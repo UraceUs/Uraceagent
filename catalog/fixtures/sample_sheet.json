@@ -1,0 +1,80 @@
+{
+  "_segments": [
+    {"segment_slug": "youth", "segment_name": "Youth / Family",
+     "description": "Parent looking for an activity for a child",
+     "required_fields": "driver_age; experience_level; origin",
+     "optional_fields": "goal", "default_agent_action": "recommend", "status": "active"},
+    {"segment_slug": "competitor", "segment_name": "Active racer",
+     "description": "Actually competes", "required_fields": "experience_level; contact_phone",
+     "optional_fields": "", "default_agent_action": "handoff_to_owner", "status": "active"}
+  ],
+  "_programs": [
+    {"program_slug": "one_day", "program_name": "1-Day Experience", "segment_slug": "youth",
+     "agent_action": "recommend", "category": "Training", "status": "active",
+     "description": "A full day with the same experience as a professional driver.",
+     "target_audience": "Kids;Teens;Adults", "age_min": "4", "age_max": "",
+     "human_approval_below_age": "5", "recommended_level": "Beginner",
+     "prerequisites": "", "benefits": "", "differentiators": "",
+     "keywords": "um dia; 1 day; experimentar", "cross_sell": "", "upsell": "",
+     "recommendation_priority": "95", "display_order": "3"},
+
+    {"program_slug": "race_team_support", "program_name": "Race Team Support",
+     "segment_slug": "competitor", "agent_action": "handoff_to_owner",
+     "category": "Racing", "status": "active", "description": "",
+     "target_audience": "Competitive Drivers", "age_min": "", "age_max": "",
+     "human_approval_below_age": "", "recommended_level": "Intermediate;Advanced",
+     "prerequisites": "Already competes", "benefits": "", "differentiators": "",
+     "keywords": "race support; equipe", "cross_sell": "", "upsell": "",
+     "recommendation_priority": "0", "display_order": "7"},
+
+    {"program_slug": "BAD Slug", "program_name": "Rejected — slug has a space",
+     "segment_slug": "youth", "agent_action": "recommend", "category": "Training",
+     "status": "active", "description": "", "target_audience": "", "age_min": "",
+     "age_max": "", "human_approval_below_age": "", "recommended_level": "",
+     "prerequisites": "", "benefits": "", "differentiators": "", "keywords": "",
+     "cross_sell": "", "upsell": "", "recommendation_priority": "", "display_order": ""},
+
+    {"program_slug": "bad_ages", "program_name": "Rejected — age_min above age_max",
+     "segment_slug": "youth", "agent_action": "recommend", "category": "Training",
+     "status": "active", "description": "", "target_audience": "", "age_min": "14",
+     "age_max": "7", "human_approval_below_age": "", "recommended_level": "",
+     "prerequisites": "", "benefits": "", "differentiators": "", "keywords": "",
+     "cross_sell": "", "upsell": "", "recommendation_priority": "", "display_order": ""},
+
+    {"program_slug": "orphan_segment", "program_name": "Rejected — segment does not exist",
+     "segment_slug": "does_not_exist", "agent_action": "recommend", "category": "Training",
+     "status": "active", "description": "", "target_audience": "", "age_min": "",
+     "age_max": "", "human_approval_below_age": "", "recommended_level": "",
+     "prerequisites": "", "benefits": "", "differentiators": "", "keywords": "",
+     "cross_sell": "", "upsell": "", "recommendation_priority": "", "display_order": ""}
+  ],
+  "_offers": [
+    {"offer_id": "acad_2t_day", "program_slug": "one_day", "offer_name": "2 stroke kart",
+     "context": "Daily - 7 years+", "description": "", "price_amount": "$819",
+     "price_currency": "USD", "price_unit": "day", "price_is_indicative": "FALSE",
+     "price_variance_note": "", "conditions_note": "Track fees paid to OKC.",
+     "agent_can_quote": "TRUE", "status": "active", "source_tab": "Academy"},
+
+    {"offer_id": "lf_lastmin_1", "program_slug": "one_day",
+     "offer_name": "Lead & Follow last minute", "context": "Track only", "description": "",
+     "price_amount": "395", "price_currency": "USD", "price_unit": "session",
+     "price_is_indicative": "FALSE", "price_variance_note": "",
+     "conditions_note": "Operator at the track only.", "agent_can_quote": "FALSE",
+     "status": "active", "source_tab": "Academy"},
+
+    {"offer_id": "no_unit", "program_slug": "one_day", "offer_name": "Rejected — price with no unit",
+     "context": "", "description": "", "price_amount": "500", "price_currency": "USD",
+     "price_unit": "", "price_is_indicative": "TRUE", "price_variance_note": "",
+     "conditions_note": "", "agent_can_quote": "TRUE", "status": "active", "source_tab": "Academy"},
+
+    {"offer_id": "bad_unit", "program_slug": "one_day", "offer_name": "Rejected — unknown unit",
+     "context": "", "description": "", "price_amount": "600", "price_currency": "USD",
+     "price_unit": "per_fortnight", "price_is_indicative": "TRUE", "price_variance_note": "",
+     "conditions_note": "", "agent_can_quote": "TRUE", "status": "active", "source_tab": "Academy"},
+
+    {"offer_id": "acad_2t_day", "program_slug": "one_day", "offer_name": "Rejected — duplicate offer_id",
+     "context": "", "description": "", "price_amount": "819", "price_currency": "USD",
+     "price_unit": "day", "price_is_indicative": "FALSE", "price_variance_note": "",
+     "conditions_note": "", "agent_can_quote": "TRUE", "status": "active", "source_tab": "Academy"}
+  ]
+}

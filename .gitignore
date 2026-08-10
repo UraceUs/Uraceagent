@@ -1,0 +1,11 @@
+.env
+.env.local
+*.env
+reports/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+*.log
+postman_environment.json

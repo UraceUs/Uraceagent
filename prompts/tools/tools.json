@@ -1,0 +1,204 @@
+{
+  "_comment": "Tool definitions for the URace sales agent. The 'modes' field on each tool is metadata used by compose.py to decide which tools to expose per mode — strip it before sending to the API.",
+
+  "tools": [
+    {
+      "name": "search_knowledge_base",
+      "description": "Semantic search over URace's knowledge base (policies, location, FAQ, promotions, program descriptions). Use for open-ended questions. Returns passages with a similarity score and their source. If nothing comes back above threshold, do NOT answer from your own knowledge — tell the driver the team will confirm.",
+      "modes": ["faq", "qualification", "followup"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "The driver's question, or the specific topic to look up." },
+          "category": { "type": "string", "description": "Optional filter, e.g. 'location', 'policies', 'faq_geral'." }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "get_program_details",
+      "description": "Structured facts about one program from the catalog: description, ages, level, prerequisites, benefits, agent_action, and its offers with prices. This is the ONLY valid source for anything specific about a program. Empty fields mean the criterion is unknown — never fill them in yourself.",
+      "modes": ["faq", "qualification", "scheduling"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "program_slug": { "type": "string", "description": "Stable catalog identifier, e.g. 'urace_academy'." },
+          "include_offers": { "type": "boolean", "description": "Include price variants. Respect agent_can_quote on each.", "default": true }
+        },
+        "required": ["program_slug"]
+      }
+    },
+    {
+      "name": "get_program_recommendation",
+      "description": "THE ONLY way to recommend a program. Runs the two-stage engine (segment classification, then offer ranking) against configured rules. Returns the recommended program, confidence, a justification built from configured rule templates, alternatives, and agent_action. May return status 'insufficient_data' with missing_fields — in that case ask for one of those fields instead of guessing.",
+      "modes": ["qualification", "faq"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" }
+        },
+        "required": ["lead_id"]
+      }
+    },
+    {
+      "name": "update_qualification_field",
+      "description": "Record a qualification fact learned from the conversation. Set inferred=true when you deduced it rather than heard it stated — inferred values carry less weight and must not drive decisions.",
+      "modes": ["faq", "qualification", "scheduling"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "field": {
+            "type": "string",
+            "enum": ["for_whom", "driver_name", "driver_age", "responsible_name", "origin", "contact_phone", "contact_email", "goal", "experience_level", "competes", "preferred_dates", "availability_window", "budget_signal", "segment"]
+          },
+          "value": { "type": "string" },
+          "source_excerpt": { "type": "string", "description": "The driver's own words that support this value." },
+          "inferred": { "type": "boolean", "default": false }
+        },
+        "required": ["lead_id", "field", "value"]
+      }
+    },
+    {
+      "name": "calculate_lead_score",
+      "description": "Recompute the lead score from configured weights. Deterministic — you do not decide the score, you only trigger the calculation. Returns score, classification, and the per-criterion breakdown.",
+      "modes": ["qualification"],
+      "input_schema": {
+        "type": "object",
+        "properties": { "lead_id": { "type": "string" } },
+        "required": ["lead_id"]
+      }
+    },
+    {
+      "name": "check_calendar_availability",
+      "description": "Free slots that fall inside BOTH the team's business hours and the driver's stated availability window. Always pass the driver's window — never assume it. Returns concrete slots; offer two, never an open-ended 'what day works?'.",
+      "modes": ["scheduling"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "date_range_start": { "type": "string", "description": "ISO 8601." },
+          "date_range_end": { "type": "string", "description": "ISO 8601." },
+          "driver_availability_window": { "type": "string", "description": "In the driver's own words, e.g. 'weekdays after 5pm'." },
+          "driver_timezone": { "type": "string" }
+        },
+        "required": ["date_range_start", "date_range_end", "driver_availability_window"]
+      }
+    },
+    {
+      "name": "create_calendar_event",
+      "description": "Create the call in Google Calendar. Call this BEFORE confirming the time to the driver — never confirm a slot that failed to save.",
+      "modes": ["scheduling"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "start_time": { "type": "string", "description": "ISO 8601 with timezone." },
+          "duration_minutes": { "type": "integer", "default": 30 },
+          "driver_phone": { "type": "string" },
+          "notes": { "type": "string" }
+        },
+        "required": ["lead_id", "start_time", "driver_phone"]
+      }
+    },
+    {
+      "name": "create_kommo_task",
+      "description": "Create a task for a human. Use for finalizing payment on a chat close, for follow-up reminders, and for anything requiring human action.",
+      "modes": ["scheduling", "followup", "escalation"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "task_type": { "type": "string", "enum": ["finalize_payment", "human_approval", "callback", "review_request", "other"] },
+          "title": { "type": "string" },
+          "details": { "type": "string" },
+          "due_at": { "type": "string" }
+        },
+        "required": ["lead_id", "task_type", "title"]
+      }
+    },
+    {
+      "name": "request_human_approval",
+      "description": "Open a human-approval request and block the flow until a person decides. Required when the driver's age is below the program's human_approval_below_age, and when a requested time falls outside the team's availability. You must NEVER approve either of these yourself.",
+      "modes": ["scheduling", "qualification"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "reason": { "type": "string", "enum": ["age_below_track_minimum", "out_of_hours_request", "own_kart_inspection", "other"] },
+          "driver_age": { "type": "integer" },
+          "driver_experience": { "type": "string", "description": "What the parent said about the child's experience — the evaluator needs this." },
+          "requested_slot": { "type": "string" },
+          "context": { "type": "string" }
+        },
+        "required": ["lead_id", "reason", "context"]
+      }
+    },
+    {
+      "name": "escalate_to_human",
+      "description": "Hand the conversation to a human. Use for competitor-profile handoff to the owner, and for payment, discounts, complaints, explicit requests, or low confidence. After calling this, stop replying — a human owns the conversation until they hand it back.",
+      "modes": ["faq", "qualification", "scheduling", "escalation"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "reason": { "type": "string", "enum": ["competitor_profile", "payment", "discount_request", "complaint", "explicit_request", "low_confidence", "kb_gap", "personal_hardship", "other"] },
+          "priority": { "type": "string", "enum": ["low", "normal", "high"], "default": "normal" },
+          "briefing": { "type": "string", "description": "For competitor_profile: the full briefing. Never invent facts; state what is still missing." },
+          "verbatim_quote": { "type": "string", "description": "For complaints: the driver's exact words, not your summary." }
+        },
+        "required": ["lead_id", "reason"]
+      }
+    },
+    {
+      "name": "add_note",
+      "description": "Append a note to the lead record in Kommo. Use to capture context a human will need.",
+      "modes": ["escalation", "faq", "qualification", "scheduling"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "note": { "type": "string" }
+        },
+        "required": ["lead_id", "note"]
+      }
+    },
+    {
+      "name": "get_lead_profile",
+      "description": "Full current state of the lead: qualification data, score, history summary, flags, prior escalations. Call this when you need context the conversation doesn't give you.",
+      "modes": ["faq", "qualification", "scheduling", "followup", "escalation"],
+      "input_schema": {
+        "type": "object",
+        "properties": { "lead_id": { "type": "string" } },
+        "required": ["lead_id"]
+      }
+    },
+    {
+      "name": "close_lead",
+      "description": "Close the lead. Used at the end of the follow-up sequence when there was no response.",
+      "modes": ["followup"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "reason": { "type": "string", "enum": ["no_response", "not_interested", "out_of_area", "converted", "other"] }
+        },
+        "required": ["lead_id", "reason"]
+      }
+    },
+    {
+      "name": "log_decision",
+      "description": "Record why you did what you did, for audit. Call whenever you make a consequential choice: recommending, escalating, giving a price, triggering an approval gate.",
+      "modes": ["faq", "qualification", "scheduling", "followup", "escalation"],
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": { "type": "string" },
+          "action": { "type": "string" },
+          "reasoning": { "type": "string" },
+          "confidence": { "type": "number", "description": "0 to 1." }
+        },
+        "required": ["lead_id", "action", "reasoning"]
+      }
+    }
+  ]
+}

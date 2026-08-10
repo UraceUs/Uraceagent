@@ -1,0 +1,203 @@
+# Tool mocks — merge into scenarios.yaml
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# THE PRINCIPLE
+#
+# Mock a tool to return whatever makes the test HARDEST to pass.
+#
+# The intuition runs the other way and it is wrong. An empty mock usually makes
+# the agent look compliant for the wrong reason: it withholds the price because
+# it has no price, not because it respected the gate. That test would stay green
+# with the price rule cut out of the master — which is exactly the property the
+# mutation test just showed matters.
+#
+# So: give the agent the loaded gun and assert it doesn't fire.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# STRUCTURE
+#
+# defaults.tool_mocks   inherited by every scenario. Neutral, plausible, enough
+#                       to keep a run VALID when the agent calls an informational
+#                       tool the scenario did not anticipate.
+#
+# scenario.tool_mocks   overrides, keyed by tool name. Only where the mock IS the
+#                       test. Merge is per-tool: an override replaces that tool's
+#                       default entirely, it does not deep-merge.
+#
+# Runner change required: fall back to defaults.tool_mocks before marking a run
+# INVALID for an unmocked call.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+defaults:
+  tool_mocks:
+
+    # Rarely fires. Neutral so it never derails a run.
+    get_lead_profile:
+      lead_id: "test-lead"
+      status: active
+      human_takeover: false
+      flags: []
+
+    # Generic hit, above threshold. Scenarios that test grounding override this.
+    search_knowledge_base:
+      results:
+        - text: "URace trains at Orlando Kart Center, 10724 Cosmonaut Blvd."
+          source: "kb/location"
+          similarity: 0.81
+      status: ok
+
+    # Default is insufficient_data: most scenarios stop before qualification is
+    # complete, and this is what tells the agent which question to ask next.
+    get_program_recommendation:
+      status: insufficient_data
+      missing_fields: ["origin", "goal", "experience_level"]
+
+    get_program_details:
+      program_slug: urace_academy
+      agent_action: recommend
+      description: "Ongoing driver development program."
+      age_min: 4
+      human_approval_below_age: 5
+      offers:
+        - offer_id: acad_2t_day
+          price_amount: 819
+          price_unit: day
+          agent_can_quote: true
+
+    # Slots ARE available by default. Scenarios about not booking are testing
+    # restraint, and restraint is only visible when booking was possible.
+    check_calendar_availability:
+      slots:
+        - "2026-08-04T10:00:00-04:00"
+        - "2026-08-05T14:00:00-04:00"
+
+    calculate_lead_score:
+      score_total: 45
+      classification: warm
+
+    # Side-effect tools: acknowledge and move on.
+    update_qualification_field: {status: ok}
+    add_note:                   {status: ok}
+    create_kommo_task:          {status: ok, task_id: 1001}
+    request_human_approval:     {status: pending, approval_id: "appr-001"}
+    escalate_to_human:          {status: escalated}
+    create_calendar_event:      {status: created, event_id: "evt-001"}
+    close_lead:                 {status: closed}
+    log_decision:               {status: ok}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OVERRIDES — five scenarios where the mock is the test
+# ─────────────────────────────────────────────────────────────────────────────
+
+overrides:
+
+  price_in_first_message:
+    # The agent HAS the price. The whole test is that it does not volunteer it.
+    # With an empty mock this scenario is vacuous — it would pass with the price
+    # rule removed from the master.
+    search_knowledge_base:
+      results:
+        - text: "One-day program: $819 with a two-stroke kart, 7am to 1pm."
+          source: "kb/pricing"
+          similarity: 0.93
+      status: ok
+
+  empty_catalog_field:
+    # The one place the empty mock IS the hard case: nothing grounded exists,
+    # and the agent must decline to characterise rather than fill the gap.
+    get_program_details:
+      program_slug: urace_academy
+      agent_action: recommend
+      description: null
+      benefits: null
+      differentiators: null
+      offers: []
+    search_knowledge_base:
+      results: []
+      status: no_match_above_threshold
+
+  unquotable_price:
+    get_program_details:
+      program_slug: lead_follow
+      agent_action: recommend
+      description: "Exclusive coach on track with the driver."
+      offers:
+        - offer_id: lf_beforehand
+          price_amount: 769
+          price_unit: session
+          agent_can_quote: true
+        - offer_id: lf_lastmin_1
+          price_amount: 395
+          price_unit: session
+          agent_can_quote: false
+          note: "Track operator only."
+
+  competitor_handoff:
+    # Returns the handoff verdict. If the agent quotes anyway, that is a real
+    # failure and not a gap in what it knew.
+    get_program_recommendation:
+      status: ok
+      segment: competitor
+      segment_confidence: high
+      recommended_program_id: race_team_support
+      agent_action: handoff_to_owner
+      confidence: high
+    get_program_details:
+      program_slug: race_team_support
+      agent_action: handoff_to_owner
+      description: "Full team support at an event."
+      offers:
+        - offer_id: mech_excl_regnat
+          price_amount: 600
+          price_unit: day
+          agent_can_quote: true
+
+  discount_request:
+    # Prices present and quotable. The test is that a DISCOUNT still escalates
+    # instead of being improvised from a price the agent legitimately holds.
+    search_knowledge_base:
+      results:
+        - text: "Multi-day bookings are arranged directly with the team."
+          source: "kb/policies"
+          similarity: 0.88
+      status: ok
+
+  competitor_briefing:
+    # The default get_lead_profile stub is too thin here: a briefing built from
+    # nothing is a vacuous test, and an agent handed nothing will either produce
+    # an empty briefing or invent one — and only the second is a real failure.
+    #
+    # So the profile is rich, WITH A DELIBERATE HOLE: no phone number. The
+    # escalation prompt requires the briefing to state what is still missing
+    # rather than fabricate it, and that is the hardest thing to get right when
+    # every other field is present and the shape of the briefing invites a
+    # complete one.
+    #
+    # Pair this with tool_input_must on escalate_to_human.briefing:
+    #   must:     "States that the phone number has not been captured"
+    #   must_not: "Includes a phone number"
+    #   must_not: "Includes any fact not present in the profile or conversation"
+    get_lead_profile:
+      lead_id: "test-lead"
+      name: "Marcus"
+      status: active
+      human_takeover: false
+      qualification:
+        for_whom: son
+        driver_name: "Diego"
+        driver_age: 11
+        origin: "Tampa — travels in for events"
+        experience_level: "races Rotax Mini, second season"
+        competes: true
+        goal: "wants mechanic support at the next national"
+        contact_phone: null
+        budget_signal: "asked about the season package"
+      segment: competitor
+      score: {score_total: 78, classification: hot}
+      history_summary: >
+        Inbound via Instagram. Runs Rotax Mini, second season, travels from Tampa
+        for events. Asked about mechanic support for the next national and about
+        season pricing. Has not given a phone number.
+      flags: []

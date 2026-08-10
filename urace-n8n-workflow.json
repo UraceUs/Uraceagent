@@ -1,0 +1,229 @@
+{
+  "name": "URACE — George Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "4e24deb7-227e-4fbe-bb07-28645f03f5cc",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        300
+      ],
+      "id": "wh-inbound",
+      "name": "Webhook",
+      "webhookId": "4e24deb7-227e-4fbe-bb07-28645f03f5cc",
+      "notes": "Entrada única. Kommo, site e testes chegam aqui."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normaliza o payload. Kommo, widget de site e teste manual\n// mandam formatos diferentes; o agente recebe sempre o mesmo.\n//\n// sessionId identifica a CONVERSA. O telefone identifica a PESSOA — e é ele\n// que o agente usa para reconhecer alguém que já falou por outro canal.\nconst b = $input.first().json.body || $input.first().json;\n\nconst text = b.msgCustomer || b.chatInput || b.message || b.text || '';\nconst phone = b.phone || b.contact_phone || b.from || null;\nconst sessionId = b.sessionId || phone || b.lead_id || 'anon-' + Date.now();\n\nif (!text.trim()) {\n  // Mensagem vazia não vira turno. Evento de sistema do Kommo (mudança de\n  // etapa, nota interna) chegaria aqui e o agente responderia ao nada.\n  return [{ json: { skip: true, sessionId } }];\n}\n\nreturn [{ json: {\n  skip: false,\n  sessionId: String(sessionId),\n  text: String(text).slice(0, 4000),\n  channel: b.channel || 'whatsapp',\n  contact_name: b.name || b.contact_name || null,\n  contact_phone: phone,\n  kommo_lead_id: b.lead_id ? Number(b.lead_id) : null\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "id": "normalize",
+      "name": "Normalizar entrada"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "id": "has-text",
+      "name": "Tem mensagem?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AGENT_API_URL }}/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Api-Key",
+              "value": "={{ $env.AGENT_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        220
+      ],
+      "id": "call-agent",
+      "name": "Chamar Agente",
+      "onError": "continueRegularOutput",
+      "notes": "O agente vive aqui: prompts, catálogo, portões de preço e idade, roteamento. Timeout alto porque um turno pode fazer várias chamadas de tool."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Decide o que devolver ao canal.\n//\n// Três resultados que NÃO são uma resposta e não podem virar uma:\n//   human_takeover  um humano assumiu — silêncio, não mensagem\n//   error           o turno falhou — texto de fallback, nunca meia frase\n//   HTTP != 200     agente fora do ar — fallback e alerta\nconst r = $input.first().json;\nconst status = r.statusCode ?? 200;\nconst body = r.body ?? r;\n\nif (status !== 200) {\n  return [{ json: {\n    reply: \"Sorry, something went wrong on my end. Someone from the team will pick this up shortly.\",\n    send: true, healthy: false, sessionId: body.sessionId || null,\n    note: 'agent unreachable: HTTP ' + status\n  }}];\n}\n\nif (body.mode === 'human_takeover') {\n  // Silêncio deliberado. Mandar qualquer coisa aqui atropela o humano que\n  // está atendendo.\n  return [{ json: { reply: '', send: false, healthy: true,\n                    sessionId: body.sessionId, note: 'human owns this conversation' }}];\n}\n\nreturn [{ json: {\n  reply: body.output,\n  send: Boolean(body.output),\n  healthy: !body.error,\n  sessionId: body.sessionId,\n  mode: body.mode || null,\n  escalated: Boolean(body.escalated)\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        220
+      ],
+      "id": "decide",
+      "name": "Decidir resposta"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ output: $json.reply, send: $json.send, sessionId: $json.sessionId, mode: $json.mode, escalated: $json.escalated }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1100,
+        220
+      ],
+      "id": "respond",
+      "name": "Responder"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ output: '', send: false, skipped: true }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        660,
+        420
+      ],
+      "id": "respond-skip",
+      "name": "Ignorar (sem texto)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalizar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar entrada": {
+      "main": [
+        [
+          {
+            "node": "Tem mensagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem mensagem?": {
+      "main": [
+        [
+          {
+            "node": "Chamar Agente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar (sem texto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chamar Agente": {
+      "main": [
+        [
+          {
+            "node": "Decidir resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decidir resposta": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
+  "versionId": "urace-agent-v2",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
