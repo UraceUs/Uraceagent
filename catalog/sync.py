@@ -407,11 +407,10 @@ def main():
     print(f"applied {applied} rows, status {status}")
 
     if changed:
-        # Seam, not an implementation: the KB indexer does not exist yet.
         # Program description/benefits/FAQ are auto-indexed from the catalog,
         # so these slugs are what needs re-embedding — nothing else.
         print(f"\nreindex queue ({len(changed)} programs): {', '.join(changed)}")
-        print("  (KB indexer not implemented — slugs printed, not enqueued)")
+        print(f"  run: python kb/indexer.py --programs {' '.join(changed)}")
 
     return 1 if (args.strict and rejected) else 0
 

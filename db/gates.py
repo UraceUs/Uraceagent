@@ -25,6 +25,8 @@ a chave. Essa diferença está documentada em db/schema.md e no README.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
@@ -110,15 +112,24 @@ def latest_age_approval(db, lead_id: str, transaction=None):
 
     Uma aprovação posterior supersede uma rejeição anterior — o ORDER BY
     do trigger, reproduzido aqui.
+
+    Deliberadamente SEM order_by na query: order_by + igualdades exige um
+    índice composto, e o portão de segurança infantil não pode depender de
+    um índice existir — um deploy num projeto sem o índice deixaria o
+    portão quebrando toda reserva (fail-closed, mas quebrando). Igualdades
+    puras não exigem índice composto; a ordenação acontece aqui, sobre as
+    poucas aprovações de um único lead.
     """
     query = (db.collection("human_approvals")
              .where(filter=FieldFilter("lead_id", "==", lead_id))
              .where(filter=FieldFilter("reason", "==",
-                                       "age_below_track_minimum"))
-             .order_by("requested_at", direction=firestore.Query.DESCENDING)
-             .limit(1))
-    snaps = list(query.stream(transaction=transaction))
-    return snaps[0].to_dict() if snaps else None
+                                       "age_below_track_minimum")))
+    rows = [s.to_dict() for s in query.stream(transaction=transaction)]
+    if not rows:
+        return None
+    sentinel = datetime.min.replace(tzinfo=timezone.utc)
+    rows.sort(key=lambda r: r.get("requested_at") or sentinel)
+    return rows[-1]
 
 
 def create_appointment(db, lead_id: str, closing_path: str,

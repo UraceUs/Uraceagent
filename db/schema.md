@@ -58,14 +58,15 @@ trigger impediria. O perímetro agora é a credencial, não o schema.
 
 ## Índices
 
-Compostos (criados sob demanda — o erro do Firestore traz o link de criação):
+**Nenhum índice composto é requisito.** As queries dos caminhos críticos usam
+apenas igualdades (que o Firestore resolve com índices single-field
+automáticos) e ordenam em código — decisão deliberada: o portão de segurança
+infantil e a primeira mensagem de produção não podem depender de um índice
+que alguém esqueceu de criar. Se alguma query nova precisar de um composto, o
+erro do Firestore traz o link de criação.
 
-- `human_approvals`: `lead_id ASC, reason ASC, requested_at DESC`
-- `follow_ups`: `lead_id ASC, status ASC`
-- `conversations`: `lead_id ASC, ended_at ASC, started_at DESC`
-- `knowledge_documents`: `source_type ASC, status ASC`
-
-Vetorial (obrigatório antes do primeiro `find_nearest`):
+Vetorial (obrigatório antes do primeiro `find_nearest` — o RAG não funciona
+sem ele; requer papel Cloud Datastore Index Admin ou o console):
 
 ```bash
 gcloud firestore indexes composite create \

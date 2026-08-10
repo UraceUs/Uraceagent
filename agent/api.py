@@ -123,16 +123,20 @@ def _resolve_lead(db, payload: Inbound) -> tuple[str, str]:
             # the person.
             lead_id = contact_ref.get().get("lead_id")
 
+    # Sem order_by: igualdades puras dispensam índice composto, e a primeira
+    # mensagem em produção não pode falhar por um índice que ninguém criou.
+    # As conversas abertas de um lead são poucas; ordena-se aqui.
     from google.cloud.firestore_v1.base_query import FieldFilter
     open_convs = list(
         db.collection("conversations")
         .where(filter=FieldFilter("lead_id", "==", lead_id))
         .where(filter=FieldFilter("ended_at", "==", None))
-        .order_by("started_at", direction=firestore.Query.DESCENDING)
-        .limit(1).stream())
+        .stream())
+    open_convs.sort(key=lambda s: (s.to_dict().get("started_at") is not None,
+                                   s.to_dict().get("started_at")))
 
     if open_convs:
-        conversation_id = open_convs[0].id
+        conversation_id = open_convs[-1].id
     else:
         conv_ref = db.collection("conversations").document()
         conv_ref.create({"lead_id": lead_id, "channel": payload.channel,
