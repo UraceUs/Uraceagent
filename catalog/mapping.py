@@ -7,7 +7,7 @@ approval sequence. The sheet-to-column mapping is the fifth opportunity, so it
 gets one definition and a checker (validate_mapping.py) instead of living
 half in the parser and half in the INSERT statement.
 
-Nothing here knows about Google or about psycopg. It is a spec.
+Nothing here knows about Google Sheets or about Firestore. It is a spec.
 """
 
 from __future__ import annotations
@@ -155,7 +155,8 @@ SEGMENTS = TabSpec(
         Column("required_fields", "required_fields", as_list),
         Column("optional_fields", "optional_fields", as_list),
         Column("default_agent_action", "default_agent_action",
-               one_of("recommend", "handoff_to_owner", "faq_only")),
+               one_of("recommend", "handoff_to_owner", "handoff_to_human",
+                      "faq_only")),
         Column("status", "status", one_of("active", "inactive")),
     ],
 )
@@ -165,9 +166,10 @@ PROGRAMS = TabSpec(
     columns=[
         Column("program_slug", "slug", slug, required=True),
         Column("program_name", "name", as_text, required=True),
-        Column("segment_slug", "segment_id", slug),        # resolved to UUID on apply
+        Column("segment_slug", "segment_id", slug),        # slug É o doc ID no Firestore
         Column("agent_action", "agent_action",
-               one_of("recommend", "handoff_to_owner", "faq_only"), required=True),
+               one_of("recommend", "handoff_to_owner", "handoff_to_human",
+                      "faq_only"), required=True),
         Column("category", "category", as_text, required=True),
         Column("status", "status", one_of("active", "inactive"), required=True),
         Column("description", "description"),

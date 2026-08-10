@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Catalog sync — Google Sheets to Postgres.
+Catalog sync — Google Sheets to Firestore.
 
 The sheet is the source of truth. It is NOT the operational store: the agent
 never reads Google during a conversation. It reads programs/program_offers,
@@ -150,14 +150,29 @@ def check_references(parsed: dict) -> list:
 # DIFF
 # =============================================================================
 
-def diff_against_live(conn, spec, rows: list[dict]) -> dict:
+def _live_docs(db, spec) -> dict[str, dict]:
+    """The live catalog, keyed the same way the sheet is.
+
+    segments/programs are top-level collections keyed by slug; offers are a
+    subcollection under each program, read here as a collection group.
+    """
+    if spec.table == "program_offers":
+        snaps = db.collection_group("offers").stream()
+    else:
+        snaps = db.collection(spec.table).stream()
+    out = {}
+    for snap in snaps:
+        row = snap.to_dict()
+        row.setdefault(spec.key, snap.id)
+        out[row[spec.key]] = row
+    return out
+
+
+def diff_against_live(db, spec, rows: list[dict]) -> dict:
     """What would change. Computed before any write, so --dry-run reports the
     same thing an apply would do."""
     cols = [c.db for c in spec.columns]
-    with conn.cursor() as cur:
-        cur.execute(
-            f"SELECT {spec.key}, {', '.join(cols)} FROM {spec.table}")
-        live = {r[0]: dict(zip([spec.key] + cols, r)) for r in cur.fetchall()}
+    live = _live_docs(db, spec)
 
     incoming = {r[spec.key]: r for r in rows}
     created = sorted(set(incoming) - set(live))
@@ -179,7 +194,7 @@ def diff_against_live(conn, spec, rows: list[dict]) -> dict:
 
 
 def _normalise(value):
-    """Postgres numerics come back as Decimal, arrays as list. Compare shapes,
+    """Números podem voltar como int/float, arrays como list. Compare shapes,
     not types, or every run reports phantom changes."""
     if value is None:
         return None
@@ -197,61 +212,97 @@ def _normalise(value):
 # APPLY
 # =============================================================================
 
-def apply_tab(conn, spec, rows: list[dict], slug_to_id: dict) -> int:
+def _doc_ref(db, spec, values: dict):
+    """Onde cada linha mora. A planilha fala em slugs porque uma pessoa a
+    mantém; no Firestore o slug É o doc ID — não há UUID para resolver."""
+    if spec.table == "program_offers":
+        return (db.collection("programs").document(values["program_id"])
+                .collection("offers").document(values[spec.key]))
+    return db.collection(spec.table).document(values[spec.key])
+
+
+def apply_tab(db, spec, rows: list[dict], live: dict) -> int:
     cols = [c.db for c in spec.columns] + ["source_sheet_row", "source_sheet_tab"]
     if spec.table != "segments":
         cols.append("synced_at")
 
+    from db import schema
+
     applied = 0
-    with conn.cursor() as cur:
-        for row in rows:
-            values = dict(row)
-            # Resolve slugs to UUIDs. The sheet speaks in slugs because a person
-            # maintains it; the database speaks in UUIDs.
-            if spec is PROGRAMS and values.get("segment_id"):
-                values["segment_id"] = slug_to_id["segments"][values["segment_id"]]
-            if spec is OFFERS:
-                values["program_id"] = slug_to_id["programs"][values["program_id"]]
-            if "synced_at" in cols:
-                values["synced_at"] = datetime.now(timezone.utc)
+    batch = db.batch()
+    ops = 0
+    for row in rows:
+        values = dict(row)
+        if "synced_at" in cols:
+            values["synced_at"] = datetime.now(timezone.utc)
 
-            present = [c for c in cols if c in values]
-            placeholders = ", ".join(["%s"] * len(present))
-            # Every mapped column is written on conflict, including the ones that
-            # are now NULL. COALESCE here would silently keep a value the team
-            # deliberately cleared — the bug that makes a stale price outlive
-            # its deletion.
-            updates = ", ".join(
-                f"{c} = EXCLUDED.{c}" for c in present if c != spec.key)
-            cur.execute(
-                f"INSERT INTO {spec.table} ({', '.join(present)}) "
-                f"VALUES ({placeholders}) "
-                f"ON CONFLICT ({spec.key}) DO UPDATE SET {updates}",
-                [values[c] for c in present])
-            applied += 1
+        # Every mapped column is written, including the ones that are now
+        # None. Merging around the Nones would silently keep a value the team
+        # deliberately cleared — the bug that makes a stale price outlive
+        # its deletion. set() sem merge substitui o documento inteiro.
+        doc = {c: values.get(c) for c in cols}
+        doc[spec.key] = values[spec.key]
+        doc.setdefault("status", "active")
+        schema.validate(spec.table, doc)
 
-        # Absent from the sheet means retired, not deleted: qualification_data,
-        # recommendation_log and appointments all reference these rows.
-        keys = [r[spec.key] for r in rows]
-        if keys:
-            cur.execute(
-                f"UPDATE {spec.table} SET status = 'inactive' "
-                f"WHERE {spec.key} <> ALL(%s) AND status <> 'inactive'", (keys,))
+        batch.set(_doc_ref(db, spec, values), doc)
+        applied += 1
+        ops += 1
+        if ops >= 400:              # limite de 500 writes por batch
+            batch.commit()
+            batch, ops = db.batch(), 0
+
+    # Absent from the sheet means retired, not deleted: qualification data,
+    # recommendation logs and appointments all reference these rows.
+    #
+    # Uma oferta que MUDOU de programa também retira o doc antigo: o caminho
+    # do documento inclui o programa, então a mesma offer_id em outro programa
+    # é outro doc — deixar o antigo ativo duplicaria a oferta.
+    incoming = {r[spec.key]: r for r in rows}
+    for key, row in live.items():
+        if row.get("status") == "inactive":
+            continue
+        new = incoming.get(key)
+        if new is not None and (spec.table != "program_offers"
+                                or new["program_id"] == row.get("program_id")):
+            continue
+        ref = _doc_ref(db, spec, row)
+        batch.update(ref, {"status": "inactive"})
+        ops += 1
+        if ops >= 400:
+            batch.commit()
+            batch, ops = db.batch(), 0
+
+    if ops:
+        batch.commit()
     return applied
-
-
-def load_slug_map(conn) -> dict:
-    out = {}
-    with conn.cursor() as cur:
-        for table in ("segments", "programs"):
-            cur.execute(f"SELECT slug, id FROM {table}")
-            out[table] = dict(cur.fetchall())
-    return out
 
 
 # =============================================================================
 # MAIN
 # =============================================================================
+
+def _storable_diffs(diffs: dict) -> dict:
+    """changes como {before, after} em vez de tupla.
+
+    O Firestore recusa array dentro de array: um update numa coluna de lista
+    (keywords, required_fields) viraria [[antes], [depois]] e derrubaria o
+    registro do run — o mapa não tem esse problema e lê melhor no console.
+    """
+    out = {}
+    for tab, d in diffs.items():
+        out[tab] = {
+            "created": list(d["created"]),
+            "deactivated": list(d["deactivated"]),
+            "updated": [
+                {"key": u["key"],
+                 "changes": {col: {"before": json.loads(json.dumps(b, default=str)),
+                                   "after": json.loads(json.dumps(a, default=str))}
+                             for col, (b, a) in u["changes"].items()}}
+                for u in d["updated"]],
+        }
+    return out
+
 
 def render_diff(name: str, d: dict, verbose: bool):
     total = len(d["created"]) + len(d["updated"]) + len(d["deactivated"])
@@ -320,48 +371,38 @@ def main():
         print()
 
     # --- database ------------------------------------------------------------
-    if not os.environ.get("DATABASE_URL"):
-        from dotenv import load_dotenv
-        load_dotenv(ROOT / ".env")
-    url = os.environ.get("DATABASE_URL")
-    if not url:
-        sys.exit("ERROR: DATABASE_URL not set.")
+    from db.client import get_db
 
-    import psycopg
+    db = get_db()
 
-    with psycopg.connect(url, autocommit=False) as conn:
-        diffs = {s.tab: diff_against_live(conn, s, parsed[s.tab]) for s in SPECS}
-        print("diff:")
-        for spec in SPECS:
-            render_diff(spec.tab, diffs[spec.tab], args.show_diff)
-        print()
+    diffs = {s.tab: diff_against_live(db, s, parsed[s.tab]) for s in SPECS}
+    print("diff:")
+    for spec in SPECS:
+        render_diff(spec.tab, diffs[spec.tab], args.show_diff)
+    print()
 
-        if args.dry_run:
-            conn.rollback()
-            print("dry run — nothing written")
-            return 1 if (args.strict and rejected) else 0
+    if args.dry_run:
+        print("dry run — nothing written")
+        return 1 if (args.strict and rejected) else 0
 
-        applied = 0
-        # Segments before programs, programs before offers: slug resolution
-        # depends on the parent existing.
-        for spec in SPECS:
-            slug_map = load_slug_map(conn)
-            applied += apply_tab(conn, spec, parsed[spec.tab], slug_map)
+    applied = 0
+    # Segments before programs, programs before offers: a oferta mora numa
+    # subcoleção do programa, então o pai tem que existir primeiro.
+    for spec in SPECS:
+        applied += apply_tab(db, spec, parsed[spec.tab], _live_docs(db, spec))
 
-        changed = sorted(
-            set(diffs[PROGRAMS.tab]["created"])
-            | {u["key"] for u in diffs[PROGRAMS.tab]["updated"]})
+    changed = sorted(
+        set(diffs[PROGRAMS.tab]["created"])
+        | {u["key"] for u in diffs[PROGRAMS.tab]["updated"]})
 
-        status = "partial" if rejected else "success"
-        with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO catalog_sync_runs (triggered_by, started_at, "
-                "finished_at, status, rows_read, rows_applied, rows_rejected, "
-                "diff_summary, errors) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                ("manual", started, datetime.now(timezone.utc), status,
-                 read_count, applied, len(rejected),
-                 json.dumps(diffs, default=str), json.dumps(rejected)))
-        conn.commit()
+    status = "partial" if rejected else "success"
+    db.collection("catalog_sync_runs").document().create({
+        "triggered_by": "manual", "started_at": started,
+        "finished_at": datetime.now(timezone.utc), "status": status,
+        "rows_read": read_count, "rows_applied": applied,
+        "rows_rejected": len(rejected),
+        "diff_summary": _storable_diffs(diffs),
+        "errors": json.loads(json.dumps(rejected, default=str))})
 
     print(f"applied {applied} rows, status {status}")
 

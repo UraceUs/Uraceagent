@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import re
 import sys
 from pathlib import Path
@@ -170,34 +169,30 @@ def content_hash(text: str) -> str:
 # PIPELINE
 # =============================================================================
 
-def load_catalog(conn, slugs: list[str] | None) -> tuple[list[dict], dict]:
-    where = "WHERE p.status = 'active'"
-    params: list = []
-    if slugs:
-        where += " AND p.slug = ANY(%s)"
-        params.append(slugs)
+def load_catalog(db, slugs: list[str] | None) -> tuple[list[dict], dict]:
+    from google.cloud.firestore_v1.base_query import FieldFilter
 
-    with conn.cursor() as cur:
-        cur.execute(f"""
-            SELECT p.id, p.slug, p.name, p.category, p.description, p.objective,
-                   p.target_audience, p.benefits, p.differentiators,
-                   p.prerequisites, p.age_min, p.age_max,
-                   p.human_approval_below_age
-            FROM programs p {where} ORDER BY p.display_order
-        """, params)
-        cols = [d[0] for d in cur.description]
-        programs = [dict(zip(cols, r)) for r in cur.fetchall()]
+    snaps = (db.collection("programs")
+             .where(filter=FieldFilter("status", "==", "active")).stream())
+    programs = []
+    for snap in snaps:
+        p = snap.to_dict()
+        if slugs and snap.id not in slugs:
+            continue
+        p["id"] = snap.id       # no Firestore o slug É o id
+        p.setdefault("slug", snap.id)
+        programs.append(p)
+    programs.sort(key=lambda p: p.get("display_order") or 0)
 
-        ids = [p["id"] for p in programs]
-        faqs: dict = {}
-        if ids:
-            cur.execute("""
-                SELECT program_id, question, answer FROM program_faq
-                WHERE status = 'active' AND program_id = ANY(%s)
-                ORDER BY display_order
-            """, (ids,))
-            for pid, q, a in cur.fetchall():
-                faqs.setdefault(pid, []).append((q, a))
+    faqs: dict = {}
+    for p in programs:
+        rows = (db.collection("programs").document(p["id"])
+                .collection("faq")
+                .where(filter=FieldFilter("status", "==", "active")).stream())
+        entries = sorted((r.to_dict() for r in rows),
+                         key=lambda r: r.get("display_order") or 0)
+        if entries:
+            faqs[p["id"]] = [(e["question"], e["answer"]) for e in entries]
     return programs, faqs
 
 
@@ -227,57 +222,76 @@ def plan(programs: list[dict], faqs: dict) -> tuple[list[dict], list[str]]:
     return docs, skipped
 
 
-def sync_documents(conn, docs: list[dict], slugs: list[str] | None) -> dict:
+def sync_documents(db, docs: list[dict], slugs: list[str] | None) -> dict:
     """Upsert auto_generated documents and retire the ones no longer produced."""
+    from google.cloud import firestore
+    from google.cloud.firestore_v1.base_query import FieldFilter
+
     stats = {"documents": 0, "documents_retired": 0}
-    with conn.cursor() as cur:
-        scope = "WHERE source_type = 'auto_generated'"
-        params: list = []
-        if slugs:
-            scope += (" AND source_ref_id IN "
-                      "(SELECT id FROM programs WHERE slug = ANY(%s))")
-            params.append(slugs)
-        cur.execute(f"SELECT id, title, content FROM knowledge_documents {scope}", params)
-        live = {(r[1]): (r[0], r[2]) for r in cur.fetchall()}
 
-        wanted = set()
-        for doc in docs:
-            wanted.add(doc["title"])
-            existing = live.get(doc["title"])
-            if existing and existing[1] == doc["content"]:
-                doc["id"] = existing[0]
-                continue
-            if existing:
-                cur.execute("""
-                    UPDATE knowledge_documents
-                    SET content = %s, category = %s, version = version + 1,
-                        updated_at = now(), updated_by = 'catalog_sync'
-                    WHERE id = %s RETURNING id
-                """, (doc["content"], doc["category"], existing[0]))
-            else:
-                cur.execute("""
-                    INSERT INTO knowledge_documents
-                        (title, category, content, source_type, source_ref_id,
-                         updated_by)
-                    VALUES (%s, %s, %s, 'auto_generated', %s, 'catalog_sync')
-                    RETURNING id
-                """, (doc["title"], doc["category"], doc["content"],
-                      doc["source_ref_id"]))
-            doc["id"] = cur.fetchone()[0]
-            stats["documents"] += 1
+    query = (db.collection("knowledge_documents")
+             .where(filter=FieldFilter("source_type", "==", "auto_generated")))
+    if slugs:
+        query = query.where(filter=FieldFilter("source_ref_id", "in",
+                                               slugs[:30]))
+    live = {}
+    for snap in query.stream():
+        row = snap.to_dict()
+        live[row["title"]] = (snap.id, row.get("content"),
+                              row.get("version", 1))
 
-        # A document nobody produces any more is retired. This is the branch
-        # that stops a deleted description from outliving its deletion.
-        for title, (doc_id, _) in live.items():
-            if title not in wanted:
-                cur.execute(
-                    "DELETE FROM knowledge_documents WHERE id = %s", (doc_id,))
-                stats["documents_retired"] += 1
+    wanted = set()
+    for doc in docs:
+        wanted.add(doc["title"])
+        existing = live.get(doc["title"])
+        if existing and existing[1] == doc["content"]:
+            doc["id"] = existing[0]
+            continue
+        if existing:
+            db.collection("knowledge_documents").document(existing[0]).update({
+                "content": doc["content"], "category": doc["category"],
+                "version": existing[2] + 1,
+                "updated_at": firestore.SERVER_TIMESTAMP,
+                "updated_by": "catalog_sync"})
+            doc["id"] = existing[0]
+        else:
+            ref = db.collection("knowledge_documents").document()
+            ref.create({"title": doc["title"], "category": doc["category"],
+                        "content": doc["content"], "language": "en",
+                        "status": "active", "version": 1,
+                        "source_type": "auto_generated",
+                        "source_ref_id": doc["source_ref_id"],
+                        "updated_by": "catalog_sync",
+                        "updated_at": firestore.SERVER_TIMESTAMP})
+            doc["id"] = ref.id
+        stats["documents"] += 1
+
+    # A document nobody produces any more is retired. This is the branch
+    # that stops a deleted description from outliving its deletion. Os
+    # chunks do documento vão junto — Firestore não tem ON DELETE CASCADE,
+    # então a cascata é feita aqui, explícita.
+    for title, (doc_id, _, _) in live.items():
+        if title not in wanted:
+            _delete_chunks_of(db, doc_id)
+            db.collection("knowledge_documents").document(doc_id).delete()
+            stats["documents_retired"] += 1
     return stats
 
 
-def sync_chunks(conn, docs: list[dict], provider, dry_run: bool) -> dict:
+def _delete_chunks_of(db, doc_id: str) -> int:
+    from google.cloud.firestore_v1.base_query import FieldFilter
+    snaps = list(db.collection("knowledge_chunks")
+                 .where(filter=FieldFilter("document_id", "==", doc_id))
+                 .stream())
+    for snap in snaps:
+        snap.reference.delete()
+    return len(snaps)
+
+
+def sync_chunks(db, docs: list[dict], provider, dry_run: bool) -> dict:
     """Chunk, embed only what changed, delete what no longer exists."""
+    from google.cloud.firestore_v1.base_query import FieldFilter
+
     stats = {"chunks_kept": 0, "chunks_embedded": 0, "chunks_deleted": 0}
 
     for doc in docs:
@@ -286,65 +300,68 @@ def sync_chunks(conn, docs: list[dict], provider, dry_run: bool) -> dict:
         pieces = chunk_text(doc["content"])
         hashes = [content_hash(p) for p in pieces]
 
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT id, metadata->>'hash' FROM knowledge_chunks
-                WHERE document_id = %s
-            """, (doc["id"],))
-            live = {h: cid for cid, h in cur.fetchall()}
+        snaps = list(db.collection("knowledge_chunks")
+                     .where(filter=FieldFilter("document_id", "==", doc["id"]))
+                     .stream())
+        live = {(s.to_dict().get("metadata") or {}).get("hash"): s.reference
+                for s in snaps}
 
-            stale = [cid for h, cid in live.items() if h not in hashes]
-            new = [(p, h) for p, h in zip(pieces, hashes) if h not in live]
-            stats["chunks_kept"] += len(live) - len(stale)
+        stale = [ref for h, ref in live.items() if h not in hashes]
+        new = [(p, h) for p, h in zip(pieces, hashes) if h not in live]
+        stats["chunks_kept"] += len(live) - len(stale)
 
-            if dry_run:
-                stats["chunks_embedded"] += len(new)
-                stats["chunks_deleted"] += len(stale)
-                continue
+        if dry_run:
+            stats["chunks_embedded"] += len(new)
+            stats["chunks_deleted"] += len(stale)
+            continue
 
-            if stale:
-                cur.execute(
-                    "DELETE FROM knowledge_chunks WHERE id = ANY(%s)", (stale,))
-                stats["chunks_deleted"] += len(stale)
+        for ref in stale:
+            ref.delete()
+        stats["chunks_deleted"] += len(stale)
 
-            if new:
-                vectors = provider.embed([p for p, _ in new], input_type="document")
-                for (text, h), vec in zip(new, vectors):
-                    cur.execute("""
-                        INSERT INTO knowledge_chunks
-                            (document_id, chunk_text, embedding, metadata)
-                        VALUES (%s, %s, %s, %s)
-                    """, (doc["id"], text, vec,
-                          _json({"hash": h, "slug": doc["slug"],
+        if new:
+            from google.cloud.firestore_v1.vector import Vector
+            vectors = provider.embed([p for p, _ in new], input_type="document")
+            for (text, h), vec in zip(new, vectors):
+                db.collection("knowledge_chunks").document().create({
+                    "document_id": doc["id"],
+                    "chunk_text": text,
+                    "embedding": Vector(vec),
+                    "metadata": {"hash": h, "slug": doc["slug"],
                                  "title": doc["title"],
-                                 "provider": provider.name})))
-                stats["chunks_embedded"] += len(new)
+                                 "provider": provider.name},
+                })
+            stats["chunks_embedded"] += len(new)
     return stats
 
 
-def prune_orphans(conn) -> int:
+def prune_orphans(db) -> int:
     """Chunks whose document is gone, and documents whose program is gone.
 
-    Cascades cover most of this, but a program deactivated rather than deleted
-    keeps its rows — and an inactive program must not stay retrievable, or the
-    agent answers about something URace stopped offering.
+    O Postgres tinha ON DELETE CASCADE cobrindo parte disto; o Firestore não
+    tem cascata nenhuma, então tudo é explícito aqui. Um programa desativado
+    (não deletado) mantém seus docs no catálogo — e um programa inativo não
+    pode continuar recuperável, ou o agente responde sobre algo que a URace
+    parou de oferecer.
     """
-    with conn.cursor() as cur:
-        cur.execute("""
-            DELETE FROM knowledge_documents kd
-            WHERE kd.source_type = 'auto_generated'
-              AND (kd.source_ref_id IS NULL
-                   OR NOT EXISTS (SELECT 1 FROM programs p
-                                  WHERE p.id = kd.source_ref_id
-                                    AND p.status = 'active'))
-            RETURNING kd.id
-        """)
-        return len(cur.fetchall())
+    from google.cloud.firestore_v1.base_query import FieldFilter
 
+    active = {s.id for s in
+              db.collection("programs")
+              .where(filter=FieldFilter("status", "==", "active"))
+              .select([]).stream()}
 
-def _json(obj):
-    import json
-    return json.dumps(obj)
+    removed = 0
+    snaps = (db.collection("knowledge_documents")
+             .where(filter=FieldFilter("source_type", "==", "auto_generated"))
+             .stream())
+    for snap in snaps:
+        ref_id = snap.to_dict().get("source_ref_id")
+        if ref_id is None or ref_id not in active:
+            _delete_chunks_of(db, snap.id)
+            snap.reference.delete()
+            removed += 1
+    return removed
 
 
 # =============================================================================
@@ -439,41 +456,32 @@ def main():
     if args.self_test:
         return self_test()
 
-    if not os.environ.get("DATABASE_URL"):
-        from dotenv import load_dotenv
-        load_dotenv(ROOT / ".env")
-    url = os.environ.get("DATABASE_URL")
-    if not url:
-        sys.exit("ERROR: DATABASE_URL not set.")
-
-    import psycopg
+    from db.client import get_db
 
     provider = get_provider(args.provider)
     print(f"provider {provider.name}, dimension {provider.dimension}\n")
 
-    with psycopg.connect(url, autocommit=False) as conn:
-        assert_matches_schema(provider, conn)
+    db = get_db()
+    assert_matches_schema(provider, db)
 
-        programs, faqs = load_catalog(conn, args.programs)
-        docs, skipped = plan(programs, faqs)
-        print(f"{len(programs)} programs -> {len(docs)} documents")
+    programs, faqs = load_catalog(db, args.programs)
+    docs, skipped = plan(programs, faqs)
+    print(f"{len(programs)} programs -> {len(docs)} documents")
 
-        if skipped:
-            print(f"\n{len(skipped)} programs produce no document (nothing filled in):")
-            for slug in skipped:
-                print(f"  {slug}")
-            print("  The agent will decline to describe these and escalate.")
+    if skipped:
+        print(f"\n{len(skipped)} programs produce no document (nothing filled in):")
+        for slug in skipped:
+            print(f"  {slug}")
+        print("  The agent will decline to describe these and escalate.")
 
-        if args.dry_run:
-            total = sum(len(chunk_text(d["content"])) for d in docs)
-            print(f"\ndry run: would produce {total} chunks; nothing written")
-            conn.rollback()
-            return 0
+    if args.dry_run:
+        total = sum(len(chunk_text(d["content"])) for d in docs)
+        print(f"\ndry run: would produce {total} chunks; nothing written")
+        return 0
 
-        stats = sync_documents(conn, docs, args.programs)
-        stats |= sync_chunks(conn, docs, provider, dry_run=False)
-        orphans = prune_orphans(conn)
-        conn.commit()
+    stats = sync_documents(db, docs, args.programs)
+    stats |= sync_chunks(db, docs, provider, dry_run=False)
+    orphans = prune_orphans(db)
 
     print(f"\ndocuments  {stats['documents']} written, "
           f"{stats['documents_retired']} retired, {orphans} orphaned removed")

@@ -32,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(ROOT / "prompts"))   # compose.py mora lá
 
 from compose import compose  # noqa: E402
 import tools_impl as tools  # noqa: E402
@@ -98,43 +99,29 @@ def detect_price_request(message: str) -> bool:
 # CONTEXT
 # =============================================================================
 
-def load_context(conn, lead_id: str) -> dict:
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT l.name, l.primary_channel, l.preferred_language, l.status,
-                   l.human_takeover, l.lead_master_summary
-            FROM leads l WHERE l.id = %s
-        """, (lead_id,))
-        lead = cur.fetchone()
-        if not lead:
-            raise SystemExit(f"lead {lead_id} not found")
+def load_context(db, lead_id: str) -> dict:
+    snap = db.collection("leads").document(lead_id).get()
+    if not snap.exists:
+        raise SystemExit(f"lead {lead_id} not found")
+    lead = snap.to_dict()
 
-        cur.execute("""
-            SELECT for_whom, driver_name, responsible_name, driver_age, origin,
-                   contact_phone, contact_email, goal, experience_level,
-                   competes, preferred_dates, availability_window, budget_signal
-            FROM qualification_data WHERE lead_id = %s
-        """, (lead_id,))
-        row = cur.fetchone()
-
-    fields = ["for_whom", "driver_name", "responsible_name", "driver_age",
-              "origin", "contact_phone", "contact_email", "goal",
-              "experience_level", "competes", "preferred_dates",
-              "availability_window", "budget_signal"]
-    qual = {k: v for k, v in zip(fields, row or [None] * len(fields)) if v is not None}
+    # A qualificação vive embutida no doc do lead (mapa `qualification`) —
+    # uma leitura traz tudo que o roteamento precisa, atomicamente.
+    qual = {k: v for k, v in (lead.get("qualification") or {}).items()
+            if v is not None and k != "updated_at"}
 
     return {
         "lead_id": lead_id,
-        "lead_name": lead[0],
-        "channel": lead[1] or "whatsapp",
-        "detected_language": lead[2] or "en",
-        "lead_status": lead[3],
-        "human_takeover": lead[4],
-        "lead_master_summary": lead[5],
+        "lead_name": lead.get("name"),
+        "channel": lead.get("primary_channel") or "whatsapp",
+        "detected_language": lead.get("preferred_language") or "en",
+        "lead_status": lead.get("status"),
+        "human_takeover": lead.get("human_takeover", False),
+        "lead_master_summary": lead.get("lead_master_summary"),
         "qualification": qual,
         "price_requested": False,
         "turn_count": 0,
-        "escalated": lead[3] == "escalated",
+        "escalated": lead.get("status") == "escalated",
     }
 
 
@@ -179,7 +166,7 @@ def render_context(ctx: dict, history: list) -> dict:
 # THE TURN
 # =============================================================================
 
-def run_turn(client, conn, ctx: dict, history: list, message: str,
+def run_turn(client, db, ctx: dict, history: list, message: str,
              verbose: bool = False) -> dict:
     ctx["turn_count"] += 1
     if detect_price_request(message):
@@ -212,7 +199,7 @@ def run_turn(client, conn, ctx: dict, history: list, message: str,
             calls_made.append(use.name)
             if verbose:
                 print(f"    [tool: {use.name}]")
-            result = tools.execute(conn, ctx, use.name, args)
+            result = tools.execute(db, ctx, use.name, args)
             results.append({"type": "tool_result", "tool_use_id": use.id,
                             "content": json.dumps(result, default=str)})
         history.append({"role": "user", "content": results})
@@ -223,44 +210,52 @@ def run_turn(client, conn, ctx: dict, history: list, message: str,
             "error": f"exceeded {MAX_TOOL_ROUNDS} tool rounds"}
 
 
-def persist(conn, ctx: dict, conversation_id: str, role: str, text: str,
+def persist(db, ctx: dict, conversation_id: str, role: str, text: str,
             mode: str | None = None):
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO messages (conversation_id, sender_type, content, mode)
-            VALUES (%s,%s,%s,%s)
-        """, (conversation_id, "lead" if role == "user" else "ai", text, mode))
+    from google.cloud import firestore
+    db.collection("conversations").document(conversation_id) \
+      .collection("messages").document().create({
+          "conversation_id": conversation_id,
+          "sender_type": "lead" if role == "user" else "ai",
+          "content": text,
+          "mode": mode,
+          "created_at": firestore.SERVER_TIMESTAMP,
+      })
 
 
 # =============================================================================
 # REPL
 # =============================================================================
 
-def ensure_lead(conn, lead_id: str | None) -> tuple[str, str]:
-    with conn.cursor() as cur:
-        if lead_id:
-            cur.execute("SELECT id FROM leads WHERE id = %s", (lead_id,))
-            if not cur.fetchone():
-                raise SystemExit(f"lead {lead_id} not found")
-        else:
-            kommo_id = int(uuid.uuid4().int % 10_000_000)
-            cur.execute("""
-                INSERT INTO leads (kommo_lead_id, name, primary_channel, lead_source)
-                VALUES (%s, NULL, 'whatsapp', 'repl') RETURNING id
-            """, (kommo_id,))
-            lead_id = str(cur.fetchone()[0])
+def ensure_lead(db, lead_id: str | None) -> tuple[str, str]:
+    from google.cloud import firestore
 
-        cur.execute("""
-            INSERT INTO conversations (lead_id, channel)
-            VALUES (%s, 'whatsapp') RETURNING id
-        """, (lead_id,))
-        conversation_id = str(cur.fetchone()[0])
-    return lead_id, conversation_id
+    if lead_id:
+        if not db.collection("leads").document(lead_id).get().exists:
+            raise SystemExit(f"lead {lead_id} not found")
+    else:
+        kommo_id = int(uuid.uuid4().int % 10_000_000)
+        lead_ref = db.collection("leads").document()
+        lead_ref.create({
+            "kommo_lead_id": kommo_id, "name": None,
+            "primary_channel": "whatsapp", "lead_source": "repl",
+            "preferred_language": "en", "status": "active",
+            "human_takeover": False, "qualification": {},
+            "created_at": firestore.SERVER_TIMESTAMP,
+            "updated_at": firestore.SERVER_TIMESTAMP,
+        })
+        lead_id = lead_ref.id
+
+    conv_ref = db.collection("conversations").document()
+    conv_ref.create({"lead_id": lead_id, "channel": "whatsapp",
+                     "started_at": firestore.SERVER_TIMESTAMP,
+                     "ended_at": None})
+    return lead_id, conv_ref.id
 
 
-def repl(conn, client, lead_id: str | None, verbose: bool):
-    lead_id, conversation_id = ensure_lead(conn, lead_id)
-    ctx = load_context(conn, lead_id)
+def repl(db, client, lead_id: str | None, verbose: bool):
+    lead_id, conversation_id = ensure_lead(db, lead_id)
+    ctx = load_context(db, lead_id)
     history: list = []
 
     print(f"lead {lead_id}")
@@ -286,20 +281,17 @@ def repl(conn, client, lead_id: str | None, verbose: bool):
             }, indent=2, default=str))
             continue
 
-        persist(conn, ctx, conversation_id, "user", message)
-        result = run_turn(client, conn, ctx, history, message, verbose)
-        conn.commit()
+        persist(db, ctx, conversation_id, "user", message)
+        result = run_turn(client, db, ctx, history, message, verbose)
 
         if result.get("error"):
             print(f"\n[{result['error']}]\n")
             continue
 
-        persist(conn, ctx, conversation_id, "assistant",
+        persist(db, ctx, conversation_id, "assistant",
                 result["text"], result["mode"])
-        conn.commit()
         print(f"\nagent> {result['text']}\n")
 
-    conn.commit()
     print(f"\nconversation {conversation_id} saved.")
 
 
@@ -362,19 +354,19 @@ def main():
     if args.dry_run:
         return dry_run()
 
-    if not os.environ.get("DATABASE_URL"):
+    if not os.environ.get("ANTHROPIC_API_KEY"):
         from dotenv import load_dotenv
         load_dotenv(ROOT / ".env")
 
     import anthropic
-    import psycopg
+    from db.client import get_db
 
     client = anthropic.Anthropic()
-    with psycopg.connect(os.environ["DATABASE_URL"], autocommit=False) as conn:
-        if args.repl:
-            repl(conn, client, args.lead, args.verbose)
-        else:
-            ap.error("--repl or --dry-run")
+    db = get_db()
+    if args.repl:
+        repl(db, client, args.lead, args.verbose)
+    else:
+        ap.error("--repl or --dry-run")
     return 0
 
 

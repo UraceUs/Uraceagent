@@ -126,25 +126,33 @@ def get_provider(name: str | None = None, dimension: int = 1024) -> Provider:
     raise EmbeddingError(f"unknown embedding provider {name!r}")
 
 
-def assert_matches_schema(provider: Provider, conn) -> None:
-    """Fail before writing anything if the column and the provider disagree.
+def assert_matches_schema(provider: Provider, db) -> None:
+    """Fail before writing anything if the corpus and the provider disagree.
 
-    Asked at startup rather than discovered at the first insert, because the
-    insert error names a row and this one names the actual problem.
+    O Firestore não declara dimensão em lugar nenhum — o índice vetorial a
+    fixa, e um vetor de dimensão errada falha na primeira busca, não na
+    escrita. Então a dimensão vira dado nosso: registrada em
+    configurations/kb no primeiro index, conferida em todos os seguintes.
+    Asked at startup rather than discovered at the first query, because the
+    query error names a request and this one names the actual problem.
     """
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT format_type(atttypid, atttypmod)
-            FROM pg_attribute
-            WHERE attrelid = 'knowledge_chunks'::regclass AND attname = 'embedding'
-        """)
-        row = cur.fetchone()
-    if not row:
-        raise EmbeddingError("knowledge_chunks.embedding not found")
+    from db.schema import EMBEDDING_DIMENSION
 
-    declared = int(row[0].strip().removeprefix("vector(").removesuffix(")"))
-    if declared != provider.dimension:
+    if provider.dimension != EMBEDDING_DIMENSION:
         raise EmbeddingError(
-            f"schema declares vector({declared}) but provider "
-            f"'{provider.name}' produces {provider.dimension}. Fix one before "
-            f"indexing — a mismatch discovered later costs a full re-embed.")
+            f"db/schema.py declares EMBEDDING_DIMENSION={EMBEDDING_DIMENSION} "
+            f"but provider '{provider.name}' produces {provider.dimension}. "
+            f"Fix one before indexing — a mismatch discovered later costs a "
+            f"full re-embed, and the vector index must be rebuilt too.")
+
+    ref = db.collection("configurations").document("kb")
+    snap = ref.get()
+    recorded = snap.to_dict().get("embedding_dimension") if snap.exists else None
+    if recorded is None:
+        ref.set({"embedding_dimension": provider.dimension,
+                 "embedding_provider": provider.name}, merge=True)
+    elif recorded != provider.dimension:
+        raise EmbeddingError(
+            f"the corpus was indexed at dimension {recorded} but provider "
+            f"'{provider.name}' produces {provider.dimension}. Re-embed the "
+            f"whole corpus (and rebuild the vector index) before mixing.")

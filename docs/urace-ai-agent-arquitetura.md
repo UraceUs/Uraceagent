@@ -2,6 +2,16 @@
 
 > Documento de arquitetura. Nenhum código de implementação de módulo está incluído aqui de propósito — apenas estrutura de dados (DDL), contratos entre módulos e decisões de design. A implementação vem depois, módulo a módulo.
 
+> **[v3 — migração para Firestore]** A camada de persistência migrou de
+> Postgres/Supabase para **Firestore** (projeto `ia-sales-agent-urace`). O DDL
+> da seção 9 e as menções a Postgres/pgvector/PostgREST neste documento são
+> **históricos**: descrevem o desenho original e as razões dele, que seguem
+> válidas. O modelo de dados vigente está em `db/schema.md`, a especificação
+> executável em `db/schema.py`, e os três portões (preço, idade, escalação) —
+> que eram função SQL + trigger — vivem agora em `db/gates.py`, dentro de
+> transações Firestore, com o serviço FastAPI como único escritor. O n8n não
+> chama mais RPC do banco: fala apenas com a API do agente.
+
 ---
 
 ## Changelog — v2: Admin Configuration Layer
