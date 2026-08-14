@@ -53,12 +53,13 @@ Estes pontos divergem entre documentos e **não foram resolvidos por conta próp
 - Só o POP define faixas, e só para Summer Camp (Baby Kart 4–7; 4t 7+; 2t 7+). Nenhuma fonte define idade mínima para 1-Day/Academy.
 - **DECISÃO (Italo, 14/08): mesma regra de idade para todos os serviços** — as faixas por categoria valem universalmente (1-Day, Academy, Camp): **Baby Kart 4–7 anos; Kart 4 tempos 7+; Kart 2 tempos 7+**. Portão de código: idade < 4 = inelegível; 4–6 = só Baby Kart; 7+ = 4t/2t conforme experiência.
 
-## Lacunas confirmadas em todas as fontes
+## Lacunas — status (atualizado 14/08)
 
-1. **Rate Card** — citado como fonte única de preço por todas as fontes, mas o documento em si não foi localizado no Drive com esse nome. Onde vive e como o agente consulta?
-2. **Links do check-in da pista** (mensagem literal permitida) — não constam em nenhum doc; obter com ADM.
-3. **Playbook Comercial v3** (scripts) — linkado no POP; complementa mas não foi extraído nesta fase.
-4. Política de crédito/validade para cancelamento ≥48h ("a definir" no próprio POP).
+1. **Rate Card** ✅ — planilha Google Sheets `160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo` ("Rate Card 2026"). Snapshot estruturado em `salesagent/config/ratecard-2026.json`. Pontos a confirmar com o Italo: (a) valores dos contratos 6/12 meses (células "detailed below" da planilha); (b) Baby Kart Rental avulso diz idade 5–8, demais tabelas dizem 4–7.
+2. **Links do check-in** ✅ — template literal em `salesagent/config/checkin-template.md`. Pendente: confirmar o link do formulário de registro (formato atípico) e se o link de driver pass vale para todos os dias.
+3. **Plano Kommo** ✅ — **Advanced** (confirma o caminho Salesbot + widget_request).
+4. **Playbook Comercial v3** (scripts) — linkado no POP; complementa mas não foi extraído nesta fase.
+5. Política de crédito/validade para cancelamento ≥48h ("a definir" no próprio POP).
 
 ## Classificação do conteúdo (destino de cada tipo)
 
