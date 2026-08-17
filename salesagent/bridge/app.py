@@ -72,7 +72,7 @@ def run_agent(lead_id: int, text: str) -> str:
     try:
         result = subprocess.run(
             ["openclaw", "agent", "--agent", SALES_AGENT,
-             "--session", f"kommo:{lead_id}", "-m", text],
+             "--session-key", f"kommo-{lead_id}", "-m", text],
             capture_output=True, text=True, timeout=120,
         )
         reply = result.stdout.strip()
