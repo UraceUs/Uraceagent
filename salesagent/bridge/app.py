@@ -9,6 +9,7 @@ nem com o Rate Card diretamente — só através destes endpoints, onde os
 portões são aplicados.
 """
 import asyncio
+import re
 import subprocess
 import time
 
@@ -27,6 +28,16 @@ SALES_AGENT = "urace-sales"  # agente no OpenClaw (criado na implantação)
 def _auth(x_api_key: str | None):
     if not AGENT_API_KEY or x_api_key != AGENT_API_KEY:
         raise HTTPException(401, "invalid api key")
+
+
+# B1-adjacent: regra de escrita "nunca em dash" garantida no código, não só no
+# prompt (rule 15 das instrucoes) — um modelo que derivar nao passa o sinal adiante.
+_DASH_RE = re.compile(r"[–—]")  # en dash (–) e em dash (—)
+
+
+def sanitize_outbound(text: str) -> str:
+    """Remove em/en dash de qualquer texto que vá para o cliente."""
+    return _DASH_RE.sub(",", text)
 
 
 # ------------------------------------------------------------------ entrada
@@ -75,7 +86,7 @@ def run_agent(lead_id: int, text: str) -> str:
              "--session-key", f"kommo-{lead_id}", "-m", text],
             capture_output=True, text=True, timeout=120,
         )
-        reply = result.stdout.strip()
+        reply = sanitize_outbound(result.stdout.strip())
         state.log("outbound", lead_id, reply)
         return reply
     except Exception as exc:  # timeout, agente fora etc. → escala, nunca inventa
