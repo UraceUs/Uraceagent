@@ -89,30 +89,24 @@ def find_existing():
 def create():
     body = {
         "name": PIPELINE_NAME,
+        "sort": 50,
+        "is_main": False,
+        "is_unsorted_on": False,
         "_embedded": {
             "statuses": [{"name": n, "sort": (i + 1) * 10}
                          for i, n in enumerate(STAGE_NAMES)]
         },
     }
-    # Kommo v4 tem variacoes de formato entre contas/versoes para "criar um
-    # recurso" — tenta objeto unico primeiro, depois envelope de array.
-    for label, payload in (("objeto único", body), ("array", [body])):
-        try:
-            resp = api("POST", "/leads/pipelines", payload)
-        except urllib.error.HTTPError as e:
-            print(f"  formato '{label}' falhou: {e.code} {e.read().decode()[:300]}")
-            continue
-        pid = None
-        if isinstance(resp, dict):
-            emb = resp.get("_embedded", {})
-            if "pipelines" in emb and emb["pipelines"]:
-                pid = emb["pipelines"][0]["id"]
-            elif "id" in resp:
-                pid = resp["id"]
-        if pid:
-            print(f"  criado com formato '{label}' (id {pid})")
-            return api("GET", f"/leads/pipelines/{pid}")
-    sys.exit("ABORTADO: não foi possível criar o pipeline em nenhum formato conhecido.")
+    try:
+        resp = api("POST", "/leads/pipelines", [body])
+    except urllib.error.HTTPError as e:
+        sys.exit(f"ABORTADO: Kommo recusou a criação.\n{e.read().decode()[:800]}")
+    emb = resp.get("_embedded", {})
+    pid = emb["pipelines"][0]["id"] if emb.get("pipelines") else None
+    if not pid:
+        sys.exit(f"ABORTADO: resposta inesperada da API: {resp}")
+    print(f"  criado (id {pid})")
+    return api("GET", f"/leads/pipelines/{pid}")
 
 
 def main():
