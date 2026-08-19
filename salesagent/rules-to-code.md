@@ -37,7 +37,7 @@
 | # | Regra | Implementação |
 |---|---|---|
 | S1 | Sales Agent sem shell/terminal/filesystem | Agente OpenClaw separado, tools restritas à skill de vendas |
-| S2 | Cliente ≠ humano autorizado | **Canal do cliente = Kommo, único canal de vendas** (via ponte, autenticada por API key). **WhatsApp é canal interno de escalação, nunca de vendas** — só Italo e Eduardo (ADM), nunca cliente. Confirmado por Italo em 19/08. O agente Chase não deve estar acessível por esse canal — ver bug aberto abaixo. |
+| S2 | Cliente ≠ humano autorizado | **Canal do cliente = Kommo, único canal de vendas** (via ponte, autenticada por API key). **WhatsApp é canal interno de escalação, nunca de vendas** — só Italo (`+1 407 487 8143`) e Eduardo/ADM (`+55 61 98267 8383`), confirmados em 19/08 e já corretos na allowlist do canal. O agente Chase não deve estar acessível por esse canal — ver bug de roteamento sob investigação. |
 | S3 | Segredos fora do alcance do agente | Tokens (Kommo, gateway) só na ponte/env do serviço; nunca em prompt, memória ou filesystem legível pelo agente |
 | S4 | Sem acesso ao agente pessoal / futuro ADM Agent | Agentes isolados no OpenClaw; sessões e memórias separadas |
 

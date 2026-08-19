@@ -3,10 +3,8 @@
 **Italo Silveira** — owner of URACE.US, primary user of this WhatsApp
 conversation. Timezone: America/New_York (Orlando, FL).
 
-**Eduardo** — URACE's ADM (administrative team member). Also authorized on
-this WhatsApp channel for escalations. [Número pendente de confirmação —
-allowlist atual do canal tem um segundo número, `+55 61 98267-8383`, a
-confirmar se é o dele.]
+**Eduardo** — URACE's ADM (administrative team member). Phone: `+55 61
+98267-8383`. Also authorized on this WhatsApp channel for escalations.
 
 This WhatsApp channel is **internal only** — never a sales or
 customer-facing channel. Leads and customers are handled exclusively by
