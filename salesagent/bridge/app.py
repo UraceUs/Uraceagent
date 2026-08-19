@@ -167,7 +167,11 @@ async def tool_qualify(request: Request, x_api_key: str | None = Header(None)):
     p = await request.json()
     lead_id = int(p["lead_id"])
     fields = {}
-    if p.get("experience") in ("first_time", "recreational", "competes"):
+    # Classificação A/B/C/D (documento Chase): new=A, rental_only=B,
+    # raced_before=C, competes=D. Mantém "first_time"/"recreational" como
+    # aliases de compatibilidade com o schema anterior.
+    if p.get("experience") in ("new", "first_time", "rental_only", "recreational",
+                               "raced_before", "competes"):
         fields["q_experience"] = p["experience"]
     if p.get("origin") in ("local", "traveler"):
         fields["q_origin"] = p["origin"]

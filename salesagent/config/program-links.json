@@ -1,0 +1,11 @@
+{
+  "_meta": {
+    "status": "PENDENTE — nenhuma URL real fornecida ainda (decisão C10)",
+    "note": "O agente Chase nunca fala preco em chat para leads Opcao A/B/Academy: ele sempre manda o link do programa. Enquanto estes campos estiverem null, a resposta correta do agente e dizer que vai confirmar o link com a equipe, nunca inventar uma URL."
+  },
+  "one_day_program_link": null,
+  "academy_link": null,
+  "training_camp_link": null,
+  "checkout_link": null,
+  "program_link_generic": null
+}

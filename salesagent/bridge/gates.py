@@ -74,6 +74,10 @@ ESCALATION_PATTERNS = [
     (r"\b(racing team|race team|corrida profissional)\b", "interesse em Racing Team"),
     (r"\b(custody|guarda|ex[- ]?(wife|husband|marido|esposa))\b", "questão de custódia"),
     (r"\b(own kart|meu kart|kart pr[óo]prio)\b", "kart próprio (inspeção/gestão)"),
+    (r"\b(complaint|complain|reclama[çc][ãa]o|reclamar)\b", "reclamação"),
+    (r"\b(media|press|imprensa|journalist|jornalista)\b", "mídia/imprensa"),
+    (r"\b(talk to a human|speak to a person|falar com (um )?humano|falar com algu[ée]m da equipe)\b",
+     "pediu para falar com humano"),
 ]
 
 
