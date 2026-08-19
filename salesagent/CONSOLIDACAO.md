@@ -76,9 +76,8 @@ ainda mais forte que abrir/fechar um número. Ver instruções atualizadas.
 
 ### C9. Estágios do funil — conceituais (documento Chase) × reais (conta Kommo)
 - **DECISÃO (Italo, 17/08): criar um funil novo e dedicado**, com os 13 estágios do documento como estágios reais do Kommo (não mapeamento por tags para o estágio em si).
-- Implementado: `salesagent/tools/create_chase_pipeline.py` — a ser rodado no VPS (ver instruções da entrega de 17/08). Gera `kommo-pipeline-chase.json`, que `config.py` da ponte passa a usar automaticamente assim que existir (tem prioridade sobre `kommo-pipeline.json`/"Sales funnel").
-- As tags do C9 original (`academy-price-aware`, `academy-qualified`, `current-racer-qualified`, `one-day-checkout-sent`, `escalated`) continuam sendo usadas **junto** com os estágios — não substituem mais os estágios, complementam com os sinais que não são "posição no funil" (ex.: uma tag persiste mesmo quando o lead avança de estágio).
-- **Status: aguardando execução do script no VPS** (não tenho acesso de rede ao Kommo a partir desta sessão de desenvolvimento).
+- ✅ **Criado em produção (17/08):** pipeline `Chase — AI Sales Funnel` (id `14316000`) na conta Kommo real, com os 13 estágios + Incoming leads + Closed won/lost. IDs reais em `salesagent/config/kommo-pipeline-chase.json`, que `config.py` da ponte já usa automaticamente (prioridade sobre "Sales funnel").
+- As tags (`academy-price-aware`, `academy-qualified`, `current-racer-qualified`, `one-day-checkout-sent`, `escalated`) continuam sendo usadas **junto** com os estágios, para sinais que não são "posição no funil".
 
 ### C10. Links de programa
 - **DECISÃO (Italo, 17/08):** 1-Day = `https://urace.us/product/go-kart-driving-experience/`; Academy = `https://urace.us/urace-academy/`. Aplicados em `program-links.json`.
