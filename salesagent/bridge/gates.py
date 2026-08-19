@@ -31,16 +31,20 @@ def get_price(lead_id: int, product: str, category: str) -> dict:
         log("gate", lead_id, f"G5 idade {age} inelegível para {category}")
         return {"status": "age_ineligible",
                 "message": f"Idade {age} não é elegível para a categoria {category}."}
-    link = PROGRAM_LINKS.get(_LINK_FIELD.get(product, ""))
+    link = (PROGRAM_LINKS.get(_LINK_FIELD.get(product, ""))
+            or PROGRAM_LINKS.get("program_link_generic"))
     if not link:
         log("gate", lead_id, f"G1: link não configurado ({product}/{category})")
         return {"status": "unknown",
                 "message": "Link do programa ainda não configurado — diga que vai confirmar e escale."}
     log("gate", lead_id, f"G1: link liberado ({product}/{category})")
-    return {"status": "ok", "product": product, "category": category, "link": link,
-            "notes": ["Nunca fale um preço em número no chat — use o link.",
-                      "Driver pass e pit pass são pagos direto à pista — nunca inclusos.",
-                      "Security deposit reembolsável sem dano ao kart."]}
+    result = {"status": "ok", "product": product, "category": category, "link": link,
+              "notes": ["Nunca fale um preço em número no chat — use o link.",
+                        "Driver pass e pit pass são pagos direto à pista — nunca inclusos.",
+                        "Security deposit reembolsável sem dano ao kart."]}
+    if product == "one_day":
+        result["checkout_link"] = PROGRAM_LINKS.get("checkout_link")
+    return result
 
 
 # ---------------------------------------------------------------- G5: idade
