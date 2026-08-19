@@ -4,43 +4,43 @@ Um modelo que nunca recebe o número não pode ser convencido a dizê-lo.
 """
 import re
 
-from config import RATECARD
+from config import PROGRAM_LINKS, RATECARD
 from state import get_conversation, log
 
 # ---------------------------------------------------------------- G1: preço
-def price_gate_open(lead_id: int) -> bool:
-    conv = get_conversation(lead_id)
-    return bool(conv["q_experience"]) and bool(conv["q_origin"])
+# Refinado em 17/08 (documento Chase, decisão C1): o agente NUNCA fala um
+# número em chat, para nenhum lead, em nenhum momento. get_price() não
+# devolve mais valor monetário para uso conversacional — devolve o link
+# da página do programa. O valor bruto continua em ratecard-2026.json para
+# uso interno/CRM (nunca exposto por este endpoint).
+_LINK_FIELD = {
+    "one_day": "one_day_program_link",
+    "monthly": "academy_link",
+    "camp": "training_camp_link",
+    "lead_and_follow": "program_link_generic",
+    "corporate": "program_link_generic",
+}
 
 
 def get_price(lead_id: int, product: str, category: str) -> dict:
-    """Única porta de saída de preço. Fecha por qualificação e por idade."""
-    if not price_gate_open(lead_id):
-        log("gate", lead_id, f"G1 fechado: preço negado ({product}/{category})")
-        return {"status": "gate_closed",
-                "message": "Qualifique primeiro: experiência do driver e origem (local/traveler)."}
+    """Única porta de saída de "preço" para o chat: devolve o LINK da
+    página, nunca um número. Ainda bloqueia por idade quando aplicável."""
     conv = get_conversation(lead_id)
     age = conv["driver_age"]
     if age is not None and not age_eligible(age, category):
         log("gate", lead_id, f"G5 idade {age} inelegível para {category}")
         return {"status": "age_ineligible",
                 "message": f"Idade {age} não é elegível para a categoria {category}."}
-    table = {
-        "one_day": RATECARD.get("academy_daily", {}),
-        "monthly": RATECARD.get("academy_monthly_no_contract", {}),
-        "camp": RATECARD.get("summer_camp", {}),
-        "lead_and_follow": RATECARD.get("lead_and_follow", {}),
-        "corporate": RATECARD.get("corporate_event", {}),
-    }.get(product)
-    if not table or category not in table:
-        log("gate", lead_id, f"G8 sem preço na base: {product}/{category}")
+    link = PROGRAM_LINKS.get(_LINK_FIELD.get(product, ""))
+    if not link:
+        log("gate", lead_id, f"G1: link não configurado ({product}/{category})")
         return {"status": "unknown",
-                "message": "Preço não disponível na base — diga que vai confirmar e escale."}
-    entry = table[category]
-    log("gate", lead_id, f"preço liberado: {product}/{category}")
-    return {"status": "ok", "product": product, "category": category, "price": entry,
-            "notes": ["Driver pass e pit pass são pagos direto à pista — nunca inclusos.",
-                      "Security deposit de $400, reembolsável sem dano."]}
+                "message": "Link do programa ainda não configurado — diga que vai confirmar e escale."}
+    log("gate", lead_id, f"G1: link liberado ({product}/{category})")
+    return {"status": "ok", "product": product, "category": category, "link": link,
+            "notes": ["Nunca fale um preço em número no chat — use o link.",
+                      "Driver pass e pit pass são pagos direto à pista — nunca inclusos.",
+                      "Security deposit reembolsável sem dano ao kart."]}
 
 
 # ---------------------------------------------------------------- G5: idade

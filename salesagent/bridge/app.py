@@ -18,7 +18,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 import gates
 import kommo_client as kommo
 import state
-from config import AGENT_API_KEY, STAGES
+from config import AGENT_API_KEY, HUMAN_WHATSAPP, STAGES
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -119,15 +119,19 @@ def escalate(lead_id: int, reason: str, context: str = "") -> None:
 def notify_human(text: str) -> None:
     """Envia ao WhatsApp interno (canal do dono) via OpenClaw.
 
-    TODO(deploy): confirmar comando de envio direto de canal na versão
-    instalada (openclaw channels send / message tool do agente principal).
+    Causa raiz do bug "não chega mensagem" (17/08): faltavam os flags de
+    entrega. `openclaw agent -m "..."` sozinho só devolve texto no stdout
+    -- não empurra nada para o canal. `--to/--channel/--deliver` são
+    obrigatórios para o agente efetivamente publicar no WhatsApp.
     """
     try:
-        subprocess.run(
-            ["openclaw", "agent", "--agent", "main", "-m",
-             f"Envie esta mensagem no WhatsApp para o Italo, sem alterar: {text}"],
+        result = subprocess.run(
+            ["openclaw", "agent", "--agent", "main", "--channel", "whatsapp",
+             "--to", HUMAN_WHATSAPP, "--deliver", "-m",
+             f"[Encaminhe exatamente o texto abaixo como mensagem, sem alterar nada]\n{text}"],
             capture_output=True, text=True, timeout=60,
         )
+        state.log("notify_human", None, f"rc={result.returncode} out={result.stdout[:300]} err={result.stderr[:300]}")
     except Exception as exc:
         state.log("error", None, f"notify_human: {exc}")
 

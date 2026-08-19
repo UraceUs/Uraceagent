@@ -36,8 +36,16 @@ ESCALATION_REALERT_MIN = int(_bridge.get("ESCALATION_REALERT_MIN", "15"))  # 10‚
 DB_PATH = URACE_DIR / "salesbridge.db"
 
 RATECARD = json.loads((REPO_DIR / "config" / "ratecard-2026.json").read_text())
-PIPELINE = json.loads((REPO_DIR / "config" / "kommo-pipeline.json").read_text())
+PROGRAM_LINKS = json.loads((REPO_DIR / "config" / "program-links.json").read_text())
 CHECKIN_TEMPLATE = (REPO_DIR / "config" / "checkin-template.md").read_text()
+
+# Pipeline ativo: prefere o pipeline dedicado do Chase (criado via
+# create_chase_pipeline.py) se existir; sen√£o cai no "Sales funnel" original.
+_chase_pipeline_path = REPO_DIR / "config" / "kommo-pipeline-chase.json"
+_pipeline_path = (_chase_pipeline_path if _chase_pipeline_path.exists()
+                  else REPO_DIR / "config" / "kommo-pipeline.json")
+PIPELINE = json.loads(_pipeline_path.read_text())
+PIPELINE_SOURCE = _pipeline_path.name
 
 STAGES = {k: v["id"] for k, v in PIPELINE["stages"].items()}
 PIPELINE_ID = PIPELINE["pipeline_id"]

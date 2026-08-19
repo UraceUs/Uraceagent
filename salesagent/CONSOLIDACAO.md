@@ -75,21 +75,17 @@ ainda mais forte que abrir/fechar um número. Ver instruções atualizadas.
 - **DECISÃO (Italo, 17/08): o nome é "Chase".** Adotado o modelo de transparência do documento — o agente se apresenta como assistente de IA da URace, não como atendente anônimo. Esta decisão **substitui** a regra 9 original das instruções (que dizia o oposto).
 
 ### C9. Estágios do funil — conceituais (documento Chase) × reais (conta Kommo)
-- O documento Chase lista 14 estágios conceituais (New Inquiry → ... → Closed).
-- A API real do Kommo (lida em 14/08) tem 20 estágios no pipeline "Sales funnel" (ver `salesagent/config/kommo-pipeline.json`), com nomes bem diferentes.
-- **Reconciliação proposta (não é decisão unilateral — pendente confirmação):** o agente move o lead pelos **estágios reais** do Kommo (a fonte de verdade, por decisão C3), e registra os **conceitos** do documento Chase (price-aware, qualified, checkout sent etc.) como **tags**, já que o funil real não tem uma etapa por conceito. Se Italo preferir reconfigurar o funil real do Kommo para bater com os nomes do documento, é só avisar — a ponte lê os estágios direto da API, então uma mudança lá se reflete automaticamente.
-- **PENDENTE: confirmação do Italo.**
+- **DECISÃO (Italo, 17/08): criar um funil novo e dedicado**, com os 13 estágios do documento como estágios reais do Kommo (não mapeamento por tags para o estágio em si).
+- Implementado: `salesagent/tools/create_chase_pipeline.py` — a ser rodado no VPS (ver instruções da entrega de 17/08). Gera `kommo-pipeline-chase.json`, que `config.py` da ponte passa a usar automaticamente assim que existir (tem prioridade sobre `kommo-pipeline.json`/"Sales funnel").
+- As tags do C9 original (`academy-price-aware`, `academy-qualified`, `current-racer-qualified`, `one-day-checkout-sent`, `escalated`) continuam sendo usadas **junto** com os estágios — não substituem mais os estágios, complementam com os sinais que não são "posição no funil" (ex.: uma tag persiste mesmo quando o lead avança de estágio).
+- **Status: aguardando execução do script no VPS** (não tenho acesso de rede ao Kommo a partir desta sessão de desenvolvimento).
 
-### C10. Links de programa — ainda não fornecidos
-- O documento Chase referencia `[1-DAY PROGRAM LINK]`, `[ACADEMY LINK]`, `[TRAINING CAMP LINK]`, `[CHECKOUT LINK]`, `[PROGRAM LINK]` — nenhuma URL real foi passada ainda.
-- Sem elas, a regra "nunca falar preço no chat, sempre mandar a página" fica incompleta — o agente vai dizer que vai confirmar em vez de mandar o link.
-- Placeholders registrados em `salesagent/config/program-links.json`.
-- **PENDENTE: Italo fornecer as URLs reais** (páginas do site com fotos, vídeos, descrição e preço de cada programa, e o link de checkout do 1-Day).
+### C10. Links de programa
+- **DECISÃO (Italo, 17/08):** 1-Day = `https://urace.us/product/go-kart-driving-experience/`; Academy = `https://urace.us/urace-academy/`. Aplicados em `program-links.json`.
+- **Ainda faltam:** Training Camp (página do camp de 3/5 dias) e Checkout (confirmar se é a própria página do 1-Day ou um link de checkout separado). Generic (usado com quem já compete) default para `https://urace.us` — avise se preferir outra página.
 
-### C11. Cadência de follow-up — POP × documento Chase
-- **POP v3:** mínimo 4 tentativas, intervalo progressivo D0→D+1→+3d→+1 semana, um único fluxo para todo lead.
-- **Documento Chase (mais novo, desenhado para automação):** três trilhas distintas conforme o estado da conversa — (a) sem resposta à mensagem inicial: 2h/24h/3d/7d, fecha ao fim; (b) link de programa enviado sem resposta: 10min/24h/3d/7d; (c) cliente pediu para retornar em data específica: tarefa persistente na data pedida, cancelada se ele responder antes.
-- **Adotado por padrão o modelo do documento Chase** (mais granular e específico para automação) — é refinamento operacional dentro do espírito já decidido em C1/C2, não inversão de política crítica. Sinalizando aqui para visibilidade; avise se preferir manter a cadência única do POP.
+### C11. Cadência de follow-up
+- **DECISÃO (Italo, 17/08): seguir o modelo de 3 trilhas do documento Chase.** Já implementado nas instruções e no `rules-to-code.md` (B2).
 
 ## Lacunas — status (atualizado 17/08)
 
