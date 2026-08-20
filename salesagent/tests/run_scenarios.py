@@ -24,6 +24,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SCENARIOS_PATH = HERE / "scenarios.json"
+BRIDGE_DIR = HERE.parent / "bridge"
+sys.path.insert(0, str(BRIDGE_DIR))
+import textproc  # noqa: E402 -- mesma função que a ponte usa antes de enviar ao cliente
 
 
 def run_agent(agent: str, session_key: str, message: str, timeout: int = 120) -> str:
@@ -76,11 +79,19 @@ def main() -> int:
         transcript = []
         scenario_hits = []
         for turn_n, msg in enumerate(sc["messages"], 1):
-            reply = run_agent(args.agent, session_key, msg)
-            transcript.append((msg, reply))
+            raw = run_agent(args.agent, session_key, msg)
+            # Checa exatamente o que o cliente veria (mesma função que a
+            # ponte aplica em app.py: diretivas [[...]] removidas, dash
+            # sanitizado) -- não o texto bruto do modelo, que pode conter
+            # instrução interna nunca destinada ao lead.
+            visible = textproc.customer_facing(raw)
+            transcript.append((msg, raw, visible))
             print(f"  lead[{turn_n}]: {msg}")
-            print(f"  chase[{turn_n}]: {reply}\n")
-            hits = check_global(reply, global_checks)
+            print(f"  chase[{turn_n}]: {visible}")
+            if visible != raw:
+                print(f"  (bruto, p/ auditoria): {raw}")
+            print()
+            hits = check_global(visible, global_checks)
             scenario_hits.extend(hits)
             time.sleep(args.sleep)
 

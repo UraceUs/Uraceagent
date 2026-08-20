@@ -9,7 +9,6 @@ nem com o Rate Card diretamente — só através destes endpoints, onde os
 portões são aplicados.
 """
 import asyncio
-import re
 import subprocess
 import time
 
@@ -18,6 +17,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 import gates
 import kommo_client as kommo
 import state
+import textproc
 from config import AGENT_API_KEY, HUMAN_WHATSAPP, STAGES
 
 app = FastAPI(title="urace-sales-bridge")
@@ -28,16 +28,6 @@ SALES_AGENT = "urace-sales"  # agente no OpenClaw (criado na implantação)
 def _auth(x_api_key: str | None):
     if not AGENT_API_KEY or x_api_key != AGENT_API_KEY:
         raise HTTPException(401, "invalid api key")
-
-
-# B1-adjacent: regra de escrita "nunca em dash" garantida no código, não só no
-# prompt (rule 15 das instrucoes) — um modelo que derivar nao passa o sinal adiante.
-_DASH_RE = re.compile(r"[–—]")  # en dash (–) e em dash (—)
-
-
-def sanitize_outbound(text: str) -> str:
-    """Remove em/en dash de qualquer texto que vá para o cliente."""
-    return _DASH_RE.sub(",", text)
 
 
 # ------------------------------------------------------------------ entrada
@@ -79,14 +69,28 @@ def process_inbound(payload: dict) -> None:
 
 # ------------------------------------------------------------------ agente
 def run_agent(lead_id: int, text: str) -> str:
-    """Um turno do agente OpenClaw, com sessão isolada por lead."""
+    """Um turno do agente OpenClaw, com sessão isolada por lead.
+
+    O texto bruto do modelo pode conter diretivas `[[...]]` (protocolo em
+    instructions/urace-sales-agent.md) -- nunca destinadas ao cliente.
+    `textproc.customer_facing()` é o único ponto que decide o que o lead
+    realmente vê (remove diretivas + sanitiza dash); as diretivas em si são
+    logadas à parte para auditoria. Executá-las (chamar CRM/escalação a
+    partir do texto do agente) é trabalho de Fase 3, ainda não implementado
+    -- hoje quem chama essas tools são os endpoints dedicados (ex.:
+    tool_qualify → escalate()), não este parser.
+    """
     try:
         result = subprocess.run(
             ["openclaw", "agent", "--agent", SALES_AGENT,
              "--session-key", f"kommo-{lead_id}", "-m", text],
             capture_output=True, text=True, timeout=120,
         )
-        reply = sanitize_outbound(result.stdout.strip())
+        raw = result.stdout.strip()
+        directives = textproc.extract_directives(raw)
+        if directives:
+            state.log("directives", lead_id, " | ".join(directives))
+        reply = textproc.customer_facing(raw)
         state.log("outbound", lead_id, reply)
         return reply
     except Exception as exc:  # timeout, agente fora etc. → escala, nunca inventa

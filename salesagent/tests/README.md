@@ -24,6 +24,17 @@ por regex em TODA resposta do agente em TODO cenário: nunca em/en dash, nunca
 preço em número, nunca "all-inclusive", nunca a palavra "vandalism", nunca
 confirmar reserva antes do pagamento, nunca esconder que é IA.
 
+**Importante:** a checagem roda em cima de `textproc.customer_facing(reply)`
+(`bridge/textproc.py`), não na resposta bruta do modelo. O agente responde em
+texto livre + diretivas internas `[[...]]` (protocolo em
+`instructions/urace-sales-agent.md`) — nunca destinadas ao cliente, e a ponte
+(`bridge/app.py`) as remove antes de qualquer envio real. O runner usa a
+mesma função da ponte para checar exatamente o que um lead real veria, não
+texto interno (nota de CRM, briefing de escalação) que só existiria por
+faltar esse passo. Quando uma diretiva é removida, a linha bruta é impressa
+como "(bruto, p/ auditoria)" logo abaixo — útil pra revisão manual, não entra
+na checagem automática.
+
 ## O que precisa de revisão manual
 
 Cada cenário tem um campo `expect_manual_review` — coisas que só um humano
