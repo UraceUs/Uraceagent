@@ -9,7 +9,10 @@ nem com o Rate Card diretamente — só através destes endpoints, onde os
 portões são aplicados.
 """
 import asyncio
+import base64
 import datetime
+import hashlib
+import hmac
 import json
 import subprocess
 import time
@@ -22,7 +25,7 @@ import gates
 import kommo_client as kommo
 import state
 import textproc
-from config import AGENT_API_KEY, HUMAN_WHATSAPP
+from config import AGENT_API_KEY, HUMAN_WHATSAPP, KOMMO_BOT_SECRET, KOMMO_TOKEN
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -82,6 +85,33 @@ def _extract_inbound(payload: dict) -> tuple[int, str, str | None, str | None]:
 _pending_returns: dict[int, tuple[str, str | None]] = {}
 
 
+def _b64url_decode(part: str) -> bytes:
+    return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
+
+
+def _verify_bot_token(token: str | None) -> bool:
+    """Valida o JWT descartável do widget_request: HS512 assinado com o
+    client secret da integração (conforme AmoCRMOAuth::parseBotDisposableToken
+    do SDK oficial). Só roda quando KOMMO_BOT_SECRET está configurado —
+    o ?key= na URL continua sendo a autenticação principal."""
+    if not KOMMO_BOT_SECRET:
+        return True
+    if not token or token.count(".") != 2:
+        return False
+    try:
+        header_b64, payload_b64, sig_b64 = token.split(".")
+        expected = hmac.new(KOMMO_BOT_SECRET.encode(),
+                            f"{header_b64}.{payload_b64}".encode(),
+                            hashlib.sha512).digest()
+        if not hmac.compare_digest(expected, _b64url_decode(sig_b64)):
+            return False
+        claims = json.loads(_b64url_decode(payload_b64))
+        exp = claims.get("exp")
+        return exp is None or int(exp) >= int(time.time())
+    except Exception:
+        return False
+
+
 @app.post("/kommo/hook")
 async def kommo_hook(request: Request, background: BackgroundTasks,
                      x_api_key: str | None = Header(None), key: str | None = None):
@@ -95,6 +125,9 @@ async def kommo_hook(request: Request, background: BackgroundTasks,
     # Sempre loga o payload bruto — é o que permite calibrar o parser contra
     # o formato REAL da conta no primeiro teste (tools/show_recent_audit.py).
     state.log("hook_raw", None, json.dumps(payload, ensure_ascii=False)[:3500])
+    if not _verify_bot_token(payload.get("token")):
+        state.log("error", None, "hook: JWT do bot inválido/expirado (KOMMO_BOT_SECRET ativo)")
+        raise HTTPException(401, "invalid bot token")
     background.add_task(process_inbound, payload)
     return {"ok": True}
 
@@ -209,21 +242,35 @@ def _salesbot_continue(lead_id: int, return_url: str, token: str | None,
                        text: str) -> bool:
     """POST de continuação do Salesbot: mostra `text` ao lead no chat.
 
-    Formato conforme docs do widget_request (token no corpo +
-    execute_handlers). O status/corpo da resposta é logado sempre — é o que
-    permite ajustar fino contra a conta real no primeiro teste ponta a ponta.
+    Formato confirmado nas docs oficiais (developers.kommo.com, referência
+    "SalesBot widget block execution confirmation", validado 21/08):
+    - POST no return_url verbatim (…/api/v4/salesbot/{bot}/continue/{id})
+    - Auth: header `Authorization: Bearer <token da integração>` — o mesmo
+      KOMMO_TOKEN que a ponte já usa na API v4. O JWT descartável do
+      payload NÃO vai no corpo (isso era um padrão de comunidade, errado).
+    - Corpo: {"data": {...}, "execute_handlers": [...]}; handler `show`
+      type=text exibe a mensagem ao lead. Sucesso = 202 Accepted.
+    - 404 = "registro aguardando execução não encontrado": o bot desistiu
+      de esperar (timeout não documentado) — cai no fallback de nota.
+    - Docs recomendam value <= 80 chars no show; bridges em produção enviam
+      textos maiores sem problema — se a conta real recusar, dividir em
+      múltiplos handlers (máx. 10) é o plano B.
     """
     body = {
-        "token": token,
         "data": {"status": "success"},
         "execute_handlers": [
             {"handler": "show", "params": {"type": "text", "value": text}},
         ],
     }
+    headers = {"Authorization": f"Bearer {KOMMO_TOKEN}"}
     try:
-        r = httpx.post(return_url, json=body, timeout=15)
+        r = httpx.post(return_url, json=body, headers=headers, timeout=15)
         state.log("salesbot_continue", lead_id,
                   f"rc={r.status_code} body={r.text[:300]}")
+        if r.status_code == 404:
+            state.log("error", lead_id,
+                      "salesbot_continue 404: bot não estava mais esperando "
+                      "(resposta demorou demais?) — usando fallback de nota")
         return r.status_code < 300
     except Exception as exc:
         state.log("error", lead_id, f"salesbot_continue: {exc}")

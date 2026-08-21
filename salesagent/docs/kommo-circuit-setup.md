@@ -9,12 +9,13 @@
 ```
 lead escreve no chat (Kommo)
   → Salesbot dispara (gatilho: mensagem recebida no funil do Chase)
-  → passo widget_request POSTa pra https://bridge.urace.us/kommo/hook?key=...
+  → bloco do widget "Chase" POSTa pra https://bridge.urace.us/kommo/hook?key=...
   → ponte ACK <2s, processa em background:
       gatilhos de escalação (B4) → estado (G3) → Chase (OpenClaw)
       → diretivas [[...]] executadas (CRM/qualify/escalate/price)
-  → ponte POSTa no return_url do Salesbot → bot mostra a resposta no chat
-  → bot volta a esperar a próxima mensagem → repete
+  → ponte POSTa no return_url (Bearer KOMMO_TOKEN, handler show)
+  → bot mostra a resposta no chat e TERMINA
+  → próxima mensagem do lead dispara o bot de novo (padrão re-trigger)
 ```
 
 ## Bloco A — ponte como serviço systemd (VPS)
@@ -65,32 +66,52 @@ curl https://bridge.urace.us/health
 O Caddyfile só expõe `/kommo/hook` e `/health` — as tools do agente e
 `/human/reply` continuam acessíveis apenas de dentro do VPS.
 
-## Bloco C — Salesbot no Kommo (interface, Italo na tela)
+## Bloco C — widget + Salesbot no Kommo (interface, Italo na tela)
 
+> Confirmado nas docs oficiais (21/08): o passo `widget_request` **só
+> existe dentro de um bloco de widget** — é preciso subir um widget custom
+> na conta (plano Advanced ✅). O widget já está pronto no repo:
+> `salesagent/kommo-widget/` (bloco "Chase — responder ao lead").
+>
 > Pré-requisito: pegar a `AGENT_API_KEY` no VPS:
 > `grep AGENT_API_KEY ~/.urace/bridge.env`
-> A URL completa do bot será:
+> A URL completa usada no bloco será:
 > `https://bridge.urace.us/kommo/hook?key=COLE_A_CHAVE_AQUI`
 
-1. **Kommo → Automate (Digital Pipeline) no funil do Chase** (o pipeline
-   novo, id `14316000`). No estágio **Incoming leads**, adicionar automação
-   **"quando o cliente envia uma mensagem" → executar Salesbot → criar novo
-   bot** (nome sugerido: `chase-bridge`).
-2. No editor do bot, adicionar o passo **Widget request / solicitação a
-   serviço externo** (no editor visual pode aparecer como "Make a request"
-   ou dentro de "+ Mais" → integração; se só existir no editor de código,
-   usar o bloco `widget_request`). Configurar:
-   - **URL**: a URL completa com `?key=` acima.
-   - Se houver campo de corpo/dados, incluir o id do lead e o texto da
-     mensagem (placeholders do editor, ex. lead id e última mensagem). Se
-     não houver, não tem problema: o payload padrão do widget_request já
-     carrega o contexto do lead — a ponte lê os dois formatos.
-3. Depois do passo de request, **o bot deve parar e aguardar** (a
-   continuação vem da ponte via `return_url`). Não adicionar mensagem fixa
-   depois do request.
-4. **Salvar e ativar** o bot no gatilho de mensagem recebida do estágio
-   Incoming leads (e nos demais estágios de conversa ativa do funil do
-   Chase, se quiser cobertura nos estágios seguintes).
+### C1. Subir o widget (uma vez só)
+
+1. Montar o zip (no VPS):
+   `cd ~/Uraceagent/salesagent/kommo-widget && zip -r chase-bridge-widget.zip manifest.json script.js i18n images`
+   (baixar o zip pro seu computador com scp/SFTP, ou montar o zip
+   localmente clonando o repo).
+2. Kommo → **Settings → Integrations → Create integration** (privada) →
+   enviar o zip como widget da integração → instalar na conta.
+3. Opcional (defesa extra): copiar o **client secret** da aba *Keys and
+   scopes* e gravar `KOMMO_BOT_SECRET=...` em `~/.urace/kommo.env` no VPS,
+   depois `sudo systemctl restart sales-bridge` — a ponte passa a validar a
+   assinatura HS512 do token do Salesbot além do `?key=`.
+
+### C2. Criar o bot
+
+1. Kommo → **Settings → Communication tools → Salesbots → criar bot**
+   (nome: `chase-bridge`).
+2. No designer, adicionar o bloco do widget **"Chase — responder ao lead"**
+   (aparece na lista de blocos, grupo de widgets). No campo URL, colar a
+   URL completa com `?key=`.
+3. **Nada depois do bloco.** O padrão é "re-trigger": o bot termina depois
+   que a ponte responde; a PRÓXIMA mensagem do lead dispara o bot de novo.
+   Sem loop interno, sem passo de espera.
+
+### C3. Gatilho — bot roda a cada mensagem recebida
+
+1. Kommo → **Leads → funil do Chase** (id `14316000`) → **Automate
+   (Digital Pipeline)**.
+2. No estágio **Incoming leads**: **+** → **Salesbot** → gatilho
+   **mensagem recebida** (incoming message, todos os canais) → escolher o
+   bot `chase-bridge`.
+3. Repetir nos demais estágios de conversa ativa do funil (qualquer
+   estágio onde o lead ainda conversa com o Chase) — o gatilho é por
+   estágio.
 
 ### Teste ponta a ponta (primeira vez)
 

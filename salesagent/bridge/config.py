@@ -23,6 +23,11 @@ _bridge = _load_env_file(URACE_DIR / "bridge.env")
 
 KOMMO_TOKEN = _kommo.get("KOMMO_TOKEN", "")
 KOMMO_DOMAIN = _kommo.get("KOMMO_DOMAIN", "urace.kommo.com").rstrip("/")
+# Client secret da integração privada (aba "Keys and scopes" no Kommo).
+# Opcional: quando presente, a ponte valida a assinatura HS512 do JWT
+# descartável que o widget_request envia (defesa em profundidade além do
+# ?key= na URL). Vazio = validação desligada.
+KOMMO_BOT_SECRET = _kommo.get("KOMMO_BOT_SECRET", "")
 
 # Chave que autentica o agente OpenClaw (e o Salesbot) na ponte
 AGENT_API_KEY = _bridge.get("AGENT_API_KEY", "")
