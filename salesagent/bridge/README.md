@@ -22,7 +22,8 @@ Kommo (Salesbot/webhook) → /kommo/hook (ACK <2s) → worker → OpenClaw (urac
 - [x] Criação do agente `urace-sales` no OpenClaw (sem shell/filesystem) com as instruções de `../instructions/` — e o processo de sincronização (`../tools/sync_agent_instructions.sh`) depois que descobrimos que o workspace do agente não lê o repo ao vivo
 - [x] `notify_human`: comando de envio direto ao canal WhatsApp, testado ao vivo
 - [x] Credenciais expostas no chat durante a implantação, rotacionadas (21/08)
-- [ ] `send_to_lead`: retorno real ao chat via Salesbot (definir na implantação — plano Advanced confirmado; falta configurar o webhook/Salesbot do lado do Kommo)
+- [x] `send_to_lead`: caminho real implementado (continuação do Salesbot via `return_url` + `execute_handlers`; fallback: nota no lead). Hook aceita o payload real do widget_request (parser tolerante multi-formato) e loga o bruto (`hook_raw`) para calibração. **Falta o lado do Kommo:** configurar o Salesbot — guia completo em `../docs/kommo-circuit-setup.md`
+- [ ] Serviço systemd + HTTPS público (Caddy) — arquivos prontos em `../deploy/`, rodar `install_bridge_service.sh` no VPS e seguir o guia acima
 - [ ] Agendador de follow-up de verdade (B2: hoje `[[followup ...]]` só vira uma task no Kommo com o due date, não dispara a mensagem sozinho)
 - [ ] Alarme de escalação (C2: re-alerta 10–30min, 9h–18h Orlando)
 - [ ] Sincronização do snapshot do Rate Card com a planilha

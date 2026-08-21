@@ -1,0 +1,26 @@
+# Caddy — HTTPS automatico (Let's Encrypt) na frente da sales-bridge.
+#
+# Pre-requisitos (uma vez só):
+#   1. DNS: criar um registro A  bridge.urace.us -> IP estatico do Lightsail
+#   2. Firewall do Lightsail: abrir portas 80 e 443 (TCP)
+#   3. Instalar o Caddy: https://caddyserver.com/docs/install#debian-ubuntu-raspbian
+#      sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+#      curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+#      curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+#      sudo apt update && sudo apt install caddy
+#   4. sudo cp salesagent/deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+#
+# O certificado e provisionado sozinho na primeira requisicao. O Kommo exige
+# HTTPS valido no URL do webhook -- por isso o Caddy, nao a porta 8800 direto.
+
+bridge.urace.us {
+	# So os endpoints que o Kommo precisa alcancar sao expostos.
+	# As tools do agente (/tools/*) e /human/reply ficam so no localhost.
+	@public path /kommo/hook /health
+	handle @public {
+		reverse_proxy 127.0.0.1:8800
+	}
+	handle {
+		respond "not found" 404
+	}
+}

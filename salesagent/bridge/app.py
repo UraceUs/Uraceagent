@@ -14,6 +14,7 @@ import json
 import subprocess
 import time
 
+import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 
 import directives as directive_engine
@@ -34,22 +35,80 @@ def _auth(x_api_key: str | None):
 
 
 # ------------------------------------------------------------------ entrada
+def _dig(payload: dict, *paths: str):
+    """Busca tolerante: cada path é 'a.b.c'; devolve o primeiro valor
+    ESCALAR (str/número) não vazio encontrado — dict/lista no fim do path
+    não contam (ex.: 'data.message' sendo um objeto não pode virar o texto
+    da mensagem). O formato exato do widget_request varia por conta/bot,
+    então a ponte procura em todos os lugares plausíveis em vez de assumir
+    um schema fixo."""
+    for path in paths:
+        node = payload
+        for part in path.split("."):
+            if isinstance(node, list) and part.isdigit():
+                node = node[int(part)] if int(part) < len(node) else None
+            elif isinstance(node, dict):
+                node = node.get(part)
+            else:
+                node = None
+            if node is None:
+                break
+        if isinstance(node, (str, int, float)) and node != "":
+            return node
+    return None
+
+
+def _extract_inbound(payload: dict) -> tuple[int, str, str | None, str | None]:
+    """Devolve (lead_id, texto, return_url, token) do payload — cobre tanto
+    o formato simples de teste ({lead_id, message}) quanto o widget_request
+    real do Salesbot (token/data/return_url com o lead aninhado)."""
+    lead_id = _dig(payload, "lead_id", "data.lead_id", "data.lead.id",
+                   "data.lead.0.id", "lead.id", "leads.0.id")
+    text = _dig(payload, "message", "data.message", "data.message.text",
+                "data.message.message.text", "message.text",
+                "data.talk.message.text", "text", "data.text")
+    return_url = _dig(payload, "return_url", "data.return_url")
+    token = _dig(payload, "token", "data.token")
+    try:
+        lead_num = int(lead_id) if lead_id is not None else 0
+    except (TypeError, ValueError):
+        lead_num = 0
+    return lead_num, str(text) if text is not None else "", return_url, token
+
+
+# return_url do Salesbot é efêmero (vale para UMA continuação do bot) —
+# memória de processo basta; se a ponte reiniciar no meio, o fallback de
+# nota no Kommo cobre (e o bot expira sozinho do lado de lá).
+_pending_returns: dict[int, tuple[str, str | None]] = {}
+
+
 @app.post("/kommo/hook")
 async def kommo_hook(request: Request, background: BackgroundTasks,
-                     x_api_key: str | None = Header(None)):
-    """Recebe evento do Salesbot/webhook do Kommo. ACK imediato (regra dos 2s)."""
-    _auth(x_api_key)
+                     x_api_key: str | None = Header(None), key: str | None = None):
+    """Recebe evento do Salesbot/webhook do Kommo. ACK imediato (regra dos 2s).
+
+    Auth: header X-Api-Key OU query ?key= (o widget_request do Salesbot não
+    envia headers customizados, então a chave vai na URL configurada no bot
+    — só trafega sobre HTTPS via Caddy)."""
+    _auth(x_api_key or key)
     payload = await request.json()
+    # Sempre loga o payload bruto — é o que permite calibrar o parser contra
+    # o formato REAL da conta no primeiro teste (tools/show_recent_audit.py).
+    state.log("hook_raw", None, json.dumps(payload, ensure_ascii=False)[:3500])
     background.add_task(process_inbound, payload)
     return {"ok": True}
 
 
 def process_inbound(payload: dict) -> None:
     """Worker assíncrono: roteia a mensagem para o agente e devolve ao Kommo."""
-    lead_id = int(payload.get("lead_id", 0))
-    text = str(payload.get("message", ""))
+    lead_id, text, return_url, token = _extract_inbound(payload)
     if not lead_id:
-        state.log("error", None, f"payload sem lead_id: {str(payload)[:200]}")
+        state.log("error", None, f"payload sem lead_id reconhecível: {str(payload)[:300]}")
+        return
+    if return_url:
+        _pending_returns[lead_id] = (return_url, token)
+    if not text:
+        state.log("error", lead_id, "payload sem texto de mensagem reconhecível")
         return
     state.log("inbound", lead_id, text)
     state.update_conversation(lead_id, last_inbound_at=int(time.time()))
@@ -130,13 +189,45 @@ def run_agent(lead_id: int, text: str) -> str:
 
 
 def send_to_lead(lead_id: int, text: str) -> None:
-    """Devolve a resposta ao cliente via Kommo (Salesbot).
+    """Devolve a resposta ao cliente via Kommo.
 
-    TODO(deploy): implementar o retorno real — return_url do widget_request
-    ou continuação de Salesbot. Definido na implantação com a conta real.
+    Caminho real: continuação do Salesbot via return_url do widget_request
+    (o bot mostra o texto no chat do lead e volta a esperar a próxima
+    mensagem). Fallback: nota no lead — não chega ao cliente, mas nada se
+    perde e fica visível pro time no card.
     """
     state.update_conversation(lead_id, last_outbound_at=int(time.time()))
+    pending = _pending_returns.pop(lead_id, None)
+    if pending and _salesbot_continue(lead_id, pending[0], pending[1], text):
+        return
     kommo.add_note(lead_id, f"[agent] {text}")
+    state.log("outbound_fallback", lead_id,
+              "sem return_url ativo — resposta gravada como nota, não entregue no chat")
+
+
+def _salesbot_continue(lead_id: int, return_url: str, token: str | None,
+                       text: str) -> bool:
+    """POST de continuação do Salesbot: mostra `text` ao lead no chat.
+
+    Formato conforme docs do widget_request (token no corpo +
+    execute_handlers). O status/corpo da resposta é logado sempre — é o que
+    permite ajustar fino contra a conta real no primeiro teste ponta a ponta.
+    """
+    body = {
+        "token": token,
+        "data": {"status": "success"},
+        "execute_handlers": [
+            {"handler": "show", "params": {"type": "text", "value": text}},
+        ],
+    }
+    try:
+        r = httpx.post(return_url, json=body, timeout=15)
+        state.log("salesbot_continue", lead_id,
+                  f"rc={r.status_code} body={r.text[:300]}")
+        return r.status_code < 300
+    except Exception as exc:
+        state.log("error", lead_id, f"salesbot_continue: {exc}")
+        return False
 
 
 # ------------------------------------------------------------------ escalação
