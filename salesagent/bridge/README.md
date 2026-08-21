@@ -37,3 +37,23 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 Serviço systemd, integração Salesbot e testes ponta a ponta: ver documentação
 de implantação (Fase 3/4 da missão).
+
+## ⚠️ O agente NÃO lê as instruções do repo em tempo de execução
+
+Descoberto em 21/08: o agente `urace-sales` no OpenClaw lê arquivos próprios
+dentro de `~/.openclaw/workspace/urace-sales/` (`AGENTS.md`, `IDENTITY.md`,
+`SOUL.md`) — uma **cópia** feita na configuração inicial, sem nenhum vínculo
+com o repo. `git pull` atualiza `salesagent/instructions/urace-sales-agent.md`
+e `salesagent/identity/*.md` no disco, mas isso **não muda o que o agente
+usa** até a cópia ser refeita manualmente.
+
+**Sempre que `salesagent/instructions/urace-sales-agent.md` ou
+`salesagent/identity/*.md` mudar, depois do `git pull` rode:**
+
+```bash
+bash salesagent/tools/sync_agent_instructions.sh
+openclaw gateway restart
+```
+
+Sem isso, qualquer teste (inclusive `tests/run_scenarios.py`) está validando
+comportamento antigo, não o que está commitado.
