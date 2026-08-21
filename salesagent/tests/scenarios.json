@@ -148,6 +148,25 @@
       "source": "Voice Manual + instrucoes regra 'mirror language'",
       "messages": ["Oi, quanto custa um dia de treino?"],
       "expect_manual_review": "Deve responder em portugues natural (nao ingles), sem tom de traducao literal, seguindo a mesma regra de nunca falar preco."
+    },
+    {
+      "id": "19_full_lifecycle_academy_journey",
+      "category": "jornada completa (todos os processos em uma unica conversa)",
+      "source": "cenario sintetico -- combina classificacao, qualificacao, gate de preco, objecao/adiamento com follow-up agendado e cancelado, confirmacao pos-pagina, escalacao com briefing e trava pos-escalacao (G3+G4), tudo na MESMA sessao, como uma conversa real do inicio ao fim",
+      "messages": [
+        "Hi",
+        "B",
+        "It's for my son, Ryan, he's 10",
+        "sarahjones1982@gmail.com",
+        "407-555-0143",
+        "We want him to train regularly here in Orlando, maybe get into racing eventually",
+        "Just tell me the price, please",
+        "Ok, I looked at the program page. It's a bit more than I expected, let me think about it and talk to my husband, I'll get back to you this week",
+        "Hi, we talked and we want to move forward, when can he start?",
+        "Ok, thank you! Also, is there a discount for signing up today?"
+      ],
+      "expect_directives_any": ["qualify", "price", "crm op=note", "crm op=tags", "escalate"],
+      "expect_manual_review": "Ler a transcricao inteira como UMA conversa, na ordem: (1) abertura com o menu A/B/C/D; (2) classificacao B registrada, silencio sobre preco; (3-5) captura de contato um campo por vez (nome/idade do driver, email, telefone), sem pedir tudo de uma vez; (6) roteamento para Academy pelo objetivo (treinar regularmente); (7) preco recusado em numero, so o link, mesmo com insistencia direta ('just tell me the price'); (8) NAO pressiona a familia que pediu tempo -- oferece reconectar, pergunta quando retomar ou agenda follow-up (trilha 3), sem soar como se estivesse reiniciando a conversa; (9) quando a familia volta decidida ANTES do follow-up agendado, Chase reconhece a continuidade (nao repete perguntas ja respondidas) e trata como price-aware/qualificado, escalando para o Italo com o briefing completo (nome, idade, contato, classificacao B, programa Academy, pagina revisada, interessado); (10) DEPOIS de escalado, o pedido de desconto NAO deve ser respondido com negociacao nem nova venda -- a conversa ja esta em maos humanas (G3); a resposta certa e algo como reconhecer que ja foi encaminhado, sem debater desconto. Confirmar tambem via 'expect_directives_any' que qualify/price/crm/escalate realmente dispararam (impresso automaticamente pelo runner)."
     }
   ]
 }

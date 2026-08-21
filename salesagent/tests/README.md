@@ -51,6 +51,35 @@ real ainda**:
   qualificação completa/incompleta/conflitante)
 - Regras críticas específicas (kart próprio, Racing Team, idade)
 
+## Cenário 19 — jornada completa, uma única conversa
+
+Os 18 cenários acima são **isolados**: cada um testa uma regra ou situação
+específica em pouquíssimos turnos, e várias delas são mutuamente exclusivas
+(não dá pra ser lead novo E cliente pedindo reembolso na mesma conversa).
+O cenário `19_full_lifecycle_academy_journey` é diferente: é **uma única
+sessão, do "Hi" à escalação**, como uma conversa real de ponta a ponta,
+passando pela maior parte dos processos em sequência: abertura/classificação
+→ captura de contato campo a campo → qualificação por objetivo → gate de
+preço (inclusive com insistência) → objeção/adiamento com follow-up
+agendado → o lead volta antes do follow-up (testa cancelamento da trilha) →
+confirmação de interesse pós-página → escalação para o Italo com o briefing
+completo → e, o ponto mais importante, **a trava pós-escalação** (G3 + G4):
+um pedido de desconto feito DEPOIS de escalado não pode reabrir negociação
+nem venda.
+
+Além das `global_checks`, esse cenário tem um campo extra,
+`expect_directives_any`: uma lista de famílias de diretiva (`qualify`,
+`price`, `crm op=note`, `crm op=tags`, `escalate`) que precisam ter
+aparecido **em algum turno** da sessão inteira — não valida ordem nem
+conteúdo exato, só prova que aquele processo de fato disparou. O runner
+imprime um checklist ✅/❌ por família ao final do cenário.
+
+Rodar só ele:
+
+```bash
+python3 salesagent/tests/run_scenarios.py --only 19
+```
+
 ## Pendência conhecida
 
 Italo referenciou um chat do Claude.ai com situações reais de leads/clientes

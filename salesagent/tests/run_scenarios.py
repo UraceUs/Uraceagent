@@ -78,6 +78,7 @@ def main() -> int:
 
         transcript = []
         scenario_hits = []
+        seen_directives = []
         for turn_n, msg in enumerate(sc["messages"], 1):
             raw = run_agent(args.agent, session_key, msg)
             # Checa exatamente o que o cliente veria (mesma função que a
@@ -85,6 +86,7 @@ def main() -> int:
             # sanitizado) -- não o texto bruto do modelo, que pode conter
             # instrução interna nunca destinada ao lead.
             visible = textproc.customer_facing(raw)
+            seen_directives.extend(textproc.extract_directives(raw))
             transcript.append((msg, raw, visible))
             print(f"  lead[{turn_n}]: {msg}")
             print(f"  chase[{turn_n}]: {visible}")
@@ -95,13 +97,35 @@ def main() -> int:
             scenario_hits.extend(hits)
             time.sleep(args.sleep)
 
+        scenario_failed = False
         if scenario_hits:
-            failed += 1
+            scenario_failed = True
             print("  ❌ REGRAS VIOLADAS:")
             for h in scenario_hits:
                 print(f"     - {h['id']}: {h['reason']} (padrão: {h['pattern']})")
         else:
             print("  ✅ nenhuma regra automática violada")
+
+        # Checklist opcional: para cenários de jornada completa, confirma que
+        # cada família de diretiva esperada apareceu ALGUMA vez na sessão
+        # inteira -- não valida ORDEM nem conteúdo exato, só presença (prova
+        # que aquele processo de fato disparou em algum turno).
+        expected_directives = sc.get("expect_directives_any")
+        if expected_directives:
+            all_directives_text = " | ".join(seen_directives)
+            print("  🧩 diretivas esperadas nesta jornada:")
+            missing = []
+            for key in expected_directives:
+                hit = key in all_directives_text
+                print(f"     {'✅' if hit else '❌'} {key}")
+                if not hit:
+                    missing.append(key)
+            if missing:
+                scenario_failed = True
+                print(f"  ❌ processo(s) que nunca disparou/dispararam na sessão: {', '.join(missing)}")
+
+        if scenario_failed:
+            failed += 1
 
         review = sc.get("expect_manual_review")
         if review:
