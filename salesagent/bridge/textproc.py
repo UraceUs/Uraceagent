@@ -8,11 +8,10 @@ que pode ir para um lead real", tanto na ponte (app.py) quanto nos testes
 (tests/run_scenarios.py) -- as duas pontas checam a MESMA função, para o que
 passa no teste ser exatamente o que o cliente veria em produção.
 
-Fase atual: as diretivas são só REMOVIDAS do texto visível (e logadas à
-parte). EXECUTAR as diretivas (chamar tools/crm, tools/escalate etc a partir
-do texto do agente) é trabalho de Fase 3, ainda não implementado -- hoje as
-tools já são chamadas via endpoints separados quando aplicável (ex.:
-tool_qualify chamando escalate() diretamente), não pelo parser de diretivas.
+Este módulo só REMOVE as diretivas do texto visível (e loga o bruto à
+parte) -- EXECUTAR o que elas pedem (CRM, qualify, escalate, follow-up,
+price) é responsabilidade de `directives.py`, chamado por `run_agent()` em
+app.py antes de `customer_facing()` decidir o texto final.
 """
 import re
 

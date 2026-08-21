@@ -44,6 +44,9 @@
 ## Pendências que bloqueiam implementação plena destas regras
 
 - ✅ C1–C7 decididos. Rate Card, links de check-in, plano Kommo e funil real resolvidos.
-- **C9** — mapeamento estágios reais × conceitos do documento Chase: proposta em uso (tags), aguardando confirmação.
-- **C10** — links de programa (`program-links.json`) ainda todos `null`: sem eles, G1 não consegue mandar a página ao lead; o agente vai dizer que confirma e escalar.
-- **C11** — cadência de 3 trilhas: adotada por padrão, sinalizada para confirmação.
+- ✅ **C9** — pipeline dedicado do Chase criado no Kommo (id `14316000`), estágios reais + tags. Ver CONSOLIDACAO.md.
+- ✅ **C10** — `program-links.json` preenchido (1-Day, Academy, checkout confirmados; fallback para a home).
+- ✅ **C11** — cadência de 3 trilhas confirmada pelo Italo.
+- ✅ **Credenciais rotacionadas** (21/08, confirmado pelo Italo) — chave Anthropic, token Kommo, PAT do GitHub e token do gateway que passaram pelo chat durante a implantação foram trocados antes de ir para produção.
+- **Pendente (C12, 21/08)** — nome do produto "Summer Camp" × "Training Camp" e discrepância de preço nos formulários do site vs. rate card real: aguardando confirmação do Italo antes de mexer em config. Ver `CONSOLIDACAO.md` C12 e `discovery/extracao-prompt-treinamento-real.md`.
+- **Pendente** — circuito completo Kommo↔ponte: `send_to_lead()` ainda só grava nota no Kommo (não responde de fato ao lead) porque falta configurar o Salesbot/webhook do lado do Kommo (passo que precisa da conta real, feito na implantação). A execução das diretivas `[[...]]` do lado da ponte já está pronta (`bridge/directives.py`, 21/08) — falta só o transporte de ida e volta com o Kommo.

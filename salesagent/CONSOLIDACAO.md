@@ -15,6 +15,7 @@
 | 5 | Commercial Operating System v4.0 | 25/07 | Autoridade (Rate Card/ADM/Italo), políticas de desconto, CRM, QA |
 | 6 | Italo AI Voice Training Manual | 17/08 | Voz e tom do agente em todos os contextos — **fonte primária de estilo de escrita** |
 | 7 | "URACE Automated Lead Qualification System" (documento "Chase", colado por Italo no chat) | 17/08 | Comportamento operacional do agente de vendas — **fonte de maior autoridade** para fluxo de conversa, classificação do lead, script de desvio de preço, cadência de follow-up e regras de escalação, por ser mais recente, mais detalhada, e ter sido revisada por Italo linha a linha antes de gerada |
+| 8 | "Prompt de Treinamento — Agente de Vendas de IA · URACE.US" (o "chat claudinho" original, colado por Italo em 21/08) | 21/08 | Comportamento validado em uso real (não role-play) — mesma prioridade alta das fontes 6/7. Extração completa em `discovery/extracao-prompt-treinamento-real.md` |
 
 **Hierarquia de autoridade operacional** (do COS v4.0, mantida): 1º Rate Card vigente (preço) → 2º contrato assinado (termos) → 3º ADM (disponibilidade, horários, links de pagamento/pista) → 4º Italo Silveira (Racing Team, programas fora do padrão, exceções comerciais).
 
@@ -85,6 +86,10 @@ ainda mais forte que abrir/fechar um número. Ver instruções atualizadas.
 
 ### C11. Cadência de follow-up
 - **DECISÃO (Italo, 17/08): seguir o modelo de 3 trilhas do documento Chase.** Já implementado nas instruções e no `rules-to-code.md` (B2).
+
+### C12. Fonte 8 (prompt de treinamento real, 21/08) — o que foi aplicado, o que ficou pendente
+- **Aplicado direto em `instructions/urace-sales-agent.md`** (não conflitava com nada, só faltava): uma pergunta por vez sempre (achado no teste do cenário 19 — o Chase estava combinando duas); reconhecer o filho quando o pai fala dele, não só capturar o dado; propor horários concretos ao fechar, nunca "que dia?" em aberto.
+- **Pendente de confirmação do Italo antes de mexer** (registrado em `discovery/extracao-prompt-treinamento-real.md`): nome do produto "Summer Camp" (documento novo) × "Training Camp" (nossas instruções) — pode ser o mesmo produto renomeado ou dois produtos diferentes; discrepância de preço nos formulários do site vs. rate card real (1-Day $779 vs $719; camp 5 dias $3.749 vs $3.449); valores específicos de passes/depósito (Driver Pass $90/$65, Spectator $5, depósito $400) a conferir contra `ratecard-2026.json`; macacão custom (produto ativo hoje?); eBay como canal (fora do escopo do Chase por decisão da missão original, só registrado).
 
 ## Lacunas — status (atualizado 17/08)
 

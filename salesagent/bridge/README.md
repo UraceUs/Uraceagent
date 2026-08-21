@@ -18,12 +18,14 @@ Kommo (Salesbot/webhook) → /kommo/hook (ACK <2s) → worker → OpenClaw (urac
 - [x] Máquina de estados SQLite (AI_ACTIVE → WAITING_HUMAN → HUMAN_HANDOFF → RESUMED → CLOSED) com transições guardadas
 - [x] Portões: G1 preço, G2 roteamento, G5 idade, G8 sem-memória, B4 gatilhos de escalação
 - [x] Endpoints de tools autenticados (price, qualify, escalate, crm)
-- [ ] `send_to_lead`: retorno real ao chat via Salesbot (definir na implantação — plano Advanced confirmado)
-- [ ] `notify_human`: comando de envio direto ao canal WhatsApp na versão instalada do OpenClaw
-- [ ] Agendador de follow-up (B2: 4 tentativas, intervalo progressivo, task sempre)
+- [x] Execução real das diretivas `[[...]]` que o agente anexa à conversa (21/08, `directives.py`) — qualify/crm/escalate/followup(como task)/price (com segunda rodada ao modelo para o link real chegar na mesma resposta)
+- [x] Criação do agente `urace-sales` no OpenClaw (sem shell/filesystem) com as instruções de `../instructions/` — e o processo de sincronização (`../tools/sync_agent_instructions.sh`) depois que descobrimos que o workspace do agente não lê o repo ao vivo
+- [x] `notify_human`: comando de envio direto ao canal WhatsApp, testado ao vivo
+- [x] Credenciais expostas no chat durante a implantação, rotacionadas (21/08)
+- [ ] `send_to_lead`: retorno real ao chat via Salesbot (definir na implantação — plano Advanced confirmado; falta configurar o webhook/Salesbot do lado do Kommo)
+- [ ] Agendador de follow-up de verdade (B2: hoje `[[followup ...]]` só vira uma task no Kommo com o due date, não dispara a mensagem sozinho)
 - [ ] Alarme de escalação (C2: re-alerta 10–30min, 9h–18h Orlando)
 - [ ] Sincronização do snapshot do Rate Card com a planilha
-- [ ] Criação do agente `urace-sales` no OpenClaw (sem shell/filesystem) com as instruções de `../instructions/`
 
 ## Instalação no VPS (resumo — guia completo na implantação)
 

@@ -75,17 +75,27 @@ def get_conversation(lead_id: int) -> dict:
             "SELECT * FROM conversations WHERE lead_id=?", (lead_id,)
         ).fetchone()
         if row is None:
+            # Insere e relê usando a MESMA conexão -- nunca recursar em
+            # get_conversation() aqui: isso abriria uma segunda conexão
+            # sqlite3 antes da primeira commitar/fechar e travava com
+            # "database is locked" no primeiro contato de qualquer lead
+            # novo (achado testando directives.py em 21/08).
             conn.execute(
                 "INSERT INTO conversations (lead_id, updated_at) VALUES (?,?)",
                 (lead_id, int(time.time())),
             )
-            return get_conversation(lead_id)
+            row = conn.execute(
+                "SELECT * FROM conversations WHERE lead_id=?", (lead_id,)
+            ).fetchone()
         return dict(row)
 
 
 def update_conversation(lead_id: int, **fields) -> None:
     if not fields:
         return
+    get_conversation(lead_id)  # garante a linha antes do UPDATE (achado 21/08:
+    # sem isso, o primeiro update de um lead novo virava um UPDATE sem
+    # nenhuma linha pra bater, e os dados eram perdidos em silêncio)
     cols = ", ".join(f"{k}=?" for k in fields)
     with db() as conn:
         conn.execute(
