@@ -29,12 +29,27 @@ sys.path.insert(0, str(BRIDGE_DIR))
 import textproc  # noqa: E402 -- mesma função que a ponte usa antes de enviar ao cliente
 
 
+class AgentCallError(Exception):
+    """Uma chamada ao CLI do OpenClaw travou ou falhou (timeout, gateway
+    fora, etc.) -- não é uma violação de regra, é a infraestrutura de
+    teste falhando. Isolado por cenário para não derrubar a suíte inteira
+    (achado em 21/08: um único timeout matava os 16 cenários restantes)."""
+
+
 def run_agent(agent: str, session_key: str, message: str, timeout: int = 120) -> str:
-    result = subprocess.run(
-        ["openclaw", "agent", "--agent", agent, "--session-key", session_key,
-         "-m", message],
-        capture_output=True, text=True, timeout=timeout,
-    )
+    try:
+        result = subprocess.run(
+            ["openclaw", "agent", "--agent", agent, "--session-key", session_key,
+             "-m", message],
+            capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AgentCallError(f"timeout após {timeout}s") from exc
+    except OSError as exc:
+        raise AgentCallError(f"falha ao chamar openclaw: {exc}") from exc
+    if result.returncode != 0:
+        raise AgentCallError(
+            f"exit code {result.returncode}: {(result.stderr or '').strip()[:300]}")
     return (result.stdout or "").strip()
 
 
@@ -65,6 +80,7 @@ def main() -> int:
     run_tag = str(int(time.time()))
     total = len(scenarios)
     failed = 0
+    errored = []
 
     print(f"Rodando {total} cenário(s) contra --agent {args.agent}\n")
 
@@ -79,8 +95,20 @@ def main() -> int:
         transcript = []
         scenario_hits = []
         seen_directives = []
+        call_failed = False
         for turn_n, msg in enumerate(sc["messages"], 1):
-            raw = run_agent(args.agent, session_key, msg)
+            try:
+                raw = run_agent(args.agent, session_key, msg)
+            except AgentCallError as exc:
+                # Infraestrutura falhou (timeout, gateway fora etc.), não é
+                # violação de regra -- registra e pula pro próximo cenário
+                # em vez de derrubar a suíte inteira.
+                print(f"  lead[{turn_n}]: {msg}")
+                print(f"  ⚠️  FALHA DE INFRAESTRUTURA: {exc}")
+                print()
+                errored.append(sid)
+                call_failed = True
+                break
             # Checa exatamente o que o cliente veria (mesma função que a
             # ponte aplica em app.py: diretivas [[...]] removidas, dash
             # sanitizado) -- não o texto bruto do modelo, que pode conter
@@ -96,6 +124,10 @@ def main() -> int:
             hits = check_global(visible, global_checks)
             scenario_hits.extend(hits)
             time.sleep(args.sleep)
+
+        if call_failed:
+            print()
+            continue
 
         scenario_failed = False
         if scenario_hits:
@@ -133,11 +165,17 @@ def main() -> int:
         print()
 
     print(f"{'=' * 70}")
-    print(f"RESUMO: {total - failed}/{total} sem violação automática"
+    ran = total - len(errored)
+    print(f"RESUMO: {ran - failed}/{ran} rodados sem violação automática"
           f" ({failed} com violação de regra crítica).")
+    if errored:
+        print(f"⚠️  {len(errored)} cenário(s) não rodaram por falha de infraestrutura"
+              f" (timeout/gateway), não regra: {', '.join(errored)}")
+        print(f"   Reroda só esses: python3 {Path(__file__).name} --only "
+              + " ".join(s.split('_')[0] for s in errored))
     print("Toda a transcrição acima ainda precisa de revisão manual/humana"
           " para as checagens de julgamento (tom, roteamento correto etc.).")
-    return 1 if failed else 0
+    return 1 if (failed or errored) else 0
 
 
 if __name__ == "__main__":
