@@ -9,7 +9,7 @@
 ```
 lead escreve no chat (Kommo)
   → Salesbot dispara (gatilho: mensagem recebida no funil do Chase)
-  → bloco do widget "Chase" POSTa pra https://bridge.urace.us/kommo/hook?key=...
+  → bloco do widget "Chase" POSTa pra https://urace-bridge.duckdns.org/kommo/hook?key=...
   → ponte ACK <2s, processa em background:
       gatilhos de escalação (B4) → estado (G3) → Chase (OpenClaw)
       → diretivas [[...]] executadas (CRM/qualify/escalate/price)
@@ -44,8 +44,13 @@ sudo journalctl -u sales-bridge -f      # logs ao vivo
 O Kommo só chama webhook em HTTPS válido. O caminho: subdomínio + Caddy
 (certificado automático).
 
-1. **DNS** (no gerenciador do domínio urace.us): registro **A**,
-   `bridge.urace.us` → IP estático do Lightsail.
+1. **DNS** ✅ (21/08): decidido usar **DuckDNS** em vez de mexer no DNS do
+   urace.us (que vive no Google, não na Hostinger — migrar nameservers só
+   pra isso seria risco desnecessário pro site/e-mail). Subdomínio criado:
+   `urace-bridge.duckdns.org` → `34.230.114.116`. ⚠️ Se o IP do Lightsail
+   não for estático (attached static IP), ele muda em stop/start — fixar o
+   IP estático no console do Lightsail OU atualizar o IP no painel do
+   DuckDNS quando mudar.
 2. **Firewall do Lightsail** (console AWS → instância → Networking): abrir
    portas **80** e **443** TCP.
 3. **Caddy** no VPS (instalação nos comentários de
@@ -59,7 +64,7 @@ sudo systemctl reload caddy
 4. Testar de fora (do seu notebook, não do VPS):
 
 ```bash
-curl https://bridge.urace.us/health
+curl https://urace-bridge.duckdns.org/health
 # esperado: {"ok":true,"ts":...}
 ```
 
@@ -76,7 +81,7 @@ O Caddyfile só expõe `/kommo/hook` e `/health` — as tools do agente e
 > Pré-requisito: pegar a `AGENT_API_KEY` no VPS:
 > `grep AGENT_API_KEY ~/.urace/bridge.env`
 > A URL completa usada no bloco será:
-> `https://bridge.urace.us/kommo/hook?key=COLE_A_CHAVE_AQUI`
+> `https://urace-bridge.duckdns.org/kommo/hook?key=COLE_A_CHAVE_AQUI`
 
 ### C1. Subir o widget (uma vez só)
 

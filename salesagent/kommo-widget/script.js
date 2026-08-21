@@ -26,7 +26,7 @@ define(['jquery'], function ($) {
         // URL digitada no bloco do designer (campo "text"); o fallback só
         // existe para não salvar um bot quebrado se o campo vier vazio.
         var hookUrl = (params && params.text) ||
-          'https://bridge.urace.us/kommo/hook';
+          'https://urace-bridge.duckdns.org/kommo/hook';
 
         var step = {
           question: [

@@ -31,7 +31,7 @@
       "settings": {
         "text": {
           "name": "salesbot.text",
-          "default_value": "https://bridge.urace.us/kommo/hook?key=COLE_A_AGENT_API_KEY_AQUI",
+          "default_value": "https://urace-bridge.duckdns.org/kommo/hook?key=COLE_A_AGENT_API_KEY_AQUI",
           "type": "text",
           "manual": true
         }
