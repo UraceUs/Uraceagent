@@ -60,3 +60,13 @@ def add_tags(lead_id: int, tags: list[str]) -> None:
             json={"_embedded": {"tags": [{"name": t} for t in tags]}},
         )
         r.raise_for_status()
+
+
+def run_bot(bot_id: str | int, lead_id: int) -> bool:
+    """Dispara um Salesbot num lead (POST /api/v4/bots/{id}/run) — usado pelo
+    agendador para entregar follow-up espontâneo pelo mesmo circuito do chat.
+    Status/corpo logados pelo chamador; devolve sucesso (2xx)."""
+    with _client() as c:
+        r = c.post(f"{BASE}/bots/{int(bot_id)}/run",
+                   json={"entity_id": lead_id, "entity_type": "leads"})
+        return r.status_code < 300

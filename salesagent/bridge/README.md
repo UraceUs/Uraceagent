@@ -23,9 +23,9 @@ Kommo (Salesbot/webhook) → /kommo/hook (ACK <2s) → worker → OpenClaw (urac
 - [x] `notify_human`: comando de envio direto ao canal WhatsApp, testado ao vivo
 - [x] Credenciais expostas no chat durante a implantação, rotacionadas (21/08)
 - [x] `send_to_lead`: caminho real implementado (continuação do Salesbot via `return_url` + `execute_handlers`; fallback: nota no lead). Hook aceita o payload real do widget_request (parser tolerante multi-formato) e loga o bruto (`hook_raw`) para calibração. **Falta o lado do Kommo:** configurar o Salesbot — guia completo em `../docs/kommo-circuit-setup.md`
-- [ ] Serviço systemd + HTTPS público (Caddy) — arquivos prontos em `../deploy/`, rodar `install_bridge_service.sh` no VPS e seguir o guia acima
-- [ ] Agendador de follow-up de verdade (B2: hoje `[[followup ...]]` só vira uma task no Kommo com o due date, não dispara a mensagem sozinho)
-- [ ] Alarme de escalação (C2: re-alerta 10–30min, 9h–18h Orlando)
+- [x] Serviço systemd + HTTPS público — instalado e confirmado no VPS (21/08): `sales-bridge` no systemd, Caddy em `urace-bridge.duckdns.org` com certificado válido (Apache ocioso desativado), `/health` respondendo de fora
+- [x] Agendador de follow-up (B2, 3 trilhas — 21/08, `scheduler.py`): thread na ponte, tick por minuto. Trilha `initial` (+2h/+24h/+3d/+7d → fecha), `link_sent` (+10min/+24h/+3d/+7d → task humana), `scheduled` (data do lead via `[[followup]]`). Mensagem composta pelo agente com o contexto da sessão; entrega espontânea via `bots/run` no Salesbot (config `FOLLOWUP_BOT_ID` em `bridge.env` — sem ela, fallback nota+tarefa). Resposta do lead cancela a trilha; escalação também (G3)
+- [x] Alarme de escalação (C2 — 21/08, no mesmo scheduler): re-alerta no WhatsApp interno a cada 15min (config `ESCALATION_REALERT_MIN`) enquanto o lead estiver em WAITING_HUMAN/HUMAN_HANDOFF, só das 9h às 18h de Orlando; fora do horário, segura até as 9h
 - [ ] Sincronização do snapshot do Rate Card com a planilha
 
 ## Instalação no VPS (resumo — guia completo na implantação)

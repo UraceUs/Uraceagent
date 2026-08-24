@@ -23,9 +23,11 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 import directives as directive_engine
 import gates
 import kommo_client as kommo
+import scheduler
 import state
 import textproc
-from config import AGENT_API_KEY, HUMAN_WHATSAPP, KOMMO_BOT_SECRET, KOMMO_TOKEN
+from config import (AGENT_API_KEY, FOLLOWUP_BOT_ID, HUMAN_WHATSAPP,
+                    KOMMO_BOT_SECRET, KOMMO_TOKEN)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -140,11 +142,28 @@ def process_inbound(payload: dict) -> None:
         return
     if return_url:
         _pending_returns[lead_id] = (return_url, token)
+
     if not text:
+        # Sem texto + follow-up pendente = é o bot disparado pelo agendador
+        # (bots/run) abrindo o canal de entrega: devolve o texto pendente.
+        conv = state.get_conversation(lead_id)
+        pending = conv.get("pending_followup_text")
+        if pending and return_url:
+            state.update_conversation(lead_id, pending_followup_text=None,
+                                      last_outbound_at=int(time.time()))
+            if _salesbot_continue(lead_id, return_url, token, pending):
+                state.log("followup", lead_id, "follow-up entregue no chat via bots/run")
+            else:
+                kommo.add_note(lead_id, f"[follow-up — enviar manualmente]\n{pending}")
+            _pending_returns.pop(lead_id, None)
+            return
         state.log("error", lead_id, "payload sem texto de mensagem reconhecível")
         return
+
     state.log("inbound", lead_id, text)
     state.update_conversation(lead_id, last_inbound_at=int(time.time()))
+    # B2: lead respondeu — qualquer trilha de follow-up ativa morre agora.
+    scheduler.cancel(lead_id, "lead respondeu")
 
     # B4: gatilhos de escalação avaliados ANTES do modelo
     triggers = gates.escalation_triggers(text)
@@ -160,6 +179,19 @@ def process_inbound(payload: dict) -> None:
     reply = run_agent(lead_id, text)
     if reply:
         send_to_lead(lead_id, reply)
+        # B2: relógio de "sem resposta" reinicia a cada envio nosso — trilha
+        # link_sent se o link de preço saiu neste turno, initial caso
+        # contrário. A trilha scheduled (diretiva com data pedida pelo lead)
+        # tem precedência e não é sobrescrita.
+        conv = state.get_conversation(lead_id)
+        if conv["state"] in ("AI_ACTIVE", "RESUMED") and conv.get("followup_track") != "scheduled":
+            track = "link_sent" if _last_turn_price_sent.pop(lead_id, False) else "initial"
+            scheduler.start_track(lead_id, track)
+
+
+# Marca "o link de preço saiu neste turno" por lead — consumida logo após o
+# envio para escolher a trilha de follow-up (B2). Efêmero por natureza.
+_last_turn_price_sent: dict[int, bool] = {}
 
 
 # ------------------------------------------------------------------ agente
@@ -202,6 +234,8 @@ def run_agent(lead_id: int, text: str) -> str:
         state.log("directives", lead_id, " | ".join(directives))
         result = directive_engine.execute(lead_id, directives, escalate)
         price_results = result["price_results"]
+        if price_results:
+            _last_turn_price_sent[lead_id] = True  # trilha B2 pós-envio
         if price_results and state.agent_may_sell(lead_id):
             system_msg = ("[SYSTEM] price tool result(s), use the real link now: "
                           + json.dumps(price_results, ensure_ascii=False))
@@ -219,6 +253,56 @@ def run_agent(lead_id: int, text: str) -> str:
     visible = textproc.customer_facing(reply)
     state.log("outbound", lead_id, visible)
     return visible
+
+
+def compose_followup(lead_id: int, track: str, attempt: int) -> str:
+    """Compõe o follow-up via agente, com a memória da sessão do lead — o
+    texto referencia a situação real da conversa (regra das instruções),
+    não um template genérico. Diretivas que vierem junto são logadas mas
+    NÃO executadas (um follow-up não pode escalar/mexer em CRM sozinho)."""
+    prompt = (f"[SYSTEM] Follow-up due for this lead: track={track}, "
+              f"attempt={attempt + 1}. Compose ONLY the follow-up message to "
+              "send now, per your Follow-up section: short, referencing this "
+              "lead's actual situation, no price, no pressure. Reply with the "
+              "message text only.")
+    try:
+        raw, dirs = _call_agent(lead_id, prompt)
+        if dirs:
+            state.log("directives", lead_id,
+                      "compose_followup (não executadas): " + " | ".join(dirs))
+        return textproc.customer_facing(raw)
+    except Exception as exc:
+        state.log("error", lead_id, f"compose_followup: {exc}")
+        return ""
+
+
+def deliver_followup(lead_id: int, text: str) -> bool:
+    """Entrega espontânea: grava o texto como pendente e dispara o Salesbot
+    no lead (bots/run). O bot chama o widget_request → process_inbound vê o
+    pendente e o devolve pelo return_url → aparece no chat. Sem bot
+    configurado (FOLLOWUP_BOT_ID vazio) devolve False e o agendador usa o
+    fallback nota+tarefa."""
+    if not FOLLOWUP_BOT_ID:
+        return False
+    state.update_conversation(lead_id, pending_followup_text=text)
+    try:
+        ok = kommo.run_bot(FOLLOWUP_BOT_ID, lead_id)
+    except Exception as exc:
+        state.log("error", lead_id, f"deliver_followup bots/run: {exc}")
+        ok = False
+    if not ok:
+        state.update_conversation(lead_id, pending_followup_text=None)
+    return ok
+
+
+@app.on_event("startup")
+async def _start_scheduler():
+    scheduler.compose_fn = compose_followup
+    scheduler.deliver_fn = deliver_followup
+    scheduler.notify_fn = notify_human
+    scheduler.task_fn = kommo.add_task
+    scheduler.note_fn = kommo.add_note
+    scheduler.start()
 
 
 def send_to_lead(lead_id: int, text: str) -> None:
@@ -280,6 +364,7 @@ def _salesbot_continue(lead_id: int, return_url: str, token: str | None,
 # ------------------------------------------------------------------ escalação
 def escalate(lead_id: int, reason: str, context: str = "") -> None:
     state.transition(lead_id, "WAITING_HUMAN", reason)
+    scheduler.cancel(lead_id, "conversa escalada")  # G3: sem follow-up comercial
     kommo.add_tags(lead_id, ["escalated"])
     kommo.add_note(lead_id, f"[escalação] {reason}")
     briefing = f"🔺 ESCALAÇÃO — lead {lead_id}\nMotivo: {reason}\nContexto: {context[:500]}\n" \

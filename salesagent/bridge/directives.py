@@ -7,11 +7,9 @@ interpreta e executa as diretivas que o próprio modelo anexa ao texto da
 conversa, no mesmo fluxo — a peça que faltava do protocolo descrito em
 `instructions/urace-sales-agent.md`, seção "System protocol".
 
-`[[followup ...]]` é a exceção: ainda não existe agendador (cron) na ponte
-(ver bridge/README.md, checklist). Por ora ele vira uma TAREFA no Kommo com
-o due date pedido — cumpre B3 (higiene de CRM, todo lead tem próxima ação
-visível) mas não dispara uma mensagem automática sozinho. Isso continua
-pendente como item de fase futura.
+`[[followup ...]]` agenda no scheduler da ponte (trilha `scheduled`) E cria
+a tarefa no Kommo (B3, visibilidade humana) — desde 21/08 o agendador
+dispara a mensagem sozinho (ver scheduler.py).
 """
 import datetime
 import re
@@ -110,11 +108,14 @@ def apply_crm(lead_id: int, kwargs: dict) -> None:
 
 
 def apply_followup(lead_id: int, kwargs: dict) -> None:
-    """Sem agendador ainda (ver docstring do módulo) -- registra como tarefa
-    do Kommo, com o due date pedido, para não perder o compromisso."""
+    """Agenda o follow-up de verdade no scheduler (trilha `scheduled` -- data
+    pedida pelo lead tem precedência sobre as trilhas automáticas, B2) e
+    também registra a tarefa no Kommo para visibilidade humana (B3)."""
+    import scheduler  # import tardio: scheduler não importa directives (sem ciclo)
     due_ts = parse_due(kwargs.get("due", ""))
     note = kwargs.get("note", "follow-up")
     track = kwargs.get("track", "?")
+    scheduler.schedule_at(lead_id, due_ts, note)
     kommo.add_task(lead_id, f"[follow-up/{track}] {note}", due_ts)
 
 

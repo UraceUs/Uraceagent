@@ -49,12 +49,28 @@ CREATE TABLE IF NOT EXISTS audit (
 """
 
 
+# Colunas adicionadas depois do schema original (21/08, agendador de
+# follow-up B2 + alarme C2). SQLite não tem ADD COLUMN IF NOT EXISTS, então
+# cada uma roda num try/except — bancos novos e antigos convergem iguais.
+_MIGRATIONS = [
+    "ALTER TABLE conversations ADD COLUMN followup_track TEXT",          # initial|link_sent|scheduled|NULL
+    "ALTER TABLE conversations ADD COLUMN next_followup_at INTEGER",
+    "ALTER TABLE conversations ADD COLUMN last_realert_at INTEGER",
+    "ALTER TABLE conversations ADD COLUMN pending_followup_text TEXT",   # aguardando entrega via bots/run
+]
+
+
 @contextmanager
 def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(SCHEMA)
+        for mig in _MIGRATIONS:
+            try:
+                conn.execute(mig)
+            except sqlite3.OperationalError:
+                pass  # coluna já existe
         yield conn
         conn.commit()
     finally:

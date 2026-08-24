@@ -37,6 +37,10 @@ HUMAN_WHATSAPP = _bridge.get("HUMAN_WHATSAPP", "+14074878143")
 BUSINESS_TZ = "America/New_York"
 BUSINESS_HOURS = (9, 18)
 ESCALATION_REALERT_MIN = int(_bridge.get("ESCALATION_REALERT_MIN", "15"))  # 10–30
+# Id do Salesbot (chase-bridge) para ENTREGA de follow-up espontâneo: o
+# agendador dispara o bot via POST /api/v4/bots/{id}/run e a ponte devolve o
+# texto pendente pelo return_url. Vazio = fallback nota+tarefa no Kommo.
+FOLLOWUP_BOT_ID = _bridge.get("FOLLOWUP_BOT_ID", "")
 
 DB_PATH = URACE_DIR / "salesbridge.db"
 
