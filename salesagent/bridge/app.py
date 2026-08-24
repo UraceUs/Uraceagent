@@ -14,6 +14,7 @@ import datetime
 import hashlib
 import hmac
 import json
+import re
 import subprocess
 import time
 
@@ -27,7 +28,7 @@ import scheduler
 import state
 import textproc
 from config import (AGENT_API_KEY, FOLLOWUP_BOT_ID, HUMAN_WHATSAPP,
-                    KOMMO_BOT_SECRET, KOMMO_TOKEN)
+                    KOMMO_BOT_SECRET, KOMMO_TOKEN, SALESBOT_DISPLAY)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -377,24 +378,49 @@ _SHOW_CHAR_LIMIT = 80
 _MAX_HANDLERS = 10
 
 
+_SENTENCE_RE = re.compile(r"(?<=[.!?…])\s+")
+
+
 def _chunk_for_salesbot(text: str, limit: int = _SHOW_CHAR_LIMIT) -> list[str]:
     """Divide a resposta em pedaços <= limit, um por balão de chat. Quebra
     primeiro por linha (o menu A/B/C/D vira um balão por opção, natural em
-    chat) e, dentro de linha longa, por palavra — nunca no meio de uma
-    palavra/URL."""
+    chat); dentro de linha longa, por FRASE (empacotando frases que couberem
+    juntas); só em último caso por palavra — nunca no meio de palavra/URL."""
     chunks: list[str] = []
+
+    def _split_words(seg: str) -> None:
+        while len(seg) > limit:
+            cut = seg.rfind(" ", 1, limit + 1)
+            if cut <= 0:
+                cut = limit  # palavra/URL única maior que o limite: corte duro
+            chunks.append(seg[:cut].strip())
+            seg = seg[cut:].strip()
+        if seg:
+            chunks.append(seg)
+
     for line in text.split("\n"):
         line = line.strip()
         if not line:
             continue
-        while len(line) > limit:
-            cut = line.rfind(" ", 1, limit + 1)
-            if cut <= 0:
-                cut = limit  # palavra/URL única maior que o limite: corte duro
-            chunks.append(line[:cut].strip())
-            line = line[cut:].strip()
-        if line:
+        if len(line) <= limit:
             chunks.append(line)
+            continue
+        # linha longa: empacota frases inteiras enquanto couberem juntas
+        packed = ""
+        for sentence in _SENTENCE_RE.split(line):
+            candidate = f"{packed} {sentence}".strip() if packed else sentence
+            if len(candidate) <= limit:
+                packed = candidate
+            else:
+                if packed:
+                    chunks.append(packed)
+                packed = ""
+                if len(sentence) <= limit:
+                    packed = sentence
+                else:
+                    _split_words(sentence)
+        if packed:
+            chunks.append(packed)
     return chunks
 
 
@@ -411,27 +437,33 @@ def _salesbot_continue(lead_id: int, return_url: str, token: str | None,
     - 404 = o bot desistiu de esperar — cai no fallback de nota.
     - Janela de espera do bot comprovada >= 58s no teste real.
     """
-    chunks = _chunk_for_salesbot(text)
-    if not chunks:
-        return False
-    if len(chunks) > _MAX_HANDLERS:
-        # Não truncar conteúdo em silêncio: mensagem longa demais para o
-        # canal vai inteira para a nota (fallback) e fica registrado.
-        state.log("error", lead_id,
-                  f"resposta viraria {len(chunks)} balões (máx {_MAX_HANDLERS}) — fallback nota")
-        return False
-    body = {
-        "data": {"status": "success"},
-        "execute_handlers": [
-            {"handler": "show", "params": {"type": "text", "value": c}}
-            for c in chunks
-        ],
-    }
+    if SALESBOT_DISPLAY == "json_reply":
+        # Widget v2: a resposta INTEIRA vai em data.reply e o próprio bot a
+        # exibe via {{json.reply}} (passo 2 do fluxo gerado pelo widget) —
+        # uma mensagem única com quebras de linha, sem limite de 80 chars.
+        body = {"data": {"status": "success", "reply": text}}
+    else:  # "balloons" — widget v1
+        chunks = _chunk_for_salesbot(text)
+        if not chunks:
+            return False
+        if len(chunks) > _MAX_HANDLERS:
+            # Não truncar conteúdo em silêncio: mensagem longa demais para o
+            # canal vai inteira para a nota (fallback) e fica registrado.
+            state.log("error", lead_id,
+                      f"resposta viraria {len(chunks)} balões (máx {_MAX_HANDLERS}) — fallback nota")
+            return False
+        body = {
+            "data": {"status": "success"},
+            "execute_handlers": [
+                {"handler": "show", "params": {"type": "text", "value": c}}
+                for c in chunks
+            ],
+        }
     headers = {"Authorization": f"Bearer {KOMMO_TOKEN}"}
     try:
         r = httpx.post(return_url, json=body, headers=headers, timeout=15)
         state.log("salesbot_continue", lead_id,
-                  f"rc={r.status_code} balões={len(chunks)} body={r.text[:300]}")
+                  f"rc={r.status_code} modo={SALESBOT_DISPLAY} body={r.text[:300]}")
         if r.status_code == 404:
             state.log("error", lead_id,
                       "salesbot_continue 404: bot não estava mais esperando "

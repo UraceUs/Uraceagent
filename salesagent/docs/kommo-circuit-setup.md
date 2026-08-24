@@ -144,8 +144,36 @@ python3 ~/Uraceagent/salesagent/tools/show_recent_audit.py -n 30
 > payload bruto sempre, aceita múltiplos formatos de entrada, e o fallback
 > de nota garante que nenhuma resposta se perde enquanto calibramos.
 
+## ✅ Circuito fechado (24/08) + migração para widget v2
+
+O teste ponta a ponta com lead real (Instagram) fechou o circuito às 21h05
+UTC de 24/08. Dois achados calibrados ao vivo: o Kommo envia o webhook
+como **form-encoded** (não JSON), e o continue valida **80 chars por
+handler `show`** (400 TooLong) — a primeira entrega real saiu como
+sequência de balões picados.
+
+**Widget v2 + modo `json_reply`** resolvem a formatação: a resposta viaja
+inteira em `data.reply` e o próprio bot a exibe via `{{json.reply}}` — uma
+única mensagem com quebras de linha, sem limite de 80. Migração:
+
+1. **Re-subir o widget**: Kommo → Settings → Integrations → Chase Bridge
+   (URACE) → Edit → **Upload new archive** com o zip v2
+   (`zip -r chase-bridge-widget.zip manifest.json script.js i18n images`).
+2. **Regenerar o fluxo do bot**: abrir o Salesbot no editor, **remover o
+   bloco "Chase — responder ao lead" e adicionar de novo** (garante que o
+   fluxo é gerado pelo script novo), colar a URL com `?key=` de novo,
+   salvar. (Só re-salvar sem recriar o bloco PODE usar script antigo em
+   cache — recriar é o caminho garantido.)
+3. **Trocar o modo na ponte**: no VPS,
+   `echo 'SALESBOT_DISPLAY=json_reply' >> ~/.urace/bridge.env && sudo systemctl restart sales-bridge`
+4. Testar de novo. Se `{{json.reply}}` não interpolar (aparecer literal no
+   chat), rollback imediato: remover a linha `SALESBOT_DISPLAY` do
+   bridge.env e reiniciar — volta ao modo balões, que funciona.
+
 ## O que continua pendente depois disso
 
-- Agendador de follow-up real (hoje `[[followup]]` vira task no Kommo).
-- Alarme de escalação C2 (re-alerta 10–30min, 9h–18h Orlando).
+- `FOLLOWUP_BOT_ID` no bridge.env (id do Salesbot — está na URL do editor
+  do bot) para o follow-up agendado chegar no chat.
 - Sync do snapshot do Rate Card com a planilha.
+- Rotacionar o client secret da integração (passou pelo chat em 24/08),
+  junto com a revisão geral de credenciais pré-lançamento.

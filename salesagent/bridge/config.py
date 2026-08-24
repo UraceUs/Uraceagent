@@ -41,6 +41,13 @@ ESCALATION_REALERT_MIN = int(_bridge.get("ESCALATION_REALERT_MIN", "15"))  # 10�
 # agendador dispara o bot via POST /api/v4/bots/{id}/run e a ponte devolve o
 # texto pendente pelo return_url. Vazio = fallback nota+tarefa no Kommo.
 FOLLOWUP_BOT_ID = _bridge.get("FOLLOWUP_BOT_ID", "")
+# Como a resposta chega no chat do lead:
+#   "balloons"   — sequência de handlers `show` de <=80 chars (funciona com o
+#                  widget v1; limite de 80 validado ao vivo em 24/08)
+#   "json_reply" — a resposta inteira vai no campo data.reply e o PRÓPRIO BOT
+#                  a exibe via {{json.reply}} (exige widget v2 + bot re-salvo;
+#                  uma mensagem única, sem limite de 80)
+SALESBOT_DISPLAY = _bridge.get("SALESBOT_DISPLAY", "balloons")
 
 DB_PATH = URACE_DIR / "salesbridge.db"
 

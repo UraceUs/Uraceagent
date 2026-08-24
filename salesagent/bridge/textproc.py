@@ -44,8 +44,13 @@ def strip_directives(text: str) -> str:
 
 
 def sanitize_dashes(text: str) -> str:
-    """Remove em/en dash de qualquer texto que vá para o cliente."""
-    return _DASH_RE.sub(",", text)
+    """Remove em/en dash de qualquer texto que vá para o cliente.
+
+    Substitui por hífen simples (permitido pela regra de voz), não por
+    vírgula: no 1º teste ao vivo a vírgula transformava o menu
+    "A — Nunca andou de kart" em "A , Nunca andou de kart" — visual quebrado
+    no chat. Com hífen: "A - Nunca andou de kart"."""
+    return _DASH_RE.sub("-", text)
 
 
 def customer_facing(text: str) -> str:
