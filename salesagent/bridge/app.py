@@ -114,6 +114,42 @@ def _verify_bot_token(token: str | None) -> bool:
         return False
 
 
+def _php_unflatten(flat: dict) -> dict:
+    """Converte chaves PHP-style ('data[lead_id]', 'a[b][0][c]') em dict
+    aninhado — formato real do widget_request na conta (descoberto no 1º
+    teste ao vivo, 24/08: o Kommo envia form-encoded, não JSON)."""
+    root: dict = {}
+    for key, value in flat.items():
+        parts = key.replace("]", "").split("[")
+        node = root
+        for i, part in enumerate(parts):
+            if i == len(parts) - 1:
+                node[part] = value
+            else:
+                nxt = node.get(part)
+                if not isinstance(nxt, dict):
+                    nxt = {}
+                    node[part] = nxt
+                node = nxt
+    return root
+
+
+def _parse_hook_body(raw_body: bytes) -> dict:
+    """Corpo do webhook em qualquer formato: JSON OU form-urlencoded
+    (PHP-style, o que o Salesbot realmente envia). Corpo vazio = {}."""
+    if not raw_body:
+        return {}
+    try:
+        parsed = json.loads(raw_body)
+        return parsed if isinstance(parsed, dict) else {"_body": parsed}
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        pass
+    from urllib.parse import parse_qs
+    form = parse_qs(raw_body.decode("utf-8", "replace"), keep_blank_values=True)
+    flat = {k: (v[0] if len(v) == 1 else v) for k, v in form.items()}
+    return _php_unflatten(flat)
+
+
 @app.post("/kommo/hook")
 async def kommo_hook(request: Request, background: BackgroundTasks,
                      x_api_key: str | None = Header(None), key: str | None = None):
@@ -123,13 +159,24 @@ async def kommo_hook(request: Request, background: BackgroundTasks,
     envia headers customizados, então a chave vai na URL configurada no bot
     — só trafega sobre HTTPS via Caddy)."""
     _auth(x_api_key or key)
-    payload = await request.json()
-    # Sempre loga o payload bruto — é o que permite calibrar o parser contra
-    # o formato REAL da conta no primeiro teste (tools/show_recent_audit.py).
-    state.log("hook_raw", None, json.dumps(payload, ensure_ascii=False)[:3500])
-    if not _verify_bot_token(payload.get("token")):
+    raw_body = await request.body()
+    # Sempre loga o corpo BRUTO + content-type ANTES de qualquer parse — é o
+    # que permite calibrar contra o formato real da conta
+    # (tools/show_recent_audit.py). 1º teste ao vivo provou o valor disso:
+    # o corpo veio form-encoded e o parse JSON puro estourava 500.
+    ctype = request.headers.get("content-type", "?")
+    state.log("hook_raw", None, f"ct={ctype} :: " + raw_body.decode("utf-8", "replace")[:3300])
+    payload = _parse_hook_body(raw_body)
+    # JWT do bot: rejeita só se o token VEIO e é inválido. Token ausente não
+    # bloqueia (formato form-encoded pode não trazê-lo onde esperamos e o
+    # ?key= da URL já é a autenticação obrigatória) — mas fica logado para
+    # calibrarmos com o payload real.
+    tok = payload.get("token")
+    if tok and not _verify_bot_token(tok):
         state.log("error", None, "hook: JWT do bot inválido/expirado (KOMMO_BOT_SECRET ativo)")
         raise HTTPException(401, "invalid bot token")
+    if KOMMO_BOT_SECRET and not tok:
+        state.log("gate", None, "hook aceito sem token JWT (auth só pelo ?key=) — calibrar depois")
     background.add_task(process_inbound, payload)
     return {"ok": True}
 
