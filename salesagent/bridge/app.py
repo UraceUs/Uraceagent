@@ -366,38 +366,72 @@ def send_to_lead(lead_id: int, text: str) -> None:
         return
     kommo.add_note(lead_id, f"[agent] {text}")
     state.log("outbound_fallback", lead_id,
-              "sem return_url ativo — resposta gravada como nota, não entregue no chat")
+              ("entrega via salesbot falhou" if pending else "sem return_url ativo")
+              + " — resposta gravada como nota, não entregue no chat")
+
+
+# Limite VALIDADO na conta real (24/08, 1º teste ao vivo): o continue do
+# Salesbot recusa `show` com value > 80 chars (erro TooLong) e aceita no
+# máximo 10 handlers por chamada. A resposta vira uma sequência de balões.
+_SHOW_CHAR_LIMIT = 80
+_MAX_HANDLERS = 10
+
+
+def _chunk_for_salesbot(text: str, limit: int = _SHOW_CHAR_LIMIT) -> list[str]:
+    """Divide a resposta em pedaços <= limit, um por balão de chat. Quebra
+    primeiro por linha (o menu A/B/C/D vira um balão por opção, natural em
+    chat) e, dentro de linha longa, por palavra — nunca no meio de uma
+    palavra/URL."""
+    chunks: list[str] = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        while len(line) > limit:
+            cut = line.rfind(" ", 1, limit + 1)
+            if cut <= 0:
+                cut = limit  # palavra/URL única maior que o limite: corte duro
+            chunks.append(line[:cut].strip())
+            line = line[cut:].strip()
+        if line:
+            chunks.append(line)
+    return chunks
 
 
 def _salesbot_continue(lead_id: int, return_url: str, token: str | None,
                        text: str) -> bool:
-    """POST de continuação do Salesbot: mostra `text` ao lead no chat.
+    """POST de continuação do Salesbot: mostra `text` ao lead no chat, como
+    uma sequência de balões (handler `show` por pedaço de <= 80 chars).
 
-    Formato confirmado nas docs oficiais (developers.kommo.com, referência
-    "SalesBot widget block execution confirmation", validado 21/08):
+    Formato confirmado nas docs oficiais + calibrado no 1º teste ao vivo:
     - POST no return_url verbatim (…/api/v4/salesbot/{bot}/continue/{id})
-    - Auth: header `Authorization: Bearer <token da integração>` — o mesmo
-      KOMMO_TOKEN que a ponte já usa na API v4. O JWT descartável do
-      payload NÃO vai no corpo (isso era um padrão de comunidade, errado).
-    - Corpo: {"data": {...}, "execute_handlers": [...]}; handler `show`
-      type=text exibe a mensagem ao lead. Sucesso = 202 Accepted.
-    - 404 = "registro aguardando execução não encontrado": o bot desistiu
-      de esperar (timeout não documentado) — cai no fallback de nota.
-    - Docs recomendam value <= 80 chars no show; bridges em produção enviam
-      textos maiores sem problema — se a conta real recusar, dividir em
-      múltiplos handlers (máx. 10) é o plano B.
+    - Auth: header `Authorization: Bearer <KOMMO_TOKEN>` (API v4)
+    - Corpo: {"data": {...}, "execute_handlers": [<=10 shows de <=80 chars]}
+    - Sucesso = 202 Accepted. 400 TooLong = pedaço estourou o limite.
+    - 404 = o bot desistiu de esperar — cai no fallback de nota.
+    - Janela de espera do bot comprovada >= 58s no teste real.
     """
+    chunks = _chunk_for_salesbot(text)
+    if not chunks:
+        return False
+    if len(chunks) > _MAX_HANDLERS:
+        # Não truncar conteúdo em silêncio: mensagem longa demais para o
+        # canal vai inteira para a nota (fallback) e fica registrado.
+        state.log("error", lead_id,
+                  f"resposta viraria {len(chunks)} balões (máx {_MAX_HANDLERS}) — fallback nota")
+        return False
     body = {
         "data": {"status": "success"},
         "execute_handlers": [
-            {"handler": "show", "params": {"type": "text", "value": text}},
+            {"handler": "show", "params": {"type": "text", "value": c}}
+            for c in chunks
         ],
     }
     headers = {"Authorization": f"Bearer {KOMMO_TOKEN}"}
     try:
         r = httpx.post(return_url, json=body, headers=headers, timeout=15)
         state.log("salesbot_continue", lead_id,
-                  f"rc={r.status_code} body={r.text[:300]}")
+                  f"rc={r.status_code} balões={len(chunks)} body={r.text[:300]}")
         if r.status_code == 404:
             state.log("error", lead_id,
                       "salesbot_continue 404: bot não estava mais esperando "
