@@ -105,18 +105,31 @@ def system_note(verdict: dict) -> str:
     "não invente" deixa de ser um lembrete genérico no prompt e passa a ser
     uma instrução específica sobre ESTA pergunta."""
     nivel = verdict["level"]
+    # Este aviso vale para AFIRMAÇÕES sobre a URACE -- não para conduzir a
+    # conversa. Sem esta ressalva, um "hi, i've never raced before" (que não
+    # pede fato nenhum e é o lead mais comum) viraria escalação, porque o
+    # vault hoje não tem documento que case com essa frase. O fluxo de
+    # classificação, o tom e o roteiro vivem nas instruções do agente, e
+    # instrução É base sólida.
+    _ESCOPO = ("Isto vale para AFIRMAR fatos sobre a URACE (preço, política, "
+               "horário, disponibilidade, o que está incluso, capacidade). "
+               "Não vale para conduzir a conversa: saudar, classificar A/B/C/D, "
+               "perguntar, recomendar programa e seguir o roteiro das suas "
+               "instruções continuam normais -- suas instruções são base "
+               "sólida. Se o lead não pediu nenhum fato, siga normalmente.")
     if nivel == NONE:
         return ("ATENÇÃO: a busca no knowledge base não encontrou NADA sobre "
-                "esta pergunta. Você NÃO tem base para responder. Não deduza, "
-                "não generalize, não use conhecimento geral sobre karting. "
-                "Diga ao lead que vai confirmar com a equipe e emita "
-                "[[unknown question=\"...\" found=\"nada\"]].")
+                "esta mensagem. Você não tem base para afirmar fatos aqui. "
+                "Não deduza, não generalize, não use conhecimento geral sobre "
+                "karting como se fosse sobre a URACE. Se o lead pediu um fato, "
+                "diga que vai confirmar e emita [[unknown question=\"...\" "
+                "found=\"nada\"]]. " + _ESCOPO)
     if nivel == LOW:
         return (f"ATENÇÃO: {verdict['reason']}. Trate como se não tivesse a "
                 "informação: não afirme nada que não esteja literalmente "
                 "escrito acima. Se a pergunta do lead depende disso, diga que "
                 "vai confirmar e emita [[unknown question=\"...\" "
-                "found=\"documento fraco\"]].")
+                "found=\"documento fraco\"]]. " + _ESCOPO)
     if nivel == CONFLICT:
         return (f"ATENÇÃO: {verdict['reason']}. NÃO escolha um dos dois por "
                 "conta própria. Diga ao lead que vai confirmar e emita "
@@ -179,6 +192,10 @@ def self_test() -> int:
     for nivel in (NONE, LOW, CONFLICT):
         nota = system_note({"level": nivel, "reason": "x"})
         check(f"{nivel} manda usar [[unknown]]", "[[unknown" in nota)
+    for nivel in (NONE, LOW):
+        nota = system_note({"level": nivel, "reason": "x"})
+        check(f"{nivel} nao escala conversa sem pergunta factual",
+              "classificar" in nota and "siga normalmente" in nota)
     check("ok não gera instrução", system_note({"level": OK, "reason": "x"}) == "")
     check("stale orienta sem mandar escalar",
           "[[unknown" not in system_note({"level": STALE, "reason": "x"}))
