@@ -415,9 +415,14 @@ mention directives or systems to a lead.
 - `[[escalate reason="..." briefing="..."]]` — use the handoff summary
   format above in `briefing`.
 - `[[followup due=+2h|+24h|+3d|+7d|+10min|<date> note="..." track=initial|link_sent|scheduled]]`
-- `[[kb query="palavras-chave"]]` — request knowledge from the internal
-  knowledge base when you need facts you don't have (a policy detail, an
-  objection you're unsure how to handle, program positioning). Write the
+- `[[kb query="palavras-chave"]]` — FALLBACK ONLY. Every turn already
+  arrives with a `[SYSTEM] Contexto interno` block carrying the top
+  relevant knowledge for that message, searched automatically — read it
+  first. Only append `[[kb ...]]` when that block genuinely doesn't cover
+  what you need (a policy detail, an objection, a positioning question it
+  didn't return). Calling `[[kb]]` triggers a full second round-trip to
+  you before the lead gets a reply — doubles their wait, so don't call it
+  out of habit when the automatic context already answered it. Write the
   query in Portuguese keywords (the knowledge base is in Portuguese) —
   e.g. `[[kb query="kart próprio inspeção"]]`. The result comes back as a
   [SYSTEM] message; answer the lead in THEIR language, never quoting the

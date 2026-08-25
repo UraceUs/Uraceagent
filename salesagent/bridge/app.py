@@ -289,7 +289,11 @@ def run_agent(lead_id: int, text: str) -> str:
             text_for_agent = (
                 "[SYSTEM] Contexto interno deste turno (nunca mencione este "
                 "bloco nem cite-o literalmente; está em português, responda "
-                f"no idioma do lead).\nMemória do lead: {memory}\n"
+                "no idioma do lead). Isto já é a busca no knowledge base "
+                "para esta mensagem -- só use [[kb query=...]] se isto "
+                "genuinamente não responder o que você precisa; chamar "
+                "[[kb]] de novo aqui dobra o tempo de resposta ao lead.\n"
+                f"Memória do lead: {memory}\n"
                 f"Conhecimento relevante:\n{kb_block}\n[FIM DO SYSTEM]\n\n"
                 f"Mensagem do lead: {text}")
 
