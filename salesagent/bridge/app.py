@@ -23,6 +23,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 
 import directives as directive_engine
 import gates
+import holding
 import kommo_client as kommo
 import scheduler
 import state
@@ -214,28 +215,52 @@ def process_inbound(payload: dict) -> None:
     # B2: lead respondeu — qualquer trilha de follow-up ativa morre agora.
     scheduler.cancel(lead_id, "lead respondeu")
 
-    # B4: gatilhos de escalação avaliados ANTES do modelo
+    # A PARTIR DAQUI existe UM só caminho de saída, e ele sempre envia algo.
+    # Antes (até 25/08) havia três `return` mudos aqui -- gatilho B4, estado
+    # escalado (G3) e agente vazio -- e cada um deixava o lead falando
+    # sozinho. O incidente que provou isso: "can i bring my own kart?" bateu
+    # no gatilho B4, escalou certinho, e o lead nunca recebeu uma linha.
+    # Escalar é sobre quem RESPONDE, nunca sobre responder ou não.
+    reply = ""
     triggers = gates.escalation_triggers(text)
     if triggers and state.get_conversation(lead_id)["state"] == "AI_ACTIVE":
+        # B4: assuntos sensíveis (desconto, refund, jurídico...) escalam
+        # ANTES do modelo -- ele nunca vê a mensagem, então também não pode
+        # ser convencido a responder. Quem acusa o recebimento é a ponte.
         escalate(lead_id, "; ".join(triggers), context=text)
-        return
+        reply = _holding_reply(lead_id, text)
+    elif not state.agent_may_sell(lead_id):
+        # G3: conversa escalada não volta a VENDER -- mas continua sendo uma
+        # conversa. O lead recebe reconhecimento, não silêncio.
+        state.log("gate", lead_id, "estado escalado — sem resposta comercial, só reconhecimento")
+        reply = _holding_reply(lead_id, text)
+    else:
+        reply = run_agent(lead_id, text)
+        if not reply:
+            # Agente fora do ar/timeout/resposta vazia. run_agent já escalou
+            # no except; o lead não pode pagar por isso com silêncio.
+            state.log("error", lead_id, "agente devolveu resposta vazia — enviando reconhecimento")
+            reply = _holding_reply(lead_id, text)
 
-    # G3: conversa escalada não volta a vender
-    if not state.agent_may_sell(lead_id):
-        state.log("gate", lead_id, "mensagem recebida em estado escalado — sem resposta comercial")
-        return
+    send_to_lead(lead_id, reply)
+    # B2: relógio de "sem resposta" reinicia a cada envio nosso — trilha
+    # link_sent se o link de preço saiu neste turno, initial caso
+    # contrário. A trilha scheduled (diretiva com data pedida pelo lead)
+    # tem precedência e não é sobrescrita. Em estado escalado nenhuma
+    # trilha comercial começa (G3) — o guard de state cobre isso.
+    conv = state.get_conversation(lead_id)
+    if conv["state"] in ("AI_ACTIVE", "RESUMED") and conv.get("followup_track") != "scheduled":
+        track = "link_sent" if _last_turn_price_sent.pop(lead_id, False) else "initial"
+        scheduler.start_track(lead_id, track)
 
-    reply = run_agent(lead_id, text)
-    if reply:
-        send_to_lead(lead_id, reply)
-        # B2: relógio de "sem resposta" reinicia a cada envio nosso — trilha
-        # link_sent se o link de preço saiu neste turno, initial caso
-        # contrário. A trilha scheduled (diretiva com data pedida pelo lead)
-        # tem precedência e não é sobrescrita.
-        conv = state.get_conversation(lead_id)
-        if conv["state"] in ("AI_ACTIVE", "RESUMED") and conv.get("followup_track") != "scheduled":
-            track = "link_sent" if _last_turn_price_sent.pop(lead_id, False) else "initial"
-            scheduler.start_track(lead_id, track)
+
+def _holding_reply(lead_id: int, lead_text: str) -> str:
+    """Mensagem de espera do `holding.py`, contando quantas já foram para
+    este lead (para não repetir a mesma frase e soar robô)."""
+    conv = state.get_conversation(lead_id)
+    sent_before = conv.get("holding_count") or 0
+    state.update_conversation(lead_id, holding_count=sent_before + 1)
+    return holding.waiting_message(lead_text, sent_before)
 
 
 # Marca "o link de preço saiu neste turno" por lead — consumida logo após o
