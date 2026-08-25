@@ -67,8 +67,13 @@ def _dig(payload: dict, *paths: str):
     return None
 
 
-def _extract_inbound(payload: dict) -> tuple[int, str, str | None, str | None]:
-    """Devolve (lead_id, texto, return_url, token) do payload — cobre tanto
+def _extract_inbound(payload: dict) -> tuple[int, str, str | None, str | None, str]:
+    """Devolve (lead_id, texto, return_url, token, contact_name) do payload.
+
+    O nome vem no widget_request como `data[contact_name]` e passou a ser
+    guardado em 25/08: uma escalação que diz só "lead 31764961" obriga o
+    humano a abrir o Kommo para saber de quem se trata. Com nome, ele
+    decide pelo WhatsApp mesmo. Cobre tanto
     o formato simples de teste ({lead_id, message}) quanto o widget_request
     real do Salesbot (token/data/return_url com o lead aninhado)."""
     lead_id = _dig(payload, "lead_id", "data.lead_id", "data.lead.id",
@@ -78,11 +83,14 @@ def _extract_inbound(payload: dict) -> tuple[int, str, str | None, str | None]:
                 "data.talk.message.text", "text", "data.text")
     return_url = _dig(payload, "return_url", "data.return_url")
     token = _dig(payload, "token", "data.token")
+    nome = _dig(payload, "contact_name", "data.contact_name",
+                "data.contact.name", "contact.name")
     try:
         lead_num = int(lead_id) if lead_id is not None else 0
     except (TypeError, ValueError):
         lead_num = 0
-    return lead_num, str(text) if text is not None else "", return_url, token
+    return (lead_num, str(text) if text is not None else "", return_url, token,
+            str(nome) if nome else "")
 
 
 # return_url do Salesbot é efêmero (vale para UMA continuação do bot) —
@@ -187,7 +195,7 @@ async def kommo_hook(request: Request, background: BackgroundTasks,
 
 def process_inbound(payload: dict) -> None:
     """Worker assíncrono: roteia a mensagem para o agente e devolve ao Kommo."""
-    lead_id, text, return_url, token = _extract_inbound(payload)
+    lead_id, text, return_url, token, contact_name = _extract_inbound(payload)
     if not lead_id:
         state.log("error", None, f"payload sem lead_id reconhecível: {str(payload)[:300]}")
         return
@@ -212,7 +220,10 @@ def process_inbound(payload: dict) -> None:
         return
 
     state.log("inbound", lead_id, text)
-    state.update_conversation(lead_id, last_inbound_at=int(time.time()))
+    campos = {"last_inbound_at": int(time.time()), "last_inbound_text": text[:500]}
+    if contact_name:
+        campos["contact_name"] = contact_name
+    state.update_conversation(lead_id, **campos)
     # B2: lead respondeu — qualquer trilha de follow-up ativa morre agora.
     scheduler.cancel(lead_id, "lead respondeu")
 
@@ -257,11 +268,15 @@ def process_inbound(payload: dict) -> None:
 
 def _holding_reply(lead_id: int, lead_text: str) -> str:
     """Mensagem de espera do `holding.py`, contando quantas já foram para
-    este lead (para não repetir a mesma frase e soar robô)."""
+    este lead (para não repetir a mesma frase e soar robô) e se apresentando
+    quando é a primeira vez que a URACE fala com essa pessoa."""
     conv = state.get_conversation(lead_id)
     sent_before = conv.get("holding_count") or 0
     state.update_conversation(lead_id, holding_count=sent_before + 1)
-    return holding.waiting_message(lead_text, sent_before)
+    return holding.waiting_message(
+        lead_text, sent_before,
+        contact_name=conv.get("contact_name"),
+        first_contact=not conv.get("last_outbound_at"))
 
 
 # Marca "o link de preço saiu neste turno" por lead — consumida logo após o
@@ -413,11 +428,38 @@ def deliver_followup(lead_id: int, text: str) -> bool:
     return ok
 
 
+def rescue_lead(conv: dict) -> bool:
+    """Entrega, por iniciativa da ponte, a resposta devida a um lead.
+
+    Chamada pelo agendador (`scheduler._maybe_rescue`) quando o lead falou
+    por último e ninguém respondeu, ou quando ele espera um humano há
+    horas. Usa o mesmo canal de entrega espontânea do follow-up -- validado
+    ponta a ponta em 25/08 -- e cai na nota do Kommo se o disparo falhar,
+    para nada se perder em silêncio.
+    """
+    lead_id = conv["lead_id"]
+    texto = holding.waiting_message(
+        conv.get("last_inbound_text") or "",
+        conv.get("holding_count") or 0,
+        contact_name=conv.get("contact_name"),
+        first_contact=not conv.get("last_outbound_at"))
+    state.update_conversation(lead_id,
+                              holding_count=(conv.get("holding_count") or 0) + 1)
+    entregue = deliver_followup(lead_id, texto)
+    if entregue:
+        state.update_conversation(lead_id, last_outbound_at=int(time.time()))
+        state.log("outbound", lead_id, texto)
+    else:
+        kommo.add_note(lead_id, f"[resgate — enviar manualmente]\n{texto}")
+    return entregue
+
+
 @app.on_event("startup")
 async def _start_scheduler():
     scheduler.compose_fn = compose_followup
     scheduler.deliver_fn = deliver_followup
     scheduler.notify_fn = notify_human
+    scheduler.rescue_fn = rescue_lead
     scheduler.task_fn = kommo.add_task
     scheduler.note_fn = kommo.add_note
     scheduler.start()
@@ -550,8 +592,11 @@ def escalate(lead_id: int, reason: str, context: str = "") -> None:
     scheduler.cancel(lead_id, "conversa escalada")  # G3: sem follow-up comercial
     kommo.add_tags(lead_id, ["escalated"])
     kommo.add_note(lead_id, f"[escalação] {reason}")
-    briefing = f"🔺 ESCALAÇÃO — lead {lead_id}\nMotivo: {reason}\nContexto: {context[:500]}\n" \
-               f"Responda 'aprovar {lead_id} <instrução>' ou 'retomar {lead_id}'."
+    conv = state.get_conversation(lead_id)
+    nome = conv.get("contact_name") or "sem nome no Kommo"
+    briefing = (f"🔺 ESCALAÇÃO — {nome} (lead {lead_id})\n"
+                f"Motivo: {reason}\nContexto: {context[:500]}\n"
+                f"Responda 'aprovar {lead_id} <instrução>' ou 'retomar {lead_id}'.")
     notify_human(briefing)
     state.log("escalation", lead_id, reason)
 

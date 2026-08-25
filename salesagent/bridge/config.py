@@ -50,6 +50,16 @@ ESCALATION_REALERT_MIN = int(_bridge.get("ESCALATION_REALERT_MIN", "15"))  # 10�
 # SPAM e se recusou a entregar. Um alarme que ninguém mais escuta é pior que
 # nenhum alarme. Ao estourar o teto, vira tarefa no Kommo (canal durável).
 ESCALATION_MAX_REALERTS = int(_bridge.get("ESCALATION_MAX_REALERTS", "4"))
+# Rede de segurança do lead (25/08): se a ponte DEVE uma resposta a alguém
+# (última fala do lead é mais nova que a última nossa) por mais que isto, o
+# agendador entrega sozinho. Cobre qualquer caminho que tenha falhado --
+# ponte fora do ar na hora, agente travado, escalação antiga. 180s dá folga
+# para um turno normal terminar sem o resgate correr junto.
+LEAD_RESCUE_AFTER_SEC = int(_bridge.get("LEAD_RESCUE_AFTER_SEC", "180"))
+# Lead esperando humano há horas: reforço de que não foi esquecido. O teto
+# real são as 3 frases distintas do holding.py -- depois disso ele silencia
+# em vez de repetir.
+LEAD_REASSURE_MIN = int(_bridge.get("LEAD_REASSURE_MIN", "120"))
 # Id do Salesbot (chase-bridge) para ENTREGA de follow-up espontâneo: o
 # agendador dispara o bot via POST /api/v4/bots/{id}/run e a ponte devolve o
 # texto pendente pelo return_url. Vazio = fallback nota+tarefa no Kommo.

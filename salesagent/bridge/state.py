@@ -59,6 +59,8 @@ _MIGRATIONS = [
     "ALTER TABLE conversations ADD COLUMN pending_followup_text TEXT",   # aguardando entrega via bots/run
     "ALTER TABLE conversations ADD COLUMN holding_count INTEGER",        # msgs de espera já enviadas (holding.py)
     "ALTER TABLE conversations ADD COLUMN realert_count INTEGER",        # re-alertas já disparados (teto no scheduler)
+    "ALTER TABLE conversations ADD COLUMN contact_name TEXT",            # nome do lead no Kommo (escalação legível)
+    "ALTER TABLE conversations ADD COLUMN last_inbound_text TEXT",       # última fala do lead (idioma p/ resgate)
 ]
 
 

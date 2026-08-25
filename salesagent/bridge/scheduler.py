@@ -37,7 +37,8 @@ from datetime import datetime
 from pathlib import Path
 
 from config import (BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_MAX_REALERTS,
-                    ESCALATION_REALERT_MIN,
+                    ESCALATION_REALERT_MIN, LEAD_REASSURE_MIN,
+                    LEAD_RESCUE_AFTER_SEC,
                     FOLLOWUP_BOT_ID, REPO_DIR)
 from state import db, log, transition, update_conversation
 
@@ -56,6 +57,7 @@ deliver_fn = None      # deliver_fn(lead_id, text) -> bool  (True = entregue no 
 notify_fn = None       # notify_fn(text) -> None  (WhatsApp interno)
 task_fn = None         # task_fn(lead_id, text, due_ts) -> None (tarefa Kommo)
 note_fn = None         # note_fn(lead_id, text) -> None (nota Kommo)
+rescue_fn = None       # rescue_fn(conv) -> bool (entrega a resposta devida ao lead)
 
 
 def in_business_hours(now_ts: int | None = None) -> bool:
@@ -95,13 +97,23 @@ def cancel(lead_id: int, reason: str = "lead respondeu") -> None:
 def tick(now: int | None = None) -> dict:
     """Uma varredura. Devolve contagens (para teste e observabilidade)."""
     now = now or int(time.time())
-    fired = realerted = 0
+    fired = realerted = resgatados = 0
     with db() as conn:
         due = [dict(r) for r in conn.execute(
             "SELECT * FROM conversations WHERE followup_track IS NOT NULL "
             "AND next_followup_at IS NOT NULL AND next_followup_at <= ?", (now,))]
         waiting = [dict(r) for r in conn.execute(
             "SELECT * FROM conversations WHERE state IN ('WAITING_HUMAN','HUMAN_HANDOFF')")]
+        # Devendo resposta: o lead falou por último e ninguém respondeu -- OU
+        # está esperando humano e faz muito tempo que não ouve nada nosso.
+        # Uma consulta, os dois casos, porque a ação é a mesma.
+        devendo = [dict(r) for r in conn.execute(
+            "SELECT * FROM conversations WHERE state != 'CLOSED' "
+            "AND last_inbound_at IS NOT NULL AND ("
+            "  COALESCE(last_outbound_at, 0) < last_inbound_at"
+            "  OR (state IN ('WAITING_HUMAN','HUMAN_HANDOFF')"
+            "      AND COALESCE(last_outbound_at, 0) < ?))",
+            (now - LEAD_REASSURE_MIN * 60,))]
 
     for conv in due:
         try:
@@ -118,12 +130,22 @@ def tick(now: int | None = None) -> dict:
             except Exception as exc:
                 log("error", conv["lead_id"], f"scheduler re-alerta: {exc}")
 
+    # Rede de segurança do LEAD -- roda fora do horário comercial também: um
+    # lead esperando não deveria descobrir que a URACE tem expediente.
+    for conv in devendo:
+        try:
+            if _maybe_rescue(conv, now):
+                resgatados += 1
+        except Exception as exc:
+            log("error", conv["lead_id"], f"scheduler resgate: {exc}")
+
     try:
         _maybe_daily_brain_maintenance(now)
     except Exception as exc:
         log("error", None, f"scheduler manutenção do brain: {exc}")
 
-    return {"followups_fired": fired, "realerts": realerted}
+    return {"followups_fired": fired, "realerts": realerted,
+            "rescues": resgatados}
 
 
 # --------------------------------------------------- ciclo diário do Brain
@@ -201,6 +223,55 @@ def _fire_followup(conv: dict, now: int) -> None:
             if task_fn:
                 task_fn(lead_id, "Follow-ups de link esgotados — decidir manter ou fechar", now + 86400)
         cancel(lead_id, f"trilha {track} esgotada")
+
+
+def _maybe_rescue(conv: dict, now: int) -> bool:
+    """Entrega a resposta que a ponte DEVE a este lead, sozinha.
+
+    A rede de segurança final. Todo o resto do sistema tenta responder na
+    hora; isto existe para quando alguma coisa falhou -- ponte reiniciando
+    no meio do turno, agente travado, escalação anterior à correção, ou o
+    Kommo simplesmente não tendo disparado o bot. A pergunta que ela faz é
+    a mais simples possível e não depende de nenhum componente ter
+    funcionado: *o lead falou depois da última vez que a gente falou?* Se
+    sim, devemos uma resposta, e ela sai agora.
+
+    Também cobre o lead que espera um humano há horas: sem isso, ele recebe
+    um "vou confirmar" e some todo mundo. As frases vêm do holding.py e são
+    três distintas -- esgotadas, o resgate silencia em vez de repetir, que
+    é o que separa insistência de spam (lição do alarme que virou ruído no
+    mesmo dia).
+
+    Roda FORA do horário comercial de propósito: o alarme do humano respeita
+    expediente, a dívida com o lead não.
+    """
+    lead_id = conv["lead_id"]
+    ultimo_lead = conv.get("last_inbound_at") or 0
+    ultimo_nosso = conv.get("last_outbound_at") or 0
+    devemos_resposta = ultimo_nosso < ultimo_lead
+
+    if devemos_resposta and now - ultimo_lead < LEAD_RESCUE_AFTER_SEC:
+        return False  # turno normal ainda pode estar em andamento
+    if not devemos_resposta:
+        # Caso "esperando humano há horas": só reforça dentro do horário
+        # comercial, para não acordar ninguém às 3h com um "não te esqueci".
+        if not in_business_hours(now):
+            return False
+        if now - ultimo_nosso < LEAD_REASSURE_MIN * 60:
+            return False
+
+    ja_enviadas = conv.get("holding_count") or 0
+    if ja_enviadas >= 3:
+        return False  # frases distintas esgotadas: silêncio é melhor que loop
+
+    if rescue_fn is None:
+        return False
+    entregue = rescue_fn(conv)
+    log("rescue", lead_id,
+        f"resposta devida ao lead entregue sozinho "
+        f"({'lead falou por último' if devemos_resposta else 'espera longa'}, "
+        f"#{ja_enviadas + 1}) — {'no chat' if entregue else 'fallback nota'}")
+    return True
 
 
 def _maybe_realert(conv: dict, now: int) -> bool:

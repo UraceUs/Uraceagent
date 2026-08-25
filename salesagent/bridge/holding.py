@@ -103,19 +103,48 @@ def is_acknowledgement(text: str) -> bool:
     return bool(_ACK_RE.match(text.strip()))
 
 
-def waiting_message(lead_text: str, sent_before: int = 0) -> str:
+# Primeiro contato: o lead não faz ideia de quem está falando com ele. Isto
+# acontece de verdade -- se a PRIMEIRA mensagem do lead bate num gatilho B4
+# ("can i bring my own kart?" bateu), a conversa escala antes do agente
+# rodar, e o lead levaria um "vou confirmar" de um estranho sem nome. A
+# apresentação segue o mesmo texto do template de abertura das instruções
+# do Chase, para o lead ouvir sempre a mesma voz.
+_APRESENTACAO = {
+    "pt": "Oi{nome}, aqui é o Chase, assistente da URACE.",
+    "es": "Hola{nome}, soy Chase, asistente de URACE.",
+    "en": "Hi{nome}, this is Chase, URACE's assistant.",
+}
+
+
+def _primeiro_nome(contact_name: str | None) -> str:
+    """', Eduardo' ou '' -- nunca deixa um nome faltando travar a mensagem
+    (regra das instruções: nome ausente não bloqueia nada)."""
+    if not contact_name:
+        return ""
+    primeiro = contact_name.strip().split()
+    return f" {primeiro[0]}" if primeiro else ""
+
+
+def waiting_message(lead_text: str, sent_before: int = 0,
+                    contact_name: str | None = None,
+                    first_contact: bool = False) -> str:
     """A mensagem que o lead recebe quando a resposta depende de um humano.
 
     `sent_before` = quantas mensagens de espera este lead já recebeu nesta
-    escalação (0 na primeira). Passa pelo mesmo `customer_facing()` que o
-    texto do modelo -- a regra de dash vale para todo texto que sai daqui,
-    não só para o que o modelo escreve.
+    escalação (0 na primeira). `first_contact` = a ponte nunca falou com
+    este lead antes, então a mensagem se apresenta. Passa pelo mesmo
+    `customer_facing()` que o texto do modelo -- a regra de dash vale para
+    todo texto que sai daqui, não só para o que o modelo escreve.
     """
     lang = detect_language(lead_text)
     if sent_before > 0 and is_acknowledgement(lead_text):
         return textproc.customer_facing(_ACK[lang])
     variants = _WAITING[lang]
-    return textproc.customer_facing(variants[min(sent_before, len(variants) - 1)])
+    texto = variants[min(sent_before, len(variants) - 1)]
+    if first_contact:
+        texto = (_APRESENTACAO[lang].format(nome=_primeiro_nome(contact_name))
+                 + " " + texto)
+    return textproc.customer_facing(texto)
 
 
 # --------------------------------------------------------------- self-test
@@ -160,6 +189,23 @@ def self_test() -> int:
           waiting_message("thanks!", 1) == textproc.customer_facing(_ACK["en"]))
     check("primeira mensagem nunca é a resposta curta",
           waiting_message("thanks!", 0) == textproc.customer_facing(_WAITING["en"][0]))
+
+    # Primeiro contato: o lead precisa saber com quem está falando.
+    ap = waiting_message("can i bring my own kart?", 0,
+                         contact_name="Eduardo F F Resende", first_contact=True)
+    check("primeiro contato se apresenta", "Chase" in ap and "URACE" in ap, ap)
+    check("primeiro contato usa o primeiro nome", "Hi Eduardo," in ap, ap)
+    check("apresentação não repete nas mensagens seguintes",
+          "Chase" not in waiting_message("hello?", 1, contact_name="Eduardo",
+                                         first_contact=False))
+    check("sem nome não quebra a apresentação",
+          "Chase" in waiting_message("hola", 0, first_contact=True))
+    check("apresentação segue o idioma do lead",
+          "asistente" in waiting_message("¿puedo llevar mi kart?", 0,
+                                         first_contact=True))
+    check("apresentação em pt usa 'aqui é o Chase'",
+          "aqui é o Chase" in waiting_message("posso levar meu kart?", 0,
+                                              first_contact=True))
 
     print()
     if failures:
