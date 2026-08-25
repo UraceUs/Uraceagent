@@ -1,0 +1,7 @@
+{
+  "items": [
+    { "type": "file", "path": "brain/_dashboards/Painel do Brain.md", "title": "⭐ Painel do Brain" },
+    { "type": "file", "path": "brain/_meta/README.md", "title": "Como o Brain funciona" },
+    { "type": "file", "path": "docs/obsidian-guia.md", "title": "Guia do Obsidian" }
+  ]
+}

@@ -3,22 +3,30 @@
 > Objetivo: em 15 minutos, você abre o vault, entende o que o Chase sabe,
 > e sabe aprovar ou corrigir conhecimento. Sem terminal, sem código.
 
-## 1. Instalar e abrir (uma vez só)
+## 1. Instalar e abrir (uma vez só — o vault já vem pré-configurado)
+
+O repositório já carrega a configuração do Obsidian (`.obsidian/`):
+marcadores prontos na barra lateral, plugin de Git embutido (oficial,
+"Git" v2.39.0) e sincronização automática ao abrir. Seus únicos passos:
 
 1. Baixe o Obsidian em [obsidian.md](https://obsidian.md) (grátis).
-2. Tenha o repositório no seu computador. Se ainda não tem: instale o
+2. Tenha o repositório no computador. Se ainda não tem: instale o
    [GitHub Desktop](https://desktop.github.com), faça login com a conta
    UraceUs e clone `UraceUs/Uraceagent` (botão "Clone").
-3. No Obsidian: **Open folder as vault** → escolha a pasta `Uraceagent`
-   inteira (decisão de 25/08: o repo todo é o vault).
-4. Fixe a nota `brain/_dashboards/Painel do Brain.md` (clique direito na
-   aba → Pin). Ela é sua página inicial.
+3. No Obsidian: **Open folder as vault** → a pasta `Uraceagent` inteira.
+4. Na primeira abertura, o Obsidian pergunta sobre plugins da comunidade:
+   clique em **"Trust author and enable plugins"** (é o plugin de Git que
+   já vem no vault — é ele que puxa e publica o conhecimento).
+
+Pronto. Na barra lateral, em **Bookmarks**, já estão: ⭐ Painel do Brain
+(sua página inicial), Como o Brain funciona, e este guia.
 
 ## 2. O dia a dia (5 minutos por dia)
 
-1. **Antes de mexer**: sincronize (GitHub Desktop → "Fetch origin" →
-   "Pull"). Isso traz os candidatos novos que o sistema gerou de noite.
-2. Abra o **Painel do Brain** → seção "Aguardando revisão".
+1. **Sincronizar**: automático — ao abrir o Obsidian, o plugin de Git puxa
+   as novidades sozinho (candidatos que o sistema gerou de noite chegam
+   assim). Para puxar de novo no meio do dia: `Ctrl/Cmd+P` → "Git: Pull".
+2. Abra o **⭐ Painel do Brain** → seção "Aguardando revisão".
 3. Para cada candidato em `brain/09_LEARNINGS/` com `status: candidate`:
    - Leia. Edite o texto como quiser (é seu conhecimento, não do sistema).
    - **Aprovar** → mude a linha `status: candidate` para `status: approved`.
@@ -26,12 +34,9 @@
    - **Descartar** → mude para `status: archived`.
    - **Na dúvida** → `status: review_required` (fica visível como pendência,
      invisível pro agente).
-4. **Publicar**: GitHub Desktop → escreva um resumo curto no campo de
-   commit → "Commit" → "Push origin". Pronto: no próximo deploy ou no
-   ciclo diário, o Chase passa a saber.
-
-> Alternativa sem GitHub Desktop: o plugin **Obsidian Git** (Settings →
-> Community plugins) dá botão de pull/push dentro do próprio Obsidian.
+4. **Publicar**: `Ctrl/Cmd+P` → **"Git: Commit-and-sync"** — commita e
+   publica num gesto (a mensagem de commit já vem pronta). O GitHub
+   Desktop continua funcionando como alternativa, se preferir.
 
 ## 3. Adicionar conhecimento novo
 

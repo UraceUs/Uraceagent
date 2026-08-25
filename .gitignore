@@ -9,3 +9,9 @@ venv/
 .DS_Store
 *.log
 postman_environment.json
+
+# Obsidian: estado volátil por máquina fica fora do repo
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.trash/
