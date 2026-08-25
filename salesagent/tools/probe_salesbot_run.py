@@ -23,12 +23,28 @@ Uso (no VPS):
 """
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bridge"))
+BRIDGE = Path(__file__).resolve().parent.parent / "bridge"
+sys.path.insert(0, str(BRIDGE))
 
-import httpx  # noqa: E402
+# httpx vive no venv da ponte, não no python do sistema. Em vez de exigir
+# que quem roda saiba disso, o script se re-executa com o interpretador
+# certo -- uma vez só (URACE_PROBE_REEXEC evita laço se o venv também não
+# tiver a dependência).
+try:
+    import httpx  # noqa: E402
+except ModuleNotFoundError:
+    _venv = BRIDGE / ".venv" / "bin" / "python"
+    if _venv.exists() and not os.environ.get("URACE_PROBE_REEXEC"):
+        os.environ["URACE_PROBE_REEXEC"] = "1"
+        os.execv(str(_venv), [str(_venv), str(Path(__file__).resolve()), *sys.argv[1:]])
+    print("httpx não encontrado. Rode com o python da ponte:")
+    print(f"  {_venv} {Path(__file__).resolve()} " + " ".join(sys.argv[1:]))
+    sys.exit(2)
+
 from config import KOMMO_DOMAIN, KOMMO_TOKEN  # noqa: E402
 
 BASE = f"https://{KOMMO_DOMAIN}/api/v4"
