@@ -28,12 +28,16 @@ As cadências (instruções, seção Follow-up):
 Regra B2: nunca duas trilhas no mesmo lead — o campo followup_track é um só.
 Regra B1: envio espontâneo SÓ daqui (o worker de mensagens nunca inicia).
 """
+import subprocess
+import sys
 import threading
 import time
 import zoneinfo
 from datetime import datetime
+from pathlib import Path
 
-from config import BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_REALERT_MIN, FOLLOWUP_BOT_ID
+from config import (BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_REALERT_MIN,
+                    FOLLOWUP_BOT_ID, REPO_DIR)
 from state import db, log, transition, update_conversation
 
 _TZ = zoneinfo.ZoneInfo(BUSINESS_TZ)
@@ -113,7 +117,49 @@ def tick(now: int | None = None) -> dict:
             except Exception as exc:
                 log("error", conv["lead_id"], f"scheduler re-alerta: {exc}")
 
+    try:
+        _maybe_daily_brain_maintenance(now)
+    except Exception as exc:
+        log("error", None, f"scheduler manutenção do brain: {exc}")
+
     return {"followups_fired": fired, "realerts": realerted}
+
+
+# --------------------------------------------------- ciclo diário do Brain
+def _maybe_daily_brain_maintenance(now: int) -> bool:
+    """Learning loop diário (decisão do Italo, 25/08): uma vez por dia, a
+    partir das 6h de Orlando, roda o extrator de aprendizados (gera
+    candidatos em brain/09_LEARNINGS) e reindexa o vault. Marca a execução
+    no próprio log de auditoria (kind=brain_maint) — sem tabela nova."""
+    local = datetime.fromtimestamp(now, tz=_TZ)
+    if local.hour < 6:
+        return False
+    today = local.date().isoformat()
+    with db() as conn:
+        row = conn.execute(
+            "SELECT MAX(ts) AS ts FROM audit WHERE kind='brain_maint'"
+        ).fetchone()
+    if row and row["ts"]:
+        last = datetime.fromtimestamp(row["ts"], tz=_TZ).date().isoformat()
+        if last == today:
+            return False
+
+    brain = Path(REPO_DIR).parent / "brain"
+    results = []
+    for script in ("extract_learnings.py", "indexer.py"):
+        path = brain / script
+        if not path.exists():
+            results.append(f"{script}: ausente")
+            continue
+        try:
+            r = subprocess.run([sys.executable, str(path)],
+                               capture_output=True, text=True, timeout=300)
+            out = (r.stdout or r.stderr or "").strip().splitlines()
+            results.append(f"{script}: rc={r.returncode} {out[-1][:150] if out else ''}")
+        except Exception as exc:
+            results.append(f"{script}: {exc}")
+    log("brain_maint", None, " | ".join(results))
+    return True
 
 
 def _fire_followup(conv: dict, now: int) -> None:

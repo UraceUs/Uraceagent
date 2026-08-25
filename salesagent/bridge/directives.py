@@ -130,11 +130,12 @@ def execute(lead_id: int, raw_directives: list[str], escalate_fn) -> dict:
     circular -- este módulo não decide QUANDO escalar por conta própria além
     do G2 (qualify->competes), só executa o que as diretivas pedem.
 
-    Devolve {'price_results': [...]} -- os resultados de qualquer
-    `[[price ...]]` encontrado, para o chamador decidir se precisa de uma
-    segunda rodada com o modelo (a resposta original normalmente ainda não
-    tem o link real, só promete mandar)."""
+    Devolve {'price_results': [...], 'kb_results': [...]} -- resultados de
+    `[[price ...]]` e `[[kb ...]]`, para o chamador decidir se precisa de
+    uma segunda rodada com o modelo (a resposta original normalmente ainda
+    não tem o dado real, só promete)."""
     price_results = []
+    kb_results = []
     already_escalated_here = False
     for name, kwargs in parse(raw_directives):
         try:
@@ -154,8 +155,14 @@ def execute(lead_id: int, raw_directives: list[str], escalate_fn) -> dict:
                 apply_followup(lead_id, kwargs)
             elif name == "price":
                 price_results.append(apply_price(lead_id, kwargs))
+            elif name == "kb":
+                import brain_kb  # tardio: evita custo quando retrieval off
+                hits = brain_kb.search(lead_id, kwargs.get("query", ""))
+                kb_results.append({"query": kwargs.get("query", ""),
+                                   "results": brain_kb.format_for_context(hits)
+                                   or "nenhum documento encontrado"})
             else:
                 state.log("error", lead_id, f"diretiva desconhecida: {name} {kwargs}")
         except Exception as exc:
             state.log("error", lead_id, f"falha executando diretiva {name}: {exc}")
-    return {"price_results": price_results}
+    return {"price_results": price_results, "kb_results": kb_results}

@@ -57,7 +57,13 @@ sudo systemctl enable sales-bridge >/dev/null 2>&1
 sudo systemctl restart sales-bridge
 echo "-- servico instalado e (re)iniciado"
 
-# 4. health check
+# 4. Sales Brain: reindexa o vault (deploy = evento de sync do conhecimento)
+if [ -f "$REPO_DIR/brain/indexer.py" ]; then
+    URACE_DIR="$URACE_DIR" python3 "$REPO_DIR/brain/indexer.py" || \
+        echo "-- AVISO: indexacao do brain falhou (ponte segue sem retrieval novo)"
+fi
+
+# 5. health check
 sleep 2
 if curl -sf http://127.0.0.1:8800/health >/dev/null; then
     echo "== OK: sales-bridge no ar em 127.0.0.1:8800 =="

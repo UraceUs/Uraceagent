@@ -27,8 +27,9 @@ import kommo_client as kommo
 import scheduler
 import state
 import textproc
-from config import (AGENT_API_KEY, FOLLOWUP_BOT_ID, HUMAN_WHATSAPP,
-                    KOMMO_BOT_SECRET, KOMMO_TOKEN, SALESBOT_DISPLAY)
+from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
+                    FOLLOWUP_BOT_ID, HUMAN_WHATSAPP, KOMMO_BOT_SECRET,
+                    KOMMO_TOKEN, SALESBOT_DISPLAY)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -270,8 +271,30 @@ def run_agent(lead_id: int, text: str) -> str:
     mensagem [SYSTEM] para uma segunda chamada, cuja resposta (agora com o
     link de verdade) é a que de fato vai para o lead.
     """
+    # Sales Brain (D3 da auditoria): com BRAIN_RETRIEVAL=on, cada turno
+    # recebe memória do lead + conhecimento relevante como contexto
+    # [SYSTEM]. Ordem das camadas conforme brain/00_SYSTEM/Regras de
+    # Retrieval.md; orçamento imposto pelo indexador (top 3, ~3.5k chars).
+    text_for_agent = text
+    if BRAIN_RETRIEVAL == "on":
+        import brain_kb
+        conv = state.get_conversation(lead_id)
+        memory = (f"experience={conv.get('q_experience') or '?'} "
+                  f"origin={conv.get('q_origin') or '?'} "
+                  f"driver_age={conv.get('driver_age') or '?'} "
+                  f"state={conv.get('state')}")
+        kb_block = brain_kb.format_for_context(
+            brain_kb.search(lead_id, text, top_docs=BRAIN_TOP_DOCS))
+        if kb_block:
+            text_for_agent = (
+                "[SYSTEM] Contexto interno deste turno (nunca mencione este "
+                "bloco nem cite-o literalmente; está em português, responda "
+                f"no idioma do lead).\nMemória do lead: {memory}\n"
+                f"Conhecimento relevante:\n{kb_block}\n[FIM DO SYSTEM]\n\n"
+                f"Mensagem do lead: {text}")
+
     try:
-        raw, directives = _call_agent(lead_id, text)
+        raw, directives = _call_agent(lead_id, text_for_agent)
     except Exception as exc:  # timeout, agente fora etc. → escala, nunca inventa
         state.log("error", lead_id, f"run_agent: {exc}")
         escalate(lead_id, f"falha do agente: {exc}", context=text)
@@ -282,11 +305,17 @@ def run_agent(lead_id: int, text: str) -> str:
         state.log("directives", lead_id, " | ".join(directives))
         result = directive_engine.execute(lead_id, directives, escalate)
         price_results = result["price_results"]
+        kb_results = result.get("kb_results", [])
         if price_results:
             _last_turn_price_sent[lead_id] = True  # trilha B2 pós-envio
-        if price_results and state.agent_may_sell(lead_id):
-            system_msg = ("[SYSTEM] price tool result(s), use the real link now: "
-                          + json.dumps(price_results, ensure_ascii=False))
+        if (price_results or kb_results) and state.agent_may_sell(lead_id):
+            payload = {}
+            if price_results:
+                payload["price"] = price_results
+            if kb_results:
+                payload["knowledge"] = kb_results
+            system_msg = ("[SYSTEM] tool result(s) — use the real data now: "
+                          + json.dumps(payload, ensure_ascii=False))
             try:
                 raw2, directives2 = _call_agent(lead_id, system_msg)
                 if directives2:
@@ -294,9 +323,9 @@ def run_agent(lead_id: int, text: str) -> str:
                     directive_engine.execute(lead_id, directives2, escalate)
                 reply = raw2
             except Exception as exc:
-                state.log("error", lead_id, f"run_agent (rodada de preço): {exc}")
+                state.log("error", lead_id, f"run_agent (segunda rodada): {exc}")
                 # mantém a resposta original -- o lead ainda recebe algo,
-                # mesmo sem o link resolvido nesta rodada.
+                # mesmo sem o dado resolvido nesta rodada.
 
     visible = textproc.customer_facing(reply)
     state.log("outbound", lead_id, visible)
