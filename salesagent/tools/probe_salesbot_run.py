@@ -93,8 +93,10 @@ def main() -> int:
 
     if vencedoras:
         print(f"ROTA(S) QUE A CONTA ACEITA: {', '.join(vencedoras)}")
-        print("run_bot() já tenta a primeira delas primeiro — nada a mudar se "
-              "a vencedora for 'salesbot/run (lista...)'.")
+        print("Confira se bate com o que kommo_client.run_bot() chama hoje "
+              "(a docstring dele registra o resultado desta medição).")
+        print("Se divergir, corrija run_bot() — não o contrário: aqui é a "
+              "conta real respondendo.")
         print("\nConfira agora se o disparo chegou na ponte:")
         print("  python3 salesagent/tools/show_recent_audit.py -n 10")
         print("  (esperado: um hook_raw com data[message] vazio, e NENHUM "

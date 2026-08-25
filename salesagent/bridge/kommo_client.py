@@ -66,45 +66,34 @@ def run_bot(bot_id: str | int, lead_id: int) -> bool:
     """Dispara um Salesbot num lead — usado pelo agendador para entregar
     follow-up (e resposta de humano) pelo mesmo circuito do chat.
 
-    Duas rotas, tentadas nesta ordem, porque a conta real contradiz o que
-    estava aqui até 25/08:
+    A rota foi CONFIRMADA contra a conta real em 25/08
+    (`tools/probe_salesbot_run.py --bot 162247`), depois de ter ficado dois
+    meses como suposição não exercitada (FOLLOWUP_BOT_ID sempre vazio em
+    produção, então o agendador caía direto no fallback de nota e ninguém
+    nunca soube se respondia). O probe testou as quatro combinações:
 
-    1. POST /api/v4/salesbot/run  — corpo em LISTA, com bot_id dentro e
-       entity_type NUMÉRICO (2 = leads). É a rota que casa com as duas
-       evidências que temos da conta: o return_url que o widget manda vive
-       em `/api/v4/salesbot/{bot}/continue/{id}`, e o JWT descartável do
-       widget_request traz `"entity_type":"2"`.
-    2. POST /api/v4/bots/{id}/run — o que este código chamava sozinho antes.
-       Nunca foi exercitado de verdade (FOLLOWUP_BOT_ID sempre esteve vazio
-       em produção), então nunca soubemos se responde nesta conta.
+        POST /api/v4/bots/{id}/run  {"entity_type": "leads"}  -> 202  ✅
+        POST /api/v4/bots/{id}/run  {"entity_type": 2}        -> 400 (InvalidType)
+        POST /api/v4/salesbot/run   (lista)                   -> 404 (rota não existe)
+        POST /api/v4/salesbot/run   (objeto)                  -> 404
 
-    Devolve True no primeiro 2xx. `probe_salesbot_run.py` resolve a dúvida
-    empiricamente e diz qual das duas a conta aceita.
+    Ou seja: `entity_type` é STRING aqui, mesmo o JWT do widget_request
+    trazendo `"2"` e o return_url vivendo em `/api/v4/salesbot/...`. As duas
+    pistas apontavam para a rota errada — por isso o probe existe, e por isso
+    ele continua no repo: se a conta mudar, ele responde de novo em 10s.
     """
-    tentativas = [
-        ("salesbot/run", f"{BASE}/salesbot/run",
-         [{"bot_id": int(bot_id), "entity_id": lead_id, "entity_type": 2}]),
-        ("bots/{id}/run", f"{BASE}/bots/{int(bot_id)}/run",
-         {"entity_id": lead_id, "entity_type": "leads"}),
-    ]
-    ultimo = ""
     with _client() as c:
-        for nome, url, body in tentativas:
-            try:
-                r = c.post(url, json=body)
-            except Exception as exc:
-                ultimo = f"{nome}: {exc}"
-                continue
-            if r.status_code < 300:
-                _log_run_bot(f"rota {nome} OK (rc={r.status_code})")
-                return True
-            ultimo = f"{nome}: rc={r.status_code} {r.text[:160]}"
-    _log_run_bot(f"nenhuma rota aceitou o disparo — último erro: {ultimo}")
-    return False
+        r = c.post(f"{BASE}/bots/{int(bot_id)}/run",
+                   json={"entity_id": lead_id, "entity_type": "leads"})
+        ok = r.status_code < 300
+        if not ok:
+            _log_run_bot(f"disparo do bot {bot_id} no lead {lead_id} recusado: "
+                         f"rc={r.status_code} {r.text[:200]}")
+        return ok
 
 
 def _log_run_bot(detalhe: str) -> None:
-    """Registra qual rota funcionou. Import tardio de state para manter este
+    """Registra falha de disparo. Import tardio de state para manter este
     módulo sem dependência de ciclo."""
     try:
         import state

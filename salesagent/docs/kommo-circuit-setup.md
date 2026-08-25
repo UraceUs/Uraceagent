@@ -210,20 +210,31 @@ que nenhum código nosso alcança (a mensagem não chega até nós).
 - **Um `hook_raw` só** → confirmado: baixar o cooldown para o mínimo que a
   conta permitir, nos 13 gatilhos.
 
-### Rota de disparo do bot por API — resolvida empiricamente
+### Rota de disparo do bot por API — RESOLVIDA (25/08)
 
-`run_bot()` chamava `POST /api/v4/bots/{id}/run` desde sempre, sem nunca ter
-sido exercitado (`FOLLOWUP_BOT_ID` sempre vazio). Duas evidências da conta
-apontam para outra rota: o `return_url` do widget vive em
-`/api/v4/salesbot/{bot}/continue/{id}`, e o JWT do widget_request traz
-`"entity_type":"2"` (numérico), não `"leads"`.
+`run_bot()` chamava `POST /api/v4/bots/{id}/run` desde que foi escrito, sem
+nunca ter sido exercitado (`FOLLOWUP_BOT_ID` sempre vazio, agendador sempre
+no fallback de nota). Duas pistas sugeriam que estava errado — o
+`return_url` do widget vive em `/api/v4/salesbot/{bot}/continue/{id}`, e o
+JWT do widget_request traz `"entity_type":"2"` (numérico).
 
-Em vez de chutar, rode o probe (seguro: sem `pending_followup_text` para o
-lead, nada chega ao cliente):
+**As duas pistas apontavam para a rota errada.** O probe mediu contra a
+conta:
+
+| Rota | Corpo | Resultado |
+|---|---|---|
+| `POST /api/v4/bots/{id}/run` | `{"entity_type": "leads"}` | **202 ✅** |
+| `POST /api/v4/bots/{id}/run` | `{"entity_type": 2}` | 400 `InvalidType` |
+| `POST /api/v4/salesbot/run` | lista | 404 (rota inexistente) |
+| `POST /api/v4/salesbot/run` | objeto | 404 |
+
+`entity_type` é **string** nesta rota, apesar do JWT usar numérico noutro
+contexto. O código original estava certo; a inferência a partir do
+`return_url` não valia. Se a conta mudar, o probe responde de novo:
 
 ```bash
 python3 salesagent/tools/probe_salesbot_run.py --bot 162247 --lead <LEAD_ID>
 ```
 
-Ele testa as quatro combinações e diz qual a conta aceita. `run_bot()` já
-tenta as duas principais em ordem e loga a vencedora (`kind=salesbot_run`).
+É seguro: sem `pending_followup_text` para o lead, a ponte não tem nada a
+dizer e nenhuma mensagem chega ao cliente.
