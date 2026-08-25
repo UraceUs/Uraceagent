@@ -14,6 +14,10 @@
 # O certificado e provisionado sozinho na primeira requisicao. O Kommo exige
 # HTTPS valido no URL do webhook -- por isso o Caddy, nao a porta 8800 direto.
 
+# Sites adicionais gerenciados por scripts (ex.: painel do OpenClaw via
+# setup_claw_ui.sh) — o glob vazio é inofensivo se nenhum existir.
+import /etc/caddy/*.caddy
+
 urace-bridge.duckdns.org {
 	# So os endpoints que o Kommo precisa alcancar sao expostos.
 	# As tools do agente (/tools/*) e /human/reply ficam so no localhost.
