@@ -44,6 +44,12 @@ HUMAN_WHATSAPP = HUMAN_WHATSAPP_LIST[0] if HUMAN_WHATSAPP_LIST else ""
 BUSINESS_TZ = "America/New_York"
 BUSINESS_HOURS = (9, 18)
 ESCALATION_REALERT_MIN = int(_bridge.get("ESCALATION_REALERT_MIN", "15"))  # 10–30
+# Teto de re-alertas por escalação. Sem teto (até 25/08) o alarme repetia a
+# cada 15min indefinidamente: numa escalação real ele disparou 10x em 152min
+# e o agente que faz o repasse no WhatsApp passou a TRATAR OS AVISOS COMO
+# SPAM e se recusou a entregar. Um alarme que ninguém mais escuta é pior que
+# nenhum alarme. Ao estourar o teto, vira tarefa no Kommo (canal durável).
+ESCALATION_MAX_REALERTS = int(_bridge.get("ESCALATION_MAX_REALERTS", "4"))
 # Id do Salesbot (chase-bridge) para ENTREGA de follow-up espontâneo: o
 # agendador dispara o bot via POST /api/v4/bots/{id}/run e a ponte devolve o
 # texto pendente pelo return_url. Vazio = fallback nota+tarefa no Kommo.

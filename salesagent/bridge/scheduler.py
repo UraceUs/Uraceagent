@@ -36,7 +36,8 @@ import zoneinfo
 from datetime import datetime
 from pathlib import Path
 
-from config import (BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_REALERT_MIN,
+from config import (BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_MAX_REALERTS,
+                    ESCALATION_REALERT_MIN,
                     FOLLOWUP_BOT_ID, REPO_DIR)
 from state import db, log, transition, update_conversation
 
@@ -203,17 +204,55 @@ def _fire_followup(conv: dict, now: int) -> None:
 
 
 def _maybe_realert(conv: dict, now: int) -> bool:
+    """Cutuca o humano enquanto a escalação não é atendida -- com TETO.
+
+    Até 25/08 isto repetia a cada 15min para sempre. Numa escalação real
+    (lead 31764961) foram 10 disparos em 152 minutos, e o agente que faz o
+    repasse no WhatsApp acabou respondendo "isso parece um script
+    automatizado tentando me pressionar (...) vou ignorar os próximos" --
+    ou seja, o alarme insistente treinou o canal a ignorá-lo. Um alarme que
+    ninguém mais escuta é pior que nenhum alarme, porque dá a sensação de
+    que alguém foi avisado.
+
+    Depois do teto, o aviso migra para um canal DURÁVEL (tarefa no Kommo,
+    que fica no card do lead até alguém fechar) e o WhatsApp silencia.
+    """
     last = max(conv.get("last_realert_at") or 0, conv.get("escalated_at") or 0)
     if not last or now - last < ESCALATION_REALERT_MIN * 60:
         return False
     lead_id = conv["lead_id"]
     mins = (now - (conv.get("escalated_at") or now)) // 60
-    if notify_fn:
-        notify_fn(f"⏰ RE-ALERTA — lead {lead_id} escalado há {mins} min sem ação humana.\n"
-                  f"Motivo: {conv.get('escalation_reason') or '?'}\n"
-                  f"Responda 'aprovar {lead_id} <instrução>' ou 'retomar {lead_id}'.")
-    update_conversation(lead_id, last_realert_at=now)
-    log("realert", lead_id, f"re-alerta após {mins} min")
+    contagem = conv.get("realert_count") or 0
+
+    if contagem >= ESCALATION_MAX_REALERTS:
+        return False  # já migrou para tarefa; não martela mais o WhatsApp
+
+    if contagem + 1 >= ESCALATION_MAX_REALERTS:
+        # Último aviso: diz que é o último e abre a tarefa no Kommo.
+        if notify_fn:
+            notify_fn(f"⏰ ÚLTIMO AVISO — lead {lead_id} escalado há {mins} min "
+                      f"sem ação humana.\n"
+                      f"Motivo: {conv.get('escalation_reason') or '?'}\n"
+                      f"Não vou repetir: a partir de agora fica como tarefa no "
+                      f"card do lead no Kommo.\n"
+                      f"Responda 'aprovar {lead_id} <instrução>' ou "
+                      f"'retomar {lead_id}'.")
+        if task_fn:
+            task_fn(lead_id,
+                    f"Escalação sem resposta humana há {mins} min: "
+                    f"{conv.get('escalation_reason') or '?'}", now + 1800)
+        log("realert", lead_id,
+            f"teto de {ESCALATION_MAX_REALERTS} re-alertas atingido após "
+            f"{mins} min — migrado para tarefa no Kommo")
+    else:
+        if notify_fn:
+            notify_fn(f"⏰ RE-ALERTA — lead {lead_id} escalado há {mins} min sem ação humana.\n"
+                      f"Motivo: {conv.get('escalation_reason') or '?'}\n"
+                      f"Responda 'aprovar {lead_id} <instrução>' ou 'retomar {lead_id}'.")
+        log("realert", lead_id,
+            f"re-alerta {contagem + 1}/{ESCALATION_MAX_REALERTS} após {mins} min")
+
+    update_conversation(lead_id, last_realert_at=now, realert_count=contagem + 1)
     return True
 
 

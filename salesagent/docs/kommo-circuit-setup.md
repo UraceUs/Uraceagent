@@ -238,3 +238,40 @@ python3 salesagent/tools/probe_salesbot_run.py --bot 162247 --lead <LEAD_ID>
 
 É seguro: sem `pending_followup_text` para o lead, a ponte não tem nada a
 dizer e nenhuma mensagem chega ao cliente.
+
+### Disparo por API roda o bot como `marketingbot`, não `salesbot`
+
+Achado ao validar o disparo (25/08). O MESMO bot 162247, disparado por
+`POST /api/v4/bots/162247/run`, chega na ponte com:
+
+```
+"bot_type":"marketingbot"
+return_url=https://urace.kommo.com/api/v4/marketingbot/162247/continue/46823416
+```
+
+enquanto o disparo por mensagem do lead chega como:
+
+```
+"bot_type":"salesbot"
+return_url=https://urace.kommo.com/api/v4/salesbot/162247/continue/100756365
+```
+
+A ponte não se importa — `_salesbot_continue()` faz POST no `return_url`
+**verbatim**, seja qual for o namespace. Mas fica registrado: se algum dia
+alguém montar essa URL à mão a partir do id do bot, vai montar errado
+metade das vezes.
+
+**Ainda não validado:** se o `continue` do `marketingbot` aceita os mesmos
+corpos (`data.reply` no modo `json_reply`, `execute_handlers` no modo
+balões). Isso só se prova entregando um follow-up de verdade — o primeiro
+que sair vai dizer. Se falhar, o log traz `salesbot_continue rc=...` e o
+fallback de nota garante que nada se perde.
+
+### Entrega espontânea validada ponta a ponta (25/08)
+
+`probe_salesbot_run.py` disparou o bot (202) e a ponte registrou o
+`hook_raw` correspondente segundos depois, com `data[message]` vazio e
+`lead_id` correto — exatamente o formato que `process_inbound()` espera
+para devolver um `pending_followup_text`. O caminho "ponte fala com o lead
+sem o lead ter falado antes" está aberto. Era o bloqueador do ciclo de
+resposta humana.

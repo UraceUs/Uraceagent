@@ -58,6 +58,7 @@ _MIGRATIONS = [
     "ALTER TABLE conversations ADD COLUMN last_realert_at INTEGER",
     "ALTER TABLE conversations ADD COLUMN pending_followup_text TEXT",   # aguardando entrega via bots/run
     "ALTER TABLE conversations ADD COLUMN holding_count INTEGER",        # msgs de espera já enviadas (holding.py)
+    "ALTER TABLE conversations ADD COLUMN realert_count INTEGER",        # re-alertas já disparados (teto no scheduler)
 ]
 
 
