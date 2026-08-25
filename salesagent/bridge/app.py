@@ -21,6 +21,7 @@ import time
 import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 
+import confidence
 import directives as directive_engine
 import gates
 import holding
@@ -29,8 +30,8 @@ import scheduler
 import state
 import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
-                    FOLLOWUP_BOT_ID, HUMAN_WHATSAPP, KOMMO_BOT_SECRET,
-                    KOMMO_TOKEN, SALESBOT_DISPLAY)
+                    FOLLOWUP_BOT_ID, HUMAN_WHATSAPP, HUMAN_WHATSAPP_LIST,
+                    KOMMO_BOT_SECRET, KOMMO_TOKEN, SALESBOT_DISPLAY)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -308,19 +309,30 @@ def run_agent(lead_id: int, text: str) -> str:
                   f"origin={conv.get('q_origin') or '?'} "
                   f"driver_age={conv.get('driver_age') or '?'} "
                   f"state={conv.get('state')}")
-        kb_block = brain_kb.format_for_context(
-            brain_kb.search(lead_id, text, top_docs=BRAIN_TOP_DOCS))
-        if kb_block:
-            text_for_agent = (
-                "[SYSTEM] Contexto interno deste turno (nunca mencione este "
-                "bloco nem cite-o literalmente; está em português, responda "
-                "no idioma do lead). Isto já é a busca no knowledge base "
-                "para esta mensagem -- só use [[kb query=...]] se isto "
-                "genuinamente não responder o que você precisa; chamar "
-                "[[kb]] de novo aqui dobra o tempo de resposta ao lead.\n"
-                f"Memória do lead: {memory}\n"
-                f"Conhecimento relevante:\n{kb_block}\n[FIM DO SYSTEM]\n\n"
-                f"Mensagem do lead: {text}")
+        hits = brain_kb.search(lead_id, text, top_docs=BRAIN_TOP_DOCS)
+        verdict = confidence.assess(hits)
+        state.log("confidence", lead_id, f"{verdict['level']}: {verdict['reason']}")
+        kb_block = brain_kb.format_for_context(hits)
+        nota = confidence.system_note(verdict)
+        # O bloco [SYSTEM] é injetado SEMPRE -- inclusive, e principalmente,
+        # quando o Brain não achou nada. Até 25/08 o `if kb_block:` fazia o
+        # oposto: busca vazia = nenhum aviso, e o modelo recebia a pergunta
+        # crua, livre para responder de memória. O caso em que ele mais
+        # precisa ouvir "você não sabe isso" era justamente o único em que
+        # ninguém dizia nada.
+        conhecimento = (f"Conhecimento relevante:\n{kb_block}\n" if kb_block
+                        else "Conhecimento relevante: NENHUM documento encontrado.\n")
+        text_for_agent = (
+            "[SYSTEM] Contexto interno deste turno (nunca mencione este "
+            "bloco nem cite-o literalmente; está em português, responda "
+            "no idioma do lead). Isto já é a busca no knowledge base "
+            "para esta mensagem -- só use [[kb query=...]] se isto "
+            "genuinamente não responder o que você precisa; chamar "
+            "[[kb]] de novo aqui dobra o tempo de resposta ao lead.\n"
+            f"Memória do lead: {memory}\n"
+            f"{conhecimento}"
+            + (f"{nota}\n" if nota else "")
+            + f"[FIM DO SYSTEM]\n\nMensagem do lead: {text}")
 
     try:
         raw, directives = _call_agent(lead_id, text_for_agent)
@@ -545,23 +557,59 @@ def escalate(lead_id: int, reason: str, context: str = "") -> None:
 
 
 def notify_human(text: str) -> None:
-    """Envia ao WhatsApp interno (canal do dono) via OpenClaw.
+    """Envia ao WhatsApp interno de CADA operador autorizado, via OpenClaw.
 
     Causa raiz do bug "não chega mensagem" (17/08): faltavam os flags de
     entrega. `openclaw agent -m "..."` sozinho só devolve texto no stdout
     -- não empurra nada para o canal. `--to/--channel/--deliver` são
     obrigatórios para o agente efetivamente publicar no WhatsApp.
+
+    Segunda causa, descoberta em 25/08 (o Italo não recebeu uma escalação
+    real): este caminho pede a um MODELO que repasse um alerta de texto
+    fixo. Um modelo pode parafrasear -- ou, como aconteceu, responder "quem
+    sou eu, quem é você?" e entregar ISSO no lugar do alerta, devolvendo
+    rc=0 como se tivesse dado certo. Duas defesas agora:
+
+    1. VERIFICAÇÃO: o alerta carrega um marcador (o id do lead). Se ele não
+       aparece no que o agente devolveu, a entrega é tratada como FALHA
+       explícita no log -- nunca mais um rc=0 mentiroso.
+    2. ALCANCE: manda para todos de HUMAN_WHATSAPP_LIST. Até 25/08 era um
+       número só, então o Eduardo -- autoridade no brief -- nunca recebeu
+       escalação nenhuma.
+
+    Pré-requisito operacional: `sync_admin_identity.sh` (a identidade do
+    Mark precisa estar no workspace do agente, senão ele não sabe que o
+    trabalho dele é repassar).
     """
-    try:
-        result = subprocess.run(
-            ["openclaw", "agent", "--agent", "main", "--channel", "whatsapp",
-             "--to", HUMAN_WHATSAPP, "--deliver", "-m",
-             f"[Encaminhe exatamente o texto abaixo como mensagem, sem alterar nada]\n{text}"],
-            capture_output=True, text=True, timeout=60,
-        )
-        state.log("notify_human", None, f"rc={result.returncode} out={result.stdout[:300]} err={result.stderr[:300]}")
-    except Exception as exc:
-        state.log("error", None, f"notify_human: {exc}")
+    marker = re.search(r"lead (\d+)", text)
+    destinos = HUMAN_WHATSAPP_LIST or [HUMAN_WHATSAPP]
+    for numero in destinos:
+        if not numero:
+            continue
+        try:
+            result = subprocess.run(
+                ["openclaw", "agent", "--agent", "main", "--channel", "whatsapp",
+                 "--to", numero, "--deliver", "-m",
+                 f"[Encaminhe exatamente o texto abaixo como mensagem, sem alterar nada]\n{text}"],
+                capture_output=True, text=True, timeout=60,
+            )
+            out = result.stdout or ""
+            entregue = result.returncode == 0 and (
+                marker is None or marker.group(1) in out)
+            state.log("notify_human", None,
+                      f"to={numero} rc={result.returncode} "
+                      f"{'OK' if entregue else 'NAO CONFIRMADO'} "
+                      f"out={out[:200]} err={(result.stderr or '')[:200]}")
+            if not entregue:
+                # Alto e claro no log: uma escalação que o humano não recebe
+                # é um lead esperando por alguém que nem sabe que existe.
+                state.log("error", None,
+                          f"ESCALAÇÃO NÃO CONFIRMADA para {numero} — o agente "
+                          f"'main' não repassou o texto (identidade "
+                          f"sincronizada? rode sync_admin_identity.sh). "
+                          f"Devolveu: {out[:200]!r}")
+        except Exception as exc:
+            state.log("error", None, f"notify_human ({numero}): {exc}")
 
 
 # ------------------------------------------------------------------ humano

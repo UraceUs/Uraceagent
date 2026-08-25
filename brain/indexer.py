@@ -281,7 +281,7 @@ def search(query: str, db_path: Path | None = None, top_docs: int = 3,
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT text, title, path, type, category, priority, "
+            "SELECT text, title, topic, path, type, category, priority, "
             " last_updated, bm25(chunks, 1.0, 4.0, 6.0, 5.0, 2.0) AS rank "
             "FROM chunks WHERE chunks MATCH ? ORDER BY rank LIMIT 24", (q,)
         ).fetchall()
@@ -297,8 +297,8 @@ def search(query: str, db_path: Path | None = None, top_docs: int = 3,
         if cur is None or score < cur["score"]:
             best[r["path"]] = {
                 "path": r["path"], "title": r["title"], "type": r["type"],
-                "category": r["category"], "priority": r["priority"],
-                "last_updated": r["last_updated"],
+                "category": r["category"], "topic": r["topic"],
+                "priority": r["priority"], "last_updated": r["last_updated"],
                 "text": r["text"], "score": round(score, 3),
             }
     ordered = sorted(best.values(),

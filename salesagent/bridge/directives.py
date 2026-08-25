@@ -155,6 +155,24 @@ def execute(lead_id: int, raw_directives: list[str], escalate_fn) -> dict:
                 apply_followup(lead_id, kwargs)
             elif name == "price":
                 price_results.append(apply_price(lead_id, kwargs))
+            elif name == "unknown":
+                # Princípio fundamental: o agente declara que não sabe, e a
+                # ESCALAÇÃO acontece em código -- não depende de ele lembrar
+                # de mandar [[escalate]] junto. O briefing carrega o que o
+                # §7 do brief exige: a pergunta, o que o Brain devolveu e o
+                # que precisa ser confirmado.
+                if not already_escalated_here:
+                    pergunta = kwargs.get("question", "").strip()
+                    achado = kwargs.get("found", "").strip() or "nada conclusivo"
+                    escalate_fn(
+                        lead_id,
+                        f"agente sem informação confiável: {pergunta[:110] or 'pergunta do lead'}",
+                        (f"Pergunta do lead: {pergunta or '(não informada pelo agente)'}\n"
+                         f"O que o Brain devolveu: {achado}\n"
+                         f"Precisa de: resposta confirmada por um operador "
+                         f"autorizado. Responda aqui e ela vira conhecimento "
+                         f"do Chase."))
+                    already_escalated_here = True
             elif name == "kb":
                 import brain_kb  # tardio: evita custo quando retrieval off
                 hits = brain_kb.search(lead_id, kwargs.get("query", ""))

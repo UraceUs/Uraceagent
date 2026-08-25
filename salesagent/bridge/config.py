@@ -31,8 +31,15 @@ KOMMO_BOT_SECRET = _kommo.get("KOMMO_BOT_SECRET", "")
 
 # Chave que autentica o agente OpenClaw (e o Salesbot) na ponte
 AGENT_API_KEY = _bridge.get("AGENT_API_KEY", "")
-# Número autorizado a aprovar escalações (WhatsApp interno)
-HUMAN_WHATSAPP = _bridge.get("HUMAN_WHATSAPP", "+14074878143")
+# Números autorizados a aprovar escalações (WhatsApp interno). Aceita LISTA
+# separada por vírgula — até 25/08 era um número só (o do Italo), e por isso
+# o Eduardo, que o brief lista como autoridade, nunca recebia escalação
+# nenhuma. HUMAN_WHATSAPP segue existindo como o primeiro da lista para não
+# quebrar chamador antigo.
+HUMAN_WHATSAPP_LIST = [n.strip() for n in
+                       _bridge.get("HUMAN_WHATSAPP", "+14074878143").split(",")
+                       if n.strip()]
+HUMAN_WHATSAPP = HUMAN_WHATSAPP_LIST[0] if HUMAN_WHATSAPP_LIST else ""
 # Horário comercial para alarmes de escalação (decisão C2)
 BUSINESS_TZ = "America/New_York"
 BUSINESS_HOURS = (9, 18)
@@ -58,6 +65,12 @@ BRAIN_TOP_DOCS = int(_bridge.get("BRAIN_TOP_DOCS", "3"))
 SALESBOT_DISPLAY = _bridge.get("SALESBOT_DISPLAY", "balloons")
 
 DB_PATH = URACE_DIR / "salesbridge.db"
+
+# Autoridade humana (§3): identidade e escopo vêm do repo, contato vem do env.
+_operators_path = REPO_DIR / "config" / "human-operators.json"
+HUMAN_OPERATORS = (json.loads(_operators_path.read_text())
+                   if _operators_path.exists() else {"operators": [], "rules": {}})
+OPERATOR_RULES = HUMAN_OPERATORS.get("rules", {})
 
 RATECARD = json.loads((REPO_DIR / "config" / "ratecard-2026.json").read_text())
 PROGRAM_LINKS = json.loads((REPO_DIR / "config" / "program-links.json").read_text())

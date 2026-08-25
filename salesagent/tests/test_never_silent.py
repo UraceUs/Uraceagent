@@ -32,6 +32,7 @@ sys.path.insert(0, str(BRIDGE_DIR))
 
 import app  # noqa: E402
 import state  # noqa: E402
+import textproc  # noqa: E402
 
 
 class _FakeKommo:
@@ -60,7 +61,11 @@ def _install_fakes(agent_reply=""):
     app.kommo = _FakeKommo()
     app.send_to_lead = lambda lead_id, text: delivered.append((lead_id, text))
     app.notify_human = lambda text: None
-    app._call_agent = lambda lead_id, message: (agent_reply, [])
+    # Espelha o _call_agent real: extrai as diretivas do texto bruto com a
+    # MESMA função da produção -- um fake que devolvesse [] estaria testando
+    # um agente que nunca emite diretiva, ou seja, nada.
+    app._call_agent = lambda lead_id, message: (
+        agent_reply, textproc.extract_directives(agent_reply))
     app.scheduler.cancel = lambda lead_id, reason="": None
     app.scheduler.start_track = lambda lead_id, track: None
     return delivered
@@ -121,11 +126,32 @@ def main() -> int:
                                    for w in ("equipe", "confirmar", "resposta")),
           f"{delivered5}")
 
+    # 6. [[unknown]]: o agente declara que não sabe -> a ponte escala
+    #    SOZINHA (não depende de ele lembrar de mandar [[escalate]] junto)
+    #    e o lead recebe a mensagem do agente, não silêncio.
+    lead5 = 900005
+    delivered6 = _install_fakes(
+        agent_reply="Let me confirm that with our team and come right back to "
+                    "you.\n[[unknown question=\"do you rent helmets?\" found=\"nada\"]]")
+    app.process_inbound({"lead_id": lead5, "message": "do you rent helmets?"})
+    check("[[unknown]] escala sem [[escalate]] junto",
+          state.get_conversation(lead5)["state"] == "WAITING_HUMAN",
+          state.get_conversation(lead5)["state"])
+    check("[[unknown]] ainda responde o lead", len(delivered6) == 1, f"{delivered6}")
+    check("a diretiva não vaza para o lead",
+          bool(delivered6) and "[[" not in delivered6[0][1], f"{delivered6}")
+
+    # 7. O motivo da escalação chega útil para o humano (§7 do brief).
+    razao = state.get_conversation(lead5)["escalation_reason"] or ""
+    check("escalação de [[unknown]] carrega a pergunta do lead",
+          "helmet" in razao.lower(), razao)
+
     print()
     if failures:
         print(f"FALHOU - {len(failures)} checagem(ns): {', '.join(failures)}")
         return 1
-    print("PASSOU - nenhum caminho da ponte deixa o lead sem resposta")
+    print("PASSOU - nenhum caminho da ponte deixa o lead sem resposta, "
+          "e o agente tem como dizer 'não sei' sem sumir")
     return 0
 
 
