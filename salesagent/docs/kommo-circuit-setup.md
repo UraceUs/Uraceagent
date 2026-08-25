@@ -177,3 +177,53 @@ inteira em `data.reply` e o próprio bot a exibe via `{{json.reply}}` — uma
 - Sync do snapshot do Rate Card com a planilha.
 - Rotacionar o client secret da integração (passou pelo chat em 24/08),
   junto com a revisão geral de credenciais pré-lançamento.
+
+## Dados confirmados da conta (25/08, varredura na UI)
+
+| Item | Valor |
+|---|---|
+| Salesbot do Chase | `Salesbot #9`, **id 162247**, `BOT_TYPE_REGULAR` |
+| Onde fica a lista | Communication → Bots (`/chats/tools/bots/`) |
+| Fluxo do bot | `Start bot` → passo único "Chase — reply to lead" → widget custom. **Sem condição, sem filtro, sem bloco de entrada.** |
+| Gatilhos | 13× "Any new conversation", um por etapa do funil, **cooldown de 5 min por lead** |
+| Integração | "Chase Bridge (URACE)" instalada e ativa (privada, sem número de versão na UI) |
+
+Nesta versão do Kommo o **editor do bot abre como modal e a URL não muda** —
+não existe `/amo_bots/edit/{id}`. O id sai do DOM da lista
+(`<div class="list-row" id="list_item_162247" data-id="162247">`).
+
+### ⚠️ Risco aberto: cooldown de 5 min pode engolir mensagem de lead
+
+Os gatilhos têm "5 mins launch cooldown". Se isso significar que uma
+segunda mensagem do mesmo lead dentro de 5 minutos **não dispara o bot**,
+a ponte nunca vê essa mensagem — e o lead fica sem resposta por um caminho
+que nenhum código nosso alcança (a mensagem não chega até nós).
+
+**Como verificar em 2 minutos**, com um lead de teste:
+
+1. Mandar uma mensagem e esperar a resposta do Chase.
+2. Mandar uma segunda mensagem **30 segundos depois**.
+3. No VPS: `python3 salesagent/tools/show_recent_audit.py -n 10`
+
+- **Dois `hook_raw`** → o cooldown não bloqueia mensagem dentro da mesma
+  conversa. Nada a fazer.
+- **Um `hook_raw` só** → confirmado: baixar o cooldown para o mínimo que a
+  conta permitir, nos 13 gatilhos.
+
+### Rota de disparo do bot por API — resolvida empiricamente
+
+`run_bot()` chamava `POST /api/v4/bots/{id}/run` desde sempre, sem nunca ter
+sido exercitado (`FOLLOWUP_BOT_ID` sempre vazio). Duas evidências da conta
+apontam para outra rota: o `return_url` do widget vive em
+`/api/v4/salesbot/{bot}/continue/{id}`, e o JWT do widget_request traz
+`"entity_type":"2"` (numérico), não `"leads"`.
+
+Em vez de chutar, rode o probe (seguro: sem `pending_followup_text` para o
+lead, nada chega ao cliente):
+
+```bash
+python3 salesagent/tools/probe_salesbot_run.py --bot 162247 --lead <LEAD_ID>
+```
+
+Ele testa as quatro combinações e diz qual a conta aceita. `run_bot()` já
+tenta as duas principais em ordem e loga a vencedora (`kind=salesbot_run`).

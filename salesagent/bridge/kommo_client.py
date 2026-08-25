@@ -63,10 +63,51 @@ def add_tags(lead_id: int, tags: list[str]) -> None:
 
 
 def run_bot(bot_id: str | int, lead_id: int) -> bool:
-    """Dispara um Salesbot num lead (POST /api/v4/bots/{id}/run) — usado pelo
-    agendador para entregar follow-up espontâneo pelo mesmo circuito do chat.
-    Status/corpo logados pelo chamador; devolve sucesso (2xx)."""
+    """Dispara um Salesbot num lead — usado pelo agendador para entregar
+    follow-up (e resposta de humano) pelo mesmo circuito do chat.
+
+    Duas rotas, tentadas nesta ordem, porque a conta real contradiz o que
+    estava aqui até 25/08:
+
+    1. POST /api/v4/salesbot/run  — corpo em LISTA, com bot_id dentro e
+       entity_type NUMÉRICO (2 = leads). É a rota que casa com as duas
+       evidências que temos da conta: o return_url que o widget manda vive
+       em `/api/v4/salesbot/{bot}/continue/{id}`, e o JWT descartável do
+       widget_request traz `"entity_type":"2"`.
+    2. POST /api/v4/bots/{id}/run — o que este código chamava sozinho antes.
+       Nunca foi exercitado de verdade (FOLLOWUP_BOT_ID sempre esteve vazio
+       em produção), então nunca soubemos se responde nesta conta.
+
+    Devolve True no primeiro 2xx. `probe_salesbot_run.py` resolve a dúvida
+    empiricamente e diz qual das duas a conta aceita.
+    """
+    tentativas = [
+        ("salesbot/run", f"{BASE}/salesbot/run",
+         [{"bot_id": int(bot_id), "entity_id": lead_id, "entity_type": 2}]),
+        ("bots/{id}/run", f"{BASE}/bots/{int(bot_id)}/run",
+         {"entity_id": lead_id, "entity_type": "leads"}),
+    ]
+    ultimo = ""
     with _client() as c:
-        r = c.post(f"{BASE}/bots/{int(bot_id)}/run",
-                   json={"entity_id": lead_id, "entity_type": "leads"})
-        return r.status_code < 300
+        for nome, url, body in tentativas:
+            try:
+                r = c.post(url, json=body)
+            except Exception as exc:
+                ultimo = f"{nome}: {exc}"
+                continue
+            if r.status_code < 300:
+                _log_run_bot(f"rota {nome} OK (rc={r.status_code})")
+                return True
+            ultimo = f"{nome}: rc={r.status_code} {r.text[:160]}"
+    _log_run_bot(f"nenhuma rota aceitou o disparo — último erro: {ultimo}")
+    return False
+
+
+def _log_run_bot(detalhe: str) -> None:
+    """Registra qual rota funcionou. Import tardio de state para manter este
+    módulo sem dependência de ciclo."""
+    try:
+        import state
+        state.log("salesbot_run", None, detalhe)
+    except Exception:
+        pass
