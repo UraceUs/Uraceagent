@@ -60,3 +60,20 @@ openclaw gateway restart
 
 Sem isso, qualquer teste (inclusive `tests/run_scenarios.py`) está validando
 comportamento antigo, não o que está commitado.
+
+## ⚠️ O mesmo problema existe pro agente da escalação (`notify_human`)
+
+Descoberto em 25/08: `notify_human()` chama `openclaw agent --agent main
+--channel whatsapp ...` para avisar Italo/Eduardo de uma escalação — mas o
+workspace desse agente `main` **nunca recebeu** a identidade do Mark
+(`admagent/identity/*.md`). Sem ela, o agente trata a escalação como uma
+conversa nova e responde "quem sou eu, quem é você" em vez de repassar o
+texto — a escalação nunca chega de forma acionável, e o humano nunca sabe
+que precisa responder 'aprovar'/'retomar'.
+
+**Sempre que `admagent/identity/*.md` mudar (e ao menos uma vez, agora):**
+
+```bash
+bash salesagent/tools/sync_admin_identity.sh
+openclaw gateway restart
+```
