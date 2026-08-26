@@ -301,7 +301,8 @@ def _maybe_realert(conv: dict, now: int) -> bool:
     if contagem + 1 >= ESCALATION_MAX_REALERTS:
         # Último aviso: diz que é o último e abre a tarefa no Kommo.
         if notify_fn:
-            notify_fn(f"⏰ ÚLTIMO AVISO — lead {lead_id} escalado há {mins} min "
+            nome = conv.get("contact_name") or f"lead {lead_id}"
+            notify_fn(f"⏰ ÚLTIMO AVISO — {nome} (lead {lead_id}) escalado há {mins} min "
                       f"sem ação humana.\n"
                       f"Motivo: {conv.get('escalation_reason') or '?'}\n"
                       f"Não vou repetir: a partir de agora fica como tarefa no "
@@ -317,9 +318,11 @@ def _maybe_realert(conv: dict, now: int) -> bool:
             f"{mins} min — migrado para tarefa no Kommo")
     else:
         if notify_fn:
-            notify_fn(f"⏰ RE-ALERTA — lead {lead_id} escalado há {mins} min sem ação humana.\n"
+            nome = conv.get("contact_name") or f"lead {lead_id}"
+            notify_fn(f"⏰ RE-ALERTA — {nome} (lead {lead_id}) escalado há {mins} min sem ação humana.\n"
                       f"Motivo: {conv.get('escalation_reason') or '?'}\n"
-                      f"Responda 'aprovar {lead_id} <instrução>' ou 'retomar {lead_id}'.")
+                      f"Pergunta: {conv.get('pending_question') or '?'}\n"
+                      f"Responda esta mensagem com o texto para o lead.")
         log("realert", lead_id,
             f"re-alerta {contagem + 1}/{ESCALATION_MAX_REALERTS} após {mins} min")
 

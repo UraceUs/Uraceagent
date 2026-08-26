@@ -97,6 +97,37 @@ def main() -> int:
     app.process_inbound({"lead_id": lead, "message": "hello? are you there?"})
     check("mensagem em conversa escalada também é respondida (G3)",
           len(delivered2) == 1, f"entregues={delivered2}")
+    check("ping do lead cita a pergunta que está pendente (nexo)",
+          bool(delivered2) and "own kart" in delivered2[0][1],
+          delivered2[0][1] if delivered2 else "")
+
+    # 2b. Pergunta SUBSTANTIVA (repetida ou nova) de lead escalado: os
+    #     humanos são reavisados NA HORA -- em 26/08 o lead repetiu a
+    #     pergunta do kart e nenhum aviso saiu, porque o alarme daquele lead
+    #     já tinha estourado o teto.
+    avisos = []
+    delivered2b = _install_fakes()
+    app.notify_human = lambda texto: avisos.append(texto)
+    app.process_inbound({"lead_id": lead, "message": "Can i bring my own kart?",
+                         "contact_name": "Eduardo F F Resende"})
+    check("pergunta de lead escalado reavisa o humano na hora",
+          len(avisos) == 1, f"{avisos}")
+    check("o reaviso traz nome, id e a pergunta",
+          bool(avisos) and "Eduardo" in avisos[0] and str(lead) in avisos[0]
+          and "own kart" in avisos[0], avisos[0][:200] if avisos else "")
+    check("o lead também recebeu resposta nesse caso",
+          len(delivered2b) == 1, f"{delivered2b}")
+    check("a resposta ao lead cita a pergunta dele",
+          bool(delivered2b) and "own kart" in delivered2b[0][1],
+          delivered2b[0][1] if delivered2b else "")
+    check("reaviso zera o ciclo de alarme",
+          (state.get_conversation(lead).get("realert_count") or 0) == 0)
+    avisos2 = []
+    delivered2c = _install_fakes()
+    app.notify_human = lambda texto: avisos2.append(texto)
+    app.process_inbound({"lead_id": lead, "message": "Oi"})
+    check("ping NÃO reavisa o humano (a pergunta é a mesma)",
+          avisos2 == [], f"{avisos2}")
     check("segunda espera usa frase diferente da primeira",
           bool(delivered and delivered2) and delivered[0][1] != delivered2[0][1],
           f"{delivered!r} vs {delivered2!r}")

@@ -103,6 +103,74 @@ def is_acknowledgement(text: str) -> bool:
     return bool(_ACK_RE.match(text.strip()))
 
 
+# Ping: saudação ou checagem de presença -- o lead cutucando, não
+# perguntando algo novo. Distinção importa duas vezes: um ping durante a
+# espera deve citar a PERGUNTA ORIGINAL (é sobre ela que ele quer notícia),
+# e um ping NÃO deve reavisar os humanos no WhatsApp (a pergunta continua a
+# mesma). Uma pergunta nova faz o oposto nos dois pontos.
+_SAUDACAO = (r"(oi+|ol[áa]+|hi+|hey+|hello+|hola+|opa|e\s?a[íi]|bom dia|"
+             r"boa tarde|boa noite|good (morning|afternoon|evening)|"
+             r"buenos d[íi]as|buenas (tardes|noches))")
+_PRESENCA = (r"(are you (still )?there|you there|anyone( there)?|still there|"
+             r"alg[uú][ée]m( a[íi])?|ta a[íi]|t[áa] a[íi]|cad[êe]( voc[êe])?)")
+# saudações e/ou checagem de presença, em qualquer combinação ("hello? are
+# you there?"), e nada além disso.
+_PING_RE = re.compile(
+    r"^\W*(" + _SAUDACAO + r"[\s!,.?]*|" + _PRESENCA + r"[\s!,.?]*)+$"
+    r"|^\W*\?+[\s!,.?]*$",
+    re.IGNORECASE)
+
+
+def is_substantive(text: str) -> bool:
+    """Mensagem com conteúdo próprio (pergunta/informação nova) -- por
+    oposição a ping e agradecimento."""
+    limpo = (text or "").strip()
+    if not limpo or len(limpo) < 3:
+        return False
+    return not (_PING_RE.match(limpo) or _ACK_RE.match(limpo))
+
+
+# Espera COM contexto: cita a pergunta do lead de volta. É o que separa
+# "Still with the team on your question" (qual pergunta? soa robô) de
+# 'About "can I bring my own kart?" - still confirming with the team'. A
+# citação é verbatim, então funciona em qualquer idioma sem tradução -- e
+# prova ao lead que a pergunta dele foi lida, não engolida por um sistema.
+_WAITING_REF = {
+    "pt": [
+        'Sobre "{q}" - essa eu confirmo com a equipe pra te passar a '
+        'informação certa. Volto aqui com a resposta.',
+        'Sua pergunta "{q}" está com a equipe. Não te esqueci - assim que '
+        'tiver a resposta certa, te aviso aqui mesmo.',
+        'Sigo atrás da resposta pra "{q}". Assim que confirmar, te falo '
+        'por aqui.',
+    ],
+    "es": [
+        'Sobre "{q}" - eso lo confirmo con el equipo para darte la '
+        'información correcta. Vuelvo por aquí con la respuesta.',
+        'Tu pregunta "{q}" está con el equipo. No te olvidé - apenas tenga '
+        'la respuesta correcta, te aviso aquí mismo.',
+        'Sigo con la respuesta para "{q}". En cuanto la confirme, te aviso '
+        'por aquí.',
+    ],
+    "en": [
+        'About "{q}" - I\'m confirming that with our team so I give you '
+        'the right answer. I\'ll come back to you right here.',
+        'Your question "{q}" is with the team. I haven\'t forgotten you - '
+        'as soon as I have the right answer, I\'ll let you know here.',
+        'Still working on the answer to "{q}". As soon as I have it '
+        'confirmed, I\'ll tell you right here.',
+    ],
+}
+
+
+def _citavel(pergunta: str | None, limite: int = 70) -> str:
+    """Encurta a pergunta para caber numa citação sem virar um parágrafo."""
+    q = " ".join((pergunta or "").split())
+    if len(q) > limite:
+        q = q[:limite].rsplit(" ", 1)[0] + "..."
+    return q
+
+
 # Primeiro contato: o lead não faz ideia de quem está falando com ele. Isto
 # acontece de verdade -- se a PRIMEIRA mensagem do lead bate num gatilho B4
 # ("can i bring my own kart?" bateu), a conversa escala antes do agente
@@ -127,20 +195,29 @@ def _primeiro_nome(contact_name: str | None) -> str:
 
 def waiting_message(lead_text: str, sent_before: int = 0,
                     contact_name: str | None = None,
-                    first_contact: bool = False) -> str:
+                    first_contact: bool = False,
+                    pending_question: str | None = None) -> str:
     """A mensagem que o lead recebe quando a resposta depende de um humano.
 
     `sent_before` = quantas mensagens de espera este lead já recebeu nesta
     escalação (0 na primeira). `first_contact` = a ponte nunca falou com
-    este lead antes, então a mensagem se apresenta. Passa pelo mesmo
-    `customer_facing()` que o texto do modelo -- a regra de dash vale para
-    todo texto que sai daqui, não só para o que o modelo escreve.
+    este lead antes, então a mensagem se apresenta. `pending_question` = a
+    pergunta que está esperando o humano; quando existe, a espera CITA a
+    pergunta de volta -- se a mensagem atual é substantiva, ela mesma é a
+    pergunta a citar; se é só um ping ("oi", "are you there?"), cita a
+    pendente. Passa pelo mesmo `customer_facing()` que o texto do modelo --
+    a regra de dash vale para todo texto que sai daqui.
     """
     lang = detect_language(lead_text)
     if sent_before > 0 and is_acknowledgement(lead_text):
         return textproc.customer_facing(_ACK[lang])
-    variants = _WAITING[lang]
-    texto = variants[min(sent_before, len(variants) - 1)]
+    ref = _citavel(lead_text if is_substantive(lead_text) else pending_question)
+    if ref:
+        variants = _WAITING_REF[lang]
+        texto = variants[min(sent_before, len(variants) - 1)].format(q=ref)
+    else:
+        variants = _WAITING[lang]
+        texto = variants[min(sent_before, len(variants) - 1)]
     if first_contact:
         texto = (_APRESENTACAO[lang].format(nome=_primeiro_nome(contact_name))
                  + " " + texto)
@@ -206,6 +283,33 @@ def self_test() -> int:
     check("apresentação em pt usa 'aqui é o Chase'",
           "aqui é o Chase" in waiting_message("posso levar meu kart?", 0,
                                               first_contact=True))
+
+    # Nexo: a espera cita a pergunta que está pendente.
+    check("ping detectado", not is_substantive("Oi") and not is_substantive("Hi")
+          and not is_substantive("hello? are you there?")
+          and not is_substantive("???"))
+    check("pergunta real é substantiva",
+          is_substantive("Can i bring my own kart?")
+          and is_substantive("do you rent helmets"))
+
+    m = waiting_message("Can i bring my own kart?", 1,
+                        pending_question="Can i bring my own kart?")
+    check("pergunta repetida é citada de volta",
+          '"Can i bring my own kart?"' in m, m)
+    m = waiting_message("Hi", 2, pending_question="Can i bring my own kart?")
+    check("ping durante a espera cita a pergunta ORIGINAL",
+          "own kart" in m, m)
+    m = waiting_message("posso levar meu kart próprio?", 0,
+                        pending_question="posso levar meu kart próprio?")
+    check("citação segue o idioma do lead (pt)", "Sobre" in m and "kart" in m, m)
+    m1 = waiting_message("Hi", 0, pending_question="Can i bring my own kart?")
+    m2 = waiting_message("Hi", 1, pending_question="Can i bring my own kart?")
+    check("citação também rotaciona (não repete a frase)", m1 != m2, f"{m1!r}")
+    longa = "can i bring my own kart and also my own tires and my own fuel and my mechanic team"
+    m = waiting_message(longa, 0, pending_question=longa)
+    check("pergunta longa é encurtada na citação", "..." in m and len(m) < 220, m)
+    m = waiting_message("Hi", 0, pending_question=None)
+    check("sem pergunta pendente cai no texto genérico", "team" in m, m)
 
     print()
     if failures:

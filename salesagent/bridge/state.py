@@ -66,6 +66,7 @@ _MIGRATIONS = [
     "ALTER TABLE conversations ADD COLUMN realert_count INTEGER",        # re-alertas já disparados (teto no scheduler)
     "ALTER TABLE conversations ADD COLUMN contact_name TEXT",            # nome do lead no Kommo (escalação legível)
     "ALTER TABLE conversations ADD COLUMN last_inbound_text TEXT",       # última fala do lead (idioma p/ resgate)
+    "ALTER TABLE conversations ADD COLUMN pending_question TEXT",        # a pergunta que espera resposta humana
 ]
 
 

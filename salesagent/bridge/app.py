@@ -261,6 +261,26 @@ def process_inbound(payload: dict) -> None:
         # G3: conversa escalada não volta a VENDER -- mas continua sendo uma
         # conversa. O lead recebe reconhecimento, não silêncio.
         state.log("gate", lead_id, "estado escalado — sem resposta comercial, só reconhecimento")
+        if holding.is_substantive(text):
+            # Pergunta NOVA (ou repetida com conteúdo) de um lead que já
+            # espera: os humanos são reavisados NA HORA, não no próximo
+            # ciclo do alarme -- que pode inclusive já ter estourado o teto
+            # (aconteceu em 26/08: o lead repetiu a pergunta do kart e
+            # nenhum aviso saiu, porque o alarme daquele lead já tinha
+            # silenciado). Mensagem nova é evento novo: zera o ciclo.
+            conv = state.get_conversation(lead_id)
+            nome = conv.get("contact_name") or "sem nome no Kommo"
+            state.update_conversation(lead_id, pending_question=text[:300],
+                                      realert_count=0,
+                                      last_realert_at=int(time.time()))
+            notify_human(
+                f"🔺 LEAD ESCALADO VOLTOU A FALAR — {nome} (lead {lead_id})\n"
+                f"Nova mensagem: {text[:300]}\n"
+                f"Escalado por: {conv.get('escalation_reason') or '?'}"
+                + (f" (há {(int(time.time()) - conv['escalated_at']) // 60} min)"
+                   if conv.get("escalated_at") else "") + "\n"
+                f"Responda esta mensagem com o texto para o lead — eu entrego "
+                f"no chat e devolvo a conversa ao Chase.")
         reply = _holding_reply(lead_id, text)
     else:
         reply = run_agent(lead_id, text)
@@ -292,7 +312,8 @@ def _holding_reply(lead_id: int, lead_text: str) -> str:
     return holding.waiting_message(
         lead_text, sent_before,
         contact_name=conv.get("contact_name"),
-        first_contact=not conv.get("last_outbound_at"))
+        first_contact=not conv.get("last_outbound_at"),
+        pending_question=conv.get("pending_question"))
 
 
 # Marca "o link de preço saiu neste turno" por lead — consumida logo após o
@@ -610,9 +631,24 @@ def escalate(lead_id: int, reason: str, context: str = "") -> None:
     kommo.add_note(lead_id, f"[escalação] {reason}")
     conv = state.get_conversation(lead_id)
     nome = conv.get("contact_name") or "sem nome no Kommo"
+    if context.strip():
+        # A pergunta fica registrada: é ela que as mensagens de espera citam
+        # de volta ao lead ("Sobre 'can I bring my own kart?' -- ...") e é
+        # ela que o knowledge_writer usa como título do candidato.
+        state.update_conversation(lead_id, pending_question=context.strip()[:300])
+    perfil_partes = []
+    if conv.get("q_experience"):
+        perfil_partes.append(f"experiência={conv['q_experience']}")
+    if conv.get("driver_age"):
+        perfil_partes.append(f"idade={conv['driver_age']}")
+    if conv.get("q_origin"):
+        perfil_partes.append(f"origem={conv['q_origin']}")
+    perfil = ("Perfil: " + ", ".join(perfil_partes) + "\n") if perfil_partes else ""
     briefing = (f"🔺 ESCALAÇÃO — {nome} (lead {lead_id})\n"
-                f"Motivo: {reason}\nContexto: {context[:500]}\n"
-                f"Responda 'aprovar {lead_id} <instrução>' ou 'retomar {lead_id}'.")
+                f"Motivo: {reason}\n{perfil}"
+                f"Pergunta do lead: {context[:400] or '(sem texto)'}\n"
+                f"Responda esta mensagem com o texto para o lead — eu entrego "
+                f"no chat e devolvo a conversa ao Chase.")
     notify_human(briefing)
     state.log("escalation", lead_id, reason)
 
