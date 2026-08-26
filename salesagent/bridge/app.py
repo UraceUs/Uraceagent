@@ -32,9 +32,9 @@ import scheduler
 import state
 import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
-                    FOLLOWUP_BOT_ID, HUMAN_OPERATORS, HUMAN_WHATSAPP,
-                    HUMAN_WHATSAPP_LIST, KOMMO_BOT_SECRET, KOMMO_TOKEN,
-                    SALESBOT_DISPLAY)
+                    FOLLOWUP_BOT_ID, HUMAN_OPERATORS, HUMAN_REPLY_TOKEN,
+                    HUMAN_WHATSAPP, HUMAN_WHATSAPP_LIST, KOMMO_BOT_SECRET,
+                    KOMMO_TOKEN, SALESBOT_DISPLAY)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -44,6 +44,19 @@ SALES_AGENT = "urace-sales"  # agente no OpenClaw (criado na implantação)
 def _auth(x_api_key: str | None):
     if not AGENT_API_KEY or x_api_key != AGENT_API_KEY:
         raise HTTPException(401, "invalid api key")
+
+
+def _auth_human_reply(x_api_key: str | None):
+    """Aceita a chave principal OU o token de escopo mínimo.
+
+    Só /human/whatsapp usa isto. O token existe para o agente do WhatsApp,
+    que roda em sandbox e precisa da credencial no prompt -- e um prompt não
+    é lugar para a chave que abre o hook do Kommo e as tools de preço."""
+    if AGENT_API_KEY and x_api_key == AGENT_API_KEY:
+        return
+    if HUMAN_REPLY_TOKEN and x_api_key == HUMAN_REPLY_TOKEN:
+        return
+    raise HTTPException(401, "invalid api key")
 
 
 # ------------------------------------------------------------------ entrada
@@ -730,7 +743,7 @@ async def human_whatsapp(request: Request, x_api_key: str | None = Header(None))
       PERGUNTA em vez de adivinhar. Aprovar o lead errado é pior que pedir
       para repetir a frase.
     """
-    _auth(x_api_key)
+    _auth_human_reply(x_api_key)
     payload = await request.json()
     numero = payload.get("from", "")
     texto = payload.get("text", "")

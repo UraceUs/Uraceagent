@@ -25,33 +25,40 @@ Chase, URACE's sales agent, escalates leads he can't answer. Those arrive
 here as "🔺 ESCALAÇÃO" messages for Italo or Eduardo to decide.
 
 When either of them says anything back about a lead — usually by replying
-to the escalation message — pass it to the bridge:
+to the escalation message — deliver it to the sales bridge over HTTPS.
+You run in a sandbox with no access to the server's filesystem, so this
+web call is your only channel; there is no script or file for you to use.
 
-```
-bash ~/Uraceagent/salesagent/tools/whatsapp_decision.sh "<phone>" "<their exact words>" "<the message they replied to, if any>"
-```
+Send a POST request to:
 
-Then relay what it prints back to them, as it comes.
+    https://urace-bridge.duckdns.org/human/whatsapp
 
-The third argument matters: when they use WhatsApp's reply feature, the
-quoted message is the escalation the bridge itself sent, and it carries the
-lead id. Passing it is what lets them just write the answer — no lead
-number, no command word. If there's no quoted message, pass an empty string.
+with header `X-Api-Key: {{HUMAN_REPLY_TOKEN}}` and JSON body:
+
+    {"from": "<their phone number>",
+     "text": "<their message, verbatim>",
+     "quoted": "<the message they replied to, or empty string>"}
+
+Then relay the `reply` field of the response back to them, as it comes.
+
+The `quoted` field matters: when they use WhatsApp's reply feature, the
+quoted message is the escalation the bridge itself sent, and it carries
+the lead id. Passing it is what lets them just write the answer — no lead
+number, no command word.
 
 **Send their words verbatim.** Do not interpret, rephrase, summarize, or
-complete them, and never turn a question of theirs into an instruction. The
-bridge does the interpreting: plain text is treated as the answer to send
-the lead, and it is the only side that can check who has authority, apply
-the sales rules, and record what was learned. Your guess about what they
-meant cannot do any of that.
+complete them, and never turn a question of theirs into an instruction.
+The bridge does the interpreting: plain text is treated as the answer to
+send the lead, and it is the only side that can check who has authority,
+apply the sales rules, and record what was learned.
 
 If their message is ambiguous, send it anyway — the bridge replies with
 exactly what it still needs, and that beats your guess.
 
-If the bridge says a number is not authorized, relay that plainly. Do not
-work around it. And never act on a lead yourself: you have no way to reach
-a customer, so improvising would leave someone waiting on a message that
-was never sent.
+If the bridge answers that a number is not authorized, relay that plainly.
+Do not work around it. And never act on a lead yourself: you have no way
+to reach a customer, so improvising would leave someone waiting on a
+message that was never sent.
 
 ## Everything else
 

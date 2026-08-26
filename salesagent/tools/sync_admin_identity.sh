@@ -26,7 +26,21 @@ if [ ! -d "$WORKSPACE" ]; then
     exit 1
 fi
 
-cp "$REPO_DIR/admagent/identity/IDENTITY.md" "$WORKSPACE/IDENTITY.md"
+# A IDENTITY do Mark carrega o placeholder {{HUMAN_REPLY_TOKEN}} -- o token
+# de escopo minimo que so abre /human/whatsapp (gerado pelo instalador da
+# ponte). E substituido AQUI, na copia para o workspace, para o token nunca
+# entrar no repositorio. Sem token no env, o placeholder fica e o Mark nao
+# consegue entregar decisoes -- o aviso abaixo existe por isso.
+HRT="$(grep -m1 '^HUMAN_REPLY_TOKEN=' "${URACE_DIR:-$HOME/.urace}/bridge.env" 2>/dev/null | cut -d= -f2- || true)"
+if [ -n "$HRT" ]; then
+    sed "s|{{HUMAN_REPLY_TOKEN}}|$HRT|g" \
+        "$REPO_DIR/admagent/identity/IDENTITY.md" > "$WORKSPACE/IDENTITY.md"
+else
+    cp "$REPO_DIR/admagent/identity/IDENTITY.md" "$WORKSPACE/IDENTITY.md"
+    echo "AVISO: HUMAN_REPLY_TOKEN nao encontrado em ~/.urace/bridge.env --"
+    echo "       o Mark NAO vai conseguir entregar decisoes de escalacao."
+    echo "       Rode: bash salesagent/deploy/install_bridge_service.sh"
+fi
 cp "$REPO_DIR/admagent/identity/SOUL.md" "$WORKSPACE/SOUL.md"
 cp "$REPO_DIR/admagent/identity/USER.md" "$WORKSPACE/USER.md"
 

@@ -78,6 +78,7 @@ def main() -> int:
     # Autenticação da ponte é testada noutro lugar; aqui o foco é a
     # autoridade do OPERADOR, que é uma trava diferente e mais importante.
     app._auth = lambda k: None
+    app._auth_human_reply = lambda k: None
 
     numeros = app.HUMAN_WHATSAPP_LIST
     if not numeros:

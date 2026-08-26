@@ -37,6 +37,13 @@ if [ ! -f "$BRIDGE_ENV" ] || ! grep -q '^AGENT_API_KEY=' "$BRIDGE_ENV"; then
 else
     echo "-- AGENT_API_KEY ja existe em $BRIDGE_ENV"
 fi
+# Token de escopo minimo para /human/whatsapp (o agente do WhatsApp roda
+# em sandbox e precisa da credencial no prompt -- ver config.py).
+if ! grep -q '^HUMAN_REPLY_TOKEN=' "$BRIDGE_ENV"; then
+    HRT="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+    echo "HUMAN_REPLY_TOKEN=$HRT" >> "$BRIDGE_ENV"
+    echo "-- HUMAN_REPLY_TOKEN gerado e gravado em $BRIDGE_ENV"
+fi
 if ! grep -q '^HUMAN_WHATSAPP=' "$BRIDGE_ENV"; then
     echo "HUMAN_WHATSAPP=+14074878143" >> "$BRIDGE_ENV"
     echo "-- HUMAN_WHATSAPP padrao gravado (Italo)"

@@ -31,6 +31,20 @@ KOMMO_BOT_SECRET = _kommo.get("KOMMO_BOT_SECRET", "")
 
 # Chave que autentica o agente OpenClaw (e o Salesbot) na ponte
 AGENT_API_KEY = _bridge.get("AGENT_API_KEY", "")
+# Credencial de ESCOPO MÍNIMO, válida só em /human/whatsapp.
+#
+# Existe porque o agente que segura o canal do WhatsApp (Mark) roda num
+# sandbox sem acesso ao filesystem do VPS -- descoberto em 26/08, quando o
+# script local que ele deveria chamar simplesmente não existia lá dentro.
+# O caminho que sobra é ele falar com a ponte por HTTPS, e para isso
+# precisa de uma credencial no prompt dele.
+#
+# Dar a AGENT_API_KEY seria dar tudo: hook do Kommo, tools de preço,
+# escalação, CRM. Esta abre UMA porta -- registrar a decisão de um humano
+# -- e nada mais. Se vazar, o estrago é limitado ao que um operador já
+# poderia fazer, e fica registrado no log de auditoria como qualquer outra
+# decisão. Rotacione trocando a linha em ~/.urace/bridge.env.
+HUMAN_REPLY_TOKEN = _bridge.get("HUMAN_REPLY_TOKEN", "")
 # Números autorizados a aprovar escalações (WhatsApp interno). Aceita LISTA
 # separada por vírgula — até 25/08 era um número só (o do Italo), e por isso
 # o Eduardo, que o brief lista como autoridade, nunca recebia escalação
