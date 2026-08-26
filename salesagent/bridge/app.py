@@ -715,7 +715,13 @@ async def human_whatsapp(request: Request, x_api_key: str | None = Header(None))
     vazio -- ninguém lia. O Italo respondeu "aprovado" numa escalação real
     e não aconteceu nada.
 
-    Corpo: {"from": "+1407...", "text": "aprovado, pode trazer o kart"}
+    Corpo: {"from": "+1407...", "text": "pode trazer o kart",
+            "quoted": "<a mensagem que a pessoa respondeu, se houver>"}
+
+    `quoted` é o que faz isto funcionar sem sintaxe: quando o operador usa o
+    RESPONDER do WhatsApp sobre a escalação, a mensagem citada é o briefing
+    que a própria ponte mandou -- e ele traz o id do lead. Então basta
+    escrever a resposta normal, como se falasse com o cliente.
 
     Duas travas, ambas deliberadas:
     - autoridade é pelo TELEFONE cadastrado, nunca por quem a mensagem diz
@@ -726,7 +732,9 @@ async def human_whatsapp(request: Request, x_api_key: str | None = Header(None))
     """
     _auth(x_api_key)
     payload = await request.json()
-    numero, texto = payload.get("from", ""), payload.get("text", "")
+    numero = payload.get("from", "")
+    texto = payload.get("text", "")
+    citada = payload.get("quoted", "") or ""
 
     operador = _operador_por_telefone(numero)
     if operador is None:
@@ -736,7 +744,7 @@ async def human_whatsapp(request: Request, x_api_key: str | None = Header(None))
 
     esperando = _leads_esperando()
     foco = esperando[0]["lead_id"] if len(esperando) == 1 else None
-    intent = human_intents.parse(texto, lead_em_foco=foco)
+    intent = human_intents.parse(texto, lead_em_foco=foco, quoted=citada)
 
     if intent["needs"]:
         if intent["lead_id"] is None and len(esperando) > 1:
@@ -787,10 +795,10 @@ def _aplicar_decisao_humana(lead_id: int, intent: dict, quem: str) -> str:
     state.update_conversation(lead_id, realert_count=0, holding_count=0)
 
     if not mensagem:
-        return (f"{nome}: liberado e devolvido ao Chase. Você não ditou uma "
-                f"resposta, então ele segue a conversa com o que já sabe. "
-                f"Se quiser que eu mande um texto específico, responda "
-                f"'aprovar {lead_id} <o texto>'.")
+        return (f"{nome}: liberado e devolvido ao Chase. Você não escreveu "
+                f"uma resposta, então ele segue a conversa com o que já sabe. "
+                f"Se quiser mandar um texto específico, é só responder esta "
+                f"mensagem escrevendo o que ele deve dizer.")
     destino = "entregue no chat" if entregue else "gravada como nota (entrega falhou)"
     aprendizado = _registrar_aprendizado(lead_id, intent, quem, conv)
     return (f"{nome}: resposta {destino} e conversa devolvida ao Chase."

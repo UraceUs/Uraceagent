@@ -58,9 +58,10 @@ class _FakeKommo:
         pass
 
 
-def chamar(numero, texto):
+def chamar(numero, texto, citada=""):
     return asyncio.run(app.human_whatsapp(
-        _Req({"from": numero, "text": texto}), x_api_key=app.AGENT_API_KEY))
+        _Req({"from": numero, "text": texto, "quoted": citada}),
+        x_api_key=app.AGENT_API_KEY))
 
 
 def main() -> int:
@@ -96,8 +97,11 @@ def main() -> int:
           state.get_conversation(lead)["state"] == "WAITING_HUMAN")
     check("nada foi entregue ao lead", entregues == [], str(entregues))
 
-    # --- operador responde com texto: chega no lead e volta pro agente
-    r = chamar(italo, "aprovar 970001 pode trazer o kart, inspecionamos antes")
+    # --- O jeito que o Italo pediu: responder a escalação escrevendo
+    # normal, sem comando e sem número de lead.
+    brief = ("🔺 ESCALAÇÃO — Eduardo F F Resende (lead 970001)\n"
+             "Motivo: kart próprio (inspeção/gestão)")
+    r = chamar(italo, "pode trazer o kart, inspecionamos antes", citada=brief)
     check("operador autorizado é aceito", r["ok"] is True, str(r))
     check("a resposta chegou ao lead",
           len(entregues) == 1 and "inspecionamos antes" in entregues[0][1],
@@ -119,8 +123,10 @@ def main() -> int:
     check("'aprovado' seco resolve o único lead esperando", r["ok"] is True, str(r))
     check("sem texto ditado, nada é inventado para o lead",
           entregues == [], str(entregues))
-    check("o retorno explica como ditar um texto",
-          "aprovar 970002" in r["reply"], r["reply"])
+    check("o retorno ensina o caminho sem sintaxe (só responder)",
+          "responder esta mensagem" in r["reply"], r["reply"])
+    check("o retorno NÃO ensina comando decorado",
+          "aprovar 970002" not in r["reply"], r["reply"])
 
     # --- dois leads esperando: pergunta, não adivinha
     for lid, nome in ((970003, "Ana"), (970004, "João")):
