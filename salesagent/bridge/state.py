@@ -17,6 +17,11 @@ ALLOWED = {
     ("AI_ACTIVE", "CLOSED"),
     ("WAITING_HUMAN", "HUMAN_HANDOFF"),
     ("WAITING_HUMAN", "RESUMED"),      # humano respondeu e devolveu ao agente
+    ("WAITING_HUMAN", "CLOSED"),       # humano decidiu encerrar sem devolver ao
+    # agente. Faltava até 26/08: o estado mais comum de um lead esperando
+    # decisão era justamente o único de onde o humano NÃO podia encerrar.
+    # Descoberto pelo teste do loop do WhatsApp -- "fechar <lead>" era
+    # aceito, logado, e silenciosamente recusado pela máquina de estados.
     ("HUMAN_HANDOFF", "RESUMED"),      # somente por comando humano explícito
     ("HUMAN_HANDOFF", "CLOSED"),
     ("RESUMED", "AI_ACTIVE"),

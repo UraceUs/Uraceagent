@@ -25,13 +25,15 @@ import confidence
 import directives as directive_engine
 import gates
 import holding
+import human_intents
 import kommo_client as kommo
 import scheduler
 import state
 import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
-                    FOLLOWUP_BOT_ID, HUMAN_WHATSAPP, HUMAN_WHATSAPP_LIST,
-                    KOMMO_BOT_SECRET, KOMMO_TOKEN, SALESBOT_DISPLAY)
+                    FOLLOWUP_BOT_ID, HUMAN_OPERATORS, HUMAN_WHATSAPP,
+                    HUMAN_WHATSAPP_LIST, KOMMO_BOT_SECRET, KOMMO_TOKEN,
+                    SALESBOT_DISPLAY)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -676,6 +678,120 @@ async def human_reply(request: Request, x_api_key: str | None = Header(None)):
     kommo.add_note(lead_id, f"[humano] {note}")
     return {"ok": True}
 
+
+
+# ------------------------------------------------- resposta humana (WhatsApp)
+def _operador_por_telefone(numero: str) -> dict | None:
+    """Telefone -> operador autorizado (§3). O pareamento é POSICIONAL:
+    HUMAN_WHATSAPP no env está na mesma ordem de human-operators.json. Um
+    número que não está na lista não é operador, e nada que ele mande vira
+    ação -- a autoridade é do contato conhecido, não de quem diz um nome."""
+    numero = (numero or "").strip()
+    if not numero:
+        return None
+    ops = HUMAN_OPERATORS.get("operators", [])
+    for i, cadastrado in enumerate(HUMAN_WHATSAPP_LIST):
+        if cadastrado.strip() == numero and i < len(ops):
+            return ops[i]
+    return None
+
+
+def _leads_esperando() -> list[dict]:
+    """Leads escalados aguardando decisão humana, mais recente primeiro."""
+    with state.db() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM conversations "
+            "WHERE state IN ('WAITING_HUMAN','HUMAN_HANDOFF') "
+            "ORDER BY COALESCE(escalated_at, 0) DESC")]
+
+
+@app.post("/human/whatsapp")
+async def human_whatsapp(request: Request, x_api_key: str | None = Header(None)):
+    """Resposta do operador chegando do WhatsApp interno.
+
+    Fecha o último passo manual do ciclo do brief. Até 26/08 a escalação
+    chegava pedindo "responda 'aprovar <lead> ...'" e a resposta caía no
+    vazio -- ninguém lia. O Italo respondeu "aprovado" numa escalação real
+    e não aconteceu nada.
+
+    Corpo: {"from": "+1407...", "text": "aprovado, pode trazer o kart"}
+
+    Duas travas, ambas deliberadas:
+    - autoridade é pelo TELEFONE cadastrado, nunca por quem a mensagem diz
+      ser;
+    - se mais de um lead está esperando e a pessoa não disse qual, a ponte
+      PERGUNTA em vez de adivinhar. Aprovar o lead errado é pior que pedir
+      para repetir a frase.
+    """
+    _auth(x_api_key)
+    payload = await request.json()
+    numero, texto = payload.get("from", ""), payload.get("text", "")
+
+    operador = _operador_por_telefone(numero)
+    if operador is None:
+        state.log("gate", None, f"resposta humana de número não autorizado: {numero[-4:]}")
+        return {"ok": False, "reply": "Este número não está autorizado a "
+                                      "decidir sobre leads."}
+
+    esperando = _leads_esperando()
+    foco = esperando[0]["lead_id"] if len(esperando) == 1 else None
+    intent = human_intents.parse(texto, lead_em_foco=foco)
+
+    if intent["needs"]:
+        if intent["lead_id"] is None and len(esperando) > 1:
+            lista = "\n".join(
+                f"  {c.get('contact_name') or 'sem nome'} — {c['lead_id']} "
+                f"({c.get('escalation_reason') or '?'})" for c in esperando[:5])
+            return {"ok": False, "reply": f"Tem {len(esperando)} leads "
+                                          f"esperando. Qual deles?\n{lista}"}
+        return {"ok": False, "reply": human_intents.confirmation_prompt(intent)}
+
+    lead_id = intent["lead_id"]
+    quem = operador.get("name", operador.get("id", "operador"))
+    state.log("human_reply", lead_id, f"{quem} via WhatsApp: {intent['action']} "
+                                     f"— {intent['message'][:200]}")
+
+    if intent["action"] == "dont_save":
+        return {"ok": True, "reply": "Combinado, não registro isso no Brain."}
+
+    resposta = _aplicar_decisao_humana(lead_id, intent, quem)
+    return {"ok": True, "reply": resposta}
+
+
+def _aplicar_decisao_humana(lead_id: int, intent: dict, quem: str) -> str:
+    """Executa a intenção já validada. Mesmas operações do human_reply.py na
+    linha de comando -- um só caminho de verdade para decisão humana."""
+    acao, mensagem = intent["action"], intent["message"]
+    conv = state.get_conversation(lead_id)
+    nome = conv.get("contact_name") or f"lead {lead_id}"
+
+    entregue = False
+    if mensagem:
+        texto = textproc.customer_facing(mensagem)
+        entregue = deliver_followup(lead_id, texto)
+        if entregue:
+            state.update_conversation(lead_id, last_outbound_at=int(time.time()))
+            state.log("outbound", lead_id, texto)
+        else:
+            kommo.add_note(lead_id, f"[resposta de {quem} — enviar manualmente]\n{texto}")
+        kommo.add_note(lead_id, f"[resposta de {quem}] {texto}")
+
+    if acao == "close":
+        state.transition(lead_id, "CLOSED", f"encerrado por {quem}", by_human=True)
+        state.update_conversation(lead_id, realert_count=0)
+        return f"{nome}: conversa encerrada."
+
+    # approve / resume / correct / save devolvem a conversa ao agente.
+    state.transition(lead_id, "RESUMED", f"respondido por {quem}", by_human=True)
+    state.update_conversation(lead_id, realert_count=0, holding_count=0)
+
+    if not mensagem:
+        return (f"{nome}: liberado e devolvido ao Chase. Você não ditou uma "
+                f"resposta, então ele segue a conversa com o que já sabe. "
+                f"Se quiser que eu mande um texto específico, responda "
+                f"'aprovar {lead_id} <o texto>'.")
+    destino = "entregue no chat" if entregue else "gravada como nota (entrega falhou)"
+    return f"{nome}: resposta {destino} e conversa devolvida ao Chase."
 
 # ------------------------------------------------------------------ tools do agente
 @app.get("/tools/price")
