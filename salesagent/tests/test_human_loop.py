@@ -22,7 +22,16 @@ os.environ["URACE_DIR"] = tempfile.mkdtemp(prefix="urace-loop-")
 sys.path.insert(0, str(BRIDGE))
 
 import app  # noqa: E402
+import knowledge_writer  # noqa: E402
 import state  # noqa: E402
+
+# BLINDAGEM: o vault de teste é temporário, apontado antes de qualquer
+# chamada. Numa versão anterior deste arquivo o teste gravou um documento
+# de verdade em brain/09_LEARNINGS/ (lead fictício 970001, confirmado por
+# "Italo Silveira") -- conhecimento inventado por um teste, esperando
+# revisão humana no vault real. Isso não pode depender de lembrarmos de
+# mockar a função certa.
+knowledge_writer.LEARNINGS_DIR = Path(os.environ["URACE_DIR"]) / "vault-teste"
 
 
 class _Req:
@@ -130,6 +139,36 @@ def main() -> int:
     r = chamar(italo, "não salvar isso no brain")
     check("'não salvar' é respeitado sem tocar em lead",
           r["ok"] is True and entregues == [], str(r))
+
+    # --- a resposta vira conhecimento pendente de revisão (§9)
+    escritos = []
+    knowledge_writer.registrar = lambda **kw: (
+        escritos.append(kw) or {"written": True, "path": "/tmp/x.md",
+                                "kind": "knowledge", "reason": "ok"})
+    knowledge_writer.reindexar = lambda: True
+    app.knowledge_writer = knowledge_writer
+
+    lead5 = 970005
+    state.get_conversation(lead5)
+    state.update_conversation(lead5, contact_name="Carlos",
+                              last_inbound_text="can i bring my own kart?")
+    state.transition(lead5, "WAITING_HUMAN", "kart próprio")
+    r = chamar(italo, "aprovar 970005 pode trazer, inspecionamos 1 dia antes")
+    check("resposta humana vira candidato no Brain", len(escritos) == 1, str(escritos))
+    check("o candidato guarda a pergunta original do lead",
+          bool(escritos) and "own kart" in escritos[0]["pergunta"], str(escritos))
+    check("o candidato guarda quem confirmou",
+          bool(escritos) and escritos[0]["autor"], str(escritos))
+    check("o operador é avisado que precisa revisar",
+          "Obsidian" in r["reply"] or "revisão" in r["reply"], r["reply"])
+
+    # --- 'não salvar' não escreve nada no Brain
+    escritos.clear()
+    lead6 = 970006
+    state.get_conversation(lead6)
+    state.transition(lead6, "WAITING_HUMAN", "x")
+    chamar(italo, "não salvar isso")
+    check("'não salvar' não escreve no Brain", escritos == [], str(escritos))
 
     # --- fechar encerra
     r = chamar(italo, "fechar 970003")

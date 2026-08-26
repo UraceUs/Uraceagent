@@ -27,6 +27,7 @@ import gates
 import holding
 import human_intents
 import kommo_client as kommo
+import knowledge_writer
 import scheduler
 import state
 import textproc
@@ -791,7 +792,49 @@ def _aplicar_decisao_humana(lead_id: int, intent: dict, quem: str) -> str:
                 f"Se quiser que eu mande um texto específico, responda "
                 f"'aprovar {lead_id} <o texto>'.")
     destino = "entregue no chat" if entregue else "gravada como nota (entrega falhou)"
-    return f"{nome}: resposta {destino} e conversa devolvida ao Chase."
+    aprendizado = _registrar_aprendizado(lead_id, intent, quem, conv)
+    return (f"{nome}: resposta {destino} e conversa devolvida ao Chase."
+            + (f"\n{aprendizado}" if aprendizado else ""))
+
+
+def _registrar_aprendizado(lead_id: int, intent: dict, quem: str,
+                           conv: dict) -> str:
+    """A resposta humana virando conhecimento — o fecho do ciclo.
+
+    Sem isto, a mesma pergunta escala de novo na semana que vem e o humano
+    responde a mesma coisa pela terceira vez. O documento nasce como
+    candidato (§9): fica pronto para um clique no Obsidian, nunca ativo
+    sozinho.
+
+    Nunca deixa a decisão do humano falhar por causa do Brain: o lead já
+    recebeu a resposta antes desta linha rodar, e qualquer erro aqui vira
+    log, não exceção.
+    """
+    if intent["action"] == "dont_save":
+        return ""
+    try:
+        resultado = knowledge_writer.registrar(
+            pergunta=conv.get("last_inbound_text") or "",
+            resposta=intent["message"],
+            autor=quem,
+            lead_id=lead_id,
+            forcar=(intent["action"] == "save"))
+        state.log("knowledge", lead_id,
+                  f"{resultado['kind']}: {resultado['reason']} "
+                  f"({resultado.get('path') or '-'})")
+        if not resultado["written"]:
+            if resultado["kind"] == "memory":
+                return ("Não levei isso pro Brain: parece acordo deste "
+                        "cliente, não regra geral. Se for regra, responda "
+                        "'salvar isso'.")
+            return ""
+        knowledge_writer.reindexar()
+        return ("Registrei isso no Brain como pendente de revisão — abra o "
+                "Obsidian e mude para `approved` para o Chase passar a "
+                "responder sozinho da próxima vez.")
+    except Exception as exc:
+        state.log("error", lead_id, f"knowledge_writer: {exc}")
+        return ""
 
 # ------------------------------------------------------------------ tools do agente
 @app.get("/tools/price")
