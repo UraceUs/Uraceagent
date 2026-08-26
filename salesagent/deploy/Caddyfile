@@ -19,9 +19,16 @@
 import /etc/caddy/*.caddy
 
 urace-bridge.duckdns.org {
-	# So os endpoints que o Kommo precisa alcancar sao expostos.
+	# So os endpoints desenhados para acesso externo sao expostos.
 	# As tools do agente (/tools/*) e /human/reply ficam so no localhost.
-	@public path /kommo/hook /health
+	#
+	# /human/whatsapp entrou na lista em 26/08: o agente que segura o canal
+	# do WhatsApp (Mark) roda num sandbox sem acesso ao VPS, entao HTTPS e o
+	# unico caminho dele ate a ponte -- o primeiro teste real parou aqui num
+	# 404. O endpoint foi desenhado para exposicao: exige o HUMAN_REPLY_TOKEN
+	# (escopo minimo, so essa rota), valida o TELEFONE do operador contra a
+	# lista cadastrada, e na duvida pergunta em vez de agir.
+	@public path /kommo/hook /health /human/whatsapp
 	handle @public {
 		reverse_proxy 127.0.0.1:8800
 	}
