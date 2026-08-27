@@ -258,30 +258,57 @@ def process_inbound(payload: dict) -> None:
         escalate(lead_id, "; ".join(triggers), context=text)
         reply = _holding_reply(lead_id, text)
     elif not state.agent_may_sell(lead_id):
-        # G3: conversa escalada não volta a VENDER -- mas continua sendo uma
-        # conversa. O lead recebe reconhecimento, não silêncio.
-        state.log("gate", lead_id, "estado escalado — sem resposta comercial, só reconhecimento")
-        if holding.is_substantive(text):
+        # G3 REFINADO (27/08, decisão do Italo): conversa escalada não volta
+        # a VENDER -- mas pergunta factual que o Brain COBRE é respondida na
+        # hora, sem humano. O caso real: lead esperando decisão sobre kart
+        # próprio perguntou o horário de funcionamento (que está no vault) e
+        # ouviu "vou confirmar com a equipe". Escalação é para o que o Chase
+        # NÃO sabe; travar o que ele sabe só ensina o lead que perguntar não
+        # adianta. Três condições, todas obrigatórias:
+        #   1. mensagem substantiva (ping/obrigado não reabre nada);
+        #   2. NENHUM gatilho B4 no texto (desconto/refund/jurídico em
+        #      conversa escalada nunca é respondido pelo modelo);
+        #   3. o retrieval devolve base sólida (confidence OK/STALE) -- na
+        #      dúvida, continua com o humano.
+        respondida_pelo_brain = False
+        if (holding.is_substantive(text) and not gates.escalation_triggers(text)
+                and BRAIN_RETRIEVAL == "on"):
+            import brain_kb
+            verdict = confidence.assess(
+                brain_kb.search(lead_id, text, top_docs=BRAIN_TOP_DOCS))
+            if verdict["level"] in (confidence.OK, confidence.STALE):
+                resposta_brain = run_agent(lead_id, text, escalated_guard=True)
+                if resposta_brain:
+                    state.log("gate", lead_id,
+                              "escalado, mas o Brain cobre a pergunta — "
+                              f"respondida sem humano ({verdict['level']})")
+                    reply = resposta_brain
+                    respondida_pelo_brain = True
+        if respondida_pelo_brain:
+            pass  # segue para o envio único no fim da função
+        else:
+            state.log("gate", lead_id, "estado escalado — sem resposta comercial, só reconhecimento")
+            if holding.is_substantive(text):
             # Pergunta NOVA (ou repetida com conteúdo) de um lead que já
             # espera: os humanos são reavisados NA HORA, não no próximo
             # ciclo do alarme -- que pode inclusive já ter estourado o teto
             # (aconteceu em 26/08: o lead repetiu a pergunta do kart e
             # nenhum aviso saiu, porque o alarme daquele lead já tinha
             # silenciado). Mensagem nova é evento novo: zera o ciclo.
-            conv = state.get_conversation(lead_id)
-            nome = conv.get("contact_name") or "sem nome no Kommo"
-            state.update_conversation(lead_id, pending_question=text[:300],
-                                      realert_count=0,
-                                      last_realert_at=int(time.time()))
-            notify_human(
-                f"🔺 LEAD ESCALADO VOLTOU A FALAR — {nome} (lead {lead_id})\n"
-                f"Nova mensagem: {text[:300]}\n"
-                f"Escalado por: {conv.get('escalation_reason') or '?'}"
-                + (f" (há {(int(time.time()) - conv['escalated_at']) // 60} min)"
-                   if conv.get("escalated_at") else "") + "\n"
-                f"Responda esta mensagem com o texto para o lead — eu entrego "
-                f"no chat e devolvo a conversa ao Chase.")
-        reply = _holding_reply(lead_id, text)
+                conv = state.get_conversation(lead_id)
+                nome = conv.get("contact_name") or "sem nome no Kommo"
+                state.update_conversation(lead_id, pending_question=text[:300],
+                                          realert_count=0,
+                                          last_realert_at=int(time.time()))
+                notify_human(
+                    f"🔺 LEAD ESCALADO VOLTOU A FALAR — {nome} (lead {lead_id})\n"
+                    f"Nova mensagem: {text[:300]}\n"
+                    f"Escalado por: {conv.get('escalation_reason') or '?'}"
+                    + (f" (há {(int(time.time()) - conv['escalated_at']) // 60} min)"
+                       if conv.get("escalated_at") else "") + "\n"
+                    f"Responda esta mensagem com o texto para o lead — eu entrego "
+                    f"no chat e devolvo a conversa ao Chase.")
+            reply = _holding_reply(lead_id, text)
     else:
         reply = run_agent(lead_id, text)
         if not reply:
@@ -334,7 +361,7 @@ def _call_agent(lead_id: int, message: str) -> tuple[str, list[str]]:
     return raw, textproc.extract_directives(raw)
 
 
-def run_agent(lead_id: int, text: str) -> str:
+def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     """Um turno do agente OpenClaw, com sessão isolada por lead.
 
     O texto bruto do modelo pode conter diretivas `[[...]]` (protocolo em
@@ -385,6 +412,22 @@ def run_agent(lead_id: int, text: str) -> str:
             f"{conhecimento}"
             + (f"{nota}\n" if nota else "")
             + f"[FIM DO SYSTEM]\n\nMensagem do lead: {text}")
+
+    if escalated_guard:
+        # Conversa escalada respondendo pergunta coberta pelo Brain: o
+        # modelo responde SÓ o fato, sem retomar venda -- a parte escalada
+        # continua com a equipe e o lead já sabe disso.
+        conv_g = state.get_conversation(lead_id)
+        pendente = conv_g.get("pending_question") or "outro assunto"
+        text_for_agent = (
+            "[SYSTEM] MODO RESTRITO: esta conversa está escalada aguardando "
+            "a equipe sobre outro assunto "
+            f"(\"{pendente[:120]}\"). Responda APENAS a pergunta factual "
+            "abaixo, usando somente o conhecimento do bloco [SYSTEM]. Não "
+            "venda, não recomende programa, não fale de preço, não retome a "
+            "qualificação. Curto e direto. Se couber natural, diga numa "
+            "frase que a outra pergunta segue sendo confirmada com a "
+            "equipe.[FIM DO MODO RESTRITO]\n\n" + text_for_agent)
 
     try:
         raw, directives = _call_agent(lead_id, text_for_agent)

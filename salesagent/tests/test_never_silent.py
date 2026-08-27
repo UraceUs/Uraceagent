@@ -128,6 +128,45 @@ def main() -> int:
     app.process_inbound({"lead_id": lead, "message": "Oi"})
     check("ping NÃO reavisa o humano (a pergunta é a mesma)",
           avisos2 == [], f"{avisos2}")
+
+    # 2c. G3 refinado (27/08): pergunta que o BRAIN COBRE é respondida na
+    #     hora mesmo com a conversa escalada -- escalação é para o que o
+    #     Chase não sabe. Caso real: lead esperando decisão do kart
+    #     perguntou o horário (que está no vault) e ouviu "vou confirmar".
+    import brain_kb  # noqa: E402
+    import confidence  # noqa: E402
+    avisos3 = []
+    delivered2d = _install_fakes(
+        agent_reply="We're open Tuesday to Sunday. Your kart question is "
+                    "still with the team.")
+    app.notify_human = lambda texto: avisos3.append(texto)
+    app.BRAIN_RETRIEVAL = "on"
+    brain_kb_search_orig = brain_kb.search
+    assess_orig = confidence.assess
+    brain_kb.search = lambda *a, **k: [{"score": -5.5, "title": "Pista e Check-in",
+                                        "path": "x.md", "type": "faq",
+                                        "category": "pista", "topic": "horario",
+                                        "last_updated": "2026-08-25",
+                                        "text": "horários..."}]
+    app.process_inbound({"lead_id": lead, "message": "what time do you open?"})
+    check("Brain cobre => responde na hora, mesmo escalado",
+          len(delivered2d) == 1 and "open" in delivered2d[0][1], f"{delivered2d}")
+    check("Brain cobre => humano NÃO é acionado", avisos3 == [], f"{avisos3}")
+    check("estado escalado segue preservado (a parte do kart continua com o humano)",
+          state.get_conversation(lead)["state"] == "WAITING_HUMAN")
+
+    # ...mas gatilho B4 em conversa escalada NUNCA é respondido pelo modelo,
+    # por mais que o Brain tenha documento de objeção de preço.
+    avisos4 = []
+    delivered2e = _install_fakes(agent_reply="NUNCA DEVERIA SER CHAMADO")
+    app.notify_human = lambda texto: avisos4.append(texto)
+    app.process_inbound({"lead_id": lead, "message": "can you give me a discount?"})
+    check("gatilho B4 escalado nunca vai pro modelo (mesmo com Brain)",
+          bool(delivered2e) and "NUNCA" not in delivered2e[0][1], f"{delivered2e}")
+    check("gatilho B4 escalado reavisa o humano", len(avisos4) == 1, f"{avisos4}")
+    brain_kb.search = brain_kb_search_orig
+    confidence.assess = assess_orig
+    app.BRAIN_RETRIEVAL = "off"
     check("segunda espera usa frase diferente da primeira",
           bool(delivered and delivered2) and delivered[0][1] != delivered2[0][1],
           f"{delivered!r} vs {delivered2!r}")
