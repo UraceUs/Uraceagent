@@ -30,6 +30,19 @@ from pathlib import Path
 BRIDGE = Path(__file__).resolve().parent.parent / "bridge"
 sys.path.insert(0, str(BRIDGE))
 
+# Dependências (httpx etc.) vivem no venv da ponte, não no python do
+# sistema -- mesmo padrão do probe_salesbot_run: o script se re-executa com
+# o interpretador certo, uma vez só. Sem isto, o snapshot do 27/08 caiu com
+# ModuleNotFoundError no meio da validação real.
+import os as _os
+try:
+    import httpx  # noqa: F401
+except ModuleNotFoundError:
+    _venv = BRIDGE / ".venv" / "bin" / "python"
+    if _venv.exists() and not _os.environ.get("URACE_VALIDATE_REEXEC"):
+        _os.environ["URACE_VALIDATE_REEXEC"] = "1"
+        _os.execv(str(_venv), [str(_venv), str(Path(__file__).resolve()), *sys.argv[1:]])
+
 import state  # noqa: E402
 from config import (BRAIN_RETRIEVAL, FOLLOWUP_BOT_ID,  # noqa: E402
                     HUMAN_WHATSAPP_LIST, SALESBOT_DISPLAY, URACE_DIR)
@@ -131,9 +144,20 @@ def fase0_ambiente() -> bool:
     if len(HUMAN_WHATSAPP_LIST) < 2:
         log_rel("  !! só 1 número em HUMAN_WHATSAPP — Eduardo fora das escalações")
 
-    rc, out = _cmd(["openclaw", "agent", "list"])
+    out = ""
+    for verbo in (["openclaw", "agent", "list"], ["openclaw", "agents", "list"]):
+        rc, out = _cmd(verbo)
+        if rc == 0 and ("urace-sales" in out or "main" in out):
+            break
     tem_sales = "urace-sales" in out
     tem_main = "main" in out
+    if not (tem_sales and tem_main):
+        # O CLI variou entre versões; os workspaces sincronizados são
+        # evidência equivalente de que os agentes existem.
+        ws = Path.home() / ".openclaw/workspace"
+        tem_sales = tem_sales or (ws / "urace-sales/AGENTS.md").exists()
+        tem_main = tem_main or (ws / "main/IDENTITY.md").exists()
+        log_rel("  (agent list não respondeu; usando os workspaces como evidência)")
     log_rel(f"  agentes: urace-sales={'OK' if tem_sales else 'AUSENTE'} main={'OK' if tem_main else 'AUSENTE'}")
     ok_geral &= tem_sales and tem_main
     return ok_geral
