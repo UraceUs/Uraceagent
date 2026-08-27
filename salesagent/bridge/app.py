@@ -411,7 +411,9 @@ def _next_action(conv: dict) -> str:
         return ("aguardar decisão humana; responder apenas o que o "
                 "conhecimento acima cobrir")
     if not conv.get("q_experience"):
-        return "obter a classificação A/B/C/D antes de qualquer outra coisa"
+        return ("obter a classificação A/B/C/D — se o lead já respondeu isso "
+                "antes no histórico desta conversa, registre com [[qualify]] "
+                "SEM reenviar o menu")
     if conv.get("q_experience") == "competes":
         return "escalar para o Italo (regra G2)"
     if not conv.get("driver_age"):

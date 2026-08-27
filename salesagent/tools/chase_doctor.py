@@ -232,25 +232,51 @@ def fase_openclaw(fix: bool) -> bool:
     area("CHASE/MANUAL", tam > 0 and not trunca,
          "carregado inteiro" if not trunca else f"TRUNCADO ({tam}>{limite})")
 
-    # ---- messaging do main: warning do doctor + allowlist real
+    # ---- agente main FUNCIONA? Teste funcional, não warning.
+    #
+    # Lição de 27/08 (aprendida do jeito caro): o doctor avisava "message
+    # tool unavailable" e a correção óbvia — allowlist explícita com
+    # group:messaging — SUBSTITUIU o toolset padrão inteiro e deixou o
+    # agente com ZERO tools ("No callable tools remain"). O Mark ficou mudo
+    # e nenhuma escalação chegou no WhatsApp por horas, num sistema que
+    # funcionava. O warning era cosmético; a correção quebrou o real.
+    # Daqui em diante a régua é FUNCIONAL: o agente responde? Então nada de
+    # mexer em tools. Está quebrado por allowlist? REMOVER a allowlist,
+    # que o default funcionava.
     rc, doc = run(["openclaw", "doctor"], timeout=120)
-    aviso_msg = "message tool" in doc
     aviso_trunc = "truncated" in doc
-    say(f"  doctor: warning de message tool={'SIM' if aviso_msg else 'não'} "
-        f"| truncated={'SIM' if aviso_trunc else 'não'}")
-    if aviso_msg and idx_main is not None and fix:
-        tools_atual = (lista[idx_main].get("tools") or {})
-        allow = list(dict.fromkeys((tools_atual.get("allow") or [])
-                                   + ["group:messaging", "message"]))
-        rc, _ = run(["openclaw", "config", "set",
-                     f"agents.list.{idx_main}.tools",
-                     json.dumps({**tools_atual, "allow": allow})])
-        rcv, _ = run(["openclaw", "config", "validate"])
-        if rcv == 0:
-            fixed(f"tools.allow do main -> {allow} (config valid)")
+    say(f"  doctor: truncated={'SIM' if aviso_trunc else 'não'} "
+        f"(warnings de tools são avaliados por teste funcional, não por lint)")
+    rc, probe = run(["openclaw", "agent", "--agent", "main", "-m",
+                     "healthcheck: reply with the single word ok"], timeout=90)
+    quebrado = "No callable tools remain" in probe or rc != 0
+    say(f"  probe funcional do main: {'QUEBRADO' if quebrado else 'ok'}"
+        + (f" — {probe.strip().splitlines()[-1][:110]}" if quebrado and probe else ""))
+    if quebrado and idx_main is not None and lista[idx_main].get("tools") and fix:
+        say("  causa provável: allowlist explícita em tools — removendo")
+        removido = False
+        for tentativa in (["openclaw", "config", "unset",
+                           f"agents.list.{idx_main}.tools"],
+                          ["openclaw", "config", "set",
+                           f"agents.list.{idx_main}.tools", "{}"]):
+            run(tentativa)
+            rcv, _ = run(["openclaw", "config", "validate"])
+            if rcv != 0:
+                continue
+            rc2, probe2 = run(["openclaw", "agent", "--agent", "main", "-m",
+                               "healthcheck: reply ok"], timeout=90)
+            if "No callable tools remain" not in probe2 and rc2 == 0:
+                removido = True
+                break
+        if removido:
+            fixed("allowlist de tools do main removida — agente voltou a "
+                  "responder (verificado por probe, não por rc)")
             mudou = True
         else:
-            say("  !! validate recusou o set de tools — mantido como estava")
+            say("  !! não consegui restaurar o main automaticamente — "
+                "remova a chave tools do agente main na config manualmente")
+    area("ESCALATION/CANAL", not quebrado or mudou,
+         "agente main responde (canal de escalação vivo)")
     area("OPENCLAW", tem_sales and idx_main is not None and not aviso_trunc,
          "agentes presentes, manual inteiro")
     seguro = not any(a.get("id") == "urace-sales" and a.get("tools")

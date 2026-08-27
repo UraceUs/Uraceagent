@@ -227,18 +227,33 @@ def rodar(lead: int) -> None:
     marca("Customer memory recovered", respondeu and usou_ctx)
     marca("Conversation continuation", respondeu and usou_ctx)
 
-    # §5: informação já confirmada não re-escala
-    t0 = int(time.time())
-    acao("como o LEAD, pergunte DE NOVO a questão já respondida: "
-         "'So can I bring my own kart or not?'")
-    time.sleep(5)
-    evs = eventos(lead, t0)
-    mostra(evs, ("inbound", "outbound", "escalation", "notify_human"))
-    re_escalou = any(e["kind"] == "escalation" for e in evs)
-    afirmou = sim("o Chase AFIRMOU a resposta confirmada (kart pode, com "
-                  "inspeção) sem escalar de novo e sem pedir confirmação?")
-    marca("Human confirmation recovered", afirmou and not re_escalou)
-    marca("No repeated questions", afirmou and not re_escalou)
+    # §5: informação já confirmada não re-escala.
+    # A pergunta vem da confirmação REAL do banco -- na primeira rodada
+    # (27/08) o roteiro presumia que o kart tinha sido confirmado, mas o
+    # humano tinha respondido o HORÁRIO; o Chase re-escalou o kart
+    # corretamente e o teste marcou FAIL por expectativa errada do próprio
+    # roteiro. Teste honesto = testar o fato que existe.
+    confs_agora = state.get_confirmations(lead)
+    if not confs_agora:
+        marca("Human confirmation recovered", False,
+              "sem nenhuma confirmação prévia para testar")
+        marca("No repeated questions", False, "idem")
+    else:
+        fato = confs_agora[0]
+        pergunta_original = (fato.get("question") or "").strip()             or "a pergunta que a equipe já respondeu"
+        resumo = fato["answer"][:60]
+        t0 = int(time.time())
+        acao(f"como o LEAD, pergunte DE NOVO a questão já respondida: "
+             f"'{pergunta_original}'")
+        time.sleep(5)
+        evs = eventos(lead, t0)
+        mostra(evs, ("inbound", "outbound", "escalation", "notify_human"))
+        re_escalou = any(e["kind"] == "escalation" for e in evs)
+        afirmou = sim(f"o Chase AFIRMOU o fato já confirmado "
+                      f"(\"{resumo}...\") sem escalar de novo e sem pedir "
+                      f"nova confirmação?")
+        marca("Human confirmation recovered", afirmou and not re_escalou)
+        marca("No repeated questions", afirmou and not re_escalou)
 
     # §7/§8: pergunta NOVA que exige humano → escalação imediata e completa
     t0 = int(time.time())
@@ -261,7 +276,10 @@ def rodar(lead: int) -> None:
     espera_ok = sim("e o lead recebeu espera citando a pergunta nova?")
     marca("Immediate escalation", conteudo_ok and chegou and espera_ok and lat < 120)
 
-    # §9: resposta humana da nova pergunta
+    # §9: resposta humana da nova pergunta. "Memory updated" mede
+    # CRESCIMENTO (uma confirmação nova gravada nesta etapa), não um número
+    # absoluto -- o total depende do histórico do lead.
+    confs_antes = len(state.get_confirmations(lead))
     t0 = int(time.time())
     acao("responda ESSA nova escalação no WhatsApp (reply), ex.: 'No "
          "discounts, but group sessions have special conditions - tell him "
@@ -274,8 +292,8 @@ def rodar(lead: int) -> None:
     entregou2 = sim("a resposta apareceu no chat do lead?")
     marca("Resume after human response",
           conv["state"] == "RESUMED" and entregou2, f"estado={conv['state']}")
-    marca("Memory updated", len(confs) >= 2,
-          f"{len(confs)} fato(s) confirmados na memória do cliente")
+    marca("Memory updated", len(confs) > confs_antes,
+          f"{confs_antes} -> {len(confs)} fato(s) confirmados")
 
     # §10: retorno — o Chase lembra da resposta humana
     t0 = int(time.time())
