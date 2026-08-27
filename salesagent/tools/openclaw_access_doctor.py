@@ -17,6 +17,16 @@ se confundem uma com a outra, e três causas prováveis conhecidas:
      ou como ?token= na query em vez de #token= no fragmento.
   3. Senha do basic_auth trocada (setup_claw_ui.sh rodou de novo) e o
      navegador insistindo na senha antiga em cache.
+  4. DISPOSITIVO NÃO PAREADO (descoberto em 27/08 pela tela real do VPS):
+     esta versão do OpenClaw autentica navegadores por "Browser Device
+     Pairing" -- o MOTD interativo anuncia "Dashboard URL:
+     https://<IP-público>/overview" + token e pergunta "Continue with
+     browser device pairing? (y/n)". Tentar logar na URL de IP cru falha
+     (o 443 é do Caddy, roteado por hostname -- IP cru não casa com site
+     nenhum), e mesmo na URL certa o painel pode exigir que o DISPOSITIVO
+     do navegador esteja aprovado (`openclaw devices approve`), não só o
+     token. Três falhas se compondo: URL errada + device não pareado +
+     token regenerado.
 
 O script DESCOBRE o estado real (processo, porta, config, token efetivo,
 Caddy, systemd, env) e testa cada elo separadamente, imprimindo no final
@@ -161,6 +171,25 @@ def main() -> int:
     if code2.strip() not in ("401", "200"):
         problemas.append(f"caminho via Caddy devolveu {code2.strip()!r} — proxy/cert/rota")
 
+    # ---------------- 4b. pareamento de dispositivos (versões novas)
+    say("\n== DISPOSITIVOS PAREADOS (auth de navegador) ==")
+    rc, dev = run(["openclaw", "devices", "list"], timeout=45)
+    if rc == 0 and dev.strip():
+        for ln in [l for l in dev.splitlines() if l.strip()][:12]:
+            say(f"  {ln.strip()[:130]}")
+        if re.search(r"pending|aguard", dev, re.I):
+            say("  !! há dispositivo PENDENTE — o dono aprova com: "
+                "openclaw devices approve")
+            problemas.append("dispositivo de navegador aguardando aprovação "
+                             "(openclaw devices approve) — provável causa do login falhar")
+    else:
+        say("  (comando 'devices list' indisponível ou vazio nesta versão)")
+    # como o gateway se anuncia (bind/porta/URL pública)
+    interess = {k: v for k, v in gcfg.items()
+                if k != "auth" and not isinstance(v, (dict, list))}
+    if interess:
+        say(f"  gateway (bind/porta/etc): {interess}")
+
     # ---------------- 5. correções sob flag
     if args.reset_ui_password:
         say("\n== RESET da senha do painel (camada 1) ==")
@@ -187,8 +216,17 @@ def main() -> int:
     else:
         say("NENHUM defeito de infraestrutura: as camadas respondem. O login "
             "falhando é quase certamente credencial errada/na camada errada.")
-    say("\nCOMO LOGAR (as DUAS camadas, nesta ordem):")
-    say(f"  1) Abra: https://{dominio}/")
+    say("\nCOMO LOGAR — três rotas, da mais simples à mais completa:")
+    say("  ROTA A (pareamento, versões novas): abra a URL do painel no SEU "
+        "navegador; se aparecer pedido de pareamento, aprove NO VPS com "
+        "'openclaw devices approve' (ou responda y no prompt interativo do "
+        "terminal SE o pedido for do seu próprio navegador). Aprovar "
+        "pareamento concede acesso ao gateway: só o dono faz isso.")
+    say("  ROTA B (túnel, sem senha nenhuma): ssh -N -L 18789:127.0.0.1:18789 "
+        "ubuntu@IP e abrir http://localhost:18789/ — localhost é confiável.")
+    say("  ROTA C (Caddy + token):")
+    say(f"  1) Abra: https://{dominio}/  (NUNCA o IP cru — o 443 "
+        "roteia por hostname e o IP não casa com site nenhum)")
     say("     O NAVEGADOR pede usuário/senha -> usuário: urace  senha: a do "
         "setup_claw_ui.sh (não é o token!)")
     if args.show_token and efetivo:
