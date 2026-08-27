@@ -21,10 +21,22 @@ sudo tee /etc/caddy/claw-ui.caddy > /dev/null <<EOF
 # Painel do OpenClaw — gerado por setup_claw_ui.sh (não editar à mão;
 # rodar o script de novo para trocar dominio/senha)
 $DOMAIN {
-	basic_auth {
-		urace $HASH
+	@ws {
+		header Connection *Upgrade*
+		header Upgrade websocket
 	}
-	reverse_proxy 127.0.0.1:18789
+	handle @ws {
+		reverse_proxy 127.0.0.1:18789 {
+			header_up Host "127.0.0.1:18789"
+			header_up Origin "http://127.0.0.1:18789"
+		}
+	}
+	handle {
+		basic_auth {
+			urace $HASH
+		}
+		reverse_proxy 127.0.0.1:18789
+	}
 }
 EOF
 
