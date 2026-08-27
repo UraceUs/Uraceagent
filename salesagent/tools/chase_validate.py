@@ -12,11 +12,22 @@ Uso (no VPS):
     python3 salesagent/tools/chase_validate.py --lead 31764961    # 1+2+3
 """
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 TOOLS = Path(__file__).resolve().parent
+
+# Mesmo bootstrap do chase_doctor: os testes importam a ponte, e a ponte
+# vive no venv dela. Sem isto (bug pego pela extensão em 27/08), a suíte
+# rodava no python do sistema e os 3 testes que importam `app` caíam com
+# ModuleNotFoundError: httpx — um FAIL de ambiente disfarçado de FAIL de
+# lógica, contradizendo o doctor que rodava a MESMA suíte no venv, 5/5.
+_VENV = TOOLS.parent / "bridge" / ".venv" / "bin" / "python"
+if _VENV.exists() and not os.environ.get("CHASE_VALIDATE_REEXEC"):
+    os.environ["CHASE_VALIDATE_REEXEC"] = "1"
+    os.execv(str(_VENV), [str(_VENV), str(Path(__file__).resolve()), *sys.argv[1:]])
 
 
 def run(script: str, *args: str) -> int:
