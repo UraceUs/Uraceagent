@@ -56,3 +56,46 @@
 3. Segundo workspace Asana (o que é?).
 4. Gmail: labels e volume (sem ler conteúdo ainda).
 5. QuickBooks: clientes/serviços existentes (qbo_contact_search, catalog).
+
+## Anatomia de uma CORRIDA no Asana (sondado 27/08, fim do dia)
+
+Fonte: projeto **U-RACE** → seção **RACES** (gid `1205450093098932`).
+
+- Séries ativas: **AMR Karting Challenge 2026** (Rounds 6-11, Homestead) e
+  **FLKC 2027** (calendário já lançado: Monticello, T4 Kartplex, Daytona,
+  AMR Homestead). Naming: `<Série> Round N | (Local)` + `due_on`.
+- Custom field: `Race = KART` (gid do campo `1213088541600529`).
+- Notes da task: regra operacional ("Confirmation needed at least 15 days
+  before the event, preferably fully organized 1 month prior") + campo
+  "Event link:".
+- Na mesma seção há tasks com NOME DE PILOTO e data de corrida (ex.: "Jude
+  Cook", due 22-23/08) — provável participação de driver por corrida.
+
+**O template operacional JÁ EXISTE como 25 subtarefas-padrão** (exemplo
+real, Round 8 gid `1216270696569279`): Confirm Drivers · **Pre race
+invoice** · Pit spot · Flights · Hotel · Track hours for practice · Event
+schedule · Buy Tires · Specify Mechanic/Engine/Fuel Rule/Chassis · Assign
+coaches (1:4) · Head staff · Send race info to WhatsApp group · Review
+parts lists per driver · **After race invoice** · Pay race staff ·
+Collect post-race client feedback · 4 Checklists FORMS · Post LineUp
+Instagram · Create race financial sheet (Inflows & Outflows).
+
+**Implicação direta**: os Workflows 1 (corrida→calendar) e 3 (invoice)
+não precisam inventar processo — o processo é este template; o Admin AI
+acompanha/preenche/relaciona estas subtarefas. "Pre/After race invoice"
+são os pontos de encaixe do QuickBooks.
+
+## FASE 1 — ENCERRADA (27/08, login validado pelo dono)
+
+Causa (4 problemas empilhados) → correção → validação:
+1. URL de IP cru anunciada pelo MOTD → usar `wss://urace-claw.duckdns.org`.
+2. Token redigido (`__OPENCLAW_REDACTED__`) confundido com o real → doctor
+   v3 lê o arquivo (`H2`: CLI redige na saída; config íntegra).
+3. basic_auth bloqueando o handshake de WebSocket (1006) → rota `@ws` no
+   Caddy (`fix_claw_ui_ws.sh`), token continua obrigatório.
+4. Origin rejeitado pelo gateway em mode:local → `header_up Origin/Host`
+   na mesma rota.
+Mais: pareamento de dispositivo aprovado pelo dono
+(`openclaw devices approve 67bf770e-...`). Login confirmado ("entrei").
+Pendentes opcionais: rodar `remove_claw_ui_password.sh` (dono), revisar
+`openclaw devices list`, rotacionar token que transitou por chats.
