@@ -28,9 +28,26 @@ $DOMAIN {
 }
 EOF
 
-# Garante o import no Caddyfile principal (idempotente)
-if ! sudo grep -q "import /etc/caddy/claw-ui.caddy" /etc/caddy/Caddyfile; then
+# Garante que o Caddyfile principal importe este arquivo -- SEM duplicar.
+#
+# O Caddyfile do repo traz `import /etc/caddy/*.caddy`, que já cobre este
+# arquivo. Até 27/08 a checagem procurava só a linha literal, não achava, e
+# somava um import explícito: o mesmo site ficava declarado DUAS vezes e o
+# Caddy recusava a config inteira ("reload failed"). Aconteceu de verdade ao
+# trocar a senha do painel, depois que o Caddyfile com o glob foi instalado.
+if sudo grep -qE '^import /etc/caddy/(\*|claw-ui)\.caddy$' /etc/caddy/Caddyfile; then
+    echo "-- import ja coberto pelo Caddyfile principal"
+else
     echo "import /etc/caddy/claw-ui.caddy" | sudo tee -a /etc/caddy/Caddyfile > /dev/null
+    echo "-- import explicito adicionado ao Caddyfile"
+fi
+
+# Valida ANTES de recarregar: config inválida derruba o reload e leva junto
+# o bridge do Kommo, que vive no mesmo Caddy.
+if ! sudo caddy validate --config /etc/caddy/Caddyfile 2>/dev/null; then
+    echo "== CONFIG INVALIDA -- nada foi recarregado. Detalhes: ==" >&2
+    sudo caddy validate --config /etc/caddy/Caddyfile 2>&1 | tail -20 >&2
+    exit 1
 fi
 
 sudo systemctl reload caddy
