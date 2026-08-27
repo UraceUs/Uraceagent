@@ -111,26 +111,57 @@ def main() -> int:
         env_tok = m.group(1).strip('"')
 
     # ---------------- 2. o token EFETIVO
-    say("\n== TOKEN (config real, não suposição) ==")
+    # Lição da rodada de 27/08 21:36: `openclaw config get` devolveu
+    # "__OPENCLAW_REDACTED__" -- ou o CLI REDIGE segredos na saída (e o
+    # valor real vive só no arquivo), ou a config foi corrompida com o
+    # próprio placeholder (copy/paste de uma saída redigida). Ler o
+    # ARQUIVO direto é o único jeito de distinguir as duas.
+    say("\n== TOKEN (lido do ARQUIVO, com CLI só de conferência) ==")
+
+    def eh_placeholder(tk):
+        return bool(tk) and "REDACT" in tk.upper()
+
+    cfg_file = Path.home() / ".openclaw" / "openclaw.json"
+    file_tok = ""
+    if cfg_file.exists():
+        try:
+            raw_cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
+            ft = ((raw_cfg.get("gateway") or {}).get("auth") or {}).get("token")
+            if isinstance(ft, str):
+                file_tok = ft
+            elif ft is not None:
+                say(f"  token no arquivo não é string (SecretRef?): {type(ft).__name__}")
+        except Exception as exc:
+            say(f"  falha lendo {cfg_file}: {exc}")
+    else:
+        say(f"  {cfg_file} não existe")
     rc, out = run(["openclaw", "config", "get", "gateway"])
     gcfg = json_da_saida(out) or {}
-    cfg_tok = ((gcfg.get("auth") or {}).get("token")) or ""
+    cli_tok = ((gcfg.get("auth") or {}).get("token")) or ""
     modo = (gcfg.get("auth") or {}).get("mode", "?")
     say(f"  gateway.auth.mode: {modo}")
-    say(f"  token na config:   {mascarar(cfg_tok)}")
-    if env_tok:
-        say(f"  token no systemd:  {mascarar(env_tok)}"
-            + ("  (IGUAL à config)" if env_tok == cfg_tok else
-               "  !! DIFERENTE da config — o gateway pode estar usando ESTE"))
-        if env_tok != cfg_tok:
-            problemas.append("token do systemd difere do da config — o efetivo é "
-                             "provavelmente o do systemd; use-o, ou alinhe os dois")
-    efetivo = env_tok or cfg_tok
-    if not efetivo:
-        problemas.append("nenhum token encontrado — gere com --regen-token")
-    say("  ATENÇÃO: o token foi REGENERADO em 27/08 (doctor "
-        "--generate-gateway-token). Qualquer token anotado antes disso é "
-        "inválido — causa provável nº1 do login falhar.")
+    say(f"  token via CLI:     {mascarar(cli_tok)}"
+        + ("  <- placeholder (CLI redige OU config corrompida)"
+           if eh_placeholder(cli_tok) else ""))
+    say(f"  token no ARQUIVO:  "
+        + (mascarar(file_tok) if file_tok else "(ausente)")
+        + ("  <- PLACEHOLDER LITERAL: config corrompida!"
+           if eh_placeholder(file_tok) else
+           ("  <- REAL (o CLI só redige na saída)" if file_tok else "")))
+    if env_tok and not eh_placeholder(env_tok):
+        say(f"  token no systemd:  {mascarar(env_tok)}")
+
+    if eh_placeholder(file_tok):
+        problemas.append(
+            "H1 CONFIRMADA: gateway.auth.token no ARQUIVO é literalmente "
+            "'__OPENCLAW_REDACTED__' — nenhum token real funciona. Reparo: "
+            "rodar de novo com --regen-token (não perde nada: o atual é o "
+            "placeholder).")
+    candidatos = [tk for tk in (file_tok, env_tok, cli_tok)
+                  if tk and not eh_placeholder(tk)]
+    efetivo = candidatos[0] if candidatos else ""
+    if not efetivo and not eh_placeholder(file_tok):
+        problemas.append("nenhum token utilizável encontrado — gere com --regen-token")
 
     # ---------------- 3. loopback: o painel responde por dentro?
     say("\n== PAINEL no loopback ==")
@@ -177,6 +208,10 @@ def main() -> int:
     if rc == 0 and dev.strip():
         for ln in [l for l in dev.splitlines() if l.strip()][:12]:
             say(f"  {ln.strip()[:130]}")
+        if re.search(r"operator\.read", dev) and "operator " not in dev:
+            say("  nota: o device pareado tem escopo de LEITURA "
+                "(operator.read) — pode logar e não conseguir operar; o "
+                "pareamento novo (rota A) resolve com escopo completo.")
         if re.search(r"pending|aguard", dev, re.I):
             say("  !! há dispositivo PENDENTE — o dono aprova com: "
                 "openclaw devices approve")
