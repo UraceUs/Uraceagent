@@ -98,6 +98,11 @@ def main() -> int:
 
     if args.action == "resume":
         ok = state.transition(args.lead, "RESUMED", f"respondido por {quem}", by_human=True)
+        conv2 = state.get_conversation(args.lead)
+        state.add_confirmation(args.lead, quem,
+                               conv2.get("pending_question")
+                               or conv2.get("last_inbound_text") or "", texto)
+        state.update_conversation(args.lead, pending_question=None)
         # Zera o alarme: escalação atendida não deve continuar cutucando
         # ninguém, e a próxima escalação deste lead merece alarme novo.
         state.update_conversation(args.lead, realert_count=0, holding_count=0)

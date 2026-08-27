@@ -104,6 +104,7 @@ completo de variáveis (`kommo.env`, `bridge.env`, chaves). Flags úteis do
 
 ## Documentação
 
+- `docs/arquitetura-final-chase.md` — **decisões de arquitetura (camadas, skills, garantias) — leia primeiro**
 - `docs/auditoria-sales-brain.md` — diagnóstico + plano do Sales Brain
 - `docs/obsidian-guia.md` — Obsidian para Italo/Eduardo (revisar conhecimento)
 - `salesagent/docs/kommo-circuit-setup.md` — circuito Kommo completo

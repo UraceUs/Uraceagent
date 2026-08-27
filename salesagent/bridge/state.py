@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS audit (
     kind TEXT NOT NULL,          -- inbound|outbound|gate|transition|escalation|human_reply|error
     detail TEXT
 );
+CREATE TABLE IF NOT EXISTS confirmations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lead_id INTEGER NOT NULL,
+    ts INTEGER NOT NULL,
+    author TEXT NOT NULL,        -- operador autorizado (human-operators.json)
+    question TEXT,               -- o que o lead perguntou
+    answer TEXT NOT NULL         -- o que o humano respondeu (human-confirmed fact)
+);
 """
 
 
@@ -150,6 +158,32 @@ def transition(lead_id: int, to_state: str, reason: str = "", by_human: bool = F
     update_conversation(lead_id, **fields)
     log("transition", lead_id, f"{frm}->{to_state} ({reason})")
     return True
+
+
+def add_confirmation(lead_id: int, author: str, question: str, answer: str) -> None:
+    """Registra uma resposta humana como fato confirmado DESTE lead.
+
+    É a metade "customer memory" do §7 do brief (a metade "knowledge
+    global" é o knowledge_writer): quando o mesmo cliente voltar — em uma
+    hora ou um mês — o que o Italo/Eduardo já respondeu pra ele entra no
+    contexto do turno, e o Chase nunca pede pra ele repetir a pergunta.
+    """
+    with db() as conn:
+        conn.execute(
+            "INSERT INTO confirmations (lead_id, ts, author, question, answer) "
+            "VALUES (?,?,?,?,?)",
+            (lead_id, int(time.time()), author, (question or "")[:300],
+             answer[:600]))
+
+
+def get_confirmations(lead_id: int, limit: int = 5) -> list[dict]:
+    """Últimas respostas humanas confirmadas para este lead (recentes
+    primeiro). Limite curto de propósito: isto entra no contexto de TODO
+    turno — memória curada, não arquivo morto."""
+    with db() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT ts, author, question, answer FROM confirmations "
+            "WHERE lead_id=? ORDER BY id DESC LIMIT ?", (lead_id, limit))]
 
 
 def agent_may_sell(lead_id: int) -> bool:

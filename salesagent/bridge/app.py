@@ -361,6 +361,69 @@ def _call_agent(lead_id: int, message: str) -> tuple[str, list[str]]:
     return raw, textproc.extract_directives(raw)
 
 
+def _memory_context(lead_id: int, conv: dict) -> str:
+    """Memória estruturada do cliente para o turno — não é histórico bruto.
+
+    A sessão do OpenClaw guarda a CONVERSA; isto aqui guarda o que a
+    conversa sozinha não garante: perfil qualificado, estágio comercial,
+    pergunta pendente, e — o mais importante — o que um humano JÁ CONFIRMOU
+    para este cliente. Sem a última parte, o caso real de 26-27/08 se
+    repete: o Italo responde a escalação, o lead recebe, e o Chase segue a
+    conversa sem saber o que foi prometido, porque a resposta humana foi
+    entregue por fora da sessão dele.
+
+    Curta de propósito (memória curada entra em TODO turno; arquivo morto
+    não entra em nenhum).
+    """
+    partes = [
+        f"nome={conv.get('contact_name') or '?'}",
+        f"experience={conv.get('q_experience') or '?'}",
+        f"origin={conv.get('q_origin') or '?'}",
+        f"driver_age={conv.get('driver_age') or '?'}",
+        f"state={conv.get('state')}",
+    ]
+    if conv.get("followup_track"):
+        partes.append(f"followup={conv['followup_track']}")
+    if conv.get("pending_question"):
+        partes.append(f"aguardando_humano=\"{conv['pending_question'][:100]}\"")
+    linhas = ["Memória do lead: " + " ".join(partes)]
+
+    confirmadas = state.get_confirmations(lead_id)
+    if confirmadas:
+        linhas.append("Respostas JÁ CONFIRMADAS pela equipe para ESTE lead "
+                      "(pode afirmar como fato; nunca peça para ele repetir "
+                      "a pergunta):")
+        for c in confirmadas:
+            q = (c.get("question") or "").strip()
+            linhas.append(f"- {('Perguntou: ' + q + ' -> ') if q else ''}"
+                          f"{c['author']} confirmou: {c['answer']}")
+
+    linhas.append(f"Próxima ação sugerida: {_next_action(conv)}")
+    return "\n".join(linhas)
+
+
+def _next_action(conv: dict) -> str:
+    """A próxima ação comercial correta, deduzida do estado — determinística
+    e sugerida, nunca imposta: o fluxo fino vive nas instruções; isto é a
+    bússola do turno (\"o objetivo não é a resposta bonita, é a próxima
+    ação certa\")."""
+    if conv.get("state") in ("WAITING_HUMAN", "HUMAN_HANDOFF"):
+        return ("aguardar decisão humana; responder apenas o que o "
+                "conhecimento acima cobrir")
+    if not conv.get("q_experience"):
+        return "obter a classificação A/B/C/D antes de qualquer outra coisa"
+    if conv.get("q_experience") == "competes":
+        return "escalar para o Italo (regra G2)"
+    if not conv.get("driver_age"):
+        return "confirmar a idade do piloto (elegibilidade)"
+    if conv.get("followup_track") == "link_sent":
+        return ("o link do programa já foi enviado; avançar para fechamento "
+                "ou tratar objeção — não reenviar o link nem reabrir "
+                "qualificação")
+    return ("recomendar o programa adequado e enviar o link via [[price]]; "
+            "detectada intenção de compra, conduzir ao fechamento")
+
+
 def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     """Um turno do agente OpenClaw, com sessão isolada por lead.
 
@@ -384,10 +447,7 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     if BRAIN_RETRIEVAL == "on":
         import brain_kb
         conv = state.get_conversation(lead_id)
-        memory = (f"experience={conv.get('q_experience') or '?'} "
-                  f"origin={conv.get('q_origin') or '?'} "
-                  f"driver_age={conv.get('driver_age') or '?'} "
-                  f"state={conv.get('state')}")
+        memory = _memory_context(lead_id, conv)
         hits = brain_kb.search(lead_id, text, top_docs=BRAIN_TOP_DOCS)
         verdict = confidence.assess(hits)
         state.log("confidence", lead_id, f"{verdict['level']}: {verdict['reason']}")
@@ -900,7 +960,16 @@ def _aplicar_decisao_humana(lead_id: int, intent: dict, quem: str) -> str:
 
     # approve / resume / correct / save devolvem a conversa ao agente.
     state.transition(lead_id, "RESUMED", f"respondido por {quem}", by_human=True)
-    state.update_conversation(lead_id, realert_count=0, holding_count=0)
+    if mensagem:
+        # Fato confirmado DESTE cliente (§7): entra na memória estruturada e
+        # é injetado em todo turno futuro -- o Chase continua a conversa
+        # sabendo o que foi prometido, e o lead nunca repete a pergunta.
+        state.add_confirmation(lead_id, quem,
+                               conv.get("pending_question")
+                               or conv.get("last_inbound_text") or "",
+                               textproc.customer_facing(mensagem))
+    state.update_conversation(lead_id, realert_count=0, holding_count=0,
+                              pending_question=None)
 
     if not mensagem:
         return (f"{nome}: liberado e devolvido ao Chase. Você não escreveu "
