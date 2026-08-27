@@ -654,6 +654,22 @@ def escalate(lead_id: int, reason: str, context: str = "") -> None:
 
 
 def notify_human(text: str) -> None:
+    """Dispara o aviso aos operadores SEM bloquear o chamador.
+
+    Por que assíncrono (bug real de 27/08): o repasse é uma chamada de
+    modelo por operador (~30-60s cada, dois operadores) e rodava NO MEIO de
+    `process_inbound` -- antes da resposta ao lead, que disputa a janela de
+    ~58s do Salesbot. O aviso ao Italo levou 36s e a resposta ao lead saiu
+    depois da janela: avisar o humano estava roubando exatamente o tempo
+    que o lead tinha. A entrega ao lead é o caminho crítico; o aviso pode
+    atrasar um minuto sem custo.
+    """
+    import threading
+    threading.Thread(target=_notify_human_sync, args=(text,),
+                     daemon=True).start()
+
+
+def _notify_human_sync(text: str) -> None:
     """Envia ao WhatsApp interno de CADA operador autorizado, via OpenClaw.
 
     Causa raiz do bug "não chega mensagem" (17/08): faltavam os flags de
