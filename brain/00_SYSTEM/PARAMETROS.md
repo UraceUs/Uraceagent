@@ -31,12 +31,31 @@ atualizado_em: 2026-08-28
 fornecedor? Troque a linha "Fornecedor ATUAL" e a IA passa a mandar para
 o novo — sem mexer em skill nenhuma.
 
+## 🎓 Nomes de serviço que mudaram
+
+| Antes | Agora | Item no QuickBooks |
+|---|---|---|
+| Karting School | **Urace Academy** | `Service:Karting School Junior/Senior 4T` (id 290) ainda tem o nome antigo · `Service:Urace Academy Training Program` (id 177) |
+
+O catálogo do QuickBooks **ainda usa o nome antigo em parte dos itens**.
+Ao ler uma invoice antiga, "Karting School" e "Urace Academy" são o
+mesmo serviço. Ao emitir, conferir qual item está sendo usado.
+
 ## 💵 Valores
 
 | Parâmetro | Valor |
 |---|---|
-| Security deposit por serviço | **US$ 400** |
+| Security deposit | **US$ 400** |
+| Frequência do depósito | ⚠️ **a confirmar** — ver nota abaixo |
 | Ordem de cobrança | 1º invoice do serviço · 2º depósito (assim que a 1ª for paga — **ou no limite dos 4 dias, pago ou não**) |
+
+> ⚠️ **Dúvida aberta sobre o depósito (28/08).** Documentei "um depósito
+> por pacote", mas o histórico do Elijah Nicholas mostra outra coisa:
+> depósito cobrado **uma vez** (15/06/2026, US$ 400, pago) e **nenhum**
+> nos pacotes de julho e agosto. O dono confirmou "não precisa cobrar o
+> depósito dele". Isso sugere **um depósito por CLIENTE/temporada**, como
+> a waiver — não por pacote. Confirmar antes de cobrar qualquer cliente
+> recorrente.
 
 ## 📅 Prazos
 
