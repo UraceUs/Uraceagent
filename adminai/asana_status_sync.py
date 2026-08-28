@@ -53,6 +53,23 @@ STATUS_PARA_SECAO = {
 # estado com nomes diferentes -- daí o mapa por gid, não por nome.
 SECAO_PARA_STATUS = {sec: (nome, opt) for nome, (opt, sec) in STATUS_PARA_SECAO.items()}
 
+# --- U-RACE: higiene das colunas dos dias -------------------------------
+# Regra do dono (28/08): serviço CONCLUÍDO -- mesmo com subtarefas ainda
+# pendentes -- sai da coluna do dia e vai para "Finished Services". Na
+# coluna do dia fica só o que está agendado (upcoming) e o do próprio dia.
+PROJETO_URACE = "1205450093098920"
+SECAO_FINISHED = "1208640396741022"
+SECOES_DIAS = {
+    "1209248561126025": "TUESDAY",
+    "1205141832260875": "WEDNESDAY",
+    "1205141832260876": "THURSDAY",
+    "1205141832260877": "FRIDAY",
+    "1205141832260878": "SATURDAY",
+    "1205141832260879": "SUNDAY",
+}
+# RACES, Luis tasks, Matt tasks e Pending Reschedule ficam FORA disto.
+# Matt tasks por ordem expressa: nenhuma automação toca aquela coluna.
+
 # Aqui a seção quer dizer categoria, não estado. Nunca mover daqui.
 SECOES_FORA_DO_FLUXO = {
     "1215968721507537": "Seção sem título",
@@ -135,8 +152,52 @@ def quem_mudou_por_ultimo(task_gid):
     return None
 
 
+def higiene_colunas_dias(aplicar=False):
+    """Tira das colunas dos dias tudo que já está concluído.
+
+    Sem isso o quadro vira um empilhado de semanas antigas: em 28/08/2026
+    havia tarefa concluída de 2023 ainda ocupando SUNDAY.
+    """
+    movidas, total = [], 0
+    for sec_gid, sec_nome in SECOES_DIAS.items():
+        offset = None
+        while True:
+            q = {"section": sec_gid, "opt_fields": "name,completed", "limit": 100}
+            if offset:
+                q["offset"] = offset
+            pagina = _req(f"/tasks?{urllib.parse.urlencode(q)}")
+            total += len(pagina)
+            for t in pagina:
+                if t.get("completed"):
+                    movidas.append((t["gid"], t.get("name", "")[:50], sec_nome))
+            if len(pagina) < 100:
+                break
+            offset = pagina[-1]["gid"]
+
+    print(f"== higiene das colunas dos dias ({'APLICANDO' if aplicar else 'simulação'}) ==")
+    print(f"-- {total} tarefa(s) nas colunas; {len(movidas)} concluída(s) para mover")
+    for gid, nome, sec in movidas:
+        print(f"   · [{sec}] {nome}")
+        if aplicar:
+            _req(f"/sections/{SECAO_FINISHED}/addTask", "POST", {"task": gid})
+    if aplicar and movidas:
+        # conferir de verdade: a busca do Asana tem atraso de índice e
+        # mostraria as tarefas ainda nas colunas antigas. Ler a seção
+        # direto é o único jeito de saber que a mudança pegou.
+        restante = 0
+        for sec_gid in SECOES_DIAS:
+            pagina = _req(f"/tasks?{urllib.parse.urlencode({'section': sec_gid, 'opt_fields': 'completed', 'limit': 100})}")
+            restante += sum(1 for t in pagina if t.get("completed"))
+        print(f"-- conferência (leitura direta, não busca): {restante} concluída(s) "
+              f"ainda nas colunas" + (" — rode de novo para a próxima página"
+                                      if restante else " ✓"))
+    return 0
+
+
 def main():
     aplicar = "--aplicar" in sys.argv
+    if "--higiene-urace" in sys.argv:
+        return higiene_colunas_dias(aplicar)
     conflitos, ok, pulados, sem_status = [], 0, [], []
 
     for t in tarefas_do_projeto():
