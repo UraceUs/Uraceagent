@@ -10,7 +10,10 @@ organizada: **manter, não reinventar.**
 
 ## 🚫 Regras invioláveis
 
-1. **NUNCA enviar e-mail.** Só criar rascunho. Enviar é do humano.
+1. **NUNCA enviar e-mail nesta rotina.** Só rascunho — enviar é do
+   humano. (As duas únicas exceções autorizadas vivem no processo do
+   macacão, não aqui: pedido de medidas ao cliente e pedido de produção
+   ao fornecedor. Ver `brain/00_SYSTEM/PARAMETROS.md`.)
 2. **Não apagar e não marcar spam.** Arquivar, só propaganda (item 5).
 3. **Na dúvida, perguntar** — generosamente nos primeiros dias.
 4. **Tom:** a caixa recebe pedido de orçamento e mensagem de parceiro.

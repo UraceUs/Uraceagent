@@ -102,10 +102,22 @@ com o modelo e, a partir do contato, **procura o cliente pedindo o
 formulário de medidas**, explicando que são necessárias porque o macacão
 é totalmente personalizado.
 
-## ⚠️ Exceção pedida à regra "a IA não envia e-mail"
+## ✅ Exceção AUTORIZADA à regra "a IA não envia e-mail"
 
-Este processo pede que a IA **envie** dois e-mails de verdade: o pedido
-de medidas ao cliente e o pedido de produção ao fornecedor. Isso
-contraria a regra geral registrada em 28/08 ("a IA nunca envia e-mail, só
-cria rascunho"). **Pendente de confirmação explícita do dono** — até lá,
-os dois saem como **rascunho**, prontos para envio humano.
+Confirmado pelo dono em 28/08: a regra "a IA nunca envia e-mail" vale
+para **os outros e-mails** (triagem da inbox, respostas gerais). Neste
+processo a IA **envia de verdade**, em duas situações e só nelas:
+
+| ✅ Pode enviar | Para quem |
+|---|---|
+| Pedido do formulário de medidas | cliente do macacão |
+| Pedido de produção (as 29 medidas + PDF) | fornecedor atual |
+
+Qualquer outro e-mail continua sendo **só rascunho**.
+
+## Fornecedor: sempre o atual, lido dos parâmetros
+
+O destinatário **nunca é fixo na skill** — sai de
+`brain/00_SYSTEM/PARAMETROS.md`, linha "Fornecedor ATUAL" (hoje: Usman,
+`Speedinds@gmail.com`). Trocou de fornecedor, troca-se lá e a IA passa a
+mandar para o novo sem mexer em mais nada.

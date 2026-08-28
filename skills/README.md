@@ -34,10 +34,18 @@ só as ferramentas da sua área. Um agente que cuida do Gmail não precisa
 de acesso ao QuickBooks. Isso é menor privilégio — a mesma regra que já
 vale para o agente de vendas não ter shell.
 
+## Valores que mudam: um lugar só
+
+Fornecedor atual, valores, prazos, contas, IDs — tudo em
+**`brain/00_SYSTEM/PARAMETROS.md`**. Nenhuma skill repete esses valores;
+todas leem de lá. O dono muda num lugar e o sistema inteiro acompanha.
+
 ## Invariantes que valem em TODAS as skills
 
 1. **A IA não envia invoice.** Prepara, preenche, revisa. Enviar é humano.
-2. **A IA não envia e-mail.** Só cria rascunho.
+2. **A IA não envia e-mail** — só rascunho. Exceções autorizadas, e
+   só estas duas: pedido de medidas ao cliente do macacão e pedido de
+   produção ao fornecedor.
 3. **Não apagar, não destruir, não regenerar credencial.** Antes de
    qualquer coisa com risco real de perda, pedir autorização.
 4. **Nunca inventar dado.** Sem fonte, escalar — não deduzir.

@@ -71,7 +71,7 @@ Tarefa fora do modelo é tarefa que a automação não lê.
 1. **Price + Payment Links** — preencher e deixar na descrição.
 2. **Security Deposit sent?** — **conferir no QuickBooks antes**; se não
    foi enviado, enviar para os dados do responsável. Valor em
-   `docs/adminai/parametros-operacionais.md` (US$ 400).
+   `brain/00_SYSTEM/PARAMETROS.md` (US$ 400).
 3. **Signed waiver** — menor → waiver do responsável; maior → *adult*.
    Via DocuSign. Voltou assinado → marcar **e anexar o PDF**.
    **Decidir pela idade** — sem idade na descrição, não decidir: escalar.
@@ -91,11 +91,26 @@ em desuso. `Kart Pick Up` = cliente buscando kart no galpão.
 
 ## SUITS — pedido de macacão
 
-Status: Standby → Design Pending → Awaiting Measurements → Design Under
-Client Review → Order sent to Usman → In Production → In Transit →
-Delivered (+ Canceled). Fornecedores: Usman, Manzoor, WheelDeal.
+Processo completo: `brain/10_PROCESSOS/suits-pedido-de-macacao.md`.
+Modelo de tarefa: gid `1217959088745716` (nome `New Order: {cliente}`).
 Campo de número do pedido = **`Pedido`** (texto, `1206689200495431`) —
 o enum `Order number` é legado quebrado, não usar.
+
+O macacão é **100% personalizado**; sem as 29 medidas e o design
+definido, o pedido não segue.
+
+| Status | Quem move |
+|---|---|
+| `Standby` · `Awaiting Measurements` · `Design Pending` | IA |
+| `Design Under Client Review` | **humano** |
+| `Order sent to Usman` · `In Production` · `In Transit` · `Delivered` | IA |
+| `Canceled` | humano |
+
+**Gatilho central:** anexo do design final **+** status `Order sent to
+Usman` — as duas condições juntas — disparam o e-mail ao fornecedor
+(formato exato no processo). **1 dia depois** → `In Production`.
+
+O vai-e-vem com o designer segue humano por decisão do dono.
 
 ## Shipping Orders — status × quadro
 
