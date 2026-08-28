@@ -59,7 +59,13 @@ ou status sem anexo, não dispara.
   assinando "Usman"). ⚠️ Outro fornecedor usa `whitesoldier205@gmail.com`
   — **falta confirmar qual dos três é** (Manzoor ou WheelDeal).
 - **Assunto:** `SUIT - {Nome do Cliente}`
-- **Anexo:** PDF do design final
+- **Anexo:** **exatamente o mesmo arquivo que está anexado na tarefa do
+  pedido no Asana** — o design final. A IA não gera, não escolhe outro e
+  não remonta: pega o anexo da tarefa e manda aquele.
+  Como: `get_attachments` na tarefa → baixar pelo `download_url` →
+  anexar ao e-mail (o Gmail aceita anexo até 25 MB somados).
+  Mais de um anexo na tarefa → **não adivinhar**: perguntar qual é o
+  design final.
 - **Corpo:**
 
 ```

@@ -113,7 +113,8 @@ definido, o pedido não segue.
 
 **Gatilho central:** anexo do design final **+** status `Order sent to
 Usman` — as duas condições juntas — disparam o e-mail ao fornecedor
-(formato exato no processo). **1 dia depois** → `In Production`.
+(formato exato no processo). O e-mail leva **o próprio anexo da tarefa**,
+não outro arquivo. **1 dia depois** → `In Production`.
 
 O vai-e-vem com o designer segue humano por decisão do dono.
 
