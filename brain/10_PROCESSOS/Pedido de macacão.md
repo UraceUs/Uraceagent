@@ -10,6 +10,8 @@ modelo_de_tarefa: "1217959088745716"
 
 # Processo — pedido de macacão (SUITS)
 
+[[URACE]] · [[Asana]] · [[Gmail]] · fornecedor atual: [[Usman]] · valores em [[PARAMETROS]]
+
 O macacão é **100% personalizado**: medidas, design, cores, logos e a
 posição de cada logo são feitos para aquele cliente. Nada é padrão.
 

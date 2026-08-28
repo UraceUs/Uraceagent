@@ -25,6 +25,9 @@ url: https://app.asana.com/1/1205450084498489/project/1205450093098920/task/1216
 
 # AMR 2026 — Round 8 (Homestead)
 
+
+[[Corridas]] · [[AMR Motorplex]] · [[Italo Silveira]] · [[Eduardo Resende]] · [[Lara Carvalho]] · [[Google Calendar]]
+
 Espelho da task do Asana gerado pela Parte A da Aplicação 1 (Admin AI).
 Corrida a 20 dias; NENHUMA subtarefa crítica concluída e 5 das 6 sem
 responsável. Regra do projeto: "Confirmation needed at least 15 days

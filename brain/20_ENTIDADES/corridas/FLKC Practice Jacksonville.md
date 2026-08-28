@@ -25,5 +25,8 @@ url: https://app.asana.com/1/1205450084498489/project/1205450093098920/task/1217
 
 # FLKC — Practice em Jacksonville (25–27/09)
 
+
+[[Corridas]] · [[Jacksonville NFKC]] · [[Luis Barros]] · [[Google Calendar]]
+
 Espelho da task do Asana (Parte A). Responsável geral: Luis Barros.
 Mesma foto do Round 8: subtarefas críticas todas abertas.

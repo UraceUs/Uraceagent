@@ -6,6 +6,8 @@ atualizado_em: 2026-08-28
 
 # ⚙️ PARÂMETROS — o que muda com o tempo
 
+[[URACE]] · usado por [[Pedido de macacão]] · [[Pagamento e security deposit]] · [[Triagem de e-mail]] · [[Compra e envio]]
+
 > **ESTE É O ÚNICO LUGAR ONDE SE ALTERA ESTES VALORES.**
 > Mudou aqui, mudou em todo lugar. Nenhuma skill, script, prompt ou
 > documento repete esses valores — **todos leem daqui**.
