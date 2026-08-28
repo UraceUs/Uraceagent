@@ -88,6 +88,19 @@ Tarefa fora do modelo é tarefa que a automação não lê.
    peças, pelo *merchant view* do QuickBooks.
 8–12. Feedback do coach, checklists, formulários — depois.
 
+### Regras de pacote, criação e waiver (28/08)
+
+- **Um depósito por pacote**, não por dia. `[1/3] [2/3] [3/3]` = 1 invoice
+  de serviço, 1 depósito de US$ 400, 1 waiver. Cobrar por tarefa seria
+  cobrar o mesmo cliente 3×.
+- **A IA cria a tarefa quando vê o pagamento da invoice do serviço no
+  QuickBooks** — o mesmo evento cria a(s) tarefa(s) e dispara o depósito.
+  O que faltar de informação, **perguntar**, não deduzir.
+- **Waiver vale por temporada.** Conferir se o piloto já tem uma válida
+  antes de pedir outra.
+- **Remarcação ou cancelamento: sempre escalar.** A IA move a tarefa e
+  avisa; devolução e crédito são decisão humana. Não mexer em dinheiro.
+
 ### Marcadores que não são serviço
 
 `TRACK CLOSED` / `OKC CLOSED` e qualquer **folga** = **dia sem treino**;

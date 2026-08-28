@@ -81,3 +81,40 @@ valendo.
 - **D-2 = tudo pronto**: invoice do serviço paga, depósito pago e waiver
   assinada. Faltou alguma → alerta.
 - Agendou com menos de 4 dias? O envio é **no mesmo dia**.
+
+
+---
+
+## Decisões de 28/08 que fecham este processo
+
+### Um depósito por PACOTE, não por dia
+Pacote de 3 dias (`[1/3] [2/3] [3/3]`) = **um** depósito de US$ 400, uma
+invoice de serviço, uma waiver. Confere com o caso real do Tyron Brouta:
+3 tarefas, invoice de $2.369,93 e um único depósito de $400.
+**Nunca cobrar depósito por tarefa** — seria cobrar o mesmo cliente 3×.
+
+### Quem cria a tarefa: a IA, ao ver o pagamento no QuickBooks
+O **pagamento da invoice do serviço** é o gatilho duplo:
+1. **cria** a tarefa no U-RACE (as N do pacote), já no modelo; e
+2. **dispara** o envio da invoice do depósito.
+
+⚠️ **A fechar no módulo QuickBooks:** como a IA descobre, a partir do
+pagamento, *quais são as datas do serviço, a categoria e o número de
+dias do pacote*. O item do catálogo provavelmente responde parte disso.
+Enquanto não estiver definido, criar a tarefa e **perguntar o que faltar**
+em vez de deduzir.
+
+⚠️ **Ponto em aberto relacionado:** se a tarefa só nasce quando a invoice
+é paga, um serviço agendado e **não pago** não existe no Asana — e é
+justamente nele que a regra "enviar o depósito em D-4, pago ou não" faria
+falta. Resolver junto com o item acima.
+
+### Waiver vale por TEMPORADA
+Assinou uma vez, vale para todos os serviços do período. Antes de pedir
+waiver, a IA **confere se já existe uma válida** para aquele piloto —
+mesma lógica de conferir o depósito no QuickBooks antes de cobrar.
+Pedir waiver a quem já assinou é atrito com o cliente à toa.
+
+### Remarcação e cancelamento: sempre escalar
+A IA **não mexe em dinheiro** nesses casos. Move a tarefa e avisa;
+devolução, crédito e reagendamento de cobrança são decisão humana.
