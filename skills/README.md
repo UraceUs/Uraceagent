@@ -55,3 +55,7 @@ todas leem de lá. O dono muda num lugar e o sistema inteiro acompanha.
    do QuickBooks). Nunca casar por nome.
 7. **Registrar o que fez** — comentário na tarefa e linha no diário do
    Obsidian. "Por que a IA fez isso?" tem que ter resposta.
+8. **Perguntar não trava nada.** A resposta do dono não vem na hora: a IA
+   registra a pergunta na tarefa, põe **aquele item** em stand-by e segue
+   com o resto. Não repete a pergunta — mas **volta a alertar se o prazo
+   chegar**. Ver `brain/10_PROCESSOS/Stand-by e escalação.md`.
