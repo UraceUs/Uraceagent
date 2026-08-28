@@ -110,3 +110,84 @@ diferentes.
 2. Depois: comunicação com o cliente (subtarefa 5)
 3. Depois: feedback, checklists e formulários (8–12)
 4. `Luis tasks` fica para o futuro; `Matt tasks` nunca entra
+
+---
+
+# Complemento (28/08) — marcadores, sensibilidade e autonomia
+
+## Corridas: as datas do Asana estão certas
+
+Fechado pelo dono: as datas das corridas já lançadas estão corretas como
+estão. **Não mexer.** O cronograma padrão documentado acima continua
+valendo para lançar corrida NOVA.
+
+## Os marcadores que ocupam as colunas dos dias
+
+Não são serviços. Existem para **indicar** alguma coisa, e viraram
+tarefa "porque foi feito nas coxas" (palavras do dono).
+
+| Marcador | O que significa | Efeito prático |
+|---|---|---|
+| `TRACK CLOSED` / `OKC CLOSED` | a pista está fechada | **não pode haver treino nesse dia** |
+| `Folga Track team` / `Folga Anderson` / qualquer *folga* | equipe de folga | **não pode haver treino nesse dia** |
+| `OKC Morning Practice` | jeito antigo de dizer "Practice OKC" | **em desuso** — não usar mais |
+| `Kart Pick Up` | cliente vem buscar o kart guardado no galpão | evento pontual |
+| `Montar o kart do Martin`, `Photos_Baby Kart`, `No practice - Orlando` | marcadores pontuais, provavelmente colocados por engano | não são rotina |
+
+**A regra que a automação precisa extrair disso:** dia com *TRACK CLOSED*
+ou com *folga* é **dia sem treino** — nenhum serviço pode ser agendado
+ali. Pista fechada e equipe de folga têm o mesmo efeito.
+
+O campo `Race`, por sua vez, é indicação de **onde/o quê**: `Practice
+OKC` = treino em Orlando · `Practice Bushnell` = treino no autódromo de
+Bushnell · `KART` = corrida de kart · `F4` = corrida de Fórmula 4.
+
+O dono está aberto a transformar esses marcadores em algo **visual**,
+desde que **nada do conteúdo das tarefas seja alterado**.
+
+## ⚠️ Dados sensíveis — regra permanente
+
+**As tarefas de serviço contêm dados de clientes** (nome e idade de
+criança, telefone, e-mail do responsável, links de pagamento). São dados
+sensíveis. Toda operação sobre elas exige cuidado: alterar só o campo em
+questão, nunca reescrever a descrição inteira, e sempre registrar no
+comentário o que mudou e por quê.
+
+## Autonomia concedida (28/08): corrigir erro rastreado
+
+O dono autorizou: **quando a IA identificar um erro e souber de onde veio
+o dado errado, pode corrigir.** Foi o caso do e-mail do Mathias Brouta,
+que estava com o e-mail do Shaun Lareau (responsável de outro cliente).
+
+Condições que a IA se impõe para usar essa autonomia:
+1. **Ter fonte.** Corrigir só com evidência externa — não com dedução.
+2. **Trocar só o campo errado**, byte por byte no resto.
+3. **Conferir por leitura direta** depois (a busca do Asana atrasa).
+4. **Comentar na tarefa** dizendo o que mudou, para quê e com que fonte.
+5. Sem fonte, **não corrigir**: comentar pedindo o dado.
+
+### Caso executado — Tyron Brouta (28/08)
+
+O e-mail correto (`mbrouta@hotmail.fr`) veio de três notificações de
+pagamento do QuickBooks, uma delas a invoice `4YZRN1QWN528NQM` de
+**$2.369,93** — exatamente o valor da tarefa, paga em 02/06/2026.
+Corrigidas as 3 tarefas do pacote, conferidas por leitura direta.
+
+### Achado colateral que muda uma conclusão anterior
+
+O diagnóstico de hoje dizia que 30 dos 31 serviços não tinham registro de
+security deposit. O QuickBooks mostra que, para o Tyron, **o depósito de
+US$ 400 foi cobrado e pago** (invoice `4YZRN1QWN529NQM`, 03/06/2026) —
+só não foi anotado na tarefa.
+
+Ou seja: o problema não é depósito não cobrado, é **depósito não
+registrado no Asana**. A verdade está no QuickBooks, e é ele que a
+subtarefa "Security Deposit sent?" precisa consultar — exatamente como o
+dono já tinha descrito.
+
+## Próximo passo dos conectores
+
+O dono confirmou o rumo: mais à frente a IA terá acesso às **duas caixas
+de e-mail** e ao sistema de onde saem os links. **Por ora, o foco é só o
+Asana.** O Gmail foi usado hoje apenas como fonte de verificação pontual
+para não gravar um dado inventado.
