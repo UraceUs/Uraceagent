@@ -99,3 +99,87 @@ Mais: pareamento de dispositivo aprovado pelo dono
 (`openclaw devices approve 67bf770e-...`). Login confirmado ("entrei").
 Pendentes opcionais: rodar `remove_claw_ui_password.sh` (dono), revisar
 `openclaw devices list`, rotacionar token que transitou por chats.
+
+## FASE 2 — sondas finais (28/08, tudo read-only via MCP)
+
+### ADM URace Workflow (projeto 1213585023616738) — o coração da operação recorrente
+
+556 tarefas, 4 seções, membros Italo + Eduardo. É AQUI que o Admin AI se
+encaixa: as cadências já existem e já estão escritas.
+
+- **URace Daily Operations** — 2 tarefas/dia geradas por recorrência:
+  - "Daily Operations Check (Morning -30min)", subtarefas atuais:
+    [Team] Schedule (Practice) · Review track team assignments ·
+    Urgent Financial Items · Customer Support.
+  - "Daily Operations (During the day execute)": 1️⃣ Today's Priorities ·
+    2️⃣ Track Operation · 3️⃣ Customer Support · 4️⃣ Finance Control.
+- **Weekly Workflow (seg e sex)**:
+  - "1️⃣ Financial Review - Race": bank statements · credit card ·
+    weekly expenses · classify (Parts/Tires/Fuel/Logistics); meta
+    declarada: "Offset expenses against parts sold to clients".
+  - "2️⃣ Invoices" (2x/semana): "Create invoices for: Training sessions,
+    Races, Parts, Services. Afterwards: ✔ Register in CRM ✔ Verify
+    payment status" — é O workflow 3 (Preparação de Invoice) já
+    documentado pela própria equipe.
+- **Monthly Workflow (3–4h)**: "Sales Report" — [Eduardo] report
+  (training/races/parts) · [Lara] comissões p/ Anabelly · [Lara]
+  conciliação compras×vendas.
+- **On-demand**: cartas p/ clientes (Eduardo), compra de peças com ciclo
+  invoice→liberação→Ana p/ pagamento (Eduardo/Lara).
+
+**Divisão de responsabilidades POR ESCRITO** (notes da tarefa diária):
+- **Eduardo**: atendimento/operação diária, caixas urace@/support@,
+  URace Store (incl. SUITS), cobrança de OS dos mecânicos, logística de
+  corrida (passagens, hotel, carro, presença de mecânicos).
+- **Lara**: planejamento e faturamento de corridas (schedule, pneus,
+  pit-spot, invoices pré/pós), clientes Pro Team, conciliação
+  compras×vendas, reembolsos de security deposit, conferência de
+  pagamentos.
+- Anabelly: pagamentos (recebe comissões e invoices liberadas).
+
+**INCONSISTÊNCIA DOCUMENTADA (não corrigida): as recorrências PARARAM.**
+Última "Daily Operations Check" gerada venceu em 03/07 (incompleta,
+assignee Eduardo); último "Sales Report" venceu 01/08 (incompleto, "Em
+andamento"). Hoje é 28/08 — quase 2 meses sem tarefas diárias geradas.
+Ou a recorrência quebrou, ou o time abandonou o projeto. É pergunta de
+negócio para o dono, e um alvo óbvio do Admin AI (gerar/cobrar cadência).
+
+### Gmail — taxonomia de labels (mapa para o Workflow 2)
+
+INBOX enxuta (32 threads) = triagem por labels funciona. Estrutura:
+- `RACES/…` por série: National (SKUSA, USPKS, Star, Supernats, ROTAX,
+  ROK Vegas, CKNA, IAME GN), Local FL (FLKC, AMR Homestead, Orlando
+  Cup|BFO, FWT, WKA Daytona…), F4 (JFC, Lucas Oil, Fara).
+- `Finances/…`: QuickBooks (727 threads), Square (5.607!), Receipt
+  (2.170), Accounting, **"Pending Invoices ❗" (16 threads)** — fila
+  manual de invoice pendente já existe como label.
+- `Marketing & Sales/Comercial/…`: **"Formulario do site" (957
+  threads)** = leads por e-mail; "Leads", "Leads por e-mail -
+  acompanhar", CRM.
+- `Team/…` (Eduardo, LARA, Samira, Anabelly, Ex-Employees/…),
+  `Travels/…` (Flights 1.165, Hotels 732), `Platforms & Subscriptions/…`
+  (ASANA 3.224 threads de notificação!), `URace Store/…`, `Suppliers`,
+  `CORP/…`, `Suits`, `KartSport - Vantage Group`.
+- Label `AWS VPS` (2 threads) — infra.
+
+### QuickBooks — clientes e catálogo (URACE, realm 9341453113046421)
+
+- **Vendas YTD 2026: $478.094,45 · 94 clientes ativos.** Top-5 concentra
+  67,7%: Kenneth Savage ($164,5k, 34%), Donald Marron ($55,2k), Pablo
+  Santiago ($54,1k), James Xikis ($37,7k), G TECH MOTORSPORTS ($12,1k).
+  3 clientes com saldo negativo -$400 (reembolsos de deposit?—conferir).
+- **Catálogo: 896 itens ativos** — 360 SERVICE / 536 NONINVENTORY (sem
+  inventário rastreado no QB). Categorias por prefixo: Parts (361),
+  Service (168), Rental (45), Parts IAME (39), OTK Parts (25), Electric
+  (25), Clothes (21), Canotops (18), Engine parts (14), Karts (11),
+  Fuel and Oil (11). Serviços = coaching (por idade/2T-4T), Summer Camp,
+  Urace Academy, trackside support, shop labor (alignment, chassis,
+  tires), Race Photos, Road trip cost, Flight Ticket.
+- Confirma o desenho: invoice pré-corrida = serviços (coaching/track
+  support/logística); pós-corrida = Parts consumidas + labor. Bate com a
+  meta semanal "offset expenses against parts sold".
+
+### Limite de sonda registrado
+O MCP do Asana está preso ao workspace " COMMAND CENTER"
+(1205450084498489); o segundo workspace (1205117893189112) não é
+alcançável pelas ferramentas atuais — auditar via UI se necessário.
