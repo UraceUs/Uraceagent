@@ -139,3 +139,15 @@ Evidência que expôs o erro: [[Michael Nicholas]] (Elijah) tem depósito de
 15/06/2026, US$ 400, pago e não devolvido. Nos pacotes seguintes — julho,
 agosto e setembro — não houve cobrança nova. Pela regra antiga, a IA teria
 cobrado quatro vezes o mesmo cliente.
+
+
+## Onde a waiver aparece
+
+**Sempre em `support@urace.us`.** É a [[Triagem de e-mail]] que a
+encontra e a anexa na tarefa do [[Asana]], marcando `Signed waiver?`.
+
+Antes de pedir waiver a um cliente, procurar em **dois lugares**:
+1. anexos das tarefas anteriores daquele piloto no [[Asana]];
+2. a caixa `support@urace.us`.
+
+Vale por temporada — ver [[DocuSign]]. Prazo: assinada **D-2** do serviço.

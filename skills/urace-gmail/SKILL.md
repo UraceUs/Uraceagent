@@ -71,6 +71,21 @@ Marcador novo só com autorização — a taxonomia é do time, não da IA.
    quais rascunhos criados e o que ficou em dúvida — e registrar no
    diário do Obsidian (`urace-obsidian`).
 
+## Waiver assinada → tarefa do Asana
+
+**As waivers assinadas sempre chegam em `support@urace.us`.** Ao
+encontrar uma na triagem:
+
+1. Identificar **de qual piloto** é (nome no PDF/assunto).
+2. Achar a tarefa de serviço dele no U-RACE.
+3. **Anexar o PDF na tarefa** e marcar a subtarefa `Signed waiver?`.
+4. Etiquetar a thread (`Platforms & Subscriptions/Docusign`).
+5. Registrar no diário.
+
+A waiver **vale por temporada**. Antes de pedir uma nova, procurar nos
+dois lugares: anexos de tarefas anteriores do piloto **e** a caixa
+`support@`. Pedir de novo a quem já assinou é atrito à toa com o cliente.
+
 ## Compra → quadro Shipping Orders (`1215968721507536`)
 
 E-mail de pedido feito, envio, atualização de status ou entrega alimenta

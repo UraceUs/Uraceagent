@@ -76,8 +76,12 @@ Tarefa fora do modelo é tarefa que a automação não lê.
    antes** (pode já ter sido cobrado e não anotado na tarefa).
    Processo: `brain/10_PROCESSOS/servico-pagamento-e-deposito.md`.
 3. **Signed waiver** — menor → waiver do responsável; maior → *adult*.
-   Via DocuSign. Voltou assinado → marcar **e anexar o PDF**.
-   **Decidir pela idade** — sem idade na descrição, não decidir: escalar.
+   Via DocuSign. **Decidir pela idade** — sem idade na descrição, não
+   decidir: escalar.
+   **A assinada sempre chega em `support@urace.us`.** Voltou → baixar,
+   **anexar o PDF na tarefa** e marcar.
+   **Vale por temporada:** antes de pedir, procurar nos anexos de tarefas
+   anteriores do piloto E na caixa `support@`.
 4. **Payment completed** — pago no QuickBooks → marcar. **A 2 dias do
    serviço tem que estar tudo pronto: invoice do serviço paga, depósito
    pago e waiver assinada.** Faltando qualquer um → **alertar o humano**.
