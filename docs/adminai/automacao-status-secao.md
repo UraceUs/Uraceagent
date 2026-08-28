@@ -164,3 +164,18 @@ Eles saíram das colunas junto (a regra é "concluído sai"), mas foram
 parar em "Finished Services", que é nome de arquivo de **serviço**.
 → **Pergunta ao dono:** quer uma coluna separada para esses marcadores de
 operação, ou "Finished Services" serve de arquivo geral?
+
+## Decisão do dono (28/08): não conectar mais nada por enquanto
+
+Nada de Personal Access Token, nada de MCP no OpenClaw/VPS por ora. O
+Asana já está conectado por MCP **nesta sessão do Claude**, e é assim que
+o trabalho segue: as operações acontecem quando o dono pede, aqui.
+
+O que isso implica, para ninguém se enganar depois:
+- `asana_status_sync.py` e o `--higiene-urace` ficam **prontos e
+  parados** — só rodam quando existir token no VPS.
+- Sem token, não há rotina automática de fundo: o resíduo antigo das
+  colunas e a sincronia status↔quadro dependem de execução pedida.
+- DocuSign, caixas de e-mail e demais conectores: **fora de escopo agora**.
+
+Não re-propor conexão sem o dono pedir.
