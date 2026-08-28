@@ -96,3 +96,17 @@ Ligações futuras (outras aplicações, uma por vez): CORRIDA → INVOICE
 - IDs externos (gid) são a chave de dedupe; nunca casar por nome.
 - Nunca presumir schema: toda estrutura acima veio de sonda real e será
   re-sondada antes de cada parte entrar em produção.
+
+---
+
+## AMPLIAÇÃO DE ESCOPO (28/08) — a Aplicação 1 é o Asana inteiro
+
+O dono definiu os 4 projetos que compõem a aplicação Asana: **U-RACE,
+SUITS, Shipping Orders e ADM URACE** (este último SOMENTE LEITURA). O
+mapa completo, com seções, campos personalizados, modelos de tarefa e
+inconsistências, está em `mapa-asana-4-projetos.md`.
+
+Corridas (este documento) são UMA das entidades do U-RACE. A outra é
+SERVIÇO — tarefa com 12 subtarefas que anda pelos quadros dos dias da
+semana (TUESDAY…SUNDAY). Pedidos por e-mail entram por último, por
+decisão do dono.
