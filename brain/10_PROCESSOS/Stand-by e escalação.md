@@ -57,6 +57,7 @@ reembolso" virou regra permanente em vez de decisão avulsa.
 |---|---|---|---|
 | Invoice do pacote de setembro do Elijah ($1.378,45) | emissão e link — envio é humano | 28/08 | **10/09** (D-2) |
 | Fornecedor do e-mail `whitesoldier205@gmail.com` | qual dos três é (Manzoor ou WheelDeal) | 28/08 | sem prazo — hoje só se usa o [[Usman]] |
+| Acesso à caixa `support@urace.us` | conexão — **bloqueia o fluxo da waiver** | 28/08 | [[Etapa de conexão]] |
 | Módulo [[QuickBooks]] | regra de negócio do dono | 28/08 | próximo módulo |
 | Módulo [[DocuSign]] | templates, gatilho, contrassinatura | 28/08 | depois do QuickBooks |
 

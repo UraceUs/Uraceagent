@@ -73,8 +73,15 @@ Marcador novo só com autorização — a taxonomia é do time, não da IA.
 
 ## Waiver assinada → tarefa do Asana
 
-**As waivers assinadas sempre chegam em `support@urace.us`.** Ao
-encontrar uma na triagem:
+**As waivers assinadas sempre chegam em `support@urace.us`.**
+
+> ⚠️ **Hoje a IA NÃO tem essa caixa** — só a `urace@`, e só vê a support@
+> quando a urace@ está em cópia (testado em 28/08). Enquanto isso não for
+> resolvido na [[Etapa de conexão]], este fluxo **não funciona**: a IA não
+> deve concluir que "não existe waiver" apenas por não achar. O caminho
+> alternativo é procurar nos **anexos de tarefas anteriores** do piloto.
+
+Ao encontrar uma waiver na triagem:
 
 1. Identificar **de qual piloto** é (nome no PDF/assunto).
 2. Achar a tarefa de serviço dele no U-RACE.

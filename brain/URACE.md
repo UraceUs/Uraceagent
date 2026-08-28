@@ -10,7 +10,7 @@ Centro do Administrative AI. Tudo que a IA sabe sobre a operação começa aqui.
 ## Como isto se organiza
 - ⚙️ [[PARAMETROS]] — **o que muda com o tempo** (fornecedor, valores, prazos). Único lugar de alteração.
 - 🧭 Sistemas: [[Asana]] · [[Gmail]] · [[QuickBooks]] · [[DocuSign]] · [[Google Calendar]]
-- 🔁 Processos: [[Pedido de macacão]] · [[Pagamento e security deposit]] · [[Triagem de e-mail]] · [[Compra e envio]] · [[Stand-by e escalação]]
+- 🔁 Processos: [[Pedido de macacão]] · [[Pagamento e security deposit]] · [[Triagem de e-mail]] · [[Compra e envio]] · [[Stand-by e escalação]] · [[Etapa de conexão]]
 - 👥 [[Equipe]] · 🧑 [[Clientes]] · 🏭 [[Fornecedores]] · 🏁 [[Corridas]] · 🎓 [[Serviços]] · 📍 [[Locais]]
 - 📓 Diário: [[2026-08-28]]
 
