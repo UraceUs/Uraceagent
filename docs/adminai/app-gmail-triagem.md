@@ -132,9 +132,29 @@ da tarefa do Asana guardado no evento.
 uma sessão com os mesmos conectores (Gmail, Asana, Calendar) e executa a
 rotina. É o que torna o "todo dia às 7h" real sem token e sem servidor.
 
-## Perguntas em aberto para o dono
+## Decisões fechadas pelo dono (28/08) — nada mais em aberto
 
-1. A caixa `support@urace.us` entra junto agora ou depois?
-2. Marcador aplicado = e-mail **sai da inbox** (arquiva) ou fica?
-3. `Finances/Pending Invoices ❗` é fila de **contas a pagar**, de
-   **cobranças a receber**, ou os dois? (hoje tem os dois misturados)
+| Pergunta | Decisão |
+|---|---|
+| Quais caixas | **`urace@urace.us` e `support@urace.us` desde já** |
+| Etiquetou, arquiva? | **Só propaganda (`wNews`) sai da inbox.** Todo o resto fica visível, mesmo classificado |
+| `Finances/Pending Invoices ❗` | **Conta a PAGAR** — o que a URACE deve. Cobrança emitida por nós não vai aqui |
+| Rascunho para quê | **Lead/orçamento e cliente atual.** Parceria e financeiro o dono responde pessoalmente |
+
+Duas leituras que essas respostas trazem, e que valem registrar:
+
+- **Parceria fica fora do rascunho de propósito.** Foi justamente o
+  assunto em que o dono pediu tom mais cuidadoso — e a conclusão dele é
+  que esse é o tipo de e-mail que se responde pessoalmente. A IA
+  classifica e para aí. Cuidado com a relação, na prática, virou *menos*
+  automação, não mais.
+- **Arquivar só propaganda** mantém a inbox como lista de pendências
+  reais. A IA tira o ruído sem esconder decisão.
+
+### Correção de uma leitura minha anterior
+
+Eu havia dito que `Pending Invoices ❗` misturava contas a pagar e
+cobranças a receber. Revendo os e-mails de lá — Goshen Land, Mammoth
+Brothers, SXS Marketing, RacingJunk, Sampson Racing — **são todos contas
+a pagar**. A pergunta era legítima, a caracterização de "misturado" não.
+A regra do dono confirma: o marcador é de contas a pagar.

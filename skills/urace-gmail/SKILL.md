@@ -1,9 +1,9 @@
 ---
 name: urace-gmail
-description: Triagem diária da caixa urace@urace.us — lê cada e-mail novo, classifica com os marcadores existentes, cria rascunho de resposta (nunca envia), alimenta o quadro Shipping Orders do Asana com compras e envios, e registra tudo no segundo cérebro. Use na rotina diária de e-mail ou quando precisar classificar/entender um e-mail da URACE.
+description: Triagem diária das caixas urace@urace.us e support@urace.us — lê cada e-mail novo, classifica com os marcadores existentes, cria rascunho de resposta (nunca envia), alimenta o quadro Shipping Orders do Asana com compras e envios, e registra tudo no segundo cérebro. Use na rotina diária de e-mail ou quando precisar classificar/entender um e-mail da URACE.
 ---
 
-# Triagem da caixa `urace@urace.us`
+# Triagem das caixas `urace@urace.us` e `support@urace.us`
 
 A taxonomia abaixo foi lida da conta real (130+ marcadores). A caixa está
 organizada: **manter, não reinventar.**
@@ -11,17 +11,23 @@ organizada: **manter, não reinventar.**
 ## 🚫 Regras invioláveis
 
 1. **NUNCA enviar e-mail.** Só criar rascunho. Enviar é do humano.
-2. **Não apagar, não arquivar sem instrução, não marcar spam.**
+2. **Não apagar e não marcar spam.** Arquivar, só propaganda (item 5).
 3. **Na dúvida, perguntar** — generosamente nos primeiros dias.
 4. **Tom:** a caixa recebe pedido de orçamento e mensagem de parceiro.
    Responder com calma e cordialidade; a relação vale mais que a pressa.
+5. **Arquivar só `wNews`.** Propaganda sai da inbox ao ser etiquetada;
+   **todo o resto fica visível na inbox**, mesmo já classificado. A IA
+   limpa o ruído, não esconde o que precisa de decisão do dono.
+6. **Rascunho só para lead/orçamento e cliente atual.** Parceria e
+   financeiro o dono responde pessoalmente — a IA classifica e para por
+   aí. Nunca enviar, em nenhum dos casos.
 
 ## Marcadores (o que vai em cada um)
 
 | Marcador | Vai isto |
 |---|---|
 | **`wNews`** | **toda propaganda**, newsletter, promoção, mala direta. É o que evita o acúmulo. Sub: `wNews/Study` para curso e conteúdo |
-| `Finances/Pending Invoices ❗` | invoice/cobrança em aberto que precisa de ação |
+| `Finances/Pending Invoices ❗` | **conta a PAGAR** — o que a URACE deve e está em aberto (fornecedor, serviço, assinatura). Cobrança que a URACE emitiu **não** vai aqui |
 | `Finances/QuickBooks` | notificação do QuickBooks (paga, recebida, lembrete) |
 | `Finances/Receipt` · `/Purchase refund` | comprovante · reembolso de compra |
 | `Finances/Shopping` (+ `/Amazon`, `/Orlando Kart Center`, `/Track Pass`) | compra |
@@ -53,10 +59,14 @@ Marcador novo só com autorização — a taxonomia é do time, não da IA.
 1. Ler cada thread nova da inbox (assunto, remetente, corpo).
 2. Classificar e aplicar o marcador. Propaganda → `wNews`.
 3. Se for **compra nossa** → atualizar o Asana (abaixo).
-4. Se pedir resposta → **rascunho**, nunca envio.
-5. Dúvida → perguntar.
-6. Relatar: quantos e-mails, quais marcadores, o que ficou pendente,
-   e registrar no diário do Obsidian (`urace-obsidian`).
+4. **Rascunho** se for lead/orçamento ou cliente atual — nunca envio.
+   Parceria e financeiro: só classificar, o dono responde.
+5. Propaganda etiquetada como `wNews` → **arquivar** (tirar da inbox).
+   Qualquer outro e-mail **permanece na inbox**.
+6. Dúvida → perguntar.
+7. Relatar: quantos e-mails, quais marcadores, quantos arquivados,
+   quais rascunhos criados e o que ficou em dúvida — e registrar no
+   diário do Obsidian (`urace-obsidian`).
 
 ## Compra → quadro Shipping Orders (`1215968721507536`)
 
