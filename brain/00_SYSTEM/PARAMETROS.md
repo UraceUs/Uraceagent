@@ -46,16 +46,25 @@ mesmo serviço. Ao emitir, conferir qual item está sendo usado.
 | Parâmetro | Valor |
 |---|---|
 | Security deposit | **US$ 400** |
-| Frequência do depósito | ⚠️ **a confirmar** — ver nota abaixo |
+| Frequência do depósito | **um por CLIENTE**, enquanto estiver retido |
 | Ordem de cobrança | 1º invoice do serviço · 2º depósito (assim que a 1ª for paga — **ou no limite dos 4 dias, pago ou não**) |
 
-> ⚠️ **Dúvida aberta sobre o depósito (28/08).** Documentei "um depósito
-> por pacote", mas o histórico do Elijah Nicholas mostra outra coisa:
-> depósito cobrado **uma vez** (15/06/2026, US$ 400, pago) e **nenhum**
-> nos pacotes de julho e agosto. O dono confirmou "não precisa cobrar o
-> depósito dele". Isso sugere **um depósito por CLIENTE/temporada**, como
-> a waiver — não por pacote. Confirmar antes de cobrar qualquer cliente
-> recorrente.
+### Quando cobrar o depósito (regra do dono, 28/08)
+
+O depósito é uma **retenção ativa**, não uma cobrança por pacote.
+Antes de cobrar, a IA **verifica no [[QuickBooks]] se o depósito daquele
+cliente foi devolvido**:
+
+| Situação do depósito | Ação |
+|---|---|
+| Nunca teve | **cobrar** US$ 400 |
+| Cobrado e **devolvido/reembolsado** | **cobrar de novo** |
+| Cobrado e **ainda retido** | **NÃO cobrar** |
+| Não consegue determinar | **não cobrar — escalar** |
+
+Caso real: Elijah Nicholas tem depósito de 15/06/2026 (US$ 400, pago) e
+**não devolvido** — por isso os pacotes de julho, agosto e setembro não
+levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 
 ## 📅 Prazos
 

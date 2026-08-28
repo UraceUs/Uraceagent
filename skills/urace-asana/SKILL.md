@@ -90,9 +90,11 @@ Tarefa fora do modelo é tarefa que a automação não lê.
 
 ### Regras de pacote, criação e waiver (28/08)
 
-- **Um depósito por pacote**, não por dia. `[1/3] [2/3] [3/3]` = 1 invoice
-  de serviço, 1 depósito de US$ 400, 1 waiver. Cobrar por tarefa seria
-  cobrar o mesmo cliente 3×.
+- **Uma invoice e uma waiver por pacote.** `[1/3] [2/3] [3/3]` = 1
+  invoice, 1 waiver. A numeração `[n/total]` é **por invoice / por mês**.
+- **Depósito: um por CLIENTE, enquanto estiver retido.** Antes de cobrar,
+  verificar no QuickBooks se foi **devolvido**: devolvido ou inexistente →
+  cobra; ainda retido → **não cobra**; indeterminado → **escala**.
 - **A IA cria a tarefa quando vê o pagamento da invoice do serviço no
   QuickBooks** — o mesmo evento cria a(s) tarefa(s) e dispara o depósito.
   O que faltar de informação, **perguntar**, não deduzir.

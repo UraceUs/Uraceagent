@@ -120,3 +120,22 @@ Pedir waiver a quem já assinou é atrito com o cliente à toa.
 ### Remarcação e cancelamento: sempre escalar
 A IA **não mexe em dinheiro** nesses casos. Move a tarefa e avisa;
 devolução, crédito e reagendamento de cobrança são decisão humana.
+
+
+## Frequência do depósito — corrigido em 28/08
+
+A primeira versão deste processo dizia "um depósito por pacote". O
+histórico real mostrou outra coisa, e o dono confirmou a regra correta:
+
+**Um depósito por CLIENTE, enquanto estiver retido.** Antes de cobrar, a
+IA verifica no [[QuickBooks]] se o valor foi devolvido àquele cliente:
+
+- devolvido → **cobra de novo**
+- ainda retido → **não cobra**
+- nunca teve → **cobra**
+- não conseguiu determinar → **escala, não cobra**
+
+Evidência que expôs o erro: [[Michael Nicholas]] (Elijah) tem depósito de
+15/06/2026, US$ 400, pago e não devolvido. Nos pacotes seguintes — julho,
+agosto e setembro — não houve cobrança nova. Pela regra antiga, a IA teria
+cobrado quatro vezes o mesmo cliente.
