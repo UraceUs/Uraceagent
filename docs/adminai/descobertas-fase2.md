@@ -183,3 +183,12 @@ INBOX enxuta (32 threads) = triagem por labels funciona. Estrutura:
 O MCP do Asana está preso ao workspace " COMMAND CENTER"
 (1205450084498489); o segundo workspace (1205117893189112) não é
 alcançável pelas ferramentas atuais — auditar via UI se necessário.
+
+### CORREÇÃO DO DONO (28/08) — decisão de escopo
+O projeto "ADM URace Workflow" (1213585023616738) NÃO será a base do
+Admin AI — o dono descartou usá-lo (o que explica as recorrências
+paradas desde julho: quadro abandonado, não bug). O que permanece válido
+dali é só o CONTEÚDO descoberto (cadências, divisão Eduardo×Lara,
+texto das tarefas de invoice) como referência de processo. A construção
+será POR PARTES E POR APLICAÇÃO (Asana, Gmail, Calendar, QuickBooks,
+Obsidian — uma de cada vez), não por um quadro central pré-existente.
