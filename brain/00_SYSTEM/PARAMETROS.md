@@ -34,6 +34,7 @@ o novo — sem mexer em skill nenhuma.
 | Parâmetro | Valor |
 |---|---|
 | Security deposit por serviço | **US$ 400** |
+| Ordem de cobrança | 1º invoice do serviço · 2º depósito (só depois da 1ª **paga**) |
 
 ## 📅 Prazos
 
@@ -42,6 +43,7 @@ o novo — sem mexer em skill nenhuma.
 | Chegada da equipe antes do 1º dia do evento | **2 dias** |
 | Nosso treino antes do 1º dia do evento | 1 dia |
 | Devolução do security deposit após a sessão | **5 dias** |
+| Invoices (serviço **e** depósito) pagas antes da data do serviço | **2 dias, no mínimo** |
 | Confirmação de corrida antes do evento | 15 dias (organizado: 30) |
 | Status `In Production` após e-mail ao fornecedor | **1 dia** |
 
