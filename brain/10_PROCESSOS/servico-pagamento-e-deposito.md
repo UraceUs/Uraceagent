@@ -41,9 +41,11 @@ Valores e prazos em `brain/00_SYSTEM/PARAMETROS.md`.
 
 | Quando | Ação |
 |---|---|
-| Invoice do serviço aparece paga no QuickBooks | prepara a invoice do depósito (US$ 400) para o responsável e avisa que está pronta |
-| Depósito pago | marca a subtarefa "Security Deposit paid?" e registra na descrição |
-| Serviço a ≤2 dias com alguma invoice em aberto | **alerta o humano** — é o prazo estourando |
+| Invoice do serviço aparece **paga** no QuickBooks | **envia** a invoice do depósito (US$ 400) ao responsável |
+| Faltam **4 dias** para o serviço e o depósito não saiu | **envia assim mesmo** — pago ou não o serviço |
+| Serviço agendado com **menos de 4 dias** de antecedência | envia o depósito **no mesmo dia do agendamento** |
+| Depósito pago | marca "Security Deposit paid?" e registra na descrição |
+| Faltam **2 dias** e falta invoice paga **ou** waiver assinada | **alerta o humano** — o prazo estourou |
 | Antes de preparar qualquer depósito | **conferir no QuickBooks se já foi cobrado** desse cliente para esse serviço |
 
 A conferência prévia não é burocracia: em 28/08 descobrimos que o
@@ -52,13 +54,30 @@ depósito do Tyron Brouta **tinha sido cobrado e pago** (invoice
 registrado na tarefa. Sem conferir, a IA cobraria de novo um cliente que
 já pagou.
 
-## ⚠️ Quem envia a invoice — pendente
+## ✅ A IA envia a invoice do depósito — autorizado
 
-A regra original do dono, em maiúsculas, é **"A IA NÃO ENVIA A INVOICE"**
-(prepara, preenche, revisa; enviar é humano). Este processo diz que o
-depósito "já pode ser enviado" assim que a primeira for paga.
+Confirmado pelo dono em 28/08. É **exceção única**: vale só para o
+depósito, porque é **valor fixo** (US$ 400), destinatário conhecido e
+gatilho objetivo. A invoice do **serviço** continua sendo enviada por
+humano — ali o valor varia e a regra "A IA NÃO ENVIA A INVOICE" segue
+valendo.
 
-Até o dono confirmar o contrário, a IA **prepara e avisa** — o envio é
-humano, como nas invoices em geral. Se ele autorizar o envio automático
-do depósito (valor fixo, destinatário conhecido, gatilho objetivo), vira
-exceção declarada nos PARÂMETROS, igual às duas exceções de e-mail.
+## Os dois prazos, que são diferentes
+
+```
+       agendamento                        D-4        D-2      DIA DO SERVIÇO
+            │                              │          │            │
+            │  invoice do serviço paga ⚡   │          │            │
+            │      → envia depósito         │          │            │
+            └──────────────────────────────>│          │            │
+                       ou, no limite:  envia │          │            │
+                                   pago ou não│         │            │
+                                              │         │            │
+                             TUDO PAGO + WAIVER ASSINADA│            │
+                                              └────────>│            │
+```
+
+- **D-4 = envio** do depósito (independe de a principal estar paga).
+- **D-2 = tudo pronto**: invoice do serviço paga, depósito pago e waiver
+  assinada. Faltou alguma → alerta.
+- Agendou com menos de 4 dias? O envio é **no mesmo dia**.

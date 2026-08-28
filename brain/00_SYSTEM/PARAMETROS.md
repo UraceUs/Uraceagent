@@ -34,7 +34,7 @@ o novo — sem mexer em skill nenhuma.
 | Parâmetro | Valor |
 |---|---|
 | Security deposit por serviço | **US$ 400** |
-| Ordem de cobrança | 1º invoice do serviço · 2º depósito (só depois da 1ª **paga**) |
+| Ordem de cobrança | 1º invoice do serviço · 2º depósito (assim que a 1ª for paga — **ou no limite dos 4 dias, pago ou não**) |
 
 ## 📅 Prazos
 
@@ -43,7 +43,8 @@ o novo — sem mexer em skill nenhuma.
 | Chegada da equipe antes do 1º dia do evento | **2 dias** |
 | Nosso treino antes do 1º dia do evento | 1 dia |
 | Devolução do security deposit após a sessão | **5 dias** |
-| Invoices (serviço **e** depósito) pagas antes da data do serviço | **2 dias, no mínimo** |
+| **Envio** da invoice do depósito | **4 dias antes** do serviço (ou **no mesmo dia**, se o serviço foi agendado com menos de 4 dias) |
+| **Pagamento** das duas invoices **+ waiver assinada** | **2 dias antes** do serviço |
 | Confirmação de corrida antes do evento | 15 dias (organizado: 30) |
 | Status `In Production` após e-mail ao fornecedor | **1 dia** |
 
@@ -65,6 +66,8 @@ enviar** — estas duas situações são a exceção:
 |---|---|
 | ✅ Pedido do formulário de medidas do macacão | cliente do SUITS |
 | ✅ Pedido de produção do macacão | fornecedor atual |
+| ✅ **Invoice do security deposit** (valor fixo US$ 400) | cliente do serviço |
+| 🚫 Invoice do serviço e qualquer outra | **humano envia** |
 | 🚫 **Todo o resto** (triagem, respostas da inbox) | **só rascunho** |
 
 ## 👥 Quem autoriza
@@ -98,3 +101,4 @@ Italo Silveira (`urace@urace.us`) · Eduardo Resende
 | Data | O que mudou | Quem |
 |---|---|---|
 | 2026-08-28 | Arquivo criado. Fornecedor atual = Usman; depósito US$ 400; exceções de envio de e-mail autorizadas | Italo |
+| 2026-08-28 | IA autorizada a **enviar a invoice do depósito** (só ela). Envio 4 dias antes; pagamento de tudo + waiver 2 dias antes | Italo |

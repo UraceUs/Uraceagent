@@ -69,18 +69,18 @@ Tarefa fora do modelo é tarefa que a automação não lê.
 ### As 12 subtarefas (prioridade do dono: 1–4 e 7 primeiro)
 
 1. **Price + Payment Links** — preencher e deixar na descrição.
-2. **Security Deposit sent?** — o depósito só sai **depois que a
-   invoice do serviço estiver PAGA**; é esse o gatilho. **Conferir no
-   QuickBooks antes** (pode já ter sido cobrado e não anotado na tarefa).
-   Valor em `brain/00_SYSTEM/PARAMETROS.md` (US$ 400).
+2. **Security Deposit sent?** — **a IA envia esta invoice** (exceção
+   autorizada; valor fixo). Gatilho: invoice do serviço paga. Limite:
+   **4 dias antes do serviço, paga ou não** — e **no mesmo dia** se o
+   serviço foi agendado com menos de 4 dias. **Conferir no QuickBooks
+   antes** (pode já ter sido cobrado e não anotado na tarefa).
    Processo: `brain/10_PROCESSOS/servico-pagamento-e-deposito.md`.
 3. **Signed waiver** — menor → waiver do responsável; maior → *adult*.
    Via DocuSign. Voltou assinado → marcar **e anexar o PDF**.
    **Decidir pela idade** — sem idade na descrição, não decidir: escalar.
-4. **Payment completed** — pago no QuickBooks → marcar. **As duas
-   invoices (serviço e depósito) têm que estar pagas com no mínimo 2 dias
-   de antecedência** da data do serviço. Serviço a ≤2 dias com invoice em
-   aberto → **alertar o humano**.
+4. **Payment completed** — pago no QuickBooks → marcar. **A 2 dias do
+   serviço tem que estar tudo pronto: invoice do serviço paga, depósito
+   pago e waiver assinada.** Faltando qualquer um → **alertar o humano**.
 5. **Driver pass / registration** — manual, **não priorizar agora**.
 6. **Service Order** — peças usadas pelo cliente (vem do mecânico) →
    invoice ao cliente, abatida do depósito.
