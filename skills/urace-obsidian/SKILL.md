@@ -76,3 +76,27 @@ externo.
 - Dado sensível de cliente (menor de idade, telefone, e-mail do
   responsável) só entra se já estiver na fonte. A IA não enriquece com
   dado de fora sem autorização.
+
+## A forma do grafo — obrigatória em toda nota nova
+
+O dono definiu a forma que o cérebro tem que manter enquanto cresce:
+**muitos hubs, cada um com satélites atômicos, e os hubs ligados entre
+si.** Regras completas em `brain/00_SYSTEM/Como o cérebro cresce.md`.
+
+O que isso exige de cada nota que você criar:
+
+1. **Uma nota, uma coisa.** Título com "e" quase sempre são duas notas.
+2. **Pelo menos 2 links de saída**: um para o hub da área, e pelo menos
+   um **lateral**, para outra área. Só o hub faz estrela isolada.
+3. **Acima de ~1.800 palavras**, dividir (diário é exceção).
+4. **Nunca deixar órfã** — se ninguém linka, não existe para a IA.
+5. **Hub é índice, não depósito.** Conteúdo mora no satélite.
+
+Antes de publicar uma leva de notas:
+
+```
+python3 adminai/brain_health.py --strict
+```
+
+Devolve erro se houver link quebrado, nome duplicado, órfã, nota pouco
+ligada ou nota grande demais.

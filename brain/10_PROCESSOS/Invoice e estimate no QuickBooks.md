@@ -64,18 +64,6 @@ enviar. (Pela API: `qbo_contact_search_customer`.)
 > [[Clientes]]. Buscar por **e-mail** quando o nome não bate. Só criar
 > cliente novo depois de buscar pelos dois.
 
-## Ordem obrigatória das chamadas
-
-Pular etapa produz duplicata de cliente ou de item.
-
-1. `company_info` — estabelece a conexão. **Sempre primeiro.**
-2. `qbo_contact_search_customer` — com a tabela de [[Clientes]] na mão.
-3. Ler o preço na [[Rate Card]] (ver [[PARAMETROS]] — precedência).
-4. `qbo_catalog_search_products` — busca até 20 termos de uma vez.
-5. `qbo_catalog_create_product` para cada item com `found: false`.
-6. `qbo_sales_create_invoice` **ou** `qbo_sales_create_estimate`.
-7. Escalar ao dono com divergências e premissas explícitas.
-
 ## Campos da invoice
 
 | Campo | Regra |
@@ -154,75 +142,13 @@ Para a IA montar uma invoice, a mensagem que pede tem que trazer
 **no [[QuickBooks]] e no [[Asana]] ao mesmo tempo**. Sem isso ela não
 consegue cruzar as fontes; pede o identificador antes de qualquer coisa.
 
-## Criar item novo no catálogo
+> 🔧 **A mecânica do conector** — criar item, item ambíguo, `txnId`, o
+> que ele não faz — está em [[Conector do QuickBooks]]. Esta nota é o
+> **processo**; aquela é a **ferramenta**.
 
-- **O QBO não aceita dois-pontos no campo `Name`.** `Parts IAME:X` falha.
-  Criar com nome simples e **avisar** que o item nasceu fora da categoria
-  e precisa ser movido à mão.
-- `taxable: false` é o padrão desta conta.
-- `product_type: "SERVICE"` **mesmo para peça** — é o padrão do catálogo.
-- Preço desconhecido entra como `unit_price: 0`, para o dono preencher.
-
-## Item ambíguo no catálogo (`requires_clarification: true`)
-
-Aparece com frequência e **nem sempre exige parar**. Critério:
-
-| Situação | O que fazer |
-|---|---|
-| Match claro pela marca ou motor | **escolher e declarar**. KA100 é IAME → "IAME Front Sprocket Z10" é a escolha certa para "front gear Z10" |
-| Peças genuinamente diferentes | escolher a mais provável, criar assim mesmo, e **sinalizar a alternativa com preço**. Ex.: "IAME Reed petal" $21,25 × "IAME Fiberglass Reed Petal" $21,89 |
-| Pacote fechado × mão de obra avulsa | **nunca sobrescrever**. "Engine rebuild top end KA100" é pacote a $650; jogar $250 de mão de obra nele distorce o item — sugerir item separado |
-
-**Travar a tarefa inteira por uma peça de $20 custa mais que sinalizar bem.**
-
-## Identificadores e links
-
-- Reference number: `4YZRN1QWN###NQM`, `5YZRN1QWN###NQM`, `6YZRN1QWN###NQM`.
-- ⚠️ **Existem `doc_number` duplicados nesta conta.** Deep link usa
-  **sempre `txnId`**, nunca o número do documento.
-- Formato:
-  `https://qbo.intuit.com/app/login?pagereq=invoice%3FtxnId%3D{txnId}&deeplinkcompanyid=9341453113046421`
-- **Reproduzir o link que a ferramenta devolveu, literalmente.** Nunca
-  montar link inventando id.
-
-## O que o conector NÃO faz
-
-- **Não edita preço** de item existente. **Não inativa** item. Só cria e busca.
-- Atualização de preço em lote sai por CSV: *Settings > Import data >
-  Products and services*, com a opção de **sobrescrever por match exato de
-  nome** marcada. Sem essa opção o QBO **cria duplicata** em vez de atualizar.
-- O CSV precisa da coluna **Income Account** preenchida ou mapeada na tela
-  de importação — o conector não lê o plano de contas, esse campo é do dono.
-- Os nomes no CSV têm que bater com o campo `Name` (**sem** o prefixo de
-  categoria), senão vira item novo.
-
-## Pré-corrida (estimate)
-
-Leva as **datas da corrida e as datas de treino**, e **sempre 2 sets de
-pneu inclusos**.
-
-**Existe modelo de estimate pronto dentro da [[Rate Card]]** (aba com
-`EST-YYYYMM-NNN`): Client · Company · Email · Phone · Class · Program ·
-Address · Event Dates, 10 linhas `Item · Description · Unit · Qty · Unit
-Price · Total`, Subtotal, Discount, Tax, **Deposit Due 30%**, Balance
-Due, TERMS & NOTES e duas assinaturas. As linhas padrão do exemplo são
-Team fee · Mechanic · Chassis · Engine · **Tires — Set** · Fuel · Misc.
-Usar essa mesma estrutura de linhas ao montar o estimate no QBO.
-
-### O regulamento manda
-
-A IA **lê o regulamento de cada corrida** e verifica se **pneu e gasolina
-têm de ser comprados na pista**:
-- se sim, são comprados para **treino oficial e corrida** (sábado e domingo);
-- **quinta e sexta** são treinos nossos — a URACE fornece e **cobra à parte**
-  (gasolina de treino).
-
-Logística: normalmente compra-se o pneu e envia-se para o local da
-corrida; com antecedência dá para retirar na pista. Em corridas com
-parceria [[KartSport]], compra-se para retirar lá.
-
-Cobrança: os 2 sets de pneu são cobrados do cliente (a equipe compra por
-ele no local) — e o **mecânico** também é cobrado.
+> 📄 **Estimate de pré-corrida** tem processo próprio:
+> [[Estimate de pre-corrida]].
+> 💰 **Cobrar invoice vencida** também: [[Cobranca de invoice vencida]].
 
 ## Termos fixos da [[Rate Card]] que afetam a cobrança
 
@@ -258,24 +184,6 @@ Qualquer outra coisa = ajuste; a IA corrige e reenvia para revisão.
 
 Esse canal é também onde a IA **aprende**: instrução dada ali que virar
 regra é gravada aqui ou em [[PARAMETROS]] — ver [[Stand-by e escalação]].
-
-## Rotina de cobrança
-
-- **A cada 2 dias:** reminder **somente das invoices OVERDUE**
-  (vencidas). Parcela a vencer **não** entra — existe parcelamento, e
-  cobrar cliente em dia queima a relação.
-- **Aprovação POR LOTE** (decisão do dono, 31/08). A IA monta o lote,
-  **mostra a lista** (cliente · valor · dias de atraso · link) e
-  **espera o "ok"**. Não há autorização permanente: "ok" num lote **não
-  vale** para o próximo. Sem "ok", o lote fica em stand-by — a IA não
-  fica repetindo o pedido, mas **volta a alertar se o prazo apertar**.
-- **Passou de 30 dias em aberto:** o cliente entra na lista de devedores
-  do segundo cérebro, com o valor e há quantos dias — a IA precisa ter
-  isso na memória, não só no relatório.
-
-> ⚠️ Hoje há **US$ 185.887 em aberto**, sendo 84% em duas invoices de 2025
-> ([[QuickBooks]]). E atenção: **invoice em aberto ≠ inadimplência** —
-> existe parcelamento (ex.: 4× US$ 1.000).
 
 ## Como a IA pergunta
 

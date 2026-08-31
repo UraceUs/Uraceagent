@@ -59,6 +59,8 @@ ou ID. Todas apontam para lá. O dono muda num lugar e o sistema inteiro
 acompanha. Toda alteração vira linha no histórico do fim daquela nota.
 
 **2. O que liga o grafo é o wikilink, não o frontmatter.**
+A forma que o cérebro tem que manter enquanto cresce — hubs, satélites,
+pontes — está em [[Como o cérebro cresce]], com o script que mede.
 `[[Assim]]`. Frontmatter serve para tipo e data; **quem desenha o grafo
 é o link no meio do texto**. Uma nota sem wikilink é uma ilha — e ilha
 não é conhecimento, é arquivo solto.

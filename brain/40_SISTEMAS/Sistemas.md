@@ -18,6 +18,7 @@ que realmente evita erro.
 |---|---|---|
 | [[Asana]] | tarefas, serviços, corridas, envios | a busca **atrasa** — conferir por leitura direta |
 | [[QuickBooks]] | dinheiro | o cliente é o **responsável**, não o piloto |
+| [[Conector do QuickBooks]] | a mecânica da ferramenta | `amount` é **unitário**, não total |
 | [[Rate Card]] | **preço** | manda **acima** do catálogo do QuickBooks |
 | [[DocuSign]] | waivers | `delivered` **não é** assinado |
 | [[Gmail]] | entrada de tudo | ver [[Taxonomia do Gmail]] |

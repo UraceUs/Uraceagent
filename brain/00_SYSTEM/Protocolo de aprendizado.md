@@ -39,9 +39,10 @@ Na dúvida entre `CONTEXT` e `RULE`, é **`CONTEXT`**.
 criar outra. Nota nova só quando o assunto é realmente novo — duas notas
 sobre a mesma coisa é o começo da contradição.
 
-**5. Ligar.** Toda nota nova sai com **pelo menos um `[[wikilink]]`**
-para o hub da área ou para a nota relacionada. É o link no meio do texto
-que desenha o grafo — nota sem link é ilha, e ilha não é conhecimento.
+**5. Ligar — pelo menos dois.** Toda nota nova sai com **um link para o
+hub da área** e **pelo menos um lateral** para algo relacionado de outra
+área. O primeiro prende o satélite; o segundo costura as constelações.
+Regras completas e a medição em [[Como o cérebro cresce]].
 
 **6. Contradição → registrar, não resolver.**
 Se a informação nova contradiz a antiga: **as duas ficam**, marcadas
