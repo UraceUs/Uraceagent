@@ -60,20 +60,22 @@ enviar. (Pela API: `qbo_contact_search_customer`.)
 
 Corrida sem tag → **criar a tag** e usar.
 
-> ⚠️ **A ferramenta MCP de invoice NÃO tem campo de classe/tag.** Ver a
-> pendência técnica no fim deste documento.
+> ⚠️ **A ferramenta MCP de invoice não tem campo de classe/tag.**
+> Decisão do dono (31/08): a IA **escreve na mensagem de escalação um
+> lembrete** de qual tag e qual classe aplicar. Quem revisa aplica no
+> clique. A IA nunca deixa passar em branco sem avisar.
 
 ### Mensagem na invoice
 
-Normalmente vazia. Quando tem, o padrão é `tipo | detalhe`, minúsculo:
+Padrão real (confirmado pelo dono, 31/08) — **`TIPO | SUBTIPO | EVENTO`**:
 
 ```
-parts | partes usadas nas práticas do dia 12/09
-training | dias 12, 26 de setembro
-race | AMR Round 8 | <datas>
+RACE | Pre Race | AMR RD 6&7
+Parts | AMR RD 6&7
 ```
 
-O mesmo texto é repetido no outro campo de mensagem.
+**O mesmo texto vai nos dois campos de mensagem.** Não é minúsculo: é
+`RACE` em caixa alta e `Parts` capitalizado, como nos exemplos.
 
 ## Preço de peça — 15% de margem
 
@@ -82,18 +84,31 @@ dealer oficial e busca o preço da peça no site do fornecedor
 ([[KartSport]], [[Comet Kart]] etc.) — **da peça exata, para aquele
 chassi e aquele motor daquele cliente**. Trabalho manual hoje.
 
-**Sobre o preço encontrado, aplica-se +15%** e é esse valor que vai na
-invoice.
+**Sobre o preço encontrado, aplica-se +15% — por peça, sempre.** Valor
+em [[PARAMETROS]] (é lá que se altera, não aqui).
 
-## A IA precisa cruzar fontes antes de faturar
+## Como a IA descobre qual peça cobrar
 
-As mensagens que chegam trazem **pouca informação**. Antes de montar uma
-invoice de peças, a IA consulta o [[Asana]] (e o [[Gmail]]) para saber
-**qual chassi e qual motor** aquele cliente usou — a peça tem que ser
-compatível com o equipamento daquele treino.
+As mensagens que chegam trazem **pouca informação**. A IA tem **três
+caminhos** para chegar na peça certa, e usa todos antes de perguntar:
 
-Peça errada na invoice = retrabalho e desgaste com o cliente. Se não
-achar chassi/motor, **não adivinhar: perguntar**.
+1. **A própria peça tem referência** — dá para saber para qual chassi e
+   qual motor ela serve.
+2. **Histórico do [[QuickBooks]]** — muitas peças são usadas com
+   frequência; o que já foi faturado antes ensina o padrão.
+3. **[[Asana]] e [[Gmail]]** — qual chassi e qual motor aquele cliente
+   usou naquele treino.
+
+Só depois de esgotar os três é que pergunta. **A peça tem que ser
+compatível com o equipamento daquele cliente** — peça errada na invoice é
+retrabalho e desgaste.
+
+## 🔑 O que a mensagem de gatilho precisa ter
+
+Para a IA montar uma invoice, a mensagem que pede tem que trazer
+**o nome ou o e-mail do cliente** — é a chave que permite localizá-lo
+**no [[QuickBooks]] e no [[Asana]] ao mesmo tempo**. Sem isso ela não
+consegue cruzar as fontes; pede o identificador antes de qualquer coisa.
 
 ## Pré-corrida (estimate)
 
@@ -124,6 +139,9 @@ Invoice para <cliente>
 E-mail: <email>   ·   Telefone: <telefone>
 Em aguardo para revisão e envio.
 <link da invoice>
+
+⚠️ Lembrete ao revisar: aplicar TAG <tag> e CLASSE <classe>
+   (a IA não consegue preencher esses dois campos)
 ```
 
 Resposta "ok, pode enviar" / "tudo certo" → **aí sim envia**.
@@ -134,7 +152,9 @@ regra é gravada aqui ou em [[PARAMETROS]] — ver [[Stand-by e escalação]].
 
 ## Rotina de cobrança
 
-- **A cada 2 dias:** selecionar as invoices em aberto e **enviar reminder**.
+- **A cada 2 dias:** enviar reminder **somente das invoices OVERDUE**
+  (vencidas). Parcela a vencer **não** entra — existe parcelamento, e
+  cobrar cliente em dia queima a relação.
 - **Passou de 30 dias em aberto:** o cliente entra na lista de devedores
   do segundo cérebro, com o valor e há quantos dias — a IA precisa ter
   isso na memória, não só no relatório.
@@ -160,12 +180,12 @@ de classe nem de tag**, e não há ferramenta para criar tag.
 Ou a classificação fica para o humano na revisão, ou depende da REST API
 com token ([[Etapa de conexão]]).
 
-**2. O reminder exige confirmação a cada envio.** A ferramenta de
-lembrete obriga mostrar o texto e **pedir "sim" explícito antes de
-disparar**. A rotina "a cada 2 dias, todas as em aberto" precisa de uma
-autorização permanente do dono ou de um "ok" por lote.
+**2. O reminder exige confirmação a cada envio.** A ferramenta obriga
+mostrar o texto e pedir "sim" antes de disparar. Escopo fechado pelo
+dono: **a cada 2 dias, só as OVERDUE**. Falta ele decidir se dá
+autorização permanente para essa rotina ou aprova por lote.
 
 **3. O que a IA consegue preencher sozinha hoje:** cliente, itens,
 quantidades, valores, descrições, `service_date` por linha, `due_date`
-(2–3 dias) e a mensagem no padrão `tipo | detalhe`. Salvar sem enviar:
-sim. **Classe: não.**
+(2–3 dias) e a mensagem no padrão `TIPO | SUBTIPO | EVENTO`. Salvar sem
+enviar: sim. **Classe e tag: não** — vão como lembrete na escalação.

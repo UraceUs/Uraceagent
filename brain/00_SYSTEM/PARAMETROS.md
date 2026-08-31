@@ -46,6 +46,7 @@ mesmo serviço. Ao emitir, conferir qual item está sendo usado.
 | Parâmetro | Valor |
 |---|---|
 | Security deposit | **US$ 400** |
+| **Margem sobre peça** | **+15%** sobre o preço do fornecedor, **por peça** |
 | Frequência do depósito | **um por CLIENTE**, enquanto estiver retido |
 | Ordem de cobrança | 1º invoice do serviço · 2º depósito (assim que a 1ª for paga — **ou no limite dos 4 dias, pago ou não**) |
 
@@ -73,6 +74,7 @@ levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 | Chegada da equipe antes do 1º dia do evento | **2 dias** |
 | Nosso treino antes do 1º dia do evento | 1 dia |
 | Devolução do security deposit após a sessão | **5 dias** |
+| Lembrete de cobrança | **a cada 2 dias** — só invoices **overdue** |
 | **Envio** da invoice do depósito | **4 dias antes** do serviço (ou **no mesmo dia**, se o serviço foi agendado com menos de 4 dias) |
 | **Pagamento** das duas invoices **+ waiver assinada** | **2 dias antes** do serviço |
 | Confirmação de corrida antes do evento | 15 dias (organizado: 30) |
@@ -132,3 +134,4 @@ Italo Silveira (`urace@urace.us`) · Eduardo Resende
 |---|---|---|
 | 2026-08-28 | Arquivo criado. Fornecedor atual = Usman; depósito US$ 400; exceções de envio de e-mail autorizadas | Italo |
 | 2026-08-28 | IA autorizada a **enviar a invoice do depósito** (só ela). Envio 4 dias antes; pagamento de tudo + waiver 2 dias antes | Italo |
+| 2026-08-31 | Margem de peça fixada em **+15%**; lembrete de cobrança **a cada 2 dias, só para invoice OVERDUE** | Italo |
