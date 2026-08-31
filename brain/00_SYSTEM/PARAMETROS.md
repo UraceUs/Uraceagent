@@ -164,5 +164,6 @@ Enquanto o "ok" não vem, o lote fica em stand-by — ver
 | 2026-08-28 | Arquivo criado. Fornecedor atual = Usman; depósito US$ 400; exceções de envio de e-mail autorizadas | Italo |
 | 2026-08-28 | IA autorizada a **enviar a invoice do depósito** (só ela). Envio 4 dias antes; pagamento de tudo + waiver 2 dias antes | Italo |
 | 2026-08-31 | Margem de peça fixada em **+15%**; lembrete de cobrança **a cada 2 dias, só para invoice OVERDUE** | Italo |
+| 2026-08-31 | Mensal Academy 4T e Baby Kart corrigidos para **$2.756,90** (planilha diz $2.756,00 — ver [[Rate Card]]). E-mail de invoice: **sai pelo próprio QuickBooks**, não existe template a escrever | Italo |
 | 2026-08-31 | Reminder de cobrança: **aprovação por lote**, sem autorização permanente | Italo |
 | 2026-08-31 | [[Rate Card]] passa a ser a fonte de preço **acima do catálogo do QuickBooks**; ordem de precedência registrada. IDs das duas planilhas adicionados | Italo (skill `urace-faturamento-qbo`) |

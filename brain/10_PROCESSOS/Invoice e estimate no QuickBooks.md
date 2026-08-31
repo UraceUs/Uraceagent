@@ -302,12 +302,18 @@ quantidades, valores, descrições, `service_date` por linha, `due_date`
 (2–3 dias) e a mensagem no padrão `TIPO | SUBTIPO | EVENTO`. Salvar sem
 enviar: sim. **Classe e tag: não** — vão como lembrete na escalação.
 
-**4. Não existe modelo de e-mail de invoice.** Confirmado em 31/08 — a
-URACE não tem um texto padrão para o e-mail que acompanha a invoice.
-Enquanto não existir, **não inventar**: quem envia é humano, e o texto é
-dele. Preencher a lacuna com um padrão plausível é pior que perguntar,
-porque vira regra de fato na próxima fatura.
+**4. ✅ Modelo de e-mail de invoice: não existe porque NÃO É PRECISO.**
+Fechado pelo dono em 31/08: **o envio é feito pelo próprio QuickBooks**,
+no botão de enviar. O texto e o layout são os do QBO. Não há e-mail
+manual pelo [[Gmail]], não há template a escrever, e **não há lacuna a
+preencher** — o assunto está encerrado, não pendente.
 
-**5. Divergência de preço aberta na [[Rate Card]]:** mensal Academy 4T
-está $2.756,00 na planilha, mas as invoices reais implicam $2.756,90
-(sessão extra $689,225 × 2 = $1.378,45). Ver [[Rate Card]].
+Consequência prática: o trabalho da IA termina na invoice **salva com
+link**. Quem revisa clica em enviar dentro do QuickBooks.
+
+**5. ✅ Os 90 centavos: resolvido.** O mensal Academy 4T é
+**US$ 2.756,90** — confirmado por invoice paga (txnId 9391, 02/07/2026),
+pelo desconto de $119,10 idêntico ao do 2T, pelo degrau de $400 entre as
+categorias e pela metade que dá exatamente $1.378,45. A planilha está
+com $2.756,00 em duas células e precisa ser corrigida. Contas e células
+em [[Rate Card]].

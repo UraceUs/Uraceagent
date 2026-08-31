@@ -280,11 +280,29 @@ sobre tudo** — quando perguntar, ser concisa e certeira.
 pergunta, pôr **aquele item** em stand-by e seguir com o resto. Não
 repetir a pergunta, mas **voltar a alertar se o prazo chegar**.
 
+## Envio do e-mail: é o QuickBooks que manda
+
+**Não existe — nem precisa existir — modelo de e-mail de invoice.** O
+envio sai do próprio QBO, no botão de enviar, com o texto e o layout
+dele. Não se escreve e-mail de invoice no Gmail e não se inventa
+template. O trabalho desta skill termina na **invoice salva com link**;
+quem revisa clica em enviar dentro do QuickBooks.
+
+## Preço da Urace Academy — os números certos
+
+Mensal (4 sessões): **4 stroke e Baby Kart $2.756,90** · 2 stroke
+$3.156,90 · kart próprio $1.800 · kart próprio + mecânico $1.200.
+Meio mês (2 sessões) 4T: **$1.378,45**. Sessão avulsa 4T $719.
+
+⚠️ A planilha traz **$2.756,00** no mensal 4T e Baby Kart — **está
+errada, faltam 90 centavos**. Confirmado por invoice paga (txnId 9391) e
+por três checagens de consistência; ver `brain/40_SISTEMAS/Rate Card.md`.
+**Usar $2.756,90.**
+
 ## Não inventar
 
-Sem definição na URACE para: **política de desconto** e **modelo de
-e-mail de invoice** (confirmado em 31/08 — não existe). Se o pedido
-depender de algum destes, dizer que não está definido e pedir a definição.
+Sem definição na URACE para: **política de desconto**. Se o pedido
+depender disso, dizer que não está definido e pedir a definição.
 
 > Margem sobre peças (**15%**), **classe/tag**, **prazo de pagamento
 > (2-3 dias)** e **frequência de cobrança (2 dias, só overdue)** **já

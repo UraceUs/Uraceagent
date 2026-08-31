@@ -48,27 +48,74 @@ Consumables · Custom.
 | Modo | Preço |
 |---|---|
 | **Sessão avulsa** (`Academy`, per session) | kart próprio $500 · Baby Kart $719 · **4 stroke $719** · 2 stroke $819 · adult shifter $899 |
-| **Mensal sem contrato** (`Academy Monthly`, 4 sessões/mês) | kart próprio + mecânico $1.200 · kart próprio $1.800 · Baby Kart $2.756 · **4 stroke $2.756** · 2 stroke $3.156,90 |
-| **Sessão extra** no mensal | $300 · $450 · $689 · **$689** · $789,23 |
+| **Mensal sem contrato** (`Academy Monthly`, 4 sessões/mês) | kart próprio + mecânico $1.200 · kart próprio $1.800 · Baby Kart **$2.756,90** · **4 stroke $2.756,90** · 2 stroke $3.156,90 · *(planilha diz $2.756,00 nas duas primeiras — ver abaixo)* |
+| **Sessão extra** no mensal | $300 · $450 · $689 · **$689** · $789,23 *(contratos indicam $789 — ver abaixo)* |
 | **Contrato 6 meses / 27 sessões** | 4T $17.858,88 (4% off · 33% entrada $5.893,43 + 5× $2.393,09) · 2T $20.450,88 |
 | **Contrato 12 meses / 54 sessões** | 4T $34.229,52 (8% off · 20% entrada $6.845,90 + 11× $2.489,42) · 2T $39.197,52 |
 
 Academy fora do OKC cobra hotel, comida e transporte à parte.
 
-### ⚠️ Divergência a confirmar com o dono
+### ✅ Os 90 centavos — RESOLVIDO em 31/08
 
-O pacote de 2 dias do [[Michael Nicholas|Elijah Nicholas]] foi faturado
-a **US$ 1.378,45** (invoice paga, confirmada no [[QuickBooks]]).
+**O mensal Academy 4T é US$ 2.756,90.** A planilha perdeu os 90 centavos
+na célula. Quatro caminhos independentes chegam no mesmo número:
 
-- $1.378,45 = **2 × $689,225** → implica mensal 4T de **$2.756,90**
-- A Rate Card diz **$2.756,00** (→ sessão extra $689,00 exata)
-- A linha vizinha, 2 stroke, mantém os centavos: $3.156,90 / $789,23
+**1. Invoice paga, valor exato.** Michael Nicholas (id 677), 02/07/2026,
+item `Service:Urace Academy Training Program` (id 177), memo "Urace
+Academy": **$2.756,90**, saldo zero.
+`https://qbo.intuit.com/app/login?pagereq=invoice%3FtxnId%3D9391&deeplinkcompanyid=9341453113046421`
+Não é dedução — é o mês cheio cobrado e pago.
 
-Ou seja: **a URACE cobra pelo valor da sessão extra do mensal ($689,x),
-não pela sessão avulsa ($719)** — e há 90 centavos de diferença entre a
-planilha e a invoice real. Falta o dono dizer qual dos dois é o certo.
-Até ele responder, **reaproveitar o valor da invoice anterior do mesmo
-cliente** e declarar isso na escalação.
+**2. O desconto do mensal é o mesmo nas duas categorias.**
+
+| | 4 avulsas | Mensal | Desconto |
+|---|---|---|---|
+| 4 stroke | 4 × $719 = $2.876 | **$2.756,90** | **$119,10** |
+| 2 stroke | 4 × $819 = $3.276 | $3.156,90 | **$119,10** |
+
+Com $2.756,00 o desconto do 4T viraria $120,00 e quebraria a simetria.
+Com $2.756,90 os dois batem em $119,10.
+
+**3. A distância entre 2T e 4T tem que ser $400.** A avulsa custa $100 a
+mais no 2T; quatro sessões = $400. $3.156,90 − $2.756,90 = **$400,00**
+exato. Com $2.756,00 daria $400,90 — um degrau que não existe em lugar
+nenhum da tabela.
+
+**4. A metade bate com a invoice de meio mês.** $2.756,90 ÷ 2 =
+**$1.378,45**, exatamente o pacote de 2 dias faturado ao mesmo cliente em
+01/08/2026 (invoice paga). Com $2.756,00 daria $1.378,00.
+
+**Baby Kart segue o 4 stroke** em todas as linhas da tabela, então também
+é **$2.756,90**.
+
+#### O que corrigir na planilha (célula, não aqui)
+
+| Célula | Está | Deve ser |
+|---|---|---|
+| `Academy Monthly — 4 Stroke Kart Rental` | $2.756,00 | **$2.756,90** |
+| `Academy Monthly — Baby Kart` | $2.756,00 | **$2.756,90** |
+
+Até a planilha ser corrigida, **o valor válido é $2.756,90** — está aqui,
+e é daqui que a IA lê.
+
+#### Achado secundário: a sessão extra do 2T
+
+A planilha traz `Academy Extra Session — 2 Stroke` a **$789,23** (que é
+$3.156,90 ÷ 4). Mas os quatro contratos só fecham no centavo com
+**$789,00** — e a sessão extra do 4T é $689,00, uma distância de $100,
+igual à das avulsas:
+
+| Contrato | Conta | Bate com a planilha |
+|---|---|---|
+| 6 meses 4T | 27 × $689 × 0,96 | $17.858,88 ✅ |
+| 6 meses 2T | 27 × **$789** × 0,96 | $20.450,88 ✅ |
+| 12 meses 4T | 54 × $689 × 0,92 | $34.229,52 ✅ |
+| 12 meses 2T | 54 × **$789** × 0,92 | $39.197,52 ✅ |
+
+Ou seja: **a sessão extra é $689 e $789 redondos** — o mensal é que leva
+os $119,10 de desconto e termina em ,90. O $789,23 da planilha é ela
+mesma dividindo o mensal por 4, na direção errada.
+**Não mexi nesse valor** — é decisão do dono, não a pergunta que ele fez.
 
 ## Termos que a Rate Card fixa (valem na invoice e no estimate)
 
