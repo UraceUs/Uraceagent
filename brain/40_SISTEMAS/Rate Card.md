@@ -49,7 +49,7 @@ Consumables · Custom.
 |---|---|
 | **Sessão avulsa** (`Academy`, per session) | kart próprio $500 · Baby Kart $719 · **4 stroke $719** · 2 stroke $819 · adult shifter $899 |
 | **Mensal sem contrato** (`Academy Monthly`, 4 sessões/mês) | kart próprio + mecânico $1.200 · kart próprio $1.800 · Baby Kart **$2.756,90** · **4 stroke $2.756,90** · 2 stroke $3.156,90 · *(planilha diz $2.756,00 nas duas primeiras — ver abaixo)* |
-| **Sessão extra** no mensal | $300 · $450 · $689 · **$689** · $789,23 *(contratos indicam $789 — ver abaixo)* |
+| **Sessão extra** no mensal (= mensal ÷ 4) | $300 · $450 · $689 · **$689** *(deveria ser $689,23 — ver abaixo)* · **$789,23** ✅ |
 | **Contrato 6 meses / 27 sessões** | 4T $17.858,88 (4% off · 33% entrada $5.893,43 + 5× $2.393,09) · 2T $20.450,88 |
 | **Contrato 12 meses / 54 sessões** | 4T $34.229,52 (8% off · 20% entrada $6.845,90 + 11× $2.489,42) · 2T $39.197,52 |
 
@@ -98,24 +98,49 @@ nenhum da tabela.
 Até a planilha ser corrigida, **o valor válido é $2.756,90** — está aqui,
 e é daqui que a IA lê.
 
-#### Achado secundário: a sessão extra do 2T
+#### A sessão extra sai do mensal ÷ 4 (decidido em 31/08)
 
-A planilha traz `Academy Extra Session — 2 Stroke` a **$789,23** (que é
-$3.156,90 ÷ 4). Mas os quatro contratos só fecham no centavo com
-**$789,00** — e a sessão extra do 4T é $689,00, uma distância de $100,
-igual à das avulsas:
+O dono confirmou **$789,23** para a sessão extra do 2 stroke. Isso fixa a
+regra: **sessão extra = mensal ÷ 4**, com os centavos.
 
-| Contrato | Conta | Bate com a planilha |
+| | Mensal | ÷ 4 | Planilha |
+|---|---|---|---|
+| 4 stroke / Baby Kart | $2.756,90 | $689,225 → **$689,23** | $689,00 ⚠️ |
+| 2 stroke | $3.156,90 | $789,225 → **$789,23** | $789,23 ✅ |
+
+⚠️ **Pela mesma regra, a sessão extra do 4T deveria ser $689,23, e a
+planilha traz $689,00.** É o mesmo tipo de arredondamento que já tinha
+comido os 90 centavos do mensal. **Aguardando o dono** — não foi alterado.
+
+##### Regra de ouro do pacote: derivar do MENSAL, nunca multiplicar a unitária
+
+Pacote de 2 sessões 4T:
+
+| Caminho | Resultado |
+|---|---|
+| **mensal ÷ 2** | **$1.378,45** ✅ foi o que a invoice paga cobrou |
+| 2 × $689,23 | $1.378,46 ❌ um centavo a mais |
+| 2 × $689,00 | $1.378,00 ❌ 45 centavos a menos |
+
+Multiplicar a unitária arredondada **cria deriva de centavo**. Sempre
+partir do mensal: 2 sessões = ÷ 2, 3 sessões = × 3/4, e assim por diante.
+Isso vale mesmo depois que o dono decidir o $689,23 — a unitária serve
+para cobrar **uma** sessão avulsa dentro do mensal, não para montar pacote.
+
+##### Os contratos não derivam da unitária com centavos
+
+Os quatro contratos publicados fecham no centavo com $689,00 e $789,00
+redondos:
+
+| Contrato | Conta | Publicado |
 |---|---|---|
 | 6 meses 4T | 27 × $689 × 0,96 | $17.858,88 ✅ |
-| 6 meses 2T | 27 × **$789** × 0,96 | $20.450,88 ✅ |
+| 6 meses 2T | 27 × $789 × 0,96 | $20.450,88 ✅ |
 | 12 meses 4T | 54 × $689 × 0,92 | $34.229,52 ✅ |
-| 12 meses 2T | 54 × **$789** × 0,92 | $39.197,52 ✅ |
+| 12 meses 2T | 54 × $789 × 0,92 | $39.197,52 ✅ |
 
-Ou seja: **a sessão extra é $689 e $789 redondos** — o mensal é que leva
-os $119,10 de desconto e termina em ,90. O $789,23 da planilha é ela
-mesma dividindo o mensal por 4, na direção errada.
-**Não mexi nesse valor** — é decisão do dono, não a pergunta que ele fez.
+Então **cada valor de contrato é lido como publicado, nunca recalculado**
+a partir da sessão extra. São duas tabelas de preço, não uma fórmula só.
 
 ## Termos que a Rate Card fixa (valem na invoice e no estimate)
 
