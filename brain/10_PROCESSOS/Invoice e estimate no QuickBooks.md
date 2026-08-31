@@ -10,22 +10,29 @@ data: 2026-08-31
 
 [[URACE]] · [[Asana]] · [[Gmail]] · [[Security deposit]] · [[Rate Card]] · [[Clientes]]
 
-## ⏸️ ESTADO ATUAL — nada é escrito no QuickBooks ainda
+## ✅ O que o agente de invoice PODE fazer
 
-Decisão do dono (31/08): **não mexer em invoice nenhuma por enquanto.**
-Ele ainda está passando as instruções para montarmos o agente de IA.
+Confirmado pelo dono (31/08). **Criar é o trabalho do agente.** A linha
+não está entre ler e escrever — está entre **escrever e ENVIAR**.
 
-Até ele liberar, este documento é **especificação, não execução**:
-
-| Pode | Não pode |
+| ✅ Pode | 🚫 Não pode |
 |---|---|
-| ler, conferir, cruzar com [[Asana]] e [[Gmail]] | criar invoice ou estimate |
-| escrever e revisar o processo aqui | criar cliente ou item no catálogo |
-| levantar divergência e trazer para ele | enviar invoice ou reminder |
+| **criar invoice** | **enviar invoice** (exceto a do [[Security deposit]]) |
+| **criar estimate** | enviar estimate sem "ok" |
+| **criar cliente** no QBO | disparar reminder sem "ok" do lote |
+| **criar item** no catálogo | apagar, inativar ou alterar o que já existe |
 
-Inclui a invoice de setembro do [[Michael Nicholas|Elijah]] (vence dia
-10): **está mapeada, não está para emitir.** Quando ele liberar, esta
-seção sai e a data da liberação entra no histórico de [[PARAMETROS]].
+Criar não é enviar. A invoice fica salva, com link, esperando revisão —
+é exatamente esse o ponto do fluxo.
+
+Antes de criar cliente: **buscar pelo responsável e pelo e-mail**
+(ver [[Clientes]]) — é assim que se evita duplicata.
+Antes de criar item: `qbo_catalog_search_products`, e só criar o que
+voltar `found: false`.
+
+**Em espera por instrução do dono:** a invoice de setembro do
+[[Michael Nicholas|Elijah]] (vence dia 10). Está mapeada e não deve ser
+emitida até ele mandar.
 
 ## 🚫 A regra que manda em tudo
 

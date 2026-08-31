@@ -22,15 +22,22 @@ cliente sem autorização**.
 > faturar** e **escrever o que aconteceu depois** (diário + comentário na
 > tarefa do Asana).
 
-## ⏸️ ESTADO ATUAL: especificação, não execução
+## ✅ O que esta skill PODE criar
 
-O Italo ainda está passando as instruções para montar o agente. Até ele
-liberar, **nenhuma escrita no QuickBooks** — nem invoice, nem estimate,
-nem cliente, nem item de catálogo, nem reminder. Ler, conferir e apontar
-divergência: pode. Criar: não.
+**Criar invoice, estimate, cliente e item de catálogo: pode** — é o
+trabalho dela (confirmado pelo Italo em 31/08). A linha não é entre ler e
+escrever, é entre **escrever e ENVIAR**.
 
-Isso inclui invoices já mapeadas e com data marcada. **Mapeada não é
-autorizada.** Quando ele liberar, esta seção sai.
+Não pode: **enviar** invoice (exceto a do security deposit), enviar
+estimate ou disparar reminder sem o "ok"; e não apaga, não inativa e não
+altera o que já existe.
+
+Antes de criar cliente, buscar pelo responsável e pelo e-mail (tabela
+abaixo). Antes de criar item, `qbo_catalog_search_products` — só criar o
+que voltar `found: false`.
+
+**Em espera por instrução:** a invoice de setembro do Elijah Nicholas
+(vence dia 10). Mapeada, não autorizada.
 
 ## 🚫 As duas regras que mandam em tudo
 
