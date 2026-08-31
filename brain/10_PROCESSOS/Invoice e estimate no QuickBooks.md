@@ -10,6 +10,23 @@ data: 2026-08-31
 
 [[URACE]] · [[Asana]] · [[Gmail]] · [[Security deposit]] · [[Rate Card]] · [[Clientes]]
 
+## ⏸️ ESTADO ATUAL — nada é escrito no QuickBooks ainda
+
+Decisão do dono (31/08): **não mexer em invoice nenhuma por enquanto.**
+Ele ainda está passando as instruções para montarmos o agente de IA.
+
+Até ele liberar, este documento é **especificação, não execução**:
+
+| Pode | Não pode |
+|---|---|
+| ler, conferir, cruzar com [[Asana]] e [[Gmail]] | criar invoice ou estimate |
+| escrever e revisar o processo aqui | criar cliente ou item no catálogo |
+| levantar divergência e trazer para ele | enviar invoice ou reminder |
+
+Inclui a invoice de setembro do [[Michael Nicholas|Elijah]] (vence dia
+10): **está mapeada, não está para emitir.** Quando ele liberar, esta
+seção sai e a data da liberação entra no histórico de [[PARAMETROS]].
+
 ## 🚫 A regra que manda em tudo
 
 **A IA cria e SALVA. A IA NÃO ENVIA.** A invoice fica com status pendente
@@ -238,9 +255,14 @@ regra é gravada aqui ou em [[PARAMETROS]] — ver [[Stand-by e escalação]].
 
 ## Rotina de cobrança
 
-- **A cada 2 dias:** enviar reminder **somente das invoices OVERDUE**
+- **A cada 2 dias:** reminder **somente das invoices OVERDUE**
   (vencidas). Parcela a vencer **não** entra — existe parcelamento, e
   cobrar cliente em dia queima a relação.
+- **Aprovação POR LOTE** (decisão do dono, 31/08). A IA monta o lote,
+  **mostra a lista** (cliente · valor · dias de atraso · link) e
+  **espera o "ok"**. Não há autorização permanente: "ok" num lote **não
+  vale** para o próximo. Sem "ok", o lote fica em stand-by — a IA não
+  fica repetindo o pedido, mas **volta a alertar se o prazo apertar**.
 - **Passou de 30 dias em aberto:** o cliente entra na lista de devedores
   do segundo cérebro, com o valor e há quantos dias — a IA precisa ter
   isso na memória, não só no relatório.
@@ -266,10 +288,11 @@ de classe nem de tag**, e não há ferramenta para criar tag.
 Ou a classificação fica para o humano na revisão, ou depende da REST API
 com token ([[Etapa de conexão]]).
 
-**2. O reminder exige confirmação a cada envio.** A ferramenta obriga
-mostrar o texto e pedir "sim" antes de disparar. Escopo fechado pelo
-dono: **a cada 2 dias, só as OVERDUE**. Falta ele decidir se dá
-autorização permanente para essa rotina ou aprova por lote.
+**2. O reminder exige confirmação a cada envio — e isso está alinhado
+com a decisão do dono.** A ferramenta obriga mostrar o texto e pedir
+"sim" antes de disparar. O dono fechou o escopo em 31/08: **a cada 2
+dias, só as OVERDUE, com "ok" a cada lote** — sem autorização permanente.
+A limitação técnica e a regra de negócio coincidem: **resolvido**.
 
 **3. O que a IA consegue preencher sozinha hoje:** cliente, itens,
 quantidades, valores, descrições, `service_date` por linha, `due_date`

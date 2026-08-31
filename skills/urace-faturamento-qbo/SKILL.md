@@ -22,6 +22,16 @@ cliente sem autorização**.
 > faturar** e **escrever o que aconteceu depois** (diário + comentário na
 > tarefa do Asana).
 
+## ⏸️ ESTADO ATUAL: especificação, não execução
+
+O Italo ainda está passando as instruções para montar o agente. Até ele
+liberar, **nenhuma escrita no QuickBooks** — nem invoice, nem estimate,
+nem cliente, nem item de catálogo, nem reminder. Ler, conferir e apontar
+divergência: pode. Criar: não.
+
+Isso inclui invoices já mapeadas e com data marcada. **Mapeada não é
+autorizada.** Quando ele liberar, esta seção sai.
+
 ## 🚫 As duas regras que mandam em tudo
 
 1. **A IA cria e SALVA. A IA NÃO ENVIA.** Fatura criada não é fatura
@@ -216,9 +226,13 @@ O mecânico também é cobrado.
 - **A cada 2 dias**, reminder **somente das invoices OVERDUE**. Parcela a
   vencer **não** entra: existe parcelamento na conta, e cobrar cliente em
   dia queima a relação. **Invoice em aberto ≠ inadimplência.**
-- `qbo_sales_send_invoice_reminder` **exige confirmação a cada envio** —
-  mostra o texto e pede "sim". Enquanto o Italo não der autorização
-  permanente para a rotina, **cada lote passa por ele**.
+- **Aprovação por lote, sempre.** Não existe autorização permanente para
+  esta rotina (decisão do Italo, 31/08). Montar o lote, **mostrar a lista**
+  (cliente · valor · dias de atraso · link) e **esperar o "ok"**. "Ok" num
+  lote não vale para o próximo. `qbo_sales_send_invoice_reminder` também
+  exige confirmação a cada envio — a ferramenta e a regra coincidem.
+  Sem "ok", o lote fica em stand-by: não repetir o pedido, mas voltar a
+  alertar se o prazo apertar.
 - Passou de **30 dias** em aberto: o cliente entra na lista de devedores
   do segundo cérebro, com valor e há quantos dias.
 

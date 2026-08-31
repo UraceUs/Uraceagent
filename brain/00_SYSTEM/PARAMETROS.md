@@ -90,7 +90,7 @@ levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 | Chegada da equipe antes do 1º dia do evento | **2 dias** |
 | Nosso treino antes do 1º dia do evento | 1 dia |
 | Devolução do security deposit após a sessão | **5 dias** |
-| Lembrete de cobrança | **a cada 2 dias** — só invoices **overdue** |
+| Lembrete de cobrança | **a cada 2 dias** — só invoices **overdue**, e **com "ok" do dono a cada lote** |
 | **Envio** da invoice do depósito | **4 dias antes** do serviço (ou **no mesmo dia**, se o serviço foi agendado com menos de 4 dias) |
 | **Pagamento** das duas invoices **+ waiver assinada** | **2 dias antes** do serviço |
 | Confirmação de corrida antes do evento | 15 dias (organizado: 30) |
@@ -121,6 +121,17 @@ enviar** — estas duas situações são a exceção:
 ## 👥 Quem autoriza
 
 Italo Silveira (`urace@urace.us`) · Eduardo Resende
+
+### Cobrança de invoice vencida — **aprovação POR LOTE**
+
+Decisão do dono (31/08): **não existe autorização permanente** para a
+rotina de reminder. A IA monta o lote das invoices **overdue**, mostra a
+lista, e **espera o "ok"**. Cada lote, a cada 2 dias, passa por um
+humano. "Ok" dado num lote **não vale** para o lote seguinte.
+
+Enquanto o "ok" não vem, o lote fica em stand-by — ver
+[[Stand-by e escalação]]. A IA **não repete a cobrança do "ok"**, mas
+**volta a alertar se o prazo apertar**.
 
 ## 🔗 IDs de sistemas
 
@@ -153,4 +164,5 @@ Italo Silveira (`urace@urace.us`) · Eduardo Resende
 | 2026-08-28 | Arquivo criado. Fornecedor atual = Usman; depósito US$ 400; exceções de envio de e-mail autorizadas | Italo |
 | 2026-08-28 | IA autorizada a **enviar a invoice do depósito** (só ela). Envio 4 dias antes; pagamento de tudo + waiver 2 dias antes | Italo |
 | 2026-08-31 | Margem de peça fixada em **+15%**; lembrete de cobrança **a cada 2 dias, só para invoice OVERDUE** | Italo |
+| 2026-08-31 | Reminder de cobrança: **aprovação por lote**, sem autorização permanente | Italo |
 | 2026-08-31 | [[Rate Card]] passa a ser a fonte de preço **acima do catálogo do QuickBooks**; ordem de precedência registrada. IDs das duas planilhas adicionados | Italo (skill `urace-faturamento-qbo`) |
