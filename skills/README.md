@@ -27,6 +27,7 @@ conhecimento levantado nestes dias mora aqui e não dentro de um `.py`.
 | `urace-gmail` | triagem diária de `urace@urace.us` | taxonomia lida da conta |
 | `urace-calendar` | corridas do Asana → Urace Race Calendar | mínima, depende do Asana |
 | `urace-faturamento-qbo` | invoice e estimate no QuickBooks | trazida pelo dono em 31/08 e **reconciliada** com o cérebro |
+| `urace-docusign` | waivers de responsabilidade | conector sondado ao vivo em 31/08 |
 
 ## Perfil por área (o que o dono chamou de "sessão diferente")
 

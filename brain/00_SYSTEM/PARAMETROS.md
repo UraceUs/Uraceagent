@@ -95,6 +95,7 @@ levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 | **Pagamento** das duas invoices **+ waiver assinada** | **2 dias antes** do serviço |
 | Confirmação de corrida antes do evento | 15 dias (organizado: 30) |
 | Status `In Production` após e-mail ao fornecedor | **1 dia** |
+| **Validade da waiver** | **1 ano a partir da assinatura** (é o que o e-mail do [[DocuSign]] promete ao cliente) |
 
 ## 🏁 Campo `Race` do Asana (`1213088541600529`)
 
@@ -144,6 +145,9 @@ Enquanto o "ok" não vem, o lote fica em stand-by — ver
 | ADM URACE (só leitura) | `1205530439507169` |
 | Modelo de tarefa de macacão | `1217959088745716` |
 | Google Calendar de corridas | Urace Race Calendar |
+| **Conta DocuSign** (e-mail `support@urace.us`) | `4261a166-3a91-4fb7-97c5-30257d657c52` |
+| Template waiver **parental** (menor) | `6dbf2094-39da-4c21-95dd-feda7ac28022` |
+| Template waiver **adult** (maior) | `c51aede4-bba5-40df-9f14-24c340e2bd3e` |
 | QuickBooks | URACE · realm / company id `9341453113046421` |
 | **Rate Card 2026** (planilha) | `160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo` |
 | **Canotops Price List** (documento) | `1bIVVEVqloBH4yWqrECODplAX8eQ9u3Mrz_byQ5TRM58` |
@@ -164,6 +168,7 @@ Enquanto o "ok" não vem, o lote fica em stand-by — ver
 | 2026-08-28 | Arquivo criado. Fornecedor atual = Usman; depósito US$ 400; exceções de envio de e-mail autorizadas | Italo |
 | 2026-08-28 | IA autorizada a **enviar a invoice do depósito** (só ela). Envio 4 dias antes; pagamento de tudo + waiver 2 dias antes | Italo |
 | 2026-08-31 | Margem de peça fixada em **+15%**; lembrete de cobrança **a cada 2 dias, só para invoice OVERDUE** | Italo |
+| 2026-08-31 | [[DocuSign]] conectado e sondado. Conta é a **`support@`** — o fluxo da waiver deixa de depender da caixa de e-mail. IDs dos 2 templates registrados; validade da waiver fixada em **1 ano da assinatura** | Italo |
 | 2026-08-31 | Mensal Academy 4T e Baby Kart corrigidos para **$2.756,90** e sessão extra dos dois para **$689,23** (planilha diz $2.756,00 / $689,00 — 4 células a arrumar, ver [[Rate Card]]). Regra fixada: **sessão extra = mensal ÷ 4**, e **pacote sai do mensal, nunca da unitária**. E-mail de invoice: **sai pelo próprio QuickBooks**, não existe template a escrever | Italo |
 | 2026-08-31 | Reminder de cobrança: **aprovação por lote**, sem autorização permanente | Italo |
 | 2026-08-31 | [[Rate Card]] passa a ser a fonte de preço **acima do catálogo do QuickBooks**; ordem de precedência registrada. IDs das duas planilhas adicionados | Italo (skill `urace-faturamento-qbo`) |
