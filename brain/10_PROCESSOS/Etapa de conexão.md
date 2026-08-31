@@ -1,7 +1,7 @@
 ---
 tipo: checklist
 area: transversal
-status: aguardando o dono abrir a etapa
+status: ativo — deploy marcado para 01/09/2026
 atualizado_em: 2026-08-28
 tipo_info: OPEN_QUESTION
 responsavel: Italo Silveira
@@ -10,9 +10,30 @@ status: ativo
 
 # 🔌 Etapa de conexão — o que precisa de credencial ou de clique do dono
 
-[[URACE]] · Decisão do dono (28/08): **primeiro a especificação completa
-de cada plataforma; credenciais e chaves só no final.** Esta lista existe
-para nada se perder até lá. **Não abrir este assunto sem o dono pedir.**
+[[URACE]] · [[Administrative AI]] · [[Escalonamento]]
+
+Decisão do dono (28/08): **primeiro a especificação completa de cada
+plataforma; credenciais e chaves só no final.** A especificação ficou
+pronta em 31/08 — **esta etapa está aberta**.
+
+> 🚀 **O runbook do deploy é `adminai/deploy/README.md`.** Esta nota é a
+> lista do que falta; o runbook é o passo a passo de como instalar.
+
+## O que levar para o VPS (31/08)
+
+| Sistema | O que | Onde tirar |
+|---|---|---|
+| [[Asana]] | Personal Access Token | perfil → Settings → Apps → Manage Developer Apps |
+| [[Gmail]] | acesso às **duas** caixas | Workspace → Contas → conceder acesso da `support@` para a `urace@` |
+| [[QuickBooks]] | Client ID · Secret · Refresh Token | developer.intuit.com → seu app → Keys |
+| [[DocuSign]] | Integration Key + chave RSA | apps.docusign.com/admin, **na conta `support@`** |
+| Anthropic | API key | console.anthropic.com (dispensável se já autenticado) |
+
+`DOCUSIGN_USER_ID`, `DOCUSIGN_ACCOUNT_ID` e `QBO_REALM_ID` já estão
+preenchidos no modelo — foram lidos das contas.
+
+⚠️ **Credencial não entra no cérebro nem no git.** Mora em
+`~/.urace/adminai.env`, permissão 600, fora do repositório.
 
 ---
 

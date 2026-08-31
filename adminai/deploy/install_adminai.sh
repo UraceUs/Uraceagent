@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Instala o Administrative AI no VPS. Idempotente: pode rodar de novo
+# depois de um git pull para aplicar código novo.
+#
+# O que ele FAZ:
+#   - cria ~/.urace (700) e ~/.urace/logs
+#   - cria ~/.urace/adminai.env a partir do exemplo, SE não existir
+#   - liga as skills do repo no diretório de skills do OpenClaw
+#   - instala os timers do systemd, mas SÓ os que têm credencial
+#   - prova, no fim, o que ficou de pé
+#
+# O que ele NÃO faz:
+#   - não sobrescreve o adminai.env preenchido (seus segredos ficam)
+#   - não escreve em Asana, Gmail, QuickBooks ou DocuSign
+#   - não liga nada com APLICAR=1 sem você mandar
+#
+# Uso (no VPS):
+#   bash adminai/deploy/install_adminai.sh
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DEPLOY_DIR="$REPO_DIR/adminai/deploy"
+URACE_DIR="${URACE_DIR:-$HOME/.urace}"
+ENV_FILE="$URACE_DIR/adminai.env"
+RUN_USER="$(id -un)"
+SKILLS_DST="${SKILLS_DST:-$HOME/.openclaw/skills}"
+
+echo "== instalador do Administrative AI =="
+echo "repo:     $REPO_DIR"
+echo "usuário:  $RUN_USER"
+echo "segredos: $URACE_DIR"
+echo
+
+# ---------------------------------------------------------------- 1. pastas
+mkdir -p "$URACE_DIR/logs"
+chmod 700 "$URACE_DIR"
+echo "-- $URACE_DIR pronto (700)"
+
+# ------------------------------------------------------------------- 2. env
+if [ ! -f "$ENV_FILE" ]; then
+    cp "$DEPLOY_DIR/adminai.env.example" "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    echo "-- $ENV_FILE criado a partir do exemplo"
+    echo "   ⚠️  PREENCHA AS CREDENCIAIS e rode este script de novo:"
+    echo "       nano $ENV_FILE"
+else
+    chmod 600 "$ENV_FILE"
+    echo "-- $ENV_FILE já existe (preservado, permissão 600)"
+fi
+
+# lê o env sem vazar valor nenhum para o log
+set -a; . "$ENV_FILE"; set +a
+
+tem() { [ -n "${!1:-}" ]; }
+
+# ---------------------------------------------------------------- 3. skills
+mkdir -p "$SKILLS_DST"
+for dir in "$REPO_DIR"/skills/*/; do
+    nome="$(basename "$dir")"
+    [ -f "$dir/SKILL.md" ] || continue
+    ln -sfn "$dir" "$SKILLS_DST/$nome"
+    echo "-- skill ligada: $nome"
+done
+echo "   (link simbólico: git pull atualiza a skill sem reinstalar)"
+
+# ------------------------------------------------------- 4. o que dá para ligar
+echo
+echo "== credenciais encontradas =="
+FALTA=()
+tem ASANA_TOKEN               && echo "   ✅ Asana"      || { echo "   ❌ Asana";      FALTA+=("ASANA_TOKEN"); }
+tem QBO_REFRESH_TOKEN         && echo "   ✅ QuickBooks" || { echo "   ❌ QuickBooks"; FALTA+=("QBO_REFRESH_TOKEN"); }
+tem DOCUSIGN_INTEGRATION_KEY  && echo "   ✅ DocuSign"   || { echo "   ❌ DocuSign";   FALTA+=("DOCUSIGN_INTEGRATION_KEY"); }
+[ -f "${GOOGLE_TOKEN_JSON:-/nao/existe}" ] && echo "   ✅ Google" || { echo "   ❌ Google"; FALTA+=("GOOGLE_TOKEN_JSON"); }
+
+# ARGS_SYNC: simulação por padrão; só vira escrita com APLICAR=1
+if [ "${APLICAR:-0}" = "1" ]; then
+    ARGS="--aplicar"
+    echo
+    echo "   ⚠️  APLICAR=1 — a sincronia do Asana vai ESCREVER de verdade."
+else
+    ARGS=""
+    echo
+    echo "   🔒 APLICAR=0 — tudo em simulação. Nada é escrito nos sistemas."
+fi
+grep -q '^ARGS_SYNC=' "$ENV_FILE" \
+    && sed -i "s|^ARGS_SYNC=.*|ARGS_SYNC=$ARGS|" "$ENV_FILE" \
+    || echo "ARGS_SYNC=$ARGS" >> "$ENV_FILE"
+
+# ---------------------------------------------------------------- 5. timers
+instalar_timer() {
+    local nome="$1" precisa="$2"
+    if [ -n "$precisa" ] && ! tem "$precisa"; then
+        echo "-- $nome: PULADO (falta $precisa)"
+        return
+    fi
+    sudo cp "$DEPLOY_DIR/$nome.service" "/etc/systemd/system/$nome.service"
+    sudo cp "$DEPLOY_DIR/$nome.timer"   "/etc/systemd/system/$nome.timer"
+    # ajusta usuário e caminhos se o layout não for o padrão
+    sudo sed -i "s|/home/ubuntu/Uraceagent|$REPO_DIR|g; \
+                 s|/home/ubuntu/.urace|$URACE_DIR|g; \
+                 s|^User=ubuntu|User=$RUN_USER|" \
+                 "/etc/systemd/system/$nome.service"
+    sudo systemctl enable --now "$nome.timer" >/dev/null
+    echo "-- $nome: instalado e ligado"
+}
+
+echo
+echo "== timers =="
+instalar_timer urace-asana-sync    ASANA_TOKEN
+instalar_timer urace-triagem-email ""
+instalar_timer urace-waivers       ""
+instalar_timer urace-brain-health  ""
+sudo systemctl daemon-reload
+
+# ----------------------------------------------------------------- 6. prova
+echo
+echo "================= PROVA REAL ================="
+echo "-- timers ativos (não confiar em rc=0):"
+systemctl list-timers 'urace-*' --no-pager --all | sed 's/^/   /' || true
+
+echo
+echo "-- o cérebro está íntegro?"
+python3 "$REPO_DIR/adminai/brain_health.py" | tail -6 | sed 's/^/   /'
+
+echo
+echo "-- skills visíveis para o agente:"
+ls -1 "$SKILLS_DST" | sed 's/^/   /'
+
+echo
+if [ ${#FALTA[@]} -gt 0 ]; then
+    echo "⚠️  AINDA FALTA: ${FALTA[*]}"
+    echo "   Preencha em $ENV_FILE e rode este script de novo."
+    echo "   Os timers que dependem delas não foram instalados."
+else
+    echo "✅ Todas as credenciais presentes."
+fi
+echo
+echo "Próximo passo, depois de ler os relatórios de simulação em"
+echo "$URACE_DIR/logs/:  troque APLICAR=0 por APLICAR=1 no env e rode"
+echo "este script de novo."

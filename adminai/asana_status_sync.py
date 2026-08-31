@@ -21,7 +21,7 @@ Seções que NÃO são status ("Locations", "Alphaline Suits", "Cannotops",
 não estado. Mover uma tarefa de lá destruiria a organização deles.
 
 Uso:
-    export ASANA_TOKEN=...            # Personal Access Token (ver docs)
+    export ASANA_TOKEN=...            # ver adminai/deploy/adminai.env.example
     python3 adminai/asana_status_sync.py            # simulação (padrão)
     python3 adminai/asana_status_sync.py --aplicar  # escreve no Asana
 """
@@ -82,8 +82,8 @@ SECOES_FORA_DO_FLUXO = {
 def _req(caminho, metodo="GET", corpo=None):
     token = os.environ.get("ASANA_TOKEN")
     if not token:
-        sys.exit("ERRO: falta ASANA_TOKEN no ambiente. Veja docs/adminai/"
-                 "automacao-status-secao.md para gerar o token.")
+        sys.exit("ERRO: falta ASANA_TOKEN no ambiente. Veja "
+                 "adminai/deploy/adminai.env.example para gerar o token.")
     dados = json.dumps({"data": corpo}).encode() if corpo is not None else None
     req = urllib.request.Request(f"{API}{caminho}", data=dados, method=metodo)
     req.add_header("Authorization", f"Bearer {token}")

@@ -26,7 +26,7 @@ era vender: era administrar. Construído **por partes e por aplicação**,
 com **uma skill por aplicação**
 ([[D-2026-08-28 - Construir por partes e por aplicacao]]).
 
-Roda no **VPS (OpenClaw)**; o Claude Code é backup e ambiente de
+Roda no **[[VPS e OpenClaw]]**; o Claude Code é backup e ambiente de
 desenvolvimento, não o destino final.
 
 ## Pessoas envolvidas
@@ -64,6 +64,9 @@ Todas em `08_DECISOES`. As que mais moldam o projeto:
 | [[Google Calendar]] | mínimo, depende do Asana |
 
 ## Pendências
+
+**Deploy marcado para 01/09/2026** — runbook em
+`adminai/deploy/README.md`, lista do que levar em [[Etapa de conexão]].
 
 [[Etapa de conexão]] — credenciais do VPS, acesso ao `support@` e os
 cliques que só o dono pode dar.

@@ -23,3 +23,4 @@ que realmente evita erro.
 | [[DocuSign]] | waivers | `delivered` **não é** assinado |
 | [[Gmail]] | entrada de tudo | ver [[Taxonomia do Gmail]] |
 | [[Google Calendar]] | corridas | depende do Asana |
+| [[VPS e OpenClaw]] | **onde a IA roda** | segredos ficam fora do repositório |

@@ -1,0 +1,10 @@
+[Unit]
+Description=Triagem de e-mail todo dia as 07h
+
+[Timer]
+OnCalendar=*-*-* 07:00
+Persistent=true
+RandomizedDelaySec=180
+
+[Install]
+WantedBy=timers.target

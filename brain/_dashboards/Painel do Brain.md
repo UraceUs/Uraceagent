@@ -12,6 +12,14 @@ status: ativo
 > Abra [[URACE]] para o mapa completo. Este painel é o **estado de hoje**:
 > o que está pendente, o que está decidido, o que está travado.
 
+## 🚀 Deploy no VPS — 01/09/2026
+
+Runbook: `adminai/deploy/README.md`. O que levar: [[Etapa de conexão]].
+Onde vai rodar: [[VPS e OpenClaw]].
+
+Sobe em **simulação** (`APLICAR=0`) — nada escrito nos sistemas até você
+ler os logs e liberar.
+
 ## 🔴 Pendente de clique do dono
 
 Coisas que a IA **não consegue fazer** — só o Italo, na interface.

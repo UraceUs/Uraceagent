@@ -1,0 +1,14 @@
+[Unit]
+Description=URACE — varredura diaria de waivers pendentes (DocuSign)
+Documentation=file:///home/ubuntu/Uraceagent/brain/10_PROCESSOS/Waiver%20de%20responsabilidade.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+EnvironmentFile=/home/ubuntu/.urace/adminai.env
+ExecStart=/bin/bash -lc 'openclaw agent --agent "$OPENCLAW_AGENT" -m "Rode a varredura diaria de waivers conforme brain/10_PROCESSOS/Waiver de responsabilidade.md: liste envelopes sent e delivered, cruze com os servicos do Asana e alerte o que estiver a 2 dias ou menos, e o que estiver perto de expirar. Lembre: delivered NAO e assinado."'
+StandardOutput=append:/home/ubuntu/.urace/logs/waivers.log
+StandardError=append:/home/ubuntu/.urace/logs/waivers.log
