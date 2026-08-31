@@ -94,11 +94,31 @@ regra de não repetir: prazo que chega **volta a alertar**.
 
 ## Quando vira `completed`
 
-1. `listEnvelopeDocuments` → baixa o PDF
-2. Anexa na tarefa do Asana daquele serviço
-3. Marca a subtarefa **"Signed waiver?"**
-4. Comenta na tarefa: quem assinou, quando, **e o `envelopeId`** — é a
-   chave externa que impede duplicar
+Destino: **o arquivo assinado vai para os anexos da tarefa DA CRIANÇA no
+Asana, e a subtarefa "Signed waiver?" é marcada como concluída.**
+
+1. `listEnvelopeDocuments` → baixa o PDF assinado.
+   **Buscar na DocuSign, não no e-mail** — a conta é a `support@`, então
+   o PDF vem da fonte, com `envelopeId` e certificado junto. (A IA não
+   tem a caixa `support@`; o anexo do e-mail é caminho alternativo para
+   quando ela tiver.)
+2. **Mapear signatário → piloto.** Na parental, quem assina é o
+   pai/mãe/responsável, mas **a tarefa é da criança**. Nunca procurar a
+   tarefa pelo nome do signatário. Mais de uma tarefa do mesmo piloto? A
+   do **serviço mais próximo ainda sem waiver**. Sem vínculo claro:
+   **escalar, não chutar.**
+3. **Anexar o PDF** na tarefa — ⛔ **o conector do Asana não sobe
+   arquivo** (só tem `get_attachments`, verificado em 31/08). Precisa do
+   Personal Access Token + REST `POST /attachments`. Até lá, pular este
+   passo e **comentar com o link** do documento assinado.
+4. **Marcar a subtarefa "Signed waiver?" como concluída** —
+   `update_tasks` com `completed: true`. **Isto já funciona hoje.**
+5. Comentar na tarefa: quem assinou, quando, o `envelopeId` e o link.
+   O `envelopeId` é a chave externa que impede duplicar.
+
+> Resumo do que trava e do que não trava: **marcar a subtarefa funciona
+> hoje; só o upload do arquivo espera o token do Asana.** Não deixar de
+> marcar por causa do anexo.
 
 ## Não é só waiver
 

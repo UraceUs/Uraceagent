@@ -57,6 +57,13 @@ JWT) · Google Drive (a [[Rate Card]]).
 
 Guardar sempre como variável de ambiente — **nunca dentro do código**.
 
+⚠️ **O token do [[Asana]] não é só "para o VPS".** O conector desta
+sessão **não sobe arquivo** — tem `get_attachments` (ler) e nenhuma
+ferramenta de escrita de anexo (verificado em 31/08). Anexar a waiver
+assinada na tarefa da criança ([[Waiver de responsabilidade]]) depende do
+PAT + REST `POST /attachments`. Enquanto isso a IA marca a subtarefa e
+comenta com o link — o arquivo é que não sobe.
+
 ---
 
 ## 🟡 Cliques do dono (não é credencial, mas só ele pode fazer)

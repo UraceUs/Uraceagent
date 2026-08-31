@@ -74,17 +74,67 @@ O alerta **se repete enquanto o prazo estiver apertado** — esta é a
 exceção à regra "não repetir pergunta" de [[Stand-by e escalação]]:
 prazo que chega **volta a alertar**, sempre.
 
-## Quando assina
+## Quando assina (regra do dono, 31/08)
 
-1. A IA vê o envelope virar `completed` no [[DocuSign]].
-2. Baixa o PDF (`listEnvelopeDocuments`).
-3. **Anexa na tarefa do [[Asana]]** daquele serviço.
-4. Marca a subtarefa **"Signed waiver?"**.
-5. Registra no comentário da tarefa: quem assinou, quando, e o id do
-   envelope — chave externa, para nunca duplicar.
+O destino é sempre o mesmo: **o arquivo assinado vai para os anexos da
+tarefa DA CRIANÇA no [[Asana]], e a subtarefa "Signed waiver?" é marcada
+como concluída.**
 
-O e-mail de confirmação chega no `support@`, mas **não é dele que a IA
-depende** — a DocuSign é a fonte. Ver [[DocuSign]].
+### 🔀 Achar a tarefa certa: o signatário NÃO é o piloto
+
+Este é o passo que erra fácil. Na waiver parental:
+
+- **quem assina** = o pai/mãe/responsável (é o nome no envelope)
+- **de quem é a tarefa** = **a criança**, o piloto
+
+Então a IA **não procura a tarefa pelo nome do signatário**. Ela mapeia
+responsável → piloto (mesma tabela de [[Clientes]] que resolve o
+[[QuickBooks]]) e só então acha a tarefa. Achou mais de uma tarefa do
+mesmo piloto? A do **serviço mais próximo** que ainda está sem waiver.
+Não achou o vínculo? **Escala — não chuta.**
+
+### De onde sai o arquivo
+
+O dono descreveu "pegar do e-mail o anexo". São **duas fontes possíveis**,
+e hoje só uma funciona:
+
+| Fonte | Estado |
+|---|---|
+| **[[DocuSign]]** (`listEnvelopeDocuments`) | ✅ **funciona hoje** — a conta é a `support@`, o PDF vem direto da fonte |
+| Anexo do e-mail em `support@` | ⛔ a IA **não tem essa caixa** ([[Etapa de conexão]]) |
+
+**Regra: buscar o PDF na DocuSign.** É o mesmo arquivo, com a vantagem de
+trazer junto o `envelopeId` e o certificado. O e-mail fica como caminho
+alternativo para quando o `support@` existir.
+
+### ⛔ O anexo em si está bloqueado pelo conector
+
+O conector do [[Asana]] tem **`get_attachments` (ler) e nada de escrever**
+— não existe ferramenta de subir arquivo. Verificado em 31/08.
+
+Então, **até o token do Asana existir** ([[Etapa de conexão]]), o passo
+"anexar" fica assim:
+
+| Passo | Hoje | Com o token (REST `POST /attachments`) |
+|---|---|---|
+| Achar a tarefa da criança | ✅ | ✅ |
+| **Anexar o PDF** | ⛔ **não dá pelo conector** | ✅ |
+| Comentar com o link do documento assinado + `envelopeId` | ✅ | ✅ |
+| **Marcar "Signed waiver?" como concluída** | ✅ (`update_tasks`, `completed: true`) | ✅ |
+
+Ou seja: **a marcação da subtarefa já funciona hoje**; só o upload do
+arquivo espera o token. Enquanto isso a IA comenta na tarefa com o link
+do assinado, para o arquivo não ficar invisível.
+
+### A sequência
+
+1. Envelope vira `completed` no [[DocuSign]].
+2. `listEnvelopeDocuments` → baixa o PDF assinado.
+3. Mapeia **signatário → piloto** e acha a tarefa da criança.
+4. **Anexa o PDF** na tarefa (quando o token existir).
+5. **Marca a subtarefa "Signed waiver?" como concluída.**
+6. Comenta na tarefa: quem assinou, quando, o `envelopeId` e o link —
+   chave externa, para nunca duplicar.
 
 ## 🚦 O que a IA pode fazer sozinha
 
