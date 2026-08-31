@@ -16,6 +16,25 @@ Foi ele que, em 28/08, resolveu sozinho o valor do pacote do
 - Devolução do depósito pelo *merchant view*
 - Antes de cobrar depósito: **conferir aqui se já foi cobrado e se foi devolvido**
 
+## ⚠️ O preço NÃO sai daqui
+
+O catálogo do QBO tem **preço defasado**. A fonte de verdade é a
+[[Rate Card]] — ver a ordem de precedência em [[PARAMETROS]]. Sempre
+comparar o valor lançado contra o `unit_price` do catálogo e **listar a
+diferença** no relato.
+
+## Armadilhas do conector (confirmadas em uso)
+
+| Armadilha | Consequência |
+|---|---|
+| Conta está no nome do **responsável**, não do piloto | buscar o piloto e criar cliente duplicado — ver [[Clientes]] |
+| **`doc_number` duplicados nesta conta** | deep link tem que usar `txnId`, nunca o número do documento |
+| `amount` da linha é **valor unitário** | `qty 2` + `amount 21.25` = $42,50, não $21,25 |
+| **Não aceita dois-pontos** no `Name` do item | `Parts IAME:X` falha; item nasce fora da categoria |
+| **Não tem campo de classe nem de tag** | classificação vai como lembrete na escalação |
+| **Não edita preço nem inativa item** | só cria e busca; lote só por CSV com "sobrescrever por match exato" |
+| Reminder **exige confirmação a cada envio** | rotina de cobrança não é autônoma hoje |
+
 ## O catálogo é grande, o uso é pequeno
 
 896 itens cadastrados (360 serviços, 536 peças) — mas **só ~25 realmente

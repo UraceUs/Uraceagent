@@ -1,12 +1,12 @@
 ---
 tipo: parametros
 fonte: humano
-atualizado_em: 2026-08-28
+atualizado_em: 2026-08-31
 ---
 
 # ⚙️ PARÂMETROS — o que muda com o tempo
 
-[[URACE]] · usado por [[Pedido de macacão]] · [[Pagamento e security deposit]] · [[Triagem de e-mail]] · [[Compra e envio]]
+[[URACE]] · usado por [[Pedido de macacão]] · [[Pagamento e security deposit]] · [[Triagem de e-mail]] · [[Compra e envio]] · [[Invoice e estimate no QuickBooks]]
 
 > **ESTE É O ÚNICO LUGAR ONDE SE ALTERA ESTES VALORES.**
 > Mudou aqui, mudou em todo lugar. Nenhuma skill, script, prompt ou
@@ -41,12 +41,28 @@ O catálogo do QuickBooks **ainda usa o nome antigo em parte dos itens**.
 Ao ler uma invoice antiga, "Karting School" e "Urace Academy" são o
 mesmo serviço. Ao emitir, conferir qual item está sendo usado.
 
+## 💰 De onde sai o PREÇO (ordem de precedência)
+
+| # | Fonte | Observação |
+|---|---|---|
+| 1 | **Valor que o dono passar** | vence tudo. Usar e **sinalizar a divergência** — nunca corrigir por conta própria |
+| 2 | **[[Rate Card]]** (Google Sheet) | fonte de verdade acima do catálogo · Canotops tem tabela própria |
+| 3 | **Invoice anterior** do mesmo serviço/cliente | aceitável e economiza trabalho, mas **dizer explicitamente**: "reaproveitei os valores da invoice X" |
+| 4 | Catálogo do [[QuickBooks]] | **preços defasados** — sempre comparar o lançado contra o `unit_price` e listar a diferença no relato |
+
+**Nunca cotar preço de memória.** Peça sem valor conhecido entra a `0`
+para o dono preencher, com aviso de quais têm preço no catálogo.
+
 ## 💵 Valores
 
 | Parâmetro | Valor |
 |---|---|
 | Security deposit | **US$ 400** |
 | **Margem sobre peça** | **+15%** sobre o preço do fornecedor, **por peça** |
+| Peça comprada pelo cliente (não pela URACE) | **+50% na mão de obra** ([[Rate Card]]) |
+| Segundo motor | **40%** do aluguel do motor ([[Rate Card]]) |
+| Entrada de campeonato | **30%** + parcelas, quitado antes da última corrida |
+| Taxa de pista | **nunca entra na invoice** — paga direto na pista |
 | Frequência do depósito | **um por CLIENTE**, enquanto estiver retido |
 | Ordem de cobrança | 1º invoice do serviço · 2º depósito (assim que a 1ª for paga — **ou no limite dos 4 dias, pago ou não**) |
 
@@ -117,7 +133,9 @@ Italo Silveira (`urace@urace.us`) · Eduardo Resende
 | ADM URACE (só leitura) | `1205530439507169` |
 | Modelo de tarefa de macacão | `1217959088745716` |
 | Google Calendar de corridas | Urace Race Calendar |
-| QuickBooks | URACE · realm `9341453113046421` |
+| QuickBooks | URACE · realm / company id `9341453113046421` |
+| **Rate Card 2026** (planilha) | `160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo` |
+| **Canotops Price List** (documento) | `1bIVVEVqloBH4yWqrECODplAX8eQ9u3Mrz_byQ5TRM58` |
 
 ## 📍 Endereços
 
@@ -135,3 +153,4 @@ Italo Silveira (`urace@urace.us`) · Eduardo Resende
 | 2026-08-28 | Arquivo criado. Fornecedor atual = Usman; depósito US$ 400; exceções de envio de e-mail autorizadas | Italo |
 | 2026-08-28 | IA autorizada a **enviar a invoice do depósito** (só ela). Envio 4 dias antes; pagamento de tudo + waiver 2 dias antes | Italo |
 | 2026-08-31 | Margem de peça fixada em **+15%**; lembrete de cobrança **a cada 2 dias, só para invoice OVERDUE** | Italo |
+| 2026-08-31 | [[Rate Card]] passa a ser a fonte de preço **acima do catálogo do QuickBooks**; ordem de precedência registrada. IDs das duas planilhas adicionados | Italo (skill `urace-faturamento-qbo`) |

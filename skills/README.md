@@ -26,6 +26,7 @@ conhecimento levantado nestes dias mora aqui e não dentro de um `.py`.
 | `urace-asana` | U-RACE, SUITS, Shipping Orders, ADM URACE | operação mapeada e validada |
 | `urace-gmail` | triagem diária de `urace@urace.us` | taxonomia lida da conta |
 | `urace-calendar` | corridas do Asana → Urace Race Calendar | mínima, depende do Asana |
+| `urace-faturamento-qbo` | invoice e estimate no QuickBooks | trazida pelo dono em 31/08 e **reconciliada** com o cérebro |
 
 ## Perfil por área (o que o dono chamou de "sessão diferente")
 
@@ -44,8 +45,8 @@ todas leem de lá. O dono muda num lugar e o sistema inteiro acompanha.
 
 1. **A IA não envia invoice.** Prepara, preenche, revisa. Enviar é humano.
 2. **A IA não envia e-mail** — só rascunho. Exceções autorizadas, e
-   só estas duas: pedido de medidas ao cliente do macacão e pedido de
-   produção ao fornecedor.
+   só estas três: pedido de medidas ao cliente do macacão, pedido de
+   produção ao fornecedor e a invoice do security deposit.
 3. **Não apagar, não destruir, não regenerar credencial.** Antes de
    qualquer coisa com risco real de perda, pedir autorização.
 4. **Nunca inventar dado.** Sem fonte, escalar — não deduzir.
