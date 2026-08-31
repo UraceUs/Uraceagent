@@ -30,10 +30,6 @@ Antes de criar cliente: **buscar pelo responsável e pelo e-mail**
 Antes de criar item: `qbo_catalog_search_products`, e só criar o que
 voltar `found: false`.
 
-**Em espera por instrução do dono:** a invoice de setembro do
-[[Michael Nicholas|Elijah]] (vence dia 10). Está mapeada e não deve ser
-emitida até ele mandar.
-
 ## 🚫 A regra que manda em tudo
 
 **A IA cria e SALVA. A IA NÃO ENVIA.** A invoice fica com status pendente

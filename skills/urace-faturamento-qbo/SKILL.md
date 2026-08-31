@@ -36,9 +36,6 @@ Antes de criar cliente, buscar pelo responsável e pelo e-mail (tabela
 abaixo). Antes de criar item, `qbo_catalog_search_products` — só criar o
 que voltar `found: false`.
 
-**Em espera por instrução:** a invoice de setembro do Elijah Nicholas
-(vence dia 10). Mapeada, não autorizada.
-
 ## 🚫 As duas regras que mandam em tudo
 
 1. **A IA cria e SALVA. A IA NÃO ENVIA.** Fatura criada não é fatura
