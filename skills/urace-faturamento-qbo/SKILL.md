@@ -293,9 +293,9 @@ quem revisa clica em enviar dentro do QuickBooks.
 Mensal (4 sessões): **4 stroke e Baby Kart $2.756,90** · 2 stroke
 $3.156,90 · kart próprio $1.800 · kart próprio + mecânico $1.200.
 Sessão avulsa (fora do mensal) 4T $719 · 2T $819.
-**Sessão extra dentro do mensal = mensal ÷ 4**: 2T **$789,23**;
-4T está $689,00 na planilha e a regra daria $689,23 — **perguntar** antes
-de usar em sessão isolada.
+**Sessão extra dentro do mensal = mensal ÷ 4**, sem exceção:
+4T e Baby Kart **$689,23** · 2T **$789,23**. A planilha traz $689,00 no
+4T — **errado, usar $689,23** (decidido pelo Italo em 31/08).
 
 ⚠️ A planilha traz **$2.756,00** no mensal 4T e Baby Kart — **está
 errada, faltam 90 centavos**. Confirmado por invoice paga (txnId 9391) e

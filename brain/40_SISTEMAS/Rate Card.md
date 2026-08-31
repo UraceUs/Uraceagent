@@ -49,7 +49,7 @@ Consumables · Custom.
 |---|---|
 | **Sessão avulsa** (`Academy`, per session) | kart próprio $500 · Baby Kart $719 · **4 stroke $719** · 2 stroke $819 · adult shifter $899 |
 | **Mensal sem contrato** (`Academy Monthly`, 4 sessões/mês) | kart próprio + mecânico $1.200 · kart próprio $1.800 · Baby Kart **$2.756,90** · **4 stroke $2.756,90** · 2 stroke $3.156,90 · *(planilha diz $2.756,00 nas duas primeiras — ver abaixo)* |
-| **Sessão extra** no mensal (= mensal ÷ 4) | $300 · $450 · $689 · **$689** *(deveria ser $689,23 — ver abaixo)* · **$789,23** ✅ |
+| **Sessão extra** no mensal (= mensal ÷ 4) | $300 · $450 · **$689,23** · **$689,23** · **$789,23** |
 | **Contrato 6 meses / 27 sessões** | 4T $17.858,88 (4% off · 33% entrada $5.893,43 + 5× $2.393,09) · 2T $20.450,88 |
 | **Contrato 12 meses / 54 sessões** | 4T $34.229,52 (8% off · 20% entrada $6.845,90 + 11× $2.489,42) · 2T $39.197,52 |
 
@@ -90,27 +90,36 @@ nenhum da tabela.
 
 #### O que corrigir na planilha (célula, não aqui)
 
+Quatro células, todas na coluna do mensal sem contrato (aparecem duas
+vezes: na tabela de cima e na lista normalizada do fim):
+
 | Célula | Está | Deve ser |
 |---|---|---|
 | `Academy Monthly — 4 Stroke Kart Rental` | $2.756,00 | **$2.756,90** |
 | `Academy Monthly — Baby Kart` | $2.756,00 | **$2.756,90** |
+| `Academy Extra Session — 4 Stroke Rental` | $689,00 | **$689,23** |
+| `Academy Extra Session — Baby Kart` | $689,00 | **$689,23** |
 
-Até a planilha ser corrigida, **o valor válido é $2.756,90** — está aqui,
-e é daqui que a IA lê.
+O 2 stroke já está certo nas duas linhas ($3.156,90 / $789,23).
+
+Até a planilha ser corrigida, **valem os valores desta nota** — é daqui
+que a IA lê.
 
 #### A sessão extra sai do mensal ÷ 4 (decidido em 31/08)
 
 O dono confirmou **$789,23** para a sessão extra do 2 stroke. Isso fixa a
 regra: **sessão extra = mensal ÷ 4**, com os centavos.
 
-| | Mensal | ÷ 4 | Planilha |
-|---|---|---|---|
-| 4 stroke / Baby Kart | $2.756,90 | $689,225 → **$689,23** | $689,00 ⚠️ |
-| 2 stroke | $3.156,90 | $789,225 → **$789,23** | $789,23 ✅ |
+O dono confirmou os dois valores, então a regra vale sem exceção:
 
-⚠️ **Pela mesma regra, a sessão extra do 4T deveria ser $689,23, e a
-planilha traz $689,00.** É o mesmo tipo de arredondamento que já tinha
-comido os 90 centavos do mensal. **Aguardando o dono** — não foi alterado.
+| | Mensal | ÷ 4 | Valor válido |
+|---|---|---|---|
+| 4 stroke / Baby Kart | $2.756,90 | $689,225 | **$689,23** |
+| 2 stroke | $3.156,90 | $789,225 | **$789,23** |
+
+A planilha traz **$689,00** no 4T e no Baby Kart — mesmo arredondamento
+que já tinha comido os 90 centavos do mensal. **Corrigido aqui em
+31/08 por decisão do dono.**
 
 ##### Regra de ouro do pacote: derivar do MENSAL, nunca multiplicar a unitária
 
@@ -122,10 +131,11 @@ Pacote de 2 sessões 4T:
 | 2 × $689,23 | $1.378,46 ❌ um centavo a mais |
 | 2 × $689,00 | $1.378,00 ❌ 45 centavos a menos |
 
-Multiplicar a unitária arredondada **cria deriva de centavo**. Sempre
-partir do mensal: 2 sessões = ÷ 2, 3 sessões = × 3/4, e assim por diante.
-Isso vale mesmo depois que o dono decidir o $689,23 — a unitária serve
-para cobrar **uma** sessão avulsa dentro do mensal, não para montar pacote.
+Multiplicar a unitária arredondada **cria deriva de centavo** — e isso
+continua verdade agora que a unitária é $689,23 (2 × $689,23 = $1.378,46,
+um centavo a mais que a invoice real). Sempre partir do mensal: 2 sessões
+= ÷ 2, 3 sessões = × 3/4, e assim por diante. A unitária serve para
+cobrar **uma** sessão dentro do mensal, não para montar pacote.
 
 ##### Os contratos não derivam da unitária com centavos
 
