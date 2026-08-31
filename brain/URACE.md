@@ -15,6 +15,8 @@ parte para qualquer coisa, e é aqui que ela devolve o que aprendeu.
 > ⚙️ **[[PARAMETROS]] é o único lugar onde se altera** valor, prazo,
 > fornecedor ou ID. Mudou lá, mudou no sistema inteiro.
 
+> 📖 Primeira vez aqui? [[COMECE AQUI]].
+
 ## 🧠 Como a IA pensa — leia antes de tudo
 
 | Nota | Para quê |
