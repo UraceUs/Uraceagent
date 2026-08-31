@@ -45,23 +45,27 @@ Assunto do e-mail que o cliente recebe:
 - Parental: `Please Complete the Docusign: Parental Consent, Release, and Waiver of Liability`
 - Adult: `Action Needed: Event Release and Waiver of Liability Docusign`
 
-### ⚠️ Dois templates vazios no meio
+### Dois templates vazios — ficam onde estão
 
 `63dcf553-4b35-40cc-919a-c83f1db11ee5` e
-`5441b464-d847-4402-bed0-7504ecf8a95b` — **sem nome, sem assunto, 0
-páginas**. Lixo de teste de 2024/2025. O Parental está com
-`autoMatch: true`, então um match automático pode cair no template
-errado. **A IA sempre escolhe o template pelo ID**, nunca por nome nem
-por auto-match.
+`5441b464-d847-4402-bed0-7504ecf8a95b` — sem nome, sem assunto, 0
+páginas. **Decisão do dono (31/08): não serão usados, e não precisam ser
+apagados.**
 
-### ⚠️ O texto do Adult Waiver está errado
+Consequência para a IA: como eles continuam na conta e o Parental está
+com `autoMatch: true`, **escolher template pelo ID é obrigatório** —
+nunca por nome, nunca deixando o auto-match decidir. Só os dois IDs da
+tabela acima existem para a automação; os outros dois **não existem**.
 
-O `emailBlurb` do **Adult Waiver** é uma cópia do texto parental: fala em
-*"your child's participation"* e *"grant consent for your child's
-participation"*. Ou seja, **um piloto adulto recebe um e-mail sobre o
-filho dele.**
+### O texto do Adult Waiver — fica como está
 
-Não corrigi — é edição do template, decisão do dono.
+O `emailBlurb` do **Adult Waiver** é cópia do texto parental: fala em
+*"your child's participation"*. Um piloto adulto recebe e-mail sobre o
+filho dele.
+
+**Decisão do dono (31/08): não mexer.** Registrado para que ninguém
+"conserte" isso depois achando que é bug esquecido — é escolha
+consciente. A IA **não edita template** em hipótese alguma.
 
 ### O prazo que o texto promete ao cliente
 

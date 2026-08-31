@@ -13,7 +13,7 @@ serviço não acontece — por isso a varredura é **diária**.
 
 > **Segundo cérebro.** Prazos e IDs moram em
 > `brain/00_SYSTEM/PARAMETROS.md`; o processo em
-> `brain/10_PROCESSOS/Waiver.md`; os fatos da conta em
+> `brain/10_PROCESSOS/Waiver de responsabilidade.md`; os fatos da conta em
 > `brain/40_SISTEMAS/DocuSign.md`. Ler antes, escrever depois (comentário
 > na tarefa do Asana + linha no diário).
 
@@ -40,9 +40,11 @@ QuickBooks. Enviar waiver é mandar e-mail a cliente.
 | **Maior** | Adult Waiver of Liability | `c51aede4-bba5-40df-9f14-24c340e2bd3e` | o próprio piloto |
 
 **Escolher SEMPRE pelo ID.** Há dois templates vazios na conta
-(`63dcf553-…`, `5441b464-…`: sem nome, 0 páginas) e o Parental está com
-`autoMatch: true` — escolher por nome ou deixar o auto-match decidir
-pode cair no template errado.
+(`63dcf553-…`, `5441b464-…`: sem nome, 0 páginas). O dono decidiu em
+31/08 que **não serão usados e não serão apagados** — então eles
+continuam lá, e com `autoMatch: true` no Parental, escolher por nome ou
+deixar o auto-match decidir pode cair no template errado.
+**Para a automação existem só os dois IDs da tabela.**
 
 Role dos dois: `Parental Consent Waiver Liability`.
 
@@ -103,8 +105,9 @@ regra de não repetir: prazo que chega **volta a alertar**.
 A conta também tem **NDA** e **Service Agreement**. A varredura os lista
 **à parte** e não age sobre eles.
 
-## Defeito conhecido (não corrigir sozinho)
+## O texto do Adult Waiver fica como está
 
-O texto do **Adult Waiver** é cópia do parental: fala em *"your child's
-participation"*. Um piloto adulto recebe e-mail sobre o filho dele.
-Editar template é decisão do dono — **sinalizar, não corrigir**.
+O `emailBlurb` do Adult Waiver é cópia do parental — fala em *"your
+child's participation"*. **O dono decidiu em 31/08 não mexer.** Não é
+pendência, é escolha. Não sinalizar de novo, não sugerir correção, e
+**nunca editar template**.

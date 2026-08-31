@@ -66,8 +66,6 @@ Guardar sempre como variável de ambiente — **nunca dentro do código**.
 | Remover o campo `Order number` do SUITS | Asana → Personalizar → Campos | Enum quebrado; os dados já foram migrados para `Pedido` em 28/08. A API deu `Access denied` |
 | Criar as 14 regras de sincronia status ↔ quadro | Asana → Personalizar → Regras | Não existe endpoint de API para criar regra. Ver [[Compra e envio]] |
 | Opção "Folga" no campo `Race` (se quiser) | Asana → Personalizar → Campos | A API não cria opção de campo |
-| **Corrigir o texto do Adult Waiver** | DocuSign → Templates | O e-mail do template adulto fala em *"your child's participation"* — texto parental copiado. Ver [[DocuSign]] |
-| Apagar os 2 templates vazios do DocuSign | DocuSign → Templates | Sem nome, 0 páginas; com `autoMatch` ligado no parental, atrapalham |
 | Corrigir as 4 células da [[Rate Card]] | Google Sheets | Mensal e sessão extra do 4T/Baby Kart. Ver [[Rate Card]] |
 
 ---
