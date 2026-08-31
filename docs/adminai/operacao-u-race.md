@@ -1,3 +1,20 @@
+# Como o U-RACE opera — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/10_PROCESSOS/` — as regras viraram processo
+- `brain/08_DECISOES/` — as autorizações viraram notas de decisão
+- `brain/40_SISTEMAS/Asana.md` — colunas, modelos e as 12 subtarefas
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Como o U-RACE opera — regras ditadas pelo dono (28/08/2026)
 
 Projeto **U-RACE** (`1205450093098920`), visão de quadro. Este documento
@@ -191,3 +208,5 @@ O dono confirmou o rumo: mais à frente a IA terá acesso às **duas caixas
 de e-mail** e ao sistema de onde saem os links. **Por ora, o foco é só o
 Asana.** O Gmail foi usado hoje apenas como fonte de verificação pontual
 para não gravar um dado inventado.
+
+</details>

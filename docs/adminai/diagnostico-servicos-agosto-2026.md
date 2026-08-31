@@ -1,3 +1,19 @@
+# Diagnóstico dos serviços de agosto — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/13_PROBLEMAS/` — os 7 achados viraram notas de problema, uma cada:
+  P-01, P-02, P-03, P-05 e P-10 (resolvido)
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Diagnóstico dos serviços recentes — U-RACE
 
 Escopo pedido pelo dono: **último mês** (vencimento de 25/07 a 29/08/2026),
@@ -98,3 +114,5 @@ Confirmar uma vez e eu aplico o padrão em todas.
 | Sem security deposit registrado | 30 |
 | Serviço concluído ocupando coluna de dia | 10 |
 | Campo `Race` faltando | **0** ✅ |
+
+</details>

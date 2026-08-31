@@ -1,3 +1,19 @@
+# Descobertas da fase 2 — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/40_SISTEMAS/Asana.md` e `brain/40_SISTEMAS/Gmail.md`
+- `brain/30_DIARIO/2026-08-28.md`
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Administrative AI — Descobertas (FASE 2/5, 27/08/2026)
 
 > Levantamento READ-ONLY feito pelos MCPs conectados à sessão Claude.
@@ -192,3 +208,5 @@ dali é só o CONTEÚDO descoberto (cadências, divisão Eduardo×Lara,
 texto das tarefas de invoice) como referência de processo. A construção
 será POR PARTES E POR APLICAÇÃO (Asana, Gmail, Calendar, QuickBooks,
 Obsidian — uma de cada vez), não por um quadro central pré-existente.
+
+</details>

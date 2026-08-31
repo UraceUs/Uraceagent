@@ -4,6 +4,9 @@ area: transversal
 fonte: humano
 ditado_por: Italo Silveira
 data: 2026-08-28
+tipo_info: RULE
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # Processo — perguntar, colocar em stand-by e retomar

@@ -3,6 +3,9 @@ tipo: processo
 area: Gmail
 fonte: humano
 atualizado_em: 2026-08-28
+tipo_info: PROCESS
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # Processo — triagem de e-mail

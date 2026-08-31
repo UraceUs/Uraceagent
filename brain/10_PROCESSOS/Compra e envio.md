@@ -3,6 +3,9 @@ tipo: processo
 area: Shipping Orders
 fonte: humano
 atualizado_em: 2026-08-28
+tipo_info: PROCESS
+responsavel: Eduardo Resende
+status: ativo
 ---
 
 # Processo — compra e envio

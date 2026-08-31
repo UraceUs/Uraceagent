@@ -6,6 +6,9 @@ ditado_por: Italo Silveira
 data: 2026-08-28
 asana_projeto: "1205661933760052"
 modelo_de_tarefa: "1217959088745716"
+tipo_info: PROCESS
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # Processo — pedido de macacão (SUITS)

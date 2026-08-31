@@ -2,6 +2,9 @@
 tipo: parametros
 fonte: humano
 atualizado_em: 2026-08-31
+tipo_info: RULE
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # ⚙️ PARÂMETROS — o que muda com o tempo

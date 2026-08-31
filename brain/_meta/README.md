@@ -1,6 +1,10 @@
 ---
 tipo: meta
 atualizado_em: 2026-08-31
+tipo_info: RULE
+fonte: interno
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # Como o cérebro funciona
@@ -21,12 +25,31 @@ interface humana desse conhecimento — o mesmo conteúdo, dois leitores.
 | Pasta | O que é | Regra |
 |---|---|---|
 | `00_SYSTEM` | comportamento da IA | **[[PARAMETROS]] é o único lugar de alteração** de valor, prazo, fornecedor e ID |
+| `01_EMPRESA` | quem é a URACE, políticas | fato com fonte, sempre |
+| `04_PROJETOS` | o que está sendo construído | um por projeto, com estado |
+| `08_DECISOES` | o que foi decidido, e por quê | **uma nota por decisão**, nunca apagada |
+| `13_PROBLEMAS` | o que está quebrado | resolvido **não sai** — muda de seção |
 | `10_PROCESSOS` | como o trabalho é feito, passo a passo | ditado pelo dono; a IA não inventa processo |
 | `20_ENTIDADES` | clientes, corridas, equipe, fornecedores, serviços, locais | uma nota por coisa real |
 | `30_DIARIO` | o que aconteceu em cada dia | append, nunca reescrever o passado |
 | `40_SISTEMAS` | Asana, Gmail, QuickBooks, Rate Card, DocuSign, Calendar | os fatos da conta **e as armadilhas** |
 | `90_ARQUIVO` | fora de uso | registro, não referência |
 | `_dashboards` · `_meta` | painel e este guia | — |
+
+## A tipagem — o que impede contexto virar regra
+
+Toda nota de conhecimento carrega **`tipo_info`**: `FACT`, `DECISION`,
+`RULE`, `PROCESS`, `PREFERENCE`, `CONTEXT`, `OPEN_QUESTION` ou
+`UNKNOWN`, mais `fonte`, `data`, `responsavel` e `status`.
+Regras completas em [[Tipos de informação]].
+
+**`CONTEXT` não vira `RULE` sozinho.** Uma coisa dita num dia entra como
+contexto; só vira regra quando um humano disser que é — e essa promoção
+vira nota em `08_DECISOES`.
+
+Obrigatório em nota nova, e nas de **processo, sistema e decisão**. As
+~50 fichas de entidade (cliente, corrida, fornecedor) ficam sem — são
+cadastro, não regra.
 
 ## As duas regras estruturais
 

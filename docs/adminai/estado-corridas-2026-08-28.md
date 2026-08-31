@@ -1,3 +1,18 @@
+# Estado das corridas em 28/08 — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/20_ENTIDADES/corridas/` — uma nota por corrida
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Estado das corridas — 28/08/2026 (Parte A, 1ª rodada do espelho)
 
 Fonte: projeto U-RACE, seção RACES, lido ao vivo (read-only). Espelhos
@@ -42,3 +57,5 @@ Sondas MCP read-only: get_tasks na seção RACES (paginado) + get_task nas
 2 corridas em janela + get_task nas 12 subtarefas críticas. Nenhuma
 escrita no Asana. Próxima rodada: re-sondar e fazer diff contra os
 espelhos (o que mudou = o que a equipe fez).
+
+</details>

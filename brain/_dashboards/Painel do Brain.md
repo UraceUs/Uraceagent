@@ -1,6 +1,10 @@
 ---
 tipo: painel
 atualizado_em: 2026-08-31
+tipo_info: CONTEXT
+fonte: interno
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # ⭐ Painel do Cérebro URACE
@@ -34,6 +38,13 @@ Coisas que a IA **não consegue fazer** — só o Italo, na interface.
 | [[Asana]] | ler tudo, criar e mover tarefa, comentar · **não sobe anexo** (falta token) |
 | [[Gmail]] | triar e rascunhar · **não envia**, salvo as exceções de [[PARAMETROS]] |
 
+## 🔧 Problemas abertos
+
+Nove, em [[Problemas]]. Os de maior risco:
+[[P-04 - Contas a receber concentradas]] ·
+[[P-07 - Waivers paradas desde junho]] ·
+[[P-05 - Security deposit quase nao aparece]]
+
 ## ⚠️ Números que a operação precisa olhar
 
 - **US$ 185.887 a receber**, 84% em duas invoices de 2025 (Juan Pacino
@@ -51,6 +62,18 @@ Coisas que a IA **não consegue fazer** — só o Italo, na interface.
 3. **`delivered` no [[DocuSign]] não é assinado.** Só `completed` conta.
 4. **O preço não sai do catálogo do QBO** — sai da [[Rate Card]].
 5. **Pacote se calcula do mensal**, nunca multiplicando a unitária.
+
+## 🧠 Para a IA se orientar
+
+| Antes de agir | Nota |
+|---|---|
+| Que peso tem essa informação? | [[Tipos de informação]] |
+| Chegou coisa nova, e agora? | [[Protocolo de aprendizado]] |
+| **O que eu não sei?** | [[Conflitos e lacunas]] |
+| Devo chamar humano? | [[Escalonamento]] |
+
+Índices: [[Empresa]] · [[Projetos]] · [[Decisoes]] · [[Processos]] ·
+[[Problemas]] · [[Sistemas]] · [[Clientes]] · [[Equipe]]
 
 ## Como este vault funciona
 

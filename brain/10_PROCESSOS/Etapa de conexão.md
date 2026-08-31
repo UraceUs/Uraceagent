@@ -3,6 +3,9 @@ tipo: checklist
 area: transversal
 status: aguardando o dono abrir a etapa
 atualizado_em: 2026-08-28
+tipo_info: OPEN_QUESTION
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # 🔌 Etapa de conexão — o que precisa de credencial ou de clique do dono

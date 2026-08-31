@@ -1,77 +1,95 @@
 ---
 tipo: hub
-atualizado_em: 2026-08-31
+tipo_info: CONTEXT
+data: 2026-08-31
+fonte: interno
+responsavel: Italo Silveira
+status: ativo
 ---
 
-# 🏁 URACE — Segundo Cérebro
+# 🏁 URACE — Cérebro Central
 
-Centro do **Administrative AI**. Tudo que a IA sabe sobre a operação
-começa aqui. Se você abriu o vault agora, esta é a nota certa.
+Memória de longo prazo da operação da [[URACE US INC]]. É daqui que a IA
+parte para qualquer coisa, e é aqui que ela devolve o que aprendeu.
 
-> ⚙️ **[[PARAMETROS]] é o único lugar onde se altera valor, prazo,
-> fornecedor ou ID.** Mudou lá, mudou no sistema inteiro. Nenhuma outra
-> nota repete esses números.
+> ⚙️ **[[PARAMETROS]] é o único lugar onde se altera** valor, prazo,
+> fornecedor ou ID. Mudou lá, mudou no sistema inteiro.
+
+## 🧠 Como a IA pensa — leia antes de tudo
+
+| Nota | Para quê |
+|---|---|
+| [[Tipos de informação]] | **FACT · DECISION · RULE · PROCESS · PREFERENCE · CONTEXT · OPEN_QUESTION · UNKNOWN.** Impede contexto virar regra |
+| [[Protocolo de aprendizado]] | o que fazer quando chega informação nova |
+| [[Conflitos e lacunas]] | **o que a IA não sabe** e o que ela sabe de dois jeitos |
+| [[Escalonamento]] | quando parar e chamar humano — e para quem |
 
 ## 🗺️ O mapa
 
-| Pasta | O que guarda | Comece por |
+| Pasta | O que guarda | Índice |
 |---|---|---|
 | `00_SYSTEM` | como a IA se comporta | [[PARAMETROS]] |
-| `10_PROCESSOS` | **como o trabalho é feito** | [[Invoice e estimate no QuickBooks]] |
-| `20_ENTIDADES` | quem e o quê | [[Clientes]] |
+| `01_EMPRESA` | quem é a URACE e suas políticas | [[Empresa]] |
+| `04_PROJETOS` | o que está sendo construído | [[Projetos]] |
+| `08_DECISOES` | o que foi decidido, e por quê | [[Decisoes]] |
+| `10_PROCESSOS` | **como o trabalho é feito** | [[Processos]] |
+| `13_PROBLEMAS` | o que está quebrado ou arriscado | [[Problemas]] |
+| `20_ENTIDADES` | quem e o quê | [[Clientes]] · [[Equipe]] |
 | `30_DIARIO` | o que aconteceu, dia a dia | [[2026-08-31]] |
-| `40_SISTEMAS` | as ferramentas e suas armadilhas | [[Asana]] |
-| `90_ARQUIVO` | o que saiu de uso (Chase/vendas) | — |
+| `40_SISTEMAS` | as ferramentas e suas armadilhas | [[Sistemas]] |
+| `90_ARQUIVO` | fora de uso (era Chase) | — |
 
-### 🧭 Sistemas
-[[Asana]] · [[Gmail]] · [[QuickBooks]] · [[Rate Card]] · [[DocuSign]] ·
-[[Google Calendar]]
+## 🧭 Atalhos
 
-### 🔁 Processos
-[[Invoice e estimate no QuickBooks]] · [[Waiver de responsabilidade]] ·
-[[Pedido de macacão]] · [[Pagamento e security deposit]] ·
-[[Compra e envio]] · [[Triagem de e-mail]] ·
-[[Stand-by e escalação]] · [[Etapa de conexão]]
+**Sistemas** — [[Asana]] · [[Gmail]] · [[QuickBooks]] · [[Rate Card]] ·
+[[DocuSign]] · [[Google Calendar]] · [[Taxonomia do Gmail]]
 
-### 🧩 Entidades
-👥 [[Equipe]] · 🧑 [[Clientes]] · 🏭 [[Fornecedores]] · 🏁 [[Corridas]] ·
-🎓 [[Serviços]] · 📍 [[Locais]] · 📄 [[Waiver]] · 💵 [[Security deposit]]
+**Processos** — [[Invoice e estimate no QuickBooks]] ·
+[[Waiver de responsabilidade]] · [[Pedido de macacão]] ·
+[[Pagamento e security deposit]] · [[Compra e envio]] ·
+[[Triagem de e-mail]] · [[Stand-by e escalação]] · [[Etapa de conexão]]
 
-### 📓 Diário
-[[2026-08-28]] · [[2026-08-31]]
+**Entidades** — 👥 [[Equipe]] · 🧑 [[Clientes]] · 🏭 [[Fornecedores]] ·
+🏁 [[Corridas]] · 🎓 [[Serviços]] · 📍 [[Locais]] · 📄 [[Waiver]] ·
+💵 [[Security deposit]]
+
+**Estado de hoje** — [[Painel do Brain]]
 
 ## 🚦 O que a IA pode mandar para fora
 
-A regra geral é **não enviar**. As exceções são estas quatro, e só elas
-— a lista completa, com datas de autorização, está em [[PARAMETROS]]:
+A regra geral é **não enviar**. As exceções são quatro, e só elas —
+lista completa com datas em [[PARAMETROS]]:
 
 | ✅ Envia sozinha | 🚫 Nunca envia sozinha |
 |---|---|
-| Invoice do [[Security deposit]] (valor fixo) | Invoice de serviço e qualquer outra |
-| **Waiver do [[DocuSign]]** (com as 4 travas) | Lembrete de assinatura (`sendReminder`) |
-| Formulário de medidas ao cliente do macacão | Resposta de inbox — **só rascunho** |
+| Invoice do [[Security deposit]] | Invoice de serviço e qualquer outra |
+| **Waiver do [[DocuSign]]** (com 4 travas) | Lembrete de assinatura |
+| Formulário de medidas ao cliente do macacão | Resposta de inbox — só rascunho |
 | Pedido de produção ao fornecedor | |
 
 ## As regras que nunca mudam
 
-1. **A IA cria e salva; quem envia é humano** — salvo as 4 exceções acima.
-2. **Não apaga, não destrói, não regenera credencial.**
-3. **Nunca inventa dado.** Sem fonte, escala.
-4. Confere por **leitura direta**, nunca pela busca (a do [[Asana]] atrasa).
-5. **Chave externa é identidade**, nunca o nome — `asana_gid`, id do
+1. **A IA cria e salva; quem envia é humano** — salvo as 4 exceções.
+2. **Se não souber, NÃO INVENTA.** Marca `UNKNOWN` e escala —
+   [[Escalonamento]].
+3. **Não apaga, não destrói, não regenera credencial.** Nada de
+   credencial no cérebro, em nota nenhuma.
+4. **Não escolhe lado em conflito** — registra os dois e marca
+   `needs_human_confirmation`.
+5. Confere por **leitura direta**, nunca pela busca (a do [[Asana]] atrasa).
+6. **Chave externa é identidade**, nunca o nome — `asana_gid`, id do
    [[QuickBooks]], `envelopeId` do [[DocuSign]].
-6. **O cliente do [[QuickBooks]] é o responsável, não o piloto.** Vale
+7. **O cliente do [[QuickBooks]] é o responsável, não o piloto.** Vale
    igual para quem assina a [[Waiver]].
-7. **Registra o que fez** — comentário na tarefa e linha no diário.
-8. **Perguntar não trava nada** — pergunta, põe em
-   [[Stand-by e escalação|stand-by]] e segue com o resto. Mas **volta a
-   alertar quando o prazo chega**.
+8. **Registra o que fez** — comentário na tarefa e linha no diário.
+9. **Perguntar não trava nada** — pergunta, põe em stand-by, segue com o
+   resto. Mas **volta a alertar quando o prazo chega**.
 
-## Onde estão as coisas fora do vault
+## Fora do vault
 
 | O quê | Onde |
 |---|---|
 | Skills da IA (uma por aplicação) | `skills/` no repositório |
 | Preço oficial | [[Rate Card]] (Google Sheets) |
 | Como abrir isto no Obsidian | `docs/obsidian-guia.md` |
-| Como o cérebro funciona por dentro | [[README|Como o cérebro funciona]] |
+| Como o cérebro funciona por dentro | [[README\|Como o cérebro funciona]] |

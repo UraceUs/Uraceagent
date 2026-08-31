@@ -2,6 +2,9 @@
 tipo: sistema
 fonte: google_drive
 atualizado_em: 2026-08-31
+tipo_info: FACT
+responsavel: Google Drive
+status: ativo
 ---
 
 # Rate Card — a fonte de verdade de PREÇO

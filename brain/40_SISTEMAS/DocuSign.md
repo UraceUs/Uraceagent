@@ -2,6 +2,9 @@
 tipo: sistema
 fonte: docusign
 atualizado_em: 2026-08-31
+tipo_info: FACT
+responsavel: sonda ao vivo
+status: ativo
 ---
 
 # DocuSign

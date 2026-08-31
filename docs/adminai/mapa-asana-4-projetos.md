@@ -1,3 +1,19 @@
+# Mapa do Asana — os 4 projetos — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/40_SISTEMAS/Asana.md` — projetos, GIDs, seções e campos
+- `brain/13_PROBLEMAS/` — as inconsistências viraram problemas rastreados
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Mapa do Asana — os 4 projetos do Administrative AI
 
 Levantamento feito ao vivo em 28/08/2026, **100% leitura** (nenhuma
@@ -201,3 +217,5 @@ operação manual escorrega).
 3. Concluir a tarefa significa o quê em cada projeto?
 4. O que dispara a criação de cada tarefa (venda fechada, e-mail, pedido
    do cliente, compra feita)?
+
+</details>

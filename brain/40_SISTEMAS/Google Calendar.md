@@ -1,6 +1,9 @@
 ---
 tipo: sistema
 atualizado_em: 2026-08-28
+tipo_info: FACT
+responsavel: sonda ao vivo
+status: ativo
 ---
 
 # Google Calendar

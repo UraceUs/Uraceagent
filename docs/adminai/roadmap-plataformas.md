@@ -1,3 +1,22 @@
+# Roadmap das 4 plataformas — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/04_PROJETOS/Administrative AI.md` — o estado por aplicação, atualizado
+
+⚠️ O conteúdo original está **desatualizado**: dizia que o QuickBooks
+tinha "regra de negócio VAZIA" e o DocuSign estava "praticamente vazio".
+Os dois foram especificados em 31/08.
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Roadmap das 4 plataformas — o que já temos e o que falta
 
 Sequência definida pelo dono (28/08): **primeiro a especificação completa
@@ -57,3 +76,5 @@ marca a subtarefa e **anexa o PDF na tarefa do Asana**.
 - Waiver vale por temporada ou por sessão? (muda tudo: se vale por
   temporada, a IA precisa checar se já existe um assinado antes de pedir
   outro — mesma lógica do "conferir o depósito no QuickBooks antes").
+
+</details>

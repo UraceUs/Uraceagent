@@ -1,3 +1,20 @@
+# Sincronia status × seção — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/10_PROCESSOS/Compra e envio.md` — a regra
+- `brain/40_SISTEMAS/Asana.md` — o gotcha do atraso da busca
+- `adminai/asana_status_sync.py` — o código, que continua onde está
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Sincronia automática: campo "Status da ordem" × quadro (seção)
 
 Projeto: **Shipping Orders** (`1215968721507536`). Decisão do dono:
@@ -179,3 +196,5 @@ O que isso implica, para ninguém se enganar depois:
 - DocuSign, caixas de e-mail e demais conectores: **fora de escopo agora**.
 
 Não re-propor conexão sem o dono pedir.
+
+</details>

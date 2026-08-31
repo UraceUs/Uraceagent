@@ -4,6 +4,9 @@ area: QuickBooks
 fonte: humano
 ditado_por: Italo Silveira
 data: 2026-08-31
+tipo_info: PROCESS
+responsavel: Italo Silveira
+status: ativo
 ---
 
 # Processo — invoice e estimate no [[QuickBooks]]

@@ -1,3 +1,20 @@
+# Aplicação 2 — E-mail — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/40_SISTEMAS/Taxonomia do Gmail.md` — a taxonomia real, com as contagens
+- `brain/10_PROCESSOS/Triagem de e-mail.md` — a rotina
+- `brain/40_SISTEMAS/Gmail.md`
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Aplicação 2 — E-mail (`urace@urace.us`)
 
 Especificação ditada pelo dono em 28/08/2026. **Passo zero cumprido:** a
@@ -158,3 +175,5 @@ cobranças a receber. Revendo os e-mails de lá — Goshen Land, Mammoth
 Brothers, SXS Marketing, RacingJunk, Sampson Racing — **são todos contas
 a pagar**. A pergunta era legítima, a caracterização de "misturado" não.
 A regra do dono confirma: o marcador é de contas a pagar.
+
+</details>

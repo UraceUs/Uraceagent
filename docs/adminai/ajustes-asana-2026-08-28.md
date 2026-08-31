@@ -1,3 +1,18 @@
+# Ajustes executados no Asana — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/30_DIARIO/2026-08-28.md` — o registro do que foi executado
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Ajustes executados no Asana — 28/08/2026
 
 Autorizados pelo dono ("pode ajustar" no SUITS; "ajuste o que for preciso
@@ -75,3 +90,5 @@ Consequências para o Admin AI:
 - `Cleanner machines - Vevor` — transportadora desconhecida, pede humano.
 - `3 Ice fox cameras - Fedex` — dados contraditórios, pede humano.
 - `4 Pieces Hour Meters…` — seção "Cancelled" vs. campo "Order Created".
+
+</details>

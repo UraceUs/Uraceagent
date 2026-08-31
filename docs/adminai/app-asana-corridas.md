@@ -1,3 +1,20 @@
+# Aplicação 1 — Asana (corridas) — MIGRADO
+
+Este documento foi **migrado para o segundo cérebro** em 31/08/2026, na
+construção do Cérebro Central. O conteúdo vive agora em:
+
+- `brain/40_SISTEMAS/Asana.md`
+- `brain/20_ENTIDADES/corridas/` — as corridas como entidades
+- `brain/04_PROJETOS/Administrative AI.md`
+
+O arquivo original fica aqui como registro do que foi levantado na
+época. **A fonte de verdade é o vault** — se divergir, o vault vence.
+
+---
+
+<details>
+<summary>Conteúdo original (28/08/2026)</summary>
+
 # Aplicação 1 — Asana (Corridas)
 
 Primeira aplicação do Administrative AI, por decisão do dono (28/08):
@@ -110,3 +127,5 @@ Corridas (este documento) são UMA das entidades do U-RACE. A outra é
 SERVIÇO — tarefa com 12 subtarefas que anda pelos quadros dos dias da
 semana (TUESDAY…SUNDAY). Pedidos por e-mail entram por último, por
 decisão do dono.
+
+</details>
