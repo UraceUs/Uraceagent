@@ -19,18 +19,38 @@ serviço não acontece — por isso a varredura é **diária**.
 
 ## 🚦 O que pode e o que não pode
 
-⚠️ **`createEnvelopeFromTemplate` cria e ENVIA no mesmo passo.** Não
-existe "salvar rascunho para alguém revisar", como na invoice do
-QuickBooks. Enviar waiver é mandar e-mail a cliente.
+**A IA ENVIA a waiver** — autorizado pelo Italo em 31/08. É exceção
+explícita à regra "a IA não manda e-mail".
 
 | Ação | Permissão |
 |---|---|
 | Ler status, listar pendentes, montar o alerta diário | ✅ livre |
 | Baixar PDF assinado e anexar no Asana | ✅ livre |
 | Marcar subtarefa "Signed waiver?" e comentar | ✅ livre |
-| **Enviar waiver** (`createEnvelopeFromTemplate`) | ⏳ **aguardando decisão do dono** — até lá, preparar e escalar |
-| **Lembrete** (`sendReminder`) | ⏳ **aguardando decisão do dono** |
+| **Enviar waiver** (`createEnvelopeFromTemplate`) | ✅ **autorizado**, com as 4 travas abaixo |
+| **Lembrete** (`sendReminder`) | ⏳ **não decidido** — alertar o Italo, não o cliente |
 | `voidEnvelope`, editar template, mexer em NDA/Service Agreement | 🚫 nunca sem pedido explícito |
+
+### ⚠️ As 4 travas antes de cada envio
+
+`createEnvelopeFromTemplate` **cria e ENVIA no mesmo passo** — chamar a
+ferramenta **é** mandar o e-mail, e **não tem volta**. Checar as quatro,
+sempre:
+
+1. **Já existe waiver válida?** `completed` daquele signatário com menos
+   de 1 ano → **não manda**, marca a subtarefa e segue.
+2. **Já existe envelope em aberto?** `sent` ou `delivered` para o mesmo
+   signatário → **não manda outro** (é o "não mandar duas vezes").
+3. **Idade confirmada?** É ela que escolhe o template. Sem idade
+   confirmada, **escalar** — parental para adulto é erro visível.
+4. **Nome e e-mail conferidos** contra Asana/QuickBooks. Contato salvo
+   no DocuSign com e-mail errado propaga o erro para sempre.
+
+Falhou alguma → **escalar em vez de enviar**: "fulano precisa de waiver
+parental, e-mail X, serviço dia Y — confirma?"
+
+**Depois de enviar, registrar:** comentário na tarefa do Asana com
+template usado, signatário, e-mail e `envelopeId`, e linha no diário.
 
 ## Os dois templates — a idade decide
 

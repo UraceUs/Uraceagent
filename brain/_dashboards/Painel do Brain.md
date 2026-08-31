@@ -1,64 +1,61 @@
 ---
-type: system
-category: dashboard
-topic: painel-principal
-priority: high
-status: active
-source: internal
-last_updated: 2026-08-25
-tags: [painel, indice]
+tipo: painel
+atualizado_em: 2026-08-31
 ---
 
-# Painel do Sales Brain
+# ⭐ Painel do Cérebro URACE
 
-> Abra esta nota primeiro. Ela é o índice humano do que o Chase sabe.
+> Abra [[URACE]] para o mapa completo. Este painel é o **estado de hoje**:
+> o que está pendente, o que está decidido, o que está travado.
 
-## ⚠️ Aguardando revisão (agir aqui)
+## 🔴 Pendente de clique do dono
 
-- [[2026-08-25 - Summer Camp vs Training Camp]] — `review_required` —
-  decisão de nomenclatura do Italo
-- *(novos candidatos do learning loop diário aparecem em `09_LEARNINGS/`
-  com `status: candidate` — promova para `approved` para o agente usar)*
+Coisas que a IA **não consegue fazer** — só o Italo, na interface.
 
-## Conhecimento ativo
+| O quê | Onde | Por quê |
+|---|---|---|
+| Corrigir 4 células de preço | [[Rate Card]] (Sheets) | mensal e sessão extra do 4T/Baby Kart. Valor válido já está no cérebro |
+| Remover campo `Order number` do SUITS | [[Asana]] | enum quebrado; API deu `Access denied` |
+| Criar as 14 regras de status ↔ quadro | [[Asana]] | não existe endpoint de API |
+| Acesso à caixa `support@urace.us` | Google Workspace | ver [[Etapa de conexão]] |
+| Credenciais para o VPS | — | [[Asana]] · [[Gmail]] · [[QuickBooks]] · [[DocuSign]] · Drive |
 
-**Sistema**
-- [[Instrucoes do Agente]] — ponteiro para as instruções canônicas
-- [[Regras de Retrieval]] — como o conhecimento chega ao Chase
+## ⏳ Decisões que faltam
 
-**Empresa**
-- [[Visao Geral URACE]] — posicionamento, quem é quem
-- [[Politicas Comerciais]] — taxas da pista, depósito, cancelamento, descontos, pagamento
+- **`sendReminder` do [[DocuSign]]**: a IA pode cutucar quem recebeu a
+  waiver e não assinou? Hoje ela alerta o dono, não o cliente.
 
-**Vendas**
-- [[Qualificacao]] — classificação A/B/C/D, roteamento, as 2 perguntas
-- [[Objecoes]] — playbook: preço, segurança, cônjuge, hardship
-- [[Follow-ups]] — as 3 trilhas e como escrever cada toque
+## 🚦 O que a IA já faz sozinha
 
-**Produtos**
-- [[Programas]] — posicionamento dos 4 programas + elegibilidade por idade
+| Área | Pode |
+|---|---|
+| [[QuickBooks]] | criar invoice, estimate, cliente e item de catálogo · **não envia** |
+| [[DocuSign]] | ler status, varredura diária, **enviar waiver** (4 travas), marcar subtarefa |
+| [[Asana]] | ler tudo, criar e mover tarefa, comentar · **não sobe anexo** (falta token) |
+| [[Gmail]] | triar e rascunhar · **não envia**, salvo as exceções de [[PARAMETROS]] |
 
-**Conhecimento operacional**
-- [[Pista e Check-in]] — OKC, passes, horários, dicas
+## ⚠️ Números que a operação precisa olhar
 
-**Aprendizados aprovados**
-- [[2026-08-24 - Leads pedem preco antes da classificacao]]
+- **US$ 185.887 a receber**, 84% em duas invoices de 2025 (Juan Pacino
+  $101.445 · Stephen Collins $55.070). Ver [[QuickBooks]].
+- **3 waivers paradas desde junho** — Matthew Hubbard, Leticia
+  Bittencourt, Austin. Ver [[DocuSign]] e [[2026-08-31]].
+- Invoice em aberto **≠ inadimplência**: existe parcelamento
+  ([[Leandro Cesar]]).
+
+## 🧠 As armadilhas que mais custaram
+
+1. **O cliente do [[QuickBooks]] é o responsável, não o piloto.** Vale
+   também para quem assina a [[Waiver]].
+2. **A busca do [[Asana]] atrasa** — conferir por leitura direta.
+3. **`delivered` no [[DocuSign]] não é assinado.** Só `completed` conta.
+4. **O preço não sai do catálogo do QBO** — sai da [[Rate Card]].
+5. **Pacote se calcula do mensal**, nunca multiplicando a unitária.
 
 ## Como este vault funciona
 
-Regras completas, schema de frontmatter e ciclo de vida
-(candidate → approved): [[README|_meta/README]].
+Estrutura, convenções e ciclo do conhecimento:
+[[README|Como o cérebro funciona]].
 
-Pastas que ainda não existem (08_CASES, 10_PROMPTS, 99_ARCHIVE) são
-criadas quando o primeiro conteúdo real delas surgir — pasta vazia não
-carrega informação.
-
-## Fontes da verdade que NÃO vivem aqui (de propósito)
-
-| Dado | Onde vive | Como chega ao agente |
-|---|---|---|
-| Preços | `salesagent/config/ratecard-2026.json` | diretiva `[[price]]` (portão G1) |
-| Links de programa | `salesagent/config/program-links.json` | idem |
-| Comportamento/voz do Chase | `salesagent/instructions/urace-sales-agent.md` | sync para o workspace do agente |
-| Memória por lead | SQLite da ponte + sessões OpenClaw | automático, por conversa |
-| Decisões de projeto | `salesagent/CONSOLIDACAO.md` | leitura humana |
+O que saiu de uso (o agente de vendas Chase) está em `90_ARQUIVO/`, e
+fica lá como registro — não como referência.

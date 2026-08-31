@@ -108,16 +108,20 @@ levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 
 ### Quando a IA PODE enviar e-mail (exceções autorizadas)
 
-Autorizado pelo dono em 28/08. A regra geral continua sendo **não
-enviar** — estas duas situações são a exceção:
+A regra geral continua sendo **não enviar**. Estas são as exceções:
 
-| Situação | Para quem |
-|---|---|
-| ✅ Pedido do formulário de medidas do macacão | cliente do SUITS |
-| ✅ Pedido de produção do macacão | fornecedor atual |
-| ✅ **Invoice do security deposit** (valor fixo US$ 400) | cliente do serviço |
-| 🚫 Invoice do serviço e qualquer outra | **humano envia** |
-| 🚫 **Todo o resto** (triagem, respostas da inbox) | **só rascunho** |
+| Situação | Para quem | Autorizado em |
+|---|---|---|
+| ✅ Pedido do formulário de medidas do macacão | cliente do SUITS | 28/08 |
+| ✅ Pedido de produção do macacão | fornecedor atual | 28/08 |
+| ✅ **Invoice do security deposit** (valor fixo US$ 400) | cliente do serviço | 28/08 |
+| ✅ **Waiver do [[DocuSign]]** (parental ou adult) | responsável ou piloto | **31/08** |
+| 🚫 Invoice do serviço e qualquer outra | **humano envia** | — |
+| 🚫 **Todo o resto** (triagem, respostas da inbox) | **só rascunho** | — |
+
+⏳ Ainda **não decidido**: `sendReminder` do [[DocuSign]] (cutucar quem
+recebeu e não assinou). Até o dono dizer, a IA **alerta ele**, não o
+cliente.
 
 ## 👥 Quem autoriza
 
@@ -168,6 +172,7 @@ Enquanto o "ok" não vem, o lote fica em stand-by — ver
 | 2026-08-28 | Arquivo criado. Fornecedor atual = Usman; depósito US$ 400; exceções de envio de e-mail autorizadas | Italo |
 | 2026-08-28 | IA autorizada a **enviar a invoice do depósito** (só ela). Envio 4 dias antes; pagamento de tudo + waiver 2 dias antes | Italo |
 | 2026-08-31 | Margem de peça fixada em **+15%**; lembrete de cobrança **a cada 2 dias, só para invoice OVERDUE** | Italo |
+| 2026-08-31 | **IA autorizada a ENVIAR a waiver** do [[DocuSign]] (4ª exceção da regra de e-mail). Travas obrigatórias em [[Waiver de responsabilidade]] | Italo |
 | 2026-08-31 | [[DocuSign]] conectado e sondado. Conta é a **`support@`** — o fluxo da waiver deixa de depender da caixa de e-mail. IDs dos 2 templates registrados; validade da waiver fixada em **1 ano da assinatura** | Italo |
 | 2026-08-31 | Mensal Academy 4T e Baby Kart corrigidos para **$2.756,90** e sessão extra dos dois para **$689,23** (planilha diz $2.756,00 / $689,00 — 4 células a arrumar, ver [[Rate Card]]). Regra fixada: **sessão extra = mensal ÷ 4**, e **pacote sai do mensal, nunca da unitária**. E-mail de invoice: **sai pelo próprio QuickBooks**, não existe template a escrever | Italo |
 | 2026-08-31 | Reminder de cobrança: **aprovação por lote**, sem autorização permanente | Italo |

@@ -1,7 +1,23 @@
 {
   "items": [
-    { "type": "file", "path": "brain/_dashboards/Painel do Brain.md", "title": "⭐ Painel do Brain" },
-    { "type": "file", "path": "brain/_meta/README.md", "title": "Como o Brain funciona" },
-    { "type": "file", "path": "docs/obsidian-guia.md", "title": "Guia do Obsidian" }
+    { "type": "file", "path": "brain/URACE.md", "title": "🏁 URACE — comece aqui" },
+    { "type": "file", "path": "brain/_dashboards/Painel do Brain.md", "title": "⭐ Painel — estado de hoje" },
+    { "type": "file", "path": "brain/00_SYSTEM/PARAMETROS.md", "title": "⚙️ PARÂMETROS — o que se altera" },
+    { "type": "group", "title": "🔁 Processos", "items": [
+      { "type": "file", "path": "brain/10_PROCESSOS/Invoice e estimate no QuickBooks.md", "title": "Invoice e estimate" },
+      { "type": "file", "path": "brain/10_PROCESSOS/Waiver de responsabilidade.md", "title": "Waiver" },
+      { "type": "file", "path": "brain/10_PROCESSOS/Pedido de macacão.md", "title": "Pedido de macacão" },
+      { "type": "file", "path": "brain/10_PROCESSOS/Pagamento e security deposit.md", "title": "Pagamento e depósito" },
+      { "type": "file", "path": "brain/10_PROCESSOS/Etapa de conexão.md", "title": "Etapa de conexão" }
+    ]},
+    { "type": "group", "title": "🧭 Sistemas", "items": [
+      { "type": "file", "path": "brain/40_SISTEMAS/Asana.md", "title": "Asana" },
+      { "type": "file", "path": "brain/40_SISTEMAS/QuickBooks.md", "title": "QuickBooks" },
+      { "type": "file", "path": "brain/40_SISTEMAS/Rate Card.md", "title": "Rate Card (preço)" },
+      { "type": "file", "path": "brain/40_SISTEMAS/DocuSign.md", "title": "DocuSign" },
+      { "type": "file", "path": "brain/40_SISTEMAS/Gmail.md", "title": "Gmail" }
+    ]},
+    { "type": "search", "query": "path:brain/30_DIARIO", "title": "📓 Diário" },
+    { "type": "file", "path": "brain/_meta/README.md", "title": "Como o cérebro funciona" }
   ]
 }

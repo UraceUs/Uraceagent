@@ -1,98 +1,72 @@
 ---
-type: system
-category: meta
-topic: como-usar-o-brain
-priority: high
-status: active
-source: internal
-last_updated: 2026-08-25
-tags: [meta, schema, regras]
+tipo: meta
+atualizado_em: 2026-08-31
 ---
 
-# Como o Sales Brain funciona
+# Como o cérebro funciona
 
-Este diretório (`brain/`) é a **knowledge base do agente de vendas Chase**
-— e, aberto no Obsidian, é a interface humana desse conhecimento. O mesmo
-conteúdo, dois leitores:
+[[URACE]] · [[Painel do Brain]] · [[PARAMETROS]]
 
-- **Humanos** (Italo/Eduardo): abrem o repositório no Obsidian, leem,
-  editam e aprovam conhecimento. `git push` publica.
-- **A IA** (Chase, via ponte): nunca lê estes arquivos direto. Um índice de
-  busca (`brain/indexer.py` → SQLite FTS5 no servidor) entrega só os
-  trechos relevantes de documentos **aprovados** a cada conversa.
+Este diretório (`brain/`) é o **segundo cérebro da URACE**: o que a IA
+administrativa sabe sobre a operação. Aberto no Obsidian, é também a
+interface humana desse conhecimento — o mesmo conteúdo, dois leitores.
 
-## O schema de frontmatter (obrigatório em todo documento)
+> Este vault era do **Chase**, o agente de vendas, até 28/08/2026. O
+> projeto pivotou para o **Administrative AI** e o conteúdo de vendas foi
+> para `90_ARQUIVO/vendas-chase/`. Se você achar uma nota falando de
+> lead, objeção ou qualificação, ela é histórica.
 
-```yaml
----
-type: sales_knowledge        # ver tabela abaixo
-category: objection          # subcategoria livre, minúsculas, sem espaço
-topic: preco                 # o assunto específico, 1-3 palavras
-priority: high               # high | medium | low
-status: active               # ver ciclo de vida abaixo
-source: internal             # internal | italo | conversa_real | fonte_externa
-last_updated: 2026-08-25     # AAAA-MM-DD, atualizar a cada edição
-tags: [vendas, objecao, preco]
-aliases: [price, pricing]    # OPCIONAL: palavras-chave em INGLÊS/ESPANHOL
----
-```
+## As pastas
 
-| Campo | Como o agente usa |
-|---|---|
-| `type` | Filtro grosso do retrieval. Valores válidos: `system`, `company_knowledge`, `product_knowledge`, `sales_knowledge`, `learning`, `faq` |
-| `category` / `topic` | Filtro fino e ranqueamento (um match no topic pesa mais que no corpo) |
-| `priority` | Desempate de ranqueamento: `high` sobe, `low` desce |
-| `status` | **Só `approved` e `active` entram no índice.** O resto é invisível pro agente |
-| `source` | Confiança em conflito (ver política abaixo) |
-| `last_updated` | Recência em conflito; documentos velhos podem aparecer no painel de desatualizados |
-| `tags` | Busca e navegação no Obsidian |
-| `aliases` | **Importante**: o conteúdo é em português, mas leads escrevem em inglês/espanhol. Os aliases entram no índice de busca e fazem a ponte entre idiomas. Todo documento que um lead possa "perguntar" deve ter aliases em EN |
+| Pasta | O que é | Regra |
+|---|---|---|
+| `00_SYSTEM` | comportamento da IA | **[[PARAMETROS]] é o único lugar de alteração** de valor, prazo, fornecedor e ID |
+| `10_PROCESSOS` | como o trabalho é feito, passo a passo | ditado pelo dono; a IA não inventa processo |
+| `20_ENTIDADES` | clientes, corridas, equipe, fornecedores, serviços, locais | uma nota por coisa real |
+| `30_DIARIO` | o que aconteceu em cada dia | append, nunca reescrever o passado |
+| `40_SISTEMAS` | Asana, Gmail, QuickBooks, Rate Card, DocuSign, Calendar | os fatos da conta **e as armadilhas** |
+| `90_ARQUIVO` | fora de uso | registro, não referência |
+| `_dashboards` · `_meta` | painel e este guia | — |
 
-## Ciclo de vida do conhecimento (status)
+## As duas regras estruturais
 
-```
-candidate → review_required → approved → active
-                                  ↓
-                              archived
-```
+**1. Valor que muda mora só em [[PARAMETROS]].**
+Nenhuma outra nota — e nenhuma skill — repete preço, prazo, fornecedor
+ou ID. Todas apontam para lá. O dono muda num lugar e o sistema inteiro
+acompanha. Toda alteração vira linha no histórico do fim daquela nota.
 
-- `candidate` — proposto pelo sistema (learning loop) ou rascunho humano.
-  **Não indexado.**
-- `review_required` — sinalizado para decisão do Italo/Eduardo. **Não
-  indexado.**
-- `approved` — revisado e aprovado por humano. **Indexado.**
-- `active` — aprovado E confirmado em uso real. **Indexado.** (na prática,
-  `approved` e `active` são equivalentes para o agente)
-- `archived` — fora de uso. **Não indexado.** Mover para `99_ARCHIVE/` se
-  quiser tirar da navegação também.
+**2. O que liga o grafo é o wikilink, não o frontmatter.**
+`[[Assim]]`. Frontmatter serve para tipo e data; **quem desenha o grafo
+é o link no meio do texto**. Uma nota sem wikilink é uma ilha — e ilha
+não é conhecimento, é arquivo solto.
 
-**O agente nunca muda um status.** Só o extrator de aprendizados grava — e
-só com `candidate`. Promover é sempre gesto humano, no Obsidian.
+## Convenções
 
-## Política de conflito (quando dois documentos discordam)
+- **Chave externa é identidade**, nunca o nome: `asana_gid`, id do
+  [[QuickBooks]], `envelopeId` do [[DocuSign]], número do pedido.
+  "Charlie Marron" e "Charles Andrew Marron" são a mesma pessoa; o id não.
+- **Nome de arquivo é o nome da nota.** Sem dois arquivos com o mesmo
+  nome no vault inteiro — o wikilink fica ambíguo.
+- **Português, direto, sem enfeite.** É documento de trabalho.
+- **Fato vem com fonte.** Se veio de uma sonda, dizer de onde e quando.
+  Se não tem fonte, não entra: a IA **escala em vez de deduzir**.
 
-O retrieval ordena por: (1) `status` active/approved primeiro → (2)
-`priority` maior → (3) `last_updated` mais recente → (4) relevância da
-busca. Se ainda assim a resposta ficar ambígua, a regra do agente é a de
-sempre: **não inventa** — diz que vai confirmar e escala.
+## Como a IA usa isto
 
-## A regra de ouro herdada do projeto
+As **skills** (em `skills/`, uma por aplicação) carregam o julgamento —
+o que fazer, o que nunca fazer, o tom. Elas **não guardam valores**:
+leem de [[PARAMETROS]] e dos processos daqui.
 
-**Nenhum dado volátil de negócio em prosa retrievável**: preço em número,
-link de página, horário de sessão, disponibilidade. Isso vive em
-`salesagent/config/*.json` e chega ao Chase por diretiva (`[[price]]`),
-imposto pela ponte (portões G1/G8). O Brain guarda posicionamento,
-processo, objeções, políticas — o **porquê** e o **como**, nunca o número.
-Um documento do Brain que precise citar preço aponta para a fonte:
-"o valor vigente está no rate card".
+Ordem de trabalho da IA, sempre a mesma: **ler o cérebro antes de agir,
+escrever nele depois** — comentário na tarefa do [[Asana]] e linha no diário do dia. "Por que a IA fez isso?" tem que ter resposta.
 
 ## Como adicionar conhecimento (humano)
 
-1. Criar o `.md` na pasta certa com o frontmatter completo (copiar de um
-   vizinho).
-2. `status: approved` se você é a autoridade do assunto; `review_required`
-   se precisa de outra pessoa.
-3. Aliases em inglês se um lead pode perguntar sobre isso.
-4. Commit + push (ou botão de sync do plugin Obsidian Git).
-5. No servidor, o índice se atualiza no próximo deploy ou ciclo diário —
-   ou na hora com `python3 brain/indexer.py`.
+1. Criar o `.md` na pasta certa, com frontmatter simples
+   (`tipo`, `atualizado_em`).
+2. **Ligar com wikilinks** ao que já existe — pelo menos um para o hub
+   ou para a nota-índice da área.
+3. Se for valor que muda, **não escreva aqui**: coloque em
+   [[PARAMETROS]] e aponte.
+4. Commit + push, ou o botão de sync do plugin Git do Obsidian
+   (`Ctrl+P` → *Git: Commit-and-sync*).

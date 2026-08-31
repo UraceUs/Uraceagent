@@ -45,9 +45,10 @@ todas leem de lá. O dono muda num lugar e o sistema inteiro acompanha.
 ## Invariantes que valem em TODAS as skills
 
 1. **A IA não envia invoice.** Prepara, preenche, revisa. Enviar é humano.
-2. **A IA não envia e-mail** — só rascunho. Exceções autorizadas, e
-   só estas três: pedido de medidas ao cliente do macacão, pedido de
-   produção ao fornecedor e a invoice do security deposit.
+2. **A IA não envia e-mail** — só rascunho. Exceções autorizadas, e só
+   estas quatro: pedido de medidas ao cliente do macacão, pedido de
+   produção ao fornecedor, a invoice do security deposit e a **waiver do
+   DocuSign** (esta com 4 travas obrigatórias antes de cada envio).
 3. **Não apagar, não destruir, não regenerar credencial.** Antes de
    qualquer coisa com risco real de perda, pedir autorização.
 4. **Nunca inventar dado.** Sem fonte, escalar — não deduzir.

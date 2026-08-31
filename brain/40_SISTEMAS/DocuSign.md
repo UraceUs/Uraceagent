@@ -120,8 +120,12 @@ como waiver, mas também não deve ignorá-los.
 
 > ⚠️ **`createEnvelopeFromTemplate` cria e ENVIA no mesmo passo** — não
 > existe "salvar rascunho e alguém revisa depois", como acontece na
-> invoice do [[QuickBooks]]. Por isso a permissão de enviar waiver tem
-> que ser decidida explicitamente pelo dono. Ver [[Waiver de responsabilidade]].
+> invoice do [[QuickBooks]]. Chamar a ferramenta **é** mandar o e-mail.
+>
+> **O dono autorizou a IA a enviar a waiver em 31/08** — e, justamente
+> porque não tem volta, o envio passa por **4 travas obrigatórias**
+> (waiver válida já existente · envelope já em aberto · idade confirmada
+> · nome e e-mail conferidos). Ver [[Waiver de responsabilidade]].
 
 ## Prazo
 

@@ -138,21 +138,51 @@ do assinado, para o arquivo não ficar invisível.
 
 ## 🚦 O que a IA pode fazer sozinha
 
-> ⚠️ **`createEnvelopeFromTemplate` cria e ENVIA no mesmo passo.** Não
-> existe rascunho para revisar depois, como na invoice do
-> [[QuickBooks]]. Enviar waiver = mandar e-mail a cliente.
+**Autorizado pelo dono em 31/08: a IA ENVIA a waiver.** É a 4ª exceção
+da regra "a IA não manda e-mail" ([[PARAMETROS]]).
 
 | Ação | Permissão |
 |---|---|
 | Ler status, listar pendentes, montar o alerta diário | ✅ livre |
 | Baixar o PDF assinado e anexar no [[Asana]] | ✅ livre |
 | Marcar a subtarefa e comentar | ✅ livre |
-| **Enviar waiver nova** (`createEnvelopeFromTemplate`) | ⏳ **aguardando decisão do dono** |
-| **Reenviar lembrete** (`sendReminder`) | ⏳ **aguardando decisão do dono** |
+| **Enviar waiver** (`createEnvelopeFromTemplate`) | ✅ **autorizado**, com as travas abaixo |
+| **Lembrete** (`sendReminder`) | ⏳ **ainda não decidido** — alerta o dono, não o cliente |
 | Anular envelope, editar template, mexer em NDA/Service Agreement | 🚫 **nunca sem pedido explícito** |
 
-Até o dono decidir, a IA **prepara e escala**: "fulano precisa de waiver
-parental, e-mail X, serviço dia Y — mando?"
+### ⚠️ As travas — obrigatórias antes de cada envio
+
+`createEnvelopeFromTemplate` **cria e ENVIA no mesmo passo**. Não existe
+rascunho para revisar, como na invoice do [[QuickBooks]]: chamar a
+ferramenta **é** mandar o e-mail, e **não tem volta**. Por isso as
+quatro checagens abaixo **não são recomendação, são pré-requisito** — e
+todas elas o próprio dono ditou.
+
+**1. Já existe waiver válida?** Envelope `completed` daquele signatário
+com menos de 1 ano → **não manda.** Marca a subtarefa e segue.
+
+**2. Já existe envelope em aberto?** Envelope `sent` ou `delivered` para
+o mesmo signatário → **não manda outro.** Isso é o "não mandar duas
+vezes" do dono. Duplicar envelope confunde o cliente e polui a conta.
+
+**3. A idade está confirmada?** É a idade que escolhe o template. **Sem
+idade confirmada, não dá para escolher** — escala, não chuta. Mandar
+parental para adulto (ou o contrário) é erro visível para o cliente.
+
+**4. Nome e e-mail conferidos?** O DocuSign guarda contatos antigos, e
+contato salvo com e-mail errado **propaga o erro** para todos os envios
+seguintes. Conferir contra a fonte ([[Asana]], [[QuickBooks]]), nunca
+aceitar o que veio salvo.
+
+Falhou qualquer uma das quatro → **escala em vez de enviar**:
+"fulano precisa de waiver parental, e-mail X, serviço dia Y — confirma?"
+
+### Depois de enviar, registrar
+
+Envio é ação irreversível, então tem que deixar rastro: comentário na
+tarefa do [[Asana]] com **template usado, signatário, e-mail e
+`envelopeId`**, e linha no diário. "Por que a IA mandou isso?" precisa
+ter resposta.
 
 ## Outros documentos na conta
 
