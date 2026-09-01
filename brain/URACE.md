@@ -25,6 +25,7 @@ parte para qualquer coisa, e é aqui que ela devolve o que aprendeu.
 | [[Protocolo de aprendizado]] | o que fazer quando chega informação nova |
 | [[Conflitos e lacunas]] | **o que a IA não sabe** e o que ela sabe de dois jeitos |
 | [[Escalonamento]] | quando parar e chamar humano — e para quem |
+| [[Preferencias do dono]] | como ele gosta de receber o trabalho |
 | [[Como o cérebro cresce]] | **a forma do grafo** — hubs, satélites e pontes. Como escrever nota nova |
 
 ## 🗺️ O mapa
