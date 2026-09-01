@@ -20,8 +20,10 @@ testado e respondendo. Ver [[2026-09-01]].
 **`APLICAR=0`** — simulação. Nada é escrito em sistema nenhum até você
 ler os logs em `~/.urace/logs/` e liberar.
 
-Faltam as credenciais de [[QuickBooks]], [[DocuSign]] e [[Gmail]] —
-lista do que buscar em [[Etapa de conexão]].
+[[DocuSign]] **conectado em 01/09** — chave RSA no VPS, apontando para
+`demo.docusign.net`. É **homologação**: o agente não enxerga as waivers
+reais até o go-live. Faltam [[QuickBooks]] e [[Gmail]] — lista do que
+buscar em [[Etapa de conexão]].
 
 ## 🔴 Pendente de clique do dono
 
