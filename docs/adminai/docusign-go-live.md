@@ -46,21 +46,28 @@ Com a chave na tela do DocuSign, no VPS, num bloco só:
 
 ```bash
 mkdir -p ~/.urace && chmod 700 ~/.urace
-cat > ~/.urace/docusign_private.key
+cat > ~/.urace/docusign-private.key
 # cole a chave inteira, incluindo as linhas BEGIN e END, e feche com Ctrl+D
 ```
 
 Depois:
 
 ```bash
-chmod 600 ~/.urace/docusign_private.key
-head -1 ~/.urace/docusign_private.key
-grep -c . ~/.urace/docusign_private.key
+chmod 600 ~/.urace/docusign-private.key
+sed -i 's|^DOCUSIGN_INTEGRATION_KEY=.*|DOCUSIGN_INTEGRATION_KEY=126393c2-ae7a-4b73-9585-fed7e13cafe7|' ~/.urace/adminai.env
+sed -i "s|^DOCUSIGN_PRIVATE_KEY_PATH=.*|DOCUSIGN_PRIVATE_KEY_PATH=$HOME/.urace/docusign-private.key|" ~/.urace/adminai.env
+head -1 ~/.urace/docusign-private.key
+openssl rsa -in ~/.urace/docusign-private.key -noout -check
 ```
 
-A primeira linha tem que ser `-----BEGIN RSA PRIVATE KEY-----`.
-Se vier truncada, refazer — chave RSA pela metade não dá erro claro,
-dá `invalid_grant`, que parece problema de permissão.
+A última linha é a prova: `RSA key ok`. Se ela falhar, a chave chegou
+truncada ou com quebra de linha errada — e isso importa porque chave RSA
+pela metade **não dá erro claro**: dá `invalid_grant`, que parece
+problema de permissão e faz procurar no lugar errado por horas.
+
+`DOCUSIGN_PRIVATE_KEY_PATH` no `.env.example` aponta para
+`/home/ubuntu/...`; os `sed` acima usam `$HOME`, que resolve para o
+usuário real do VPS.
 
 ---
 
