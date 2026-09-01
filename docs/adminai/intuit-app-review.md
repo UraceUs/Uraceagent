@@ -23,7 +23,8 @@ Dois caminhos para publicá-las:
 **a) No site da URACE** (preferível — é o domínio da empresa)
 Suba os dois arquivos e anote as URLs finais.
 
-**b) No próprio VPS**, pelo Caddy que já está instalado:
+**b) No próprio VPS**, pelo Caddy que já está instalado — **feito em
+01/09**, as duas respondem 200 em `https://urace-bridge.duckdns.org/legal/`:
 
 ```bash
 cd ~/Uraceagent && git pull
@@ -48,12 +49,12 @@ O script termina fazendo `curl` nas duas URLs e mostrando o código HTTP.
 | **App name** | `URACE Administrative AI` — vale renomear; hoje está "ia app", que não diz nada a um revisor |
 | **Description** | Internal operations tool for URACE.US INC. Prepares invoices and estimates from the company's own service records, tracks outstanding balances, and keeps accounting data consistent with the company's project management and document signing systems. Not distributed to third parties. |
 | **App category** | `Accounting` (segunda opção, se pedir: `Invoicing`) |
-| **Host domain** | o domínio onde as páginas do passo 0 ficaram |
-| **Launch URL** | `https://<domínio>/legal/privacy.html` — o app é headless, não tem tela pública; aponte para uma página que exista |
-| **Disconnect URL** | `https://<domínio>/legal/privacy.html` |
-| **Connect / Reconnect URL** | `https://<domínio>/legal/privacy.html` |
-| **EULA URL** | `https://<domínio>/legal/eula.html` |
-| **Privacy policy URL** | `https://<domínio>/legal/privacy.html` |
+| **Host domain** | `urace-bridge.duckdns.org` (sem `https://`) |
+| **Launch URL** | `https://urace-bridge.duckdns.org/legal/privacy.html` — o app é headless, não tem tela pública; aponta para uma página que existe |
+| **Disconnect URL** | `https://urace-bridge.duckdns.org/legal/privacy.html` |
+| **Connect / Reconnect URL** | `https://urace-bridge.duckdns.org/legal/privacy.html` |
+| **EULA URL** | `https://urace-bridge.duckdns.org/legal/eula.html` |
+| **Privacy policy URL** | `https://urace-bridge.duckdns.org/legal/privacy.html` |
 | **Where is the app hosted?** | Amazon Web Services (AWS), United States |
 | **Regulated industries** | **Não.** O app não atende saúde, finanças reguladas, governo nem crédito. É uma escola e equipe de kart. |
 | **Terms of service** | mesma URL do EULA, se pedir separado |
