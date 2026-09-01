@@ -25,7 +25,7 @@ pronta em 31/08 — **esta etapa está aberta**.
 |---|---|---|
 | [[Asana]] | Personal Access Token | perfil → Settings → Apps → Manage Developer Apps |
 | [[Gmail]] | acesso às **duas** caixas | Workspace → Contas → conceder acesso da `support@` para a `urace@` |
-| [[QuickBooks]] | Client ID · Secret · Refresh Token | developer.intuit.com → seu app → Keys |
+| [[QuickBooks]] | ⛔ **travado** — app em `IN DEVELOPMENT`, produção exige EULA, política de privacidade e questionário de compliance. Ver [[P-11 - Producao do app QuickBooks travada]] | adiado por decisão de 01/09 |
 | [[DocuSign]] | Integration Key + chave RSA | apps.docusign.com/admin, **na conta `support@`** |
 | Anthropic | API key | console.anthropic.com (dispensável se já autenticado) |
 
