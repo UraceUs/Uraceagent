@@ -37,6 +37,7 @@ apagada**: vira `status: superado`, com link para a que a substituiu.
 - [[D-2026-08-31 - Templates vazios do DocuSign]]
 - [[D-2026-08-31 - Texto do Adult Waiver fica como esta]]
 - [[D-2026-08-31 - Waiver vale um ano]]
+- [[D-2026-09-01 - Manter o par RSA do DocuSign demo]]
 
 ## Por que isto existe
 
