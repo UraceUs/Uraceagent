@@ -12,13 +12,16 @@ status: ativo
 > Abra [[URACE]] para o mapa completo. Este painel é o **estado de hoje**:
 > o que está pendente, o que está decidido, o que está travado.
 
-## 🚀 Deploy no VPS — 01/09/2026
+## ✅ No ar desde 01/09/2026
 
-Runbook: `adminai/deploy/README.md`. O que levar: [[Etapa de conexão]].
-Onde vai rodar: [[VPS e OpenClaw]].
+4 timers rodando no [[VPS e OpenClaw]], 6 skills ligadas, [[Asana]]
+testado e respondendo. Ver [[2026-09-01]].
 
-Sobe em **simulação** (`APLICAR=0`) — nada escrito nos sistemas até você
-ler os logs e liberar.
+**`APLICAR=0`** — simulação. Nada é escrito em sistema nenhum até você
+ler os logs em `~/.urace/logs/` e liberar.
+
+Faltam as credenciais de [[QuickBooks]], [[DocuSign]] e [[Gmail]] —
+lista do que buscar em [[Etapa de conexão]].
 
 ## 🔴 Pendente de clique do dono
 
