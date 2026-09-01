@@ -26,7 +26,7 @@ pronta em 31/08 — **esta etapa está aberta**.
 | [[Asana]] | Personal Access Token | perfil → Settings → Apps → Manage Developer Apps |
 | [[Gmail]] | acesso às **duas** caixas | Workspace → Contas → conceder acesso da `support@` para a `urace@` |
 | [[QuickBooks]] | ⛔ app em `IN DEVELOPMENT` — produção exige EULA, política de privacidade e compliance. **Caminho crítico**: sem isso o agente do VPS só alcança sandbox | respostas prontas em `docs/adminai/intuit-app-review.md` |
-| [[DocuSign]] | Integration Key + chave RSA | apps.docusign.com/admin, **na conta `support@`** |
+| [[DocuSign]] | ⛔ produção **não cria** Integration Key — nasce em conta demo e sobe por go-live (~20 chamadas). Ver [[P-12 - Integration Key do DocuSign so nasce em demo]] | começar cedo: a espera corre sozinha |
 | Anthropic | API key | console.anthropic.com (dispensável se já autenticado) |
 
 `DOCUSIGN_USER_ID`, `DOCUSIGN_ACCOUNT_ID` e `QBO_REALM_ID` já estão
