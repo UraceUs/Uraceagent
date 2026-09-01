@@ -130,6 +130,51 @@ como waiver, mas também não deve ignorá-los.
 > (waiver válida já existente · envelope já em aberto · idade confirmada
 > · nome e e-mail conferidos). Ver [[Waiver de responsabilidade]].
 
+
+## ⚠️ Demo e produção são DUAS contas — a armadilha do mesmo e-mail
+
+Desde 01/09/2026 existe **também uma conta de desenvolvedor (demo)**,
+criada com o **mesmo e-mail e a mesma senha** da produção
+(ver [[P-12 - Integration Key do DocuSign so nasce em demo]]).
+
+São sistemas **completamente separados**. Compartilham só o e-mail — é
+como ter conta no Gmail e no Outlook com o mesmo endereço.
+
+| | **Produção** (a real) | **Demo** (a de teste) |
+|---|---|---|
+| Login | `account.docusign.com` | `account-d.docusign.com` |
+| App | `apps.docusign.com` | `appdemo.docusign.com` |
+| Admin | `admin.docusign.com` | `admindemo.docusign.com` |
+| API | `na4.docusign.net` | `demo.docusign.net` |
+| Conteúdo | 4 templates · 39 envelopes | **vazia** |
+
+### O susto de 01/09
+
+Depois de criar a conta demo, o dono abriu o DocuSign e **não viu
+template nem envelope nenhum** — parecia que a conta tinha sido
+sobreposta e os dados perdidos.
+
+**Nada foi perdido.** O navegador tinha ficado logado no **demo**, que
+nasce vazio. Leitura da produção feita na mesma hora confirmou: os 4
+templates com os mesmos IDs, 39 envelopes desde 01/06, 19 completos.
+
+Para voltar à conta real: **`https://apps.docusign.com/send/home`**.
+
+### O risco que fica
+
+Waiver enviada do **demo não tem validade jurídica** — o documento sai
+carimbado como teste. E como as duas contas têm a mesma senha, é fácil
+mandar do ambiente errado sem perceber.
+
+**Recomendação ao dono:** trocar a senha do demo para uma diferente. Não
+é urgente, mas obriga a saber em qual ambiente se está antes de enviar.
+
+⚠️ **Regra para a IA:** a conta de produção é
+`4261a166-3a91-4fb7-97c5-30257d657c52`, base `https://na4.docusign.net`.
+**Nunca enviar waiver por outro `accountId` ou outra base URI.** Se a
+resposta da API vier de `demo.docusign.net`, está no ambiente errado —
+parar e escalar.
+
 ## Prazo
 
 Assinada **2 dias antes** do serviço ([[PARAMETROS]]) — o dono falou "um

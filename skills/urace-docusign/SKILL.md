@@ -8,6 +8,12 @@ description: Cuida das waivers de responsabilidade da URACE.US INC no DocuSign �
 Conta `4261a166-3a91-4fb7-97c5-30257d657c52`, titular Italo Jorge da
 Silveira, e-mail da conta **`support@urace.us`**, região `na4`.
 
+⚠️ **Existe uma segunda conta, de DEMO, com o mesmo e-mail e a mesma
+senha.** Ela é vazia e serve só para desenvolvimento. Envelope enviado
+de lá **não tem validade jurídica**. Sempre usar o `accountId` acima e a
+base `https://na4.docusign.net`; se a resposta vier de
+`demo.docusign.net`, **parar e escalar**.
+
 A waiver é condição para o piloto entrar na pista. Sem ela assinada o
 serviço não acontece — por isso a varredura é **diária**.
 

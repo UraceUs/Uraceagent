@@ -57,6 +57,16 @@ por falta de credencial. E há prazo real: a waiver do Matthew Hubbard
 ⏳ O passo 4 é espera que corre sozinha — vale **começar cedo** mesmo
 priorizando outra coisa.
 
+### A conta demo foi criada em 01/09 — e deu um susto
+
+Criada com o **mesmo e-mail e a mesma senha** da produção. O dono abriu
+o DocuSign depois e não viu template nem envelope: parecia perda total.
+**Não era** — o navegador tinha ficado no demo, que nasce vazio. Leitura
+da produção na mesma hora confirmou tudo intacto: 4 templates, 39
+envelopes, 19 completos.
+
+A armadilha e como não cair nela de novo estão em [[DocuSign]].
+
 ## O padrão que apareceu duas vezes no mesmo dia
 
 [[P-11 - Producao do app QuickBooks travada]] e este são o **mesmo tipo
