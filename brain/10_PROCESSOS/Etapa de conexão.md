@@ -25,7 +25,7 @@ pronta em 31/08 — **esta etapa está aberta**.
 |---|---|---|
 | [[Asana]] | Personal Access Token | perfil → Settings → Apps → Manage Developer Apps |
 | [[Gmail]] | acesso às **duas** caixas | Workspace → Contas → conceder acesso da `support@` para a `urace@` |
-| [[QuickBooks]] | ⛔ **travado** — app em `IN DEVELOPMENT`, produção exige EULA, política de privacidade e questionário de compliance. Ver [[P-11 - Producao do app QuickBooks travada]] | adiado por decisão de 01/09 |
+| [[QuickBooks]] | ⛔ app em `IN DEVELOPMENT` — produção exige EULA, política de privacidade e compliance. **Caminho crítico**: sem isso o agente do VPS só alcança sandbox | respostas prontas em `docs/adminai/intuit-app-review.md` |
 | [[DocuSign]] | Integration Key + chave RSA | apps.docusign.com/admin, **na conta `support@`** |
 | Anthropic | API key | console.anthropic.com (dispensável se já autenticado) |
 

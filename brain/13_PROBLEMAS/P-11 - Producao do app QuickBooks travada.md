@@ -33,35 +33,41 @@ Sonda de 01/09/2026 pela extensão de navegador, logada na conta do dono.
 Ela parou ao ver que destravar exigiria mudar configuração além do que
 tinha sido autorizado — comportamento correto.
 
-## Impacto
+## Impacto: está no CAMINHO CRÍTICO
 
-**Nenhum, hoje.** É importante entender por quê:
+Eu tinha classificado como "sem impacto hoje", com o argumento de que o
+faturamento funciona pelo conector do Claude. **O dono corrigiu, e a
+correção é estrutural:**
 
-- **Nenhuma das 4 rotinas do [[VPS e OpenClaw]] usa o QuickBooks.**
-  Sincronia do [[Asana]], [[Triagem de e-mail]],
-  [[Waiver de responsabilidade|varredura de waivers]] e saúde do cérebro
-  não tocam em QBO.
-- O faturamento acontece **pelo conector do Claude**, que já tem acesso à
-  empresa real — foi por ele que se leu a invoice paga de $2.756,90, o
-  A/R de $185.887 e as 896 linhas do catálogo.
+> "o quickbooks tem que estar na vps, o claude não vai operar esse
+> agente de ia"
 
-O bloqueio só passa a doer quando o faturamento migrar para o VPS, e a
-IA precisar conferir pagamento e devolução de depósito sozinha.
+É a mesma decisão de sempre —
+[[D-2026-08-28 - Construir por partes e por aplicacao]]: o sistema é o
+[[VPS e OpenClaw]]; o Claude Code é ambiente de desenvolvimento e
+backup, **não o destino**. Medir impacto pelo que o conector do Claude
+cobre é medir pelo backup.
+
+Sem chave de produção, o agente no VPS só alcança **sandbox** — não a
+[[URACE US INC]] real. Ou seja: **o faturamento não migra para o VPS
+enquanto isto não for resolvido.**
 
 ## O que fazer
 
-**Decisão de 01/09: adiar.** A ordem passa a ser [[DocuSign]] →
-Google/[[Gmail]] → QuickBooks. As duas primeiras têm rotina diária
-falhando **agora**; esta não.
+**Destravar.** O passo a passo com **as respostas de cada campo já
+prontas** está em `docs/adminai/intuit-app-review.md` — inclusive o
+questionário de compliance.
 
-Quando for a hora, os dois itens que **dependem do dono** e que ninguém
-pode inventar por ele:
+O único pré-requisito que dependia do dono já está resolvido: as duas
+páginas exigidas (**política de privacidade** e **EULA**) foram escritas
+em `adminai/deploy/legal/`, e há um script que as publica pelo Caddy do
+próprio VPS (`servir_legal.sh`), com prova por `curl` no fim. Ele só
+precisa **ler e assumir o texto** — quem responde pelas cláusulas é a
+empresa.
 
-1. uma página de **política de privacidade** no site da URACE;
-2. uma página de **EULA** (termos de uso do app).
-
-O resto do formulário e o questionário de compliance podem ser
-preenchidos com acompanhamento.
+⚠️ **Não confundir com prazo de token:** o refresh token do QuickBooks
+vale **100 dias** e rotaciona a cada uso — diferente do token permanente
+do [[Asana]].
 
 ⚠️ **Não confundir com acesso de usuário.** Dar acesso a alguém para
 emitir invoice (ex.: `lucas@urace.us`) é *gear → Manage users* dentro do
