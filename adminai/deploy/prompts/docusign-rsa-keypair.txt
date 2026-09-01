@@ -1,0 +1,41 @@
+Continuando de onde você parou na conta demo do DocuSign
+(https://apps-d.docusign.com/admin/apps-and-keys).
+
+DECISÃO: use o app que JÁ EXISTE. Não crie um segundo.
+App: URACE Administrative AI
+Integration Key: 126393c2-ae7a-4b73-9585-fed7e13cafe7
+
+REGRA QUE VALE ACIMA DE TUDO:
+A chave privada RSA NÃO pode ser copiada, transcrita, resumida nem
+colada na sua resposta. Quando ela aparecer, você só me avisa que está
+na tela. Eu copio manualmente.
+
+5) ABRA o app existente (Actions → Edit, ou clique no nome).
+   Confirme que a Integration Key na tela é a 126393c2-… acima.
+   Se for outra, PARE e me diga qual é.
+
+6) Na seção "Additional settings" → "Redirect URIs", verifique se já
+   existe alguma URI cadastrada.
+   - Se a lista estiver vazia, clique em "Add URI" e cadastre
+     exatamente: https://urace-bridge.duckdns.org/legal/privacy.html
+   - Se já houver alguma, me reporte quais são ANTES de adicionar.
+   Salve e confirme que ela aparece na lista.
+
+7) Ainda na tela do app, procure a seção "Authentication" (ou "RSA
+   Keypairs"). Me diga se JÁ EXISTE algum par de chaves listado.
+   - Se já existir: PARE e me reporte. Não gere outro.
+   - Se não existir: PARE e me avise que está vazio.
+
+   Nos dois casos, pare aqui. O próximo passo gera uma chave privada que
+   aparece UMA ÚNICA VEZ, e eu preciso estar pronto para copiar antes.
+
+8) SÓ DEPOIS DA MINHA CONFIRMAÇÃO EXPLÍCITA: clique em "Generate RSA"
+   (ou "Add RSA Keypair").
+   Deixe a janela com a chave ABERTA na tela e me avise que está pronta.
+   Não copie o conteúdo. Não feche a janela.
+   Me reporte apenas: (a) que a chave foi gerada, (b) o Key ID que
+   aparece na lista, se houver.
+
+9) NÃO faça mais nada depois disso. Não clique em "Go Live" nem em
+   "Complete required details", não altere escopos, não apague nada,
+   não mexa em templates nem em envelopes.

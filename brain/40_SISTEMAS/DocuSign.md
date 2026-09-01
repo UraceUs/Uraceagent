@@ -147,6 +147,18 @@ como ter conta no Gmail e no Outlook com o mesmo endereço.
 | Admin | `admin.docusign.com` | `admindemo.docusign.com` |
 | API | `na4.docusign.net` | `demo.docusign.net` |
 | Conteúdo | 4 templates · 39 envelopes | **vazia** |
+| `accountId` | `4261a166-3a91-4fb7-97c5-30257d657c52` | `d3cf672c-62f6-4c5c-bddb-7a3307a52123` |
+| `userId` | `b3ef4ae4-917e-4394-96b4-e1e5498cc75b` | `4347151f-fe2a-4e6f-87df-e8457a00a7ff` |
+
+Os GUIDs são **diferentes** nos dois ambientes: mesma pessoa, mesma
+empresa, identidades distintas. O número curto da conta demo é
+`50217403`, nome "Urace US" — não confundir com o `accountId`.
+
+A **Integration Key** (o `client_id` da aplicação) é
+`126393c2-ae7a-4b73-9585-fed7e13cafe7`, criada em 01/09/2026 no app
+`URACE Administrative AI`. Ela **sobrevive ao go-live**: é a mesma chave
+em demo e em produção. O que muda é para qual `accountId` ela aponta.
+Ver [[P-12 - Integration Key do DocuSign so nasce em demo]].
 
 ### O susto de 01/09
 

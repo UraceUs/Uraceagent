@@ -15,8 +15,13 @@ em `brain/40_SISTEMAS/DocuSign.md`.
 | Admin | `admindemo.docusign.com` | `admin.docusign.com` |
 | Login | `account-d.docusign.com` | `account.docusign.com` |
 | API | `https://demo.docusign.net` | `https://na4.docusign.net` |
-| accountId | **outro** (a extensão vai reportar) | `4261a166-3a91-4fb7-97c5-30257d657c52` |
-| userId | **outro** | `b3ef4ae4-917e-4394-96b4-e1e5498cc75b` |
+| accountId | `d3cf672c-62f6-4c5c-bddb-7a3307a52123` | `4261a166-3a91-4fb7-97c5-30257d657c52` |
+| userId | `4347151f-fe2a-4e6f-87df-e8457a00a7ff` | `b3ef4ae4-917e-4394-96b4-e1e5498cc75b` |
+
+**Integration Key (o `client_id`):**
+`126393c2-ae7a-4b73-9585-fed7e13cafe7` — app `URACE Administrative AI`,
+criado em 01/09/2026. É a **mesma chave** depois do go-live; o que muda
+é o `accountId` para o qual ela aponta.
 
 ⚠️ **Os 4 templates e os 39 envelopes reais estão na produção.** A conta
 demo nasce vazia — isso é esperado, não é perda de dados.
@@ -61,9 +66,28 @@ dá `invalid_grant`, que parece problema de permissão.
 
 ## Passo 4 — consentimento único do JWT
 
-O JWT só funciona depois que um humano autoriza a aplicação uma vez.
-Assim que a Integration Key existir, monto a URL de consentimento — ela
-precisa da chave, então não dá para adiantar.
+O JWT não funciona enquanto um humano não autorizar a aplicação **uma
+vez**, por ambiente. É um clique só, mas sem ele todo `invalid_grant`
+parece problema de chave.
+
+**Demo** — abrir logado em `account-d`, autorizar, e a página vai
+redirecionar para a `privacy.html` com um `?code=` na URL. O código não
+serve para nada aqui: o que importa é ter clicado em **Allow**.
+
+```
+https://account-d.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=126393c2-ae7a-4b73-9585-fed7e13cafe7&redirect_uri=https://urace-bridge.duckdns.org/legal/privacy.html
+```
+
+**Produção** — só depois do go-live aprovado, e logado em `account`
+(não em `account-d`):
+
+```
+https://account.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=126393c2-ae7a-4b73-9585-fed7e13cafe7&redirect_uri=https://urace-bridge.duckdns.org/legal/privacy.html
+```
+
+O escopo `impersonation` é o que permite o agente agir como o usuário
+`support@urace.us` sem ninguém logar. É por isso que a chave privada RSA
+é secreto de verdade.
 
 ---
 
