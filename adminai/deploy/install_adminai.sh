@@ -177,6 +177,30 @@ echo "== servidores MCP =="
 instalar_mcp asana ASANA_TOKEN asana_mcp.py
 openclaw --no-color mcp reload >/dev/null 2>&1 || true
 
+# A política do sandbox só deixa passar ferramenta listada. Sem isto o
+# gateway conhece o servidor e o agente não vê nada (P-13, parte 2).
+# Lê os nomes reais da sondagem e grava em agents.list[].tools.sandbox.tools.alsoAllow.
+if command -v openclaw >/dev/null 2>&1 && openclaw --no-color mcp probe --json > /tmp/urace-probe.json 2>/dev/null; then
+    LIBERADAS=$(python3 - "$HOME/.openclaw/openclaw.json" /tmp/urace-probe.json "${OPENCLAW_AGENT:-urace-admin}" <<'PYEOF'
+import json, sys
+cfg, probe, agente = sys.argv[1:4]
+d = json.load(open(cfg))
+tools = sorted(json.load(open(probe)).get("tools", []))
+for a in d.get("agents", {}).get("list", []):
+    if a.get("id") == agente:
+        a.setdefault("tools", {}).setdefault("sandbox", {}).setdefault("tools", {})["alsoAllow"] = tools
+json.dump(d, open(cfg, "w"), indent=2, ensure_ascii=False)
+print(len(tools))
+PYEOF
+    )
+    if openclaw --no-color config validate >/dev/null 2>&1; then
+        echo "-- política do sandbox: $LIBERADAS ferramentas MCP liberadas para ${OPENCLAW_AGENT:-urace-admin}"
+    else
+        echo "-- política do sandbox: config INVÁLIDA depois da liberação — confira: openclaw config validate"
+    fi
+    rm -f /tmp/urace-probe.json
+fi
+
 # ----------------------------------------------------------------- 6. prova
 echo
 echo "================= PROVA REAL ================="

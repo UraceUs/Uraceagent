@@ -124,7 +124,26 @@ ferramenta.
 
 O instalador registra cada servidor com `openclaw mcp set` (idempotente)
 só quando a credencial existe, e prova com `openclaw mcp probe` — a
-sondagem real, com token, listando o que o agente enxerga.
+sondagem real, com token.
+
+⚠️ **Sondagem verde não é agente vendo.** A política de ferramentas do
+sandbox só deixa passar o que está listado, e o padrão não inclui MCP
+nenhum: o gateway conhecia o `asana` e o agente via zero ferramentas.
+Descoberto com `openclaw sandbox explain --agent urace-admin`. O
+instalador agora lê os nomes da sondagem (`asana__asana_tarefa`, …) e
+grava em `agents.list[].tools.sandbox.tools.alsoAllow` — quando o
+DocuSign entrar, entra sozinho.
+
+### Sessão: uma por rotina e por dia
+
+A sessão do agente **persiste entre execuções**. Na primeira semana tudo
+caía em `agent:urace-admin:main`, e o agente chegou a dizer *"isto se
+repetiu quatro vezes hoje"* — carregando a conclusão de ontem em vez de
+olhar de novo.
+
+As units agora passam `--session-key agent:urace-admin:waivers-AAAA-MM-DD`:
+cada manhã começa limpa; duas execuções no mesmo dia compartilham
+contexto. Também `--thinking medium` e `--timeout 900`.
 
 ## Como está montado
 
