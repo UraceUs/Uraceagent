@@ -33,8 +33,9 @@ fonte, não presumido. Antes de agir em estrutura nova, **re-sondar**.
 
 ## Campo `Race` (`1213088541600529`) — obrigatório
 
-`Practice OKC` (Orlando, o padrão) · `Practice Bushnell` · `KART` ·
-`F4` · `TRACK CLOSED`. É por ele que se separa prática de corrida e kart
+`Practice OKC` `1215501111942172` (Orlando, o padrão) · `Practice Bushnell`
+`1216267652449325` · `KART` `1213088541600530` · `F4` `1213088541600531` ·
+`TRACK CLOSED` `1216760479094481`. É por ele que se separa prática de corrida e kart
 de F4. **Sempre preencher.**
 
 ## RACES — corridas
@@ -49,6 +50,12 @@ de F4. **Sempre preencher.**
 - Regra escrita no projeto: confirmar ≥15 dias antes; organizado 1 mês antes.
 
 ## Serviços — o modelo é obrigatório
+
+**Modelo de tarefa do Asana:** `Session Setup | Customer Name_Product
+[Category_ Engine and Days]`, gid `1208702559561159`. Instanciar por
+`create_task_from_template` (é assíncrono — conferir por leitura direta que
+nasceram **12 subtarefas** antes de seguir), depois renomear, preencher a
+descrição, `due_on`, `Race`, responsável, e mover para a coluna do dia.
 
 Nome: `{Piloto}_{Serviço}_{Categoria} [n/total]`. Descrição:
 

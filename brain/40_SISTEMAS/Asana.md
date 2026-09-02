@@ -13,6 +13,19 @@ Onde a operação vive. Workspace ` COMMAND CENTER`.
 - **SUITS** `1205661933760052` — [[Pedido de macacão]]
 - **Shipping Orders** `1215968721507536` — [[Compra e envio]]
 - **ADM URACE** `1205530439507169` — ⚠️ **somente leitura**
+## Modelo de tarefa de serviço
+
+O U-RACE tem um **modelo de tarefa** do próprio Asana: *Session Setup |
+Customer Name_Product [Category_ Engine and Days]*, gid
+`1208702559561159`. É ele que gera as 12 subtarefas de [[Serviços]].
+Descoberto em 02/09 lendo o projeto — nenhuma nota anterior o citava, e
+[[P-01 - Modelo de tarefa fora do padrao]] existe justamente porque
+tarefas foram criadas sem ele.
+
+Opções do campo `Race`: Practice OKC `1215501111942172` · Practice
+Bushnell `1216267652449325` · KART `1213088541600530` · F4
+`1213088541600531` · TRACK CLOSED `1216760479094481`.
+
 ## Colunas do U-RACE
 `RACES` · `Finished Services` · TUESDAY→SUNDAY (dia do serviço) · `Pending Reschedule` · `Luis tasks` · **`Matt tasks` — nenhuma automação**
 Serviço concluído sai da coluna do dia → `Finished Services`.
