@@ -77,3 +77,11 @@ pule a fila, nem na Intuit nem no DocuSign.
 **Consequência para a fila:** das três credenciais que faltam, só a do
 **Google** não tem portão de revisão — e é justamente a que destrava a
 [[Triagem de e-mail]] diária. Passa a ser a próxima.
+
+## 02/09 — o caminho até o go-live está aberto
+
+Integration Key `126393c2-…`, par RSA instalado, consentimento dado,
+JWT autenticando na conta demo. O que falta é o próprio go-live: as ~20
+chamadas bem-sucedidas e o pedido em *Apps and Keys → Go Live*. Depois,
+trocar `DOCUSIGN_BASE_URI` para `na4` e os IDs para os de produção.
+Passo a passo em `docs/adminai/docusign-go-live.md`.
