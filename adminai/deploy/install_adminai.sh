@@ -175,6 +175,7 @@ instalar_mcp() {
 echo
 echo "== servidores MCP =="
 instalar_mcp asana ASANA_TOKEN asana_mcp.py
+instalar_mcp docusign DOCUSIGN_INTEGRATION_KEY docusign_mcp.py
 openclaw --no-color mcp reload >/dev/null 2>&1 || true
 
 # A política do sandbox só deixa passar ferramenta listada. Sem isto o

@@ -110,7 +110,7 @@ rodam no host — os nossos, em `adminai/mcp/`:
 | Servidor | Sistema | Estado |
 |---|---|---|
 | `asana_mcp.py` | [[Asana]] | ativo desde 02/09 |
-| `docusign_mcp.py` | [[DocuSign]] | a escrever — espera o go-live |
+| `docusign_mcp.py` | [[DocuSign]] | ativo desde 02/09 · lê no demo; **envio só em produção** |
 
 Os oficiais (Asana `mcp.asana.com/v2/mcp`, DocuSign `mcp-d.docusign.com`)
 existem, mas **exigem Client ID + Secret pré-registrados**, e o `oauth` do

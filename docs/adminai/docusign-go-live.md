@@ -98,6 +98,21 @@ O escopo `impersonation` é o que permite o agente agir como o usuário
 
 ---
 
+## Passo 4b — provar o consentimento sem depender de memória
+
+Quem clicou em Allow não precisa lembrar: a API responde. No VPS, uma
+chamada direta ao servidor MCP, sem passar pelo agente:
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"docusign_ambiente","arguments":{}}}' | URACE_ENV=$HOME/.urace/adminai.env timeout 60 python3 ~/Uraceagent/adminai/mcp/docusign_mcp.py 2>/dev/null | tail -1 | python3 -c "import sys,json;r=json.load(sys.stdin)['result'];print(r['content'][0]['text'])"
+```
+
+| Resposta | Significa |
+|---|---|
+| `usuario: support@urace.us` + contas | consentimento dado, JWT vivo, chave certa |
+| `consent_required` | falta o clique do Passo 4 |
+| `invalid_grant` | chave privada não bate com a pública do app, ou `userId` errado |
+
 ## Passo 5 — as ~20 chamadas de demo
 
 O go-live exige um histórico de chamadas bem-sucedidas no ambiente demo

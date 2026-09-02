@@ -187,6 +187,42 @@ mandar do ambiente errado sem perceber.
 resposta da API vier de `demo.docusign.net`, está no ambiente errado —
 parar e escalar.
 
+## Como o Administrative AI fala com o DocuSign
+
+Desde 02/09/2026, por **servidor MCP nosso** (`adminai/mcp/docusign_mcp.py`),
+no [[VPS e OpenClaw]]. Autentica por **JWT com a chave RSA** de
+`~/.urace/`, assinando com o `openssl` da máquina — sem biblioteca. O
+agente recebe só as ferramentas; chave e token ficam no host.
+
+O MCP oficial (`mcp-d.docusign.com`) exigiria Client ID + Secret, que o
+OpenClaw não sabe usar. O servidor próprio trouxe o que o oficial não
+daria: **as 4 travas rodam dentro da ferramenta de envio**, antes da
+chamada. O modelo não tem como pular uma.
+
+| Trava | Como o servidor garante |
+|---|---|
+| 1 · waiver válida (< 1 ano) | consulta os envelopes `completed` do e-mail e recusa |
+| 2 · envelope em aberto | consulta `sent`/`delivered` do e-mail e recusa |
+| 3 · idade confirmada | argumento `idade_confirmada=false` → recusa antes de qualquer API |
+| 4 · nome/e-mail conferidos | argumento `nome_email_conferidos=false` → recusa antes de qualquer API |
+| **5 · ambiente** | base `demo.docusign.net` → envio **sempre** recusado (sem validade jurídica) |
+| template pelo ID | só os 2 de [[PARAMETROS]]; qualquer outro é recusado |
+| `APLICAR=0` | passa pelas travas e devolve *"teria enviado"* |
+
+Não existem: `voidEnvelope`, editar template, `sendReminder` (U-01 em
+[[Conflitos e lacunas]]). Se precisar, é humano.
+
+**Leitura:** `docusign_ambiente` (chame primeiro — diz se é demo ou
+produção e se o JWT autentica) · `docusign_templates` ·
+`docusign_envelopes` · `docusign_envelope` · `docusign_waivers_de`
+(a consulta das travas 1 e 2 para um e-mail).
+
+**Escrita:** `docusign_enviar_waiver`, só.
+
+Enquanto a base for demo, a conta está **vazia de propósito**: leitura
+ali serve para acumular as chamadas do go-live, não para ver waiver
+real. Ver `docs/adminai/docusign-go-live.md`.
+
 ## Prazo
 
 Assinada **2 dias antes** do serviço ([[PARAMETROS]]) — o dono falou "um
