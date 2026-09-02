@@ -20,10 +20,13 @@ testado e respondendo. Ver [[2026-09-01]].
 **`APLICAR=0`** — simulação. Nada é escrito em sistema nenhum até você
 ler os logs em `~/.urace/logs/` e liberar.
 
-[[DocuSign]] **conectado em 01/09** — chave RSA no VPS, apontando para
-`demo.docusign.net`. É **homologação**: o agente não enxerga as waivers
-reais até o go-live. Faltam [[QuickBooks]] e [[Gmail]] — lista do que
-buscar em [[Etapa de conexão]].
+**02/09 — o agente leu o [[Asana]] pela primeira vez.** Servidor MCP
+nosso, regras do dono em código, relatório conferido na fonte: Enzo
+05/09 com waiver assinada, nenhum alerta. Ver [[2026-09-02]].
+
+[[DocuSign]] com chave RSA no VPS, apontando para `demo.docusign.net`. É
+**homologação**: o agente não enxerga as waivers reais até o go-live.
+Faltam [[QuickBooks]] e [[Gmail]] — lista em [[Etapa de conexão]].
 
 ## 🔴 Pendente de clique do dono
 

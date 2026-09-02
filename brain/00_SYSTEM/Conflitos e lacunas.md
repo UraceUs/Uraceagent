@@ -64,6 +64,12 @@ a definição** — não arbitrar. → [[Invoice e estimate no QuickBooks]]
 Como a IA descobre quando o serviço vai acontecer, a partir de uma
 invoice paga? → [[QuickBooks]]
 
+### U-06 · Papel de [[Lucas Azaro]]
+Concluiu a subtarefa "Signed waiver?" do Enzo em 31/08 no [[Asana]]; o
+dono pediu acesso ao [[QuickBooks]] para `lucas@urace.us` em 01/09. O
+**papel formal não está registrado em lugar nenhum**. Dono da resposta:
+[[Italo Silveira]]. → [[Equipe]]
+
 ---
 
 ## 🔒 Fechado — o que já foi resolvido
