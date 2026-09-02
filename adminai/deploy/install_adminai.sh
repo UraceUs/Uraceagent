@@ -52,6 +52,17 @@ fi
 set -a; . "$ENV_FILE"; set +a
 
 tem() { [ -n "${!1:-}" ]; }
+# o Google não guarda segredo em variável, e sim num arquivo de token
+tem_google() { [ -f "${GOOGLE_TOKEN_JSON:-/nao/existe}" ]; }
+
+# devolve 0 quando FALTA o requisito (nome vazio = sem requisito)
+falta_para() {
+    case "$1" in
+        "")                 return 1 ;;
+        GOOGLE_TOKEN_JSON)  tem_google && return 1 || return 0 ;;
+        *)                  tem "$1"   && return 1 || return 0 ;;
+    esac
+}
 
 # ---------------------------------------------------------------- 3. skills
 mkdir -p "$SKILLS_DST"
@@ -89,8 +100,15 @@ grep -q '^ARGS_SYNC=' "$ENV_FILE" \
 # ---------------------------------------------------------------- 5. timers
 instalar_timer() {
     local nome="$1" precisa="$2"
-    if [ -n "$precisa" ] && ! tem "$precisa"; then
+    if falta_para "$precisa"; then
         echo "-- $nome: PULADO (falta $precisa)"
+        # se ficou de uma rodada anterior, desliga: sem credencial ele só
+        # acumula falha no log todo dia. Volta a subir quando a credencial vier.
+        if systemctl list-unit-files "$nome.timer" --no-legend 2>/dev/null | grep -q .; then
+            sudo systemctl disable --now "$nome.timer" >/dev/null 2>&1 || true
+            echo "   (timer que estava ligado foi desligado — voltaria a falhar)"
+        fi
+        PULADOS+=("$nome")
         return
     fi
     sudo cp "$DEPLOY_DIR/$nome.service" "/etc/systemd/system/$nome.service"
@@ -106,9 +124,10 @@ instalar_timer() {
 
 echo
 echo "== timers =="
+PULADOS=()
 instalar_timer urace-asana-sync    ASANA_TOKEN
-instalar_timer urace-triagem-email ""
-instalar_timer urace-waivers       ""
+instalar_timer urace-triagem-email GOOGLE_TOKEN_JSON
+instalar_timer urace-waivers       DOCUSIGN_INTEGRATION_KEY
 instalar_timer urace-brain-health  ""
 sudo systemctl daemon-reload
 
@@ -130,7 +149,11 @@ echo
 if [ ${#FALTA[@]} -gt 0 ]; then
     echo "⚠️  AINDA FALTA: ${FALTA[*]}"
     echo "   Preencha em $ENV_FILE e rode este script de novo."
-    echo "   Os timers que dependem delas não foram instalados."
+    if [ ${#PULADOS[@]} -gt 0 ]; then
+        echo "   Timers desligados por falta de credencial: ${PULADOS[*]}"
+    else
+        echo "   Nenhum timer ficou de fora — as rotinas ligadas não dependem delas."
+    fi
 else
     echo "✅ Todas as credenciais presentes."
 fi
