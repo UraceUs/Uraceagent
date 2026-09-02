@@ -101,6 +101,31 @@ Cuidado: `openclaw models list` **quebra** com a saída redirecionada
 `agents.list[]`, um array de objetos com `id`. `config set
 agents.<nome>.model` não funciona e corrompe a validação.
 
+### Ferramentas: servidores MCP próprios
+
+O agente no container não tem CLI nem credencial. O que ele tem são
+**ferramentas MCP**, expostas pelo gateway a partir de servidores que
+rodam no host — os nossos, em `adminai/mcp/`:
+
+| Servidor | Sistema | Estado |
+|---|---|---|
+| `asana_mcp.py` | [[Asana]] | ativo desde 02/09 |
+| `docusign_mcp.py` | [[DocuSign]] | a escrever — espera o go-live |
+
+Os oficiais (Asana `mcp.asana.com/v2/mcp`, DocuSign `mcp-d.docusign.com`)
+existem, mas **exigem Client ID + Secret pré-registrados**, e o `oauth` do
+OpenClaw só aceita `scope`, `redirectUrl` e `clientMetadataUrl` — registro
+dinâmico, nada mais. Confirmado no schema, não no palpite.
+
+O esqueleto é `mcp_stdio.py`: JSON-RPC por stdio, zero dependência. Fala
+`initialize`, `tools/list`, `tools/call`. Uma chamada que falha devolve
+`isError` e o servidor **continua de pé** — nunca `sys.exit` dentro de
+ferramenta.
+
+O instalador registra cada servidor com `openclaw mcp set` (idempotente)
+só quando a credencial existe, e prova com `openclaw mcp probe` — a
+sondagem real, com token, listando o que o agente enxerga.
+
 ## Como está montado
 
 - **Segredos** em `~/.urace/adminai.env`, permissão 600, **fora do

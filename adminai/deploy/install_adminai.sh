@@ -149,6 +149,34 @@ instalar_timer urace-waivers       DOCUSIGN_INTEGRATION_KEY
 instalar_timer urace-brain-health  ""
 sudo systemctl daemon-reload
 
+# ------------------------------------------------------- 5b. servidores MCP
+# O agente roda num container e só vê ferramentas que o gateway expõe.
+# Cada servidor é nosso (adminai/mcp/), roda no host e lê o token de
+# $ENV_FILE -- a credencial nunca entra no sandbox. `mcp set` é idempotente.
+instalar_mcp() {
+    local nome="$1" precisa="$2" script="$3"
+    if ! command -v openclaw >/dev/null 2>&1; then
+        echo "-- mcp $nome: PULADO (openclaw fora do PATH)"; return
+    fi
+    if falta_para "$precisa"; then
+        echo "-- mcp $nome: PULADO (falta $precisa)"
+        openclaw --no-color mcp unset "$nome" >/dev/null 2>&1 || true
+        return
+    fi
+    local json
+    json=$(printf '{"command":"python3","args":["%s"],"env":{"URACE_ENV":"%s","OPENCLAW_AGENT":"%s"}}'                   "$REPO_DIR/adminai/mcp/$script" "$ENV_FILE" "${OPENCLAW_AGENT:-urace-admin}")
+    if openclaw --no-color mcp set "$nome" "$json" >/dev/null 2>&1; then
+        echo "-- mcp $nome: registrado ($script)"
+    else
+        echo "-- mcp $nome: FALHOU ao registrar — rode: openclaw mcp set $nome '$json'"
+    fi
+}
+
+echo
+echo "== servidores MCP =="
+instalar_mcp asana ASANA_TOKEN asana_mcp.py
+openclaw --no-color mcp reload >/dev/null 2>&1 || true
+
 # ----------------------------------------------------------------- 6. prova
 echo
 echo "================= PROVA REAL ================="
@@ -162,6 +190,16 @@ python3 "$REPO_DIR/adminai/brain_health.py" | tail -6 | sed 's/^/   /'
 echo
 echo "-- skills visíveis para o agente:"
 ls -1 "$SKILLS_DST" | sed 's/^/   /'
+
+echo
+echo "-- ferramentas MCP que o agente enxerga (sondagem real, com token):"
+if command -v openclaw >/dev/null 2>&1; then
+    openclaw --no-color mcp probe 2>&1 \
+        | sed -e 's/\x1b\[[0-9;]*[a-zA-Z]//g' -e 's/\r/\n/g' \
+        | grep -vE '^OpenClaw [0-9]|^\s*$' | head -30 | sed 's/^/   /' || true
+else
+    echo "   (openclaw fora do PATH — sem sondagem)"
+fi
 
 echo
 if [ ${#FALTA[@]} -gt 0 ]; then
