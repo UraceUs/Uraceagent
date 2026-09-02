@@ -85,3 +85,19 @@ JWT autenticando na conta demo. O que falta é o próprio go-live: as ~20
 chamadas bem-sucedidas e o pedido em *Apps and Keys → Go Live*. Depois,
 trocar `DOCUSIGN_BASE_URI` para `na4` e os IDs para os de produção.
 Passo a passo em `docs/adminai/docusign-go-live.md`.
+
+## ⏸️ Pausado em 02/09 — onde parou
+
+Go Live Status: **"Pending approval"**, com link *"Submit verification
+form"*. Já feito: Integration Type = *Private custom integration*, link
+da privacidade, Terms & Conditions aceitos, conta de produção
+selecionada (`Italo Jorge da Silveira – 152293148`, que é a `4261a166-…`).
+
+**O que falta é uma coisa só:** o formulário de verificação, que é um
+**envelope assinado pelo Italo** (nome tem que bater com documento).
+Não é tarefa de extensão. Campos e valores em
+`docs/adminai/docusign-go-live.md`, passo 6. Depois de assinado, até 48h
+de revisão manual da DocuSign.
+
+Enquanto isso o VPS fica como está: base `demo`, varredura rodando no
+demo vazio, envio recusado pelo servidor. Nada quebra por esperar.

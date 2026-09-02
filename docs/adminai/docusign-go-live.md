@@ -127,6 +127,23 @@ waivers reais**. É período de homologação, não de operação.
 
 ## Passo 6 — pedir o go-live
 
+**Estado em 02/09:** "Pending approval", faltando só o *verification
+form* — um envelope que o **Italo assina**, com nome igual ao documento.
+Valores para o envelope:
+
+| Campo | Valor |
+|---|---|
+| Nome | Italo Jorge da Silveira |
+| E-mail (admin da produção) | `support@urace.us` |
+| **Production Account ID** | `4261a166-3a91-4fb7-97c5-30257d657c52` — o GUID, não `152293148`, não o do demo |
+| Integration Key | `126393c2-ae7a-4b73-9585-fed7e13cafe7` |
+| App | `URACE Administrative AI` · Private custom integration · JWT Grant |
+| Empresa | URACE.US INC · 6149 Cyril Ave, Orlando, FL 32809 · (407) 250-2291 |
+| Volume | ~15 envelopes/mês (39 desde junho) |
+| Connect / embedded signing | Não / Não |
+
+Depois da aprovação (até 48h):
+
 `admindemo.docusign.com` → Apps and Keys → o app → **Go Live**.
 Depois de aprovado, trocar no `~/.urace/adminai.env`:
 
