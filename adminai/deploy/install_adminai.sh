@@ -83,6 +83,24 @@ tem QBO_REFRESH_TOKEN         && echo "   ✅ QuickBooks" || { echo "   ❌ Quic
 tem DOCUSIGN_INTEGRATION_KEY  && echo "   ✅ DocuSign"   || { echo "   ❌ DocuSign";   FALTA+=("DOCUSIGN_INTEGRATION_KEY"); }
 [ -f "${GOOGLE_TOKEN_JSON:-/nao/existe}" ] && echo "   ✅ Google" || { echo "   ❌ Google"; FALTA+=("GOOGLE_TOKEN_JSON"); }
 
+# O agente que as rotinas chamam existe mesmo? Credencial presente e timer
+# ativo não provam nada se o `openclaw agent --agent` cair num nome que não
+# existe: a rotina morre na primeira linha, todo dia, com rc=1.
+AG="${OPENCLAW_AGENT:-}"
+if [ -z "$AG" ]; then
+    echo "   ❌ OPENCLAW_AGENT vazio no env"
+    FALTA+=("OPENCLAW_AGENT")
+elif ! command -v openclaw >/dev/null 2>&1; then
+    echo "   ⚠️  openclaw não está no PATH — não deu para conferir o agente"
+elif openclaw agents list 2>/dev/null | grep -qE "^- ${AG}( |\$)"; then
+    echo "   ✅ agente '$AG' existe no OpenClaw"
+else
+    echo "   ❌ agente '$AG' NÃO existe — as rotinas falham na primeira linha"
+    echo "      crie com:"
+    echo "      openclaw agents add $AG --non-interactive --workspace \$HOME/.openclaw/workspace/$AG"
+    FALTA+=("OPENCLAW_AGENT")
+fi
+
 # ARGS_SYNC: simulação por padrão; só vira escrita com APLICAR=1
 if [ "${APLICAR:-0}" = "1" ]; then
     ARGS="--aplicar"

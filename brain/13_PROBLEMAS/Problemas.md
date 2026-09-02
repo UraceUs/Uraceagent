@@ -37,7 +37,8 @@ e estado. Não é lista de melhoria — é o que está quebrado ou arriscado.
 
 ## Resolvidos
 
-[[P-10 - Email de cliente trocado]] (28/08)
+[[P-10 - Email de cliente trocado]] (28/08) ·
+[[P-13 - Deploy verde sem agente existir]] (02/09)
 
 ## Como usar
 
