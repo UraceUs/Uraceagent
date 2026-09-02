@@ -86,7 +86,7 @@ chamadas bem-sucedidas e o pedido em *Apps and Keys → Go Live*. Depois,
 trocar `DOCUSIGN_BASE_URI` para `na4` e os IDs para os de produção.
 Passo a passo em `docs/adminai/docusign-go-live.md`.
 
-## ⏸️ Pausado em 02/09 — onde parou
+## ~~Pausado~~ 02/09 14:43 — formulário assinado, em revisão
 
 Go Live Status: **"Pending approval"**, com link *"Submit verification
 form"*. Já feito: Integration Type = *Private custom integration*, link
@@ -101,3 +101,15 @@ de revisão manual da DocuSign.
 
 Enquanto isso o VPS fica como está: base `demo`, varredura rodando no
 demo vazio, envio recusado pelo servidor. Nada quebra por esperar.
+
+## ✅ Go-Live Form assinado — 02/09/2026 11:43 PT
+
+Envelope `53FB5A34-CFDE-4BBC-8747-92A57BAC813B`. Assinado pelo
+[[Italo Silveira]] no celular, com **verificação de identidade por
+documento (carteira de motorista, EUA) — aprovada**. Os três campos que
+recusam foram conferidos no PDF: Production API Account ID
+`4261a166-…`, Integration Key `126393c2-…`, signatário `support@urace.us`.
+
+Seguiu para *"Go Live Execution — Dev Support Engineer II"*. **Até 48h.**
+Quando aprovar: o bloco de virada está em
+`docs/adminai/docusign-go-live.md`, passo 7. Até lá o VPS fica em demo.

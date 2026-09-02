@@ -142,6 +142,40 @@ Valores para o envelope:
 | Volume | ~15 envelopes/mês (39 desde junho) |
 | Connect / embedded signing | Não / Não |
 
+**02/09 14:43 — assinado.** Envelope `53FB5A34-…`, identidade verificada
+por documento, na fila de *Go Live Execution*.
+
+## Passo 7 — a virada para produção (só depois do e-mail de aprovação)
+
+Confirmar primeiro no admin de **produção** (`admin.docusign.com` →
+Apps and Keys) que o app `URACE Administrative AI` aparece lá com a
+mesma chave. Só então, no VPS, num bloco só:
+
+```bash
+cp -a ~/.urace/adminai.env ~/.urace/adminai.env.antes-da-producao
+sed -i 's|^DOCUSIGN_ACCOUNT_ID=.*|DOCUSIGN_ACCOUNT_ID=4261a166-3a91-4fb7-97c5-30257d657c52|' ~/.urace/adminai.env
+sed -i 's|^DOCUSIGN_USER_ID=.*|DOCUSIGN_USER_ID=b3ef4ae4-917e-4394-96b4-e1e5498cc75b|' ~/.urace/adminai.env
+sed -i 's|^DOCUSIGN_BASE_URI=.*|DOCUSIGN_BASE_URI=https://na4.docusign.net|' ~/.urace/adminai.env
+grep '^DOCUSIGN_' ~/.urace/adminai.env | grep -v PRIVATE
+```
+
+Depois, **o consentimento de novo, agora em produção** — é por
+ambiente, o do demo não vale aqui. Logado em `account` (não `account-d`):
+
+```
+https://account.docusign.com/oauth/auth?response_type=code&scope=signature%20impersonation&client_id=126393c2-ae7a-4b73-9585-fed7e13cafe7&redirect_uri=https://urace-bridge.duckdns.org/legal/privacy.html
+```
+
+E a prova, pela mesma ferramenta:
+
+```bash
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"docusign_envelopes","arguments":{"status":"sent,delivered,completed","desde_dias":120}}}' | URACE_ENV=$HOME/.urace/adminai.env timeout 60 python3 ~/Uraceagent/adminai/mcp/docusign_mcp.py 2>/dev/null | tail -1 | python3 -c "import sys,json;r=json.load(sys.stdin)['result'];t=r['content'][0]['text'];print(t[:600])"
+```
+
+Tem que vir `"ambiente": "PRODUÇÃO"` e `"total"` na casa dos 39. Se vier
+`consent_required`, é o Allow de produção que faltou. Depois disso,
+`openclaw mcp reload` e a varredura seguinte enxerga as waivers reais.
+
 Depois da aprovação (até 48h):
 
 `admindemo.docusign.com` → Apps and Keys → o app → **Go Live**.
