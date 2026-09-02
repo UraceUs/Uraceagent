@@ -9,6 +9,7 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Uraceagent
 EnvironmentFile=/home/ubuntu/.urace/adminai.env
+ExecStartPre=/bin/bash -lc 'mkdir -p "$HOME/.openclaw/workspace/$OPENCLAW_AGENT/brain" && rsync -a --delete brain/ "$HOME/.openclaw/workspace/$OPENCLAW_AGENT/brain/"'
 ExecStart=/bin/bash -lc 'openclaw agent --agent "$OPENCLAW_AGENT" -m "Rode a triagem diaria do Gmail conforme brain/10_PROCESSOS/Triagem de e-mail.md. Lembre: a IA NAO envia e-mail, so rascunho, com as excecoes de PARAMETROS. Registre o que fez no diario do cerebro."'
 StandardOutput=append:/home/ubuntu/.urace/logs/triagem-email.log
 StandardError=append:/home/ubuntu/.urace/logs/triagem-email.log

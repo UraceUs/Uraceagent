@@ -9,6 +9,7 @@ Type=oneshot
 User=ubuntu
 WorkingDirectory=/home/ubuntu/Uraceagent
 EnvironmentFile=/home/ubuntu/.urace/adminai.env
+ExecStartPre=/bin/bash -lc 'mkdir -p "$HOME/.openclaw/workspace/$OPENCLAW_AGENT/brain" && rsync -a --delete brain/ "$HOME/.openclaw/workspace/$OPENCLAW_AGENT/brain/"'
 ExecStart=/bin/bash -lc 'openclaw agent --agent "$OPENCLAW_AGENT" -m "Rode a varredura diaria de waivers conforme brain/10_PROCESSOS/Waiver de responsabilidade.md: liste envelopes sent e delivered, cruze com os servicos do Asana e alerte o que estiver a 2 dias ou menos, e o que estiver perto de expirar. Lembre: delivered NAO e assinado."'
 StandardOutput=append:/home/ubuntu/.urace/logs/waivers.log
 StandardError=append:/home/ubuntu/.urace/logs/waivers.log

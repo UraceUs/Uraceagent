@@ -39,11 +39,35 @@ Python puro e não passam por modelo nenhum.
 | Agent dir | `~/.openclaw/agents/urace-admin/agent` — auth própria |
 | Routing | **nenhum** — sem `--bind`, não recebe conversa de canal |
 
-O cérebro entra no workspace por **link simbólico**
-(`brain -> /home/ubuntu/Uraceagent/brain`), e não apontando o workspace
-para o repositório. A razão é concreta: `openclaw agents delete`
-**apaga o workspace**. Com o repositório como workspace, um `delete`
-levaria o repositório junto; com o link, leva só o link.
+### Como o cérebro chega até o agente
+
+⚠️ **O agente roda dentro de um container Docker** (`sandbox.mode:
+"all"`, imagem `openclaw-sandbox:bookworm-slim`). Só o workspace é
+montado. Isso derruba as soluções óbvias:
+
+| Tentativa | Por que não funciona |
+|---|---|
+| Link simbólico para o repositório | o alvo não existe dentro do container — link quebrado |
+| Workspace = o repositório | `agents delete` **apaga o workspace**: apagaria o repositório |
+| Bind para `/workspace/brain` | `/workspace` é **caminho reservado**; o OpenClaw recusa |
+| Bind de `~/Uraceagent/brain` para `/opt/...` | origem **fora do workspace**; recusado sem override perigoso |
+
+O que funciona: **o cérebro é copiado para dentro do workspace antes de
+cada execução**, por `ExecStartPre` nas duas units que chamam o agente:
+
+```
+rsync -a --delete brain/ "$HOME/.openclaw/workspace/$OPENCLAW_AGENT/brain/"
+```
+
+O `--delete` é intencional: a cópia é reescrita a cada run, então o
+**repositório continua sendo a única fonte de verdade** e rabisco do
+agente não vira fato. Se o agente precisar um dia escrever no cérebro,
+isso passa a ser uma decisão consciente, não um efeito colateral.
+
+Recusar o override `dangerouslyAllowExternalBindSources` foi escolha:
+ele resolveria com uma linha, mas abriria a config para montar qualquer
+caminho do host dentro do sandbox — trava geral aberta por um caso
+específico.
 
 ⚠️ **O default do OpenClaw ainda é o `urace-sales`**, o agente de vendas
 arquivado. Chamada sem `--agent` cai nele. Ver
