@@ -1,0 +1,22 @@
+[Unit]
+Description=URACE — Command Center (FastAPI + SPA) em 127.0.0.1:8790
+Documentation=file:///home/ubuntu/Uraceagent/docs/adminai/command-center-adr.md
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+# segredos e OPENCLAW_AGENT vêm do mesmo env dos timers; nada no repo
+EnvironmentFile=-/home/ubuntu/.urace/adminai.env
+Environment=CC_PORT=8790
+Environment=PYTHONUNBUFFERED=1
+# bash -l: o mesmo PATH de login dos timers, para o `openclaw` do AI Command ser achado
+ExecStart=/bin/bash -lc 'exec /home/ubuntu/.urace/cc-venv/bin/uvicorn command_center.api.main:app --host 127.0.0.1 --port 8790 --proxy-headers --forwarded-allow-ips 127.0.0.1'
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy — URACE Administrative AI</title>
+<style>
+:root{color-scheme:light dark}
+body{max-width:44rem;margin:0 auto;padding:2.5rem 1.25rem 5rem;
+     font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif;
+     background:#fff;color:#1a1a1a}
+@media(prefers-color-scheme:dark){body{background:#141414;color:#e8e6e3}}
+h1{font-size:1.7rem;line-height:1.25;margin:0 0 .25rem}
+h2{font-size:1.1rem;margin:2rem 0 .5rem}
+.sub{color:#666;margin:0 0 2rem;font-size:.95rem}
+@media(prefers-color-scheme:dark){.sub{color:#999}}
+ul{padding-left:1.25rem}li{margin:.3rem 0}
+address{font-style:normal;margin-top:.5rem}
+hr{border:0;border-top:1px solid #ddd;margin:2.5rem 0}
+@media(prefers-color-scheme:dark){hr{border-top-color:#333}}
+</style></head><body>
+
+<h1>Privacy Policy</h1>
+<p class="sub">URACE Administrative AI · Last updated: September 1, 2026</p>
+
+<p>This policy describes how the <strong>URACE Administrative AI</strong>
+application ("the App") handles data. The App is an internal operations tool
+built and operated by <strong>URACE.US INC</strong> ("we", "us") for our own
+business use. It is not distributed to, sold to, or made available to the
+public.</p>
+
+<h2>1. Who this applies to</h2>
+<p>The App connects only to the QuickBooks Online company file belonging to
+URACE.US INC. It is used exclusively by authorized URACE.US INC personnel. We
+do not onboard third-party customers or connect other companies' QuickBooks
+accounts.</p>
+
+<h2>2. What data the App accesses</h2>
+<p>Through the Intuit QuickBooks Online API, and only with the
+<code>com.intuit.quickbooks.accounting</code> scope, the App may read and
+write:</p>
+<ul>
+  <li>Customer records (name, email, phone, billing address)</li>
+  <li>Invoices, estimates and their line items</li>
+  <li>Products and services in our catalog</li>
+  <li>Accounts receivable reports</li>
+</ul>
+<p>The App does <strong>not</strong> access payroll data, bank credentials,
+card numbers, or any payment instrument. It does not process payments.</p>
+
+<h2>3. Why we access it</h2>
+<p>To prepare and review invoices and estimates for our karting services, to
+track outstanding balances, and to keep our internal records consistent with
+our project management and document signing systems.</p>
+
+<h2>4. Where data is stored</h2>
+<p>The App runs on a private virtual server hosted with Amazon Web Services in
+the United States. Data retrieved from QuickBooks is held only for as long as
+needed to complete the task at hand, plus operational logs. Access credentials
+are stored as environment variables on that server with owner-only file
+permissions, never in source control.</p>
+
+<h2>5. What we do not do</h2>
+<ul>
+  <li>We do not sell, rent or trade any data.</li>
+  <li>We do not share QuickBooks data with third parties, except the
+      infrastructure providers required to run the App (AWS for hosting,
+      Anthropic for language model processing).</li>
+  <li>We do not use QuickBooks data to train machine learning models.</li>
+  <li>We do not access any QuickBooks company other than our own.</li>
+</ul>
+
+<h2>6. Security</h2>
+<p>Access is over HTTPS/TLS. OAuth tokens are stored with restricted file
+permissions and are never written to logs, source control or the App's user
+interface — the interface reports only whether a credential is present, never
+its value. The server is accessed over SSH with key authentication.</p>
+
+<h2>7. Retention and deletion</h2>
+<p>Operational logs are retained for up to 90 days. Disconnecting the App from
+QuickBooks revokes its tokens immediately and stops all access. To request
+deletion of any stored data, contact us at the address below.</p>
+
+<h2>8. Changes</h2>
+<p>If this policy changes, the updated version will be published at this same
+address with a new "Last updated" date.</p>
+
+<h2>9. Contact</h2>
+<address>
+URACE.US INC<br>
+6149 Cyril Ave, Orlando, FL 32809, USA<br>
+<a href="mailto:support@urace.us">support@urace.us</a> · (407) 250-2291
+</address>
+
+<hr>
+<p class="sub">Intuit and QuickBooks are trademarks of Intuit Inc. This
+application is not endorsed by or affiliated with Intuit Inc.</p>
+
+</body></html>

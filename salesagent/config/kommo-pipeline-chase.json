@@ -1,0 +1,34 @@
+{
+  "_meta": {
+    "source": "criado via create_chase_pipeline.py em 2026-08-17",
+    "pipeline_name": "Chase — AI Sales Funnel",
+    "note": "Pipeline operado pelo agente Chase (nao e o 'Sales funnel' original, usado pelo time humano). Tags de qualificacao aplicadas pelo agente (nao sao estagios, criam-se sozinhas no primeiro uso): academy-price-aware, academy-qualified, current-racer-qualified, one-day-checkout-sent, escalated"
+  },
+  "pipeline_id": 14316000,
+  "pipeline_name": "Chase — AI Sales Funnel",
+  "stages": {
+    "incoming_leads": { "id": 110564416, "name": "Incoming leads" },
+    "new_inquiry": { "id": 110564420, "name": "New Inquiry" },
+    "contact_information_collected": { "id": 110564424, "name": "Contact Information Collected" },
+    "program_recommended": { "id": 110564428, "name": "Program Recommended" },
+    "information_sent": { "id": 110564432, "name": "Information Sent" },
+    "academy_price_aware": { "id": 110564436, "name": "Academy Price-Aware" },
+    "academy_qualified": { "id": 110564440, "name": "Academy Qualified" },
+    "academy_call_scheduled": { "id": 110564444, "name": "Academy Call Scheduled" },
+    "current_racer_qualified": { "id": 110564448, "name": "Current Racer Qualified" },
+    "racing_call_scheduled": { "id": 110564452, "name": "Racing Call Scheduled" },
+    "one_day_checkout_sent": { "id": 110564456, "name": "One-Day Checkout Sent" },
+    "payment_received": { "id": 110564460, "name": "Payment Received" },
+    "scheduling_required": { "id": 110564464, "name": "Scheduling Required" },
+    "nurture": { "id": 110564468, "name": "Nurture" },
+    "closed___won": { "id": 142, "name": "Closed - won" },
+    "closed___lost": { "id": 143, "name": "Closed - lost" }
+  },
+  "tags": [
+    "academy-price-aware",
+    "academy-qualified",
+    "current-racer-qualified",
+    "one-day-checkout-sent",
+    "escalated"
+  ]
+}

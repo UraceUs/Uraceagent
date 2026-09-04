@@ -1,0 +1,41 @@
+{
+  "widget": {
+    "name": "widget.name",
+    "description": "widget.description",
+    "short_description": "widget.short_description",
+    "version": "1.0.0",
+    "interface_version": 2,
+    "init_once": true,
+    "locale": ["en", "pt"],
+    "installation": true,
+    "support": {
+      "link": "https://urace.us",
+      "email": "urace@urace.us"
+    }
+  },
+
+  "locations": ["salesbot_designer", "settings"],
+
+  "settings": {
+    "url": {
+      "name": "settings.url",
+      "type": "text",
+      "required": false
+    }
+  },
+
+  "salesbot_designer": {
+    "logo": "/images/logo.png",
+    "chase_reply": {
+      "name": "salesbot.chase_reply",
+      "settings": {
+        "text": {
+          "name": "salesbot.text",
+          "default_value": "https://urace-bridge.duckdns.org/kommo/hook?key=COLE_A_AGENT_API_KEY_AQUI",
+          "type": "text",
+          "manual": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "collapse-filter": false,
+  "search": "path:brain -path:90_ARQUIVO",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": true,
+  "showOrphans": false,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:brain/00_SYSTEM",
+      "color": {
+        "a": 1,
+        "rgb": 16211026
+      }
+    },
+    {
+      "query": "path:brain/10_PROCESSOS",
+      "color": {
+        "a": 1,
+        "rgb": 5431378
+      }
+    },
+    {
+      "query": "path:brain/40_SISTEMAS",
+      "color": {
+        "a": 1,
+        "rgb": 15761296
+      }
+    },
+    {
+      "query": "path:brain/20_ENTIDADES",
+      "color": {
+        "a": 1,
+        "rgb": 6591981
+      }
+    },
+    {
+      "query": "path:brain/08_DECISOES",
+      "color": {
+        "a": 1,
+        "rgb": 10233776
+      }
+    },
+    {
+      "query": "path:brain/13_PROBLEMAS",
+      "color": {
+        "a": 1,
+        "rgb": 14431557
+      }
+    },
+    {
+      "query": "path:brain/04_PROJETOS",
+      "color": {
+        "a": 1,
+        "rgb": 3182799
+      }
+    },
+    {
+      "query": "path:brain/01_EMPRESA",
+      "color": {
+        "a": 1,
+        "rgb": 9868950
+      }
+    },
+    {
+      "query": "path:brain/30_DIARIO",
+      "color": {
+        "a": 0.75,
+        "rgb": 10395294
+      }
+    },
+    {
+      "query": "file:URACE",
+      "color": {
+        "a": 1,
+        "rgb": 15020032
+      }
+    }
+  ],
+  "collapse-display": false,
+  "showArrow": true,
+  "textFadeMultiplier": -0.4,
+  "nodeSizeMultiplier": 1.25,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": false,
+  "centerStrength": 0.42,
+  "repelStrength": 11,
+  "linkStrength": 0.75,
+  "linkDistance": 190,
+  "scale": 0.85,
+  "close": false
+}

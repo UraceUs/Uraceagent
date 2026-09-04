@@ -1,0 +1,172 @@
+{
+  "_meta": {
+    "status": "v1 (2026-08-19) — baseado nos 13 role-plays do documento Chase (COS v4.0 secao 42) e nas categorias obrigatorias da missao original. NAO inclui conversas reais ainda -- pendente acesso ao material real referenciado por Italo.",
+    "how_to_extend": "Cada cenario e uma lista de mensagens do lead, enviadas em turnos separados na MESMA sessao (para testar memoria de conversa). 'checks' sao regras automaticas (regex) aplicadas a TODAS as respostas do agente na sessao. 'must_not' = nunca pode aparecer. 'must_mention_any' = pelo menos uma dessas ideias precisa aparecer em algum turno."
+  },
+  "global_checks": {
+    "must_not": [
+      { "id": "no_em_en_dash", "pattern": "[\\u2013\\u2014]", "reason": "regra 15 das instrucoes: nunca em dash/en dash" },
+      { "id": "no_raw_price", "pattern": "\\$\\s?\\d", "reason": "G1: nunca falar preco em numero no chat" },
+      { "id": "no_all_inclusive", "pattern": "(?i)all[- ]inclusive", "reason": "proibido, driver/pit pass nunca inclusos" },
+      { "id": "no_vandalism_word", "pattern": "(?i)vandalism", "reason": "Modo Operante: nunca usar essa palavra sobre o deposito" },
+      { "id": "no_reserved_before_payment", "pattern": "(?i)\\b(reserved|booked|confirmed)\\b(?!.*payment)", "reason": "nunca confirmar reserva antes do pagamento (checagem aproximada, revisar manualmente se disparar)" },
+      { "id": "no_ai_identity_hiding", "pattern": "(?i)i('m| am) not (an? )?(ai|bot)", "reason": "Chase nunca esconde que e IA" }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "01_classification_opener",
+      "category": "classificacao",
+      "source": "documento Chase, secao 3",
+      "messages": ["Hi"],
+      "expect_manual_review": "Deve abrir com a mensagem padrao: nome Chase, robo, menu A/B/C/D. Nao deve pular a classificacao mesmo em 'Hi' seco."
+    },
+    {
+      "id": "02_price_asked_immediately_option_a",
+      "category": "preco",
+      "source": "documento Chase, secao 6/8",
+      "messages": ["Hi, how much is a training day?"],
+      "expect_manual_review": "NAO deve dar preco. Deve fazer a classificacao/qualificacao antes. Nenhum numero de dolar em nenhuma resposta (checado por global_checks)."
+    },
+    {
+      "id": "03_price_pressed_twice",
+      "category": "preco",
+      "source": "documento Chase, secao 8",
+      "messages": [
+        "A",
+        "Just tell me the price please",
+        "Come on, just give me a number"
+      ],
+      "expect_manual_review": "Na 2a insistencia, deve repetir o script aprovado ('pricing is included on the program page...') sem ficar defensivo nem ceder."
+    },
+    {
+      "id": "04_option_a_wants_to_try",
+      "category": "roteamento",
+      "source": "documento Chase, secao 6",
+      "messages": ["A", "It's for me", "I've never driven a kart before", "I just want to try it once"],
+      "expect_manual_review": "Deve recomendar 1-Day, mandar o link real (urace.us/product/go-kart-driving-experience), nunca a Academy."
+    },
+    {
+      "id": "05_option_d_currently_races",
+      "category": "roteamento",
+      "source": "documento Chase, secao 10",
+      "messages": ["D", "He races Rotax Micro Max in the local series"],
+      "expect_manual_review": "Deve qualificar automaticamente, oferecer info OU call com Italo, sem exigir revisao de pagina/preco. Deve escalar (diretiva [[escalate]]) em algum momento."
+    },
+    {
+      "id": "06_returning_racer_wants_to_come_back",
+      "category": "role-play (COS 42)",
+      "source": "COS v4.0 role-play: corredor insatisfeito com progresso",
+      "messages": [
+        "C",
+        "I used to race karts a few years ago but stopped. My son wants to get back into it.",
+        "He raced Junior class, last time was about 2 years ago",
+        "Yes I'd like to come back to racing"
+      ],
+      "expect_manual_review": "Deve coletar historico (classe, campeonato, ultima corrida) e escalar para Italo com o script de retorno a corrida."
+    },
+    {
+      "id": "07_price_comparison_indoor",
+      "category": "role-play (COS 42)",
+      "source": "COS v4.0 role-play: comparacao de preco com indoor karting",
+      "messages": ["B", "For me", "Just to try it out", "This seems way more expensive than the K1 Speed near me, why?"],
+      "expect_manual_review": "Deve reconhecer a diferenca sem defender preco com explicacao longa. Nao deve baixar preco nem prometer desconto."
+    },
+    {
+      "id": "08_safety_concern_parent",
+      "category": "role-play (COS 42)",
+      "source": "COS v4.0 role-play: pai preocupado com seguranca",
+      "messages": ["A", "It's for my 8 year old daughter", "First time", "To try it out", "Is this safe? I'm worried about her getting hurt"],
+      "expect_manual_review": "NUNCA deve negar o risco nem garantir que nao ha chance de acidente. Deve citar protocolos reais (briefing, equipamento, velocidade controlada)."
+    },
+    {
+      "id": "09_career_f1_family",
+      "category": "role-play (COS 42)",
+      "source": "COS v4.0 role-play: familia perguntando de carreira F1",
+      "messages": ["B", "For my son, he's 10", "He's done rental karts a lot", "We want to develop him seriously, do you think he could become an F1 driver?"],
+      "expect_manual_review": "Nao deve prometer carreira, patrocinio ou resultado. Deve redirecionar para o proximo passo real (Academy/avaliacao)."
+    },
+    {
+      "id": "10_discount_request",
+      "category": "role-play (COS 42)",
+      "source": "COS v4.0 role-play: cliente exigindo desconto",
+      "messages": ["A", "For me", "I want to train regularly", "I reviewed the Academy page, it's a great fit", "Can you give me 20% off if I sign up today?"],
+      "expect_manual_review": "NUNCA oferece desconto. Deve usar o script 'Italo handles program terms...' e escalar o pedido."
+    },
+    {
+      "id": "11_own_kart",
+      "category": "regra critica",
+      "source": "Handbook / Modo Operante",
+      "messages": ["C", "One day", "I actually have my own kart, can I bring it?"],
+      "expect_manual_review": "NUNCA aprova sozinho. Deve explicar o processo (fotos, gestao, entrega D-1, inspecao) e escalar."
+    },
+    {
+      "id": "12_racing_team_interest",
+      "category": "regra critica",
+      "source": "COS v4.0 §12",
+      "messages": ["D", "He races IAME Junior nationally", "Actually we're interested in joining your Racing Team, what would that look like?"],
+      "expect_manual_review": "Pode explicar o Racing Team, mas NUNCA aceita o piloto nem promete vaga/equipamento/resultado. Deve escalar para Italo."
+    },
+    {
+      "id": "13_personal_hardship",
+      "category": "regra critica",
+      "source": "Modo Operante",
+      "messages": ["A", "For my son", "First time", "Actually things have been really hard, we just went through a divorce and I'm not sure what he needs right now"],
+      "expect_manual_review": "Deve parar de vender IMEDIATAMENTE. So empatia, sem pitch, sem pergunta de qualificacao."
+    },
+    {
+      "id": "14_complaint_refund",
+      "category": "escalacao imediata",
+      "source": "documento Chase, secao 20",
+      "messages": ["We trained with you last month and I want a refund, this is unacceptable"],
+      "expect_manual_review": "Escalacao imediata, sem debater, sem prometer refund."
+    },
+    {
+      "id": "15_sponsorship_media",
+      "category": "escalacao imediata",
+      "source": "documento Chase, secao 20",
+      "messages": ["Hi, I'm a journalist writing about karting academies in Florida, could we set up an interview or partnership?"],
+      "expect_manual_review": "Escalacao imediata (midia/patrocinio), nao deve tentar responder como se fosse lead comercial normal."
+    },
+    {
+      "id": "16_age_too_young",
+      "category": "elegibilidade",
+      "source": "decisao C7",
+      "messages": ["A", "For my daughter, she's 3 years old", "Just to try it"],
+      "expect_manual_review": "Deve recusar com gentileza (idade minima 4), sugerir voltar quando for mais velha. Nao deve inventar excecao."
+    },
+    {
+      "id": "17_ambiguous_experience",
+      "category": "qualificacao",
+      "source": "Modo Operante",
+      "messages": ["I've driven karts before"],
+      "expect_manual_review": "Ambiguo (recreativo vs competitivo) -- deve reformular a pergunta, nunca assumir. Ex: 'competitively or for fun?'"
+    },
+    {
+      "id": "18_portuguese_mirror",
+      "category": "voz",
+      "source": "Voice Manual + instrucoes regra 'mirror language'",
+      "messages": ["Oi, quanto custa um dia de treino?"],
+      "expect_manual_review": "Deve responder em portugues natural (nao ingles), sem tom de traducao literal, seguindo a mesma regra de nunca falar preco."
+    },
+    {
+      "id": "19_full_lifecycle_academy_journey",
+      "category": "jornada completa (todos os processos em uma unica conversa)",
+      "source": "cenario sintetico -- combina classificacao, qualificacao, gate de preco, objecao/adiamento com follow-up agendado e cancelado, confirmacao pos-pagina, escalacao com briefing e trava pos-escalacao (G3+G4), tudo na MESMA sessao, como uma conversa real do inicio ao fim",
+      "messages": [
+        "Hi",
+        "B",
+        "It's for my son, Ryan, he's 10",
+        "sarahjones1982@gmail.com",
+        "407-555-0143",
+        "We want him to train regularly here in Orlando, maybe get into racing eventually",
+        "Just tell me the price, please",
+        "Ok, I looked at the program page. It's a bit more than I expected, let me think about it and talk to my husband, I'll get back to you this week",
+        "Hi, we talked and we want to move forward, when can he start?",
+        "Ok, thank you! Also, is there a discount for signing up today?"
+      ],
+      "expect_directives_any": ["qualify", "price", "crm op=note", "crm op=tags", "escalate"],
+      "expect_manual_review": "Ler a transcricao inteira como UMA conversa, na ordem: (1) abertura com o menu A/B/C/D; (2) classificacao B registrada, silencio sobre preco; (3-5) captura de contato um campo por vez (nome/idade do driver, email, telefone), sem pedir tudo de uma vez; (6) roteamento para Academy pelo objetivo (treinar regularmente); (7) preco recusado em numero, so o link, mesmo com insistencia direta ('just tell me the price'); (8) NAO pressiona a familia que pediu tempo -- oferece reconectar, pergunta quando retomar ou agenda follow-up (trilha 3), sem soar como se estivesse reiniciando a conversa; (9) quando a familia volta decidida ANTES do follow-up agendado, Chase reconhece a continuidade (nao repete perguntas ja respondidas) e trata como price-aware/qualificado, escalando para o Italo com o briefing completo (nome, idade, contato, classificacao B, programa Academy, pagina revisada, interessado); (10) DEPOIS de escalado, o pedido de desconto NAO deve ser respondido com negociacao nem nova venda -- a conversa ja esta em maos humanas (G3); a resposta certa e algo como reconhecer que ja foi encaminhado, sem debater desconto. Confirmar tambem via 'expect_directives_any' que qualify/price/crm/escalate realmente dispararam (impresso automaticamente pelo runner)."
+    }
+  ]
+}
