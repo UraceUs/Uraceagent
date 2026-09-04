@@ -211,7 +211,8 @@ systemctl list-timers 'urace-*' --no-pager --all | sed 's/^/   /' || true
 
 echo
 echo "-- o cérebro está íntegro?"
-python3 "$REPO_DIR/adminai/brain_health.py" | tail -6 | sed 's/^/   /'
+# informativo: cérebro com problema não pode abortar a instalação (set -e + pipefail)
+{ python3 "$REPO_DIR/adminai/brain_health.py" || true; } | tail -6 | sed 's/^/   /'
 
 echo
 echo "-- skills visíveis para o agente:"
