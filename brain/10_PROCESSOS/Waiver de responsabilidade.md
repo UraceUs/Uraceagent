@@ -192,3 +192,13 @@ ter resposta.
 DocuSign também carrega **NDA** e **Service Agreement** (ex.: Caio
 Imperato, Pablo Santiago). **Não são waiver** — a rotina diária os lista
 à parte e não age sobre eles.
+
+## Dispensa explícita do dono
+
+Uma tarefa pode ter comentário do dono (ou `[IA ADM]` citando o dono)
+dizendo que **a waiver não é necessária nesta sessão**. Nesse caso a
+varredura **não alerta** — lista a tarefa como "dispensada por decisão
+humana em DD/MM" e segue. A subtarefa "Signed waiver?" fica aberta: não
+houve assinatura. Primeiro caso:
+[[D-2026-09-04 - Renato Pionti sem waiver nesta sessao]]. O motivo geral
+ainda é lacuna (U-07 em [[Conflitos e lacunas]]).

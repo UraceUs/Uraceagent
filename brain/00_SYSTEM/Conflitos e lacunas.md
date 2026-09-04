@@ -70,6 +70,13 @@ dono pediu acesso ao [[QuickBooks]] para `lucas@urace.us` em 01/09. O
 **papel formal não está registrado em lugar nenhum**. Dono da resposta:
 [[Italo Silveira]]. → [[Equipe]]
 
+### U-07 · Quando um serviço dispensa waiver
+Em 04/09 o dono dispensou a waiver do Renato Pionti (Professional
+Coaching 2T, menor de 14) sem dizer por quê. Existe uma regra por trás —
+tipo de serviço? waiver em papel? — ou foi caso a caso? Enquanto não se
+sabe, cada dispensa é pontual e vem por comentário do dono na tarefa.
+→ [[D-2026-09-04 - Renato Pionti sem waiver nesta sessao]] · [[Waiver de responsabilidade]]
+
 ---
 
 ## 🔒 Fechado — o que já foi resolvido
