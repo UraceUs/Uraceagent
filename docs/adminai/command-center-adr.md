@@ -85,3 +85,24 @@ A ordem do spec, com o que cada uma reaproveita:
 (`schema.sql`, migrações), `providers/`, `web/` (React). Serviço
 `urace-command-center` em `127.0.0.1:8790`, Caddy em `/ops/*`. O Pit
 Wall continua existindo como relatório dentro do Command Center.
+
+### Deploy e prova (04/09/2026)
+
+`adminai/deploy/command_center/servir_command_center.sh` faz, nesta
+ordem e parando no primeiro erro: venv em `~/.urace/cc-venv`; `npm ci &&
+npm run build`; `pytest command_center/tests` (27); primeiro ADMIN se a
+tabela de usuários está vazia; unit `urace-command-center` (`bash -lc`
+para herdar o PATH onde está o `openclaw`); `handle /ops*` inserido no
+bloco existente do Caddyfile com backup e `caddy validate`; prova real
+em HTTPS: `/ops/` 200 com o SPA e zero nome de cliente no HTML,
+`/ops/api/dashboard` **401** sem sessão, `/painel/` e `/legal/` seguem
+200.
+
+Antes do VPS, o frontend foi exercitado num Chromium real contra o
+backend com banco de teste: login com senha errada mostra só *"Invalid
+email or password."*; VIEWER não vê Usuários/Políticas nem o botão de
+sincronizar e recebe *"Sem permissão"* em `/ops/users`; ⌘K acha cliente,
+serviço e oferece "perguntar à IA"; o sino mostra CRITICAL/HIGH; tema
+escuro persiste; 390 px de largura funciona; AI Command sem `openclaw`
+termina em **FAILED** com o motivo, não pendurado.
+

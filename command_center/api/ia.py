@@ -34,6 +34,7 @@ from command_center.db import agora, atualizar, auditar, conectar, get_db, inser
 
 r = APIRouter(prefix="/ops/api/ai")
 AGENTE = os.environ.get("OPENCLAW_AGENT", "urace-admin")
+OPENCLAW = os.environ.get("OPENCLAW_BIN", "openclaw")   # caminho completo quando o PATH do serviço não tem
 TIMEOUT = int(os.environ.get("CC_AI_TIMEOUT", "900"))
 SUGESTOES = [
     "O que precisa da minha atenção hoje?",
@@ -49,12 +50,12 @@ SUGESTOES = [
 # ------------------------------------------------------------- runner
 def runner_openclaw(texto, session_key):
     """Roda o agente real. Devolve (ok, saida, erro)."""
-    cmd = ["openclaw", "--no-color", "agent", "--agent", AGENTE, "--session-key", session_key,
+    cmd = [OPENCLAW, "--no-color", "agent", "--agent", AGENTE, "--session-key", session_key,
            "--thinking", "medium", "--timeout", str(TIMEOUT), "--json", "-m", texto]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT + 30)
     except FileNotFoundError:
-        return False, "", "openclaw não está no PATH deste serviço"
+        return False, "", f"{OPENCLAW} não está no PATH deste serviço (defina OPENCLAW_BIN no adminai.env)"
     except subprocess.TimeoutExpired:
         return False, "", f"o agente não respondeu em {TIMEOUT}s"
     saida = _limpa(p.stdout)

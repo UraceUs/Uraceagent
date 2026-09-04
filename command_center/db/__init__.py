@@ -32,7 +32,11 @@ def conectar(caminho=None):
     caminho = caminho or db_path()
     os.makedirs(os.path.dirname(caminho), exist_ok=True)
     novo = not os.path.exists(caminho)
-    con = sqlite3.connect(caminho, timeout=10, isolation_level=None)  # autocommit
+    # check_same_thread=False: o FastAPI abre a dependência num thread do pool
+    # e roda o endpoint em outro. A conexão é de UMA requisição, nunca é
+    # compartilhada entre duas ao mesmo tempo, então é seguro.
+    con = sqlite3.connect(caminho, timeout=10, isolation_level=None,  # autocommit
+                          check_same_thread=False)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA busy_timeout = 10000")

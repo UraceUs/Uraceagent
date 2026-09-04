@@ -178,6 +178,35 @@ Testes do renderizador em `adminai/painel/tests/test_md.py` — cada caso
 é um padrão real que quebrou (negrito atravessando quebra de linha,
 negrito dentro de célula, `>` de citação, asterisco escapado).
 
+### O Command Center (`/ops/`)
+
+`command_center/` no repositório: FastAPI + SQLite (`~/.urace/command-center.sqlite`,
+600) + SPA React construído em `command_center/web/dist`. Serviço
+`urace-command-center` em `127.0.0.1:8790`, Caddy `handle /ops*` no
+mesmo bloco do domínio, ao lado de `/painel*` e `/legal/*`. Instalação
+por `adminai/deploy/command_center/servir_command_center.sh` (venv em
+`~/.urace/cc-venv`, `npm ci && npm run build`, pytest, primeiro ADMIN,
+unit, Caddy, prova real).
+
+O que ele é: login próprio (scrypt, sessão revogável, cookie `HttpOnly`
++ CSRF), papéis ADMIN/MANAGER/OPERATOR/VIEWER checados **no servidor**,
+auditoria em tabela que gatilhos impedem de alterar, espelhos de Asana,
+DocuSign e Gmail lidos pelos mesmos módulos MCP, "Precisa de atenção"
+com prioridade contextual (VIP fora, RACES fora, delivered ≠ assinada)
+e **AI Command** que fala com o `urace-admin` por
+`openclaw agent --json`. Toda ação com efeito vira proposta e passa por
+política (`action_policies`); invoice só sai depois de aprovada (04/09).
+
+⚠️ Dois erros pegos em teste de navegador antes de subir, em 04/09:
+`sqlite3` recusa a conexão em outra thread (o FastAPI abre a dependência
+num thread e roda a rota em outro) — `check_same_thread=False`, uma
+conexão por requisição; e "Sair" seguido de novo login devolvia a
+pessoa à última página, que para um VIEWER era "Sem permissão".
+
+O unit usa `bash -lc` de propósito: sem o PATH de login, o serviço não
+acha o `openclaw` e o AI Command falha com "não está no PATH". Se ainda
+falhar, `OPENCLAW_BIN=/caminho/openclaw` no `adminai.env`.
+
 ## Como está montado
 
 - **Segredos** em `~/.urace/adminai.env`, permissão 600, **fora do

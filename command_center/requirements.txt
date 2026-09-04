@@ -1,0 +1,5 @@
+# Backend do Command Center. Instalado num venv em ~/.urace/cc-venv pelo
+# adminai/deploy/command_center/servir_command_center.sh (sem sudo pip).
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2,<3
