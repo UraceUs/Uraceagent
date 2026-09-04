@@ -34,7 +34,7 @@ echo "-- 1/7 venv + fastapi/uvicorn (silencioso, 1-2 min na primeira vez)"
 [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
 "$VENV/bin/pip" install -q --upgrade pip >/dev/null
 "$VENV/bin/pip" install -q -r "$REPO/command_center/requirements.txt"
-"$VENV/bin/pip" install -q pytest httpx >/dev/null
+"$VENV/bin/pip" install -q pytest httpx >/dev/null; "$VENV/bin/pip" install -q httpx2 >/dev/null 2>&1 || true   # starlette novo pede httpx2
 echo "-- venv pronto: $("$VENV/bin/python" -c 'import fastapi; print("fastapi", fastapi.__version__)')"
 
 # ------------------------------------------------------------- 2. frontend
@@ -48,7 +48,8 @@ echo "-- frontend construído: $(du -sh "$REPO/command_center/web/dist" | cut -f
 
 # --------------------------------------------------------------- 3. testes
 echo "-- 3/7 testes do backend"
-( cd "$REPO" && CC_DB_PATH=/tmp/cc-test-$$.sqlite "$VENV/bin/python" -m pytest -q command_center/tests 2>&1 | tail -3 )
+# cinto e suspensório: além do conftest, nenhum caminho de credencial real chega ao pytest
+( cd "$REPO" && env -u ASANA_TOKEN -u DOCUSIGN_INTEGRATION_KEY -u GOOGLE_TOKEN_JSON URACE_ENV=/nao/existe GOOGLE_TOKEN_JSON_SUPPORT=/nao/existe CC_DB_PATH=/tmp/cc-test-$$.sqlite "$VENV/bin/python" -m pytest -q command_center/tests 2>&1 | tail -3 )
 rm -f /tmp/cc-test-$$.sqlite*
 
 # ------------------------------------------------------ 4. primeiro ADMIN
