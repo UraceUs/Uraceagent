@@ -11,6 +11,7 @@ export function Login() {
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [remember, setRemember] = useState(false)
+  const [show, setShow] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (ready && user) return <Navigate to={loc.state?.from || '/'} replace />
@@ -40,7 +41,10 @@ export function Login() {
         <div className="field"><label htmlFor="email">E-mail</label>
           <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required autoFocus aria-invalid={!!err} /></div>
         <div className="field"><label htmlFor="pw">Senha</label>
-          <input id="pw" className="input" type="password" autoComplete="current-password" value={pw} onChange={e => setPw(e.target.value)} required aria-invalid={!!err} /></div>
+          <div className="pwwrap">
+            <input id="pw" className="input" type={show ? 'text' : 'password'} autoComplete="current-password" value={pw} onChange={e => setPw(e.target.value)} required aria-invalid={!!err} />
+            <button type="button" className="eye" onClick={() => setShow(s => !s)} aria-label={show ? 'Esconder senha' : 'Mostrar senha'} aria-pressed={show} title={show ? 'Esconder' : 'Mostrar'}>{show ? 'Esconder' : 'Mostrar'}</button>
+          </div></div>
         <label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> Manter conectado por 30 dias</label>
         <button className="btn primary block" disabled={busy || !email || !pw}>{busy ? <span className="spin" /> : 'Entrar'}</button>
         <div className="small muted">Esqueceu a senha? Peça ao administrador para redefinir.</div>

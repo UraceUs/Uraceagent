@@ -331,3 +331,15 @@ INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
   ('qbo_apagar','BLOCKED','a IA nunca apaga'),
   ('apagar_qualquer_coisa','BLOCKED','a IA nunca apaga'),
   ('apagar_cliente','BLOCKED','a IA nunca apaga');
+
+-- ------------------------------------------------- itens de atenção ocultos
+-- "Excluir" um aviso não apaga a fonte (a tarefa, o envelope, o e-mail
+-- continuam onde estão). Só esconde o aviso, com quem e por quê. Restaurável.
+CREATE TABLE IF NOT EXISTS attention_dismissals (
+  key           TEXT PRIMARY KEY,         -- regra:tipo:id — estável entre coletas
+  level         TEXT,
+  title         TEXT,
+  reason        TEXT,
+  dismissed_by  INTEGER NOT NULL REFERENCES users(id),
+  dismissed_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);

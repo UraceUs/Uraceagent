@@ -29,7 +29,26 @@ def _link(con, tipo, id_):
     return r["deep_link"] if r else None
 
 
-def coletar(con):
+def coletar(con, incluir_ocultos=False):
+    """Itens ativos; com incluir_ocultos=True devolve também os ocultos, marcados."""
+    itens = _coletar(con)
+    ocultos = {r["key"]: r for r in todos(con, """SELECT d.*, u.name AS dismissed_by_name FROM attention_dismissals d
+                                                  LEFT JOIN users u ON u.id = d.dismissed_by""")}
+    saida = []
+    for it in itens:
+        d = ocultos.get(it["key"])
+        if d and not incluir_ocultos:
+            continue
+        it["dismissed"] = {"by": d["dismissed_by_name"], "at": d["dismissed_at"], "reason": d["reason"]} if d else None
+        saida.append(it)
+    return saida
+
+
+def _chave(regra, tipo, id_):
+    return f"{regra}:{tipo}:{id_}"
+
+
+def _coletar(con):
     itens = []
     hoje = date.today()
 
@@ -57,6 +76,7 @@ def coletar(con):
             nivel = "MEDIUM"
         quem = t["cliente"] or t["pilot_name"] or t["title"]
         itens.append(dict(
+            key=_chave("waiver-servico", "task", t["id"]),
             level=nivel,
             title=f"{quem}: serviço em {dias} dia(s) sem waiver assinada" if dias else f"{quem}: serviço HOJE sem waiver assinada",
             why=("Envelope aberto (" + aberto["status"] + ", não assinado)." if aberto else "Nenhum envelope enviado.")
@@ -68,7 +88,7 @@ def coletar(con):
 
     # ---- 2. e-mail devolvido (envelope que nunca vai ser assinado)
     for w in todos(con, "SELECT w.*, c.name AS cliente FROM waivers w LEFT JOIN clients c ON c.id=w.client_id WHERE w.status='autoresponded'"):
-        itens.append(dict(level="HIGH", title=f"Waiver de {w['signer_name'] or w['cliente']} devolveu (e-mail inválido)",
+        itens.append(dict(key=_chave("waiver-devolveu", "waiver", w["id"]), level="HIGH", title=f"Waiver de {w['signer_name'] or w['cliente']} devolveu (e-mail inválido)",
                           why=f"{w['signer_email']}: o servidor de e-mail recusou. Ninguém vai assinar esse envelope.",
                           entity={"type": "waiver", "id": w["id"]}, client_id=w["client_id"],
                           link=_link(con, "waiver", w["id"]), action="Corrigir e-mail e reenviar"))
@@ -80,7 +100,7 @@ def coletar(con):
         if dias is None or dias > 21:
             continue
         tem_servico = um(con, "SELECT 1 FROM tasks WHERE client_id=? AND status='open'", (w["client_id"],)) if w["client_id"] else None
-        itens.append(dict(level="MEDIUM" if tem_servico else "LOW",
+        itens.append(dict(key=_chave("waiver-expira", "waiver", w["id"]), level="MEDIUM" if tem_servico else "LOW",
                           title=f"Waiver de {w['signer_name'] or w['cliente']} expira em {dias} dia(s)",
                           why=("Há serviço agendado para este cliente. " if tem_servico else "Sem serviço agendado. ")
                               + ("Aberta e não assinada." if w["status"] == "delivered" else "Enviada, nunca aberta."),
@@ -91,7 +111,7 @@ def coletar(con):
     for t in todos(con, "SELECT t.*, c.name AS cliente FROM tasks t LEFT JOIN clients c ON c.id=t.client_id WHERE t.status='open' AND t.due_on < ?",
                    (hoje.isoformat(),)):
         dias = -(_dias_ate(t["due_on"]) or 0)
-        itens.append(dict(level="MEDIUM" if dias <= 3 else "LOW",
+        itens.append(dict(key=_chave("tarefa-vencida", "task", t["id"]), level="MEDIUM" if dias <= 3 else "LOW",
                           title=f"Tarefa vencida há {dias} dia(s): {t['title'][:60]}",
                           why="Serviço concluído deve ir para Finished Services; ainda está na coluna do dia.",
                           entity={"type": "task", "id": t["id"]}, client_id=t["client_id"],
@@ -99,7 +119,7 @@ def coletar(con):
 
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
-        itens.append(dict(level="HIGH" if i["status"] == "ERROR" else "MEDIUM",
+        itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",
                           title=f"Integração {i['system']}: {i['status']}",
                           why=(i["last_error"] or "")[:200], entity={"type": "integration", "id": i["system"]},
                           client_id=None, link=None, action="Ver integrações"))
@@ -107,20 +127,20 @@ def coletar(con):
     # ---- 6. ações da IA esperando aprovação / falhas
     n = um(con, "SELECT COUNT(*) AS n FROM ai_actions WHERE status='PROPOSED' AND policy='REQUIRES_APPROVAL'")
     if n and n["n"]:
-        itens.append(dict(level="HIGH", title=f"{n['n']} ação(ões) da IA esperando sua aprovação",
+        itens.append(dict(key=_chave("aprovacoes", "approvals", "pendentes"), level="HIGH", title=f"{n['n']} ação(ões) da IA esperando sua aprovação",
                           why="Nada executa sem aprovação humana.", entity={"type": "approvals", "id": None},
                           client_id=None, link=None, action="Revisar"))
     n = um(con, "SELECT COUNT(*) AS n FROM ai_commands WHERE status='FAILED' AND created_at > ?",
            ((datetime.utcnow() - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S"),))
     if n and n["n"]:
-        itens.append(dict(level="HIGH", title=f"{n['n']} comando(s) da IA falharam nas últimas 48h",
+        itens.append(dict(key=_chave("ia-falhas", "ai", "48h"), level="HIGH", title=f"{n['n']} comando(s) da IA falharam nas últimas 48h",
                           why="Ver o erro no histórico do AI Command.", entity={"type": "ai", "id": None},
                           client_id=None, link=None, action="Ver AI Activity"))
 
     # ---- 7. e-mails não tratados de cliente conhecido
     for e in todos(con, """SELECT e.*, c.name AS cliente FROM emails e JOIN clients c ON c.id=e.client_id
                            WHERE e.handled=0 ORDER BY e.last_at DESC LIMIT 20"""):
-        itens.append(dict(level="HIGH", title=f"{e['cliente']} escreveu: {(e['subject'] or '')[:60]}",
+        itens.append(dict(key=_chave("email-cliente", "email", e["id"]), level="HIGH", title=f"{e['cliente']} escreveu: {(e['subject'] or '')[:60]}",
                           why=f"Cliente conhecido na caixa {e['mailbox']}@ sem tratamento.",
                           entity={"type": "email", "id": e["id"]}, client_id=e["client_id"],
                           link=_link(con, "email", e["id"]), action="Responder"))

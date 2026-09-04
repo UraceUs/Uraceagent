@@ -124,8 +124,8 @@ def test_politicas_admin_e_apagar_nunca(cli):
 
 def test_sync_sem_credencial_nao_derruba(cli):
     h = entra(cli, "admin@urace.us")
-    r = cli.post(B + "/sync", headers=h)
-    assert r.status_code == 200
+    r = cli.post(B + "/sync?wait=1", headers=h)
+    assert r.status_code in (200, 202)
     j = r.json()
     assert j["asana"]["motivo"] == "not connected" and j["docusign"]["motivo"] == "not connected"
     assert j["cerebro"]["ok"] and j["cerebro"]["notas"] >= 10          # as notas do cérebro leem sem rede
@@ -138,3 +138,68 @@ def test_check_integracoes_sem_credencial(cli):
     r = cli.post(B + "/integrations/check", headers=h).json()
     assert r["quickbooks"]["status"] == "DISCONNECTED" and "P-11" in r["quickbooks"]["detail"]["nota"]
     assert r["gmail"]["status"] == "DISCONNECTED"
+
+
+# ------------------------------------------------ ocultar aviso (04/09, "excluir testes")
+def test_ocultar_aviso_nao_apaga_fonte(cli):
+    h = entra(cli, "admin@urace.us")
+    itens = cli.get(B + "/needs-attention").json()
+    assert itens and all("key" in i for i in itens)
+    alvo = itens[0]
+    n_tasks = len(cli.get(B + "/tasks?status=all").json())
+    r = cli.post(B + "/needs-attention/dismiss", headers=h,
+                 json={"key": alvo["key"], "title": alvo["title"], "level": alvo["level"], "reason": "teste antigo"})
+    assert r.status_code == 200
+    assert alvo["key"] not in [i["key"] for i in cli.get(B + "/needs-attention").json()]
+    ocultos = [i for i in cli.get(B + "/needs-attention?hidden=1").json() if i["key"] == alvo["key"]]
+    assert ocultos and ocultos[0]["dismissed"]["by"] == "Admin" and ocultos[0]["dismissed"]["reason"] == "teste antigo"
+    assert len(cli.get(B + "/tasks?status=all").json()) == n_tasks        # a fonte continua lá
+    # dashboard também esconde
+    assert alvo["key"] not in [i["key"] for i in cli.get(B + "/dashboard").json()["needs_attention"]]
+    # restaurar
+    assert cli.post(B + "/needs-attention/restore", headers=h, json={"key": alvo["key"]}).status_code == 200
+    assert alvo["key"] in [i["key"] for i in cli.get(B + "/needs-attention").json()]
+    assert cli.post(B + "/needs-attention/restore", headers=h, json={"key": alvo["key"]}).status_code == 404
+    ev = [a["event"] for a in cli.get(B + "/audit", headers=h).json()]
+    assert "attention.dismiss" in ev and "attention.restore" in ev
+
+
+def test_ocultar_exige_operador(cli):
+    h = entra(cli, "viewer@urace.us")
+    r = cli.post(B + "/needs-attention/dismiss", headers=h, json={"key": "x:task:1"})
+    assert r.status_code == 403
+    assert cli.post(B + "/needs-attention/dismiss", headers=entra(cli, "admin@urace.us"), json={"key": "semdoispontos"}).status_code == 400
+
+
+def test_tasks_all_e_email_handled(cli):
+    h = entra(cli, "admin@urace.us")
+    todas = cli.get(B + "/tasks?status=all").json()
+    abertas = cli.get(B + "/tasks").json()
+    assert len(todas) >= len(abertas) and all("section" in t for t in todas)
+    emails = cli.get(B + "/emails").json()
+    if emails:
+        e = emails[0]
+        assert cli.patch(B + f"/emails/{e['id']}", headers=h, json={"handled": True}).status_code == 200
+        assert [x for x in cli.get(B + "/emails").json() if x["id"] == e["id"]][0]["handled"] == 1
+        assert cli.patch(B + f"/emails/{e['id']}", headers=entra(cli, "viewer@urace.us"), json={"handled": False}).status_code == 403
+    h = entra(cli, "admin@urace.us")                 # o cookie do cliente virou o do viewer acima
+    assert cli.patch(B + "/emails/999999", headers=h, json={"handled": True}).status_code == 404
+
+
+def test_docusign_templates_sem_credencial(cli):
+    entra(cli, "admin@urace.us")
+    r = cli.get(B + "/docusign/templates")
+    assert r.status_code == 200 and r.json()["connected"] is False and r.json()["templates"] == []
+
+
+def test_sync_em_segundo_plano(cli):
+    h = entra(cli, "admin@urace.us")
+    r = cli.post(B + "/sync", headers=h)
+    assert r.status_code == 202 and r.json()["running"] is True
+    import time
+    for _ in range(50):
+        st = cli.get(B + "/sync").json()
+        if not st["running"]:
+            break
+        time.sleep(0.1)
+    assert st["running"] is False and st["result"]["asana"]["motivo"] == "not connected"

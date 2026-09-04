@@ -10,7 +10,7 @@ import { AttentionPage } from './pages/Attention'
 import { Client360 } from './pages/Client360'
 import { Clients } from './pages/Clients'
 import { Dashboard } from './pages/Dashboard'
-import { Emails, Tasks, Waivers } from './pages/Lists'
+import { AsanaPage, DocuSignPage, GmailPage, QuickBooksPage } from './pages/Systems'
 import { Login } from './pages/Login'
 import { Account, Audit, Integrations, Policies, Users } from './pages/System'
 
@@ -33,9 +33,13 @@ export default function App() {
           <Route path="attention" element={<AttentionPage />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:id" element={<Client360 />} />
-          <Route path="tasks" element={<Tasks />} />
-          <Route path="waivers" element={<Waivers />} />
-          <Route path="emails" element={<Emails />} />
+          <Route path="asana" element={<AsanaPage />} />
+          <Route path="docusign" element={<DocuSignPage />} />
+          <Route path="gmail" element={<GmailPage />} />
+          <Route path="quickbooks" element={<QuickBooksPage />} />
+          <Route path="tasks" element={<Navigate to="/asana" replace />} />
+          <Route path="waivers" element={<Navigate to="/docusign" replace />} />
+          <Route path="emails" element={<Navigate to="/gmail" replace />} />
           <Route path="ai" element={<AICommand />} />
           <Route path="ai/:id" element={<AICommand />} />
           <Route path="approvals" element={<Approvals />} />

@@ -3,13 +3,14 @@ integrações, políticas. Toda rota exige sessão; escrita exige papel.
 """
 import json
 import sqlite3
+import threading
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import atencao, auth
-from command_center.db import auditar, get_db, todos, um
+from command_center.db import agora, auditar, conectar, get_db, todos, um
 from command_center.providers import SISTEMAS, recarregar, saude
 from command_center.providers import sync as sy
 
@@ -44,12 +45,47 @@ def integrations_check(request: Request, u=Depends(auth.exige("OPERATOR")),
     return saida
 
 
-@r.post("/sync")
-def sync(request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
-    """Atualiza os espelhos a partir das fontes reais. Só leitura nos sistemas."""
-    res = sy.sync_tudo(con)
-    auditar(con, "sync.run", f"user:{u['id']}", user_id=u["id"], detail=res, ip=auth._ip(request))
-    return res
+_SYNC = {"running": False, "started_at": None, "finished_at": None, "result": None, "by": None}
+_SYNC_LOCK = threading.Lock()
+
+
+def _sync_thread(user_id, ip):
+    con = conectar()
+    try:
+        res = sy.sync_tudo(con)
+        auditar(con, "sync.run", f"user:{user_id}", user_id=user_id, detail=res, ip=ip)
+        _SYNC["result"] = res
+    except Exception as e:                        # nunca deixa a flag presa em "running"
+        _SYNC["result"] = {"ok": False, "motivo": f"{type(e).__name__}: {str(e)[:300]}"}
+    finally:
+        _SYNC["running"] = False
+        _SYNC["finished_at"] = agora()
+        con.close()
+
+
+@r.post("/sync", status_code=202)
+def sync(request: Request, wait: bool = False, u=Depends(auth.exige("OPERATOR")),
+         con: sqlite3.Connection = Depends(get_db)):
+    """Atualiza os espelhos a partir das fontes reais. Só leitura nos sistemas.
+
+    Roda em segundo plano (o histórico do Asana pode levar minutos); o
+    estado sai em GET /sync. wait=1 espera terminar (testes e scripts).
+    """
+    if wait:
+        res = sy.sync_tudo(con)
+        auditar(con, "sync.run", f"user:{u['id']}", user_id=u["id"], detail=res, ip=auth._ip(request))
+        return res
+    with _SYNC_LOCK:
+        if _SYNC["running"]:
+            return {"started": False, "running": True, "started_at": _SYNC["started_at"]}
+        _SYNC.update(running=True, started_at=agora(), finished_at=None, result=None, by=u["id"])
+    threading.Thread(target=_sync_thread, args=(u["id"], auth._ip(request)), daemon=True).start()
+    return {"started": True, "running": True, "started_at": _SYNC["started_at"]}
+
+
+@r.get("/sync")
+def sync_status(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    return {**_SYNC, "logs": todos(con, "SELECT * FROM sync_logs ORDER BY id DESC LIMIT 12")}
 
 
 # --------------------------------------------------------- dashboard
@@ -83,8 +119,45 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
 
 
 @r.get("/needs-attention")
-def needs_attention(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    return atencao.coletar(con)
+def needs_attention(hidden: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    return atencao.coletar(con, incluir_ocultos=hidden)
+
+
+class OcultarIn(BaseModel):
+    key: str
+    reason: str = None
+    level: str = None
+    title: str = None
+
+
+@r.post("/needs-attention/dismiss")
+def attention_dismiss(dados: OcultarIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+                      con: sqlite3.Connection = Depends(get_db)):
+    """Esconde um aviso. Não toca na tarefa, no envelope nem no e-mail de origem."""
+    if not dados.key or ":" not in dados.key or len(dados.key) > 200:
+        raise HTTPException(400, "Invalid key.")
+    con.execute("""INSERT INTO attention_dismissals (key, level, title, reason, dismissed_by)
+                   VALUES (?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET reason=excluded.reason,
+                   dismissed_by=excluded.dismissed_by, dismissed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')""",
+                (dados.key, dados.level, (dados.title or "")[:200], (dados.reason or "")[:500] or None, u["id"]))
+    auditar(con, "attention.dismiss", f"user:{u['id']}", user_id=u["id"], entity_type="attention", entity_id=dados.key,
+            detail={"title": dados.title, "reason": dados.reason}, ip=auth._ip(request))
+    return {"ok": True}
+
+
+class RestaurarIn(BaseModel):
+    key: str
+
+
+@r.post("/needs-attention/restore")
+def attention_restore(dados: RestaurarIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+                      con: sqlite3.Connection = Depends(get_db)):
+    n = con.execute("DELETE FROM attention_dismissals WHERE key=?", (dados.key,)).rowcount
+    if not n:
+        raise HTTPException(404, "Nothing hidden with that key.")
+    auditar(con, "attention.restore", f"user:{u['id']}", user_id=u["id"], entity_type="attention", entity_id=dados.key,
+            ip=auth._ip(request))
+    return {"ok": True}
 
 
 # ----------------------------------------------------------- clientes
@@ -101,12 +174,14 @@ def clients(status: str = None, q: str = None, vip: bool = None,
     rows = todos(con, f"""
         SELECT c.*, s.label AS stage,
           (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status='open') AS open_tasks,
+          (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status='completed') AS done_tasks,
+          (SELECT MAX(due_on) FROM tasks t WHERE t.client_id=c.id AND t.status='completed') AS last_service,
           (SELECT MIN(due_on) FROM tasks t WHERE t.client_id=c.id AND t.status='open' AND due_on>=date('now')) AS next_service,
           (SELECT status FROM waivers w WHERE w.client_id=c.id ORDER BY sent_at DESC LIMIT 1) AS waiver_status,
           (SELECT COUNT(*) FROM emails e WHERE e.client_id=c.id AND e.handled=0) AS emails_open,
           (SELECT MAX(synced_at) FROM tasks t WHERE t.client_id=c.id) AS last_activity
         FROM clients c LEFT JOIN client_stages s ON s.code=c.stage_code
-        WHERE {' AND '.join(where)} ORDER BY next_service IS NULL, next_service, c.name""", p)
+        WHERE {' AND '.join(where)} ORDER BY next_service IS NULL, next_service, COALESCE(c.pilot_name, c.name)""", p)
     return rows
 
 
@@ -190,8 +265,17 @@ def search(q: str, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
 
 # ------------------------------------------------------------- listas
 @r.get("/tasks")
-def tasks(status: str = "open", u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    rows = todos(con, "SELECT t.*, c.name AS client_name FROM tasks t LEFT JOIN clients c ON c.id=t.client_id WHERE t.status=? ORDER BY t.due_on", (status,))
+def tasks(status: str = "open", project: str = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """status=open|completed|all. Espelho do quadro inteiro (menos Matt tasks)."""
+    where, p = [], []
+    if status != "all":
+        where.append("t.status=?"); p.append(status)
+    if project:
+        where.append("t.project=?"); p.append(project)
+    sql = "SELECT t.*, c.name AS client_name FROM tasks t LEFT JOIN clients c ON c.id=t.client_id"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    rows = todos(con, sql + " ORDER BY t.due_on IS NULL, t.due_on, t.title", p)
     for t in rows:
         t["links"] = _links(con, "task", t["id"])
     return rows
@@ -206,11 +290,43 @@ def waivers(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get
 
 
 @r.get("/emails")
-def emails(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    rows = todos(con, "SELECT e.*, c.name AS client_name FROM emails e LEFT JOIN clients c ON c.id=e.client_id ORDER BY e.last_at DESC LIMIT 200")
+def emails(mailbox: str = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    sql = "SELECT e.*, c.name AS client_name FROM emails e LEFT JOIN clients c ON c.id=e.client_id"
+    p = []
+    if mailbox:
+        sql += " WHERE e.mailbox=?"; p.append(mailbox)
+    rows = todos(con, sql + " ORDER BY e.last_at DESC LIMIT 300", p)
     for e in rows:
         e["links"] = _links(con, "email", e["id"])
     return rows
+
+
+class EmailIn(BaseModel):
+    handled: bool
+
+
+@r.patch("/emails/{eid}")
+def email_patch(eid: int, dados: EmailIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+                con: sqlite3.Connection = Depends(get_db)):
+    """Marca tratado/não tratado no espelho. Não mexe no Gmail."""
+    if not um(con, "SELECT id FROM emails WHERE id=?", (eid,)):
+        raise HTTPException(404, "Email not found.")
+    con.execute("UPDATE emails SET handled=? WHERE id=?", (1 if dados.handled else 0, eid))
+    auditar(con, "email.handled", f"user:{u['id']}", user_id=u["id"], entity_type="email", entity_id=eid,
+            detail={"handled": dados.handled}, ip=auth._ip(request))
+    return {"ok": True}
+
+
+@r.get("/docusign/templates")
+def docusign_templates(u=Depends(auth.usuario_atual)):
+    """Modelos da conta DocuSign, ao vivo. Sem credencial devolve connected=false, nunca 500."""
+    from command_center.providers import NaoConectado, chamar
+    try:
+        return {"connected": True, "templates": chamar("docusign", "docusign_templates")}
+    except NaoConectado as e:
+        return {"connected": False, "reason": str(e), "templates": []}
+    except Exception as e:
+        return {"connected": False, "reason": f"{type(e).__name__}: {str(e)[:200]}", "templates": []}
 
 
 # ---------------------------------------------------------- políticas

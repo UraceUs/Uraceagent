@@ -12,7 +12,8 @@ export interface Integration {
 }
 
 export interface Attention {
-  level: Level; title: string; why: string
+  key: string; level: Level; title: string; why: string
+  dismissed: null | { by: string | null; at: string; reason: string | null }
   entity: { type: string; id: number | string | null }
   client_id: number | null; link: string | null; action: string
 }
@@ -34,7 +35,8 @@ export interface Client {
   pilot_name: string | null; pilot_dob: string | null; vip: number; status: string
   stage_code: string | null; stage?: string | null; source: string | null; notes: string | null
   created_at: string; updated_at: string
-  open_tasks?: number; next_service?: string | null; waiver_status?: string | null
+  open_tasks?: number; done_tasks?: number; last_service?: string | null
+  next_service?: string | null; waiver_status?: string | null
   emails_open?: number; last_activity?: string | null
 }
 
@@ -42,6 +44,7 @@ export interface Task {
   id: number; client_id: number | null; title: string; project: string | null; section: string | null
   status: string | null; due_on: string | null; assignee: string | null
   subtasks_total: number | null; subtasks_done: number | null; synced_at: string
+  fields?: string | null; section_gid?: string | null
   client_name?: string | null; links?: Link[]
 }
 
@@ -103,4 +106,10 @@ export interface SearchResult {
   waivers: Pick<Waiver, 'id' | 'signer_name' | 'signer_email' | 'status' | 'expires_at' | 'client_id'>[]
   emails: Pick<Email, 'id' | 'subject' | 'sender' | 'mailbox' | 'last_at' | 'client_id'>[]
   commands: Pick<AiCommand, 'id' | 'text' | 'status' | 'created_at'>[]
+}
+
+export interface SyncStatus {
+  running: boolean; started_at: string | null; finished_at: string | null
+  result: Record<string, { ok: boolean; motivo?: string; tarefas?: number; clientes_novos?: number }> | null
+  logs: { id: number; system: string; started_at: string; finished_at: string; ok: number; items: number; message: string }[]
 }

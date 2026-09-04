@@ -8,16 +8,29 @@ import { Chip, Empty, ErrorState, Ext, Loading, POLICY_LABEL, Section, WAIVER_LA
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
+function idade(dob?: string | null) {
+  if (!dob) return null
+  const d = new Date(dob.slice(0, 10) + 'T12:00:00Z'); if (isNaN(d.getTime())) return null
+  const h = new Date(); let a = h.getFullYear() - d.getFullYear()
+  if (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())) a--
+  return a
+}
+
 const KIND: Record<string, [string, 'ok' | 'warn' | 'crit' | 'info' | '']> = {
   SERVICE: ['Serviço', 'info'], WAIVER_SENT: ['Waiver enviada', 'warn'], WAIVER_SIGNED: ['Waiver assinada', 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: ['Ação da IA', 'info'],
 }
 
 export function Client360() {
   const { id } = useParams()
+  return <ClientCard id={Number(id)} />
+}
+
+/** Card completo do cliente. Em rota, sem onClose; em janela, com onClose. */
+export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }) {
   const nav = useNavigate()
   const { can } = useAuth()
   const toast = useToast()
-  const { data, error, loading, reload } = useGet<C360>(`/clients/${id}`)
+  const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
   const [tab, setTab] = useState<'timeline' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false })
@@ -46,14 +59,14 @@ export function Client360() {
   return <>
     <div className="page-h">
       <div>
-        <div className="small"><a onClick={() => nav(-1)} style={{ cursor: 'pointer' }}>← voltar</a></div>
-        <div className="row wrap"><h1 className="h1">{c.name}</h1>{!!c.vip && <Chip tone="warn">VIP</Chip>}<Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.source && <Chip tone="outline">{c.source}</Chip>}</div>
-        <div className="sub small">{c.pilot_name && <>Piloto: <b>{c.pilot_name}</b>{c.pilot_dob && <> (nasc. {fmtDate(c.pilot_dob)})</>} · </>}{c.email || 'sem e-mail'}{c.phone && <> · {c.phone}</>}{c.company && <> · {c.company}</>}</div>
+        {!onClose && <div className="small"><a onClick={() => nav(-1)} style={{ cursor: 'pointer' }}>← voltar</a></div>}
+        <div className="row wrap"><h1 className="h1">{c.pilot_name || c.name}</h1>{c.pilot_name && <span className="ink2">responsável: <b>{c.name}</b></span>}{!!c.vip && <Chip tone="warn">VIP</Chip>}<Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.source && <Chip tone="outline">{c.source}</Chip>}</div>
+        <div className="sub small">{c.pilot_dob && <>Piloto nascido em {fmtDate(c.pilot_dob)}{idade(c.pilot_dob) !== null && <> ({idade(c.pilot_dob)} anos{idade(c.pilot_dob)! < 18 ? ', menor: waiver parental' : ''})</>} · </>}{c.email || 'sem e-mail'}{c.phone && <> · {c.phone}</>}{c.company && <> · {c.company}</>}</div>
       </div>
       <div className="row wrap">
         {data.links.map(l => <Ext key={l.system + l.external_id} href={l.deep_link}>{l.system}</Ext>)}
         {can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}
-        {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } })}>Perguntar à IA</button>}
+        {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>Perguntar à IA</button>}
       </div>
     </div>
     {risco && <div className="banner crit"><b>Serviço em {dias === 0 ? 'HOJE' : `${dias} dia(s)`} sem waiver assinada.</b> {wBad ? `O e-mail ${wBad.signer_email} devolveu: corrija e reenvie.` : wOpen ? `Envelope ${WAIVER_LABEL[wOpen.status!]}; cobre a assinatura.` : 'Nenhum envelope enviado.'}</div>}
@@ -64,6 +77,14 @@ export function Client360() {
       <div className="card kpi"><div className="lbl">Serviços abertos</div><div className="val">{data.tasks.filter(t => t.status === 'open').length}</div><div className="foot">{data.tasks.length} no total</div></div>
       <div className="card kpi"><div className="lbl">E-mails sem tratamento</div><div className="val" style={{ color: data.emails.some(e => !e.handled) ? 'var(--warn)' : undefined }}>{data.emails.filter(e => !e.handled).length}</div><div className="foot">{data.emails.length} threads conhecidas</div></div>
     </div>
+    <Section title="Dados do cliente">
+      <div className="grid g2">
+        <dl className="dl"><dt>Piloto</dt><dd>{c.pilot_name || <span className="muted">— (o próprio)</span>}</dd><dt>Nascimento</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd>
+          <dt>Responsável</dt><dd>{c.name}</dd><dt>Empresa</dt><dd>{c.company || '—'}</dd></dl>
+        <dl className="dl"><dt>E-mail</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}</dd><dt>Telefone</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd>
+          <dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Origem</dt><dd>{c.source || '—'} · desde {fmtDate(c.created_at)}</dd></dl>
+      </div>
+    </Section>
     {edit && <Section title="Editar cliente">
       <div className="grid g3">
         <div className="field"><label>Status</label><select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{['ACTIVE', 'NEW', 'PENDING', 'AT_RISK', 'COMPLETED', 'INACTIVE'].map(s => <option key={s}>{s}</option>)}</select></div>

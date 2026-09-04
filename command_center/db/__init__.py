@@ -48,9 +48,21 @@ def conectar(caminho=None):
     return con
 
 
+# Colunas acrescentadas depois do primeiro deploy: CREATE TABLE IF NOT EXISTS
+# não as adiciona em banco existente; cada linha aqui é idempotente.
+MIGRACOES = [
+    ("tasks", "fields", "TEXT"),          # campos personalizados do Asana (json)
+    ("tasks", "section_gid", "TEXT"),
+]
+
+
 def aplicar_schema(con):
     with open(SCHEMA, encoding="utf-8") as f:
         con.executescript(f.read())
+    for tabela, coluna, tipo in MIGRACOES:
+        existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
+        if coluna not in existentes:
+            con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
 
 
 @contextmanager

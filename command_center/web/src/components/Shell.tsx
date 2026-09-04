@@ -51,14 +51,16 @@ export function Shell() {
         <NavLink to="/" end>Dashboard</NavLink>
         <NavLink to="/attention">Precisa de atenção {attn > 0 && <span className="n">{attn}</span>}</NavLink>
         <NavLink to="/clients">Clientes</NavLink>
-        <NavLink to="/tasks">Serviços</NavLink>
-        <NavLink to="/waivers">Waivers {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NavLink>
-        <NavLink to="/emails">E-mails {!!d?.emails_attention && <span className="n soft">{d.emails_attention}</span>}</NavLink>
+        <div className="grp">Sistemas</div>
+        <NavLink to="/asana">Asana</NavLink>
+        <NavLink to="/docusign">DocuSign {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NavLink>
+        <NavLink to="/gmail">Gmail {!!d?.emails_attention && <span className="n soft">{d.emails_attention}</span>}</NavLink>
+        <NavLink to="/quickbooks">QuickBooks</NavLink>
         <div className="grp">Inteligência</div>
         <NavLink to="/ai" end>AI Command</NavLink>
         <NavLink to="/approvals">Aprovações {pend > 0 && <span className="n">{pend}</span>}</NavLink>
         <NavLink to="/activity">Atividade da IA</NavLink>
-        <div className="grp">Sistema</div>
+        <div className="grp">Administração</div>
         <NavLink to="/integrations">Integrações {badInt > 0 && <span className="n">{badInt}</span>}</NavLink>
         {can('MANAGER') && <NavLink to="/audit">Auditoria</NavLink>}
         {can('ADMIN') && <NavLink to="/policies">Políticas da IA</NavLink>}

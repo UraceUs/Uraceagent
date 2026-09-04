@@ -33,14 +33,14 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
     const s = q.trim()
     if (res) {
       res.clients.forEach(c => out.push({ group: 'Clientes', label: c.name + (c.pilot_name ? ` · piloto ${c.pilot_name}` : ''), hint: c.email || '', go: go(`/clients/${c.id}`), tone: c.vip ? 'warn' : undefined }))
-      res.tasks.forEach(t => out.push({ group: 'Serviços', label: t.title, hint: `${t.section || ''} ${fmtDate(t.due_on)}`, go: go(t.client_id ? `/clients/${t.client_id}` : '/clients') }))
-      res.waivers.forEach(w => out.push({ group: 'Waivers', label: `${w.signer_name || w.signer_email} · ${w.status}`, hint: 'expira ' + fmtDate(w.expires_at), go: go(w.client_id ? `/clients/${w.client_id}` : '/waivers') }))
-      res.emails.forEach(e => out.push({ group: 'E-mails', label: e.subject || '(sem assunto)', hint: `${e.mailbox}@ · ${e.sender || ''}`, go: go(e.client_id ? `/clients/${e.client_id}` : '/emails') }))
+      res.tasks.forEach(t => out.push({ group: 'Serviços', label: t.title, hint: `${t.section || ''} ${fmtDate(t.due_on)}`, go: go(t.client_id ? `/clients/${t.client_id}` : '/asana') }))
+      res.waivers.forEach(w => out.push({ group: 'Waivers', label: `${w.signer_name || w.signer_email} · ${w.status}`, hint: 'expira ' + fmtDate(w.expires_at), go: go(w.client_id ? `/clients/${w.client_id}` : '/docusign') }))
+      res.emails.forEach(e => out.push({ group: 'E-mails', label: e.subject || '(sem assunto)', hint: `${e.mailbox}@ · ${e.sender || ''}`, go: go(e.client_id ? `/clients/${e.client_id}` : '/gmail') }))
       res.commands.forEach(c => out.push({ group: 'Comandos', label: c.text, hint: c.status, go: go(`/ai/${c.id}`) }))
     }
     if (s.length >= 2) out.push({ group: 'IA', label: `Perguntar à IA: "${s}"`, hint: 'Enter', go: () => { onClose(); ask(s) } })
     const pages: [string, string][] = [['Dashboard', '/'], ['Precisa de atenção', '/attention'], ['Clientes', '/clients'], ['AI Command', '/ai'],
-      ['Aprovações', '/approvals'], ['Waivers', '/waivers'], ['E-mails', '/emails'], ['Serviços', '/tasks'], ['Integrações', '/integrations'], ['Atividade da IA', '/activity'], ['Políticas', '/policies'], ['Auditoria', '/audit'], ['Usuários', '/users']]
+      ['Aprovações', '/approvals'], ['Asana', '/asana'], ['DocuSign', '/docusign'], ['Gmail', '/gmail'], ['QuickBooks', '/quickbooks'], ['Integrações', '/integrations'], ['Atividade da IA', '/activity'], ['Políticas', '/policies'], ['Auditoria', '/audit'], ['Usuários', '/users']]
     pages.filter(([n]) => !s || n.toLowerCase().includes(s.toLowerCase())).forEach(([n, p]) => out.push({ group: 'Ir para', label: n, go: go(p) }))
     return out
   }, [res, q, nav, onClose, ask])

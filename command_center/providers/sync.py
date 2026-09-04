@@ -130,13 +130,54 @@ def _liga(con, tipo, id_, sistema, ext, link=None):
 
 
 # ------------------------------------------------------ Asana
+SECAO_SEM_ESPELHO = "matt tasks"     # dado sensível, fora de qualquer automação (dono, 28/08)
+
+
+def _grava_tarefa(con, gid, campos):
+    tid = um(con, "SELECT entity_id FROM entity_links WHERE system='asana' AND external_id=? AND entity_type='task'", (gid,))
+    if tid:
+        atualizar(con, "tasks", tid["entity_id"], **campos)
+    else:
+        nid = inserir(con, "tasks", **campos)
+        _liga(con, "task", nid, "asana", gid, ASANA_LINK.format(proj=PROJETO_URACE, gid=gid))
+
+
 def sync_asana(con):
-    """Tarefas abertas das colunas dos dias → clientes + tarefas."""
+    """Espelha o quadro U-RACE inteiro (menos "Matt tasks").
+
+    Colunas dos dias: leitura completa de cada tarefa (notas → cliente,
+    subtarefas). Demais colunas (RACES, Finished Services…): só o resumo da
+    lista, sem cliente — servem para a visão de calendário/quadro.
+    """
     inicio = agora()
     novos = tarefas = 0
     try:
-        for sec_gid, sec_nome in SECOES_DIAS.items():
-            for t in chamar("asana", "asana_tarefas_da_secao", secao_gid=sec_gid, incluir_concluidas=False):
+        secoes = chamar("asana", "asana_secoes", projeto_gid=PROJETO_URACE)
+        for sec in secoes:
+            sec_gid, sec_nome = sec["gid"], sec["nome"]
+            if (sec_nome or "").strip().lower() == SECAO_SEM_ESPELHO:
+                continue
+            eh_dia = sec_gid in SECOES_DIAS
+            eh_finished = sec_gid == SECAO_FINISHED
+            # colunas de cliente: dias (agenda) e Finished Services (histórico desde a criação do projeto)
+            eh_cliente = eh_dia or eh_finished
+            for t in chamar("asana", "asana_tarefas_da_secao", secao_gid=sec_gid, incluir_concluidas=eh_finished):
+                comum = dict(project="U-RACE", section=sec_nome, section_gid=sec_gid,
+                             status="completed" if t.get("concluida") else "open",
+                             due_on=t.get("vence_em"), assignee=t.get("responsavel"),
+                             fields=json.dumps(t.get("campos"), ensure_ascii=False) if t.get("campos") else None,
+                             synced_at=agora())
+                ja = um(con, """SELECT t.id, t.client_id, t.status FROM entity_links l JOIN tasks t ON t.id=l.entity_id
+                                WHERE l.system='asana' AND l.external_id=? AND l.entity_type='task'""", (t["gid"],))
+                # histórico já lido e concluído não muda: só o resumo (evita reler centenas de tarefas)
+                rapido = (not eh_cliente) or (eh_finished and ja and ja["client_id"] and ja["status"] == "completed" and t.get("concluida"))
+                if rapido:
+                    campos = dict(title=t.get("nome"), subtasks_total=t.get("subtarefas"), **comum)
+                    if ja and ja["client_id"]:
+                        campos.pop("subtasks_total")          # o resumo não sabe quantas estão feitas; mantém o lido
+                    _grava_tarefa(con, t["gid"], campos)
+                    tarefas += 1
+                    continue
                 full = chamar("asana", "asana_tarefa", gid=t["gid"])
                 d = parse_descricao(full.get("notas"))
                 partes = nome_da_tarefa(full.get("nome"))
@@ -146,20 +187,12 @@ def sync_asana(con):
                 novos += novo
                 _liga(con, "client", cid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
                 subs = full.get("subtarefas_lista") or []
-                tid = um(con, "SELECT entity_id FROM entity_links WHERE system='asana' AND external_id=? AND entity_type='task'", (t["gid"],))
-                campos = dict(client_id=cid, title=full.get("nome"), project="U-RACE", section=sec_nome,
-                              status="completed" if full.get("concluida") else "open",
-                              due_on=full.get("vence_em"), assignee=full.get("responsavel"),
-                              subtasks_total=len(subs), subtasks_done=sum(1 for s in subs if s.get("concluida")),
-                              synced_at=agora())
-                if tid:
-                    atualizar(con, "tasks", tid["entity_id"], **campos)
-                else:
-                    nid = inserir(con, "tasks", **campos)
-                    _liga(con, "task", nid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
+                _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"),
+                                                 subtasks_total=len(subs),
+                                                 subtasks_done=sum(1 for s in subs if s.get("concluida")), **comum))
                 tarefas += 1
-        _marca(con, "asana", True, tarefas, f"{tarefas} tarefas, {novos} clientes novos", inicio)
-        return {"ok": True, "tarefas": tarefas, "clientes_novos": novos}
+        _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos", inicio)
+        return {"ok": True, "tarefas": tarefas, "clientes_novos": novos, "colunas": len(secoes)}
     except NaoConectado as e:
         _marca(con, "asana", False, 0, f"não conectado: {e}", inicio, desconectado=True)
         return {"ok": False, "motivo": "not connected"}

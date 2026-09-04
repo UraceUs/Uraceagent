@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useOutletContext } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import type { Loaded } from '../api/hooks'
-import type { Dashboard as D } from '../api/types'
+import type { Dashboard as D, SyncStatus } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { AttentionList } from './Attention'
 import { Banner, Chip, ErrorState, Kpi, Loading, Section, Spinner, statusTone } from '../components/ui'
@@ -23,15 +23,27 @@ export function Dashboard() {
 
   async function sync() {
     setSyncing(true)
-    try { await api.post('/sync'); toast('Espelhos atualizados a partir das fontes.', 'ok'); dash.reload() }
-    catch (e) { toast((e as ApiError).message, 'crit') } finally { setSyncing(false) }
+    try {
+      const r = await api.post<{ started: boolean; running: boolean }>('/sync')
+      toast(r.started ? 'Sincronia iniciada. O histórico do Asana pode levar alguns minutos.' : 'Já há uma sincronia rodando.')
+      for (let i = 0; i < 240; i++) {                       // até ~20 min, a cada 5 s
+        await new Promise(res => setTimeout(res, 5000))
+        const st = await api.get<SyncStatus>('/sync')
+        if (!st.running) {
+          const falhas = Object.entries(st.result || {}).filter(([, v]) => !v.ok)
+          toast(falhas.length ? `Sincronia terminou com aviso: ${falhas.map(([k, v]) => `${k} (${v.motivo})`).join(', ')}` : 'Espelhos atualizados a partir das fontes.', falhas.length ? undefined : 'ok')
+          break
+        }
+      }
+      dash.reload()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSyncing(false) }
   }
 
   return <>
     <div className="page-h">
       <div><h1 className="h1">Dashboard</h1><div className="sub small">Dados espelhados das fontes reais. Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>.</div></div>
       <div className="row">
-        {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing}>{syncing ? <Spinner /> : '↻'} Sincronizar agora</button>}
+        {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing}>{syncing ? <Spinner /> : '↻'} {syncing ? 'Sincronizando…' : 'Sincronizar agora'}</button>}
         {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai')}>Perguntar à IA</button>}
       </div>
     </div>
@@ -54,7 +66,7 @@ export function Dashboard() {
     </div>
     <div className="grid g2" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)' }}>
       <Section title="Precisa de atenção" count={d.needs_attention_total} tight right={<Link to="/attention" className="small">ver tudo</Link>}>
-        <AttentionList items={d.needs_attention} />
+        <AttentionList items={d.needs_attention} onChange={dash.reload} />
       </Section>
       <div className="stack">
         <Section title="Integrações" tight right={<Link to="/integrations" className="small">detalhes</Link>}>
