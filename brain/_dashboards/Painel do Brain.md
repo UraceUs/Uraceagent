@@ -26,7 +26,8 @@ nosso, regras do dono em código, relatório conferido na fonte: Enzo
 
 **04/09 — [[DocuSign]] em produção.** Go-live aprovado, 50 envelopes
 visíveis ao agente. Envio ainda atrás de `APLICAR=0`. Ver [[2026-09-04]].
-Faltam [[QuickBooks]] e [[Gmail]] — lista em [[Etapa de conexão]].
+**[[Gmail]] conectado 04/09** — as duas caixas, sem envio. Falta só
+[[QuickBooks]] — lista em [[Etapa de conexão]].
 
 ## 🔴 Pendente de clique do dono
 

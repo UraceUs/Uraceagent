@@ -38,6 +38,13 @@ não da planilha, para esses quatro valores.
 
 ---
 
+### C-02 · Horário: "quarta a domingo" × coluna TUESDAY
+O dono confirmou a um lead (27/08) que o funcionamento é **quarta a
+domingo, 8h–13h**. O quadro U-RACE do [[Asana]] tem coluna **TUESDAY**
+como dia de serviço. Ou terça é exceção (serviço fora do horário
+público), ou a coluna é herança. **Não decidido.** Dono da resposta:
+[[Italo Silveira]]. → [[Orlando Kart Center]] · [[Serviços]]
+
 ## ❓ Lacunas — `UNKNOWN`
 
 Coisas que a IA **não sabe** e que não dá para deduzir. Cada uma tem um
