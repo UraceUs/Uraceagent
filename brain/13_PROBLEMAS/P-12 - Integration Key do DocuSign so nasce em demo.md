@@ -116,6 +116,8 @@ Quando aprovar: o bloco de virada está em
 
 ## ✅ Resolvido — 04/09/2026
 
+Diário: [[2026-09-04]].
+
 Go-live aprovado em menos de 48h. Virada feita: env em `na4`, IDs de
 produção, consentimento de produção dado, e a prova pela ferramenta:
 `"ambiente": "PRODUÇÃO"`, **50 envelopes** nos últimos 120 dias.
