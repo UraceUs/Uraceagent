@@ -79,6 +79,13 @@ dono pediu acesso ao [[QuickBooks]] para `lucas@urace.us` em 01/09. O
 
 ---
 
+### U-08 · O que é "Offsight"
+O spec do Command Center (04/09) cita "Offsight" oito vezes — como
+integração, como origem de cliente, como `offsight_id`. **Não existe em
+nenhum lugar**: cérebro, código, conexões, conversas. A IA não implementa
+integração que não sabe o que é. Dono da resposta: [[Italo Silveira]].
+→ `docs/adminai/command-center-adr.md`
+
 ## 🔒 Fechado — o que já foi resolvido
 
 - **U-07 · dispensa de waiver** — fechada em 04/09: **cliente VIP dispensa waiver**. Lista em [[PARAMETROS]]; primeiro caso [[Rafael Pionti]]. Também fechado no mesmo dia: **RACES não entra na varredura de waiver**.

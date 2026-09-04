@@ -39,6 +39,7 @@ apagada**: vira `status: superado`, com link para a que a substituiu.
 - [[D-2026-08-31 - Waiver vale um ano]]
 - [[D-2026-09-01 - Manter o par RSA do DocuSign demo]]
 - [[D-2026-09-04 - Renato Pionti sem waiver nesta sessao]]
+- [[D-2026-09-04 - Invoice sai depois de aprovada no painel]]
 
 ## Por que isto existe
 
