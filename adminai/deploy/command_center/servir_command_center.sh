@@ -30,6 +30,7 @@ mkdir -p "$URACE_DIR"; chmod 700 "$URACE_DIR"
 if ! python3 -c "import venv, ensurepip" 2>/dev/null; then
     echo "!! python3-venv ausente. Rode: sudo apt-get install -y python3-venv"; exit 1
 fi
+echo "-- 1/7 venv + fastapi/uvicorn (silencioso, 1-2 min na primeira vez)"
 [ -x "$VENV/bin/python" ] || python3 -m venv "$VENV"
 "$VENV/bin/pip" install -q --upgrade pip >/dev/null
 "$VENV/bin/pip" install -q -r "$REPO/command_center/requirements.txt"
@@ -40,15 +41,18 @@ echo "-- venv pronto: $("$VENV/bin/python" -c 'import fastapi; print("fastapi", 
 if ! command -v npm >/dev/null; then
     echo "!! npm ausente. Instale Node 20+ (ex.: NodeSource) e rode de novo"; exit 1
 fi
+echo "-- 2/7 build do frontend: npm ci + vite (silencioso, 1-3 min)"
 ( cd "$REPO/command_center/web" && npm ci --no-audit --no-fund --silent && npm run build --silent )
 [ -f "$REPO/command_center/web/dist/index.html" ] || { echo "!! build do frontend não gerou dist/index.html"; exit 1; }
 echo "-- frontend construído: $(du -sh "$REPO/command_center/web/dist" | cut -f1)"
 
 # --------------------------------------------------------------- 3. testes
+echo "-- 3/7 testes do backend"
 ( cd "$REPO" && CC_DB_PATH=/tmp/cc-test-$$.sqlite "$VENV/bin/python" -m pytest -q command_center/tests 2>&1 | tail -3 )
 rm -f /tmp/cc-test-$$.sqlite*
 
 # ------------------------------------------------------ 4. primeiro ADMIN
+echo "-- 4/7 usuários"
 N_USERS=$(cd "$REPO" && "$VENV/bin/python" - <<'PY'
 from command_center.db import conectar, aplicar_schema, um
 con = conectar(); aplicar_schema(con)
@@ -61,6 +65,7 @@ if [ "$N_USERS" = "0" ]; then
 fi
 
 # --------------------------------------------------------------- 5. systemd
+echo "-- 5/7 serviço systemd"
 sudo cp "$REPO/adminai/deploy/command_center/$UNIT.service" "/etc/systemd/system/$UNIT.service"
 sudo sed -i "s|/home/ubuntu/Uraceagent|$REPO|g; s|/home/ubuntu/.urace|$URACE_DIR|g; s|^User=ubuntu|User=$(id -un)|; s|8790|$PORTA|g" \
         "/etc/systemd/system/$UNIT.service"
@@ -74,6 +79,7 @@ curl -sf "http://127.0.0.1:$PORTA/ops/ready" >/dev/null || { echo "!! /ops/ready
 echo "-- serviço no ar em 127.0.0.1:$PORTA"
 
 # ----------------------------------------------------------------- 6. Caddy
+echo "-- 6/7 Caddy"
 sudo cp "$CADDYFILE" "$CADDYFILE.bak-$(date +%Y%m%d-%H%M%S)"
 sudo DOMINIO="$DOMINIO" PORTA="$PORTA" python3 - <<'PY'
 import os, re
