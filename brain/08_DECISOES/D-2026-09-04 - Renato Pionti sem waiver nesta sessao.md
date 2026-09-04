@@ -17,11 +17,10 @@ A sessão **Renato Frota Pionti_Professional Coaching_2T [1/1]**, de
 
 ## Por quê
 
-**Não informado.** O dono disse "pro Renato não precisa" e nada mais.
-Fica registrado como decisão pontual desta sessão — **não** vira regra.
-O motivo é uma lacuna: pode ser waiver em papel na pista, pode ser
-característica do serviço, pode ser outra coisa. Sem saber, a IA não
-generaliza. Ver [[Conflitos e lacunas]] (U-07).
+**Renato é VIP** — informado pelo dono em 04/09, depois do registro
+inicial. Com isso a decisão deixou de ser pontual e virou regra em
+[[PARAMETROS]]: **cliente VIP dispensa waiver**, valendo só para quem
+está na lista de VIPs. Cliente: [[Rafael Pionti]].
 
 ## Impacto
 

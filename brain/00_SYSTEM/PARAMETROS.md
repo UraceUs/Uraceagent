@@ -99,6 +99,8 @@ levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 | Confirmação de corrida antes do evento | 15 dias (organizado: 30) |
 | Status `In Production` após e-mail ao fornecedor | **1 dia** |
 | **Validade da waiver** | **1 ano a partir da assinatura** (é o que o e-mail do [[DocuSign]] promete ao cliente) |
+| **Cliente VIP dispensa waiver** | decisão do dono, 04/09. Lista de VIPs: [[Rafael Pionti]] (Renato). **Só quem está nesta lista** — não existe marcador no Asana; a IA não deduz VIP de nada |
+| **Varredura de waiver: só as colunas dos dias** | TUESDAY…SUNDAY. **RACES não entra** (dono, 04/09) |
 
 ## 🏁 Campo `Race` do Asana (`1213088541600529`)
 
@@ -179,4 +181,5 @@ Enquanto o "ok" não vem, o lote fica em stand-by — ver
 | 2026-08-31 | [[DocuSign]] conectado e sondado. Conta é a **`support@`** — o fluxo da waiver deixa de depender da caixa de e-mail. IDs dos 2 templates registrados; validade da waiver fixada em **1 ano da assinatura** | Italo |
 | 2026-08-31 | Mensal Academy 4T e Baby Kart corrigidos para **$2.756,90** e sessão extra dos dois para **$689,23** (planilha diz $2.756,00 / $689,00 — 4 células a arrumar, ver [[Rate Card]]). Regra fixada: **sessão extra = mensal ÷ 4**, e **pacote sai do mensal, nunca da unitária**. E-mail de invoice: **sai pelo próprio QuickBooks**, não existe template a escrever | Italo |
 | 2026-08-31 | Reminder de cobrança: **aprovação por lote**, sem autorização permanente | Italo |
+| 2026-09-04 | **VIP dispensa waiver** (Renato Pionti, primeiro da lista). **RACES fica fora da varredura de waiver.** [[DocuSign]] em produção | Italo |
 | 2026-08-31 | [[Rate Card]] passa a ser a fonte de preço **acima do catálogo do QuickBooks**; ordem de precedência registrada. IDs das duas planilhas adicionados | Italo (skill `urace-faturamento-qbo`) |

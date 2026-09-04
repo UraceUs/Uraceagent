@@ -7,7 +7,7 @@ atualizado_em: 2026-08-31
 Identidade é a **chave externa** (id do [[QuickBooks]], `asana_gid`), nunca o nome.
 "Charlie Marron" e "Charles Andrew Marron" são a mesma pessoa.
 ## Maiores por faturamento
-[[Kenneth Savage]] · [[Donald Marron]] · [[Pablo Santiago]] · [[James Xikis]]
+[[Kenneth Savage]] · [[Donald Marron]] · [[Pablo Santiago]] · [[James Xikis]] · [[Rafael Pionti]] (VIP)
 ## ⚠️ A conta do QuickBooks está no nome do RESPONSÁVEL, não do piloto
 
 Este é o erro mais fácil de cometer ao faturar: procurar o piloto e

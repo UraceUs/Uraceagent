@@ -202,3 +202,13 @@ humana em DD/MM" e segue. A subtarefa "Signed waiver?" fica aberta: não
 houve assinatura. Primeiro caso:
 [[D-2026-09-04 - Renato Pionti sem waiver nesta sessao]]. O motivo geral
 ainda é lacuna (U-07 em [[Conflitos e lacunas]]).
+
+## Escopo da varredura e VIPs (dono, 04/09)
+
+- **Só as colunas dos dias** (TUESDAY…SUNDAY). **RACES não entra** na
+  varredura de waiver.
+- **Cliente VIP dispensa waiver.** A lista está em [[PARAMETROS]] e é a
+  única fonte: não há marcador no Asana, e a IA **não deduz** VIP de
+  valor, frequência ou nome. Tarefa de VIP aparece na varredura como
+  "dispensada (VIP)", sem alerta, e a subtarefa "Signed waiver?" fica
+  como estiver.
