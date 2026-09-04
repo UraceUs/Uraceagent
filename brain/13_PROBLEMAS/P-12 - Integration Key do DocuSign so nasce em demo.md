@@ -113,3 +113,20 @@ recusam foram conferidos no PDF: Production API Account ID
 Seguiu para *"Go Live Execution — Dev Support Engineer II"*. **Até 48h.**
 Quando aprovar: o bloco de virada está em
 `docs/adminai/docusign-go-live.md`, passo 7. Até lá o VPS fica em demo.
+
+## ✅ Resolvido — 04/09/2026
+
+Go-live aprovado em menos de 48h. Virada feita: env em `na4`, IDs de
+produção, consentimento de produção dado, e a prova pela ferramenta:
+`"ambiente": "PRODUÇÃO"`, **50 envelopes** nos últimos 120 dias.
+
+**O que o go-live NÃO carrega — e eu tinha dito que carregava:** a
+Integration Key é a mesma, mas **o par RSA e os Redirect URIs não vêm
+junto**. A produção nasceu com `RSA Keypairs: None`. Resolvido com
+**Upload RSA** da chave pública derivada da privada do VPS
+(`openssl rsa -pubout`) — sem gerar par novo, sem tocar na privada. O par
+de produção ficou com ID próprio (`bb92d17c-…`), mesma chave.
+
+Outra pegadinha: o primeiro Allow de produção deu *"Não existem URI de
+redirecionamento registados"* mesmo com a URI salva — propagação. Cinco
+minutos depois funcionou.

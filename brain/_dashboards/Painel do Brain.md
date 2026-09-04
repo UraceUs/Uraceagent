@@ -24,8 +24,8 @@ ler os logs em `~/.urace/logs/` e liberar.
 nosso, regras do dono em código, relatório conferido na fonte: Enzo
 05/09 com waiver assinada, nenhum alerta. Ver [[2026-09-02]].
 
-[[DocuSign]] com chave RSA no VPS, apontando para `demo.docusign.net`. É
-**homologação**: o agente não enxerga as waivers reais até o go-live.
+**04/09 — [[DocuSign]] em produção.** Go-live aprovado, 50 envelopes
+visíveis ao agente. Envio ainda atrás de `APLICAR=0`.
 Faltam [[QuickBooks]] e [[Gmail]] — lista em [[Etapa de conexão]].
 
 ## 🔴 Pendente de clique do dono

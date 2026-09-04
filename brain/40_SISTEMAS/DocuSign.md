@@ -219,9 +219,14 @@ produção e se o JWT autentica) · `docusign_templates` ·
 
 **Escrita:** `docusign_enviar_waiver`, só.
 
-Enquanto a base for demo, a conta está **vazia de propósito**: leitura
-ali serve para acumular as chamadas do go-live, não para ver waiver
-real. Ver `docs/adminai/docusign-go-live.md`.
+**Em produção desde 04/09/2026.** Base `na4.docusign.net`, conta
+`4261a166-…`, 50 envelopes visíveis. A fase demo acabou; o que a IA lê
+agora é a conta real. Envio continua atrás de `APLICAR=1`.
+
+⚠️ O go-live promove a **Integration Key**, não o par RSA nem os
+Redirect URIs — a produção nasce com `RSA: None`. Resolve-se com *Upload
+RSA* da chave pública derivada da privada que já está no VPS. Nunca
+*Generate*: isso invalidaria a chave instalada.
 
 ## Prazo
 
