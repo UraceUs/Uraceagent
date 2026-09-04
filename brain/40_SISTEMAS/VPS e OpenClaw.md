@@ -207,6 +207,25 @@ O unit usa `bash -lc` de propósito: sem o PATH de login, o serviço não
 acha o `openclaw` e o AI Command falha com "não está no PATH". Se ainda
 falhar, `OPENCLAW_BIN=/caminho/openclaw` no `adminai.env`.
 
+### Command Center (no ar desde 04/09/2026)
+
+**`https://urace-bridge.duckdns.org/ops/`** — serviço `urace-command-center`
+(uvicorn no venv `~/.urace/cc-venv`, `127.0.0.1:8790`), Caddy com
+`handle /ops*` dentro do bloco do domínio. Banco em
+`~/.urace/command-center.sqlite`. Primeiro ADMIN: Eduardo Resende
+(`eduardoffresende@gmail.com`, id 1). Prova real do deploy: `/ops/` 200
+com o SPA, `/ops/api/dashboard` sem sessão 401, zero dado de cliente no
+HTML, `/legal/` intacto.
+
+Deploy e atualização: `bash adminai/deploy/command_center/servir_command_center.sh`
+(idempotente: venv, build, 27 testes isolados do `~/.urace`, unit,
+Caddy com backup, prova). Usuários pela tela **Usuários** ou
+`~/.urace/cc-venv/bin/python -m command_center.manage`.
+
+⚠️ O Pit Wall em `/painel/` **não está publicado** no VPS (404 em
+04/09): `servir_painel.sh` só chegou lá com o pull do Command Center.
+Publicar é opcional — o Command Center cobre o que ele mostrava.
+
 ## Como está montado
 
 - **Segredos** em `~/.urace/adminai.env`, permissão 600, **fora do
