@@ -1,6 +1,6 @@
 ---
 tipo: painel
-atualizado_em: 2026-08-31
+atualizado_em: 2026-09-04
 tipo_info: CONTEXT
 fonte: interno
 responsavel: Italo Silveira
@@ -11,6 +11,16 @@ status: ativo
 
 > Abra [[URACE]] para o mapa completo. Este painel é o **estado de hoje**:
 > o que está pendente, o que está decidido, o que está travado.
+> **Fotografia inteira do projeto (antes × agora, todos os links):**
+> [[Administrative AI - Estado completo em 2026-09-04]].
+
+## 🚀 04/09 — Command Center no ar
+
+`https://urace-bridge.duckdns.org/ops/` — login próprio, papéis, auditoria.
+A IA acorda a cada mudança (tarefa nova, e-mail de cliente, waiver),
+propõe, e o humano aprova; aprovar executa. Balão "Instruir a IA" vira
+memória. Ver [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]]
+e [[Semana 2026-08-31 a 2026-09-04 - Resumo]].
 
 ## ✅ No ar desde 01/09/2026
 
@@ -31,9 +41,8 @@ visíveis ao agente. Envio ainda atrás de `APLICAR=0`. Ver [[2026-09-04]].
 
 ## 📊 O painel
 
-`https://urace-bridge.duckdns.org/painel/` — login próprio, sessão de
-12 h. Regera sozinho a cada 15 min, com a seção **Em progresso** lendo
-os relatórios das rotinas. Ver [[VPS e OpenClaw]].
+O Pit Wall (`/painel/`) está pronto mas **não publicado** no VPS; o
+Command Center (`/ops/`) o substitui. Ver [[VPS e OpenClaw]].
 
 ## 🔴 Pendente de clique do dono
 

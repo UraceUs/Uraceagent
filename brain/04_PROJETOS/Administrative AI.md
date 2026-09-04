@@ -57,10 +57,10 @@ Todas em `08_DECISOES`. As que mais moldam o projeto:
 
 | Aplicação | Estado |
 |---|---|
-| [[Asana]] | mapeado e validado · escrita liberada · **falta PAT para anexo** |
-| [[Gmail]] | taxonomia lida · triagem especificada · **falta `support@`** |
-| [[QuickBooks]] | processo completo · pode criar, não envia |
-| [[DocuSign]] | conectado e sondado · **pode enviar waiver** |
+| [[Asana]] | **MCP próprio no VPS**, quadro espelhado no Command Center; ADM URACE e Matt tasks só leitura |
+| [[Gmail]] | **as duas caixas conectadas** (04/09); inbox por dentro no Command Center; sem envio |
+| [[QuickBooks]] | **stand-by** (Intuit, P-11); invoice só após aprovação |
+| [[DocuSign]] | **produção** (04/09); envia waiver com aprovação; download, lixeira, reenvio pelo painel |
 | [[Google Calendar]] | mínimo, depende do Asana |
 
 ## Pendências
@@ -75,6 +75,12 @@ cliques que só o dono pode dar.
 
 Ver [[Problemas]]. O que mais afeta este projeto:
 [[P-09 - Conector do Asana nao sobe anexo]].
+
+## Estado completo
+
+**[[Administrative AI - Estado completo em 2026-09-04]]** — a fotografia
+inteira: antes × agora por aplicação, linha do tempo, todas as decisões e
+problemas, links, pendências. Atualizada em 04/09/2026.
 
 ## Próximos passos
 
