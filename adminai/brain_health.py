@@ -18,7 +18,10 @@ import re
 import sys
 import collections
 
-VAULT = "brain"
+import os as _os
+# o cérebro fica ao lado deste script (../brain), não em quem chamou:
+# o instalador roda de ~ e antes disso dava "nada encontrado".
+VAULT = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "brain")
 ARQUIVO = "90_ARQUIVO"          # arquivo morto não conta na saúde
 MIN_SAIDA = 2                    # toda nota liga para o hub + pelo menos 1 lateral
 MEGA_PALAVRAS = 1800             # acima disso, a nota provavelmente cobre 2 assuntos
