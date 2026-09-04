@@ -34,3 +34,15 @@ As regras em código: **não existe ferramenta de envio**; arquivar só com
 `gmail_baixar_anexo` · `calendar_eventos` · `sheets_ler` ·
 `gmail_rotular` · `gmail_rascunho`. Passo a passo em
 `docs/adminai/google-conexao.md`.
+
+### Primeira triagem real — 04/09
+
+8 threads em 3 dias, todas propaganda/notificação, classificadas com
+marcadores reais (`wNews`, `Banks/Bank of America`, `Platforms &
+Subscriptions/Google`, `Softwares|Apps/Docusign`, `Marketing/RD Station`).
+Zero rascunhos — nada pedia resposta. Tudo em simulação.
+
+⚠️ **`support@` não tem o marcador `wNews`.** A regra em código só
+arquiva com ele, e a IA não cria marcador. Propaganda no `support@` fica
+rotulada e **na inbox** até o dono criar `wNews` lá — um clique na tela
+do Gmail. Registrado no [[Painel do Brain]].

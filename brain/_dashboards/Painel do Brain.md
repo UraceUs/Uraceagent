@@ -38,7 +38,7 @@ Coisas que a IA **não consegue fazer** — só o Italo, na interface.
 | Corrigir 4 células de preço | [[Rate Card]] (Sheets) | mensal e sessão extra do 4T/Baby Kart. Valor válido já está no cérebro |
 | Remover campo `Order number` do SUITS | [[Asana]] | enum quebrado; API deu `Access denied` |
 | Criar as 14 regras de status ↔ quadro | [[Asana]] | não existe endpoint de API |
-| Acesso à caixa `support@urace.us` | Google Workspace | ver [[Etapa de conexão]] |
+| Criar o marcador `wNews` na caixa `support@` | [[Gmail]] | sem ele a IA não arquiva propaganda lá — e ela não cria marcador por regra |
 | Credenciais para o VPS | — | [[Asana]] · [[Gmail]] · [[QuickBooks]] · [[DocuSign]] · Drive |
 
 ## ⏳ Decisões que faltam
