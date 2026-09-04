@@ -159,6 +159,18 @@ página aprovada em 01/09 era o desenho, feito à mão. Mesma família do
 [[P-13 - Deploy verde sem agente existir]]: aprovado como ideia, nunca
 executado como código.
 
+**Publicado em `https://urace-bridge.duckdns.org/painel/`**, atrás de
+página de login própria (`adminai/painel/servidor_painel.py`), servida
+pelo Caddy por `reverse_proxy` para `127.0.0.1:8787`.
+
+Não é o `basic_auth` do Caddy: aquele abre a caixinha cinza do navegador,
+sem como sair e sem explicar nada. Aqui: senha em **scrypt** com sal,
+sessão em cookie **assinado com HMAC** (12 h, `HttpOnly`, `Secure`,
+`SameSite=Strict`), bloqueio após 5 erros por IP, e botão de sair.
+
+⚠️ `hashlib.scrypt` com `n=2**15, r=8` precisa de `maxmem` explícito — o
+padrão do OpenSSL é 32 MB e falha com *"memory limit exceeded"*.
+
 O painel **observa, não trabalha**: lê log, systemd e os relatórios.
 Nunca chama API. Das credenciais mostra só a presença, nunca o valor.
 

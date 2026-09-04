@@ -1,0 +1,18 @@
+[Unit]
+Description=URACE — serve o Pit Wall com página de login (127.0.0.1)
+Documentation=file:///home/ubuntu/Uraceagent/adminai/painel/servidor_painel.py
+After=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+Environment=PAINEL_PORTA=8787
+ExecStart=/usr/bin/python3 adminai/painel/servidor_painel.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -29,6 +29,12 @@ visíveis ao agente. Envio ainda atrás de `APLICAR=0`. Ver [[2026-09-04]].
 **[[Gmail]] conectado 04/09** — as duas caixas, sem envio. Falta só
 [[QuickBooks]] — lista em [[Etapa de conexão]].
 
+## 📊 O painel
+
+`https://urace-bridge.duckdns.org/painel/` — login próprio, sessão de
+12 h. Regera sozinho a cada 15 min, com a seção **Em progresso** lendo
+os relatórios das rotinas. Ver [[VPS e OpenClaw]].
+
 ## 🔴 Pendente de clique do dono
 
 Coisas que a IA **não consegue fazer** — só o Italo, na interface.
