@@ -47,3 +47,6 @@ Antes, as decisões viviam soltas no diário e no histórico do
 [[PARAMETROS]]. Não dava para perguntar *"o que ficou decidido sobre
 X?"*. Agora dá.
 - [[D-2026-09-04 - Senha do Command Center com minimo de 5]] — mínimo de 5 caracteres; o bloqueio de tentativas é o que protege
+- [[D-2026-09-04 - Clique humano move e-mail para o marcador]] — botão na aba Gmail aplica marcador e arquiva; regra da IA (só wNews) intacta
+- [[D-2026-09-04 - Lixeira e reenvio de waiver pelo painel]] — lixeira anula em aberto e oculta assinada; download, reenvio e vínculo cliente↔waiver
+- [[D-2026-09-04 - O que e cliente, ativo, e um card por pessoa]] — corrida não é cliente; ativo = 6 meses; união de duplicados; varredura por cliente

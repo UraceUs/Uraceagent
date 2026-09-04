@@ -338,6 +338,23 @@ def sheets_ler(conta, planilha_id, intervalo):
     return {"intervalo": r.get("range"), "linhas": r.get("values", [])}
 
 
+# ----------------------------------------------------- PORTA HUMANA
+def mover_humano(conta, thread_id, marcador):
+    """Clique de uma pessoa no Command Center: aplica o marcador e tira da inbox.
+
+    NÃO é ferramenta do MCP — o agente não enxerga esta função. Decisão do
+    dono (04/09): "quando eu clicar no botão, já vai mover pra essa caixa".
+    A regra da IA (arquivar só com wNews) continua valendo em gmail_rotular.
+    Não passa por APLICAR: é ação humana, auditada pelo Command Center.
+    """
+    if marcador.upper() in PROIBIDOS or marcador.upper() in ("INBOX", "UNREAD", "STARRED"):
+        raise ErroFerramenta(f"RECUSADO: '{marcador}' não é um marcador de destino.")
+    lid = _label_id(conta, marcador)          # marcador inexistente é erro, nunca criação
+    _req(conta, f"{GMAIL}/threads/{thread_id}/modify", "POST",
+         {"addLabelIds": [lid], "removeLabelIds": ["INBOX"]})
+    return {"aplicado": True, "thread_id": thread_id, "marcador": marcador, "arquivado": True}
+
+
 # ----------------------------------------------------------- ESCRITA
 @srv.ferramenta(
     "gmail_rotular",

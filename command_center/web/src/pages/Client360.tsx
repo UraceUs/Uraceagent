@@ -35,6 +35,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false })
   const [saving, setSaving] = useState(false)
+  const [scanning, setScanning] = useState(false)
   if (error && !data) return <ErrorState error={error} retry={reload} />
   if (loading && !data) return <Loading rows={8} />
   if (!data) return null
@@ -65,6 +66,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       </div>
       <div className="row wrap">
         {data.links.map(l => <Ext key={l.system + l.external_id} href={l.deep_link}>{l.system}</Ext>)}
+        {can('OPERATOR') && <button className="btn" disabled={scanning} title="Gmail (urace@ e support@) e DocuSign por e-mail e nome" onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? `Varredura parcial: ${r.avisos.join('; ')}` : `Achou ${r.gmail} thread(s) de e-mail e ligou ${r.docusign} waiver(s).`, r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} Buscar nas plataformas</button>}
         {can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}
         {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>Perguntar à IA</button>}
       </div>
@@ -82,7 +84,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <dl className="dl"><dt>Piloto</dt><dd>{c.pilot_name || <span className="muted">— (o próprio)</span>}</dd><dt>Nascimento</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd>
           <dt>Responsável</dt><dd>{c.name}</dd><dt>Empresa</dt><dd>{c.company || '—'}</dd></dl>
         <dl className="dl"><dt>E-mail</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}</dd><dt>Telefone</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd>
-          <dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Origem</dt><dd>{c.source || '—'} · desde {fmtDate(c.created_at)}</dd></dl>
+          <dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Origem</dt><dd>{c.source || '—'} · desde {fmtDate(c.created_at)}</dd><dt>Varrido</dt><dd className="mono small">{c.scanned_at ? fmtDateTime(c.scanned_at) : 'nunca'}</dd></dl>
       </div>
     </Section>
     {edit && <Section title="Editar cliente">
@@ -111,7 +113,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       </tbody></table></div>}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>Nenhum envelope para este e-mail.</Empty></td></tr>}
-        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}</td><td><Chip tone={statusTone(w.status)}>{WAIVER_LABEL[w.status || ''] || w.status}</Chip></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td>{w.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>{l.system}</Ext>)}</td></tr>)}
+        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}</td><td><Chip tone={statusTone(w.status)}>{WAIVER_LABEL[w.status || ''] || w.status}</Chip></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title="Baixar PDF assinado">⬇ PDF</a>} {w.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>{l.system}</Ext>)}</td></tr>)}
       </tbody></table></div>}
       {tab === 'emails' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Caixa</th><th>Assunto</th><th>De</th><th>Prioridade</th><th>Tratado</th><th></th></tr></thead><tbody>
         {data.emails.length === 0 && <tr><td colSpan={7}><Empty>Nenhum e-mail vinculado.</Empty></td></tr>}

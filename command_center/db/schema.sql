@@ -343,3 +343,17 @@ CREATE TABLE IF NOT EXISTS attention_dismissals (
   dismissed_by  INTEGER NOT NULL REFERENCES users(id),
   dismissed_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- ------------------------------------------------------ uniões de cliente
+-- Um card por pessoa. Quando dois registros são a mesma pessoa, o duplicado
+-- sai do espelho e fica aqui, inteiro, com quem uniu e por quê.
+CREATE TABLE IF NOT EXISTS client_merges (
+  id         INTEGER PRIMARY KEY,
+  keep_id    INTEGER NOT NULL,
+  drop_id    INTEGER NOT NULL,
+  drop_name  TEXT,
+  drop_json  TEXT,
+  merged_by  TEXT NOT NULL,                -- sync | user:<id>
+  reason     TEXT,
+  merged_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);

@@ -107,3 +107,9 @@ def saude(sistema):
         return "DISCONNECTED", {"motivo": str(e)}
     except Exception as e:
         return "ERROR", {"motivo": f"{type(e).__name__}: {str(e)[:200]}"}
+
+
+def modulo(sistema):
+    """O módulo do MCP em si, para as portas humanas (funções que não são
+    ferramentas do agente). Levanta NaoConectado como `chamar`."""
+    return _carregar(sistema)

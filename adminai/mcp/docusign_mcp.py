@@ -188,6 +188,79 @@ def _envelopes_de(email, desde_dias):
     return achados
 
 
+# ----------------------------------------------------- PORTAS HUMANAS
+# Funções chamadas só pelo Command Center num clique de pessoa. NÃO são
+# ferramentas do MCP: o agente não as enxerga. Não passam por APLICAR
+# (é ação humana) e são auditadas pelo Command Center.
+def _req_bytes(caminho, accept="application/pdf"):
+    url = f"{_base()}/restapi/v2.1/accounts/{os.environ['DOCUSIGN_ACCOUNT_ID']}{caminho}"
+    req = urllib.request.Request(url, method="GET")
+    req.add_header("Authorization", f"Bearer {_access_token()}")
+    req.add_header("Accept", accept)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            return r.read()
+    except urllib.error.HTTPError as e:
+        raise ErroFerramenta(f"HTTP {e.code} em GET {caminho}: {e.read()[:300].decode(errors='replace')}")
+    except urllib.error.URLError as e:
+        raise ErroFerramenta(f"sem conexão com o DocuSign: {e.reason}")
+
+
+def baixar_documento_humano(envelopeId):
+    """PDF combinado (documento + certificado) de um envelope. Bytes."""
+    return _req_bytes(f"/envelopes/{envelopeId}/documents/combined?certificate=true")
+
+
+def formulario_humano(envelopeId):
+    """Campos preenchidos (form data): é onde vive o nome do menor na parental."""
+    r = _req(f"/envelopes/{envelopeId}/form_data")
+    campos = {}
+    for f in r.get("formData", []) or []:
+        if f.get("name") and f.get("value") not in (None, ""):
+            campos[f["name"]] = f["value"]
+    for rec in r.get("recipientFormData", []) or []:
+        for f in rec.get("formData", []) or []:
+            if f.get("name") and f.get("value") not in (None, ""):
+                campos.setdefault(f["name"], f["value"])
+    return campos
+
+
+def anular_humano(envelopeId, motivo):
+    """Anula (void) um envelope em aberto. Envelope completed NÃO pode ser
+    anulado nem apagado por aqui: é documento assinado."""
+    e = _req(f"/envelopes/{envelopeId}")
+    if e.get("status") == "completed":
+        raise ErroFerramenta("RECUSADO: envelope assinado é registro legal; fica no DocuSign. "
+                             "No painel dá para ocultar.")
+    if e.get("status") == "voided":
+        return {"aplicado": False, "ja_estava": "voided"}
+    _req(f"/envelopes/{envelopeId}", "PUT", {"status": "voided", "voidedReason": (motivo or "Anulado pelo Command Center")[:200]})
+    return {"aplicado": True, "envelopeId": envelopeId, "status": "voided"}
+
+
+def reenviar_humano(envelopeId, novo_email=None, novo_nome=None):
+    """Reenvia a notificação ao signatário; se veio e-mail novo, corrige antes
+    (caso do e-mail devolvido)."""
+    e = _req(f"/envelopes/{envelopeId}?include=recipients")
+    if e.get("status") not in ("sent", "delivered"):
+        raise ErroFerramenta(f"RECUSADO: só envelope sent/delivered pode ser reenviado (está {e.get('status')}).")
+    signers = (e.get("recipients") or {}).get("signers", [])
+    if not signers:
+        raise ErroFerramenta("envelope sem signatário")
+    alvo = signers[0]
+    if novo_email and novo_email.strip().lower() != (alvo.get("email") or "").lower():
+        corpo = {"signers": [{"recipientId": alvo["recipientId"], "email": novo_email.strip(),
+                              "name": (novo_nome or alvo.get("name") or "").strip()}]}
+        r = _req(f"/envelopes/{envelopeId}/recipients?resend_envelope=true", "PUT", corpo)
+        erros = [x for x in r.get("recipientUpdateResults", []) if (x.get("errorDetails") or {}).get("errorCode")]
+        if erros:
+            raise ErroFerramenta(f"DocuSign recusou a correção: {erros[0]['errorDetails']}")
+        return {"aplicado": True, "reenviado": True, "email_corrigido": novo_email.strip()}
+    _req(f"/envelopes/{envelopeId}/recipients?resend_envelope=true", "PUT",
+         {"signers": [{"recipientId": alvo["recipientId"]}]})
+    return {"aplicado": True, "reenviado": True, "email": alvo.get("email")}
+
+
 srv = Servidor("urace-docusign", "0.1")
 
 

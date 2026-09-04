@@ -34,6 +34,7 @@ export interface Client {
   id: number; name: string; company: string | null; email: string | null; phone: string | null
   pilot_name: string | null; pilot_dob: string | null; vip: number; status: string
   stage_code: string | null; stage?: string | null; source: string | null; notes: string | null
+  status_locked?: number; last_service_at?: string | null; scanned_at?: string | null
   created_at: string; updated_at: string
   open_tasks?: number; done_tasks?: number; last_service?: string | null
   next_service?: string | null; waiver_status?: string | null
@@ -51,13 +52,16 @@ export interface Task {
 export interface Waiver {
   id: number; client_id: number | null; signer_name: string | null; signer_email: string | null
   template: string | null; status: string | null; sent_at: string | null; completed_at: string | null
-  expires_at: string | null; client_name?: string | null; links?: Link[]
+  expires_at: string | null; hidden?: number; minor_name?: string | null; link_reason?: string | null; link_by?: 'sync' | 'human' | null
+  client_name?: string | null; client_pilot?: string | null; links?: Link[]
 }
 
 export interface Email {
   id: number; client_id: number | null; mailbox: string; subject: string | null; sender: string | null
   last_at: string | null; labels: string | null; priority: string | null; intent: string | null
-  handled: number; client_name?: string | null; links?: Link[]
+  handled: number; snippet?: string | null; is_inbox?: number; messages?: number | null
+  suggested_label?: string | null; suggested_reason?: string | null; suggested_by?: 'rules' | 'ia' | 'label' | null; suggested_at?: string | null
+  client_name?: string | null; links?: Link[]
 }
 
 export interface Invoice {
@@ -112,4 +116,10 @@ export interface SyncStatus {
   running: boolean; started_at: string | null; finished_at: string | null
   result: Record<string, { ok: boolean; motivo?: string; tarefas?: number; clientes_novos?: number }> | null
   logs: { id: number; system: string; started_at: string; finished_at: string; ok: number; items: number; message: string }[]
+}
+
+export interface GmailLabel { name: string; id: string | null; type: string | null; inbox_count: number }
+export interface GmailMessage {
+  message_id: string; de: string | null; para: string | null; data: string | null; assunto: string | null
+  marcadores: string[] | null; snippet: string | null; corpo?: string; anexos?: { nome: string; mime: string; attachment_id: string | null; bytes: number | null }[] | null
 }

@@ -53,6 +53,20 @@ def conectar(caminho=None):
 MIGRACOES = [
     ("tasks", "fields", "TEXT"),          # campos personalizados do Asana (json)
     ("tasks", "section_gid", "TEXT"),
+    ("emails", "snippet", "TEXT"),
+    ("emails", "is_inbox", "INTEGER NOT NULL DEFAULT 1"),
+    ("emails", "messages", "INTEGER"),
+    ("emails", "suggested_label", "TEXT"),   # sugestão da IA/regras: para onde mover
+    ("emails", "suggested_reason", "TEXT"),
+    ("emails", "suggested_by", "TEXT"),      # rules | ia | label (já tinha marcador)
+    ("emails", "suggested_at", "TEXT"),
+    ("waivers", "hidden", "INTEGER NOT NULL DEFAULT 0"),   # lixeira do painel (restaurável)
+    ("waivers", "minor_name", "TEXT"),                     # nome do menor (parental), do form data
+    ("waivers", "link_reason", "TEXT"),                    # por que está ligada a este cliente
+    ("waivers", "link_by", "TEXT"),                        # sync | human
+    ("clients", "status_locked", "INTEGER NOT NULL DEFAULT 0"),  # status mudado à mão não é recalculado
+    ("clients", "last_service_at", "TEXT"),
+    ("clients", "scanned_at", "TEXT"),                     # última varredura Gmail/DocuSign deste cliente
 ]
 
 

@@ -203,3 +203,146 @@ def test_sync_em_segundo_plano(cli):
             break
         time.sleep(0.1)
     assert st["running"] is False and st["result"]["asana"]["motivo"] == "not connected"
+
+
+# ------------------------------------------------ Gmail por dentro (04/09)
+def test_gmail_labels_e_thread_sem_credencial(cli):
+    entra(cli, "admin@urace.us")
+    r = cli.get(B + "/gmail/labels?mailbox=urace").json()
+    assert r["connected"] is False and isinstance(r["labels"], list)
+    emails = cli.get(B + "/emails").json()
+    if emails:
+        t = cli.get(B + f"/emails/{emails[0]['id']}/thread").json()
+        assert t["connected"] is False and t["messages"] == []
+
+
+def test_mover_email_exige_gmail_e_operador(cli):
+    h = entra(cli, "admin@urace.us")
+    emails = cli.get(B + "/emails").json()
+    if emails:
+        e = emails[0]
+        assert cli.post(B + f"/emails/{e['id']}/move", headers=h, json={"label": "INBOX"}).status_code == 400
+        r = cli.post(B + f"/emails/{e['id']}/move", headers=h, json={"label": "wNews"})
+        assert r.status_code in (409, 503)                       # sem vínculo ou sem Gmail: nunca 500
+        assert cli.post(B + f"/emails/{e['id']}/move", headers=entra(cli, "viewer@urace.us"), json={"label": "wNews"}).status_code == 403
+
+
+def test_classificar_por_regras():
+    from command_center.providers import classificar
+    nomes = ["wNews", "Softwares|Apps/Docusign", "Finances/Pending Invoices ❗", "Marketing & Sales/Comercial/Formulario do site"]
+    assert classificar.por_regras({"labels": '["INBOX","Banks/Bank of America"]', "sender": "x", "subject": "y"}, nomes)[0] == "Banks/Bank of America"
+    lab, motivo, por = classificar.por_regras({"labels": "[]", "sender": "Docusign Account <info@account.docusign.com>", "subject": "New Device Login"}, nomes)
+    assert lab == "Softwares|Apps/Docusign" and por == "rules"
+    assert classificar.por_regras({"labels": "[]", "sender": "Urace <urace@urace.us>", "subject": 'New message from "Urace - The Driver Factory"'}, nomes)[0].endswith("Formulario do site")
+    assert classificar.por_regras({"labels": "[]", "sender": "financeiro@sxsmkt.com.br", "subject": "FATURAMENTO SETEMBRO/2026"}, nomes)[0].startswith("Finances")
+    assert classificar.por_regras({"labels": "[]", "sender": "joao@gmail.com", "subject": "oi"}, nomes) is None
+    # resposta da IA validada contra a lista real: marcador inventado vira None
+    res = classificar.parse_ia('bla {"itens":[{"id":1,"marcador":"wnews","motivo":"propaganda"},{"id":2,"marcador":"Inventado/Novo","motivo":"x"}]} fim', nomes)
+    assert res[1][0] == "wNews" and res[2][0] is None
+
+
+# ------------------------------------------------ DocuSign: lixeira, reenvio, vínculo, download
+def test_waiver_lixeira_restaurar_vinculo(cli):
+    h = entra(cli, "admin@urace.us")
+    ws = cli.get(B + "/waivers").json()
+    assert ws, "fixture tem waiver"
+    w = ws[0]
+    # sem DocuSign: em aberto E com vínculo não dá para anular -> 503, nada muda no painel.
+    # Sem vínculo com envelope (fixture), só some do painel e volta com restore.
+    r = cli.post(B + f"/waivers/{w['id']}/trash", headers=h, json={"reason": "teste"})
+    if w["status"] in ("sent", "delivered", "autoresponded") and w.get("links"):
+        assert r.status_code == 503
+        assert any(x["id"] == w["id"] for x in cli.get(B + "/waivers").json())
+    else:
+        assert r.status_code == 200
+        assert not any(x["id"] == w["id"] for x in cli.get(B + "/waivers").json())
+        assert any(x["id"] == w["id"] for x in cli.get(B + "/waivers?hidden=1").json())
+        assert cli.post(B + f"/waivers/{w['id']}/restore", headers=h).status_code == 200
+    # vínculo manual e desvínculo
+    clientes = cli.get(B + "/clients").json()
+    assert cli.post(B + f"/waivers/{w['id']}/link", headers=h, json={"client_id": clientes[0]["id"]}).status_code == 200
+    w2 = [x for x in cli.get(B + "/waivers").json() if x["id"] == w["id"]][0]
+    assert w2["client_id"] == clientes[0]["id"] and w2["link_by"] == "human"
+    assert cli.post(B + f"/waivers/{w['id']}/link", headers=h, json={"client_id": 999999}).status_code == 404
+    # download sem DocuSign: 503, nunca 500; reenvio idem; e-mail inválido 400
+    assert cli.get(B + f"/waivers/{w['id']}/download").status_code in (503, 409)
+    assert cli.post(B + f"/waivers/{w['id']}/resend", headers=h, json={"email": "invalido"}).status_code == 400
+    assert cli.post(B + f"/waivers/{w['id']}/resend", headers=h, json={}).status_code in (503, 409)
+    # restaurar algo que não está oculto: 404
+    assert cli.post(B + f"/waivers/{w['id']}/restore", headers=h).status_code == 404
+    assert cli.post(B + f"/waivers/{w['id']}/trash", headers=entra(cli, "viewer@urace.us"), json={}).status_code == 403
+
+
+def test_vinculo_por_nome_do_menor():
+    from command_center.providers.sync import _mesmo_nome
+    assert _mesmo_nome("Renato Frota Pionti", "Renato Pionti")
+    assert _mesmo_nome("RENATO PIONTI", "renato pionti")
+    assert not _mesmo_nome("Matthew Hubbard", "Renato Pionti")
+    assert not _mesmo_nome("", "Renato Pionti")
+
+
+# ------------------------------------------------ identidade: cliente, ativo, um card por pessoa (04/09)
+def test_identidade_pessoa_e_nome():
+    from command_center.providers import identidade as I
+    assert I.pessoa_do_titulo("Session Setup | Aaron Benoit_Kart [Practice_2T]") == "Aaron Benoit"
+    assert I.pessoa_do_titulo("Aaron Benoit_Trackside Support") == "Aaron Benoit"
+    assert I.pessoa_do_titulo("2026 SKUSA Winter Series RD1/2 | Musselman Honda Circuit") is None
+    assert I.pessoa_do_titulo("2026 ROK Florida Winter Tour Rd1, Orlando Kart Center (Orlando, FL)") is None
+    assert I.pessoa_do_titulo("Email:") is None
+    assert I.pessoa_do_titulo("Enzo Kurian [4 strokes 09/05/26]") == "Enzo Kurian"
+    assert I.mesmo_nome("Alex Alonso", "Alex Alonzo") and I.mesmo_nome("Renato Frota Pionti", "Renato Pionti")
+    assert not I.mesmo_nome("Aaron Benoit", "Aaron Smith") and not I.mesmo_nome("Alex Alonso", "Alexandre Alonso")
+    assert I.so_digitos("+1 (407) 555-0199") == "4075550199"
+
+
+def test_deduplicar_e_status(cli):
+    from command_center.db import conectar, inserir
+    from command_center.providers import identidade as I
+    con = conectar()
+    a = inserir(con, "clients", name="Alex Alonso", email="alex@example.com", status="ACTIVE", source="asana")
+    b = inserir(con, "clients", name="ALEX ALONSO", phone="(407) 555-0100", status="ACTIVE", source="asana")   # nome igual normalizado -> une
+    c = inserir(con, "clients", name="Alex Alonzo", status="ACTIVE", source="asana")                           # quase igual -> só candidato
+    corrida = inserir(con, "clients", name="2026 SKUSA Winter Series RD1/2", status="ACTIVE", source="asana")
+    inserir(con, "tasks", client_id=b, title="Alex Alonso_Kart", project="U-RACE", section="Finished Services", status="completed", due_on="2025-01-10")
+    inserir(con, "tasks", client_id=corrida, title="2026 SKUSA Winter Series RD1/2", project="U-RACE", section="Finished Services", status="completed", due_on="2026-01-10")
+    assert I.limpar_nao_clientes(con) >= 1 and not con.execute("SELECT 1 FROM clients WHERE id=?", (corrida,)).fetchone()
+    n = I.deduplicar(con)
+    assert n >= 1 and not con.execute("SELECT 1 FROM clients WHERE id=?", (b,)).fetchone()
+    # o sobrevivente pode ser a nota do cérebro com o mesmo nome (id menor): resolve pelo e-mail
+    keep = con.execute("SELECT * FROM clients WHERE email='alex@example.com'").fetchone()
+    a = keep["id"]
+    assert keep["phone"] == "(407) 555-0100"                                     # completou o principal
+    assert con.execute("SELECT client_id FROM tasks WHERE title='Alex Alonso_Kart'").fetchone()[0] == a
+    assert con.execute("SELECT COUNT(*) FROM client_merges").fetchone()[0] >= 1
+    pares = I.candidatos_duplicados(con)
+    assert any({p["a"]["id"], p["b"]["id"]} == {a, c} for p in pares)
+    I.recalcular_status(con)
+    assert con.execute("SELECT status FROM clients WHERE id=?", (a,)).fetchone()[0] == "INACTIVE"      # último serviço jan/2025
+    # rota de união manual + auditoria; status travado à mão sobrevive
+    h = entra(cli, "admin@urace.us")
+    assert cli.post(B + "/client-merge", headers=h, json={"keep_id": a, "drop_id": c, "reason": "mesma pessoa"}).status_code == 200
+    assert not con.execute("SELECT 1 FROM clients WHERE id=?", (c,)).fetchone()
+    assert cli.patch(B + f"/clients/{a}", headers=h, json={"status": "ACTIVE"}).status_code == 200
+    I.recalcular_status(con)
+    assert con.execute("SELECT status, status_locked FROM clients WHERE id=?", (a,)).fetchone()[0] == "ACTIVE"
+    dup = cli.get(B + "/client-duplicates").json()
+    assert "pairs" in dup and any(m["keep_id"] == a for m in dup["merged"])
+    # varredura sem credencial: responde com avisos, nunca 500
+    r = cli.post(B + f"/clients/{a}/scan", headers=h)
+    assert r.status_code == 200 and r.json()["gmail"] == 0 and r.json()["avisos"]
+    con.close()
+
+
+def test_clients_ordem_recente_primeiro(cli):
+    entra(cli, "admin@urace.us")
+    rows = cli.get(B + "/clients").json()
+    chaves = [max(r.get("next_service") or "", r.get("last_service") or "") for r in rows]
+    assert chaves == sorted(chaves, reverse=True)
+
+
+def test_task_detail_sem_asana(cli):
+    entra(cli, "admin@urace.us")
+    t = cli.get(B + "/tasks?status=all").json()[0]
+    r = cli.get(B + f"/tasks/{t['id']}/detail")
+    assert r.status_code == 200 and r.json()["connected"] is False
+    assert cli.get(B + "/tasks/999999/detail").status_code == 404
