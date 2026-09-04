@@ -146,6 +146,26 @@ As units agora passam `--session-key agent:urace-admin:waivers-AAAA-MM-DD`:
 cada manhã começa limpa; duas execuções no mesmo dia compartilham
 contexto. Também `--thinking medium` e `--timeout 900`.
 
+### O painel (Pit Wall)
+
+`adminai/painel/gerar_painel.py` lê o estado da máquina e escreve
+`~/.urace/painel/index.html`. Timer próprio, a cada 15 minutos. A seção
+**Em progresso** mostra o último relatório de cada rotina, com selo de
+idade — relatório velho vira alerta em vez de passar por atual.
+
+⚠️ **O gerador nunca tinha rodado até 04/09.** `TEMPLATE.format()`
+quebrava nas variáveis de CSS (`{--paper:…}`), lidas como campos. A
+página aprovada em 01/09 era o desenho, feito à mão. Mesma família do
+[[P-13 - Deploy verde sem agente existir]]: aprovado como ideia, nunca
+executado como código.
+
+O painel **observa, não trabalha**: lê log, systemd e os relatórios.
+Nunca chama API. Das credenciais mostra só a presença, nunca o valor.
+
+Testes do renderizador em `adminai/painel/tests/test_md.py` — cada caso
+é um padrão real que quebrou (negrito atravessando quebra de linha,
+negrito dentro de célula, `>` de citação, asterisco escapado).
+
 ## Como está montado
 
 - **Segredos** em `~/.urace/adminai.env`, permissão 600, **fora do

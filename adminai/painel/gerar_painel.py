@@ -246,51 +246,71 @@ def _agente():
 
 
 def _md(txt):
-    """Markdown mínimo → HTML. Escapa ANTES de transformar."""
-    linhas, saida, tabela = txt.split("\n"), [], []
+    """Markdown mínimo → HTML.
+
+    Trabalha por BLOCO, não por linha: o agente quebra frases no meio, e
+    negrito que atravessa a quebra (`**abriu e NÃO\\nassinou**`) só fecha
+    se as linhas do parágrafo forem juntadas antes. Escapa antes de
+    transformar.
+    """
+    def inline(t):
+        t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t, flags=re.S)
+        t = re.sub(r"`([^`]+)`", r"<code>\1</code>", t)
+        t = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", t)
+        return re.sub(r"\\([*_|`])", r"\1", t)          # \* escapado vira *
+
+    saida, par, itens, tabela = [], [], [], []
+
+    def fecha_par():
+        if par:
+            saida.append(f"<p>{inline(' '.join(par))}</p>")
+            par.clear()
+
+    def fecha_lista():
+        if itens:
+            li = "".join(f"<li>{inline(' '.join(x))}</li>" for x in itens)
+            saida.append(f"<ul>{li}</ul>")
+            itens.clear()
 
     def fecha_tabela():
         if not tabela:
             return
-        cab, corpo = tabela[0], tabela[2:] if len(tabela) > 2 else []
-        th = "".join(f"<th>{c}</th>" for c in cab)
-        tr = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in l) + "</tr>"
+        cab, corpo = tabela[0], [l for l in tabela[1:]
+                                 if not all(re.fullmatch(r":?-{2,}:?", c or "") for c in l)]
+        th = "".join(f"<th>{inline(c)}</th>" for c in cab)
+        tr = "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in l) + "</tr>"
                      for l in corpo)
         saida.append(f"<table class=rel-tab><thead><tr>{th}</tr></thead><tbody>{tr}</tbody></table>")
         tabela.clear()
 
-    lista = False
-    for bruto in linhas:
-        l = e(bruto.rstrip())
-        # inline
-        l = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", l)
-        l = re.sub(r"`([^`]+)`", r"<code>\1</code>", l)
-        l = re.sub(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", r"\1", l)
-        nu = l.strip()
-        if nu.startswith("|") and nu.endswith("|"):
-            tabela.append([c.strip() for c in nu.strip("|").split("|")])
+    def fecha_tudo():
+        fecha_par(); fecha_lista(); fecha_tabela()
+
+    for bruto in txt.split("\n"):
+        l = e(bruto.rstrip()).strip()
+        l = re.sub(r"^&gt;\s?", "", l)                   # citação: só o texto
+        if l.startswith("|") and l.endswith("|"):
+            fecha_par(); fecha_lista()
+            tabela.append([c.strip() for c in l.strip("|").split("|")])
             continue
         fecha_tabela()
-        if not nu:
-            if lista:
-                saida.append("</ul>"); lista = False
+        if not l:
+            fecha_par(); fecha_lista()
             continue
-        if nu.startswith("#"):
-            if lista:
-                saida.append("</ul>"); lista = False
-            saida.append(f"<h4>{nu.lstrip('#').strip()}</h4>")
-        elif re.match(r"^([-*•]|\d+\.)\s", nu):
-            if not lista:
-                saida.append("<ul>"); lista = True
-            item = re.sub(r"^([-*\u2022]|\d+\.)\s+", "", nu)
-            saida.append(f"<li>{item}</li>")
+        if l.startswith("#"):
+            fecha_tudo()
+            saida.append(f"<h4>{inline(l.lstrip('#').strip())}</h4>")
+            continue
+        m = re.match(r"^([-*\u2022]|\d+\.)\s+(.*)$", l)
+        if m:
+            fecha_par()
+            itens.append([m.group(2)])
+            continue
+        if itens:                       # linha solta depois de item: continua o item
+            itens[-1].append(l)
         else:
-            if lista:
-                saida.append("</ul>"); lista = False
-            saida.append(f"<p>{nu}</p>")
-    if lista:
-        saida.append("</ul>")
-    fecha_tabela()
+            par.append(l)
+    fecha_tudo()
     return "\n".join(saida)
 
 
@@ -444,7 +464,7 @@ def render(rotinas, sync, cerebro, creds, aplicar, alertas, abertos, destaques,
     </div>""" for p in destaques)
 
     return TEMPLATE.format(
-        css=CSS, blocos_rel=blocos_rel,
+        css=CSS.replace("__VCLASSE__", vclasse), blocos_rel=blocos_rel,
         vclasse=vclasse, vtexto=e(vtexto),
         n_rot=len(rotinas), n_skills=len(os.listdir(os.path.join(REPO, "skills"))) - 1,
         modo=("escrevendo nos sistemas" if aplicar else
@@ -471,8 +491,8 @@ body{background:var(--paper);color:var(--ink);font-family:"Barlow",system-ui,-ap
 .mark span{font-family:"Barlow Condensed",sans-serif;font-weight:600;font-size:30px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink)}
 .stamp{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
 .stamp em{display:block;font-style:normal;color:var(--ink-2);font-weight:500}
-.verdict{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--{vclasse});border-radius:3px;padding:14px 18px;box-shadow:var(--shadow);margin-bottom:26px}
-.verdict .big{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:23px;text-transform:uppercase;letter-spacing:.03em;color:var(--{vclasse})}
+.verdict{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--rule);border-left:4px solid var(--__VCLASSE__);border-radius:3px;padding:14px 18px;box-shadow:var(--shadow);margin-bottom:26px}
+.verdict .big{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:23px;text-transform:uppercase;letter-spacing:.03em;color:var(--__VCLASSE__)}
 .verdict p{margin:0;color:var(--ink-2);font-size:14.5px;max-width:62ch}
 .verdict .sep{width:1px;align-self:stretch;background:var(--rule)}
 h2{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:15px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:10px}
