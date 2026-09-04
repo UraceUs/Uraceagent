@@ -201,6 +201,7 @@ instalar_timer urace-asana-sync    ASANA_TOKEN
 instalar_timer urace-triagem-email GOOGLE_TOKEN_JSON
 instalar_timer urace-waivers       DOCUSIGN_INTEGRATION_KEY
 instalar_timer urace-brain-health  ""
+instalar_timer urace-painel       ""
 sudo systemctl daemon-reload
 
 # ----------------------------------------------------------------- 6. prova

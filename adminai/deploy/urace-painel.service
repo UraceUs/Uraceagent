@@ -1,0 +1,13 @@
+[Unit]
+Description=URACE — gera o Pit Wall (painel de monitoramento)
+Documentation=file:///home/ubuntu/Uraceagent/adminai/painel/gerar_painel.py
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+EnvironmentFile=/home/ubuntu/.urace/adminai.env
+ExecStart=/usr/bin/python3 adminai/painel/gerar_painel.py
+StandardOutput=append:/home/ubuntu/.urace/logs/painel.log
+StandardError=append:/home/ubuntu/.urace/logs/painel.log
