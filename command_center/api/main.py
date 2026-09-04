@@ -14,13 +14,41 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from command_center.api import auth, ia, rotas
-from command_center.db import aplicar_schema, conectar, get_db, todos, um
+from command_center.db import auditar, aplicar_schema, conectar, get_db, todos, um
 
 BASE = "/ops"
 AQUI = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.normpath(os.path.join(AQUI, "..", "web", "dist"))
 
 from contextlib import asynccontextmanager
+
+
+def _autosync():
+    """A cada N minutos: espelha as fontes e acorda a IA para o que mudou.
+    É o que faz "a IA agir a cada alteração" sem ninguém clicar."""
+    import threading
+    import time
+    from command_center.api import motor
+    from command_center.db import um
+    from command_center.providers import sync as sy
+    minutos = int(os.environ.get("CC_AUTOSYNC_MIN", "15"))
+    time.sleep(20)                                        # deixa o serviço subir
+    while True:
+        con = conectar()
+        try:
+            admin = um(con, "SELECT id FROM users WHERE role='ADMIN' AND active=1 ORDER BY id LIMIT 1")
+            if admin:
+                res = sy.sync_tudo(con)
+                res["eventos_disparados"] = motor.processar_eventos(con, admin["id"])
+                auditar(con, "sync.auto", "system", detail=res)
+        except Exception as e:                            # nunca derruba o laço
+            try:
+                auditar(con, "sync.auto.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+            except Exception:
+                pass
+        finally:
+            con.close()
+        time.sleep(minutos * 60)
 
 
 @asynccontextmanager
@@ -30,6 +58,9 @@ async def _ciclo(app):
         aplicar_schema(con)
     finally:
         con.close()
+    if os.environ.get("CC_AUTOSYNC", "1") == "1":
+        import threading
+        threading.Thread(target=_autosync, daemon=True, name="cc-autosync").start()
     yield
 
 

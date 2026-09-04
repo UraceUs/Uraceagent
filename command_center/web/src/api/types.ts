@@ -123,3 +123,7 @@ export interface GmailMessage {
   message_id: string; de: string | null; para: string | null; data: string | null; assunto: string | null
   marcadores: string[] | null; snippet: string | null; corpo?: string; anexos?: { nome: string; mime: string; attachment_id: string | null; bytes: number | null }[] | null
 }
+
+export interface Learning { id: number; scope: string; text: string; source_key: string | null; created_by: number | null; created_by_name?: string | null; created_at: string; active: number }
+export interface AiEvent { id: number; kind: string; entity_type: string | null; entity_id: number | null; client_id: number | null; client_name?: string | null; pilot_name?: string | null; summary: string | null; detected_at: string; status: 'NEW' | 'RUNNING' | 'DONE' | 'FAILED' | 'SKIPPED'; command_id: number | null; command_status?: string | null; actions?: number; handled_at: string | null; note: string | null }
+export interface AutomationRule { id: number; name: string; enabled: number; trigger: string; conditions: string | null; actions: string; created_at: string }

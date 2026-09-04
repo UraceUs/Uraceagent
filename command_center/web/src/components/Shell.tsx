@@ -59,6 +59,7 @@ export function Shell() {
         <div className="grp">Inteligência</div>
         <NavLink to="/ai" end>AI Command</NavLink>
         <NavLink to="/approvals">Aprovações {pend > 0 && <span className="n">{pend}</span>}</NavLink>
+        <NavLink to="/automation">Automação e memória</NavLink>
         <NavLink to="/activity">Atividade da IA</NavLink>
         <div className="grp">Administração</div>
         <NavLink to="/integrations">Integrações {badInt > 0 && <span className="n">{badInt}</span>}</NavLink>

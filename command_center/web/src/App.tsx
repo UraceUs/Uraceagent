@@ -7,6 +7,7 @@ import { ToastProvider } from './components/Toast'
 import { Empty } from './components/ui'
 import { AICommand, Activity, Approvals } from './pages/AI'
 import { AttentionPage } from './pages/Attention'
+import { Automation } from './pages/Automation'
 import { Client360 } from './pages/Client360'
 import { Clients } from './pages/Clients'
 import { Dashboard } from './pages/Dashboard'
@@ -44,6 +45,7 @@ export default function App() {
           <Route path="ai/:id" element={<AICommand />} />
           <Route path="approvals" element={<Approvals />} />
           <Route path="activity" element={<Activity />} />
+          <Route path="automation" element={<Automation />} />
           <Route path="integrations" element={<Integrations />} />
           <Route path="audit" element={<Guard min="MANAGER"><Audit /></Guard>} />
           <Route path="policies" element={<Guard min="ADMIN"><Policies /></Guard>} />

@@ -134,13 +134,22 @@ def _liga(con, tipo, id_, sistema, ext, link=None):
 SECAO_SEM_ESPELHO = "matt tasks"     # dado sensível, fora de qualquer automação (dono, 28/08)
 
 
+def _evento(con, kind, entity_type, entity_id, client_id, summary):
+    from command_center.api import motor
+    motor.registrar_evento(con, kind, entity_type, entity_id, client_id, summary)
+
+
 def _grava_tarefa(con, gid, campos):
+    """Devolve (id, nova). Tarefa nova de cliente em coluna de dia acorda a IA (task.created)."""
     tid = um(con, "SELECT entity_id FROM entity_links WHERE system='asana' AND external_id=? AND entity_type='task'", (gid,))
     if tid:
         atualizar(con, "tasks", tid["entity_id"], **campos)
-    else:
-        nid = inserir(con, "tasks", **campos)
-        _liga(con, "task", nid, "asana", gid, ASANA_LINK.format(proj=PROJETO_URACE, gid=gid))
+        return tid["entity_id"], False
+    nid = inserir(con, "tasks", **campos)
+    _liga(con, "task", nid, "asana", gid, ASANA_LINK.format(proj=PROJETO_URACE, gid=gid))
+    if campos.get("client_id") and campos.get("section_gid") in SECOES_DIAS and campos.get("status") == "open":
+        _evento(con, "task.created", "task", nid, campos["client_id"], f"{campos.get('title')} em {campos.get('section')} ({campos.get('due_on')})")
+    return nid, True
 
 
 def _nome_valido(n):
@@ -313,9 +322,16 @@ def sync_docusign(con, desde_dias=365):
                     ligados += 1 if cid else 0
                 if atual:
                     atualizar(con, "waivers", atual["id"], **campos)
+                    wid_final = atual["id"]
                 else:
-                    nid = inserir(con, "waivers", **campos)
-                    _liga(con, "waiver", nid, "docusign", e["envelopeId"], DOCUSIGN_LINK.format(env=e["envelopeId"]))
+                    wid_final = inserir(con, "waivers", **campos)
+                    _liga(con, "waiver", wid_final, "docusign", e["envelopeId"], DOCUSIGN_LINK.format(env=e["envelopeId"]))
+                status_antes = atual["status"] if atual else None
+                cid_final = campos.get("client_id", atual["client_id"] if atual else None)
+                if campos["status"] == "autoresponded" and status_antes != "autoresponded":
+                    _evento(con, "waiver.bounced", "waiver", wid_final, cid_final, f"waiver de {s.get('nome')} devolveu ({email})")
+                if campos["status"] == "completed" and status_antes not in (None, "completed") and cid_final:
+                    _evento(con, "waiver.completed", "waiver", wid_final, cid_final, f"waiver de {s.get('nome')} assinada")
                 n += 1
         _marca(con, "docusign", True, n, f"{n} envelopes, {ligados} ligados a cliente · {r.get('ambiente')}", inicio,
                detalhe={"ambiente": r.get("ambiente")})
@@ -364,6 +380,8 @@ def sync_gmail(con, dias=14):
                     rid = inserir(con, "emails", **campos)
                     _liga(con, "email", rid, "gmail", t["thread_id"],
                           f"https://mail.google.com/mail/u/{0 if conta == 'urace' else 1}/#inbox/{t['thread_id']}")
+                    if cli:
+                        _evento(con, "email.received", "email", rid, cli["id"], f"{cli['name']}: {t.get('assunto')} ({conta}@)")
                 atual = um(con, "SELECT suggested_by FROM emails WHERE id=?", (rid,))
                 if not atual or atual["suggested_by"] != "ia":          # a IA, quando opinou, prevalece
                     sug = classificar.por_regras({**campos, "id": rid}, marcadores)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Attention as A, Level } from '../api/types'
@@ -11,10 +11,31 @@ import { useToast } from '../components/Toast'
 const LEVELS: Level[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const LABEL: Record<Level, string> = { CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Médio', LOW: 'Baixo' }
 
+function Balao({ a, onDone }: { a: A; onDone: () => void }) {
+  const toast = useToast()
+  const nav = useNavigate()
+  const [text, setText] = useState('')
+  const [remember, setRemember] = useState(true)
+  const [busy, setBusy] = useState(false)
+  async function send() {
+    if (!text.trim()) return
+    setBusy(true)
+    try {
+      const r = await api.post<{ command_id: number; remembered: boolean }>('/needs-attention/instruct', { key: a.key, text, remember, title: a.title, why: a.why, client_id: a.client_id, entity_type: a.entity.type, entity_id: a.entity.id === null ? null : String(a.entity.id) })
+      toast(r.remembered ? 'Instrução enviada à IA e guardada na memória dela.' : 'Instrução enviada à IA.', 'ok'); onDone(); nav(`/ai/${r.command_id}`)
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  return <div className="balao" onClick={e => e.stopPropagation()}>
+    <textarea className="input" rows={3} autoFocus value={text} onChange={e => setText(e.target.value)} placeholder={`Diga à IA o que fazer com isto. Ex.: "o valor deste serviço é $350, produto Practice 2T; envie a invoice e a waiver parental".`} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }} />
+    <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> guardar na memória da IA {a.client_id ? '(deste cliente)' : `(itens do tipo ${a.entity.type})`}</label><span className="grow" /><button className="btn ghost sm" onClick={onDone}>cancelar</button><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : '✦ Enviar à IA'}</button></div>
+  </div>
+}
+
 export function AttentionList({ items, onChange }: { items: A[]; onChange?: () => void }) {
   const { can } = useAuth()
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
+  const [balao, setBalao] = useState<string | null>(null)
   async function hide(a: A) {
     const reason = window.prompt(`Ocultar este aviso?\n\n"${a.title}"\n\nA tarefa, o envelope ou o e-mail de origem NÃO são apagados. Motivo (opcional):`)
     if (reason === null) return
@@ -42,9 +63,11 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
         {a.entity.type === 'ai' && <Link to="/ai">Ver comandos</Link>}
         {a.entity.type === 'integration' && <Link to="/integrations">Integrações</Link>}
         <span className="grow" />
+        {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title="Diga à IA o que fazer com este item">✦ Instruir a IA</button>}
         {can('OPERATOR') && !a.dismissed && <button className="btn ghost sm" disabled={busy === a.key} onClick={() => hide(a)} title="Esconde o aviso; não apaga a origem">Ocultar</button>}
         {can('OPERATOR') && a.dismissed && <button className="btn sm" disabled={busy === a.key} onClick={() => restore(a)}>Restaurar</button>}
       </div>
+      {balao === a.key && <Balao a={a} onDone={() => setBalao(null)} />}
     </div>
   </div>)}</div>
 }

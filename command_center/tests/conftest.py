@@ -15,3 +15,4 @@ for k in ("URACE_ENV", "GOOGLE_TOKEN_JSON", "GOOGLE_TOKEN_JSON_SUPPORT"):
 for k in list(os.environ):
     if k.startswith(("ASANA_", "DOCUSIGN_", "QBO_", "GOOGLE_CLIENT", "OPENCLAW_GATEWAY")) or k == "APLICAR":
         del os.environ[k]
+os.environ["CC_AUTOSYNC"] = "0"          # teste não roda o laço de sincronia

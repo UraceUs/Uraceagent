@@ -357,3 +357,42 @@ CREATE TABLE IF NOT EXISTS client_merges (
   reason     TEXT,
   merged_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- ------------------------------------------------------ memória da IA
+-- O que o dono ensinou pelo balão de instrução. Entra em todo prompt
+-- relevante (global, por cliente ou por tipo de item). Desativável, nunca
+-- apagado: é a trilha de como a IA aprendeu.
+CREATE TABLE IF NOT EXISTS ai_learnings (
+  id          INTEGER PRIMARY KEY,
+  scope       TEXT NOT NULL DEFAULT 'global',   -- global | client:<id> | entity:<type>
+  text        TEXT NOT NULL,
+  source_key  TEXT,                              -- chave do item de atenção que originou
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  active      INTEGER NOT NULL DEFAULT 1
+);
+
+-- ------------------------------------------------------ eventos que acordam a IA
+CREATE TABLE IF NOT EXISTS ai_events (
+  id           INTEGER PRIMARY KEY,
+  kind         TEXT NOT NULL,             -- task.created | email.received | waiver.bounced | waiver.completed
+  entity_type  TEXT,
+  entity_id    INTEGER,
+  client_id    INTEGER REFERENCES clients(id),
+  summary      TEXT,
+  detected_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  status       TEXT NOT NULL DEFAULT 'NEW'
+               CHECK (status IN ('NEW','RUNNING','DONE','FAILED','SKIPPED')),
+  command_id   INTEGER REFERENCES ai_commands(id),
+  handled_at   TEXT,
+  note         TEXT
+);
+CREATE INDEX IF NOT EXISTS ai_events_status ON ai_events(status, detected_at);
+CREATE UNIQUE INDEX IF NOT EXISTS ai_events_unico ON ai_events(kind, entity_type, entity_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS automation_rules_name ON automation_rules(name);
+INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+  ('novo_servico',     1, '{"event":"task.created"}',   '{"sections":"dias"}', '{"ia":"preparar waiver e invoice do serviço; propor ações"}'),
+  ('email_cliente',    1, '{"event":"email.received"}', '{"client_known":true}', '{"ia":"ler a thread, classificar, propor resposta em rascunho"}'),
+  ('waiver_devolvida', 1, '{"event":"waiver.bounced"}', NULL, '{"ia":"achar e-mail correto no Asana/Gmail e propor reenvio"}'),
+  ('waiver_assinada',  1, '{"event":"waiver.completed"}', NULL, '{"ia":"comentar na tarefa do Asana que a waiver chegou"}');

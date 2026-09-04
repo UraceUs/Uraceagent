@@ -51,10 +51,12 @@ _SYNC_LOCK = threading.Lock()
 
 
 def _sync_thread(user_id, ip):
+    from command_center.api import motor
     con = conectar()
     try:
         res = sy.sync_tudo(con)
         auditar(con, "sync.run", f"user:{user_id}", user_id=user_id, detail=res, ip=ip)
+        res["eventos_disparados"] = motor.processar_eventos(con, user_id)
         _SYNC["result"] = res
     except Exception as e:                        # nunca deixa a flag presa em "running"
         _SYNC["result"] = {"ok": False, "motivo": f"{type(e).__name__}: {str(e)[:300]}"}
@@ -73,8 +75,10 @@ def sync(request: Request, wait: bool = False, u=Depends(auth.exige("OPERATOR"))
     estado sai em GET /sync. wait=1 espera terminar (testes e scripts).
     """
     if wait:
+        from command_center.api import motor
         res = sy.sync_tudo(con)
         auditar(con, "sync.run", f"user:{u['id']}", user_id=u["id"], detail=res, ip=auth._ip(request))
+        res["eventos_disparados"] = motor.processar_eventos(con, u["id"])
         return res
     with _SYNC_LOCK:
         if _SYNC["running"]:
@@ -126,9 +130,9 @@ def needs_attention(hidden: bool = False, u=Depends(auth.usuario_atual), con: sq
 
 class OcultarIn(BaseModel):
     key: str
-    reason: str = None
-    level: str = None
-    title: str = None
+    reason: str | None = None
+    level: str | None = None
+    title: str | None = None
 
 
 @r.post("/needs-attention/dismiss")
@@ -163,7 +167,7 @@ def attention_restore(dados: RestaurarIn, request: Request, u=Depends(auth.exige
 
 # ----------------------------------------------------------- clientes
 @r.get("/clients")
-def clients(status: str = None, q: str = None, vip: bool = None,
+def clients(status: str | None = None, q: str | None = None, vip: bool | None = None,
             u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     where, p = ["1=1"], []
     if status:
@@ -222,10 +226,10 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
 
 
 class ClienteIn(BaseModel):
-    status: str = None
-    stage_code: str = None
-    notes: str = None
-    vip: bool = None
+    status: str | None = None
+    stage_code: str | None = None
+    notes: str | None = None
+    vip: bool | None = None
 
 
 @r.patch("/clients/{cid}")
@@ -268,7 +272,7 @@ def search(q: str, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
 
 # ------------------------------------------------------------- listas
 @r.get("/tasks")
-def tasks(status: str = "open", project: str = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+def tasks(status: str = "open", project: str | None = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """status=open|completed|all. Espelho do quadro inteiro (menos Matt tasks)."""
     where, p = [], []
     if status != "all":
@@ -293,7 +297,7 @@ def waivers(hidden: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Co
 
 
 @r.get("/emails")
-def emails(mailbox: str = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+def emails(mailbox: str | None = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     sql = "SELECT e.*, c.name AS client_name FROM emails e LEFT JOIN clients c ON c.id=e.client_id"
     p = []
     if mailbox:
@@ -340,7 +344,7 @@ def policies(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(ge
 
 class PoliticaIn(BaseModel):
     policy: str
-    note: str = None
+    note: str | None = None
 
 
 @r.put("/policies/{action}")
@@ -521,7 +525,7 @@ def waiver_download(wid: int, request: Request, u=Depends(auth.usuario_atual), c
 
 
 class LixeiraIn(BaseModel):
-    reason: str = None
+    reason: str | None = None
 
 
 @r.post("/waivers/{wid}/trash")
@@ -559,8 +563,8 @@ def waiver_restore(wid: int, request: Request, u=Depends(auth.exige("OPERATOR"))
 
 
 class ReenviarIn(BaseModel):
-    email: str = None
-    name: str = None
+    email: str | None = None
+    name: str | None = None
 
 
 @r.post("/waivers/{wid}/resend")
@@ -590,7 +594,7 @@ def waiver_resend(wid: int, dados: ReenviarIn, request: Request, u=Depends(auth.
 
 
 class VinculoIn(BaseModel):
-    client_id: int = None   # null = desvincular
+    client_id: int | None = None   # null = desvincular
 
 
 @r.post("/waivers/{wid}/link")
@@ -623,7 +627,7 @@ def clients_duplicates(u=Depends(auth.usuario_atual), con: sqlite3.Connection = 
 class UnirIn(BaseModel):
     keep_id: int
     drop_id: int
-    reason: str = None
+    reason: str | None = None
 
 
 @r.post("/client-merge")
@@ -811,3 +815,93 @@ def task_detail(tid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection
         return {"connected": False, "reason": str(e)}
     except Exception as e:
         raise HTTPException(502, f"Asana: {str(e)[:300]}")
+
+
+
+# ============================================================ IA que age: instrução, memória, eventos, regras
+from command_center.api import motor  # noqa: E402
+
+
+class InstruirIn(BaseModel):
+    key: str
+    text: str
+    remember: bool = True
+    title: str | None = None
+    why: str | None = None
+    client_id: int | None = None
+    entity_type: str | None = None
+    entity_id: str | None = None
+
+
+@r.post("/needs-attention/instruct", status_code=202)
+def attention_instruct(dados: InstruirIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Balão do item: manda a instrução para o agente com o contexto do item; com remember, vira memória."""
+    texto = (dados.text or "").strip()
+    if not texto or len(texto) > 4000:
+        raise HTTPException(400, "Escreva a instrução (até 4000 caracteres).")
+    item = {"title": dados.title, "why": dados.why, "client_id": dados.client_id,
+            "entity": {"type": dados.entity_type, "id": dados.entity_id}}
+    cid = motor.instruir(con, u["id"], dados.key, texto, item, dados.remember)
+    return {"command_id": cid, "remembered": bool(dados.remember)}
+
+
+@r.get("/ai/learnings")
+def learnings(all: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    sql = "SELECT l.*, us.name AS created_by_name FROM ai_learnings l LEFT JOIN users us ON us.id=l.created_by"
+    if not all:
+        sql += " WHERE l.active=1"
+    return todos(con, sql + " ORDER BY l.id DESC LIMIT 300")
+
+
+class AprenderIn(BaseModel):
+    text: str
+    client_id: int | None = None
+    entity_type: str | None = None
+
+
+@r.post("/ai/learnings", status_code=201)
+def learning_create(dados: AprenderIn, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not (dados.text or "").strip():
+        raise HTTPException(400, "Texto vazio.")
+    return {"id": motor.aprender(con, dados.text, u["id"], dados.client_id, dados.entity_type)}
+
+
+@r.post("/ai/learnings/{lid}/toggle")
+def learning_toggle(lid: int, request: Request, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    l = um(con, "SELECT * FROM ai_learnings WHERE id=?", (lid,))
+    if not l:
+        raise HTTPException(404, "Not found.")
+    con.execute("UPDATE ai_learnings SET active=? WHERE id=?", (0 if l["active"] else 1, lid))
+    auditar(con, "ai.learning.toggle", f"user:{u['id']}", user_id=u["id"], entity_type="ai_learning", entity_id=lid, detail={"active": not l["active"]}, ip=auth._ip(request))
+    return {"ok": True, "active": not l["active"]}
+
+
+@r.get("/ai/events")
+def ai_events(limit: int = 100, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    return todos(con, """SELECT e.*, c.name AS client_name, c.pilot_name, cmd.status AS command_status,
+                                (SELECT COUNT(*) FROM ai_actions a WHERE a.command_id=e.command_id) AS actions
+                         FROM ai_events e LEFT JOIN clients c ON c.id=e.client_id LEFT JOIN ai_commands cmd ON cmd.id=e.command_id
+                         ORDER BY e.id DESC LIMIT ?""", (max(1, min(limit, 500)),))
+
+
+@r.post("/ai/events/process", status_code=202)
+def ai_events_process(u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    return {"disparados": motor.processar_eventos(con, u["id"])}
+
+
+@r.get("/automation/rules")
+def automation_rules(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    return todos(con, "SELECT * FROM automation_rules ORDER BY id")
+
+
+class RegraIn(BaseModel):
+    enabled: bool
+
+
+@r.put("/automation/rules/{name}")
+def automation_rule_put(name: str, dados: RegraIn, request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
+    if not um(con, "SELECT id FROM automation_rules WHERE name=?", (name,)):
+        raise HTTPException(404, "Unknown rule.")
+    con.execute("UPDATE automation_rules SET enabled=? WHERE name=?", (1 if dados.enabled else 0, name))
+    auditar(con, "automation.rule", f"user:{u['id']}", user_id=u["id"], entity_type="automation_rule", entity_id=name, detail={"enabled": dados.enabled}, ip=auth._ip(request))
+    return {"ok": True}

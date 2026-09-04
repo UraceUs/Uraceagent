@@ -91,8 +91,10 @@ RUNNER = runner_openclaw
 SUFIXO = (
     "\n\n[Command Center] Ao terminar, liste TODAS as ações que você executaria em produção, "
     "uma por linha, exatamente neste formato e nada mais nessas linhas:\n"
-    "ACAO: <nome_da_ferramenta_mcp> | <alvo (pessoa, gid, e-mail)> | <resumo curto>\n"
-    "Se não houver ação nenhuma, escreva: ACAO: nenhuma")
+    "ACAO: <nome_da_ferramenta_mcp> | <alvo (pessoa, gid, e-mail)> | <resumo curto> | <JSON com os argumentos EXATOS da ferramenta>\n"
+    "O JSON é obrigatório e precisa ter os mesmos nomes de parâmetro da ferramenta (ex.: "
+    '{"templateId":"…","nome":"…","email":"…","idade_confirmada":true,"nome_email_conferidos":true,"servico":"…"}). '
+    "Quem aprovar no painel executa exatamente esse JSON. Se não houver ação nenhuma, escreva: ACAO: nenhuma")
 
 
 # ------------------------------------------------- ações propostas
@@ -130,7 +132,7 @@ def extrair_acoes(con, command_id, texto):
     """
     achadas, vistos = [], set()
 
-    def registra(nome, descricao, fonte, alvo=None):
+    def registra(nome, descricao, fonte, alvo=None, args=None):
         chave = (nome, (alvo or descricao)[:80])
         if chave in vistos:
             return
@@ -139,8 +141,8 @@ def extrair_acoes(con, command_id, texto):
         aid = inserir(con, "ai_actions", command_id=command_id, action=nome,
                       system=nome.split("_")[0] if "_" in nome else None, policy=pol,
                       status="BLOCKED" if pol == "BLOCKED" else "PROPOSED",
-                      payload=json.dumps({"alvo": alvo, "descricao": descricao[:500], "fonte": fonte}, ensure_ascii=False),
-                      reason="proposta pelo agente em simulação (APLICAR=0)")
+                      payload=json.dumps({"alvo": alvo, "descricao": descricao[:500], "fonte": fonte, "args": args}, ensure_ascii=False),
+                      reason="proposta pelo agente" + ("" if args else " (sem argumentos estruturados)"))
         if pol == "REQUIRES_APPROVAL":
             inserir(con, "approvals", action_id=aid)
         achadas.append({"id": aid, "action": nome, "policy": pol, "alvo": alvo, "descricao": descricao[:200]})
@@ -152,9 +154,17 @@ def extrair_acoes(con, command_id, texto):
             corpo = m.group(1).strip()
             if corpo.lower().startswith("nenhuma"):
                 continue
+            args = None
+            mj = re.search(r"\|\s*(\{.*\})\s*$", corpo)
+            if mj:
+                try:
+                    args = json.loads(mj.group(1))
+                except ValueError:
+                    args = None
+                corpo = corpo[:mj.start()].rstrip()
             partes = [p.strip() for p in corpo.split("|")]
             nome = re.sub(r"[^a-z0-9_]", "", partes[0].lower()) or "acao_desconhecida"
-            registra(nome, " | ".join(partes[1:]) or corpo, "protocolo", partes[1] if len(partes) > 1 else None)
+            registra(nome, " | ".join(partes[1:]) or corpo, "protocolo", partes[1] if len(partes) > 1 else None, args if isinstance(args, dict) else None)
             continue
         if "teria_feito" in l:
             desc = None
@@ -212,6 +222,8 @@ def command_create(dados: ComandoIn, request: Request, u=Depends(auth.exige("OPE
     texto = (dados.text or "").strip()
     if not texto or len(texto) > 4000:
         raise HTTPException(400, "Command must be between 1 and 4000 characters.")
+    from command_center.api import motor
+    texto = texto + motor.aprendizados(con)
     session_key = f"agent:{AGENTE}:web-{u['id']}-{date.today().isoformat()}"
     cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, session_key=session_key)
     auditar(con, "ai.command", f"user:{u['id']}", user_id=u["id"], entity_type="ai_command",
@@ -240,14 +252,14 @@ def command_get(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection
 
 
 @r.get("/actions")
-def actions(status: str = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+def actions(status: str | None = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     if status:
         return todos(con, "SELECT * FROM ai_actions WHERE status=? ORDER BY id DESC LIMIT 200", (status.upper(),))
     return todos(con, "SELECT * FROM ai_actions ORDER BY id DESC LIMIT 200")
 
 
 class DecisaoIn(BaseModel):
-    comment: str = None
+    comment: str | None = None
 
 
 def _decide(con, aid, u, decisao, comentario, ip):
@@ -268,8 +280,11 @@ def _decide(con, aid, u, decisao, comentario, ip):
     atualizar(con, "ai_actions", aid, status="APPROVED" if decisao == "APPROVED" else "REJECTED")
     auditar(con, f"action.{decisao.lower()}", f"user:{u['id']}", user_id=u["id"], entity_type="ai_action",
             entity_id=aid, detail={"action": a["action"], "policy": a["policy"], "comment": comentario}, ip=ip)
-    return {"ok": True, "status": "APPROVED" if decisao == "APPROVED" else "REJECTED",
-            "note": "Execução de ações aprovadas chega com o motor (Fase 6). Até lá fica registrada e auditada."}
+    if decisao == "APPROVED":
+        from command_center.api import motor
+        threading.Thread(target=motor.executar_acao, args=(aid, u["id"]), daemon=True).start()
+        return {"ok": True, "status": "APPROVED", "note": "Aprovada: executando agora pelo sistema. O resultado aparece na ação em segundos."}
+    return {"ok": True, "status": "REJECTED"}
 
 
 @r.post("/actions/{aid}/approve")

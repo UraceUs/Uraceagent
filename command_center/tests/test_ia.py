@@ -126,3 +126,100 @@ def test_historico_e_por_usuario_salvo_para_manager(cli):
     assert cli.get(B + "/commands").json() == []                  # viewer não comandou nada
     entra(cli, "admin@urace.us")
     assert len(cli.get(B + "/commands").json()) >= 2              # manager+ vê todos
+
+
+R = "/ops/api"
+
+
+# ------------------------------------------------ IA que age (04/09): eventos, balão, memória, execução
+def test_acao_com_json_e_execucao_aprovada(cli):
+    from command_center.api import ia, motor
+    from command_center.db import conectar
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, "Feito.\nACAO: asana_comentar | 123 | avisar | {\"gid\":\"123\",\"texto\":\"waiver chegou\"}\nACAO: docusign_enviar_waiver | x@y.com | parental", None)
+    r = cli.post(B + "/commands", headers=h, json={"text": "teste de protocolo"})
+    cid = r.json()["id"]
+    import time
+    for _ in range(50):
+        c = cli.get(B + f"/commands/{cid}").json()
+        if c["status"] in ("DONE", "FAILED"):
+            break
+        time.sleep(0.1)
+    acts = {a["action"]: a for a in c["actions"]}
+    import json
+    assert json.loads(acts["asana_comentar"]["payload"])["args"] == {"gid": "123", "texto": "waiver chegou"}
+    assert json.loads(acts["docusign_enviar_waiver"]["payload"])["args"] is None
+    assert acts["docusign_enviar_waiver"]["policy"] == "REQUIRES_APPROVAL"
+    # aprovar a que não tem args: executa e falha com explicação (nunca 500, nunca "some")
+    aid = acts["docusign_enviar_waiver"]["id"]
+    r = cli.post(B + f"/actions/{aid}/approve", headers=h, json={})
+    assert r.status_code == 200 and "executando" in r.json()["note"]
+    for _ in range(50):
+        a = [x for x in cli.get(B + "/actions").json() if x["id"] == aid][0]
+        if a["status"] in ("DONE", "FAILED"):
+            break
+        time.sleep(0.1)
+    assert a["status"] == "FAILED" and "argumentos" in a["result"]
+    # a com args mas política SAFE/confirmação: aprovar executa via provider (sem Asana -> FAILED "não conectado")
+    aid2 = acts["asana_comentar"]["id"]
+    cli.post(B + f"/actions/{aid2}/approve", headers=h, json={})
+    for _ in range(50):
+        a2 = [x for x in cli.get(B + "/actions").json() if x["id"] == aid2][0]
+        if a2["status"] in ("DONE", "FAILED"):
+            break
+        time.sleep(0.1)
+    assert a2["status"] == "FAILED" and "conectado" in (a2["result"] or "").lower()
+    con = conectar(); assert motor.aprendizados(con) == ""; con.close()
+
+
+def test_balao_instrui_e_aprende(cli):
+    from command_center.api import ia
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, ("ENSINADO" if "custa $350" in texto else "SEM MEMORIA") + "\nACAO: nenhuma", None)
+    r = cli.post(R + "/needs-attention/instruct", headers=h, json={"key": "waiver-servico:task:1", "text": "Practice OKC custa $350; envie a invoice e a waiver", "remember": True, "title": "X sem waiver", "why": "regra", "client_id": None, "entity_type": "task", "entity_id": "1"})
+    assert r.status_code == 202 and r.json()["remembered"]
+    ls = cli.get(B + "/learnings").json()
+    assert ls and ls[0]["scope"] == "entity:task" and "custa $350" in ls[0]["text"]
+    # a memória entra no próximo comando do mesmo escopo (entity:task) — e no global só o global
+    cid = cli.post(R + "/needs-attention/instruct", headers=h, json={"key": "k2", "text": "ok", "remember": False, "title": "Y", "entity_type": "task"}).json()["command_id"]
+    import time
+    for _ in range(50):
+        c = cli.get(B + f"/commands/{cid}").json()
+        if c["status"] in ("DONE", "FAILED"):
+            break
+        time.sleep(0.1)
+    assert c["status"] == "DONE" and c["output"].startswith("ENSINADO")
+    assert cli.post(R + "/needs-attention/instruct", headers=entra(cli, "viewer@urace.us"), json={"key": "k", "text": "x"}).status_code == 403
+    h = entra(cli, "admin@urace.us")
+    assert cli.post(B + f"/learnings/{ls[0]['id']}/toggle", headers=h).json()["active"] is False
+
+
+def test_eventos_viram_comandos_conforme_regra(cli):
+    from command_center.api import ia, motor
+    from command_center.db import conectar, inserir
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, "EVENTO OK\nACAO: nenhuma", None)
+    con = conectar()
+    cid = inserir(con, "clients", name="Evento Teste", email="ev@example.com", status="ACTIVE", source="asana")
+    tid = inserir(con, "tasks", client_id=cid, title="Evento Teste_Kart", project="U-RACE", section="SATURDAY", status="open", due_on="2026-09-12")
+    motor.registrar_evento(con, "task.created", "task", tid, cid, "Evento Teste_Kart em SATURDAY")
+    motor.registrar_evento(con, "task.created", "task", tid, cid, "duplicado ignorado")
+    assert con.execute("SELECT COUNT(*) FROM ai_events WHERE entity_id=?", (tid,)).fetchone()[0] == 1
+    # regra desligada -> SKIPPED; ligada -> comando
+    assert cli.put(R + "/automation/rules/novo_servico", headers=h, json={"enabled": False}).status_code == 200
+    assert motor.processar_eventos(con, 1) == 0
+    ev = cli.get(B + "/events").json()[0]
+    assert ev["status"] == "SKIPPED"
+    cli.put(R + "/automation/rules/novo_servico", headers=h, json={"enabled": True})
+    con.execute("UPDATE ai_events SET status='NEW' WHERE id=?", (ev["id"],))
+    assert motor.processar_eventos(con, 1) == 1
+    import time
+    for _ in range(50):
+        ev = cli.get(B + "/events").json()[0]
+        if ev["status"] in ("DONE", "FAILED"):
+            break
+        time.sleep(0.1)
+    assert ev["status"] == "DONE" and ev["command_id"] and ev["command_status"] == "DONE"
+    assert cli.put(R + "/automation/rules/nao_existe", headers=h, json={"enabled": True}).status_code == 404
+    assert cli.put(R + "/automation/rules/novo_servico", headers=entra(cli, "viewer@urace.us"), json={"enabled": False}).status_code == 403
+    con.close()

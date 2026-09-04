@@ -328,3 +328,8 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .ic{border:1px solid transparent;background:transparent;cursor:pointer;padding:4px 6px;border-radius:var(--r);color:var(--ink-2);font-size:14px;line-height:1}
 .ic:hover{background:var(--surface-2);border-color:var(--rule)}
 .ic.danger:hover{color:var(--crit);border-color:var(--crit)}
+
+/* ---------- balão de instrução */
+.balao{margin-top:10px;padding:10px;border:1px solid var(--accent);border-radius:var(--r);background:var(--accent-wash);display:flex;flex-direction:column;gap:8px;position:relative}
+.balao::before{content:"";position:absolute;top:-7px;left:24px;width:12px;height:12px;background:var(--accent-wash);border-left:1px solid var(--accent);border-top:1px solid var(--accent);transform:rotate(45deg)}
+.balao textarea{background:var(--surface)}
