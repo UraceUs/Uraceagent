@@ -93,7 +93,7 @@ export function Users() {
         <div className="field"><label>Nome</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
         <div className="field"><label>E-mail</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
         <div className="field"><label>Papel</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{['ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER'].map(r => <option key={r}>{r}</option>)}</select></div>
-        <div className="field"><label>Senha inicial</label><input className="input" type="password" required minLength={12} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">Mínimo 12 caracteres. Peça para trocar no primeiro acesso.</span></div>
+        <div className="field"><label>Senha inicial</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">Mínimo 5 caracteres. Peça para trocar no primeiro acesso.</span></div>
         <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : 'Criar'}</button>
       </form></Section>
     </div>
@@ -133,7 +133,7 @@ export function Account() {
     <div style={{ maxWidth: 420 }}><Section title="Trocar senha"><form className="stack" onSubmit={submit}>
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
       <div className="field"><label>Senha atual</label><input className="input" type="password" autoComplete="current-password" required value={f.current_password} onChange={e => setF({ ...f, current_password: e.target.value })} /></div>
-      <div className="field"><label>Nova senha</label><input className="input" type="password" autoComplete="new-password" required minLength={12} value={f.new_password} onChange={e => setF({ ...f, new_password: e.target.value })} /></div>
+      <div className="field"><label>Nova senha</label><input className="input" type="password" autoComplete="new-password" required minLength={5} value={f.new_password} onChange={e => setF({ ...f, new_password: e.target.value })} /></div>
       <div className="field"><label>Repita a nova</label><input className="input" type="password" autoComplete="new-password" required value={f.again} onChange={e => setF({ ...f, again: e.target.value })} /></div>
       <div className="small muted">Ao trocar, todas as sessões são encerradas e você entra de novo.</div>
       <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : 'Trocar senha'}</button>

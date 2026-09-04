@@ -46,3 +46,4 @@ apagada**: vira `status: superado`, com link para a que a substituiu.
 Antes, as decisões viviam soltas no diário e no histórico do
 [[PARAMETROS]]. Não dava para perguntar *"o que ficou decidido sobre
 X?"*. Agora dá.
+- [[D-2026-09-04 - Senha do Command Center com minimo de 5]] — mínimo de 5 caracteres; o bloqueio de tentativas é o que protege

@@ -52,8 +52,14 @@ def confere_senha(senha, sal_b64, hash_b64):
                                base64.b64decode(hash_b64))
 
 
+# Mínimo de 5 por decisão do dono (04/09/2026). O que segura a porta é o
+# bloqueio de tentativas (5 erros em 15 min por IP e por e-mail) — não
+# afrouxe os dois ao mesmo tempo.
+SENHA_MIN = 5
+
+
 def senha_aceitavel(s):
-    return isinstance(s, str) and 10 <= len(s) <= 200
+    return isinstance(s, str) and SENHA_MIN <= len(s) <= 200
 
 
 # ----------------------------------------------------------- usuários
@@ -61,7 +67,7 @@ def criar_usuario(con, email, name, role, senha, por_user_id=None, ip=None):
     if role not in PAPEIS:
         raise ValueError("papel inválido")
     if not senha_aceitavel(senha):
-        raise ValueError("senha: mínimo 10 caracteres")
+        raise ValueError(f"senha: mínimo {SENHA_MIN} caracteres")
     sal, h = hash_senha(senha)
     uid = inserir(con, "users", email=email.strip().lower(), name=name.strip(),
                   role=role, pw_salt=sal, pw_hash=h)
@@ -73,7 +79,7 @@ def criar_usuario(con, email, name, role, senha, por_user_id=None, ip=None):
 
 def trocar_senha(con, user_id, senha, por_user_id, ip=None):
     if not senha_aceitavel(senha):
-        raise ValueError("senha: mínimo 10 caracteres")
+        raise ValueError(f"senha: mínimo {SENHA_MIN} caracteres")
     sal, h = hash_senha(senha)
     atualizar(con, "users", user_id, pw_salt=sal, pw_hash=h)
     # senha nova derruba toda sessão aberta daquele usuário

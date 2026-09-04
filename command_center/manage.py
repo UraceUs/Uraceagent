@@ -19,18 +19,26 @@ def main(argv):
     if cmd == "create-admin":
         email = input("e-mail: ").strip().lower()
         name = input("nome: ").strip()
-        s1 = getpass("senha (mín. 10, não aparece): ")
-        if s1 != getpass("repita: "):
-            sys.exit("as duas não conferem. Nada criado.")
+        while True:
+            s1 = getpass(f"senha (mín. {auth.SENHA_MIN}, não aparece): ")
+            if len(s1) < auth.SENHA_MIN:
+                print(f"   curta demais: precisa de {auth.SENHA_MIN} ou mais. De novo."); continue
+            if s1 != getpass("repita: "):
+                print("   as duas não conferem. De novo."); continue
+            break
         uid = auth.criar_usuario(con, email, name, "ADMIN", s1)
         print(f"✅ ADMIN criado: {email} (id {uid})")
     elif cmd == "set-password" and len(argv) > 2:
         u = um(con, "SELECT id FROM users WHERE email = ?", (argv[2].strip().lower(),))
         if not u:
             sys.exit("usuário não existe")
-        s1 = getpass("senha nova: ")
-        if s1 != getpass("repita: "):
-            sys.exit("as duas não conferem. Nada alterado.")
+        while True:
+            s1 = getpass(f"senha nova (mín. {auth.SENHA_MIN}): ")
+            if len(s1) < auth.SENHA_MIN:
+                print("   curta demais. De novo."); continue
+            if s1 != getpass("repita: "):
+                print("   as duas não conferem. De novo."); continue
+            break
         auth.trocar_senha(con, u["id"], s1, u["id"])
         print("✅ senha trocada; sessões abertas foram derrubadas")
     elif cmd == "list-users":
