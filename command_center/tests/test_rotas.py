@@ -7,7 +7,6 @@ from datetime import date, timedelta
 
 import pytest
 
-os.environ["CC_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "cc-rotas.sqlite")
 os.environ["URACE_ENV"] = "/nao/existe"
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -23,6 +22,7 @@ HOJE = date.today()
 
 @pytest.fixture(scope="module")
 def cli():
+    os.environ["CC_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "cc.sqlite")
     con = conectar(); aplicar_schema(con)
     auth.criar_usuario(con, "admin@urace.us", "Admin", "ADMIN", SENHA)
     auth.criar_usuario(con, "viewer@urace.us", "Viewer", "VIEWER", SENHA)

@@ -16,7 +16,10 @@ from datetime import datetime, timezone
 AQUI = os.path.dirname(os.path.abspath(__file__))
 SCHEMA = os.path.join(AQUI, "schema.sql")
 URACE_DIR = os.environ.get("URACE_DIR", os.path.expanduser("~/.urace"))
-DB_PATH = os.environ.get("CC_DB_PATH", os.path.join(URACE_DIR, "command-center.sqlite"))
+def db_path():
+    """Lido a cada chamada: testes e serviços trocam pelo ambiente."""
+    return os.environ.get("CC_DB_PATH", os.path.join(
+        os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "command-center.sqlite"))
 
 
 def agora():
@@ -26,7 +29,7 @@ def agora():
 
 
 def conectar(caminho=None):
-    caminho = caminho or DB_PATH
+    caminho = caminho or db_path()
     os.makedirs(os.path.dirname(caminho), exist_ok=True)
     novo = not os.path.exists(caminho)
     con = sqlite3.connect(caminho, timeout=10, isolation_level=None)  # autocommit
