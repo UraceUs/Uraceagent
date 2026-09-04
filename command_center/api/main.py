@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from command_center.api import auth, rotas
+from command_center.api import auth, ia, rotas
 from command_center.db import aplicar_schema, conectar, get_db, todos, um
 
 BASE = "/ops"
@@ -52,6 +52,7 @@ async def _cabecalhos(request: Request, call_next):
 
 
 app.include_router(rotas.r)
+app.include_router(ia.r)
 
 
 # ------------------------------------------------------------- saúde
