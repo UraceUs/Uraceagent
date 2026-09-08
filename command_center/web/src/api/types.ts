@@ -59,7 +59,7 @@ export interface Waiver {
 export interface Email {
   id: number; client_id: number | null; mailbox: string; subject: string | null; sender: string | null
   last_at: string | null; labels: string | null; priority: string | null; intent: string | null
-  handled: number; snippet?: string | null; is_inbox?: number; messages?: number | null
+  handled: number; handled_by?: string | null; handled_reason?: string | null; snippet?: string | null; is_inbox?: number; messages?: number | null
   suggested_label?: string | null; suggested_reason?: string | null; suggested_by?: 'rules' | 'ia' | 'label' | null; suggested_at?: string | null
   client_name?: string | null; links?: Link[]
 }

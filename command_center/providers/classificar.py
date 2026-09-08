@@ -94,3 +94,33 @@ def parse_ia(texto, nomes_marcadores):
         real = _acha(nomes_marcadores, it.get("marcador"))
         saida[i] = (real, (it.get("motivo") or "")[:200]) if real else (None, "IA não achou marcador válido")
     return saida
+
+
+# Marcadores cujo e-mail não pede humano: notificação de sistema, propaganda, banco.
+NOTIFICACAO_PREFIXOS = ("softwares|apps/", "platforms & subscriptions/", "marketing/rd station", "banks/", "wnews", "shipping status")
+NOSSOS_DOMINIOS = ("@urace.us",)
+AVISO_DOCUSIGN = re.compile(r"\b(completed|conclu[ií]do|viewed|visualizou|anulado|voided|please complete the docusign|declined)\b", re.I)
+
+
+def auto_tratar(email, sugestao):
+    """Motivo pelo qual este e-mail NÃO precisa de humano, ou None.
+
+    A IA se corrige aqui: o que é notificação, propaganda ou coisa que nós
+    mesmos mandamos não vira item de atenção — vira 'tratado automaticamente'.
+    """
+    de = (email.get("sender") or "").lower()
+    assunto = (email.get("subject") or "").lower()
+    if any(d in de for d in NOSSOS_DOMINIOS):
+        return "enviado por nós (urace.us)"
+    if "docusign" in de or AVISO_DOCUSIGN.search(assunto) and "docusign" in assunto:
+        return "notificação do DocuSign (o status vem do próprio DocuSign)"
+    if sugestao:
+        lab = sugestao.lower()
+        for pref in NOTIFICACAO_PREFIXOS:
+            if lab.startswith(pref):
+                return f"notificação/propaganda ({sugestao})"
+    if re.search(r"\b(nova convers[aã]o|new lead|rdstation)\b", assunto) or "rdstation" in de:
+        return "lead do RD Station (vai para o funil, não para a inbox)"
+    if re.search(r"\b(your tickets|here's your pass|pit & driver pass|receipt|recibo)\b", assunto):
+        return "confirmação automática (ingresso/recibo)"
+    return None

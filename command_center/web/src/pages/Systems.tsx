@@ -270,6 +270,7 @@ export function GmailPage() {
             <span className="snip">{e.snippet}</span>
             <span className="sug" onClick={ev => ev.stopPropagation()}>
               {e.client_id && <Chip tone="accent">{e.client_name}</Chip>}
+              {!!e.handled && e.handled_by === 'auto' && <Chip tone="ok" >✓ auto: {e.handled_reason}</Chip>}
               {e.suggested_label ? <><Chip tone={e.suggested_by === 'ia' ? 'info' : 'neutral'}>{e.suggested_by === 'ia' ? '✦ ' : ''}{e.suggested_label}</Chip>
                 {can('OPERATOR') && <button className="btn sm primary" disabled={busy === e.id} onClick={() => move(e, e.suggested_label!)}>{busy === e.id ? <Spinner /> : 'Mover'}</button>}</>
                 : <span className="small muted">sem sugestão</span>}
@@ -281,7 +282,7 @@ export function GmailPage() {
           <div className="toolbar">
             <select className="input" style={{ width: 240 }} value={moveTo || cur.suggested_label || ''} onChange={ev => setMoveTo(ev.target.value)} aria-label="Marcador de destino"><option value="">Marcador…</option>{userLabels.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}</select>
             {can('OPERATOR') && <button className="btn primary sm" disabled={busy === cur.id || !(moveTo || cur.suggested_label)} onClick={() => move(cur, moveTo || cur.suggested_label!)}>Mover para o marcador</button>}
-            {can('OPERATOR') && <button className="btn sm" onClick={async () => { await api.patch(`/emails/${cur.id}`, { handled: !cur.handled }); emails.reload() }}>{cur.handled ? '✓ tratado' : 'marcar tratado'}</button>}
+            {can('OPERATOR') && <button className="btn sm" title={cur.handled_reason || ''} onClick={async () => { await api.patch(`/emails/${cur.id}`, { handled: !cur.handled }); emails.reload() }}>{cur.handled ? (cur.handled_by === 'auto' ? '✓ tratado pela IA' : '✓ tratado') : 'marcar tratado'}</button>}
             <span className="grow" />
             {cur.client_id && <a onClick={() => nav(`/clients/${cur.client_id}`)} style={{ cursor: 'pointer' }} className="small">cliente: {cur.client_name}</a>}
             {cur.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>Gmail</Ext>)}

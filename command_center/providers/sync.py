@@ -217,6 +217,11 @@ def sync_asana(con):
                                                  subtasks_total=len(subs),
                                                  subtasks_done=sum(1 for s in subs if s.get("concluida")), **comum))
                 tarefas += 1
+        # tarefa de dia passado ainda aberta: a IA confere e move sozinha (evento, uma vez por tarefa)
+        hoje = __import__("datetime").date.today().isoformat()
+        for t in todos(con, "SELECT id, title, section, due_on, client_id FROM tasks WHERE status='open' AND due_on < ? AND section_gid IN (%s)" % ",".join("?" * len(SECOES_DIAS)),
+                       (hoje, *SECOES_DIAS.keys())):
+            _evento(con, "task.overdue", "task", t["id"], t["client_id"], f"{t['title']} ({t['section']}, {t['due_on']}) ainda aberta depois da data")
         limpos = identidade.limpar_nao_clientes(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
@@ -380,14 +385,21 @@ def sync_gmail(con, dias=14):
                     rid = inserir(con, "emails", **campos)
                     _liga(con, "email", rid, "gmail", t["thread_id"],
                           f"https://mail.google.com/mail/u/{0 if conta == 'urace' else 1}/#inbox/{t['thread_id']}")
-                    if cli:
+                    if cli and not classificar.auto_tratar(campos, None):
                         _evento(con, "email.received", "email", rid, cli["id"], f"{cli['name']}: {t.get('assunto')} ({conta}@)")
-                atual = um(con, "SELECT suggested_by FROM emails WHERE id=?", (rid,))
+                atual = um(con, "SELECT suggested_by, suggested_label, handled FROM emails WHERE id=?", (rid,))
+                sug_label = atual["suggested_label"] if atual else None
                 if not atual or atual["suggested_by"] != "ia":          # a IA, quando opinou, prevalece
                     sug = classificar.por_regras({**campos, "id": rid}, marcadores)
                     if sug:
+                        sug_label = sug[0]
                         atualizar(con, "emails", rid, suggested_label=sug[0], suggested_reason=sug[1],
                                   suggested_by=sug[2], suggested_at=agora())
+                # autocorreção: notificação, propaganda e coisa nossa não viram trabalho humano
+                if not (atual and atual["handled"]):
+                    motivo = classificar.auto_tratar(campos, sug_label)
+                    if motivo:
+                        atualizar(con, "emails", rid, handled=1, handled_by="auto", handled_reason=motivo)
                 n += 1
             # quem estava na inbox espelhada e não voltou, saiu da inbox
             for e in todos(con, "SELECT e.id, l.external_id FROM emails e JOIN entity_links l ON l.entity_type='email' AND l.entity_id=e.id AND l.system='gmail' WHERE e.mailbox=? AND e.is_inbox=1", (conta,)):

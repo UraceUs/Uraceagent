@@ -346,3 +346,54 @@ def test_task_detail_sem_asana(cli):
     r = cli.get(B + f"/tasks/{t['id']}/detail")
     assert r.status_code == 200 and r.json()["connected"] is False
     assert cli.get(B + "/tasks/999999/detail").status_code == 404
+
+
+# ------------------------------------------------ autocorreção (08/09): atenção só do que a IA não resolveu
+def test_auto_tratar_notificacoes():
+    from command_center.providers import classificar as C
+    assert C.auto_tratar({"sender": "Urace <urace@urace.us>", "subject": "We have an exclusive 10% discount just for you!"}, None).startswith("enviado por nós")
+    assert "DocuSign" in C.auto_tratar({"sender": "Docusign <dse@docusign.net>", "subject": "Completed: Please Complete the Docusign: Parental"}, None)
+    assert "RD Station" in C.auto_tratar({"sender": "x@rdstation.com", "subject": "Urace 'Nova conversão - Joseph Kurian'"}, None)
+    assert "ingresso" in C.auto_tratar({"sender": "tix@okc.com", "subject": "Your tickets for OKC PIT & DRIVER PASS"}, None)
+    assert C.auto_tratar({"sender": "a@b.com", "subject": "x"}, "Softwares|Apps/Docusign") is not None
+    assert C.auto_tratar({"sender": "joekur001@gmail.com", "subject": "Plano mensal para o Enzo"}, None) is None      # este sim é humano
+
+
+def test_atencao_ignora_historico_e_notificacao(cli):
+    from command_center.db import conectar, inserir
+    entra(cli, "admin@urace.us")
+    con = conectar()
+    cid = con.execute("SELECT id FROM clients LIMIT 1").fetchone()[0]
+    velho = inserir(con, "emails", client_id=cid, mailbox="support", subject="Your tickets for OKC PIT & DRIVER PASS", sender="tix@okc.com",
+                    last_at="2026-03-17T10:00:00Z", handled=0, is_inbox=0)
+    fora = inserir(con, "emails", client_id=cid, mailbox="support", subject="Re: Rescheduled for August 8th", sender="joe@example.com",
+                   last_at="2026-09-07T10:00:00Z", handled=0, is_inbox=0)
+    nosso = inserir(con, "emails", client_id=cid, mailbox="support", subject="10% discount just for you", sender="Urace <urace@urace.us>",
+                    last_at="2026-09-07T10:00:00Z", handled=0, is_inbox=1)
+    real = inserir(con, "emails", client_id=cid, mailbox="support", subject="Plano mensal para o Enzo", sender="joe@example.com",
+                   last_at="2026-09-07T10:00:00Z", handled=0, is_inbox=1, priority="HIGH")
+    itens = cli.get(B + "/needs-attention").json()
+    chaves = {i["key"] for i in itens}
+    assert f"email-cliente:email:{real}" in chaves
+    for eid in (velho, fora, nosso):
+        assert f"email-cliente:email:{eid}" not in chaves
+    # tarefa vencida sem a IA ter tentado ainda (sem evento) e com 1 dia: não aparece; com evento RUNNING: não aparece
+    from datetime import date, timedelta
+    tid = inserir(con, "tasks", client_id=cid, title="Vencida_Kart", project="U-RACE", section="SATURDAY", section_gid="1205141832260878",
+                  status="open", due_on=(date.today() - timedelta(days=3)).isoformat())
+    assert f"tarefa-vencida:task:{tid}" in {i["key"] for i in cli.get(B + "/needs-attention").json()}       # 3 dias, sem evento: aparece
+    con.execute("INSERT INTO ai_events (kind, entity_type, entity_id, client_id, summary, status) VALUES ('task.overdue','task',?,?, 'x','RUNNING')", (tid, cid))
+    assert f"tarefa-vencida:task:{tid}" not in {i["key"] for i in cli.get(B + "/needs-attention").json()}   # a IA está cuidando
+    con.close()
+
+
+def test_falha_da_ia_so_se_a_ultima_falhou(cli):
+    from command_center.db import conectar, inserir
+    entra(cli, "admin@urace.us")
+    con = conectar()
+    uid = con.execute("SELECT id FROM users LIMIT 1").fetchone()[0]
+    inserir(con, "ai_commands", user_id=uid, text="a", session_key="s", status="FAILED", error="boom", finished_at="2026-09-08T10:00:00.000Z")
+    assert any(i["key"].startswith("ia-falhas") and "boom" in i["why"] for i in cli.get(B + "/needs-attention").json())
+    inserir(con, "ai_commands", user_id=uid, text="b", session_key="s", status="DONE", output="ok", finished_at="2026-09-08T11:00:00.000Z")
+    assert not any(i["key"].startswith("ia-falhas") for i in cli.get(B + "/needs-attention").json())        # recuperou: silêncio
+    con.close()

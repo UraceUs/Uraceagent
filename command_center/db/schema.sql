@@ -317,6 +317,7 @@ INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
   ('asana_criar_tarefa','SAFE','criar tarefa: autorizado pelo dono (31/08)'),
   ('asana_comentar','SAFE','comentário com prefixo [IA ADM]'),
   ('asana_mover_para_secao','REQUIRES_CONFIRMATION','muda o quadro'),
+  ('asana_mover_para_finished','SAFE','só para Finished Services, tarefa de dia passado e concluída: autocorreção (dono, 08/09)'),
   ('asana_concluir','REQUIRES_CONFIRMATION','Signed waiver? etc.'),
   ('asana_anexar_arquivo','SAFE','waiver assinada na tarefa'),
   ('gmail_rascunho','SAFE','rascunho nunca envia'),
@@ -392,6 +393,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ai_events_unico ON ai_events(kind, entity_type
 
 CREATE UNIQUE INDEX IF NOT EXISTS automation_rules_name ON automation_rules(name);
 INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+  ('tarefa_vencida',   1, '{"event":"task.overdue"}',   NULL, '{"ia":"conferir se o serviço aconteceu e mover para Finished Services"}'),
   ('novo_servico',     1, '{"event":"task.created"}',   '{"sections":"dias"}', '{"ia":"preparar waiver e invoice do serviço; propor ações"}'),
   ('email_cliente',    1, '{"event":"email.received"}', '{"client_known":true}', '{"ia":"ler a thread, classificar, propor resposta em rascunho"}'),
   ('waiver_devolvida', 1, '{"event":"waiver.bounced"}', NULL, '{"ia":"achar e-mail correto no Asana/Gmail e propor reenvio"}'),

@@ -65,6 +65,10 @@ def _prompt_evento(con, ev):
              "email.received": "Chegou e-mail de um cliente conhecido. Leia a thread (gmail_thread), diga o que ele quer, classifique com o marcador certo e, se precisar de resposta, PROPONHA um rascunho (gmail_rascunho). Nunca envie.",
              "waiver.bounced": "A waiver deste cliente voltou (e-mail devolvido). Procure o e-mail correto na tarefa do Asana e nas caixas do Gmail; PROPONHA a correção e o reenvio, ou diga que não achou.",
              "waiver.completed": "A waiver deste cliente foi assinada. Comente na tarefa do Asana correspondente que a waiver chegou (asana_comentar).",
+             "task.overdue": "A tarefa está numa coluna de dia que já passou e continua aberta. Leia a tarefa (asana_tarefa) e os comentários. "
+                             "Se o serviço aconteceu (subtarefas feitas, comentário de conclusão, ou simplesmente a data passou sem cancelamento), "
+                             "declare ACAO: asana_mover_para_finished | <gid> | mover para Finished Services | {\"gid\":\"<gid>\"} — essa ação é SAFE e executa sozinha. "
+                             "Se houver sinal de que NÃO aconteceu (cancelado, remarcado), diga isso claramente e não mova.",
              }.get(ev["kind"], "Avalie o evento e proponha o que fazer.")
     return (f"EVENTO AUTOMÁTICO: {ev['kind']} — {ev['summary']}\n{regra}"
             + _contexto_cliente(con, ev["client_id"]) + aprendizados(con, ev["client_id"], ev["entity_type"]))
@@ -165,7 +169,11 @@ def executar_acao(aid, user_id):
             atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(),
                       result="Sem argumentos estruturados: a IA descreveu a ação mas não deu os campos exatos. Peça no AI Command: 'refaça a ACAO com os argumentos em JSON'.")
             return
-        sistema = a["system"] or a["action"].split("_")[0]
+        acao = a["action"]
+        if acao == "asana_mover_para_finished":       # açúcar SAFE: só para a coluna Finished Services
+            from command_center.providers.sync import SECAO_FINISHED
+            acao, args = "asana_mover_para_secao", {"gid": args.get("gid"), "secao_gid": SECAO_FINISHED}
+        sistema = a["system"] or acao.split("_")[0]
         if sistema in ("qbo", "quickbooks"):
             atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(), result="QuickBooks em stand-by (P-11): nada foi enviado.")
             return
@@ -174,7 +182,7 @@ def executar_acao(aid, user_id):
         anterior = os.environ.get("APLICAR")
         os.environ["APLICAR"] = "1"                 # aprovação humana = autorização, só nesta chamada
         try:
-            res = chamar(sistema, a["action"], **args)
+            res = chamar(sistema, acao, **args)
         finally:
             if anterior is None:
                 os.environ.pop("APLICAR", None)
@@ -190,3 +198,16 @@ def executar_acao(aid, user_id):
         auditar(con, "action.failed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:300]})
     finally:
         con.close()
+
+
+def executar_safe(con, command_id, user_id):
+    """Ações SAFE com argumentos executam sozinhas, logo depois de propostas.
+    É a autocorreção: o que não precisa de humano não espera humano."""
+    ids = [a["id"] for a in todos(con, "SELECT id, payload FROM ai_actions WHERE command_id=? AND policy='SAFE' AND status='PROPOSED'", (command_id,))
+           if isinstance((json.loads(a["payload"] or "{}")).get("args"), dict)]
+    for aid in ids:
+        atualizar(con, "ai_actions", aid, status="APPROVED")
+        auditar(con, "action.auto", "system", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"policy": "SAFE"})
+    for aid in ids:
+        executar_acao(aid, user_id)
+    return len(ids)

@@ -67,6 +67,8 @@ MIGRACOES = [
     ("clients", "status_locked", "INTEGER NOT NULL DEFAULT 0"),  # status mudado à mão não é recalculado
     ("clients", "last_service_at", "TEXT"),
     ("clients", "scanned_at", "TEXT"),                     # última varredura Gmail/DocuSign deste cliente
+    ("emails", "handled_by", "TEXT"),                      # user:<id> | auto
+    ("emails", "handled_reason", "TEXT"),
 ]
 
 

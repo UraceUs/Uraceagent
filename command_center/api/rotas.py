@@ -318,7 +318,7 @@ def email_patch(eid: int, dados: EmailIn, request: Request, u=Depends(auth.exige
     """Marca tratado/não tratado no espelho. Não mexe no Gmail."""
     if not um(con, "SELECT id FROM emails WHERE id=?", (eid,)):
         raise HTTPException(404, "Email not found.")
-    con.execute("UPDATE emails SET handled=? WHERE id=?", (1 if dados.handled else 0, eid))
+    con.execute("UPDATE emails SET handled=?, handled_by=?, handled_reason=NULL WHERE id=?", (1 if dados.handled else 0, f"user:{u['id']}" if dados.handled else None, eid))
     auditar(con, "email.handled", f"user:{u['id']}", user_id=u["id"], entity_type="email", entity_id=eid,
             detail={"handled": dados.handled}, ip=auth._ip(request))
     return {"ok": True}
@@ -436,8 +436,8 @@ def email_move(eid: int, dados: MoverIn, request: Request, u=Depends(auth.exige(
     labels = [l for l in json.loads(e["labels"] or "[]") if l != "INBOX"]
     if label not in labels:
         labels.append(label)
-    con.execute("UPDATE emails SET labels=?, is_inbox=0, handled=1, synced_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
-                (json.dumps(labels, ensure_ascii=False), eid))
+    con.execute("UPDATE emails SET labels=?, is_inbox=0, handled=1, handled_by=?, handled_reason=?, synced_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?",
+                (json.dumps(labels, ensure_ascii=False), f"user:{u['id']}", f"movido para {label}", eid))
     auditar(con, "email.move", f"user:{u['id']}", user_id=u["id"], entity_type="email", entity_id=eid,
             detail={"label": label, "thread": tid, "mailbox": e["mailbox"]}, ip=auth._ip(request))
     return {"ok": True, **res}
@@ -715,9 +715,13 @@ def _varrer_cliente(con, c):
             for t in r.get("threads", []):
                 eid = um(con, "SELECT entity_id FROM entity_links WHERE system='gmail' AND external_id=? AND entity_type='email'", (t["thread_id"],))
                 marcadores = t.get("marcadores") or []
+                na_inbox = "INBOX" in marcadores
                 campos = dict(client_id=c["id"], mailbox=conta, subject=t.get("assunto"), sender=(t.get("de") or "")[:200],
                               last_at=sy._data_iso(t.get("data")), snippet=(t.get("snippet") or "")[:300], messages=t.get("mensagens"),
-                              is_inbox=1 if "INBOX" in marcadores else 0, labels=json.dumps(marcadores, ensure_ascii=False), synced_at=agora())
+                              is_inbox=1 if na_inbox else 0, labels=json.dumps(marcadores, ensure_ascii=False), synced_at=agora(),
+                              # histórico fora da inbox é contexto do cliente, não trabalho pendente
+                              handled=0 if na_inbox else 1, handled_by=None if na_inbox else "auto",
+                              handled_reason=None if na_inbox else "histórico trazido pela varredura (fora da inbox)")
                 if eid:
                     con.execute("UPDATE emails SET client_id=COALESCE(client_id, ?), synced_at=? WHERE id=?", (c["id"], agora(), eid["entity_id"]))
                 else:

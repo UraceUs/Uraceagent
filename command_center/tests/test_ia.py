@@ -223,3 +223,38 @@ def test_eventos_viram_comandos_conforme_regra(cli):
     assert cli.put(R + "/automation/rules/nao_existe", headers=h, json={"enabled": True}).status_code == 404
     assert cli.put(R + "/automation/rules/novo_servico", headers=entra(cli, "viewer@urace.us"), json={"enabled": False}).status_code == 403
     con.close()
+
+
+def test_safe_executa_sozinho_e_finished(cli):
+    from command_center.api import ia
+    import json, time
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, 'ok\nACAO: asana_mover_para_finished | 999 | mover | {"gid":"999"}\nACAO: asana_mover_para_secao | 999 | mover | {"gid":"999","secao_gid":"1"}', None)
+    cid = cli.post(B + "/commands", headers=h, json={"text": "vencida"}).json()["id"]
+    for _ in range(80):
+        c = cli.get(B + f"/commands/{cid}").json()
+        if c["status"] in ("DONE", "FAILED") and all(a["status"] not in ("APPROVED", "RUNNING") for a in c["actions"]):
+            break
+        time.sleep(0.1)
+    acts = {a["action"]: a for a in c["actions"]}
+    # SAFE com args: executou sozinha (sem Asana aqui -> FAILED "não conectado", mas passou pelo motor, não ficou PROPOSED)
+    assert acts["asana_mover_para_finished"]["policy"] == "SAFE" and acts["asana_mover_para_finished"]["status"] == "FAILED"
+    assert "conectado" in (acts["asana_mover_para_finished"]["result"] or "").lower()
+    # REQUIRES_CONFIRMATION continua esperando gente
+    assert acts["asana_mover_para_secao"]["status"] == "PROPOSED"
+
+
+def test_openclaw_descoberta_e_mensagem():
+    from command_center.api import ia
+    import os
+    antes = os.environ.pop("OPENCLAW_BIN", None)
+    try:
+        assert ia._acha_openclaw()                                   # nunca vazio
+        os.environ["OPENCLAW_BIN"] = "/x/y/openclaw"
+        assert ia._acha_openclaw() == "/x/y/openclaw"
+        ok, _, erro = ia.runner_openclaw("ping", "s")
+        assert not ok and "OPENCLAW_BIN" in erro and "/x/y/openclaw" in erro
+    finally:
+        os.environ.pop("OPENCLAW_BIN", None)
+        if antes:
+            os.environ["OPENCLAW_BIN"] = antes

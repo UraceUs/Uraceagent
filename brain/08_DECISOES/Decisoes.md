@@ -51,3 +51,4 @@ X?"*. Agora dá.
 - [[D-2026-09-04 - Lixeira e reenvio de waiver pelo painel]] — lixeira anula em aberto e oculta assinada; download, reenvio e vínculo cliente↔waiver
 - [[D-2026-09-04 - O que e cliente, ativo, e um card por pessoa]] — corrida não é cliente; ativo = 6 meses; união de duplicados; varredura por cliente
 - [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]] — eventos → agente → propostas; aprovar executa; balão vira memória
+- [[D-2026-09-08 - A IA se corrige antes de chamar humano]] — atenção só do que a IA não resolveu; notificação/histórico tratados sozinhos; vencida vai para Finished sozinha; SAFE executa na hora

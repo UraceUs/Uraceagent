@@ -34,7 +34,26 @@ from command_center.db import agora, atualizar, auditar, conectar, get_db, inser
 
 r = APIRouter(prefix="/ops/api/ai")
 AGENTE = os.environ.get("OPENCLAW_AGENT", "urace-admin")
-OPENCLAW = os.environ.get("OPENCLAW_BIN", "openclaw")   # caminho completo quando o PATH do serviço não tem
+def _acha_openclaw():
+    """OPENCLAW_BIN se definido; senão procura no PATH e nos lugares usuais do npm/nvm.
+    Autocorreção: o serviço não precisa que alguém descubra o caminho à mão."""
+    import glob
+    import shutil
+    if os.environ.get("OPENCLAW_BIN"):
+        return os.environ["OPENCLAW_BIN"]
+    achado = shutil.which("openclaw")
+    if achado:
+        return achado
+    home = os.path.expanduser("~")
+    for pad in (f"{home}/.npm-global/bin/openclaw", "/usr/local/bin/openclaw", f"{home}/.local/bin/openclaw",
+                f"{home}/.nvm/versions/node/*/bin/openclaw", "/opt/*/bin/openclaw"):
+        for c in sorted(glob.glob(pad), reverse=True):
+            if os.access(c, os.X_OK):
+                return c
+    return "openclaw"
+
+
+OPENCLAW = _acha_openclaw()
 TIMEOUT = int(os.environ.get("CC_AI_TIMEOUT", "900"))
 SUGESTOES = [
     "O que precisa da minha atenção hoje?",
@@ -50,12 +69,15 @@ SUGESTOES = [
 # ------------------------------------------------------------- runner
 def runner_openclaw(texto, session_key):
     """Roda o agente real. Devolve (ok, saida, erro)."""
+    global OPENCLAW
     cmd = [OPENCLAW, "--no-color", "agent", "--agent", AGENTE, "--session-key", session_key,
            "--thinking", "medium", "--timeout", str(TIMEOUT), "--json", "-m", texto]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT + 30)
     except FileNotFoundError:
-        return False, "", f"{OPENCLAW} não está no PATH deste serviço (defina OPENCLAW_BIN no adminai.env)"
+        OPENCLAW = _acha_openclaw()                    # tenta redescobrir para a próxima
+        return False, "", (f"'{OPENCLAW}' não encontrado neste serviço. Procurei no PATH, ~/.npm-global, ~/.nvm e /usr/local/bin. "
+                           "Defina OPENCLAW_BIN=<caminho> em ~/.urace/adminai.env e reinicie urace-command-center.")
     except subprocess.TimeoutExpired:
         return False, "", f"o agente não respondeu em {TIMEOUT}s"
     saida = _limpa(p.stdout)
@@ -189,13 +211,18 @@ def _executa(command_id, texto, session_key, user_id):
     try:
         atualizar(con, "ai_commands", command_id, status="RUNNING", started_at=agora())
         ok, saida, erro = RUNNER(texto + SUFIXO, session_key)
+        if not ok and erro and ("não respondeu" in erro or "não encontrado" in erro):
+            # autocorreção: falha transitória (timeout, binário) ganha UMA segunda chance
+            ok, saida, erro = RUNNER(texto + SUFIXO, session_key)
         if ok:
             # ações ANTES do DONE: quem lê o comando no instante em que ele
             # termina já vê as propostas (a tela faz polling nesse status)
             acoes = extrair_acoes(con, command_id, saida)
+            from command_center.api import motor
+            auto = motor.executar_safe(con, command_id, user_id)
             atualizar(con, "ai_commands", command_id, status="DONE", finished_at=agora(), output=saida)
             auditar(con, "ai.command.done", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",
-                    entity_id=command_id, detail={"acoes_propostas": len(acoes)})
+                    entity_id=command_id, detail={"acoes_propostas": len(acoes), "executadas_safe": auto})
         else:
             atualizar(con, "ai_commands", command_id, status="FAILED", finished_at=agora(), error=erro)
             auditar(con, "ai.command.failed", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",
