@@ -1,0 +1,60 @@
+Você é meu assistente operando no navegador, nas contas do Google Workspace e do Asana da URACE (eu já estou logado). Tarefa: resolver, sem eu precisar clicar, os itens que o nosso painel "Precisa de atenção" listou hoje. Trabalhe passo a passo, confirme cada tela antes de agir e, no fim, me devolva um relatório curto do que fez e do que não conseguiu.
+
+REGRAS ABSOLUTAS
+- NUNCA envie e-mail, resposta ou rascunho. Você só rotula, arquiva e move.
+- NUNCA apague nada, NUNCA use Lixeira ou Spam.
+- No Asana, só mova tarefas para a coluna "Finished Services". Não conclua, não edite, não comente.
+- Se algo não estiver como descrito aqui, pare naquele item, anote, e siga para o próximo.
+
+PARTE 1 — GMAIL, caixa support@urace.us (https://mail.google.com/mail/u/1/)
+Antes de tudo confirme no canto superior direito que a conta ativa é support@urace.us. Se for outra, troque de conta.
+
+1a. Criar o marcador que falta
+- Nas configurações de marcadores (engrenagem > Ver todas as configurações > Marcadores > Criar novo marcador), crie o marcador chamado exatamente: wNews
+- Se ele já existir, não crie de novo.
+
+1b. Rotular e arquivar as threads antigas do cliente Joseph Kurian
+Para cada assunto abaixo, use a busca do Gmail com o texto entre aspas. Abra a thread, aplique o marcador indicado e depois clique em Arquivar (ícone da caixa com seta para baixo). Se a busca devolver mais de uma thread com o mesmo assunto, faça em todas.
+- "We have an exclusive 10% discount just for you!"  -> marcador: wNews  (foi enviado por nós, propaganda)
+- "Tenemos un 10% de descuento especial solo para ti!"  -> marcador: wNews
+- "Completed: Please Complete the Docusign: Parental Consent"  -> marcador: Softwares|Apps/Docusign
+- "Joseph Kurian viewed Please Complete the Docusign"  -> marcador: Softwares|Apps/Docusign
+- "Concluído: Enzo Condorodis - Please Complete the Docusign"  -> marcador: Softwares|Apps/Docusign
+- "Aline Alcantara Condorodis visualizou Enzo Condorodis"  -> marcador: Softwares|Apps/Docusign
+- "Anulado: (ENZO) Please Complete the Docusign"  -> marcador: Softwares|Apps/Docusign
+- "Nova conversão - Joseph Kurian"  -> marcador: Marketing/RD Station
+- "Here's your pass!"  -> marcador: LOC/Practice Orlando
+- "Your tickets for OKC PIT & DRIVER PASS"  -> marcador: LOC/Practice Orlando
+- "Fwd: Practice photos"  -> marcador: Kart Racing School | Client talks
+- "Re: Rescheduled for August 15th"  -> marcador: Kart Racing School | Client talks
+- "Re: Rescheduled for August 8th"  -> marcador: Kart Racing School | Client talks
+- "Re: ENZO'S DAY TRACK"  -> marcador: Kart Racing School | Client talks
+- "Re: About URace Programs"  -> marcador: Kart Racing School | Client talks
+Se um marcador indicado não existir na conta support@, use o mais parecido que existir e anote no relatório qual usou. Não crie marcador além do wNews.
+
+1c. Os que ficam para o Italo (NÃO arquive, NÃO responda)
+Só localize, aplique o marcador "Kart Racing School | Client talks" e marque com estrela. Anote no relatório a data da última mensagem de cada um:
+- "Proposal - URace"
+- "Plano mensal para o Enzo"
+
+PARTE 2 — GMAIL, caixa urace@urace.us (https://mail.google.com/mail/u/0/)
+Confirme que a conta ativa é urace@urace.us.
+- Busque: "New payment request from URACE - invoice 6YZRN1QWN647NQ"
+- É um encaminhamento de cobrança sobre o Alex Alonzo (Summer Camp Junior 4T). NÃO arquive. Aplique o marcador "Finances" (ou "Finances/Pending Invoices ❗" se for o único que existir), marque com estrela, e anote no relatório: remetente, data e o que a mensagem pede.
+
+PARTE 3 — ASANA, quadro U-RACE (https://app.asana.com/0/1205450093098920/board)
+Três tarefas estão em colunas de dia que já passaram (05/09) e continuam abertas. Para cada uma:
+- Abra a tarefa e leia as subtarefas e os comentários.
+- Se as subtarefas estão marcadas como feitas, ou há comentário dizendo que o serviço aconteceu, ou simplesmente não há nenhum comentário de cancelamento ou remarcação: arraste a tarefa para a coluna "Finished Services". Não marque como concluída.
+- Se houver comentário de cancelamento ou remarcação: NÃO mova, e anote o que o comentário diz.
+As tarefas:
+- "Enzo Kurian [4 strokes 09/05/26]"
+- "Araan Gillani_Arrive and Drive_Baby Kart [1/1]"
+- "Renato Frota Pionti_Professional Coaching_2T [1/1]"
+
+RELATÓRIO FINAL (me devolva neste formato)
+- support@: wNews criado? (sim/já existia) | threads rotuladas e arquivadas: N | marcadores substituídos: quais
+- support@ para o Italo: "Proposal - URace" (última msg em __) | "Plano mensal para o Enzo" (última msg em __)
+- urace@: cobrança do Alex Alonzo: remetente __, data __, pede __
+- Asana: quais das 3 tarefas foram para Finished Services e quais não, com o motivo
+- Qualquer coisa que não estava como descrito aqui
