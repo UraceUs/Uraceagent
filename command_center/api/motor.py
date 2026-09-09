@@ -94,7 +94,8 @@ def processar_eventos(con, user_id, limite=3):
             atualizar(con, "ai_events", ev["id"], status="SKIPPED", handled_at=agora(), note="regra desligada")
             continue
         texto = _prompt_evento(con, ev)
-        session_key = f"agent:{ia.AGENTE}:evento-{ev['kind']}-{ev['id']}"
+        # UMA sessão por dia para todos os eventos: cada chave nova sobe outro sandbox (09/09: 6 containers)
+        session_key = f"agent:{ia.AGENTE}:eventos-{agora()[:10]}"
         cid = inserir(con, "ai_commands", user_id=user_id, text=texto, session_key=session_key)
         wid = inserir(con, "ai_workflows", command_id=cid, client_id=ev["client_id"], kind=ev["kind"], summary=ev["summary"])
         atualizar(con, "ai_events", ev["id"], status="RUNNING", command_id=cid, handled_at=agora())
