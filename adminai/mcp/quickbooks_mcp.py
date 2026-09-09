@@ -143,7 +143,10 @@ def _req(caminho, metodo="GET", corpo=None, params=None):
             bruto = r.read()
             return json.loads(bruto) if bruto else {}
     except urllib.error.HTTPError as e:
-        raise ErroFerramenta(f"HTTP {e.code} em {metodo} {caminho}: {e.read()[:400].decode(errors='replace')}")
+        # intuit_tid: o id que o suporte da Intuit pede para rastrear a chamada
+        tid = e.headers.get("intuit_tid") if e.headers else None
+        log("QBO erro", e.code, metodo, caminho, "intuit_tid=", tid)
+        raise ErroFerramenta(f"HTTP {e.code} em {metodo} {caminho} (intuit_tid={tid}): {e.read()[:400].decode(errors='replace')}")
     except urllib.error.URLError as e:
         raise ErroFerramenta(f"sem conexão com o QuickBooks: {e.reason}")
 

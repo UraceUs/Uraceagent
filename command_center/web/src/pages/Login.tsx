@@ -48,6 +48,7 @@ export function Login() {
         <label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> Manter conectado por 30 dias</label>
         <button className="btn primary block" disabled={busy || !email || !pw}>{busy ? <span className="spin" /> : 'Entrar'}</button>
         <div className="small muted">Esqueceu a senha? Peça ao administrador para redefinir.</div>
+        <div className="small muted">Suporte: <a href="mailto:urace@urace.us">urace@urace.us</a> · +1 407-485-6784</div>
       </form>
     </div>
   </div>
