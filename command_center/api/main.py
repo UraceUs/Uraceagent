@@ -23,6 +23,24 @@ DIST = os.path.normpath(os.path.join(AQUI, "..", "web", "dist"))
 from contextlib import asynccontextmanager
 
 
+def _limpar_sandboxes():
+    """Para os sandboxes ociosos do agente. Cada sessão do OpenClaw sobe um
+    container que fica de pé por horas (09/09: 6 containers, VPS de 1,9 GB).
+    Só mexe quando nenhum `openclaw agent` está rodando — aí todos estão ociosos."""
+    import subprocess
+    agente = os.environ.get("OPENCLAW_AGENT", "urace-admin")
+    try:
+        if subprocess.run(["pgrep", "-f", "openclaw agent"], capture_output=True, timeout=10).returncode == 0:
+            return 0
+        ids = subprocess.run(["docker", "ps", "-q", "--filter", f"name=openclaw-sbx-agent-{agente}"],
+                             capture_output=True, text=True, timeout=20).stdout.split()
+        if ids:
+            subprocess.run(["docker", "stop", *ids], capture_output=True, timeout=120)
+        return len(ids)
+    except Exception:
+        return 0
+
+
 def _autosync():
     """A cada N minutos: espelha as fontes e acorda a IA para o que mudou.
     É o que faz "a IA agir a cada alteração" sem ninguém clicar."""
@@ -44,6 +62,9 @@ def _autosync():
             if pode:
                 rotas._sync_thread(admin["id"], None)      # mesma rotina do botão, mesma trava
                 auditar(con, "sync.auto", "system", detail=rotas._SYNC.get("result"))
+            parados = _limpar_sandboxes()
+            if parados:
+                auditar(con, "sandbox.cleanup", "system", detail={"parados": parados})
         except Exception as e:                            # nunca derruba o laço
             try:
                 auditar(con, "sync.auto.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
