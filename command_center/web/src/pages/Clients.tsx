@@ -50,9 +50,35 @@ function Duplicados({ onChanged }: { onChanged: () => void }) {
   </Section>
 }
 
+function NovoCliente({ onClose, onCreated }: { onClose: () => void; onCreated: (id: number) => void }) {
+  const toast = useToast()
+  const [f, setF] = useState({ name: '', pilot_name: '', pilot_dob: '', email: '', phone: '', company: '', notes: '', vip: false })
+  const [busy, setBusy] = useState(false)
+  async function save() {
+    setBusy(true)
+    try { const r = await api.post<{ id: number; created: boolean }>('/clients', f); toast(r.created ? 'Cliente criado.' : 'Esse cliente já existia: abrindo o card dele.', 'ok'); onCreated(r.id); onClose() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose}>✕</button>
+    <div><h2 className="h1" style={{ fontSize: 22 }}>Novo cliente</h2><div className="small muted">O responsável é quem paga e assina. Se já existir alguém com o mesmo e-mail, telefone ou nome, o card existente abre em vez de duplicar.</div></div>
+    <div className="grid g2">
+      <div className="field"><label>Responsável *</label><input className="input" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+      <div className="field"><label>Piloto (se for outra pessoa)</label><input className="input" value={f.pilot_name} onChange={e => setF({ ...f, pilot_name: e.target.value })} /></div>
+      <div className="field"><label>E-mail</label><input className="input" type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
+      <div className="field"><label>Telefone</label><input className="input" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} /></div>
+      <div className="field"><label>Nascimento do piloto</label><input className="input" type="date" value={f.pilot_dob} onChange={e => setF({ ...f, pilot_dob: e.target.value })} /></div>
+      <div className="field"><label>Empresa</label><input className="input" value={f.company} onChange={e => setF({ ...f, company: e.target.value })} /></div>
+    </div>
+    <div className="field"><label>Notas</label><textarea className="input" rows={2} value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+    <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || f.name.trim().length < 2} onClick={save}>{busy ? <Spinner /> : 'Salvar e abrir o card'}</button></div>
+  </div></div>
+}
+
 export function Clients() {
   const { can } = useAuth()
   const toast = useToast()
+  const [novo, setNovo] = useState(false)
   const [sp, setSp] = useSearchParams()
   const [q, setQ] = useState(sp.get('q') || '')
   const status = sp.get('status') || ''
@@ -84,7 +110,7 @@ export function Clients() {
   }
   return <>
     <div className="page-h"><div><h1 className="h1">Clientes</h1><div className="sub small">Uma pessoa, um card. Corrida não é cliente. Ativo = serviço nos últimos 6 meses. Ordem: serviço mais recente primeiro. Clique para abrir o card completo.</div></div>
-      <div className="row wrap">{can('OPERATOR') && <button className="btn" disabled={scanning} onClick={scanAll} title="Gmail (as duas caixas) e DocuSign de cada cliente ativo">{scanning ? <Spinner /> : '⌕'} Varrer plataformas ({ativos} ativos)</button>}</div></div>
+      <div className="row wrap">{can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}>+ Novo cliente</button>}{can('OPERATOR') && <button className="btn" disabled={scanning} onClick={scanAll} title="Gmail (as duas caixas) e DocuSign de cada cliente ativo">{scanning ? <Spinner /> : '⌕'} Varrer plataformas ({ativos} ativos)</button>}</div></div>
     <div className="row wrap">
       <input className="input" style={{ maxWidth: 320 }} placeholder="Piloto, responsável ou e-mail" value={q} onChange={e => setQ(e.target.value)} aria-label="Filtrar" />
       <select className="input" style={{ width: 190 }} value={status} onChange={e => set('status', e.target.value)} aria-label="Status">
@@ -119,6 +145,7 @@ export function Clients() {
           })}</tbody>
         </table></div>}
     </Section>
+    {novo && <NovoCliente onClose={() => setNovo(false)} onCreated={id => { reload(); open(id) }} />}
     {openId && <div className="modal-scrim" onMouseDown={() => open(null)}>
       <div className="modal" onMouseDown={e => e.stopPropagation()} role="dialog" aria-label="Card do cliente">
         <button className="btn ghost sm close" onClick={() => open(null)} aria-label="Fechar">✕ fechar</button>

@@ -261,6 +261,21 @@ def reenviar_humano(envelopeId, novo_email=None, novo_nome=None):
     return {"aplicado": True, "reenviado": True, "email": alvo.get("email")}
 
 
+def enviar_waiver_humano(templateId, nome, email, servico=""):
+    """Botão 'Enviar waiver' do Command Center. Não é ferramenta do agente. Não passa por APLICAR
+    (a pessoa clicou), mas as travas de duplicidade (waiver válida / envelope aberto) continuam."""
+    anterior = os.environ.get("APLICAR")
+    os.environ["APLICAR"] = "1"
+    try:
+        return docusign_enviar_waiver(templateId, nome, email, idade_confirmada=True,
+                                      nome_email_conferidos=True, servico=servico or "")
+    finally:
+        if anterior is None:
+            os.environ.pop("APLICAR", None)
+        else:
+            os.environ["APLICAR"] = anterior
+
+
 srv = Servidor("urace-docusign", "0.1")
 
 

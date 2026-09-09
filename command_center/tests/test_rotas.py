@@ -397,3 +397,38 @@ def test_falha_da_ia_so_se_a_ultima_falhou(cli):
     inserir(con, "ai_commands", user_id=uid, text="b", session_key="s", status="DONE", output="ok", finished_at="2026-09-08T11:00:00.000Z")
     assert not any(i["key"].startswith("ia-falhas") for i in cli.get(B + "/needs-attention").json())        # recuperou: silêncio
     con.close()
+
+
+# ------------------------------------------------ criação manual pelo painel (09/09)
+def test_criar_cliente_manual_sem_duplicar(cli):
+    h = entra(cli, "admin@urace.us")
+    r = cli.post(B + "/clients", headers=h, json={"name": "Eduardo Teste", "pilot_name": "Davi Teste", "email": "eduardo.teste@example.com", "phone": "61 98267-8383", "pilot_dob": "2013-03-04"})
+    assert r.status_code == 201 and r.json()["created"] is True
+    cid = r.json()["id"]
+    r2 = cli.post(B + "/clients", headers=h, json={"name": "EDUARDO TESTE", "email": "eduardo.teste@example.com"})
+    assert r2.status_code == 201 and r2.json()["created"] is False and r2.json()["id"] == cid
+    c = cli.get(B + f"/clients/{cid}").json()["client"]
+    assert c["pilot_name"] == "Davi Teste" and c["status"] == "NEW" and c["source"] == "manual"
+    assert cli.post(B + "/clients", headers=h, json={"name": "X"}).status_code == 400
+    assert cli.post(B + "/clients", headers=entra(cli, "viewer@urace.us"), json={"name": "Alguém Novo"}).status_code == 403
+
+
+def test_nova_tarefa_e_waiver_sem_sistemas(cli):
+    h = entra(cli, "admin@urace.us")
+    # segunda-feira não tem coluna
+    assert cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Practice", "due_on": "2026-09-14"}).status_code == 400
+    r = cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Practice", "category": "Kart", "due_on": "2026-09-19", "email": "eduardo.teste@example.com", "dob": "2013-03-04"})
+    assert r.status_code == 503                                    # sem Asana aqui: nunca 500, nada espelhado
+    assert cli.post(B + "/waivers/send", headers=h, json={"template": "parental", "signer_name": "Eduardo Teste", "signer_email": "eduardo@urace.us"}).status_code == 400
+    assert cli.post(B + "/waivers/send", headers=h, json={"template": "x", "signer_name": "E", "signer_email": "e@x.com"}).status_code == 400
+    assert cli.post(B + "/waivers/send", headers=h, json={"template": "parental", "signer_name": "Eduardo Teste", "signer_email": "eduardo.teste@example.com"}).status_code == 503
+    rc = cli.get(B + "/rate-card/check").json()
+    assert rc["ok"] is False and rc["id"].startswith("160ef")
+
+
+def test_extrai_texto_do_openclaw_novo():
+    from command_center.api import ia
+    j = '{"runId":"x","status":"ok","result":{"payloads":[{"text":"Faltam dois dados:\\n1. e-mail\\n2. data","mediaUrl":null}],"meta":{}}}'
+    assert ia._extrai_texto(j).startswith("Faltam dois dados")
+    assert ia._extrai_texto('{"text":"formato antigo"}') == "formato antigo"
+    assert ia._extrai_texto("texto solto sem json") is None

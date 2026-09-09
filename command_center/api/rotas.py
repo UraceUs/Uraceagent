@@ -2,6 +2,7 @@
 integrações, políticas. Toda rota exige sessão; escrita exige papel.
 """
 import json
+import os
 import re
 import sqlite3
 import threading
@@ -949,3 +950,165 @@ def qbo_summary(u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depe
             "paid_30d": {"count": pagas30["c"], "total": round(pagas30["t"], 2)},
             "top_debtors": todos(con, """SELECT c.id, c.name, c.pilot_name, SUM(i.balance) AS balance, COUNT(*) AS n FROM invoices i JOIN clients c ON c.id=i.client_id
                                          WHERE i.status IN ('open','sent','overdue') GROUP BY c.id ORDER BY balance DESC LIMIT 8""")}
+
+
+
+# ============================================================ Criação manual pelo painel (portas humanas)
+from command_center.providers.sync import PROJETO_URACE, SECOES_DIAS, _upsert_cliente, _liga, ASANA_LINK  # noqa: E402
+
+MODELO_SESSAO = os.environ.get("ASANA_MODELO_SESSAO", "1208702559561159")
+RATE_CARD_ID = "160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo"
+
+
+class ClienteNovoIn(BaseModel):
+    name: str
+    pilot_name: str | None = None
+    pilot_dob: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    company: str | None = None
+    notes: str | None = None
+    vip: bool = False
+
+
+@r.post("/clients", status_code=201)
+def client_create(dados: ClienteNovoIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Cliente criado à mão no painel. Se já existir (e-mail, telefone, nome), devolve o existente em vez de duplicar."""
+    nome = (dados.name or "").strip()
+    if len(nome) < 2:
+        raise HTTPException(400, "Nome do responsável é obrigatório.")
+    email = (dados.email or "").strip().lower() or None
+    if email and "@" not in email:
+        raise HTTPException(400, "E-mail inválido.")
+    cid, novo = _upsert_cliente(con, nome, email, (dados.phone or "").strip() or None, (dados.pilot_name or "").strip() or None,
+                                (dados.pilot_dob or "").strip() or None, True if dados.vip else None, source="manual")
+    if dados.company or dados.notes:
+        con.execute("UPDATE clients SET company=COALESCE(?, company), notes=COALESCE(?, notes) WHERE id=?", (dados.company, dados.notes, cid))
+    if novo:
+        con.execute("UPDATE clients SET status='NEW' WHERE id=?", (cid,))
+    auditar(con, "client.create" if novo else "client.match", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid,
+            detail={"name": nome, "email": email, "novo": novo}, ip=auth._ip(request))
+    return {"id": cid, "created": novo}
+
+
+class TarefaNovaIn(BaseModel):
+    client_id: int | None = None
+    pilot_name: str
+    responsible: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    dob: str | None = None
+    product: str                         # ex.: Practice, Professional Coaching, Arrive and Drive
+    category: str | None = None          # ex.: Kart, 2T, 4T, Baby Kart, F4
+    days: int = 1
+    due_on: str                          # AAAA-MM-DD
+    section_gid: str | None = None       # coluna do dia; se vazio, deduz do due_on
+    extra_notes: str | None = None
+
+
+def _secao_do_dia(due_on):
+    from datetime import date as _d
+    nomes = {1: "TUESDAY", 2: "WEDNESDAY", 3: "THURSDAY", 4: "FRIDAY", 5: "SATURDAY", 6: "SUNDAY"}
+    wd = _d.fromisoformat(due_on).weekday()
+    nome = nomes.get(wd)
+    for gid, n in SECOES_DIAS.items():
+        if n == nome:
+            return gid, n
+    return None, None
+
+
+@r.post("/tasks", status_code=201)
+def task_create(dados: TarefaNovaIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Botão 'Nova tarefa': instancia o modelo oficial no Asana, na coluna do dia, e espelha aqui."""
+    from datetime import date as _d
+    try:
+        _d.fromisoformat(dados.due_on)
+    except ValueError:
+        raise HTTPException(400, "Data inválida (AAAA-MM-DD).")
+    sec_gid, sec_nome = (dados.section_gid, SECOES_DIAS.get(dados.section_gid)) if dados.section_gid else _secao_do_dia(dados.due_on)
+    if not sec_gid:
+        raise HTTPException(400, "A data cai numa segunda-feira: o quadro não tem coluna. Escolha outra data ou a coluna.")
+    piloto = dados.pilot_name.strip()
+    resp = (dados.responsible or piloto).strip()
+    nome = f"{piloto}_{dados.product.strip()}" + (f"_{dados.category.strip()}" if dados.category else "") + f" [1/{max(1, int(dados.days))}]"
+    idade = None
+    if dados.dob:
+        try:
+            b = _d.fromisoformat(dados.dob); h = _d.today()
+            idade = h.year - b.year - ((h.month, h.day) < (b.month, b.day))
+        except ValueError:
+            raise HTTPException(400, "Data de nascimento inválida (AAAA-MM-DD).")
+    notas = (f"Driver's name: {piloto}\nDate of Birth: {dados.dob or ''}\nAge: {idade if idade is not None else ''}\n"
+             f"Responsible Name: {resp}\nEmail: {dados.email or ''}\nPhone: {dados.phone or ''}\n"
+             f"Service Dates for this Month: {dados.due_on}" + (f"\n\n{dados.extra_notes}" if dados.extra_notes else "")
+             + f"\n\n[criado pelo Command Center por {u['name']}]")
+    try:
+        res = modulo("asana").criar_do_modelo_humano(MODELO_SESSAO, nome, sec_gid, notas, dados.due_on)
+    except NaoConectado as ex:
+        raise HTTPException(503, f"Asana não conectado: {ex}")
+    except Exception as ex:
+        raise HTTPException(502, str(ex)[:300])
+    cid = dados.client_id
+    if not cid:
+        cid, _ = _upsert_cliente(con, resp, (dados.email or "").lower() or None, dados.phone, piloto if piloto != resp else None, dados.dob, source="manual")
+    tid = inserir(con, "tasks", client_id=cid, title=res.get("nome") or nome, project="U-RACE", section=sec_nome, section_gid=sec_gid,
+                  status="open", due_on=dados.due_on, synced_at=agora())
+    _liga(con, "task", tid, "asana", res["gid"], res.get("link") or ASANA_LINK.format(proj=PROJETO_URACE, gid=res["gid"]))
+    _liga(con, "client", cid, "asana", res["gid"], res.get("link"))
+    auditar(con, "task.create", f"user:{u['id']}", user_id=u["id"], entity_type="task", entity_id=tid,
+            detail={"gid": res["gid"], "nome": nome, "secao": sec_nome, "client_id": cid}, ip=auth._ip(request))
+    from command_center.api import motor
+    motor.registrar_evento(con, "task.created", "task", tid, cid, f"{nome} em {sec_nome} ({dados.due_on}) — criada pelo painel")
+    return {"id": tid, "client_id": cid, "gid": res["gid"], "link": res.get("link"), "section": sec_nome}
+
+
+class WaiverEnviarIn(BaseModel):
+    template: str                        # parental | adult
+    signer_name: str
+    signer_email: str
+    service: str | None = None
+    client_id: int | None = None
+
+
+@r.post("/waivers/send", status_code=201)
+def waiver_send(dados: WaiverEnviarIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Botão 'Enviar waiver': clique humano; as travas de duplicidade do DocuSign continuam valendo."""
+    templates = {"parental": os.environ.get("DOCUSIGN_TEMPLATE_PARENTAL", "6dbf2094-39da-4c21-95dd-feda7ac28022"),
+                 "adult": os.environ.get("DOCUSIGN_TEMPLATE_ADULT", "c51aede4-bba5-40df-9f14-24c340e2bd3e")}
+    if dados.template not in templates:
+        raise HTTPException(400, "Modelo deve ser parental ou adult.")
+    email = dados.signer_email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(400, "E-mail inválido.")
+    if email.endswith("@urace.us"):
+        raise HTTPException(400, "E-mail do domínio da URACE não é de cliente. Confira o e-mail do responsável.")
+    try:
+        res = modulo("docusign").enviar_waiver_humano(templates[dados.template], dados.signer_name.strip(), email, dados.service or "")
+    except NaoConectado as ex:
+        raise HTTPException(503, f"DocuSign não conectado: {ex}")
+    except Exception as ex:
+        raise HTTPException(409 if "RECUSADO" in str(ex) or "NÃO ENVIAR" in str(ex) else 502, str(ex)[:300])
+    env = res.get("envelopeId") if isinstance(res, dict) else None
+    cid = dados.client_id or (_acha := None)
+    if not cid:
+        c = um(con, "SELECT id FROM clients WHERE email=?", (email,))
+        cid = c["id"] if c else None
+    wid = inserir(con, "waivers", client_id=cid, signer_name=dados.signer_name.strip(), signer_email=email, template=dados.template,
+                  status="sent", sent_at=agora(), link_reason="enviada pelo painel", link_by="human" if cid else None, synced_at=agora())
+    if env:
+        _liga(con, "waiver", wid, "docusign", env, f"https://apps.docusign.com/send/documents/details/{env}")
+    auditar(con, "waiver.send", f"user:{u['id']}", user_id=u["id"], entity_type="waiver", entity_id=wid,
+            detail={"envelope": env, "template": dados.template, "email": email}, ip=auth._ip(request))
+    return {"id": wid, "envelope": env, "result": res}
+
+
+@r.get("/rate-card/check")
+def rate_card_check(u=Depends(auth.usuario_atual)):
+    """A IA precisa ler a planilha de preços. Prova: lê as primeiras células ao vivo."""
+    try:
+        r = chamar("gmail", "sheets_ler", conta="urace", planilha_id=RATE_CARD_ID, intervalo="A1:D6")
+        return {"ok": True, "linhas": r.get("linhas", [])[:6], "id": RATE_CARD_ID}
+    except NaoConectado as e:
+        return {"ok": False, "reason": str(e), "id": RATE_CARD_ID}
+    except Exception as e:
+        return {"ok": False, "reason": f"{type(e).__name__}: {str(e)[:200]}", "id": RATE_CARD_ID}

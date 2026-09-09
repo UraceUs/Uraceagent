@@ -111,7 +111,38 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
   </div></div>
 }
 
+function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const toast = useToast()
+  const [f, setF] = useState({ pilot_name: '', responsible: '', email: '', phone: '', dob: '', product: 'Practice', category: 'Kart', days: 1, due_on: '', extra_notes: '' })
+  const [busy, setBusy] = useState(false)
+  const set = (k: string, v: string | number) => setF({ ...f, [k]: v })
+  async function save() {
+    setBusy(true)
+    try { const r = await api.post<{ id: number; link: string; section: string }>('/tasks', f); toast(`Tarefa criada na coluna ${r.section}.`, 'ok'); onDone(); onClose(); if (r.link) window.open(r.link, '_blank', 'noopener') }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose}>✕</button>
+    <div><h2 className="h1" style={{ fontSize: 22 }}>Nova tarefa de serviço</h2><div className="small muted">Cria no Asana a partir do modelo oficial (com as subtarefas), na coluna do dia da data. A IA é avisada e prepara waiver e invoice.</div></div>
+    <div className="grid g2">
+      <div className="field"><label>Piloto *</label><input className="input" value={f.pilot_name} onChange={e => set('pilot_name', e.target.value)} /></div>
+      <div className="field"><label>Responsável (quem paga/assina)</label><input className="input" value={f.responsible} onChange={e => set('responsible', e.target.value)} placeholder="se vazio, o próprio piloto" /></div>
+      <div className="field"><label>E-mail do responsável</label><input className="input" type="email" value={f.email} onChange={e => set('email', e.target.value)} /></div>
+      <div className="field"><label>Telefone</label><input className="input" value={f.phone} onChange={e => set('phone', e.target.value)} /></div>
+      <div className="field"><label>Nascimento do piloto</label><input className="input" type="date" value={f.dob} onChange={e => set('dob', e.target.value)} /></div>
+      <div className="field"><label>Data do serviço *</label><input className="input" type="date" value={f.due_on} onChange={e => set('due_on', e.target.value)} /></div>
+      <div className="field"><label>Produto *</label><select className="input" value={f.product} onChange={e => set('product', e.target.value)}>{['Practice', 'Professional Coaching', 'Arrive and Drive', 'Urace Academy', 'Summer Camp', 'Race Support', 'Trackside Support', 'Test Drive'].map(x => <option key={x}>{x}</option>)}</select></div>
+      <div className="field"><label>Categoria</label><select className="input" value={f.category} onChange={e => set('category', e.target.value)}>{['Kart', '2T', '4T', 'Baby Kart', 'F4', 'X30', 'KA100'].map(x => <option key={x}>{x}</option>)}</select></div>
+      <div className="field"><label>Dias</label><input className="input" type="number" min={1} max={10} value={f.days} onChange={e => set('days', Number(e.target.value))} /></div>
+    </div>
+    <div className="field"><label>Observações</label><textarea className="input" rows={2} value={f.extra_notes} onChange={e => set('extra_notes', e.target.value)} placeholder="altura, peso, experiência, pedidos especiais" /></div>
+    <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !f.pilot_name.trim() || !f.due_on} onClick={save}>{busy ? <Spinner /> : 'Criar no Asana'}</button></div>
+  </div></div>
+}
+
 export function AsanaPage() {
+  const { can } = useAuth()
+  const [nova, setNova] = useState(false)
   const [tab, setTab] = useTab<'cal' | 'board' | 'list'>('v', 'cal')
   const [status, setStatus] = useTab<'all' | 'open' | 'completed'>('s', 'all')
   const { data, error, loading, reload } = useGet<Task[]>('/tasks?status=all', 120000)
@@ -120,7 +151,9 @@ export function AsanaPage() {
   return <>
     <IntHeader system="asana" title="Asana" desc="Quadro U-RACE espelhado: TUESDAY a SUNDAY é a agenda, RACES são corridas, Finished Services é o histórico. “Matt tasks” não é espelhada (decisão do dono)." openHref={ASANA_PROJ} openLabel="Abrir no Asana" />
     <div className="row wrap"><SubTabs tabs={[['cal', 'Calendário'], ['board', 'Quadro'], ['list', 'Lista']]} value={tab} onChange={setTab} /><div className="grow" />
+      {can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>+ Nova tarefa</button>}
       <select className="input" style={{ width: 160 }} value={status} onChange={e => setStatus(e.target.value as 'all')}><option value="all">Abertas e concluídas</option><option value="open">Só abertas</option><option value="completed">Só concluídas</option></select><button className="btn" onClick={reload}>↻</button></div>
+    {nova && <NovaTarefa onClose={() => setNova(false)} onDone={reload} />}
     {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading rows={6} /> : <>
       {tab === 'cal' && <Calendario tasks={tasks} onOpen={setOpen} />}
       {tab === 'board' && <Quadro tasks={tasks} onOpen={setOpen} />}
@@ -144,10 +177,33 @@ function LinkClient({ w, onDone }: { w: Waiver; onDone: () => void }) {
     {(clients.data || []).slice(0, 5).map(c => <button key={c.id} className="btn sm" onClick={async () => { try { await api.post(`/waivers/${w.id}/link`, { client_id: c.id }); toast('Vinculado.', 'ok'); setQ(''); onDone() } catch (ex) { toast((ex as ApiError).message, 'crit') } }}>{c.pilot_name || c.name}</button>)}
   </div>
 }
+function EnviarWaiver({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const toast = useToast()
+  const [f, setF] = useState({ template: 'parental', signer_name: '', signer_email: '', service: '' })
+  const [busy, setBusy] = useState(false)
+  async function send() {
+    if (!window.confirm(`Enviar a waiver ${f.template} para ${f.signer_name} <${f.signer_email}> agora?`)) return
+    setBusy(true)
+    try { await api.post('/waivers/send', f); toast('Waiver enviada pelo DocuSign.', 'ok'); onDone(); onClose() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose}>✕</button>
+    <div><h2 className="h1" style={{ fontSize: 22 }}>Enviar waiver</h2><div className="small muted">Parental quando o piloto é menor: quem assina é o responsável. O DocuSign recusa se já houver waiver válida ou envelope aberto para o e-mail.</div></div>
+    <div className="grid g2">
+      <div className="field"><label>Modelo</label><select className="input" value={f.template} onChange={e => setF({ ...f, template: e.target.value })}><option value="parental">Parental (piloto menor)</option><option value="adult">Adult</option></select></div>
+      <div className="field"><label>Serviço (opcional)</label><input className="input" value={f.service} onChange={e => setF({ ...f, service: e.target.value })} /></div>
+      <div className="field"><label>Nome de quem assina *</label><input className="input" value={f.signer_name} onChange={e => setF({ ...f, signer_name: e.target.value })} /></div>
+      <div className="field"><label>E-mail de quem assina *</label><input className="input" type="email" value={f.signer_email} onChange={e => setF({ ...f, signer_email: e.target.value })} /></div>
+    </div>
+    <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !f.signer_name.trim() || !f.signer_email.includes('@')} onClick={send}>{busy ? <Spinner /> : 'Enviar agora'}</button></div>
+  </div></div>
+}
+
 export function DocuSignPage() {
   const nav = useNavigate()
   const { can } = useAuth()
   const toast = useToast()
+  const [enviar, setEnviar] = useState(false)
   const [tab, setTab] = useTab<'env' | 'signed' | 'tpl' | 'lixo'>('v', 'env')
   const [st, setSt] = useTab<string>('s', 'all')
   const env = useGet<Waiver[]>(tab === 'lixo' ? '/waivers?hidden=1' : '/waivers', 120000)
@@ -176,8 +232,10 @@ export function DocuSignPage() {
   return <>
     <IntHeader system="docusign" title="DocuSign" desc="Envelopes de waiver da conta de produção (na4). Delivered não é assinada; autoresponded é e-mail devolvido. Cada envelope é ligado ao cliente/piloto pelo e-mail, pelo nome do menor ou pelo signatário." openHref="https://app.docusign.com/home" openLabel="Abrir no DocuSign" />
     <div className="row wrap"><SubTabs tabs={[['env', 'Envelopes'], ['signed', `Assinadas (${(env.data || []).filter(w => w.status === 'completed' && (w.template === 'parental' || w.template === 'adult')).length})`], ['tpl', 'Modelos'], ['lixo', 'Lixeira']]} value={tab} onChange={setTab} /><div className="grow" />
+      {can('OPERATOR') && <button className="btn primary" onClick={() => setEnviar(true)}>+ Enviar waiver</button>}
       {tab !== 'tpl' && tab !== 'signed' && <select className="input" style={{ width: 220 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todos ({env.data?.length ?? 0})</option>{Object.entries(counts).map(([k, n]) => <option key={k} value={k}>{WAIVER_LABEL[k] || k} ({n})</option>)}</select>}
       <button className="btn" onClick={() => { env.reload(); tpl.reload() }}>↻</button></div>
+    {enviar && <EnviarWaiver onClose={() => setEnviar(false)} onDone={env.reload} />}
     {tab !== 'tpl' && <Section title={tab === 'lixo' ? 'Na lixeira do painel' : tab === 'signed' ? 'Waivers assinadas (parental e adult)' : 'Envelopes'} count={rows.length} tight>
       {env.error && !env.data ? <ErrorState error={env.error} retry={env.reload} /> : env.loading && !env.data ? <Loading /> : rows.length === 0 ? <Empty>{tab === 'lixo' ? 'Nada na lixeira.' : 'Nenhum envelope espelhado com esse filtro.'}</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>Cliente / piloto</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>

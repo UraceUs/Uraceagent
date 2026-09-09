@@ -40,3 +40,5 @@ Como isso muda o que se escreve:
 Português, direto, sem enfeite. Ele corrige em uma frase; texto longo
 atrapalha. E **não tirar dúvida sobre tudo** — quando perguntar, ser
 conciso e certeiro. Ver [[Escalonamento]].
+
+- **09/09 — a IA conversa como colega.** No AI Command, resposta em português direto, sem jargão interno (trava, APLICAR, política, ids). Faltou dado: perguntas em lista curta e para. Dá para agir: age e diz em uma linha. Preço: lê a Rate Card antes de perguntar.

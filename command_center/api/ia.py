@@ -95,13 +95,25 @@ def _limpa(s):
 
 
 def _extrai_texto(saida):
-    """`--json` pode devolver um objeto; pega o campo de texto se houver."""
-    try:
-        j = json.loads(saida.strip().split("\n")[-1])
-    except Exception:
+    """`--json` devolve um objeto; o texto do agente vive em lugares diferentes
+    conforme a versão do OpenClaw. Procura em todos; devolve None se não achar."""
+    bruto = (saida or "").strip()
+    j = None
+    for candidato in (bruto, bruto.split("\n")[-1]):
+        try:
+            j = json.loads(candidato)
+            break
+        except Exception:
+            continue
+    if not isinstance(j, dict):
         return None
-    for k in ("text", "reply", "output", "content", "message"):
-        v = j.get(k) if isinstance(j, dict) else None
+    res = j.get("result") if isinstance(j.get("result"), dict) else {}
+    pay = res.get("payloads") or j.get("payloads") or []
+    textos = [p.get("text") for p in pay if isinstance(p, dict) and isinstance(p.get("text"), str) and p["text"].strip()]
+    if textos:
+        return "\n\n".join(textos)
+    for k in ("finalAssistantVisibleText", "finalAssistantRawText", "text", "reply", "output", "content", "message"):
+        v = res.get(k) if k in res else j.get(k)
         if isinstance(v, str) and v.strip():
             return v
     return None
@@ -116,7 +128,12 @@ _PARALELO = threading.Semaphore(int(os.environ.get("CC_AI_PARALELO", "1")))
 # Command Center lê sem adivinhar. O agente já trabalha em simulação
 # (APLICAR=0); isto só pede que ele declare as ações no fim.
 SUFIXO = (
-    "\n\n[Command Center] Ao terminar, liste TODAS as ações que você executaria em produção, "
+    "\n\n[Command Center] COMO RESPONDER: você é um colega de operação da URACE falando com o dono pelo painel. "
+    "Português direto, frases curtas, sem jargão interno: não cite 'trava', 'APLICAR', 'política', ids de template ou nomes de ferramenta no texto. "
+    "Se faltar dado, faça as perguntas numa lista curta (só o que realmente impede agir) e pare. "
+    "Se der para agir com o que tem, aja e diga o que fez em uma linha. Não explique regras internas, aplique-as. "
+    "Se precisar de preço, leia a Rate Card (planilha) antes de perguntar ao dono."
+    "\nAo terminar, liste TODAS as ações que você executaria em produção, "
     "uma por linha, exatamente neste formato e nada mais nessas linhas:\n"
     "ACAO: <nome_da_ferramenta_mcp> | <alvo (pessoa, gid, e-mail)> | <resumo curto> | <JSON com os argumentos EXATOS da ferramenta>\n"
     "O JSON é obrigatório e precisa ter os mesmos nomes de parâmetro da ferramenta (ex.: "

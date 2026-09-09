@@ -360,6 +360,55 @@ def asana_criar_tarefa(projeto_gid, nome, secao_gid=None, notas=None, vence_em=N
     return {"aplicado": True, "gid": r["gid"], "link": r.get("permalink_url")}
 
 
+def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None):
+    """Instancia o modelo de tarefa (subtarefas, campos) e ajusta nome, seção, notas e data."""
+    import time
+    if secao_gid and secao_gid == _gid_matt_tasks():
+        raise ErroFerramenta("RECUSADO: não se cria nada em 'Matt tasks'.")
+    job = _req(f"/task_templates/{modelo_gid}/instantiateTask", "POST", {"name": nome})["data"]
+    novo = (job.get("new_task") or {}).get("gid")
+    for _ in range(30):                        # o Asana cria em segundo plano
+        if novo:
+            break
+        time.sleep(1)
+        j = _req(f"/jobs/{job['gid']}")["data"]
+        novo = (j.get("new_task") or {}).get("gid")
+        if j.get("status") == "failed":
+            raise ErroFerramenta("o Asana não conseguiu instanciar o modelo")
+    if not novo:
+        raise ErroFerramenta("o Asana demorou demais para criar a tarefa a partir do modelo")
+    ajuste = {}
+    if notas:
+        ajuste["notes"] = notas
+    if vence_em:
+        ajuste["due_on"] = vence_em
+    if ajuste:
+        _req(f"/tasks/{novo}", "PUT", ajuste)
+    if secao_gid:
+        _req(f"/sections/{secao_gid}/addTask", "POST", {"task": novo})
+    t = _req(f"/tasks/{novo}?opt_fields=permalink_url,name")["data"]
+    return {"aplicado": True, "gid": novo, "nome": t.get("name"), "link": t.get("permalink_url")}
+
+
+@srv.ferramenta(
+    "asana_criar_do_modelo",
+    "Cria uma tarefa de serviço a partir do modelo oficial (com as subtarefas e campos do modelo) "
+    "e a coloca na coluna do dia. Preencha 'notas' no bloco padrão (Driver's name / Date of Birth / "
+    "Age / Responsible Name / Email / Phone). Com APLICAR=0 é simulação.",
+    {"modelo_gid": {"type": "string"}, "nome": {"type": "string"}, "secao_gid": {"type": "string"},
+     "notas": {"type": "string"}, "vence_em": {"type": "string", "description": "AAAA-MM-DD"}},
+    ["modelo_gid", "nome"])
+def asana_criar_do_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None):
+    if not _aplicar():
+        return _simulado(f"criar '{nome}' a partir do modelo {modelo_gid}" + (f", seção {secao_gid}" if secao_gid else ""))
+    return _instanciar_modelo(modelo_gid, nome, secao_gid, notas, vence_em)
+
+
+def criar_do_modelo_humano(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None):
+    """Porta humana (botão 'Nova tarefa' do Command Center): não é ferramenta do agente e não passa por APLICAR."""
+    return _instanciar_modelo(modelo_gid, nome, secao_gid, notas, vence_em)
+
+
 @srv.ferramenta(
     "asana_anexar_arquivo",
     "Sobe um arquivo como anexo da tarefa (ex.: a waiver assinada em PDF). O "

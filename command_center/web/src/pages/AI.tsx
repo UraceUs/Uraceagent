@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, statusTone } from '../components/ui'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
 import { useToast } from '../components/Toast'
+import { Md } from '../components/Md'
 
 export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void }) {
   const { can } = useAuth()
@@ -47,11 +48,11 @@ function CommandView({ id, onDone }: { id: number; onDone?: () => void }) {
   if (!c) return <Loading rows={2} />
   const running = c.status === 'QUEUED' || c.status === 'RUNNING'
   return <div className="chat">
-    <div className="msg me"><div className="av avatar">EU</div><div className="grow"><div className="meta">{fmtDateTime(c.created_at)}</div><div className="bub">{c.text}</div></div></div>
+    <div className="msg me"><div className="av avatar">EU</div><div className="grow"><div className="meta">{fmtDateTime(c.created_at)}</div><div className="bub">{c.text.split('\n\nO QUE O DONO JÁ ENSINOU')[0]}</div></div></div>
     <div className="msg"><div className="av avatar" style={{ background: 'var(--brand)' }}>AI</div><div className="grow">
       <div className="meta">urace-admin <Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.finished_at && <span>{ago(c.finished_at)}</span>}</div>
       <div className="bub">{running ? <span className="row"><span className="spin" /> {c.status === 'QUEUED' ? 'Na fila…' : 'Pensando e consultando os sistemas…'} <span className="muted small">(pode levar alguns minutos)</span></span>
-        : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : (c.output || <span className="muted">(sem texto)</span>)}</div>
+        : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : c.output ? <Md text={c.output} /> : <span className="muted">(sem texto)</span>}</div>
       {!!c.actions?.length && <div className="acts"><div className="small muted cond">Ações propostas ({c.actions.length})</div>{c.actions.map(a => <ActionCard key={a.id} a={a} />)}</div>}
     </div></div>
   </div>
@@ -70,23 +71,27 @@ export function AICommand() {
   const ta = useRef<HTMLTextAreaElement>(null)
   useEffect(() => { if (loc.state?.ask) { setText(loc.state.ask); ta.current?.focus(); window.history.replaceState({}, '') } }, [loc.state])
   const cur = id ? Number(id) : null
+  const hojeIso = new Date().toISOString().slice(0, 10)
+  const hoje = [...(hist.data || [])].filter(c => c.created_at.startsWith(hojeIso) && !c.text.startsWith('EVENTO AUTOMÁTICO') && !c.text.startsWith('INSTRUÇÃO DO DONO') && !c.text.startsWith('TAREFA:')).reverse()
 
   async function send() {
     const t = text.trim(); if (!t || busy) return
     setBusy(true)
-    try { const r = await api.post<{ id: number }>('/ai/commands', { text: t }); setText(''); nav(`/ai/${r.id}`); hist.reload() }
+    try { await api.post<{ id: number }>('/ai/commands', { text: t }); setText(''); if (cur) nav('/ai'); hist.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
 
   return <>
-    <div className="page-h"><div><h1 className="h1">AI Command</h1><div className="sub small">Fala com o agente <span className="mono">urace-admin</span> do OpenClaw, que lê Asana, DocuSign e Gmail pelos MCP próprios. Toda ação com efeito vira proposta e passa por política.</div></div></div>
+    <div className="page-h"><div><h1 className="h1">AI Command</h1><div className="sub small">Conversa com o agente, que lê Asana, DocuSign, Gmail e QuickBooks. Ele lembra a conversa do dia. O que tem efeito vira ação: segura executa, waiver e invoice esperam sua aprovação.</div></div></div>
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 300px' }}>
       <div className="stack">
         {!can('OPERATOR') && <Banner tone="info">Seu papel é de leitura: você vê o histórico, mas não envia comandos.</Banner>}
-        {cur ? <CommandView key={cur} id={cur} onDone={hist.reload} /> : <div className="card card-b">
-          <div className="h2" style={{ marginBottom: 10 }}>Sugestões</div>
-          {sug.data ? <div className="sug">{sug.data.map(s => <button key={s} onClick={() => { setText(s); ta.current?.focus() }}>{s}</button>)}</div> : <Loading rows={2} />}
-        </div>}
+        {cur ? <CommandView key={cur} id={cur} onDone={hist.reload} /> : <>
+          {hoje.length > 0 ? <div className="stack">{hoje.map(c => <CommandView key={c.id} id={c.id} onDone={hist.reload} />)}</div> : <div className="card card-b">
+            <div className="h2" style={{ marginBottom: 10 }}>Sugestões</div>
+            {sug.data ? <div className="sug">{sug.data.map(s => <button key={s} onClick={() => { setText(s); ta.current?.focus() }}>{s}</button>)}</div> : <Loading rows={2} />}
+          </div>}
+        </>}
         {can('OPERATOR') && <div className="composer"><div className="box">
           <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} placeholder="Pergunte ou peça algo. Enter envia, Shift+Enter quebra linha." maxLength={4000}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} rows={2} aria-label="Comando" />
