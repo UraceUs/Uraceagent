@@ -126,6 +126,17 @@ def _coletar(con):
                           entity={"type": "task", "id": t["id"]}, client_id=t["client_id"],
                           link=_link(con, "task", t["id"]), action="Mover ou concluir"))
 
+    # ---- 4b. invoice vencida há mais de 30 dias (regra do dono: cobrança por lote, mas não some)
+    for i in todos(con, """SELECT i.*, c.name AS cliente FROM invoices i LEFT JOIN clients c ON c.id=i.client_id
+                           WHERE i.status='overdue' AND i.due_on < ? ORDER BY i.due_on""",
+                   ((hoje - timedelta(days=30)).isoformat(),)):
+        dias = -(_dias_ate(i["due_on"]) or 0)
+        itens.append(dict(key=_chave("invoice-vencida", "invoice", i["id"]), level="MEDIUM" if dias < 90 else "HIGH",
+                          title=f"Invoice {i['doc_number'] or ''} de {i['cliente'] or 'cliente sem vínculo'} vencida há {dias} dias",
+                          why="Saldo em aberto não é inadimplência (pode haver parcelamento); a cobrança é por lote (D-2026-08-31).",
+                          entity={"type": "invoice", "id": i["id"]}, client_id=i["client_id"],
+                          link=_link(con, "invoice", i["id"]), action="Cobrar no lote"))
+
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",

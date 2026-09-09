@@ -84,6 +84,8 @@ async def _cabecalhos(request: Request, call_next):
 
 app.include_router(rotas.r)
 app.include_router(ia.r)
+from command_center.api import qbo  # noqa: E402
+app.include_router(qbo.r)
 
 
 # ------------------------------------------------------------- saúde

@@ -104,3 +104,28 @@ como sinônimo de inadimplência — pode ser parcela a vencer.
 - O que entra na **Pre race invoice** × **After race invoice**
 - Devolução do depósito: a IA executa ou só prepara? (*merchant view* é tela)
 - Preço das **peças do Service Order**: sai do catálogo ou é digitado?
+
+
+## Como o Administrative AI fala com o QuickBooks (09/09)
+
+Por servidor MCP nosso (`adminai/mcp/quickbooks_mcp.py`), no
+[[VPS e OpenClaw]], com as regras do [[Conector do QuickBooks]] em
+código: cliente é o responsável; preço da [[Rate Card]]; `unitario`
+unitário; item sem dois-pontos, `taxable=false`, SERVICE; deep link por
+txnId; **nunca apaga**. Ferramentas: `qbo_empresa` · `qbo_clientes_buscar`
+· `qbo_itens_buscar` · `qbo_invoices` · `qbo_invoice` · `qbo_estimates` ·
+`qbo_contas_a_receber` · `qbo_criar_cliente` · `qbo_criar_item` ·
+`qbo_criar_invoice` · `qbo_criar_estimate` · `qbo_enviar_invoice`
+(aprovação humana + `APLICAR=1`).
+
+**Consentimento pelo Command Center** (`/ops/quickbooks` → Conectar):
+a Intuit exige redirect em HTTPS, e o nosso é
+`https://urace-bridge.duckdns.org/ops/api/qbo/callback`. O token fica em
+`~/.urace/qbo-token.json`; o refresh **rotaciona a cada uso e vale 100
+dias** — o MCP regrava a cada refresh. Passo a passo:
+`docs/adminai/quickbooks-conexao.md`. Depende de [[P-11 - Producao do app QuickBooks travada]]
+(chaves de produção).
+
+No painel: KPIs (em aberto, vencidas, pagas em 30 d), maiores saldos,
+lista de invoices, invoices no card do cliente; "Precisa de atenção"
+aponta invoice vencida há mais de 30 dias.

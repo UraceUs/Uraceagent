@@ -136,7 +136,7 @@ def test_sync_sem_credencial_nao_derruba(cli):
 def test_check_integracoes_sem_credencial(cli):
     h = entra(cli, "admin@urace.us")
     r = cli.post(B + "/integrations/check", headers=h).json()
-    assert r["quickbooks"]["status"] == "DISCONNECTED" and "P-11" in r["quickbooks"]["detail"]["nota"]
+    assert r["quickbooks"]["status"] == "DISCONNECTED" and "QBO" in r["quickbooks"]["detail"]["motivo"]
     assert r["gmail"]["status"] == "DISCONNECTED"
 
 

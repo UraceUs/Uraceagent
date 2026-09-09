@@ -174,9 +174,8 @@ def executar_acao(aid, user_id):
             from command_center.providers.sync import SECAO_FINISHED
             acao, args = "asana_mover_para_secao", {"gid": args.get("gid"), "secao_gid": SECAO_FINISHED}
         sistema = a["system"] or acao.split("_")[0]
-        if sistema in ("qbo", "quickbooks"):
-            atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(), result="QuickBooks em stand-by (P-11): nada foi enviado.")
-            return
+        if sistema == "qbo":
+            sistema = "quickbooks"
         if sistema == "google":
             sistema = "gmail"
         anterior = os.environ.get("APLICAR")

@@ -65,8 +65,14 @@ export interface Email {
 }
 
 export interface Invoice {
-  id: number; client_id: number | null; number: string | null; amount: number | null
+  id: number; client_id: number | null; doc_number: string | null; amount: number | null
   balance: number | null; status: string | null; issued_on: string | null; due_on: string | null
+  client_name?: string | null; pilot_name?: string | null; links?: Link[]
+}
+export interface QboSummary {
+  connected: boolean; integration: Integration | null
+  open: { count: number; total: number }; overdue: { count: number; total: number }; paid_30d: { count: number; total: number }
+  top_debtors: { id: number; name: string; pilot_name: string | null; balance: number; n: number }[]
 }
 
 export interface TimelineEvent {

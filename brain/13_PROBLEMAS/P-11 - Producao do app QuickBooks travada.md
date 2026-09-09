@@ -73,3 +73,12 @@ do [[Asana]].
 emitir invoice (ex.: `lucas@urace.us`) é *gear → Manage users* dentro do
 QuickBooks, e **não tem relação** com o app de desenvolvedor. Esse
 caminho está livre.
+
+
+## 09/09 — tudo pronto do nosso lado
+
+Código de conexão pronto e testado: MCP próprio, consentimento pelo
+Command Center (redirect HTTPS `…/ops/api/qbo/callback`), espelho de
+invoices, painel. **Falta só a Intuit liberar as chaves de produção** e
+o dono colar as duas chaves no VPS. Prompt da extensão para checar o
+status e pegar as chaves: `adminai/deploy/prompts/quickbooks-producao.txt`.

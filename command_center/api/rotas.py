@@ -909,3 +909,33 @@ def automation_rule_put(name: str, dados: RegraIn, request: Request, u=Depends(a
     con.execute("UPDATE automation_rules SET enabled=? WHERE name=?", (1 if dados.enabled else 0, name))
     auditar(con, "automation.rule", f"user:{u['id']}", user_id=u["id"], entity_type="automation_rule", entity_id=name, detail={"enabled": dados.enabled}, ip=auth._ip(request))
     return {"ok": True}
+
+
+
+# ============================================================ QuickBooks (financeiro: MANAGER+)
+@r.get("/invoices")
+def invoices(status: str = None, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    sql = "SELECT i.*, c.name AS client_name, c.pilot_name FROM invoices i LEFT JOIN clients c ON c.id=i.client_id"
+    p = []
+    if status:
+        sql += " WHERE i.status=?"; p.append(status)
+    rows = todos(con, sql + " ORDER BY CASE i.status WHEN 'overdue' THEN 0 WHEN 'open' THEN 1 WHEN 'sent' THEN 1 ELSE 2 END, i.due_on DESC LIMIT 500", p)
+    for i in rows:
+        i["links"] = _links(con, "invoice", i["id"])
+    return rows
+
+
+@r.get("/qbo/summary")
+def qbo_summary(u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    from datetime import date as _d
+    hoje = _d.today().isoformat()
+    n = lambda sql, p=(): (um(con, sql, p) or {})
+    aberto = n("SELECT COUNT(*) AS c, COALESCE(SUM(balance),0) AS t FROM invoices WHERE status IN ('open','sent','overdue')")
+    vencido = n("SELECT COUNT(*) AS c, COALESCE(SUM(balance),0) AS t FROM invoices WHERE status='overdue'")
+    pagas30 = n("SELECT COUNT(*) AS c, COALESCE(SUM(amount),0) AS t FROM invoices WHERE status='paid' AND issued_on >= date(?, '-30 days')", (hoje,))
+    integ = um(con, "SELECT status, detail, last_success_at FROM integrations WHERE system='quickbooks'")
+    return {"connected": bool(integ and integ["status"] == "CONNECTED"), "integration": integ,
+            "open": {"count": aberto["c"], "total": round(aberto["t"], 2)}, "overdue": {"count": vencido["c"], "total": round(vencido["t"], 2)},
+            "paid_30d": {"count": pagas30["c"], "total": round(pagas30["t"], 2)},
+            "top_debtors": todos(con, """SELECT c.id, c.name, c.pilot_name, SUM(i.balance) AS balance, COUNT(*) AS n FROM invoices i JOIN clients c ON c.id=i.client_id
+                                         WHERE i.status IN ('open','sent','overdue') GROUP BY c.id ORDER BY balance DESC LIMIT 8""")}

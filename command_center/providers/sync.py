@@ -427,6 +427,36 @@ def _data_iso(rfc):
         return rfc
 
 
+# ------------------------------------------------------ QuickBooks
+def sync_qbo(con, desde_dias=365):
+    """Invoices do QBO → invoices (espelho), ligadas ao cliente pelo e-mail de cobrança
+    ou pelo nome do responsável. Só leitura."""
+    inicio = agora()
+    try:
+        r = chamar("quickbooks", "qbo_invoices", status="all", desde_dias=desde_dias, maximo=500)
+        n = ligadas = 0
+        for inv in r.get("invoices", []):
+            email = (inv.get("email") or "").lower() or None
+            cli = _acha_cliente(con, email=email, nome=inv.get("cliente"))
+            iid = um(con, "SELECT entity_id FROM entity_links WHERE system='quickbooks' AND external_id=? AND entity_type='invoice'", (inv["id"],))
+            campos = dict(client_id=cli["id"] if cli else None, doc_number=inv.get("numero"), amount=inv.get("total"), balance=inv.get("saldo"),
+                          status=inv.get("status"), issued_on=inv.get("emitida_em"), due_on=inv.get("vence_em"), synced_at=agora())
+            if iid:
+                atualizar(con, "invoices", iid["entity_id"], **campos)
+            else:
+                nid = inserir(con, "invoices", **campos)
+                _liga(con, "invoice", nid, "quickbooks", inv["id"], inv.get("link"))
+            n += 1; ligadas += 1 if cli else 0
+        _marca(con, "quickbooks", True, n, f"{n} invoices, {ligadas} ligadas a cliente", inicio)
+        return {"ok": True, "invoices": n, "ligadas": ligadas}
+    except NaoConectado as e:
+        _marca(con, "quickbooks", False, 0, f"não conectado: {e}", inicio, desconectado=True)
+        return {"ok": False, "motivo": "not connected"}
+    except Exception as e:
+        _marca(con, "quickbooks", False, 0, f"{type(e).__name__}: {str(e)[:300]}", inicio)
+        return {"ok": False, "motivo": str(e)[:300]}
+
+
 # ------------------------------------------------------ registro
 def _marca(con, sistema, ok, itens, msg, inicio, desconectado=False, detalhe=None):
     inserir(con, "sync_logs", system=sistema, started_at=inicio, finished_at=agora(),
@@ -443,4 +473,4 @@ def _marca(con, sistema, ok, itens, msg, inicio, desconectado=False, detalhe=Non
 
 def sync_tudo(con):
     return {"cerebro": sync_cerebro(con), "asana": sync_asana(con),
-            "docusign": sync_docusign(con), "gmail": sync_gmail(con)}
+            "docusign": sync_docusign(con), "gmail": sync_gmail(con), "quickbooks": sync_qbo(con)}

@@ -6,10 +6,10 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
-import type { Client, Email, GmailLabel, GmailMessage, Integration, Task, Waiver } from '../api/types'
+import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Ext, Loading, Section, Spinner, WAIVER_LABEL, statusTone } from '../components/ui'
-import { daysUntil, fmtDate, fmtDateTime, safeJson } from '../components/fmt'
+import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
 const ORDEM_SECOES = ['TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY', 'RACES', 'Finished Services']
@@ -303,23 +303,41 @@ export function GmailPage() {
 
 // ------------------------------------------------------------- QuickBooks
 export function QuickBooksPage() {
-  const { data } = useGet<Integration[]>('/integrations', 60000)
-  const i = data?.find(x => x.system === 'quickbooks')
-  const det = safeJson(i?.detail) as { nota?: string } | null
+  const { can } = useAuth()
+  const [sp] = useSearchParams()
+  const ints = useGet<Integration[]>('/integrations', 60000)
+  const i = ints.data?.find(x => x.system === 'quickbooks')
+  const connected = i?.status === 'CONNECTED'
+  const sum = useGet<QboSummary>(can('MANAGER') ? '/qbo/summary' : null, 120000)
+  const inv = useGet<Invoice[]>(can('MANAGER') && connected ? '/invoices' : null, 120000)
+  const [st, setSt] = useTab<string>('s', 'all')
+  const rows = (inv.data || []).filter(x => st === 'all' || x.status === st)
+  const det = safeJson(i?.detail) as { nota?: string; realm_id?: string; empresa?: string } | null
   return <>
-    <IntHeader system="quickbooks" title="QuickBooks" desc="Faturamento, clientes e pagamentos. Em stand-by por decisão do dono até a Intuit liberar a produção do app (P-11)." openHref="https://qbo.intuit.com/" openLabel="Abrir o QuickBooks" />
-    <Banner tone="info"><b>Nada é inventado aqui.</b> Enquanto a integração não está conectada, esta aba mostra só o estado real. {det?.nota && <>Nota do servidor: {det.nota}.</>}</Banner>
-    <div className="grid g3">
-      <div className="card kpi"><div className="lbl">Invoices em aberto</div><div className="val">—</div><div className="foot">aparece quando conectar</div></div>
-      <div className="card kpi"><div className="lbl">Recebido no mês</div><div className="val">—</div><div className="foot">aparece quando conectar</div></div>
-      <div className="card kpi"><div className="lbl">Clientes no QBO</div><div className="val">—</div><div className="foot">aparece quando conectar</div></div>
-    </div>
-    <Section title="O que entra quando conectar">
-      <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
-        <li><b>Invoices</b> por cliente, com saldo, vencimento e status, também no card do cliente (histórico de pagamento).</li>
-        <li><b>Envio de invoice pela IA só depois de aprovação humana</b> no Command Center (decisão de 04/09).</li>
-        <li><b>Recebimentos</b> e vencidas há mais de 30 dias em “Precisa de atenção”.</li>
-      </ul>
-    </Section>
+    <IntHeader system="quickbooks" title="QuickBooks" desc="Faturamento, clientes e pagamentos da URACE US INC. Criar invoice pede confirmação; enviar pede aprovação (decisão de 04/09). A IA nunca apaga." openHref="https://qbo.intuit.com/" openLabel="Abrir o QuickBooks" />
+    {sp.get('connected') && <Banner tone="ok">QuickBooks conectado. Rode “Sincronizar agora” no Dashboard para trazer as invoices.</Banner>}
+    {sp.get('erro') && <Banner tone="crit">A Intuit devolveu erro no consentimento: {sp.get('erro')}</Banner>}
+    {!connected && <div className="card card-b stack">
+      <div className="h2">Conectar</div>
+      <div className="small ink2">Três passos, todos no <code>docs/adminai/quickbooks-conexao.md</code>: (1) chaves de produção do app na Intuit com a redirect URI <span className="mono">https://urace-bridge.duckdns.org/ops/api/qbo/callback</span>; (2) as chaves no servidor; (3) o botão abaixo, que abre a tela de autorização da Intuit e volta para cá.</div>
+      {i?.last_error && <Banner tone="warn">Último erro: {i.last_error}</Banner>}
+      <div className="row">{can('ADMIN') ? <a className="btn primary" href="/ops/api/qbo/connect">Conectar QuickBooks</a> : <span className="muted small">Só o administrador conecta.</span>}<span className="small muted">{det?.nota}</span></div>
+    </div>}
+    {!can('MANAGER') && <Banner tone="info">Valores financeiros são visíveis para gerentes e administradores.</Banner>}
+    {can('MANAGER') && sum.data && <div className="grid g3">
+      <div className="card kpi"><div className="lbl">Em aberto</div><div className="val">{connected ? money(sum.data.open.total) : '—'}</div><div className="foot">{connected ? `${sum.data.open.count} invoice(s)` : 'conecte para ver'}</div></div>
+      <div className="card kpi"><div className="lbl">Vencidas</div><div className={`val${sum.data.overdue.count ? ' crit' : ''}`}>{connected ? money(sum.data.overdue.total) : '—'}</div><div className="foot">{connected ? `${sum.data.overdue.count} invoice(s)` : 'conecte para ver'}</div></div>
+      <div className="card kpi"><div className="lbl">Emitidas e pagas (30 d)</div><div className="val ok">{connected ? money(sum.data.paid_30d.total) : '—'}</div><div className="foot">{connected ? `${sum.data.paid_30d.count} invoice(s)` : 'conecte para ver'}</div></div>
+    </div>}
+    {can('MANAGER') && connected && !!sum.data?.top_debtors.length && <Section title="Maiores saldos em aberto" tight>
+      <table className="tbl"><tbody>{sum.data.top_debtors.map(d => <tr key={d.id} className="click" onClick={() => window.location.assign(`/ops/clients?open=${d.id}`)}><td>{d.pilot_name || d.name}{d.pilot_name && <div className="small muted">{d.name}</div>}</td><td className="mono">{d.n} invoice(s)</td><td className="mono right">{money(d.balance)}</td></tr>)}</tbody></table>
+      <div className="small muted" style={{ padding: '8px 14px' }}>Saldo em aberto não é inadimplência: existe parcelamento. Cobrança é por lote (decisão de 31/08).</div>
+    </Section>}
+    {can('MANAGER') && connected && <Section title="Invoices" count={rows.length} tight right={<select className="input" style={{ width: 160 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todas</option><option value="overdue">Vencidas</option><option value="open">Em aberto</option><option value="sent">Enviadas</option><option value="paid">Pagas</option></select>}>
+      {inv.error && !inv.data ? <ErrorState error={inv.error} retry={inv.reload} /> : inv.loading && !inv.data ? <Loading /> : rows.length === 0 ? <Empty>Nenhuma invoice espelhada. Sincronize no Dashboard.</Empty> :
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nº</th><th>Cliente</th><th>Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th><th></th></tr></thead><tbody>
+          {rows.map(x => <tr key={x.id}><td className="mono">{x.doc_number}</td><td>{x.client_id ? <a href={`/ops/clients?open=${x.client_id}`}>{x.pilot_name || x.client_name}</a> : <span className="muted">não vinculado</span>}</td><td className="mono">{fmtDate(x.issued_on)}</td><td className="mono">{fmtDate(x.due_on)}</td><td className="mono">{money(x.amount)}</td><td className="mono">{money(x.balance)}</td><td><Chip tone={statusTone(x.status === 'open' ? 'PENDING' : x.status)}>{x.status}</Chip></td><td>{x.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>abrir</Ext>)}</td></tr>)}
+        </tbody></table></div>}
+    </Section>}
   </>
 }

@@ -143,6 +143,7 @@ echo "== servidores MCP =="
 instalar_mcp asana ASANA_TOKEN asana_mcp.py
 instalar_mcp docusign DOCUSIGN_INTEGRATION_KEY docusign_mcp.py
 instalar_mcp google   GOOGLE_TOKEN_JSON        gmail_mcp.py
+if [ -f "${QBO_TOKEN_JSON:-$HOME/.urace/qbo-token.json}" ]; then instalar_mcp quickbooks QBO_CLIENT_ID quickbooks_mcp.py; else echo "-- quickbooks: sem token ainda (conecte pelo Command Center); MCP não registrado"; fi
 openclaw --no-color mcp reload >/dev/null 2>&1 || true
 
 # A política do sandbox só deixa passar ferramenta listada. Sem isto o

@@ -1,0 +1,11 @@
+Você está no navegador, logado na minha conta do Intuit Developer (https://developer.intuit.com). Não altere nada além do que está aqui. No fim, me devolva um relatório curto.
+
+1. Abra Dashboard e entre no app da URACE (hoje chamado "ia app", workspace "Urace", AppID começando com 94f253e1).
+2. Diga o STATUS do app: "In development" ou "Production" liberado? Se houver aba "Keys & credentials" → "Production" sem cadeado, siga para o passo 3. Se estiver com cadeado, abra "App details" e "Compliance" e me liste EXATAMENTE o que a Intuit ainda marca como pendente (nome de cada campo/seção incompleta), sem preencher nada.
+3. Em "Keys & credentials" → "Production":
+   a) copie o Client ID e o Client Secret e me devolva os dois (é para eu colar no servidor; não guarde em outro lugar);
+   b) em "Redirect URIs", adicione exatamente esta URI e salve: https://urace-bridge.duckdns.org/ops/api/qbo/callback
+   c) confirme que a URI ficou salva.
+4. Se a Intuit pedir para verificar e-mail, telefone ou endereço do perfil, me diga o que ela pede, sem preencher.
+
+RELATÓRIO: status do app | pendências (se houver) | Client ID | Client Secret | redirect URI salva (sim/não) | qualquer aviso da Intuit

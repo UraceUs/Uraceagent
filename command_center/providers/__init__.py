@@ -93,15 +93,8 @@ def saude(sistema):
                 return "ERROR", {"contas": contas}
             return ("CONNECTED" if len(ok) == len(contas) else "DEGRADED"), {"contas": contas}
         if sistema == "quickbooks":
-            # P-11: produção da Intuit ainda travada. Sem credencial = não conectado.
-            env = os.path.expanduser(os.environ.get("URACE_ENV", "~/.urace/adminai.env"))
-            tem = False
-            if os.path.exists(env):
-                for l in open(env, encoding="utf-8", errors="replace"):
-                    if l.startswith("QBO_REFRESH_TOKEN=") and l.strip().split("=", 1)[1]:
-                        tem = True
-            return ("DEGRADED" if tem else "DISCONNECTED"), {
-                "nota": "produção do app Intuit pendente (P-11)" if not tem else "credencial presente; provider ainda não implementado"}
+            r = chamar("quickbooks", "qbo_empresa")
+            return "CONNECTED", {"empresa": r.get("empresa"), "realm_id": r.get("realm_id"), "envio_permitido": r.get("envio_permitido")}
         return "DISCONNECTED", {"nota": "sistema desconhecido"}
     except NaoConectado as e:
         return "DISCONNECTED", {"motivo": str(e)}
