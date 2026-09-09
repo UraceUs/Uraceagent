@@ -35,6 +35,7 @@ export interface Client {
   pilot_name: string | null; pilot_dob: string | null; vip: number; status: string
   stage_code: string | null; stage?: string | null; source: string | null; notes: string | null
   status_locked?: number; last_service_at?: string | null; scanned_at?: string | null; monthly_plan?: string | null; monthly_note?: string | null
+  plan_type?: 'monthly' | 'daily' | null; pro_driver?: number; chassis_id?: number | null; engine_id?: number | null; equipment_notes?: string | null
   created_at: string; updated_at: string
   open_tasks?: number; done_tasks?: number; last_service?: string | null
   next_service?: string | null; waiver_status?: string | null
@@ -140,3 +141,13 @@ export interface ContextSource {
   active: number; added_by: number | null; added_by_name?: string | null; added_at: string
   last_check_at: string | null; last_check_ok: number | null; last_check_msg: string | null; workspace_name?: string | null
 }
+
+export interface Chassis { id: number; brand: string; model: string | null; size: string | null; tire_front: string | null; tire_rear: string | null; notes: string | null; image_path: string | null; active: number }
+export interface Engine { id: number; brand: string; model: string; stroke: string | null; category: string | null; notes: string | null; image_path: string | null; active: number }
+export interface Part { id: number; engine_id: number | null; name: string; part_number: string | null; price: number | null; notes: string | null; active: number; engine_brand?: string; engine_model?: string }
+export interface Catalog { chassis: Chassis[]; engines: Engine[]; parts: Part[] }
+export interface Contract { id: number; client_id: number; kind: string; source: 'docusign' | 'upload'; envelope_id: string | null; status: string | null; signed_at: string | null; file_path: string | null; title: string | null; added_by_name?: string | null; added_at: string }
+export interface MonthlyMonth { month: string; invoice: { id: number; doc_number: string | null; amount?: number | null; balance?: number | null; status: string | null; memo: string | null } | null; sessions_used: number; sessions_left: number; sessions: { title: string; due_on: string; status: string }[]; needs_invoice: boolean }
+export interface Monthly { months: MonthlyMonth[]; last_monthly_amount: number | null; last_monthly_memo: string | null; sessions_per_month: number; contracts: Contract[] }
+export interface Race { id: number; name: string; series: string | null; track: string | null; city: string | null; date_start: string | null; date_end: string | null; notes: string | null; source: string | null; active: number; invites: number
+  invited: { id: number; client_id: number; name: string; pilot_name: string | null; status: string; estimate_text: string | null; estimate_cmd: number | null; estimate_status: string | null }[] }

@@ -85,12 +85,13 @@ export function Clients() {
   const vip = sp.get('vip') || ''
   const openId = sp.get('open') ? Number(sp.get('open')) : null
   const [scanning, setScanning] = useState(false)
+  const aba = sp.get('v') === 'pro' ? 'pro' : 'all'
   useEffect(() => {
     if ((sp.get('q') || '') === q) return
     const t = setTimeout(() => { const n = new URLSearchParams(window.location.search); if (q) n.set('q', q); else n.delete('q'); setSp(n, { replace: true }) }, 250)
     return () => clearTimeout(t)
   }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
-  const { data, error, loading, reload } = useGet<Client[]>('/clients' + qs({ q: sp.get('q'), status, vip: vip === '' ? undefined : vip === '1' }))
+  const { data, error, loading, reload } = useGet<Client[]>('/clients' + qs({ q: sp.get('q'), status, vip: vip === '' ? undefined : vip === '1', pro: aba === 'pro' ? true : undefined }))
   const set = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); setSp(n) }
   const open = (id: number | null) => { const n = new URLSearchParams(sp); if (id) n.set('open', String(id)); else n.delete('open'); setSp(n) }
   const rows = data || []                                       // ordem do servidor: serviço mais recente primeiro
@@ -111,6 +112,8 @@ export function Clients() {
   return <>
     <div className="page-h"><div><h1 className="h1">Clientes</h1><div className="sub small">Uma pessoa, um card. Corrida não é cliente. Ativo = serviço nos últimos 6 meses. Ordem: serviço mais recente primeiro. Clique para abrir o card completo.</div></div>
       <div className="row wrap">{can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}>+ Novo cliente</button>}{can('OPERATOR') && <button className="btn" disabled={scanning} onClick={scanAll} title="Gmail (as duas caixas) e DocuSign de cada cliente ativo">{scanning ? <Spinner /> : '⌕'} Varrer plataformas ({ativos} ativos)</button>}</div></div>
+    <div className="tabs"><button className={aba === 'all' ? 'on' : ''} onClick={() => set('v', '')}>Todos</button><button className={aba === 'pro' ? 'on' : ''} onClick={() => set('v', 'pro')}>★ Pro Racing Drivers</button></div>
+    {aba === 'pro' && <Banner tone="info">Pilotos do mensal prontos para competir. Marque a estrela no card (Editar → Pro Racing Driver, só gerente). Convites e prévia de custo por corrida ficam em <a href="/ops/races">Corridas</a>.</Banner>}
     <div className="row wrap">
       <input className="input" style={{ maxWidth: 320 }} placeholder="Piloto, responsável ou e-mail" value={q} onChange={e => setQ(e.target.value)} aria-label="Filtrar" />
       <select className="input" style={{ width: 190 }} value={status} onChange={e => set('status', e.target.value)} aria-label="Status">
@@ -132,7 +135,7 @@ export function Clients() {
             const w = (c.waiver_status || '').toLowerCase()
             const semWaiver = dias !== null && dias <= 2 && w !== 'completed' && !c.vip
             return <tr key={c.id} className="click" onClick={() => open(c.id)}>
-              <td><div className="row"><b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">VIP</Chip>}</div>{!c.pilot_name && <div className="small muted">piloto é o próprio</div>}</td>
+              <td><div className="row">{!!c.pro_driver && <span title="Pro Racing Driver" style={{ color: 'var(--warn)' }}>★</span>}<b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">VIP</Chip>}{c.plan_type === 'monthly' && <Chip tone="accent">mensal</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">diária</Chip>}</div>{!c.pilot_name && <div className="small muted">piloto é o próprio</div>}</td>
               <td>{c.pilot_name ? c.name : <span className="muted">—</span>}<div className="small muted">{c.email || ''}{c.phone ? ` · ${c.phone}` : ''}</div></td>
               <td><Chip tone={statusTone(c.status)}>{c.status === 'ACTIVE' ? 'ativo' : c.status === 'INACTIVE' ? 'inativo' : c.status}</Chip>{!!c.status_locked && <span className="small muted" title="mudado à mão"> 🔒</span>}</td>
               <td className="mono">{c.last_service ? fmtDate(c.last_service) : <span className="muted">—</span>}</td>
@@ -152,6 +155,5 @@ export function Clients() {
         <ClientCard id={openId} onClose={() => open(null)} />
       </div>
     </div>}
-    {false && <Banner tone="info">.</Banner>}
   </>
 }

@@ -178,13 +178,15 @@ def attention_restore(dados: RestaurarIn, request: Request, u=Depends(auth.exige
 
 # ----------------------------------------------------------- clientes
 @r.get("/clients")
-def clients(status: str | None = None, q: str | None = None, vip: bool | None = None,
+def clients(status: str | None = None, q: str | None = None, vip: bool | None = None, pro: bool | None = None,
             u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     where, p = ["1=1"], []
     if status:
         where.append("c.status=?"); p.append(status.upper())
     if vip is not None:
         where.append("c.vip=?"); p.append(1 if vip else 0)
+    if pro is not None:
+        where.append("c.pro_driver=?"); p.append(1 if pro else 0)
     if q:
         where.append("(c.name LIKE ? OR c.pilot_name LIKE ? OR c.email LIKE ?)"); p += [f"%{q}%"] * 3
     rows = todos(con, f"""
@@ -756,6 +758,7 @@ def _varrer_cliente(con, c):
             saida["avisos"].append(f"docusign: {e}")
         except Exception as e:
             saida["avisos"].append(f"docusign: {str(e)[:120]}")
+    saida["contratos"] = _contratos_do_docusign(con, c)
     con.execute("UPDATE clients SET scanned_at=? WHERE id=?", (agora(), c["id"]))
     return saida
 
@@ -1338,3 +1341,403 @@ def context_download(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Conne
     if not c or not c["path"] or not os.path.isfile(c["path"]):
         raise HTTPException(404, "Arquivo não encontrado.")
     return FileResponse(c["path"], filename=os.path.basename(c["path"]), headers={"Cache-Control": "no-store"})
+
+
+# ============================================================ Pro Racing Drivers, mensalidade, contrato, equipamento, corridas (09/09)
+MESES_EN = {m: i for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), 1)}
+SESSOES_MES = 4
+CONTRACT_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "contracts")
+IMAGE_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "images")
+
+
+def mes_da_invoice(inv):
+    """'Urace Academy Training Program + Tuner [August, 2026]' → '2026-08'; senão o mês de emissão."""
+    m = re.search(r"\[\s*([A-Za-z]+)[,\s]+(\d{4})\s*\]", inv.get("memo") or "")
+    if m and m.group(1).lower() in MESES_EN:
+        return f"{m.group(2)}-{MESES_EN[m.group(1).lower()]:02d}"
+    return (inv.get("issued_on") or "")[:7] or None
+
+
+def resumo_mensalidade(con, cid, meses=4):
+    """Por mês: invoice da mensalidade (memo Academy), sessões usadas (tarefas de treino), restantes, e se falta invoice."""
+    from datetime import date as _d
+    hoje = _d.today()
+    invs = todos(con, "SELECT * FROM invoices WHERE client_id=? ORDER BY issued_on DESC", (cid,))
+    por_mes = {}
+    for i in invs:
+        if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + (i.get("doc_number") or ""), re.I):
+            por_mes.setdefault(mes_da_invoice(i), i)
+    saida = []
+    for k in range(meses):
+        y, mo = hoje.year, hoje.month - k
+        while mo <= 0:
+            mo += 12; y -= 1
+        mes = f"{y}-{mo:02d}"
+        usadas = todos(con, """SELECT title, due_on, status FROM tasks WHERE client_id=? AND due_on LIKE ? AND project='U-RACE'
+                               AND LOWER(COALESCE(section,'')) NOT IN ('races','finished services') OR (client_id=? AND due_on LIKE ? AND status='completed' AND LOWER(COALESCE(section,''))='finished services')""",
+                       (cid, mes + "%", cid, mes + "%"))
+        inv = por_mes.get(mes)
+        saida.append({"month": mes, "invoice": ({"id": inv["id"], "doc_number": inv["doc_number"], "amount": inv["amount"], "balance": inv["balance"], "status": inv["status"], "memo": inv["memo"]} if inv else None),
+                      "sessions_used": len(usadas), "sessions_left": max(0, SESSOES_MES - len(usadas)), "sessions": usadas,
+                      "needs_invoice": inv is None and (k == 0 or len(usadas) > 0)})
+    ultimo = next((i for i in invs if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or ""), re.I)), None)
+    return {"months": saida, "last_monthly_amount": ultimo["amount"] if ultimo else None, "last_monthly_memo": ultimo["memo"] if ultimo else None,
+            "sessions_per_month": SESSOES_MES}
+
+
+@r.get("/clients/{cid}/monthly")
+def client_monthly(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
+        raise HTTPException(404, "Client not found.")
+    r_ = resumo_mensalidade(con, cid)
+    if not auth.pode(u["role"], "MANAGER"):                          # financeiro só para gerente+
+        for m in r_["months"]:
+            if m["invoice"]:
+                m["invoice"] = {k: v for k, v in m["invoice"].items() if k not in ("amount", "balance")}
+        r_["last_monthly_amount"] = None
+    r_["contracts"] = todos(con, "SELECT c.*, us.name AS added_by_name FROM contracts c LEFT JOIN users us ON us.id=c.added_by WHERE c.client_id=? ORDER BY c.id DESC", (cid,))
+    return r_
+
+
+class EquipIn(BaseModel):
+    plan_type: str | None = None          # monthly | daily
+    pro_driver: bool | None = None
+    chassis_id: int | None = None
+    engine_id: int | None = None
+    equipment_notes: str | None = None
+
+
+@r.patch("/clients/{cid}/profile")
+def client_profile(cid: int, dados: EquipIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
+        raise HTTPException(404, "Client not found.")
+    campos = {}
+    if dados.plan_type is not None:
+        if dados.plan_type not in ("monthly", "daily", ""):
+            raise HTTPException(400, "plan_type: monthly ou daily.")
+        campos["plan_type"] = dados.plan_type or None
+    if dados.pro_driver is not None:
+        if not auth.pode(u["role"], "MANAGER"):
+            raise HTTPException(403, "Só gerente marca Pro Racing Driver.")
+        campos["pro_driver"] = 1 if dados.pro_driver else 0
+    for k in ("chassis_id", "engine_id", "equipment_notes"):
+        v = getattr(dados, k)
+        if v is not None:
+            campos[k] = v or None
+    if not campos:
+        return {"ok": True}
+    sets = ", ".join(f"{k}=?" for k in campos)
+    con.execute(f"UPDATE clients SET {sets}, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?", (*campos.values(), cid))
+    auditar(con, "client.profile", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid, detail=campos, ip=auth._ip(request))
+    return {"ok": True}
+
+
+@r.get("/clients/{cid}/equipment")
+def client_equipment(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    c = um(con, "SELECT chassis_id, engine_id, equipment_notes FROM clients WHERE id=?", (cid,))
+    if not c:
+        raise HTTPException(404, "Client not found.")
+    ch = um(con, "SELECT * FROM catalog_chassis WHERE id=?", (c["chassis_id"],)) if c["chassis_id"] else None
+    en = um(con, "SELECT * FROM catalog_engines WHERE id=?", (c["engine_id"],)) if c["engine_id"] else None
+    parts = todos(con, "SELECT * FROM catalog_parts WHERE engine_id=? AND active=1 ORDER BY name", (c["engine_id"],)) if c["engine_id"] else []
+    return {"chassis": ch, "engine": en, "parts": parts, "notes": c["equipment_notes"]}
+
+
+# ---- contrato da Academy: upload ou achado no DocuSign
+@r.post("/clients/{cid}/contract", status_code=201)
+async def contract_upload(cid: int, request: Request, file: UploadFile = File(...), title: str = Form(""),
+                          u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
+        raise HTTPException(404, "Client not found.")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".pdf", ".png", ".jpg", ".jpeg"):
+        raise HTTPException(400, "Contrato em PDF (ou imagem).")
+    dados = await file.read()
+    if not dados or len(dados) > MAX_BYTES:
+        raise HTTPException(400, "Arquivo vazio ou maior que 25 MB.")
+    os.makedirs(CONTRACT_DIR, exist_ok=True)
+    caminho = os.path.join(CONTRACT_DIR, f"cliente-{cid}-{_slug(os.path.splitext(file.filename or 'contrato')[0])}{ext}")
+    with open(caminho, "wb") as f:
+        f.write(dados)
+    os.chmod(caminho, 0o600)
+    kid = inserir(con, "contracts", client_id=cid, kind="academy", source="upload", file_path=caminho, title=(title or file.filename or "Contrato")[:120], added_by=u["id"], status="completed")
+    con.execute("UPDATE clients SET plan_type=COALESCE(plan_type,'monthly') WHERE id=?", (cid,))
+    auditar(con, "contract.upload", f"user:{u['id']}", user_id=u["id"], entity_type="contract", entity_id=kid, detail={"client_id": cid, "nome": os.path.basename(caminho)}, ip=auth._ip(request))
+    return {"id": kid}
+
+
+@r.get("/contracts/{kid}/download")
+def contract_download(kid: int, request: Request, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    from fastapi.responses import FileResponse, Response
+    k = um(con, "SELECT * FROM contracts WHERE id=?", (kid,))
+    if not k:
+        raise HTTPException(404, "Not found.")
+    if k["file_path"] and os.path.isfile(k["file_path"]):
+        return FileResponse(k["file_path"], filename=os.path.basename(k["file_path"]), headers={"Cache-Control": "no-store"})
+    if k["envelope_id"]:
+        try:
+            pdf = modulo("docusign").baixar_documento_humano(k["envelope_id"])
+        except NaoConectado as ex:
+            raise HTTPException(503, f"DocuSign não conectado: {ex}")
+        except Exception as ex:
+            raise HTTPException(502, str(ex)[:300])
+        auditar(con, "contract.download", f"user:{u['id']}", user_id=u["id"], entity_type="contract", entity_id=kid, ip=auth._ip(request))
+        return Response(content=pdf, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="contrato-{kid}.pdf"', "Cache-Control": "no-store"})
+    raise HTTPException(404, "Contrato sem arquivo nem envelope.")
+
+
+def _contratos_do_docusign(con, c):
+    """Envelopes do cliente cujo assunto fala de Academy/contract viram contratos (fonte DocuSign)."""
+    email = (c["email"] or "").lower()
+    if not email:
+        return 0
+    n = 0
+    try:
+        r = chamar("docusign", "docusign_waivers_de", email=email)
+    except Exception:
+        return 0
+    for grupo in ("waiver_valida", "em_aberto", "historico"):
+        for e in r.get(grupo) or []:
+            assunto = (e.get("assunto") or "").lower()
+            if not re.search(r"academy|contract|contrato|program", assunto) or re.search(r"waiver", assunto):
+                continue
+            if um(con, "SELECT 1 FROM contracts WHERE envelope_id=?", (e["envelopeId"],)):
+                continue
+            inserir(con, "contracts", client_id=c["id"], kind="academy", source="docusign", envelope_id=e["envelopeId"], status=e.get("status"),
+                    signed_at=e.get("concluido_em"), title=e.get("assunto"))
+            if e.get("status") == "completed":
+                con.execute("UPDATE clients SET plan_type=COALESCE(plan_type,'monthly') WHERE id=?", (c["id"],))
+            n += 1
+    return n
+
+
+# ---- catálogo de equipamento (editável)
+@r.get("/catalog")
+def catalog(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    return {"chassis": todos(con, "SELECT * FROM catalog_chassis ORDER BY active DESC, brand, model"),
+            "engines": todos(con, "SELECT * FROM catalog_engines ORDER BY active DESC, brand, model"),
+            "parts": todos(con, "SELECT p.*, e.brand AS engine_brand, e.model AS engine_model FROM catalog_parts p LEFT JOIN catalog_engines e ON e.id=p.engine_id ORDER BY p.engine_id, p.name")}
+
+
+class ChassisIn(BaseModel):
+    brand: str | None = None
+    model: str | None = None
+    size: str | None = None
+    tire_front: str | None = None
+    tire_rear: str | None = None
+    notes: str | None = None
+    active: bool | None = None
+
+
+class EngineIn(BaseModel):
+    brand: str | None = None
+    model: str | None = None
+    stroke: str | None = None
+    category: str | None = None
+    notes: str | None = None
+    active: bool | None = None
+
+
+class PartIn(BaseModel):
+    engine_id: int | None = None
+    name: str | None = None
+    part_number: str | None = None
+    price: float | None = None
+    notes: str | None = None
+    active: bool | None = None
+
+
+_TABELAS = {"chassis": ("catalog_chassis", ChassisIn), "engines": ("catalog_engines", EngineIn), "parts": ("catalog_parts", PartIn)}
+
+
+def _catalogo_upsert(con, kind, dados, cid, u, request):
+    tabela, _ = _TABELAS[kind]
+    campos = {k: (1 if v else 0) if k == "active" else v for k, v in dados.model_dump().items() if v is not None}
+    if cid is None:
+        if kind == "chassis" and not campos.get("brand"):
+            raise HTTPException(400, "Marca é obrigatória.")
+        if kind == "engines" and not (campos.get("brand") and campos.get("model")):
+            raise HTTPException(400, "Marca e modelo são obrigatórios.")
+        if kind == "parts" and not (campos.get("name") and campos.get("engine_id")):
+            raise HTTPException(400, "Nome e motor são obrigatórios.")
+        cid = inserir(con, tabela, **campos)
+    else:
+        if not um(con, f"SELECT id FROM {tabela} WHERE id=?", (cid,)):
+            raise HTTPException(404, "Not found.")
+        if campos:
+            con.execute(f"UPDATE {tabela} SET " + ", ".join(f"{k}=?" for k in campos) + " WHERE id=?", (*campos.values(), cid))
+    auditar(con, "catalog.save", f"user:{u['id']}", user_id=u["id"], entity_type=tabela, entity_id=cid, detail=campos, ip=auth._ip(request))
+    return {"id": cid}
+
+
+@r.post("/catalog/chassis", status_code=201)
+def chassis_create(dados: ChassisIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    return _catalogo_upsert(con, "chassis", dados, None, u, request)
+
+
+@r.patch("/catalog/chassis/{cid}")
+def chassis_patch(cid: int, dados: ChassisIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    return _catalogo_upsert(con, "chassis", dados, cid, u, request)
+
+
+@r.post("/catalog/engines", status_code=201)
+def engine_create(dados: EngineIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    return _catalogo_upsert(con, "engines", dados, None, u, request)
+
+
+@r.patch("/catalog/engines/{cid}")
+def engine_patch(cid: int, dados: EngineIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    return _catalogo_upsert(con, "engines", dados, cid, u, request)
+
+
+@r.post("/catalog/parts", status_code=201)
+def part_create(dados: PartIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    return _catalogo_upsert(con, "parts", dados, None, u, request)
+
+
+@r.patch("/catalog/parts/{cid}")
+def part_patch(cid: int, dados: PartIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    return _catalogo_upsert(con, "parts", dados, cid, u, request)
+
+
+@r.post("/catalog/{kind}/{cid}/image")
+async def catalog_image(kind: str, cid: int, request: Request, file: UploadFile = File(...), u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if kind not in ("chassis", "engines"):
+        raise HTTPException(404, "Not found.")
+    tabela = _TABELAS[kind][0]
+    if not um(con, f"SELECT id FROM {tabela} WHERE id=?", (cid,)):
+        raise HTTPException(404, "Not found.")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+        raise HTTPException(400, "Imagem em PNG, JPG ou WEBP.")
+    dados = await file.read()
+    if not dados or len(dados) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imagem vazia ou maior que 5 MB.")
+    os.makedirs(IMAGE_DIR, exist_ok=True)
+    caminho = os.path.join(IMAGE_DIR, f"{kind}-{cid}{ext}")
+    with open(caminho, "wb") as f:
+        f.write(dados)
+    con.execute(f"UPDATE {tabela} SET image_path=? WHERE id=?", (caminho, cid))
+    auditar(con, "catalog.image", f"user:{u['id']}", user_id=u["id"], entity_type=tabela, entity_id=cid, ip=auth._ip(request))
+    return {"ok": True}
+
+
+@r.get("/catalog/{kind}/{cid}/image")
+def catalog_image_get(kind: str, cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    from fastapi.responses import FileResponse
+    if kind not in ("chassis", "engines"):
+        raise HTTPException(404, "Not found.")
+    c = um(con, f"SELECT image_path FROM {_TABELAS[kind][0]} WHERE id=?", (cid,))
+    if not c or not c["image_path"] or not os.path.isfile(c["image_path"]):
+        raise HTTPException(404, "Sem imagem.")
+    return FileResponse(c["image_path"], headers={"Cache-Control": "private, max-age=3600"})
+
+
+# ---- corridas e convites
+@r.get("/races")
+def races(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    rows = todos(con, "SELECT r.*, (SELECT COUNT(*) FROM race_invites i WHERE i.race_id=r.id) AS invites FROM races r WHERE r.active=1 ORDER BY COALESCE(r.date_start,'9999') ")
+    for rc in rows:
+        rc["invited"] = todos(con, """SELECT i.*, c.name, c.pilot_name, cmd.status AS estimate_status FROM race_invites i JOIN clients c ON c.id=i.client_id
+                                      LEFT JOIN ai_commands cmd ON cmd.id=i.estimate_cmd WHERE i.race_id=? ORDER BY i.id""", (rc["id"],))
+    return rows
+
+
+class RaceIn(BaseModel):
+    name: str | None = None
+    series: str | None = None
+    track: str | None = None
+    city: str | None = None
+    date_start: str | None = None
+    date_end: str | None = None
+    notes: str | None = None
+    active: bool | None = None
+
+
+@r.post("/races", status_code=201)
+def race_create(dados: RaceIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not (dados.name or "").strip():
+        raise HTTPException(400, "Nome da corrida é obrigatório.")
+    campos = {k: v for k, v in dados.model_dump().items() if v is not None and k != "active"}
+    rid = inserir(con, "races", source="manual", **campos)
+    auditar(con, "race.create", f"user:{u['id']}", user_id=u["id"], entity_type="race", entity_id=rid, detail=campos, ip=auth._ip(request))
+    return {"id": rid}
+
+
+@r.patch("/races/{rid}")
+def race_patch(rid: int, dados: RaceIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not um(con, "SELECT id FROM races WHERE id=?", (rid,)):
+        raise HTTPException(404, "Not found.")
+    campos = {k: (1 if v else 0) if k == "active" else v for k, v in dados.model_dump().items() if v is not None}
+    if campos:
+        con.execute("UPDATE races SET " + ", ".join(f"{k}=?" for k in campos) + " WHERE id=?", (*campos.values(), rid))
+    auditar(con, "race.update", f"user:{u['id']}", user_id=u["id"], entity_type="race", entity_id=rid, detail=campos, ip=auth._ip(request))
+    return {"ok": True}
+
+
+class ConviteIn(BaseModel):
+    client_id: int
+
+
+@r.post("/races/{rid}/invite", status_code=201)
+def race_invite(rid: int, dados: ConviteIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not um(con, "SELECT id FROM races WHERE id=?", (rid,)):
+        raise HTTPException(404, "Race not found.")
+    c = um(con, "SELECT id, pro_driver FROM clients WHERE id=?", (dados.client_id,))
+    if not c:
+        raise HTTPException(404, "Client not found.")
+    if um(con, "SELECT 1 FROM race_invites WHERE race_id=? AND client_id=?", (rid, dados.client_id)):
+        raise HTTPException(409, "Já convidado.")
+    iid = inserir(con, "race_invites", race_id=rid, client_id=dados.client_id, invited_by=u["id"])
+    auditar(con, "race.invite", f"user:{u['id']}", user_id=u["id"], entity_type="race", entity_id=rid, detail={"client_id": dados.client_id}, ip=auth._ip(request))
+    return {"id": iid}
+
+
+class ConviteStatusIn(BaseModel):
+    status: str
+
+
+@r.patch("/invites/{iid}")
+def invite_status(iid: int, dados: ConviteStatusIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if dados.status not in ("invited", "confirmed", "declined", "done"):
+        raise HTTPException(400, "status inválido.")
+    if not um(con, "SELECT id FROM race_invites WHERE id=?", (iid,)):
+        raise HTTPException(404, "Not found.")
+    con.execute("UPDATE race_invites SET status=? WHERE id=?", (dados.status, iid))
+    auditar(con, "race.invite.status", f"user:{u['id']}", user_id=u["id"], entity_type="race_invite", entity_id=iid, detail={"status": dados.status}, ip=auth._ip(request))
+    return {"ok": True}
+
+
+def _estimativa_thread(iid, cid_cmd, texto, session_key, user_id):
+    from command_center.api import ia
+    ia._executa(cid_cmd, texto, session_key, user_id)
+    con = conectar()
+    try:
+        c = um(con, "SELECT status, output, error FROM ai_commands WHERE id=?", (cid_cmd,))
+        con.execute("UPDATE race_invites SET estimate_text=? WHERE id=?", ((c["output"] if c and c["status"] == "DONE" else f"falhou: {c['error'] if c else '?'}")[:4000], iid))
+    finally:
+        con.close()
+
+
+@r.post("/invites/{iid}/estimate", status_code=202)
+def invite_estimate(iid: int, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Prévia de custo da corrida para este piloto: a IA lê a aba Racing team da Rate Card e o equipamento. Não cria nada no QuickBooks."""
+    from command_center.api import ia, motor
+    i = um(con, "SELECT i.*, r.name AS race, r.series, r.track, r.city, r.date_start, r.date_end, r.notes AS race_notes FROM race_invites i JOIN races r ON r.id=i.race_id WHERE i.id=?", (iid,))
+    if not i:
+        raise HTTPException(404, "Not found.")
+    c = um(con, "SELECT * FROM clients WHERE id=?", (i["client_id"],))
+    eq = client_equipment(i["client_id"], u, con)
+    prompt = (f"PRÉVIA DE CUSTO (não crie nada no QuickBooks, não envie nada): quanto custaria para o piloto {c['pilot_name'] or c['name']} "
+              f"(responsável {c['name']}, plano {c['plan_type'] or '?'}/{c['monthly_plan'] or 'sem mensal'}) correr em '{i['race']}' "
+              f"({i['series'] or ''} {i['track'] or ''} {i['city'] or ''} {i['date_start'] or ''}–{i['date_end'] or ''}). "
+              f"Equipamento: chassi {json.dumps(eq['chassis'], ensure_ascii=False) if eq['chassis'] else 'não informado'}; motor {json.dumps(eq['engine'], ensure_ascii=False) if eq['engine'] else 'não informado'}. "
+              "Use a aba 'Racing team' da Rate Card (sheets_ler) e, se a corrida for fora do Orlando Kart Center, some hotel/comida/transporte conforme a planilha. "
+              "Responda com uma tabela curta: item, quantidade, unitário, total; e o total geral. Diga o que assumiu. ACAO: nenhuma."
+              + motor.aprendizados(con, c["id"]))
+    session_key = f"agent:{ia.AGENTE}:estimativa-{iid}"
+    cmd = inserir(con, "ai_commands", user_id=u["id"], text=prompt, session_key=session_key)
+    con.execute("UPDATE race_invites SET estimate_cmd=?, estimate_text=NULL WHERE id=?", (cmd, iid))
+    auditar(con, "race.estimate", f"user:{u['id']}", user_id=u["id"], entity_type="race_invite", entity_id=iid, detail={"command_id": cmd}, ip=auth._ip(request))
+    threading.Thread(target=_estimativa_thread, args=(iid, cmd, prompt, session_key, u["id"]), daemon=True).start()
+    return {"command_id": cmd}

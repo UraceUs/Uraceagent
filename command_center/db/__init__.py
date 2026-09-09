@@ -71,6 +71,13 @@ MIGRACOES = [
     ("emails", "handled_reason", "TEXT"),
     ("clients", "monthly_plan", "TEXT"),                  # ex.: "Academy 4 stroke" — gera a invoice do dia 1
     ("clients", "monthly_note", "TEXT"),                  # ajustes do plano (extra, desconto de contrato)
+    ("clients", "plan_type", "TEXT"),                     # monthly | daily
+    ("clients", "pro_driver", "INTEGER NOT NULL DEFAULT 0"),  # estrela: pronto para competir
+    ("clients", "chassis_id", "INTEGER"),
+    ("clients", "engine_id", "INTEGER"),
+    ("clients", "equipment_notes", "TEXT"),
+    ("invoices", "memo", "TEXT"),                         # ex.: "Urace Academy Training Program + Tuner [August, 2026]"
+    ("invoices", "customer_email", "TEXT"),
 ]
 
 

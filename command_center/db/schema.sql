@@ -442,3 +442,96 @@ INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
   (5, 'global', 'Mensal Academy sem contrato (4 sessões por mês; sessão extra = mensal ÷ 4): kart próprio + mecânico $1.200 (extra $300); kart próprio $1.800 (extra $450); Baby Kart $2.756,90 (extra $689,23); 4 stroke $2.756,90 (extra $689,23); 2 stroke $3.156,90 (extra $789,23). Contratos de 6 meses (27 sessões, 4% off) e 12 meses (54 sessões, 8% off) estão detalhados na aba Academy.', 'dono-2026-09-09'),
   (6, 'global', 'Treino fora do Orlando Kart Center (ex.: semana em Jacksonville ou Homestead) cobra $250 extra POR SESSÃO de hotel, comida e transporte.', 'dono-2026-09-09'),
   (7, 'global', 'Invoice ligada a esses produtos NUNCA sai sozinha: proponha qbo_criar_e_enviar_invoice com cliente, linhas e valores exatos, e ela vai para Aprovações com prévia. Aprovar = enviar. Mensalidade recorrente é montada no dia 1 do mês, uma por cliente com plano, e fica pronta esperando aprovação.', 'dono-2026-09-09');
+
+-- ------------------------------------------------- equipamento (editável pelo dono)
+CREATE TABLE IF NOT EXISTS catalog_chassis (
+  id          INTEGER PRIMARY KEY,
+  brand       TEXT NOT NULL,             -- Tony Kart, Parolin, OTK, CRG, Birel ART, Kosmic…
+  model       TEXT,
+  size        TEXT,                      -- Cadet / Mini / Junior / Senior / Shifter
+  tire_front  TEXT,                      -- ex.: 10x4.60-5
+  tire_rear   TEXT,                      -- ex.: 11x7.10-5
+  notes       TEXT,
+  image_path  TEXT,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TABLE IF NOT EXISTS catalog_engines (
+  id          INTEGER PRIMARY KEY,
+  brand       TEXT NOT NULL,             -- IAME, Tillotson, Rotax, Vortex, Briggs…
+  model       TEXT NOT NULL,             -- KA100, X30, T225RS, Mini Swift, 206
+  stroke      TEXT,                      -- 2T / 4T
+  category    TEXT,                      -- Cadet, Junior, Senior, Shifter
+  notes       TEXT,
+  image_path  TEXT,
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TABLE IF NOT EXISTS catalog_parts (
+  id          INTEGER PRIMARY KEY,
+  engine_id   INTEGER REFERENCES catalog_engines(id),
+  name        TEXT NOT NULL,
+  part_number TEXT,
+  price       REAL,                      -- referência; a Rate Card/QBO mandam
+  notes       TEXT,
+  active      INTEGER NOT NULL DEFAULT 1
+);
+INSERT OR IGNORE INTO catalog_chassis (id, brand, model, size, tire_front, tire_rear, notes) VALUES
+  (1, 'Tony Kart', 'Racer 401RR', 'Senior', '10x4.60-5', '11x7.10-5', 'OTK; o mais usado nos EUA'),
+  (2, 'Tony Kart', 'Rookie', 'Cadet', '10x4.00-5', '11x5.00-5', 'OTK cadet'),
+  (3, 'Parolin', 'Le Mans', 'Senior', '10x4.60-5', '11x7.10-5', ''),
+  (4, 'Parolin', 'Rocky', 'Cadet', '10x4.00-5', '11x5.00-5', ''),
+  (5, 'Kosmic', 'Mercury', 'Senior', '10x4.60-5', '11x7.10-5', 'OTK'),
+  (6, 'CRG', 'KT2', 'Senior', '10x4.60-5', '11x7.10-5', ''),
+  (7, 'Birel ART', 'RY30', 'Senior', '10x4.60-5', '11x7.10-5', '');
+INSERT OR IGNORE INTO catalog_engines (id, brand, model, stroke, category, notes) VALUES
+  (1, 'IAME', 'KA100', '2T', 'Junior/Senior', '100cc, partida elétrica; peças IAME'),
+  (2, 'IAME', 'X30', '2T', 'Junior/Senior', '125cc TaG'),
+  (3, 'IAME', 'Mini Swift', '2T', 'Cadet', '60cc'),
+  (4, 'IAME', 'SSE 175', '2T', 'Shifter', 'shifter'),
+  (5, 'Tillotson', 'T225RS', '4T', 'Junior/Senior', '4 tempos'),
+  (6, 'Briggs & Stratton', 'LO206', '4T', 'Junior/Senior', '4 tempos lacrado'),
+  (7, 'Rotax', 'MAX EVO', '2T', 'Junior/Senior', '125cc'),
+  (8, 'Vortex', 'ROK GP', '2T', 'Senior', 'ROK Cup');
+
+-- ------------------------------------------------- corridas e convites (Pro Racing Drivers)
+CREATE TABLE IF NOT EXISTS races (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT NOT NULL,
+  series      TEXT,                      -- SKUSA, ROK, USPKS, FWT…
+  track       TEXT,
+  city        TEXT,
+  date_start  TEXT,
+  date_end    TEXT,
+  notes       TEXT,
+  source      TEXT,                      -- asana | manual
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE TABLE IF NOT EXISTS race_invites (
+  id            INTEGER PRIMARY KEY,
+  race_id       INTEGER NOT NULL REFERENCES races(id),
+  client_id     INTEGER NOT NULL REFERENCES clients(id),
+  status        TEXT NOT NULL DEFAULT 'invited' CHECK (status IN ('invited','confirmed','declined','done')),
+  estimate_text TEXT,                    -- prévia de custo dada pela IA (não é invoice)
+  estimate_cmd  INTEGER REFERENCES ai_commands(id),
+  invited_by    INTEGER REFERENCES users(id),
+  invited_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (race_id, client_id)
+);
+
+-- ------------------------------------------------- contratos (Academy) por cliente
+CREATE TABLE IF NOT EXISTS contracts (
+  id           INTEGER PRIMARY KEY,
+  client_id    INTEGER NOT NULL REFERENCES clients(id),
+  kind         TEXT NOT NULL DEFAULT 'academy',
+  source       TEXT NOT NULL,            -- docusign | upload
+  envelope_id  TEXT,
+  status       TEXT,                     -- completed, sent…
+  signed_at    TEXT,
+  file_path    TEXT,
+  title        TEXT,
+  added_by     INTEGER REFERENCES users(id),
+  added_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS contracts_client ON contracts(client_id);

@@ -196,7 +196,8 @@ def _resumo_invoice(inv):
     return {"id": inv.get("Id"), "numero": inv.get("DocNumber"), "cliente_id": cr.get("value"), "cliente": cr.get("name"),
             "email": (inv.get("BillEmail") or {}).get("Address"), "emitida_em": inv.get("TxnDate"), "vence_em": inv.get("DueDate"),
             "total": inv.get("TotalAmt"), "saldo": inv.get("Balance"), "status": _status_invoice(inv, hoje),
-            "email_status": inv.get("EmailStatus"), "linhas": linhas, "link": deep_link(inv.get("Id")),
+            "email_status": inv.get("EmailStatus"), "memo": (inv.get("CustomerMemo") or {}).get("value"),
+            "linhas": linhas, "link": deep_link(inv.get("Id")),
             "aviso": "saldo em aberto não é inadimplência: existe parcelamento (ver cérebro)" if float(inv.get("Balance") or 0) > 0 else None}
 
 

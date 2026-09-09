@@ -502,3 +502,83 @@ def test_mensalidade_dia_1_um_evento_por_cliente(cli):
     ev = con.execute("SELECT kind, summary FROM ai_events WHERE kind='billing.monthly' AND entity_id=?", (cid,)).fetchone()
     assert ev and "Academy 4 stroke" in ev[1]
     con.close()
+
+
+# ------------------------------------------------ Pro Racing Drivers, mensalidade, equipamento, corridas (09/09)
+def test_mensalidade_por_memo_e_sessoes(cli):
+    from command_center.api.rotas import mes_da_invoice
+    from command_center.db import conectar, inserir
+    assert mes_da_invoice({"memo": "Urace Academy Training Program + Tuner [August, 2026]", "issued_on": "2026-09-01"}) == "2026-08"
+    assert mes_da_invoice({"memo": "sem mês", "issued_on": "2026-09-03"}) == "2026-09"
+    h = entra(cli, "admin@urace.us")
+    con = conectar()
+    from datetime import date
+    hoje = date.today(); mes = hoje.strftime("%Y-%m")
+    cid = inserir(con, "clients", name="Brian Santiago", email="brian@example.com", pilot_name="Brian Santiago", status="ACTIVE", source="asana", plan_type="monthly")
+    inserir(con, "invoices", client_id=cid, doc_number="INV-77", amount=2756.90, balance=0, status="paid", issued_on=f"{mes}-01",
+            memo=f"Urace Academy Training Program + Tuner [{hoje.strftime('%B')}, {hoje.year}]")
+    inserir(con, "tasks", client_id=cid, title="Brian Santiago_Academy_2 stroke [1/4]", project="U-RACE", section="SATURDAY", status="open", due_on=f"{mes}-06")
+    inserir(con, "tasks", client_id=cid, title="Brian Santiago_Academy_2 stroke [2/4]", project="U-RACE", section="Finished Services", status="completed", due_on=f"{mes}-13")
+    con.close()
+    m = cli.get(B + f"/clients/{cid}/monthly").json()
+    atual = m["months"][0]
+    assert atual["month"] == mes and atual["invoice"]["doc_number"] == "INV-77" and atual["sessions_used"] == 2 and atual["sessions_left"] == 2 and atual["needs_invoice"] is False
+    assert m["last_monthly_amount"] == 2756.90
+    # leitor não vê valor
+    entra(cli, "viewer@urace.us")
+    mv = cli.get(B + f"/clients/{cid}/monthly").json()
+    assert mv["last_monthly_amount"] is None and "amount" not in mv["months"][0]["invoice"]
+    # perfil: tipo, estrela (só gerente), equipamento
+    h = entra(cli, "admin@urace.us")
+    assert cli.patch(B + f"/clients/{cid}/profile", headers=h, json={"pro_driver": True, "chassis_id": 1, "engine_id": 2, "equipment_notes": "chassi nº 123"}).status_code == 200
+    eq = cli.get(B + f"/clients/{cid}/equipment").json()
+    assert eq["chassis"]["brand"] == "Tony Kart" and eq["engine"]["model"] == "X30" and eq["notes"] == "chassi nº 123"
+    assert any(c["id"] == cid for c in cli.get(B + "/clients?pro=true").json())
+    assert cli.patch(B + f"/clients/{cid}/profile", headers=entra(cli, "viewer@urace.us"), json={"pro_driver": False}).status_code == 403
+    # contrato por upload
+    h = entra(cli, "admin@urace.us")
+    r = cli.post(B + f"/clients/{cid}/contract", headers=h, files={"file": ("contrato.pdf", b"%PDF-1.4 fake", "application/pdf")}, data={"title": "Contrato Academy"})
+    assert r.status_code == 201
+    kid = r.json()["id"]
+    assert cli.get(B + f"/contracts/{kid}/download").status_code == 200
+    assert cli.get(B + f"/clients/{cid}/monthly").json()["contracts"][0]["source"] == "upload"
+
+
+def test_catalogo_editavel_e_corridas(cli):
+    h = entra(cli, "admin@urace.us")
+    cat = cli.get(B + "/catalog").json()
+    assert len(cat["chassis"]) >= 7 and any(e["model"] == "KA100" for e in cat["engines"])
+    r = cli.post(B + "/catalog/chassis", headers=h, json={"brand": "Kart Republic", "model": "KR2", "size": "Senior", "tire_front": "10x4.60-5", "tire_rear": "11x7.10-5"})
+    assert r.status_code == 201
+    cid = r.json()["id"]
+    assert cli.patch(B + f"/catalog/chassis/{cid}", headers=h, json={"notes": "novo"}).status_code == 200
+    assert cli.post(B + "/catalog/engines", headers=h, json={"brand": "IAME"}).status_code == 400
+    ka = [e for e in cat["engines"] if e["model"] == "KA100"][0]
+    assert cli.post(B + "/catalog/parts", headers=h, json={"engine_id": ka["id"], "name": "Reed petal", "part_number": "X-10", "price": 21.25}).status_code == 201
+    assert any(p["name"] == "Reed petal" for p in cli.get(B + "/catalog").json()["parts"])
+    assert cli.post(B + f"/catalog/chassis/{cid}/image", headers=h, files={"file": ("x.png", b"\x89PNG fake", "image/png")}).status_code == 200
+    assert cli.get(B + f"/catalog/chassis/{cid}/image").status_code == 200
+    # corridas e convites
+    r = cli.post(B + "/races", headers=h, json={"name": "SKUSA Winter Series RD1", "series": "SKUSA", "track": "AMR Homestead", "city": "Homestead, FL", "date_start": "2027-01-15"})
+    assert r.status_code == 201
+    rid = r.json()["id"]
+    pro = cli.get(B + "/clients?pro=true").json()[0]
+    assert cli.post(B + f"/races/{rid}/invite", headers=h, json={"client_id": pro["id"]}).status_code == 201
+    assert cli.post(B + f"/races/{rid}/invite", headers=h, json={"client_id": pro["id"]}).status_code == 409
+    corrida = [x for x in cli.get(B + "/races").json() if x["id"] == rid][0]
+    assert corrida["invites"] == 1 and corrida["invited"][0]["status"] == "invited"
+    iid = corrida["invited"][0]["id"]
+    assert cli.patch(B + f"/invites/{iid}", headers=h, json={"status": "confirmed"}).status_code == 200
+    # prévia de custo: vira comando da IA (runner falso responde na hora)
+    from command_center.api import ia
+    ia.RUNNER = lambda texto, sk: (True, "| Item | Qtd | Unit | Total |\n| Inscrição | 1 | $450 | $450 |\nTotal: $450\nACAO: nenhuma", None)
+    r = cli.post(B + f"/invites/{iid}/estimate", headers=h)
+    assert r.status_code == 202
+    import time
+    for _ in range(50):
+        inv = [x for x in cli.get(B + "/races").json() if x["id"] == rid][0]["invited"][0]
+        if inv["estimate_text"]:
+            break
+        time.sleep(0.1)
+    assert "$450" in inv["estimate_text"]
+    assert cli.post(B + "/races", headers=entra(cli, "viewer@urace.us"), json={"name": "x"}).status_code == 403

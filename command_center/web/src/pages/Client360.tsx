@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
-import type { Client360 as C360 } from '../api/types'
+import type { Catalog, Client360 as C360, Monthly } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Chip, Empty, ErrorState, Ext, Loading, POLICY_LABEL, Section, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Ext, Loading, POLICY_LABEL, Section, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -31,9 +31,11 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const { can } = useAuth()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
-  const [tab, setTab] = useState<'timeline' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
+  const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
+  const monthly = useGet<Monthly>(id && tab === 'monthly' ? `/clients/${id}/monthly` : null)
+  const catalog = useGet<Catalog>(id && tab === 'equip' ? '/catalog' : null)
   const [edit, setEdit] = useState(false)
-  const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '' })
+  const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '', plan_type: '', pro_driver: false })
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
   if (error && !data) return <ErrorState error={error} retry={reload} />
@@ -47,13 +49,17 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const dias = daysUntil(prox?.due_on)
   const risco = !c.vip && prox && !wOk && dias !== null && dias <= 2
 
-  function openEdit() { setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '' }); setEdit(true) }
+  function openEdit() { setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '', plan_type: c.plan_type || '', pro_driver: !!c.pro_driver }); setEdit(true) }
   async function save() {
     setSaving(true)
     try {
       const body: Record<string, unknown> = { status: form.status, stage_code: form.stage_code || null, notes: form.notes, monthly_plan: form.monthly_plan || null, monthly_note: form.monthly_note || null }
       if (can('MANAGER')) body.vip = form.vip
-      await api.patch(`/clients/${c.id}`, body); toast('Cliente atualizado.', 'ok'); setEdit(false); reload()
+      await api.patch(`/clients/${c.id}`, body)
+      const perfil: Record<string, unknown> = { plan_type: form.plan_type }
+      if (can('MANAGER')) perfil.pro_driver = form.pro_driver
+      await api.patch(`/clients/${c.id}/profile`, perfil)
+      toast('Cliente atualizado.', 'ok'); setEdit(false); reload()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSaving(false) }
   }
 
@@ -61,7 +67,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     <div className="page-h">
       <div>
         {!onClose && <div className="small"><a onClick={() => nav(-1)} style={{ cursor: 'pointer' }}>← voltar</a></div>}
-        <div className="row wrap"><h1 className="h1">{c.pilot_name || c.name}</h1>{c.pilot_name && <span className="ink2">responsável: <b>{c.name}</b></span>}{!!c.vip && <Chip tone="warn">VIP</Chip>}<Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.source && <Chip tone="outline">{c.source}</Chip>}</div>
+        <div className="row wrap">{!!c.pro_driver && <span title="Pro Racing Driver" style={{ color: 'var(--warn)', fontSize: 26 }}>★</span>}<h1 className="h1">{c.pilot_name || c.name}</h1>{c.plan_type === 'monthly' && <Chip tone="accent">Academy Monthly</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">Academy Day</Chip>}{c.pilot_name && <span className="ink2">responsável: <b>{c.name}</b></span>}{!!c.vip && <Chip tone="warn">VIP</Chip>}<Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.source && <Chip tone="outline">{c.source}</Chip>}</div>
         <div className="sub small">{c.pilot_dob && <>Piloto nascido em {fmtDate(c.pilot_dob)}{idade(c.pilot_dob) !== null && <> ({idade(c.pilot_dob)} anos{idade(c.pilot_dob)! < 18 ? ', menor: waiver parental' : ''})</>} · </>}{c.email || 'sem e-mail'}{c.phone && <> · {c.phone}</>}{c.company && <> · {c.company}</>}</div>
       </div>
       <div className="row wrap">
@@ -94,6 +100,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <div className="field"><label>VIP</label><label className="check"><input type="checkbox" disabled={!can('MANAGER')} checked={form.vip} onChange={e => setForm({ ...form, vip: e.target.checked })} /> dispensa waiver {!can('MANAGER') && <span className="muted">(só gerente)</span>}</label></div>
       </div>
       <div className="grid g2" style={{ marginTop: 12 }}>
+        <div className="field"><label>Tipo de piloto</label><select className="input" value={form.plan_type} onChange={e => setForm({ ...form, plan_type: e.target.value })}><option value="">não definido</option><option value="monthly">Urace Academy Monthly (mensal)</option><option value="daily">Urace Academy Day (diária)</option></select></div>
+        <div className="field"><label>★ Pro Racing Driver</label><label className="check"><input type="checkbox" disabled={!can('MANAGER')} checked={form.pro_driver} onChange={e => setForm({ ...form, pro_driver: e.target.checked })} /> pronto para ser convidado para corridas {!can('MANAGER') && <span className="muted">(só gerente)</span>}</label></div>
         <div className="field"><label>Plano mensal (gera a invoice do dia 1)</label><select className="input" value={form.monthly_plan} onChange={e => setForm({ ...form, monthly_plan: e.target.value })}><option value="">sem plano mensal</option>{['Academy Baby Kart', 'Academy 4 stroke', 'Academy 2 stroke', 'Academy kart próprio', 'Academy kart próprio + mecânico', 'Contrato 6 meses', 'Contrato 12 meses'].map(x => <option key={x}>{x}</option>)}</select></div>
         <div className="field"><label>Ajustes do plano</label><input className="input" value={form.monthly_note} onChange={e => setForm({ ...form, monthly_note: e.target.value })} placeholder="ex.: 1 sessão extra em setembro; treino fora do OKC" /></div>
       </div>
@@ -102,8 +110,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     </Section>}
     {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>Notas:</b> {c.notes}</div>}
     <div className="tabs">
-      {(['timeline', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-        {{ timeline: 'Linha do tempo', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
+      {(['timeline', 'monthly', 'equip', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: 'Equipamento', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
       </button>)}
     </div>
     <div className="card card-b">
@@ -111,6 +119,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         const [lbl, tone] = KIND[e.kind] || [e.kind, '']
         return <div className="ev" key={i}><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div><span className="small muted cond">{lbl}</span> · {e.title} <Chip tone={statusTone(e.status)}>{e.status}</Chip></div></div>
       })}</div>)}
+      {tab === 'monthly' && <Mensalidade id={c.id} m={monthly.data} loading={monthly.loading} reload={monthly.reload} plan={c.plan_type} fin={can('MANAGER')} />}
+      {tab === 'equip' && <Equipamento c={c} cat={catalog.data} reload={reload} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={6}><Empty>Sem serviços vinculados.</Empty></td></tr>}
         {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Chip tone={statusTone(t.status === 'open' ? 'PENDING' : 'COMPLETED')}>{t.status}</Chip></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td>{t.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>{l.system}</Ext>)}</td></tr>)}
@@ -132,4 +142,72 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <div className="acts">{data.ai_actions.map(a => <div className="act" key={a.id}><span className="what">{a.action}</span><Chip tone={statusTone(a.policy)}>{POLICY_LABEL[a.policy]}</Chip><Chip tone={statusTone(a.status)}>{a.status}</Chip><span className="small muted">{fmtDateTime(a.created_at)}</span>{a.reason && <div className="small ink2" style={{ width: '100%' }}>{a.reason}</div>}</div>)}</div>)}
     </div>
   </>
+}
+
+
+function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Monthly | null; loading: boolean; reload: () => void; plan?: string | null; fin: boolean }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const [file, setFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  async function upload() {
+    if (!file) return
+    setBusy(true)
+    try {
+      const fd = new FormData(); fd.append('file', file); fd.append('title', file.name)
+      const csrf = document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || ''
+      const res = await fetch(`/ops/api/clients/${id}/contract`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': decodeURIComponent(csrf) } })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || `HTTP ${res.status}`) }
+      toast('Contrato guardado.', 'ok'); setFile(null); reload()
+    } catch (e) { toast((e as Error).message, 'crit') } finally { setBusy(false) }
+  }
+  if (loading && !m) return <Loading />
+  if (!m) return null
+  const mesNome = (k: string) => new Date(k + '-15T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  return <div className="stack">
+    {plan !== 'monthly' && <Banner tone="info">Este piloto não está marcado como Academy Monthly. Marque em Editar → Tipo de piloto para o dia 1 gerar a mensalidade.</Banner>}
+    <div className="grid g3">
+      <div className="card kpi"><div className="lbl">Última mensalidade</div><div className="val" style={{ fontSize: 24 }}>{fin ? (m.last_monthly_amount != null ? money(m.last_monthly_amount) : '—') : '🔒'}</div><div className="foot truncate" title={m.last_monthly_memo || ''}>{m.last_monthly_memo || 'nenhuma invoice de Academy encontrada'}</div></div>
+      <div className="card kpi"><div className="lbl">Sessões este mês</div><div className="val">{m.months[0]?.sessions_used ?? 0}<span className="muted" style={{ fontSize: 18 }}> / {m.sessions_per_month}</span></div><div className="foot">{m.months[0]?.sessions_left ?? 0} restante(s)</div></div>
+      <div className="card kpi"><div className="lbl">Invoice do mês</div><div className={`val ${m.months[0]?.invoice ? 'ok' : 'warn'}`} style={{ fontSize: 22 }}>{m.months[0]?.invoice ? (m.months[0].invoice.status || 'emitida') : 'falta'}</div><div className="foot">{m.months[0]?.invoice?.doc_number || (m.months[0]?.needs_invoice ? 'a IA monta no dia 1, você aprova' : '')}</div></div>
+    </div>
+    <Section title="Meses" tight><div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mês</th><th>Invoice</th><th>Sessões usadas</th><th>Restantes</th><th>Situação</th></tr></thead><tbody>
+      {m.months.map(x => <tr key={x.month}><td style={{ textTransform: 'capitalize' }}>{mesNome(x.month)}</td>
+        <td>{x.invoice ? <><span className="mono">{x.invoice.doc_number}</span> <Chip tone={statusTone(x.invoice.status === 'open' ? 'PENDING' : x.invoice.status)}>{x.invoice.status}</Chip>{fin && x.invoice.amount != null && <span className="mono"> {money(x.invoice.amount)}</span>}<div className="small muted">{x.invoice.memo}</div></> : <span className="muted">—</span>}</td>
+        <td className="mono">{x.sessions_used}{x.sessions.length > 0 && <div className="small muted">{x.sessions.map(s => fmtDate(s.due_on)).join(' · ')}</div>}</td><td className="mono">{x.sessions_left}</td>
+        <td>{x.needs_invoice ? <Chip tone="warn">falta invoice</Chip> : x.invoice ? <Chip tone="ok">ok</Chip> : <span className="muted">sem uso</span>}</td></tr>)}
+    </tbody></table></div></Section>
+    <Section title="Contrato da Academy" count={m.contracts.length}>
+      {m.contracts.length === 0 ? <div className="small muted">Nenhum contrato. Use "Buscar nas plataformas" para achar no DocuSign (assunto com Academy/contract) ou suba o PDF abaixo.</div> :
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Contrato</th><th>Origem</th><th>Status</th><th>Assinado</th><th></th></tr></thead><tbody>
+          {m.contracts.map(k => <tr key={k.id}><td>{k.title}</td><td>{k.source === 'docusign' ? 'DocuSign' : `upload (${k.added_by_name || ''})`}</td><td><Chip tone={statusTone(k.status)}>{k.status || '—'}</Chip></td><td className="mono">{fmtDate(k.signed_at)}</td><td><a className="btn sm" href={`/ops/api/contracts/${k.id}/download`}>⬇ PDF</a></td></tr>)}
+        </tbody></table></div>}
+      {can('OPERATOR') && <div className="row wrap" style={{ marginTop: 10 }}><input className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : 'Subir contrato'}</button></div>}
+    </Section>
+  </div>
+}
+
+function Equipamento({ c, cat, reload }: { c: { id: number; chassis_id?: number | null; engine_id?: number | null; equipment_notes?: string | null }; cat: Catalog | null; reload: () => void }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const [f, setF] = useState({ chassis_id: c.chassis_id || 0, engine_id: c.engine_id || 0, equipment_notes: c.equipment_notes || '' })
+  const [busy, setBusy] = useState(false)
+  if (!cat) return <Loading />
+  const ch = cat.chassis.find(x => x.id === Number(f.chassis_id)); const en = cat.engines.find(x => x.id === Number(f.engine_id))
+  const parts = cat.parts.filter(p => p.engine_id === Number(f.engine_id) && p.active)
+  async function save() { setBusy(true); try { await api.patch(`/clients/${c.id}/profile`, { chassis_id: f.chassis_id || null, engine_id: f.engine_id || null, equipment_notes: f.equipment_notes }); toast('Equipamento salvo.', 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) } }
+  return <div className="stack">
+    <div className="grid g2">
+      <div className="field"><label>Chassi</label><select className="input" disabled={!can('OPERATOR')} value={f.chassis_id} onChange={e => setF({ ...f, chassis_id: Number(e.target.value) })}><option value={0}>—</option>{cat.chassis.filter(x => x.active).map(x => <option key={x.id} value={x.id}>{x.brand} {x.model || ''} {x.size ? `(${x.size})` : ''}</option>)}</select></div>
+      <div className="field"><label>Motor</label><select className="input" disabled={!can('OPERATOR')} value={f.engine_id} onChange={e => setF({ ...f, engine_id: Number(e.target.value) })}><option value={0}>—</option>{cat.engines.filter(x => x.active).map(x => <option key={x.id} value={x.id}>{x.brand} {x.model} {x.stroke ? `· ${x.stroke}` : ''}</option>)}</select></div>
+    </div>
+    <div className="grid g2">
+      {ch && <div className="card card-b"><div className="h2">Chassi</div>{ch.image_path && <img src={`/ops/api/catalog/chassis/${ch.id}/image`} alt="" style={{ maxHeight: 140, borderRadius: 3, margin: '8px 0' }} />}<dl className="dl"><dt>Marca</dt><dd>{ch.brand} {ch.model}</dd><dt>Tamanho</dt><dd>{ch.size || '—'}</dd><dt>Pneu diant.</dt><dd className="mono">{ch.tire_front || '—'}</dd><dt>Pneu tras.</dt><dd className="mono">{ch.tire_rear || '—'}</dd>{ch.notes && <><dt>Notas</dt><dd className="small">{ch.notes}</dd></>}</dl></div>}
+      {en && <div className="card card-b"><div className="h2">Motor</div>{en.image_path && <img src={`/ops/api/catalog/engines/${en.id}/image`} alt="" style={{ maxHeight: 140, borderRadius: 3, margin: '8px 0' }} />}<dl className="dl"><dt>Motor</dt><dd>{en.brand} {en.model}</dd><dt>Tempos</dt><dd>{en.stroke || '—'}</dd><dt>Categoria</dt><dd>{en.category || '—'}</dd>{en.notes && <><dt>Notas</dt><dd className="small">{en.notes}</dd></>}</dl>
+        <div className="h2" style={{ marginTop: 10 }}>Peças deste motor ({parts.length})</div>{parts.length === 0 ? <div className="small muted">Nenhuma peça cadastrada. Cadastre em Equipamentos.</div> : <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{parts.map(p => <li key={p.id} className="small">{p.name}{p.part_number && <span className="mono muted"> {p.part_number}</span>}{p.price != null && <span className="muted"> · {money(p.price)}</span>}</li>)}</ul>}</div>}
+    </div>
+    <div className="field"><label>Notas de equipamento</label><textarea className="input" rows={2} disabled={!can('OPERATOR')} value={f.equipment_notes} onChange={e => setF({ ...f, equipment_notes: e.target.value })} placeholder="ajustes, pneus usados, número do chassi, histórico" /></div>
+    {can('OPERATOR') && <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={busy} onClick={save}>{busy ? <span className="spin" /> : 'Salvar equipamento'}</button></div>}
+    <div className="small muted">Estoque de peças vem depois; por enquanto o catálogo é referência. Edite chassis, motores e peças em <a href="/ops/equipment">Equipamentos</a>.</div>
+  </div>
 }

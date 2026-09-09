@@ -217,6 +217,11 @@ def sync_asana(con):
                                                  subtasks_total=len(subs),
                                                  subtasks_done=sum(1 for s in subs if s.get("concluida")), **comum))
                 tarefas += 1
+        # coluna RACES vira a lista de corridas (para convidar os Pro Racing Drivers)
+        for t in todos(con, "SELECT id, title, due_on FROM tasks WHERE project='U-RACE' AND LOWER(COALESCE(section,''))='races'"):
+            if not um(con, "SELECT 1 FROM races WHERE name=? AND source='asana'", (t["title"],)):
+                inserir(con, "races", name=t["title"], date_start=t["due_on"], source="asana",
+                        series=next((x for x in ("SKUSA", "ROK", "USPKS", "FWT", "AMR", "Florida Karting") if x.lower() in (t["title"] or "").lower()), None))
         # tarefa de dia passado ainda aberta: a IA confere e move sozinha (evento, uma vez por tarefa)
         hoje = __import__("datetime").date.today().isoformat()
         for t in todos(con, "SELECT id, title, section, due_on, client_id FROM tasks WHERE status='open' AND due_on < ? AND section_gid IN (%s)" % ",".join("?" * len(SECOES_DIAS)),
@@ -440,7 +445,8 @@ def sync_qbo(con, desde_dias=365):
             cli = _acha_cliente(con, email=email, nome=inv.get("cliente"))
             iid = um(con, "SELECT entity_id FROM entity_links WHERE system='quickbooks' AND external_id=? AND entity_type='invoice'", (inv["id"],))
             campos = dict(client_id=cli["id"] if cli else None, doc_number=inv.get("numero"), amount=inv.get("total"), balance=inv.get("saldo"),
-                          status=inv.get("status"), issued_on=inv.get("emitida_em"), due_on=inv.get("vence_em"), synced_at=agora())
+                          status=inv.get("status"), issued_on=inv.get("emitida_em"), due_on=inv.get("vence_em"), memo=inv.get("memo"),
+                          customer_email=email, synced_at=agora())
             if iid:
                 atualizar(con, "invoices", iid["entity_id"], **campos)
             else:
