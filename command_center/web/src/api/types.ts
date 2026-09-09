@@ -119,7 +119,7 @@ export interface SearchResult {
 }
 
 export interface SyncStatus {
-  running: boolean; started_at: string | null; finished_at: string | null
+  running: boolean; started_at: string | null; finished_at: string | null; stage?: string | null; stage_started_at?: string | null
   result: Record<string, { ok: boolean; motivo?: string; tarefas?: number; clientes_novos?: number }> | null
   logs: { id: number; system: string; started_at: string; finished_at: string; ok: number; items: number; message: string }[]
 }

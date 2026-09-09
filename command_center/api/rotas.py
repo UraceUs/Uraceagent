@@ -46,7 +46,7 @@ def integrations_check(request: Request, u=Depends(auth.exige("OPERATOR")),
     return saida
 
 
-_SYNC = {"running": False, "started_at": None, "finished_at": None, "result": None, "by": None}
+_SYNC = {"running": False, "started_at": None, "finished_at": None, "result": None, "by": None, "stage": None, "stage_started_at": None}
 _SYNC_LOCK = threading.Lock()
 
 
@@ -54,7 +54,16 @@ def _sync_thread(user_id, ip):
     from command_center.api import motor
     con = conectar()
     try:
-        res = sy.sync_tudo(con)
+        res = {}
+        # uma etapa por sistema, com o nome visível em GET /sync (a tela mostra "sincronizando: asana")
+        for nome, fn in (("cerebro", sy.sync_cerebro), ("asana", sy.sync_asana), ("docusign", sy.sync_docusign),
+                         ("gmail", sy.sync_gmail), ("quickbooks", sy.sync_qbo)):
+            _SYNC["stage"] = nome; _SYNC["stage_started_at"] = agora()
+            try:
+                res[nome] = fn(con)
+            except Exception as e:                    # um sistema com erro não derruba os outros
+                res[nome] = {"ok": False, "motivo": f"{type(e).__name__}: {str(e)[:300]}"}
+        _SYNC["stage"] = "eventos"
         auditar(con, "sync.run", f"user:{user_id}", user_id=user_id, detail=res, ip=ip)
         res["eventos_disparados"] = motor.processar_eventos(con, user_id)
         _SYNC["result"] = res
@@ -63,6 +72,7 @@ def _sync_thread(user_id, ip):
     finally:
         _SYNC["running"] = False
         _SYNC["finished_at"] = agora()
+        _SYNC["stage"] = None
         con.close()
 
 

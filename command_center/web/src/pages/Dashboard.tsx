@@ -15,6 +15,7 @@ export function Dashboard() {
   const nav = useNavigate()
   const toast = useToast()
   const [syncing, setSyncing] = useState(false)
+  const [stage, setStage] = useState<string>('')
   const d = dash.data
   if (dash.error && !d) return <ErrorState error={dash.error} retry={dash.reload} />
   if (!d) return <Loading rows={6} />
@@ -29,6 +30,7 @@ export function Dashboard() {
       for (let i = 0; i < 240; i++) {                       // até ~20 min, a cada 5 s
         await new Promise(res => setTimeout(res, 5000))
         const st = await api.get<SyncStatus>('/sync')
+        if (st.running) { const t0 = st.started_at ? Math.round((Date.now() - new Date(st.started_at).getTime()) / 60000) : 0; setStage(`${st.stage || '…'} · ${t0} min`) }
         if (!st.running) {
           const falhas = Object.entries(st.result || {}).filter(([, v]) => !v.ok)
           toast(falhas.length ? `Sincronia terminou com aviso: ${falhas.map(([k, v]) => `${k} (${v.motivo})`).join(', ')}` : 'Espelhos atualizados a partir das fontes.', falhas.length ? undefined : 'ok')
@@ -36,14 +38,14 @@ export function Dashboard() {
         }
       }
       dash.reload()
-    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSyncing(false) }
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSyncing(false); setStage('') }
   }
 
   return <>
     <div className="page-h">
       <div><h1 className="h1">Dashboard</h1><div className="sub small">Dados espelhados das fontes reais. Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>.</div></div>
       <div className="row">
-        {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing}>{syncing ? <Spinner /> : '↻'} {syncing ? 'Sincronizando…' : 'Sincronizar agora'}</button>}
+        {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing}>{syncing ? <Spinner /> : '↻'} {syncing ? `Sincronizando: ${stage || '…'}` : 'Sincronizar agora'}</button>}
         {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai')}>Perguntar à IA</button>}
       </div>
     </div>
