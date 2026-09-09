@@ -8,7 +8,7 @@ import { Empty } from './components/ui'
 import { AICommand, Activity, Approvals } from './pages/AI'
 import { AttentionPage } from './pages/Attention'
 import { Automation } from './pages/Automation'
-import { Equipment, Races } from './pages/Garage'
+import { Races } from './pages/Races'
 import { Client360 } from './pages/Client360'
 import { Clients } from './pages/Clients'
 import { Dashboard } from './pages/Dashboard'
@@ -40,7 +40,7 @@ export default function App() {
           <Route path="gmail" element={<GmailPage />} />
           <Route path="quickbooks" element={<QuickBooksPage />} />
           <Route path="races" element={<Races />} />
-          <Route path="equipment" element={<Equipment />} />
+          <Route path="equipment" element={<Navigate to="/clients?v=pro" replace />} />
           <Route path="tasks" element={<Navigate to="/asana" replace />} />
           <Route path="waivers" element={<Navigate to="/docusign" replace />} />
           <Route path="emails" element={<Navigate to="/gmail" replace />} />

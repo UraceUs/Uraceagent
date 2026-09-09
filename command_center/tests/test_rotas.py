@@ -559,8 +559,11 @@ def test_catalogo_editavel_e_corridas(cli):
     assert cli.post(B + f"/catalog/chassis/{cid}/image", headers=h, files={"file": ("x.png", b"\x89PNG fake", "image/png")}).status_code == 200
     assert cli.get(B + f"/catalog/chassis/{cid}/image").status_code == 200
     # corridas e convites
-    r = cli.post(B + "/races", headers=h, json={"name": "SKUSA Winter Series RD1", "series": "SKUSA", "track": "AMR Homestead", "city": "Homestead, FL", "date_start": "2027-01-15"})
-    assert r.status_code == 201
+    # sem Asana: criar do modelo dá 503 (nunca 500); "só no painel" cria local
+    r = cli.post(B + "/races", headers=h, json={"name": "SKUSA Winter Series RD1", "series": "SKUSA", "date_start": "2027-01-15"})
+    assert r.status_code == 503
+    r = cli.post(B + "/races", headers=h, json={"name": "SKUSA Winter Series RD1", "series": "SKUSA", "track": "AMR Homestead", "city": "Homestead, FL", "date_start": "2027-01-15", "local_only": True})
+    assert r.status_code == 201 and r.json()["task_id"] is None
     rid = r.json()["id"]
     pro = cli.get(B + "/clients?pro=true").json()[0]
     assert cli.post(B + f"/races/{rid}/invite", headers=h, json={"client_id": pro["id"]}).status_code == 201
@@ -750,3 +753,121 @@ def test_adicionar_marcador_e_corpo_html_sem_gmail(cli, monkeypatch):
     st = cli.get(B + "/gmail/triage").json()
     assert st["rule"]["schedule"] == '["07:00","13:00","21:00"]'
     assert cli.post(B + "/gmail/triage", headers=h, json={"mailbox": "urace"}).status_code == 202
+
+
+def test_calendario_de_corridas_segue_a_coluna_races(cli, monkeypatch):
+    """Uma corrida por tarefa da coluna RACES; concluída sai do calendário; convite comenta na tarefa (Asana falso)."""
+    from command_center.api import rotas
+    from command_center.db import conectar, inserir, um
+    from command_center.providers import sync
+    con = conectar()
+    try:
+        t1 = inserir(con, "tasks", client_id=None, title="ROK Cup USA Round 5 [Orlando / OKC]", project="U-RACE", section="RACES", status="open", due_on="2026-10-17")
+        inserir(con, "entity_links", entity_type="task", entity_id=t1, system="asana", external_id="7770001", deep_link="https://app.asana.com/0/1205450093098920/7770001/f")
+        t2 = inserir(con, "tasks", client_id=None, title="SKUSA SuperNationals [Las Vegas]", project="U-RACE", section="RACES", status="completed", due_on="2025-11-20")
+        inserir(con, "tasks", client_id=None, title="Treino de sábado", project="U-RACE", section="SATURDAY", status="open", due_on="2026-10-17")
+        sync.sincronizar_corridas(con); sync.sincronizar_corridas(con)          # idempotente
+        con.commit()
+        r1 = um(con, "SELECT * FROM races WHERE task_id=?", (t1,)); r2 = um(con, "SELECT * FROM races WHERE task_id=?", (t2,))
+        assert r1 and r1["active"] == 1 and r1["date_start"] == "2026-10-17" and r1["series"] == "ROK"
+        assert r2 and r2["active"] == 0 and r2["series"] == "SKUSA"
+        assert con.execute("SELECT COUNT(*) FROM races WHERE task_id=?", (t1,)).fetchone()[0] == 1
+        assert not um(con, "SELECT 1 FROM races WHERE name='Treino de sábado'")
+        # data mudou no Asana → segue; tarefa concluída depois → sai do calendário
+        con.execute("UPDATE tasks SET due_on='2026-10-24' WHERE id=?", (t1,)); sync.sincronizar_corridas(con)
+        assert um(con, "SELECT date_start FROM races WHERE task_id=?", (t1,))["date_start"] == "2026-10-24"
+        con.commit()
+    finally:
+        con.close()
+    h = entra(cli, "admin@urace.us")
+    cal = cli.get(B + "/races").json()
+    assert any(x["task_id"] == t1 and x["task"]["links"][0]["external_id"] == "7770001" for x in cal)
+    assert not any(x["task_id"] == t2 for x in cal) and any(x["task_id"] == t2 for x in cli.get(B + "/races?all=true").json())
+    rid = [x for x in cal if x["task_id"] == t1][0]["id"]
+    comentarios = []
+
+    class As:
+        MODELO_CORRIDA = "1208930444315129"
+        def comentar_humano(self, gid, texto): comentarios.append((gid, texto)); return {"aplicado": True}
+        def criar_do_modelo_humano(self, modelo, nome, secao_gid=None, notas=None, vence_em=None):
+            assert modelo == "1208930444315129" and secao_gid == "sec-races"
+            return {"aplicado": True, "gid": "7770099", "nome": nome, "link": "https://app.asana.com/x"}
+    monkeypatch.setattr(rotas, "modulo", lambda s: As())
+    monkeypatch.setattr(rotas, "chamar", lambda s, f, **a: [{"gid": "sec-races", "nome": "RACES"}, {"gid": "s2", "nome": "SATURDAY"}] if f == "asana_secoes" else (_ for _ in ()).throw(AssertionError(f)))
+    pro = cli.get(B + "/clients?pro=true").json()[0]
+    assert cli.post(B + f"/races/{rid}/invite", headers=h, json={"client_id": pro["id"]}).status_code == 201
+    iid = [x for x in cli.get(B + "/races").json() if x["id"] == rid][0]["invited"][0]["id"]
+    assert cli.patch(B + f"/invites/{iid}", headers=h, json={"status": "confirmed"}).status_code == 200
+    assert [c[0] for c in comentarios] == ["7770001", "7770001"] and "aguardando confirmação" in comentarios[0][1] and "CONFIRMADO" in comentarios[1][1]
+    # corridas de um piloto
+    minhas = cli.get(B + f"/races?client_id={pro['id']}&all=true").json()
+    assert any(x["id"] == rid for x in minhas)
+    # nova corrida = tarefa do modelo "New Race" na coluna RACES
+    r = cli.post(B + "/races", headers=h, json={"name": "USPKS Round 1", "series": "USPKS", "city": "New Castle", "track": "NCMP", "date_start": "2027-04-10"})
+    assert r.status_code == 201 and r.json()["task_id"]
+    nova = [x for x in cli.get(B + "/races").json() if x["id"] == r.json()["id"]][0]
+    assert nova["name"] == "USPKS Round 1 [New Castle / NCMP]" and nova["task"]["section"] == "RACES" and nova["task"]["links"][0]["external_id"] == "7770099"
+
+
+def test_historico_completo_do_asana_liga_servicos_a_pessoa_e_sugere_duplicados(cli, monkeypatch):
+    """Todas as colunas, concluídas incluídas, sem teto: cada treino vai para a pessoa certa;
+    Brian/Bryan vira par para decidir; unir à mão passa tudo para um card."""
+    from command_center.api import rotas
+    from command_center.db import conectar, um, todos
+    from command_center.providers import identidade, sync
+    secoes = [{"gid": "1208640396741022", "nome": "Finished Services"}, {"gid": "s-sat", "nome": "SATURDAY"}, {"gid": "s-matt", "nome": "Matt tasks"}]
+    lista = {"1208640396741022": [{"gid": f"9{i:03d}", "nome": f"Thiago Belluci_Academy [{i}/4]", "concluida": True, "vence_em": f"2026-0{1 + i % 6}-1{i % 9}", "subtarefas": 3} for i in range(1, 8)]
+             + [{"gid": "9500", "nome": "Tiago Belluci_Practice OKC", "concluida": True, "vence_em": "2026-08-30", "subtarefas": 2}],
+             "s-sat": [{"gid": "9600", "nome": "Thiago Belluci_Academy [1/4]", "concluida": False, "vence_em": "2026-09-13", "subtarefas": 3}],
+             "s-matt": [{"gid": "9700", "nome": "Nunca lida", "concluida": False}]}
+    chamadas = {"secao": [], "tarefa": []}
+
+    def chamar_falso(sistema, ferramenta, **a):
+        if ferramenta == "asana_secoes":
+            return secoes
+        if ferramenta == "asana_tarefas_da_secao":
+            chamadas["secao"].append(a); return lista[a["secao_gid"]]
+        if ferramenta == "asana_tarefa":
+            chamadas["tarefa"].append(a["gid"])
+            nome = next(t["nome"] for l in lista.values() for t in l if t["gid"] == a["gid"])
+            resp = "Tiago Belluci Sr" if a["gid"] == "9500" else "Thiago Belluci Sr"
+            return {"gid": a["gid"], "nome": nome, "notas": f"Driver's name: {nome.split('_')[0]}\nResponsible Name: {resp}\nEmail: {'tiago' if a['gid'] == '9500' else 'thiago'}@example.com\nPhone: 407-555-0{a['gid'][-3:]}",
+                    "subtarefas_lista": [{"gid": "x", "nome": "Waiver", "concluida": True}, {"gid": "y", "nome": "Invoice", "concluida": False}]}
+        raise AssertionError(ferramenta)
+    monkeypatch.setattr(sync, "chamar", chamar_falso)
+    con = conectar()
+    try:
+        res = sync.sync_asana_completo(con); con.commit()
+        assert res["ok"] and res["tarefas"] == 9 and res["colunas"] == 2 and all(c["incluir_concluidas"] and c["maximo"] >= 20000 for c in chamadas["secao"])
+        assert "9700" not in chamadas["tarefa"]                                  # Matt tasks nunca
+        brian = um(con, "SELECT * FROM clients WHERE pilot_name='Thiago Belluci'"); bryan = um(con, "SELECT * FROM clients WHERE pilot_name='Tiago Belluci'")
+        assert brian and bryan and brian["id"] != bryan["id"]
+        assert con.execute("SELECT COUNT(*) FROM tasks WHERE client_id=?", (brian["id"],)).fetchone()[0] == 8   # 7 concluídos + 1 aberto
+        assert con.execute("SELECT COUNT(*) FROM tasks WHERE client_id=?", (bryan["id"],)).fetchone()[0] == 1
+        assert res["candidatos"] >= 1 and any({p["a"]["id"], p["b"]["id"]} == {brian["id"], bryan["id"]} for p in identidade.candidatos_duplicados(con))
+        # segunda rodada: nada relido por inteiro (já estão na pessoa certa)
+        n = len(chamadas["tarefa"]); sync.sync_asana_completo(con); con.commit()
+        assert len(chamadas["tarefa"]) == n
+    finally:
+        con.close()
+    h = entra(cli, "admin@urace.us")
+    sug = cli.get(B + f"/clients/{brian['id']}/duplicates").json()
+    assert [x["id"] for x in sug] == [bryan["id"]] and "Tiago" in sug[0]["why"]
+    r = cli.post(B + "/client-merge", headers=h, json={"keep_id": brian["id"], "drop_id": bryan["id"]})
+    assert r.status_code == 200 and r.json()["moved"]["tasks"] == 1
+    assert cli.get(B + f"/clients/{bryan['id']}").status_code == 404
+    c = cli.get(B + f"/clients/{brian['id']}").json()
+    assert len(c["tasks"]) == 9 and c["client"]["status"] == "ACTIVE"
+    # /sync/full: só gerente; devolve 202 e status (o thread usa o chamar real → 'not connected', nunca 500)
+    assert cli.post(B + "/sync/full", headers=entra(cli, "viewer@urace.us")).status_code == 403
+    h = entra(cli, "admin@urace.us")
+    monkeypatch.undo()
+    assert cli.post(B + "/sync/full", headers=h).status_code == 202
+    import time
+    for _ in range(100):
+        st = cli.get(B + "/sync/full").json()
+        if not st["running"]:
+            break
+        time.sleep(0.1)
+    assert not st["running"] and st["result"] is not None
+    assert not rotas._SYNC["running"]

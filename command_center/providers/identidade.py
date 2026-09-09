@@ -164,16 +164,39 @@ def deduplicar(con, por="sync"):
     return n
 
 
-def candidatos_duplicados(con):
-    """Pares que PARECEM a mesma pessoa (Alonso/Alonzo) — decisão humana, com a IA ajudando."""
+def parecido(a, b):
+    """Mais largo que mesmo_nome — SÓ para sugerir duplicados a uma pessoa, nunca
+    para unir sozinho: primeiro nome com uma letra de diferença (Brian/Bryan),
+    sobrenome igual; ou um nome contido no outro (Brian Santiago ⊂ Brian S. Santiago Jr)."""
+    if mesmo_nome(a, b):
+        return True
+    pa, pb = normaliza(a), normaliza(b)
+    if len(pa) < 2 or len(pb) < 2:
+        return False
+    if set(pa) <= set(pb) or set(pb) <= set(pa):
+        return True
+    return len(pa[0]) >= 4 and len(pb[0]) >= 4 and _lev(pa[0], pb[0]) <= 1 and pa[-1] == pb[-1]
+
+
+def _nomes(c):
+    return [n for n in (c.get("pilot_name"), c.get("name")) if n and len(normaliza(n)) >= 2]
+
+
+def candidatos_duplicados(con, para=None):
+    """Pares que PARECEM a mesma pessoa (Alonso/Alonzo, Brian/Bryan, piloto de um =
+    responsável do outro) — decisão humana, com a IA ajudando. `para` restringe a um cliente."""
     cs = todos(con, "SELECT id, name, pilot_name, email, phone FROM clients ORDER BY name")
-    pares = []
+    pares, vistos = [], set()
     for i, a in enumerate(cs):
         for b in cs[i + 1:]:
-            na, nb = a["pilot_name"] or a["name"], b["pilot_name"] or b["name"]
-            if chave_exata(na) != chave_exata(nb) and mesmo_nome(na, nb):
-                pares.append({"a": a, "b": b, "why": f"nomes quase iguais: '{na}' × '{nb}'"})
-    return pares[:100]
+            if para and para not in (a["id"], b["id"]):
+                continue
+            for na in _nomes(a):
+                for nb in _nomes(b):
+                    if chave_exata(na) != chave_exata(nb) and parecido(na, nb) and (a["id"], b["id"]) not in vistos:
+                        vistos.add((a["id"], b["id"]))
+                        pares.append({"a": a, "b": b, "why": f"nomes quase iguais: '{na}' × '{nb}'"})
+    return pares[:200]
 
 
 # ------------------------------------------------------------- limpeza e status

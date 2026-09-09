@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
-import type { Catalog, Client360 as C360, Monthly } from '../api/types'
+import { CatalogoEditor } from './Garage'
+import { UnirModal } from '../components/Unir'
+import type { Catalog, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Ext, Loading, POLICY_LABEL, Section, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
@@ -31,9 +33,12 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const { can } = useAuth()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
-  const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
+  const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'races' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
+  const [proBusy, setProBusy] = useState(false)
+  const [unir, setUnir] = useState(false)
   const monthly = useGet<Monthly>(id && tab === 'monthly' ? `/clients/${id}/monthly` : null)
   const catalog = useGet<Catalog>(id && tab === 'equip' ? '/catalog' : null)
+  const corridas = useGet<Race[]>(id && tab === 'races' ? `/races?client_id=${id}&all=true` : null)
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '', plan_type: '', pro_driver: false })
   const [saving, setSaving] = useState(false)
@@ -49,6 +54,13 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const dias = daysUntil(prox?.due_on)
   const risco = !c.vip && prox && !wOk && dias !== null && dias <= 2
 
+  async function togglePro() {
+    const vai = !c.pro_driver
+    if (!window.confirm(vai ? `Tornar ${c.pilot_name || c.name} um ★ Pro Racing Driver?\n\nEle vai para a aba Pro Racing Drivers e o card ganha Equipamento e Corridas.` : `Tirar ${c.pilot_name || c.name} de Pro Racing Driver?`)) return
+    setProBusy(true)
+    try { await api.patch(`/clients/${c.id}/profile`, { pro_driver: vai }); toast(vai ? 'Agora é Pro Racing Driver.' : 'Saiu de Pro Racing Driver.', 'ok'); if (!vai && (tab === 'equip' || tab === 'races')) setTab('timeline'); reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setProBusy(false) }
+  }
   function openEdit() { setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '', plan_type: c.plan_type || '', pro_driver: !!c.pro_driver }); setEdit(true) }
   async function save() {
     setSaving(true)
@@ -73,7 +85,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       <div className="row wrap">
         {data.links.map(l => <Ext key={l.system + l.external_id} href={l.deep_link}>{l.system}</Ext>)}
         {can('OPERATOR') && <button className="btn" disabled={scanning} title="Gmail (urace@ e support@) e DocuSign por e-mail e nome" onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? `Varredura parcial: ${r.avisos.join('; ')}` : `Achou ${r.gmail} thread(s) de e-mail e ligou ${r.docusign} waiver(s).`, r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} Buscar nas plataformas</button>}
-        {can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}
+        {can('MANAGER') && <button className={`btn${c.pro_driver ? '' : ' primary'}`} disabled={proBusy} onClick={togglePro} title={c.pro_driver ? 'Tirar de Pro Racing Driver' : 'Vai para a aba Pro Racing Drivers e libera equipamento e corridas'}>{proBusy ? <span className="spin" /> : c.pro_driver ? '★ Pro Racing Driver' : '☆ Tornar Pro'}</button>}{can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}{can('OPERATOR') && <button className="btn" onClick={() => setUnir(true)} title="A mesma pessoa em dois cards? Junta tudo num só.">⧉ Unir com…</button>}
         {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>Perguntar à IA</button>}
       </div>
     </div>
@@ -110,8 +122,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     </Section>}
     {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>Notas:</b> {c.notes}</div>}
     <div className="tabs">
-      {(['timeline', 'monthly', 'equip', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: 'Equipamento', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
+      {(['timeline', 'monthly', 'equip', 'races', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => c.pro_driver || (t !== 'equip' && t !== 'races')).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: '★ Equipamento', races: `★ Corridas`, tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
       </button>)}
     </div>
     <div className="card card-b">
@@ -120,7 +132,9 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         return <div className="ev" key={i}><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div><span className="small muted cond">{lbl}</span> · {e.title} <Chip tone={statusTone(e.status)}>{e.status}</Chip></div></div>
       })}</div>)}
       {tab === 'monthly' && <Mensalidade id={c.id} m={monthly.data} loading={monthly.loading} reload={monthly.reload} plan={c.plan_type} fin={can('MANAGER')} />}
-      {tab === 'equip' && <Equipamento c={c} cat={catalog.data} reload={reload} />}
+      {tab === 'equip' && <Equipamento c={c} cat={catalog.data} reload={() => { reload(); catalog.reload() }} />}
+      {unir && <UnirModal keep={c} onClose={() => setUnir(false)} onDone={(kid) => { if (kid !== c.id) nav(`/clients/${kid}`); else reload() }} />}
+      {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={6}><Empty>Sem serviços vinculados.</Empty></td></tr>}
         {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Chip tone={statusTone(t.status === 'open' ? 'PENDING' : 'COMPLETED')}>{t.status}</Chip></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td>{t.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>{l.system}</Ext>)}</td></tr>)}
@@ -208,6 +222,20 @@ function Equipamento({ c, cat, reload }: { c: { id: number; chassis_id?: number 
     </div>
     <div className="field"><label>Notas de equipamento</label><textarea className="input" rows={2} disabled={!can('OPERATOR')} value={f.equipment_notes} onChange={e => setF({ ...f, equipment_notes: e.target.value })} placeholder="ajustes, pneus usados, número do chassi, histórico" /></div>
     {can('OPERATOR') && <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={busy} onClick={save}>{busy ? <span className="spin" /> : 'Salvar equipamento'}</button></div>}
-    <div className="small muted">Estoque de peças vem depois; por enquanto o catálogo é referência. Edite chassis, motores e peças em <a href="/ops/equipment">Equipamentos</a>.</div>
+    <details className="card card-b" style={{ marginTop: 4 }}><summary style={{ cursor: 'pointer' }}><b>Cadastrar ou editar chassis, motores e peças</b> <span className="small muted">(catálogo, vale para todos os pilotos)</span></summary>
+      <div style={{ marginTop: 10 }}><CatalogoEditor data={cat} reload={reload} /></div></details>
+  </div>
+}
+
+function CorridasDoPiloto({ rs, loading, cid }: { rs: Race[] | null; loading: boolean; cid: number }) {
+  if (loading && !rs) return <Loading />
+  const lista = rs || []
+  return <div className="stack">
+    {lista.length === 0 ? <Empty title="Nenhuma corrida ainda">Convide este piloto no calendário de <Link to="/races">Corridas</Link>.</Empty> : <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Corrida</th><th>Onde</th><th>Situação</th><th>Prévia</th></tr></thead><tbody>
+      {lista.map(r => { const i = r.invited.find(x => x.client_id === cid); return <tr key={r.id}><td className="mono nowrap">{fmtDate(r.date_start)}</td><td><Link to="/races">{r.name}</Link>{!r.active && <span className="small muted"> (fora do calendário)</span>}</td><td className="small">{[r.track, r.city].filter(Boolean).join(' · ') || '—'}</td>
+        <td>{i && <Chip tone={statusTone(i.status === 'confirmed' || i.status === 'done' ? 'COMPLETED' : i.status === 'declined' ? 'REJECTED' : 'PENDING')}>{({ invited: 'aguardando confirmação', confirmed: 'confirmado', declined: 'não vai', done: 'correu' } as Record<string, string>)[i.status] || i.status}</Chip>}</td>
+        <td className="small">{i?.estimate_text ? <Link to={i.estimate_cmd ? `/ai/${i.estimate_cmd}` : '/races'}>ver prévia</Link> : <span className="muted">—</span>}</td></tr> })}
+    </tbody></table></div>}
+    <div className="small muted">Convidar, confirmar e pedir a prévia de custo é no calendário de <Link to="/races">Corridas</Link>.</div>
   </div>
 }

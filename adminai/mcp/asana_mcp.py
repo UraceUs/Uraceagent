@@ -212,13 +212,14 @@ def asana_secoes(projeto_gid):
     "(gid, nome, vencimento, responsável, seção, campos personalizados). Use "
     "asana_tarefa para ver notas e subtarefas.",
     {"secao_gid": {"type": "string"},
-     "incluir_concluidas": {"type": "boolean", "default": False}},
+     "incluir_concluidas": {"type": "boolean", "default": False},
+     "maximo": {"type": "integer", "default": 500, "description": "teto de tarefas (o histórico completo passa 20000)"}},
     ["secao_gid"])
-def asana_tarefas_da_secao(secao_gid, incluir_concluidas=False):
+def asana_tarefas_da_secao(secao_gid, incluir_concluidas=False, maximo=500):
     params = {"section": secao_gid, "opt_fields": CAMPOS_LISTA}
     if not incluir_concluidas:
         params["completed_since"] = "now"
-    return [_resumo_tarefa(t) for t in _paginar("/tasks", params)]
+    return [_resumo_tarefa(t) for t in _paginar("/tasks", params, limite=int(maximo or 500))]
 
 
 @srv.ferramenta(
@@ -407,6 +408,19 @@ def asana_criar_do_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em
 def criar_do_modelo_humano(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None):
     """Porta humana (botão 'Nova tarefa' do Command Center): não é ferramenta do agente e não passa por APLICAR."""
     return _instanciar_modelo(modelo_gid, nome, secao_gid, notas, vence_em)
+
+
+MODELO_CORRIDA = "1208930444315129"       # "New Race [Race + City/Track]" — modelo oficial do quadro U-RACE
+
+
+def comentar_humano(gid, texto):
+    """Porta humana (convite/confirmação de corrida pelo Command Center): comenta na
+    tarefa. Não é ferramenta do agente e não passa por APLICAR. Respeita as
+    proteções (ADM URACE, Matt tasks)."""
+    t = _ler_tarefa(gid)
+    _recusar_se_protegida(t, "comentar")
+    r = _req(f"/tasks/{gid}/stories", "POST", {"text": texto})["data"]
+    return {"aplicado": True, "story_gid": r["gid"], "tarefa": t["name"]}
 
 
 @srv.ferramenta(

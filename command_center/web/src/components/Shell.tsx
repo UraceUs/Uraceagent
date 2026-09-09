@@ -52,7 +52,6 @@ export function Shell() {
         <NavLink to="/attention">Precisa de atenção {attn > 0 && <span className="n">{attn}</span>}</NavLink>
         <NavLink to="/clients">Clientes</NavLink>
         <NavLink to="/races">Corridas</NavLink>
-        <NavLink to="/equipment">Equipamentos</NavLink>
         <div className="grp">Sistemas</div>
         <NavLink to="/asana">Asana</NavLink>
         <NavLink to="/docusign">DocuSign {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NavLink>

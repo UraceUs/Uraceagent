@@ -729,6 +729,54 @@ def waiver_link(wid: int, dados: VinculoIn, request: Request, u=Depends(auth.exi
 from command_center.providers import identidade  # noqa: E402
 
 
+_FULL = {"running": False, "started_at": None, "finished_at": None, "stage": None, "done": 0, "total": None, "result": None, "by": None}
+
+
+def _full_thread(user_id):
+    con = conectar()
+    try:
+        def prog(d):
+            _FULL.update(d)
+        res = sy.sync_asana_completo(con, prog)
+        con.commit()
+        _FULL["result"] = res
+        auditar(con, "sync.full", f"user:{user_id}", user_id=user_id, detail=res)
+    except Exception as e:
+        _FULL["result"] = {"ok": False, "motivo": f"{type(e).__name__}: {str(e)[:300]}"}
+    finally:
+        _FULL["running"] = False; _FULL["finished_at"] = agora()
+        with _SYNC_LOCK:
+            _SYNC["running"] = False
+        con.close()
+
+
+@r.post("/sync/full", status_code=202)
+def sync_full(u=Depends(auth.exige("MANAGER"))):
+    """Puxa o histórico COMPLETO do quadro U-RACE (todas as colunas, concluídas incluídas,
+    sem teto) e liga cada serviço à pessoa certa. Segura a sincronia normal enquanto roda."""
+    with _SYNC_LOCK:
+        if _FULL["running"] or _SYNC["running"]:
+            return {"started": False, **_FULL, "sync_running": _SYNC["running"]}
+        _SYNC.update(running=True, started_at=agora(), finished_at=None, result=None, by=u["id"], stage="histórico completo do Asana")
+    _FULL.update(running=True, started_at=agora(), finished_at=None, stage="listando", done=0, total=None, result=None, by=u["id"])
+    threading.Thread(target=_full_thread, args=(u["id"],), daemon=True).start()
+    return {"started": True, **_FULL}
+
+
+@r.get("/sync/full")
+def sync_full_status(u=Depends(auth.usuario_atual)):
+    return _FULL
+
+
+@r.get("/clients/{cid}/duplicates")
+def client_duplicates_of(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Quem parece ser a mesma pessoa que este cliente (para o botão 'Unir com…')."""
+    if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
+        raise HTTPException(404, "Client not found.")
+    pares = identidade.candidatos_duplicados(con, para=cid)
+    return [dict(**(p["b"] if p["a"]["id"] == cid else p["a"]), why=p["why"]) for p in pares]
+
+
 @r.get("/client-duplicates")
 def clients_duplicates(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """Pares que parecem a mesma pessoa. Decisão humana; a IA pode opinar."""
@@ -748,10 +796,12 @@ def clients_merge(dados: UnirIn, request: Request, u=Depends(auth.exige("OPERATO
         raise HTTPException(400, "Same client.")
     if not um(con, "SELECT id FROM clients WHERE id=?", (dados.keep_id,)) or not um(con, "SELECT id FROM clients WHERE id=?", (dados.drop_id,)):
         raise HTTPException(404, "Client not found.")
+    antes = {t: um(con, f"SELECT COUNT(*) AS n FROM {t} WHERE client_id=?", (dados.drop_id,))["n"] for t in ("tasks", "waivers", "emails", "invoices")}
     identidade.unir(con, dados.keep_id, dados.drop_id, f"user:{u['id']}", dados.reason or "unido à mão")
+    identidade.recalcular_status(con)
     auditar(con, "client.merge", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=dados.keep_id,
-            detail={"drop_id": dados.drop_id, "reason": dados.reason}, ip=auth._ip(request))
-    return {"ok": True}
+            detail={"drop_id": dados.drop_id, "reason": dados.reason, "moved": antes}, ip=auth._ip(request))
+    return {"ok": True, "moved": antes}
 
 
 _DUP_IA = {"running": False, "result": None, "finished_at": None}
@@ -1731,13 +1781,42 @@ def catalog_image_get(kind: str, cid: int, u=Depends(auth.usuario_atual), con: s
 
 
 # ---- corridas e convites
+def _corrida_out(con, rc):
+    rc["invited"] = todos(con, """SELECT i.*, c.name, c.pilot_name, cmd.status AS estimate_status FROM race_invites i JOIN clients c ON c.id=i.client_id
+                                  LEFT JOIN ai_commands cmd ON cmd.id=i.estimate_cmd WHERE i.race_id=? ORDER BY i.id""", (rc["id"],))
+    rc["task"] = None
+    if rc.get("task_id"):
+        t = um(con, "SELECT id, title, status, due_on, section, subtasks_total, subtasks_done, assignee, synced_at FROM tasks WHERE id=?", (rc["task_id"],))
+        if t:
+            t["links"] = _links(con, "task", t["id"])
+            rc["task"] = t
+    return rc
+
+
 @r.get("/races")
-def races(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    rows = todos(con, "SELECT r.*, (SELECT COUNT(*) FROM race_invites i WHERE i.race_id=r.id) AS invites FROM races r WHERE r.active=1 ORDER BY COALESCE(r.date_start,'9999') ")
-    for rc in rows:
-        rc["invited"] = todos(con, """SELECT i.*, c.name, c.pilot_name, cmd.status AS estimate_status FROM race_invites i JOIN clients c ON c.id=i.client_id
-                                      LEFT JOIN ai_commands cmd ON cmd.id=i.estimate_cmd WHERE i.race_id=? ORDER BY i.id""", (rc["id"],))
-    return rows
+def races(all: bool = False, client_id: int | None = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Calendário de corridas: a coluna RACES do Asana (uma por tarefa) mais as manuais."""
+    where, p = ["1=1"], []
+    if not all:
+        where.append("r.active=1")
+    if client_id:
+        where.append("r.id IN (SELECT race_id FROM race_invites WHERE client_id=?)"); p.append(client_id)
+    rows = todos(con, f"SELECT r.*, (SELECT COUNT(*) FROM race_invites i WHERE i.race_id=r.id) AS invites FROM races r WHERE {' AND '.join(where)} ORDER BY COALESCE(r.date_start,'9999')", p)
+    return [_corrida_out(con, rc) for rc in rows]
+
+
+def _comenta_na_corrida(con, rid, texto):
+    """Espelha no Asana o convite/confirmação (comentário na tarefa da corrida). Sem Asana, segue em silêncio."""
+    r = um(con, "SELECT task_id FROM races WHERE id=?", (rid,))
+    if not r or not r["task_id"]:
+        return None
+    l = um(con, "SELECT external_id FROM entity_links WHERE entity_type='task' AND entity_id=? AND system='asana'", (r["task_id"],))
+    if not l:
+        return None
+    try:
+        return modulo("asana").comentar_humano(l["external_id"], texto)
+    except Exception as e:
+        return {"erro": f"{type(e).__name__}: {str(e)[:200]}"}
 
 
 class RaceIn(BaseModel):
@@ -1749,16 +1828,44 @@ class RaceIn(BaseModel):
     date_end: str | None = None
     notes: str | None = None
     active: bool | None = None
+    local_only: bool | None = None
 
 
 @r.post("/races", status_code=201)
 def race_create(dados: RaceIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Nova corrida = tarefa criada do modelo oficial "New Race [Race + City/Track]" na coluna
+    RACES do Asana (vem com as subtarefas do modelo). Sem Asana: 503, a não ser que
+    `local_only` (só no painel)."""
     if not (dados.name or "").strip():
         raise HTTPException(400, "Nome da corrida é obrigatório.")
-    campos = {k: v for k, v in dados.model_dump().items() if v is not None and k != "active"}
-    rid = inserir(con, "races", source="manual", **campos)
-    auditar(con, "race.create", f"user:{u['id']}", user_id=u["id"], entity_type="race", entity_id=rid, detail=campos, ip=auth._ip(request))
-    return {"id": rid}
+    campos = {k: v for k, v in dados.model_dump().items() if v is not None and k not in ("active", "local_only")}
+    task_id = None
+    if not dados.local_only:
+        try:
+            m = modulo("asana")
+            secoes = chamar("asana", "asana_secoes", projeto_gid=PROJETO_URACE)
+            races_gid = next((x["gid"] for x in secoes if x["nome"].strip().upper() == "RACES"), None)
+            if not races_gid:
+                raise HTTPException(409, "Coluna RACES não encontrada no quadro U-RACE.")
+            local = " / ".join(x for x in (dados.city, dados.track) if x)
+            nome = f"{dados.name.strip()}" + (f" [{local}]" if local else "")
+            notas = "\n".join(x for x in ((f"Série: {dados.series}" if dados.series else ""), (f"Pista: {dados.track}" if dados.track else ""),
+                                          (f"Cidade: {dados.city}" if dados.city else ""), (f"Fim: {dados.date_end}" if dados.date_end else ""), dados.notes or "") if x)
+            novo = m.criar_do_modelo_humano(m.MODELO_CORRIDA, nome, secao_gid=races_gid, notas=notas or None, vence_em=dados.date_start)
+            gid = novo.get("gid") or (novo.get("tarefa") or {}).get("gid")
+            if gid:
+                task_id, _ = sy._grava_tarefa(con, gid, dict(client_id=None, title=nome, project="U-RACE", section="RACES", section_gid=races_gid,
+                                                             status="open", due_on=dados.date_start, subtasks_total=novo.get("subtarefas"), subtasks_done=0, synced_at=agora()))
+            campos["name"] = nome
+        except HTTPException:
+            raise
+        except NaoConectado as e:
+            raise HTTPException(503, f"Asana não conectado: {e}. Marque 'só no painel' para criar sem o Asana.")
+        except Exception as e:
+            raise HTTPException(502, f"Asana: {str(e)[:300]}")
+    rid = inserir(con, "races", source="asana" if task_id else "manual", task_id=task_id, **campos)
+    auditar(con, "race.create", f"user:{u['id']}", user_id=u["id"], entity_type="race", entity_id=rid, detail={**campos, "task_id": task_id}, ip=auth._ip(request))
+    return {"id": rid, "task_id": task_id}
 
 
 @r.patch("/races/{rid}")
@@ -1786,6 +1893,8 @@ def race_invite(rid: int, dados: ConviteIn, request: Request, u=Depends(auth.exi
     if um(con, "SELECT 1 FROM race_invites WHERE race_id=? AND client_id=?", (rid, dados.client_id)):
         raise HTTPException(409, "Já convidado.")
     iid = inserir(con, "race_invites", race_id=rid, client_id=dados.client_id, invited_by=u["id"])
+    piloto = um(con, "SELECT COALESCE(pilot_name, name) AS p FROM clients WHERE id=?", (dados.client_id,))["p"]
+    _comenta_na_corrida(con, rid, f"[Command Center] Convidado: {piloto} — aguardando confirmação.")
     auditar(con, "race.invite", f"user:{u['id']}", user_id=u["id"], entity_type="race", entity_id=rid, detail={"client_id": dados.client_id}, ip=auth._ip(request))
     return {"id": iid}
 
@@ -1801,6 +1910,9 @@ def invite_status(iid: int, dados: ConviteStatusIn, request: Request, u=Depends(
     if not um(con, "SELECT id FROM race_invites WHERE id=?", (iid,)):
         raise HTTPException(404, "Not found.")
     con.execute("UPDATE race_invites SET status=? WHERE id=?", (dados.status, iid))
+    i = um(con, "SELECT i.race_id, COALESCE(c.pilot_name, c.name) AS p FROM race_invites i JOIN clients c ON c.id=i.client_id WHERE i.id=?", (iid,))
+    rotulo = {"confirmed": "CONFIRMADO", "declined": "não vai", "done": "correu", "invited": "convidado, aguardando confirmação"}.get(dados.status, dados.status)
+    _comenta_na_corrida(con, i["race_id"], f"[Command Center] {i['p']}: {rotulo}.")
     auditar(con, "race.invite.status", f"user:{u['id']}", user_id=u["id"], entity_type="race_invite", entity_id=iid, detail={"status": dados.status}, ip=auth._ip(request))
     return {"ok": True}
 

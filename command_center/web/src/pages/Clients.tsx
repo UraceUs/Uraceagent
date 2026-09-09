@@ -1,3 +1,4 @@
+import { PuxarHistorico, UnirModal } from '../components/Unir'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
@@ -79,6 +80,7 @@ export function Clients() {
   const { can } = useAuth()
   const toast = useToast()
   const [novo, setNovo] = useState(false)
+  const [unirManual, setUnirManual] = useState(false)
   const [sp, setSp] = useSearchParams()
   const [q, setQ] = useState(sp.get('q') || '')
   const status = sp.get('status') || ''
@@ -113,7 +115,7 @@ export function Clients() {
     <div className="page-h"><div><h1 className="h1">Clientes</h1><div className="sub small">Uma pessoa, um card. Corrida não é cliente. Ativo = serviço nos últimos 6 meses. Ordem: serviço mais recente primeiro. Clique para abrir o card completo.</div></div>
       <div className="row wrap">{can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}>+ Novo cliente</button>}{can('OPERATOR') && <button className="btn" disabled={scanning} onClick={scanAll} title="Gmail (as duas caixas) e DocuSign de cada cliente ativo">{scanning ? <Spinner /> : '⌕'} Varrer plataformas ({ativos} ativos)</button>}</div></div>
     <div className="tabs"><button className={aba === 'all' ? 'on' : ''} onClick={() => set('v', '')}>Todos</button><button className={aba === 'pro' ? 'on' : ''} onClick={() => set('v', 'pro')}>★ Pro Racing Drivers</button></div>
-    {aba === 'pro' && <Banner tone="info">Pilotos do mensal prontos para competir. Marque a estrela no card (Editar → Pro Racing Driver, só gerente). Convites e prévia de custo por corrida ficam em <a href="/ops/races">Corridas</a>.</Banner>}
+    {aba === 'pro' && <Banner tone="info">Pilotos prontos para competir. No card do cliente, o botão <b>★ Tornar Pro</b> traz ele para cá e libera equipamento e corridas. Convites e prévia de custo ficam no calendário de <a href="/ops/races">Corridas</a>.</Banner>}
     <div className="row wrap">
       <input className="input" style={{ maxWidth: 320 }} placeholder="Piloto, responsável ou e-mail" value={q} onChange={e => setQ(e.target.value)} aria-label="Filtrar" />
       <select className="input" style={{ width: 190 }} value={status} onChange={e => set('status', e.target.value)} aria-label="Status">
@@ -124,6 +126,8 @@ export function Clients() {
       </select>
       <div className="grow" /><button className="btn" onClick={reload}>↻</button>
     </div>
+    <div className="row wrap" style={{ marginBottom: 8 }}><span className="small muted">Mesma pessoa em dois cards?</span>{can('OPERATOR') && <button className="btn sm" onClick={() => setUnirManual(true)}>⧉ Unir dois clientes</button>}<PuxarHistorico onDone={reload} /><span className="small muted">Puxa todas as tarefas de treino do Asana (todas as colunas, desde o início) e liga cada uma à pessoa certa; depois lista os possíveis duplicados abaixo.</span></div>
+    {unirManual && <UnirModal onClose={() => setUnirManual(false)} onDone={() => reload()} />}
     <Duplicados onChanged={reload} />
     <Section title="Clientes" count={rows.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading rows={8} /> :

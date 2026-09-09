@@ -161,6 +161,73 @@ def _nome_valido(n):
     return n if identidade.pessoa_do_titulo(n) or (2 <= len(n.split()) <= 5 and not re.search(r"\d|@", n)) else None
 
 
+LIMITE_LISTA = 2000          # tarefas por coluna na sincronia de 15 min (Finished Services é grande)
+
+
+def sync_asana_completo(con, progresso=None):
+    """Histórico COMPLETO do quadro U-RACE (pedido do dono, 09/09): toda coluna
+    menos "Matt tasks", concluídas incluídas, sem teto. Cada tarefa ainda sem
+    cliente é lida por inteiro (notas → piloto/responsável) e ligada à pessoa
+    certa; depois une os duplicados certos e recalcula ativo/inativo. Roda em
+    segundo plano; `progresso(dict)` recebe etapa/feitos/total."""
+    inicio = agora()
+    novos = tarefas = lidas = 0
+    avisa = progresso or (lambda d: None)
+    try:
+        secoes = [x for x in chamar("asana", "asana_secoes", projeto_gid=PROJETO_URACE) if (x["nome"] or "").strip().lower() != SECAO_SEM_ESPELHO]
+        listas = []
+        for sec in secoes:
+            avisa({"stage": f"listando {sec['nome']}", "done": tarefas, "total": None})
+            listas.append((sec, chamar("asana", "asana_tarefas_da_secao", secao_gid=sec["gid"], incluir_concluidas=True, maximo=20000)))
+        total = sum(len(l) for _, l in listas)
+        for sec, lista in listas:
+            sec_gid, sec_nome = sec["gid"], sec["nome"]
+            for t in lista:
+                comum = dict(project="U-RACE", section=sec_nome, section_gid=sec_gid,
+                             status="completed" if t.get("concluida") else "open",
+                             due_on=t.get("vence_em"), assignee=t.get("responsavel"),
+                             fields=json.dumps(t.get("campos"), ensure_ascii=False) if t.get("campos") else None,
+                             synced_at=agora())
+                ja = um(con, """SELECT t.id, t.client_id FROM entity_links l JOIN tasks t ON t.id=l.entity_id
+                                WHERE l.system='asana' AND l.external_id=? AND l.entity_type='task'""", (t["gid"],))
+                if ja and ja["client_id"]:                      # já está na pessoa certa: só atualiza o resumo
+                    _grava_tarefa(con, t["gid"], dict(title=t.get("nome"), **comum))
+                else:
+                    full = chamar("asana", "asana_tarefa", gid=t["gid"]); lidas += 1
+                    d = parse_descricao(full.get("notas"))
+                    pessoa = identidade.pessoa_do_titulo(full.get("nome"))
+                    piloto = _nome_valido(d["piloto"]) or pessoa
+                    resp = _nome_valido(d["responsavel"]) or piloto
+                    subs = full.get("subtarefas_lista") or []
+                    feitas = sum(1 for x in subs if x.get("concluida"))
+                    if not resp:
+                        _grava_tarefa(con, t["gid"], dict(client_id=None, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **comum))
+                    else:
+                        cid, novo = _upsert_cliente(con, resp, d["email"], d["telefone"],
+                                                    piloto if piloto and identidade.chave_exata(piloto) != identidade.chave_exata(resp) else None, d["nascimento"])
+                        novos += novo
+                        _liga(con, "client", cid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
+                        _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **comum))
+                tarefas += 1
+                if tarefas % 10 == 0:
+                    con.commit()
+                    avisa({"stage": sec_nome, "done": tarefas, "total": total})
+        sincronizar_corridas(con)
+        limpos = identidade.limpar_nao_clientes(con)
+        unidos = identidade.deduplicar(con, por="sync")
+        identidade.recalcular_status(con)
+        candidatos = len(identidade.candidatos_duplicados(con))
+        _marca(con, "asana", True, tarefas, f"histórico completo: {tarefas} tarefas ({lidas} lidas por inteiro), {novos} clientes novos, {unidos} unidos, {candidatos} pares para decidir", inicio)
+        return {"ok": True, "tarefas": tarefas, "lidas": lidas, "clientes_novos": novos, "colunas": len(secoes), "unidos": unidos,
+                "removidos": limpos, "candidatos": candidatos}
+    except NaoConectado as e:
+        _marca(con, "asana", False, 0, f"não conectado: {e}", inicio, desconectado=True)
+        return {"ok": False, "motivo": "not connected"}
+    except Exception as e:
+        _marca(con, "asana", False, tarefas, f"histórico: {type(e).__name__}: {str(e)[:300]}", inicio)
+        return {"ok": False, "motivo": str(e)[:300], "tarefas": tarefas}
+
+
 def sync_asana(con):
     """Espelha o quadro U-RACE inteiro (menos "Matt tasks").
 
@@ -180,7 +247,7 @@ def sync_asana(con):
             eh_finished = sec_gid == SECAO_FINISHED
             # colunas de cliente: dias (agenda) e Finished Services (histórico desde a criação do projeto)
             eh_cliente = eh_dia or eh_finished
-            for t in chamar("asana", "asana_tarefas_da_secao", secao_gid=sec_gid, incluir_concluidas=eh_finished):
+            for t in chamar("asana", "asana_tarefas_da_secao", secao_gid=sec_gid, incluir_concluidas=eh_finished, maximo=LIMITE_LISTA):
                 comum = dict(project="U-RACE", section=sec_nome, section_gid=sec_gid,
                              status="completed" if t.get("concluida") else "open",
                              due_on=t.get("vence_em"), assignee=t.get("responsavel"),
@@ -218,10 +285,7 @@ def sync_asana(con):
                                                  subtasks_done=sum(1 for s in subs if s.get("concluida")), **comum))
                 tarefas += 1
         # coluna RACES vira a lista de corridas (para convidar os Pro Racing Drivers)
-        for t in todos(con, "SELECT id, title, due_on FROM tasks WHERE project='U-RACE' AND LOWER(COALESCE(section,''))='races'"):
-            if not um(con, "SELECT 1 FROM races WHERE name=? AND source='asana'", (t["title"],)):
-                inserir(con, "races", name=t["title"], date_start=t["due_on"], source="asana",
-                        series=next((x for x in ("SKUSA", "ROK", "USPKS", "FWT", "AMR", "Florida Karting") if x.lower() in (t["title"] or "").lower()), None))
+        sincronizar_corridas(con)
         # tarefa de dia passado ainda aberta: a IA confere e move sozinha (evento, uma vez por tarefa)
         hoje = __import__("datetime").date.today().isoformat()
         for t in todos(con, "SELECT id, title, section, due_on, client_id FROM tasks WHERE status='open' AND due_on < ? AND section_gid IN (%s)" % ",".join("?" * len(SECOES_DIAS)),
@@ -461,6 +525,30 @@ def sync_qbo(con, desde_dias=365):
     except Exception as e:
         _marca(con, "quickbooks", False, 0, f"{type(e).__name__}: {str(e)[:300]}", inicio)
         return {"ok": False, "motivo": str(e)[:300]}
+
+
+SERIES = ("SKUSA", "ROK", "USPKS", "FWT", "AMR", "Florida Karting", "SuperKarts", "Rotax", "WKA")
+
+
+def sincronizar_corridas(con):
+    """Coluna RACES do Asana = calendário de corridas. Uma corrida por tarefa
+    (ligada por task_id); nome e data seguem a tarefa; tarefa concluída ou
+    fora da coluna some do calendário (active=0), sem apagar convites."""
+    vistos = set()
+    for t in todos(con, "SELECT id, title, due_on, status FROM tasks WHERE project='U-RACE' AND LOWER(COALESCE(section,''))='races'"):
+        vistos.add(t["id"])
+        serie = next((x for x in SERIES if x.lower() in (t["title"] or "").lower()), None)
+        r = um(con, "SELECT id FROM races WHERE task_id=?", (t["id"],)) or \
+            um(con, "SELECT id FROM races WHERE task_id IS NULL AND name=? AND source='asana'", (t["title"],))
+        if r:
+            con.execute("UPDATE races SET task_id=?, name=?, date_start=COALESCE(?, date_start), series=COALESCE(series, ?), active=? WHERE id=?",
+                        (t["id"], t["title"], t["due_on"], serie, 1 if t["status"] == "open" else 0, r["id"]))
+        else:
+            inserir(con, "races", name=t["title"], date_start=t["due_on"], source="asana", series=serie, task_id=t["id"],
+                    active=1 if t["status"] == "open" else 0)
+    for r in todos(con, "SELECT id, task_id FROM races WHERE source='asana' AND task_id IS NOT NULL AND active=1"):
+        if r["task_id"] not in vistos:
+            con.execute("UPDATE races SET active=0 WHERE id=?", (r["id"],))
 
 
 # ------------------------------------------------------ registro
