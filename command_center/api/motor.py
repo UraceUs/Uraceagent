@@ -83,6 +83,11 @@ def _prompt_evento(con, ev):
              "email.received": "Chegou e-mail de um cliente conhecido. Leia a thread (gmail_thread), diga o que ele quer, classifique com o marcador certo e, se precisar de resposta, PROPONHA um rascunho (gmail_rascunho). Nunca envie.",
              "waiver.bounced": "A waiver deste cliente voltou (e-mail devolvido). Procure o e-mail correto na tarefa do Asana e nas caixas do Gmail; PROPONHA a correção e o reenvio, ou diga que não achou.",
              "waiver.completed": "A waiver deste cliente foi assinada. Comente na tarefa do Asana correspondente que a waiver chegou (asana_comentar).",
+             "billing.monthly": "É dia 1: monte a invoice MENSAL deste cliente conforme o plano (campo monthly_plan e monthly_note do cliente) "
+                                "e os preços da aba Academy da Rate Card (mensal sem contrato; extra = mensal ÷ 4; +$250/sessão fora do OKC). "
+                                "Ache o cliente no QuickBooks (qbo_clientes_buscar pelo e-mail do responsável) e o item no catálogo (qbo_itens_buscar). "
+                                "Declare UMA ação: ACAO: qbo_criar_e_enviar_invoice | <cliente> | mensalidade <mês> | {json com cliente_id, linhas[item_id, quantidade, unitario, descricao], vence_em, memo, email}. "
+                                "Não invente valor: se algo faltar, diga o que falta e não proponha a ação.",
              "task.overdue": "A tarefa está numa coluna de dia que já passou e continua aberta. Leia a tarefa (asana_tarefa) e os comentários. "
                              "Se o serviço aconteceu (subtarefas feitas, comentário de conclusão, ou simplesmente a data passou sem cancelamento), "
                              "declare ACAO: asana_mover_para_finished | <gid> | mover para Finished Services | {\"gid\":\"<gid>\"} — essa ação é SAFE e executa sozinha. "
@@ -229,3 +234,21 @@ def executar_safe(con, command_id, user_id):
     for aid in ids:
         executar_acao(aid, user_id)
     return len(ids)
+
+
+def eventos_do_dia_1(con, hoje=None):
+    """No dia 1 do mês, um evento billing.monthly por cliente com plano mensal (uma vez por mês)."""
+    from datetime import date
+    hoje = hoje or date.today()
+    if hoje.day != 1:
+        return 0
+    mes = hoje.strftime("%Y-%m")
+    n = 0
+    for c in todos(con, "SELECT id, name, pilot_name, monthly_plan FROM clients WHERE monthly_plan IS NOT NULL AND monthly_plan<>'' AND status IN ('ACTIVE','NEW','PENDING')"):
+        if um(con, "SELECT 1 FROM ai_events WHERE kind='billing.monthly' AND entity_type='client' AND entity_id=? AND summary LIKE ?", (c["id"], f"mensalidade {mes}%")):
+            continue
+        # a chave única é (kind, tipo, id): para permitir um por mês, o id do evento leva o mês no summary e o entity_id é o cliente
+        con.execute("DELETE FROM ai_events WHERE kind='billing.monthly' AND entity_type='client' AND entity_id=? AND status IN ('DONE','FAILED','SKIPPED')", (c["id"],))
+        registrar_evento(con, "billing.monthly", "client", c["id"], c["id"], f"mensalidade {mes}: {c['pilot_name'] or c['name']} — plano {c['monthly_plan']}")
+        n += 1
+    return n

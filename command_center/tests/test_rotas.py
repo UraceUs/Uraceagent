@@ -416,8 +416,8 @@ def test_criar_cliente_manual_sem_duplicar(cli):
 def test_nova_tarefa_e_waiver_sem_sistemas(cli):
     h = entra(cli, "admin@urace.us")
     # segunda-feira não tem coluna
-    assert cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Urace Daily", "due_on": "2026-09-14"}).status_code == 400
-    r = cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Urace Daily", "category": "2T", "due_on": "2026-09-19", "email": "eduardo.teste@example.com", "dob": "2013-03-04"})
+    assert cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Urace Daily", "due_on": "2026-09-14", "email": "e@x.com", "phone": "1", "responsible": "R"}).status_code == 400
+    r = cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Urace Daily", "category": "2 stroke", "due_on": "2026-09-19", "email": "eduardo.teste@example.com", "phone": "61 98267-8383", "dob": "2013-03-04", "responsible": "Eduardo Teste"})
     assert r.status_code == 503                                    # sem Asana aqui: nunca 500, nada espelhado
     assert cli.post(B + "/waivers/send", headers=h, json={"template": "parental", "signer_name": "Eduardo Teste", "signer_email": "eduardo@urace.us"}).status_code == 400
     assert cli.post(B + "/waivers/send", headers=h, json={"template": "x", "signer_name": "E", "signer_email": "e@x.com"}).status_code == 400
@@ -471,3 +471,34 @@ def test_nome_da_tarefa_padrao():
     assert nome_tarefa("Enzo Kurian", "Academy", "4T", 3, 4) == "Enzo Kurian_Academy_4T [3/4]"
     assert nome_tarefa("Davi", "Corrida", None, 1, 2) == "Davi_Corrida [1/2]"
     assert "Corrida" in PRODUTOS and "Racing team" in PRODUTOS["Corrida"]
+
+
+# ------------------------------------------------ regras de 09/09: obrigatórios, menor exige responsável, mensalidade dia 1
+def test_nova_tarefa_obrigatorios_e_menor(cli):
+    h = entra(cli, "admin@urace.us")
+    base = {"pilot_name": "Davi Teste", "product": "Urace Daily", "category": "2 stroke", "due_on": "2026-09-19", "email": "pai@example.com", "phone": "61 98267-8383"}
+    r = cli.post(B + "/tasks", headers=h, json={**base, "email": ""})
+    assert r.status_code == 400 and "e-mail" in r.json()["detail"]
+    r = cli.post(B + "/tasks", headers=h, json={**base, "dob": "2013-03-04"})
+    assert r.status_code == 400 and "responsável" in r.json()["detail"].lower()          # menor sem responsável
+    r = cli.post(B + "/tasks", headers=h, json={**base, "category": "KA100"})
+    assert r.status_code == 400 and "Categoria" in r.json()["detail"]
+    r = cli.post(B + "/tasks", headers=h, json={**base, "dob": "2013-03-04", "responsible": "Eduardo Teste"})
+    assert r.status_code == 503                                                           # passou nas regras; sem Asana aqui
+
+
+def test_mensalidade_dia_1_um_evento_por_cliente(cli):
+    from datetime import date
+    from command_center.api import motor
+    from command_center.db import conectar
+    h = entra(cli, "admin@urace.us")
+    con = conectar()
+    cid = con.execute("SELECT id FROM clients ORDER BY id LIMIT 1").fetchone()[0]
+    assert cli.patch(B + f"/clients/{cid}", headers=h, json={"monthly_plan": "Academy 4 stroke", "monthly_note": "1 extra"}).status_code == 200
+    assert cli.get(B + f"/clients/{cid}").json()["client"]["monthly_plan"] == "Academy 4 stroke"
+    assert motor.eventos_do_dia_1(con, date(2026, 10, 2)) == 0                           # não é dia 1
+    assert motor.eventos_do_dia_1(con, date(2026, 10, 1)) >= 1
+    assert motor.eventos_do_dia_1(con, date(2026, 10, 1)) == 0                           # uma vez por mês
+    ev = con.execute("SELECT kind, summary FROM ai_events WHERE kind='billing.monthly' AND entity_id=?", (cid,)).fetchone()
+    assert ev and "Academy 4 stroke" in ev[1]
+    con.close()

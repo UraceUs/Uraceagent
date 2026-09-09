@@ -60,6 +60,7 @@ def _autosync():
                 if pode:
                     rotas._SYNC.update(running=True, started_at=agora(), finished_at=None, result=None, by=admin["id"])
             if pode:
+                motor.eventos_do_dia_1(con)                # mensalidades: uma por cliente com plano, no dia 1
                 rotas._sync_thread(admin["id"], None)      # mesma rotina do botão, mesma trava
                 auditar(con, "sync.auto", "system", detail=rotas._SYNC.get("result"))
             parados = _limpar_sandboxes()

@@ -401,6 +401,33 @@ def qbo_enviar_invoice(id, email=None):
     return {"aplicado": True, "id": id, "numero": r.get("DocNumber"), "enviado_para": destino, "email_status": r.get("EmailStatus"), "link": deep_link(id)}
 
 
+@srv.ferramenta("qbo_criar_e_enviar_invoice",
+                "Cria a invoice E envia por e-mail numa ação só. É a ação para propor quando o dono aprovar = enviar "
+                "(mensalidade do dia 1, diária, lead and follow). Exige aprovação humana no painel; com APLICAR=0 é simulação.",
+                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string"},
+                 "memo": {"type": "string"}, "email": {"type": "string"}}, ["cliente_id", "linhas"])
+def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None):
+    corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
+    if vence_em:
+        corpo["DueDate"] = vence_em
+    if memo:
+        corpo["CustomerMemo"] = {"value": memo[:1000]}
+    if email:
+        corpo["BillEmail"] = {"Address": email}
+    total = sum(l["Amount"] for l in corpo["Line"])
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"criar e enviar invoice de {total:.2f} para cliente {cliente_id}"}
+    inv = _req("/invoice", "POST", corpo).get("Invoice", {})
+    destino = email or (inv.get("BillEmail") or {}).get("Address")
+    if not destino:
+        c = _req(f"/customer/{cliente_id}").get("Customer", {})
+        destino = (c.get("PrimaryEmailAddr") or {}).get("Address")
+    if not destino:
+        return {**_resumo_invoice(inv), "enviado": False, "aviso": "criada, mas sem e-mail de cobrança: envie pelo QuickBooks"}
+    r = _req(f"/invoice/{inv['Id']}/send", "POST", params={"sendTo": destino}).get("Invoice", {})
+    return {**_resumo_invoice(r or inv), "enviado": True, "enviado_para": destino}
+
+
 if __name__ == "__main__":
     _carregar_env()
     log("realm:", os.environ.get("QBO_REALM_ID"), "| APLICAR =", os.environ.get("APLICAR", "0"))

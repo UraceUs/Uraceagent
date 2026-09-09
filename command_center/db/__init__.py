@@ -69,6 +69,8 @@ MIGRACOES = [
     ("clients", "scanned_at", "TEXT"),                     # última varredura Gmail/DocuSign deste cliente
     ("emails", "handled_by", "TEXT"),                      # user:<id> | auto
     ("emails", "handled_reason", "TEXT"),
+    ("clients", "monthly_plan", "TEXT"),                  # ex.: "Academy 4 stroke" — gera a invoice do dia 1
+    ("clients", "monthly_note", "TEXT"),                  # ajustes do plano (extra, desconto de contrato)
 ]
 
 

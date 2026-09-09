@@ -328,6 +328,7 @@ INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
   ('docusign_send_reminder','BLOCKED','U-01: não decidido'),
   ('qbo_criar_invoice','REQUIRES_CONFIRMATION','pode criar (31/08); preço pela Rate Card'),
   ('qbo_enviar_invoice','REQUIRES_APPROVAL','D-2026-09-04: envia depois de aprovada no painel'),
+  ('qbo_criar_e_enviar_invoice','REQUIRES_APPROVAL','cria e envia num clique: aprovar = enviar (dono, 09/09); prévia obrigatória na aprovação'),
   ('qbo_enviar_invoice_deposito','REQUIRES_APPROVAL','exceção de 28/08, agora com aprovação'),
   ('qbo_apagar','BLOCKED','a IA nunca apaga'),
   ('apagar_qualquer_coisa','BLOCKED','a IA nunca apaga'),
@@ -393,6 +394,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ai_events_unico ON ai_events(kind, entity_type
 
 CREATE UNIQUE INDEX IF NOT EXISTS automation_rules_name ON automation_rules(name);
 INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+  ('mensalidade_dia_1', 1, '{"event":"billing.monthly"}', NULL, '{"ia":"montar a invoice mensal de cada cliente com plano e deixar pronta para aprovação (aprovar = enviar)"}'),
   ('tarefa_vencida',   1, '{"event":"task.overdue"}',   NULL, '{"ia":"conferir se o serviço aconteceu e mover para Finished Services"}'),
   ('novo_servico',     1, '{"event":"task.created"}',   '{"sections":"dias"}', '{"ia":"preparar waiver e invoice do serviço; propor ações"}'),
   ('email_cliente',    1, '{"event":"email.received"}', '{"client_known":true}', '{"ia":"ler a thread, classificar, propor resposta em rascunho"}'),
@@ -432,3 +434,11 @@ UPDATE context_sources SET description = 'Fonte de verdade dos preços (acima do
 INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
   (1, 'global', 'Preço: corrida usa a aba "Racing team" da Rate Card; treino (Urace Daily, Academy, Arrive and Drive, Summer Camp, Test Drive) usa a aba "Academy". Nunca dê valor sem ler a aba certa.', 'dono-2026-09-09'),
   (2, 'global', 'Produtos do quadro: "Urace Daily" = treino avulso (Practice e Professional Coaching são Daily); "Academy" = mensal com 4 sessões, nome da tarefa leva [1/4]…[4/4]; "Corrida" = Race Support / Trackside Support. O nome da tarefa segue Piloto_Produto_Categoria [n/total].', 'dono-2026-09-09');
+
+-- Regras de preço ditadas pelo dono em 09/09 (Rate Card, aba Academy) — memória inicial da IA
+INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
+  (3, 'global', 'Diária (Urace Daily / Arrive and Drive, tudo incluso: mecânico, coaching e equipamento de segurança): Using Own Kart $500 (4 anos ou mais); Baby Kart $719 (4 a 7 anos); 4 stroke $719 (7 ou mais); 2 stroke $819 (7 ou mais); Adult Shifter $899 (14 ou mais, só com experiência). Conferir na aba Academy antes de usar.', 'dono-2026-09-09'),
+  (4, 'global', 'Lead and Follow coaching (o coach vai para a pista junto com o piloto, 2T): fechado com antecedência é SEMPRE $769 por piloto. Os "last minute deals" ($395 um piloto, $245 cada com dois) só o operador fecha na pista; os mecânicos avisam depois para montar a invoice. Pacote de 5 sessões: $3.460,50 (10% off, $692,10 por sessão).', 'dono-2026-09-09'),
+  (5, 'global', 'Mensal Academy sem contrato (4 sessões por mês; sessão extra = mensal ÷ 4): kart próprio + mecânico $1.200 (extra $300); kart próprio $1.800 (extra $450); Baby Kart $2.756,90 (extra $689,23); 4 stroke $2.756,90 (extra $689,23); 2 stroke $3.156,90 (extra $789,23). Contratos de 6 meses (27 sessões, 4% off) e 12 meses (54 sessões, 8% off) estão detalhados na aba Academy.', 'dono-2026-09-09'),
+  (6, 'global', 'Treino fora do Orlando Kart Center (ex.: semana em Jacksonville ou Homestead) cobra $250 extra POR SESSÃO de hotel, comida e transporte.', 'dono-2026-09-09'),
+  (7, 'global', 'Invoice ligada a esses produtos NUNCA sai sozinha: proponha qbo_criar_e_enviar_invoice com cliente, linhas e valores exatos, e ela vai para Aprovações com prévia. Aprovar = enviar. Mensalidade recorrente é montada no dia 1 do mês, uma por cliente com plano, e fica pronta esperando aprovação.', 'dono-2026-09-09');

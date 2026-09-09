@@ -113,9 +113,12 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
 
 function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const toast = useToast()
-  const [f, setF] = useState({ pilot_name: '', responsible: '', email: '', phone: '', dob: '', height: '', weight: '', waist: '', experience: '', product: 'Urace Daily', category: '2T', package_n: 1, package_total: 4, days: 1, due_on: '', extra_notes: '' })
+  const [f, setF] = useState({ pilot_name: '', responsible: '', email: '', phone: '', dob: '', height: '', weight: '', waist: '', experience: '', product: 'Urace Daily', category: '2 stroke', package_n: 1, package_total: 4, days: 1, due_on: '', extra_notes: '' })
   const [busy, setBusy] = useState(false)
   const set = (k: string, v: string | number) => setF({ ...f, [k]: v })
+  const idade = f.dob ? Math.floor((Date.now() - new Date(f.dob + 'T12:00:00Z').getTime()) / (365.25 * 86400000)) : null
+  const menor = idade !== null && idade < 18
+  const faltam = [!f.pilot_name.trim() && 'piloto', !f.email.includes('@') && 'e-mail', !f.phone.trim() && 'telefone', !f.due_on && 'data', (menor || idade === null) && !f.responsible.trim() && (menor ? 'responsável (piloto menor)' : 'nascimento ou responsável')].filter(Boolean) as string[]
   async function save() {
     setBusy(true)
     try { const r = await api.post<{ id: number; link: string; section: string }>('/tasks', f); toast(`Tarefa criada na coluna ${r.section}.`, 'ok'); onDone(); onClose(); if (r.link) window.open(r.link, '_blank', 'noopener') }
@@ -126,15 +129,16 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
     <div><h2 className="h1" style={{ fontSize: 22 }}>Nova tarefa de serviço</h2><div className="small muted">Cria no Asana a partir do modelo oficial (com as subtarefas), na coluna do dia da data. A IA é avisada e prepara waiver e invoice.</div></div>
     <div className="grid g2">
       <div className="field"><label>Piloto *</label><input className="input" value={f.pilot_name} onChange={e => set('pilot_name', e.target.value)} /></div>
-      <div className="field"><label>Responsável (quem paga/assina)</label><input className="input" value={f.responsible} onChange={e => set('responsible', e.target.value)} placeholder="se vazio, o próprio piloto" /></div>
-      <div className="field"><label>E-mail do responsável</label><input className="input" type="email" value={f.email} onChange={e => set('email', e.target.value)} /></div>
-      <div className="field"><label>Telefone</label><input className="input" value={f.phone} onChange={e => set('phone', e.target.value)} /></div>
-      <div className="field"><label>Nascimento do piloto</label><input className="input" type="date" value={f.dob} onChange={e => set('dob', e.target.value)} /></div>
+      <div className="field"><label>Responsável {menor ? '* (piloto menor: quem assina e paga)' : '(quem paga/assina)'}</label><input className="input" value={f.responsible} onChange={e => set('responsible', e.target.value)} placeholder={menor ? 'obrigatório' : 'se adulto e vazio, o próprio piloto'} /></div>
+      <div className="field"><label>E-mail do responsável *</label><input className="input" type="email" value={f.email} onChange={e => set('email', e.target.value)} /></div>
+      <div className="field"><label>Telefone *</label><input className="input" value={f.phone} onChange={e => set('phone', e.target.value)} /></div>
+      <div className="field"><label>Nascimento do piloto {idade !== null && <span className="muted">({idade} anos{menor ? ', menor' : ''})</span>}</label><input className="input" type="date" value={f.dob} onChange={e => set('dob', e.target.value)} /></div>
       <div className="field"><label>Data do serviço *</label><input className="input" type="date" value={f.due_on} onChange={e => set('due_on', e.target.value)} /></div>
       <div className="field"><label>Produto *</label><select className="input" value={f.product} onChange={e => set('product', e.target.value)}>
-        <option value="Urace Daily">Urace Daily (treino: Practice / Professional Coaching)</option><option value="Academy">Academy (mensal, 4 sessões)</option><option value="Corrida">Corrida (Race / Trackside Support)</option><option value="Arrive and Drive">Arrive and Drive</option><option value="Summer Camp">Summer Camp</option><option value="Test Drive">Test Drive</option></select>
+        <option value="Urace Daily">Urace Daily (treino: Practice / Professional Coaching)</option><option value="Lead and Follow">Lead and Follow (coach na pista, $769 fechado antes)</option><option value="Academy">Academy (mensal, 4 sessões)</option><option value="Corrida">Corrida (Race / Trackside Support)</option><option value="Arrive and Drive">Arrive and Drive</option><option value="Summer Camp">Summer Camp</option><option value="Test Drive">Test Drive</option></select>
         <span className="small muted">{f.product === 'Corrida' ? 'preço: Rate Card, aba Racing team' : 'preço: Rate Card, aba Academy'}</span></div>
-      <div className="field"><label>Categoria</label><select className="input" value={f.category} onChange={e => set('category', e.target.value)}>{['2T', '4T', 'Baby Kart', 'F4', 'X30', 'KA100'].map(x => <option key={x}>{x}</option>)}</select></div>
+      <div className="field"><label>Categoria (como na Rate Card)</label><select className="input" value={f.category} onChange={e => set('category', e.target.value)}>
+        <option value="Using Own Kart">Using Own Kart (4+ anos)</option><option value="Baby Kart">Baby Kart (4 a 7 anos)</option><option value="4 stroke">4 stroke kart (7+)</option><option value="2 stroke">2 stroke kart (7+)</option><option value="Adult Shifter">Adult Shifter rental (14+, com experiência)</option><option value="F4">F4</option></select></div>
       {f.product === 'Academy' ? <div className="field"><label>Sessão do mês</label><select className="input" value={f.package_n} onChange={e => set('package_n', Number(e.target.value))}>{[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}/4</option>)}</select></div>
         : <div className="field"><label>Dias</label><input className="input" type="number" min={1} max={10} value={f.days} onChange={e => set('days', Number(e.target.value))} /></div>}
       <div className="field"><label>Altura</label><input className="input" value={f.height} onChange={e => set('height', e.target.value)} placeholder="ex.: 1,60 m" /></div>
@@ -143,7 +147,7 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
       <div className="field"><label>Experiência</label><input className="input" value={f.experience} onChange={e => set('experience', e.target.value)} placeholder="ex.: 2 anos de kart, nunca pilotou" /></div>
     </div>
     <div className="field"><label>Observações</label><textarea className="input" rows={2} value={f.extra_notes} onChange={e => set('extra_notes', e.target.value)} placeholder="altura, peso, experiência, pedidos especiais" /></div>
-    <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !f.pilot_name.trim() || !f.due_on} onClick={save}>{busy ? <Spinner /> : 'Criar no Asana'}</button></div>
+    <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><span className="small muted">{faltam.length > 0 && `falta: ${faltam.join(', ')}`}</span><button className="btn primary" disabled={busy || faltam.length > 0} onClick={save}>{busy ? <Spinner /> : 'Criar no Asana'}</button></div>
   </div></div>
 }
 

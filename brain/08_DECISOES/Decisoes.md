@@ -52,3 +52,4 @@ X?"*. Agora dá.
 - [[D-2026-09-04 - O que e cliente, ativo, e um card por pessoa]] — corrida não é cliente; ativo = 6 meses; união de duplicados; varredura por cliente
 - [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]] — eventos → agente → propostas; aprovar executa; balão vira memória
 - [[D-2026-09-08 - A IA se corrige antes de chamar humano]] — atenção só do que a IA não resolveu; notificação/histórico tratados sozinhos; vencida vai para Finished sozinha; SAFE executa na hora
+- [[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]] — ação cria+envia com prévia; evento billing.monthly por cliente com plano; preços da diária, lead and follow e +$250 fora do OKC

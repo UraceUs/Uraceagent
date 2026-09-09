@@ -33,7 +33,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
   const [tab, setTab] = useState<'timeline' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
   const [edit, setEdit] = useState(false)
-  const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false })
+  const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '' })
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
   if (error && !data) return <ErrorState error={error} retry={reload} />
@@ -47,11 +47,11 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const dias = daysUntil(prox?.due_on)
   const risco = !c.vip && prox && !wOk && dias !== null && dias <= 2
 
-  function openEdit() { setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip }); setEdit(true) }
+  function openEdit() { setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '' }); setEdit(true) }
   async function save() {
     setSaving(true)
     try {
-      const body: Record<string, unknown> = { status: form.status, stage_code: form.stage_code || null, notes: form.notes }
+      const body: Record<string, unknown> = { status: form.status, stage_code: form.stage_code || null, notes: form.notes, monthly_plan: form.monthly_plan || null, monthly_note: form.monthly_note || null }
       if (can('MANAGER')) body.vip = form.vip
       await api.patch(`/clients/${c.id}`, body); toast('Cliente atualizado.', 'ok'); setEdit(false); reload()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSaving(false) }
@@ -84,7 +84,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <dl className="dl"><dt>Piloto</dt><dd>{c.pilot_name || <span className="muted">— (o próprio)</span>}</dd><dt>Nascimento</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd>
           <dt>Responsável</dt><dd>{c.name}</dd><dt>Empresa</dt><dd>{c.company || '—'}</dd></dl>
         <dl className="dl"><dt>E-mail</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}</dd><dt>Telefone</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd>
-          <dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Origem</dt><dd>{c.source || '—'} · desde {fmtDate(c.created_at)}</dd><dt>Varrido</dt><dd className="mono small">{c.scanned_at ? fmtDateTime(c.scanned_at) : 'nunca'}</dd></dl>
+          <dt>Plano mensal</dt><dd>{c.monthly_plan || <span className="muted">—</span>}{c.monthly_note && <div className="small muted">{c.monthly_note}</div>}</dd><dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Origem</dt><dd>{c.source || '—'} · desde {fmtDate(c.created_at)}</dd><dt>Varrido</dt><dd className="mono small">{c.scanned_at ? fmtDateTime(c.scanned_at) : 'nunca'}</dd></dl>
       </div>
     </Section>
     {edit && <Section title="Editar cliente">
@@ -92,6 +92,10 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <div className="field"><label>Status</label><select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{['ACTIVE', 'NEW', 'PENDING', 'AT_RISK', 'COMPLETED', 'INACTIVE'].map(s => <option key={s}>{s}</option>)}</select></div>
         <div className="field"><label>Etapa</label><select className="input" value={form.stage_code} onChange={e => setForm({ ...form, stage_code: e.target.value })}><option value="">—</option>{data.stages.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}</select></div>
         <div className="field"><label>VIP</label><label className="check"><input type="checkbox" disabled={!can('MANAGER')} checked={form.vip} onChange={e => setForm({ ...form, vip: e.target.checked })} /> dispensa waiver {!can('MANAGER') && <span className="muted">(só gerente)</span>}</label></div>
+      </div>
+      <div className="grid g2" style={{ marginTop: 12 }}>
+        <div className="field"><label>Plano mensal (gera a invoice do dia 1)</label><select className="input" value={form.monthly_plan} onChange={e => setForm({ ...form, monthly_plan: e.target.value })}><option value="">sem plano mensal</option>{['Academy Baby Kart', 'Academy 4 stroke', 'Academy 2 stroke', 'Academy kart próprio', 'Academy kart próprio + mecânico', 'Contrato 6 meses', 'Contrato 12 meses'].map(x => <option key={x}>{x}</option>)}</select></div>
+        <div className="field"><label>Ajustes do plano</label><input className="input" value={form.monthly_note} onChange={e => setForm({ ...form, monthly_note: e.target.value })} placeholder="ex.: 1 sessão extra em setembro; treino fora do OKC" /></div>
       </div>
       <div className="field" style={{ marginTop: 12 }}><label>Notas</label><textarea className="input" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
       <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}><button className="btn" onClick={() => setEdit(false)}>Cancelar</button><button className="btn primary" disabled={saving} onClick={save}>{saving ? <span className="spin" /> : 'Salvar'}</button></div>

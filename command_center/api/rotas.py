@@ -241,6 +241,8 @@ class ClienteIn(BaseModel):
     stage_code: str | None = None
     notes: str | None = None
     vip: bool | None = None
+    monthly_plan: str | None = None
+    monthly_note: str | None = None
 
 
 @r.patch("/clients/{cid}")
@@ -991,8 +993,10 @@ def client_create(dados: ClienteNovoIn, request: Request, u=Depends(auth.exige("
     return {"id": cid, "created": novo}
 
 
+CATEGORIAS = ("Using Own Kart", "Baby Kart", "4 stroke", "2 stroke", "Adult Shifter", "F4")
 PRODUTOS = {
     "Urace Daily": "treino avulso (Practice / Professional Coaching); preço na aba Academy da Rate Card",
+    "Lead and Follow": "coach na pista junto com o piloto (2T); fechado com antecedência = $769 por piloto; aba Academy",
     "Academy": "mensal, 4 sessões [1/4 … 4/4]; preço na aba Academy",
     "Corrida": "Race Support / Trackside Support; preço na aba Racing team",
     "Arrive and Drive": "kart da URACE; aba Academy",
@@ -1047,6 +1051,13 @@ def task_create(dados: TarefaNovaIn, request: Request, u=Depends(auth.exige("OPE
         _d.fromisoformat(dados.due_on)
     except ValueError:
         raise HTTPException(400, "Data inválida (AAAA-MM-DD).")
+    faltam = [k for k, v in (("piloto", dados.pilot_name), ("e-mail", dados.email), ("telefone", dados.phone)) if not (v or "").strip()]
+    if faltam:
+        raise HTTPException(400, "Obrigatório: " + ", ".join(faltam) + ".")
+    if "@" not in (dados.email or ""):
+        raise HTTPException(400, "E-mail inválido.")
+    if dados.category and dados.category not in CATEGORIAS:
+        raise HTTPException(400, f"Categoria deve ser uma de: {', '.join(CATEGORIAS)}.")
     sec_gid, sec_nome = (dados.section_gid, SECOES_DIAS.get(dados.section_gid)) if dados.section_gid else _secao_do_dia(dados.due_on)
     if not sec_gid:
         raise HTTPException(400, "A data cai numa segunda-feira: o quadro não tem coluna. Escolha outra data ou a coluna.")
@@ -1063,6 +1074,10 @@ def task_create(dados: TarefaNovaIn, request: Request, u=Depends(auth.exige("OPE
             idade = h.year - b.year - ((h.month, h.day) < (b.month, b.day))
         except ValueError:
             raise HTTPException(400, "Data de nascimento inválida (AAAA-MM-DD).")
+    if idade is not None and idade < 18 and not (dados.responsible or "").strip():
+        raise HTTPException(400, "Piloto menor de idade: o responsável é obrigatório (é quem assina a waiver e paga).")
+    if idade is None and not (dados.responsible or "").strip():
+        raise HTTPException(400, "Informe a data de nascimento do piloto ou o responsável.")
     notas = (f"Driver's name: {piloto}\nDate of Birth: {dados.dob or ''}\nAge: {idade if idade is not None else ''}\n"
              f"Height: {dados.height or ''}\nWeight: {dados.weight or ''}\nWaist: {dados.waist or ''}\nExperience: {dados.experience or ''}\n"
              f"Responsible Name: {resp}\nEmail: {dados.email or ''}\nPhone: {dados.phone or ''}\n"

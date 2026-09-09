@@ -199,3 +199,24 @@ Não trocar um pelo outro.
   *Summer Camp*, *Test Drive*. Nome: `Piloto_Produto_Categoria [n/total]`.
 - Exemplo dado pelo dono: **Daily 2T (1/1) = $819** — conferir na aba
   Academy antes de usar; se a planilha disser outro valor, a planilha manda.
+
+
+## Tabelas ditadas pelo dono em 09/09 (aba Academy; a planilha manda se divergir)
+
+**Diária tudo incluso** (mecânico, coaching, equipamento de segurança) — *URACE Academy | Arrive and drive (daily rates)*:
+
+| Categoria | Idade | Diária |
+|---|---|---|
+| Using Own Kart (todas as categorias) | 4+ | **$500** |
+| Baby Kart | 4–7 | **$719** |
+| 4 stroke kart | 7+ | **$719** |
+| 2 stroke kart | 7+ | **$819** |
+| Adult Shifter kart rental | 14+, só com experiência | **$899** |
+
+**Lead and Follow coaching** (o coach vai para a pista com o piloto, 2T): fechado com antecedência **$769 por piloto**, sempre. *Last-minute* ($395 um piloto; $245 cada com dois) **só o operador fecha na pista**; os mecânicos avisam depois para montar a invoice. Pacote de 5 sessões: $3.460,50 (10% off; $692,10/sessão).
+
+**Mensal sem contrato** (4 sessões/mês; extra = mensal ÷ 4): kart próprio + mecânico $1.200 (extra $300) · kart próprio $1.800 (extra $450) · Baby Kart $2.756,90 (extra $689,23) · 4 stroke $2.756,90 (extra $689,23) · 2 stroke $3.156,90 (extra $789,23). Contratos: 6 meses = 27 sessões, 4% off, entrada 33%, 5 parcelas; 12 meses = 54 sessões, 8% off, entrada 20%, 11 parcelas (valores na planilha).
+
+**Fora do OKC** (Jacksonville, Homestead…): **+$250 por sessão** de hotel, comida e transporte.
+
+Envio de qualquer invoice desses produtos: **aprovação no painel, com prévia; aprovar = enviar** ([[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]]).

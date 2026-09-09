@@ -34,7 +34,7 @@ export interface Client {
   id: number; name: string; company: string | null; email: string | null; phone: string | null
   pilot_name: string | null; pilot_dob: string | null; vip: number; status: string
   stage_code: string | null; stage?: string | null; source: string | null; notes: string | null
-  status_locked?: number; last_service_at?: string | null; scanned_at?: string | null
+  status_locked?: number; last_service_at?: string | null; scanned_at?: string | null; monthly_plan?: string | null; monthly_note?: string | null
   created_at: string; updated_at: string
   open_tasks?: number; done_tasks?: number; last_service?: string | null
   next_service?: string | null; waiver_status?: string | null
