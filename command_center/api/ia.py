@@ -70,6 +70,8 @@ SUGESTOES = [
 def runner_openclaw(texto, session_key):
     """Roda o agente real. Devolve (ok, saida, erro)."""
     global OPENCLAW
+    if os.environ.get("OPENCLAW_BIN"):                 # a variável manda, sempre (também no teste)
+        OPENCLAW = os.environ["OPENCLAW_BIN"]
     cmd = [OPENCLAW, "--no-color", "agent", "--agent", AGENTE, "--session-key", session_key,
            "--thinking", "medium", "--timeout", str(TIMEOUT), "--json", "-m", texto]
     try:
