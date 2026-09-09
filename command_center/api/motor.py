@@ -86,7 +86,7 @@ def registrar_evento(con, kind, entity_type, entity_id, client_id, summary):
                    VALUES (?,?,?,?,?)""", (kind, entity_type, entity_id, client_id, summary[:300]))
 
 
-def processar_eventos(con, user_id, limite=10):
+def processar_eventos(con, user_id, limite=3):
     """Transforma eventos NEW em comandos para o agente (um por evento), respeitando as regras."""
     disparados = 0
     for ev in todos(con, "SELECT * FROM ai_events WHERE status='NEW' ORDER BY id LIMIT ?", (limite,)):

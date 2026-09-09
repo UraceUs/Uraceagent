@@ -108,6 +108,9 @@ def _extrai_texto(saida):
 
 
 RUNNER = runner_openclaw
+# Cada execução do agente sobe um processo Node + sandbox Docker. Em paralelo
+# isso derruba o VPS (09/09: 6 eventos → 6 agentes → site fora do ar).
+_PARALELO = threading.Semaphore(int(os.environ.get("CC_AI_PARALELO", "1")))
 
 # Anexado a todo comando: transforma "o que eu faria" em linhas que o
 # Command Center lê sem adivinhar. O agente já trabalha em simulação
@@ -211,11 +214,11 @@ def extrair_acoes(con, command_id, texto):
 def _executa(command_id, texto, session_key, user_id):
     con = conectar()
     try:
-        atualizar(con, "ai_commands", command_id, status="RUNNING", started_at=agora())
-        ok, saida, erro = RUNNER(texto + SUFIXO, session_key)
-        if not ok and erro and ("não respondeu" in erro or "não encontrado" in erro):
-            # autocorreção: falha transitória (timeout, binário) ganha UMA segunda chance
+        with _PARALELO:                                   # fila: um agente por vez
+            atualizar(con, "ai_commands", command_id, status="RUNNING", started_at=agora())
             ok, saida, erro = RUNNER(texto + SUFIXO, session_key)
+            if not ok and erro and ("não respondeu" in erro or "não encontrado" in erro):
+                ok, saida, erro = RUNNER(texto + SUFIXO, session_key)
         if ok:
             # ações ANTES do DONE: quem lê o comando no instante em que ele
             # termina já vê as propostas (a tela faz polling nesse status)

@@ -29,18 +29,21 @@ def _autosync():
     import threading
     import time
     from command_center.api import motor
-    from command_center.db import um
-    from command_center.providers import sync as sy
+    from command_center.db import agora, um
     minutos = int(os.environ.get("CC_AUTOSYNC_MIN", "15"))
     time.sleep(20)                                        # deixa o serviço subir
     while True:
+        from command_center.api import rotas
         con = conectar()
         try:
             admin = um(con, "SELECT id FROM users WHERE role='ADMIN' AND active=1 ORDER BY id LIMIT 1")
-            if admin:
-                res = sy.sync_tudo(con)
-                res["eventos_disparados"] = motor.processar_eventos(con, admin["id"])
-                auditar(con, "sync.auto", "system", detail=res)
+            with rotas._SYNC_LOCK:
+                pode = admin is not None and not rotas._SYNC["running"]
+                if pode:
+                    rotas._SYNC.update(running=True, started_at=agora(), finished_at=None, result=None, by=admin["id"])
+            if pode:
+                rotas._sync_thread(admin["id"], None)      # mesma rotina do botão, mesma trava
+                auditar(con, "sync.auto", "system", detail=rotas._SYNC.get("result"))
         except Exception as e:                            # nunca derruba o laço
             try:
                 auditar(con, "sync.auto.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
