@@ -125,3 +125,24 @@ def test_audit_append_only():
     with pytest.raises(sqlite3.DatabaseError):
         con.execute("DELETE FROM audit_logs")
     con.close()
+
+
+def test_admin_muda_papel_de_outro(cli):
+    """Usuários próprios: testes anteriores do módulo mexem na senha do admin da fixture."""
+    B = "/ops/api"
+    con = conectar()
+    chefe = auth.criar_usuario(con, "chefe@urace.us", "Chefe", "ADMIN", SENHA)
+    alvo = auth.criar_usuario(con, "alvo@urace.us", "Alvo", "VIEWER", SENHA)
+    con.execute("DELETE FROM login_attempts")            # testes anteriores esgotaram as 5 tentativas do IP
+    con.close()
+    assert entra(cli, "chefe@urace.us").status_code == 200
+    h = csrf(cli)
+    assert cli.post(B + f"/users/{chefe}/role", headers=h, json={"role": "VIEWER"}).status_code == 400      # não o próprio
+    assert cli.post(B + f"/users/{alvo}/role", headers=h, json={"role": "CHEFE"}).status_code == 400
+    r = cli.post(B + f"/users/{alvo}/role", headers=h, json={"role": "MANAGER"})
+    assert r.status_code == 200 and r.json()["role"] == "MANAGER"
+    assert [x for x in cli.get(B + "/users", headers=h).json() if x["id"] == alvo][0]["role"] == "MANAGER"
+    assert "user.role" in [a["event"] for a in cli.get(B + "/audit", headers=h).json()]
+    assert cli.post(B + f"/users/{alvo}/role", headers=h, json={"role": "ADMIN"}).status_code == 200
+    assert cli.post(B + f"/users/{alvo}/role", headers=h, json={"role": "OPERATOR"}).status_code == 200
+    assert cli.post(B + "/users/999999/role", headers=h, json={"role": "VIEWER"}).status_code == 404

@@ -398,3 +398,37 @@ INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, acti
   ('email_cliente',    1, '{"event":"email.received"}', '{"client_known":true}', '{"ia":"ler a thread, classificar, propor resposta em rascunho"}'),
   ('waiver_devolvida', 1, '{"event":"waiver.bounced"}', NULL, '{"ia":"achar e-mail correto no Asana/Gmail e propor reenvio"}'),
   ('waiver_assinada',  1, '{"event":"waiver.completed"}', NULL, '{"ia":"comentar na tarefa do Asana que a waiver chegou"}');
+
+-- ------------------------------------------------- fontes de contexto da IA
+-- Planilhas, arquivos e links que o dono cadastra para a IA consultar.
+-- Arquivos ficam em ~/.urace/context/ (fora do repo) e são copiados para o
+-- workspace do agente (contexto/), onde ele consegue ler.
+CREATE TABLE IF NOT EXISTS context_sources (
+  id            INTEGER PRIMARY KEY,
+  kind          TEXT NOT NULL CHECK (kind IN ('sheet','file','link')),
+  title         TEXT NOT NULL,
+  description   TEXT,                     -- para que serve / quando usar
+  url           TEXT,                     -- link original (planilha, doc)
+  sheet_id      TEXT,                     -- id da planilha do Google
+  sheet_range   TEXT,                     -- aba/intervalo sugerido
+  path          TEXT,                     -- arquivo no disco (~/.urace/context/...)
+  text_path     TEXT,                     -- texto extraído (PDF -> .txt)
+  mime          TEXT,
+  size          INTEGER,
+  active        INTEGER NOT NULL DEFAULT 1,
+  added_by      INTEGER REFERENCES users(id),
+  added_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  last_check_at TEXT,
+  last_check_ok INTEGER,
+  last_check_msg TEXT
+);
+INSERT OR IGNORE INTO context_sources (id, kind, title, description, url, sheet_id, sheet_range)
+  VALUES (1, 'sheet', 'Rate Card 2026', 'Fonte de verdade dos preços (acima do catálogo do QuickBooks). Serviços, corridas, Academy, mecânico, aluguel.',
+          'https://docs.google.com/spreadsheets/d/160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo', '160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo', 'A1:F80');
+
+-- Regra do dono (09/09) sobre como ler a Rate Card: vale mesmo em banco já criado
+UPDATE context_sources SET description = 'Fonte de verdade dos preços (acima do catálogo do QuickBooks). CORRIDA → aba "Racing team". TREINO (Urace Daily, Academy, Arrive and Drive, Summer Camp, Test Drive) → aba "Academy". Ler a aba certa antes de dar qualquer valor.', sheet_range = 'Academy!A1:F80'
+  WHERE sheet_id = '160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo' AND (description NOT LIKE '%Racing team%' OR sheet_range = 'A1:F80');
+INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
+  (1, 'global', 'Preço: corrida usa a aba "Racing team" da Rate Card; treino (Urace Daily, Academy, Arrive and Drive, Summer Camp, Test Drive) usa a aba "Academy". Nunca dê valor sem ler a aba certa.', 'dono-2026-09-09'),
+  (2, 'global', 'Produtos do quadro: "Urace Daily" = treino avulso (Practice e Professional Coaching são Daily); "Academy" = mensal com 4 sessões, nome da tarefa leva [1/4]…[4/4]; "Corrida" = Race Support / Trackside Support. O nome da tarefa segue Piloto_Produto_Categoria [n/total].', 'dono-2026-09-09');

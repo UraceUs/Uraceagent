@@ -169,7 +169,7 @@ def test_acao_com_json_e_execucao_aprovada(cli):
             break
         time.sleep(0.1)
     assert a2["status"] == "FAILED" and "conectado" in (a2["result"] or "").lower()
-    con = conectar(); assert motor.aprendizados(con) == ""; con.close()
+    con = conectar(); assert "Racing team" in motor.aprendizados(con) and "custa $350" not in motor.aprendizados(con); con.close()
 
 
 def test_balao_instrui_e_aprende(cli):

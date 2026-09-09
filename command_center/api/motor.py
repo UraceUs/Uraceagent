@@ -30,10 +30,28 @@ def aprendizados(con, client_id=None, entity_type=None):
     marks = ",".join("?" * len(escopos))
     rows = todos(con, f"SELECT scope, text FROM ai_learnings WHERE active=1 AND scope IN ({marks}) ORDER BY id DESC LIMIT ?",
                  (*escopos, MAX_APRENDIZADOS))
-    if not rows:
+    saida = ""
+    if rows:
+        linhas = [f"- ({r['scope']}) {r['text']}" for r in reversed(rows)]
+        saida += "\n\nO QUE O DONO JÁ ENSINOU (obedeça; em conflito com o cérebro, isto prevalece):\n" + "\n".join(linhas)
+    return saida + fontes_de_contexto(con)
+
+
+def fontes_de_contexto(con):
+    """Planilhas e arquivos cadastrados em Integrações: a IA sabe que existem e como ler cada um."""
+    fontes = todos(con, "SELECT * FROM context_sources WHERE active=1 ORDER BY kind, id")
+    if not fontes:
         return ""
-    linhas = [f"- ({r['scope']}) {r['text']}" for r in reversed(rows)]
-    return "\n\nO QUE O DONO JÁ ENSINOU (obedeça; em conflito com o cérebro, isto prevalece):\n" + "\n".join(linhas)
+    linhas = []
+    for f in fontes:
+        if f["kind"] == "sheet":
+            linhas.append(f"- PLANILHA '{f['title']}': {f['description'] or ''} → sheets_ler(conta='urace', planilha_id='{f['sheet_id']}', intervalo='{f['sheet_range'] or 'A1:Z200'}')")
+        elif f["kind"] == "file":
+            nome = os.path.basename(f["text_path"] or f["path"] or "")
+            linhas.append(f"- ARQUIVO '{f['title']}': {f['description'] or ''} → read /workspace/contexto/{nome}")
+        else:
+            linhas.append(f"- LINK '{f['title']}': {f['description'] or ''} → {f['url']}")
+    return "\n\nFONTES DE CONTEXTO cadastradas pelo dono (consulte quando o assunto pedir):\n" + "\n".join(linhas)
 
 
 def aprender(con, texto, user_id, client_id=None, entity_type=None, source_key=None):

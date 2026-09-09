@@ -213,6 +213,37 @@ def api_users_active(uid: int, dados: AtivoIn, request: Request, u=Depends(auth.
     return {"ok": True}
 
 
+class PapelIn(BaseModel):
+    role: str
+
+
+@app.post(BASE + "/api/users/{uid}/role")
+def api_users_role(uid: int, dados: PapelIn, request: Request, u=Depends(auth.exige("ADMIN")),
+                   con: sqlite3.Connection = Depends(get_db)):
+    """Administrador muda o nível de acesso de OUTRA pessoa. Não muda o próprio e não
+    deixa a conta sem administrador ativo. A pessoa é derrubada das sessões para
+    entrar já com o papel novo."""
+    if dados.role not in auth.PAPEIS:
+        raise HTTPException(400, f"Papel inválido. Use um de: {', '.join(auth.PAPEIS)}.")
+    if uid == u["id"]:
+        raise HTTPException(400, "Você não muda o próprio papel; peça a outro administrador.")
+    alvo = um(con, "SELECT id, role, active FROM users WHERE id = ?", (uid,))
+    if not alvo:
+        raise HTTPException(404, "User not found.")
+    if alvo["role"] == "ADMIN" and dados.role != "ADMIN":
+        n = um(con, "SELECT COUNT(*) AS n FROM users WHERE role='ADMIN' AND active=1 AND id<>?", (uid,))
+        if not n or n["n"] == 0:
+            raise HTTPException(409, "Esse é o único administrador ativo; promova outro antes.")
+    if alvo["role"] == dados.role:
+        return {"ok": True, "role": dados.role}
+    con.execute("UPDATE users SET role = ? WHERE id = ?", (dados.role, uid))
+    auth.revogar_todas(con, uid)
+    from command_center.db import auditar as _aud
+    _aud(con, "user.role", f"user:{u['id']}", user_id=u["id"], entity_type="user", entity_id=uid,
+         detail={"from": alvo["role"], "to": dados.role}, ip=auth._ip(request))
+    return {"ok": True, "role": dados.role}
+
+
 # ------------------------------------------------------------- audit
 @app.get(BASE + "/api/audit")
 def api_audit(limit: int = 100, u=Depends(auth.exige("MANAGER")),

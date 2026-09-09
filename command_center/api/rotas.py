@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import atencao, auth
-from command_center.db import agora, auditar, conectar, get_db, todos, um
+from command_center.db import agora, auditar, conectar, get_db, inserir, todos, um
 from command_center.providers import SISTEMAS, recarregar, saude
 from command_center.providers import sync as sy
 
@@ -991,6 +991,22 @@ def client_create(dados: ClienteNovoIn, request: Request, u=Depends(auth.exige("
     return {"id": cid, "created": novo}
 
 
+PRODUTOS = {
+    "Urace Daily": "treino avulso (Practice / Professional Coaching); preço na aba Academy da Rate Card",
+    "Academy": "mensal, 4 sessões [1/4 … 4/4]; preço na aba Academy",
+    "Corrida": "Race Support / Trackside Support; preço na aba Racing team",
+    "Arrive and Drive": "kart da URACE; aba Academy",
+    "Summer Camp": "camp; aba Academy",
+    "Test Drive": "primeira experiência; aba Academy",
+}
+
+
+def nome_tarefa(piloto, produto, categoria, n, total):
+    """'Renato Frota Pionti_Urace Daily_2T [1/1]' — o padrão que o quadro e a IA leem."""
+    base = f"{piloto.strip()}_{produto.strip()}" + (f"_{categoria.strip()}" if categoria else "")
+    return f"{base} [{max(1, int(n or 1))}/{max(1, int(total or 1))}]"
+
+
 class TarefaNovaIn(BaseModel):
     client_id: int | None = None
     pilot_name: str
@@ -998,9 +1014,15 @@ class TarefaNovaIn(BaseModel):
     email: str | None = None
     phone: str | None = None
     dob: str | None = None
-    product: str                         # ex.: Practice, Professional Coaching, Arrive and Drive
-    category: str | None = None          # ex.: Kart, 2T, 4T, Baby Kart, F4
-    days: int = 1
+    height: str | None = None
+    weight: str | None = None
+    waist: str | None = None
+    experience: str | None = None
+    product: str                         # Urace Daily | Academy | Corrida | Arrive and Drive | Summer Camp | Test Drive
+    category: str | None = None          # 2T, 4T, Baby Kart, F4, X30, KA100
+    package_n: int = 1                   # Academy: sessão 1..4 do mês
+    package_total: int = 1               # Academy: 4
+    days: int = 1                        # compatibilidade
     due_on: str                          # AAAA-MM-DD
     section_gid: str | None = None       # coluna do dia; se vazio, deduz do due_on
     extra_notes: str | None = None
@@ -1030,7 +1052,10 @@ def task_create(dados: TarefaNovaIn, request: Request, u=Depends(auth.exige("OPE
         raise HTTPException(400, "A data cai numa segunda-feira: o quadro não tem coluna. Escolha outra data ou a coluna.")
     piloto = dados.pilot_name.strip()
     resp = (dados.responsible or piloto).strip()
-    nome = f"{piloto}_{dados.product.strip()}" + (f"_{dados.category.strip()}" if dados.category else "") + f" [1/{max(1, int(dados.days))}]"
+    if dados.product not in PRODUTOS:
+        raise HTTPException(400, f"Produto deve ser um de: {', '.join(PRODUTOS)}.")
+    n, total = (dados.package_n, dados.package_total) if dados.product == "Academy" else (1, max(1, int(dados.days or 1)))
+    nome = nome_tarefa(piloto, dados.product, dados.category, n, total)
     idade = None
     if dados.dob:
         try:
@@ -1039,7 +1064,9 @@ def task_create(dados: TarefaNovaIn, request: Request, u=Depends(auth.exige("OPE
         except ValueError:
             raise HTTPException(400, "Data de nascimento inválida (AAAA-MM-DD).")
     notas = (f"Driver's name: {piloto}\nDate of Birth: {dados.dob or ''}\nAge: {idade if idade is not None else ''}\n"
+             f"Height: {dados.height or ''}\nWeight: {dados.weight or ''}\nWaist: {dados.waist or ''}\nExperience: {dados.experience or ''}\n"
              f"Responsible Name: {resp}\nEmail: {dados.email or ''}\nPhone: {dados.phone or ''}\n"
+             f"Product: {dados.product}" + (f" / {dados.category}" if dados.category else "") + f" — {PRODUTOS[dados.product]}\n"
              f"Service Dates for this Month: {dados.due_on}" + (f"\n\n{dados.extra_notes}" if dados.extra_notes else "")
              + f"\n\n[criado pelo Command Center por {u['name']}]")
     try:
@@ -1112,3 +1139,187 @@ def rate_card_check(u=Depends(auth.usuario_atual)):
         return {"ok": False, "reason": str(e), "id": RATE_CARD_ID}
     except Exception as e:
         return {"ok": False, "reason": f"{type(e).__name__}: {str(e)[:200]}", "id": RATE_CARD_ID}
+
+
+
+# ============================================================ Fontes de contexto da IA (Integrações → Planilhas / Arquivos)
+from fastapi import File, Form, UploadFile  # noqa: E402
+
+CONTEXT_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "context")
+EXT_OK = {".pdf", ".txt", ".md", ".csv", ".json", ".docx", ".xlsx", ".png", ".jpg", ".jpeg"}
+MAX_BYTES = 25 * 1024 * 1024
+
+
+def _workspace_contexto():
+    agente = os.environ.get("OPENCLAW_AGENT", "urace-admin")
+    return os.path.expanduser(f"~/.openclaw/workspace/{agente}/contexto")
+
+
+def _sheet_id(url):
+    m = re.search(r"/spreadsheets/d/([A-Za-z0-9_-]{20,})", url or "")
+    return m.group(1) if m else ((url or "").strip() if re.fullmatch(r"[A-Za-z0-9_-]{20,}", (url or "").strip()) else None)
+
+
+def _slug(nome):
+    base = re.sub(r"[^A-Za-z0-9._-]+", "-", nome.strip()).strip("-.")[:80] or "arquivo"
+    return base
+
+
+def _extrair_texto(caminho, mime):
+    """PDF → texto (pypdf, se instalado). txt/md/csv/json → o próprio arquivo. Outros: sem texto."""
+    ext = os.path.splitext(caminho)[1].lower()
+    if ext in (".txt", ".md", ".csv", ".json"):
+        return caminho
+    if ext == ".pdf":
+        try:
+            from pypdf import PdfReader
+            partes = []
+            for pg in PdfReader(caminho).pages[:200]:
+                partes.append(pg.extract_text() or "")
+            txt = "\n\n".join(partes).strip()
+            if txt:
+                alvo = caminho + ".txt"
+                with open(alvo, "w", encoding="utf-8") as f:
+                    f.write(txt)
+                return alvo
+        except Exception:
+            return None
+    return None
+
+
+def _publicar_no_workspace(src):
+    """Copia o arquivo (e o texto extraído) para o workspace do agente: é lá que ele lê."""
+    import shutil
+    try:
+        dst_dir = _workspace_contexto()
+        os.makedirs(dst_dir, exist_ok=True)
+        for pth in (src["path"], src["text_path"]):
+            if pth and os.path.isfile(pth):
+                shutil.copy2(pth, os.path.join(dst_dir, os.path.basename(pth)))
+        return True
+    except Exception:
+        return False
+
+
+@r.get("/context")
+def context_list(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    rows = todos(con, "SELECT c.*, us.name AS added_by_name FROM context_sources c LEFT JOIN users us ON us.id=c.added_by ORDER BY c.kind, c.id")
+    for c in rows:
+        c["workspace_name"] = os.path.basename(c["text_path"] or c["path"] or "") if c["kind"] == "file" else None
+    return rows
+
+
+class PlanilhaIn(BaseModel):
+    title: str
+    url: str
+    description: str | None = None
+    sheet_range: str | None = None
+
+
+@r.post("/context/sheet", status_code=201)
+def context_sheet(dados: PlanilhaIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    sid = _sheet_id(dados.url)
+    if not sid:
+        raise HTTPException(400, "Cole o link da planilha do Google (docs.google.com/spreadsheets/d/…).")
+    if not (dados.title or "").strip():
+        raise HTTPException(400, "Dê um título.")
+    if um(con, "SELECT id FROM context_sources WHERE sheet_id=?", (sid,)):
+        raise HTTPException(409, "Essa planilha já está cadastrada.")
+    cid = inserir(con, "context_sources", kind="sheet", title=dados.title.strip()[:120], description=(dados.description or "").strip()[:500] or None,
+                  url=f"https://docs.google.com/spreadsheets/d/{sid}", sheet_id=sid, sheet_range=(dados.sheet_range or "").strip()[:60] or None, added_by=u["id"])
+    auditar(con, "context.add", f"user:{u['id']}", user_id=u["id"], entity_type="context", entity_id=cid, detail={"kind": "sheet", "title": dados.title}, ip=auth._ip(request))
+    return {"id": cid, **_checar(con, cid)}
+
+
+class LinkIn(BaseModel):
+    title: str
+    url: str
+    description: str | None = None
+
+
+@r.post("/context/link", status_code=201)
+def context_link(dados: LinkIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not (dados.url or "").startswith("http"):
+        raise HTTPException(400, "Link inválido.")
+    cid = inserir(con, "context_sources", kind="link", title=dados.title.strip()[:120], description=(dados.description or "").strip()[:500] or None,
+                  url=dados.url.strip()[:500], added_by=u["id"])
+    auditar(con, "context.add", f"user:{u['id']}", user_id=u["id"], entity_type="context", entity_id=cid, detail={"kind": "link", "title": dados.title}, ip=auth._ip(request))
+    return {"id": cid}
+
+
+@r.post("/context/file", status_code=201)
+async def context_file(request: Request, file: UploadFile = File(...), title: str = Form(""), description: str = Form(""),
+                       u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in EXT_OK:
+        raise HTTPException(400, f"Tipo não aceito ({ext or 'sem extensão'}). Aceitos: {', '.join(sorted(EXT_OK))}.")
+    dados = await file.read()
+    if not dados:
+        raise HTTPException(400, "Arquivo vazio.")
+    if len(dados) > MAX_BYTES:
+        raise HTTPException(413, "Arquivo maior que 25 MB.")
+    os.makedirs(CONTEXT_DIR, exist_ok=True)
+    nome = _slug(os.path.splitext(file.filename or "arquivo")[0]) + ext
+    caminho = os.path.join(CONTEXT_DIR, nome)
+    n = 1
+    while os.path.exists(caminho):
+        n += 1; caminho = os.path.join(CONTEXT_DIR, f"{_slug(os.path.splitext(file.filename or 'arquivo')[0])}-{n}{ext}")
+    with open(caminho, "wb") as f:
+        f.write(dados)
+    os.chmod(caminho, 0o600)
+    texto = _extrair_texto(caminho, file.content_type)
+    cid = inserir(con, "context_sources", kind="file", title=(title or file.filename or nome).strip()[:120], description=(description or "").strip()[:500] or None,
+                  path=caminho, text_path=texto, mime=file.content_type, size=len(dados), added_by=u["id"])
+    ok = _publicar_no_workspace({"path": caminho, "text_path": texto})
+    con.execute("UPDATE context_sources SET last_check_at=?, last_check_ok=?, last_check_msg=? WHERE id=?",
+                (agora(), 1 if ok else 0, ("no workspace do agente" + ("" if texto else "; sem texto extraído — a IA só vê o nome")) if ok else "não consegui copiar para o workspace do agente", cid))
+    auditar(con, "context.add", f"user:{u['id']}", user_id=u["id"], entity_type="context", entity_id=cid,
+            detail={"kind": "file", "nome": os.path.basename(caminho), "bytes": len(dados), "texto": bool(texto)}, ip=auth._ip(request))
+    return {"id": cid, "name": os.path.basename(caminho), "text": bool(texto), "workspace": ok}
+
+
+def _checar(con, cid):
+    c = um(con, "SELECT * FROM context_sources WHERE id=?", (cid,))
+    ok, msg = False, ""
+    try:
+        if c["kind"] == "sheet":
+            r = chamar("gmail", "sheets_ler", conta="urace", planilha_id=c["sheet_id"], intervalo=(c["sheet_range"] or "A1:D5").split("!")[-1] if False else (c["sheet_range"] or "A1:D5"))
+            linhas = r.get("linhas", [])
+            ok, msg = True, f"{len(linhas)} linha(s) lidas; primeira: {(linhas[0] if linhas else [])[:4]}"
+        elif c["kind"] == "file":
+            ok = _publicar_no_workspace(c)
+            msg = "no workspace do agente" if ok else "não consegui copiar para o workspace do agente"
+        else:
+            ok, msg = True, "link registrado (a IA recebe o endereço)"
+    except NaoConectado as e:
+        msg = f"não conectado: {e}"
+    except Exception as e:
+        msg = f"{type(e).__name__}: {str(e)[:200]}"
+    con.execute("UPDATE context_sources SET last_check_at=?, last_check_ok=?, last_check_msg=? WHERE id=?", (agora(), 1 if ok else 0, msg[:300], cid))
+    return {"ok": ok, "msg": msg}
+
+
+@r.post("/context/{cid}/check")
+def context_check(cid: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    if not um(con, "SELECT id FROM context_sources WHERE id=?", (cid,)):
+        raise HTTPException(404, "Not found.")
+    return _checar(con, cid)
+
+
+@r.post("/context/{cid}/toggle")
+def context_toggle(cid: int, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    c = um(con, "SELECT * FROM context_sources WHERE id=?", (cid,))
+    if not c:
+        raise HTTPException(404, "Not found.")
+    con.execute("UPDATE context_sources SET active=? WHERE id=?", (0 if c["active"] else 1, cid))
+    auditar(con, "context.toggle", f"user:{u['id']}", user_id=u["id"], entity_type="context", entity_id=cid, detail={"active": not c["active"]}, ip=auth._ip(request))
+    return {"ok": True, "active": not c["active"]}
+
+
+@r.get("/context/{cid}/download")
+def context_download(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    from fastapi.responses import FileResponse
+    c = um(con, "SELECT * FROM context_sources WHERE id=? AND kind='file'", (cid,))
+    if not c or not c["path"] or not os.path.isfile(c["path"]):
+        raise HTTPException(404, "Arquivo não encontrado.")
+    return FileResponse(c["path"], filename=os.path.basename(c["path"]), headers={"Cache-Control": "no-store"})

@@ -133,3 +133,10 @@ export interface GmailMessage {
 export interface Learning { id: number; scope: string; text: string; source_key: string | null; created_by: number | null; created_by_name?: string | null; created_at: string; active: number }
 export interface AiEvent { id: number; kind: string; entity_type: string | null; entity_id: number | null; client_id: number | null; client_name?: string | null; pilot_name?: string | null; summary: string | null; detected_at: string; status: 'NEW' | 'RUNNING' | 'DONE' | 'FAILED' | 'SKIPPED'; command_id: number | null; command_status?: string | null; actions?: number; handled_at: string | null; note: string | null }
 export interface AutomationRule { id: number; name: string; enabled: number; trigger: string; conditions: string | null; actions: string; created_at: string }
+
+export interface ContextSource {
+  id: number; kind: 'sheet' | 'file' | 'link'; title: string; description: string | null; url: string | null
+  sheet_id: string | null; sheet_range: string | null; path: string | null; text_path: string | null; mime: string | null; size: number | null
+  active: number; added_by: number | null; added_by_name?: string | null; added_at: string
+  last_check_at: string | null; last_check_ok: number | null; last_check_msg: string | null; workspace_name?: string | null
+}

@@ -187,3 +187,15 @@ A capa comercial traz **10724 Cosmonaut Blvd, Orlando FL**
 (o [[Orlando Kart Center]]). O modelo de estimate e o rodapé trazem **6149 Cyril Ave,
 Orlando FL 32809** — este é o de cobrança, o que está em [[PARAMETROS]].
 Não trocar um pelo outro.
+
+
+## Como a IA lê a Rate Card (dono, 09/09/2026)
+
+- **Corrida** (Race Support, Trackside Support) → aba **Racing team**.
+- **Treino** (Urace Daily = Practice / Professional Coaching; Academy;
+  Arrive and Drive; Summer Camp; Test Drive) → aba **Academy**.
+- Produtos do quadro simplificados: *Urace Daily*, *Academy* (mensal,
+  nome da tarefa com `[1/4]…[4/4]`), *Corrida*, *Arrive and Drive*,
+  *Summer Camp*, *Test Drive*. Nome: `Piloto_Produto_Categoria [n/total]`.
+- Exemplo dado pelo dono: **Daily 2T (1/1) = $819** — conferir na aba
+  Academy antes de usar; se a planilha disser outro valor, a planilha manda.

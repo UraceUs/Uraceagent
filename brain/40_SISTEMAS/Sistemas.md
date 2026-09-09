@@ -24,3 +24,14 @@ que realmente evita erro.
 | [[Gmail]] | entrada de tudo | ver [[Taxonomia do Gmail]] |
 | [[Google Calendar]] | corridas | depende do Asana |
 | [[VPS e OpenClaw]] | **onde a IA roda** | segredos ficam fora do repositório |
+
+
+## Fontes de contexto da IA (09/09)
+
+Em **Integrações → Planilhas e links / Arquivos** do Command Center o dono
+cadastra planilhas (lidas ao vivo por `sheets_ler`), links e arquivos
+(PDF, TXT, MD, CSV, DOCX, XLSX, imagem; até 25 MB). Cada item tem um
+"para que serve"; tudo que está ativo entra em **todo comando da IA** com
+o caminho de leitura. Arquivos ficam em `~/.urace/context/` e são copiados
+para `contexto/` no workspace do agente; PDF vira `.txt` ao lado. A
+[[Rate Card]] é a primeira fonte, com status próprio na aba Sistemas.

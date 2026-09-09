@@ -416,8 +416,8 @@ def test_criar_cliente_manual_sem_duplicar(cli):
 def test_nova_tarefa_e_waiver_sem_sistemas(cli):
     h = entra(cli, "admin@urace.us")
     # segunda-feira não tem coluna
-    assert cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Practice", "due_on": "2026-09-14"}).status_code == 400
-    r = cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Practice", "category": "Kart", "due_on": "2026-09-19", "email": "eduardo.teste@example.com", "dob": "2013-03-04"})
+    assert cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Urace Daily", "due_on": "2026-09-14"}).status_code == 400
+    r = cli.post(B + "/tasks", headers=h, json={"pilot_name": "Davi Teste", "product": "Urace Daily", "category": "2T", "due_on": "2026-09-19", "email": "eduardo.teste@example.com", "dob": "2013-03-04"})
     assert r.status_code == 503                                    # sem Asana aqui: nunca 500, nada espelhado
     assert cli.post(B + "/waivers/send", headers=h, json={"template": "parental", "signer_name": "Eduardo Teste", "signer_email": "eduardo@urace.us"}).status_code == 400
     assert cli.post(B + "/waivers/send", headers=h, json={"template": "x", "signer_name": "E", "signer_email": "e@x.com"}).status_code == 400
@@ -432,3 +432,42 @@ def test_extrai_texto_do_openclaw_novo():
     assert ia._extrai_texto(j).startswith("Faltam dois dados")
     assert ia._extrai_texto('{"text":"formato antigo"}') == "formato antigo"
     assert ia._extrai_texto("texto solto sem json") is None
+
+
+# ------------------------------------------------ fontes de contexto (09/09): planilhas, arquivos, links
+def test_contexto_planilha_arquivo_e_prompt(cli, tmp_path, monkeypatch):
+    from command_center.api import motor, rotas
+    from command_center.db import conectar
+    monkeypatch.setattr(rotas, "CONTEXT_DIR", str(tmp_path / "ctx"))
+    monkeypatch.setattr(rotas, "_workspace_contexto", lambda: str(tmp_path / "ws" / "contexto"))
+    h = entra(cli, "admin@urace.us")
+    base = cli.get(B + "/context").json()
+    assert any(c["title"] == "Rate Card 2026" and c["kind"] == "sheet" for c in base)       # semente
+    r = cli.post(B + "/context/sheet", headers=h, json={"title": "Corridas 2026", "url": "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abc/edit#gid=0", "description": "preços por série", "sheet_range": "A1:C20"})
+    assert r.status_code == 201 and r.json()["ok"] is False                                  # sem Google aqui: cadastra, leitura falha, nunca 500
+    assert cli.post(B + "/context/sheet", headers=h, json={"title": "x", "url": "https://exemplo.com/nao-e-planilha"}).status_code == 400
+    assert cli.post(B + "/context/sheet", headers=h, json={"title": "dup", "url": "https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789abc/"}).status_code == 409
+    assert cli.post(B + "/context/link", headers=h, json={"title": "Site", "url": "https://urace.us"}).status_code == 201
+    # arquivo de texto: vai para o disco e para o workspace do agente
+    r = cli.post(B + "/context/file", headers=h, files={"file": ("regulamento 2026.txt", b"Regra 1: capacete obrigatorio.", "text/plain")}, data={"title": "Regulamento", "description": "regras da pista"})
+    assert r.status_code == 201 and r.json()["text"] is True and r.json()["workspace"] is True
+    assert (tmp_path / "ws" / "contexto" / "regulamento-2026.txt").read_text() == "Regra 1: capacete obrigatorio."
+    assert cli.post(B + "/context/file", headers=h, files={"file": ("x.exe", b"MZ", "application/octet-stream")}).status_code == 400
+    fid = r.json()["id"]
+    assert cli.get(B + f"/context/{fid}/download").status_code == 200
+    # entra no prompt da IA
+    con = conectar()
+    txt = motor.aprendizados(con)
+    assert "FONTES DE CONTEXTO" in txt and "sheets_ler(conta='urace', planilha_id='160ef" in txt and "/workspace/contexto/regulamento-2026.txt" in txt and "LINK 'Site'" in txt
+    assert cli.post(B + f"/context/{fid}/toggle", headers=h).json()["active"] is False
+    assert "regulamento-2026" not in motor.aprendizados(con)
+    con.close()
+    assert cli.post(B + "/context/link", headers=entra(cli, "viewer@urace.us"), json={"title": "x", "url": "https://x.y"}).status_code == 403
+
+
+def test_nome_da_tarefa_padrao():
+    from command_center.api.rotas import nome_tarefa, PRODUTOS
+    assert nome_tarefa("Renato Frota Pionti", "Urace Daily", "2T", 1, 1) == "Renato Frota Pionti_Urace Daily_2T [1/1]"
+    assert nome_tarefa("Enzo Kurian", "Academy", "4T", 3, 4) == "Enzo Kurian_Academy_4T [3/4]"
+    assert nome_tarefa("Davi", "Corrida", None, 1, 2) == "Davi_Corrida [1/2]"
+    assert "Corrida" in PRODUTOS and "Racing team" in PRODUTOS["Corrida"]
