@@ -6,7 +6,7 @@ import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, WAIVER_LABEL, statusTone } from '../components/ui'
-import { daysUntil, fmtDate, fmtDateTime } from '../components/fmt'
+import { daysUntil, fmtDate } from '../components/fmt'
 import { useToast } from '../components/Toast'
 import { ClientCard } from './Client360'
 
@@ -112,7 +112,7 @@ export function Clients() {
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Clientes</h1><div className="sub small">Uma pessoa, um card. Corrida não é cliente. Ativo = serviço nos últimos 6 meses. Ordem: serviço mais recente primeiro. Clique para abrir o card completo.</div></div>
+    <div className="page-h"><div><h1 className="h1">Clientes</h1><div className="sub small">Um card por pessoa, do serviço mais recente para o mais antigo. Ativo = serviço nos últimos 6 meses.</div></div>
       <div className="row wrap">{can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}>+ Novo cliente</button>}{can('OPERATOR') && <button className="btn" disabled={scanning} onClick={scanAll} title="Gmail (as duas caixas) e DocuSign de cada cliente ativo">{scanning ? <Spinner /> : '⌕'} Varrer plataformas ({ativos} ativos)</button>}</div></div>
     <div className="tabs"><button className={aba === 'all' ? 'on' : ''} onClick={() => set('v', '')}>Todos</button><button className={aba === 'pro' ? 'on' : ''} onClick={() => set('v', 'pro')}>★ Pro Racing Drivers</button></div>
     {aba === 'pro' && <Banner tone="info">Pilotos prontos para competir. No card do cliente, o botão <b>★ Tornar Pro</b> traz ele para cá e libera equipamento e corridas. Convites e prévia de custo ficam no calendário de <a href="/ops/races">Corridas</a>.</Banner>}
@@ -133,21 +133,20 @@ export function Clients() {
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading rows={8} /> :
         rows.length === 0 ? <Empty title="Nenhum cliente">Sem registros com esse filtro. Se a lista está vazia, rode “Sincronizar agora” no Dashboard.</Empty> :
         <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Piloto</th><th>Responsável</th><th>Status</th><th>Último serviço</th><th>Próximo</th><th>Waiver</th><th>Serviços</th><th>E-mails</th><th>Varrido</th></tr></thead>
+          <thead><tr><th>Piloto</th><th>Responsável e contato</th><th>Status</th><th>Próximo serviço</th><th>Último</th><th>Waiver</th><th>Serviços</th><th>E-mails</th></tr></thead>
           <tbody>{rows.map(c => {
             const dias = daysUntil(c.next_service)
             const w = (c.waiver_status || '').toLowerCase()
             const semWaiver = dias !== null && dias <= 2 && w !== 'completed' && !c.vip
             return <tr key={c.id} className="click" onClick={() => open(c.id)}>
               <td><div className="row">{!!c.pro_driver && <span title="Pro Racing Driver" style={{ color: 'var(--warn)' }}>★</span>}<b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">VIP</Chip>}{c.plan_type === 'monthly' && <Chip tone="accent">mensal</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">diária</Chip>}</div>{!c.pilot_name && <div className="small muted">piloto é o próprio</div>}</td>
-              <td>{c.pilot_name ? c.name : <span className="muted">—</span>}<div className="small muted">{c.email || ''}{c.phone ? ` · ${c.phone}` : ''}</div></td>
+              <td>{c.pilot_name ? c.name : <span className="muted">o próprio</span>}<div className="small muted truncate" style={{ maxWidth: 260 }}>{c.email || 'sem e-mail'}{c.phone ? ` · ${c.phone}` : ''}</div></td>
               <td><Chip tone={statusTone(c.status)}>{c.status === 'ACTIVE' ? 'ativo' : c.status === 'INACTIVE' ? 'inativo' : c.status}</Chip>{!!c.status_locked && <span className="small muted" title="mudado à mão"> 🔒</span>}</td>
+              <td className="mono nowrap">{c.next_service ? <><b style={{ color: dias !== null && dias <= 1 ? 'var(--brand)' : undefined }}>{dias === 0 ? 'HOJE' : dias === 1 ? 'AMANHÃ' : `em ${dias} d`}</b> <span className="muted small">{fmtDate(c.next_service)}</span></> : <span className="muted">—</span>}</td>
               <td className="mono">{c.last_service ? fmtDate(c.last_service) : <span className="muted">—</span>}</td>
-              <td className="mono">{c.next_service ? <>{fmtDate(c.next_service)} <span className="muted small">{dias === 0 ? 'hoje' : dias === 1 ? 'amanhã' : `${dias} d`}</span></> : <span className="muted">—</span>}</td>
               <td>{c.vip ? <Chip tone="neutral">dispensada (VIP)</Chip> : w ? <Chip tone={semWaiver ? 'crit' : statusTone(w)}>{WAIVER_LABEL[w] || w}</Chip> : <Chip tone={semWaiver ? 'crit' : 'neutral'}>nenhuma</Chip>}</td>
-              <td className="mono">{c.open_tasks ?? 0} abertos · {c.done_tasks ?? 0} feitos</td>
-              <td className="mono">{c.emails_open ? <span style={{ color: 'var(--warn)' }}>{c.emails_open}</span> : 0}</td>
-              <td className="mono small muted">{c.scanned_at ? fmtDateTime(c.scanned_at) : '—'}</td>
+              <td className="mono nowrap"><b>{c.open_tasks ?? 0}</b><span className="muted">/{(c.open_tasks ?? 0) + (c.done_tasks ?? 0)}</span> <span className="small muted">abertos</span></td>
+              <td className="mono">{c.emails_open ? <span style={{ color: 'var(--warn)', fontWeight: 700 }}>{c.emails_open} sem resposta</span> : <span className="muted">—</span>}</td>
             </tr>
           })}</tbody>
         </table></div>}

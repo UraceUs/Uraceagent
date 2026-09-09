@@ -396,3 +396,9 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .tl .ev .t{font-weight:600}
 .tl .ev .kind{font-family:var(--font-cond);font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:1px 6px;border-radius:2px;background:var(--surface-2)}
 .tl .ev .kind.ok{color:var(--ok);background:var(--ok-wash)}.tl .ev .kind.warn{color:var(--warn);background:var(--warn-wash)}.tl .ev .kind.info{color:var(--info);background:var(--info-wash)}
+
+/* ---------- atenção e listas: uma linha de ação, link junto do título */
+.att .why{margin-top:2px}
+.att-acts{margin-top:8px;gap:6px}
+.att-acts .btn.sm{text-decoration:none}
+.tbl td.nowrap,.nowrap{white-space:nowrap}

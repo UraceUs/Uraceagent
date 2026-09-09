@@ -5,7 +5,7 @@ import type { Loaded } from '../api/hooks'
 import type { Dashboard as D, SyncStatus } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { AttentionList } from './Attention'
-import { Banner, Chip, ErrorState, Kpi, Loading, Section, Spinner, statusTone } from '../components/ui'
+import { Banner, Chip, ErrorState, Kpi, Loading, SYS_NAME, Section, Spinner, statusTone } from '../components/ui'
 import { ago, money } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -43,7 +43,7 @@ export function Dashboard() {
 
   return <>
     <div className="page-h">
-      <div><h1 className="h1">Dashboard</h1><div className="sub small">Dados espelhados das fontes reais. Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>.</div></div>
+      <div><h1 className="h1">Dashboard</h1><div className="sub small">Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>. A IA já tratou o que pôde; abaixo, só o que sobrou para gente.</div></div>
       <div className="row">
         {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing}>{syncing ? <Spinner /> : '↻'} {syncing ? `Sincronizando: ${stage || '…'}` : 'Sincronizar agora'}</button>}
         {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai')}>Perguntar à IA</button>}
@@ -51,10 +51,10 @@ export function Dashboard() {
     </div>
     {stale && <Banner tone="warn"><b>Espelho antigo.</b> {lastSync ? `A última sincronia foi há ${ago(lastSync)}.` : 'Nenhuma sincronia registrada ainda.'} Os números abaixo podem estar defasados.</Banner>}
     <div className="grid g6">
-      <Kpi label="Clientes ativos" value={d.active_clients} onClick={() => nav('/clients?status=ACTIVE')} />
-      <Kpi label="Serviços hoje" value={d.tasks_due_today} onClick={() => nav('/tasks')} />
-      <Kpi label="Vencidos" value={d.overdue_tasks} tone={d.overdue_tasks ? 'warn' : undefined} onClick={() => nav('/tasks')} />
-      <Kpi label="Próximos 7 dias" value={d.upcoming_7d} onClick={() => nav('/tasks')} />
+      <Kpi label="Pista hoje" value={d.tasks_due_today} foot="serviços marcados para hoje" onClick={() => nav('/tasks')} />
+      <Kpi label="Próximos 7 dias" value={d.upcoming_7d} foot="serviços na agenda" onClick={() => nav('/tasks')} />
+      <Kpi label="Vencidos" value={d.overdue_tasks} foot={d.overdue_tasks ? 'a IA confere e move' : 'nenhum'} tone={d.overdue_tasks ? 'warn' : undefined} onClick={() => nav('/tasks')} />
+      <Kpi label="Clientes ativos" value={d.active_clients} foot="serviço nos últimos 6 meses" onClick={() => nav('/clients?status=ACTIVE')} />
       <Kpi label="Waivers abertas" value={d.waivers_open} foot={d.waivers_bounced ? <span style={{ color: 'var(--crit)' }}>{d.waivers_bounced} devolvida(s)</span> : 'nenhuma devolvida'} tone={d.waivers_bounced ? 'crit' : undefined} onClick={() => nav('/waivers')} />
       <Kpi label="E-mails de cliente" value={d.emails_attention} tone={d.emails_attention ? 'warn' : undefined} foot="sem tratamento" onClick={() => nav('/emails')} />
     </div>
@@ -74,8 +74,8 @@ export function Dashboard() {
         <Section title="Integrações" tight right={<Link to="/integrations" className="small">detalhes</Link>}>
           <table className="tbl"><tbody>
             {d.integrations.map(i => <tr key={i.system} className="click" onClick={() => nav('/integrations')}>
-              <td style={{ textTransform: 'capitalize' }}>{i.system}</td>
-              <td><Chip tone={statusTone(i.status)} dot>{i.status}</Chip></td>
+              <td>{SYS_NAME[i.system] || i.system}</td>
+              <td><Chip tone={statusTone(i.status)} dot>{i.status === 'CONNECTED' ? 'ok' : i.status.toLowerCase()}</Chip></td>
               <td className="right mono small muted">{i.last_success_at ? ago(i.last_success_at) : '—'}</td>
             </tr>)}
           </tbody></table>
@@ -84,7 +84,7 @@ export function Dashboard() {
           <table className="tbl"><tbody>
             {d.last_sync.length === 0 && <tr><td className="muted">Nunca sincronizou. Use “Sincronizar agora”.</td></tr>}
             {d.last_sync.map(s => <tr key={s.system}>
-              <td style={{ textTransform: 'capitalize' }}>{s.system}</td>
+              <td>{SYS_NAME[s.system] || s.system}</td>
               <td><Chip tone={s.ok ? 'ok' : 'crit'}>{s.ok ? 'ok' : 'falhou'}</Chip></td>
               <td className="small muted truncate" style={{ maxWidth: 200 }} title={s.message || ''}>{s.message}</td>
               <td className="right mono small muted">{ago(s.at)}</td>

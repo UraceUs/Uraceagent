@@ -49,19 +49,26 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   if (items.length === 0) return <Empty title="Tudo em ordem">Nenhum item precisa de humano agora.</Empty>
+  const sysOf = (l: string) => /asana\.com/.test(l) ? 'Asana' : /docusign/.test(l) ? 'DocuSign' : /google\.com/.test(l) ? 'Gmail' : /intuit|qbo/.test(l) ? 'QuickBooks' : 'Origem'
   return <div>{items.map(a => <div className={`att${a.dismissed ? ' dim' : ''}`} key={a.key}>
     <div className={`lv ${a.level}`} />
     <div className="grow">
-      <div className="row wrap"><span className="ti">{a.title}</span><Chip tone={levelTone(a.level)}>{LABEL[a.level]}</Chip>{a.dismissed && <Chip tone="outline">oculto</Chip>}</div>
+      <div className="row wrap" style={{ gap: 8 }}>
+        <span className="ti">{a.title}</span>
+        <Chip tone={levelTone(a.level)}>{LABEL[a.level]}</Chip>
+        {a.dismissed && <Chip tone="outline">oculto</Chip>}
+        <span className="grow" />
+        {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title="Abrir no sistema de origem">{sysOf(a.link)} ↗</a>}
+      </div>
       <div className="why">{a.why}</div>
       {a.dismissed && <div className="small muted">Ocultado por {a.dismissed.by || '?'} em {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</div>}
-      <div className="row wrap small" style={{ marginTop: 6 }}>
-        <span className="chip outline">{a.action}</span>
-        {a.client_id && <Link to={`/clients/${a.client_id}`}>Abrir cliente</Link>}
-        {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title="Abrir no sistema de origem">{/asana\.com/.test(a.link) ? 'Asana' : /docusign/.test(a.link) ? 'DocuSign' : /google\.com/.test(a.link) ? 'Gmail' : /intuit|qbo/.test(a.link) ? 'QuickBooks' : 'Origem'} ↗</a>}
-        {a.entity.type === 'approvals' && <Link to="/approvals">Ir para aprovações</Link>}
-        {a.entity.type === 'ai' && <Link to="/ai">Ver comandos</Link>}
-        {a.entity.type === 'integration' && <Link to="/integrations">Integrações</Link>}
+      <div className="row wrap small att-acts">
+        {a.client_id && <Link className="btn sm" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? 'Abrir cliente e responder' : 'Abrir cliente'}</Link>}
+        {a.entity.type === 'approvals' && <Link className="btn sm" to="/approvals">Ver aprovações</Link>}
+        {a.entity.type === 'ai' && <Link className="btn sm" to="/ai">Ver conversa da IA</Link>}
+        {a.entity.type === 'integration' && <Link className="btn sm" to="/integrations">Ver integrações</Link>}
+        {a.entity.type === 'email' && !a.client_id && <Link className="btn sm" to="/gmail">Abrir na inbox</Link>}
+        {!a.client_id && !['approvals', 'ai', 'integration', 'email'].includes(a.entity.type) && a.action && <span className="chip outline">{a.action}</span>}
         <span className="grow" />
         {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title="Diga à IA o que fazer com este item">✦ Instruir a IA</button>}
         {can('OPERATOR') && !a.dismissed && <button className="btn ghost sm" disabled={busy === a.key} onClick={() => hide(a)} title="Esconde o aviso; não apaga a origem">Ocultar</button>}
@@ -82,7 +89,7 @@ export function AttentionPage() {
   const hidden = (data || []).filter(a => a.dismissed).length
   return <>
     <div className="page-h"><div><h1 className="h1">Precisa de atenção</h1>
-      <div className="sub small">Ordenado por impacto, não por idade: dinheiro, prazo do serviço, waiver que bloqueia a pista, VIP, e-mail devolvido. “Ocultar” esconde o aviso e registra quem e por quê; nada é apagado nas fontes.</div></div>
+      <div className="sub small">Só o que a IA não resolveu sozinha, do mais grave para o menos. Ocultar esconde o aviso; a origem fica.</div></div>
       <div className="row"><label className="check"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> mostrar ocultos{showHidden && hidden > 0 && <> ({hidden})</>}</label><button className="btn" onClick={reload}>↻ Atualizar</button></div></div>
     <div className="tabs">
       <button className={f === 'ALL' ? 'on' : ''} onClick={() => setF('ALL')}>Todos ({data?.length ?? 0})</button>

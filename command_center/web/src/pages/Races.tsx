@@ -106,7 +106,7 @@ export function Races() {
   const proximas = (races.data || []).filter(r => r.date_start && r.date_start >= iso(hoje)).slice(0, 8)
   const semData = (races.data || []).filter(r => !r.date_start)
   return <>
-    <div className="page-h"><div><h1 className="h1">Corridas</h1><div className="sub small">Só corridas: a coluna RACES do quadro U-RACE, sem os treinos. Clique na corrida para convidar os ★ Pro Racing Drivers; o piloto fica dentro da corrida até você confirmar se vai ou não.</div></div>
+    <div className="page-h"><div><h1 className="h1">Corridas</h1><div className="sub small">A coluna RACES do Asana, só corridas. Clique numa corrida para convidar os ★ Pro; o piloto fica nela até a confirmação.</div></div>
       <div className="row">{can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>+ Nova corrida</button>}<button className="btn" onClick={races.reload}>↻</button></div></div>
     <div className="cal-h"><button className="btn sm" onClick={() => setYm(ym.m === 0 ? { y: ym.y - 1, m: 11 } : { y: ym.y, m: ym.m - 1 })}>◀</button><h2 className="h1" style={{ fontSize: 20, margin: '0 8px', textTransform: 'capitalize' }}>{MESES[ym.m]} {ym.y}</h2><button className="btn sm" onClick={() => setYm(ym.m === 11 ? { y: ym.y + 1, m: 0 } : { y: ym.y, m: ym.m + 1 })}>▶</button><button className="btn ghost sm" onClick={() => setYm({ y: hoje.getFullYear(), m: hoje.getMonth() })}>hoje</button>
       <span className="grow" /><span className="small muted">{(races.data || []).length} corrida(s) no calendário</span></div>

@@ -159,7 +159,7 @@ export function AsanaPage() {
   const [open, setOpen] = useState<Task | null>(null)
   const tasks = (data || []).filter(t => status === 'all' || t.status === status)
   return <>
-    <IntHeader system="asana" title="Asana" desc="Quadro U-RACE espelhado: TUESDAY a SUNDAY é a agenda, RACES são corridas, Finished Services é o histórico. “Matt tasks” não é espelhada (decisão do dono)." openHref={ASANA_PROJ} openLabel="Abrir no Asana" />
+    <IntHeader system="asana" title="Asana" desc="Quadro U-RACE: TUESDAY a SUNDAY é a agenda, RACES são corridas, Finished Services é o histórico." openHref={ASANA_PROJ} openLabel="Abrir no Asana" />
     <div className="row wrap"><SubTabs tabs={[['cal', 'Calendário'], ['board', 'Quadro'], ['list', 'Lista']]} value={tab} onChange={setTab} /><div className="grow" />
       {can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>+ Nova tarefa</button>}
       <select className="input" style={{ width: 160 }} value={status} onChange={e => setStatus(e.target.value as 'all')}><option value="all">Abertas e concluídas</option><option value="open">Só abertas</option><option value="completed">Só concluídas</option></select><button className="btn" onClick={reload}>↻</button></div>
@@ -240,7 +240,7 @@ export function DocuSignPage() {
     act(w, 'resend', { email: novo.trim().toLowerCase() !== (w.signer_email || '').toLowerCase() ? novo.trim() : undefined })
   }
   return <>
-    <IntHeader system="docusign" title="DocuSign" desc="Envelopes de waiver da conta de produção (na4). Delivered não é assinada; autoresponded é e-mail devolvido. Cada envelope é ligado ao cliente/piloto pelo e-mail, pelo nome do menor ou pelo signatário." openHref="https://app.docusign.com/home" openLabel="Abrir no DocuSign" />
+    <IntHeader system="docusign" title="DocuSign" desc="Waivers de produção. Entregue não é assinada; devolvida é e-mail errado. Cada envelope ligado ao piloto." openHref="https://app.docusign.com/home" openLabel="Abrir no DocuSign" />
     <div className="row wrap"><SubTabs tabs={[['env', 'Envelopes'], ['signed', `Assinadas (${(env.data || []).filter(w => w.status === 'completed' && (w.template === 'parental' || w.template === 'adult')).length})`], ['tpl', 'Modelos'], ['lixo', 'Lixeira']]} value={tab} onChange={setTab} /><div className="grow" />
       {can('OPERATOR') && <button className="btn primary" onClick={() => setEnviar(true)}>+ Enviar waiver</button>}
       {tab !== 'tpl' && tab !== 'signed' && <select className="input" style={{ width: 220 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todos ({env.data?.length ?? 0})</option>{Object.entries(counts).map(([k, n]) => <option key={k} value={k}>{WAIVER_LABEL[k] || k} ({n})</option>)}</select>}
@@ -381,7 +381,7 @@ export function GmailPage() {
   const horarios = (() => { try { return (JSON.parse(triage.data?.rule?.schedule || '[]') as string[]).join(', ') } catch { return '' } })()
   const ultimaTriagem = (() => { try { const r = JSON.parse(triage.data?.rule?.last_result || 'null'); return r ? `última: ${r.horario || ''} → ${r.movidos ?? 0} movidos, ${r.ficaram ?? 0} ficaram` : 'ainda não rodou' } catch { return '' } })()
   return <>
-    <IntHeader system="gmail" title="Gmail" desc={`Caixa de entrada por dentro. A IA lê cada thread ${horarios ? `às ${horarios}` : 'de manhã, à tarde e à noite'}, aplica os marcadores e move para o marcador principal (decisão de 09/09); o que ela não decide fica aqui para você. Clicar num marcador da thread move para ele. A IA nunca envia e-mail.`} openHref={`https://mail.google.com/mail/u/${box === 'urace' ? 0 : 1}/`} openLabel="Abrir o Gmail" />
+    <IntHeader system="gmail" title="Gmail" desc={`A IA lê a inbox ${horarios ? `às ${horarios}` : '3× ao dia'}, marca e move para o principal. Aqui fica o que ela não decidiu. Clicar num marcador move.`} openHref={`https://mail.google.com/mail/u/${box === 'urace' ? 0 : 1}/`} openLabel="Abrir o Gmail" />
     <div className="row wrap"><SubTabs tabs={[['urace', 'urace@'], ['support', 'support@']]} value={box} onChange={b => { setBox(b); setSel('INBOX'); setOpenId('') }} /><div className="grow" />
       <span className="small muted" title={ultimaTriagem}>{triage.data?.rule && !triage.data.rule.enabled ? 'triagem automática desligada (Automação)' : ultimaTriagem}</span>
       {can('OPERATOR') && <button className="btn primary" disabled={triaging || triage.data?.running || inbox.length === 0} onClick={triageNow} title="A IA lê cada thread da inbox, aplica os marcadores e move para o principal — agora, sem esperar o horário">{triaging || triage.data?.running ? <Spinner /> : '✦'} Triar com a IA agora</button>}
@@ -453,7 +453,7 @@ export function QuickBooksPage() {
   const rows = (inv.data || []).filter(x => st === 'all' || x.status === st)
   const det = safeJson(i?.detail) as { nota?: string; realm_id?: string; empresa?: string } | null
   return <>
-    <IntHeader system="quickbooks" title="QuickBooks" desc="Faturamento, clientes e pagamentos da URACE US INC. Criar invoice pede confirmação; enviar pede aprovação (decisão de 04/09). A IA nunca apaga." openHref="https://qbo.intuit.com/" openLabel="Abrir o QuickBooks" />
+    <IntHeader system="quickbooks" title="QuickBooks" desc="Invoices e pagamentos da URACE US INC. A IA prepara; enviar pede aprovação. Nunca apaga." openHref="https://qbo.intuit.com/" openLabel="Abrir o QuickBooks" />
     {sp.get('connected') && <Banner tone="ok">QuickBooks conectado. Rode “Sincronizar agora” no Dashboard para trazer as invoices.</Banner>}
     {sp.get('erro') && <Banner tone="crit">A Intuit devolveu erro no consentimento: {sp.get('erro')}</Banner>}
     {!connected && <div className="card card-b stack">

@@ -37,7 +37,7 @@ export function Automation() {
     try { await api.post('/ai/learnings', { text: novo }); setNovo(''); toast('Guardado. Entra em todo comando da IA a partir de agora.', 'ok'); learn.reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Automação e memória</h1><div className="sub small">A cada sincronia (a cada 15 minutos ou ao clicar), o que mudou vira evento; cada evento com regra ligada acorda a IA, que propõe ações. Aprovar executa. O que você ensina fica na memória e entra em todo comando.</div></div>
+    <div className="page-h"><div><h1 className="h1">Automação e memória</h1><div className="sub small">Cada mudança vira evento; regra ligada acorda a IA. O que você ensina entra em todo comando.</div></div>
       {can('OPERATOR') && <button className="btn" onClick={async () => { const r = await api.post<{ disparados: number }>('/ai/events/process'); toast(`${r.disparados} evento(s) disparado(s).`, 'ok'); events.reload() }}>Processar eventos pendentes</button>}</div>
     <div className="grid g2">
       <Section title="Regras" count={rules.data?.length}>
