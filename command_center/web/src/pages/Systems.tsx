@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Ext, Loading, Section, Spinner, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -39,8 +39,7 @@ function taskTone(t: Task) {
   const d = daysUntil(t.due_on); return d !== null && d < 0 ? 'late' : ''
 }
 function TaskLink({ t }: { t: Task }) {
-  const l = t.links?.find(x => x.system === 'asana')?.deep_link
-  return l ? <Ext href={l}>Asana</Ext> : null
+  return <SysLink links={t.links} one />
 }
 
 function Calendario({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void }) {
@@ -262,7 +261,7 @@ export function DocuSignPage() {
               {aberto && can('OPERATOR') && tab !== 'lixo' && <button className="ic" disabled={busy === w.id} title={w.status === 'autoresponded' ? 'Corrigir e-mail e reenviar' : 'Reenviar'} aria-label="Reenviar" onClick={() => resend(w)}>↻</button>}
               {tab !== 'lixo' && can('OPERATOR') && <button className="ic danger" disabled={busy === w.id} title={aberto ? 'Anular no DocuSign e tirar do painel' : 'Tirar do painel (assinada fica no DocuSign)'} aria-label="Lixeira" onClick={() => trash(w)}>🗑</button>}
               {tab === 'lixo' && can('OPERATOR') && <button className="btn sm" disabled={busy === w.id} onClick={() => act(w, 'restore')}>Restaurar</button>}
-              {w.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>abrir</Ext>)}
+              <SysLink links={w.links} one />
             </td></tr> })}
         </tbody></table></div>}</Section>}
     {tab === 'tpl' && <Section title="Modelos da conta" count={tplList.length}>
@@ -425,7 +424,7 @@ export function GmailPage() {
             {can('OPERATOR') && <button className="btn sm" title={cur.handled_reason || ''} onClick={async () => { await api.patch(`/emails/${cur.id}`, { handled: !cur.handled }); emails.reload() }}>{cur.handled ? (cur.handled_by === 'auto' || cur.handled_by === 'ia' ? '✓ tratado pela IA' : '✓ tratado') : 'marcar tratado'}</button>}
             <span className="grow" />
             {cur.client_id && <a onClick={() => nav(`/clients/${cur.client_id}`)} style={{ cursor: 'pointer' }} className="small">cliente: {cur.client_name}</a>}
-            {cur.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>Gmail</Ext>)}
+            <SysLink links={cur.links} one />
           </div>
           <div><div className="h1" style={{ fontSize: 20 }}>{cur.subject || '(sem assunto)'}</div>
             <div className="small muted">{cur.sender} · {fmtDateTime(cur.last_at)}{cur.suggested_label && <> · sugestão: <b>{cur.suggested_label}</b>{cur.suggested_reason && <> ({cur.suggested_reason})</>}</>}</div></div>
@@ -476,7 +475,7 @@ export function QuickBooksPage() {
     {can('MANAGER') && connected && <Section title="Invoices" count={rows.length} tight right={<select className="input" style={{ width: 160 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todas</option><option value="overdue">Vencidas</option><option value="open">Em aberto</option><option value="sent">Enviadas</option><option value="paid">Pagas</option></select>}>
       {inv.error && !inv.data ? <ErrorState error={inv.error} retry={inv.reload} /> : inv.loading && !inv.data ? <Loading /> : rows.length === 0 ? <Empty>Nenhuma invoice espelhada. Sincronize no Dashboard.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nº</th><th>Cliente</th><th>Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th><th></th></tr></thead><tbody>
-          {rows.map(x => <tr key={x.id}><td className="mono">{x.doc_number}</td><td>{x.client_id ? <a href={`/ops/clients?open=${x.client_id}`}>{x.pilot_name || x.client_name}</a> : <span className="muted">não vinculado</span>}</td><td className="mono">{fmtDate(x.issued_on)}</td><td className="mono">{fmtDate(x.due_on)}</td><td className="mono">{money(x.amount)}</td><td className="mono">{money(x.balance)}</td><td><Chip tone={statusTone(x.status === 'open' ? 'PENDING' : x.status)}>{x.status}</Chip></td><td>{x.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>abrir</Ext>)}</td></tr>)}
+          {rows.map(x => <tr key={x.id}><td className="mono">{x.doc_number}</td><td>{x.client_id ? <a href={`/ops/clients?open=${x.client_id}`}>{x.pilot_name || x.client_name}</a> : <span className="muted">não vinculado</span>}</td><td className="mono">{fmtDate(x.issued_on)}</td><td className="mono">{fmtDate(x.due_on)}</td><td className="mono">{money(x.amount)}</td><td className="mono">{money(x.balance)}</td><td><Chip tone={statusTone(x.status === 'open' ? 'PENDING' : x.status)}>{x.status}</Chip></td><td><SysLink links={x.links} one /></td></tr>)}
         </tbody></table></div>}
     </Section>}
   </>

@@ -221,20 +221,36 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     invoices = todos(con, "SELECT * FROM invoices WHERE client_id=? ORDER BY issued_on DESC", (cid,)) if fin else None
     acoes = todos(con, "SELECT a.* FROM ai_actions a JOIN ai_workflows w ON w.id=a.workflow_id WHERE w.client_id=? ORDER BY a.created_at DESC LIMIT 50", (cid,))
     # timeline: tudo junto, em ordem
+    # cada item da linha do tempo leva o SEU link (Asana da tarefa, DocuSign do envelope, Gmail da thread, QBO da invoice)
+    def _usd(v):
+        return "?" if v is None else f"${v:,.2f}"
+
+    def _dbr(d):
+        return f"{d[8:10]}/{d[5:7]}/{d[:4]}" if d and len(d) >= 10 else (d or "")
     tl = []
     for t in tarefas:
-        tl.append({"at": t["due_on"], "kind": "SERVICE", "title": t["title"], "status": t["status"], "entity": {"type": "task", "id": t["id"]}})
+        tl.append({"at": t["due_on"], "kind": "SERVICE", "title": t["title"], "status": t["status"], "entity": {"type": "task", "id": t["id"]},
+                   "detail": f"{t['section'] or ''}" + (f" · subtarefas {t['subtasks_done'] or 0}/{t['subtasks_total']}" if t.get("subtasks_total") else ""), "links": t["links"]})
     for w in waivers:
-        tl.append({"at": (w["sent_at"] or "")[:10], "kind": "WAIVER_SENT", "title": f"Waiver {w['template']} → {w['signer_name']}", "status": w["status"], "entity": {"type": "waiver", "id": w["id"]}})
+        tl.append({"at": (w["sent_at"] or "")[:10], "kind": "WAIVER_SENT", "title": f"Waiver {w['template']} → {w['signer_name']}", "status": w["status"], "entity": {"type": "waiver", "id": w["id"]},
+                   "detail": w.get("signer_email"), "links": w["links"]})
         if w["completed_at"]:
-            tl.append({"at": w["completed_at"][:10], "kind": "WAIVER_SIGNED", "title": f"Waiver assinada por {w['signer_name']}", "status": "completed", "entity": {"type": "waiver", "id": w["id"]}})
+            tl.append({"at": w["completed_at"][:10], "kind": "WAIVER_SIGNED", "title": f"Waiver assinada por {w['signer_name']}", "status": "completed", "entity": {"type": "waiver", "id": w["id"]},
+                       "detail": f"vale até {_dbr(w['expires_at'])}" if w.get("expires_at") else None, "links": w["links"]})
     for e in emails:
-        tl.append({"at": (e["last_at"] or "")[:10], "kind": "EMAIL", "title": e["subject"], "status": "handled" if e["handled"] else "open", "entity": {"type": "email", "id": e["id"]}})
+        tl.append({"at": (e["last_at"] or "")[:10], "kind": "EMAIL", "title": e["subject"], "status": "handled" if e["handled"] else "open", "entity": {"type": "email", "id": e["id"]},
+                   "detail": f"{e['mailbox']}@ · {e.get('sender') or ''}", "links": e["links"]})
     for a in acoes:
-        tl.append({"at": a["created_at"][:10], "kind": "AI_ACTION", "title": a["action"], "status": a["status"], "entity": {"type": "ai_action", "id": a["id"]}})
+        tl.append({"at": a["created_at"][:10], "kind": "AI_ACTION", "title": a["action"], "status": a["status"], "entity": {"type": "ai_action", "id": a["id"]},
+                   "detail": (a.get("reason") or "")[:120], "links": []})
+    for i in (invoices or []):
+        tl.append({"at": i["issued_on"] or (i["due_on"] or ""), "kind": "INVOICE", "title": f"Invoice {i['doc_number'] or ''} · {_usd(i['amount'])}", "status": i["status"] or "?",
+                   "entity": {"type": "invoice", "id": i["id"]}, "detail": (f"saldo {_usd(i['balance'])}" if i.get("balance") else "paga") + (f" · vence {_dbr(i['due_on'])}" if i.get("due_on") else "") + (f" · {i['memo']}" if i.get("memo") else ""), "links": _links(con, "invoice", i["id"])})
     tl.sort(key=lambda x: x["at"] or "", reverse=True)
+    ultimo = next((t for t in tarefas if t["status"] == "completed" and t["due_on"]), None)
     return {"client": c, "links": _links(con, "client", cid), "tasks": tarefas, "waivers": waivers,
-            "emails": emails, "invoices": invoices, "ai_actions": acoes, "timeline": tl,
+            "emails": emails, "invoices": invoices, "ai_actions": acoes, "timeline": tl, "last_service": ultimo,
+            "open_balance": (sum((i["balance"] or 0) for i in invoices) if invoices else None),
             "stages": todos(con, "SELECT code, label FROM client_stages ORDER BY ord")}
 
 

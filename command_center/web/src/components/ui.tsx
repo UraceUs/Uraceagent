@@ -76,3 +76,12 @@ export function Ext({ href, children }: { href?: string | null; children: ReactN
   if (!href) return <span className="muted">{children}</span>
   return <a href={href} target="_blank" rel="noopener noreferrer">{children} ↗</a>
 }
+
+
+/** Nome legível de cada sistema, para o link ficar ao lado do SEU item — nunca solto no topo. */
+export const SYS_NAME: Record<string, string> = { asana: 'Asana', docusign: 'DocuSign', gmail: 'Gmail', quickbooks: 'QuickBooks', qbo: 'QuickBooks', brain: 'Cérebro', kommo: 'Kommo' }
+export function SysLink({ links, one }: { links?: { system: string; external_id: string; deep_link: string | null }[] | null; one?: boolean }) {
+  const ls = (links || []).filter(l => l.deep_link)
+  if (ls.length === 0) return null
+  return <span className="syslinks">{(one ? ls.slice(0, 1) : ls).map(l => <a key={l.system + l.external_id} className={`syslink ${l.system}`} href={l.deep_link!} target="_blank" rel="noopener noreferrer" title={`Abrir no ${SYS_NAME[l.system] || l.system}`}>{SYS_NAME[l.system] || l.system} ↗</a>)}</span>
+}

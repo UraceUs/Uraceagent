@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Attention as A, Level } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Chip, Empty, ErrorState, Ext, Loading, Section, levelTone } from '../components/ui'
+import { Chip, Empty, ErrorState, Loading, Section, levelTone } from '../components/ui'
 import { fmtDateTime } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -58,7 +58,7 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
       <div className="row wrap small" style={{ marginTop: 6 }}>
         <span className="chip outline">{a.action}</span>
         {a.client_id && <Link to={`/clients/${a.client_id}`}>Abrir cliente</Link>}
-        {a.link && <Ext href={a.link}>Abrir na fonte</Ext>}
+        {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title="Abrir no sistema de origem">{/asana\.com/.test(a.link) ? 'Asana' : /docusign/.test(a.link) ? 'DocuSign' : /google\.com/.test(a.link) ? 'Gmail' : /intuit|qbo/.test(a.link) ? 'QuickBooks' : 'Origem'} ↗</a>}
         {a.entity.type === 'approvals' && <Link to="/approvals">Ir para aprovações</Link>}
         {a.entity.type === 'ai' && <Link to="/ai">Ver comandos</Link>}
         {a.entity.type === 'integration' && <Link to="/integrations">Integrações</Link>}

@@ -6,7 +6,7 @@ import { CatalogoEditor } from './Garage'
 import { UnirModal } from '../components/Unir'
 import type { Catalog, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Ext, Loading, POLICY_LABEL, Section, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -19,7 +19,7 @@ function idade(dob?: string | null) {
 }
 
 const KIND: Record<string, [string, 'ok' | 'warn' | 'crit' | 'info' | '']> = {
-  SERVICE: ['Serviço', 'info'], WAIVER_SENT: ['Waiver enviada', 'warn'], WAIVER_SIGNED: ['Waiver assinada', 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: ['Ação da IA', 'info'],
+  SERVICE: ['Serviço', 'info'], WAIVER_SENT: ['Waiver enviada', 'warn'], WAIVER_SIGNED: ['Waiver assinada', 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: ['Ação da IA', 'info'], INVOICE: ['Invoice', 'ok'],
 }
 
 export function Client360() {
@@ -75,36 +75,58 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSaving(false) }
   }
 
+  const anos = idade(c.pilot_dob)
+  const menor = anos !== null && anos < 18
+  const ultimo = data.last_service
+  const emailsAbertos = data.emails.filter(e => !e.handled).length
+  const abertos = data.tasks.filter(t => t.status === 'open').length
   return <>
-    <div className="page-h">
-      <div>
+    <div className="c360-h">
+      <div className="who">
         {!onClose && <div className="small"><a onClick={() => nav(-1)} style={{ cursor: 'pointer' }}>← voltar</a></div>}
-        <div className="row wrap">{!!c.pro_driver && <span title="Pro Racing Driver" style={{ color: 'var(--warn)', fontSize: 26 }}>★</span>}<h1 className="h1">{c.pilot_name || c.name}</h1>{c.plan_type === 'monthly' && <Chip tone="accent">Academy Monthly</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">Academy Day</Chip>}{c.pilot_name && <span className="ink2">responsável: <b>{c.name}</b></span>}{!!c.vip && <Chip tone="warn">VIP</Chip>}<Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.source && <Chip tone="outline">{c.source}</Chip>}</div>
-        <div className="sub small">{c.pilot_dob && <>Piloto nascido em {fmtDate(c.pilot_dob)}{idade(c.pilot_dob) !== null && <> ({idade(c.pilot_dob)} anos{idade(c.pilot_dob)! < 18 ? ', menor: waiver parental' : ''})</>} · </>}{c.email || 'sem e-mail'}{c.phone && <> · {c.phone}</>}{c.company && <> · {c.company}</>}</div>
+        <div className="row wrap" style={{ gap: 10 }}>
+          {!!c.pro_driver && <span className="star" title="Pro Racing Driver">★</span>}
+          <h1 className="h1" style={{ fontSize: 32 }}>{c.pilot_name || c.name}</h1>
+          <Chip tone={statusTone(c.status)} dot>{c.status}</Chip>
+          {c.plan_type === 'monthly' && <Chip tone="accent">Academy Monthly</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">Academy Day</Chip>}
+          {!!c.vip && <Chip tone="warn">VIP</Chip>}
+        </div>
+        <div className="meta">
+          {c.pilot_name && c.pilot_name !== c.name && <span><span className="k">responsável</span> <b>{c.name}</b></span>}
+          {anos !== null && <span><span className="k">idade</span> <b>{anos}</b>{menor && <Chip tone="warn">menor · waiver parental</Chip>}</span>}
+          {c.email ? <span><span className="k">e-mail</span> <a href={`mailto:${c.email}`}>{c.email}</a>{c.email_alt && <> <span className="muted">·</span> <a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></>}</span> : <span className="muted">sem e-mail</span>}
+          {c.phone && <span><span className="k">tel</span> <a href={`tel:${c.phone}`}>{c.phone}</a></span>}
+          {c.company && <span><span className="k">empresa</span> {c.company}</span>}
+        </div>
       </div>
-      <div className="row wrap">
-        {data.links.map(l => <Ext key={l.system + l.external_id} href={l.deep_link}>{l.system}</Ext>)}
-        {can('OPERATOR') && <button className="btn" disabled={scanning} title="Gmail (urace@ e support@) e DocuSign por e-mail e nome" onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? `Varredura parcial: ${r.avisos.join('; ')}` : `Achou ${r.gmail} thread(s) de e-mail e ligou ${r.docusign} waiver(s).`, r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} Buscar nas plataformas</button>}
-        {can('MANAGER') && <button className={`btn${c.pro_driver ? '' : ' primary'}`} disabled={proBusy} onClick={togglePro} title={c.pro_driver ? 'Tirar de Pro Racing Driver' : 'Vai para a aba Pro Racing Drivers e libera equipamento e corridas'}>{proBusy ? <span className="spin" /> : c.pro_driver ? '★ Pro Racing Driver' : '☆ Tornar Pro'}</button>}{can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}{can('OPERATOR') && <button className="btn" onClick={() => setUnir(true)} title="A mesma pessoa em dois cards? Junta tudo num só.">⧉ Unir com…</button>}
-        {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>Perguntar à IA</button>}
+      <div className="c360-acts">
+        {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>✦ Perguntar à IA</button>}
+        {can('MANAGER') && <button className={`btn${c.pro_driver ? '' : ''}`} disabled={proBusy} onClick={togglePro} title={c.pro_driver ? 'Tirar de Pro Racing Driver' : 'Vai para a aba Pro Racing Drivers e libera equipamento e corridas'}>{proBusy ? <span className="spin" /> : c.pro_driver ? '★ Pro Racing Driver' : '☆ Tornar Pro'}</button>}
+        {can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}
+        {can('OPERATOR') && <details className="more"><summary className="btn" title="Mais ações">⋯</summary><div className="menu">
+          <button className="btn ghost sm" disabled={scanning} onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? `Varredura parcial: ${r.avisos.join('; ')}` : `Achou ${r.gmail} thread(s) de e-mail e ligou ${r.docusign} waiver(s).`, r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} Buscar no Gmail e DocuSign</button>
+          <button className="btn ghost sm" onClick={() => setUnir(true)}>⧉ Unir com outro card</button>
+        </div></details>}
       </div>
     </div>
     {risco && <div className="banner crit"><b>Serviço em {dias === 0 ? 'HOJE' : `${dias} dia(s)`} sem waiver assinada.</b> {wBad ? `O e-mail ${wBad.signer_email} devolveu: corrija e reenvie.` : wOpen ? `Envelope ${WAIVER_LABEL[wOpen.status!]}; cobre a assinatura.` : 'Nenhum envelope enviado.'}</div>}
     {!!c.vip && <div className="banner info">Cliente VIP: dispensa waiver por decisão do dono (04/09/2026). Nada de cobrança automática.</div>}
-    <div className="grid g4">
-      <div className="card kpi"><div className="lbl">Próximo serviço</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate">{prox?.title || 'nada agendado'}</div></div>
-      <div className="card kpi"><div className="lbl">Waiver</div><div className="val" style={{ fontSize: 22, color: wOk ? 'var(--ok)' : wBad ? 'var(--crit)' : 'var(--warn)' }}>{c.vip ? 'dispensada' : wOk ? 'assinada' : wBad ? 'devolveu' : wOpen ? WAIVER_LABEL[wOpen.status!] : 'nenhuma'}</div><div className="foot">{wOk?.expires_at ? `expira ${fmtDate(wOk.expires_at)}` : wOpen?.expires_at ? `expira ${fmtDate(wOpen.expires_at)}` : ''}</div></div>
-      <div className="card kpi"><div className="lbl">Serviços abertos</div><div className="val">{data.tasks.filter(t => t.status === 'open').length}</div><div className="foot">{data.tasks.length} no total</div></div>
-      <div className="card kpi"><div className="lbl">E-mails sem tratamento</div><div className="val" style={{ color: data.emails.some(e => !e.handled) ? 'var(--warn)' : undefined }}>{data.emails.filter(e => !e.handled).length}</div><div className="foot">{data.emails.length} threads conhecidas</div></div>
+    <div className="grid g5 c360-k">
+      <div className="card kpi"><div className="lbl">Próximo serviço</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : 'nada agendado'}</div></div>
+      <div className="card kpi"><div className="lbl">Último serviço</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot truncate" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : 'nenhum concluído'}</div></div>
+      <div className="card kpi"><div className="lbl">Waiver</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? 'dispensada' : wOk ? 'assinada' : wBad ? 'devolveu' : wOpen ? WAIVER_LABEL[wOpen.status!] : 'nenhuma'}</div><div className="foot">{wOk?.expires_at ? <>vale até {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>expira {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one /></div></div>
+      <div className="card kpi"><div className="lbl">Serviços</div><div className="val">{abertos}<span className="of">/{data.tasks.length}</span></div><div className="foot">{abertos === 1 ? '1 aberto' : `${abertos} abertos`} · {data.tasks.length - abertos} concluídos</div></div>
+      {data.invoices !== null
+        ? <div className="card kpi"><div className="lbl">Em aberto (QBO)</div><div className={`val ${(data.open_balance || 0) > 0 ? 'warn' : 'ok'}`} style={{ fontSize: 22 }}>{money(data.open_balance || 0)}</div><div className="foot">{data.invoices.length} invoice(s) · {emailsAbertos ? <span style={{ color: 'var(--warn)' }}>{emailsAbertos} e-mail(s) sem resposta</span> : 'e-mails em dia'}</div></div>
+        : <div className="card kpi"><div className="lbl">E-mails</div><div className={`val ${emailsAbertos ? 'warn' : ''}`}>{emailsAbertos}</div><div className="foot">sem resposta · {data.emails.length} conhecidos</div></div>}
     </div>
-    <Section title="Dados do cliente">
-      <div className="grid g2">
-        <dl className="dl"><dt>Piloto</dt><dd>{c.pilot_name || <span className="muted">— (o próprio)</span>}</dd><dt>Nascimento</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd>
-          <dt>Responsável</dt><dd>{c.name}</dd><dt>Empresa</dt><dd>{c.company || '—'}</dd></dl>
-        <dl className="dl"><dt>E-mail</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}</dd><dt>Telefone</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd>
-          <dt>Plano mensal</dt><dd>{c.monthly_plan || <span className="muted">—</span>}{c.monthly_note && <div className="small muted">{c.monthly_note}</div>}</dd><dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Origem</dt><dd>{c.source || '—'} · desde {fmtDate(c.created_at)}</dd><dt>Varrido</dt><dd className="mono small">{c.scanned_at ? fmtDateTime(c.scanned_at) : 'nunca'}</dd></dl>
+    <details className="card c360-d"><summary className="card-h" style={{ cursor: 'pointer' }}><h2 className="h2">Dados completos</h2><span className="grow" /><span className="small muted">{c.source || '—'} · desde {fmtDate(c.created_at)}{c.scanned_at && <> · varrido {fmtDateTime(c.scanned_at)}</>}</span></summary>
+      <div className="card-b grid g3">
+        <dl className="dl"><dt>Piloto</dt><dd>{c.pilot_name || <span className="muted">o próprio</span>}</dd><dt>Nascimento</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd><dt>Responsável</dt><dd>{c.name}</dd></dl>
+        <dl className="dl"><dt>E-mail</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}{c.email_alt && <div className="small"><a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></div>}</dd><dt>Telefone</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd><dt>Empresa</dt><dd>{c.company || '—'}</dd></dl>
+        <dl className="dl"><dt>Plano mensal</dt><dd>{c.monthly_plan || <span className="muted">—</span>}{c.monthly_note && <div className="small muted">{c.monthly_note}</div>}</dd><dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Tipo</dt><dd>{c.plan_type === 'monthly' ? 'Academy Monthly' : c.plan_type === 'daily' ? 'Academy Day' : '—'}{!!c.pro_driver && ' · ★ Pro'}</dd></dl>
       </div>
-    </Section>
+    </details>
     {edit && <Section title="Editar cliente">
       <div className="grid g3">
         <div className="field"><label>Status</label><select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{['ACTIVE', 'NEW', 'PENDING', 'AT_RISK', 'COMPLETED', 'INACTIVE'].map(s => <option key={s}>{s}</option>)}</select></div>
@@ -129,7 +151,14 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     <div className="card card-b">
       {tab === 'timeline' && (data.timeline.length === 0 ? <Empty>Nenhum evento ainda.</Empty> : <div className="tl">{data.timeline.map((e, i) => {
         const [lbl, tone] = KIND[e.kind] || [e.kind, '']
-        return <div className="ev" key={i}><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div><span className="small muted cond">{lbl}</span> · {e.title} <Chip tone={statusTone(e.status)}>{e.status}</Chip></div></div>
+        const mes = (e.at || '').slice(0, 7); const antes = (data.timeline[i - 1]?.at || '').slice(0, 7)
+        return <div key={i}>
+          {mes !== antes && <div className="tl-m">{mes ? new Date(mes + '-02T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : 'sem data'}</div>}
+          <div className="ev"><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div className="b">
+            <div className="row wrap" style={{ gap: 8 }}><span className={`kind ${tone}`}>{lbl}</span><span className="t">{e.title}</span><Chip tone={statusTone(e.status)}>{e.status}</Chip><span className="grow" /><SysLink links={e.links} /></div>
+            {e.detail && <div className="small muted">{e.detail}</div>}
+          </div></div>
+        </div>
       })}</div>)}
       {tab === 'monthly' && <Mensalidade id={c.id} m={monthly.data} loading={monthly.loading} reload={monthly.reload} plan={c.plan_type} fin={can('MANAGER')} />}
       {tab === 'equip' && <Equipamento c={c} cat={catalog.data} reload={() => { reload(); catalog.reload() }} />}
@@ -137,15 +166,15 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={6}><Empty>Sem serviços vinculados.</Empty></td></tr>}
-        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Chip tone={statusTone(t.status === 'open' ? 'PENDING' : 'COMPLETED')}>{t.status}</Chip></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td>{t.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>{l.system}</Ext>)}</td></tr>)}
+        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Chip tone={statusTone(t.status === 'open' ? 'PENDING' : 'COMPLETED')}>{t.status}</Chip></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td><SysLink links={t.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>Nenhum envelope para este e-mail.</Empty></td></tr>}
-        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}</td><td><Chip tone={statusTone(w.status)}>{WAIVER_LABEL[w.status || ''] || w.status}</Chip></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title="Baixar PDF assinado">⬇ PDF</a>} {w.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>{l.system}</Ext>)}</td></tr>)}
+        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}</td><td><Chip tone={statusTone(w.status)}>{WAIVER_LABEL[w.status || ''] || w.status}</Chip></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title="Baixar PDF assinado">⬇ PDF</a>} <SysLink links={w.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'emails' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Caixa</th><th>Assunto</th><th>De</th><th>Prioridade</th><th>Tratado</th><th></th></tr></thead><tbody>
         {data.emails.length === 0 && <tr><td colSpan={7}><Empty>Nenhum e-mail vinculado.</Empty></td></tr>}
-        {data.emails.map(e => <tr key={e.id}><td className="mono">{fmtDateTime(e.last_at)}</td><td>{e.mailbox}@</td><td>{e.subject}</td><td className="small">{e.sender}</td><td>{e.priority && <Chip tone={statusTone(e.priority === 'CRITICAL' ? 'ERROR' : e.priority === 'HIGH' ? 'PENDING' : 'ACTIVE')}>{e.priority}</Chip>}</td><td>{e.handled ? '✓' : <span style={{ color: 'var(--warn)' }}>não</span>}</td><td>{e.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>abrir</Ext>)}</td></tr>)}
+        {data.emails.map(e => <tr key={e.id}><td className="mono">{fmtDateTime(e.last_at)}</td><td>{e.mailbox}@</td><td>{e.subject}</td><td className="small">{e.sender}</td><td>{e.priority && <Chip tone={statusTone(e.priority === 'CRITICAL' ? 'ERROR' : e.priority === 'HIGH' ? 'PENDING' : 'ACTIVE')}>{e.priority}</Chip>}</td><td>{e.handled ? '✓' : <span style={{ color: 'var(--warn)' }}>não</span>}</td><td><SysLink links={e.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'invoices' && (data.invoices === null ? <Empty title="Financeiro restrito">Invoices são visíveis para gerentes e administradores.</Empty> :
         data.invoices.length === 0 ? <Empty>Nenhuma invoice. QuickBooks está em stand-by; nada é inventado aqui.</Empty> :

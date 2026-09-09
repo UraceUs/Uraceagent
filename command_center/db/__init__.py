@@ -66,7 +66,8 @@ MIGRACOES = [
     ("automation_rules", "schedule", "TEXT"),      # json: ["07:00","13:00","21:00"] hora local (Orlando)
     ("automation_rules", "last_run_at", "TEXT"),   # chave do último horário rodado: "2026-09-09 07:00"
     ("automation_rules", "last_result", "TEXT"),
-    ("races", "task_id", "INTEGER"),               # tarefa da coluna RACES (calendário = o que está no Asana)
+    ("races", "task_id", "INTEGER"),
+    ("clients", "email_alt", "TEXT"),              # segundo e-mail da descrição (o principal fica limpo)               # tarefa da coluna RACES (calendário = o que está no Asana)
     ("waivers", "hidden", "INTEGER NOT NULL DEFAULT 0"),   # lixeira do painel (restaurável)
     ("waivers", "minor_name", "TEXT"),                     # nome do menor (parental), do form data
     ("waivers", "link_reason", "TEXT"),                    # por que está ligada a este cliente

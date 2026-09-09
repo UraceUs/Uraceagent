@@ -64,10 +64,8 @@ def parse_descricao(notes):
         if m and " / " in m.group(1):
             partes = [p.strip() for p in re.split(r"\s/\s", m.group(1))]
             d["responsavel"], d["email"], d["telefone"] = (partes + [None] * 3)[:3]
-    if d["email"] and "@" not in d["email"]:
-        d["email"] = None
-    if d["email"]:
-        d["email"] = d["email"].lower()
+    d["email"], d["email_alt"] = identidade.normaliza_email(d["email"])
+    d["telefone"] = identidade.normaliza_telefone(d["telefone"]) if d["telefone"] else None
     if d["nascimento"]:
         d["nascimento"] = _data_iso(d["nascimento"])
     return d
@@ -103,18 +101,19 @@ def _acha_cliente(con, email=None, nome=None, piloto=None, telefone=None):
 
 
 def _upsert_cliente(con, nome, email=None, telefone=None, piloto=None, nascimento=None,
-                    vip=None, source="asana"):
+                    vip=None, source="asana", email_alt=None):
     """Um card por pessoa. Quem já existe (e-mail, telefone, nome igual ou quase) só é enriquecido."""
     c = _acha_cliente(con, email, nome, piloto, telefone)
     campos = dict(updated_at=agora())
     if email: campos["email"] = email
+    if email_alt: campos["email_alt"] = email_alt
     if telefone: campos["phone"] = telefone
     if piloto: campos["pilot_name"] = piloto
     if nascimento: campos["pilot_dob"] = nascimento
     if vip is not None: campos["vip"] = 1 if vip else 0
     if c:
         # não troca um nome bom por um pior; só preenche vazio
-        for k in ("email", "phone", "pilot_name", "pilot_dob"):
+        for k in ("email", "email_alt", "phone", "pilot_name", "pilot_dob"):
             if k in campos and c[k]:
                 campos.pop(k)
         if campos.keys() - {"updated_at"} or vip is not None:
@@ -204,7 +203,7 @@ def sync_asana_completo(con, progresso=None):
                         _grava_tarefa(con, t["gid"], dict(client_id=None, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **comum))
                     else:
                         cid, novo = _upsert_cliente(con, resp, d["email"], d["telefone"],
-                                                    piloto if piloto and identidade.chave_exata(piloto) != identidade.chave_exata(resp) else None, d["nascimento"])
+                                                    piloto if piloto and identidade.chave_exata(piloto) != identidade.chave_exata(resp) else None, d["nascimento"], email_alt=d.get("email_alt"))
                         novos += novo
                         _liga(con, "client", cid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
                         _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **comum))
@@ -214,6 +213,7 @@ def sync_asana_completo(con, progresso=None):
                     avisa({"stage": sec_nome, "done": tarefas, "total": total})
         sincronizar_corridas(con)
         limpos = identidade.limpar_nao_clientes(con)
+        identidade.limpar_contatos(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
         candidatos = len(identidade.candidatos_duplicados(con))
@@ -277,7 +277,7 @@ def sync_asana(con):
                     continue
                 cid, novo = _upsert_cliente(con, resp, d["email"], d["telefone"],
                                             piloto if piloto and identidade.chave_exata(piloto) != identidade.chave_exata(resp) else None,
-                                            d["nascimento"])
+                                            d["nascimento"], email_alt=d.get("email_alt"))
                 novos += novo
                 _liga(con, "client", cid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
                 _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"),
@@ -292,6 +292,7 @@ def sync_asana(con):
                        (hoje, *SECOES_DIAS.keys())):
             _evento(con, "task.overdue", "task", t["id"], t["client_id"], f"{t['title']} ({t['section']}, {t['due_on']}) ainda aberta depois da data")
         limpos = identidade.limpar_nao_clientes(con)
+        identidade.limpar_contatos(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
         _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos, {unidos} unidos, {limpos} não-clientes removidos", inicio)

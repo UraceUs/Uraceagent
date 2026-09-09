@@ -871,3 +871,33 @@ def test_historico_completo_do_asana_liga_servicos_a_pessoa_e_sugere_duplicados(
         time.sleep(0.1)
     assert not st["running"] and st["result"] is not None
     assert not rotas._SYNC["running"]
+
+
+def test_contato_limpo_e_linha_do_tempo_com_link_de_cada_item(cli):
+    """'email%3apablo@x , bryan@x' vira principal + alternativo; telefone legível; cada evento da
+    linha do tempo carrega o próprio link (nada de fila de 'asana ↗' no topo)."""
+    from command_center.providers import identidade, sync
+    from command_center.db import conectar, inserir, um
+    assert identidade.normaliza_email("email%3apablosantiago@outlook.com , bryanlsantiago@outlook.com") == ("pablosantiago@outlook.com", "bryanlsantiago@outlook.com")
+    assert identidade.normaliza_email("mailto:X@Y.com") == ("x@y.com", None)
+    assert identidade.normaliza_email("sem email aqui") == (None, None)
+    assert identidade.normaliza_telefone("305-609-7845") == "305-609-7845" and identidade.normaliza_telefone("(305) 609 7845") == "305-609-7845"
+    assert identidade.normaliza_telefone("+1 305 609 7845") == "305-609-7845" and identidade.normaliza_telefone("N/A") is None
+    d = sync.parse_descricao("Driver's name: Bryan Santiago\nResponsible Name: Pablo Santiago\nEmail: email%3apablosantiago@outlook.com , bryanlsantiago@outlook.com\nPhone: (305) 609-7845")
+    assert d["email"] == "pablosantiago@outlook.com" and d["email_alt"] == "bryanlsantiago@outlook.com" and d["telefone"] == "305-609-7845"
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Pablo Santiago", email="email%3apablosantiago@outlook.com , bryanlsantiago@outlook.com", phone="(305) 609 7845", pilot_name="Bryan Santiago", vip=0, status="ACTIVE", source="asana")
+        assert identidade.limpar_contatos(con) >= 1 and identidade.limpar_contatos(con) == 0
+        c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
+        assert c["email"] == "pablosantiago@outlook.com" and c["email_alt"] == "bryanlsantiago@outlook.com" and c["phone"] == "305-609-7845"
+        t = inserir(con, "tasks", client_id=cid, title="Bryan Santiago_Academy [3/4]", project="U-RACE", section="Finished Services", status="completed", due_on="2026-08-22", subtasks_total=4, subtasks_done=4)
+        inserir(con, "entity_links", entity_type="task", entity_id=t, system="asana", external_id="5550001", deep_link="https://app.asana.com/0/1205450093098920/5550001/f")
+        con.commit()
+    finally:
+        con.close()
+    entra(cli, "admin@urace.us")
+    d = cli.get(B + f"/clients/{cid}").json()
+    ev = [e for e in d["timeline"] if e["kind"] == "SERVICE" and e["entity"]["id"] == t][0]
+    assert ev["links"][0]["system"] == "asana" and ev["links"][0]["deep_link"].endswith("/5550001/f") and "4/4" in ev["detail"]
+    assert d["last_service"]["id"] == t and d["client"]["email_alt"] == "bryanlsantiago@outlook.com"

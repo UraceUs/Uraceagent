@@ -81,6 +81,60 @@ def chave_exata(nome):
     return " ".join(normaliza(nome))
 
 
+# ------------------------------------------------------------- contato limpo
+_RX_EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+
+
+def normaliza_email(texto):
+    """'email%3apablo@x.com , bryan@x.com' -> ('pablo@x.com', 'bryan@x.com').
+    Tira mailto:/email: (também codificados), separa por vírgula/espaço/';',
+    devolve (principal, alternativo). Sem e-mail válido -> (None, None)."""
+    from urllib.parse import unquote
+    t = unquote(texto or "").replace("%3a", ":").replace("%3A", ":")
+    t = re.sub(r"(?i)\b(mailto|e-?mail)\s*:\s*", " ", t)
+    achados = []
+    for e in _RX_EMAIL.findall(t):
+        e = e.lower().strip(".")
+        if e not in achados:
+            achados.append(e)
+    if not achados:
+        return None, None
+    return achados[0], (achados[1] if len(achados) > 1 else None)
+
+
+def normaliza_telefone(texto):
+    """Só o primeiro telefone, no formato que as pessoas leem: 305-609-7845 / +55 11 9…"""
+    t = (texto or "").strip()
+    if not t:
+        return None
+    m = re.search(r"\+?\d[\d\s().\-]{6,}\d", t)
+    if not m:
+        return None
+    dig = re.sub(r"\D", "", m.group(0))
+    if len(dig) == 10:
+        return f"{dig[:3]}-{dig[3:6]}-{dig[6:]}"
+    if len(dig) == 11 and dig.startswith("1"):
+        return f"{dig[1:4]}-{dig[4:7]}-{dig[7:]}"
+    return m.group(0).strip()
+
+
+def limpar_contatos(con):
+    """Passa a régua nos contatos já espelhados (idempotente): e-mail com lixo
+    vira principal + alternativo; telefone legível. Devolve quantos mudou."""
+    n = 0
+    for c in todos(con, "SELECT id, email, email_alt, phone FROM clients"):
+        principal, alt = normaliza_email(c["email"])
+        if c["email"] and principal is None:          # texto sem e-mail nenhum: não inventa
+            principal = None
+        tel = normaliza_telefone(c["phone"]) if c["phone"] else None
+        novo = {"email": principal if c["email"] else None, "email_alt": alt or c["email_alt"], "phone": tel if c["phone"] else None}
+        if any(novo[k] != c[k] for k in novo):
+            con.execute("UPDATE clients SET email=?, email_alt=?, phone=?, updated_at=? WHERE id=?",
+                        (novo["email"], novo["email_alt"], novo["phone"], agora(), c["id"]))
+            n += 1
+    return n
+
+
 # ------------------------------------------------------------- busca
 def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
     """Cliente existente para esta identidade, na ordem de confiança."""

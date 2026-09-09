@@ -35,7 +35,7 @@ export interface Client {
   pilot_name: string | null; pilot_dob: string | null; vip: number; status: string
   stage_code: string | null; stage?: string | null; source: string | null; notes: string | null
   status_locked?: number; last_service_at?: string | null; scanned_at?: string | null; monthly_plan?: string | null; monthly_note?: string | null
-  plan_type?: 'monthly' | 'daily' | null; pro_driver?: number; chassis_id?: number | null; engine_id?: number | null; equipment_notes?: string | null
+  plan_type?: 'monthly' | 'daily' | null; pro_driver?: number; chassis_id?: number | null; engine_id?: number | null; equipment_notes?: string | null; email_alt?: string | null
   created_at: string; updated_at: string
   open_tasks?: number; done_tasks?: number; last_service?: string | null
   next_service?: string | null; waiver_status?: string | null
@@ -78,14 +78,14 @@ export interface QboSummary {
 }
 
 export interface TimelineEvent {
-  at: string; kind: 'SERVICE' | 'WAIVER_SENT' | 'WAIVER_SIGNED' | 'EMAIL' | 'AI_ACTION'
-  title: string; status: string; entity: { type: string; id: number }
+  at: string; kind: 'SERVICE' | 'WAIVER_SENT' | 'WAIVER_SIGNED' | 'EMAIL' | 'AI_ACTION' | 'INVOICE'
+  title: string; status: string; entity: { type: string; id: number }; detail?: string | null; links?: Link[]
 }
 
 export interface Client360 {
   client: Client; links: Link[]; tasks: Task[]; waivers: Waiver[]; emails: Email[]
   invoices: Invoice[] | null; ai_actions: AiAction[]; timeline: TimelineEvent[]
-  stages: { code: string; label: string }[]
+  stages: { code: string; label: string }[]; last_service?: Task | null; open_balance?: number | null
 }
 
 export interface AiCommand {
