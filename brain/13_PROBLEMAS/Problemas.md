@@ -32,7 +32,7 @@ e estado. Não é lista de melhoria — é o que está quebrado ou arriscado.
 **Sistemas**
 [[P-08 - Order Number guardando URL]] ·
 [[P-09 - Conector do Asana nao sobe anexo]] ·
-[[P-11 - Producao do app QuickBooks travada]]
+[[P-11 - Producao do app QuickBooks travada]] ✅ 09/09
 
 ## Resolvidos
 

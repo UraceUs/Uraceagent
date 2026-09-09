@@ -4,7 +4,7 @@ tipo_info: FACT
 data: 2026-09-01
 fonte: sonda no developer.intuit.com pela extensão de navegador
 responsavel: Italo Silveira
-status: ativo
+status: resolvido
 ---
 
 # P-11 — Chaves de produção do app QuickBooks travadas
@@ -82,3 +82,18 @@ Command Center (redirect HTTPS `…/ops/api/qbo/callback`), espelho de
 invoices, painel. **Falta só a Intuit liberar as chaves de produção** e
 o dono colar as duas chaves no VPS. Prompt da extensão para checar o
 status e pegar as chaves: `adminai/deploy/prompts/quickbooks-producao.txt`.
+
+
+## ✅ RESOLVIDO em 09/09/2026
+
+Pela extensão de navegador, em uma tarde: perfil do portal completado
+(endereço da empresa), *regulated industries* corrigido (estava marcado
+"Payments / money movement", errado), questionário de conformidade
+respondido com a verdade sobre o que o código faz e **aprovado na hora**
+("Everything looks great"). Chaves de produção liberadas; redirect URI
+`https://urace-bridge.duckdns.org/ops/api/qbo/callback` salva. Plano da
+empresa: **QuickBooks Plus**.
+
+Três respostas ficaram "não" de propósito (teste em sandbox, time de
+segurança dedicado, MFA no app) — não travaram nada. Segredo colado no
+VPS pelo dono; o portal tem "Rotate secret" se um dia precisar trocar.
