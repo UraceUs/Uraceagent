@@ -33,16 +33,10 @@ def integrations(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depend
 @r.post("/integrations/check")
 def integrations_check(request: Request, u=Depends(auth.exige("OPERATOR")),
                        con: sqlite3.Connection = Depends(get_db)):
-    """Sonda cada sistema com UMA chamada real e grava o estado."""
-    recarregar()
-    saida = {}
-    for s in SISTEMAS:
-        st, det = saude(s)
-        con.execute("UPDATE integrations SET status=?, last_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), "
-                    "last_success_at=CASE WHEN ? IN ('CONNECTED','DEGRADED') THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE last_success_at END, "
-                    "last_error=CASE WHEN ? IN ('ERROR','DISCONNECTED') THEN ? ELSE NULL END, detail=? WHERE system=?",
-                    (st, st, st, json.dumps(det, ensure_ascii=False)[:500], json.dumps(det, ensure_ascii=False), s))
-        saida[s] = {"status": st, "detail": det}
+    """Sonda cada sistema com UMA chamada real e grava o estado. A rotina
+    automática só roda de manhã e à noite (agenda.py, decisão do dono 09/09)."""
+    from command_center.api import agenda
+    saida = agenda.sondar(con, por=f"user:{u['id']}")
     auditar(con, "integrations.check", f"user:{u['id']}", user_id=u["id"], ip=auth._ip(request))
     return saida
 
@@ -64,6 +58,12 @@ def _sync_thread(user_id, ip):
                 res[nome] = fn(con)
             except Exception as e:                    # um sistema com erro não derruba os outros
                 res[nome] = {"ok": False, "motivo": f"{type(e).__name__}: {str(e)[:300]}"}
+            if isinstance(res[nome], dict) and res[nome].get("ok") is False and nome != "cerebro":
+                try:                                  # caiu no meio do uso: aí sim re-sonda (só ele)
+                    from command_center.api import agenda
+                    agenda.sondar_apos_falha(con, nome, str(res[nome].get("motivo") or ""))
+                except Exception:
+                    pass
         _SYNC["stage"] = "eventos"
         auditar(con, "sync.run", f"user:{user_id}", user_id=user_id, detail=res, ip=ip)
         res["eventos_disparados"] = motor.processar_eventos(con, user_id)
@@ -402,7 +402,8 @@ def gmail_labels(mailbox: str = "urace", u=Depends(auth.usuario_atual), con: sql
         nomes = chamar("gmail", "gmail_marcadores", conta=mailbox)
         return {"connected": True, "labels": [{"name": m["nome"], "id": m["id"], "type": m.get("tipo"), "inbox_count": contagem.get(m["nome"], 0)} for m in nomes]}
     except NaoConectado as e:
-        return {"connected": False, "reason": str(e), "labels": [{"name": k, "id": None, "type": "user", "inbox_count": v} for k, v in sorted(contagem.items())]}
+        return {"connected": False, "reason": str(e), "labels": [{"name": k, "id": None, "type": "user", "inbox_count": v} for k, v in sorted(contagem.items())
+                                                                 if k.upper() not in classificar.SISTEMA and not k.startswith("CATEGORY_")]}
     except Exception as e:
         return {"connected": False, "reason": f"{type(e).__name__}: {str(e)[:200]}", "labels": []}
 
@@ -423,6 +424,102 @@ def email_thread(eid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connectio
         return {"connected": False, "reason": str(ex), "messages": []}
     except Exception as ex:
         raise HTTPException(502, f"Gmail: {str(ex)[:300]}")
+
+
+@r.get("/emails/{eid}/html/{message_id}")
+def email_html(eid: int, message_id: str, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """A mensagem como o Gmail mostra (HTML + imagens inline), limpa e com CSP
+    própria, para o iframe com sandbox do painel. Sem HTML, cai para o texto."""
+    from fastapi.responses import HTMLResponse
+    from command_center.api import html_seguro
+    e = um(con, "SELECT * FROM emails WHERE id=?", (eid,))
+    if not e or not re.fullmatch(r"[A-Za-z0-9_-]{4,40}", message_id or ""):
+        raise HTTPException(404, "Email not found.")
+    try:
+        r_ = modulo("gmail").mensagem_html(e["mailbox"], message_id)
+    except NaoConectado as ex:
+        raise HTTPException(503, f"Gmail não conectado: {ex}")
+    except Exception as ex:
+        raise HTTPException(502, f"Gmail: {str(ex)[:300]}")
+    html = r_.get("html") or ("<pre style='white-space:pre-wrap'>%s</pre>" % (r_.get("texto") or "").replace("&", "&amp;").replace("<", "&lt;"))
+    resp = HTMLResponse(html_seguro.pagina(html, r_.get("assunto") or e["subject"] or ""))
+    resp.headers["Content-Security-Policy"] = html_seguro.CSP
+    resp.headers["X-Frame-Options"] = "SAMEORIGIN"
+    return resp
+
+
+class RotularIn(BaseModel):
+    add: list[str] = []
+
+
+@r.post("/emails/{eid}/labels")
+def email_labels(eid: int, dados: RotularIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+                 con: sqlite3.Connection = Depends(get_db)):
+    """Clique humano: ADICIONA marcadores (não tira da inbox). Mover é o clique no marcador."""
+    e = um(con, "SELECT * FROM emails WHERE id=?", (eid,))
+    if not e:
+        raise HTTPException(404, "Email not found.")
+    add = [l.strip() for l in dados.add if l and l.strip() and l.strip().upper() not in ("INBOX", "TRASH", "SPAM", "UNREAD", "STARRED")]
+    if not add:
+        raise HTTPException(400, "Escolha um marcador.")
+    tid = _thread_id(con, eid)
+    if not tid:
+        raise HTTPException(409, "Thread sem vínculo com o Gmail.")
+    try:
+        res = modulo("gmail").rotular_humano(e["mailbox"], tid, add)
+    except NaoConectado as ex:
+        raise HTTPException(503, f"Gmail não conectado: {ex}")
+    except Exception as ex:
+        raise HTTPException(502, str(ex)[:300])
+    labels = json.loads(e["labels"] or "[]")
+    for l in add:
+        if l not in labels:
+            labels.append(l)
+    con.execute("UPDATE emails SET labels=?, synced_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?", (json.dumps(labels, ensure_ascii=False), eid))
+    auditar(con, "email.label", f"user:{u['id']}", user_id=u["id"], entity_type="email", entity_id=eid,
+            detail={"add": add, "thread": tid, "mailbox": e["mailbox"]}, ip=auth._ip(request))
+    return {"ok": True, "labels": labels, **res}
+
+
+_TRIAGEM = {"running": False, "started_at": None, "finished_at": None, "result": None}
+
+
+def _triagem_thread(user_id, mailboxes):
+    from command_center.api import agenda, ia, motor
+    from command_center.providers import triagem
+    con = conectar()
+    try:
+        with ia._PARALELO:
+            _TRIAGEM["result"] = triagem.rodar(con, ia.RUNNER, f"agent:{ia.AGENTE}:triagem-{date.today().isoformat()}",
+                                               mailboxes=mailboxes, aprendizados=motor.aprendizados(con), por=f"user:{user_id}")
+        _ = agenda   # a rotina automática usa o mesmo caminho
+    except Exception as e:
+        _TRIAGEM["result"] = {"erros": [f"{type(e).__name__}: {str(e)[:300]}"]}
+    finally:
+        _TRIAGEM["running"] = False; _TRIAGEM["finished_at"] = agora(); con.close()
+
+
+class TriagemIn(BaseModel):
+    mailbox: str | None = None
+
+
+@r.post("/gmail/triage", status_code=202)
+def gmail_triage(dados: TriagemIn, request: Request, u=Depends(auth.exige("OPERATOR"))):
+    """Triagem agora (a automática roda 07:00, 13:00 e 21:00): a IA lê cada thread,
+    aplica os marcadores e move para o principal. Só ficam na inbox as que ela não decidiu."""
+    if _TRIAGEM["running"]:
+        return {"started": False, "running": True}
+    from command_center.providers import triagem
+    caixas = tuple([dados.mailbox]) if dados.mailbox in triagem.CAIXAS else triagem.CAIXAS
+    _TRIAGEM.update(running=True, started_at=agora(), finished_at=None, result=None)
+    threading.Thread(target=_triagem_thread, args=(u["id"], caixas), daemon=True).start()
+    return {"started": True, "running": True}
+
+
+@r.get("/gmail/triage")
+def gmail_triage_status(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    regra = um(con, "SELECT enabled, schedule, last_run_at, last_result FROM automation_rules WHERE name='gmail_triagem'")
+    return {**_TRIAGEM, "rule": regra}
 
 
 class MoverIn(BaseModel):

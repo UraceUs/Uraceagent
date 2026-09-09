@@ -60,6 +60,12 @@ MIGRACOES = [
     ("emails", "suggested_reason", "TEXT"),
     ("emails", "suggested_by", "TEXT"),      # rules | ia | label (já tinha marcador)
     ("emails", "suggested_at", "TEXT"),
+    ("emails", "triaged_at", "TEXT"),        # triagem automática da IA (manhã/tarde/noite)
+    ("emails", "triage_reason", "TEXT"),
+    ("emails", "needs_human", "INTEGER NOT NULL DEFAULT 0"),  # movido pela IA, mas pede resposta humana
+    ("automation_rules", "schedule", "TEXT"),      # json: ["07:00","13:00","21:00"] hora local (Orlando)
+    ("automation_rules", "last_run_at", "TEXT"),   # chave do último horário rodado: "2026-09-09 07:00"
+    ("automation_rules", "last_result", "TEXT"),
     ("waivers", "hidden", "INTEGER NOT NULL DEFAULT 0"),   # lixeira do painel (restaurável)
     ("waivers", "minor_name", "TEXT"),                     # nome do menor (parental), do form data
     ("waivers", "link_reason", "TEXT"),                    # por que está ligada a este cliente
@@ -88,6 +94,22 @@ def aplicar_schema(con):
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
         if coluna not in existentes:
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+    for sql in POS_MIGRACAO:
+        con.execute(sql)
+
+
+# Sementes que dependem de coluna criada por migração (rodam depois dela).
+# Horários em hora local de Orlando; quem lê é command_center/api/agenda.py.
+POS_MIGRACAO = [
+    """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+       ('gmail_triagem', 1, '{"schedule":true}', NULL,
+        '{"ia":"ler cada e-mail da inbox, aplicar os marcadores e mover para o marcador principal"}')""",
+    """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+       ('sondagem_integracoes', 1, '{"schedule":true}', NULL,
+        '{"sistema":"sondar cada integração com uma chamada real; fora do horário, só se uma falhar"}')""",
+    """UPDATE automation_rules SET schedule='["07:00","13:00","21:00"]' WHERE name='gmail_triagem' AND schedule IS NULL""",
+    """UPDATE automation_rules SET schedule='["07:00","22:00"]' WHERE name='sondagem_integracoes' AND schedule IS NULL""",
+]
 
 
 @contextmanager

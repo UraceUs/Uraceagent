@@ -199,7 +199,12 @@ echo
 echo "== timers =="
 PULADOS=()
 instalar_timer urace-asana-sync    ASANA_TOKEN
-instalar_timer urace-triagem-email GOOGLE_TOKEN_JSON
+# urace-triagem-email saiu em 09/09: a triagem roda pelo Command Center (07/13/21h,
+# regra gmail_triagem). Dois agentes ao mesmo tempo derrubam o VPS. Se estava ligado, desliga.
+if systemctl list-unit-files urace-triagem-email.timer --no-legend 2>/dev/null | grep -q .; then
+    sudo systemctl disable --now urace-triagem-email.timer >/dev/null 2>&1 || true
+    echo "   urace-triagem-email.timer desligado (triagem agora é do Command Center)"
+fi
 instalar_timer urace-waivers       DOCUSIGN_INTEGRATION_KEY
 instalar_timer urace-brain-health  ""
 instalar_timer urace-painel       ""

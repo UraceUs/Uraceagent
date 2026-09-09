@@ -66,6 +66,8 @@ def _autosync():
             parados = _limpar_sandboxes()
             if parados:
                 auditar(con, "sandbox.cleanup", "system", detail={"parados": parados})
+            from command_center.api import agenda   # rotinas por horário: triagem do Gmail, sondagem manhã/noite
+            agenda.rodar(con)
         except Exception as e:                            # nunca derruba o laço
             try:
                 auditar(con, "sync.auto.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
@@ -97,9 +99,11 @@ app = FastAPI(title="URACE Command Center", docs_url=None, redoc_url=None,
 async def _cabecalhos(request: Request, call_next):
     resp = await call_next(request)
     resp.headers["X-Content-Type-Options"] = "nosniff"
-    resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Referrer-Policy"] = "no-referrer"
     resp.headers["Cache-Control"] = resp.headers.get("Cache-Control", "no-store")
+    if "Content-Security-Policy" in resp.headers:      # rota com política própria (corpo de e-mail em iframe)
+        return resp
+    resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' "
         "https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "

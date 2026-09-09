@@ -13,6 +13,10 @@ const RULE_LABEL: Record<string, [string, string]> = {
   email_cliente: ['E-mail de cliente conhecido', 'A IA lê a thread, classifica e propõe um rascunho de resposta. Nunca envia.'],
   waiver_devolvida: ['Waiver com e-mail devolvido', 'A IA procura o e-mail certo no Asana e no Gmail e propõe a correção e o reenvio.'],
   waiver_assinada: ['Waiver assinada', 'A IA comenta na tarefa do Asana que a waiver chegou.'],
+  mensalidade_dia_1: ['Mensalidade no dia 1', 'A IA prepara a invoice mensal de cada piloto com plano e deixa para aprovação (aprovar = enviar).'],
+  tarefa_vencida: ['Serviço vencido no quadro', 'A IA confere se aconteceu e move para Finished Services.'],
+  gmail_triagem: ['Triagem do Gmail (07:00, 13:00, 21:00)', 'A IA lê cada thread da inbox, aplica os marcadores e move para o marcador principal. O que pede resposta continua em Precisa de atenção.'],
+  sondagem_integracoes: ['Sondagem das integrações (07:00 e 22:00)', 'Uma chamada real por sistema, de manhã e à noite. Fora disso só re-sonda o sistema que falhar durante o uso.'],
 }
 const KIND_LABEL: Record<string, string> = { 'task.created': 'serviço novo', 'email.received': 'e-mail de cliente', 'waiver.bounced': 'waiver devolvida', 'waiver.completed': 'waiver assinada' }
 
@@ -38,7 +42,7 @@ export function Automation() {
     <div className="grid g2">
       <Section title="Regras" count={rules.data?.length}>
         {rules.error ? <ErrorState error={rules.error} retry={rules.reload} /> : !rules.data ? <Loading /> : <div className="stack">{rules.data.map(r => { const [l, d] = RULE_LABEL[r.name] || [r.name, r.actions]; return <div className="act" key={r.id}>
-          <div className="grow"><b>{l}</b><div className="small ink2">{d}</div></div>
+          <div className="grow"><b>{l}</b><div className="small ink2">{d}</div>{r.schedule && <div className="small muted mono">horários {(() => { try { return (JSON.parse(r.schedule) as string[]).join(' · ') } catch { return r.schedule } })()}{r.last_run_at && ` · última ${r.last_run_at}`}</div>}</div>
           <label className="check" title={can('ADMIN') ? '' : 'só administrador'}><input type="checkbox" disabled={!can('ADMIN')} checked={!!r.enabled} onChange={() => toggle(r)} /> {r.enabled ? 'ligada' : 'desligada'}</label>
         </div> })}</div>}
         <Banner tone="info">Invoice: enquanto o QuickBooks estiver em stand-by, a IA prepara e propõe; o envio de verdade só existe com o QuickBooks conectado, e sempre depois de aprovação (decisão de 04/09).</Banner>

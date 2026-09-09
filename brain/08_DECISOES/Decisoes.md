@@ -54,3 +54,4 @@ X?"*. Agora dá.
 - [[D-2026-09-08 - A IA se corrige antes de chamar humano]] — atenção só do que a IA não resolveu; notificação/histórico tratados sozinhos; vencida vai para Finished sozinha; SAFE executa na hora
 - [[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]] — ação cria+envia com prévia; evento billing.monthly por cliente com plano; preços da diária, lead and follow e +$250 fora do OKC
 - [[D-2026-09-09 - Pro Racing Drivers, mensalidade e equipamento no card]] — tipo de piloto, estrela, sessões do mês pelo memo da invoice, contrato, equipamento e corridas com prévia
+- [[D-2026-09-09 - Triagem do Gmail pela IA e sondagem so de manha e a noite]] — corpo como no Gmail; IA lê, marca e move para o principal 07/13/21h; busca de marcador ao digitar; sondagem só 07h e 22h, re-sonda se cair

@@ -324,6 +324,18 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .mail .msg-b .hd{display:flex;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-bottom:6px}
 .mail .msg-b pre{white-space:pre-wrap;word-break:break-word;font-family:var(--font);font-size:13.5px;margin:0;line-height:1.5}
 .mail .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-bottom:10px;border-bottom:1px solid var(--rule)}
+.mail-frame{width:100%;border:0;background:#fff;border-radius:var(--r);display:block}
+.lchip{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-cond);font-weight:700;font-size:12px;letter-spacing:.05em;padding:2px 8px;border-radius:2px;border:1px solid var(--rule);background:var(--surface-2);color:var(--ink-2);cursor:pointer;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lchip:hover:not(:disabled){border-color:var(--brand);color:var(--ink);background:var(--accent-wash)}
+.lchip.here{cursor:default;color:var(--ok);border-color:var(--ok)}
+.lchip.sug{color:var(--info,#2f6fb3);border-style:dashed}
+.lchip:disabled{opacity:.7;cursor:default}
+.lpick{position:relative}
+.lpick .input{padding:5px 9px;font-size:13px}
+.lpick-menu{position:absolute;z-index:30;top:calc(100% + 3px);left:0;right:0;max-height:260px;overflow:auto;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);box-shadow:var(--shadow,0 6px 20px rgba(0,0,0,.12))}
+.lpick-menu .opt{display:flex;gap:8px;align-items:center;padding:6px 10px;cursor:pointer;font-size:13px}
+.lpick-menu .opt.on{background:var(--accent-wash)}
+.lpick-menu .opt .c{margin-left:auto;font-size:11px;color:var(--muted)}
 @media(max-width:1100px){.mail{grid-template-columns:1fr;max-height:none}.mail .labels,.mail .list{border-right:0;border-bottom:1px solid var(--rule);max-height:40vh}}
 .ic{border:1px solid transparent;background:transparent;cursor:pointer;padding:4px 6px;border-radius:var(--r);color:var(--ink-2);font-size:14px;line-height:1}
 .ic:hover{background:var(--surface-2);border-color:var(--rule)}

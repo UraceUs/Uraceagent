@@ -22,6 +22,14 @@ Rotina diária nas caixas do [[Gmail]] (`urace@` e `support@`).
 6. Dúvida → perguntar.
 7. Registrar no diário ([[2026-08-28]]).
 
+## Desde 09/09: quem roda é o Command Center
+A triagem roda **07:00, 13:00 e 21:00** pelo painel (regra
+`gmail_triagem`): a IA lê cada thread, aplica os marcadores e **move
+para o marcador principal** da hierarquia — o passo 3 acima vale só
+para a ferramenta `gmail_rotular` do agente solto. O que ela não decide
+fica na inbox; o que pede resposta vai para *Precisa de atenção*. Ver
+[[D-2026-09-09 - Triagem do Gmail pela IA e sondagem so de manha e a noite]].
+
 ## Regra
 A IA **não envia** nesta rotina. As duas exceções autorizadas estão em
 [[Pedido de macacão]] e [[Security deposit]] — ver [[PARAMETROS]].

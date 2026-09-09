@@ -2,7 +2,7 @@
  * fontes reais e link "abrir na fonte". Asana e DocuSign não permitem ser
  * embutidos em iframe (X-Frame-Options), então a visão é reconstruída aqui
  * a partir do espelho — e cada item leva para o original com um clique. */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
@@ -278,6 +278,49 @@ export function DocuSignPage() {
 
 // ------------------------------------------------------------------ Gmail
 type Box = 'urace' | 'support'
+const SYS_LABELS = new Set(['INBOX', 'UNREAD', 'STARRED', 'IMPORTANT', 'SENT', 'DRAFT', 'SPAM', 'TRASH', 'CHAT'])
+const userLabelsOf = (e: Email) => (JSON.parse(e.labels || '[]') as string[]).filter(l => l && !SYS_LABELS.has(l.toUpperCase()) && !l.startsWith('CATEGORY_'))
+
+/** Busca por digitação entre os marcadores reais da caixa (decisão do dono, 09/09). Enter ou clique adiciona. */
+export function LabelPicker({ labels, exclude, onPick, placeholder = 'Adicionar marcador… (digite para buscar)' }: { labels: GmailLabel[]; exclude?: string[]; onPick: (name: string) => void; placeholder?: string }) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const [ix, setIx] = useState(0)
+  const box = useRef<HTMLDivElement>(null)
+  const ex = new Set((exclude || []).map(x => x.toLowerCase()))
+  const norm = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const qn = norm(q.trim())
+  const hits = labels.filter(l => !ex.has(l.name.toLowerCase())).filter(l => !qn || norm(l.name).includes(qn))
+    .sort((a, b) => (norm(a.name).startsWith(qn) ? 0 : 1) - (norm(b.name).startsWith(qn) ? 0 : 1) || a.name.localeCompare(b.name)).slice(0, 12)
+  useEffect(() => { setIx(0) }, [q])
+  useEffect(() => {
+    const h = (ev: MouseEvent) => { if (box.current && !box.current.contains(ev.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
+  }, [])
+  function pick(name: string) { onPick(name); setQ(''); setOpen(false) }
+  return <div className="lpick" ref={box}>
+    <input className="input" value={q} placeholder={placeholder} aria-label="Buscar marcador" onFocus={() => setOpen(true)} onChange={ev => { setQ(ev.target.value); setOpen(true) }}
+      onKeyDown={ev => { if (ev.key === 'ArrowDown') { ev.preventDefault(); setIx(i => Math.min(i + 1, hits.length - 1)) } else if (ev.key === 'ArrowUp') { ev.preventDefault(); setIx(i => Math.max(i - 1, 0)) } else if (ev.key === 'Enter') { ev.preventDefault(); if (hits[ix]) pick(hits[ix].name) } else if (ev.key === 'Escape') setOpen(false) }} />
+    {open && <div className="lpick-menu" role="listbox">
+      {hits.length === 0 ? <div className="small muted" style={{ padding: '6px 10px' }}>Nenhum marcador com “{q}”. A IA não cria marcador; crie no Gmail.</div>
+        : hits.map((l, i) => <div key={l.name} role="option" aria-selected={i === ix} className={`opt${i === ix ? ' on' : ''}`} onMouseEnter={() => setIx(i)} onMouseDown={ev => { ev.preventDefault(); pick(l.name) }}>
+          <span className="truncate">{l.name}</span>{l.inbox_count ? <span className="c mono">{l.inbox_count}</span> : null}</div>)}
+    </div>}
+  </div>
+}
+
+/** O corpo como o Gmail mostra: HTML com imagens, num iframe sem script (sandbox + CSP própria no servidor). */
+function CorpoHtml({ eid, m }: { eid: number; m: GmailMessage }) {
+  const [alt, setAlt] = useState(false)
+  const [h, setH] = useState(320)
+  if (!m.tem_html || alt) return <><pre>{m.corpo || m.snippet}</pre>{m.tem_html && <a className="small" style={{ cursor: 'pointer' }} onClick={() => setAlt(false)}>ver como no Gmail</a>}</>
+  return <>
+    <iframe className="mail-frame" title={m.assunto || 'mensagem'} src={`/ops/api/emails/${eid}/html/${m.message_id}`} sandbox="" referrerPolicy="no-referrer" style={{ height: h }}
+      onLoad={ev => { try { const d = (ev.target as HTMLIFrameElement).contentDocument; if (d) setH(Math.min(1800, Math.max(160, d.documentElement.scrollHeight + 24))) } catch { /* sandbox opaco: fica na altura padrão */ } }} />
+    <a className="small" style={{ cursor: 'pointer' }} onClick={() => setAlt(true)}>ver só o texto</a>
+  </>
+}
+
 export function GmailPage() {
   const nav = useNavigate()
   const { can } = useAuth()
@@ -290,7 +333,8 @@ export function GmailPage() {
   const thread = useGet<{ connected: boolean; reason?: string; messages: GmailMessage[] }>(openId ? `/emails/${openId}/thread` : null)
   const [busy, setBusy] = useState<number | null>(null)
   const [classifying, setClassifying] = useState(false)
-  const [moveTo, setMoveTo] = useState('')
+  const [triaging, setTriaging] = useState(false)
+  const triage = useGet<{ running: boolean; rule?: { enabled: number; schedule: string | null; last_run_at: string | null; last_result: string | null } | null }>('/gmail/triage', 60000)
   const inbox = (emails.data || []).filter(e => e.is_inbox !== 0)
   const rows = sel === 'INBOX' ? inbox : sel === 'SEM_SUGESTAO' ? inbox.filter(e => !e.suggested_label) : inbox.filter(e => (JSON.parse(e.labels || '[]') as string[]).includes(sel) || e.suggested_label === sel)
   const cur = (emails.data || []).find(e => String(e.id) === openId) || null
@@ -302,6 +346,24 @@ export function GmailPage() {
     setBusy(e.id)
     try { await api.post(`/emails/${e.id}/move`, { label }); toast(`Movido para ${label}.`, 'ok'); if (String(e.id) === openId) setOpenId(''); emails.reload(); labels.reload() }
     catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  async function addLabel(e: Email, label: string) {
+    setBusy(e.id)
+    try { await api.post(`/emails/${e.id}/labels`, { add: [label] }); toast(`Marcador ${label} adicionado. Clique nele para mover.`, 'ok'); emails.reload(); labels.reload() }
+    catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  async function triageNow() {
+    setTriaging(true)
+    try {
+      const r = await api.post<{ started: boolean }>('/gmail/triage', { mailbox: box })
+      toast(r.started ? 'A IA está lendo a inbox: aplica os marcadores e move para o principal. Leva alguns minutos.' : 'Já há uma triagem rodando.')
+      for (let i = 0; i < 150; i++) {
+        await new Promise(res => setTimeout(res, 4000))
+        const st = await api.get<{ running: boolean; result: { lidos?: number; movidos?: number; ficaram?: number; precisa_humano?: number; erros?: string[] } | null }>('/gmail/triage')
+        if (!st.running) { const r2 = st.result || {}; const err = (r2.erros || []).length; toast(`IA leu ${r2.lidos ?? 0}: moveu ${r2.movidos ?? 0}, ${r2.ficaram ?? 0} ficaram na inbox, ${r2.precisa_humano ?? 0} pedem resposta${err ? `; ${err} erro(s): ${r2.erros![0]}` : ''}.`, err ? 'crit' : 'ok'); break }
+      }
+      emails.reload(); labels.reload(); triage.reload()
+    } catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setTriaging(false) }
   }
   async function classify() {
     setClassifying(true)
@@ -317,10 +379,14 @@ export function GmailPage() {
     } catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setClassifying(false) }
   }
   const semSug = inbox.filter(e => !e.suggested_label).length
+  const horarios = (() => { try { return (JSON.parse(triage.data?.rule?.schedule || '[]') as string[]).join(', ') } catch { return '' } })()
+  const ultimaTriagem = (() => { try { const r = JSON.parse(triage.data?.rule?.last_result || 'null'); return r ? `última: ${r.horario || ''} → ${r.movidos ?? 0} movidos, ${r.ficaram ?? 0} ficaram` : 'ainda não rodou' } catch { return '' } })()
   return <>
-    <IntHeader system="gmail" title="Gmail" desc="Caixa de entrada por dentro. A IA sugere o marcador de cada thread; o botão “Mover” aplica o marcador e tira da inbox (decisão de 04/09). A IA nunca envia e-mail." openHref={`https://mail.google.com/mail/u/${box === 'urace' ? 0 : 1}/`} openLabel="Abrir o Gmail" />
+    <IntHeader system="gmail" title="Gmail" desc={`Caixa de entrada por dentro. A IA lê cada thread ${horarios ? `às ${horarios}` : 'de manhã, à tarde e à noite'}, aplica os marcadores e move para o marcador principal (decisão de 09/09); o que ela não decide fica aqui para você. Clicar num marcador da thread move para ele. A IA nunca envia e-mail.`} openHref={`https://mail.google.com/mail/u/${box === 'urace' ? 0 : 1}/`} openLabel="Abrir o Gmail" />
     <div className="row wrap"><SubTabs tabs={[['urace', 'urace@'], ['support', 'support@']]} value={box} onChange={b => { setBox(b); setSel('INBOX'); setOpenId('') }} /><div className="grow" />
-      {can('OPERATOR') && <button className="btn primary" disabled={classifying || semSug === 0} onClick={classify} title="Manda para o agente as threads ainda sem sugestão">{classifying ? <Spinner /> : '✦'} Classificar com a IA{semSug > 0 && ` (${semSug})`}</button>}
+      <span className="small muted" title={ultimaTriagem}>{triage.data?.rule && !triage.data.rule.enabled ? 'triagem automática desligada (Automação)' : ultimaTriagem}</span>
+      {can('OPERATOR') && <button className="btn primary" disabled={triaging || triage.data?.running || inbox.length === 0} onClick={triageNow} title="A IA lê cada thread da inbox, aplica os marcadores e move para o principal — agora, sem esperar o horário">{triaging || triage.data?.running ? <Spinner /> : '✦'} Triar com a IA agora</button>}
+      {can('OPERATOR') && <button className="btn" disabled={classifying || semSug === 0} onClick={classify} title="Só sugere o marcador (não move) para as threads ainda sem sugestão">{classifying ? <Spinner /> : '✦'} Só sugerir{semSug > 0 && ` (${semSug})`}</button>}
       <button className="btn" onClick={() => { emails.reload(); labels.reload() }}>↻</button></div>
     {labels.data && !labels.data.connected && <Banner tone="warn">Gmail não conectado neste servidor: {labels.data.reason}. A lista abaixo é só o espelho.</Banner>}
     <div className="mail">
@@ -339,7 +405,8 @@ export function GmailPage() {
             <span className="snip">{e.snippet}</span>
             <span className="sug" onClick={ev => ev.stopPropagation()}>
               {e.client_id && <Chip tone="accent">{e.client_name}</Chip>}
-              {!!e.handled && e.handled_by === 'auto' && <Chip tone="ok" >✓ auto: {e.handled_reason}</Chip>}
+              {!!e.handled && (e.handled_by === 'auto' || e.handled_by === 'ia') && <Chip tone="ok" >✓ IA: {e.handled_reason}</Chip>}
+              {userLabelsOf(e).slice(0, 3).map(l => <button key={l} className="lchip" disabled={busy === e.id || !can('OPERATOR')} title={`Mover para ${l}`} onClick={() => move(e, l)}>{l} →</button>)}
               {e.suggested_label ? <><Chip tone={e.suggested_by === 'ia' ? 'info' : 'neutral'}>{e.suggested_by === 'ia' ? '✦ ' : ''}{e.suggested_label}</Chip>
                 {can('OPERATOR') && <button className="btn sm primary" disabled={busy === e.id} onClick={() => move(e, e.suggested_label!)}>{busy === e.id ? <Spinner /> : 'Mover'}</button>}</>
                 : <span className="small muted">sem sugestão</span>}
@@ -349,9 +416,13 @@ export function GmailPage() {
       <div className="read">
         {!cur ? <Empty title="Selecione uma thread">O corpo abre aqui, ao vivo do Gmail.</Empty> : <>
           <div className="toolbar">
-            <select className="input" style={{ width: 240 }} value={moveTo || cur.suggested_label || ''} onChange={ev => setMoveTo(ev.target.value)} aria-label="Marcador de destino"><option value="">Marcador…</option>{userLabels.map(l => <option key={l.name} value={l.name}>{l.name}</option>)}</select>
-            {can('OPERATOR') && <button className="btn primary sm" disabled={busy === cur.id || !(moveTo || cur.suggested_label)} onClick={() => move(cur, moveTo || cur.suggested_label!)}>Mover para o marcador</button>}
-            {can('OPERATOR') && <button className="btn sm" title={cur.handled_reason || ''} onClick={async () => { await api.patch(`/emails/${cur.id}`, { handled: !cur.handled }); emails.reload() }}>{cur.handled ? (cur.handled_by === 'auto' ? '✓ tratado pela IA' : '✓ tratado') : 'marcar tratado'}</button>}
+            <div className="row wrap" style={{ gap: 6 }} aria-label="Marcadores da thread">
+              {userLabelsOf(cur).map(l => <button key={l} className={`lchip${cur.is_inbox === 0 ? ' here' : ''}`} disabled={busy === cur.id || !can('OPERATOR')} title={cur.is_inbox === 0 ? `Já está em ${l}` : `Mover para ${l} (aplica e tira da inbox)`} onClick={() => cur.is_inbox !== 0 && move(cur, l)}>{l}{cur.is_inbox !== 0 && ' →'}</button>)}
+              {cur.suggested_label && !userLabelsOf(cur).includes(cur.suggested_label) && can('OPERATOR') && <button className="lchip sug" disabled={busy === cur.id} title={`Sugestão da IA: mover para ${cur.suggested_label}`} onClick={() => move(cur, cur.suggested_label!)}>✦ {cur.suggested_label} →</button>}
+              {userLabelsOf(cur).length === 0 && !cur.suggested_label && <span className="small muted">sem marcador</span>}
+            </div>
+            {can('OPERATOR') && <div style={{ minWidth: 260, flex: '1 1 260px' }}><LabelPicker labels={userLabels} exclude={userLabelsOf(cur)} onPick={l => addLabel(cur, l)} /></div>}
+            {can('OPERATOR') && <button className="btn sm" title={cur.handled_reason || ''} onClick={async () => { await api.patch(`/emails/${cur.id}`, { handled: !cur.handled }); emails.reload() }}>{cur.handled ? (cur.handled_by === 'auto' || cur.handled_by === 'ia' ? '✓ tratado pela IA' : '✓ tratado') : 'marcar tratado'}</button>}
             <span className="grow" />
             {cur.client_id && <a onClick={() => nav(`/clients/${cur.client_id}`)} style={{ cursor: 'pointer' }} className="small">cliente: {cur.client_name}</a>}
             {cur.links?.map(l => <Ext key={l.external_id} href={l.deep_link}>Gmail</Ext>)}
@@ -361,7 +432,7 @@ export function GmailPage() {
           {thread.loading && !thread.data ? <Loading rows={5} /> : thread.error ? <ErrorState error={thread.error} retry={thread.reload} /> : thread.data && !thread.data.connected ? <Banner tone="warn">Não deu para ler o corpo: {thread.data.reason}</Banner> :
             (thread.data?.messages || []).map(m => <div className="msg-b" key={m.message_id}>
               <div className="hd"><b>{m.de}</b><span>para {m.para}</span><span className="mono">{m.data}</span></div>
-              <pre>{m.corpo || m.snippet}</pre>
+              <CorpoHtml eid={cur.id} m={m} />
               {m.anexos && m.anexos.length > 0 && <div className="small muted" style={{ marginTop: 6 }}>Anexos: {m.anexos.map(a => a.nome).join(', ')}</div>}
             </div>)}
         </>}

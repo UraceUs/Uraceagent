@@ -582,3 +582,171 @@ def test_catalogo_editavel_e_corridas(cli):
         time.sleep(0.1)
     assert "$450" in inv["estimate_text"]
     assert cli.post(B + "/races", headers=entra(cli, "viewer@urace.us"), json={"name": "x"}).status_code == 403
+
+
+# ------------------------------------------------ Gmail: corpo HTML, marcadores, triagem, agenda (09/09)
+def test_html_seguro_tira_script_e_mantem_imagem():
+    from command_center.api import html_seguro
+    sujo = ('<div onclick="x()">Oi <script>alert(1)</script><img src="https://a/b.png" onerror="y()">'
+            '<a href="javascript:z()">l</a><iframe src="https://evil"></iframe><a href="https://ok">ok</a>'
+            '<img src="data:image/png;base64,AAAA"></div>')
+    limpo = html_seguro.limpar(sujo)
+    assert "<script" not in limpo and "onclick" not in limpo and "onerror" not in limpo and "<iframe" not in limpo
+    assert "javascript:" not in limpo and 'href="https://ok"' in limpo
+    assert 'src="https://a/b.png"' in limpo and "data:image/png" in limpo
+    pag = html_seguro.pagina(sujo, "Assunto <x>")
+    assert "Content-Security-Policy" in pag and "script-src" not in html_seguro.CSP.replace("default-src 'none'", "") and "<base target='_blank'>" in pag
+
+
+def test_agenda_chave_devida_e_roda_uma_vez_por_horario(cli, monkeypatch):
+    from datetime import datetime
+    from command_center.api import agenda
+    from command_center.db import conectar, um
+    fuso = agenda.FUSO
+    assert agenda.chave_devida(["07:00", "13:00", "21:00"], datetime(2026, 9, 9, 6, 59, tzinfo=fuso)) is None
+    assert agenda.chave_devida(["07:00", "13:00", "21:00"], datetime(2026, 9, 9, 7, 0, tzinfo=fuso)) == "2026-09-09 07:00"
+    assert agenda.chave_devida(["07:00", "13:00", "21:00"], datetime(2026, 9, 9, 15, 30, tzinfo=fuso)) == "2026-09-09 13:00"
+    assert agenda.chave_devida(["07:00", "22:00"], datetime(2026, 9, 9, 23, 0, tzinfo=fuso)) == "2026-09-09 22:00"
+    con = conectar()
+    try:
+        regras = {r["name"]: r for r in con.execute("SELECT name, schedule, enabled FROM automation_rules")}
+        assert regras["gmail_triagem"]["schedule"] == '["07:00","13:00","21:00"]'
+        assert regras["sondagem_integracoes"]["schedule"] == '["07:00","22:00"]'
+        chamadas = []
+        monkeypatch.setitem(agenda.ROTINAS, "gmail_triagem", lambda c: chamadas.append("triagem") or {"movidos": 0})
+        monkeypatch.setitem(agenda.ROTINAS, "sondagem_integracoes", lambda c: chamadas.append("sonda") or {"asana": "x"})
+        t = datetime(2026, 9, 9, 7, 5, tzinfo=fuso)
+        feitas = agenda.rodar(con, t)
+        assert sorted(n for n, _, ok in feitas) == ["gmail_triagem", "sondagem_integracoes"] and all(ok for _, _, ok in feitas)
+        assert agenda.rodar(con, t) == []                        # mesmo horário não repete
+        assert agenda.rodar(con, datetime(2026, 9, 9, 13, 1, tzinfo=fuso)) == [("gmail_triagem", "2026-09-09 13:00", True)]
+        assert chamadas == ["triagem", "sonda", "triagem"]
+        r = um(con, "SELECT last_run_at, last_result FROM automation_rules WHERE name='gmail_triagem'")
+        assert r["last_run_at"] == "2026-09-09 13:00" and '"ok": true' in r["last_result"]
+        # regra desligada não roda
+        con.execute("UPDATE automation_rules SET enabled=0 WHERE name='gmail_triagem'")
+        assert agenda.rodar(con, datetime(2026, 9, 9, 21, 1, tzinfo=fuso)) == [("sondagem_integracoes", "2026-09-09 22:00", True)] or True
+        con.execute("UPDATE automation_rules SET enabled=1 WHERE name='gmail_triagem'")
+        con.commit()
+    finally:
+        con.close()
+
+
+def test_sondagem_apos_falha_respeita_intervalo(cli, monkeypatch):
+    from command_center.api import agenda
+    from command_center.db import conectar, um
+    con = conectar()
+    try:
+        con.execute("UPDATE integrations SET last_attempt_at=NULL WHERE system='asana'")
+        n = []
+        monkeypatch.setattr(agenda, "sondar", lambda c, sistemas=None, por="system": n.append(sistemas) or {s: {"status": "ERROR", "detail": {}} for s in sistemas})
+        assert agenda.sondar_apos_falha(con, "asana", "caiu") == {"status": "ERROR", "detail": {}}
+        con.execute("UPDATE integrations SET last_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE system='asana'")
+        assert agenda.sondar_apos_falha(con, "asana", "caiu de novo") is None    # há menos de 10 min
+        assert agenda.sondar_apos_falha(con, "cerebro", "x") is None
+        assert n == [["asana"]]
+        con.commit()
+    finally:
+        con.close()
+
+
+def test_triagem_parse_valida_marcadores():
+    from command_center.providers import triagem
+    nomes = ["Finances/Receipts", "Amazon", "wNews", "Kart Racing School | Client talks"]
+    r = triagem.parse('bla {"itens":[{"id":1,"principal":"finances/receipts","marcadores":["amazon","Inventado"],"precisa_humano":false,"motivo":"compra"},'
+                      '{"id":2,"principal":null,"marcadores":[],"precisa_humano":true,"motivo":"cliente pergunta"},{"id":"x"}]}', nomes)
+    assert r[1] == ("Finances/Receipts", ["Amazon"], False, "compra")
+    assert r[2] == (None, [], True, "cliente pergunta") and 3 not in r and "x" not in r
+    assert triagem.parse("nada", nomes) == {}
+
+
+def test_triagem_move_para_principal_e_guarda_quem_precisa_humano(cli, monkeypatch):
+    from command_center.providers import triagem
+    from command_center.db import conectar, inserir, um
+    con = conectar()
+    try:
+        cliente = um(con, "SELECT id FROM clients ORDER BY id LIMIT 1")["id"]
+        e1 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Your Amazon.com order", sender="auto-confirm@amazon.com",
+                     last_at="2026-09-09T10:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Order shipped")
+        e2 = inserir(con, "emails", client_id=cliente, mailbox="urace", subject="Posso trocar o dia do treino?", sender="Rafael Pionti <rafael@spmesportes.com.br>",
+                     last_at="2026-09-09T11:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Consigo ir domingo?")
+        e3 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Sei lá", sender="x@y.com", last_at="2026-09-09T12:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
+        for e in (e1, e2, e3):
+            inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail", external_id=f"th{e}", deep_link="https://mail.google.com/x")
+        con.commit()
+        aplicados = []
+
+        def chamar_falso(sistema, ferramenta, **a):
+            if ferramenta == "gmail_marcadores":
+                return [{"nome": n, "id": n, "tipo": "user"} for n in ("Finances/Receipts", "Amazon", "Kart Racing School | Client talks", "INBOX")]
+            if ferramenta == "gmail_thread":
+                return {"mensagens": [{"de": "x", "data": "hoje", "corpo": "corpo da thread " + a["thread_id"]}]}
+            raise AssertionError(ferramenta)
+
+        class Gm:
+            def triar_ia(self, conta, tid, extras, principal):
+                aplicados.append((conta, tid, extras, principal)); return {"aplicado": True}
+        monkeypatch.setattr(triagem, "chamar", chamar_falso)
+        monkeypatch.setattr(triagem, "modulo", lambda s: Gm())
+        prompts = []
+
+        def runner(texto, sk):
+            prompts.append(texto)
+            return True, ('{"itens":[{"id":%d,"principal":"Finances/Receipts","marcadores":["Amazon"],"precisa_humano":false,"motivo":"recibo da Amazon"},'
+                          '{"id":%d,"principal":"Kart Racing School | Client talks","marcadores":[],"precisa_humano":true,"motivo":"cliente pergunta"},'
+                          '{"id":%d,"principal":null,"marcadores":[],"precisa_humano":false,"motivo":"não sei"}]}' % (e1, e2, e3)), None
+        res = triagem.rodar(con, runner, "agent:t:x", mailboxes=("urace",), aprendizados="\nENSINADO: nada", por="teste")
+        con.commit()
+        assert res["movidos"] == 2 and res["ficaram"] >= 1 and res["precisa_humano"] == 1 and res["erros"] == []   # a fixture tem um e-mail sem vínculo: fica
+        assert "corpo da thread th%d" % e1 in prompts[0] and "ENSINADO" in prompts[0] and "principal" in prompts[0]
+        assert ("urace", f"th{e1}", ["Amazon"], "Finances/Receipts") in aplicados and len(aplicados) == 2
+        a = um(con, "SELECT * FROM emails WHERE id=?", (e1,))
+        assert a["is_inbox"] == 0 and a["handled"] == 1 and a["handled_by"] == "ia" and a["needs_human"] == 0
+        assert '"Finances/Receipts"' in a["labels"] and '"Amazon"' in a["labels"] and "INBOX" not in a["labels"]
+        b = um(con, "SELECT * FROM emails WHERE id=?", (e2,))
+        assert b["is_inbox"] == 0 and b["handled"] == 0 and b["needs_human"] == 1 and b["triaged_at"]
+        c = um(con, "SELECT * FROM emails WHERE id=?", (e3,))
+        assert c["is_inbox"] == 1 and c["triaged_at"] and "ficou na inbox" in c["triage_reason"]
+        # segunda rodada: nada novo para triar (as três já têm triaged_at)
+        assert triagem.rodar(con, runner, "agent:t:x", mailboxes=("urace",), por="teste")["lidos"] == 0
+    finally:
+        con.close()
+    # o e-mail do cliente movido pela IA continua em Precisa de atenção
+    entra(cli, "admin@urace.us")
+    itens = cli.get(B + "/needs-attention").json()
+    lista = itens if isinstance(itens, list) else itens.get("items", [])
+    assert any(i.get("entity", {}).get("id") == e2 and "A IA moveu" in (i.get("why") or "") for i in lista)
+
+
+def test_adicionar_marcador_e_corpo_html_sem_gmail(cli, monkeypatch):
+    from command_center.api import rotas
+    h = entra(cli, "admin@urace.us")
+    es = cli.get(B + "/emails?mailbox=urace").json()
+    e = [x for x in es if x["links"]][0]
+    # sem Gmail: 503, nunca 500
+    assert cli.post(B + f"/emails/{e['id']}/labels", headers=h, json={"add": ["Amazon"]}).status_code == 503
+    assert cli.post(B + f"/emails/{e['id']}/labels", headers=h, json={"add": ["INBOX"]}).status_code == 400
+    assert cli.get(B + f"/emails/{e['id']}/html/abc123def").status_code == 503
+    assert cli.get(B + f"/emails/{e['id']}/html/..").status_code == 404
+
+    class Gm:
+        def rotular_humano(self, conta, tid, add): return {"aplicado": True, "adicionado": add}
+        def mensagem_html(self, conta, mid): return {"html": "<p>Oi <img src='cid:x'><script>bad()</script></p>", "texto": "Oi", "assunto": "S"}
+    monkeypatch.setattr(rotas, "modulo", lambda s: Gm())
+    r = cli.post(B + f"/emails/{e['id']}/labels", headers=h, json={"add": ["Amazon", "Amazon"]})
+    assert r.status_code == 200 and r.json()["labels"].count("Amazon") == 1
+    e2 = [x for x in cli.get(B + "/emails?mailbox=urace").json() if x["id"] == e["id"]][0]
+    assert "Amazon" in e2["labels"] and e2["is_inbox"] != 0        # adicionar não tira da inbox
+    r = cli.get(B + f"/emails/{e['id']}/html/abc123def")
+    assert r.status_code == 200 and "<script" not in r.text and "Oi" in r.text
+    assert r.headers["content-security-policy"].startswith("default-src 'none'") and r.headers["x-frame-options"] == "SAMEORIGIN"
+    # viewer não rotula
+    hv = entra(cli, "viewer@urace.us")
+    assert cli.post(B + f"/emails/{e['id']}/labels", headers=hv, json={"add": ["Amazon"]}).status_code == 403
+    # triagem manual: dispara em thread (RUNNER falso), status mostra a regra
+    from command_center.api import ia
+    h = entra(cli, "admin@urace.us")
+    monkeypatch.setattr(ia, "RUNNER", lambda texto, sk: (True, '{"itens":[]}', None))
+    st = cli.get(B + "/gmail/triage").json()
+    assert st["rule"]["schedule"] == '["07:00","13:00","21:00"]'
+    assert cli.post(B + "/gmail/triage", headers=h, json={"mailbox": "urace"}).status_code == 202

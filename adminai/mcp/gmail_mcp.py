@@ -144,13 +144,15 @@ def _mapa_labels(nome):
 
 
 def _label_id(nome, label):
-    m = _mapa_labels(nome)
-    if label in m:
-        return m[label]
-    # tolerância a maiúsculas/minúsculas, nunca a nome novo
-    for n, i in m.items():
-        if n.lower() == label.lower():
-            return i
+    for tentativa in (0, 1):
+        m = _mapa_labels(nome)
+        if label in m:
+            return m[label]
+        # tolerância a maiúsculas/minúsculas, nunca a nome novo
+        for n, i in m.items():
+            if n.lower() == label.lower():
+                return i
+        _labels.pop(nome, None)           # marcador criado hoje no Gmail: recarrega uma vez
     raise ErroFerramenta(f"marcador '{label}' não existe na conta {nome}. A IA não cria marcador — "
                          "use um da taxonomia (brain/40_SISTEMAS/Taxonomia do Gmail.md).")
 
@@ -166,17 +168,29 @@ def _b64d(s):
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
-def _corpo(payload):
-    """Prefere text/plain; cai para HTML sem tags. Lista anexos."""
-    textos, htmls, anexos = [], [], []
+def _corpo(payload, com_html=False):
+    """Prefere text/plain; cai para HTML sem tags. Lista anexos.
+    Com com_html devolve também (html, imagens inline por Content-ID)."""
+    textos, htmls, anexos, inline = [], [], [], []
 
     def walk(p):
         mime = p.get("mimeType", "")
         body = p.get("body", {})
+        cid = None
+        for h in p.get("headers", []) or []:
+            if h.get("name", "").lower() == "content-id":
+                cid = (h.get("value") or "").strip("<> ")
         if p.get("filename"):
-            anexos.append({"nome": p["filename"], "mime": mime, "attachment_id": body.get("attachmentId"),
+            item = {"nome": p["filename"], "mime": mime, "attachment_id": body.get("attachmentId"),
+                    "bytes": body.get("size")}
+            if cid and mime.startswith("image/"):
+                inline.append({"cid": cid, **item})
+            else:
+                anexos.append(item)
+        elif cid and mime.startswith("image/") and body.get("attachmentId"):
+            inline.append({"cid": cid, "nome": None, "mime": mime, "attachment_id": body.get("attachmentId"),
                            "bytes": body.get("size")})
-        if body.get("data"):
+        if body.get("data") and not p.get("filename"):
             t = _b64d(body["data"]).decode("utf-8", errors="replace")
             (textos if mime == "text/plain" else htmls if mime == "text/html" else []).append(t)
         for sub in p.get("parts", []) or []:
@@ -185,6 +199,8 @@ def _corpo(payload):
     texto = "\n".join(textos) if textos else re.sub(r"<[^>]+>", " ", "\n".join(htmls))
     texto = re.sub(r"[ \t]+", " ", texto)
     texto = re.sub(r"\n\s*\n+", "\n\n", texto).strip()
+    if com_html:
+        return texto, anexos, ("\n".join(htmls) if htmls else None), inline
     return texto, anexos
 
 
@@ -193,10 +209,35 @@ def _resumo_msg(m, com_corpo=False, limite=4000):
          "data": _cabecalho(m, "Date"), "assunto": _cabecalho(m, "Subject"),
          "marcadores": m.get("labelIds"), "snippet": m.get("snippet")}
     if com_corpo:
-        texto, anexos = _corpo(m.get("payload", {}))
+        texto, anexos, html, inline = _corpo(m.get("payload", {}), com_html=True)
         r["corpo"] = texto[:limite] + ("…[cortado]" if len(texto) > limite else "")
         r["anexos"] = anexos or None
+        r["tem_html"] = bool(html)
+        r["inline"] = len(inline)
     return r
+
+
+def mensagem_html(conta, message_id, limite_imagens=3_000_000):
+    """Porta do Command Center (não é ferramenta do agente): o HTML da mensagem
+    como o Gmail mostra, com as imagens inline (cid:) embutidas em data: URI.
+    Não sanitiza — quem sanitiza é o painel, que também o exibe em iframe sem script."""
+    m = _req(conta, f"{GMAIL}/messages/{message_id}?format=full")
+    texto, anexos, html, inline = _corpo(m.get("payload", {}), com_html=True)
+    if not html:
+        return {"html": None, "texto": texto, "anexos": anexos}
+    usados = 0
+    for im in inline:
+        if not im.get("attachment_id") or usados > limite_imagens:
+            continue
+        try:
+            r = _req(conta, f"{GMAIL}/messages/{message_id}/attachments/{im['attachment_id']}")
+            dados = _b64d(r["data"])
+        except Exception:
+            continue
+        usados += len(dados)
+        uri = f"data:{im['mime']};base64,{base64.b64encode(dados).decode()}"
+        html = re.sub(r"cid:\s*" + re.escape(im["cid"]), uri, html, flags=re.I)
+    return {"html": html, "texto": texto, "anexos": anexos, "assunto": _cabecalho(m, "Subject")}
 
 
 def _simulado(descricao):
@@ -353,6 +394,45 @@ def mover_humano(conta, thread_id, marcador):
     _req(conta, f"{GMAIL}/threads/{thread_id}/modify", "POST",
          {"addLabelIds": [lid], "removeLabelIds": ["INBOX"]})
     return {"aplicado": True, "thread_id": thread_id, "marcador": marcador, "arquivado": True}
+
+
+def rotular_humano(conta, thread_id, adicionar):
+    """Clique de uma pessoa: ADICIONA marcadores à thread, sem tirar da inbox.
+    Não é ferramenta do MCP. Marcador inexistente é erro, nunca criação."""
+    adicionar = [l for l in (adicionar or []) if l and l.strip()]
+    if not adicionar:
+        raise ErroFerramenta("nada a adicionar")
+    for l in adicionar:
+        if l.upper() in PROIBIDOS or l.upper() in ("INBOX", "UNREAD", "STARRED"):
+            raise ErroFerramenta(f"RECUSADO: '{l}' não é um marcador que se adiciona.")
+    ids = [_label_id(conta, l) for l in adicionar]
+    _req(conta, f"{GMAIL}/threads/{thread_id}/modify", "POST", {"addLabelIds": ids})
+    return {"aplicado": True, "thread_id": thread_id, "adicionado": adicionar}
+
+
+def triar_ia(conta, thread_id, marcadores, principal):
+    """Porta da TRIAGEM automática (manhã, tarde e noite). Não é ferramenta do
+    agente: é o Command Center que chama depois de validar a resposta da IA.
+
+    Decisão do dono (09/09): "a IA leia cada e-mail, adicione marcadores e mova
+    pro marcador principal" — aplica todos os marcadores e tira da inbox.
+    Substitui, só para esta porta, a regra antiga de arquivar apenas wNews.
+    Regras que continuam em código: nunca TRASH/SPAM; marcador tem de existir.
+    """
+    todos_ = [l for l in list(marcadores or []) + [principal] if l]
+    if not principal or not todos_:
+        raise ErroFerramenta("triagem sem marcador principal")
+    for l in todos_:
+        if l.upper() in PROIBIDOS or l.upper() in ("INBOX", "UNREAD", "STARRED"):
+            raise ErroFerramenta(f"RECUSADO: '{l}' nunca é destino de triagem.")
+    ids = []
+    for l in todos_:
+        i = _label_id(conta, l)
+        if i not in ids:
+            ids.append(i)
+    _req(conta, f"{GMAIL}/threads/{thread_id}/modify", "POST",
+         {"addLabelIds": ids, "removeLabelIds": ["INBOX"]})
+    return {"aplicado": True, "thread_id": thread_id, "marcadores": todos_, "principal": principal, "arquivado": True}
 
 
 # ----------------------------------------------------------- ESCRITA

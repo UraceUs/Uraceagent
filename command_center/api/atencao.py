@@ -163,13 +163,14 @@ def _coletar(con):
     from command_center.providers import classificar
     corte = (datetime.utcnow() - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%S")
     for e in todos(con, """SELECT e.*, c.name AS cliente FROM emails e JOIN clients c ON c.id=e.client_id
-                           WHERE e.handled=0 AND COALESCE(e.is_inbox,1)=1 AND COALESCE(e.last_at,'') >= ?
+                           WHERE e.handled=0 AND (COALESCE(e.is_inbox,1)=1 OR COALESCE(e.needs_human,0)=1) AND COALESCE(e.last_at,'') >= ?
                            ORDER BY e.last_at DESC LIMIT 20""", (corte,)):
         if classificar.auto_tratar(e, e.get("suggested_label")):
             continue
         nivel = "HIGH" if (e.get("priority") in ("CRITICAL", "HIGH")) else "MEDIUM"
         itens.append(dict(key=_chave("email-cliente", "email", e["id"]), level=nivel, title=f"{e['cliente']} escreveu: {(e['subject'] or '')[:60]}",
-                          why=f"Na inbox {e['mailbox']}@ há {max(0, (datetime.utcnow() - datetime.fromisoformat(e['last_at'][:19])).days) if e.get('last_at') else '?'} dia(s), sem resposta. Intenção: {e.get('intent') or 'não classificada'}.",
+                          why=(f"A IA moveu para '{e.get('suggested_label')}' ({e.get('triage_reason') or 'pede resposta'}), mas é uma pessoa que responde." if e.get("needs_human") and not e.get("is_inbox")
+                               else f"Na inbox {e['mailbox']}@ há {max(0, (datetime.utcnow() - datetime.fromisoformat(e['last_at'][:19])).days) if e.get('last_at') else '?'} dia(s), sem resposta. Intenção: {e.get('intent') or 'não classificada'}."),
                           entity={"type": "email", "id": e["id"]}, client_id=e["client_id"],
                           link=_link(con, "email", e["id"]), action="Responder"))
 

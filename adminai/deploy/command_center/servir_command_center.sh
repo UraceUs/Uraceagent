@@ -78,6 +78,12 @@ systemctl is-active --quiet "$UNIT.service" \
     || { echo "!! o serviço não subiu:"; journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }
 curl -sf "http://127.0.0.1:$PORTA/ops/ready" >/dev/null || { echo "!! /ops/ready não respondeu"; journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }
 echo "-- serviço no ar em 127.0.0.1:$PORTA"
+# 09/09: a triagem do Gmail passou para o Command Center (07/13/21h). O timer antigo
+# das 07:00 rodaria um segundo agente ao mesmo tempo — e o VPS não aguenta dois.
+if systemctl is-enabled --quiet urace-triagem-email.timer 2>/dev/null; then
+    sudo systemctl disable --now urace-triagem-email.timer >/dev/null 2>&1 || true
+    echo "-- urace-triagem-email.timer desligado: a triagem agora é do painel (Automação > Triagem do Gmail)"
+fi
 
 # ----------------------------------------------------------------- 6. Caddy
 echo "-- 6/7 Caddy"

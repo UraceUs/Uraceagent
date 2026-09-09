@@ -194,6 +194,7 @@ def executar_acao(aid, user_id):
                       result="Sem argumentos estruturados: a IA descreveu a ação mas não deu os campos exatos. Peça no AI Command: 'refaça a ACAO com os argumentos em JSON'.")
             return
         acao = a["action"]
+        sistema = a["system"] or acao.split("_")[0]
         if acao == "asana_mover_para_finished":       # açúcar SAFE: só para a coluna Finished Services
             from command_center.providers.sync import SECAO_FINISHED
             acao, args = "asana_mover_para_secao", {"gid": args.get("gid"), "secao_gid": SECAO_FINISHED}
@@ -219,6 +220,11 @@ def executar_acao(aid, user_id):
     except Exception as e:
         atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(), result=f"{type(e).__name__}: {str(e)[:500]}")
         auditar(con, "action.failed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:300]})
+        try:                                              # caiu durante o uso da IA: re-sonda só esse sistema
+            from command_center.api import agenda
+            agenda.sondar_apos_falha(con, sistema, str(e))
+        except Exception:
+            pass
     finally:
         con.close()
 
