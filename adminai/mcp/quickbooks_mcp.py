@@ -336,6 +336,22 @@ def qbo_criar_item(nome, preco=0, descricao=None):
     return _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
 
 
+def criar_item_sistema(nome, preco=0, descricao=None):
+    """Porta do Command Center (não é ferramenta do agente): cria o item do catálogo quando a
+    invoice pede um produto que ainda não existe. Decisão do dono (10/09): a IA pode criar o
+    produto com a descrição e o valor; o que ele aprova é só o envio da invoice."""
+    nome = (nome or "").strip()
+    if not nome or PROIBIDO_NO_NOME in nome:
+        raise ErroFerramenta("nome de item inválido")
+    r = _query(f"select * from Item where Name = '{_esc(nome)}' maxresults 1")
+    if r.get("Item"):
+        return _resumo_item(r["Item"][0])
+    corpo = {"Name": nome, "Type": "Service", "Taxable": False, "UnitPrice": float(preco or 0), "IncomeAccountRef": _conta_receita()}
+    if descricao:
+        corpo["Description"] = descricao[:4000]
+    return _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
+
+
 def _conta_receita():
     r = _query("select * from Account where AccountType = 'Income' and Active = true maxresults 5")
     contas = r.get("Account", [])

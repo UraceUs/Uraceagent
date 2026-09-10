@@ -290,7 +290,7 @@ def test_nao_repete_acao_feita_e_substitui_pendente(cli):
     assert a1["asana_atualizar_tarefa"]["status"] == "PROPOSED" and a1["qbo_criar_e_enviar_invoice"]["status"] == "PROPOSED"
     # o dono muda algo e manda de novo: as pendentes antigas são substituídas, não duplicadas
     c2 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "waiver vale um ano, mesmo valor"}).json()["id"])
-    assert "AÇÕES JÁ PROPOSTAS HOJE" in c2["text"] and "#%d" % a1["asana_atualizar_tarefa"]["id"] in c2["text"]
+    assert "AÇÕES JÁ PROPOSTAS HOJE" in c2["prompt"] and "#%d" % a1["asana_atualizar_tarefa"]["id"] in c2["prompt"] and c2["text"] == "waiver vale um ano, mesmo valor"
     a2 = {a["action"]: a for a in c2["actions"]}
     assert all(a["status"] == "PROPOSED" for a in a2.values())
     velha = cli.get(f"{B}/commands/{c1['id']}").json()["actions"]
@@ -302,7 +302,7 @@ def test_nao_repete_acao_feita_e_substitui_pendente(cli):
     acoes3 = [a["action"] for a in c3["actions"]]
     assert "asana_atualizar_tarefa" not in acoes3 and "qbo_criar_e_enviar_invoice" in acoes3
     assert "já aprovada/feita em #%d" % a2["asana_atualizar_tarefa"]["id"] in c3["output"]
-    assert "FEITA" in c3["text"]
+    assert "FEITA" in c3["prompt"]
 
 
 def test_invoice_zerada_ganha_uma_correcao_da_ia(cli, monkeypatch):
@@ -378,12 +378,13 @@ def test_contexto_do_piloto_citado_e_invoice_resolvida_sem_perguntar(cli, monkey
                                           'ACAO: qbo_clientes_buscar | Nicolas Pera | achar o cliente | {"texto":"peranicolas2106@gmail.com"}\n'
                                           'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice | {"cliente_id":"<id>","linhas":[{"item_id":"<id>","quantidade":1,"unitario":500,"descricao":"Arrive and Drive daily - David Pera - 2026-09-13"}],"vence_em":"2026-09-13"}'), None)
     c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "Filho do Nicolas Pera - David Pera. Domingo, mesmo esquema."}).json()["id"])
-    assert "CONTEXTO DO PAINEL sobre David Pera" in c["text"] and "cliente_id=696" in c["text"]
-    assert [a["action"] for a in c["actions"]] == ["qbo_criar_e_enviar_invoice"] and c["actions"][0]["status"] == "PROPOSED"
+    assert "CONTEXTO DO PAINEL sobre David Pera" in c["prompt"] and "cliente_id=696" in c["prompt"]
+    vivas = [a for a in c["actions"] if a["status"] == "PROPOSED"]
+    assert [a["action"] for a in vivas] == ["qbo_criar_e_enviar_invoice"] and all(a["action"] != "qbo_clientes_buscar" for a in c["actions"])
     import json as _j
-    p = _j.loads(c["actions"][0]["payload"])
+    p = _j.loads(vivas[0]["payload"])
     assert not p.get("problemas") and p["args"]["cliente_id"] == "696" and p["args"]["linhas"][0]["item_id"] == "31"
-    assert "é consulta, não ação" in c["output"]
+    assert cli.get(f"{B}/actions/{vivas[0]['id']}").json()["status"] == "PROPOSED"
     ia.RUNNER = runner_falso
 
 
@@ -441,3 +442,43 @@ def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, mo
         con.close()
     motor.executar_acao(aid2, 1)
     assert preenchidos[-1] == ("999001", "https://qbo.intuit.com/app/invoice?txnId=1042", 500.0, True)
+
+
+def test_consulta_executada_na_hora_e_item_criado_quando_nao_existe(cli, monkeypatch):
+    """Busca listada pelo agente é executada pelo painel e volta como resultado na mesma conversa;
+    produto que não existe no QBO é criado com o valor (só o envio da invoice fica para o dono)."""
+    from command_center.api import acoes
+    from command_center.db import conectar, um
+    import command_center.providers as prov
+    criados, buscas = [], []
+
+    class Qbo:
+        def qbo_itens_buscar(self, termos=None, texto=None): buscas.append(termos or texto); return [{"termo": texto or termos, "found": False, "itens": []}]
+        def criar_item_sistema(self, nome, preco=0, descricao=None): criados.append((nome, preco)); return {"id": "77", "nome": nome}
+    monkeypatch.setattr(prov, "modulo", lambda s: Qbo())
+    chamadas = []
+
+    def runner(texto, sk):
+        chamadas.append(texto)
+        if "Executei as consultas" in texto:
+            assert "qbo_itens_buscar" in texto and '"found": false' in texto
+            return True, ('Item não existe: crio e monto a invoice de $500.\n'
+                          'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice | {"cliente_id":"696","linhas":[{"item":"Urace Daily","quantidade":1,"unitario":500,"descricao":"Urace Daily - Using Own Kart - David Pera - 2026-09-20"}],"vence_em":"2026-09-20"}'), None
+        return True, ('Vou procurar o item.\nACAO: qbo_itens_buscar | Urace Daily | achar o item | {"texto":"Urace Daily"}'), None
+    ia.RUNNER = runner
+    h = entra(cli, "admin@urace.us")
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera dia 20, Urace Daily, invoice de $500"}).json()["id"], timeout=8)
+    assert len(chamadas) == 2 and buscas == ["Urace Daily"]
+    acs = [a for a in c["actions"] if a["status"] == "PROPOSED"]
+    assert [a["action"] for a in acs] == ["qbo_criar_e_enviar_invoice"]
+    p = json.loads(acs[0]["payload"])
+    assert not p.get("problemas") and p["args"]["linhas"][0]["item_id"] == "77" and criados == [("Urace Daily", 500.0)]
+    assert "criado no QuickBooks (id 77" in c["output"]
+    con = conectar()
+    try:
+        assert um(con, "SELECT name FROM qbo_items WHERE id='77'")["name"] == "Urace Daily"
+    finally:
+        con.close()
+    assert acoes._nome_de_produto("Arrive and Drive daily - David Pera - 2026-09-13") == "Arrive and Drive daily"
+    assert acoes._nome_de_produto("Coisa qualquer", None) is None
+    ia.RUNNER = runner_falso

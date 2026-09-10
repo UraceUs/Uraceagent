@@ -72,3 +72,18 @@ com parâmetro errado e mandou a invoice com `<id de …>`. Ficou:
     abaixo de `Invoice link:` e de `Security deposit:`). O **security
     deposit** segue o mesmo procedimento: a invoice de depósito grava o
     link e o valor na linha `Security deposit:`.
+
+**Quarta rodada (10/09, 09:07):** *"Ele tem autonomia pra fazer essas
+buscas. O que eu preciso aprovar é somente o envio."* e *"quando eu
+aprovo, ele não me traz resultado."*
+14. **Busca executada na hora pelo painel:** consulta que o agente listar
+    é executada (só leitura) e o resultado volta para ele na mesma
+    conversa, numa rodada de conclusão. Nunca pede aprovação.
+15. **Produto que não existe no QuickBooks é criado pelo painel** com
+    nome do produto (Urace Daily, Arrive and Drive…), valor e descrição,
+    e entra no catálogo espelhado. `qbo_criar_item` é SAFE.
+16. **Aprovar acompanha até o fim:** a tela segue a execução e devolve o
+    resultado (✓ "Invoice 1042 de $500,00 criada e enviada para…", com
+    link; ✗ "Falhou: …"). Sem clicar duas vezes.
+17. Histórico mostra só o que o dono escreveu; o contexto que vai ao
+    agente fica em `ai_commands.prompt`.

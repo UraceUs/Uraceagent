@@ -193,7 +193,39 @@ def _buscar_cliente_qbo(texto):
         return []
 
 
-def extrair_acoes(con, command_id, texto, notas=None):
+def _criar_item_qbo(nome, preco, descricao=None):
+    from command_center.providers import modulo
+    return modulo("quickbooks").criar_item_sistema(nome, preco, descricao)
+
+
+_SISTEMA_DO_NOME = {"qbo": "quickbooks", "quickbooks": "quickbooks", "asana": "asana", "docusign": "docusign",
+                    "gmail": "gmail", "google": "gmail", "calendar": "gmail", "sheets": "gmail"}
+
+
+def executar_consultas(consultas):
+    """Roda as buscas/leituras que o agente listou (só leitura; sem APLICAR). Devolve linhas de texto
+    com o resultado, para voltar ao agente na mesma conversa. Parâmetro desconhecido é descartado."""
+    import inspect
+    from command_center.providers import NaoConectado, modulo
+    saida = []
+    for nome, args in consultas[:6]:
+        sistema = _SISTEMA_DO_NOME.get(nome.split("_")[0], nome.split("_")[0])
+        try:
+            fn = getattr(modulo(sistema), nome, None)
+            if fn is None:
+                saida.append(f"- {nome}: ferramenta não existe"); continue
+            aceitos = inspect.signature(fn).parameters
+            kw = {k: v for k, v in (args or {}).items() if k in aceitos} if not any(p.kind == p.VAR_KEYWORD for p in aceitos.values()) else dict(args or {})
+            res = fn(**kw)
+            saida.append(f"- {nome} {json.dumps(kw, ensure_ascii=False)[:120]} → {json.dumps(res, ensure_ascii=False)[:1500]}")
+        except NaoConectado as e:
+            saida.append(f"- {nome}: não conectado ({e})")
+        except Exception as e:
+            saida.append(f"- {nome}: {type(e).__name__}: {str(e)[:200]}")
+    return saida
+
+
+def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
     """Lê as ações que o agente declarou. Três fontes, na ordem:
     1. linhas `ACAO: ferramenta | alvo | resumo` (o protocolo pedido no SUFIXO)
     2. JSON de simulação dos MCP (`"teria_feito": ...`), se o agente o ecoou
@@ -213,13 +245,16 @@ def extrair_acoes(con, command_id, texto, notas=None):
         if chave in vistos:
             return
         vistos.add(chave)
-        if acoes.eh_consulta(nome):                       # busca/leitura não é ação: o agente deveria ter executado
-            notas.append(f"{nome} é consulta, não ação: a IA executa na hora, não propõe.")
+        if acoes.eh_consulta(nome):                       # busca/leitura: o painel executa na hora e devolve ao agente
+            if consultas is not None and isinstance(args, dict):
+                consultas.append((nome, args))
+            else:
+                notas.append(f"{nome} é consulta, não ação: a IA executa na hora, não propõe.")
             return
         pol = _politica(con, nome)
         problemas = []
         if isinstance(args, dict):
-            args, problemas = acoes.normalizar(nome, args, texto, _buscar_item_qbo, _buscar_cliente_qbo, con, alvo)
+            args, problemas = acoes.normalizar(nome, args, texto, _buscar_item_qbo, _buscar_cliente_qbo, con, alvo, _criar_item_qbo, notas)
         assin = acoes.assinatura(nome, args, alvo)
         estado, antiga = acoes.ja_decidida(con, assin)
         if estado == "feita":
@@ -235,9 +270,10 @@ def extrair_acoes(con, command_id, texto, notas=None):
                              ("proposta pelo agente" + ("" if args else " (sem argumentos estruturados)")))
         if pol == "REQUIRES_APPROVAL":
             inserir(con, "approvals", action_id=aid)
-        if estado == "pendente" and antiga["command_id"] != command_id:
+        if estado == "pendente":                          # a mesma ação ainda pendente (mesmo comando ou anterior): a nova manda
             acoes.substituir(con, antiga["id"], aid)
-            notas.append(f"{nome} → {alvo or descricao[:60]}: substitui a proposta #{antiga['id']} (instrução mais recente).")
+            if antiga["command_id"] != command_id:
+                notas.append(f"{nome} → {alvo or descricao[:60]}: substitui a proposta #{antiga['id']} (instrução mais recente).")
         achadas.append({"id": aid, "action": nome, "policy": pol, "alvo": alvo, "descricao": descricao[:200], "problemas": problemas})
 
     for linha in (texto or "").split("\n"):
@@ -277,31 +313,46 @@ def extrair_acoes(con, command_id, texto, notas=None):
 
 
 # ------------------------------------------------------------ execução
-def _executa(command_id, texto, session_key, user_id):
+def _executa(command_id, texto, session_key, user_id, prompt=None):
+    """`texto` é o que o dono escreveu (fica no histórico); `prompt` é o que vai ao agente (texto + contexto)."""
     con = conectar()
     try:
+        prompt = prompt or texto
         with _PARALELO:                                   # fila: um agente por vez
             atualizar(con, "ai_commands", command_id, status="RUNNING", started_at=agora())
-            ok, saida, erro = RUNNER(texto + SUFIXO, session_key)
+            ok, saida, erro = RUNNER(prompt + SUFIXO, session_key)
             if not ok and erro and ("não respondeu" in erro or "não encontrado" in erro):
-                ok, saida, erro = RUNNER(texto + SUFIXO, session_key)
+                ok, saida, erro = RUNNER(prompt + SUFIXO, session_key)
         if ok:
             # ações ANTES do DONE: quem lê o comando no instante em que ele
             # termina já vê as propostas (a tela faz polling nesse status)
             from command_center.api import acoes as _ac
-            notas = []
-            lista = extrair_acoes(con, command_id, saida, notas)
-            incompletas = [a for a in lista if a.get("problemas")]
-            if incompletas:                               # uma chance de corrigir, na mesma conversa
-                pedido = "".join(_ac.pedido_de_correcao(a["action"], a["problemas"]) for a in incompletas[:3])
+            notas, consultas = [], []
+            lista = extrair_acoes(con, command_id, saida, notas, consultas)
+            incompletas = []
+            for _rodada in range(2):                      # buscas viram resultado; proposta incompleta ganha correção
+                resultados = executar_consultas(consultas) if consultas else []
+                incompletas = [a for a in lista if a.get("problemas")]
+                if not resultados and not incompletas:
+                    break
+                pedido = ""
+                if resultados:
+                    pedido += "\n\n[Command Center] Executei as consultas que você listou (não peça de novo). RESULTADOS:\n" + "\n".join(resultados)
+                if incompletas:
+                    pedido += "".join(_ac.pedido_de_correcao(a["action"], a["problemas"]) for a in incompletas[:3])
+                pedido += ("\n\nAgora CONCLUA o pedido do dono: reescreva SOMENTE as linhas ACAO finais que faltam, com os campos exatos "
+                           "(cliente_id e item_id numéricos, unitario com o valor dito). Nada de consulta: se um item não existir, use qbo_criar_item.")
                 with _PARALELO:
                     ok2, saida2, _ = RUNNER(pedido, session_key)
-                if ok2 and re.search(r"^ACAO:", saida2 or "", re.M):
-                    for a in incompletas:
-                        atualizar(con, "ai_actions", a["id"], status="REJECTED", finished_at=agora(), result="substituída pela correção da própria IA")
-                        con.execute("UPDATE approvals SET decided_at=?, decision='REJECTED', comment='corrigida' WHERE action_id=? AND decided_at IS NULL", (agora(), a["id"]))
-                    lista = [a for a in lista if not a.get("problemas")] + extrair_acoes(con, command_id, saida2, notas)
-                    saida = saida + "\n" + "\n".join(l for l in saida2.split("\n") if l.strip().upper().startswith("ACAO:"))
+                if not ok2 or not re.search(r"^ACAO:", saida2 or "", re.M):
+                    break
+                for a in incompletas:
+                    atualizar(con, "ai_actions", a["id"], status="REJECTED", finished_at=agora(), result="substituída pela correção da própria IA")
+                    con.execute("UPDATE approvals SET decided_at=?, decision='REJECTED', comment='corrigida' WHERE action_id=? AND decided_at IS NULL", (agora(), a["id"]))
+                consultas = []
+                lista = [a for a in lista if not a.get("problemas")] + extrair_acoes(con, command_id, saida2, notas, consultas)
+                saida = saida + "\n\n" + saida2.strip()
+            incompletas = [a for a in lista if a.get("problemas")]
             if notas:
                 saida = saida + "\n\n" + "\n".join("(Command Center) " + n for n in notas)
             from command_center.api import motor
@@ -336,12 +387,12 @@ def command_create(dados: ComandoIn, request: Request, u=Depends(auth.exige("OPE
     if not texto or len(texto) > 4000:
         raise HTTPException(400, "Command must be between 1 and 4000 characters.")
     from command_center.api import acoes, motor
-    texto = texto + motor.aprendizados(con) + motor.contexto_do_comando(con, texto) + acoes.estado_do_dia(con, u["id"])
+    prompt = texto + motor.aprendizados(con) + motor.contexto_do_comando(con, texto) + acoes.estado_do_dia(con, u["id"])
     session_key = f"agent:{AGENTE}:web-{u['id']}-{date.today().isoformat()}"
-    cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, session_key=session_key)
+    cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, prompt=prompt, session_key=session_key)
     auditar(con, "ai.command", f"user:{u['id']}", user_id=u["id"], entity_type="ai_command",
             entity_id=cid, detail={"text": texto[:300]}, ip=auth._ip(request))
-    threading.Thread(target=_executa, args=(cid, texto, session_key, u["id"]), daemon=True).start()
+    threading.Thread(target=_executa, args=(cid, texto, session_key, u["id"], prompt), daemon=True).start()
     return {"id": cid, "status": "QUEUED"}
 
 
@@ -369,6 +420,14 @@ def actions(status: str | None = None, u=Depends(auth.usuario_atual), con: sqlit
     if status:
         return todos(con, "SELECT * FROM ai_actions WHERE status=? ORDER BY id DESC LIMIT 200", (status.upper(),))
     return todos(con, "SELECT * FROM ai_actions ORDER BY id DESC LIMIT 200")
+
+
+@r.get("/actions/{aid}")
+def action_get(aid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    a = um(con, "SELECT * FROM ai_actions WHERE id=?", (aid,))
+    if not a:
+        raise HTTPException(404, "Action not found.")
+    return a
 
 
 class DecisaoIn(BaseModel):

@@ -316,6 +316,7 @@ INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
   ('asana_tarefa','SAFE','leitura'),
   ('asana_criar_tarefa','SAFE','criar tarefa: autorizado pelo dono (31/08)'),
   ('asana_criar_do_modelo','SAFE','tarefa de serviço pelo modelo oficial, na coluna do dia (dono, 04/09)'),
+  ('qbo_criar_item','SAFE','a IA cria o produto no catálogo com descrição e valor; só o envio da invoice pede aprovação (dono, 10/09)'),
   ('asana_comentar','SAFE','comentário com prefixo [IA ADM]'),
   ('asana_mover_para_secao','REQUIRES_CONFIRMATION','muda o quadro'),
   ('asana_mover_para_finished','SAFE','só para Finished Services, tarefa de dia passado e concluída: autocorreção (dono, 08/09)'),

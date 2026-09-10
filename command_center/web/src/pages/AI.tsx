@@ -33,6 +33,29 @@ function Previa({ a }: { a: AiAction }) {
   return <pre className="mono small muted" style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap' }}>{JSON.stringify(args, null, 1).slice(0, 800)}</pre>
 }
 
+/** O resultado de uma ação executada, em uma frase (invoice, tarefa, waiver, comentário). */
+function resumoResultado(a: AiAction): string {
+  const r = safeJson(a.result) as Record<string, unknown> | null
+  if (!r || typeof r !== 'object') return a.result ? a.result.slice(0, 200) : 'feito'
+  if (a.action.startsWith('qbo_') && (r.numero || r.id)) return `Invoice ${r.numero || r.id}${r.total != null ? ` de ${money(Number(r.total))}` : ''} criada${r.enviado ? ` e enviada para ${r.enviado_para}` : r.aviso ? ` (${r.aviso})` : ''}.`
+  if (a.action.startsWith('asana_criar') && r.gid) return `Tarefa "${r.nome || ''}" criada no Asana.`
+  if (a.action === 'docusign_enviar_waiver') return `Waiver enviada${r.email ? ` para ${r.email}` : ''}.`
+  if (a.action === 'asana_comentar') return 'Comentário publicado no Asana.'
+  if (a.action.startsWith('asana_mover')) return 'Tarefa movida no Asana.'
+  if (r.aplicado === true) return 'Feito.'
+  return JSON.stringify(r).slice(0, 200)
+}
+
+function ResultadoBox({ a }: { a: AiAction }) {
+  if (!a.result) return null
+  const r = safeJson(a.result) as Record<string, unknown> | null
+  const ok = a.status === 'DONE'
+  return <div className={`banner ${ok ? 'ok' : a.status === 'FAILED' ? 'crit' : 'info'}`} style={{ marginTop: 6 }}>
+    <b>{ok ? '✓ ' : a.status === 'FAILED' ? '✗ ' : ''}{ok ? resumoResultado(a) : a.status === 'FAILED' ? `Falhou: ${a.result.slice(0, 300)}` : a.result.slice(0, 300)}</b>
+    {ok && r && typeof r === 'object' && typeof r.link === 'string' && <> <a className="syslink" href={r.link} target="_blank" rel="noopener noreferrer">{a.action.startsWith('qbo_') ? 'QuickBooks' : 'Asana'} ↗</a></>}
+  </div>
+}
+
 export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void }) {
   const { can } = useAuth()
   const toast = useToast()
@@ -42,7 +65,20 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
   async function decide(kind: 'approve' | 'reject') {
     const comment = kind === 'reject' ? (window.prompt('Motivo (opcional):') ?? undefined) : undefined
     setBusy(kind === 'approve' ? 'a' : 'r')
-    try { const r = await api.post<{ note?: string }>(`/ai/actions/${a.id}/${kind}`, { comment }); toast(kind === 'approve' ? (r.note || 'Aprovada.') : 'Rejeitada.', kind === 'approve' ? 'ok' : undefined); onChange?.() }
+    try {
+      await api.post<{ note?: string }>(`/ai/actions/${a.id}/${kind}`, { comment })
+      if (kind === 'reject') { toast('Rejeitada.'); onChange?.(); return }
+      toast('Aprovada. Executando…')
+      // acompanha até o fim e devolve o resultado, como o dono pediu (10/09): positivo ou negativo, com o que deu
+      for (let i = 0; i < 60; i++) {
+        await new Promise(res => setTimeout(res, 2000))
+        const st = await api.get<AiAction>(`/ai/actions/${a.id}`)
+        if (st.status === 'DONE') { toast(`✓ ${resumoResultado(st)}`, 'ok'); break }
+        if (st.status === 'FAILED') { toast(`✗ Falhou: ${(st.result || 'sem detalhe').slice(0, 220)}`, 'crit'); break }
+        if (i === 59) toast('Ainda executando. O resultado aparece na ação em instantes.')
+      }
+      onChange?.()
+    }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   return <div className="act">
@@ -51,7 +87,7 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
       {a.reason && <div className="small ink2" style={{ marginTop: 4 }}>{a.reason}</div>}
       {payload !== null && typeof payload === 'object' && (a.status === 'PROPOSED' || a.status === 'APPROVED') && <Previa a={a} />}
       {payload !== null && typeof payload === 'object' && a.status !== 'PROPOSED' && a.status !== 'APPROVED' && <details className="small muted" style={{ marginTop: 4 }}><summary>dados</summary><pre className="mono" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(payload, null, 1).slice(0, 600)}</pre></details>}
-      {a.result && <div className="small" style={{ marginTop: 4 }}><b>Resultado:</b> {a.result.slice(0, 300)}</div>}
+      <ResultadoBox a={a} />
       <div className="small muted" style={{ marginTop: 4 }}>{fmtDateTime(a.created_at)}{a.command_id && <> · comando #{a.command_id}</>}</div>
     </div>
     {a.status === 'PROPOSED' && a.policy !== 'BLOCKED' && <div className="row">

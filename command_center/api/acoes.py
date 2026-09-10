@@ -101,7 +101,22 @@ def valores_no_texto(texto):
     return vistos
 
 
-def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None, con=None, alvo=None):
+PRODUTOS_CONHECIDOS = ("urace daily", "arrive and drive", "academy", "lead and follow", "race support", "trackside", "corrida",
+                       "summer camp", "test drive", "security deposit", "practice", "professional coaching", "coaching", "daily")
+
+
+def _nome_de_produto(*candidatos):
+    """Nome para criar o item no QBO: o primeiro candidato que cite um produto conhecido, sem o sufixo ' - piloto - data'."""
+    for c in candidatos:
+        if not c:
+            continue
+        base = re.split(r"\s+-\s+", str(c).strip())[0].strip()
+        if any(p in base.lower() for p in PRODUTOS_CONHECIDOS) and 3 <= len(base) <= 80 and ":" not in base:
+            return base
+    return None
+
+
+def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None, con=None, alvo=None, criar_item=None, notas=None):
     """Devolve (args_normalizados, problemas). `buscar_item(nome)` -> lista de {id, nome};
     `buscar_cliente(texto)` -> lista de {id, nome, email}. Com `con`, usa o catálogo e o
     espelho para resolver item e cliente sem depender do agente."""
@@ -156,13 +171,17 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None,
                 if len(exatos) == 1 or len(achados) == 1:
                     n["item_id"] = str((exatos or achados)[0]["id"])
             if not n["item_id"]:
-                problemas.append(f"item '{nome_item}' não achado no catálogo do QuickBooks (precisa do id numérico)")
+                n["_criar_nome"] = _nome_de_produto(nome_item, n["descricao"])
+                if not n["_criar_nome"]:
+                    problemas.append(f"item '{nome_item}' não achado no catálogo do QuickBooks (precisa do id numérico)")
         elif not n["item_id"]:
             achado = _casa_item(n["descricao"], cache)
             if achado:
                 n["item_id"] = str(achado["id"])
             else:
-                problemas.append("linha sem item do QuickBooks")
+                n["_criar_nome"] = _nome_de_produto(n["descricao"])
+                if not n["_criar_nome"]:
+                    problemas.append("linha sem item do QuickBooks")
         linhas.append(n)
     if not linhas:
         problemas.append("invoice sem linhas")
@@ -174,6 +193,26 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None,
     for l in linhas:
         if not l["unitario"]:
             problemas.append(f"valor unitário zerado{' em ' + l['descricao'] if l.get('descricao') else ''}")
+    # produto que não existe no catálogo: o painel cria (autonomia dada pelo dono, 10/09) — com o valor já resolvido
+    for l in linhas:
+        nome_novo = l.pop("_criar_nome", None)
+        if l.get("item_id") or not nome_novo:
+            continue
+        if criar_item and l.get("unitario"):
+            try:
+                novo = criar_item(nome_novo, l["unitario"], l.get("descricao"))
+            except Exception as e:
+                novo = None
+                problemas.append(f"não deu para criar o item '{nome_novo}' no QuickBooks: {str(e)[:120]}")
+            if novo and novo.get("id"):
+                l["item_id"] = str(novo["id"])
+                if notas is not None:
+                    notas.append(f"item '{novo.get('nome') or nome_novo}' criado no QuickBooks (id {novo['id']}, ${float(l['unitario']):,.2f}).")
+                if con:
+                    con.execute("INSERT OR REPLACE INTO qbo_items (id, name, full_name, price, type, active, synced_at) VALUES (?,?,?,?,?,1,?)",
+                                (str(novo["id"]), novo.get("nome") or nome_novo, novo.get("nome_completo"), l["unitario"], "Service", agora()))
+        if not l.get("item_id"):
+            problemas.append(f"item '{nome_novo}' não existe no catálogo do QuickBooks" + ("" if l.get("unitario") else " e sem valor para criá-lo"))
     saida["linhas"] = linhas
     cid = saida.get("cliente_id")
     if cid is None or not re.fullmatch(r"\d+", str(cid).strip()):
@@ -214,9 +253,9 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None,
     return saida, problemas
 
 
-def normalizar(acao, args, texto_ia="", buscar_item=None, buscar_cliente=None, con=None, alvo=None):
+def normalizar(acao, args, texto_ia="", buscar_item=None, buscar_cliente=None, con=None, alvo=None, criar_item=None, notas=None):
     if acao in ACOES_INVOICE:
-        return normalizar_invoice(args, texto_ia, buscar_item, buscar_cliente, con, alvo)
+        return normalizar_invoice(args, texto_ia, buscar_item, buscar_cliente, con, alvo, criar_item, notas)
     return args, []
 
 

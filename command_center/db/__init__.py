@@ -67,7 +67,8 @@ MIGRACOES = [
     ("automation_rules", "last_run_at", "TEXT"),   # chave do último horário rodado: "2026-09-09 07:00"
     ("automation_rules", "last_result", "TEXT"),
     ("races", "task_id", "INTEGER"),
-    ("clients", "email_alt", "TEXT"),              # segundo e-mail da descrição (o principal fica limpo)               # tarefa da coluna RACES (calendário = o que está no Asana)
+    ("clients", "email_alt", "TEXT"),
+    ("ai_commands", "prompt", "TEXT"),              # o que foi ao agente (texto do dono + contexto); `text` é só o que o dono escreveu              # segundo e-mail da descrição (o principal fica limpo)               # tarefa da coluna RACES (calendário = o que está no Asana)
     ("waivers", "hidden", "INTEGER NOT NULL DEFAULT 0"),   # lixeira do painel (restaurável)
     ("waivers", "minor_name", "TEXT"),                     # nome do menor (parental), do form data
     ("waivers", "link_reason", "TEXT"),                    # por que está ligada a este cliente
