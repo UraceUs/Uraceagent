@@ -406,6 +406,51 @@ def command_list(limit: int = 30, u=Depends(auth.usuario_atual), con: sqlite3.Co
     return todos(con, sql, ((u["id"], limit) if mine else (limit,)))
 
 
+_AUTO_PREFIXOS = ("EVENTO AUTOMÁTICO", "TAREFA:")
+
+
+def _eh_auto(texto):
+    return (texto or "").startswith(_AUTO_PREFIXOS)
+
+
+@r.get("/threads")
+def threads(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Uma conversa por usuário (decisão do dono, 10/09). Gerente/admin vê a de todos e a automática;
+    os demais só a própria."""
+    rows = todos(con, """SELECT us.id, us.name, us.role, COUNT(c.id) AS n, MAX(c.created_at) AS last_at
+                         FROM users us LEFT JOIN ai_commands c ON c.user_id=us.id
+                              AND c.text NOT LIKE 'EVENTO AUTOMÁTICO%' AND c.text NOT LIKE 'TAREFA:%'
+                         WHERE us.active=1 GROUP BY us.id ORDER BY last_at DESC NULLS LAST, us.name""")
+    if not auth.pode(u["role"], "MANAGER"):
+        rows = [r_ for r_ in rows if r_["id"] == u["id"]]
+        return {"threads": rows, "auto": None}
+    auto = um(con, "SELECT COUNT(*) AS n, MAX(created_at) AS last_at FROM ai_commands WHERE text LIKE 'EVENTO AUTOMÁTICO%' OR text LIKE 'TAREFA:%'")
+    return {"threads": rows, "auto": auto}
+
+
+@r.get("/thread")
+def thread(user_id: int | None = None, kind: str = "chat", before: int | None = None, limit: int = 40,
+           u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """A conversa contínua: comandos do usuário (mais antigos primeiro), cada um com suas ações."""
+    limit = max(1, min(limit, 200))
+    gerente = auth.pode(u["role"], "MANAGER")
+    if kind == "auto":
+        if not gerente:
+            raise HTTPException(403, "Only managers see the automatic thread.")
+        where, p = ["(text LIKE 'EVENTO AUTOMÁTICO%' OR text LIKE 'TAREFA:%')"], []
+    else:
+        alvo = user_id if (user_id and gerente) else u["id"]
+        where, p = ["user_id=?", "text NOT LIKE 'EVENTO AUTOMÁTICO%'", "text NOT LIKE 'TAREFA:%'"], [alvo]
+    if before:
+        where.append("id<?"); p.append(before)
+    rows = todos(con, f"SELECT id, user_id, text, status, created_at, started_at, finished_at, output, error FROM ai_commands WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT ?", (*p, limit + 1))
+    mais = len(rows) > limit
+    rows = list(reversed(rows[:limit]))
+    for c in rows:
+        c["actions"] = todos(con, "SELECT * FROM ai_actions WHERE command_id=? ORDER BY id", (c["id"],))
+    return {"commands": rows, "has_more": mais}
+
+
 @r.get("/commands/{cid}")
 def command_get(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     c = um(con, "SELECT * FROM ai_commands WHERE id=?", (cid,))

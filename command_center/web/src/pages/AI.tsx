@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { AiAction, AiCommand } from '../api/types'
@@ -98,6 +98,20 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
   </div>
 }
 
+/** Uma mensagem da conversa: o que a pessoa escreveu e a resposta da IA com as ações. */
+function Bolha({ c, onChange, quem }: { c: AiCommand; onChange?: () => void; quem?: string }) {
+  const running = c.status === 'QUEUED' || c.status === 'RUNNING'
+  return <div className="chat">
+    <div className="msg me"><div className="av avatar">{(quem || 'EU').slice(0, 2).toUpperCase()}</div><div className="grow"><div className="meta">{quem && <b>{quem} · </b>}{fmtDateTime(c.created_at)}</div><div className="bub">{c.text.split('\n\nO QUE O DONO JÁ ENSINOU')[0]}</div></div></div>
+    <div className="msg"><div className="av avatar" style={{ background: 'var(--brand)' }}>AI</div><div className="grow">
+      <div className="meta">urace-admin <Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.finished_at && <span>{ago(c.finished_at)}</span>}</div>
+      <div className="bub">{running ? <span className="row"><span className="spin" /> {c.status === 'QUEUED' ? 'Na fila…' : 'Pensando e consultando os sistemas…'} <span className="muted small">(pode levar alguns minutos)</span></span>
+        : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : c.output ? <Md text={c.output} /> : <span className="muted">(sem texto)</span>}</div>
+      {!!c.actions?.length && <div className="acts"><div className="small muted cond">Ações propostas ({c.actions.length})</div>{c.actions.map(a => <ActionCard key={a.id} a={a} onChange={onChange} />)}</div>}
+    </div></div>
+  </div>
+}
+
 function CommandView({ id, onDone }: { id: number; onDone?: () => void }) {
   const [c, setC] = useState<AiCommand | null>(null)
   const [err, setErr] = useState<ApiError | null>(null)
@@ -108,64 +122,87 @@ function CommandView({ id, onDone }: { id: number; onDone?: () => void }) {
   }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <ErrorState error={err} />
   if (!c) return <Loading rows={2} />
-  const running = c.status === 'QUEUED' || c.status === 'RUNNING'
-  return <div className="chat">
-    <div className="msg me"><div className="av avatar">EU</div><div className="grow"><div className="meta">{fmtDateTime(c.created_at)}</div><div className="bub">{c.text.split('\n\nO QUE O DONO JÁ ENSINOU')[0]}</div></div></div>
-    <div className="msg"><div className="av avatar" style={{ background: 'var(--brand)' }}>AI</div><div className="grow">
-      <div className="meta">urace-admin <Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.finished_at && <span>{ago(c.finished_at)}</span>}</div>
-      <div className="bub">{running ? <span className="row"><span className="spin" /> {c.status === 'QUEUED' ? 'Na fila…' : 'Pensando e consultando os sistemas…'} <span className="muted small">(pode levar alguns minutos)</span></span>
-        : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : c.output ? <Md text={c.output} /> : <span className="muted">(sem texto)</span>}</div>
-      {!!c.actions?.length && <div className="acts"><div className="small muted cond">Ações propostas ({c.actions.length})</div>{c.actions.map(a => <ActionCard key={a.id} a={a} />)}</div>}
-    </div></div>
-  </div>
+  return <Bolha c={c} onChange={() => api.get<AiCommand>(`/ai/commands/${id}`).then(setC)} />
 }
+
+interface Threads { threads: { id: number; name: string; role: string; n: number; last_at: string | null }[]; auto: { n: number; last_at: string | null } | null }
+interface Thread { commands: AiCommand[]; has_more: boolean }
 
 export function AICommand() {
   const { id } = useParams()
   const nav = useNavigate()
   const loc = useLocation() as { state?: { ask?: string } }
-  const { can } = useAuth()
+  const { can, user } = useAuth()
   const toast = useToast()
+  const [sp, setSp] = useSearchParams()
+  const sel = sp.get('u') || 'me'                                   // me | <user_id> | auto
   const sug = useGet<string[]>('/ai/suggestions')
-  const hist = useGet<AiCommand[]>('/ai/commands?limit=30')
+  const threads = useGet<Threads>('/ai/threads', 60000)
+  const query = sel === 'auto' ? '/ai/thread?kind=auto' : sel === 'me' ? '/ai/thread' : `/ai/thread?user_id=${sel}`
+  const [thread, setThread] = useState<Thread | null>(null)
+  const [err, setErr] = useState<ApiError | null>(null)
+  const [maisAntigos, setMaisAntigos] = useState<AiCommand[]>([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const ta = useRef<HTMLTextAreaElement>(null)
+  const fim = useRef<HTMLDivElement>(null)
+  const load = () => api.get<Thread>(query).then(t => { setThread(t); setErr(null) }).catch(setErr)
+  useEffect(() => { setThread(null); setMaisAntigos([]); load() }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rodando = !!thread?.commands.some(c => c.status === 'QUEUED' || c.status === 'RUNNING')
+  useEffect(() => { const t = setInterval(load, rodando ? 3000 : 30000); return () => clearInterval(t) }, [query, rodando]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (loc.state?.ask) { setText(loc.state.ask); ta.current?.focus(); window.history.replaceState({}, '') } }, [loc.state])
+  const n = thread?.commands.length || 0
+  useEffect(() => { if (n && maisAntigos.length === 0) fim.current?.scrollIntoView({ block: 'end' }) }, [n]) // eslint-disable-line react-hooks/exhaustive-deps
   const cur = id ? Number(id) : null
-  const hojeIso = new Date().toISOString().slice(0, 10)
-  const hoje = [...(hist.data || [])].filter(c => c.created_at.startsWith(hojeIso) && !c.text.startsWith('EVENTO AUTOMÁTICO') && !c.text.startsWith('INSTRUÇÃO DO DONO') && !c.text.startsWith('TAREFA:')).reverse()
+  const minha = sel === 'me' || (user && String(user.id) === sel)
+  const nomeDe = (uid: number) => threads.data?.threads.find(t => t.id === uid)?.name || `usuário #${uid}`
+  const todos = [...maisAntigos, ...(thread?.commands || [])]
 
   async function send() {
     const t = text.trim(); if (!t || busy) return
     setBusy(true)
-    try { await api.post<{ id: number }>('/ai/commands', { text: t }); setText(''); if (cur) nav('/ai'); hist.reload() }
+    try { await api.post<{ id: number }>('/ai/commands', { text: t }); setText(''); if (cur) nav('/ai'); if (sel !== 'me') { const nsp = new URLSearchParams(sp); nsp.delete('u'); setSp(nsp) } await load(); threads.reload(); setTimeout(() => fim.current?.scrollIntoView({ block: 'end' }), 100) }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
+  async function anteriores() {
+    const primeiro = todos[0]?.id; if (!primeiro) return
+    const t = await api.get<Thread>(query + (query.includes('?') ? '&' : '?') + `before=${primeiro}`)
+    setMaisAntigos(m => [...t.commands, ...m]); if (thread) setThread({ ...thread, has_more: t.has_more })
+  }
+  const separador = (c: AiCommand, i: number) => { const d = c.created_at.slice(0, 10); const ant = todos[i - 1]?.created_at.slice(0, 10); return d !== ant ? <div key={'d' + c.id} className="chat-day">{new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</div> : null }
 
   return <>
-    <div className="page-h"><div><h1 className="h1">AI Command</h1><div className="sub small">Conversa com o agente, que lê Asana, DocuSign, Gmail e QuickBooks. Ele lembra a conversa do dia. O que tem efeito vira ação: segura executa, waiver e invoice esperam sua aprovação.</div></div></div>
-    <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 300px' }}>
+    <div className="page-h"><div><h1 className="h1">AI Command</h1><div className="sub small">Uma conversa só, contínua. A IA lê Asana, DocuSign, Gmail e QuickBooks; busca e cria sozinha, e só o envio de invoice e waiver espera você.</div></div></div>
+    <div className="grid" style={{ gridTemplateColumns: can('MANAGER') ? 'minmax(0,1fr) 260px' : 'minmax(0,1fr)' }}>
       <div className="stack">
-        {!can('OPERATOR') && <Banner tone="info">Seu papel é de leitura: você vê o histórico, mas não envia comandos.</Banner>}
-        {cur ? <CommandView key={cur} id={cur} onDone={hist.reload} /> : <>
-          {hoje.length > 0 ? <div className="stack">{hoje.map(c => <CommandView key={c.id} id={c.id} onDone={hist.reload} />)}</div> : <div className="card card-b">
-            <div className="h2" style={{ marginBottom: 10 }}>Sugestões</div>
-            {sug.data ? <div className="sug">{sug.data.map(s => <button key={s} onClick={() => { setText(s); ta.current?.focus() }}>{s}</button>)}</div> : <Loading rows={2} />}
+        {!can('OPERATOR') && <Banner tone="info">Seu papel é de leitura: você vê a conversa, mas não envia comandos.</Banner>}
+        {cur ? <><div className="small"><a onClick={() => nav('/ai')} style={{ cursor: 'pointer' }}>← voltar à conversa</a></div><CommandView key={cur} id={cur} onDone={load} /></> : <>
+          {sel === 'auto' && <Banner tone="info">Conversa automática: eventos do quadro, e-mails e waivers que acordaram a IA sozinha. Ninguém escreve aqui.</Banner>}
+          {!minha && sel !== 'auto' && <Banner tone="info">Você está lendo a conversa de <b>{nomeDe(Number(sel))}</b>. Para falar com a IA, volte para a sua.</Banner>}
+          {err ? <ErrorState error={err} retry={load} /> : !thread ? <Loading rows={4} /> : todos.length === 0 ? <div className="card card-b">
+            <div className="h2" style={{ marginBottom: 10 }}>{sel === 'auto' ? 'Nada automático ainda.' : 'Comece por aqui'}</div>
+            {sel !== 'auto' && (sug.data ? <div className="sug">{sug.data.map(s => <button key={s} onClick={() => { setText(s); ta.current?.focus() }}>{s}</button>)}</div> : <Loading rows={2} />)}
+          </div> : <div className="stack">
+            {(thread.has_more) && <div className="row" style={{ justifyContent: 'center' }}><button className="btn sm" onClick={anteriores}>↑ mensagens anteriores</button></div>}
+            {todos.map((c, i) => <div key={c.id}>{separador(c, i)}<Bolha c={c} onChange={load} quem={sel === 'auto' ? 'AUTO' : undefined} /></div>)}
+            <div ref={fim} />
           </div>}
         </>}
-        {can('OPERATOR') && <div className="composer"><div className="box">
+        {can('OPERATOR') && (minha || cur) && <div className="composer"><div className="box">
           <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} placeholder="Pergunte ou peça algo. Enter envia, Shift+Enter quebra linha." maxLength={4000}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} rows={2} aria-label="Comando" />
           <button className="btn primary" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : 'Enviar'}</button>
-        </div><div className="small muted" style={{ marginTop: 4 }}>{text.length}/4000 · a resposta pode levar minutos; você pode navegar e voltar.</div></div>}
+        </div><div className="small muted">{text.length}/4000 · a resposta pode levar minutos; você pode navegar e voltar.</div></div>}
       </div>
-      <Section title="Histórico" count={hist.data?.length} tight right={cur && <a onClick={() => nav('/ai')} style={{ cursor: 'pointer' }} className="small">novo</a>}>
-        {hist.error && !hist.data ? <ErrorState error={hist.error} retry={hist.reload} /> : !hist.data ? <Loading /> : hist.data.length === 0 ? <Empty>Nenhum comando ainda.</Empty> :
-          <div>{hist.data.map(c => <div key={c.id} className={`att${cur === c.id ? '' : ' click'}`} style={{ cursor: 'pointer', background: cur === c.id ? 'var(--surface-2)' : undefined }} onClick={() => nav(`/ai/${c.id}`)}>
-            <div className="grow"><div className="truncate small" style={{ fontWeight: 500 }}>{c.text}</div><div className="row small muted"><Chip tone={statusTone(c.status)}>{c.status}</Chip>{ago(c.created_at)}</div></div>
-          </div>)}</div>}
-      </Section>
+      {can('MANAGER') && <div className="card" style={{ alignSelf: 'start', position: 'sticky', top: 12 }}>
+        <div className="card-h"><h2 className="h2">Conversas</h2></div>
+        <div className="hist">
+          {(threads.data?.threads || []).map(t => <div key={t.id} className={`it${(sel === 'me' && user && t.id === user.id) || sel === String(t.id) ? ' on' : ''}`} onClick={() => { const nsp = new URLSearchParams(sp); if (user && t.id === user.id) nsp.delete('u'); else nsp.set('u', String(t.id)); setSp(nsp); if (cur) nav('/ai?' + nsp.toString()) }}>
+            <div className="t">{user && t.id === user.id ? 'Minha conversa' : t.name}</div><div className="small muted">{t.n} mensagem(ns){t.last_at ? ` · ${ago(t.last_at)}` : ''}</div></div>)}
+          {threads.data?.auto && <div className={`it${sel === 'auto' ? ' on' : ''}`} onClick={() => { const nsp = new URLSearchParams(sp); nsp.set('u', 'auto'); setSp(nsp); if (cur) nav('/ai?u=auto') }}>
+            <div className="t">Automático</div><div className="small muted">{threads.data.auto.n} evento(s){threads.data.auto.last_at ? ` · ${ago(threads.data.auto.last_at)}` : ''}</div></div>}
+        </div>
+      </div>}
     </div>
   </>
 }

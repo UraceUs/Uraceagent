@@ -402,3 +402,10 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .att-acts{margin-top:8px;gap:6px}
 .att-acts .btn.sm{text-decoration:none}
 .tbl td.nowrap,.nowrap{white-space:nowrap}
+
+/* ---------- AI Command: uma conversa por usuário */
+.chat-day{font-family:var(--font-cond);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:center;margin:12px 0 2px;padding-top:8px;border-top:1px solid var(--rule)}
+.hist .it{padding:10px 14px;border-bottom:1px solid var(--rule);cursor:pointer}
+.hist .it:hover{background:var(--surface-2)}
+.hist .it.on{background:var(--accent-wash);box-shadow:inset 3px 0 0 var(--brand)}
+.hist .it .t{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

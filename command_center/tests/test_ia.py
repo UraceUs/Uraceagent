@@ -482,3 +482,36 @@ def test_consulta_executada_na_hora_e_item_criado_quando_nao_existe(cli, monkeyp
     assert acoes._nome_de_produto("Arrive and Drive daily - David Pera - 2026-09-13") == "Arrive and Drive daily"
     assert acoes._nome_de_produto("Coisa qualquer", None) is None
     ia.RUNNER = runner_falso
+
+
+def test_uma_conversa_por_usuario_e_automatica_separada(cli):
+    from command_center.db import conectar, inserir
+    con = conectar()
+    try:
+        op = con.execute("SELECT id FROM users WHERE email='op@urace.us'").fetchone()[0]
+        inserir(con, "ai_commands", user_id=op, text="pergunta do operador", session_key="s", status="DONE", output="resposta")
+        inserir(con, "ai_commands", user_id=1, text="EVENTO AUTOMÁTICO: task.overdue — x", session_key="s", status="DONE", output="movi")
+        con.commit()
+    finally:
+        con.close()
+    # operador: só a própria conversa; sem a automática; sem ver a do admin
+    h = entra(cli, "op@urace.us")
+    t = cli.get(f"{B}/threads").json()
+    assert [x["id"] for x in t["threads"]] == [op] and t["auto"] is None
+    mine = cli.get(f"{B}/thread").json()
+    assert all(c["user_id"] == op for c in mine["commands"]) and any(c["text"] == "pergunta do operador" for c in mine["commands"])
+    assert not any(c["text"].startswith("EVENTO") for c in mine["commands"])
+    assert all(c["user_id"] == op for c in cli.get(f"{B}/thread?user_id=1").json()["commands"])     # não escala para outro usuário
+    assert cli.get(f"{B}/thread?kind=auto").status_code == 403
+    # admin: vê todas, a do operador e a automática; ordem cronológica com ações embutidas
+    h = entra(cli, "admin@urace.us")
+    t = cli.get(f"{B}/threads").json()
+    assert op in [x["id"] for x in t["threads"]] and t["auto"]["n"] >= 1
+    do_op = cli.get(f"{B}/thread?user_id={op}").json()["commands"]
+    assert all(c["user_id"] == op for c in do_op) and "pergunta do operador" in [c["text"] for c in do_op]
+    auto = cli.get(f"{B}/thread?kind=auto").json()["commands"]
+    assert auto and all(c["text"].startswith(("EVENTO AUTOMÁTICO", "TAREFA:")) for c in auto)
+    minha = cli.get(f"{B}/thread?limit=2").json()
+    assert len(minha["commands"]) == 2 and minha["has_more"] and minha["commands"][0]["id"] < minha["commands"][1]["id"] and "actions" in minha["commands"][0]
+    antes = cli.get(f"{B}/thread?limit=2&before={minha['commands'][0]['id']}").json()["commands"]
+    assert all(c["id"] < minha["commands"][0]["id"] for c in antes)

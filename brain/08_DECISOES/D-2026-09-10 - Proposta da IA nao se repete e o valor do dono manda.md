@@ -87,3 +87,9 @@ aprovo, ele não me traz resultado."*
     link; ✗ "Falhou: …"). Sem clicar duas vezes.
 17. Histórico mostra só o que o dono escreveu; o contexto que vai ao
     agente fica em `ai_commands.prompt`.
+18. **Uma conversa só por usuário** (dono, 10/09): o AI Command é um chat
+    contínuo, com separador de dia e "mensagens anteriores". Gerente e
+    admin escolhem a conversa de qualquer usuário (leitura) e a
+    **Automática** (eventos e tarefas que acordaram a IA); usuário comum
+    vê só a própria. A memória do agente continua uma sessão por dia
+    (carga do VPS), mas a tela é uma linha só.
