@@ -631,8 +631,11 @@ def _envelope_id(con, wid):
 
 @r.get("/waivers/{wid}/download")
 def waiver_download(wid: int, request: Request, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    """PDF assinado (documento + certificado), ao vivo do DocuSign."""
+    """PDF assinado (documento + certificado). Baixa do DocuSign na primeira vez e guarda
+    em ~/.urace/waivers: depois o card do cliente abre o arquivo guardado, e é o mesmo
+    arquivo que vai anexado na tarefa do Asana."""
     from fastapi.responses import Response
+    from command_center.api import motor
     w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
     if not w:
         raise HTTPException(404, "Waiver not found.")
@@ -640,7 +643,11 @@ def waiver_download(wid: int, request: Request, u=Depends(auth.usuario_atual), c
     if not env:
         raise HTTPException(409, "Envelope sem vínculo com o DocuSign.")
     try:
-        pdf = modulo("docusign").baixar_documento_humano(env)
+        try:
+            with open(motor.pdf_da_waiver(con, w), "rb") as f:
+                pdf = f.read()
+        except OSError:                                  # sem lugar para guardar: pega ao vivo
+            pdf = modulo("docusign").baixar_documento_humano(env)
     except NaoConectado as ex:
         raise HTTPException(503, f"DocuSign não conectado: {ex}")
     except Exception as ex:

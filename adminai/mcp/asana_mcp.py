@@ -460,6 +460,29 @@ def criar_do_modelo_humano(modelo_gid, nome, secao_gid=None, notas=None, vence_e
 MODELO_CORRIDA = "1208930444315129"       # "New Race [Race + City/Track]" — modelo oficial do quadro U-RACE
 
 
+RX_SUBTAREFA_PAGAMENTO = re.compile(r"payment .*(complet|received|confirm)|pagamento .*(conclu|receb|confirm)|"
+                                    r"\bpaid\b|\bpago\b|invoice .*(paid|paga)", re.I)
+
+
+def concluir_subtarefa_sistema(gid_tarefa, padrao=None):
+    """Porta do Command Center (não é ferramenta do agente): fecha a subtarefa que casa com
+    `padrao` (por omissão, a de pagamento). Nasceu de 10/09: pagamento confirmado no
+    QuickBooks e a subtarefa "Payment has been completed (invoice)?" continuava aberta.
+    Só conclui, nunca reabre; respeita as proteções (ADM URACE, Matt tasks)."""
+    t = _ler_tarefa(gid_tarefa)
+    _recusar_se_protegida(t, "concluir subtarefa")
+    rx = re.compile(padrao, re.I) if padrao else RX_SUBTAREFA_PAGAMENTO
+    subs = _req(f"/tasks/{gid_tarefa}/subtasks?opt_fields=gid,name,completed&limit=100")["data"]
+    alvo = next((s for s in subs if rx.search(s.get("name") or "")), None)
+    if not alvo:
+        return {"aplicado": False, "motivo": "nenhuma subtarefa de pagamento nesta tarefa",
+                "subtarefas": [s.get("name") for s in subs]}
+    if alvo.get("completed"):
+        return {"aplicado": False, "motivo": "já estava concluída", "subtarefa": alvo["name"], "gid": alvo["gid"]}
+    _req(f"/tasks/{alvo['gid']}", "PUT", {"completed": True})
+    return {"aplicado": True, "subtarefa": alvo["name"], "gid": alvo["gid"], "tarefa": t.get("name")}
+
+
 def comentar_humano(gid, texto):
     """Porta humana (convite/confirmação de corrida pelo Command Center): comenta na
     tarefa. Não é ferramenta do agente e não passa por APLICAR. Respeita as

@@ -401,6 +401,7 @@ INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, acti
   ('novo_servico',     1, '{"event":"task.created"}',   '{"sections":"dias"}', '{"ia":"preparar waiver e invoice do serviço; propor ações"}'),
   ('email_cliente',    1, '{"event":"email.received"}', '{"client_known":true}', '{"ia":"ler a thread, classificar, propor resposta em rascunho"}'),
   ('waiver_devolvida', 1, '{"event":"waiver.bounced"}', NULL, '{"ia":"achar e-mail correto no Asana/Gmail e propor reenvio"}'),
+  ('pagamento_confirmado', 1, '{"event":"invoice.paid"}', NULL, '{"sistema":"fechar a subtarefa de pagamento da tarefa do serviço e comentar o que foi pago"}'),
   ('waiver_assinada',  1, '{"event":"waiver.completed"}', NULL, '{"ia":"comentar na tarefa do Asana que a waiver chegou"}');
 
 -- ------------------------------------------------- fontes de contexto da IA

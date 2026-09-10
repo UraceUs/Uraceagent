@@ -519,7 +519,13 @@ def sync_qbo(con, desde_dias=365):
                           status=inv.get("status"), issued_on=inv.get("emitida_em"), due_on=inv.get("vence_em"), memo=inv.get("memo"),
                           customer_email=email, customer_ref=str(inv.get("cliente_id")) if inv.get("cliente_id") else None, synced_at=agora())
             if iid:
+                antes = um(con, "SELECT status, balance FROM invoices WHERE id=?", (iid["entity_id"],)) or {}
                 atualizar(con, "invoices", iid["entity_id"], **campos)
+                virou_paga = (campos["status"] == "paid" or not (campos["balance"] or 0)) and \
+                             (antes.get("status") != "paid" and (antes.get("balance") or 0) > 0)
+                if virou_paga:
+                    _evento(con, "invoice.paid", "invoice", iid["entity_id"], cli["id"] if cli else None,
+                            f"invoice {inv.get('numero') or inv['id']} de {inv.get('cliente') or email or '?'} foi paga ({inv.get('total')})")
             else:
                 nid = inserir(con, "invoices", **campos)
                 _liga(con, "invoice", nid, "quickbooks", inv["id"], inv.get("link"))

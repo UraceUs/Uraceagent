@@ -634,3 +634,123 @@ def test_argumento_que_a_ferramenta_nao_aceita_e_descartado(cli, monkeypatch):
         assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='action.args_ajustados'") is not None
     finally:
         con.close()
+
+
+def test_pagamento_confirmado_fecha_a_subtarefa_de_pagamento_no_asana(cli, monkeypatch):
+    """10/09, dono: 'chegou email confirmando o pagamento do david pera e a IA ainda não
+    marcou como pago na subtask do asana'. Agora é mecânico: o QuickBooks confirma, o painel
+    fecha a subtarefa e comenta. Não acorda o agente e não pede aprovação."""
+    from command_center.api import motor
+    from command_center.db import conectar, inserir, um
+    import command_center.providers as prov
+    con = conectar()
+    try:
+        d = um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")
+        cid = d["id"] if d else inserir(con, "clients", name="Nicolas Pera", pilot_name="David Pera", status="ACTIVE")
+        tid = inserir(con, "tasks", client_id=cid, title="David Pera_Urace Daily_Using Own Kart [1/1]",
+                      project="U-RACE", section="Sunday", status="open", due_on="2026-09-13")
+        inserir(con, "entity_links", entity_type="task", entity_id=tid, system="asana", external_id="777001")
+        outra = inserir(con, "tasks", client_id=cid, title="David Pera_Race Support [1/1]", project="U-RACE", status="open", due_on="2026-10-01")
+        inserir(con, "entity_links", entity_type="task", entity_id=outra, system="asana", external_id="777002")
+        inv = inserir(con, "invoices", client_id=cid, doc_number="URACE-0007", amount=500.0, balance=0, status="paid",
+                      issued_on="2026-09-09", due_on="2026-09-11",
+                      memo="Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026")
+        con.commit()
+    finally:
+        con.close()
+    feito = []
+
+    class Asana:
+        def concluir_subtarefa_sistema(self, gid, padrao=None):
+            feito.append(("sub", gid, os.environ.get("APLICAR")))
+            return {"aplicado": True, "subtarefa": "Payment has been completed (invoice)?", "gid": gid + "-s3", "tarefa": "David Pera_Urace Daily_Using Own Kart [1/1]"}
+
+        def comentar_humano(self, gid, texto):
+            feito.append(("comentario", gid, texto)); return {"aplicado": True}
+    monkeypatch.setattr(prov, "modulo", lambda s: Asana())
+    con = conectar()
+    try:
+        r = motor.marcar_pagamento_no_asana(con, inv)
+        assert r["ok"] and r["subtarefa"] == "Payment has been completed (invoice)?"
+        assert feito[0] == ("sub", "777001", "1")            # a tarefa da data do serviço, não a de outubro
+        assert "URACE-0007" in feito[1][2] and "$500.00" in feito[1][2] and "concluída" in feito[1][2]
+        assert os.environ.get("APLICAR") is None             # APLICAR volta a ser o que era
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='invoice.paid.asana'") is not None
+        # o evento é resolvido pelo painel: DONE, sem comando para o agente
+        ev = inserir(con, "ai_events", kind="invoice.paid", entity_type="invoice", entity_id=inv, client_id=None, summary="paga")
+        con.commit()
+        motor.processar_eventos(con, 1)
+        e = um(con, "SELECT status, command_id, note FROM ai_events WHERE id=?", (ev,))
+        assert e["status"] == "DONE" and e["command_id"] is None and "Payment has been completed" in e["note"]
+    finally:
+        con.close()
+
+
+def test_pagamento_sem_tarefa_batendo_nao_quebra(cli, monkeypatch):
+    from command_center.api import motor
+    from command_center.db import conectar, inserir, um
+    import command_center.providers as prov
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Sem Tarefa", pilot_name="Sem Tarefa", status="NEW")
+        inv = inserir(con, "invoices", client_id=cid, doc_number="URACE-0008", amount=100.0, balance=0, status="paid", due_on="2026-09-11")
+        solta = inserir(con, "invoices", doc_number="URACE-0009", amount=50.0, balance=0, status="paid")
+        con.commit()
+        monkeypatch.setattr(prov, "modulo", lambda s: (_ for _ in ()).throw(AssertionError("não devia chamar o Asana")))
+        assert motor.marcar_pagamento_no_asana(con, inv)["ok"] is False
+        assert motor.marcar_pagamento_no_asana(con, solta)["motivo"] == "invoice sem cliente ligado"
+    finally:
+        con.close()
+
+
+def test_waiver_assinada_vai_anexada_em_toda_tarefa_criada(cli, monkeypatch, tmp_path):
+    """10/09, dono: 'a cada tarefa criada buscar a waiver do cliente e deixar anexado na
+    tarefa e no card do cliente'. O painel baixa o PDF uma vez, guarda em ~/.urace/waivers
+    (o card passa a servir dali) e anexa na tarefa do Asana. Nunca anexa duas vezes."""
+    from command_center.api import motor
+    from command_center.db import conectar, inserir, um
+    import command_center.providers as prov
+    monkeypatch.setattr(motor, "PASTA_WAIVERS", str(tmp_path / "waivers"))
+    baixados, anexos = [], []
+
+    class Docusign:
+        def baixar_documento_humano(self, env): baixados.append(env); return b"%PDF-1.4 waiver assinada"
+
+    class Asana:
+        def asana_anexar_arquivo(self, gid, caminho):
+            anexos.append((gid, caminho, os.environ.get("APLICAR")))
+            return {"aplicado": True, "anexo_gid": "an-1", "nome": os.path.basename(caminho)}
+    monkeypatch.setattr(prov, "modulo", lambda s: Docusign() if s == "docusign" else Asana())
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Pai do Théo", pilot_name="Théo Teste", status="ACTIVE", email="pai@teste.com")
+        wid = inserir(con, "waivers", client_id=cid, signer_name="Pai do Théo", signer_email="pai@teste.com",
+                      template="parental", status="completed", sent_at="2026-09-01", completed_at="2026-09-02", expires_at="2027-09-02")
+        inserir(con, "entity_links", entity_type="waiver", entity_id=wid, system="docusign", external_id="env-123")
+        tid = inserir(con, "tasks", client_id=cid, title="Théo Teste_Urace Daily [1/1]", project="U-RACE",
+                      section="Sunday", status="open", due_on="2026-09-20")
+        inserir(con, "entity_links", entity_type="task", entity_id=tid, system="asana", external_id="888001")
+        con.commit()
+        r = motor.anexar_waiver_na_tarefa(con, tid)
+        assert r["ok"] and r["anexo"] and baixados == ["env-123"]
+        assert anexos[0][0] == "888001" and anexos[0][2] == "1" and os.environ.get("APLICAR") is None
+        guardado = um(con, "SELECT pdf_path FROM waivers WHERE id=?", (wid,))["pdf_path"]
+        assert os.path.isfile(guardado) and open(guardado, "rb").read().startswith(b"%PDF")
+        assert um(con, "SELECT waiver_id FROM tasks WHERE id=?", (tid,))["waiver_id"] == wid
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='task.waiver_anexada'") is not None
+        # de novo: não anexa duas vezes, nem baixa de novo
+        assert motor.anexar_waiver_na_tarefa(con, tid)["motivo"] == "waiver já anexada"
+        assert len(anexos) == 1
+        # tarefa recém-criada pela IA (ainda sem espelho): anexa pelo gid e usa o PDF guardado
+        motor.anexar_waiver_em_gid(con, "888002", cid)
+        assert anexos[1][0] == "888002" and baixados == ["env-123"]
+        # cliente sem waiver: não quebra, só explica
+        outro = inserir(con, "clients", name="Sem Waiver", pilot_name="Sem Waiver", status="ACTIVE")
+        t2 = inserir(con, "tasks", client_id=outro, title="Sem Waiver_Urace Daily", status="open", due_on="2026-09-20")
+        con.commit()
+        assert motor.anexar_waiver_na_tarefa(con, t2)["motivo"] == "cliente sem waiver assinada na validade"
+        # e a waiver vencida não vale
+        con.execute("UPDATE waivers SET expires_at='2026-01-01' WHERE id=?", (wid,)); con.commit()
+        assert motor.waiver_do_cliente(con, cid) is None
+    finally:
+        con.close()

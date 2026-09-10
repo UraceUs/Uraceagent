@@ -12,13 +12,15 @@ const RULE_LABEL: Record<string, [string, string]> = {
   novo_servico: ['Serviço novo no quadro', 'A IA confere a waiver do piloto, prepara a invoice (produto e valor) e propõe as ações. Nada sai sem aprovação.'],
   email_cliente: ['E-mail de cliente conhecido', 'A IA lê a thread, classifica e propõe um rascunho de resposta. Nunca envia.'],
   waiver_devolvida: ['Waiver com e-mail devolvido', 'A IA procura o e-mail certo no Asana e no Gmail e propõe a correção e o reenvio.'],
+  pagamento_confirmado: ['Pagamento confirmado', 'Quando o QuickBooks confirma o pagamento, o painel fecha a subtarefa de pagamento da tarefa do serviço no Asana e comenta o que foi pago. Não passa pela IA nem por aprovação.'],
+  waiver_na_tarefa: ['Waiver junto da tarefa', 'A cada serviço novo no quadro, o painel busca a waiver assinada do piloto, guarda o PDF no card do cliente e anexa na tarefa do Asana. Não passa pela IA nem por aprovação.'],
   waiver_assinada: ['Waiver assinada', 'A IA comenta na tarefa do Asana que a waiver chegou.'],
   mensalidade_dia_1: ['Mensalidade no dia 1', 'A IA prepara a invoice mensal de cada piloto com plano e deixa para aprovação (aprovar = enviar).'],
   tarefa_vencida: ['Serviço vencido no quadro', 'A IA confere se aconteceu e move para Finished Services.'],
   gmail_triagem: ['Triagem do Gmail (07:00, 13:00, 21:00)', 'A IA lê cada thread da inbox, aplica os marcadores e move para o marcador principal. O que pede resposta continua em Precisa de atenção.'],
   sondagem_integracoes: ['Sondagem das integrações (07:00 e 22:00)', 'Uma chamada real por sistema, de manhã e à noite. Fora disso só re-sonda o sistema que falhar durante o uso.'],
 }
-const KIND_LABEL: Record<string, string> = { 'task.created': 'serviço novo', 'email.received': 'e-mail de cliente', 'waiver.bounced': 'waiver devolvida', 'waiver.completed': 'waiver assinada' }
+const KIND_LABEL: Record<string, string> = { 'invoice.paid': 'pagamento confirmado', 'task.created': 'serviço novo', 'email.received': 'e-mail de cliente', 'waiver.bounced': 'waiver devolvida', 'waiver.completed': 'waiver assinada' }
 
 export function Automation() {
   const { can } = useAuth()

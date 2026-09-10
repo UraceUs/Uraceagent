@@ -150,3 +150,30 @@ def test_invoice_sempre_com_numero(monkeypatch):
     monkeypatch.setattr(qb, "_req", lambda caminho, metodo="GET", corpo=None, params=None: (enviados.append((caminho, corpo)) or {"Invoice": {"Id": "9", "DocNumber": corpo["DocNumber"], "TotalAmt": 500, "Balance": 500, "Line": []}}))
     r = qb.qbo_criar_invoice("696", [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "x"}], vence_em="2026-09-11", memo="m")
     assert enviados[0][1]["DocNumber"] == "1042" and enviados[0][1]["PrivateNote"] == "m" and r["numero"] == "1042"
+
+
+def test_invoice_que_vira_paga_gera_evento_uma_vez(cli, monkeypatch):
+    """A confirmação de pagamento chega pelo QuickBooks (não pelo e-mail): a sincronia
+    percebe saldo zerado e registra invoice.paid, que fecha a subtarefa no Asana."""
+    from command_center.db import conectar, inserir, um
+    from command_center.providers import sync
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Pagador Teste", pilot_name="Pagador Teste", status="ACTIVE", email="pagador@teste.com")
+        iid = inserir(con, "invoices", client_id=cid, doc_number="URACE-0100", amount=500.0, balance=500.0, status="sent",
+                      due_on="2026-09-11", customer_email="pagador@teste.com")
+        inserir(con, "entity_links", entity_type="invoice", entity_id=iid, system="quickbooks", external_id="tx-500")
+        con.commit()
+        inv = {"id": "tx-500", "numero": "URACE-0100", "total": 500.0, "saldo": 500.0, "status": "sent",
+               "emitida_em": "2026-09-09", "vence_em": "2026-09-11", "email": "pagador@teste.com", "cliente": "Pagador Teste"}
+        monkeypatch.setattr(sync, "chamar", lambda s, a, **k: {"invoices": [inv]} if a == "qbo_invoices" else {"itens": []})
+        sync.sync_qbo(con)
+        assert um(con, "SELECT 1 AS x FROM ai_events WHERE kind='invoice.paid' AND entity_id=?", (iid,)) is None
+        inv.update(saldo=0.0, status="paid")
+        sync.sync_qbo(con)
+        ev = um(con, "SELECT status, summary FROM ai_events WHERE kind='invoice.paid' AND entity_id=?", (iid,))
+        assert ev and ev["status"] == "NEW" and "URACE-0100" in ev["summary"]
+        sync.sync_qbo(con)                     # já paga: não repete o evento
+        assert um(con, "SELECT COUNT(*) AS n FROM ai_events WHERE kind='invoice.paid' AND entity_id=?", (iid,))["n"] == 1
+    finally:
+        con.close()

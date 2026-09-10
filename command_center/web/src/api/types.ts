@@ -47,14 +47,14 @@ export interface Task {
   id: number; client_id: number | null; title: string; project: string | null; section: string | null
   status: string | null; due_on: string | null; assignee: string | null
   subtasks_total: number | null; subtasks_done: number | null; synced_at: string
-  fields?: string | null; section_gid?: string | null
+  fields?: string | null; section_gid?: string | null; waiver_id?: number | null
   client_name?: string | null; links?: Link[]
 }
 
 export interface Waiver {
   id: number; client_id: number | null; signer_name: string | null; signer_email: string | null
   template: string | null; status: string | null; sent_at: string | null; completed_at: string | null
-  expires_at: string | null; hidden?: number; minor_name?: string | null; link_reason?: string | null; link_by?: 'sync' | 'human' | null
+  expires_at: string | null; hidden?: number; pdf_path?: string | null; minor_name?: string | null; link_reason?: string | null; link_by?: 'sync' | 'human' | null
   client_name?: string | null; client_pilot?: string | null; links?: Link[]
 }
 
