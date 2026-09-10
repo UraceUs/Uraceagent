@@ -277,7 +277,7 @@ def test_normaliza_invoice_aliases_item_por_nome_e_valor_do_texto():
     assert acoes.assinatura("asana_criar_tarefa", {"nome": "David Pera_Urace Daily [1/1]", "vence_em": "2026-09-13"}) == "asana_criar_tarefa|david pera_urace daily [1/1]|2026-09-13"
 
 
-_TAREFA = 'ACAO: asana_criar_do_modelo | David Pera | serviço domingo | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pera_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}'
+_TAREFA = 'ACAO: asana_atualizar_tarefa | David Pera | serviço domingo | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pera_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}'
 _INVOICE_OK = 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"Using Own Kart - David Pera - 2026-09-13"}],"vence_em":"2026-09-13"}'
 
 
@@ -286,21 +286,21 @@ def test_nao_repete_acao_feita_e_substitui_pendente(cli):
     ia.RUNNER = lambda texto, sk: (True, "Vou criar a tarefa e a invoice de $500.\n" + _TAREFA + "\n" + _INVOICE_OK, None)
     c1 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera domingo, mesmo esquema"}).json()["id"])
     a1 = {a["action"]: a for a in c1["actions"]}
-    assert a1["asana_criar_do_modelo"]["status"] == "PROPOSED" and a1["qbo_criar_e_enviar_invoice"]["status"] == "PROPOSED"
+    assert a1["asana_atualizar_tarefa"]["status"] == "PROPOSED" and a1["qbo_criar_e_enviar_invoice"]["status"] == "PROPOSED"
     # o dono muda algo e manda de novo: as pendentes antigas são substituídas, não duplicadas
     c2 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "waiver vale um ano, mesmo valor"}).json()["id"])
-    assert "AÇÕES JÁ PROPOSTAS HOJE" in c2["text"] and "#%d" % a1["asana_criar_do_modelo"]["id"] in c2["text"]
+    assert "AÇÕES JÁ PROPOSTAS HOJE" in c2["text"] and "#%d" % a1["asana_atualizar_tarefa"]["id"] in c2["text"]
     a2 = {a["action"]: a for a in c2["actions"]}
     assert all(a["status"] == "PROPOSED" for a in a2.values())
     velha = cli.get(f"{B}/commands/{c1['id']}").json()["actions"]
     assert all(a["status"] == "REJECTED" and "substituída" in (a["result"] or "") for a in velha)
     assert "substitui a proposta" in c2["output"]
     # a tarefa foi aprovada e executada: não volta a ser proposta
-    con = conectar(); con.execute("UPDATE ai_actions SET status='DONE' WHERE id=?", (a2["asana_criar_do_modelo"]["id"],)); con.commit(); con.close()
+    con = conectar(); con.execute("UPDATE ai_actions SET status='DONE' WHERE id=?", (a2["asana_atualizar_tarefa"]["id"],)); con.commit(); con.close()
     c3 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "e aí?"}).json()["id"])
     acoes3 = [a["action"] for a in c3["actions"]]
-    assert "asana_criar_do_modelo" not in acoes3 and "qbo_criar_e_enviar_invoice" in acoes3
-    assert "já aprovada/feita em #%d" % a2["asana_criar_do_modelo"]["id"] in c3["output"]
+    assert "asana_atualizar_tarefa" not in acoes3 and "qbo_criar_e_enviar_invoice" in acoes3
+    assert "já aprovada/feita em #%d" % a2["asana_atualizar_tarefa"]["id"] in c3["output"]
     assert "FEITA" in c3["text"]
 
 
@@ -324,4 +324,25 @@ def test_invoice_zerada_ganha_uma_correcao_da_ia(cli, monkeypatch):
     import json as _j
     p = _j.loads(boa[0]["payload"])
     assert p["args"]["linhas"][0]["unitario"] == 500 and not p.get("problemas") and "unitario" in c["output"]
+    ia.RUNNER = runner_falso
+
+
+def test_nome_com_prefixo_do_mcp_e_tarefa_pelo_modelo(cli):
+    """'asana__asana_criar_tarefa' (como o OpenClaw expõe) vira asana_criar_tarefa; em coluna de dia,
+    vira asana_criar_do_modelo com o modelo oficial — e executa (SAFE) em vez de cair em 'Confirmar' e falhar."""
+    from command_center.api import acoes
+    assert acoes.nome_canonico("asana__asana_criar_tarefa") == "asana_criar_tarefa"
+    assert acoes.nome_canonico("qbo__qbo_criar_e_enviar_invoice") == "qbo_criar_e_enviar_invoice"
+    assert acoes.nome_canonico("google__gmail_rascunho") == "gmail_rascunho"
+    n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pera_Urace Daily [1/1]", "notas": "x", "vence_em": "2026-09-13"})
+    assert n == "asana_criar_do_modelo" and a == {"modelo_gid": acoes.MODELO_SESSAO, "nome": "David Pera_Urace Daily [1/1]", "secao_gid": "1205141832260879", "notas": "x", "vence_em": "2026-09-13"}
+    assert acoes.converter("asana_criar_tarefa", {"secao_gid": "outra", "nome": "x"})[0] == "asana_criar_tarefa"
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, 'Criando.\nACAO: asana__asana_criar_tarefa | David Pera | tarefa | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pera_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}', None)
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera domingo"}).json()["id"])
+    a = c["actions"][0]
+    assert a["action"] == "asana_criar_do_modelo" and a["policy"] == "SAFE"
+    import json as _j
+    assert _j.loads(a["payload"])["args"]["modelo_gid"] == acoes.MODELO_SESSAO
+    assert a["status"] in ("FAILED", "DONE") and (a["status"] == "DONE" or "não conectado" in (a["result"] or ""))   # sem Asana no teste: tentou de verdade
     ia.RUNNER = runner_falso

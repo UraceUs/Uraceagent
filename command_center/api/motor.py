@@ -193,12 +193,14 @@ def executar_acao(aid, user_id):
             atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(),
                       result="Sem argumentos estruturados: a IA descreveu a ação mas não deu os campos exatos. Peça no AI Command: 'refaça a ACAO com os argumentos em JSON'.")
             return
-        acao = a["action"]
-        sistema = a["system"] or acao.split("_")[0]
+        from command_center.api import acoes as _ac
+        acao = _ac.nome_canonico(a["action"])
+        acao, args = _ac.converter(acao, args)
+        sistema = acao.split("_")[0]
         if acao == "asana_mover_para_finished":       # açúcar SAFE: só para a coluna Finished Services
             from command_center.providers.sync import SECAO_FINISHED
             acao, args = "asana_mover_para_secao", {"gid": args.get("gid"), "secao_gid": SECAO_FINISHED}
-        sistema = a["system"] or acao.split("_")[0]
+        sistema = acao.split("_")[0]
         if sistema == "qbo":
             sistema = "quickbooks"
         if sistema == "google":

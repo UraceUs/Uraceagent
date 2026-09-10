@@ -195,6 +195,8 @@ def extrair_acoes(con, command_id, texto, notas=None):
     notas = notas if notas is not None else []
 
     def registra(nome, descricao, fonte, alvo=None, args=None):
+        nome = acoes.nome_canonico(nome)
+        nome, args = acoes.converter(nome, args)
         chave = (nome, (alvo or descricao)[:80])
         if chave in vistos:
             return

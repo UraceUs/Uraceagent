@@ -158,6 +158,38 @@ def pedido_de_correcao(acao, problemas):
             "Se o dono disse o valor, use exatamente esse valor. Não repita o texto anterior, não explique.")
 
 
+# ----------------------------------------------------- nome da ferramenta
+_PREFIXOS = ("asana__", "docusign__", "google__", "gmail__", "quickbooks__", "qbo__", "mcp__")
+MODELO_SESSAO = "1208702559561159"       # "Session Setup | Customer Name_Product…" — modelo oficial do quadro
+
+
+def nome_canonico(nome):
+    """'asana__asana_criar_tarefa' (nome com o prefixo do servidor MCP, como o
+    OpenClaw expõe) -> 'asana_criar_tarefa', que é o que a política e o módulo conhecem."""
+    n = re.sub(r"[^a-z0-9_]", "", (nome or "").lower())
+    mudou = True
+    while mudou:
+        mudou = False
+        for pf in _PREFIXOS:
+            if n.startswith(pf):
+                n = n[len(pf):]; mudou = True
+    return n or "acao_desconhecida"
+
+
+def converter(nome, args):
+    """Tarefa de serviço numa coluna de dia nasce do modelo oficial (decisão do dono,
+    04/09): asana_criar_tarefa vira asana_criar_do_modelo com os mesmos campos."""
+    if nome == "asana_criar_tarefa" and isinstance(args, dict) and not args.get("modelo_gid"):
+        from command_center.providers.sync import SECOES_DIAS
+        if str(args.get("secao_gid") or "") in SECOES_DIAS:
+            novo = {"modelo_gid": MODELO_SESSAO, "nome": args.get("nome"), "secao_gid": str(args.get("secao_gid"))}
+            for k in ("notas", "vence_em"):
+                if args.get(k):
+                    novo[k] = args[k]
+            return "asana_criar_do_modelo", novo
+    return nome, args
+
+
 # ----------------------------------------------------- assinatura / repetição
 def assinatura(acao, args, alvo=None):
     """O que faz duas propostas serem 'a mesma ação'. Curta e estável."""
