@@ -69,12 +69,8 @@ sincronia — e marca o lead como esperando resposta.
 4. Resposta saindo como **bot** serve? Se não servir, o caminho é
    registrar canal próprio na Chats API (suporte do Kommo, 1 a 3 dias) e
    o WhatsApp teria de migrar.
-5. Qual Salesbot entrega a resposta e **qual campo do lead ele envia**. O
-   bot #9 (id 162247) da era Chase tem roteiro próprio, por etapa daquele
-   funil: ligar `KOMMO_BOT_ID` nele sem antes trocar o roteiro faria o
-   cliente receber a cópia do Chase, não o texto do painel. Enquanto isso
-   não for conferido, o certo é deixar `KOMMO_BOT_ID` vazio — o painel
-   recusa responder e todo o resto (funil, conversa, etapa, tags, nota)
-   funciona.
+5. ~~Campo do lead~~ — superado na mesma noite: o chat passou a usar o
+   circuito do widget (hook + return_url), que carrega o texto de quem
+   escreveu. Ver [[D-2026-09-10 - O chat do Kommo dentro do Command Center]].
 
 Relacionado: [[Kommo - o que da para fazer pelo Command Center]], [[Projeto Chase]].

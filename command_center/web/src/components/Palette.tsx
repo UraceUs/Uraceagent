@@ -40,7 +40,7 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
     }
     if (s.length >= 2) out.push({ group: 'IA', label: `Perguntar à IA: "${s}"`, hint: 'Enter', go: () => { onClose(); ask(s) } })
     const pages: [string, string][] = [['Dashboard', '/'], ['Precisa de atenção', '/attention'], ['Clientes', '/clients'], ['Pro Racing Drivers', '/clients?v=pro'], ['Corridas', '/races'], ['AI Command', '/ai'],
-      ['Aprovações', '/approvals'], ['Asana', '/asana'], ['DocuSign', '/docusign'], ['Gmail', '/gmail'], ['QuickBooks', '/quickbooks'], ['CRM · Kommo', '/crm'], ['Integrações', '/integrations'], ['Automação e memória', '/automation'], ['Atividade da IA', '/activity'], ['Políticas', '/policies'], ['Auditoria', '/audit'], ['Usuários', '/users']]
+      ['Aprovações', '/approvals'], ['Asana', '/asana'], ['DocuSign', '/docusign'], ['Gmail', '/gmail'], ['QuickBooks', '/quickbooks'], ['Chat · Kommo', '/crm/chat'], ['Funil de vendas · Kommo', '/crm/funil'], ['Integrações', '/integrations'], ['Automação e memória', '/automation'], ['Atividade da IA', '/activity'], ['Políticas', '/policies'], ['Auditoria', '/audit'], ['Usuários', '/users']]
     pages.filter(([n]) => !s || n.toLowerCase().includes(s.toLowerCase())).forEach(([n, p]) => out.push({ group: 'Ir para', label: n, go: go(p) }))
     return out
   }, [res, q, nav, onClose, ask])

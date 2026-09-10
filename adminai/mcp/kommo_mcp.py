@@ -3,8 +3,8 @@
 
 Roda no HOST, sem dependência nenhuma (urllib). O token longo da
 integração privada fica em ~/.urace/kommo.env (KOMMO_DOMAIN, KOMMO_TOKEN,
-KOMMO_BOT_ID, KOMMO_CAMPO_RESPOSTA, KOMMO_WEBHOOK_SECRET) — nunca no
-repositório, nunca no container do agente.
+KOMMO_BOT_ID, KOMMO_HOOK_KEY, KOMMO_BOT_SECRET) — nunca no repositório,
+nunca no container do agente.
 
 Regras do dono, em código:
   - NADA é apagado: não existe apagar lead, contato, nota ou tag aqui.
@@ -13,12 +13,11 @@ Regras do dono, em código:
     HUMANA: não é ferramenta do agente, e só acontece com APLICAR=1,
     que o Command Center libera na ação do dono. O agente pode PROPOR
     pelo painel; quem confirma é gente.
-  - Responder pelo canal nativo (Instagram/Facebook/WhatsApp) sai pelo
-    Salesbot da conta (caminho provado em 24-25/08 na era Chase): a
-    mensagem aparece como do bot, e o texto do painel só chega ao cliente
-    se o bot mandar o campo indicado em KOMMO_CAMPO_RESPOSTA. Sem
-    KOMMO_BOT_ID a resposta é recusada; sem o campo, o painel avisa que
-    quem escolhe o texto é o roteiro do bot — nunca finge que enviou.
+  - O chat (Instagram/Facebook/WhatsApp) entra e sai pelo circuito do
+    Salesbot provado em 24/08: o bot manda cada mensagem recebida ao hook
+    do painel e fica esperando; a resposta humana volta pelo return_url
+    e o bot a mostra no chat, com o texto NOSSO. Sem KOMMO_BOT_ID não dá
+    para reabrir o chat horas depois — o painel recusa em vez de fingir.
 
 Ver brain/40_SISTEMAS/Kommo - o que da para fazer pelo Command Center.md.
 """
@@ -260,6 +259,50 @@ def kommo_conversa(lead_id, maximo=100):
     return saida
 
 
+CANAIS = (("amocrmwa", "WhatsApp"), ("waba", "WhatsApp"), ("whatsapp", "WhatsApp"), ("instagram", "Instagram"),
+          ("facebook", "Facebook"), ("fb", "Facebook"), ("messenger", "Facebook"), ("telegram", "Telegram"),
+          ("viber", "Viber"), ("sms", "SMS"), ("amojo", "Chat do site"), ("site", "Chat do site"))
+
+
+def canal_da_origem(origem):
+    """'com.amocrm.amocrmwa' → 'WhatsApp'; 'instagram' → 'Instagram'… None se não souber."""
+    o = (origem or "").lower()
+    for chave, nome in CANAIS:
+        if chave in o:
+            return nome
+    return None
+
+
+@srv.ferramenta("kommo_chats",
+                "Movimento do chat (Instagram, Facebook, WhatsApp…) pelos eventos da conta: para cada "
+                "mensagem recebida/enviada, o lead, o canal, a direção e a hora. O TEXTO das mensagens "
+                "dos canais nativos não vem pela API do Kommo. Só leitura.",
+                {"desde_dias": {"type": "integer", "default": 30}, "maximo": {"type": "integer", "default": 500}}, [])
+def kommo_chats(desde_dias=30, maximo=500):
+    desde = int(time.time()) - int(desde_dias or 30) * 86400
+    params = {"filter[type][0]": "incoming_chat_message", "filter[type][1]": "outgoing_chat_message",
+              "filter[entity][0]": "lead", "filter[created_at][from]": desde}
+    saida = []
+    for ev in _lista("/events", "events", params, maximo=int(maximo or 500)):
+        if ev.get("entity_type") not in (None, "lead", "leads"):
+            continue
+        va = ev.get("value_after") or []
+        msg = {}
+        if isinstance(va, list) and va and isinstance(va[0], dict):
+            msg = va[0].get("message") or va[0]
+        elif isinstance(va, dict):
+            msg = va.get("message") or va
+        origem = msg.get("origin") or msg.get("source") or ""
+        saida.append({"id": str(ev.get("id")), "lead_id": str(ev.get("entity_id")),
+                      "direcao": "entrada" if ev.get("type") == "incoming_chat_message" else "saida",
+                      "canal": canal_da_origem(origem), "origem": origem or None,
+                      "talk_id": str(msg.get("talk_id")) if msg.get("talk_id") else None,
+                      "mensagem_id": str(msg.get("id")) if msg.get("id") else None,
+                      "em": _quando(ev.get("created_at"))})
+    saida.sort(key=lambda x: x["em"] or "")
+    return saida
+
+
 # --------------------------------------------------- portas humanas
 # Não são ferramentas do agente: quem chama é o Command Center, depois do
 # clique de uma pessoa. Todas exigem APLICAR=1 (o painel libera na hora).
@@ -301,49 +344,143 @@ def nota_humana(lead_id, texto):
     return {"aplicado": True, "lead_id": str(lead_id), "nota_id": str(nid) if nid else None}
 
 
-def responder_humano(lead_id, texto, bot_id=None):
-    """Responde ao lead pelo canal em que ele falou (Instagram, Facebook, WhatsApp).
+# --------------------------------------------- o chat: circuito do Salesbot
+# Caminho provado com lead real do Instagram em 24/08 (era Chase): o Salesbot
+# tem um bloco de widget que faz `widget_request` para o nosso hook a cada
+# mensagem recebida (form-encoded, chaves PHP-style) e fica esperando a
+# continuação; quem responde POSTa no `return_url` com {"data": {"reply": …}}
+# e o bot mostra {{json.reply}} no chat do lead — o texto NOSSO, inteiro, no
+# canal em que ele falou. Para responder horas depois, `bots/run` reabre o
+# canal: o bot chama o hook sem mensagem e recebe o que estava na fila.
+import base64
+import hashlib
+import hmac
 
-    Como a mensagem sai: quem entrega no chat é o Salesbot da conta, disparado
-    por API (caminho provado em 24-25/08 na era Chase). Duas coisas vêm daí, e
-    as duas são ditas em voz alta em vez de escondidas:
 
-      1. a mensagem aparece como do BOT, não de uma pessoa, e o gatilho tem
-         cooldown de 5 min por lead;
-      2. o bot manda o que ELE está configurado para mandar. Para o texto
-         escrito no painel chegar ao cliente, o Salesbot precisa enviar um
-         CAMPO do lead — o id desse campo vai em KOMMO_CAMPO_RESPOSTA, e o
-         painel grava o texto lá antes de disparar. Sem esse campo, o painel
-         grava a nota, dispara o bot e AVISA que quem escolhe o texto é o
-         roteiro do bot: ninguém fica achando que o cliente leu o que se
-         escreveu aqui.
+def parse_corpo_hook(bruto):
+    """Corpo do widget_request em qualquer formato: JSON ou form-urlencoded com
+    chaves PHP-style ('data[lead_id]'), que é o que o Salesbot manda de verdade."""
+    if not bruto:
+        return {}
+    if isinstance(bruto, bytes):
+        bruto = bruto.decode("utf-8", "replace")
+    try:
+        j = json.loads(bruto)
+        return j if isinstance(j, dict) else {"_corpo": j}
+    except ValueError:
+        pass
+    plano = {k: (v[0] if len(v) == 1 else v) for k, v in urllib.parse.parse_qs(bruto, keep_blank_values=True).items()}
+    raiz = {}
+    for chave, valor in plano.items():
+        partes = chave.replace("]", "").split("[")
+        no = raiz
+        for i, parte in enumerate(partes):
+            if i == len(partes) - 1:
+                no[parte] = valor
+            else:
+                prox = no.get(parte)
+                if not isinstance(prox, dict):
+                    prox = {}
+                    no[parte] = prox
+                no = prox
+    return raiz
 
-    Sem KOMMO_BOT_ID a resposta é RECUSADA: melhor não responder do que fingir."""
+
+def _cava(payload, *caminhos):
+    for caminho in caminhos:
+        no = payload
+        for parte in caminho.split("."):
+            if isinstance(no, list) and parte.isdigit():
+                no = no[int(parte)] if int(parte) < len(no) else None
+            elif isinstance(no, dict):
+                no = no.get(parte)
+            else:
+                no = None
+            if no is None:
+                break
+        if isinstance(no, (str, int, float)) and no != "":
+            return no
+    return None
+
+
+def extrair_entrada(payload):
+    """(lead_id, texto, return_url, token, nome, telefone) do payload do widget."""
+    lead = _cava(payload, "lead_id", "data.lead_id", "data.lead.id", "data.lead.0.id", "lead.id", "leads.0.id")
+    texto = _cava(payload, "message", "data.message", "data.message.text", "data.message.message.text",
+                  "message.text", "data.talk.message.text", "text", "data.text")
+    # o placeholder que o Kommo não resolveu vem literal: não é mensagem
+    if isinstance(texto, str) and texto.strip().startswith("{{"):
+        texto = None
+    return {"lead_id": str(lead) if lead is not None else None, "texto": (str(texto).strip() if texto is not None else ""),
+            "return_url": _cava(payload, "return_url", "data.return_url"),
+            "token": _cava(payload, "token", "data.token"),
+            "nome": _cava(payload, "contact_name", "data.contact_name", "data.contact.name", "contact.name"),
+            "telefone": _cava(payload, "contact_phone", "data.contact_phone", "data.contact.phone")}
+
+
+def verificar_token_bot(token):
+    """JWT descartável do widget_request: HS512 com o client secret da integração
+    (KOMMO_BOT_SECRET). Sem segredo configurado, não há o que verificar (True)."""
+    segredo = os.environ.get("KOMMO_BOT_SECRET", "")
+    if not segredo:
+        return True
+    if not token or token.count(".") != 2:
+        return False
+    try:
+        h, p, sig = token.split(".")
+        esperado = hmac.new(segredo.encode(), f"{h}.{p}".encode(), hashlib.sha512).digest()
+        dado = base64.urlsafe_b64decode(sig + "=" * (-len(sig) % 4))
+        if not hmac.compare_digest(esperado, dado):
+            return False
+        claims = json.loads(base64.urlsafe_b64decode(p + "=" * (-len(p) % 4)))
+        return claims.get("exp") is None or int(claims["exp"]) >= int(time.time())
+    except Exception:
+        return False
+
+
+def continuar_bot_humano(return_url, texto):
+    """Entrega `texto` no chat do lead pela continuação do Salesbot (modo json_reply:
+    o bot mostra {{json.reply}}, mensagem única, sem o limite de 80 chars).
+    Devolve (ok, detalhe). 404 = o bot já não estava esperando."""
     texto = (texto or "").strip()
-    if not texto:
-        raise ErroFerramenta("resposta vazia")
+    if not texto or not return_url:
+        return False, "sem texto ou sem return_url"
+    if not str(return_url).startswith("https://"):
+        return False, "return_url fora do padrão"
+    if not _aplicar():
+        return False, f"SIMULAÇÃO (APLICAR=0): entregaria no chat: {texto[:80]}"
+    corpo = json.dumps({"data": {"status": "success", "reply": texto[:4000]}}).encode()
+    req = urllib.request.Request(return_url, data=corpo, method="POST", headers={
+        "Authorization": f"Bearer {os.environ['KOMMO_TOKEN']}", "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status < 300, f"{r.status}"
+    except urllib.error.HTTPError as e:
+        detalhe = e.read().decode("utf-8", "replace")[:200]
+        if e.code == 404:
+            return False, "o bot já não estava esperando (404)"
+        return False, f"{e.code}: {detalhe}"
+    except urllib.error.URLError as e:
+        return False, f"fora de alcance: {e}"
+
+
+def abrir_canal_humano(lead_id, bot_id=None):
+    """Dispara o Salesbot no lead (`bots/run`, provado em 25/08): o bot chama o hook
+    sem mensagem e recebe o que estiver na fila. Sem KOMMO_BOT_ID, recusa."""
     bot = str(bot_id or os.environ.get("KOMMO_BOT_ID") or "").strip()
     if not bot:
-        raise ErroFerramenta("RECUSADO: sem KOMMO_BOT_ID no ~/.urace/kommo.env não dá para entregar a mensagem no "
-                             "chat do Kommo. Configure o Salesbot de resposta (ou responda pelo próprio Kommo) — "
-                             "a nota interna continua disponível.")
-    campo = str(os.environ.get("KOMMO_CAMPO_RESPOSTA") or "").strip()
+        raise ErroFerramenta("RECUSADO: sem KOMMO_BOT_ID no ~/.urace/kommo.env não dá para reabrir o chat do "
+                             "lead. Ligue o bot do Command Center no Kommo e grave o id dele.")
     if not _aplicar():
-        return _simulado(f"responder ao lead {lead_id} pelo bot {bot}"
-                         f"{f' (texto no campo {campo})' if campo else ' (sem campo de resposta configurado)'}: {texto[:80]}")
-    if campo:                                    # o Salesbot lê este campo e manda o que está nele
-        _req(f"/leads/{int(lead_id)}", "PATCH",
-             {"custom_fields_values": [{"field_id": int(campo), "values": [{"value": texto[:4000]}]}]})
-    # o texto vai como nota do painel ANTES do disparo: fica o registro do que foi dito
-    _req(f"/leads/{int(lead_id)}/notes", "POST",
-         [{"note_type": NOTA_COMUM, "params": {"text": f"[Command Center] resposta enviada: {texto[:2000]}"}}])
+        return _simulado(f"disparar o bot {bot} no lead {lead_id}")
     _req(f"/bots/{int(bot)}/run", "POST", {"entity_id": int(lead_id), "entity_type": "leads"})
-    return {"aplicado": True, "lead_id": str(lead_id), "bot_id": bot, "campo": campo or None,
-            "como": "mensagem do bot no canal do lead",
-            "aviso": ("sai como mensagem do bot; cooldown de 5 min por lead" if campo else
-                      "sai como mensagem do bot e QUEM ESCOLHE O TEXTO É O ROTEIRO DO BOT: sem "
-                      "KOMMO_CAMPO_RESPOSTA configurado, o que você escreveu ficou registrado na nota do lead, "
-                      "mas pode não ser o que o cliente vai ler. Cooldown de 5 min por lead.")}
+    return {"aplicado": True, "lead_id": str(lead_id), "bot_id": bot}
+
+
+def responder_humano(lead_id, texto, bot_id=None):
+    """Mantida por compatibilidade: hoje a resposta é fila + circuito do Salesbot
+    (command_center/api/crm.py). Aqui só reabre o canal."""
+    return abrir_canal_humano(lead_id, bot_id)
 
 
 def atribuir_humano(lead_id, usuario_id):

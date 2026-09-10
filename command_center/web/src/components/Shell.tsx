@@ -57,7 +57,9 @@ export function Shell() {
         <NavLink to="/docusign">DocuSign {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NavLink>
         <NavLink to="/gmail">Gmail {!!d?.emails_attention && <span className="n soft">{d.emails_attention}</span>}</NavLink>
         <NavLink to="/quickbooks">QuickBooks</NavLink>
-        <NavLink to="/crm">CRM · Kommo {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NavLink>
+        <div className="grp">CRM · Kommo</div>
+        <NavLink to="/crm/chat">Chat {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NavLink>
+        <NavLink to="/crm/funil">Funil de vendas</NavLink>
         <div className="grp">Inteligência</div>
         <NavLink to="/ai" end>AI Command</NavLink>
         <NavLink to="/approvals">Aprovações {pend > 0 && <span className="n">{pend}</span>}</NavLink>

@@ -41,8 +41,10 @@ export default function App() {
           <Route path="docusign" element={<DocuSignPage />} />
           <Route path="gmail" element={<GmailPage />} />
           <Route path="quickbooks" element={<QuickBooksPage />} />
-          <Route path="crm" element={<CRM />} />
-          <Route path="kommo" element={<Navigate to="/crm" replace />} />
+          <Route path="crm" element={<Navigate to="/crm/chat" replace />} />
+          <Route path="crm/chat" element={<CRM vista="chat" />} />
+          <Route path="crm/funil" element={<CRM vista="funil" />} />
+          <Route path="kommo" element={<Navigate to="/crm/chat" replace />} />
           <Route path="races" element={<Races />} />
           <Route path="equipment" element={<Navigate to="/clients?v=pro" replace />} />
           <Route path="tasks" element={<Navigate to="/asana" replace />} />

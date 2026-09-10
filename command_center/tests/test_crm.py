@@ -68,9 +68,9 @@ class KommoFalso:
         self.feito.append(("nota", lead_id, texto, os.environ.get("APLICAR")))
         return {"aplicado": True, "nota_id": "n99"}
 
-    def responder_humano(self, lead_id, texto, bot_id=None):
-        self.feito.append(("responder", lead_id, texto, os.environ.get("APLICAR")))
-        return {"aplicado": True, "bot_id": "162247", "aviso": "sai como mensagem do bot"}
+    def abrir_canal_humano(self, lead_id, bot_id=None):
+        self.feito.append(("abrir", lead_id, None, os.environ.get("APLICAR")))
+        return {"aplicado": True, "bot_id": "162247"}
 
 
 @pytest.fixture
@@ -141,17 +141,18 @@ def test_mover_tag_nota_e_resposta_sao_atos_humanos_com_aplicar(cli, kommo):
     assert cli.post(f"{B}/crm/leads/{lid}/tags", headers=h, json={"tags": ["quente"]}).status_code == 200
     assert cli.post(f"{B}/crm/leads/{lid}/note", headers=h, json={"text": "ligou, pediu domingo"}).status_code == 200
     r = cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "Oi Maria! A experimental sai $500."})
-    assert r.status_code == 200 and "bot" in r.json()["aviso"]
-    assert [x[0] for x in kommo.feito] == ["mover", "tag", "nota", "responder"]
+    assert r.status_code == 200 and r.json()["como"] == "bot disparado" and "fila" in r.json()["aviso"]
+    assert [x[0] for x in kommo.feito] == ["mover", "tag", "nota", "abrir"]
     assert all(x[-1] == "1" for x in kommo.feito)               # APLICAR ligado só na chamada
     assert os.environ.get("APLICAR") is None                    # e devolvido depois
     con = conectar()
     try:
         l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lid,))
         assert l["stage_id"] == "105276412" and l["stage_name"] == "First Contact"
-        assert "quente" in json.loads(l["tags"]) and l["needs_reply"] == 0
-        msgs = todos(con, "SELECT direction, text FROM crm_messages WHERE lead_id=? ORDER BY id", (lid,))
-        assert [m["direction"] for m in msgs] == ["entrada", "nota", "saida"]
+        assert "quente" in json.loads(l["tags"])
+        msgs = todos(con, "SELECT direction, text, status FROM crm_messages WHERE lead_id=? ORDER BY id", (lid,))
+        assert [m["direction"] for m in msgs] == ["entrada", "nota", "saida"] and msgs[-1]["status"] == "queued"
+        con.execute("DELETE FROM crm_messages WHERE lead_id=? AND status='queued'", (lid,)); con.commit()   # limpa para os testes do chat
         eventos = {a["event"] for a in todos(con, "SELECT event FROM audit_logs")}
         assert {"crm.stage", "crm.tags", "crm.note", "crm.reply"} <= eventos
     finally:
@@ -163,8 +164,8 @@ def test_sem_salesbot_a_resposta_e_recusada_com_explicacao(cli, monkeypatch):
     from mcp_stdio import ErroFerramenta
 
     class SemBot:
-        def responder_humano(self, lead_id, texto, bot_id=None):
-            raise ErroFerramenta("RECUSADO: sem KOMMO_BOT_ID não dá para entregar a mensagem no chat do Kommo.")
+        def abrir_canal_humano(self, lead_id, bot_id=None):
+            raise ErroFerramenta("RECUSADO: sem KOMMO_BOT_ID não dá para reabrir o chat do lead.")
     monkeypatch.setattr(crm, "modulo", lambda s: SemBot())
     h = entra(cli, "op@urace.us")
     con = conectar()
@@ -174,6 +175,12 @@ def test_sem_salesbot_a_resposta_e_recusada_com_explicacao(cli, monkeypatch):
         con.close()
     r = cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "oi"})
     assert r.status_code == 502 and "KOMMO_BOT_ID" in r.json()["detail"]
+    con = conectar()
+    try:                                                    # a mensagem fica marcada como falha, não some
+        assert um(con, "SELECT status FROM crm_messages WHERE lead_id=? AND text='oi'", (lid,))["status"] == "failed"
+        con.execute("DELETE FROM crm_messages WHERE lead_id=? AND text='oi'", (lid,)); con.commit()
+    finally:
+        con.close()
 
 
 def test_leitor_nao_escreve_no_crm(cli, kommo):
@@ -231,33 +238,23 @@ def test_sem_credencial_o_crm_nao_derruba_a_tela(cli, monkeypatch):
     assert cli.get(f"{B}/crm/stages", headers=h).status_code == 503
 
 
-def test_resposta_pelo_salesbot_diz_a_verdade_sobre_quem_escolhe_o_texto(monkeypatch):
-    """O bot manda o que ELE está configurado para mandar. Com KOMMO_CAMPO_RESPOSTA o
-    painel grava o texto no campo que o bot envia; sem o campo, avisa em vez de deixar
-    o dono achar que o cliente leu o que ele escreveu."""
+def test_portas_do_circuito_do_salesbot(monkeypatch):
+    """Continuação só em HTTPS e só com APLICAR; reabrir o canal exige KOMMO_BOT_ID."""
     import kommo_mcp as k
     chamadas = []
     monkeypatch.setattr(k, "_req", lambda c, m="GET", corpo=None, params=None: chamadas.append((m, c, corpo)) or {})
-    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com")
-    monkeypatch.setenv("KOMMO_TOKEN", "t")
-    monkeypatch.setenv("KOMMO_BOT_ID", "162247")
-    monkeypatch.delenv("KOMMO_CAMPO_RESPOSTA", raising=False)
-    monkeypatch.setenv("APLICAR", "1")
-    r = k.responder_humano("5001", "A experimental sai $500.")
-    assert r["aplicado"] and "ROTEIRO DO BOT" in r["aviso"] and r["campo"] is None
-    assert [c[1] for c in chamadas] == ["/leads/5001/notes", "/bots/162247/run"]
-    chamadas.clear()
-    monkeypatch.setenv("KOMMO_CAMPO_RESPOSTA", "998877")
-    r = k.responder_humano("5001", "A experimental sai $500.")
-    assert r["campo"] == "998877" and "ROTEIRO" not in r["aviso"]
-    assert chamadas[0][1] == "/leads/5001" and chamadas[0][2]["custom_fields_values"][0]["field_id"] == 998877
-    assert chamadas[0][2]["custom_fields_values"][0]["values"][0]["value"] == "A experimental sai $500."
-    # sem bot: recusa, e nada é chamado
-    chamadas.clear()
-    monkeypatch.delenv("KOMMO_BOT_ID")
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com"); monkeypatch.setenv("KOMMO_TOKEN", "t")
+    monkeypatch.delenv("APLICAR", raising=False)
+    ok, det = k.continuar_bot_humano("https://urace.kommo.com/api/v4/salesbot/1/continue/a", "oi")
+    assert ok is False and "SIMULAÇÃO" in det
+    assert k.continuar_bot_humano("http://inseguro/x", "oi")[1] == "return_url fora do padrão"
+    assert k.continuar_bot_humano("https://x", "")[1] == "sem texto ou sem return_url"
+    monkeypatch.delenv("KOMMO_BOT_ID", raising=False)
     with pytest.raises(Exception) as e:
-        k.responder_humano("5001", "oi")
+        k.abrir_canal_humano("5001")
     assert "KOMMO_BOT_ID" in str(e.value) and chamadas == []
+    monkeypatch.setenv("KOMMO_BOT_ID", "162247"); monkeypatch.setenv("APLICAR", "1")
+    assert k.abrir_canal_humano("5001")["aplicado"] and chamadas[-1][1] == "/bots/162247/run" and chamadas[-1][2]["entity_type"] == "leads"
 
 
 def test_escrita_no_kommo_e_simulacao_sem_aplicar(monkeypatch):
@@ -275,3 +272,177 @@ def test_escrita_no_kommo_e_simulacao_sem_aplicar(monkeypatch):
     assert k.responder_humano("5001", "teste")["aplicado"] is False
     assert chamadas == []
     assert not hasattr(k, "apagar_lead") and not hasattr(k, "apagar_humano")   # não existe porta de apagar
+
+
+# ------------------------------------------------------------- o chat (hook, fila, entrega)
+HOOK = ("data%5Bmessage%5D=Consegue+domingo%3F&data%5Blead_id%5D=5001&data%5Bcontact_name%5D=Maria+Souza"
+        "&data%5Bcontact_phone%5D=%2B1+407+555+0101&return_url=https%3A%2F%2Furace.kommo.com%2Fapi%2Fv4%2Fsalesbot%2F162247%2Fcontinue%2Fabc")
+
+
+class KommoChat:
+    """Portas do circuito do Salesbot: continuação e bots/run, sem rede."""
+
+    def __init__(self):
+        self.entregas, self.runs, self.notas = [], [], []
+        self.falhar_continue = False
+    parse_corpo_hook = staticmethod(lambda b: __import__("kommo_mcp").parse_corpo_hook(b))
+    extrair_entrada = staticmethod(lambda p: __import__("kommo_mcp").extrair_entrada(p))
+    verificar_token_bot = staticmethod(lambda t: __import__("kommo_mcp").verificar_token_bot(t))
+
+    def continuar_bot_humano(self, return_url, texto):
+        self.entregas.append((return_url, texto, os.environ.get("APLICAR")))
+        return (False, "o bot já não estava esperando (404)") if self.falhar_continue else (True, "202")
+
+    def abrir_canal_humano(self, lead_id, bot_id=None):
+        self.runs.append((lead_id, os.environ.get("APLICAR")))
+        return {"aplicado": True, "lead_id": lead_id, "bot_id": "999"}
+
+    def nota_humana(self, lead_id, texto):
+        self.notas.append((lead_id, texto)); return {"aplicado": True, "nota_id": "n1"}
+
+
+@pytest.fixture
+def chat(monkeypatch):
+    k = KommoChat()
+    monkeypatch.setattr(crm, "modulo", lambda s: k)
+    monkeypatch.setattr(crm, "chamar", lambda s, f, **a: {"kommo_conversa": [], "kommo_funis": FUNIS,
+                                                          "kommo_lead": LEADS[0]}[f])
+    monkeypatch.setenv("KOMMO_HOOK_KEY", "chave-do-hook")
+    monkeypatch.setenv("KOMMO_BOT_ID", "999")
+    monkeypatch.delenv("KOMMO_BOT_SECRET", raising=False)
+    return k
+
+
+def _lid(ext="5001"):
+    con = conectar()
+    try:
+        return um(con, "SELECT id FROM crm_leads WHERE external_id=?", (ext,))["id"]
+    finally:
+        con.close()
+
+
+def test_hook_do_salesbot_guarda_a_mensagem_e_so_com_a_chave(cli, chat):
+    assert cli.post(f"{B}/crm/hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"}).status_code == 403
+    assert cli.post(f"{B}/crm/hook?key=errada", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"}).status_code == 403
+    r = cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 200 and r.json()["ok"]
+    con = conectar()
+    try:
+        l = um(con, "SELECT * FROM crm_leads WHERE external_id='5001'")
+        assert l["needs_reply"] == 1 and l["return_url"].endswith("/continue/abc") and l["return_at"] and l["last_hook_at"]
+        m = um(con, "SELECT * FROM crm_messages WHERE lead_id=? AND source='hook'", (l["id"],))
+        assert m["direction"] == "entrada" and m["text"] == "Consegue domingo?" and m["author"] == "Maria Souza"
+        # o mesmo POST de novo no mesmo minuto não duplica
+        cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
+        assert um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=? AND source='hook'", (l["id"],))["n"] == 1
+    finally:
+        con.close()
+    assert chat.entregas == []                    # nada na fila: o bot fica esperando, sem inventar resposta
+
+
+def test_resposta_sai_na_hora_se_o_bot_ainda_espera(cli, chat):
+    h = entra(cli, "op@urace.us")
+    lid = _lid()
+    r = cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "Domingo às 9h, pode ser?"})
+    assert r.status_code == 200 and r.json()["como"] == "entregue"
+    assert chat.entregas[-1][0].endswith("/continue/abc") and chat.entregas[-1][1] == "Domingo às 9h, pode ser?" and chat.entregas[-1][2] == "1"
+    assert chat.runs == []                        # não precisou disparar o bot
+    con = conectar()
+    try:
+        m = um(con, "SELECT status FROM crm_messages WHERE lead_id=? AND direction='saida' ORDER BY id DESC LIMIT 1", (lid,))
+        assert m["status"] == "sent"
+        l = um(con, "SELECT return_url, needs_reply FROM crm_leads WHERE id=?", (lid,))
+        assert l["return_url"] is None and l["needs_reply"] == 0     # continuação gasta, conversa respondida
+    finally:
+        con.close()
+
+
+def test_resposta_horas_depois_dispara_o_bot_e_o_hook_entrega_a_fila(cli, chat):
+    h = entra(cli, "op@urace.us")
+    lid = _lid()
+    r = cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "Confirmado para domingo!"})
+    assert r.status_code == 200 and r.json()["como"] == "bot disparado" and chat.runs == [("5001", "1")]
+    con = conectar()
+    try:
+        assert um(con, "SELECT status FROM crm_messages WHERE lead_id=? AND direction='saida' ORDER BY id DESC LIMIT 1", (lid,))["status"] == "queued"
+    finally:
+        con.close()
+    # o bot abre o canal: chama o hook SEM mensagem, com return_url novo → a fila sai
+    sem_msg = "data%5Blead_id%5D=5001&data%5Bmessage%5D=%7B%7Bmessage_text%7D%7D&return_url=https%3A%2F%2Furace.kommo.com%2Fapi%2Fv4%2Fsalesbot%2F999%2Fcontinue%2Fxyz"
+    assert cli.post(f"{B}/crm/hook?key=chave-do-hook", content=sem_msg, headers={"Content-Type": "application/x-www-form-urlencoded"}).status_code == 200
+    assert chat.entregas[-1][0].endswith("/continue/xyz") and chat.entregas[-1][1] == "Confirmado para domingo!"
+    con = conectar()
+    try:
+        assert um(con, "SELECT status FROM crm_messages WHERE lead_id=? AND direction='saida' ORDER BY id DESC LIMIT 1", (lid,))["status"] == "sent"
+        assert um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=? AND direction='entrada' AND text LIKE '%message_text%'", (lid,))["n"] == 0   # placeholder não vira mensagem
+    finally:
+        con.close()
+
+
+def test_fila_parada_vira_nota_e_fica_marcada(cli, chat):
+    h = entra(cli, "op@urace.us")
+    lid = _lid()
+    cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "Essa vai ficar parada"})
+    con = conectar()
+    try:
+        con.execute("UPDATE crm_messages SET at='2026-01-01T00:00:00Z' WHERE lead_id=? AND status='queued'", (lid,)); con.commit()
+        assert crm.varrer_fila(con) == 1
+        m = um(con, "SELECT status, error FROM crm_messages WHERE lead_id=? AND text='Essa vai ficar parada'", (lid,))
+        assert m["status"] == "failed" and "nota" in m["error"]
+        assert chat.notas[-1][0] == "5001" and "enviar manualmente" in chat.notas[-1][1]
+    finally:
+        con.close()
+    d = cli.get(f"{B}/crm/leads/{lid}", headers=h).json()
+    assert any(m["status"] == "failed" for m in d["mensagens"])
+
+
+def test_inbox_e_setup(cli, chat):
+    h = entra(cli, "admin@urace.us")
+    ib = cli.get(f"{B}/crm/inbox", headers=h).json()
+    c = next(c for c in ib["conversas"] if c["external_id"] == "5001")
+    assert c["snippet"] and c["source"] == "Instagram" and ib["conversas"][0]["needs_reply"] == 1   # quem espera no topo
+    s = cli.get(f"{B}/crm/setup", headers=h).json()
+    assert s["hook_url"].endswith("/ops/api/crm/hook?key=chave-do-hook") and s["bot_id"] == "999" and s["hooks_hoje"] >= 1
+    assert cli.get(f"{B}/crm/setup", headers=entra(cli, "op@urace.us")).status_code == 403
+
+
+def test_hook_com_assinatura_do_bot(cli, chat, monkeypatch):
+    import base64, hmac, hashlib
+    monkeypatch.setenv("KOMMO_BOT_SECRET", "segredo")
+    h64 = lambda b: base64.urlsafe_b64encode(b).decode().rstrip("=")
+    cab, corpo = h64(b'{"alg":"HS512"}'), h64(b'{"exp":9999999999}')
+    bom = f"{cab}.{corpo}." + h64(hmac.new(b"segredo", f"{cab}.{corpo}".encode(), hashlib.sha512).digest())
+    ruim = f"{cab}.{corpo}.AAAA"
+    base = "data%5Blead_id%5D=5001&data%5Bmessage%5D=oi"
+    assert cli.post(f"{B}/crm/hook?key=chave-do-hook", content=base + "&token=" + ruim, headers={"Content-Type": "application/x-www-form-urlencoded"}).status_code == 401
+    assert cli.post(f"{B}/crm/hook?key=chave-do-hook", content=base + "&token=" + bom, headers={"Content-Type": "application/x-www-form-urlencoded"}).status_code == 200
+
+
+def test_eventos_de_chat_viram_conversas_com_canal(cli, monkeypatch):
+    """O texto antigo a API não entrega; o movimento (quem, canal, quando) entra e a
+    conversa aparece na caixa de entrada com a origem certa e 'espera resposta'."""
+    from command_center.providers import sync
+    import kommo_mcp as k
+    eventos_brutos = {"_embedded": {"events": [
+        {"id": "e1", "type": "outgoing_chat_message", "entity_id": 7001, "entity_type": "lead", "created_at": 1789000000,
+         "value_after": [{"message": {"id": "m1", "origin": "com.amocrm.amocrmwa", "talk_id": 55}}]},
+        {"id": "e2", "type": "incoming_chat_message", "entity_id": 7001, "entity_type": "lead", "created_at": 1789000600,
+         "value_after": [{"message": {"id": "m2", "origin": "com.amocrm.amocrmwa", "talk_id": 55}}]},
+    ]}}
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com"); monkeypatch.setenv("KOMMO_TOKEN", "t")
+    monkeypatch.setattr(k, "_req", lambda c, m="GET", corpo=None, params=None: eventos_brutos if c == "/events" else {})
+    evs = k.kommo_chats()
+    assert [e["direcao"] for e in evs] == ["saida", "entrada"] and evs[0]["canal"] == "WhatsApp"
+    monkeypatch.setattr(sync, "chamar", lambda s, f, **a: {"kommo_chats": evs, "kommo_lead": {"id": "7001", "nome": "João Kart", "contato": {"nome": "João", "telefone": "+1 321 555 0102"}}}[f])
+    con = conectar()
+    try:
+        r = sync.sincronizar_chats_kommo(con)
+        assert r["conversas"] == 1 and r["conversas_novas"] == 1
+        l = um(con, "SELECT * FROM crm_leads WHERE external_id='7001'")
+        assert l["source"] == "WhatsApp" and l["needs_reply"] == 1 and l["name"] == "João Kart" and l["link"].endswith("/leads/detail/7001")
+        ms = todos(con, "SELECT direction, text, source FROM crm_messages WHERE lead_id=? ORDER BY at", (l["id"],))
+        assert [m["direction"] for m in ms] == ["saida", "entrada"] and all(m["text"] is None for m in ms) and ms[0]["source"] == "WhatsApp"
+        sync.sincronizar_chats_kommo(con)          # de novo: não duplica
+        assert um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=?", (l["id"],))["n"] == 2
+    finally:
+        con.close()

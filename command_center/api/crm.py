@@ -11,14 +11,16 @@ Como funciona:
   * ESCREVER (mover de etapa, marcar tag, anotar, responder) chama as
     PORTAS HUMANAS do MCP com APLICAR liberado só naquela chamada: quem
     autoriza é o clique de uma pessoa, e tudo fica na auditoria.
-  * RESPONDER sai pelo Salesbot da conta e aparece como mensagem do bot
-    (limite conhecido do Kommo). Sem KOMMO_BOT_ID a resposta é recusada
-    com explicação; a nota interna continua funcionando. E o texto escrito
-    aqui só chega ao cliente se o bot mandar o campo de KOMMO_CAMPO_RESPOSTA
-    — sem esse campo a tela avisa que quem escolhe o texto é o roteiro do bot.
-  * O webhook do Kommo entra por /crm/webhook com segredo compartilhado —
-    é assim que a mensagem que chega no Instagram/Facebook/WhatsApp
-    aparece aqui sem esperar a próxima sincronia.
+  * O CHAT usa o circuito do Salesbot provado em 24/08: o bloco do widget
+    manda cada mensagem recebida para /crm/hook (?key=KOMMO_HOOK_KEY) e o
+    bot fica esperando; a RESPOSTA humana entra numa fila e sai pela
+    continuação (return_url) com o texto de quem escreveu — na hora, se o
+    bot ainda espera; senão o painel dispara o bot (bots/run) e ele volta ao
+    hook para buscar a fila. Sem entrega em PRAZO_FILA_S, vira nota no lead
+    e fica marcada como não entregue. Aparece como mensagem do bot: limite
+    do Kommo, dito na tela.
+  * /crm/webhook (JSON + segredo) continua existindo para automações
+    externas; o caminho real do chat é o hook.
 
 Nada apaga lead, contato, nota ou tag: essa porta não existe.
 """
@@ -27,7 +29,7 @@ import json
 import os
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
@@ -124,10 +126,12 @@ def lead(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
         aviso = f"Kommo não conectado: {e}. Mostrando o que já estava guardado."
     except Exception as e:
         aviso = f"Não deu para ler a conversa agora: {str(e)[:200]}"
+    varrer_fila(con); con.commit()
     mensagens = todos(con, "SELECT * FROM crm_messages WHERE lead_id=? ORDER BY at, id", (lid,))
+    l = _lead(con, lid)
     return {"lead": l, "mensagens": mensagens, "aviso": aviso,
-            "responder_habilitado": bool(os.environ.get("KOMMO_BOT_ID")),
-            "texto_chega_ao_cliente": bool(os.environ.get("KOMMO_CAMPO_RESPOSTA"))}
+            "responder_habilitado": bool(os.environ.get("KOMMO_BOT_ID")) or _return_fresco(l),
+            "chat_ligado": bool(_chave_hook()) and bool(os.environ.get("KOMMO_BOT_ID"))}
 
 
 # ------------------------------------------------------------- escrita
@@ -193,22 +197,94 @@ def nota(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("OPERA
     return {"ok": True, **res}
 
 
+JANELA_RETURN_S = 50          # o bot espera >= 58 s (provado 24/08); usamos com folga
+PRAZO_FILA_S = 150            # sem entrega até aqui, a mensagem vira nota no Kommo e fica marcada
+
+
+def _entregar(con, lead, msg_id, texto):
+    """Tenta entregar pela continuação em aberto do Salesbot. Devolve (ok, detalhe)."""
+    ok, det = modulo(SISTEMA).continuar_bot_humano(lead["return_url"], texto)
+    if ok:
+        atualizar(con, "crm_messages", msg_id, status="sent", error=None)
+        atualizar(con, "crm_leads", lead["id"], return_url=None, return_token=None, return_at=None,
+                  needs_reply=0, synced_at=agora())
+    else:
+        atualizar(con, "crm_messages", msg_id, error=det[:300])
+        if "404" in det or "não estava mais esperando" in det:
+            atualizar(con, "crm_leads", lead["id"], return_url=None, return_token=None, return_at=None)
+    return ok, det
+
+
+def _return_fresco(lead):
+    if not lead.get("return_url") or not lead.get("return_at"):
+        return False
+    from datetime import datetime, timezone
+    try:
+        idade = (datetime.now(timezone.utc) - datetime.fromisoformat(lead["return_at"].replace("Z", "+00:00"))).total_seconds()
+    except ValueError:
+        return False
+    return idade < JANELA_RETURN_S
+
+
+def _proxima_da_fila(con, lead_id):
+    return um(con, """SELECT * FROM crm_messages WHERE lead_id=? AND direction='saida' AND status='queued'
+                      ORDER BY id LIMIT 1""", (lead_id,))
+
+
+def varrer_fila(con):
+    """Mensagem na fila há mais de PRAZO_FILA_S sem o bot abrir o canal: não fica em
+    silêncio. Vira nota no lead ("enviar manualmente") e fica marcada como falha."""
+    from datetime import datetime, timedelta, timezone
+    limite = (datetime.now(timezone.utc) - timedelta(seconds=PRAZO_FILA_S)).strftime("%Y-%m-%dT%H:%M:%S")
+    velhas = todos(con, """SELECT m.*, l.external_id AS lead_ext FROM crm_messages m JOIN crm_leads l ON l.id=m.lead_id
+                           WHERE m.direction='saida' AND m.status='queued' AND m.at < ?""", (limite,))
+    for m in velhas:
+        motivo = "o bot não abriu o chat a tempo (Salesbot ligado? gatilho na etapa? KOMMO_BOT_ID?)"
+        try:
+            _aplicando(modulo(SISTEMA).nota_humana, m["lead_ext"],
+                       f"[Command Center — NÃO chegou ao cliente, enviar manualmente]\n{m['text']}")
+            motivo += " — texto gravado como nota no lead"
+        except Exception as e:
+            motivo += f" — e a nota também falhou: {str(e)[:120]}"
+        atualizar(con, "crm_messages", m["id"], status="failed", error=motivo[:300])
+        auditar(con, "crm.reply.failed", "system", entity_type="crm_lead", entity_id=m["lead_id"], detail={"msg": m["id"]})
+    return len(velhas)
+
+
 @r.post("/leads/{lid}/reply")
 def responder(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("OPERATOR")),
               con: sqlite3.Connection = Depends(get_db)):
-    """Responde ao lead no canal dele. Ato humano: nunca a IA sozinha."""
+    """Responde ao lead no canal em que ele falou. Ato humano: nunca a IA sozinha.
+
+    Caminho: a mensagem entra na fila; se o Salesbot ainda está esperando (o lead
+    acabou de falar), sai na hora pela continuação; senão o painel dispara o bot
+    (bots/run), que chama o hook sem mensagem e recebe a fila. Se em PRAZO_FILA_S
+    o bot não abrir o chat, a varredura marca como falha e grava nota no Kommo."""
+    texto = (dados.text or "").strip()
+    if not texto:
+        raise HTTPException(400, "Resposta vazia.")
     l = _lead(con, lid)
-    try:
-        res = _aplicando(modulo(SISTEMA).responder_humano, l["external_id"], dados.text)
-    except Exception as e:
-        raise _erro(e)
-    inserir(con, "crm_messages", lead_id=lid, external_id=None, direction="saida",
-            author=u["name"], text=dados.text[:8000], at=agora(), source="painel")
-    atualizar(con, "crm_leads", lid, needs_reply=0, synced_at=agora())
+    mid = inserir(con, "crm_messages", lead_id=lid, external_id=None, direction="saida", status="queued",
+                  author=u["name"], text=texto[:8000], at=agora(), source="painel")
     auditar(con, "crm.reply", f"user:{u['id']}", user_id=u["id"], entity_type="crm_lead", entity_id=lid,
-            detail={"chars": len(dados.text), "bot": res.get("bot_id")}, ip=auth._ip(request))
+            detail={"chars": len(texto), "msg": mid}, ip=auth._ip(request))
+    como, det = "fila", None
+    if _return_fresco(l):
+        ok, det = _aplicando(_entregar, con, l, mid, texto)
+        como = "entregue" if ok else "fila"
+    if como == "fila":
+        try:
+            _aplicando(modulo(SISTEMA).abrir_canal_humano, l["external_id"])
+            como = "bot disparado"
+        except Exception as e:
+            atualizar(con, "crm_messages", mid, status="failed", error=str(e)[:300])
+            con.commit()
+            raise _erro(e)
     con.commit()
-    return {"ok": True, **res}
+    return {"ok": True, "msg_id": mid, "como": como, "detalhe": det,
+            "aviso": ("Enviada no chat do lead." if como == "entregue" else
+                      "Na fila: o bot do Kommo vai abrir o chat e entregar em segundos. Se em 2-3 min não sair, "
+                      "vira nota no lead e fica marcada aqui como não entregue.")}
 
 
 class VinculoIn(BaseModel):
@@ -235,6 +311,147 @@ def sincronizar(u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depe
     res = sync_kommo(con)
     con.commit()
     return res
+
+
+# ------------------------------------------------------------- hook do Salesbot (o chat)
+def _chave_hook():
+    """KOMMO_HOOK_KEY vem do ~/.urace/kommo.env (EnvironmentFile do serviço); se o
+    serviço subiu sem ele, o módulo do MCP carrega o arquivo ao ser importado."""
+    if not os.environ.get("KOMMO_HOOK_KEY"):
+        try:
+            modulo(SISTEMA)
+        except Exception:
+            pass
+    return os.environ.get("KOMMO_HOOK_KEY", "")
+
+
+def _enriquecer_lead(lid, external_id):
+    """Lead que chegou pelo hook antes da sincronia: lê no Kommo funil, etapa, origem e contato."""
+    from command_center.db import conectar
+    con = conectar()
+    try:
+        d = chamar(SISTEMA, "kommo_lead", lead_id=external_id)
+        c = d.get("contato") or {}
+        atualizar(con, "crm_leads", lid, name=d.get("nome"), pipeline_id=d.get("funil_id"), pipeline_name=d.get("funil"),
+                  stage_id=d.get("etapa_id"), stage_name=d.get("etapa"), stage_order=d.get("ordem"), price=d.get("valor"),
+                  source=d.get("origem"), tags=json.dumps(d.get("tags") or [], ensure_ascii=False), link=d.get("link"),
+                  contact_name=c.get("nome"), contact_email=c.get("email"), contact_phone=c.get("telefone"),
+                  created_at_src=d.get("criado_em"), updated_at_src=d.get("atualizado_em"), synced_at=agora())
+        if c.get("email") or c.get("telefone") or c.get("nome"):
+            from command_center.providers.sync import _acha_cliente
+            cli = _acha_cliente(con, email=(c.get("email") or "").lower() or None, nome=c.get("nome"), telefone=c.get("telefone"))
+            if cli:
+                atualizar(con, "crm_leads", lid, client_id=cli["id"])
+        con.commit()
+    except Exception:
+        pass
+    finally:
+        con.close()
+
+
+def _entregar_fila(lid):
+    """Em segundo plano, logo depois do ACK: o bot está esperando, entrega o que há na fila."""
+    from command_center.db import conectar
+    con = conectar()
+    try:
+        l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lid,))
+        m = _proxima_da_fila(con, lid) if l else None
+        if l and m and l["return_url"]:
+            _aplicando(_entregar, con, l, m["id"], m["text"])
+            con.commit()
+    finally:
+        con.close()
+
+
+@r.post("/hook")
+async def hook(request: Request, background: BackgroundTasks, key: str | None = None,
+               con: sqlite3.Connection = Depends(get_db)):
+    """O Salesbot do Kommo bate aqui a cada mensagem recebida (bloco do widget,
+    widget_request, form-encoded) e quando o painel o dispara para entregar uma
+    resposta. ACK em menos de 2 s; o resto é em segundo plano.
+
+    Autenticação: ?key= igual a KOMMO_HOOK_KEY (o widget não manda header). Se
+    KOMMO_BOT_SECRET existir, o JWT descartável do bot também é conferido."""
+    chave = _chave_hook()
+    if not chave or not hmac.compare_digest(chave, key or ""):
+        raise HTTPException(403, "Forbidden.")
+    bruto = await request.body()
+    try:
+        k = modulo(SISTEMA)
+    except NaoConectado as ex:
+        raise HTTPException(503, f"Kommo não conectado: {ex}")
+    payload = k.parse_corpo_hook(bruto)
+    tok = payload.get("token") or (payload.get("data") or {}).get("token") if isinstance(payload.get("data"), dict) else payload.get("token")
+    if tok and not k.verificar_token_bot(tok):
+        raise HTTPException(401, "invalid bot token")
+    e = k.extrair_entrada(payload)
+    if not e["lead_id"]:
+        auditar(con, "crm.hook.ignorado", "kommo", detail={"motivo": "sem lead_id", "amostra": bruto[:200].decode("utf-8", "replace")})
+        con.commit()
+        return {"ok": True, "ignorado": "sem lead_id"}
+    l = um(con, "SELECT * FROM crm_leads WHERE external_id=?", (e["lead_id"],))
+    novo = l is None
+    if novo:
+        lid = inserir(con, "crm_leads", external_id=e["lead_id"], name=e["nome"] or f"Lead {e['lead_id']}",
+                      contact_name=e["nome"], contact_phone=e["telefone"], synced_at=agora())
+    else:
+        lid = l["id"]
+        if e["nome"] and not l["contact_name"]:
+            atualizar(con, "crm_leads", lid, contact_name=e["nome"], contact_phone=e["telefone"] or l["contact_phone"])
+    campos = dict(last_hook_at=agora())
+    if e["return_url"]:
+        campos.update(return_url=e["return_url"], return_token=e["token"], return_at=agora())
+    if e["texto"]:
+        import hashlib
+        ext = "hook:" + hashlib.sha1(f"{e['lead_id']}|{e['texto']}|{agora()[:16]}".encode()).hexdigest()[:16]
+        if not um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (lid, ext)):
+            inserir(con, "crm_messages", lead_id=lid, external_id=ext, direction="entrada",
+                    author=e["nome"] or "cliente", text=e["texto"][:8000], at=agora(), source="hook")
+        campos.update(last_message_at=agora(), needs_reply=1)
+    atualizar(con, "crm_leads", lid, **campos)
+    auditar(con, "crm.hook", "kommo", entity_type="crm_lead", entity_id=lid,
+            detail={"mensagem": bool(e["texto"]), "return_url": bool(e["return_url"]), "novo": novo})
+    con.commit()
+    if novo:
+        background.add_task(_enriquecer_lead, lid, e["lead_id"])
+    if e["return_url"]:
+        background.add_task(_entregar_fila, lid)
+    return {"ok": True}
+
+
+@r.get("/inbox")
+def inbox(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """As conversas, como uma caixa de entrada: quem falou por último primeiro,
+    quem espera resposta no topo."""
+    varrer_fila(con); con.commit()
+    leads = todos(con, """SELECT c.*, cl.name AS client_name, cl.pilot_name AS client_pilot,
+                                 (SELECT text FROM crm_messages m WHERE m.lead_id=c.id AND m.direction IN ('entrada','saida')
+                                  AND m.text IS NOT NULL ORDER BY m.at DESC, m.id DESC LIMIT 1) AS snippet,
+                                 (SELECT COUNT(*) FROM crm_messages m WHERE m.lead_id=c.id AND m.direction IN ('entrada','saida')) AS msgs,
+                                 (SELECT COUNT(*) FROM crm_messages m WHERE m.lead_id=c.id AND m.status='failed') AS falhas
+                          FROM crm_leads c LEFT JOIN clients cl ON cl.id=c.client_id
+                          WHERE c.last_message_at IS NOT NULL OR c.last_hook_at IS NOT NULL
+                             OR EXISTS (SELECT 1 FROM crm_messages m WHERE m.lead_id=c.id AND m.direction IN ('entrada','saida'))
+                          ORDER BY c.needs_reply DESC, COALESCE(c.last_message_at, c.updated_at_src, c.synced_at) DESC
+                          LIMIT 300""")
+    for l in leads:
+        l["tags"] = json.loads(l["tags"] or "[]")
+    return {"conversas": leads, "pendentes": sum(1 for l in leads if l["needs_reply"])}
+
+
+@r.get("/setup")
+def setup(request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
+    """O que falta para o chat funcionar, e a URL exata para colar no bloco do bot."""
+    host = os.environ.get("CC_PUBLIC_HOST") or request.headers.get("x-forwarded-host") or request.headers.get("host") or "urace-bridge.duckdns.org"
+    chave = _chave_hook()
+    ultimo = um(con, "SELECT at AS created_at FROM audit_logs WHERE event='crm.hook' ORDER BY id DESC LIMIT 1")
+    hoje = um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='crm.hook' AND at >= ?", (agora()[:10],))
+    return {"hook_url": (f"https://{host}/ops/api/crm/hook?key={chave}" if chave else None),
+            "hook_key": bool(chave), "bot_id": os.environ.get("KOMMO_BOT_ID") or None,
+            "bot_secret": bool(os.environ.get("KOMMO_BOT_SECRET")), "token": bool(os.environ.get("KOMMO_TOKEN")),
+            "ultimo_hook": ultimo["created_at"] if ultimo else None, "hooks_hoje": hoje["n"] if hoje else 0,
+            "fila": um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE status='queued'")["n"],
+            "falhas": um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE status='failed'")["n"]}
 
 
 # ------------------------------------------------------------- webhook

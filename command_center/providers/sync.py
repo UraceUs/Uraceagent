@@ -676,15 +676,80 @@ def sync_kommo(con, maximo=LIMITE_LEADS, com_conversa=20):
                                        WHERE lead_id=? AND direction IN ('saida','nota')""", (lid,))
                 pendente = 1 if not (ult_saida and (ult_saida["m"] or "") > ultima) else 0
                 atualizar(con, "crm_leads", lid, last_message_at=ultima, needs_reply=pendente)
-        _marca(con, "kommo", True, n, f"{n} leads, {ligados} ligados a cliente, {len(funis)} funis", inicio,
-               detalhe={"funis": [f["nome"] for f in funis]})
-        return {"ok": True, "leads": n, "ligados": ligados, "funis": len(funis)}
+        chats = sincronizar_chats_kommo(con)
+        try:                                             # resposta parada na fila não fica em silêncio
+            from command_center.api import crm
+            crm.varrer_fila(con)
+        except Exception:
+            pass
+        _marca(con, "kommo", True, n, f"{n} leads, {ligados} ligados a cliente, {len(funis)} funis, "
+               f"{chats.get('conversas', 0)} conversas", inicio, detalhe={"funis": [f["nome"] for f in funis], **chats})
+        return {"ok": True, "leads": n, "ligados": ligados, "funis": len(funis), **chats}
     except NaoConectado as e:
         _marca(con, "kommo", False, 0, f"não conectado: {e}", inicio, desconectado=True)
         return {"ok": False, "motivo": "not connected"}
     except Exception as e:
         _marca(con, "kommo", False, 0, f"{type(e).__name__}: {str(e)[:300]}", inicio)
         return {"ok": False, "motivo": str(e)[:300]}
+
+
+def sincronizar_chats_kommo(con, desde_dias=30, maximo=500, enriquecer=40):
+    """O movimento do chat (Instagram, Facebook, WhatsApp) vem dos EVENTOS do Kommo:
+    para cada mensagem, lead, canal, direção e hora — o texto dos canais nativos a API
+    não entrega, então a mensagem antiga entra como marca ("mensagem pelo Instagram")
+    e a nova entra inteira pelo hook. Aqui cada conversa ganha canal (origem de
+    verdade), última mensagem e "espera resposta" quando o cliente falou por último."""
+    try:
+        eventos = chamar("kommo", "kommo_chats", desde_dias=desde_dias, maximo=maximo)
+    except Exception as e:
+        return {"conversas": 0, "aviso": f"eventos de chat indisponíveis: {str(e)[:160]}"}
+    por_lead = {}
+    for ev in eventos:
+        por_lead.setdefault(ev["lead_id"], []).append(ev)
+    novos = 0
+    dominio = os.environ.get("KOMMO_DOMAIN", "urace.kommo.com").replace("https://", "").strip("/")
+    for ext, evs in por_lead.items():
+        l = _lead_do_espelho(con, ext)
+        if not l:
+            link = f"https://{dominio}/leads/detail/{ext}"
+            if enriquecer > 0:                              # lead que não veio na lista dos recentes
+                enriquecer -= 1
+                try:
+                    d = chamar("kommo", "kommo_lead", lead_id=ext)
+                    c = d.get("contato") or {}
+                    cli = _acha_cliente(con, email=(c.get("email") or "").lower() or None,
+                                        nome=c.get("nome") or d.get("nome"), telefone=c.get("telefone"))
+                    lid = inserir(con, "crm_leads", external_id=ext, client_id=cli["id"] if cli else None, name=d.get("nome"),
+                                  pipeline_id=d.get("funil_id"), pipeline_name=d.get("funil"), stage_id=d.get("etapa_id"),
+                                  stage_name=d.get("etapa"), stage_order=d.get("ordem"), price=d.get("valor"),
+                                  source=d.get("origem"), tags=json.dumps(d.get("tags") or [], ensure_ascii=False),
+                                  contact_name=c.get("nome"), contact_email=c.get("email") or None, contact_phone=c.get("telefone"),
+                                  link=d.get("link") or link, created_at_src=d.get("criado_em"), updated_at_src=d.get("atualizado_em"),
+                                  synced_at=agora())
+                except Exception:
+                    lid = inserir(con, "crm_leads", external_id=ext, name=f"Lead {ext}", link=link, synced_at=agora())
+            else:
+                lid = inserir(con, "crm_leads", external_id=ext, name=f"Lead {ext}", link=link, synced_at=agora())
+            _liga(con, "crm_lead", lid, "kommo", ext, link)
+            l = _lead_do_espelho(con, ext)
+            novos += 1
+        for ev in evs:
+            ext_msg = "ev:" + ev["id"]
+            if um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (l["id"], ext_msg)):
+                continue
+            inserir(con, "crm_messages", lead_id=l["id"], external_id=ext_msg, direction=ev["direcao"],
+                    author=None, text=None, at=ev["em"] or agora(), source=ev.get("canal") or "kommo-evento")
+        ultimo = evs[-1]
+        campos = {}
+        canal = next((e.get("canal") for e in reversed(evs) if e.get("canal")), None)
+        if canal and not l["source"]:
+            campos["source"] = canal
+        if ultimo["em"] and (not l["last_message_at"] or ultimo["em"] > l["last_message_at"]):
+            campos["last_message_at"] = ultimo["em"]
+            campos["needs_reply"] = 1 if ultimo["direcao"] == "entrada" else 0
+        if campos:
+            atualizar(con, "crm_leads", l["id"], **campos)
+    return {"conversas": len(por_lead), "eventos": len(eventos), "conversas_novas": novos}
 
 
 def sync_tudo(con):

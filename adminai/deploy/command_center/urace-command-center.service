@@ -9,6 +9,8 @@ User=ubuntu
 WorkingDirectory=/home/ubuntu/Uraceagent
 # segredos e OPENCLAW_AGENT vêm do mesmo env dos timers; nada no repo
 EnvironmentFile=-/home/ubuntu/.urace/adminai.env
+# o chat do Kommo (hook, bot, segredo) vive em arquivo próprio
+EnvironmentFile=-/home/ubuntu/.urace/kommo.env
 Environment=CC_PORT=8790
 Environment=PYTHONUNBUFFERED=1
 # bash -l: o mesmo PATH de login dos timers, para o `openclaw` do AI Command ser achado

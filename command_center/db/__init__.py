@@ -90,6 +90,12 @@ MIGRACOES = [
     ("invoices", "customer_ref", "TEXT"),                 # id do cliente no QBO (a IA usa direto na próxima invoice)
     ("waivers", "pdf_path", "TEXT"),                      # PDF assinado guardado em ~/.urace/waivers (card e anexo usam)
     ("tasks", "waiver_id", "INTEGER"),                    # waiver que já foi anexada nesta tarefa (não anexa duas vezes)
+    ("crm_messages", "status", "TEXT"),                   # saída: queued | sent | failed (entrada fica NULL)
+    ("crm_messages", "error", "TEXT"),
+    ("crm_leads", "return_url", "TEXT"),                  # continuação do Salesbot em aberto (efêmera)
+    ("crm_leads", "return_token", "TEXT"),
+    ("crm_leads", "return_at", "TEXT"),
+    ("crm_leads", "last_hook_at", "TEXT"),                # última vez que o bot falou com o painel por este lead
 ]
 
 

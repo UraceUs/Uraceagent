@@ -191,8 +191,12 @@ lead2 = inserir(con, "crm_leads", external_id="5002", name="Carla Mendes — men
                 last_message_at=d(-1) + "T16:00:00Z", needs_reply=0)
 inserir(con, "crm_messages", lead_id=lead2, external_id="m2", direction="entrada", author="Carla Mendes",
         text="Fechado, pode mandar a invoice da mensalidade.", at=d(-1) + "T15:40:00Z", source="kommo")
-inserir(con, "crm_messages", lead_id=lead2, external_id=None, direction="saida", author="Italo Silveira",
+inserir(con, "crm_messages", lead_id=lead2, external_id=None, direction="saida", status="sent", author="Italo Silveira",
         text="Perfeito, Carla! Mando ainda hoje.", at=d(-1) + "T16:00:00Z", source="painel")
+# histórico anterior ao painel: o Kommo entrega só o movimento (canal, direção, hora), não o texto
+for i, (dirc, quando) in enumerate((("entrada", "T10:00:00Z"), ("saida", "T10:05:00Z"), ("entrada", "T10:20:00Z"))):
+    inserir(con, "crm_messages", lead_id=lead1, external_id=f"ev:{i}", direction=dirc, author=None, text=None,
+            at=d(-3) + quando, source="Instagram")
 
 # aprendizado do dono e fonte de contexto já vêm do schema
 con.commit()

@@ -65,6 +65,16 @@ if [ "$N_USERS" = "0" ]; then
     ( cd "$REPO" && "$VENV/bin/python" -m command_center.manage create-admin )
 fi
 
+# ------------------------------------------------- 4b. chave do hook do Kommo
+# O Salesbot bate em /ops/api/crm/hook?key=…; a chave nasce aqui, uma vez, e fica
+# só em ~/.urace/kommo.env (600). Sem o arquivo, o CRM só não liga o chat.
+KENV="$URACE_DIR/kommo.env"
+if [ -f "$KENV" ] && ! grep -q '^KOMMO_HOOK_KEY=' "$KENV"; then
+    echo "KOMMO_HOOK_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> "$KENV"
+    chmod 600 "$KENV"
+    echo "-- KOMMO_HOOK_KEY gerada em $KENV (a URL para o bot aparece em CRM → Ligar o chat)"
+fi
+
 # --------------------------------------------------------------- 5. systemd
 echo "-- 5/7 serviço systemd"
 sudo cp "$REPO/adminai/deploy/command_center/$UNIT.service" "/etc/systemd/system/$UNIT.service"
