@@ -217,11 +217,16 @@ select.input{appearance:auto}
 kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong);border-radius:2px;padding:0 5px}
 
 /* ---------- AI */
-.chat{display:flex;flex-direction:column;gap:14px}
-.msg{display:flex;gap:12px}
-.msg .av{flex:none}
-.msg .bub{flex:1;min-width:0;background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:12px 14px;white-space:pre-wrap;word-break:break-word}
-.msg.me .bub{background:var(--accent-wash);border-color:transparent}
+.chat{display:flex;flex-direction:column;gap:10px}
+.msg{display:flex;flex-direction:column;max-width:100%}
+.msg .bub{min-width:0;white-space:pre-wrap;word-break:break-word;line-height:1.5}
+.msg.me{align-items:flex-end}
+.msg.me .bub{max-width:min(78%,760px);background:var(--accent-wash);color:var(--ink);border-radius:16px 16px 4px 16px;padding:10px 14px}
+.msg.ai{align-items:flex-start}
+.msg.ai .bub{max-width:min(92%,900px);padding:4px 0 2px;background:transparent;border:0}
+.msg.ai .bub p:first-child{margin-top:0}
+.msg.ai .acts{width:min(92%,900px)}
+.msg .when{font-size:11px;color:var(--muted);margin-top:3px;padding:0 4px}
 .msg .meta{font-size:12px;color:var(--muted);margin-bottom:4px;display:flex;gap:10px;align-items:center}
 .acts{display:flex;flex-direction:column;gap:8px;margin-top:10px}
 .act{border:1px solid var(--rule);border-radius:var(--r);padding:10px 12px;background:var(--paper);display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
@@ -229,7 +234,7 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .sug{display:flex;flex-wrap:wrap;gap:8px}
 .sug button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:20px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--ink-2)}
 .sug button:hover{border-color:var(--accent);color:var(--accent)}
-.composer{position:sticky;bottom:0;background:var(--paper);padding-top:10px}
+.composer{position:sticky;bottom:0;background:var(--paper);padding:10px 0 4px;z-index:5}
 .composer .box{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--rule-strong);border-radius:var(--r);padding:10px}
 .composer textarea{flex:1;border:0;background:transparent;resize:none;outline:none;min-height:44px;max-height:200px;font-family:var(--font)}
 

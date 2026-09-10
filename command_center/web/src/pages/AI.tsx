@@ -4,7 +4,10 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { AiAction, AiCommand } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, SYS_NAME, Section, statusTone } from '../components/ui'
+
+const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: 'Criar e enviar invoice', qbo_criar_invoice: 'Criar invoice', qbo_enviar_invoice: 'Enviar invoice', qbo_criar_item: 'Criar item no catálogo', qbo_criar_cliente: 'Criar cliente no QuickBooks', asana_criar_do_modelo: 'Criar tarefa (modelo oficial)', asana_criar_tarefa: 'Criar tarefa', asana_comentar: 'Comentar na tarefa', asana_mover_para_secao: 'Mover tarefa', asana_mover_para_finished: 'Mover para Finished Services', asana_concluir: 'Concluir tarefa', docusign_enviar_waiver: 'Enviar waiver', gmail_rascunho: 'Rascunho de e-mail', gmail_rotular: 'Marcar e-mail' }
+const STATUS_LABEL: Record<string, string> = { PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada' }
 import { ago, fmtDateTime, money, safeJson } from '../components/fmt'
 import { useToast } from '../components/Toast'
 import { Md } from '../components/Md'
@@ -83,12 +86,12 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
   }
   return <div className="act">
     <div className="grow">
-      <div className="row wrap"><span className="what">{a.action}</span>{a.system && <Chip tone="outline">{a.system}</Chip>}<Chip tone={statusTone(a.policy)}>{POLICY_LABEL[a.policy]}</Chip><Chip tone={statusTone(a.status)}>{a.status}</Chip></div>
+      <div className="row wrap"><span className="what">{ACAO_LABEL[a.action] || a.action}</span>{a.system && <Chip tone="outline">{SYS_NAME[a.system] || a.system}</Chip>}<Chip tone={statusTone(a.policy)}>{POLICY_LABEL[a.policy]}</Chip><Chip tone={statusTone(a.status)}>{STATUS_LABEL[a.status] || a.status}</Chip></div>
       {a.reason && <div className="small ink2" style={{ marginTop: 4 }}>{a.reason}</div>}
       {payload !== null && typeof payload === 'object' && (a.status === 'PROPOSED' || a.status === 'APPROVED') && <Previa a={a} />}
       {payload !== null && typeof payload === 'object' && a.status !== 'PROPOSED' && a.status !== 'APPROVED' && <details className="small muted" style={{ marginTop: 4 }}><summary>dados</summary><pre className="mono" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(payload, null, 1).slice(0, 600)}</pre></details>}
       <ResultadoBox a={a} />
-      <div className="small muted" style={{ marginTop: 4 }}>{fmtDateTime(a.created_at)}{a.command_id && <> · comando #{a.command_id}</>}</div>
+      <div className="small muted" style={{ marginTop: 4 }}>{fmtDateTime(a.created_at)}</div>
     </div>
     {a.status === 'PROPOSED' && a.policy !== 'BLOCKED' && <div className="row">
       {can('MANAGER') && <button className="btn primary sm" disabled={!!busy || incompleta} title={incompleta ? 'Proposta incompleta: peça à IA os dados que faltam' : ''} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : (a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver') ? 'Aprovar e enviar' : 'Aprovar'}</button>}
@@ -101,14 +104,15 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
 /** Uma mensagem da conversa: o que a pessoa escreveu e a resposta da IA com as ações. */
 function Bolha({ c, onChange, quem }: { c: AiCommand; onChange?: () => void; quem?: string }) {
   const running = c.status === 'QUEUED' || c.status === 'RUNNING'
+  const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   return <div className="chat">
-    <div className="msg me"><div className="av avatar">{(quem || 'EU').slice(0, 2).toUpperCase()}</div><div className="grow"><div className="meta">{quem && <b>{quem} · </b>}{fmtDateTime(c.created_at)}</div><div className="bub">{c.text.split('\n\nO QUE O DONO JÁ ENSINOU')[0]}</div></div></div>
-    <div className="msg"><div className="av avatar" style={{ background: 'var(--brand)' }}>AI</div><div className="grow">
-      <div className="meta">urace-admin <Chip tone={statusTone(c.status)}>{c.status}</Chip>{c.finished_at && <span>{ago(c.finished_at)}</span>}</div>
-      <div className="bub">{running ? <span className="row"><span className="spin" /> {c.status === 'QUEUED' ? 'Na fila…' : 'Pensando e consultando os sistemas…'} <span className="muted small">(pode levar alguns minutos)</span></span>
+    <div className="msg me"><div className="bub">{c.text.split('\n\nO QUE O DONO JÁ ENSINOU')[0]}</div><div className="when">{quem ? `${quem} · ` : ''}{hora(c.created_at)}</div></div>
+    <div className="msg ai">
+      <div className="bub">{running ? <span className="row"><span className="spin" /> {c.status === 'QUEUED' ? 'Na fila…' : 'Lendo os sistemas e pensando…'}</span>
         : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : c.output ? <Md text={c.output} /> : <span className="muted">(sem texto)</span>}</div>
-      {!!c.actions?.length && <div className="acts"><div className="small muted cond">Ações propostas ({c.actions.length})</div>{c.actions.map(a => <ActionCard key={a.id} a={a} onChange={onChange} />)}</div>}
-    </div></div>
+      {!!c.actions?.length && <div className="acts">{c.actions.map(a => <ActionCard key={a.id} a={a} onChange={onChange} />)}</div>}
+      <div className="when">{c.finished_at ? hora(c.finished_at) : running ? 'agora' : ''}{c.status === 'FAILED' && ' · falhou'}</div>
+    </div>
   </div>
 }
 
