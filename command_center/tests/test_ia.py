@@ -586,3 +586,16 @@ def test_invoice_vence_2_dias_antes_e_memo_com_data_do_servico(cli):
         assert acoes.memo_invoice("Urace Daily", "2 stroke", "Théo", "2026-10-03") == "Urace Daily | 2 stroke | Théo | Service date: 10/03/2026"
     finally:
         con.close()
+
+
+def test_sem_credito_vira_mensagem_clara_e_triagem_nao_trava_a_sincronia(cli):
+    from command_center.api import agenda, ia
+    from command_center.db import conectar
+    assert "sem crédito" in ia.motivo_amigavel("GatewayClientRequestError: FailoverError: LLM request rejected: Your credit balance is too low to access the Anthropic API.")
+    assert ia.motivo_amigavel("outro erro qualquer") == "outro erro qualquer"
+    con = conectar()
+    try:
+        r = agenda._rodar_triagem(con)              # volta na hora: a triagem corre em thread própria
+        assert r.get("em_segundo_plano") or r.get("pulada")
+    finally:
+        con.close()

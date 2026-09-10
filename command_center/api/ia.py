@@ -314,6 +314,17 @@ def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
 
 
 # ------------------------------------------------------------ execução
+SEM_CREDITO = ("credit balance", "insufficient_quota", "billing", "quota exceeded", "rate_limit_error")
+
+
+def motivo_amigavel(erro):
+    """O erro do gateway em uma frase que o dono entende (e a causa certa: crédito do modelo, não o painel)."""
+    e = (erro or "")
+    if any(k in e.lower() for k in SEM_CREDITO):
+        return "O modelo da IA (conta Anthropic usada pelo OpenClaw) está sem crédito ou fora da cota. O painel, a sincronia e as regras continuam; só o que depende da IA espera. Reponha o crédito em console.anthropic.com (Plans & Billing) ou ligue a recarga automática."
+    return e
+
+
 def _executa(command_id, texto, session_key, user_id, prompt=None):
     """`texto` é o que o dono escreveu (fica no histórico); `prompt` é o que vai ao agente (texto + contexto)."""
     con = conectar()
@@ -362,7 +373,7 @@ def _executa(command_id, texto, session_key, user_id, prompt=None):
             auditar(con, "ai.command.done", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",
                     entity_id=command_id, detail={"acoes_propostas": len(lista), "executadas_safe": auto, "corrigidas": len(incompletas), "notas": notas[:5]})
         else:
-            atualizar(con, "ai_commands", command_id, status="FAILED", finished_at=agora(), error=erro)
+            atualizar(con, "ai_commands", command_id, status="FAILED", finished_at=agora(), error=motivo_amigavel(erro))
             auditar(con, "ai.command.failed", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",
                     entity_id=command_id, detail={"erro": (erro or "")[:300]})
     except Exception as e:

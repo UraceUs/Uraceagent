@@ -85,12 +85,39 @@ def sondar_apos_falha(con, sistema, motivo=""):
 
 
 # --------------------------------------------------------------- rotinas
+_TRIAGEM_RODANDO = {"em": False}
+
+
 def _rodar_triagem(con):
-    from command_center.api import ia, motor
-    from command_center.providers import triagem
-    with ia._PARALELO:                                   # nunca junto com outro agente
-        return triagem.rodar(con, ia.RUNNER, f"agent:{ia.AGENTE}:triagem-{datetime.now(FUSO).strftime('%Y-%m-%d')}",
-                             aprendizados=motor.aprendizados(con), por="agenda")
+    """A triagem chama o agente várias vezes; roda em thread própria para o laço da sincronia
+    NUNCA esperar pela IA (dono, 10/09: sem crédito na Anthropic a sincronia parou junto)."""
+    import threading
+    from command_center.db import conectar
+    if _TRIAGEM_RODANDO["em"]:
+        return {"pulada": "triagem anterior ainda rodando"}
+
+    def corpo():
+        from command_center.api import ia, motor
+        from command_center.providers import triagem
+        c2 = conectar()
+        try:
+            with ia._PARALELO:                           # nunca junto com outro agente
+                res = triagem.rodar(c2, ia.RUNNER, f"agent:{ia.AGENTE}:triagem-{datetime.now(FUSO).strftime('%Y-%m-%d')}",
+                                    aprendizados=motor.aprendizados(c2), por="agenda")
+            c2.execute("UPDATE automation_rules SET last_result=? WHERE name='gmail_triagem'",
+                       (json.dumps({"em": agora(), "ok": not res.get("erros"), **res}, ensure_ascii=False)[:2000],))
+            c2.commit()
+        except Exception as e:
+            try:
+                auditar(c2, "agenda.gmail_triagem.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+            except Exception:
+                pass
+        finally:
+            _TRIAGEM_RODANDO["em"] = False
+            c2.close()
+    _TRIAGEM_RODANDO["em"] = True
+    threading.Thread(target=corpo, daemon=True, name="cc-triagem").start()
+    return {"iniciada": True, "em_segundo_plano": True}
 
 
 ROTINAS = {
