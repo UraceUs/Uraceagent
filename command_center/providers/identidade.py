@@ -33,6 +33,43 @@ def so_digitos(tel):
     return d[-10:] if len(d) >= 10 else (d or None)
 
 
+# Rótulos do modelo de tarefa e nomes de serviço/corrida: NUNCA são gente.
+# Nasceu de 10/09: a importação criou "Date of Birth:", "Karting School",
+# "Professional Coaching" e "Lucas oil Laguna Seca" como clientes.
+_ROTULOS = {"driver", "driver's name", "drivers name", "date of birth", "birth", "age", "height", "weight", "waist",
+            "karting experience", "experience", "responsible", "responsible name", "email", "e-mail", "phone",
+            "product", "invoice", "invoice link", "price", "security deposit", "service dates", "service date",
+            "service dates for this month", "name", "notes", "tbd", "n/a", "na", "none", "-", "--"}
+_SERVICOS = {"karting school", "kart school", "kart racing school", "professional coaching", "coaching",
+             "arrive and drive", "urace daily", "urace academy", "academy", "summer camp", "test drive",
+             "lead and follow", "race support", "trackside support", "trackside", "practice", "pratice",
+             "session setup", "shipping orders", "kart setup", "new race", "race weekend", "track day"}
+_RX_CORRIDA_EXTRA = re.compile(r"\b(skusa|uspks|rok|fwt|wka|rotax|superkarts|flkc|f4|nola|"                       # séries
+                               r"laguna seca|mid[- ]ohio|road america|sebring|daytona|homestead|bushnell|lake erie|"  # pistas
+                               r"new castle|barnesville|ozark|jacksonville|canadian tire|vir|okc|"
+                               r"supernationals|winter series|pro tour|grand nationals|"
+                               r"rd\s*\d|round\s*\d|race\s*\d|cup|series|championship|nationals|karting challenge)\b", re.I)
+
+
+def eh_rotulo_ou_servico(texto):
+    """True quando o 'nome' é rótulo do modelo, nome de serviço ou de corrida — não é gente."""
+    t = re.sub(r"[:\-–]+\s*$", "", (texto or "").strip()).strip()
+    if not t:
+        return True
+    baixo = t.lower()
+    if baixo in _ROTULOS or baixo in _SERVICOS:
+        return True
+    if ":" in t:                                   # "Date of Birth: Age: 13" e afins
+        return True
+    if any(baixo.startswith(r + " ") or baixo.endswith(" " + r) for r in ("email", "phone", "age", "name")):
+        return True
+    if any(sv in baixo for sv in _SERVICOS):
+        return True
+    if _RX_CORRIDA_EXTRA.search(t) or CORRIDA.search(t):
+        return True
+    return False
+
+
 def pessoa_do_titulo(titulo):
     """Nome da pessoa no título da tarefa, ou None quando não é gente.
 
@@ -45,6 +82,8 @@ def pessoa_do_titulo(titulo):
     t = SERVICO_SUFIXO.sub("", t)
     t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s+–\s+|\s*,\s*", t)[0].strip()
     if not t or re.search(r"\d", t) or CORRIDA.search(titulo or ""):
+        return None
+    if eh_rotulo_ou_servico(t):
         return None
     palavras = [p for p in t.split() if p]
     if not (2 <= len(palavras) <= 5) or any(len(p) < 2 for p in palavras[:2]):
@@ -116,6 +155,19 @@ def normaliza_telefone(texto):
     if len(dig) == 11 and dig.startswith("1"):
         return f"{dig[1:4]}-{dig[4:7]}-{dig[7:]}"
     return m.group(0).strip()
+
+
+_RX_ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def limpar_nascimentos(con):
+    """Nascimento só vale como data ISO. Texto solto ("Age: 13") sai do campo (dono, 10/09)."""
+    n = 0
+    for c in todos(con, "SELECT id, pilot_dob FROM clients WHERE pilot_dob IS NOT NULL AND pilot_dob<>''"):
+        if not _RX_ISO.match((c["pilot_dob"] or "").strip()[:10]):
+            con.execute("UPDATE clients SET pilot_dob=NULL, updated_at=? WHERE id=?", (agora(), c["id"]))
+            n += 1
+    return n
 
 
 def limpar_contatos(con):
@@ -259,7 +311,8 @@ def limpar_nao_clientes(con):
     não tem nada humano ligado (e-mail, telefone, waiver, e-mail, VIP)."""
     n = 0
     for c in todos(con, "SELECT * FROM clients WHERE source='asana'"):
-        if pessoa_do_titulo(c["name"]) or c["email"] or c["phone"] or c["vip"]:
+        falso = eh_rotulo_ou_servico(c["name"]) or (c["pilot_name"] and eh_rotulo_ou_servico(c["pilot_name"]))
+        if not falso and (pessoa_do_titulo(c["name"]) or c["email"] or c["phone"] or c["vip"]):
             continue
         if um(con, "SELECT 1 FROM waivers WHERE client_id=?", (c["id"],)) or um(con, "SELECT 1 FROM emails WHERE client_id=?", (c["id"],)):
             continue

@@ -6,6 +6,7 @@ import type { ActionPolicy, AuditRow, ContextSource, Integration, Policy } from 
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, Spinner, statusTone } from '../components/ui'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 
 const DESC: Record<string, string> = {
@@ -110,11 +111,12 @@ export function Integrations() {
 }
 
 export function Policies() {
+  const perguntar = usePerguntar()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<ActionPolicy[]>('/policies')
   const [busy, setBusy] = useState<string | null>(null)
   async function set(action: string, policy: Policy) {
-    if (!window.confirm(`Mudar "${action}" para ${POLICY_LABEL[policy]}?`)) return
+    if (!await perguntar({ titulo: `Mudar "${action}" para ${POLICY_LABEL[policy]}?`, texto: 'Muda o que a IA pode fazer sozinha. Fica auditado.', ok: 'Mudar' })) return
     setBusy(action)
     try { await api.put(`/policies/${action}`, { policy }); toast('Política atualizada e auditada.', 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
@@ -136,12 +138,13 @@ interface U { id: number; email: string; name: string; role: string; active: num
 const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
 
 function PapelEditavel({ u, self, onChanged }: { u: U; self: boolean; onChanged: () => void }) {
+  const perguntar = usePerguntar()
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   async function mudar(role: string) {
     if (role === u.role) { setOpen(false); return }
-    if (!window.confirm(`Mudar ${u.name} de ${ROLE_PT[u.role]} para ${ROLE_PT[role]}?\n\nA pessoa é desconectada e entra de novo já com o papel novo.`)) return
+    if (!await perguntar({ titulo: `Mudar ${u.name} de ${ROLE_PT[u.role]} para ${ROLE_PT[role]}?`, texto: 'A pessoa é desconectada e entra de novo já com o papel novo.', ok: 'Mudar papel' })) return
     setBusy(true)
     try { await api.post(`/users/${u.id}/role`, { role }); toast(`${u.name} agora é ${ROLE_PT[role]}.`, 'ok'); setOpen(false); onChanged() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
@@ -153,6 +156,7 @@ function PapelEditavel({ u, self, onChanged }: { u: U; self: boolean; onChanged:
 
 export function Users() {
   const { user } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<U[]>('/users')
   const [f, setF] = useState({ email: '', name: '', role: 'OPERATOR', password: '' })
@@ -163,7 +167,7 @@ export function Users() {
     try { await api.post('/users', f); toast('Usuário criado.', 'ok'); setF({ email: '', name: '', role: 'OPERATOR', password: '' }); reload() } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
   }
   async function toggle(u: U) {
-    if (!window.confirm(`${u.active ? 'Desativar' : 'Reativar'} ${u.email}?`)) return
+    if (!await perguntar({ titulo: `${u.active ? 'Desativar' : 'Reativar'} ${u.email}?`, ok: u.active ? 'Desativar' : 'Reativar', perigo: !!u.active })) return
     try { await api.post(`/users/${u.id}/active`, { active: !u.active }); reload() } catch (ex) { toast((ex as ApiError).message, 'crit') }
   }
   return <>

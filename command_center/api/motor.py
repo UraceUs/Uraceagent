@@ -277,6 +277,9 @@ def executar_acao(aid, user_id):
         from command_center.api import acoes as _ac
         acao = _ac.nome_canonico(a["action"])
         acao, args = _ac.converter(acao, args)
+        args, sobrando = _ac.ajustar_aos_parametros(acao, args)
+        if sobrando:
+            auditar(con, "action.args_ajustados", "system", entity_type="ai_action", entity_id=aid, detail={"acao": acao, "descartados": sobrando})
         sistema = acao.split("_")[0]
         if acao == "asana_mover_para_finished":       # açúcar SAFE: só para a coluna Finished Services
             from command_center.providers.sync import SECAO_FINISHED

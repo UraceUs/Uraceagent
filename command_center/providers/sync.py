@@ -152,12 +152,15 @@ def _grava_tarefa(con, gid, campos):
 
 
 def _nome_valido(n):
-    """Nome de gente vindo da descrição; descarta rótulo solto ('Email:') e lixo."""
+    """Nome de gente vindo da descrição. Rótulo do modelo ("Date of Birth:"), nome de
+    serviço ("Karting School") e nome de corrida NUNCA viram cliente (dono, 10/09)."""
     from command_center.providers import identidade
-    n = (n or "").strip().rstrip(":")
-    if not n or n.lower() in ("email", "phone", "name", "responsible", "n/a", "-", "none"):
+    n = (n or "").strip().rstrip(":").strip()
+    if not n or identidade.eh_rotulo_ou_servico(n):
         return None
-    return n if identidade.pessoa_do_titulo(n) or (2 <= len(n.split()) <= 5 and not re.search(r"\d|@", n)) else None
+    if identidade.pessoa_do_titulo(n):
+        return n
+    return n if (2 <= len(n.split()) <= 5 and not re.search(r"\d|@", n)) else None
 
 
 LIMITE_LISTA = 2000          # tarefas por coluna na sincronia de 15 min (Finished Services é grande)
@@ -214,6 +217,7 @@ def sync_asana_completo(con, progresso=None):
         sincronizar_corridas(con)
         limpos = identidade.limpar_nao_clientes(con)
         identidade.limpar_contatos(con)
+        identidade.limpar_nascimentos(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
         candidatos = len(identidade.candidatos_duplicados(con))
@@ -245,8 +249,9 @@ def sync_asana(con):
                 continue
             eh_dia = sec_gid in SECOES_DIAS
             eh_finished = sec_gid == SECAO_FINISHED
-            # colunas de cliente: dias (agenda) e Finished Services (histórico desde a criação do projeto)
-            eh_cliente = eh_dia or eh_finished
+            # toda coluna que não seja corrida tem serviço de cliente — inclusive
+            # "Pending Reschedule", que ficava de fora e escondia serviço do piloto (dono, 10/09)
+            eh_cliente = not _eh_coluna_de_corrida(sec_nome)
             for t in chamar("asana", "asana_tarefas_da_secao", secao_gid=sec_gid, incluir_concluidas=eh_finished, maximo=LIMITE_LISTA):
                 comum = dict(project="U-RACE", section=sec_nome, section_gid=sec_gid,
                              status="completed" if t.get("concluida") else "open",
@@ -293,6 +298,7 @@ def sync_asana(con):
             _evento(con, "task.overdue", "task", t["id"], t["client_id"], f"{t['title']} ({t['section']}, {t['due_on']}) ainda aberta depois da data")
         limpos = identidade.limpar_nao_clientes(con)
         identidade.limpar_contatos(con)
+        identidade.limpar_nascimentos(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
         _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos, {unidos} unidos, {limpos} não-clientes removidos", inicio)
@@ -546,24 +552,35 @@ def sincronizar_itens_qbo(con):
 
 
 SERIES = ("SKUSA", "ROK", "USPKS", "FWT", "AMR", "Florida Karting", "SuperKarts", "Rotax", "WKA")
+_RX_TREINO = re.compile(r"\b(pr[aá]tice|practice|treino|test day|track day|coaching|academy|daily|summer camp)\b", re.I)
+
+
+def _eh_coluna_de_corrida(nome):
+    return (nome or "").strip().lower() == "races"
 
 
 def sincronizar_corridas(con):
     """Coluna RACES do Asana = calendário de corridas. Uma corrida por tarefa
     (ligada por task_id); nome e data seguem a tarefa; tarefa concluída ou
     fora da coluna some do calendário (active=0), sem apagar convites."""
+    from datetime import date as _date
+    hoje_ = _date.today().isoformat()
     vistos = set()
     for t in todos(con, "SELECT id, title, due_on, status FROM tasks WHERE project='U-RACE' AND LOWER(COALESCE(section,''))='races'"):
+        if _RX_TREINO.search(t["title"] or "") and not any(x.lower() in (t["title"] or "").lower() for x in SERIES):
+            continue                                   # treino que vazou para a coluna RACES não é corrida (dono, 10/09)
         vistos.add(t["id"])
         serie = next((x for x in SERIES if x.lower() in (t["title"] or "").lower()), None)
         r = um(con, "SELECT id FROM races WHERE task_id=?", (t["id"],)) or \
             um(con, "SELECT id FROM races WHERE task_id IS NULL AND name=? AND source='asana'", (t["title"],))
         if r:
+            # concluída no Asana mas com data futura continua no calendário (dono, 10/09)
+            viva = 1 if (t["status"] == "open" or (t["due_on"] or "") >= hoje_) else 0
             con.execute("UPDATE races SET task_id=?, name=?, date_start=COALESCE(?, date_start), series=COALESCE(series, ?), active=? WHERE id=?",
-                        (t["id"], t["title"], t["due_on"], serie, 1 if t["status"] == "open" else 0, r["id"]))
+                        (t["id"], t["title"], t["due_on"], serie, viva, r["id"]))
         else:
             inserir(con, "races", name=t["title"], date_start=t["due_on"], source="asana", series=serie, task_id=t["id"],
-                    active=1 if t["status"] == "open" else 0)
+                    active=1 if (t["status"] == "open" or (t["due_on"] or "") >= hoje_) else 0)
     for r in todos(con, "SELECT id, task_id FROM races WHERE source='asana' AND task_id IS NOT NULL AND active=1"):
         if r["task_id"] not in vistos:
             con.execute("UPDATE races SET active=0 WHERE id=?", (r["id"],))

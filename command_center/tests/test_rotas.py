@@ -930,3 +930,94 @@ def test_avisos_descritivos_invoice_e_tarefa(cli):
     ft = dict(t_it["facts"])
     assert ft["Tarefa"].startswith("Théo Mendes_Urace Daily") and ft["Coluna"] == "SATURDAY" and ft["Serviço"] == "Urace Daily / 2 stroke" and ft["Subtarefas"] == "9/12" and ft["Piloto"] == "Théo Mendes"
     assert "venceu em" in t_it["title"]
+
+
+# ================= correções do teste real pela extensão (10/09) =================
+def test_importacao_nao_fabrica_cliente_falso():
+    """Rótulo do modelo, nome de serviço e nome de corrida NUNCA viram cliente."""
+    from command_center.providers import identidade as idt, sync
+    for lixo in ("Date of Birth:", "Email:", "Age: 13", "Height", "Waist", "Karting Experience",
+                 "Karting School", "Kart School", "Professional Coaching", "Arrive and Drive",
+                 "Summer Camp", "Lucas oil Laguna Seca", "USPKS Lake Erie", "AMR Round 8", "Practice OKC"):
+        assert idt.eh_rotulo_ou_servico(lixo), lixo
+        assert idt.pessoa_do_titulo(lixo) is None, lixo
+        assert sync._nome_valido(lixo) is None, lixo
+    for gente in ("Bryan Santiago", "David Pera", "Renato Frota Pionti", "Nya Amankwa"):
+        assert not idt.eh_rotulo_ou_servico(gente), gente
+        assert sync._nome_valido(gente) == gente
+
+
+def test_limpeza_tira_cliente_falso_e_nascimento_invalido(cli):
+    from command_center.db import conectar, inserir, um
+    from command_center.providers import identidade as idt
+    con = conectar()
+    try:
+        falso = inserir(con, "clients", name="Date of Birth:", pilot_name="Email:", vip=0, status="ACTIVE", source="asana")
+        corrida = inserir(con, "clients", name="Lucas oil Laguna Seca", vip=0, status="ACTIVE", source="asana")
+        bom = inserir(con, "clients", name="Nya Amankwa", email="nduany@gmail.com", pilot_name="Dinai Amankwa",
+                      pilot_dob="Age: 13", vip=0, status="ACTIVE", source="asana")
+        t = inserir(con, "tasks", client_id=falso, title="serviço solto", project="U-RACE", section="SATURDAY", status="open", due_on="2026-09-12")
+        con.commit()
+        assert idt.limpar_nao_clientes(con) >= 2
+        assert um(con, "SELECT id FROM clients WHERE id=?", (falso,)) is None
+        assert um(con, "SELECT id FROM clients WHERE id=?", (corrida,)) is None
+        assert um(con, "SELECT id FROM clients WHERE id=?", (bom,)) is not None      # gente de verdade fica
+        assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] is None   # a tarefa fica, só perde o vínculo errado
+        assert idt.limpar_nascimentos(con) >= 1
+        assert um(con, "SELECT pilot_dob FROM clients WHERE id=?", (bom,))["pilot_dob"] is None
+        con.commit()
+    finally:
+        con.close()
+
+
+def test_calendario_mostra_corrida_concluida_futura_e_ignora_treino_na_coluna_races(cli):
+    from datetime import date, timedelta
+    from command_center.db import conectar, inserir, um
+    from command_center.providers import sync
+    con = conectar()
+    try:
+        futuro = (date.today() + timedelta(days=20)).isoformat()
+        passado = (date.today() - timedelta(days=40)).isoformat()
+        feita_futura = inserir(con, "tasks", client_id=None, title="F4 VIR Round 3", project="U-RACE", section="RACES", status="completed", due_on=futuro)
+        feita_velha = inserir(con, "tasks", client_id=None, title="USPKS Lake Erie", project="U-RACE", section="RACES", status="completed", due_on=passado)
+        treino = inserir(con, "tasks", client_id=None, title="Pratice at Jacksonville for FLKC", project="U-RACE", section="RACES", status="open", due_on=futuro)
+        con.commit()
+        sync.sincronizar_corridas(con); con.commit()
+        assert um(con, "SELECT active FROM races WHERE task_id=?", (feita_futura,))["active"] == 1   # concluída, mas ainda vai acontecer
+        assert um(con, "SELECT active FROM races WHERE task_id=?", (feita_velha,))["active"] == 0
+        assert um(con, "SELECT id FROM races WHERE task_id=?", (treino,)) is None                   # treino não é corrida
+    finally:
+        con.close()
+
+
+def test_triagem_pagamento_recebido_e_ausencia_automatica():
+    from command_center.providers import classificar as cl
+    nomes = ["Finances", "Finances/Pending Invoices ❗", "wNews"]
+    lab, motivo, _ = cl.por_regras({"sender": "quickbooks@notification.intuit.com", "subject": "Payment received for invoice 1044", "labels": "[]"}, nomes)
+    assert lab == "Finances" and "recebido" in motivo
+    lab, _, _ = cl.por_regras({"sender": "billing@x.com", "subject": "Your invoice is due", "labels": "[]"}, nomes)
+    assert lab == "Finances/Pending Invoices ❗"
+    assert cl.auto_tratar({"sender": "nya@gmail.com", "subject": "unavailable Re: karting experience", "snippet": ""}, None)
+    assert cl.auto_tratar({"sender": "x@y.com", "subject": "Automatic reply: out of office", "snippet": ""}, None)
+    assert cl.auto_tratar({"sender": "x@y.com", "subject": "Dúvida", "snippet": "Estarei fora até dia 20"}, None)
+    assert not cl.auto_tratar({"sender": "cliente@x.com", "subject": "Posso trocar o treino?", "snippet": "domingo"}, None)
+
+
+def test_aviso_de_aprovacao_diz_o_que_e(cli):
+    import json as _j
+    from command_center.db import conectar, inserir
+    con = conectar()
+    try:
+        cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE")
+        aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo",
+                      policy="REQUIRES_APPROVAL", status="PROPOSED",
+                      payload=_j.dumps({"alvo": "Pablo Santiago", "args": {"cliente_id": "485", "data_servico": "2026-09-12",
+                                                                            "linhas": [{"item_id": "9", "quantidade": 1, "unitario": 1600, "descricao": "Urace Academy Training Program"}]}}))
+        inserir(con, "approvals", action_id=aid); con.commit()
+    finally:
+        con.close()
+    entra(cli, "admin@urace.us")
+    it = [i for i in cli.get(B + "/needs-attention").json() if i["entity"]["type"] == "approvals"][0]
+    assert "Pablo Santiago" in it["title"] and "$1,600.00" in it["title"]
+    f = dict(it["facts"])
+    assert "Urace Academy Training Program" in f["Invoice"] and "12/09/2026" in f["Invoice"]

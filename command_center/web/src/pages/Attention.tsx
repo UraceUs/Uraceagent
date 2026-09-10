@@ -6,6 +6,7 @@ import type { Attention as A, Level } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, Section, levelTone } from '../components/ui'
 import { fmtDateTime } from '../components/fmt'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 
 const LEVELS: Level[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -33,11 +34,12 @@ function Balao({ a, onDone }: { a: A; onDone: () => void }) {
 
 export function AttentionList({ items, onChange }: { items: A[]; onChange?: () => void }) {
   const { can } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
   const [balao, setBalao] = useState<string | null>(null)
   async function hide(a: A) {
-    const reason = window.prompt(`Ocultar este aviso?\n\n"${a.title}"\n\nA tarefa, o envelope ou o e-mail de origem NÃO são apagados. Motivo (opcional):`)
+    const reason = await perguntar({ titulo: 'Ocultar este aviso?', texto: `"${a.title}"\n\nA tarefa, o envelope ou o e-mail de origem NÃO são apagados.`, campo: 'Motivo (opcional)', ok: 'Ocultar' }) as string | null
     if (reason === null) return
     setBusy(a.key)
     try { await api.post('/needs-attention/dismiss', { key: a.key, title: a.title, level: a.level, reason }); toast('Aviso ocultado. Dá para restaurar em "ocultos".', 'ok'); onChange?.() }

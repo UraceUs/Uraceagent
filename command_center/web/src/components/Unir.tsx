@@ -5,7 +5,8 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Chip, Spinner } from './ui'
+import { Banner, Chip, Spinner } from './ui'
+import { usePerguntar } from './Perguntar'
 import { useToast } from './Toast'
 
 type Sug = Client & { why?: string }
@@ -28,6 +29,7 @@ function Picker({ label, value, onPick, exclude, sugestoes }: { label: string; v
 
 /** keep = cliente fixo (aberto no card). Sem keep, escolhe os dois. */
 export function UnirModal({ keep, onClose, onDone }: { keep?: Client; onClose: () => void; onDone: (keepId: number) => void }) {
+  const perguntar = usePerguntar()
   const toast = useToast()
   const [a, setA] = useState<Client | null>(keep || null)
   const [b, setB] = useState<Client | null>(null)
@@ -37,7 +39,7 @@ export function UnirModal({ keep, onClose, onDone }: { keep?: Client; onClose: (
   const ka = manter === 'a' ? a : b; const kb = manter === 'a' ? b : a
   async function unir() {
     if (!ka || !kb) return
-    if (!window.confirm(`Unir "${kb.pilot_name || kb.name}" em "${ka.pilot_name || ka.name}"?\n\nTodos os serviços, waivers, e-mails e invoices do segundo passam para o primeiro. O segundo sai da lista (fica guardado e auditado).`)) return
+    if (!await perguntar({ titulo: `Unir "${kb.pilot_name || kb.name}" em "${ka.pilot_name || ka.name}"?`, texto: 'Todos os serviços, waivers, e-mails e invoices do segundo passam para o primeiro. O segundo sai da lista (fica guardado e auditado).', ok: 'Unir' })) return
     setBusy(true)
     try { const r = await api.post<{ ok: boolean; moved: Record<string, number> }>('/client-merge', { keep_id: ka.id, drop_id: kb.id, reason: 'mesma pessoa (unido à mão)' }); toast(`Unidos: ${r.moved.tasks} serviço(s), ${r.moved.waivers} waiver(s), ${r.moved.emails} e-mail(s), ${r.moved.invoices} invoice(s) passaram para ${ka.pilot_name || ka.name}.`, 'ok'); onDone(ka.id); onClose() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
@@ -56,7 +58,7 @@ export function UnirModal({ keep, onClose, onDone }: { keep?: Client; onClose: (
   </div></div>
 }
 
-interface Full { running: boolean; stage: string | null; done: number; total: number | null; started_at: string | null; result: { ok?: boolean; motivo?: string; tarefas?: number; lidas?: number; clientes_novos?: number; unidos?: number; candidatos?: number } | null }
+interface Full { running: boolean; stage: string | null; done: number; total: number | null; started_at: string | null; result: { ok?: boolean; motivo?: string; tarefas?: number; lidas?: number; clientes_novos?: number; unidos?: number; removidos?: number; candidatos?: number } | null }
 
 /** Botão "Puxar histórico completo do Asana" com progresso. Só gerente/admin. */
 export function PuxarHistorico({ onDone }: { onDone: () => void }) {
@@ -64,6 +66,7 @@ export function PuxarHistorico({ onDone }: { onDone: () => void }) {
   const toast = useToast()
   const [st, setSt] = useState<Full | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirmar, setConfirmar] = useState(false)
   useEffect(() => { api.get<Full>('/sync/full').then(setSt).catch(() => undefined) }, [])
   useEffect(() => {
     if (!st?.running) return
@@ -72,9 +75,19 @@ export function PuxarHistorico({ onDone }: { onDone: () => void }) {
   }, [st?.running]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!can('MANAGER')) return null
   async function puxar() {
-    if (!window.confirm('Puxar o histórico completo do quadro U-RACE?\n\nLê todas as colunas (menos Matt tasks), concluídas incluídas, e liga cada serviço à pessoa certa. Pode levar vários minutos; a sincronia normal espera.')) return
-    setBusy(true)
+    setBusy(true); setConfirmar(false)
     try { const r = await api.post<Full & { started: boolean }>('/sync/full'); setSt(r); toast(r.started ? 'Puxando o histórico do Asana…' : 'Já tem uma sincronia rodando. Espere ela acabar.') } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
-  return <button className="btn" disabled={busy || !!st?.running} onClick={puxar} title="Todas as tarefas de todas as colunas, desde a criação do quadro">{st?.running ? <><Spinner /> {st.stage}{st.total ? ` ${st.done}/${st.total}` : ''}</> : '⟳ Puxar histórico do Asana'}</button>
+  const r = st?.result
+  return <>
+    <button className="btn" disabled={busy || !!st?.running} onClick={() => setConfirmar(true)} title="Todas as tarefas de todas as colunas, desde a criação do quadro">{st?.running ? <><Spinner /> {st.stage}{st.total ? ` ${st.done}/${st.total}` : ''}</> : '⟳ Puxar histórico do Asana'}</button>
+    {confirmar && <div className="modal-scrim" onMouseDown={() => setConfirmar(false)}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+      <button className="btn ghost sm close" onClick={() => setConfirmar(false)} aria-label="Fechar">✕</button>
+      <div><h2 className="h1" style={{ fontSize: 22 }}>Puxar o histórico completo</h2>
+        <div className="small ink2">Lê todas as colunas do quadro U-RACE menos “Matt tasks”, concluídas incluídas, e liga cada serviço à pessoa certa. Pode levar vários minutos; a sincronia normal espera. Nada é apagado no Asana.</div></div>
+      <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={() => setConfirmar(false)}>Cancelar</button><button className="btn primary" disabled={busy} onClick={puxar}>{busy ? <Spinner /> : 'Puxar agora'}</button></div>
+    </div></div>}
+    {r && !st?.running && <Banner tone={r.ok === false ? 'crit' : 'ok'}>{r.ok === false ? `Histórico parou: ${r.motivo}` :
+      <>Histórico puxado: <b>{r.tarefas ?? 0}</b> tarefas, <b>{r.clientes_novos ?? 0}</b> clientes novos, <b>{r.unidos ?? 0}</b> unidos sozinhos, <b>{r.removidos ?? 0}</b> não-clientes removidos, <b>{r.candidatos ?? 0}</b> par(es) para você decidir abaixo.</>}</Banner>}
+  </>
 }

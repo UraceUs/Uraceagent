@@ -10,6 +10,7 @@ import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, Qbo
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 
 const ORDEM_SECOES = ['TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY', 'RACES', 'Finished Services']
@@ -188,11 +189,12 @@ function LinkClient({ w, onDone }: { w: Waiver; onDone: () => void }) {
   </div>
 }
 function EnviarWaiver({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const perguntar = usePerguntar()
   const toast = useToast()
   const [f, setF] = useState({ template: 'parental', signer_name: '', signer_email: '', service: '' })
   const [busy, setBusy] = useState(false)
   async function send() {
-    if (!window.confirm(`Enviar a waiver ${f.template} para ${f.signer_name} <${f.signer_email}> agora?`)) return
+    if (!await perguntar({ titulo: 'Enviar a waiver agora?', texto: `Modelo ${f.template} para ${f.signer_name} <${f.signer_email}>.`, ok: 'Enviar' })) return
     setBusy(true)
     try { await api.post('/waivers/send', f); toast('Waiver enviada pelo DocuSign.', 'ok'); onDone(); onClose() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
@@ -212,6 +214,7 @@ function EnviarWaiver({ onClose, onDone }: { onClose: () => void; onDone: () => 
 export function DocuSignPage() {
   const nav = useNavigate()
   const { can } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const [enviar, setEnviar] = useState(false)
   const [tab, setTab] = useTab<'env' | 'signed' | 'tpl' | 'lixo'>('v', 'env')
@@ -228,14 +231,14 @@ export function DocuSignPage() {
       toast(kind === 'trash' ? (r.voided ? 'Envelope anulado no DocuSign e removido do painel.' : r.note || 'Removido do painel.') : kind === 'restore' ? 'Restaurado.' : r.email_corrigido ? `E-mail corrigido para ${r.email_corrigido} e reenviado.` : 'Reenviado ao signatário.', 'ok'); env.reload() }
     catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setBusy(null) }
   }
-  function trash(w: Waiver) {
+  async function trash(w: Waiver) {
     const aberto = ['sent', 'delivered', 'autoresponded'].includes(w.status || '')
     const msg = aberto ? `Anular o envelope de ${w.signer_name} no DocuSign e tirar do painel?\n\nO signatário não consegue mais assinar. Motivo (opcional):` : `Tirar a waiver de ${w.signer_name} do painel?\n\nEnvelope assinado é registro legal e continua no DocuSign. Motivo (opcional):`
-    const reason = window.prompt(msg); if (reason === null) return
+    const reason = await perguntar({ titulo: 'Mandar para a lixeira?', texto: msg, campo: 'Motivo (opcional)', ok: 'Confirmar', perigo: true }) as string | null; if (reason === null) return
     act(w, 'trash', { reason })
   }
-  function resend(w: Waiver) {
-    const novo = window.prompt(`Reenviar a waiver para ${w.signer_name}.\n\nE-mail do signatário (edite se estava errado):`, w.signer_email || '')
+  async function resend(w: Waiver) {
+    const novo = await perguntar({ titulo: `Reenviar a waiver para ${w.signer_name}`, texto: 'Confira o e-mail do signatário e corrija se estava errado.', campo: 'E-mail', valor: w.signer_email || '', ok: 'Reenviar' }) as string | null
     if (novo === null) return
     act(w, 'resend', { email: novo.trim().toLowerCase() !== (w.signer_email || '').toLowerCase() ? novo.trim() : undefined })
   }
@@ -323,6 +326,7 @@ function CorpoHtml({ eid, m }: { eid: number; m: GmailMessage }) {
 export function GmailPage() {
   const nav = useNavigate()
   const { can } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const [box, setBox] = useTab<Box>('v', 'urace')
   const [sel, setSel] = useTab<string>('l', 'INBOX')          // INBOX | SEM_SUGESTAO | <marcador>
@@ -341,7 +345,7 @@ export function GmailPage() {
 
   async function move(e: Email, label: string) {
     if (!label) return
-    if (!window.confirm(`Mover para "${label}"?\n\nAplica o marcador e tira da caixa de entrada.`)) return
+    if (!await perguntar({ titulo: `Mover para "${label}"?`, texto: 'Aplica o marcador e tira da caixa de entrada.', ok: 'Mover' })) return
     setBusy(e.id)
     try { await api.post(`/emails/${e.id}/move`, { label }); toast(`Movido para ${label}.`, 'ok'); if (String(e.id) === openId) setOpenId(''); emails.reload(); labels.reload() }
     catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setBusy(null) }

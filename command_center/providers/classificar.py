@@ -24,6 +24,8 @@ REGRAS = [
     (None, r"new message from .urace", "Marketing & Sales/Comercial/Formulario do site", "formulário do site"),
     (r"rdstation|rd station|resultadosdigitais", None, "Marketing/RD Station", "remetente RD Station"),
     (None, r"\b(tracking|shipped|shipment|delivery|entrega|rastreio)\b", "Shipping Status", "assunto de envio"),
+    (None, r"\b(payment received|payment confirmation|pagamento recebido|you (?:ve |have )?got paid|deposit(?:ed)? into)\b", "Finances", "confirmação de pagamento recebido"),
+    (None, r"\b(statement|extrato) (?:is )?(?:ready|available|dispon)", "Finances", "extrato disponível"),
     (None, r"\b(invoice|fatura|faturamento|boleto|payment request|cobran)", "Finances/Pending Invoices ❗", "assunto de cobrança"),
     (r"google\.com|no-reply@accounts\.google", None, "Platforms & Subscriptions/Google", "remetente Google"),
     (None, r"\b(newsletter|unsubscribe|promo|sale|% off|oferta|desconto)\b", "wNews", "assunto de propaganda"),
@@ -102,6 +104,11 @@ NOSSOS_DOMINIOS = ("@urace.us",)
 AVISO_DOCUSIGN = re.compile(r"\b(completed|conclu[ií]do|viewed|visualizou|anulado|voided|please complete the docusign|declined)\b", re.I)
 
 
+# Resposta automática de ausência: ninguém precisa responder de volta.
+AUSENCIA = re.compile(r"\b(out of (?:the )?office|ooo|unavailable|automatic reply|auto[- ]?reply|resposta autom|"
+                      r"estarei fora|f[ée]rias|vacation|away from (?:my )?(?:desk|email)|no escrit[óo]rio somente)\b", re.I)
+
+
 def auto_tratar(email, sugestao):
     """Motivo pelo qual este e-mail NÃO precisa de humano, ou None.
 
@@ -112,6 +119,8 @@ def auto_tratar(email, sugestao):
     assunto = (email.get("subject") or "").lower()
     if any(d in de for d in NOSSOS_DOMINIOS):
         return "enviado por nós (urace.us)"
+    if AUSENCIA.search(assunto) or AUSENCIA.search((email.get("snippet") or "")[:160]):
+        return "resposta automática de ausência (não pede resposta)"
     if "docusign" in de or AVISO_DOCUSIGN.search(assunto) and "docusign" in assunto:
         return "notificação do DocuSign (o status vem do próprio DocuSign)"
     if sugestao:

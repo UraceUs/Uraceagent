@@ -8,6 +8,7 @@ import type { Catalog, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 
 function idade(dob?: string | null) {
@@ -31,6 +32,7 @@ export function Client360() {
 export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }) {
   const nav = useNavigate()
   const { can } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
   const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'races' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
@@ -56,7 +58,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
 
   async function togglePro() {
     const vai = !c.pro_driver
-    if (!window.confirm(vai ? `Tornar ${c.pilot_name || c.name} um ★ Pro Racing Driver?\n\nEle vai para a aba Pro Racing Drivers e o card ganha Equipamento e Corridas.` : `Tirar ${c.pilot_name || c.name} de Pro Racing Driver?`)) return
+    if (!await perguntar(vai ? { titulo: `Tornar ${c.pilot_name || c.name} um ★ Pro Racing Driver?`, texto: 'Ele vai para a aba Pro Racing Drivers e o card ganha Equipamento e Corridas.', ok: 'Tornar Pro' } : { titulo: `Tirar ${c.pilot_name || c.name} de Pro Racing Driver?`, ok: 'Tirar' })) return
     setProBusy(true)
     try { await api.patch(`/clients/${c.id}/profile`, { pro_driver: vai }); toast(vai ? 'Agora é Pro Racing Driver.' : 'Saiu de Pro Racing Driver.', 'ok'); if (!vai && (tab === 'equip' || tab === 'races')) setTab('timeline'); reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setProBusy(false) }

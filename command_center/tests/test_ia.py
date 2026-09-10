@@ -599,3 +599,38 @@ def test_sem_credito_vira_mensagem_clara_e_triagem_nao_trava_a_sincronia(cli):
         assert r.get("em_segundo_plano") or r.get("pulada")
     finally:
         con.close()
+
+
+def test_argumento_que_a_ferramenta_nao_aceita_e_descartado(cli, monkeypatch):
+    """Os dois erros reais de 10/09: 'projeto_gid' em asana_criar_do_modelo e 'texto' em
+    qbo_itens_buscar quebravam a execução inteira. Agora o campo a mais é descartado."""
+    from command_center.api import acoes, motor
+    from command_center.db import conectar, inserir, um
+    import command_center.providers as prov
+
+    class Asana:
+        def asana_criar_do_modelo(self, modelo_gid, nome, secao_gid=None, notas=None, vence_em=None, campos=None):
+            return {"aplicado": True, "gid": "999", "nome": nome, "link": "https://app.asana.com/x"}
+    monkeypatch.setattr(prov, "modulo", lambda s: Asana())
+    args, sobrando = acoes.ajustar_aos_parametros("asana_criar_do_modelo", {
+        "projeto_gid": "1205450093098920", "modelo_gid": "1208702559561159", "nome": "X", "secao_gid": "s", "vence_em": "2026-09-12"})
+    assert sobrando == ["projeto_gid"] and "projeto_gid" not in args and args["nome"] == "X"
+    assert acoes.ajustar_aos_parametros("asana_criar_do_modelo", {"modelo_gid": "m", "nome": "X"})[1] == []
+    con = conectar()
+    try:
+        cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE")
+        aid = inserir(con, "ai_actions", command_id=cmd, action="asana_criar_do_modelo", system="asana", policy="SAFE",
+                      status="APPROVED", payload=json.dumps({"args": {"projeto_gid": "1205450093098920", "modelo_gid": "m",
+                                                                      "nome": "Bryan Santiago_Academy [3/4]", "secao_gid": "s"}}))
+        con.commit()
+    finally:
+        con.close()
+    monkeypatch.setattr(prov, "chamar", lambda sistema, acao, **a: Asana().asana_criar_do_modelo(**a))
+    motor.executar_acao(aid, 1)
+    con = conectar()
+    try:
+        a = um(con, "SELECT status, result FROM ai_actions WHERE id=?", (aid,))
+        assert a["status"] == "DONE" and '"gid": "999"' in a["result"]
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='action.args_ajustados'") is not None
+    finally:
+        con.close()

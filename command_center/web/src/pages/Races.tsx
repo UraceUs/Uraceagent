@@ -9,6 +9,7 @@ import type { Client, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, statusTone } from '../components/ui'
 import { fmtDate, money } from '../components/fmt'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Md } from '../components/Md'
 
@@ -30,6 +31,7 @@ interface TaskDetail { connected: boolean; reason?: string; task?: { notas?: str
 
 function CorridaModal({ r, pros, onClose, reload }: { r: Race; pros: Client[]; onClose: () => void; reload: () => void }) {
   const { can } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const det = useGet<TaskDetail>(r.task_id ? `/tasks/${r.task_id}/detail` : null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -37,7 +39,7 @@ function CorridaModal({ r, pros, onClose, reload }: { r: Race; pros: Client[]; o
   async function convidar(cid: number) { setBusy(`c${cid}`); try { await api.post(`/races/${r.id}/invite`, { client_id: cid }); toast('Piloto colocado na corrida. Fica lá até a confirmação.', 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) } }
   async function estimar(iid: number) { setBusy(`e${iid}`); try { await api.post(`/invites/${iid}/estimate`); toast('A IA está montando a prévia (1 a 3 min).'); setTimeout(reload, 60000) } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) } }
   async function status(iid: number, st: string) { try { await api.patch(`/invites/${iid}`, { status: st }); reload() } catch (e) { toast((e as ApiError).message, 'crit') } }
-  async function tirar() { if (!window.confirm('Tirar esta corrida do calendário do painel? (No Asana nada muda.)')) return; try { await api.patch(`/races/${r.id}`, { active: false }); reload(); onClose() } catch (e) { toast((e as ApiError).message, 'crit') } }
+  async function tirar() { if (!await perguntar({ titulo: 'Tirar esta corrida do calendário?', texto: 'Some do painel. No Asana nada muda.', ok: 'Tirar', perigo: true })) return; try { await api.patch(`/races/${r.id}`, { active: false }); reload(); onClose() } catch (e) { toast((e as ApiError).message, 'crit') } }
   const link = r.task?.links?.[0]?.deep_link || det.data?.task?.link
   return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 900 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>

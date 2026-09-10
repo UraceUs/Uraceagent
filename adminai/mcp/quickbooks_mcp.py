@@ -374,9 +374,16 @@ def _proximo_doc_number():
         m = re.fullmatch(r"([A-Za-z\-]*)(\d+)", d)
         if m and int(m.group(2)) > melhor:
             melhor, prefixo, largura = int(m.group(2)), m.group(1), len(m.group(2))
-    if not melhor:
-        return dt.date.today().strftime("%Y%m%d") + "01"
-    return f"{prefixo}{str(melhor + 1).zfill(largura)}"
+    if melhor:
+        return f"{prefixo}{str(melhor + 1).zfill(largura)}"
+    # a conta usa número não numérico (ex.: 6YZRN1QWN657NQM): segue um esquema próprio,
+    # sequencial e legível, configurável em QBO_PREFIXO_INVOICE (padrão "URACE-")
+    pref = os.environ.get("QBO_PREFIXO_INVOICE", "URACE-")
+    r = _query(f"select DocNumber from Invoice where DocNumber like '{_esc(pref)}%' orderby DocNumber desc maxresults 1")
+    achado = (r.get("Invoice") or [{}])[0].get("DocNumber") or ""
+    m = re.fullmatch(re.escape(pref) + r"(\d+)", achado.strip())
+    seq = int(m.group(1)) + 1 if m else 1
+    return f"{pref}{str(seq).zfill(4)}"
 
 
 def _linhas(linhas):

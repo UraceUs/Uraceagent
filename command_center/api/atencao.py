@@ -182,11 +182,31 @@ def _coletar(con):
                           facts=[("Sistema", i["system"]), ("Último sucesso", (i.get("last_success_at") or "—")[:16].replace("T", " ")), ("Última tentativa", (i.get("last_attempt_at") or "—")[:16].replace("T", " ")), ("Erros seguidos", str(i.get("error_count") or 0))]))
 
     # ---- 6. ações da IA esperando aprovação / falhas
-    n = um(con, "SELECT COUNT(*) AS n FROM ai_actions WHERE status='PROPOSED' AND policy='REQUIRES_APPROVAL'")
-    if n and n["n"]:
-        itens.append(dict(key=_chave("aprovacoes", "approvals", "pendentes"), level="HIGH", title=f"{n['n']} ação(ões) da IA esperando sua aprovação",
-                          why="Nada executa sem aprovação humana.", entity={"type": "approvals", "id": None},
-                          client_id=None, link=None, action="Revisar"))
+    pend = todos(con, "SELECT id, action, payload, created_at FROM ai_actions WHERE status='PROPOSED' AND policy='REQUIRES_APPROVAL' ORDER BY id DESC LIMIT 10")
+    if pend:
+        from command_center.api.acoes import ACOES_INVOICE
+        detalhes = []
+        for a in pend:
+            try:
+                pl = json.loads(a["payload"] or "{}")
+            except ValueError:
+                pl = {}
+            args = pl.get("args") if isinstance(pl.get("args"), dict) else {}
+            alvo = pl.get("alvo") or "—"
+            if a["action"] in ACOES_INVOICE:
+                total = sum((l.get("quantidade") or 1) * (l.get("unitario") or 0) for l in args.get("linhas") or [] if isinstance(l, dict))
+                desc = next((l.get("descricao") for l in args.get("linhas") or [] if isinstance(l, dict) and l.get("descricao")), None)
+                detalhes.append(("Invoice", f"{alvo} · {_usd(total)}" + (f" · {desc}" if desc else "") + (f" · serviço {_dbr(args.get('data_servico'))}" if args.get("data_servico") else "")))
+            elif a["action"] == "docusign_enviar_waiver":
+                detalhes.append(("Waiver", f"{args.get('nome') or alvo} <{args.get('email') or '—'}>"))
+            else:
+                detalhes.append((a["action"], alvo))
+        itens.append(dict(key=_chave("aprovacoes", "approvals", "pendentes"), level="HIGH",
+                          title=(f"{detalhes[0][0]} esperando sua aprovação: {detalhes[0][1]}" if len(pend) == 1
+                                 else f"{len(pend)} ações da IA esperando sua aprovação"),
+                          why="Nada executa sem aprovação humana. Aprovar uma invoice cria E envia ao cliente.",
+                          entity={"type": "approvals", "id": None}, client_id=None, link=None, action="Revisar",
+                          facts=[(k, v) for k, v in detalhes[:6]]))
     # falha da IA só vira item se a ÚLTIMA execução falhou (se ela se recuperou depois, não incomoda)
     ult = um(con, "SELECT status, error FROM ai_commands WHERE status IN ('DONE','FAILED') ORDER BY finished_at DESC LIMIT 1")
     if ult and ult["status"] == "FAILED":

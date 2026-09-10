@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import type { Role } from './api/types'
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { Shell } from './components/Shell'
+import { PerguntarProvider } from './components/Perguntar'
 import { ToastProvider } from './components/Toast'
 import { Empty } from './components/ui'
 import { AICommand, Activity, Approvals } from './pages/AI'
@@ -27,7 +28,7 @@ function Guard({ min, children }: { min?: Role; children: ReactNode }) {
 
 export default function App() {
   return <BrowserRouter basename="/ops">
-    <AuthProvider><ToastProvider>
+    <AuthProvider><ToastProvider><PerguntarProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route element={<Guard><Shell /></Guard>}>
@@ -57,6 +58,6 @@ export default function App() {
           <Route path="*" element={<div className="card"><Empty title="Página não encontrada">Use o menu ou ⌘K.</Empty></div>} />
         </Route>
       </Routes>
-    </ToastProvider></AuthProvider>
+    </PerguntarProvider></ToastProvider></AuthProvider>
   </BrowserRouter>
 }

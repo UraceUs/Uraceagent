@@ -7,6 +7,7 @@ import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate } from '../components/fmt'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { ClientCard } from './Client360'
 
@@ -15,16 +16,17 @@ type Parecer = { mesma_pessoa: boolean | null; confianca: string; motivo: string
 
 function Duplicados({ onChanged }: { onChanged: () => void }) {
   const { can } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const { data, loading, reload } = useGet<{ pairs: Par[]; merged: { id: number; keep_id: number; drop_name: string; reason: string; merged_by: string; merged_at: string }[] }>('/client-duplicates')
   const [ia, setIa] = useState<Record<string, Parecer> | null>(null)
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
   async function unir(keep: Client, drop: Client) {
-    if (!window.confirm(`Unir "${drop.pilot_name || drop.name}" em "${keep.pilot_name || keep.name}"?\n\nServiços, waivers e e-mails do segundo passam para o primeiro. O registro unido fica guardado e auditado.`)) return
+    if (!await perguntar({ titulo: `Unir "${drop.pilot_name || drop.name}" em "${keep.pilot_name || keep.name}"?`, texto: 'Serviços, waivers e e-mails do segundo passam para o primeiro. O registro unido fica guardado e auditado.', ok: 'Unir' })) return
     try { await api.post('/client-merge', { keep_id: keep.id, drop_id: drop.id, reason: 'mesma pessoa (revisão humana)' }); toast('Unidos.', 'ok'); reload(); onChanged() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
-  async function perguntar() {
+  async function parecerDaIa() {
     setBusy(true)
     try {
       await api.post('/client-duplicates/ai')
@@ -37,7 +39,7 @@ function Duplicados({ onChanged }: { onChanged: () => void }) {
   }
   const n = data?.pairs.length ?? 0
   if (!loading && n === 0 && !(data?.merged.length)) return null
-  return <Section title="Possíveis duplicados" count={n} right={<div className="row">{n > 0 && can('OPERATOR') && <button className="btn sm" disabled={busy} onClick={perguntar}>{busy ? <Spinner /> : '✦'} Pedir parecer da IA</button>}<button className="btn ghost sm" onClick={() => setOpen(o => !o)}>{open ? 'esconder' : 'ver'}</button></div>}>
+  return <Section title="Possíveis duplicados" count={n} right={<div className="row">{n > 0 && can('OPERATOR') && <button className="btn sm" disabled={busy} onClick={parecerDaIa}>{busy ? <Spinner /> : '✦'} Pedir parecer da IA</button>}<button className="btn ghost sm" onClick={() => setOpen(o => !o)}>{open ? 'esconder' : 'ver'}</button></div>}>
     {!open ? <div className="small muted">{n} par(es) com nomes quase iguais esperando decisão{data?.merged.length ? ` · ${data.merged.length} união(ões) feitas` : ''}.</div> : <>
       {n === 0 && <div className="small muted">Nenhum par pendente.</div>}
       {(data?.pairs || []).map(p => { const par = ia?.[`${p.a.id}-${p.b.id}`]; return <div className="act" key={`${p.a.id}-${p.b.id}`}>

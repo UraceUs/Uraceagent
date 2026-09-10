@@ -109,6 +109,34 @@ def eh_consulta(nome):
     return bool(_CONSULTA_RX.search(nome or ""))
 
 
+SISTEMA_DA_ACAO = {"qbo": "quickbooks", "quickbooks": "quickbooks", "asana": "asana", "docusign": "docusign",
+                   "gmail": "gmail", "google": "gmail", "calendar": "gmail", "sheets": "gmail"}
+
+
+def ajustar_aos_parametros(acao, args):
+    """Descarta o que a ferramenta não aceita e avisa. Nasceu de dois erros reais (10/09):
+    `asana_criar_do_modelo() got an unexpected keyword argument 'projeto_gid'` e
+    `qbo_itens_buscar() got an unexpected keyword argument 'texto'` — o agente manda
+    campos a mais e a execução quebrava inteira em vez de seguir com o que serve."""
+    import inspect
+    if not isinstance(args, dict):
+        return args, []
+    try:
+        from command_center.providers import modulo
+        fn = getattr(modulo(SISTEMA_DA_ACAO.get(acao.split("_")[0], acao.split("_")[0])), acao, None)
+        if fn is None:
+            return args, []
+        p_ = inspect.signature(fn).parameters
+    except Exception:
+        return args, []
+    if any(x.kind == x.VAR_KEYWORD for x in p_.values()):
+        return args, []
+    sobrando = [k for k in args if k not in p_]
+    if not sobrando:
+        return args, []
+    return {k: v for k, v in args.items() if k in p_}, sobrando
+
+
 def itens_do_cache(con):
     return todos(con, "SELECT id, name, full_name, price FROM qbo_items WHERE active=1 ORDER BY name") if con else []
 

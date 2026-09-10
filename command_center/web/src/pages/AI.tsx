@@ -9,6 +9,7 @@ import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, SYS_NAME, Secti
 const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: 'Criar e enviar invoice', qbo_criar_invoice: 'Criar invoice', qbo_enviar_invoice: 'Enviar invoice', qbo_criar_item: 'Criar item no catálogo', qbo_criar_cliente: 'Criar cliente no QuickBooks', asana_criar_do_modelo: 'Criar tarefa (modelo oficial)', asana_criar_tarefa: 'Criar tarefa', asana_comentar: 'Comentar na tarefa', asana_mover_para_secao: 'Mover tarefa', asana_mover_para_finished: 'Mover para Finished Services', asana_concluir: 'Concluir tarefa', docusign_enviar_waiver: 'Enviar waiver', gmail_rascunho: 'Rascunho de e-mail', gmail_rotular: 'Marcar e-mail' }
 const STATUS_LABEL: Record<string, string> = { PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada' }
 import { ago, fmtDateTime, money, safeJson } from '../components/fmt'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Md } from '../components/Md'
 
@@ -61,12 +62,14 @@ function ResultadoBox({ a }: { a: AiAction }) {
 
 export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void }) {
   const { can } = useAuth()
+  const perguntar = usePerguntar()
   const toast = useToast()
   const [busy, setBusy] = useState<'a' | 'r' | null>(null)
   const payload = safeJson(a.payload)
   const incompleta = !!(payload && typeof payload === 'object' && Array.isArray((payload as { problemas?: unknown }).problemas) && ((payload as { problemas: unknown[] }).problemas).length)
   async function decide(kind: 'approve' | 'reject') {
-    const comment = kind === 'reject' ? (window.prompt('Motivo (opcional):') ?? undefined) : undefined
+    const comment = kind === 'reject' ? ((await perguntar({ titulo: 'Rejeitar esta ação?', texto: 'Ela sai da fila e não executa.', campo: 'Motivo (opcional)', ok: 'Rejeitar', perigo: true }) as string | null) ?? undefined) : undefined
+    if (kind === 'reject' && comment === undefined) return
     setBusy(kind === 'approve' ? 'a' : 'r')
     try {
       await api.post<{ note?: string }>(`/ai/actions/${a.id}/${kind}`, { comment })

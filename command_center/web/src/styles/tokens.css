@@ -436,3 +436,9 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
   .tl-m{padding-left:0;text-align:left}
   .previa .tbl,.act .tbl{font-size:12px}
 }
+
+/* ---------- pergunta dentro da página (no lugar do diálogo do navegador) */
+.modal.ask{max-width:520px;display:flex;flex-direction:column;gap:12px}
+.modal.ask .field{margin:0}
+.btn.danger{border-color:var(--crit);color:var(--crit)}
+.btn.danger:hover{background:var(--crit);color:#fff}
