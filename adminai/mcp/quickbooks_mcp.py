@@ -20,6 +20,7 @@ gravado de volta no arquivo. Sem uso por 100 dias, refazer o consentimento.
 import base64
 import datetime as dt
 import json
+import re
 import os
 import sys
 import urllib.error
@@ -362,6 +363,22 @@ def _conta_receita():
     return {"value": c["Id"], "name": c["Name"]}
 
 
+def _proximo_doc_number():
+    """Próximo número de invoice: a conta usa numeração personalizada (Invoice no. obrigatório),
+    e a API não numera sozinha (dono viu invoice sem número, 10/09). Pega o maior número
+    numérico das últimas invoices e soma 1, preservando prefixo e zeros à esquerda."""
+    r = _query("select DocNumber from Invoice orderby Id desc maxresults 50")
+    melhor, prefixo, largura = 0, "", 0
+    for inv in r.get("Invoice", []):
+        d = (inv.get("DocNumber") or "").strip()
+        m = re.fullmatch(r"([A-Za-z\-]*)(\d+)", d)
+        if m and int(m.group(2)) > melhor:
+            melhor, prefixo, largura = int(m.group(2)), m.group(1), len(m.group(2))
+    if not melhor:
+        return dt.date.today().strftime("%Y%m%d") + "01"
+    return f"{prefixo}{str(melhor + 1).zfill(largura)}"
+
+
 def _linhas(linhas):
     out = []
     for l in linhas:
@@ -385,10 +402,12 @@ LINHAS_SCHEMA = {"type": "array", "items": {"type": "object", "properties": {
                 "'unitario' é o valor unitário da Rate Card; 'x 2 dias' é quantidade 2. NÃO envia. Com APLICAR=0 é simulação.",
                 {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD (2 dias antes do serviço)"},
                  "memo": {"type": "string"}, "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
-def qbo_criar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None):
+def qbo_criar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None, numero=None):
     corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
     if vence_em:
         corpo["DueDate"] = vence_em
+    if _aplicar():
+        corpo["DocNumber"] = str(numero).strip() if numero else _proximo_doc_number()   # nunca sem número
     if memo:
         corpo["CustomerMemo"] = {"value": memo[:1000]}          # "Note to customer"
     if nota_privada or memo:
@@ -437,10 +456,12 @@ def qbo_enviar_invoice(id, email=None):
                 {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD (2 dias antes do serviço)"},
                  "memo": {"type": "string", "description": "Note to customer: produto | categoria | piloto | Service date: MM/DD/AAAA"},
                  "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
-def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None):
+def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None, numero=None):
     corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
     if vence_em:
         corpo["DueDate"] = vence_em
+    if _aplicar():
+        corpo["DocNumber"] = str(numero).strip() if numero else _proximo_doc_number()   # nunca sem número
     if memo:
         corpo["CustomerMemo"] = {"value": memo[:1000]}          # "Note to customer"
     if nota_privada or memo:

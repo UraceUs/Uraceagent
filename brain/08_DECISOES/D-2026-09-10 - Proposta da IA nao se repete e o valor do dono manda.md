@@ -100,3 +100,8 @@ aprovo, ele não me traz resultado."*
     (`Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026`).
     O painel calcula e preenche mesmo que o agente esqueça; a regra
     também entrou na memória da IA (aprendizado 10).
+20. **Invoice sempre com número.** A conta do QuickBooks usa numeração
+    personalizada ("Invoice no." obrigatório) e a API não numera sozinha:
+    a primeira invoice da IA saiu sem número e o QBO recusou o envio. O
+    painel agora manda o próximo número (maior número emitido + 1,
+    mantendo prefixo e zeros) em toda invoice criada.

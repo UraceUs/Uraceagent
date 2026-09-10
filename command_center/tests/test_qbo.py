@@ -130,3 +130,23 @@ def test_invoices_e_summary_sao_financeiro(cli):
     s = cli.get(B + "/qbo/summary").json()
     assert "open" in s and "overdue" in s and isinstance(s["top_debtors"], list)
     assert cli.get(B + "/invoices").status_code == 200
+
+
+def test_invoice_sempre_com_numero(monkeypatch):
+    """Conta com numeração personalizada: a API não numera; o painel manda o próximo número."""
+    import importlib, sys
+    sys.path.insert(0, "adminai/mcp")
+    qb = importlib.import_module("quickbooks_mcp")
+    monkeypatch.setattr(qb, "_query", lambda sql: {"Invoice": [{"DocNumber": "1041"}, {"DocNumber": "1039"}, {"DocNumber": "ABC"}, {"DocNumber": None}]} if "DocNumber" in sql else {})
+    assert qb._proximo_doc_number() == "1042"
+    monkeypatch.setattr(qb, "_query", lambda sql: {"Invoice": [{"DocNumber": "INV-0099"}]})
+    assert qb._proximo_doc_number() == "INV-0100"
+    monkeypatch.setattr(qb, "_query", lambda sql: {"Invoice": []})
+    assert qb._proximo_doc_number().endswith("01") and len(qb._proximo_doc_number()) == 10
+    enviados = []
+    monkeypatch.setattr(qb, "_query", lambda sql: {"Invoice": [{"DocNumber": "1041"}]})
+    monkeypatch.setattr(qb, "_aplicar", lambda: True)
+    monkeypatch.setattr(qb, "_realm", lambda: "9341453113046421")
+    monkeypatch.setattr(qb, "_req", lambda caminho, metodo="GET", corpo=None, params=None: (enviados.append((caminho, corpo)) or {"Invoice": {"Id": "9", "DocNumber": corpo["DocNumber"], "TotalAmt": 500, "Balance": 500, "Line": []}}))
+    r = qb.qbo_criar_invoice("696", [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "x"}], vence_em="2026-09-11", memo="m")
+    assert enviados[0][1]["DocNumber"] == "1042" and enviados[0][1]["PrivateNote"] == "m" and r["numero"] == "1042"
