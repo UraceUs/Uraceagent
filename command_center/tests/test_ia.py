@@ -399,7 +399,7 @@ def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, mo
         notas = a["notas"]
         assert "Service Dates for this Month: 09/13/2026" in notas and "Date of Birth: 05/02/2014" in notas and "Age: 12  (menor: waiver parental)" in notas
         assert "Responsible Name: Nicolas Pera" in notas and "Email: peranicolas2106@gmail.com" in notas and "Product: Urace Daily / Using Own Kart" in notas
-        assert "Invoice link: (a IA preenche quando a invoice sair)    Price: $500.00" in notas
+        assert "Invoice link: (a IA preenche quando a invoice sair)\nPrice: $500.00\n\nSecurity deposit: —\nPrice: —" in notas and "Height: —\nWeight: —\nWaist: —" in notas
         n2, a2 = acoes.converter("asana_criar_do_modelo", {"modelo_gid": "x", "nome": "David Pera_Urace Daily_2T [1/1]", "secao_gid": "1205141832260879"}, con, "treino em Bushnell")
         assert a2["campos"] == {"Race": "Practice Bushnell"}
         assert "campos" not in acoes.converter("asana_criar_do_modelo", {"modelo_gid": "x", "nome": "ROK Cup Round 5 [Orlando]", "secao_gid": "s"}, None, "")[1]

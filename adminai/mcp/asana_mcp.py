@@ -383,12 +383,13 @@ def preencher_invoice_na_tarefa(gid, link, valor=None):
     t = _ler_tarefa(gid)
     _recusar_se_protegida(t, "editar")
     notas = t.get("notes") or ""
-    preco = f"    Price: ${float(valor):,.2f}" if valor is not None else ""
-    linha = f"Invoice link: {link}{preco}"
+    linha = f"Invoice link: {link}"
     if re.search(r"(?im)^Invoice link:.*$", notas):
         notas = re.sub(r"(?im)^Invoice link:.*$", linha, notas, count=1)
+        if valor is not None:                        # a linha 'Price:' logo abaixo recebe o valor real
+            notas = re.sub(r"(?im)^(Invoice link:.*\n)Price:.*$", lambda m: m.group(1) + f"Price: ${float(valor):,.2f}", notas, count=1)
     else:
-        notas = notas.rstrip() + "\n\n" + linha
+        notas = notas.rstrip() + "\n\n" + linha + (f"\nPrice: ${float(valor):,.2f}" if valor is not None else "")
     _req(f"/tasks/{gid}", "PUT", {"notes": notas})
     return {"aplicado": True, "gid": gid, "invoice_link": link}
 

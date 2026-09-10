@@ -271,7 +271,9 @@ def notas_servico(piloto, responsavel, email=None, telefone=None, dob=None, data
               f"Driver's name: {v(piloto)}",
               f"Date of Birth: {_dbr_us(dob) if dob else '—'}",
               f"Age: {idade if idade is not None else '—'}" + ("  (menor: waiver parental)" if idade is not None and idade < 18 else ""),
-              f"Height: {v(altura)}    Weight: {v(peso)}    Waist: {v(cintura)}",
+              f"Height: {v(altura)}",
+              f"Weight: {v(peso)}",
+              f"Waist: {v(cintura)}",
               f"Karting Experience: {v(experiencia)}",
               "----------------------------------------",
               f"Responsible Name: {v(responsavel)}",
@@ -279,8 +281,11 @@ def notas_servico(piloto, responsavel, email=None, telefone=None, dob=None, data
               f"Phone: {v(telefone)}",
               "----------------------------------------",
               f"Product: {v(produto)}" + (f" / {categoria}" if categoria else ""),
-              f"Invoice link: (a IA preenche quando a invoice sair)    Price: {('$%.2f' % float(preco)) if preco not in (None, '') else '—'}",
-              "Security deposit: —    Price: —"]
+              "Invoice link: (a IA preenche quando a invoice sair)",
+              f"Price: {('$%.2f' % float(preco)) if preco not in (None, '') else '—'}",
+              "",
+              "Security deposit: —",
+              "Price: —"]
     if extra:
         linhas += ["", str(extra).strip()]
     if por:
