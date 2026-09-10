@@ -95,6 +95,7 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
     </div>
     {a.status === 'PROPOSED' && a.policy !== 'BLOCKED' && <div className="row">
       {can('MANAGER') && <button className="btn primary sm" disabled={!!busy || incompleta} title={incompleta ? 'Proposta incompleta: peça à IA os dados que faltam' : ''} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : (a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver') ? 'Aprovar e enviar' : 'Aprovar'}</button>}
+      {can('OPERATOR') && incompleta && <button className="btn sm" disabled={!!busy} title="O painel acha ou cria o item, resolve o cliente e completa a proposta" onClick={async () => { setBusy('a'); try { const r = await api.post<{ ok: boolean; problemas: string[]; notas: string[] }>(`/ai/actions/${a.id}/complete`); toast(r.ok ? `Completada.${r.notas.length ? ' ' + r.notas.join(' ') : ''} Agora dá para aprovar.` : `Ainda falta: ${r.problemas.join('; ')}`, r.ok ? 'ok' : 'crit'); onChange?.() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) } }}>{busy === 'a' ? <span className="spin" /> : '⚙ Completar agora'}</button>}
       {can('OPERATOR') && <button className="btn sm" disabled={!!busy} onClick={() => decide('reject')}>{busy === 'r' ? <span className="spin" /> : 'Rejeitar'}</button>}
     </div>}
     {a.policy === 'BLOCKED' && <Chip tone="crit">bloqueada por política</Chip>}

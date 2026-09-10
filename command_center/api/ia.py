@@ -475,6 +475,29 @@ def action_get(aid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     return a
 
 
+@r.post("/actions/{aid}/complete")
+def action_complete(aid: int, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Proposta incompleta: o painel tenta completar sozinho (cliente pelo espelho/QBO, item pelo
+    catálogo ou criado com o valor), sem nova rodada do agente."""
+    from command_center.api import acoes
+    a = um(con, "SELECT * FROM ai_actions WHERE id=?", (aid,))
+    if not a or a["status"] != "PROPOSED":
+        raise HTTPException(404 if not a else 409, "Action not found." if not a else f"Action is already {a['status']}.")
+    p = json.loads(a["payload"] or "{}")
+    args = p.get("args")
+    if not isinstance(args, dict):
+        raise HTTPException(400, "Sem argumentos para completar.")
+    notas = []
+    c = um(con, "SELECT output FROM ai_commands WHERE id=?", (a["command_id"],)) if a["command_id"] else None
+    args2, problemas = acoes.normalizar(a["action"], args, (c or {}).get("output") or "", _buscar_item_qbo, _buscar_cliente_qbo, con, p.get("alvo"), _criar_item_qbo, notas)
+    p.update(args=args2, problemas=problemas or None, assinatura=acoes.assinatura(a["action"], args2, p.get("alvo")))
+    atualizar(con, "ai_actions", aid, payload=json.dumps(p, ensure_ascii=False),
+              reason=("incompleta: " + "; ".join(problemas)) if problemas else "completada pelo painel" + (" — " + "; ".join(notas) if notas else ""))
+    auditar(con, "action.complete", f"user:{u['id']}", user_id=u["id"], entity_type="ai_action", entity_id=aid,
+            detail={"problemas": problemas, "notas": notas[:5]}, ip=auth._ip(request))
+    return {"ok": not problemas, "problemas": problemas, "notas": notas}
+
+
 class DecisaoIn(BaseModel):
     comment: str | None = None
 

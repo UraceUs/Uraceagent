@@ -532,3 +532,32 @@ def test_continuar_sem_citar_o_piloto_usa_o_ultimo_da_conversa(cli):
     finally:
         con.close()
     ia.RUNNER = runner_falso
+
+
+def test_completar_proposta_incompleta_pelo_painel(cli, monkeypatch):
+    """Proposta antiga 'sem item': o botão Completar acha/cria o item e resolve o cliente sem nova rodada da IA."""
+    from command_center.db import conectar, inserir
+    import command_center.providers as prov
+    con = conectar()
+    try:
+        cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE", output="Invoice de $500.")
+        aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL", status="PROPOSED",
+                      payload=json.dumps({"alvo": "Nicolas Pera", "args": {"cliente_id": "696", "email": "peranicolas2106@gmail.com", "vence_em": "2026-09-13",
+                                                                             "linhas": [{"item_id": "", "quantidade": 1, "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pera - 2026-09-13"}]},
+                                          "problemas": ["linha sem item do QuickBooks"]}), reason="incompleta: linha sem item do QuickBooks")
+        inserir(con, "approvals", action_id=aid); con.commit()
+    finally:
+        con.close()
+    criados = []
+
+    class Qbo:
+        def criar_item_sistema(self, nome, preco=0, descricao=None): criados.append((nome, preco)); return {"id": "88", "nome": nome}
+        def qbo_itens_buscar(self, termos=None, texto=None): return [{"found": False, "itens": []}]
+    monkeypatch.setattr(prov, "modulo", lambda s: Qbo())
+    h = entra(cli, "admin@urace.us")
+    r = cli.post(f"{B}/actions/{aid}/complete", headers=h)
+    assert r.status_code == 200 and r.json()["ok"] and criados == [("Urace Daily", 500.0)]
+    a = cli.get(f"{B}/actions/{aid}").json()
+    p = json.loads(a["payload"])
+    assert p["args"]["linhas"][0]["item_id"] == "88" and not p.get("problemas") and a["reason"].startswith("completada pelo painel")
+    assert cli.post(f"{B}/actions/{aid}/complete", headers=entra(cli, "viewer@urace.us")).status_code == 403
