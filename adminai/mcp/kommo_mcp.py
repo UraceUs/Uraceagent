@@ -276,9 +276,53 @@ def canal_da_origem(origem):
 TIPOS_CHAT = ("incoming_chat_message", "outgoing_chat_message")
 
 
+_talks = {}
+TIPOS_TALK = ("conversation_answered", "talk_created", "talk_closed", "conversation_closed", "talk_opened")
+
+
+def talk(talk_id):
+    """Conversa (talk) do Kommo: lead, contato, canal (origin), horas. Com cache."""
+    tid = str(talk_id)
+    if tid not in _talks:
+        r = _req(f"/talks/{int(tid)}") or {}
+        _talks[tid] = {"id": tid, "lead_id": str(r.get("entity_id")) if r.get("entity_type") in ("lead", "leads") and r.get("entity_id") else None,
+                       "contato_id": str(r.get("contact_id")) if r.get("contact_id") else None,
+                       "origem": r.get("origin"), "canal": canal_da_origem(r.get("origin")),
+                       "lida": r.get("is_read"), "em_trabalho": r.get("is_in_work"),
+                       "criada_em": _quando(r.get("created_at")), "atualizada_em": _quando(r.get("updated_at"))}
+    return _talks[tid]
+
+
+def _lead_do_contato(contato_id):
+    """Lead mais recente ligado a um contato (para conversa que só aponta o contato)."""
+    r = _req(f"/contacts/{int(contato_id)}", params={"with": "leads"}) or {}
+    leads = ((r.get("_embedded") or {}).get("leads") or [])
+    return str(leads[-1]["id"]) if leads else None
+
+
 def _evento_chat(ev):
-    """Evento cru → registro de chat, ou None se não for mensagem de chat."""
+    """Evento cru → registro de chat, ou None se não for mensagem de chat.
+    Nesta conta (10/09) a conversa aparece como entidade 'talk' (conversation_answered):
+    o talk diz o lead e o canal."""
     tipo = str(ev.get("type") or "")
+    if ev.get("entity_type") == "talk" or tipo in TIPOS_TALK:
+        try:
+            t = talk(ev.get("entity_id"))
+        except Exception:
+            return None
+        lead = t["lead_id"]
+        if not lead and t["contato_id"]:
+            try:
+                lead = _lead_do_contato(t["contato_id"])
+            except Exception:
+                lead = None
+        if not lead:
+            return None
+        # "answered" = nós respondemos; "created/opened" = o cliente falou
+        entrada = tipo in ("talk_created", "talk_opened")
+        return {"id": str(ev.get("id")), "lead_id": lead, "direcao": "entrada" if entrada else "saida",
+                "canal": t["canal"], "origem": t["origem"], "tipo": tipo, "talk_id": t["id"], "mensagem_id": None,
+                "em": _quando(ev.get("created_at"))}
     if "chat_message" not in tipo and "message" not in tipo:
         return None
     if ev.get("entity_type") not in (None, "lead", "leads"):
@@ -301,9 +345,9 @@ def _evento_chat(ev):
 def _filtros_de_chat(desde):
     """Os formatos de filtro que a API v4 aceita variam entre contas/versões; tenta na ordem."""
     return [
-        ("tipo[]", {"filter[type][]": TIPOS_CHAT, "filter[entity][]": "lead", "filter[created_at][from]": desde}),
+        ("tipo[]", {"filter[type][]": TIPOS_CHAT + TIPOS_TALK, "filter[created_at][from]": desde}),
         ("tipo[0]", {"filter[type][0]": TIPOS_CHAT[0], "filter[type][1]": TIPOS_CHAT[1], "filter[created_at][from]": desde}),
-        ("tipo,csv", {"filter[type]": ",".join(TIPOS_CHAT), "filter[created_at][from]": desde}),
+        ("tipo,csv", {"filter[type]": ",".join(TIPOS_CHAT + TIPOS_TALK), "filter[created_at][from]": desde}),
         ("sem tipo", {"filter[created_at][from]": desde}),
     ]
 

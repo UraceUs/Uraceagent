@@ -455,3 +455,25 @@ def test_eventos_de_chat_viram_conversas_com_canal(cli, monkeypatch):
         assert um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=?", (l["id"],))["n"] == 2
     finally:
         con.close()
+
+
+def test_conversa_como_talk_vira_registro_de_chat(monkeypatch):
+    """Caso real de 10/09: a conta não emite incoming_chat_message; o chat aparece como
+    evento em entidade 'talk' (conversation_answered). O talk diz lead e canal."""
+    import kommo_mcp as k
+    k._talks.clear()
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com"); monkeypatch.setenv("KOMMO_TOKEN", "t")
+    chamadas = []
+    def _req(c, m="GET", corpo=None, params=None):
+        chamadas.append(c)
+        if c == "/talks/8967":
+            return {"talk_id": 8967, "contact_id": 6549506, "entity_id": 23899732, "entity_type": "lead",
+                    "origin": "com.amocrm.amocrmwa", "is_read": True, "created_at": 1789000000, "updated_at": 1789100000}
+        return {}
+    monkeypatch.setattr(k, "_req", _req)
+    ev = {"id": "e9", "type": "conversation_answered", "entity_type": "talk", "entity_id": 8967, "created_at": 1789100000, "value_after": []}
+    r = k._evento_chat(ev)
+    assert r["lead_id"] == "23899732" and r["canal"] == "WhatsApp" and r["direcao"] == "saida" and r["talk_id"] == "8967"
+    k._evento_chat(dict(ev, id="e10"))
+    assert chamadas.count("/talks/8967") == 1                      # cache: um talk, uma chamada
+    assert k._evento_chat({"type": "incoming_mail", "entity_type": "contact", "entity_id": 1}) is None
