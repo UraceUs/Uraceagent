@@ -138,7 +138,10 @@ SUFIXO = (
     "ACAO: <nome_da_ferramenta_mcp> | <alvo (pessoa, gid, e-mail)> | <resumo curto> | <JSON com os argumentos EXATOS da ferramenta>\n"
     "O JSON é obrigatório e precisa ter os mesmos nomes de parâmetro da ferramenta (ex.: "
     '{"templateId":"…","nome":"…","email":"…","idade_confirmada":true,"nome_email_conferidos":true,"servico":"…"}). '
-    "Quem aprovar no painel executa exatamente esse JSON. Se não houver ação nenhuma, escreva: ACAO: nenhuma")
+    "Quem aprovar no painel executa exatamente esse JSON. Se não houver ação nenhuma, escreva: ACAO: nenhuma"
+    "\nInvoice (qbo_criar_e_enviar_invoice / qbo_criar_invoice) SEMPRE assim: "
+    '{"cliente_id":"<id numérico do RESPONSÁVEL no QBO, via qbo_clientes_buscar>","linhas":[{"item_id":"<id numérico via qbo_itens_buscar>","quantidade":1,"unitario":<valor em dólares, nunca 0>,"descricao":"<serviço - piloto - data>"}],"vence_em":"AAAA-MM-DD","memo":"…","email":"…"}. '
+    "O valor que o dono disse manda sobre qualquer outro. Nunca proponha de novo uma ação que já foi aprovada ou feita hoje.")
 
 
 # ------------------------------------------------- ações propostas
@@ -168,13 +171,28 @@ def _politica(con, acao):
     return p["policy"] if p else "REQUIRES_CONFIRMATION"
 
 
-def extrair_acoes(con, command_id, texto):
+def _buscar_item_qbo(nome):
+    """Item do catálogo do QBO pelo nome (leitura). Sem QBO, lista vazia."""
+    from command_center.providers import chamar
+    try:
+        r = chamar("quickbooks", "qbo_itens_buscar", termos=[nome])
+        return [{"id": i.get("id"), "nome": i.get("nome")} for i in (r[0].get("itens") if r else [])]
+    except Exception:
+        return []
+
+
+def extrair_acoes(con, command_id, texto, notas=None):
     """Lê as ações que o agente declarou. Três fontes, na ordem:
     1. linhas `ACAO: ferramenta | alvo | resumo` (o protocolo pedido no SUFIXO)
     2. JSON de simulação dos MCP (`"teria_feito": ...`), se o agente o ecoou
     3. prosa ("teria enviado a waiver para…") — último recurso, marcado como tal
+    Antes de gravar: argumentos normalizados (acoes.py), item do QBO resolvido,
+    ação igual já aprovada não é reproposta, pendente igual é substituída.
+    `notas` (lista) recebe avisos para o dono ("já aprovada em #11").
     """
+    from command_center.api import acoes
     achadas, vistos = [], set()
+    notas = notas if notas is not None else []
 
     def registra(nome, descricao, fonte, alvo=None, args=None):
         chave = (nome, (alvo or descricao)[:80])
@@ -182,14 +200,28 @@ def extrair_acoes(con, command_id, texto):
             return
         vistos.add(chave)
         pol = _politica(con, nome)
+        problemas = []
+        if isinstance(args, dict):
+            args, problemas = acoes.normalizar(nome, args, texto, _buscar_item_qbo)
+        assin = acoes.assinatura(nome, args, alvo)
+        estado, antiga = acoes.ja_decidida(con, assin)
+        if estado == "feita":
+            notas.append(f"{nome} → {alvo or descricao[:60]}: já aprovada/feita em #{antiga['id']} (comando #{antiga['command_id']}); não proposta de novo.")
+            achadas.append({"id": antiga["id"], "action": nome, "policy": pol, "alvo": alvo, "descricao": descricao[:200], "repetida": True})
+            return
         aid = inserir(con, "ai_actions", command_id=command_id, action=nome,
                       system=nome.split("_")[0] if "_" in nome else None, policy=pol,
                       status="BLOCKED" if pol == "BLOCKED" else "PROPOSED",
-                      payload=json.dumps({"alvo": alvo, "descricao": descricao[:500], "fonte": fonte, "args": args}, ensure_ascii=False),
-                      reason="proposta pelo agente" + ("" if args else " (sem argumentos estruturados)"))
+                      payload=json.dumps({"alvo": alvo, "descricao": descricao[:500], "fonte": fonte, "args": args,
+                                          "assinatura": assin, "problemas": problemas or None}, ensure_ascii=False),
+                      reason=("incompleta: " + "; ".join(problemas)) if problemas else
+                             ("proposta pelo agente" + ("" if args else " (sem argumentos estruturados)")))
         if pol == "REQUIRES_APPROVAL":
             inserir(con, "approvals", action_id=aid)
-        achadas.append({"id": aid, "action": nome, "policy": pol, "alvo": alvo, "descricao": descricao[:200]})
+        if estado == "pendente" and antiga["command_id"] != command_id:
+            acoes.substituir(con, antiga["id"], aid)
+            notas.append(f"{nome} → {alvo or descricao[:60]}: substitui a proposta #{antiga['id']} (instrução mais recente).")
+        achadas.append({"id": aid, "action": nome, "policy": pol, "alvo": alvo, "descricao": descricao[:200], "problemas": problemas})
 
     for linha in (texto or "").split("\n"):
         l = linha.strip()
@@ -239,12 +271,27 @@ def _executa(command_id, texto, session_key, user_id):
         if ok:
             # ações ANTES do DONE: quem lê o comando no instante em que ele
             # termina já vê as propostas (a tela faz polling nesse status)
-            acoes = extrair_acoes(con, command_id, saida)
+            from command_center.api import acoes as _ac
+            notas = []
+            lista = extrair_acoes(con, command_id, saida, notas)
+            incompletas = [a for a in lista if a.get("problemas")]
+            if incompletas:                               # uma chance de corrigir, na mesma conversa
+                pedido = "".join(_ac.pedido_de_correcao(a["action"], a["problemas"]) for a in incompletas[:3])
+                with _PARALELO:
+                    ok2, saida2, _ = RUNNER(pedido, session_key)
+                if ok2 and re.search(r"^ACAO:", saida2 or "", re.M):
+                    for a in incompletas:
+                        atualizar(con, "ai_actions", a["id"], status="REJECTED", finished_at=agora(), result="substituída pela correção da própria IA")
+                        con.execute("UPDATE approvals SET decided_at=?, decision='REJECTED', comment='corrigida' WHERE action_id=? AND decided_at IS NULL", (agora(), a["id"]))
+                    lista = [a for a in lista if not a.get("problemas")] + extrair_acoes(con, command_id, saida2, notas)
+                    saida = saida + "\n" + "\n".join(l for l in saida2.split("\n") if l.strip().upper().startswith("ACAO:"))
+            if notas:
+                saida = saida + "\n\n" + "\n".join("(Command Center) " + n for n in notas)
             from command_center.api import motor
             auto = motor.executar_safe(con, command_id, user_id)
             atualizar(con, "ai_commands", command_id, status="DONE", finished_at=agora(), output=saida)
             auditar(con, "ai.command.done", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",
-                    entity_id=command_id, detail={"acoes_propostas": len(acoes), "executadas_safe": auto})
+                    entity_id=command_id, detail={"acoes_propostas": len(lista), "executadas_safe": auto, "corrigidas": len(incompletas), "notas": notas[:5]})
         else:
             atualizar(con, "ai_commands", command_id, status="FAILED", finished_at=agora(), error=erro)
             auditar(con, "ai.command.failed", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",
@@ -271,8 +318,8 @@ def command_create(dados: ComandoIn, request: Request, u=Depends(auth.exige("OPE
     texto = (dados.text or "").strip()
     if not texto or len(texto) > 4000:
         raise HTTPException(400, "Command must be between 1 and 4000 characters.")
-    from command_center.api import motor
-    texto = texto + motor.aprendizados(con)
+    from command_center.api import acoes, motor
+    texto = texto + motor.aprendizados(con) + acoes.estado_do_dia(con, u["id"])
     session_key = f"agent:{AGENTE}:web-{u['id']}-{date.today().isoformat()}"
     cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, session_key=session_key)
     auditar(con, "ai.command", f"user:{u['id']}", user_id=u["id"], entity_type="ai_command",

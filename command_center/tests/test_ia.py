@@ -258,3 +258,70 @@ def test_openclaw_descoberta_e_mensagem():
         os.environ.pop("OPENCLAW_BIN", None)
         if antes:
             os.environ["OPENCLAW_BIN"] = antes
+
+
+# ------------------------------------------ 10/09: invoice com valor certo, sem repetir o decidido
+def test_normaliza_invoice_aliases_item_por_nome_e_valor_do_texto():
+    from command_center.api import acoes
+    buscar = lambda nome: [{"id": "31", "nome": "Arrive and Drive daily"}] if "arrive" in nome.lower() else []
+    args, prob = acoes.normalizar_invoice({"cliente": "77", "itens": [{"item": "Arrive and Drive daily", "valor": "$500", "qty": 1, "desc": "David Pera 13/09"}], "due": "2026-09-13"}, "", buscar)
+    assert prob == [] and args["cliente_id"] == "77" and args["vence_em"] == "2026-09-13"
+    assert args["linhas"][0] == {"item_id": "31", "quantidade": 1, "unitario": 500.0, "descricao": "David Pera 13/09"}
+    # valor zerado + UM valor no texto da IA → o texto manda
+    args, prob = acoes.normalizar_invoice({"cliente_id": 77, "linhas": [{"item_id": "31", "unitario": 0, "descricao": "x"}]}, "Invoice de $500 no nome do Nicolas.", buscar)
+    assert prob == [] and args["linhas"][0]["unitario"] == 500.0 and args["linhas"][0]["_valor_do_texto"] is True
+    # dois valores no texto: não adivinha → problema; item não achado → problema
+    args, prob = acoes.normalizar_invoice({"cliente_id": "77", "linhas": [{"item": "Coisa inexistente", "unitario": 0}]}, "Pode ser $500 ou $719.", buscar)
+    assert any("Coisa inexistente" in p for p in prob) and any("zerado" in p for p in prob)
+    assert acoes.valores_no_texto("Total: $1,250.00 e $500") == [1250.0, 500.0]
+    assert acoes.assinatura("asana_criar_tarefa", {"nome": "David Pera_Urace Daily [1/1]", "vence_em": "2026-09-13"}) == "asana_criar_tarefa|david pera_urace daily [1/1]|2026-09-13"
+
+
+_TAREFA = 'ACAO: asana_criar_do_modelo | David Pera | serviço domingo | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pera_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}'
+_INVOICE_OK = 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"Using Own Kart - David Pera - 2026-09-13"}],"vence_em":"2026-09-13"}'
+
+
+def test_nao_repete_acao_feita_e_substitui_pendente(cli):
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, "Vou criar a tarefa e a invoice de $500.\n" + _TAREFA + "\n" + _INVOICE_OK, None)
+    c1 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera domingo, mesmo esquema"}).json()["id"])
+    a1 = {a["action"]: a for a in c1["actions"]}
+    assert a1["asana_criar_do_modelo"]["status"] == "PROPOSED" and a1["qbo_criar_e_enviar_invoice"]["status"] == "PROPOSED"
+    # o dono muda algo e manda de novo: as pendentes antigas são substituídas, não duplicadas
+    c2 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "waiver vale um ano, mesmo valor"}).json()["id"])
+    assert "AÇÕES JÁ PROPOSTAS HOJE" in c2["text"] and "#%d" % a1["asana_criar_do_modelo"]["id"] in c2["text"]
+    a2 = {a["action"]: a for a in c2["actions"]}
+    assert all(a["status"] == "PROPOSED" for a in a2.values())
+    velha = cli.get(f"{B}/commands/{c1['id']}").json()["actions"]
+    assert all(a["status"] == "REJECTED" and "substituída" in (a["result"] or "") for a in velha)
+    assert "substitui a proposta" in c2["output"]
+    # a tarefa foi aprovada e executada: não volta a ser proposta
+    con = conectar(); con.execute("UPDATE ai_actions SET status='DONE' WHERE id=?", (a2["asana_criar_do_modelo"]["id"],)); con.commit(); con.close()
+    c3 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "e aí?"}).json()["id"])
+    acoes3 = [a["action"] for a in c3["actions"]]
+    assert "asana_criar_do_modelo" not in acoes3 and "qbo_criar_e_enviar_invoice" in acoes3
+    assert "já aprovada/feita em #%d" % a2["asana_criar_do_modelo"]["id"] in c3["output"]
+    assert "FEITA" in c3["text"]
+
+
+def test_invoice_zerada_ganha_uma_correcao_da_ia(cli, monkeypatch):
+    h = entra(cli, "admin@urace.us")
+    chamadas = []
+
+    def runner(texto, sk):
+        chamadas.append(texto)
+        if "[Command Center] A ação qbo_criar_e_enviar_invoice" in texto:
+            return True, 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"corrigida"}],"vence_em":"2026-09-20"}', None
+        return True, ('Mesmo esquema: pode ser $500 ou $719, depende.\n'
+                      'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice | {"cliente_id":"77","itens":[{"item":"Arrive and Drive daily - David","valor":0}],"vence_em":"2026-09-20"}'), None
+    ia.RUNNER = runner
+    monkeypatch.setattr(ia, "_buscar_item_qbo", lambda nome: [])
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "invoice do David pro dia 20"}).json()["id"], timeout=8)
+    assert len(chamadas) == 2 and "valor unitário zerado" in chamadas[1]
+    acs = c["actions"]
+    boa = [a for a in acs if a["status"] == "PROPOSED"]; ruim = [a for a in acs if a["status"] == "REJECTED"]
+    assert len(boa) == 1 and len(ruim) == 1 and "correção" in ruim[0]["result"]
+    import json as _j
+    p = _j.loads(boa[0]["payload"])
+    assert p["args"]["linhas"][0]["unitario"] == 500 and not p.get("problemas") and "unitario" in c["output"]
+    ia.RUNNER = runner_falso

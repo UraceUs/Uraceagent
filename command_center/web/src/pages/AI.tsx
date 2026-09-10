@@ -11,13 +11,16 @@ import { Md } from '../components/Md'
 
 type Args = Record<string, unknown>
 function Previa({ a }: { a: AiAction }) {
-  const p = safeJson(a.payload) as { args?: Args; alvo?: string; descricao?: string } | null
+  const p = safeJson(a.payload) as { args?: Args; alvo?: string; descricao?: string; problemas?: string[] | null } | null
   const args = (p && typeof p === 'object' && p.args && typeof p.args === 'object') ? p.args as Args : null
+  const problemas = (p && Array.isArray(p.problemas)) ? p.problemas : []
   if (!args) return <div className="small" style={{ color: 'var(--warn)', marginTop: 6 }}>Sem os dados exatos: a IA descreveu a ação mas não deu os campos. Aprovar vai falhar com esse motivo. Peça no AI Command: "refaça com os argumentos".</div>
   if (a.action.startsWith('qbo_') && Array.isArray(args.linhas)) {
-    const linhas = args.linhas as { item_id?: string; quantidade?: number; unitario?: number; descricao?: string }[]
+    const linhas = args.linhas as { item_id?: string; quantidade?: number; unitario?: number; descricao?: string; _valor_do_texto?: boolean }[]
     const total = linhas.reduce((t, l) => t + (Number(l.quantidade ?? 1) * Number(l.unitario ?? 0)), 0)
     return <div className="previa"><div className="cond small muted">Prévia da invoice · {a.action === 'qbo_criar_e_enviar_invoice' ? 'aprovar = criar e ENVIAR' : a.action === 'qbo_enviar_invoice' ? 'aprovar = ENVIAR' : 'aprovar = criar (não envia)'}</div>
+      {problemas.length > 0 && <div className="banner crit" style={{ margin: '6px 0' }}><b>Proposta incompleta, não dá para aprovar:</b> {problemas.join('; ')}. Diga no AI Command o que falta (ex.: "o valor é $500") e ela refaz.</div>}
+      {linhas.some(l => l._valor_do_texto) && <div className="small muted">Valor unitário tirado do que a IA escreveu no texto.</div>}
       <dl className="dl"><dt>Cliente (QBO)</dt><dd>{String(args.cliente_id ?? '')}{args.email ? <span className="muted"> · {String(args.email)}</span> : null}</dd>{args.vence_em ? <><dt>Vence</dt><dd className="mono">{String(args.vence_em)}</dd></> : null}{args.memo ? <><dt>Memo</dt><dd className="small">{String(args.memo)}</dd></> : null}</dl>
       <table className="tbl" style={{ marginTop: 6 }}><thead><tr><th>Item</th><th>Descrição</th><th>Qtd</th><th>Unitário</th><th>Total</th></tr></thead><tbody>
         {linhas.map((l, i) => <tr key={i}><td className="mono">{l.item_id}</td><td className="small">{l.descricao}</td><td className="mono">{l.quantidade ?? 1}</td><td className="mono">{money(Number(l.unitario ?? 0))}</td><td className="mono">{money(Number(l.quantidade ?? 1) * Number(l.unitario ?? 0))}</td></tr>)}
@@ -35,6 +38,7 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
   const toast = useToast()
   const [busy, setBusy] = useState<'a' | 'r' | null>(null)
   const payload = safeJson(a.payload)
+  const incompleta = !!(payload && typeof payload === 'object' && Array.isArray((payload as { problemas?: unknown }).problemas) && ((payload as { problemas: unknown[] }).problemas).length)
   async function decide(kind: 'approve' | 'reject') {
     const comment = kind === 'reject' ? (window.prompt('Motivo (opcional):') ?? undefined) : undefined
     setBusy(kind === 'approve' ? 'a' : 'r')
@@ -51,7 +55,7 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
       <div className="small muted" style={{ marginTop: 4 }}>{fmtDateTime(a.created_at)}{a.command_id && <> · comando #{a.command_id}</>}</div>
     </div>
     {a.status === 'PROPOSED' && a.policy !== 'BLOCKED' && <div className="row">
-      {can('MANAGER') && <button className="btn primary sm" disabled={!!busy} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : (a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver') ? 'Aprovar e enviar' : 'Aprovar'}</button>}
+      {can('MANAGER') && <button className="btn primary sm" disabled={!!busy || incompleta} title={incompleta ? 'Proposta incompleta: peça à IA os dados que faltam' : ''} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : (a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver') ? 'Aprovar e enviar' : 'Aprovar'}</button>}
       {can('OPERATOR') && <button className="btn sm" disabled={!!busy} onClick={() => decide('reject')}>{busy === 'r' ? <span className="spin" /> : 'Rejeitar'}</button>}
     </div>}
     {a.policy === 'BLOCKED' && <Chip tone="crit">bloqueada por política</Chip>}

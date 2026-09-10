@@ -58,3 +58,4 @@ X?"*. Agora dá.
 - [[D-2026-09-09 - Tornar Pro no card, corridas em calendario do Asana com o modelo New Race]] — botão Tornar Pro; equipamento só no card; calendário só de corridas (coluna RACES); convite = piloto dentro da corrida até confirmar; nova corrida do modelo New Race
 - [[D-2026-09-09 - Unir clientes a mao e puxar o historico completo do Asana]] — unir dois cards à mão com busca e sugestões; histórico completo do quadro sem teto, cada serviço na pessoa certa
 - [[D-2026-09-09 - Design para cognicao rapida, cada link no seu item]] — regra de design do sistema: link ao lado do item, cabeçalho que responde quem é, cinco números, linha do tempo por mês, contato limpo na origem
+- [[D-2026-09-10 - Proposta da IA nao se repete e o valor do dono manda]] — argumentos normalizados, invoice nunca $0 sem aviso, ação aprovada não volta, pendente é substituída, estado do dia no comando
