@@ -68,3 +68,7 @@ com parâmetro errado e mandou a invoice com `<id de …>`. Ficou:
     QuickBooks, o painel grava o link e o valor na linha "Invoice link:"
     da descrição da tarefa do mesmo comando (ou do cliente na mesma data).
 12. Palavreado: serviço novo é "criar", nunca "recriar".
+13. Descrição no formato ditado pelo dono (um campo por linha, `Price:`
+    abaixo de `Invoice link:` e de `Security deposit:`). O **security
+    deposit** segue o mesmo procedimento: a invoice de depósito grava o
+    link e o valor na linha `Security deposit:`.

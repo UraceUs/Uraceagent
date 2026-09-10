@@ -11,6 +11,7 @@
   nesta chamada: aprovação humana é a autorização.
 """
 import json
+import re
 import os
 import threading
 
@@ -296,8 +297,10 @@ def executar_acao(aid, user_id):
                 gid = _tarefa_da_invoice(con, a, args)
                 if gid:
                     from command_center.providers import modulo
-                    modulo("asana").preencher_invoice_na_tarefa(gid, res["link"], res.get("total"))
-                    auditar(con, "asana.invoice_link", "system", entity_type="ai_action", entity_id=aid, detail={"gid": gid, "link": res["link"]})
+                    texto_inv = " ".join(str(x) for x in [args.get("memo")] + [l.get("descricao") for l in (args.get("linhas") or []) if isinstance(l, dict)] if x).lower()
+                    deposito = bool(re.search(r"deposit|dep[oó]sito|cau[çc][ãa]o", texto_inv))
+                    modulo("asana").preencher_invoice_na_tarefa(gid, res["link"], res.get("total"), deposito=deposito)
+                    auditar(con, "asana.invoice_link", "system", entity_type="ai_action", entity_id=aid, detail={"gid": gid, "link": res["link"], "campo": "Security deposit" if deposito else "Invoice link"})
             except Exception as e:
                 auditar(con, "asana.invoice_link.failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
     except NaoConectado as e:

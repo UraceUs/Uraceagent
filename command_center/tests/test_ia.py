@@ -420,7 +420,7 @@ def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, mo
     import command_center.providers as prov
 
     class As:
-        def preencher_invoice_na_tarefa(self, gid, link, valor=None): preenchidos.append((gid, link, valor)); return {"aplicado": True}
+        def preencher_invoice_na_tarefa(self, gid, link, valor=None, deposito=False): preenchidos.append((gid, link, valor, deposito)); return {"aplicado": True}
     monkeypatch.setattr(prov, "modulo", lambda s: As())
     monkeypatch.setattr(prov, "chamar", lambda sistema, acao, **a: {"id": "1042", "link": "https://qbo.intuit.com/app/invoice?txnId=1042", "total": 500.0, "enviado": True})
     motor.executar_acao(aid, 1)
@@ -430,4 +430,14 @@ def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, mo
         assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='asana.invoice_link'") is not None
     finally:
         con.close()
-    assert preenchidos == [("999001", "https://qbo.intuit.com/app/invoice?txnId=1042", 500.0)]
+    assert preenchidos == [("999001", "https://qbo.intuit.com/app/invoice?txnId=1042", 500.0, False)]
+    # security deposit: mesmo procedimento, na linha 'Security deposit:'
+    con = conectar()
+    try:
+        aid2 = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL", status="APPROVED",
+                       payload=json.dumps({"args": {"cliente_id": "696", "linhas": [{"item_id": "40", "quantidade": 1, "unitario": 400, "descricao": "Security deposit - David Pera"}], "vence_em": "2026-09-13"}}))
+        con.commit()
+    finally:
+        con.close()
+    motor.executar_acao(aid2, 1)
+    assert preenchidos[-1] == ("999001", "https://qbo.intuit.com/app/invoice?txnId=1042", 500.0, True)

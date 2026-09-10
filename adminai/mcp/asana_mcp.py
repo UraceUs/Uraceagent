@@ -377,21 +377,24 @@ def _definir_campo_enum(gid, nome_campo, nome_opcao):
     raise ErroFerramenta(f"campo '{nome_campo}' não existe nesta tarefa")
 
 
-def preencher_invoice_na_tarefa(gid, link, valor=None):
+def preencher_invoice_na_tarefa(gid, link, valor=None, deposito=False):
     """Porta do Command Center (não é ferramenta do agente): depois da invoice sair do
-    QuickBooks, grava o link (e o valor) na linha 'Invoice link:' da descrição."""
+    QuickBooks, grava o link (e o valor) na linha 'Invoice link:' da descrição — ou na
+    linha 'Security deposit:' quando a invoice é o depósito (mesmo procedimento, dono 10/09)."""
     t = _ler_tarefa(gid)
     _recusar_se_protegida(t, "editar")
     notas = t.get("notes") or ""
-    linha = f"Invoice link: {link}"
-    if re.search(r"(?im)^Invoice link:.*$", notas):
-        notas = re.sub(r"(?im)^Invoice link:.*$", linha, notas, count=1)
+    rotulo = "Security deposit" if deposito else "Invoice link"
+    linha = f"{rotulo}: {link}"
+    rx = re.compile(r"(?im)^" + re.escape(rotulo) + r":.*$")
+    if rx.search(notas):
+        notas = rx.sub(linha, notas, count=1)
         if valor is not None:                        # a linha 'Price:' logo abaixo recebe o valor real
-            notas = re.sub(r"(?im)^(Invoice link:.*\n)Price:.*$", lambda m: m.group(1) + f"Price: ${float(valor):,.2f}", notas, count=1)
+            notas = re.sub(r"(?im)^(" + re.escape(rotulo) + r":.*\n)Price:.*$", lambda m: m.group(1) + f"Price: ${float(valor):,.2f}", notas, count=1)
     else:
         notas = notas.rstrip() + "\n\n" + linha + (f"\nPrice: ${float(valor):,.2f}" if valor is not None else "")
     _req(f"/tasks/{gid}", "PUT", {"notes": notas})
-    return {"aplicado": True, "gid": gid, "invoice_link": link}
+    return {"aplicado": True, "gid": gid, "invoice_link": link, "campo": rotulo}
 
 
 def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None, campos=None):
