@@ -31,8 +31,44 @@ _ALIAS_TOPO = {
     "linhas": ("linhas", "itens", "items", "lines", "line"),
     "vence_em": ("vence_em", "due", "due_date", "duedate", "vencimento"),
     "email": ("email", "e_mail", "email_cobranca", "bill_email"),
-    "memo": ("memo", "observacao", "nota", "customer_memo"),
+    "memo": ("memo", "observacao", "nota", "customer_memo", "note_to_customer"),
+    "data_servico": ("data_servico", "data_do_servico", "service_date", "data", "dia_do_servico"),
+    "nota_privada": ("nota_privada", "private_note", "memo_on_statement"),
 }
+DIAS_ANTES = 2                      # vencimento da invoice = 2 dias antes do serviço (diretiva do dono)
+
+
+def _iso(d):
+    d = (d or "").strip()
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", d)
+    if m:
+        return d
+    m = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(\d{4})", d)
+    if m:
+        return f"{m.group(3)}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+    return None
+
+
+def _menos_dias(iso, n):
+    from datetime import date, timedelta
+    try:
+        return (date.fromisoformat(iso) - timedelta(days=n)).isoformat()
+    except ValueError:
+        return None
+
+
+def memo_invoice(produto=None, categoria=None, piloto=None, data_servico=None, descricao=None):
+    """Nota ao cliente e memo interno, sempre iguais: 'Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026'."""
+    partes = []
+    if produto:
+        partes.append(produto + (f" | {categoria}" if categoria else ""))
+    elif descricao:
+        partes.append(re.split(r"\s+-\s+\d{4}-\d{2}-\d{2}$", descricao.strip())[0])
+    if piloto and piloto not in " ".join(partes):
+        partes.append(piloto)
+    if data_servico:
+        partes.append(f"Service date: {_dbr_us(data_servico)}")
+    return " | ".join(partes)
 _RX_DINHEIRO = re.compile(r"(?<![\w.])\$\s?(\d{1,3}(?:[.,]\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)")
 
 
@@ -247,9 +283,50 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None,
             saida["cliente_id"] = str(cid).strip()
     else:
         saida["cliente_id"] = str(cid).strip()
-    for k in ("vence_em", "email", "memo"):
+    for k in ("vence_em", "email", "memo", "data_servico", "nota_privada"):
         if saida.get(k) is not None:
             saida[k] = str(saida[k])
+    # data do serviço: dita, ou a data da tarefa do cliente que bate com o vencimento que o agente mandou
+    servico = _iso(saida.get("data_servico"))
+    venc = _iso(saida.get("vence_em"))
+    if not servico and venc and con:
+        cid_esp = None
+        if saida.get("email"):
+            cli_ = um(con, "SELECT id FROM clients WHERE LOWER(email)=? OR LOWER(email_alt)=?", (saida["email"].lower(), saida["email"].lower()))
+            cid_esp = cli_["id"] if cli_ else None
+        if cid_esp is None and alvo:
+            from command_center.providers import identidade
+            pessoa_, _ = identidade.acha_pessoa(con, nome=alvo, piloto=alvo)
+            cid_esp = pessoa_["id"] if pessoa_ else None
+        if cid_esp and um(con, "SELECT 1 FROM tasks WHERE client_id=? AND due_on=?", (cid_esp, venc)):
+            servico = venc
+    if not servico and venc and not con:
+        servico = venc
+    if not servico:
+        for l in linhas:                              # última chance: a data no fim da descrição "… - 2026-09-13"
+            m = re.search(r"(\d{4}-\d{2}-\d{2})\s*$", l.get("descricao") or "")
+            if m:
+                servico = m.group(1); break
+    if servico:
+        saida["data_servico"] = servico
+        saida["vence_em"] = _menos_dias(servico, DIAS_ANTES) or saida.get("vence_em")
+    # nota ao cliente e memo interno: iguais, com produto, categoria, piloto e data do serviço
+    piloto_ = None
+    if alvo and con:
+        from command_center.providers import identidade
+        p_, _ = identidade.acha_pessoa(con, nome=alvo, piloto=alvo)
+        piloto_ = (p_ or {}).get("pilot_name") if p_ else None
+    desc0 = (linhas[0].get("descricao") if linhas else None) or ""
+    produto_, categoria_ = None, None
+    m = re.match(r"\s*([^|\-]+?)\s*[|/\-]\s*([^|\-]+?)\s*(?:[|\-]|$)", desc0)
+    if m and any(p in m.group(1).lower() for p in PRODUTOS_CONHECIDOS):
+        produto_, categoria_ = m.group(1).strip(), m.group(2).strip()
+        if categoria_ and (categoria_ == piloto_ or re.search(r"\d{4}", categoria_)):
+            categoria_ = None
+    memo_atual = (saida.get("memo") or "").strip()
+    if not memo_atual or (servico and _dbr_us(servico) not in memo_atual and servico not in memo_atual):
+        saida["memo"] = memo_invoice(produto_, categoria_, piloto_, servico, desc0) or memo_atual
+    saida["nota_privada"] = saida.get("memo")
     return saida, problemas
 
 

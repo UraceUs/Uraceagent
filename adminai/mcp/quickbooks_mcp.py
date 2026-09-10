@@ -383,14 +383,16 @@ LINHAS_SCHEMA = {"type": "array", "items": {"type": "object", "properties": {
 @srv.ferramenta("qbo_criar_invoice",
                 "Cria invoice para um cliente (id do QBO) com linhas [item_id, quantidade, unitario, descricao]. "
                 "'unitario' é o valor unitário da Rate Card; 'x 2 dias' é quantidade 2. NÃO envia. Com APLICAR=0 é simulação.",
-                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD"},
-                 "memo": {"type": "string"}, "email": {"type": "string"}}, ["cliente_id", "linhas"])
-def qbo_criar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None):
+                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD (2 dias antes do serviço)"},
+                 "memo": {"type": "string"}, "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
+def qbo_criar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None):
     corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
     if vence_em:
         corpo["DueDate"] = vence_em
     if memo:
-        corpo["CustomerMemo"] = {"value": memo[:1000]}
+        corpo["CustomerMemo"] = {"value": memo[:1000]}          # "Note to customer"
+    if nota_privada or memo:
+        corpo["PrivateNote"] = (nota_privada or memo)[:4000]     # "Memo on statement": igual à nota (dono, 10/09)
     if email:
         corpo["BillEmail"] = {"Address": email}
     total = sum(l["Amount"] for l in corpo["Line"])
@@ -432,14 +434,17 @@ def qbo_enviar_invoice(id, email=None):
 @srv.ferramenta("qbo_criar_e_enviar_invoice",
                 "Cria a invoice E envia por e-mail numa ação só. É a ação para propor quando o dono aprovar = enviar "
                 "(mensalidade do dia 1, diária, lead and follow). Exige aprovação humana no painel; com APLICAR=0 é simulação.",
-                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string"},
-                 "memo": {"type": "string"}, "email": {"type": "string"}}, ["cliente_id", "linhas"])
-def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None):
+                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD (2 dias antes do serviço)"},
+                 "memo": {"type": "string", "description": "Note to customer: produto | categoria | piloto | Service date: MM/DD/AAAA"},
+                 "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
+def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None):
     corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
     if vence_em:
         corpo["DueDate"] = vence_em
     if memo:
-        corpo["CustomerMemo"] = {"value": memo[:1000]}
+        corpo["CustomerMemo"] = {"value": memo[:1000]}          # "Note to customer"
+    if nota_privada or memo:
+        corpo["PrivateNote"] = (nota_privada or memo)[:4000]     # "Memo on statement": igual à nota (dono, 10/09)
     if email:
         corpo["BillEmail"] = {"Address": email}
     total = sum(l["Amount"] for l in corpo["Line"])

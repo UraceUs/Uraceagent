@@ -447,6 +447,7 @@ INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
 
 INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
   (8, 'global', 'Waiver assinada vale UM ANO a partir da assinatura (decisão de 31/08). Se o piloto tem waiver assinada há menos de um ano, NÃO pergunte e NÃO peça de novo; só peça quando não houver ou estiver vencida.', 'dono-2026-09-10'),
+  (10, 'global', 'Invoice de serviço: vencimento (due date) SEMPRE 2 dias antes da data do serviço (serviço dia 13 → vence dia 11). A nota ao cliente (Note to customer) e o memo interno (Memo on statement) são IGUAIS e trazem produto, categoria, piloto e a data do serviço, ex.: "Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026".', 'dono-2026-09-10'),
   (9, 'global', '"Mesmo esquema" / "mesma coisa da última vez" = repita o último serviço do piloto: mesmo produto, categoria e pista, mesmo valor da última invoice do responsável no QuickBooks, na coluna do dia pedido. Não pergunte o que o histórico já responde: crie a tarefa e proponha a invoice de uma vez, com os ids que vêm no CONTEXTO DO PAINEL.', 'dono-2026-09-10');
 
 -- catálogo do QuickBooks (espelho, só leitura): a IA recebe os ids no comando e o painel resolve item pelo nome

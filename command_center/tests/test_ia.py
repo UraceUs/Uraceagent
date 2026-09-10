@@ -266,7 +266,7 @@ def test_normaliza_invoice_aliases_item_por_nome_e_valor_do_texto():
     from command_center.api import acoes
     buscar = lambda nome: [{"id": "31", "nome": "Arrive and Drive daily"}] if "arrive" in nome.lower() else []
     args, prob = acoes.normalizar_invoice({"cliente": "77", "itens": [{"item": "Arrive and Drive daily", "valor": "$500", "qty": 1, "desc": "David Pera 13/09"}], "due": "2026-09-13"}, "", buscar)
-    assert prob == [] and args["cliente_id"] == "77" and args["vence_em"] == "2026-09-13"
+    assert prob == [] and args["cliente_id"] == "77" and args["data_servico"] == "2026-09-13" and args["vence_em"] == "2026-09-11"   # vence 2 dias antes do serviço
     assert args["linhas"][0] == {"item_id": "31", "quantidade": 1, "unitario": 500.0, "descricao": "David Pera 13/09"}
     # valor zerado + UM valor no texto da IA → o texto manda
     args, prob = acoes.normalizar_invoice({"cliente_id": 77, "linhas": [{"item_id": "31", "unitario": 0, "descricao": "x"}]}, "Invoice de $500 no nome do Nicolas.", buscar)
@@ -563,3 +563,26 @@ def test_completar_proposta_incompleta_pelo_painel(cli, monkeypatch):
     assert p["args"]["linhas"][0]["item_id"] and (criados == [] or p["args"]["linhas"][0]["item_id"] == "88")
     assert not p.get("problemas") and a["reason"].startswith("completada pelo painel")
     assert cli.post(f"{B}/actions/{aid}/complete", headers=entra(cli, "viewer@urace.us")).status_code == 403
+
+
+def test_invoice_vence_2_dias_antes_e_memo_com_data_do_servico(cli):
+    from command_center.api import acoes
+    from command_center.db import conectar, inserir, um
+    con = conectar()
+    try:
+        cid = um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")["id"]
+        inserir(con, "tasks", client_id=cid, title="David Pera_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="SUNDAY", status="open", due_on="2026-09-13")
+        con.commit()
+        # o agente manda o dia do serviço como vencimento: o painel entende (bate com a tarefa) e corrige
+        args, prob = acoes.normalizar_invoice({"cliente_id": "696", "email": "peranicolas2106@gmail.com", "vence_em": "2026-09-13",
+                                               "linhas": [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pera - 2026-09-13"}]},
+                                              "", None, None, con, "Nicolas Pera")
+        assert prob == [] and args["data_servico"] == "2026-09-13" and args["vence_em"] == "2026-09-11"
+        assert args["memo"] == "Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026" and args["nota_privada"] == args["memo"]
+        # com data_servico explícita e memo sem data: memo ganha a data; vencimento = -2
+        args, _ = acoes.normalizar_invoice({"cliente_id": "696", "data_servico": "09/20/2026", "memo": "Academy daily | Using Own Kart",
+                                            "linhas": [{"item_id": "31", "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pera"}]}, "", None, None, con, "Nicolas Pera")
+        assert args["vence_em"] == "2026-09-18" and "Service date: 09/20/2026" in args["memo"] and args["nota_privada"] == args["memo"]
+        assert acoes.memo_invoice("Urace Daily", "2 stroke", "Théo", "2026-10-03") == "Urace Daily | 2 stroke | Théo | Service date: 10/03/2026"
+    finally:
+        con.close()

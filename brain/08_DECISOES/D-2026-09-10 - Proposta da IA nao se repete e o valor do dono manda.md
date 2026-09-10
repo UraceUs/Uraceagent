@@ -93,3 +93,10 @@ aprovo, ele não me traz resultado."*
     **Automática** (eventos e tarefas que acordaram a IA); usuário comum
     vê só a própria. A memória do agente continua uma sessão por dia
     (carga do VPS), mas a tela é uma linha só.
+19. **Invoice bem montada, garantida pelo painel** (dono, 10/09, ao ver a
+    primeira invoice sair): vencimento **2 dias antes do serviço**
+    (diretiva antiga que a IA não aplicou), **nota ao cliente e memo
+    interno iguais** com produto, categoria, piloto e data do serviço
+    (`Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026`).
+    O painel calcula e preenche mesmo que o agente esqueça; a regra
+    também entrou na memória da IA (aprendizado 10).

@@ -141,6 +141,7 @@ SUFIXO = (
     "Quem aprovar no painel executa exatamente esse JSON. Se não houver ação nenhuma, escreva: ACAO: nenhuma"
     "\nInvoice (qbo_criar_e_enviar_invoice / qbo_criar_invoice) SEMPRE assim: "
     '{"cliente_id":"<id numérico do RESPONSÁVEL no QBO, via qbo_clientes_buscar>","linhas":[{"item_id":"<id numérico via qbo_itens_buscar>","quantidade":1,"unitario":<valor em dólares, nunca 0>,"descricao":"<serviço - piloto - data>"}],"vence_em":"AAAA-MM-DD","memo":"…","email":"…"}. '
+    "Inclua \"data_servico\":\"AAAA-MM-DD\" (o dia do treino/corrida): o vencimento é 2 dias antes e o painel calcula. "
     "O valor que o dono disse manda sobre qualquer outro. Nunca proponha de novo uma ação que já foi aprovada ou feita hoje. "
     "Consultas (buscar, ler, listar) você executa AGORA, durante a resposta — nunca as liste como ACAO. "
     "Serviço novo é uma tarefa NOVA no quadro com os dados do cliente (o histórico é só referência): diga 'criar', nunca 'recriar'. "
