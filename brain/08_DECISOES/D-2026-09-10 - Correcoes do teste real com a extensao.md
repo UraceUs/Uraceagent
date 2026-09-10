@@ -53,3 +53,12 @@ invoice antiga de $101.445,37 ("All open invoices 2024-2025"); os pontos
 9 (papéis) e 10 (celular) do teste ainda não foram rodados com conta real.
 
 Relacionado: [[D-2026-09-10 - Proposta da IA nao se repete e o valor do dono manda]].
+
+**10. Apagar/unir cliente batia em `FOREIGN KEY constraint failed`** (visto
+na tela de Integrações logo depois do deploy): invoice, evento da IA,
+evento de calendário e convite de corrida apontavam para o cliente que a
+limpeza queria remover. Agora existe **um lugar só** que conhece todas as
+tabelas ligadas ao cliente (`identidade.LIGACOES_*`): o que aceita vazio é
+solto, o que **exige** cliente (convite de corrida, contrato) **bloqueia a
+remoção** — alguém agiu ali e isso não se apaga sozinho. A união passou a
+repontar tudo, inclusive eventos e convites, que antes ficavam para trás.

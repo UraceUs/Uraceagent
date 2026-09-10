@@ -212,6 +212,41 @@ def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
     return None, None
 
 
+# --------------------------------------------- quem aponta para o cliente
+# Tabelas com client_id que ACEITA vazio (repontar ou soltar) e as que EXIGEM
+# cliente (bloqueiam a remoção: alguém agiu ali e não se apaga sem decisão humana).
+LIGACOES_SOLTAVEIS = ("tasks", "waivers", "emails", "invoices", "calendar_events", "ai_workflows", "ai_events")
+LIGACOES_OBRIGATORIAS = ("race_invites", "contracts")
+
+
+def _repontar(con, de_id, para_id):
+    """Passa tudo do cliente `de_id` para `para_id` (união)."""
+    for t in LIGACOES_SOLTAVEIS + LIGACOES_OBRIGATORIAS:
+        try:
+            con.execute(f"UPDATE OR IGNORE {t} SET client_id=? WHERE client_id=?", (para_id, de_id))
+            con.execute(f"DELETE FROM {t} WHERE client_id=?", (de_id,)) if t in LIGACOES_OBRIGATORIAS else None
+        except Exception:
+            pass
+
+
+def _soltar(con, cid):
+    """Solta o vínculo com o cliente `cid` no que aceita vazio. Devolve False quando
+    alguma tabela EXIGE cliente (aí não se apaga)."""
+    for t in LIGACOES_OBRIGATORIAS:
+        try:
+            if um(con, f"SELECT 1 FROM {t} WHERE client_id=?", (cid,)):
+                return False
+        except Exception:
+            pass
+    for t in LIGACOES_SOLTAVEIS:
+        try:
+            con.execute(f"UPDATE {t} SET client_id=NULL WHERE client_id=?", (cid,))
+        except Exception:
+            pass
+    con.execute("DELETE FROM entity_links WHERE entity_type='client' AND entity_id=?", (str(cid),))
+    return True
+
+
 # ------------------------------------------------------------- unir
 def unir(con, keep_id, drop_id, por, motivo):
     """Um card só: tudo do duplicado passa para o principal; o duplicado sai do espelho."""
@@ -220,11 +255,7 @@ def unir(con, keep_id, drop_id, por, motivo):
     k = um(con, "SELECT * FROM clients WHERE id=?", (keep_id,)); d = um(con, "SELECT * FROM clients WHERE id=?", (drop_id,))
     if not k or not d:
         return
-    for t in ("tasks", "waivers", "emails", "invoices", "ai_workflows"):
-        try:
-            con.execute(f"UPDATE {t} SET client_id=? WHERE client_id=?", (keep_id, drop_id))
-        except Exception:
-            pass
+    _repontar(con, drop_id, keep_id)
     con.execute("UPDATE OR IGNORE entity_links SET entity_id=? WHERE entity_type='client' AND entity_id=?", (str(keep_id), str(drop_id)))
     con.execute("DELETE FROM entity_links WHERE entity_type='client' AND entity_id=?", (str(drop_id),))
     # completa o principal com o que só o duplicado tinha
@@ -316,8 +347,8 @@ def limpar_nao_clientes(con):
             continue
         if um(con, "SELECT 1 FROM waivers WHERE client_id=?", (c["id"],)) or um(con, "SELECT 1 FROM emails WHERE client_id=?", (c["id"],)):
             continue
-        con.execute("UPDATE tasks SET client_id=NULL WHERE client_id=?", (c["id"],))
-        con.execute("DELETE FROM entity_links WHERE entity_type='client' AND entity_id=?", (str(c["id"]),))
+        if not _soltar(con, c["id"]):
+            continue                                   # tem convite de corrida ou contrato: alguém agiu, não se apaga
         con.execute("DELETE FROM clients WHERE id=?", (c["id"],))
         n += 1
     return n

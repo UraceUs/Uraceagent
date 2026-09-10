@@ -1021,3 +1021,41 @@ def test_aviso_de_aprovacao_diz_o_que_e(cli):
     assert "Pablo Santiago" in it["title"] and "$1,600.00" in it["title"]
     f = dict(it["facts"])
     assert "Urace Academy Training Program" in f["Invoice"] and "12/09/2026" in f["Invoice"]
+
+
+def test_apagar_e_unir_cliente_nao_quebra_chave_estrangeira(cli):
+    """10/09: a limpeza batia em 'FOREIGN KEY constraint failed' porque invoice, evento e
+    convite apontavam para o cliente. Agora solta o que aceita vazio e não apaga quem tem
+    convite de corrida ou contrato."""
+    from command_center.db import conectar, inserir, um
+    from command_center.providers import identidade as idt
+    con = conectar()
+    try:
+        falso = inserir(con, "clients", name="Professional Coaching", vip=0, status="ACTIVE", source="asana")
+        t = inserir(con, "tasks", client_id=falso, title="x", project="U-RACE", section="SATURDAY", status="open", due_on="2026-09-12")
+        i = inserir(con, "invoices", client_id=falso, doc_number="9001", amount=10, balance=0, status="paid")
+        ev = inserir(con, "ai_events", kind="task.created", entity_type="task", entity_id=t, client_id=falso, summary="x")
+        w = inserir(con, "ai_workflows", client_id=falso, kind="x", status="DONE") if um(con, "SELECT name FROM sqlite_master WHERE name='ai_workflows'") else None
+        # outro falso, mas com convite de corrida: alguém agiu, não se apaga
+        comConvite = inserir(con, "clients", name="Karting School", vip=0, status="ACTIVE", source="asana")
+        rid = inserir(con, "races", name="[teste] corrida", source="manual", active=1)
+        inserir(con, "race_invites", race_id=rid, client_id=comConvite, invited_by=1)
+        con.commit()
+        idt.limpar_nao_clientes(con); con.commit()
+        assert um(con, "SELECT id FROM clients WHERE id=?", (falso,)) is None
+        assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] is None
+        assert um(con, "SELECT client_id FROM invoices WHERE id=?", (i,))["client_id"] is None
+        assert um(con, "SELECT client_id FROM ai_events WHERE id=?", (ev,))["client_id"] is None
+        assert um(con, "SELECT id FROM clients WHERE id=?", (comConvite,)) is not None
+        # unir também repontar tudo, inclusive convite e evento
+        a = inserir(con, "clients", name="Piloto Um", email="um@x.com", vip=0, status="ACTIVE", source="asana")
+        b = inserir(con, "clients", name="Piloto Dois", vip=0, status="ACTIVE", source="asana")
+        ev2 = inserir(con, "ai_events", kind="task.overdue", entity_type="task", entity_id=t, client_id=b, summary="y")
+        inserir(con, "race_invites", race_id=rid, client_id=b, invited_by=1)
+        con.commit()
+        idt.unir(con, a, b, "teste", "mesma pessoa"); con.commit()
+        assert um(con, "SELECT id FROM clients WHERE id=?", (b,)) is None
+        assert um(con, "SELECT client_id FROM ai_events WHERE id=?", (ev2,))["client_id"] == a
+        assert um(con, "SELECT client_id FROM race_invites WHERE race_id=? AND client_id=?", (rid, a))["client_id"] == a
+    finally:
+        con.close()
