@@ -454,6 +454,16 @@ def setup(request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connect
             "falhas": um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE status='failed'")["n"]}
 
 
+@r.get("/diagnostico")
+def diagnostico(u=Depends(auth.exige("ADMIN"))):
+    """Só ADMIN: o que o Kommo devolve cru em /events (tipos e forma), para acertar a
+    leitura do chat sem adivinhar. Não traz texto de mensagem."""
+    try:
+        return modulo(SISTEMA).eventos_brutos_humano(maximo=20, desde_dias=30)
+    except Exception as e:
+        raise _erro(e)
+
+
 # ------------------------------------------------------------- webhook
 @r.post("/webhook")
 async def webhook(request: Request, con: sqlite3.Connection = Depends(get_db)):

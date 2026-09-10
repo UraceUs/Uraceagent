@@ -749,7 +749,13 @@ def sincronizar_chats_kommo(con, desde_dias=30, maximo=500, enriquecer=40):
             campos["needs_reply"] = 1 if ultimo["direcao"] == "entrada" else 0
         if campos:
             atualizar(con, "crm_leads", l["id"], **campos)
-    return {"conversas": len(por_lead), "eventos": len(eventos), "conversas_novas": novos}
+    modo = None
+    try:
+        from command_center.providers import modulo
+        modo = modulo("kommo")._ultimo_modo.get("modo")
+    except Exception:
+        pass
+    return {"conversas": len(por_lead), "eventos": len(eventos), "conversas_novas": novos, "filtro_de_eventos": modo}
 
 
 def sync_tudo(con):

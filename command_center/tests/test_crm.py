@@ -430,9 +430,18 @@ def test_eventos_de_chat_viram_conversas_com_canal(cli, monkeypatch):
          "value_after": [{"message": {"id": "m2", "origin": "com.amocrm.amocrmwa", "talk_id": 55}}]},
     ]}}
     monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com"); monkeypatch.setenv("KOMMO_TOKEN", "t")
-    monkeypatch.setattr(k, "_req", lambda c, m="GET", corpo=None, params=None: eventos_brutos if c == "/events" else {})
+    pedidos = []
+    def _lista_falsa(params, maximo):
+        pedidos.append(params)
+        # a conta ignora o filtro de tipo em silêncio: só "sem tipo" traz algo (é o caso real de 10/09)
+        return eventos_brutos["_embedded"]["events"] + [{"id": "e0", "type": "lead_status_changed", "entity_type": "lead", "entity_id": 7001}] \
+            if "filter[type]" not in " ".join(params) else []
+    monkeypatch.setattr(k, "_lista_eventos", _lista_falsa)
     evs = k.kommo_chats()
     assert [e["direcao"] for e in evs] == ["saida", "entrada"] and evs[0]["canal"] == "WhatsApp"
+    assert len(pedidos) == 4 and k._ultimo_modo["modo"] == "sem tipo"          # tentou os formatos e caiu no cru
+    monkeypatch.setattr(k, "_lista_eventos", lambda params, maximo: eventos_brutos["_embedded"]["events"])
+    assert len(k.kommo_chats()) == 2 and k._ultimo_modo["modo"] == "tipo[]"   # quando o filtro funciona, para no primeiro
     monkeypatch.setattr(sync, "chamar", lambda s, f, **a: {"kommo_chats": evs, "kommo_lead": {"id": "7001", "nome": "João Kart", "contato": {"nome": "João", "telefone": "+1 321 555 0102"}}}[f])
     con = conectar()
     try:

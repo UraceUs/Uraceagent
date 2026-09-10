@@ -273,6 +273,64 @@ def canal_da_origem(origem):
     return None
 
 
+TIPOS_CHAT = ("incoming_chat_message", "outgoing_chat_message")
+
+
+def _evento_chat(ev):
+    """Evento cru → registro de chat, ou None se não for mensagem de chat."""
+    tipo = str(ev.get("type") or "")
+    if "chat_message" not in tipo and "message" not in tipo:
+        return None
+    if ev.get("entity_type") not in (None, "lead", "leads"):
+        return None
+    va = ev.get("value_after") or []
+    msg = {}
+    if isinstance(va, list) and va and isinstance(va[0], dict):
+        msg = va[0].get("message") or va[0]
+    elif isinstance(va, dict):
+        msg = va.get("message") or va
+    origem = msg.get("origin") or msg.get("source") or ""
+    return {"id": str(ev.get("id")), "lead_id": str(ev.get("entity_id")),
+            "direcao": "entrada" if tipo.startswith("incoming") else "saida",
+            "canal": canal_da_origem(origem), "origem": origem or None, "tipo": tipo,
+            "talk_id": str(msg.get("talk_id")) if msg.get("talk_id") else None,
+            "mensagem_id": str(msg.get("id")) if msg.get("id") else None,
+            "em": _quando(ev.get("created_at"))}
+
+
+def _filtros_de_chat(desde):
+    """Os formatos de filtro que a API v4 aceita variam entre contas/versões; tenta na ordem."""
+    return [
+        ("tipo[]", {"filter[type][]": TIPOS_CHAT, "filter[entity][]": "lead", "filter[created_at][from]": desde}),
+        ("tipo[0]", {"filter[type][0]": TIPOS_CHAT[0], "filter[type][1]": TIPOS_CHAT[1], "filter[created_at][from]": desde}),
+        ("tipo,csv", {"filter[type]": ",".join(TIPOS_CHAT), "filter[created_at][from]": desde}),
+        ("sem tipo", {"filter[created_at][from]": desde}),
+    ]
+
+
+def _lista_eventos(params, maximo):
+    """Como _lista, mas com listas nos params (urlencode doseq)."""
+    saida, pagina = [], 1
+    while len(saida) < maximo:
+        p = dict(params, page=pagina, limit=min(LIMITE_PAGINA, maximo - len(saida)))
+        url = _base() + "/events?" + urllib.parse.urlencode(p, doseq=True)
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {os.environ['KOMMO_TOKEN']}", "Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                bruto = r.read()
+                dados = json.loads(bruto) if bruto and r.status != 204 else {}
+        except urllib.error.HTTPError as e:
+            if e.code == 204:
+                break
+            raise ErroFerramenta(f"Kommo GET /events → {e.code}: {e.read().decode('utf-8', 'replace')[:300]}")
+        itens = ((dados or {}).get("_embedded") or {}).get("events") or []
+        saida.extend(itens)
+        if len(itens) < p["limit"] or not dados.get("_links", {}).get("next"):
+            break
+        pagina += 1
+    return saida[:maximo]
+
+
 @srv.ferramenta("kommo_chats",
                 "Movimento do chat (Instagram, Facebook, WhatsApp…) pelos eventos da conta: para cada "
                 "mensagem recebida/enviada, o lead, o canal, a direção e a hora. O TEXTO das mensagens "
@@ -280,27 +338,36 @@ def canal_da_origem(origem):
                 {"desde_dias": {"type": "integer", "default": 30}, "maximo": {"type": "integer", "default": 500}}, [])
 def kommo_chats(desde_dias=30, maximo=500):
     desde = int(time.time()) - int(desde_dias or 30) * 86400
-    params = {"filter[type][0]": "incoming_chat_message", "filter[type][1]": "outgoing_chat_message",
-              "filter[entity][0]": "lead", "filter[created_at][from]": desde}
-    saida = []
-    for ev in _lista("/events", "events", params, maximo=int(maximo or 500)):
-        if ev.get("entity_type") not in (None, "lead", "leads"):
-            continue
-        va = ev.get("value_after") or []
-        msg = {}
-        if isinstance(va, list) and va and isinstance(va[0], dict):
-            msg = va[0].get("message") or va[0]
-        elif isinstance(va, dict):
-            msg = va.get("message") or va
-        origem = msg.get("origin") or msg.get("source") or ""
-        saida.append({"id": str(ev.get("id")), "lead_id": str(ev.get("entity_id")),
-                      "direcao": "entrada" if ev.get("type") == "incoming_chat_message" else "saida",
-                      "canal": canal_da_origem(origem), "origem": origem or None,
-                      "talk_id": str(msg.get("talk_id")) if msg.get("talk_id") else None,
-                      "mensagem_id": str(msg.get("id")) if msg.get("id") else None,
-                      "em": _quando(ev.get("created_at"))})
+    saida, modo = [], None
+    for nome, params in _filtros_de_chat(desde):
+        # sem filtro de tipo vem TUDO (etapa, tarefa, nota…): lê mais páginas e separa aqui
+        brutos = _lista_eventos(params, maximo if nome != "sem tipo" else max(maximo, 2000))
+        saida = [x for x in (_evento_chat(ev) for ev in brutos) if x]
+        modo = nome
+        if saida:
+            break
     saida.sort(key=lambda x: x["em"] or "")
+    _ultimo_modo["modo"] = modo
     return saida
+
+
+_ultimo_modo = {"modo": None}
+
+
+def eventos_brutos_humano(maximo=20, desde_dias=30):
+    """Diagnóstico (porta do painel, só ADMIN): os últimos eventos crus da conta, sem
+    filtro de tipo, com os nomes de tipo e a forma do value_after — o suficiente para
+    acertar o filtro de chat sem adivinhar. Nunca traz texto de mensagem."""
+    desde = int(time.time()) - int(desde_dias or 30) * 86400
+    brutos = _lista_eventos({"filter[created_at][from]": desde}, int(maximo or 20))
+    tipos = {}
+    for ev in brutos:
+        tipos[ev.get("type")] = tipos.get(ev.get("type"), 0) + 1
+    amostra = [{"type": ev.get("type"), "entity_type": ev.get("entity_type"), "entity_id": ev.get("entity_id"),
+                "created_at": _quando(ev.get("created_at")),
+                "value_after": json.loads(json.dumps(ev.get("value_after"))[:400]) if isinstance(ev.get("value_after"), (dict, list)) and len(json.dumps(ev.get("value_after"))) <= 400 else str(ev.get("value_after"))[:400]}
+               for ev in brutos[:int(maximo or 20)]]
+    return {"tipos": tipos, "amostra": amostra, "modo_do_ultimo_chats": _ultimo_modo["modo"]}
 
 
 # --------------------------------------------------- portas humanas
