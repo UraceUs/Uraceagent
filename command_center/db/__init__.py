@@ -96,6 +96,7 @@ MIGRACOES = [
     ("crm_leads", "return_token", "TEXT"),
     ("crm_leads", "return_at", "TEXT"),
     ("crm_leads", "last_hook_at", "TEXT"),                # última vez que o bot falou com o painel por este lead
+    ("crm_leads", "link_by", "TEXT"),                     # human = vínculo com o cliente feito à mão (a sincronia não mexe)
 ]
 
 

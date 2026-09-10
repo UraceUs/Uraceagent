@@ -614,6 +614,22 @@ def _lead_do_espelho(con, ext):
     return um(con, "SELECT * FROM crm_leads WHERE external_id=?", (str(ext),))
 
 
+def recalcular_conversa(con, lead_id):
+    """Estado da conversa a partir do que está guardado, de qualquer fonte (hook, Kommo,
+    painel): última mensagem do cliente vs última resposta que SAIU de verdade (nota
+    interna e envio falhado não contam). last_message_at nunca regride."""
+    l = um(con, "SELECT last_message_at FROM crm_leads WHERE id=?", (lead_id,)) or {}
+    ult_in = (um(con, "SELECT MAX(at) AS m FROM crm_messages WHERE lead_id=? AND direction='entrada'", (lead_id,)) or {}).get("m")
+    ult_out = (um(con, """SELECT MAX(at) AS m FROM crm_messages WHERE lead_id=? AND direction='saida'
+                          AND (status='sent' OR status IS NULL)""", (lead_id,)) or {}).get("m")
+    ultimo = max([x for x in (ult_in, ult_out, l.get("last_message_at")) if x] or [None])
+    campos = {"needs_reply": 1 if ult_in and (not ult_out or ult_in > ult_out) else 0}
+    if ultimo:
+        campos["last_message_at"] = ultimo
+    atualizar(con, "crm_leads", lead_id, **campos)
+    return campos
+
+
 def guardar_conversa(con, lead_id, mensagens):
     """Grava conversa/anotações sem repetir (chave: lead + id da mensagem).
     Devolve quantas entraram e quando foi a última mensagem DO CLIENTE."""
@@ -644,7 +660,7 @@ def sync_kommo(con, maximo=LIMITE_LEADS, com_conversa=20):
             contato = l.get("contato") or {}
             cli = _acha_cliente(con, email=(contato.get("email") or "").lower() or None,
                                 nome=contato.get("nome") or l.get("nome"), telefone=contato.get("telefone"))
-            campos = dict(client_id=cli["id"] if cli else None, name=l.get("nome"),
+            campos = dict(name=l.get("nome"),
                           pipeline_id=l.get("funil_id"), pipeline_name=l.get("funil"),
                           stage_id=l.get("etapa_id"), stage_name=l.get("etapa"), stage_order=l.get("ordem"),
                           price=l.get("valor"), source=l.get("origem"),
@@ -655,10 +671,13 @@ def sync_kommo(con, maximo=LIMITE_LEADS, com_conversa=20):
                           synced_at=agora())
             atual = _lead_do_espelho(con, l["id"])
             if atual:
+                # vínculo com o cliente: só preenche o que está vazio, e nunca mexe no feito à mão
+                if cli and not atual["client_id"] and (atual["link_by"] or "") != "human":
+                    campos["client_id"] = cli["id"]
                 atualizar(con, "crm_leads", atual["id"], **campos)
                 lid = atual["id"]
             else:
-                lid = inserir(con, "crm_leads", external_id=str(l["id"]), **campos)
+                lid = inserir(con, "crm_leads", external_id=str(l["id"]), client_id=cli["id"] if cli else None, **campos)
                 _liga(con, "crm_lead", lid, "kommo", str(l["id"]), l.get("link"))
             n += 1
             ligados += 1 if cli else 0
@@ -670,12 +689,9 @@ def sync_kommo(con, maximo=LIMITE_LEADS, com_conversa=20):
                 msgs = chamar("kommo", "kommo_conversa", lead_id=str(ext), maximo=50)
             except Exception:
                 continue
-            _, ultima = guardar_conversa(con, lid, msgs)
-            if ultima:
-                ult_saida = um(con, """SELECT MAX(at) AS m FROM crm_messages
-                                       WHERE lead_id=? AND direction IN ('saida','nota')""", (lid,))
-                pendente = 1 if not (ult_saida and (ult_saida["m"] or "") > ultima) else 0
-                atualizar(con, "crm_leads", lid, last_message_at=ultima, needs_reply=pendente)
+            novas, _ = guardar_conversa(con, lid, msgs)
+            if novas:
+                recalcular_conversa(con, lid)
         chats = sincronizar_chats_kommo(con)
         try:                                             # resposta parada na fila não fica em silêncio
             from command_center.api import crm
@@ -739,16 +755,10 @@ def sincronizar_chats_kommo(con, desde_dias=30, maximo=500, enriquecer=40):
                 continue
             inserir(con, "crm_messages", lead_id=l["id"], external_id=ext_msg, direction=ev["direcao"],
                     author=None, text=None, at=ev["em"] or agora(), source=ev.get("canal") or "kommo-evento")
-        ultimo = evs[-1]
-        campos = {}
         canal = next((e.get("canal") for e in reversed(evs) if e.get("canal")), None)
         if canal and not l["source"]:
-            campos["source"] = canal
-        if ultimo["em"] and (not l["last_message_at"] or ultimo["em"] > l["last_message_at"]):
-            campos["last_message_at"] = ultimo["em"]
-            campos["needs_reply"] = 1 if ultimo["direcao"] == "entrada" else 0
-        if campos:
-            atualizar(con, "crm_leads", l["id"], **campos)
+            atualizar(con, "crm_leads", l["id"], source=canal)
+        recalcular_conversa(con, l["id"])
     modo = None
     try:
         from command_center.providers import modulo

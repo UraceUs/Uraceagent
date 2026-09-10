@@ -86,11 +86,13 @@ function Conversa({ id, conectado, onChange }: { id: number; conectado: boolean;
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   async function responder() {
-    if (!texto.trim()) return
+    const t = texto.trim()
+    if (!t || busy) return                      // Ctrl+Enter durante o envio não manda duas vezes
     setBusy('r')
     try {
-      const rr = await api.post<{ como: string; aviso?: string }>(`/crm/leads/${id}/reply`, { text: texto })
-      setTexto(''); toast(rr.aviso || 'Enviada.', rr.como === 'entregue' ? 'ok' : undefined); d.reload(); onChange()
+      const rr = await api.post<{ como: string; aviso?: string }>(`/crm/leads/${id}/reply`, { text: t })
+      setTexto(v => (v.trim() === t ? '' : v))  // o que foi digitado durante o envio fica
+      toast(rr.aviso || 'Enviada.', rr.como === 'entregue' ? 'ok' : undefined); d.reload(); onChange()
       if (rr.como !== 'entregue') setTimeout(() => d.reload(), 6000)
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }

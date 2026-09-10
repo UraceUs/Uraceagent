@@ -41,16 +41,26 @@ SISTEMA = "kommo"
 
 
 def _aplicando(fn, *a, **kw):
-    """Ato humano: APLICAR=1 só nesta chamada (igual ao motor da IA)."""
-    anterior = os.environ.get("APLICAR")
-    os.environ["APLICAR"] = "1"
+    """Ato humano: APLICAR ligado só NESTA thread e só nesta chamada. Não mexe no
+    ambiente do processo — uma tarefa de fundo do hook rodando ao mesmo tempo que uma
+    ação da IA não pode virar a simulação dela em escrita real (nem o contrário)."""
+    k = modulo(SISTEMA)
+    ctx = getattr(k, "_ctx", None)
+    if ctx is None:                                   # módulo falso nos testes: cai no ambiente
+        anterior = os.environ.get("APLICAR")
+        os.environ["APLICAR"] = "1"
+        try:
+            return fn(*a, **kw)
+        finally:
+            if anterior is None:
+                os.environ.pop("APLICAR", None)
+            else:
+                os.environ["APLICAR"] = anterior
+    ctx.aplicar = True
     try:
         return fn(*a, **kw)
     finally:
-        if anterior is None:
-            os.environ.pop("APLICAR", None)
-        else:
-            os.environ["APLICAR"] = anterior
+        ctx.aplicar = None
 
 
 def _erro(e):
@@ -118,9 +128,10 @@ def lead(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
     try:
         msgs = chamar(SISTEMA, "kommo_conversa", lead_id=l["external_id"], maximo=100)
         from command_center.providers.sync import guardar_conversa
-        novas, ultima = guardar_conversa(con, lid, msgs)
-        if ultima:
-            atualizar(con, "crm_leads", lid, last_message_at=ultima)
+        novas, _ = guardar_conversa(con, lid, msgs)
+        if novas:
+            from command_center.providers.sync import recalcular_conversa
+            recalcular_conversa(con, lid)
         con.commit()
     except NaoConectado as e:
         aviso = f"Kommo não conectado: {e}. Mostrando o que já estava guardado."
@@ -201,17 +212,37 @@ JANELA_RETURN_S = 50          # o bot espera >= 58 s (provado 24/08); usamos com
 PRAZO_FILA_S = 150            # sem entrega até aqui, a mensagem vira nota no Kommo e fica marcada
 
 
-def _entregar(con, lead, msg_id, texto):
-    """Tenta entregar pela continuação em aberto do Salesbot. Devolve (ok, detalhe)."""
+def _reivindicar_fila(con, lead_id):
+    """Marca as mensagens na fila como 'sending' de forma atômica e devolve-as em ordem.
+    Duas entregas concorrentes (resposta na hora + tarefa de fundo do hook) não levam a
+    mesma mensagem: só quem mudou o status leva."""
+    fila = todos(con, """SELECT id, text FROM crm_messages WHERE lead_id=? AND direction='saida' AND status='queued'
+                         ORDER BY id""", (lead_id,))
+    minhas = []
+    for m in fila:
+        cur = con.execute("UPDATE crm_messages SET status='sending' WHERE id=? AND status='queued'", (m["id"],))
+        if cur.rowcount == 1:
+            minhas.append(m)
+    con.commit()
+    return minhas
+
+
+def _entregar(con, lead, mensagens):
+    """Entrega as mensagens reivindicadas numa continuação só (o bot só espera uma).
+    Devolve (ok, detalhe). Falha devolve as mensagens para a fila com o motivo."""
+    texto = "\n\n".join(m["text"] for m in mensagens if m.get("text"))
     ok, det = modulo(SISTEMA).continuar_bot_humano(lead["return_url"], texto)
     if ok:
-        atualizar(con, "crm_messages", msg_id, status="sent", error=None)
+        for m in mensagens:
+            atualizar(con, "crm_messages", m["id"], status="sent", error=None)
         atualizar(con, "crm_leads", lead["id"], return_url=None, return_token=None, return_at=None,
                   needs_reply=0, synced_at=agora())
     else:
-        atualizar(con, "crm_messages", msg_id, error=det[:300])
-        if "404" in det or "não estava mais esperando" in det:
+        for m in mensagens:
+            atualizar(con, "crm_messages", m["id"], status="queued", error=det[:300])
+        if "404" in det or "não estava mais esperando" in det or "fora do domínio" in det:
             atualizar(con, "crm_leads", lead["id"], return_url=None, return_token=None, return_at=None)
+    con.commit()
     return ok, det
 
 
@@ -226,18 +257,13 @@ def _return_fresco(lead):
     return idade < JANELA_RETURN_S
 
 
-def _proxima_da_fila(con, lead_id):
-    return um(con, """SELECT * FROM crm_messages WHERE lead_id=? AND direction='saida' AND status='queued'
-                      ORDER BY id LIMIT 1""", (lead_id,))
-
-
 def varrer_fila(con):
     """Mensagem na fila há mais de PRAZO_FILA_S sem o bot abrir o canal: não fica em
     silêncio. Vira nota no lead ("enviar manualmente") e fica marcada como falha."""
     from datetime import datetime, timedelta, timezone
     limite = (datetime.now(timezone.utc) - timedelta(seconds=PRAZO_FILA_S)).strftime("%Y-%m-%dT%H:%M:%S")
     velhas = todos(con, """SELECT m.*, l.external_id AS lead_ext FROM crm_messages m JOIN crm_leads l ON l.id=m.lead_id
-                           WHERE m.direction='saida' AND m.status='queued' AND m.at < ?""", (limite,))
+                           WHERE m.direction='saida' AND m.status IN ('queued','sending') AND m.at < ?""", (limite,))
     for m in velhas:
         motivo = "o bot não abriu o chat a tempo (Salesbot ligado? gatilho na etapa? KOMMO_BOT_ID?)"
         try:
@@ -268,11 +294,14 @@ def responder(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("
                   author=u["name"], text=texto[:8000], at=agora(), source="painel")
     auditar(con, "crm.reply", f"user:{u['id']}", user_id=u["id"], entity_type="crm_lead", entity_id=lid,
             detail={"chars": len(texto), "msg": mid}, ip=auth._ip(request))
+    con.commit()
     como, det = "fila", None
     if _return_fresco(l):
-        ok, det = _aplicando(_entregar, con, l, mid, texto)
-        como = "entregue" if ok else "fila"
-    if como == "fila":
+        minhas = _reivindicar_fila(con, lid)          # a fila inteira, em ordem — inclui a de agora
+        if minhas:
+            ok, det = _aplicando(_entregar, con, l, minhas)
+            como = "entregue" if ok else "fila"
+    if como == "fila" and um(con, "SELECT 1 AS x FROM crm_messages WHERE id=? AND status='queued'", (mid,)):
         try:
             _aplicando(modulo(SISTEMA).abrir_canal_humano, l["external_id"])
             como = "bot disparado"
@@ -298,7 +327,7 @@ def vincular(lid: int, dados: VinculoIn, request: Request, u=Depends(auth.exige(
     l = _lead(con, lid)
     if dados.client_id and not um(con, "SELECT 1 AS x FROM clients WHERE id=?", (dados.client_id,)):
         raise HTTPException(404, "Client not found.")
-    atualizar(con, "crm_leads", lid, client_id=dados.client_id, synced_at=agora())
+    atualizar(con, "crm_leads", lid, client_id=dados.client_id, link_by="human", synced_at=agora())
     auditar(con, "crm.link", f"user:{u['id']}", user_id=u["id"], entity_type="crm_lead", entity_id=lid,
             detail={"de": l["client_id"], "para": dados.client_id}, ip=auth._ip(request))
     con.commit()
@@ -355,10 +384,10 @@ def _entregar_fila(lid):
     con = conectar()
     try:
         l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lid,))
-        m = _proxima_da_fila(con, lid) if l else None
-        if l and m and l["return_url"]:
-            _aplicando(_entregar, con, l, m["id"], m["text"])
-            con.commit()
+        if l and l["return_url"]:
+            minhas = _reivindicar_fila(con, lid)
+            if minhas:
+                _aplicando(_entregar, con, l, minhas)
     finally:
         con.close()
 
@@ -374,6 +403,9 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
     KOMMO_BOT_SECRET existir, o JWT descartável do bot também é conferido."""
     chave = _chave_hook()
     if not chave or not hmac.compare_digest(chave, key or ""):
+        auditar(con, "crm.hook.recusado", "kommo", detail={"motivo": "sem chave configurada" if not chave else "chave não bate",
+                                                         "ip": request.headers.get("x-forwarded-for") or (request.client.host if request.client else None)})
+        con.commit()
         raise HTTPException(403, "Forbidden.")
     bruto = await request.body()
     try:

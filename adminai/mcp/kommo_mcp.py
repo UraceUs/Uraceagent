@@ -23,7 +23,9 @@ Ver brain/40_SISTEMAS/Kommo - o que da para fazer pelo Command Center.md.
 """
 import json
 import os
+import re
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -62,7 +64,13 @@ def _base():
     return f"https://{d}/api/v4"
 
 
+_ctx = threading.local()      # o Command Center liga APLICAR só na thread da ação humana
+
+
 def _aplicar():
+    forcado = getattr(_ctx, "aplicar", None)
+    if forcado is not None:
+        return bool(forcado)
     return os.environ.get("APLICAR", "0") == "1"
 
 
@@ -89,22 +97,25 @@ def _req(caminho, metodo="GET", corpo=None, params=None):
         if e.code in (401, 403):
             raise ErroFerramenta(f"Kommo recusou a credencial ({e.code}). O token longo pode ter expirado: "
                                  f"gere outro na integração privada e grave em ~/.urace/kommo.env. {detalhe}")
-        if e.code == 404:
+        if e.code == 404 and metodo == "GET":
             return {}
         raise ErroFerramenta(f"Kommo {metodo} {caminho} → {e.code}: {detalhe}")
     except urllib.error.URLError as e:
         raise ErroFerramenta(f"Kommo fora de alcance: {e}")
+    except (TimeoutError, OSError) as e:
+        raise ErroFerramenta(f"Kommo não respondeu a tempo: {e}")
 
 
 def _lista(caminho, chave, params=None, maximo=200):
     """Pagina /api/v4 até `maximo`. Devolve a lista de `_embedded[chave]`."""
     saida, pagina = [], 1
+    limite = min(LIMITE_PAGINA, maximo)         # FIXO: page=2&limit=50 devolve 51-100, não 251-300
     while len(saida) < maximo:
-        p = dict(params or {}, page=pagina, limit=min(LIMITE_PAGINA, maximo - len(saida)))
+        p = dict(params or {}, page=pagina, limit=limite)
         r = _req(caminho, params=p)
         itens = ((r or {}).get("_embedded") or {}).get(chave) or []
         saida.extend(itens)
-        if len(itens) < p["limit"] or not r.get("_links", {}).get("next"):
+        if len(itens) < limite or not r.get("_links", {}).get("next"):
             break
         pagina += 1
     return saida[:maximo]
@@ -192,10 +203,17 @@ def _campos(entidade):
     return saida
 
 
+def _primeiro(v):
+    """Campo com vários valores vem como lista: fica o primeiro (texto)."""
+    if isinstance(v, (list, tuple)):
+        v = next((x for x in v if x not in (None, "")), None)
+    return str(v).strip() if v not in (None, "") else None
+
+
 def _resumo_contato(c):
     campos = _campos(c)
-    email = next((v for k, v in campos.items() if "email" in (k or "").lower()), None)
-    tel = next((v for k, v in campos.items() if any(x in (k or "").lower() for x in ("phone", "telefone", "whats"))), None)
+    email = _primeiro(next((v for k, v in campos.items() if "email" in (k or "").lower()), None))
+    tel = _primeiro(next((v for k, v in campos.items() if any(x in (k or "").lower() for x in ("phone", "telefone", "whats"))), None))
     return {"id": str(c.get("id")) if c.get("id") else None, "nome": c.get("name"),
             "email": email, "telefone": tel, "campos": campos}
 
@@ -246,6 +264,7 @@ def kommo_leads(funil_id=None, etapa_id=None, texto=None, maximo=50):
             params["filter[statuses][0][pipeline_id]"] = int(funil_id)
     if texto:
         params["query"] = texto
+    _contatos.clear()                                 # cache vale por chamada
     leads = _lista("/leads", "leads", params, maximo=int(maximo or 50))
     ids = [str(c["id"]) for l in leads for c in (((l.get("_embedded") or {}).get("contacts") or [])[:1]) if c.get("id")]
     if ids:
@@ -382,8 +401,9 @@ def _filtros_de_chat(desde):
 def _lista_eventos(params, maximo):
     """Como _lista, mas com listas nos params (urlencode doseq)."""
     saida, pagina = [], 1
+    limite = min(LIMITE_PAGINA, maximo)
     while len(saida) < maximo:
-        p = dict(params, page=pagina, limit=min(LIMITE_PAGINA, maximo - len(saida)))
+        p = dict(params, page=pagina, limit=limite)
         url = _base() + "/events?" + urllib.parse.urlencode(p, doseq=True)
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {os.environ['KOMMO_TOKEN']}", "Accept": "application/json"})
         try:
@@ -396,7 +416,7 @@ def _lista_eventos(params, maximo):
             raise ErroFerramenta(f"Kommo GET /events → {e.code}: {e.read().decode('utf-8', 'replace')[:300]}")
         itens = ((dados or {}).get("_embedded") or {}).get("events") or []
         saida.extend(itens)
-        if len(itens) < p["limit"] or not dados.get("_links", {}).get("next"):
+        if len(itens) < limite or not dados.get("_links", {}).get("next"):
             break
         pagina += 1
     return saida[:maximo]
@@ -406,8 +426,9 @@ def _lista_eventos(params, maximo):
                 "Movimento do chat (Instagram, Facebook, WhatsApp…) pelos eventos da conta: para cada "
                 "mensagem recebida/enviada, o lead, o canal, a direção e a hora. O TEXTO das mensagens "
                 "dos canais nativos não vem pela API do Kommo. Só leitura.",
-                {"desde_dias": {"type": "integer", "default": 30}, "maximo": {"type": "integer", "default": 500}}, [])
-def kommo_chats(desde_dias=30, maximo=500):
+                {"desde_dias": {"type": "integer", "default": 30}, "maximo": {"type": "integer", "default": 2000}}, [])
+def kommo_chats(desde_dias=30, maximo=2000):
+    _talks.clear()
     desde = int(time.time()) - int(desde_dias or 30) * 86400
     saida, modo, erros = [], None, []
     for nome, params in _filtros_de_chat(desde):
@@ -582,30 +603,101 @@ def verificar_token_bot(token):
         return False
 
 
+_SHOW_LIMITE = 80          # validado na conta em 24/08: show > 80 chars = 400 TooLong
+_MAX_HANDLERS = 10
+_RX_FRASE = re.compile(r"(?<=[.!?…])\s+")
+
+
+def _baloes(texto, limite=_SHOW_LIMITE):
+    """Quebra a resposta em balões de até `limite` chars: por linha, depois por frase,
+    por palavra só em último caso (nunca no meio de palavra/URL). Porte do provado 24/08."""
+    saida = []
+
+    def _palavras(seg):
+        while len(seg) > limite:
+            corte = seg.rfind(" ", 1, limite + 1)
+            if corte <= 0:
+                corte = limite
+            saida.append(seg[:corte].strip())
+            seg = seg[corte:].strip()
+        if seg:
+            saida.append(seg)
+
+    for linha in texto.split("\n"):
+        linha = linha.strip()
+        if not linha:
+            continue
+        if len(linha) <= limite:
+            saida.append(linha)
+            continue
+        junto = ""
+        for frase in _RX_FRASE.split(linha):
+            cand = f"{junto} {frase}".strip() if junto else frase
+            if len(cand) <= limite:
+                junto = cand
+            else:
+                if junto:
+                    saida.append(junto)
+                junto = ""
+                if len(frase) <= limite:
+                    junto = frase
+                else:
+                    _palavras(frase)
+        if junto:
+            saida.append(junto)
+    return saida
+
+
+def _return_url_confiavel(url):
+    """A continuação leva o KOMMO_TOKEN no header: só vai para o domínio da conta."""
+    try:
+        p = urllib.parse.urlparse(str(url or ""))
+    except Exception:
+        return False
+    if p.scheme != "https" or not p.hostname:
+        return False
+    dominio = os.environ.get("KOMMO_DOMAIN", "").replace("https://", "").strip("/").lower()
+    host = p.hostname.lower()
+    return host == dominio or host.endswith(".kommo.com") or host.endswith(".amocrm.com")
+
+
 def continuar_bot_humano(return_url, texto):
-    """Entrega `texto` no chat do lead pela continuação do Salesbot (modo json_reply:
-    o bot mostra {{json.reply}}, mensagem única, sem o limite de 80 chars).
+    """Entrega `texto` no chat do lead pela continuação do Salesbot.
+
+    KOMMO_MODO_ENTREGA = "balloons" (padrão; provado com lead real em 24/08: até 10
+    handlers `show` de <= 80 chars) ou "json_reply" (widget v2: uma mensagem inteira via
+    {{json.reply}}; só se o widget v2 estiver instalado e o bot re-salvo).
     Devolve (ok, detalhe). 404 = o bot já não estava esperando."""
     texto = (texto or "").strip()
     if not texto or not return_url:
         return False, "sem texto ou sem return_url"
-    if not str(return_url).startswith("https://"):
-        return False, "return_url fora do padrão"
+    if not _return_url_confiavel(return_url):
+        return False, "return_url fora do domínio do Kommo"
+    modo = (os.environ.get("KOMMO_MODO_ENTREGA") or "balloons").strip().lower()
+    if modo == "json_reply":
+        corpo = {"data": {"status": "success", "reply": texto[:4000]}}
+    else:
+        pedacos = _baloes(texto)
+        if not pedacos:
+            return False, "sem texto"
+        if len(pedacos) > _MAX_HANDLERS:
+            return False, f"resposta longa demais para o chat ({len(pedacos)} balões, máximo {_MAX_HANDLERS}): encurte"
+        corpo = {"data": {"status": "success"},
+                 "execute_handlers": [{"handler": "show", "params": {"type": "text", "value": p}} for p in pedacos]}
     if not _aplicar():
-        return False, f"SIMULAÇÃO (APLICAR=0): entregaria no chat: {texto[:80]}"
-    corpo = json.dumps({"data": {"status": "success", "reply": texto[:4000]}}).encode()
-    req = urllib.request.Request(return_url, data=corpo, method="POST", headers={
+        return False, f"SIMULAÇÃO (APLICAR=0): entregaria no chat ({modo}): {texto[:80]}"
+    req = urllib.request.Request(return_url, data=json.dumps(corpo).encode(), method="POST", headers={
         "Authorization": f"Bearer {os.environ['KOMMO_TOKEN']}", "Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
-            return r.status < 300, f"{r.status}"
+            return r.status < 300, f"{r.status} ({modo})"
     except urllib.error.HTTPError as e:
         detalhe = e.read().decode("utf-8", "replace")[:200]
         if e.code == 404:
             return False, "o bot já não estava esperando (404)"
         return False, f"{e.code}: {detalhe}"
-    except urllib.error.URLError as e:
-        return False, f"fora de alcance: {e}"
+    except Exception as e:                       # URLError, timeout, conexão caída: nunca derruba quem chamou
+        return False, f"falha na entrega: {type(e).__name__}: {str(e)[:120]}"
 
 
 def abrir_canal_humano(lead_id, bot_id=None):

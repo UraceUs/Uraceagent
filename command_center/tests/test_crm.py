@@ -247,7 +247,8 @@ def test_portas_do_circuito_do_salesbot(monkeypatch):
     monkeypatch.delenv("APLICAR", raising=False)
     ok, det = k.continuar_bot_humano("https://urace.kommo.com/api/v4/salesbot/1/continue/a", "oi")
     assert ok is False and "SIMULAÇÃO" in det
-    assert k.continuar_bot_humano("http://inseguro/x", "oi")[1] == "return_url fora do padrão"
+    assert k.continuar_bot_humano("http://inseguro/x", "oi")[1] == "return_url fora do domínio do Kommo"
+    assert k.continuar_bot_humano("https://evil.example/api/v4/salesbot/1/continue/a", "oi")[1] == "return_url fora do domínio do Kommo"
     assert k.continuar_bot_humano("https://x", "")[1] == "sem texto ou sem return_url"
     monkeypatch.delenv("KOMMO_BOT_ID", raising=False)
     with pytest.raises(Exception) as e:
@@ -509,3 +510,119 @@ def test_filtro_recusado_passa_ao_proximo_e_contatos_vem_em_lote(monkeypatch):
     leads = k.kommo_leads(maximo=10)
     assert [l["contato"]["nome"] for l in leads] == ["C1", "C2", "C3"]
     assert [c for c, _ in chamadas].count("/contacts") == 1 and not any(c.startswith("/contacts/") for c, _ in chamadas)
+
+
+
+def test_correcoes_da_revisao_adversarial(cli, monkeypatch):
+    """Os achados reais da revisão de 10/09, cada um com a sua prova."""
+    import kommo_mcp as k
+    from mcp_stdio import ErroFerramenta
+    from command_center.providers import identidade, sync
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com"); monkeypatch.setenv("KOMMO_TOKEN", "t")
+    req_real = k._req
+    # 1. paginação com limit fixo: página 2 pede o mesmo limit da página 1
+    pedidos = []
+    def _req(c, m="GET", corpo=None, params=None):
+        pedidos.append((m, c, dict(params or {})))
+        if c == "/leads":
+            n = params["page"]
+            return {"_embedded": {"leads": [{"id": (n - 1) * 250 + i, "pipeline_id": 1, "status_id": 2} for i in range(1, 251)]},
+                    "_links": {"next": {"href": "x"}}}
+        return {}
+    monkeypatch.setattr(k, "_req", _req)
+    monkeypatch.setattr(k, "_nome_etapa", lambda f, e: ("F", "E", 1))
+    leads = k.kommo_leads(maximo=300)
+    assert len(leads) == 300 and [p["limit"] for m, c, p in pedidos if c == "/leads"] == [250, 250]
+    assert leads[250]["id"] == "251"
+    # 2. 404 em escrita é erro (não 'aplicado: True')
+    import urllib.error, io
+    def _urlopen_404(req, timeout=0):
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, io.BytesIO(b'{"title":"Not Found"}'))
+    monkeypatch.setattr(k.urllib.request, "urlopen", _urlopen_404)
+    monkeypatch.setattr(k, "_req", req_real)
+    k._ctx.aplicar = True
+    try:
+        with pytest.raises(ErroFerramenta) as e:
+            k.abrir_canal_humano("5001", bot_id="1")
+        assert "404" in str(e.value)
+        assert k._req("/leads/999") == {}                      # leitura: 404 = vazio
+    finally:
+        k._ctx.aplicar = None
+    # 3. contato com dois telefones não quebra
+    c = {"id": 1, "name": "X", "custom_fields_values": [{"field_name": "Phone", "values": [{"value": "+1 407"}, {"value": "+1 321"}]}]}
+    assert k._resumo_contato(c)["telefone"] == "+1 407"
+    # 4. balões: até 80 chars, sem cortar palavra
+    assert all(len(b) <= 80 for b in k._baloes("Uma frase bem comprida que passa dos oitenta caracteres com certeza porque continua e continua sem parar. Outra."))
+    # 5. APLICAR por thread: ligar numa thread não liga na outra
+    import threading
+    visto = {}
+    def outra():
+        visto["outra"] = k._aplicar()
+    k._ctx.aplicar = True
+    try:
+        t = threading.Thread(target=outra); t.start(); t.join()
+        assert k._aplicar() is True and visto["outra"] is False
+    finally:
+        k._ctx.aplicar = None
+    # 6. crm_leads entra na limpeza/união de cliente (sem FOREIGN KEY)
+    assert "crm_leads" in identidade.LIGACOES_SOLTAVEIS
+    con = conectar()
+    try:
+        a = inserir(con, "clients", name="Dup A", pilot_name="Dup A", status="NEW")
+        b = inserir(con, "clients", name="Dup B", pilot_name="Dup B", status="NEW")
+        lid = inserir(con, "crm_leads", external_id="8801", name="L", client_id=b, synced_at="2026-09-10T00:00:00Z")
+        identidade._repontar(con, b, a)
+        assert um(con, "SELECT client_id FROM crm_leads WHERE id=?", (lid,))["client_id"] == a
+        assert identidade._soltar(con, a) is True and um(con, "SELECT client_id FROM crm_leads WHERE id=?", (lid,))["client_id"] is None
+        # 7. sincronia não apaga vínculo nem mexe no feito à mão
+        con.execute("UPDATE crm_leads SET client_id=?, link_by='human' WHERE id=?", (a, lid)); con.commit()
+        lead_api = dict(LEADS[0], id="8801", contato={"nome": "Ninguém", "email": None, "telefone": None})
+        monkeypatch.setattr(sync, "chamar", lambda s, f, **kw: {"kommo_funis": FUNIS, "kommo_leads": [lead_api], "kommo_conversa": [], "kommo_chats": []}[f])
+        sync.sync_kommo(con)
+        assert um(con, "SELECT client_id, link_by FROM crm_leads WHERE id=?", (lid,))["client_id"] == a
+        # 8. estado da conversa: nota interna e envio falhado não contam como resposta; nada regride
+        inserir(con, "crm_messages", lead_id=lid, external_id="i1", direction="entrada", text="oi", at="2026-09-10T10:00:00Z", source="hook")
+        inserir(con, "crm_messages", lead_id=lid, external_id="n1", direction="nota", text="anotação", at="2026-09-10T10:05:00Z", source="painel")
+        inserir(con, "crm_messages", lead_id=lid, external_id=None, direction="saida", status="failed", text="x", at="2026-09-10T10:06:00Z", source="painel")
+        con.commit()
+        est = sync.recalcular_conversa(con, lid)
+        assert est["needs_reply"] == 1 and est["last_message_at"] == "2026-09-10T10:00:00Z"
+        inserir(con, "crm_messages", lead_id=lid, external_id=None, direction="saida", status="sent", text="resposta", at="2026-09-10T10:07:00Z", source="painel")
+        con.commit()
+        assert sync.recalcular_conversa(con, lid)["needs_reply"] == 0
+        con.execute("DELETE FROM crm_messages WHERE lead_id=?", (lid,)); con.execute("DELETE FROM crm_leads WHERE id=?", (lid,))
+        con.execute("DELETE FROM clients WHERE id IN (?,?)", (a, b)); con.commit()
+    finally:
+        con.close()
+
+
+def test_fila_e_reivindicada_uma_vez_e_sai_junta(cli, chat):
+    """Duas entregas concorrentes não levam a mesma mensagem; a fila inteira sai numa
+    continuação só, em ordem."""
+    h = entra(cli, "op@urace.us")
+    lid = _lid()
+    con = conectar()
+    try:
+        con.execute("UPDATE crm_leads SET return_url=NULL, return_at=NULL WHERE id=?", (lid,)); con.commit()
+    finally:
+        con.close()
+    # duas respostas com o bot fora da janela → as duas na fila, bot disparado
+    assert cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "primeira"}).json()["como"] == "bot disparado"
+    assert cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "segunda"}).json()["como"] == "bot disparado"
+    con = conectar()
+    try:
+        l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lid,))
+        assert len(crm._reivindicar_fila(con, lid)) == 2                # leva as duas
+        assert crm._reivindicar_fila(con, lid) == []                    # ninguém mais leva
+        con.execute("UPDATE crm_messages SET status='queued' WHERE lead_id=? AND status='sending'", (lid,)); con.commit()
+    finally:
+        con.close()
+    # o bot abre o canal: uma continuação com as duas, em ordem
+    sem_msg = "data%5Blead_id%5D=5001&return_url=https%3A%2F%2Furace.kommo.com%2Fapi%2Fv4%2Fsalesbot%2F999%2Fcontinue%2Fq2"
+    assert cli.post(f"{B}/crm/hook?key=chave-do-hook", content=sem_msg, headers={"Content-Type": "application/x-www-form-urlencoded"}).status_code == 200
+    assert chat.entregas[-1][1] == "primeira\n\nsegunda"
+    con = conectar()
+    try:
+        assert um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=? AND status='sent' AND text IN ('primeira','segunda')", (lid,))["n"] == 2
+    finally:
+        con.close()
