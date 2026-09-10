@@ -57,10 +57,17 @@ def sondar(con, sistemas=None, por="system"):
     saida = {}
     for s in (sistemas or SISTEMAS):
         st, det = saude(s)
+        # a sondagem não apaga o detalhe da última sincronia (conversas, filtro…): entra ao lado, em "sondagem"
+        atual = um(con, "SELECT detail FROM integrations WHERE system=?", (s,)) or {}
+        try:
+            antigo = json.loads(atual.get("detail") or "{}")
+        except ValueError:
+            antigo = {}
+        detalhe = {**{k: v for k, v in antigo.items() if k != "sondagem"}, "sondagem": det} if antigo else det
         con.execute("UPDATE integrations SET status=?, last_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), "
                     "last_success_at=CASE WHEN ? IN ('CONNECTED','DEGRADED') THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE last_success_at END, "
                     "last_error=CASE WHEN ? IN ('ERROR','DISCONNECTED') THEN ? ELSE NULL END, detail=? WHERE system=?",
-                    (st, st, st, json.dumps(det, ensure_ascii=False)[:500], json.dumps(det, ensure_ascii=False), s))
+                    (st, st, st, json.dumps(det, ensure_ascii=False)[:500], json.dumps(detalhe, ensure_ascii=False), s))
         saida[s] = {"status": st, "detail": det}
     return saida
 
