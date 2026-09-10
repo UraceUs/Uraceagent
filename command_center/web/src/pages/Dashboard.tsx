@@ -72,16 +72,16 @@ export function Dashboard() {
       </Section>
       <div className="stack">
         <Section title="Integrações" tight right={<Link to="/integrations" className="small">detalhes</Link>}>
-          <table className="tbl"><tbody>
+          <div className="tbl-wrap"><table className="tbl"><tbody>
             {d.integrations.map(i => <tr key={i.system} className="click" onClick={() => nav('/integrations')}>
               <td>{SYS_NAME[i.system] || i.system}</td>
               <td><Chip tone={statusTone(i.status)} dot>{i.status === 'CONNECTED' ? 'ok' : i.status.toLowerCase()}</Chip></td>
               <td className="right mono small muted">{i.last_success_at ? ago(i.last_success_at) : '—'}</td>
             </tr>)}
-          </tbody></table>
+          </tbody></table></div>
         </Section>
         <Section title="Sincronia" tight>
-          <table className="tbl"><tbody>
+          <div className="tbl-wrap"><table className="tbl"><tbody>
             {d.last_sync.length === 0 && <tr><td className="muted">Nunca sincronizou. Use “Sincronizar agora”.</td></tr>}
             {d.last_sync.map(s => <tr key={s.system}>
               <td>{SYS_NAME[s.system] || s.system}</td>
@@ -89,7 +89,7 @@ export function Dashboard() {
               <td className="small muted truncate" style={{ maxWidth: 200 }} title={s.message || ''}>{s.message}</td>
               <td className="right mono small muted">{ago(s.at)}</td>
             </tr>)}
-          </tbody></table>
+          </tbody></table></div>
         </Section>
       </div>
     </div>
