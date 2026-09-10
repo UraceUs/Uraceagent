@@ -3,8 +3,8 @@
 
 Roda no HOST, sem dependência nenhuma (urllib). O token longo da
 integração privada fica em ~/.urace/kommo.env (KOMMO_DOMAIN, KOMMO_TOKEN,
-KOMMO_BOT_ID, KOMMO_WEBHOOK_SECRET) — nunca no repositório, nunca no
-container do agente.
+KOMMO_BOT_ID, KOMMO_CAMPO_RESPOSTA, KOMMO_WEBHOOK_SECRET) — nunca no
+repositório, nunca no container do agente.
 
 Regras do dono, em código:
   - NADA é apagado: não existe apagar lead, contato, nota ou tag aqui.
@@ -15,8 +15,10 @@ Regras do dono, em código:
     pelo painel; quem confirma é gente.
   - Responder pelo canal nativo (Instagram/Facebook/WhatsApp) sai pelo
     Salesbot da conta (caminho provado em 24-25/08 na era Chase): a
-    mensagem aparece como do bot. Sem KOMMO_BOT_ID configurado, a
-    resposta é recusada com explicação — nunca finge que enviou.
+    mensagem aparece como do bot, e o texto do painel só chega ao cliente
+    se o bot mandar o campo indicado em KOMMO_CAMPO_RESPOSTA. Sem
+    KOMMO_BOT_ID a resposta é recusada; sem o campo, o painel avisa que
+    quem escolhe o texto é o roteiro do bot — nunca finge que enviou.
 
 Ver brain/40_SISTEMAS/Kommo - o que da para fazer pelo Command Center.md.
 """
@@ -302,10 +304,21 @@ def nota_humana(lead_id, texto):
 def responder_humano(lead_id, texto, bot_id=None):
     """Responde ao lead pelo canal em que ele falou (Instagram, Facebook, WhatsApp).
 
-    Caminho provado na era Chase: o Salesbot da conta é disparado por API e
-    entrega a mensagem no chat. A mensagem sai como do BOT, não como de uma
-    pessoa — e o gatilho tem cooldown de 5 min por lead. Sem KOMMO_BOT_ID a
-    resposta é RECUSADA: melhor não responder do que fingir que respondeu."""
+    Como a mensagem sai: quem entrega no chat é o Salesbot da conta, disparado
+    por API (caminho provado em 24-25/08 na era Chase). Duas coisas vêm daí, e
+    as duas são ditas em voz alta em vez de escondidas:
+
+      1. a mensagem aparece como do BOT, não de uma pessoa, e o gatilho tem
+         cooldown de 5 min por lead;
+      2. o bot manda o que ELE está configurado para mandar. Para o texto
+         escrito no painel chegar ao cliente, o Salesbot precisa enviar um
+         CAMPO do lead — o id desse campo vai em KOMMO_CAMPO_RESPOSTA, e o
+         painel grava o texto lá antes de disparar. Sem esse campo, o painel
+         grava a nota, dispara o bot e AVISA que quem escolhe o texto é o
+         roteiro do bot: ninguém fica achando que o cliente leu o que se
+         escreveu aqui.
+
+    Sem KOMMO_BOT_ID a resposta é RECUSADA: melhor não responder do que fingir."""
     texto = (texto or "").strip()
     if not texto:
         raise ErroFerramenta("resposta vazia")
@@ -314,14 +327,23 @@ def responder_humano(lead_id, texto, bot_id=None):
         raise ErroFerramenta("RECUSADO: sem KOMMO_BOT_ID no ~/.urace/kommo.env não dá para entregar a mensagem no "
                              "chat do Kommo. Configure o Salesbot de resposta (ou responda pelo próprio Kommo) — "
                              "a nota interna continua disponível.")
+    campo = str(os.environ.get("KOMMO_CAMPO_RESPOSTA") or "").strip()
     if not _aplicar():
-        return _simulado(f"responder ao lead {lead_id} pelo bot {bot}: {texto[:80]}")
+        return _simulado(f"responder ao lead {lead_id} pelo bot {bot}"
+                         f"{f' (texto no campo {campo})' if campo else ' (sem campo de resposta configurado)'}: {texto[:80]}")
+    if campo:                                    # o Salesbot lê este campo e manda o que está nele
+        _req(f"/leads/{int(lead_id)}", "PATCH",
+             {"custom_fields_values": [{"field_id": int(campo), "values": [{"value": texto[:4000]}]}]})
     # o texto vai como nota do painel ANTES do disparo: fica o registro do que foi dito
     _req(f"/leads/{int(lead_id)}/notes", "POST",
          [{"note_type": NOTA_COMUM, "params": {"text": f"[Command Center] resposta enviada: {texto[:2000]}"}}])
     _req(f"/bots/{int(bot)}/run", "POST", {"entity_id": int(lead_id), "entity_type": "leads"})
-    return {"aplicado": True, "lead_id": str(lead_id), "bot_id": bot, "como": "mensagem do bot no canal do lead",
-            "aviso": "sai como mensagem do bot; o gatilho tem cooldown de 5 min por lead"}
+    return {"aplicado": True, "lead_id": str(lead_id), "bot_id": bot, "campo": campo or None,
+            "como": "mensagem do bot no canal do lead",
+            "aviso": ("sai como mensagem do bot; cooldown de 5 min por lead" if campo else
+                      "sai como mensagem do bot e QUEM ESCOLHE O TEXTO É O ROTEIRO DO BOT: sem "
+                      "KOMMO_CAMPO_RESPOSTA configurado, o que você escreveu ficou registrado na nota do lead, "
+                      "mas pode não ser o que o cliente vai ler. Cooldown de 5 min por lead.")}
 
 
 def atribuir_humano(lead_id, usuario_id):

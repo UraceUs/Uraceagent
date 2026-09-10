@@ -13,7 +13,9 @@ Como funciona:
     autoriza é o clique de uma pessoa, e tudo fica na auditoria.
   * RESPONDER sai pelo Salesbot da conta e aparece como mensagem do bot
     (limite conhecido do Kommo). Sem KOMMO_BOT_ID a resposta é recusada
-    com explicação; a nota interna continua funcionando.
+    com explicação; a nota interna continua funcionando. E o texto escrito
+    aqui só chega ao cliente se o bot mandar o campo de KOMMO_CAMPO_RESPOSTA
+    — sem esse campo a tela avisa que quem escolhe o texto é o roteiro do bot.
   * O webhook do Kommo entra por /crm/webhook com segredo compartilhado —
     é assim que a mensagem que chega no Instagram/Facebook/WhatsApp
     aparece aqui sem esperar a próxima sincronia.
@@ -124,7 +126,8 @@ def lead(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
         aviso = f"Não deu para ler a conversa agora: {str(e)[:200]}"
     mensagens = todos(con, "SELECT * FROM crm_messages WHERE lead_id=? ORDER BY at, id", (lid,))
     return {"lead": l, "mensagens": mensagens, "aviso": aviso,
-            "responder_habilitado": bool(os.environ.get("KOMMO_BOT_ID"))}
+            "responder_habilitado": bool(os.environ.get("KOMMO_BOT_ID")),
+            "texto_chega_ao_cliente": bool(os.environ.get("KOMMO_CAMPO_RESPOSTA"))}
 
 
 # ------------------------------------------------------------- escrita

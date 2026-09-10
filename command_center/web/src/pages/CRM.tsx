@@ -28,7 +28,7 @@ interface Etapa { id: string; nome: string; ordem: number; leads: Lead[] }
 interface Funil { id: string; nome: string; etapas: Etapa[] }
 interface Board { funis: Funil[]; total: number; pendentes: number; integracao: { status?: string; last_success_at?: string | null; last_error?: string | null } }
 interface Mensagem { id: number; direction: string; author: string | null; text: string | null; at: string | null; source: string | null }
-interface LeadDetalhe { lead: Lead; mensagens: Mensagem[]; aviso: string | null; responder_habilitado: boolean }
+interface LeadDetalhe { lead: Lead; mensagens: Mensagem[]; aviso: string | null; responder_habilitado: boolean; texto_chega_ao_cliente: boolean }
 interface EtapaViva { id: string; nome: string; ordem: number }
 interface FunilVivo { id: string; nome: string; etapas: EtapaViva[] }
 
@@ -95,7 +95,13 @@ function LeadModal({ id, conectado, onClose, reload }: { id: number; conectado: 
   }
   async function responder() {
     if (!texto.trim()) return
-    if (!await perguntar({ titulo: 'Enviar esta resposta ao lead?', texto: 'Sai no canal em que ele falou (Instagram, Facebook, WhatsApp) como mensagem do bot da conta. Não dá para desfazer.', ok: 'Enviar' })) return
+    if (!await perguntar({
+      titulo: 'Enviar esta resposta ao lead?',
+      texto: d.data?.texto_chega_ao_cliente
+        ? 'Sai no canal em que ele falou (Instagram, Facebook, WhatsApp) como mensagem do bot da conta. Não dá para desfazer.'
+        : 'ATENÇÃO: o Salesbot da conta ainda não está ligado a um campo de resposta (KOMMO_CAMPO_RESPOSTA). O que você escreveu fica registrado na nota do lead, mas quem escolhe o texto que o cliente vai ler é o roteiro do bot. Não dá para desfazer.',
+      ok: 'Enviar', perigo: !d.data?.texto_chega_ao_cliente,
+    })) return
     setBusy('r')
     try { const rr = await api.post<{ aviso?: string }>(`/crm/leads/${id}/reply`, { text: texto }); setTexto(''); toast(`Resposta enviada.${rr.aviso ? ' ' + rr.aviso : ''}`, 'ok'); d.reload(); reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
@@ -149,7 +155,8 @@ function LeadModal({ id, conectado, onClose, reload }: { id: number; conectado: 
                 <textarea className="input" rows={3} value={texto} placeholder="Escreva a resposta…" onChange={e => setTexto(e.target.value)} disabled={!d.data?.responder_habilitado} />
                 <div className="row wrap">
                   <button className="btn primary sm" disabled={busy === 'r' || !texto.trim() || !d.data?.responder_habilitado} onClick={responder}>{busy === 'r' ? <Spinner /> : 'Enviar resposta'}</button>
-                  {!d.data?.responder_habilitado && <span className="small muted">Sem o Salesbot configurado (KOMMO_BOT_ID), a resposta sai só pelo Kommo. A anotação abaixo funciona.</span>}
+                  {!d.data?.responder_habilitado ? <span className="small muted">Sem o Salesbot configurado (KOMMO_BOT_ID), a resposta sai só pelo Kommo. A anotação abaixo funciona.</span>
+                    : !d.data?.texto_chega_ao_cliente && <span className="small" style={{ color: 'var(--warn)' }}>O bot ainda não manda o texto daqui: falta ligar o campo de resposta (KOMMO_CAMPO_RESPOSTA). O que você escrever fica na nota do lead.</span>}
                 </div></div>
               <div className="field"><label>Anotação interna (não vai para o cliente)</label>
                 <textarea className="input" rows={2} value={nota} onChange={e => setNota(e.target.value)} />

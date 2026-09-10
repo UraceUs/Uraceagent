@@ -44,13 +44,19 @@ sincronia — e marca o lead como esperando resposta.
   RBAC de OPERATOR para cima e registro na auditoria (`crm.stage`,
   `crm.tags`, `crm.note`, `crm.reply`). A IA pode propor; quem manda a
   mensagem é gente.
-- **Responder é honesto**: a entrega usa o Salesbot da conta (caminho
-  provado em 24-25/08 na era Chase), então a mensagem **aparece como do
-  bot** e o gatilho tem cooldown de 5 min por lead. Sem `KOMMO_BOT_ID`
-  configurado o painel **recusa** responder e explica — melhor não
-  responder do que fingir que respondeu. A anotação continua funcionando.
+- **Responder é honesto, em dois níveis**: a entrega usa o Salesbot da
+  conta (caminho provado em 24-25/08 na era Chase), então a mensagem
+  **aparece como do bot** e o gatilho tem cooldown de 5 min por lead. Sem
+  `KOMMO_BOT_ID` o painel **recusa** responder e explica. E há um segundo
+  detalhe que não pode ficar escondido: **o bot manda o que o roteiro dele
+  manda**. Para o texto escrito no painel chegar ao cliente, o Salesbot
+  precisa enviar um CAMPO do lead — o id vai em `KOMMO_CAMPO_RESPOSTA` e o
+  painel grava o texto lá antes de disparar. Sem esse campo, a confirmação
+  fica vermelha e avisa: o que foi escrito fica na nota do lead, mas quem
+  escolhe o texto que o cliente lê é o bot. A anotação sempre funciona.
 - **Segredo fora do repositório**: `~/.urace/kommo.env` (600) com
-  `KOMMO_DOMAIN`, `KOMMO_TOKEN`, `KOMMO_BOT_ID`, `KOMMO_WEBHOOK_SECRET`.
+  `KOMMO_DOMAIN`, `KOMMO_TOKEN`, `KOMMO_BOT_ID`, `KOMMO_CAMPO_RESPOSTA` e
+  `KOMMO_WEBHOOK_SECRET`.
 
 ## O que ainda depende da palavra do dono
 
@@ -63,5 +69,12 @@ sincronia — e marca o lead como esperando resposta.
 4. Resposta saindo como **bot** serve? Se não servir, o caminho é
    registrar canal próprio na Chats API (suporte do Kommo, 1 a 3 dias) e
    o WhatsApp teria de migrar.
+5. Qual Salesbot entrega a resposta e **qual campo do lead ele envia**. O
+   bot #9 (id 162247) da era Chase tem roteiro próprio, por etapa daquele
+   funil: ligar `KOMMO_BOT_ID` nele sem antes trocar o roteiro faria o
+   cliente receber a cópia do Chase, não o texto do painel. Enquanto isso
+   não for conferido, o certo é deixar `KOMMO_BOT_ID` vazio — o painel
+   recusa responder e todo o resto (funil, conversa, etapa, tags, nota)
+   funciona.
 
 Relacionado: [[Kommo - o que da para fazer pelo Command Center]], [[Projeto Chase]].

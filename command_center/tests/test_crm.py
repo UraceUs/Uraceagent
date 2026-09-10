@@ -229,3 +229,49 @@ def test_sem_credencial_o_crm_nao_derruba_a_tela(cli, monkeypatch):
     d = cli.get(f"{B}/crm/leads/{lid}", headers=h).json()
     assert "não conectado" in (d["aviso"] or "") and len(d["mensagens"]) >= 1    # mostra o que já tinha
     assert cli.get(f"{B}/crm/stages", headers=h).status_code == 503
+
+
+def test_resposta_pelo_salesbot_diz_a_verdade_sobre_quem_escolhe_o_texto(monkeypatch):
+    """O bot manda o que ELE está configurado para mandar. Com KOMMO_CAMPO_RESPOSTA o
+    painel grava o texto no campo que o bot envia; sem o campo, avisa em vez de deixar
+    o dono achar que o cliente leu o que ele escreveu."""
+    import kommo_mcp as k
+    chamadas = []
+    monkeypatch.setattr(k, "_req", lambda c, m="GET", corpo=None, params=None: chamadas.append((m, c, corpo)) or {})
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com")
+    monkeypatch.setenv("KOMMO_TOKEN", "t")
+    monkeypatch.setenv("KOMMO_BOT_ID", "162247")
+    monkeypatch.delenv("KOMMO_CAMPO_RESPOSTA", raising=False)
+    monkeypatch.setenv("APLICAR", "1")
+    r = k.responder_humano("5001", "A experimental sai $500.")
+    assert r["aplicado"] and "ROTEIRO DO BOT" in r["aviso"] and r["campo"] is None
+    assert [c[1] for c in chamadas] == ["/leads/5001/notes", "/bots/162247/run"]
+    chamadas.clear()
+    monkeypatch.setenv("KOMMO_CAMPO_RESPOSTA", "998877")
+    r = k.responder_humano("5001", "A experimental sai $500.")
+    assert r["campo"] == "998877" and "ROTEIRO" not in r["aviso"]
+    assert chamadas[0][1] == "/leads/5001" and chamadas[0][2]["custom_fields_values"][0]["field_id"] == 998877
+    assert chamadas[0][2]["custom_fields_values"][0]["values"][0]["value"] == "A experimental sai $500."
+    # sem bot: recusa, e nada é chamado
+    chamadas.clear()
+    monkeypatch.delenv("KOMMO_BOT_ID")
+    with pytest.raises(Exception) as e:
+        k.responder_humano("5001", "oi")
+    assert "KOMMO_BOT_ID" in str(e.value) and chamadas == []
+
+
+def test_escrita_no_kommo_e_simulacao_sem_aplicar(monkeypatch):
+    """APLICAR=0 (padrão) não escreve nada no CRM: só diz o que teria feito."""
+    import kommo_mcp as k
+    chamadas = []
+    monkeypatch.setattr(k, "_req", lambda c, m="GET", corpo=None, params=None: chamadas.append((m, c)) or {})
+    monkeypatch.setattr(k, "_nome_etapa", lambda f, e: ("Sales funnel", "First Contact", 2))
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com")
+    monkeypatch.setenv("KOMMO_TOKEN", "t")
+    monkeypatch.setenv("KOMMO_BOT_ID", "162247")
+    monkeypatch.delenv("APLICAR", raising=False)
+    assert k.mover_etapa_humano("5001", "105276412", "9903543")["aplicado"] is False
+    assert k.nota_humana("5001", "teste")["aplicado"] is False
+    assert k.responder_humano("5001", "teste")["aplicado"] is False
+    assert chamadas == []
+    assert not hasattr(k, "apagar_lead") and not hasattr(k, "apagar_humano")   # não existe porta de apagar
