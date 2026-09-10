@@ -414,3 +414,7 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .hist .it:hover{background:var(--surface-2)}
 .hist .it.on{background:var(--accent-wash);box-shadow:inset 3px 0 0 var(--brand)}
 .hist .it .t{font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- avisos: os fatos do item, sem abrir nada */
+.att .facts{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:12.5px;color:var(--ink)}
+.att .facts .k{font-family:var(--font-cond);font-weight:600;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-right:5px}

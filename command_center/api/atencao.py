@@ -48,6 +48,36 @@ def _chave(regra, tipo, id_):
     return f"{regra}:{tipo}:{id_}"
 
 
+def _usd(v):
+    return "—" if v is None else f"${float(v):,.2f}"
+
+
+def _dbr(iso):
+    return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}" if iso and len(iso) >= 10 else "—"
+
+
+def _fatos_tarefa(t):
+    """Nome, data, coluna, piloto/responsável, produto e categoria, subtarefas — tudo que identifica a tarefa."""
+    from command_center.api.acoes import _partes_do_nome
+    piloto, produto, categoria = _partes_do_nome(t.get("title"))
+    f = [("Tarefa", t.get("title") or "—"), ("Data", _dbr(t.get("due_on"))), ("Coluna", t.get("section") or "—")]
+    if t.get("cliente") or t.get("pilot_name"):
+        f.append(("Piloto", t.get("pilot_name") or piloto or "—"))
+        f.append(("Responsável", t.get("cliente") or "—"))
+    if produto:
+        f.append(("Serviço", produto + (f" / {categoria}" if categoria else "")))
+    if t.get("subtasks_total"):
+        f.append(("Subtarefas", f"{t.get('subtasks_done') or 0}/{t['subtasks_total']}"))
+    if t.get("email"):
+        f.append(("E-mail", t["email"]))
+    return f
+
+
+def _fatos_waiver(w):
+    return [("Assina", w.get("signer_name") or "—"), ("E-mail", w.get("signer_email") or "—"), ("Modelo", w.get("template") or "—"),
+            ("Enviada", _dbr(w.get("sent_at"))), ("Expira", _dbr(w.get("expires_at"))), ("Cliente", w.get("cliente") or "sem vínculo")]
+
+
 def _coletar(con):
     itens = []
     hoje = date.today()
@@ -84,6 +114,7 @@ def _coletar(con):
             entity={"type": "task", "id": t["id"]}, client_id=t["client_id"],
             link=_link(con, "task", t["id"]),
             action="Enviar waiver" if not aberto else "Cobrar assinatura",
+            facts=_fatos_tarefa(t) + [("Waiver", aberto["status"] if aberto else "nenhuma enviada")],
         ))
 
     # ---- 2. e-mail devolvido (envelope que nunca vai ser assinado)
@@ -91,7 +122,7 @@ def _coletar(con):
         itens.append(dict(key=_chave("waiver-devolveu", "waiver", w["id"]), level="HIGH", title=f"Waiver de {w['signer_name'] or w['cliente']} devolveu (e-mail inválido)",
                           why=f"{w['signer_email']}: o servidor de e-mail recusou. Ninguém vai assinar esse envelope.",
                           entity={"type": "waiver", "id": w["id"]}, client_id=w["client_id"],
-                          link=_link(con, "waiver", w["id"]), action="Corrigir e-mail e reenviar"))
+                          link=_link(con, "waiver", w["id"]), action="Corrigir e-mail e reenviar", facts=_fatos_waiver(w)))
 
     # ---- 3. waiver perto de expirar, com serviço no quadro
     for w in todos(con, """SELECT w.*, c.name AS cliente FROM waivers w LEFT JOIN clients c ON c.id=w.client_id
@@ -105,10 +136,10 @@ def _coletar(con):
                           why=("Há serviço agendado para este cliente. " if tem_servico else "Sem serviço agendado. ")
                               + ("Aberta e não assinada." if w["status"] == "delivered" else "Enviada, nunca aberta."),
                           entity={"type": "waiver", "id": w["id"]}, client_id=w["client_id"],
-                          link=_link(con, "waiver", w["id"]), action="Decidir: cobrar ou deixar expirar"))
+                          link=_link(con, "waiver", w["id"]), action="Decidir: cobrar ou deixar expirar", facts=_fatos_waiver(w)))
 
     # ---- 4. tarefa vencida ainda aberta — só depois que a IA tentou (evento task.overdue DONE/FAILED)
-    for t in todos(con, """SELECT t.*, c.name AS cliente, ev.status AS ev_status, cmd.output AS ia_out, cmd.error AS ia_err
+    for t in todos(con, """SELECT t.*, c.name AS cliente, c.pilot_name, c.email, ev.status AS ev_status, cmd.output AS ia_out, cmd.error AS ia_err
                            FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
                            LEFT JOIN ai_events ev ON ev.kind='task.overdue' AND ev.entity_type='task' AND ev.entity_id=t.id
                            LEFT JOIN ai_commands cmd ON cmd.id=ev.command_id
@@ -121,28 +152,34 @@ def _coletar(con):
             continue                                   # ainda vai virar evento na próxima sincronia
         resumo_ia = ((t["ia_out"] or t["ia_err"] or "").strip().split("\n")[0][:160])
         itens.append(dict(key=_chave("tarefa-vencida", "task", t["id"]), level="LOW" if t["ev_status"] == "DONE" else "MEDIUM",
-                          title=f"Tarefa vencida há {dias} dia(s) que a IA não conseguiu fechar: {t['title'][:60]}",
+                          title=f"{t['title'][:70]} · venceu em {_dbr(t['due_on'])} ({dias} dia(s)) e continua aberta",
                           why=("A IA tentou e disse: " + resumo_ia) if resumo_ia else "Serviço concluído deve ir para Finished Services; ainda está na coluna do dia.",
                           entity={"type": "task", "id": t["id"]}, client_id=t["client_id"],
-                          link=_link(con, "task", t["id"]), action="Mover ou concluir"))
+                          link=_link(con, "task", t["id"]), action="Mover ou concluir", facts=_fatos_tarefa(t)))
 
     # ---- 4b. invoice vencida há mais de 30 dias (regra do dono: cobrança por lote, mas não some)
-    for i in todos(con, """SELECT i.*, c.name AS cliente FROM invoices i LEFT JOIN clients c ON c.id=i.client_id
+    for i in todos(con, """SELECT i.*, c.name AS cliente, c.pilot_name FROM invoices i LEFT JOIN clients c ON c.id=i.client_id
                            WHERE i.status='overdue' AND i.due_on < ? ORDER BY i.due_on""",
                    ((hoje - timedelta(days=30)).isoformat(),)):
         dias = -(_dias_ate(i["due_on"]) or 0)
+        quem = i["cliente"] or i.get("customer_email") or "cliente não identificado"
+        servico = (i.get("memo") or "").strip() or "serviço não descrito na invoice"
         itens.append(dict(key=_chave("invoice-vencida", "invoice", i["id"]), level="MEDIUM" if dias < 90 else "HIGH",
-                          title=f"Invoice {i['doc_number'] or ''} de {i['cliente'] or 'cliente sem vínculo'} vencida há {dias} dias",
-                          why="Saldo em aberto não é inadimplência (pode haver parcelamento); a cobrança é por lote (D-2026-08-31).",
+                          title=f"Invoice {i['doc_number'] or ''} · {quem} · {_usd(i['balance'] if i.get('balance') is not None else i['amount'])} em aberto · venceu em {_dbr(i['due_on'])} ({dias} dias)",
+                          why=f"{servico}. Emitida em {_dbr(i.get('issued_on'))}. Saldo em aberto não é inadimplência (pode haver parcelamento); a cobrança é por lote (D-2026-08-31).",
                           entity={"type": "invoice", "id": i["id"]}, client_id=i["client_id"],
-                          link=_link(con, "invoice", i["id"]), action="Cobrar no lote"))
+                          link=_link(con, "invoice", i["id"]), action="Cobrar no lote",
+                          facts=[("Cliente", quem), ("Piloto", i.get("pilot_name") or "—"), ("Serviço", servico), ("Valor", _usd(i["amount"])),
+                                 ("Em aberto", _usd(i["balance"])), ("Emitida", _dbr(i.get("issued_on"))), ("Venceu", _dbr(i.get("due_on"))),
+                                 ("E-mail de cobrança", i.get("customer_email") or "—")]))
 
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",
                           title=f"Integração {i['system']}: {i['status']}",
                           why=(i["last_error"] or "")[:200], entity={"type": "integration", "id": i["system"]},
-                          client_id=None, link=None, action="Ver integrações"))
+                          client_id=None, link=None, action="Ver integrações",
+                          facts=[("Sistema", i["system"]), ("Último sucesso", (i.get("last_success_at") or "—")[:16].replace("T", " ")), ("Última tentativa", (i.get("last_attempt_at") or "—")[:16].replace("T", " ")), ("Erros seguidos", str(i.get("error_count") or 0))]))
 
     # ---- 6. ações da IA esperando aprovação / falhas
     n = um(con, "SELECT COUNT(*) AS n FROM ai_actions WHERE status='PROPOSED' AND policy='REQUIRES_APPROVAL'")
@@ -172,7 +209,9 @@ def _coletar(con):
                           why=(f"A IA moveu para '{e.get('suggested_label')}' ({e.get('triage_reason') or 'pede resposta'}), mas é uma pessoa que responde." if e.get("needs_human") and not e.get("is_inbox")
                                else f"Na inbox {e['mailbox']}@ há {max(0, (datetime.utcnow() - datetime.fromisoformat(e['last_at'][:19])).days) if e.get('last_at') else '?'} dia(s), sem resposta. Intenção: {e.get('intent') or 'não classificada'}."),
                           entity={"type": "email", "id": e["id"]}, client_id=e["client_id"],
-                          link=_link(con, "email", e["id"]), action="Responder"))
+                          link=_link(con, "email", e["id"]), action="Responder",
+                          facts=[("De", e.get("sender") or "—"), ("Assunto", e.get("subject") or "—"), ("Caixa", f"{e['mailbox']}@urace.us"),
+                                 ("Quando", (e.get("last_at") or "—")[:16].replace("T", " ")), ("Cliente", e["cliente"]), ("Trecho", (e.get("snippet") or "")[:140] or "—")]))
 
     ordem = {n: i for i, n in enumerate(NIVEIS)}
     itens.sort(key=lambda x: ordem[x["level"]])

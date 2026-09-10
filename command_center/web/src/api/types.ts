@@ -13,7 +13,9 @@ export interface Integration {
 
 export interface Attention {
   key: string; level: Level; title: string; why: string
-  dismissed: null | { by: string | null; at: string; reason: string | null }
+  dismissed: null | { by: string | null; at: string; reason: string | null
+  facts?: [string, string][]
+}
   entity: { type: string; id: number | string | null }
   client_id: number | null; link: string | null; action: string
 }

@@ -901,3 +901,32 @@ def test_contato_limpo_e_linha_do_tempo_com_link_de_cada_item(cli):
     ev = [e for e in d["timeline"] if e["kind"] == "SERVICE" and e["entity"]["id"] == t][0]
     assert ev["links"][0]["system"] == "asana" and ev["links"][0]["deep_link"].endswith("/5550001/f") and "4/4" in ev["detail"]
     assert d["last_service"]["id"] == t and d["client"]["email_alt"] == "bryanlsantiago@outlook.com"
+
+
+def test_avisos_descritivos_invoice_e_tarefa(cli):
+    """Cada aviso traz os fatos (quem, valor, serviço, datas) sem precisar abrir a origem (dono, 10/09)."""
+    from command_center.db import conectar, inserir
+    from datetime import date, timedelta
+    con = conectar()
+    try:
+        c = inserir(con, "clients", name="Carla Mendes", email="carla@example.com", pilot_name="Théo Mendes", vip=0, status="ACTIVE", source="asana")
+        inv = inserir(con, "invoices", client_id=c, doc_number="1077", amount=819, balance=819, status="overdue", issued_on="2026-07-01", due_on=(date.today() - timedelta(days=45)).isoformat(),
+                      memo="Urace Daily 2 stroke - Théo Mendes [July, 2026]", customer_email="carla@example.com")
+        inserir(con, "entity_links", entity_type="invoice", entity_id=inv, system="quickbooks", external_id="1077", deep_link="https://qbo.intuit.com/app/invoice?txnId=1077")
+        t = inserir(con, "tasks", client_id=c, title="Théo Mendes_Urace Daily_2 stroke [1/1]", project="U-RACE", section="SATURDAY", status="open",
+                    due_on=(date.today() - timedelta(days=5)).isoformat(), subtasks_total=12, subtasks_done=9)
+        ev = inserir(con, "ai_events", kind="task.overdue", entity_type="task", entity_id=t, client_id=c, summary="x", status="FAILED")
+        con.commit()
+    finally:
+        con.close()
+    entra(cli, "admin@urace.us")
+    itens = cli.get(B + "/needs-attention").json()
+    inv_it = [i for i in itens if i["entity"] == {"type": "invoice", "id": inv}][0]
+    assert "Carla Mendes" in inv_it["title"] and "$819.00" in inv_it["title"] and "1077" in inv_it["title"]
+    fatos = dict(inv_it["facts"])
+    assert fatos["Serviço"].startswith("Urace Daily 2 stroke") and fatos["Piloto"] == "Théo Mendes" and fatos["Emitida"] == "01/07/2026" and fatos["E-mail de cobrança"] == "carla@example.com"
+    assert inv_it["link"].endswith("txnId=1077")
+    t_it = [i for i in itens if i["entity"] == {"type": "task", "id": t}][0]
+    ft = dict(t_it["facts"])
+    assert ft["Tarefa"].startswith("Théo Mendes_Urace Daily") and ft["Coluna"] == "SATURDAY" and ft["Serviço"] == "Urace Daily / 2 stroke" and ft["Subtarefas"] == "9/12" and ft["Piloto"] == "Théo Mendes"
+    assert "venceu em" in t_it["title"]

@@ -61,6 +61,7 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
         {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title="Abrir no sistema de origem">{sysOf(a.link)} ↗</a>}
       </div>
       <div className="why">{a.why}</div>
+      {!!a.facts?.length && <div className="facts">{a.facts.filter(([, v]) => v && v !== '—').map(([k, v]) => <span key={k}><span className="k">{k}</span>{v}</span>)}</div>}
       {a.dismissed && <div className="small muted">Ocultado por {a.dismissed.by || '?'} em {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</div>}
       <div className="row wrap small att-acts">
         {a.client_id && <Link className="btn sm" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? 'Abrir cliente e responder' : 'Abrir cliente'}</Link>}
