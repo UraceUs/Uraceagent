@@ -141,7 +141,9 @@ SUFIXO = (
     "Quem aprovar no painel executa exatamente esse JSON. Se não houver ação nenhuma, escreva: ACAO: nenhuma"
     "\nInvoice (qbo_criar_e_enviar_invoice / qbo_criar_invoice) SEMPRE assim: "
     '{"cliente_id":"<id numérico do RESPONSÁVEL no QBO, via qbo_clientes_buscar>","linhas":[{"item_id":"<id numérico via qbo_itens_buscar>","quantidade":1,"unitario":<valor em dólares, nunca 0>,"descricao":"<serviço - piloto - data>"}],"vence_em":"AAAA-MM-DD","memo":"…","email":"…"}. '
-    "O valor que o dono disse manda sobre qualquer outro. Nunca proponha de novo uma ação que já foi aprovada ou feita hoje.")
+    "O valor que o dono disse manda sobre qualquer outro. Nunca proponha de novo uma ação que já foi aprovada ou feita hoje. "
+    "Consultas (buscar, ler, listar) você executa AGORA, durante a resposta — nunca as liste como ACAO. "
+    "Se o CONTEXTO DO PAINEL já trouxer o id do cliente e dos itens do QuickBooks, use-os sem buscar de novo.")
 
 
 # ------------------------------------------------- ações propostas
@@ -181,6 +183,15 @@ def _buscar_item_qbo(nome):
         return []
 
 
+def _buscar_cliente_qbo(texto):
+    from command_center.providers import chamar
+    try:
+        r = chamar("quickbooks", "qbo_clientes_buscar", texto=texto, maximo=5)
+        return [{"id": c.get("id"), "nome": c.get("nome"), "email": c.get("email")} for c in (r if isinstance(r, list) else r.get("clientes", []))]
+    except Exception:
+        return []
+
+
 def extrair_acoes(con, command_id, texto, notas=None):
     """Lê as ações que o agente declarou. Três fontes, na ordem:
     1. linhas `ACAO: ferramenta | alvo | resumo` (o protocolo pedido no SUFIXO)
@@ -201,10 +212,13 @@ def extrair_acoes(con, command_id, texto, notas=None):
         if chave in vistos:
             return
         vistos.add(chave)
+        if acoes.eh_consulta(nome):                       # busca/leitura não é ação: o agente deveria ter executado
+            notas.append(f"{nome} é consulta, não ação: a IA executa na hora, não propõe.")
+            return
         pol = _politica(con, nome)
         problemas = []
         if isinstance(args, dict):
-            args, problemas = acoes.normalizar(nome, args, texto, _buscar_item_qbo)
+            args, problemas = acoes.normalizar(nome, args, texto, _buscar_item_qbo, _buscar_cliente_qbo, con, alvo)
         assin = acoes.assinatura(nome, args, alvo)
         estado, antiga = acoes.ja_decidida(con, assin)
         if estado == "feita":
@@ -321,7 +335,7 @@ def command_create(dados: ComandoIn, request: Request, u=Depends(auth.exige("OPE
     if not texto or len(texto) > 4000:
         raise HTTPException(400, "Command must be between 1 and 4000 characters.")
     from command_center.api import acoes, motor
-    texto = texto + motor.aprendizados(con) + acoes.estado_do_dia(con, u["id"])
+    texto = texto + motor.aprendizados(con) + motor.contexto_do_comando(con, texto) + acoes.estado_do_dia(con, u["id"])
     session_key = f"agent:{AGENTE}:web-{u['id']}-{date.today().isoformat()}"
     cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, session_key=session_key)
     auditar(con, "ai.command", f"user:{u['id']}", user_id=u["id"], entity_type="ai_command",

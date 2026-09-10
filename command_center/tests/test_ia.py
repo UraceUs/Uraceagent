@@ -346,3 +346,41 @@ def test_nome_com_prefixo_do_mcp_e_tarefa_pelo_modelo(cli):
     assert _j.loads(a["payload"])["args"]["modelo_gid"] == acoes.MODELO_SESSAO
     assert a["status"] in ("FAILED", "DONE") and (a["status"] == "DONE" or "não conectado" in (a["result"] or ""))   # sem Asana no teste: tentou de verdade
     ia.RUNNER = runner_falso
+
+
+def test_contexto_do_piloto_citado_e_invoice_resolvida_sem_perguntar(cli, monkeypatch):
+    """'Filho do Nicolas Pera - David Pera... mesmo esquema' → o comando leva histórico, id do cliente no QBO,
+    waiver válida e itens; consulta proposta como ação é descartada; invoice com placeholders é resolvida pelo espelho."""
+    from command_center.api import acoes, motor
+    from command_center.db import conectar, inserir
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Nicolas Pera", email="peranicolas2106@gmail.com", phone="305-906-2542", pilot_name="David Pera", pilot_dob="2014-05-02", vip=0, status="ACTIVE", source="asana")
+        inserir(con, "tasks", client_id=cid, title="David Pera_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="Finished Services", status="completed", due_on="2026-08-23")
+        inserir(con, "invoices", client_id=cid, doc_number="1031", amount=500, balance=0, status="paid", issued_on="2026-08-20", memo="Using Own Kart - David Pera", customer_email="peranicolas2106@gmail.com", customer_ref="696")
+        inserir(con, "waivers", client_id=cid, signer_name="Nicolas Pera", signer_email="peranicolas2106@gmail.com", template="parental", status="completed", sent_at="2026-08-15", completed_at="2026-08-16", expires_at="2027-08-16")
+        con.execute("INSERT OR REPLACE INTO qbo_items (id, name, full_name, price, type, active) VALUES ('31','Arrive and Drive daily','Arrive and Drive daily',500,'Service',1), ('32','Race Support','Race Support',1200,'Service',1)")
+        con.commit()
+        assert motor.cliente_citado(con, "Filho do Nicolas Pera - David Pera. Coloca na agenda pro Domingo esta semana.") == cid
+        ctx = motor.contexto_do_comando(con, "David Pera domingo, mesmo esquema")
+        assert "cliente_id=696" in ctx and "ASSINADA em 2026-08-16" in ctx and "31: Arrive and Drive daily" in ctx and '"idade": 12' in ctx and "Using Own Kart" in ctx
+        assert motor.contexto_do_comando(con, "quem tem invoice vencida?") == ""
+        # invoice com placeholders → cliente pelo espelho (última invoice), item pelo catálogo, valor do texto
+        args, prob = acoes.normalizar_invoice({"cliente_id": "<id de qbo_clientes_buscar>", "linhas": [{"item_id": "<id de qbo_itens_buscar>", "quantidade": 1, "unitario": 0, "descricao": "Arrive and Drive daily - Using Own Kart - David Pera - 2026-09-13"}], "vence_em": "2026-09-13"},
+                                             "Invoice de $500 no nome do Nicolas.", None, None, con, "Nicolas Pera")
+        assert prob == [] and args["cliente_id"] == "696" and args["linhas"][0]["item_id"] == "31" and args["linhas"][0]["unitario"] == 500.0 and args["email"] == "peranicolas2106@gmail.com"
+    finally:
+        con.close()
+    assert acoes.eh_consulta("qbo_itens_buscar") and acoes.eh_consulta("asana_tarefa") and not acoes.eh_consulta("qbo_criar_e_enviar_invoice") and not acoes.eh_consulta("asana_criar_do_modelo")
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, ('Vou montar a invoice de $500.\n'
+                                          'ACAO: qbo_clientes_buscar | Nicolas Pera | achar o cliente | {"texto":"peranicolas2106@gmail.com"}\n'
+                                          'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice | {"cliente_id":"<id>","linhas":[{"item_id":"<id>","quantidade":1,"unitario":500,"descricao":"Arrive and Drive daily - David Pera - 2026-09-13"}],"vence_em":"2026-09-13"}'), None)
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "Filho do Nicolas Pera - David Pera. Domingo, mesmo esquema."}).json()["id"])
+    assert "CONTEXTO DO PAINEL sobre David Pera" in c["text"] and "cliente_id=696" in c["text"]
+    assert [a["action"] for a in c["actions"]] == ["qbo_criar_e_enviar_invoice"] and c["actions"][0]["status"] == "PROPOSED"
+    import json as _j
+    p = _j.loads(c["actions"][0]["payload"])
+    assert not p.get("problemas") and p["args"]["cliente_id"] == "696" and p["args"]["linhas"][0]["item_id"] == "31"
+    assert "é consulta, não ação" in c["output"]
+    ia.RUNNER = runner_falso

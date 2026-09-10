@@ -511,21 +511,38 @@ def sync_qbo(con, desde_dias=365):
             iid = um(con, "SELECT entity_id FROM entity_links WHERE system='quickbooks' AND external_id=? AND entity_type='invoice'", (inv["id"],))
             campos = dict(client_id=cli["id"] if cli else None, doc_number=inv.get("numero"), amount=inv.get("total"), balance=inv.get("saldo"),
                           status=inv.get("status"), issued_on=inv.get("emitida_em"), due_on=inv.get("vence_em"), memo=inv.get("memo"),
-                          customer_email=email, synced_at=agora())
+                          customer_email=email, customer_ref=str(inv.get("cliente_id")) if inv.get("cliente_id") else None, synced_at=agora())
             if iid:
                 atualizar(con, "invoices", iid["entity_id"], **campos)
             else:
                 nid = inserir(con, "invoices", **campos)
                 _liga(con, "invoice", nid, "quickbooks", inv["id"], inv.get("link"))
             n += 1; ligadas += 1 if cli else 0
-        _marca(con, "quickbooks", True, n, f"{n} invoices, {ligadas} ligadas a cliente", inicio)
-        return {"ok": True, "invoices": n, "ligadas": ligadas}
+        itens = sincronizar_itens_qbo(con)
+        _marca(con, "quickbooks", True, n, f"{n} invoices, {ligadas} ligadas a cliente, {itens} itens do catálogo", inicio)
+        return {"ok": True, "invoices": n, "ligadas": ligadas, "itens": itens}
     except NaoConectado as e:
         _marca(con, "quickbooks", False, 0, f"não conectado: {e}", inicio, desconectado=True)
         return {"ok": False, "motivo": "not connected"}
     except Exception as e:
         _marca(con, "quickbooks", False, 0, f"{type(e).__name__}: {str(e)[:300]}", inicio)
         return {"ok": False, "motivo": str(e)[:300]}
+
+
+def sincronizar_itens_qbo(con):
+    """Catálogo de itens do QBO no espelho (ids que a IA precisa para a invoice)."""
+    try:
+        itens = chamar("quickbooks", "qbo_itens", maximo=300)
+    except Exception:
+        return 0
+    for i in itens:
+        if not i.get("id"):
+            continue
+        con.execute("""INSERT INTO qbo_items (id, name, full_name, price, type, active, synced_at) VALUES (?,?,?,?,?,?,?)
+                       ON CONFLICT(id) DO UPDATE SET name=excluded.name, full_name=excluded.full_name, price=excluded.price,
+                       type=excluded.type, active=excluded.active, synced_at=excluded.synced_at""",
+                    (str(i["id"]), i.get("nome") or "", i.get("nome_completo"), i.get("preco"), i.get("tipo"), 1 if i.get("ativo", True) else 0, agora()))
+    return len(itens)
 
 
 SERIES = ("SKUSA", "ROK", "USPKS", "FWT", "AMR", "Florida Karting", "SuperKarts", "Rotax", "WKA")

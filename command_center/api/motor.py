@@ -76,6 +76,58 @@ def _contexto_cliente(con, client_id):
             + "\nSERVIÇOS NO ESPELHO: " + json.dumps(ts, ensure_ascii=False))
 
 
+def cliente_citado(con, texto):
+    """Cliente cujo nome (piloto ou responsável, 2+ palavras) aparece no texto do dono."""
+    from command_center.providers.identidade import normaliza
+    t = " " + " ".join(normaliza(texto or "")) + " "
+    melhor, tam = None, 0
+    for c in todos(con, "SELECT id, name, pilot_name FROM clients"):
+        for n in (c["pilot_name"], c["name"]):
+            toks = normaliza(n or "")
+            if len(toks) >= 2 and (" " + " ".join(toks) + " ") in t and len(toks) > tam:
+                melhor, tam = c["id"], len(toks)
+    return melhor
+
+
+def contexto_do_comando(con, texto):
+    """Tudo que o painel já sabe sobre o piloto citado: histórico, última invoice (com o id do
+    cliente no QBO), waiver e o catálogo de itens. Entra no comando para a IA agir de uma vez."""
+    cid = cliente_citado(con, texto)
+    if not cid:
+        return ""
+    c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
+    ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? ORDER BY due_on DESC LIMIT 5", (cid,))
+    inv = um(con, "SELECT doc_number, amount, memo, issued_on, customer_ref, customer_email FROM invoices WHERE client_id=? ORDER BY issued_on DESC LIMIT 1", (cid,))
+    ws = todos(con, "SELECT status, template, signer_name, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (cid,))
+    from datetime import date, timedelta
+    corte = (date.today() - timedelta(days=365)).isoformat()
+    assinada = next((w for w in ws if w["status"] == "completed" and (w["completed_at"] or "")[:10] >= corte), None)
+    idade = None
+    if c.get("pilot_dob"):
+        try:
+            d = date.fromisoformat(c["pilot_dob"][:10]); h = date.today()
+            idade = h.year - d.year - ((h.month, h.day) < (d.month, d.day))
+        except ValueError:
+            pass
+    itens = todos(con, "SELECT id, name, price FROM qbo_items WHERE active=1 ORDER BY name LIMIT 60")
+    linhas = ["\n\nCONTEXTO DO PAINEL sobre " + (c["pilot_name"] or c["name"]) + " (use estes dados; não pergunte o que já está aqui):",
+              "- Piloto: " + json.dumps({"nome": c["pilot_name"] or c["name"], "nascimento": c.get("pilot_dob"), "idade": idade,
+                                         "menor": (idade is not None and idade < 18), "tipo": c.get("plan_type"), "vip": bool(c.get("vip"))}, ensure_ascii=False),
+              "- Responsável (quem paga e assina): " + json.dumps({"nome": c["name"], "email": c.get("email"), "email_alt": c.get("email_alt"), "telefone": c.get("phone")}, ensure_ascii=False),
+              "- Últimos serviços: " + json.dumps(ts, ensure_ascii=False),
+              "- Última invoice no QuickBooks: " + (json.dumps({"numero": inv["doc_number"], "valor": inv["amount"], "memo": inv["memo"], "emitida_em": inv["issued_on"],
+                                                                 "cliente_id_qbo": inv["customer_ref"], "email_cobranca": inv["customer_email"]}, ensure_ascii=False) if inv else "nenhuma no espelho"),
+              "- Waiver: " + (f"ASSINADA em {assinada['completed_at'][:10]} por {assinada['signer_name']} ({assinada['template']}) — vale um ano, NÃO peça de novo" if assinada
+                              else ("nenhuma assinada nos últimos 12 meses" + (f"; última: {ws[0]['status']} ({ws[0]['template']})" if ws else ""))),
+              ]
+    if inv and inv["customer_ref"]:
+        linhas.append(f"- Para invoice: cliente_id={inv['customer_ref']} (id do responsável no QBO), email={inv['customer_email'] or c.get('email')}")
+    if itens:
+        linhas.append("- Itens do QuickBooks (item_id: nome, preço de lista; o preço válido é o da Rate Card): " +
+                      "; ".join(f"{i['id']}: {i['name']}" + (f" (${i['price']:.0f})" if i.get("price") else "") for i in itens))
+    return "\n".join(linhas)
+
+
 def _prompt_evento(con, ev):
     regra = {"task.created": "Um serviço NOVO entrou no quadro. Verifique a waiver do piloto (docusign_waivers_de pelo e-mail do responsável; menor = parental) e, se faltar, PROPONHA o envio. "
                              "Verifique o que falta para a invoice (produto/valor): se souber pelo Rate Card e pela tarefa, proponha a invoice com o valor; se não souber, diga exatamente o que falta. "

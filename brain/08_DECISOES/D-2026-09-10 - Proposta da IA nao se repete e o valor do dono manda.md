@@ -39,3 +39,20 @@ aprovado — a memória da conversa guarda o texto, não as decisões.
    frase "o valor que o dono disse manda sobre qualquer outro".
 
 Relacionado: [[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]], [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]].
+
+**Segunda rodada (10/09, 08:58):** a tarefa nasceu do modelo, mas a IA
+propôs as *buscas* (cliente e item do QBO) como ações, chamou a busca
+com parâmetro errado e mandou a invoice com `<id de …>`. Ficou:
+5. **Contexto do painel no comando:** quando a mensagem cita um piloto
+   ou responsável conhecido, o comando leva idade, responsável, últimos
+   serviços, última invoice com o **id do cliente no QBO**, waiver (vale
+   um ano) e o **catálogo de itens do QBO** com ids. A IA age de uma vez.
+6. **Consulta não é ação:** buscar/ler/listar nunca vira proposta; o
+   painel avisa e descarta.
+7. **Painel resolve o que faltar:** cliente pelo espelho (última invoice
+   do responsável) ou pelo QBO por e-mail; item pelo catálogo espelhado
+   (`qbo_items`, atualizado a cada sincronia); `<placeholder>` conta
+   como vazio.
+8. Memória da IA: waiver assinada há menos de um ano não se pergunta;
+   "mesmo esquema" = repetir o último serviço e o valor da última
+   invoice, sem perguntar.

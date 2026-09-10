@@ -56,7 +56,38 @@ def _pega(d, aliases):
     baixo = {str(k).lower(): k for k in d}
     for a in aliases:
         if a in baixo:
-            return d[baixo[a]]
+            v = d[baixo[a]]
+            if isinstance(v, str) and re.fullmatch(r"\s*<[^>]*>\s*", v):      # "<id de qbo_itens_buscar>" = não preencheu
+                return None
+            return v
+    return None
+
+
+# Ferramentas de LEITURA: o agente executa na hora; nunca viram "ação" para aprovar.
+_CONSULTA_RX = re.compile(r"(_buscar|_listar|_ler)$|^(qbo_invoices|qbo_invoice|qbo_empresa|qbo_itens|qbo_estimates|qbo_contas_a_receber|"
+                          r"asana_tarefa|asana_tarefas_da_secao|asana_projetos|asana_secoes|asana_comentarios|asana_anexos|"
+                          r"docusign_waivers_de|docusign_ambiente|docusign_envelope|gmail_thread|gmail_marcadores|gmail_contas|calendar_eventos|sheets_ler)$")
+
+
+def eh_consulta(nome):
+    return bool(_CONSULTA_RX.search(nome or ""))
+
+
+def itens_do_cache(con):
+    return todos(con, "SELECT id, name, full_name, price FROM qbo_items WHERE active=1 ORDER BY name") if con else []
+
+
+def _casa_item(nome_ou_desc, itens):
+    """Item do catálogo cujo nome está contido na descrição (ou igual). Prefere o nome mais longo."""
+    t = (nome_ou_desc or "").lower()
+    if not t:
+        return None
+    exatos = [i for i in itens if (i["name"] or "").lower() == t]
+    if len(exatos) == 1:
+        return exatos[0]
+    contidos = [i for i in itens if len(i["name"] or "") >= 4 and (i["name"] or "").lower() in t]
+    if contidos:
+        return max(contidos, key=lambda i: len(i["name"]))
     return None
 
 
@@ -70,10 +101,13 @@ def valores_no_texto(texto):
     return vistos
 
 
-def normalizar_invoice(args, texto_ia="", buscar_item=None):
-    """Devolve (args_normalizados, problemas). `buscar_item(nome)` -> lista de {id, nome}."""
+def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None, con=None, alvo=None):
+    """Devolve (args_normalizados, problemas). `buscar_item(nome)` -> lista de {id, nome};
+    `buscar_cliente(texto)` -> lista de {id, nome, email}. Com `con`, usa o catálogo e o
+    espelho para resolver item e cliente sem depender do agente."""
     if not isinstance(args, dict):
         return args, ["sem argumentos"]
+    cache = itens_do_cache(con) if con else []
     saida = {}
     for chave, aliases in _ALIAS_TOPO.items():
         v = _pega(args, aliases)
@@ -110,7 +144,10 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None):
             n["item_id"] = None
             if not n["descricao"]:
                 n["descricao"] = nome_item
-            if buscar_item:
+            achado = _casa_item(nome_item, cache) or _casa_item(n["descricao"], cache)
+            if achado:
+                n["item_id"] = str(achado["id"])
+            elif buscar_item:
                 try:
                     achados = [x for x in (buscar_item(nome_item) or []) if x.get("id")]
                 except Exception:
@@ -121,7 +158,11 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None):
             if not n["item_id"]:
                 problemas.append(f"item '{nome_item}' não achado no catálogo do QuickBooks (precisa do id numérico)")
         elif not n["item_id"]:
-            problemas.append("linha sem item do QuickBooks")
+            achado = _casa_item(n["descricao"], cache)
+            if achado:
+                n["item_id"] = str(achado["id"])
+            else:
+                problemas.append("linha sem item do QuickBooks")
         linhas.append(n)
     if not linhas:
         problemas.append("invoice sem linhas")
@@ -136,7 +177,35 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None):
     saida["linhas"] = linhas
     cid = saida.get("cliente_id")
     if cid is None or not re.fullmatch(r"\d+", str(cid).strip()):
-        problemas.append("cliente do QuickBooks sem id numérico (busque com qbo_clientes_buscar)")
+        # resolve pelo espelho (última invoice do responsável) ou pelo QBO (e-mail, depois nome)
+        email = (saida.get("email") or "").strip().lower() or None
+        pessoa = None
+        if con:
+            if email:
+                pessoa = um(con, "SELECT * FROM clients WHERE LOWER(email)=? OR LOWER(email_alt)=?", (email, email))
+            if not pessoa and alvo:
+                from command_center.providers import identidade
+                pessoa, _ = identidade.acha_pessoa(con, nome=alvo, piloto=alvo)
+            if pessoa:
+                inv = um(con, "SELECT customer_ref, customer_email FROM invoices WHERE client_id=? AND customer_ref IS NOT NULL ORDER BY issued_on DESC LIMIT 1", (pessoa["id"],))
+                if inv:
+                    cid = inv["customer_ref"]
+                    saida.setdefault("email", inv["customer_email"] or pessoa["email"])
+                email = email or pessoa["email"]
+        if (cid is None or not re.fullmatch(r"\d+", str(cid).strip())) and buscar_cliente:
+            for termo in [x for x in (email, (pessoa or {}).get("name") if pessoa else None, alvo) if x]:
+                try:
+                    achados = [x for x in (buscar_cliente(termo) or []) if x.get("id")]
+                except Exception:
+                    achados = []
+                if len(achados) == 1:
+                    cid = achados[0]["id"]
+                    saida.setdefault("email", achados[0].get("email"))
+                    break
+        if cid is None or not re.fullmatch(r"\d+", str(cid).strip()):
+            problemas.append("cliente do QuickBooks sem id numérico (busque com qbo_clientes_buscar)")
+        else:
+            saida["cliente_id"] = str(cid).strip()
     else:
         saida["cliente_id"] = str(cid).strip()
     for k in ("vence_em", "email", "memo"):
@@ -145,9 +214,9 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None):
     return saida, problemas
 
 
-def normalizar(acao, args, texto_ia="", buscar_item=None):
+def normalizar(acao, args, texto_ia="", buscar_item=None, buscar_cliente=None, con=None, alvo=None):
     if acao in ACOES_INVOICE:
-        return normalizar_invoice(args, texto_ia, buscar_item)
+        return normalizar_invoice(args, texto_ia, buscar_item, buscar_cliente, con, alvo)
     return args, []
 
 

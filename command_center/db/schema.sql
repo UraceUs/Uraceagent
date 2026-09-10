@@ -444,6 +444,21 @@ INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
   (6, 'global', 'Treino fora do Orlando Kart Center (ex.: semana em Jacksonville ou Homestead) cobra $250 extra POR SESSÃO de hotel, comida e transporte.', 'dono-2026-09-09'),
   (7, 'global', 'Invoice ligada a esses produtos NUNCA sai sozinha: proponha qbo_criar_e_enviar_invoice com cliente, linhas e valores exatos, e ela vai para Aprovações com prévia. Aprovar = enviar. Mensalidade recorrente é montada no dia 1 do mês, uma por cliente com plano, e fica pronta esperando aprovação.', 'dono-2026-09-09');
 
+INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
+  (8, 'global', 'Waiver assinada vale UM ANO a partir da assinatura (decisão de 31/08). Se o piloto tem waiver assinada há menos de um ano, NÃO pergunte e NÃO peça de novo; só peça quando não houver ou estiver vencida.', 'dono-2026-09-10'),
+  (9, 'global', '"Mesmo esquema" / "mesma coisa da última vez" = repita o último serviço do piloto: mesmo produto, categoria e pista, mesmo valor da última invoice do responsável no QuickBooks, na coluna do dia pedido. Não pergunte o que o histórico já responde: crie a tarefa e proponha a invoice de uma vez, com os ids que vêm no CONTEXTO DO PAINEL.', 'dono-2026-09-10');
+
+-- catálogo do QuickBooks (espelho, só leitura): a IA recebe os ids no comando e o painel resolve item pelo nome
+CREATE TABLE IF NOT EXISTS qbo_items (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  full_name   TEXT,
+  price       REAL,
+  type        TEXT,
+  active      INTEGER NOT NULL DEFAULT 1,
+  synced_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 -- ------------------------------------------------- equipamento (editável pelo dono)
 CREATE TABLE IF NOT EXISTS catalog_chassis (
   id          INTEGER PRIMARY KEY,

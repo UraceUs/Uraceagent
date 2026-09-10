@@ -232,14 +232,25 @@ def qbo_clientes_buscar(texto, maximo=20):
                 "Itens do catálogo por nome (até 20 termos). O PREÇO válido é o da Rate Card, não o daqui. "
                 "Devolve 'found' por termo; o que voltar found=false pode ser criado com qbo_criar_item.",
                 {"termos": {"type": "array", "items": {"type": "string"}}}, ["termos"])
-def qbo_itens_buscar(termos):
+def qbo_itens_buscar(termos=None, texto=None):
+    if termos is None and texto:                       # o agente às vezes manda 'texto'
+        termos = [texto]
+    if isinstance(termos, str):
+        termos = [termos]
     saida = []
-    for termo in list(termos)[:20]:
+    for termo in list(termos or [])[:20]:
         r = _query(f"select * from Item where Name like '%{_esc(termo)}%' maxresults 10")
         itens = [_resumo_item(i) for i in r.get("Item", [])]
         saida.append({"termo": termo, "found": bool(itens), "itens": itens,
                       "requires_clarification": len(itens) > 1})
     return saida
+
+
+@srv.ferramenta("qbo_itens", "Todos os itens ATIVOS do catálogo (id, nome, preço de lista). O preço válido é o da Rate Card.",
+                {"maximo": {"type": "integer", "default": 300}}, [])
+def qbo_itens(maximo=300):
+    r = _query(f"select * from Item where Active = true maxresults {int(maximo)}")
+    return [_resumo_item(i) for i in r.get("Item", [])]
 
 
 @srv.ferramenta("qbo_invoices",

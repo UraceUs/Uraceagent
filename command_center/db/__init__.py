@@ -86,6 +86,7 @@ MIGRACOES = [
     ("clients", "equipment_notes", "TEXT"),
     ("invoices", "memo", "TEXT"),                         # ex.: "Urace Academy Training Program + Tuner [August, 2026]"
     ("invoices", "customer_email", "TEXT"),
+    ("invoices", "customer_ref", "TEXT"),                 # id do cliente no QBO (a IA usa direto na próxima invoice)
 ]
 
 
