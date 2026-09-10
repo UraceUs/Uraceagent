@@ -515,3 +515,20 @@ def test_uma_conversa_por_usuario_e_automatica_separada(cli):
     assert len(minha["commands"]) == 2 and minha["has_more"] and minha["commands"][0]["id"] < minha["commands"][1]["id"] and "actions" in minha["commands"][0]
     antes = cli.get(f"{B}/thread?limit=2&before={minha['commands'][0]['id']}").json()["commands"]
     assert all(c["id"] < minha["commands"][0]["id"] for c in antes)
+
+
+def test_continuar_sem_citar_o_piloto_usa_o_ultimo_da_conversa(cli):
+    """"pode continuar com a invoice" → o contexto do painel vem do último piloto citado hoje nesta conversa."""
+    from command_center.api import motor
+    from command_center.db import conectar
+    h = entra(cli, "admin@urace.us")
+    ia.RUNNER = lambda texto, sk: (True, "Ok.\nACAO: nenhuma", None)
+    espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera domingo que vem, mesmo esquema"}).json()["id"])
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "pode continuar com a montagem da invoice"}).json()["id"])
+    assert "CONTEXTO DO PAINEL sobre David Pera" in c["prompt"] and c["text"] == "pode continuar com a montagem da invoice"
+    con = conectar()
+    try:
+        assert motor.contexto_do_comando(con, "e aí?", user_id=None) == ""
+    finally:
+        con.close()
+    ia.RUNNER = runner_falso

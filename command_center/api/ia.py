@@ -387,7 +387,7 @@ def command_create(dados: ComandoIn, request: Request, u=Depends(auth.exige("OPE
     if not texto or len(texto) > 4000:
         raise HTTPException(400, "Command must be between 1 and 4000 characters.")
     from command_center.api import acoes, motor
-    prompt = texto + motor.aprendizados(con) + motor.contexto_do_comando(con, texto) + acoes.estado_do_dia(con, u["id"])
+    prompt = texto + motor.aprendizados(con) + motor.contexto_do_comando(con, texto, u["id"]) + acoes.estado_do_dia(con, u["id"])
     session_key = f"agent:{AGENTE}:web-{u['id']}-{date.today().isoformat()}"
     cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, prompt=prompt, session_key=session_key)
     auditar(con, "ai.command", f"user:{u['id']}", user_id=u["id"], entity_type="ai_command",

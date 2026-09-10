@@ -90,10 +90,16 @@ def cliente_citado(con, texto):
     return melhor
 
 
-def contexto_do_comando(con, texto):
+def contexto_do_comando(con, texto, user_id=None):
     """Tudo que o painel já sabe sobre o piloto citado: histórico, última invoice (com o id do
-    cliente no QBO), waiver e o catálogo de itens. Entra no comando para a IA agir de uma vez."""
+    cliente no QBO), waiver e o catálogo de itens. Entra no comando para a IA agir de uma vez.
+    Sem nome na mensagem ("pode continuar com a invoice"), vale o último piloto da conversa do dia."""
     cid = cliente_citado(con, texto)
+    if not cid and user_id:
+        for c in todos(con, "SELECT text FROM ai_commands WHERE user_id=? AND created_at >= date('now') AND text NOT LIKE 'EVENTO AUTOMÁTICO%' ORDER BY id DESC LIMIT 8", (user_id,)):
+            cid = cliente_citado(con, c["text"])
+            if cid:
+                break
     if not cid:
         return ""
     c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
