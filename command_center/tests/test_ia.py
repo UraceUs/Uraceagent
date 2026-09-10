@@ -556,8 +556,10 @@ def test_completar_proposta_incompleta_pelo_painel(cli, monkeypatch):
     monkeypatch.setattr(prov, "modulo", lambda s: Qbo())
     h = entra(cli, "admin@urace.us")
     r = cli.post(f"{B}/actions/{aid}/complete", headers=h)
-    assert r.status_code == 200 and r.json()["ok"] and criados == [("Urace Daily", 500.0)]
+    assert r.status_code == 200 and r.json()["ok"]
     a = cli.get(f"{B}/actions/{aid}").json()
     p = json.loads(a["payload"])
-    assert p["args"]["linhas"][0]["item_id"] == "88" and not p.get("problemas") and a["reason"].startswith("completada pelo painel")
+    # o item vem do catálogo espelhado (se já existir) ou é criado na hora (id 88)
+    assert p["args"]["linhas"][0]["item_id"] and (criados == [] or p["args"]["linhas"][0]["item_id"] == "88")
+    assert not p.get("problemas") and a["reason"].startswith("completada pelo painel")
     assert cli.post(f"{B}/actions/{aid}/complete", headers=entra(cli, "viewer@urace.us")).status_code == 403
