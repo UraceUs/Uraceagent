@@ -32,7 +32,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp_stdio import ErroFerramenta, Servidor, log  # noqa: E402
 
-TIMEOUT = 20
+TIMEOUT = 40
 LIMITE_PAGINA = 250                      # teto da API v4
 # tipos de nota que são conversa de verdade (o resto é ruído de sistema)
 NOTAS_DE_CONVERSA = {"amomail_message", "chat_message", "sms_in", "sms_out", "call_in", "call_out"}
@@ -151,14 +151,34 @@ def _nome_etapa(funil_id, etapa_id):
     return None, None, None
 
 
+_contatos = {}
+
+
+def _carregar_contatos(ids):
+    """Contatos em lote (até 50 por chamada) — 250 leads viravam 250 chamadas e estouravam o tempo (10/09)."""
+    faltam = [str(i) for i in ids if str(i) not in _contatos]
+    for i in range(0, len(faltam), 50):
+        lote = faltam[i:i + 50]
+        params = {f"filter[id][{j}]": v for j, v in enumerate(lote)}
+        params["limit"] = 50
+        r = _req("/contacts", params=params) or {}
+        for c in ((r.get("_embedded") or {}).get("contacts") or []):
+            _contatos[str(c.get("id"))] = c
+        for v in lote:
+            _contatos.setdefault(v, None)
+
+
 def _contato_do_lead(lead):
     """Primeiro contato embutido → nome, e-mail, telefone."""
     cs = ((lead.get("_embedded") or {}).get("contacts") or [])
     if not cs:
         return {}
     c = cs[0]
-    if "custom_fields_values" not in c and c.get("id"):        # veio só o id: busca o contato
-        c = _req(f"/contacts/{c['id']}") or c
+    if "custom_fields_values" not in c and c.get("id"):        # veio só o id: usa o lote (ou busca um)
+        cid = str(c["id"])
+        if cid not in _contatos:
+            _carregar_contatos([cid])
+        c = _contatos.get(cid) or c
     return _resumo_contato(c)
 
 
@@ -226,7 +246,14 @@ def kommo_leads(funil_id=None, etapa_id=None, texto=None, maximo=50):
             params["filter[statuses][0][pipeline_id]"] = int(funil_id)
     if texto:
         params["query"] = texto
-    return [_resumo_lead(l) for l in _lista("/leads", "leads", params, maximo=int(maximo or 50))]
+    leads = _lista("/leads", "leads", params, maximo=int(maximo or 50))
+    ids = [str(c["id"]) for l in leads for c in (((l.get("_embedded") or {}).get("contacts") or [])[:1]) if c.get("id")]
+    if ids:
+        try:
+            _carregar_contatos(ids)
+        except ErroFerramenta:
+            pass                                          # cai no um-a-um só para os que faltarem
+    return [_resumo_lead(l) for l in leads]
 
 
 @srv.ferramenta("kommo_lead", "Um lead pelo id, com contato, tags, origem e campos. Só leitura.",
@@ -277,7 +304,7 @@ TIPOS_CHAT = ("incoming_chat_message", "outgoing_chat_message")
 
 
 _talks = {}
-TIPOS_TALK = ("conversation_answered", "talk_created", "talk_closed", "conversation_closed", "talk_opened")
+TIPOS_TALK = ("conversation_answered",)          # o único tipo de talk que a conta emitiu (10/09); nome inventado = 400
 
 
 def talk(talk_id):
@@ -382,14 +409,20 @@ def _lista_eventos(params, maximo):
                 {"desde_dias": {"type": "integer", "default": 30}, "maximo": {"type": "integer", "default": 500}}, [])
 def kommo_chats(desde_dias=30, maximo=500):
     desde = int(time.time()) - int(desde_dias or 30) * 86400
-    saida, modo = [], None
+    saida, modo, erros = [], None, []
     for nome, params in _filtros_de_chat(desde):
-        # sem filtro de tipo vem TUDO (etapa, tarefa, nota…): lê mais páginas e separa aqui
-        brutos = _lista_eventos(params, maximo if nome != "sem tipo" else max(maximo, 2000))
+        try:
+            # sem filtro de tipo vem TUDO (etapa, tarefa, nota…): lê mais páginas e separa aqui
+            brutos = _lista_eventos(params, maximo if nome != "sem tipo" else max(maximo, 1000))
+        except ErroFerramenta as e:                     # formato que esta conta não aceita: tenta o próximo
+            erros.append(f"{nome}: {str(e)[:120]}")
+            continue
         saida = [x for x in (_evento_chat(ev) for ev in brutos) if x]
         modo = nome
         if saida:
             break
+    if modo is None and erros:
+        raise ErroFerramenta("nenhum formato de filtro aceito: " + " | ".join(erros))
     saida.sort(key=lambda x: x["em"] or "")
     _ultimo_modo["modo"] = modo
     return saida

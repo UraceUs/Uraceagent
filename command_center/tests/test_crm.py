@@ -477,3 +477,35 @@ def test_conversa_como_talk_vira_registro_de_chat(monkeypatch):
     k._evento_chat(dict(ev, id="e10"))
     assert chamadas.count("/talks/8967") == 1                      # cache: um talk, uma chamada
     assert k._evento_chat({"type": "incoming_mail", "entity_type": "contact", "entity_id": 1}) is None
+
+
+def test_filtro_recusado_passa_ao_proximo_e_contatos_vem_em_lote(monkeypatch):
+    import kommo_mcp as k
+    from mcp_stdio import ErroFerramenta
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com"); monkeypatch.setenv("KOMMO_TOKEN", "t")
+    tentativas = []
+    def _lista_falsa(params, maximo):
+        tentativas.append(" ".join(params))
+        if "filter[type]" in tentativas[-1]:
+            raise ErroFerramenta('Kommo GET /events → 400: {"errors":{"key":"type"}}')
+        return [{"id": "e1", "type": "incoming_chat_message", "entity_type": "lead", "entity_id": 1, "created_at": 1789000000,
+                 "value_after": [{"message": {"origin": "instagram"}}]}]
+    monkeypatch.setattr(k, "_lista_eventos", _lista_falsa)
+    evs = k.kommo_chats()
+    assert len(evs) == 1 and k._ultimo_modo["modo"] == "sem tipo" and len(tentativas) == 4
+    # contatos em lote: 3 leads com contato só por id → UMA chamada /contacts
+    k._contatos.clear()
+    chamadas = []
+    def _req(c, m="GET", corpo=None, params=None):
+        chamadas.append((c, params))
+        if c == "/leads":
+            return {"_embedded": {"leads": [{"id": i, "name": f"L{i}", "pipeline_id": 1, "status_id": 2,
+                                             "_embedded": {"contacts": [{"id": 100 + i}]}} for i in (1, 2, 3)]}}
+        if c == "/contacts":
+            return {"_embedded": {"contacts": [{"id": 100 + i, "name": f"C{i}", "custom_fields_values": []} for i in (1, 2, 3)]}}
+        return {}
+    monkeypatch.setattr(k, "_req", _req)
+    monkeypatch.setattr(k, "_nome_etapa", lambda f, e: ("Sales funnel", "First Contact", 2))
+    leads = k.kommo_leads(maximo=10)
+    assert [l["contato"]["nome"] for l in leads] == ["C1", "C2", "C3"]
+    assert [c for c, _ in chamadas].count("/contacts") == 1 and not any(c.startswith("/contacts/") for c, _ in chamadas)
