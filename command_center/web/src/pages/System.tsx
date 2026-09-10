@@ -14,6 +14,7 @@ const DESC: Record<string, string> = {
   docusign: 'Waivers (produção, conta na4). Delivered ≠ assinada.',
   gmail: 'Caixas urace@ e support@. Sem envio a partir daqui.',
   quickbooks: 'Em stand-by por decisão do dono. Invoices só depois de aprovação humana.',
+  kommo: 'Funil comercial (Instagram, Facebook, WhatsApp). Token da integração privada em ~/.urace/kommo.env. Resposta pelo painel sai como mensagem do bot da conta.',
 }
 
 function Contexto({ kind }: { kind: 'sheet' | 'file' }) {

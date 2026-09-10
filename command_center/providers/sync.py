@@ -606,6 +606,88 @@ def _marca(con, sistema, ok, itens, msg, inicio, desconectado=False, detalhe=Non
                     ("DISCONNECTED" if desconectado else "ERROR", agora(), msg[:500], sistema))
 
 
+# ------------------------------------------------------------ Kommo (CRM)
+LIMITE_LEADS = 300               # leads mais recentes por sincronia
+
+
+def _lead_do_espelho(con, ext):
+    return um(con, "SELECT * FROM crm_leads WHERE external_id=?", (str(ext),))
+
+
+def guardar_conversa(con, lead_id, mensagens):
+    """Grava conversa/anotações sem repetir (chave: lead + id da mensagem).
+    Devolve quantas entraram e quando foi a última mensagem DO CLIENTE."""
+    novas, ultima_entrada = 0, None
+    for m in mensagens:
+        ext = str(m.get("id") or "")
+        if ext and um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (lead_id, ext)):
+            continue
+        inserir(con, "crm_messages", lead_id=lead_id, external_id=ext or None,
+                direction=m.get("direcao") or "nota", author=m.get("quem"), text=(m.get("texto") or "")[:8000],
+                at=m.get("em") or agora(), source=m.get("origem") or "kommo")
+        novas += 1
+        if (m.get("direcao") == "entrada") and (not ultima_entrada or (m.get("em") or "") > ultima_entrada):
+            ultima_entrada = m.get("em")
+    return novas, ultima_entrada
+
+
+def sync_kommo(con, maximo=LIMITE_LEADS, com_conversa=20):
+    """Funil comercial do Kommo → espelho. Só leitura. Liga o lead ao card do
+    cliente pelo e-mail/telefone/nome (nunca cria cliente: lead não é cliente)."""
+    inicio = agora()
+    try:
+        funis = chamar("kommo", "kommo_funis")
+        leads = chamar("kommo", "kommo_leads", maximo=maximo)
+        n = ligados = 0
+        recentes = []
+        for l in leads:
+            contato = l.get("contato") or {}
+            cli = _acha_cliente(con, email=(contato.get("email") or "").lower() or None,
+                                nome=contato.get("nome") or l.get("nome"), telefone=contato.get("telefone"))
+            campos = dict(client_id=cli["id"] if cli else None, name=l.get("nome"),
+                          pipeline_id=l.get("funil_id"), pipeline_name=l.get("funil"),
+                          stage_id=l.get("etapa_id"), stage_name=l.get("etapa"), stage_order=l.get("ordem"),
+                          price=l.get("valor"), source=l.get("origem"),
+                          tags=json.dumps(l.get("tags") or [], ensure_ascii=False),
+                          responsible=l.get("responsavel_id"), contact_name=contato.get("nome"),
+                          contact_email=(contato.get("email") or None), contact_phone=contato.get("telefone"),
+                          link=l.get("link"), created_at_src=l.get("criado_em"), updated_at_src=l.get("atualizado_em"),
+                          synced_at=agora())
+            atual = _lead_do_espelho(con, l["id"])
+            if atual:
+                atualizar(con, "crm_leads", atual["id"], **campos)
+                lid = atual["id"]
+            else:
+                lid = inserir(con, "crm_leads", external_id=str(l["id"]), **campos)
+                _liga(con, "crm_lead", lid, "kommo", str(l["id"]), l.get("link"))
+            n += 1
+            ligados += 1 if cli else 0
+            recentes.append((lid, l["id"], l.get("atualizado_em") or ""))
+        # conversa só dos mais recentes: cada lead é uma chamada a mais
+        recentes.sort(key=lambda x: x[2], reverse=True)
+        for lid, ext, _ in recentes[:int(com_conversa or 0)]:
+            try:
+                msgs = chamar("kommo", "kommo_conversa", lead_id=str(ext), maximo=50)
+            except Exception:
+                continue
+            _, ultima = guardar_conversa(con, lid, msgs)
+            if ultima:
+                ult_saida = um(con, """SELECT MAX(at) AS m FROM crm_messages
+                                       WHERE lead_id=? AND direction IN ('saida','nota')""", (lid,))
+                pendente = 1 if not (ult_saida and (ult_saida["m"] or "") > ultima) else 0
+                atualizar(con, "crm_leads", lid, last_message_at=ultima, needs_reply=pendente)
+        _marca(con, "kommo", True, n, f"{n} leads, {ligados} ligados a cliente, {len(funis)} funis", inicio,
+               detalhe={"funis": [f["nome"] for f in funis]})
+        return {"ok": True, "leads": n, "ligados": ligados, "funis": len(funis)}
+    except NaoConectado as e:
+        _marca(con, "kommo", False, 0, f"não conectado: {e}", inicio, desconectado=True)
+        return {"ok": False, "motivo": "not connected"}
+    except Exception as e:
+        _marca(con, "kommo", False, 0, f"{type(e).__name__}: {str(e)[:300]}", inicio)
+        return {"ok": False, "motivo": str(e)[:300]}
+
+
 def sync_tudo(con):
     return {"cerebro": sync_cerebro(con), "asana": sync_asana(con),
-            "docusign": sync_docusign(con), "gmail": sync_gmail(con), "quickbooks": sync_qbo(con)}
+            "docusign": sync_docusign(con), "gmail": sync_gmail(con), "quickbooks": sync_qbo(con),
+            "kommo": sync_kommo(con)}

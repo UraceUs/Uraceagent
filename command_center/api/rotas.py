@@ -121,6 +121,7 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
         "waivers_open": n("SELECT COUNT(*) AS n FROM waivers WHERE status IN ('sent','delivered')"),
         "waivers_bounced": n("SELECT COUNT(*) AS n FROM waivers WHERE status='autoresponded'"),
         "emails_attention": n("SELECT COUNT(*) AS n FROM emails WHERE handled=0 AND client_id IS NOT NULL"),
+        "crm_pending": n("SELECT COUNT(*) AS n FROM crm_leads WHERE needs_reply=1"),
         "ai_actions_today": n("SELECT COUNT(*) AS n FROM ai_actions WHERE created_at >= ?", (hoje,)),
         "ai_pending_approval": n("SELECT COUNT(*) AS n FROM ai_actions WHERE status='PROPOSED' AND policy='REQUIRES_APPROVAL'"),
         "open_invoices": (None if not fin else {

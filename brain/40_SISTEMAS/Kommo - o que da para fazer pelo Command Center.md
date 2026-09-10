@@ -4,7 +4,7 @@ tipo_info: CONTEXT
 data: 2026-09-09
 fonte: docs da era Chase (salesagent/docs/kommo-circuit-setup.md, CONSOLIDACAO.md, config/kommo-pipeline.json) + API v4 do Kommo
 responsavel: Italo Silveira
-status: em estudo (sem ação até o dono decidir)
+status: implementado no Command Center (10/09) — ver decisão
 ---
 
 # Kommo — o que dá para fazer pelo Command Center
@@ -12,8 +12,13 @@ status: em estudo (sem ação até o dono decidir)
 [[Gmail]] · [[Projeto Chase]] · [[Administrative AI]]
 
 Pedido do dono (09/09): aba Kommo no painel com inbox, resposta, estágio,
-tags, contato, origem do lead e visão do funil. **Nenhuma ação tomada;
-só levantamento.** Continua em 10/09.
+tags, contato, origem do lead e visão do funil. O levantamento abaixo virou
+código em 10/09 — ver [[D-2026-09-10 - Kommo dentro do Command Center]].
+
+**Onde vive agora:** `adminai/mcp/kommo_mcp.py` (leitura como ferramenta,
+escrita como porta humana), `command_center/api/crm.py` (rotas + webhook),
+`command_center/providers/sync.py::sync_kommo` (espelho) e a aba
+`/ops/crm`. Credenciais em `~/.urace/kommo.env`, fora do repositório.
 
 ## O que já existe da era Chase (reaproveitável)
 - Integração privada **"Chase Bridge (URACE)"** instalada e ativa na conta

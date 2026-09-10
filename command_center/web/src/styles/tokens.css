@@ -442,3 +442,9 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .modal.ask .field{margin:0}
 .btn.danger{border-color:var(--crit);color:var(--crit)}
 .btn.danger:hover{background:var(--crit);color:#fff}
+
+/* ---------- CRM (Kommo): lead no quadro e anotação na conversa */
+.tcard.lead{display:flex;flex-direction:column;gap:4px;text-align:left;width:100%;font:inherit;color:inherit}
+.tcard.lead.esperando{border-left:3px solid var(--warn)}
+.msg.nota{align-items:flex-start}
+.msg.nota .bub{max-width:min(92%,900px);background:var(--surface-2);border:1px dashed var(--rule);border-radius:var(--r);padding:8px 12px;color:var(--ink-2);font-size:13px}

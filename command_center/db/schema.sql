@@ -155,6 +155,49 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   synced_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- ------------------------------------------------------------- CRM (Kommo)
+-- Espelho do funil comercial. A fonte de verdade continua sendo o Kommo;
+-- aqui fica o que a tela precisa mostrar rápido e ligar ao card do cliente.
+CREATE TABLE IF NOT EXISTS crm_leads (
+  id             INTEGER PRIMARY KEY,
+  external_id    TEXT NOT NULL UNIQUE,      -- id do lead no Kommo
+  client_id      INTEGER REFERENCES clients(id),
+  name           TEXT,
+  pipeline_id    TEXT,
+  pipeline_name  TEXT,
+  stage_id       TEXT,
+  stage_name     TEXT,
+  stage_order    INTEGER,
+  price          REAL,
+  source         TEXT,                      -- Instagram, Facebook, WhatsApp, site…
+  tags           TEXT,                      -- json
+  responsible    TEXT,
+  contact_name   TEXT,
+  contact_email  TEXT COLLATE NOCASE,
+  contact_phone  TEXT,
+  link           TEXT,
+  created_at_src TEXT,
+  updated_at_src TEXT,
+  last_message_at TEXT,
+  needs_reply    INTEGER NOT NULL DEFAULT 0,
+  synced_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS crm_leads_stage ON crm_leads(pipeline_id, stage_order);
+CREATE INDEX IF NOT EXISTS crm_leads_client ON crm_leads(client_id);
+
+CREATE TABLE IF NOT EXISTS crm_messages (
+  id          INTEGER PRIMARY KEY,
+  lead_id     INTEGER NOT NULL REFERENCES crm_leads(id),
+  external_id TEXT,
+  direction   TEXT,                         -- entrada | saida | nota
+  author      TEXT,
+  text        TEXT,
+  at          TEXT,
+  source      TEXT,                          -- kommo | webhook | painel
+  UNIQUE (lead_id, external_id)
+);
+CREATE INDEX IF NOT EXISTS crm_messages_lead ON crm_messages(lead_id, at);
+
 -- ---------------------------------------------------------- integrações
 CREATE TABLE IF NOT EXISTS integrations (
   system            TEXT PRIMARY KEY,     -- asana, docusign, gmail, quickbooks
@@ -308,7 +351,7 @@ INSERT OR IGNORE INTO client_stages (code, label, ord) VALUES
 
 INSERT OR IGNORE INTO integrations (system, status) VALUES
   ('asana','DISCONNECTED'), ('docusign','DISCONNECTED'),
-  ('gmail','DISCONNECTED'), ('quickbooks','DISCONNECTED');
+  ('gmail','DISCONNECTED'), ('quickbooks','DISCONNECTED'), ('kommo','DISCONNECTED');
 
 -- A política inicial vem do cérebro (PARAMETROS + decisões de 04/09).
 INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES

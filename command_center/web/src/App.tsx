@@ -12,6 +12,7 @@ import { Automation } from './pages/Automation'
 import { Races } from './pages/Races'
 import { Client360 } from './pages/Client360'
 import { Clients } from './pages/Clients'
+import { CRM } from './pages/CRM'
 import { Dashboard } from './pages/Dashboard'
 import { AsanaPage, DocuSignPage, GmailPage, QuickBooksPage } from './pages/Systems'
 import { Login } from './pages/Login'
@@ -40,6 +41,8 @@ export default function App() {
           <Route path="docusign" element={<DocuSignPage />} />
           <Route path="gmail" element={<GmailPage />} />
           <Route path="quickbooks" element={<QuickBooksPage />} />
+          <Route path="crm" element={<CRM />} />
+          <Route path="kommo" element={<Navigate to="/crm" replace />} />
           <Route path="races" element={<Races />} />
           <Route path="equipment" element={<Navigate to="/clients?v=pro" replace />} />
           <Route path="tasks" element={<Navigate to="/asana" replace />} />

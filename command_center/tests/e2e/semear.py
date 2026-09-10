@@ -168,9 +168,36 @@ inserir(con, "ai_commands", user_id=1, text="EVENTO AUTOMÁTICO: task.overdue �
 inserir(con, "ai_events", kind="task.overdue", entity_type="task", entity_id=t_vencida, client_id=theo,
         summary="Théo Mendes_Urace Daily_2 stroke [1/1] ainda aberta", status="FAILED")
 
+# ------------------------------------------------------------------ CRM (Kommo)
+# Funil comercial com lead do Instagram esperando resposta, lead já ligado a cliente
+# e lead de WhatsApp em outra etapa. Espelho: nada aqui fala com o Kommo.
+con.execute("UPDATE integrations SET status='CONNECTED', last_success_at=? WHERE system='kommo'", (d(0) + "T07:02:00Z",))
+lead1 = inserir(con, "crm_leads", external_id="5001", name="Maria Souza — aula experimental",
+                pipeline_id="9903543", pipeline_name="Sales funnel", stage_id="76050835",
+                stage_name="Leads de entrada", stage_order=1, price=500, source="Instagram",
+                tags='["instagram","experimental"]', contact_name="Maria Souza", contact_email="maria@example.com",
+                contact_phone="+1 407 555 0101", link="https://urace.kommo.com/leads/detail/5001",
+                created_at_src=d(-2) + "T18:00:00Z", updated_at_src=d(0) + "T09:10:00Z",
+                last_message_at=d(0) + "T09:10:00Z", needs_reply=1)
+inserir(con, "crm_messages", lead_id=lead1, external_id="m1", direction="entrada", author="Maria Souza",
+        text="Oi! Vi o vídeo do kart. Quanto custa a aula experimental para o meu filho de 9 anos?",
+        at=d(0) + "T09:10:00Z", source="kommo")
+lead2 = inserir(con, "crm_leads", external_id="5002", name="Carla Mendes — mensalidade 2 stroke",
+                client_id=theo, pipeline_id="9903543", pipeline_name="Sales funnel", stage_id="105276412",
+                stage_name="First Contact", stage_order=2, price=3156.9, source="WhatsApp",
+                tags='["mensalidade"]', contact_name="Carla Mendes", contact_email="carla@example.com",
+                contact_phone="407-555-0199", link="https://urace.kommo.com/leads/detail/5002",
+                created_at_src=d(-9) + "T12:00:00Z", updated_at_src=d(-1) + "T16:00:00Z",
+                last_message_at=d(-1) + "T16:00:00Z", needs_reply=0)
+inserir(con, "crm_messages", lead_id=lead2, external_id="m2", direction="entrada", author="Carla Mendes",
+        text="Fechado, pode mandar a invoice da mensalidade.", at=d(-1) + "T15:40:00Z", source="kommo")
+inserir(con, "crm_messages", lead_id=lead2, external_id=None, direction="saida", author="Italo Silveira",
+        text="Perfeito, Carla! Mando ainda hoje.", at=d(-1) + "T16:00:00Z", source="painel")
+
 # aprendizado do dono e fonte de contexto já vêm do schema
 con.commit()
 n = lambda t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]                       # noqa: E731
 print(f"clientes={n('clients')} tarefas={n('tasks')} waivers={n('waivers')} emails={n('emails')} "
-      f"invoices={n('invoices')} corridas={n('races')} acoes={n('ai_actions')} comandos={n('ai_commands')} itens_qbo={n('qbo_items')}")
+      f"invoices={n('invoices')} corridas={n('races')} acoes={n('ai_actions')} comandos={n('ai_commands')} "
+      f"itens_qbo={n('qbo_items')} leads={n('crm_leads')}")
 con.close()

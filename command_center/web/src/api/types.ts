@@ -21,7 +21,7 @@ export interface Attention {
 
 export interface Dashboard {
   active_clients: number; tasks_due_today: number; overdue_tasks: number; upcoming_7d: number
-  waivers_open: number; waivers_bounced: number; emails_attention: number
+  waivers_open: number; waivers_bounced: number; emails_attention: number; crm_pending?: number
   ai_actions_today: number; ai_pending_approval: number
   open_invoices: null | { count: number; total: number; overdue: number; connected: boolean }
   integrations: Pick<Integration, 'system' | 'status' | 'last_success_at'>[]
