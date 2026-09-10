@@ -245,9 +245,60 @@ def nome_canonico(nome):
     return n or "acao_desconhecida"
 
 
-def converter(nome, args):
-    """Tarefa de serviço numa coluna de dia nasce do modelo oficial (decisão do dono,
-    04/09): asana_criar_tarefa vira asana_criar_do_modelo com os mesmos campos."""
+RACE_PADRAO = "Practice OKC"
+
+
+def _dbr_us(iso):
+    return f"{iso[5:7]}/{iso[8:10]}/{iso[:4]}" if iso and len(iso) >= 10 else (iso or "")
+
+
+def _idade(dob):
+    from datetime import date
+    try:
+        d = date.fromisoformat((dob or "")[:10]); h = date.today()
+        return h.year - d.year - ((h.month, h.day) < (d.month, d.day))
+    except ValueError:
+        return None
+
+
+def notas_servico(piloto, responsavel, email=None, telefone=None, dob=None, data=None, produto=None, categoria=None,
+                  preco=None, altura=None, peso=None, cintura=None, experiencia=None, extra=None, por=None):
+    """A descrição da tarefa de serviço, no bloco padrão do quadro, sempre igual e legível.
+    'Invoice link' fica vazio até a invoice sair do QuickBooks (o painel preenche)."""
+    idade = _idade(dob)
+    v = lambda x: (str(x).strip() if x not in (None, "") else "—")
+    linhas = [f"Service Dates for this Month: {_dbr_us(data) if data else '—'}",
+              f"Driver's name: {v(piloto)}",
+              f"Date of Birth: {_dbr_us(dob) if dob else '—'}",
+              f"Age: {idade if idade is not None else '—'}" + ("  (menor: waiver parental)" if idade is not None and idade < 18 else ""),
+              f"Height: {v(altura)}    Weight: {v(peso)}    Waist: {v(cintura)}",
+              f"Karting Experience: {v(experiencia)}",
+              "----------------------------------------",
+              f"Responsible Name: {v(responsavel)}",
+              f"Email: {v(email)}",
+              f"Phone: {v(telefone)}",
+              "----------------------------------------",
+              f"Product: {v(produto)}" + (f" / {categoria}" if categoria else ""),
+              f"Invoice link: (a IA preenche quando a invoice sair)    Price: {('$%.2f' % float(preco)) if preco not in (None, '') else '—'}",
+              "Security deposit: —    Price: —"]
+    if extra:
+        linhas += ["", str(extra).strip()]
+    if por:
+        linhas += ["", f"[criado pelo Command Center por {por}]"]
+    return "\n".join(linhas)
+
+
+def _partes_do_nome(nome):
+    """'David Pera_Urace Daily_Using Own Kart [1/1]' -> (piloto, produto, categoria)."""
+    base = re.sub(r"\s*\[[^\]]*\]\s*$", "", nome or "")
+    partes = [x.strip() for x in base.split("_")]
+    return (partes[0] if partes else None, partes[1] if len(partes) > 1 else None, partes[2] if len(partes) > 2 else None)
+
+
+def converter(nome, args, con=None, texto=""):
+    """Tarefa de serviço numa coluna de dia nasce do modelo oficial (decisão do dono, 04/09):
+    asana_criar_tarefa vira asana_criar_do_modelo. Com o espelho (`con`), a descrição é
+    montada com os dados do piloto e o campo Race sai 'Practice OKC' (ou Bushnell, se citado)."""
     if nome == "asana_criar_tarefa" and isinstance(args, dict) and not args.get("modelo_gid"):
         from command_center.providers.sync import SECOES_DIAS
         if str(args.get("secao_gid") or "") in SECOES_DIAS:
@@ -255,7 +306,29 @@ def converter(nome, args):
             for k in ("notas", "vence_em"):
                 if args.get(k):
                     novo[k] = args[k]
-            return "asana_criar_do_modelo", novo
+            nome, args = "asana_criar_do_modelo", novo
+    if nome == "asana_criar_do_modelo" and isinstance(args, dict):
+        args = dict(args)
+        piloto, produto, categoria = _partes_do_nome(args.get("nome"))
+        if con:
+            from command_center.api import motor
+            cid = motor.cliente_citado(con, (args.get("nome") or "") + " " + (args.get("notas") or "") + " " + (texto or ""))
+            c = um(con, "SELECT * FROM clients WHERE id=?", (cid,)) if cid else None
+            if c:
+                preco = None
+                m = re.search(r"Price:\s*\$?\s*([\d.,]+)", args.get("notas") or "")
+                if m:
+                    preco = _num(m.group(1))
+                if preco is None:
+                    cit = valores_no_texto(texto)
+                    preco = cit[0] if len(cit) == 1 else None
+                args["notas"] = notas_servico(c.get("pilot_name") or piloto or c["name"], c["name"], c.get("email"), c.get("phone"), c.get("pilot_dob"),
+                                              args.get("vence_em"), produto, categoria, preco, por="IA (AI Command)")
+        campos = dict(args.get("campos") or {})
+        if not campos.get("Race") and not re.search(r"\b(race|corrida|round|cup|series)\b", (args.get("nome") or "").lower()):
+            campos["Race"] = "Practice Bushnell" if re.search(r"bushnell", (args.get("nome") or "") + " " + (texto or ""), re.I) else RACE_PADRAO
+        if campos:
+            args["campos"] = campos
     return nome, args
 
 

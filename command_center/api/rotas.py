@@ -1244,14 +1244,12 @@ def task_create(dados: TarefaNovaIn, request: Request, u=Depends(auth.exige("OPE
         raise HTTPException(400, "Piloto menor de idade: o responsável é obrigatório (é quem assina a waiver e paga).")
     if idade is None and not (dados.responsible or "").strip():
         raise HTTPException(400, "Informe a data de nascimento do piloto ou o responsável.")
-    notas = (f"Driver's name: {piloto}\nDate of Birth: {dados.dob or ''}\nAge: {idade if idade is not None else ''}\n"
-             f"Height: {dados.height or ''}\nWeight: {dados.weight or ''}\nWaist: {dados.waist or ''}\nExperience: {dados.experience or ''}\n"
-             f"Responsible Name: {resp}\nEmail: {dados.email or ''}\nPhone: {dados.phone or ''}\n"
-             f"Product: {dados.product}" + (f" / {dados.category}" if dados.category else "") + f" — {PRODUTOS[dados.product]}\n"
-             f"Service Dates for this Month: {dados.due_on}" + (f"\n\n{dados.extra_notes}" if dados.extra_notes else "")
-             + f"\n\n[criado pelo Command Center por {u['name']}]")
+    from command_center.api import acoes as _ac
+    notas = _ac.notas_servico(piloto, resp, dados.email, dados.phone, dados.dob, dados.due_on, dados.product, dados.category, None,
+                              dados.height, dados.weight, dados.waist, dados.experience, dados.extra_notes, por=u["name"])
+    campos = {} if dados.product in ("Corrida",) else {"Race": "Practice Bushnell" if re.search(r"bushnell", (dados.extra_notes or "") + (dados.category or ""), re.I) else _ac.RACE_PADRAO}
     try:
-        res = modulo("asana").criar_do_modelo_humano(MODELO_SESSAO, nome, sec_gid, notas, dados.due_on)
+        res = modulo("asana").criar_do_modelo_humano(MODELO_SESSAO, nome, sec_gid, notas, dados.due_on, campos)
     except NaoConectado as ex:
         raise HTTPException(503, f"Asana não conectado: {ex}")
     except Exception as ex:

@@ -1,6 +1,7 @@
 """AI Command com runner falso: fila, execução em thread, extração de
 ações propostas com a política vigente, aprovação/rejeição auditadas,
 BLOCKED nunca aprovável, e isolamento por usuário."""
+import json
 import os
 import tempfile
 import time
@@ -335,7 +336,7 @@ def test_nome_com_prefixo_do_mcp_e_tarefa_pelo_modelo(cli):
     assert acoes.nome_canonico("qbo__qbo_criar_e_enviar_invoice") == "qbo_criar_e_enviar_invoice"
     assert acoes.nome_canonico("google__gmail_rascunho") == "gmail_rascunho"
     n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pera_Urace Daily [1/1]", "notas": "x", "vence_em": "2026-09-13"})
-    assert n == "asana_criar_do_modelo" and a == {"modelo_gid": acoes.MODELO_SESSAO, "nome": "David Pera_Urace Daily [1/1]", "secao_gid": "1205141832260879", "notas": "x", "vence_em": "2026-09-13"}
+    assert n == "asana_criar_do_modelo" and a == {"modelo_gid": acoes.MODELO_SESSAO, "nome": "David Pera_Urace Daily [1/1]", "secao_gid": "1205141832260879", "notas": "x", "vence_em": "2026-09-13", "campos": {"Race": "Practice OKC"}}
     assert acoes.converter("asana_criar_tarefa", {"secao_gid": "outra", "nome": "x"})[0] == "asana_criar_tarefa"
     h = entra(cli, "admin@urace.us")
     ia.RUNNER = lambda texto, sk: (True, 'Criando.\nACAO: asana__asana_criar_tarefa | David Pera | tarefa | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pera_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}', None)
@@ -384,3 +385,49 @@ def test_contexto_do_piloto_citado_e_invoice_resolvida_sem_perguntar(cli, monkey
     assert not p.get("problemas") and p["args"]["cliente_id"] == "696" and p["args"]["linhas"][0]["item_id"] == "31"
     assert "é consulta, não ação" in c["output"]
     ia.RUNNER = runner_falso
+
+
+def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, monkeypatch):
+    from command_center.api import acoes, motor
+    from command_center.db import conectar, inserir, um
+    con = conectar()
+    try:
+        cid = um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")["id"]
+        n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pera_Urace Daily_Using Own Kart [1/1]",
+                                                     "notas": "Driver's name: David Pera\nInvoice link:   Price: $500", "vence_em": "2026-09-13"}, con, "David Pera domingo mesmo esquema")
+        assert n == "asana_criar_do_modelo" and a["campos"] == {"Race": "Practice OKC"}
+        notas = a["notas"]
+        assert "Service Dates for this Month: 09/13/2026" in notas and "Date of Birth: 05/02/2014" in notas and "Age: 12  (menor: waiver parental)" in notas
+        assert "Responsible Name: Nicolas Pera" in notas and "Email: peranicolas2106@gmail.com" in notas and "Product: Urace Daily / Using Own Kart" in notas
+        assert "Invoice link: (a IA preenche quando a invoice sair)    Price: $500.00" in notas
+        n2, a2 = acoes.converter("asana_criar_do_modelo", {"modelo_gid": "x", "nome": "David Pera_Urace Daily_2T [1/1]", "secao_gid": "1205141832260879"}, con, "treino em Bushnell")
+        assert a2["campos"] == {"Race": "Practice Bushnell"}
+        assert "campos" not in acoes.converter("asana_criar_do_modelo", {"modelo_gid": "x", "nome": "ROK Cup Round 5 [Orlando]", "secao_gid": "s"}, None, "")[1]
+        # invoice executada → link volta para a tarefa criada no mesmo comando
+        cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE")
+        inserir(con, "ai_actions", command_id=cmd, action="asana_criar_do_modelo", system="asana", policy="SAFE", status="DONE", payload="{}", result='{"aplicado": true, "gid": "999001"}')
+        aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL", status="APPROVED",
+                      payload=json.dumps({"args": {"cliente_id": "696", "linhas": [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "x"}], "vence_em": "2026-09-13", "email": "peranicolas2106@gmail.com"}}))
+        con.commit()
+        assert motor._tarefa_da_invoice(con, {"command_id": cmd}, {"email": "peranicolas2106@gmail.com", "vence_em": "2026-09-13"}) == "999001"
+    finally:
+        con.close()
+    preenchidos = []
+
+    class Qbo:
+        pass
+    monkeypatch.setattr(motor, "chamar", lambda sistema, acao, **a: {"id": "1042", "link": "https://qbo.intuit.com/app/invoice?txnId=1042", "total": 500.0, "enviado": True}, raising=False)
+    import command_center.providers as prov
+
+    class As:
+        def preencher_invoice_na_tarefa(self, gid, link, valor=None): preenchidos.append((gid, link, valor)); return {"aplicado": True}
+    monkeypatch.setattr(prov, "modulo", lambda s: As())
+    monkeypatch.setattr(prov, "chamar", lambda sistema, acao, **a: {"id": "1042", "link": "https://qbo.intuit.com/app/invoice?txnId=1042", "total": 500.0, "enviado": True})
+    motor.executar_acao(aid, 1)
+    con = conectar()
+    try:
+        assert um(con, "SELECT status FROM ai_actions WHERE id=?", (aid,))["status"] == "DONE"
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='asana.invoice_link'") is not None
+    finally:
+        con.close()
+    assert preenchidos == [("999001", "https://qbo.intuit.com/app/invoice?txnId=1042", 500.0)]

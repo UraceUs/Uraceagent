@@ -229,6 +229,28 @@ def _executa_instrucao(command_id, workflow_id, texto, session_key, user_id):
 
 
 # ------------------------------------------------------------ execução de ação aprovada
+def _tarefa_da_invoice(con, acao_row, args):
+    """gid da tarefa do Asana a que a invoice pertence: a tarefa criada no mesmo comando,
+    ou a tarefa do cliente com a mesma data de vencimento."""
+    if acao_row.get("command_id"):
+        for x in todos(con, "SELECT result FROM ai_actions WHERE command_id=? AND action IN ('asana_criar_do_modelo','asana_criar_tarefa') AND status='DONE'", (acao_row["command_id"],)):
+            try:
+                gid = (json.loads(x["result"] or "{}")).get("gid")
+            except ValueError:
+                gid = None
+            if gid:
+                return gid
+    email = (args.get("email") or "").lower()
+    data = args.get("vence_em")
+    c = um(con, "SELECT id FROM clients WHERE LOWER(email)=? OR LOWER(email_alt)=?", (email, email)) if email else None
+    if c and data:
+        t = um(con, """SELECT l.external_id FROM tasks t JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
+                       WHERE t.client_id=? AND t.due_on=? ORDER BY t.id DESC LIMIT 1""", (c["id"], data))
+        if t:
+            return t["external_id"]
+    return None
+
+
 def executar_acao(aid, user_id):
     """Roda uma ação APPROVED pelo módulo do MCP (sem passar pelo agente).
     Precisa de args estruturados no payload; sem eles, devolve o que falta."""
@@ -269,6 +291,15 @@ def executar_acao(aid, user_id):
         atualizar(con, "ai_actions", aid, status="DONE", finished_at=agora(), result=json.dumps(res, ensure_ascii=False)[:2000])
         auditar(con, "action.executed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid,
                 detail={"action": a["action"], "args": {k: (str(v)[:80]) for k, v in args.items()}})
+        if acao in ("qbo_criar_e_enviar_invoice", "qbo_criar_invoice") and isinstance(res, dict) and res.get("link"):
+            try:                                              # o link da invoice volta para a linha 'Invoice link:' da tarefa
+                gid = _tarefa_da_invoice(con, a, args)
+                if gid:
+                    from command_center.providers import modulo
+                    modulo("asana").preencher_invoice_na_tarefa(gid, res["link"], res.get("total"))
+                    auditar(con, "asana.invoice_link", "system", entity_type="ai_action", entity_id=aid, detail={"gid": gid, "link": res["link"]})
+            except Exception as e:
+                auditar(con, "asana.invoice_link.failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
     except NaoConectado as e:
         atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(), result=f"não conectado: {e}")
     except Exception as e:

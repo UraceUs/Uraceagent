@@ -25,6 +25,7 @@ Teste do protocolo sem rede:
         | ASANA_TOKEN=x python3 adminai/mcp/asana_mcp.py
 """
 import json
+import re
 import mimetypes
 import os
 import sys
@@ -361,8 +362,40 @@ def asana_criar_tarefa(projeto_gid, nome, secao_gid=None, notas=None, vence_em=N
     return {"aplicado": True, "gid": r["gid"], "link": r.get("permalink_url")}
 
 
-def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None):
-    """Instancia o modelo de tarefa (subtarefas, campos) e ajusta nome, seção, notas e data."""
+def _definir_campo_enum(gid, nome_campo, nome_opcao):
+    """Marca um campo de seleção da tarefa pelo NOME da opção (ex.: Race = Practice OKC).
+    Opção inexistente é erro claro, nunca criação."""
+    t = _req(f"/tasks/{gid}?opt_fields=custom_fields.gid,custom_fields.name,custom_fields.enum_options.gid,custom_fields.enum_options.name,custom_fields.enum_options.enabled")["data"]
+    for cf in t.get("custom_fields", []) or []:
+        if (cf.get("name") or "").strip().lower() != nome_campo.strip().lower():
+            continue
+        for op in cf.get("enum_options", []) or []:
+            if (op.get("name") or "").strip().lower() == nome_opcao.strip().lower() and op.get("enabled", True):
+                _req(f"/tasks/{gid}", "PUT", {"custom_fields": {cf["gid"]: op["gid"]}})
+                return True
+        raise ErroFerramenta(f"opção '{nome_opcao}' não existe no campo '{nome_campo}'")
+    raise ErroFerramenta(f"campo '{nome_campo}' não existe nesta tarefa")
+
+
+def preencher_invoice_na_tarefa(gid, link, valor=None):
+    """Porta do Command Center (não é ferramenta do agente): depois da invoice sair do
+    QuickBooks, grava o link (e o valor) na linha 'Invoice link:' da descrição."""
+    t = _ler_tarefa(gid)
+    _recusar_se_protegida(t, "editar")
+    notas = t.get("notes") or ""
+    preco = f"    Price: ${float(valor):,.2f}" if valor is not None else ""
+    linha = f"Invoice link: {link}{preco}"
+    if re.search(r"(?im)^Invoice link:.*$", notas):
+        notas = re.sub(r"(?im)^Invoice link:.*$", linha, notas, count=1)
+    else:
+        notas = notas.rstrip() + "\n\n" + linha
+    _req(f"/tasks/{gid}", "PUT", {"notes": notas})
+    return {"aplicado": True, "gid": gid, "invoice_link": link}
+
+
+def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None, campos=None):
+    """Instancia o modelo de tarefa (subtarefas, campos) e ajusta nome, seção, notas, data
+    e campos de seleção (ex.: {"Race": "Practice OKC"})."""
     import time
     if secao_gid and secao_gid == _gid_matt_tasks():
         raise ErroFerramenta("RECUSADO: não se cria nada em 'Matt tasks'.")
@@ -387,8 +420,17 @@ def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=No
         _req(f"/tasks/{novo}", "PUT", ajuste)
     if secao_gid:
         _req(f"/sections/{secao_gid}/addTask", "POST", {"task": novo})
+    avisos = []
+    for campo, opcao in (campos or {}).items():
+        try:
+            _definir_campo_enum(novo, campo, opcao)
+        except ErroFerramenta as e:
+            avisos.append(str(e))
     t = _req(f"/tasks/{novo}?opt_fields=permalink_url,name")["data"]
-    return {"aplicado": True, "gid": novo, "nome": t.get("name"), "link": t.get("permalink_url")}
+    r = {"aplicado": True, "gid": novo, "nome": t.get("name"), "link": t.get("permalink_url")}
+    if avisos:
+        r["avisos"] = avisos
+    return r
 
 
 @srv.ferramenta(
@@ -397,17 +439,18 @@ def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=No
     "e a coloca na coluna do dia. Preencha 'notas' no bloco padrão (Driver's name / Date of Birth / "
     "Age / Responsible Name / Email / Phone). Com APLICAR=0 é simulação.",
     {"modelo_gid": {"type": "string"}, "nome": {"type": "string"}, "secao_gid": {"type": "string"},
-     "notas": {"type": "string"}, "vence_em": {"type": "string", "description": "AAAA-MM-DD"}},
+     "notas": {"type": "string"}, "vence_em": {"type": "string", "description": "AAAA-MM-DD"},
+     "campos": {"type": "object", "description": "campos de seleção pelo nome da opção, ex.: {\"Race\": \"Practice OKC\"}"}},
     ["modelo_gid", "nome"])
-def asana_criar_do_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None):
+def asana_criar_do_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None, campos=None):
     if not _aplicar():
         return _simulado(f"criar '{nome}' a partir do modelo {modelo_gid}" + (f", seção {secao_gid}" if secao_gid else ""))
-    return _instanciar_modelo(modelo_gid, nome, secao_gid, notas, vence_em)
+    return _instanciar_modelo(modelo_gid, nome, secao_gid, notas, vence_em, campos)
 
 
-def criar_do_modelo_humano(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None):
+def criar_do_modelo_humano(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None, campos=None):
     """Porta humana (botão 'Nova tarefa' do Command Center): não é ferramenta do agente e não passa por APLICAR."""
-    return _instanciar_modelo(modelo_gid, nome, secao_gid, notas, vence_em)
+    return _instanciar_modelo(modelo_gid, nome, secao_gid, notas, vence_em, campos)
 
 
 MODELO_CORRIDA = "1208930444315129"       # "New Race [Race + City/Track]" — modelo oficial do quadro U-RACE

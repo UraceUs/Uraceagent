@@ -56,3 +56,15 @@ com parâmetro errado e mandou a invoice com `<id de …>`. Ficou:
 8. Memória da IA: waiver assinada há menos de um ano não se pergunta;
    "mesmo esquema" = repetir o último serviço e o valor da última
    invoice, sem perguntar.
+
+**Terceira rodada (10/09, tarefa vista no Asana):**
+9. **Descrição padrão** da tarefa de serviço, montada pelo painel com os
+   dados do piloto (datas em mês/dia/ano, nascimento, idade e aviso de
+   menor, responsável, e-mail, telefone, produto/categoria, preço).
+   Vale para a IA e para o botão "Nova tarefa".
+10. **Campo Race = "Practice OKC"** por padrão em tarefa de treino
+    ("Practice Bushnell" se a mensagem citar Bushnell; corrida não mexe).
+11. **Link da invoice volta para a tarefa:** quando a invoice sai do
+    QuickBooks, o painel grava o link e o valor na linha "Invoice link:"
+    da descrição da tarefa do mesmo comando (ou do cliente na mesma data).
+12. Palavreado: serviço novo é "criar", nunca "recriar".
