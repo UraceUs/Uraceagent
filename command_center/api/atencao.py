@@ -197,6 +197,8 @@ def _coletar(con):
                 total = sum((l.get("quantidade") or 1) * (l.get("unitario") or 0) for l in args.get("linhas") or [] if isinstance(l, dict))
                 desc = next((l.get("descricao") for l in args.get("linhas") or [] if isinstance(l, dict) and l.get("descricao")), None)
                 detalhes.append(("Invoice", f"{alvo} · {_usd(total)}" + (f" · {desc}" if desc else "") + (f" · serviço {_dbr(args.get('data_servico'))}" if args.get("data_servico") else "")))
+                if pl.get("conferir"):                    # preço que não veio do dono nem do catálogo
+                    detalhes.append(("Conferir o preço", " ".join(pl["conferir"])[:220]))
             elif a["action"] == "docusign_enviar_waiver":
                 detalhes.append(("Waiver", f"{args.get('nome') or alvo} <{args.get('email') or '—'}>"))
             else:

@@ -256,6 +256,7 @@ def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
         problemas = []
         if isinstance(args, dict):
             args, problemas = acoes.normalizar(nome, args, texto, _buscar_item_qbo, _buscar_cliente_qbo, con, alvo, _criar_item_qbo, notas)
+        conferir = args.pop("_conferir", None) if isinstance(args, dict) else None
         assin = acoes.assinatura(nome, args, alvo)
         estado, antiga = acoes.ja_decidida(con, assin)
         if estado == "feita":
@@ -266,7 +267,7 @@ def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
                       system=nome.split("_")[0] if "_" in nome else None, policy=pol,
                       status="BLOCKED" if pol == "BLOCKED" else "PROPOSED",
                       payload=json.dumps({"alvo": alvo, "descricao": descricao[:500], "fonte": fonte, "args": args,
-                                          "assinatura": assin, "problemas": problemas or None}, ensure_ascii=False),
+                                          "assinatura": assin, "problemas": problemas or None, "conferir": conferir or None}, ensure_ascii=False),
                       reason=("incompleta: " + "; ".join(problemas)) if problemas else
                              ("proposta pelo agente" + ("" if args else " (sem argumentos estruturados)")))
         if pol == "REQUIRES_APPROVAL":
@@ -502,7 +503,8 @@ def action_complete(aid: int, request: Request, u=Depends(auth.exige("OPERATOR")
     notas = []
     c = um(con, "SELECT output FROM ai_commands WHERE id=?", (a["command_id"],)) if a["command_id"] else None
     args2, problemas = acoes.normalizar(a["action"], args, (c or {}).get("output") or "", _buscar_item_qbo, _buscar_cliente_qbo, con, p.get("alvo"), _criar_item_qbo, notas)
-    p.update(args=args2, problemas=problemas or None, assinatura=acoes.assinatura(a["action"], args2, p.get("alvo")))
+    conferir = args2.pop("_conferir", None) if isinstance(args2, dict) else None
+    p.update(args=args2, problemas=problemas or None, conferir=conferir or None, assinatura=acoes.assinatura(a["action"], args2, p.get("alvo")))
     atualizar(con, "ai_actions", aid, payload=json.dumps(p, ensure_ascii=False),
               reason=("incompleta: " + "; ".join(problemas)) if problemas else "completada pelo painel" + (" — " + "; ".join(notas) if notas else ""))
     auditar(con, "action.complete", f"user:{u['id']}", user_id=u["id"], entity_type="ai_action", entity_id=aid,

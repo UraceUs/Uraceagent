@@ -451,6 +451,14 @@ INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
   (10, 'global', 'Invoice de serviço: vencimento (due date) SEMPRE 2 dias antes da data do serviço (serviço dia 13 → vence dia 11). A nota ao cliente (Note to customer) e o memo interno (Memo on statement) são IGUAIS e trazem produto, categoria, piloto e a data do serviço, ex.: "Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026".', 'dono-2026-09-10'),
   (9, 'global', '"Mesmo esquema" / "mesma coisa da última vez" = repita o último serviço do piloto: mesmo produto, categoria e pista, mesmo valor da última invoice do responsável no QuickBooks, na coluna do dia pedido. Não pergunte o que o histórico já responde: crie a tarefa e proponha a invoice de uma vez, com os ids que vêm no CONTEXTO DO PAINEL.', 'dono-2026-09-10');
 
+-- Regras antigas do dono que a IA do painel também precisa saber (revisão de 10/09)
+INSERT OR IGNORE INTO ai_learnings (id, scope, text, source_key) VALUES
+  (11, 'global', 'Security deposit é UM POR CLIENTE enquanto estiver retido. Antes de cobrar depósito, confira no QuickBooks: nunca teve → cobra; já foi devolvido → cobra de novo; ainda retido → NÃO cobra; não deu para determinar → escale para o dono (decisão de 28/08).', 'dono-2026-08-28'),
+  (12, 'global', 'Peça: preço do fornecedor + 15%, sempre, por peça (decisão de 31/08).', 'dono-2026-08-31'),
+  (13, 'global', 'Cobrança de invoice atrasada é POR LOTE: só invoice OVERDUE, no máximo a cada 2 dias, e com "ok" do dono a cada lote — "ok" num lote não vale para o próximo. Saldo em aberto não é inadimplência (pode ser parcelamento).', 'dono-2026-08-31'),
+  (14, 'global', 'Não existe modelo de e-mail de invoice: o envio sai do próprio QuickBooks, no botão de enviar. O trabalho da IA termina na invoice salva com número, link e memo certos. Nunca mande a invoice por Gmail.', 'dono-2026-08-31'),
+  (15, 'global', 'Preço: o valor que o dono disser manda; depois a Rate Card; o catálogo do QuickBooks é só referência. NUNCA repita o valor da última invoice sem conferir a Rate Card — o painel marca a proposta com "confira o preço" quando o valor não veio do dono nem do catálogo.', 'dono-2026-09-10');
+
 -- catálogo do QuickBooks (espelho, só leitura): a IA recebe os ids no comando e o painel resolve item pelo nome
 CREATE TABLE IF NOT EXISTS qbo_items (
   id          TEXT PRIMARY KEY,

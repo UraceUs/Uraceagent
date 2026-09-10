@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 SC = os.path.dirname(os.path.abspath(__file__))
 os.environ["URACE_ENV"] = "/nao/existe"
-os.environ["CC_DB_PATH"] = os.path.join(SC, "e2e_full.sqlite")
+os.environ.setdefault("CC_DB_PATH", os.path.join(SC, "e2e_full.sqlite"))   # o README manda o caminho por CC_DB_PATH
 sys.path.insert(0, "/home/user/Uraceagent")
 
 from command_center.api import auth                                    # noqa: E402

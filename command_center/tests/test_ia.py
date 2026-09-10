@@ -270,7 +270,10 @@ def test_normaliza_invoice_aliases_item_por_nome_e_valor_do_texto():
     assert args["linhas"][0] == {"item_id": "31", "quantidade": 1, "unitario": 500.0, "descricao": "David Pera 13/09"}
     # valor zerado + UM valor no texto da IA → o texto manda
     args, prob = acoes.normalizar_invoice({"cliente_id": 77, "linhas": [{"item_id": "31", "unitario": 0, "descricao": "x"}]}, "Invoice de $500 no nome do Nicolas.", buscar)
-    assert prob == [] and args["linhas"][0]["unitario"] == 500.0 and args["linhas"][0]["_valor_do_texto"] is True
+    assert prob == [] and args["linhas"][0]["unitario"] == 500.0 and "_conferir" not in args   # valor dito: o dono manda
+    # valor que não veio do comando nem do catálogo do QuickBooks: sai marcado para conferir na Rate Card
+    args, prob = acoes.normalizar_invoice({"cliente_id": "77", "linhas": [{"item_id": "31", "unitario": 1600, "descricao": "Training Program + Tuner"}]}, "", buscar)
+    assert prob == [] and any("Rate Card" in c for c in args["_conferir"])
     # dois valores no texto: não adivinha → problema; item não achado → problema
     args, prob = acoes.normalizar_invoice({"cliente_id": "77", "linhas": [{"item": "Coisa inexistente", "unitario": 0}]}, "Pode ser $500 ou $719.", buscar)
     assert any("Coisa inexistente" in p for p in prob) and any("zerado" in p for p in prob)

@@ -277,6 +277,31 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None,
                                 (str(novo["id"]), novo.get("nome") or nome_novo, novo.get("nome_completo"), l["unitario"], "Service", agora()))
         if not l.get("item_id"):
             problemas.append(f"item '{nome_novo}' não existe no catálogo do QuickBooks" + ("" if l.get("unitario") else " e sem valor para criá-lo"))
+    # de onde veio cada valor: o que o dono disse manda; a Rate Card manda sobre o catálogo do
+    # QuickBooks; valor que não veio de nenhum dos dois é MARCADO para conferir antes de aprovar
+    # (teste real de 10/09: a IA copiou $1.600 da última invoice, produto que nem está na Rate Card).
+    conferir = []
+    for l in linhas:
+        do_texto = l.pop("_valor_do_texto", False)
+        if not l.get("unitario"):
+            continue
+        cat = next((c for c in cache if str(c.get("id")) == str(l.get("item_id"))), None)
+        preco = _num((cat or {}).get("price"))
+        rotulo = (l.get("descricao") or (cat or {}).get("nome") or "linha").strip()[:60]
+        if do_texto or _num(_pega(args, ("valor_do_dono",))):
+            continue                                     # valor dito no comando: o dono manda
+        if preco and abs(preco - l["unitario"]) < 0.01:
+            continue                                     # bate com o catálogo do QuickBooks
+        if preco:
+            conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não bate com o catálogo do QuickBooks (${preco:,.2f}). "
+                            "Confira na Rate Card (corrida → aba Racing team; treino → aba Academy) antes de aprovar.")
+        else:
+            conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não veio do comando nem do catálogo. "
+                            "Confira na Rate Card antes de aprovar.")
+    if conferir:
+        saida["_conferir"] = conferir
+        if notas is not None:
+            notas.extend(conferir)
     saida["linhas"] = linhas
     cid = saida.get("cliente_id")
     if cid is None or not re.fullmatch(r"\d+", str(cid).strip()):
