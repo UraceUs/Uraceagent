@@ -1,0 +1,22 @@
+# systemd unit da sales-bridge (ponte Kommo <-> OpenClaw).
+# Instalado por install_bridge_service.sh -- os caminhos assumem o layout
+# padrao do VPS (usuario ubuntu, repo em ~/Uraceagent). Se o layout for
+# outro, o instalador ajusta via sed antes de copiar.
+[Unit]
+Description=URACE sales-bridge (Kommo <-> OpenClaw Sales Agent)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent/salesagent/bridge
+Environment=URACE_DIR=/home/ubuntu/.urace
+ExecStart=/home/ubuntu/Uraceagent/salesagent/bridge/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8800
+Restart=always
+RestartSec=3
+# O agente OpenClaw e chamado via subprocess -- precisa do PATH do usuario
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target

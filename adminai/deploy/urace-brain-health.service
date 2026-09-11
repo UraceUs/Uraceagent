@@ -1,0 +1,11 @@
+[Unit]
+Description=URACE — saude do grafo do segundo cerebro
+Documentation=file:///home/ubuntu/Uraceagent/brain/00_SYSTEM/Como%20o%20cerebro%20cresce.md
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+ExecStart=/bin/bash -lc 'python3 adminai/brain_health.py'
+StandardOutput=append:/home/ubuntu/.urace/logs/brain-health.log
+StandardError=append:/home/ubuntu/.urace/logs/brain-health.log

@@ -1,0 +1,49 @@
+Você está logado no Google como urace@urace.us (Workspace da URACE).
+Vamos criar um cliente OAuth para o Administrative AI. Siga na ordem,
+me reporte cada item, e NÃO invente: se uma tela pedir algo fora deste
+roteiro, pare e me diga o que ela pede.
+
+REGRA ACIMA DE TUDO: o arquivo JSON do final contém um "client_secret".
+Você me avisa que o download aconteceu e o nome do arquivo. NÃO abre,
+NÃO copia, NÃO cola o conteúdo na sua resposta.
+
+1) ABRA https://console.cloud.google.com/ . Se pedir para aceitar termos,
+   aceite. No seletor de projeto (topo), veja se já existe algum projeto.
+   Me reporte os nomes. Se houver um chamado "URACE Administrative AI"
+   ou parecido, use-o; senão, crie um NOVO projeto com esse nome exato:
+   URACE Administrative AI
+   (organização: urace.us, se aparecer a opção). Espere criar e selecione-o.
+
+2) ATIVE as APIs. Menu → "APIs e serviços" → "Biblioteca". Procure e
+   ative, uma por uma:
+   - Gmail API
+   - Google Calendar API
+   - Google Sheets API
+   - Google Drive API
+   Me confirme as quatro como "Ativada".
+
+3) TELA DE CONSENTIMENTO. "APIs e serviços" → "Tela de permissão OAuth"
+   (pode aparecer como "Google Auth Platform" → "Branding"/"Público").
+   - Nome do app: URACE Administrative AI
+   - E-mail de suporte do usuário: support@urace.us
+   - Público / User type: INTERNO (Internal). Isto é essencial: interno
+     ao Workspace não passa por verificação do Google. Se a opção
+     "Interno" NÃO aparecer, PARE e me avise.
+   - Contato do desenvolvedor: support@urace.us
+   Salve. Não precisa adicionar escopos nesta tela (o app pede em tempo
+   de execução). Se a tela exigir escopos, PARE e me diga o que pede.
+
+4) CLIENTE OAUTH. "APIs e serviços" → "Credenciais" → "Criar credenciais"
+   → "ID do cliente OAuth".
+   - Tipo de aplicativo: "App para computador" (Desktop app)
+   - Nome: URACE Administrative AI - VPS
+   Criar.
+
+5) Vai aparecer um modal com Client ID e Client Secret e um botão
+   "Fazer o download do JSON". CLIQUE no download. Me reporte:
+   - o nome do arquivo baixado (algo como client_secret_….json)
+   - o Client ID (esse pode ser copiado: termina em .apps.googleusercontent.com)
+   NÃO reporte o Client Secret.
+
+6) NÃO faça mais nada: não crie chaves de API, não crie service account,
+   não mude escopos, não publique o app.

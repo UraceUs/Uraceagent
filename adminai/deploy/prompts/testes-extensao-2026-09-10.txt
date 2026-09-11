@@ -1,0 +1,84 @@
+Você é o Eduardo/Italo testando o Administrative AI da URACE.US pela extensão do
+navegador, com as contas reais já logadas (Asana, DocuSign, Gmail, QuickBooks) e o
+Command Center aberto em https://urace-bridge.duckdns.org/ops/.
+
+REGRAS DURAS (não negocie com elas):
+- NÃO envie e-mail, NÃO envie waiver, NÃO envie invoice ao cliente, NÃO apague nada.
+- NÃO mexa na coluna "Matt tasks" do Asana nem no projeto "ADM URACE".
+- Tudo que você criar de teste, marque com "[TESTE]" no nome e me diga no fim o que
+  ficou para limpar. Se algo pedir confirmação de envio, PARE e me pergunte.
+- Se um dado real parecer errado, não corrija sozinho: anote e me conte.
+
+O QUE PROVAR, na ordem. Para cada item escreva: o que fez, o que viu, PASSOU ou FALHOU,
+e a evidência (número, nome, data ou print).
+
+1. CARD DO CLIENTE
+   Abra Clientes, procure "Bryan Santiago". No card confira:
+   - e-mail aparece limpo (nada de "email%3a" nem dois e-mails colados);
+   - cabeçalho traz piloto, responsável, idade e telefone;
+   - NÃO existe fila de "asana ↗" no topo;
+   - cada item da linha do tempo tem o link do próprio sistema ao lado;
+   - os cinco números (próximo serviço, último, waiver, serviços, em aberto no QBO)
+     batem com o Asana e o QuickBooks reais. Abra os dois para conferir.
+
+2. HISTÓRICO DO ASANA E DUPLICADOS
+   Em Clientes, clique "⟳ Puxar histórico do Asana". Espere terminar.
+   - Quantas tarefas entraram, quantos clientes novos, quantos pares para decidir?
+   - Abra "Possíveis duplicados". Os pares fazem sentido? Algum par é claramente a
+     mesma pessoa escrita de dois jeitos? NÃO una nada ainda: só liste para mim.
+   - Confira no Asana se algum treino antigo de um piloto continua fora do painel.
+
+3. TAREFA PELO MODELO
+   No AI Command peça: "[TESTE] cria a tarefa do Bryan Santiago para o próximo sábado,
+   Academy 2 stroke, mesmo esquema da última vez". Depois abra a tarefa no Asana e veja:
+   - nasceu na coluna do dia certo, com as 12 subtarefas do modelo;
+   - o campo "Race" está preenchido com "Practice OKC";
+   - a descrição está no formato: Service Dates, Driver's name, Date of Birth, Age,
+     Height, Weight, Waist, Karting Experience, Responsible Name, Email, Phone,
+     Product, Invoice link, Price, Security deposit, Price — um campo por linha.
+
+4. INVOICE (monte, NÃO envie)
+   Ainda no AI Command, peça a invoice desse mesmo serviço. Na prévia, antes de aprovar:
+   - o valor bate com a aba "Academy" da Rate Card?
+   - "Serviço em" é o dia do treino e "Vence" é DOIS DIAS ANTES?
+   - a nota ao cliente traz produto, categoria, piloto e "Service date"?
+   PARE aqui. NÃO clique em "Aprovar e enviar". Me diga o que apareceu.
+   Se a proposta vier marcada como incompleta, clique "⚙ Completar agora" e me diga
+   se ela ficou pronta e o que faltava.
+
+5. NUMERAÇÃO DA INVOICE
+   Abra o QuickBooks, veja a última invoice emitida e me diga o número. Confira se a
+   numeração personalizada continua ligada (Configurações → Vendas → Números de
+   transação personalizados). Isso me diz qual número a próxima invoice do painel vai usar.
+
+6. GMAIL
+   Na aba Gmail do painel:
+   - abra uma thread e veja se o corpo aparece com imagens, como no Gmail;
+   - digite no campo de marcador e veja se a busca acha o marcador certo;
+   - NÃO mova nada ainda. Só me diga se os marcadores que a IA sugeriu fazem sentido
+     para as cinco threads mais recentes da inbox.
+
+7. CORRIDAS
+   Abra Corridas. Compare o calendário com a coluna RACES do Asana:
+   - toda corrida da coluna aparece no mês certo?
+   - algum treino vazou para o calendário? (não deveria)
+   - abra uma corrida e veja se as subtarefas do modelo aparecem.
+
+8. PRECISA DE ATENÇÃO
+   Cada aviso diz por si quem é, quanto, qual serviço e as datas, sem abrir nada?
+   Aponte qualquer aviso que ainda esteja vago ou que não devesse estar ali.
+
+9. PAPÉIS
+   Entre com a conta do operador. Confirme que ele NÃO vê o botão de aprovar invoice e
+   NÃO vê a conversa de outros usuários. Depois volte para a sua conta.
+
+10. CELULAR
+   Abra o painel no celular (ou reduza a janela para 390px). Passe por Dashboard,
+   Precisa de atenção, Clientes, card do cliente, Corridas, Gmail e AI Command.
+   Alguma tela rola para o lado ou corta texto?
+
+NO FIM, me entregue:
+- a lista PASSOU/FALHOU dos dez pontos, com a evidência de cada um;
+- tudo que ficou criado como "[TESTE]" para eu apagar;
+- qualquer número do painel que não bateu com o sistema de origem, com os dois valores;
+- as três coisas que mais atrapalhariam a operação do dia a dia, em ordem.

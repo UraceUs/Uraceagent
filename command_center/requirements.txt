@@ -1,0 +1,7 @@
+# Backend do Command Center. Instalado num venv em ~/.urace/cc-venv pelo
+# adminai/deploy/command_center/servir_command_center.sh (sem sudo pip).
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic>=2,<3
+python-multipart>=0.0.9   # upload de arquivos de contexto
+pypdf>=4,<6              # texto de PDF para a IA ler

@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "source": "GET /api/v4/leads/pipelines na conta urace.kommo.com (Support Urace, id 33722171)",
+    "snapshot_date": "2026-08-14",
+    "note": "IDs reais da conta. O Sales Agent opera SOMENTE no pipeline 'Sales funnel'. Demais pipelines (Pos Venda, Contact list, Operacional Vendas, Emails) sao de outras areas."
+  },
+  "pipeline_id": 9903543,
+  "pipeline_name": "Sales funnel",
+  "stages": {
+    "leads_de_entrada": { "id": 76050835, "name": "Leads de entrada", "role": "entrada de lead novo" },
+    "first_contact": { "id": 105276412, "name": "First Contact", "role": "primeira resposta enviada" },
+    "onboarding_funnel": { "id": 78564259, "name": "Onboarding funnel", "role": "qualificacao em andamento" },
+    "conversation_in_progress": { "id": 90232403, "name": "conversation in progress", "role": "dialogo ativo" },
+    "follow_up_1": { "id": 76052579, "name": "Follow Up 1", "role": "1a tentativa de follow-up" },
+    "follow_up_2": { "id": 81784023, "name": "Follow Up 2", "role": "2a tentativa" },
+    "follow_up_3": { "id": 76999127, "name": "Follow Up 3", "role": "3a+ tentativa (4a tentativa permanece aqui — ambiguidade #2 do POP)" },
+    "cold_leads": { "id": 77188783, "name": "Cold Leads", "role": "lead frio / nurture" },
+    "hot_leads": { "id": 78606031, "name": "Hot Leads", "role": "lead quente" },
+    "client_awaiting_reply": { "id": 77831927, "name": "The client is awaiting a reply", "role": "DEVEMOS resposta ao cliente (alarme)" },
+    "waiting_for_reply": { "id": 76052571, "name": "We're waiting for a reply", "role": "aguardando o lead responder" },
+    "closing_the_sale": { "id": 77518191, "name": "Closing the sale", "role": "fechamento" },
+    "scheduled_service": { "id": 76052575, "name": "Scheduled service | Signed Wave | Security deposit", "role": "pos-pagamento / operacional" },
+    "final_email": { "id": 76098943, "name": "Final Email_ Confirmation (Driver e Pit Pass)", "role": "confirmacao final enviada" },
+    "feedback_after_2_days": { "id": 77191935, "name": "Feedback after 2 days of service", "role": "pos-servico: feedback" },
+    "followup_after_10_days": { "id": 76995491, "name": "Follow-up after 10 days of the service _ Invite to return", "role": "pos-servico: recompra" },
+    "international_client": { "id": 76999135, "name": "International Client", "role": "segmento especial" },
+    "suppliers": { "id": 76999131, "name": "Suppliers", "role": "NAO-VENDA: fornecedores — o agente ignora leads nesta etapa" },
+    "closed_won": { "id": 142, "name": "Closed won", "role": "ganho (SOMENTE via evento de pagamento confirmado — portao G9)" },
+    "lost_sale": { "id": 143, "name": "Lost sale", "role": "perdido (apos 4 tentativas ou recusa explicita, com motivo)" }
+  },
+  "agent_rules": {
+    "entry_stages": ["leads_de_entrada"],
+    "never_touch_stages": ["suppliers"],
+    "closed_won_requires": "payment_confirmed_event",
+    "escalation_marker": "tag 'escalated' + estado HUMAN_HANDOFF no SQLite (sem etapa dedicada no funil)"
+  },
+  "other_pipelines_reference": {
+    "pos_venda": 9957451,
+    "contact_list": 9957459,
+    "operacional_vendas": 10025743,
+    "emails": 10046015
+  }
+}

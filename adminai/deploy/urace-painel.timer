@@ -1,0 +1,10 @@
+[Unit]
+Description=URACE — regera o painel de 15 em 15 minutos
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

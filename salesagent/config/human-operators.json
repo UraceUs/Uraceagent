@@ -1,0 +1,40 @@
+{
+  "_comment": [
+    "Autoridade humana do sistema — fonte única, nunca espalhe estes nomes",
+    "pelo código (§3 do brief de escalação+aprendizado, 25/08).",
+    "Quem está aqui pode: receber escalação, autorizar resposta ao lead, e",
+    "fornecer conhecimento oficial que vira documento no Sales Brain.",
+    "Os telefones NÃO ficam aqui — vivem em ~/.urace/bridge.env",
+    "(HUMAN_WHATSAPP aceita lista separada por vírgula, na ordem desta lista).",
+    "Este arquivo guarda identidade e autoridade; o env guarda o contato."
+  ],
+  "operators": [
+    {
+      "id": "italo",
+      "name": "Italo Silveira",
+      "role": "owner",
+      "authority": "high",
+      "scope": ["escalation", "knowledge_write", "commercial_decision"],
+      "notes": "Dono da URACE. Autoridade final em preço, política e exceção comercial."
+    },
+    {
+      "id": "eduardo",
+      "name": "Eduardo",
+      "role": "adm",
+      "authority": "high",
+      "scope": ["escalation", "knowledge_write"],
+      "notes": "ADM. Autoridade sobre processo, operação e informação de pista."
+    }
+  ],
+  "rules": {
+    "knowledge_from_operator_status": "review_required",
+    "_why_not_approved": [
+      "Resposta de operador entra como review_required, não approved: o §9 do",
+      "brief é explícito — resposta humana vira CANDIDATO, nunca sobrescreve",
+      "conhecimento existente sozinha. Promover segue sendo gesto humano no",
+      "Obsidian, com o documento já escrito e pronto para um clique."
+    ],
+    "conflict_status": "conflict_detected",
+    "notify_all_on_escalation": true
+  }
+}

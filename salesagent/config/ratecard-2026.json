@@ -1,0 +1,85 @@
+{
+  "_meta": {
+    "source": "Google Sheets 160efDlmavKKGbtGfJKCTOV_3Q9JEO3Lc6xA1mEMMNyo (Rate Card 2026)",
+    "snapshot_date": "2026-08-14",
+    "currency": "USD",
+    "authority": "O Rate Card vigente na planilha SEMPRE prevalece sobre este snapshot. Processo de atualizacao: reler a planilha e regravar este arquivo (ver DOCUMENTACAO).",
+    "track_fees_note": "TRACK FEES NOT INCLUDED ON PRICE, MUST BE PAID DIRECTLY TO THE TRACK OVER THE LINKS PROVIDED.",
+    "notes": [
+      "A planilha contem tambem uma aba 'Rate Card 2024' (legada, com celulas vazias) — ignorada neste snapshot.",
+      "Tabelas de corrida/eventos (team fees, engine/chassis rental, arrive & drive, DIY, mecanicos) existem na planilha mas sao territorio de ESCALACAO (Italo) — nao expostas ao Sales Agent como cotacao."
+    ]
+  },
+  "academy_daily": {
+    "_label": "URace Academy daily rates (1-Day Training)",
+    "own_kart": { "age": "4+", "price": 500.0, "description": "Using Own Kart (all categories)" },
+    "baby_kart": { "age": "4-7", "price": 719.0 },
+    "four_stroke": { "age": "7+", "price": 719.0 },
+    "two_stroke": { "age": "7+", "price": 819.0 },
+    "adult_shifter": { "age": "14+", "price": 899.0, "restriction": "Only with experience; sujeito a aprovacao (Italo)" }
+  },
+  "academy_monthly_no_contract": {
+    "_label": "URACE Academy monthly rates — no contract (4 sessions per month)",
+    "own_kart_own_mechanic": { "age": "any", "monthly": 1200.0, "extra_session": 300.0 },
+    "own_kart": { "age": "any", "monthly": 1800.0, "extra_session": 450.0 },
+    "baby_kart": { "age": "4-7", "monthly": 2756.0, "extra_session": 689.0 },
+    "four_stroke_rental": { "age": "7+", "monthly": 2756.0, "extra_session": 689.0 },
+    "two_stroke_rental": { "age": "7+", "monthly": 3156.9, "extra_session": 789.23 },
+    "_notes": [
+      "Academy fora do OKC: cobra-se extra de hotel, comida e transporte.",
+      "Opcoes de contrato 6 e 12 meses existem na planilha (celulas 'detailed below') — confirmar valores na planilha antes de citar."
+    ]
+  },
+  "summer_camp": {
+    "_label": "Summer Camp Program — Intensive Training (Wed-Sun; not available in race weeks)",
+    "formats_days": [3, 5],
+    "own_kart": { "per_practice": 440.0, "days5": 2200.0, "days3": 1320.0 },
+    "baby_kart": { "age": "4-7", "per_practice": 689.98, "days5": 3449.89, "days3": 2069.93 },
+    "kart_4t": { "age": "7+", "per_practice": 689.98, "days5": 3449.89, "days3": 2069.93 },
+    "kart_2t": { "age": "7+", "per_practice": 789.98, "days5": 3949.89, "days3": 2369.93 }
+  },
+  "lead_and_follow": {
+    "_label": "Lead and follow coaching (2 stroke)",
+    "beforehand_one_driver": 769.0,
+    "package_5_sessions": { "total": 3460.5, "per_session": 692.1, "discount": "10%" },
+    "last_minute": {
+      "_restriction": "Last-minute deals SOMENTE pelo operador autorizado na pista — o Sales Agent NUNCA cota estes valores.",
+      "two_drivers_each": 245.0,
+      "one_driver": 395.0
+    }
+  },
+  "corporate_event": {
+    "_label": "Corporate Event (per driver, by sessions)",
+    "sessions": { "1": 390.0, "2": 490.0, "3": 570.0, "4": 630.0, "5": 680.0, "6": 719.0 },
+    "rules": [
+      "Minimo de 3 drivers por evento; minimo 3 karts; cada driver completa ao menos 2 sessoes.",
+      "Guests nao-pilotos pagam apenas entry fee (pista).",
+      "Eventos sao customizaveis/negociaveis individualmente -> escalacao."
+    ]
+  },
+  "kart_rental_standalone": {
+    "_label": "Kart rental prices (somente para outras equipes ou clientes da Urace)",
+    "baby_kart": { "age": "5-8", "price": 250.0, "_flag": "ATENCAO: planilha diz 5-8 anos aqui, mas Baby Kart e 4-7 nas demais tabelas — inconsistencia a confirmar com Italo" },
+    "four_stroke": { "age": "7+", "price": 400.0 },
+    "two_stroke": { "age": "7+", "price": 500.0 },
+    "shifter": { "age": "14+ com experiencia", "price": 600.0 }
+  },
+  "deposits_fees": {
+    "security_deposit": 400.0,
+    "security_deposit_refund_days": 5,
+    "reschedule_cancel_under_48h_fee": 95.0,
+    "payment_deadline_days_before_session": 2
+  },
+  "escalation_only_tables": {
+    "_note": "Presentes na planilha; qualquer conversa que chegue aqui = escalacao a Italo",
+    "examples": [
+      "Team fees (club/state/national/Las Vegas)",
+      "Engine rental (60/100/125cc, Rotax Micro/Mini) practice/local/national",
+      "Chassis rental (Cadet/Full Size)",
+      "Arrive & Drive 2026 (Micro/Mini, Junior/Senior)",
+      "Urace DIY (team spot, chassis/day, engine/day)",
+      "Season contracts / championship packages",
+      "Mechanic fees (shared/exclusive)"
+    ]
+  }
+}

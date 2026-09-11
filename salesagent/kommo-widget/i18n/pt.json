@@ -1,0 +1,14 @@
+{
+  "widget": {
+    "name": "Chase Bridge (URACE)",
+    "short_description": "Ponte do agente de vendas da URACE para o Salesbot.",
+    "description": "Conecta o Salesbot ao Chase, o agente de vendas da URACE. A cada mensagem do lead, o Chase gera a resposta e o Salesbot a envia no chat."
+  },
+  "settings": {
+    "url": "URL da ponte"
+  },
+  "salesbot": {
+    "chase_reply": "Chase — responder ao lead",
+    "text": "URL da ponte (com ?key=)"
+  }
+}

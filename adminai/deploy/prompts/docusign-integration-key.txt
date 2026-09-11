@@ -1,0 +1,49 @@
+Você está logado no DocuSign com a conta support@urace.us. Preciso criar
+uma Integration Key na CONTA DE DESENVOLVEDOR (demo). Siga na ordem e me
+reporte cada item. Não pule etapa e não invente valor nenhum: se algo não
+aparecer na tela como descrito, pare e me diga exatamente o que viu.
+
+REGRA QUE VALE ACIMA DE TUDO:
+A chave privada RSA NÃO pode ser copiada, transcrita, resumida nem
+colada na sua resposta. Quando ela aparecer, você só me avisa que está
+na tela. Eu copio manualmente.
+
+1) ABRA https://admindemo.docusign.com/apps-and-keys
+   Confirme que a URL final continua em admindemo (demo), e não em
+   admin.docusign.com. Se cair na produção, pare e me avise.
+
+2) NO ALTO DA PÁGINA há um bloco com os IDs da conta. Me reporte,
+   copiando exatamente:
+   - User ID (um GUID)
+   - API Account ID (outro GUID)
+   - Account Base URI (deve terminar em demo.docusign.net)
+   Esses três valores são do ambiente demo e são DIFERENTES dos de
+   produção. É esperado que sejam diferentes.
+
+3) CLIQUE em "Add App and Integration Key".
+   Nome do app: URACE Administrative AI
+   Confirme.
+
+4) ME REPORTE a Integration Key gerada (é um GUID, aparece no topo da
+   tela do app). Esse valor pode ser copiado — não é secreto.
+
+5) AINDA NA TELA DO APP, na seção "Additional settings" →
+   "Redirect URIs", clique em "Add URI" e cadastre exatamente:
+   https://urace-bridge.duckdns.org/legal/privacy.html
+   Salve e confirme que ela aparece na lista.
+
+6) PARE AQUI E ME AVISE antes de continuar.
+   O próximo passo gera um par de chaves RSA, e a chave privada aparece
+   UMA ÚNICA VEZ. Se a tela for fechada antes de eu copiar, a chave se
+   perde e é preciso gerar outra. Só siga para o passo 7 depois que eu
+   responder que estou pronto.
+
+7) DEPOIS DA MINHA CONFIRMAÇÃO: na seção "Authentication", clique em
+   "Generate RSA" (ou "Add RSA Keypair").
+   Deixe a janela com a chave ABERTA na tela e me avise que está pronta.
+   Não copie o conteúdo. Não feche a janela.
+   Me reporte apenas: (a) que a chave foi gerada, (b) o Key ID / nome do
+   par que aparece na lista, se houver.
+
+8) NÃO faça mais nada depois disso. Não clique em "Go Live", não altere
+   escopos, não apague nada, não mexa em templates nem em envelopes.

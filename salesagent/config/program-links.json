@@ -1,0 +1,11 @@
+{
+  "_meta": {
+    "status": "COMPLETO (17/08). Regra: qualquer produto sem link especifico cai em program_link_generic (home).",
+    "note": "O agente Chase nunca fala preco em chat para leads Opcao A/B/Academy: ele sempre manda o link do programa. O checkout so existe seguindo o fluxo normal do site (nao ha checkout direto por produto)."
+  },
+  "one_day_program_link": "https://urace.us/product/go-kart-driving-experience/",
+  "academy_link": "https://urace.us/urace-academy/",
+  "training_camp_link": null,
+  "checkout_link": "https://urace.us/checkout/",
+  "program_link_generic": "https://urace.us/"
+}

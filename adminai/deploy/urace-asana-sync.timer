@@ -1,0 +1,12 @@
+[Unit]
+Description=Roda a sincronia do Asana em dia util, de manha
+
+[Timer]
+# 06:40 de segunda a sexta, horario do servidor
+OnCalendar=Mon..Fri 06:40
+# Se o VPS estava desligado na hora, roda assim que subir
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

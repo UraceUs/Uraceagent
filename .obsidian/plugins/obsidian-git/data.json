@@ -1,0 +1,7 @@
+{
+  "commitMessage": "brain: atualização de conhecimento via Obsidian",
+  "autoCommitMessage": "brain: atualização de conhecimento via Obsidian",
+  "autoPullOnBoot": true,
+  "pullBeforePush": true,
+  "disablePopups": false
+}

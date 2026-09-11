@@ -1,0 +1,14 @@
+{
+  "widget": {
+    "name": "Chase Bridge (URACE)",
+    "short_description": "URACE sales agent bridge for Salesbot.",
+    "description": "Connects the Salesbot to Chase, URACE's sales agent. On each lead message, Chase generates the reply and the Salesbot sends it in the chat."
+  },
+  "settings": {
+    "url": "Bridge URL"
+  },
+  "salesbot": {
+    "chase_reply": "Chase — reply to lead",
+    "text": "Bridge URL (with ?key=)"
+  }
+}
