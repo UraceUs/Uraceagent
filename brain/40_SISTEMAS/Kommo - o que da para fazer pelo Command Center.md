@@ -44,6 +44,6 @@ escrita como porta humana), `command_center/api/crm.py` (rotas + webhook),
 | Dados de contato (e-mail, telefone, campos) | Sim | API v4 contacts | — |
 | Origem do lead (Instagram/Facebook/WhatsApp) | Sim | canal da conversa / campo de origem | link de anúncio/UTM só se o formulário capturou |
 | Ler as mensagens que chegam | Sim, a partir da ativação | Salesbot "mensagem recebida" → webhook no painel | histórico anterior não vem pela API |
-| Responder pelo painel (canais nativos) | Sim | Salesbot disparado por API + widget (caminho do Chase) | sai como mensagem do bot; cooldown 5 min |
+| Responder pelo painel (canais nativos) | **Provado 11/09 (WhatsApp)** | Salesbot disparado por API + widget (caminho do Chase) | sai como mensagem do bot; cooldown 5 min; exige `KOMMO_MODO_ENTREGA=json_reply` para casar com o bloco `{{json.reply}}` do bot |
 | Responder como canal próprio (Chats API) | Sim | registrar canal via suporte (1–3 dias) | WhatsApp teria de migrar; Instagram/Facebook seguem nativos |
 | Modelos oficiais do WhatsApp, chamadas, anexos ricos | Não/limitado | — | ficam no Kommo |

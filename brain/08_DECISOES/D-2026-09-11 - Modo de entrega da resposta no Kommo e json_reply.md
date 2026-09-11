@@ -38,6 +38,10 @@ molde como se fosse texto. Não é erro de código: é desencontro de configura�
 `KOMMO_MODO_ENTREGA=json_reply` em `~/.urace/kommo.env`. Alinha o painel ao bot
 que já existe, sem tocar no Salesbot.
 
+**Provado em 11/09**, no mesmo teste: depois da troca do modo e do restart do
+serviço, o dono respondeu pelo painel e o texto dele chegou inteiro no WhatsApp.
+O circuito resposta-pelo-painel → WhatsApp do cliente está **funcionando**.
+
 Se algum dia o bot for refeito **sem** o bloco `{{json.reply}}`, o modo volta a
 ser `balloons` — que é o provado com lead real do Instagram em 24/08.
 
