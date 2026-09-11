@@ -43,15 +43,29 @@ def _corpo_thread(mailbox, thread_id):
     return texto[:CORPO_MAX] + ("…" if len(texto) > CORPO_MAX else "")
 
 
-def prompt(emails, nomes, mailbox, aprendizados=""):
+def confirmados(con):
+    """Os marcadores que o dono confirmou no manual. Vazio = a triagem não roda."""
+    return [l["name"] for l in todos(con, "SELECT name FROM gmail_labels WHERE status='confirmado' AND in_gmail=1 ORDER BY name")]
+
+
+def manual(con):
+    """O manual como texto para o prompt: marcador → o que vai nele."""
+    linhas = todos(con, """SELECT name, what FROM gmail_labels WHERE status='confirmado' AND in_gmail=1
+                           ORDER BY family, name""")
+    return "\n".join(f"- {l['name']}: {l['what']}" for l in linhas if l["what"])
+
+
+def prompt(emails, nomes, mailbox, aprendizados="", livro=""):
     linhas = []
     for e in emails:
         linhas.append(f"### id={e['id']}\nde: {e.get('sender') or ''}\nassunto: {e.get('subject') or ''}\n"
                       f"marcadores atuais: {e.get('labels') or '[]'}\ncorpo:\n{e.get('_corpo') or e.get('snippet') or ''}")
     return (f"TAREFA: triagem da inbox de {mailbox}@urace.us. Leia cada thread abaixo e decida os marcadores, "
-            "seguindo brain/10_PROCESSOS/Triagem de e-mail.md e brain/40_SISTEMAS/Taxonomia do Gmail.md.\n"
-            "REGRAS:\n"
+            "seguindo o MANUAL confirmado pelo dono (abaixo).\n"
+            + (f"MANUAL DOS MARCADORES (o dono confirmou isto; é a única regra que vale):\n{livro}\n" if livro else "")
+            + "REGRAS:\n"
             "- Use SOMENTE marcadores desta lista, com o nome EXATO (a hierarquia é o '/'): " + json.dumps(nomes, ensure_ascii=False) + ".\n"
+            "- Marcador que não está na lista NÃO EXISTE para você, mesmo que apareça no e-mail.\n"
             "- 'principal' é a PASTA onde a thread vai viver, escolhida pela hierarquia (o caminho completo, ex.: 'Finances/Receipts'). "
             "'marcadores' são etiquetas extras (fornecedor, pessoa, série). Ex.: compra na Amazon → marcadores ['Amazon'] (se existir), principal = o marcador de recibos.\n"
             "- 'precisa_humano' = true quando a thread pede resposta ou decisão de uma pessoa (cliente perguntando, cobrança a pagar, problema). "
@@ -91,6 +105,15 @@ def parse(texto, nomes):
 def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agenda"):
     """Uma rodada completa. Devolve o resumo (também gravado na auditoria)."""
     saida = {"lidos": 0, "movidos": 0, "ficaram": 0, "precisa_humano": 0, "erros": []}
+    # TRAVA (dono, 11/09): sem manual confirmado, a IA não classifica nada. E quando
+    # rodar, só com os marcadores que ele confirmou — nunca um que apareceu na caixa.
+    permitidos = confirmados(con)
+    if not permitidos:
+        saida["pulada"] = ("manual dos marcadores não confirmado: abra Gmail → Manual dos marcadores, "
+                           "confira o que vai em cada um e confirme. Até lá a triagem não roda.")
+        auditar(con, "gmail.triagem.bloqueada", "system", detail={"motivo": "manual não confirmado"})
+        return saida
+    livro = manual(con)
     for mailbox in mailboxes:
         try:
             nomes = [m["nome"] for m in chamar("gmail", "gmail_marcadores", conta=mailbox)]
@@ -98,7 +121,9 @@ def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agen
             saida["erros"].append(f"{mailbox}: não conectado ({e})"); continue
         except Exception as e:
             saida["erros"].append(f"{mailbox}: {type(e).__name__}: {str(e)[:120]}"); continue
-        nomes = [n for n in nomes if n.upper() not in SISTEMA and not n.startswith("CATEGORY_")]
+        nomes = [n for n in nomes if n in permitidos]        # só o que o dono confirmou
+        if not nomes:
+            saida["erros"].append(f"{mailbox}: nenhum marcador confirmado existe nesta caixa"); continue
         emails = todos(con, "SELECT * FROM emails WHERE mailbox=? AND is_inbox=1 AND triaged_at IS NULL ORDER BY last_at DESC LIMIT ?",
                        (mailbox, MAXIMO_POR_RODADA))
         for e in emails:
@@ -107,7 +132,7 @@ def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agen
             e["_corpo"] = _corpo_thread(mailbox, e["_thread"]) if e["_thread"] else ""
         for i in range(0, len(emails), LOTE):
             lote = emails[i:i + LOTE]
-            ok, texto, erro = runner(prompt(lote, nomes, mailbox, aprendizados), session_key)
+            ok, texto, erro = runner(prompt(lote, nomes, mailbox, aprendizados, livro), session_key)
             if not ok:
                 saida["erros"].append(f"{mailbox}: IA falhou: {str(erro)[:160]}"); break
             res = parse(texto, nomes)

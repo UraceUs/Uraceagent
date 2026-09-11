@@ -198,6 +198,25 @@ CREATE TABLE IF NOT EXISTS crm_messages (
 );
 CREATE INDEX IF NOT EXISTS crm_messages_lead ON crm_messages(lead_id, at);
 
+-- ------------------------------------------- manual de marcadores do Gmail
+-- O dono (11/09): "leia marcador por marcador, entenda o que vai em cada um, me
+-- dê o manual e eu confirmo — só daí ela sabe como agir". A triagem só usa
+-- marcador com status 'confirmado'; enquanto não houver nenhum, ela não roda.
+CREATE TABLE IF NOT EXISTS gmail_labels (
+  id            INTEGER PRIMARY KEY,
+  name          TEXT NOT NULL UNIQUE,     -- nome EXATO no Gmail
+  family        TEXT,                     -- raiz (Finances, Banks, RACES…)
+  what          TEXT,                     -- o que vai aqui (o manual)
+  threads       INTEGER,                  -- volume lido da conta
+  status        TEXT NOT NULL DEFAULT 'pendente'
+                CHECK (status IN ('pendente','confirmado','fora')),
+  in_gmail      INTEGER NOT NULL DEFAULT 1,   -- ainda existe na caixa?
+  confirmed_by  TEXT,
+  confirmed_at  TEXT,
+  synced_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS gmail_labels_status ON gmail_labels(status, family);
+
 -- ---------------------------------------------------------- integrações
 CREATE TABLE IF NOT EXISTS integrations (
   system            TEXT PRIMARY KEY,     -- asana, docusign, gmail, quickbooks

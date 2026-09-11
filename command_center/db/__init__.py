@@ -103,12 +103,27 @@ MIGRACOES = [
 def aplicar_schema(con):
     with open(SCHEMA, encoding="utf-8") as f:
         con.executescript(f.read())
+    _semear_marcadores(con)
     for tabela, coluna, tipo in MIGRACOES:
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
         if coluna not in existentes:
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
     for sql in POS_MIGRACAO:
         con.execute(sql)
+
+
+def _semear_marcadores(con):
+    """Manual dos marcadores do Gmail: entra como PROPOSTA (pendente/fora) e nunca
+    sobrescreve o que o dono já confirmou ou editou."""
+    from command_center.providers.taxonomia_gmail import MANUAL
+    for nome, familia, o_que, threads, estado in MANUAL:
+        con.execute("""INSERT INTO gmail_labels (name, family, what, threads, status)
+                       VALUES (?,?,?,?,?)
+                       ON CONFLICT(name) DO UPDATE SET
+                         family=excluded.family,
+                         what=CASE WHEN gmail_labels.status='pendente' THEN excluded.what ELSE gmail_labels.what END,
+                         threads=COALESCE(gmail_labels.threads, excluded.threads)""",
+                    (nome, familia, o_que, threads, estado))
 
 
 # Sementes que dependem de coluna criada por migração (rodam depois dela).

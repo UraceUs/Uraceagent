@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import atencao, auth
-from command_center.db import agora, auditar, conectar, get_db, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, conectar, get_db, inserir, todos, um
 from command_center.providers import SISTEMAS, recarregar, saude
 from command_center.providers import sync as sy
 
@@ -622,6 +622,96 @@ def gmail_classify(dados: ClassificarIn, u=Depends(auth.exige("OPERATOR"))):
 @r.get("/gmail/classify")
 def gmail_classify_status(u=Depends(auth.usuario_atual)):
     return _CLASSIF
+
+
+# ------------------------------------------- manual dos marcadores do Gmail
+@r.get("/gmail/manual")
+def gmail_manual(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """O manual: marcador por marcador, o que vai em cada um, e o estado da confirmação.
+    A triagem só usa o que estiver 'confirmado' — sem nada confirmado, ela não roda."""
+    from command_center.providers.taxonomia_gmail import EXEMPLOS
+    linhas = todos(con, "SELECT * FROM gmail_labels ORDER BY family, name")
+    contagem = {}
+    for l in linhas:
+        contagem[l["status"]] = contagem.get(l["status"], 0) + 1
+    return {"labels": linhas, "resumo": contagem, "exemplos": [{"chega": a, "vai_para": b} for a, b in EXEMPLOS],
+            "confirmado": contagem.get("confirmado", 0) > 0,
+            "confirmado_em": (um(con, "SELECT MAX(confirmed_at) AS q FROM gmail_labels WHERE status='confirmado'") or {}).get("q")}
+
+
+class MarcadorIn(BaseModel):
+    what: str | None = None
+    status: str | None = None          # pendente | confirmado | fora
+
+
+@r.patch("/gmail/manual/{lid}")
+def gmail_manual_editar(lid: int, dados: MarcadorIn, request: Request, u=Depends(auth.exige("MANAGER")),
+                        con: sqlite3.Connection = Depends(get_db)):
+    """O dono corrige o que vai num marcador, ou tira o marcador do manual."""
+    l = um(con, "SELECT * FROM gmail_labels WHERE id=?", (lid,))
+    if not l:
+        raise HTTPException(404, "Marcador não está no manual.")
+    campos = {}
+    if dados.what is not None:
+        campos["what"] = dados.what.strip()[:500]
+    if dados.status:
+        if dados.status not in ("pendente", "confirmado", "fora"):
+            raise HTTPException(400, "status inválido")
+        campos["status"] = dados.status
+        campos["confirmed_by"] = f"user:{u['id']}" if dados.status == "confirmado" else None
+        campos["confirmed_at"] = agora() if dados.status == "confirmado" else None
+    if campos:
+        atualizar(con, "gmail_labels", lid, **campos)
+        auditar(con, "gmail.manual.editado", f"user:{u['id']}", user_id=u["id"], entity_type="gmail_label", entity_id=lid,
+                detail={"marcador": l["name"], **{k: v for k, v in campos.items() if k in ("what", "status")}}, ip=auth._ip(request))
+        con.commit()
+    return um(con, "SELECT * FROM gmail_labels WHERE id=?", (lid,))
+
+
+class ConfirmarIn(BaseModel):
+    familia: str | None = None         # confirma só uma família; sem ela, tudo que está pendente
+
+
+@r.post("/gmail/manual/confirm")
+def gmail_manual_confirmar(dados: ConfirmarIn, request: Request, u=Depends(auth.exige("MANAGER")),
+                           con: sqlite3.Connection = Depends(get_db)):
+    """Confirmação do dono: a partir daqui a IA pode classificar — e SÓ com estes marcadores."""
+    sql = "UPDATE gmail_labels SET status='confirmado', confirmed_by=?, confirmed_at=? WHERE status='pendente'"
+    p = [f"user:{u['id']}", agora()]
+    if dados.familia:
+        sql += " AND family=?"
+        p.append(dados.familia)
+    n = con.execute(sql, p).rowcount
+    auditar(con, "gmail.manual.confirmado", f"user:{u['id']}", user_id=u["id"],
+            detail={"familia": dados.familia or "todas", "marcadores": n}, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True, "confirmados": n}
+
+
+@r.post("/gmail/manual/refresh")
+def gmail_manual_atualizar(mailbox: str = "urace", u=Depends(auth.exige("MANAGER")),
+                           con: sqlite3.Connection = Depends(get_db)):
+    """Relê os marcadores da caixa (só leitura): marcador novo entra como PENDENTE,
+    marcador que sumiu fica anotado. Nada é criado no Gmail."""
+    try:
+        nomes = chamar("gmail", "gmail_marcadores", conta=mailbox)
+    except NaoConectado as e:
+        raise HTTPException(503, f"Gmail não conectado: {e}")
+    except Exception as e:
+        raise HTTPException(502, str(e)[:300])
+    vivos = {m["nome"] for m in nomes if (m.get("tipo") or "user") == "user"}
+    novos = []
+    for nome in sorted(vivos):
+        if not um(con, "SELECT 1 AS x FROM gmail_labels WHERE name=?", (nome,)):
+            inserir(con, "gmail_labels", name=nome, family=nome.split("/")[0], what=None, status="pendente")
+            novos.append(nome)
+    if vivos:
+        marcas = ",".join("?" * len(vivos))
+        con.execute(f"UPDATE gmail_labels SET in_gmail=CASE WHEN name IN ({marcas}) THEN 1 ELSE 0 END", tuple(sorted(vivos)))
+    if novos:
+        auditar(con, "gmail.manual.novos", f"user:{u['id']}", user_id=u["id"], detail={"marcadores": novos[:20]})
+    con.commit()
+    return {"ok": True, "novos": novos, "total_na_caixa": len(vivos)}
 
 
 # ============================================================= DocuSign

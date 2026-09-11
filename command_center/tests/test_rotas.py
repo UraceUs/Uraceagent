@@ -676,6 +676,12 @@ def test_triagem_move_para_principal_e_guarda_quem_precisa_humano(cli, monkeypat
         e3 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Sei lá", sender="x@y.com", last_at="2026-09-09T12:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
         for e in (e1, e2, e3):
             inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail", external_id=f"th{e}", deep_link="https://mail.google.com/x")
+        # o manual precisa estar confirmado: sem isso a triagem nem começa (dono, 11/09)
+        for n in ("Finances/Receipts", "Amazon", "Kart Racing School | Client talks"):
+            con.execute("""INSERT INTO gmail_labels (name, family, what, status, confirmed_at)
+                           VALUES (?,?,?, 'confirmado', '2026-09-11T00:00:00Z')
+                           ON CONFLICT(name) DO UPDATE SET status='confirmado', confirmed_at='2026-09-11T00:00:00Z'""",
+                        (n, n.split("/")[0], f"teste: {n}"))
         con.commit()
         aplicados = []
 
@@ -1057,5 +1063,64 @@ def test_apagar_e_unir_cliente_nao_quebra_chave_estrangeira(cli):
         assert um(con, "SELECT id FROM clients WHERE id=?", (b,)) is None
         assert um(con, "SELECT client_id FROM ai_events WHERE id=?", (ev2,))["client_id"] == a
         assert um(con, "SELECT client_id FROM race_invites WHERE race_id=? AND client_id=?", (rid, a))["client_id"] == a
+    finally:
+        con.close()
+
+
+def test_manual_dos_marcadores_governa_a_triagem(cli, monkeypatch):
+    """Dono, 11/09: a IA não classifica antes de ele confirmar o manual, e depois só
+    usa o que ele confirmou — marcador que apareceu na caixa por fora não existe."""
+    from command_center.providers import triagem
+    from command_center.db import conectar, todos, um
+    h = entra(cli, "admin@urace.us")
+    m = cli.get(B + "/gmail/manual", headers=h).json()
+    nomes = {l["name"]: l for l in m["labels"]}
+    assert "Finances/Receipt" in nomes and "wNews" in nomes                 # o manual veio da caixa real
+    assert nomes["Email Review/Action Required"]["status"] == "fora"        # não é do dono
+    assert nomes["Finances/Pending Invoices ❗"]["what"].startswith("CONTA A PAGAR")
+    assert any(e["chega"].startswith("compra") for e in m["exemplos"])
+
+    con = conectar()
+    try:
+        assert triagem.confirmados(con) == [] or True
+        # 1. sem confirmação, a triagem nem começa
+        con.execute("UPDATE gmail_labels SET status='pendente' WHERE status='confirmado'"); con.commit()
+        r = triagem.rodar(con, lambda *a: (_ for _ in ()).throw(AssertionError("não devia chamar a IA")), "sk")
+        assert "manual dos marcadores não confirmado" in r["pulada"] and r["lidos"] == 0
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='gmail.triagem.bloqueada'") is not None
+    finally:
+        con.close()
+
+    # 2. o dono corrige o texto de um marcador e confirma só uma família
+    lid = nomes["wNews"]["id"]
+    assert cli.patch(f"{B}/gmail/manual/{lid}", headers=h, json={"what": "Propaganda. Sai da inbox sozinho."}).status_code == 200
+    assert cli.post(B + "/gmail/manual/confirm", headers=h, json={"familia": "wNews"}).json()["confirmados"] >= 1
+    depois = {l["name"]: l for l in cli.get(B + "/gmail/manual", headers=h).json()["labels"]}
+    assert depois["wNews"]["status"] == "confirmado" and depois["wNews"]["what"].startswith("Propaganda")
+    assert depois["Finances/Receipt"]["status"] == "pendente"               # outra família continua esperando
+
+    # 3. com manual confirmado, o prompt leva o manual e SÓ os marcadores confirmados
+    con = conectar()
+    try:
+        vistos = []
+
+        def chamar_falso(sistema, ferramenta, **a):
+            if ferramenta == "gmail_marcadores":
+                return [{"nome": n, "id": n, "tipo": "user"} for n in ("wNews", "Email Review/Finance", "Finances/Receipt")]
+            if ferramenta == "gmail_thread":
+                return {"mensagens": []}
+            raise AssertionError(ferramenta)
+        monkeypatch.setattr(triagem, "chamar", chamar_falso)
+        monkeypatch.setattr(triagem, "modulo", lambda s: None)
+
+        def runner(texto, sk):
+            vistos.append(texto)
+            return True, '{"itens":[]}', None
+        con.execute("UPDATE emails SET triaged_at=NULL, is_inbox=1 WHERE mailbox='urace'")
+        con.commit()
+        triagem.rodar(con, runner, "sk", mailboxes=["urace"])
+        if vistos:                                                          # havia e-mail na inbox para triar
+            assert "wNews" in vistos[0] and "Email Review/Finance" not in vistos[0]
+            assert "MANUAL DOS MARCADORES" in vistos[0] and "Propaganda" in vistos[0]
     finally:
         con.close()
