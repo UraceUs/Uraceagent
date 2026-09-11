@@ -1079,11 +1079,19 @@ def test_manual_dos_marcadores_governa_a_triagem(cli, monkeypatch):
     assert nomes["Email Review/Action Required"]["status"] == "fora"        # não é do dono
     assert nomes["Finances/Pending Invoices ❗"]["what"].startswith("CONTA A PAGAR")
     assert any(e["chega"].startswith("compra") for e in m["exemplos"])
+    # o que o dono confirmou em 11/09 já vem confirmado, com as correções dele
+    assert nomes["Finances/Receipt"]["status"] == "confirmado" and nomes["Finances/Receipt"]["confirmed_by"]
+    assert nomes["LOC | Practice"]["what"] == "Treino independente da pista"
+    assert "'purchased'" in nomes["Shipping Status"]["what"]
+    from command_center.providers.taxonomia_gmail import MANUAL
+    do_manual = {n: e for n, _f, _q, _t, e in MANUAL}
+    assert sum(1 for l in m["labels"] if l["name"] in do_manual and l["status"] == "confirmado") == 145
+    assert sum(1 for l in m["labels"] if l["status"] == "fora") == 11
 
     con = conectar()
     try:
-        assert triagem.confirmados(con) == [] or True
-        # 1. sem confirmação, a triagem nem começa
+        # 1. sem confirmação, a triagem nem começa (guarda o estado para devolver depois)
+        antes = [(l["name"], l["status"]) for l in todos(con, "SELECT name, status FROM gmail_labels")]
         con.execute("UPDATE gmail_labels SET status='pendente' WHERE status='confirmado'"); con.commit()
         r = triagem.rodar(con, lambda *a: (_ for _ in ()).throw(AssertionError("não devia chamar a IA")), "sk")
         assert "manual dos marcadores não confirmado" in r["pulada"] and r["lidos"] == 0
@@ -1122,5 +1130,8 @@ def test_manual_dos_marcadores_governa_a_triagem(cli, monkeypatch):
         if vistos:                                                          # havia e-mail na inbox para triar
             assert "wNews" in vistos[0] and "Email Review/Finance" not in vistos[0]
             assert "MANUAL DOS MARCADORES" in vistos[0] and "Propaganda" in vistos[0]
+        for nome, estado in antes:                                          # devolve o manual como estava
+            con.execute("UPDATE gmail_labels SET status=? WHERE name=?", (estado, nome))
+        con.commit()
     finally:
         con.close()

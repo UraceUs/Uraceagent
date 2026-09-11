@@ -113,17 +113,25 @@ def aplicar_schema(con):
 
 
 def _semear_marcadores(con):
-    """Manual dos marcadores do Gmail: entra como PROPOSTA (pendente/fora) e nunca
-    sobrescreve o que o dono já confirmou ou editou."""
-    from command_center.providers.taxonomia_gmail import MANUAL
+    """Manual dos marcadores do Gmail. O dono confirmou os 145 em 11/09 (marcador por
+    marcador): a semente traz esse estado para quem ainda está `pendente`. Nunca
+    desfaz o que ele mudar depois no painel — só promove pendente → confirmado."""
+    from command_center.providers.taxonomia_gmail import MANUAL, CONFIRMADO_POR
     for nome, familia, o_que, threads, estado in MANUAL:
-        con.execute("""INSERT INTO gmail_labels (name, family, what, threads, status)
-                       VALUES (?,?,?,?,?)
+        con.execute("""INSERT INTO gmail_labels (name, family, what, threads, status, confirmed_by, confirmed_at)
+                       VALUES (?,?,?,?,?,
+                               CASE WHEN ?='confirmado' THEN ? END,
+                               CASE WHEN ?='confirmado' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') END)
                        ON CONFLICT(name) DO UPDATE SET
                          family=excluded.family,
                          what=CASE WHEN gmail_labels.status='pendente' THEN excluded.what ELSE gmail_labels.what END,
-                         threads=COALESCE(gmail_labels.threads, excluded.threads)""",
-                    (nome, familia, o_que, threads, estado))
+                         threads=COALESCE(gmail_labels.threads, excluded.threads),
+                         status=CASE WHEN gmail_labels.status='pendente' THEN excluded.status ELSE gmail_labels.status END,
+                         confirmed_by=CASE WHEN gmail_labels.status='pendente' AND excluded.status='confirmado'
+                                           THEN ? ELSE gmail_labels.confirmed_by END,
+                         confirmed_at=CASE WHEN gmail_labels.status='pendente' AND excluded.status='confirmado'
+                                           THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE gmail_labels.confirmed_at END""",
+                    (nome, familia, o_que, threads, estado, estado, CONFIRMADO_POR, estado, CONFIRMADO_POR))
 
 
 # Sementes que dependem de coluna criada por migração (rodam depois dela).

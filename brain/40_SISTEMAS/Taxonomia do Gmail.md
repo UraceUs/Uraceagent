@@ -1,8 +1,8 @@
 ---
 tipo: sistema
 tipo_info: FACT
-data: 2026-08-28
-fonte: leitura ao vivo dos marcadores de urace@urace.us
+data: 2026-09-11
+fonte: leitura ao vivo dos 156 marcadores de urace@urace.us (11/09) + confirmação do dono, marcador por marcador
 responsavel: Italo Silveira
 status: ativo
 ---
@@ -11,9 +11,24 @@ status: ativo
 
 [[Gmail]] · [[Triagem de e-mail]] · [[URACE]]
 
-Lido da conta em 28/08/2026, com a contagem real de threads. **Não é
-proposta — é o que existe.** É este mapa que a [[Triagem de e-mail]] usa
-para decidir onde cada e-mail cai.
+**Atualizado em 11/09/2026.** A conta tem **156 marcadores**; o dono leu e
+**confirmou 145, um a um**, no manual (artifact + painel: Gmail → Manual dos
+marcadores). É esse manual — e só ele — que a triagem usa; o texto de cada
+marcador vive em `command_center/providers/taxonomia_gmail.py` e na tabela
+`gmail_labels`. Marcador que aparecer na caixa depois disso entra como
+`pendente` e a IA **não o enxerga** até o dono confirmar.
+
+Duas correções que ele fez com a própria mão: `LOC | Practice` = "treino
+independente da pista"; `Shipping Status` inclui também o **'purchased'**.
+
+⚠️ **Os 11 `Email Review/…` não são do dono.** Apareceram em setembro e
+foram aplicados em ~700 conversas, **nenhuma com mais de 14 dias**, por cima
+dos marcadores dele. Não foi o Command Center (o MCP recusa marcador que não
+existe e nunca cria nenhum): veio de um filtro do Gmail ou de um app com
+acesso à caixa. Ficaram **fora** do manual — a IA os ignora.
+
+A tabela abaixo é o retrato de 28/08, mantido porque explica o peso de cada
+família.
 
 | Marcador | Threads | O que guarda |
 |---|---|---|
