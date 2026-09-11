@@ -430,7 +430,7 @@ def sync_gmail(con, dias=14):
     """Espelha a inbox das duas caixas: quem está lá agora, com snippet e
     marcadores. O que saiu da inbox desde a última passada vira is_inbox=0.
     Sugestão de destino por regras já aqui; a IA cobre o resto sob demanda."""
-    from command_center.providers import classificar
+    from command_center.providers import classificar, triagem
     inicio = agora()
     try:
         n = 0
@@ -438,6 +438,10 @@ def sync_gmail(con, dias=14):
             try:
                 r = chamar("gmail", "gmail_buscar", conta=conta, consulta=f"newer_than:{dias}d", so_inbox=True, maximo=100)
                 marcadores = [m["nome"] for m in chamar("gmail", "gmail_marcadores", conta=conta)]
+                # só o que o dono confirmou no manual entra como sugestão de destino (11/09).
+                # Mesma trava da triagem: manual vazio = nenhuma sugestão, e não um chute.
+                permitidos = set(triagem.confirmados(con))
+                marcadores = [m for m in marcadores if m in permitidos]
             except Exception as e:
                 if type(e).__name__ == "ErroFerramenta" and "não configurada" in str(e):
                     continue

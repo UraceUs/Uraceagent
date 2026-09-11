@@ -125,7 +125,7 @@ export function GmailManual() {
       : <Banner tone="ok"><b>{r.confirmado} marcador(es) confirmado(s)</b>{d.data.confirmado_em && <> · último {ago(d.data.confirmado_em)}</>}. A IA só usa estes; qualquer outro que apareça na caixa é ignorado.</Banner>}
 
     {!!(d.data?.labels || []).some(m => m.family === 'Email Review') &&
-      <Banner tone="crit"><b>“Email Review/…” não é seu.</b> São 11 marcadores aplicados em ~700 conversas nos últimos 14 dias por algo fora do Command Center (o painel não cria marcador — o código recusa). Estão marcados como <b>não usar</b>. Se você quiser que sumam, é no Gmail: Configurações → Filtros e endereços bloqueados, e Conta Google → Segurança → Apps com acesso à conta.</Banner>}
+      <Banner tone="crit"><b>“Email Review/…” não é seu.</b> São 11 marcadores aplicados em ~700 conversas entre 9 e 12 de agosto. Não foi o Command Center — o painel não cria marcador, o código recusa. O log de tokens OAuth do domínio mostrou que naquela data o único app com escrita no Gmail era o conector <b>Claude for Gmail</b> do claude.ai (autorizado em 16/07): foram sessões suas no Claude com esse conector ligado. Estão marcados como <b>não usar</b> e a IA os ignora — inclusive na sugestão de destino. Para parar de vez: claude.ai → Configurações → Conectores → Gmail.</Banner>}
 
     <div className="card"><div className="card-b">
       <div className="h2" style={{ marginBottom: 8 }}>O que chega → onde vai</div>

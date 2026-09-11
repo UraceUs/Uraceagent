@@ -2,7 +2,7 @@
 tipo: processo
 area: Gmail
 fonte: humano
-atualizado_em: 2026-08-28
+atualizado_em: 2026-09-11
 tipo_info: PROCESS
 responsavel: Italo Silveira
 status: ativo
@@ -12,9 +12,17 @@ status: ativo
 
 Rotina diária nas caixas do [[Gmail]] (`urace@` e `support@`).
 
+## A regra que manda: o manual confirmado (11/09)
+A IA **só classifica com os marcadores que o dono confirmou**, um a um, no
+manual — 145 dos 156. Marcador que não está lá **não existe** para ela, e
+ela **nunca cria marcador**. Sem manual confirmado, a triagem **não roda**.
+Fonte: `command_center/providers/taxonomia_gmail.py`; o agente lê
+`skills/urace-gmail/MANUAL.md`; o dono confere no painel (Gmail → Manual dos
+marcadores). Ver [[Taxonomia do Gmail]].
+
 ## Passos
 1. Ler cada thread nova da inbox.
-2. Classificar e aplicar o marcador da taxonomia ([[Gmail]]).
+2. Classificar e aplicar o marcador **do manual confirmado** ([[Taxonomia do Gmail]]).
 3. Propaganda → `wNews` **e arquivar**. Todo o resto **fica na inbox**.
 4. Compra nossa → alimentar [[Compra e envio]] no [[Asana]].
 5. **Rascunho** para lead/orçamento e cliente atual. Parceria e

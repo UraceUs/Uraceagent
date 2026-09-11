@@ -21,11 +21,16 @@ marcador vive em `command_center/providers/taxonomia_gmail.py` e na tabela
 Duas correções que ele fez com a própria mão: `LOC | Practice` = "treino
 independente da pista"; `Shipping Status` inclui também o **'purchased'**.
 
-⚠️ **Os 11 `Email Review/…` não são do dono.** Apareceram em setembro e
-foram aplicados em ~700 conversas, **nenhuma com mais de 14 dias**, por cima
-dos marcadores dele. Não foi o Command Center (o MCP recusa marcador que não
-existe e nunca cria nenhum): veio de um filtro do Gmail ou de um app com
-acesso à caixa. Ficaram **fora** do manual — a IA os ignora.
+⚠️ **Os 11 `Email Review/…` não são do dono — origem apurada em 11/09.**
+Foram aplicados em ~700 conversas a partir de **9 a 12 de agosto**, por cima
+dos marcadores dele, com erros de classificação típicos de LLM (extrato do
+Home Depot como "Verification Code"). **Não foi o Command Center** — o MCP
+recusa marcador que não existe e o código não tem nenhuma função que crie
+marcador. O log de tokens OAuth do domínio fechou o caso: entre 9 e 12/08
+**nenhum token novo foi emitido**, e o único app com escrita no Gmail naquela
+data era o **conector `Claude for Gmail` do claude.ai** (token de 16/07/2026).
+Foram sessões do dono no Claude, com o conector do Gmail ligado. Ficaram
+**fora** do manual — a IA os ignora. Ver [[D-2026-09-11 - Manual dos marcadores do Gmail confirmado pelo dono]].
 
 A tabela abaixo é o retrato de 28/08, mantido porque explica o peso de cada
 família.
@@ -58,4 +63,18 @@ família.
 - A waiver assinada chega no `support@`, mas **a fonte de verdade é o
   [[DocuSign]]**, não o e-mail.
 
-Rotina diária proposta: **07h**. Ver [[Triagem de e-mail]].
+Rotina: **07h, 13h e 21h** pelo Command Center. Ver [[Triagem de e-mail]].
+
+## Onde o manual vive (11/09)
+
+Uma fonte só, três consumidores:
+
+| Onde | O que é |
+|---|---|
+| `command_center/providers/taxonomia_gmail.py` | **a fonte** — 156 marcadores, texto e estado |
+| `skills/urace-gmail/MANUAL.md` | gerado dela; é o que o agente lê |
+| Painel → Gmail → **Manual dos marcadores** | a tela onde o dono confere e confirma |
+| tabela `gmail_labels` | estado por marcador (confirmado / pendente / fora) |
+
+`python3 adminai/gerar_manual_marcadores.py` regera o `MANUAL.md`, e o teste
+`test_manual_da_skill_esta_em_dia` quebra se os dois divergirem.

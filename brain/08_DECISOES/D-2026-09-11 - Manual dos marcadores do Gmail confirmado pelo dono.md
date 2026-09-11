@@ -29,19 +29,34 @@ agir."*
 5. Correções do dono, com a própria mão: `LOC | Practice` = "treino
    independente da pista"; `Shipping Status` cobre também **'purchased'**.
 
-## Sobre os `Email Review/…`
+## Sobre os `Email Review/…` — caso encerrado em 11/09
 
-Não são dele e não foram feitos pelo painel. Aplicados em ~700 conversas nos
-últimos 14 dias por um filtro do Gmail ou app com acesso à caixa — e erram
-(extrato do Home Depot marcado como "Verification Code"). Ficam **fora** do
-manual. Sumir de vez é no Gmail (Configurações → Filtros) e na Conta Google
-(Segurança → Apps com acesso).
+Não são dele e **não foram feitos pelo painel**. A investigação percorreu os
+41 filtros do Gmail (nenhum aplica esses marcadores), os projetos do Apps
+Script (nenhum gatilho), o cabeçalho bruto de um e-mail rotulado (nenhum
+rastro — rotulagem via API não deixa) e, por fim, o **log de tokens OAuth do
+domínio**, que fechou o caso:
+
+- a rotulagem começou entre **9 e 12 de agosto**;
+- nesse intervalo **nenhum token novo foi emitido** — quem rotulou usou um
+  token que já existia;
+- naquela data o **único** app com escrita no Gmail era o conector
+  **`Claude for Gmail`** do claude.ai, autorizado em **16/07/2026**;
+- o `URACE Administrative AI` (nosso cliente OAuth, os mesmos quatro escopos
+  de `adminai/google_auth.py`) só ganhou acesso em **04/09 às 11:09** — a
+  manhã em que conectamos o Google, com a triagem das 11:34 rodando sem Gmail
+  e a primeira triagem real às 11:53. O IP da AWS é o navegador da extensão,
+  que roda na nuvem. Não é invasor.
+
+Foram **sessões do dono no Claude com o conector do Gmail ligado**. Os
+marcadores ficam **fora** do manual e a IA os ignora. O dono decidiu não
+caçar o responsável: "não quero ir atrás de quem foi".
 
 ## Ponto que o dono ainda pode querer mudar
 
 Ele confirmou também os 6 marcadores de `Years 2019-2023`, cujo texto diz
-"arquivo morto por ano — a triagem NÃO usa". Como está, a IA pode arquivar
-e-mail novo lá dentro. Um clique em "não usar" na tela resolve.
+"arquivo morto por ano — a triagem NÃO usa" — e disse **"resolvido"** em
+11/09, mantendo como está. Um clique em "não usar" na tela reverte.
 
 Onde vive: `command_center/providers/taxonomia_gmail.py` (o manual),
 tabela `gmail_labels` (estado e confirmação), `providers/triagem.py` (a

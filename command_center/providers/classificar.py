@@ -18,11 +18,11 @@ SISTEMA = {"INBOX", "UNREAD", "STARRED", "IMPORTANT", "SENT", "DRAFT", "SPAM", "
 
 # (regex no remetente | regex no assunto) -> marcador preferido, motivo
 REGRAS = [
-    (r"docusign", None, "Softwares|Apps/Docusign", "remetente DocuSign"),
+    (r"docusign", None, "Platforms & Subscriptions/Docusign", "remetente DocuSign"),
     (r"bankofamerica|bofa", None, "Banks/Bank of America", "remetente Bank of America"),
     (r"americanexpress|amex", None, "Banks/American Express", "remetente American Express"),
     (None, r"new message from .urace", "Marketing & Sales/Comercial/Formulario do site", "formulário do site"),
-    (r"rdstation|rd station|resultadosdigitais", None, "Marketing/RD Station", "remetente RD Station"),
+    (r"rdstation|rd station|resultadosdigitais", None, "Marketing & Sales/Comercial/CRM", "remetente RD Station"),
     (None, r"\b(tracking|shipped|shipment|delivery|entrega|rastreio)\b", "Shipping Status", "assunto de envio"),
     (None, r"\b(payment received|payment confirmation|pagamento recebido|you (?:ve |have )?got paid|deposit(?:ed)? into)\b", "Finances", "confirmação de pagamento recebido"),
     (None, r"\b(statement|extrato) (?:is )?(?:ready|available|dispon)", "Finances", "extrato disponível"),
@@ -48,12 +48,20 @@ def _acha(nomes, alvo):
 
 
 def por_regras(email, nomes_marcadores):
-    """Devolve (marcador, motivo, origem) ou None."""
+    """Devolve (marcador, motivo, origem) ou None.
+
+    `nomes_marcadores` é a lista FECHADA de marcadores que o dono confirmou no
+    manual (11/09). O que não está nela não vira sugestão — nem quando já está
+    colado na thread: os ~700 e-mails com `Email Review/…` foram rotulados por
+    fora, e repetir isso como destino seria a IA obedecer a quem não é o dono.
+    """
+    permitidos = set(nomes_marcadores or [])
     try:
         atuais = json.loads(email.get("labels") or "[]")
     except ValueError:
         atuais = []
-    usuario = [l for l in atuais if l and l.upper() not in SISTEMA and not l.startswith("CATEGORY_")]
+    usuario = [l for l in atuais
+               if l and l.upper() not in SISTEMA and not l.startswith("CATEGORY_") and l in permitidos]
     if usuario:
         return usuario[0], f"já tem o marcador '{usuario[0]}' (filtro do Gmail)", "label"
     de = (email.get("sender") or "").lower()

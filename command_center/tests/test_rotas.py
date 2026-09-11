@@ -229,16 +229,31 @@ def test_mover_email_exige_gmail_e_operador(cli):
 
 def test_classificar_por_regras():
     from command_center.providers import classificar
-    nomes = ["wNews", "Softwares|Apps/Docusign", "Finances/Pending Invoices ❗", "Marketing & Sales/Comercial/Formulario do site"]
+    nomes = ["wNews", "Platforms & Subscriptions/Docusign", "Banks/Bank of America",
+             "Finances/Pending Invoices ❗", "Marketing & Sales/Comercial/Formulario do site"]
     assert classificar.por_regras({"labels": '["INBOX","Banks/Bank of America"]', "sender": "x", "subject": "y"}, nomes)[0] == "Banks/Bank of America"
     lab, motivo, por = classificar.por_regras({"labels": "[]", "sender": "Docusign Account <info@account.docusign.com>", "subject": "New Device Login"}, nomes)
-    assert lab == "Softwares|Apps/Docusign" and por == "rules"
+    assert lab == "Platforms & Subscriptions/Docusign" and por == "rules"
     assert classificar.por_regras({"labels": "[]", "sender": "Urace <urace@urace.us>", "subject": 'New message from "Urace - The Driver Factory"'}, nomes)[0].endswith("Formulario do site")
     assert classificar.por_regras({"labels": "[]", "sender": "financeiro@sxsmkt.com.br", "subject": "FATURAMENTO SETEMBRO/2026"}, nomes)[0].startswith("Finances")
     assert classificar.por_regras({"labels": "[]", "sender": "joao@gmail.com", "subject": "oi"}, nomes) is None
     # resposta da IA validada contra a lista real: marcador inventado vira None
     res = classificar.parse_ia('bla {"itens":[{"id":1,"marcador":"wnews","motivo":"propaganda"},{"id":2,"marcador":"Inventado/Novo","motivo":"x"}]} fim', nomes)
     assert res[1][0] == "wNews" and res[2][0] is None
+
+
+def test_sugestao_nao_repete_marcador_que_o_dono_nao_confirmou():
+    """Dono, 11/09: os `Email Review/…` foram colados por fora e ele os deixou de fora
+    do manual. A sugestão de destino não pode devolvê-los só porque já estão na thread —
+    seria a IA obedecendo a quem não é o dono."""
+    from command_center.providers import classificar
+    nomes = ["wNews", "Banks/Bank of America"]                  # a lista fechada do manual
+    e = {"labels": '["INBOX","Email Review/Finance","Banks/Bank of America"]', "sender": "x", "subject": "y"}
+    assert classificar.por_regras(e, nomes)[0] == "Banks/Bank of America"
+    so_intruso = {"labels": '["INBOX","Email Review/Action Required"]', "sender": "x", "subject": "y"}
+    assert classificar.por_regras(so_intruso, nomes) is None
+    # manual vazio (nada confirmado) = nenhuma sugestão, nunca um chute
+    assert classificar.por_regras(e, []) is None
 
 
 # ------------------------------------------------ DocuSign: lixeira, reenvio, vínculo, download

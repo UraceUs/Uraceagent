@@ -1,6 +1,6 @@
 ---
 tipo: sistema
-atualizado_em: 2026-08-28
+atualizado_em: 2026-09-11
 tipo_info: FACT
 responsavel: sonda ao vivo
 status: ativo
@@ -16,6 +16,9 @@ Caixas `urace@urace.us` e `support@urace.us`. Processo: [[Triagem de e-mail]].
 - `Suits` (432) — [[Pedido de macacão]] · `RACES/...` — [[Corridas]]
 ## Regra
 A IA **cria rascunho, não envia** — exceto as duas do [[Pedido de macacão]].
+A IA **não cria marcador** e **só usa marcador confirmado** pelo dono no
+manual de 11/09 ([[Taxonomia do Gmail]]). Sem manual confirmado, a triagem
+não roda.
 
 ## Como o Administrative AI fala com o Gmail (04/09)
 
