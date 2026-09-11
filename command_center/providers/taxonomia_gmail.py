@@ -18,7 +18,10 @@ Regras que valem para o manual inteiro:
   * `principal` é a pasta onde a thread vai viver (o caminho completo);
     `marcadores` são etiquetas extras (loja, pessoa, série).
   * Marcador de família "Email Review" NÃO é do dono: entra como `fora` até ele dizer
-    o contrário (ver a nota em brain/40_SISTEMAS/Taxonomia do Gmail.md).
+    o contrário (ver a nota em brain/40_SISTEMAS/Taxonomia do Gmail.md). Os 11 foram
+    APAGADOS da caixa em 11/09, a pedido dele (714 conversas perderam a etiqueta;
+    nenhum e-mail foi apagado). As linhas ficam aqui de propósito: se algo os recriar,
+    já nascem `fora` e a IA não os enxerga.
 
 O volume é o número de threads lido da conta em 11/09 — serve para o dono ver o peso
 de cada marcador ao confirmar.

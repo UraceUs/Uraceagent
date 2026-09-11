@@ -124,8 +124,11 @@ export function GmailManual() {
       ? <Banner tone="warn"><b>A triagem está parada.</b> Enquanto nenhum marcador estiver confirmado, a IA não classifica nem move e-mail nenhum. Confira família por família abaixo e confirme o que estiver certo.</Banner>
       : <Banner tone="ok"><b>{r.confirmado} marcador(es) confirmado(s)</b>{d.data.confirmado_em && <> · último {ago(d.data.confirmado_em)}</>}. A IA só usa estes; qualquer outro que apareça na caixa é ignorado.</Banner>}
 
-    {!!(d.data?.labels || []).some(m => m.family === 'Email Review') &&
-      <Banner tone="crit"><b>“Email Review/…” não é seu.</b> São 11 marcadores aplicados em ~700 conversas entre 9 e 12 de agosto. Não foi o Command Center — o painel não cria marcador, o código recusa. O log de tokens OAuth do domínio mostrou que naquela data o único app com escrita no Gmail era o conector <b>Claude for Gmail</b> do claude.ai (autorizado em 16/07): foram sessões suas no Claude com esse conector ligado. Estão marcados como <b>não usar</b> e a IA os ignora — inclusive na sugestão de destino. Para parar de vez: claude.ai → Configurações → Conectores → Gmail.</Banner>}
+    {/* Só avisa enquanto os marcadores ainda existirem na caixa. Os 11 foram
+        apagados em 11/09 a pedido do dono; um "Reler a caixa" zera este aviso.
+        As linhas continuam no manual como `fora`: se algo recriá-los, já nascem ignorados. */}
+    {!!(d.data?.labels || []).some(m => m.family === 'Email Review' && m.in_gmail) &&
+      <Banner tone="crit"><b>“Email Review/…” não é seu.</b> São 11 marcadores aplicados em ~700 conversas entre 9 e 12 de agosto. Não foi o Command Center — o painel não cria marcador, o código recusa. O log de tokens OAuth do domínio mostrou que naquela data o único app com escrita no Gmail era o conector <b>Claude for Gmail</b> do claude.ai (autorizado em 16/07): foram sessões suas no Claude com esse conector ligado. Estão marcados como <b>não usar</b> e a IA os ignora — inclusive na sugestão de destino. Some da caixa apagando os marcadores no Gmail; some daqui com <b>⟳ Reler a caixa</b>.</Banner>}
 
     <div className="card"><div className="card-b">
       <div className="h2" style={{ marginBottom: 8 }}>O que chega → onde vai</div>

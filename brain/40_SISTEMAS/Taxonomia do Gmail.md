@@ -30,7 +30,12 @@ marcador. O log de tokens OAuth do domínio fechou o caso: entre 9 e 12/08
 **nenhum token novo foi emitido**, e o único app com escrita no Gmail naquela
 data era o **conector `Claude for Gmail` do claude.ai** (token de 16/07/2026).
 Foram sessões do dono no Claude, com o conector do Gmail ligado. Ficaram
-**fora** do manual — a IA os ignora. Ver [[D-2026-09-11 - Manual dos marcadores do Gmail confirmado pelo dono]].
+**fora** do manual — a IA os ignora. **Apagados da caixa em 11/09** a pedido
+dele: os 11 marcadores saíram, 714 conversas perderam a etiqueta e **nenhum
+e-mail foi apagado**. Ele optou por **manter o conector do Gmail ligado**, então
+pode voltar a acontecer se uma sessão do Claude for instruída a organizar a caixa.
+As 11 linhas continuam no manual como `fora`: se algo os recriar, já nascem
+ignorados. Ver [[D-2026-09-11 - Manual dos marcadores do Gmail confirmado pelo dono]].
 
 A tabela abaixo é o retrato de 28/08, mantido porque explica o peso de cada
 família.
