@@ -297,20 +297,41 @@ código.
 
 ---
 
-## 8. Se a conta for WhatsApp Lite (QR code)
+## 8. Caminho de WhatsApp da conta — verificado
 
-O Kommo oferece dois caminhos de WhatsApp. O que usa QR code para parear um
-celular não passa pela API oficial, não tem modelos e não tem aprovação da Meta —
-e também não tem a garantia de entrega nem a proteção contra bloqueio. Se os
-modelos não aparecem em nenhum lugar das configurações, é provável que a conta
-esteja nesse caminho, e a solução é migrar para o **WhatsApp Business** oficial
-dentro do Kommo antes de qualquer coisa neste documento.
+O Kommo oferece dois caminhos de WhatsApp, e só um deles tem modelos.
+
+**A conta da URace está no caminho certo.** Uma auditoria das configurações do
+Kommo confirmou que o número está no **WhatsApp Business oficial (WABA / Cloud
+API)** provido pela própria Kommo, com status `Connected` e nota de qualidade
+`High`. Nada deste documento depende de migração: os modelos podem ser
+submetidos hoje.
+
+Para referência futura, o outro caminho é o **WhatsApp Lite**, que pareia um
+celular por QR code. Ele não passa pela API oficial, não tem modelos, não tem
+aprovação da Meta e não tem garantia de entrega. Se um dia os modelos sumirem
+das configurações, é sinal de que o número voltou para esse caminho.
+
+### 8.1 Isto não vale para Instagram e Messenger
+
+Modelos são um mecanismo **exclusivo do WhatsApp**. O Instagram tem a sua
+própria janela de 24 horas e **não tem equivalente a modelo aprovado**: passado
+esse prazo, uma DM só pode ser respondida se o lead escrever de novo. O
+Messenger tem a mesma restrição.
+
+Isso importa porque a auditoria encontrou os canais de Instagram (DM e
+comentários) e Facebook Messenger com **erro de conexão** no Kommo desde o fim de
+agosto — mensagens desses canais deixaram de chegar ao CRM. Esse é um problema
+separado, de reautorização de token da Meta, e nenhum modelo de WhatsApp o
+resolve. Os leads perdidos nesses canais só voltam a ser alcançáveis se
+escreverem de novo, ou por outro canal em que você já tenha o contato — e aí,
+sim, o WhatsApp com os modelos abaixo é a via.
 
 ---
 
 ## 9. Checklist de implantação
 
-- [ ] Confirmar que o número está no WhatsApp Business API oficial (não Lite)
+- [x] Confirmar que o número está no WhatsApp Business API oficial (não Lite) — confirmado: WABA/Cloud API via Kommo, `Connected`, qualidade `High`
 - [ ] Concluir a *Business Verification* no Gerenciador de Negócios da Meta
 - [ ] Submeter os 8 modelos em `en_US`
 - [ ] Submeter `pt_BR` para os modelos que atendem público brasileiro
