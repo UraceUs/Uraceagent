@@ -68,3 +68,24 @@ def test_relatorio_marca_o_que_ficou_sem_regra_e_o_que_nao_e_do_manual():
 def test_nao_usa_dominio_pessoal_como_regra():
     """gmail.com/hotmail e afins pegariam a caixa inteira — ficam de fora na amostra."""
     assert "gmail.com" in g.DOMINIOS_PROIBIDOS and "outlook.com" in g.DOMINIOS_PROIBIDOS
+
+
+def test_abre_a_caixa_carregando_env_E_tokens(monkeypatch):
+    """O bug de 14/09: o script carregava o env e esquecia os tokens. O Gmail
+    respondia "conta não configurada. Disponíveis: []", que parece falta de
+    credencial e não é — o token estava lá, ninguém tinha lido."""
+    chamadas = []
+    falso = type("M", (), {
+        "_carregar_env": staticmethod(lambda: chamadas.append("env")),
+        "_carregar_contas": staticmethod(lambda: chamadas.append("contas")),
+        "_contas": {"urace": {}},
+        "_sem_token": {"support": "/home/ubuntu/.urace/google-token-support.json"},
+        "_mapa_labels": staticmethod(lambda c: {"wNews": "Label_1"}),
+    })
+    monkeypatch.setattr(g, "gmail_mcp", falso)
+    assert g.marcadores_da_caixa("urace") == {"wNews": "Label_1"}
+    assert chamadas == ["env", "contas"]
+    # caixa sem token: erro que diz o que fazer, não stack trace
+    with pytest.raises(SystemExit) as ex:
+        g.marcadores_da_caixa("support")
+    assert "google_auth.py --conta support" in str(ex.value)

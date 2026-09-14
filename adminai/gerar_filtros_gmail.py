@@ -58,6 +58,22 @@ def _endereco(de):
     return bruto if "@" in bruto else ""
 
 
+def marcadores_da_caixa(conta):
+    """Abre a caixa e devolve os marcadores dela.
+
+    São DOIS carregamentos, e esquecer o segundo custou uma rodada: `_carregar_env`
+    lê o ~/.urace/adminai.env, mas quem preenche `_contas` com os tokens é
+    `_carregar_contas`. Sem ele o Gmail responde "conta não configurada.
+    Disponíveis: []" — que parece falta de credencial e não é."""
+    gmail_mcp._carregar_env()
+    gmail_mcp._carregar_contas()
+    if conta not in gmail_mcp._contas:
+        sys.exit(f"ERRO: a caixa {conta}@ não tem token neste servidor "
+                 f"({gmail_mcp._sem_token.get(conta, '?')}).\n"
+                 f"Rode: python3 adminai/google_auth.py --conta {conta}")
+    return gmail_mcp._mapa_labels(conta)
+
+
 def _req(conta, url, tentativas=4):
     """Como o _req do MCP, mas espera e tenta de novo quando o Gmail limita."""
     for n in range(tentativas):
@@ -186,8 +202,7 @@ def main():
     ap.add_argument("--saida", default=os.path.expanduser("~/.urace"))
     a = ap.parse_args()
 
-    gmail_mcp._carregar_env()
-    na_caixa = list(gmail_mcp._mapa_labels(a.conta))
+    na_caixa = list(marcadores_da_caixa(a.conta))
     nomes = [n for n, _f, _q, _t, e in MANUAL if e == OK and n in na_caixa]
     if not nomes:
         sys.exit(f"nenhum marcador do manual existe na caixa {a.conta}@ — nada a fazer.")
