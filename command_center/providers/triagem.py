@@ -12,10 +12,16 @@ passa a ter duas tarefas: **confirmar** o que o filtro marcou e **classificar**
 o que o filtro não conseguiu, usando contexto e conhecimento.
 
 Isso parte a rodada em duas:
-  * thread que já chegou com marcador do manual → pedido barato, sem corpo:
-    "o filtro disse X; confirma ou corrige?". Discordância vira `needs_human`,
-    porque quem precisa de conserto é o filtro, e isso é decisão do dono.
-  * thread sem marcador nenhum → o pedido completo, com corpo, como antes.
+  * thread que já chegou com marcador do manual → "o filtro disse X; confirma,
+    completa ou corrige?". Discordância vira `needs_human`, porque quem precisa
+    de conserto é o filtro, e isso é decisão do dono.
+  * thread sem marcador nenhum → classifica do zero.
+
+**O corpo é lido nos dois casos** (dono, 14/09: *"sempre leia para colocar mais
+marcadores caso seja preciso e escalar em situações que te ensinarei no
+futuro"*). O filtro acerta a pasta pelo remetente, mas só o conteúdo diz se
+falta etiqueta e se aquilo precisa de gente. Os `aprendizados` — o que o dono
+ensina com o tempo — entram nos dois pedidos pelo mesmo motivo.
 
 Como funciona:
 1. pega as threads da inbox espelhada ainda não triadas;
@@ -44,15 +50,17 @@ CORPO_MAX = 1200           # caracteres de corpo por thread no prompt
 
 
 def _corpo_thread(mailbox, thread_id):
+    """O corpo, ou string vazia. Nunca levanta: uma thread ilegível não pode
+    derrubar a rodada inteira — a IA classifica pelo remetente e pelo assunto."""
     try:
         t = chamar("gmail", "gmail_thread", conta=mailbox, thread_id=thread_id)
+        partes = []
+        for m in (t.get("mensagens") or [])[-2:]:    # as duas últimas mensagens bastam
+            partes.append(f"[{m.get('de') or ''} · {m.get('data') or ''}]\n{(m.get('corpo') or m.get('snippet') or '')}")
+        texto = "\n\n".join(partes)
+        return texto[:CORPO_MAX] + ("…" if len(texto) > CORPO_MAX else "")
     except Exception:
         return ""
-    partes = []
-    for m in t.get("mensagens", [])[-2:]:            # as duas últimas mensagens bastam
-        partes.append(f"[{m.get('de') or ''} · {m.get('data') or ''}]\n{(m.get('corpo') or m.get('snippet') or '')}")
-    texto = "\n\n".join(partes)
-    return texto[:CORPO_MAX] + ("…" if len(texto) > CORPO_MAX else "")
 
 
 def confirmados(con):
@@ -86,31 +94,37 @@ def _principal_provavel(marcadores):
     return max(marcadores, key=lambda n: (n.count("/"), len(n))) if marcadores else None
 
 
-def prompt_confirmar(emails, nomes, mailbox, livro=""):
-    """Pedido barato para o que o filtro nativo já marcou: confirmar ou corrigir.
+def prompt_confirmar(emails, nomes, mailbox, aprendizados="", livro=""):
+    """O que o filtro nativo já marcou: confirmar, COMPLETAR e escalar.
 
-    Sem corpo da thread — remetente e assunto bastam para dizer se o filtro
-    acertou, e é isso que mantém o custo baixo agora que o filtro pega o grosso."""
+    O dono (14/09) recusou a versão barata sem corpo: *"sempre leia para colocar
+    mais marcadores caso seja preciso e escalar em situações que te ensinarei no
+    futuro"*. O filtro acerta a pasta pelo remetente; só o conteúdo diz se falta
+    etiqueta e se aquilo precisa de uma pessoa."""
     linhas = []
     for e in emails:
         linhas.append(f"### id={e['id']}\nde: {e.get('sender') or ''}\nassunto: {e.get('subject') or ''}\n"
                       f"marcador aplicado pelo filtro: {e.get('_filtro_principal')}\n"
-                      f"outros marcadores na thread: {json.dumps(e.get('_filtro_todos') or [], ensure_ascii=False)}")
-    return (f"TAREFA: conferir a classificação automática da inbox de {mailbox}@urace.us.\n"
-            "Um filtro nativo do Gmail já marcou estas threads pelo remetente. Ele acerta na "
-            "grande maioria das vezes. Seu trabalho é CONFIRMAR — e só corrigir quando estiver "
-            "claramente errado pelo manual.\n"
+                      f"outros marcadores na thread: {json.dumps(e.get('_filtro_todos') or [], ensure_ascii=False)}\n"
+                      f"corpo:\n{e.get('_corpo') or e.get('snippet') or ''}")
+    return (f"TAREFA: conferir e COMPLETAR a classificação automática da inbox de {mailbox}@urace.us.\n"
+            "Um filtro nativo do Gmail já marcou estas threads pelo remetente. Ele acerta a pasta na "
+            "grande maioria das vezes, mas ele não lê o e-mail — você lê. Seu trabalho é:\n"
+            "  1. CONFIRMAR o marcador do filtro (só corrija se estiver claramente errado pelo manual);\n"
+            "  2. ACRESCENTAR os marcadores que faltarem — fornecedor, pessoa, série, loja;\n"
+            "  3. ESCALAR: dizer precisa_humano=true quando o conteúdo pedir decisão de uma pessoa.\n"
             + (f"MANUAL DOS MARCADORES (o dono confirmou isto; é a única regra que vale):\n{livro}\n" if livro else "")
             + "REGRAS:\n"
             "- Use SOMENTE marcadores desta lista, com o nome EXATO: " + json.dumps(nomes, ensure_ascii=False) + ".\n"
             "- Na dúvida, CONFIRME o que o filtro pôs. Corrigir sem certeza é pior que não corrigir.\n"
             "- 'principal' = o marcador do filtro, ou o correto se ele errou feio.\n"
+            "- 'marcadores' = etiquetas extras que o filtro não tinha como saber, lidas do corpo.\n"
             "- 'precisa_humano' = true quando a thread pede resposta ou decisão de uma pessoa. "
             "Notificação, propaganda, recibo, extrato e confirmação automática = false.\n"
             "- Não rotule, não mova, não escreva nada: só responda.\n"
             "RESPONDA APENAS com JSON no formato "
             "{\"itens\":[{\"id\":<int>,\"principal\":\"<nome exato>\",\"marcadores\":[\"<nome exato>\"],\"precisa_humano\":<bool>,\"motivo\":\"<até 15 palavras>\"}]} "
-            "e nada mais.\n\n" + "\n\n".join(linhas))
+            "e nada mais." + aprendizados + "\n\n" + "\n\n".join(linhas))
 
 
 def prompt(emails, nomes, mailbox, aprendizados="", livro=""):
@@ -190,12 +204,12 @@ def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agen
             e["_thread"] = l["external_id"] if l else None
             e["_filtro_todos"] = do_filtro(e, permitidos)
             e["_filtro_principal"] = _principal_provavel(e["_filtro_todos"])
-            # o corpo é o que custa: só lê o da thread que o filtro não pegou
-            e["_corpo"] = _corpo_thread(mailbox, e["_thread"]) if (e["_thread"] and not e["_filtro_principal"]) else ""
+            # sempre lê o corpo (dono, 14/09): é ele que diz se falta marcador e se escala
+            e["_corpo"] = _corpo_thread(mailbox, e["_thread"]) if e["_thread"] else ""
         com_filtro = [e for e in emails if e["_filtro_principal"]]
         sem_filtro = [e for e in emails if not e["_filtro_principal"]]
         saida["do_filtro"] += len(com_filtro)
-        grupos = ((com_filtro, lambda lote: prompt_confirmar(lote, nomes, mailbox, livro)),
+        grupos = ((com_filtro, lambda lote: prompt_confirmar(lote, nomes, mailbox, aprendizados, livro)),
                   (sem_filtro, lambda lote: prompt(lote, nomes, mailbox, aprendizados, livro)))
         for grupo, montar in grupos:
             for i in range(0, len(grupo), LOTE):

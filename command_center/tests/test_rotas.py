@@ -1205,18 +1205,21 @@ def test_triagem_confirma_o_filtro_e_classifica_so_o_resto(cli, monkeypatch):
                           '{"id":%d,"principal":"Finances/Pending Invoices ❗","marcadores":[],"precisa_humano":true,"motivo":"cobranca real"},'
                           '{"id":%d,"principal":"Kart Racing School | Client talks","marcadores":[],"precisa_humano":true,"motivo":"cliente"}]}'
                           % (ja, errado, sem)), None
-        r = triagem.rodar(con, runner, "sk", mailboxes=("urace",), por="teste")
+        r = triagem.rodar(con, runner, "sk", mailboxes=("urace",),
+                          aprendizados="\nENSINADO: escalar cobrança", por="teste")
         con.commit()
 
         # duas conversas vieram marcadas pelo filtro; uma chegou limpa
         assert r["do_filtro"] == 2 and r["confirmados"] == 1 and r["corrigidos"] == 1 and r["erros"] == []
-        # o corpo só é lido de quem o filtro não pegou — é o que custa
-        assert corpos == [f"th{sem}"]
+        # dono, 14/09: o corpo é lido SEMPRE — é ele que diz se falta marcador e se escala
+        assert sorted(corpos) == sorted([f"th{ja}", f"th{errado}", f"th{sem}"])
         assert len(prompts) == 2
         confirmacao, completo = prompts[0], prompts[1]
         assert "CONFIRMAR" in confirmacao and "marcador aplicado pelo filtro" in confirmacao
-        assert "CORPO DE" not in confirmacao
-        assert f"CORPO DE th{sem}" in completo
+        assert "ACRESCENTAR" in confirmacao and "ESCALAR" in confirmacao
+        assert f"CORPO DE th{ja}" in confirmacao                  # o filtro não lê o e-mail; a IA lê
+        assert "ENSINADO: escalar cobrança" in confirmacao        # o que o dono ensina vale nos dois caminhos
+        assert f"CORPO DE th{sem}" in completo and "ENSINADO: escalar cobrança" in completo
 
         # confirmado: segue o filtro, sem virar trabalho de gente
         a = um(con, "SELECT * FROM emails WHERE id=?", (ja,))
@@ -1273,3 +1276,13 @@ def test_gmail_degradado_quando_falta_uma_caixa(monkeypatch):
     monkeypatch.setattr(providers, "chamar", lambda s, f, **a: {"contas": {
         "urace": {"ok": False}, "support": {"ok": False}}})
     assert providers.saude("gmail")[0] == "ERROR"
+
+
+def test_corpo_ilegivel_nao_derruba_a_rodada(monkeypatch):
+    """Uma thread que o Gmail devolve torta não pode parar a triagem das outras."""
+    from command_center.providers import triagem
+    for resposta in ([], None, {"mensagens": None}, {"mensagens": [{"de": None}]}):
+        monkeypatch.setattr(triagem, "chamar", lambda s, f, r=resposta, **a: r)
+        assert isinstance(triagem._corpo_thread("urace", "th1"), str)
+    monkeypatch.setattr(triagem, "chamar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("caiu")))
+    assert triagem._corpo_thread("urace", "th1") == ""
