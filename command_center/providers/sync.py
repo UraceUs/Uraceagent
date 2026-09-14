@@ -426,10 +426,22 @@ def sync_docusign(con, desde_dias=365):
 
 
 # ------------------------------------------------------ Gmail
-def sync_gmail(con, dias=14):
-    """Espelha a inbox das duas caixas: quem está lá agora, com snippet e
+MAX_INBOX = 1000          # trava de segurança; a inbox real das duas caixas é dezenas
+
+
+def sync_gmail(con, dias=None):
+    """Espelha a inbox INTEIRA das duas caixas: quem está lá agora, com snippet e
     marcadores. O que saiu da inbox desde a última passada vira is_inbox=0.
-    Sugestão de destino por regras já aqui; a IA cobre o resto sob demanda."""
+    Sugestão de destino por regras já aqui; a IA cobre o resto sob demanda.
+
+    Dono, 14/09: *"preciso que apareçam todos os e-mails em cada visualização,
+    menos os que foram enviados para os marcadores; os que não foram, mesmo
+    estando lidos, precisam estar aparecendo lá."*
+
+    Por isso não há mais corte por data. O corte de 14 dias que existia aqui
+    escondia do painel qualquer e-mail mais velho que o dono ainda não tivesse
+    arquivado — foi o que sumiu com a caixa support@, que tinha 18 conversas na
+    inbox e aparecia com 3. `dias` fica só para quem quiser uma passada curta."""
     from command_center.providers import classificar, triagem
     inicio = agora()
     try:
@@ -437,7 +449,16 @@ def sync_gmail(con, dias=14):
         pulados = []
         for conta in ("urace", "support"):
             try:
-                r = chamar("gmail", "gmail_buscar", conta=conta, consulta=f"newer_than:{dias}d", so_inbox=True, maximo=100)
+                consulta = f"newer_than:{dias}d" if dias else ""
+                threads, pagina = [], None
+                while len(threads) < MAX_INBOX:           # a inbox inteira, página por página
+                    r = chamar("gmail", "gmail_buscar", conta=conta, consulta=consulta,
+                               so_inbox=True, maximo=100, pagina=pagina)
+                    threads.extend(r.get("threads", []))
+                    pagina = r.get("proxima_pagina")
+                    if not pagina:
+                        break
+                r = {"threads": threads}
                 marcadores = [m["nome"] for m in chamar("gmail", "gmail_marcadores", conta=conta)]
                 # só o que o dono confirmou no manual entra como sugestão de destino (11/09).
                 # Mesma trava da triagem: manual vazio = nenhuma sugestão, e não um chute.
@@ -487,7 +508,7 @@ def sync_gmail(con, dias=14):
             for e in todos(con, "SELECT e.id, l.external_id FROM emails e JOIN entity_links l ON l.entity_type='email' AND l.entity_id=e.id AND l.system='gmail' WHERE e.mailbox=? AND e.is_inbox=1", (conta,)):
                 if e["external_id"] not in vistos:
                     atualizar(con, "emails", e["id"], is_inbox=0, synced_at=agora())
-        recado = f"{n} threads na inbox ({dias} dias)"
+        recado = f"{n} threads na inbox" + (f" ({dias} dias)" if dias else " (inbox inteira)")
         if pulados:
             recado += f" — SEM a caixa {', '.join(p + '@' for p in pulados)}: falta o token (google_auth.py --conta " + pulados[0] + ")"
         _marca(con, "gmail", True, n, recado, inicio)

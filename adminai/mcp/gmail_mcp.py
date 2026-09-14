@@ -293,10 +293,13 @@ def gmail_marcadores(conta):
     "remetente, assunto, data, marcadores e snippet da última mensagem.",
     {"conta": CONTA, "consulta": {"type": "string"},
      "so_inbox": {"type": "boolean", "default": True},
-     "maximo": {"type": "integer", "default": 20}},
+     "maximo": {"type": "integer", "default": 20},
+     "pagina": {"type": "string", "description": "token de `proxima_pagina` para continuar de onde parou"}},
     ["conta", "consulta"])
-def gmail_buscar(conta, consulta, so_inbox=True, maximo=20):
+def gmail_buscar(conta, consulta, so_inbox=True, maximo=20, pagina=None):
     params = {"q": consulta, "maxResults": max(1, min(int(maximo), 100))}
+    if pagina:
+        params["pageToken"] = pagina
     if so_inbox:
         params["labelIds"] = "INBOX"
     r = _req(conta, f"{GMAIL}/threads?{urllib.parse.urlencode(params)}")

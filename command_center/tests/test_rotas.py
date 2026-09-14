@@ -1286,3 +1286,69 @@ def test_corpo_ilegivel_nao_derruba_a_rodada(monkeypatch):
         assert isinstance(triagem._corpo_thread("urace", "th1"), str)
     monkeypatch.setattr(triagem, "chamar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("caiu")))
     assert triagem._corpo_thread("urace", "th1") == ""
+
+
+def test_sync_gmail_espelha_a_inbox_inteira_sem_corte_por_data(cli, monkeypatch):
+    """Dono, 14/09: "preciso que apareçam todos os e-mails em cada visualização,
+    menos os que foram enviados para os marcadores; os que não foram, mesmo estando
+    lidos, precisam estar aparecendo lá."
+
+    O corte de 14 dias que existia aqui escondia do painel o e-mail antigo ainda não
+    arquivado — foi o que fez a caixa support@ aparecer com 3 de 18."""
+    from command_center.providers import sync
+    from command_center.db import conectar, todos
+    con = conectar()
+    try:
+        consultas, paginas = [], []
+
+        def chamar_falso(sistema, ferramenta, **a):
+            if ferramenta == "gmail_marcadores":
+                return [{"nome": "wNews", "id": "x", "tipo": "user"}]
+            if ferramenta == "gmail_buscar":
+                if a["conta"] != "support":
+                    return {"threads": [], "proxima_pagina": None}
+                consultas.append(a["consulta"]); paginas.append(a.get("pagina"))
+                if not a.get("pagina"):          # primeira página
+                    return {"threads": [{"thread_id": "t1", "de": "Velho <v@x.com>", "assunto": "de 40 dias atras",
+                                         "data": "Mon, 05 Aug 2026 10:00:00 -0400", "snippet": "lido, mas nao arquivado",
+                                         "mensagens": 1, "marcadores": ["INBOX"]}],
+                            "proxima_pagina": "PAG2"}
+                return {"threads": [{"thread_id": "t2", "de": "Novo <n@x.com>", "assunto": "de hoje",
+                                     "data": "Mon, 14 Sep 2026 10:00:00 -0400", "snippet": "novo",
+                                     "mensagens": 1, "marcadores": ["INBOX"]}],
+                        "proxima_pagina": None}
+            raise AssertionError(ferramenta)
+
+        monkeypatch.setattr(sync, "chamar", chamar_falso)
+        r = sync.sync_gmail(con)
+        con.commit()
+        assert r["ok"] is True
+        # sem filtro de data, e seguiu para a segunda página
+        assert consultas == ["", ""] and paginas == [None, "PAG2"]
+        assuntos = [e["subject"] for e in todos(con, "SELECT subject FROM emails WHERE mailbox='support' AND is_inbox=1")]
+        assert "de 40 dias atras" in assuntos and "de hoje" in assuntos
+    finally:
+        con.close()
+
+
+def test_listagem_poe_a_inbox_na_frente_do_limite(cli):
+    """O que ainda não foi para um marcador não pode cair fora do LIMIT por ser antigo."""
+    from command_center.db import conectar, inserir
+    con = conectar()
+    try:
+        antigo = inserir(con, "emails", mailbox="support", subject="antigo e na inbox", sender="a@x.com",
+                         last_at="2020-01-01T00:00:00", is_inbox=1, handled=1, labels='["INBOX"]')
+        for i in range(3):
+            inserir(con, "emails", mailbox="support", subject=f"arquivado {i}", sender="b@x.com",
+                    last_at="2026-09-14T10:00:00", is_inbox=0, handled=1, labels='["wNews"]')
+        con.commit()
+    finally:
+        con.close()
+    h = entra(cli, "admin@urace.us")
+    rows = cli.get(B + "/emails?mailbox=support", headers=h).json()
+    assert all(r["mailbox"] == "support" for r in rows)
+    posicoes = [i for i, r in enumerate(rows) if r["is_inbox"]]
+    arquivados = [i for i, r in enumerate(rows) if not r["is_inbox"]]
+    assert posicoes, "a inbox tem de aparecer"
+    assert not arquivados or max(posicoes) < min(arquivados), "inbox antes do que já foi para marcador"
+    assert antigo in [r["id"] for r in rows if r["is_inbox"]], "o antigo e lido continua na lista"

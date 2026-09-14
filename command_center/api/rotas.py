@@ -334,7 +334,9 @@ def emails(mailbox: str | None = None, u=Depends(auth.usuario_atual), con: sqlit
     p = []
     if mailbox:
         sql += " WHERE e.mailbox=?"; p.append(mailbox)
-    rows = todos(con, sql + " ORDER BY e.last_at DESC LIMIT 300", p)
+    # inbox primeiro: o e-mail que o dono ainda não arquivou não pode cair fora do
+    # LIMIT por ser antigo (regra dele, 14/09). O já arquivado é que pode.
+    rows = todos(con, sql + " ORDER BY e.is_inbox DESC, e.last_at DESC LIMIT 300", p)
     for e in rows:
         e["links"] = _links(con, "email", e["id"])
     return rows
