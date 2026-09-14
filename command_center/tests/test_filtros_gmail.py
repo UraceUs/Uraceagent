@@ -89,3 +89,14 @@ def test_abre_a_caixa_carregando_env_E_tokens(monkeypatch):
     with pytest.raises(SystemExit) as ex:
         g.marcadores_da_caixa("support")
     assert "google_auth.py --conta support" in str(ex.value)
+
+
+def test_relatorio_nao_confunde_marcador_do_sistema_com_intruso():
+    """O primeiro relatório listou INBOX, SENT, TRASH e CATEGORY_* como "não estão no
+    manual". Ruído que escondia o que importava: `Action Required` e `Finance`, que
+    apareceram sozinhos na caixa depois de 11/09."""
+    na_caixa = ["INBOX", "SENT", "TRASH", "UNREAD", "CATEGORY_PROMOTIONS", "CHAT", "DRAFT",
+                "wNews", "Finances/Receipt", "Action Required", "Finance", "Receipts"]
+    assert g.desconhecidos(na_caixa) == ["Action Required", "Finance", "Receipts"]
+    # marcador que o dono deixou de fora continua sendo "do manual": ele já decidiu
+    assert "Email Review/Finance" not in g.desconhecidos(["Email Review/Finance", "wNews"])

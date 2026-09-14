@@ -43,6 +43,7 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "adminai", "mcp"))
 
 import gmail_mcp  # noqa: E402
+from command_center.providers.classificar import SISTEMA  # noqa: E402
 from command_center.providers.taxonomia_gmail import MANUAL, OK  # noqa: E402
 
 ARQUIVAVEL = "wNews"                 # o único marcador que sai da inbox sozinho
@@ -156,10 +157,22 @@ def xml(por_marcador, conta):
     return "\n".join(L) + "\n"
 
 
+def desconhecidos(na_caixa):
+    """Marcadores da caixa que não são do dono nem do Gmail.
+
+    Tem de descontar os do sistema (INBOX, SENT, CATEGORY_*…) e o manual INTEIRO,
+    não só o confirmado. Sem isso o relatório enchia de ruído e escondia o que
+    importa: um marcador novo que apareceu sozinho, como os `Email Review/…` de
+    agosto."""
+    do_manual = {n for n, _f, _q, _t, _e in MANUAL}
+    return sorted(n for n in na_caixa
+                  if n not in do_manual and n.upper() not in SISTEMA and not n.startswith("CATEGORY_"))
+
+
 def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo):
     cobertos = set(por_marcador)
     sem = [n for n in nomes if n not in cobertos]
-    fora_do_manual = sorted(set(na_caixa) - set(nomes))
+    fora_do_manual = desconhecidos(na_caixa)
     L = [f"# Filtros do Gmail — {conta}@urace.us", "",
          f"Gerado de mensagens reais da caixa. Um remetente vira regra quando **{int(share*100)}%** ou mais",
          f"das mensagens dele estão naquele marcador e há pelo menos **{minimo}** mensagens dele na amostra.",
@@ -169,7 +182,9 @@ def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo):
          f"- remetentes usados: **{sum(len(v) for v in por_marcador.values())}**", ""]
     if fora_do_manual:
         L += ["## ⚠️ Marcadores na caixa que NÃO estão no manual", "",
-              "Apareceram depois da confirmação de 11/09. A IA os ignora; confira se são seus.", ""]
+              "Não são do sistema do Gmail e não estão no manual que o dono confirmou em 11/09.",
+              "A IA os ignora. Confira um por um: os seus entram no manual; os que você não",
+              "reconhecer foram postos por outra coisa, como os `Email Review/…` de agosto.", ""]
         L += [f"- `{n}`" for n in fora_do_manual] + [""]
     L += ["## As regras", "", "| Marcador | Remetentes | Evidência |", "|---|---|---|"]
     for alvo in sorted(por_marcador):
