@@ -1150,3 +1150,126 @@ def test_manual_dos_marcadores_governa_a_triagem(cli, monkeypatch):
         con.commit()
     finally:
         con.close()
+
+
+# ------------------------------------------------ filtro nativo + IA (dono, 14/09)
+def test_principal_provavel_pega_o_mais_especifico():
+    from command_center.providers.triagem import _principal_provavel, do_filtro
+    assert _principal_provavel(["Finances", "Finances/Shopping/Amazon", "Finances/Shopping"]) == "Finances/Shopping/Amazon"
+    assert _principal_provavel([]) is None
+    # o que não está no manual não conta como trabalho do filtro — foi assim que
+    # os "Email Review/…" entraram na caixa em agosto sem serem do dono
+    e = {"labels": '["INBOX","UNREAD","CATEGORY_UPDATES","wNews","Email Review/Finance"]'}
+    assert do_filtro(e, ["wNews", "Finances/Receipt"]) == ["wNews"]
+    assert do_filtro({"labels": "isto não é json"}, ["wNews"]) == []
+
+
+def test_triagem_confirma_o_filtro_e_classifica_so_o_resto(cli, monkeypatch):
+    """Dono, 14/09: "vai ter o nativo rodando e a IA também vai fazer esse trabalho
+    confirmando os marcadores e marcando os que o filtro não conseguir"."""
+    from command_center.providers import triagem
+    from command_center.db import conectar, inserir, um
+    con = conectar()
+    try:
+        ja = inserir(con, "emails", mailbox="urace", subject="Your receipt", sender="service@paypal.com",
+                     last_at="2026-09-14T10:00:00", handled=0, is_inbox=1, labels='["INBOX","Finances/Receipt"]')
+        sem = inserir(con, "emails", mailbox="urace", subject="Posso trocar o treino?", sender="piloto@exemplo.com",
+                      last_at="2026-09-14T11:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
+        errado = inserir(con, "emails", mailbox="urace", subject="Fatura em aberto", sender="promo@loja.com",
+                         last_at="2026-09-14T12:00:00", handled=0, is_inbox=1, labels='["INBOX","wNews"]')
+        for e in (ja, sem, errado):
+            inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail",
+                    external_id=f"th{e}", deep_link="https://mail.google.com/x")
+        con.commit()
+        USAVEIS = ("Finances/Receipt", "wNews", "Kart Racing School | Client talks", "Finances/Pending Invoices ❗")
+        corpos, aplicados = [], []
+
+        def chamar_falso(sistema, ferramenta, **a):
+            if ferramenta == "gmail_marcadores":
+                return [{"nome": n, "id": n, "tipo": "user"} for n in USAVEIS]
+            if ferramenta == "gmail_thread":
+                corpos.append(a["thread_id"])
+                return {"mensagens": [{"de": "x", "data": "hoje", "corpo": "CORPO DE " + a["thread_id"]}]}
+            raise AssertionError(ferramenta)
+
+        class Gm:
+            def triar_ia(self, conta, tid, extras, principal):
+                aplicados.append((tid, principal)); return {"aplicado": True}
+        monkeypatch.setattr(triagem, "chamar", chamar_falso)
+        monkeypatch.setattr(triagem, "modulo", lambda s: Gm())
+        prompts = []
+
+        def runner(texto, sk):
+            prompts.append(texto)
+            return True, ('{"itens":[{"id":%d,"principal":"Finances/Receipt","marcadores":[],"precisa_humano":false,"motivo":"recibo"},'
+                          '{"id":%d,"principal":"Finances/Pending Invoices ❗","marcadores":[],"precisa_humano":true,"motivo":"cobranca real"},'
+                          '{"id":%d,"principal":"Kart Racing School | Client talks","marcadores":[],"precisa_humano":true,"motivo":"cliente"}]}'
+                          % (ja, errado, sem)), None
+        r = triagem.rodar(con, runner, "sk", mailboxes=("urace",), por="teste")
+        con.commit()
+
+        # duas conversas vieram marcadas pelo filtro; uma chegou limpa
+        assert r["do_filtro"] == 2 and r["confirmados"] == 1 and r["corrigidos"] == 1 and r["erros"] == []
+        # o corpo só é lido de quem o filtro não pegou — é o que custa
+        assert corpos == [f"th{sem}"]
+        assert len(prompts) == 2
+        confirmacao, completo = prompts[0], prompts[1]
+        assert "CONFIRMAR" in confirmacao and "marcador aplicado pelo filtro" in confirmacao
+        assert "CORPO DE" not in confirmacao
+        assert f"CORPO DE th{sem}" in completo
+
+        # confirmado: segue o filtro, sem virar trabalho de gente
+        a = um(con, "SELECT * FROM emails WHERE id=?", (ja,))
+        assert a["suggested_by"] == "filtro+ia" and a["needs_human"] == 0 and a["is_inbox"] == 0
+        assert (f"th{ja}", "Finances/Receipt") in aplicados
+        # discordância: aplica o da IA, mas chama gente — quem precisa de conserto é o filtro
+        b = um(con, "SELECT * FROM emails WHERE id=?", (errado,))
+        assert b["needs_human"] == 1 and "discorda do filtro" in b["triage_reason"] and "wNews" in b["triage_reason"]
+        assert '"wNews"' in b["labels"]                      # o filtro não é apagado por conta própria
+        # o que o filtro não pegou passou pelo caminho completo, com corpo
+        c = um(con, "SELECT * FROM emails WHERE id=?", (sem,))
+        assert c["suggested_by"] == "ia" and c["suggested_label"] == "Kart Racing School | Client talks"
+    finally:
+        con.close()
+
+
+def test_triagem_mantem_o_filtro_quando_a_ia_nao_responde(cli, monkeypatch):
+    """Se a IA falhar em responder, o marcador do filtro continua valendo: ele é
+    evidência do remetente, não um palpite."""
+    from command_center.providers import triagem
+    from command_center.db import conectar, inserir, um
+    con = conectar()
+    try:
+        e = inserir(con, "emails", mailbox="urace", subject="Your receipt", sender="service@paypal.com",
+                    last_at="2026-09-14T13:00:00", handled=0, is_inbox=1, labels='["INBOX","Finances/Receipt"]')
+        inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail",
+                external_id=f"th{e}", deep_link="https://mail.google.com/x")
+        con.commit()
+        monkeypatch.setattr(triagem, "chamar", lambda s, f, **a: [{"nome": "Finances/Receipt", "id": "x", "tipo": "user"}])
+        monkeypatch.setattr(triagem, "modulo", lambda s: type("G", (), {"triar_ia": lambda *a, **k: {"aplicado": True}})())
+        r = triagem.rodar(con, lambda t, sk: (True, "{}", None), "sk", mailboxes=("urace",), por="teste")
+        con.commit()
+        assert r["movidos"] == 1
+        assert um(con, "SELECT triage_reason FROM emails WHERE id=?", (e,))["triage_reason"].startswith("filtro do Gmail")
+    finally:
+        con.close()
+
+
+def test_gmail_degradado_quando_falta_uma_caixa(monkeypatch):
+    """Dono, 14/09: "só o urace@ aparece no Command Center". A causa era silêncio —
+    caixa sem token sumia da resposta e o Gmail aparecia CONNECTED com uma caixa só."""
+    from command_center import providers
+    monkeypatch.setattr(providers, "chamar", lambda s, f, **a: {"contas": {
+        "urace": {"email": "urace@urace.us", "ok": True},
+        "support": {"ok": False, "erro": "sem token em ~/.urace/google-token-support.json"}}})
+    status, detalhe = providers.saude("gmail")
+    assert status == "DEGRADED"
+    assert detalhe["contas"]["support"]["ok"] is False and "sem token" in detalhe["contas"]["support"]["erro"]
+    # as duas de pé = conectado
+    monkeypatch.setattr(providers, "chamar", lambda s, f, **a: {"contas": {
+        "urace": {"ok": True}, "support": {"ok": True}}})
+    assert providers.saude("gmail")[0] == "CONNECTED"
+    # nenhuma de pé = erro
+    monkeypatch.setattr(providers, "chamar", lambda s, f, **a: {"contas": {
+        "urace": {"ok": False}, "support": {"ok": False}}})
+    assert providers.saude("gmail")[0] == "ERROR"

@@ -66,7 +66,9 @@ def _workspace_host():
 
 
 # ---------------------------------------------------------------- contas
+CAIXAS_ESPERADAS = ("urace", "support")   # as duas do dono; faltar uma é problema, não silêncio
 _contas = {}          # nome -> dict(token file content)
+_sem_token = {}       # nome -> caminho que não existe (para o painel poder avisar)
 _tokens = {}          # nome -> {"valor", "expira"}
 _labels = {}          # nome -> {label_name: id}
 
@@ -82,6 +84,8 @@ def _carregar_contas():
         if os.path.isfile(p):
             with open(p, encoding="utf-8") as f:
                 _contas[nome] = json.load(f)
+        else:
+            _sem_token[nome] = p
     if not _contas:
         sys.exit("ERRO: nenhum token do Google. Rode adminai/google_auth.py primeiro.")
 
@@ -256,6 +260,8 @@ CONTA = {"type": "string", "enum": ["urace", "support"], "description": "qual ca
     "Quais caixas estão configuradas e se o token autentica. CHAME PRIMEIRO. "
     "Devolve o e-mail real de cada conta, como o Google o vê.")
 def gmail_contas():
+    """Caixa sem token entra na resposta como `ok: false` — some do painel era pior:
+    o Gmail aparecia CONNECTED com uma caixa só e ninguém via que a outra sumiu."""
     saida = {}
     for nome in _contas:
         try:
@@ -263,6 +269,10 @@ def gmail_contas():
             saida[nome] = {"email": p.get("emailAddress"), "threads": p.get("threadsTotal"), "ok": True}
         except ErroFerramenta as e:
             saida[nome] = {"ok": False, "erro": str(e)}
+    for nome in CAIXAS_ESPERADAS:
+        if nome not in saida:
+            saida[nome] = {"ok": False, "erro": f"sem token em {_sem_token.get(nome, '?')} — "
+                                                f"rode: python3 adminai/google_auth.py --conta {nome}"}
     return {"contas": saida, "APLICAR": os.environ.get("APLICAR", "0"), "envio": "não existe ferramenta de envio"}
 
 

@@ -434,6 +434,7 @@ def sync_gmail(con, dias=14):
     inicio = agora()
     try:
         n = 0
+        pulados = []
         for conta in ("urace", "support"):
             try:
                 r = chamar("gmail", "gmail_buscar", conta=conta, consulta=f"newer_than:{dias}d", so_inbox=True, maximo=100)
@@ -444,6 +445,7 @@ def sync_gmail(con, dias=14):
                 marcadores = [m for m in marcadores if m in permitidos]
             except Exception as e:
                 if type(e).__name__ == "ErroFerramenta" and "não configurada" in str(e):
+                    pulados.append(conta)          # não some em silêncio: vai para o relatório
                     continue
                 raise
             vistos = set()
@@ -485,8 +487,11 @@ def sync_gmail(con, dias=14):
             for e in todos(con, "SELECT e.id, l.external_id FROM emails e JOIN entity_links l ON l.entity_type='email' AND l.entity_id=e.id AND l.system='gmail' WHERE e.mailbox=? AND e.is_inbox=1", (conta,)):
                 if e["external_id"] not in vistos:
                     atualizar(con, "emails", e["id"], is_inbox=0, synced_at=agora())
-        _marca(con, "gmail", True, n, f"{n} threads na inbox ({dias} dias)", inicio)
-        return {"ok": True, "threads": n}
+        recado = f"{n} threads na inbox ({dias} dias)"
+        if pulados:
+            recado += f" — SEM a caixa {', '.join(p + '@' for p in pulados)}: falta o token (google_auth.py --conta " + pulados[0] + ")"
+        _marca(con, "gmail", True, n, recado, inicio)
+        return {"ok": True, "threads": n, "pulados": pulados}
     except NaoConectado as e:
         _marca(con, "gmail", False, 0, f"não conectado: {e}", inicio, desconectado=True)
         return {"ok": False, "motivo": "not connected"}
