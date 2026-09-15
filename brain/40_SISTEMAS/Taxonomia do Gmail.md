@@ -144,3 +144,19 @@ filtro e identifique a propaganda"*. A regra entrou no prompt, com o critério
 escrito (quer vender/divulgar × já existe relação) e com a trava que importa:
 **na dúvida, não usar `wNews`** — recibo enterrado custa mais caro que propaganda
 na inbox.
+
+## Segunda revisão dos filtros (15/09) e o "arquivar" da família wNews
+
+O dono revisou o relatório novo e tirou mais quatro regras. A que importava:
+`@orlandokartcenter.com` estava indo para `Finances/Pending Invoices ❗` — a fila de
+**contas a pagar** do painel. Todo e-mail do OKC viraria dívida fantasma. As
+outras três: e-mail devolvido (`mailer-daemon`) indo para marketing, companhia
+aérea (Breeze) indo para corrida, cobrança do Google indo para rede social.
+
+E decidiu: **o relatório diário do Kommo pode arquivar** (`samuel.rulli@itcygnus.com`
+→ `wNews/George | Atendente`, 31 de 31). Isso expôs uma inconsistência antiga: a
+regra "arquivar só com `wNews`" estava escrita no código como **nome exato**, então
+`wNews/Study`, `wNews/Italo| MAA` e `wNews/George | Atendente` não contavam — nem
+no gerador de filtros, nem no MCP (`gmail_rotular` recusaria). A taxonomia sempre
+disse que a família inteira é propaganda. Agora o código diz o mesmo:
+`wNews` e qualquer `wNews/…` saem da inbox.

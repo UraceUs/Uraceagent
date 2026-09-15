@@ -69,6 +69,11 @@ REGRAS_RECUSADAS = {
     ("zach.holcombe@mylaps.com", "CORP/Betim"),
     ("@mylaps.com", "ITALO"),
     ("@mylaps.com", "CORP/Betim"),
+    # segunda rodada de revisão do dono, 15/09
+    ("@orlandokartcenter.com", "Finances/Pending Invoices ❗"),   # viraria conta a pagar fantasma
+    ("mailer-daemon@googlemail.com", "Marketing & Sales/Colina | Site e ADS"),  # é e-mail devolvido
+    ("@flybreeze.com", "RACES/F4/JFC"),                          # companhia aérea, não corrida
+    ("payments-noreply@google.com", "Marketing & Sales/Comercial/Canais | Social Media"),  # é cobrança
 }
 RX_EMAIL = re.compile(r"<([^>]+)>")
 # Remetentes genéricos demais para virar regra: pegariam a caixa inteira.
@@ -243,7 +248,8 @@ def xml(por_marcador, conta):
               "    <content></content>",
               f"    <apps:property name='from' value={quoteattr(remetentes)}/>",
               f"    <apps:property name='label' value={quoteattr(alvo)}/>"]
-        if alvo == ARQUIVAVEL:                      # regra do dono: só propaganda sai da inbox
+        # regra do dono: só propaganda sai da inbox — e propaganda é a família wNews inteira
+        if alvo == ARQUIVAVEL or alvo.startswith(ARQUIVAVEL + "/"):
             L.append("    <apps:property name='shouldArchive' value='true'/>")
         L.append("  </entry>")
     L.append("</feed>")

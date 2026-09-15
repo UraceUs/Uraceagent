@@ -205,3 +205,35 @@ def test_pasta_de_ex_funcionario_nunca_vira_filtro():
         r = g.regras(_conta({"deltaairlines@t.delta.com": {alvo: 8}}),
                      {"deltaairlines@t.delta.com": 8}, share=0.6, minimo=3)
         assert r == {}, alvo
+
+
+def test_segunda_revisao_do_dono_15_09():
+    """A que mais importava: `@orlandokartcenter.com` estava indo para
+    `Finances/Pending Invoices ❗`, que é a fila de CONTAS A PAGAR do dono — todo
+    e-mail do OKC viraria dívida fantasma no painel."""
+    recusadas = [("@orlandokartcenter.com", "Finances/Pending Invoices ❗"),
+                 ("mailer-daemon@googlemail.com", "Marketing & Sales/Colina | Site e ADS"),
+                 ("@flybreeze.com", "RACES/F4/JFC"),
+                 ("payments-noreply@google.com", "Marketing & Sales/Comercial/Canais | Social Media")]
+    for remetente, alvo in recusadas:
+        assert g.regras(_conta({remetente: {alvo: 9}}), {remetente: 9}, 0.6, 3) == {}, f"{remetente} -> {alvo}"
+    # o OKC continua indo para a pasta de compra, que é o certo
+    r = g.regras(_conta({"@orlandokartcenter.com": {"Finances/Shopping/Orlando Kart Center": 5}}),
+                 {"@orlandokartcenter.com": 6}, 0.6, 3)
+    assert [e for e, _n, _t in r["Finances/Shopping/Orlando Kart Center"]] == ["@orlandokartcenter.com"]
+    # e o relatório do Kommo arquiva em wNews: decisão do dono em 15/09
+    r = g.regras(_conta({"samuel.rulli@itcygnus.com": {"wNews/George | Atendente": 31}}),
+                 {"samuel.rulli@itcygnus.com": 31}, 0.6, 3)
+    assert r["wNews/George | Atendente"]
+
+
+def test_familia_wnews_inteira_arquiva():
+    """Decisão do dono (15/09): o relatório diário do Kommo, em
+    `wNews/George | Atendente`, pode sair da inbox. A taxonomia dele já dizia que a
+    família wNews inteira é propaganda — só o código tratava o nome exato."""
+    r = {"wNews": [("promo@loja.com", 9, 9)],
+         "wNews/George | Atendente": [("samuel.rulli@itcygnus.com", 31, 31)],
+         "Finances/Receipt": [("service@paypal.com", 7, 8)]}
+    x = g.xml(r, "urace")
+    assert x.count("shouldArchive") == 2, "wNews e a sub-pasta arquivam; recibo não"
+    assert "shouldArchive" not in x.split("Finances/Receipt")[1].split("</entry>")[0]

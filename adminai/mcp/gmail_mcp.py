@@ -39,7 +39,15 @@ from mcp_stdio import ErroFerramenta, Servidor, log  # noqa: E402
 GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me"
 CAL = "https://www.googleapis.com/calendar/v3"
 SHEETS = "https://sheets.googleapis.com/v4/spreadsheets"
-MARCADOR_ARQUIVAVEL = "wNews"            # o único que sai da inbox sozinho
+MARCADOR_ARQUIVAVEL = "wNews"            # o único que sai da inbox sozinho — ele e as sub-pastas dele
+
+
+def _e_propaganda(nome):
+    """`wNews` e qualquer `wNews/…`: a taxonomia do dono diz que a família inteira é
+    propaganda (Study, Italo| MAA, George | Atendente…). Decisão dele em 15/09: o
+    relatório diário do Kommo, em `wNews/George | Atendente`, pode sair da inbox."""
+    n = (nome or "").lower()
+    return n == MARCADOR_ARQUIVAVEL.lower() or n.startswith(MARCADOR_ARQUIVAVEL.lower() + "/")
 PROIBIDOS = {"TRASH", "SPAM"}            # nunca, por nenhuma ferramenta
 
 
@@ -470,8 +478,8 @@ def gmail_rotular(conta, thread_id, adicionar=None, remover=None):
         atuais = set()
         for m in th.get("messages", []):
             atuais.update(m.get("labelIds") or [])
-        vai_ter_wnews = (_label_id(conta, MARCADOR_ARQUIVAVEL) in atuais) or \
-                        any(l.lower() == MARCADOR_ARQUIVAVEL.lower() for l in adicionar)
+        ids_propaganda = {i for n, i in _mapa_labels(conta).items() if _e_propaganda(n)}
+        vai_ter_wnews = bool(ids_propaganda & atuais) or any(_e_propaganda(l) for l in adicionar)
         if not vai_ter_wnews:
             raise ErroFerramenta(f"RECUSADO: arquivar (remover INBOX) só com '{MARCADOR_ARQUIVAVEL}'. "
                                  "Todo o resto fica na inbox — regra do dono.")
