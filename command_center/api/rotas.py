@@ -628,11 +628,20 @@ def gmail_classify_status(u=Depends(auth.usuario_atual)):
 
 # ------------------------------------------- manual dos marcadores do Gmail
 @r.get("/gmail/manual")
-def gmail_manual(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+def gmail_manual(mailbox: str | None = None, u=Depends(auth.usuario_atual),
+                 con: sqlite3.Connection = Depends(get_db)):
     """O manual: marcador por marcador, o que vai em cada um, e o estado da confirmação.
-    A triagem só usa o que estiver 'confirmado' — sem nada confirmado, ela não roda."""
+    A triagem só usa o que estiver 'confirmado' — sem nada confirmado, ela não roda.
+
+    `mailbox` filtra pela caixa: a support@ tem taxonomia própria e misturar as duas
+    numa lista só esconde que uma delas está sem manual."""
     from command_center.providers.taxonomia_gmail import EXEMPLOS
-    linhas = todos(con, "SELECT * FROM gmail_labels ORDER BY family, name")
+    from command_center.providers.triagem import DA_CAIXA
+    sql, p = "SELECT * FROM gmail_labels", []
+    if mailbox:
+        sql += " WHERE 1=1 " + DA_CAIXA
+        p.append(mailbox)
+    linhas = todos(con, sql + " ORDER BY family, name", p)
     contagem = {}
     for l in linhas:
         contagem[l["status"]] = contagem.get(l["status"], 0) + 1
@@ -672,20 +681,28 @@ def gmail_manual_editar(lid: int, dados: MarcadorIn, request: Request, u=Depends
 
 class ConfirmarIn(BaseModel):
     familia: str | None = None         # confirma só uma família; sem ela, tudo que está pendente
+    mailbox: str | None = None         # e só desta caixa: a tela é por caixa, a confirmação também
 
 
 @r.post("/gmail/manual/confirm")
 def gmail_manual_confirmar(dados: ConfirmarIn, request: Request, u=Depends(auth.exige("MANAGER")),
                            con: sqlite3.Connection = Depends(get_db)):
     """Confirmação do dono: a partir daqui a IA pode classificar — e SÓ com estes marcadores."""
+    from command_center.providers.triagem import DA_CAIXA
     sql = "UPDATE gmail_labels SET status='confirmado', confirmed_by=?, confirmed_at=? WHERE status='pendente'"
     p = [f"user:{u['id']}", agora()]
     if dados.familia:
         sql += " AND family=?"
         p.append(dados.familia)
+    if dados.mailbox:
+        # a tela é por caixa; "confirmar tudo" olhando a urace@ não pode confirmar
+        # marcador da support@ que o dono nem viu
+        sql += " " + DA_CAIXA.replace("gmail_labels.mailboxes", "mailboxes")
+        p.append(dados.mailbox)
     n = con.execute(sql, p).rowcount
     auditar(con, "gmail.manual.confirmado", f"user:{u['id']}", user_id=u["id"],
-            detail={"familia": dados.familia or "todas", "marcadores": n}, ip=auth._ip(request))
+            detail={"familia": dados.familia or "todas", "caixa": dados.mailbox or "todas",
+                    "marcadores": n}, ip=auth._ip(request))
     con.commit()
     return {"ok": True, "confirmados": n}
 
@@ -702,18 +719,34 @@ def gmail_manual_atualizar(mailbox: str = "urace", u=Depends(auth.exige("MANAGER
     except Exception as e:
         raise HTTPException(502, str(e)[:300])
     vivos = {m["nome"] for m in nomes if (m.get("tipo") or "user") == "user"}
-    novos = []
+    novos, saiu = [], []
+    # A presença é POR CAIXA. Antes isto era um flag só: reler a support@ marcava todos
+    # os marcadores da urace@ como inexistentes, porque não estavam na lista daquela caixa.
+    for l in todos(con, "SELECT id, name, mailboxes, origin FROM gmail_labels"):
+        try:
+            caixas = json.loads(l["mailboxes"] or '["urace"]')
+        except ValueError:
+            caixas = ["urace"]
+        tinha = mailbox in caixas
+        if l["name"] in vivos and not tinha:
+            caixas.append(mailbox)
+        elif l["name"] not in vivos and tinha:
+            caixas.remove(mailbox)
+            saiu.append(l["name"])
+        else:
+            continue
+        atualizar(con, "gmail_labels", l["id"], mailboxes=json.dumps(sorted(set(caixas))),
+                  in_gmail=1 if caixas else 0)
     for nome in sorted(vivos):
         if not um(con, "SELECT 1 AS x FROM gmail_labels WHERE name=?", (nome,)):
-            inserir(con, "gmail_labels", name=nome, family=nome.split("/")[0], what=None, status="pendente")
+            inserir(con, "gmail_labels", name=nome, family=nome.split("/")[0], what=None,
+                    status="pendente", mailboxes=json.dumps([mailbox]), origin="caixa")
             novos.append(nome)
-    if vivos:
-        marcas = ",".join("?" * len(vivos))
-        con.execute(f"UPDATE gmail_labels SET in_gmail=CASE WHEN name IN ({marcas}) THEN 1 ELSE 0 END", tuple(sorted(vivos)))
-    if novos:
-        auditar(con, "gmail.manual.novos", f"user:{u['id']}", user_id=u["id"], detail={"marcadores": novos[:20]})
+    if novos or saiu:
+        auditar(con, "gmail.manual.novos", f"user:{u['id']}", user_id=u["id"],
+                detail={"caixa": mailbox, "marcadores": novos[:20], "sairam": saiu[:20]})
     con.commit()
-    return {"ok": True, "novos": novos, "total_na_caixa": len(vivos)}
+    return {"ok": True, "novos": novos, "sairam": saiu, "caixa": mailbox, "total_na_caixa": len(vivos)}
 
 
 # ============================================================= DocuSign

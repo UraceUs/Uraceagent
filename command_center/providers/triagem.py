@@ -117,15 +117,32 @@ def _corpo_thread(mailbox, thread_id):
         return ""
 
 
-def confirmados(con):
-    """Os marcadores que o dono confirmou no manual. Vazio = a triagem não roda."""
-    return [l["name"] for l in todos(con, "SELECT name FROM gmail_labels WHERE status='confirmado' AND in_gmail=1 ORDER BY name")]
+DA_CAIXA = ("AND EXISTS (SELECT 1 FROM json_each(COALESCE(gmail_labels.mailboxes,'[\"urace\"]')) "
+            "WHERE json_each.value = ?)")
 
 
-def manual(con):
+def confirmados(con, mailbox=None):
+    """Os marcadores que o dono confirmou no manual. Vazio = a triagem não roda.
+
+    Com `mailbox`, só os que existem NAQUELA caixa. A support@ tem taxonomia própria
+    (`Customer Service/…`) que o manual de 11/09 não cobre: sem este filtro a IA
+    tentaria usar na support@ marcador que só existe na urace@."""
+    sql = "SELECT name FROM gmail_labels WHERE status='confirmado' AND in_gmail=1"
+    p = []
+    if mailbox:
+        sql += " " + DA_CAIXA
+        p.append(mailbox)
+    return [l["name"] for l in todos(con, sql + " ORDER BY name", p)]
+
+
+def manual(con, mailbox=None):
     """O manual como texto para o prompt: marcador → o que vai nele."""
-    linhas = todos(con, """SELECT name, what FROM gmail_labels WHERE status='confirmado' AND in_gmail=1
-                           ORDER BY family, name""")
+    sql = "SELECT name, what FROM gmail_labels WHERE status='confirmado' AND in_gmail=1"
+    p = []
+    if mailbox:
+        sql += " " + DA_CAIXA
+        p.append(mailbox)
+    linhas = todos(con, sql + " ORDER BY family, name", p)
     return "\n".join(f"- {l['name']}: {l['what']}" for l in linhas if l["what"])
 
 
@@ -260,14 +277,18 @@ def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agen
              "do_filtro": 0, "confirmados": 0, "corrigidos": 0, "sugeridos": [], "erros": []}
     # TRAVA (dono, 11/09): sem manual confirmado, a IA não classifica nada. E quando
     # rodar, só com os marcadores que ele confirmou — nunca um que apareceu na caixa.
-    permitidos = confirmados(con)
-    if not permitidos:
+    if not confirmados(con):
         saida["pulada"] = ("manual dos marcadores não confirmado: abra Gmail → Manual dos marcadores, "
                            "confira o que vai em cada um e confirme. Até lá a triagem não roda.")
         auditar(con, "gmail.triagem.bloqueada", "system", detail={"motivo": "manual não confirmado"})
         return saida
-    livro = manual(con)
     for mailbox in mailboxes:
+        permitidos = confirmados(con, mailbox)      # cada caixa tem a sua taxonomia
+        livro = manual(con, mailbox)
+        if not permitidos:
+            saida["erros"].append(f"{mailbox}: nenhum marcador do manual foi confirmado para esta caixa "
+                                  f"(Gmail → Manual dos marcadores → {mailbox}@)")
+            continue
         try:
             nomes = [m["nome"] for m in chamar("gmail", "gmail_marcadores", conta=mailbox)]
         except NaoConectado as e:

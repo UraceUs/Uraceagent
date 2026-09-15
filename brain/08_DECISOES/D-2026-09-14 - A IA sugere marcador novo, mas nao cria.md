@@ -59,3 +59,42 @@ O passo 3 é o que impede a enxurrada. Sem ele, "não achei marcador" viraria
 A regra vale nos **dois** caminhos da triagem — tanto no que o filtro nativo já
 marcou quanto no que chegou limpo. O filtro acerta a pasta pelo remetente, mas
 quem percebe que **falta** uma pasta é quem lê o e-mail.
+
+---
+
+# Anexo — o manual passa a ser por caixa (14/09)
+
+O pedido original do dono era *"leia as tags dos dois e-mails"*. O manual de 11/09
+saiu inteiro da `urace@`: os 156 marcadores são de lá. A `support@` tem taxonomia
+própria — `Customer Service/Leads`, `Customer Service/Service/New Order`,
+`Curriculos`, `Canotops` — que ninguém leu, e por isso a triagem daquela caixa
+trabalhava quase no vazio: só 2 marcadores existem nas duas.
+
+## Por que `mailboxes` e não uma tabela nova
+
+A alternativa era reconstruir `gmail_labels` com `UNIQUE(mailbox, name)`. Isso
+mexeria numa tabela que guarda **as 145 confirmações do dono** — risco real de
+perda por um ganho que não existe: o nome do marcador É a taxonomia, então `wNews`
+na `urace@` e `wNews` na `support@` são a mesma coisa e merecem uma linha só.
+
+Então cada marcador ganhou `mailboxes` (json: `["urace"]`, `["urace","support"]`).
+Nenhuma linha reescrita, nenhuma confirmação em risco.
+
+## O bug que isso descobriu
+
+O `refresh` fazia `UPDATE gmail_labels SET in_gmail = CASE WHEN name IN (...)`.
+Relê a `support@` e **todos** os marcadores da `urace@` viravam "não existe mais na
+caixa", porque não estavam na lista daquela caixa. Ninguém tinha rodado ainda — o
+bug estava esperando. Agora a presença é por caixa, e o que entra e sai vai para a
+auditoria.
+
+`confirmar tudo` também passou a respeitar a caixa: a tela é por caixa, e confirmar
+olhando a `urace@` não pode confirmar marcador da `support@` que o dono nem viu.
+
+## O que falta, e é dele
+
+`adminai/ler_marcadores_caixa.py --conta support` produz o retrato da caixa —
+marcador por marcador, com exemplos reais de quem manda e com que assunto. É a
+mesma leitura de 11/09. Com esse retrato eu escrevo o que vai em cada marcador, e
+ele confirma no painel, na aba `support@`. Enquanto não confirmar, a triagem da
+`support@` não roda — a trava de 11/09 vale para as duas caixas.

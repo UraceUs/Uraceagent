@@ -69,6 +69,7 @@ MIGRACOES = [
     ("races", "task_id", "INTEGER"),
     ("clients", "email_alt", "TEXT"),
     ("ai_commands", "prompt", "TEXT"),              # o que foi ao agente (texto do dono + contexto); `text` é só o que o dono escreveu              # segundo e-mail da descrição (o principal fica limpo)               # tarefa da coluna RACES (calendário = o que está no Asana)
+    ("gmail_labels", "mailboxes", "TEXT"),         # json: em que caixas o marcador existe, ex. ["urace","support"]
     ("gmail_labels", "origin", "TEXT"),            # caixa | ia (marcador que a IA propôs, ainda não existe no Gmail)
     ("gmail_labels", "proposed_reason", "TEXT"),   # o e-mail que motivou a proposta
     ("waivers", "hidden", "INTEGER NOT NULL DEFAULT 0"),   # lixeira do painel (restaurável)
@@ -120,6 +121,8 @@ def _semear_marcadores(con):
     desfaz o que ele mudar depois no painel — só promove pendente → confirmado."""
     from command_center.providers.taxonomia_gmail import MANUAL, CONFIRMADO_POR
     for nome, familia, o_que, threads, estado in MANUAL:
+        # `mailboxes` NÃO entra aqui: a semente roda ANTES das migrações criarem a
+        # coluna. Quem preenche é o POS_MIGRACAO, que roda depois.
         con.execute("""INSERT INTO gmail_labels (name, family, what, threads, status, confirmed_by, confirmed_at)
                        VALUES (?,?,?,?,?,
                                CASE WHEN ?='confirmado' THEN ? END,
@@ -139,6 +142,8 @@ def _semear_marcadores(con):
 # Sementes que dependem de coluna criada por migração (rodam depois dela).
 # Horários em hora local de Orlando; quem lê é command_center/api/agenda.py.
 POS_MIGRACAO = [
+    # o manual nasceu lendo só a urace@ (11/09). Quem não tem caixa é de lá.
+    """UPDATE gmail_labels SET mailboxes='["urace"]' WHERE mailboxes IS NULL OR mailboxes=''""",
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
        ('gmail_triagem', 1, '{"schedule":true}', NULL,
         '{"ia":"ler cada e-mail da inbox, aplicar os marcadores e mover para o marcador principal"}')""",

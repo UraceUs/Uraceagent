@@ -462,7 +462,7 @@ def sync_gmail(con, dias=None):
                 marcadores = [m["nome"] for m in chamar("gmail", "gmail_marcadores", conta=conta)]
                 # só o que o dono confirmou no manual entra como sugestão de destino (11/09).
                 # Mesma trava da triagem: manual vazio = nenhuma sugestão, e não um chute.
-                permitidos = set(triagem.confirmados(con))
+                permitidos = set(triagem.confirmados(con, conta))
                 marcadores = [m for m in marcadores if m in permitidos]
             except Exception as e:
                 if type(e).__name__ == "ErroFerramenta" and "não configurada" in str(e):

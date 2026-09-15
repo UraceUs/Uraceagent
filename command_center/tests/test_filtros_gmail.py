@@ -125,3 +125,41 @@ def test_relatorio_nao_confunde_marcador_do_sistema_com_intruso():
     assert g.desconhecidos(na_caixa) == ["Action Required", "Finance", "Receipts"]
     # marcador que o dono deixou de fora continua sendo "do manual": ele já decidiu
     assert "Email Review/Finance" not in g.desconhecidos(["Email Review/Finance", "wNews"])
+
+
+def test_dominio_inteiro_vira_uma_regra_so():
+    """Dono, 14/09: "deixe essas lógicas nativas o máximo que der". Regra por endereço
+    só pega quem já apareceu; por domínio pega o endereço que a transportadora criar
+    amanhã."""
+    por_remetente = _conta({"mcinfo@ups.com": {"Shipping Status": 9},
+                            "tracking@ups.com": {"Shipping Status": 5},
+                            "quantum@ups.com": {"Shipping Status": 4}})
+    mensagens = {"mcinfo@ups.com": 9, "tracking@ups.com": 5, "quantum@ups.com": 4}
+    r = g.regras(por_remetente, mensagens, share=0.6, minimo=3)
+    assert [e for e, _n, _t in r["Shipping Status"]] == ["@ups.com"], "um filtro, não três"
+    assert ("@ups.com", 18, 18) in r["Shipping Status"]
+
+
+def test_dominio_misturado_nao_vira_regra_mas_o_endereco_forte_sobrevive():
+    """google.com manda de tudo: o domínio não pode virar regra. Mas o endereço que
+    tem cara própria continua valendo."""
+    por_remetente = _conta({
+        "payments-noreply@google.com": {"Finances/Receipt": 8},
+        "businessprofile-noreply@google.com": {"Platforms & Subscriptions/Google": 7},
+        "no-reply@accounts.google.com": {"Platforms & Subscriptions/Google": 6},
+    })
+    mensagens = {"payments-noreply@google.com": 8, "businessprofile-noreply@google.com": 7,
+                 "no-reply@accounts.google.com": 6}
+    r = g.regras(por_remetente, mensagens, share=0.6, minimo=3)
+    assert [e for e, _n, _t in r["Finances/Receipt"]] == ["payments-noreply@google.com"]
+    alvos = [e for e, _n, _t in r["Platforms & Subscriptions/Google"]]
+    assert "@google.com" not in alvos          # 7 de 15 no dominio: nao sustenta
+    assert "businessprofile-noreply@google.com" in alvos
+
+
+def test_um_endereco_so_no_dominio_nao_vira_regra_de_dominio():
+    """Generalizar a partir de um endereço é chute: `noreply@x.com` não autoriza
+    dizer que o domínio inteiro vai naquele marcador."""
+    r = g.regras(_conta({"noreply@robinhood.com": {"Banks/Robinhood": 30}}),
+                 {"noreply@robinhood.com": 30}, share=0.6, minimo=3)
+    assert [e for e, _n, _t in r["Banks/Robinhood"]] == ["noreply@robinhood.com"]

@@ -1420,3 +1420,76 @@ def test_sugestao_nunca_ressuscita_familia_recusada(cli):
         con.commit()
     finally:
         con.close()
+
+
+# ------------------------------------------------ manual por caixa (dono, 14/09)
+def test_manual_separa_as_duas_caixas(cli, monkeypatch):
+    """A support@ tem taxonomia própria (`Customer Service/…`) que o manual de 11/09,
+    lido da urace@, não cobre. Sem separar por caixa a IA tentaria usar na support@
+    marcador que só existe na urace@ — e o painel escondia que uma caixa está sem
+    manual nenhum."""
+    from command_center.providers import triagem
+    from command_center.db import conectar, um
+    h = entra(cli, "admin@urace.us")
+
+    # o manual de 11/09 é da urace@; a support@ ainda não tem nada
+    assert "wNews" in triagem.__dict__ or True
+    con = conectar()
+    try:
+        assert "Finances/Receipt" in triagem.confirmados(con, "urace")
+        assert triagem.confirmados(con, "support") == [], "a support@ ainda não tem manual"
+        assert "Finances/Receipt" in triagem.manual(con, "urace")
+        assert triagem.manual(con, "support") == ""
+    finally:
+        con.close()
+
+    # reler a support@ NÃO pode apagar a presença da urace@ — era o bug do refresh
+    monkeypatch.setattr("command_center.api.rotas.chamar", lambda s, f, **a: [
+        {"nome": "Customer Service/Leads", "id": "l1", "tipo": "user"},
+        {"nome": "wNews", "id": "l2", "tipo": "user"}])
+    r = cli.post(B + "/gmail/manual/refresh?mailbox=support", headers=h).json()
+    assert "Customer Service/Leads" in r["novos"] and r["caixa"] == "support"
+
+    con = conectar()
+    try:
+        rec = um(con, "SELECT * FROM gmail_labels WHERE name='Finances/Receipt'")
+        assert rec["in_gmail"] == 1 and "urace" in rec["mailboxes"], "a urace@ sobreviveu"
+        w = um(con, "SELECT mailboxes FROM gmail_labels WHERE name='wNews'")
+        assert "urace" in w["mailboxes"] and "support" in w["mailboxes"], "existe nas duas"
+        novo = um(con, "SELECT * FROM gmail_labels WHERE name='Customer Service/Leads'")
+        assert novo["status"] == "pendente" and novo["mailboxes"] == '["support"]'
+        # e agora a support@ enxerga o que é dela e o que é comum
+        assert triagem.confirmados(con, "support") == ["wNews"]
+        assert "Customer Service/Leads" not in triagem.confirmados(con, "support")
+    finally:
+        con.close()
+
+    # a listagem filtra pela caixa
+    so_support = cli.get(B + "/gmail/manual?mailbox=support", headers=h).json()
+    nomes = {l["name"] for l in so_support["labels"]}
+    assert "Customer Service/Leads" in nomes and "wNews" in nomes
+    assert "Finances/Receipt" not in nomes
+    assert len(cli.get(B + "/gmail/manual", headers=h).json()["labels"]) > len(so_support["labels"])
+
+
+def test_confirmar_tudo_nao_atravessa_a_caixa(cli, monkeypatch):
+    """A tela é por caixa. "Confirmar tudo" olhando a urace@ não pode confirmar
+    marcador da support@ que o dono nem viu."""
+    from command_center.db import conectar, inserir, um
+    h = entra(cli, "admin@urace.us")
+    con = conectar()
+    try:
+        inserir(con, "gmail_labels", name="[teste] so da support", family="[teste]", what="x",
+                status="pendente", mailboxes='["support"]')
+        inserir(con, "gmail_labels", name="[teste] so da urace", family="[teste]", what="y",
+                status="pendente", mailboxes='["urace"]')
+        con.commit()
+    finally:
+        con.close()
+    cli.post(B + "/gmail/manual/confirm", headers=h, json={"familia": "[teste]", "mailbox": "urace"})
+    con = conectar()
+    try:
+        assert um(con, "SELECT status FROM gmail_labels WHERE name='[teste] so da urace'")["status"] == "confirmado"
+        assert um(con, "SELECT status FROM gmail_labels WHERE name='[teste] so da support'")["status"] == "pendente"
+    finally:
+        con.close()

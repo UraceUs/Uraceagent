@@ -135,6 +135,29 @@ def amostrar(conta, nomes, amostra, verboso=True):
     return por_remetente, mensagens
 
 
+def _dominio(endereco):
+    return endereco.split("@")[-1]
+
+
+def por_dominio(por_remetente, mensagens):
+    """Junta os remetentes por domínio: (dominio -> Counter(marcador), dominio -> mensagens,
+    dominio -> quantos endereços distintos).
+
+    É daqui que sai a cobertura que o dono pediu ("nativo o máximo que der"). Regra por
+    endereço só pega o endereço que já apareceu na amostra: `mcinfo@ups.com` vira filtro,
+    mas `tracking@ups.com` que chegar amanhã não. Regra por domínio pega os dois — e os
+    que ainda nem existem."""
+    contagens = collections.defaultdict(collections.Counter)
+    msgs = collections.Counter()
+    enderecos = collections.defaultdict(set)
+    for end, c in por_remetente.items():
+        d = _dominio(end)
+        contagens[d].update(c)
+        msgs[d] += mensagens.get(end, 0)
+        enderecos[d].add(end)
+    return contagens, msgs, enderecos
+
+
 def regras(por_remetente, mensagens, share, minimo, max_marcadores=2):
     """marcador -> [(remetente, acertos, mensagens)], só onde a evidência sustenta.
 
@@ -153,8 +176,26 @@ def regras(por_remetente, mensagens, share, minimo, max_marcadores=2):
                 continue
             if n >= minimo and n / total >= share:
                 saida[alvo].append((end, n, total))
-    for alvo in saida:
-        saida[alvo].sort(key=lambda x: -x[1])
+    # promove a domínio o que se sustenta no domínio inteiro, e some com os endereços
+    # daquele domínio que viraram redundantes
+    dcont, dmsgs, dends = por_dominio(por_remetente, mensagens)
+    for dom, contagem in dcont.items():
+        if len(dends[dom]) < 2:           # um endereço só: a regra por endereço já basta
+            continue
+        total = dmsgs.get(dom, 0)
+        if not total:
+            continue
+        for alvo, n in contagem.most_common(max_marcadores):
+            if alvo.split("/")[0] in FAMILIAS_SEM_FILTRO:
+                continue
+            if n >= minimo and n / total >= share:
+                saida[alvo] = [t for t in saida[alvo] if _dominio(t[0]) != dom]
+                saida[alvo].append(("@" + dom, n, total))
+    for alvo in list(saida):
+        if not saida[alvo]:
+            del saida[alvo]
+        else:
+            saida[alvo].sort(key=lambda x: -x[1])
     return saida
 
 
@@ -200,6 +241,10 @@ def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo):
          "A evidência é lida `mensagens no marcador / mensagens do remetente`. Um mesmo remetente",
          "pode virar regra de dois marcadores — a UPS está em `Shipping Status` e em",
          "`Finances/Shopping`, e o Gmail aceita os dois filtros.",
+         "",
+         "Regra que começa com `@` vale para o **domínio inteiro** — pega inclusive endereços",
+         "que ainda não existem. Ela só é criada quando o domínio tem 2 ou mais endereços",
+         "diferentes e o conjunto todo aponta para o mesmo marcador.",
          "",
          f"- marcadores com filtro: **{len(cobertos)}**",
          f"- marcadores sem remetente estável: **{len(sem)}**",

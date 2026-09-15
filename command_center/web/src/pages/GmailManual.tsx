@@ -8,6 +8,7 @@
    com o volume real da caixa. Nada é usado na triagem antes de o dono confirmar; o que
    ele marcar como "não usar" fica fora para sempre. */
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
@@ -71,11 +72,16 @@ function Linha({ m, reload }: { m: Marcador; reload: () => void }) {
   </tr>
 }
 
+type Caixa = 'urace' | 'support'
+
 export function GmailManual() {
   const { can } = useAuth()
   const toast = useToast()
   const perguntar = usePerguntar()
-  const d = useGet<Manual>('/gmail/manual')
+  const [sp, setSp] = useSearchParams()
+  const caixa = ((sp.get('c') as Caixa) || 'urace')
+  const trocarCaixa = (c: Caixa) => { const n = new URLSearchParams(sp); n.set('c', c); setSp(n, { replace: true }) }
+  const d = useGet<Manual>(`/gmail/manual?mailbox=${caixa}`)
   const [filtro, setFiltro] = useState('')
   const [so, setSo] = useState<'todos' | 'pendente' | 'confirmado' | 'fora'>('todos')
   const [busy, setBusy] = useState<string | null>(null)
@@ -102,12 +108,12 @@ export function GmailManual() {
       ok: 'Confirmar',
     })) return
     setBusy(familia || 'tudo')
-    try { const r = await api.post<{ confirmados: number }>('/gmail/manual/confirm', { familia }); toast(`${r.confirmados} marcador(es) confirmado(s).`, 'ok'); d.reload() }
+    try { const r = await api.post<{ confirmados: number }>('/gmail/manual/confirm', { familia, mailbox: caixa }); toast(`${r.confirmados} marcador(es) confirmado(s).`, 'ok'); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   async function reler() {
     setBusy('reler')
-    try { const r = await api.post<{ novos: string[]; total_na_caixa: number }>('/gmail/manual/refresh', {}); toast(r.novos.length ? `${r.novos.length} marcador(es) novo(s) na caixa: ${r.novos.slice(0, 3).join(', ')}${r.novos.length > 3 ? '…' : ''}` : `Nenhum marcador novo (${r.total_na_caixa} na caixa).`, 'ok'); d.reload() }
+    try { const r = await api.post<{ novos: string[]; total_na_caixa: number }>(`/gmail/manual/refresh?mailbox=${caixa}`, {}); toast(r.novos.length ? `${r.novos.length} marcador(es) novo(s) na caixa: ${r.novos.slice(0, 3).join(', ')}${r.novos.length > 3 ? '…' : ''}` : `Nenhum marcador novo (${r.total_na_caixa} na caixa).`, 'ok'); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
 
@@ -117,7 +123,9 @@ export function GmailManual() {
   return <div className="stack">
     <div className="card-h">
       <div><h1 className="h1">Manual dos marcadores · Gmail</h1>
-        <div className="small ink2">O que a IA entendeu de cada marcador da sua caixa. Ela só classifica com o que você confirmar.</div></div>
+        <div className="small ink2">O que a IA entendeu de cada marcador da caixa <b>{caixa}@urace.us</b>. Ela só classifica com o que você confirmar — e só nesta caixa.</div>
+        <div className="tabs" style={{ marginTop: 8 }}>{(['urace', 'support'] as Caixa[]).map(c =>
+          <button key={c} className={caixa === c ? 'on' : ''} onClick={() => trocarCaixa(c)}>{c}@</button>)}</div></div>
       <div className="grow" />
       <div className="row wrap">
         {can('MANAGER') && <button className="btn" disabled={busy === 'reler'} onClick={reler}>{busy === 'reler' ? <Spinner /> : '⟳ Reler a caixa'}</button>}
