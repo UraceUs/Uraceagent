@@ -121,8 +121,9 @@ def test_relatorio_nao_confunde_marcador_do_sistema_com_intruso():
     manual". Ruído que escondia o que importava: `Action Required` e `Finance`, que
     apareceram sozinhos na caixa depois de 11/09."""
     na_caixa = ["INBOX", "SENT", "TRASH", "UNREAD", "CATEGORY_PROMOTIONS", "CHAT", "DRAFT",
-                "wNews", "Finances/Receipt", "Action Required", "Finance", "Receipts"]
-    assert g.desconhecidos(na_caixa) == ["Action Required", "Finance", "Receipts"]
+                "wNews", "Finances/Receipt", "Customer Service/Leads", "Finance", "Receipts"]
+    # `Customer Service/Leads` é da support@: entrou no manual em 14/09 e deixou de ser intruso
+    assert g.desconhecidos(na_caixa) == ["Finance", "Receipts"]
     # marcador que o dono deixou de fora continua sendo "do manual": ele já decidiu
     assert "Email Review/Finance" not in g.desconhecidos(["Email Review/Finance", "wNews"])
 
@@ -180,3 +181,27 @@ def test_amostra_busca_por_id_e_nao_por_nome(monkeypatch):
     g.amostrar("urace", ["LOC | Practice"], 30, mapa={"LOC | Practice": "Label_392"}, verboso=False)
     assert "labelIds=Label_392" in urls[0]
     assert "label%3A" not in urls[0] and "%7C" not in urls[0], "nome com | não pode ir na consulta"
+
+
+def test_regras_recusadas_pelo_dono_nao_voltam():
+    """Revisão do dono em 14/09. O gerador não tem como saber que a Hilton não é
+    corrida nem que o DOL não é banco: a recusa fica registrada."""
+    casos = [("flag@dol.gov", "Banks/Idea Financial"),
+             ("noreply@h6.hilton.com", "RACES/F4/JFC"),
+             ("greenlane@dwolla.com", "RACES"),
+             ("info@tkart.it", "Team/Samira")]
+    for remetente, alvo in casos:
+        r = g.regras(_conta({remetente: {alvo: 9}}), {remetente: 9}, share=0.6, minimo=3)
+        assert r == {}, f"{remetente} -> {alvo} devia estar recusado"
+    # o destino certo do mesmo remetente continua valendo
+    r = g.regras(_conta({"flag@dol.gov": {"Finances/Anderson_EB3": 4}}), {"flag@dol.gov": 4}, 0.6, 3)
+    assert [e for e, _n, _t in r["Finances/Anderson_EB3"]] == ["flag@dol.gov"]
+
+
+def test_pasta_de_ex_funcionario_nunca_vira_filtro():
+    """Mesmo erro do arquivo por ano: e-mail NOVO da Delta na pasta de quem saiu da
+    empresa é e-mail enterrado."""
+    for alvo in ("Team/Ex-Employees/MANU", "Ex-Funcionários/Lara"):
+        r = g.regras(_conta({"deltaairlines@t.delta.com": {alvo: 8}}),
+                     {"deltaairlines@t.delta.com": 8}, share=0.6, minimo=3)
+        assert r == {}, alvo

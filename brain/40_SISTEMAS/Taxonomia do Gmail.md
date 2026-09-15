@@ -118,3 +118,29 @@ daquela caixa **não roda** — a trava de 11/09 vale para as duas.
 `Softwares|Apps/Docusign` (399) e `Waivers` (57) guardam a mesma coisa por
 caminhos diferentes: o primeiro é todo envelope do DocuSign, o segundo é a waiver
 do cliente. Vale o dono decidir qual manda, senão a IA vai hesitar em toda waiver.
+
+## Regra do dono (14/09): não mexer em marcador fora do manual
+
+> *"Não mexa em marcadores que no momento não estão no manual."*
+
+Marcador que aparece na caixa e não está no manual é **ignorado**, não apagado,
+não editado, não usado. A IA não o enxerga na triagem, o filtro não o cria e
+nenhum script encosta nele. Ele só existe para a IA depois que o dono o coloca no
+manual e confirma.
+
+Vale inclusive para os que ela desconfia: em 11/09 os `Email Review/…` só saíram
+da caixa porque **ele mandou**, com essas palavras. A leitura e o aviso são
+trabalho da IA; a decisão é dele.
+
+## Propaganda é trabalho da IA, não do filtro (14/09)
+
+`wNews` é o maior marcador da caixa (1.981 conversas) e o único que sai da inbox
+sozinho — e é justamente o que o filtro por remetente **não cobre**: propaganda
+vem de centenas de endereços, cada um com uma ou duas mensagens, e nenhum passa no
+corte de evidência. Na primeira geração, `wNews` ganhou **um** remetente.
+
+Decisão do dono: *"faça de uma forma que a IA leia esses que não forem pegos pelo
+filtro e identifique a propaganda"*. A regra entrou no prompt, com o critério
+escrito (quer vender/divulgar × já existe relação) e com a trava que importa:
+**na dúvida, não usar `wNews`** — recibo enterrado custa mais caro que propaganda
+na inbox.

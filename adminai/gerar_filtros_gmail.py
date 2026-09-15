@@ -44,12 +44,32 @@ sys.path.insert(0, os.path.join(RAIZ, "adminai", "mcp"))
 
 import gmail_mcp  # noqa: E402
 from command_center.providers.classificar import SISTEMA  # noqa: E402
-from command_center.providers.taxonomia_gmail import MANUAL, OK  # noqa: E402
+from command_center.providers.taxonomia_gmail import MANUAL, MANUAL_SUPPORT, OK  # noqa: E402
 
 ARQUIVAVEL = "wNews"                 # o único marcador que sai da inbox sozinho
-# Arquivo morto por ano: o manual do dono diz "a triagem NÃO usa". Mandar e-mail
-# NOVO para a pasta de 2019 seria enterrá-lo — nunca vira filtro.
-FAMILIAS_SEM_FILTRO = {"Years 2019-2023"}
+# Pastas de histórico: mandar e-mail NOVO para lá é enterrá-lo. Arquivo por ano
+# ("a triagem NÃO usa", manual do dono) e pasta de quem já saiu da empresa — o
+# gerador tinha posto a Delta e um fornecedor na pasta da Manu, que saiu.
+FAMILIAS_SEM_FILTRO = {"Years 2019-2023", "Ex-Funcionários"}
+PASTAS_SEM_FILTRO = ("Team/Ex-Employees",)
+
+# Regras que o dono revisou e RECUSOU (14/09). Ficam aqui para não voltarem na
+# próxima geração — o gerador não tem como saber que a Hilton não é corrida.
+REGRAS_RECUSADAS = {
+    ("flag@dol.gov", "Banks/Idea Financial"),                     # DOL não é banco; o certo é o EB3
+    ("noreply@h6.hilton.com", "RACES/F4/JFC"),                    # hotel, não corrida
+    ("noreply@booking.com", "ITALO/Casamento"),                   # reserva nova não é do casamento
+    ("greenlane@dwolla.com", "RACES"),                            # pagamento, não corrida
+    ("info@tkart.it", "Team/Samira"),                             # o destino é o marcador do TKART
+    ("info@mortgagehouz.com", "Team/Anabelly"),                   # o certo é Finances/Accounting
+    ("team@user.hostinger.com", "Marketing & Sales/Comercial/Landipage Old"),   # hospedagem, não lead
+    ("alejandra.anez@mylaps.com", "ITALO"),                       # MyLaps já tem filtro do dono
+    ("zach.holcombe@mylaps.com", "ITALO"),
+    ("alejandra.anez@mylaps.com", "CORP/Betim"),
+    ("zach.holcombe@mylaps.com", "CORP/Betim"),
+    ("@mylaps.com", "ITALO"),
+    ("@mylaps.com", "CORP/Betim"),
+}
 RX_EMAIL = re.compile(r"<([^>]+)>")
 # Remetentes genéricos demais para virar regra: pegariam a caixa inteira.
 DOMINIOS_PROIBIDOS = {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com"}
@@ -140,6 +160,13 @@ def amostrar(conta, nomes, amostra, mapa=None, verboso=True):
     return por_remetente, mensagens
 
 
+def _recusado(remetente, alvo):
+    """Regra que não deve nascer: pasta de histórico, ou par que o dono já recusou."""
+    if alvo.split("/")[0] in FAMILIAS_SEM_FILTRO or alvo.startswith(PASTAS_SEM_FILTRO):
+        return True
+    return (remetente, alvo) in REGRAS_RECUSADAS
+
+
 def _dominio(endereco):
     return endereco.split("@")[-1]
 
@@ -177,7 +204,7 @@ def regras(por_remetente, mensagens, share, minimo, max_marcadores=2):
         if not total:
             continue
         for alvo, n in contagem.most_common(max_marcadores):
-            if alvo.split("/")[0] in FAMILIAS_SEM_FILTRO:
+            if _recusado(end, alvo):
                 continue
             if n >= minimo and n / total >= share:
                 saida[alvo].append((end, n, total))
@@ -191,7 +218,7 @@ def regras(por_remetente, mensagens, share, minimo, max_marcadores=2):
         if not total:
             continue
         for alvo, n in contagem.most_common(max_marcadores):
-            if alvo.split("/")[0] in FAMILIAS_SEM_FILTRO:
+            if _recusado("@" + dom, alvo):
                 continue
             if n >= minimo and n / total >= share:
                 saida[alvo] = [t for t in saida[alvo] if _dominio(t[0]) != dom]
@@ -230,7 +257,9 @@ def desconhecidos(na_caixa):
     não só o confirmado. Sem isso o relatório enchia de ruído e escondia o que
     importa: um marcador novo que apareceu sozinho, como os `Email Review/…` de
     agosto."""
-    do_manual = {n for n, _f, _q, _t, _e in MANUAL}
+    # os DOIS manuais: a support@ tem taxonomia própria, e sem ela os 64 marcadores
+    # dela apareceriam como "intrusos" no relatório daquela caixa
+    do_manual = {n for n, _f, _q, _t, _e in MANUAL} | {n for n, _f, _q, _t, _e in MANUAL_SUPPORT}
     return sorted(n for n in na_caixa
                   if n not in do_manual and n.upper() not in SISTEMA
                   and not n.startswith("CATEGORY_") and not n.upper().endswith("_STAR"))

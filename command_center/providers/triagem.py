@@ -53,6 +53,27 @@ MAX_SUGESTOES = 3          # propostas de marcador novo por rodada; trava contra
 # e-mail for importante e nada no manual servir. Sugerir, nunca criar — a regra
 # dele desde 11/09 é "a IA não cria marcador", e o MCP recusa de qualquer forma.
 # A cadeia é de exclusão: cada passo só é alcançado se o anterior falhar.
+# Dono, 14/09: *"faça de uma forma que a IA leia esses que não forem pegos pelo
+# filtro e identifique a propaganda"*. `wNews` é o maior marcador da caixa (1.981
+# conversas) e o ÚNICO que sai da inbox sozinho — e é justamente o que filtro por
+# remetente não cobre: propaganda vem de centenas de endereços, cada um com uma ou
+# duas mensagens. Nenhum passa no corte de evidência. Então esse trabalho é da IA.
+REGRA_PROPAGANDA = (
+    "PROPAGANDA — o que o filtro nativo nunca vai pegar, e por isso é com você:\n"
+    "  É propaganda quando o e-mail quer VENDER, DIVULGAR ou CHAMAR DE VOLTA, e não\n"
+    "  trata de nada que a URACE já contratou, comprou ou combinou. Sinais: oferta,\n"
+    "  desconto, cupom, lançamento, newsletter, convite para evento de terceiro,\n"
+    "  'última chance', 'você foi selecionado', link de descadastro. O remetente\n"
+    "  quase sempre é um disparo em massa, não uma pessoa escrevendo para você.\n"
+    "  NÃO é propaganda, por mais parecido que soe: recibo, fatura, extrato,\n"
+    "  confirmação de pedido, rastreio, aviso de conta e de segurança, e qualquer\n"
+    "  coisa de fornecedor, cliente ou parceiro com quem já existe conversa.\n"
+    "  Marketing que a URACE contratou (a agência, a ferramenta que ela paga) também\n"
+    "  NÃO é propaganda: é fornecedor.\n"
+    "  Propaganda → principal = 'wNews' (ou a sub-pasta certa dela), precisa_humano=false.\n"
+    "  É o único marcador que tira o e-mail da inbox, então na dúvida NÃO use: um\n"
+    "  recibo enterrado em wNews custa mais caro que uma propaganda na inbox.\n")
+
 REGRA_SUGESTAO = (
     "SUGERIR MARCADOR NOVO — só depois de esgotar esta ordem, nunca antes:\n"
     "  1. Existe marcador no manual que serve? Use ele. Fim. Não sugira nada.\n"
@@ -193,7 +214,7 @@ def prompt_confirmar(emails, nomes, mailbox, aprendizados="", livro=""):
             "- 'precisa_humano' = true quando a thread pede resposta ou decisão de uma pessoa. "
             "Notificação, propaganda, recibo, extrato e confirmação automática = false.\n"
             "- Não rotule, não mova, não escreva nada: só responda.\n"
-            + REGRA_SUGESTAO +
+            + REGRA_PROPAGANDA + REGRA_SUGESTAO +
             "RESPONDA APENAS com JSON no formato "
             "{\"itens\":[{\"id\":<int>,\"principal\":\"<nome exato>\",\"marcadores\":[\"<nome exato>\"],\"precisa_humano\":<bool>,\"motivo\":\"<até 15 palavras>\","
             "\"sugestao_marcador\":{\"nome\":\"<nome>\",\"o_que\":\"<frase>\",\"por_que\":\"<frase>\"} ou null}]} "
@@ -217,7 +238,7 @@ def prompt(emails, nomes, mailbox, aprendizados="", livro=""):
             "Notificação, propaganda, recibo, extrato e confirmação automática = false.\n"
             "- Se não tiver certeza do principal, use null: a thread fica na inbox para uma pessoa decidir.\n"
             "- Não rotule, não mova, não escreva nada: só responda.\n"
-            + REGRA_SUGESTAO +
+            + REGRA_PROPAGANDA + REGRA_SUGESTAO +
             "RESPONDA APENAS com JSON no formato "
             "{\"itens\":[{\"id\":<int>,\"principal\":\"<nome exato ou null>\",\"marcadores\":[\"<nome exato>\"],\"precisa_humano\":<bool>,\"motivo\":\"<até 15 palavras>\","
             "\"sugestao_marcador\":{\"nome\":\"<nome>\",\"o_que\":\"<frase>\",\"por_que\":\"<frase>\"} ou null}]} "
