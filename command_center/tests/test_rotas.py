@@ -1352,3 +1352,71 @@ def test_listagem_poe_a_inbox_na_frente_do_limite(cli):
     assert posicoes, "a inbox tem de aparecer"
     assert not arquivados or max(posicoes) < min(arquivados), "inbox antes do que já foi para marcador"
     assert antigo in [r["id"] for r in rows if r["is_inbox"]], "o antigo e lido continua na lista"
+
+
+# ------------------------------------------------ IA sugere marcador novo (dono, 14/09)
+def test_sugestoes_so_saem_com_nome_novo_e_util():
+    from command_center.providers import triagem
+    j = ('{"itens":['
+         '{"id":1,"principal":null,"sugestao_marcador":{"nome":"Suppliers/Fulano","o_que":"pecas do Fulano","por_que":"fornecedor novo"}},'
+         '{"id":2,"principal":null,"sugestao_marcador":{"nome":"wNews","o_que":"x","por_que":"y"}},'          # já existe
+         '{"id":3,"principal":null,"sugestao_marcador":{"nome":"suppliers/fulano","o_que":"x","por_que":"y"}},'  # repetida
+         '{"id":4,"principal":null,"sugestao_marcador":null},'
+         '{"id":5,"principal":null}]}')
+    r = triagem.sugestoes(j, ["wNews", "Finances/Receipt"])
+    assert [s["nome"] for s in r] == ["Suppliers/Fulano"]
+    assert r[0]["o_que"] == "pecas do Fulano" and r[0]["por_que"] == "fornecedor novo"
+    assert triagem.sugestoes("sem json nenhum", ["wNews"]) == []
+
+
+def test_ia_sugere_marcador_e_ele_espera_o_dono(cli, monkeypatch):
+    """Dono, 14/09: a IA deve sugerir marcador novo quando o e-mail for importante e
+    nada servir. Sugerir — nunca criar: a regra dele de 11/09 continua de pé."""
+    from command_center.providers import triagem
+    from command_center.db import conectar, inserir, um
+    con = conectar()
+    try:
+        e = inserir(con, "emails", mailbox="urace", subject="Contrato de patrocinio 2027",
+                    sender="juridico@patrocinador.com", last_at="2026-09-14T15:00:00",
+                    handled=0, is_inbox=1, labels='["INBOX"]')
+        inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail",
+                external_id=f"th{e}", deep_link="https://mail.google.com/x")
+        con.commit()
+        monkeypatch.setattr(triagem, "chamar", lambda s, f, **a:
+                            [{"nome": "wNews", "id": "x", "tipo": "user"}] if f == "gmail_marcadores"
+                            else {"mensagens": [{"de": "x", "data": "hoje", "corpo": "minuta em anexo"}]})
+        monkeypatch.setattr(triagem, "modulo", lambda s: type("G", (), {"triar_ia": lambda *a, **k: {"aplicado": True}})())
+        resposta = ('{"itens":[{"id":%d,"principal":null,"marcadores":[],"precisa_humano":true,"motivo":"contrato",'
+                    '"sugestao_marcador":{"nome":"Marketing & Sales/Patrocinio","o_que":"Contrato e conversa de patrocinio.",'
+                    '"por_que":"minuta de contrato sem marcador que sirva"}}]}' % e)
+        r = triagem.rodar(con, lambda t, sk: (True, resposta, None), "sk", mailboxes=("urace",), por="teste")
+        con.commit()
+        assert r["sugeridos"] == ["Marketing & Sales/Patrocinio"]
+        novo = um(con, "SELECT * FROM gmail_labels WHERE name='Marketing & Sales/Patrocinio'")
+        assert novo["status"] == "pendente", "espera o dono; a IA não confirma sozinha"
+        assert novo["in_gmail"] == 0, "não existe no Gmail: a IA não cria marcador"
+        assert novo["origin"] == "ia" and novo["family"] == "Marketing & Sales"
+        assert novo["proposed_reason"].startswith("minuta de contrato")
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='gmail.marcador.sugerido'") is not None
+        # e não passa a valer sozinho: a triagem só usa o que está confirmado
+        assert "Marketing & Sales/Patrocinio" not in triagem.confirmados(con)
+
+        # a mesma proposta de novo não duplica
+        r2 = triagem.rodar(con, lambda t, sk: (True, resposta, None), "sk", mailboxes=("urace",), por="teste")
+        con.commit()
+        assert r2["sugeridos"] == []
+    finally:
+        con.close()
+
+
+def test_sugestao_nunca_ressuscita_familia_recusada(cli):
+    from command_center.providers import triagem
+    from command_center.db import conectar, um
+    con = conectar()
+    try:
+        for nome in ("Email Review/Outra Coisa", "Years 2019-2023/y.2027"):
+            assert triagem.guardar_sugestao(con, {"nome": nome, "o_que": "x", "por_que": "y"}, "teste") is False
+            assert um(con, "SELECT 1 AS x FROM gmail_labels WHERE name=?", (nome,)) is None
+        con.commit()
+    finally:
+        con.close()

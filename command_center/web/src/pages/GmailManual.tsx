@@ -20,6 +20,7 @@ interface Marcador {
   id: number; name: string; family: string | null; what: string | null; threads: number | null
   status: 'pendente' | 'confirmado' | 'fora'; in_gmail: number
   confirmed_by: string | null; confirmed_at: string | null
+  origin: string | null; proposed_reason: string | null
 }
 interface Manual {
   labels: Marcador[]; resumo: Record<string, number>; exemplos: { chega: string; vai_para: string }[]
@@ -48,8 +49,12 @@ function Linha({ m, reload }: { m: Marcador; reload: () => void }) {
       <div className="row wrap small muted" style={{ gap: 6 }}>
         <Chip tone={TOM[m.status]}>{ROTULO[m.status]}</Chip>
         {!!m.threads && <span>{m.threads.toLocaleString('pt-BR')} conversas</span>}
-        {!m.in_gmail && <Chip tone="crit">não existe mais na caixa</Chip>}
+        {m.origin === 'ia'
+          ? <Chip tone="warn">sugestão da IA · ainda não existe no Gmail</Chip>
+          : !m.in_gmail && <Chip tone="crit">não existe mais na caixa</Chip>}
       </div>
+      {m.origin === 'ia' && !!m.proposed_reason &&
+        <div className="small muted" style={{ marginTop: 4 }}>Por quê: {m.proposed_reason}</div>}
     </td>
     <td style={{ minWidth: 0 }}>
       {can('MANAGER') ? <textarea className="input" rows={2} value={texto} placeholder="o que vai neste marcador…"
@@ -127,6 +132,16 @@ export function GmailManual() {
     {/* Só avisa enquanto os marcadores ainda existirem na caixa. Os 11 foram
         apagados em 11/09 a pedido do dono; um "Reler a caixa" zera este aviso.
         As linhas continuam no manual como `fora`: se algo recriá-los, já nascem ignorados. */}
+    {(() => {
+      const sug = (d.data?.labels || []).filter(m => m.origin === 'ia' && m.status === 'pendente')
+      return sug.length > 0 && <Banner tone="warn">
+        <b>A IA sugeriu {sug.length} marcador(es) novo(s).</b> Ela leu e-mails importantes que não
+        cabiam em nenhum marcador seu. Ela <b>não cria marcador</b> — a sugestão espera você.
+        Se confirmar, <b>crie o marcador no Gmail com o mesmo nome</b>; sem isso a IA não consegue
+        aplicá-lo. Se não fizer sentido, marque como “não usar”.
+      </Banner>
+    })()}
+
     {!!(d.data?.labels || []).some(m => m.family === 'Email Review' && m.in_gmail) &&
       <Banner tone="crit"><b>“Email Review/…” não é seu.</b> São 11 marcadores aplicados em ~700 conversas entre 9 e 12 de agosto. Não foi o Command Center — o painel não cria marcador, o código recusa. O log de tokens OAuth do domínio mostrou que naquela data o único app com escrita no Gmail era o conector <b>Claude for Gmail</b> do claude.ai (autorizado em 16/07): foram sessões suas no Claude com esse conector ligado. Estão marcados como <b>não usar</b> e a IA os ignora — inclusive na sugestão de destino. Some da caixa apagando os marcadores no Gmail; some daqui com <b>⟳ Reler a caixa</b>.</Banner>}
 

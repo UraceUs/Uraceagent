@@ -69,6 +69,8 @@ MIGRACOES = [
     ("races", "task_id", "INTEGER"),
     ("clients", "email_alt", "TEXT"),
     ("ai_commands", "prompt", "TEXT"),              # o que foi ao agente (texto do dono + contexto); `text` é só o que o dono escreveu              # segundo e-mail da descrição (o principal fica limpo)               # tarefa da coluna RACES (calendário = o que está no Asana)
+    ("gmail_labels", "origin", "TEXT"),            # caixa | ia (marcador que a IA propôs, ainda não existe no Gmail)
+    ("gmail_labels", "proposed_reason", "TEXT"),   # o e-mail que motivou a proposta
     ("waivers", "hidden", "INTEGER NOT NULL DEFAULT 0"),   # lixeira do painel (restaurável)
     ("waivers", "minor_name", "TEXT"),                     # nome do menor (parental), do form data
     ("waivers", "link_reason", "TEXT"),                    # por que está ligada a este cliente

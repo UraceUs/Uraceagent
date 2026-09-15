@@ -47,6 +47,60 @@ CAIXAS = ("urace", "support")
 LOTE = 12                  # threads por pedido à IA (o corpo entra, então menos que a classificação)
 MAXIMO_POR_RODADA = 48     # por caixa; o resto fica para a próxima rodada
 CORPO_MAX = 1200           # caracteres de corpo por thread no prompt
+MAX_SUGESTOES = 3          # propostas de marcador novo por rodada; trava contra enxurrada
+
+# O raciocínio que o dono pediu (14/09): a IA pode SUGERIR marcador novo quando o
+# e-mail for importante e nada no manual servir. Sugerir, nunca criar — a regra
+# dele desde 11/09 é "a IA não cria marcador", e o MCP recusa de qualquer forma.
+# A cadeia é de exclusão: cada passo só é alcançado se o anterior falhar.
+REGRA_SUGESTAO = (
+    "SUGERIR MARCADOR NOVO — só depois de esgotar esta ordem, nunca antes:\n"
+    "  1. Existe marcador no manual que serve? Use ele. Fim. Não sugira nada.\n"
+    "  2. Serve um marcador PAI existente (ex.: 'Finances' quando não há a pasta filha "
+    "certa)? Use o pai. Fim.\n"
+    "  3. Nenhum serve. Este e-mail é IMPORTANTE? Importante = mexe com dinheiro, "
+    "contrato, obrigação legal, cliente, fornecedor, prazo — algo que, perdido, custa. "
+    "Propaganda, newsletter, notificação de sistema e aviso automático NÃO são "
+    "importantes, por maior que seja o volume.\n"
+    "  4. Não é importante → deixe 'principal' null. Fica na inbox para uma pessoa ver. "
+    "NÃO sugira marcador.\n"
+    "  5. É importante → aí sim sugira UM marcador, no campo 'sugestao_marcador':\n"
+    "     - 'nome': dentro da hierarquia que já existe, com '/' (ex.: 'Suppliers/Fulano'). "
+    "Só invente família nova se nenhuma das existentes couber.\n"
+    "     - 'o_que': o que deve ir nesse marcador daqui para frente, em uma frase.\n"
+    "     - 'por_que': o que neste e-mail mostra que o marcador falta.\n"
+    "     Nunca proponha nome igual ou quase igual a um que já existe.\n"
+    "     No máximo UMA sugestão por e-mail, e só quando ela for mesmo necessária.\n"
+    "Você NÃO cria marcador e NÃO aplica a sugestão: ela vai para o dono aprovar no "
+    "painel. Enquanto ele não aprovar, o marcador não existe.\n")
+
+
+def sugestoes(texto, nomes):
+    """As propostas de marcador novo na resposta da IA, já limpas.
+
+    Separada do `parse` de propósito: classificar e propor são decisões diferentes,
+    e uma resposta pode trazer uma sem a outra."""
+    m = re.search(r"\{.*\}", texto or "", re.S)
+    if not m:
+        return []
+    try:
+        dados = json.loads(m.group(0))
+    except ValueError:
+        return []
+    existentes = {n.lower() for n in nomes}
+    saida, vistos = [], set()
+    for it in dados.get("itens", []) or []:
+        sug = it.get("sugestao_marcador")
+        if not isinstance(sug, dict):
+            continue
+        nome = (sug.get("nome") or "").strip().strip("/")[:120]
+        if not nome or nome.lower() in existentes or nome.lower() in vistos:
+            continue
+        vistos.add(nome.lower())
+        saida.append({"nome": nome,
+                      "o_que": (sug.get("o_que") or "").strip()[:500],
+                      "por_que": (sug.get("por_que") or "").strip()[:300]})
+    return saida
 
 
 def _corpo_thread(mailbox, thread_id):
@@ -122,8 +176,10 @@ def prompt_confirmar(emails, nomes, mailbox, aprendizados="", livro=""):
             "- 'precisa_humano' = true quando a thread pede resposta ou decisão de uma pessoa. "
             "Notificação, propaganda, recibo, extrato e confirmação automática = false.\n"
             "- Não rotule, não mova, não escreva nada: só responda.\n"
+            + REGRA_SUGESTAO +
             "RESPONDA APENAS com JSON no formato "
-            "{\"itens\":[{\"id\":<int>,\"principal\":\"<nome exato>\",\"marcadores\":[\"<nome exato>\"],\"precisa_humano\":<bool>,\"motivo\":\"<até 15 palavras>\"}]} "
+            "{\"itens\":[{\"id\":<int>,\"principal\":\"<nome exato>\",\"marcadores\":[\"<nome exato>\"],\"precisa_humano\":<bool>,\"motivo\":\"<até 15 palavras>\","
+            "\"sugestao_marcador\":{\"nome\":\"<nome>\",\"o_que\":\"<frase>\",\"por_que\":\"<frase>\"} ou null}]} "
             "e nada mais." + aprendizados + "\n\n" + "\n\n".join(linhas))
 
 
@@ -144,8 +200,10 @@ def prompt(emails, nomes, mailbox, aprendizados="", livro=""):
             "Notificação, propaganda, recibo, extrato e confirmação automática = false.\n"
             "- Se não tiver certeza do principal, use null: a thread fica na inbox para uma pessoa decidir.\n"
             "- Não rotule, não mova, não escreva nada: só responda.\n"
+            + REGRA_SUGESTAO +
             "RESPONDA APENAS com JSON no formato "
-            "{\"itens\":[{\"id\":<int>,\"principal\":\"<nome exato ou null>\",\"marcadores\":[\"<nome exato>\"],\"precisa_humano\":<bool>,\"motivo\":\"<até 15 palavras>\"}]} "
+            "{\"itens\":[{\"id\":<int>,\"principal\":\"<nome exato ou null>\",\"marcadores\":[\"<nome exato>\"],\"precisa_humano\":<bool>,\"motivo\":\"<até 15 palavras>\","
+            "\"sugestao_marcador\":{\"nome\":\"<nome>\",\"o_que\":\"<frase>\",\"por_que\":\"<frase>\"} ou null}]} "
             "e nada mais." + aprendizados + "\n\n" + "\n\n".join(linhas))
 
 
@@ -174,10 +232,32 @@ def parse(texto, nomes):
     return saida
 
 
+FAMILIAS_RECUSADAS = {"Email Review", "Years 2019-2023"}
+
+
+def guardar_sugestao(con, sug, por):
+    """Grava a proposta como PENDENTE no manual. Não cria nada no Gmail.
+
+    O marcador só passa a existir quando o dono confirmar no painel E criar o
+    marcador na caixa — a IA não cria marcador, e o MCP recusa aplicar o que não
+    existe. Devolve True se guardou."""
+    nome = sug["nome"]
+    if nome.split("/")[0] in FAMILIAS_RECUSADAS:
+        return False
+    if um(con, "SELECT 1 AS x FROM gmail_labels WHERE lower(name)=lower(?)", (nome,)):
+        return False                               # já existe (ou já foi proposto antes)
+    con.execute("""INSERT INTO gmail_labels (name, family, what, status, in_gmail, origin, proposed_reason)
+                   VALUES (?,?,?, 'pendente', 0, 'ia', ?)""",
+                (nome, nome.split("/")[0], sug["o_que"], sug["por_que"]))
+    auditar(con, "gmail.marcador.sugerido", por,
+            detail={"marcador": nome, "o_que": sug["o_que"], "por_que": sug["por_que"]})
+    return True
+
+
 def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agenda"):
     """Uma rodada completa. Devolve o resumo (também gravado na auditoria)."""
     saida = {"lidos": 0, "movidos": 0, "ficaram": 0, "precisa_humano": 0,
-             "do_filtro": 0, "confirmados": 0, "corrigidos": 0, "erros": []}
+             "do_filtro": 0, "confirmados": 0, "corrigidos": 0, "sugeridos": [], "erros": []}
     # TRAVA (dono, 11/09): sem manual confirmado, a IA não classifica nada. E quando
     # rodar, só com os marcadores que ele confirmou — nunca um que apareceu na caixa.
     permitidos = confirmados(con)
@@ -218,6 +298,11 @@ def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agen
                 if not ok:
                     saida["erros"].append(f"{mailbox}: IA falhou: {str(erro)[:160]}"); break
                 res = parse(texto, nomes)
+                for sug in sugestoes(texto, nomes):
+                    if len(saida["sugeridos"]) >= MAX_SUGESTOES:
+                        break                      # trava contra enxurrada de propostas
+                    if guardar_sugestao(con, sug, por):
+                        saida["sugeridos"].append(sug["nome"])
                 for e in lote:
                     saida["lidos"] += 1
                     principal, extras, humano, motivo = res.get(e["id"], (None, [], False, "sem resposta da IA"))
