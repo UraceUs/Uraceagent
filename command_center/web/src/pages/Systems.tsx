@@ -16,13 +16,27 @@ import { useToast } from '../components/Toast'
 const ORDEM_SECOES = ['TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY', 'RACES', 'Finished Services']
 const ASANA_PROJ = 'https://app.asana.com/0/1205450093098920/board'
 
+/* Estado de aba na URL. Lê a URL AO VIVO na hora de escrever, não o valor do closure:
+   um clique que troca caixa + filtro + thread chama três setters seguidos, e partindo
+   do valor antigo cada um sobrescrevia o anterior — "clico em support@ e não acontece
+   nada". Com BrowserRouter o replaceState é síncrono, então o segundo setter já vê o
+   que o primeiro gravou. E quem muda várias chaves de uma vez usa `useTabs().setMany`,
+   que grava tudo numa navegação só. */
 function useTab<T extends string>(key: string, def: T): [T, (t: T) => void] {
   const [sp, setSp] = useSearchParams()
   const v = (sp.get(key) as T) || def
-  // Forma funcional, de propósito: um clique que troca caixa + filtro + thread chama três
-  // setters seguidos. Partindo do `sp` do closure, cada um sobrescrevia o anterior e a
-  // troca de caixa (o primeiro) se perdia — "clico em support@ e não acontece nada".
-  return [v, (t: T) => setSp(prev => { const n = new URLSearchParams(prev); n.set(key, t); return n }, { replace: true })]
+  return [v, (t: T) => { const n = new URLSearchParams(window.location.search); n.set(key, t); setSp(n, { replace: true }) }]
+}
+
+function useTabs() {
+  const [, setSp] = useSearchParams()
+  return {
+    setMany: (mudancas: Record<string, string>) => {
+      const n = new URLSearchParams(window.location.search)
+      for (const [k, v] of Object.entries(mudancas)) { if (v) n.set(k, v); else n.delete(k) }
+      setSp(n, { replace: true })
+    },
+  }
 }
 
 function SubTabs<T extends string>({ tabs, value, onChange }: { tabs: [T, string][]; value: T; onChange: (t: T) => void }) {
@@ -331,9 +345,10 @@ export function GmailPage() {
   const { can } = useAuth()
   const perguntar = usePerguntar()
   const toast = useToast()
-  const [box, setBox] = useTab<Box>('v', 'urace')
+  const [box] = useTab<Box>('v', 'urace')
   const [sel, setSel] = useTab<string>('l', 'INBOX')          // INBOX | SEM_SUGESTAO | <marcador>
   const [openId, setOpenId] = useTab<string>('o', '')
+  const { setMany } = useTabs()
   const labels = useGet<{ connected: boolean; reason?: string; labels: GmailLabel[] }>(`/gmail/labels?mailbox=${box}`, 120000)
   const emails = useGet<Email[]>(`/emails?mailbox=${box}`, 60000)
   const thread = useGet<{ connected: boolean; reason?: string; messages: GmailMessage[] }>(openId ? `/emails/${openId}/thread` : null)
@@ -389,7 +404,7 @@ export function GmailPage() {
   const ultimaTriagem = (() => { try { const r = JSON.parse(triage.data?.rule?.last_result || 'null'); return r ? `última: ${r.horario || ''} → ${r.movidos ?? 0} movidos, ${r.ficaram ?? 0} ficaram` : 'ainda não rodou' } catch { return '' } })()
   return <>
     <IntHeader system="gmail" title="Gmail" desc={`A IA lê a inbox ${horarios ? `às ${horarios}` : '3× ao dia'}, marca e move para o principal. Aqui fica o que ela não decidiu. Clicar num marcador move.`} openHref={`https://mail.google.com/mail/u/${box === 'urace' ? 0 : 1}/`} openLabel="Abrir o Gmail" />
-    <div className="row wrap"><SubTabs tabs={[['urace', 'urace@'], ['support', 'support@']]} value={box} onChange={b => { setBox(b); setSel('INBOX'); setOpenId('') }} /><div className="grow" />
+    <div className="row wrap"><SubTabs tabs={[['urace', 'urace@'], ['support', 'support@']]} value={box} onChange={b => setMany({ v: b, l: 'INBOX', o: '' })} /><div className="grow" />
       <span className="small muted" title={ultimaTriagem}>{triage.data?.rule && !triage.data.rule.enabled ? 'triagem automática desligada (Automação)' : ultimaTriagem}</span>
       {can('OPERATOR') && <button className="btn primary" disabled={triaging || triage.data?.running || inbox.length === 0} onClick={triageNow} title="A IA lê cada thread da inbox, aplica os marcadores e move para o principal — agora, sem esperar o horário">{triaging || triage.data?.running ? <Spinner /> : '✦'} Triar com a IA agora</button>}
       {can('OPERATOR') && <button className="btn" disabled={classifying || semSug === 0} onClick={classify} title="Só sugere o marcador (não move) para as threads ainda sem sugestão">{classifying ? <Spinner /> : '✦'} Só sugerir{semSug > 0 && ` (${semSug})`}</button>}
