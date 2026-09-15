@@ -19,7 +19,10 @@ const ASANA_PROJ = 'https://app.asana.com/0/1205450093098920/board'
 function useTab<T extends string>(key: string, def: T): [T, (t: T) => void] {
   const [sp, setSp] = useSearchParams()
   const v = (sp.get(key) as T) || def
-  return [v, (t: T) => { const n = new URLSearchParams(sp); n.set(key, t); setSp(n, { replace: true }) }]
+  // Forma funcional, de propósito: um clique que troca caixa + filtro + thread chama três
+  // setters seguidos. Partindo do `sp` do closure, cada um sobrescrevia o anterior e a
+  // troca de caixa (o primeiro) se perdia — "clico em support@ e não acontece nada".
+  return [v, (t: T) => setSp(prev => { const n = new URLSearchParams(prev); n.set(key, t); return n }, { replace: true })]
 }
 
 function SubTabs<T extends string>({ tabs, value, onChange }: { tabs: [T, string][]; value: T; onChange: (t: T) => void }) {

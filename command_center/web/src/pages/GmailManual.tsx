@@ -111,7 +111,7 @@ export function GmailManual() {
   const perguntar = usePerguntar()
   const [sp, setSp] = useSearchParams()
   const caixa = ((sp.get('c') as Caixa) || 'urace')
-  const trocarCaixa = (c: Caixa) => { const n = new URLSearchParams(sp); n.set('c', c); setSp(n, { replace: true }) }
+  const trocarCaixa = (c: Caixa) => setSp(prev => { const n = new URLSearchParams(prev); n.set('c', c); return n }, { replace: true })
   const d = useGet<Manual>(`/gmail/manual?mailbox=${caixa}`)
   const [filtro, setFiltro] = useState('')
   const [so, setSo] = useState<'todos' | 'pendente' | 'confirmado' | 'fora'>('todos')
