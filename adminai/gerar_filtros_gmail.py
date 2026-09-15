@@ -47,6 +47,9 @@ from command_center.providers.classificar import SISTEMA  # noqa: E402
 from command_center.providers.taxonomia_gmail import MANUAL, OK  # noqa: E402
 
 ARQUIVAVEL = "wNews"                 # o único marcador que sai da inbox sozinho
+# Arquivo morto por ano: o manual do dono diz "a triagem NÃO usa". Mandar e-mail
+# NOVO para a pasta de 2019 seria enterrá-lo — nunca vira filtro.
+FAMILIAS_SEM_FILTRO = {"Years 2019-2023"}
 RX_EMAIL = re.compile(r"<([^>]+)>")
 # Remetentes genéricos demais para virar regra: pegariam a caixa inteira.
 DOMINIOS_PROIBIDOS = {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com"}
@@ -89,8 +92,16 @@ def _req(conta, url, tentativas=4):
 
 
 def amostrar(conta, nomes, amostra, verboso=True):
-    """remetente -> Counter(marcador), lido das mensagens reais da caixa."""
+    """(remetente -> Counter(marcador), remetente -> nº de MENSAGENS).
+
+    Os dois são necessários. A primeira versão usava a soma dos marcadores como
+    denominador e isso reprovava justamente os remetentes que importam: uma
+    mensagem da UPS que está em `Shipping Status` E em `Finances/Shopping` contava
+    2, a fatia de cada marcador virava 50%, e nenhum dos dois passava. Era por isso
+    que `Shipping Status`, `wNews`, `Finances/Shopping` e `Banks/PayPal` — os
+    maiores da caixa — saíam sem regra nenhuma."""
     por_remetente = collections.defaultdict(collections.Counter)
+    mensagens = collections.Counter()
     id_para_nome = {v: k for k, v in gmail_mcp._mapa_labels(conta).items()}
     vistos = set()
     for i, nome in enumerate(nomes, 1):
@@ -114,24 +125,33 @@ def amostrar(conta, nomes, amostra, verboso=True):
             end = _endereco(gmail_mcp._cabecalho(d, "From"))
             if not end or end.split("@")[-1] in DOMINIOS_PROIBIDOS:
                 continue
+            mensagens[end] += 1
             # a mensagem conta para TODOS os marcadores que ela tem: é assim que
             # a ambiguidade (Amazon em dois marcadores) aparece nos números
             for lid in d.get("labelIds", []):
                 alvo = id_para_nome.get(lid)
                 if alvo and alvo in nomes:
                     por_remetente[end][alvo] += 1
-    return por_remetente
+    return por_remetente, mensagens
 
 
-def regras(por_remetente, share, minimo, max_marcadores=2):
-    """marcador -> [(remetente, acertos, total)], só onde a evidência sustenta."""
+def regras(por_remetente, mensagens, share, minimo, max_marcadores=2):
+    """marcador -> [(remetente, acertos, mensagens)], só onde a evidência sustenta.
+
+    `minimo` conta as mensagens NAQUELE marcador, não o total do remetente: 2 de 3
+    passava na versão anterior e foi assim que um apelido do eBay virou regra do
+    `Finances/Anderson_EB3` e uma newsletter da F1 virou `Platforms & Subscriptions`.
+    Um remetente pode legitimamente virar regra de dois marcadores (a UPS está em
+    `Shipping Status` e em `Finances/Shopping`): o Gmail aceita os dois filtros."""
     saida = collections.defaultdict(list)
     for end, contagem in por_remetente.items():
-        total = sum(contagem.values())
-        if total < minimo:
+        total = mensagens.get(end, 0)
+        if not total:
             continue
         for alvo, n in contagem.most_common(max_marcadores):
-            if n / total >= share:
+            if alvo.split("/")[0] in FAMILIAS_SEM_FILTRO:
+                continue
+            if n >= minimo and n / total >= share:
                 saida[alvo].append((end, n, total))
     for alvo in saida:
         saida[alvo].sort(key=lambda x: -x[1])
@@ -166,7 +186,8 @@ def desconhecidos(na_caixa):
     agosto."""
     do_manual = {n for n, _f, _q, _t, _e in MANUAL}
     return sorted(n for n in na_caixa
-                  if n not in do_manual and n.upper() not in SISTEMA and not n.startswith("CATEGORY_"))
+                  if n not in do_manual and n.upper() not in SISTEMA
+                  and not n.startswith("CATEGORY_") and not n.upper().endswith("_STAR"))
 
 
 def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo):
@@ -175,7 +196,10 @@ def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo):
     fora_do_manual = desconhecidos(na_caixa)
     L = [f"# Filtros do Gmail — {conta}@urace.us", "",
          f"Gerado de mensagens reais da caixa. Um remetente vira regra quando **{int(share*100)}%** ou mais",
-         f"das mensagens dele estão naquele marcador e há pelo menos **{minimo}** mensagens dele na amostra.",
+         f"das mensagens DELE estão naquele marcador e há pelo menos **{minimo}** mensagens dele ali.",
+         "A evidência é lida `mensagens no marcador / mensagens do remetente`. Um mesmo remetente",
+         "pode virar regra de dois marcadores — a UPS está em `Shipping Status` e em",
+         "`Finances/Shopping`, e o Gmail aceita os dois filtros.",
          "",
          f"- marcadores com filtro: **{len(cobertos)}**",
          f"- marcadores sem remetente estável: **{len(sem)}**",
@@ -223,8 +247,8 @@ def main():
         sys.exit(f"nenhum marcador do manual existe na caixa {a.conta}@ — nada a fazer.")
     print(f"caixa {a.conta}@: {len(na_caixa)} marcadores, {len(nomes)} do manual confirmado", file=sys.stderr)
 
-    por_remetente = amostrar(a.conta, nomes, a.amostra)
-    por_marcador = regras(por_remetente, a.share, a.minimo)
+    por_remetente, mensagens = amostrar(a.conta, nomes, a.amostra)
+    por_marcador = regras(por_remetente, mensagens, a.share, a.minimo)
 
     os.makedirs(a.saida, exist_ok=True)
     fx = os.path.join(a.saida, f"mailFilters-{a.conta}.xml")

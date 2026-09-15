@@ -29,19 +29,44 @@ def test_endereco(bruto, esperado):
     assert g._endereco(bruto) == esperado
 
 
-def test_remetente_dominante_vira_regra_e_o_ambiguo_nao():
-    por_remetente = {
-        "mcinfo@ups.com": {"Shipping Status": 9},                       # 100% -> regra
-        "service@paypal.com": {"Finances/Receipt": 7, "Banks/PayPal": 1},  # 87% -> regra
-        "contato@aleatorio.com": {"Suppliers": 1},                      # 1 msg -> sem evidência
-        "meio@a@meio.com": {"Finances": 5, "Suppliers": 5},             # 50/50 -> nenhum
-    }
-    r = g.regras({k: __import__("collections").Counter(v) for k, v in por_remetente.items()},
-                 share=0.6, minimo=3)
+def _conta(d):
+    import collections
+    return {k: collections.Counter(v) for k, v in d.items()}
+
+
+def test_remetente_dominante_vira_regra_e_o_fraco_nao():
+    por_remetente = _conta({
+        "mcinfo@ups.com": {"Shipping Status": 9},
+        "service@paypal.com": {"Finances/Receipt": 7, "Banks/PayPal": 1},
+        "contato@aleatorio.com": {"Suppliers": 1},
+        "ebay@alias.com": {"Finances/Anderson_EB3": 2},       # 2 de 3: fraco demais
+    })
+    mensagens = {"mcinfo@ups.com": 9, "service@paypal.com": 8, "contato@aleatorio.com": 1, "ebay@alias.com": 3}
+    r = g.regras(por_remetente, mensagens, share=0.6, minimo=3)
     assert [e for e, _n, _t in r["Shipping Status"]] == ["mcinfo@ups.com"]
     assert [e for e, _n, _t in r["Finances/Receipt"]] == ["service@paypal.com"]
     assert "Banks/PayPal" not in r          # 1 de 8 nao sustenta
-    assert "Suppliers" not in r             # nem 1 mensagem, nem maioria
+    assert "Suppliers" not in r             # uma mensagem so
+    assert "Finances/Anderson_EB3" not in r, "2 mensagens nao viram regra"
+
+
+def test_mensagem_com_dois_marcadores_nao_derruba_os_dois():
+    """O bug que esvaziou o primeiro relatório: somando os marcadores como
+    denominador, a UPS ficava com 50% em cada um e nenhum passava — e foi assim que
+    `Shipping Status`, `wNews` e `Finances/Shopping`, os maiores da caixa, saíram
+    sem regra nenhuma."""
+    por_remetente = _conta({"mcinfo@ups.com": {"Shipping Status": 9, "Finances/Shopping": 9}})
+    r = g.regras(por_remetente, {"mcinfo@ups.com": 9}, share=0.6, minimo=3)
+    assert ("mcinfo@ups.com", 9, 9) in r["Shipping Status"]
+    assert ("mcinfo@ups.com", 9, 9) in r["Finances/Shopping"]
+
+
+def test_arquivo_morto_por_ano_nunca_vira_filtro():
+    """`Years 2019-2023` é arquivo; o manual diz que a triagem não usa. Mandar
+    e-mail NOVO para a pasta de 2019 seria enterrá-lo."""
+    r = g.regras(_conta({"darrin@amrmotorplex.com": {"Years 2019-2023/y.2019": 8}}),
+                 {"darrin@amrmotorplex.com": 8}, share=0.6, minimo=3)
+    assert r == {}
 
 
 def test_xml_agrupa_por_marcador_e_so_arquiva_wnews():
