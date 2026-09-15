@@ -83,3 +83,38 @@ Uma fonte só, três consumidores:
 
 `python3 adminai/gerar_manual_marcadores.py` regera o `MANUAL.md`, e o teste
 `test_manual_da_skill_esta_em_dia` quebra se os dois divergirem.
+
+## A caixa support@ — lida em 14/09
+
+A `support@` tem **64 marcadores próprios**, e nenhum deles estava no manual de
+11/09: aquele saiu inteiro da `urace@`. São caixas com funções diferentes —
+`urace@` é dinheiro, compra e plataforma; `support@` é **atendimento, funil de
+cliente e fornecedor**.
+
+O que mais pesa lá: `Softwares|Apps/Docusign` (399 conversas) ·
+`Customer Service/LP Leads` (413) · `Fornecedores` (285) ·
+`Ex-Funcionários/Jeyson Herrera` (247) · `Softwares|Apps/Ecwid` (322) ·
+`Karting School` (187) · `Softwares|Apps/Dialpad` (173).
+
+Os 64 entraram como **`pendente`**: o dono confirma marcador por marcador no
+painel (aba `support@`), como fez na `urace@`. Enquanto não confirmar, a triagem
+daquela caixa **não roda** — a trava de 11/09 vale para as duas.
+
+### Quatro coisas que a leitura mostrou e ele precisa decidir
+
+1. **`Action Required`, `Lead or Customer` e `Operations` estão aqui também.** São
+   os mesmos nomes de categorias `Email Review/` apagadas da `urace@` em 11/09 —
+   o que rotulou uma caixa mexeu nas duas. Entraram como `fora`.
+2. **`Curriculos` não tem currículo.** São 2 conversas de lead
+   ("Thank you for reaching out").
+3. **`Ex-Funcionários/George | Atendente` não é atendimento.** São 227 conversas do
+   "Relatório Kommo - Leads Diários" que o Samuel (Cygnus) mandava todo dia.
+4. **`Marketing/RD Station /MailMarketing` tem cheiro de golpe.** Há mensagens de
+   `rdstation-fin.com` e `rdstation-security.com` — o domínio verdadeiro é
+   `rdstation.com.br`. Uma delas é "Fatura RD Station em Atraso".
+
+### Sobreposição a resolver
+
+`Softwares|Apps/Docusign` (399) e `Waivers` (57) guardam a mesma coisa por
+caminhos diferentes: o primeiro é todo envelope do DocuSign, o segundo é a waiver
+do cliente. Vale o dono decidir qual manda, senão a IA vai hesitar em toda waiver.

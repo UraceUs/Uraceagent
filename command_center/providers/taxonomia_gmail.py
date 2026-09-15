@@ -226,3 +226,93 @@ EXEMPLOS = [
 
 def por_nome():
     return {nome: (familia, o_que, threads, estado) for nome, familia, o_que, threads, estado in MANUAL}
+
+
+# ============================================================ support@urace.us
+# Lido da caixa em 14/09/2026 (adminai/ler_marcadores_caixa.py). O manual acima é da
+# urace@; esta caixa nunca tinha sido lida, e é outra coisa: atendimento, funil de
+# cliente e operação com fornecedor — não finanças e plataformas.
+#
+# TUDO entra como PENDENTE. O dono confirma marcador por marcador no painel
+# (Gmail → Manual dos marcadores → aba support@), como fez na urace@ em 11/09.
+# As descrições dizem o que ESTÁ dentro, não o que o nome promete: onde as duas
+# coisas divergem, está marcado com ⚠️ para ele decidir.
+MANUAL_SUPPORT = [
+    # ------------------------------------------------- não são do dono
+    ("Action Required", "Intruso (confira)", "⚠️ NÃO parece ser seu: mesmo nome de uma das categorias 'Email Review/' que foram apagadas da urace@ em 11/09. 3 conversas, aplicadas por fora. Sugiro deixar de fora da triagem.", 3, FORA),
+    ("Lead or Customer", "Intruso (confira)", "⚠️ NÃO parece ser seu: mesmo nome de outra categoria 'Email Review/'. 2 conversas. Sugiro deixar de fora.", 2, FORA),
+    ("Operations", "Intruso (confira)", "⚠️ NÃO parece ser seu: mesmo nome de outra categoria 'Email Review/'. 1 conversa, do Kommo. Sugiro deixar de fora.", 1, FORA),
+    # ------------------------------------------------- atendimento
+    ("Customer Service", "Customer Service", "Pasta-mãe do atendimento. Está vazia: as conversas vivem nas filhas.", 0, PENDENTE),
+    ("Customer Service/LP Leads", "Customer Service", "LEAD que entrou pela landing page: o disparo 'Welcome to Urace - <nome>' do site. É o maior volume da caixa.", 413, PENDENTE),
+    ("Customer Service/Leads", "Customer Service", "LEAD que virou conversa: a pessoa respondeu e há troca sobre começar no kart.", 102, PENDENTE),
+    ("Customer Service/Leads/Acompanhar", "Customer Service", "Lead que ficou de responder e depende de um follow-up NOSSO.", 17, PENDENTE),
+    ("Customer Service/Leads/Leads Forms", "Customer Service", "Lead do formulário do site ('New message from Urace - The Driver Factory').", 21, PENDENTE),
+    ("Customer Service/Leads/Leads Newsletter", "Customer Service", "Lead que veio do formulário da newsletter.", 3, PENDENTE),
+    ("Customer Service/Urace Clients", "Customer Service", "Conversa com quem JÁ É cliente: coaching, sessão, dúvida de quem está treinando.", 53, PENDENTE),
+    ("Customer Service/Venda fechada", "Customer Service", "Conversa que terminou em VENDA. O lead comprou.", 43, PENDENTE),
+    ("Customer Service/Summer Camp", "Customer Service", "Summer Camp: interesse, vaga, agenda e retorno do responsável.", 159, PENDENTE),
+    ("Customer Service/Service/New Order", "Customer Service", "Pedido novo na loja/agendamento ('You've got a new order: #...').", 1, PENDENTE),
+    ("Customer Service/Services - Canceled", "Customer Service", "Compra ou agendamento CANCELADO, e pedido que falhou.", 16, PENDENTE),
+    ("Customer Service/Kommo", "Customer Service", "Notificação do Kommo: aviso de lead, limite de sessão, código de login.", 53, PENDENTE),
+    ("Curriculos", "Curriculos", "⚠️ O nome diz currículo, mas o que está dentro é conversa com candidato/lead ('Thank you for reaching out'). Só 2 conversas. Confira antes de confirmar.", 2, PENDENTE),
+    # ------------------------------------------------- escola e pilotos
+    ("Karting School", "Karting School", "ESCOLA: conversa com aluno e responsável — confirmação, retorno, recado da temporada.", 187, PENDENTE),
+    ("Karting School/URace confirmation", "Karting School", "Confirmação de sessão marcada com o piloto ('URACE - Session Confirmation').", 63, PENDENTE),
+    ("Karting School/Welcome", "Karting School", "Boas-vindas ao aluno novo e o formulário inicial ('Tell Us a Bit About You').", 67, PENDENTE),
+    ("Events & National Races", "Events & National Races", "Corrida e evento: inscrição, logística, passagem e reembolso ligados à prova.", 33, PENDENTE),
+    ("Events & National Races/FWT", "Events & National Races", "Florida Winter Tour: agenda de treino do piloto na semana da prova.", 2, PENDENTE),
+    # ------------------------------------------------- documento e contrato
+    ("Waivers", "Waivers", "WAIVER de responsabilidade no DocuSign: enviada, vista, assinada ou anulada. É daqui que sai a waiver do cliente.", 57, PENDENTE),
+    ("Share request", "Share request", "Pedido e aviso de compartilhamento do Google Drive (documento, planilha, pasta).", 19, PENDENTE),
+    # ------------------------------------------------- dinheiro
+    ("Financeiro", "Financeiro", "Pasta-mãe do financeiro. Está vazia: o dinheiro vive nas filhas.", 0, PENDENTE),
+    ("Financeiro/Charges", "Financeiro", "COBRANÇA ao cliente: saldo em aberto e lembrete de pagamento que nós enviamos.", 51, PENDENTE),
+    ("Financeiro/Recibos", "Financeiro", "Recibo do que a URACE pagou (n8n/Paddle, GitHub, QuickBooks).", 11, PENDENTE),
+    ("Financeiro/Pit Pass and Driver Pass OKC", "Financeiro", "Ingresso de pit pass e driver pass do Orlando Kart Center (eveyevents).", 72, PENDENTE),
+    ("Financeiro/Wise | Paid", "Financeiro", "Wise: aviso da conta, mudança de termos e pagamento feito por lá.", 35, PENDENTE),
+    ("Financeiro/Others purchases", "Financeiro", "⚠️ Compras avulsas, mas o conteúdo está misturado (propaganda do Alibaba, aviso de login). Vale rever o que deve ficar aqui.", 13, PENDENTE),
+    ("Financeiro/Anabelly", "Financeiro", "Financeiro tratado pela Anabelly. Está vazio hoje.", 0, PENDENTE),
+    # ------------------------------------------------- fornecedor e produto
+    ("Fornecedores", "Fornecedores", "FORNECEDOR: negociação, amostra, medida de macacão, conversa com fábrica (Alibaba, Speed, Palace).", 285, PENDENTE),
+    ("Fornecedores/Pendente", "Fornecedores", "Pedido ao fornecedor em ABERTO: falta pagar, falta enviar, falta responder.", 7, PENDENTE),
+    ("Fornecedores/Recebido", "Fornecedores", "Pedido ao fornecedor que já CHEGOU.", 7, PENDENTE),
+    ("Suits Order", "Suits Order", "MACACÃO: medidas do piloto, acerto do pedido e acompanhamento até a entrega.", 60, PENDENTE),
+    ("Canotops", "Canotops", "Compra da Canotops no Alibaba: pedido Trade Assurance, pagamento, envio e encerramento.", 141, PENDENTE),
+    ("Shipping", "Shipping", "Transporte: FedEx (chamado, tarifa, programa de pontos).", 13, PENDENTE),
+    ("Site - Loja", "Site - Loja", "Loja do site: pedido que falhou.", 2, PENDENTE),
+    # ------------------------------------------------- marketing
+    ("Marketing", "Marketing", "Marketing e parceria que chegam no support@: proposta, patrocínio, fornecedor de brinde, formulário de qualificação.", 71, PENDENTE),
+    ("Marketing/RD Station /MailMarketing", "Marketing", "⚠️ RD Station — MAS ATENÇÃO: há mensagens de `rdstation-fin.com` e `rdstation-security.com`, que NÃO são domínios da RD Station (o verdadeiro é rdstation.com.br). Cheiro de golpe de cobrança. Confira antes de confirmar.", 10, PENDENTE),
+    ("Marketing/Samira", "Marketing", "Marketing tratado pela Samira.", 2, PENDENTE),
+    # ------------------------------------------------- plataformas
+    ("Softwares|Apps", "Softwares|Apps", "Pasta-mãe das plataformas. Praticamente vazia: cada serviço tem a sua filha.", 1, PENDENTE),
+    ("Softwares|Apps/Docusign", "Softwares|Apps", "DocuSign, TODO o tráfego de envelope (399 conversas). ⚠️ Se sobrepõe a `Waivers`: aqui é o envelope em geral, lá é a waiver do cliente. Vale decidir qual manda.", 399, PENDENTE),
+    ("Softwares|Apps/Ecwid", "Softwares|Apps", "Ecwid (loja): relatório semanal e avisos da plataforma.", 322, PENDENTE),
+    ("Softwares|Apps/Dialpad", "Softwares|Apps", "Dialpad: recado de voz e aviso de login. É por aqui que chega ligação perdida de cliente.", 173, PENDENTE),
+    ("Softwares|Apps/GitHub", "Softwares|Apps", "GitHub: falha de execução, aviso de segurança e app conectado à conta.", 28, PENDENTE),
+    ("Softwares|Apps/LinkedLn", "Softwares|Apps", "LinkedIn: vaga publicada e candidatura recebida.", 8, PENDENTE),
+    ("Softwares|Apps/Zoho", "Softwares|Apps", "Zoho: conta, MFA e cobrança.", 3, PENDENTE),
+    ("Simplybook", "Simplybook", "Simplybook (agenda): reserva nova, alteração, lembrete e cancelamento de sessão.", 85, PENDENTE),
+    ("Simplybook/Order", "Simplybook", "Simplybook: o pedido em si — reserva confirmada e pedido que falhou.", 5, PENDENTE),
+    ("subscriptions", "subscriptions", "Assinatura de serviço: Supabase, Heroku, Salesforce — cobrança, aviso e pausa de projeto.", 6, PENDENTE),
+    ("Eduardo", "Equipe", "O que o Eduardo tratou no atendimento.", 95, PENDENTE),
+    ("Eduardo/n8n", "Equipe", "n8n: recibo do Paddle, aviso da plataforma e workflow desativado.", 14, PENDENTE),
+    ("Tests", "Tests", "Mensagem de teste (formulário do site, projeto de teste). Não é trabalho real.", 22, PENDENTE),
+    # ------------------------------------------------- histórico de quem saiu
+    ("Ex-Funcionários", "Ex-Funcionários", "Pasta-mãe do histórico de quem já saiu. Vazia: as conversas vivem nas filhas.", 0, PENDENTE),
+    ("Ex-Funcionários/Jeyson Herrera", "Ex-Funcionários", "Atendimento que o Jeyson tratou (Summer Camp, boas-vindas).", 247, PENDENTE),
+    ("Ex-Funcionários/George | Atendente", "Ex-Funcionários", "⚠️ O nome diz atendente, mas o conteúdo é o 'Relatório Kommo - Leads Diários' que o Samuel (Cygnus) mandava todo dia. Não é conversa de cliente. Confira.", 227, PENDENTE),
+    ("Ex-Funcionários/Lara", "Ex-Funcionários", "Atendimento que a Lara tratou (lead, boas-vindas, primeira sessão).", 185, PENDENTE),
+    ("Ex-Funcionários/MANU", "Ex-Funcionários", "O que a Manu tratou — inclui a experiência no Airbnb e confirmação de piloto.", 178, PENDENTE),
+    ("Ex-Funcionários/Carolina Salinovic", "Ex-Funcionários", "O que a Carolina tratou — muito pedido de macacão.", 164, PENDENTE),
+    ("Ex-Funcionários/Mariana", "Ex-Funcionários", "O que a Mariana tratou — imprensa, direito de imagem, documento.", 114, PENDENTE),
+    ("Ex-Funcionários/Nathalia (MKT)", "Ex-Funcionários", "Marketing da Nathalia: parceria, mídia e rotina de tarefas.", 8, PENDENTE),
+    ("Ex-Funcionários/Thiers", "Ex-Funcionários", "O que o Thiers tratou — lead do site e recado de voz.", 5, PENDENTE),
+    ("Ex-Funcionários/Felipe", "Ex-Funcionários", "O que o Felipe tratou — corrida, mapa de pista, recado de voz.", 4, PENDENTE),
+    ("Ex-Funcionários/Paula", "Ex-Funcionários", "O que a Paula tratou — boas-vindas e primeira ida à pista.", 2, PENDENTE),
+]
+
+
+def por_nome_support():
+    return {n: (f, q, t, e) for n, f, q, t, e in MANUAL_SUPPORT}

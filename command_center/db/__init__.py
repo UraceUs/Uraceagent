@@ -106,11 +106,11 @@ MIGRACOES = [
 def aplicar_schema(con):
     with open(SCHEMA, encoding="utf-8") as f:
         con.executescript(f.read())
-    _semear_marcadores(con)
     for tabela, coluna, tipo in MIGRACOES:
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
         if coluna not in existentes:
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+    _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`
     for sql in POS_MIGRACAO:
         con.execute(sql)
 
@@ -119,16 +119,17 @@ def _semear_marcadores(con):
     """Manual dos marcadores do Gmail. O dono confirmou os 145 em 11/09 (marcador por
     marcador): a semente traz esse estado para quem ainda está `pendente`. Nunca
     desfaz o que ele mudar depois no painel — só promove pendente → confirmado."""
-    from command_center.providers.taxonomia_gmail import MANUAL, CONFIRMADO_POR
-    for nome, familia, o_que, threads, estado in MANUAL:
-        # `mailboxes` NÃO entra aqui: a semente roda ANTES das migrações criarem a
-        # coluna. Quem preenche é o POS_MIGRACAO, que roda depois.
-        con.execute("""INSERT INTO gmail_labels (name, family, what, threads, status, confirmed_by, confirmed_at)
-                       VALUES (?,?,?,?,?,
+    from command_center.providers.taxonomia_gmail import MANUAL, MANUAL_SUPPORT, CONFIRMADO_POR
+    livros = (("urace", MANUAL), ("support", MANUAL_SUPPORT))
+    for caixa, nome, familia, o_que, threads, estado in (
+            (c, *linha) for c, livro in livros for linha in livro):
+        con.execute("""INSERT INTO gmail_labels (name, family, what, threads, status, mailboxes, confirmed_by, confirmed_at)
+                       VALUES (?,?,?,?,?,?,
                                CASE WHEN ?='confirmado' THEN ? END,
                                CASE WHEN ?='confirmado' THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') END)
                        ON CONFLICT(name) DO UPDATE SET
                          family=excluded.family,
+                         mailboxes=COALESCE(gmail_labels.mailboxes, excluded.mailboxes),
                          what=CASE WHEN gmail_labels.status='pendente' THEN excluded.what ELSE gmail_labels.what END,
                          threads=COALESCE(gmail_labels.threads, excluded.threads),
                          status=CASE WHEN gmail_labels.status='pendente' THEN excluded.status ELSE gmail_labels.status END,
@@ -136,7 +137,8 @@ def _semear_marcadores(con):
                                            THEN ? ELSE gmail_labels.confirmed_by END,
                          confirmed_at=CASE WHEN gmail_labels.status='pendente' AND excluded.status='confirmado'
                                            THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE gmail_labels.confirmed_at END""",
-                    (nome, familia, o_que, threads, estado, estado, CONFIRMADO_POR, estado, CONFIRMADO_POR))
+                    (nome, familia, o_que, threads, estado, json.dumps([caixa]),
+                     estado, CONFIRMADO_POR, estado, CONFIRMADO_POR))
 
 
 # Sementes que dependem de coluna criada por migração (rodam depois dela).

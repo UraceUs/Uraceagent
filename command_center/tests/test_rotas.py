@@ -1101,7 +1101,12 @@ def test_manual_dos_marcadores_governa_a_triagem(cli, monkeypatch):
     from command_center.providers.taxonomia_gmail import MANUAL
     do_manual = {n: e for n, _f, _q, _t, e in MANUAL}
     assert sum(1 for l in m["labels"] if l["name"] in do_manual and l["status"] == "confirmado") == 145
-    assert sum(1 for l in m["labels"] if l["status"] == "fora") == 11
+    # 11 "Email Review/…" da urace@ + 3 na support@ com os mesmos nomes de categoria
+    from command_center.providers.taxonomia_gmail import MANUAL_SUPPORT
+    do_support = {n: e for n, _f, _q, _t, e in MANUAL_SUPPORT}
+    assert sum(1 for l in m["labels"] if l["name"] in do_manual and l["status"] == "fora") == 11
+    assert sum(1 for l in m["labels"] if l["name"] in do_support and l["status"] == "fora") == 3
+    assert do_support["Action Required"] == "fora" and do_support["Customer Service/Leads"] == "pendente"
 
     con = conectar()
     try:
@@ -1432,23 +1437,26 @@ def test_manual_separa_as_duas_caixas(cli, monkeypatch):
     from command_center.db import conectar, um
     h = entra(cli, "admin@urace.us")
 
-    # o manual de 11/09 é da urace@; a support@ ainda não tem nada
-    assert "wNews" in triagem.__dict__ or True
+    # o manual de 11/09 é da urace@ e está confirmado; o da support@ foi lido em 14/09
+    # e espera o dono — por isso a triagem de lá ainda não roda
     con = conectar()
     try:
         assert "Finances/Receipt" in triagem.confirmados(con, "urace")
-        assert triagem.confirmados(con, "support") == [], "a support@ ainda não tem manual"
+        assert "Customer Service/Leads" not in triagem.confirmados(con, "support")
+        assert triagem.confirmados(con, "support") == [], "nada confirmado na support@ ainda"
         assert "Finances/Receipt" in triagem.manual(con, "urace")
         assert triagem.manual(con, "support") == ""
+        assert um(con, "SELECT mailboxes FROM gmail_labels WHERE name='Customer Service/Leads'")["mailboxes"] == '["support"]'
     finally:
         con.close()
 
     # reler a support@ NÃO pode apagar a presença da urace@ — era o bug do refresh
     monkeypatch.setattr("command_center.api.rotas.chamar", lambda s, f, **a: [
         {"nome": "Customer Service/Leads", "id": "l1", "tipo": "user"},
+        {"nome": "[teste] criado depois do manual", "id": "l3", "tipo": "user"},
         {"nome": "wNews", "id": "l2", "tipo": "user"}])
     r = cli.post(B + "/gmail/manual/refresh?mailbox=support", headers=h).json()
-    assert "Customer Service/Leads" in r["novos"] and r["caixa"] == "support"
+    assert r["novos"] == ["[teste] criado depois do manual"] and r["caixa"] == "support"
 
     con = conectar()
     try:
@@ -1456,7 +1464,7 @@ def test_manual_separa_as_duas_caixas(cli, monkeypatch):
         assert rec["in_gmail"] == 1 and "urace" in rec["mailboxes"], "a urace@ sobreviveu"
         w = um(con, "SELECT mailboxes FROM gmail_labels WHERE name='wNews'")
         assert "urace" in w["mailboxes"] and "support" in w["mailboxes"], "existe nas duas"
-        novo = um(con, "SELECT * FROM gmail_labels WHERE name='Customer Service/Leads'")
+        novo = um(con, "SELECT * FROM gmail_labels WHERE name='[teste] criado depois do manual'")
         assert novo["status"] == "pendente" and novo["mailboxes"] == '["support"]'
         # e agora a support@ enxerga o que é dela e o que é comum
         assert triagem.confirmados(con, "support") == ["wNews"]
