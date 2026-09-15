@@ -2097,3 +2097,90 @@ def invite_estimate(iid: int, request: Request, u=Depends(auth.exige("OPERATOR")
     auditar(con, "race.estimate", f"user:{u['id']}", user_id=u["id"], entity_type="race_invite", entity_id=iid, detail={"command_id": cmd}, ip=auth._ip(request))
     threading.Thread(target=_estimativa_thread, args=(iid, cmd, prompt, session_key, u["id"]), daemon=True).start()
     return {"command_id": cmd}
+
+
+# ============================================================ filtros nativos do Gmail (15/09)
+# O gerador (adminai/gerar_filtros_gmail.py) roda no VPS e grava em ~/.urace. O dono
+# precisava de `scp` para levar o arquivo ao navegador — e o scp falhou. Agora o painel
+# gera, mostra o relatório e entrega o XML: a extensão baixa e importa no Gmail.
+import subprocess  # noqa: E402
+import sys  # noqa: E402
+
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+FILTROS_DIR = os.environ.get("URACE_DIR", os.path.expanduser("~/.urace"))
+CAIXAS_FILTRO = ("urace", "support")
+_filtros_rodando: dict[str, bool] = {}
+
+
+def _caminhos_filtros(conta):
+    if conta not in CAIXAS_FILTRO:
+        raise HTTPException(404, "Caixa desconhecida.")
+    return (os.path.join(FILTROS_DIR, f"mailFilters-{conta}.xml"),
+            os.path.join(FILTROS_DIR, f"filtros-{conta}.md"),
+            os.path.join(FILTROS_DIR, f"filtros-{conta}.log"))
+
+
+def _gerar_filtros_thread(conta, user_id):
+    xml, _md, log = _caminhos_filtros(conta)
+    _filtros_rodando[conta] = True
+    try:
+        with open(log, "w", encoding="utf-8") as f:
+            p = subprocess.run([sys.executable, os.path.join(REPO_DIR, "adminai", "gerar_filtros_gmail.py"),
+                                "--conta", conta, "--saida", FILTROS_DIR],
+                               cwd=REPO_DIR, stdout=f, stderr=subprocess.STDOUT, timeout=3600)
+        ok = p.returncode == 0 and os.path.isfile(xml)
+    except Exception as e:                                   # timeout, permissão: nunca derruba o serviço
+        ok = False
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"\nERRO: {type(e).__name__}: {e}\n")
+    finally:
+        _filtros_rodando[conta] = False
+    con = conectar()
+    try:
+        auditar(con, "gmail.filtros.gerados" if ok else "gmail.filtros.falhou", f"user:{user_id}", user_id=user_id,
+                detail={"caixa": conta, "log": log})
+        con.commit()
+    finally:
+        con.close()
+
+
+@r.get("/gmail/filtros/{conta}")
+def gmail_filtros_estado(conta: str, u=Depends(auth.usuario_atual)):
+    """O que existe gerado para a caixa: quantos filtros, quando, e o relatório para revisar."""
+    xml, md, log = _caminhos_filtros(conta)
+    saida = {"caixa": conta, "rodando": bool(_filtros_rodando.get(conta)), "existe": os.path.isfile(xml),
+             "gerado_em": None, "filtros": 0, "relatorio": None, "log": None}
+    if saida["existe"]:
+        from datetime import datetime, timezone
+        saida["gerado_em"] = datetime.fromtimestamp(os.path.getmtime(xml), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(xml, encoding="utf-8") as f:
+            saida["filtros"] = f.read().count("<entry>")
+    if os.path.isfile(md):
+        with open(md, encoding="utf-8") as f:
+            saida["relatorio"] = f.read()
+    if os.path.isfile(log):
+        with open(log, encoding="utf-8") as f:
+            saida["log"] = f.read()[-1500:]
+    return saida
+
+
+@r.post("/gmail/filtros/{conta}/gerar")
+def gmail_filtros_gerar(conta: str, request: Request, u=Depends(auth.exige("MANAGER"))):
+    """Gera os filtros em segundo plano (leva minutos: lê milhares de mensagens).
+    Só leitura no Gmail; o resultado é um arquivo que o dono revisa e importa."""
+    _caminhos_filtros(conta)
+    if _filtros_rodando.get(conta):
+        return {"started": False, "motivo": "já está rodando"}
+    threading.Thread(target=_gerar_filtros_thread, args=(conta, u["id"]), daemon=True).start()
+    return {"started": True}
+
+
+@r.get("/gmail/filtros/{conta}/download")
+def gmail_filtros_download(conta: str, u=Depends(auth.exige("MANAGER"))):
+    """O XML que o Gmail importa (Configurações → Filtros → Importar filtros)."""
+    from fastapi.responses import FileResponse
+    xml, _md, _log = _caminhos_filtros(conta)
+    if not os.path.isfile(xml):
+        raise HTTPException(404, "Ainda não há filtros gerados para esta caixa.")
+    return FileResponse(xml, filename=f"mailFilters-{conta}.xml", media_type="application/xml",
+                        headers={"Cache-Control": "no-store"})

@@ -1501,3 +1501,38 @@ def test_confirmar_tudo_nao_atravessa_a_caixa(cli, monkeypatch):
         assert um(con, "SELECT status FROM gmail_labels WHERE name='[teste] so da support'")["status"] == "pendente"
     finally:
         con.close()
+
+
+# ------------------------------------------------ filtros nativos pelo painel (15/09)
+def test_filtros_nativos_estado_download_e_geracao(cli, monkeypatch):
+    """O scp do dono falhou e não devia existir: o painel gera, mostra e entrega o XML."""
+    from command_center.api import rotas
+    h = entra(cli, "admin@urace.us")
+    assert cli.get(B + "/gmail/filtros/outra", headers=h).status_code == 404
+    e = cli.get(B + "/gmail/filtros/urace", headers=h).json()
+    assert e["existe"] is False and e["filtros"] == 0 and e["rodando"] is False
+    assert cli.get(B + "/gmail/filtros/urace/download", headers=h).status_code == 404
+
+    # com o arquivo gerado: conta os filtros, entrega o XML e o relatório
+    os.makedirs(rotas.FILTROS_DIR, exist_ok=True)
+    with open(os.path.join(rotas.FILTROS_DIR, "mailFilters-urace.xml"), "w", encoding="utf-8") as f:
+        f.write("<feed><entry>a</entry><entry>b</entry></feed>")
+    with open(os.path.join(rotas.FILTROS_DIR, "filtros-urace.md"), "w", encoding="utf-8") as f:
+        f.write("# Filtros\n| `wNews` | promo@x.com | 9/9 |")
+    e = cli.get(B + "/gmail/filtros/urace", headers=h).json()
+    assert e["existe"] is True and e["filtros"] == 2 and e["gerado_em"] and "wNews" in e["relatorio"]
+    d = cli.get(B + "/gmail/filtros/urace/download", headers=h)
+    assert d.status_code == 200 and b"<entry>" in d.content
+    assert "mailFilters-urace.xml" in d.headers.get("content-disposition", "")
+    # viewer não baixa: é configuração do dono
+    assert cli.get(B + "/gmail/filtros/urace/download", headers=entra(cli, "viewer@urace.us")).status_code == 403
+
+    # gerar: dispara em segundo plano e não roda duas vezes ao mesmo tempo
+    h = entra(cli, "admin@urace.us")          # o login do viewer acima trocou a sessão
+    disparos = []
+    monkeypatch.setattr(rotas, "_gerar_filtros_thread", lambda conta, uid: disparos.append(conta))
+    assert cli.post(B + "/gmail/filtros/support/gerar", headers=h).json()["started"] is True
+    assert disparos == ["support"]
+    rotas._filtros_rodando["support"] = True
+    assert cli.post(B + "/gmail/filtros/support/gerar", headers=h).json()["started"] is False
+    rotas._filtros_rodando["support"] = False

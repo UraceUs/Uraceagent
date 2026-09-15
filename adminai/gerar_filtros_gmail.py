@@ -166,10 +166,16 @@ def amostrar(conta, nomes, amostra, mapa=None, verboso=True):
 
 
 def _recusado(remetente, alvo):
-    """Regra que não deve nascer: pasta de histórico, ou par que o dono já recusou."""
+    """Regra que não deve nascer: pasta de histórico, ou par que o dono já recusou.
+
+    Recusar o domínio recusa os endereços dele: sem isso, tirar
+    `@orlandokartcenter.com → Pending Invoices` deixava `arielle@orlandokartcenter.com`
+    entrar sozinho no mesmo marcador, pela porta do endereço individual."""
     if alvo.split("/")[0] in FAMILIAS_SEM_FILTRO or alvo.startswith(PASTAS_SEM_FILTRO):
         return True
-    return (remetente, alvo) in REGRAS_RECUSADAS
+    if (remetente, alvo) in REGRAS_RECUSADAS:
+        return True
+    return not remetente.startswith("@") and ("@" + _dominio(remetente), alvo) in REGRAS_RECUSADAS
 
 
 def _dominio(endereco):

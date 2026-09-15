@@ -237,3 +237,11 @@ def test_familia_wnews_inteira_arquiva():
     x = g.xml(r, "urace")
     assert x.count("shouldArchive") == 2, "wNews e a sub-pasta arquivam; recibo não"
     assert "shouldArchive" not in x.split("Finances/Receipt")[1].split("</entry>")[0]
+
+
+def test_recusar_o_dominio_recusa_os_enderecos_dele():
+    """Tirar `@orlandokartcenter.com` da fila de contas a pagar não pode deixar
+    `arielle@orlandokartcenter.com` entrar lá pela porta do endereço individual."""
+    r = g.regras(_conta({"arielle@orlandokartcenter.com": {"Finances/Pending Invoices ❗": 4}}),
+                 {"arielle@orlandokartcenter.com": 4}, 0.6, 3)
+    assert r == {}

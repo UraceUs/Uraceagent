@@ -73,6 +73,37 @@ function Linha({ m, reload }: { m: Marcador; reload: () => void }) {
 }
 
 type Caixa = 'urace' | 'support'
+interface Filtros { caixa: string; rodando: boolean; existe: boolean; gerado_em: string | null; filtros: number; relatorio: string | null; log: string | null }
+
+/* Filtros nativos do Gmail: gerados no servidor a partir dos remetentes reais, revisados
+   aqui e importados no Gmail pelo dono. Antes o arquivo só saía do VPS por scp — e o scp
+   falhou. Agora ele baixa daqui. */
+function FiltrosNativos({ caixa }: { caixa: Caixa }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const f = useGet<Filtros>(`/gmail/filtros/${caixa}`, 15000)
+  const [ver, setVer] = useState(false)
+  const [busy, setBusy] = useState(false)
+  async function gerar() {
+    setBusy(true)
+    try { const r = await api.post<{ started: boolean; motivo?: string }>(`/gmail/filtros/${caixa}/gerar`, {}); toast(r.started ? 'Gerando: leva alguns minutos, a tela atualiza sozinha.' : `Não iniciou: ${r.motivo}`, r.started ? 'ok' : 'crit'); f.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  const d = f.data
+  return <div className="card"><div className="card-h">
+    <h2 className="h2">Filtros nativos do Gmail · {caixa}@</h2><div className="grow" />
+    <div className="row wrap">
+      {can('MANAGER') && <button className="btn" disabled={busy || !!d?.rodando} onClick={gerar}>{d?.rodando ? <><Spinner /> gerando…</> : d?.existe ? '⟳ Gerar de novo' : '✦ Gerar filtros'}</button>}
+      {can('MANAGER') && d?.existe && <a className="btn primary" href={`/ops/api/gmail/filtros/${caixa}/download`}>⬇ Baixar XML ({d.filtros})</a>}
+      {d?.relatorio && <button className="btn ghost" onClick={() => setVer(v => !v)}>{ver ? 'esconder relatório' : 'ver relatório'}</button>}
+    </div></div>
+    <div className="card-b">
+      {!d?.existe && !d?.rodando && <div className="small muted">Nenhum filtro gerado ainda para esta caixa. O gerador lê os remetentes reais de cada marcador confirmado e monta um arquivo que o Gmail importa.</div>}
+      {d?.existe && <div className="small">{d.filtros} filtro(s) · gerado {d.gerado_em ? ago(d.gerado_em) : ''}. Revise o relatório, baixe o XML e importe em Gmail → Configurações → Filtros → <b>Importar filtros</b>. Na primeira vez, <b>não</b> marque “aplicar às conversas existentes”.</div>}
+      {d?.rodando && d.log && <pre className="small mono" style={{ maxHeight: 120, overflow: 'auto', marginTop: 8 }}>{d.log.split('\n').slice(-6).join('\n')}</pre>}
+      {ver && d?.relatorio && <pre className="small" style={{ whiteSpace: 'pre-wrap', maxHeight: 480, overflow: 'auto', marginTop: 8 }}>{d.relatorio}</pre>}
+    </div></div>
+}
 
 export function GmailManual() {
   const { can } = useAuth()
@@ -159,6 +190,8 @@ export function GmailManual() {
         {(d.data?.exemplos || []).map((e, i) => <tr key={i}><td style={{ width: '45%' }}>{e.chega}</td><td className="mono small">{e.vai_para}</td></tr>)}
       </tbody></table></div>
     </div></div>
+
+    <FiltrosNativos caixa={caixa} />
 
     <div className="row wrap">
       <input className="input" style={{ maxWidth: 320 }} placeholder="Buscar marcador…" value={filtro} onChange={e => setFiltro(e.target.value)} />
