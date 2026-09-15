@@ -91,7 +91,7 @@ def _req(conta, url, tentativas=4):
     return {}
 
 
-def amostrar(conta, nomes, amostra, verboso=True):
+def amostrar(conta, nomes, amostra, mapa=None, verboso=True):
     """(remetente -> Counter(marcador), remetente -> nº de MENSAGENS).
 
     Os dois são necessários. A primeira versão usava a soma dos marcadores como
@@ -102,10 +102,15 @@ def amostrar(conta, nomes, amostra, verboso=True):
     maiores da caixa — saíam sem regra nenhuma."""
     por_remetente = collections.defaultdict(collections.Counter)
     mensagens = collections.Counter()
-    id_para_nome = {v: k for k, v in gmail_mcp._mapa_labels(conta).items()}
+    mapa = mapa or gmail_mcp._mapa_labels(conta)
+    id_para_nome = {v: k for k, v in mapa.items()}
     vistos = set()
     for i, nome in enumerate(nomes, 1):
-        q = urllib.parse.urlencode({"q": f'label:"{nome}"', "maxResults": amostra})
+        # POR ID, não por nome: `q=label:"Softwares|Apps/Docusign"` devolve ZERO porque o
+        # Gmail interpreta o `|` na consulta. Foi assim que todos os `Softwares|Apps/*`,
+        # `LOC | Practice/*` e `Kart Racing School | Client talks` apareceram vazios —
+        # e `LOC | Practice/Practice Orlando` tem 370 conversas.
+        q = urllib.parse.urlencode({"labelIds": mapa[nome], "maxResults": amostra})
         try:
             r = _req(conta, f"{gmail_mcp.GMAIL}/messages?{q}")
         except Exception as e:
@@ -286,13 +291,14 @@ def main():
     ap.add_argument("--saida", default=os.path.expanduser("~/.urace"))
     a = ap.parse_args()
 
-    na_caixa = list(marcadores_da_caixa(a.conta))
+    mapa = marcadores_da_caixa(a.conta)
+    na_caixa = list(mapa)
     nomes = [n for n, _f, _q, _t, e in MANUAL if e == OK and n in na_caixa]
     if not nomes:
         sys.exit(f"nenhum marcador do manual existe na caixa {a.conta}@ — nada a fazer.")
     print(f"caixa {a.conta}@: {len(na_caixa)} marcadores, {len(nomes)} do manual confirmado", file=sys.stderr)
 
-    por_remetente, mensagens = amostrar(a.conta, nomes, a.amostra)
+    por_remetente, mensagens = amostrar(a.conta, nomes, a.amostra, mapa=mapa)
     por_marcador = regras(por_remetente, mensagens, a.share, a.minimo)
 
     os.makedirs(a.saida, exist_ok=True)

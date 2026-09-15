@@ -163,3 +163,20 @@ def test_um_endereco_so_no_dominio_nao_vira_regra_de_dominio():
     r = g.regras(_conta({"noreply@robinhood.com": {"Banks/Robinhood": 30}}),
                  {"noreply@robinhood.com": 30}, share=0.6, minimo=3)
     assert [e for e, _n, _t in r["Banks/Robinhood"]] == ["noreply@robinhood.com"]
+
+
+def test_amostra_busca_por_id_e_nao_por_nome(monkeypatch):
+    """O `|` no nome quebra a consulta do Gmail: `label:"Softwares|Apps/Docusign"`
+    devolve ZERO, e `LOC | Practice/Practice Orlando` tem 370 conversas. Por isso a
+    amostra vai por labelIds, que não passa por interpretação de texto."""
+    urls = []
+    falso = type("M", (), {
+        "GMAIL": "https://x/users/me",
+        "_mapa_labels": staticmethod(lambda c: {}),
+        "_cabecalho": staticmethod(lambda d, h: "Alguém <a@b.com>"),
+    })
+    monkeypatch.setattr(g, "gmail_mcp", falso)
+    monkeypatch.setattr(g, "_req", lambda conta, url, tentativas=4: urls.append(url) or {"messages": []})
+    g.amostrar("urace", ["LOC | Practice"], 30, mapa={"LOC | Practice": "Label_392"}, verboso=False)
+    assert "labelIds=Label_392" in urls[0]
+    assert "label%3A" not in urls[0] and "%7C" not in urls[0], "nome com | não pode ir na consulta"

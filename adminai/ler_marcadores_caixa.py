@@ -50,14 +50,19 @@ def retrato(conta, exemplos, so_novos):
          "Nada foi escrito: isto é só leitura, para o manual ser escrito e o dono confirmar.", ""]
     for i, nome in enumerate(nomes, 1):
         print(f"[{i}/{len(nomes)}] {nome}", file=sys.stderr)
-        q = urllib.parse.urlencode({"q": f'label:"{nome}"', "maxResults": exemplos})
+        # POR ID: `q=label:"Softwares|Apps/Docusign"` devolve zero, porque o Gmail
+        # interpreta o `|` na consulta. Contagem vem de labels/{id}, que dá o número
+        # real — `resultSizeEstimate` trava em 201 e engana.
         try:
+            det = _req(conta, f"{gmail_mcp.GMAIL}/labels/{mapa[nome]}")
+            q = urllib.parse.urlencode({"labelIds": mapa[nome], "maxResults": exemplos})
             r = _req(conta, f"{gmail_mcp.GMAIL}/messages?{q}")
         except Exception as e:
             L += [f"## `{nome}`", f"- (não deu para ler: {type(e).__name__})", ""]
             continue
         msgs = r.get("messages", [])
-        L += [f"## `{nome}`", f"aproximadamente {r.get('resultSizeEstimate', len(msgs))} mensagens", ""]
+        L += [f"## `{nome}`",
+              f"{det.get('threadsTotal', '?')} conversas · {det.get('messagesTotal', '?')} mensagens", ""]
         for m in msgs:
             try:
                 d = _req(conta, f"{gmail_mcp.GMAIL}/messages/{m['id']}"
