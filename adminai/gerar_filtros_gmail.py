@@ -76,6 +76,16 @@ REGRAS_RECUSADAS = {
     ("payments-noreply@google.com", "Marketing & Sales/Comercial/Canais | Social Media"),  # é cobrança
 }
 RX_EMAIL = re.compile(r"<([^>]+)>")
+
+# Regras DITADAS pelo dono (16/09), não inferidas da amostra. A única exceção à regra
+# "nada de assunto": remetente fixo (DocuSign) + frase fixa (o nome do modelo da waiver).
+# (busca do Gmail para `hasTheWord`, marcador, arquivar?) — só entram se o marcador
+# existir na caixa.
+REGRAS_DO_DONO = [
+    ("from:(docusign.net OR docusign.com)", "Softwares|Apps/Docusign", False),
+    ('from:(docusign.net) subject:("Waiver of Liability") {subject:"Please Complete" subject:"Completed:"}',
+     "Waivers", False),
+]
 # Remetentes genéricos demais para virar regra: pegariam a caixa inteira.
 DOMINIOS_PROIBIDOS = {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com"}
 
@@ -242,10 +252,25 @@ def regras(por_remetente, mensagens, share, minimo, max_marcadores=2):
     return saida
 
 
-def xml(por_marcador, conta):
+def regras_do_dono(na_caixa):
+    """As ditadas, filtradas pelo que existe nesta caixa."""
+    return [(q, alvo, arq) for q, alvo, arq in REGRAS_DO_DONO if alvo in na_caixa]
+
+
+def xml(por_marcador, conta, ditadas=()):
     L = ["<?xml version='1.0' encoding='UTF-8'?>",
          "<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>",
          f"  <title>Filtros URACE — {conta}@urace.us</title>"]
+    for busca, alvo, arquivar in ditadas:
+        L += ["  <entry>",
+              "    <category term='filter'></category>",
+              "    <title>Mail Filter</title>",
+              "    <content></content>",
+              f"    <apps:property name='hasTheWord' value={quoteattr(busca)}/>",
+              f"    <apps:property name='label' value={quoteattr(alvo)}/>"]
+        if arquivar:
+            L.append("    <apps:property name='shouldArchive' value='true'/>")
+        L.append("  </entry>")
     for alvo in sorted(por_marcador):
         remetentes = " OR ".join(e for e, _n, _t in por_marcador[alvo])
         L += ["  <entry>",
@@ -277,8 +302,8 @@ def desconhecidos(na_caixa):
                   and not n.startswith("CATEGORY_") and not n.upper().endswith("_STAR"))
 
 
-def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo):
-    cobertos = set(por_marcador)
+def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo, ditadas=()):
+    cobertos = set(por_marcador) | {alvo for _q, alvo, _a in ditadas}
     sem = [n for n in nomes if n not in cobertos]
     fora_do_manual = desconhecidos(na_caixa)
     L = [f"# Filtros do Gmail — {conta}@urace.us", "",
@@ -301,6 +326,10 @@ def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo):
               "A IA os ignora. Confira um por um: os seus entram no manual; os que você não",
               "reconhecer foram postos por outra coisa, como os `Email Review/…` de agosto.", ""]
         L += [f"- `{n}`" for n in fora_do_manual] + [""]
+    if ditadas:
+        L += ["## Regras ditadas pelo dono", "", "Não vêm da amostra: são a regra dele, palavra por palavra.", "",
+              "| Marcador | Busca do Gmail |", "|---|---|"]
+        L += [f"| `{alvo.replace('|', chr(92) + '|')}` | `{q}` |" for q, alvo, _a in ditadas] + [""]
     L += ["## As regras", "", "| Marcador | Remetentes | Evidência |", "|---|---|---|"]
     for alvo in sorted(por_marcador):
         itens = por_marcador[alvo]
@@ -345,10 +374,11 @@ def main():
     os.makedirs(a.saida, exist_ok=True)
     fx = os.path.join(a.saida, f"mailFilters-{a.conta}.xml")
     fr = os.path.join(a.saida, f"filtros-{a.conta}.md")
+    ditadas = regras_do_dono(na_caixa)
     with open(fx, "w", encoding="utf-8") as f:
-        f.write(xml(por_marcador, a.conta))
+        f.write(xml(por_marcador, a.conta, ditadas))
     with open(fr, "w", encoding="utf-8") as f:
-        f.write(relatorio(por_marcador, nomes, na_caixa, a.conta, a.share, a.minimo))
+        f.write(relatorio(por_marcador, nomes, na_caixa, a.conta, a.share, a.minimo, ditadas))
     print(f"\nescrito: {fx}\nescrito: {fr}", file=sys.stderr)
     print(f"{len(por_marcador)} filtros, {sum(len(v) for v in por_marcador.values())} remetentes")
 

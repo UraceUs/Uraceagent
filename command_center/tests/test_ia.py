@@ -757,3 +757,115 @@ def test_waiver_assinada_vai_anexada_em_toda_tarefa_criada(cli, monkeypatch, tmp
         assert motor.waiver_do_cliente(con, cid) is None
     finally:
         con.close()
+
+
+# ------------------------------------------------ waiver por e-mail e subtarefa (dono, 16/09)
+def test_waiver_fecha_a_subtarefa_e_entra_nas_tarefas_que_ja_existiam(cli, monkeypatch, tmp_path):
+    """Dono, 16/09: "já marcar na tarefa daquele serviço que a waiver já está assinada" e
+    "nas próximas tarefas daquele cliente já deixar pré-marcado"."""
+    from command_center.api import motor
+    from command_center.db import conectar, inserir, um
+    import command_center.providers as prov
+    monkeypatch.setattr(motor, "PASTA_WAIVERS", str(tmp_path / "w"))
+    fechadas, anexos = [], []
+
+    class Docusign:
+        def baixar_documento_humano(self, env): return b"%PDF-1.4 assinada"
+
+    class Asana:
+        def asana_anexar_arquivo(self, gid, caminho): anexos.append(gid); return {"aplicado": True, "anexo_gid": "a"}
+        def concluir_subtarefa_sistema(self, gid, padrao=None):
+            fechadas.append((gid, padrao)); return {"aplicado": True, "subtarefa": "Signed waiver?", "gid": "s1"}
+    monkeypatch.setattr(prov, "modulo", lambda s: Docusign() if s == "docusign" else Asana())
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Mãe da Ana", pilot_name="Ana Teste", status="ACTIVE", email="mae@teste.com")
+        wid = inserir(con, "waivers", client_id=cid, signer_name="Mãe da Ana", signer_email="mae@teste.com",
+                      template="parental", status="completed", sent_at="2026-09-10", completed_at="2026-09-15", expires_at="2027-09-15")
+        inserir(con, "entity_links", entity_type="waiver", entity_id=wid, system="docusign", external_id="env-9")
+        # duas tarefas abertas que já existiam, uma fechada
+        t1 = inserir(con, "tasks", client_id=cid, title="Ana Teste_Urace Daily", status="open", due_on="2026-09-20")
+        t2 = inserir(con, "tasks", client_id=cid, title="Ana Teste_Academy", status="open", due_on="2026-09-27")
+        t3 = inserir(con, "tasks", client_id=cid, title="antiga", status="completed", due_on="2026-08-01")
+        for t, gid in ((t1, "g1"), (t2, "g2"), (t3, "g3")):
+            inserir(con, "entity_links", entity_type="task", entity_id=t, system="asana", external_id=gid)
+        con.commit()
+        r = motor.waiver_assinada_nas_tarefas(con, wid)
+        con.commit()
+        assert r["ok"] and sorted(x["task_id"] for x in r["tarefas"]) == [t1, t2]
+        assert sorted(anexos) == ["g1", "g2"], "a fechada não recebe"
+        assert all(p and "waiver" in p for _g, p in fechadas) and sorted(g for g, _p in fechadas) == ["g1", "g2"]
+        assert um(con, "SELECT waiver_id FROM tasks WHERE id=?", (t2,))["waiver_id"] == wid
+        # de novo: nada a fazer, nada duplicado
+        assert motor.waiver_assinada_nas_tarefas(con, wid)["tarefas"] == []
+    finally:
+        con.close()
+
+
+def test_waiver_do_email_liga_ao_cliente_e_usa_o_anexo_quando_a_api_falha(cli, monkeypatch, tmp_path):
+    """Dono, 16/09: "vai abrir o e-mail, vai abrir o anexo, vai baixar aquele anexo para colocar
+    dentro do Command Center". A API do DocuSign continua sendo a primeira opção; o anexo do
+    e-mail é a reserva."""
+    from command_center.api import motor
+    from command_center.db import conectar, inserir, um
+    import command_center.providers as prov
+    monkeypatch.setattr(motor, "PASTA_WAIVERS", str(tmp_path / "w"))
+
+    class Docusign:
+        def baixar_documento_humano(self, env): raise RuntimeError("DocuSign fora")
+
+    class Gmail:
+        def anexos_da_thread(self, conta, tid):
+            return [{"message_id": "m1", "attachment_id": "a1", "nome": "waiver_assinada.pdf", "mime": "application/pdf"}]
+        def baixar_anexo_bytes(self, conta, mid, aid): return b"%PDF-1.4 do anexo"
+
+    class Asana:
+        def asana_anexar_arquivo(self, gid, caminho): return {"aplicado": True, "anexo_gid": "a"}
+        def concluir_subtarefa_sistema(self, gid, padrao=None): return {"aplicado": True, "subtarefa": "Signed waiver?"}
+    monkeypatch.setattr(prov, "modulo", lambda s: {"docusign": Docusign(), "gmail": Gmail(), "asana": Asana()}[s])
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Pai do Nya", pilot_name="Nya Amankwa", status="ACTIVE")
+        wid = inserir(con, "waivers", client_id=cid, signer_name="Pai do Nya", minor_name="Nya Amankwa",
+                      template="parental", status="completed", sent_at="2026-09-10", completed_at="2026-09-15", expires_at="2027-09-15")
+        inserir(con, "entity_links", entity_type="waiver", entity_id=wid, system="docusign", external_id="env-7")
+        tid = inserir(con, "tasks", client_id=cid, title="Nya Amankwa_Urace Daily", status="open", due_on="2026-09-20")
+        inserir(con, "entity_links", entity_type="task", entity_id=tid, system="asana", external_id="g7")
+        eid = inserir(con, "emails", mailbox="support", subject="Completed: Please Complete the Docusign: Parental Consent, Release, and Waiver of Liability",
+                      sender="dse_na4@docusign.net", is_inbox=1, labels='["INBOX","Softwares|Apps/Docusign","Waivers"]')
+        con.commit()
+        r = motor.waiver_do_email(con, eid, "support", "th-7", "Completed … Nya Amankwa … Waiver of Liability")
+        con.commit()
+        assert r["ok"] and r["client_id"] == cid and r["signer"] == "Pai do Nya"
+        assert r["pdf_origem"] == "anexo do e-mail" and open(r["pdf"], "rb").read().startswith(b"%PDF-1.4 do anexo")
+        assert um(con, "SELECT client_id FROM emails WHERE id=?", (eid,))["client_id"] == cid
+        assert um(con, "SELECT pdf_path FROM waivers WHERE id=?", (wid,))["pdf_path"] == r["pdf"]
+        assert um(con, "SELECT waiver_id FROM tasks WHERE id=?", (tid,))["waiver_id"] == wid
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='email.waiver_ligada'") is not None
+        # e-mail que não cita nenhum signatário conhecido: fica para uma pessoa, sem chute
+        e2 = inserir(con, "emails", mailbox="support", subject="Completed: Waiver", sender="dse_na4@docusign.net", is_inbox=1, labels='["INBOX"]')
+        con.commit()
+        r2 = motor.waiver_do_email(con, e2, "support", "th-8", "alguém desconhecido assinou")
+        assert r2["ok"] is False and um(con, "SELECT client_id FROM emails WHERE id=?", (e2,))["client_id"] is None
+    finally:
+        con.close()
+
+
+def test_waiver_completed_e_mecanico_antes_de_acordar_a_ia(cli, monkeypatch):
+    from command_center.api import motor
+    from command_center.db import conectar, inserir, um
+    chamadas = []
+    monkeypatch.setattr(motor, "waiver_assinada_nas_tarefas", lambda con, wid: chamadas.append(wid) or {"ok": True, "tarefas": []})
+    monkeypatch.setattr(motor, "regra_ligada", lambda con, kind: False)      # a IA não é acordada neste teste
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="X", status="ACTIVE")
+        wid = inserir(con, "waivers", client_id=cid, signer_name="X", status="completed")
+        inserir(con, "ai_events", kind="waiver.completed", entity_type="waiver", entity_id=wid, client_id=cid, summary="waiver de X assinada")
+        con.commit()
+        motor.processar_eventos(con, 1)
+        con.commit()
+        assert chamadas == [wid]
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='waiver.assinada.tarefas'") is not None
+    finally:
+        con.close()

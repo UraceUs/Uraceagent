@@ -1536,3 +1536,34 @@ def test_filtros_nativos_estado_download_e_geracao(cli, monkeypatch):
     rotas._filtros_rodando["support"] = True
     assert cli.post(B + "/gmail/filtros/support/gerar", headers=h).json()["started"] is False
     rotas._filtros_rodando["support"] = False
+
+
+def test_triagem_dispara_o_fluxo_da_waiver_quando_o_email_e_waiver(cli, monkeypatch):
+    """Dono, 16/09: chegou e-mail com a tag Waivers → a IA identifica de quem é, guarda o PDF
+    no card e marca a tarefa. Aqui só se prova que a triagem chama o fluxo — o fluxo em si
+    tem teste próprio."""
+    from command_center.providers import triagem
+    from command_center.api import motor
+    from command_center.db import conectar, inserir
+    con = conectar()
+    try:
+        con.execute("""INSERT INTO gmail_labels (name, family, what, status, mailboxes, confirmed_at)
+                       VALUES ('Waivers','Waivers','w','confirmado','["support"]','2026-09-16T00:00:00Z')
+                       ON CONFLICT(name) DO UPDATE SET status='confirmado', mailboxes='["support"]', in_gmail=1""")
+        # (um teste anterior relê a support@ com outra lista e tira o Waivers daquela caixa)
+        e = inserir(con, "emails", mailbox="support", subject="Completed: … Waiver of Liability", sender="dse_na4@docusign.net",
+                    last_at="2026-09-16T10:00:00", handled=0, is_inbox=1, labels='["INBOX","Waivers"]')
+        inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail", external_id=f"th{e}", deep_link="x")
+        con.commit()
+        chamadas = []
+        monkeypatch.setattr(motor, "waiver_do_email", lambda con, eid, mb, tid, texto: chamadas.append((eid, mb, tid)) or {"ok": True, "signer": "X"})
+        monkeypatch.setattr(triagem, "chamar", lambda s, f, **a: [{"nome": "Waivers", "id": "x", "tipo": "user"}] if f == "gmail_marcadores"
+                            else {"mensagens": [{"de": "d", "data": "h", "corpo": "Nya Amankwa assinou"}]})
+        monkeypatch.setattr(triagem, "modulo", lambda s: type("G", (), {"triar_ia": lambda *a, **k: {"aplicado": True}})())
+        resposta = '{"itens":[{"id":%d,"principal":"Waivers","marcadores":[],"precisa_humano":false,"motivo":"waiver assinada"}]}' % e
+        r = triagem.rodar(con, lambda t, sk: (True, resposta, None), "sk", mailboxes=("support",), por="teste")
+        con.commit()
+        assert chamadas == [(e, "support", f"th{e}")]
+        assert r["waivers"] == [{"email": e, "ok": True, "signer": "X", "motivo": None}]
+    finally:
+        con.close()

@@ -144,6 +144,12 @@ def _semear_marcadores(con):
 # Sementes que dependem de coluna criada por migração (rodam depois dela).
 # Horários em hora local de Orlando; quem lê é command_center/api/agenda.py.
 POS_MIGRACAO = [
+    # 16/09: o dono ditou a regra Docusign x Waivers depois de já ter confirmado os dois.
+    # Troca o texto só se ainda for o que eu escrevi em 14/09 — o que ele editar fica.
+    """UPDATE gmail_labels SET what='TODO e-mail do DocuSign, sem exceção (regra do dono, 16/09): enviado, visualizado, concluído, anulado, aviso da conta. Se for waiver enviada ou assinada, leva TAMBÉM o marcador ''Waivers''.'
+       WHERE name='Softwares|Apps/Docusign' AND what LIKE 'DocuSign, TODO o tráfego de envelope%'""",
+    """UPDATE gmail_labels SET what='WAIVER do DocuSign ENVIADA ao cliente ou RECEBIDA ASSINADA (regra do dono, 16/09). Vai SEMPRE junto com ''Softwares|Apps/Docusign'', nunca sozinho. Aviso de ''visualizou'' e ''anulada'' NÃO entra aqui. Ao marcar, a IA identifica de quem é, guarda o PDF no card do cliente e fecha a subtarefa da waiver nas tarefas dele.'
+       WHERE name='Waivers' AND what LIKE 'WAIVER de responsabilidade no DocuSign: enviada, vista%'""",
     # o manual nasceu lendo só a urace@ (11/09). Quem não tem caixa é de lá.
     """UPDATE gmail_labels SET mailboxes='["urace"]' WHERE mailboxes IS NULL OR mailboxes=''""",
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES

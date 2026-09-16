@@ -263,7 +263,7 @@ MANUAL_SUPPORT = [
     ("Events & National Races", "Events & National Races", "Corrida e evento: inscrição, logística, passagem e reembolso ligados à prova.", 33, PENDENTE),
     ("Events & National Races/FWT", "Events & National Races", "Florida Winter Tour: agenda de treino do piloto na semana da prova.", 2, PENDENTE),
     # ------------------------------------------------- documento e contrato
-    ("Waivers", "Waivers", "WAIVER de responsabilidade no DocuSign: enviada, vista, assinada ou anulada. É daqui que sai a waiver do cliente.", 57, PENDENTE),
+    ("Waivers", "Waivers", "WAIVER do DocuSign ENVIADA ao cliente ou RECEBIDA ASSINADA (regra do dono, 16/09). Vai SEMPRE junto com 'Softwares|Apps/Docusign', nunca sozinho. Aviso de 'visualizou' e 'anulada' NÃO entra aqui. Ao marcar, a IA identifica de quem é, guarda o PDF no card do cliente e fecha a subtarefa da waiver nas tarefas dele.", 57, PENDENTE),
     ("Share request", "Share request", "Pedido e aviso de compartilhamento do Google Drive (documento, planilha, pasta).", 19, PENDENTE),
     # ------------------------------------------------- dinheiro
     ("Financeiro", "Financeiro", "Pasta-mãe do financeiro. Está vazia: o dinheiro vive nas filhas.", 0, PENDENTE),
@@ -287,7 +287,7 @@ MANUAL_SUPPORT = [
     ("Marketing/Samira", "Marketing", "Marketing tratado pela Samira.", 2, PENDENTE),
     # ------------------------------------------------- plataformas
     ("Softwares|Apps", "Softwares|Apps", "Pasta-mãe das plataformas. Praticamente vazia: cada serviço tem a sua filha.", 1, PENDENTE),
-    ("Softwares|Apps/Docusign", "Softwares|Apps", "DocuSign, TODO o tráfego de envelope (399 conversas). ⚠️ Se sobrepõe a `Waivers`: aqui é o envelope em geral, lá é a waiver do cliente. Vale decidir qual manda.", 399, PENDENTE),
+    ("Softwares|Apps/Docusign", "Softwares|Apps", "TODO e-mail do DocuSign, sem exceção (regra do dono, 16/09): enviado, visualizado, concluído, anulado, aviso da conta. Se for waiver enviada ou assinada, leva TAMBÉM o marcador 'Waivers'.", 399, PENDENTE),
     ("Softwares|Apps/Ecwid", "Softwares|Apps", "Ecwid (loja): relatório semanal e avisos da plataforma.", 322, PENDENTE),
     ("Softwares|Apps/Dialpad", "Softwares|Apps", "Dialpad: recado de voz e aviso de login. É por aqui que chega ligação perdida de cliente.", 173, PENDENTE),
     ("Softwares|Apps/GitHub", "Softwares|Apps", "GitHub: falha de execução, aviso de segurança e app conectado à conta.", 28, PENDENTE),

@@ -259,6 +259,30 @@ def pdf_da_waiver(con, w):
     return caminho
 
 
+RX_SUBTAREFA_WAIVER = r"waiver"      # "Signed waiver?" e variações
+
+
+def _marcar_waiver_no_asana(gid):
+    """Fecha a subtarefa da waiver na tarefa (dono, 16/09: "já marcar na tarefa daquele
+    serviço que a waiver já está assinada"). Nunca derruba quem chamou: tarefa sem essa
+    subtarefa só devolve o motivo."""
+    from command_center.providers import modulo
+    anterior = os.environ.get("APLICAR")
+    os.environ["APLICAR"] = "1"
+    try:
+        m = modulo("asana")
+        if not hasattr(m, "concluir_subtarefa_sistema"):
+            return {"aplicado": False, "motivo": "porta de subtarefa indisponível"}
+        return m.concluir_subtarefa_sistema(gid, padrao=RX_SUBTAREFA_WAIVER)
+    except Exception as e:
+        return {"aplicado": False, "motivo": f"{type(e).__name__}: {str(e)[:160]}"}
+    finally:
+        if anterior is None:
+            os.environ.pop("APLICAR", None)
+        else:
+            os.environ["APLICAR"] = anterior
+
+
 def _anexar_no_asana(gid, caminho):
     """Anexo é ato mecânico do painel: APLICAR liberado só nesta chamada."""
     from command_center.providers import modulo
@@ -279,13 +303,15 @@ def anexar_waiver_em_gid(con, gid, client_id):
     if not w:
         return {"ok": False, "motivo": "cliente sem waiver assinada na validade"}
     r = _anexar_no_asana(gid, pdf_da_waiver(con, w))
+    sub = _marcar_waiver_no_asana(gid)
     t = um(con, """SELECT entity_id FROM entity_links
                    WHERE entity_type='task' AND system='asana' AND external_id=?""", (gid,))
     if t:
         atualizar(con, "tasks", t["entity_id"], waiver_id=w["id"])
     auditar(con, "task.waiver_anexada", "system", entity_type="task", entity_id=(t["entity_id"] if t else None),
-            detail={"waiver_id": w["id"], "signer": w["signer_name"], "gid": gid, "anexo_gid": r.get("anexo_gid")})
-    return {"ok": True, "waiver_id": w["id"], "anexo": True, "signer": w["signer_name"], **r}
+            detail={"waiver_id": w["id"], "signer": w["signer_name"], "gid": gid, "anexo_gid": r.get("anexo_gid"),
+                    "subtarefa": sub.get("subtarefa") if sub.get("aplicado") else sub.get("motivo")})
+    return {"ok": True, "waiver_id": w["id"], "anexo": True, "signer": w["signer_name"], "subtarefa": sub, **r}
 
 
 def anexar_waiver_na_tarefa(con, task_id):
@@ -310,10 +336,87 @@ def anexar_waiver_na_tarefa(con, task_id):
         atualizar(con, "tasks", task_id, waiver_id=w["id"])   # no card já vale; no Asana não há o que anexar
         return {"ok": True, "waiver_id": w["id"], "anexo": False, "motivo": "tarefa sem gid do Asana"}
     r = _anexar_no_asana(t["gid"], caminho)
+    sub = _marcar_waiver_no_asana(t["gid"])          # "Signed waiver?" fecha junto com o anexo
     atualizar(con, "tasks", task_id, waiver_id=w["id"])
     auditar(con, "task.waiver_anexada", "system", entity_type="task", entity_id=task_id,
-            detail={"waiver_id": w["id"], "signer": w["signer_name"], "gid": t["gid"], "anexo_gid": r.get("anexo_gid")})
-    return {"ok": True, "waiver_id": w["id"], "anexo": True, "signer": w["signer_name"], **r}
+            detail={"waiver_id": w["id"], "signer": w["signer_name"], "gid": t["gid"], "anexo_gid": r.get("anexo_gid"),
+                    "subtarefa": sub.get("subtarefa") if sub.get("aplicado") else sub.get("motivo")})
+    return {"ok": True, "waiver_id": w["id"], "anexo": True, "signer": w["signer_name"], "subtarefa": sub, **r}
+
+
+def _nomes_no_texto(texto):
+    return re.sub(r"\s+", " ", (texto or "")).lower()
+
+
+def waiver_do_email(con, email_id, mailbox, thread_id, texto):
+    """E-mail do DocuSign que é waiver (dono, 16/09): descobrir DE QUEM é, ligar o e-mail ao
+    cliente, garantir o PDF no card e a waiver nas tarefas dele.
+
+    A fonte de verdade da waiver continua sendo o DocuSign (sync). O e-mail é o gatilho e o
+    caminho de reserva: se a API não devolver o PDF, ele sai do anexo do próprio e-mail.
+    Identificação: o nome do signatário (ou do menor) da waiver mais recente que aparece no
+    assunto/corpo. Sem casar com ninguém, o e-mail fica para uma pessoa — nunca chuta."""
+    from command_center.providers import modulo
+    alvo = _nomes_no_texto(texto)
+    escolhida = None
+    for w in todos(con, """SELECT * FROM waivers WHERE COALESCE(hidden,0)=0 AND client_id IS NOT NULL
+                           ORDER BY COALESCE(completed_at, sent_at, synced_at) DESC LIMIT 200"""):
+        for nome in (w["signer_name"], w["minor_name"] if "minor_name" in w.keys() else None):
+            if nome and len(nome.strip()) >= 5 and nome.strip().lower() in alvo:
+                escolhida = w
+                break
+        if escolhida:
+            break
+    if not escolhida:
+        return {"ok": False, "motivo": "nenhum signatário conhecido aparece no e-mail"}
+    atualizar(con, "emails", email_id, client_id=escolhida["client_id"])
+    saida = {"ok": True, "waiver_id": escolhida["id"], "client_id": escolhida["client_id"],
+             "signer": escolhida["signer_name"], "pdf": None, "tarefas": []}
+    if escolhida["status"] == "completed":
+        try:
+            saida["pdf"] = pdf_da_waiver(con, escolhida)                      # a API do DocuSign primeiro
+        except Exception as e:
+            saida["pdf_api_erro"] = f"{type(e).__name__}: {str(e)[:120]}"
+            try:                                                               # reserva: o anexo do e-mail
+                g = modulo("gmail")
+                for a in g.anexos_da_thread(mailbox, thread_id):
+                    dados = g.baixar_anexo_bytes(mailbox, a["message_id"], a["attachment_id"])
+                    if not dados.startswith(b"%PDF"):
+                        continue
+                    os.makedirs(PASTA_WAIVERS, mode=0o700, exist_ok=True)
+                    caminho = os.path.join(PASTA_WAIVERS, f"email-{escolhida['id']}-{re.sub(r'[^A-Za-z0-9._-]+', '_', a['nome'] or 'waiver.pdf')[:80]}")
+                    with open(caminho, "wb") as f:
+                        f.write(dados)
+                    os.chmod(caminho, 0o600)
+                    atualizar(con, "waivers", escolhida["id"], pdf_path=caminho)
+                    saida["pdf"] = caminho
+                    saida["pdf_origem"] = "anexo do e-mail"
+                    break
+            except Exception as e:
+                saida["pdf_anexo_erro"] = f"{type(e).__name__}: {str(e)[:120]}"
+        saida["tarefas"] = waiver_assinada_nas_tarefas(con, escolhida["id"]).get("tarefas", [])
+    auditar(con, "email.waiver_ligada", "system", entity_type="email", entity_id=email_id,
+            detail={k: v for k, v in saida.items() if k != "tarefas"} | {"tarefas": len(saida["tarefas"])})
+    return saida
+
+
+def waiver_assinada_nas_tarefas(con, waiver_id):
+    """A waiver chegou assinada: vai para TODAS as tarefas abertas do cliente que ainda
+    não a têm — anexo + subtarefa. Dono, 16/09: "se o cliente já tem a waiver assinada,
+    nas próximas tarefas daquele cliente já deixar pré-marcado". As próximas o
+    `task.created` cobre; esta função cobre as que já existiam quando ela chegou."""
+    w = um(con, "SELECT * FROM waivers WHERE id=?", (waiver_id,))
+    if not w or w["status"] != "completed" or not w["client_id"]:
+        return {"ok": False, "motivo": "waiver não assinada ou sem cliente", "tarefas": []}
+    feitas = []
+    for t in todos(con, """SELECT id FROM tasks WHERE client_id=? AND status='open' AND waiver_id IS NULL
+                           ORDER BY due_on""", (w["client_id"],)):
+        try:
+            r = anexar_waiver_na_tarefa(con, t["id"])
+            feitas.append({"task_id": t["id"], **{k: r.get(k) for k in ("ok", "anexo", "motivo")}})
+        except Exception as e:
+            feitas.append({"task_id": t["id"], "ok": False, "motivo": f"{type(e).__name__}: {str(e)[:120]}"})
+    return {"ok": True, "waiver_id": waiver_id, "tarefas": feitas}
 
 
 def processar_eventos(con, user_id, limite=3):
@@ -325,6 +428,14 @@ def processar_eventos(con, user_id, limite=3):
                 anexar_waiver_na_tarefa(con, ev["entity_id"])
             except Exception as e:
                 auditar(con, "task.waiver_anexada.falhou", "system", entity_type="task", entity_id=ev["entity_id"],
+                        detail={"erro": f"{type(e).__name__}: {str(e)[:200]}"})
+        if ev["kind"] == "waiver.completed" and regra_ligada_nome(con, "waiver_na_tarefa"):
+            try:                                          # mecânico: a assinada entra nas tarefas que já existiam
+                r = waiver_assinada_nas_tarefas(con, ev["entity_id"])
+                auditar(con, "waiver.assinada.tarefas", "system", entity_type="waiver", entity_id=ev["entity_id"],
+                        detail={"tarefas": r.get("tarefas", [])[:10]})
+            except Exception as e:
+                auditar(con, "task.waiver_anexada.falhou", "system", entity_type="waiver", entity_id=ev["entity_id"],
                         detail={"erro": f"{type(e).__name__}: {str(e)[:200]}"})
         if not regra_ligada(con, ev["kind"]):
             atualizar(con, "ai_events", ev["id"], status="SKIPPED", handled_at=agora(), note="regra desligada")

@@ -417,6 +417,27 @@ def mover_humano(conta, thread_id, marcador):
     return {"aplicado": True, "thread_id": thread_id, "marcador": marcador, "arquivado": True}
 
 
+def anexos_da_thread(conta, thread_id, mime_prefixo="application/pdf"):
+    """Porta do Command Center (não é ferramenta do agente): os anexos de uma thread,
+    com o que precisa para baixar. Nasceu do fluxo da waiver por e-mail (dono, 16/09):
+    o e-mail 'Completed' do DocuSign traz o PDF assinado."""
+    th = _req(conta, f"{GMAIL}/threads/{thread_id}?format=full")
+    saida = []
+    for m in th.get("messages", []):
+        _texto, anexos, _html, _inline = _corpo(m.get("payload", {}), com_html=True)
+        for a in anexos or []:
+            if a.get("attachment_id") and (a.get("mime") or "").startswith(mime_prefixo):
+                saida.append({"message_id": m["id"], "attachment_id": a["attachment_id"],
+                              "nome": a.get("nome"), "mime": a.get("mime")})
+    return saida
+
+
+def baixar_anexo_bytes(conta, message_id, attachment_id):
+    """Porta do Command Center: os bytes de um anexo. Quem decide onde guardar é quem chama."""
+    r = _req(conta, f"{GMAIL}/messages/{message_id}/attachments/{attachment_id}")
+    return _b64d(r["data"])
+
+
 def rotular_humano(conta, thread_id, adicionar):
     """Clique de uma pessoa: ADICIONA marcadores à thread, sem tirar da inbox.
     Não é ferramenta do MCP. Marcador inexistente é erro, nunca criação."""

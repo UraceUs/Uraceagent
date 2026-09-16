@@ -48,6 +48,7 @@ LOTE = 12                  # threads por pedido à IA (o corpo entra, então men
 MAXIMO_POR_RODADA = 48     # por caixa; o resto fica para a próxima rodada
 CORPO_MAX = 1200           # caracteres de corpo por thread no prompt
 MAX_SUGESTOES = 3          # propostas de marcador novo por rodada; trava contra enxurrada
+MARCADOR_WAIVER = "Waivers"  # support@: o e-mail do DocuSign que É waiver (enviada ou assinada)
 
 # O raciocínio que o dono pediu (14/09): a IA pode SUGERIR marcador novo quando o
 # e-mail for importante e nada no manual servir. Sugerir, nunca criar — a regra
@@ -386,5 +387,16 @@ def rodar(con, runner, session_key, mailboxes=CAIXAS, aprendizados="", por="agen
                               synced_at=agora())
                     saida["movidos"] += 1
                     saida["precisa_humano"] += 1 if humano else 0
+                    # Dono, 16/09: e-mail que é waiver → descobrir de quem é, ligar ao cliente,
+                    # garantir o PDF no card e a waiver nas tarefas dele. Mecânico, auditado,
+                    # e nunca derruba a rodada.
+                    if MARCADOR_WAIVER in [principal] + extras + list(e["_filtro_todos"]):
+                        try:
+                            from command_center.api import motor
+                            r_w = motor.waiver_do_email(con, e["id"], mailbox, e["_thread"],
+                                                        f"{e.get('subject') or ''} {e.get('snippet') or ''} {e.get('_corpo') or ''}")
+                            saida.setdefault("waivers", []).append({"email": e["id"], **{k: r_w.get(k) for k in ("ok", "signer", "motivo")}})
+                        except Exception as ex:
+                            saida["erros"].append(f"{mailbox} waiver do e-mail {e['id']}: {str(ex)[:120]}")
     auditar(con, "gmail.triage", por, detail=saida)
     return saida

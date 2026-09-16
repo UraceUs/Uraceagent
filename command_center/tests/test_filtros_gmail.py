@@ -245,3 +245,21 @@ def test_recusar_o_dominio_recusa_os_enderecos_dele():
     r = g.regras(_conta({"arielle@orlandokartcenter.com": {"Finances/Pending Invoices ❗": 4}}),
                  {"arielle@orlandokartcenter.com": 4}, 0.6, 3)
     assert r == {}
+
+
+def test_regras_ditadas_pelo_dono_docusign_e_waiver():
+    """Dono, 16/09: todo e-mail do DocuSign leva `Softwares|Apps/Docusign`; só a waiver
+    enviada ou assinada leva TAMBÉM `Waivers`. É a única regra com assunto — remetente
+    fixo mais o nome do modelo — e só entra onde o marcador existe."""
+    d = g.regras_do_dono(["Softwares|Apps/Docusign", "Waivers", "wNews"])
+    alvos = [alvo for _q, alvo, _a in d]
+    assert alvos == ["Softwares|Apps/Docusign", "Waivers"]
+    busca_waiver = next(q for q, alvo, _a in d if alvo == "Waivers")
+    assert "Waiver of Liability" in busca_waiver and "Completed:" in busca_waiver and "Please Complete" in busca_waiver
+    assert "Voided" not in busca_waiver
+    # a urace@ não tem esses marcadores: nada entra
+    assert g.regras_do_dono(["wNews", "Finances/Receipt"]) == []
+    x = g.xml({}, "support", d)
+    assert x.count("<entry>") == 2 and "hasTheWord" in x and "shouldArchive" not in x
+    md = g.relatorio({}, ["Waivers"], ["Waivers"], "support", 0.6, 3, d)
+    assert "Regras ditadas pelo dono" in md and "Sem remetente estável" not in md.split("## Regras ditadas")[0]
