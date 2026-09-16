@@ -116,6 +116,26 @@ aba *Internos* no painel, com o assunto como nome, nunca ligado a cliente, fora 
 contas de waiver e dos avisos de atenção. Ver
 [[D-2026-09-16 - Piloto nao e servico, documento interno e a IA dentro da tarefa]].
 
+## Os modelos pela tela do painel (16/09)
+
+Pedido do dono: *"visualizar esses modelos, alterar o nome, alterar o modelo fazendo
+upload de um novo PDF."* A aba *Modelos* abre cada modelo: nome (editável por MANAGER),
+documentos com **Ver PDF** e **Substituir PDF…**, papéis com a contagem de campos de
+assinatura e as âncoras de texto, quando existem.
+
+Três travas, porque modelo de waiver é documento legal:
+
+- **Trocar o PDF guarda o antigo antes**, em `~/.urace/docusign-templates/`, com o id do
+  modelo, do documento e a hora no nome. Auditado com o caminho da cópia.
+- O `documentId` é mantido, então os **campos de assinatura continuam presos ao
+  documento**. Campo por âncora de texto segue a âncora; campo por posição na página
+  fica onde estava — se o leiaute mudou, conferir no DocuSign antes da próxima waiver.
+- Só PDF, até 25 MB, MANAGER. A IA não tem essas portas: são funções humanas
+  (`modelo_humano`, `renomear_modelo_humano`, `substituir_documento_do_modelo_humano`).
+
+Os dois modelos **sem nome** que a lista mostra (`63dcf553…` e `5441b464…`) existem
+na conta com o nome vazio; a tela diz "clique para nomear".
+
 ## O que o conector faz
 
 **Lê:** `getUserInfo` · `getTemplates` · `getEnvelopes` · `getEnvelope` ·

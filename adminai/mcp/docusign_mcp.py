@@ -225,6 +225,53 @@ def formulario_humano(envelopeId):
     return campos
 
 
+# ---- modelos (dono, 16/09): ver, renomear e trocar o PDF, pela tela do painel
+def modelo_humano(templateId):
+    """Um modelo por inteiro: nome, documentos (id, nome, páginas), papéis e quantos campos
+    (tabs) cada papel tem no documento. É o que a tela mostra antes de deixar mexer."""
+    t = _req(f"/templates/{templateId}?include=recipients,tabs")
+    docs = _req(f"/templates/{templateId}/documents").get("templateDocuments", []) or []
+    papeis = []
+    for s in (t.get("recipients") or {}).get("signers", []) or []:
+        tabs = s.get("tabs") or {}
+        papeis.append({"papel": s.get("roleName"), "recipientId": s.get("recipientId"),
+                       "campos": sum(len(v) for v in tabs.values() if isinstance(v, list)),
+                       "ancoras": sorted({x.get("anchorString") for v in tabs.values() if isinstance(v, list)
+                                          for x in v if x.get("anchorString")})})
+    return {"templateId": templateId, "nome": t.get("name"), "descricao": t.get("description"),
+            "alterado_em": t.get("lastModified"), "compartilhado": t.get("shared"),
+            "documentos": [{"documentId": d.get("documentId"), "nome": d.get("name"), "paginas": d.get("pages")} for d in docs],
+            "papeis": papeis, "uso_pela_IA": TEMPLATES.get(templateId)}
+
+
+def baixar_documento_do_modelo_humano(templateId, documentId):
+    """O PDF de um documento do modelo, como está hoje. Bytes."""
+    return _req_bytes(f"/templates/{templateId}/documents/{documentId}")
+
+
+def renomear_modelo_humano(templateId, nome):
+    """Só o nome. Nada mais do modelo é tocado."""
+    nome = (nome or "").strip()
+    if not (2 <= len(nome) <= 120):
+        raise ErroFerramenta("nome do modelo: entre 2 e 120 caracteres")
+    _req(f"/templates/{templateId}", "PUT", {"name": nome})
+    return {"ok": True, "templateId": templateId, "nome": nome}
+
+
+def substituir_documento_do_modelo_humano(templateId, documentId, nome_arquivo, pdf):
+    """Troca o PDF de UM documento do modelo, mantendo o documentId — assim os campos de
+    assinatura (tabs) continuam presos a ele. Se o novo PDF tiver outro leiaute, os campos
+    por posição podem cair no lugar errado; os por âncora de texto seguem a âncora.
+    Quem chama guarda o PDF antigo antes (Command Center). Bytes têm de ser PDF."""
+    if not pdf or not pdf.startswith(b"%PDF"):
+        raise ErroFerramenta("o arquivo não é um PDF")
+    nome_arquivo = (nome_arquivo or "documento.pdf").strip()[:100]
+    corpo = {"documents": [{"documentId": str(documentId), "name": nome_arquivo, "fileExtension": "pdf",
+                            "documentBase64": base64.b64encode(pdf).decode()}]}
+    r = _req(f"/templates/{templateId}/documents/{documentId}", "PUT", corpo)
+    return {"ok": True, "templateId": templateId, "documentId": str(documentId), "nome": nome_arquivo, "resposta": r}
+
+
 def anular_humano(envelopeId, motivo):
     """Anula (void) um envelope em aberto. Envelope completed NÃO pode ser
     anulado nem apagado por aqui: é documento assinado."""

@@ -1709,3 +1709,64 @@ def test_envelope_interno_e_aba_propria(cli):
     itens = cli.get(B + "/needs-attention", headers=h).json()
     lista = itens if isinstance(itens, list) else itens.get("items", [])
     assert not any("Hernan X" in (i.get("title") or "") for i in lista)
+
+
+# ================= 16/09: modelos do DocuSign — ver, renomear, trocar o PDF =================
+def test_modelo_docusign_ver_renomear_e_trocar_pdf(cli, monkeypatch, tmp_path):
+    from command_center.api import rotas
+    from command_center.providers import NaoConectado
+    TID = "c51aede4-bba5-40df-9f14-24c340e2bd3e"
+    estado = {"nome": "Adult Waiver of Liability", "pdf": b"%PDF-1.4 antigo", "trocas": []}
+
+    class Docusign:
+        def modelo_humano(self, tid):
+            assert tid == TID
+            return {"templateId": tid, "nome": estado["nome"], "documentos": [{"documentId": "1", "nome": "waiver.pdf", "paginas": "2"}],
+                    "papeis": [{"papel": "Support U-Race", "campos": 3, "ancoras": []}], "uso_pela_IA": "Adult"}
+        def baixar_documento_do_modelo_humano(self, tid, did):
+            return estado["pdf"]
+        def renomear_modelo_humano(self, tid, nome):
+            estado["nome"] = nome; return {"ok": True}
+        def substituir_documento_do_modelo_humano(self, tid, did, nome_arquivo, pdf):
+            assert pdf.startswith(b"%PDF")
+            estado["trocas"].append((did, nome_arquivo)); estado["pdf"] = pdf; return {"ok": True}
+
+    monkeypatch.setattr(rotas, "TEMPLATES_DIR", str(tmp_path))
+    import command_center.providers as prov
+    monkeypatch.setattr(prov, "modulo", lambda s: Docusign())
+    h = entra(cli, "admin@urace.us")
+    # ver
+    r = cli.get(B + f"/docusign/templates/{TID}")
+    assert r.status_code == 200 and r.json()["connected"] and r.json()["documentos"][0]["documentId"] == "1"
+    r = cli.get(B + f"/docusign/templates/{TID}/documents/1")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/pdf") and "inline" in r.headers["content-disposition"]
+    assert cli.get(B + "/docusign/templates/nao-e-uuid").status_code == 400
+    # renomear (MANAGER), auditado com o nome antigo
+    r = cli.patch(B + f"/docusign/templates/{TID}", headers=h, json={"name": "Adult Waiver 2026"})
+    assert r.status_code == 200 and r.json()["antes"] == "Adult Waiver of Liability" and estado["nome"] == "Adult Waiver 2026"
+    assert cli.patch(B + f"/docusign/templates/{TID}", headers=h, json={"name": "x"}).status_code == 400
+    # trocar o PDF: guarda o antigo antes, recusa o que não é PDF
+    r = cli.post(B + f"/docusign/templates/{TID}/documents/1", headers=h, files={"file": ("novo.pdf", b"%PDF-1.7 novo", "application/pdf")})
+    assert r.status_code == 200 and r.json()["backup"].startswith(TID)
+    guardado = list(tmp_path.glob("*.pdf"))
+    assert len(guardado) == 1 and guardado[0].read_bytes() == b"%PDF-1.4 antigo"
+    assert estado["trocas"] == [("1", "novo.pdf")] and estado["pdf"] == b"%PDF-1.7 novo"
+    assert cli.post(B + f"/docusign/templates/{TID}/documents/1", headers=h, files={"file": ("x.pdf", b"nao e pdf", "application/pdf")}).status_code == 400
+    assert cli.post(B + f"/docusign/templates/{TID}/documents/1", headers=h, files={"file": ("x.txt", b"%PDF-1.7", "text/plain")}).status_code == 400
+    # OPERATOR não renomeia nem troca; sem DocuSign, ver responde connected=false
+    from command_center.api import auth as _auth
+    from command_center.db import conectar as _conectar, um as _um
+    con = _conectar()
+    try:
+        if not _um(con, "SELECT id FROM users WHERE email=?", ("op@urace.us",)):
+            _auth.criar_usuario(con, "op@urace.us", "Op", "OPERATOR", SENHA); con.commit()
+    finally:
+        con.close()
+    ho = entra(cli, "op@urace.us")
+    assert cli.patch(B + f"/docusign/templates/{TID}", headers=ho, json={"name": "Outro nome"}).status_code == 403
+    assert cli.post(B + f"/docusign/templates/{TID}/documents/1", headers=ho, files={"file": ("n.pdf", b"%PDF-1.7", "application/pdf")}).status_code == 403
+    def caiu(s):
+        raise NaoConectado("sem credencial")
+    monkeypatch.setattr(prov, "modulo", caiu)
+    entra(cli, "admin@urace.us")
+    assert cli.get(B + f"/docusign/templates/{TID}").json()["connected"] is False

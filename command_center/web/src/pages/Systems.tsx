@@ -258,6 +258,58 @@ function EnviarWaiver({ onClose, onDone }: { onClose: () => void; onDone: () => 
   </div></div>
 }
 
+interface ModeloDetalhe {
+  connected: boolean; reason?: string; templateId?: string; nome?: string | null; descricao?: string | null; alterado_em?: string | null
+  documentos?: { documentId: string; nome: string | null; paginas?: string | number | null }[]
+  papeis?: { papel: string | null; campos: number; ancoras: string[] }[]; uso_pela_IA?: string | null
+}
+/** Modelo do DocuSign por inteiro (dono, 16/09): ver o PDF, renomear, trocar o PDF. A troca
+ *  guarda o PDF antigo no servidor antes; os campos de assinatura ficam presos ao documento. */
+function ModeloModal({ id, onClose, onChanged }: { id: string; onClose: () => void; onChanged: () => void }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const perguntar = usePerguntar()
+  const det = useGet<ModeloDetalhe>(`/docusign/templates/${id}`)
+  const [nome, setNome] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const nomeAtual = nome ?? (det.data?.nome || '')
+  async function renomear() {
+    setBusy('nome')
+    try { await api.patch(`/docusign/templates/${id}`, { name: nomeAtual }); toast('Modelo renomeado no DocuSign.', 'ok'); setNome(null); det.reload(); onChanged() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  async function substituir(did: string, file: File) {
+    const ok = await perguntar({ titulo: 'Trocar o PDF deste modelo?', perigo: true, ok: 'Trocar',
+      texto: `"${file.name}" vai substituir o documento ${did} do modelo "${det.data?.nome || id}" no DocuSign.\n\nO PDF atual fica guardado no servidor antes da troca. Os campos de assinatura continuam presos ao documento: se o leiaute mudou, confira no DocuSign onde eles caíram antes de enviar a próxima waiver.` })
+    if (!ok) return
+    setBusy(did)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const csrf = document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || ''
+      const res = await fetch(`/ops/api/docusign/templates/${id}/documents/${did}`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': decodeURIComponent(csrf) } })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || `HTTP ${res.status}`) }
+      const j = await res.json(); toast(`PDF trocado. O antigo ficou guardado como ${j.backup}.`, 'ok'); det.reload(); onChanged()
+    } catch (e) { toast((e as Error).message, 'crit') } finally { setBusy(null) }
+  }
+  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
+    <div><div className="small muted cond">DocuSign · modelo</div><h2 className="h1" style={{ fontSize: 22 }}>{det.data?.nome || <span className="muted">(sem nome)</span>}</h2><div className="small muted mono">{id}</div></div>
+    {det.loading && !det.data && <Loading rows={3} />}
+    {det.error && <ErrorState error={det.error} retry={det.reload} />}
+    {det.data && !det.data.connected && <Banner tone="warn">DocuSign não conectado: {det.data.reason}</Banner>}
+    {det.data?.connected && <>
+      {det.data.uso_pela_IA && <Banner tone="info">Este modelo é um dos dois que a automação usa: {det.data.uso_pela_IA}</Banner>}
+      {can('MANAGER') && <Section title="Nome" tight><div className="row wrap"><input className="input grow" value={nomeAtual} onChange={e => setNome(e.target.value)} maxLength={120} /><button className="btn primary sm" disabled={busy === 'nome' || nomeAtual.trim().length < 2 || nomeAtual === (det.data.nome || '')} onClick={renomear}>{busy === 'nome' ? <Spinner /> : 'Salvar nome'}</button></div></Section>}
+      <Section title="Documentos" count={det.data.documentos?.length} tight>{!det.data.documentos?.length ? <Empty>O modelo não tem documento.</Empty> : <div>{det.data.documentos.map(d => <div key={d.documentId} className="att"><div className="lv LOW" /><div className="grow">{d.nome || `documento ${d.documentId}`}<div className="small muted">id {d.documentId}{d.paginas ? ` · ${d.paginas} pág.` : ''}</div></div>
+        <a className="btn sm" href={`/ops/api/docusign/templates/${id}/documents/${d.documentId}`} target="_blank" rel="noopener noreferrer">Ver PDF ↗</a>
+        {can('MANAGER') && <label className="btn sm" style={{ cursor: busy ? 'default' : 'pointer' }}>{busy === d.documentId ? <Spinner /> : 'Substituir PDF…'}<input type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} disabled={!!busy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) substituir(d.documentId, f) }} /></label>}
+      </div>)}</div>}</Section>
+      <Section title="Papéis e campos de assinatura" count={det.data.papeis?.length} tight>{!det.data.papeis?.length ? <Empty>Sem papéis.</Empty> : <div>{det.data.papeis.map((p, i) => <div key={i} className="att"><div className="lv LOW" /><div className="grow">{p.papel || '?'}<div className="small muted">{p.campos} campo(s){p.ancoras.length ? ` · âncoras: ${p.ancoras.join(', ')}` : ' · por posição na página'}</div></div></div>)}</div>}</Section>
+      <div className="small muted">Alterado em {fmtDateTime(det.data.alterado_em)}. Trocar o PDF mantém o documento e seus campos; se o leiaute mudou, confira no DocuSign.</div>
+    </>}
+  </div></div>
+}
+
 export function DocuSignPage() {
   const nav = useNavigate()
   const { can } = useAuth()
@@ -265,6 +317,7 @@ export function DocuSignPage() {
   const toast = useToast()
   const [enviar, setEnviar] = useState(false)
   const [tab, setTab] = useTab<'env' | 'signed' | 'int' | 'tpl' | 'lixo'>('v', 'env')
+  const [modelo, setModelo] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [st, setSt] = useTab<string>('s', 'all')
   const env = useGet<Waiver[]>(tab === 'lixo' ? '/waivers?hidden=1' : '/waivers', 120000)
@@ -325,10 +378,11 @@ export function DocuSignPage() {
       {tpl.loading && !tpl.data ? <Loading /> : tpl.error ? <ErrorState error={tpl.error} retry={tpl.reload} /> : tpl.data && !tpl.data.connected ? <Banner tone="warn">DocuSign não conectado neste servidor: {tpl.data.reason}</Banner> :
         tplList.length === 0 ? <Empty>A conta não devolveu modelos.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Modelo</th><th>ID</th><th>Papéis</th></tr></thead><tbody>
-          {tplList.map((t, i) => <tr key={i}><td>{t.nome || t.name}</td><td className="mono small">{t.templateId || t.id}</td><td className="small">{(t.papeis || t.roles || []).join(', ')}</td></tr>)}
+          {tplList.map((t, i) => { const id = String(t.templateId || t.id || ''); return <tr key={i} className="click" onClick={() => id && setModelo(id)}><td>{t.nome || t.name || <span className="muted">(sem nome — clique para nomear)</span>}</td><td className="mono small">{id}</td><td className="small">{(t.papeis || t.roles || []).join(', ')}</td></tr> })}
         </tbody></table></div>}
-      <div className="small muted" style={{ marginTop: 10 }}>Envio de waiver pela IA passa por aprovação (política). Só os dois modelos de PARAMETROS servem para a automação.</div>
+      <div className="small muted" style={{ marginTop: 10 }}>Clique no modelo para ver o PDF, renomear ou trocar o PDF. Envio de waiver pela IA passa por aprovação (política). Só os dois modelos de PARAMETROS servem para a automação.</div>
     </Section>}
+    {modelo && <ModeloModal id={modelo} onClose={() => setModelo(null)} onChanged={tpl.reload} />}
   </>
 }
 

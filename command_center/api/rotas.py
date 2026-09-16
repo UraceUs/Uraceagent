@@ -371,6 +371,110 @@ def docusign_templates(u=Depends(auth.usuario_atual)):
         return {"connected": False, "reason": f"{type(e).__name__}: {str(e)[:200]}", "templates": []}
 
 
+from fastapi import File as _File, UploadFile as _UploadFile  # noqa: E402
+
+RX_TEMPLATE = re.compile(r"^[0-9a-fA-F-]{36}$")
+RX_DOCID = re.compile(r"^\d{1,6}$")
+TEMPLATES_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "docusign-templates")
+
+
+def _ids_do_modelo(tid, did=None):
+    if not RX_TEMPLATE.match(tid or "") or (did is not None and not RX_DOCID.match(did or "")):
+        raise HTTPException(400, "Identificador de modelo/documento inválido.")
+
+
+@r.get("/docusign/templates/{tid}")
+def docusign_template(tid: str, u=Depends(auth.usuario_atual)):
+    """Um modelo por inteiro (dono, 16/09): documentos, papéis e campos. Só leitura."""
+    _ids_do_modelo(tid)
+    from command_center.providers import NaoConectado, modulo
+    try:
+        return {"connected": True, **modulo("docusign").modelo_humano(tid)}
+    except NaoConectado as e:
+        return {"connected": False, "reason": str(e)}
+    except Exception as e:
+        raise HTTPException(502, f"DocuSign: {str(e)[:300]}")
+
+
+@r.get("/docusign/templates/{tid}/documents/{did}")
+def docusign_template_pdf(tid: str, did: str, u=Depends(auth.usuario_atual)):
+    """O PDF do modelo como está hoje, aberto no navegador."""
+    _ids_do_modelo(tid, did)
+    from fastapi.responses import Response
+    from command_center.providers import NaoConectado, modulo
+    try:
+        pdf = modulo("docusign").baixar_documento_do_modelo_humano(tid, did)
+    except NaoConectado as e:
+        raise HTTPException(503, f"DocuSign não conectado: {e}")
+    except Exception as e:
+        raise HTTPException(502, str(e)[:300])
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="modelo-{tid[:8]}-{did}.pdf"', "Cache-Control": "no-store"})
+
+
+class RenomearModeloIn(BaseModel):
+    name: str
+
+
+@r.patch("/docusign/templates/{tid}")
+def docusign_template_rename(tid: str, dados: RenomearModeloIn, request: Request, u=Depends(auth.exige("MANAGER")),
+                             con: sqlite3.Connection = Depends(get_db)):
+    """Renomeia o modelo no DocuSign. MANAGER; auditado com o nome antigo."""
+    _ids_do_modelo(tid)
+    nome = (dados.name or "").strip()
+    if not (2 <= len(nome) <= 120):
+        raise HTTPException(400, "Nome do modelo: entre 2 e 120 caracteres.")
+    from command_center.providers import NaoConectado, modulo
+    try:
+        g = modulo("docusign")
+        antes = g.modelo_humano(tid).get("nome")
+        g.renomear_modelo_humano(tid, nome)
+    except NaoConectado as e:
+        raise HTTPException(503, f"DocuSign não conectado: {e}")
+    except Exception as e:
+        raise HTTPException(502, str(e)[:300])
+    auditar(con, "docusign.template.renamed", f"user:{u['id']}", user_id=u["id"], entity_type="docusign_template", entity_id=tid,
+            detail={"antes": antes, "depois": nome}, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True, "name": nome, "antes": antes}
+
+
+@r.post("/docusign/templates/{tid}/documents/{did}")
+async def docusign_template_replace(tid: str, did: str, request: Request, file: _UploadFile = _File(...),
+                                    u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    """Troca o PDF de um documento do modelo (dono, 16/09). Antes de trocar, guarda o PDF
+    atual em ~/.urace/docusign-templates — troca de modelo de contrato não pode ser sem volta.
+    O documentId é mantido, então os campos de assinatura continuam no documento."""
+    _ids_do_modelo(tid, did)
+    dados = await file.read()
+    if not dados:
+        raise HTTPException(400, "Arquivo vazio.")
+    if len(dados) > MAX_BYTES:
+        raise HTTPException(413, "Arquivo maior que 25 MB.")
+    if not dados.startswith(b"%PDF") or os.path.splitext(file.filename or "")[1].lower() != ".pdf":
+        raise HTTPException(400, "Só PDF.")
+    from command_center.providers import NaoConectado, modulo
+    try:
+        g = modulo("docusign")
+        antigo = g.baixar_documento_do_modelo_humano(tid, did)
+        os.makedirs(TEMPLATES_DIR, mode=0o700, exist_ok=True)
+        backup = os.path.join(TEMPLATES_DIR, f"{tid}-{did}-{agora()[:19].replace(':', '')}.pdf")
+        with open(backup, "wb") as f:
+            f.write(antigo)
+        os.chmod(backup, 0o600)
+        g.substituir_documento_do_modelo_humano(tid, did, file.filename, dados)
+    except NaoConectado as e:
+        raise HTTPException(503, f"DocuSign não conectado: {e}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, str(e)[:300])
+    auditar(con, "docusign.template.document_replaced", f"user:{u['id']}", user_id=u["id"], entity_type="docusign_template", entity_id=tid,
+            detail={"documentId": did, "arquivo": file.filename, "bytes": len(dados), "backup": backup}, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True, "backup": os.path.basename(backup)}
+
+
 # ---------------------------------------------------------- políticas
 @r.get("/policies")
 def policies(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
