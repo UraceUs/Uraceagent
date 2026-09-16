@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Attention as A, Level } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Chip, Empty, ErrorState, Loading, Section, levelTone } from '../components/ui'
+import { Chip, Empty, ErrorState, LEVEL_GLYPH, Loading, PageHeader, Section, levelTone } from '../components/ui'
 import { fmtDateTime } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -57,7 +57,7 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
     <div className="grow">
       <div className="row wrap" style={{ gap: 8 }}>
         <span className="ti">{a.title}</span>
-        <Chip tone={levelTone(a.level)}>{LABEL[a.level]}</Chip>
+        <Chip tone={levelTone(a.level)} glyph={LEVEL_GLYPH[a.level]}>{LABEL[a.level]}</Chip>
         {a.dismissed && <Chip tone="outline">oculto</Chip>}
         <span className="grow" />
         {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title="Abrir no sistema de origem">{sysOf(a.link)} ↗</a>}
@@ -74,7 +74,7 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
         {!a.client_id && !['approvals', 'ai', 'integration', 'email'].includes(a.entity.type) && a.action && <span className="chip outline">{a.action}</span>}
         <span className="grow" />
         {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title="Diga à IA o que fazer com este item">✦ Instruir a IA</button>}
-        {can('OPERATOR') && !a.dismissed && <button className="btn ghost sm" disabled={busy === a.key} onClick={() => hide(a)} title="Esconde o aviso; não apaga a origem">Ocultar</button>}
+        {can('OPERATOR') && !a.dismissed && <button className="btn quiet sm" disabled={busy === a.key} onClick={() => hide(a)} title="Esconde o aviso; não apaga a origem">ocultar</button>}
         {can('OPERATOR') && a.dismissed && <button className="btn sm" disabled={busy === a.key} onClick={() => restore(a)}>Restaurar</button>}
       </div>
       {balao === a.key && <Balao a={a} onDone={() => setBalao(null)} />}
@@ -91,13 +91,13 @@ export function AttentionPage() {
   const count = (l: Level) => (data || []).filter(a => a.level === l).length
   const hidden = (data || []).filter(a => a.dismissed).length
   return <>
-    <div className="page-h"><div><h1 className="h1">Precisa de atenção</h1>
-      <div className="sub small">Só o que a IA não resolveu sozinha, do mais grave para o menos. Ocultar esconde o aviso; a origem fica.</div></div>
-      <div className="row"><label className="check"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> mostrar ocultos{showHidden && hidden > 0 && <> ({hidden})</>}</label><button className="btn" onClick={reload}>↻ Atualizar</button></div></div>
+    <PageHeader title="Precisa de atenção" help="Só o que a IA não resolveu sozinha, do mais grave para o menos. Ocultar esconde o aviso; a origem (tarefa, envelope, e-mail) fica onde está.">
+      <label className="check"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> mostrar ocultos{showHidden && hidden > 0 && <> ({hidden})</>}</label><button className="btn" onClick={reload}>↻</button>
+    </PageHeader>
     <div className="tabs">
-      <button className={f === 'ALL' ? 'on' : ''} onClick={() => setF('ALL')}>Todos ({data?.length ?? 0})</button>
-      {LEVELS.map(l => <button key={l} className={f === l ? 'on' : ''} onClick={() => setF(l)}>{LABEL[l]} ({count(l)})</button>)}
+      <button className={f === 'ALL' ? 'on' : ''} onClick={() => setF('ALL')}>Todos <span className="count">{data?.length ?? 0}</span></button>
+      {LEVELS.map(l => <button key={l} className={f === l ? 'on' : ''} onClick={() => setF(l)}>{LEVEL_GLYPH[l]} {LABEL[l]} <span className="count">{count(l)}</span></button>)}
     </div>
-    <Section title="Itens" count={items.length} tight>{loading && !data ? <Loading /> : <AttentionList items={items} onChange={reload} />}</Section>
+    <Section title={f === 'ALL' ? 'Do mais grave para o menos' : LABEL[f]} count={items.length} tight>{loading && !data ? <Loading /> : <AttentionList items={items} onChange={reload} />}</Section>
   </>
 }

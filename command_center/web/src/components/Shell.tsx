@@ -4,8 +4,8 @@ import { useAuth } from '../auth/AuthContext'
 import { useGet, useOnline } from '../api/hooks'
 import type { Attention, Dashboard } from '../api/types'
 import { Palette } from './Palette'
-import { Chip, levelTone, statusTone } from './ui'
-import { initials } from './fmt'
+import { Chip, statusTone } from './ui'
+import { ago, initials } from './fmt'
 
 const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
 
@@ -23,7 +23,9 @@ export function Shell() {
   const online = useOnline()
   const [pal, setPal] = useState(false)
   const [side, setSide] = useState(false)
-  const [menu, setMenu] = useState<'none' | 'who' | 'bell'>('none')
+  const [menu, setMenu] = useState<'none' | 'who'>('none')
+  const [clock, setClock] = useState(() => new Date())
+  useEffect(() => { const id = setInterval(() => setClock(new Date()), 30000); return () => clearInterval(id) }, [])
   const menuRef = useRef<HTMLDivElement>(null)
   useOutside(menuRef, useCallback(() => setMenu('none'), []))
   // um único GET leve alimenta os contadores do menu e o sino (a cada 60 s)
@@ -38,9 +40,15 @@ export function Shell() {
   const ask = useCallback((text: string) => nav('/ai', { state: { ask: text } }), [nav])
   const d = dash.data
   const alerts: Attention[] = (d?.needs_attention || []).filter(a => a.level === 'CRITICAL' || a.level === 'HIGH')
+  const crit = (d?.needs_attention || []).filter(a => a.level === 'CRITICAL').length
   const pend = d?.ai_pending_approval || 0
   const attn = d?.needs_attention_total || 0
-  const badInt = (d?.integrations || []).filter(i => i.status === 'ERROR' || i.status === 'DEGRADED').length
+  const bad = (d?.integrations || []).filter(i => i.status !== 'CONNECTED' && i.status !== 'SYNCING')
+  const badInt = bad.length
+  const nInt = (d?.integrations || []).length
+  const lastSync = (d?.last_sync || []).map(s => s.at).filter(Boolean).sort().pop() || null
+  const syncAge = lastSync ? Date.now() - new Date(lastSync).getTime() : null
+  const syncTone = syncAge === null ? 'crit' : syncAge > 2 * 3600e3 ? 'warn' : 'ok'
 
   return <div className="app">
     {side && <div className="scrim" onClick={() => setSide(false)} />}
@@ -49,7 +57,7 @@ export function Shell() {
       <nav className="nav" aria-label="Principal">
         <div className="grp">Operação</div>
         <NavLink to="/" end>Dashboard</NavLink>
-        <NavLink to="/attention">Precisa de atenção {attn > 0 && <span className="n">{attn}</span>}</NavLink>
+        <NavLink to="/attention">Precisa de atenção {attn > 0 && <span className={`n${crit ? '' : ' warn'}`}>{attn}</span>}</NavLink>
         <NavLink to="/clients">Clientes</NavLink>
         <NavLink to="/races">Corridas</NavLink>
         <div className="grp">Sistemas</div>
@@ -63,11 +71,11 @@ export function Shell() {
         <NavLink to="/crm/funil">Funil de vendas</NavLink>
         <div className="grp">Inteligência</div>
         <NavLink to="/ai" end>AI Command</NavLink>
-        <NavLink to="/approvals">Aprovações {pend > 0 && <span className="n">{pend}</span>}</NavLink>
+        <NavLink to="/approvals">Aprovações {pend > 0 && <span className="n warn">{pend}</span>}</NavLink>
         <NavLink to="/automation">Automação e memória</NavLink>
         <NavLink to="/activity">Atividade da IA</NavLink>
         <div className="grp">Administração</div>
-        <NavLink to="/integrations">Integrações {badInt > 0 && <span className="n">{badInt}</span>}</NavLink>
+        <NavLink to="/integrations">Integrações {badInt > 0 && <span className="n warn">{badInt}</span>}</NavLink>
         {can('MANAGER') && <NavLink to="/audit">Auditoria</NavLink>}
         {can('ADMIN') && <NavLink to="/policies">Políticas da IA</NavLink>}
         {can('ADMIN') && <NavLink to="/users">Usuários</NavLink>}
@@ -75,6 +83,7 @@ export function Shell() {
       <div className="foot">{user?.name}<br /><span className="mono" style={{ fontSize: 11 }}>{ROLE_PT[user?.role || ''] || user?.role}</span></div>
     </aside>
     <div className="main">
+      <div className="topbar">
       <header className="top">
         <button className="iconbtn burger" aria-label="Menu" onClick={() => setSide(s => !s)}>☰</button>
         <div className="search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
@@ -84,21 +93,9 @@ export function Shell() {
         {!online && <Chip tone="crit" dot>Offline</Chip>}
         {online && dash.error?.offline && <Chip tone="warn" dot>Servidor fora</Chip>}
         <div ref={menuRef} style={{ position: 'relative', display: 'flex', gap: 4 }}>
-          <button className="iconbtn" aria-label="Notificações" onClick={() => setMenu(m => m === 'bell' ? 'none' : 'bell')}>
-            🔔{(alerts.length > 0 || pend > 0) && <span className="dot" />}
-          </button>
           <button className="who" onClick={() => setMenu(m => m === 'who' ? 'none' : 'who')} aria-haspopup="menu">
             <span className="avatar">{initials(user?.name)}</span><span className="small ink2">{user?.name?.split(' ')[0]}</span>
           </button>
-          {menu === 'bell' && <div className="pop">
-            <div className="card-h"><h2 className="h2">Agora</h2><div className="grow" /><NavLink to="/attention" className="small">ver tudo</NavLink></div>
-            {pend > 0 && <div className="att"><div className="lv HIGH" /><div className="grow"><div className="ti">{pend} ação(ões) da IA esperando aprovação</div><NavLink to="/approvals" className="small">Revisar</NavLink></div></div>}
-            {alerts.length === 0 && pend === 0 && <div className="state"><p>Nada crítico ou alto no momento.</p></div>}
-            {alerts.map((a, i) => <div className="att" key={i}><div className={`lv ${a.level}`} /><div className="grow">
-              <div className="ti">{a.title}</div><div className="why">{a.why}</div>
-              <div className="row" style={{ marginTop: 4 }}><Chip tone={levelTone(a.level)}>{a.level}</Chip>{a.client_id && <NavLink to={`/clients/${a.client_id}`} className="small">abrir cliente</NavLink>}</div>
-            </div></div>)}
-          </div>}
           {menu === 'who' && <div className="menu" role="menu">
             <div className="mh">{user?.email}<br /><Chip tone={statusTone('ACTIVE')}>{ROLE_PT[user?.role || '']}</Chip></div>
             <hr />
@@ -109,6 +106,15 @@ export function Shell() {
           </div>}
         </div>
       </header>
+      {/* Race control: o estado da operação em uma linha, em toda tela. Cada item leva para onde se resolve. */}
+      <div className="rc" aria-label="Estado da operação">
+        <span className={`it link ${syncTone}`} title={lastSync ? `última sincronia: ${new Date(lastSync).toLocaleString('pt-BR')}` : 'nenhuma sincronia'} onClick={() => nav('/')}><span className="k">Espelho</span><span className="g">{syncTone === 'ok' ? '✓' : syncTone === 'warn' ? '▲' : '✕'}</span>{lastSync ? `há ${ago(lastSync)}` : 'nunca'}</span>
+        <span className={`it link ${badInt ? 'warn' : 'ok'}`} title={badInt ? bad.map(b => `${b.system}: ${b.status.toLowerCase()}`).join(' · ') : 'todas respondendo'} onClick={() => nav('/integrations')}><span className="k">Sistemas</span><span className="g">{badInt ? '▲' : '✓'}</span>{nInt ? `${nInt - badInt}/${nInt}` : '—'}{badInt > 0 && badInt <= 2 && ` · ${bad.map(b => b.system).join(', ')}`}{badInt > 2 && ` · ${badInt} com problema`}</span>
+        <span className={`it link ${crit ? 'crit' : alerts.length ? 'warn' : 'ok'}`} onClick={() => nav('/attention')}><span className="k">Atenção</span><span className="g">{crit ? '✕' : alerts.length ? '▲' : '✓'}</span>{attn ? `${attn} item(ns)` : 'em ordem'}{crit > 0 && ` · ${crit} crítico(s)`}</span>
+        <span className={`it link ${pend ? 'warn' : ''}`} onClick={() => nav(pend ? '/approvals' : '/ai')}><span className="k">IA</span><span className="g">{pend ? '○' : '✓'}</span>{pend ? `${pend} esperando você` : 'nada pendente'}</span>
+        <span className="it clock" title="hora local"><span className="k">{clock.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>{clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+      </div>
+      </div>
       <main className="page"><Outlet context={{ dash }} /></main>
     </div>
     <Palette open={pal} onClose={() => setPal(false)} ask={ask} />

@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { ActionPolicy, AuditRow, ContextSource, Integration, Policy } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, Spinner, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, POLICY_LABEL, Section, Spinner, Status, statusTone, SYS_NAME } from '../components/ui'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -16,6 +16,9 @@ const DESC: Record<string, string> = {
   quickbooks: 'Em stand-by por decisão do dono. Invoices só depois de aprovação humana.',
   kommo: 'Funil comercial (Instagram, Facebook, WhatsApp). Token da integração privada em ~/.urace/kommo.env. Resposta pelo painel sai como mensagem do bot da conta.',
 }
+
+/** O erro da sondagem às vezes vem como JSON ({"motivo": "…"}); a pessoa lê o motivo, não o JSON. */
+function motivo(s: string) { const j = safeJson(s) as { motivo?: string } | null; return (j && typeof j === 'object' && typeof j.motivo === 'string') ? j.motivo : s }
 
 function Contexto({ kind }: { kind: 'sheet' | 'file' }) {
   const { can } = useAuth()
@@ -87,21 +90,20 @@ export function Integrations() {
     try { await api.post('/integrations/check'); if (rate) await api.post(`/context/${rate.id}/check`); toast('Sondagem concluída.', 'ok'); reload(); ctx.reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Integrações</h1><div className="sub small">Estado real de cada sistema, mais as planilhas e arquivos que a IA pode consultar. “Verificar” faz UMA chamada real por sistema.</div></div>
-      {can('OPERATOR') && tab === 'sys' && <button className="btn primary" onClick={check} disabled={busy}>{busy ? <Spinner /> : '⚡'} Verificar agora</button>}</div>
+    <PageHeader title="Integrações" help={<>Estado real de cada sistema, mais as planilhas e arquivos que a IA pode consultar. “Verificar” faz UMA chamada real por sistema.</>}>
+      {can('OPERATOR') && tab === 'sys' && <button className="btn primary" onClick={check} disabled={busy}>{busy ? <Spinner /> : '⚡'} Verificar agora</button>}</PageHeader>
     <div className="tabs">{([['sys', 'Sistemas'], ['sheets', 'Planilhas e links'], ['files', 'Arquivos']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
     {tab === 'sys' && (error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-      <div className="grid g2">{(data || []).map(i => { const det = safeJson(i.detail); return <div className="card card-b" key={i.system}>
-        <div className="row"><h2 className="h1" style={{ fontSize: 22 }}>{i.system}</h2><Chip tone={statusTone(i.status)} dot>{i.status}</Chip></div>
-        <div className="small ink2" style={{ margin: '6px 0 10px' }}>{DESC[i.system]}</div>
-        <dl className="dl"><dt>Último sucesso</dt><dd className="mono">{i.last_success_at ? `${fmtDateTime(i.last_success_at)} (${ago(i.last_success_at)})` : '—'}</dd>
-          <dt>Última tentativa</dt><dd className="mono">{i.last_attempt_at ? fmtDateTime(i.last_attempt_at) : '—'}</dd>
-          <dt>Erros</dt><dd className="mono">{i.error_count}</dd>
-          {i.last_error && <><dt>Último erro</dt><dd className="small" style={{ color: 'var(--crit)' }}>{i.last_error}</dd></>}
-          {det !== null && typeof det === 'object' && <><dt>Detalhe</dt><dd><pre className="mono small muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(det, null, 1).slice(0, 500)}</pre></dd></>}</dl>
+      <div className="grid g2">{(data || []).map(i => { const det = safeJson(i.detail); const ruim = i.status !== 'CONNECTED' && i.status !== 'SYNCING'; return <div className="card card-b lead" key={i.system} style={{ borderLeftColor: ruim ? 'var(--crit)' : 'var(--ok)' }}>
+        <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{SYS_NAME[i.system] || i.system}</h2><Status s={i.status} /><span className="grow" /><span className="small muted mono" title={i.last_success_at ? fmtDateTime(i.last_success_at) : ''}>{i.last_success_at ? `respondeu há ${ago(i.last_success_at)}` : 'nunca respondeu'}</span></div>
+        <div className="small ink2" style={{ margin: '6px 0 0' }}>{DESC[i.system]}</div>
+        {i.last_error && <div className="banner crit" style={{ marginTop: 8 }}><span className="bi">✕</span><div className="grow small">{motivo(i.last_error)}</div></div>}
+        <details className="small muted" style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer' }}>detalhes técnicos</summary>
+          <dl className="dl" style={{ marginTop: 6 }}><dt>Última tentativa</dt><dd className="mono">{i.last_attempt_at ? fmtDateTime(i.last_attempt_at) : '—'}</dd><dt>Erros seguidos</dt><dd className="mono">{i.error_count}</dd>
+            {det !== null && typeof det === 'object' && <><dt>Detalhe</dt><dd><pre className="mono small muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(det, null, 1).slice(0, 500)}</pre></dd></>}</dl></details>
       </div> })}
       {rate && <div className="card card-b">
-        <div className="row"><h2 className="h1" style={{ fontSize: 22 }}>rate card</h2><Chip tone={rate.last_check_ok === null ? 'neutral' : rate.last_check_ok ? 'ok' : 'crit'} dot>{rate.last_check_ok === null ? 'NÃO TESTADA' : rate.last_check_ok ? 'CONNECTED' : 'ERROR'}</Chip></div>
+        <div className="row"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>Rate Card</h2><Status kind={rate.last_check_ok === null ? 'wait' : rate.last_check_ok ? 'ok' : 'crit'} label={rate.last_check_ok === null ? 'não testada' : rate.last_check_ok ? 'lida' : 'falhou'} /></div>
         <div className="small ink2" style={{ margin: '6px 0 10px' }}>Planilha de preços, fonte de verdade acima do catálogo do QuickBooks. A IA lê ao vivo pelo Google.</div>
         <dl className="dl"><dt>Última leitura</dt><dd className="mono">{rate.last_check_at ? `${fmtDateTime(rate.last_check_at)} (${ago(rate.last_check_at)})` : '—'}</dd><dt>Resultado</dt><dd className="small">{rate.last_check_msg || '—'}</dd><dt>Planilha</dt><dd><a href={rate.url || '#'} target="_blank" rel="noopener noreferrer">abrir ↗</a></dd></dl>
       </div>}
@@ -122,7 +124,7 @@ export function Policies() {
     try { await api.put(`/policies/${action}`, { policy }); toast('Política atualizada e auditada.', 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Políticas da IA</h1><div className="sub small">O que a IA pode fazer sozinha, o que pede confirmação, o que exige aprovação e o que está bloqueado. Apagar nunca destrava.</div></div></div>
+    <PageHeader title="Políticas da IA" help={<>O que a IA pode fazer sozinha, o que pede confirmação, o que exige aprovação e o que está bloqueado. Apagar nunca destrava.</>} />
     <Banner tone="info">Decisões do dono já em código: invoice só depois de aprovada (04/09); IA não envia e-mail; nada é apagado; Matt tasks e ADM URACE são só leitura.</Banner>
     <Section title="Ações" count={data?.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
@@ -172,7 +174,7 @@ export function Users() {
     try { await api.post(`/users/${u.id}/active`, { active: !u.active }); reload() } catch (ex) { toast((ex as ApiError).message, 'crit') }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Usuários</h1><div className="sub small">Papéis: Administrador tudo; Gerente aprova e vê financeiro; Operador envia comandos; Leitura só vê.</div></div></div>
+    <PageHeader title="Usuários" help={<>Papéis: Administrador tudo; Gerente aprova e vê financeiro; Operador envia comandos; Leitura só vê.</>} />
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
       <Section title="Cadastrados" count={data?.length} tight>
         {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
@@ -198,8 +200,8 @@ export function Audit() {
   const [q, setQ] = useState('')
   const rows = (data || []).filter(r => !q || `${r.event} ${r.actor} ${r.entity_type} ${r.entity_id} ${r.detail}`.toLowerCase().includes(q.toLowerCase()))
   return <>
-    <div className="page-h"><div><h1 className="h1">Auditoria</h1><div className="sub small">Registro imutável (gatilhos no banco impedem UPDATE/DELETE). Logins, comandos, decisões, mudanças de política.</div></div>
-      <div className="row"><input className="input" style={{ width: 260 }} placeholder="Filtrar" value={q} onChange={e => setQ(e.target.value)} /><button className="btn" onClick={reload}>↻</button></div></div>
+    <PageHeader title="Auditoria" help={<>Registro imutável (gatilhos no banco impedem UPDATE/DELETE). Logins, comandos, decisões, mudanças de política.</>}>
+      <input className="input" style={{ width: 260 }} placeholder="Filtrar" value={q} onChange={e => setQ(e.target.value)} /><button className="btn" onClick={reload}>↻</button></PageHeader>
     <Section title="Eventos" count={rows.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : rows.length === 0 ? <Empty>Nada registrado.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Evento</th><th>Quem</th><th>IP</th><th>Entidade</th><th>Detalhe</th></tr></thead><tbody>
@@ -222,7 +224,7 @@ export function Account() {
     catch (ex) { setMsg({ tone: 'crit', text: (ex as ApiError).message }) } finally { setBusy(false) }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Minha conta</h1><div className="sub small">{user?.name} · {user?.email} · {user?.role}</div></div></div>
+    <PageHeader title="Minha conta" help={<>{user?.name} · {user?.email} · {user?.role}</>} />
     <div style={{ maxWidth: 420 }}><Section title="Trocar senha"><form className="stack" onSubmit={submit}>
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
       <div className="field"><label>Senha atual</label><input className="input" type="password" autoComplete="current-password" required value={f.current_password} onChange={e => setF({ ...f, current_password: e.target.value })} /></div>

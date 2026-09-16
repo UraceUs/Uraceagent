@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { AiAction, AiCommand } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, SYS_NAME, Section, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, PageHeader, SYS_NAME, Section, Status } from '../components/ui'
 
 const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: 'Criar e enviar invoice', qbo_criar_invoice: 'Criar invoice', qbo_enviar_invoice: 'Enviar invoice', qbo_criar_item: 'Criar item no catálogo', qbo_criar_cliente: 'Criar cliente no QuickBooks', asana_criar_do_modelo: 'Criar tarefa (modelo oficial)', asana_criar_tarefa: 'Criar tarefa', asana_comentar: 'Comentar na tarefa', asana_mover_para_secao: 'Mover tarefa', asana_mover_para_finished: 'Mover para Finished Services', asana_concluir: 'Concluir tarefa', docusign_enviar_waiver: 'Enviar waiver', gmail_rascunho: 'Rascunho de e-mail', gmail_rotular: 'Marcar e-mail' }
 const STATUS_LABEL: Record<string, string> = { PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada' }
@@ -14,6 +14,21 @@ import { useToast } from '../components/Toast'
 import { Md } from '../components/Md'
 
 type Args = Record<string, unknown>
+
+/** O que a pessoa escreveu, sem o contexto técnico que o painel cola no prompt (CLIENTE: {...},
+ *  WAIVERS NO ESPELHO, O QUE O DONO JÁ ENSINOU…). Quem quiser o prompt inteiro abre "ver o que a IA recebeu". */
+const CORTES = ['\n\nO QUE O DONO JÁ ENSINOU', '\n\nCONTEXTO DO PAINEL', '\nCLIENTE: ', '\nTAREFA: ', '\nSUBTAREFAS (', '\nDESCRIÇÃO DA TAREFA', '\nWAIVERS NO ESPELHO', '\nSERVIÇOS NO ESPELHO', '\n\nFONTES DE CONTEXTO', '\n\nESTADO DO DIA', '\nCumpra a instrução', '\nAja NESTA tarefa']
+export function textoHumano(text: string): { eyebrow?: string; texto: string; tecnico: boolean } {
+  let corte = text.length
+  for (const c of CORTES) { const i = text.indexOf(c); if (i >= 0 && i < corte) corte = i }
+  let t = text.slice(0, corte).trim()
+  let eyebrow: string | undefined
+  const m = /^INSTRUÇÃO DO DONO (?:sobre o item de atenção|dentro da tarefa do Asana) "([^"]+)"[^:]*:\n?/.exec(t)
+  if (m) { eyebrow = `✦ instrução em: ${m[1]}`; t = t.slice(m[0].length).trim() }
+  else if (/^EVENTO AUTOMÁTICO/.test(t)) { eyebrow = '⚙ evento automático'; t = t.replace(/^EVENTO AUTOMÁTICO[^\n]*\n?/, '').trim() }
+  else if (/^TAREFA:/.test(t)) { eyebrow = '⚙ tarefa do painel'; t = t.replace(/^TAREFA:\s*/, '').trim() }
+  return { eyebrow, texto: t || text.slice(0, 400), tecnico: corte < text.length }
+}
 function Previa({ a }: { a: AiAction }) {
   const p = safeJson(a.payload) as { args?: Args; alvo?: string; descricao?: string; problemas?: string[] | null; conferir?: string[] | null } | null
   const args = (p && typeof p === 'object' && p.args && typeof p.args === 'object') ? p.args as Args : null
@@ -88,19 +103,22 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
     }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
-  return <div className="act">
+  const envia = a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver'
+  const cls = a.status === 'PROPOSED' ? 'wait' : a.status === 'DONE' ? 'done' : a.status === 'FAILED' || a.status === 'REJECTED' || a.policy === 'BLOCKED' ? 'fail' : ''
+  return <div className={`act ${cls}`}>
     <div className="grow">
-      <div className="row wrap"><span className="what">{ACAO_LABEL[a.action] || a.action}</span>{a.system && <Chip tone="outline">{SYS_NAME[a.system] || a.system}</Chip>}<Chip tone={statusTone(a.policy)}>{POLICY_LABEL[a.policy]}</Chip><Chip tone={statusTone(a.status)}>{STATUS_LABEL[a.status] || a.status}</Chip></div>
+      <div className="row wrap"><span className="what">{ACAO_LABEL[a.action] || a.action}{envia && ' ↗'}</span><Status s={a.status} label={STATUS_LABEL[a.status] || a.status} /></div>
+      <div className="meta">{a.system && <span>{SYS_NAME[a.system] || a.system}</span>}{a.system && <span>·</span>}<span title="política desta ação">{POLICY_LABEL[a.policy]}</span>{envia && <><span>·</span><span style={{ color: 'var(--warn)' }}>sai da empresa: aprovar = enviar</span></>}</div>
       {a.reason && <div className="small ink2" style={{ marginTop: 4 }}>{a.reason}</div>}
       {payload !== null && typeof payload === 'object' && (a.status === 'PROPOSED' || a.status === 'APPROVED') && <Previa a={a} />}
       {payload !== null && typeof payload === 'object' && a.status !== 'PROPOSED' && a.status !== 'APPROVED' && <details className="small muted" style={{ marginTop: 4 }}><summary>dados</summary><pre className="mono" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(payload, null, 1).slice(0, 600)}</pre></details>}
       <ResultadoBox a={a} />
       <div className="small muted" style={{ marginTop: 4 }}>{fmtDateTime(a.created_at)}</div>
     </div>
-    {a.status === 'PROPOSED' && a.policy !== 'BLOCKED' && <div className="row">
-      {can('MANAGER') && <button className="btn primary sm" disabled={!!busy || incompleta} title={incompleta ? 'Proposta incompleta: peça à IA os dados que faltam' : ''} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : (a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver') ? 'Aprovar e enviar' : 'Aprovar'}</button>}
+    {a.status === 'PROPOSED' && a.policy !== 'BLOCKED' && <div className="decide">
+      {can('MANAGER') && <button className="btn primary" disabled={!!busy || incompleta} title={incompleta ? 'Proposta incompleta: peça à IA os dados que faltam' : ''} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : envia ? 'Aprovar e enviar ↗' : 'Aprovar'}</button>}
       {can('OPERATOR') && incompleta && <button className="btn sm" disabled={!!busy} title="O painel acha ou cria o item, resolve o cliente e completa a proposta" onClick={async () => { setBusy('a'); try { const r = await api.post<{ ok: boolean; problemas: string[]; notas: string[] }>(`/ai/actions/${a.id}/complete`); toast(r.ok ? `Completada.${r.notas.length ? ' ' + r.notas.join(' ') : ''} Agora dá para aprovar.` : `Ainda falta: ${r.problemas.join('; ')}`, r.ok ? 'ok' : 'crit'); onChange?.() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) } }}>{busy === 'a' ? <span className="spin" /> : '⚙ Completar agora'}</button>}
-      {can('OPERATOR') && <button className="btn sm" disabled={!!busy} onClick={() => decide('reject')}>{busy === 'r' ? <span className="spin" /> : 'Rejeitar'}</button>}
+      {can('OPERATOR') && <button className="btn quiet" disabled={!!busy} onClick={() => decide('reject')}>{busy === 'r' ? <span className="spin" /> : 'Rejeitar'}</button>}
     </div>}
     {a.policy === 'BLOCKED' && <Chip tone="crit">bloqueada por política</Chip>}
   </div>
@@ -111,7 +129,7 @@ function Bolha({ c, onChange, quem }: { c: AiCommand; onChange?: () => void; que
   const running = c.status === 'QUEUED' || c.status === 'RUNNING'
   const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   return <div className="chat">
-    <div className="msg me"><div className="bub">{c.text.split('\n\nO QUE O DONO JÁ ENSINOU')[0]}</div><div className="when">{quem ? `${quem} · ` : ''}{hora(c.created_at)}</div></div>
+    <div className="msg me"><div className="bub">{(() => { const h = textoHumano(c.text); return <>{h.eyebrow && <span className="ctx">{h.eyebrow}</span>}{h.texto}{h.tecnico && <details className="small" style={{ marginTop: 6, opacity: .8 }}><summary style={{ cursor: 'pointer' }}>ver o que a IA recebeu</summary><pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, margin: '6px 0 0' }}>{c.text}</pre></details>}</> })()}</div><div className="when">{quem ? `${quem} · ` : ''}{hora(c.created_at)}</div></div>
     <div className="msg ai">
       <div className="bub">{running ? <span className="row"><span className="spin" /> {c.status === 'QUEUED' ? 'Na fila…' : 'Lendo os sistemas e pensando…'}</span>
         : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : c.output ? <Md text={c.output} /> : <span className="muted">(sem texto)</span>}</div>
@@ -183,7 +201,7 @@ export function AICommand() {
   const separador = (c: AiCommand, i: number) => { const d = c.created_at.slice(0, 10); const ant = todos[i - 1]?.created_at.slice(0, 10); return d !== ant ? <div key={'d' + c.id} className="chat-day">{new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</div> : null }
 
   return <>
-    <div className="page-h"><div><h1 className="h1">AI Command</h1><div className="sub small">Uma conversa só, contínua. A IA lê Asana, DocuSign, Gmail e QuickBooks; busca e cria sozinha, e só o envio de invoice e waiver espera você.</div></div></div>
+    <PageHeader title="AI Command" help="Uma conversa só, contínua, por pessoa. A IA lê Asana, DocuSign, Gmail e QuickBooks; busca e cria sozinha, e só o envio de invoice e waiver espera a sua aprovação." />
     <div className="grid" style={{ gridTemplateColumns: can('MANAGER') ? 'minmax(0,1fr) 260px' : 'minmax(0,1fr)' }}>
       <div className="stack">
         {!can('OPERATOR') && <Banner tone="info">Seu papel é de leitura: você vê a conversa, mas não envia comandos.</Banner>}
@@ -231,7 +249,7 @@ export function Approvals() {
   const items = (data || []).filter(a => a.policy !== 'BLOCKED')
   const blocked = (data || []).filter(a => a.policy === 'BLOCKED')
   return <>
-    <div className="page-h"><div><h1 className="h1">Aprovações</h1><div className="sub small">Ações que a IA propôs e que exigem decisão humana. Aprovar registra a decisão; a execução chega com o motor de ações (fase 6).</div></div><button className="btn" onClick={reload}>↻</button></div>
+    <PageHeader title="Aprovações" help="Ações que a IA propôs e que exigem decisão humana. Aprovar executa na hora; o que sai da empresa (invoice, waiver) está marcado com ↗."><button className="btn" onClick={reload}>↻</button></PageHeader>
     {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : <>
       <Section title="Pendentes" count={items.length}>{items.length === 0 ? <Empty title="Fila vazia">Nada esperando aprovação.</Empty> : <div className="acts">{items.map(a => <ActionCard key={a.id} a={a} onChange={reload} />)}</div>}</Section>
       {blocked.length > 0 && <Section title="Bloqueadas por política" count={blocked.length}><div className="acts">{blocked.map(a => <ActionCard key={a.id} a={a} />)}</div></Section>}
@@ -242,11 +260,11 @@ export function Approvals() {
 export function Activity() {
   const { data, error, loading, reload } = useGet<{ at: string; actor: string; event: string; entity_type: string | null; entity_id: string | null; detail: string | null }[]>('/ai/activity?limit=200', 30000)
   return <>
-    <div className="page-h"><div><h1 className="h1">Atividade da IA</h1><div className="sub small">Trilha imutável: comandos, ações propostas e decisões, em ordem.</div></div><button className="btn" onClick={reload}>↻</button></div>
+    <PageHeader title="Atividade da IA" help="Trilha imutável: comandos, ações propostas e decisões, em ordem."><button className="btn" onClick={reload}>↻</button></PageHeader>
     <Section title="Eventos" count={data?.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : (data || []).length === 0 ? <Empty>Nenhum evento de IA registrado.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Evento</th><th>Quem</th><th>Entidade</th><th>Detalhe</th></tr></thead><tbody>
-          {data!.map((r, i) => { const d = safeJson(r.detail); return <tr key={i}><td className="mono nowrap">{fmtDateTime(r.at)}</td><td><Chip tone={r.event.includes('reject') || r.event.includes('fail') ? 'crit' : r.event.includes('approve') ? 'ok' : 'neutral'}>{r.event}</Chip></td><td className="mono small">{r.actor}</td><td className="small">{r.entity_type} {r.entity_id}</td><td className="small ink2" style={{ maxWidth: 480 }}>{typeof d === 'string' ? d : d ? JSON.stringify(d).slice(0, 240) : ''}</td></tr> })}
+          {data!.map((r, i) => { const d = safeJson(r.detail); return <tr key={i}><td className="mono nowrap">{fmtDateTime(r.at)}</td><td><Chip tone={r.event.includes('reject') || r.event.includes('fail') ? 'crit' : r.event.includes('approve') ? 'ok' : 'neutral'} glyph={r.event.includes('reject') || r.event.includes('fail') ? '✕' : r.event.includes('approve') ? '✓' : '●'}>{r.event}</Chip></td><td className="mono small">{r.actor}</td><td className="small">{r.entity_type} {r.entity_id}</td><td className="small ink2" style={{ maxWidth: 480 }}>{typeof d === 'string' ? d : d ? JSON.stringify(d).slice(0, 240) : ''}</td></tr> })}
         </tbody></table></div>}
     </Section>
   </>

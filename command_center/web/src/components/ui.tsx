@@ -1,12 +1,41 @@
-import { type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
 import type { Level, Policy } from '../api/types'
 
 export type Tone = 'ok' | 'warn' | 'crit' | 'info' | 'neutral' | 'accent' | 'outline'
 
-export function Chip({ tone = 'neutral', children, dot }: { tone?: Tone; children: ReactNode; dot?: boolean }) {
-  return <span className={`chip ${tone}`}>{dot && <i />}{children}</span>
+export function Chip({ tone = 'neutral', children, dot, glyph, title }: { tone?: Tone | 'run' | 'wait'; children: ReactNode; dot?: boolean; glyph?: string; title?: string }) {
+  return <span className={`chip ${tone}`} title={title}>{glyph ? <span className="g" aria-hidden="true">{glyph}</span> : dot && <i />}{children}</span>
 }
+
+/** Linguagem de estado do Pit Wall: cor + glifo + texto, nunca só a cor.
+ *  ✓ feito/ok · ◐ em andamento · ○ esperando · ▲ atenção · ✕ falhou/crítico · — desligado */
+export type StatusKind = 'ok' | 'run' | 'wait' | 'warn' | 'crit' | 'off'
+export const STATUS_GLYPH: Record<StatusKind, string> = { ok: '✓', run: '◐', wait: '○', warn: '▲', crit: '✕', off: '—' }
+export function statusKind(s?: string | null): StatusKind {
+  switch ((s || '').toUpperCase()) {
+    case 'CONNECTED': case 'COMPLETED': case 'DONE': case 'APPROVED': case 'ACTIVE': case 'SAFE': case 'PAID': case 'OK': case 'CONFIRMED': return 'ok'
+    case 'SYNCING': case 'RUNNING': case 'QUEUED': return 'run'
+    case 'PROPOSED': case 'DELIVERED': case 'SENT': case 'PENDING': case 'NEW': case 'OPEN': case 'INVITED': case 'REQUIRES_APPROVAL': case 'REQUIRES_CONFIRMATION': case 'DRAFT': return 'wait'
+    case 'DEGRADED': case 'AT_RISK': case 'OVERDUE': return 'warn'
+    case 'ERROR': case 'FAILED': case 'REJECTED': case 'AUTORESPONDED': case 'DECLINED': case 'VOIDED': case 'BLOCKED': return 'crit'
+    case 'DISCONNECTED': case 'INACTIVE': case 'CANCELLED': case 'SKIPPED': return 'off'
+    default: return 'wait'
+  }
+}
+const KIND_TONE: Record<StatusKind, Tone | 'run' | 'wait'> = { ok: 'ok', run: 'run', wait: 'wait', warn: 'warn', crit: 'crit', off: 'neutral' }
+/** Nome em português de cada estado cru que a API devolve. O que não estiver aqui aparece como veio. */
+export const STATUS_PT: Record<string, string> = {
+  CONNECTED: 'ok', DEGRADED: 'degradado', ERROR: 'erro', DISCONNECTED: 'desligado', SYNCING: 'sincronizando',
+  ACTIVE: 'ativo', INACTIVE: 'inativo', NEW: 'novo', PENDING: 'pendente', AT_RISK: 'em risco', COMPLETED: 'concluído',
+  open: 'aberto', completed: 'concluído', paid: 'paga', overdue: 'vencida', sent: 'enviada', draft: 'rascunho',
+  PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', QUEUED: 'na fila', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada', SKIPPED: 'pulado',
+}
+export function Status({ s, label, kind }: { s?: string | null; label?: ReactNode; kind?: StatusKind }) {
+  const k = kind || statusKind(s)
+  return <Chip tone={KIND_TONE[k]} glyph={STATUS_GLYPH[k]}>{label ?? (STATUS_PT[s || ''] ?? STATUS_PT[(s || '').toUpperCase()] ?? (s || '').toLowerCase())}</Chip>
+}
+export const LEVEL_GLYPH: Record<Level, string> = { CRITICAL: '✕', HIGH: '▲', MEDIUM: '●', LOW: '○' }
 
 export function levelTone(l: Level): Tone {
   return l === 'CRITICAL' ? 'crit' : l === 'HIGH' ? 'warn' : l === 'MEDIUM' ? 'info' : 'neutral'
@@ -59,8 +88,8 @@ export function Section({ title, count, right, children, tight }: { title: React
   </section>
 }
 
-export function Kpi({ label, value, tone, foot, onClick }: { label: string; value: ReactNode; tone?: 'crit' | 'warn' | 'ok'; foot?: ReactNode; onClick?: () => void }) {
-  return <div className={`card kpi${onClick ? ' link' : ''}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+export function Kpi({ label, value, tone, foot, onClick, lead, sm }: { label: string; value: ReactNode; tone?: 'crit' | 'warn' | 'ok'; foot?: ReactNode; onClick?: () => void; lead?: boolean; sm?: boolean }) {
+  return <div className={`card kpi${onClick ? ' link' : ''}${lead ? ' lead' : ''}${sm ? ' sm' : ''}${lead && tone ? ' ' + tone : ''}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
     onKeyDown={e => { if (onClick && (e.key === 'Enter' || e.key === ' ')) onClick() }}>
     <div className="lbl">{label}</div>
     <div className={`val ${tone || ''}`}>{value}</div>
@@ -68,8 +97,26 @@ export function Kpi({ label, value, tone, foot, onClick }: { label: string; valu
   </div>
 }
 
+const BANNER_GLYPH = { crit: '✕', warn: '▲', ok: '✓', info: '●' } as const
 export function Banner({ tone, children }: { tone: 'crit' | 'warn' | 'ok' | 'info'; children: ReactNode }) {
-  return <div className={`banner ${tone}`} role={tone === 'crit' ? 'alert' : 'status'}>{children}</div>
+  return <div className={`banner ${tone}`} role={tone === 'crit' ? 'alert' : 'status'}><span className="bi" aria-hidden="true">{BANNER_GLYPH[tone]}</span><div className="grow">{children}</div></div>
+}
+
+/** Cabeçalho de página: título quieto, a ação principal à direita, e a explicação (nível 4) atrás do "?".
+ *  A pessoa que já sabe não lê o mesmo parágrafo toda vez; quem não sabe clica. */
+export function PageHeader({ title, help, children, eyebrow }: { title: ReactNode; help?: ReactNode; children?: ReactNode; eyebrow?: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return <div className="page-h">
+    <div className="grow">{eyebrow && <div className="small muted cond">{eyebrow}</div>}
+      <h1 className="h1">{title}{help && <button type="button" className={`help${open ? ' on' : ''}`} aria-label="O que é esta tela" aria-expanded={open} title="O que é esta tela" onClick={() => setOpen(o => !o)}>?</button>}</h1>
+      {help && open && <div className="sub small">{help}</div>}</div>
+    {children && <div className="row wrap">{children}</div>}
+  </div>
+}
+
+/** Barra fina no topo enquanto algo roda em segundo plano (sincronia, triagem, geração). */
+export function Progress({ on }: { on: boolean }) {
+  return on ? <div className="progress" role="progressbar" aria-label="em andamento" /> : null
 }
 
 export function Ext({ href, children }: { href?: string | null; children: ReactNode }) {
@@ -84,4 +131,10 @@ export function SysLink({ links, one }: { links?: { system: string; external_id:
   const ls = (links || []).filter(l => l.deep_link)
   if (ls.length === 0) return null
   return <span className="syslinks">{(one ? ls.slice(0, 1) : ls).map(l => <a key={l.system + l.external_id} className={`syslink ${l.system}`} href={l.deep_link!} target="_blank" rel="noopener noreferrer" title={`Abrir no ${SYS_NAME[l.system] || l.system}`}>{SYS_NAME[l.system] || l.system} ↗</a>)}</span>
+}
+
+/** Fita de números de contexto (nível 2): nome à esquerda, valor à direita. */
+export function Strip({ items }: { items: { label: string; value: ReactNode; tone?: 'crit' | 'warn' | 'ok'; onClick?: () => void; title?: string }[] }) {
+  return <div className="strip">{items.map(i => <div key={i.label} className={`it${i.onClick ? ' link' : ''}`} onClick={i.onClick} role={i.onClick ? 'button' : undefined} tabIndex={i.onClick ? 0 : undefined} title={i.title}
+    onKeyDown={e => { if (i.onClick && (e.key === 'Enter' || e.key === ' ')) i.onClick() }}><span className="lbl">{i.label}</span><span className={`val ${i.tone || ''}`}>{i.value}</span></div>)}</div>
 }

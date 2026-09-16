@@ -5,7 +5,7 @@ import type { Loaded } from '../api/hooks'
 import type { Dashboard as D, SyncStatus } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { AttentionList } from './Attention'
-import { Banner, Chip, ErrorState, Kpi, Loading, SYS_NAME, Section, Spinner, statusTone } from '../components/ui'
+import { Banner, ErrorState, Kpi, Loading, PageHeader, Progress, SYS_NAME, Section, Spinner, Status, Strip } from '../components/ui'
 import { ago, money } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -41,57 +41,45 @@ export function Dashboard() {
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSyncing(false); setStage('') }
   }
 
+  const crit = d.needs_attention.filter(a => a.level === 'CRITICAL').length
+  const syncPor = new Map(d.last_sync.map(s => [s.system, s]))
   return <>
-    <div className="page-h">
-      <div><h1 className="h1">Dashboard</h1><div className="sub small">Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>. A IA já tratou o que pôde; abaixo, só o que sobrou para gente.</div></div>
-      <div className="row">
-        {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing}>{syncing ? <Spinner /> : '↻'} {syncing ? `Sincronizando: ${stage || '…'}` : 'Sincronizar agora'}</button>}
-        {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai')}>Perguntar à IA</button>}
-      </div>
+    <Progress on={syncing} />
+    <PageHeader title="Dashboard" help={<>O que decide está em cima: pista de hoje, o que precisa de gente, o que espera sua aprovação. A IA já tratou o que pôde. Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>.</>}>
+      {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing} title="Lê Asana, DocuSign, Gmail e QuickBooks de novo">{syncing ? <Spinner /> : '↻'} {syncing ? `Sincronizando: ${stage || '…'}` : 'Sincronizar'}</button>}
+      {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai')}>✦ Perguntar à IA</button>}
+    </PageHeader>
+    {stale && <Banner tone="warn"><b>Espelho antigo.</b> {lastSync ? `A última sincronia foi há ${ago(lastSync)}.` : 'Nenhuma sincronia registrada ainda.'} Os números podem estar defasados — sincronize.</Banner>}
+    <div className="grid g4k">
+      <Kpi lead label="Pista hoje" value={d.tasks_due_today} foot={d.tasks_due_today ? 'serviço(s) marcado(s) para hoje' : 'nada marcado para hoje'} onClick={() => nav('/asana?v=board')} />
+      <Kpi lead label="Precisa de gente" value={d.needs_attention_total} tone={crit ? 'crit' : d.needs_attention_total ? 'warn' : 'ok'} foot={crit ? `${crit} crítico(s)` : d.needs_attention_total ? 'nenhum crítico' : 'tudo em ordem'} onClick={() => nav('/attention')} />
+      <Kpi lead label="Esperando você" value={d.ai_pending_approval} tone={d.ai_pending_approval ? 'warn' : 'ok'} foot={d.ai_pending_approval ? 'ação(ões) da IA para aprovar' : 'nenhuma aprovação pendente'} onClick={() => nav('/approvals')} />
+      <Kpi lead label="Waivers abertas" value={d.waivers_open} tone={d.waivers_bounced ? 'crit' : undefined} foot={d.waivers_bounced ? `${d.waivers_bounced} devolvida(s) — e-mail errado` : 'nenhuma devolvida'} onClick={() => nav('/docusign')} />
     </div>
-    {stale && <Banner tone="warn"><b>Espelho antigo.</b> {lastSync ? `A última sincronia foi há ${ago(lastSync)}.` : 'Nenhuma sincronia registrada ainda.'} Os números abaixo podem estar defasados.</Banner>}
-    <div className="grid g6">
-      <Kpi label="Pista hoje" value={d.tasks_due_today} foot="serviços marcados para hoje" onClick={() => nav('/tasks')} />
-      <Kpi label="Próximos 7 dias" value={d.upcoming_7d} foot="serviços na agenda" onClick={() => nav('/tasks')} />
-      <Kpi label="Vencidos" value={d.overdue_tasks} foot={d.overdue_tasks ? 'a IA confere e move' : 'nenhum'} tone={d.overdue_tasks ? 'warn' : undefined} onClick={() => nav('/tasks')} />
-      <Kpi label="Clientes ativos" value={d.active_clients} foot="serviço nos últimos 6 meses" onClick={() => nav('/clients?status=ACTIVE')} />
-      <Kpi label="Waivers abertas" value={d.waivers_open} foot={d.waivers_bounced ? <span style={{ color: 'var(--crit)' }}>{d.waivers_bounced} devolvida(s)</span> : 'nenhuma devolvida'} tone={d.waivers_bounced ? 'crit' : undefined} onClick={() => nav('/waivers')} />
-      <Kpi label="E-mails de cliente" value={d.emails_attention} tone={d.emails_attention ? 'warn' : undefined} foot="sem tratamento" onClick={() => nav('/emails')} />
-    </div>
-    <div className="grid g3">
-      <Kpi label="Ações da IA hoje" value={d.ai_actions_today} onClick={() => nav('/activity')} />
-      <Kpi label="Esperando aprovação" value={d.ai_pending_approval} tone={d.ai_pending_approval ? 'warn' : undefined} onClick={() => nav('/approvals')} />
-      {d.open_invoices === null
-        ? <Kpi label="Invoices em aberto" value="—" foot="visível para gerentes" />
-        : <Kpi label="Invoices em aberto" value={d.open_invoices.connected ? money(d.open_invoices.total) : '—'}
-            foot={d.open_invoices.connected ? `${d.open_invoices.count} aberta(s), ${d.open_invoices.overdue} vencida(s)` : 'QuickBooks em stand-by (não conectado)'} />}
-    </div>
-    <div className="grid g2" style={{ gridTemplateColumns: 'minmax(0,1.5fr) minmax(0,1fr)' }}>
-      <Section title="Precisa de atenção" count={d.needs_attention_total} tight right={<Link to="/attention" className="small">ver tudo</Link>}>
-        <AttentionList items={d.needs_attention} onChange={dash.reload} />
+    <Strip items={[
+      { label: 'Próximos 7 dias', value: d.upcoming_7d, onClick: () => nav('/asana?v=cal'), title: 'serviços na agenda' },
+      { label: 'Vencidos', value: d.overdue_tasks, tone: d.overdue_tasks ? 'warn' : undefined, onClick: () => nav('/asana?v=board&s=open'), title: 'a IA confere e move' },
+      { label: 'Clientes ativos', value: d.active_clients, onClick: () => nav('/clients?status=ACTIVE'), title: 'serviço nos últimos 6 meses' },
+      { label: 'E-mails sem tratar', value: d.emails_attention, tone: d.emails_attention ? 'warn' : undefined, onClick: () => nav('/gmail') },
+      { label: 'Ações da IA hoje', value: d.ai_actions_today, onClick: () => nav('/activity') },
+      { label: 'Invoices em aberto', value: d.open_invoices === null ? '🔒' : d.open_invoices.connected ? money(d.open_invoices.total) : '—', tone: d.open_invoices?.overdue ? 'warn' : undefined,
+        title: d.open_invoices === null ? 'visível para gerentes' : d.open_invoices?.connected ? `${d.open_invoices.count} aberta(s), ${d.open_invoices.overdue} vencida(s)` : 'QuickBooks não conectado', onClick: () => nav('/quickbooks') },
+    ]} />
+    <div className="grid g2" style={{ gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)' }}>
+      <Section title="Precisa de atenção" count={d.needs_attention_total} tight right={<Link to="/attention" className="small">ver tudo →</Link>}>
+        <AttentionList items={d.needs_attention.slice(0, 6)} onChange={dash.reload} />
+        {d.needs_attention_total > 6 && <div className="small muted" style={{ padding: '10px 16px' }}><Link to="/attention">mais {d.needs_attention_total - 6} item(ns) →</Link></div>}
       </Section>
-      <div className="stack">
-        <Section title="Integrações" tight right={<Link to="/integrations" className="small">detalhes</Link>}>
-          <div className="tbl-wrap"><table className="tbl"><tbody>
-            {d.integrations.map(i => <tr key={i.system} className="click" onClick={() => nav('/integrations')}>
-              <td>{SYS_NAME[i.system] || i.system}</td>
-              <td><Chip tone={statusTone(i.status)} dot>{i.status === 'CONNECTED' ? 'ok' : i.status.toLowerCase()}</Chip></td>
-              <td className="right mono small muted">{i.last_success_at ? ago(i.last_success_at) : '—'}</td>
-            </tr>)}
-          </tbody></table></div>
-        </Section>
-        <Section title="Sincronia" tight>
-          <div className="tbl-wrap"><table className="tbl"><tbody>
-            {d.last_sync.length === 0 && <tr><td className="muted">Nunca sincronizou. Use “Sincronizar agora”.</td></tr>}
-            {d.last_sync.map(s => <tr key={s.system}>
-              <td>{SYS_NAME[s.system] || s.system}</td>
-              <td><Chip tone={s.ok ? 'ok' : 'crit'}>{s.ok ? 'ok' : 'falhou'}</Chip></td>
-              <td className="small muted truncate" style={{ maxWidth: 200 }} title={s.message || ''}>{s.message}</td>
-              <td className="right mono small muted">{ago(s.at)}</td>
-            </tr>)}
-          </tbody></table></div>
-        </Section>
-      </div>
+      <Section title="Sistemas" tight right={<Link to="/integrations" className="small">detalhes →</Link>}>
+        <div className="tbl-wrap"><table className="tbl"><tbody>
+          {d.integrations.map(i => { const s = syncPor.get(i.system); return <tr key={i.system} className="click" onClick={() => nav('/integrations')} tabIndex={0} onKeyDown={e => e.key === 'Enter' && nav('/integrations')}>
+            <td><b>{SYS_NAME[i.system] || i.system}</b>{s && s.ok === 0 && <div className="small clamp2" style={{ color: 'var(--crit)' }} title={s.message || ''}>{s.message}</div>}</td>
+            <td className="nowrap"><Status s={i.status} /></td>
+            <td className="right mono small muted nowrap" title={i.last_success_at ? `última resposta ${new Date(i.last_success_at).toLocaleString('pt-BR')}` : ''}>{i.last_success_at ? ago(i.last_success_at) : '—'}</td>
+          </tr> })}
+          {d.last_sync.length === 0 && <tr><td className="muted">Nunca sincronizou. Use “Sincronizar”.</td></tr>}
+        </tbody></table></div>
+      </Section>
     </div>
   </>
 }

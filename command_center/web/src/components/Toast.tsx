@@ -12,7 +12,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [])
   const v = useMemo(() => push, [push])
   return <Ctx.Provider value={v}>{children}
-    <div className="toast-wrap" aria-live="polite">{list.map(t => <div key={t.id} className={`toast ${t.tone || ''}`}>{t.text}</div>)}</div>
+    <div className="toast-wrap" aria-live="polite">{list.map(t => <div key={t.id} className={`toast ${t.tone || ''}`}><span className="ic" aria-hidden="true">{t.tone === 'ok' ? '✓' : t.tone === 'crit' ? '✕' : '●'}</span><div className="grow"><div className="tt">{t.tone === 'ok' ? 'Feito' : t.tone === 'crit' ? 'Não deu' : 'Aviso'}</div>{t.text}</div></div>)}</div>
   </Ctx.Provider>
 }
 export const useToast = () => useContext(Ctx)

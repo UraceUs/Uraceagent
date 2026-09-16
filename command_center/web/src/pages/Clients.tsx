@@ -5,7 +5,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, WAIVER_LABEL, statusKind } from '../components/ui'
 import { daysUntil, fmtDate } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -114,41 +114,48 @@ export function Clients() {
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Clientes</h1><div className="sub small">Um card por pessoa, do serviço mais recente para o mais antigo. Ativo = serviço nos últimos 6 meses.</div></div>
-      <div className="row wrap">{can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}>+ Novo cliente</button>}{can('OPERATOR') && <button className="btn" disabled={scanning} onClick={scanAll} title="Gmail (as duas caixas) e DocuSign de cada cliente ativo">{scanning ? <Spinner /> : '⌕'} Varrer plataformas ({ativos} ativos)</button>}</div></div>
+    <Progress on={scanning} />
+    <PageHeader title="Clientes" help="Um card por pessoa, do serviço mais recente para o mais antigo. Ativo = serviço nos últimos 6 meses. Piloto em destaque; o responsável (quem paga e assina) ao lado.">
+      {can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}>+ Novo cliente</button>}
+      {can('OPERATOR') && <details className="more"><summary className="btn" title="Ferramentas: varrer plataformas, unir cards, puxar histórico">⋯</summary><div className="menu">
+        <button className="btn ghost sm" disabled={scanning} onClick={scanAll} title="Gmail (as duas caixas) e DocuSign de cada cliente ativo">{scanning ? <Spinner /> : '⌕'} Varrer plataformas ({ativos} ativos)</button>
+        <button className="btn ghost sm" onClick={() => setUnirManual(true)}>⧉ Unir dois clientes</button>
+        <PuxarHistorico onDone={reload} />
+        <div className="small muted" style={{ padding: '4px 8px', maxWidth: 280 }}>Puxar histórico lê todas as tarefas de treino do Asana, desde o início, e liga cada uma à pessoa certa; possíveis duplicados aparecem abaixo.</div>
+      </div></details>}
+    </PageHeader>
     <div className="tabs"><button className={aba === 'all' ? 'on' : ''} onClick={() => set('v', '')}>Todos</button><button className={aba === 'pro' ? 'on' : ''} onClick={() => set('v', 'pro')}>★ Pro Racing Drivers</button></div>
     {aba === 'pro' && <Banner tone="info">Pilotos prontos para competir. No card do cliente, o botão <b>★ Tornar Pro</b> traz ele para cá e libera equipamento e corridas. Convites e prévia de custo ficam no calendário de <a href="/ops/races">Corridas</a>.</Banner>}
-    <div className="row wrap">
+    <div className="row wrap toolbar-page">
       <input className="input" style={{ maxWidth: 320 }} placeholder="Piloto, responsável ou e-mail" value={q} onChange={e => setQ(e.target.value)} aria-label="Filtrar" />
       <select className="input" style={{ width: 190 }} value={status} onChange={e => set('status', e.target.value)} aria-label="Status">
-        <option value="">Ativos e inativos</option><option value="ACTIVE">Ativos (6 meses)</option><option value="INACTIVE">Inativos</option>{['NEW', 'PENDING', 'AT_RISK', 'COMPLETED'].map(s => <option key={s}>{s}</option>)}
+        <option value="">Ativos e inativos</option><option value="ACTIVE">Ativos (6 meses)</option><option value="INACTIVE">Inativos</option><option value="NEW">Novos</option><option value="PENDING">Pendentes</option><option value="AT_RISK">Em risco</option><option value="COMPLETED">Concluídos</option>
       </select>
       <select className="input" style={{ width: 130 }} value={vip} onChange={e => set('vip', e.target.value)} aria-label="VIP">
         <option value="">VIP e não</option><option value="1">Só VIP</option><option value="0">Sem VIP</option>
       </select>
-      <div className="grow" /><button className="btn" onClick={reload}>↻</button>
+      <div className="grow" /><button className="btn" onClick={reload} aria-label="Atualizar">↻</button>
     </div>
-    <div className="row wrap" style={{ marginBottom: 8 }}><span className="small muted">Mesma pessoa em dois cards?</span>{can('OPERATOR') && <button className="btn sm" onClick={() => setUnirManual(true)}>⧉ Unir dois clientes</button>}<PuxarHistorico onDone={reload} /><span className="small muted">Puxa todas as tarefas de treino do Asana (todas as colunas, desde o início) e liga cada uma à pessoa certa; depois lista os possíveis duplicados abaixo.</span></div>
     {unirManual && <UnirModal onClose={() => setUnirManual(false)} onDone={() => reload()} />}
     <Duplicados onChanged={reload} />
     <Section title="Clientes" count={rows.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading rows={8} /> :
         rows.length === 0 ? <Empty title="Nenhum cliente">Sem registros com esse filtro. Se a lista está vazia, rode “Sincronizar agora” no Dashboard.</Empty> :
-        <div className="tbl-wrap"><table className="tbl">
-          <thead><tr><th>Piloto</th><th>Responsável e contato</th><th>Status</th><th>Próximo serviço</th><th>Último</th><th>Waiver</th><th>Serviços</th><th>E-mails</th></tr></thead>
+        <div className="tbl-wrap"><table className="tbl rsp">
+          <thead><tr><th>Piloto</th><th>Responsável e contato</th><th>Status</th><th>Próximo serviço</th><th className="hide-md">Último</th><th>Waiver</th><th>Serviços</th><th>E-mails</th></tr></thead>
           <tbody>{rows.map(c => {
             const dias = daysUntil(c.next_service)
             const w = (c.waiver_status || '').toLowerCase()
             const semWaiver = dias !== null && dias <= 2 && w !== 'completed' && !c.vip
-            return <tr key={c.id} className="click" onClick={() => open(c.id)}>
-              <td><div className="row">{!!c.pro_driver && <span title="Pro Racing Driver" style={{ color: 'var(--warn)' }}>★</span>}<b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">VIP</Chip>}{c.plan_type === 'monthly' && <Chip tone="accent">mensal</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">diária</Chip>}</div>{!c.pilot_name && <div className="small muted">piloto é o próprio</div>}</td>
-              <td>{c.pilot_name ? c.name : <span className="muted">o próprio</span>}<div className="small muted truncate" style={{ maxWidth: 260 }}>{c.email || 'sem e-mail'}{c.phone ? ` · ${c.phone}` : ''}</div></td>
-              <td><Chip tone={statusTone(c.status)}>{c.status === 'ACTIVE' ? 'ativo' : c.status === 'INACTIVE' ? 'inativo' : c.status}</Chip>{!!c.status_locked && <span className="small muted" title="mudado à mão"> 🔒</span>}</td>
-              <td className="mono nowrap">{c.next_service ? <><b style={{ color: dias !== null && dias <= 1 ? 'var(--brand)' : undefined }}>{dias === 0 ? 'HOJE' : dias === 1 ? 'AMANHÃ' : `em ${dias} d`}</b> <span className="muted small">{fmtDate(c.next_service)}</span></> : <span className="muted">—</span>}</td>
-              <td className="mono">{c.last_service ? fmtDate(c.last_service) : <span className="muted">—</span>}</td>
-              <td>{c.vip ? <Chip tone="neutral">dispensada (VIP)</Chip> : w ? <Chip tone={semWaiver ? 'crit' : statusTone(w)}>{WAIVER_LABEL[w] || w}</Chip> : <Chip tone={semWaiver ? 'crit' : 'neutral'}>nenhuma</Chip>}</td>
-              <td className="mono nowrap"><b>{c.open_tasks ?? 0}</b><span className="muted">/{(c.open_tasks ?? 0) + (c.done_tasks ?? 0)}</span> <span className="small muted">abertos</span></td>
-              <td className="mono">{c.emails_open ? <span style={{ color: 'var(--warn)', fontWeight: 700 }}>{c.emails_open} sem resposta</span> : <span className="muted">—</span>}</td>
+            return <tr key={c.id} className="click" onClick={() => open(c.id)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') open(c.id) }}>
+              <td className="first"><div className="row">{!!c.pro_driver && <span title="Pro Racing Driver" style={{ color: 'var(--warn)' }}>★</span>}<b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">VIP</Chip>}{c.plan_type === 'monthly' && <Chip tone="accent">mensal</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">diária</Chip>}</div>{!c.pilot_name && <div className="small muted">piloto é o próprio</div>}</td>
+              <td data-l="Responsável">{c.pilot_name ? c.name : <span className="muted">o próprio</span>}<div className="small muted truncate" style={{ maxWidth: 260 }}>{c.email || 'sem e-mail'}{c.phone ? ` · ${c.phone}` : ''}</div></td>
+              <td data-l="Status"><Status s={c.status} />{!!c.status_locked && <span className="small muted" title="mudado à mão"> 🔒</span>}</td>
+              <td data-l="Próximo" className="mono nowrap">{c.next_service ? <><b style={{ color: dias !== null && dias <= 1 ? 'var(--brand)' : undefined }}>{dias === 0 ? 'HOJE' : dias === 1 ? 'AMANHÃ' : `em ${dias} d`}</b> <span className="muted small">{fmtDate(c.next_service)}</span></> : <span className="muted">—</span>}</td>
+              <td data-l="Último" className="mono hide-md">{c.last_service ? fmtDate(c.last_service) : <span className="muted">—</span>}</td>
+              <td data-l="Waiver">{c.vip ? <Chip tone="neutral" glyph="—">dispensada (VIP)</Chip> : w ? <Status s={w} kind={semWaiver ? 'crit' : statusKind(w)} label={WAIVER_LABEL[w] || w} /> : <Status kind={semWaiver ? 'crit' : 'wait'} label="nenhuma" />}</td>
+              <td data-l="Serviços" className="mono nowrap"><b>{c.open_tasks ?? 0}</b><span className="muted">/{(c.open_tasks ?? 0) + (c.done_tasks ?? 0)}</span> <span className="small muted">abertos</span></td>
+              <td data-l="E-mails" className="mono">{c.emails_open ? <span style={{ color: 'var(--warn)', fontWeight: 700 }}>▲ {c.emails_open} sem resposta</span> : <span className="muted">—</span>}</td>
             </tr>
           })}</tbody>
         </table></div>}

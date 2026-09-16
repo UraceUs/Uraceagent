@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -44,10 +44,11 @@ function SubTabs<T extends string>({ tabs, value, onChange }: { tabs: [T, string
 }
 
 function IntHeader({ system, title, desc, openHref, openLabel }: { system: string; title: string; desc: string; openHref: string; openLabel: string }) {
-  const { data } = useGet<Integration[]>('/integrations', 60000)
-  const i = data?.find(x => x.system === system)
-  return <div className="page-h"><div><div className="row wrap"><h1 className="h1">{title}</h1>{i && <Chip tone={statusTone(i.status)} dot>{i.status}</Chip>}</div><div className="sub small">{desc}</div></div>
-    <a className="btn" href={openHref} target="_blank" rel="noopener noreferrer">{openLabel} ↗</a></div>
+  const ints = useGet<Integration[]>('/integrations', 120000)
+  const st = ints.data?.find(x => x.system === system)
+  return <PageHeader title={<>{title} {st && <Status s={st.status} />}</>} help={desc}>
+    <a className="btn" href={openHref} target="_blank" rel="noopener noreferrer">{openLabel} ↗</a>
+  </PageHeader>
 }
 
 // ------------------------------------------------------------------ Asana
@@ -90,11 +91,13 @@ function Quadro({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void })
   const cols = useMemo(() => { const mp = new Map<string, Task[]>(); for (const t of tasks) { const k = t.section || '—'; mp.set(k, [...(mp.get(k) || []), t]) }
     return [...mp.entries()].sort((a, b) => { const ia = ORDEM_SECOES.indexOf(a[0]), ib = ORDEM_SECOES.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) }) }, [tasks])
   if (cols.length === 0) return <div className="card"><Empty title="Quadro vazio">Nenhuma tarefa espelhada. Sincronize no Dashboard.</Empty></div>
-  return <div className="board">{cols.map(([sec, ts]) => <div className="col" key={sec}><div className="ch">{sec}<span className="count">{ts.length}</span></div><div className="cards">
-    {ts.map(t => <div key={t.id} className={`tcard${t.status === 'completed' ? ' done' : ''}`} onClick={() => onOpen(t)}>
+  const hojeSec = ORDEM_SECOES[(new Date().getDay() + 6) % 7 - 1] || ''   // seg → nada; ter…dom → coluna do dia
+  return <div className="board">{cols.map(([sec, ts]) => <div className={`col${sec === hojeSec ? ' today' : ''}${sec === 'Finished Services' ? ' hist' : ''}`} key={sec}><div className="ch">{sec === hojeSec ? '● ' : ''}{sec}<span className="count">{ts.length}</span></div><div className="cards">
+    {ts.map(t => { const d = daysUntil(t.due_on); return <div key={t.id} className={`tcard${t.status === 'completed' ? ' done' : ''}`} onClick={() => onOpen(t)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onOpen(t) }}>
+      {t.client_name && <div className="who">{t.client_name}</div>}
       <div className="t">{t.title}</div>
-      <div className="m">{t.due_on && <span className="mono">{fmtDate(t.due_on)}</span>}{t.client_name && <span>{t.client_name}</span>}{t.subtasks_total ? <span>{t.subtasks_done ?? '?'}/{t.subtasks_total}</span> : null}</div>
-    </div>)}</div></div>)}</div>
+      <div className="m">{t.due_on && <span className={`mono${t.status !== 'completed' && d !== null && d < 0 ? ' warn' : ''}`}>{d === 0 ? 'HOJE' : d === 1 ? 'amanhã' : fmtDate(t.due_on)}</span>}{t.subtasks_total ? <span className="mono">{t.subtasks_done ?? '?'}/{t.subtasks_total}</span> : null}{t.waiver_id ? <span className="ok" title="waiver assinada anexada">✓ waiver</span> : null}</div>
+    </div> })}</div></div>)}</div>
 }
 
 interface TaskDetail {
@@ -114,7 +117,7 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
     <div><div className="small muted cond">{t.project} · {t.section}</div><h2 className="h1" style={{ fontSize: 22 }}>{t.title}</h2></div>
     <div className="grid g2">
-      <dl className="dl"><dt>Vence</dt><dd className="mono">{fmtDate(t.due_on)}</dd><dt>Status</dt><dd><Chip tone={statusTone(t.status === 'open' ? 'PENDING' : 'COMPLETED')}>{t.status}</Chip></dd>
+      <dl className="dl"><dt>Vence</dt><dd className="mono">{fmtDate(t.due_on)}</dd><dt>Status</dt><dd><Status s={t.status} /></dd>
         <dt>Responsável</dt><dd>{t.assignee || '—'}</dd>
         <dt>Cliente</dt><dd>{t.client_id ? <a onClick={() => { onClose(); nav(`/clients?open=${t.client_id}`) }} style={{ cursor: 'pointer' }}>{t.client_name || 'abrir'}</a> : <span className="muted">não vinculado</span>}</dd></dl>
       <dl className="dl">{fields && Object.entries(fields).map(([k, v]) => <><dt key={k + 'k'}>{k}</dt><dd key={k + 'v'}>{v}</dd></>)}
@@ -210,14 +213,14 @@ export function AsanaPage() {
     <IntHeader system="asana" title="Asana" desc="Quadro U-RACE: TUESDAY a SUNDAY é a agenda, RACES são corridas, Finished Services é o histórico." openHref={ASANA_PROJ} openLabel="Abrir no Asana" />
     <div className="row wrap"><SubTabs tabs={[['cal', 'Calendário'], ['board', 'Quadro'], ['list', 'Lista']]} value={tab} onChange={setTab} /><div className="grow" />
       {can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>+ Nova tarefa</button>}
-      <select className="input" style={{ width: 160 }} value={status} onChange={e => setStatus(e.target.value as 'all')}><option value="all">Abertas e concluídas</option><option value="open">Só abertas</option><option value="completed">Só concluídas</option></select><button className="btn" onClick={reload}>↻</button></div>
+      <select className="input" style={{ width: 160 }} value={status} onChange={e => setStatus(e.target.value as 'all')} aria-label="Quais tarefas"><option value="open">Só abertas</option><option value="all">Abertas e concluídas</option><option value="completed">Só concluídas</option></select><button className="btn" onClick={reload} aria-label="Atualizar">↻</button></div>
     {nova && <NovaTarefa onClose={() => setNova(false)} onDone={reload} />}
     {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading rows={6} /> : <>
       {tab === 'cal' && <Calendario tasks={tasks} onOpen={setOpen} />}
       {tab === 'board' && <Quadro tasks={tasks} onOpen={setOpen} />}
       {tab === 'list' && <Section title="Tarefas" count={tasks.length} tight>{tasks.length === 0 ? <Empty>Nada com esse filtro.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Tarefa</th><th>Coluna</th><th>Cliente</th><th>Responsável</th><th>Subtarefas</th><th>Status</th><th></th></tr></thead><tbody>
-          {tasks.map(t => <tr key={t.id} className="click" onClick={() => setOpen(t)}><td className="mono nowrap">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td>{t.client_name || <span className="muted">—</span>}</td><td className="small">{t.assignee}</td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? '?'}/${t.subtasks_total}` : '—'}</td><td><Chip tone={statusTone(t.status === 'open' ? 'PENDING' : 'COMPLETED')}>{t.status}</Chip></td><td onClick={e => e.stopPropagation()}><TaskLink t={t} /></td></tr>)}
+          {tasks.map(t => <tr key={t.id} className="click" onClick={() => setOpen(t)}><td className="mono nowrap">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td>{t.client_name || <span className="muted">—</span>}</td><td className="small">{t.assignee}</td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? '?'}/${t.subtasks_total}` : '—'}</td><td><Status s={t.status} /></td><td onClick={e => e.stopPropagation()}><TaskLink t={t} /></td></tr>)}
         </tbody></table></div>}</Section>}
     </>}
     {open && <TaskModal t={open} onClose={() => setOpen(null)} />}
@@ -355,20 +358,20 @@ export function DocuSignPage() {
     <IntHeader system="docusign" title="DocuSign" desc="Waivers de produção. Entregue não é assinada; devolvida é e-mail errado. Cada envelope ligado ao piloto." openHref="https://app.docusign.com/home" openLabel="Abrir no DocuSign" />
     <div className="row wrap"><SubTabs tabs={[['env', 'Envelopes'], ['signed', `Assinadas (${(env.data || []).filter(w => w.status === 'completed' && (w.template === 'parental' || w.template === 'adult') && !interno(w)).length})`], ['int', `Internos (${nInt})`], ['tpl', 'Modelos'], ['lixo', 'Lixeira']]} value={tab} onChange={setTab} /><div className="grow" />
       {can('OPERATOR') && <button className="btn primary" onClick={() => setEnviar(true)}>+ Enviar waiver</button>}
-      {tab !== 'tpl' && <input className="input" style={{ width: 230 }} placeholder="Buscar signatário, piloto, documento…" value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar nas waivers" />}
+      {tab !== 'tpl' && <input className="input" style={{ width: 200 }} placeholder="Buscar…" title="signatário, e-mail, piloto, responsável, menor ou assunto" value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar nas waivers" />}
       {tab !== 'tpl' && tab !== 'signed' && tab !== 'int' && <select className="input" style={{ width: 220 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todos ({Object.values(counts).reduce((a, n) => a + n, 0)})</option>{Object.entries(counts).map(([k, n]) => <option key={k} value={k}>{WAIVER_LABEL[k] || k} ({n})</option>)}</select>}
       <button className="btn" onClick={() => { env.reload(); tpl.reload() }}>↻</button></div>
     {enviar && <EnviarWaiver onClose={() => setEnviar(false)} onDone={env.reload} />}
     {tab !== 'tpl' && <Section title={tab === 'lixo' ? 'Na lixeira do painel' : tab === 'signed' ? 'Waivers assinadas (parental e adult)' : tab === 'int' ? 'Documentos internos (o support@ assina; não são waiver de cliente)' : 'Envelopes'} count={rows.length} tight>
       {env.error && !env.data ? <ErrorState error={env.error} retry={env.reload} /> : env.loading && !env.data ? <Loading /> : rows.length === 0 ? <Empty>{tab === 'lixo' ? 'Nada na lixeira.' : q ? 'Nada bate com a busca.' : tab === 'int' ? 'Nenhum documento interno espelhado. A próxima sincronia do DocuSign marca os envelopes que o support@ assina.' : 'Nenhum envelope espelhado com esse filtro.'}</Empty> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>{tab === 'int' ? 'Documento' : 'Cliente / piloto'}</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
+        <div className="tbl-wrap"><table className="tbl rsp"><thead><tr><th>Signatário</th><th>{tab === 'int' ? 'Documento' : 'Cliente / piloto'}</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
           {rows.map(w => { const aberto = ['sent', 'delivered', 'autoresponded'].includes(w.status || ''); return <tr key={w.id}>
-            <td>{w.signer_name}<div className="small muted">{w.signer_email}</div>{w.minor_name && <div className="small">menor: <b>{w.minor_name}</b></div>}{tab !== 'int' && w.subject && <div className="small muted" title={w.subject}>{w.subject.slice(0, 60)}</div>}</td>
-            <td>{tab === 'int' ? <span title={w.subject || ''}>{w.subject || <span className="muted">sem assunto</span>}</span> : w.client_id ? <><a onClick={() => nav(`/clients/${w.client_id}`)} style={{ cursor: 'pointer' }}>{w.client_pilot || w.client_name}</a>{w.client_pilot && <div className="small muted">{w.client_name}</div>}{w.link_reason && <div className="small muted" title={w.link_reason}>{w.link_by === 'human' ? 'à mão' : 'auto'}: {w.link_reason.slice(0, 48)}</div>}</> : <><span className="muted">não vinculado</span>{can('OPERATOR') && <LinkClient w={w} onDone={env.reload} />}</>}</td>
-            <td>{w.template}</td>
-            <td><Chip tone={statusTone(w.status)}>{WAIVER_LABEL[w.status || ''] || w.status}</Chip></td>
-            <td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td>
-            <td className="nowrap">
+            <td className="first">{w.signer_name}<div className="small muted">{w.signer_email}</div>{w.minor_name && <div className="small">menor: <b>{w.minor_name}</b></div>}{tab !== 'int' && w.subject && <div className="small muted" title={w.subject}>{w.subject.slice(0, 60)}</div>}</td>
+            <td data-l={tab === 'int' ? 'Documento' : 'Piloto'}>{tab === 'int' ? <span title={w.subject || ''}>{w.subject || <span className="muted">sem assunto</span>}</span> : w.client_id ? <><a onClick={() => nav(`/clients/${w.client_id}`)} style={{ cursor: 'pointer' }}>{w.client_pilot || w.client_name}</a>{w.client_pilot && <div className="small muted">{w.client_name}</div>}{w.link_reason && <div className="small muted" title={w.link_reason}>{w.link_by === 'human' ? 'vínculo à mão' : 'vínculo automático'}</div>}</> : <><span className="muted">não vinculado</span>{can('OPERATOR') && <LinkClient w={w} onDone={env.reload} />}</>}</td>
+            <td data-l="Modelo">{w.template}</td>
+            <td data-l="Status"><Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} /></td>
+            <td data-l="Enviada" className="mono">{fmtDate(w.sent_at)}</td><td data-l="Assinada" className="mono">{fmtDate(w.completed_at)}</td><td data-l="Expira" className="mono">{fmtDate(w.expires_at)}</td>
+            <td className="nowrap" data-l="Ações">
               {w.status === 'completed' && <a className={tab === 'signed' ? 'btn sm' : 'ic'} href={`/ops/api/waivers/${w.id}/download`} title="Baixar PDF assinado" aria-label="Baixar">⬇{tab === 'signed' ? ' PDF' : ''}</a>}
               {tab === 'signed' && w.client_id && <button className="btn sm" onClick={() => nav(`/clients?open=${w.client_id}`)} title="Abrir o card do cliente">→ cliente</button>}
               {aberto && can('OPERATOR') && tab !== 'lixo' && <button className="ic" disabled={busy === w.id} title={w.status === 'autoresponded' ? 'Corrigir e-mail e reenviar' : 'Reenviar'} aria-label="Reenviar" onClick={() => resend(w)}>↻</button>}
@@ -501,8 +504,9 @@ export function GmailPage() {
     <div className="row wrap"><SubTabs tabs={[['urace', 'urace@'], ['support', 'support@']]} value={box} onChange={b => setMany({ v: b, l: 'INBOX', o: '' })} /><div className="grow" />
       <span className="small muted" title={ultimaTriagem}>{triage.data?.rule && !triage.data.rule.enabled ? 'triagem automática desligada (Automação)' : ultimaTriagem}</span>
       {can('OPERATOR') && <button className="btn primary" disabled={triaging || triage.data?.running || inbox.length === 0} onClick={triageNow} title="A IA lê cada thread da inbox, aplica os marcadores e move para o principal — agora, sem esperar o horário">{triaging || triage.data?.running ? <Spinner /> : '✦'} Triar com a IA agora</button>}
-      {can('OPERATOR') && <button className="btn" disabled={classifying || semSug === 0} onClick={classify} title="Só sugere o marcador (não move) para as threads ainda sem sugestão">{classifying ? <Spinner /> : '✦'} Só sugerir{semSug > 0 && ` (${semSug})`}</button>}
-      <button className="btn" onClick={() => { emails.reload(); labels.reload() }}>↻</button></div>
+      {can('OPERATOR') && <button className="btn quiet" disabled={classifying || semSug === 0} onClick={classify} title="Só sugere o marcador (não move) para as threads ainda sem sugestão">{classifying ? <Spinner /> : ''} só sugerir{semSug > 0 && ` (${semSug})`}</button>}
+      <button className="btn" onClick={() => { emails.reload(); labels.reload() }} aria-label="Atualizar">↻</button></div>
+    <Progress on={triaging || classifying || !!triage.data?.running} />
     {labels.data && !labels.data.connected && <Banner tone="warn">Gmail não conectado neste servidor: {labels.data.reason}. A lista abaixo é só o espelho.</Banner>}
     <div className="mail">
       <div className="labels">

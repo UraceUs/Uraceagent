@@ -7,7 +7,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Spinner, statusTone } from '../components/ui'
 import { fmtDate, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -108,8 +108,8 @@ export function Races() {
   const proximas = (races.data || []).filter(r => r.date_start && r.date_start >= iso(hoje)).slice(0, 8)
   const semData = (races.data || []).filter(r => !r.date_start)
   return <>
-    <div className="page-h"><div><h1 className="h1">Corridas</h1><div className="sub small">A coluna RACES do Asana, só corridas. Clique numa corrida para convidar os ★ Pro; o piloto fica nela até a confirmação.</div></div>
-      <div className="row">{can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>+ Nova corrida</button>}<button className="btn" onClick={races.reload}>↻</button></div></div>
+    <PageHeader title="Corridas" help={<>A coluna RACES do Asana, só corridas. Clique numa corrida para convidar os ★ Pro; o piloto fica nela até a confirmação.</>}>
+      {can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>+ Nova corrida</button>}<button className="btn" onClick={races.reload}>↻</button></PageHeader>
     <div className="cal-h"><button className="btn sm" onClick={() => setYm(ym.m === 0 ? { y: ym.y - 1, m: 11 } : { y: ym.y, m: ym.m - 1 })}>◀</button><h2 className="h1" style={{ fontSize: 20, margin: '0 8px', textTransform: 'capitalize' }}>{MESES[ym.m]} {ym.y}</h2><button className="btn sm" onClick={() => setYm(ym.m === 11 ? { y: ym.y + 1, m: 0 } : { y: ym.y, m: ym.m + 1 })}>▶</button><button className="btn ghost sm" onClick={() => setYm({ y: hoje.getFullYear(), m: hoje.getMonth() })}>hoje</button>
       <span className="grow" /><span className="small muted">{(races.data || []).length} corrida(s) no calendário</span></div>
     {races.error && !races.data ? <ErrorState error={races.error} retry={races.reload} /> : !races.data ? <Loading rows={6} /> :

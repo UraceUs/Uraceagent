@@ -6,7 +6,7 @@ import { CatalogoEditor } from './Garage'
 import { UnirModal } from '../components/Unir'
 import type { Catalog, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -89,7 +89,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <div className="row wrap" style={{ gap: 10 }}>
           {!!c.pro_driver && <span className="star" title="Pro Racing Driver">★</span>}
           <h1 className="h1" style={{ fontSize: 32 }}>{c.pilot_name || c.name}</h1>
-          <Chip tone={statusTone(c.status)} dot>{c.status}</Chip>
+          <Status s={c.status} />
           {c.plan_type === 'monthly' && <Chip tone="accent">Academy Monthly</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">Academy Day</Chip>}
           {!!c.vip && <Chip tone="warn">VIP</Chip>}
         </div>
@@ -111,8 +111,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         </div></details>}
       </div>
     </div>
-    {risco && <div className="banner crit"><b>Serviço em {dias === 0 ? 'HOJE' : `${dias} dia(s)`} sem waiver assinada.</b> {wBad ? `O e-mail ${wBad.signer_email} devolveu: corrija e reenvie.` : wOpen ? `Envelope ${WAIVER_LABEL[wOpen.status!]}; cobre a assinatura.` : 'Nenhum envelope enviado.'}</div>}
-    {!!c.vip && <div className="banner info">Cliente VIP: dispensa waiver por decisão do dono (04/09/2026). Nada de cobrança automática.</div>}
+    {risco && <Banner tone="crit"><b>Serviço em {dias === 0 ? 'HOJE' : `${dias} dia(s)`} sem waiver assinada.</b> {wBad ? `O e-mail ${wBad.signer_email} devolveu: corrija e reenvie.` : wOpen ? `Envelope ${WAIVER_LABEL[wOpen.status!]}; cobre a assinatura.` : 'Nenhum envelope enviado.'}</Banner>}
+    {!!c.vip && <Banner tone="info">Cliente VIP: dispensa waiver por decisão do dono (04/09/2026). Nada de cobrança automática.</Banner>}
     <div className="grid g5 c360-k">
       <div className="card kpi"><div className="lbl">Próximo serviço</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : 'nada agendado'}</div></div>
       <div className="card kpi"><div className="lbl">Último serviço</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot truncate" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : 'nenhum concluído'}</div></div>
@@ -157,7 +157,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         return <div key={i}>
           {mes !== antes && <div className="tl-m">{mes ? new Date(mes + '-02T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : 'sem data'}</div>}
           <div className="ev"><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div className="b">
-            <div className="row wrap" style={{ gap: 8 }}><span className={`kind ${tone}`}>{lbl}</span><span className="t">{e.title}</span><Chip tone={statusTone(e.status)}>{e.status}</Chip><span className="grow" /><SysLink links={e.links} /></div>
+            <div className="row wrap" style={{ gap: 8 }}><span className={`kind ${tone}`}>{lbl}</span><span className="t">{e.title}</span><Status s={e.status} label={e.kind.startsWith('WAIVER') ? (WAIVER_LABEL[(e.status || '').toLowerCase()] || e.status) : undefined} /><span className="grow" /><SysLink links={e.links} /></div>
             {e.detail && <div className="small muted">{e.detail}</div>}
           </div></div>
         </div>
@@ -168,11 +168,11 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th>Waiver</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>Sem serviços vinculados.</Empty></td></tr>}
-        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Chip tone={statusTone(t.status === 'open' ? 'PENDING' : 'COMPLETED')}>{t.status}</Chip></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title="A waiver assinada foi anexada nesta tarefa">📎 waiver</a> : <span className="muted">—</span>}</td><td><SysLink links={t.links} /></td></tr>)}
+        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Status s={t.status} /></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title="A waiver assinada foi anexada nesta tarefa">📎 waiver</a> : <span className="muted">—</span>}</td><td><SysLink links={t.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>Nenhum envelope para este e-mail.</Empty></td></tr>}
-        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}</td><td><Chip tone={statusTone(w.status)}>{WAIVER_LABEL[w.status || ''] || w.status}</Chip></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.pdf_path ? 'PDF assinado guardado no card' : 'Baixar PDF assinado do DocuSign'}>⬇ PDF{w.pdf_path ? ' ✓' : ''}</a>} <SysLink links={w.links} /></td></tr>)}
+        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}</td><td><Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} /></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.pdf_path ? 'PDF assinado guardado no card' : 'Baixar PDF assinado do DocuSign'}>⬇ PDF{w.pdf_path ? ' ✓' : ''}</a>} <SysLink links={w.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'emails' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Caixa</th><th>Assunto</th><th>De</th><th>Prioridade</th><th>Tratado</th><th></th></tr></thead><tbody>
         {data.emails.length === 0 && <tr><td colSpan={7}><Empty>Nenhum e-mail vinculado.</Empty></td></tr>}
@@ -181,7 +181,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'invoices' && (data.invoices === null ? <Empty title="Financeiro restrito">Invoices são visíveis para gerentes e administradores.</Empty> :
         data.invoices.length === 0 ? <Empty>Nenhuma invoice. QuickBooks está em stand-by; nada é inventado aqui.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nº</th><th>Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th></tr></thead><tbody>
-          {data.invoices.map(i => <tr key={i.id}><td className="mono">{i.doc_number}</td><td className="mono">{fmtDate(i.issued_on)}</td><td className="mono">{fmtDate(i.due_on)}</td><td className="mono">{money(i.amount)}</td><td className="mono">{money(i.balance)}</td><td><Chip tone={statusTone(i.status)}>{i.status}</Chip></td></tr>)}
+          {data.invoices.map(i => <tr key={i.id}><td className="mono">{i.doc_number}</td><td className="mono">{fmtDate(i.issued_on)}</td><td className="mono">{fmtDate(i.due_on)}</td><td className="mono">{money(i.amount)}</td><td className="mono">{money(i.balance)}</td><td><Status s={i.status} /></td></tr>)}
         </tbody></table></div>)}
       {tab === 'ai' && (data.ai_actions.length === 0 ? <Empty>A IA ainda não propôs nada para este cliente.</Empty> :
         <div className="acts">{data.ai_actions.map(a => <div className="act" key={a.id}><span className="what">{a.action}</span><Chip tone={statusTone(a.policy)}>{POLICY_LABEL[a.policy]}</Chip><Chip tone={statusTone(a.status)}>{a.status}</Chip><span className="small muted">{fmtDateTime(a.created_at)}</span>{a.reason && <div className="small ink2" style={{ width: '100%' }}>{a.reason}</div>}</div>)}</div>)}

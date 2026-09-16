@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { AiEvent, AutomationRule, Learning } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, Section, Spinner, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Spinner, statusTone } from '../components/ui'
 import { fmtDateTime } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -39,8 +39,8 @@ export function Automation() {
     try { await api.post('/ai/learnings', { text: novo }); setNovo(''); toast('Guardado. Entra em todo comando da IA a partir de agora.', 'ok'); learn.reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <>
-    <div className="page-h"><div><h1 className="h1">Automação e memória</h1><div className="sub small">Cada mudança vira evento; regra ligada acorda a IA. O que você ensina entra em todo comando.</div></div>
-      {can('OPERATOR') && <button className="btn" onClick={async () => { const r = await api.post<{ disparados: number }>('/ai/events/process'); toast(`${r.disparados} evento(s) disparado(s).`, 'ok'); events.reload() }}>Processar eventos pendentes</button>}</div>
+    <PageHeader title="Automação e memória" help={<>Cada mudança vira evento; regra ligada acorda a IA. O que você ensina entra em todo comando.</>}>
+      {can('OPERATOR') && <button className="btn" onClick={async () => { const r = await api.post<{ disparados: number }>('/ai/events/process'); toast(`${r.disparados} evento(s) disparado(s).`, 'ok'); events.reload() }}>Processar eventos pendentes</button>}</PageHeader>
     <div className="grid g2">
       <Section title="Regras" count={rules.data?.length}>
         {rules.error ? <ErrorState error={rules.error} retry={rules.reload} /> : !rules.data ? <Loading /> : <div className="stack">{rules.data.map(r => { const [l, d] = RULE_LABEL[r.name] || [r.name, r.actions]; return <div className="act" key={r.id}>
