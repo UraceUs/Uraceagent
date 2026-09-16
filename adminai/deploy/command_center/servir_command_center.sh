@@ -83,10 +83,16 @@ sudo sed -i "s|/home/ubuntu/Uraceagent|$REPO|g; s|/home/ubuntu/.urace|$URACE_DIR
 sudo systemctl daemon-reload
 sudo systemctl enable "$UNIT.service" >/dev/null
 sudo systemctl restart "$UNIT.service"
-sleep 2
-systemctl is-active --quiet "$UNIT.service" \
-    || { echo "!! o serviço não subiu:"; journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }
-curl -sf "http://127.0.0.1:$PORTA/ops/ready" >/dev/null || { echo "!! /ops/ready não respondeu"; journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }
+# 16/09: com 2 s fixos o script acusou falha numa subida que só estava lenta (o serviço
+# aplica migrações e semeia o manual ao iniciar). Espera até 60 s, olhando a cada 2.
+pronto=""
+for _ in $(seq 1 30); do
+    sleep 2
+    systemctl is-active --quiet "$UNIT.service" \
+        || { echo "!! o serviço não subiu:"; journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }
+    if curl -sf "http://127.0.0.1:$PORTA/ops/ready" >/dev/null; then pronto=1; break; fi
+done
+[ -n "$pronto" ] || { echo "!! /ops/ready não respondeu em 60 s"; journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }
 echo "-- serviço no ar em 127.0.0.1:$PORTA"
 # 09/09: a triagem do Gmail passou para o Command Center (07/13/21h). O timer antigo
 # das 07:00 rodaria um segundo agente ao mesmo tempo — e o VPS não aguenta dois.
