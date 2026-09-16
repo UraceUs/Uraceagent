@@ -8,7 +8,7 @@ status: ativo
 
 # D-2026-09-16 — Os filtros do Gmail passam a ser criados pela API
 
-[[Taxonomia do Gmail]] · [[Gmail]] · [[D-2026-09-14 - Filtros nativos]]
+[[Taxonomia do Gmail]] · [[Gmail]] · [[D-2026-09-14 - A IA sugere marcador novo, mas nao cria]]
 
 ## Por que mudou
 
@@ -45,3 +45,22 @@ caso do envio de e-mail desde 04/09:
 
 O XML continua sendo gerado e continua baixável — quem quiser importar à mão,
 importa. A API é o caminho principal porque é o que não trava.
+
+## Como terminou (mesmo dia)
+
+A `support@` foi inteira pela API: painel respondeu **"2 criado(s), 22 já
+existiam"** — a trava de duplicata funcionou (as 22 derivadas de remetente já
+estavam lá) e os 2 criados são as duas regras que o dono ditou, `Softwares|Apps/Docusign`
+e `Waivers`, que sustentam o fluxo da waiver.
+
+Essas duas custaram duas tentativas com **HTTP 400 "Filter doesn't have any
+criteria"**: o critério ia como `hasTheWord`, que é o nome **na tela** do Gmail —
+na API o campo é `query`. A API descarta campo que não conhece **sem reclamar do
+nome** e depois diz que o filtro está vazio, o que manda o diagnóstico para o lado
+errado. `criar_filtro_humano` passou a traduzir o nome e a **recusar campo
+desconhecido** na entrada (`063099a`), para o erro aparecer onde ele nasce.
+
+A `urace@` ficou com as 89 novas sobre as 41 antigas, importadas pela tela antes
+desta decisão valer. Da próxima vez que precisar de filtro lá, é pela API também.
+Falta uma contagem real das duas caixas para fechar o número — comando no diário
+de 16/09.

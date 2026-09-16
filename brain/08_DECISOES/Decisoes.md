@@ -61,3 +61,8 @@ X?"*. Agora dá.
 - [[D-2026-09-10 - Proposta da IA nao se repete e o valor do dono manda]] — argumentos normalizados, invoice nunca $0 sem aviso, ação aprovada não volta, pendente é substituída, estado do dia no comando
 - [[D-2026-09-10 - O modelo da IA e a Anthropic com recarga automatica]] — OpenClaw é o corpo, a Anthropic é o modelo; recarga automática; sincronia nunca espera pela IA
 - [[D-2026-09-10 - Correcoes do teste real com a extensao]] — argumento a mais não quebra mais a ação; importação não fabrica cliente falso; toda coluna sincroniza; calendário certo; invoice numerada; diálogos dentro da página
+- [[D-2026-09-11 - Manual dos marcadores do Gmail confirmado pelo dono]] — a IA não cria marcador; triagem só roda com o manual confirmado e só enxerga o que o dono confirmou
+- [[D-2026-09-11 - Modo de entrega da resposta no Kommo e json_reply]] — a resposta do bot sai por `json_reply`, não por widget
+- [[D-2026-09-14 - A IA sugere marcador novo, mas nao cria]] — marcador novo vira sugestão no painel; quem cria é o dono
+- [[D-2026-09-16 - Waiver por e-mail, DocuSign x Waivers e a subtarefa]] — todo envelope leva `Softwares|Apps/Docusign`, só a waiver leva `Waivers`; a IA baixa o PDF, acha o cliente, fecha a subtarefa e pré-marca as próximas
+- [[D-2026-09-16 - Filtros criados pela API, nao pela tela]] — filtro nativo nasce do botão do painel, com trava de duplicata; só cria, nunca apaga nem edita

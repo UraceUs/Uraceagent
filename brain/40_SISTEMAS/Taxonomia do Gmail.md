@@ -184,6 +184,38 @@ não são do sistema e não estão no manual:
 não caçar e não mexer: o painel ignora; este registro é só para a linha do tempo.
 (Os dois `Years 2019-2023/…/[Gmail]…` são lixo de importação antiga, não intruso.)
 
-Filtros nativos da `urace@`: **90**, 180 remetentes, importados em 16/09 com a
-regra `ken@naturecoasthealthcare.com → Team/LARA` desmarcada na importação
-(pasta de quem já saiu). A recusa entrou no gerador para não voltar.
+## Os filtros nativos das duas caixas ficaram de pé em 16/09
+
+A `urace@` foi pela tela (importação do XML), depois de duas tentativas frustradas
+no mesmo dia — conta delegada e clique em dobro. Entraram **89 regras novas** por
+cima das **41 que já existiam**, com `ken@naturecoasthealthcare.com → Team/LARA`
+desmarcada na hora da importação (pasta de quem já saiu); a recusa entrou no
+gerador para não voltar.
+
+A `support@` foi **pela API**, do botão *Criar no Gmail* do painel. O painel
+respondeu **"2 criado(s), 22 já existiam"**: as 22 derivadas de remetente já
+tinham sido importadas antes, e os 2 criados são justamente **as duas regras
+ditadas pelo dono** — as que sustentam o fluxo da waiver:
+
+| Critério | Marcador |
+|---|---|
+| `from:(docusign.net OR docusign.com)` | `Softwares\|Apps/Docusign` |
+| `from:(docusign.net)` + assunto com *Waiver of Liability* e *Please Complete* / *Completed:* | `Waivers` |
+
+Essas duas foram as que erraram duas vezes com HTTP 400 antes: o critério ia como
+`hasTheWord`, que é o nome **na tela** do Gmail — na API o campo é `query`, e a
+API descarta campo que não conhece sem reclamar do nome, só diz que o filtro "não
+tem critério nenhum". Corrigido no commit `063099a`, com recusa explícita de campo
+desconhecido para não repetir o diagnóstico.
+
+Os números acima são o que o painel relatou. **Falta conferir a contagem real nas
+duas caixas** antes de eu tratar isso como fechado — é um comando só, no VPS, e
+está no diário de 16/09.
+
+### O que o filtro nativo não cobre — de propósito
+
+Propaganda (`wNews`) e qualquer coisa que dependa de contexto continuam com a IA:
+o filtro pega remetente e assunto, a IA lê o corpo, confirma o marcador do filtro,
+acrescenta o que faltar e escala o que não souber. As duas coisas rodam juntas —
+foi o desenho que o dono pediu: *"vai ter o nativo rodando e a IA também vai fazer
+esse trabalho"*.
