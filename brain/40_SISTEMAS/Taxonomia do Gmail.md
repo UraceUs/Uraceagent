@@ -208,9 +208,34 @@ API descarta campo que não conhece sem reclamar do nome, só diz que o filtro "
 tem critério nenhum". Corrigido no commit `063099a`, com recusa explícita de campo
 desconhecido para não repetir o diagnóstico.
 
-Os números acima são o que o painel relatou. **Falta conferir a contagem real nas
-duas caixas** antes de eu tratar isso como fechado — é um comando só, no VPS, e
-está no diário de 16/09.
+### A contagem real (16/09, no VPS)
+
+`urace@` **130** filtros — bate com o previsto (41 + 89).
+
+`support@` **37**, não 24 como o painel fez parecer. A conta fecha assim:
+**13** filtros que o dono já tinha, **22** derivadas importadas pelo XML antes, e
+**2** criadas pela API. O "22 já existiam" do painel era a trava de duplicata
+reconhecendo o que a importação anterior já tinha posto lá — não filtro do dono.
+
+Dois achados da contagem, os dois de antes desta rodada:
+
+1. **Um filtro manda todo envelope do DocuSign para `Waivers`** —
+   `dse_na4@docusign.net` é o endereço de envio da conta inteira. É o gatilho do
+   fluxo da waiver disparando em documento que não é waiver.
+   Ver [[P-14 - Filtro manda todo envelope do DocuSign para Waivers]].
+2. **Sete pares redundantes.** A importação criou versões "com um remetente a
+   mais" ao lado das do dono (`info@bushnellmotorsportspark.com` sozinho e com
+   `@united.com`; RD Station com e sem `receiv@rdstation-fin.com`; Spirit com e
+   sem Marriott; n8n com e sem `accounts.google.com`; Dialpad, Ecwid e Kommo em
+   dobro). A trava de duplicata compara critério **idêntico** — superset não é
+   idêntico, então passou. Mesmo marcador nos dois, então não erra nada; só suja.
+
+Duas coisas para o dono olhar, que **não** são obra desta rodada:
+`receiv@rdstation-fin.com` está dentro de um filtro como se fosse RD Station
+legítimo (é o domínio que levantou suspeita de golpe em 14/09), e
+`samuel.rulli@itcygnus.com` tem filtro marcando **IMPORTANT** — o mesmo remetente
+que ele mandou arquivar na `urace@` em 15/09. Há ainda um filtro
+(`[Newsletter Form] new lead`) que **não faz nada**: critério sem ação nenhuma.
 
 ### O que o filtro nativo não cobre — de propósito
 
