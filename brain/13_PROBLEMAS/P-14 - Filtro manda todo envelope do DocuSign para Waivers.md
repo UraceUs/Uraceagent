@@ -68,10 +68,33 @@ Valem agora só as duas regras que ele ditou: `from:(docusign.net OR docusign.co
 → `Softwares|Apps/Docusign` para todo envelope, e o assunto de *Waiver of
 Liability* → `Waivers` só para waiver.
 
-**Sobra uma ponta:** filtro só age na chegada, então as **6 mensagens que já foram
-marcadas** continuam com `Waivers` (o NDA do Caio, a *Intended Use Letter*, as duas
-da *Invite Letter* do Bryan, a do Michael Nicholas e o `UniversalNon-POD`). Tirar
-marcador de e-mail dele é decisão dele — está oferecido, não feito.
+## O estrago real era maior: 32 mensagens, e metade era a corretora
+
+Varrendo tudo o que tinha `Waivers` (**87 mensagens**), o que não tinha cara de
+waiver eram **32** — e o filtro tinha **dois braços**, não um:
+
+- `richard@thinkinsurance.co.uk` → **22 mensagens "Test Day"**: a corretora de
+  seguro inteira virava waiver (13 do Richard + 9 respostas do próprio `support@`
+  nas mesmas conversas). Elas já tinham o marcador certo,
+  `Customer Service/Venda fechada`, pelo outro filtro dele.
+- `dse_NA4@docusign.net` → **10 documentos que não são waiver**: `URACE Employment
+  Letter`, `Employment Offer Letter Hernan`, `Invite Letter 2026` (Hernan ×2,
+  Alfredo, Brayan), `OKC Letter 2026`, `LETTER OF INTENT AND SPONSORSHIP`,
+  `Contrato_Marketing_Digital`, `UniversalNon-POD`. Carta de emprego e contrato
+  de marketing a um passo de serem baixados e colados em card de cliente.
+
+Conferido o remetente de cada uma antes de tirar: **nenhuma tinha sido marcada pela
+mão dele**. O dono tirou o marcador em duas passadas (23 + 9), mensagem por
+mensagem, com teto de segurança e sem apagar nada. `Waivers` ficou com **55**,
+todas com *waiver* ou *consent* no assunto.
+
+## Efeito da regra ditada que vale saber
+
+O assunto *"Nya Amankwa viewed **Please Complete** the Docusign: Parental
+Consent…"* casa com a regra dele, então aviso de **visualizou** e de **anulado**
+também recebe `Waivers`. Não quebra: `waiver_do_email` só baixa PDF e mexe em
+tarefa quando o registro no DocuSign está `completed`; "visualizou" no máximo
+liga o e-mail ao cliente certo. Só aparece na lista. Apertar é decisão dele.
 
 ## O que mudou no código
 

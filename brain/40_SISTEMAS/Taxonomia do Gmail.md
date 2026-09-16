@@ -220,9 +220,12 @@ reconhecendo o que a importação anterior já tinha posto lá — não filtro d
 Dois achados da contagem, os dois de antes desta rodada:
 
 1. **Um filtro mandava todo envelope do DocuSign para `Waivers`** —
-   `dse_na4@docusign.net` é o endereço de envio da conta inteira, e 6 das últimas 40
-   mensagens dele não eram waiver. Era o gatilho do fluxo disparando em documento
-   errado. **O dono apagou no mesmo dia**; a caixa ficou com **36** filtros.
+   `dse_na4@docusign.net` é o endereço de envio da conta inteira — e o outro braço
+   do filtro, `richard@thinkinsurance.co.uk`, levava a corretora de seguro inteira
+   junto. **32 mensagens** marcadas errado, entre carta de emprego e contrato de
+   marketing. Era o gatilho do fluxo disparando em documento errado. **O dono
+   apagou o filtro e limpou as 32 no mesmo dia**; a caixa ficou com **36** filtros
+   e `Waivers` com 55 mensagens, todas waiver.
    Ver [[P-14 - Filtro manda todo envelope do DocuSign para Waivers]].
 2. **Sete pares redundantes.** A importação criou versões "com um remetente a
    mais" ao lado das do dono (`info@bushnellmotorsportspark.com` sozinho e com
