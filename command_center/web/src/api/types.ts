@@ -55,6 +55,7 @@ export interface Waiver {
   id: number; client_id: number | null; signer_name: string | null; signer_email: string | null
   template: string | null; status: string | null; sent_at: string | null; completed_at: string | null
   expires_at: string | null; hidden?: number; pdf_path?: string | null; minor_name?: string | null; link_reason?: string | null; link_by?: 'sync' | 'human' | null
+  subject?: string | null; internal?: number
   client_name?: string | null; client_pilot?: string | null; links?: Link[]
 }
 

@@ -118,8 +118,8 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
         "overdue_tasks": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND due_on<?", (hoje,)),
         "upcoming_7d": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND due_on BETWEEN ? AND ?",
                          (hoje, (date.today() + timedelta(days=7)).isoformat())),
-        "waivers_open": n("SELECT COUNT(*) AS n FROM waivers WHERE status IN ('sent','delivered')"),
-        "waivers_bounced": n("SELECT COUNT(*) AS n FROM waivers WHERE status='autoresponded'"),
+        "waivers_open": n("SELECT COUNT(*) AS n FROM waivers WHERE status IN ('sent','delivered') AND COALESCE(internal,0)=0"),
+        "waivers_bounced": n("SELECT COUNT(*) AS n FROM waivers WHERE status='autoresponded' AND COALESCE(internal,0)=0"),
         "emails_attention": n("SELECT COUNT(*) AS n FROM emails WHERE handled=0 AND client_id IS NOT NULL"),
         "crm_pending": n("SELECT COUNT(*) AS n FROM crm_leads WHERE needs_reply=1"),
         "ai_actions_today": n("SELECT COUNT(*) AS n FROM ai_actions WHERE created_at >= ?", (hoje,)),
@@ -323,6 +323,7 @@ def tasks(status: str = "open", project: str | None = None, u=Depends(auth.usuar
 @r.get("/waivers")
 def waivers(hidden: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     rows = todos(con, "SELECT w.*, c.name AS client_name, c.pilot_name AS client_pilot FROM waivers w LEFT JOIN clients c ON c.id=w.client_id WHERE w.hidden=? ORDER BY CASE w.status WHEN 'autoresponded' THEN 0 WHEN 'delivered' THEN 1 WHEN 'sent' THEN 2 ELSE 3 END, w.sent_at DESC", (1 if hidden else 0,))
+    # `internal` e `subject` vêm no w.*: a tela separa os documentos da empresa numa aba (dono, 16/09)
     for w in rows:
         w["links"] = _links(con, "waiver", w["id"])
     return rows
@@ -1158,6 +1159,25 @@ def attention_instruct(dados: InstruirIn, request: Request, u=Depends(auth.exige
     item = {"title": dados.title, "why": dados.why, "client_id": dados.client_id,
             "entity": {"type": dados.entity_type, "id": dados.entity_id}}
     cid = motor.instruir(con, u["id"], dados.key, texto, item, dados.remember)
+    return {"command_id": cid, "remembered": bool(dados.remember)}
+
+
+class InstruirTarefaIn(BaseModel):
+    text: str
+    remember: bool = False
+
+
+@r.post("/tasks/{tid}/instruct", status_code=202)
+def task_instruct(tid: int, dados: InstruirTarefaIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+                  con: sqlite3.Connection = Depends(get_db)):
+    """Caixa da IA dentro da tarefa (dono, 16/09): a instrução vai com o gid, título,
+    cliente, subtarefas e descrição desta tarefa, e a IA age nela — e só nela."""
+    texto = (dados.text or "").strip()
+    if not texto or len(texto) > 4000:
+        raise HTTPException(400, "Escreva a instrução (até 4000 caracteres).")
+    cid = motor.instruir_tarefa(con, u["id"], tid, texto, dados.remember)
+    if cid is None:
+        raise HTTPException(404, "Task not found.")
     return {"command_id": cid, "remembered": bool(dados.remember)}
 
 

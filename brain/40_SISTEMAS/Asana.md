@@ -26,9 +26,18 @@ Opções do campo `Race`: Practice OKC `1215501111942172` · Practice
 Bushnell `1216267652449325` · KART `1213088541600530` · F4
 `1213088541600531` · TRACK CLOSED `1216760479094481`.
 
+**Piloto ≠ serviço no título (dono, 16/09).** Antes do primeiro separador (`_`, `|`,
+hífen com espaço) é a pessoa; o resto é serviço. Hífen colado só separa quando o que
+vem depois é serviço ou tem número. "Elliott Hubbard_Summer Camp 2026 1/4" é o piloto
+Elliott Hubbard em Summer Camp 2026, sessão 1 de 4 — nunca um cliente chamado assim.
+
 ## Colunas do U-RACE
 `RACES` · `Finished Services` · TUESDAY→SUNDAY (dia do serviço) · `Pending Reschedule` · `Luis tasks` · **`Matt tasks` — nenhuma automação**
 Serviço concluído sai da coluna do dia → `Finished Services`.
+
+No painel (16/09): o quadro abre em **Só abertas**, com o que não foi concluído primeiro
+e a data mais recente no topo. E cada tarefa tem a caixa **✦ IA nesta tarefa**: a
+instrução vai com o gid e a IA age só nela.
 ## Como o Administrative AI fala com o Asana
 
 Desde 02/09/2026, por um **servidor MCP nosso** (`adminai/mcp/asana_mcp.py`),

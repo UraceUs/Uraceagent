@@ -70,18 +70,37 @@ def eh_rotulo_ou_servico(texto):
     return False
 
 
+def _corta_no_separador(t):
+    """A parte que vem antes do separador de serviço.
+
+    `_`, `|`, `:`, `,` e o hífen COM espaço separam sempre — é o padrão do quadro
+    ("Piloto_Serviço_Categoria [n/t]"). O hífen colado ("Elliott Hubbard-Summer Camp")
+    é contextual (dono, 16/09): só separa quando o que vem depois tem cara de serviço
+    ou tem número; "Jean-Luc Picard" e "Ana-Maria" continuam sendo um nome só."""
+    t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s+–\s+|\s*,\s*", t)[0].strip()
+    m = re.match(r"^([^-]+?)-(.+)$", t)
+    if m:
+        antes, depois = m.group(1).strip(), m.group(2).strip()
+        if antes and depois and (re.search(r"\d", depois) or eh_rotulo_ou_servico(depois)):
+            t = antes
+    return t
+
+
 def pessoa_do_titulo(titulo):
     """Nome da pessoa no título da tarefa, ou None quando não é gente.
 
     'Session Setup | Aaron Benoit_Kart [Practice_2T]' → 'Aaron Benoit'
     'Aaron Benoit_Trackside Support' → 'Aaron Benoit'
+    'Elliott Hubbard_Summer Camp 2026 1/4' → 'Elliott Hubbard'
     '2026 SKUSA Winter Series RD1/2 | …' → None
     """
     t = (titulo or "").strip()
     t = re.sub(r"^\s*session setup\s*\|\s*", "", t, flags=re.I)
     t = SERVICO_SUFIXO.sub("", t)
-    t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s+–\s+|\s*,\s*", t)[0].strip()
-    if not t or re.search(r"\d", t) or CORRIDA.search(titulo or ""):
+    t = _corta_no_separador(t)
+    # a palavra de corrida/serviço que condena é a que está na PARTE DA PESSOA: "Mike
+    # Fattuta_Professional Coach Rotax" tem gente antes do separador e serviço depois
+    if not t or re.search(r"\d", t) or CORRIDA.search(t):
         return None
     if eh_rotulo_ou_servico(t):
         return None
@@ -166,6 +185,28 @@ def limpar_nascimentos(con):
     for c in todos(con, "SELECT id, pilot_dob FROM clients WHERE pilot_dob IS NOT NULL AND pilot_dob<>''"):
         if not _RX_ISO.match((c["pilot_dob"] or "").strip()[:10]):
             con.execute("UPDATE clients SET pilot_dob=NULL, updated_at=? WHERE id=?", (agora(), c["id"]))
+            n += 1
+    return n
+
+
+def limpar_nomes_de_servico(con):
+    """Nome de cliente que carrega o serviço junto ("Elliott Hubbard_Summer Camp 2026 1/4",
+    "Mike Fattuta_Professional Coach Rotax") fica só com a pessoa. Dono, 16/09: a IA tem
+    de saber diferenciar o nome do piloto do nome do serviço. Idempotente; quando o
+    título não tem gente reconhecível, não mexe (isso é assunto de limpar_nao_clientes)."""
+    n = 0
+    for c in todos(con, "SELECT id, name, pilot_name FROM clients"):
+        novo = {}
+        for k in ("name", "pilot_name"):
+            v = (c[k] or "").strip()
+            if not v or not re.search(r"[_|:\[\]]|\s[-–]\s|\d", v):
+                continue
+            pessoa = pessoa_do_titulo(v)
+            if pessoa and pessoa != v:
+                novo[k] = pessoa
+        if novo:
+            sets = ", ".join(f"{k}=?" for k in novo)
+            con.execute(f"UPDATE clients SET {sets}, updated_at=? WHERE id=?", (*novo.values(), agora(), c["id"]))
             n += 1
     return n
 

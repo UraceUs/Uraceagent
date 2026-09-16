@@ -81,16 +81,44 @@ def _data_iso(s):
 
 
 def nome_da_tarefa(nome):
-    """'Renato Frota Pionti_Professional Coaching_2T [1/1]' → partes."""
+    """Título do quadro → partes. Piloto e serviço são coisas diferentes (dono, 16/09):
+    o que vem antes do primeiro separador (`_`, `|`, hífen com espaço) é a pessoa, o
+    resto é serviço; `[n/t]` no fim, ou "n/t" solto, é a contagem.
+
+    'Renato Frota Pionti_Professional Coaching_2T [1/1]' → piloto, serviço, categoria, 1, 1
+    'Elliott Hubbard_Summer Camp 2026 1/4'               → 'Elliott Hubbard', 'Summer Camp 2026', 1, 4
+    'Enzo Kurian [4 strokes 09/05/26]'                   → 'Enzo Kurian', '4 strokes 09/05/26'"""
+    from command_center.providers import identidade
     nome = (nome or "").strip()
-    m = re.match(r"^(.+?)_(.+?)_(.+?)\s*\[(\d+)/(\d+)\]\s*$", nome)
+    servico = categoria = n = total = None
+    cabeca = nome
+    m = re.search(r"\s*\[(.*?)\]\s*$", nome)
     if m:
-        return dict(piloto=m.group(1).strip(), servico=m.group(2).strip(),
-                    categoria=m.group(3).strip(), n=int(m.group(4)), total=int(m.group(5)))
-    m = re.match(r"^(.+?)\s*\[(.+?)\]\s*$", nome)         # 'Enzo Kurian [4 strokes 09/05/26]'
-    if m:
-        return dict(piloto=m.group(1).strip(), servico=m.group(2).strip(), categoria=None, n=None, total=None)
-    return dict(piloto=nome, servico=None, categoria=None, n=None, total=None)
+        cabeca, dentro = nome[:m.start()].strip(), m.group(1).strip()
+        mm = re.fullmatch(r"(\d+)\s*/\s*(\d+)", dentro)
+        if mm:
+            n, total = int(mm.group(1)), int(mm.group(2))
+        else:
+            servico = dentro
+    else:
+        mm = re.search(r"\s+(\d+)\s*/\s*(\d+)\s*$", cabeca)
+        if mm:
+            n, total = int(mm.group(1)), int(mm.group(2))
+            cabeca = cabeca[:mm.start()].strip()
+    cabeca = re.sub(r"^\s*session setup\s*\|\s*", "", cabeca, flags=re.I)
+    partes = [x.strip() for x in re.split(r"\s*[_|]\s*|\s+[-–]\s+", cabeca) if x.strip()]
+    piloto = partes[0] if partes else cabeca
+    pessoa = identidade.pessoa_do_titulo(piloto)
+    if pessoa and pessoa.lower() != piloto.lower():          # hífen colado: 'Elliott Hubbard-Summer Camp 2026'
+        sobra = piloto[len(pessoa):].lstrip(" -–_").strip()
+        partes = [pessoa] + ([sobra] if sobra else []) + partes[1:]
+        piloto = pessoa
+    resto = partes[1:]
+    if servico is None and resto:
+        servico, resto = resto[0], resto[1:]
+    if categoria is None and resto:
+        categoria = resto[0]
+    return dict(piloto=piloto, servico=servico, categoria=categoria, n=n, total=total)
 
 
 # ------------------------------------------------------ clientes
@@ -156,10 +184,16 @@ def _nome_valido(n):
     serviço ("Karting School") e nome de corrida NUNCA viram cliente (dono, 10/09)."""
     from command_center.providers import identidade
     n = (n or "").strip().rstrip(":").strip()
-    if not n or identidade.eh_rotulo_ou_servico(n):
+    if not n:
         return None
-    if identidade.pessoa_do_titulo(n):
-        return n
+    # primeiro separa a pessoa do serviço, depois julga: "Elliott Hubbard_Summer Camp 2026
+    # 1/4" virava nome de cliente inteiro porque aqui só se validava a string e se devolvia
+    # ela mesma — e "Summer Camp" sozinho é serviço, não gente (dono, 16/09)
+    pessoa = identidade.pessoa_do_titulo(n)
+    if pessoa:
+        return pessoa if pessoa.lower() != n.lower() else n
+    if identidade.eh_rotulo_ou_servico(n):
+        return None
     return n if (2 <= len(n.split()) <= 5 and not re.search(r"\d|@", n)) else None
 
 
@@ -218,6 +252,7 @@ def sync_asana_completo(con, progresso=None):
         limpos = identidade.limpar_nao_clientes(con)
         identidade.limpar_contatos(con)
         identidade.limpar_nascimentos(con)
+        identidade.limpar_nomes_de_servico(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
         candidatos = len(identidade.candidatos_duplicados(con))
@@ -299,6 +334,7 @@ def sync_asana(con):
         limpos = identidade.limpar_nao_clientes(con)
         identidade.limpar_contatos(con)
         identidade.limpar_nascimentos(con)
+        identidade.limpar_nomes_de_servico(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
         _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos, {unidos} unidos, {limpos} não-clientes removidos", inicio)
@@ -368,6 +404,16 @@ def _vincula_waiver(con, signer_email, signer_name, minor_name):
     return None, None
 
 
+EMAIL_INTERNO = "support@urace.us"
+
+
+def _envelope_interno(signatarios):
+    """Documento da empresa, não waiver de cliente (dono, 16/09): envelope em que o
+    `support@urace.us` é um dos signatários — carta de emprego, invite letter, contrato
+    de marketing. Fica numa aba própria e nunca é ligado a cliente."""
+    return any((s.get("email") or "").strip().lower() == EMAIL_INTERNO for s in signatarios or [])
+
+
 def sync_docusign(con, desde_dias=365):
     """Espelha envelopes e liga cada um ao cliente/piloto. O nome do menor vem
     do form data da parental (uma chamada a mais só quando ainda não temos)."""
@@ -379,6 +425,7 @@ def sync_docusign(con, desde_dias=365):
         for e in r.get("envelopes", []):
             assunto = (e.get("assunto") or "").lower()
             template = "parental" if "parental" in assunto else "adult" if "adult" in assunto or "waiver" in assunto else "other"
+            interno = _envelope_interno(e.get("signatarios"))
             for s in e.get("signatarios") or []:
                 email = (s.get("email") or "").lower() or None
                 wid = um(con, "SELECT entity_id FROM entity_links WHERE system='docusign' AND external_id=? AND entity_type='waiver'", (e["envelopeId"],))
@@ -396,8 +443,11 @@ def sync_docusign(con, desde_dias=365):
                 campos = dict(signer_name=s.get("nome"), signer_email=email, template=template,
                               status=s.get("status") if s.get("status") == "autoresponded" else e.get("status"),
                               sent_at=e.get("enviado_em"), completed_at=e.get("concluido_em"),
-                              expires_at=e.get("expira_em"), minor_name=minor, synced_at=agora())
-                if not (atual and atual["link_by"] == "human"):            # vínculo feito à mão não é sobrescrito
+                              expires_at=e.get("expira_em"), minor_name=minor, synced_at=agora(),
+                              subject=(e.get("assunto") or "")[:200] or None, internal=1 if interno else 0)
+                if interno and not (atual and atual["link_by"] == "human"):
+                    campos.update(client_id=None, link_reason="documento interno da empresa", link_by=None)
+                elif not (atual and atual["link_by"] == "human"):          # vínculo feito à mão não é sobrescrito
                     cid, motivo = _vincula_waiver(con, email, s.get("nome"), minor)
                     campos.update(client_id=cid, link_reason=motivo, link_by="sync" if cid else None)
                     ligados += 1 if cid else 0

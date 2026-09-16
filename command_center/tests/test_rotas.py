@@ -1639,3 +1639,73 @@ def test_criterio_hasTheWord_vira_query_na_api(monkeypatch):
     import pytest as _pytest
     with _pytest.raises(Exception, match="não conhece"):
         g.criar_filtro_humano("support", {"inventado": "x"}, "Waivers")
+
+
+# ================= 16/09: piloto ≠ serviço; `_` e `-` como separador =================
+def test_piloto_separado_do_servico():
+    """As telas do DocuSign mostravam "Elliott Hubbard_Summer Camp 2026 1/4" como nome de
+    piloto: a validação devolvia a string inteira. Agora sai só a pessoa; o hífen colado
+    separa só quando o que vem depois é serviço ou tem número (dono, 16/09)."""
+    from command_center.providers import identidade as I, sync
+    assert sync._nome_valido("Elliott Hubbard_Summer Camp 2026 1/4") == "Elliott Hubbard"
+    assert sync._nome_valido("Mike Fattuta_Professional Coach Rotax") == "Mike Fattuta"
+    assert I.pessoa_do_titulo("Mike Fattuta_Professional Coach Rotax") == "Mike Fattuta"      # 'rotax' no serviço não condena a pessoa
+    assert I.pessoa_do_titulo("Elliott Hubbard-Summer Camp 2026") == "Elliott Hubbard"        # hífen colado, contexto de serviço
+    assert I.pessoa_do_titulo("Aaron Benoit - Trackside Support") == "Aaron Benoit"
+    assert I.pessoa_do_titulo("Jean-Luc Picard") == "Jean-Luc Picard"                          # hífen de nome fica
+    assert I.pessoa_do_titulo("Ana-Maria Souza") == "Ana-Maria Souza"
+    assert sync._nome_valido("Summer Camp") is None and sync._nome_valido("Test Day") is None
+    d = sync.nome_da_tarefa("Elliott Hubbard_Summer Camp 2026 1/4")
+    assert (d["piloto"], d["servico"], d["n"], d["total"]) == ("Elliott Hubbard", "Summer Camp 2026", 1, 4)
+    d = sync.nome_da_tarefa("Renato Frota Pionti_Professional Coaching_2T [1/1]")
+    assert (d["piloto"], d["servico"], d["categoria"], d["n"], d["total"]) == ("Renato Frota Pionti", "Professional Coaching", "2T", 1, 1)
+    d = sync.nome_da_tarefa("Enzo Kurian [4 strokes 09/05/26]")
+    assert (d["piloto"], d["servico"]) == ("Enzo Kurian", "4 strokes 09/05/26")
+    d = sync.nome_da_tarefa("Mike Fattuta_Professional Coach Rotax")
+    assert (d["piloto"], d["servico"]) == ("Mike Fattuta", "Professional Coach Rotax")
+
+
+def test_limpeza_tira_servico_do_nome_do_cliente(cli):
+    from command_center.db import conectar, inserir, um
+    from command_center.providers import identidade as idt
+    con = conectar()
+    try:
+        a = inserir(con, "clients", name="Matthew Hubbard", pilot_name="Elliott Hubbard_Summer Camp 2026 1/4", vip=0, status="ACTIVE", source="asana")
+        b = inserir(con, "clients", name="Mike Fattuta_Professional Coach Rotax", vip=0, status="ACTIVE", source="asana")
+        c = inserir(con, "clients", name="Jean-Luc Picard", pilot_name="Nya Amankwa", vip=0, status="ACTIVE", source="asana")
+        con.commit()
+        assert idt.limpar_nomes_de_servico(con) == 2
+        assert um(con, "SELECT pilot_name FROM clients WHERE id=?", (a,))["pilot_name"] == "Elliott Hubbard"
+        assert um(con, "SELECT name FROM clients WHERE id=?", (b,))["name"] == "Mike Fattuta"
+        assert um(con, "SELECT name, pilot_name FROM clients WHERE id=?", (c,))["name"] == "Jean-Luc Picard"
+        assert idt.limpar_nomes_de_servico(con) == 0                                  # idempotente
+        con.commit()
+    finally:
+        con.close()
+
+
+# ================= 16/09: documento interno do DocuSign não é waiver de cliente =================
+def test_envelope_interno_e_aba_propria(cli):
+    from command_center.db import conectar, inserir
+    from command_center.providers import sync
+    assert sync._envelope_interno([{"email": "hernan@x.com"}, {"email": "Support@URACE.us"}])
+    assert not sync._envelope_interno([{"email": "pai@x.com"}]) and not sync._envelope_interno(None)
+    h = entra(cli, "admin@urace.us")
+    con = conectar()
+    try:
+        inserir(con, "waivers", signer_name="Hernan X", signer_email="hernan@x.com", template="other", status="sent",
+                sent_at="2026-09-01", subject="URACE Employment Letter", internal=1, hidden=0)
+        inserir(con, "waivers", signer_name="Pai Y", signer_email="pai@y.com", template="parental", status="autoresponded",
+                sent_at="2026-09-01", subject="Parental Consent", internal=0, hidden=0)
+        con.commit()
+    finally:
+        con.close()
+    rows = cli.get(B + "/waivers", headers=h).json()
+    interno = next(w for w in rows if w["subject"] == "URACE Employment Letter")
+    assert interno["internal"] == 1                                                  # a tela separa pela flag
+    # carta de emprego em aberto não é "waiver em aberto" no painel nem vira aviso
+    d = cli.get(B + "/dashboard", headers=h).json()
+    assert d["waivers_open"] == 0
+    itens = cli.get(B + "/needs-attention", headers=h).json()
+    lista = itens if isinstance(itens, list) else itens.get("items", [])
+    assert not any("Hernan X" in (i.get("title") or "") for i in lista)

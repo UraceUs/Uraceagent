@@ -869,3 +869,32 @@ def test_waiver_completed_e_mecanico_antes_de_acordar_a_ia(cli, monkeypatch):
         assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='waiver.assinada.tarefas'") is not None
     finally:
         con.close()
+
+
+def test_instruir_dentro_da_tarefa(cli):
+    """Caixa da IA no modal da tarefa (dono, 16/09): o comando vai com o gid, o título e o
+    cliente da tarefa, e a IA age nela. VIEWER não manda; tarefa inexistente é 404."""
+    from command_center.db import conectar, inserir
+    h = entra(cli, "admin@urace.us")
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Enzo Kurian", vip=0, status="ACTIVE", source="asana")
+        tid = inserir(con, "tasks", client_id=cid, title="Enzo Kurian_Arrive and Drive [1/1]", project="U-RACE", section="WEDNESDAY", status="open", due_on="2026-09-16")
+        con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id, deep_link) VALUES ('task', ?, 'asana', '916000777', 'https://app.asana.com/0/1/916000777')", (tid,))
+        con.commit()
+    finally:
+        con.close()
+    visto = {}
+    ia.RUNNER = lambda texto, sk: (visto.__setitem__("prompt", texto), (True, "Feito.\nACAO: nenhuma", None))[1]
+    r = cli.post(R + f"/tasks/{tid}/instruct", headers=h, json={"text": "feche a subtarefa da waiver e comente que está paga", "remember": False})
+    assert r.status_code == 202
+    c = espera(cli, r.json()["command_id"])
+    assert c["status"] == "DONE"
+    p = visto["prompt"]
+    assert "916000777" in p and "Enzo Kurian_Arrive and Drive" in p and "NESTA tarefa" in p and "feche a subtarefa" in p
+    assert '"cliente": "Enzo Kurian"' in p
+    assert cli.post(R + f"/tasks/{tid}/instruct", headers=entra(cli, "viewer@urace.us"), json={"text": "x"}).status_code == 403
+    h = entra(cli, "admin@urace.us")
+    assert cli.post(R + "/tasks/999999/instruct", headers=h, json={"text": "x"}).status_code == 404
+    assert cli.post(R + f"/tasks/{tid}/instruct", headers=h, json={"text": ""}).status_code == 400
+    ia.RUNNER = runner_falso

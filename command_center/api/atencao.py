@@ -118,7 +118,7 @@ def _coletar(con):
         ))
 
     # ---- 2. e-mail devolvido (envelope que nunca vai ser assinado)
-    for w in todos(con, "SELECT w.*, c.name AS cliente FROM waivers w LEFT JOIN clients c ON c.id=w.client_id WHERE w.status='autoresponded'"):
+    for w in todos(con, "SELECT w.*, c.name AS cliente FROM waivers w LEFT JOIN clients c ON c.id=w.client_id WHERE w.status='autoresponded' AND COALESCE(w.internal,0)=0"):
         itens.append(dict(key=_chave("waiver-devolveu", "waiver", w["id"]), level="HIGH", title=f"Waiver de {w['signer_name'] or w['cliente']} devolveu (e-mail inválido)",
                           why=f"{w['signer_email']}: o servidor de e-mail recusou. Ninguém vai assinar esse envelope.",
                           entity={"type": "waiver", "id": w["id"]}, client_id=w["client_id"],
@@ -126,7 +126,7 @@ def _coletar(con):
 
     # ---- 3. waiver perto de expirar, com serviço no quadro
     for w in todos(con, """SELECT w.*, c.name AS cliente FROM waivers w LEFT JOIN clients c ON c.id=w.client_id
-                           WHERE w.status IN ('sent','delivered') AND w.expires_at IS NOT NULL"""):
+                           WHERE w.status IN ('sent','delivered') AND w.expires_at IS NOT NULL AND COALESCE(w.internal,0)=0"""):
         dias = _dias_ate(w["expires_at"])
         if dias is None or dias > 21:
             continue

@@ -66,3 +66,4 @@ X?"*. Agora dá.
 - [[D-2026-09-14 - A IA sugere marcador novo, mas nao cria]] — marcador novo vira sugestão no painel; quem cria é o dono
 - [[D-2026-09-16 - Waiver por e-mail, DocuSign x Waivers e a subtarefa]] — todo envelope leva `Softwares|Apps/Docusign`, só a waiver leva `Waivers`; a IA baixa o PDF, acha o cliente, fecha a subtarefa e pré-marca as próximas
 - [[D-2026-09-16 - Filtros criados pela API, nao pela tela]] — filtro nativo nasce do botão do painel, com trava de duplicata; só cria, nunca apaga nem edita
+- [[D-2026-09-16 - Piloto nao e servico, documento interno e a IA dentro da tarefa]] — `_`/`|`/hífen separam pessoa de serviço; envelope que o support@ assina é documento interno com aba própria; caixa da IA no modal da tarefa; quadro abre só com abertas, mais recentes no topo

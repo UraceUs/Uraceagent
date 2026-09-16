@@ -497,6 +497,48 @@ def instruir(con, user_id, key, texto, item, lembrar):
     return cid
 
 
+def instruir_tarefa(con, user_id, task_id, texto, lembrar=False):
+    """Instrução dada DENTRO de uma tarefa do Asana (dono, 16/09): a IA age nessa tarefa,
+    e só nela. Vai com o gid, o título, a coluna, o cliente, as subtarefas e o que ela
+    tem de anexo — o que o modal mostra é o que a IA recebe. Comentar, fechar subtarefa,
+    anexar, mover: tudo com o gid desta tarefa; criar outra tarefa, nunca por aqui.
+    As travas do MCP continuam valendo (Matt tasks e ADM URACE não se tocam)."""
+    from command_center.providers import chamar
+    t = um(con, "SELECT t.*, c.name AS client_name, c.pilot_name FROM tasks t LEFT JOIN clients c ON c.id=t.client_id WHERE t.id=?", (task_id,))
+    if not t:
+        return None
+    l = um(con, "SELECT external_id, deep_link FROM entity_links WHERE entity_type='task' AND entity_id=? AND system='asana'", (task_id,))
+    gid = l["external_id"] if l else None
+    subs, notas = [], None
+    if gid:
+        try:
+            full = chamar("asana", "asana_tarefa", gid=gid)
+            notas = (full.get("notas") or "")[:1500] or None
+            subs = [{"gid": s.get("gid"), "nome": s.get("nome"), "concluida": bool(s.get("concluida")), "vence_em": s.get("vence_em")}
+                    for s in (full.get("subtarefas_lista") or [])][:40]
+        except Exception:
+            pass                                             # sem Asana ao vivo: vai o espelho
+    if lembrar:
+        aprender(con, texto, user_id, client_id=t["client_id"], entity_type="task", source_key=f"task:{task_id}")
+    tarefa = {"gid": gid, "titulo": t["title"], "coluna": t["section"], "vence_em": t["due_on"], "status": t["status"],
+              "responsavel": t["assignee"], "cliente": t["client_name"], "piloto": t["pilot_name"],
+              "subtarefas": f"{t['subtasks_done'] or 0}/{t['subtasks_total'] or 0}", "link": l["deep_link"] if l else None}
+    prompt = (f"INSTRUÇÃO DO DONO dentro da tarefa do Asana \"{t['title']}\" (gid {gid or 'sem vínculo'}):\n{texto.strip()}\n"
+              "Aja NESTA tarefa e só nela: comentário, subtarefa (concluir/criar), anexo, data, mover de coluna — sempre com este gid. "
+              "Não crie outra tarefa por este caminho. Consulte o que precisar e PROPONHA as ações com os dados exatos."
+              "\nTAREFA: " + json.dumps(tarefa, ensure_ascii=False)
+              + ("\nSUBTAREFAS (gid · nome · concluída · vence): " + json.dumps(subs, ensure_ascii=False) if subs else "")
+              + ("\nDESCRIÇÃO DA TAREFA:\n" + notas if notas else "")
+              + _contexto_cliente(con, t["client_id"]) + aprendizados(con, t["client_id"], "task"))
+    session_key = f"agent:{ia.AGENTE}:tarefa-{user_id}-{agora()[:10]}"
+    cid = inserir(con, "ai_commands", user_id=user_id, text=prompt, session_key=session_key)
+    wid = inserir(con, "ai_workflows", command_id=cid, client_id=t["client_id"], kind="instrucao", summary=t["title"]) if t["client_id"] else None
+    auditar(con, "ai.instruct", f"user:{user_id}", user_id=user_id, entity_type="task", entity_id=task_id,
+            detail={"text": texto[:300], "remember": bool(lembrar), "command_id": cid, "gid": gid})
+    threading.Thread(target=_executa_instrucao, args=(cid, wid, prompt, session_key, user_id), daemon=True).start()
+    return cid
+
+
 def _executa_instrucao(command_id, workflow_id, texto, session_key, user_id):
     ia._executa(command_id, texto, session_key, user_id)
     if workflow_id:

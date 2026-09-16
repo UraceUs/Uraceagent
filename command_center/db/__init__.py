@@ -92,6 +92,8 @@ MIGRACOES = [
     ("invoices", "customer_email", "TEXT"),
     ("invoices", "customer_ref", "TEXT"),                 # id do cliente no QBO (a IA usa direto na próxima invoice)
     ("waivers", "pdf_path", "TEXT"),                      # PDF assinado guardado em ~/.urace/waivers (card e anexo usam)
+    ("waivers", "subject", "TEXT"),                       # assunto do envelope: é o que identifica um documento interno
+    ("waivers", "internal", "INTEGER NOT NULL DEFAULT 0"), # 1 = documento da empresa (support@ assina); não é waiver de cliente
     ("tasks", "waiver_id", "INTEGER"),                    # waiver que já foi anexada nesta tarefa (não anexa duas vezes)
     ("crm_messages", "status", "TEXT"),                   # saída: queued | sent | failed (entrada fica NULL)
     ("crm_messages", "error", "TEXT"),

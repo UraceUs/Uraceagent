@@ -80,6 +80,12 @@ function Calendario({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => voi
       </div> })}</div></div>
 }
 
+/** Ordem do quadro e da lista (dono, 16/09): o que ainda não foi concluído vem primeiro; dentro
+ *  de cada grupo, a data mais recente no topo; sem data vai para o fim. O calendário não usa. */
+function ordenar(ts: Task[]) {
+  return [...ts].sort((a, b) => ((a.status === 'completed' ? 1 : 0) - (b.status === 'completed' ? 1 : 0)) || (b.due_on || '').localeCompare(a.due_on || ''))
+}
+
 function Quadro({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void }) {
   const cols = useMemo(() => { const mp = new Map<string, Task[]>(); for (const t of tasks) { const k = t.section || '—'; mp.set(k, [...(mp.get(k) || []), t]) }
     return [...mp.entries()].sort((a, b) => { const ia = ORDEM_SECOES.indexOf(a[0]), ib = ORDEM_SECOES.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) }) }, [tasks])
@@ -100,6 +106,7 @@ interface TaskDetail {
 }
 function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
   const nav = useNavigate()
+  const { can } = useAuth()
   const det = useGet<TaskDetail>(`/tasks/${t.id}/detail`)
   const fields = (det.data?.task?.campos as Record<string, string> | undefined) || (safeJson(t.fields) as Record<string, string> | null)
   const subs = det.data?.task?.subtarefas_lista || []
@@ -124,8 +131,31 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
       </div>
       <Section title="Comentários" count={det.data.comments?.length} tight>{!det.data.comments?.length ? <Empty>Nenhum comentário.</Empty> : <div>{det.data.comments.map((c, i) => <div key={i} className="att"><div className="lv LOW" /><div className="grow"><div className="small muted"><b>{c.quem || '?'}</b> · {fmtDateTime(c.quando)}</div><div style={{ whiteSpace: 'pre-wrap' }}>{c.texto}</div></div></div>)}</div>}</Section>
     </>}
+    {can('OPERATOR') && <InstruirTarefa t={t} onClose={onClose} />}
     <div className="row"><TaskLink t={t} /></div>
   </div></div>
+}
+
+/** Caixa da IA dentro da tarefa (dono, 16/09): a instrução vai com o gid, o título, o cliente,
+ *  as subtarefas e a descrição desta tarefa, e a IA age nela — e só nela. */
+function InstruirTarefa({ t, onClose }: { t: Task; onClose: () => void }) {
+  const toast = useToast()
+  const nav = useNavigate()
+  const [text, setText] = useState('')
+  const [remember, setRemember] = useState(false)
+  const [busy, setBusy] = useState(false)
+  async function send() {
+    if (!text.trim()) return
+    setBusy(true)
+    try {
+      const r = await api.post<{ command_id: number; remembered: boolean }>(`/tasks/${t.id}/instruct`, { text, remember })
+      toast(r.remembered ? 'Instrução enviada à IA e guardada na memória dela.' : 'Instrução enviada à IA.', 'ok'); onClose(); nav(`/ai/${r.command_id}`)
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  return <Section title="✦ IA nesta tarefa" tight>
+    <textarea className="input" rows={3} value={text} onChange={e => setText(e.target.value)} placeholder={`Diga à IA o que fazer com esta tarefa. Ex.: "confirme o piloto, feche a subtarefa da waiver e comente que a invoice foi paga".`} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }} />
+    <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> guardar na memória da IA {t.client_id ? '(deste cliente)' : '(tarefas)'}</label><span className="grow" /><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : '✦ Enviar à IA'}</button></div>
+  </Section>
 }
 
 function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
@@ -172,10 +202,10 @@ export function AsanaPage() {
   const { can } = useAuth()
   const [nova, setNova] = useState(false)
   const [tab, setTab] = useTab<'cal' | 'board' | 'list'>('v', 'cal')
-  const [status, setStatus] = useTab<'all' | 'open' | 'completed'>('s', 'all')
+  const [status, setStatus] = useTab<'all' | 'open' | 'completed'>('s', 'open')     // dono, 16/09: o quadro abre só com o que falta fazer
   const { data, error, loading, reload } = useGet<Task[]>('/tasks?status=all', 120000)
   const [open, setOpen] = useState<Task | null>(null)
-  const tasks = (data || []).filter(t => status === 'all' || t.status === status)
+  const tasks = ordenar((data || []).filter(t => status === 'all' || t.status === status))
   return <>
     <IntHeader system="asana" title="Asana" desc="Quadro U-RACE: TUESDAY a SUNDAY é a agenda, RACES são corridas, Finished Services é o histórico." openHref={ASANA_PROJ} openLabel="Abrir no Asana" />
     <div className="row wrap"><SubTabs tabs={[['cal', 'Calendário'], ['board', 'Quadro'], ['list', 'Lista']]} value={tab} onChange={setTab} /><div className="grow" />
@@ -234,13 +264,19 @@ export function DocuSignPage() {
   const perguntar = usePerguntar()
   const toast = useToast()
   const [enviar, setEnviar] = useState(false)
-  const [tab, setTab] = useTab<'env' | 'signed' | 'tpl' | 'lixo'>('v', 'env')
+  const [tab, setTab] = useTab<'env' | 'signed' | 'int' | 'tpl' | 'lixo'>('v', 'env')
+  const [q, setQ] = useState('')
   const [st, setSt] = useTab<string>('s', 'all')
   const env = useGet<Waiver[]>(tab === 'lixo' ? '/waivers?hidden=1' : '/waivers', 120000)
   const tpl = useGet<{ connected: boolean; reason?: string; templates: Template[] | Record<string, unknown> }>(tab === 'tpl' ? '/docusign/templates' : null)
   const [busy, setBusy] = useState<number | null>(null)
-  const rows = (env.data || []).filter(w => tab === 'signed' ? (w.status === 'completed' && (w.template === 'parental' || w.template === 'adult')) : (st === 'all' || w.status === st))
-  const counts = (env.data || []).reduce<Record<string, number>>((a, w) => { a[w.status || '?'] = (a[w.status || '?'] || 0) + 1; return a }, {})
+  // Documento interno = envelope que o support@ assina (carta de emprego, invite letter…): aba própria, fora das waivers (dono, 16/09)
+  const interno = (w: Waiver) => !!w.internal
+  const bate = (w: Waiver) => { const s = q.trim().toLowerCase(); return !s || [w.signer_name, w.signer_email, w.client_pilot, w.client_name, w.minor_name, w.subject].some(v => (v || '').toLowerCase().includes(s)) }
+  const rows = (env.data || []).filter(w => tab === 'signed' ? (w.status === 'completed' && (w.template === 'parental' || w.template === 'adult') && !interno(w))
+    : tab === 'int' ? interno(w) : tab === 'lixo' ? (st === 'all' || w.status === st) : (!interno(w) && (st === 'all' || w.status === st))).filter(bate)
+  const nInt = (env.data || []).filter(interno).length
+  const counts = (env.data || []).filter(w => tab === 'lixo' || !interno(w)).reduce<Record<string, number>>((a, w) => { a[w.status || '?'] = (a[w.status || '?'] || 0) + 1; return a }, {})
   const tplList: Template[] = Array.isArray(tpl.data?.templates) ? tpl.data!.templates as Template[] : ((tpl.data?.templates as Record<string, unknown>)?.templates as Template[]) || []
   async function act(w: Waiver, kind: 'trash' | 'restore' | 'resend', body?: unknown) {
     setBusy(w.id)
@@ -261,17 +297,18 @@ export function DocuSignPage() {
   }
   return <>
     <IntHeader system="docusign" title="DocuSign" desc="Waivers de produção. Entregue não é assinada; devolvida é e-mail errado. Cada envelope ligado ao piloto." openHref="https://app.docusign.com/home" openLabel="Abrir no DocuSign" />
-    <div className="row wrap"><SubTabs tabs={[['env', 'Envelopes'], ['signed', `Assinadas (${(env.data || []).filter(w => w.status === 'completed' && (w.template === 'parental' || w.template === 'adult')).length})`], ['tpl', 'Modelos'], ['lixo', 'Lixeira']]} value={tab} onChange={setTab} /><div className="grow" />
+    <div className="row wrap"><SubTabs tabs={[['env', 'Envelopes'], ['signed', `Assinadas (${(env.data || []).filter(w => w.status === 'completed' && (w.template === 'parental' || w.template === 'adult') && !interno(w)).length})`], ['int', `Internos (${nInt})`], ['tpl', 'Modelos'], ['lixo', 'Lixeira']]} value={tab} onChange={setTab} /><div className="grow" />
       {can('OPERATOR') && <button className="btn primary" onClick={() => setEnviar(true)}>+ Enviar waiver</button>}
-      {tab !== 'tpl' && tab !== 'signed' && <select className="input" style={{ width: 220 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todos ({env.data?.length ?? 0})</option>{Object.entries(counts).map(([k, n]) => <option key={k} value={k}>{WAIVER_LABEL[k] || k} ({n})</option>)}</select>}
+      {tab !== 'tpl' && <input className="input" style={{ width: 230 }} placeholder="Buscar signatário, piloto, documento…" value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar nas waivers" />}
+      {tab !== 'tpl' && tab !== 'signed' && tab !== 'int' && <select className="input" style={{ width: 220 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todos ({Object.values(counts).reduce((a, n) => a + n, 0)})</option>{Object.entries(counts).map(([k, n]) => <option key={k} value={k}>{WAIVER_LABEL[k] || k} ({n})</option>)}</select>}
       <button className="btn" onClick={() => { env.reload(); tpl.reload() }}>↻</button></div>
     {enviar && <EnviarWaiver onClose={() => setEnviar(false)} onDone={env.reload} />}
-    {tab !== 'tpl' && <Section title={tab === 'lixo' ? 'Na lixeira do painel' : tab === 'signed' ? 'Waivers assinadas (parental e adult)' : 'Envelopes'} count={rows.length} tight>
-      {env.error && !env.data ? <ErrorState error={env.error} retry={env.reload} /> : env.loading && !env.data ? <Loading /> : rows.length === 0 ? <Empty>{tab === 'lixo' ? 'Nada na lixeira.' : 'Nenhum envelope espelhado com esse filtro.'}</Empty> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>Cliente / piloto</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
+    {tab !== 'tpl' && <Section title={tab === 'lixo' ? 'Na lixeira do painel' : tab === 'signed' ? 'Waivers assinadas (parental e adult)' : tab === 'int' ? 'Documentos internos (o support@ assina; não são waiver de cliente)' : 'Envelopes'} count={rows.length} tight>
+      {env.error && !env.data ? <ErrorState error={env.error} retry={env.reload} /> : env.loading && !env.data ? <Loading /> : rows.length === 0 ? <Empty>{tab === 'lixo' ? 'Nada na lixeira.' : q ? 'Nada bate com a busca.' : tab === 'int' ? 'Nenhum documento interno espelhado. A próxima sincronia do DocuSign marca os envelopes que o support@ assina.' : 'Nenhum envelope espelhado com esse filtro.'}</Empty> :
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>{tab === 'int' ? 'Documento' : 'Cliente / piloto'}</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
           {rows.map(w => { const aberto = ['sent', 'delivered', 'autoresponded'].includes(w.status || ''); return <tr key={w.id}>
-            <td>{w.signer_name}<div className="small muted">{w.signer_email}</div>{w.minor_name && <div className="small">menor: <b>{w.minor_name}</b></div>}</td>
-            <td>{w.client_id ? <><a onClick={() => nav(`/clients/${w.client_id}`)} style={{ cursor: 'pointer' }}>{w.client_pilot || w.client_name}</a>{w.client_pilot && <div className="small muted">{w.client_name}</div>}{w.link_reason && <div className="small muted" title={w.link_reason}>{w.link_by === 'human' ? 'à mão' : 'auto'}: {w.link_reason.slice(0, 48)}</div>}</> : <><span className="muted">não vinculado</span>{can('OPERATOR') && <LinkClient w={w} onDone={env.reload} />}</>}</td>
+            <td>{w.signer_name}<div className="small muted">{w.signer_email}</div>{w.minor_name && <div className="small">menor: <b>{w.minor_name}</b></div>}{tab !== 'int' && w.subject && <div className="small muted" title={w.subject}>{w.subject.slice(0, 60)}</div>}</td>
+            <td>{tab === 'int' ? <span title={w.subject || ''}>{w.subject || <span className="muted">sem assunto</span>}</span> : w.client_id ? <><a onClick={() => nav(`/clients/${w.client_id}`)} style={{ cursor: 'pointer' }}>{w.client_pilot || w.client_name}</a>{w.client_pilot && <div className="small muted">{w.client_name}</div>}{w.link_reason && <div className="small muted" title={w.link_reason}>{w.link_by === 'human' ? 'à mão' : 'auto'}: {w.link_reason.slice(0, 48)}</div>}</> : <><span className="muted">não vinculado</span>{can('OPERATOR') && <LinkClient w={w} onDone={env.reload} />}</>}</td>
             <td>{w.template}</td>
             <td><Chip tone={statusTone(w.status)}>{WAIVER_LABEL[w.status || ''] || w.status}</Chip></td>
             <td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td>

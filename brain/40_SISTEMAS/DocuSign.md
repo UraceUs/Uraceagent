@@ -110,6 +110,12 @@ aberto: `Caio_Imperato_AgreementNDAdocx.pdf` e
 documento, com outra criticidade — a rotina da waiver não deve tratá-los
 como waiver, mas também não deve ignorá-los.
 
+**Desde 16/09 eles têm lugar:** envelope em que o **`support@urace.us` é signatário**
+(carta de emprego, invite letter, contrato de marketing, NDA) é **documento interno** —
+aba *Internos* no painel, com o assunto como nome, nunca ligado a cliente, fora das
+contas de waiver e dos avisos de atenção. Ver
+[[D-2026-09-16 - Piloto nao e servico, documento interno e a IA dentro da tarefa]].
+
 ## O que o conector faz
 
 **Lê:** `getUserInfo` · `getTemplates` · `getEnvelopes` · `getEnvelope` ·

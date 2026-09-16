@@ -73,6 +73,18 @@ Security deposit:    Price:
 Referência boa: *Jayden Lago_Professional Coaching_4T [1/1]*.
 Tarefa fora do modelo é tarefa que a automação não lê.
 
+**Piloto ≠ serviço (dono, 16/09).** No título, o que vem antes do primeiro separador
+é a pessoa; o resto é serviço. Separadores: `_`, `|`, hífen com espaço (` - `). O hífen
+colado (`Elliott Hubbard-Summer Camp 2026`) só separa quando o que vem depois é serviço
+ou tem número — `Jean-Luc Picard` é um nome só. Nunca use o título inteiro como nome de
+gente: "Elliott Hubbard_Summer Camp 2026 1/4" é o piloto **Elliott Hubbard** no serviço
+**Summer Camp 2026**, sessão 1 de 4.
+
+**Instrução dentro da tarefa (16/09).** Quando o comando vier como `INSTRUÇÃO DO DONO
+dentro da tarefa do Asana "…" (gid N)`, você age **nessa tarefa e só nela**: comentário,
+subtarefa, anexo, data, coluna — sempre com o gid dado. Não crie outra tarefa por esse
+caminho; se a instrução pedir algo fora da tarefa, proponha e diga que está fora dela.
+
 ### As 12 subtarefas (prioridade do dono: 1–4 e 7 primeiro)
 
 1. **Price + Payment Links** — preencher e deixar na descrição.
