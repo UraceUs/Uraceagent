@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, SysLink, WAIVER_LABEL } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -561,6 +561,67 @@ export function GmailPage() {
 }
 
 // ------------------------------------------------------------- QuickBooks
+const ABERTA = (i: Invoice) => ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0
+const CAD_PT: Record<string, string> = { daily: 'diário', weekly: 'semanal', custom: 'personalizado' }
+export function cadenciaTexto(i: Invoice) { return i.reminder_cadence === 'custom' ? `a cada ${i.reminder_every_days} d` : CAD_PT[i.reminder_cadence || ''] || '' }
+
+/** Estado do lembrete de uma invoice, com o toggle (dono, 16/09). */
+export function LembreteChip({ i, onChange }: { i: Invoice; onChange: () => void }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  if (!i.reminder_id) return <span className="muted small">—</span>
+  const on = !!i.reminder_enabled
+  async function toggle() {
+    setBusy(true)
+    try { await api.patch(`/invoice-reminders/${i.reminder_id}`, { enabled: !on }); toast(on ? 'Lembrete desligado.' : 'Lembrete ligado. Vai no próximo dia útil da rotina (09:00).', 'ok'); onChange() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  return <span className="row" style={{ gap: 6 }}>
+    <Status kind={on ? 'ok' : 'off'} label={on ? `${cadenciaTexto(i)} · próx. ${fmtDate(i.reminder_next_on)}` : `desligado · ${cadenciaTexto(i)}`} />
+    {i.reminder_sent_count ? <span className="small muted mono" title={i.reminder_last_sent_at ? `último ${fmtDateTime(i.reminder_last_sent_at)}` : ''}>{i.reminder_sent_count}×</span> : null}
+    {i.reminder_note && <span className="small muted" title={i.reminder_note}>▲</span>}
+    {can('MANAGER') && <button className={`btn sm${on ? '' : ' quiet'}`} disabled={busy} onClick={e => { e.stopPropagation(); toggle() }} title={on ? 'Desligar o lembrete' : 'Ligar o lembrete'} aria-pressed={on}>{busy ? <Spinner /> : on ? 'ligado' : 'ligar'}</button>}
+  </span>
+}
+
+/** Configurar lembretes das invoices escolhidas: diário, semanal ou a cada N dias; ligado/desligado; enviar agora. */
+export function LembreteModal({ invoices, onClose, onDone }: { invoices: Invoice[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast()
+  const perguntar = usePerguntar()
+  const base = invoices.find(i => i.reminder_id)
+  const [cad, setCad] = useState<'daily' | 'weekly' | 'custom'>(base?.reminder_cadence || 'weekly')
+  const [every, setEvery] = useState<number>(base?.reminder_every_days || 3)
+  const [on, setOn] = useState<boolean>(base ? !!base.reminder_enabled : true)
+  const [busy, setBusy] = useState<'save' | 'now' | null>(null)
+  const abertas = invoices.filter(ABERTA)
+  const total = abertas.reduce((s, i) => s + (i.balance || 0), 0)
+  async function salvar() {
+    setBusy('save')
+    try { await api.put('/invoice-reminders', { invoice_ids: abertas.map(i => i.id), cadence: cad, every_days: cad === 'custom' ? every : undefined, enabled: on }); toast(on ? `Lembrete ${cad === 'custom' ? `a cada ${every} dias` : CAD_PT[cad]} ligado em ${abertas.length} invoice(s). Sai às 09:00 de cada dia devido.` : 'Lembrete guardado desligado.', 'ok'); onDone(); onClose() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  async function agora() {
+    if (!await perguntar({ titulo: `Enviar o lembrete agora para ${abertas.length} invoice(s)?`, texto: `Reenvia cada invoice por e-mail pelo QuickBooks, para o e-mail de cobrança dela. Total em aberto: ${money(total)}.\n\nIsso sai da empresa agora.`, ok: 'Enviar agora ↗', perigo: true })) return
+    setBusy('now')
+    try { const r = await api.post<{ enviados: number; detalhe: { invoice_id: number; ok: boolean; motivo?: string; aplicado?: boolean }[] }>('/invoice-reminders/send-now', { invoice_ids: abertas.map(i => i.id) }); const falhas = r.detalhe.filter(d => !d.ok); const sim = r.detalhe.some(d => d.ok && !d.aplicado); toast(`${r.enviados} lembrete(s) enviado(s)${sim ? ' — em simulação (APLICAR=0), nada saiu de verdade' : ''}${falhas.length ? `; ${falhas.length} não: ${falhas[0].motivo}` : ''}.`, falhas.length ? 'crit' : 'ok'); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
+    <div><div className="small muted cond">QuickBooks · lembretes</div><h2 className="h1" style={{ fontSize: 22 }}>Lembrete de {abertas.length} invoice(s) em aberto</h2>
+      <div className="small ink2">{abertas.map(i => `${i.doc_number || '#' + i.id}${i.pilot_name || i.client_name ? ` (${i.pilot_name || i.client_name})` : ''}`).join(' · ')} — {money(total)} em aberto.{invoices.length > abertas.length && <> <b>{invoices.length - abertas.length}</b> ficaram de fora por já estarem pagas.</>}</div></div>
+    <div className="field"><label>Com que frequência</label>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {(['daily', 'weekly', 'custom'] as const).map(c => <button key={c} className={`btn sm${cad === c ? ' on' : ''}`} onClick={() => setCad(c)} aria-pressed={cad === c}>{c === 'daily' ? 'Diário' : c === 'weekly' ? 'Semanal' : 'A cada N dias'}</button>)}
+        {cad === 'custom' && <span className="row" style={{ gap: 6 }}><input className="input" type="number" min={1} max={90} value={every} onChange={e => setEvery(Math.max(1, Math.min(90, Number(e.target.value) || 1)))} style={{ width: 80 }} aria-label="Dias" /> <span className="small muted">dias</span></span>}
+      </div></div>
+    <label className="check"><input type="checkbox" checked={on} onChange={e => setOn(e.target.checked)} /> lembrete ligado {on ? '— começa hoje, às 09:00 (ou amanhã, se já passou)' : '— fica guardado, não envia'}</label>
+    <div className="small muted">Cada envio é o reenvio da invoice pelo QuickBooks, para o e-mail de cobrança. Invoice paga desliga o lembrete sozinha. Tudo fica na auditoria.</div>
+    <div className="row wrap" style={{ justifyContent: 'flex-end' }}><button className="btn quiet" disabled={!!busy || abertas.length === 0} onClick={agora} title="Manda o lembrete agora, sem esperar as 09:00">{busy === 'now' ? <Spinner /> : 'Enviar agora ↗'}</button><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={!!busy || abertas.length === 0} onClick={salvar}>{busy === 'save' ? <Spinner /> : 'Salvar'}</button></div>
+  </div></div>
+}
+
 export function QuickBooksPage() {
   const { can } = useAuth()
   const [sp] = useSearchParams()
@@ -570,7 +631,27 @@ export function QuickBooksPage() {
   const sum = useGet<QboSummary>(can('MANAGER') ? '/qbo/summary' : null, 120000)
   const inv = useGet<Invoice[]>(can('MANAGER') && connected ? '/invoices' : null, 120000)
   const [st, setSt] = useTab<string>('s', 'all')
-  const rows = (inv.data || []).filter(x => st === 'all' || x.status === st)
+  const [q, setQ] = useTab<string>('q', '')
+  const [vmin, setVmin] = useTab<string>('min', '')
+  const [vmax, setVmax] = useTab<string>('max', '')
+  const [de, setDe] = useTab<string>('de', '')
+  const [ate, setAte] = useTab<string>('ate', '')
+  const [campo, setCampo] = useTab<'due_on' | 'issued_on'>('d', 'due_on')
+  const [sel, setSel] = useState<number[]>([])
+  const [lemb, setLemb] = useState(false)
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const qn = norm(q.trim())
+  // Filtros (dono, 16/09): valor, período (por vencimento ou emissão), cliente, número e palavras da invoice (memo).
+  const rows = (inv.data || []).filter(x => (st === 'all' || (st === 'aberto' ? ABERTA(x) : st === 'lembrete' ? !!x.reminder_enabled : x.status === st))
+    && (!qn || [x.doc_number, x.client_name, x.pilot_name, x.memo, x.customer_email].some(v => norm(v || '').includes(qn)))
+    && (!vmin || (x.amount || 0) >= Number(vmin)) && (!vmax || (x.amount || 0) <= Number(vmax))
+    && (!de || (x[campo] || '') >= de) && (!ate || (x[campo] || '') <= ate))
+  const somaAberto = rows.reduce((s, x) => s + (x.balance || 0), 0)
+  const filtrando = !!(qn || vmin || vmax || de || ate || st !== 'all')
+  const limpar = () => { setQ(''); setVmin(''); setVmax(''); setDe(''); setAte(''); setSt('all') }
+  const abertasNaTela = rows.filter(ABERTA)
+  const selecionadas = rows.filter(x => sel.includes(x.id))
+  const toggleSel = (id: number) => setSel(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id])
   const det = safeJson(i?.detail) as { nota?: string; realm_id?: string; empresa?: string } | null
   return <>
     <IntHeader system="quickbooks" title="QuickBooks" desc="Invoices e pagamentos da URACE US INC. A IA prepara; enviar pede aprovação. Nunca apaga." openHref="https://qbo.intuit.com/" openLabel="Abrir o QuickBooks" />
@@ -592,11 +673,26 @@ export function QuickBooksPage() {
       <table className="tbl"><tbody>{sum.data.top_debtors.map(d => <tr key={d.id} className="click" onClick={() => window.location.assign(`/ops/clients?open=${d.id}`)}><td>{d.pilot_name || d.name}{d.pilot_name && <div className="small muted">{d.name}</div>}</td><td className="mono">{d.n} invoice(s)</td><td className="mono right">{money(d.balance)}</td></tr>)}</tbody></table>
       <div className="small muted" style={{ padding: '8px 14px' }}>Saldo em aberto não é inadimplência: existe parcelamento. Cobrança é por lote (decisão de 31/08).</div>
     </Section>}
-    {can('MANAGER') && connected && <Section title="Invoices" count={rows.length} tight right={<select className="input" style={{ width: 160 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">Todas</option><option value="overdue">Vencidas</option><option value="open">Em aberto</option><option value="sent">Enviadas</option><option value="paid">Pagas</option></select>}>
-      {inv.error && !inv.data ? <ErrorState error={inv.error} retry={inv.reload} /> : inv.loading && !inv.data ? <Loading /> : rows.length === 0 ? <Empty>Nenhuma invoice espelhada. Sincronize no Dashboard.</Empty> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nº</th><th>Cliente</th><th>Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th><th></th></tr></thead><tbody>
-          {rows.map(x => <tr key={x.id}><td className="mono">{x.doc_number}</td><td>{x.client_id ? <a href={`/ops/clients?open=${x.client_id}`}>{x.pilot_name || x.client_name}</a> : <span className="muted">não vinculado</span>}</td><td className="mono">{fmtDate(x.issued_on)}</td><td className="mono">{fmtDate(x.due_on)}</td><td className="mono">{money(x.amount)}</td><td className="mono">{money(x.balance)}</td><td><Chip tone={statusTone(x.status === 'open' ? 'PENDING' : x.status)}>{x.status}</Chip></td><td><SysLink links={x.links} one /></td></tr>)}
+    {can('MANAGER') && connected && <>
+      <div className="card card-b stack" style={{ gap: 8 }}>
+        <div className="row wrap toolbar-page">
+          <input className="input" style={{ maxWidth: 300 }} placeholder="Nº, cliente, piloto, e-mail ou palavra da invoice" value={q} onChange={e => setQ(e.target.value)} aria-label="Buscar invoice" />
+          <select className="input" style={{ width: 170 }} value={st} onChange={e => setSt(e.target.value)} aria-label="Status"><option value="all">Todas</option><option value="aberto">Com saldo</option><option value="overdue">Vencidas</option><option value="open">Em aberto</option><option value="sent">Enviadas</option><option value="paid">Pagas</option><option value="lembrete">Com lembrete ligado</option></select>
+          <span className="row" style={{ gap: 6 }}><span className="small muted">valor</span><input className="input" type="number" style={{ width: 96 }} placeholder="de" value={vmin} onChange={e => setVmin(e.target.value)} aria-label="Valor mínimo" /><input className="input" type="number" style={{ width: 96 }} placeholder="até" value={vmax} onChange={e => setVmax(e.target.value)} aria-label="Valor máximo" /></span>
+          <span className="row" style={{ gap: 6 }}><select className="input" style={{ width: 120 }} value={campo} onChange={e => setCampo(e.target.value as 'due_on')} aria-label="Data por"><option value="due_on">vence</option><option value="issued_on">emitida</option></select><input className="input" type="date" style={{ width: 150 }} value={de} onChange={e => setDe(e.target.value)} aria-label="De" /><input className="input" type="date" style={{ width: 150 }} value={ate} onChange={e => setAte(e.target.value)} aria-label="Até" /></span>
+          {filtrando && <button className="btn quiet sm" onClick={limpar}>limpar</button>}
+        </div>
+        <div className="row wrap small muted"><span><b className="ink2">{rows.length}</b> invoice(s){filtrando ? ' no filtro' : ''} · <b className="ink2">{money(somaAberto)}</b> em aberto</span><span className="grow" />
+          {abertasNaTela.length > 0 && <><button className="btn sm" onClick={() => setSel(s => s.length === abertasNaTela.length ? [] : abertasNaTela.map(x => x.id))}>{sel.length === abertasNaTela.length ? 'desmarcar todas' : `marcar as ${abertasNaTela.length} com saldo`}</button>
+          <button className="btn primary sm" disabled={selecionadas.length === 0} onClick={() => setLemb(true)}>⏰ Lembretes{selecionadas.length ? ` (${selecionadas.length})` : ''}</button></>}</div>
+      </div>
+      <Section title="Invoices" count={rows.length} tight>
+      {inv.error && !inv.data ? <ErrorState error={inv.error} retry={inv.reload} /> : inv.loading && !inv.data ? <Loading /> : rows.length === 0 ? <Empty>{filtrando ? 'Nada bate com o filtro.' : 'Nenhuma invoice espelhada. Sincronize no Dashboard.'}</Empty> :
+        <div className="tbl-wrap"><table className="tbl rsp"><thead><tr><th></th><th>Nº</th><th>Cliente</th><th className="hide-md">Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Lembrete</th><th></th></tr></thead><tbody>
+          {rows.map(x => <tr key={x.id} className={sel.includes(x.id) ? 'on' : ''}><td>{ABERTA(x) && <input type="checkbox" checked={sel.includes(x.id)} onChange={() => toggleSel(x.id)} aria-label={`Selecionar ${x.doc_number}`} />}</td><td className="mono first" data-l="Nº">{x.doc_number}{x.memo && <div className="small muted truncate" style={{ maxWidth: 220 }} title={x.memo}>{x.memo}</div>}</td><td data-l="Cliente">{x.client_id ? <a href={`/ops/clients?open=${x.client_id}`}>{x.pilot_name || x.client_name}</a> : <span className="muted">não vinculado</span>}</td><td className="mono hide-md" data-l="Emitida">{fmtDate(x.issued_on)}</td><td className="mono" data-l="Vence">{fmtDate(x.due_on)}</td><td className="mono" data-l="Valor">{money(x.amount)}</td><td className="mono" data-l="Saldo">{money(x.balance)}</td><td data-l="Status"><Status s={x.status} /></td><td data-l="Lembrete"><LembreteChip i={x} onChange={inv.reload} /></td><td><SysLink links={x.links} one /></td></tr>)}
         </tbody></table></div>}
-    </Section>}
+      </Section>
+      {lemb && <LembreteModal invoices={selecionadas} onClose={() => setLemb(false)} onDone={() => { inv.reload(); setSel([]) }} />}
+    </>}
   </>
 }

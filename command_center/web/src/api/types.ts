@@ -71,7 +71,10 @@ export interface Email {
 export interface Invoice {
   id: number; client_id: number | null; doc_number: string | null; amount: number | null
   balance: number | null; status: string | null; issued_on: string | null; due_on: string | null
+  memo?: string | null; customer_email?: string | null
   client_name?: string | null; pilot_name?: string | null; links?: Link[]
+  reminder_id?: number | null; reminder_enabled?: number | null; reminder_cadence?: 'daily' | 'weekly' | 'custom' | null
+  reminder_every_days?: number | null; reminder_next_on?: string | null; reminder_last_sent_at?: string | null; reminder_sent_count?: number | null; reminder_note?: string | null
 }
 export interface QboSummary {
   connected: boolean; integration: Integration | null

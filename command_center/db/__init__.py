@@ -163,6 +163,10 @@ POS_MIGRACAO = [
     """UPDATE automation_rules SET schedule='["07:00","13:00","21:00"]' WHERE name='gmail_triagem' AND schedule IS NULL""",
     """UPDATE automation_rules SET schedule='["07:00","22:00"]' WHERE name='sondagem_integracoes' AND schedule IS NULL""",
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+       ('lembrete_invoice', 1, '{"schedule":true}', NULL,
+        '{"sistema":"mandar o lembrete (reenvio da invoice pelo QuickBooks) de cada invoice em aberto com lembrete ligado e dia chegado"}')""",
+    """UPDATE automation_rules SET schedule='["09:00"]' WHERE name='lembrete_invoice' AND schedule IS NULL""",
+    """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
        ('waiver_na_tarefa', 1, '{"event":"task.created","por":"sistema"}', NULL,
         '{"sistema":"anexar a waiver assinada do piloto na tarefa do Asana e guardar o PDF no card do cliente"}')""",
 ]

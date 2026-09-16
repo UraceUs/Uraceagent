@@ -67,3 +67,4 @@ X?"*. Agora dá.
 - [[D-2026-09-16 - Waiver por e-mail, DocuSign x Waivers e a subtarefa]] — todo envelope leva `Softwares|Apps/Docusign`, só a waiver leva `Waivers`; a IA baixa o PDF, acha o cliente, fecha a subtarefa e pré-marca as próximas
 - [[D-2026-09-16 - Filtros criados pela API, nao pela tela]] — filtro nativo nasce do botão do painel, com trava de duplicata; só cria, nunca apaga nem edita
 - [[D-2026-09-16 - Piloto nao e servico, documento interno e a IA dentro da tarefa]] — `_`/`|`/hífen separam pessoa de serviço; envelope que o support@ assina é documento interno com aba própria; caixa da IA no modal da tarefa; quadro abre só com abertas, mais recentes no topo
+- [[D-2026-09-16 - Lembretes recorrentes de invoice e filtros do QuickBooks]] — lembrete por invoice (diário/semanal/N dias, toggle) no QuickBooks e no card; rotina 09:00 reenvia pelo QuickBooks; paga desliga sozinha; quem liga é a aprovação; filtros por valor, período, cliente, número e memo

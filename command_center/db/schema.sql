@@ -131,6 +131,25 @@ CREATE TABLE IF NOT EXISTS invoices (
   synced_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- Lembretes recorrentes de invoice em aberto (dono, 16/09): um por invoice, cadência em dias.
+CREATE TABLE IF NOT EXISTS invoice_reminders (
+  id            INTEGER PRIMARY KEY,
+  invoice_id    INTEGER NOT NULL UNIQUE REFERENCES invoices(id),
+  client_id     INTEGER REFERENCES clients(id),
+  cadence       TEXT NOT NULL CHECK (cadence IN ('daily','weekly','custom')),
+  every_days    INTEGER NOT NULL DEFAULT 7,
+  enabled       INTEGER NOT NULL DEFAULT 1,
+  next_on       TEXT,                     -- AAAA-MM-DD (dia local de Orlando) do próximo envio
+  last_sent_at  TEXT,
+  sent_count    INTEGER NOT NULL DEFAULT 0,
+  note          TEXT,
+  created_by    INTEGER REFERENCES users(id),
+  updated_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS invoice_reminders_due ON invoice_reminders(enabled, next_on);
+
 CREATE TABLE IF NOT EXISTS emails (
   id            INTEGER PRIMARY KEY,
   client_id     INTEGER REFERENCES clients(id),

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { CatalogoEditor } from './Garage'
+import { LembreteChip, LembreteModal } from './Systems'
 import { UnirModal } from '../components/Unir'
 import type { Catalog, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -45,6 +46,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '', plan_type: '', pro_driver: false })
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
+  const [selInv, setSelInv] = useState<number[]>([])
+  const [lemb, setLemb] = useState(false)
   if (error && !data) return <ErrorState error={error} retry={reload} />
   if (loading && !data) return <Loading rows={8} />
   if (!data) return null
@@ -179,10 +182,13 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         {data.emails.map(e => <tr key={e.id}><td className="mono">{fmtDateTime(e.last_at)}</td><td>{e.mailbox}@</td><td>{e.subject}</td><td className="small">{e.sender}</td><td>{e.priority && <Chip tone={statusTone(e.priority === 'CRITICAL' ? 'ERROR' : e.priority === 'HIGH' ? 'PENDING' : 'ACTIVE')}>{e.priority}</Chip>}</td><td>{e.handled ? '✓' : <span style={{ color: 'var(--warn)' }}>não</span>}</td><td><SysLink links={e.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'invoices' && (data.invoices === null ? <Empty title="Financeiro restrito">Invoices são visíveis para gerentes e administradores.</Empty> :
-        data.invoices.length === 0 ? <Empty>Nenhuma invoice. QuickBooks está em stand-by; nada é inventado aqui.</Empty> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nº</th><th>Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th></tr></thead><tbody>
-          {data.invoices.map(i => <tr key={i.id}><td className="mono">{i.doc_number}</td><td className="mono">{fmtDate(i.issued_on)}</td><td className="mono">{fmtDate(i.due_on)}</td><td className="mono">{money(i.amount)}</td><td className="mono">{money(i.balance)}</td><td><Status s={i.status} /></td></tr>)}
-        </tbody></table></div>)}
+        data.invoices.length === 0 ? <Empty>Nenhuma invoice. QuickBooks está em stand-by; nada é inventado aqui.</Empty> : <>
+        {(() => { const abertas = data.invoices.filter(i => ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0); return abertas.length > 0 && can('MANAGER') && <div className="row wrap" style={{ marginBottom: 8 }}><span className="small muted"><b className="ink2">{abertas.length}</b> em aberto · {money(abertas.reduce((s, i) => s + (i.balance || 0), 0))}</span><span className="grow" /><button className="btn sm" onClick={() => setSelInv(s => s.length === abertas.length ? [] : abertas.map(i => i.id))}>{selInv.length === abertas.length ? 'desmarcar' : 'marcar todas em aberto'}</button><button className="btn primary sm" disabled={selInv.length === 0} onClick={() => setLemb(true)}>⏰ Lembretes{selInv.length ? ` (${selInv.length})` : ''}</button></div> })()}
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th></th><th>Nº</th><th>Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Lembrete</th></tr></thead><tbody>
+          {data.invoices.map(i => { const aberta = ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0; return <tr key={i.id}><td>{aberta && can('MANAGER') && <input type="checkbox" checked={selInv.includes(i.id)} onChange={() => setSelInv(s => s.includes(i.id) ? s.filter(x => x !== i.id) : [...s, i.id])} aria-label={`Selecionar ${i.doc_number}`} />}</td><td className="mono">{i.doc_number}{i.memo && <div className="small muted truncate" style={{ maxWidth: 220 }} title={i.memo}>{i.memo}</div>}</td><td className="mono">{fmtDate(i.issued_on)}</td><td className="mono">{fmtDate(i.due_on)}</td><td className="mono">{money(i.amount)}</td><td className="mono">{money(i.balance)}</td><td><Status s={i.status} /></td><td><LembreteChip i={i} onChange={reload} /></td></tr> })}
+        </tbody></table></div>
+        {lemb && <LembreteModal invoices={data.invoices.filter(i => selInv.includes(i.id))} onClose={() => setLemb(false)} onDone={() => { reload(); setSelInv([]) }} />}
+      </>)}
       {tab === 'ai' && (data.ai_actions.length === 0 ? <Empty>A IA ainda não propôs nada para este cliente.</Empty> :
         <div className="acts">{data.ai_actions.map(a => <div className="act" key={a.id}><span className="what">{a.action}</span><Chip tone={statusTone(a.policy)}>{POLICY_LABEL[a.policy]}</Chip><Chip tone={statusTone(a.status)}>{a.status}</Chip><span className="small muted">{fmtDateTime(a.created_at)}</span>{a.reason && <div className="small ink2" style={{ width: '100%' }}>{a.reason}</div>}</div>)}</div>)}
     </div>

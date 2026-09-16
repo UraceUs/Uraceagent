@@ -633,12 +633,14 @@ def test_agenda_chave_devida_e_roda_uma_vez_por_horario(cli, monkeypatch):
         chamadas = []
         monkeypatch.setitem(agenda.ROTINAS, "gmail_triagem", lambda c: chamadas.append("triagem") or {"movidos": 0})
         monkeypatch.setitem(agenda.ROTINAS, "sondagem_integracoes", lambda c: chamadas.append("sonda") or {"asana": "x"})
+        monkeypatch.setitem(agenda.ROTINAS, "lembrete_invoice", lambda c: chamadas.append("lembretes") or {"enviados": 0})
         t = datetime(2026, 9, 9, 7, 5, tzinfo=fuso)
         feitas = agenda.rodar(con, t)
         assert sorted(n for n, _, ok in feitas) == ["gmail_triagem", "sondagem_integracoes"] and all(ok for _, _, ok in feitas)
         assert agenda.rodar(con, t) == []                        # mesmo horário não repete
-        assert agenda.rodar(con, datetime(2026, 9, 9, 13, 1, tzinfo=fuso)) == [("gmail_triagem", "2026-09-09 13:00", True)]
-        assert chamadas == ["triagem", "sonda", "triagem"]
+        # às 13:01 vencem a triagem das 13:00 e os lembretes das 09:00 (16/09)
+        assert sorted(agenda.rodar(con, datetime(2026, 9, 9, 13, 1, tzinfo=fuso))) == [("gmail_triagem", "2026-09-09 13:00", True), ("lembrete_invoice", "2026-09-09 09:00", True)]
+        assert sorted(chamadas) == ["lembretes", "sonda", "triagem", "triagem"]
         r = um(con, "SELECT last_run_at, last_result FROM automation_rules WHERE name='gmail_triagem'")
         assert r["last_run_at"] == "2026-09-09 13:00" and '"ok": true' in r["last_result"]
         # regra desligada não roda
@@ -1775,3 +1777,70 @@ def test_modelo_docusign_ver_renomear_e_trocar_pdf(cli, monkeypatch, tmp_path):
     monkeypatch.setattr(prov, "modulo", caiu)
     entra(cli, "admin@urace.us")
     assert cli.get(B + f"/docusign/templates/{TID}").json()["connected"] is False
+
+
+# ================= 16/09: lembretes recorrentes de invoice em aberto =================
+def test_lembretes_de_invoice(cli, monkeypatch):
+    """Dono: botão nos clientes e no QuickBooks para mandar reminders — diário, semanal ou a
+    cada N dias, com toggle. Quem liga é MANAGER; a rotina das 09:00 manda o que está devido,
+    reenviando a invoice pelo QuickBooks; invoice paga desliga sozinha."""
+    from datetime import date, timedelta
+    from command_center.api import agenda, lembretes
+    from command_center.db import conectar, inserir, um
+    con = conectar()
+    try:
+        cid = inserir(con, "clients", name="Bryan Santiago", email="bryan@example.com", vip=0, status="ACTIVE", source="asana")
+        i1 = inserir(con, "invoices", client_id=cid, doc_number="URACE-0101", amount=1200, balance=1200, status="overdue", issued_on="2026-08-07", due_on="2026-08-14", customer_email="bryan@example.com", memo="Race Support")
+        i2 = inserir(con, "invoices", client_id=cid, doc_number="URACE-0102", amount=350, balance=0, status="paid", issued_on="2026-09-01", due_on="2026-09-03")
+        for i, ext in ((i1, "9001"), (i2, "9002")):
+            con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id, deep_link) VALUES ('invoice', ?, 'quickbooks', ?, NULL)", (i, ext))
+        con.commit()
+    finally:
+        con.close()
+    h = entra(cli, "admin@urace.us")
+    # configurar: a paga entra no pedido mas sai da tela (o modal avisa); a aberta ganha lembrete semanal
+    r = cli.put(B + "/invoice-reminders", headers=h, json={"invoice_ids": [i1, i2], "cadence": "weekly", "enabled": True})
+    assert r.status_code == 200 and len(r.json()["reminders"]) == 2
+    assert cli.put(B + "/invoice-reminders", headers=h, json={"invoice_ids": [i1], "cadence": "custom", "every_days": 200}).status_code == 400
+    assert cli.put(B + "/invoice-reminders", headers=h, json={"invoice_ids": [], "cadence": "daily"}).status_code == 400
+    # a invoice devolve o estado do lembrete (QuickBooks e card do cliente)
+    inv = next(x for x in cli.get(B + "/invoices", headers=h).json() if x["id"] == i1)
+    assert inv["reminder_enabled"] == 1 and inv["reminder_cadence"] == "weekly" and inv["reminder_every_days"] == 7 and inv["reminder_next_on"] == lembretes.hoje_local().isoformat()
+    card = cli.get(B + f"/clients/{cid}", headers=h).json()
+    assert next(x for x in card["invoices"] if x["id"] == i1)["reminder_enabled"] == 1
+    # a rotina: envia pelo QuickBooks (falso), marca o próximo dia; a paga desliga sozinha
+    enviados = []
+    monkeypatch.setattr("command_center.providers.chamar", lambda s, f, **a: enviados.append((s, f, a)) or {"aplicado": True, "enviado_para": "bryan@example.com", "numero": "URACE-0101"})
+    con = conectar()
+    try:
+        res = lembretes.rodar(con)
+        assert res["enviados"] == 1 and res["parados"] == 1, res
+        assert enviados == [("quickbooks", "qbo_enviar_invoice", {"id": "9001"})]
+        r1 = um(con, "SELECT * FROM invoice_reminders WHERE invoice_id=?", (i1,))
+        assert r1["sent_count"] == 1 and r1["next_on"] == (lembretes.hoje_local() + timedelta(days=7)).isoformat()
+        r2 = um(con, "SELECT * FROM invoice_reminders WHERE invoice_id=?", (i2,))
+        assert r2["enabled"] == 0 and "paga" in r2["note"]
+        assert lembretes.rodar(con)["enviados"] == 0                      # antes do dia, nada sai
+        assert "lembrete_invoice" in agenda.ROTINAS
+        assert um(con, "SELECT schedule FROM automation_rules WHERE name='lembrete_invoice'")["schedule"] == '["09:00"]'
+        assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='invoice.reminder.sent'")["n"] == 1
+    finally:
+        con.close()
+    # toggle e envio agora
+    rid = r.json()["reminders"][0]["id"]
+    assert cli.patch(B + f"/invoice-reminders/{rid}", headers=h, json={"enabled": False}).json()["enabled"] == 0
+    assert cli.patch(B + f"/invoice-reminders/{rid}", headers=h, json={"enabled": True, "cadence": "custom", "every_days": 3}).json()["every_days"] == 3
+    r = cli.post(B + "/invoice-reminders/send-now", headers=h, json={"invoice_ids": [i1, i2]})
+    assert r.status_code == 200 and r.json()["enviados"] == 1 and len(enviados) == 2
+    lista = cli.get(B + f"/invoice-reminders?client_id={cid}", headers=h).json()
+    assert [x["doc_number"] for x in lista][0] == "URACE-0101"
+    # OPERATOR não configura lembrete (é dinheiro saindo da empresa)
+    from command_center.api import auth as _auth
+    con = conectar()
+    try:
+        if not um(con, "SELECT id FROM users WHERE email=?", ("op@urace.us",)):
+            _auth.criar_usuario(con, "op@urace.us", "Op", "OPERATOR", SENHA); con.commit()
+    finally:
+        con.close()
+    ho = entra(cli, "op@urace.us")
+    assert cli.put(B + "/invoice-reminders", headers=ho, json={"invoice_ids": [i1], "cadence": "daily"}).status_code == 403

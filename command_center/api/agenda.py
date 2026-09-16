@@ -127,9 +127,15 @@ def _rodar_triagem(con):
     return {"iniciada": True, "em_segundo_plano": True}
 
 
+def _rodar_lembretes(con):
+    from command_center.api import lembretes
+    return lembretes.rodar(con)
+
+
 ROTINAS = {
     "gmail_triagem": _rodar_triagem,
     "sondagem_integracoes": lambda con: sondar(con, por="agenda"),
+    "lembrete_invoice": _rodar_lembretes,          # dono, 16/09: lembrete recorrente de invoice em aberto, 09:00
 }
 
 

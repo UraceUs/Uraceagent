@@ -219,7 +219,8 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     emails = todos(con, "SELECT * FROM emails WHERE client_id=? ORDER BY last_at DESC LIMIT 50", (cid,))
     for e in emails:
         e["links"] = _links(con, "email", e["id"])
-    invoices = todos(con, "SELECT * FROM invoices WHERE client_id=? ORDER BY issued_on DESC", (cid,)) if fin else None
+    from command_center.api import lembretes
+    invoices = todos(con, f"SELECT i.*, {lembretes.CAMPOS_NA_INVOICE} FROM invoices i WHERE i.client_id=? ORDER BY i.issued_on DESC", (cid,)) if fin else None
     acoes = todos(con, "SELECT a.* FROM ai_actions a JOIN ai_workflows w ON w.id=a.workflow_id WHERE w.client_id=? ORDER BY a.created_at DESC LIMIT 50", (cid,))
     # timeline: tudo junto, em ordem
     # cada item da linha do tempo leva o SEU link (Asana da tarefa, DocuSign do envelope, Gmail da thread, QBO da invoice)
@@ -1354,7 +1355,8 @@ def automation_rule_put(name: str, dados: RegraIn, request: Request, u=Depends(a
 # ============================================================ QuickBooks (financeiro: MANAGER+)
 @r.get("/invoices")
 def invoices(status: str = None, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
-    sql = "SELECT i.*, c.name AS client_name, c.pilot_name FROM invoices i LEFT JOIN clients c ON c.id=i.client_id"
+    from command_center.api import lembretes
+    sql = f"SELECT i.*, c.name AS client_name, c.pilot_name, {lembretes.CAMPOS_NA_INVOICE} FROM invoices i LEFT JOIN clients c ON c.id=i.client_id"
     p = []
     if status:
         sql += " WHERE i.status=?"; p.append(status)
@@ -1362,6 +1364,93 @@ def invoices(status: str = None, u=Depends(auth.exige("MANAGER")), con: sqlite3.
     for i in rows:
         i["links"] = _links(con, "invoice", i["id"])
     return rows
+
+
+class LembreteIn(BaseModel):
+    invoice_ids: list[int]
+    cadence: str = "weekly"
+    every_days: int | None = None
+    enabled: bool = True
+
+
+class LembretePatch(BaseModel):
+    enabled: bool | None = None
+    cadence: str | None = None
+    every_days: int | None = None
+
+
+@r.get("/invoice-reminders")
+def reminders_list(client_id: int | None = None, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    from command_center.api import lembretes
+    return lembretes.listar(con, client_id)
+
+
+@r.put("/invoice-reminders")
+def reminders_set(dados: LembreteIn, request: Request, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    """Liga (ou reconfigura) o lembrete das invoices escolhidas. Quem liga é a aprovação humana (dono, 16/09)."""
+    from command_center.api import lembretes
+    if not dados.invoice_ids:
+        raise HTTPException(400, "Escolha ao menos uma invoice.")
+    try:
+        saida = lembretes.configurar(con, u["id"], dados.invoice_ids[:100], dados.cadence, dados.every_days, dados.enabled)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    con.commit()
+    return {"ok": True, "reminders": saida}
+
+
+@r.patch("/invoice-reminders/{rid}")
+def reminder_patch(rid: int, dados: LembretePatch, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    from command_center.api import lembretes
+    try:
+        r_ = lembretes.alternar(con, u["id"], rid, dados.enabled, dados.cadence, dados.every_days)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not r_:
+        raise HTTPException(404, "Lembrete não encontrado.")
+    con.commit()
+    return r_
+
+
+@r.post("/invoice-reminders/send-now")
+def reminders_send_now(dados: LembreteIn, request: Request, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    """Manda o lembrete agora para as invoices escolhidas (sem esperar as 09:00). Auditado por invoice."""
+    from command_center.api import lembretes
+    if not dados.invoice_ids:
+        raise HTTPException(400, "Escolha ao menos uma invoice.")
+    saida = []
+    for iid in dados.invoice_ids[:50]:
+        r_ = um(con, "SELECT * FROM invoice_reminders WHERE invoice_id=?", (iid,))
+        if not r_:                                        # sem lembrete configurado: manda uma vez, sem criar recorrência
+            inv = um(con, "SELECT id FROM invoices WHERE id=?", (iid,))
+            if not inv:
+                continue
+            r_ = {"id": None, "invoice_id": iid, "every_days": 0}
+        res = lembretes.enviar(con, r_, por=u["id"]) if r_["id"] else _enviar_uma_vez(con, u["id"], iid)
+        saida.append({"invoice_id": iid, **res})
+    con.commit()
+    return {"ok": True, "enviados": sum(1 for s in saida if s.get("ok")), "detalhe": saida}
+
+
+def _enviar_uma_vez(con, user_id, iid):
+    from command_center.api import lembretes
+    from command_center.providers import NaoConectado, chamar
+    inv = um(con, "SELECT * FROM invoices WHERE id=?", (iid,))
+    ext = lembretes._qbo_id(con, iid)
+    if not ext:
+        return {"ok": False, "motivo": "invoice sem vínculo com o QuickBooks"}
+    if inv["status"] not in lembretes.ABERTAS or not (inv["balance"] or 0) > 0:
+        return {"ok": False, "motivo": "invoice já paga"}
+    try:
+        res = chamar("quickbooks", "qbo_enviar_invoice", id=ext)
+    except NaoConectado as e:
+        return {"ok": False, "motivo": f"QuickBooks não conectado: {e}"}
+    except Exception as e:
+        return {"ok": False, "motivo": f"{type(e).__name__}: {str(e)[:200]}"}
+    aplicado = bool(res.get("aplicado"))
+    auditar(con, "invoice.reminder.sent" if aplicado else "invoice.reminder.simulated", f"user:{user_id}", user_id=user_id, entity_type="invoice", entity_id=iid,
+            detail={"doc_number": inv["doc_number"], "balance": inv["balance"], "para": res.get("enviado_para") or inv["customer_email"], "unico": True})
+    return {"ok": True, "aplicado": aplicado, "para": res.get("enviado_para"), "doc_number": inv["doc_number"]}
 
 
 @r.get("/qbo/summary")

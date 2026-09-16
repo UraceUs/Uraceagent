@@ -17,6 +17,7 @@ const RULE_LABEL: Record<string, [string, string]> = {
   waiver_assinada: ['Waiver assinada', 'A IA comenta na tarefa do Asana que a waiver chegou.'],
   mensalidade_dia_1: ['Mensalidade no dia 1', 'A IA prepara a invoice mensal de cada piloto com plano e deixa para aprovação (aprovar = enviar).'],
   tarefa_vencida: ['Serviço vencido no quadro', 'A IA confere se aconteceu e move para Finished Services.'],
+  lembrete_invoice: ['Lembretes de invoice (09:00)', 'Manda o lembrete (reenvio da invoice pelo QuickBooks) de cada invoice em aberto com lembrete ligado e dia chegado — diário, semanal ou a cada N dias, como configurado no QuickBooks ou no card do cliente. Invoice paga desliga sozinha. Não passa pela IA: quem ligou o lembrete foi a aprovação.'],
   gmail_triagem: ['Triagem do Gmail (07:00, 13:00, 21:00)', 'A IA lê cada thread da inbox, aplica os marcadores e move para o marcador principal. O que pede resposta continua em Precisa de atenção.'],
   sondagem_integracoes: ['Sondagem das integrações (07:00 e 22:00)', 'Uma chamada real por sistema, de manhã e à noite. Fora disso só re-sonda o sistema que falhar durante o uso.'],
 }
