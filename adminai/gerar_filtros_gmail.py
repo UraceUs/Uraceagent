@@ -317,6 +317,34 @@ def sem_conflito_com_o_dono(por_marcador, ditadas):
     return {alvo: itens for alvo, itens in por_marcador.items() if alvo not in ditados}
 
 
+def conflitos_na_caixa(filtros, ditadas, mapa):
+    """Filtros que JÁ existem na caixa mandando para um marcador que o dono ditou.
+
+    A trava `sem_conflito_com_o_dono` impede o gerador de CRIAR a regra errada; não
+    impede nada do que já está lá. Foi o que a contagem de 16/09 mostrou na support@:
+    um filtro antigo levava `dse_na4@docusign.net` — o remetente de todo envelope do
+    DocuSign — para `Waivers`, e 6 de 40 mensagens dele não eram waiver nenhuma.
+    Como `Waivers` é o gatilho do fluxo da waiver, isso não é marcador torto: é a IA
+    acordando em documento errado. O gerador não apaga filtro (só cria); o que ele
+    pode fazer é pôr o conflito na cara do dono, no relatório.
+
+    Devolve [(criterio_legivel, marcador)] — vazio quando não há conflito."""
+    ditados = {alvo for _q, alvo, _a in ditadas}
+    meus = {q for q, _alvo, _a in ditadas}
+    nome_do_id = {i: n for n, i in (mapa or {}).items()}
+    achados = []
+    for f in filtros or []:
+        cr = f.get("criteria", {}) or {}
+        if cr.get("query") in meus:                      # a regra dele mesma, não conflito
+            continue
+        alvos = [nome_do_id.get(i, i) for i in ((f.get("action", {}) or {}).get("addLabelIds") or [])]
+        for alvo in alvos:
+            if alvo in ditados:
+                legivel = " ".join(f"{k}={v}" for k, v in cr.items() if v not in (None, "", []))
+                achados.append((legivel, alvo))
+    return achados
+
+
 def xml(por_marcador, conta, ditadas=()):
     L = ["<?xml version='1.0' encoding='UTF-8'?>",
          "<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>",
@@ -364,7 +392,7 @@ def desconhecidos(na_caixa):
                   and not n.startswith("CATEGORY_") and not n.upper().endswith("_STAR"))
 
 
-def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo, ditadas=()):
+def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo, ditadas=(), conflitos=()):
     cobertos = set(por_marcador) | {alvo for _q, alvo, _a in ditadas}
     sem = [n for n in nomes if n not in cobertos]
     fora_do_manual = desconhecidos(na_caixa)
@@ -388,6 +416,13 @@ def relatorio(por_marcador, nomes, na_caixa, conta, share, minimo, ditadas=()):
               "A IA os ignora. Confira um por um: os seus entram no manual; os que você não",
               "reconhecer foram postos por outra coisa, como os `Email Review/…` de agosto.", ""]
         L += [f"- `{n}`" for n in fora_do_manual] + [""]
+    if conflitos:
+        L += ["## 🚨 Filtro que já existe na caixa contraria uma regra sua", "",
+              "Estes filtros **já estão no Gmail** (não são desta geração) e mandam e-mail para um",
+              "marcador que você ditou — ou seja, competem com a sua regra e podem marcar o que",
+              "ela manda não marcar. O gerador nunca apaga filtro; a decisão é sua.", "",
+              "| Filtro que existe | Manda para |", "|---|---|"]
+        L += [f"| `{c}` | `{alvo.replace('|', chr(92) + '|')}` |" for c, alvo in conflitos] + [""]
     if ditadas:
         L += ["## Regras ditadas pelo dono", "", "Não vêm da amostra: são a regra dele, palavra por palavra.", "",
               "| Marcador | Busca do Gmail |", "|---|---|"]
@@ -442,10 +477,17 @@ def main():
     fr = os.path.join(a.saida, f"filtros-{a.conta}.md")
     ditadas = regras_do_dono(na_caixa)
     por_marcador = sem_conflito_com_o_dono(por_marcador, ditadas)
+    try:
+        conflitos = conflitos_na_caixa(gmail_mcp.listar_filtros_humano(a.conta), ditadas, mapa)
+    except Exception as e:                       # ler filtro é extra: não derruba a geração
+        conflitos = []
+        print(f"aviso: não deu para ler os filtros que já existem ({e})", file=sys.stderr)
+    for c, alvo in conflitos:
+        print(f"CONFLITO: filtro existente `{c}` manda para `{alvo}`, que é regra sua", file=sys.stderr)
     with open(fx, "w", encoding="utf-8") as f:
         f.write(xml(por_marcador, a.conta, ditadas))
     with open(fr, "w", encoding="utf-8") as f:
-        f.write(relatorio(por_marcador, nomes, na_caixa, a.conta, a.share, a.minimo, ditadas))
+        f.write(relatorio(por_marcador, nomes, na_caixa, a.conta, a.share, a.minimo, ditadas, conflitos))
     print(f"\nescrito: {fx}\nescrito: {fr}", file=sys.stderr)
     print(f"{len(por_marcador)} filtros, {sum(len(v) for v in por_marcador.values())} remetentes")
 

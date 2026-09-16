@@ -23,6 +23,16 @@ from = dse_na4@docusign.net OR richard@thinkinsurance.co.uk  ->  Waivers
 todo envelope sai dele, waiver ou não. Então esse filtro põe `Waivers` em coisa
 que não é waiver.
 
+## A prova, nas últimas 40 mensagens do remetente (16/09)
+
+**34 waivers e 6 que não são**: um NDA do Caio Imperato, a *Intended Use Letter* da
+URACE_AUTO_LLC, a *Invite Letter 2026* do Bryan Bernal (duas mensagens) e um
+`UniversalNon-POD`. Todas com `Waivers` colado pelo filtro — 15% de erro, e cada
+uma delas acordaria o fluxo da waiver em documento que não é waiver.
+
+As 6 já estão marcadas na caixa: filtro só age na chegada, então apagar o filtro
+não tira o marcador do que já passou.
+
 ## Por que isso importa mais do que um marcador errado
 
 `Waivers` é o **gatilho do fluxo da waiver**: a IA baixa o PDF, lê para descobrir

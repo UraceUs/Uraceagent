@@ -331,3 +331,30 @@ def test_quarta_revisao_support_16_09():
     r = g.regras(_conta({"info@rdstation.com.br": {"Marketing/RD Station /MailMarketing": 5}}),
                  {"info@rdstation.com.br": 5}, 0.6, 3)
     assert r["Marketing/RD Station /MailMarketing"]
+
+
+def test_conflito_com_filtro_que_ja_existe_na_caixa():
+    """16/09: a trava impede CRIAR a regra errada, mas a support@ já tinha um filtro
+    antigo levando `dse_na4@docusign.net` (remetente de todo envelope do DocuSign)
+    para `Waivers` — 6 de 40 mensagens dele não eram waiver. O gerador não apaga
+    filtro; tem de mostrar o conflito no relatório."""
+    mapa = {"Waivers": "L1", "Softwares|Apps/Docusign": "L2", "Fornecedores": "L3"}
+    ditadas = g.regras_do_dono(list(mapa))
+    existentes = [
+        {"criteria": {"from": "dse_na4@docusign.net OR richard@thinkinsurance.co.uk"},
+         "action": {"addLabelIds": ["L1"]}},
+        {"criteria": {"from": "info@modishosports.com"}, "action": {"addLabelIds": ["L3"]}},
+        # a própria regra ditada, já criada: não é conflito consigo mesma
+        {"criteria": {"query": ditadas[0][0]}, "action": {"addLabelIds": ["L2"]}},
+    ]
+    c = g.conflitos_na_caixa(existentes, ditadas, mapa)
+    assert [alvo for _cr, alvo in c] == ["Waivers"]
+    assert "dse_na4@docusign.net" in c[0][0]
+    assert "🚨" in g.relatorio({}, list(mapa), list(mapa), "support", 0.6, 3, ditadas, c)
+    # sem conflito, a seção não aparece
+    assert "🚨" not in g.relatorio({}, list(mapa), list(mapa), "support", 0.6, 3, ditadas, [])
+
+
+def test_conflito_nao_derruba_geracao_sem_filtros():
+    assert g.conflitos_na_caixa(None, (), {}) == []
+    assert g.conflitos_na_caixa([], g.regras_do_dono(["Waivers"]), None) == []
