@@ -160,3 +160,14 @@ regra "arquivar só com `wNews`" estava escrita no código como **nome exato**, 
 no gerador de filtros, nem no MCP (`gmail_rotular` recusaria). A taxonomia sempre
 disse que a família inteira é propaganda. Agora o código diz o mesmo:
 `wNews` e qualquer `wNews/…` saem da inbox.
+
+## Decisão do dono (16/09): a lista de destinos mostra TODOS os marcadores
+
+Perguntei se a barra lateral do Gmail no painel devia listar só o que está
+confirmado no manual, já que um clique ali move o e-mail — inclusive para
+marcador que não é dele (`Action Required`, `Legal or Contract`). Resposta:
+**"mostra todos os marcadores"**.
+
+A distinção que ele faz é clara e vale registrar: a regra "só o que está no
+manual" é para a **IA**. O clique humano é decisão dele, na hora, com o marcador
+que ele quiser — inclusive um que ainda não entrou no manual. Não filtrar a lista.
