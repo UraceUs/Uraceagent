@@ -564,3 +564,29 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .mail.inbox .toolbar{flex-direction:column;align-items:stretch;gap:6px}
 .nav a.sub{padding-left:26px;font-size:13px;color:var(--muted)}
 .nav a.sub.active{color:var(--ink)}
+
+/* ---------- movimento (16/09): velocidade, precisão, resposta. Nada que distraia.
+   Tudo curto (≤ 260 ms), com a mesma curva, e desligado em prefers-reduced-motion. */
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.page-in{animation:rise .22s var(--ease) both}
+.att,.tcard,.act,.kpi,.strip .it,.tbl.rsp tr,.hist .it,.cal .ev{animation:rise .24s var(--ease) both}
+.att:nth-child(2),.tcard:nth-child(2),.act:nth-child(2),.kpi:nth-child(2){animation-delay:30ms}
+.att:nth-child(3),.tcard:nth-child(3),.act:nth-child(3),.kpi:nth-child(3){animation-delay:60ms}
+.att:nth-child(4),.tcard:nth-child(4),.act:nth-child(4),.kpi:nth-child(4){animation-delay:90ms}
+.att:nth-child(5),.tcard:nth-child(5),.act:nth-child(5){animation-delay:120ms}
+.att:nth-child(6),.tcard:nth-child(6),.act:nth-child(6){animation-delay:150ms}
+.att:nth-child(n+7),.tcard:nth-child(n+7),.act:nth-child(n+7){animation-delay:180ms}
+.toast{animation:toastin .2s var(--ease) both}
+.kpi.link:hover,.tcard:hover{transform:translateY(-1px);border-color:var(--accent)}
+.kpi.link,.tcard{transition:transform var(--t) var(--ease),border-color var(--t) var(--ease),box-shadow var(--t) var(--ease)}
+.rc .g.run,.chip.run .g{animation:pulse 1.6s ease-in-out infinite}
+.spin{animation-duration:.7s}
+.tabs button{position:relative}
+.tabs button::after{content:"";position:absolute;left:14px;right:14px;bottom:-1px;height:2px;background:var(--brand);transform:scaleX(0);transform-origin:center;transition:transform var(--t) var(--ease)}
+.tabs button.on{border-bottom-color:transparent}
+.tabs button.on::after{transform:scaleX(1)}
+.btn.primary:hover:not(:disabled){box-shadow:0 2px 10px -4px var(--accent)}
+.modal{animation:rise .2s var(--ease) both}
+@media(prefers-reduced-motion:reduce){.att,.tcard,.act,.kpi,.strip .it,.tbl.rsp tr,.hist .it,.cal .ev,.page-in,.toast,.modal{animation:none}.rc .g.run,.chip.run .g{animation:none}}

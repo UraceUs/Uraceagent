@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
 import type { Level, Policy } from '../api/types'
 
@@ -92,7 +92,7 @@ export function Kpi({ label, value, tone, foot, onClick, lead, sm }: { label: st
   return <div className={`card kpi${onClick ? ' link' : ''}${lead ? ' lead' : ''}${sm ? ' sm' : ''}${lead && tone ? ' ' + tone : ''}`} onClick={onClick} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
     onKeyDown={e => { if (onClick && (e.key === 'Enter' || e.key === ' ')) onClick() }}>
     <div className="lbl">{label}</div>
-    <div className={`val ${tone || ''}`}>{value}</div>
+    <div className={`val ${tone || ''}`}><Num v={value} /></div>
     {foot && <div className="foot">{foot}</div>}
   </div>
 }
@@ -136,5 +136,22 @@ export function SysLink({ links, one }: { links?: { system: string; external_id:
 /** Fita de números de contexto (nível 2): nome à esquerda, valor à direita. */
 export function Strip({ items }: { items: { label: string; value: ReactNode; tone?: 'crit' | 'warn' | 'ok'; onClick?: () => void; title?: string }[] }) {
   return <div className="strip">{items.map(i => <div key={i.label} className={`it${i.onClick ? ' link' : ''}`} onClick={i.onClick} role={i.onClick ? 'button' : undefined} tabIndex={i.onClick ? 0 : undefined} title={i.title}
-    onKeyDown={e => { if (i.onClick && (e.key === 'Enter' || e.key === ' ')) i.onClick() }}><span className="lbl">{i.label}</span><span className={`val ${i.tone || ''}`}>{i.value}</span></div>)}</div>
+    onKeyDown={e => { if (i.onClick && (e.key === 'Enter' || e.key === ' ')) i.onClick() }}><span className="lbl">{i.label}</span><span className={`val ${i.tone || ''}`}><Num v={i.value} /></span></div>)}</div>
+}
+
+/** Conta até o número em ~400 ms (ease-out). Só para inteiros; qualquer outra coisa passa direto. */
+export function Num({ v }: { v: ReactNode }) {
+  const alvo = typeof v === 'number' && Number.isInteger(v) ? v : null
+  const [n, setN] = useState(alvo ?? 0)
+  const raf = useRef(0)
+  useEffect(() => {
+    if (alvo === null) return
+    const reduz = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduz || alvo === 0) { setN(alvo); return }
+    const de = n, t0 = performance.now(), dur = 400
+    const tick = (t: number) => { const k = Math.min(1, (t - t0) / dur); const e = 1 - Math.pow(1 - k, 3); setN(Math.round(de + (alvo - de) * e)); if (k < 1) raf.current = requestAnimationFrame(tick) }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [alvo]) // eslint-disable-line react-hooks/exhaustive-deps
+  return <>{alvo === null ? v : n}</>
 }

@@ -284,3 +284,20 @@ cartões compactos com o motivo do erro em português e os detalhes técnicos fe
 - Login: foco e feedback já valem pelo design system; sem mudança visual.
 - Ícones: continuam glifos de texto (✓ ▲ ✕ ○ ◐ ✦ ↗); se um dia entrar um set de ícones,
   entra por aqui, num lugar só.
+
+## Referência de movimento (16/09): inspora.design, categoria Motion
+
+O dono mandou usar `https://www.inspora.design/?category=Motion` como referência. O domínio
+está **bloqueado pelo proxy** do ambiente de trabalho; pela busca, é um arquivo curado de
+trabalho visual e a categoria Motion são peças animadas (transições de produto,
+micro-interações, motion de marca). Sem ver as peças que ele tem em mente, entrou só a
+camada que o brief já pedia — *velocidade, precisão, resposta; nada que distraia*:
+
+- entrada de página e de listas em 220–240 ms com escalonamento de 30 ms por item;
+- número de KPI e da fita **conta até o valor** em 400 ms (telemetria chegando, não pulando);
+- sublinhado das tabs desliza; toast entra de baixo; modal sobe 6 px;
+- cartão e KPI clicável levantam 1 px no hover, com a borda na cor de ação;
+- glifo ◐ pulsa enquanto algo roda; tudo desligado em `prefers-reduced-motion`.
+
+Pendente: ele mandar 3–6 capturas ou gravações das peças do inspora que quer de referência,
+para calibrar curva, duração e o que mais merece movimento.

@@ -115,7 +115,7 @@ export function Shell() {
         <span className="it clock" title="hora local"><span className="k">{clock.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>{clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
       </div>
-      <main className="page"><Outlet context={{ dash }} /></main>
+      <main className="page"><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Outlet context={{ dash }} /></div></main>
     </div>
     <Palette open={pal} onClose={() => setPal(false)} ask={ask} />
   </div>
