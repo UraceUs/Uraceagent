@@ -80,6 +80,11 @@ REGRAS_RECUSADAS = {
     ("@dhl.com", "Suppliers/Stickers - Jake"),
     ("@bluegemsmgmt.com", "ITALO"),                               # é parceria, não pessoal
     ("ken@naturecoasthealthcare.com", "Team/LARA"),               # pasta de quem já saiu; fica só RACES/F4
+    # quarta rodada — support@, 16/09
+    ("receiv@rdstation-fin.com", "Marketing/RD Station /MailMarketing"),  # domínio FALSO, golpe de cobrança
+    ("no-reply@accounts.google.com", "Eduardo/n8n"),              # alerta de segurança da conta Google
+    ("support@kommo.com", "Marketing"),                           # Kommo é Customer Service/Kommo
+    ("@united.com", "Events & National Races"),                   # companhia aérea é Travels
 }
 RX_EMAIL = re.compile(r"<([^>]+)>")
 
@@ -301,6 +306,17 @@ def regras_do_dono(na_caixa):
     return [(q, alvo, arq) for q, alvo, arq in REGRAS_DO_DONO if alvo in na_caixa]
 
 
+def sem_conflito_com_o_dono(por_marcador, ditadas):
+    """Marcador que o dono ditou não recebe regra vinda da amostra.
+
+    Era o furo que a support@ mostrou (16/09): ele ditou que só waiver enviada ou
+    assinada leva `Waivers`, e a amostra somou `dse_na4@docusign.net` — o remetente de
+    TODO e-mail do DocuSign. Juntas, as duas mandariam "visualizou" e "anulado" para
+    `Waivers`, o oposto da regra dele. Onde ele falou, a amostra cala."""
+    ditados = {alvo for _q, alvo, _a in ditadas}
+    return {alvo: itens for alvo, itens in por_marcador.items() if alvo not in ditados}
+
+
 def xml(por_marcador, conta, ditadas=()):
     L = ["<?xml version='1.0' encoding='UTF-8'?>",
          "<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>",
@@ -425,6 +441,7 @@ def main():
     fx = os.path.join(a.saida, f"mailFilters-{a.conta}.xml")
     fr = os.path.join(a.saida, f"filtros-{a.conta}.md")
     ditadas = regras_do_dono(na_caixa)
+    por_marcador = sem_conflito_com_o_dono(por_marcador, ditadas)
     with open(fx, "w", encoding="utf-8") as f:
         f.write(xml(por_marcador, a.conta, ditadas))
     with open(fr, "w", encoding="utf-8") as f:

@@ -301,3 +301,33 @@ def test_gerador_le_o_manual_confirmado_no_painel(monkeypatch, tmp_path):
     finally:
         con.close()
         _os.environ.pop("CC_DB_PATH", None)
+
+
+def test_regra_ditada_manda_sozinha_no_marcador_dela():
+    """Dono, 16/09: só waiver ENVIADA ou ASSINADA leva `Waivers`. A amostra somou
+    `dse_na4@docusign.net`, que é o remetente de TODO e-mail do DocuSign — juntas, as
+    duas mandariam 'visualizou' e 'anulado' para lá. Onde ele falou, a amostra cala."""
+    ditadas = g.regras_do_dono(["Softwares|Apps/Docusign", "Waivers"])
+    por_marcador = {"Waivers": [("dse_na4@docusign.net", 9, 10)],
+                    "Softwares|Apps/Docusign": [("@docusign.net", 13, 14)],
+                    "Fornecedores": [("info@palaceracewear.com", 5, 5)]}
+    r = g.sem_conflito_com_o_dono(por_marcador, ditadas)
+    assert "Waivers" not in r and "Softwares|Apps/Docusign" not in r
+    assert r["Fornecedores"], "o resto da amostra continua valendo"
+    # e o XML final fica com a regra dele, não com a da amostra
+    x = g.xml(r, "support", ditadas)
+    assert "Waiver of Liability" in x and "dse_na4@docusign.net" not in x
+
+
+def test_quarta_revisao_support_16_09():
+    """O domínio falso da RD Station não pode virar filtro: arquivar phishing numa pasta
+    normal o faz parecer legítimo."""
+    for remetente, alvo in [("receiv@rdstation-fin.com", "Marketing/RD Station /MailMarketing"),
+                            ("no-reply@accounts.google.com", "Eduardo/n8n"),
+                            ("support@kommo.com", "Marketing"),
+                            ("@united.com", "Events & National Races")]:
+        assert g.regras(_conta({remetente: {alvo: 9}}), {remetente: 9}, 0.6, 3) == {}, f"{remetente} -> {alvo}"
+    # o domínio verdadeiro da RD Station continua valendo
+    r = g.regras(_conta({"info@rdstation.com.br": {"Marketing/RD Station /MailMarketing": 5}}),
+                 {"info@rdstation.com.br": 5}, 0.6, 3)
+    assert r["Marketing/RD Station /MailMarketing"]
