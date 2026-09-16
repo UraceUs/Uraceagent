@@ -25,7 +25,11 @@ export function useGet<T>(path: string | null, every?: number): Loaded<T> {
   useEffect(() => {
     if (!every || !path) return
     const id = setInterval(() => { if (document.visibilityState === 'visible') setTick(t => t + 1) }, every)
-    return () => clearInterval(id)
+    // Aba em segundo plano não faz refetch (economia). Quando volta a ficar visível, busca
+    // na hora: foi assim que "gerando…" ficou preso na tela com a geração já concluída.
+    const aoVoltar = () => { if (document.visibilityState === 'visible') setTick(t => t + 1) }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', aoVoltar) }
   }, [every, path])
   const reload = useCallback(() => setTick(t => t + 1), [])
   return { data, error, loading, reload }
