@@ -438,6 +438,46 @@ def baixar_anexo_bytes(conta, message_id, attachment_id):
     return _b64d(r["data"])
 
 
+def listar_filtros_humano(conta):
+    """Porta do Command Center: os filtros nativos da caixa, como o Gmail os guarda."""
+    return _req(conta, f"{GMAIL}/settings/filters").get("filter", [])
+
+
+def _assinatura_filtro(f):
+    """Identidade de um filtro para comparar com outro: critério + o que ele faz.
+    É o que impede criar em dobro — o dono acabou de levar um susto com isso."""
+    c, a = f.get("criteria", {}) or {}, f.get("action", {}) or {}
+    return (tuple(sorted((k, str(v)) for k, v in c.items() if v not in (None, "", []))),
+            tuple(sorted(a.get("addLabelIds") or [])),
+            tuple(sorted(a.get("removeLabelIds") or [])))
+
+
+def criar_filtro_humano(conta, criterio, marcador, arquivar=False):
+    """Cria UM filtro nativo. Porta do Command Center, nunca ferramenta do agente.
+
+    As regras do dono viram código aqui também:
+      - marcador tem de existir (`_label_id` recusa o que não existe: a IA não cria marcador);
+      - arquivar (tirar da INBOX) só com a família `wNews` — a mesma trava de gmail_rotular;
+      - TRASH e SPAM nunca;
+      - não apaga nem edita filtro nenhum: só cria, e pula o que já existe igual.
+    Devolve (criado: bool, detalhe)."""
+    if not isinstance(criterio, dict) or not any(criterio.values()):
+        raise ErroFerramenta("critério vazio")
+    if marcador.upper() in PROIBIDOS:
+        raise ErroFerramenta(f"RECUSADO: '{marcador}' nunca.")
+    if arquivar and not _e_propaganda(marcador):
+        raise ErroFerramenta(f"RECUSADO: arquivar só com '{MARCADOR_ARQUIVAVEL}' — regra do dono.")
+    lid = _label_id(conta, marcador)
+    corpo = {"criteria": {k: v for k, v in criterio.items() if v},
+             "action": {"addLabelIds": [lid], **({"removeLabelIds": ["INBOX"]} if arquivar else {})}}
+    alvo = _assinatura_filtro(corpo)
+    for f in listar_filtros_humano(conta):
+        if _assinatura_filtro(f) == alvo:
+            return False, {"motivo": "já existe igual", "filtro_id": f.get("id")}
+    novo = _req(conta, f"{GMAIL}/settings/filters", "POST", corpo)
+    return True, {"filtro_id": novo.get("id"), "marcador": marcador, "arquiva": bool(arquivar)}
+
+
 def rotular_humano(conta, thread_id, adicionar):
     """Clique de uma pessoa: ADICIONA marcadores à thread, sem tirar da inbox.
     Não é ferramenta do MCP. Marcador inexistente é erro, nunca criação."""

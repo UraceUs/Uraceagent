@@ -2175,6 +2175,54 @@ def gmail_filtros_gerar(conta: str, request: Request, u=Depends(auth.exige("MANA
     return {"started": True}
 
 
+def _regras_do_xml(caminho):
+    """As regras do arquivo que o dono revisou. Ler o XML (e não recalcular) garante que
+    o que entra no Gmail é exatamente o que ele viu no relatório."""
+    import xml.etree.ElementTree as ET
+    ns = {"a": "http://www.w3.org/2005/Atom", "apps": "http://schemas.google.com/apps/2006"}
+    regras = []
+    for entry in ET.parse(caminho).getroot().findall("a:entry", ns):
+        p = {e.get("name"): e.get("value") for e in entry.findall("apps:property", ns)}
+        criterio = {k: p[k] for k in ("from", "to", "subject", "hasTheWord") if p.get(k)}
+        if criterio and p.get("label"):
+            regras.append({"criterio": criterio, "marcador": p["label"],
+                           "arquivar": p.get("shouldArchive") == "true"})
+    return regras
+
+
+@r.post("/gmail/filtros/{conta}/aplicar")
+def gmail_filtros_aplicar(conta: str, request: Request, u=Depends(auth.exige("MANAGER")),
+                          con: sqlite3.Connection = Depends(get_db)):
+    """Cria no Gmail os filtros do arquivo gerado, pela API (16/09).
+
+    Nasceu de um problema real: pela tela, a conta delegada não consegue importar
+    (o Google pede reautenticação) e um clique a mais dispara a criação em dobro.
+    Pela API não há nem um nem outro — e filtro que já existe igual é pulado.
+    Nunca apaga nem edita filtro: só cria o que falta."""
+    xml, _md, _log = _caminhos_filtros(conta)
+    if not os.path.isfile(xml):
+        raise HTTPException(404, "Ainda não há filtros gerados para esta caixa.")
+    try:
+        g = modulo("gmail")
+    except NaoConectado as e:
+        raise HTTPException(503, f"Gmail não conectado: {e}")
+    if not hasattr(g, "criar_filtro_humano"):
+        raise HTTPException(503, "O servidor ainda não tem a porta de filtros; rode o deploy.")
+    criados, pulados, erros = [], [], []
+    for reg in _regras_do_xml(xml):
+        try:
+            ok, det = g.criar_filtro_humano(conta, reg["criterio"], reg["marcador"], reg["arquivar"])
+            (criados if ok else pulados).append({"marcador": reg["marcador"], **det})
+        except Exception as e:
+            erros.append({"marcador": reg["marcador"], "erro": f"{type(e).__name__}: {str(e)[:200]}"})
+    auditar(con, "gmail.filtros.aplicados", f"user:{u['id']}", user_id=u["id"],
+            detail={"caixa": conta, "criados": len(criados), "pulados": len(pulados),
+                    "erros": erros[:10]}, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True, "caixa": conta, "criados": len(criados), "pulados": len(pulados),
+            "erros": erros, "detalhe_criados": criados[:50]}
+
+
 @r.get("/gmail/filtros/{conta}/download")
 def gmail_filtros_download(conta: str, u=Depends(auth.exige("MANAGER"))):
     """O XML que o Gmail importa (Configurações → Filtros → Importar filtros)."""

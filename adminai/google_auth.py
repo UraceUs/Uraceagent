@@ -22,7 +22,14 @@ Escopos pedidos de uma vez, para não voltar aqui depois:
   gmail.modify   -- ler, rotular, criar rascunho (o servidor MCP não
                     expõe envio; a trava é na ferramenta, não no escopo,
                     porque não existe escopo "rascunho sem envio")
+  gmail.settings.basic -- criar FILTRO nativo (16/09). Mesma história: não
+                    existe escopo só-de-filtros, então este também abre
+                    encaminhamento, resposta automática e endereço de envio.
+                    O código só cria filtro, e nunca apaga nenhum.
   calendar.readonly, drive.readonly, spreadsheets.readonly
+
+⚠️ Se você já consentiu antes de 16/09, o token NÃO tem settings.basic: rode de
+novo para as duas caixas. Consentimento novo não invalida o anterior.
 """
 import argparse
 import json
@@ -34,6 +41,10 @@ import urllib.request
 
 ESCOPOS = [
     "https://www.googleapis.com/auth/gmail.modify",
+    # settings.basic: criar FILTRO nativo pela API (16/09). Não existe escopo só-de-filtros —
+    # este também abre encaminhamento, resposta automática e endereços de envio. O dono
+    # autorizou sabendo disso; o código só usa filtros, e nunca apaga nenhum.
+    "https://www.googleapis.com/auth/gmail.settings.basic",
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/spreadsheets.readonly",

@@ -81,25 +81,40 @@ interface Filtros { caixa: string; rodando: boolean; existe: boolean; gerado_em:
 function FiltrosNativos({ caixa }: { caixa: Caixa }) {
   const { can } = useAuth()
   const toast = useToast()
+  const perguntar = usePerguntar()
   const f = useGet<Filtros>(`/gmail/filtros/${caixa}`, 15000)
   const [ver, setVer] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [aplicando, setAplicando] = useState(false)
   async function gerar() {
     setBusy(true)
     try { const r = await api.post<{ started: boolean; motivo?: string }>(`/gmail/filtros/${caixa}/gerar`, {}); toast(r.started ? 'Gerando: leva alguns minutos, a tela atualiza sozinha.' : `Não iniciou: ${r.motivo}`, r.started ? 'ok' : 'crit'); f.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  async function aplicar() {
+    if (!await perguntar({
+      titulo: `Criar os ${f.data?.filtros} filtros na caixa ${caixa}@?`,
+      texto: 'Vai direto pela API do Gmail, sem importar arquivo. Filtro que já existe igual é pulado, e nenhum filtro seu é apagado ou alterado. Vale só para e-mail novo.',
+      ok: 'Criar filtros',
+    })) return
+    setAplicando(true)
+    try {
+      const r = await api.post<{ criados: number; pulados: number; erros: { marcador: string; erro: string }[] }>(`/gmail/filtros/${caixa}/aplicar`, {})
+      toast(`${r.criados} criado(s), ${r.pulados} já existiam${r.erros.length ? `, ${r.erros.length} com erro` : ''}.`, r.erros.length ? 'crit' : 'ok')
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setAplicando(false) }
   }
   const d = f.data
   return <div className="card"><div className="card-h">
     <h2 className="h2">Filtros nativos do Gmail · {caixa}@</h2><div className="grow" />
     <div className="row wrap">
       {can('MANAGER') && <button className="btn" disabled={busy || !!d?.rodando} onClick={gerar}>{d?.rodando ? <><Spinner /> gerando…</> : d?.existe ? '⟳ Gerar de novo' : '✦ Gerar filtros'}</button>}
-      {can('MANAGER') && d?.existe && <a className="btn primary" href={`/ops/api/gmail/filtros/${caixa}/download`}>⬇ Baixar XML ({d.filtros})</a>}
+      {can('MANAGER') && d?.existe && <button className="btn primary" disabled={aplicando || !!d.rodando} onClick={aplicar}>{aplicando ? <><Spinner /> criando…</> : `✦ Criar no Gmail (${d.filtros})`}</button>}
+      {can('MANAGER') && d?.existe && <a className="btn" href={`/ops/api/gmail/filtros/${caixa}/download`}>⬇ Baixar XML</a>}
       {d?.relatorio && <button className="btn ghost" onClick={() => setVer(v => !v)}>{ver ? 'esconder relatório' : 'ver relatório'}</button>}
     </div></div>
     <div className="card-b">
       {!d?.existe && !d?.rodando && <div className="small muted">Nenhum filtro gerado ainda para esta caixa. O gerador lê os remetentes reais de cada marcador confirmado e monta um arquivo que o Gmail importa.</div>}
-      {d?.existe && <div className="small">{d.filtros} filtro(s) · gerado {d.gerado_em ? ago(d.gerado_em) : ''}. Revise o relatório, baixe o XML e importe em Gmail → Configurações → Filtros → <b>Importar filtros</b>. Na primeira vez, <b>não</b> marque “aplicar às conversas existentes”.</div>}
+      {d?.existe && <div className="small">{d.filtros} filtro(s) · gerado {d.gerado_em ? ago(d.gerado_em) : ''}. Revise o relatório e clique em <b>Criar no Gmail</b>: vai pela API, pula o que já existe e não toca nos seus filtros. Vale só para e-mail novo. (O XML continua aí para importar à mão, se preferir.)</div>}
       {d?.rodando && d.log && <pre className="small mono" style={{ maxHeight: 120, overflow: 'auto', marginTop: 8 }}>{d.log.split('\n').slice(-6).join('\n')}</pre>}
       {ver && d?.relatorio && <pre className="small" style={{ whiteSpace: 'pre-wrap', maxHeight: 480, overflow: 'auto', marginTop: 8 }}>{d.relatorio}</pre>}
     </div></div>

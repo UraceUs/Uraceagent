@@ -1567,3 +1567,46 @@ def test_triagem_dispara_o_fluxo_da_waiver_quando_o_email_e_waiver(cli, monkeypa
         assert r["waivers"] == [{"email": e, "ok": True, "signer": "X", "motivo": None}]
     finally:
         con.close()
+
+
+def test_filtros_aplicados_pela_api_pulam_o_que_ja_existe(cli, monkeypatch, tmp_path):
+    """Dono, 16/09: "consegue fazer sem ser pela extensão?". A importação pela tela
+    travou (conta delegada pede reautenticação) e um clique a mais disparou a criação
+    em dobro. Pela API não há nem um nem outro."""
+    from command_center.api import rotas
+    import command_center.providers as prov
+    h = entra(cli, "admin@urace.us")
+    os.makedirs(rotas.FILTROS_DIR, exist_ok=True)
+    with open(os.path.join(rotas.FILTROS_DIR, "mailFilters-urace.xml"), "w", encoding="utf-8") as f:
+        f.write("""<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>
+  <entry><apps:property name='from' value='mcinfo@ups.com'/><apps:property name='label' value='Shipping Status'/></entry>
+  <entry><apps:property name='from' value='promo@x.com'/><apps:property name='label' value='wNews'/><apps:property name='shouldArchive' value='true'/></entry>
+  <entry><apps:property name='hasTheWord' value='from:(docusign.net)'/><apps:property name='label' value='Softwares|Apps/Docusign'/></entry>
+  <entry><apps:property name='label' value='SemCriterio'/></entry>
+</feed>""")
+    vistos = []
+
+    class Gmail:
+        def criar_filtro_humano(self, conta, criterio, marcador, arquivar=False):
+            vistos.append((conta, tuple(sorted(criterio.items())), marcador, arquivar))
+            if marcador == "wNews":
+                return False, {"motivo": "já existe igual", "filtro_id": "f9"}
+            if marcador.startswith("Softwares"):
+                raise RuntimeError("marcador não existe nesta caixa")
+            return True, {"filtro_id": "f1", "marcador": marcador}
+    monkeypatch.setattr(rotas, "modulo", lambda s: Gmail())
+    r = cli.post(B + "/gmail/filtros/urace/aplicar", headers=h).json()
+    assert r["criados"] == 1 and r["pulados"] == 1 and len(r["erros"]) == 1
+    assert r["erros"][0]["marcador"] == "Softwares|Apps/Docusign"
+    # entrada sem critério nenhum não vira filtro
+    assert [m for _c, _cr, m, _a in vistos] == ["Shipping Status", "wNews", "Softwares|Apps/Docusign"]
+    assert vistos[1][3] is True and vistos[0][3] is False        # só a propaganda arquiva
+    assert vistos[2][1] == (("hasTheWord", "from:(docusign.net)"),)
+    from command_center.db import conectar, um
+    con = conectar()
+    try:
+        assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='gmail.filtros.aplicados'") is not None
+    finally:
+        con.close()
+    assert cli.post(B + "/gmail/filtros/urace/aplicar", headers=entra(cli, "viewer@urace.us")).status_code == 403
