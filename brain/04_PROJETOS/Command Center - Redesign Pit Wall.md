@@ -299,5 +299,18 @@ camada que o brief já pedia — *velocidade, precisão, resposta; nada que dist
 - cartão e KPI clicável levantam 1 px no hover, com a borda na cor de ação;
 - glifo ◐ pulsa enquanto algo roda; tudo desligado em `prefers-reduced-motion`.
 
-Pendente: ele mandar 3–6 capturas ou gravações das peças do inspora que quer de referência,
-para calibrar curva, duração e o que mais merece movimento.
+A extensão trouxe o relatório (12 posts, 36 quadros, 91 no feed) — arquivado em
+`brain/90_ARQUIVO/inspora-motion-2026-09-16/relatorio.md`. Os três escolhidos para o pit
+wall e o que virou código:
+
+| Referência | O que ela faz | O que entrou |
+|---|---|---|
+| **05 · tabs animation** (@marcelkargul) | indicador nasce no centro da aba, cone de luz suave embaixo, texto clareia | `.tabs button.on` — sublinhado cresce do centro (300 ms) + cone radial na cor da marca a 22% |
+| **06 · Thinking states** (@xchylerdrenth) | processamento pequeno, mono, loop 1,2–1,5 s, só pixel/opacidade | `Thinking`: 4 barras de 2 px, 1,3 s, sem escala — na bolha da IA e no botão de sincronia |
+| **02 · Components N3XT** (@adriankuleszo) | pontos acendem em sequência; porcentagem conta | `Dots`: matriz de pontos (25 ms por ponto) nas subtarefas do quadro e do modal; `Num` já contava |
+| 03 / 09 / 11 (camadas) | tooltip, popover e menu entram com fade + leve escala em 150–300 ms; fundo desfoca | menus, popovers, balão e paleta em 180 ms; scrim de modal e paleta com blur de 2 px |
+| 03 (chips) | "In progress" gira | glifo ◐ gira em 1,4 s no chip e na faixa race control |
+
+Os riscos que o relatório apontou viraram regra: **sem mola nem overshoot** (ease-out em
+tudo), **um brilho por vez** (só o cone da aba), **blur só numa camada** (scrim), e das
+quatro referências de tema claro (01, 02, 03, 09) veio o movimento, não a paleta.

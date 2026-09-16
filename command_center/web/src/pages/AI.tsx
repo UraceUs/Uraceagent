@@ -4,7 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { AiAction, AiCommand } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, PageHeader, SYS_NAME, Section, Status } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, PageHeader, SYS_NAME, Section, Status, Thinking } from '../components/ui'
 
 const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: 'Criar e enviar invoice', qbo_criar_invoice: 'Criar invoice', qbo_enviar_invoice: 'Enviar invoice', qbo_criar_item: 'Criar item no catálogo', qbo_criar_cliente: 'Criar cliente no QuickBooks', asana_criar_do_modelo: 'Criar tarefa (modelo oficial)', asana_criar_tarefa: 'Criar tarefa', asana_comentar: 'Comentar na tarefa', asana_mover_para_secao: 'Mover tarefa', asana_mover_para_finished: 'Mover para Finished Services', asana_concluir: 'Concluir tarefa', docusign_enviar_waiver: 'Enviar waiver', gmail_rascunho: 'Rascunho de e-mail', gmail_rotular: 'Marcar e-mail' }
 const STATUS_LABEL: Record<string, string> = { PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada' }
@@ -131,7 +131,7 @@ function Bolha({ c, onChange, quem }: { c: AiCommand; onChange?: () => void; que
   return <div className="chat">
     <div className="msg me"><div className="bub">{(() => { const h = textoHumano(c.text); return <>{h.eyebrow && <span className="ctx">{h.eyebrow}</span>}{h.texto}{h.tecnico && <details className="small" style={{ marginTop: 6, opacity: .8 }}><summary style={{ cursor: 'pointer' }}>ver o que a IA recebeu</summary><pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, margin: '6px 0 0' }}>{c.text}</pre></details>}</> })()}</div><div className="when">{quem ? `${quem} · ` : ''}{hora(c.created_at)}</div></div>
     <div className="msg ai">
-      <div className="bub">{running ? <span className="row"><span className="spin" /> {c.status === 'QUEUED' ? 'Na fila…' : 'Lendo os sistemas e pensando…'}</span>
+      <div className="bub">{running ? <Thinking label={c.status === 'QUEUED' ? 'Na fila…' : 'Lendo os sistemas e pensando…'} />
         : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : c.output ? <Md text={c.output} /> : <span className="muted">(sem texto)</span>}</div>
       {!!c.actions?.length && <div className="acts">{c.actions.map(a => <ActionCard key={a.id} a={a} onChange={onChange} />)}</div>}
       <div className="when">{c.finished_at ? hora(c.finished_at) : running ? 'agora' : ''}{c.status === 'FAILED' && ' · falhou'}</div>

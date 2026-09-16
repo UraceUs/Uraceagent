@@ -5,7 +5,7 @@ import type { Loaded } from '../api/hooks'
 import type { Dashboard as D, SyncStatus } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { AttentionList } from './Attention'
-import { Banner, ErrorState, Kpi, Loading, PageHeader, Progress, SYS_NAME, Section, Spinner, Status, Strip } from '../components/ui'
+import { Banner, ErrorState, Kpi, Loading, PageHeader, Progress, SYS_NAME, Section, Status, Strip, Thinking } from '../components/ui'
 import { ago, money } from '../components/fmt'
 import { useToast } from '../components/Toast'
 
@@ -46,7 +46,7 @@ export function Dashboard() {
   return <>
     <Progress on={syncing} />
     <PageHeader title="Dashboard" help={<>O que decide está em cima: pista de hoje, o que precisa de gente, o que espera sua aprovação. A IA já tratou o que pôde. Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>.</>}>
-      {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing} title="Lê Asana, DocuSign, Gmail e QuickBooks de novo">{syncing ? <Spinner /> : '↻'} {syncing ? `Sincronizando: ${stage || '…'}` : 'Sincronizar'}</button>}
+      {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing} title="Lê Asana, DocuSign, Gmail e QuickBooks de novo">{syncing ? <Thinking label={`Sincronizando: ${stage || '…'}`} /> : <>↻ Sincronizar</>}</button>}
       {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai')}>✦ Perguntar à IA</button>}
     </PageHeader>
     {stale && <Banner tone="warn"><b>Espelho antigo.</b> {lastSync ? `A última sincronia foi há ${ago(lastSync)}.` : 'Nenhuma sincronia registrada ainda.'} Os números podem estar defasados — sincronize.</Banner>}

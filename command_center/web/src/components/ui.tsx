@@ -155,3 +155,20 @@ export function Num({ v }: { v: ReactNode }) {
   }, [alvo]) // eslint-disable-line react-hooks/exhaustive-deps
   return <>{alvo === null ? v : n}</>
 }
+
+/** Indicador de "processando" à moda das referências (inspora 06): pequeno, monocromático,
+ *  loop de ~1,3 s só de opacidade/altura — sem mola, sem escala. */
+export function Thinking({ label }: { label?: ReactNode }) {
+  return <span className="thinking" role="status" aria-live="polite"><span className="bars" aria-hidden="true"><i /><i /><i /><i /></span>{label && <span>{label}</span>}</span>
+}
+
+/** Matriz de pontos que acende em sequência (inspora 02): progresso que se lê de longe.
+ *  Até 24 pontos; acima disso vira barra, porque ponto demais é ruído. */
+export function Dots({ done, total, tone }: { done: number; total: number; tone?: 'ok' | 'warn' | 'accent' }) {
+  const n = Math.max(0, Math.min(total, 24)), d = Math.max(0, Math.min(done, n))
+  if (total <= 0) return null
+  if (total > 24) return <span className="bar" title={`${done}/${total}`}><i style={{ width: `${Math.round(100 * done / total)}%` }} /></span>
+  return <span className={`dots ${tone || 'accent'}`} title={`${done} de ${total}`} aria-label={`${done} de ${total}`}>
+    {Array.from({ length: n }).map((_, i) => <i key={i} className={i < d ? 'on' : ''} style={{ animationDelay: `${i * 25}ms` }} />)}
+  </span>
+}

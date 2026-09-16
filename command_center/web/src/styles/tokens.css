@@ -590,3 +590,30 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .btn.primary:hover:not(:disabled){box-shadow:0 2px 10px -4px var(--accent)}
 .modal{animation:rise .2s var(--ease) both}
 @media(prefers-reduced-motion:reduce){.att,.tcard,.act,.kpi,.strip .it,.tbl.rsp tr,.hist .it,.cal .ev,.page-in,.toast,.modal{animation:none}.rc .g.run,.chip.run .g{animation:none}}
+
+/* ---------- calibração com as referências do inspora (16/09)
+   05 tabs: indicador nasce no centro e ganha um cone de luz suave embaixo.
+   06 thinking: processamento pequeno, mono, loop 1,3 s, só opacidade/altura.
+   02 N3XT: pontos acendem em sequência; número conta.
+   03/09/11 camadas: entram com fade + escala 0,98 em ~180 ms; fundo desfoca 2 px (uma camada por vez).
+   Sem mola, sem overshoot, sem brilho em cima de dado. */
+.tabs button.on::before{content:"";position:absolute;left:0;right:0;bottom:-1px;height:22px;pointer-events:none;background:radial-gradient(60% 100% at 50% 100%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 70%);opacity:0;animation:fadein .3s var(--ease) .12s forwards}
+@keyframes fadein{to{opacity:1}}
+.thinking{display:inline-flex;align-items:center;gap:8px;color:var(--ink-2);font-size:13.5px}
+.thinking .bars{display:inline-flex;align-items:flex-end;gap:2px;height:14px;width:16px}
+.thinking .bars i{display:block;width:2px;height:4px;background:currentColor;opacity:.35;animation:eq 1.3s ease-in-out infinite}
+.thinking .bars i:nth-child(2){animation-delay:.16s}.thinking .bars i:nth-child(3){animation-delay:.32s}.thinking .bars i:nth-child(4){animation-delay:.48s}
+@keyframes eq{0%,100%{height:4px;opacity:.35}50%{height:14px;opacity:1}}
+.dots{display:inline-flex;flex-wrap:wrap;gap:2px;max-width:70px;vertical-align:middle}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--rule-strong);opacity:.6;display:block}
+.dots i.on{opacity:1;animation:dot .28s var(--ease) both}
+.dots.accent i.on{background:var(--accent)}.dots.ok i.on{background:var(--ok)}.dots.warn i.on{background:var(--warn)}
+@keyframes dot{from{transform:scale(.4);opacity:.2}to{transform:none;opacity:1}}
+.bar{display:inline-block;width:64px;height:4px;background:var(--rule);border-radius:2px;overflow:hidden;vertical-align:middle}
+.bar i{display:block;height:100%;background:var(--accent);transition:width .4s var(--ease)}
+@keyframes popin{from{opacity:0;transform:scale(.98) translateY(-2px)}to{opacity:1;transform:none}}
+.menu,.pop,.lpick-menu,.balao,.pal{animation:popin .18s var(--ease) both}
+.modal-scrim,.pal-scrim{backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.chip.run .g{animation:spin 1.4s linear infinite;display:inline-block}
+.rc .g.run{animation:spin 1.4s linear infinite;display:inline-block}
+@media(prefers-reduced-motion:reduce){.tabs button.on::before{animation:none;opacity:1}.thinking .bars i,.dots i.on,.menu,.pop,.lpick-menu,.balao,.pal{animation:none}.modal-scrim,.pal-scrim{backdrop-filter:none}}

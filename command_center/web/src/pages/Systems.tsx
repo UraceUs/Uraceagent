@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -96,7 +96,7 @@ function Quadro({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void })
     {ts.map(t => { const d = daysUntil(t.due_on); return <div key={t.id} className={`tcard${t.status === 'completed' ? ' done' : ''}`} onClick={() => onOpen(t)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onOpen(t) }}>
       {t.client_name && <div className="who">{t.client_name}</div>}
       <div className="t">{t.title}</div>
-      <div className="m">{t.due_on && <span className={`mono${t.status !== 'completed' && d !== null && d < 0 ? ' warn' : ''}`}>{d === 0 ? 'HOJE' : d === 1 ? 'amanhã' : fmtDate(t.due_on)}</span>}{t.subtasks_total ? <span className="mono">{t.subtasks_done ?? '?'}/{t.subtasks_total}</span> : null}{t.waiver_id ? <span className="ok" title="waiver assinada anexada">✓ waiver</span> : null}</div>
+      <div className="m">{t.due_on && <span className={`mono${t.status !== 'completed' && d !== null && d < 0 ? ' warn' : ''}`}>{d === 0 ? 'HOJE' : d === 1 ? 'amanhã' : fmtDate(t.due_on)}</span>}{t.subtasks_total ? <span className="row" style={{ gap: 6 }}><Dots done={t.subtasks_done ?? 0} total={t.subtasks_total} tone={t.status === 'completed' ? 'ok' : 'accent'} /><span className="mono">{t.subtasks_done ?? '?'}/{t.subtasks_total}</span></span> : null}{t.waiver_id ? <span className="ok" title="waiver assinada anexada">✓ waiver</span> : null}</div>
     </div> })}</div></div>)}</div>
 }
 
@@ -129,7 +129,7 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
     {det.data?.connected && <>
       <Section title="Descrição">{det.data.task?.notas ? <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font)', margin: 0, fontSize: 13.5 }}>{det.data.task.notas}</pre> : <span className="muted small">sem descrição</span>}</Section>
       <div className="grid g2">
-        <Section title="Subtarefas" count={subs.length} tight>{subs.length === 0 ? <Empty>Nenhuma.</Empty> : <div>{subs.map(s => <div key={s.gid} className="att"><div className={`lv ${s.concluida ? 'LOW' : 'MEDIUM'}`} /><div className="grow" style={{ textDecoration: s.concluida ? 'line-through' : undefined, color: s.concluida ? 'var(--muted)' : undefined }}>{s.concluida ? '✓ ' : '○ '}{s.nome}{s.vence_em && <span className="small muted mono"> · {fmtDate(s.vence_em)}</span>}</div></div>)}</div>}</Section>
+        <Section title={<>Subtarefas <Dots done={subs.filter(s => s.concluida).length} total={subs.length} /></>} count={subs.length} tight>{subs.length === 0 ? <Empty>Nenhuma.</Empty> : <div>{subs.map(s => <div key={s.gid} className="att"><div className={`lv ${s.concluida ? 'LOW' : 'MEDIUM'}`} /><div className="grow" style={{ textDecoration: s.concluida ? 'line-through' : undefined, color: s.concluida ? 'var(--muted)' : undefined }}>{s.concluida ? '✓ ' : '○ '}{s.nome}{s.vence_em && <span className="small muted mono"> · {fmtDate(s.vence_em)}</span>}</div></div>)}</div>}</Section>
         <Section title="Anexos" count={det.data.attachments?.length} tight>{!det.data.attachments?.length ? <Empty>Nenhum.</Empty> : <div>{det.data.attachments.map(a => <div key={a.gid} className="att"><div className="lv LOW" /><div className="grow">{a.download ? <a href={a.download} target="_blank" rel="noopener noreferrer">{a.nome} ↗</a> : a.nome}<div className="small muted">{a.origem} · {fmtDateTime(a.quando)}</div></div></div>)}</div>}</Section>
       </div>
       <Section title="Comentários" count={det.data.comments?.length} tight>{!det.data.comments?.length ? <Empty>Nenhum comentário.</Empty> : <div>{det.data.comments.map((c, i) => <div key={i} className="att"><div className="lv LOW" /><div className="grow"><div className="small muted"><b>{c.quem || '?'}</b> · {fmtDateTime(c.quando)}</div><div style={{ whiteSpace: 'pre-wrap' }}>{c.texto}</div></div></div>)}</div>}</Section>
