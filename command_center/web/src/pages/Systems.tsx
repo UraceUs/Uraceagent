@@ -279,7 +279,9 @@ function ModeloModal({ id, onClose, onChanged }: { id: string; onClose: () => vo
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   async function substituir(did: string, file: File) {
-    const ok = await perguntar({ titulo: 'Trocar o PDF deste modelo?', perigo: true, ok: 'Trocar',
+    const vazio = !det.data?.documentos?.length
+    const ok = await perguntar(vazio ? { titulo: 'Adicionar este PDF ao modelo?', ok: 'Adicionar', texto: `"${file.name}" vira o documento do modelo "${det.data?.nome || id}".\n\nO modelo continua sem papéis e sem campos de assinatura: isso se coloca no DocuSign, depois.` }
+      : { titulo: 'Trocar o PDF deste modelo?', perigo: true, ok: 'Trocar',
       texto: `"${file.name}" vai substituir o documento ${did} do modelo "${det.data?.nome || id}" no DocuSign.\n\nO PDF atual fica guardado no servidor antes da troca. Os campos de assinatura continuam presos ao documento: se o leiaute mudou, confira no DocuSign onde eles caíram antes de enviar a próxima waiver.` })
     if (!ok) return
     setBusy(did)
@@ -288,7 +290,7 @@ function ModeloModal({ id, onClose, onChanged }: { id: string; onClose: () => vo
       const csrf = document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || ''
       const res = await fetch(`/ops/api/docusign/templates/${id}/documents/${did}`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': decodeURIComponent(csrf) } })
       if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || `HTTP ${res.status}`) }
-      const j = await res.json(); toast(`PDF trocado. O antigo ficou guardado como ${j.backup}.`, 'ok'); det.reload(); onChanged()
+      const j = await res.json(); toast(j.novo ? 'PDF adicionado ao modelo. Agora coloque os campos de assinatura no DocuSign.' : `PDF trocado. O antigo ficou guardado como ${j.backup}.`, 'ok'); det.reload(); onChanged()
     } catch (e) { toast((e as Error).message, 'crit') } finally { setBusy(null) }
   }
   return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
@@ -300,7 +302,8 @@ function ModeloModal({ id, onClose, onChanged }: { id: string; onClose: () => vo
     {det.data?.connected && <>
       {det.data.uso_pela_IA && <Banner tone="info">Este modelo é um dos dois que a automação usa: {det.data.uso_pela_IA}</Banner>}
       {can('MANAGER') && <Section title="Nome" tight><div className="row wrap"><input className="input grow" value={nomeAtual} onChange={e => setNome(e.target.value)} maxLength={120} /><button className="btn primary sm" disabled={busy === 'nome' || nomeAtual.trim().length < 2 || nomeAtual === (det.data.nome || '')} onClick={renomear}>{busy === 'nome' ? <Spinner /> : 'Salvar nome'}</button></div></Section>}
-      <Section title="Documentos" count={det.data.documentos?.length} tight>{!det.data.documentos?.length ? <Empty>O modelo não tem documento.</Empty> : <div>{det.data.documentos.map(d => <div key={d.documentId} className="att"><div className="lv LOW" /><div className="grow">{d.nome || `documento ${d.documentId}`}<div className="small muted">id {d.documentId}{d.paginas ? ` · ${d.paginas} pág.` : ''}</div></div>
+      {!det.data.documentos?.length && !det.data.papeis?.length && <Banner tone="warn">Modelo <b>vazio</b>: sem PDF, sem papel, sem campo de assinatura. Não serve para enviar nada. Ou você o apaga no DocuSign, ou sobe um PDF aqui e coloca os campos lá.</Banner>}
+      <Section title="Documentos" count={det.data.documentos?.length} right={!det.data.documentos?.length && can('MANAGER') ? <label className="btn sm" style={{ cursor: busy ? 'default' : 'pointer' }}>{busy === '1' ? <Spinner /> : 'Adicionar PDF…'}<input type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} disabled={!!busy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) substituir('1', f) }} /></label> : undefined} tight>{!det.data.documentos?.length ? <Empty>O modelo não tem documento.</Empty> : <div>{det.data.documentos.map(d => <div key={d.documentId} className="att"><div className="lv LOW" /><div className="grow">{d.nome || `documento ${d.documentId}`}<div className="small muted">id {d.documentId}{d.paginas ? ` · ${d.paginas} pág.` : ''}</div></div>
         <a className="btn sm" href={`/ops/api/docusign/templates/${id}/documents/${d.documentId}`} target="_blank" rel="noopener noreferrer">Ver PDF ↗</a>
         {can('MANAGER') && <label className="btn sm" style={{ cursor: busy ? 'default' : 'pointer' }}>{busy === d.documentId ? <Spinner /> : 'Substituir PDF…'}<input type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} disabled={!!busy} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) substituir(d.documentId, f) }} /></label>}
       </div>)}</div>}</Section>
@@ -378,7 +381,7 @@ export function DocuSignPage() {
       {tpl.loading && !tpl.data ? <Loading /> : tpl.error ? <ErrorState error={tpl.error} retry={tpl.reload} /> : tpl.data && !tpl.data.connected ? <Banner tone="warn">DocuSign não conectado neste servidor: {tpl.data.reason}</Banner> :
         tplList.length === 0 ? <Empty>A conta não devolveu modelos.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Modelo</th><th>ID</th><th>Papéis</th></tr></thead><tbody>
-          {tplList.map((t, i) => { const id = String(t.templateId || t.id || ''); return <tr key={i} className="click" onClick={() => id && setModelo(id)}><td>{t.nome || t.name || <span className="muted">(sem nome — clique para nomear)</span>}</td><td className="mono small">{id}</td><td className="small">{(t.papeis || t.roles || []).join(', ')}</td></tr> })}
+          {tplList.map((t, i) => { const id = String(t.templateId || t.id || ''); return <tr key={i} className="click" onClick={() => id && setModelo(id)}><td>{t.nome || t.name || <span className="muted">(sem nome — clique para nomear)</span>}{!(t.papeis || t.roles || []).length && <span className="small muted"> · vazio</span>}</td><td className="mono small">{id}</td><td className="small">{(t.papeis || t.roles || []).join(', ')}</td></tr> })}
         </tbody></table></div>}
       <div className="small muted" style={{ marginTop: 10 }}>Clique no modelo para ver o PDF, renomear ou trocar o PDF. Envio de waiver pela IA passa por aprovação (política). Só os dois modelos de PARAMETROS servem para a automação.</div>
     </Section>}

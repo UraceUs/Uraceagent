@@ -133,8 +133,12 @@ Três travas, porque modelo de waiver é documento legal:
 - Só PDF, até 25 MB, MANAGER. A IA não tem essas portas: são funções humanas
   (`modelo_humano`, `renomear_modelo_humano`, `substituir_documento_do_modelo_humano`).
 
-Os dois modelos **sem nome** que a lista mostra (`63dcf553…` e `5441b464…`) existem
-na conta com o nome vazio; a tela diz "clique para nomear".
+Os dois modelos **sem nome** que a lista mostra (`63dcf553…` e `5441b464…`) são
+**vazios**: sem PDF, sem papel, sem campo — alterados em 01/11 e nunca terminados. Não
+servem para enviar nada. A tela marca "vazio" e avisa; dá para subir um primeiro PDF
+por ali (sem guardar cópia, porque não há o que guardar), mas os campos de assinatura
+se colocam no DocuSign. Apagar modelo é no DocuSign, pela mão do dono — o painel não
+apaga.
 
 ## O que o conector faz
 

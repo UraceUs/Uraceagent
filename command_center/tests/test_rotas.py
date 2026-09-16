@@ -1751,6 +1751,11 @@ def test_modelo_docusign_ver_renomear_e_trocar_pdf(cli, monkeypatch, tmp_path):
     guardado = list(tmp_path.glob("*.pdf"))
     assert len(guardado) == 1 and guardado[0].read_bytes() == b"%PDF-1.4 antigo"
     assert estado["trocas"] == [("1", "novo.pdf")] and estado["pdf"] == b"%PDF-1.7 novo"
+    # modelo vazio: adiciona o PDF sem tentar guardar o que não existe
+    estado["vazio"] = True
+    Docusign.modelo_humano = lambda self, tid: {"templateId": tid, "nome": None, "documentos": [], "papeis": [], "uso_pela_IA": None}
+    r = cli.post(B + f"/docusign/templates/{TID}/documents/1", headers=h, files={"file": ("primeiro.pdf", b"%PDF-1.7 primeiro", "application/pdf")})
+    assert r.status_code == 200 and r.json()["novo"] is True and r.json()["backup"] is None and len(list(tmp_path.glob("*.pdf"))) == 1
     assert cli.post(B + f"/docusign/templates/{TID}/documents/1", headers=h, files={"file": ("x.pdf", b"nao e pdf", "application/pdf")}).status_code == 400
     assert cli.post(B + f"/docusign/templates/{TID}/documents/1", headers=h, files={"file": ("x.txt", b"%PDF-1.7", "text/plain")}).status_code == 400
     # OPERATOR não renomeia nem troca; sem DocuSign, ver responde connected=false

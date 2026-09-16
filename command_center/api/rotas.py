@@ -456,12 +456,15 @@ async def docusign_template_replace(tid: str, did: str, request: Request, file: 
     from command_center.providers import NaoConectado, modulo
     try:
         g = modulo("docusign")
-        antigo = g.baixar_documento_do_modelo_humano(tid, did)
-        os.makedirs(TEMPLATES_DIR, mode=0o700, exist_ok=True)
-        backup = os.path.join(TEMPLATES_DIR, f"{tid}-{did}-{agora()[:19].replace(':', '')}.pdf")
-        with open(backup, "wb") as f:
-            f.write(antigo)
-        os.chmod(backup, 0o600)
+        existe = any(str(d.get("documentId")) == did for d in (g.modelo_humano(tid).get("documentos") or []))
+        backup = None
+        if existe:                                            # modelo vazio (sem PDF) não tem o que guardar
+            antigo = g.baixar_documento_do_modelo_humano(tid, did)
+            os.makedirs(TEMPLATES_DIR, mode=0o700, exist_ok=True)
+            backup = os.path.join(TEMPLATES_DIR, f"{tid}-{did}-{agora()[:19].replace(':', '')}.pdf")
+            with open(backup, "wb") as f:
+                f.write(antigo)
+            os.chmod(backup, 0o600)
         g.substituir_documento_do_modelo_humano(tid, did, file.filename, dados)
     except NaoConectado as e:
         raise HTTPException(503, f"DocuSign não conectado: {e}")
@@ -470,9 +473,9 @@ async def docusign_template_replace(tid: str, did: str, request: Request, file: 
     except Exception as e:
         raise HTTPException(502, str(e)[:300])
     auditar(con, "docusign.template.document_replaced", f"user:{u['id']}", user_id=u["id"], entity_type="docusign_template", entity_id=tid,
-            detail={"documentId": did, "arquivo": file.filename, "bytes": len(dados), "backup": backup}, ip=auth._ip(request))
+            detail={"documentId": did, "arquivo": file.filename, "bytes": len(dados), "backup": backup, "novo": not existe}, ip=auth._ip(request))
     con.commit()
-    return {"ok": True, "backup": os.path.basename(backup)}
+    return {"ok": True, "backup": os.path.basename(backup) if backup else None, "novo": not existe}
 
 
 # ---------------------------------------------------------- políticas
