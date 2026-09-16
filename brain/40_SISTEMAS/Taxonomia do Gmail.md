@@ -171,3 +171,19 @@ marcador que não é dele (`Action Required`, `Legal or Contract`). Resposta:
 A distinção que ele faz é clara e vale registrar: a regra "só o que está no
 manual" é para a **IA**. O clique humano é decisão dele, na hora, com o marcador
 que ele quiser — inclusive um que ainda não entrou no manual. Não filtrar a lista.
+
+## Intrusos na urace@ em 16/09 — o registro
+
+Relatório do gerador, revisado pela extensão. Marcadores que existem na caixa,
+não são do sistema e não estão no manual:
+
+`Action Required` · `Finance` · `Legal or Contract` · `Operations` · `Receipts` ·
+`Travel` · `Vendor or Partner` — sete, com os mesmos nomes de categoria dos
+`Email Review/…` apagados em 11/09, agora sem prefixo. O e-mail do D4Sign de
+14/09 às 22:50 chegou com dois deles colados. **Continua ativo.** O dono decidiu
+não caçar e não mexer: o painel ignora; este registro é só para a linha do tempo.
+(Os dois `Years 2019-2023/…/[Gmail]…` são lixo de importação antiga, não intruso.)
+
+Filtros nativos da `urace@`: **90**, 180 remetentes, importados em 16/09 com a
+regra `ken@naturecoasthealthcare.com → Team/LARA` desmarcada na importação
+(pasta de quem já saiu). A recusa entrou no gerador para não voltar.

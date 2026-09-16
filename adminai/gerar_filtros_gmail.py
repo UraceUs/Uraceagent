@@ -79,6 +79,7 @@ REGRAS_RECUSADAS = {
     ("noreply.odd@dhl.com", "Suppliers/Stickers - Jake"),         # transportadora não é o fornecedor
     ("@dhl.com", "Suppliers/Stickers - Jake"),
     ("@bluegemsmgmt.com", "ITALO"),                               # é parceria, não pessoal
+    ("ken@naturecoasthealthcare.com", "Team/LARA"),               # pasta de quem já saiu; fica só RACES/F4
 }
 RX_EMAIL = re.compile(r"<([^>]+)>")
 
