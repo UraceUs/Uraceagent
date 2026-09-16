@@ -124,8 +124,8 @@ def test_relatorio_nao_confunde_marcador_do_sistema_com_intruso():
                 "wNews", "Finances/Receipt", "Customer Service/Leads", "Finance", "Receipts"]
     # `Customer Service/Leads` é da support@: entrou no manual em 14/09 e deixou de ser intruso
     assert g.desconhecidos(na_caixa) == ["Finance", "Receipts"]
-    # marcador que o dono deixou de fora continua sendo "do manual": ele já decidiu
-    assert "Email Review/Finance" not in g.desconhecidos(["Email Review/Finance", "wNews"])
+    # marcador que o dono deixou de FORA voltando à caixa é intruso de novo: tem de aparecer
+    assert g.desconhecidos(["Email Review/Finance", "wNews"]) == ["Email Review/Finance"]
 
 
 def test_dominio_inteiro_vira_uma_regra_so():
@@ -263,3 +263,21 @@ def test_regras_ditadas_pelo_dono_docusign_e_waiver():
     assert x.count("<entry>") == 2 and "hasTheWord" in x and "shouldArchive" not in x
     md = g.relatorio({}, ["Waivers"], ["Waivers"], "support", 0.6, 3, d)
     assert "Regras ditadas pelo dono" in md and "Sem remetente estável" not in md.split("## Regras ditadas")[0]
+
+
+def test_dominio_de_plataforma_de_envio_nunca_vira_regra_de_dominio():
+    """Revisão da extensão (16/09): `@g.shopifyemail.com` é TODA loja Shopify, não a do
+    Orlando Kart Center. O endereço da loja continua valendo; o domínio, nunca."""
+    por = _conta({"store+57444597856@t.shopifyemail.com": {"Finances/Shopping/Orlando Kart Center": 20},
+                  "store+83901055190@g.shopifyemail.com": {"Finances/Shopping/Orlando Kart Center": 3}})
+    msgs = {"store+57444597856@t.shopifyemail.com": 23, "store+83901055190@g.shopifyemail.com": 3}
+    r = g.regras(por, msgs, share=0.6, minimo=3)
+    alvos = [e for e, _n, _t in r["Finances/Shopping/Orlando Kart Center"]]
+    assert "store+57444597856@t.shopifyemail.com" in alvos
+    assert not any(a.startswith("@") for a in alvos), "nada de @shopifyemail.com"
+
+
+def test_intruso_que_o_dono_deixou_de_fora_continua_sendo_listado():
+    """`Action Required` está no manual da support@ como FORA. Se aparecer na urace@, não
+    pode ser tratado como conhecido — é intruso e tem de aparecer no relatório."""
+    assert g.desconhecidos(["wNews", "Action Required", "Email Review/Finance"]) == ["Action Required", "Email Review/Finance"]

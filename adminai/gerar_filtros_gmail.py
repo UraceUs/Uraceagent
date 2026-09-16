@@ -44,7 +44,7 @@ sys.path.insert(0, os.path.join(RAIZ, "adminai", "mcp"))
 
 import gmail_mcp  # noqa: E402
 from command_center.providers.classificar import SISTEMA  # noqa: E402
-from command_center.providers.taxonomia_gmail import MANUAL, MANUAL_SUPPORT, OK  # noqa: E402
+from command_center.providers.taxonomia_gmail import FORA, MANUAL, MANUAL_SUPPORT, OK  # noqa: E402
 
 ARQUIVAVEL = "wNews"                 # o único marcador que sai da inbox sozinho
 # Pastas de histórico: mandar e-mail NOVO para lá é enterrá-lo. Arquivo por ano
@@ -74,6 +74,11 @@ REGRAS_RECUSADAS = {
     ("mailer-daemon@googlemail.com", "Marketing & Sales/Colina | Site e ADS"),  # é e-mail devolvido
     ("@flybreeze.com", "RACES/F4/JFC"),                          # companhia aérea, não corrida
     ("payments-noreply@google.com", "Marketing & Sales/Comercial/Canais | Social Media"),  # é cobrança
+    # terceira rodada — revisão da extensão, 16/09
+    ("trackingupdates@fedex.com", "CORP/CORP Canotops"),         # rastreio é Shipping Status
+    ("noreply.odd@dhl.com", "Suppliers/Stickers - Jake"),         # transportadora não é o fornecedor
+    ("@dhl.com", "Suppliers/Stickers - Jake"),
+    ("@bluegemsmgmt.com", "ITALO"),                               # é parceria, não pessoal
 }
 RX_EMAIL = re.compile(r"<([^>]+)>")
 
@@ -88,6 +93,15 @@ REGRAS_DO_DONO = [
 ]
 # Remetentes genéricos demais para virar regra: pegariam a caixa inteira.
 DOMINIOS_PROIBIDOS = {"gmail.com", "hotmail.com", "outlook.com", "yahoo.com", "icloud.com"}
+# Domínios de PLATAFORMA DE ENVIO, usados por milhares de empresas: nunca viram regra de
+# domínio. `@g.shopifyemail.com` não é a loja do Orlando Kart Center — é toda loja Shopify;
+# `@shared1.ccsend.com` é o Constant Contact inteiro. O endereço individual
+# (`store+57444597856@t.shopifyemail.com`) continua valendo: ele é preciso, o domínio não.
+# (Revisão da extensão em 16/09.)
+# Transportadora NÃO entra aqui: `@ups.com` → Shipping Status é regra boa (na caixa do dono,
+# UPS é sempre envio). O erro "DHL → fornecedor Jake" é caso a caso, e vai para as recusadas.
+DOMINIOS_COMPARTILHADOS = ("shopifyemail.com", "ccsend.com", "hs-send.com", "hubspotemail.net",
+                           "mailchimpapp.net", "mcsv.net", "sendgrid.net", "mailgun.org", "rsgsv.net")
 
 
 def _endereco(de):
@@ -235,6 +249,8 @@ def regras(por_remetente, mensagens, share, minimo, max_marcadores=2):
     for dom, contagem in dcont.items():
         if len(dends[dom]) < 2:           # um endereço só: a regra por endereço já basta
             continue
+        if any(dom == c or dom.endswith("." + c) for c in DOMINIOS_COMPARTILHADOS):
+            continue                      # plataforma de envio / transportadora: só endereço
         total = dmsgs.get(dom, 0)
         if not total:
             continue
@@ -296,7 +312,9 @@ def desconhecidos(na_caixa):
     agosto."""
     # os DOIS manuais: a support@ tem taxonomia própria, e sem ela os 64 marcadores
     # dela apareceriam como "intrusos" no relatório daquela caixa
-    do_manual = {n for n, _f, _q, _t, _e in MANUAL} | {n for n, _f, _q, _t, _e in MANUAL_SUPPORT}
+    # e o que o dono deixou de FORA ("Action Required", "Email Review/…") NÃO é conhecido:
+    # se voltar a aparecer na caixa, tem de ser listado como intruso, não escondido
+    do_manual = {n for n, _f, _q, _t, e in MANUAL if e != FORA} | {n for n, _f, _q, _t, e in MANUAL_SUPPORT if e != FORA}
     return sorted(n for n in na_caixa
                   if n not in do_manual and n.upper() not in SISTEMA
                   and not n.startswith("CATEGORY_") and not n.upper().endswith("_STAR"))
