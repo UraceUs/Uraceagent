@@ -145,7 +145,9 @@ export function AICommand() {
   const toast = useToast()
   const [sp, setSp] = useSearchParams()
   const sel = sp.get('u') || 'me'                                   // me | <user_id> | auto
-  const sug = useGet<string[]>('/ai/suggestions')
+  const sug = useGet<{ grupo: string; texto: string }[]>('/ai/suggestions')
+  const [menuSug, setMenuSug] = useState(false)
+  useEffect(() => { if (!menuSug) return; const off = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenuSug(false) }; window.addEventListener('keydown', off); return () => window.removeEventListener('keydown', off) }, [menuSug])
   const threads = useGet<Threads>('/ai/threads', 60000)
   const query = sel === 'auto' ? '/ai/thread?kind=auto' : sel === 'me' ? '/ai/thread' : `/ai/thread?user_id=${sel}`
   const [thread, setThread] = useState<Thread | null>(null)
@@ -190,15 +192,23 @@ export function AICommand() {
           {!minha && sel !== 'auto' && <Banner tone="info">Você está lendo a conversa de <b>{nomeDe(Number(sel))}</b>. Para falar com a IA, volte para a sua.</Banner>}
           {err ? <ErrorState error={err} retry={load} /> : !thread ? <Loading rows={4} /> : todos.length === 0 ? <div className="card card-b">
             <div className="h2" style={{ marginBottom: 10 }}>{sel === 'auto' ? 'Nada automático ainda.' : 'Comece por aqui'}</div>
-            {sel !== 'auto' && (sug.data ? <div className="sug">{sug.data.map(s => <button key={s} onClick={() => { setText(s); ta.current?.focus() }}>{s}</button>)}</div> : <Loading rows={2} />)}
+            {sel !== 'auto' && (sug.data ? <div className="sug">{sug.data.map(s => <button key={s.texto} onClick={() => { setText(s.texto); ta.current?.focus() }}>{s.texto}</button>)}</div> : <Loading rows={2} />)}
           </div> : <div className="stack">
             {(thread.has_more) && <div className="row" style={{ justifyContent: 'center' }}><button className="btn sm" onClick={anteriores}>↑ mensagens anteriores</button></div>}
             {todos.map((c, i) => <div key={c.id}>{separador(c, i)}<Bolha c={c} onChange={load} quem={sel === 'auto' ? 'AUTO' : undefined} /></div>)}
             <div ref={fim} />
           </div>}
         </>}
-        {can('OPERATOR') && (minha || cur) && <div className="composer"><div className="box">
-          <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} placeholder="Pergunte ou peça algo. Enter envia, Shift+Enter quebra linha." maxLength={4000}
+        {can('OPERATOR') && (minha || cur) && <div className="composer">{menuSug && <div className="scrim-clear" onClick={() => setMenuSug(false)} />}<div className="box">
+          <div style={{ position: 'relative' }}>
+            <button className={`btn ghost sm${menuSug ? ' on' : ''}`} title="Sugestões do que pedir à IA" aria-label="Sugestões" aria-expanded={menuSug} onClick={() => setMenuSug(v => !v)}>✦</button>
+            {menuSug && <div className="menu up sugm" role="menu">
+              {(() => { const grupos: string[] = []; for (const s of sug.data || []) if (!grupos.includes(s.grupo)) grupos.push(s.grupo); return grupos.map(g => <div key={g}><div className="mh">{g}</div>
+                {(sug.data || []).filter(s => s.grupo === g).map(s => <button key={s.texto} className="mi" role="menuitem" onClick={() => { setText(s.texto); setMenuSug(false); setTimeout(() => { const el = ta.current; if (!el) return; el.focus(); const i = s.texto.indexOf('{'); if (i >= 0) { const j = s.texto.indexOf('}', i); el.setSelectionRange(i, j >= 0 ? j + 1 : i) } }, 0) }}>{s.texto}</button>)}</div>) })()}
+              {!sug.data?.length && <div className="mh">Sem sugestões.</div>}
+            </div>}
+          </div>
+          <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} placeholder="Pergunte ou peça algo. Enter envia, Shift+Enter quebra linha. ✦ mostra sugestões." maxLength={4000}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} rows={2} aria-label="Comando" />
           <button className="btn primary" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : 'Enviar'}</button>
         </div><div className="small muted">{text.length}/4000 · a resposta pode levar minutos; você pode navegar e voltar.</div></div>}

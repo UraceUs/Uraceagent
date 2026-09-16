@@ -55,14 +55,24 @@ def _acha_openclaw():
 
 OPENCLAW = _acha_openclaw()
 TIMEOUT = int(os.environ.get("CC_AI_TIMEOUT", "900"))
+# Sugestões do botão ✦ do AI Command (dono, 16/09): o que dá para pedir à IA, por área.
+# Clicar preenche a caixa, não envia — o que está entre chaves é para a pessoa completar.
 SUGESTOES = [
-    "O que precisa da minha atenção hoje?",
-    "Quais serviços desta semana estão sem waiver assinada?",
-    "Quem tem invoice vencida há mais de 30 dias?",
-    "Prepare o relatório de operações de hoje",
-    "Verifique a saúde das integrações",
-    "Chegou um cliente novo — vou passar os dados; prepare o onboarding",
-    "Quais e-mails de cliente estão sem resposta?",
+    {"grupo": "Hoje", "texto": "O que precisa da minha atenção hoje?"},
+    {"grupo": "Hoje", "texto": "Prepare o relatório de operações de hoje"},
+    {"grupo": "Hoje", "texto": "Quais serviços desta semana estão sem waiver assinada?"},
+    {"grupo": "Waiver", "texto": "Envie a waiver parental para o responsável de {piloto}"},
+    {"grupo": "Waiver", "texto": "Confira se {piloto} tem waiver válida e, se não tiver, envie"},
+    {"grupo": "Invoice", "texto": "Crie e envie a invoice de {serviço} para {piloto}, valor ${valor}"},
+    {"grupo": "Invoice", "texto": "Quem tem invoice vencida há mais de 30 dias?"},
+    {"grupo": "Asana", "texto": "Crie a tarefa de {serviço} para {piloto} no dia {data}"},
+    {"grupo": "Asana", "texto": "Comente na tarefa de {piloto} que {o que aconteceu}"},
+    {"grupo": "Asana", "texto": "Mova a tarefa de {piloto} para Finished Services"},
+    {"grupo": "E-mail", "texto": "Quais e-mails de cliente estão sem resposta?"},
+    {"grupo": "E-mail", "texto": "Faça um rascunho de resposta para o e-mail de {cliente} sobre {assunto}"},
+    {"grupo": "Cliente", "texto": "Chegou um cliente novo — vou passar os dados; prepare o onboarding"},
+    {"grupo": "Cliente", "texto": "Resumo de {piloto}: serviços, invoices e waiver"},
+    {"grupo": "Sistema", "texto": "Verifique a saúde das integrações"},
 ]
 
 
