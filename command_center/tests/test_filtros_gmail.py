@@ -281,3 +281,23 @@ def test_intruso_que_o_dono_deixou_de_fora_continua_sendo_listado():
     """`Action Required` está no manual da support@ como FORA. Se aparecer na urace@, não
     pode ser tratado como conhecido — é intruso e tem de aparecer no relatório."""
     assert g.desconhecidos(["wNews", "Action Required", "Email Review/Finance"]) == ["Action Required", "Email Review/Finance"]
+
+
+def test_gerador_le_o_manual_confirmado_no_painel(monkeypatch, tmp_path):
+    """A support@ gerou 4 filtros em vez de 61: o gerador procurava nela os marcadores
+    da urace@, porque só olhava a lista estática do código. Quem manda depois da
+    confirmação do dono é a tabela gmail_labels, por caixa."""
+    import os as _os
+    from command_center.db import conectar, aplicar_schema
+    _os.environ["CC_DB_PATH"] = str(tmp_path / "cc.sqlite")
+    con = conectar()
+    try:
+        aplicar_schema(con)
+        con.execute("UPDATE gmail_labels SET status='confirmado' WHERE name IN ('Customer Service/Leads','Waivers')")
+        con.commit()
+        assert sorted(g.confirmados_no_painel("support")) == ["Customer Service/Leads", "Waivers"]
+        assert "Customer Service/Leads" not in g.confirmados_no_painel("urace")
+        assert "Finances/Receipt" in g.confirmados_no_painel("urace")
+    finally:
+        con.close()
+        _os.environ.pop("CC_DB_PATH", None)

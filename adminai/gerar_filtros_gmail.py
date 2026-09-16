@@ -112,6 +112,33 @@ def _endereco(de):
     return bruto if "@" in bruto else ""
 
 
+def confirmados_no_painel(conta):
+    """Os marcadores que o dono CONFIRMOU para esta caixa, lidos do banco do painel.
+
+    A lista estática (`MANUAL`) é só a proposta de 11/09, e é da urace@. Quem manda
+    depois da confirmação é `gmail_labels` — foi lá que ele confirmou os 145 da urace@
+    e os 64 da support@. Sem isto, a support@ gerava 4 filtros em vez de 61: o gerador
+    procurava nela os marcadores da OUTRA caixa.
+
+    Devolve None se não der para ler o banco — aí o chamador cai na lista estática."""
+    try:
+        sys.path.insert(0, RAIZ)
+        from command_center.db import conectar, todos
+        con = conectar()
+        try:
+            linhas = todos(con, """SELECT name FROM gmail_labels
+                                   WHERE status='confirmado' AND in_gmail=1
+                                     AND EXISTS (SELECT 1 FROM json_each(COALESCE(mailboxes,'["urace"]'))
+                                                 WHERE json_each.value = ?)""", (conta,))
+            return [l["name"] for l in linhas]
+        finally:
+            con.close()
+    except Exception as e:
+        print(f"  ! não deu para ler o manual do painel ({type(e).__name__}); usando a lista do código",
+              file=sys.stderr)
+        return None
+
+
 def marcadores_da_caixa(conta):
     """Abre a caixa e devolve os marcadores dela.
 
@@ -382,7 +409,11 @@ def main():
 
     mapa = marcadores_da_caixa(a.conta)
     na_caixa = list(mapa)
-    nomes = [n for n, _f, _q, _t, e in MANUAL if e == OK and n in na_caixa]
+    confirmados = confirmados_no_painel(a.conta)
+    if confirmados is None:                      # sem banco: a proposta do código, da caixa certa
+        livro = MANUAL if a.conta == "urace" else MANUAL_SUPPORT
+        confirmados = [n for n, _f, _q, _t, e in livro if e == OK]
+    nomes = [n for n in confirmados if n in na_caixa]
     if not nomes:
         sys.exit(f"nenhum marcador do manual existe na caixa {a.conta}@ — nada a fazer.")
     print(f"caixa {a.conta}@: {len(na_caixa)} marcadores, {len(nomes)} do manual confirmado", file=sys.stderr)
