@@ -4,7 +4,7 @@ tipo_info: FACT
 data: 2026-09-16
 fonte: contagem real dos filtros da support@ pelo VPS
 responsavel: Italo Silveira
-status: aberto
+status: resolvido
 ---
 
 # P-14 — Um filtro manda **todo** envelope do DocuSign para `Waivers`
@@ -58,10 +58,23 @@ Isso também mostra um limite do gerador: ele evita criar de novo, **mas não v�
 que já está na caixa**. Filtro existente que conflita com regra ditada precisa
 aparecer no relatório.
 
-## O que falta
+## Resolvido no mesmo dia (16/09)
 
-Decisão do dono para **apagar esse filtro** — o código só cria filtro, nunca
-apaga nem edita, e apagar configuração da caixa dele não é coisa que eu faça
-sozinho. Apagado, ficam valendo as duas regras que ele ditou, que já estão lá:
-`from:(docusign.net OR docusign.com)` → `Softwares|Apps/Docusign` para tudo, e o
-assunto de *Waiver of Liability* → `Waivers` só para waiver.
+O dono apagou o filtro com a própria mão — o comando conferia que era **exatamente
+um** e abortava se achasse outro. `ANe1BmgC3X5ET_S_ey3-D_g9jvTnEhqVwLcD1g`, fora.
+A `support@` ficou com **36** filtros.
+
+Valem agora só as duas regras que ele ditou: `from:(docusign.net OR docusign.com)`
+→ `Softwares|Apps/Docusign` para todo envelope, e o assunto de *Waiver of
+Liability* → `Waivers` só para waiver.
+
+**Sobra uma ponta:** filtro só age na chegada, então as **6 mensagens que já foram
+marcadas** continuam com `Waivers` (o NDA do Caio, a *Intended Use Letter*, as duas
+da *Invite Letter* do Bryan, a do Michael Nicholas e o `UniversalNon-POD`). Tirar
+marcador de e-mail dele é decisão dele — está oferecido, não feito.
+
+## O que mudou no código
+
+`conflitos_na_caixa()` no gerador (`fa6cd38`): antes de escrever o relatório, ele lê
+os filtros que **já existem** e abre o relatório com o conflito, além de avisar no
+terminal. A trava antiga só impedia criar de novo; essa enxerga o que já está lá.

@@ -39,7 +39,7 @@ e estado. Não é lista de melhoria — é o que está quebrado ou arriscado.
 [[P-10 - Email de cliente trocado]] (28/08) ·
 [[P-13 - Deploy verde sem agente existir]] (02/09) ·
 [[P-12 - Integration Key do DocuSign so nasce em demo]] (04/09) ·
-[[P-14 - Filtro manda todo envelope do DocuSign para Waivers]] (16/09, **aberto**)
+[[P-14 - Filtro manda todo envelope do DocuSign para Waivers]] (16/09, filtro apagado no mesmo dia)
 
 ## Como usar
 
