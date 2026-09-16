@@ -1610,3 +1610,32 @@ def test_filtros_aplicados_pela_api_pulam_o_que_ja_existe(cli, monkeypatch, tmp_
     finally:
         con.close()
     assert cli.post(B + "/gmail/filtros/urace/aplicar", headers=entra(cli, "viewer@urace.us")).status_code == 403
+
+
+def test_criterio_hasTheWord_vira_query_na_api(monkeypatch):
+    """16/09: as duas regras ditadas pelo dono (Docusign e Waivers) falharam com
+    "Filter doesn't have any criteria". Causa: `hasTheWord` é o nome do campo na TELA
+    do Gmail; na API é `query`. Mandar o nome errado não dá erro de campo — a API
+    descarta o critério e reclama que o filtro está vazio."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "gmail_mcp_t", os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))), "adminai", "mcp", "gmail_mcp.py"))
+    g = importlib.util.module_from_spec(spec)
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), "adminai", "mcp"))
+    spec.loader.exec_module(g)
+    enviados = []
+    monkeypatch.setattr(g, "_req", lambda conta, url, metodo="GET", corpo=None:
+                        enviados.append((url, corpo)) or ({"filter": []} if metodo == "GET" else {"id": "f1"}))
+    monkeypatch.setattr(g, "_label_id", lambda conta, l: "Label_9")
+    ok, det = g.criar_filtro_humano("support", {"hasTheWord": 'from:(docusign.net) subject:("Waiver of Liability")'}, "Waivers")
+    assert ok and det["filtro_id"] == "f1"
+    corpo = [c for _u, c in enviados if c][0]
+    assert "query" in corpo["criteria"] and "hasTheWord" not in corpo["criteria"]
+    assert corpo["criteria"]["query"].startswith("from:(docusign.net)")
+    # campo que a API não conhece é recusado antes de virar um filtro sem critério
+    import pytest as _pytest
+    with _pytest.raises(Exception, match="não conhece"):
+        g.criar_filtro_humano("support", {"inventado": "x"}, "Waivers")

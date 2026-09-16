@@ -463,6 +463,14 @@ def criar_filtro_humano(conta, criterio, marcador, arquivar=False):
     Devolve (criado: bool, detalhe)."""
     if not isinstance(criterio, dict) or not any(criterio.values()):
         raise ErroFerramenta("critério vazio")
+    # A API não conhece `hasTheWord` — esse é o nome na TELA do Gmail; aqui é `query`.
+    # Mandar o nome errado não dá erro de campo: a API descarta e reclama que o filtro
+    # "não tem critério nenhum". Foi o que derrubou as duas regras ditadas pelo dono
+    # (Docusign e Waivers) em 16/09, justamente as que sustentam o fluxo da waiver.
+    criterio = {("query" if k == "hasTheWord" else k): v for k, v in criterio.items()}
+    CAMPOS = {"from", "to", "subject", "query", "negatedQuery", "hasAttachment", "size"}
+    if desconhecidos := set(criterio) - CAMPOS:
+        raise ErroFerramenta(f"campo de critério que a API não conhece: {sorted(desconhecidos)}")
     if marcador.upper() in PROIBIDOS:
         raise ErroFerramenta(f"RECUSADO: '{marcador}' nunca.")
     if arquivar and not _e_propaganda(marcador):
