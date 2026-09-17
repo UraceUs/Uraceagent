@@ -184,12 +184,11 @@ export function Policies() {
 }
 
 interface U { id: number; email: string; name: string; role: string; active: number; created_at: string; last_login_at: string | null; free?: boolean }
-const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', CLOSER: 'Vendas (closer)', VIEWER: 'Leitura' }
+const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
 const ROLE_O_QUE: Record<string, string> = {
   ADMIN: 'tudo, inclusive usuários, políticas da IA e integrações',
   MANAGER: 'tudo do operador + financeiro (QuickBooks e invoices) e auditoria',
-  OPERATOR: 'o dia a dia: clientes, serviços, waivers, e-mails, chat e IA — e aprova o que a IA propõe nesses módulos (invoice e QuickBooks ficam com o gerente)',
-  CLOSER: 'só vendas: oportunidades, agenda, chat e a IA da venda — confirma o que a IA propõe na venda dele, menos invoice',
+  OPERATOR: 'o dia a dia e as vendas: clientes, serviços, waivers, e-mails, chat, oportunidades e IA — e aprova o que a IA propõe nesses módulos (invoice e QuickBooks ficam com o gerente)',
   VIEWER: 'só leitura',
 }
 
@@ -209,7 +208,7 @@ function PapelEditavel({ u, self, onChanged }: { u: U; self: boolean; onChanged:
   if (self) return <Chip tone="accent">{ROLE_PT[u.role] || u.role}</Chip>
   if (!open) return <button className="chip accent" style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }} title="Clique para mudar o nível de acesso" onClick={() => setOpen(true)}>{ROLE_PT[u.role] || u.role} ▾</button>
   return <span className="row"><select className="input" style={{ width: 160, padding: '4px 8px' }} autoFocus disabled={busy} value={u.role} onChange={e => mudar(e.target.value)} onBlur={() => !busy && setOpen(false)}>
-    {['ADMIN', 'MANAGER', 'OPERATOR', 'CLOSER', 'VIEWER'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>{busy && <Spinner />}</span>
+    {['ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>{busy && <Spinner />}</span>
 }
 
 export function Users() {
@@ -229,7 +228,7 @@ export function Users() {
     try { await api.post(`/users/${u.id}/active`, { active: !u.active }); reload() } catch (ex) { toast((ex as ApiError).message, 'crit') }
   }
   return <>
-    <PageHeader title="Usuários" help={<>Administrador: {ROLE_O_QUE.ADMIN}. Gerente: {ROLE_O_QUE.MANAGER}. Operador: {ROLE_O_QUE.OPERATOR}. Vendas (closer): {ROLE_O_QUE.CLOSER}. Leitura: {ROLE_O_QUE.VIEWER}. Conta de acesso livre não tem cargo e alcança tudo.</>} />
+    <PageHeader title="Usuários" help={<>Administrador: {ROLE_O_QUE.ADMIN}. Gerente: {ROLE_O_QUE.MANAGER}. Operador: {ROLE_O_QUE.OPERATOR}. Leitura: {ROLE_O_QUE.VIEWER}. Conta de acesso livre não tem cargo e alcança tudo.</>} />
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
       <Section title="Cadastrados" count={data?.length} tight>
         {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
@@ -242,7 +241,7 @@ export function Users() {
         {err && <Banner tone="crit">{err}</Banner>}
         <div className="field"><label>Nome</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
         <div className="field"><label>E-mail</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
-        <div className="field"><label>Papel</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{['ADMIN', 'MANAGER', 'OPERATOR', 'CLOSER', 'VIEWER'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>
+        <div className="field"><label>Papel</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{['ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>
           <span className="small muted">{ROLE_O_QUE[f.role]}</span></div>
         <div className="field"><label>Senha inicial</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">Mínimo 5 caracteres. Peça para trocar no primeiro acesso.</span></div>
         <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : 'Criar'}</button>

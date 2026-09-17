@@ -49,7 +49,9 @@ const paraISO = (local: string) => (local ? new Date(local).toISOString() : '')
 export function Oportunidades() {
   const { can, user } = useAuth()
   const nav = useNavigate()
-  const b = useGet<Board>('/sales/board', 30000)
+  // vendas é área do operador: todos veem tudo, e quem quiser filtra as suas (dono, 17/09)
+  const [soMinhas, setSoMinhas] = useState(false)
+  const b = useGet<Board>(`/sales/board${soMinhas ? '?minhas=1' : ''}`, 30000)
   const [nova, setNova] = useState(false)
   const [busca, setBusca] = useState('')
   if (b.loading && !b.data) return <Loading rows={5} />
@@ -58,12 +60,15 @@ export function Oportunidades() {
   const filtra = (o: Opp) => !busca || `${o.name} ${o.pilot_name || ''} ${o.email || ''} ${o.phone || ''} ${o.service || ''}`.toLowerCase().includes(busca.toLowerCase())
   return <div className="stack">
     <PageHeader title="Oportunidades" eyebrow={`Vendas · ${user?.name?.split(' ')[0] || ''}`}
-      help={<>Quem está perto de fechar. Oportunidade não é cliente: só vira card de cliente quando a venda fecha. {d.so_minhas ? 'Você vê as suas.' : 'Você vê todas.'}</>}>
+      help={<>Quem está perto de fechar. Oportunidade não é cliente: só vira card de cliente quando a venda fecha.</>}>
       <div className="row" style={{ gap: 8 }}>
         <input className="input" style={{ width: 220 }} placeholder="Buscar nome, telefone…" value={busca} onChange={e => setBusca(e.target.value)} />
         <Mic valor={busca} onTexto={setBusca} titulo="Ditar a busca" />
+        <button className={`btn${soMinhas ? ' on' : ''}`} onClick={() => setSoMinhas(v => !v)} title={soMinhas ? 'Mostrando só as suas' : 'Mostrando as de todos'}>
+          <Icon name="user" size={16} /> {soMinhas ? 'Só minhas' : 'Todas'}
+        </button>
         <Link className="btn" to="/sales/agenda"><Icon name="cal" size={16} /> Agenda</Link>
-        {can('CLOSER') && <button className="btn primary" onClick={() => setNova(true)}><Icon name="plus" size={16} /> Nova oportunidade</button>}
+        {can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}><Icon name="plus" size={16} /> Nova oportunidade</button>}
       </div>
     </PageHeader>
 
@@ -204,10 +209,10 @@ export function Oportunidade() {
         </div>
       </div>
       <div className="c360-acts">
-        {can('CLOSER') && <button className="btn primary" onClick={() => setLigar(true)}><Icon name="phone" size={16} /> Registrar ligação</button>}
-        {can('CLOSER') && o.stage !== 'GANHO' && <button className="btn" onClick={() => setFechar(true)}><Icon name="check" size={16} /> Fechar venda</button>}
-        {can('CLOSER') && <button className="btn" disabled={busy === 'ret'} onClick={marcarRetorno}><Icon name="clock" size={16} /> Retorno</button>}
-        {can('CLOSER') && o.stage !== 'PERDIDO' && o.stage !== 'GANHO' && <button className="btn ghost sm" disabled={busy === 'perd'} onClick={perdido}>Perdido</button>}
+        {can('OPERATOR') && <button className="btn primary" onClick={() => setLigar(true)}><Icon name="phone" size={16} /> Registrar ligação</button>}
+        {can('OPERATOR') && o.stage !== 'GANHO' && <button className="btn" onClick={() => setFechar(true)}><Icon name="check" size={16} /> Fechar venda</button>}
+        {can('OPERATOR') && <button className="btn" disabled={busy === 'ret'} onClick={marcarRetorno}><Icon name="clock" size={16} /> Retorno</button>}
+        {can('OPERATOR') && o.stage !== 'PERDIDO' && o.stage !== 'GANHO' && <button className="btn ghost sm" disabled={busy === 'perd'} onClick={perdido}>Perdido</button>}
       </div>
     </div>
 
@@ -233,7 +238,7 @@ export function Oportunidade() {
           </div>
         </div>
 
-        {can('CLOSER') && <div className="card card-b stack">
+        {can('OPERATOR') && <div className="card card-b stack">
           <label className="small muted">Anotação (interna)</label>
           <TextoComVoz valor={nota} onChange={setNota} linhas={2} placeholder="O que combinou, o que ele pediu… (Enter guarda)" onEnter={anotar} />
           <div className="row"><button className="btn sm" disabled={busy === 'nota' || !nota.trim()} onClick={anotar}>{busy === 'nota' ? <Spinner /> : 'Guardar anotação'}</button></div>
@@ -502,7 +507,7 @@ export function PassarParaCloser({ leadId }: { leadId: number }) {
   const { can } = useAuth()
   const [busy, setBusy] = useState(false)
   const ref = useRef(false)
-  if (!can('CLOSER')) return null
+  if (!can('OPERATOR')) return null
   return <button className="btn sm" disabled={busy} title="Vira oportunidade na área de vendas" onClick={async () => {
     if (ref.current) return
     ref.current = true; setBusy(true)

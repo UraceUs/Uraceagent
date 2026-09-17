@@ -62,14 +62,19 @@ Regras de segurança que já estão valendo (`command_center/api/auth.py`):
 | **Acesso livre** (hoje `eduardoffresende@gmail.com`) | tudo, e **sem cargo**: o painel mostra "Acesso livre" no lugar do papel | — (e ninguém consegue trocar o papel dessa conta) |
 | **Administrador** | tudo: usuários, políticas da IA, integrações, auditoria, financeiro, vendas, dia a dia | — |
 | **Gerente** | tudo do operador + financeiro (QuickBooks, invoices) e auditoria; aprova qualquer proposta da IA | usuários e políticas |
-| **Operador** | clientes, serviços, waivers, e-mails, chat, corridas, vendas e a IA — **e aprova o que a IA propõe nesses módulos** | financeiro (QuickBooks e invoice), auditoria, usuários, políticas |
-| **Vendas (closer)** | só a área de vendas: Oportunidades, Agenda de vendas, Chat do Kommo, falar com a IA. Vê **apenas as oportunidades dele** e confirma propostas `venda_*` da venda dele | todo o resto — e o bloqueio é no servidor (403), não só menu escondido: usuários, auditoria, políticas, QuickBooks, invoices, Gmail, DocuSign, integrações, automação. Nunca aprova invoice |
+| **Operador** | o dia a dia **e as vendas**: clientes, serviços, waivers, e-mails, chat, corridas, oportunidades e a IA — **e aprova o que a IA propõe nesses módulos** | financeiro (QuickBooks e invoice), auditoria, usuários, políticas |
 | **Leitura** | vê tudo o que a tela mostra | não escreve nada |
+
+**Quem vende é operador.** Não existe papel "vendas": a área de vendas é uma tela
+do operador como qualquer outra (correção do dono em 17/09 — *"vendas e operador
+devem ser a mesma coisa, com os acessos de operador"*). Todos os operadores veem
+todas as oportunidades; o botão **Só minhas / Todas** no quadro é filtro de tela,
+não trava.
 
 Onde isso está no código: os papéis em `auth.PAPEIS` / `auth.NIVEL`; a conta de
 acesso livre em `auth.ACESSO_LIVRE` (ajustável pela variável `CC_ACESSO_LIVRE`,
-e-mails separados por vírgula); o que o closer não alcança em
-`main.FECHADO_AO_CLOSER`; quem pode decidir cada proposta em `ia.pode_decidir`.
+e-mails separados por vírgula); quem pode decidir cada proposta em
+`ia.pode_decidir`.
 
 ---
 
@@ -77,8 +82,7 @@ e-mails separados por vírgula); o que o closer não alcança em
 
 ### Hoje (`/ops/`)
 A abertura do dia: serviços de hoje, o que vence, invoices abertas (gerente e
-acima), integrações e os itens que precisam de atenção. O closer entra direto em
-Oportunidades.
+acima), integrações e os itens que precisam de atenção.
 
 ### Precisa de atenção (`/ops/attention`)
 A fila do que dói, ordenada por impacto: waiver que voltou, serviço sem waiver,
@@ -88,18 +92,19 @@ item e a IA age com o contexto do cliente. O que você escreve ali pode ficar
 guardado na memória da IA.
 
 ### Vendas
-- **Oportunidades** (`/ops/sales`) — o quadro do closer, uma coluna por etapa:
+- **Oportunidades** (`/ops/sales`) — o quadro de vendas, uma coluna por etapa:
   Novo → Em conversa → Proposta → Fechamento → Ganho / Perdido. Em cima, os
   números do dia (abertas, retornos de hoje, atrasados, valor em proposta e em
-  fechamento).
-- **Agenda de vendas** (`/ops/sales/agenda`) — os retornos que o closer marcou em
-  cada ligação, agrupados por dia; atrasado em vermelho.
+  fechamento) e o botão **Só minhas / Todas**.
+- **Agenda de vendas** (`/ops/sales/agenda`) — os retornos marcados em cada
+  ligação, agrupados por dia; atrasado em vermelho.
 - **Chat do Kommo** (`/ops/crm/chat`) — a conversa do lead dentro do painel, com
   os dados que o Kommo mostra ao lado, favoritos, e o botão **"Passar para o
-  closer"**, que transforma o lead em oportunidade.
+  closer"**, que transforma o lead em oportunidade (a pessoa que vende — não é um
+  papel do sistema).
 - **Funil do Kommo** (`/ops/crm/funil`) — as etapas do funil espelhadas.
 
-O fluxo completo do closer está no item 5.
+O fluxo completo da venda está no item 5.
 
 ### Clientes (`/ops/clients` e `/ops/clients/:id`)
 Um card por pessoa. Regras que valem aqui: **corrida não é cliente**; "ativo" é
@@ -143,7 +148,7 @@ DocuSign daquele cliente.
 
 ---
 
-## 5. O fluxo do closer, passo a passo
+## 5. O fluxo da venda, passo a passo
 
 **Oportunidade não é cliente.** Ela vive em `opportunities`, separada de
 `clients`, e só vira card de cliente quando a venda fecha.
@@ -177,7 +182,7 @@ DocuSign daquele cliente.
    esperando a aprovação do dono**. Administrador e gerente passam direto.
 6. **Falar com a IA na ficha** — a caixa dentro da oportunidade: você dita e ela
    registra a ligação, marca retorno, anota, move etapa, cria tarefa, manda
-   waiver ou fecha a venda. Ela só alcança a oportunidade daquele closer.
+   waiver ou fecha a venda, sempre naquela oportunidade.
 
 Travas que o servidor impõe (`command_center/api/vendas.py`):
 "Ganho" não sai pela mão (é resultado do fechamento); "Perdido" exige motivo;
@@ -233,9 +238,8 @@ Ação que não está na tabela cai em `REQUIRES_CONFIRMATION` por padrão
 `venda_enviar_invoice` (aprovação do dono).
 
 **Quem decide** (`ia.pode_decidir`): administrador, gerente e a conta de acesso
-livre decidem tudo; o operador decide nos módulos dele; o closer confirma só
-propostas `venda_*` da oportunidade dele; invoice e QuickBooks nunca saem do
-gerente para cima. Leitura não decide nada.
+livre decidem tudo; o operador decide nos módulos dele — o que inclui vendas;
+invoice e QuickBooks nunca saem do gerente para cima. Leitura não decide nada.
 
 ---
 
@@ -278,8 +282,6 @@ asfalto — nada quebra.
 | Invoice só depois de aprovada | `qbo_*_invoice = REQUIRES_APPROVAL`; a prévia é obrigatória na aprovação |
 | Waiver tem travas no servidor + aprovação | `adminai/mcp/docusign_mcp.py`: recusa sem `idade_confirmada`, sem `nome_email_conferidos`, com modelo errado ou com e-mail do domínio da URACE |
 | Invoice fora da tabela é do dono | `vendas._confere_preco` + `pode_decidir` |
-| Closer não alcança o resto do painel | `main.FECHADO_AO_CLOSER` (403 no servidor) |
-| Closer só mexe na venda dele | `vendas._opp` e `acoes_painel._opp_por` |
 | ADM URACE e Matt tasks: só leitura | regra do dono dentro do `asana_mcp` |
 | Auditoria não se apaga | gatilhos no SQLite contra `UPDATE`/`DELETE` em `audit_logs` |
 | Tudo no fuso da Flórida | `America/New_York` no servidor (`vendas.hoje_local`, `dia_local`, `quando_pt`) e no frontend (`components/fmt.ts`) |
@@ -314,8 +316,8 @@ relativos à raiz do repositório `UraceUs/Uraceagent`, branch
 |---|---|
 | Autenticação, RBAC, auditoria | `command_center/api/auth.py` |
 | Rotas principais e dashboard | `command_center/api/rotas.py` |
-| App, static, guarda do closer | `command_center/api/main.py` |
-| Vendas (closer) | `command_center/api/vendas.py` |
+| App, arquivos do build, cabeçalhos | `command_center/api/main.py` |
+| Vendas (oportunidades, fechamento) | `command_center/api/vendas.py` |
 | Ações do painel e de venda | `command_center/api/acoes_painel.py` |
 | Motor da IA (contexto, execução) | `command_center/api/motor.py` |
 | Conversa com o agente, políticas, aprovação | `command_center/api/ia.py` |
@@ -332,7 +334,7 @@ relativos à raiz do repositório `UraceUs/Uraceagent`, branch
 `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` ·
 `GET /dashboard` · `GET /needs-attention`, `POST /needs-attention/instruct` ·
 `GET /clients`, `GET /clients/{id}` ·
-`GET /sales/board`, `GET /sales/agenda`, `GET /sales/{id}`, `POST /sales`,
+`GET /sales/board` (`?minhas=1`), `GET /sales/agenda`, `GET /sales/{id}`, `POST /sales`,
 `PATCH /sales/{id}`, `POST /sales/{id}/call`, `POST /sales/{id}/next`,
 `POST /sales/{id}/note`, `POST /sales/{id}/stage`, `POST /sales/from-lead/{lead}`,
 `POST /sales/{id}/close`, `POST /sales/{id}/step/{passo}` ·
@@ -382,7 +384,7 @@ cd command_center/web && npx tsc --noEmit -p tsconfig.app.json && npm run build
 - **Diário** (o que aconteceu, dia a dia): `brain/30_DIARIO/`
 - **Identidade visual** ("Pit Wall Glass"):
   `brain/08_DECISOES/D-2026-09-17 - Identidade Pit Wall Glass (iOS x F1).md`
-- **Fluxo do closer, voz e acesso livre**:
+- **Fluxo da venda, voz e acesso livre**:
   `brain/08_DECISOES/D-2026-09-17 - Fluxo do closer, voz no painel e acesso livre.md`
 - **ADR do Command Center**: `docs/adminai/command-center-adr.md`
 - **Parâmetros operacionais**: `docs/adminai/parametros-operacionais.md`

@@ -124,11 +124,10 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
         "waivers_bounced": n("SELECT COUNT(*) AS n FROM waivers WHERE status='autoresponded' AND COALESCE(internal,0)=0"),
         "emails_attention": n("SELECT COUNT(*) AS n FROM emails WHERE handled=0 AND client_id IS NOT NULL"),
         "crm_pending": n("SELECT COUNT(*) AS n FROM crm_leads WHERE needs_reply=1"),
-        # vendas (17/09): retornos vencidos ou de hoje. Closer só conta os dele.
-        "sales_due": n(f"""SELECT COUNT(*) AS n FROM opportunities
-                           WHERE stage NOT IN ('GANHO','PERDIDO') AND next_at IS NOT NULL
-                             AND next_at <= ?{' AND (closer_user_id=? OR closer_user_id IS NULL)' if u["role"] == "CLOSER" else ''}""",
-                        (fim_do_dia,) + ((u["id"],) if u["role"] == "CLOSER" else ())),
+        # vendas (17/09): retornos vencidos ou de hoje, de todo mundo
+        "sales_due": n("""SELECT COUNT(*) AS n FROM opportunities
+                          WHERE stage NOT IN ('GANHO','PERDIDO') AND next_at IS NOT NULL
+                            AND next_at <= ?""", (fim_do_dia,)),
         "ai_actions_today": n("SELECT COUNT(*) AS n FROM ai_actions WHERE created_at >= ?", (hoje,)),
         "ai_pending_approval": n("SELECT COUNT(*) AS n FROM ai_actions WHERE status='PROPOSED' AND policy='REQUIRES_APPROVAL'"),
         "open_invoices": (None if not fin else {

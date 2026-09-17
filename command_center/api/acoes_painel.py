@@ -81,34 +81,22 @@ def painel_waiver_lixeira(con, user_id, waiver_id, motivo=None):
 
 
 # ---------------------------------------------------------------- vendas (closer, 17/09)
-# O closer fala com a IA e ela age na oportunidade dele. Mesmas travas das rotas: quem não é
-# dono da oportunidade não mexe, e invoice fora da tabela continua sendo do dono.
-def _e_closer(con, user_id):
-    if not user_id:
-        return False
-    u = um(con, "SELECT role FROM users WHERE id=?", (user_id,))
-    return bool(u) and u["role"] == "CLOSER"
-
-
+# Quem vende fala com a IA e ela age na oportunidade. Mesmas travas das rotas: Ganho só pelo
+# fechamento, invoice fora da tabela continua sendo do dono.
 def _opp_por(con, opp_id=None, nome=None, user_id=None):
-    """Acha a oportunidade por id ou por nome. Closer só alcança as dele — a IA
-    não é atalho para mexer na venda de outro."""
-    so_minhas = _e_closer(con, user_id)
-    dono = "" if not so_minhas else " AND (closer_user_id=? OR closer_user_id IS NULL)"
-    extra = (user_id,) if so_minhas else ()
+    """Acha a oportunidade por id ou por nome. Vendas é área do operador: quem entra
+    alcança qualquer oportunidade (correção do dono, 17/09)."""
     if opp_id:
-        o = um(con, f"SELECT * FROM opportunities WHERE id=?{dono}", (int(opp_id),) + extra)
+        o = um(con, "SELECT * FROM opportunities WHERE id=?", (int(opp_id),))
         if not o:
-            return None, (f"a oportunidade #{opp_id} é de outro closer" if so_minhas and
-                          um(con, "SELECT 1 AS x FROM opportunities WHERE id=?", (int(opp_id),))
-                          else f"não existe oportunidade #{opp_id}")
+            return None, f"não existe oportunidade #{opp_id}"
         return o, None
     if not nome:
         return None, "diga de quem é a oportunidade (nome ou id)"
     like = f"%{nome.strip().lower()}%"
-    achadas = todos(con, f"""SELECT * FROM opportunities WHERE stage NOT IN ('GANHO','PERDIDO')
-                            AND (lower(name) LIKE ? OR lower(COALESCE(pilot_name,'')) LIKE ?){dono}
-                            ORDER BY updated_at DESC LIMIT 5""", (like, like) + extra)
+    achadas = todos(con, """SELECT * FROM opportunities WHERE stage NOT IN ('GANHO','PERDIDO')
+                            AND (lower(name) LIKE ? OR lower(COALESCE(pilot_name,'')) LIKE ?)
+                            ORDER BY updated_at DESC LIMIT 5""", (like, like))
     if not achadas:
         return None, f"não achei oportunidade aberta de '{nome}'"
     if len(achadas) > 1:

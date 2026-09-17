@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY,
   email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
   name          TEXT NOT NULL,
-  role          TEXT NOT NULL CHECK (role IN ('ADMIN','MANAGER','OPERATOR','CLOSER','VIEWER')),
+  role          TEXT NOT NULL CHECK (role IN ('ADMIN','MANAGER','OPERATOR','VIEWER')),
   pw_salt       TEXT NOT NULL,            -- base64
   pw_hash       TEXT NOT NULL,            -- base64 scrypt
   active        INTEGER NOT NULL DEFAULT 1,

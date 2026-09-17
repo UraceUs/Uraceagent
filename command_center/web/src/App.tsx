@@ -21,7 +21,7 @@ import { Login } from './pages/Login'
 import { Account, Audit, Integrations, Policies, Users } from './pages/System'
 import { AgendaVendas, Oportunidade, Oportunidades } from './pages/Vendas'
 
-const PAPEL_PT: Record<string, string> = { ADMIN: 'administrador', MANAGER: 'gerente', OPERATOR: 'operador', CLOSER: 'vendas', VIEWER: 'leitura' }
+const PAPEL_PT: Record<string, string> = { ADMIN: 'administrador', MANAGER: 'gerente', OPERATOR: 'operador', VIEWER: 'leitura' }
 
 function Guard({ min, children }: { min?: Role; children: ReactNode }) {
   const { user, ready, can } = useAuth()
@@ -32,20 +32,13 @@ function Guard({ min, children }: { min?: Role; children: ReactNode }) {
   return <>{children}</>
 }
 
-/** O closer entra direto nas oportunidades; o resto entra no Hoje. */
-function Inicio() {
-  const { user, livre } = useAuth()
-  if (user?.role === 'CLOSER' && !livre) return <Navigate to="/sales" replace />
-  return <Dashboard />
-}
-
 export default function App() {
   return <BrowserRouter basename="/ops">
     <AuthProvider><ToastProvider><PerguntarProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route element={<Guard><Shell /></Guard>}>
-          <Route index element={<Inicio />} />
+          <Route index element={<Dashboard />} />
           <Route path="attention" element={<AttentionPage />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:id" element={<Client360 />} />
@@ -58,9 +51,9 @@ export default function App() {
           <Route path="crm/chat" element={<CRM vista="chat" />} />
           <Route path="crm/funil" element={<CRM vista="funil" />} />
           <Route path="kommo" element={<Navigate to="/crm/chat" replace />} />
-          <Route path="sales" element={<Guard min="CLOSER"><Oportunidades /></Guard>} />
-          <Route path="sales/agenda" element={<Guard min="CLOSER"><AgendaVendas /></Guard>} />
-          <Route path="sales/:id" element={<Guard min="CLOSER"><Oportunidade /></Guard>} />
+          <Route path="sales" element={<Guard min="OPERATOR"><Oportunidades /></Guard>} />
+          <Route path="sales/agenda" element={<Guard min="OPERATOR"><AgendaVendas /></Guard>} />
+          <Route path="sales/:id" element={<Guard min="OPERATOR"><Oportunidade /></Guard>} />
           <Route path="vendas" element={<Navigate to="/sales" replace />} />
           <Route path="races" element={<Races />} />
           <Route path="equipment" element={<Navigate to="/clients?v=pro" replace />} />

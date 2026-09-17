@@ -118,38 +118,18 @@ def aplicar_schema(con):
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
         if coluna not in existentes:
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
-    _migrar_papeis(con)              # CHECK de users.role: bancos antigos não conhecem CLOSER
+    _migrar_papeis(con)              # o papel CLOSER foi desfeito: quem tiver vira OPERATOR
     _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`
     for sql in POS_MIGRACAO:
         con.execute(sql)
 
 
 def _migrar_papeis(con):
-    """users.role tem CHECK; banco criado antes de 17/09 não aceita CLOSER. SQLite não altera
-    CHECK: recria a tabela com o mesmo conteúdo (FK desligada só durante a troca)."""
-    linha = um(con, "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")
-    if not linha or "CLOSER" in (linha.get("sql") or ""):
-        return
-    cols = [r[1] for r in con.execute("PRAGMA table_info(users)")]
-    lista = ", ".join(cols)
-    con.execute("PRAGMA foreign_keys=OFF")
-    try:
-        con.executescript("""
-        CREATE TABLE users_novo (
-          id            INTEGER PRIMARY KEY,
-          email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
-          name          TEXT NOT NULL,
-          role          TEXT NOT NULL CHECK (role IN ('ADMIN','MANAGER','OPERATOR','CLOSER','VIEWER')),
-          pw_salt       TEXT NOT NULL,
-          pw_hash       TEXT NOT NULL,
-          active        INTEGER NOT NULL DEFAULT 1,
-          created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
-          last_login_at TEXT
-        );""")
-        con.execute(f"INSERT INTO users_novo ({lista}) SELECT {lista} FROM users")
-        con.executescript("DROP TABLE users; ALTER TABLE users_novo RENAME TO users;")
-    finally:
-        con.execute("PRAGMA foreign_keys=ON")
+    """O papel CLOSER existiu por algumas horas em 17/09 e foi desfeito na mesma tarde
+    ("vendas e operador devem ser a mesma coisa, com os acessos de operador"). Quem tiver
+    ficado com ele vira OPERATOR — o CHECK antigo do banco aceita os dois, então não é
+    preciso recriar a tabela."""
+    con.execute("UPDATE users SET role='OPERATOR' WHERE role='CLOSER'")
 
 
 def _semear_marcadores(con):

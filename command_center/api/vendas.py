@@ -1,5 +1,8 @@
 """Vendas: o fluxo do closer (dono, 17/09) — aprovado no canvas antes de entrar aqui.
 
+Closer aqui é a PESSOA que vende, não um papel do sistema: quem vende é OPERATOR e a
+área de vendas é uma tela do operador (correção do dono, 17/09).
+
 Oportunidade NÃO é cliente: vive em `opportunities`, com linha do tempo própria
 (`opp_events`), e só vira card de cliente no Ganho. O closer liga por fora e registra
 tudo aqui: ligação, retorno, anotação, etapa. Quando fecha, UMA tela dispara a lista:
@@ -50,8 +53,6 @@ def _opp(con, oid, u=None):
                    LEFT JOIN clients c ON c.id=o.client_id WHERE o.id=?""", (oid,))
     if not o:
         raise HTTPException(404, "Oportunidade não encontrada.")
-    if u and u["role"] == "CLOSER" and o["closer_user_id"] not in (None, u["id"]):
-        raise HTTPException(403, "Esta oportunidade é de outro closer.")
     o["closing"] = json.loads(o["closing"] or "null")
     return o
 
@@ -137,8 +138,8 @@ def _aplicando(sistema, fn, *a, **kw):
 # --------------------------------------------------------------- leitura
 @r.get("/board")
 def board(minhas: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    """O quadro: uma coluna por etapa, na ordem do fluxo. Closer vê as dele por padrão."""
-    so_minhas = minhas or u["role"] == "CLOSER"
+    """O quadro: uma coluna por etapa, na ordem do fluxo. `minhas=1` filtra as suas."""
+    so_minhas = minhas
     where, args = "", []
     if so_minhas:
         where, args = "WHERE (o.closer_user_id=? OR o.closer_user_id IS NULL)", [u["id"]]
@@ -169,10 +170,10 @@ def _dias_atras(n):
 
 
 @r.get("/agenda")
-def agenda(dias: int = 7, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    """Agenda de vendas: retornos marcados, atrasado primeiro. Só os do closer, quando é closer."""
+def agenda(dias: int = 7, minhas: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Agenda de vendas: retornos marcados, atrasado primeiro. `minhas=1` mostra só os seus."""
     where, args = "WHERE o.next_at IS NOT NULL AND o.stage NOT IN ('GANHO','PERDIDO')", []
-    if u["role"] == "CLOSER":
+    if minhas:
         where += " AND (o.closer_user_id=? OR o.closer_user_id IS NULL)"
         args.append(u["id"])
     ops = todos(con, f"""SELECT o.id, o.name, o.pilot_name, o.service, o.amount, o.stage, o.source,
@@ -235,7 +236,7 @@ def _campos(d: OppIn):
 
 
 @r.post("", status_code=201)
-def criar(dados: OppIn, request: Request, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def criar(dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Nova oportunidade: o closer cria durante a ligação, em segundos."""
     campos = _campos(dados)
     if not campos.get("name"):
@@ -253,7 +254,7 @@ def criar(dados: OppIn, request: Request, u=Depends(auth.exige("CLOSER")), con: 
 
 
 @r.patch("/{oid}")
-def editar(oid: int, dados: OppIn, request: Request, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def editar(oid: int, dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     o = _opp(con, oid, u)
     campos = _campos(dados)
     atualizar(con, "opportunities", oid, updated_at=agora(), **campos)
@@ -276,7 +277,7 @@ class LigacaoIn(BaseModel):
 
 
 @r.post("/{oid}/call")
-def ligacao(oid: int, dados: LigacaoIn, request: Request, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def ligacao(oid: int, dados: LigacaoIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Registrar a ligação (ditada ou digitada): resultado, o que foi dito e o próximo passo."""
     o = _opp(con, oid, u)
     if dados.resultado not in RESULTADOS:
@@ -307,7 +308,7 @@ class RetornoIn(BaseModel):
 
 
 @r.post("/{oid}/next")
-def retorno(oid: int, dados: RetornoIn, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def retorno(oid: int, dados: RetornoIn, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     _opp(con, oid, u)
     atualizar(con, "opportunities", oid, next_at=dados.quando, next_what=_limpa(dados.o_que) or "retorno", updated_at=agora())
     _ev(con, oid, "next", f"Retorno marcado: {quando_pt(dados.quando)}", _limpa(dados.o_que), f"user:{u['id']}")
@@ -320,7 +321,7 @@ class TextoIn(BaseModel):
 
 
 @r.post("/{oid}/note")
-def anotar(oid: int, dados: TextoIn, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def anotar(oid: int, dados: TextoIn, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     o = _opp(con, oid, u)
     t = _limpa(dados.texto)
     if not t:
@@ -337,7 +338,7 @@ class EtapaIn(BaseModel):
 
 
 @r.post("/{oid}/stage")
-def mover(oid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def mover(oid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     o = _opp(con, oid, u)
     if dados.etapa not in ETAPAS:
         raise HTTPException(400, f"Etapa inválida. Use: {', '.join(ETAPAS)}")
@@ -357,7 +358,7 @@ def mover(oid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("CLOS
 
 
 @r.post("/from-lead/{lead_id}", status_code=201)
-def do_chat(lead_id: int, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def do_chat(lead_id: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """"Passar para o closer": o lead do chat do Kommo vira oportunidade, com o que já se sabe."""
     l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lead_id,))
     if not l:
@@ -535,7 +536,7 @@ def _extra(con, o, e: ExtraIn, user_id):
 
 
 @r.post("/{oid}/close")
-def fechar(oid: int, dados: FecharIn, request: Request, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def fechar(oid: int, dados: FecharIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Fechar venda: uma tela, um botão. Cada passo ligado roda aqui e o resultado fica gravado.
     Falha de um passo não impede os outros; a tela mostra o que faltou, com o botão manual."""
     o = _opp(con, oid, u)
@@ -603,7 +604,7 @@ def fechar(oid: int, dados: FecharIn, request: Request, u=Depends(auth.exige("CL
 
 
 @r.post("/{oid}/step/{passo}")
-def refazer(oid: int, passo: str, u=Depends(auth.exige("CLOSER")), con: sqlite3.Connection = Depends(get_db)):
+def refazer(oid: int, passo: str, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Botão manual de um passo (reenviar waiver, mandar a invoice, criar a tarefa…)."""
     o = _opp(con, oid, u)
     if passo not in PASSOS:

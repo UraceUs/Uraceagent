@@ -1,8 +1,7 @@
-export type Role = 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'CLOSER' | 'VIEWER'
-// CLOSER (17/09) é vendas: escreve na área dele, não alcança o resto do painel.
-// A ordem é a escada que o `can()` usa; o que o closer não vê está na lista
-// de caminhos fechados do servidor, não no nível.
-export const ROLES: Role[] = ['VIEWER', 'CLOSER', 'OPERATOR', 'MANAGER', 'ADMIN']
+export type Role = 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'VIEWER'
+// A ordem é a escada que o `can()` usa. Vendas não é papel: quem vende é OPERATOR
+// e a área de vendas é uma tela do operador (correção do dono, 17/09).
+export const ROLES: Role[] = ['VIEWER', 'OPERATOR', 'MANAGER', 'ADMIN']
 export type Level = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 export type Policy = 'SAFE' | 'REQUIRES_CONFIRMATION' | 'REQUIRES_APPROVAL' | 'BLOCKED'
 

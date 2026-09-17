@@ -2,8 +2,9 @@
 
 O que estes testes seguram, porque é o que dói se quebrar:
   * oportunidade não é cliente: só vira card no fechamento;
-  * closer vê e mexe apenas no que é dele — pela rota e pela IA;
-  * closer não alcança o resto do painel (usuários, QuickBooks, políticas…);
+  * vendas é área do OPERADOR: quem vende alcança qualquer oportunidade, e o filtro
+    "só minhas" é escolha de tela, não trava de papel (correção do dono, 17/09);
+  * leitura não cria nada;
   * fechar venda grava passo por passo: o que caiu não derruba o resto;
   * valor fora da tabela fecha a venda, mas a invoice fica esperando o dono;
   * tarefa personalizada do fechamento vira lembrete no painel;
@@ -33,8 +34,8 @@ def cli():
     con = conectar()
     aplicar_schema(con)
     auth.criar_usuario(con, "admin@urace.us", "Admin", "ADMIN", SENHA)
-    auth.criar_usuario(con, "closer@urace.us", "Carla Closer", "CLOSER", SENHA)
-    auth.criar_usuario(con, "outro@urace.us", "Otto Closer", "CLOSER", SENHA)
+    auth.criar_usuario(con, "closer@urace.us", "Carla Vendas", "OPERATOR", SENHA)
+    auth.criar_usuario(con, "outro@urace.us", "Otto Vendas", "OPERATOR", SENHA)
     auth.criar_usuario(con, "leitura@urace.us", "Lê", "VIEWER", SENHA)
     con.commit()
     con.close()
@@ -78,7 +79,7 @@ def test_ligacao_move_etapa_marca_retorno_e_aparece_na_agenda(cli):
 
     b = cli.get(f"{B}/sales/board", headers=h).json()
     conversa = [c for c in b["colunas"] if c["etapa"] == "CONVERSA"][0]
-    assert b["so_minhas"] and any(o["id"] == oid for o in conversa["oportunidades"])
+    assert b["so_minhas"] is False and any(o["id"] == oid for o in conversa["oportunidades"])
     assert [o for o in conversa["oportunidades"] if o["id"] == oid][0]["calls"] == 1
 
     # anotação entra na ficha e na linha do tempo
@@ -99,29 +100,38 @@ def test_perdido_exige_motivo_e_ganho_nao_sai_por_fora_do_fechamento(cli):
     assert o["stage"] == "PERDIDO" and o["lost_reason"] == "achou caro" and o["next_at"] is None
 
 
-def test_closer_nao_alcanca_oportunidade_de_outro_closer(cli):
+def test_quem_vende_alcanca_qualquer_oportunidade_e_filtra_as_suas(cli):
+    """Correção do dono, 17/09: "vendas e operador devem ser a mesma coisa, com os acessos de
+    operador". Some a trava por papel; o recorte "só minhas" passa a ser filtro de tela."""
     h1 = entra(cli, "closer@urace.us")
     minha = cria(cli, h1, name="Cliente da Carla", email="carla-cliente@example.com")
     h2 = entra(cli, "outro@urace.us")
-    assert cli.get(f"{B}/sales/{minha}", headers=h2).status_code == 403
-    assert cli.post(f"{B}/sales/{minha}/note", headers=h2, json={"texto": "oi"}).status_code == 403
+    assert cli.get(f"{B}/sales/{minha}", headers=h2).status_code == 200
+    assert cli.post(f"{B}/sales/{minha}/note", headers=h2, json={"texto": "outro operador anotou"}).status_code == 200
+    # sem filtro, o quadro traz a oportunidade dos dois; com minhas=1, só as de quem pediu
     b = cli.get(f"{B}/sales/board", headers=h2).json()
+    assert b["so_minhas"] is False
+    assert any(o["id"] == minha for c in b["colunas"] for o in c["oportunidades"])
+    b = cli.get(f"{B}/sales/board?minhas=1", headers=h2).json()
+    assert b["so_minhas"] is True
     assert all(o["id"] != minha for c in b["colunas"] for o in c["oportunidades"])
-    # o administrador vê tudo
+    # e o administrador continua vendo tudo
     ha = entra(cli, "admin@urace.us")
     assert cli.get(f"{B}/sales/{minha}", headers=ha).status_code == 200
-    assert cli.get(f"{B}/sales/board", headers=ha).json()["so_minhas"] is False
 
 
-def test_leitura_nao_cria_e_closer_nao_entra_no_resto_do_painel(cli):
+def test_leitura_nao_cria_e_quem_vende_tem_os_acessos_do_operador(cli):
     h = entra(cli, "leitura@urace.us")
     assert cli.post(B + "/sales", headers=h, json={"name": "X"}).status_code == 403
     h = entra(cli, "closer@urace.us")
-    for caminho in ("/users", "/audit", "/policies", "/qbo/invoices", "/integrations", "/automation/rules"):
-        assert cli.get(B + caminho, headers=h).status_code == 403, caminho
-    # a área dele continua aberta
     assert cli.get(B + "/sales/board", headers=h).status_code == 200
     assert cli.get(B + "/dashboard", headers=h).status_code == 200
+    # os módulos do operador estão abertos para quem vende (não existe mais área fechada por papel)
+    for caminho in ("/clients", "/needs-attention", "/crm/inbox", "/crm/board"):
+        assert cli.get(B + caminho, headers=h).status_code == 200, caminho
+    # o que continua fechado é o que sempre foi do gerente/administrador
+    assert cli.get(B + "/users", headers=h).status_code == 403
+    assert cli.get(B + "/audit", headers=h).status_code == 403
 
 
 def test_lead_do_chat_vira_oportunidade_uma_vez_so(cli):
@@ -240,7 +250,7 @@ def test_passo_sem_integracao_nao_derruba_o_fechamento(cli):
 
 
 # --------------------------------------------------------------- a IA da venda
-def test_ia_age_na_oportunidade_e_recusa_o_que_nao_e_dela(cli):
+def test_ia_age_na_oportunidade_e_recusa_o_que_nao_pode(cli):
     from command_center.api import acoes_painel
     h = entra(cli, "closer@urace.us")
     oid = cria(cli, h, name="Zeca IA", email="zeca@example.com")
@@ -265,18 +275,16 @@ def test_ia_age_na_oportunidade_e_recusa_o_que_nao_e_dela(cli):
         r = acoes_painel.executar(con, carla, "venda_mover_etapa", {"opp_id": oid, "etapa": "PERDIDO"})
         assert not r["aplicado"] and "motivo" in r["motivo"]
 
-        # tarefa personalizada pela IA
         r = acoes_painel.executar(con, carla, "venda_tarefa", {"opp_id": oid, "titulo": "mandar o mapa da pista"})
         assert r["aplicado"] and r["onde"] == "painel"
 
-        # oportunidade de outro closer: a IA não é atalho
-        r = acoes_painel.executar(con, otto, "venda_anotar", {"opp_id": oid, "texto": "não devia entrar"})
-        assert not r["aplicado"] and "outro closer" in r["motivo"]
-        # nem por nome
-        r = acoes_painel.executar(con, otto, "venda_anotar", {"nome": "Zeca", "texto": "nem assim"})
-        assert not r["aplicado"] and "não achei" in r["motivo"]
+        # outro operador alcança a mesma oportunidade: vendas é área de todos eles
+        r = acoes_painel.executar(con, otto, "venda_anotar", {"opp_id": oid, "texto": "o outro também anota"})
+        assert r["aplicado"]
 
-        # resultado inventado é recusado com a lista do que vale
+        # oportunidade que não existe, e resultado inventado, seguem recusados
+        r = acoes_painel.executar(con, carla, "venda_anotar", {"opp_id": 999999, "texto": "nada"})
+        assert not r["aplicado"] and "não existe" in r["motivo"]
         r = acoes_painel.executar(con, carla, "venda_registrar_ligacao", {"opp_id": oid, "resultado": "talvez"})
         assert not r["aplicado"] and "fechou" in r["motivo"]
         con.commit()

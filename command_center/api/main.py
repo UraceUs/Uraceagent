@@ -111,32 +111,6 @@ async def _cabecalhos(request: Request, call_next):
     return resp
 
 
-# O CLOSER (17/09) é vendas: mesmo nível de escrita do OPERATOR, mas estas áreas não são dele.
-# Um lugar só, para não depender de cada rota lembrar da regra.
-FECHADO_AO_CLOSER = ("/ops/api/qbo", "/ops/api/invoices", "/ops/api/automation", "/ops/api/rules",
-                     "/ops/api/policies", "/ops/api/users", "/ops/api/audit", "/ops/api/system",
-                     "/ops/api/gmail", "/ops/api/docusign", "/ops/api/integrations", "/ops/api/context")
-
-
-@app.middleware("http")
-async def _limites_do_closer(request, call_next):
-    caminho = request.url.path
-    if caminho.startswith(FECHADO_AO_CLOSER) and request.method != "OPTIONS":
-        from command_center.api import auth as _auth
-        from command_center.db import conectar
-        bolo = request.cookies.get(_auth.COOKIE_SESSAO)
-        if bolo:
-            con = conectar()
-            try:
-                s = _auth.sessao_valida(con, bolo)
-            finally:
-                con.close()
-            if s and s.get("role") == "CLOSER":
-                from fastapi.responses import JSONResponse
-                return JSONResponse({"detail": "Esta área não é do time de vendas."}, status_code=403)
-    return await call_next(request)
-
-
 app.include_router(rotas.r)
 app.include_router(ia.r)
 from command_center.api import qbo  # noqa: E402

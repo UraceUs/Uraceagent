@@ -57,7 +57,7 @@ Para a IA não responder bonito sem agir, o comando que começa com `[oportunida
 de cada `ACAO`. E a IA respeita a mesma trava da tela: **closer só alcança a oportunidade dele**,
 mesmo pedindo pela IA.
 
-## 4. Papéis: entra CLOSER, e existe conta sem cargo
+## 4. Papéis: existe conta sem cargo (e o CLOSER foi desfeito no mesmo dia)
 
 - `CLOSER` tem o **mesmo nível de escrita do OPERATOR**, mas só na área de vendas. O que ele não
   alcança está numa lista de caminhos no servidor (`FECHADO_AO_CLOSER` em `main.py`): usuários,

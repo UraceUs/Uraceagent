@@ -32,10 +32,12 @@ MAX_FALHAS = 5            # por chave (ip ou e-mail) na janela
 JANELA_MIN = 15
 COOKIE_SESSAO = "cc_session"
 COOKIE_CSRF = "cc_csrf"
-PAPEIS = ("ADMIN", "MANAGER", "OPERATOR", "CLOSER", "VIEWER")
-# CLOSER (17/09) é vendas: mesmo nível de escrita do OPERATOR, mas só nas telas de venda —
-# o que ele NÃO alcança está em CAMINHOS_FECHADOS (main.py), não no nível.
-NIVEL = {"ADMIN": 3, "MANAGER": 2, "OPERATOR": 1, "CLOSER": 1, "VIEWER": 0}
+PAPEIS = ("ADMIN", "MANAGER", "OPERATOR", "VIEWER")
+# 17/09, correção do dono: "vendas e operador devem ser a mesma coisa, com os acessos de
+# operador". Existiu um papel CLOSER por algumas horas; quem vende é OPERATOR, e a área de
+# vendas é uma tela do operador como qualquer outra. Banco antigo com role='CLOSER' é
+# convertido em OPERATOR na migração.
+NIVEL = {"ADMIN": 3, "MANAGER": 2, "OPERATOR": 1, "VIEWER": 0}
 MSG_CREDENCIAL = "Invalid email or password."
 
 # Acesso livre (dono, 17/09): "ele opera em todas as áreas, então não precisa

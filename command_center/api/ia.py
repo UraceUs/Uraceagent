@@ -490,8 +490,6 @@ def actions(status: str | None = None, u=Depends(auth.usuario_atual), con: sqlit
         lista = todos(con, "SELECT * FROM ai_actions WHERE status=? ORDER BY id DESC LIMIT 200", (status.upper(),))
     else:
         lista = todos(con, "SELECT * FROM ai_actions ORDER BY id DESC LIMIT 200")
-    if u["role"] == "CLOSER":                     # closer só vê a fila da área dele
-        lista = [a for a in lista if a["action"].startswith("venda_")]
     return marcar_decisao(con, u, lista)
 
 
@@ -533,7 +531,7 @@ class DecisaoIn(BaseModel):
 
 # Quem decide o que a IA propõe (dono, 17/09): "o operador aprova o que a IA propõe, nos
 # módulos de acesso que ele tem". Financeiro (QuickBooks e invoice) continua sendo do gerente
-# ou do administrador — é dinheiro saindo. Closer decide só na venda dele, e nunca a invoice.
+# ou do administrador — é dinheiro saindo.
 SISTEMAS_FINANCEIROS = ("qbo", "quickbooks", "invoices")
 
 
@@ -548,27 +546,10 @@ def pode_decidir(con, u, a):
     """(pode, motivo): quem pode aprovar ou recusar esta proposta da IA."""
     if u.get("free") or auth.pode(u["role"], "MANAGER"):
         return True, None
-    if not auth.pode(u["role"], "OPERATOR") and u["role"] != "CLOSER":
+    if not auth.pode(u["role"], "OPERATOR"):
         return False, "Seu acesso é de leitura."
     if _financeira(a):
         return False, "Invoice e QuickBooks são decisão do gerente ou do administrador."
-    if u["role"] != "CLOSER":
-        return True, None
-    # closer: só as ações da área dele, e só na oportunidade dele
-    if not a["action"].startswith("venda_"):
-        return False, "Esta proposta não é da área de vendas."
-    try:
-        args = (json.loads(a["payload"] or "{}") or {}).get("args") or {}
-    except ValueError:
-        args = {}
-    oid = args.get("opp_id")
-    if not oid:
-        return False, "Não consigo dizer de qual oportunidade é esta proposta."
-    o = um(con, "SELECT closer_user_id FROM opportunities WHERE id=?", (int(oid),))
-    if not o:
-        return False, "A oportunidade desta proposta não existe mais."
-    if o["closer_user_id"] not in (None, u["id"]):
-        return False, "Esta oportunidade é de outro closer."
     return True, None
 
 
