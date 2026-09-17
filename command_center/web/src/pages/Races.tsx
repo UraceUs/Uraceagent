@@ -7,7 +7,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Spinner, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section, Spinner, statusTone } from '../components/ui'
 import { fmtDate, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -41,7 +41,7 @@ function CorridaModal({ r, pros, onClose, reload }: { r: Race; pros: Client[]; o
   async function status(iid: number, st: string) { try { await api.patch(`/invites/${iid}`, { status: st }); reload() } catch (e) { toast((e as ApiError).message, 'crit') } }
   async function tirar() { if (!await perguntar({ titulo: 'Tirar esta corrida do calendário?', texto: 'Some do painel. No Asana nada muda.', ok: 'Tirar', perigo: true })) return; try { await api.patch(`/races/${r.id}`, { active: false }); reload(); onClose() } catch (e) { toast((e as ApiError).message, 'crit') } }
   const link = r.task?.links?.[0]?.deep_link || det.data?.task?.link
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 900 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 900 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
     <div><div className="small muted cond">{r.source === 'asana' ? 'coluna RACES do Asana' : 'só no painel'}{r.series && <> · {r.series}</>}</div><h2 className="h1" style={{ fontSize: 22 }}>{r.name}</h2>
       <div className="small ink2">{[r.track, r.city].filter(Boolean).join(' · ')}{r.date_start && <> · {fmtDate(r.date_start)}{r.date_end && r.date_end !== r.date_start ? ` a ${fmtDate(r.date_end)}` : ''}</>}{r.task && <> · <Chip tone={statusTone(r.task.status === 'open' ? 'PENDING' : 'COMPLETED')}>{r.task.status}</Chip></>}</div>
@@ -63,7 +63,7 @@ function CorridaModal({ r, pros, onClose, reload }: { r: Race; pros: Client[]; o
         {det.data?.task?.notas && <details style={{ marginTop: 6 }}><summary className="small">descrição</summary><pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font)', fontSize: 13, margin: 0 }}>{det.data.task.notas}</pre></details>}
       </Section>
     </div>
-  </div></div>
+  </div></Scrim>
 }
 
 function NovaCorrida({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
@@ -75,7 +75,7 @@ function NovaCorrida({ onClose, onCreated }: { onClose: () => void; onCreated: (
     try { const r = await api.post<{ id: number; task_id: number | null }>('/races', { ...f, local_only: f.local_only || undefined }); toast(r.task_id ? 'Corrida criada no Asana (coluna RACES) com as subtarefas do modelo.' : 'Corrida criada só no painel.', 'ok'); onCreated(); onClose() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>Nova corrida</h2><div className="small ink2">Cria a tarefa no Asana a partir do modelo <b>New Race [Race + City/Track]</b>, na coluna RACES, com as mesmas subtarefas do modelo.</div></div>
     <div className="grid g2">
@@ -89,7 +89,7 @@ function NovaCorrida({ onClose, onCreated }: { onClose: () => void; onCreated: (
     <div className="field"><label>Observações</label><textarea className="input" rows={2} value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
     <label className="check small"><input type="checkbox" checked={f.local_only} onChange={e => setF({ ...f, local_only: e.target.checked })} /> só no painel (não cria no Asana)</label>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !f.name.trim() || !f.date_start} onClick={criar}>{busy ? <Spinner /> : 'Criar corrida'}</button></div>
-  </div></div>
+  </div></Scrim>
 }
 
 export function Races() {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, qs } from '../api/client'
 import type { SearchResult } from '../api/types'
-import { Chip } from './ui'
+import { Chip, Scrim } from './ui'
 import { fmtDate } from './fmt'
 
 interface Item { group: string; label: string; hint?: string; go: () => void; tone?: 'ok' | 'warn' | 'crit' | 'neutral' | 'info' }
@@ -59,7 +59,7 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
 
   if (!open) return null
   let lastGroup = ''
-  return <div className="pal-scrim" onMouseDown={onClose}>
+  return <Scrim className="pal-scrim" onMouseDown={onClose}>
     <div className="pal" role="dialog" aria-label="Busca" onMouseDown={e => e.stopPropagation()}>
       <input ref={inp} value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cliente, piloto, e-mail, serviço… ou perguntar à IA" aria-label="Buscar" />
       <div className="res">
@@ -77,5 +77,5 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
       </div>
       <div className="ft"><span><kbd className="k">↑↓</kbd> navegar</span><span><kbd className="k">↵</kbd> abrir</span><span><kbd className="k">esc</kbd> fechar</span>{busy && <span className="spin" style={{ marginLeft: 'auto', width: 12, height: 12 }} />}</div>
     </div>
-  </div>
+  </Scrim>
 }

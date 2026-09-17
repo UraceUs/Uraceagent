@@ -35,6 +35,13 @@ Como isso muda o que se escreve:
 - **Terminar com a prova.** O último comando do bloco mostra se deu
   certo, para não precisar de uma segunda rodada só para conferir.
 
+**Deploy só quando ele pedir (17/09/2026).** "Junte tudo num push; quando eu
+falar para atualizar o código ou o sistema, me dê o bloco para colar na VPS."
+Ou seja: cada mudança vai para a branch normalmente, mas a linha de deploy
+(`git pull … && bash …servir_command_center.sh`) só aparece na resposta
+quando ele diz "atualiza", "sobe", "deploy" ou parecido. Até lá, a resposta
+diz o que mudou e para; ele acumula e sobe de uma vez.
+
 ## Texto
 
 Português, direto, sem enfeite. Ele corrige em uma frase; texto longo

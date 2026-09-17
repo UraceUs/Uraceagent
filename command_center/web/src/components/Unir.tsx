@@ -5,7 +5,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Spinner } from './ui'
+import { Banner, Chip, Scrim, Spinner } from './ui'
 import { usePerguntar } from './Perguntar'
 import { useToast } from './Toast'
 
@@ -44,7 +44,7 @@ export function UnirModal({ keep, onClose, onDone }: { keep?: Client; onClose: (
     try { const r = await api.post<{ ok: boolean; moved: Record<string, number> }>('/client-merge', { keep_id: ka.id, drop_id: kb.id, reason: 'mesma pessoa (unido à mão)' }); toast(`Unidos: ${r.moved.tasks} serviço(s), ${r.moved.waivers} waiver(s), ${r.moved.emails} e-mail(s), ${r.moved.invoices} invoice(s) passaram para ${ka.pilot_name || ka.name}.`, 'ok'); onDone(ka.id); onClose() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>Unir dois clientes</h2><div className="small ink2">A mesma pessoa escrita de dois jeitos vira um card só. Nada é apagado dos sistemas de origem.</div></div>
     {keep && sug.data && sug.data.length > 0 && !b && <div className="small">✦ Parece duplicado de: {sug.data.map(s => <button key={s.id} className="lchip" style={{ marginRight: 4 }} title={s.why} onClick={() => setB(s)}>{s.pilot_name || s.name}</button>)}</div>}
@@ -55,7 +55,7 @@ export function UnirModal({ keep, onClose, onDone }: { keep?: Client; onClose: (
       <label className="check"><input type="radio" checked={manter === 'b'} onChange={() => setManter('b')} /> {b.pilot_name || b.name} <Chip tone="outline">{b.status}</Chip></label>
     </div><div className="small muted">O que faltar no card que fica (e-mail, telefone, nascimento) é completado com o do outro.</div></div>}
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !a || !b} onClick={unir}>{busy ? <Spinner /> : 'Unir'}</button></div>
-  </div></div>
+  </div></Scrim>
 }
 
 interface Full { running: boolean; stage: string | null; done: number; total: number | null; started_at: string | null; result: { ok?: boolean; motivo?: string; tarefas?: number; lidas?: number; clientes_novos?: number; unidos?: number; removidos?: number; candidatos?: number } | null }
@@ -81,12 +81,12 @@ export function PuxarHistorico({ onDone }: { onDone: () => void }) {
   const r = st?.result
   return <>
     <button className="btn" disabled={busy || !!st?.running} onClick={() => setConfirmar(true)} title="Todas as tarefas de todas as colunas, desde a criação do quadro">{st?.running ? <><Spinner /> {st.stage}{st.total ? ` ${st.done}/${st.total}` : ''}</> : '⟳ Puxar histórico do Asana'}</button>
-    {confirmar && <div className="modal-scrim" onMouseDown={() => setConfirmar(false)}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+    {confirmar && <Scrim onMouseDown={() => setConfirmar(false)}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
       <button className="btn ghost sm close" onClick={() => setConfirmar(false)} aria-label="Fechar">✕</button>
       <div><h2 className="h1" style={{ fontSize: 22 }}>Puxar o histórico completo</h2>
         <div className="small ink2">Lê todas as colunas do quadro U-RACE menos “Matt tasks”, concluídas incluídas, e liga cada serviço à pessoa certa. Pode levar vários minutos; a sincronia normal espera. Nada é apagado no Asana.</div></div>
       <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={() => setConfirmar(false)}>Cancelar</button><button className="btn primary" disabled={busy} onClick={puxar}>{busy ? <Spinner /> : 'Puxar agora'}</button></div>
-    </div></div>}
+    </div></Scrim>}
     {r && !st?.running && <Banner tone={r.ok === false ? 'crit' : 'ok'}>{r.ok === false ? `Histórico parou: ${r.motivo}` :
       <>Histórico puxado: <b>{r.tarefas ?? 0}</b> tarefas, <b>{r.clientes_novos ?? 0}</b> clientes novos, <b>{r.unidos ?? 0}</b> unidos sozinhos, <b>{r.removidos ?? 0}</b> não-clientes removidos, <b>{r.candidatos ?? 0}</b> par(es) para você decidir abaixo.</>}</Banner>}
   </>

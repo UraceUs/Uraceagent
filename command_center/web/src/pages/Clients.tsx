@@ -5,7 +5,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, WAIVER_LABEL, statusKind } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Progress, Scrim, Section, Spinner, Status, WAIVER_LABEL, statusKind } from '../components/ui'
 import { daysUntil, fmtDate } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -62,7 +62,7 @@ function NovoCliente({ onClose, onCreated }: { onClose: () => void; onCreated: (
     try { const r = await api.post<{ id: number; created: boolean }>('/clients', f); toast(r.created ? 'Cliente criado.' : 'Esse cliente já existia: abrindo o card dele.', 'ok'); onCreated(r.id); onClose() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>Novo cliente</h2><div className="small muted">O responsável é quem paga e assina. Se já existir alguém com o mesmo e-mail, telefone ou nome, o card existente abre em vez de duplicar.</div></div>
     <div className="grid g2">
@@ -75,7 +75,7 @@ function NovoCliente({ onClose, onCreated }: { onClose: () => void; onCreated: (
     </div>
     <div className="field"><label>Notas</label><textarea className="input" rows={2} value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || f.name.trim().length < 2} onClick={save}>{busy ? <Spinner /> : 'Salvar e abrir o card'}</button></div>
-  </div></div>
+  </div></Scrim>
 }
 
 export function Clients() {
@@ -166,11 +166,11 @@ export function Clients() {
         </table></div>}
     </Section>
     {novo && <NovoCliente onClose={() => setNovo(false)} onCreated={id => { reload(); open(id) }} />}
-    {openId && <div className="modal-scrim" onMouseDown={() => open(null)}>
+    {openId && <Scrim onMouseDown={() => open(null)}>
       <div className="modal" onMouseDown={e => e.stopPropagation()} role="dialog" aria-label="Card do cliente">
         <button className="btn ghost sm close" onClick={() => open(null)} aria-label="Fechar" title="Fechar (Esc)">✕</button>
         <ClientCard id={openId} onClose={() => open(null)} />
       </div>
-    </div>}
+    </Scrim>}
   </>
 }

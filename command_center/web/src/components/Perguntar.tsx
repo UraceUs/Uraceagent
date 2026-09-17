@@ -1,3 +1,4 @@
+import { Scrim } from './ui'
 /* Confirmação e pergunta dentro da página, no lugar de window.confirm / window.prompt.
 
    Motivo (10/09): o diálogo do navegador trava a extensão que testa e opera o painel,
@@ -53,7 +54,7 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
 
   const v = useMemo(() => perguntar, [perguntar])
   return <Ctx.Provider value={v}>{children}
-    {p && <div className="modal-scrim" role="dialog" aria-modal="true" aria-label={p.titulo} onMouseDown={() => fechar(p.campo ? null : false)}>
+    {p && <Scrim role="dialog" aria-modal="true" aria-label={p.titulo} onMouseDown={() => fechar(p.campo ? null : false)}>
       <div className="modal ask" onMouseDown={e => e.stopPropagation()}>
         <h2 className="h1" style={{ fontSize: 20 }}>{p.titulo}</h2>
         {p.texto && <div className="small ink2" style={{ whiteSpace: 'pre-wrap' }}>{p.texto}</div>}
@@ -64,7 +65,7 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
           <button ref={inicial} className={`btn ${p.perigo ? 'danger' : 'primary'}`} onClick={() => fechar(p.campo ? texto : true)}>{p.ok || 'Confirmar'}</button>
         </div>
       </div>
-    </div>}
+    </Scrim>}
   </Ctx.Provider>
 }
 

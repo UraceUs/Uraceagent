@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
 import type { Level, Policy } from '../api/types'
 
@@ -171,4 +172,10 @@ export function Dots({ done, total, tone }: { done: number; total: number; tone?
   return <span className={`dots ${tone || 'accent'}`} title={`${done} de ${total}`} aria-label={`${done} de ${total}`}>
     {Array.from({ length: n }).map((_, i) => <i key={i} className={i < d ? 'on' : ''} style={{ animationDelay: `${i * 25}ms` }} />)}
   </span>
+}
+
+/** Fundo de janela (modal) renderizado no <body>: assim nenhum invólucro animado/transformado da página
+ *  vira referência do position:fixed e a janela abre sempre por inteiro, na tela. */
+export function Scrim({ className = 'modal-scrim', ...rest }: HTMLAttributes<HTMLDivElement>) {
+  return createPortal(<div className={className} {...rest} />, document.body)
 }

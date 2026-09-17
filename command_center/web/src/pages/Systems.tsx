@@ -8,7 +8,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Section, Spinner, Status, SysLink, WAIVER_LABEL } from '../components/ui'
+import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Scrim, Section, Spinner, Status, SysLink, WAIVER_LABEL } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -113,7 +113,7 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
   const det = useGet<TaskDetail>(`/tasks/${t.id}/detail`)
   const fields = (det.data?.task?.campos as Record<string, string> | undefined) || (safeJson(t.fields) as Record<string, string> | null)
   const subs = det.data?.task?.subtarefas_lista || []
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 860 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 860 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
     <div><div className="small muted cond">{t.project} · {t.section}</div><h2 className="h1" style={{ fontSize: 22 }}>{t.title}</h2></div>
     <div className="grid g2">
@@ -136,7 +136,7 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
     </>}
     {can('OPERATOR') && <InstruirTarefa t={t} onClose={onClose} />}
     <div className="row"><TaskLink t={t} /></div>
-  </div></div>
+  </div></Scrim>
 }
 
 /** Caixa da IA dentro da tarefa (dono, 16/09): a instrução vai com o gid, o título, o cliente,
@@ -174,7 +174,7 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
     try { const r = await api.post<{ id: number; link: string; section: string }>('/tasks', f); toast(`Tarefa criada na coluna ${r.section}.`, 'ok'); onDone(); onClose(); if (r.link) window.open(r.link, '_blank', 'noopener') }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>Nova tarefa de serviço</h2><div className="small muted">Cria no Asana a partir do modelo oficial (com as subtarefas), na coluna do dia da data. A IA é avisada e prepara waiver e invoice.</div></div>
     <div className="grid g2">
@@ -198,7 +198,7 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
     </div>
     <div className="field"><label>Observações</label><textarea className="input" rows={2} value={f.extra_notes} onChange={e => set('extra_notes', e.target.value)} placeholder="altura, peso, experiência, pedidos especiais" /></div>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><span className="small muted">{faltam.length > 0 && `falta: ${faltam.join(', ')}`}</span><button className="btn primary" disabled={busy || faltam.length > 0} onClick={save}>{busy ? <Spinner /> : 'Criar no Asana'}</button></div>
-  </div></div>
+  </div></Scrim>
 }
 
 export function AsanaPage() {
@@ -248,7 +248,7 @@ function EnviarWaiver({ onClose, onDone }: { onClose: () => void; onDone: () => 
     setBusy(true)
     try { await api.post('/waivers/send', f); toast('Waiver enviada pelo DocuSign.', 'ok'); onDone(); onClose() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>Enviar waiver</h2><div className="small muted">Parental quando o piloto é menor: quem assina é o responsável. O DocuSign recusa se já houver waiver válida ou envelope aberto para o e-mail.</div></div>
     <div className="grid g2">
@@ -258,7 +258,7 @@ function EnviarWaiver({ onClose, onDone }: { onClose: () => void; onDone: () => 
       <div className="field"><label>E-mail de quem assina *</label><input className="input" type="email" value={f.signer_email} onChange={e => setF({ ...f, signer_email: e.target.value })} /></div>
     </div>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !f.signer_name.trim() || !f.signer_email.includes('@')} onClick={send}>{busy ? <Spinner /> : 'Enviar agora'}</button></div>
-  </div></div>
+  </div></Scrim>
 }
 
 interface ModeloDetalhe {
@@ -296,7 +296,7 @@ function ModeloModal({ id, onClose, onChanged }: { id: string; onClose: () => vo
       const j = await res.json(); toast(j.novo ? 'PDF adicionado ao modelo. Agora coloque os campos de assinatura no DocuSign.' : `PDF trocado. O antigo ficou guardado como ${j.backup}.`, 'ok'); det.reload(); onChanged()
     } catch (e) { toast((e as Error).message, 'crit') } finally { setBusy(null) }
   }
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
     <div><div className="small muted cond">DocuSign · modelo</div><h2 className="h1" style={{ fontSize: 22 }}>{det.data?.nome || <span className="muted">(sem nome)</span>}</h2><div className="small muted mono">{id}</div></div>
     {det.loading && !det.data && <Loading rows={3} />}
@@ -313,7 +313,7 @@ function ModeloModal({ id, onClose, onChanged }: { id: string; onClose: () => vo
       <Section title="Papéis e campos de assinatura" count={det.data.papeis?.length} tight>{!det.data.papeis?.length ? <Empty>Sem papéis.</Empty> : <div>{det.data.papeis.map((p, i) => <div key={i} className="att"><div className="lv LOW" /><div className="grow">{p.papel || '?'}<div className="small muted">{p.campos} campo(s){p.ancoras.length ? ` · âncoras: ${p.ancoras.join(', ')}` : ' · por posição na página'}</div></div></div>)}</div>}</Section>
       <div className="small muted">Alterado em {fmtDateTime(det.data.alterado_em)}. Trocar o PDF mantém o documento e seus campos; se o leiaute mudou, confira no DocuSign.</div>
     </>}
-  </div></div>
+  </div></Scrim>
 }
 
 export function DocuSignPage() {
@@ -607,7 +607,7 @@ export function LembreteModal({ invoices, onClose, onDone }: { invoices: Invoice
     try { const r = await api.post<{ enviados: number; detalhe: { invoice_id: number; ok: boolean; motivo?: string; aplicado?: boolean }[] }>('/invoice-reminders/send-now', { invoice_ids: abertas.map(i => i.id) }); const falhas = r.detalhe.filter(d => !d.ok); const sim = r.detalhe.some(d => d.ok && !d.aplicado); toast(`${r.enviados} lembrete(s) enviado(s)${sim ? ' — em simulação (APLICAR=0), nada saiu de verdade' : ''}${falhas.length ? `; ${falhas.length} não: ${falhas[0].motivo}` : ''}.`, falhas.length ? 'crit' : 'ok'); onDone() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
-  return <div className="modal-scrim" onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
     <div><div className="small muted cond">QuickBooks · lembretes</div><h2 className="h1" style={{ fontSize: 22 }}>Lembrete de {abertas.length} invoice(s) em aberto</h2>
       <div className="small ink2">{abertas.map(i => `${i.doc_number || '#' + i.id}${i.pilot_name || i.client_name ? ` (${i.pilot_name || i.client_name})` : ''}`).join(' · ')} — {money(total)} em aberto.{invoices.length > abertas.length && <> <b>{invoices.length - abertas.length}</b> ficaram de fora por já estarem pagas.</>}</div></div>
@@ -619,7 +619,7 @@ export function LembreteModal({ invoices, onClose, onDone }: { invoices: Invoice
     <label className="check"><input type="checkbox" checked={on} onChange={e => setOn(e.target.checked)} /> lembrete ligado {on ? '— começa hoje, às 09:00 (ou amanhã, se já passou)' : '— fica guardado, não envia'}</label>
     <div className="small muted">Cada envio é o reenvio da invoice pelo QuickBooks, para o e-mail de cobrança. Invoice paga desliga o lembrete sozinha. Tudo fica na auditoria.</div>
     <div className="row wrap" style={{ justifyContent: 'flex-end' }}><button className="btn quiet" disabled={!!busy || abertas.length === 0} onClick={agora} title="Manda o lembrete agora, sem esperar as 09:00">{busy === 'now' ? <Spinner /> : 'Enviar agora ↗'}</button><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={!!busy || abertas.length === 0} onClick={salvar}>{busy === 'save' ? <Spinner /> : 'Salvar'}</button></div>
-  </div></div>
+  </div></Scrim>
 }
 
 export function QuickBooksPage() {
