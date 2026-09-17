@@ -677,6 +677,12 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
     if conta.get("subdomain") and dominio and not dominio.startswith(str(conta["subdomain"]).lower()):
         raise HTTPException(403, "Conta do Kommo diferente.")
 
+    if isinstance(corpo.get("message"), dict):               # amostra crua da última mensagem, para diagnóstico (17/09)
+        try:
+            from command_center.api.sistema import _dir
+            (_dir() / "kommo-webhook-ultimo.json").write_text(json.dumps({k: v for k, v in corpo.items() if k != "account"}, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception:
+            pass
     msgs = _mensagens_do_webhook_kommo(corpo)
     if not msgs:                                              # formato simples
         ext = str(corpo.get("lead_id") or corpo.get("entity_id") or "").strip()

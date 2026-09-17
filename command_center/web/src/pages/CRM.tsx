@@ -64,11 +64,21 @@ const CAMPO_OCULTO = /email|e-mail|phone|telefone|whats|^im$|instagram|facebook|
 const nomeDo = (l: Lead) => l.contact_name || l.name || `Lead ${l.external_id}`
 
 // ------------------------------------------------------------------ conversa (o chat)
+/** Chip do canal que abre o perfil (Instagram, Facebook…) quando o retrato do Kommo trouxe o link. */
+function ChipCanal({ source, perfis }: { source: string | null; perfis?: Perfil[] }) {
+  if (!source) return null
+  const t = source.toLowerCase()
+  const p = (perfis || []).find(x => x.rede.toLowerCase() === t || (t.includes('face') && x.rede === 'Facebook') || (t.includes('insta') && x.rede === 'Instagram'))
+  const chip = <Chip tone={origemTone(source)} title={p ? `abrir ${p.rotulo}` : 'o Kommo ainda não entregou o link do perfil'}>{iconeDaOrigem(source)} {source}{p ? ' ↗' : ''}</Chip>
+  return p ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>{chip}</a> : chip
+}
+
 function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado: boolean; onChange: () => void; onDados?: () => void }) {
   const { can } = useAuth()
   const toast = useToast()
   const perguntar = usePerguntar()
   const d = useGet<LeadDetalhe>(`/crm/leads/${id}`, 15000)
+  const det = useGet<DetalheResp>(`/crm/leads/${id}/detail`, 120000)
   const funis = useGet<FunilVivo[]>(conectado ? '/crm/stages' : null)
   const [texto, setTexto] = useState('')
   const [nota, setNota] = useState('')
@@ -127,7 +137,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
         <div className="row wrap" style={{ gap: 8 }}>
           <button className={`star${l.starred ? ' on' : ''}`} onClick={estrelaLead} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar conversa'} title={l.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={18} /></button>
           <b style={{ fontSize: 16 }}>{nomeDo(l)}</b>
-          {l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}
+          <ChipCanal source={l.source} perfis={det.data?.detalhe?.perfis} />
           {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
           {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> Dados do lead</button>}
         </div>
