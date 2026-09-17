@@ -98,6 +98,11 @@ export function Clients() {
   const { data, error, loading, reload } = useGet<Client[]>('/clients' + qs({ q: sp.get('q'), status, vip: vip === '' ? undefined : vip === '1', pro: aba === 'pro' ? true : undefined }))
   const set = (k: string, v: string) => { const n = new URLSearchParams(sp); if (v) n.set(k, v); else n.delete(k); setSp(n) }
   const open = (id: number | null) => { const n = new URLSearchParams(sp); if (id) n.set('open', String(id)); else n.delete('open'); setSp(n) }
+  useEffect(() => {
+    if (!openId) return
+    const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.modal.ask, .lpick-menu, details.more[open]')) open(null) }
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k)
+  }, [openId]) // eslint-disable-line react-hooks/exhaustive-deps
   const rows = data || []                                       // ordem do servidor: serviço mais recente primeiro
   const ativos = rows.filter(c => c.status === 'ACTIVE').length
   async function scanAll() {
@@ -163,7 +168,7 @@ export function Clients() {
     {novo && <NovoCliente onClose={() => setNovo(false)} onCreated={id => { reload(); open(id) }} />}
     {openId && <div className="modal-scrim" onMouseDown={() => open(null)}>
       <div className="modal" onMouseDown={e => e.stopPropagation()} role="dialog" aria-label="Card do cliente">
-        <button className="btn ghost sm close" onClick={() => open(null)} aria-label="Fechar">✕ fechar</button>
+        <button className="btn ghost sm close" onClick={() => open(null)} aria-label="Fechar" title="Fechar (Esc)">✕</button>
         <ClientCard id={openId} onClose={() => open(null)} />
       </div>
     </div>}
