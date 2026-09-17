@@ -447,6 +447,50 @@ def responder(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("
                       "vira nota no lead e fica marcada aqui como não entregue.")}
 
 
+@r.get("/leads/{lid}/avatar")
+def avatar(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Foto do perfil que o Kommo manda no webhook. A URL (amojo.kommo.com) não é pública: o servidor
+    busca com o token da conta e guarda em cache (~/.urace/avatars). Sem foto → 404 (o painel mostra iniciais)."""
+    import hashlib
+    import urllib.request
+    from fastapi.responses import Response
+    from command_center.api.sistema import _dir
+    l = _lead(con, lid)
+    url = l.get("contact_avatar")
+    if not url or not str(url).startswith("https://"):
+        raise HTTPException(404, "sem foto")
+    pasta = _dir() / "avatars"
+    pasta.mkdir(parents=True, exist_ok=True)
+    chave = hashlib.sha1(url.encode()).hexdigest()[:20]
+    for ext, mt in (("jpg", "image/jpeg"), ("png", "image/png"), ("webp", "image/webp")):
+        f = pasta / f"{lid}-{chave}.{ext}"
+        if f.exists():
+            return Response(f.read_bytes(), media_type=mt, headers={"Cache-Control": "private, max-age=86400"})
+    token = os.environ.get("KOMMO_TOKEN") or ""
+    if not token:
+        try:
+            modulo(SISTEMA); token = os.environ.get("KOMMO_TOKEN") or ""
+        except Exception:
+            token = ""
+    dados, mt = None, None
+    for headers in ({"Authorization": f"Bearer {token}", "User-Agent": "urace-command-center"}, {"User-Agent": "urace-command-center"}):
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                ct = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                corpo = resp.read(3_000_000)
+                if ct.startswith("image/") and corpo:
+                    dados, mt = corpo, ct
+                    break
+        except Exception:
+            continue
+    if not dados:
+        raise HTTPException(404, "foto indisponível")
+    ext = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}.get(mt, "jpg")
+    (pasta / f"{lid}-{chave}.{ext}").write_bytes(dados)
+    return Response(dados, media_type=mt, headers={"Cache-Control": "private, max-age=86400"})
+
+
 class EstrelaIn(BaseModel):
     starred: bool = True
 

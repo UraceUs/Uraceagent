@@ -780,3 +780,31 @@ def test_perfil_informado_no_painel_e_foto_do_webhook(cli, chat, monkeypatch):
     r = cli.post(f"{B}/crm/leads/{lid}/profiles", json={"facebook": ""}, headers=h)
     assert "facebook" not in r.json()["profiles"]
     assert cli.post(f"{B}/crm/leads/{lid}/profiles", json={"instagram": "x"}).status_code in (401, 403)
+
+
+def test_foto_do_lead_vem_pelo_servidor_e_fica_em_cache(cli, chat, monkeypatch, tmp_path):
+    import urllib.request
+    from command_center.api import crm as _crm
+    monkeypatch.setenv("URACE_DIR", str(tmp_path))
+    h = entra(cli, "admin@urace.us")
+    cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    lid = _lid("5001")
+    assert cli.get(f"{B}/crm/leads/{lid}/avatar", headers=h).status_code == 404       # sem foto
+    con = conectar()
+    try:
+        con.execute("UPDATE crm_leads SET contact_avatar='https://amojo.kommo.com/attachments/profiles/x/f.jpg' WHERE id=?", (lid,)); con.commit()
+    finally:
+        con.close()
+    chamadas = []
+    class R:
+        headers = {"Content-Type": "image/jpeg"}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self, n=None): return b"\\xff\\xd8imagem"
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=10: chamadas.append(req.get_header("Authorization")) or R())
+    r = cli.get(f"{B}/crm/leads/{lid}/avatar", headers=h)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("image/jpeg") and r.content.startswith(b"\\xff\\xd8")
+    assert chamadas and chamadas[0] and chamadas[0].startswith("Bearer ")
+    r2 = cli.get(f"{B}/crm/leads/{lid}/avatar", headers=h)                            # segunda vez: cache, sem chamada
+    assert r2.status_code == 200 and len(chamadas) == 1
+    assert (tmp_path / "avatars").exists() and _crm is not None
