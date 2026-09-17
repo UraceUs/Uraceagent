@@ -85,17 +85,32 @@ def test_comando_roda_e_propoe_acoes_com_politica(cli):
     con.close()
 
 
-def test_aprovacao_exige_manager_e_e_auditada(cli):
-    entra(cli, "op@urace.us")
-    acao = [a for a in cli.get(B + "/actions?status=PROPOSED").json() if a["policy"] == "REQUIRES_APPROVAL"][0]
-    h = {"X-CSRF": cli.cookies.get("cc_csrf")}
-    assert cli.post(f"{B}/actions/{acao['id']}/approve", headers=h, json={}).status_code == 403   # OPERATOR não aprova
-    h = entra(cli, "admin@urace.us")
+def test_operador_aprova_no_modulo_dele_e_o_financeiro_e_do_gerente(cli):
+    """Dono, 17/09: "o operador aprova o que a IA propõe, nos módulos de acesso que ele tem".
+    Waiver (DocuSign) é módulo dele; invoice e QuickBooks continuam do gerente/administrador."""
+    from command_center.db import inserir
+    con = conectar()
+    invoice = inserir(con, "ai_actions", action="qbo_criar_e_enviar_invoice", system="qbo",
+                      policy="REQUIRES_APPROVAL", status="PROPOSED", payload="{}", reason="teste")
+    con.close()
+    h = entra(cli, "op@urace.us")
+    # o painel já diz, em cada proposta, quem pode decidir
+    fila = {a["id"]: a for a in cli.get(B + "/actions?status=PROPOSED").json()}
+    assert fila[invoice]["can_decide"] is False and "gerente" in fila[invoice]["decide_note"]
+    assert cli.post(f"{B}/actions/{invoice}/approve", headers=h, json={}).status_code == 403
+    assert cli.post(f"{B}/actions/{invoice}/reject", headers=h, json={}).status_code == 403
+
+    acao = [a for a in fila.values() if a["policy"] == "REQUIRES_APPROVAL" and a["system"] == "docusign"][0]
+    assert acao["can_decide"] is True and acao["decide_note"] is None
     r = cli.post(f"{B}/actions/{acao['id']}/approve", headers=h, json={"comment": "ok, manda"})
     assert r.status_code == 200 and r.json()["status"] == "APPROVED"
     assert cli.post(f"{B}/actions/{acao['id']}/approve", headers=h, json={}).status_code == 409   # já decidida
     ev = [e["event"] for e in cli.get(B + "/activity").json()]
     assert "action.approved" in ev and "ai.command.done" in ev and "ai.command" in ev
+    # o gerente decide a invoice sem discussão
+    h = entra(cli, "admin@urace.us")
+    assert cli.get(B + f"/actions/{invoice}").json()["can_decide"] is True
+    assert cli.post(f"{B}/actions/{invoice}/reject", headers=h, json={"comment": "valor errado"}).status_code == 200
 
 
 def test_operador_pode_rejeitar(cli):

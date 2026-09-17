@@ -104,6 +104,8 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
     }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
+  // servidor manda; enquanto ele não responder (lista antiga em cache), vale o papel
+  const decide_ok = a.can_decide ?? can('MANAGER')
   const envia = a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver' || a.action === 'docusign_reenviar_waiver' || a.action === 'qbo_lembrete_invoice'
   const cls = a.status === 'PROPOSED' ? 'wait' : a.status === 'DONE' ? 'done' : a.status === 'FAILED' || a.status === 'REJECTED' || a.policy === 'BLOCKED' ? 'fail' : ''
   return <div className={`act ${cls}`}>
@@ -117,9 +119,12 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
       <div className="small muted" style={{ marginTop: 4 }}>{fmtDateTime(a.created_at)}</div>
     </div>
     {a.status === 'PROPOSED' && a.policy !== 'BLOCKED' && <div className="decide">
-      {can('MANAGER') && <button className="btn primary" disabled={!!busy || incompleta} title={incompleta ? 'Proposta incompleta: peça à IA os dados que faltam' : ''} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : envia ? 'Aprovar e enviar ↗' : 'Aprovar'}</button>}
+      {/* quem decide vem do servidor: o operador decide nos módulos dele; invoice e QuickBooks
+          continuam com o gerente ou o administrador (dono, 17/09) */}
+      {decide_ok && <button className="btn primary" disabled={!!busy || incompleta} title={incompleta ? 'Proposta incompleta: peça à IA os dados que faltam' : ''} onClick={() => decide('approve')}>{busy === 'a' ? <span className="spin" /> : envia ? 'Aprovar e enviar ↗' : 'Aprovar'}</button>}
+      {!decide_ok && a.decide_note && <span className="small muted" style={{ maxWidth: 210 }}>{a.decide_note}</span>}
       {can('OPERATOR') && incompleta && <button className="btn sm" disabled={!!busy} title="O painel acha ou cria o item, resolve o cliente e completa a proposta" onClick={async () => { setBusy('a'); try { const r = await api.post<{ ok: boolean; problemas: string[]; notas: string[] }>(`/ai/actions/${a.id}/complete`); toast(r.ok ? `Completada.${r.notas.length ? ' ' + r.notas.join(' ') : ''} Agora dá para aprovar.` : `Ainda falta: ${r.problemas.join('; ')}`, r.ok ? 'ok' : 'crit'); onChange?.() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) } }}>{busy === 'a' ? <span className="spin" /> : '⚙ Completar agora'}</button>}
-      {can('OPERATOR') && <button className="btn quiet" disabled={!!busy} onClick={() => decide('reject')}>{busy === 'r' ? <span className="spin" /> : 'Rejeitar'}</button>}
+      {decide_ok && <button className="btn quiet" disabled={!!busy} onClick={() => decide('reject')}>{busy === 'r' ? <span className="spin" /> : 'Rejeitar'}</button>}
     </div>}
     {a.policy === 'BLOCKED' && <Chip tone="crit">bloqueada por política</Chip>}
   </div>
@@ -252,7 +257,7 @@ export function Approvals() {
   const items = (data || []).filter(a => a.policy !== 'BLOCKED')
   const blocked = (data || []).filter(a => a.policy === 'BLOCKED')
   return <>
-    <PageHeader title="Aprovações" help="Ações que a IA propôs e que exigem decisão humana. Aprovar executa na hora; o que sai da empresa (invoice, waiver) está marcado com ↗."><button className="btn" onClick={reload}>↻</button></PageHeader>
+    <PageHeader title="Aprovações" help="Ações que a IA propôs e que exigem decisão humana. Aprovar executa na hora; o que sai da empresa (invoice, waiver) está marcado com ↗. Cada pessoa decide nos módulos que alcança — invoice e QuickBooks ficam com o gerente ou o administrador."><button className="btn" onClick={reload}>↻</button></PageHeader>
     {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : <>
       <Section title="Pendentes" count={items.length}>{items.length === 0 ? <Empty title="Fila vazia">Nada esperando aprovação.</Empty> : <div className="acts">{items.map(a => <ActionCard key={a.id} a={a} onChange={reload} />)}</div>}</Section>
       {blocked.length > 0 && <Section title="Bloqueadas por política" count={blocked.length}><div className="acts">{blocked.map(a => <ActionCard key={a.id} a={a} />)}</div></Section>}

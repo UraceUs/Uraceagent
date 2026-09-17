@@ -187,9 +187,9 @@ interface U { id: number; email: string; name: string; role: string; active: num
 const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', CLOSER: 'Vendas (closer)', VIEWER: 'Leitura' }
 const ROLE_O_QUE: Record<string, string> = {
   ADMIN: 'tudo, inclusive usuários, políticas da IA e integrações',
-  MANAGER: 'tudo do operador + financeiro e auditoria',
-  OPERATOR: 'o dia a dia: clientes, serviços, waivers, e-mails, IA',
-  CLOSER: 'só vendas: oportunidades, agenda, chat e a IA da venda',
+  MANAGER: 'tudo do operador + financeiro (QuickBooks e invoices) e auditoria',
+  OPERATOR: 'o dia a dia: clientes, serviços, waivers, e-mails, chat e IA — e aprova o que a IA propõe nesses módulos (invoice e QuickBooks ficam com o gerente)',
+  CLOSER: 'só vendas: oportunidades, agenda, chat e a IA da venda — confirma o que a IA propõe na venda dele, menos invoice',
   VIEWER: 'só leitura',
 }
 

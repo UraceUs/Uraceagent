@@ -79,6 +79,7 @@ export function Shell() {
           <NL to="/crm/chat" icon="chat">Chat {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NL>
           <div className="grp">Inteligência</div>
           <NL to="/ai" end icon="spark">Falar com a IA</NL>
+          <NL to="/approvals" icon="seal">Esperando você {pend > 0 && <span className="n warn">{pend}</span>}</NL>
           <NL to="/activity" icon="activity">O que a IA fez</NL>
         </> : <>
         <div className="grp">Hoje</div>

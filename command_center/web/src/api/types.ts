@@ -110,6 +110,8 @@ export interface AiAction {
   status: 'PROPOSED' | 'APPROVED' | 'REJECTED' | 'RUNNING' | 'DONE' | 'FAILED' | 'BLOCKED'
   payload: string | null; result: string | null; reason: string | null
   created_at: string; finished_at: string | null
+  /** o servidor diz se ESTA pessoa pode decidir esta proposta (e, se não, por quê) */
+  can_decide?: boolean; decide_note?: string | null
 }
 
 export interface AuditRow {

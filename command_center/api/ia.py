@@ -471,7 +471,7 @@ def thread(user_id: int | None = None, kind: str = "chat", before: int | None = 
     mais = len(rows) > limit
     rows = list(reversed(rows[:limit]))
     for c in rows:
-        c["actions"] = todos(con, "SELECT * FROM ai_actions WHERE command_id=? ORDER BY id", (c["id"],))
+        c["actions"] = marcar_decisao(con, u, todos(con, "SELECT * FROM ai_actions WHERE command_id=? ORDER BY id", (c["id"],)))
     return {"commands": rows, "has_more": mais}
 
 
@@ -480,15 +480,19 @@ def command_get(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection
     c = um(con, "SELECT * FROM ai_commands WHERE id=?", (cid,))
     if not c or (c["user_id"] != u["id"] and not auth.pode(u["role"], "MANAGER")):
         raise HTTPException(404, "Command not found.")
-    c["actions"] = todos(con, "SELECT * FROM ai_actions WHERE command_id=? ORDER BY id", (cid,))
+    c["actions"] = marcar_decisao(con, u, todos(con, "SELECT * FROM ai_actions WHERE command_id=? ORDER BY id", (cid,)))
     return c
 
 
 @r.get("/actions")
 def actions(status: str | None = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     if status:
-        return todos(con, "SELECT * FROM ai_actions WHERE status=? ORDER BY id DESC LIMIT 200", (status.upper(),))
-    return todos(con, "SELECT * FROM ai_actions ORDER BY id DESC LIMIT 200")
+        lista = todos(con, "SELECT * FROM ai_actions WHERE status=? ORDER BY id DESC LIMIT 200", (status.upper(),))
+    else:
+        lista = todos(con, "SELECT * FROM ai_actions ORDER BY id DESC LIMIT 200")
+    if u["role"] == "CLOSER":                     # closer só vê a fila da área dele
+        lista = [a for a in lista if a["action"].startswith("venda_")]
+    return marcar_decisao(con, u, lista)
 
 
 @r.get("/actions/{aid}")
@@ -496,7 +500,7 @@ def action_get(aid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     a = um(con, "SELECT * FROM ai_actions WHERE id=?", (aid,))
     if not a:
         raise HTTPException(404, "Action not found.")
-    return a
+    return marcar_decisao(con, u, [a])[0]
 
 
 @r.post("/actions/{aid}/complete")
@@ -527,6 +531,58 @@ class DecisaoIn(BaseModel):
     comment: str | None = None
 
 
+# Quem decide o que a IA propõe (dono, 17/09): "o operador aprova o que a IA propõe, nos
+# módulos de acesso que ele tem". Financeiro (QuickBooks e invoice) continua sendo do gerente
+# ou do administrador — é dinheiro saindo. Closer decide só na venda dele, e nunca a invoice.
+SISTEMAS_FINANCEIROS = ("qbo", "quickbooks", "invoices")
+
+
+def _financeira(a):
+    return (a["system"] or "").lower() in SISTEMAS_FINANCEIROS \
+        or a["action"].startswith(("qbo_", "quickbooks_")) \
+        or a["action"].endswith("enviar_invoice") \
+        or a["action"] == "qbo_lembrete_invoice"
+
+
+def pode_decidir(con, u, a):
+    """(pode, motivo): quem pode aprovar ou recusar esta proposta da IA."""
+    if u.get("free") or auth.pode(u["role"], "MANAGER"):
+        return True, None
+    if not auth.pode(u["role"], "OPERATOR") and u["role"] != "CLOSER":
+        return False, "Seu acesso é de leitura."
+    if _financeira(a):
+        return False, "Invoice e QuickBooks são decisão do gerente ou do administrador."
+    if u["role"] != "CLOSER":
+        return True, None
+    # closer: só as ações da área dele, e só na oportunidade dele
+    if not a["action"].startswith("venda_"):
+        return False, "Esta proposta não é da área de vendas."
+    try:
+        args = (json.loads(a["payload"] or "{}") or {}).get("args") or {}
+    except ValueError:
+        args = {}
+    oid = args.get("opp_id")
+    if not oid:
+        return False, "Não consigo dizer de qual oportunidade é esta proposta."
+    o = um(con, "SELECT closer_user_id FROM opportunities WHERE id=?", (int(oid),))
+    if not o:
+        return False, "A oportunidade desta proposta não existe mais."
+    if o["closer_user_id"] not in (None, u["id"]):
+        return False, "Esta oportunidade é de outro closer."
+    return True, None
+
+
+def marcar_decisao(con, u, acoes_):
+    """Anexa a cada ação se ESTA pessoa pode decidir — o painel usa para mostrar o botão certo."""
+    for a in acoes_:
+        if a.get("status") == "PROPOSED" and a.get("policy") != "BLOCKED":
+            pode, motivo = pode_decidir(con, u, a)
+            a["can_decide"], a["decide_note"] = pode, motivo
+        else:
+            a["can_decide"], a["decide_note"] = False, None
+    return acoes_
+
+
 def _decide(con, aid, u, decisao, comentario, ip):
     a = um(con, "SELECT * FROM ai_actions WHERE id=?", (aid,))
     if not a:
@@ -535,6 +591,9 @@ def _decide(con, aid, u, decisao, comentario, ip):
         raise HTTPException(403, "This action is blocked by policy and cannot be approved.")
     if a["status"] != "PROPOSED":
         raise HTTPException(409, f"Action is already {a['status']}.")
+    pode, motivo = pode_decidir(con, u, a)
+    if not pode:
+        raise HTTPException(403, motivo or "You don't have permission to do this.")
     ap = um(con, "SELECT id FROM approvals WHERE action_id=? AND decided_at IS NULL", (aid,))
     if ap:
         con.execute("UPDATE approvals SET decided_at=?, decided_by=?, decision=?, comment=? WHERE id=?",
@@ -553,7 +612,7 @@ def _decide(con, aid, u, decisao, comentario, ip):
 
 
 @r.post("/actions/{aid}/approve")
-def action_approve(aid: int, dados: DecisaoIn, request: Request, u=Depends(auth.exige("MANAGER")),
+def action_approve(aid: int, dados: DecisaoIn, request: Request, u=Depends(auth.exige("OPERATOR")),
                    con: sqlite3.Connection = Depends(get_db)):
     return _decide(con, aid, u, "APPROVED", dados.comment, auth._ip(request))
 
