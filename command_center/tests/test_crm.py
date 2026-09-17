@@ -718,3 +718,14 @@ def test_webhook_de_conta_do_kommo_traz_o_texto_e_some_com_a_marca(cli, chat, mo
     # a URL do webhook aparece na configuração
     s = cli.get(f"{B}/crm/setup", headers=h).json()
     assert s["webhook_url"].endswith(f"/ops/api/crm/webhook?key={chave}") and s["ultimo_webhook"]
+
+
+def test_webhook_marcado_como_all_nunca_devolve_erro(cli, chat):
+    """Aviso de lead/contato/nota do webhook "All": 200 sempre, lead conhecido é relido; nada inventado."""
+    from urllib.parse import urlencode
+    cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    corpo = {"account[subdomain]": "urace", "leads[status][0][id]": "5001", "leads[status][0][status_id]": "2", "leads[status][0][pipeline_id]": "9"}
+    r = cli.post(f"{B}/crm/webhook?key=chave-do-hook", content=urlencode(corpo), headers={"content-type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 200 and r.json()["leads_relidos"] == 1 and "leads" in r.json()["ignorado"]
+    r2 = cli.post(f"{B}/crm/webhook?key=chave-do-hook", content=urlencode({"account[subdomain]": "urace", "contacts[update][0][id]": "77"}), headers={"content-type": "application/x-www-form-urlencoded"})
+    assert r2.status_code == 200 and r2.json()["leads_relidos"] == 0

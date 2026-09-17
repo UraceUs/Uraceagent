@@ -657,10 +657,18 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
     if not msgs:                                              # formato simples
         ext = str(corpo.get("lead_id") or corpo.get("entity_id") or "").strip()
         if not ext:
-            # talk[add]/[update] sem mensagem: só um sinal; nada a guardar
-            if isinstance(corpo.get("talk"), dict):
-                return {"ok": True, "talks": True}
-            raise HTTPException(400, "sem lead_id")
+            # Webhook marcado como "All": leads/contacts/notes/talks… Nunca devolve erro (o Kommo
+            # desliga o webhook depois de falhas seguidas). Lead que mudou é relido em segundo plano.
+            tocados = []
+            for chave in ("add", "update", "status", "responsible", "restore"):
+                for it in _lista_php((corpo.get("leads") or {}).get(chave) if isinstance(corpo.get("leads"), dict) else None):
+                    if it.get("id"):
+                        tocados.append(str(it["id"]))
+            for ext2 in tocados[:20]:
+                l2 = um(con, "SELECT id FROM crm_leads WHERE external_id=?", (ext2,))
+                if l2:
+                    background.add_task(_enriquecer_lead, l2["id"], ext2)
+            return {"ok": True, "ignorado": [k for k in corpo.keys() if k != "account"], "leads_relidos": len(tocados)}
         msgs = [{"id": str(corpo.get("message_id") or ""), "lead_id": ext, "contato_id": None, "talk_id": None,
                  "texto": str(corpo.get("text") or corpo.get("message") or "").strip(), "direcao": "entrada",
                  "autor": corpo.get("author") or corpo.get("name"), "origem": corpo.get("source"), "criado_em": None, "anexo": None,
