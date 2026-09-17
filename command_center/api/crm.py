@@ -387,6 +387,29 @@ def responder(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("
                       "vira nota no lead e fica marcada aqui como não entregue.")}
 
 
+class EstrelaIn(BaseModel):
+    starred: bool = True
+
+
+@r.post("/leads/{lid}/star")
+def estrela_lead(lid: int, dados: EstrelaIn, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Favoritar a conversa (estrela na lista). Marca do painel; não vai para o Kommo."""
+    _lead(con, lid)
+    atualizar(con, "crm_leads", lid, starred=1 if dados.starred else 0)
+    con.commit()
+    return {"ok": True, "starred": bool(dados.starred)}
+
+
+@r.post("/messages/{mid}/star")
+def estrela_mensagem(mid: int, dados: EstrelaIn, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Favoritar uma mensagem dentro da conversa."""
+    if not um(con, "SELECT 1 AS x FROM crm_messages WHERE id=?", (mid,)):
+        raise HTTPException(404, "Message not found.")
+    atualizar(con, "crm_messages", mid, starred=1 if dados.starred else 0)
+    con.commit()
+    return {"ok": True, "starred": bool(dados.starred)}
+
+
 class VinculoIn(BaseModel):
     client_id: int | None = None
 
@@ -524,8 +547,8 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
 
 @r.get("/inbox")
 def inbox(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    """As conversas, como uma caixa de entrada: quem falou por último primeiro,
-    quem espera resposta no topo."""
+    """As conversas, como uma caixa de entrada: a mensagem mais recente sempre no topo
+    (pedido do dono, 17/09); quem espera resposta é marcado, não reordenado."""
     varrer_fila(con); con.commit()
     leads = todos(con, """SELECT c.*, cl.name AS client_name, cl.pilot_name AS client_pilot,
                                  (SELECT text FROM crm_messages m WHERE m.lead_id=c.id AND m.direction IN ('entrada','saida')
@@ -535,7 +558,8 @@ def inbox(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_d
                           FROM crm_leads c LEFT JOIN clients cl ON cl.id=c.client_id
                           WHERE c.last_message_at IS NOT NULL OR c.last_hook_at IS NOT NULL
                              OR EXISTS (SELECT 1 FROM crm_messages m WHERE m.lead_id=c.id AND m.direction IN ('entrada','saida'))
-                          ORDER BY c.needs_reply DESC, COALESCE(c.last_message_at, c.updated_at_src, c.synced_at) DESC
+                          ORDER BY COALESCE((SELECT MAX(m.at) FROM crm_messages m WHERE m.lead_id=c.id AND m.direction IN ('entrada','saida')),
+                                            c.last_message_at, c.updated_at_src, c.synced_at) DESC
                           LIMIT 300""")
     for l in leads:
         l["tags"] = json.loads(l["tags"] or "[]")

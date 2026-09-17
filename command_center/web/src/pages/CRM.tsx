@@ -24,12 +24,12 @@ export interface Lead {
   link: string | null; created_at_src: string | null; updated_at_src: string | null
   last_message_at: string | null; needs_reply: number; last_hook_at?: string | null
   client_name?: string | null; client_pilot?: string | null
-  snippet?: string | null; msgs?: number; falhas?: number
+  snippet?: string | null; msgs?: number; falhas?: number; starred?: number | null
 }
 interface Etapa { id: string; nome: string; ordem: number; leads: Lead[] }
 interface Funil { id: string; nome: string; etapas: Etapa[] }
 interface Board { funis: Funil[]; total: number; pendentes: number; integracao: { status?: string; last_success_at?: string | null; last_error?: string | null } }
-interface Mensagem { id: number; direction: string; author: string | null; text: string | null; at: string | null; source: string | null; status?: string | null; error?: string | null }
+interface Mensagem { id: number; direction: string; author: string | null; text: string | null; at: string | null; source: string | null; status?: string | null; error?: string | null; starred?: number | null }
 interface LeadDetalhe { lead: Lead; mensagens: Mensagem[]; aviso: string | null; responder_habilitado: boolean; chat_ligado: boolean }
 interface EtapaViva { id: string; nome: string; ordem: number }
 interface FunilVivo { id: string; nome: string; etapas: EtapaViva[] }
@@ -73,6 +73,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
   const [texto, setTexto] = useState('')
   const [nota, setNota] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [soFav, setSoFav] = useState(false)
   const fim = useRef<HTMLDivElement | null>(null)
   const l = d.data?.lead
   const etapas = useMemo(() => funis.data?.find(f => f.id === (l?.pipeline_id || ''))?.etapas || [], [funis.data, l?.pipeline_id])
@@ -97,6 +98,12 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     try { await api.post(`/crm/leads/${id}/note`, { text: nota }); setNota(''); toast('Anotação guardada no lead (não vai para o cliente).', 'ok'); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
+  async function estrelaMsg(m: Mensagem) {
+    try { await api.post(`/crm/messages/${m.id}/star`, { starred: !m.starred }); d.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function estrelaLead() {
+    try { await api.post(`/crm/leads/${id}/star`, { starred: !l?.starred }); d.reload(); onChange() } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
   async function responder() {
     const t = texto.trim()
     if (!t || busy) return                      // Ctrl+Enter durante o envio não manda duas vezes
@@ -118,6 +125,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     <div className="toolbar">
       <div className="grow" style={{ minWidth: 0 }}>
         <div className="row wrap" style={{ gap: 8 }}>
+          <button className={`star${l.starred ? ' on' : ''}`} onClick={estrelaLead} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar conversa'} title={l.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={18} /></button>
           <b style={{ fontSize: 16 }}>{nomeDo(l)}</b>
           {l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}
           {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
@@ -138,12 +146,14 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
         </select>
         {l.tags.map(t => <span key={t} className="lchip">{t}</span>)}
         {can('OPERATOR') && <button className="btn ghost sm" disabled={busy === 't'} onClick={marcar}>{busy === 't' ? <Spinner /> : '+ tag'}</button>}
+        <button className={`btn ghost sm${soFav ? ' on' : ''}`} onClick={() => setSoFav(v => !v)} title="Só as mensagens favoritas"><Icon name="star" size={14} /> {soFav ? 'todas' : 'favoritas'}</button>
       </div>
     </div>
     {d.data?.aviso && <Banner tone="warn">{d.data.aviso}</Banner>}
     <div className="chat" style={{ flex: 1 }}>
       {msgs.length === 0 && <Empty title="Sem mensagens guardadas">O que o lead escreveu antes do chat ser ligado fica só no Kommo. A partir de agora, cada mensagem entra aqui na hora.</Empty>}
-      {msgs.map(m => {
+      {soFav && !msgs.some(m => m.starred) && <Empty title="Nenhuma mensagem favorita">Passe o mouse numa mensagem e clique na estrela.</Empty>}
+      {msgs.filter(m => !soFav || m.starred).map(m => {
         const d0 = m.at ? fmtDate(m.at) : ''
         const sep = d0 && d0 !== dia
         if (d0) dia = d0
@@ -160,7 +170,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
                   {m.direction === 'saida' && m.status === 'sent' && <Chip tone="ok">entregue</Chip>}
                   {m.direction === 'saida' && m.status === 'failed' && <Chip tone="crit">não entregue</Chip>}
                 </div>
-                <div className="bub">{m.text}</div>
+                <div className="bub-row"><div className="bub">{m.text}</div><button className={`star sm${m.starred ? ' on' : ''}`} onClick={() => estrelaMsg(m)} aria-label={m.starred ? 'Tirar favorita' : 'Favoritar mensagem'} title={m.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={14} /></button></div>
                 {m.status === 'failed' && m.error && <div className="small" style={{ color: 'var(--crit)' }}>{m.error}</div>}
               </div>}
         </Fragment>
@@ -170,7 +180,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     {can('OPERATOR') && <div className="stack" style={{ gap: 8 }}>
       {!d.data?.chat_ligado && <Banner tone="warn">{d.data?.responder_habilitado ? 'O bot ainda está esperando esta conversa: dá para responder agora.' : 'O chat ainda não está ligado no Kommo (Salesbot + KOMMO_BOT_ID). Até lá, responda pelo Kommo; a anotação abaixo funciona.'}</Banner>}
       <div className="field"><label>Responder no chat do lead {l.source ? `(${l.source})` : ''}</label>
-        <textarea className="input" rows={3} value={texto} placeholder="Escreva a resposta… (Ctrl+Enter envia)" onChange={e => setTexto(e.target.value)} disabled={!d.data?.responder_habilitado} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) responder() }} />
+        <textarea className="input" rows={3} value={texto} placeholder="Escreva a resposta… Enter envia, Shift+Enter quebra a linha" onChange={e => setTexto(e.target.value)} disabled={!d.data?.responder_habilitado} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); responder() } }} />
         <div className="row wrap"><button className="btn primary sm" disabled={busy === 'r' || !texto.trim() || !d.data?.responder_habilitado} onClick={responder}>{busy === 'r' ? <Spinner /> : 'Enviar no chat'}</button><span className="small muted">Sai pelo bot da conta no canal do lead, com o seu texto.</span></div></div>
       <details><summary className="small">Anotação interna (não vai para o cliente)</summary>
         <div className="field" style={{ marginTop: 6 }}><textarea className="input" rows={2} value={nota} onChange={e => setNota(e.target.value)} />
@@ -267,17 +277,25 @@ function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
   const aberto = Number(sp.get('lead')) || null
   const [filtro, setFiltro] = useState('')
   const [dados, setDados] = useState(false)
+  const [vista, setVista] = useState<'todas' | 'esperando' | 'fav'>('todas')
   const leadAberto = (inbox.data?.conversas || []).find(l => l.id === aberto) || null
   const lista = (inbox.data?.conversas || []).filter(l => !filtro || `${nomeDo(l)} ${l.contact_phone || ''} ${l.contact_email || ''} ${l.source || ''}`.toLowerCase().includes(filtro.toLowerCase()))
+    .filter(l => vista === 'todas' || (vista === 'esperando' ? !!l.needs_reply : !!l.starred))
+  const toast2 = useToast()
+  async function estrela(l: Lead, e: React.MouseEvent) {
+    e.stopPropagation()
+    try { await api.post(`/crm/leads/${l.id}/star`, { starred: !l.starred }); inbox.reload() } catch (err) { toast2((err as ApiError).message, 'crit') }
+  }
   if (inbox.loading && !inbox.data) return <Loading rows={6} />
   if (inbox.error) return <ErrorState error={inbox.error} retry={inbox.reload} />
   return <div className={`mail inbox${aberto ? ' com-dados' : ''}`}>
     <div className="list">
-      <div style={{ padding: 8, borderBottom: '1px solid var(--rule)' }}><input className="input" placeholder="Buscar conversa…" value={filtro} onChange={e => setFiltro(e.target.value)} /></div>
+      <div style={{ padding: 8, borderBottom: '1px solid var(--rule)' }} className="stack"><input className="input" placeholder="Buscar conversa…" value={filtro} onChange={e => setFiltro(e.target.value)} />
+        <div className="tabs" style={{ alignSelf: 'stretch' }}><button className={vista === 'todas' ? 'on' : ''} onClick={() => setVista('todas')}>Todas</button><button className={vista === 'esperando' ? 'on' : ''} onClick={() => setVista('esperando')}>Esperando <span className="count">{inbox.data?.pendentes || 0}</span></button><button className={vista === 'fav' ? 'on' : ''} onClick={() => setVista('fav')}>★ Favoritas</button></div></div>
       {lista.length === 0 && <div style={{ padding: 16 }}><Empty title="Nenhuma conversa ainda">Quando o chat estiver ligado no Kommo, cada mensagem do Instagram, Facebook e WhatsApp aparece aqui na hora.</Empty></div>}
       {lista.map(l => <div key={l.id} className={`item${aberto === l.id ? ' on' : ''}`} onClick={() => setSp({ lead: String(l.id) })}>
         <div className="from">{!!l.needs_reply && <span style={{ color: 'var(--warn)' }}>● </span>}{nomeDo(l)}</div>
-        <div className="when">{l.last_message_at ? ago(l.last_message_at) : ''}</div>
+        <div className="when"><button className={`star sm${l.starred ? ' on' : ''}`} onClick={e => estrela(l, e)} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar'}><Icon name="star" size={13} /></button> {l.last_message_at ? ago(l.last_message_at) : ''}</div>
         <div className="subj">{l.snippet || <span className="muted">{l.msgs ? `${l.msgs} mensagem(ns) · texto no Kommo` : 'sem mensagem guardada'}</span>}</div>
         <div className="sug">{l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}{l.stage_name && <span className="small muted">{l.stage_name}</span>}{!!l.falhas && <Chip tone="crit">{l.falhas} não entregue</Chip>}{l.client_id && <span className="small muted">· {l.client_pilot || l.client_name}</span>}</div>
       </div>)}

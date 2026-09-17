@@ -401,7 +401,7 @@ def test_inbox_e_setup(cli, chat):
     h = entra(cli, "admin@urace.us")
     ib = cli.get(f"{B}/crm/inbox", headers=h).json()
     c = next(c for c in ib["conversas"] if c["external_id"] == "5001")
-    assert c["snippet"] and c["source"] == "Instagram" and ib["conversas"][0]["needs_reply"] == 1   # quem espera no topo
+    assert c["snippet"] and c["source"] == "Instagram"      # a ordem da lista é pela mensagem mais recente
     s = cli.get(f"{B}/crm/setup", headers=h).json()
     assert s["hook_url"].endswith("/ops/api/crm/hook?key=chave-do-hook") and s["bot_id"] == "999" and s["hooks_hoje"] >= 1
     assert cli.get(f"{B}/crm/setup", headers=entra(cli, "op@urace.us")).status_code == 403
@@ -729,3 +729,31 @@ def test_webhook_marcado_como_all_nunca_devolve_erro(cli, chat):
     assert r.status_code == 200 and r.json()["leads_relidos"] == 1 and "leads" in r.json()["ignorado"]
     r2 = cli.post(f"{B}/crm/webhook?key=chave-do-hook", content=urlencode({"account[subdomain]": "urace", "contacts[update][0][id]": "77"}), headers={"content-type": "application/x-www-form-urlencoded"})
     assert r2.status_code == 200 and r2.json()["leads_relidos"] == 0
+
+
+def test_lista_do_chat_pela_mensagem_mais_recente_e_favoritos(cli, chat):
+    h = entra(cli, "admin@urace.us")
+    cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    a = _lid("5001")
+    con = conectar()
+    try:
+        # outro lead, esperando resposta há mais tempo; e uma mensagem nossa mais nova no 5001 (que já não espera)
+        b = con.execute("INSERT INTO crm_leads (external_id, name, needs_reply, last_message_at, synced_at) VALUES ('6001','Outro',1,'2026-09-17T10:00:00Z','2026-09-17T10:00:00Z')").lastrowid
+        con.execute("INSERT INTO crm_messages (lead_id, external_id, direction, text, at, source) VALUES (?,?,?,?,?,?)", (b, "x1", "entrada", "oi", "2026-09-17T10:00:00Z", "webhook"))
+        con.execute("INSERT INTO crm_messages (lead_id, external_id, direction, text, at, source, status) VALUES (?,?,?,?,?,?,?)", (a, "p9", "saida", "respondido", "2026-09-17T12:00:00Z", "painel", "sent"))
+        con.execute("UPDATE crm_leads SET needs_reply=0 WHERE id=?", (a,))
+        con.commit()
+    finally:
+        con.close()
+    ib = cli.get(f"{B}/crm/inbox", headers=h).json()["conversas"]
+    ids = [c["id"] for c in ib]
+    assert ids.index(a) < ids.index(b)                       # mais recente primeiro, mesmo sem esperar resposta
+    assert cli.post(f"{B}/crm/leads/{b}/star", json={"starred": True}, headers=h).json()["starred"] is True
+    ib = cli.get(f"{B}/crm/inbox", headers=h).json()["conversas"]
+    assert next(c for c in ib if c["id"] == b)["starred"] == 1
+    d = cli.get(f"{B}/crm/leads/{a}", headers=h).json()
+    mid = d["mensagens"][0]["id"]
+    assert cli.post(f"{B}/crm/messages/{mid}/star", json={"starred": True}, headers=h).status_code == 200
+    d = cli.get(f"{B}/crm/leads/{a}", headers=h).json()
+    assert next(m for m in d["mensagens"] if m["id"] == mid)["starred"] == 1
+    assert cli.post(f"{B}/crm/messages/999999/star", json={"starred": True}, headers=h).status_code == 404

@@ -103,7 +103,9 @@ MIGRACOES = [
     ("crm_leads", "last_hook_at", "TEXT"),                # última vez que o bot falou com o painel por este lead
     ("crm_leads", "link_by", "TEXT"),
     ("crm_leads", "detail", "TEXT"),                      # retrato completo do lead no Kommo (json de kommo_lead_completo)
-    ("crm_leads", "detail_at", "TEXT"),                     # human = vínculo com o cliente feito à mão (a sincronia não mexe)
+    ("crm_leads", "detail_at", "TEXT"),
+    ("crm_leads", "starred", "INTEGER"),                   # conversa favorita (estrela na lista do chat)
+    ("crm_messages", "starred", "INTEGER"),                # mensagem favorita dentro da conversa                     # human = vínculo com o cliente feito à mão (a sincronia não mexe)
 ]
 
 

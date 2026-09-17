@@ -325,3 +325,19 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .msg.marca .bub a{color:var(--accent-ink)}
 .chat-day{border-top:0;margin:14px 0 4px}
 .mail.inbox .read .toolbar{position:sticky;top:0;background:var(--surface);z-index:2;padding-top:6px;margin:-4px -4px 0;padding-inline:4px}
+
+/* ---------- favoritos no chat (17/09) */
+.star{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:4px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.star:hover{color:var(--warn);background:var(--glass-2)}
+.star.on{color:var(--warn)}
+.star.on .sf{fill:currentColor}
+.star.sm{padding:2px}
+.mail .item .when{display:inline-flex;align-items:center;gap:4px}
+.mail .item .star{opacity:.35}.mail .item:hover .star,.mail .item .star.on{opacity:1}
+.msg .bub-row{display:flex;align-items:flex-end;gap:4px;max-width:100%}
+.msg.me .bub-row{flex-direction:row-reverse}
+.msg .bub-row .star{opacity:0;transition:opacity var(--t) var(--ease)}
+.msg:hover .bub-row .star,.msg .bub-row .star.on{opacity:1}
+.msg.me .bub-row .bub{max-width:100%}
+.mail .list .tabs{width:100%;display:flex}
+.mail .list .tabs button{flex:1 1 0;padding:0 8px}
