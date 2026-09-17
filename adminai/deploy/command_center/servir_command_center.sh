@@ -15,6 +15,22 @@
 # Uso (no VPS):  bash adminai/deploy/command_center/servir_command_center.sh
 set -euo pipefail
 
+# ---------------------------------------------------------------- 0. sobrevive à queda do SSH
+# O terminal do dono cai toda hora (17/09). O deploy leva 2-3 min: se a sessão cai no meio,
+# o script morria junto. Agora ele se solta do terminal (setsid + nohup), grava tudo em
+# ~/.urace/deploy-<data>.log e o terminal só acompanha o log. Caiu? Reconecte e rode:
+#   tail -n 60 "$(ls -t ~/.urace/deploy-*.log | head -1)"
+if [ -z "${URACE_DEPLOY_DETACHED:-}" ] && [ -t 1 ]; then
+  mkdir -p "${URACE_DIR:-$HOME/.urace}"
+  _LOG="${URACE_DIR:-$HOME/.urace}/deploy-$(date +%Y%m%d-%H%M%S).log"
+  URACE_DEPLOY_DETACHED=1 setsid nohup bash "${BASH_SOURCE[0]}" "$@" > "$_LOG" 2>&1 < /dev/null &
+  _PID=$!
+  echo "-- deploy em segundo plano (sobrevive à queda do SSH) · log: $_LOG"
+  tail -n +1 -f "$_LOG" --pid="$_PID" 2>/dev/null || true
+  wait "$_PID" 2>/dev/null || true
+  exit 0
+fi
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 DOMINIO="${DOMINIO:-urace-bridge.duckdns.org}"
 CADDYFILE="/etc/caddy/Caddyfile"
