@@ -23,6 +23,7 @@ que realmente evita erro.
 | [[DocuSign]] | waivers | `delivered` **não é** assinado |
 | [[Gmail]] | entrada de tudo | ver [[Taxonomia do Gmail]] |
 | [[Google Calendar]] | corridas | depende do Asana |
+| [[Kommo]] | leads e chat (o painel é a ponte) | a API **não** entrega o @ do Instagram/Facebook |
 | [[VPS e OpenClaw]] | **onde a IA roda** | segredos ficam fora do repositório |
 | **Command Center** | a mesa de operação (`/ops/`) | manual completo em `docs/manual-do-command-center.md` — telas, papéis, fluxo do closer, voz, políticas da IA, deploy e o que fazer quando dá erro |
 

@@ -1,5 +1,11 @@
 # Destravar as chaves de produção do QuickBooks
 
+> **Resolvido em 09/09/2026.** A Intuit liberou as chaves de produção; o
+> segredo está no VPS e o redirect salvo é `…/ops/api/qbo/callback`. Desde 10/09
+> há invoice real proposta e aprovada pelo painel. Este documento fica como o
+> passo a passo de como foi feito (e para o dia em que precisar refazer).
+
+
 O app da URACE está `IN DEVELOPMENT` e as chaves de produção estão atrás
 de cadeado. Este documento tem **as respostas prontas** de cada campo,
 para o preenchimento virar trabalho mecânico.

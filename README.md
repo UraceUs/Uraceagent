@@ -1,16 +1,46 @@
-# URACE — Agente de Vendas (Chase) + Sales Brain
+# URACE — Command Center + agentes de IA
 
-Agente comercial da URACE: atende leads no Kommo, qualifica pela
-classificação A/B/C/D, recomenda o programa certo, agenda follow-ups — e
-passa para uma pessoa quando é o caso. Em produção desde 24/08/2026
-(circuito completo validado com lead real via Instagram).
+Este repositório tem **dois sistemas** da URACE. Um está rodando hoje; o
+outro está em stand-by desde 27/08/2026.
+
+## O que está no ar: Command Center
+
+**https://urace-bridge.duckdns.org/ops/** — a mesa de operação da URACE.
+Espelha Asana, DocuSign, Gmail, QuickBooks e Kommo em um lugar; a IA
+propõe o que fazer e a pessoa aprova; tudo fica em auditoria imutável.
+No ar desde 04/09/2026, com as cinco fontes conectadas.
+
+Inclui a **área de vendas** (oportunidades, agenda de retornos e o
+fechamento que dispara cliente, QuickBooks, waiver, Asana e Kommo numa
+tela), o **chat do Kommo** dentro do painel e **voz** (ditar e ouvir) em
+todo campo de texto.
+
+→ **Manual completo, para humanos e para IA:**
+[`docs/manual-do-command-center.md`](docs/manual-do-command-center.md)
+→ **Fotografia do estado de hoje:**
+`brain/04_PROJETOS/Administrative AI - Estado completo em 2026-09-17.md`
+→ **Código:** `command_center/` (FastAPI + SQLite + React) · **deploy:**
+`adminai/deploy/command_center/servir_command_center.sh`
+
+## Em stand-by: agente de vendas (Chase)
+
+Agente comercial que atendia leads no Kommo, qualificava pela
+classificação A/B/C/D, recomendava o programa e passava para uma pessoa
+quando era o caso. Ficou em produção de 24/08 a 27/08/2026 (circuito
+validado com lead real via Instagram) e foi **pausado** quando o projeto
+virou para o administrativo — o gargalo real não era vender, era
+administrar. O dossiê do que existia está em
+[`docs/resumo-chase-pre-pivot.md`](docs/resumo-chase-pre-pivot.md).
+O resto deste README descreve esse agente, e continua valendo como
+documentação dele.
 
 ## Por onde começar
 
 | Você quer | Leia |
 |---|---|
-| **usar o painel** (Command Center) | [`docs/manual-do-command-center.md`](docs/manual-do-command-center.md) — manual completo, para humanos e para IA |
-| entender o agente de vendas (Chase) | este README, abaixo |
+| **usar o painel** (o que está rodando) | [`docs/manual-do-command-center.md`](docs/manual-do-command-center.md) |
+| saber o estado do projeto hoje | `brain/04_PROJETOS/Administrative AI - Estado completo em 2026-09-17.md` |
+| entender o agente de vendas (Chase, em stand-by) | este README, abaixo |
 | ver o porquê de cada regra | `brain/08_DECISOES/` |
 | saber o que aconteceu, dia a dia | `brain/30_DIARIO/` |
 

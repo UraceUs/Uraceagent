@@ -189,9 +189,10 @@ por `adminai/deploy/command_center/servir_command_center.sh` (venv em
 unit, Caddy, prova real).
 
 O que ele é: login próprio (scrypt, sessão revogável, cookie `HttpOnly`
-+ CSRF), papéis ADMIN/MANAGER/OPERATOR/CLOSER/VIEWER checados **no
-servidor** (CLOSER escreve só na área de vendas; conta de acesso livre
-não tem cargo e alcança tudo — 17/09),
++ CSRF), papéis ADMIN/MANAGER/OPERATOR/VIEWER checados **no
+servidor** (quem vende é o operador — o papel CLOSER existiu por algumas
+horas em 17/09 e foi removido no mesmo dia; conta de acesso livre não tem
+cargo e alcança tudo),
 auditoria em tabela que gatilhos impedem de alterar, espelhos de Asana,
 DocuSign e Gmail lidos pelos mesmos módulos MCP, "Precisa de atenção"
 com prioridade contextual (VIP fora, RACES fora, delivered ≠ assinada)

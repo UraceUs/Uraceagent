@@ -123,8 +123,10 @@ a Intuit exige redirect em HTTPS, e o nosso é
 `https://urace-bridge.duckdns.org/ops/api/qbo/callback`. O token fica em
 `~/.urace/qbo-token.json`; o refresh **rotaciona a cada uso e vale 100
 dias** — o MCP regrava a cada refresh. Passo a passo:
-`docs/adminai/quickbooks-conexao.md`. Depende de [[P-11 - Producao do app QuickBooks travada]]
-(chaves de produção).
+`docs/adminai/quickbooks-conexao.md`. **Produção liberada em 09/09/2026** — ver
+[[P-11 - Producao do app QuickBooks travada]] (resolvido). Desde 10/09 há invoice real
+proposta e aprovada pelo painel, e a sincronia registra `invoice.paid` lendo o saldo
+zerado no QuickBooks.
 
 No painel: KPIs (em aberto, vencidas, pagas em 30 d), maiores saldos,
 lista de invoices, invoices no card do cliente; "Precisa de atenção"

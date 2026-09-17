@@ -1,8 +1,16 @@
 # URACE Command Center — decisões de arquitetura (ADR)
 
-Data: 04/09/2026. Origem: spec "URACE AI OPERATIONS & COMMAND CENTER",
-entregue pelo dono. Este documento registra **o que foi decidido, por
-quê, e o que do spec não vale para a URACE**. É lido antes do código.
+Data: 04/09/2026. **Revisado em 17/09/2026.** Origem: spec "URACE AI
+OPERATIONS & COMMAND CENTER", entregue pelo dono. Este documento registra
+**o que foi decidido, por quê, e o que do spec não vale para a URACE**. É
+lido antes do código.
+
+> **Estado em 17/09/2026: o painel está no ar e em uso.** As decisões
+> abaixo continuam valendo — o que mudou é que deixaram de ser plano. O
+> motor de execução existe, o QuickBooks está em produção e a área de
+> vendas fecha venda de ponta a ponta. Fotografia completa em
+> `brain/04_PROJETOS/Administrative AI - Estado completo em 2026-09-17.md`;
+> manual de uso em `docs/manual-do-command-center.md`.
 
 ## 1. O que o spec não sabia sobre a URACE
 
@@ -56,28 +64,36 @@ sem `DELETE`/`UPDATE` possíveis, nem por bug, nem por interface.
 | `REQUIRES_APPROVAL` | **enviar invoice**, enviar invoice do depósito, **enviar waiver** (as 4 travas continuam no servidor), criar invoice acima de um teto configurável |
 | `BLOCKED` | apagar qualquer coisa, enviar e-mail livre, mexer em `Matt tasks`, escrever no ADM URACE, editar template do DocuSign, `sendReminder` (U-01 não decidido) |
 
-Enquanto o motor de execução (Fase 6) não existe, **toda escrita da IA
-é proposta**: `APLICAR=0` no VPS faz o servidor MCP devolver *"teria
-feito X"*, e o Command Center mostra isso como ação pendente. Nada
+**Toda escrita da IA nasce como proposta.** O agente no VPS roda com
+`APLICAR=0` e devolve *"teria feito X"*; o Command Center mostra isso
+como ação pendente. Desde 09/09/2026 o motor de execução existe
+(`command_center/api/motor.py`): aprovar no painel executa na hora, com o
+`APLICAR` ligado só naquele clique e registro em `audit_logs`. Nada
 executa por trás do dono.
 
 ## 4. Sem dado falso
 
 Integração sem credencial mostra **"Integration not connected"**. Mock
-só em desenvolvimento, marcado como tal. O `QuickBooks` entra assim até
-a Intuit liberar a produção.
+só em desenvolvimento, marcado como tal. O `QuickBooks` entrou assim até
+**09/09/2026**, quando a Intuit liberou a produção (P-11); desde 10/09 as
+invoices são reais.
 
 ## 5. Fases
 
-A ordem do spec, com o que cada uma reaproveita:
+A ordem do spec, com o estado de **17/09/2026** ao lado:
 
-1. **Auth, shell, design system, dashboard, clientes, busca, AI Command** — reaproveita Pit Wall (identidade aprovada), MCP como providers, `urace-admin` como IA.
-2. Motor de workflow, Client 360 completo, Asana, tarefas, calendário.
-3. Gmail e inteligência de e-mail — o `gmail_mcp` já classifica; falta a camada de prioridade contextual.
-4. QuickBooks — **depende da Intuit** (P-11).
-5. "Offsight" — **depende de U-08**.
-6. Automação, atividade da IA, auditoria, alertas, aprovações executando.
-7. Testes, segurança, performance, acessibilidade.
+1. **Auth, shell, design system, dashboard, clientes, busca, AI Command** — **feito** (04/09). Reaproveitou o Pit Wall (identidade aprovada), MCP como providers, `urace-admin` como IA.
+2. Motor de workflow, Client 360 completo, Asana, tarefas, calendário — **feito** (04–09/09).
+3. Gmail e inteligência de e-mail — **feito** (04/09): as duas caixas, três colunas, marcador sugerido pela IA e aplicado no botão Mover.
+4. QuickBooks — **feito** (produção liberada em 09/09; invoice real desde 10/09).
+5. "Offsight" — **não existe**, continua dependendo de U-08.
+6. Automação, atividade da IA, auditoria, alertas, aprovações executando — **feito**; `audit_logs` imutável por gatilho.
+7. Testes, segurança, performance, acessibilidade — **207 testes** automatizados, e o deploy para se um falhar.
+
+Fora do spec, entraram depois: **Kommo** com o chat do lead dentro do
+painel (16–17/09), a **área de vendas** com fechamento em uma tela
+(17/09), **voz** para ditar e ouvir (17/09) e o botão **Atualizar agora**
+(17/09).
 
 ## 6. Onde mora
 
@@ -90,7 +106,7 @@ Wall continua existindo como relatório dentro do Command Center.
 
 `adminai/deploy/command_center/servir_command_center.sh` faz, nesta
 ordem e parando no primeiro erro: venv em `~/.urace/cc-venv`; `npm ci &&
-npm run build`; `pytest command_center/tests` (27); primeiro ADMIN se a
+npm run build`; `pytest command_center/tests` (27 naquele dia; 207 em 17/09); primeiro ADMIN se a
 tabela de usuários está vazia; unit `urace-command-center` (`bash -lc`
 para herdar o PATH onde está o `openclaw`); `handle /ops*` inserido no
 bloco existente do Caddyfile com backup e `caddy validate`; prova real

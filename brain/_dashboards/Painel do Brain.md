@@ -1,6 +1,6 @@
 ---
 tipo: painel
-atualizado_em: 2026-09-04
+atualizado_em: 2026-09-17
 tipo_info: CONTEXT
 fonte: interno
 responsavel: Italo Silveira
@@ -10,39 +10,43 @@ status: ativo
 # ⭐ Painel do Cérebro URACE
 
 > Abra [[URACE]] para o mapa completo. Este painel é o **estado de hoje**:
-> o que está pendente, o que está decidido, o que está travado.
-> **Fotografia inteira do projeto (antes × agora, todos os links):**
-> [[Administrative AI - Estado completo em 2026-09-04]].
+> o que está no ar, o que falta, o que está travado.
+> **Fotografia inteira do projeto:**
+> [[Administrative AI - Estado completo em 2026-09-17]].
+> **Manual de uso do painel** (humanos e IA): `docs/manual-do-command-center.md`.
 
-## 🚀 04/09 — Command Center no ar
+## 🟢 O projeto está rodando
 
-`https://urace-bridge.duckdns.org/ops/` — login próprio, papéis, auditoria.
-A IA acorda a cada mudança (tarefa nova, e-mail de cliente, waiver),
-propõe, e o humano aprova; aprovar executa. Balão "Instruir a IA" vira
-memória. Ver [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]]
-e [[Semana 2026-08-31 a 2026-09-04 - Resumo]].
+`https://urace-bridge.duckdns.org/ops/` — [[Command Center]] no ar desde 04/09, com
+login próprio, papéis, auditoria imutável e o espelho das **cinco** fontes.
 
-## ✅ No ar desde 01/09/2026
+| Fonte | Estado | Desde |
+|---|---|---|
+| [[Asana]] | MCP próprio; ADM URACE e Matt tasks só leitura | 02/09 |
+| [[DocuSign]] | produção; envia waiver com aprovação | 04/09 |
+| [[Gmail]] | as duas caixas, sem envio livre | 04/09 |
+| [[QuickBooks]] | **produção liberada** (P-11 resolvido); invoice só após aprovação | 09/09 |
+| [[Kommo]] | chat do lead dentro do painel | 16–17/09 |
 
-4 timers rodando no [[VPS e OpenClaw]], 6 skills ligadas, [[Asana]]
-testado e respondendo. Ver [[2026-09-01]].
+**17/09 — três coisas novas:** a **área de vendas** (oportunidade não é cliente;
+fechar venda em uma tela dispara cliente, QuickBooks, waiver, Asana e Kommo), a
+**voz** em todo campo de texto, e o **login novo** com a foto da pista. Mais o botão
+**Atualizar agora**, que faz o deploy sem terminal. Ver [[2026-09-17]].
 
-**`APLICAR=0`** — simulação. Nada é escrito em sistema nenhum até você
-ler os logs em `~/.urace/logs/` e liberar.
+**Papéis:** Administrador · Gerente · Operador · Leitura, e a conta de **acesso livre**
+(sem cargo, alcança tudo). Não existe papel "vendas": quem vende é Operador.
 
-**02/09 — o agente leu o [[Asana]] pela primeira vez.** Servidor MCP
-nosso, regras do dono em código, relatório conferido na fonte: Enzo
-05/09 com waiver assinada, nenhum alerta. Ver [[2026-09-02]].
+## 📊 O Pit Wall
 
-**04/09 — [[DocuSign]] em produção.** Go-live aprovado, 50 envelopes
-visíveis ao agente. Envio ainda atrás de `APLICAR=0`. Ver [[2026-09-04]].
-**[[Gmail]] conectado 04/09** — as duas caixas, sem envio. Falta só
-[[QuickBooks]] — lista em [[Etapa de conexão]].
+O Pit Wall (`/painel/`) está pronto mas **não publicado** — hoje responde 404. O
+Command Center (`/ops/`) cobre o que ele mostrava. Decisão pendente: publicar ou
+aposentar. Ver [[VPS e OpenClaw]].
 
-## 📊 O painel
+## ⚙️ Como a IA escreve
 
-O Pit Wall (`/painel/`) está pronto mas **não publicado** no VPS; o
-Command Center (`/ops/`) o substitui. Ver [[VPS e OpenClaw]].
+O agente no [[VPS e OpenClaw]] roda em **simulação** (`APLICAR=0`): ele propõe. Quem
+executa o que foi aprovado é o **painel**, e o APLICAR liga só naquele clique. Nada
+apaga, waiver e invoice exigem aprovação, e tudo fica em `audit_logs`.
 
 ## 🔴 Pendente de clique do dono
 

@@ -500,8 +500,8 @@ export function AgendaVendas() {
   </div>
 }
 
-/** Botão "Passar para o closer" usado no chat do Kommo. */
-export function PassarParaCloser({ leadId }: { leadId: number }) {
+/** Botão "Passar para vendas" usado no chat do Kommo. */
+export function PassarParaVendas({ leadId }: { leadId: number }) {
   const nav = useNavigate()
   const toast = useToast()
   const { can } = useAuth()
@@ -513,5 +513,5 @@ export function PassarParaCloser({ leadId }: { leadId: number }) {
     ref.current = true; setBusy(true)
     try { const r = await api.post<{ id: number; reaproveitada: boolean }>(`/sales/from-lead/${leadId}`); toast(r.reaproveitada ? 'Já existia: abrindo.' : 'Oportunidade criada.', 'ok'); nav(`/sales/${r.id}`) }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false); ref.current = false }
-  }}>{busy ? <Spinner /> : <><Icon name="target" size={14} /> Passar para o closer</>}</button>
+  }}>{busy ? <Spinner /> : <><Icon name="target" size={14} /> Passar para vendas</>}</button>
 }

@@ -20,7 +20,8 @@ ação, aprende, salva na própria memória."*
 - **Balão**: a instrução vai para o agente com o item e, se marcado
   "guardar", entra em `ai_learnings` (global, por cliente ou por tipo).
   Toda memória ativa entra em todo comando seguinte.
-- **Invoice**: enquanto o QuickBooks está em stand-by (P-11), a IA
+- **Invoice** (nota de 17/09: o QuickBooks saiu do stand-by em 09/09, produção
+  liberada — a regra de aprovação abaixo continua valendo): a IA
   prepara e propõe; não existe envio real até conectar — e mesmo então só
   depois de aprovada (decisão da manhã).
 

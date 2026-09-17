@@ -59,17 +59,20 @@ Todas em `08_DECISOES`. As que mais moldam o projeto:
 |---|---|
 | [[Asana]] | **MCP próprio no VPS**, quadro espelhado no Command Center; ADM URACE e Matt tasks só leitura |
 | [[Gmail]] | **as duas caixas conectadas** (04/09); inbox por dentro no Command Center; sem envio |
-| [[QuickBooks]] | **stand-by** (Intuit, P-11); invoice só após aprovação |
+| [[QuickBooks]] | **produção** (09/09, P-11 resolvido); invoice criada e enviada **depois de aprovada**; lembretes recorrentes |
 | [[DocuSign]] | **produção** (04/09); envia waiver com aprovação; download, lixeira, reenvio pelo painel |
+| [[Kommo]] | **chat do lead dentro do painel** (16–17/09): webhook da conta entrega a mensagem, a resposta sai pelo bot |
 | [[Google Calendar]] | mínimo, depende do Asana |
+| **Vendas** | área própria no painel (17/09): oportunidades, agenda de retornos e fechamento em uma tela |
 
-## Pendências
+## Pendências (17/09)
 
-**Deploy marcado para 01/09/2026** — runbook em
-`adminai/deploy/README.md`, lista do que levar em [[Etapa de conexão]].
+O deploy aconteceu em 01/09 e o painel está no ar. O que falta hoje:
 
-[[Etapa de conexão]] — credenciais do VPS, acesso ao `support@` e os
-cliques que só o dono pode dar.
+1. **URACE** — criar o usuário de vendas (papel Operador) e rodar uma venda de ponta a ponta.
+2. **Italo** — passar o hex oficial do azul da marca (o painel usa `#1E5BC6`, tirado da foto do kart).
+3. **Italo** — decidir se o [[Pit Wall]] é publicado em `/painel/` ou aposentado.
+4. **Italo** — decidir se o agente do OpenClaw sai da simulação (`APLICAR=0`) nas rotinas diárias.
 
 ## Problemas
 
@@ -78,9 +81,13 @@ Ver [[Problemas]]. O que mais afeta este projeto:
 
 ## Estado completo
 
-**[[Administrative AI - Estado completo em 2026-09-04]]** — a fotografia
-inteira: antes × agora por aplicação, linha do tempo, todas as decisões e
-problemas, links, pendências. Atualizada em 04/09/2026.
+**[[Administrative AI - Estado completo em 2026-09-17]]** — a fotografia de hoje:
+o que está no ar, o que não está, como a operação funciona, as travas, os números e
+todos os links. A anterior fica como histórico:
+[[Administrative AI - Estado completo em 2026-09-04]].
+
+**Manual de uso do painel**, para humanos e para IA:
+`docs/manual-do-command-center.md`.
 
 ## Próximos passos
 

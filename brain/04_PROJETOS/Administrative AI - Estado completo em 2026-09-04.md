@@ -11,6 +11,12 @@ status: ativo
 
 [[URACE]] · [[Administrative AI]] · [[Painel do Brain]] · [[Semana 2026-08-31 a 2026-09-04 - Resumo]]
 
+> **Fotografia de 04/09/2026 — histórica.** Para o estado de hoje, abra
+> [[Administrative AI - Estado completo em 2026-09-17]]: o painel está no
+> ar, o QuickBooks entrou em produção em 09/09, o Kommo entrou em 16–17/09
+> e a área de vendas em 17/09. Esta nota fica como registro do que era
+> verdade naquele dia.
+
 > Este arquivo é a **fotografia inteira** do projeto: o que já existia
 > antes desta semana, o que evoluiu nela, e como está agora. Abra por
 > aqui para ver "como é que está". O detalhe de cada ponto está nas notas

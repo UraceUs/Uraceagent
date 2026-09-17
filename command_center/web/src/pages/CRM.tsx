@@ -15,7 +15,7 @@ import { ago, fmtDate, fmtDateLong, fmtDateTime, fmtTime, money } from '../compo
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
-import { PassarParaCloser } from './Vendas'
+import { PassarParaVendas } from './Vendas'
 
 export interface Lead {
   id: number; external_id: string; client_id: number | null; name: string | null
@@ -154,7 +154,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
           <ChipCanal source={l.source} perfis={det.data?.detalhe?.perfis} nome={nomeDo(l)} />
           {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
           {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> Dados do lead</button>}
-          <PassarParaCloser leadId={l.id} />
+          <PassarParaVendas leadId={l.id} />
         </div>
         <div className="row wrap small muted" style={{ gap: 10 }}>
           {l.contact_phone && <a href={`tel:${l.contact_phone.replace(/[^\d+]/g, '')}`}>{l.contact_phone}</a>}

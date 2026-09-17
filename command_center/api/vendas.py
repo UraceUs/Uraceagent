@@ -359,7 +359,7 @@ def mover(oid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("OPER
 
 @r.post("/from-lead/{lead_id}", status_code=201)
 def do_chat(lead_id: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
-    """"Passar para o closer": o lead do chat do Kommo vira oportunidade, com o que já se sabe."""
+    """"Passar para vendas": o lead do chat do Kommo vira oportunidade, com o que já se sabe."""
     l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lead_id,))
     if not l:
         raise HTTPException(404, "Lead não encontrado.")

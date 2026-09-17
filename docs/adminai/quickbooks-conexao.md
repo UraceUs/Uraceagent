@@ -1,5 +1,11 @@
 # Conectar o QuickBooks ao VPS (produção)
 
+> **Resolvido em 09/09/2026.** A Intuit liberou as chaves de produção; o
+> segredo está no VPS e o redirect salvo é `…/ops/api/qbo/callback`. Desde 10/09
+> há invoice real proposta e aprovada pelo painel. Este documento fica como o
+> passo a passo de como foi feito (e para o dia em que precisar refazer).
+
+
 O agente roda no VPS; o conector do Claude não conta. Para o QuickBooks
 real (URACE US INC, realm `9341453113046421`) falar com o VPS são três
 coisas: **chaves de produção** do app na Intuit, **redirect URI** em
