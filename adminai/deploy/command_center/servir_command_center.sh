@@ -96,8 +96,16 @@ echo "-- 5/7 serviço systemd"
 sudo cp "$REPO/adminai/deploy/command_center/$UNIT.service" "/etc/systemd/system/$UNIT.service"
 sudo sed -i "s|/home/ubuntu/Uraceagent|$REPO|g; s|/home/ubuntu/.urace|$URACE_DIR|g; s|^User=ubuntu|User=$(id -un)|; s|8790|$PORTA|g" \
         "/etc/systemd/system/$UNIT.service"
+# 17/09: botão "Atualizar sistema" no painel — um path unit vigia ~/.urace/deploy.request e roda
+# este mesmo script numa unit própria (fora do cgroup do serviço, então sobrevive ao restart).
+_BRANCH="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+for _u in urace-deploy.service urace-deploy.path; do
+    sudo cp "$REPO/adminai/deploy/command_center/$_u" "/etc/systemd/system/$_u"
+    sudo sed -i "s|/home/ubuntu/Uraceagent|$REPO|g; s|/home/ubuntu/.urace|$URACE_DIR|g; s|/home/ubuntu|$HOME|g; s|^User=ubuntu|User=$(id -un)|; s|BRANCH|$_BRANCH|g" "/etc/systemd/system/$_u"
+done
 sudo systemctl daemon-reload
 sudo systemctl enable "$UNIT.service" >/dev/null
+sudo systemctl enable --now urace-deploy.path >/dev/null 2>&1 || true
 sudo systemctl restart "$UNIT.service"
 # 16/09: com 2 s fixos o script acusou falha numa subida que só estava lenta (o serviço
 # aplica migrações e semeia o manual ao iniciar). Espera até 60 s, olhando a cada 2.

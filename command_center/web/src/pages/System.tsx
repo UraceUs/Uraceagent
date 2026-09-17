@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { ActionPolicy, AuditRow, ContextSource, Integration, Policy } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, POLICY_LABEL, Section, Spinner, Status, statusTone, SYS_NAME } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, POLICY_LABEL, Section, Spinner, Status, statusTone, SYS_NAME, Thinking } from '../components/ui'
+import { Icon } from '../components/Icon'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -75,6 +76,50 @@ function Contexto({ kind }: { kind: 'sheet' | 'file' }) {
   </div>
 }
 
+interface UpdateInfo { versao: { commit: string | null; branch: string | null; quando: string | null; mensagem: string | null }; instalado: boolean; rodando: boolean; ultima: { log: string; resultado: boolean | null; inicio: string | null }; agora: string; novidades?: { atras?: number; commits?: string[]; remoto?: string; erro?: string } }
+
+/** Atualizar o sistema sem terminal (17/09): o pedido vira um arquivo que o servidor vigia; o mesmo
+ *  deploy de sempre roda numa unit própria e o log aparece aqui ao vivo. */
+function Atualizacao() {
+  const toast = useToast()
+  const [verificar, setVerificar] = useState(false)
+  const [pedido, setPedido] = useState(false)
+  const [aberto, setAberto] = useState(false)
+  const st = useGet<UpdateInfo>(`/system/update${verificar ? '?verificar=1' : ''}`, 5000)
+  const logRef = useRef<HTMLPreElement | null>(null)
+  const d = st.data
+  const rodando = !!d?.rodando
+  useEffect(() => { if (d?.rodando) { setAberto(true); setPedido(false) } }, [d?.rodando])
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight }, [d?.ultima?.log])
+  async function atualizar() {
+    setPedido(true)
+    try { await api.post('/system/update'); toast('Atualização pedida. O servidor começa em segundos; acompanhe o log.', 'ok'); setAberto(true); st.reload() }
+    catch (e) { setPedido(false); toast((e as ApiError).message, 'crit') }
+  }
+  const reiniciando = !!st.error && (rodando || pedido)
+  const nov = d?.novidades
+  return <div className="card card-b" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className="row wrap" style={{ gap: 10 }}>
+      <span className="icbox red"><Icon name="refresh" /></span>
+      <div className="grow" style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 700 }}>Atualização do sistema</div>
+        <div className="small muted">{d?.versao?.commit ? <>versão <span className="mono">{d.versao.commit}</span> · {d.versao.quando ? fmtDateTime(d.versao.quando) : ''} · {d.versao.mensagem}</> : st.error ? 'servidor reiniciando…' : 'lendo a versão…'}</div>
+      </div>
+      {rodando || reiniciando ? <Thinking label={reiniciando ? 'reiniciando o serviço…' : 'atualizando…'} /> : d?.ultima?.resultado === true && d.ultima.inicio ? <Chip tone="ok" glyph="✓">última: ok · {fmtDateTime(d.ultima.inicio)}</Chip> : d?.ultima?.resultado === false ? <Chip tone="crit" glyph="✕">última falhou</Chip> : null}
+      {!verificar ? <button className="btn" onClick={() => setVerificar(true)}>Ver novidades</button>
+        : nov?.erro ? <Chip tone="warn">{nov.erro}</Chip> : nov ? <Chip tone={nov.atras ? 'warn' : 'ok'}>{nov.atras ? `${nov.atras} atualização(ões) esperando` : 'já está na versão mais nova'}</Chip> : <Spinner />}
+      <button className="btn primary" disabled={rodando || pedido || reiniciando || d?.instalado === false} onClick={atualizar}>{rodando || pedido ? <Spinner /> : <Icon name="refresh" size={16} />} Atualizar agora</button>
+    </div>
+    {d && !d.instalado && <Banner tone="warn">O botão ainda não está instalado no servidor: rode o deploy uma vez pelo terminal. A partir daí, tudo por aqui.</Banner>}
+    {!!nov?.commits?.length && <ul className="small ink2" style={{ margin: 0, paddingLeft: 18 }}>{nov.commits.map((c, i) => <li key={i}>{c}</li>)}</ul>}
+    {(d?.ultima?.log || rodando) && <details open={aberto} onToggle={e => setAberto((e.target as HTMLDetailsElement).open)}>
+      <summary className="small muted" style={{ cursor: 'pointer' }}>log da última rodada{d?.ultima?.inicio ? ` · ${fmtDateTime(d.ultima.inicio)}` : ''}</summary>
+      <pre ref={logRef} className="mono small" style={{ margin: '8px 0 0', maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,.3)', padding: 12, borderRadius: 12 }}>{d?.ultima?.log || 'esperando o servidor começar…'}</pre>
+    </details>}
+    <div className="xs muted">Roda no servidor o mesmo deploy de sempre (git pull, build, testes, serviço, Caddy). Leva 2–3 min; o painel some por uns segundos quando o serviço reinicia e volta sozinho.</div>
+  </div>
+}
+
 export function Integrations() {
   const { can } = useAuth()
   const toast = useToast()
@@ -92,6 +137,7 @@ export function Integrations() {
   return <>
     <PageHeader title="Integrações" help={<>Estado real de cada sistema, mais as planilhas e arquivos que a IA pode consultar. “Verificar” faz UMA chamada real por sistema.</>}>
       {can('OPERATOR') && tab === 'sys' && <button className="btn primary" onClick={check} disabled={busy}>{busy ? <Spinner /> : '⚡'} Verificar agora</button>}</PageHeader>
+    {can('ADMIN') && tab === 'sys' && <Atualizacao />}
     <div className="tabs">{([['sys', 'Sistemas'], ['sheets', 'Planilhas e links'], ['files', 'Arquivos']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
     {tab === 'sys' && (error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
       <div className="grid g2">{(data || []).map(i => { const det = safeJson(i.detail); const ruim = i.status !== 'CONNECTED' && i.status !== 'SYNCING'; return <div className="card card-b lead" key={i.system} style={{ borderLeftColor: ruim ? 'var(--crit)' : 'var(--ok)' }}>

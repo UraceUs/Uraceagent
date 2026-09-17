@@ -117,6 +117,8 @@ from command_center.api import qbo  # noqa: E402
 app.include_router(qbo.r)
 from command_center.api import crm  # noqa: E402
 app.include_router(crm.r)
+from command_center.api import sistema  # noqa: E402
+app.include_router(sistema.r)
 
 
 # ------------------------------------------------------------- saúde

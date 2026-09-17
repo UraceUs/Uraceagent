@@ -42,6 +42,10 @@ Ou seja: cada mudança vai para a branch normalmente, mas a linha de deploy
 quando ele diz "atualiza", "sobe", "deploy" ou parecido. Até lá, a resposta
 diz o que mudou e para; ele acumula e sobe de uma vez.
 
+Desde 17/09 existe o botão **Atualizar sistema** (Integrações, ADMIN): quando ele
+disser "atualiza", a resposta é "Integrações → Atualizar agora" — o bloco de terminal
+fica só para quando o botão não puder (unit não instalada, servidor fora).
+
 ## Texto
 
 Português, direto, sem enfeite. Ele corrige em uma frase; texto longo
