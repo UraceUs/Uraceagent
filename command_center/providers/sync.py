@@ -833,6 +833,9 @@ def sincronizar_chats_kommo(con, desde_dias=30, maximo=500, enriquecer=40):
             ext_msg = "ev:" + ev["id"]
             if um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (l["id"], ext_msg)):
                 continue
+            from command_center.api.crm import tem_texto_perto
+            if tem_texto_perto(con, l["id"], ev["direcao"], ev["em"]):      # o webhook já trouxe esta com texto
+                continue
             inserir(con, "crm_messages", lead_id=l["id"], external_id=ext_msg, direction=ev["direcao"],
                     author=None, text=None, at=ev["em"] or agora(), source=ev.get("canal") or "kommo-evento")
         canal = next((e.get("canal") for e in reversed(evs) if e.get("canal")), None)

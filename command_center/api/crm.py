@@ -207,6 +207,8 @@ def _absorver_detalhe(con, l, d):
         ext = "ev:" + ev["id"]
         if um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (l["id"], ext)):
             continue
+        if tem_texto_perto(con, l["id"], ev["direcao"], ev.get("em")):
+            continue
         inserir(con, "crm_messages", lead_id=l["id"], external_id=ext, direction=ev["direcao"], author=None, text=None,
                 at=ev.get("em") or agora(), source=ev.get("canal") or "kommo-evento")
         novas += 1
@@ -547,7 +549,10 @@ def setup(request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connect
     chave = _chave_hook()
     ultimo = um(con, "SELECT at AS created_at FROM audit_logs WHERE event='crm.hook' ORDER BY id DESC LIMIT 1")
     hoje = um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='crm.hook' AND at >= ?", (agora()[:10],))
+    ultimo_wh = um(con, "SELECT at AS created_at FROM audit_logs WHERE event='crm.webhook' ORDER BY id DESC LIMIT 1")
     return {"hook_url": (f"https://{host}/ops/api/crm/hook?key={chave}" if chave else None),
+            "webhook_url": (f"https://{host}/ops/api/crm/webhook?key={chave}" if chave else None),
+            "ultimo_webhook": ultimo_wh["created_at"] if ultimo_wh else None,
             "hook_key": bool(chave), "bot_id": os.environ.get("KOMMO_BOT_ID") or None,
             "bot_secret": bool(os.environ.get("KOMMO_BOT_SECRET")), "token": bool(os.environ.get("KOMMO_TOKEN")),
             "ultimo_hook": ultimo["created_at"] if ultimo else None, "hooks_hoje": hoje["n"] if hoje else 0,
@@ -566,37 +571,154 @@ def diagnostico(u=Depends(auth.exige("ADMIN"))):
 
 
 # ------------------------------------------------------------- webhook
-@r.post("/webhook")
-async def webhook(request: Request, con: sqlite3.Connection = Depends(get_db)):
-    """Mensagem que chega no Kommo (Salesbot/webhook) entra aqui na hora.
+def _lista_php(v):
+    """`message[add][0][...]` vem como dict com chaves '0','1'… (form PHP) ou como lista (JSON)."""
+    if isinstance(v, list):
+        return [x for x in v if isinstance(x, dict)]
+    if isinstance(v, dict):
+        return [x for _, x in sorted(v.items(), key=lambda kv: str(kv[0])) if isinstance(x, dict)]
+    return []
 
-    Sem cookie de sessão: quem prova a origem é o segredo compartilhado
-    (KOMMO_WEBHOOK_SECRET), comparado em tempo constante. Sem segredo
-    configurado, a porta fica fechada — não se aceita post anônimo."""
-    segredo = os.environ.get("KOMMO_WEBHOOK_SECRET", "")
-    enviado = request.headers.get("x-urace-secret") or request.query_params.get("secret") or ""
-    if not segredo or not hmac.compare_digest(segredo, enviado):
-        raise HTTPException(403, "Forbidden.")
+
+def _mensagens_do_webhook_kommo(corpo):
+    """Webhook de conta do Kommo ("Incoming message received"): message[add][i] com id, chat_id, talk_id,
+    contact_id, text, created_at, element_type (2 = lead), entity_type, entity_id, type (incoming/outgoing),
+    author{name}, origin. Devolve uma lista normalizada; vazia se não for esse formato."""
+    saida = []
+    m = corpo.get("message") if isinstance(corpo, dict) else None
+    if not isinstance(m, dict):
+        return saida
+    for chave in ("add", "update"):
+        for it in _lista_php(m.get(chave)):
+            texto = it.get("text")
+            if texto is None and isinstance(it.get("message"), dict):
+                it = it["message"]; texto = it.get("text")
+            tipo = str(it.get("type") or "incoming").lower()
+            et = str(it.get("entity_type") or "").lower()
+            el = str(it.get("element_type") or "")
+            lead = None
+            if et in ("lead", "leads") or el == "2":
+                lead = it.get("entity_id") or it.get("element_id")
+            autor = it.get("author") if isinstance(it.get("author"), dict) else {}
+            saida.append({"id": str(it.get("id") or ""), "lead_id": str(lead) if lead else None,
+                          "contato_id": str(it.get("contact_id") or "") or None, "talk_id": str(it.get("talk_id") or "") or None,
+                          "texto": (str(texto).strip() if texto is not None else ""), "direcao": "saida" if tipo.startswith("out") else "entrada",
+                          "autor": autor.get("name"), "origem": it.get("origin"), "criado_em": it.get("created_at"),
+                          "anexo": it.get("attachment") or it.get("media") or None})
+    return saida
+
+
+def _quando_kommo(v):
     try:
-        corpo = await request.json()
+        from adminai.mcp.kommo_mcp import _quando
+        return _quando(int(v)) if v not in (None, "") else None
     except Exception:
-        corpo = dict(await request.form())
-    ext = str(corpo.get("lead_id") or corpo.get("entity_id") or "").strip()
-    texto = (corpo.get("text") or corpo.get("message") or "").strip()
-    if not ext:
-        raise HTTPException(400, "sem lead_id")
-    l = um(con, "SELECT id FROM crm_leads WHERE external_id=?", (ext,))
-    if not l:                                   # lead que ainda não veio na sincronia: cria o mínimo
-        lid = inserir(con, "crm_leads", external_id=ext, name=corpo.get("name") or f"Lead {ext}",
-                      source=corpo.get("source"), synced_at=agora())
-    else:
-        lid = l["id"]
-    if texto:
-        inserir(con, "crm_messages", lead_id=lid, external_id=str(corpo.get("message_id") or "") or None,
-                direction="entrada", author=corpo.get("author") or corpo.get("name") or "cliente",
-                text=texto[:8000], at=agora(), source="webhook")
-        atualizar(con, "crm_leads", lid, last_message_at=agora(), needs_reply=1)
-    auditar(con, "crm.webhook", "kommo", entity_type="crm_lead", entity_id=lid,
-            detail={"chars": len(texto), "origem": corpo.get("source")})
+        return None
+
+
+def tem_texto_perto(con, lead_id, direcao, em, janela=180):
+    """Já há mensagem COM texto desta direção a ≤ janela s? Então a marca (evento sem texto) é a mesma mensagem."""
+    if not em:
+        return False
+    r = um(con, """SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND direction=? AND text IS NOT NULL
+                   AND ABS(strftime('%s', at) - strftime('%s', ?)) <= ? LIMIT 1""", (lead_id, direcao, em, janela))
+    return bool(r)
+
+
+@r.post("/webhook")
+async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+    """Mensagem que chega no Kommo entra aqui na hora, com TEXTO.
+
+    Dois formatos: (a) o webhook de conta do Kommo ("Incoming message received", Settings →
+    Integrations → Webhooks), form-encoded, message[add][0][text]…; (b) o simples
+    {lead_id, text, message_id, author} de um bot/webhook próprio.
+    Sem cookie de sessão: quem prova a origem é o segredo na URL (?key= igual ao do hook,
+    ou ?secret= / X-Urace-Secret = KOMMO_WEBHOOK_SECRET), comparado em tempo constante."""
+    segredo = os.environ.get("KOMMO_WEBHOOK_SECRET", "")
+    chave = _chave_hook()
+    enviado = request.headers.get("x-urace-secret") or request.query_params.get("secret") or request.query_params.get("key") or ""
+    ok = (segredo and hmac.compare_digest(segredo, enviado)) or (chave and hmac.compare_digest(chave, enviado))
+    if not ok:
+        raise HTTPException(403, "Forbidden.")
+    bruto = await request.body()
+    try:
+        corpo = json.loads(bruto) if bruto else {}
+        if not isinstance(corpo, dict):
+            corpo = {}
+    except ValueError:
+        from adminai.mcp.kommo_mcp import parse_corpo_hook
+        corpo = parse_corpo_hook(bruto)
+    conta = (corpo.get("account") or {}) if isinstance(corpo.get("account"), dict) else {}
+    dominio = os.environ.get("KOMMO_DOMAIN", "").replace("https://", "").strip("/").lower()
+    if conta.get("subdomain") and dominio and not dominio.startswith(str(conta["subdomain"]).lower()):
+        raise HTTPException(403, "Conta do Kommo diferente.")
+
+    msgs = _mensagens_do_webhook_kommo(corpo)
+    if not msgs:                                              # formato simples
+        ext = str(corpo.get("lead_id") or corpo.get("entity_id") or "").strip()
+        if not ext:
+            # talk[add]/[update] sem mensagem: só um sinal; nada a guardar
+            if isinstance(corpo.get("talk"), dict):
+                return {"ok": True, "talks": True}
+            raise HTTPException(400, "sem lead_id")
+        msgs = [{"id": str(corpo.get("message_id") or ""), "lead_id": ext, "contato_id": None, "talk_id": None,
+                 "texto": str(corpo.get("text") or corpo.get("message") or "").strip(), "direcao": "entrada",
+                 "autor": corpo.get("author") or corpo.get("name"), "origem": corpo.get("source"), "criado_em": None, "anexo": None,
+                 "_nome": corpo.get("name"), "_simples": True}]
+    from adminai.mcp.kommo_mcp import canal_da_origem
+    guardadas, leads = 0, set()
+    for m in msgs:
+        ext = m["lead_id"]
+        if not ext and m["contato_id"]:                       # mensagem só com contato: acha o lead
+            try:
+                ext = modulo(SISTEMA)._lead_do_contato(m["contato_id"])
+            except Exception:
+                ext = None
+        if not ext:
+            continue
+        canal = canal_da_origem(m["origem"]) or (m["origem"] if m["origem"] and len(str(m["origem"])) < 40 else None)
+        l = um(con, "SELECT * FROM crm_leads WHERE external_id=?", (ext,))
+        novo = False
+        if not l:
+            lid = inserir(con, "crm_leads", external_id=ext, name=m.get("_nome") or m["autor"] or f"Lead {ext}", contact_name=m["autor"],
+                          source=canal, link=f"https://{dominio or 'urace.kommo.com'}/leads/detail/{ext}", synced_at=agora())
+            novo = True
+        else:
+            lid = l["id"]
+            campos = {}
+            if canal and not l["source"]:
+                campos["source"] = canal
+            if m["autor"] and not l["contact_name"] and m["direcao"] == "entrada":
+                campos["contact_name"] = m["autor"]
+            if campos:
+                atualizar(con, "crm_leads", lid, **campos)
+        leads.add(lid)
+        texto = m["texto"] or ("" if not m["anexo"] else "[anexo]")
+        if not texto:
+            continue
+        em = _quando_kommo(m["criado_em"]) or agora()
+        ext_msg = (m["id"] if m.get("_simples") and m["id"] else None) or (f"msg:{m['id']}" if m["id"] else f"msg:{lid}:{em}")
+        if um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (lid, ext_msg)):
+            continue
+        # resposta nossa que o Kommo devolve como "outgoing": se o painel mandou o mesmo texto há pouco, é a mesma
+        if m["direcao"] == "saida" and um(con, """SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND direction='saida' AND text=?
+                                                  AND ABS(strftime('%s', at) - strftime('%s', ?)) <= 900 LIMIT 1""", (lid, texto[:8000], em)):
+            continue
+        # a sincronia pode já ter posto a marca (evento sem texto) desta mesma mensagem: some com a marca
+        con.execute("""DELETE FROM crm_messages WHERE lead_id=? AND direction=? AND text IS NULL AND external_id LIKE 'ev:%'
+                       AND ABS(strftime('%s', at) - strftime('%s', ?)) <= 180""", (lid, m["direcao"], em))
+        inserir(con, "crm_messages", lead_id=lid, external_id=ext_msg, direction=m["direcao"],
+                author=(m["autor"] or ("cliente" if m["direcao"] == "entrada" else "nós")), text=texto[:8000], at=em,
+                source=canal or "webhook", status=("sent" if m["direcao"] == "saida" else None))
+        guardadas += 1
+        if m["direcao"] == "entrada":
+            atualizar(con, "crm_leads", lid, last_message_at=em, needs_reply=1)
+        else:
+            from command_center.providers.sync import recalcular_conversa
+            recalcular_conversa(con, lid)
+        if novo:
+            background.add_task(_enriquecer_lead, lid, ext)
+    for lid in leads:
+        auditar(con, "crm.webhook", "kommo", entity_type="crm_lead", entity_id=lid, detail={"mensagens": guardadas, "formato": "kommo" if corpo.get("message") else "simples"})
     con.commit()
-    return {"ok": True, "lead_id": lid}
+    return {"ok": True, "leads": sorted(leads), "mensagens": guardadas}

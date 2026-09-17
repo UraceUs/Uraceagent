@@ -42,7 +42,7 @@ interface LeadK { id: string; nome: string | null; valor: number | null; funil: 
 interface ConversaK { canal?: string | null; origem?: string | null; lida?: boolean | null; em_trabalho?: boolean | null; criada_em?: string | null; atualizada_em?: string | null; ultima_do_cliente?: string | null; ultima_nossa?: string | null; mensagens?: number; recebidas?: number; enviadas?: number }
 interface Detalhe { lead: LeadK; contatos: ContatoK[]; perfis: Perfil[]; conversa: ConversaK | null; eventos: EventoK[]; lido_em?: string }
 interface DetalheResp { detalhe: Detalhe; ao_vivo: boolean; em: string | null; aviso: string | null }
-interface Setup { hook_url: string | null; hook_key: boolean; bot_id: string | null; bot_secret: boolean; token: boolean; ultimo_hook: string | null; hooks_hoje: number; fila: number; falhas: number }
+interface Setup { hook_url: string | null; webhook_url?: string | null; ultimo_webhook?: string | null; hook_key: boolean; bot_id: string | null; bot_secret: boolean; token: boolean; ultimo_hook: string | null; hooks_hoje: number; fila: number; falhas: number }
 
 /** Origem do lead com a cara do canal: o dono precisa ver de onde veio sem ler. */
 export function origemTone(s?: string | null): Tone {
@@ -331,8 +331,19 @@ function LigarChat() {
   if (!s.data) return null
   const d = s.data
   const pronto = d.hook_key && !!d.bot_id && d.token
-  return <details className="card" open={!pronto}><summary style={{ padding: '10px 14px', cursor: 'pointer' }}><b>Ligar o chat</b> <span className="small muted">— {pronto ? (d.ultimo_hook ? `ligado · último sinal do bot ${ago(d.ultimo_hook)} · ${d.hooks_hoje} hoje` : 'configurado, esperando o primeiro sinal do bot') : 'falta configurar no Kommo'}</span></summary>
+  const textoVivo = !!d.ultimo_webhook
+  return <details className="card" open={!pronto || !textoVivo}><summary style={{ padding: '10px 14px', cursor: 'pointer' }}><b>Ligar o chat</b> <span className="small muted">— {pronto ? (d.ultimo_hook ? `bot ligado · último sinal ${ago(d.ultimo_hook)} · ${d.hooks_hoje} hoje` : 'bot configurado, esperando o primeiro sinal') : 'falta configurar no Kommo'}{textoVivo ? ` · texto das mensagens chegando (último ${ago(d.ultimo_webhook)})` : ' · texto das mensagens ainda NÃO chega: falta o webhook do Kommo (abaixo)'}</span></summary>
     <div className="card-b stack">
+      {d.webhook_url && <div className="card" style={{ padding: '12px 14px', background: textoVivo ? 'var(--ok-wash)' : 'var(--warn-wash)', borderColor: 'transparent' }}>
+        <div className="row wrap" style={{ gap: 8 }}><b>1. Texto de toda mensagem recebida (Instagram, Facebook, WhatsApp) — webhook de conta do Kommo</b>{textoVivo ? <Chip tone="ok">ativo</Chip> : <Chip tone="warn">falta ligar</Chip>}</div>
+        <div className="row wrap" style={{ marginTop: 6 }}><code className="mono small" style={{ wordBreak: 'break-all' }}>{d.webhook_url}</code><button className="btn sm" onClick={() => { navigator.clipboard?.writeText(d.webhook_url!).then(() => toast('URL do webhook copiada.', 'ok')) }}>copiar</button></div>
+        <ol className="small" style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
+          <li>Kommo → <b>Settings → Integrations → Webhooks</b> → <b>Add webhook</b> → cole a URL acima.</li>
+          <li>Marque <b>Incoming message received</b> (e, se aparecerem, <b>Talk added</b> e <b>Talk edited</b>) → <b>Save</b>.</li>
+          <li>Mande uma mensagem de teste pelo Instagram: em segundos ela aparece aqui com o texto, sem depender de bot nem de etapa.</li>
+        </ol>
+      </div>}
+      <div className="row wrap" style={{ gap: 8 }}><b>2. Responder daqui — bot command-center (Salesbot)</b></div>
       <div className="row wrap">
         <Chip tone={d.token ? 'ok' : 'crit'}>{d.token ? 'token ✓' : 'sem token'}</Chip>
         <Chip tone={d.hook_key ? 'ok' : 'crit'}>{d.hook_key ? 'chave do hook ✓' : 'sem chave do hook (rode o deploy)'}</Chip>

@@ -680,3 +680,41 @@ def test_detalhe_do_lead_le_ao_vivo_guarda_e_cai_para_o_retrato(cli, kommo, monk
     monkeypatch.setattr(crm, "chamar", lambda *a, **k: (_ for _ in ()).throw(NaoConectado("sem KOMMO_TOKEN")))
     r2 = cli.get(f"/ops/api/crm/leads/{lid}/detail")
     assert r2.status_code == 200 and not r2.json()["ao_vivo"] and "retrato" in r2.json()["aviso"] and r2.json()["detalhe"]["lead"]["nome"] == "mauro_s_moreira"
+
+
+def test_webhook_de_conta_do_kommo_traz_o_texto_e_some_com_a_marca(cli, chat, monkeypatch):
+    """Settings → Integrations → Webhooks → "Incoming message received": form PHP-style com o texto."""
+    from urllib.parse import urlencode
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com")
+    h = entra(cli, "admin@urace.us")
+    cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})  # garante o lead 5001
+    con = conectar()
+    try:
+        ext = "5001"; lid = _lid(ext)
+        # a sincronia já tinha posto a marca (sem texto) desta mensagem
+        con.execute("INSERT INTO crm_messages (lead_id, external_id, direction, text, at, source) VALUES (?,?,?,?,?,?)",
+                    (lid, "ev:900", "entrada", None, "2026-09-17T14:11:00Z", "Instagram"))
+        con.commit()
+    finally:
+        con.close()
+    corpo = {"account[subdomain]": "urace", "account[id]": "1",
+             "message[add][0][id]": "abc-1", "message[add][0][chat_id]": "c1", "message[add][0][talk_id]": "77", "message[add][0][contact_id]": "501",
+             "message[add][0][text]": "Hi! Do you have a slot on Saturday?", "message[add][0][created_at]": "1789654260",  # 2026-09-17T14:11:00Z
+             "message[add][0][element_type]": "2", "message[add][0][entity_type]": "lead", "message[add][0][entity_id]": ext, "message[add][0][element_id]": ext,
+             "message[add][0][type]": "incoming", "message[add][0][author][name]": "eduardo.resende", "message[add][0][origin]": "com.amocrm.instagram"}
+    chave = __import__("os").environ["KOMMO_HOOK_KEY"]
+    assert cli.post(f"{B}/crm/webhook", content=urlencode(corpo), headers={"content-type": "application/x-www-form-urlencoded"}).status_code == 403
+    r = cli.post(f"{B}/crm/webhook?key={chave}", content=urlencode(corpo), headers={"content-type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 200 and r.json()["mensagens"] == 1
+    d = cli.get(f"{B}/crm/leads/{lid}", headers=h).json()
+    textos = [m for m in d["mensagens"] if m["external_id"] == "msg:abc-1"]
+    assert textos and textos[0]["text"].startswith("Hi! Do you have") and textos[0]["author"] == "eduardo.resende" and textos[0]["source"] == "Instagram"
+    assert textos[0]["at"].startswith("2026-09-17T14:11")
+    assert not any(m["external_id"] == "ev:900" for m in d["mensagens"])       # a marca sumiu: virou a mensagem com texto
+    assert d["lead"]["needs_reply"] == 1
+    # repetir o mesmo webhook não duplica
+    r2 = cli.post(f"{B}/crm/webhook?key={chave}", content=urlencode(corpo), headers={"content-type": "application/x-www-form-urlencoded"})
+    assert r2.json()["mensagens"] == 0
+    # a URL do webhook aparece na configuração
+    s = cli.get(f"{B}/crm/setup", headers=h).json()
+    assert s["webhook_url"].endswith(f"/ops/api/crm/webhook?key={chave}") and s["ultimo_webhook"]
