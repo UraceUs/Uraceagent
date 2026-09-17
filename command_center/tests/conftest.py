@@ -10,6 +10,7 @@ import os
 import tempfile
 
 os.environ["HOME"] = tempfile.mkdtemp(prefix="cc-home-")
+os.environ["URACE_DIR"] = os.path.join(os.environ["HOME"], ".urace")   # 17/09: no VPS o deploy exporta URACE_DIR real; teste nunca escreve lá
 for k in ("URACE_ENV", "GOOGLE_TOKEN_JSON", "GOOGLE_TOKEN_JSON_SUPPORT"):
     os.environ[k] = "/nao/existe"
 for k in list(os.environ):
