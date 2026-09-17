@@ -145,6 +145,75 @@ def lead(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
             "chat_ligado": bool(_chave_hook()) and bool(os.environ.get("KOMMO_BOT_ID"))}
 
 
+@r.get("/leads/{lid}/detail")
+def detalhe(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Tudo que o Kommo mostra do lead (17/09): contatos com todos os campos, perfis (Instagram,
+    Facebook, WhatsApp…), responsável, funil, tags, datas, estado da conversa e histórico.
+    Lê ao vivo e guarda o retrato; sem Kommo, devolve o último retrato guardado."""
+    l = _lead(con, lid)
+    aviso, ao_vivo, d = None, False, None
+    try:
+        d = chamar(SISTEMA, "kommo_lead_completo", lead_id=l["external_id"])
+        ao_vivo = True
+        atualizar(con, "crm_leads", lid, detail=json.dumps(d, ensure_ascii=False), detail_at=agora())
+        _absorver_detalhe(con, l, d)
+        con.commit()
+    except NaoConectado as e:
+        aviso = f"Kommo não conectado: {e}."
+    except Exception as e:
+        aviso = f"Não deu para ler o lead no Kommo agora: {str(e)[:200]}."
+    if d is None:
+        if l.get("detail"):
+            try:
+                d = json.loads(l["detail"])
+                aviso = (aviso or "") + " Mostrando o último retrato guardado."
+            except ValueError:
+                d = None
+        if d is None:
+            raise HTTPException(503, aviso or "Sem retrato do lead.")
+    l = _lead(con, lid)
+    return {"detalhe": d, "ao_vivo": ao_vivo, "em": l.get("detail_at"), "aviso": aviso}
+
+
+def _absorver_detalhe(con, l, d):
+    """O que o retrato traz de melhor entra no espelho: contato, origem, responsável, e cada mensagem
+    do histórico (só hora e canal) vira marca na conversa, sem repetir."""
+    from command_center.providers.sync import recalcular_conversa
+    lead = d.get("lead") or {}
+    c = (d.get("contatos") or [{}])[0]
+    campos = {}
+    if c.get("nome") and not l.get("contact_name"):
+        campos["contact_name"] = c["nome"]
+    if c.get("email") and not l.get("contact_email"):
+        campos["contact_email"] = c["email"]
+    if c.get("telefone") and not l.get("contact_phone"):
+        campos["contact_phone"] = c["telefone"]
+    canal = (d.get("conversa") or {}).get("canal")
+    if canal and (not l.get("source") or l["source"] != canal):
+        campos["source"] = canal
+    if lead.get("responsavel"):
+        campos["responsible"] = lead["responsavel"]
+    if lead.get("tags") is not None:
+        campos["tags"] = json.dumps(lead.get("tags") or [], ensure_ascii=False)
+    for k in (("funil_id", "pipeline_id"), ("funil", "pipeline_name"), ("etapa_id", "stage_id"), ("etapa", "stage_name"), ("ordem", "stage_order"), ("valor", "price")):
+        if lead.get(k[0]) is not None:
+            campos[k[1]] = lead[k[0]]
+    if campos:
+        atualizar(con, "crm_leads", l["id"], **campos)
+    novas = 0
+    for ev in d.get("eventos") or []:
+        if not ev.get("mensagem"):
+            continue
+        ext = "ev:" + ev["id"]
+        if um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (l["id"], ext)):
+            continue
+        inserir(con, "crm_messages", lead_id=l["id"], external_id=ext, direction=ev["direcao"], author=None, text=None,
+                at=ev.get("em") or agora(), source=ev.get("canal") or "kommo-evento")
+        novas += 1
+    if novas:
+        recalcular_conversa(con, l["id"])
+
+
 # ------------------------------------------------------------- escrita
 class EtapaIn(BaseModel):
     stage_id: str

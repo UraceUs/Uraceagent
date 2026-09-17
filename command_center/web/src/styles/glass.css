@@ -295,3 +295,33 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .modal{animation:sheet .26s var(--ease) both}
 @keyframes sheet{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.modal{animation:none}}
+
+/* ---------- chat do Kommo (17/09): tudo do lead ao lado da conversa */
+.mail.inbox.com-dados{grid-template-columns:minmax(240px,.85fr) minmax(0,1.6fr) minmax(300px,.95fr)}
+.ld-col{border-left:1px solid var(--glass-line);overflow:auto;min-width:0}
+.ld-btn{display:none}
+@media(max-width:1300px){.mail.inbox.com-dados{grid-template-columns:minmax(240px,1fr) minmax(0,1.7fr)}.ld-col{display:none}.ld-btn{display:inline-flex}}
+@media(max-width:1100px){.mail.inbox.com-dados{grid-template-columns:1fr}}
+.ld{display:flex;flex-direction:column;gap:4px;padding:6px 0 12px;font-size:13.5px}
+.ld-h{display:flex;align-items:center;gap:10px;padding:10px 14px 6px}
+.ld-sec{padding:4px 0 6px}
+.ld-t{font-family:var(--font-cond);font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:8px 14px 4px}
+.ld-row{display:grid;grid-template-columns:96px minmax(0,1fr);gap:8px;padding:5px 14px;border-top:1px solid var(--glass-line);align-items:baseline}
+.ld-row:first-of-type{border-top:0}
+.ld-row .k{font-size:12px;color:var(--muted);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ld-row .v{min-width:0;overflow-wrap:anywhere}
+.ld-perfil{display:flex;align-items:center;gap:10px;padding:6px 14px;color:var(--ink);border-radius:12px;margin:0 6px}
+.ld-perfil:hover{background:var(--glass-2);color:var(--ink)}
+.ld-perfil .t{display:block;font-weight:600}
+.ld-perfil .s{display:block;font-size:12px;color:var(--muted)}
+.icbox{width:34px;height:34px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:var(--glass-2);border:1px solid var(--glass-line);color:var(--ink-2);flex:0 0 auto}
+.icbox.red{background:var(--brand-wash);color:var(--brand);border-color:transparent}
+.icbox.ok{background:var(--ok-wash);color:var(--ok);border-color:transparent}
+.icbox.info{background:var(--info-wash);color:var(--info);border-color:transparent}
+.ld-ev{display:grid;grid-template-columns:112px minmax(0,1fr);gap:8px;padding:5px 14px;border-top:1px solid var(--glass-line);font-size:13px}
+.msg.marca{margin:2px 0}
+.msg.marca .bub{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:3px 10px;max-width:100%;white-space:normal}
+.msg.marca.ai .bub{border-bottom-left-radius:999px}
+.msg.marca .bub a{color:var(--accent-ink)}
+.chat-day{border-top:0;margin:14px 0 4px}
+.mail.inbox .read .toolbar{position:sticky;top:0;background:var(--surface);z-index:2;padding-top:6px;margin:-4px -4px 0;padding-inline:4px}

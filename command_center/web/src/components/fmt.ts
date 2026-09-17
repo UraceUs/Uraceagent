@@ -12,6 +12,18 @@ export function fmtDateTime(iso?: string | null) {
   if (isNaN(d.getTime())) return iso
   return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ })
 }
+export function fmtTime(iso?: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: TZ })
+}
+export function fmtDateLong(iso?: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', timeZone: TZ })
+}
 export function ago(iso?: string | null) {
   if (!iso) return 'nunca'
   const d = new Date(iso); if (isNaN(d.getTime())) return iso

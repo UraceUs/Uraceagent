@@ -49,3 +49,10 @@ atrapalha. E **não tirar dúvida sobre tudo** — quando perguntar, ser
 conciso e certeiro. Ver [[Escalonamento]].
 
 - **09/09 — a IA conversa como colega.** No AI Command, resposta em português direto, sem jargão interno (trava, APLICAR, política, ids). Faltou dado: perguntas em lista curta e para. Dá para agir: age e diz em uma linha. Preço: lê a Rate Card antes de perguntar.
+
+## Fuso horário: Flórida, sempre (17/09/2026)
+
+"Tudo no sistema roda no fuso EDT Flórida." Toda data e hora mostrada no painel é em
+America/New_York (`fmt.ts` já formata assim; o backend guarda em UTC e converte na tela).
+Rotinas e horários de agenda também são lidos nesse fuso. Nunca mostrar hora do servidor
+nem do navegador.

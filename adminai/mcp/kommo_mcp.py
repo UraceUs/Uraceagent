@@ -236,6 +236,216 @@ def _resumo_lead(lead, com_contato=True):
     }
 
 
+# ------------------------------------------------------------- lead completo (17/09)
+# O dono quer no chat do painel TUDO que o Kommo mostra do lead: perfis (Instagram, Facebook…),
+# contato com todos os campos, responsável, funil/etapa, tags, datas, conversa e histórico.
+_usuarios = {}
+
+
+def _nomes_usuarios():
+    if not _usuarios:
+        try:
+            for u in _lista("/users", "users", maximo=100):
+                _usuarios[str(u.get("id"))] = u.get("name")
+        except ErroFerramenta:
+            pass
+    return _usuarios
+
+
+def _campos_lista(ent):
+    """custom_fields_values → lista plana: um item por valor, com nome, código, tipo e enum."""
+    saida = []
+    for cf in (ent.get("custom_fields_values") or []):
+        for v in (cf.get("values") or []):
+            if v.get("value") in (None, ""):
+                continue
+            saida.append({"campo": cf.get("field_name") or cf.get("field_code") or str(cf.get("field_id")),
+                          "codigo": cf.get("field_code"), "tipo": cf.get("field_type"),
+                          "valor": v.get("value"), "enum": v.get("enum_code") or v.get("enum")})
+    return saida
+
+
+PERFIS = (("instagram", "Instagram", "https://www.instagram.com/{}/"), ("facebook", "Facebook", "https://www.facebook.com/{}"),
+          ("messenger", "Facebook", "https://www.facebook.com/{}"), ("telegram", "Telegram", "https://t.me/{}"),
+          ("tiktok", "TikTok", "https://www.tiktok.com/@{}"), ("whats", "WhatsApp", "https://wa.me/{}"),
+          ("linkedin", "LinkedIn", "https://www.linkedin.com/in/{}"), ("site", "Site", "{}"), ("web", "Site", "{}"))
+
+
+def _perfis(campos_lista, nome, origem, telefone):
+    """Links de perfil: dos campos do contato/lead (Instagram, Facebook, site…) e, quando o lead veio
+    do Instagram e o nome é um @usuário, do próprio nome. Telefone vira link do WhatsApp."""
+    saida, vistos = [], set()
+
+    def add(rede, rotulo, url, inferido=False):
+        if url in vistos:
+            return
+        vistos.add(url)
+        saida.append({"rede": rede, "rotulo": rotulo, "url": url, "inferido": inferido})
+
+    for c in campos_lista or []:
+        k = (c.get("campo") or "").lower() + " " + str(c.get("enum") or "").lower()
+        val = _primeiro(c.get("valor"))
+        if not val:
+            continue
+        if val.startswith("http://") or val.startswith("https://"):
+            rede = next((n for ch, n, _ in PERFIS if ch in k or ch in val.lower()), None) or (c.get("campo") or "Link")
+            add(rede, val.replace("https://", "").replace("http://", "").rstrip("/"), val)
+            continue
+        for chave, rede, molde in PERFIS:
+            if chave in k and rede not in ("Site",):
+                h = val.strip().lstrip("@")
+                if rede == "WhatsApp":
+                    d = re.sub(r"\D", "", h)
+                    if len(d) >= 10:
+                        add(rede, val.strip(), molde.format(d))
+                else:
+                    add(rede, "@" + h, molde.format(h))
+                break
+    canal = canal_da_origem(origem) or (origem or "")
+    h = (nome or "").strip().lstrip("@")
+    if "instagram" in canal.lower() and h and re.fullmatch(r"[A-Za-z0-9._]{2,30}", h) and not any(p["rede"] == "Instagram" for p in saida):
+        add("Instagram", "@" + h, f"https://www.instagram.com/{h}/", True)
+    if telefone:
+        d = re.sub(r"\D", "", telefone)
+        if len(d) >= 10 and not any(p["rede"] == "WhatsApp" for p in saida):
+            add("WhatsApp", telefone, f"https://wa.me/{d}", True)
+    return saida
+
+
+def _dominio():
+    return os.environ.get("KOMMO_DOMAIN", "urace.kommo.com").replace("https://", "").strip("/")
+
+
+def _resumo_contato_completo(c):
+    base = _resumo_contato(c)
+    lista = _campos_lista(c)
+    emails = [_primeiro(x["valor"]) for x in lista if "email" in (x.get("codigo") or x.get("campo") or "").lower()]
+    tels = [_primeiro(x["valor"]) for x in lista if any(t in (x.get("codigo") or x.get("campo") or "").lower() for t in ("phone", "telefone", "whats"))]
+    base.update({"primeiro_nome": c.get("first_name"), "ultimo_nome": c.get("last_name"),
+                 "emails": [e for e in emails if e], "telefones": [t for t in tels if t], "campos_lista": lista,
+                 "tags": [t.get("name") for t in ((c.get("_embedded") or {}).get("tags") or []) if t.get("name")],
+                 "responsavel": _nomes_usuarios().get(str(c.get("responsible_user_id"))),
+                 "criado_em": _quando(c.get("created_at")), "atualizado_em": _quando(c.get("updated_at")),
+                 "link": f"https://{_dominio()}/contacts/detail/{c.get('id')}" if c.get("id") else None})
+    return base
+
+
+EVENTO_PT = {"lead_added": "Lead criado", "lead_deleted": "Lead apagado", "lead_restored": "Lead restaurado",
+             "incoming_chat_message": "Mensagem do cliente", "outgoing_chat_message": "Mensagem nossa",
+             "incoming_call": "Ligação recebida", "outgoing_call": "Ligação feita", "incoming_sms": "SMS recebido", "outgoing_sms": "SMS enviado",
+             "entity_tag_added": "Tag adicionada", "entity_tag_deleted": "Tag removida", "entity_linked": "Contato ligado", "entity_unlinked": "Contato desligado",
+             "task_added": "Tarefa criada", "task_completed": "Tarefa concluída", "task_deadline_changed": "Prazo da tarefa mudou",
+             "common_note_added": "Anotação", "attachment_note_added": "Anexo", "lead_status_changed": "Etapa", "responsible_user_changed": "Responsável",
+             "sale_field_changed": "Valor", "name_field_changed": "Nome", "custom_field_value_changed": "Campo",
+             "entity_merged": "Leads unidos", "conversation_answered": "Conversa respondida", "talk_created": "Conversa aberta", "talk_opened": "Conversa reaberta"}
+
+
+def _texto_evento(ev):
+    tipo = str(ev.get("type") or "")
+    va = ev.get("value_after") or []
+    vb = ev.get("value_before") or []
+    a0 = va[0] if isinstance(va, list) and va and isinstance(va[0], dict) else (va if isinstance(va, dict) else {})
+    b0 = vb[0] if isinstance(vb, list) and vb and isinstance(vb[0], dict) else (vb if isinstance(vb, dict) else {})
+    if tipo == "lead_status_changed":
+        de = (b0.get("lead_status") or {}); para = (a0.get("lead_status") or {})
+        _, e1, _ = _nome_etapa(de.get("pipeline_id"), de.get("id")) if de else (None, None, None)
+        _, e2, _ = _nome_etapa(para.get("pipeline_id"), para.get("id")) if para else (None, None, None)
+        return f"{e1 or '—'} → {e2 or '—'}"
+    if tipo == "responsible_user_changed":
+        u = (a0.get("responsible_user") or {}).get("id")
+        return _nomes_usuarios().get(str(u)) or (str(u) if u else "")
+    if tipo in ("entity_tag_added", "entity_tag_deleted"):
+        return (a0.get("tag") or b0.get("tag") or {}).get("name") or ""
+    if tipo == "sale_field_changed":
+        return str((a0.get("sale_field_value") or {}).get("sale") or a0.get("sale") or "")
+    if tipo == "name_field_changed":
+        return str((a0.get("name_field_value") or {}).get("name") or "")
+    if tipo == "custom_field_value_changed":
+        cf = a0.get("custom_field_value") or {}
+        return f"{cf.get('field_name') or cf.get('field_id') or ''}: {cf.get('text') or cf.get('enum_code') or cf.get('value') or ''}".strip(": ")
+    if tipo in ("common_note_added", "attachment_note_added"):
+        return str((a0.get("note") or {}).get("text") or "")[:300]
+    if "chat_message" in tipo:
+        m = a0.get("message") or a0
+        return canal_da_origem(m.get("origin") or m.get("source") or "") or ""
+    return ""
+
+
+def _eventos_do_lead(lead_id, maximo=120):
+    """Histórico do lead direto dos eventos da conta: etapa, tags, responsável, mensagens (só hora e canal), notas…"""
+    brutos = _lista_eventos({"filter[entity][]": "lead", "filter[entity_id][]": int(lead_id)}, maximo)
+    saida = []
+    for ev in brutos:
+        tipo = str(ev.get("type") or "")
+        va = ev.get("value_after") or []
+        a0 = va[0] if isinstance(va, list) and va and isinstance(va[0], dict) else (va if isinstance(va, dict) else {})
+        m = (a0.get("message") or a0) if "chat_message" in tipo else {}
+        saida.append({"id": str(ev.get("id")), "tipo": tipo, "rotulo": EVENTO_PT.get(tipo, tipo.replace("_", " ")),
+                      "texto": _texto_evento(ev), "em": _quando(ev.get("created_at")),
+                      "por": _nomes_usuarios().get(str(ev.get("created_by"))) if ev.get("created_by") else None,
+                      "mensagem": "chat_message" in tipo, "direcao": ("entrada" if tipo.startswith("incoming") else "saida") if "chat_message" in tipo else None,
+                      "talk_id": str(m.get("talk_id")) if isinstance(m, dict) and m.get("talk_id") else None,
+                      "canal": canal_da_origem((m.get("origin") or m.get("source")) if isinstance(m, dict) else None)})
+    saida.sort(key=lambda x: x["em"] or "")
+    return saida
+
+
+@srv.ferramenta("kommo_lead_completo",
+                "Tudo que o Kommo mostra de um lead: lead com todos os campos, contatos com todos os campos "
+                "(e-mails, telefones, redes), links de perfil (Instagram, Facebook, WhatsApp…), responsável, "
+                "funil/etapa, tags, datas, estado da conversa e histórico de eventos. Só leitura.",
+                {"lead_id": {"type": "string"}}, ["lead_id"])
+def kommo_lead_completo(lead_id):
+    r = _req(f"/leads/{int(lead_id)}", params={"with": "contacts,source_id,loss_reason,catalog_elements"})
+    if not r:
+        raise ErroFerramenta(f"lead {lead_id} não existe nesta conta do Kommo")
+    lead = _resumo_lead(r, com_contato=False)
+    lead.update({"campos_lista": _campos_lista(r), "responsavel": _nomes_usuarios().get(lead.get("responsavel_id")),
+                 "fechado_em": _quando(r.get("closed_at")), "fim_previsto": _quando(r.get("closest_task_at")),
+                 "perdido_motivo": ((r.get("_embedded") or {}).get("loss_reason") or [{}])[0].get("name") if (r.get("_embedded") or {}).get("loss_reason") else None,
+                 "origem_kommo": ((r.get("_embedded") or {}).get("source") or {}).get("name") if isinstance((r.get("_embedded") or {}).get("source"), dict) else None,
+                 "criado_por": _nomes_usuarios().get(str(r.get("created_by"))) if r.get("created_by") else None})
+    ids = [str(c.get("id")) for c in ((r.get("_embedded") or {}).get("contacts") or []) if c.get("id")]
+    contatos = []
+    if ids:
+        _carregar_contatos(ids)
+        for cid in ids:
+            c = _contatos.get(cid)
+            if c:
+                contatos.append(_resumo_contato_completo(c))
+    origem = lead.get("origem")
+    perfis = []
+    for c in contatos:
+        for p in _perfis(c["campos_lista"], c.get("nome"), origem, c.get("telefone")):
+            if p["url"] not in {x["url"] for x in perfis}:
+                perfis.append(p)
+    for p in _perfis(lead["campos_lista"], lead.get("nome"), origem, None):
+        if p["url"] not in {x["url"] for x in perfis}:
+            perfis.append(p)
+    try:
+        eventos = _eventos_do_lead(lead_id)
+    except ErroFerramenta as e:
+        eventos = []
+        lead["aviso_eventos"] = str(e)[:200]
+    conversa = None
+    tid = next((e["talk_id"] for e in reversed(eventos) if e.get("talk_id")), None)
+    if tid:
+        try:
+            conversa = talk(tid)
+        except Exception:
+            conversa = None
+    msgs = [e for e in eventos if e["mensagem"]]
+    ult_in = next((e["em"] for e in reversed(msgs) if e["direcao"] == "entrada"), None)
+    ult_out = next((e["em"] for e in reversed(msgs) if e["direcao"] == "saida"), None)
+    if not conversa and msgs:
+        conversa = {"canal": next((e["canal"] for e in reversed(msgs) if e["canal"]), None)}
+    if conversa is not None:
+        conversa.update({"ultima_do_cliente": ult_in, "ultima_nossa": ult_out, "mensagens": len(msgs),
+                         "recebidas": sum(1 for e in msgs if e["direcao"] == "entrada"), "enviadas": sum(1 for e in msgs if e["direcao"] == "saida")})
+    return {"lead": lead, "contatos": contatos, "perfis": perfis, "conversa": conversa, "eventos": eventos,
+            "lido_em": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
 @srv.ferramenta("kommo_conta", "Conta do Kommo ligada (nome, subdomínio, usuários). Só leitura.", {}, [])
 def kommo_conta():
     r = _req("/account", params={"with": "users_groups"})

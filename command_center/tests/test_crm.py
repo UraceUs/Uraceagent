@@ -626,3 +626,57 @@ def test_fila_e_reivindicada_uma_vez_e_sai_junta(cli, chat):
         assert um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=? AND status='sent' AND text IN ('primeira','segunda')", (lid,))["n"] == 2
     finally:
         con.close()
+
+
+# ------------------------------------------------------------ tudo do lead no chat (17/09)
+def test_perfis_e_eventos_do_lead_completo(monkeypatch):
+    from adminai.mcp import kommo_mcp as k
+    campos = [{"campo": "Instagram", "codigo": None, "tipo": "text", "valor": "@mauro_s", "enum": None},
+              {"campo": "Site", "codigo": None, "tipo": "url", "valor": "https://exemplo.com/x", "enum": None},
+              {"campo": "Phone", "codigo": "PHONE", "tipo": "multitext", "valor": "+1 407 555 0101", "enum": "WORK"}]
+    p = k._perfis(campos, "kian1414.1", "instagram", "+1 407 555 0101")
+    redes = {x["rede"]: x for x in p}
+    assert redes["Instagram"]["url"] == "https://www.instagram.com/mauro_s/"          # campo vence o nome
+    assert redes["Site"]["url"] == "https://exemplo.com/x"
+    assert redes["WhatsApp"]["url"] == "https://wa.me/14075550101" and redes["WhatsApp"]["inferido"]
+    # sem campo de Instagram, o nome-@usuário de um lead do Instagram vira o link (deduzido)
+    p2 = k._perfis([], "kian1414.1", "instagram", None)
+    assert p2[0]["rede"] == "Instagram" and p2[0]["inferido"] and p2[0]["url"].endswith("/kian1414.1/")
+    assert k._perfis([], "Nya Amankwa", "instagram", None) == []                       # nome com espaço não é @
+    monkeypatch.setattr(k, "_nome_etapa", lambda f, e: ("Sales funnel", {"1": "First Contact", "2": "Qualified"}.get(str(e)), 1))
+    monkeypatch.setattr(k, "_nomes_usuarios", lambda: {"7": "Italo"})
+    brutos = [{"id": 1, "type": "incoming_chat_message", "created_at": 1758100000, "value_after": [{"message": {"id": "m1", "talk_id": 55, "origin": "com.amocrm.amocrmwa"}}]},
+              {"id": 2, "type": "lead_status_changed", "created_at": 1758100100, "created_by": 7, "value_before": [{"lead_status": {"id": 1, "pipeline_id": 9}}], "value_after": [{"lead_status": {"id": 2, "pipeline_id": 9}}]},
+              {"id": 3, "type": "entity_tag_added", "created_at": 1758100200, "value_after": [{"tag": {"name": "Karting"}}]}]
+    monkeypatch.setattr(k, "_lista_eventos", lambda params, maximo: brutos)
+    evs = k._eventos_do_lead("123")
+    assert evs[0]["mensagem"] and evs[0]["direcao"] == "entrada" and evs[0]["canal"] == "WhatsApp" and evs[0]["talk_id"] == "55"
+    assert evs[1]["rotulo"] == "Etapa" and evs[1]["texto"] == "First Contact → Qualified" and evs[1]["por"] == "Italo"
+    assert evs[2]["texto"] == "Karting"
+
+
+def test_detalhe_do_lead_le_ao_vivo_guarda_e_cai_para_o_retrato(cli, kommo, monkeypatch):
+    from command_center.api import crm
+    from command_center.providers import NaoConectado
+    # espelha o funil para ter um lead
+    cli.post("/ops/api/crm/sync")
+    lid = cli.get("/ops/api/crm/board").json()["funis"][0]["etapas"][0]["leads"][0]["id"]
+    retrato = {"lead": {"id": "1001", "nome": "mauro_s_moreira", "valor": None, "funil": "Sales funnel", "etapa": "First Contact", "tags": ["Karting"],
+                        "responsavel": "Italo", "origem": "instagram", "campos_lista": [], "criado_em": "2026-09-16T05:00:00Z", "atualizado_em": "2026-09-17T05:06:00Z"},
+               "contatos": [{"id": "5", "nome": "mauro_s_moreira", "email": None, "telefone": "+1 407 555 0199", "emails": [], "telefones": ["+1 407 555 0199"], "campos_lista": [], "tags": []}],
+               "perfis": [{"rede": "Instagram", "rotulo": "@mauro_s_moreira", "url": "https://www.instagram.com/mauro_s_moreira/", "inferido": True}],
+               "conversa": {"canal": "Instagram", "lida": False, "ultima_do_cliente": "2026-09-17T05:06:00Z", "ultima_nossa": None, "mensagens": 1, "recebidas": 1, "enviadas": 0},
+               "eventos": [{"id": "77", "tipo": "incoming_chat_message", "rotulo": "Mensagem do cliente", "texto": "Instagram", "em": "2026-09-17T05:06:00Z", "mensagem": True, "direcao": "entrada", "canal": "Instagram"}],
+               "lido_em": "2026-09-17T13:00:00Z"}
+    antigo = crm.chamar
+    monkeypatch.setattr(crm, "chamar", lambda s, f, **a: retrato if f == "kommo_lead_completo" else antigo(s, f, **a))
+    r = cli.get(f"/ops/api/crm/leads/{lid}/detail")
+    assert r.status_code == 200 and r.json()["ao_vivo"] and r.json()["detalhe"]["perfis"][0]["rede"] == "Instagram"
+    # a mensagem do histórico virou marca na conversa (hora e canal), e o lead ficou com o canal e o responsável
+    l = cli.get(f"/ops/api/crm/leads/{lid}").json()
+    assert any(m["external_id"] == "ev:77" and m["text"] is None and m["source"] == "Instagram" for m in l["mensagens"])
+    assert l["lead"]["responsible"] == "Italo" and l["lead"]["source"] == "Instagram" and l["lead"]["needs_reply"] == 1
+    # sem Kommo, devolve o último retrato guardado e avisa
+    monkeypatch.setattr(crm, "chamar", lambda *a, **k: (_ for _ in ()).throw(NaoConectado("sem KOMMO_TOKEN")))
+    r2 = cli.get(f"/ops/api/crm/leads/{lid}/detail")
+    assert r2.status_code == 200 and not r2.json()["ao_vivo"] and "retrato" in r2.json()["aviso"] and r2.json()["detalhe"]["lead"]["nome"] == "mauro_s_moreira"

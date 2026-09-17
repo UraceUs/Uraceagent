@@ -4,13 +4,14 @@
    Kommo aparecem aqui como uma caixa de entrada, e a resposta sai daqui pelo circuito
    do Salesbot (provado em 24/08). O funil é a segunda aba. Cada link fica junto do seu
    item — nunca uma fila de links no topo. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, Spinner, statusTone, type Tone } from '../components/ui'
-import { ago, fmtDateTime, money } from '../components/fmt'
+import { Banner, Chip, Empty, ErrorState, Loading, Scrim, Spinner, statusTone, type Tone } from '../components/ui'
+import { Icon } from '../components/Icon'
+import { ago, fmtDate, fmtDateLong, fmtDateTime, fmtTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 
@@ -33,6 +34,14 @@ interface LeadDetalhe { lead: Lead; mensagens: Mensagem[]; aviso: string | null;
 interface EtapaViva { id: string; nome: string; ordem: number }
 interface FunilVivo { id: string; nome: string; etapas: EtapaViva[] }
 interface Inbox { conversas: Lead[]; pendentes: number }
+interface Perfil { rede: string; rotulo: string; url: string; inferido?: boolean }
+interface CampoK { campo: string; codigo?: string | null; tipo?: string | null; valor: unknown; enum?: string | null }
+interface ContatoK { id: string | null; nome: string | null; primeiro_nome?: string | null; ultimo_nome?: string | null; email: string | null; telefone: string | null; emails: string[]; telefones: string[]; campos_lista: CampoK[]; tags: string[]; responsavel?: string | null; criado_em?: string | null; atualizado_em?: string | null; link?: string | null }
+interface EventoK { id: string; tipo: string; rotulo: string; texto: string; em: string | null; por?: string | null; mensagem: boolean; direcao?: string | null; canal?: string | null }
+interface LeadK { id: string; nome: string | null; valor: number | null; funil: string | null; etapa: string | null; tags: string[]; responsavel?: string | null; origem?: string | null; origem_kommo?: string | null; campos_lista: CampoK[]; criado_em?: string | null; atualizado_em?: string | null; fechado_em?: string | null; perdido_motivo?: string | null; criado_por?: string | null; link?: string | null; aviso_eventos?: string | null }
+interface ConversaK { canal?: string | null; origem?: string | null; lida?: boolean | null; em_trabalho?: boolean | null; criada_em?: string | null; atualizada_em?: string | null; ultima_do_cliente?: string | null; ultima_nossa?: string | null; mensagens?: number; recebidas?: number; enviadas?: number }
+interface Detalhe { lead: LeadK; contatos: ContatoK[]; perfis: Perfil[]; conversa: ConversaK | null; eventos: EventoK[]; lido_em?: string }
+interface DetalheResp { detalhe: Detalhe; ao_vivo: boolean; em: string | null; aviso: string | null }
 interface Setup { hook_url: string | null; hook_key: boolean; bot_id: string | null; bot_secret: boolean; token: boolean; ultimo_hook: string | null; hooks_hoje: number; fila: number; falhas: number }
 
 /** Origem do lead com a cara do canal: o dono precisa ver de onde veio sem ler. */
@@ -49,10 +58,13 @@ function iconeDaOrigem(s?: string | null) {
   const t = (s || '').toLowerCase()
   return Object.entries(ORIGEM_ICONE).find(([k]) => t.includes(k))?.[1] || '•'
 }
+const REDE_ICONE: Record<string, string> = { instagram: 'instagram', facebook: 'facebook', messenger: 'facebook', whatsapp: 'whatsapp', telegram: 'telegram', site: 'globe', web: 'globe', linkedin: 'globe', tiktok: 'globe' }
+function iconeDaRede(s?: string | null) { const t = (s || '').toLowerCase(); return Object.entries(REDE_ICONE).find(([k]) => t.includes(k))?.[1] || 'out' }
+const CAMPO_OCULTO = /email|e-mail|phone|telefone|whats|^im$|instagram|facebook|messenger|telegram/i
 const nomeDo = (l: Lead) => l.contact_name || l.name || `Lead ${l.external_id}`
 
 // ------------------------------------------------------------------ conversa (o chat)
-function Conversa({ id, conectado, onChange }: { id: number; conectado: boolean; onChange: () => void }) {
+function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado: boolean; onChange: () => void; onDados?: () => void }) {
   const { can } = useAuth()
   const toast = useToast()
   const perguntar = usePerguntar()
@@ -101,16 +113,7 @@ function Conversa({ id, conectado, onChange }: { id: number; conectado: boolean;
   if (d.error) return <div className="read"><ErrorState error={d.error} retry={d.reload} /></div>
   if (!l) return null
   const msgs = d.data?.mensagens || []
-  // mensagem antiga do canal nativo vem sem texto (a API do Kommo não entrega): vira uma marca
-  // compacta — várias seguidas viram uma linha só, com o link para ler no Kommo
-  const blocos: (Mensagem | { marca: true; n: number; de: string | null; ate: string | null; entradas: number })[] = []
-  for (const m of msgs) {
-    if (m.text === null || m.text === undefined) {
-      const ult = blocos[blocos.length - 1]
-      if (ult && 'marca' in ult) { ult.n++; ult.ate = m.at; if (m.direction === 'entrada') ult.entradas++ }
-      else blocos.push({ marca: true, n: 1, de: m.at, ate: m.at, entradas: m.direction === 'entrada' ? 1 : 0 })
-    } else blocos.push(m)
-  }
+  let dia = ''
   return <div className="read">
     <div className="toolbar">
       <div className="grow" style={{ minWidth: 0 }}>
@@ -118,6 +121,7 @@ function Conversa({ id, conectado, onChange }: { id: number; conectado: boolean;
           <b style={{ fontSize: 16 }}>{nomeDo(l)}</b>
           {l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}
           {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
+          {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> Dados do lead</button>}
         </div>
         <div className="row wrap small muted" style={{ gap: 10 }}>
           {l.contact_phone && <a href={`tel:${l.contact_phone.replace(/[^\d+]/g, '')}`}>{l.contact_phone}</a>}
@@ -139,16 +143,28 @@ function Conversa({ id, conectado, onChange }: { id: number; conectado: boolean;
     {d.data?.aviso && <Banner tone="warn">{d.data.aviso}</Banner>}
     <div className="chat" style={{ flex: 1 }}>
       {msgs.length === 0 && <Empty title="Sem mensagens guardadas">O que o lead escreveu antes do chat ser ligado fica só no Kommo. A partir de agora, cada mensagem entra aqui na hora.</Empty>}
-      {blocos.map((m, i) => 'marca' in m ? <div key={`marca${i}`} className="msg nota"><div className="bub">{m.n === 1 ? 'uma mensagem' : `${m.n} mensagens`} {l.source ? `pelo ${l.source}` : 'no chat'}{m.entradas && m.entradas < m.n ? ` (${m.entradas} do cliente)` : m.entradas === m.n ? ' do cliente' : ' da nossa parte'} · {m.de ? fmtDateTime(m.de) : ''}{m.n > 1 && m.ate ? ` → ${fmtDateTime(m.ate)}` : ''} · o texto de antes do painel fica no Kommo{l.link && <> — <a href={l.link} target="_blank" rel="noopener noreferrer">ler lá ↗</a></>}</div></div>
-        : <div key={m.id} className={`msg ${m.direction === 'entrada' ? 'ai' : m.direction === 'nota' ? 'nota' : 'me'}`}>
-        <div className="meta">{m.direction === 'entrada' ? (m.author || 'cliente') : m.direction === 'nota' ? `nota · ${m.author || 'painel'}` : (m.author || 'nós')}{m.at && ` · ${fmtDateTime(m.at)}`}
-          {m.direction === 'saida' && m.status === 'queued' && <Chip tone="warn">na fila</Chip>}
-          {m.direction === 'saida' && m.status === 'sent' && <Chip tone="ok">entregue</Chip>}
-          {m.direction === 'saida' && m.status === 'failed' && <Chip tone="crit">não entregue</Chip>}
-        </div>
-        <div className="bub">{m.text}</div>
-        {m.status === 'failed' && m.error && <div className="small" style={{ color: 'var(--crit)' }}>{m.error}</div>}
-      </div>)}
+      {msgs.map(m => {
+        const d0 = m.at ? fmtDate(m.at) : ''
+        const sep = d0 && d0 !== dia
+        if (d0) dia = d0
+        const semTexto = m.text === null || m.text === undefined
+        return <Fragment key={m.id}>
+          {sep && <div className="chat-day">{fmtDateLong(m.at)}</div>}
+          {semTexto
+            ? <div className={`msg marca ${m.direction === 'entrada' ? 'ai' : 'me'}`} title="A API do Kommo não entrega o texto das mensagens de antes do painel">
+                <div className="bub"><Icon name={iconeDaRede(m.source || l.source)} size={14} /> {m.direction === 'entrada' ? 'cliente escreveu' : 'respondemos'} · {fmtTime(m.at)}{m.source && m.source !== 'kommo-evento' ? ` · ${m.source}` : ''}{l.link && <> · <a href={l.link} target="_blank" rel="noopener noreferrer">texto no Kommo ↗</a></>}</div>
+              </div>
+            : <div className={`msg ${m.direction === 'entrada' ? 'ai' : m.direction === 'nota' ? 'nota' : 'me'}`}>
+                <div className="meta">{m.direction === 'entrada' ? (m.author || nomeDo(l)) : m.direction === 'nota' ? `nota · ${m.author || 'painel'}` : (m.author || 'nós')}{m.at && ` · ${fmtTime(m.at)}`}
+                  {m.direction === 'saida' && m.status === 'queued' && <Chip tone="warn">na fila</Chip>}
+                  {m.direction === 'saida' && m.status === 'sent' && <Chip tone="ok">entregue</Chip>}
+                  {m.direction === 'saida' && m.status === 'failed' && <Chip tone="crit">não entregue</Chip>}
+                </div>
+                <div className="bub">{m.text}</div>
+                {m.status === 'failed' && m.error && <div className="small" style={{ color: 'var(--crit)' }}>{m.error}</div>}
+              </div>}
+        </Fragment>
+      })}
       <div ref={fim} />
     </div>
     {can('OPERATOR') && <div className="stack" style={{ gap: 8 }}>
@@ -163,16 +179,99 @@ function Conversa({ id, conectado, onChange }: { id: number; conectado: boolean;
   </div>
 }
 
+// ------------------------------------------------------------------ dados do lead (tudo que o Kommo mostra)
+function Linha({ k, children }: { k: string; children: React.ReactNode }) {
+  return <div className="ld-row"><span className="k">{k}</span><span className="v">{children}</span></div>
+}
+function ValorCampo({ v }: { v: unknown }) {
+  if (v === null || v === undefined || v === '') return <span className="muted">—</span>
+  if (typeof v === 'string' && /^https?:\/\//.test(v)) return <a href={v} target="_blank" rel="noopener noreferrer">{v.replace(/^https?:\/\//, '')} ↗</a>
+  if (Array.isArray(v)) return <>{v.map(String).join(', ')}</>
+  return <>{String(v)}</>
+}
+export function DadosDoLead({ id, l, onClose }: { id: number; l: Lead; onClose?: () => void }) {
+  const d = useGet<DetalheResp>(`/crm/leads/${id}/detail`, 60000)
+  if (d.loading && !d.data) return <div className="ld"><Loading rows={5} /></div>
+  if (d.error) return <div className="ld"><ErrorState error={d.error} retry={d.reload} /></div>
+  const det = d.data!.detalhe
+  const lead = det.lead, c = det.contatos[0], conv = det.conversa
+  const outrosContato = (c?.campos_lista || []).filter(x => !CAMPO_OCULTO.test(`${x.campo} ${x.codigo || ''} ${x.enum || ''}`))
+  const outrosLead = (lead.campos_lista || []).filter(x => !CAMPO_OCULTO.test(`${x.campo} ${x.codigo || ''}`))
+  const historico = det.eventos.filter(e => !e.mensagem).slice(-40).reverse()
+  return <div className="ld">
+    <div className="ld-h"><b>Dados do lead</b><span className="small muted">{d.data!.ao_vivo ? `ao vivo · ${fmtTime(det.lido_em)}` : `retrato de ${fmtDateTime(d.data!.em)}`}</span>
+      <button className="btn ghost sm" style={{ marginLeft: 'auto' }} title="Reler no Kommo" onClick={d.reload} aria-label="Reler"><Icon name="refresh" size={16} /></button>
+      {onClose && <button className="btn ghost sm" onClick={onClose} aria-label="Fechar"><Icon name="x" size={16} /></button>}</div>
+    {d.data!.aviso && <div className="small" style={{ color: 'var(--warn)', padding: '0 14px 8px' }}>{d.data!.aviso}</div>}
+
+    {det.perfis.length > 0 && <section className="ld-sec">
+      <div className="ld-t">Perfis e canais</div>
+      {det.perfis.map(p => <a key={p.url} className="ld-perfil" href={p.url} target="_blank" rel="noopener noreferrer" title={p.inferido ? 'deduzido do nome/telefone' : 'campo do Kommo'}>
+        <span className={`icbox ${iconeDaRede(p.rede) === 'instagram' ? 'red' : iconeDaRede(p.rede) === 'whatsapp' ? 'ok' : iconeDaRede(p.rede) === 'facebook' ? 'info' : ''}`}><Icon name={iconeDaRede(p.rede)} /></span>
+        <span className="grow" style={{ minWidth: 0 }}><span className="t truncate">{p.rotulo}</span><span className="s">{p.rede}{p.inferido ? ' · deduzido' : ''}</span></span>
+        <Icon name="out" size={16} className="muted" /></a>)}
+    </section>}
+
+    <section className="ld-sec">
+      <div className="ld-t">Contato{det.contatos.length > 1 ? ` (${det.contatos.length})` : ''}</div>
+      {!c && <div className="small muted" style={{ padding: '0 14px 8px' }}>Lead sem contato ligado no Kommo.</div>}
+      {c && <>
+        <Linha k="Nome">{c.nome || '—'}{c.link && <> <a href={c.link} target="_blank" rel="noopener noreferrer" className="small">no Kommo ↗</a></>}</Linha>
+        {(c.telefones.length ? c.telefones : c.telefone ? [c.telefone] : []).map(t => <Linha key={t} k="Telefone"><a href={`tel:${t.replace(/[^\d+]/g, '')}`}>{t}</a></Linha>)}
+        {(c.emails.length ? c.emails : c.email ? [c.email] : []).map(e => <Linha key={e} k="E-mail"><a href={`mailto:${e}`}>{e}</a></Linha>)}
+        {outrosContato.map((x, i) => <Linha key={i} k={x.campo}><ValorCampo v={x.valor} />{x.enum ? <span className="muted small"> · {x.enum}</span> : null}</Linha>)}
+        {c.tags.length > 0 && <Linha k="Tags">{c.tags.join(', ')}</Linha>}
+        {c.responsavel && <Linha k="Responsável">{c.responsavel}</Linha>}
+        {c.criado_em && <Linha k="Criado">{fmtDateTime(c.criado_em)}</Linha>}
+      </>}
+      {det.contatos.slice(1).map(o => <Linha key={o.id || o.nome || ''} k="Também">{o.nome}{o.telefone ? ` · ${o.telefone}` : ''}{o.email ? ` · ${o.email}` : ''}</Linha>)}
+    </section>
+
+    <section className="ld-sec">
+      <div className="ld-t">Lead</div>
+      <Linha k="Funil">{lead.funil || '—'}{lead.etapa ? <> · <b>{lead.etapa}</b></> : null}</Linha>
+      <Linha k="Origem">{lead.origem || lead.origem_kommo || conv?.canal || '—'}</Linha>
+      <Linha k="Valor">{lead.valor ? money(lead.valor) : '—'}</Linha>
+      <Linha k="Responsável">{lead.responsavel || l.responsible || '—'}</Linha>
+      {lead.tags.length > 0 && <Linha k="Tags">{lead.tags.join(', ')}</Linha>}
+      {outrosLead.map((x, i) => <Linha key={i} k={x.campo}><ValorCampo v={x.valor} /></Linha>)}
+      <Linha k="Criado">{lead.criado_em ? fmtDateTime(lead.criado_em) : '—'}{lead.criado_por ? <span className="muted small"> · {lead.criado_por}</span> : null}</Linha>
+      <Linha k="Atualizado">{lead.atualizado_em ? fmtDateTime(lead.atualizado_em) : '—'}</Linha>
+      {lead.fechado_em && <Linha k="Fechado">{fmtDateTime(lead.fechado_em)}{lead.perdido_motivo ? ` · ${lead.perdido_motivo}` : ''}</Linha>}
+      <Linha k="Id">{lead.id}{lead.link && <> · <a href={lead.link} target="_blank" rel="noopener noreferrer">abrir no Kommo ↗</a></>}</Linha>
+    </section>
+
+    {conv && <section className="ld-sec">
+      <div className="ld-t">Conversa</div>
+      {conv.canal && <Linha k="Canal">{conv.canal}{conv.origem ? <span className="muted small"> · {conv.origem}</span> : null}</Linha>}
+      {conv.lida !== undefined && conv.lida !== null && <Linha k="Lida">{conv.lida ? 'sim' : <span style={{ color: 'var(--warn)' }}>não</span>}</Linha>}
+      {conv.em_trabalho !== undefined && conv.em_trabalho !== null && <Linha k="Em atendimento">{conv.em_trabalho ? 'sim' : 'não'}</Linha>}
+      <Linha k="Do cliente">{conv.ultima_do_cliente ? fmtDateTime(conv.ultima_do_cliente) : '—'}</Linha>
+      <Linha k="Nossa">{conv.ultima_nossa ? fmtDateTime(conv.ultima_nossa) : '—'}</Linha>
+      {typeof conv.mensagens === 'number' && <Linha k="Mensagens">{conv.mensagens} <span className="muted small">· {conv.recebidas} do cliente · {conv.enviadas} nossas</span></Linha>}
+      {conv.criada_em && <Linha k="Aberta">{fmtDateTime(conv.criada_em)}</Linha>}
+    </section>}
+
+    <section className="ld-sec">
+      <div className="ld-t">Histórico no Kommo</div>
+      {historico.length === 0 && <div className="small muted" style={{ padding: '0 14px 8px' }}>{lead.aviso_eventos || 'Nenhum evento além das mensagens.'}</div>}
+      {historico.map(e => <div key={e.id} className="ld-ev"><span className="mono small muted">{fmtDateTime(e.em)}</span><span><b>{e.rotulo}</b>{e.texto ? ` · ${e.texto}` : ''}{e.por ? <span className="muted small"> · {e.por}</span> : null}</span></div>)}
+    </section>
+  </div>
+}
+
 // ------------------------------------------------------------------ caixa de entrada
 function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
   const [sp, setSp] = useSearchParams()
   const inbox = useGet<Inbox>('/crm/inbox', 20000)
   const aberto = Number(sp.get('lead')) || null
   const [filtro, setFiltro] = useState('')
+  const [dados, setDados] = useState(false)
+  const leadAberto = (inbox.data?.conversas || []).find(l => l.id === aberto) || null
   const lista = (inbox.data?.conversas || []).filter(l => !filtro || `${nomeDo(l)} ${l.contact_phone || ''} ${l.contact_email || ''} ${l.source || ''}`.toLowerCase().includes(filtro.toLowerCase()))
   if (inbox.loading && !inbox.data) return <Loading rows={6} />
   if (inbox.error) return <ErrorState error={inbox.error} retry={inbox.reload} />
-  return <div className="mail inbox">
+  return <div className={`mail inbox${aberto ? ' com-dados' : ''}`}>
     <div className="list">
       <div style={{ padding: 8, borderBottom: '1px solid var(--rule)' }}><input className="input" placeholder="Buscar conversa…" value={filtro} onChange={e => setFiltro(e.target.value)} /></div>
       {lista.length === 0 && <div style={{ padding: 16 }}><Empty title="Nenhuma conversa ainda">Quando o chat estiver ligado no Kommo, cada mensagem do Instagram, Facebook e WhatsApp aparece aqui na hora.</Empty></div>}
@@ -183,7 +282,9 @@ function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
         <div className="sug">{l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}{l.stage_name && <span className="small muted">{l.stage_name}</span>}{!!l.falhas && <Chip tone="crit">{l.falhas} não entregue</Chip>}{l.client_id && <span className="small muted">· {l.client_pilot || l.client_name}</span>}</div>
       </div>)}
     </div>
-    {aberto ? <Conversa key={aberto} id={aberto} conectado={conectado} onChange={inbox.reload} /> : <div className="read"><Empty title="Escolha uma conversa">A lista ao lado mostra quem falou por último; quem espera resposta fica no topo com ●.</Empty></div>}
+    {aberto ? <Conversa key={aberto} id={aberto} conectado={conectado} onChange={inbox.reload} onDados={() => setDados(true)} /> : <div className="read"><Empty title="Escolha uma conversa">A lista ao lado mostra quem falou por último; quem espera resposta fica no topo com ●.</Empty></div>}
+    {aberto && leadAberto && <aside className="ld-col"><DadosDoLead key={`c${aberto}`} id={aberto} l={leadAberto} /></aside>}
+    {dados && aberto && leadAberto && <Scrim onMouseDown={() => setDados(false)}><div className="modal" style={{ maxWidth: 560, padding: 0 }} onMouseDown={e => e.stopPropagation()}><DadosDoLead key={`m${aberto}`} id={aberto} l={leadAberto} onClose={() => setDados(false)} /></div></Scrim>}
   </div>
 }
 
