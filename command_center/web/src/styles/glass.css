@@ -6,7 +6,7 @@
    Este arquivo vem DEPOIS de tokens.css e redefine as peças que todas as telas usam.
    ============================================================================ */
 
-/* ---------- fundo com profundidade (brilho suave vermelho/teal, como nas referências) */
+/* ---------- fundo com profundidade (brilho suave vermelho/azul, como nas referências) */
 body{background:radial-gradient(900px 520px at 85% -10%,var(--brand-wash),transparent 60%),radial-gradient(700px 500px at 0% 110%,var(--accent-wash),transparent 60%),var(--paper);background-attachment:fixed;font-size:14px;letter-spacing:.005em}
 a:hover{text-decoration:none;color:var(--accent-ink)}
 
@@ -278,17 +278,10 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .c360-d summary .h2::before{content:"";display:inline-block;width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);margin-right:8px;vertical-align:1px;transition:transform var(--t) var(--ease)}
 .c360-d[open] summary .h2::before{content:"";transform:rotate(45deg)}
 
-/* ---------- login: vidro sobre profundidade */
-.login .art{background:radial-gradient(700px 500px at 20% 20%,var(--brand-wash),transparent 60%),var(--paper);color:var(--ink-2)}
-.login .art .mark b,.login .art .mark span{font-family:var(--font-cond)}
-.login .art .mark span{color:var(--ink)}
-.login .art h1{font-family:var(--font);text-transform:none;letter-spacing:-.02em;font-size:44px;color:var(--ink);font-weight:700}
-.login .art p{color:var(--muted)}
-.login .art::after{border-color:var(--brand);opacity:.16}
-.login .form{background:transparent}
-.login .box{background:var(--glass);border:1px solid var(--glass-line);border-radius:var(--r-xl);padding:28px;box-shadow:var(--shadow);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);max-width:420px}
-.login .box .h1{font-size:26px}
-.login .box .btn.primary{min-height:46px;font-size:15px}
+/* ---------- login: a estrutura está em tokens.css (opção B, 17/09). Aqui só o tema claro. */
+[data-theme="light"] .login .art h1{color:#fff}
+[data-theme="light"] .login .art .mark span:not(.mark-u){color:#fff}
+[data-theme="light"] .login .pista .veu{background:linear-gradient(180deg,rgba(14,13,12,.72) 0%,rgba(14,13,12,.3) 44%,rgba(14,13,12,.92) 100%)}
 
 /* ---------- movimento: mais suave (iOS), mesma curva; sem sublinhado deslizante nas abas */
 .page-in{animation-duration:.26s}
@@ -318,7 +311,7 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .icbox.red{background:var(--brand-wash);color:var(--brand);border-color:transparent}
 .icbox.ok{background:var(--ok-wash);color:var(--ok);border-color:transparent}
 .icbox.info{background:var(--info-wash);color:var(--info);border-color:transparent}
-.icbox.teal{background:var(--accent-wash);color:var(--accent-ink);border-color:transparent}
+.icbox.teal,.icbox.azul{background:var(--accent-wash);color:var(--accent-ink);border-color:transparent}
 .icbox.crit{background:var(--crit-wash);color:var(--crit);border-color:transparent}
 /* chave liga/desliga (vem do iOS): usada no "o que acontece ao confirmar" */
 .sw{position:relative;width:46px;height:28px;flex:0 0 auto;border-radius:999px;border:1px solid transparent;background:var(--ok);cursor:pointer;transition:background .18s ease}
