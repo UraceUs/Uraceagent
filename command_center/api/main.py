@@ -304,9 +304,16 @@ if os.path.isdir(os.path.join(DIST, "assets")):
 @app.get(BASE + "/")
 @app.get(BASE + "/{caminho:path}")
 def spa(caminho: str = ""):
-    """Tudo que não é /api nem /assets devolve o index do SPA."""
+    """Tudo que não é /api nem /assets devolve o index do SPA — menos os arquivos soltos do
+    build (o que o Vite copia de `web/public`: a foto do login, favicon). Sem isso o `<img>`
+    do login recebia o index e achava que a foto não existia (17/09)."""
     if caminho.startswith("api/") or caminho.startswith("assets/"):
         raise HTTPException(404)
+    if caminho and "\\" not in caminho:
+        alvo = os.path.normpath(os.path.join(DIST, caminho))
+        if (alvo.startswith(DIST + os.sep) and os.path.isfile(alvo)
+                and os.path.basename(alvo) != "index.html"):
+            return FileResponse(alvo, headers={"Cache-Control": "public, max-age=3600"})
     index = os.path.join(DIST, "index.html")
     if not os.path.isfile(index):
         return JSONResponse({"error": "frontend not built",

@@ -286,12 +286,12 @@ select.input{appearance:auto}
 .login .box .btn.primary{min-height:54px;border-radius:999px;font-size:16px}
 /* a foto (ou o desenho que ocupa o lugar dela até a foto entrar) */
 .login .pista{position:absolute;inset:0}
-.login .pista .foto-pista{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 42%;
-  filter:grayscale(1) contrast(1.08) brightness(1.04);opacity:.85;
-  -webkit-mask-image:linear-gradient(103deg,#000 0%,rgba(0,0,0,.96) 42%,rgba(0,0,0,.45) 82%,transparent 100%),linear-gradient(#000 0%,#000 62%,rgba(0,0,0,.35) 100%);
-  -webkit-mask-composite:source-in;mask-image:linear-gradient(103deg,#000 0%,rgba(0,0,0,.96) 42%,rgba(0,0,0,.45) 82%,transparent 100%),linear-gradient(#000 0%,#000 62%,rgba(0,0,0,.35) 100%);mask-composite:intersect}
-.login .pista .veu{position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,13,12,.8) 0%,rgba(14,13,12,.32) 44%,rgba(14,13,12,.95) 100%)}
-.login .pista .brasa{position:absolute;inset:0;background:radial-gradient(760px 520px at 12% 86%,rgba(232,86,62,.3),transparent 62%);mix-blend-mode:soft-light}
+.login .pista .foto-pista{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:52% 45%;
+  filter:grayscale(1) contrast(1.06) brightness(1.04);opacity:.62;
+  -webkit-mask-image:linear-gradient(104deg,#000 0%,#000 52%,rgba(0,0,0,.4) 86%,transparent 100%),linear-gradient(180deg,rgba(0,0,0,.6) 0%,#000 26%,#000 56%,rgba(0,0,0,.2) 92%,transparent 100%);
+  -webkit-mask-composite:source-in;mask-image:linear-gradient(104deg,#000 0%,#000 52%,rgba(0,0,0,.4) 86%,transparent 100%),linear-gradient(180deg,rgba(0,0,0,.6) 0%,#000 26%,#000 56%,rgba(0,0,0,.2) 92%,transparent 100%);mask-composite:intersect}
+.login .pista .veu{position:absolute;inset:0;background:linear-gradient(180deg,rgba(19,18,17,.62) 0%,rgba(19,18,17,.12) 30%,rgba(19,18,17,.5) 70%,rgba(19,18,17,.93) 100%)}
+.login .pista .brasa{position:absolute;inset:0;background:radial-gradient(700px 480px at 10% 88%,rgba(232,86,62,.26),transparent 64%);mix-blend-mode:soft-light}
 .login .pista .grao{position:absolute;inset:0;opacity:.045;background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.7) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(0,0,0,.7) 0 1px,transparent 1px 3px)}
 .login .tk{position:absolute;inset:0;overflow:hidden;
   background:radial-gradient(120% 90% at 30% -10%,#3a3835 0%,#24221f 42%,#151413 78%),#131211}

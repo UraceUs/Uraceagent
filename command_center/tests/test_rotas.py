@@ -1915,3 +1915,25 @@ def test_acoes_do_painel_e_capacidades(cli, monkeypatch):
     assert any(r["name"] == "varredura_clientes" and r["schedule"] == '["06:00"]' for r in cap["rules"])
     assert any(hh["area"] == "Kommo" for hh in cap["human_only"])
     assert cli.get(B + "/ai/capabilities", headers=entra(cli, "viewer@urace.us")).status_code == 200
+
+
+def test_foto_do_login_e_servida_e_a_rota_do_spa_continua_no_index(cli):
+    """17/09: só /ops/assets era servido como arquivo, então a foto do login (que o Vite copia
+    de web/public para a raiz do dist) recebia o index e o `<img>` achava que ela não existia.
+    Aqui: arquivo solto do build sai como arquivo, rota do React continua caindo no index, e
+    nada consegue sair do dist."""
+    from command_center.api import main as _main
+    if not os.path.isdir(_main.DIST):
+        pytest.skip("frontend não construído neste ambiente")
+    alvo = os.path.join(_main.DIST, "teste-pista.txt")
+    with open(alvo, "w") as f:
+        f.write("asfalto")
+    try:
+        r = cli.get("/ops/teste-pista.txt")
+        assert r.status_code == 200 and r.text == "asfalto"
+        assert cli.get("/ops/login").status_code == 200          # rota do SPA
+        # caminho que tenta sair do dist volta como index, nunca como arquivo de fora
+        fora = _main.spa("../../README.md")
+        assert os.path.basename(getattr(fora, "path", "index.html")) == "index.html"
+    finally:
+        os.remove(alvo)
