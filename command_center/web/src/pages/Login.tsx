@@ -2,8 +2,8 @@
  *
  * Duas metades: a foto da pista à esquerda, cortada na diagonal com a linha vermelha,
  * e o formulário à direita. Preto, branco, vermelho e azul — sem verde, sem teal.
- * A foto real entra em `web/public/pista.jpg`; enquanto não estiver lá, o desenho em
- * preto e branco ocupa o lugar (nada quebra, nada fica em branco).
+ * A foto real entra em `web/public/pista.jpg`, em preto e branco e com degradê nas beiradas.
+ * Enquanto o arquivo não estiver lá, fica um fundo escuro de asfalto — sem desenho nenhum.
  */
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
@@ -12,19 +12,12 @@ import { useAuth } from '../auth/AuthContext'
 import { Banner } from '../components/ui'
 import { Icon } from '../components/Icon'
 
-/** O lado da pista: a foto quando existe; o desenho quando ainda não foi colocada. */
+/** O lado da pista: a foto quando existe; um fundo de asfalto quando ainda não foi colocada. */
 function Pista() {
   const [semFoto, setSemFoto] = useState(false)
   return <div className="pista" aria-hidden="true">
     {!semFoto && <img className="foto-pista" src={`${import.meta.env.BASE_URL}pista.jpg`} alt="" onError={() => setSemFoto(true)} />}
-    {semFoto && <div className="tk">
-      <i className="ceu" /><i className="muro" /><i className="box" /><i className="def" /><i className="grama" /><i className="asf" /><i className="sombra" />
-      <svg className="kart" viewBox="0 0 200 120" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round">
-        <path d="M38 88h124M46 88c0-10 8-18 18-18h72c10 0 18 8 18 18" />
-        <rect x="28" y="72" width="22" height="30" rx="6" /><rect x="150" y="72" width="22" height="30" rx="6" />
-        <path d="M80 70V52a20 20 0 0 1 40 0v18" /><circle cx="100" cy="40" r="15" /><path d="M86 38h28" />
-      </svg>
-    </div>}
+    {semFoto && <div className="tk"><i className="asf" /><i className="def" /></div>}
     <i className="veu" /><i className="brasa" /><i className="grao" />
   </div>
 }
