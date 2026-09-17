@@ -167,6 +167,20 @@ POS_MIGRACAO = [
         '{"sistema":"mandar o lembrete (reenvio da invoice pelo QuickBooks) de cada invoice em aberto com lembrete ligado e dia chegado"}')""",
     """UPDATE automation_rules SET schedule='["09:00"]' WHERE name='lembrete_invoice' AND schedule IS NULL""",
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+       ('varredura_clientes', 1, '{"schedule":true}', NULL,
+        '{"sistema":"varrer o Gmail (as duas caixas) e o DocuSign de cada cliente ativo e ligar o que achar ao card"}')""",
+    """UPDATE automation_rules SET schedule='["06:00"]' WHERE name='varredura_clientes' AND schedule IS NULL""",
+    """INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
+       ('docusign_reenviar_waiver','REQUIRES_APPROVAL','reenvia/corrige e-mail do signatário: sai da empresa (dono, 17/09)'),
+       ('docusign_anular_envelope','REQUIRES_APPROVAL','anula envelope em aberto; assinado nunca (dono, 17/09)'),
+       ('docusign_renomear_modelo','REQUIRES_CONFIRMATION','só o nome do modelo (dono, 17/09)'),
+       ('docusign_substituir_documento_modelo','REQUIRES_APPROVAL','troca o PDF do modelo com cópia do antigo (dono, 17/09)'),
+       ('asana_criar_corrida','SAFE','corrida pelo modelo New Race, na coluna RACES (dono, 17/09)'),
+       ('qbo_lembrete_invoice','SAFE','lembrete de invoice: o gerente escolhe quais, o disparo é da IA (dono, 17/09)'),
+       ('painel_unir_clientes','SAFE','só com mesmo e-mail, telefone ou responsável; fora disso a ação recusa (dono, 17/09)'),
+       ('painel_varrer_cliente','SAFE','Gmail + DocuSign do cliente: só leitura e espelho (dono, 17/09)'),
+       ('painel_waiver_lixeira','REQUIRES_CONFIRMATION','tira do painel; em aberto anula no DocuSign (dono, 17/09)')""",
+    """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
        ('waiver_na_tarefa', 1, '{"event":"task.created","por":"sistema"}', NULL,
         '{"sistema":"anexar a waiver assinada do piloto na tarefa do Asana e guardar o PDF no card do cliente"}')""",
 ]

@@ -535,3 +535,31 @@ if __name__ == "__main__":
     _carregar_env()
     log("APLICAR =", os.environ.get("APLICAR", "0"), "| projetos:", len(PROJETOS))
     srv.rodar()
+
+
+@srv.ferramenta(
+    "asana_criar_corrida",
+    "Cria uma CORRIDA na coluna RACES do U-RACE a partir do modelo oficial \"New Race [Race + City/Track]\" "
+    "(vem com as subtarefas do modelo). Liberado pelo dono em 17/09. `vence_em` é o dia da corrida (AAAA-MM-DD). "
+    "O nome fica \"<nome> [cidade / pista]\". Com APLICAR=0 é simulação.",
+    {"nome": {"type": "string"}, "vence_em": {"type": "string"}, "cidade": {"type": "string"}, "pista": {"type": "string"},
+     "serie": {"type": "string"}, "notas": {"type": "string"}, "fim": {"type": "string", "description": "último dia, se a corrida tem mais de um"}},
+    ["nome", "vence_em"])
+def asana_criar_corrida(nome, vence_em, cidade=None, pista=None, serie=None, notas=None, fim=None):
+    nome = (nome or "").strip()
+    if not nome:
+        raise ErroFerramenta("nome da corrida é obrigatório")
+    secoes = asana_secoes(PROJETO_URACE)
+    races = next((s["gid"] for s in secoes if (s.get("nome") or "").strip().upper() == "RACES"), None)
+    if not races:
+        raise ErroFerramenta("coluna RACES não encontrada no U-RACE")
+    local = " / ".join(x for x in (cidade, pista) if x)
+    titulo = nome + (f" [{local}]" if local else "")
+    texto = "\n".join(x for x in ((f"Série: {serie}" if serie else ""), (f"Pista: {pista}" if pista else ""),
+                                  (f"Cidade: {cidade}" if cidade else ""), (f"Fim: {fim}" if fim else ""), notas or "") if x)
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"criar '{titulo}' em RACES pelo modelo New Race, vence {vence_em}"}
+    r = _instanciar_modelo(MODELO_CORRIDA, titulo, secao_gid=races, notas=texto or None, vence_em=vence_em)
+    gid = r.get("gid") or (r.get("tarefa") or {}).get("gid")
+    return {"aplicado": True, "gid": gid, "nome": titulo, "secao_gid": races, "vence_em": vence_em, "fim": fim,
+            "serie": serie, "pista": pista, "cidade": cidade, "subtarefas": r.get("subtarefas"), "link": r.get("link")}

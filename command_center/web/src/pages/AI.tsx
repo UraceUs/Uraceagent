@@ -6,7 +6,7 @@ import type { AiAction, AiCommand } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, PageHeader, SYS_NAME, Section, Status, Thinking } from '../components/ui'
 
-const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: 'Criar e enviar invoice', qbo_criar_invoice: 'Criar invoice', qbo_enviar_invoice: 'Enviar invoice', qbo_criar_item: 'Criar item no catálogo', qbo_criar_cliente: 'Criar cliente no QuickBooks', asana_criar_do_modelo: 'Criar tarefa (modelo oficial)', asana_criar_tarefa: 'Criar tarefa', asana_comentar: 'Comentar na tarefa', asana_mover_para_secao: 'Mover tarefa', asana_mover_para_finished: 'Mover para Finished Services', asana_concluir: 'Concluir tarefa', docusign_enviar_waiver: 'Enviar waiver', gmail_rascunho: 'Rascunho de e-mail', gmail_rotular: 'Marcar e-mail' }
+const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: 'Criar e enviar invoice', qbo_criar_invoice: 'Criar invoice', qbo_enviar_invoice: 'Enviar invoice', qbo_criar_item: 'Criar item no catálogo', qbo_criar_cliente: 'Criar cliente no QuickBooks', asana_criar_do_modelo: 'Criar tarefa (modelo oficial)', asana_criar_tarefa: 'Criar tarefa', asana_comentar: 'Comentar na tarefa', asana_mover_para_secao: 'Mover tarefa', asana_mover_para_finished: 'Mover para Finished Services', asana_concluir: 'Concluir tarefa', docusign_enviar_waiver: 'Enviar waiver', docusign_reenviar_waiver: 'Reenviar waiver', docusign_anular_envelope: 'Anular envelope', docusign_renomear_modelo: 'Renomear modelo', docusign_substituir_documento_modelo: 'Trocar PDF do modelo', asana_criar_corrida: 'Criar corrida (New Race)', qbo_lembrete_invoice: 'Lembrete de invoice', painel_unir_clientes: 'Unir dois clientes', painel_varrer_cliente: 'Varrer Gmail e DocuSign do cliente', painel_waiver_lixeira: 'Waiver para a lixeira', gmail_rascunho: 'Rascunho de e-mail', gmail_rotular: 'Marcar e-mail' }
 const STATUS_LABEL: Record<string, string> = { PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada' }
 import { ago, fmtDateTime, money, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
@@ -103,7 +103,7 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
     }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
-  const envia = a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver'
+  const envia = a.action.endsWith('enviar_invoice') || a.action === 'docusign_enviar_waiver' || a.action === 'docusign_reenviar_waiver' || a.action === 'qbo_lembrete_invoice'
   const cls = a.status === 'PROPOSED' ? 'wait' : a.status === 'DONE' ? 'done' : a.status === 'FAILED' || a.status === 'REJECTED' || a.policy === 'BLOCKED' ? 'fail' : ''
   return <div className={`act ${cls}`}>
     <div className="grow">

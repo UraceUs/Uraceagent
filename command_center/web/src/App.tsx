@@ -9,6 +9,7 @@ import { Empty } from './components/ui'
 import { AICommand, Activity, Approvals } from './pages/AI'
 import { AttentionPage } from './pages/Attention'
 import { Automation } from './pages/Automation'
+import { Capabilities } from './pages/Capabilities'
 import { Races } from './pages/Races'
 import { Client360 } from './pages/Client360'
 import { Clients } from './pages/Clients'
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="waivers" element={<Navigate to="/docusign" replace />} />
           <Route path="emails" element={<Navigate to="/gmail" replace />} />
           <Route path="ai" element={<AICommand />} />
+          <Route path="ai/capabilities" element={<Capabilities />} />
           <Route path="ai/:id" element={<AICommand />} />
           <Route path="approvals" element={<Approvals />} />
           <Route path="activity" element={<Activity />} />

@@ -471,3 +471,81 @@ if __name__ == "__main__":
     log("ambiente:", "DEMO" if _eh_demo() else "PRODUÇÃO", "| base:", _base(),
         "| APLICAR =", os.environ.get("APLICAR", "0"))
     srv.rodar()
+
+
+# ----------------------------------------------- ESCRITA liberada pelo dono em 17/09
+# "Reenviar/corrigir e-mail, anular, lixeira, ver/renomear/trocar PDF de modelo: isso a IA
+# pode fazer." Cada uma passa pelo gate do painel (aprovação ou confirmação) e por APLICAR.
+def _pdf_local(caminho):
+    """Lê um PDF do workspace do agente ou de ~/.urace — nunca de outro lugar."""
+    agente = os.environ.get("OPENCLAW_AGENT", "urace-admin")
+    host = os.path.expanduser(f"~/.openclaw/workspace/{agente}")
+    if caminho.startswith("/workspace/"):
+        caminho = os.path.join(host, caminho[len("/workspace/"):])
+    caminho = os.path.expanduser(caminho)
+    real = os.path.realpath(caminho)
+    if not any(real.startswith(os.path.realpath(r) + os.sep) for r in (host, os.path.expanduser("~/.urace"))):
+        raise ErroFerramenta(f"RECUSADO: só leio PDF do workspace ou de ~/.urace, não {caminho}")
+    with open(real, "rb") as f:
+        dados = f.read()
+    if not dados.startswith(b"%PDF"):
+        raise ErroFerramenta("o arquivo não é um PDF")
+    return os.path.basename(real), dados
+
+
+@srv.ferramenta(
+    "docusign_reenviar_waiver",
+    "Reenvia a notificação de um envelope em aberto (sent/delivered) ao signatário; com `novo_email`, "
+    "corrige o e-mail antes (caso do e-mail devolvido). Exige aprovação humana no painel. "
+    "Com APLICAR=0 é simulação.",
+    {"envelopeId": {"type": "string"}, "novo_email": {"type": "string"}, "novo_nome": {"type": "string"}}, ["envelopeId"])
+def docusign_reenviar_waiver(envelopeId, novo_email=None, novo_nome=None):
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"reenviar {envelopeId}" + (f" para {novo_email}" if novo_email else "")}
+    return reenviar_humano(envelopeId, novo_email, novo_nome)
+
+
+@srv.ferramenta(
+    "docusign_anular_envelope",
+    "Anula (void) um envelope EM ABERTO, com motivo. Envelope assinado nunca é anulado (registro legal). "
+    "Exige aprovação humana no painel. Com APLICAR=0 é simulação.",
+    {"envelopeId": {"type": "string"}, "motivo": {"type": "string"}}, ["envelopeId", "motivo"])
+def docusign_anular_envelope(envelopeId, motivo):
+    if not (motivo or "").strip():
+        raise ErroFerramenta("motivo é obrigatório")
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"anular {envelopeId}: {motivo}"}
+    return anular_humano(envelopeId, motivo)
+
+
+@srv.ferramenta(
+    "docusign_renomear_modelo",
+    "Renomeia um modelo (template) da conta. Só o nome. Pede confirmação no painel. Com APLICAR=0 é simulação.",
+    {"templateId": {"type": "string"}, "nome": {"type": "string"}}, ["templateId", "nome"])
+def docusign_renomear_modelo(templateId, nome):
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"renomear modelo {templateId} para '{nome}'"}
+    return renomear_modelo_humano(templateId, nome)
+
+
+@srv.ferramenta(
+    "docusign_substituir_documento_modelo",
+    "Troca o PDF de um documento de um modelo, mantendo o documentId (os campos de assinatura continuam nele). "
+    "Guarda o PDF antigo em ~/.urace/docusign-templates antes. `caminho` é um PDF do workspace (/workspace/…) "
+    "ou de ~/.urace. Exige aprovação humana no painel. Com APLICAR=0 é simulação.",
+    {"templateId": {"type": "string"}, "documentId": {"type": "string"}, "caminho": {"type": "string"}}, ["templateId", "documentId", "caminho"])
+def docusign_substituir_documento_modelo(templateId, documentId, caminho):
+    nome, pdf = _pdf_local(caminho)
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"trocar o documento {documentId} do modelo {templateId} por {nome} ({len(pdf)} bytes)"}
+    pasta = os.path.expanduser("~/.urace/docusign-templates")
+    backup = None
+    if any(str(d.get("documentId")) == str(documentId) for d in modelo_humano(templateId).get("documentos") or []):
+        antigo = baixar_documento_do_modelo_humano(templateId, documentId)
+        os.makedirs(pasta, mode=0o700, exist_ok=True)
+        backup = os.path.join(pasta, f"{templateId}-{documentId}-{dt.datetime.utcnow().strftime('%Y%m%dT%H%M%S')}.pdf")
+        with open(backup, "wb") as f:
+            f.write(antigo)
+        os.chmod(backup, 0o600)
+    r = substituir_documento_do_modelo_humano(templateId, documentId, nome, pdf)
+    return {**r, "backup": backup}

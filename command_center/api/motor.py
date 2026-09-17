@@ -597,6 +597,25 @@ def executar_acao(aid, user_id):
         if sobrando:
             auditar(con, "action.args_ajustados", "system", entity_type="ai_action", entity_id=aid, detail={"acao": acao, "descartados": sobrando})
         sistema = acao.split("_")[0]
+        if sistema == "painel":                        # ação do próprio painel (unir, varrer, lixeira) — dono, 17/09
+            from command_center.api import acoes_painel
+            if acao not in acoes_painel.ACOES:
+                raise ValueError(f"ação do painel desconhecida: {acao}")
+            res = acoes_painel.executar(con, user_id, acao, args)
+            ok = bool(res.get("aplicado"))
+            atualizar(con, "ai_actions", aid, status="DONE" if ok else "FAILED", finished_at=agora(), result=json.dumps(res, ensure_ascii=False)[:2000])
+            auditar(con, "action.executed" if ok else "action.failed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid,
+                    detail={"action": acao, "args": {k: (str(v)[:80]) for k, v in args.items()}, "res": str(res)[:300]})
+            con.commit()
+            return
+        if acao == "qbo_lembrete_invoice":             # só invoice com lembrete LIGADO pelo gerente (dono, 17/09)
+            from command_center.api import lembretes
+            lemb = lembretes.lembrete_do_qbo(con, str(args.get("id")))
+            if not lemb or not lemb["enabled"]:
+                atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(),
+                          result="RECUSADO: esta invoice não tem lembrete ligado no painel. Quem escolhe as invoices é o gerente; o disparo é da IA.")
+                auditar(con, "action.failed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"action": acao, "motivo": "sem lembrete ligado"})
+                return
         if acao == "asana_mover_para_finished":       # açúcar SAFE: só para a coluna Finished Services
             from command_center.providers.sync import SECAO_FINISHED
             acao, args = "asana_mover_para_secao", {"gid": args.get("gid"), "secao_gid": SECAO_FINISHED}
@@ -628,6 +647,22 @@ def executar_acao(aid, user_id):
                     auditar(con, "asana.invoice_link", "system", entity_type="ai_action", entity_id=aid, detail={"gid": gid, "link": res["link"], "campo": "Security deposit" if deposito else "Invoice link"})
             except Exception as e:
                 auditar(con, "asana.invoice_link.failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
+        if acao == "qbo_lembrete_invoice" and isinstance(res, dict):
+            try:                                              # o painel marca o próximo dia e audita o envio
+                from command_center.api import lembretes
+                lembretes.registrar_envio(con, str(args.get("id")), res, por="ia")
+            except Exception as e:
+                auditar(con, "invoice.reminder.bookkeeping_failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
+        if acao == "asana_criar_corrida" and isinstance(res, dict) and res.get("gid"):
+            try:                                              # a corrida entra no calendário do painel, como a criada pelo botão
+                from command_center.providers import sync as _sy
+                tid, _ = _sy._grava_tarefa(con, res["gid"], dict(client_id=None, title=res.get("nome"), project="U-RACE", section="RACES", section_gid=res.get("secao_gid"),
+                                                                status="open", due_on=res.get("vence_em"), subtasks_total=res.get("subtarefas"), subtasks_done=0, synced_at=agora()))
+                inserir(con, "races", source="asana", task_id=tid, name=res.get("nome"), series=res.get("serie"), track=res.get("pista"), city=res.get("cidade"),
+                        date_start=res.get("vence_em"), date_end=res.get("fim"), notes=None)
+                auditar(con, "race.create", "ia", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"gid": res["gid"], "nome": res.get("nome")})
+            except Exception as e:
+                auditar(con, "race.create.mirror_failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
         if acao in ("asana_criar_do_modelo", "asana_criar_tarefa") and isinstance(res, dict) and res.get("gid"):
             try:                                              # toda tarefa criada leva a waiver assinada do piloto junto
                 cmd = um(con, "SELECT text FROM ai_commands WHERE id=?", (a["command_id"],)) or {}

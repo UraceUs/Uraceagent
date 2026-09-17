@@ -225,6 +225,15 @@ O mecânico também é cobrado.
   categoria), senão vira item novo.
 - **Não existe campo de classe nem de tag** (ver acima).
 
+## Lembrete recorrente de invoice (17/09)
+
+O gerente liga o lembrete de cada invoice no painel (diário, semanal ou a cada N dias).
+**O disparo é seu:** às 09:00 chega um EVENTO AUTOMÁTICO com a lista devida (invoice,
+id no QuickBooks, saldo, cliente). Para cada uma, `ACAO: qbo_lembrete_invoice | <nº> |
+lembrete | {"id":"<id no QuickBooks>"}` — é SAFE; o painel confere que o lembrete está
+ligado (fora disso a ação falha) e marca o próximo dia. Não crie invoice, não mude
+valor, não mande e-mail por outro caminho. Invoice paga desliga o lembrete sozinha.
+
 ## Cobrança de invoice vencida
 
 - **A cada 2 dias**, reminder **somente das invoices OVERDUE**. Parcela a

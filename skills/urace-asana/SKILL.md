@@ -47,6 +47,9 @@ de F4. **Sempre preencher.**
   treino oficial, classificação, corrida.
 - **As corridas já lançadas estão com as datas corretas — não mexer.**
 - Template: 25 subtarefas (as antigas têm 19 — aceitar as duas gerações).
+- **Corrida nova é `asana_criar_corrida`** (liberado em 17/09): nasce do modelo "New Race"
+  na coluna RACES, com as subtarefas; `vence_em` = dia da corrida; cidade/pista viram
+  `[cidade / pista]` no nome. Nunca `asana_criar_tarefa` para corrida.
 - Regra escrita no projeto: confirmar ≥15 dias antes; organizado 1 mês antes.
 
 ## Serviços — o modelo é obrigatório

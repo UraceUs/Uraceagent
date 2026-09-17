@@ -1289,6 +1289,43 @@ def task_instruct(tid: int, dados: InstruirTarefaIn, request: Request, u=Depends
     return {"command_id": cid, "remembered": bool(dados.remember)}
 
 
+SO_HUMANO = [
+    ("Kommo", "responder no chat, mover etapa, marcar tag, anotar, atribuir — pelo painel"),
+    ("Clientes", "tornar ★ Pro, equipamento, contrato, criar cliente à mão"),
+    ("Administração", "aprovar e rejeitar ações da IA, políticas, usuários, auditoria imutável"),
+    ("Gmail", "confirmar o manual dos marcadores; criar filtros nativos; mover por clique"),
+    ("QuickBooks", "escolher quais invoices têm lembrete recorrente (ligar/desligar); conectar a conta"),
+    ("DocuSign", "enviar waiver pelo botão; escolher o PDF que substitui um modelo"),
+]
+
+
+@r.get("/ai/capabilities")
+def ai_capabilities(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """O que a IA pode fazer, lido de onde vive: as ferramentas registradas nos MCPs, a tabela de
+    políticas, as ações do painel e as regras de automação. Nunca desatualiza (dono, 16/09)."""
+    import importlib
+    from command_center.api import acoes, acoes_painel
+    politicas = {p["action"]: p for p in todos(con, "SELECT action, policy, note FROM action_policies")}
+    ferramentas = []
+    for sistema, modulo_ in (("asana", "asana_mcp"), ("docusign", "docusign_mcp"), ("gmail", "gmail_mcp"), ("quickbooks", "quickbooks_mcp"), ("kommo", "kommo_mcp")):
+        try:
+            m = importlib.import_module(modulo_)
+        except Exception as e:
+            ferramentas.append({"system": sistema, "name": f"({modulo_})", "description": f"não carregou: {e}", "policy": None, "kind": "erro"}); continue
+        for nome, (desc, _schema, _fn) in getattr(m, "srv")._ferramentas.items():
+            leitura = acoes.eh_consulta(nome)
+            pol = politicas.get(nome)
+            ferramentas.append({"system": sistema, "name": nome, "description": desc, "kind": "leitura" if leitura else "escrita",
+                                "policy": "SAFE" if leitura else (pol["policy"] if pol else "REQUIRES_CONFIRMATION"), "note": (pol or {}).get("note"), "classified": bool(pol) or leitura})
+    for a in acoes_painel.descrever_todas():
+        pol = politicas.get(a["name"])
+        ferramentas.append({"system": "painel", "name": a["name"], "description": a["description"], "kind": "escrita",
+                            "policy": pol["policy"] if pol else "REQUIRES_CONFIRMATION", "note": (pol or {}).get("note"), "classified": bool(pol)})
+    bloqueadas = [{"name": a, "note": p["note"]} for a, p in politicas.items() if p["policy"] == "BLOCKED"]
+    regras = todos(con, "SELECT name, enabled, trigger, schedule, last_run_at, last_result FROM automation_rules ORDER BY id")
+    return {"tools": ferramentas, "blocked": bloqueadas, "rules": regras, "human_only": [{"area": a, "what": w} for a, w in SO_HUMANO]}
+
+
 @r.get("/ai/learnings")
 def learnings(all: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     sql = "SELECT l.*, us.name AS created_by_name FROM ai_learnings l LEFT JOIN users us ON us.id=l.created_by"

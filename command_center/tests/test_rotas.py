@@ -1,6 +1,7 @@
 """Dashboard, atenção, clientes, busca, políticas — com espelhos
 semeados por SQL (sem rede). Providers desconectados aqui: o teste de
 sync prova que isso vira 'not connected', nunca 500."""
+import json
 import os
 import tempfile
 from datetime import date, timedelta
@@ -634,13 +635,14 @@ def test_agenda_chave_devida_e_roda_uma_vez_por_horario(cli, monkeypatch):
         monkeypatch.setitem(agenda.ROTINAS, "gmail_triagem", lambda c: chamadas.append("triagem") or {"movidos": 0})
         monkeypatch.setitem(agenda.ROTINAS, "sondagem_integracoes", lambda c: chamadas.append("sonda") or {"asana": "x"})
         monkeypatch.setitem(agenda.ROTINAS, "lembrete_invoice", lambda c: chamadas.append("lembretes") or {"enviados": 0})
+        monkeypatch.setitem(agenda.ROTINAS, "varredura_clientes", lambda c: chamadas.append("varredura") or {"iniciada": True})
         t = datetime(2026, 9, 9, 7, 5, tzinfo=fuso)
         feitas = agenda.rodar(con, t)
-        assert sorted(n for n, _, ok in feitas) == ["gmail_triagem", "sondagem_integracoes"] and all(ok for _, _, ok in feitas)
+        assert sorted(n for n, _, ok in feitas) == ["gmail_triagem", "sondagem_integracoes", "varredura_clientes"] and all(ok for _, _, ok in feitas)
         assert agenda.rodar(con, t) == []                        # mesmo horário não repete
         # às 13:01 vencem a triagem das 13:00 e os lembretes das 09:00 (16/09)
         assert sorted(agenda.rodar(con, datetime(2026, 9, 9, 13, 1, tzinfo=fuso))) == [("gmail_triagem", "2026-09-09 13:00", True), ("lembrete_invoice", "2026-09-09 09:00", True)]
-        assert sorted(chamadas) == ["lembretes", "sonda", "triagem", "triagem"]
+        assert sorted(chamadas) == ["lembretes", "sonda", "triagem", "triagem", "varredura"]
         r = um(con, "SELECT last_run_at, last_result FROM automation_rules WHERE name='gmail_triagem'")
         assert r["last_run_at"] == "2026-09-09 13:00" and '"ok": true' in r["last_result"]
         # regra desligada não roda
@@ -1808,24 +1810,49 @@ def test_lembretes_de_invoice(cli, monkeypatch):
     assert inv["reminder_enabled"] == 1 and inv["reminder_cadence"] == "weekly" and inv["reminder_every_days"] == 7 and inv["reminder_next_on"] == lembretes.hoje_local().isoformat()
     card = cli.get(B + f"/clients/{cid}", headers=h).json()
     assert next(x for x in card["invoices"] if x["id"] == i1)["reminder_enabled"] == 1
-    # a rotina: envia pelo QuickBooks (falso), marca o próximo dia; a paga desliga sozinha
+    # a rotina (dono, 17/09: o disparo é da IA): a paga desliga sozinha; a devida vai para a IA
+    # como EVENTO AUTOMÁTICO com o id do QuickBooks; a IA propõe qbo_lembrete_invoice (SAFE)
+    import time
+    from command_center.api import ia, motor
     enviados = []
     monkeypatch.setattr("command_center.providers.chamar", lambda s, f, **a: enviados.append((s, f, a)) or {"aplicado": True, "enviado_para": "bryan@example.com", "numero": "URACE-0101"})
+    ia.RUNNER = lambda texto, sk: (True, 'Lembrete disparado.\nACAO: qbo_lembrete_invoice | URACE-0101 | lembrete | {"id":"9001"}', None) if "EVENTO AUTOMÁTICO: lembretes" in texto else (True, "ok\nACAO: nenhuma", None)
     con = conectar()
     try:
         res = lembretes.rodar(con)
-        assert res["enviados"] == 1 and res["parados"] == 1, res
-        assert enviados == [("quickbooks", "qbo_enviar_invoice", {"id": "9001"})]
-        r1 = um(con, "SELECT * FROM invoice_reminders WHERE invoice_id=?", (i1,))
-        assert r1["sent_count"] == 1 and r1["next_on"] == (lembretes.hoje_local() + timedelta(days=7)).isoformat()
+        assert res["devidos"] == 1 and res["parados"] == 1 and res["command_id"], res
+        cmd = um(con, "SELECT text FROM ai_commands WHERE id=?", (res["command_id"],))
+        assert "9001" in cmd["text"] and "URACE-0101" in cmd["text"] and cmd["text"].startswith("EVENTO AUTOMÁTICO")
         r2 = um(con, "SELECT * FROM invoice_reminders WHERE invoice_id=?", (i2,))
         assert r2["enabled"] == 0 and "paga" in r2["note"]
-        assert lembretes.rodar(con)["enviados"] == 0                      # antes do dia, nada sai
-        assert "lembrete_invoice" in agenda.ROTINAS
+        for _ in range(60):                                               # a IA responde, a ação SAFE executa sozinha
+            a = um(con, "SELECT status FROM ai_actions WHERE command_id=? AND action='qbo_lembrete_invoice'", (res["command_id"],))
+            if a and a["status"] in ("DONE", "FAILED"):
+                break
+            time.sleep(0.1)
+        assert a and a["status"] == "DONE", a
+        assert ("quickbooks", "qbo_lembrete_invoice", {"id": "9001"}) in enviados
+        r1 = um(con, "SELECT * FROM invoice_reminders WHERE invoice_id=?", (i1,))
+        assert r1["sent_count"] == 1 and r1["next_on"] == (lembretes.hoje_local() + timedelta(days=7)).isoformat()
+        assert lembretes.rodar(con)["devidos"] == 0                       # antes do dia, nada vai para a IA
+        assert "lembrete_invoice" in agenda.ROTINAS and "varredura_clientes" in agenda.ROTINAS
         assert um(con, "SELECT schedule FROM automation_rules WHERE name='lembrete_invoice'")["schedule"] == '["09:00"]'
         assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='invoice.reminder.sent'")["n"] == 1
+        # a trava: lembrete de invoice SEM lembrete ligado é recusado pelo executor, mesmo aprovado
+        i3 = inserir(con, "invoices", client_id=cid, doc_number="URACE-0103", amount=100, balance=100, status="open", issued_on="2026-09-10", due_on="2026-09-12")
+        con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id, deep_link) VALUES ('invoice', ?, 'quickbooks', '9003', NULL)", (i3,))
+        aid = inserir(con, "ai_actions", command_id=res["command_id"], action="qbo_lembrete_invoice", system="quickbooks", policy="SAFE", status="APPROVED", payload=json.dumps({"args": {"id": "9003"}}))
+        con.commit()
     finally:
         con.close()
+    motor.executar_acao(aid, 1)
+    con = conectar()
+    try:
+        a = um(con, "SELECT status, result FROM ai_actions WHERE id=?", (aid,))
+        assert a["status"] == "FAILED" and "lembrete ligado" in a["result"]
+    finally:
+        con.close()
+    assert not any(x[2].get("id") == "9003" for x in enviados)
     # toggle e envio agora
     rid = r.json()["reminders"][0]["id"]
     assert cli.patch(B + f"/invoice-reminders/{rid}", headers=h, json={"enabled": False}).json()["enabled"] == 0
@@ -1844,3 +1871,47 @@ def test_lembretes_de_invoice(cli, monkeypatch):
         con.close()
     ho = entra(cli, "op@urace.us")
     assert cli.put(B + "/invoice-reminders", headers=ho, json={"invoice_ids": [i1], "cadence": "daily"}).status_code == 403
+
+
+
+# ================= 17/09: o que a IA pode fazer — ações do painel e a página de capacidades =================
+def test_acoes_do_painel_e_capacidades(cli, monkeypatch):
+    from command_center.api import acoes_painel, motor
+    from command_center.db import conectar, inserir, um
+    h = entra(cli, "admin@urace.us")
+    con = conectar()
+    try:
+        a = inserir(con, "clients", name="Rafael Monteiro", email="rafael.m@example.com", pilot_name="Théo Monteiro", vip=0, status="ACTIVE", source="asana")
+        b = inserir(con, "clients", name="Rafael Monteiro", email=None, pilot_name="Theo Monteiro", vip=0, status="ACTIVE", source="kommo")
+        c = inserir(con, "clients", name="Outra Pessoa", email="outra@example.com", vip=0, status="ACTIVE", source="asana")
+        t1 = inserir(con, "tasks", client_id=b, title="Theo Monteiro_Urace Daily_2T [1/1]", project="U-RACE", section="SATURDAY", status="open", due_on="2026-09-20")
+        con.commit()
+        # mesmo responsável: a IA pode unir; pessoas diferentes: recusado
+        r = acoes_painel.executar(con, 1, "painel_unir_clientes", {"keep_id": a, "drop_id": b, "motivo": "mesmo responsável"})
+        assert r["aplicado"] and any("responsável" in x for x in r["criterio"])
+        assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t1,))["client_id"] == a
+        r = acoes_painel.executar(con, 1, "painel_unir_clientes", {"keep_id": a, "drop_id": c})
+        assert not r["aplicado"] and "RECUSADO" in r["motivo"]
+        assert um(con, "SELECT id FROM clients WHERE id=?", (c,)) is not None
+        # pelo executor do motor (ação SAFE aprovada), o mesmo caminho
+        aid = inserir(con, "ai_actions", action="painel_unir_clientes", system="painel", policy="SAFE", status="APPROVED", payload=json.dumps({"args": {"keep_id": a, "drop_id": c}}))
+        con.commit()
+    finally:
+        con.close()
+    motor.executar_acao(aid, 1)
+    con = conectar()
+    try:
+        assert um(con, "SELECT status FROM ai_actions WHERE id=?", (aid,))["status"] == "FAILED"
+    finally:
+        con.close()
+    # a página: ferramentas lidas dos MCPs, políticas, ações do painel, regras, só-humano
+    cap = cli.get(B + "/ai/capabilities", headers=h).json()
+    nomes = {t["name"]: t for t in cap["tools"]}
+    for n in ("asana_criar_corrida", "docusign_reenviar_waiver", "docusign_anular_envelope", "qbo_lembrete_invoice", "painel_unir_clientes", "painel_varrer_cliente", "gmail_buscar"):
+        assert n in nomes, n
+    assert nomes["gmail_buscar"]["kind"] == "leitura" and nomes["asana_criar_corrida"]["policy"] == "SAFE"
+    assert nomes["docusign_anular_envelope"]["policy"] == "REQUIRES_APPROVAL" and nomes["painel_unir_clientes"]["policy"] == "SAFE"
+    assert any(b["name"] == "qbo_apagar" for b in cap["blocked"])
+    assert any(r["name"] == "varredura_clientes" and r["schedule"] == '["06:00"]' for r in cap["rules"])
+    assert any(hh["area"] == "Kommo" for hh in cap["human_only"])
+    assert cli.get(B + "/ai/capabilities", headers=entra(cli, "viewer@urace.us")).status_code == 200

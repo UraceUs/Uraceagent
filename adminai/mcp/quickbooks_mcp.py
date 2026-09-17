@@ -493,3 +493,12 @@ if __name__ == "__main__":
     _carregar_env()
     log("realm:", os.environ.get("QBO_REALM_ID"), "| APLICAR =", os.environ.get("APLICAR", "0"))
     srv.rodar()
+
+
+@srv.ferramenta("qbo_lembrete_invoice",
+                "LEMBRETE de invoice em aberto: reenvia a invoice por e-mail pelo QuickBooks. Só para invoice "
+                "com lembrete LIGADO pelo gerente no painel (o painel confere; fora disso a ação falha). "
+                "O dono escolhe quais; o disparo é seu. Com APLICAR=0 é simulação.",
+                {"id": {"type": "string", "description": "id da invoice no QuickBooks (txnId)"}}, ["id"])
+def qbo_lembrete_invoice(id):
+    return qbo_enviar_invoice(id)

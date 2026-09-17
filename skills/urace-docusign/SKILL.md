@@ -35,7 +35,12 @@ explícita à regra "a IA não manda e-mail".
 | Marcar subtarefa "Signed waiver?" e comentar | ✅ livre |
 | **Enviar waiver** (`createEnvelopeFromTemplate`) | ✅ **autorizado**, com as 4 travas abaixo |
 | **Lembrete** (`sendReminder`) | ⏳ **não decidido** — alertar o Italo, não o cliente |
-| `voidEnvelope`, editar template, mexer em NDA/Service Agreement | 🚫 nunca sem pedido explícito |
+| **Reenviar / corrigir e-mail** (`docusign_reenviar_waiver`) | ✅ liberado em 17/09 — **com aprovação** no painel (sai da empresa) |
+| **Anular envelope em aberto** (`docusign_anular_envelope`) | ✅ liberado em 17/09 — **com aprovação**; assinado nunca |
+| **Lixeira do painel** (`painel_waiver_lixeira`) | ✅ com confirmação; em aberto anula, assinado só some do painel |
+| **Renomear modelo** (`docusign_renomear_modelo`) | ✅ com confirmação |
+| **Trocar o PDF de um modelo** (`docusign_substituir_documento_modelo`) | ✅ **com aprovação**; o antigo é guardado antes; os campos de assinatura ficam no documento |
+| Mexer em NDA/Service Agreement (documentos internos) | 🚫 nunca sem pedido explícito |
 
 ### ⚠️ As 4 travas antes de cada envio
 
