@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY,
   email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
   name          TEXT NOT NULL,
-  role          TEXT NOT NULL CHECK (role IN ('ADMIN','MANAGER','OPERATOR','VIEWER')),
+  role          TEXT NOT NULL CHECK (role IN ('ADMIN','MANAGER','OPERATOR','CLOSER','VIEWER')),
   pw_salt       TEXT NOT NULL,            -- base64
   pw_hash       TEXT NOT NULL,            -- base64 scrypt
   active        INTEGER NOT NULL DEFAULT 1,
@@ -216,6 +216,49 @@ CREATE TABLE IF NOT EXISTS crm_messages (
   UNIQUE (lead_id, external_id)
 );
 CREATE INDEX IF NOT EXISTS crm_messages_lead ON crm_messages(lead_id, at);
+
+-- ---------------------------------------------------- vendas (closer): oportunidade NÃO é cliente
+-- Pedido do dono (17/09): o closer liga por fora e registra tudo aqui. Só vira cliente no Ganho.
+CREATE TABLE IF NOT EXISTS opportunities (
+  id             INTEGER PRIMARY KEY,
+  name           TEXT NOT NULL,             -- quem decide/paga (responsável)
+  email          TEXT COLLATE NOCASE,
+  phone          TEXT,
+  pilot_name     TEXT,
+  pilot_age      INTEGER,
+  service        TEXT,                      -- o que ele quer (interesse)
+  service_date   TEXT,                      -- AAAA-MM-DD do serviço combinado
+  service_time   TEXT,                      -- HH:MM (opcional)
+  amount         REAL,                      -- valor fechado/estimado
+  stage          TEXT NOT NULL DEFAULT 'NOVO'
+                 CHECK (stage IN ('NOVO','CONVERSA','PROPOSTA','FECHAMENTO','GANHO','PERDIDO')),
+  source         TEXT,                      -- Instagram, Facebook, WhatsApp, Ligação, Site, Indicação
+  closer_user_id INTEGER REFERENCES users(id),
+  client_id      INTEGER REFERENCES clients(id),      -- preenchido no Ganho
+  crm_lead_id    INTEGER REFERENCES crm_leads(id),    -- quando veio do chat
+  next_at        TEXT,                      -- retorno agendado (ISO)
+  next_what      TEXT,
+  lost_reason    TEXT,
+  notes          TEXT,
+  closing        TEXT,                      -- json: passos do fechamento e resultado de cada um
+  starred        INTEGER,
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS opp_stage ON opportunities(stage, next_at);
+CREATE INDEX IF NOT EXISTS opp_closer ON opportunities(closer_user_id, stage);
+
+CREATE TABLE IF NOT EXISTS opp_events (
+  id       INTEGER PRIMARY KEY,
+  opp_id   INTEGER NOT NULL REFERENCES opportunities(id),
+  kind     TEXT NOT NULL,                   -- call|email|note|stage|waiver|invoice|asana|kommo|client|task|next|ia
+  title    TEXT,
+  detail   TEXT,
+  at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  actor    TEXT,
+  ok       INTEGER                          -- 1 feito · 0 falhou · NULL informativo
+);
+CREATE INDEX IF NOT EXISTS opp_events_opp ON opp_events(opp_id, at);
 
 -- ------------------------------------------- manual de marcadores do Gmail
 -- O dono (11/09): "leia marcador por marcador, entenda o que vai em cada um, me

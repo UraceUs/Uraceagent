@@ -118,9 +118,38 @@ def aplicar_schema(con):
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
         if coluna not in existentes:
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+    _migrar_papeis(con)              # CHECK de users.role: bancos antigos não conhecem CLOSER
     _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`
     for sql in POS_MIGRACAO:
         con.execute(sql)
+
+
+def _migrar_papeis(con):
+    """users.role tem CHECK; banco criado antes de 17/09 não aceita CLOSER. SQLite não altera
+    CHECK: recria a tabela com o mesmo conteúdo (FK desligada só durante a troca)."""
+    linha = um(con, "SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")
+    if not linha or "CLOSER" in (linha.get("sql") or ""):
+        return
+    cols = [r[1] for r in con.execute("PRAGMA table_info(users)")]
+    lista = ", ".join(cols)
+    con.execute("PRAGMA foreign_keys=OFF")
+    try:
+        con.executescript("""
+        CREATE TABLE users_novo (
+          id            INTEGER PRIMARY KEY,
+          email         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          name          TEXT NOT NULL,
+          role          TEXT NOT NULL CHECK (role IN ('ADMIN','MANAGER','OPERATOR','CLOSER','VIEWER')),
+          pw_salt       TEXT NOT NULL,
+          pw_hash       TEXT NOT NULL,
+          active        INTEGER NOT NULL DEFAULT 1,
+          created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+          last_login_at TEXT
+        );""")
+        con.execute(f"INSERT INTO users_novo ({lista}) SELECT {lista} FROM users")
+        con.executescript("DROP TABLE users; ALTER TABLE users_novo RENAME TO users;")
+    finally:
+        con.execute("PRAGMA foreign_keys=ON")
 
 
 def _semear_marcadores(con):
@@ -183,6 +212,14 @@ POS_MIGRACAO = [
        ('docusign_substituir_documento_modelo','REQUIRES_APPROVAL','troca o PDF do modelo com cópia do antigo (dono, 17/09)'),
        ('asana_criar_corrida','SAFE','corrida pelo modelo New Race, na coluna RACES (dono, 17/09)'),
        ('qbo_lembrete_invoice','SAFE','lembrete de invoice: o gerente escolhe quais, o disparo é da IA (dono, 17/09)'),
+       ('venda_registrar_ligacao','SAFE','registro do closer na oportunidade, ditado ou digitado (dono, 17/09)'),
+       ('venda_agendar_retorno','SAFE','retorno na agenda de vendas; nada sai para o cliente (dono, 17/09)'),
+       ('venda_anotar','SAFE','anotação interna na oportunidade (dono, 17/09)'),
+       ('venda_mover_etapa','SAFE','move a oportunidade no quadro de vendas (dono, 17/09)'),
+       ('venda_tarefa','SAFE','tarefa/lembrete do fechamento: painel ou Asana (dono, 17/09)'),
+       ('venda_enviar_waiver','REQUIRES_CONFIRMATION','waiver do serviço combinado, pelo modelo do DocuSign (dono, 17/09)'),
+       ('venda_enviar_invoice','REQUIRES_APPROVAL','invoice fora da tabela de preços só com o dono (dono, 17/09)'),
+       ('venda_fechar','REQUIRES_CONFIRMATION','fecha a venda e dispara cliente, QuickBooks, waiver, Asana e Kommo (dono, 17/09)'),
        ('painel_unir_clientes','SAFE','só com mesmo e-mail, telefone ou responsável; fora disso a ação recusa (dono, 17/09)'),
        ('painel_varrer_cliente','SAFE','Gmail + DocuSign do cliente: só leitura e espelho (dono, 17/09)'),
        ('painel_waiver_lixeira','REQUIRES_CONFIRMATION','tira do painel; em aberto anula no DocuSign (dono, 17/09)')""",

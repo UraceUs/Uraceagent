@@ -8,7 +8,10 @@ import { Chip, statusTone } from './ui'
 import { Icon, type IconName } from './Icon'
 import { ago, initials } from './fmt'
 
-const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
+const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', CLOSER: 'Vendas', VIEWER: 'Leitura' }
+/** Conta de acesso livre não tem cargo (dono, 17/09) — o painel diz só que ela alcança tudo. */
+const cargoDe = (u?: { role?: string; free?: boolean } | null) =>
+  u?.free ? 'Acesso livre' : (ROLE_PT[u?.role || ''] || u?.role || '')
 
 /** Item do menu com ícone de traço à esquerda (padrão SF Symbols). */
 function NL({ to, end, icon, children }: { to: string; end?: boolean; icon: IconName; children: React.ReactNode }) {
@@ -26,7 +29,7 @@ function useOutside(ref: React.RefObject<HTMLElement | null>, close: () => void)
 }
 
 export function Shell() {
-  const { user, logout, can } = useAuth()
+  const { user, logout, can, livre } = useAuth()
   const nav = useNavigate()
   const loc = useLocation()
   const online = useOnline()
@@ -48,6 +51,8 @@ export function Shell() {
   }, [])
   const ask = useCallback((text: string) => nav('/ai', { state: { ask: text } }), [nav])
   const d = dash.data
+  // closer só tem a área de vendas; a conta de acesso livre nunca é limitada
+  const soVendas = user?.role === 'CLOSER' && !livre
   const alerts: Attention[] = (d?.needs_attention || []).filter(a => a.level === 'CRITICAL' || a.level === 'HIGH')
   const crit = (d?.needs_attention || []).filter(a => a.level === 'CRITICAL').length
   const pend = d?.ai_pending_approval || 0
@@ -66,14 +71,27 @@ export function Shell() {
         <button className="iconbtn burger" aria-label="Fechar menu" onClick={() => setSide(false)}><Icon name="x" /></button></div>
       <div className="search side-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}><Icon name="search" size={16} /><span>Buscar ou perguntar</span><kbd>⌘K</kbd></div>
       <nav className="nav" aria-label="Principal">
+        {soVendas ? <>
+          {/* Closer: só a área de vendas. O resto o servidor nem entrega. */}
+          <div className="grp">Vendas</div>
+          <NL to="/sales" end icon="target">Oportunidades</NL>
+          <NL to="/sales/agenda" icon="cal">Agenda de vendas {!!(d?.sales_due || 0) && <span className="n warn">{d?.sales_due}</span>}</NL>
+          <NL to="/crm/chat" icon="chat">Chat {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NL>
+          <div className="grp">Inteligência</div>
+          <NL to="/ai" end icon="spark">Falar com a IA</NL>
+          <NL to="/activity" icon="activity">O que a IA fez</NL>
+        </> : <>
         <div className="grp">Hoje</div>
         <NL to="/" end icon="home">Hoje</NL>
         <NL to="/attention" icon="alert">Precisa de atenção {attn > 0 && <span className={`n${crit ? '' : ' warn'}`}>{attn}</span>}</NL>
         <NL to="/races" icon="flag">Corridas</NL>
+        <div className="grp">Vendas</div>
+        <NL to="/sales" end icon="target">Oportunidades {!!(d?.sales_due || 0) && <span className="n warn">{d?.sales_due}</span>}</NL>
+        <NL to="/sales/agenda" icon="cal">Agenda de vendas</NL>
+        <NL to="/crm/chat" icon="chat">Chat do Kommo {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NL>
         <div className="grp">Pessoas</div>
         <NL to="/clients" icon="people">Clientes</NL>
-        <NL to="/crm/funil" icon="funnel">Funil de vendas</NL>
-        <NL to="/crm/chat" icon="chat">Chat {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NL>
+        <NL to="/crm/funil" icon="funnel">Funil do Kommo</NL>
         <div className="grp">Sistemas</div>
         <NL to="/asana" icon="list">Asana</NL>
         <NL to="/docusign" icon="doc">DocuSign {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NL>
@@ -91,8 +109,9 @@ export function Shell() {
         {can('MANAGER') && <NL to="/audit" icon="shield">Auditoria</NL>}
         {can('ADMIN') && <NL to="/policies" icon="key">Políticas da IA</NL>}
         {can('ADMIN') && <NL to="/users" icon="user">Usuários</NL>}
+        </>}
       </nav>
-      <div className="foot"><span className="avatar">{initials(user?.name)}</span><div className="grow"><div className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{user?.name}</div><div className="small muted">{ROLE_PT[user?.role || ''] || user?.role}</div></div></div>
+      <div className="foot"><span className="avatar">{initials(user?.name)}</span><div className="grow"><div className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{user?.name}</div><div className="small muted">{cargoDe(user)}</div></div></div>
     </aside>
     <div className="main">
       <div className="topbar">
@@ -102,12 +121,12 @@ export function Shell() {
           <Icon name="search" size={16} /><span>Buscar ou perguntar à IA…</span><kbd>⌘K</kbd>
         </div>
         {/* Race control: o estado da operação em cápsulas, em toda tela. Cada item leva para onde se resolve. */}
-        <div className="rc" aria-label="Estado da operação">
+        {!soVendas && <div className="rc" aria-label="Estado da operação">
           <button className={`it ${syncTone}`} title={lastSync ? `última sincronia: ${new Date(lastSync).toLocaleString('pt-BR')}` : 'nenhuma sincronia'} onClick={() => nav('/')}><span className="k">Espelho</span><b>{lastSync ? `há ${ago(lastSync)}` : 'nunca'}</b></button>
           <button className={`it ${badInt ? 'warn' : 'ok'}`} title={badInt ? bad.map(b => `${b.system}: ${b.status.toLowerCase()}`).join(' · ') : 'todas respondendo'} onClick={() => nav('/integrations')}><span className="k">Sistemas</span><b>{nInt ? `${nInt - badInt}/${nInt}` : '—'}{badInt > 0 && badInt <= 2 && ` · ${bad.map(b => b.system).join(', ')}`}{badInt > 2 && ` · ${badInt} com problema`}</b></button>
           <button className={`it ${crit ? 'crit' : alerts.length ? 'warn' : 'ok'}`} onClick={() => nav('/attention')}><span className="k">Atenção</span><b>{attn ? `${attn} item(ns)` : 'em ordem'}{crit > 0 && ` · ${crit} crítico(s)`}</b></button>
           <button className={`it ${pend ? 'warn' : ''}`} onClick={() => nav(pend ? '/approvals' : '/ai')}><span className="k">IA</span><b>{pend ? `${pend} esperando você` : 'nada pendente'}</b></button>
-        </div>
+        </div>}
         <div className="grow" />
         <span className="clock mono small muted" title="hora local">{clock.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
         {!online && <Chip tone="crit" dot>Offline</Chip>}
@@ -117,7 +136,7 @@ export function Shell() {
             <span className="avatar">{initials(user?.name)}</span><span className="small ink2">{user?.name?.split(' ')[0]}</span>
           </button>
           {menu === 'who' && <div className="menu" role="menu">
-            <div className="mh">{user?.email}<br /><Chip tone={statusTone('ACTIVE')}>{ROLE_PT[user?.role || '']}</Chip></div>
+            <div className="mh">{user?.email}<br /><Chip tone={livre ? 'accent' : statusTone('ACTIVE')}>{cargoDe(user)}</Chip></div>
             <hr />
             <button className="mi" onClick={() => nav('/account')}>Minha conta e senha</button>
             <button className="mi" onClick={() => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('cc.theme', r.dataset.theme) } catch { /* ignore */ } }}>Alternar tema</button>
@@ -130,10 +149,17 @@ export function Shell() {
       <main className="page"><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Outlet context={{ dash }} /></div></main>
     </div>
     <nav className="tabbar" aria-label="Abas">
-      <TB to="/" end icon="home">Hoje</TB>
-      <TB to="/attention" icon="alert" n={attn}>Atenção</TB>
-      <TB to="/clients" icon="people">Clientes</TB>
-      <TB to="/ai" icon="spark" n={pend}>IA</TB>
+      {soVendas ? <>
+        <TB to="/sales" end icon="target">Vendas</TB>
+        <TB to="/sales/agenda" icon="cal" n={d?.sales_due || 0}>Agenda</TB>
+        <TB to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>Chat</TB>
+        <TB to="/ai" icon="spark">IA</TB>
+      </> : <>
+        <TB to="/" end icon="home">Hoje</TB>
+        <TB to="/attention" icon="alert" n={attn}>Atenção</TB>
+        <TB to="/sales" icon="target" n={d?.sales_due || 0}>Vendas</TB>
+        <TB to="/ai" icon="spark" n={pend}>IA</TB>
+      </>}
       <button className={`tb${side ? ' active' : ''}`} onClick={() => setSide(s => !s)} aria-label="Mais"><Icon name="more" />Mais</button>
     </nav>
     <Palette open={pal} onClose={() => setPal(false)} ask={ask} />

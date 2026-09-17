@@ -16,6 +16,7 @@ import { Banner, Chip, Empty, ErrorState, Loading, Spinner } from '../components
 import { ago } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { Mic } from '../components/Voz'
 
 interface Marcador {
   id: number; name: string; family: string | null; what: string | null; threads: number | null
@@ -58,8 +59,10 @@ function Linha({ m, reload }: { m: Marcador; reload: () => void }) {
         <div className="small muted" style={{ marginTop: 4 }}>Por quê: {m.proposed_reason}</div>}
     </td>
     <td style={{ minWidth: 0 }}>
-      {can('MANAGER') ? <textarea className="input" rows={2} value={texto} placeholder="o que vai neste marcador…"
-        onChange={e => setTexto(e.target.value)} onBlur={() => { if (mudou) salvar() }} />
+      {can('MANAGER') ? <div className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
+        <textarea className="input" rows={2} value={texto} placeholder="o que vai neste marcador…"
+          onChange={e => setTexto(e.target.value)} onBlur={() => { if (mudou) salvar() }} />
+        <Mic valor={texto} onTexto={setTexto} /></div>
         : <div className="small">{m.what || <span className="muted">—</span>}</div>}
     </td>
     {can('MANAGER') && <td className="nowrap">

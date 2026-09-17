@@ -10,6 +10,7 @@ import { daysUntil, fmtDate } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { ClientCard } from './Client360'
+import { TextoComVoz } from '../components/Voz'
 
 type Par = { a: Client; b: Client; why: string }
 type Parecer = { mesma_pessoa: boolean | null; confianca: string; motivo: string }
@@ -73,7 +74,7 @@ function NovoCliente({ onClose, onCreated }: { onClose: () => void; onCreated: (
       <div className="field"><label>Nascimento do piloto</label><input className="input" type="date" value={f.pilot_dob} onChange={e => setF({ ...f, pilot_dob: e.target.value })} /></div>
       <div className="field"><label>Empresa</label><input className="input" value={f.company} onChange={e => setF({ ...f, company: e.target.value })} /></div>
     </div>
-    <div className="field"><label>Notas</label><textarea className="input" rows={2} value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+    <div className="field"><label>Notas</label><TextoComVoz valor={f.notes} onChange={t => setF({ ...f, notes: t })} linhas={2} placeholder="Dá para ditar" /></div>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || f.name.trim().length < 2} onClick={save}>{busy ? <Spinner /> : 'Salvar e abrir o card'}</button></div>
   </div></Scrim>
 }

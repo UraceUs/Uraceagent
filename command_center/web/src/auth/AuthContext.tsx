@@ -7,6 +7,8 @@ interface Ctx {
   login: (email: string, password: string, remember: boolean) => Promise<void>
   logout: () => Promise<void>
   can: (min: Role) => boolean
+  /** conta de acesso livre: sem cargo, alcança tudo (decisão do dono, 17/09) */
+  livre: boolean
   refresh: () => Promise<void>
 }
 const AuthCtx = createContext<Ctx | null>(null)
@@ -32,7 +34,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user, ready, refresh,
     login: async (email, password, remember) => { setUser(await api.post<User>('/auth/login', { email, password, remember })) },
     logout: async () => { try { await api.post('/auth/logout') } finally { setUser(null) } },
-    can: (min) => can(user?.role, min),
+    can: (min) => (user?.free ? true : can(user?.role, min)),
+    livre: !!user?.free,
   }), [user, ready, refresh])
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }

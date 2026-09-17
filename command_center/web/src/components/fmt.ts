@@ -24,6 +24,16 @@ export function fmtDateLong(iso?: string | null) {
   if (isNaN(d.getTime())) return iso
   return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', timeZone: TZ })
 }
+/** Dia (na Florida) de um instante — é assim que agrupamos agenda e listas. */
+export function diaLocal(iso?: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return String(iso).slice(0, 10)
+  return d.toLocaleDateString('en-CA', { timeZone: TZ })   // AAAA-MM-DD
+}
+/** Hoje na Florida, em AAAA-MM-DD. "Tudo no sistema roda no fuso EDT" (dono). */
+export const hojeLocal = () => new Date().toLocaleDateString('en-CA', { timeZone: TZ })
+
 export function ago(iso?: string | null) {
   if (!iso) return 'nunca'
   const d = new Date(iso); if (isNaN(d.getTime())) return iso

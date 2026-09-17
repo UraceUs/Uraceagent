@@ -9,7 +9,9 @@ rodam dentro do Command Center, com as travas do dono em código.
 
 Cada uma devolve um dict com `aplicado` e o que fez; o executor do motor grava e audita.
 """
-from command_center.db import agora, auditar, todos, um
+import json
+
+from command_center.db import agora, atualizar, auditar, todos, um
 from command_center.providers import identidade
 
 
@@ -78,22 +80,226 @@ def painel_waiver_lixeira(con, user_id, waiver_id, motivo=None):
             "nota": "assinada fica no DocuSign; só saiu do painel" if w["status"] == "completed" else None}
 
 
+# ---------------------------------------------------------------- vendas (closer, 17/09)
+# O closer fala com a IA e ela age na oportunidade dele. Mesmas travas das rotas: quem não é
+# dono da oportunidade não mexe, e invoice fora da tabela continua sendo do dono.
+def _e_closer(con, user_id):
+    if not user_id:
+        return False
+    u = um(con, "SELECT role FROM users WHERE id=?", (user_id,))
+    return bool(u) and u["role"] == "CLOSER"
+
+
+def _opp_por(con, opp_id=None, nome=None, user_id=None):
+    """Acha a oportunidade por id ou por nome. Closer só alcança as dele — a IA
+    não é atalho para mexer na venda de outro."""
+    so_minhas = _e_closer(con, user_id)
+    dono = "" if not so_minhas else " AND (closer_user_id=? OR closer_user_id IS NULL)"
+    extra = (user_id,) if so_minhas else ()
+    if opp_id:
+        o = um(con, f"SELECT * FROM opportunities WHERE id=?{dono}", (int(opp_id),) + extra)
+        if not o:
+            return None, (f"a oportunidade #{opp_id} é de outro closer" if so_minhas and
+                          um(con, "SELECT 1 AS x FROM opportunities WHERE id=?", (int(opp_id),))
+                          else f"não existe oportunidade #{opp_id}")
+        return o, None
+    if not nome:
+        return None, "diga de quem é a oportunidade (nome ou id)"
+    like = f"%{nome.strip().lower()}%"
+    achadas = todos(con, f"""SELECT * FROM opportunities WHERE stage NOT IN ('GANHO','PERDIDO')
+                            AND (lower(name) LIKE ? OR lower(COALESCE(pilot_name,'')) LIKE ?){dono}
+                            ORDER BY updated_at DESC LIMIT 5""", (like, like) + extra)
+    if not achadas:
+        return None, f"não achei oportunidade aberta de '{nome}'"
+    if len(achadas) > 1:
+        return None, "mais de uma oportunidade com esse nome: " + ", ".join(f"#{a['id']} {a['name']}" for a in achadas)
+    return achadas[0], None
+
+
+def venda_registrar_ligacao(con, user_id, opp_id=None, nome=None, resultado="pensar", texto=None, minutos=None,
+                            proximo_em=None, proximo_que=None):
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    if resultado not in vendas.RESULTADOS:
+        return {"aplicado": False, "motivo": f"resultado deve ser um de: {', '.join(vendas.RESULTADOS)}"}
+    titulo = vendas.RESULTADOS[resultado] + (f" · {minutos} min" if minutos else "")
+    vendas._ev(con, o["id"], "call", titulo, (texto or "").strip() or None, "ia", 1 if resultado != "nao_atendeu" else 0)
+    campos = {"updated_at": agora()}
+    if proximo_em:
+        campos.update(next_at=proximo_em, next_what=(proximo_que or "retorno"))
+    etapa = "FECHAMENTO" if resultado == "fechou" else ("CONVERSA" if o["stage"] == "NOVO" and resultado != "sem_interesse" else None)
+    if etapa and etapa != o["stage"]:
+        campos["stage"] = etapa
+        vendas._ev(con, o["id"], "stage", f"{vendas.ETAPA_PT[o['stage']]} → {vendas.ETAPA_PT[etapa]}", None, "ia")
+    atualizar(con, "opportunities", o["id"], **campos)
+    auditar(con, "sales.call", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"],
+            detail={"resultado": resultado, "etapa": campos.get("stage")})
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], "etapa": campos.get("stage", o["stage"]),
+            "retorno": campos.get("next_at")}
+
+
+def venda_agendar_retorno(con, user_id, quando=None, opp_id=None, nome=None, o_que=None):
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    if not quando:
+        return {"aplicado": False, "motivo": "diga quando (AAAA-MM-DDTHH:MM)"}
+    if len(quando) == 10:
+        quando += "T12:00:00Z"
+    atualizar(con, "opportunities", o["id"], next_at=quando, next_what=(o_que or "retorno"), updated_at=agora())
+    vendas._ev(con, o["id"], "next", f"Retorno marcado: {vendas.quando_pt(quando)}", o_que, "ia")
+    auditar(con, "sales.next", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"], detail={"quando": quando})
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], "quando": quando}
+
+
+def venda_anotar(con, user_id, texto=None, opp_id=None, nome=None):
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    t = (texto or "").strip()
+    if not t:
+        return {"aplicado": False, "motivo": "anotação vazia"}
+    vendas._ev(con, o["id"], "note", "Anotação", t, "ia")
+    atualizar(con, "opportunities", o["id"], notes=((o["notes"] + "\n") if o["notes"] else "") + t, updated_at=agora())
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"]}
+
+
+def venda_mover_etapa(con, user_id, etapa=None, opp_id=None, nome=None, motivo=None):
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    etapa = (etapa or "").upper()
+    if etapa not in vendas.ETAPAS:
+        return {"aplicado": False, "motivo": f"etapa deve ser uma de: {', '.join(vendas.ETAPAS)}"}
+    if etapa == "GANHO":
+        return {"aplicado": False, "motivo": "RECUSADO: Ganho é resultado do fechamento — use venda_fechar, que cria o cliente e dispara o resto"}
+    if etapa == "PERDIDO" and not (motivo or "").strip():
+        return {"aplicado": False, "motivo": "perdido exige motivo"}
+    atualizar(con, "opportunities", o["id"], stage=etapa, lost_reason=(motivo or None) if etapa == "PERDIDO" else o["lost_reason"],
+              next_at=None if etapa == "PERDIDO" else o["next_at"], updated_at=agora())
+    vendas._ev(con, o["id"], "stage", f"{vendas.ETAPA_PT[o['stage']]} → {vendas.ETAPA_PT[etapa]}", motivo, "ia")
+    auditar(con, "sales.stage", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"],
+            detail={"de": o["stage"], "para": etapa, "motivo": motivo})
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], "etapa": etapa}
+
+
+def venda_tarefa(con, user_id, titulo=None, opp_id=None, nome=None, onde="painel", quando=None, notas=None):
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    if not (titulo or "").strip():
+        return {"aplicado": False, "motivo": "diga o que é a tarefa"}
+    extra = vendas.ExtraIn(titulo=titulo.strip(), onde=("asana" if onde == "asana" else "painel"), quando=quando, notas=notas)
+    res = vendas._extra(con, o, extra, user_id)
+    vendas._ev(con, o["id"], "task", f"Tarefa: {titulo.strip()}", res, "ia", 1)
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], **res}
+
+
+def venda_enviar_waiver(con, user_id, opp_id=None, nome=None):
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    try:
+        res = vendas._waiver(con, dict(o, client_id=o["client_id"]))
+    except Exception as e:                                        # noqa: BLE001
+        return {"aplicado": False, "motivo": str(e)[:240]}
+    vendas._ev(con, o["id"], "waiver", "Waiver enviada pela IA", res, "ia", 1)
+    auditar(con, "sales.waiver", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"], detail=res)
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], **res}
+
+
+def venda_enviar_invoice(con, user_id, opp_id=None, nome=None):
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    if not o["service"] or o["amount"] is None:
+        return {"aplicado": False, "motivo": "esta oportunidade não tem serviço e valor: complete a ficha antes"}
+    try:
+        res = vendas._qbo(con, o, True)
+    except Exception as e:                                        # noqa: BLE001
+        return {"aplicado": False, "motivo": str(e)[:240]}
+    vendas._ev(con, o["id"], "invoice", "Invoice criada e enviada pela IA", res, "ia", 1)
+    auditar(con, "sales.invoice", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"], detail=res)
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], **res}
+
+
+def venda_fechar(con, user_id, opp_id=None, nome=None):
+    """Fecha a venda e dispara a lista inteira (cliente, QuickBooks, waiver, Asana, Kommo)."""
+    from command_center.api import vendas
+    o, erro = _opp_por(con, opp_id, nome, user_id)
+    if erro:
+        return {"aplicado": False, "motivo": erro}
+    if not o["service"] or o["amount"] is None:
+        return {"aplicado": False, "motivo": "para fechar preciso do serviço e do valor na ficha"}
+    saida = []
+    try:
+        cid, det = vendas._cliente_do_fechamento(con, o, None)
+        atualizar(con, "opportunities", o["id"], client_id=cid)
+        o = dict(o, client_id=cid)
+        vendas._passo(saida, "cliente", True, det, {"client_id": cid})
+    except Exception as e:                                        # noqa: BLE001
+        vendas._passo(saida, "cliente", False, str(e)[:200])
+    for passo, fn in (("qbo", lambda: vendas._qbo(con, o, True)), ("waiver", lambda: vendas._waiver(con, o)),
+                      ("asana", lambda: vendas._asana(con, o)), ("kommo", lambda: vendas._kommo_ganho(con, o))):
+        try:
+            vendas._passo(saida, passo, True, "feito", fn())
+        except Exception as e:                                    # noqa: BLE001
+            vendas._passo(saida, passo, False, str(e)[:200])
+    fechado = {"em": agora(), "por": "ia", "passos": saida}
+    etapa = "GANHO" if o["client_id"] else "FECHAMENTO"
+    atualizar(con, "opportunities", o["id"], stage=etapa, closing=json.dumps(fechado, ensure_ascii=False),
+              next_at=None, updated_at=agora())
+    for p in saida:
+        vendas._ev(con, o["id"], vendas.PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}", None, "ia",
+                   1 if p["ok"] else (0 if p["ok"] is False else None))
+    auditar(con, "sales.close", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"],
+            detail={"passos": {p["passo"]: p["ok"] for p in saida}, "valor": o["amount"]})
+    return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], "etapa": etapa,
+            "feitos": [p["nome"] for p in saida if p["ok"]], "faltou": [f"{p['nome']}: {p['detalhe']}" for p in saida if p["ok"] is False]}
+
+
 ACOES = {
     "painel_unir_clientes": (painel_unir_clientes, ("keep_id", "drop_id", "motivo")),
     "painel_varrer_cliente": (painel_varrer_cliente, ("client_id",)),
     "painel_waiver_lixeira": (painel_waiver_lixeira, ("waiver_id", "motivo")),
+    "venda_registrar_ligacao": (venda_registrar_ligacao, ("opp_id", "nome", "resultado", "texto", "minutos", "proximo_em", "proximo_que")),
+    "venda_agendar_retorno": (venda_agendar_retorno, ("opp_id", "nome", "quando", "o_que")),
+    "venda_anotar": (venda_anotar, ("opp_id", "nome", "texto")),
+    "venda_mover_etapa": (venda_mover_etapa, ("opp_id", "nome", "etapa", "motivo")),
+    "venda_tarefa": (venda_tarefa, ("opp_id", "nome", "titulo", "onde", "quando", "notas")),
+    "venda_enviar_waiver": (venda_enviar_waiver, ("opp_id", "nome")),
+    "venda_enviar_invoice": (venda_enviar_invoice, ("opp_id", "nome")),
+    "venda_fechar": (venda_fechar, ("opp_id", "nome")),
 }
 DESCRICOES = {
     "painel_unir_clientes": "Une dois cards de cliente em um. Só quando têm o mesmo e-mail, telefone ou responsável; fora disso é decisão humana.",
     "painel_varrer_cliente": "Varre o Gmail (urace@ e support@) e o DocuSign de um cliente e liga o que achar ao card.",
     "painel_waiver_lixeira": "Tira uma waiver do painel (restaurável). Envelope em aberto é anulado no DocuSign; assinado só some do painel.",
+    "venda_registrar_ligacao": "Registra a ligação numa oportunidade de venda (resultado, o que foi dito, próximo passo) e move a etapa quando for o caso.",
+    "venda_agendar_retorno": "Marca o retorno de uma oportunidade na agenda de vendas. Nada sai para o cliente.",
+    "venda_anotar": "Guarda uma anotação interna na oportunidade.",
+    "venda_mover_etapa": "Move a oportunidade no quadro de vendas (Ganho não: isso é o fechamento).",
+    "venda_tarefa": "Cria uma tarefa do fechamento: no painel (lembrete) ou no Asana.",
+    "venda_enviar_waiver": "Envia a waiver do serviço combinado para o responsável, pelo modelo certo do DocuSign.",
+    "venda_enviar_invoice": "Cria o cliente no QuickBooks se faltar e envia a invoice do valor fechado.",
+    "venda_fechar": "Fecha a venda: cria o card do cliente, o cliente e a invoice no QuickBooks, envia a waiver, cria a tarefa no Asana e move o Kommo para Closed won.",
 }
 
 
 def executar(con, user_id, acao, args):
     fn, params = ACOES[acao]
     kw = {k: args.get(k) for k in params if k in args}
-    faltam = [k for k in params if k not in kw and k not in ("motivo",)]
+    opcionais = ("motivo", "opp_id", "nome", "texto", "minutos", "proximo_em", "proximo_que", "o_que",
+                 "onde", "quando", "notas", "titulo", "etapa", "resultado")
+    faltam = [k for k in params if k not in kw and k not in opcionais]
     if faltam:
         return {"aplicado": False, "motivo": f"faltam argumentos: {faltam}"}
     return fn(con, user_id, **kw)

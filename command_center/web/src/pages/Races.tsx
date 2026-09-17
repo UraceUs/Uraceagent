@@ -12,6 +12,7 @@ import { fmtDate, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Md } from '../components/Md'
+import { TextoComVoz } from '../components/Voz'
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
@@ -86,7 +87,7 @@ function NovaCorrida({ onClose, onCreated }: { onClose: () => void; onCreated: (
       <div className="field"><label>Início *</label><input className="input" type="date" value={f.date_start} onChange={e => setF({ ...f, date_start: e.target.value })} /></div>
       <div className="field"><label>Fim</label><input className="input" type="date" value={f.date_end} onChange={e => setF({ ...f, date_end: e.target.value })} /></div>
     </div>
-    <div className="field"><label>Observações</label><textarea className="input" rows={2} value={f.notes} onChange={e => setF({ ...f, notes: e.target.value })} /></div>
+    <div className="field"><label>Observações</label><TextoComVoz valor={f.notes} onChange={t => setF({ ...f, notes: t })} linhas={2} placeholder="Dá para ditar" /></div>
     <label className="check small"><input type="checkbox" checked={f.local_only} onChange={e => setF({ ...f, local_only: e.target.checked })} /> só no painel (não cria no Asana)</label>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><button className="btn primary" disabled={busy || !f.name.trim() || !f.date_start} onClick={criar}>{busy ? <Spinner /> : 'Criar corrida'}</button></div>
   </div></Scrim>

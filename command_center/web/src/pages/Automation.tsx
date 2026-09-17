@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Spinner, statusTone } from '../components/ui'
 import { fmtDateTime } from '../components/fmt'
 import { useToast } from '../components/Toast'
+import { TextoComVoz } from '../components/Voz'
 
 const RULE_LABEL: Record<string, [string, string]> = {
   novo_servico: ['Serviço novo no quadro', 'A IA confere a waiver do piloto, prepara a invoice (produto e valor) e propõe as ações. Nada sai sem aprovação.'],
@@ -52,7 +53,7 @@ export function Automation() {
         <Banner tone="info">Invoice: enquanto o QuickBooks estiver em stand-by, a IA prepara e propõe; o envio de verdade só existe com o QuickBooks conectado, e sempre depois de aprovação (decisão de 04/09).</Banner>
       </Section>
       <Section title="Memória da IA" count={learn.data?.filter(l => l.active).length}>
-        {can('OPERATOR') && <div className="stack" style={{ marginBottom: 12 }}><textarea className="input" rows={2} value={novo} onChange={e => setNovo(e.target.value)} placeholder='Ensine uma regra geral. Ex.: "Practice OKC 2T custa $350; Coaching Bushnell 4T custa $600."' /><div className="row"><span className="grow" /><button className="btn primary sm" disabled={busy || !novo.trim()} onClick={ensinar}>{busy ? <Spinner /> : 'Guardar'}</button></div></div>}
+        {can('OPERATOR') && <div className="stack" style={{ marginBottom: 12 }}><TextoComVoz valor={novo} onChange={setNovo} linhas={2} placeholder='Ensine (ou dite) uma regra geral. Ex.: "Practice OKC 2T custa $350; Coaching Bushnell 4T custa $600."' /><div className="row"><span className="grow" /><button className="btn primary sm" disabled={busy || !novo.trim()} onClick={ensinar}>{busy ? <Spinner /> : 'Guardar'}</button></div></div>}
         {!learn.data ? <Loading /> : learn.data.length === 0 ? <Empty>A IA ainda não aprendeu nada por aqui. Use o balão “Instruir a IA” em Precisa de atenção, ou ensine acima.</Empty> :
           <div>{learn.data.map(l => <div className={`att${l.active ? '' : ' dim'}`} key={l.id}><div className={`lv ${l.active ? 'MEDIUM' : 'LOW'}`} /><div className="grow"><div>{l.text}</div><div className="small muted"><Chip tone="outline">{l.scope}</Chip> {l.created_by_name || 'sistema'} · {fmtDateTime(l.created_at)}{l.source_key && <> · de um item de atenção</>}</div></div>
             {can('MANAGER') && <button className="btn ghost sm" onClick={async () => { await api.post(`/ai/learnings/${l.id}/toggle`); learn.reload() }}>{l.active ? 'desativar' : 'reativar'}</button>}</div>)}</div>}

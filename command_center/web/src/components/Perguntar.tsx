@@ -12,6 +12,7 @@ import { Scrim } from './ui'
      // com `campo`, devolve o texto (string, pode ser vazia) ou null se cancelar
 */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Mic } from './Voz'
 
 export interface Pergunta {
   titulo: string
@@ -59,7 +60,10 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
         <h2 className="h1" style={{ fontSize: 20 }}>{p.titulo}</h2>
         {p.texto && <div className="small ink2" style={{ whiteSpace: 'pre-wrap' }}>{p.texto}</div>}
         {p.campo && <div className="field"><label>{p.campo}</label>
-          <input ref={entrada} className="input" value={texto} onChange={e => setTexto(e.target.value)} /></div>}
+          <div className="row" style={{ gap: 6 }}>
+            <input ref={entrada} className="input" value={texto} onChange={e => setTexto(e.target.value)} />
+            <Mic valor={texto} onTexto={setTexto} />
+          </div></div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn" onClick={() => fechar(p.campo ? null : false)}>{p.cancelar || 'Cancelar'}</button>
           <button ref={inicial} className={`btn ${p.perigo ? 'danger' : 'primary'}`} onClick={() => fechar(p.campo ? texto : true)}>{p.ok || 'Confirmar'}</button>

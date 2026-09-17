@@ -16,6 +16,7 @@ Decisões (ADR §2):
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 import sqlite3
 import time
@@ -31,9 +32,26 @@ MAX_FALHAS = 5            # por chave (ip ou e-mail) na janela
 JANELA_MIN = 15
 COOKIE_SESSAO = "cc_session"
 COOKIE_CSRF = "cc_csrf"
-PAPEIS = ("ADMIN", "MANAGER", "OPERATOR", "VIEWER")
-NIVEL = {p: i for i, p in enumerate(reversed(PAPEIS))}   # ADMIN=3 … VIEWER=0
+PAPEIS = ("ADMIN", "MANAGER", "OPERATOR", "CLOSER", "VIEWER")
+# CLOSER (17/09) é vendas: mesmo nível de escrita do OPERATOR, mas só nas telas de venda —
+# o que ele NÃO alcança está em CAMINHOS_FECHADOS (main.py), não no nível.
+NIVEL = {"ADMIN": 3, "MANAGER": 2, "OPERATOR": 1, "CLOSER": 1, "VIEWER": 0}
 MSG_CREDENCIAL = "Invalid email or password."
+
+# Acesso livre (dono, 17/09): "ele opera em todas as áreas, então não precisa
+# nem de nomenclatura de cargo — ele tem acesso livre e irrestrito". Na prática
+# a conta é ADMIN; a diferença é que o painel não mostra cargo nenhum e ninguém
+# rebaixa a conta por engano. A lista pode crescer por CC_ACESSO_LIVRE
+# (e-mails separados por vírgula) sem mexer no código.
+ACESSO_LIVRE = tuple(
+    e.strip().lower() for e in os.environ.get(
+        "CC_ACESSO_LIVRE", "eduardoffresende@gmail.com").split(",") if e.strip()
+)
+
+
+def livre(email):
+    """A conta tem acesso livre e irrestrito (sem cargo)?"""
+    return (email or "").strip().lower() in ACESSO_LIVRE
 
 
 # ------------------------------------------------------------- senha
@@ -180,7 +198,8 @@ def login(con, request, response, email, senha, lembrar=False):
                         secure=seguro, samesite="strict", path="/")
     response.set_cookie(COOKIE_CSRF, csrf, max_age=max_age, httponly=False,
                         secure=seguro, samesite="strict", path="/")
-    return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"]}
+    return {"id": u["id"], "email": u["email"], "name": u["name"],
+            "role": u["role"], "free": livre(u["email"])}
 
 
 def logout(con, request, response):
@@ -204,7 +223,8 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
         csrf_header = request.headers.get("x-csrf", "")
         if not csrf_cookie or not hmac.compare_digest(csrf_cookie, csrf_header):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "CSRF check failed.")
-    return {"id": s["user_id"], "email": s["email"], "name": s["name"], "role": s["role"]}
+    return {"id": s["user_id"], "email": s["email"], "name": s["name"],
+            "role": s["role"], "free": livre(s["email"])}
 
 
 def exige(papel_minimo):
@@ -213,6 +233,8 @@ def exige(papel_minimo):
         raise ValueError(papel_minimo)
 
     def _guarda(u=Depends(usuario_atual)):
+        if u.get("free"):
+            return u
         if NIVEL[u["role"]] < NIVEL[papel_minimo]:
             raise HTTPException(status.HTTP_403_FORBIDDEN,
                                 "You don't have permission to do this.")

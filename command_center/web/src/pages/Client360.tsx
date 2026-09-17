@@ -11,6 +11,7 @@ import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, Status
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { TextoComVoz } from '../components/Voz'
 
 function idade(dob?: string | null) {
   if (!dob) return null
@@ -144,7 +145,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <div className="field"><label>Plano mensal (gera a invoice do dia 1)</label><select className="input" value={form.monthly_plan} onChange={e => setForm({ ...form, monthly_plan: e.target.value })}><option value="">sem plano mensal</option>{['Academy Baby Kart', 'Academy 4 stroke', 'Academy 2 stroke', 'Academy kart próprio', 'Academy kart próprio + mecânico', 'Contrato 6 meses', 'Contrato 12 meses'].map(x => <option key={x}>{x}</option>)}</select></div>
         <div className="field"><label>Ajustes do plano</label><input className="input" value={form.monthly_note} onChange={e => setForm({ ...form, monthly_note: e.target.value })} placeholder="ex.: 1 sessão extra em setembro; treino fora do OKC" /></div>
       </div>
-      <div className="field" style={{ marginTop: 12 }}><label>Notas</label><textarea className="input" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} /></div>
+      <div className="field" style={{ marginTop: 12 }}><label>Notas</label><TextoComVoz valor={form.notes} onChange={t => setForm({ ...form, notes: t })} linhas={3} placeholder="Dá para ditar" /></div>
       <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}><button className="btn" onClick={() => setEdit(false)}>Cancelar</button><button className="btn primary" disabled={saving} onClick={save}>{saving ? <span className="spin" /> : 'Salvar'}</button></div>
     </Section>}
     {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>Notas:</b> {c.notes}</div>}
@@ -257,7 +258,7 @@ function Equipamento({ c, cat, reload }: { c: { id: number; chassis_id?: number 
       {en && <div className="card card-b"><div className="h2">Motor</div>{en.image_path && <img src={`/ops/api/catalog/engines/${en.id}/image`} alt="" style={{ maxHeight: 140, borderRadius: 3, margin: '8px 0' }} />}<dl className="dl"><dt>Motor</dt><dd>{en.brand} {en.model}</dd><dt>Tempos</dt><dd>{en.stroke || '—'}</dd><dt>Categoria</dt><dd>{en.category || '—'}</dd>{en.notes && <><dt>Notas</dt><dd className="small">{en.notes}</dd></>}</dl>
         <div className="h2" style={{ marginTop: 10 }}>Peças deste motor ({parts.length})</div>{parts.length === 0 ? <div className="small muted">Nenhuma peça cadastrada. Cadastre em Equipamentos.</div> : <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{parts.map(p => <li key={p.id} className="small">{p.name}{p.part_number && <span className="mono muted"> {p.part_number}</span>}{p.price != null && <span className="muted"> · {money(p.price)}</span>}</li>)}</ul>}</div>}
     </div>
-    <div className="field"><label>Notas de equipamento</label><textarea className="input" rows={2} disabled={!can('OPERATOR')} value={f.equipment_notes} onChange={e => setF({ ...f, equipment_notes: e.target.value })} placeholder="ajustes, pneus usados, número do chassi, histórico" /></div>
+    <div className="field"><label>Notas de equipamento</label><TextoComVoz valor={f.equipment_notes} onChange={t => setF({ ...f, equipment_notes: t })} linhas={2} disabled={!can('OPERATOR')} placeholder="ajustes, pneus usados, número do chassi, histórico (dá para ditar)" /></div>
     {can('OPERATOR') && <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={busy} onClick={save}>{busy ? <span className="spin" /> : 'Salvar equipamento'}</button></div>}
     <details className="card card-b" style={{ marginTop: 4 }}><summary style={{ cursor: 'pointer' }}><b>Cadastrar ou editar chassis, motores e peças</b> <span className="small muted">(catálogo, vale para todos os pilotos)</span></summary>
       <div style={{ marginTop: 10 }}><CatalogoEditor data={cat} reload={reload} /></div></details>

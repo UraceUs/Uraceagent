@@ -1,9 +1,13 @@
-export type Role = 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'VIEWER'
-export const ROLES: Role[] = ['VIEWER', 'OPERATOR', 'MANAGER', 'ADMIN']
+export type Role = 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'CLOSER' | 'VIEWER'
+// CLOSER (17/09) é vendas: escreve na área dele, não alcança o resto do painel.
+// A ordem é a escada que o `can()` usa; o que o closer não vê está na lista
+// de caminhos fechados do servidor, não no nível.
+export const ROLES: Role[] = ['VIEWER', 'CLOSER', 'OPERATOR', 'MANAGER', 'ADMIN']
 export type Level = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 export type Policy = 'SAFE' | 'REQUIRES_CONFIRMATION' | 'REQUIRES_APPROVAL' | 'BLOCKED'
 
-export interface User { id: number; email: string; name: string; role: Role }
+// `free`: conta de acesso livre e irrestrito (o dono pediu: sem cargo nenhum).
+export interface User { id: number; email: string; name: string; role: Role; free?: boolean }
 
 export interface Integration {
   system: string; status: 'CONNECTED' | 'SYNCING' | 'DEGRADED' | 'ERROR' | 'DISCONNECTED'
@@ -22,6 +26,7 @@ export interface Attention {
 export interface Dashboard {
   active_clients: number; tasks_due_today: number; overdue_tasks: number; upcoming_7d: number
   waivers_open: number; waivers_bounced: number; emails_attention: number; crm_pending?: number
+  sales_due?: number
   ai_actions_today: number; ai_pending_approval: number
   open_invoices: null | { count: number; total: number; overdue: number; connected: boolean }
   integrations: Pick<Integration, 'system' | 'status' | 'last_success_at'>[]

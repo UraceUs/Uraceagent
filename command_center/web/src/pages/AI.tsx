@@ -8,7 +8,8 @@ import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, PageHeader, SYS
 
 const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: 'Criar e enviar invoice', qbo_criar_invoice: 'Criar invoice', qbo_enviar_invoice: 'Enviar invoice', qbo_criar_item: 'Criar item no catálogo', qbo_criar_cliente: 'Criar cliente no QuickBooks', asana_criar_do_modelo: 'Criar tarefa (modelo oficial)', asana_criar_tarefa: 'Criar tarefa', asana_comentar: 'Comentar na tarefa', asana_mover_para_secao: 'Mover tarefa', asana_mover_para_finished: 'Mover para Finished Services', asana_concluir: 'Concluir tarefa', docusign_enviar_waiver: 'Enviar waiver', docusign_reenviar_waiver: 'Reenviar waiver', docusign_anular_envelope: 'Anular envelope', docusign_renomear_modelo: 'Renomear modelo', docusign_substituir_documento_modelo: 'Trocar PDF do modelo', asana_criar_corrida: 'Criar corrida (New Race)', qbo_lembrete_invoice: 'Lembrete de invoice', painel_unir_clientes: 'Unir dois clientes', painel_varrer_cliente: 'Varrer Gmail e DocuSign do cliente', painel_waiver_lixeira: 'Waiver para a lixeira', gmail_rascunho: 'Rascunho de e-mail', gmail_rotular: 'Marcar e-mail' }
 const STATUS_LABEL: Record<string, string> = { PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada' }
-import { ago, fmtDateTime, money, safeJson } from '../components/fmt'
+import { ago, fmtDateTime, fmtTime, money, safeJson } from '../components/fmt'
+import { Mic, Ouvir } from '../components/Voz'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Md } from '../components/Md'
@@ -125,16 +126,17 @@ export function ActionCard({ a, onChange }: { a: AiAction; onChange?: () => void
 }
 
 /** Uma mensagem da conversa: o que a pessoa escreveu e a resposta da IA com as ações. */
-function Bolha({ c, onChange, quem }: { c: AiCommand; onChange?: () => void; quem?: string }) {
+export function Bolha({ c, onChange, quem }: { c: AiCommand; onChange?: () => void; quem?: string }) {
   const running = c.status === 'QUEUED' || c.status === 'RUNNING'
-  const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const hora = (iso: string) => fmtTime(iso)
   return <div className="chat">
     <div className="msg me"><div className="bub">{(() => { const h = textoHumano(c.text); return <>{h.eyebrow && <span className="ctx">{h.eyebrow}</span>}{h.texto}{h.tecnico && <details className="small" style={{ marginTop: 6, opacity: .8 }}><summary style={{ cursor: 'pointer' }}>ver o que a IA recebeu</summary><pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11.5, margin: '6px 0 0' }}>{c.text}</pre></details>}</> })()}</div><div className="when">{quem ? `${quem} · ` : ''}{hora(c.created_at)}</div></div>
     <div className="msg ai">
       <div className="bub">{running ? <Thinking label={c.status === 'QUEUED' ? 'Na fila…' : 'Lendo os sistemas e pensando…'} />
         : c.status === 'FAILED' ? <span style={{ color: 'var(--crit)' }}>Falhou: {c.error}</span> : c.output ? <Md text={c.output} /> : <span className="muted">(sem texto)</span>}</div>
       {!!c.actions?.length && <div className="acts">{c.actions.map(a => <ActionCard key={a.id} a={a} onChange={onChange} />)}</div>}
-      <div className="when">{c.finished_at ? hora(c.finished_at) : running ? 'agora' : ''}{c.status === 'FAILED' && ' · falhou'}</div>
+      <div className="when row" style={{ gap: 6 }}>{c.finished_at ? hora(c.finished_at) : running ? 'agora' : ''}{c.status === 'FAILED' && ' · falhou'}
+        {!running && c.output && <Ouvir texto={c.output} titulo="Ouvir a resposta da IA" />}</div>
     </div>
   </div>
 }
@@ -228,6 +230,7 @@ export function AICommand() {
           </div>
           <textarea ref={ta} value={text} onChange={e => setText(e.target.value)} placeholder="Pergunte ou peça algo. Enter envia, Shift+Enter quebra linha. ✦ mostra sugestões." maxLength={4000}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }} rows={2} aria-label="Comando" />
+          <Mic valor={text} onTexto={t => { setText(t); ta.current?.focus() }} titulo="Ditar o comando (falar em vez de digitar)" />
           <button className="btn primary" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : 'Enviar'}</button>
         </div><div className="small muted">{text.length}/4000 · a resposta pode levar minutos; você pode navegar e voltar.</div></div>}
       </div>

@@ -14,6 +14,8 @@ import { Icon } from '../components/Icon'
 import { ago, fmtDate, fmtDateLong, fmtDateTime, fmtTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { TextoComVoz } from '../components/Voz'
+import { PassarParaCloser } from './Vendas'
 
 export interface Lead {
   id: number; external_id: string; client_id: number | null; name: string | null
@@ -152,6 +154,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
           <ChipCanal source={l.source} perfis={det.data?.detalhe?.perfis} nome={nomeDo(l)} />
           {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
           {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> Dados do lead</button>}
+          <PassarParaCloser leadId={l.id} />
         </div>
         <div className="row wrap small muted" style={{ gap: 10 }}>
           {l.contact_phone && <a href={`tel:${l.contact_phone.replace(/[^\d+]/g, '')}`}>{l.contact_phone}</a>}
@@ -202,10 +205,10 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     {can('OPERATOR') && <div className="stack" style={{ gap: 8 }}>
       {!d.data?.chat_ligado && <Banner tone="warn">{d.data?.responder_habilitado ? 'O bot ainda está esperando esta conversa: dá para responder agora.' : 'O chat ainda não está ligado no Kommo (Salesbot + KOMMO_BOT_ID). Até lá, responda pelo Kommo; a anotação abaixo funciona.'}</Banner>}
       <div className="field"><label>Responder no chat do lead {l.source ? `(${l.source})` : ''}</label>
-        <textarea className="input" rows={3} value={texto} placeholder="Escreva a resposta… Enter envia, Shift+Enter quebra a linha" onChange={e => setTexto(e.target.value)} disabled={!d.data?.responder_habilitado} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); responder() } }} />
+        <TextoComVoz valor={texto} onChange={setTexto} linhas={3} placeholder="Escreva ou dite a resposta… Enter envia, Shift+Enter quebra a linha" disabled={!d.data?.responder_habilitado} onEnter={responder} />
         <div className="row wrap"><button className="btn primary sm" disabled={busy === 'r' || !texto.trim() || !d.data?.responder_habilitado} onClick={responder}>{busy === 'r' ? <Spinner /> : 'Enviar no chat'}</button><span className="small muted">Sai pelo bot da conta no canal do lead, com o seu texto.</span></div></div>
       <details><summary className="small">Anotação interna (não vai para o cliente)</summary>
-        <div className="field" style={{ marginTop: 6 }}><textarea className="input" rows={2} value={nota} onChange={e => setNota(e.target.value)} />
+        <div className="field" style={{ marginTop: 6 }}><TextoComVoz valor={nota} onChange={setNota} linhas={2} placeholder="O que ficou combinado… (dá para ditar)" />
           <button className="btn sm" disabled={busy === 'n' || !nota.trim()} onClick={anotar}>{busy === 'n' ? <Spinner /> : 'Anotar no lead'}</button></div></details>
     </div>}
   </div>

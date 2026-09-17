@@ -39,7 +39,7 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
       res.commands.forEach(c => out.push({ group: 'Comandos', label: c.text, hint: c.status, go: go(`/ai/${c.id}`) }))
     }
     if (s.length >= 2) out.push({ group: 'IA', label: `Perguntar à IA: "${s}"`, hint: 'Enter', go: () => { onClose(); ask(s) } })
-    const pages: [string, string][] = [['Hoje', '/'], ['Precisa de atenção', '/attention'], ['Clientes', '/clients'], ['Pro Racing Drivers', '/clients?v=pro'], ['Corridas', '/races'], ['AI Command', '/ai'],
+    const pages: [string, string][] = [['Hoje', '/'], ['Precisa de atenção', '/attention'], ['Clientes', '/clients'], ['Pro Racing Drivers', '/clients?v=pro'], ['Corridas', '/races'], ['Oportunidades · vendas', '/sales'], ['Agenda de vendas', '/sales/agenda'], ['AI Command', '/ai'],
       ['Aprovações', '/approvals'], ['O que a IA pode fazer', '/ai/capabilities'], ['Asana', '/asana'], ['DocuSign', '/docusign'], ['Gmail', '/gmail'], ['Manual dos marcadores', '/gmail/manual'], ['QuickBooks', '/quickbooks'], ['Chat · Kommo', '/crm/chat'], ['Funil de vendas · Kommo', '/crm/funil'], ['Integrações', '/integrations'], ['Automação e memória', '/automation'], ['Atividade da IA', '/activity'], ['Políticas', '/policies'], ['Auditoria', '/audit'], ['Usuários', '/users']]
     pages.filter(([n]) => !s || n.toLowerCase().includes(s.toLowerCase())).forEach(([n, p]) => out.push({ group: 'Ir para', label: n, go: go(p) }))
     return out

@@ -111,6 +111,32 @@ async def _cabecalhos(request: Request, call_next):
     return resp
 
 
+# O CLOSER (17/09) é vendas: mesmo nível de escrita do OPERATOR, mas estas áreas não são dele.
+# Um lugar só, para não depender de cada rota lembrar da regra.
+FECHADO_AO_CLOSER = ("/ops/api/qbo", "/ops/api/invoices", "/ops/api/automation", "/ops/api/rules",
+                     "/ops/api/policies", "/ops/api/users", "/ops/api/audit", "/ops/api/system",
+                     "/ops/api/gmail", "/ops/api/docusign", "/ops/api/integrations", "/ops/api/context")
+
+
+@app.middleware("http")
+async def _limites_do_closer(request, call_next):
+    caminho = request.url.path
+    if caminho.startswith(FECHADO_AO_CLOSER) and request.method != "OPTIONS":
+        from command_center.api import auth as _auth
+        from command_center.db import conectar
+        bolo = request.cookies.get(_auth.COOKIE_SESSAO)
+        if bolo:
+            con = conectar()
+            try:
+                s = _auth.sessao_valida(con, bolo)
+            finally:
+                con.close()
+            if s and s.get("role") == "CLOSER":
+                from fastapi.responses import JSONResponse
+                return JSONResponse({"detail": "Esta área não é do time de vendas."}, status_code=403)
+    return await call_next(request)
+
+
 app.include_router(rotas.r)
 app.include_router(ia.r)
 from command_center.api import qbo  # noqa: E402
@@ -119,6 +145,8 @@ from command_center.api import crm  # noqa: E402
 app.include_router(crm.r)
 from command_center.api import sistema  # noqa: E402
 app.include_router(sistema.r)
+from command_center.api import vendas  # noqa: E402
+app.include_router(vendas.r)
 
 
 # ------------------------------------------------------------- saúde
@@ -186,7 +214,11 @@ class UsuarioIn(BaseModel):
 
 @app.get(BASE + "/api/users")
 def api_users(u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
-    return todos(con, "SELECT id, email, name, role, active, created_at, last_login_at FROM users ORDER BY id")
+    lista = todos(con, "SELECT id, email, name, role, active, created_at, last_login_at FROM users ORDER BY id")
+    # `free` marca a conta de acesso livre (sem cargo) — o painel não mostra papel nela
+    for r in lista:
+        r["free"] = auth.livre(r["email"])
+    return lista
 
 
 @app.post(BASE + "/api/users", status_code=201)
@@ -236,9 +268,11 @@ def api_users_role(uid: int, dados: PapelIn, request: Request, u=Depends(auth.ex
         raise HTTPException(400, f"Papel inválido. Use um de: {', '.join(auth.PAPEIS)}.")
     if uid == u["id"]:
         raise HTTPException(400, "Você não muda o próprio papel; peça a outro administrador.")
-    alvo = um(con, "SELECT id, role, active FROM users WHERE id = ?", (uid,))
+    alvo = um(con, "SELECT id, email, role, active FROM users WHERE id = ?", (uid,))
     if not alvo:
         raise HTTPException(404, "User not found.")
+    if auth.livre(alvo["email"]):
+        raise HTTPException(400, "Esta conta tem acesso livre e irrestrito; não tem cargo para mudar.")
     if alvo["role"] == "ADMIN" and dados.role != "ADMIN":
         n = um(con, "SELECT COUNT(*) AS n FROM users WHERE role='ADMIN' AND active=1 AND id<>?", (uid,))
         if not n or n["n"] == 0:

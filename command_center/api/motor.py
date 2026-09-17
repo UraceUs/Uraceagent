@@ -135,6 +135,51 @@ def contexto_do_comando(con, texto, user_id=None):
     return "\n".join(linhas)
 
 
+_RE_OPP = re.compile(r"\[oportunidade #(\d+)")
+
+# O closer conversa com a IA dentro da oportunidade. Sem este bloco a IA responde bonito e
+# não age: ela precisa saber de que venda se trata e o nome exato de cada ação.
+VENDA_PROTOCOLO = [
+    'ACAO: venda_registrar_ligacao | <quem> | <resumo> | {"opp_id":%d,"resultado":"fechou|pensar|nao_atendeu|sem_interesse|remarcou","texto":"o que ele falou","minutos":0,"proximo_em":"AAAA-MM-DDTHH:MM:00Z","proximo_que":"o que fazer no retorno"}',
+    'ACAO: venda_agendar_retorno | <quem> | <resumo> | {"opp_id":%d,"quando":"AAAA-MM-DDTHH:MM:00Z","o_que":"confirmar e fechar"}',
+    'ACAO: venda_anotar | <quem> | <resumo> | {"opp_id":%d,"texto":"a anotação"}',
+    'ACAO: venda_mover_etapa | <quem> | <resumo> | {"opp_id":%d,"etapa":"NOVO|CONVERSA|PROPOSTA|FECHAMENTO|PERDIDO","motivo":"obrigatório em PERDIDO"}',
+    'ACAO: venda_tarefa | <quem> | <resumo> | {"opp_id":%d,"titulo":"o que fazer","onde":"painel|asana","quando":"AAAA-MM-DD","notas":"opcional"}',
+    'ACAO: venda_enviar_waiver | <quem> | <resumo> | {"opp_id":%d}',
+    'ACAO: venda_enviar_invoice | <quem> | <resumo> | {"opp_id":%d}',
+    'ACAO: venda_fechar | <quem> | <resumo> | {"opp_id":%d}',
+]
+
+
+def contexto_da_venda(con, texto):
+    """Contexto de uma oportunidade quando a mensagem vem da tela de vendas."""
+    from command_center.api import vendas
+    m = _RE_OPP.search(texto or "")
+    if not m:
+        return ""
+    o = um(con, "SELECT * FROM opportunities WHERE id=?", (int(m.group(1)),))
+    if not o:
+        return ""
+    evs = todos(con, "SELECT kind, title, detail, at FROM opp_events WHERE opp_id=? ORDER BY at DESC LIMIT 6", (o["id"],))
+    ficha = {"id": o["id"], "quem_decide": o["name"], "email": o["email"], "telefone": o["phone"],
+             "piloto": o["pilot_name"], "idade_do_piloto": o["pilot_age"], "servico": o["service"],
+             "data_do_servico": o["service_date"], "hora": o["service_time"], "valor": o["amount"],
+             "etapa": vendas.ETAPA_PT.get(o["stage"], o["stage"]), "origem": o["source"],
+             "proximo_passo": o["next_what"], "proximo_em": o["next_at"], "ja_e_cliente": bool(o["client_id"])}
+    linhas = ["\n\nCONTEXTO DA VENDA (esta conversa é dentro de uma oportunidade do time de vendas; "
+              "oportunidade NÃO é cliente — ela só vira cliente no fechamento):",
+              "- Ficha: " + json.dumps(ficha, ensure_ascii=False),
+              "- Últimos registros: " + json.dumps([{"quando": e["at"], "o_que": e["title"], "detalhe": (e["detail"] or "")[:160]} for e in evs], ensure_ascii=False),
+              f"- Hoje na Flórida é {vendas.hoje_local()}; toda data e hora que você declarar é no fuso da Flórida.",
+              "- Para agir NESTA venda use somente as ações abaixo, sempre com \"opp_id\": " + str(o["id"]) + ":"]
+    linhas += ["  " + (m_ % o["id"]) for m_ in VENDA_PROTOCOLO]
+    linhas.append("- venda_fechar dispara de uma vez: card do cliente, cliente e invoice no QuickBooks, waiver, tarefa no Asana e Kommo em Closed won. "
+                  "Só use quando a pessoa disser que fechou. Se faltar serviço ou valor na ficha, pergunte antes.")
+    if not o["email"]:
+        linhas.append("- Esta ficha está SEM e-mail: waiver e invoice não saem. Peça o e-mail antes de prometer envio.")
+    return "\n".join(linhas)
+
+
 def _prompt_evento(con, ev):
     regra = {"task.created": "Um serviço NOVO entrou no quadro. Verifique a waiver do piloto (docusign_waivers_de pelo e-mail do responsável; menor = parental) e, se faltar, PROPONHA o envio. "
                              "Verifique o que falta para a invoice (produto/valor): se souber pelo Rate Card e pela tarefa, proponha a invoice com o valor; se não souber, diga exatamente o que falta. "
@@ -597,7 +642,7 @@ def executar_acao(aid, user_id):
         if sobrando:
             auditar(con, "action.args_ajustados", "system", entity_type="ai_action", entity_id=aid, detail={"acao": acao, "descartados": sobrando})
         sistema = acao.split("_")[0]
-        if sistema == "painel":                        # ação do próprio painel (unir, varrer, lixeira) — dono, 17/09
+        if sistema in ("painel", "venda"):             # ação do próprio painel (unir, varrer, lixeira, vendas do closer)
             from command_center.api import acoes_painel
             if acao not in acoes_painel.ACOES:
                 raise ValueError(f"ação do painel desconhecida: {acao}")

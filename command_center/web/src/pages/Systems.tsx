@@ -12,6 +12,7 @@ import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, S
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { Mic, TextoComVoz } from '../components/Voz'
 
 const ORDEM_SECOES = ['TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY', 'RACES', 'Finished Services']
 const ASANA_PROJ = 'https://app.asana.com/0/1205450093098920/board'
@@ -156,7 +157,7 @@ function InstruirTarefa({ t, onClose }: { t: Task; onClose: () => void }) {
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <Section title="✦ IA nesta tarefa" tight>
-    <textarea className="input" rows={3} value={text} onChange={e => setText(e.target.value)} placeholder={`Diga à IA o que fazer com esta tarefa. Ex.: "confirme o piloto, feche a subtarefa da waiver e comente que a invoice foi paga".`} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }} />
+    <TextoComVoz valor={text} onChange={setText} linhas={3} placeholder={`Diga (ou dite) à IA o que fazer com esta tarefa. Ex.: "confirme o piloto, feche a subtarefa da waiver e comente que a invoice foi paga".`} />
     <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> guardar na memória da IA {t.client_id ? '(deste cliente)' : '(tarefas)'}</label><span className="grow" /><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : '✦ Enviar à IA'}</button></div>
   </Section>
 }
@@ -178,10 +179,10 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
     <button className="btn ghost sm close" onClick={onClose}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>Nova tarefa de serviço</h2><div className="small muted">Cria no Asana a partir do modelo oficial (com as subtarefas), na coluna do dia da data. A IA é avisada e prepara waiver e invoice.</div></div>
     <div className="grid g2">
-      <div className="field"><label>Piloto *</label><input className="input" value={f.pilot_name} onChange={e => set('pilot_name', e.target.value)} /></div>
-      <div className="field"><label>Responsável {menor ? '* (piloto menor: quem assina e paga)' : '(quem paga/assina)'}</label><input className="input" value={f.responsible} onChange={e => set('responsible', e.target.value)} placeholder={menor ? 'obrigatório' : 'se adulto e vazio, o próprio piloto'} /></div>
-      <div className="field"><label>E-mail do responsável *</label><input className="input" type="email" value={f.email} onChange={e => set('email', e.target.value)} /></div>
-      <div className="field"><label>Telefone *</label><input className="input" value={f.phone} onChange={e => set('phone', e.target.value)} /></div>
+      <div className="field"><label>Piloto *</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.pilot_name} onChange={e => set('pilot_name', e.target.value)} /><Mic valor={f.pilot_name} onTexto={t => set('pilot_name', t)} /></div></div>
+      <div className="field"><label>Responsável {menor ? '* (piloto menor: quem assina e paga)' : '(quem paga/assina)'}</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.responsible} onChange={e => set('responsible', e.target.value)} placeholder={menor ? 'obrigatório' : 'se adulto e vazio, o próprio piloto'} /><Mic valor={f.responsible} onTexto={t => set('responsible', t)} /></div></div>
+      <div className="field"><label>E-mail do responsável *</label><div className="row" style={{ gap: 6 }}><input className="input" type="email" value={f.email} onChange={e => set('email', e.target.value)} /><Mic valor={f.email} onTexto={t => set('email', t.replace(/\s+/g, '').replace(/arroba/gi, '@'))} /></div></div>
+      <div className="field"><label>Telefone *</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.phone} onChange={e => set('phone', e.target.value)} /><Mic valor={f.phone} onTexto={t => set('phone', t)} /></div></div>
       <div className="field"><label>Nascimento do piloto {idade !== null && <span className="muted">({idade} anos{menor ? ', menor' : ''})</span>}</label><input className="input" type="date" value={f.dob} onChange={e => set('dob', e.target.value)} /></div>
       <div className="field"><label>Data do serviço *</label><input className="input" type="date" value={f.due_on} onChange={e => set('due_on', e.target.value)} /></div>
       <div className="field"><label>Produto *</label><select className="input" value={f.product} onChange={e => set('product', e.target.value)}>
@@ -194,9 +195,9 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
       <div className="field"><label>Altura</label><input className="input" value={f.height} onChange={e => set('height', e.target.value)} placeholder="ex.: 1,60 m" /></div>
       <div className="field"><label>Peso</label><input className="input" value={f.weight} onChange={e => set('weight', e.target.value)} placeholder="ex.: 52 kg" /></div>
       <div className="field"><label>Cintura</label><input className="input" value={f.waist} onChange={e => set('waist', e.target.value)} placeholder="para o macacão" /></div>
-      <div className="field"><label>Experiência</label><input className="input" value={f.experience} onChange={e => set('experience', e.target.value)} placeholder="ex.: 2 anos de kart, nunca pilotou" /></div>
+      <div className="field"><label>Experiência</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.experience} onChange={e => set('experience', e.target.value)} placeholder="ex.: 2 anos de kart, nunca pilotou" /><Mic valor={f.experience} onTexto={t => set('experience', t)} /></div></div>
     </div>
-    <div className="field"><label>Observações</label><textarea className="input" rows={2} value={f.extra_notes} onChange={e => set('extra_notes', e.target.value)} placeholder="altura, peso, experiência, pedidos especiais" /></div>
+    <div className="field"><label>Observações</label><TextoComVoz valor={f.extra_notes} onChange={t => set('extra_notes', t)} linhas={2} placeholder="altura, peso, experiência, pedidos especiais (dá para ditar)" /></div>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>Cancelar</button><span className="small muted">{faltam.length > 0 && `falta: ${faltam.join(', ')}`}</span><button className="btn primary" disabled={busy || faltam.length > 0} onClick={save}>{busy ? <Spinner /> : 'Criar no Asana'}</button></div>
   </div></Scrim>
 }

@@ -8,6 +8,7 @@ import { Chip, Empty, ErrorState, LEVEL_GLYPH, Loading, PageHeader, Section, lev
 import { fmtDateTime } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { TextoComVoz } from '../components/Voz'
 
 const LEVELS: Level[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const LABEL: Record<Level, string> = { CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Médio', LOW: 'Baixo' }
@@ -27,7 +28,7 @@ function Balao({ a, onDone }: { a: A; onDone: () => void }) {
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <div className="balao" onClick={e => e.stopPropagation()}>
-    <textarea className="input" rows={3} autoFocus value={text} onChange={e => setText(e.target.value)} placeholder={`Diga à IA o que fazer com isto. Ex.: "o valor deste serviço é $350, produto Practice 2T; envie a invoice e a waiver parental".`} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send() }} />
+    <TextoComVoz valor={text} onChange={setText} linhas={3} autoFocus placeholder={`Diga (ou dite) à IA o que fazer com isto. Ex.: "o valor deste serviço é $350, produto Practice 2T; envie a invoice e a waiver parental".`} />
     <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> guardar na memória da IA {a.client_id ? '(deste cliente)' : `(itens do tipo ${a.entity.type})`}</label><span className="grow" /><button className="btn ghost sm" onClick={onDone}>cancelar</button><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : '✦ Enviar à IA'}</button></div>
   </div>
 }
