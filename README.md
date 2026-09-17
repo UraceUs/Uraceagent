@@ -5,6 +5,15 @@ classificação A/B/C/D, recomenda o programa certo, agenda follow-ups — e
 passa para uma pessoa quando é o caso. Em produção desde 24/08/2026
 (circuito completo validado com lead real via Instagram).
 
+## Por onde começar
+
+| Você quer | Leia |
+|---|---|
+| **usar o painel** (Command Center) | [`docs/manual-do-command-center.md`](docs/manual-do-command-center.md) — manual completo, para humanos e para IA |
+| entender o agente de vendas (Chase) | este README, abaixo |
+| ver o porquê de cada regra | `brain/08_DECISOES/` |
+| saber o que aconteceu, dia a dia | `brain/30_DIARIO/` |
+
 ## O princípio que governa tudo
 
 **As garantias vivem abaixo do modelo, não no prompt.** As regras que não

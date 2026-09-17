@@ -32,3 +32,16 @@ da identidade visual da URACE"** — nada de paleta das referências.
   a identidade vale para o sistema inteiro sem tocar na lógica de cada página.
 - `components/Shell.tsx`: menu com ícones, race control em cápsulas dentro da barra de topo, barra de abas.
 - Nenhuma mudança de backend. 181 testes; capturas em desktop e celular, escuro e claro.
+
+---
+
+## Correção de 17/09, mais tarde: o teal saiu, entrou o azul
+
+Ordem dele, ao aprovar o login novo: *"coloca sempre no nosso padrão de azul, preto,
+branco e vermelho"*. O teal `#5DAFB2` **não é mais** cor da casa. O token continua sendo
+`--accent`, agora com o azul do kart da foto: `#1E5BC6` no tema escuro e `#1B4FA8` no claro
+(`--accent-ink` `#6FA0EE` / `#173F86`). Todo realce, foco de campo, link e chip do painel
+seguiu o token. **O hex oficial da marca nunca foi documentado** — se ele passar o código
+exato, é uma linha em `styles/tokens.css`.
+
+Também mudou o login: ver `D-2026-09-17 - Login com a foto da pista.md`.

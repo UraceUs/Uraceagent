@@ -24,6 +24,7 @@ que realmente evita erro.
 | [[Gmail]] | entrada de tudo | ver [[Taxonomia do Gmail]] |
 | [[Google Calendar]] | corridas | depende do Asana |
 | [[VPS e OpenClaw]] | **onde a IA roda** | segredos ficam fora do repositório |
+| **Command Center** | a mesa de operação (`/ops/`) | manual completo em `docs/manual-do-command-center.md` — telas, papéis, fluxo do closer, voz, políticas da IA, deploy e o que fazer quando dá erro |
 
 
 ## Fontes de contexto da IA (09/09)
