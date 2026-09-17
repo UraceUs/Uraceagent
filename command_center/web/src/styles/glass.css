@@ -341,3 +341,10 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .msg.me .bub-row .bub{max-width:100%}
 .mail .list .tabs{width:100%;display:flex}
 .mail .list .tabs button{flex:1 1 0;padding:0 8px}
+
+/* ---------- foto do cliente no chat (vem do webhook do Kommo) */
+.foto{border-radius:50%;object-fit:cover;flex:0 0 auto;background:var(--glass-2);border:1px solid var(--glass-line)}
+.foto.ini{display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:var(--ink-2);background:linear-gradient(135deg,var(--accent-wash),var(--glass-2))}
+.mail .item.com-foto{grid-template-columns:auto 1fr auto;column-gap:10px}
+.mail .item.com-foto .foto{grid-row:1/4;align-self:start;margin-top:2px}
+.mail .item.com-foto .subj,.mail .item.com-foto .snip,.mail .item.com-foto .sug{grid-column:2/4}

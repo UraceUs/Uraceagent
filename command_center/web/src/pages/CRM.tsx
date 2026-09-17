@@ -24,7 +24,7 @@ export interface Lead {
   link: string | null; created_at_src: string | null; updated_at_src: string | null
   last_message_at: string | null; needs_reply: number; last_hook_at?: string | null
   client_name?: string | null; client_pilot?: string | null
-  snippet?: string | null; msgs?: number; falhas?: number; starred?: number | null
+  snippet?: string | null; msgs?: number; falhas?: number; starred?: number | null; contact_avatar?: string | null; profiles?: string | null
 }
 interface Etapa { id: string; nome: string; ordem: number; leads: Lead[] }
 interface Funil { id: string; nome: string; etapas: Etapa[] }
@@ -34,7 +34,7 @@ interface LeadDetalhe { lead: Lead; mensagens: Mensagem[]; aviso: string | null;
 interface EtapaViva { id: string; nome: string; ordem: number }
 interface FunilVivo { id: string; nome: string; etapas: EtapaViva[] }
 interface Inbox { conversas: Lead[]; pendentes: number }
-interface Perfil { rede: string; rotulo: string; url: string; inferido?: boolean }
+interface Perfil { rede: string; rotulo: string; url: string; inferido?: boolean; informado?: boolean }
 interface CampoK { campo: string; codigo?: string | null; tipo?: string | null; valor: unknown; enum?: string | null }
 interface ContatoK { id: string | null; nome: string | null; primeiro_nome?: string | null; ultimo_nome?: string | null; email: string | null; telefone: string | null; emails: string[]; telefones: string[]; campos_lista: CampoK[]; tags: string[]; responsavel?: string | null; criado_em?: string | null; atualizado_em?: string | null; link?: string | null }
 interface EventoK { id: string; tipo: string; rotulo: string; texto: string; em: string | null; por?: string | null; mensagem: boolean; direcao?: string | null; canal?: string | null }
@@ -61,16 +61,26 @@ function iconeDaOrigem(s?: string | null) {
 const REDE_ICONE: Record<string, string> = { instagram: 'instagram', facebook: 'facebook', messenger: 'facebook', whatsapp: 'whatsapp', telegram: 'telegram', site: 'globe', web: 'globe', linkedin: 'globe', tiktok: 'globe' }
 function iconeDaRede(s?: string | null) { const t = (s || '').toLowerCase(); return Object.entries(REDE_ICONE).find(([k]) => t.includes(k))?.[1] || 'out' }
 const CAMPO_OCULTO = /email|e-mail|phone|telefone|whats|^im$|instagram|facebook|messenger|telegram/i
+function Foto({ l, size = 36 }: { l: Lead; size?: number }) {
+  const n = nomeDo(l)
+  return l.contact_avatar
+    ? <img className="foto" src={l.contact_avatar} alt="" width={size} height={size} style={{ width: size, height: size }} referrerPolicy="no-referrer" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+    : <span className="foto ini" style={{ width: size, height: size, fontSize: Math.round(size * .36) }}>{n.split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('')}</span>
+}
 const nomeDo = (l: Lead) => l.contact_name || l.name || `Lead ${l.external_id}`
 
 // ------------------------------------------------------------------ conversa (o chat)
-/** Chip do canal que abre o perfil (Instagram, Facebook…) quando o retrato do Kommo trouxe o link. */
-function ChipCanal({ source, perfis }: { source: string | null; perfis?: Perfil[] }) {
+/** Chip do canal: abre o perfil quando o painel tem o @ (informado ou deduzido); senão abre a busca da rede pelo nome. */
+function ChipCanal({ source, perfis, nome }: { source: string | null; perfis?: Perfil[]; nome: string }) {
   if (!source) return null
   const t = source.toLowerCase()
   const p = (perfis || []).find(x => x.rede.toLowerCase() === t || (t.includes('face') && x.rede === 'Facebook') || (t.includes('insta') && x.rede === 'Instagram'))
-  const chip = <Chip tone={origemTone(source)} title={p ? `abrir ${p.rotulo}` : 'o Kommo ainda não entregou o link do perfil'}>{iconeDaOrigem(source)} {source}{p ? ' ↗' : ''}</Chip>
-  return p ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>{chip}</a> : chip
+  const busca = t.includes('insta') ? `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(nome)}`
+    : t.includes('face') || t.includes('messenger') ? `https://www.facebook.com/search/people/?q=${encodeURIComponent(nome)}` : null
+  const href = p?.url || busca
+  const titulo = p ? `abrir ${p.rotulo}` : busca ? `procurar "${nome}" no ${source} (o Kommo não entrega o @ pela API; informe em Dados do lead)` : source
+  const chip = <Chip tone={origemTone(source)} title={titulo}>{iconeDaOrigem(source)} {source}{p ? ' ↗' : busca ? ' ⌕' : ''}</Chip>
+  return href ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>{chip}</a> : chip
 }
 
 function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado: boolean; onChange: () => void; onDados?: () => void }) {
@@ -136,8 +146,9 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
       <div className="grow" style={{ minWidth: 0 }}>
         <div className="row wrap" style={{ gap: 8 }}>
           <button className={`star${l.starred ? ' on' : ''}`} onClick={estrelaLead} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar conversa'} title={l.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={18} /></button>
+          <Foto l={l} size={40} />
           <b style={{ fontSize: 16 }}>{nomeDo(l)}</b>
-          <ChipCanal source={l.source} perfis={det.data?.detalhe?.perfis} />
+          <ChipCanal source={l.source} perfis={det.data?.detalhe?.perfis} nome={nomeDo(l)} />
           {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
           {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> Dados do lead</button>}
         </div>
@@ -209,7 +220,32 @@ function ValorCampo({ v }: { v: unknown }) {
   if (Array.isArray(v)) return <>{v.map(String).join(', ')}</>
   return <>{String(v)}</>
 }
-export function DadosDoLead({ id, l, onClose }: { id: number; l: Lead; onClose?: () => void }) {
+function InformarPerfis({ id, l, atual, onDone }: { id: number; l: Lead; atual: Perfil[]; onDone: () => void }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const [aberto, setAberto] = useState(false)
+  const salvo = (() => { try { return JSON.parse(l.profiles || '{}') as Record<string, string> } catch { return {} } })()
+  const [ig, setIg] = useState(salvo.instagram || '')
+  const [fb, setFb] = useState(salvo.facebook || '')
+  const [busy, setBusy] = useState(false)
+  if (!can('OPERATOR')) return null
+  const temIg = atual.some(p => p.rede === 'Instagram' && p.informado), temFb = atual.some(p => p.rede === 'Facebook' && p.informado)
+  async function salvar() {
+    setBusy(true)
+    try { await api.post(`/crm/leads/${id}/profiles`, { instagram: ig, facebook: fb }); toast('Perfil guardado. O chip do canal já abre direto.', 'ok'); setAberto(false); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  return <div style={{ padding: '0 14px 6px' }}>
+    {!aberto && <button className="btn ghost sm" onClick={() => setAberto(true)}><Icon name="pencil" size={14} /> {temIg || temFb ? 'editar @ / perfil' : 'informar @ do Instagram ou perfil do Facebook'}</button>}
+    {aberto && <div className="stack" style={{ gap: 6 }}>
+      <div className="field"><label>Instagram (@usuário)</label><input className="input" value={ig} placeholder="@usuario" onChange={e => setIg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvar() }} /></div>
+      <div className="field"><label>Facebook (link do perfil)</label><input className="input" value={fb} placeholder="facebook.com/…" onChange={e => setFb(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvar() }} /></div>
+      <div className="row"><button className="btn primary sm" disabled={busy} onClick={salvar}>{busy ? <Spinner /> : 'Guardar'}</button><button className="btn ghost sm" onClick={() => setAberto(false)}>cancelar</button></div>
+    </div>}
+  </div>
+}
+
+export function DadosDoLead({ id, l, onClose, onChange }: { id: number; l: Lead; onClose?: () => void; onChange?: () => void }) {
   const d = useGet<DetalheResp>(`/crm/leads/${id}/detail`, 60000)
   if (d.loading && !d.data) return <div className="ld"><Loading rows={5} /></div>
   if (d.error) return <div className="ld"><ErrorState error={d.error} retry={d.reload} /></div>
@@ -224,13 +260,15 @@ export function DadosDoLead({ id, l, onClose }: { id: number; l: Lead; onClose?:
       {onClose && <button className="btn ghost sm" onClick={onClose} aria-label="Fechar"><Icon name="x" size={16} /></button>}</div>
     {d.data!.aviso && <div className="small" style={{ color: 'var(--warn)', padding: '0 14px 8px' }}>{d.data!.aviso}</div>}
 
-    {det.perfis.length > 0 && <section className="ld-sec">
+    <section className="ld-sec">
       <div className="ld-t">Perfis e canais</div>
+      <InformarPerfis id={id} l={l} onDone={() => { d.reload(); onChange?.() }} atual={det.perfis} />
       {det.perfis.map(p => <a key={p.url} className="ld-perfil" href={p.url} target="_blank" rel="noopener noreferrer" title={p.inferido ? 'deduzido do nome/telefone' : 'campo do Kommo'}>
         <span className={`icbox ${iconeDaRede(p.rede) === 'instagram' ? 'red' : iconeDaRede(p.rede) === 'whatsapp' ? 'ok' : iconeDaRede(p.rede) === 'facebook' ? 'info' : ''}`}><Icon name={iconeDaRede(p.rede)} /></span>
         <span className="grow" style={{ minWidth: 0 }}><span className="t truncate">{p.rotulo}</span><span className="s">{p.rede}{p.inferido ? ' · deduzido' : ''}</span></span>
         <Icon name="out" size={16} className="muted" /></a>)}
-    </section>}
+      {det.perfis.length === 0 && <div className="xs muted" style={{ padding: '0 14px 8px' }}>O Kommo não entrega o @ do Instagram nem o perfil do Facebook pela API. Copie de lá uma vez (Open profile) e informe acima: o chip do canal passa a abrir o perfil direto.</div>}
+    </section>
 
     <section className="ld-sec">
       <div className="ld-t">Contato{det.contatos.length > 1 ? ` (${det.contatos.length})` : ''}</div>
@@ -303,7 +341,8 @@ function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
       <div style={{ padding: 8, borderBottom: '1px solid var(--rule)' }} className="stack"><input className="input" placeholder="Buscar conversa…" value={filtro} onChange={e => setFiltro(e.target.value)} />
         <div className="tabs" style={{ alignSelf: 'stretch' }}><button className={vista === 'todas' ? 'on' : ''} onClick={() => setVista('todas')}>Todas</button><button className={vista === 'esperando' ? 'on' : ''} onClick={() => setVista('esperando')}>Esperando <span className="count">{inbox.data?.pendentes || 0}</span></button><button className={vista === 'fav' ? 'on' : ''} onClick={() => setVista('fav')}>★ Favoritas</button></div></div>
       {lista.length === 0 && <div style={{ padding: 16 }}><Empty title="Nenhuma conversa ainda">Quando o chat estiver ligado no Kommo, cada mensagem do Instagram, Facebook e WhatsApp aparece aqui na hora.</Empty></div>}
-      {lista.map(l => <div key={l.id} className={`item${aberto === l.id ? ' on' : ''}`} onClick={() => setSp({ lead: String(l.id) })}>
+      {lista.map(l => <div key={l.id} className={`item com-foto${aberto === l.id ? ' on' : ''}`} onClick={() => setSp({ lead: String(l.id) })}>
+        <Foto l={l} size={36} />
         <div className="from">{!!l.needs_reply && <span style={{ color: 'var(--warn)' }}>● </span>}{nomeDo(l)}</div>
         <div className="when"><button className={`star sm${l.starred ? ' on' : ''}`} onClick={e => estrela(l, e)} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar'}><Icon name="star" size={13} /></button> {l.last_message_at ? ago(l.last_message_at) : ''}</div>
         <div className="subj">{l.snippet || <span className="muted">{l.msgs ? `${l.msgs} mensagem(ns) · texto no Kommo` : 'sem mensagem guardada'}</span>}</div>
@@ -311,8 +350,8 @@ function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
       </div>)}
     </div>
     {aberto ? <Conversa key={aberto} id={aberto} conectado={conectado} onChange={inbox.reload} onDados={() => setDados(true)} /> : <div className="read"><Empty title="Escolha uma conversa">A lista ao lado mostra quem falou por último; quem espera resposta fica no topo com ●.</Empty></div>}
-    {aberto && leadAberto && <aside className="ld-col"><DadosDoLead key={`c${aberto}`} id={aberto} l={leadAberto} /></aside>}
-    {dados && aberto && leadAberto && <Scrim onMouseDown={() => setDados(false)}><div className="modal" style={{ maxWidth: 560, padding: 0 }} onMouseDown={e => e.stopPropagation()}><DadosDoLead key={`m${aberto}`} id={aberto} l={leadAberto} onClose={() => setDados(false)} /></div></Scrim>}
+    {aberto && leadAberto && <aside className="ld-col"><DadosDoLead key={`c${aberto}`} id={aberto} l={leadAberto} onChange={inbox.reload} /></aside>}
+    {dados && aberto && leadAberto && <Scrim onMouseDown={() => setDados(false)}><div className="modal" style={{ maxWidth: 560, padding: 0 }} onMouseDown={e => e.stopPropagation()}><DadosDoLead key={`m${aberto}`} id={aberto} l={leadAberto} onClose={() => setDados(false)} onChange={inbox.reload} /></div></Scrim>}
   </div>
 }
 

@@ -172,7 +172,67 @@ def detalhe(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = D
         if d is None:
             raise HTTPException(503, aviso or "Sem retrato do lead.")
     l = _lead(con, lid)
+    d["perfis"] = _perfis_do_painel(l) + [p for p in (d.get("perfis") or []) if not any(q["rede"] == p["rede"] for q in _perfis_do_painel(l))]
     return {"detalhe": d, "ao_vivo": ao_vivo, "em": l.get("detail_at"), "aviso": aviso}
+
+
+REDES = {"instagram": ("Instagram", "https://www.instagram.com/{}/"), "facebook": ("Facebook", "{}"), "tiktok": ("TikTok", "https://www.tiktok.com/@{}"),
+         "whatsapp": ("WhatsApp", "https://wa.me/{}"), "site": ("Site", "{}")}
+
+
+def _perfis_do_painel(l):
+    """Perfis que uma pessoa informou no painel (o Kommo não expõe o @ pela API)."""
+    try:
+        p = json.loads(l.get("profiles") or "{}") or {}
+    except ValueError:
+        p = {}
+    saida = []
+    for rede, (nome, molde) in REDES.items():
+        v = str(p.get(rede) or "").strip()
+        if not v:
+            continue
+        if v.startswith("http"):
+            url, rotulo = v, v.replace("https://", "").replace("http://", "").rstrip("/")
+        elif rede == "whatsapp":
+            import re as _re
+            d = _re.sub(r"\D", "", v); url, rotulo = molde.format(d), v
+        elif rede in ("facebook", "site"):
+            url, rotulo = "https://" + v.lstrip("@"), v.lstrip("@")
+        else:
+            h = v.lstrip("@"); url, rotulo = molde.format(h), "@" + h
+        saida.append({"rede": nome, "rotulo": rotulo, "url": url, "informado": True})
+    return saida
+
+
+class PerfisIn(BaseModel):
+    instagram: str | None = None
+    facebook: str | None = None
+    tiktok: str | None = None
+    whatsapp: str | None = None
+    site: str | None = None
+
+
+@r.post("/leads/{lid}/profiles")
+def perfis(lid: int, dados: PerfisIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Informar o @/link do perfil do lead (uma vez; fica no painel). Vazio apaga."""
+    l = _lead(con, lid)
+    try:
+        atual = json.loads(l.get("profiles") or "{}") or {}
+    except ValueError:
+        atual = {}
+    for k, v in dados.model_dump().items():
+        if v is None:
+            continue
+        v = v.strip()
+        if v:
+            atual[k] = v[:200]
+        else:
+            atual.pop(k, None)
+    atualizar(con, "crm_leads", lid, profiles=json.dumps(atual, ensure_ascii=False))
+    auditar(con, "crm.profiles", f"user:{u['id']}", user_id=u["id"], entity_type="crm_lead", entity_id=lid, detail={"redes": sorted(atual)}, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True, "profiles": atual, "perfis": _perfis_do_painel({"profiles": json.dumps(atual)})}
+
 
 
 def _absorver_detalhe(con, l, d):
@@ -627,7 +687,8 @@ def _mensagens_do_webhook_kommo(corpo):
             saida.append({"id": str(it.get("id") or ""), "lead_id": str(lead) if lead else None,
                           "contato_id": str(it.get("contact_id") or "") or None, "talk_id": str(it.get("talk_id") or "") or None,
                           "texto": (str(texto).strip() if texto is not None else ""), "direcao": "saida" if tipo.startswith("out") else "entrada",
-                          "autor": autor.get("name"), "origem": it.get("origin"), "criado_em": it.get("created_at"),
+                          "autor": autor.get("name"), "avatar": autor.get("avatar_url") if str(autor.get("type") or "") != "internal" else None,
+                          "origem": it.get("origin"), "criado_em": it.get("created_at"),
                           "anexo": it.get("attachment") or it.get("media") or None})
     return saida
 
@@ -719,7 +780,7 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
         novo = False
         if not l:
             lid = inserir(con, "crm_leads", external_id=ext, name=m.get("_nome") or m["autor"] or f"Lead {ext}", contact_name=m["autor"],
-                          source=canal, link=f"https://{dominio or 'urace.kommo.com'}/leads/detail/{ext}", synced_at=agora())
+                          contact_avatar=m.get("avatar"), source=canal, link=f"https://{dominio or 'urace.kommo.com'}/leads/detail/{ext}", synced_at=agora())
             novo = True
         else:
             lid = l["id"]
@@ -728,6 +789,8 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
                 campos["source"] = canal
             if m["autor"] and not l["contact_name"] and m["direcao"] == "entrada":
                 campos["contact_name"] = m["autor"]
+            if m.get("avatar") and m["direcao"] == "entrada" and m["avatar"] != l.get("contact_avatar"):
+                campos["contact_avatar"] = m["avatar"]
             if campos:
                 atualizar(con, "crm_leads", lid, **campos)
         leads.add(lid)

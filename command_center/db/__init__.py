@@ -105,7 +105,9 @@ MIGRACOES = [
     ("crm_leads", "detail", "TEXT"),                      # retrato completo do lead no Kommo (json de kommo_lead_completo)
     ("crm_leads", "detail_at", "TEXT"),
     ("crm_leads", "starred", "INTEGER"),                   # conversa favorita (estrela na lista do chat)
-    ("crm_messages", "starred", "INTEGER"),                # mensagem favorita dentro da conversa                     # human = vínculo com o cliente feito à mão (a sincronia não mexe)
+    ("crm_messages", "starred", "INTEGER"),                # mensagem favorita dentro da conversa
+    ("crm_leads", "contact_avatar", "TEXT"),               # foto do perfil que o Kommo manda no webhook (author.avatar_url)
+    ("crm_leads", "profiles", "TEXT"),                     # json {instagram: "@usuario", facebook: "url"} informado no painel                     # human = vínculo com o cliente feito à mão (a sincronia não mexe)
 ]
 
 

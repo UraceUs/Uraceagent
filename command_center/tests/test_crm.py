@@ -757,3 +757,26 @@ def test_lista_do_chat_pela_mensagem_mais_recente_e_favoritos(cli, chat):
     d = cli.get(f"{B}/crm/leads/{a}", headers=h).json()
     assert next(m for m in d["mensagens"] if m["id"] == mid)["starred"] == 1
     assert cli.post(f"{B}/crm/messages/999999/star", json={"starred": True}, headers=h).status_code == 404
+
+
+def test_perfil_informado_no_painel_e_foto_do_webhook(cli, chat, monkeypatch):
+    from urllib.parse import urlencode
+    h = entra(cli, "admin@urace.us")
+    cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    lid = _lid("5001")
+    corpo = {"account[subdomain]": "urace", "message[add][0][id]": "av-1", "message[add][0][talk_id]": "77", "message[add][0][contact_id]": "501",
+             "message[add][0][text]": "foto", "message[add][0][created_at]": "1789654300", "message[add][0][element_type]": "2",
+             "message[add][0][entity_type]": "lead", "message[add][0][entity_id]": "5001", "message[add][0][type]": "incoming",
+             "message[add][0][author][name]": "Maria Souza", "message[add][0][author][type]": "external",
+             "message[add][0][author][avatar_url]": "https://amojo.kommo.com/attachments/profiles/x/foto.jpg", "message[add][0][origin]": "instagram_business"}
+    assert cli.post(f"{B}/crm/webhook?key=chave-do-hook", content=urlencode(corpo), headers={"content-type": "application/x-www-form-urlencoded"}).status_code == 200
+    l = cli.get(f"{B}/crm/leads/{lid}", headers=h).json()["lead"]
+    assert l["contact_avatar"].endswith("foto.jpg") and l["source"] == "Instagram"
+    r = cli.post(f"{B}/crm/leads/{lid}/profiles", json={"instagram": "@maria.souza", "facebook": "facebook.com/maria.souza"}, headers=h)
+    assert r.status_code == 200 and r.json()["profiles"]["instagram"] == "@maria.souza"
+    ps = {p["rede"]: p for p in r.json()["perfis"]}
+    assert ps["Instagram"]["url"] == "https://www.instagram.com/maria.souza/" and ps["Facebook"]["url"] == "https://facebook.com/maria.souza" and ps["Instagram"]["informado"]
+    # vazio apaga
+    r = cli.post(f"{B}/crm/leads/{lid}/profiles", json={"facebook": ""}, headers=h)
+    assert "facebook" not in r.json()["profiles"]
+    assert cli.post(f"{B}/crm/leads/{lid}/profiles", json={"instagram": "x"}).status_code in (401, 403)
