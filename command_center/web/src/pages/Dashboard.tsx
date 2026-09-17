@@ -45,7 +45,7 @@ export function Dashboard() {
   const syncPor = new Map(d.last_sync.map(s => [s.system, s]))
   return <>
     <Progress on={syncing} />
-    <PageHeader title="Dashboard" help={<>O que decide está em cima: pista de hoje, o que precisa de gente, o que espera sua aprovação. A IA já tratou o que pôde. Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>.</>}>
+    <PageHeader title="Hoje" eyebrow={new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })} help={<>O que decide está em cima: pista de hoje, o que precisa de gente, o que espera sua aprovação. A IA já tratou o que pôde. Última sincronia: <b>{lastSync ? ago(lastSync) : 'nunca'}</b>.</>}>
       {can('OPERATOR') && <button className="btn" onClick={sync} disabled={syncing} title="Lê Asana, DocuSign, Gmail e QuickBooks de novo">{syncing ? <Thinking label={`Sincronizando: ${stage || '…'}`} /> : <>↻ Sincronizar</>}</button>}
       {can('OPERATOR') && <button className="btn primary" onClick={() => nav('/ai')}>✦ Perguntar à IA</button>}
     </PageHeader>

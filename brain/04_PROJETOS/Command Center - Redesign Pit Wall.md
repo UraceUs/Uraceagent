@@ -314,3 +314,17 @@ wall e o que virou código:
 Os riscos que o relatório apontou viraram regra: **sem mola nem overshoot** (ease-out em
 tudo), **um brilho por vez** (só o cone da aba), **blur só numa camada** (scrim), e das
 quatro referências de tema claro (01, 02, 03, 09) veio o movimento, não a paleta.
+
+
+## Terceira rodada (17/09): "Pit Wall Glass" — base iOS, energia F1, cores da URACE
+
+O dono mandou quatro referências (site da F1, Revio, Campaign Canvas, Request Tracker) e pediu a
+base do iOS atual, com menu mais intuitivo. Fluxo: pesquisa do iOS 26/27 → canvas de proposta com
+cinco pranchas → correção dele ("só cores da URACE") → aprovação → aplicação no sistema inteiro.
+Detalhes e regras em [[D-2026-09-17 - Identidade Pit Wall Glass (iOS x F1)]].
+
+Revisão de UX depois da aplicação (rig de demonstração, 1440 e 390 px, escuro e claro):
+- barra de topo ganhou fundo degradê + blur, senão o conteúdo aparecia por trás das cápsulas;
+- em listas (avisos, Gmail, tabelas) o botão principal virou teal — o vermelho fica um por tela;
+- barra de abas do celular a 90% de opacidade, para o texto de trás não competir;
+- painel "Conversas" do AI Command realinhado à altura nova da barra (sticky top 74).

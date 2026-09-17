@@ -5,9 +5,18 @@ import { useGet, useOnline } from '../api/hooks'
 import type { Attention, Dashboard } from '../api/types'
 import { Palette } from './Palette'
 import { Chip, statusTone } from './ui'
+import { Icon, type IconName } from './Icon'
 import { ago, initials } from './fmt'
 
 const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
+
+/** Item do menu com ícone de traço à esquerda (padrão SF Symbols). */
+function NL({ to, end, icon, children }: { to: string; end?: boolean; icon: IconName; children: React.ReactNode }) {
+  return <NavLink to={to} end={end}><Icon name={icon} />{children}</NavLink>
+}
+function TB({ to, end, icon, n, children }: { to: string; end?: boolean; icon: IconName; n?: number; children: React.ReactNode }) {
+  return <NavLink to={to} end={end} className="tb"><span className="tbi"><Icon name={icon} />{!!n && <i className="n">{n > 99 ? '99+' : n}</i>}</span>{children}</NavLink>
+}
 
 function useOutside(ref: React.RefObject<HTMLElement | null>, close: () => void) {
   useEffect(() => {
@@ -53,44 +62,54 @@ export function Shell() {
   return <div className="app">
     {side && <div className="scrim" onClick={() => setSide(false)} />}
     <aside className={`side${side ? ' open' : ''}`}>
-      <div className="brand"><div className="mark"><b>URACE</b><span>Command Center</span></div><small>OPERATIONS · ORLANDO</small></div>
+      <div className="brand"><span className="mark-u" aria-hidden="true">U</span><div className="mark"><b>Command Center</b><small>URACE · Orlando</small></div>
+        <button className="iconbtn burger" aria-label="Fechar menu" onClick={() => setSide(false)}><Icon name="x" /></button></div>
+      <div className="search side-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}><Icon name="search" size={16} /><span>Buscar ou perguntar</span><kbd>⌘K</kbd></div>
       <nav className="nav" aria-label="Principal">
-        <div className="grp">Operação</div>
-        <NavLink to="/" end>Dashboard</NavLink>
-        <NavLink to="/attention">Precisa de atenção {attn > 0 && <span className={`n${crit ? '' : ' warn'}`}>{attn}</span>}</NavLink>
-        <NavLink to="/clients">Clientes</NavLink>
-        <NavLink to="/races">Corridas</NavLink>
+        <div className="grp">Hoje</div>
+        <NL to="/" end icon="home">Hoje</NL>
+        <NL to="/attention" icon="alert">Precisa de atenção {attn > 0 && <span className={`n${crit ? '' : ' warn'}`}>{attn}</span>}</NL>
+        <NL to="/races" icon="flag">Corridas</NL>
+        <div className="grp">Pessoas</div>
+        <NL to="/clients" icon="people">Clientes</NL>
+        <NL to="/crm/funil" icon="funnel">Funil de vendas</NL>
+        <NL to="/crm/chat" icon="chat">Chat {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NL>
         <div className="grp">Sistemas</div>
-        <NavLink to="/asana">Asana</NavLink>
-        <NavLink to="/docusign">DocuSign {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NavLink>
-        <NavLink to="/gmail">Gmail {!!d?.emails_attention && <span className="n soft">{d.emails_attention}</span>}</NavLink>
+        <NL to="/asana" icon="list">Asana</NL>
+        <NL to="/docusign" icon="doc">DocuSign {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NL>
+        <NL to="/gmail" icon="mail">Gmail {!!d?.emails_attention && <span className="n soft">{d.emails_attention}</span>}</NL>
         <NavLink to="/gmail/manual" className="sub">Manual dos marcadores</NavLink>
-        <NavLink to="/quickbooks">QuickBooks</NavLink>
-        <div className="grp">CRM · Kommo</div>
-        <NavLink to="/crm/chat">Chat {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NavLink>
-        <NavLink to="/crm/funil">Funil de vendas</NavLink>
+        <NL to="/quickbooks" icon="dollar">QuickBooks</NL>
         <div className="grp">Inteligência</div>
-        <NavLink to="/ai" end>AI Command</NavLink>
-        <NavLink to="/approvals">Aprovações {pend > 0 && <span className="n warn">{pend}</span>}</NavLink>
-        <NavLink to="/automation">Automação e memória</NavLink>
-        <NavLink to="/ai/capabilities">O que a IA pode fazer</NavLink>
-        <NavLink to="/activity">Atividade da IA</NavLink>
+        <NL to="/ai" end icon="spark">AI Command</NL>
+        <NL to="/approvals" icon="seal">Aprovações {pend > 0 && <span className="n warn">{pend}</span>}</NL>
+        <NL to="/automation" icon="gear">Automação e memória</NL>
+        <NL to="/ai/capabilities" icon="book">O que a IA pode fazer</NL>
+        <NL to="/activity" icon="activity">Atividade da IA</NL>
         <div className="grp">Administração</div>
-        <NavLink to="/integrations">Integrações {badInt > 0 && <span className="n warn">{badInt}</span>}</NavLink>
-        {can('MANAGER') && <NavLink to="/audit">Auditoria</NavLink>}
-        {can('ADMIN') && <NavLink to="/policies">Políticas da IA</NavLink>}
-        {can('ADMIN') && <NavLink to="/users">Usuários</NavLink>}
+        <NL to="/integrations" icon="plug">Integrações {badInt > 0 && <span className="n warn">{badInt}</span>}</NL>
+        {can('MANAGER') && <NL to="/audit" icon="shield">Auditoria</NL>}
+        {can('ADMIN') && <NL to="/policies" icon="key">Políticas da IA</NL>}
+        {can('ADMIN') && <NL to="/users" icon="user">Usuários</NL>}
       </nav>
-      <div className="foot">{user?.name}<br /><span className="mono" style={{ fontSize: 11 }}>{ROLE_PT[user?.role || ''] || user?.role}</span></div>
+      <div className="foot"><span className="avatar">{initials(user?.name)}</span><div className="grow"><div className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{user?.name}</div><div className="small muted">{ROLE_PT[user?.role || ''] || user?.role}</div></div></div>
     </aside>
     <div className="main">
       <div className="topbar">
       <header className="top">
-        <button className="iconbtn burger" aria-label="Menu" onClick={() => setSide(s => !s)}>☰</button>
-        <div className="search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
-          <span>⌕</span><span>Buscar ou perguntar à IA…</span><kbd>⌘K</kbd>
+        <button className="iconbtn burger" aria-label="Menu" onClick={() => setSide(s => !s)}><Icon name="menu" /></button>
+        <div className="search top-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
+          <Icon name="search" size={16} /><span>Buscar ou perguntar à IA…</span><kbd>⌘K</kbd>
+        </div>
+        {/* Race control: o estado da operação em cápsulas, em toda tela. Cada item leva para onde se resolve. */}
+        <div className="rc" aria-label="Estado da operação">
+          <button className={`it ${syncTone}`} title={lastSync ? `última sincronia: ${new Date(lastSync).toLocaleString('pt-BR')}` : 'nenhuma sincronia'} onClick={() => nav('/')}><span className="k">Espelho</span><b>{lastSync ? `há ${ago(lastSync)}` : 'nunca'}</b></button>
+          <button className={`it ${badInt ? 'warn' : 'ok'}`} title={badInt ? bad.map(b => `${b.system}: ${b.status.toLowerCase()}`).join(' · ') : 'todas respondendo'} onClick={() => nav('/integrations')}><span className="k">Sistemas</span><b>{nInt ? `${nInt - badInt}/${nInt}` : '—'}{badInt > 0 && badInt <= 2 && ` · ${bad.map(b => b.system).join(', ')}`}{badInt > 2 && ` · ${badInt} com problema`}</b></button>
+          <button className={`it ${crit ? 'crit' : alerts.length ? 'warn' : 'ok'}`} onClick={() => nav('/attention')}><span className="k">Atenção</span><b>{attn ? `${attn} item(ns)` : 'em ordem'}{crit > 0 && ` · ${crit} crítico(s)`}</b></button>
+          <button className={`it ${pend ? 'warn' : ''}`} onClick={() => nav(pend ? '/approvals' : '/ai')}><span className="k">IA</span><b>{pend ? `${pend} esperando você` : 'nada pendente'}</b></button>
         </div>
         <div className="grow" />
+        <span className="clock mono small muted" title="hora local">{clock.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
         {!online && <Chip tone="crit" dot>Offline</Chip>}
         {online && dash.error?.offline && <Chip tone="warn" dot>Servidor fora</Chip>}
         <div ref={menuRef} style={{ position: 'relative', display: 'flex', gap: 4 }}>
@@ -101,23 +120,22 @@ export function Shell() {
             <div className="mh">{user?.email}<br /><Chip tone={statusTone('ACTIVE')}>{ROLE_PT[user?.role || '']}</Chip></div>
             <hr />
             <button className="mi" onClick={() => nav('/account')}>Minha conta e senha</button>
-            <button className="mi" onClick={() => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('cc.theme', r.dataset.theme) } catch { /* ignore */ } }}>Alternar tema</button>
+            <button className="mi" onClick={() => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('cc.theme', r.dataset.theme) } catch { /* ignore */ } }}>Alternar tema</button>
             <hr />
             <button className="mi" onClick={() => { nav('/login', { replace: true, state: null }); logout() }}>Sair</button>
           </div>}
         </div>
       </header>
-      {/* Race control: o estado da operação em uma linha, em toda tela. Cada item leva para onde se resolve. */}
-      <div className="rc" aria-label="Estado da operação">
-        <span className={`it link ${syncTone}`} title={lastSync ? `última sincronia: ${new Date(lastSync).toLocaleString('pt-BR')}` : 'nenhuma sincronia'} onClick={() => nav('/')}><span className="k">Espelho</span><span className="g">{syncTone === 'ok' ? '✓' : syncTone === 'warn' ? '▲' : '✕'}</span>{lastSync ? `há ${ago(lastSync)}` : 'nunca'}</span>
-        <span className={`it link ${badInt ? 'warn' : 'ok'}`} title={badInt ? bad.map(b => `${b.system}: ${b.status.toLowerCase()}`).join(' · ') : 'todas respondendo'} onClick={() => nav('/integrations')}><span className="k">Sistemas</span><span className="g">{badInt ? '▲' : '✓'}</span>{nInt ? `${nInt - badInt}/${nInt}` : '—'}{badInt > 0 && badInt <= 2 && ` · ${bad.map(b => b.system).join(', ')}`}{badInt > 2 && ` · ${badInt} com problema`}</span>
-        <span className={`it link ${crit ? 'crit' : alerts.length ? 'warn' : 'ok'}`} onClick={() => nav('/attention')}><span className="k">Atenção</span><span className="g">{crit ? '✕' : alerts.length ? '▲' : '✓'}</span>{attn ? `${attn} item(ns)` : 'em ordem'}{crit > 0 && ` · ${crit} crítico(s)`}</span>
-        <span className={`it link ${pend ? 'warn' : ''}`} onClick={() => nav(pend ? '/approvals' : '/ai')}><span className="k">IA</span><span className="g">{pend ? '○' : '✓'}</span>{pend ? `${pend} esperando você` : 'nada pendente'}</span>
-        <span className="it clock" title="hora local"><span className="k">{clock.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</span>{clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
       </div>
       <main className="page"><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Outlet context={{ dash }} /></div></main>
     </div>
+    <nav className="tabbar" aria-label="Abas">
+      <TB to="/" end icon="home">Hoje</TB>
+      <TB to="/attention" icon="alert" n={attn}>Atenção</TB>
+      <TB to="/clients" icon="people">Clientes</TB>
+      <TB to="/ai" icon="spark" n={pend}>IA</TB>
+      <button className={`tb${side ? ' active' : ''}`} onClick={() => setSide(s => !s)} aria-label="Mais"><Icon name="more" />Mais</button>
+    </nav>
     <Palette open={pal} onClose={() => setPal(false)} ask={ask} />
   </div>
 }

@@ -231,7 +231,7 @@ export function AICommand() {
           <button className="btn primary" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : 'Enviar'}</button>
         </div><div className="small muted">{text.length}/4000 · a resposta pode levar minutos; você pode navegar e voltar.</div></div>}
       </div>
-      {can('MANAGER') && <div className="card" style={{ alignSelf: 'start', position: 'sticky', top: 12 }}>
+      {can('MANAGER') && <div className="card" style={{ alignSelf: 'start', position: 'sticky', top: 74 }}>
         <div className="card-h"><h2 className="h2">Conversas</h2></div>
         <div className="hist">
           {(threads.data?.threads || []).map(t => <div key={t.id} className={`it${(sel === 'me' && user && t.id === user.id) || sel === String(t.id) ? ' on' : ''}`} onClick={() => { const nsp = new URLSearchParams(sp); if (user && t.id === user.id) nsp.delete('u'); else nsp.set('u', String(t.id)); setSp(nsp); if (cur) nav('/ai?' + nsp.toString()) }}>
