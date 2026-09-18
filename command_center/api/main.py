@@ -122,6 +122,8 @@ app.include_router(sistema.r)
 from command_center.api import vendas  # noqa: E402
 app.include_router(vendas.r)
 app.include_router(dialpad.r)
+from command_center.api import precos  # noqa: E402
+app.include_router(precos.r)
 
 
 # ------------------------------------------------------------- saúde

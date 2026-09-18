@@ -337,6 +337,48 @@ def qbo_criar_item(nome, preco=0, descricao=None):
     return _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
 
 
+PECA_NO_NOME = ("parts:", "engine parts:", "otk parts:", "birelart:", "fuel and oil:", "electric:")
+
+
+def preco_item_sistema(item_id, preco, quem="painel"):
+    """Porta do Command Center: muda o PREÇO DE LISTA de um item do catálogo.
+
+    Existe por decisão do dono (18/09/2026): a Rate Card do Drive manda no preço, e o painel
+    a aplica sozinho uma vez por semana. Três recusas de segurança:
+      · peça nunca muda de preço (ele decidiu assim) — o nome completo denuncia a categoria;
+      · preço negativo ou absurdo (acima de $100 mil) não passa;
+      · item inativo ou inexistente não passa.
+    A escrita é *sparse*: só o UnitPrice muda, o resto do item fica como está."""
+    item_id = str(item_id or "").strip()
+    if not item_id:
+        raise ErroFerramenta("sem id do item")
+    try:
+        novo = round(float(preco), 2)
+    except (TypeError, ValueError):
+        raise ErroFerramenta(f"preço inválido: {preco!r}")
+    if novo < 0 or novo > 100000:
+        raise ErroFerramenta(f"RECUSADO: preço fora da faixa aceita (US$ {novo:,.2f})")
+    r = _query(f"select * from Item where Id = '{_esc(item_id)}' maxresults 1")
+    achado = r.get("Item") or []
+    if not achado:
+        raise ErroFerramenta(f"item {item_id} não existe no catálogo")
+    it = achado[0]
+    nome_completo = (it.get("FullyQualifiedName") or it.get("Name") or "")
+    if nome_completo.lower().startswith(PECA_NO_NOME):
+        raise ErroFerramenta(f"RECUSADO: '{nome_completo}' é peça, e peça mantém o preço (dono, 18/09)")
+    if it.get("Active") is False:
+        raise ErroFerramenta(f"RECUSADO: '{nome_completo}' está inativo")
+    antes = float(it.get("UnitPrice") or 0)
+    desc = f"preço de '{nome_completo}': {antes:,.2f} -> {novo:,.2f} (por {quem})"
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": desc,
+                "id": item_id, "nome": nome_completo, "antes": antes, "novo": novo}
+    corpo = {"Id": item_id, "SyncToken": it.get("SyncToken"), "sparse": True, "UnitPrice": novo}
+    saida = _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
+    log("QBO preço", nome_completo, antes, "->", novo, "por", quem)
+    return {"aplicado": True, "antes": antes, **saida}
+
+
 def criar_item_sistema(nome, preco=0, descricao=None):
     """Porta do Command Center (não é ferramenta do agente): cria o item do catálogo quando a
     invoice pede um produto que ainda não existe. Decisão do dono (10/09): a IA pode criar o

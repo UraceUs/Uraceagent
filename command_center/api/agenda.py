@@ -132,6 +132,13 @@ def _rodar_lembretes(con):
     return lembretes.rodar(con)
 
 
+def _rodar_ratecard(con):
+    """Segunda de manhã: Rate Card do Drive → preço no QuickBooks (dono, 18/09). A regra
+    roda todo dia no horário; quem recorta a segunda-feira é a própria rotina."""
+    from command_center.api import precos
+    return precos.rodar_semanal(con)
+
+
 def _rodar_varredura(con):
     """Gmail + DocuSign de cada cliente ativo, em thread própria (dono, 17/09: "a IA deve fazer isso")."""
     import threading
@@ -151,6 +158,7 @@ ROTINAS = {
     "gmail_triagem": _rodar_triagem,
     "sondagem_integracoes": lambda con: sondar(con, por="agenda"),
     "lembrete_invoice": _rodar_lembretes,          # dono, 16/09: lembrete recorrente de invoice em aberto, 09:00
+    "ratecard_semanal": _rodar_ratecard,           # dono, 18/09: "faça ele ler isso uma vez por semana"
 }
 
 

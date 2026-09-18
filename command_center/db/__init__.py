@@ -185,6 +185,10 @@ POS_MIGRACAO = [
        ('varredura_clientes', 1, '{"schedule":true}', NULL,
         '{"sistema":"varrer o Gmail (as duas caixas) e o DocuSign de cada cliente ativo e ligar o que achar ao card"}')""",
     """UPDATE automation_rules SET schedule='["06:00"]' WHERE name='varredura_clientes' AND schedule IS NULL""",
+    """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+       ('ratecard_semanal', 1, '{"schedule":true}', NULL,
+        '{"sistema":"ler a URACE RATE CARD 2026 no Drive e aplicar os preços no QuickBooks, pelo mapa revisado"}')""",
+    """UPDATE automation_rules SET schedule='["07:30"]' WHERE name='ratecard_semanal' AND schedule IS NULL""",
     """INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
        ('docusign_reenviar_waiver','REQUIRES_APPROVAL','reenvia/corrige e-mail do signatário: sai da empresa (dono, 17/09)'),
        ('docusign_anular_envelope','REQUIRES_APPROVAL','anula envelope em aberto; assinado nunca (dono, 17/09)'),
@@ -203,7 +207,8 @@ POS_MIGRACAO = [
        ('painel_unir_clientes','SAFE','só com mesmo e-mail, telefone ou responsável; fora disso a ação recusa (dono, 17/09)'),
        ('painel_varrer_cliente','SAFE','Gmail + DocuSign do cliente: só leitura e espelho (dono, 17/09)'),
        ('painel_waiver_lixeira','REQUIRES_CONFIRMATION','tira do painel; em aberto anula no DocuSign (dono, 17/09)'),
-       ('dialpad_ligar','REQUIRES_CONFIRMATION','discar pelo Dialpad: só a pedido de uma pessoa, nunca por conta da IA (dono, 18/09)')""",
+       ('dialpad_ligar','REQUIRES_CONFIRMATION','discar pelo Dialpad: só a pedido de uma pessoa, nunca por conta da IA (dono, 18/09)'),
+       ('qbo_atualizar_preco','SAFE','preço do catálogo vindo da Rate Card do Drive: o dono dispensou aprovação quando o valor é o dela (18/09); peça nunca muda')""",
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
        ('waiver_na_tarefa', 1, '{"event":"task.created","por":"sistema"}', NULL,
         '{"sistema":"anexar a waiver assinada do piloto na tarefa do Asana e guardar o PDF no card do cliente"}')""",
