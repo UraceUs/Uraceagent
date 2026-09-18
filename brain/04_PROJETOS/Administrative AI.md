@@ -76,8 +76,10 @@ O deploy aconteceu em 01/09 e o painel está no ar. O que falta hoje:
 
 ## Problemas
 
-Ver [[Problemas]]. O que mais afeta este projeto:
-[[P-09 - Conector do Asana nao sobe anexo]].
+Ver [[Problemas]]. O que mais afeta este projeto hoje:
+[[P-06 - Precos defasados no catalogo do QuickBooks]] (a invoice sai pela Rate Card, mas o
+catálogo continua errado) e [[P-05 - Security deposit quase nao aparece]]. O
+[[P-09 - Conector do Asana nao sobe anexo]] foi **resolvido em 02/09** pelo MCP próprio.
 
 ## Estado completo
 

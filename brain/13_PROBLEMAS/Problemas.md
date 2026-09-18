@@ -30,8 +30,7 @@ e estado. Não é lista de melhoria — é o que está quebrado ou arriscado.
 [[P-07 - Waivers paradas desde junho]]
 
 **Sistemas**
-[[P-08 - Order Number guardando URL]] ·
-[[P-09 - Conector do Asana nao sobe anexo]]
+[[P-08 - Order Number guardando URL]]
 
 ## Resolvidos
 
@@ -39,7 +38,8 @@ e estado. Não é lista de melhoria — é o que está quebrado ou arriscado.
 [[P-13 - Deploy verde sem agente existir]] (02/09) ·
 [[P-12 - Integration Key do DocuSign so nasce em demo]] (04/09) ·
 [[P-14 - Filtro manda todo envelope do DocuSign para Waivers]] (16/09, filtro apagado no mesmo dia) ·
-[[P-11 - Producao do app QuickBooks travada]] (09/09, chaves de produção liberadas pela Intuit)
+[[P-11 - Producao do app QuickBooks travada]] (09/09, chaves de produção liberadas pela Intuit) ·
+[[P-09 - Conector do Asana nao sobe anexo]] (02/09, o MCP próprio do Asana ganhou `asana_anexar_arquivo`; conferido em 18/09)
 
 ## Como usar
 

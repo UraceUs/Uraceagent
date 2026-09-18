@@ -9,6 +9,11 @@ status: ativo
 
 # P-09 — O conector do Asana não sobe arquivo
 
+> **Resolvido em 02/09/2026** (conferido em 18/09): o problema era do conector pronto do
+> Asana. O **servidor MCP próprio** que entrou naquele dia tem `asana_anexar_arquivo` —
+> sobe o PDF da waiver assinada na tarefa, recusa em ADM URACE e em `Matt tasks`, e com
+> `APLICAR=0` só simula. O passo da waiver assinada deixou de estar travado.
+
 [[Asana]] · [[Waiver de responsabilidade]] · [[Etapa de conexão]] · [[Problemas]]
 
 ## O problema
