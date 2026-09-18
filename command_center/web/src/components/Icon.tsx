@@ -33,6 +33,8 @@ const P: Record<string, string> = {
   x: '<path d="m6 6 12 12M18 6 6 18"/>',
   refresh: '<path d="M20 12a8 8 0 0 1-14.2 5M4 12a8 8 0 0 1 14.2-5"/><path d="M18.5 3.5V7H15M5.5 20.5V17H9"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  /* painel lateral: usado no botão que abre e fecha o menu (17/09 → 18/09) */
+  panel: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M9.5 4.5v15"/>',
   pin: '<path d="M12 21s6.5-6 6.5-11a6.5 6.5 0 0 0-13 0c0 5 6.5 11 6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
   pencil: '<path d="m4 20 4.5-1 10-10-3.5-3.5-10 10z"/><path d="m13 7.5 3.5 3.5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',

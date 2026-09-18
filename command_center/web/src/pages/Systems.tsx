@@ -40,6 +40,10 @@ function useTabs() {
   }
 }
 
+/** No celular o mês de 7 colunas não cabe de pé: a Lista abre por padrão e o
+ *  calendário fica a um toque. Quem escolher a aba manda — a escolha vai para a URL. */
+const telaPequena = () => typeof window !== 'undefined' && window.matchMedia('(max-width:700px)').matches
+
 function SubTabs<T extends string>({ tabs, value, onChange }: { tabs: [T, string][]; value: T; onChange: (t: T) => void }) {
   return <div className="tabs">{tabs.map(([k, l]) => <button key={k} className={value === k ? 'on' : ''} onClick={() => onChange(k)}>{l}</button>)}</div>
 }
@@ -205,7 +209,7 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 export function AsanaPage() {
   const { can } = useAuth()
   const [nova, setNova] = useState(false)
-  const [tab, setTab] = useTab<'cal' | 'board' | 'list'>('v', 'cal')
+  const [tab, setTab] = useTab<'cal' | 'board' | 'list'>('v', telaPequena() ? 'list' : 'cal')
   const [status, setStatus] = useTab<'all' | 'open' | 'completed'>('s', 'open')     // dono, 16/09: o quadro abre só com o que falta fazer
   const { data, error, loading, reload } = useGet<Task[]>('/tasks?status=all', 120000)
   const [open, setOpen] = useState<Task | null>(null)
@@ -220,8 +224,8 @@ export function AsanaPage() {
       {tab === 'cal' && <Calendario tasks={tasks} onOpen={setOpen} />}
       {tab === 'board' && <Quadro tasks={tasks} onOpen={setOpen} />}
       {tab === 'list' && <Section title="Tarefas" count={tasks.length} tight>{tasks.length === 0 ? <Empty>Nada com esse filtro.</Empty> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Tarefa</th><th>Coluna</th><th>Cliente</th><th>Responsável</th><th>Subtarefas</th><th>Status</th><th></th></tr></thead><tbody>
-          {tasks.map(t => <tr key={t.id} className="click" onClick={() => setOpen(t)}><td className="mono nowrap">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td>{t.client_name || <span className="muted">—</span>}</td><td className="small">{t.assignee}</td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? '?'}/${t.subtasks_total}` : '—'}</td><td><Status s={t.status} /></td><td onClick={e => e.stopPropagation()}><TaskLink t={t} /></td></tr>)}
+        <div className="tbl-wrap"><table className="tbl rsp"><thead><tr><th>Data</th><th>Tarefa</th><th>Coluna</th><th>Cliente</th><th>Responsável</th><th>Subtarefas</th><th>Status</th><th></th></tr></thead><tbody>
+          {tasks.map(t => <tr key={t.id} className="click" onClick={() => setOpen(t)}><td className="mono nowrap" data-l="Data">{fmtDate(t.due_on)}</td><td className="first">{t.title}</td><td data-l="Coluna">{t.section}</td><td data-l="Cliente">{t.client_name || <span className="muted">—</span>}</td><td className="small" data-l="Quem">{t.assignee}</td><td className="mono" data-l="Subtarefas">{t.subtasks_total ? `${t.subtasks_done ?? '?'}/${t.subtasks_total}` : '—'}</td><td data-l="Status"><Status s={t.status} /></td><td onClick={e => e.stopPropagation()}><TaskLink t={t} /></td></tr>)}
         </tbody></table></div>}</Section>}
     </>}
     {open && <TaskModal t={open} onClose={() => setOpen(null)} />}

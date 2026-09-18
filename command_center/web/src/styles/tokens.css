@@ -174,8 +174,18 @@ select.input{appearance:auto}
 .tbl tbody tr.click td:last-child{position:relative}
 .tbl tbody tr.click:hover td:last-child::after{content:"›";position:absolute;right:6px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:16px}
 .tbl.zebra tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
+/* Nada pode passar da largura da tela (18/09): rede de segurança para qualquer página.
+   `clip` não cria contêiner de rolagem, então continua valendo o sticky do topo. */
+#root{overflow-x:clip}
+img,svg,video,canvas{max-width:100%}
+.page,.page-in,.card,.stack,.grid,.main{min-width:0}
+pre,code{overflow-x:auto;max-width:100%}
+
 /* no celular a tabela principal vira lista de cartões: cada célula com o nome da coluna (data-l) */
 @media(max-width:700px){
+  /* tabela que não virou cartão rola dentro do próprio quadro, sem empurrar a página */
+  .tbl:not(.rsp){display:block;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tbl:not(.rsp) thead th{position:static}
   .tbl.rsp thead{display:none}
   .tbl.rsp,.tbl.rsp tbody,.tbl.rsp tr,.tbl.rsp td{display:block;width:100%}
   .tbl.rsp tr{border-bottom:1px solid var(--rule);padding:10px 12px}
@@ -574,10 +584,17 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 
 @media(max-width:700px){
   .page-h{align-items:flex-start;flex-direction:column}
-  .page-h .row{width:100%}
+  .page-h .h1,.page-h .sub,.page-h .small{text-align:left}
+  .page-h .row{width:100%;flex-wrap:wrap;gap:8px}
   .page-h .row .btn.primary{flex:1 1 auto}
   .toolbar-page{flex-direction:column;align-items:stretch}
   .toolbar-page .input,.toolbar-page select{max-width:none!important;width:100%!important}
+  /* calendário de 7 colunas: em vez de colunas de 50px ilegíveis, rola dentro do quadro */
+  .cal{grid-template-columns:repeat(7,minmax(60px,1fr));overflow-x:auto}
+  /* alvo de toque: nada de botão de 30px no dedo */
+  .btn{min-height:40px}
+  .btn.sm{min-height:36px}
+  .input,select.input,textarea.input{min-height:44px;font-size:16px}
 }
 
 /* ---------- pergunta dentro da página (no lugar do diálogo do navegador) */

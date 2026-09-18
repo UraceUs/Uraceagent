@@ -80,6 +80,25 @@ e-mails separados por vírgula); quem pode decidir cada proposta em
 
 ## 4. O painel, tela por tela
 
+### O menu, e a tela
+
+O menu lateral **abre e fecha** pelo botão de painel na barra de cima (o segundo
+ícone, ao lado da busca). Fechado, ele vira um **trilho de ícones**: o contador de
+cada item continua ali, como uma bolinha colorida. **Encoste o mouse no trilho** e o
+menu inteiro aparece por cima da página — o conteúdo não se mexe. O jeito como você
+deixou o menu **fica guardado naquele navegador**: quem fecha encontra fechado.
+
+Em monitor grande, as páginas de **leitura** (ficha do cliente, manual dos
+marcadores, o que a IA pode fazer, minha conta) têm largura máxima, para a linha de
+texto não ficar cansativa; **quadro, tabela larga, calendário e chat** usam a tela
+inteira.
+
+No **celular** o menu é uma gaveta que entra por cima, pelo botão de três linhas, e
+embaixo fica a barra de abas (Hoje, Atenção, Vendas, IA, Mais). Toda tela é montada
+para a largura do aparelho: nada rola para o lado sem querer, tabela larga vira
+cartão ou rola dentro do próprio quadro, e o calendário do Asana abre na **Lista**
+(o mês fica a um toque).
+
 ### Hoje (`/ops/`)
 A abertura do dia: serviços de hoje, o que vence, invoices abertas (gerente e
 acima), integrações e os itens que precisam de atenção.

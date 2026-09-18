@@ -14,8 +14,10 @@ CC_AUTOSYNC=0 URACE_ENV=/nao/existe CC_DB_PATH=$SC/e2e.sqlite \
 # 2. provar (92 verificações, imprime OK/FALHA)
 S=$SC node command_center/tests/e2e/operacao.mjs
 
-# 3. rolagem lateral no celular, tela por tela
+# 3. rolagem lateral no celular, tela por tela (25 rotas; acusa também alvo de toque < 34px)
 node command_center/tests/e2e/celular.mjs
+#    se o Chromium do Playwright não bater de versão:
+#    PW_CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome node …/celular.mjs
 ```
 
 Usuários semeados (senha `senha-de-teste-123`): `italo@urace.us` (admin),

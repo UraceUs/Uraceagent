@@ -13,12 +13,28 @@ const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gere
 const cargoDe = (u?: { role?: string; free?: boolean } | null) =>
   u?.free ? 'Acesso livre' : (ROLE_PT[u?.role || ''] || u?.role || '')
 
-/** Item do menu com ícone de traço à esquerda (padrão SF Symbols). */
-function NL({ to, end, icon, children }: { to: string; end?: boolean; icon: IconName; children: React.ReactNode }) {
-  return <NavLink to={to} end={end}><Icon name={icon} />{children}</NavLink>
+/** Item do menu com ícone de traço à esquerda (padrão SF Symbols).
+ *  O rótulo vai em `.lbl` e o contador em `.n` separados: no menu em trilho (18/09) o
+ *  primeiro some e o segundo vira bolinha, sem mexer no JSX de cada item. */
+function NL({ to, end, icon, n, tone, children }: {
+  to: string; end?: boolean; icon: IconName; n?: number; tone?: 'warn' | 'soft'; children: React.ReactNode
+}) {
+  const rotulo = typeof children === 'string' ? children : undefined
+  return <NavLink to={to} end={end} title={rotulo}>
+    <Icon name={icon} /><span className="lbl">{children}</span>
+    {!!n && <span className={`n${tone ? ' ' + tone : ''}`}>{n > 99 ? '99+' : n}</span>}
+  </NavLink>
 }
 function TB({ to, end, icon, n, children }: { to: string; end?: boolean; icon: IconName; n?: number; children: React.ReactNode }) {
   return <NavLink to={to} end={end} className="tb"><span className="tbi"><Icon name={icon} />{!!n && <i className="n">{n > 99 ? '99+' : n}</i>}</span>{children}</NavLink>
+}
+
+/** Largura da página por rota (decisão do dono, 18/09): leitura ganha limite confortável;
+ *  quadro, tabela larga, calendário e chat usam a tela inteira; o resto fica no limite padrão. */
+function larguraDa(p: string) {
+  if (/^\/clients\/[^/]+/.test(p) || p === '/gmail/manual' || p === '/ai/capabilities' || p === '/account') return ' read'
+  if (/^\/(crm|sales|asana|gmail|docusign|quickbooks|audit|activity|races|clients)$/.test(p) || p.startsWith('/crm/')) return ' wide'
+  return ''
 }
 
 function useOutside(ref: React.RefObject<HTMLElement | null>, close: () => void) {
@@ -35,6 +51,15 @@ export function Shell() {
   const online = useOnline()
   const [pal, setPal] = useState(false)
   const [side, setSide] = useState(false)
+  // menu em trilho no computador (opção C, aprovada em 18/09). Fica guardado por navegador.
+  const [trilho, setTrilho] = useState(() => {
+    try { return localStorage.getItem('cc.menu') === 'trilho' } catch { return false }
+  })
+  const alternaTrilho = useCallback(() => setTrilho(v => {
+    const n = !v
+    try { localStorage.setItem('cc.menu', n ? 'trilho' : 'aberto') } catch { /* ignore */ }
+    return n
+  }), [])
   const [menu, setMenu] = useState<'none' | 'who'>('none')
   const [clock, setClock] = useState(() => new Date())
   useEffect(() => { const id = setInterval(() => setClock(new Date()), 30000); return () => clearInterval(id) }, [])
@@ -62,7 +87,7 @@ export function Shell() {
   const syncAge = lastSync ? Date.now() - new Date(lastSync).getTime() : null
   const syncTone = syncAge === null ? 'crit' : syncAge > 2 * 3600e3 ? 'warn' : 'ok'
 
-  return <div className="app">
+  return <div className={`app${trilho ? ' rail' : ''}`}>
     {side && <div className="scrim" onClick={() => setSide(false)} />}
     <aside className={`side${side ? ' open' : ''}`}>
       <div className="brand"><span className="mark-u" aria-hidden="true">U</span><div className="mark"><b>Command Center</b><small>URACE · Orlando</small></div>
@@ -71,29 +96,29 @@ export function Shell() {
       <nav className="nav" aria-label="Principal">
         <div className="grp">Hoje</div>
         <NL to="/" end icon="home">Hoje</NL>
-        <NL to="/attention" icon="alert">Precisa de atenção {attn > 0 && <span className={`n${crit ? '' : ' warn'}`}>{attn}</span>}</NL>
+        <NL to="/attention" icon="alert" n={attn} tone={crit ? undefined : 'warn'}>Precisa de atenção</NL>
         <NL to="/races" icon="flag">Corridas</NL>
         <div className="grp">Vendas</div>
-        <NL to="/sales" end icon="target">Oportunidades {!!(d?.sales_due || 0) && <span className="n warn">{d?.sales_due}</span>}</NL>
+        <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">Oportunidades</NL>
         <NL to="/sales/agenda" icon="cal">Agenda de vendas</NL>
-        <NL to="/crm/chat" icon="chat">Chat do Kommo {!!d?.crm_pending && <span className="n">{d.crm_pending}</span>}</NL>
+        <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>Chat do Kommo</NL>
         <div className="grp">Pessoas</div>
         <NL to="/clients" icon="people">Clientes</NL>
         <NL to="/crm/funil" icon="funnel">Funil do Kommo</NL>
         <div className="grp">Sistemas</div>
         <NL to="/asana" icon="list">Asana</NL>
-        <NL to="/docusign" icon="doc">DocuSign {!!d?.waivers_bounced && <span className="n">{d.waivers_bounced}</span>}</NL>
-        <NL to="/gmail" icon="mail">Gmail {!!d?.emails_attention && <span className="n soft">{d.emails_attention}</span>}</NL>
+        <NL to="/docusign" icon="doc" n={d?.waivers_bounced || 0}>DocuSign</NL>
+        <NL to="/gmail" icon="mail" n={d?.emails_attention || 0} tone="soft">Gmail</NL>
         <NavLink to="/gmail/manual" className="sub">Manual dos marcadores</NavLink>
         <NL to="/quickbooks" icon="dollar">QuickBooks</NL>
         <div className="grp">Inteligência</div>
         <NL to="/ai" end icon="spark">AI Command</NL>
-        <NL to="/approvals" icon="seal">Aprovações {pend > 0 && <span className="n warn">{pend}</span>}</NL>
+        <NL to="/approvals" icon="seal" n={pend} tone="warn">Aprovações</NL>
         <NL to="/automation" icon="gear">Automação e memória</NL>
         <NL to="/ai/capabilities" icon="book">O que a IA pode fazer</NL>
         <NL to="/activity" icon="activity">Atividade da IA</NL>
         <div className="grp">Administração</div>
-        <NL to="/integrations" icon="plug">Integrações {badInt > 0 && <span className="n warn">{badInt}</span>}</NL>
+        <NL to="/integrations" icon="plug" n={badInt} tone="warn">Integrações</NL>
         {can('MANAGER') && <NL to="/audit" icon="shield">Auditoria</NL>}
         {can('ADMIN') && <NL to="/policies" icon="key">Políticas da IA</NL>}
         {can('ADMIN') && <NL to="/users" icon="user">Usuários</NL>}
@@ -104,6 +129,8 @@ export function Shell() {
       <div className="topbar">
       <header className="top">
         <button className="iconbtn burger" aria-label="Menu" onClick={() => setSide(s => !s)}><Icon name="menu" /></button>
+        <button className="iconbtn railbtn" aria-label={trilho ? 'Abrir o menu' : 'Fechar o menu'} aria-expanded={!trilho}
+          title={trilho ? 'Abrir o menu' : 'Fechar o menu'} onClick={alternaTrilho}><Icon name="panel" /></button>
         <div className="search top-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
           <Icon name="search" size={16} /><span>Buscar ou perguntar à IA…</span><kbd>⌘K</kbd>
         </div>
@@ -133,7 +160,7 @@ export function Shell() {
         </div>
       </header>
       </div>
-      <main className="page"><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Outlet context={{ dash }} /></div></main>
+      <main className={`page${larguraDa(loc.pathname)}`}><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Outlet context={{ dash }} /></div></main>
     </div>
     <nav className="tabbar" aria-label="Abas">
       <TB to="/" end icon="home">Hoje</TB>

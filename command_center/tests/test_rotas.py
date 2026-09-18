@@ -43,8 +43,11 @@ def cli():
             template="parental", status="completed", sent_at="2026-08-29", completed_at="2026-08-31")
     inserir(con, "waivers", client_id=None, signer_name="Matthew Hubbard", signer_email="misterhubbbard@gmail.com",
             template="parental", status="autoresponded", sent_at="2026-05-27", expires_at="2026-09-24")
+    # a atenção "cliente escreveu" só olha os últimos 14 dias (atencao.py), então a data
+    # aqui é relativa: com 2026-09-04 fixo o teste passava até 17/09 e quebrava no dia 18.
     inserir(con, "emails", client_id=rafael, mailbox="urace", subject="Sobre o treino de sábado",
-            sender="Rafael Pionti <rafael@spmesportes.com.br>", last_at="2026-09-04", handled=0)
+            sender="Rafael Pionti <rafael@spmesportes.com.br>",
+            last_at=(HOJE - timedelta(days=3)).isoformat(), handled=0)
     inserir(con, "invoices", client_id=rafael, doc_number="1001", amount=400, balance=400, status="sent",
             issued_on="2026-09-02", due_on="2026-09-04")
     con.close()
