@@ -1,0 +1,38 @@
+# Caddy — HTTPS automatico (Let's Encrypt) na frente da sales-bridge.
+#
+# Pre-requisitos (uma vez só):
+#   1. DNS: urace-bridge.duckdns.org criado no DuckDNS apontando pro IP do
+#      Lightsail (feito 21/08; atualizar la se o IP mudar)
+#   2. Firewall do Lightsail: abrir portas 80 e 443 (TCP)
+#   3. Instalar o Caddy: https://caddyserver.com/docs/install#debian-ubuntu-raspbian
+#      sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+#      curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+#      curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+#      sudo apt update && sudo apt install caddy
+#   4. sudo cp salesagent/deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+#
+# O certificado e provisionado sozinho na primeira requisicao. O Kommo exige
+# HTTPS valido no URL do webhook -- por isso o Caddy, nao a porta 8800 direto.
+
+# Sites adicionais gerenciados por scripts (ex.: painel do OpenClaw via
+# setup_claw_ui.sh) — o glob vazio é inofensivo se nenhum existir.
+import /etc/caddy/*.caddy
+
+urace-bridge.duckdns.org {
+	# So os endpoints desenhados para acesso externo sao expostos.
+	# As tools do agente (/tools/*) e /human/reply ficam so no localhost.
+	#
+	# /human/whatsapp entrou na lista em 26/08: o agente que segura o canal
+	# do WhatsApp (Mark) roda num sandbox sem acesso ao VPS, entao HTTPS e o
+	# unico caminho dele ate a ponte -- o primeiro teste real parou aqui num
+	# 404. O endpoint foi desenhado para exposicao: exige o HUMAN_REPLY_TOKEN
+	# (escopo minimo, so essa rota), valida o TELEFONE do operador contra a
+	# lista cadastrada, e na duvida pergunta em vez de agir.
+	@public path /kommo/hook /health /human/whatsapp
+	handle @public {
+		reverse_proxy 127.0.0.1:8800
+	}
+	handle {
+		respond "not found" 404
+	}
+}

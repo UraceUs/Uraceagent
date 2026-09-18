@@ -1,0 +1,53 @@
+{
+  "gerado_em": "2026-08-28",
+  "motivo": "backup do estado ANTES dos ajustes autorizados pelo dono (SUITS Order number -> Pedido; Shipping Orders links)",
+  "como_reverter": "reaplicar os valores 'antes' com update_tasks; no SUITS, re-adicionar o custom field 1205661933760057 ao projeto via update_project add_custom_fields",
+  "suits_order_number_enum": {
+    "campo_gid": "1205661933760057",
+    "campo_destino_texto": "1206689200495431",
+    "tarefas": [
+      {"gid": "1205668720326256", "nome": "Igor / Gabriel", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668717002422", "nome": "Mark Bergs", "order_number": "email", "pedido_antes": "email/square"},
+      {"gid": "1209069800704293", "nome": "Matt Hayden", "order_number": "#ZJ3YF", "pedido_antes": "email/site"},
+      {"gid": "1206423670536793", "nome": "Lothar Kuster", "order_number": "#IGR1S", "pedido_antes": null},
+      {"gid": "1206406218149882", "nome": "Martin Jaramilo", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668716821410", "nome": "Zulu", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668716821404", "nome": "Jaysin", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668554586855", "nome": "Marina Couto", "order_number": "#HF9Y2", "pedido_antes": null},
+      {"gid": "1205668554586843", "nome": "Ty Canoles", "order_number": "#5FLT3", "pedido_antes": null},
+      {"gid": "1205668554586849", "nome": "Antony Di Donato", "order_number": "#JQCKL", "pedido_antes": null},
+      {"gid": "1205668720326268", "nome": "Steve Flood / Lucas", "order_number": "#5MPH9", "pedido_antes": null},
+      {"gid": "1205668720326262", "nome": "Carlos", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668720326250", "nome": "Jose Aguirre", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668718731204", "nome": "Michael", "order_number": "KJCBE", "pedido_antes": null},
+      {"gid": "1205668720354628", "nome": "Naomi Garcia", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668717002446", "nome": "Eric and Liam Gray", "order_number": "email", "pedido_antes": null},
+      {"gid": "1205668717002438", "nome": "Raymi Guzman", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668717002430", "nome": "Alexander Jacoby", "order_number": "emial", "pedido_antes": null},
+      {"gid": "1205668644557504", "nome": "Michael Kotowski", "order_number": "wpp Italo", "pedido_antes": null},
+      {"gid": "1205668644509437", "nome": "Chris Gorman", "order_number": "#LUHFA", "pedido_antes": null},
+      {"gid": "1205668644509429", "nome": "Patrick Stein", "order_number": "#JQQFV", "pedido_antes": null},
+      {"gid": "1205668644509411", "nome": "Fabio Delgado", "order_number": "#1L77H", "pedido_antes": null},
+      {"gid": "1205668720321781", "nome": "Fabio Delgado", "order_number": "#9GXIY", "pedido_antes": null},
+      {"gid": "1205668720321764", "nome": "Ron Ferguson", "order_number": "#VTJ6J", "pedido_antes": null},
+      {"gid": "1205668557653787", "nome": "Juliet Pernicek", "order_number": "#M6IQU", "pedido_antes": null},
+      {"gid": "1205668557653797", "nome": "Mariam Alhosani", "order_number": "#IJJBI", "pedido_antes": null},
+      {"gid": "1205668557653777", "nome": "Andrew Kutscher", "order_number": "#JBXAB", "pedido_antes": null}
+    ]
+  },
+  "shipping_orders_links": {
+    "tracking_gid": "1215973949234127",
+    "order_number_gid": "1215973949234125",
+    "tarefas": [
+      {"gid": "1217251119213459", "nome": "CHAINS", "tracking_antes": "1ZK102480333620918"},
+      {"gid": "1216988381031134", "nome": "Kart Sport Order #46244", "tracking_antes": "1ZK102480107706530"},
+      {"gid": "1216988381031121", "nome": "Kart Sport Order #46245", "tracking_antes": "1ZK102480107706530"},
+      {"gid": "1216012599963240", "nome": "Placas Schiavo - Compra", "tracking_antes": "1ZB8R405YW27040579"},
+      {"gid": "1215973949424836", "nome": "IAME Reedjet KA100", "tracking_antes": "1ZK102480305333979"},
+      {"gid": "1217594555399856", "nome": "Kartsport Order #46662", "tracking_antes": "ups.com/track?track=yes&trackNums=1ZK102480329154234"},
+      {"gid": "1217155327033912", "nome": "STORMCRAFT Gaming PC", "tracking_antes": "google.com/url?q=<newegg>"},
+      {"gid": "1216609514000426", "nome": "Pedido bateria com 4 unidades", "tracking_antes": "google.com/url?q=<amazon 111-5817755-8250620>"},
+      {"gid": "1216893560116086", "nome": "Alibaba parts", "order_number_antes": "<URL de email do Alibaba com tokens, orderId=309514646501022128>"}
+    ]
+  }
+}

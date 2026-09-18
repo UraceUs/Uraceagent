@@ -1,0 +1,17 @@
+[Unit]
+Description=URACE — atualização do Command Center pedida pelo painel (Integrações → Atualizar sistema)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+Environment=HOME=/home/ubuntu
+Environment=URACE_DIR=/home/ubuntu/.urace
+# o pedido é um arquivo; some antes de começar, para o próximo clique valer
+ExecStartPre=/bin/rm -f /home/ubuntu/.urace/deploy.request
+# bash -l: o mesmo PATH de login (node/npm) que o dono tem no terminal
+ExecStart=/bin/bash -lc 'echo "=== deploy $(date -Is) (pedido pelo painel) ==="; git pull origin BRANCH && bash adminai/deploy/command_center/servir_command_center.sh; rc=$?; echo "=== fim: $rc ==="; exit $rc'
+StandardOutput=append:/home/ubuntu/.urace/deploy-painel.log
+StandardError=append:/home/ubuntu/.urace/deploy-painel.log
+TimeoutStartSec=900

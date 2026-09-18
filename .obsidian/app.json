@@ -1,0 +1,19 @@
+{
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "brain/30_DIARIO",
+  "attachmentFolderPath": "brain/_anexos",
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "showLineNumber": false,
+  "readableLineLength": true,
+  "strictLineBreaks": false,
+  "showUnsupportedFiles": false,
+  "userIgnoreFilters": [
+    "salesagent/",
+    "adminai/",
+    "brain/__pycache__/",
+    ".github/",
+    "node_modules/"
+  ]
+}
