@@ -217,6 +217,37 @@ CREATE TABLE IF NOT EXISTS crm_messages (
 );
 CREATE INDEX IF NOT EXISTS crm_messages_lead ON crm_messages(lead_id, at);
 
+-- ---------------------------------------------------- telefonia (Dialpad)
+-- 18/09: a URACE tem UM número de empresa que recebe todas as ligações. O evento chega por
+-- webhook (JSON ou JWT assinado), casa pelo telefone com cliente/oportunidade/lead, e a
+-- gravação e a transcrição entram porque o aviso de consentimento já toca na chamada.
+CREATE TABLE IF NOT EXISTS calls (
+  id              INTEGER PRIMARY KEY,
+  external_id     TEXT UNIQUE,               -- call_id no Dialpad
+  direction       TEXT,                      -- entrada | saida
+  state           TEXT,                      -- ringing | connected | hangup | missed | voicemail…
+  external_number TEXT,                      -- o número de fora (E.164)
+  internal_number TEXT,                      -- o número da empresa
+  contact_name    TEXT,                      -- nome que o Dialpad conhece
+  who             TEXT,                      -- quem atendeu ou discou do nosso lado
+  started_at      TEXT,
+  ended_at        TEXT,
+  seconds         INTEGER,
+  answered        INTEGER NOT NULL DEFAULT 0,
+  voicemail       INTEGER NOT NULL DEFAULT 0,
+  recording_url   TEXT,
+  transcript      TEXT,
+  client_id       INTEGER REFERENCES clients(id),
+  opportunity_id  INTEGER REFERENCES opportunities(id),
+  lead_id         INTEGER REFERENCES crm_leads(id),
+  handled         INTEGER NOT NULL DEFAULT 0, -- perdida já tratada
+  raw             TEXT,                       -- o evento como chegou (campo novo não se perde)
+  at              TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS calls_quando ON calls(started_at);
+CREATE INDEX IF NOT EXISTS calls_client ON calls(client_id);
+CREATE INDEX IF NOT EXISTS calls_opp ON calls(opportunity_id);
+
 -- ---------------------------------------------------- vendas (closer): oportunidade NÃO é cliente
 -- Pedido do dono (17/09): o closer liga por fora e registra tudo aqui. Só vira cliente no Ganho.
 CREATE TABLE IF NOT EXISTS opportunities (

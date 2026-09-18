@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from command_center.api import auth, ia, rotas
+from command_center.api import auth, dialpad, ia, rotas
 from command_center.db import auditar, aplicar_schema, conectar, get_db, todos, um
 
 BASE = "/ops"
@@ -121,6 +121,7 @@ from command_center.api import sistema  # noqa: E402
 app.include_router(sistema.r)
 from command_center.api import vendas  # noqa: E402
 app.include_router(vendas.r)
+app.include_router(dialpad.r)
 
 
 # ------------------------------------------------------------- saúde

@@ -235,6 +235,28 @@ def _coletar(con):
                           facts=[("De", e.get("sender") or "—"), ("Assunto", e.get("subject") or "—"), ("Caixa", f"{e['mailbox']}@urace.us"),
                                  ("Quando", (e.get("last_at") or "—")[:16].replace("T", " ")), ("Cliente", e["cliente"]), ("Trecho", (e.get("snippet") or "")[:140] or "—")]))
 
+    # ---- 8. ligação perdida no número da empresa (Dialpad), ainda sem retorno
+    corte_lig = (datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S")
+    for c in todos(con, """SELECT c.*, cl.name AS cliente, o.name AS oportunidade
+                           FROM calls c LEFT JOIN clients cl ON cl.id = c.client_id
+                           LEFT JOIN opportunities o ON o.id = c.opportunity_id
+                           WHERE c.answered = 0 AND c.handled = 0 AND c.direction = 'entrada'
+                             AND COALESCE(c.started_at, c.at) >= ?
+                           ORDER BY COALESCE(c.started_at, c.at) DESC LIMIT 20""", (corte_lig,)):
+        quem = c.get("cliente") or c.get("oportunidade") or c.get("contact_name") or c.get("external_number") or "número desconhecido"
+        conhecido = bool(c.get("client_id") or c.get("opportunity_id") or c.get("lead_id"))
+        itens.append(dict(key=_chave("ligacao-perdida", "call", c["id"]),
+                          level="HIGH" if conhecido else "MEDIUM",
+                          title=f"{quem} ligou e ninguém atendeu",
+                          why=("Deixou recado na caixa postal." if c.get("voicemail") else "Ligação perdida no número da empresa.")
+                              + (" É gente que a gente já conhece." if conhecido else " Número que ainda não está no painel."),
+                          entity={"type": "call", "id": c["id"]}, client_id=c.get("client_id"),
+                          link=None, action="Ligar de volta",
+                          facts=[("Número", c.get("external_number") or "—"),
+                                 ("Quando", (c.get("started_at") or c.get("at") or "—")[:16].replace("T", " ")),
+                                 ("Recado", "sim" if c.get("voicemail") else "não"),
+                                 ("Oportunidade", c.get("oportunidade") or "—")]))
+
     ordem = {n: i for i, n in enumerate(NIVEIS)}
     itens.sort(key=lambda x: ordem[x["level"]])
     return itens

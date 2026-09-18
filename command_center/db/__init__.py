@@ -202,7 +202,8 @@ POS_MIGRACAO = [
        ('venda_fechar','REQUIRES_CONFIRMATION','fecha a venda e dispara cliente, QuickBooks, waiver, Asana e Kommo (dono, 17/09)'),
        ('painel_unir_clientes','SAFE','só com mesmo e-mail, telefone ou responsável; fora disso a ação recusa (dono, 17/09)'),
        ('painel_varrer_cliente','SAFE','Gmail + DocuSign do cliente: só leitura e espelho (dono, 17/09)'),
-       ('painel_waiver_lixeira','REQUIRES_CONFIRMATION','tira do painel; em aberto anula no DocuSign (dono, 17/09)')""",
+       ('painel_waiver_lixeira','REQUIRES_CONFIRMATION','tira do painel; em aberto anula no DocuSign (dono, 17/09)'),
+       ('dialpad_ligar','REQUIRES_CONFIRMATION','discar pelo Dialpad: só a pedido de uma pessoa, nunca por conta da IA (dono, 18/09)')""",
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
        ('waiver_na_tarefa', 1, '{"event":"task.created","por":"sistema"}', NULL,
         '{"sistema":"anexar a waiver assinada do piloto na tarefa do Asana e guardar o PDF no card do cliente"}')""",
