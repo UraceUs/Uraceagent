@@ -9,6 +9,8 @@ status: ativo
 
 # P-08 — Campos de rastreio guardando link em vez de código
 
+> **Direção do dono (18/09):** a IA pode **extrair o código do link** e gravar no campo certo, em vez de alguém copiar à mão.
+
 [[Asana]] · [[Compra e envio]] · [[Problemas]]
 
 ## O problema

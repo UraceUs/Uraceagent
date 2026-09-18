@@ -46,11 +46,11 @@ responsavel: Italo Silveira
 
 | O que | Por quê | De quem depende |
 |---|---|---|
-| **Pit Wall** em `/painel/` | nunca publicado; o Command Center cobre o que ele mostrava (hoje responde 404) | decisão do dono: publicar ou aposentar |
+| **Pit Wall** em `/painel/` | **aposentado em 18/09** por decisão do dono: a rota sai do Caddy (`aposentar_painel.sh`) | — |
 | **Foto do login** | o arquivo entrou no repositório em 17/09, depois do último deploy | rodar o deploy de novo |
 | **Agente escrevendo sozinho** | o agente no OpenClaw roda em simulação (`APLICAR=0`); quem executa o aprovado é o painel, com APLICAR ligado só naquele clique | decisão do dono |
-| **Azul oficial da marca** | o painel usa `#1E5BC6`, tirado do kart da foto; o hex oficial não está documentado em lugar nenhum | Italo passar o código |
-| **Usuário de vendas** | ninguém foi criado ainda com papel Operador para vender | URACE |
+| **Azul oficial da marca** | **resolvido em 18/09: `#0057B4`**, dito pelo dono e aplicado no painel | — |
+| **Usuário de vendas** | ninguém criado ainda; em 18/09 o dono disse que quem vai usar é outra pessoa (o Lucas, comercial) | URACE |
 
 ## 3. Como a operação funciona hoje
 

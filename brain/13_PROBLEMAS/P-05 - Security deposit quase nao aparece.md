@@ -9,6 +9,8 @@ status: ativo
 
 # P-05 — O security deposit quase não é cobrado
 
+> **Regra do dono (18/09):** cobra-se o depósito quando é o **primeiro serviço** do cliente, ou quando o **anterior já foi devolvido** (inclusive com dedução por peça usada). Um depósito retido por vez. Está em [[PARAMETROS]].
+
 [[Security deposit]] · [[QuickBooks]] · [[Problemas]]
 
 ## O problema

@@ -9,6 +9,8 @@ status: ativo
 
 # P-07 — Três waivers paradas desde junho
 
+> **Direção do dono (18/09):** **reenviar as três**. A do Matthew Hubbard precisa da correção do e-mail antes — o servidor dele recusou a entrega.
+
 [[DocuSign]] · [[Waiver]] · [[Problemas]]
 
 ## O problema

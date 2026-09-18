@@ -22,6 +22,24 @@ status: ativo
 
 ---
 
+## Security deposit — quando cobrar (dono, 18/09/2026)
+
+Cobra-se o security deposit quando:
+
+1. é o **primeiro serviço** daquele cliente; ou
+2. o **depósito anterior já foi devolvido** — inclusive quando houve dedução por
+   peça usada.
+
+Ou seja: o cliente tem **um** depósito retido por vez. Enquanto o antigo estiver
+retido, não se cobra outro. A devolução é do dono; a IA **prepara** e ele informa
+peças e serviços a subtrair (U-03).
+
+## Rate Card — a fonte é o Drive (dono, 18/09/2026)
+
+"Use o rate card sempre; ele será atualizado no Drive, sempre consultar lá."
+A planilha no Drive é a **fonte de verdade de preço**, acima do catálogo do
+QuickBooks e de qualquer valor copiado para o cérebro.
+
 ## 🧵 Fornecedores de macacão (SUITS)
 
 | Papel | Quem | Contato |

@@ -167,7 +167,7 @@ echo "   SPA montado                -> $TEM_APP  (tem que ser 1)"
 echo "   dado de cliente no HTML    -> $VAZOU  (tem que ser 0)"
 echo "   /ops/api/dashboard sem sessão -> HTTP $API  (tem que ser 401)"
 echo "   /legal/privacy.html        -> HTTP $LEGAL  (continua 200)"
-echo "   /painel/                   -> HTTP $PAINEL  (informativo: 404 = Pit Wall ainda não publicado; servir_painel.sh)"
+echo "   /painel/                   -> HTTP $PAINEL  (404 esperado: Pit Wall aposentado pelo dono em 18/09)"
 echo
 if [ "$SPA" = "200" ] && [ "$TEM_APP" = "1" ] && [ "$VAZOU" = "0" ] && [ "$API" = "401" ] && [ "$LEGAL" = "200" ]; then
     echo "✅ https://$DOMINIO/ops/ no ar. Entre com o ADMIN criado; a API só responde com sessão."

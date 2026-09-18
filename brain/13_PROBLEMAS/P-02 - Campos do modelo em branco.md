@@ -9,6 +9,8 @@ status: ativo
 
 # P-02 — Modelo colado com os campos em branco
 
+> **Direção do dono (18/09):** a IA pode arrumar o que for seguro — preencher campo que o painel já sabe (piloto, idade, responsável, e-mail, link da invoice). O que ela não souber fica em branco e vira proposta, nunca chute.
+
 [[Asana]] · [[Serviços]] · [[Problemas]]
 
 ## O problema

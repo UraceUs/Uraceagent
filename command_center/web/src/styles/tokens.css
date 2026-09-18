@@ -3,7 +3,9 @@
 :root{
   --paper:#131211;--surface:#1C1A18;--surface-2:#242120;--surface-3:#2C2825;
   --ink:#EFEBE5;--ink-2:#C4BDB4;--muted:#948B81;--rule:#2E2A27;--rule-strong:#403A35;
-  --accent:#1E5BC6;--accent-ink:#6FA0EE;--accent-wash:#12213B;
+  /* azul OFICIAL da marca (dono, 18/09/2026: #0057B4). Fundo de botão usa --accent;
+     texto e link usam --accent-ink, porque o azul oficial é escuro demais para ler no preto. */
+  --accent:#0057B4;--accent-ink:#7FB3F5;--accent-wash:#0C1F38;
   --ok:#57B387;--ok-wash:#13271E;--warn:#D2A24A;--warn-wash:#2A2113;--crit:#E0705F;--crit-wash:#2E1815;
   --info:#7FA6E0;--info-wash:#16233A;--brand:#E8563E;--brand-wash:rgba(232,86,62,.16);
   --glass:rgba(239,235,229,.06);--glass-2:rgba(239,235,229,.10);--glass-line:rgba(239,235,229,.10);--glass-line-2:rgba(239,235,229,.18);
@@ -22,7 +24,7 @@
 [data-theme="light"]{
   --paper:#F6F3EF;--surface:#FFFFFF;--surface-2:#EFEBE5;--surface-3:#E6E0D8;
   --ink:#191714;--ink-2:#4A443C;--muted:#7A7168;--rule:#DED8D0;--rule-strong:#C7BFB5;
-  --accent:#1B4FA8;--accent-ink:#173F86;--accent-wash:#E1E9F7;
+  --accent:#0057B4;--accent-ink:#00417F;--accent-wash:#DFEAF8;
   --ok:#2C7A54;--ok-wash:#E3F1E9;--warn:#9C6B12;--warn-wash:#F6ECD9;--crit:#A8352A;--crit-wash:#F7E4E1;
   --info:#2F5D9E;--info-wash:#E2EAF6;--brand:#C4321F;--brand-wash:rgba(196,50,31,.12);
   --glass:rgba(255,255,255,.55);--glass-2:rgba(255,255,255,.8);--glass-line:rgba(25,23,20,.08);--glass-line-2:rgba(25,23,20,.14);
@@ -36,7 +38,7 @@
 *{box-sizing:border-box}
 html,body,#root{height:100%}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:14.5px;line-height:1.5;-webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+a{color:var(--accent-ink);text-decoration:none}a:hover{text-decoration:underline}
 button,input,select,textarea{font:inherit;color:inherit}
 h1,h2,h3{margin:0}
 .cond{font-family:var(--font-cond);text-transform:uppercase;letter-spacing:.04em}
@@ -76,7 +78,7 @@ h1,h2,h3{margin:0}
 .card.quiet .card-h{border-bottom-color:transparent;padding-bottom:4px}
 .page-h .h1{font-size:24px}
 .page-h .help{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule-strong);background:transparent;color:var(--muted);font-family:var(--mono);font-size:12px;cursor:pointer;vertical-align:middle;margin-left:8px}
-.page-h .help:hover,.page-h .help.on{color:var(--accent);border-color:var(--accent)}
+.page-h .help:hover,.page-h .help.on{color:var(--accent-ink);border-color:var(--accent)}
 .page-h .sub{margin-top:4px}
 .grid{display:grid;gap:14px}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -363,7 +365,7 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .msg.me .bub .ctx{display:block;font-family:var(--font-cond);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:4px}
 .sug{display:flex;flex-wrap:wrap;gap:8px}
 .sug button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:20px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--ink-2)}
-.sug button:hover{border-color:var(--accent);color:var(--accent)}
+.sug button:hover{border-color:var(--accent);color:var(--accent-ink)}
 .composer{position:sticky;bottom:0;background:var(--paper);padding:10px 0 4px;z-index:5}
 .composer .box{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--rule-strong);border-radius:var(--r);padding:10px}
 .composer textarea{flex:1;border:0;background:transparent;resize:none;outline:none;min-height:44px;max-height:200px;font-family:var(--font)}
@@ -410,7 +412,7 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 /* ---------- senha com olho */
 .pwwrap{position:relative}
 .pwwrap .input{padding-right:92px}
-.pwwrap .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--accent);font-family:var(--font-cond);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;padding:6px 8px;border-radius:2px}
+.pwwrap .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--accent-ink);font-family:var(--font-cond);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;padding:6px 8px;border-radius:2px}
 .pwwrap .eye:hover{background:var(--surface-2)}
 
 /* ---------- avisos ocultos */

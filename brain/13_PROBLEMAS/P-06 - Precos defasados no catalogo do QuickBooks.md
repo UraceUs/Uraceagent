@@ -9,6 +9,8 @@ status: ativo
 
 # P-06 — Catálogo do QuickBooks com preço defasado
 
+> **Direção do dono (18/09):** atualizar o catálogo **pela Rate Card** no que existir lá; para item sem Rate Card, usar o valor das **últimas invoices** do mesmo serviço. Como são 896 itens, a atualização vai por lista revisada antes de aplicar.
+
 [[QuickBooks]] · [[Rate Card]] · [[Problemas]]
 
 ## O problema

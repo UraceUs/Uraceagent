@@ -9,6 +9,8 @@ status: ativo
 
 # P-01 — Tarefas de serviço fora do modelo
 
+> **Direção do dono (18/09):** a IA pode arrumar o que for seguro. Aplicar o modelo de 12 subtarefas em tarefa de serviço nova é seguro; reescrever tarefa antiga entra como proposta.
+
 [[Asana]] · [[Serviços]] · [[Problemas]]
 
 ## O problema

@@ -65,14 +65,20 @@ Todas em `08_DECISOES`. As que mais moldam o projeto:
 | [[Google Calendar]] | mínimo, depende do Asana |
 | **Vendas** | área própria no painel (17/09): oportunidades, agenda de retornos e fechamento em uma tela |
 
-## Pendências (17/09)
+## Pendências (18/09)
 
-O deploy aconteceu em 01/09 e o painel está no ar. O que falta hoje:
+As quatro pendências de 17/09 foram **respondidas pelo dono em 18/09**
+([[D-2026-09-18 - As travas respondidas, uma a uma]]): azul oficial `#0057B4` (já no
+painel), Pit Wall **aposentado**, agente **com `APLICAR=1`** nas rotinas, e a venda de
+ponta a ponta fica com **outra pessoa** (o Lucas, pelo papel comercial de U-06).
 
-1. **URACE** — criar o usuário de vendas (papel Operador) e rodar uma venda de ponta a ponta.
-2. **Italo** — passar o hex oficial do azul da marca (o painel usa `#1E5BC6`, tirado da foto do kart).
-3. **Italo** — decidir se o [[Pit Wall]] é publicado em `/painel/` ou aposentado.
-4. **Italo** — decidir se o agente do OpenClaw sai da simulação (`APLICAR=0`) nas rotinas diárias.
+O que falta agora:
+
+1. **URACE** — criar o usuário do Lucas (papel Operador) e rodar a venda de ponta a ponta.
+2. **URACE** — reenviar as três waivers paradas (P-07); a do Hubbard pede correção do e-mail.
+3. **Comigo** — a lista revisada de preços do catálogo antes de tocar nos 896 itens (P-06).
+4. **Comigo** — o que o agente passa a escrever sozinho com `APLICAR=1`, antes de ligar.
+5. **Comigo** — ler a Rate Card do Drive em vez de guardar cópia (decisão de C-01).
 
 ## Problemas
 

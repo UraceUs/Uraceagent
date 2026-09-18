@@ -9,6 +9,8 @@ status: ativo
 
 # P-04 — 84% do valor a receber está em duas invoices de 2025
 
+> **Direção do dono (18/09):** *"deixe em stand-by para esses por hora"*. Não cobrar Juan Pacino e Stephen Collins por enquanto; os dois saem da fila de cobrança e do que a IA propõe. Os outros 27 continuam valendo.
+
 [[QuickBooks]] · [[Problemas]]
 
 ## O problema

@@ -9,6 +9,8 @@ status: ativo
 
 # P-03 — Serviço velho parado na coluna do dia
 
+> **Direção do dono (18/09):** a IA pode arrumar o que for seguro — mover para `Finished Services` serviço já realizado e com as subtarefas fechadas.
+
 [[Asana]] · [[Problemas]]
 
 ## O problema

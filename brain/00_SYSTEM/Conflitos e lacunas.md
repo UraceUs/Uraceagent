@@ -23,68 +23,15 @@ não escolhe lado. Ver [[Protocolo de aprendizado]], passo 6.
 
 ## ⚠️ Conflitos abertos — `needs_human_confirmation`
 
-### C-01 · Preço do mensal Academy 4T e Baby Kart
-
-| Fonte | Diz |
-|---|---|
-| **[[Rate Card]]** (planilha) | $2.756,00 mensal · $689,00 sessão extra |
-| **[[QuickBooks]]** (invoice paga txnId 9391) + 3 checagens de consistência | **$2.756,90** · **$689,23** |
-
-**Resolvido no cérebro em 31/08** por decisão do dono: vale
-**$2.756,90 / $689,23**. O conflito **continua aberto na planilha** — 4
-células esperando o clique dele. Enquanto isso, **a IA lê do cérebro**,
-não da planilha, para esses quatro valores.
-→ [[Rate Card]] · [[D-2026-08-31 - Sessao extra e mensal do Academy]]
-
----
-
-### C-02 · Horário: "quarta a domingo" × coluna TUESDAY
-O dono confirmou a um lead (27/08) que o funcionamento é **quarta a
-domingo, 8h–13h**. O quadro U-RACE do [[Asana]] tem coluna **TUESDAY**
-como dia de serviço. Ou terça é exceção (serviço fora do horário
-público), ou a coluna é herança. **Não decidido.** Dono da resposta:
-[[Italo Silveira]]. → [[Orlando Kart Center]] · [[Serviços]]
+Nenhum. Os dois que existiam foram fechados em 18/09 — ver a tabela abaixo.
 
 ## ❓ Lacunas — `UNKNOWN`
-
-Coisas que a IA **não sabe** e que não dá para deduzir. Cada uma tem um
-dono da resposta.
-
-### U-01 · `sendReminder` do [[DocuSign]]
-A IA pode cutucar quem recebeu a waiver e não assinou?
-**Não decidido.** Hoje ela alerta [[Italo Silveira]], não o cliente.
-→ [[Waiver de responsabilidade]]
 
 ### U-02 · Fornecedor do e-mail `whitesoldier205@gmail.com`
 Recebeu um pedido "SUIT - Frankie Iadevaia". Não se sabe se é o Manzoor,
 o WheelDeal ou outro. → [[PARAMETROS]] · [[Fornecedores]]
 
-### U-03 · Devolução do security deposit
-A IA executa a devolução ou só prepara? O *merchant view* do
-[[QuickBooks]] é tela, não API. → [[Pagamento e security deposit]]
-
-### U-04 · Política de desconto
-Não existe regra definida na URACE. Se um pedido depender disso, **pedir
-a definição** — não arbitrar. → [[Invoice e estimate no QuickBooks]]
-
-### U-05 · Datas e duração do serviço a partir do pagamento
-Como a IA descobre quando o serviço vai acontecer, a partir de uma
-invoice paga? → [[QuickBooks]]
-
-### U-06 · Papel de [[Lucas Azaro]]
-Concluiu a subtarefa "Signed waiver?" do Enzo em 31/08 no [[Asana]]; o
-dono pediu acesso ao [[QuickBooks]] para `lucas@urace.us` em 01/09. O
-**papel formal não está registrado em lugar nenhum**. Dono da resposta:
-[[Italo Silveira]]. → [[Equipe]]
-
----
-
-### U-08 · O que é "Offsight"
-O spec do Command Center (04/09) cita "Offsight" oito vezes — como
-integração, como origem de cliente, como `offsight_id`. **Não existe em
-nenhum lugar**: cérebro, código, conexões, conversas. A IA não implementa
-integração que não sabe o que é. Dono da resposta: [[Italo Silveira]].
-→ `docs/adminai/command-center-adr.md`
+*(As outras lacunas foram fechadas em 18/09 — tabela abaixo.)*
 
 ## 🔒 Fechado — o que já foi resolvido
 
@@ -100,6 +47,14 @@ Fica aqui como memória: **estes assuntos não precisam ser reabertos.**
 | F-04 | Depósito é por pacote ou por cliente? | 28/08 | **Por cliente**, enquanto retido — conferir se foi devolvido |
 | F-05 | Reminder de cobrança: autorização permanente? | 31/08 | **Não** — aprovação por lote |
 | F-06 | Templates vazios do [[DocuSign]] | 31/08 | Não serão usados **nem apagados** → escolher template por ID |
+| C-01 | Rate Card × QuickBooks: 4 células | 18/09 | **A Rate Card manda, sempre** — e ela é mantida atualizada no Drive: "sempre consultar lá" (dono) |
+| C-02 | Terça é dia de serviço? | 18/09 | **É dia de serviço, sim.** A coluna TUESDAY do Asana vale; o horário público de quarta a domingo não é a regra interna |
+| U-01 | `sendReminder` do DocuSign | 18/09 | **A IA não cutuca o cliente** — avisa só o dono, como já fazia |
+| U-03 | Devolução do security deposit | 18/09 | **A IA prepara, o dono devolve.** Ele informa peças e serviços a subtrair do valor |
+| U-04 | Política de desconto | 18/09 | **Existe em casos raros, com o motivo explicado** — e a decisão continua sendo do dono, caso a caso |
+| U-05 | Data do serviço a partir da invoice paga | 18/09 | **A data já está na tarefa do Asana** — não há o que deduzir |
+| U-06 | Papel do [[Lucas Azaro]] | 18/09 | **Marketing / vendas (closer) / comercial** |
+| U-08 | O que é "Offsight" | 18/09 | **Não existe: pode esquecer.** Sai do spec e do ADR |
 
 ---
 
