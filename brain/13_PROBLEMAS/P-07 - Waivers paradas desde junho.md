@@ -9,6 +9,21 @@ status: ativo
 
 # P-07 — Três waivers paradas desde junho
 
+> **Estado real conferido na conta do DocuSign em 18/09/2026 — o registro abaixo é de
+> 31/08 e já não vale.** Antes de reenviar nada (o dono autorizou "reenviar as três"),
+> a conta foi lida ao vivo, e não havia o que reenviar:
+>
+> | Quem | O que aconteceu de verdade |
+> |---|---|
+> | **Matthew Hubbard** | o envelope com o e-mail errado (`misterhubbbard@`, três b) foi **anulado em 09/09** pelo Eduardo, no Command Center. O novo, com `misterhubbard@gmail.com` corrigido, foi **reenviado em 17/09 às 14:53** e está aguardando assinatura |
+> | **Leticia Bittencourt** | **ela já assinou em 16/06 às 18:55** (envelope `81b835b4`). Existe um segundo envelope, criado no mesmo dia às 15:16, que ficou aberto e foi **reenviado por engano em 17/09** — é duplicata do que ela já assinou, e o certo é **anular**, não reenviar |
+> | **Austin** | envelope **anulado em 15/09** pelo Eduardo, no Command Center. Não há envelope aberto; se ele ainda vai à pista, precisa de waiver nova |
+>
+> Ou seja: dois foram reenviados **ontem** e um foi anulado de propósito. Reenviar hoje
+> seria cutucar duas vezes em 24 h — e uma delas quem já assinou.
+>
+> **Lição, a mesma da semana:** estado de sistema se confere na fonte, não no registro.
+
 > **Direção do dono (18/09):** **reenviar as três**. A do Matthew Hubbard precisa da correção do e-mail antes — o servidor dele recusou a entrega.
 
 [[DocuSign]] · [[Waiver]] · [[Problemas]]
