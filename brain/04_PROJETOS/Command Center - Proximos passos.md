@@ -48,7 +48,12 @@ Command Center.
       nasce com `origem` e `external_id` para a ponte não precisar migrar conversa depois
 - [x] 🤖 **Base construída** (21/09): tabelas, API e testes do chat interno
 - [ ] 🤖 Tela do chat interno no painel (lista de conversas + conversa, pensada para celular)
-- [ ] 🤖 **Notificação push (PWA)** — o que decide se a equipe adota ou ignora
+- [x] 🤖 **Notificação push (PWA)** — construída em 21/09: chave VAPID própria, assinatura
+      por pessoa e por aparelho, aviso sem o texto da conversa, aparelho morto limpo sozinho
+- [x] 🤖 Instalação na tela inicial (manifest, ícone, instrução própria para iPhone)
+- [ ] 👤 Ligar a notificação no seu celular e mandar o teste (Equipe → "Ligar notificação")
+- [x] 👤 **App nativo: não por ora.** PWA instalado na tela inicial; Capacitor só se
+      aparecer maquininha, código de barras pesado ou offline longo
 - [ ] 👤 Admin do Google Workspace liberar o app do Chat na organização — **é o único
       bloqueio que sobrou** nesta frente
 - [ ] 🤖 Ponte do Google Chat (depois do admin liberar)
@@ -119,8 +124,9 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
 Mecânico vende peça direto ao cliente pelo celular, com ou sem ajuda da IA.
 
 - [ ] 🔒 **Depende do módulo 5** (estoque) — sem saber o que tem, não há o que vender
-- [ ] 👤 **Como o cliente paga?** Link de pagamento do QuickBooks? Maquininha? Fica na
-      conta do cliente para faturar depois? Isso muda o módulo inteiro.
+- [x] 👤 **Como o cliente paga: QuickBooks**, sempre (dono, 21/09). Link ou QR aberto no
+      celular do próprio cliente — sem maquininha, sem hardware no box. Isso também
+      decidiu o app: PWA basta, ver [[D-2026-09-21 - Celular e PWA, sem app nativo]]
 - [ ] Tela de venda pensada para celular: acha o cliente, acha a peça, quantidade, pronto
 - [ ] Preço vem da **Rate Card** (regra do dono, 18/09) — e peça mantém o preço
 - [ ] Baixa no estoque na hora da venda

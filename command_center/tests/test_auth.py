@@ -205,3 +205,25 @@ def test_custo_da_senha_em_producao_nao_cai_por_configuracao():
     assert auth._CUSTO == 2 ** 12                      # aqui, rodando sob pytest
     # e a função realmente usa a constante (ninguém deixou um número solto para trás)
     assert "n=_CUSTO" in inspect.getsource(auth._scrypt)
+
+
+def test_banco_de_producao_continua_gravando_com_seguranca():
+    """Par do teste do custo da senha. Em 21/09 o `synchronous` foi desligado NOS TESTES
+    (cada fixture levava ~2 s criando a schema na VPS, o que punha 170 s no deploy).
+
+    A trava é a mesma: só vale com o pytest carregado. Não existe configuração que
+    desligue a durabilidade do banco de verdade — se alguém trocar isto por um
+    `os.environ`, este teste morre e a conversa acontece antes do estrago."""
+    import inspect
+
+    from command_center import db
+    fonte = inspect.getsource(db.conectar)
+    assert 'if "pytest" in sys.modules:' in fonte
+    assert 'PRAGMA synchronous = OFF' in fonte
+    assert "os.environ" not in fonte.split('if "pytest" in sys.modules:')[1]
+    # e aqui, sob pytest, é o valor rápido mesmo
+    con = db.conectar()
+    try:
+        assert con.execute("PRAGMA synchronous").fetchone()[0] == 0
+    finally:
+        con.close()

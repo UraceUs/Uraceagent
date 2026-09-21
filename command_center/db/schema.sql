@@ -79,6 +79,23 @@ CREATE TABLE IF NOT EXISTS team_members (
   PRIMARY KEY (channel_id, user_id)
 );
 
+-- Notificação no celular (dono, 21/09). O painel instalado na tela inicial avisa mesmo
+-- fechado — é o que faz a equipe usar o chat de dentro em vez do WhatsApp.
+-- Uma linha por PESSOA e por APARELHO: o mesmo mecânico no celular e no tablet são duas
+-- assinaturas, e tirar uma não derruba a outra.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id          INTEGER PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id),
+  endpoint    TEXT NOT NULL UNIQUE,      -- o endereço que o navegador deu; identifica o aparelho
+  p256dh      TEXT NOT NULL,             -- chaves da assinatura: sem elas o navegador não abre o aviso
+  auth        TEXT NOT NULL,
+  user_agent  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  last_ok_at  TEXT,
+  falhas      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS push_subscriptions_user ON push_subscriptions(user_id);
+
 -- Chave de API: outro sistema falando com o Command Center sem navegador (dono, 21/09).
 -- O SEGREDO NUNCA FICA AQUI: só o hash (scrypt, como senha). Perdeu a chave, cria outra.
 -- Toda chave age como uma PESSOA e tem um papel, e o papel dela nunca passa do papel da

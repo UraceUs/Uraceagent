@@ -17,6 +17,7 @@ import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Spinner 
 import { Icon } from '../components/Icon'
 import { ago, fmtTime } from '../components/fmt'
 import { useToast } from '../components/Toast'
+import { Avisos } from '../components/Avisos'
 import { TextoComVoz } from '../components/Voz'
 
 interface Canal {
@@ -61,6 +62,8 @@ export function Equipe() {
     <PageHeader title="Equipe" help={<>A conversa do dia a dia dentro do painel: ligada à corrida, ao serviço ou ao cliente, com quem precisa ver. O que for do cliente continua no Chat do Kommo.</>}>
       {can('OPERATOR') && <button className="btn primary" onClick={() => setCriando(v => !v)}>Nova conversa</button>}
     </PageHeader>
+
+    <div className="card" style={{ padding: '10px 14px', marginBottom: 12 }}><Avisos /></div>
 
     {criando && <Section title="Nova conversa">
       <div className="row wrap" style={{ gap: 8 }}>

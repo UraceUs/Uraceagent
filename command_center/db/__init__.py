@@ -10,6 +10,7 @@ ao lado dos outros segredos (permissão 600).
 import json
 import os
 import sqlite3
+import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -40,6 +41,19 @@ def conectar(caminho=None):
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA busy_timeout = 10000")
+    # Em TESTE, o banco é descartável: gravar com segurança de queda de energia não
+    # protege nada e custa caro. Medido na VPS em 21/09: cada fixture levava ~2 s só
+    # criando a schema (o disco é volume de rede, e cada CREATE TABLE sincroniza), o que
+    # colocava 170 s no deploy e fazia o terminal do dono cair antes do fim.
+    #
+    # Em produção NADA muda — e a trava é a mesma do custo da senha: isto só vale com o
+    # pytest carregado no processo. Não há variável de ambiente que desligue a durabilidade
+    # do banco de verdade, nem por engano nem de propósito.
+    # Só `synchronous`: trocar `journal_mode` pede lock exclusivo e falha quando outra
+    # conexão está com o banco aberto — um teste pegou isso na hora (21/09). O ganho está
+    # no fsync mesmo; o journal em memória acrescentava pouco e trazia essa fragilidade.
+    if "pytest" in sys.modules:
+        con.execute("PRAGMA synchronous = OFF")
     if novo:
         try:
             os.chmod(caminho, 0o600)

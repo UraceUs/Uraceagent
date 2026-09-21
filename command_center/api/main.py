@@ -147,7 +147,9 @@ async def _cabecalhos(request: Request, call_next):
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline' "
         "https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
-        "connect-src 'self'; frame-ancestors 'none'")
+        # worker-src explícito: sem ele o navegador cai no default e a regra fica
+        # dependendo de qual versão de CSP o telefone implementa (21/09)
+        "connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'")
     return resp
 
 
@@ -166,6 +168,8 @@ from command_center.api import precos  # noqa: E402
 app.include_router(precos.r)
 from command_center.api import equipe  # noqa: E402
 app.include_router(equipe.r)
+from command_center.api import push  # noqa: E402
+app.include_router(push.r)
 
 
 # ------------------------------------------------------------- saúde
@@ -407,6 +411,18 @@ def spa(caminho: str = ""):
         alvo = os.path.normpath(os.path.join(DIST, caminho))
         if (alvo.startswith(DIST + os.sep) and os.path.isfile(alvo)
                 and os.path.basename(alvo) != "index.html"):
+            nome = os.path.basename(alvo)
+            # O service worker NÃO pode ser guardado em cache: ele é quem entrega o aviso e
+            # quem sabe abrir a conversa certa. Uma versão velha presa por uma hora vira
+            # "a notificação leva para o lugar errado" — defeito que ninguém liga ao cache.
+            if nome == "sw.js":
+                return FileResponse(alvo, media_type="application/javascript",
+                                    headers={"Cache-Control": "no-cache"})
+            # .webmanifest não está na tabela de tipos do Python: sem dizer o tipo, o
+            # telefone ignora o arquivo em silêncio e o painel não vira aplicativo
+            if nome.endswith(".webmanifest"):
+                return FileResponse(alvo, media_type="application/manifest+json",
+                                    headers={"Cache-Control": "public, max-age=3600"})
             return FileResponse(alvo, headers={"Cache-Control": "public, max-age=3600"})
     index = os.path.join(DIST, "index.html")
     if not os.path.isfile(index):

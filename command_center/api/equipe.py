@@ -25,7 +25,7 @@ sem janela de 24 h.
 """
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
@@ -167,8 +167,31 @@ class MensagemIn(BaseModel):
     reply_to: int | None = None
 
 
+def _avisar_quem_nao_esta_vendo(cid, autor_id, autor_nome, canal_nome, texto):
+    """O aviso no celular sai em segundo plano, com conexão própria.
+
+    Em segundo plano porque notificação não pode segurar a resposta de quem escreveu — a
+    mensagem já está salva, o aviso é consequência. E o texto da mensagem NÃO vai junto:
+    o aviso passa por servidor da Apple/Google, e conversa da equipe não tem por que
+    passar por lá. Vai quem escreveu, onde, e o link."""
+    from command_center.api import push
+    from command_center.db import conectar
+    con = conectar()
+    try:
+        alvos = [x["user_id"] for x in todos(con, """SELECT user_id FROM team_members
+                                                     WHERE channel_id=? AND muted=0 AND user_id<>?""",
+                                             (cid, autor_id))]
+        if alvos:
+            push.avisar(con, alvos, f"{autor_nome.split(' ')[0]} em {canal_nome}",
+                        "Nova mensagem no chat da equipe.", f"/ops/equipe?c={cid}")
+    except Exception:                                  # noqa: BLE001
+        pass                                           # aviso que falha não estraga a conversa
+    finally:
+        con.close()
+
+
 @r.post("/canais/{cid}/mensagens", status_code=201)
-def escrever(cid: int, dados: MensagemIn, u=Depends(auth.exige("OPERATOR")),
+def escrever(cid: int, dados: MensagemIn, fundo: BackgroundTasks, u=Depends(auth.exige("OPERATOR")),
              con: sqlite3.Connection = Depends(get_db)):
     _canal(con, cid)
     if not _pode_ver(con, cid, u):
@@ -183,6 +206,8 @@ def escrever(cid: int, dados: MensagemIn, u=Depends(auth.exige("OPERATOR")),
     con.execute("UPDATE team_members SET last_read_id=? WHERE channel_id=? AND user_id=? AND last_read_id<?",
                 (mid, cid, u["id"], mid))
     con.commit()
+    c = _canal(con, cid)
+    fundo.add_task(_avisar_quem_nao_esta_vendo, cid, u["id"], u["name"], c["name"], texto)
     return {"id": mid}
 
 
