@@ -1,0 +1,76 @@
+---
+tipo: indice
+tipo_info: CONTEXT
+data: 2026-08-31
+fonte: interno
+responsavel: Italo Silveira
+status: ativo
+---
+
+# ⚖️ Decisões
+
+[[URACE]] · [[Tipos de informação]] · [[Protocolo de aprendizado]]
+
+Uma nota por decisão tomada por um humano. **Decisão vale até ser
+revogada por outra decisão** — a IA nunca revoga por conta própria.
+
+Nome do arquivo: `D-AAAA-MM-DD - assunto`. Decisão superada **não é
+apagada**: vira `status: superado`, com link para a que a substituiu.
+
+## Todas (18)
+
+- [[D-2026-08-27 - Descontinuar o Chase]]
+- [[D-2026-08-28 - ADM URACE e somente leitura]]
+- [[D-2026-08-28 - Autonomia para corrigir erro rastreado]]
+- [[D-2026-08-28 - Construir por partes e por aplicacao]]
+- [[D-2026-08-28 - Deposito e um por cliente]]
+- [[D-2026-08-28 - IA envia a invoice do deposito]]
+- [[D-2026-08-28 - PARAMETROS e o ponto unico de alteracao]]
+- [[D-2026-08-31 - Agente de invoice pode criar]]
+- [[D-2026-08-31 - Cobranca por lote]]
+- [[D-2026-08-31 - Conhecimento da era Chase fica no arquivo]]
+- [[D-2026-08-31 - IA envia a waiver]]
+- [[D-2026-08-31 - Margem de 15 por cento na peca]]
+- [[D-2026-08-31 - Rate Card acima do catalogo do QuickBooks]]
+- [[D-2026-08-31 - Sem modelo de email de invoice]]
+- [[D-2026-08-31 - Sessao extra e mensal do Academy]]
+- [[D-2026-08-31 - Templates vazios do DocuSign]]
+- [[D-2026-08-31 - Texto do Adult Waiver fica como esta]]
+- [[D-2026-08-31 - Waiver vale um ano]]
+- [[D-2026-09-01 - Manter o par RSA do DocuSign demo]]
+- [[D-2026-09-04 - Renato Pionti sem waiver nesta sessao]]
+- [[D-2026-09-04 - Invoice sai depois de aprovada no painel]]
+
+## Por que isto existe
+
+Antes, as decisões viviam soltas no diário e no histórico do
+[[PARAMETROS]]. Não dava para perguntar *"o que ficou decidido sobre
+X?"*. Agora dá.
+- [[D-2026-09-04 - Senha do Command Center com minimo de 5]] — mínimo de 5 caracteres; o bloqueio de tentativas é o que protege
+- [[D-2026-09-04 - Clique humano move e-mail para o marcador]] — botão na aba Gmail aplica marcador e arquiva; regra da IA (só wNews) intacta
+- [[D-2026-09-04 - Lixeira e reenvio de waiver pelo painel]] — lixeira anula em aberto e oculta assinada; download, reenvio e vínculo cliente↔waiver
+- [[D-2026-09-04 - O que e cliente, ativo, e um card por pessoa]] — corrida não é cliente; ativo = 6 meses; união de duplicados; varredura por cliente
+- [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]] — eventos → agente → propostas; aprovar executa; balão vira memória
+- [[D-2026-09-08 - A IA se corrige antes de chamar humano]] — atenção só do que a IA não resolveu; notificação/histórico tratados sozinhos; vencida vai para Finished sozinha; SAFE executa na hora
+- [[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]] — ação cria+envia com prévia; evento billing.monthly por cliente com plano; preços da diária, lead and follow e +$250 fora do OKC
+- [[D-2026-09-09 - Pro Racing Drivers, mensalidade e equipamento no card]] — tipo de piloto, estrela, sessões do mês pelo memo da invoice, contrato, equipamento e corridas com prévia
+- [[D-2026-09-09 - Triagem do Gmail pela IA e sondagem so de manha e a noite]] — corpo como no Gmail; IA lê, marca e move para o principal 07/13/21h; busca de marcador ao digitar; sondagem só 07h e 22h, re-sonda se cair
+- [[D-2026-09-09 - Tornar Pro no card, corridas em calendario do Asana com o modelo New Race]] — botão Tornar Pro; equipamento só no card; calendário só de corridas (coluna RACES); convite = piloto dentro da corrida até confirmar; nova corrida do modelo New Race
+- [[D-2026-09-09 - Unir clientes a mao e puxar o historico completo do Asana]] — unir dois cards à mão com busca e sugestões; histórico completo do quadro sem teto, cada serviço na pessoa certa
+- [[D-2026-09-09 - Design para cognicao rapida, cada link no seu item]] — regra de design do sistema: link ao lado do item, cabeçalho que responde quem é, cinco números, linha do tempo por mês, contato limpo na origem
+- [[D-2026-09-10 - Proposta da IA nao se repete e o valor do dono manda]] — argumentos normalizados, invoice nunca $0 sem aviso, ação aprovada não volta, pendente é substituída, estado do dia no comando
+- [[D-2026-09-10 - O modelo da IA e a Anthropic com recarga automatica]] — OpenClaw é o corpo, a Anthropic é o modelo; recarga automática; sincronia nunca espera pela IA
+- [[D-2026-09-10 - Correcoes do teste real com a extensao]] — argumento a mais não quebra mais a ação; importação não fabrica cliente falso; toda coluna sincroniza; calendário certo; invoice numerada; diálogos dentro da página
+- [[D-2026-09-11 - Manual dos marcadores do Gmail confirmado pelo dono]] — a IA não cria marcador; triagem só roda com o manual confirmado e só enxerga o que o dono confirmou
+- [[D-2026-09-11 - Modo de entrega da resposta no Kommo e json_reply]] — a resposta do bot sai por `json_reply`, não por widget
+- [[D-2026-09-14 - A IA sugere marcador novo, mas nao cria]] — marcador novo vira sugestão no painel; quem cria é o dono
+- [[D-2026-09-16 - Waiver por e-mail, DocuSign x Waivers e a subtarefa]] — todo envelope leva `Softwares|Apps/Docusign`, só a waiver leva `Waivers`; a IA baixa o PDF, acha o cliente, fecha a subtarefa e pré-marca as próximas
+- [[D-2026-09-16 - Filtros criados pela API, nao pela tela]] — filtro nativo nasce do botão do painel, com trava de duplicata; só cria, nunca apaga nem edita
+- [[D-2026-09-16 - Piloto nao e servico, documento interno e a IA dentro da tarefa]] — `_`/`|`/hífen separam pessoa de serviço; envelope que o support@ assina é documento interno com aba própria; caixa da IA no modal da tarefa; quadro abre só com abertas, mais recentes no topo
+- [[D-2026-09-16 - Lembretes recorrentes de invoice e filtros do QuickBooks]] — lembrete por invoice (diário/semanal/N dias, toggle) no QuickBooks e no card; rotina 09:00 reenvia pelo QuickBooks; paga desliga sozinha; quem liga é a aprovação; filtros por valor, período, cliente, número e memo
+- [[D-2026-09-17 - Identidade Pit Wall Glass (iOS x F1)]] — todo o painel na forma iOS (vidro, cápsulas, cantos, título grande, ícones de traço, folha no celular) com energia F1; só cores da URACE; preto padrão; menu em quatro grupos; Geist + Titillium
+- [[D-2026-09-17 - O que a IA pode fazer, revisado pelo dono]] — DocuSign reenviar/anular/modelo com aprovação; disparo do lembrete é da IA; corrida pelo New Race; unir só com e-mail/telefone/responsável iguais; varredura diária às 06:00; página lida do código
+- [[D-2026-09-17 - Fluxo do closer, voz no painel e acesso livre]] — oportunidade não é cliente; fechar venda em uma tela dispara cliente, QuickBooks, waiver, Asana e Kommo (com tarefa personalizada); valor fora da tabela fecha a venda e deixa a invoice para o dono; quem vende é o operador (o papel CLOSER foi removido no mesmo dia); conta de acesso livre sem cargo; voz (ditar e ouvir) em todo o painel; fuso da Flórida também no servidor
+- [[D-2026-09-18 - As travas respondidas, uma a uma]] — as 19 travas da operação respondidas pelo dono: terça é dia de serviço; desconto só em caso raro com motivo; a IA não cutuca cliente por waiver; ela prepara a devolução do depósito e ele devolve; Lucas é comercial; "Offsight" não existe; azul oficial #0057B4; Pit Wall aposentado; agente com APLICAR=1 nas rotinas; catálogo atualizado pela Rate Card, que mora no Drive
+- [[D-2026-09-18 - Menu em trilho que revela, e a tela manda no layout]] — o menu fecha virando trilho de 68px com o contador em bolinha, e ao encostar o mouse abre por cima do conteúdo sem empurrar nada; o estado fica guardado no navegador; largura máxima só nas páginas de leitura; no celular o menu segue gaveta e toda tela é montada para a largura do aparelho
+- [[D-2026-09-17 - Login com a foto da pista]] — login em duas metades com a foto da pista cortada na diagonal e a linha vermelha; só marca, título e formulário; foto em `web/public/pista.jpg` com fallback de asfalto; o teal sai e entra o azul da marca em todo o painel

@@ -1,0 +1,16 @@
+{
+  "name": "URACE Command Center",
+  "short_name": "URACE",
+  "description": "Operação da URACE: chat da equipe, clientes, corridas e o dia a dia.",
+  "start_url": "/ops/",
+  "scope": "/ops/",
+  "display": "standalone",
+  "background_color": "#0B0E13",
+  "theme_color": "#0B0E13",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/ops/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/ops/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/ops/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,9 @@
+[Unit]
+Description=URACE — dispara a atualização quando o painel deixa o pedido em ~/.urace/deploy.request
+
+[Path]
+PathExists=/home/ubuntu/.urace/deploy.request
+Unit=urace-deploy.service
+
+[Install]
+WantedBy=multi-user.target

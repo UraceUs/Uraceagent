@@ -1,0 +1,10 @@
+[Unit]
+Description=Varredura de waivers todo dia as 07h30
+
+[Timer]
+OnCalendar=*-*-* 07:30
+Persistent=true
+RandomizedDelaySec=180
+
+[Install]
+WantedBy=timers.target

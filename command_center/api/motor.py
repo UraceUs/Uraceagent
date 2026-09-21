@@ -1,0 +1,765 @@
+"""Motor de eventos e aprendizado.
+
+- Cada mudança detectada pela sincronia vira um ai_event (tarefa criada,
+  e-mail de cliente recebido, waiver devolvida/assinada).
+- Uma regra ligada em automation_rules transforma o evento num comando
+  para o agente, com o contexto do item e o que o dono já ensinou
+  (ai_learnings). O agente responde e PROPÕE ações; política decide se
+  executa, pede confirmação ou espera aprovação humana.
+- O balão "Instruir a IA" em cada item de atenção vira comando + memória.
+- Ação aprovada executa aqui, pelo módulo do MCP, com APLICAR liberado só
+  nesta chamada: aprovação humana é a autorização.
+"""
+import json
+import re
+import os
+import threading
+
+from command_center.api import ia
+from command_center.db import agora, atualizar, auditar, conectar, inserir, todos, um
+
+MAX_APRENDIZADOS = 25
+
+
+# ------------------------------------------------------------ memória
+def aprendizados(con, client_id=None, entity_type=None):
+    escopos = ["global"]
+    if client_id:
+        escopos.append(f"client:{client_id}")
+    if entity_type:
+        escopos.append(f"entity:{entity_type}")
+    marks = ",".join("?" * len(escopos))
+    rows = todos(con, f"SELECT scope, text FROM ai_learnings WHERE active=1 AND scope IN ({marks}) ORDER BY id DESC LIMIT ?",
+                 (*escopos, MAX_APRENDIZADOS))
+    saida = ""
+    if rows:
+        linhas = [f"- ({r['scope']}) {r['text']}" for r in reversed(rows)]
+        saida += "\n\nO QUE O DONO JÁ ENSINOU (obedeça; em conflito com o cérebro, isto prevalece):\n" + "\n".join(linhas)
+    return saida + fontes_de_contexto(con)
+
+
+def fontes_de_contexto(con):
+    """Planilhas e arquivos cadastrados em Integrações: a IA sabe que existem e como ler cada um."""
+    fontes = todos(con, "SELECT * FROM context_sources WHERE active=1 ORDER BY kind, id")
+    if not fontes:
+        return ""
+    linhas = []
+    for f in fontes:
+        if f["kind"] == "sheet":
+            linhas.append(f"- PLANILHA '{f['title']}': {f['description'] or ''} → sheets_ler(conta='urace', planilha_id='{f['sheet_id']}', intervalo='{f['sheet_range'] or 'A1:Z200'}')")
+        elif f["kind"] == "file":
+            nome = os.path.basename(f["text_path"] or f["path"] or "")
+            linhas.append(f"- ARQUIVO '{f['title']}': {f['description'] or ''} → read /workspace/contexto/{nome}")
+        else:
+            linhas.append(f"- LINK '{f['title']}': {f['description'] or ''} → {f['url']}")
+    return "\n\nFONTES DE CONTEXTO cadastradas pelo dono (consulte quando o assunto pedir):\n" + "\n".join(linhas)
+
+
+def aprender(con, texto, user_id, client_id=None, entity_type=None, source_key=None):
+    escopo = f"client:{client_id}" if client_id else (f"entity:{entity_type}" if entity_type else "global")
+    lid = inserir(con, "ai_learnings", scope=escopo, text=texto.strip()[:1000], source_key=source_key, created_by=user_id)
+    auditar(con, "ai.learn", f"user:{user_id}", user_id=user_id, entity_type="ai_learning", entity_id=lid,
+            detail={"scope": escopo, "text": texto[:200]})
+    return lid
+
+
+# ------------------------------------------------------------ contexto
+def _contexto_cliente(con, client_id):
+    if not client_id:
+        return ""
+    c = um(con, "SELECT * FROM clients WHERE id=?", (client_id,))
+    if not c:
+        return ""
+    ws = todos(con, "SELECT status, template, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (client_id,))
+    ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? ORDER BY due_on DESC LIMIT 5", (client_id,))
+    return ("\nCLIENTE: " + json.dumps({k: c[k] for k in ("id", "name", "pilot_name", "pilot_dob", "email", "phone", "vip", "status") if k in c.keys()}, ensure_ascii=False)
+            + "\nWAIVERS NO ESPELHO: " + json.dumps(ws, ensure_ascii=False)
+            + "\nSERVIÇOS NO ESPELHO: " + json.dumps(ts, ensure_ascii=False))
+
+
+def cliente_citado(con, texto):
+    """Cliente cujo nome (piloto ou responsável, 2+ palavras) aparece no texto do dono."""
+    from command_center.providers.identidade import normaliza
+    t = " " + " ".join(normaliza(texto or "")) + " "
+    melhor, tam = None, 0
+    for c in todos(con, "SELECT id, name, pilot_name FROM clients"):
+        for n in (c["pilot_name"], c["name"]):
+            toks = normaliza(n or "")
+            if len(toks) >= 2 and (" " + " ".join(toks) + " ") in t and len(toks) > tam:
+                melhor, tam = c["id"], len(toks)
+    return melhor
+
+
+def contexto_do_comando(con, texto, user_id=None):
+    """Tudo que o painel já sabe sobre o piloto citado: histórico, última invoice (com o id do
+    cliente no QBO), waiver e o catálogo de itens. Entra no comando para a IA agir de uma vez.
+    Sem nome na mensagem ("pode continuar com a invoice"), vale o último piloto da conversa do dia."""
+    cid = cliente_citado(con, texto)
+    if not cid and user_id:
+        for c in todos(con, "SELECT text FROM ai_commands WHERE user_id=? AND created_at >= date('now') AND text NOT LIKE 'EVENTO AUTOMÁTICO%' ORDER BY id DESC LIMIT 8", (user_id,)):
+            cid = cliente_citado(con, c["text"])
+            if cid:
+                break
+    if not cid:
+        return ""
+    c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
+    ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? ORDER BY due_on DESC LIMIT 5", (cid,))
+    inv = um(con, "SELECT doc_number, amount, memo, issued_on, customer_ref, customer_email FROM invoices WHERE client_id=? ORDER BY issued_on DESC LIMIT 1", (cid,))
+    ws = todos(con, "SELECT status, template, signer_name, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (cid,))
+    from datetime import date, timedelta
+    corte = (date.today() - timedelta(days=365)).isoformat()
+    assinada = next((w for w in ws if w["status"] == "completed" and (w["completed_at"] or "")[:10] >= corte), None)
+    idade = None
+    if c.get("pilot_dob"):
+        try:
+            d = date.fromisoformat(c["pilot_dob"][:10]); h = date.today()
+            idade = h.year - d.year - ((h.month, h.day) < (d.month, d.day))
+        except ValueError:
+            pass
+    itens = todos(con, "SELECT id, name, price FROM qbo_items WHERE active=1 ORDER BY name LIMIT 60")
+    linhas = ["\n\nCONTEXTO DO PAINEL sobre " + (c["pilot_name"] or c["name"]) + " (use estes dados; não pergunte o que já está aqui):",
+              "- Piloto: " + json.dumps({"nome": c["pilot_name"] or c["name"], "nascimento": c.get("pilot_dob"), "idade": idade,
+                                         "menor": (idade is not None and idade < 18), "tipo": c.get("plan_type"), "vip": bool(c.get("vip"))}, ensure_ascii=False),
+              "- Responsável (quem paga e assina): " + json.dumps({"nome": c["name"], "email": c.get("email"), "email_alt": c.get("email_alt"), "telefone": c.get("phone")}, ensure_ascii=False),
+              "- Últimos serviços: " + json.dumps(ts, ensure_ascii=False),
+              "- Última invoice no QuickBooks: " + (json.dumps({"numero": inv["doc_number"], "valor": inv["amount"], "memo": inv["memo"], "emitida_em": inv["issued_on"],
+                                                                 "cliente_id_qbo": inv["customer_ref"], "email_cobranca": inv["customer_email"]}, ensure_ascii=False) if inv else "nenhuma no espelho"),
+              "- Waiver: " + (f"ASSINADA em {assinada['completed_at'][:10]} por {assinada['signer_name']} ({assinada['template']}) — vale um ano, NÃO peça de novo" if assinada
+                              else ("nenhuma assinada nos últimos 12 meses" + (f"; última: {ws[0]['status']} ({ws[0]['template']})" if ws else ""))),
+              ]
+    if inv and inv["customer_ref"]:
+        linhas.append(f"- Para invoice: cliente_id={inv['customer_ref']} (id do responsável no QBO), email={inv['customer_email'] or c.get('email')}")
+    if itens:
+        linhas.append("- Itens do QuickBooks (item_id: nome, preço de lista; o preço válido é o da Rate Card): " +
+                      "; ".join(f"{i['id']}: {i['name']}" + (f" (${i['price']:.0f})" if i.get("price") else "") for i in itens))
+    return "\n".join(linhas)
+
+
+_RE_OPP = re.compile(r"\[oportunidade #(\d+)")
+
+# O closer conversa com a IA dentro da oportunidade. Sem este bloco a IA responde bonito e
+# não age: ela precisa saber de que venda se trata e o nome exato de cada ação.
+VENDA_PROTOCOLO = [
+    'ACAO: venda_registrar_ligacao | <quem> | <resumo> | {"opp_id":%d,"resultado":"fechou|pensar|nao_atendeu|sem_interesse|remarcou","texto":"o que ele falou","minutos":0,"proximo_em":"AAAA-MM-DDTHH:MM:00Z","proximo_que":"o que fazer no retorno"}',
+    'ACAO: venda_agendar_retorno | <quem> | <resumo> | {"opp_id":%d,"quando":"AAAA-MM-DDTHH:MM:00Z","o_que":"confirmar e fechar"}',
+    'ACAO: venda_anotar | <quem> | <resumo> | {"opp_id":%d,"texto":"a anotação"}',
+    'ACAO: venda_mover_etapa | <quem> | <resumo> | {"opp_id":%d,"etapa":"NOVO|CONVERSA|PROPOSTA|FECHAMENTO|PERDIDO","motivo":"obrigatório em PERDIDO"}',
+    'ACAO: venda_tarefa | <quem> | <resumo> | {"opp_id":%d,"titulo":"o que fazer","onde":"painel|asana","quando":"AAAA-MM-DD","notas":"opcional"}',
+    'ACAO: venda_enviar_waiver | <quem> | <resumo> | {"opp_id":%d}',
+    'ACAO: venda_enviar_invoice | <quem> | <resumo> | {"opp_id":%d}',
+    'ACAO: venda_fechar | <quem> | <resumo> | {"opp_id":%d}',
+]
+
+
+def contexto_da_venda(con, texto):
+    """Contexto de uma oportunidade quando a mensagem vem da tela de vendas."""
+    from command_center.api import vendas
+    m = _RE_OPP.search(texto or "")
+    if not m:
+        return ""
+    o = um(con, "SELECT * FROM opportunities WHERE id=?", (int(m.group(1)),))
+    if not o:
+        return ""
+    evs = todos(con, "SELECT kind, title, detail, at FROM opp_events WHERE opp_id=? ORDER BY at DESC LIMIT 6", (o["id"],))
+    ficha = {"id": o["id"], "quem_decide": o["name"], "email": o["email"], "telefone": o["phone"],
+             "piloto": o["pilot_name"], "idade_do_piloto": o["pilot_age"], "servico": o["service"],
+             "data_do_servico": o["service_date"], "hora": o["service_time"], "valor": o["amount"],
+             "etapa": vendas.ETAPA_PT.get(o["stage"], o["stage"]), "origem": o["source"],
+             "proximo_passo": o["next_what"], "proximo_em": o["next_at"], "ja_e_cliente": bool(o["client_id"])}
+    linhas = ["\n\nCONTEXTO DA VENDA (esta conversa é dentro de uma oportunidade do time de vendas; "
+              "oportunidade NÃO é cliente — ela só vira cliente no fechamento):",
+              "- Ficha: " + json.dumps(ficha, ensure_ascii=False),
+              "- Últimos registros: " + json.dumps([{"quando": e["at"], "o_que": e["title"], "detalhe": (e["detail"] or "")[:160]} for e in evs], ensure_ascii=False),
+              f"- Hoje na Flórida é {vendas.hoje_local()}; toda data e hora que você declarar é no fuso da Flórida.",
+              "- Para agir NESTA venda use somente as ações abaixo, sempre com \"opp_id\": " + str(o["id"]) + ":"]
+    linhas += ["  " + (m_ % o["id"]) for m_ in VENDA_PROTOCOLO]
+    linhas.append("- venda_fechar dispara de uma vez: card do cliente, cliente e invoice no QuickBooks, waiver, tarefa no Asana e Kommo em Closed won. "
+                  "Só use quando a pessoa disser que fechou. Se faltar serviço ou valor na ficha, pergunte antes.")
+    if not o["email"]:
+        linhas.append("- Esta ficha está SEM e-mail: waiver e invoice não saem. Peça o e-mail antes de prometer envio.")
+    return "\n".join(linhas)
+
+
+def _prompt_evento(con, ev):
+    regra = {"task.created": "Um serviço NOVO entrou no quadro. Verifique a waiver do piloto (docusign_waivers_de pelo e-mail do responsável; menor = parental) e, se faltar, PROPONHA o envio. "
+                             "Verifique o que falta para a invoice (produto/valor): se souber pelo Rate Card e pela tarefa, proponha a invoice com o valor; se não souber, diga exatamente o que falta. "
+                             "Comente na tarefa do Asana o que preparou.",
+             "email.received": "Chegou e-mail de um cliente conhecido. Leia a thread (gmail_thread), diga o que ele quer, classifique com o marcador certo e, se precisar de resposta, PROPONHA um rascunho (gmail_rascunho). Nunca envie.",
+             "waiver.bounced": "A waiver deste cliente voltou (e-mail devolvido). Procure o e-mail correto na tarefa do Asana e nas caixas do Gmail; PROPONHA a correção e o reenvio, ou diga que não achou.",
+             "waiver.completed": "A waiver deste cliente foi assinada. Comente na tarefa do Asana correspondente que a waiver chegou (asana_comentar).",
+             "billing.monthly": "É dia 1: monte a invoice MENSAL deste cliente conforme o plano (campo monthly_plan e monthly_note do cliente) "
+                                "e os preços da aba Academy da Rate Card (mensal sem contrato; extra = mensal ÷ 4; +$250/sessão fora do OKC). "
+                                "Ache o cliente no QuickBooks (qbo_clientes_buscar pelo e-mail do responsável) e o item no catálogo (qbo_itens_buscar). "
+                                "Declare UMA ação: ACAO: qbo_criar_e_enviar_invoice | <cliente> | mensalidade <mês> | {json com cliente_id, linhas[item_id, quantidade, unitario, descricao], vence_em, memo, email}. "
+                                "Não invente valor: se algo faltar, diga o que falta e não proponha a ação.",
+             "task.overdue": "A tarefa está numa coluna de dia que já passou e continua aberta. Leia a tarefa (asana_tarefa) e os comentários. "
+                             "Se o serviço aconteceu (subtarefas feitas, comentário de conclusão, ou simplesmente a data passou sem cancelamento), "
+                             "declare ACAO: asana_mover_para_finished | <gid> | mover para Finished Services | {\"gid\":\"<gid>\"} — essa ação é SAFE e executa sozinha. "
+                             "Se houver sinal de que NÃO aconteceu (cancelado, remarcado), diga isso claramente e não mova.",
+             }.get(ev["kind"], "Avalie o evento e proponha o que fazer.")
+    return (f"EVENTO AUTOMÁTICO: {ev['kind']} — {ev['summary']}\n{regra}"
+            + _contexto_cliente(con, ev["client_id"]) + aprendizados(con, ev["client_id"], ev["entity_type"]))
+
+
+# ------------------------------------------------------------ eventos
+def regra_ligada(con, kind):
+    """Regra da IA para este evento. As regras mecânicas (por='sistema') ficam de fora:
+    elas rodam no painel e são ligadas/desligadas pelo nome."""
+    r = um(con, """SELECT enabled FROM automation_rules
+                   WHERE json_extract(trigger, '$.event') = ? AND json_extract(trigger, '$.por') IS NULL""", (kind,))
+    return bool(r and r["enabled"])
+
+
+def regra_ligada_nome(con, nome):
+    r = um(con, "SELECT enabled FROM automation_rules WHERE name=?", (nome,))
+    return bool(r and r["enabled"])
+
+
+def registrar_evento(con, kind, entity_type, entity_id, client_id, summary):
+    """Idempotente por (kind, tipo, id)."""
+    con.execute("""INSERT OR IGNORE INTO ai_events (kind, entity_type, entity_id, client_id, summary)
+                   VALUES (?,?,?,?,?)""", (kind, entity_type, entity_id, client_id, summary[:300]))
+
+
+def marcar_pagamento_no_asana(con, invoice_id):
+    """Pagamento confirmado no QuickBooks fecha a subtarefa de pagamento da tarefa do serviço
+    e comenta o que foi pago (dono, 10/09). É mecânico: não passa pelo agente nem por aprovação.
+
+    Acha a tarefa pela data do serviço (memo "Service date: MM/DD/AAAA", senão vencimento + 2
+    dias, senão a tarefa aberta mais próxima do mesmo cliente)."""
+    from command_center.providers import modulo
+    inv = um(con, "SELECT * FROM invoices WHERE id=?", (invoice_id,))
+    if not inv or not inv["client_id"]:
+        return {"ok": False, "motivo": "invoice sem cliente ligado"}
+    alvo = None
+    m = re.search(r"service date:\s*(\d{1,2})/(\d{1,2})/(\d{4})", (inv["memo"] or ""), re.I)
+    if m:
+        alvo = f"{m.group(3)}-{int(m.group(1)):02d}-{int(m.group(2)):02d}"
+    elif inv["due_on"]:
+        from datetime import date, timedelta
+        try:
+            alvo = (date.fromisoformat(inv["due_on"][:10]) + timedelta(days=2)).isoformat()
+        except ValueError:
+            alvo = None
+    t = um(con, """SELECT t.id, t.title, l.external_id AS gid FROM tasks t
+                   JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
+                   WHERE t.client_id=? AND t.due_on=?  ORDER BY t.id DESC LIMIT 1""", (inv["client_id"], alvo)) if alvo else None
+    if not t:
+        t = um(con, """SELECT t.id, t.title, l.external_id AS gid FROM tasks t
+                       JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
+                       WHERE t.client_id=? AND t.status='open' ORDER BY ABS(julianday(COALESCE(t.due_on, date('now'))) - julianday(?)) LIMIT 1""",
+                (inv["client_id"], alvo or agora()[:10]))
+    if not t:
+        return {"ok": False, "motivo": "nenhuma tarefa do cliente com data batendo"}
+    m_ = modulo("asana")
+    anterior = os.environ.get("APLICAR")
+    os.environ["APLICAR"] = "1"
+    try:
+        r = m_.concluir_subtarefa_sistema(t["gid"])
+        valor = f"${float(inv['amount']):,.2f}" if inv["amount"] is not None else "?"
+        if r.get("aplicado"):
+            m_.comentar_humano(t["gid"], f"[IA ADM] Pagamento confirmado: invoice {inv['doc_number'] or ''} de {valor}. "
+                                          f"Subtarefa \"{r['subtarefa']}\" marcada como concluída.")
+    finally:
+        if anterior is None:
+            os.environ.pop("APLICAR", None)
+        else:
+            os.environ["APLICAR"] = anterior
+    auditar(con, "invoice.paid.asana", "system", entity_type="invoice", entity_id=invoice_id,
+            detail={"tarefa": t["title"], "gid": t["gid"], **r})
+    return {"ok": bool(r.get("aplicado")), "tarefa": t["title"], **r}
+
+
+# ------------------------------------------------------- waiver na tarefa
+PASTA_WAIVERS = os.path.expanduser(os.environ.get("CC_WAIVERS_DIR", "~/.urace/waivers"))
+
+
+def waiver_do_cliente(con, client_id):
+    """A waiver assinada que vale para este cliente: a mais recente, não escondida,
+    e ainda dentro da validade (se a data de validade existir)."""
+    return um(con, """SELECT * FROM waivers
+                      WHERE client_id=? AND status='completed' AND COALESCE(hidden,0)=0
+                        AND (expires_at IS NULL OR expires_at >= date('now'))
+                      ORDER BY COALESCE(completed_at, sent_at) DESC LIMIT 1""", (client_id,))
+
+
+def pdf_da_waiver(con, w):
+    """Baixa o PDF assinado do DocuSign UMA vez e guarda em ~/.urace/waivers (600).
+    Depois disso o card do cliente e o anexo do Asana usam o arquivo local."""
+    from command_center.providers import modulo
+    caminho = w["pdf_path"] if "pdf_path" in w.keys() else None
+    if caminho and os.path.isfile(caminho):
+        return caminho
+    env = um(con, """SELECT external_id FROM entity_links
+                     WHERE entity_type='waiver' AND entity_id=? AND system='docusign'""", (w["id"],))
+    if not env:
+        raise ValueError("waiver sem envelope no DocuSign")
+    pdf = modulo("docusign").baixar_documento_humano(env["external_id"])
+    os.makedirs(PASTA_WAIVERS, mode=0o700, exist_ok=True)
+    caminho = os.path.join(PASTA_WAIVERS, f"{re.sub(r'[^A-Za-z0-9._-]+', '_', env['external_id'])[:80]}.pdf")
+    with open(caminho, "wb") as f:
+        f.write(pdf)
+    os.chmod(caminho, 0o600)
+    atualizar(con, "waivers", w["id"], pdf_path=caminho)
+    return caminho
+
+
+RX_SUBTAREFA_WAIVER = r"waiver"      # "Signed waiver?" e variações
+
+
+def _marcar_waiver_no_asana(gid):
+    """Fecha a subtarefa da waiver na tarefa (dono, 16/09: "já marcar na tarefa daquele
+    serviço que a waiver já está assinada"). Nunca derruba quem chamou: tarefa sem essa
+    subtarefa só devolve o motivo."""
+    from command_center.providers import modulo
+    anterior = os.environ.get("APLICAR")
+    os.environ["APLICAR"] = "1"
+    try:
+        m = modulo("asana")
+        if not hasattr(m, "concluir_subtarefa_sistema"):
+            return {"aplicado": False, "motivo": "porta de subtarefa indisponível"}
+        return m.concluir_subtarefa_sistema(gid, padrao=RX_SUBTAREFA_WAIVER)
+    except Exception as e:
+        return {"aplicado": False, "motivo": f"{type(e).__name__}: {str(e)[:160]}"}
+    finally:
+        if anterior is None:
+            os.environ.pop("APLICAR", None)
+        else:
+            os.environ["APLICAR"] = anterior
+
+
+def _anexar_no_asana(gid, caminho):
+    """Anexo é ato mecânico do painel: APLICAR liberado só nesta chamada."""
+    from command_center.providers import modulo
+    anterior = os.environ.get("APLICAR")
+    os.environ["APLICAR"] = "1"
+    try:
+        return modulo("asana").asana_anexar_arquivo(gid, caminho)
+    finally:
+        if anterior is None:
+            os.environ.pop("APLICAR", None)
+        else:
+            os.environ["APLICAR"] = anterior
+
+
+def anexar_waiver_em_gid(con, gid, client_id):
+    """Tarefa recém-criada pela IA: ainda não existe no espelho, mas a waiver já vai junto."""
+    w = waiver_do_cliente(con, client_id) if client_id else None
+    if not w:
+        return {"ok": False, "motivo": "cliente sem waiver assinada na validade"}
+    r = _anexar_no_asana(gid, pdf_da_waiver(con, w))
+    sub = _marcar_waiver_no_asana(gid)
+    t = um(con, """SELECT entity_id FROM entity_links
+                   WHERE entity_type='task' AND system='asana' AND external_id=?""", (gid,))
+    if t:
+        atualizar(con, "tasks", t["entity_id"], waiver_id=w["id"])
+    auditar(con, "task.waiver_anexada", "system", entity_type="task", entity_id=(t["entity_id"] if t else None),
+            detail={"waiver_id": w["id"], "signer": w["signer_name"], "gid": gid, "anexo_gid": r.get("anexo_gid"),
+                    "subtarefa": sub.get("subtarefa") if sub.get("aplicado") else sub.get("motivo")})
+    return {"ok": True, "waiver_id": w["id"], "anexo": True, "signer": w["signer_name"], "subtarefa": sub, **r}
+
+
+def anexar_waiver_na_tarefa(con, task_id):
+    """Toda tarefa criada leva a waiver assinada do piloto junto (dono, 10/09): o painel
+    busca a waiver do cliente, guarda o PDF no card e anexa na tarefa do Asana.
+    Mecânico: não passa pelo agente nem por aprovação, e nunca anexa duas vezes."""
+    from command_center.providers import modulo
+    t = um(con, """SELECT t.*, l.external_id AS gid FROM tasks t
+                   LEFT JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
+                   WHERE t.id=?""", (task_id,))
+    if not t:
+        return {"ok": False, "motivo": "tarefa não existe no painel"}
+    if not t["client_id"]:
+        return {"ok": False, "motivo": "tarefa sem cliente"}
+    if t["waiver_id"]:
+        return {"ok": False, "motivo": "waiver já anexada"}
+    w = waiver_do_cliente(con, t["client_id"])
+    if not w:
+        return {"ok": False, "motivo": "cliente sem waiver assinada na validade"}
+    caminho = pdf_da_waiver(con, w)
+    if not t["gid"]:
+        atualizar(con, "tasks", task_id, waiver_id=w["id"])   # no card já vale; no Asana não há o que anexar
+        return {"ok": True, "waiver_id": w["id"], "anexo": False, "motivo": "tarefa sem gid do Asana"}
+    r = _anexar_no_asana(t["gid"], caminho)
+    sub = _marcar_waiver_no_asana(t["gid"])          # "Signed waiver?" fecha junto com o anexo
+    atualizar(con, "tasks", task_id, waiver_id=w["id"])
+    auditar(con, "task.waiver_anexada", "system", entity_type="task", entity_id=task_id,
+            detail={"waiver_id": w["id"], "signer": w["signer_name"], "gid": t["gid"], "anexo_gid": r.get("anexo_gid"),
+                    "subtarefa": sub.get("subtarefa") if sub.get("aplicado") else sub.get("motivo")})
+    return {"ok": True, "waiver_id": w["id"], "anexo": True, "signer": w["signer_name"], "subtarefa": sub, **r}
+
+
+def _nomes_no_texto(texto):
+    return re.sub(r"\s+", " ", (texto or "")).lower()
+
+
+def waiver_do_email(con, email_id, mailbox, thread_id, texto):
+    """E-mail do DocuSign que é waiver (dono, 16/09): descobrir DE QUEM é, ligar o e-mail ao
+    cliente, garantir o PDF no card e a waiver nas tarefas dele.
+
+    A fonte de verdade da waiver continua sendo o DocuSign (sync). O e-mail é o gatilho e o
+    caminho de reserva: se a API não devolver o PDF, ele sai do anexo do próprio e-mail.
+    Identificação: o nome do signatário (ou do menor) da waiver mais recente que aparece no
+    assunto/corpo. Sem casar com ninguém, o e-mail fica para uma pessoa — nunca chuta."""
+    from command_center.providers import modulo
+    alvo = _nomes_no_texto(texto)
+    escolhida = None
+    for w in todos(con, """SELECT * FROM waivers WHERE COALESCE(hidden,0)=0 AND client_id IS NOT NULL
+                           ORDER BY COALESCE(completed_at, sent_at, synced_at) DESC LIMIT 200"""):
+        for nome in (w["signer_name"], w["minor_name"] if "minor_name" in w.keys() else None):
+            if nome and len(nome.strip()) >= 5 and nome.strip().lower() in alvo:
+                escolhida = w
+                break
+        if escolhida:
+            break
+    if not escolhida:
+        return {"ok": False, "motivo": "nenhum signatário conhecido aparece no e-mail"}
+    atualizar(con, "emails", email_id, client_id=escolhida["client_id"])
+    saida = {"ok": True, "waiver_id": escolhida["id"], "client_id": escolhida["client_id"],
+             "signer": escolhida["signer_name"], "pdf": None, "tarefas": []}
+    if escolhida["status"] == "completed":
+        try:
+            saida["pdf"] = pdf_da_waiver(con, escolhida)                      # a API do DocuSign primeiro
+        except Exception as e:
+            saida["pdf_api_erro"] = f"{type(e).__name__}: {str(e)[:120]}"
+            try:                                                               # reserva: o anexo do e-mail
+                g = modulo("gmail")
+                for a in g.anexos_da_thread(mailbox, thread_id):
+                    dados = g.baixar_anexo_bytes(mailbox, a["message_id"], a["attachment_id"])
+                    if not dados.startswith(b"%PDF"):
+                        continue
+                    os.makedirs(PASTA_WAIVERS, mode=0o700, exist_ok=True)
+                    caminho = os.path.join(PASTA_WAIVERS, f"email-{escolhida['id']}-{re.sub(r'[^A-Za-z0-9._-]+', '_', a['nome'] or 'waiver.pdf')[:80]}")
+                    with open(caminho, "wb") as f:
+                        f.write(dados)
+                    os.chmod(caminho, 0o600)
+                    atualizar(con, "waivers", escolhida["id"], pdf_path=caminho)
+                    saida["pdf"] = caminho
+                    saida["pdf_origem"] = "anexo do e-mail"
+                    break
+            except Exception as e:
+                saida["pdf_anexo_erro"] = f"{type(e).__name__}: {str(e)[:120]}"
+        saida["tarefas"] = waiver_assinada_nas_tarefas(con, escolhida["id"]).get("tarefas", [])
+    auditar(con, "email.waiver_ligada", "system", entity_type="email", entity_id=email_id,
+            detail={k: v for k, v in saida.items() if k != "tarefas"} | {"tarefas": len(saida["tarefas"])})
+    return saida
+
+
+def waiver_assinada_nas_tarefas(con, waiver_id):
+    """A waiver chegou assinada: vai para TODAS as tarefas abertas do cliente que ainda
+    não a têm — anexo + subtarefa. Dono, 16/09: "se o cliente já tem a waiver assinada,
+    nas próximas tarefas daquele cliente já deixar pré-marcado". As próximas o
+    `task.created` cobre; esta função cobre as que já existiam quando ela chegou."""
+    w = um(con, "SELECT * FROM waivers WHERE id=?", (waiver_id,))
+    if not w or w["status"] != "completed" or not w["client_id"]:
+        return {"ok": False, "motivo": "waiver não assinada ou sem cliente", "tarefas": []}
+    feitas = []
+    for t in todos(con, """SELECT id FROM tasks WHERE client_id=? AND status='open' AND waiver_id IS NULL
+                           ORDER BY due_on""", (w["client_id"],)):
+        try:
+            r = anexar_waiver_na_tarefa(con, t["id"])
+            feitas.append({"task_id": t["id"], **{k: r.get(k) for k in ("ok", "anexo", "motivo")}})
+        except Exception as e:
+            feitas.append({"task_id": t["id"], "ok": False, "motivo": f"{type(e).__name__}: {str(e)[:120]}"})
+    return {"ok": True, "waiver_id": waiver_id, "tarefas": feitas}
+
+
+def processar_eventos(con, user_id, limite=3):
+    """Transforma eventos NEW em comandos para o agente (um por evento), respeitando as regras."""
+    disparados = 0
+    for ev in todos(con, "SELECT * FROM ai_events WHERE status='NEW' ORDER BY id LIMIT ?", (limite,)):
+        if ev["kind"] == "task.created" and regra_ligada_nome(con, "waiver_na_tarefa"):
+            try:                                          # mecânico e independente da IA: a waiver vai junto
+                anexar_waiver_na_tarefa(con, ev["entity_id"])
+            except Exception as e:
+                auditar(con, "task.waiver_anexada.falhou", "system", entity_type="task", entity_id=ev["entity_id"],
+                        detail={"erro": f"{type(e).__name__}: {str(e)[:200]}"})
+        if ev["kind"] == "waiver.completed" and regra_ligada_nome(con, "waiver_na_tarefa"):
+            try:                                          # mecânico: a assinada entra nas tarefas que já existiam
+                r = waiver_assinada_nas_tarefas(con, ev["entity_id"])
+                auditar(con, "waiver.assinada.tarefas", "system", entity_type="waiver", entity_id=ev["entity_id"],
+                        detail={"tarefas": r.get("tarefas", [])[:10]})
+            except Exception as e:
+                auditar(con, "task.waiver_anexada.falhou", "system", entity_type="waiver", entity_id=ev["entity_id"],
+                        detail={"erro": f"{type(e).__name__}: {str(e)[:200]}"})
+        if not regra_ligada(con, ev["kind"]):
+            atualizar(con, "ai_events", ev["id"], status="SKIPPED", handled_at=agora(), note="regra desligada")
+            continue
+        if ev["kind"] == "invoice.paid":                  # mecânico: o painel resolve, sem acordar o agente
+            try:
+                r = marcar_pagamento_no_asana(con, ev["entity_id"])
+                nota = (f"subtarefa \"{r.get('subtarefa')}\" concluída em {r.get('tarefa')}" if r.get("ok")
+                        else f"não marcada: {r.get('motivo') or r.get('subtarefa') or '?'}")
+            except Exception as e:
+                nota = f"falhou: {type(e).__name__}: {str(e)[:200]}"
+            atualizar(con, "ai_events", ev["id"], status="DONE", handled_at=agora(), note=nota[:300])
+            continue
+        texto = _prompt_evento(con, ev)
+        # UMA sessão por dia para todos os eventos: cada chave nova sobe outro sandbox (09/09: 6 containers)
+        session_key = f"agent:{ia.AGENTE}:eventos-{agora()[:10]}"
+        cid = inserir(con, "ai_commands", user_id=user_id, text=texto, session_key=session_key)
+        wid = inserir(con, "ai_workflows", command_id=cid, client_id=ev["client_id"], kind=ev["kind"], summary=ev["summary"])
+        atualizar(con, "ai_events", ev["id"], status="RUNNING", command_id=cid, handled_at=agora())
+        auditar(con, "ai.event", "system", user_id=user_id, entity_type="ai_event", entity_id=ev["id"],
+                detail={"kind": ev["kind"], "command_id": cid, "workflow_id": wid})
+        threading.Thread(target=_executa_evento, args=(ev["id"], cid, wid, texto, session_key, user_id), daemon=True).start()
+        disparados += 1
+    return disparados
+
+
+def _executa_evento(event_id, command_id, workflow_id, texto, session_key, user_id):
+    ia._executa(command_id, texto, session_key, user_id)
+    con = conectar()
+    try:
+        c = um(con, "SELECT status FROM ai_commands WHERE id=?", (command_id,))
+        ok = c and c["status"] == "DONE"
+        atualizar(con, "ai_events", event_id, status="DONE" if ok else "FAILED", handled_at=agora())
+        atualizar(con, "ai_workflows", workflow_id, status="DONE" if ok else "FAILED", finished_at=agora())
+        con.execute("UPDATE ai_actions SET workflow_id=? WHERE command_id=?", (workflow_id, command_id))
+    finally:
+        con.close()
+
+
+# ------------------------------------------------------------ instrução pelo balão
+def instruir(con, user_id, key, texto, item, lembrar):
+    """Comando com o contexto do item de atenção; opcionalmente vira memória."""
+    client_id = item.get("client_id")
+    entity = item.get("entity") or {}
+    if lembrar:
+        aprender(con, texto, user_id, client_id=client_id, entity_type=entity.get("type"), source_key=key)
+    prompt = (f"INSTRUÇÃO DO DONO sobre o item de atenção \"{item.get('title')}\" ({item.get('why', '')}):\n{texto.strip()}\n"
+              "Cumpra a instrução: consulte o que precisar e PROPONHA as ações (waiver, invoice, comentário, rascunho) com os dados exatos."
+              + _contexto_cliente(con, client_id) + aprendizados(con, client_id, entity.get("type")))
+    session_key = f"agent:{ia.AGENTE}:atencao-{user_id}-{agora()[:10]}"
+    cid = inserir(con, "ai_commands", user_id=user_id, text=prompt, session_key=session_key)
+    if client_id:
+        wid = inserir(con, "ai_workflows", command_id=cid, client_id=client_id, kind="instrucao", summary=item.get("title"))
+    else:
+        wid = None
+    auditar(con, "ai.instruct", f"user:{user_id}", user_id=user_id, entity_type="attention", entity_id=key,
+            detail={"text": texto[:300], "remember": bool(lembrar), "command_id": cid})
+    threading.Thread(target=_executa_instrucao, args=(cid, wid, prompt, session_key, user_id), daemon=True).start()
+    return cid
+
+
+def instruir_tarefa(con, user_id, task_id, texto, lembrar=False):
+    """Instrução dada DENTRO de uma tarefa do Asana (dono, 16/09): a IA age nessa tarefa,
+    e só nela. Vai com o gid, o título, a coluna, o cliente, as subtarefas e o que ela
+    tem de anexo — o que o modal mostra é o que a IA recebe. Comentar, fechar subtarefa,
+    anexar, mover: tudo com o gid desta tarefa; criar outra tarefa, nunca por aqui.
+    As travas do MCP continuam valendo (Matt tasks e ADM URACE não se tocam)."""
+    from command_center.providers import chamar
+    t = um(con, "SELECT t.*, c.name AS client_name, c.pilot_name FROM tasks t LEFT JOIN clients c ON c.id=t.client_id WHERE t.id=?", (task_id,))
+    if not t:
+        return None
+    l = um(con, "SELECT external_id, deep_link FROM entity_links WHERE entity_type='task' AND entity_id=? AND system='asana'", (task_id,))
+    gid = l["external_id"] if l else None
+    subs, notas = [], None
+    if gid:
+        try:
+            full = chamar("asana", "asana_tarefa", gid=gid)
+            notas = (full.get("notas") or "")[:1500] or None
+            subs = [{"gid": s.get("gid"), "nome": s.get("nome"), "concluida": bool(s.get("concluida")), "vence_em": s.get("vence_em")}
+                    for s in (full.get("subtarefas_lista") or [])][:40]
+        except Exception:
+            pass                                             # sem Asana ao vivo: vai o espelho
+    if lembrar:
+        aprender(con, texto, user_id, client_id=t["client_id"], entity_type="task", source_key=f"task:{task_id}")
+    tarefa = {"gid": gid, "titulo": t["title"], "coluna": t["section"], "vence_em": t["due_on"], "status": t["status"],
+              "responsavel": t["assignee"], "cliente": t["client_name"], "piloto": t["pilot_name"],
+              "subtarefas": f"{t['subtasks_done'] or 0}/{t['subtasks_total'] or 0}", "link": l["deep_link"] if l else None}
+    prompt = (f"INSTRUÇÃO DO DONO dentro da tarefa do Asana \"{t['title']}\" (gid {gid or 'sem vínculo'}):\n{texto.strip()}\n"
+              "Aja NESTA tarefa e só nela: comentário, subtarefa (concluir/criar), anexo, data, mover de coluna — sempre com este gid. "
+              "Não crie outra tarefa por este caminho. Consulte o que precisar e PROPONHA as ações com os dados exatos."
+              "\nTAREFA: " + json.dumps(tarefa, ensure_ascii=False)
+              + ("\nSUBTAREFAS (gid · nome · concluída · vence): " + json.dumps(subs, ensure_ascii=False) if subs else "")
+              + ("\nDESCRIÇÃO DA TAREFA:\n" + notas if notas else "")
+              + _contexto_cliente(con, t["client_id"]) + aprendizados(con, t["client_id"], "task"))
+    session_key = f"agent:{ia.AGENTE}:tarefa-{user_id}-{agora()[:10]}"
+    cid = inserir(con, "ai_commands", user_id=user_id, text=prompt, session_key=session_key)
+    wid = inserir(con, "ai_workflows", command_id=cid, client_id=t["client_id"], kind="instrucao", summary=t["title"]) if t["client_id"] else None
+    auditar(con, "ai.instruct", f"user:{user_id}", user_id=user_id, entity_type="task", entity_id=task_id,
+            detail={"text": texto[:300], "remember": bool(lembrar), "command_id": cid, "gid": gid})
+    threading.Thread(target=_executa_instrucao, args=(cid, wid, prompt, session_key, user_id), daemon=True).start()
+    return cid
+
+
+def _executa_instrucao(command_id, workflow_id, texto, session_key, user_id):
+    ia._executa(command_id, texto, session_key, user_id)
+    if workflow_id:
+        con = conectar()
+        try:
+            c = um(con, "SELECT status FROM ai_commands WHERE id=?", (command_id,))
+            atualizar(con, "ai_workflows", workflow_id, status="DONE" if c and c["status"] == "DONE" else "FAILED", finished_at=agora())
+            con.execute("UPDATE ai_actions SET workflow_id=? WHERE command_id=?", (workflow_id, command_id))
+        finally:
+            con.close()
+
+
+# ------------------------------------------------------------ execução de ação aprovada
+def _tarefa_da_invoice(con, acao_row, args):
+    """gid da tarefa do Asana a que a invoice pertence: a tarefa criada no mesmo comando,
+    ou a tarefa do cliente com a mesma data de vencimento."""
+    if acao_row.get("command_id"):
+        for x in todos(con, "SELECT result FROM ai_actions WHERE command_id=? AND action IN ('asana_criar_do_modelo','asana_criar_tarefa') AND status='DONE'", (acao_row["command_id"],)):
+            try:
+                gid = (json.loads(x["result"] or "{}")).get("gid")
+            except ValueError:
+                gid = None
+            if gid:
+                return gid
+    email = (args.get("email") or "").lower()
+    data = args.get("vence_em")
+    c = um(con, "SELECT id FROM clients WHERE LOWER(email)=? OR LOWER(email_alt)=?", (email, email)) if email else None
+    if c and data:
+        t = um(con, """SELECT l.external_id FROM tasks t JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
+                       WHERE t.client_id=? AND t.due_on=? ORDER BY t.id DESC LIMIT 1""", (c["id"], data))
+        if t:
+            return t["external_id"]
+    return None
+
+
+def executar_acao(aid, user_id):
+    """Roda uma ação APPROVED pelo módulo do MCP (sem passar pelo agente).
+    Precisa de args estruturados no payload; sem eles, devolve o que falta."""
+    from command_center.providers import NaoConectado, chamar
+    con = conectar()
+    try:
+        a = um(con, "SELECT * FROM ai_actions WHERE id=?", (aid,))
+        if not a or a["status"] != "APPROVED":
+            return
+        payload = json.loads(a["payload"] or "{}")
+        args = payload.get("args")
+        atualizar(con, "ai_actions", aid, status="RUNNING")
+        if not isinstance(args, dict) or not args:
+            atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(),
+                      result="Sem argumentos estruturados: a IA descreveu a ação mas não deu os campos exatos. Peça no AI Command: 'refaça a ACAO com os argumentos em JSON'.")
+            return
+        from command_center.api import acoes as _ac
+        acao = _ac.nome_canonico(a["action"])
+        acao, args = _ac.converter(acao, args)
+        args, sobrando = _ac.ajustar_aos_parametros(acao, args)
+        if sobrando:
+            auditar(con, "action.args_ajustados", "system", entity_type="ai_action", entity_id=aid, detail={"acao": acao, "descartados": sobrando})
+        sistema = acao.split("_")[0]
+        if sistema in ("painel", "venda"):             # ação do próprio painel (unir, varrer, lixeira, vendas do closer)
+            from command_center.api import acoes_painel
+            if acao not in acoes_painel.ACOES:
+                raise ValueError(f"ação do painel desconhecida: {acao}")
+            res = acoes_painel.executar(con, user_id, acao, args)
+            ok = bool(res.get("aplicado"))
+            atualizar(con, "ai_actions", aid, status="DONE" if ok else "FAILED", finished_at=agora(), result=json.dumps(res, ensure_ascii=False)[:2000])
+            auditar(con, "action.executed" if ok else "action.failed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid,
+                    detail={"action": acao, "args": {k: (str(v)[:80]) for k, v in args.items()}, "res": str(res)[:300]})
+            con.commit()
+            return
+        if acao == "qbo_lembrete_invoice":             # só invoice com lembrete LIGADO pelo gerente (dono, 17/09)
+            from command_center.api import lembretes
+            lemb = lembretes.lembrete_do_qbo(con, str(args.get("id")))
+            if not lemb or not lemb["enabled"]:
+                atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(),
+                          result="RECUSADO: esta invoice não tem lembrete ligado no painel. Quem escolhe as invoices é o gerente; o disparo é da IA.")
+                auditar(con, "action.failed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"action": acao, "motivo": "sem lembrete ligado"})
+                return
+        if acao == "asana_mover_para_finished":       # açúcar SAFE: só para a coluna Finished Services
+            from command_center.providers.sync import SECAO_FINISHED
+            acao, args = "asana_mover_para_secao", {"gid": args.get("gid"), "secao_gid": SECAO_FINISHED}
+        sistema = acao.split("_")[0]
+        if sistema == "qbo":
+            sistema = "quickbooks"
+        if sistema == "google":
+            sistema = "gmail"
+        anterior = os.environ.get("APLICAR")
+        os.environ["APLICAR"] = "1"                 # aprovação humana = autorização, só nesta chamada
+        try:
+            res = chamar(sistema, acao, **args)
+        finally:
+            if anterior is None:
+                os.environ.pop("APLICAR", None)
+            else:
+                os.environ["APLICAR"] = anterior
+        atualizar(con, "ai_actions", aid, status="DONE", finished_at=agora(), result=json.dumps(res, ensure_ascii=False)[:2000])
+        auditar(con, "action.executed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid,
+                detail={"action": a["action"], "args": {k: (str(v)[:80]) for k, v in args.items()}})
+        if acao in ("qbo_criar_e_enviar_invoice", "qbo_criar_invoice") and isinstance(res, dict) and res.get("link"):
+            try:                                              # o link da invoice volta para a linha 'Invoice link:' da tarefa
+                gid = _tarefa_da_invoice(con, a, args)
+                if gid:
+                    from command_center.providers import modulo
+                    texto_inv = " ".join(str(x) for x in [args.get("memo")] + [l.get("descricao") for l in (args.get("linhas") or []) if isinstance(l, dict)] if x).lower()
+                    deposito = bool(re.search(r"deposit|dep[oó]sito|cau[çc][ãa]o", texto_inv))
+                    modulo("asana").preencher_invoice_na_tarefa(gid, res["link"], res.get("total"), deposito=deposito)
+                    auditar(con, "asana.invoice_link", "system", entity_type="ai_action", entity_id=aid, detail={"gid": gid, "link": res["link"], "campo": "Security deposit" if deposito else "Invoice link"})
+                    if acao == "qbo_criar_e_enviar_invoice":   # criar só grava o link; enviar vira rastro
+                        from command_center.api import rastro as _rastro
+                        _rastro.no_asana(con, gid, f"Invoice {res.get('doc_number') or ''} enviada".replace("  ", " ").strip(),
+                                         {"link": res["link"]})
+            except Exception as e:
+                auditar(con, "asana.invoice_link.failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
+        if acao == "qbo_lembrete_invoice" and isinstance(res, dict):
+            try:                                              # o painel marca o próximo dia e audita o envio
+                from command_center.api import lembretes
+                lembretes.registrar_envio(con, str(args.get("id")), res, por="ia")
+            except Exception as e:
+                auditar(con, "invoice.reminder.bookkeeping_failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
+        if acao == "asana_criar_corrida" and isinstance(res, dict) and res.get("gid"):
+            try:                                              # a corrida entra no calendário do painel, como a criada pelo botão
+                from command_center.providers import sync as _sy
+                tid, _ = _sy._grava_tarefa(con, res["gid"], dict(client_id=None, title=res.get("nome"), project="U-RACE", section="RACES", section_gid=res.get("secao_gid"),
+                                                                status="open", due_on=res.get("vence_em"), subtasks_total=res.get("subtarefas"), subtasks_done=0, synced_at=agora()))
+                inserir(con, "races", source="asana", task_id=tid, name=res.get("nome"), series=res.get("serie"), track=res.get("pista"), city=res.get("cidade"),
+                        date_start=res.get("vence_em"), date_end=res.get("fim"), notes=None)
+                auditar(con, "race.create", "ia", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"gid": res["gid"], "nome": res.get("nome")})
+            except Exception as e:
+                auditar(con, "race.create.mirror_failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
+        if acao in ("asana_criar_do_modelo", "asana_criar_tarefa") and isinstance(res, dict) and res.get("gid"):
+            try:                                              # toda tarefa criada leva a waiver assinada do piloto junto
+                cmd = um(con, "SELECT text FROM ai_commands WHERE id=?", (a["command_id"],)) or {}
+                cid_ = cliente_citado(con, " ".join(x for x in [args.get("nome"), args.get("notas"), cmd.get("text")] if x))
+                if cid_ and regra_ligada_nome(con, "waiver_na_tarefa"):
+                    anexar_waiver_em_gid(con, res["gid"], cid_)
+            except Exception as e:
+                auditar(con, "task.waiver_anexada.falhou", "system", entity_type="ai_action", entity_id=aid, detail={"erro": f"{type(e).__name__}: {str(e)[:200]}"})
+    except NaoConectado as e:
+        atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(), result=f"não conectado: {e}")
+    except Exception as e:
+        atualizar(con, "ai_actions", aid, status="FAILED", finished_at=agora(), result=f"{type(e).__name__}: {str(e)[:500]}")
+        auditar(con, "action.failed", f"user:{user_id}", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:300]})
+        try:                                              # caiu durante o uso da IA: re-sonda só esse sistema
+            from command_center.api import agenda
+            agenda.sondar_apos_falha(con, sistema, str(e))
+        except Exception:
+            pass
+    finally:
+        con.close()
+
+
+def executar_safe(con, command_id, user_id):
+    """Ações SAFE com argumentos executam sozinhas, logo depois de propostas.
+    É a autocorreção: o que não precisa de humano não espera humano."""
+    ids = [a["id"] for a in todos(con, "SELECT id, payload FROM ai_actions WHERE command_id=? AND policy='SAFE' AND status='PROPOSED'", (command_id,))
+           if isinstance((json.loads(a["payload"] or "{}")).get("args"), dict)]
+    for aid in ids:
+        atualizar(con, "ai_actions", aid, status="APPROVED")
+        auditar(con, "action.auto", "system", user_id=user_id, entity_type="ai_action", entity_id=aid, detail={"policy": "SAFE"})
+    for aid in ids:
+        executar_acao(aid, user_id)
+    return len(ids)
+
+
+def eventos_do_dia_1(con, hoje=None):
+    """No dia 1 do mês, um evento billing.monthly por cliente com plano mensal (uma vez por mês)."""
+    from datetime import date
+    hoje = hoje or date.today()
+    if hoje.day != 1:
+        return 0
+    mes = hoje.strftime("%Y-%m")
+    n = 0
+    for c in todos(con, "SELECT id, name, pilot_name, monthly_plan FROM clients WHERE monthly_plan IS NOT NULL AND monthly_plan<>'' AND status IN ('ACTIVE','NEW','PENDING')"):
+        if um(con, "SELECT 1 FROM ai_events WHERE kind='billing.monthly' AND entity_type='client' AND entity_id=? AND summary LIKE ?", (c["id"], f"mensalidade {mes}%")):
+            continue
+        # a chave única é (kind, tipo, id): para permitir um por mês, o id do evento leva o mês no summary e o entity_id é o cliente
+        con.execute("DELETE FROM ai_events WHERE kind='billing.monthly' AND entity_type='client' AND entity_id=? AND status IN ('DONE','FAILED','SKIPPED')", (c["id"],))
+        registrar_evento(con, "billing.monthly", "client", c["id"], c["id"], f"mensalidade {mes}: {c['pilot_name'] or c['name']} — plano {c['monthly_plan']}")
+        n += 1
+    return n

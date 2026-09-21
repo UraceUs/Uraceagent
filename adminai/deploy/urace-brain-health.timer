@@ -1,0 +1,9 @@
+[Unit]
+Description=Mede a forma do grafo toda segunda de manha
+
+[Timer]
+OnCalendar=Mon 06:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

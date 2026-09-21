@@ -1,0 +1,54 @@
+Você está no navegador, logado na minha conta do Intuit Developer (https://developer.intuit.com), no app "ia app" (workspace Urace, AppID 94f253e1-d2db-4d92-95df-603f49558833). Objetivo: destravar as credenciais de Production. Faça só o que está aqui. Se aparecer uma pergunta ou campo que não está neste roteiro, NÃO invente: anote a pergunta exatamente como está e siga para o próximo item. No fim, me devolva o relatório.
+
+PARTE A — Perfil do Developer Portal ("Review your Intuit Developer Portal Profile and verify your email")
+Preencha os campos vazios com os dados da empresa e deixe os já preenchidos como estão (Italo Silveira, urace@urace.us, +1 407-485-6784):
+- Address: 6149 Cyril Ave
+- Address 2: (deixe vazio)
+- Country: United States
+- State or province: Florida
+- City: Orlando
+- Zip code: 32809
+Clique em "Next" / salvar. Se o botão "Update" ao lado do e-mail for necessário para verificar o e-mail, clique nele. Se a Intuit disser que mandou um link de verificação, abra https://mail.google.com/mail/u/0/ (caixa urace@urace.us), procure o e-mail da Intuit dos últimos minutos, clique no link de verificação, e volte ao portal para confirmar que o item ficou marcado como concluído.
+
+PARTE B — Regulated industries ("Confirm regulated industries")
+Em Settings do app, confirme que a resposta é NÃO / "None" para indústrias reguladas (o app é de uma escola e equipe de kart; não atende saúde, finanças reguladas, governo nem crédito). Se já estiver assim, apenas confirme.
+
+PARTE C — Redirect URI (pode ser feito com as chaves ainda bloqueadas)
+Em Settings → Redirect URIs de PRODUCTION, adicione exatamente e salve:
+https://urace-bridge.duckdns.org/ops/api/qbo/callback
+Mantenha as URIs que já existirem.
+
+PARTE D — Compliance → "Continue questionnaire" (App assessment questionnaire)
+Responda com a verdade abaixo. Onde a pergunta for de múltipla escolha, escolha a opção que corresponde; onde for texto livre, use o texto indicado.
+- Nome/descrição do app: "URACE Administrative AI" — Internal operations tool for URACE.US INC. Prepares invoices and estimates from the company's own service records, tracks outstanding balances, and keeps accounting data consistent with the company's project management and document signing systems. Not distributed to third parties.
+- Escopos usados: apenas com.intuit.quickbooks.accounting
+- Acessa dados de pagamento, cartão ou conta bancária? Não
+- Processa pagamentos? Não
+- Armazena dados do QuickBooks? Apenas temporariamente para completar cada tarefa, mais logs operacionais por até 90 dias
+- Compartilha dados com terceiros? Apenas provedores de infraestrutura: Amazon Web Services (hospedagem) e Anthropic (modelo de linguagem)
+- Vende ou aluga dados? Não
+- Usa dados para treinar modelos? Não
+- Quantas empresas/clientes se conectam? Uma: a própria URACE.US INC. Não há clientes terceiros
+- O app é público na Intuit App Store? Não, uso interno
+- Onde ficam os tokens? Em arquivo de ambiente no servidor, permissão restrita (600), fora de controle de versão
+- Transporte criptografado? Sim, HTTPS/TLS
+- Acesso ao servidor: SSH com chave; painel administrativo com login, sessões revogáveis e trilha de auditoria
+- Hospedagem: Amazon Web Services, Estados Unidos
+- Política de privacidade: https://urace-bridge.duckdns.org/legal/privacy.html
+- EULA / termos: https://urace-bridge.duckdns.org/legal/eula.html
+- Contato de segurança / privacidade: urace@urace.us
+- Plano de resposta a incidentes: acesso revogado e tokens rotacionados imediatamente; a Intuit e os usuários afetados são notificados em até 72 horas
+- Retenção e exclusão: dados do QuickBooks não são copiados para armazenamento permanente; logs são apagados após 90 dias; a desconexão do app revoga o token
+Se alguma pergunta pedir upload de documento, certificação (SOC 2, ISO), pentest, ou algo que exija evidência que não temos, NÃO envie nada e NÃO marque "sim": anote a pergunta e pule. Não conclua/submeta o questionário se houver perguntas sem resposta; salve o progresso e me diga quais ficaram.
+Se todas as perguntas tiverem resposta, submeta o questionário.
+
+PARTE E — Verificar
+Volte a "Keys & credentials" → "Production". Se o cadeado sumiu: copie o Client ID e o Client Secret e me devolva os dois. Se ainda estiver bloqueado: me diga qual porcentagem cada seção mostra agora (App details e Compliance) e o que falta.
+
+RELATÓRIO
+- Perfil: endereço salvo (sim/não) | e-mail verificado (sim/não/aguardando link)
+- Regulated industries confirmado (sim/não)
+- Redirect URI salva (sim/não)
+- Questionário: submetido (sim/não) | perguntas que ficaram sem resposta (texto exato de cada uma)
+- Production: destravado (sim/não) | Client ID | Client Secret | porcentagens
+- Qualquer aviso da Intuit

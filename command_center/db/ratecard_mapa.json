@@ -1,0 +1,147 @@
+{
+ "revisado_em": "2026-09-18",
+ "revisado_por": "Italo Silveira, na página de preços",
+ "pares": [
+  {
+   "rc": "Engine Rental — 60cc — National Event",
+   "qbo": "Rental:60cc Engine Rental | National Event",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "lista de 18/09, valor direto da Rate Card"
+  },
+  {
+   "rc": "Engine Rental — 100cc — National Event",
+   "qbo": "Rental:100cc Engine Rental | National Event",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "aprovado na página de preços, 18/09"
+  },
+  {
+   "rc": "Shop — Tire Change (labor)",
+   "qbo": "Service:Tire change labor",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "aprovado na página de preços, 18/09"
+  },
+  {
+   "rc": "Shop — Labor (hourly)",
+   "qbo": "Service:Shop hour",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "aprovado na página de preços, 18/09"
+  },
+  {
+   "rc": "Oil change w/ friction reducer",
+   "qbo": "Service:Motor oil change",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "dono confirmou: é o mesmo item (18/09)"
+  },
+  {
+   "rc": "SKUSA Winter Series IAME (10% discounted, 2 races)",
+   "qbo": "Service:SKUSA Winter Series RD1&2 | X30 @OKC",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "dono confirmou: é o mesmo item (18/09)"
+  },
+  {
+   "rc": "Shop — Cleaning",
+   "qbo": "Service:Cleaning, lube and shop supplies",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "dono confirmou: é o mesmo item (18/09)"
+  },
+  {
+   "rc": "Exclusive Mechanic · Club event - Orlando",
+   "qbo": "Service:Exclusive mechanic support (Orlando Club Event | Pratice)",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "dono confirmou: é o mesmo item (18/09) — o nome do item tem 'Pratice' escrito errado"
+  },
+  {
+   "rc": "Team Fee",
+   "qbo": "team fee",
+   "qbo_id": null,
+   "acao": "atualizar",
+   "porque": "dono confirmou: é o mesmo item (18/09)"
+  },
+  {
+   "rc": "Academy Contract — 4 Stroke — 6 Months / 27 sessions",
+   "qbo": "Service:Driving Experience (4 Stroke_6 Sessions)",
+   "qbo_id": null,
+   "acao": "ignorar",
+   "porque": "dono (18/09): o valor do contrato é dividido em 6 invoices, uma por mês — não é preço de item"
+  }
+ ],
+ "correcoes": [
+  {
+   "qbo": "Service:State Events (3 days / Extra day at $600)",
+   "atual": 2.4,
+   "novo": 2400.0,
+   "porque": "dono, 18/09: $2.400"
+  },
+  {
+   "qbo": "Service:FLKC Arrive and drive JR/SR",
+   "atual": 4.1,
+   "novo": 4100.0,
+   "porque": "dono, 18/09: tabela Arrive & Drive, Junior/Senior State (3 days) = $4.100"
+  },
+  {
+   "qbo": "Service:Summer Camp_Junior/Senior Kart 2t (Age 11+)",
+   "atual": 3.63,
+   "novo": 3949.89,
+   "porque": "dono, 18/09: $3.949,89"
+  },
+  {
+   "qbo": "Travel Fee",
+   "atual": 0.85,
+   "novo": 250.0,
+   "porque": "dono, 18/09: 250 por dia"
+  }
+ ],
+ "familias": {
+  "Engine Rental": "criar",
+  "Summer Camp": "criar",
+  "Mechanic": "criar",
+  "Championship": "criar",
+  "Academy Session": "criar",
+  "Academy Extra Session": "criar",
+  "Engine Rental-60CC**": "criar",
+  "Engine Rental-100CC**": "criar",
+  "Engine Rental-125CC**": "criar",
+  "Kart Rental": "criar",
+  "Academy Contract": "criar",
+  "2 classes 1 Mechanic": "ignorar",
+  "Rotax Micro/Mini": "criar",
+  "Tires": "criar",
+  "Fuel": "ignorar",
+  "Misc / Parts": "criar",
+  "Team Fee": "criar",
+  "DIY": "ignorar",
+  "Cleaning": "criar",
+  "Wheel alignment": "criar",
+  "Frame jig": "criar",
+  "Orlando Club Event": "criar",
+  "FWT Rok Cup (10% discounted, 3 races)": "criar",
+  "FWT+Winter Series combo (15% discounted,": "criar",
+  "Las Vegas combo (10% discounted, 2 races": "criar",
+  "Practice week before FWT Rok Cup": "criar",
+  "Total": "ignorar",
+  "Last minute deal* - 1 Driver": "ignorar",
+  "Beforehand over the phone/site": "criar",
+  "Baby Kart Rental": "criar",
+  "Any 4 stroke kart rental": "criar",
+  "Any 2 stroke kart rental": "criar",
+  "Subtotal": "ignorar",
+  "TOTAL": "ignorar",
+  "Deposit Due": "ignorar",
+  "Balance Due": "ignorar",
+  "Shop": "ignorar",
+  "Arrive & Drive": "criar"
+ },
+ "notas": [
+  "Summer Camp: ao criar, onde a Rate Card diz 'per practice', o nome vai 'per additional practice' (dono, 18/09).",
+  "Orlando Club Event: o valor da linha é POR DIA (dono, 18/09).",
+  "Peça nunca muda de preço (dono, 18/09)."
+ ]
+}

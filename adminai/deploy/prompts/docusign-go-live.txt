@@ -1,0 +1,54 @@
+Você está logado no DocuSign com support@urace.us. Vamos pedir o GO-LIVE
+(promoção para produção) da Integration Key do app URACE Administrative AI.
+Siga na ordem, me reporte cada item, e NÃO invente valor: se um campo pedir
+algo que não está aqui, pare e me diga qual é.
+
+CONTEXTO QUE VOCÊ PRECISA:
+- Conta DEMO (desenvolvedor): https://admindemo.docusign.com/apps-and-keys
+- App: URACE Administrative AI
+- Integration Key: 126393c2-ae7a-4b73-9585-fed7e13cafe7
+- Já foram feitas 24 chamadas de API bem-sucedidas hoje (02/09) com essa chave.
+- A conta de PRODUÇÃO para onde a chave deve ser promovida se chama
+  "Urace US", Account ID 4261a166-3a91-4fb7-97c5-30257d657c52, mesmo
+  login support@urace.us.
+
+DADOS DA EMPRESA, se algum formulário pedir:
+- Empresa: URACE.US INC
+- Endereço: 6149 Cyril Ave, Orlando, FL 32809, USA
+- Telefone: (407) 250-2291
+- E-mail de contato: support@urace.us
+- Site / política de privacidade: https://urace-bridge.duckdns.org/legal/privacy.html
+- Descrição do app: Internal operations tool for URACE.US INC. Sends and
+  tracks liability waivers for karting services from the company's own
+  templates. Not distributed to third parties.
+- Tipo de integração: server-to-server (JWT), uso interno, uma única conta.
+
+1) ABRA https://admindemo.docusign.com/apps-and-keys e confirme que a URL
+   final é apps-d (demo). Localize o app URACE Administrative AI. Na coluna
+   "Go Live Status" deve estar "Not started" com o link "Complete required
+   details". Me reporte o que está escrito.
+
+2) CLIQUE em "Complete required details" (ou em Actions → Go Live, se for
+   o caso). Me reporte TODOS os campos que a tela pede antes de preencher.
+   Preencha só os que estão no bloco DADOS DA EMPRESA acima. Se houver
+   campo fora dessa lista, PARE e me diga.
+
+3) Quando a tela oferecer "Start Go-Live Review" / "Submit" / "Review API
+   calls", clique. A DocuSign roda uma revisão automática das últimas
+   chamadas. Me reporte o resultado EXATO:
+   - Se disser que passou, siga para o 4.
+   - Se disser que faltam chamadas ou que houve erros, PARE e me copie a
+     mensagem inteira. Não tente de novo.
+
+4) Se a revisão passar, a tela vai pedir para escolher a conta de
+   PRODUÇÃO que recebe a chave. Pode pedir login: use support@urace.us
+   (é a conta de produção, login em account.docusign.com, não account-d).
+   Escolha a conta "Urace US" com Account ID 4261a166-3a91-4fb7-97c5-30257d657c52.
+   Se aparecer mais de uma conta, PARE e me liste todas antes de escolher.
+
+5) Confirme a promoção e me reporte o status final que aparece em
+   "Go Live Status" e a Integration Key mostrada (deve continuar
+   126393c2-…).
+
+6) NÃO gere chaves novas, NÃO clique em "Add Secret Key", NÃO mexa em
+   templates, envelopes ou Redirect URIs. Só o go-live.
