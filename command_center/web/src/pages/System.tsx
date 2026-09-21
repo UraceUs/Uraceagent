@@ -211,6 +211,96 @@ function PapelEditavel({ u, self, onChanged }: { u: U; self: boolean; onChanged:
     {['ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>{busy && <Spinner />}</span>
 }
 
+// ------------------------------------------------------------------ chaves de API
+// Dono, 21/09: "preciso montar uma chave api desse command center". A chave aparece UMA vez,
+// na criação — depois só existe o hash no banco. A tela diz isso antes de o valor sumir.
+interface K {
+  id: string; name: string; role: string; created_at: string; expires_at: string | null
+  last_used_at: string | null; last_ip: string | null; uses: number; revoked_at: string | null
+  note: string | null; como: string; como_nome: string; papel_pessoa: string; criada_por: string | null
+}
+
+function Chaves({ usuarios }: { usuarios: U[] }) {
+  const { user } = useAuth()
+  const toast = useToast()
+  const perguntar = usePerguntar()
+  const { data, error, loading, reload } = useGet<K[]>('/keys')
+  const [f, setF] = useState({ name: '', role: 'VIEWER', user_id: '', days: '', note: '' })
+  const [nova, setNova] = useState<{ id: string; chave: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function criar(e: FormEvent) {
+    e.preventDefault(); setBusy(true); setErr(null)
+    try {
+      const r = await api.post<{ id: string; chave: string }>('/keys', {
+        name: f.name, role: f.role, note: f.note || null,
+        user_id: f.user_id ? Number(f.user_id) : null,
+        days: f.days ? Number(f.days) : null,
+      })
+      setNova(r); setF({ name: '', role: 'VIEWER', user_id: '', days: '', note: '' }); reload()
+    } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
+  }
+  async function revogar(k: K) {
+    if (!await perguntar({
+      titulo: `Revogar a chave "${k.name}"?`,
+      texto: 'Quem estiver usando esta chave recebe erro no pedido seguinte. Não dá para desfazer: crie outra.',
+      ok: 'Revogar', perigo: true,
+    })) return
+    try { await api.post(`/keys/${k.id}/revoke`); toast('Chave revogada.', 'ok'); reload() }
+    catch (ex) { toast((ex as ApiError).message, 'crit') }
+  }
+
+  const eu = usuarios.find(x => x.id === user?.id)
+  const tetoDe = (id: string) => usuarios.find(x => String(x.id) === id)?.role
+  return <Section title="Chaves de API" count={(data || []).filter(k => !k.revoked_at).length}>
+    {nova && <Banner tone="ok">
+      <div><b>Guarde agora: esta é a única vez que a chave aparece.</b> Ela não fica no banco — só o resumo dela.
+        Se perder, revogue esta e crie outra.</div>
+      <div className="row wrap" style={{ marginTop: 8 }}>
+        <code className="mono small" style={{ wordBreak: 'break-all' }}>{nova.chave}</code>
+        <button className="btn sm" onClick={() => navigator.clipboard?.writeText(nova.chave).then(() => toast('Chave copiada.', 'ok'))}>copiar</button>
+        <button className="btn sm" onClick={() => setNova(null)}>já guardei</button>
+      </div></Banner>}
+    <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
+      <div>
+        {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
+          (data || []).length === 0 ? <Empty>Nenhuma chave criada. O painel só responde a quem tem sessão.</Empty> :
+            <div className="tbl-wrap"><table className="tbl"><thead><tr>
+              <th>Nome</th><th>Papel</th><th>Age como</th><th>Último uso</th><th>Validade</th><th></th></tr></thead><tbody>
+              {(data || []).map(k => <tr key={k.id} style={k.revoked_at ? { opacity: .5 } : undefined}>
+                <td><div>{k.name}</div><div className="mono small muted">urk_{k.id}_…{k.note ? ` · ${k.note}` : ''}</div></td>
+                <td>{k.revoked_at ? <Chip tone="neutral">revogada</Chip> : <Chip tone={k.role === 'VIEWER' ? 'neutral' : 'accent'}>{ROLE_PT[k.role] || k.role}</Chip>}</td>
+                <td className="small">{k.como_nome}<div className="muted">{k.como}</div></td>
+                <td className="small">{k.last_used_at ? <>{fmtDateTime(k.last_used_at)}<div className="muted">{k.uses} uso(s){k.last_ip ? ` · ${k.last_ip}` : ''}</div></> : <span className="muted">nunca usada</span>}</td>
+                <td className="small">{k.expires_at ? fmtDateTime(k.expires_at) : <span className="muted">não expira</span>}</td>
+                <td>{!k.revoked_at && <button className="btn sm danger" onClick={() => revogar(k)}>Revogar</button>}</td></tr>)}
+            </tbody></table></div>}
+      </div>
+      <form className="stack" onSubmit={criar}>
+        {err && <Banner tone="crit">{err}</Banner>}
+        <div className="field"><label>Para que serve</label>
+          <input className="input" required placeholder="n8n — leitura do painel" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+        <div className="field"><label>Papel</label>
+          <select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>
+            {['VIEWER', 'OPERATOR', 'MANAGER', 'ADMIN'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>
+          <span className="small muted">{ROLE_O_QUE[f.role]}</span></div>
+        <div className="field"><label>Age como</label>
+          <select className="input" value={f.user_id} onChange={e => setF({ ...f, user_id: e.target.value })}>
+            <option value="">{eu ? `${eu.name} (você)` : 'você'}</option>
+            {usuarios.filter(x => x.id !== user?.id && x.active).map(x => <option key={x.id} value={x.id}>{x.name} — {ROLE_PT[x.role] || x.role}</option>)}</select>
+          <span className="small muted">A chave nunca alcança mais do que esta pessoa alcança{f.user_id && tetoDe(f.user_id) ? ` (${ROLE_PT[tetoDe(f.user_id)!]})` : ''}. Rebaixou a pessoa, a chave desce junto.</span></div>
+        <div className="field"><label>Validade (dias)</label>
+          <input className="input" type="number" min={1} placeholder="em branco = não expira" value={f.days} onChange={e => setF({ ...f, days: e.target.value })} /></div>
+        <div className="field"><label>Anotação</label>
+          <input className="input" placeholder="opcional: quem pediu, onde está usada" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></div>
+        <button className="btn primary" disabled={busy || !f.name.trim()}>{busy ? <Spinner /> : 'Criar chave'}</button>
+        <div className="small muted">Use em <code className="mono">Authorization: Bearer urk_…</code> ou <code className="mono">X-API-Key: urk_…</code>. Chave não precisa de CSRF e não abre sessão.</div>
+      </form>
+    </div>
+  </Section>
+}
+
 export function Users() {
   const { user } = useAuth()
   const perguntar = usePerguntar()
@@ -264,6 +354,7 @@ export function Users() {
         <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : 'Criar'}</button>
       </form></Section>
     </div>
+    <Chaves usuarios={data || []} />
   </>
 }
 

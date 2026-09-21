@@ -215,8 +215,116 @@ def logout(con, request, response):
         response.delete_cookie(c, path="/")
 
 
+# ------------------------------------------------------------ chave de API
+# Dono, 21/09: "preciso montar uma chave api desse command center". Outro sistema
+# (n8n, script, integração) precisa falar com o painel sem navegador — e sem afrouxar
+# nada do que já protege a porta.
+#
+# Formato:  urk_<id>_<segredo>   ·  id público (vai no log), segredo de 32 bytes.
+# No banco fica só o HASH do segredo (scrypt, como senha). Quem perde a chave cria
+# outra; ninguém — nem o ADMIN, nem eu — consegue ler a chave depois de criada.
+#
+# Três travas que valem mais que o resto:
+#   1. a chave age como uma PESSOA e o papel dela nunca passa do papel dessa pessoa;
+#   2. chave nenhuma herda "acesso livre": conta sem cargo não vira chave sem limite;
+#   3. quem entra por chave não recebe cookie e não passa por CSRF (não há cookie para
+#      um site de terceiro abusar) — mas também não ganha sessão nem troca senha.
+PREFIXO_CHAVE = "urk"
+
+
+def gerar_chave():
+    """Devolve (id_publico, segredo, chave_inteira). A chave inteira só existe aqui."""
+    ident = secrets.token_hex(5)
+    segredo = secrets.token_urlsafe(32)
+    return ident, segredo, f"{PREFIXO_CHAVE}_{ident}_{segredo}"
+
+
+def criar_chave(con, nome, papel, user_id, por_user_id=None, dias=None, nota=None):
+    """Cria e devolve a chave inteira UMA vez. Depois disto, só o hash existe."""
+    if papel not in PAPEIS:
+        raise ValueError(f"papel inválido: use um de {', '.join(PAPEIS)}")
+    dono = um(con, "SELECT id, email, role, active FROM users WHERE id = ?", (user_id,))
+    if not dono or not dono["active"]:
+        raise ValueError("a chave precisa de uma pessoa ativa para agir como ela")
+    teto = "ADMIN" if livre(dono["email"]) else dono["role"]
+    if NIVEL[papel] > NIVEL[teto]:
+        raise ValueError(f"a chave não pode ter mais acesso que {dono['email']} ({teto})")
+    ident, segredo, inteira = gerar_chave()
+    sal, h = hash_senha(segredo)
+    expira = ((datetime.now(timezone.utc) + timedelta(days=int(dias))).strftime("%Y-%m-%dT%H:%M:%SZ")
+              if dias else None)
+    con.execute("""INSERT INTO api_keys (id, name, salt, hash, role, user_id, created_by, expires_at, note)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (ident, (nome or "sem nome")[:80], sal, h, papel, user_id, por_user_id, expira, (nota or None)))
+    auditar(con, "apikey.create", f"user:{por_user_id}" if por_user_id else "system", user_id=por_user_id,
+            entity_type="api_key", entity_id=None,
+            detail={"chave": ident, "nome": nome, "papel": papel, "como": dono["email"], "expira": expira})
+    con.commit()
+    return {"id": ident, "chave": inteira, "role": papel, "expires_at": expira}
+
+
+def revogar_chave(con, ident, por_user_id=None):
+    k = um(con, "SELECT id, name FROM api_keys WHERE id = ? AND revoked_at IS NULL", (ident,))
+    if not k:
+        return False
+    con.execute("UPDATE api_keys SET revoked_at = ? WHERE id = ?", (agora(), ident))
+    auditar(con, "apikey.revoke", f"user:{por_user_id}" if por_user_id else "system", user_id=por_user_id,
+            entity_type="api_key", entity_id=None, detail={"chave": ident, "nome": k["name"]})
+    con.commit()
+    return True
+
+
+def _chave_do_pedido(request):
+    """`Authorization: Bearer urk_...` ou `X-API-Key: urk_...`."""
+    bruto = request.headers.get("x-api-key") or ""
+    if not bruto:
+        cabecalho = request.headers.get("authorization") or ""
+        if cabecalho[:7].lower() == "bearer ":
+            bruto = cabecalho[7:]
+    bruto = bruto.strip()
+    if not bruto.startswith(PREFIXO_CHAVE + "_"):
+        return None, None
+    partes = bruto.split("_", 2)
+    return (partes[1], partes[2]) if len(partes) == 3 and partes[1] and partes[2] else (None, None)
+
+
+def chave_valida(con, request, tocar=True):
+    """Confere a chave do pedido. Devolve o usuário efetivo ou None.
+
+    Papel efetivo = o menor entre o papel da chave e o papel de quem ela representa: se a
+    pessoa foi rebaixada depois, a chave desce junto, sem ninguém lembrar de revogar."""
+    ident, segredo = _chave_do_pedido(request)
+    if not ident:
+        return None
+    k = um(con, """SELECT k.*, u.email, u.name, u.role AS papel_pessoa, u.active
+                   FROM api_keys k JOIN users u ON u.id = k.user_id
+                   WHERE k.id = ? AND k.revoked_at IS NULL""", (ident,))
+    if not k or not k["active"]:
+        return None
+    if k["expires_at"] and k["expires_at"] <= agora():
+        return None
+    if not confere_senha(segredo, k["salt"], k["hash"]):
+        return None
+    teto = "ADMIN" if livre(k["email"]) else k["papel_pessoa"]
+    papel = k["role"] if NIVEL[k["role"]] <= NIVEL[teto] else teto
+    if tocar:
+        # uma escrita por minuto, no máximo: saber que a chave está viva não vale
+        # um UPDATE a cada GET de uma integração que consulta de dez em dez segundos
+        con.execute("""UPDATE api_keys SET uses = uses + 1, last_used_at = ?, last_ip = ?
+                       WHERE id = ? AND (last_used_at IS NULL OR last_used_at < ?)""",
+                    (agora(), _ip(request), ident,
+                     (datetime.now(timezone.utc) - timedelta(seconds=60)).strftime("%Y-%m-%dT%H:%M:%SZ")))
+        con.commit()
+    # `free` fica FALSO de propósito: acesso livre é da pessoa no navegador, não da chave.
+    return {"id": k["user_id"], "email": k["email"], "name": f"{k['name']} (chave)",
+            "role": papel, "free": False, "via": f"key:{ident}"}
+
+
 # ------------------------------------------------------------ guardas
 def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
+    porchave = chave_valida(con, request)
+    if porchave:
+        return porchave                       # sem cookie, sem CSRF: não há cookie para abusar
     s = sessao_valida(con, request.cookies.get(COOKIE_SESSAO))
     if not s:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has expired.")

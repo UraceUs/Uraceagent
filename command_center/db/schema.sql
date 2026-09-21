@@ -24,6 +24,28 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at TEXT
 );
 
+-- Chave de API: outro sistema falando com o Command Center sem navegador (dono, 21/09).
+-- O SEGREDO NUNCA FICA AQUI: só o hash (scrypt, como senha). Perdeu a chave, cria outra.
+-- Toda chave age como uma PESSOA e tem um papel, e o papel dela nunca passa do papel da
+-- pessoa — chave não é porta dos fundos para privilégio que o dono da chave não tem.
+CREATE TABLE IF NOT EXISTS api_keys (
+  id           TEXT PRIMARY KEY,          -- prefixo público: aparece no log e não abre nada sozinho
+  name         TEXT NOT NULL,
+  salt         TEXT NOT NULL,
+  hash         TEXT NOT NULL,
+  role         TEXT NOT NULL CHECK (role IN ('ADMIN','MANAGER','OPERATOR','VIEWER')),
+  user_id      INTEGER NOT NULL REFERENCES users(id),   -- a chave age como esta pessoa
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  expires_at   TEXT,                      -- NULL = não expira
+  last_used_at TEXT,
+  last_ip      TEXT,
+  uses         INTEGER NOT NULL DEFAULT 0,
+  revoked_at   TEXT,
+  note         TEXT                       -- para que serve, escrito por quem criou
+);
+CREATE INDEX IF NOT EXISTS ix_api_keys_user ON api_keys(user_id);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id          TEXT PRIMARY KEY,           -- token aleatório (só o hash fica aqui)
   user_id     INTEGER NOT NULL REFERENCES users(id),

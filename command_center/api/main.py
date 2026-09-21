@@ -330,6 +330,51 @@ def api_users_password(uid: int, dados: SenhaDeOutroIn, request: Request, u=Depe
                       "ela entra de novo com a senha nova.")}
 
 
+# ------------------------------------------------------- chaves de API (ADMIN)
+class ChaveIn(BaseModel):
+    name: str
+    role: str = "VIEWER"
+    user_id: int | None = None        # a pessoa que a chave representa (padrão: quem criou)
+    days: int | None = None           # validade; sem isto, não expira
+    note: str | None = None
+
+
+@app.get(BASE + "/api/keys")
+def api_keys_list(u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
+    """As chaves que existem — nunca a chave em si, que só existiu no momento da criação."""
+    return todos(con, """SELECT k.id, k.name, k.role, k.created_at, k.expires_at, k.last_used_at,
+                                k.last_ip, k.uses, k.revoked_at, k.note,
+                                u.email AS como, u.name AS como_nome, u.role AS papel_pessoa,
+                                c.email AS criada_por
+                         FROM api_keys k JOIN users u ON u.id = k.user_id
+                         LEFT JOIN users c ON c.id = k.created_by
+                         ORDER BY k.revoked_at IS NOT NULL, k.created_at DESC""")
+
+
+@app.post(BASE + "/api/keys", status_code=201)
+def api_keys_create(dados: ChaveIn, request: Request, u=Depends(auth.exige("ADMIN")),
+                    con: sqlite3.Connection = Depends(get_db)):
+    """Cria a chave e devolve o valor UMA vez. Não há como vê-lo de novo — nem por aqui,
+    nem no banco: o que fica guardado é o hash. Perdeu, cria outra e revoga a antiga."""
+    try:
+        nova = auth.criar_chave(con, dados.name, (dados.role or "").upper(),
+                                dados.user_id or u["id"], por_user_id=u["id"],
+                                dias=dados.days, nota=dados.note)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {**nova, "aviso": ("Guarde agora: esta é a única vez que a chave aparece. "
+                              "Ela vale como a pessoa escolhida, com o papel escolhido.")}
+
+
+@app.post(BASE + "/api/keys/{ident}/revoke")
+def api_keys_revoke(ident: str, request: Request, u=Depends(auth.exige("ADMIN")),
+                    con: sqlite3.Connection = Depends(get_db)):
+    """Desliga a chave na hora. Quem estiver usando recebe 401 no pedido seguinte."""
+    if not auth.revogar_chave(con, ident, por_user_id=u["id"]):
+        raise HTTPException(404, "Chave não encontrada (ou já revogada).")
+    return {"ok": True}
+
+
 # ------------------------------------------------------------- audit
 @app.get(BASE + "/api/audit")
 def api_audit(limit: int = 100, u=Depends(auth.exige("MANAGER")),
