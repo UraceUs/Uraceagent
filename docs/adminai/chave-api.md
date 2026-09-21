@@ -80,3 +80,36 @@ segredo, que não é guardado.
 
 Revogue no painel (efeito imediato) e crie outra. Não existe "trocar o segredo" de uma
 chave: a identidade dela é o segredo.
+
+
+## Se quem vai consumir é um Claude
+
+Chave crua serve para script. Um Claude fala **MCP** — e o repositório tem um servidor MCP
+do próprio painel: `adminai/mcp/command_center_mcp.py`.
+
+Ele expõe o painel como ferramentas (`cc_dashboard`, `cc_atencao`, `cc_invoices`,
+`cc_financeiro`, `cc_oportunidades`, `cc_clientes`, `cc_cliente`, `cc_conversas`,
+`cc_conversa`, `cc_corridas`, `cc_auditoria`, `cc_buscar` e o escape `cc_consultar`).
+
+**Nenhuma ferramenta escreve.** Não é confiança no modelo: o arquivo não sabe fazer outro
+verbo além de `GET`, e a ferramenta que não deve existir não é registrada — não há como
+desobedecer. Some-se a isso a chave criada como *só leitura*, e as duas travas valem
+juntas.
+
+Ligar no Claude Code, na máquina onde ele roda:
+
+```bash
+claude mcp add urace-cc --env CC_API_KEY=urk_SUA_CHAVE --env CC_URL=https://urace-bridge.duckdns.org \
+  -- /home/ubuntu/.urace/cc-venv/bin/python /home/ubuntu/Uraceagent/adminai/mcp/command_center_mcp.py
+```
+
+Ou guarde a chave em `~/.urace/command-center.env` (`CC_API_KEY=urk_…`) e ligue sem `--env`.
+A chave fica no ambiente ou nesse arquivo — **nunca no repositório**.
+
+### Se ele precisar agir um dia
+
+O caminho certo não é uma chave que escreve. O Command Center já tem a IA de dentro, com
+política por ação (SAFE / confirmação / aprovação / bloqueada) e portão de APLICAR. Um
+Claude de fora é um **leitor**: se precisar agir, que proponha a ação no painel para uma
+pessoa aprovar. Chave que escreve é tratada como pessoa agindo, e não passa por portão
+nenhum.
