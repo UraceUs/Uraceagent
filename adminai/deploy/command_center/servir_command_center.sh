@@ -26,6 +26,8 @@ if [ -z "${URACE_DEPLOY_DETACHED:-}" ] && [ -t 1 ]; then
   URACE_DEPLOY_DETACHED=1 setsid nohup bash "${BASH_SOURCE[0]}" "$@" > "$_LOG" 2>&1 < /dev/null &
   _PID=$!
   echo "-- deploy em segundo plano (sobrevive à queda do SSH) · log: $_LOG"
+  echo "-- PODE FECHAR O TERMINAL ou apertar Ctrl+C: isso encerra só este acompanhamento."
+  echo "   O deploy continua. Para ver como terminou, depois:  tail -n 20 $_LOG"
   tail -n +1 -f "$_LOG" --pid="$_PID" 2>/dev/null || true
   wait "$_PID" 2>/dev/null || true
   exit 0

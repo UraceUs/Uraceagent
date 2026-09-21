@@ -19,6 +19,7 @@ import hmac
 import os
 import secrets
 import sqlite3
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -57,8 +58,22 @@ def livre(email):
 
 
 # ------------------------------------------------------------- senha
+# Custo do scrypt. Em produção é 2**15 e não se mexe: é ele que torna caro testar senha
+# roubada. Em teste é 2**12 — e isso não é frouxidão, é o contrário.
+#
+# 21/09: a suíte faz centenas de hashes (cada criar_usuario, cada login), a ~180 ms por
+# hash na VPS. O deploy ficava 3 minutos parado em "3/7 testes do backend" e o terminal do
+# dono desconectava antes do fim. Teste lento é teste que se deixa de rodar, e suíte que
+# não roda não protege ninguém.
+#
+# A trava contra afrouxar produção por engano: o custo baixo só vale quando o **pytest
+# está carregado no processo**. Não há variável de ambiente para isso — ninguém consegue
+# enfraquecer a senha de produção mudando configuração, nem sem querer nem de propósito.
+_CUSTO = 2 ** 12 if "pytest" in sys.modules else 2 ** 15
+
+
 def _scrypt(senha, sal):
-    return hashlib.scrypt(senha.encode(), salt=sal, n=2 ** 15, r=8, p=1,
+    return hashlib.scrypt(senha.encode(), salt=sal, n=_CUSTO, r=8, p=1,
                           dklen=32, maxmem=64 * 1024 * 1024)
 
 

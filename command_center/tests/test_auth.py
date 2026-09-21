@@ -189,3 +189,19 @@ def test_so_administrador_define_senha_de_outro(cli):
     con.close()
     assert entra(cli, "viewer@urace.us").status_code == 200
     assert cli.post(B + f"/users/{alvo}/password", headers=csrf(cli), json={"password": "senha-qualquer"}).status_code == 403
+
+
+def test_custo_da_senha_em_producao_nao_cai_por_configuracao():
+    """21/09: o custo do scrypt foi baixado NOS TESTES (a suíte fazia centenas de hashes e
+    o deploy ficava 3min28 parado neles, com o terminal do dono caindo antes do fim).
+
+    Isto aqui é a trava: o custo baixo só existe quando o pytest está carregado no
+    processo. Não há variável de ambiente que enfraqueça a senha de produção — nem por
+    engano, nem de propósito. Se alguém um dia trocar essa condição por um `os.environ`,
+    este teste morre e a conversa acontece antes do estrago."""
+    import inspect
+    fonte = inspect.getsource(auth)
+    assert '_CUSTO = 2 ** 12 if "pytest" in sys.modules else 2 ** 15' in fonte
+    assert auth._CUSTO == 2 ** 12                      # aqui, rodando sob pytest
+    # e a função realmente usa a constante (ninguém deixou um número solto para trás)
+    assert "n=_CUSTO" in inspect.getsource(auth._scrypt)
