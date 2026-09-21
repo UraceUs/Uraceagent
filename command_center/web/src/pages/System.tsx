@@ -312,7 +312,56 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
         <div className="small muted">Use em <code className="mono">Authorization: Bearer urk_…</code> ou <code className="mono">X-API-Key: urk_…</code>. Chave não precisa de CSRF e não abre sessão.</div>
       </form>
     </div>
+    <ComoUsar />
   </Section>
+}
+
+/** O passo a passo fica AQUI, junto de onde a chave nasce (dono, 21/09: "deixe o passo a
+ *  passo na mesma sessão das apis") — e não num documento que ninguém abre na hora. */
+function ComoUsar() {
+  const toast = useToast()
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://urace-bridge.duckdns.org'
+  const curl = `curl -s -H "Authorization: Bearer SUA_CHAVE" ${base}/ops/api/dashboard`
+  const prova = `curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "Authorization: Bearer SUA_CHAVE" -H "Content-Type: application/json" -d '{"name":"teste"}' ${base}/ops/api/clients`
+  const mcp = `claude mcp add urace-cc --env CC_API_KEY=SUA_CHAVE --env CC_URL=${base} -- /home/ubuntu/.urace/cc-venv/bin/python /home/ubuntu/Uraceagent/adminai/mcp/command_center_mcp.py`
+  const Linha = ({ cmd, rotulo }: { cmd: string; rotulo: string }) =>
+    <div className="row wrap" style={{ gap: 8, marginTop: 6, alignItems: 'flex-start' }}>
+      <code className="mono small" style={{ wordBreak: 'break-all', flex: '1 1 320px' }}>{cmd}</code>
+      <button className="btn sm" onClick={() => navigator.clipboard?.writeText(cmd).then(() => toast(`${rotulo} copiado.`, 'ok'))}>copiar</button>
+    </div>
+
+  return <details style={{ marginTop: 14 }}>
+    <summary style={{ cursor: 'pointer' }}><b>Como usar a chave</b> <span className="small muted">— script, agente de IA e o que fazer se vazar</span></summary>
+    <div className="stack" style={{ gap: 14, marginTop: 10 }}>
+      <div className="card" style={{ padding: '12px 14px' }}>
+        <b>1. Em script, integração ou terminal</b>
+        <div className="small ink2">A chave vai no cabeçalho. Serve <code className="mono">Authorization: Bearer</code> ou <code className="mono">X-API-Key</code>. Não precisa de CSRF e não abre sessão.</div>
+        <Linha cmd={curl} rotulo="Comando" />
+        <div className="small muted" style={{ marginTop: 6 }}>Voltou JSON com os números do dia? Funcionando.</div>
+      </div>
+
+      <div className="card" style={{ padding: '12px 14px' }}>
+        <b>2. Confira que ela não escreve</b>
+        <div className="small ink2">Com "só leitura" marcado, isto tem que responder <b>403</b>. Se responder 200, a chave está escrevendo — revogue e crie outra.</div>
+        <Linha cmd={prova} rotulo="Comando" />
+      </div>
+
+      <div className="card" style={{ padding: '12px 14px' }}>
+        <b>3. Ligar num Claude (MCP)</b>
+        <div className="small ink2">Um Claude não usa a chave crua: ele fala MCP. O servidor <code className="mono">command_center_mcp.py</code> traduz o painel em ferramentas
+          (<span className="mono">cc_dashboard</span>, <span className="mono">cc_atencao</span>, <span className="mono">cc_invoices</span>, <span className="mono">cc_financeiro</span>, <span className="mono">cc_conversas</span>, <span className="mono">cc_auditoria</span>…).
+          Rode este comando <b>na máquina onde o Claude roda</b>:</div>
+        <Linha cmd={mcp} rotulo="Comando" />
+        <div className="small muted" style={{ marginTop: 6 }}>Nenhuma ferramenta desse servidor escreve — ele não sabe fazer outro verbo além de GET. Vale para o Claude Code e para qualquer agente que aceite MCP por stdio; o claude.ai (web/app) pede conector remoto com OAuth, que é outro caminho.</div>
+      </div>
+
+      <div className="card" style={{ padding: '12px 14px' }}>
+        <b>4. Se a chave vazar</b>
+        <div className="small ink2">Revogue aqui — corta na hora, o pedido seguinte já recebe erro — e crie outra. Não existe "trocar o segredo": a identidade da chave é o segredo.
+          O <span className="mono">urk_&lt;id&gt;</span> que aparece na lista é público de propósito (vai no log e na auditoria) e sozinho não abre nada.</div>
+      </div>
+    </div>
+  </details>
 }
 
 export function Users() {
