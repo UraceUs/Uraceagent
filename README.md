@@ -140,6 +140,11 @@ conversa do Italo; pedido operacional vai para a equipe.
 
 ---
 
+Quem faz o quê (sessões U RACE/CRM/COMERCIAL/AGREGADOR + o Orchestrator):
+ver `docs/mapa-de-agentes.md`.
+
+---
+
 ## Estado
 
 | Camada | Estado |
