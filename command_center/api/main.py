@@ -264,6 +264,32 @@ def api_users_role(uid: int, dados: PapelIn, request: Request, u=Depends(auth.ex
     return {"ok": True, "role": dados.role}
 
 
+class SenhaDeOutroIn(BaseModel):
+    password: str
+
+
+@app.post(BASE + "/api/users/{uid}/password")
+def api_users_password(uid: int, dados: SenhaDeOutroIn, request: Request, u=Depends(auth.exige("ADMIN")),
+                       con: sqlite3.Connection = Depends(get_db)):
+    """Administrador define a senha de alguém que perdeu a sua (dono, 21/09).
+
+    Não pede a senha antiga — quem esqueceu não a tem. O que protege é ser ADMIN, ficar na
+    auditoria com quem fez, e derrubar toda sessão aberta daquela pessoa: se alguém entrou
+    na conta dela, sai na hora. A senha nova não volta em resposta nenhuma; quem define a
+    combina com a pessoa por fora."""
+    alvo = um(con, "SELECT id, email, name FROM users WHERE id = ?", (uid,))
+    if not alvo:
+        raise HTTPException(404, "User not found.")
+    try:
+        auth.trocar_senha(con, uid, dados.password, por_user_id=u["id"], ip=auth._ip(request))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    con.commit()
+    return {"ok": True, "email": alvo["email"],
+            "aviso": ("Senha definida. As sessões abertas desta pessoa foram derrubadas; "
+                      "ela entra de novo com a senha nova.")}
+
+
 # ------------------------------------------------------------- audit
 @app.get(BASE + "/api/audit")
 def api_audit(limit: int = 100, u=Depends(auth.exige("MANAGER")),

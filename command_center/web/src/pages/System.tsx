@@ -227,14 +227,31 @@ export function Users() {
     if (!await perguntar({ titulo: `${u.active ? 'Desativar' : 'Reativar'} ${u.email}?`, ok: u.active ? 'Desativar' : 'Reativar', perigo: !!u.active })) return
     try { await api.post(`/users/${u.id}/active`, { active: !u.active }); reload() } catch (ex) { toast((ex as ApiError).message, 'crit') }
   }
+  // 21/09: quem esquece a senha não tem como provar a antiga. O administrador define uma nova,
+  // fica na auditoria, e as sessões abertas daquela pessoa caem na hora.
+  async function senha(u: U) {
+    const nova = await perguntar({
+      titulo: `Definir uma senha nova para ${u.name}`,
+      texto: `${u.email} entra com a senha que você digitar aqui. As sessões abertas dela caem na hora. Mínimo 5 caracteres — combine a senha com a pessoa por fora do painel.`,
+      campo: 'Senha nova', segredo: true, ok: 'Definir senha',
+    })
+    if (typeof nova !== 'string' || !nova) return
+    try { await api.post(`/users/${u.id}/password`, { password: nova }); toast(`Senha definida para ${u.email}.`, 'ok'); reload() }
+    catch (ex) { toast((ex as ApiError).message, 'crit') }
+  }
   return <>
     <PageHeader title="Usuários" help={<>Administrador: {ROLE_O_QUE.ADMIN}. Gerente: {ROLE_O_QUE.MANAGER}. Operador: {ROLE_O_QUE.OPERATOR}. Leitura: {ROLE_O_QUE.VIEWER}. Conta de acesso livre não tem cargo e alcança tudo.</>} />
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
       <Section title="Cadastrados" count={data?.length} tight>
         {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
           <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Ativo</th><th>Último login</th><th></th></tr></thead><tbody>
-            {(data || []).map(u => <tr key={u.id}><td>{u.name}</td><td className="small">{u.email}</td><td><PapelEditavel u={u} self={u.id === user?.id} onChanged={reload} /></td><td>{u.active ? <Chip tone="ok">sim</Chip> : <Chip tone="neutral">não</Chip>}</td><td className="mono small">{u.last_login_at ? ago(u.last_login_at) : 'nunca'}</td>
-              <td>{u.id !== user?.id && <button className="btn sm" onClick={() => toggle(u)}>{u.active ? 'Desativar' : 'Reativar'}</button>}</td></tr>)}
+            {(data || []).map(u => <tr key={u.id}><td>{u.name}</td><td className="small">{u.email}</td><td><PapelEditavel u={u} self={u.id === user?.id} onChanged={reload} /></td><td>{u.active ? <Chip tone="ok">sim</Chip> : <Chip tone="neutral">não</Chip>}</td><td className="small nowrap">{u.last_login_at
+                ? <><span className="mono">{fmtDateTime(u.last_login_at)}</span><div className="muted">{ago(u.last_login_at)}</div></>
+                : <span className="muted">nunca entrou</span>}</td>
+              <td><div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                <button className="btn sm" onClick={() => senha(u)} title="Definir uma senha nova para esta pessoa">Definir senha</button>
+                {u.id !== user?.id && <button className="btn sm" onClick={() => toggle(u)}>{u.active ? 'Desativar' : 'Reativar'}</button>}
+              </div></td></tr>)}
           </tbody></table></div>}
       </Section>
       <Section title="Novo usuário"><form className="stack" onSubmit={create}>

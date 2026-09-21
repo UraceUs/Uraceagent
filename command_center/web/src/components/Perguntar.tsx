@@ -22,6 +22,8 @@ export interface Pergunta {
   perigo?: boolean
   campo?: string
   valor?: string
+  /** campo de senha: não aparece na tela, não é ditado e o navegador não guarda */
+  segredo?: boolean
 }
 type Responder = (p: Pergunta) => Promise<boolean | string | null>
 
@@ -61,8 +63,9 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
         {p.texto && <div className="small ink2" style={{ whiteSpace: 'pre-wrap' }}>{p.texto}</div>}
         {p.campo && <div className="field"><label>{p.campo}</label>
           <div className="row" style={{ gap: 6 }}>
-            <input ref={entrada} className="input" value={texto} onChange={e => setTexto(e.target.value)} />
-            <Mic valor={texto} onTexto={setTexto} />
+            <input ref={entrada} className="input" value={texto} onChange={e => setTexto(e.target.value)}
+              type={p.segredo ? 'password' : 'text'} autoComplete={p.segredo ? 'new-password' : undefined} />
+            {!p.segredo && <Mic valor={texto} onTexto={setTexto} />}
           </div></div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <button className="btn" onClick={() => fechar(p.campo ? null : false)}>{p.cancelar || 'Cancelar'}</button>

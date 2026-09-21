@@ -146,3 +146,46 @@ def test_admin_muda_papel_de_outro(cli):
     assert cli.post(B + f"/users/{alvo}/role", headers=h, json={"role": "ADMIN"}).status_code == 200
     assert cli.post(B + f"/users/{alvo}/role", headers=h, json={"role": "OPERATOR"}).status_code == 200
     assert cli.post(B + "/users/999999/role", headers=h, json={"role": "VIEWER"}).status_code == 404
+
+
+def test_admin_define_senha_de_quem_esqueceu(cli):
+    """Dono, 21/09: *"um botão onde dê para definir uma nova senha"*. Quem esqueceu a senha não
+    tem como provar a antiga — então o administrador define uma. O que protege: ser ADMIN,
+    ficar na auditoria e derrubar as sessões abertas da pessoa."""
+    B = "/ops/api"
+    con = conectar()
+    dono = auth.criar_usuario(con, "dono-senha@urace.us", "Dono", "ADMIN", SENHA)
+    esquecido = auth.criar_usuario(con, "esqueceu@urace.us", "Esqueceu", "OPERATOR", SENHA)
+    con.execute("DELETE FROM login_attempts")
+    con.close()
+
+    # a pessoa está com sessão aberta neste momento
+    assert entra(cli, "esqueceu@urace.us").status_code == 200
+    assert cli.get(B + "/dashboard").status_code == 200
+    de_dentro = cli.cookies.get("cc_session")
+
+    assert entra(cli, "dono-senha@urace.us").status_code == 200
+    h = csrf(cli)
+    assert cli.post(B + f"/users/{esquecido}/password", headers=h, json={"password": "abc"}).status_code == 400
+    assert cli.post(B + "/users/999999/password", headers=h, json={"password": "senha-nova-999"}).status_code == 404
+    r = cli.post(B + f"/users/{esquecido}/password", headers=h, json={"password": "senha-nova-999"})
+    assert r.status_code == 200 and r.json()["email"] == "esqueceu@urace.us"
+    assert "senha-nova-999" not in r.text                      # a senha nova não volta em resposta nenhuma
+    assert "user.password_change" in [a["event"] for a in cli.get(B + "/audit", headers=h).json()]
+
+    # a senha velha não entra mais, a nova entra, e a sessão que estava aberta caiu
+    assert entra(cli, "esqueceu@urace.us", SENHA).status_code == 401
+    assert entra(cli, "esqueceu@urace.us", "senha-nova-999").status_code == 200
+    cli.cookies.clear(); cli.cookies.set("cc_session", de_dentro, domain="cc.test")
+    assert cli.get(B + "/dashboard").status_code == 401
+    assert dono                                                # (usado só para criar o administrador)
+
+
+def test_so_administrador_define_senha_de_outro(cli):
+    B = "/ops/api"
+    con = conectar()
+    alvo = auth.criar_usuario(con, "alvo-senha@urace.us", "Alvo", "VIEWER", SENHA)
+    con.execute("DELETE FROM login_attempts")
+    con.close()
+    assert entra(cli, "viewer@urace.us").status_code == 200
+    assert cli.post(B + f"/users/{alvo}/password", headers=csrf(cli), json={"password": "senha-qualquer"}).status_code == 403
