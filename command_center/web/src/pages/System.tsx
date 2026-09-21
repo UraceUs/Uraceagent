@@ -218,6 +218,7 @@ interface K {
   id: string; name: string; role: string; created_at: string; expires_at: string | null
   last_used_at: string | null; last_ip: string | null; uses: number; revoked_at: string | null
   note: string | null; como: string; como_nome: string; papel_pessoa: string; criada_por: string | null
+  read_only: number
 }
 
 function Chaves({ usuarios }: { usuarios: U[] }) {
@@ -225,20 +226,20 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
   const toast = useToast()
   const perguntar = usePerguntar()
   const { data, error, loading, reload } = useGet<K[]>('/keys')
-  const [f, setF] = useState({ name: '', role: 'VIEWER', user_id: '', days: '', note: '' })
-  const [nova, setNova] = useState<{ id: string; chave: string } | null>(null)
+  const [f, setF] = useState({ name: '', role: 'VIEWER', user_id: '', days: '', note: '', read_only: true })
+  const [nova, setNova] = useState<{ id: string; chave: string; read_only: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
 
   async function criar(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null)
     try {
-      const r = await api.post<{ id: string; chave: string }>('/keys', {
-        name: f.name, role: f.role, note: f.note || null,
+      const r = await api.post<{ id: string; chave: string; read_only: boolean }>('/keys', {
+        name: f.name, role: f.role, note: f.note || null, read_only: f.read_only,
         user_id: f.user_id ? Number(f.user_id) : null,
         days: f.days ? Number(f.days) : null,
       })
-      setNova(r); setF({ name: '', role: 'VIEWER', user_id: '', days: '', note: '' }); reload()
+      setNova(r); setF({ name: '', role: 'VIEWER', user_id: '', days: '', note: '', read_only: true }); reload()
     } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
   }
   async function revogar(k: K) {
@@ -254,9 +255,12 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
   const eu = usuarios.find(x => x.id === user?.id)
   const tetoDe = (id: string) => usuarios.find(x => String(x.id) === id)?.role
   return <Section title="Chaves de API" count={(data || []).filter(k => !k.revoked_at).length}>
-    {nova && <Banner tone="ok">
+    {nova && <Banner tone={nova.read_only ? 'ok' : 'warn'}>
       <div><b>Guarde agora: esta é a única vez que a chave aparece.</b> Ela não fica no banco — só o resumo dela.
         Se perder, revogue esta e crie outra.</div>
+      <div className="small" style={{ marginTop: 4 }}>{nova.read_only
+        ? 'Esta chave consulta o painel e não muda nada.'
+        : 'Atenção: esta chave ESCREVE. O que ela fizer acontece de verdade — mensagem sai para o cliente, preço muda no QuickBooks — sem passar por aprovação.'}</div>
       <div className="row wrap" style={{ marginTop: 8 }}>
         <code className="mono small" style={{ wordBreak: 'break-all' }}>{nova.chave}</code>
         <button className="btn sm" onClick={() => navigator.clipboard?.writeText(nova.chave).then(() => toast('Chave copiada.', 'ok'))}>copiar</button>
@@ -270,7 +274,10 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
               <th>Nome</th><th>Papel</th><th>Age como</th><th>Último uso</th><th>Validade</th><th></th></tr></thead><tbody>
               {(data || []).map(k => <tr key={k.id} style={k.revoked_at ? { opacity: .5 } : undefined}>
                 <td><div>{k.name}</div><div className="mono small muted">urk_{k.id}_…{k.note ? ` · ${k.note}` : ''}</div></td>
-                <td>{k.revoked_at ? <Chip tone="neutral">revogada</Chip> : <Chip tone={k.role === 'VIEWER' ? 'neutral' : 'accent'}>{ROLE_PT[k.role] || k.role}</Chip>}</td>
+                <td>{k.revoked_at ? <Chip tone="neutral">revogada</Chip> : <div className="row wrap" style={{ gap: 4 }}>
+                  <Chip tone={k.role === 'VIEWER' ? 'neutral' : 'accent'}>{ROLE_PT[k.role] || k.role}</Chip>
+                  {k.read_only ? <Chip tone="ok" title="Consulta e não muda nada">só leitura</Chip>
+                    : <Chip tone="warn" title="O que esta chave fizer acontece de verdade, sem aprovação">escreve</Chip>}</div>}</td>
                 <td className="small">{k.como_nome}<div className="muted">{k.como}</div></td>
                 <td className="small">{k.last_used_at ? <>{fmtDateTime(k.last_used_at)}<div className="muted">{k.uses} uso(s){k.last_ip ? ` · ${k.last_ip}` : ''}</div></> : <span className="muted">nunca usada</span>}</td>
                 <td className="small">{k.expires_at ? fmtDateTime(k.expires_at) : <span className="muted">não expira</span>}</td>
@@ -290,6 +297,13 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
             <option value="">{eu ? `${eu.name} (você)` : 'você'}</option>
             {usuarios.filter(x => x.id !== user?.id && x.active).map(x => <option key={x.id} value={x.id}>{x.name} — {ROLE_PT[x.role] || x.role}</option>)}</select>
           <span className="small muted">A chave nunca alcança mais do que esta pessoa alcança{f.user_id && tetoDe(f.user_id) ? ` (${ROLE_PT[tetoDe(f.user_id)!]})` : ''}. Rebaixou a pessoa, a chave desce junto.</span></div>
+        <div className="field"><label>O que ela pode fazer</label>
+          <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={f.read_only} onChange={e => setF({ ...f, read_only: e.target.checked })} />
+            <span className="small">Só leitura — consulta e não muda nada</span></label>
+          {!f.read_only && <span className="small" style={{ color: 'var(--warn)' }}>
+            Esta chave vai ESCREVER: mensagem sai para o cliente, preço muda no QuickBooks, tudo sem passar por aprovação.
+            Papel e escrita são coisas separadas de propósito — dê escrita só se for mesmo necessário.</span>}</div>
         <div className="field"><label>Validade (dias)</label>
           <input className="input" type="number" min={1} placeholder="em branco = não expira" value={f.days} onChange={e => setF({ ...f, days: e.target.value })} /></div>
         <div className="field"><label>Anotação</label>

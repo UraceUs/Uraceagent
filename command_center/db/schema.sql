@@ -42,7 +42,11 @@ CREATE TABLE IF NOT EXISTS api_keys (
   last_ip      TEXT,
   uses         INTEGER NOT NULL DEFAULT 0,
   revoked_at   TEXT,
-  note         TEXT                       -- para que serve, escrito por quem criou
+  note         TEXT,                      -- para que serve, escrito por quem criou
+  -- Papel diz O QUE a chave alcança; isto diz se ela pode MEXER. Um agente de IA pode
+  -- precisar ver o financeiro inteiro e não ter direito de mandar mensagem para cliente
+  -- nem reescrever preço. Padrão 1 (só leitura) de propósito: escrever é a exceção.
+  read_only    INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_api_keys_user ON api_keys(user_id);
 

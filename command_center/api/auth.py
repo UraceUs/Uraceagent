@@ -229,6 +229,12 @@ def logout(con, request, response):
 #   2. chave nenhuma herda "acesso livre": conta sem cargo não vira chave sem limite;
 #   3. quem entra por chave não recebe cookie e não passa por CSRF (não há cookie para
 #      um site de terceiro abusar) — mas também não ganha sessão nem troca senha.
+#
+# E uma quarta, que veio do uso real (21/09: a chave é para um agente de IA fora do
+# painel, com acesso ao financeiro): **papel e permissão de escrever são coisas
+# separadas**. `read_only` deixa a chave ver tudo o que o papel dela alcança e não mexer
+# em nada — porque "ver o financeiro" e "mandar mensagem para cliente" não deveriam vir
+# no mesmo pacote. O padrão é só leitura; escrever é a exceção, marcada na mão.
 PREFIXO_CHAVE = "urk"
 
 
@@ -239,7 +245,7 @@ def gerar_chave():
     return ident, segredo, f"{PREFIXO_CHAVE}_{ident}_{segredo}"
 
 
-def criar_chave(con, nome, papel, user_id, por_user_id=None, dias=None, nota=None):
+def criar_chave(con, nome, papel, user_id, por_user_id=None, dias=None, nota=None, somente_leitura=True):
     """Cria e devolve a chave inteira UMA vez. Depois disto, só o hash existe."""
     if papel not in PAPEIS:
         raise ValueError(f"papel inválido: use um de {', '.join(PAPEIS)}")
@@ -253,14 +259,17 @@ def criar_chave(con, nome, papel, user_id, por_user_id=None, dias=None, nota=Non
     sal, h = hash_senha(segredo)
     expira = ((datetime.now(timezone.utc) + timedelta(days=int(dias))).strftime("%Y-%m-%dT%H:%M:%SZ")
               if dias else None)
-    con.execute("""INSERT INTO api_keys (id, name, salt, hash, role, user_id, created_by, expires_at, note)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
-                (ident, (nome or "sem nome")[:80], sal, h, papel, user_id, por_user_id, expira, (nota or None)))
+    con.execute("""INSERT INTO api_keys (id, name, salt, hash, role, user_id, created_by, expires_at, note, read_only)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (ident, (nome or "sem nome")[:80], sal, h, papel, user_id, por_user_id, expira, (nota or None),
+                 1 if somente_leitura else 0))
     auditar(con, "apikey.create", f"user:{por_user_id}" if por_user_id else "system", user_id=por_user_id,
             entity_type="api_key", entity_id=None,
-            detail={"chave": ident, "nome": nome, "papel": papel, "como": dono["email"], "expira": expira})
+            detail={"chave": ident, "nome": nome, "papel": papel, "como": dono["email"], "expira": expira,
+                    "so_leitura": bool(somente_leitura)})
     con.commit()
-    return {"id": ident, "chave": inteira, "role": papel, "expires_at": expira}
+    return {"id": ident, "chave": inteira, "role": papel, "expires_at": expira,
+            "read_only": bool(somente_leitura)}
 
 
 def revogar_chave(con, ident, por_user_id=None):
@@ -317,13 +326,18 @@ def chave_valida(con, request, tocar=True):
         con.commit()
     # `free` fica FALSO de propósito: acesso livre é da pessoa no navegador, não da chave.
     return {"id": k["user_id"], "email": k["email"], "name": f"{k['name']} (chave)",
-            "role": papel, "free": False, "via": f"key:{ident}"}
+            "role": papel, "free": False, "via": f"key:{ident}",
+            "somente_leitura": bool(k["read_only"])}
 
 
 # ------------------------------------------------------------ guardas
 def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
     porchave = chave_valida(con, request)
     if porchave:
+        if porchave["somente_leitura"] and request.method not in ("GET", "HEAD", "OPTIONS"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                "Esta chave é só de leitura: ela consulta o painel e não muda nada. "
+                                "Para deixá-la agir, crie outra chave sem 'só leitura'.")
         return porchave                       # sem cookie, sem CSRF: não há cookie para abusar
     s = sessao_valida(con, request.cookies.get(COOKIE_SESSAO))
     if not s:

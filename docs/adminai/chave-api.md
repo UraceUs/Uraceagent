@@ -11,7 +11,8 @@ sem afrouxar nada do que já protege a porta.
 | campo | o que decide |
 |---|---|
 | **Para que serve** | o nome que vai aparecer na lista e na auditoria |
-| **Papel** | o que a chave pode fazer: Leitura, Operador, Gerente, Administrador |
+| **Papel** | o que a chave **alcança**: Leitura, Operador, Gerente, Administrador |
+| **Só leitura** | se ela pode **mexer**. Ligado por padrão |
 | **Age como** | a pessoa que a chave representa — e o **teto** do que ela alcança |
 | **Validade** | em dias; em branco, não expira |
 
@@ -39,6 +40,21 @@ Qualquer rota do painel responde à chave, respeitando o papel dela. Exemplos ú
 | `GET /ops/api/crm/inbox` | Leitura | conversas do chat |
 | `POST /ops/api/crm/leads/{id}/reply` | Operador | responder no chat do lead |
 | `GET /ops/api/clients` | Leitura | clientes |
+
+## Papel e escrita são coisas separadas
+
+Em 21/09 a primeira chave de verdade foi para um **agente de IA fora do painel, com acesso
+ao financeiro**. Ver o financeiro e mandar mensagem para cliente não podem vir no mesmo
+pacote — então o papel diz o que a chave *alcança* e `read_only` diz se ela pode *mexer*.
+
+Uma chave Gerente só-leitura lê QuickBooks, invoices, auditoria, conversas e clientes, e
+qualquer `POST`/`PUT`/`PATCH`/`DELETE` dela volta 403. **Só leitura é o padrão**: escrever
+é exceção, marcada na mão.
+
+Se você tirar a marca, o aviso na tela é literal e vale repetir aqui: o que a chave fizer
+**acontece de verdade** — a mensagem sai para o cliente, o preço muda no QuickBooks — sem
+passar por aprovação nenhuma. O portão de APLICAR e as políticas da IA valem para o que a
+IA propõe *dentro* do painel; uma chave que escreve é tratada como pessoa agindo.
 
 ## As três travas
 

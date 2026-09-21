@@ -337,13 +337,14 @@ class ChaveIn(BaseModel):
     user_id: int | None = None        # a pessoa que a chave representa (padrão: quem criou)
     days: int | None = None           # validade; sem isto, não expira
     note: str | None = None
+    read_only: bool = True            # padrão: consulta o painel e não muda nada
 
 
 @app.get(BASE + "/api/keys")
 def api_keys_list(u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
     """As chaves que existem — nunca a chave em si, que só existiu no momento da criação."""
     return todos(con, """SELECT k.id, k.name, k.role, k.created_at, k.expires_at, k.last_used_at,
-                                k.last_ip, k.uses, k.revoked_at, k.note,
+                                k.last_ip, k.uses, k.revoked_at, k.note, k.read_only,
                                 u.email AS como, u.name AS como_nome, u.role AS papel_pessoa,
                                 c.email AS criada_por
                          FROM api_keys k JOIN users u ON u.id = k.user_id
@@ -359,11 +360,14 @@ def api_keys_create(dados: ChaveIn, request: Request, u=Depends(auth.exige("ADMI
     try:
         nova = auth.criar_chave(con, dados.name, (dados.role or "").upper(),
                                 dados.user_id or u["id"], por_user_id=u["id"],
-                                dias=dados.days, nota=dados.note)
+                                dias=dados.days, nota=dados.note, somente_leitura=dados.read_only)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {**nova, "aviso": ("Guarde agora: esta é a única vez que a chave aparece. "
-                              "Ela vale como a pessoa escolhida, com o papel escolhido.")}
+                              + ("Ela consulta o painel e não muda nada."
+                                 if nova["read_only"] else
+                                 "ATENÇÃO: esta chave ESCREVE — o que ela fizer acontece de verdade, "
+                                 "sem passar por aprovação."))}
 
 
 @app.post(BASE + "/api/keys/{ident}/revoke")

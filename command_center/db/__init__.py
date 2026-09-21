@@ -113,6 +113,7 @@ MIGRACOES = [
     ("crm_messages", "tentativas", "INTEGER NOT NULL DEFAULT 0"),
     ("crm_messages", "ultima_tentativa", "TEXT"),
     ("crm_messages", "confirmado_em", "TEXT"),             # o Kommo devolveu esta mensagem: chegou mesmo
+    ("api_keys", "read_only", "INTEGER NOT NULL DEFAULT 1"),   # chave que lê e não mexe (padrão)
 ]
 
 
