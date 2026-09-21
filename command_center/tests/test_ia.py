@@ -76,12 +76,16 @@ def test_comando_roda_e_propoe_acoes_com_politica(cli):
     c = espera(cli, r.json()["id"])
     assert c["status"] == "DONE" and "Renato" in c["output"]
     pol = {a["action"]: a for a in c["actions"]}
-    assert pol["docusign_enviar_waiver"]["policy"] == "REQUIRES_APPROVAL"
+    # 21/09: a waiver passou a sair sozinha (revisão do dono, ação a ação)
+    assert pol["docusign_enviar_waiver"]["policy"] == "SAFE"
     assert pol["docusign_enviar_waiver"]["status"] == "PROPOSED"
     assert pol["asana_comentar"]["policy"] == "SAFE"
     assert pol["gmail_rascunho"]["policy"] == "SAFE"
+    # E a consequência de ser SAFE: não abre pedido de aprovação nenhum. Antes de 21/09
+    # este teste exigia o contrário — a linha em `approvals` era a prova de que a waiver
+    # esperava alguém. Agora a prova é a ausência dela.
     con = conectar()
-    assert todos(con, "SELECT * FROM approvals WHERE action_id=?", (pol["docusign_enviar_waiver"]["id"],))
+    assert not todos(con, "SELECT * FROM approvals WHERE action_id=?", (pol["docusign_enviar_waiver"]["id"],))
     con.close()
 
 
@@ -100,7 +104,15 @@ def test_operador_aprova_no_modulo_dele_e_o_financeiro_e_do_gerente(cli):
     assert cli.post(f"{B}/actions/{invoice}/approve", headers=h, json={}).status_code == 403
     assert cli.post(f"{B}/actions/{invoice}/reject", headers=h, json={}).status_code == 403
 
-    acao = [a for a in fila.values() if a["policy"] == "REQUIRES_APPROVAL" and a["system"] == "docusign"][0]
+    # 21/09: a waiver virou SAFE, então a ação de aprovação que sobrou no módulo dele é
+    # trocar o PDF de um modelo do DocuSign. O ponto do teste continua o mesmo: o operador
+    # decide no que é dele, e não no financeiro.
+    con = conectar()
+    modelo = inserir(con, "ai_actions", action="docusign_substituir_documento_modelo", system="docusign",
+                     policy="REQUIRES_APPROVAL", status="PROPOSED", payload="{}", reason="teste")
+    con.close()
+    fila = {a["id"]: a for a in cli.get(B + "/actions?status=PROPOSED").json()}
+    acao = fila[modelo]
     assert acao["can_decide"] is True and acao["decide_note"] is None
     r = cli.post(f"{B}/actions/{acao['id']}/approve", headers=h, json={"comment": "ok, manda"})
     assert r.status_code == 200 and r.json()["status"] == "APPROVED"
@@ -114,9 +126,15 @@ def test_operador_aprova_no_modulo_dele_e_o_financeiro_e_do_gerente(cli):
 
 
 def test_operador_pode_rejeitar(cli):
+    """Cria a própria ação: depender do que sobrou de outro teste fez este quebrar quando a
+    revisão de 21/09 mudou o portão da waiver e a fila ficou vazia."""
+    from command_center.db import inserir
+    con = conectar()
+    aid = inserir(con, "ai_actions", action="docusign_substituir_documento_modelo", system="docusign",
+                  policy="REQUIRES_APPROVAL", status="PROPOSED", payload="{}", reason="teste")
+    con.close()
     h = entra(cli, "op@urace.us")
-    acao = [a for a in cli.get(B + "/actions?status=PROPOSED").json()][0]
-    r = cli.post(f"{B}/actions/{acao['id']}/reject", headers=h, json={"comment": "não é o caso"})
+    r = cli.post(f"{B}/actions/{aid}/reject", headers=h, json={"comment": "não é o caso"})
     assert r.status_code == 200 and r.json()["status"] == "REJECTED"
 
 
@@ -165,7 +183,7 @@ def test_acao_com_json_e_execucao_aprovada(cli):
     import json
     assert json.loads(acts["asana_comentar"]["payload"])["args"] == {"gid": "123", "texto": "waiver chegou"}
     assert json.loads(acts["docusign_enviar_waiver"]["payload"])["args"] is None
-    assert acts["docusign_enviar_waiver"]["policy"] == "REQUIRES_APPROVAL"
+    assert acts["docusign_enviar_waiver"]["policy"] == "SAFE"          # 21/09
     # aprovar a que não tem args: executa e falha com explicação (nunca 500, nunca "some")
     aid = acts["docusign_enviar_waiver"]["id"]
     r = cli.post(B + f"/actions/{aid}/approve", headers=h, json={})

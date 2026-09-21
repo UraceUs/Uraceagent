@@ -118,7 +118,9 @@ def test_vip_dispensa_alerta_e_so_manager_muda(cli):
 def test_politicas_admin_e_apagar_nunca(cli):
     h = entra(cli, "admin@urace.us")
     pol = {p["action"]: p["policy"] for p in cli.get(B + "/policies").json()}
-    assert pol["qbo_enviar_invoice"] == "REQUIRES_APPROVAL" and pol["gmail_enviar"] == "BLOCKED"
+    # 21/09: enviar invoice passou a pedir só confirmação, e e-mail livre saiu de "nunca"
+    # para "com aprovação". O que continua BLOCKED é o que apaga — ver o teste da revisão.
+    assert pol["qbo_enviar_invoice"] == "REQUIRES_CONFIRMATION" and pol["gmail_enviar"] == "REQUIRES_APPROVAL"
     assert cli.put(B + "/policies/apagar_cliente", headers=h, json={"policy": "SAFE"}).status_code == 403
     assert cli.put(B + "/policies/qbo_criar_invoice", headers=h, json={"policy": "REQUIRES_APPROVAL"}).status_code == 200
     entra(cli, "viewer@urace.us")
@@ -1927,7 +1929,8 @@ def test_acoes_do_painel_e_capacidades(cli, monkeypatch):
     for n in ("asana_criar_corrida", "docusign_reenviar_waiver", "docusign_anular_envelope", "qbo_lembrete_invoice", "painel_unir_clientes", "painel_varrer_cliente", "gmail_buscar"):
         assert n in nomes, n
     assert nomes["gmail_buscar"]["kind"] == "leitura" and nomes["asana_criar_corrida"]["policy"] == "SAFE"
-    assert nomes["docusign_anular_envelope"]["policy"] == "REQUIRES_APPROVAL" and nomes["painel_unir_clientes"]["policy"] == "SAFE"
+    assert nomes["docusign_anular_envelope"]["policy"] == "REQUIRES_CONFIRMATION"   # 21/09
+    assert nomes["painel_unir_clientes"]["policy"] == "SAFE"
     assert any(b["name"] == "qbo_apagar" for b in cap["blocked"])
     assert any(r["name"] == "varredura_clientes" and r["schedule"] == '["06:00"]' for r in cap["rules"])
     assert any(hh["area"] == "Kommo" for hh in cap["human_only"])
@@ -1954,3 +1957,49 @@ def test_foto_do_login_e_servida_e_a_rota_do_spa_continua_no_index(cli):
         assert os.path.basename(getattr(fora, "path", "index.html")) == "index.html"
     finally:
         os.remove(alvo)
+
+
+def test_revisao_do_portao_de_21_09_e_o_que_ficou_de_fora():
+    """O dono revisou as 42 ações uma a uma em 21/09, na página editável.
+
+    Este teste guarda as duas metades: o que ele mandou mudar está aplicado, e o que eu
+    NÃO apliquei continua como estava — porque apagar não tem volta, porque a resposta
+    dele era condicional (e condição vira trava no servidor, não política), ou porque
+    parecia toque errado e eu perguntei antes."""
+    # Banco próprio: o que se afirma aqui é o que a SEMENTE produz, e outro teste do módulo
+    # muda política pela API — no banco compartilhado isto passaria a medir o outro teste.
+    import os as _os
+    import tempfile as _tmp
+
+    from command_center.db import aplicar_schema as _schema
+    from command_center.db import conectar as _conectar
+    from command_center.db import todos as _todos
+    antes = _os.environ.get("CC_DB_PATH")
+    _os.environ["CC_DB_PATH"] = _os.path.join(_tmp.mkdtemp(), "portao.sqlite")
+    con = _conectar()
+    try:
+        _schema(con)
+        p = {r["action"]: r["policy"] for r in _todos(con, "SELECT action, policy FROM action_policies")}
+        # o que ele decidiu, aplicado
+        assert p["docusign_enviar_waiver"] == "SAFE"
+        assert p["docusign_reenviar_waiver"] == "SAFE"
+        assert p["docusign_anular_envelope"] == "REQUIRES_CONFIRMATION"
+        assert p["venda_enviar_waiver"] == "SAFE"
+        assert p["venda_enviar_invoice"] == "REQUIRES_CONFIRMATION"
+        assert p["qbo_criar_invoice"] == "SAFE"
+        assert p["qbo_enviar_invoice"] == "REQUIRES_CONFIRMATION"
+        assert p["gmail_enviar"] == "REQUIRES_APPROVAL"
+        assert p["venda_mover_etapa"] == "REQUIRES_CONFIRMATION"
+        # o que ficou de fora, e continua trancado
+        assert p["apagar_cliente"] == "BLOCKED"
+        assert p["apagar_qualquer_coisa"] == "BLOCKED"
+        assert p["qbo_apagar"] == "BLOCKED"
+        assert p["docusign_send_reminder"] == "BLOCKED"       # a resposta era condicional
+        assert p["gmail_rotular"] == "REQUIRES_CONFIRMATION"  # idem
+        assert p["venda_tarefa"] == "SAFE"                    # parecia toque errado
+    finally:
+        con.close()
+        if antes is None:
+            _os.environ.pop("CC_DB_PATH", None)
+        else:
+            _os.environ["CC_DB_PATH"] = antes

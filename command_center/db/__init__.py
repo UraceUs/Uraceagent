@@ -192,6 +192,34 @@ def _semear_marcadores(con):
 
 # Sementes que dependem de coluna criada por migração (rodam depois dela).
 # Horários em hora local de Orlando; quem lê é command_center/api/agenda.py.
+# --------------------------------------------------------- portão do APLICAR, revisado
+# O dono respondeu as 42 ações uma a uma em 21/09 (página editável). Cada linha abaixo só
+# troca a política SE ela ainda for a que estava valendo — o que ele mudar depois no painel
+# fica. Isso é o que torna a revisão idempotente e não atropela decisão posterior.
+#
+# NÃO ESTÁ AQUI, de propósito, e por quê:
+#   · apagar_cliente, apagar_qualquer_coisa, qbo_apagar — ele marcou para SAIR de "nunca".
+#     Apagar não tem volta, e contraria a regra que ele mesmo me deu ("não destrua dados").
+#     Fica bloqueado até ele confirmar de viva voz, item a item.
+#   · docusign_send_reminder e gmail_rotular — a resposta dele foi CONDICIONAL ("só se o
+#     cliente tem serviço futuro agendado", "só move os 100% confirmados"). Condição não
+#     cabe numa política: vira trava no servidor, e é lá que vai ser escrita.
+#   · venda_tarefa — ele marcou APROVAÇÃO para criar tarefa interna, o oposto de todo o
+#     resto. Parece toque errado; perguntei antes de apertar.
+REVISAO_21_09 = [
+    # afrouxaram (decisão dele)
+    ("docusign_enviar_waiver", "REQUIRES_APPROVAL", "SAFE"),
+    ("docusign_reenviar_waiver", "REQUIRES_APPROVAL", "SAFE"),
+    ("docusign_anular_envelope", "REQUIRES_APPROVAL", "REQUIRES_CONFIRMATION"),
+    ("venda_enviar_waiver", "REQUIRES_CONFIRMATION", "SAFE"),
+    ("venda_enviar_invoice", "REQUIRES_APPROVAL", "REQUIRES_CONFIRMATION"),
+    ("qbo_criar_invoice", "REQUIRES_CONFIRMATION", "SAFE"),
+    ("qbo_enviar_invoice", "REQUIRES_APPROVAL", "REQUIRES_CONFIRMATION"),
+    ("gmail_enviar", "BLOCKED", "REQUIRES_APPROVAL"),
+    # apertou (decisão dele)
+    ("venda_mover_etapa", "SAFE", "REQUIRES_CONFIRMATION"),
+]
+
 POS_MIGRACAO = [
     # 16/09: o dono ditou a regra Docusign x Waivers depois de já ter confirmado os dois.
     # Troca o texto só se ainda for o que eu escrevi em 14/09 — o que ele editar fica.
@@ -249,6 +277,13 @@ POS_MIGRACAO = [
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
        ('waiver_na_tarefa', 1, '{"event":"task.created","por":"sistema"}', NULL,
         '{"sistema":"anexar a waiver assinada do piloto na tarefa do Asana e guardar o PDF no card do cliente"}')""",
+    # Por último, de propósito: os UPDATE abaixo só encontram a linha depois dos
+    # INSERT OR IGNORE acima. Tentei colocá-los no topo e, em banco novo, metade não
+    # pegou — a linha ainda não existia.
+    *[f"""UPDATE action_policies SET policy='{depois}',
+             note=COALESCE(note,'') || ' · revisto pelo dono em 21/09 ({antes} -> {depois})'
+           WHERE action='{acao}' AND policy='{antes}'"""
+      for acao, antes, depois in REVISAO_21_09],
 ]
 
 

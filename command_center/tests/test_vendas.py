@@ -299,8 +299,10 @@ def test_acoes_de_venda_tem_politica_e_nome_no_catalogo(cli):
     finally:
         con.close()
     assert pol["venda_anotar"] == "SAFE" and pol["venda_agendar_retorno"] == "SAFE"
-    assert pol["venda_enviar_waiver"] == "REQUIRES_CONFIRMATION"
-    assert pol["venda_enviar_invoice"] == "REQUIRES_APPROVAL"
+    # 21/09 o dono revisou: a waiver do serviço combinado passou a sair sozinha
+    assert pol["venda_enviar_waiver"] == "SAFE"
+    # 21/09: invoice fora da tabela passou de aprovação para confirmação
+    assert pol["venda_enviar_invoice"] == "REQUIRES_CONFIRMATION"
     assert pol["venda_fechar"] == "REQUIRES_CONFIRMATION"
     from command_center.api import acoes_painel
     nomes = {a["name"] for a in acoes_painel.descrever_todas()}
