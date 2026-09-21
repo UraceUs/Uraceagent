@@ -808,3 +808,73 @@ def test_foto_do_lead_vem_pelo_servidor_e_fica_em_cache(cli, chat, monkeypatch, 
     r2 = cli.get(f"{B}/crm/leads/{lid}/avatar", headers=h)                            # segunda vez: cache, sem chamada
     assert r2.status_code == 200 and len(chamadas) == 1
     assert (tmp_path / "avatars").exists() and _crm is not None
+
+
+# ------------------------------------------------------------------ 21/09: mensagem que não saiu
+def _lead_de_teste(nome="Lead do reenvio"):
+    """Lead próprio, para não depender da ordem dos outros testes do módulo."""
+    from command_center.db import agora
+    con = conectar()
+    lid = inserir(con, "crm_leads", external_id=f"ext-{nome}", name=nome, pipeline_id="9903543",
+                  stage_id="76050835", contact_name=nome, last_message_at=agora(), needs_reply=1)
+    con.commit(); con.close()
+    return lid
+
+
+def test_reenviar_mensagem_que_nao_chegou(cli, monkeypatch):
+    """O dono respondeu pelo painel e algumas mensagens não saíram (21/09). Agora dá para
+    mandar de novo: a antiga fica no histórico, marcada como substituída."""
+    from command_center.api import crm
+    from command_center.db import agora
+    lid = _lead_de_teste("Reenvio 1")
+    con = conectar()
+    mid = inserir(con, "crm_messages", lead_id=lid, direction="saida", status="failed",
+                  author="Italo", text="oi, consegue vir sábado?", at=agora(), source="painel",
+                  error="o bot não abriu o chat a tempo")
+    con.commit(); con.close()
+
+    monkeypatch.setattr(crm, "_aplicando", lambda fn, *a, **k: (True, "entregue"))
+    monkeypatch.setattr(crm, "_return_fresco", lambda l: True)
+    monkeypatch.setattr(crm, "_reivindicar_fila", lambda con, lid: [{"id": 1, "text": "x"}])
+    h = entra(cli, "admin@urace.us")
+    r = cli.post(f"{B}/crm/leads/{lid}/messages/{mid}/resend", json={}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["como"] == "entregue"
+
+    con = conectar()
+    antiga = um(con, "SELECT * FROM crm_messages WHERE id=?", (mid,))
+    assert antiga["status"] == "failed" and "substituída" in (antiga["error"] or "")
+    nova = um(con, "SELECT * FROM crm_messages WHERE lead_id=? ORDER BY id DESC LIMIT 1", (lid,))
+    assert nova["id"] != mid and nova["text"] == "oi, consegue vir sábado?"
+    assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='crm.reply.resend'")
+    con.close()
+
+
+def test_nao_reenvia_o_que_ja_foi_entregue(cli):
+    from command_center.db import agora
+    lid = _lead_de_teste("Reenvio 2")
+    con = conectar()
+    mid = inserir(con, "crm_messages", lead_id=lid, direction="saida", status="sent",
+                  author="Italo", text="já foi", at=agora(), source="painel")
+    con.commit(); con.close()
+    h = entra(cli, "admin@urace.us")
+    assert cli.post(f"{B}/crm/leads/{lid}/messages/{mid}/resend", json={}, headers=h).status_code == 409
+
+
+def test_atencao_avisa_mensagem_nao_entregue(cli):
+    """O painel sabia que a mensagem não saiu e ficava calado. Agora grita."""
+    from datetime import datetime, timedelta
+    lid = _lead_de_teste("Reenvio 3")
+    velha = (datetime.utcnow() - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S")
+    con = conectar()
+    inserir(con, "crm_messages", lead_id=lid, direction="saida", status="failed", author="Italo",
+            text="não chegou ao cliente", at=velha, source="painel", error="o bot não abriu o chat")
+    con.commit(); con.close()
+
+    entra(cli, "admin@urace.us")
+    itens = cli.get(f"{B}/needs-attention").json()
+    nao_entregue = [i for i in itens if i["entity"]["type"] == "crm_message"]
+    assert nao_entregue and nao_entregue[0]["level"] == "CRITICAL"
+    assert "não chegou" in nao_entregue[0]["title"]
+    # o aviso de "chat mudo" depende do último webhook do banco inteiro: vive em
+    # test_crm_silencio.py, com banco próprio, para não depender da ordem dos testes.

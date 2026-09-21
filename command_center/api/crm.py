@@ -447,6 +447,54 @@ def responder(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("
                       "vira nota no lead e fica marcada aqui como não entregue.")}
 
 
+class ReenviarIn(BaseModel):
+    texto: str | None = None
+
+
+@r.post("/leads/{lid}/messages/{mid}/resend")
+def reenviar(lid: int, mid: int, dados: ReenviarIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+             con: sqlite3.Connection = Depends(get_db)):
+    """Tentar de novo uma resposta que não chegou ao cliente.
+
+    Existe porque em 21/09 o dono respondeu pelo painel e **algumas mensagens não saíram**:
+    o estado ficava certo na tela ("não entregue"), mas não havia como reenviar sem copiar
+    o texto na mão. A mensagem antiga é marcada como substituída — o histórico não some."""
+    l = _lead(con, lid)
+    m = um(con, "SELECT * FROM crm_messages WHERE id=? AND lead_id=?", (mid, lid))
+    if not m:
+        raise HTTPException(404, "mensagem não encontrada nesta conversa")
+    if m["direction"] != "saida":
+        raise HTTPException(400, "só dá para reenviar resposta sua")
+    if m["status"] == "sent":
+        raise HTTPException(409, "essa já foi entregue")
+    texto = (dados.texto or m["text"] or "").strip()
+    if not texto:
+        raise HTTPException(400, "sem texto para reenviar")
+    atualizar(con, "crm_messages", mid, status="failed",
+              error=f"substituída pelo reenvio de {u['name']} em {agora()[:16].replace('T', ' ')}")
+    novo = inserir(con, "crm_messages", lead_id=lid, external_id=None, direction="saida", status="queued",
+                   author=u["name"], text=texto[:8000], at=agora(), source="painel")
+    auditar(con, "crm.reply.resend", f"user:{u['id']}", user_id=u["id"], entity_type="crm_lead", entity_id=lid,
+            detail={"de": mid, "para": novo}, ip=auth._ip(request))
+    con.commit()
+    como, det = "fila", None
+    if _return_fresco(l):
+        minhas = _reivindicar_fila(con, lid)
+        if minhas:
+            ok, det = _aplicando(_entregar, con, l, minhas)
+            como = "entregue" if ok else "fila"
+    if como == "fila":
+        try:
+            _aplicando(modulo(SISTEMA).abrir_canal_humano, l["external_id"])
+            como = "bot disparado"
+        except Exception as e:
+            atualizar(con, "crm_messages", novo, status="failed", error=str(e)[:300])
+            con.commit()
+            raise _erro(e)
+    con.commit()
+    return {"ok": True, "msg_id": novo, "como": como, "detalhe": det}
+
+
 @r.get("/leads/{lid}/avatar")
 def avatar(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """Foto do perfil que o Kommo manda no webhook. A URL (amojo.kommo.com) não é pública: o servidor

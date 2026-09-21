@@ -379,18 +379,24 @@ def test_auto_tratar_notificacoes():
 
 
 def test_atencao_ignora_historico_e_notificacao(cli):
+    from datetime import datetime, timedelta
+
     from command_center.db import conectar, inserir
     entra(cli, "admin@urace.us")
     con = conectar()
     cid = con.execute("SELECT id FROM clients LIMIT 1").fetchone()[0]
+    # datas RELATIVAS: a atenção "cliente escreveu" só olha 14 dias, e cenário com data fixa
+    # quebra sozinho quando o tempo passa (aconteceu duas vezes: 18/09 e 21/09).
+    recente = (datetime.utcnow() - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    antigo = (datetime.utcnow() - timedelta(days=180)).strftime("%Y-%m-%dT%H:%M:%SZ")
     velho = inserir(con, "emails", client_id=cid, mailbox="support", subject="Your tickets for OKC PIT & DRIVER PASS", sender="tix@okc.com",
-                    last_at="2026-03-17T10:00:00Z", handled=0, is_inbox=0)
+                    last_at=antigo, handled=0, is_inbox=0)
     fora = inserir(con, "emails", client_id=cid, mailbox="support", subject="Re: Rescheduled for August 8th", sender="joe@example.com",
-                   last_at="2026-09-07T10:00:00Z", handled=0, is_inbox=0)
+                   last_at=recente, handled=0, is_inbox=0)
     nosso = inserir(con, "emails", client_id=cid, mailbox="support", subject="10% discount just for you", sender="Urace <urace@urace.us>",
-                    last_at="2026-09-07T10:00:00Z", handled=0, is_inbox=1)
+                    last_at=recente, handled=0, is_inbox=1)
     real = inserir(con, "emails", client_id=cid, mailbox="support", subject="Plano mensal para o Enzo", sender="joe@example.com",
-                   last_at="2026-09-07T10:00:00Z", handled=0, is_inbox=1, priority="HIGH")
+                   last_at=recente, handled=0, is_inbox=1, priority="HIGH")
     itens = cli.get(B + "/needs-attention").json()
     chaves = {i["key"] for i in itens}
     assert f"email-cliente:email:{real}" in chaves

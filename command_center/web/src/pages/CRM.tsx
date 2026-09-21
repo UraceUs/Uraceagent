@@ -121,6 +121,16 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     try { await api.post(`/crm/leads/${id}/note`, { text: nota }); setNota(''); toast('Anotação guardada no lead (não vai para o cliente).', 'ok'); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
+  // 21/09: o dono respondeu pelo painel e algumas mensagens não saíram. O estado já aparecia
+  // na bolha; faltava poder mandar de novo sem copiar o texto na mão.
+  async function reenviar(m: Mensagem) {
+    setBusy(`r${m.id}`)
+    try {
+      const r = await api.post<{ como: string }>(`/crm/leads/${id}/messages/${m.id}/resend`, {})
+      toast(r.como === 'entregue' ? 'Entregue agora.' : 'Na fila: o bot do Kommo abre o chat em segundos.', 'ok')
+      d.reload()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
   async function estrelaMsg(m: Mensagem) {
     try { await api.post(`/crm/messages/${m.id}/star`, { starred: !m.starred }); d.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
@@ -197,6 +207,9 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
                 </div>
                 <div className="bub-row"><div className="bub">{m.text}</div><button className={`star sm${m.starred ? ' on' : ''}`} onClick={() => estrelaMsg(m)} aria-label={m.starred ? 'Tirar favorita' : 'Favoritar mensagem'} title={m.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={14} /></button></div>
                 {m.status === 'failed' && m.error && <div className="small" style={{ color: 'var(--crit)' }}>{m.error}</div>}
+                {m.direction === 'saida' && (m.status === 'failed' || m.status === 'queued') && can('OPERATOR') &&
+                  <button className="btn sm" style={{ marginTop: 6 }} disabled={busy === `r${m.id}`}
+                    onClick={() => reenviar(m)}>{busy === `r${m.id}` ? <Spinner /> : <><Icon name="refresh" size={14} /> Tentar de novo</>}</button>}
               </div>}
         </Fragment>
       })}

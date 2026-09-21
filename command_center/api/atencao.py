@@ -257,6 +257,52 @@ def _coletar(con):
                                  ("Recado", "sim" if c.get("voicemail") else "não"),
                                  ("Oportunidade", c.get("oportunidade") or "—")]))
 
+    # ---- 9. o chat do Kommo: mensagem minha que não chegou ao cliente
+    for m in todos(con, """SELECT m.*, l.name AS lead, l.id AS lead_id FROM crm_messages m
+                           JOIN crm_leads l ON l.id = m.lead_id
+                           WHERE m.direction='saida' AND m.status IN ('failed','queued','sending')
+                             AND m.at >= ? ORDER BY m.at DESC LIMIT 12""",
+                   ((datetime.utcnow() - timedelta(days=3)).strftime("%Y-%m-%dT%H:%M:%S"),)):
+        parada = (m.get("status") or "") != "failed"
+        try:
+            idade = (datetime.utcnow() - datetime.fromisoformat((m.get("at") or "")[:19])).total_seconds()
+        except ValueError:
+            idade = 10**6
+        if parada and idade < 300:               # 5 min: ainda pode sair sozinha, não é problema
+            continue
+        itens.append(dict(key=_chave("crm-nao-entregue", "crm_message", m["id"]),
+                          level="CRITICAL" if not parada else "HIGH",
+                          title=f"Sua resposta para {m['lead']} não chegou",
+                          why=(m.get("error") or "Está parada na fila: o bot do Kommo não abriu o chat.")[:200],
+                          entity={"type": "crm_message", "id": m["id"]}, client_id=None,
+                          link=f"/crm/chat?lead={m['lead_id']}", action="Tentar de novo",
+                          facts=[("Quando", (m.get("at") or "—")[:16].replace("T", " ")),
+                                 ("Estado", m.get("status") or "—"),
+                                 ("Texto", (m.get("text") or "")[:120] or "—")]))
+
+    # ---- 10. o chat parou de RECEBER (o webhook do Kommo emudeceu)
+    # Sintoma que o dono viu em 21/09: "algumas msgs não foram e outras não chegaram".
+    # O Kommo desliga o webhook depois de falhas seguidas — e o painel ficava calado.
+    hook = um(con, "SELECT at FROM audit_logs WHERE event='crm.webhook' ORDER BY id DESC LIMIT 1")
+    conversas = um(con, "SELECT COUNT(*) AS n FROM crm_leads WHERE last_message_at IS NOT NULL")
+    if conversas and conversas["n"]:
+        try:
+            horas = ((datetime.utcnow() - datetime.fromisoformat((hook["at"] or "")[:19])).total_seconds() / 3600
+                     if hook else 10**6)
+        except ValueError:
+            horas = 10**6
+        if horas >= 24:
+            quando = f"há {int(horas)} h" if horas < 10**5 else "nunca"
+            itens.append(dict(key=_chave("crm-mudo", "crm", "webhook"), level="CRITICAL",
+                              title="O chat do Kommo parou de receber mensagem",
+                              why=(f"O último aviso do Kommo chegou {quando}. Enquanto isso, mensagem de lead "
+                                   "não entra no painel — e quem escreveu fica sem resposta."),
+                              entity={"type": "crm", "id": None}, client_id=None,
+                              link="/crm/chat", action="Ver a configuração do chat",
+                              facts=[("Último aviso do Kommo", (hook["at"] if hook else "—") or "—"),
+                                     ("O que costuma ser", "o Kommo desliga o webhook depois de falhas seguidas"),
+                                     ("Onde religar", "Kommo → Settings → Webhooks, com a URL de Integrações")]))
+
     ordem = {n: i for i, n in enumerate(NIVEIS)}
     itens.sort(key=lambda x: ordem[x["level"]])
     return itens
