@@ -194,24 +194,26 @@ INSERT INTO configurations (category, key, value, updated_by) VALUES
 -- -----------------------------------------------------------------------------
 INSERT INTO configurations (category, key, value, updated_by) VALUES
 ('pipeline_mapping', 'custom_fields', '{
-  "interest":            {"field_id": null},
-  "program":             {"field_id": null, "type": "text",
+  "interest":            {"field_id": 1331937},
+  "program":             {"field_id": 1331939, "type": "text",
                           "note": "free text, not a select — avoids syncing option lists with the catalog"},
-  "experience":          {"field_id": null},
-  "driver_age":          {"field_id": null},
-  "budget":              {"field_id": null},
-  "urgency":             {"field_id": null},
-  "lead_score":          {"field_id": null},
-  "score_reason":        {"field_id": null}
+  "experience":          {"field_id": 1331941},
+  "driver_age":          {"field_id": 1331943},
+  "budget":              {"field_id": 1331945},
+  "urgency":             {"field_id": 1331947},
+  "lead_score":          {"field_id": 1331949},
+  "score_reason":        {"field_id": 1331951}
 }', 'seed'),
 
 ('pipeline_mapping', 'stages', '{
-  "new":           {"status_id": null},
-  "qualifying":    {"status_id": null},
-  "qualified":     {"status_id": null},
-  "scheduled":     {"status_id": null},
-  "with_owner":    {"status_id": null},
-  "closed_lost":   {"status_id": null}
+  "_pipeline_id":  14316000,
+  "_pipeline_note": "Chase — AI Sales Funnel. PENDING REBUILD (2026-09-21, Italo): missing a 24h Meta-lead SLA window, pipeline too long/convoluted. IDs below are the CURRENT pipeline, to be revisited when it is rebuilt.",
+  "new":           {"status_id": 110564420, "note": "New Inquiry"},
+  "qualifying":    {"status_id": 110564424, "note": "Contact Information Collected"},
+  "qualified":     {"status_id": 110564440, "note": "Academy Qualified — defaulted to Academy track; Racing track (Current Racer Qualified, 110564448) not mapped yet, schema only holds one ID per stage"},
+  "scheduled":     {"status_id": 110564444, "note": "Academy Call Scheduled — same Academy-default caveat as qualified; Racing track is Racing Call Scheduled, 110564452"},
+  "with_owner":    {"status_id": null, "note": "No equivalent stage exists yet — closest is Nurture (110564468) but semantics differ (long-term nurture, not human handoff). Left unmapped pending pipeline rebuild."},
+  "closed_lost":   {"status_id": 143, "note": "Closed - lost"}
 }', 'seed');
 
 -- -----------------------------------------------------------------------------
