@@ -56,3 +56,29 @@ existe — `GET /api/v4/leads/custom_fields` e `GET /api/v4/leads/pipelines`
 `experience`, `driver_age`, `budget`, `urgency`, `lead_score`,
 `score_reason`) e o pipeline `Chase — AI Sales Funnel` (14316000) já
 existem e estão mapeados em `db/002_seed_config.sql`.
+
+## Cliente Kommo — não chame a API na mão
+
+`agent/kommo_client.py` existe pra isso: ler lead, ler custom fields/pipelines,
+atualizar campos, mover etapa, ler eventos (checagem de robô antes de mover em
+lote), criar nota. Usa `KOMMO_TOKEN` (env) ou `~/.urace/kommo_token.txt` — a
+mesma convenção de guarda de token desta seção.
+
+```bash
+python agent/kommo_client.py --self-test       # sem rede, sem token
+python agent/kommo_client.py --whoami          # confirma que o token funciona
+python agent/kommo_client.py --custom-fields   # lista os IDs reais dos campos
+python agent/kommo_client.py --pipelines       # lista pipelines e etapas
+```
+
+```python
+from agent.kommo_client import KommoClient
+client = KommoClient()
+lead = client.get_lead(12345, with_=("contacts", "notes"))
+client.update_lead(12345, custom_fields_values=[{"field_id": 1331943, "values": [{"value": 9}]}])
+```
+
+`send_native_channel_message()` propositalmente **lança erro** — a API do
+Kommo não manda mensagem de Instagram/Facebook/WhatsApp, só o Salesbot ou a
+tela manual. Isso é estrutural no código, não um lembrete de prompt: quem
+tentar usa Salesbot ou a UI, nunca esse client.
