@@ -32,7 +32,7 @@ import urllib.parse
 import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mcp_stdio import ErroFerramenta, Servidor, log  # noqa: E402
+from mcp_stdio import ErroFerramenta, Servidor, assinar, log  # noqa: E402
 
 TIMEOUT = 40
 LIMITE_PAGINA = 250                      # teto da API v4
@@ -713,8 +713,10 @@ def nota_humana(lead_id, texto):
         raise ErroFerramenta("nota vazia")
     if not _aplicar():
         return _simulado(f"anotar no lead {lead_id}: {texto[:80]}")
+    # anotação é interna: assina (dono, 21/09). A RESPOSTA no chat não — aquilo é o texto
+    # que uma pessoa digitou no painel, e carimbar "Ai agent" mudaria o que o cliente entende.
     r = _req(f"/leads/{int(lead_id)}/notes", "POST",
-             [{"note_type": NOTA_COMUM, "params": {"text": texto[:20000]}}])
+             [{"note_type": NOTA_COMUM, "params": {"text": assinar(texto)[:20000]}}])
     nid = (((r or {}).get("_embedded") or {}).get("notes") or [{}])[0].get("id")
     return {"aplicado": True, "lead_id": str(lead_id), "nota_id": str(nid) if nid else None}
 

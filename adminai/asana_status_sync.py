@@ -257,7 +257,8 @@ def main():
                  {"task": c["gid"]})
         _req(f"/tasks/{c['gid']}/stories", "POST", {"text":
              f"[IA ADM] Sincronia automática status x quadro: {acao}. "
-             f"Critério: a última alteração vence (lido do histórico da tarefa)."})
+             f"Critério: a última alteração vence (lido do histórico da tarefa).\n\n"
+             f"by Urace Ai agent"})     # dono, 21/09: tudo que o painel escreve é assinado
         print("     aplicado + comentário registrado na tarefa")
     return 0
 

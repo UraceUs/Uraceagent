@@ -35,7 +35,7 @@ import urllib.request
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mcp_stdio import ErroFerramenta, Servidor, log  # noqa: E402
+from mcp_stdio import ASSINATURA, ErroFerramenta, Servidor, assinar, log  # noqa: E402
 
 API = "https://app.asana.com/api/1.0"
 WORKSPACE = "1205450084498489"
@@ -297,7 +297,7 @@ def asana_comentar(gid, texto):
     _recusar_se_protegida(t, "comentar")
     if not _aplicar():
         return _simulado(f"comentar em '{t['name']}' ({gid}): {texto[:200]}")
-    r = _req(f"/tasks/{gid}/stories", "POST", {"text": texto})["data"]
+    r = _req(f"/tasks/{gid}/stories", "POST", {"text": assinar(texto)})["data"]
     return {"aplicado": True, "story_gid": r["gid"], "tarefa": t["name"]}
 
 
@@ -348,9 +348,8 @@ def asana_criar_tarefa(projeto_gid, nome, secao_gid=None, notas=None, vence_em=N
         raise ErroFerramenta("RECUSADO: não se cria nada no ADM URACE.")
     if secao_gid and secao_gid == _gid_matt_tasks():
         raise ErroFerramenta("RECUSADO: não se cria nada em 'Matt tasks'.")
-    corpo = {"name": nome, "workspace": WORKSPACE, "projects": [projeto_gid]}
-    if notas:
-        corpo["notes"] = notas
+    corpo = {"name": nome, "workspace": WORKSPACE, "projects": [projeto_gid],
+             "notes": assinar(notas)}           # assinada mesmo sem descrição (dono, 21/09)
     if vence_em:
         corpo["due_on"] = vence_em
     if not _aplicar():
@@ -393,7 +392,7 @@ def preencher_invoice_na_tarefa(gid, link, valor=None, deposito=False):
             notas = re.sub(r"(?im)^(" + re.escape(rotulo) + r":.*\n)Price:.*$", lambda m: m.group(1) + f"Price: ${float(valor):,.2f}", notas, count=1)
     else:
         notas = notas.rstrip() + "\n\n" + linha + (f"\nPrice: ${float(valor):,.2f}" if valor is not None else "")
-    _req(f"/tasks/{gid}", "PUT", {"notes": notas})
+    _req(f"/tasks/{gid}", "PUT", {"notes": assinar(notas)})
     return {"aplicado": True, "gid": gid, "invoice_link": link, "campo": rotulo}
 
 
@@ -416,8 +415,17 @@ def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=No
     if not novo:
         raise ErroFerramenta("o Asana demorou demais para criar a tarefa a partir do modelo")
     ajuste = {}
+    # A assinatura vale SEMPRE (dono, 21/09), e serviço e corrida nascem aqui — mas sem
+    # descrição própria não dá para escrever só o carimbo: isso apagaria o texto que veio
+    # do modelo. Então, nesse caso, lê o que o modelo trouxe e acrescenta ao fim.
     if notas:
-        ajuste["notes"] = notas
+        ajuste["notes"] = assinar(notas)
+    else:
+        try:
+            do_modelo = (_req(f"/tasks/{novo}?opt_fields=notes")["data"] or {}).get("notes") or ""
+        except Exception:                      # noqa: BLE001 — sem isto a tarefa fica sem marca
+            do_modelo = ""
+        ajuste["notes"] = assinar(do_modelo)
     if vence_em:
         ajuste["due_on"] = vence_em
     if ajuste:
@@ -489,7 +497,7 @@ def comentar_humano(gid, texto):
     proteções (ADM URACE, Matt tasks)."""
     t = _ler_tarefa(gid)
     _recusar_se_protegida(t, "comentar")
-    r = _req(f"/tasks/{gid}/stories", "POST", {"text": texto})["data"]
+    r = _req(f"/tasks/{gid}/stories", "POST", {"text": assinar(texto)})["data"]
     return {"aplicado": True, "story_gid": r["gid"], "tarefa": t["name"]}
 
 

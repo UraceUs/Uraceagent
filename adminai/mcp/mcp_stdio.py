@@ -38,6 +38,30 @@ def log(*partes):
     print("[mcp]", *partes, file=sys.stderr, flush=True)
 
 
+# --------------------------------------------------------------- assinatura
+# Dono, 21/09, depois de descobrir tarefa de agente no Asana dele sem saber de quem era:
+# *"tudo que for feito pelo command center de agora em diante tem que ter a assinatura
+# by Urace Ai agent"*.
+#
+# Um lugar só, usado por todo caminho que escreve em sistema de fora. Quem lê a tarefa, a
+# anotação ou o comentário sabe na hora o que veio do painel e o que veio de gente.
+#
+# **Onde NÃO se assina, e por quê:** o que chega ao cliente com cara de pessoa. Resposta
+# no chat do Kommo é o texto que o dono digitou, não da IA; invoice e waiver saem no nome
+# da empresa. Carimbar "Ai agent" ali mudaria o que o cliente entende da conversa — isso é
+# decisão de negócio, não de código, e ficou perguntada em vez de assumida.
+ASSINATURA = "by Urace Ai agent"
+
+
+def assinar(texto, marca=ASSINATURA):
+    """Acrescenta a assinatura ao fim, em linha própria. Idempotente: texto que já tem a
+    marca volta igual — senão a mesma tarefa editada três vezes ganharia três carimbos."""
+    corpo = (texto or "").rstrip()
+    if marca.lower() in corpo.lower():
+        return corpo or None
+    return (corpo + "\n\n" + marca).strip() if corpo else marca
+
+
 class ErroFerramenta(Exception):
     """Erro que o modelo deve ler como resultado, não como falha do servidor."""
 
