@@ -33,7 +33,7 @@ agent/         Orchestrator, camada de tools em Python, API HTTP
 prompts/       Master prompt + 5 modos + definições de tools
 tests/         Cenários, calibração do judge, mocks
 postman/       Collection que prova os portões contra o banco real
-docs/          Arquitetura (26 seções) e planilhas do catálogo
+docs/          Arquitetura (26 seções), templates do WhatsApp e planilhas do catálogo
 ```
 
 ---
@@ -124,6 +124,7 @@ confirmar. É o que permite operar com o catálogo pela metade sem inventar.
 
 `docs/urace-catalogo-template.xlsx` — estrutura das três abas
 `docs/urace-programs-preenchido.xlsx` — conteúdo comercial redigido, para revisão
+`docs/whatsapp-templates.md` — modelos aprovados pela Meta para falar fora da janela de 24h
 
 ---
 
