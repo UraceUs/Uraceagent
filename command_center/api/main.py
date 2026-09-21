@@ -95,10 +95,14 @@ def _laco_do_chat():
     while True:
         con = conectar()
         try:
+            from command_center.db import agora as _agora
             from command_center.api import crm
             r = crm.empurrar_fila(con)
             desistiu = crm.varrer_fila(con)
             con.commit()
+            crm.BATIDA.update(em=_agora(), ciclos=crm.BATIDA["ciclos"] + 1,
+                              ultimo=({**r, "desistiu": desistiu} if (r["entregues"] or desistiu or r["falhas"])
+                                      else crm.BATIDA["ultimo"]))
             if r["entregues"] or desistiu or r["falhas"]:
                 auditar(con, "crm.fila", "system", detail={**r, "desistiu": desistiu})
                 con.commit()

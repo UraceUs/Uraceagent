@@ -422,6 +422,13 @@ def varrer_fila(con):
     return len(velhas)
 
 
+# Sinal de vida do laço `cc-chat`. Em memória de propósito: é batida de coração, não
+# histórico — gravar no banco a cada meio minuto seria sujeira pura. Quem lê é o painel,
+# em "Ligar o chat", e o /crm/setup. Sem isto, saber se o laço está vivo virava palpite:
+# o Python 3.12 não põe o nome da thread no sistema, então `ps` nunca mostra `cc-chat`.
+BATIDA = {"em": None, "ciclos": 0, "ultimo": None}
+
+
 def empurrar_fila(con):
     """Insiste com o que está na fila. Roda sozinho a cada meio minuto (laço `cc-chat`).
 
@@ -822,7 +829,10 @@ def setup(request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connect
             "bot_secret": bool(os.environ.get("KOMMO_BOT_SECRET")), "token": bool(os.environ.get("KOMMO_TOKEN")),
             "ultimo_hook": ultimo["created_at"] if ultimo else None, "hooks_hoje": hoje["n"] if hoje else 0,
             "fila": um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE status='queued'")["n"],
-            "falhas": um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE status='failed'")["n"]}
+            "falhas": um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE status='failed'")["n"],
+            # o laço que insiste com a fila está vivo? sem isto, só dava para supor
+            "laco_em": BATIDA["em"], "laco_ciclos": BATIDA["ciclos"], "laco_ultimo": BATIDA["ultimo"],
+            "recibo_ativo": confirmacao_confiavel(con)}
 
 
 @r.get("/diagnostico")

@@ -177,3 +177,22 @@ def test_so_cobra_recibo_de_conta_que_da_recibo(cli):
     avisos = [i for i in atencao._coletar(con) if i["key"].startswith("crm-sem-recibo")]
     assert avisos and "Charles" in avisos[0]["title"]
     con.close()
+
+
+# ------------------------------------------------------------------ sinal de vida do laço
+def test_setup_diz_se_a_entrega_automatica_esta_viva(cli):
+    """21/09: conferi o laço com `ps` e ele não aparecia — o Python 3.12 não põe o nome da
+    thread no sistema, então `ps` nunca mostraria. Saber se a entrega automática está de pé
+    não pode depender de palpite: o painel pergunta e o servidor responde."""
+    con = conectar()
+    auth.criar_usuario(con, "admin@urace.us", "Admin", "ADMIN", SENHA)
+    con.commit(); con.close()
+    cli.cookies.clear()
+    assert cli.post(f"{B}/auth/login", json={"email": "admin@urace.us", "password": SENHA}).status_code == 200
+
+    crm.BATIDA.update(em=None, ciclos=0, ultimo=None)
+    assert cli.get(f"{B}/crm/setup").json()["laco_em"] is None      # parado: a tela avisa
+
+    crm.BATIDA.update(em=agora(), ciclos=7)
+    s = cli.get(f"{B}/crm/setup").json()
+    assert s["laco_em"] and s["laco_ciclos"] == 7 and s["recibo_ativo"] is False
