@@ -103,6 +103,7 @@ export function Shell() {
         <NL to="/sales/agenda" icon="cal">Agenda de vendas</NL>
         <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>Chat do Kommo</NL>
         <div className="grp">Pessoas</div>
+        <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">Equipe</NL>
         <NL to="/clients" icon="people">Clientes</NL>
         <NL to="/crm/funil" icon="funnel">Funil do Kommo</NL>
         <div className="grp">Sistemas</div>

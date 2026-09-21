@@ -51,6 +51,20 @@ Sem janela de tempo. Sem custo por mensagem. Sem aprovação prévia de texto.
    número por onde entram os leads. **Não vou por esse caminho**, e registro aqui para não
    ser proposto de novo daqui a três meses.
 
+## Adendo do mesmo dia: WhatsApp fica para depois
+
+O dono, depois de ver os três pedágios: *"não vamos usar o wpp por enquanto"*. Decisão
+aceita e é a mais sensata — recriar os grupos da equipe com teto de 8 pessoas, verificar a
+empresa na Meta e pagar template para avisar mecânico fora da janela é muito pedágio para
+o valor que entrega.
+
+**O levantamento acima fica registrado de propósito**: quando o assunto voltar, os limites
+já estão medidos e ninguém precisa redescobrir — nem propor biblioteca não oficial.
+
+Então o alvo passa a ser: **chat nativo no painel + push no celular + ponte do Google
+Chat**. O WhatsApp da equipe continua onde está, sem ponte. (O WhatsApp de *cliente*
+segue pelo Kommo, como hoje — nada muda ali.)
+
 ## A decisão de desenho
 
 **O Command Center vira o hub; os dois viram canais — mas com pesos diferentes.**

@@ -163,3 +163,15 @@ def test_mensagem_vazia_nao_entra(cli):
     with pytest.raises(ValueError):
         equipe.guardar_mensagem(con, cid, "  ", "alguém")
     con.close()
+
+
+def test_o_menu_mostra_o_nao_lido_de_quem_esta_olhando(cli):
+    """O contador do menu é o da PESSOA, não o da casa. Número que não é meu eu aprendo a
+    ignorar em dois dias — e aí a notificação deixa de significar alguma coisa."""
+    h = entra(cli, "mec@urace.us")
+    cid = cli.post(f"{B}/equipe/canais", headers=h, json={"name": "Box",
+                                                          "membros": [uid("outro@urace.us")]}).json()["id"]
+    cli.post(f"{B}/equipe/canais/{cid}/mensagens", headers=h, json={"text": "olha isso"})
+    assert cli.get(f"{B}/dashboard", headers=h).json()["equipe_nao_lidas"] == 0     # quem escreveu
+    h2 = entra(cli, "outro@urace.us")
+    assert cli.get(f"{B}/dashboard", headers=h2).json()["equipe_nao_lidas"] == 1    # quem recebeu

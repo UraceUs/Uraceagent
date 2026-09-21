@@ -671,3 +671,12 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .chip.run .g{animation:spin 1.4s linear infinite;display:inline-block}
 .rc .g.run{animation:spin 1.4s linear infinite;display:inline-block}
 @media(prefers-reduced-motion:reduce){.tabs button.on::before{animation:none;opacity:1}.thinking .bars i,.dots i.on,.menu,.pop,.lpick-menu,.balao,.pal{animation:none}.modal-scrim,.pal-scrim{backdrop-filter:none}}
+
+
+/* Chat da equipe no celular: uma coisa de cada vez. No computador, lista e conversa
+   lado a lado; no telefone, quem abriu a conversa não precisa ver a lista atrás. */
+.so-mobile{display:none}
+@media(max-width:700px){
+  .so-desktop{display:none}
+  .so-mobile{display:inline-flex}
+}

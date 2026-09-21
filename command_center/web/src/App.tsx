@@ -14,6 +14,7 @@ import { Races } from './pages/Races'
 import { Client360 } from './pages/Client360'
 import { Clients } from './pages/Clients'
 import { CRM } from './pages/CRM'
+import { Equipe } from './pages/Equipe'
 import { GmailManual } from './pages/GmailManual'
 import { Dashboard } from './pages/Dashboard'
 import { AsanaPage, DocuSignPage, GmailPage, QuickBooksPage } from './pages/Systems'
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="crm/chat" element={<CRM vista="chat" />} />
           <Route path="crm/funil" element={<CRM vista="funil" />} />
           <Route path="kommo" element={<Navigate to="/crm/chat" replace />} />
+          <Route path="equipe" element={<Equipe />} />
           <Route path="sales" element={<Guard min="OPERATOR"><Oportunidades /></Guard>} />
           <Route path="sales/agenda" element={<Guard min="OPERATOR"><AgendaVendas /></Guard>} />
           <Route path="sales/:id" element={<Guard min="OPERATOR"><Oportunidade /></Guard>} />

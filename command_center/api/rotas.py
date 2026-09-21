@@ -11,7 +11,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from command_center.api import atencao, auth, vendas
+from command_center.api import atencao, auth, equipe, vendas
 from command_center.db import agora, atualizar, auditar, conectar, get_db, inserir, todos, um
 from command_center.providers import SISTEMAS, recarregar, saude
 from command_center.providers import sync as sy
@@ -124,6 +124,9 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
         "waivers_bounced": n("SELECT COUNT(*) AS n FROM waivers WHERE status='autoresponded' AND COALESCE(internal,0)=0"),
         "emails_attention": n("SELECT COUNT(*) AS n FROM emails WHERE handled=0 AND client_id IS NOT NULL"),
         "crm_pending": n("SELECT COUNT(*) AS n FROM crm_leads WHERE needs_reply=1"),
+        # chat da equipe: o que ESTA pessoa ainda não leu (o menu mostra o número dela,
+        # não o da casa — contador que não é meu eu aprendo a ignorar em dois dias)
+        "equipe_nao_lidas": sum(equipe.nao_lidas(con, u["id"]).values()),
         # vendas (17/09): retornos vencidos ou de hoje, de todo mundo
         "sales_due": n("""SELECT COUNT(*) AS n FROM opportunities
                           WHERE stage NOT IN ('GANHO','PERDIDO') AND next_at IS NOT NULL

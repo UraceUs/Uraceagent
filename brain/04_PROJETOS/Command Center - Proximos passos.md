@@ -49,13 +49,14 @@ Command Center.
 - [x] 🤖 **Base construída** (21/09): tabelas, API e testes do chat interno
 - [ ] 🤖 Tela do chat interno no painel (lista de conversas + conversa, pensada para celular)
 - [ ] 🤖 **Notificação push (PWA)** — o que decide se a equipe adota ou ignora
-- [ ] 👤 Número do WhatsApp para a API: o atual dos leads (via Kommo) ou um segundo?
-- [ ] 👤 Official Business Account verificada na Meta (sem isso, grupo nem começa)
-- [ ] 👤 Aceitar recriar grupo de equipe como grupo de API de até 8 — ou deixar o grupo no
-      WhatsApp comum e trazer para o painel só o que é operação
-- [ ] 👤 Admin do Google Workspace liberar o app do Chat na organização
+- [ ] 👤 Admin do Google Workspace liberar o app do Chat na organização — **é o único
+      bloqueio que sobrou** nesta frente
 - [ ] 🤖 Ponte do Google Chat (depois do admin liberar)
-- [ ] 🤖 Ponte do WhatsApp: 1:1 primeiro; grupo só se o limite de 8 for aceito
+
+**WhatsApp: parado por decisão do dono em 21/09** — *"não vamos usar o wpp por enquanto"*.
+Os limites já estão medidos em [[D-2026-09-21 - Chat interno e a ponte com WhatsApp e Google Chat]];
+quando voltar, ninguém precisa redescobrir. O WhatsApp de cliente segue pelo Kommo, como
+hoje. O da equipe continua onde está, sem ponte.
 
 ## 2. Checklists de serviço e corrida
 
