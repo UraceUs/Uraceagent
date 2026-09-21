@@ -13,10 +13,20 @@ dois lados têm texto. Não é por id: a mesma mensagem tem id diferente em cada
 (nota do Kommo, id da mensagem no webhook, marca da sincronia) — foi isso que deixou a
 conversa em dobro até 21/09.
 
-**Dois limites, ditos na cara:** a API de notas do Kommo nem sempre traz o texto das
-mensagens de chat (aí o casamento é só por tempo), e o que é anterior à integração não
-vem pela API. Por isso a conferência olha uma janela recente e diz quantas linhas de
-cada lado ficaram sem texto — o que não dá para afirmar, ela não afirma.
+**A regra que vale mais que tudo aqui: só acusa na direção em que enxerga.** Na primeira
+versão (21/09, manhã) ela apontou quatro respostas como "não foi" — e a conversa daqueles
+leads vinha VAZIA do Kommo. Acusar com base em lista vazia é o pior defeito que uma
+conferência pode ter. Agora: se o Kommo não devolve nada de um lead, o veredito é *não deu
+para conferir*; se devolve mensagens mas nenhuma nossa, as respostas daquele lead ficam em
+*não dá para dizer* — nunca em "não foi".
+
+**Duas fontes, porque nenhuma basta sozinha:** as notas do lead (`kommo_conversa`, traz
+texto quando tem) e os eventos de conversa da conta (`kommo_chats`, sem texto, mas é o que
+esta conta registra). A segunda entra só onde a primeira não cobre.
+
+**Dois limites:** a API do Kommo nem sempre traz o texto da mensagem de chat (aí o
+casamento é só por tempo), e o que é anterior à integração não vem. Por isso a janela é
+recente e o relatório conta quantas linhas ficaram sem texto.
 
 Só leitura: não escreve no Kommo nem no banco.
 """
@@ -82,17 +92,52 @@ def _ler_do_kommo(lead_externo, maximo=200):
     return chamar("kommo", "kommo_conversa", lead_id=str(lead_externo), maximo=maximo)
 
 
-def conferir_lead(con, lead, ler=None, desde=None):
+def eventos_por_lead(dias=7, maximo=2000):
+    """Eventos de conversa da conta, agrupados por lead. Sem texto — só direção e hora —,
+    mas é o que esta conta registra quando a nota não existe. Falhou? `{}`: a conferência
+    segue só com as notas e diz que enxergou menos."""
+    from command_center.providers import chamar
+    try:
+        brutos = chamar("kommo", "kommo_chats", desde_dias=int(dias), maximo=int(maximo)) or []
+    except Exception:                                             # noqa: BLE001
+        return {}
+    saida = {}
+    for e in brutos:
+        saida.setdefault(str(e.get("lead_id")), []).append(
+            {"id": str(e.get("id")), "tipo": e.get("tipo") or "evento", "direcao": e.get("direcao"),
+             "texto": "", "em": e.get("em"), "fonte": "evento"})
+    return saida
+
+
+def _lado_do_kommo(notas, eventos, corte):
+    """Junta as duas fontes. O evento só entra onde não há nota da mesma direção por perto:
+    as duas descrevem a mesma mensagem, e contar duas vezes inventaria conversa."""
+    dentro = lambda x: corte is None or (_segundos(x.get("em")) or 0) >= corte          # noqa: E731
+    itens = [dict(n, fonte=n.get("fonte") or "nota") for n in notas
+             if n.get("direcao") in DIRECOES and dentro(n)]
+    for ev in eventos or []:
+        if ev.get("direcao") not in DIRECOES or not dentro(ev):
+            continue
+        te = _segundos(ev.get("em"))
+        perto = any(i["direcao"] == ev["direcao"] and te is not None
+                    and (_segundos(i.get("em")) or 0) and abs(_segundos(i["em"]) - te) <= JANELA_S
+                    for i in itens)
+        if not perto:
+            itens.append(ev)
+    itens.sort(key=lambda x: _segundos(x.get("em")) or 0)
+    return itens
+
+
+def conferir_lead(con, lead, ler=None, desde=None, eventos=None):
     """Um lead: o que está só no Kommo, o que está só no painel, e o que não deu para dizer."""
     ler = ler or _ler_do_kommo
     try:
         bruto = ler(lead["external_id"]) or []
     except Exception as e:                                        # noqa: BLE001
         return {"lead": lead, "erro": str(e)[:200], "nao_chegou": [], "nao_foi": [], "confere": 0,
-                "sem_texto_kommo": 0, "pendentes": []}
+                "sem_texto_kommo": 0, "pendentes": [], "cego_saida": [], "sem_dados": True}
     corte = _segundos(desde)
-    kommo = [k for k in bruto if k.get("direcao") in DIRECOES
-             and (corte is None or (_segundos(k.get("em")) or 0) >= corte)]
+    kommo = _lado_do_kommo(bruto, eventos, corte)
     painel = [dict(m) for m in todos(con, """SELECT id, direction, text, at, status, author, source
                                              FROM crm_messages WHERE lead_id=? AND direction IN ('entrada','saida')
                                              ORDER BY at""", (lead["id"],))
@@ -101,30 +146,39 @@ def conferir_lead(con, lead, ler=None, desde=None):
     # o que o painel sabe que não saiu já está marcado: não depende de conferência
     pendentes = [p for p in painel if p["direction"] == "saida" and p["status"] in ("queued", "sending", "failed")]
     ids_pendentes = {p["id"] for p in pendentes}
+    sobrou_saida = [p for p in so_painel if p["direction"] == "saida"
+                    and p["status"] == "sent" and p["id"] not in ids_pendentes]
+    # A trava: só chama de "não foi" se este lado do Kommo provou que mostra resposta nossa.
+    # Sem nenhuma saída visível, a ausência não diz nada — e silêncio não é prova.
+    enxerga_saida = any(k["direcao"] == "saida" for k in kommo)
     return {
         "lead": lead,
         "erro": None,
-        # cliente falou no Kommo e o painel não tem: não chegou
+        # cliente falou no Kommo e o painel não tem: não chegou (isto só dispara com dado na mão)
         "nao_chegou": [k for k in so_kommo if k["direcao"] == "entrada"],
-        # o painel diz que respondeu (e deu por entregue) e o Kommo não tem: não foi
-        "nao_foi": [p for p in so_painel if p["direction"] == "saida"
-                    and p["status"] == "sent" and p["id"] not in ids_pendentes],
+        "nao_foi": sobrou_saida if enxerga_saida else [],
+        "cego_saida": [] if enxerga_saida else sobrou_saida,
         "pendentes": pendentes,
         "confere": len(pares),
         "sem_texto_kommo": sum(1 for k in kommo if not _limpo(k.get("texto"))),
+        "sem_dados": not kommo,
     }
 
 
-def conferir(con, dias=7, maximo_leads=40, ler=None):
+def conferir(con, dias=7, maximo_leads=40, ler=None, eventos=None):
     """Os leads com conversa nos últimos `dias`, um a um. Não escreve nada."""
     from datetime import datetime, timedelta, timezone
     desde = (datetime.now(timezone.utc) - timedelta(days=int(dias))).strftime("%Y-%m-%dT%H:%M:%SZ")
     leads = todos(con, """SELECT id, external_id, name, source, link FROM crm_leads
                           WHERE COALESCE(last_message_at, synced_at) >= ?
                           ORDER BY COALESCE(last_message_at, synced_at) DESC LIMIT ?""", (desde, int(maximo_leads)))
-    saida = [conferir_lead(con, dict(l), ler=ler, desde=desde) for l in leads]
-    return {"desde": desde, "leads": saida,
+    por_lead = eventos if eventos is not None else eventos_por_lead(dias=dias)
+    saida = [conferir_lead(con, dict(l), ler=ler, desde=desde,
+                           eventos=por_lead.get(str(l["external_id"]), [])) for l in leads]
+    return {"desde": desde, "leads": saida, "eventos": sum(len(v) for v in por_lead.values()),
             "nao_chegou": sum(len(r["nao_chegou"]) for r in saida),
             "nao_foi": sum(len(r["nao_foi"]) for r in saida),
+            "cego_saida": sum(len(r["cego_saida"]) for r in saida),
+            "sem_dados": sum(1 for r in saida if r.get("sem_dados") and not r["erro"]),
             "pendentes": sum(len(r["pendentes"]) for r in saida),
             "erros": sum(1 for r in saida if r["erro"])}

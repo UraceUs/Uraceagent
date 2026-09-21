@@ -108,6 +108,62 @@ def test_conferencia_inteira_soma_os_leads_da_janela(con):
     inserir(con, "crm_messages", lead_id=b["id"], external_id=None, direction="saida", status="sent",
             author="Italo", text="sumiu B", at=em(11), source="painel")
     con.commit()
-    r = conferencia.conferir(con, dias=7, ler=lambda _e: [])
+    # o Kommo mostra resposta nossa nos dois: aí a ausência conta
+    visivel = [{"id": "n0", "direcao": "saida", "texto": "outra", "em": em(300)}]
+    r = conferencia.conferir(con, dias=7, ler=lambda _e: visivel, eventos={})
     assert r["nao_foi"] == 2 and r["nao_chegou"] == 0 and r["erros"] == 0
     assert len(r["leads"]) == 2
+
+
+# ------------------------------------------- a trava: não acusar sem enxergar (21/09, tarde)
+def test_conversa_vazia_no_kommo_nao_acusa_ninguem(con):
+    """O defeito da primeira versão: o Kommo devolveu ZERO linha e ela apontou quatro
+    respostas como "não foi". Lista vazia não é prova de nada."""
+    l = _lead(con, "7008")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="hey", at=em(25), source="painel")
+    con.commit()
+    r = conferencia.conferir_lead(con, l, ler=lambda _e: [], eventos=[])
+    assert r["nao_foi"] == [] and r["sem_dados"] is True
+    assert [m["text"] for m in r["cego_saida"]] == ["hey"]
+
+
+def test_kommo_que_so_mostra_entrada_nao_julga_a_saida(con):
+    """Se a conta registra o que o cliente manda mas não o que nós respondemos, a saída
+    inteira é ponto cego — e ponto cego se chama 'não dá para dizer'."""
+    l = _lead(con, "7009")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="respondi", at=em(20), source="painel")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id="msg:5", direction="entrada",
+            author="cliente", text="oi", at=em(22), source="Instagram")
+    con.commit()
+    r = conferencia.conferir_lead(con, l, ler=lambda _e: [{"id": "n1", "direcao": "entrada", "texto": "oi", "em": em(22)}])
+    assert r["nao_foi"] == [] and [m["text"] for m in r["cego_saida"]] == ["respondi"]
+    assert r["sem_dados"] is False and r["confere"] == 1
+
+
+def test_evento_de_conversa_serve_de_segunda_fonte(con):
+    """A conta registra a conversa como evento (sem texto) mesmo quando a nota não existe.
+    Com o evento, a saída volta a ser conferível — e o que casa, casa."""
+    l = _lead(con, "7010")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="chegou", at=em(18), source="painel")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="essa não", at=em(8), source="painel")
+    con.commit()
+    eventos = [{"id": "e1", "direcao": "saida", "texto": "", "em": em(18), "fonte": "evento"}]
+    r = conferencia.conferir_lead(con, l, ler=lambda _e: [], eventos=eventos)
+    assert r["confere"] == 1 and [m["text"] for m in r["nao_foi"]] == ["essa não"]
+    assert not r["cego_saida"] and r["sem_dados"] is False
+
+
+def test_nota_e_evento_da_mesma_mensagem_nao_viram_duas(con):
+    """As duas fontes descrevem a mesma mensagem: contar as duas inventaria conversa."""
+    l = _lead(con, "7011")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="oi", at=em(10), source="painel")
+    con.commit()
+    r = conferencia.conferir_lead(
+        con, l, ler=lambda _e: [{"id": "n1", "direcao": "saida", "texto": "oi", "em": em(10)}],
+        eventos=[{"id": "e1", "direcao": "saida", "texto": "", "em": em(10), "fonte": "evento"}])
+    assert r["confere"] == 1 and not r["nao_foi"] and not r["nao_chegou"]

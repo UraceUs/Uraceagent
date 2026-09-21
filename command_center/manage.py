@@ -17,12 +17,17 @@ def _conferir_chat(con, dias):
     """Lê a conversa de cada lead no Kommo e confronta com a do painel. Só leitura."""
     from command_center.providers import conferencia
     r = conferencia.conferir(con, dias=dias)
-    print(f"Conferência do chat — desde {r['desde'][:16].replace('T', ' ')} (UTC), {len(r['leads'])} conversa(s)\n")
+    quando = r["desde"][:16].replace("T", " ")
+    print(f"Conferência do chat — desde {quando} (UTC), {len(r['leads'])} conversa(s), "
+          f"{r['eventos']} evento(s) de conversa lidos da conta\n")
+    cegos = []
     for c in r["leads"]:
         l = c["lead"]
         nome = (l.get("name") or l["external_id"])[:34]
         if c["erro"]:
             print(f"⚠ {nome:<34} não deu para ler no Kommo: {c['erro']}"); continue
+        if c["cego_saida"]:
+            cegos.append((nome, l, c["cego_saida"]))
         if not (c["nao_chegou"] or c["nao_foi"] or c["pendentes"]):
             continue
         print(f"— {nome}  (lead {l['external_id']}{' · ' + l['source'] if l.get('source') else ''})")
@@ -35,10 +40,20 @@ def _conferir_chat(con, dias):
         if l.get("link"):
             print(f"    no Kommo: {l['link']}")
         print()
+    if cegos:
+        print("Não dá para dizer (o Kommo não mostra resposta nossa nestas conversas — a ausência")
+        print("aqui não é prova de que não chegou; é falta de dado):")
+        for nome, l, ms in cegos:
+            print(f"  · {nome} (lead {l['external_id']}): "
+                  + ", ".join(f"{str(m['at'])[:16].replace('T', ' ')} \"{(m['text'] or '')[:28]}\"" for m in ms[:3])
+                  + (f" e mais {len(ms) - 3}" if len(ms) > 3 else ""))
+        print()
     print(f"Total: {r['nao_foi']} não foi(ram) · {r['nao_chegou']} não chegou(aram) · "
-          f"{r['pendentes']} ainda na fila · {r['erros']} conversa(s) que não deu para ler")
+          f"{r['pendentes']} ainda na fila · {r['cego_saida']} sem como dizer · "
+          f"{r['sem_dados']} conversa(s) que o Kommo devolveu vazia · {r['erros']} que não deu para ler")
     print("Lembre: a API do Kommo não devolve o texto de toda mensagem de chat, e o que é anterior")
-    print("à integração não vem pela API — por isso a conferência olha só a janela recente.")
+    print("à integração não vem pela API. Onde ela não enxerga, a conferência diz que não sabe —")
+    print("nunca conta silêncio como mensagem perdida.")
     return 0
 
 
