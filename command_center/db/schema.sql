@@ -24,6 +24,61 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at TEXT
 );
 
+-- ------------------------------------------------------------------ chat interno
+-- Dono, 21/09: unificar o que hoje se fala no WhatsApp (mecânicos, coach, designers,
+-- fornecedor de suit) e no Google Chat (staff adm, financeiro, comercial). A decisão está
+-- em D-2026-09-21: o painel é o hub, os dois viram canais — o Google Chat com ponte
+-- completa, o WhatsApp com o que a API permite (janela de 24 h, grupo de no máximo 8).
+--
+-- Por isso a mensagem nasce com `origem` e `external_id`: a mesma tabela guarda o que foi
+-- escrito aqui e o que veio de fora, e a ponte sabe o que já espelhou. Sem isso, ligar as
+-- pontes depois significaria migrar dados — e migração de conversa é perda de conversa.
+CREATE TABLE IF NOT EXISTS team_channels (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT NOT NULL,
+  kind        TEXT NOT NULL DEFAULT 'EQUIPE'      -- EQUIPE | CORRIDA | SERVICO | CLIENTE | DIRETO
+              CHECK (kind IN ('EQUIPE','CORRIDA','SERVICO','CLIENTE','DIRETO')),
+  -- a que isto se refere: corrida, serviço ou cliente. Conversa solta vira conversa perdida.
+  entity_type TEXT,
+  entity_id   INTEGER,
+  topic       TEXT,
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  archived_at TEXT,
+  -- ponte: espaço do Google Chat ou grupo do WhatsApp que este canal espelha
+  bridge      TEXT,                               -- gchat | whatsapp | NULL (só painel)
+  bridge_id   TEXT,
+  UNIQUE (bridge, bridge_id)
+);
+CREATE INDEX IF NOT EXISTS team_channels_entidade ON team_channels(entity_type, entity_id);
+
+CREATE TABLE IF NOT EXISTS team_messages (
+  id          INTEGER PRIMARY KEY,
+  channel_id  INTEGER NOT NULL REFERENCES team_channels(id),
+  user_id     INTEGER REFERENCES users(id),       -- NULL quando veio de fora por alguém sem conta
+  author      TEXT NOT NULL,                      -- nome de quem escreveu, sempre legível
+  text        TEXT NOT NULL,
+  at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  origem      TEXT NOT NULL DEFAULT 'painel',     -- painel | gchat | whatsapp
+  external_id TEXT,                               -- id da mensagem no sistema de origem
+  reply_to    INTEGER REFERENCES team_messages(id),
+  edited_at   TEXT,
+  deleted_at  TEXT,                               -- some da tela; o registro fica
+  UNIQUE (channel_id, origem, external_id)
+);
+CREATE INDEX IF NOT EXISTS team_messages_canal ON team_messages(channel_id, at);
+
+-- Quem participa e até onde já leu. `last_read_id` em vez de data: mensagem tem ordem,
+-- relógio de celular não é confiável, e "3 não lidas" tem de bater com o que a pessoa vê.
+CREATE TABLE IF NOT EXISTS team_members (
+  channel_id   INTEGER NOT NULL REFERENCES team_channels(id),
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  joined_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  last_read_id INTEGER NOT NULL DEFAULT 0,
+  muted        INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (channel_id, user_id)
+);
+
 -- Chave de API: outro sistema falando com o Command Center sem navegador (dono, 21/09).
 -- O SEGREDO NUNCA FICA AQUI: só o hash (scrypt, como senha). Perdeu a chave, cria outra.
 -- Toda chave age como uma PESSOA e tem um papel, e o papel dela nunca passa do papel da

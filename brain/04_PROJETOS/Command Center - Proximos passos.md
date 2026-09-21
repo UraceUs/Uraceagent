@@ -37,19 +37,25 @@ Chat interno e Checklists não dependem de nada disso e podem andar em paralelo.
 Hoje a equipe se fala por WhatsApp e Google Chat. O objetivo é unificar dentro do
 Command Center.
 
-- [ ] 👤 **Decidir: substituir ou fazer ponte?** Um chat dentro do painel que não toca
-      no celular perde para o WhatsApp no primeiro dia. As três saídas honestas:
-      (a) chat próprio com notificação push de verdade; (b) ponte que espelha WhatsApp e
-      Google Chat dentro do painel; (c) chat próprio só para o que é operação (serviço,
-      corrida, peça) e o social continua onde está.
-- [ ] 👤 Levantar quem usa o quê hoje e para quê (mecânicos no WhatsApp? staff no Google
-      Chat? grupo por corrida?). Sem isso, qualquer desenho é chute.
-- [ ] 🤖 Levantar o que a API do Google Chat permite (ler, escrever, webhook) e o que o
-      WhatsApp Business permite — o WhatsApp tem janela de 24h e modelo de mensagem
-      aprovada; isso limita o que dá para fazer e precisa estar na mesa antes de decidir.
-- [ ] Desenhar o modelo: conversa ligada a quê? (corrida, serviço, cliente, livre)
-- [ ] Construir
-- [ ] Notificação no celular (o ponto que decide se a equipe adota ou ignora)
+- [x] 👤 **Decidido em 21/09: ponte**, unindo WhatsApp e Google Chat — não substituição
+- [x] 👤 Quem usa o quê: **WhatsApp** mecânicos, coach, designers, fornecedor de suit ·
+      **Google Chat** staff adm, financeiro e comercial
+- [x] 🤖 APIs levantadas em 21/09 (ver [[D-2026-09-21 - Chat interno e a ponte com WhatsApp e Google Chat]]):
+      Google Chat espelha inteiro, sem pedágio; WhatsApp cobra três pedágios — janela de
+      24 h com template pago fora dela, grupo de API com **no máximo 8 pessoas** e que não
+      conecta em grupo já existente, e número que não pode estar no app WhatsApp Business
+- [x] Desenhar o modelo: canal ligado a corrida, serviço, cliente ou livre; mensagem já
+      nasce com `origem` e `external_id` para a ponte não precisar migrar conversa depois
+- [x] 🤖 **Base construída** (21/09): tabelas, API e testes do chat interno
+- [ ] 🤖 Tela do chat interno no painel (lista de conversas + conversa, pensada para celular)
+- [ ] 🤖 **Notificação push (PWA)** — o que decide se a equipe adota ou ignora
+- [ ] 👤 Número do WhatsApp para a API: o atual dos leads (via Kommo) ou um segundo?
+- [ ] 👤 Official Business Account verificada na Meta (sem isso, grupo nem começa)
+- [ ] 👤 Aceitar recriar grupo de equipe como grupo de API de até 8 — ou deixar o grupo no
+      WhatsApp comum e trazer para o painel só o que é operação
+- [ ] 👤 Admin do Google Workspace liberar o app do Chat na organização
+- [ ] 🤖 Ponte do Google Chat (depois do admin liberar)
+- [ ] 🤖 Ponte do WhatsApp: 1:1 primeiro; grupo só se o limite de 8 for aceito
 
 ## 2. Checklists de serviço e corrida
 
