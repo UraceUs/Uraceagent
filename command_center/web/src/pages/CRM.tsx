@@ -93,7 +93,12 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
   const d = useGet<LeadDetalhe>(`/crm/leads/${id}`, 15000)
   const det = useGet<DetalheResp>(`/crm/leads/${id}/detail`, 120000)
   const funis = useGet<FunilVivo[]>(conectado ? '/crm/stages' : null)
-  const [texto, setTexto] = useState('')
+  // 21/09: o dono respondeu pelo painel e a mensagem sumiu sem ir. Se a sessão cai (401), a tela
+  // vai para o /login e o que foi digitado morre junto. O rascunho fica guardado por lead, então
+  // ele volta, entra de novo e o texto está lá.
+  const chaveRascunho = `cc.chat.rascunho.${id}`
+  const [texto, setTexto] = useState(() => { try { return localStorage.getItem(`cc.chat.rascunho.${id}`) || '' } catch { return '' } })
+  const [falhou, setFalhou] = useState<string | null>(null)
   const [nota, setNota] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [soFav, setSoFav] = useState(false)
@@ -102,6 +107,9 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
   const etapas = useMemo(() => funis.data?.find(f => f.id === (l?.pipeline_id || ''))?.etapas || [], [funis.data, l?.pipeline_id])
   const total = d.data?.mensagens.length || 0
   useEffect(() => { fim.current?.scrollIntoView({ block: 'end' }) }, [total])
+  useEffect(() => {
+    try { if (texto.trim()) localStorage.setItem(chaveRascunho, texto); else localStorage.removeItem(chaveRascunho) } catch { /* sem storage: só não guarda */ }
+  }, [texto, chaveRascunho])
 
   async function mover(stage: string) {
     setBusy('m')
@@ -140,13 +148,20 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
   async function responder() {
     const t = texto.trim()
     if (!t || busy) return                      // Ctrl+Enter durante o envio não manda duas vezes
-    setBusy('r')
+    setBusy('r'); setFalhou(null)
     try {
       const rr = await api.post<{ como: string; aviso?: string }>(`/crm/leads/${id}/reply`, { text: t })
       setTexto(v => (v.trim() === t ? '' : v))  // o que foi digitado durante o envio fica
       toast(rr.aviso || 'Enviada.', rr.como === 'entregue' ? 'ok' : undefined); d.reload(); onChange()
       if (rr.como !== 'entregue') setTimeout(() => d.reload(), 6000)
-    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+    } catch (e) {
+      // o texto NÃO é apagado e o aviso NÃO some sozinho: mensagem que não saiu tem de doer na tela
+      const err = e as ApiError
+      setFalhou(err.unauthorized ? 'Sua sessão tinha caído: a mensagem NÃO foi enviada. Entre de novo — o texto continua aqui.'
+        : err.offline ? 'Sem conexão: a mensagem NÃO foi enviada. O texto continua aqui; toque em Enviar de novo.'
+          : `A mensagem NÃO foi enviada: ${err.message}`)
+      toast('A mensagem não foi enviada.', 'crit')
+    } finally { setBusy(null) }
   }
 
   if (d.loading && !d.data) return <div className="read"><Loading /></div>
@@ -217,6 +232,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     </div>
     {can('OPERATOR') && <div className="stack" style={{ gap: 8 }}>
       {!d.data?.chat_ligado && <Banner tone="warn">{d.data?.responder_habilitado ? 'O bot ainda está esperando esta conversa: dá para responder agora.' : 'O chat ainda não está ligado no Kommo (Salesbot + KOMMO_BOT_ID). Até lá, responda pelo Kommo; a anotação abaixo funciona.'}</Banner>}
+      {falhou && <Banner tone="crit">{falhou} <button className="btn sm" style={{ marginLeft: 8 }} disabled={busy === 'r' || !texto.trim()} onClick={responder}>Enviar de novo</button></Banner>}
       <div className="field"><label>Responder no chat do lead {l.source ? `(${l.source})` : ''}</label>
         <TextoComVoz valor={texto} onChange={setTexto} linhas={3} placeholder="Escreva ou dite a resposta… Enter envia, Shift+Enter quebra a linha" disabled={!d.data?.responder_habilitado} onEnter={responder} />
         <div className="row wrap"><button className="btn primary sm" disabled={busy === 'r' || !texto.trim() || !d.data?.responder_habilitado} onClick={responder}>{busy === 'r' ? <Spinner /> : 'Enviar no chat'}</button><span className="small muted">Sai pelo bot da conta no canal do lead, com o seu texto.</span></div></div>

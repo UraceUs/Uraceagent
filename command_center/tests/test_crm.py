@@ -331,11 +331,15 @@ def test_hook_do_salesbot_guarda_a_mensagem_e_so_com_a_chave(cli, chat):
     try:
         l = um(con, "SELECT * FROM crm_leads WHERE external_id='5001'")
         assert l["needs_reply"] == 1 and l["return_url"].endswith("/continue/abc") and l["return_at"] and l["last_hook_at"]
-        m = um(con, "SELECT * FROM crm_messages WHERE lead_id=? AND source='hook'", (l["id"],))
-        assert m["direction"] == "entrada" and m["text"] == "Consegue domingo?" and m["author"] == "Maria Souza"
-        # o mesmo POST de novo no mesmo minuto não duplica
+        # a mensagem entra UMA vez, venha pelo hook do bot ou pelo webhook da conta: se os dois
+        # caminhos gravassem, a conversa apareceria em dobro — foi o que o dono viu em 21/09
+        linhas = todos(con, """SELECT * FROM crm_messages WHERE lead_id=? AND direction='entrada'
+                               AND text='Consegue domingo?'""", (l["id"],))
+        assert len(linhas) == 1 and linhas[0]["author"] in ("Maria Souza", "Maria")
+        # o mesmo POST de novo no mesmo minuto também não duplica
         cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
-        assert um(con, "SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=? AND source='hook'", (l["id"],))["n"] == 1
+        assert um(con, """SELECT COUNT(*) AS n FROM crm_messages WHERE lead_id=? AND direction='entrada'
+                          AND text='Consegue domingo?'""", (l["id"],))["n"] == 1
     finally:
         con.close()
     assert chat.entregas == []                    # nada na fila: o bot fica esperando, sem inventar resposta

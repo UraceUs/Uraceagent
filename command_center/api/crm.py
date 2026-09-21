@@ -682,7 +682,8 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
     if e["texto"]:
         import hashlib
         ext = "hook:" + hashlib.sha1(f"{e['lead_id']}|{e['texto']}|{agora()[:16]}".encode()).hexdigest()[:16]
-        if not um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (lid, ext)):
+        if not um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (lid, ext)) \
+                and not _entrada_gemea(con, lid, e["texto"], agora()):
             inserir(con, "crm_messages", lead_id=lid, external_id=ext, direction="entrada",
                     author=e["nome"] or "cliente", text=e["texto"][:8000], at=agora(), source="hook")
         campos.update(last_message_at=agora(), needs_reply=1)
@@ -802,6 +803,22 @@ def tem_texto_perto(con, lead_id, direcao, em, janela=180):
     return bool(r)
 
 
+JANELA_GEMEA_S = 300          # a mesma mensagem pelos dois caminhos chega em segundos
+
+
+def _entrada_gemea(con, lead_id, texto, em, janela=JANELA_GEMEA_S):
+    """A mensagem do lead chega DUAS vezes: pelo webhook da conta (com o id do Kommo, o canal e
+    o autor) e pelo hook do bot (só o texto). Em 21/09 o dono viu a conversa duplicada e achou
+    que estava faltando mensagem. Vale a do webhook; a do hook só entra se a outra não veio.
+
+    O casamento é por texto e tempo porque os dois caminhos dão ids diferentes para a mesma
+    mensagem. A janela é curta (5 min) de propósito: cliente que repete a mesma frase depois
+    disso continua aparecendo duas vezes, como deve."""
+    return bool(um(con, """SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND direction='entrada' AND text=?
+                           AND ABS(strftime('%s', at) - strftime('%s', ?)) <= ? LIMIT 1""",
+                   (lead_id, (texto or "")[:8000], em, janela)))
+
+
 @r.post("/webhook")
 async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
     """Mensagem que chega no Kommo entra aqui na hora, com TEXTO.
@@ -897,6 +914,11 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
         if m["direcao"] == "saida" and um(con, """SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND direction='saida' AND text=?
                                                   AND ABS(strftime('%s', at) - strftime('%s', ?)) <= 900 LIMIT 1""", (lid, texto[:8000], em)):
             continue
+        # o hook do bot pode já ter posto a MESMA mensagem (só texto): vale esta, com id e canal
+        if m["direcao"] == "entrada":
+            con.execute("""DELETE FROM crm_messages WHERE lead_id=? AND direction='entrada' AND external_id LIKE 'hook:%'
+                           AND text=? AND ABS(strftime('%s', at) - strftime('%s', ?)) <= ?""",
+                        (lid, texto[:8000], em, JANELA_GEMEA_S))
         # a sincronia pode já ter posto a marca (evento sem texto) desta mesma mensagem: some com a marca
         con.execute("""DELETE FROM crm_messages WHERE lead_id=? AND direction=? AND text IS NULL AND external_id LIKE 'ev:%'
                        AND ABS(strftime('%s', at) - strftime('%s', ?)) <= 180""", (lid, m["direcao"], em))

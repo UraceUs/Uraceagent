@@ -58,3 +58,37 @@ def test_sem_conversa_nenhuma_nao_ha_o_que_avisar(cli):
     con.execute("UPDATE crm_leads SET last_message_at = NULL")
     con.commit(); con.close()
     assert not _mudo(cli)
+
+
+# --------------------------------------------------------------- mensagem em dobro (21/09)
+def test_mensagem_do_lead_nao_entra_duas_vezes(cli):
+    """A mesma mensagem chega pelo webhook da conta E pelo hook do bot. O dono viu a conversa
+    duplicada em 21/09 e achou que estava faltando mensagem. Uma só: a do webhook."""
+    from command_center.api import crm
+    con = conectar()
+    lid = inserir(con, "crm_leads", external_id="99001", name="Dobro", synced_at=agora())
+    con.commit()
+    assert not crm._entrada_gemea(con, lid, "What dates are available?", agora())
+    inserir(con, "crm_messages", lead_id=lid, external_id="msg:777", direction="entrada",
+            author="cliente", text="What dates are available?", at=agora(), source="Instagram")
+    con.commit()
+    # agora o hook do bot bate com o MESMO texto: não pode entrar de novo
+    assert crm._entrada_gemea(con, lid, "What dates are available?", agora())
+    # texto diferente continua entrando
+    assert not crm._entrada_gemea(con, lid, "Any time", agora())
+    con.close()
+
+
+def test_repeticao_de_verdade_do_cliente_continua_aparecendo(cli):
+    """A janela é curta de propósito: quem escreve a mesma frase meia hora depois aparece duas
+    vezes, como deve. Estreitar isso foi decisão, não descuido."""
+    from command_center.api import crm
+    from datetime import datetime, timedelta, timezone
+    con = conectar()
+    lid = inserir(con, "crm_leads", external_id="99002", name="Repete", synced_at=agora())
+    antes = (datetime.now(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    inserir(con, "crm_messages", lead_id=lid, external_id="msg:800", direction="entrada",
+            author="cliente", text="oi", at=antes, source="Instagram")
+    con.commit()
+    assert not crm._entrada_gemea(con, lid, "oi", agora())
+    con.close()
