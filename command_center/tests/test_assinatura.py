@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 
 import asana_mcp as A  # noqa: E402
 import kommo_mcp as K  # noqa: E402
-from mcp_stdio import ASSINATURA, assinar  # noqa: E402
+from mcp_stdio import AGENTE, ASSINATURA, assinar, rastro  # noqa: E402
 
 TAREFA = {"gid": "1", "name": "Serviço do Pedro", "notes": "",
           "memberships": [{"project": {"gid": A.PROJETO_URACE, "name": "U-RACE"},
@@ -75,16 +75,19 @@ def test_assinar_e_idempotente_e_nunca_perde_o_texto():
 
 
 # ------------------------------------------------------------------ Asana
-def test_tarefa_nova_nasce_assinada_mesmo_sem_descricao(asana):
+def test_tarefa_nova_nasce_dizendo_quem_criou_e_quando(asana):
+    """21/09, segunda volta do dono: não basta assinar — a descrição diz que foi criada
+    pelo agente, com dia e hora."""
     A.asana_criar_tarefa(A.PROJETO_URACE, "Trocar pneu do kart 12")
-    corpo = asana.corpo("/tasks")[0]
-    assert corpo["notes"] == ASSINATURA
+    notas = asana.corpo("/tasks")[0]["notes"]
+    assert notas.startswith("Tarefa criada em ") and notas.endswith(AGENTE)
+    assert "/2026 " in notas and ("EDT" in notas or "EST" in notas)
 
 
 def test_tarefa_com_descricao_mantem_a_descricao_e_ganha_a_marca(asana):
     A.asana_criar_tarefa(A.PROJETO_URACE, "Serviço", notas="Levar pneu novo")
-    corpo = asana.corpo("/tasks")[0]
-    assert corpo["notes"].startswith("Levar pneu novo") and corpo["notes"].endswith(ASSINATURA)
+    notas = asana.corpo("/tasks")[0]["notes"]
+    assert notas.startswith("Levar pneu novo") and notas.endswith(AGENTE)
 
 
 def test_comentario_do_agente_e_o_do_painel_sao_assinados(asana):
@@ -108,13 +111,13 @@ def test_servico_pelo_modelo_e_assinado_sem_apagar_o_texto_do_modelo(asana, monk
     asana.tarefa_do_modelo = "Checklist do serviço:\n- conferir pneus"
     A._instanciar_modelo("modelo-1", "Serviço do Pedro")
     ajuste = [c for cam, c in asana.escritas if cam.startswith("/tasks/") and c and "notes" in c][-1]
-    assert "conferir pneus" in ajuste["notes"] and ajuste["notes"].endswith(ASSINATURA)
+    assert "conferir pneus" in ajuste["notes"] and ajuste["notes"].endswith(AGENTE)
 
     # e com descrição própria, a descrição manda
     asana.escritas.clear()
     A._instanciar_modelo("modelo-1", "Outro", notas="observação do dono")
     ajuste = [c for cam, c in asana.escritas if cam.startswith("/tasks/") and c and "notes" in c][-1]
-    assert ajuste["notes"] == "observação do dono\n\n" + ASSINATURA
+    assert ajuste["notes"].startswith("observação do dono") and ajuste["notes"].endswith(AGENTE)
 
 
 # ------------------------------------------------------------------ Kommo
@@ -138,3 +141,47 @@ def test_a_resposta_no_chat_do_cliente_nao_leva_assinatura(monkeypatch):
     ok, _ = K.continuar_bot_humano("https://urace.kommo.com/api/v4/salesbot/1/continue/abc",
                                    "Oi Charles, temos vaga sábado!")
     assert ASSINATURA not in str(saiu.get("corpo"))
+
+
+# ------------------------------------------------- o rastro do que aconteceu FORA do Asana
+def test_mover_tarefa_deixa_comentario_com_a_hora(asana, monkeypatch):
+    """*"moveu uma tarefa, coloca um comentário dizendo que foi movido tal dia, tal hora,
+    pelo agente de IA"* — dono, 21/09."""
+    monkeypatch.setattr(A, "asana_secoes", lambda pg: [{"gid": "77", "nome": "Finished Services"}])
+    A.asana_mover_para_secao("1", "77")
+    comentarios = [c["text"] for cam, c in asana.escritas if "/stories" in cam]
+    assert len(comentarios) == 1
+    assert comentarios[0].startswith("Movida de [") and "para [Finished Services]" in comentarios[0]
+    assert comentarios[0].endswith(AGENTE) and "/2026 " in comentarios[0]
+
+
+def test_comentario_falhando_nao_desfaz_a_mudanca(asana, monkeypatch):
+    """O rastro sai DEPOIS da ação. Se o comentário falhar, a tarefa continua movida — e o
+    chamador não pode receber um erro por causa disso."""
+    monkeypatch.setattr(A, "asana_secoes", lambda pg: [{"gid": "77", "nome": "QUA"}])
+    real = asana.__call__
+
+    def quebra(caminho, metodo="GET", corpo=None, **kw):
+        if "/stories" in caminho:
+            raise RuntimeError("Asana fora do ar")
+        return real(caminho, metodo, corpo, **kw)
+    monkeypatch.setattr(A, "_req", quebra)
+    r = A.asana_mover_para_secao("1", "77")
+    assert r["aplicado"] is True
+
+
+def test_a_porta_do_rastro_recusa_projeto_protegido(asana, monkeypatch):
+    """ADM URACE é só leitura (regra do dono): nem o registro do agente escreve lá."""
+    protegida = dict(TAREFA, memberships=[{"project": {"gid": A.PROJETO_ADM, "name": "ADM URACE"},
+                                           "section": {"gid": "1", "name": "x"}}])
+    monkeypatch.setattr(A, "_ler_tarefa", lambda gid, *a, **k: protegida)
+    with pytest.raises(A.ErroFerramenta):
+        A.comentar_rastro("1", "Invoice enviada")
+
+
+def test_rastro_de_invoice_e_de_waiver_dizem_o_que_saiu(asana):
+    A.comentar_rastro("1", "Invoice 1234 enviada para pedro@exemplo.com")
+    A.comentar_rastro("1", "Waiver enviada para Pedro Souza (modelo parental)")
+    textos = [c["text"] for cam, c in asana.escritas if "/stories" in cam]
+    assert all(t.endswith(AGENTE) and " em " in t for t in textos)
+    assert "Invoice 1234 enviada" in textos[0] and "Waiver enviada" in textos[1]

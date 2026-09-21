@@ -690,6 +690,10 @@ def executar_acao(aid, user_id):
                     deposito = bool(re.search(r"deposit|dep[oó]sito|cau[çc][ãa]o", texto_inv))
                     modulo("asana").preencher_invoice_na_tarefa(gid, res["link"], res.get("total"), deposito=deposito)
                     auditar(con, "asana.invoice_link", "system", entity_type="ai_action", entity_id=aid, detail={"gid": gid, "link": res["link"], "campo": "Security deposit" if deposito else "Invoice link"})
+                    if acao == "qbo_criar_e_enviar_invoice":   # criar só grava o link; enviar vira rastro
+                        from command_center.api import rastro as _rastro
+                        _rastro.no_asana(con, gid, f"Invoice {res.get('doc_number') or ''} enviada".replace("  ", " ").strip(),
+                                         {"link": res["link"]})
             except Exception as e:
                 auditar(con, "asana.invoice_link.failed", "system", entity_type="ai_action", entity_id=aid, detail={"erro": str(e)[:200]})
         if acao == "qbo_lembrete_invoice" and isinstance(res, dict):

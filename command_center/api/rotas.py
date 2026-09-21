@@ -1497,6 +1497,9 @@ def _enviar_uma_vez(con, user_id, iid):
     aplicado = bool(res.get("aplicado"))
     auditar(con, "invoice.reminder.sent" if aplicado else "invoice.reminder.simulated", f"user:{user_id}", user_id=user_id, entity_type="invoice", entity_id=iid,
             detail={"doc_number": inv["doc_number"], "balance": inv["balance"], "para": res.get("enviado_para") or inv["customer_email"], "unico": True})
+    if aplicado:                       # dono, 21/09: a tarefa do cliente fica sabendo, com a hora
+        from command_center.api import rastro
+        rastro.invoice_enviada(con, inv, para=res.get("enviado_para") or inv["customer_email"], lembrete=True)
     return {"ok": True, "aplicado": aplicado, "para": res.get("enviado_para"), "doc_number": inv["doc_number"]}
 
 
@@ -1701,6 +1704,8 @@ def waiver_send(dados: WaiverEnviarIn, request: Request, u=Depends(auth.exige("O
         _liga(con, "waiver", wid, "docusign", env, f"https://apps.docusign.com/send/documents/details/{env}")
     auditar(con, "waiver.send", f"user:{u['id']}", user_id=u["id"], entity_type="waiver", entity_id=wid,
             detail={"envelope": env, "template": dados.template, "email": email}, ip=auth._ip(request))
+    from command_center.api import rastro        # dono, 21/09: a tarefa registra, com a hora
+    rastro.waiver_enviada(con, cid, dados.signer_name.strip(), email, modelo=dados.template)
     return {"id": wid, "envelope": env, "result": res}
 
 

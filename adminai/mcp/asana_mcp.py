@@ -35,7 +35,8 @@ import urllib.request
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mcp_stdio import ASSINATURA, ErroFerramenta, Servidor, assinar, log  # noqa: E402
+from mcp_stdio import AGENTE, ASSINATURA, ErroFerramenta, Servidor, assinar, rastro  # noqa: E402
+from mcp_stdio import log  # noqa: E402
 
 API = "https://app.asana.com/api/1.0"
 WORKSPACE = "1205450084498489"
@@ -315,6 +316,8 @@ def asana_mover_para_secao(gid, secao_gid):
     if not _aplicar():
         return _simulado(f"mover '{t['name']}' ({gid}) de [{de}] para seção {secao_gid}")
     _req(f"/sections/{secao_gid}/addTask", "POST", {"task": gid})
+    destino = next((x["nome"] for x in _secoes_do_projeto(t) if x["gid"] == str(secao_gid)), str(secao_gid))
+    _anotar_rastro(gid, f"Movida de [{de}] para [{destino}]")
     return {"aplicado": True, "tarefa": t["name"], "de": de, "para": secao_gid}
 
 
@@ -349,7 +352,9 @@ def asana_criar_tarefa(projeto_gid, nome, secao_gid=None, notas=None, vence_em=N
     if secao_gid and secao_gid == _gid_matt_tasks():
         raise ErroFerramenta("RECUSADO: não se cria nada em 'Matt tasks'.")
     corpo = {"name": nome, "workspace": WORKSPACE, "projects": [projeto_gid],
-             "notes": assinar(notas)}           # assinada mesmo sem descrição (dono, 21/09)
+             # dono, 21/09: "criou a tarefa, já coloca na descrição, no final: criado pelo
+             # URACE AI Agent" — com dia e hora, como ele pediu para as outras ações
+             "notes": assinar(notas, marca=rastro("Tarefa criada"))}
     if vence_em:
         corpo["due_on"] = vence_em
     if not _aplicar():
@@ -396,6 +401,28 @@ def preencher_invoice_na_tarefa(gid, link, valor=None, deposito=False):
     return {"aplicado": True, "gid": gid, "invoice_link": link, "campo": rotulo}
 
 
+def _secoes_do_projeto(t):
+    """As seções do projeto da tarefa — para o rastro dizer "[QUA]" e não um gid."""
+    try:
+        pg = next((((m.get("project") or {}).get("gid")) for m in t.get("memberships", [])), None)
+        return asana_secoes(pg) if pg else []
+    except Exception:                          # noqa: BLE001
+        return []
+
+
+def _anotar_rastro(gid, o_que):
+    """Comenta na tarefa o que o painel acabou de fazer, com dia e hora (dono, 21/09).
+
+    Nunca levanta: a ação JÁ aconteceu quando este comentário sai. Falhar aqui não pode
+    transformar uma tarefa movida com sucesso em erro na tela de quem mandou mover."""
+    try:
+        _req(f"/tasks/{gid}/stories", "POST", {"text": rastro(o_que)})
+        return True
+    except Exception as e:                     # noqa: BLE001
+        log("não deu para registrar o rastro na tarefa", gid, ":", e)
+        return False
+
+
 def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=None, campos=None):
     """Instancia o modelo de tarefa (subtarefas, campos) e ajusta nome, seção, notas, data
     e campos de seleção (ex.: {"Race": "Practice OKC"})."""
@@ -418,14 +445,15 @@ def _instanciar_modelo(modelo_gid, nome, secao_gid=None, notas=None, vence_em=No
     # A assinatura vale SEMPRE (dono, 21/09), e serviço e corrida nascem aqui — mas sem
     # descrição própria não dá para escrever só o carimbo: isso apagaria o texto que veio
     # do modelo. Então, nesse caso, lê o que o modelo trouxe e acrescenta ao fim.
+    marca = rastro("Tarefa criada pelo modelo")
     if notas:
-        ajuste["notes"] = assinar(notas)
+        ajuste["notes"] = assinar(notas, marca=marca)
     else:
         try:
             do_modelo = (_req(f"/tasks/{novo}?opt_fields=notes")["data"] or {}).get("notes") or ""
         except Exception:                      # noqa: BLE001 — sem isto a tarefa fica sem marca
             do_modelo = ""
-        ajuste["notes"] = assinar(do_modelo)
+        ajuste["notes"] = assinar(do_modelo, marca=marca)
     if vence_em:
         ajuste["due_on"] = vence_em
     if ajuste:
@@ -489,6 +517,16 @@ def concluir_subtarefa_sistema(gid_tarefa, padrao=None):
         return {"aplicado": False, "motivo": "já estava concluída", "subtarefa": alvo["name"], "gid": alvo["gid"]}
     _req(f"/tasks/{alvo['gid']}", "PUT", {"completed": True})
     return {"aplicado": True, "subtarefa": alvo["name"], "gid": alvo["gid"], "tarefa": t.get("name")}
+
+
+def comentar_rastro(gid, o_que):
+    """Porta do Command Center: registra na tarefa o que o painel fez em OUTRO sistema
+    (invoice enviada, waiver enviada), com dia e hora. Não passa por APLICAR — é registro,
+    não ação — mas respeita as proteções: em ADM URACE e 'Matt tasks' não se escreve."""
+    t = _ler_tarefa(gid)
+    _recusar_se_protegida(t, "comentar")
+    r = _req(f"/tasks/{gid}/stories", "POST", {"text": rastro(o_que)})["data"]
+    return {"aplicado": True, "story_gid": r["gid"], "tarefa": t["name"]}
 
 
 def comentar_humano(gid, texto):

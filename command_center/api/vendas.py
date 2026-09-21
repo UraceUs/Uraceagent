@@ -477,6 +477,9 @@ def _waiver(con, o):
     wid = inserir(con, "waivers", client_id=o["client_id"], signer_name=o["name"], signer_email=email,
                   template=("parental" if menor else "adult"), status="sent", sent_at=agora(),
                   link_reason="enviada no fechamento da venda", link_by="human", synced_at=agora())
+    from command_center.api import rastro        # dono, 21/09: fica registrado na tarefa, com a hora
+    rastro.waiver_enviada(con, o["client_id"], o["name"], email,
+                          modelo=("parental" if menor else "adult"))
     return {"envelope": env, "waiver_id": wid, "modelo": "parental" if menor else "adult"}
 
 

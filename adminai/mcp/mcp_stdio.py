@@ -50,16 +50,43 @@ def log(*partes):
 # no chat do Kommo é o texto que o dono digitou, não da IA; invoice e waiver saem no nome
 # da empresa. Carimbar "Ai agent" ali mudaria o que o cliente entende da conversa — isso é
 # decisão de negócio, não de código, e ficou perguntada em vez de assumida.
-ASSINATURA = "by Urace Ai agent"
+AGENTE = "URACE AI Agent"
+ASSINATURA = f"by {AGENTE}"
+FUSO = "America/New_York"                      # tudo no sistema roda no fuso da Flórida
+
+
+def agora_local():
+    """Data e hora na Flórida, do jeito que o dono lê: 21/09/2026 15:42 (EDT)."""
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+        t = datetime.now(ZoneInfo(FUSO))
+        return t.strftime("%d/%m/%Y %H:%M ") + f"({t.strftime('%Z')})"
+    except Exception:                          # noqa: BLE001 — sem tzdata, a hora ainda sai
+        return datetime.now().strftime("%d/%m/%Y %H:%M")
 
 
 def assinar(texto, marca=ASSINATURA):
     """Acrescenta a assinatura ao fim, em linha própria. Idempotente: texto que já tem a
-    marca volta igual — senão a mesma tarefa editada três vezes ganharia três carimbos."""
+    marca volta igual — senão a mesma tarefa editada três vezes ganharia três carimbos.
+
+    A checagem é pelo NOME do agente, não pela frase inteira: assim um texto que já diz
+    "Criado pelo URACE AI Agent em 21/09" também não ganha um segundo carimbo."""
     corpo = (texto or "").rstrip()
-    if marca.lower() in corpo.lower():
+    if AGENTE.lower() in corpo.lower():
         return corpo or None
     return (corpo + "\n\n" + marca).strip() if corpo else marca
+
+
+def rastro(o_que):
+    """A frase que fica no Asana quando o painel faz alguma coisa em OUTRO sistema.
+
+    Dono, 21/09: *"moveu uma tarefa, coloca um comentário dizendo que foi movido tal dia,
+    tal hora, pelo agente de IA"* — e o mesmo para invoice e waiver enviadas. É o que
+    transforma o Asana no diário do que o agente fez, em vez de só assinar o que ele
+    escreve. Uso: rastro("Movida para QUA") → "Movida para QUA em 21/09/2026 15:42 (EDT)
+    pelo URACE AI Agent"."""
+    return f"{o_que} em {agora_local()} pelo {AGENTE}"
 
 
 class ErroFerramenta(Exception):
