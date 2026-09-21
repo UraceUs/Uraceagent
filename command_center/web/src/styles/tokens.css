@@ -680,3 +680,10 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
   .so-desktop{display:none}
   .so-mobile{display:inline-flex}
 }
+
+/* Abas de "Conversas | Pessoas" no chat da equipe. Duas listas no mesmo lugar: falar com
+   alguém não pode exigir procurar em outra tela. */
+.tab{flex:1;padding:8px 10px;background:transparent;border:0;border-bottom:2px solid var(--rule);
+  color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--ink)}

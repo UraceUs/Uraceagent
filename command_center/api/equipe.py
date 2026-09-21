@@ -12,6 +12,11 @@ dentro — e é justamente o chat de dentro que resolve a objeção certa do don
 não toca no celular perde para o WhatsApp"), porque ele notifica sem custo por mensagem e
 sem janela de 24 h.
 
+**A intenção, na palavra do dono (21/09):** falar com uma pessoa em um clique, montar
+grupo com nome, participantes e foto, e poder **silenciar** tanto a conversa individual
+quanto o grupo. É chat de gente, não só de operação — e as duas coisas convivem aqui: a
+conversa do serviço continua existindo, ligada ao serviço.
+
 **Três coisas que este módulo faz e que um chat ingênuo não faz:**
 
 1. **Conversa tem dono.** Canal se liga a corrida, serviço ou cliente. Conversa solta
@@ -23,9 +28,10 @@ sem janela de 24 h.
    pontes entrarem, elas escrevem na mesma tabela — sem migrar conversa, que é o mesmo que
    perder conversa.
 """
+import os
 import sqlite3
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from command_center.api import auth
@@ -54,6 +60,42 @@ def _pode_ver(con, cid, u):
 
 def entrar(con, cid, user_id):
     con.execute("INSERT OR IGNORE INTO team_members (channel_id, user_id) VALUES (?,?)", (cid, user_id))
+
+
+def _chave_direta(a, b):
+    """Par de pessoas vira uma chave estável: o menor id primeiro.
+
+    É isso que impede duas conversas paralelas entre as mesmas duas pessoas — cada uma
+    com metade do histórico, que é o defeito clássico de chat direto feito na pressa. O
+    índice único no banco é quem garante, não a boa vontade do código."""
+    x, y = sorted((int(a), int(b)))
+    return f"{x}-{y}"
+
+
+def canal_direto(con, eu, outro):
+    """A conversa entre duas pessoas, criada na primeira vez que alguém abre. Chamar de
+    novo devolve a mesma."""
+    if int(eu) == int(outro):
+        raise ValueError("não dá para abrir conversa consigo mesmo")
+    chave = _chave_direta(eu, outro)
+    c = um(con, "SELECT * FROM team_channels WHERE dm_key=?", (chave,))
+    if c:
+        entrar(con, c["id"], eu); entrar(con, c["id"], outro)   # alguém pode ter saído
+        return c["id"]
+    cid = inserir(con, "team_channels", name="", kind="DIRETO", dm_key=chave, created_by=eu)
+    entrar(con, cid, eu)
+    entrar(con, cid, outro)
+    return cid
+
+
+def _nome_para(con, canal, user_id):
+    """Conversa direta não tem nome próprio: ela se chama como a OUTRA pessoa, e isso
+    depende de quem está olhando."""
+    if canal["kind"] != "DIRETO":
+        return canal["name"]
+    o = um(con, """SELECT u.name FROM team_members m JOIN users u ON u.id=m.user_id
+                   WHERE m.channel_id=? AND m.user_id<>? LIMIT 1""", (canal["id"], user_id))
+    return o["name"] if o else "Conversa"
 
 
 def garantir_canal(con, kind, entity_type=None, entity_id=None, name=None, por=None):
@@ -93,6 +135,15 @@ def nao_lidas(con, user_id):
         GROUP BY m.channel_id""", (user_id, user_id))}
 
 
+def total_nao_lidas(con, user_id):
+    """O número do menu. Exclui o que a pessoa silenciou — é isso que silenciar significa
+    para quem olha o menu. A contagem POR CONVERSA continua incluindo os silenciados: some
+    da vista, não da memória."""
+    mudos = {x["channel_id"] for x in todos(con, "SELECT channel_id FROM team_members WHERE user_id=? AND muted=1",
+                                            (user_id,))}
+    return sum(n for cid, n in nao_lidas(con, user_id).items() if cid not in mudos)
+
+
 # --------------------------------------------------------------------- rotas
 @r.get("/canais")
 def canais(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
@@ -110,8 +161,11 @@ def canais(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_
         FROM team_channels c WHERE c.archived_at IS NULL {visiveis}
         ORDER BY COALESCE(ultima_em, c.created_at) DESC""", {"uid": u["id"]})
     novas = nao_lidas(con, u["id"])
-    return {"canais": [{**dict(c), "nao_lidas": novas.get(c["id"], 0)} for c in linhas],
-            "total_nao_lidas": sum(novas.values())}
+    mudos = {x["channel_id"] for x in todos(con, "SELECT channel_id FROM team_members WHERE user_id=? AND muted=1",
+                                            (u["id"],))}
+    saida = [{**dict(c), "name": _nome_para(con, c, u["id"]), "nao_lidas": novas.get(c["id"], 0),
+              "mudo": c["id"] in mudos} for c in linhas]
+    return {"canais": saida, "total_nao_lidas": sum(n for cid, n in novas.items() if cid not in mudos)}
 
 
 class CanalIn(BaseModel):
@@ -121,6 +175,7 @@ class CanalIn(BaseModel):
     entity_id: int | None = None
     topic: str | None = None
     membros: list[int] = []
+    icone: str | None = None            # emoji; a foto sobe depois, por rota própria
 
 
 @r.post("/canais", status_code=201)
@@ -132,7 +187,8 @@ def criar_canal(dados: CanalIn, request: Request, u=Depends(auth.exige("OPERATOR
         raise HTTPException(400, "A conversa precisa de um nome.")
     cid = inserir(con, "team_channels", name=dados.name.strip()[:120], kind=dados.kind,
                   entity_type=dados.entity_type, entity_id=dados.entity_id,
-                  topic=(dados.topic or None), created_by=u["id"])
+                  topic=(dados.topic or None), created_by=u["id"],
+                  icon=(dados.icone or None) and dados.icone.strip()[:8])
     entrar(con, cid, u["id"])                          # quem cria participa
     for m in dados.membros:
         if um(con, "SELECT id FROM users WHERE id=? AND active=1", (m,)):
@@ -157,9 +213,10 @@ def canal(cid: int, desde: int = 0, u=Depends(auth.usuario_atual), con: sqlite3.
     membros = todos(con, """SELECT u.id, u.name, u.email, u.role, m.last_read_id, m.muted
                             FROM team_members m JOIN users u ON u.id=m.user_id
                             WHERE m.channel_id=? ORDER BY u.name""", (cid,))
-    return {"canal": dict(c), "mensagens": msgs, "membros": membros,
-            "participo": bool(um(con, "SELECT 1 AS x FROM team_members WHERE channel_id=? AND user_id=?",
-                                 (cid, u["id"])))}
+    meu = um(con, "SELECT muted FROM team_members WHERE channel_id=? AND user_id=?", (cid, u["id"]))
+    return {"canal": {**dict(c), "name": _nome_para(con, c, u["id"])},
+            "mensagens": msgs, "membros": membros,
+            "participo": bool(meu), "mudo": bool(meu and meu["muted"])}
 
 
 class MensagemIn(BaseModel):
@@ -223,6 +280,103 @@ def marcar_lido(cid: int, dados: LidoIn, u=Depends(auth.usuario_atual),
                 (int(dados.ate), cid, u["id"], int(dados.ate)))
     con.commit()
     return {"ok": True}
+
+
+@r.get("/pessoas")
+def pessoas(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Quem existe para conversar, com a conversa direta que já existe (se existir).
+
+    É esta lista que faz "falar com alguém em um clique": a tela mostra as pessoas e, ao
+    tocar, abre a conversa — criando na hora se for a primeira vez."""
+    novas = nao_lidas(con, u["id"])
+    saida = []
+    for p in todos(con, """SELECT id, name, email, role FROM users
+                           WHERE active=1 AND id<>? ORDER BY name""", (u["id"],)):
+        c = um(con, "SELECT id FROM team_channels WHERE dm_key=?", (_chave_direta(u["id"], p["id"]),))
+        saida.append({**dict(p), "canal_id": c["id"] if c else None,
+                      "nao_lidas": novas.get(c["id"], 0) if c else 0})
+    return saida
+
+
+@r.post("/direto/{user_id}", status_code=201)
+def abrir_direto(user_id: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Abre (ou reabre) a conversa com uma pessoa. Chamar duas vezes devolve a mesma."""
+    if not um(con, "SELECT id FROM users WHERE id=? AND active=1", (user_id,)):
+        raise HTTPException(404, "Pessoa não encontrada (ou inativa).")
+    try:
+        cid = canal_direto(con, u["id"], user_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    con.commit()
+    return {"id": cid}
+
+
+class MudoIn(BaseModel):
+    mudo: bool
+
+
+@r.post("/canais/{cid}/silenciar")
+def silenciar(cid: int, dados: MudoIn, u=Depends(auth.usuario_atual),
+              con: sqlite3.Connection = Depends(get_db)):
+    """Silenciar é por PESSOA: eu calo o grupo para mim, e não para os outros.
+
+    Silenciado não manda aviso no celular e não entra no número do menu. As mensagens
+    continuam chegando e contando na lista — some da vista, não da memória."""
+    _canal(con, cid)
+    if not um(con, "SELECT 1 AS x FROM team_members WHERE channel_id=? AND user_id=?", (cid, u["id"])):
+        raise HTTPException(403, "Você não participa desta conversa.")
+    con.execute("UPDATE team_members SET muted=? WHERE channel_id=? AND user_id=?",
+                (1 if dados.mudo else 0, cid, u["id"]))
+    con.commit()
+    return {"ok": True, "mudo": dados.mudo}
+
+
+def _pasta_imagens():
+    caminho = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "equipe")
+    os.makedirs(caminho, exist_ok=True)
+    return caminho
+
+
+TIPOS_IMAGEM = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+IMAGEM_MAX = 4 * 1024 * 1024
+
+
+@r.post("/canais/{cid}/imagem")
+async def subir_imagem(cid: int, arquivo: UploadFile = File(...), u=Depends(auth.exige("OPERATOR")),
+                       con: sqlite3.Connection = Depends(get_db)):
+    """Foto do grupo. Fica em ~/.urace/equipe, fora do repositório e fora do banco.
+
+    Só conversa de grupo tem foto: conversa direta já se identifica pela pessoa."""
+    c = _canal(con, cid)
+    if c["kind"] == "DIRETO":
+        raise HTTPException(400, "Conversa direta não tem foto: ela é a pessoa.")
+    if not _pode_ver(con, cid, u):
+        raise HTTPException(403, "Você não participa desta conversa.")
+    ext = TIPOS_IMAGEM.get((arquivo.content_type or "").lower())
+    if not ext:
+        raise HTTPException(400, "Use PNG, JPG ou WEBP.")
+    dados = await arquivo.read(IMAGEM_MAX + 1)
+    if len(dados) > IMAGEM_MAX:
+        raise HTTPException(400, "Imagem grande demais (máximo 4 MB).")
+    nome = f"canal-{cid}{ext}"
+    with open(os.path.join(_pasta_imagens(), nome), "wb") as f:
+        f.write(dados)
+    con.execute("UPDATE team_channels SET image_path=?, icon=NULL WHERE id=?", (nome, cid))
+    con.commit()
+    return {"ok": True}
+
+
+@r.get("/canais/{cid}/imagem")
+def ver_imagem(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """A foto sai pelo servidor, com sessão — nunca por link público adivinhável."""
+    c = _canal(con, cid)
+    if not c["image_path"] or not _pode_ver(con, cid, u):
+        raise HTTPException(404)
+    caminho = os.path.join(_pasta_imagens(), os.path.basename(c["image_path"]))
+    if not os.path.isfile(caminho):
+        raise HTTPException(404)
+    from fastapi.responses import FileResponse
+    return FileResponse(caminho, headers={"Cache-Control": "private, max-age=300"})
 
 
 class MembroIn(BaseModel):

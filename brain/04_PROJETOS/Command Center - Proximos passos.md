@@ -47,7 +47,10 @@ Command Center.
 - [x] Desenhar o modelo: canal ligado a corrida, serviço, cliente ou livre; mensagem já
       nasce com `origem` e `external_id` para a ponte não precisar migrar conversa depois
 - [x] 🤖 **Base construída** (21/09): tabelas, API e testes do chat interno
-- [ ] 🤖 Tela do chat interno no painel (lista de conversas + conversa, pensada para celular)
+- [x] 🤖 Tela do chat interno no painel (lista + conversa, pensada para celular)
+- [x] 🤖 **Chat de gente** (dono, 21/09): conversa direta em um clique pela lista de
+      pessoas, grupo com nome/ícone/foto/participantes, e silenciar por pessoa — vale para
+      conversa individual e para grupo
 - [x] 🤖 **Notificação push (PWA)** — construída em 21/09: chave VAPID própria, assinatura
       por pessoa e por aparelho, aviso sem o texto da conversa, aparelho morto limpo sozinho
 - [x] 🤖 Instalação na tela inicial (manifest, ícone, instrução própria para iPhone)

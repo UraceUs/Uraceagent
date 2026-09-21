@@ -125,8 +125,9 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
         "emails_attention": n("SELECT COUNT(*) AS n FROM emails WHERE handled=0 AND client_id IS NOT NULL"),
         "crm_pending": n("SELECT COUNT(*) AS n FROM crm_leads WHERE needs_reply=1"),
         # chat da equipe: o que ESTA pessoa ainda não leu (o menu mostra o número dela,
-        # não o da casa — contador que não é meu eu aprendo a ignorar em dois dias)
-        "equipe_nao_lidas": sum(equipe.nao_lidas(con, u["id"]).values()),
+        # não o da casa — contador que não é meu eu aprendo a ignorar em dois dias), já
+        # sem o que ela silenciou
+        "equipe_nao_lidas": equipe.total_nao_lidas(con, u["id"]),
         # vendas (17/09): retornos vencidos ou de hoje, de todo mundo
         "sales_due": n("""SELECT COUNT(*) AS n FROM opportunities
                           WHERE stage NOT IN ('GANHO','PERDIDO') AND next_at IS NOT NULL

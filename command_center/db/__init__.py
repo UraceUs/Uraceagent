@@ -128,6 +128,16 @@ MIGRACOES = [
     ("crm_messages", "ultima_tentativa", "TEXT"),
     ("crm_messages", "confirmado_em", "TEXT"),             # o Kommo devolveu esta mensagem: chegou mesmo
     ("api_keys", "read_only", "INTEGER NOT NULL DEFAULT 1"),   # chave que lê e não mexe (padrão)
+    # 21/09, o dono explicando a intenção do chat interno: falar com uma pessoa em um
+    # clique, montar grupo com nome e foto, e poder silenciar os dois.
+    ("team_channels", "icon", "TEXT"),        # emoji do grupo (o barato: não precisa de upload)
+    ("team_channels", "image_path", "TEXT"),  # foto do grupo, guardada fora do repositório
+    # conversa direta entre duas pessoas: "menor-maior" dos ids. O UNIQUE é o que impede
+    # duas conversas paralelas entre as mesmas pessoas — cada uma com metade do histórico.
+    ("team_channels", "dm_key", "TEXT"),
+]
+INDICES_EXTRA = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
 ]
 
 
@@ -138,6 +148,8 @@ def aplicar_schema(con):
         existentes = {r[1] for r in con.execute(f"PRAGMA table_info({tabela})")}
         if coluna not in existentes:
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
+    for sql in INDICES_EXTRA:        # índices de colunas que só existem depois da migração
+        con.execute(sql)
     _migrar_papeis(con)              # o papel CLOSER foi desfeito: quem tiver vira OPERATOR
     _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`
     for sql in POS_MIGRACAO:
