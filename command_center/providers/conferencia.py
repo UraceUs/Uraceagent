@@ -24,6 +24,14 @@ para conferir*; se devolve mensagens mas nenhuma nossa, as respostas daquele lea
 texto quando tem) e os eventos de conversa da conta (`kommo_chats`, sem texto, mas é o que
 esta conta registra). A segunda entra só onde a primeira não cobre.
 
+**Evento não é mensagem.** O evento do Kommo diz *"houve conversa nesta direção, a esta
+hora"* — uma conversa respondida, não uma bolha. Quando o painel manda duas respostas
+seguidas (11:24 "Hey Charles" e 11:24 "how are you?"), o Kommo registra UM evento para as
+duas. Casar um-para-um com evento fez a conferência apontar a segunda como perdida, e o
+print do Kommo mostrava as duas com ✓Delivered. Por isso, **um evento sem texto vale por
+todas as mensagens da mesma direção dentro da janela**; só a nota com texto é
+um-para-um.
+
 **Dois limites:** a API do Kommo nem sempre traz o texto da mensagem de chat (aí o
 casamento é só por tempo), e o que é anterior à integração não vem. Por isso a janela é
 recente e o relatório conta quantas linhas ficaram sem texto.
@@ -128,6 +136,23 @@ def _lado_do_kommo(notas, eventos, corte):
     return itens
 
 
+def _cobertos_por_evento(kommo, sobra):
+    """Sobra do painel que um evento sem texto já explica. Devolve (cobertas, restantes).
+
+    Sem isto, duas respostas no mesmo minuto viram uma entrega e uma acusação — e a
+    acusação é falsa: o Kommo mostrava as duas entregues (provado no print de 21/09)."""
+    marcos = [(k["direcao"], _segundos(k.get("em"))) for k in kommo
+              if not _limpo(k.get("texto")) and _segundos(k.get("em")) is not None]
+    cobertas, restantes = [], []
+    for p in sobra:
+        tp = _segundos(p["at"])
+        if tp is not None and any(d == p["direction"] and abs(t - tp) <= JANELA_S for d, t in marcos):
+            cobertas.append(p)
+        else:
+            restantes.append(p)
+    return cobertas, restantes
+
+
 def conferir_lead(con, lead, ler=None, desde=None, eventos=None):
     """Um lead: o que está só no Kommo, o que está só no painel, e o que não deu para dizer."""
     ler = ler or _ler_do_kommo
@@ -148,6 +173,7 @@ def conferir_lead(con, lead, ler=None, desde=None, eventos=None):
     ids_pendentes = {p["id"] for p in pendentes}
     sobrou_saida = [p for p in so_painel if p["direction"] == "saida"
                     and p["status"] == "sent" and p["id"] not in ids_pendentes]
+    cobertas, sobrou_saida = _cobertos_por_evento(kommo, sobrou_saida)
     # A trava: só chama de "não foi" se este lado do Kommo provou que mostra resposta nossa.
     # Sem nenhuma saída visível, a ausência não diz nada — e silêncio não é prova.
     enxerga_saida = any(k["direcao"] == "saida" for k in kommo)
@@ -159,7 +185,8 @@ def conferir_lead(con, lead, ler=None, desde=None, eventos=None):
         "nao_foi": sobrou_saida if enxerga_saida else [],
         "cego_saida": [] if enxerga_saida else sobrou_saida,
         "pendentes": pendentes,
-        "confere": len(pares),
+        "confere": len(pares) + len(cobertas),
+        "por_evento": len(cobertas),
         "sem_texto_kommo": sum(1 for k in kommo if not _limpo(k.get("texto"))),
         "sem_dados": not kommo,
     }

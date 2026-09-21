@@ -167,3 +167,33 @@ def test_nota_e_evento_da_mesma_mensagem_nao_viram_duas(con):
         con, l, ler=lambda _e: [{"id": "n1", "direcao": "saida", "texto": "oi", "em": em(10)}],
         eventos=[{"id": "e1", "direcao": "saida", "texto": "", "em": em(10), "fonte": "evento"}])
     assert r["confere"] == 1 and not r["nao_foi"] and not r["nao_chegou"]
+
+
+def test_duas_respostas_no_mesmo_minuto_nao_viram_uma_perdida(con):
+    """O caso real do lead do Charles (18/09, 11:24): o painel mandou "Hey Charles" e
+    "how are you?" no mesmo minuto, o Kommo mostrou as DUAS com ✓Delivered e registrou UM
+    evento de conversa. Casando um-para-um, a segunda virava acusação falsa."""
+    l = _lead(con, "7012")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="Hey Charles", at=em(60), source="painel")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="how are you?", at=em(60), source="painel")
+    con.commit()
+    um_evento = [{"id": "e1", "direcao": "saida", "texto": "", "em": em(60), "fonte": "evento"}]
+    r = conferencia.conferir_lead(con, l, ler=lambda _e: [], eventos=um_evento)
+    # uma casou no par, a outra ficou coberta pelo mesmo evento: as duas explicadas, zero acusação
+    assert r["nao_foi"] == [] and r["confere"] == 2 and r["por_evento"] == 1
+
+
+def test_resposta_longe_do_evento_continua_sendo_acusada(con):
+    """A cobertura é só dentro da janela: resposta de outra hora, sem nenhum sinal do
+    Kommo perto dela, continua aparecendo — senão a conferência não serviria para nada."""
+    l = _lead(con, "7013")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="perto", at=em(60), source="painel")
+    inserir(con, "crm_messages", lead_id=l["id"], external_id=None, direction="saida", status="sent",
+            author="Italo", text="longe", at=em(5), source="painel")
+    con.commit()
+    r = conferencia.conferir_lead(con, l, ler=lambda _e: [],
+                                  eventos=[{"id": "e1", "direcao": "saida", "texto": "", "em": em(60), "fonte": "evento"}])
+    assert [m["text"] for m in r["nao_foi"]] == ["longe"] and r["por_evento"] == 0 and r["confere"] == 1
