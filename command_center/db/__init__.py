@@ -108,6 +108,11 @@ MIGRACOES = [
     ("crm_messages", "starred", "INTEGER"),                # mensagem favorita dentro da conversa
     ("crm_leads", "contact_avatar", "TEXT"),               # foto do perfil que o Kommo manda no webhook (author.avatar_url)
     ("crm_leads", "profiles", "TEXT"),                     # json {instagram: "@usuario", facebook: "url"} informado no painel                     # human = vínculo com o cliente feito à mão (a sincronia não mexe)
+    # 21/09: entregar uma vez e torcer não é entregar. A fila agora insiste sozinha e a
+    # entrega só é dada por certa quando o próprio Kommo devolve a mensagem.
+    ("crm_messages", "tentativas", "INTEGER NOT NULL DEFAULT 0"),
+    ("crm_messages", "ultima_tentativa", "TEXT"),
+    ("crm_messages", "confirmado_em", "TEXT"),             # o Kommo devolveu esta mensagem: chegou mesmo
 ]
 
 
@@ -189,6 +194,11 @@ POS_MIGRACAO = [
        ('ratecard_semanal', 1, '{"schedule":true}', NULL,
         '{"sistema":"ler a URACE RATE CARD 2026 no Drive e aplicar os preços no QuickBooks, pelo mapa revisado"}')""",
     """UPDATE automation_rules SET schedule='["07:30"]' WHERE name='ratecard_semanal' AND schedule IS NULL""",
+    # dono, 21/09: "preciso garantir que todas cheguem". Confere o chat contra o Kommo todo dia.
+    """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+       ('conferir_chat', 1, '{"schedule":true}', NULL,
+        '{"sistema":"conferir a conversa de cada lead no Kommo contra a do painel e avisar o que o painel nao recebeu"}')""",
+    """UPDATE automation_rules SET schedule='["08:10"]' WHERE name='conferir_chat' AND schedule IS NULL""",
     """INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
        ('docusign_reenviar_waiver','REQUIRES_APPROVAL','reenvia/corrige e-mail do signatário: sai da empresa (dono, 17/09)'),
        ('docusign_anular_envelope','REQUIRES_APPROVAL','anula envelope em aberto; assinado nunca (dono, 17/09)'),

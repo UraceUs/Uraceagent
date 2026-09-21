@@ -78,6 +78,41 @@ def _autosync():
         time.sleep(minutos * 60)
 
 
+def _laco_do_chat():
+    """A resposta no chat não pode depender de alguém abrir a tela.
+
+    Até 21/09 a entrega tinha UMA chance: se o Salesbot não abrisse o canal naquele
+    instante, a mensagem ficava parada até alguém abrir a conversa no painel — e o
+    dono descobria dias depois. Este laço insiste a cada meio minuto e desiste só
+    quando o prazo acaba, gravando nota no lead e acendendo o aviso.
+
+    Meio minuto é de propósito: a janela de continuação do bot é de menos de um
+    minuto, e perder essa janela é perder a entrega instantânea."""
+    import time
+    from command_center.db import auditar, conectar
+    time.sleep(25)
+    segundos = int(os.environ.get("CC_CHAT_SEG", "30"))
+    while True:
+        con = conectar()
+        try:
+            from command_center.api import crm
+            r = crm.empurrar_fila(con)
+            desistiu = crm.varrer_fila(con)
+            con.commit()
+            if r["entregues"] or desistiu or r["falhas"]:
+                auditar(con, "crm.fila", "system", detail={**r, "desistiu": desistiu})
+                con.commit()
+        except Exception as e:                            # nunca derruba o laço
+            try:
+                auditar(con, "crm.fila.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+                con.commit()
+            except Exception:
+                pass
+        finally:
+            con.close()
+        time.sleep(segundos)
+
+
 @asynccontextmanager
 async def _ciclo(app):
     con = conectar()
@@ -88,6 +123,7 @@ async def _ciclo(app):
     if os.environ.get("CC_AUTOSYNC", "1") == "1":
         import threading
         threading.Thread(target=_autosync, daemon=True, name="cc-autosync").start()
+        threading.Thread(target=_laco_do_chat, daemon=True, name="cc-chat").start()
     yield
 
 

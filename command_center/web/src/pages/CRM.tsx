@@ -31,8 +31,8 @@ export interface Lead {
 interface Etapa { id: string; nome: string; ordem: number; leads: Lead[] }
 interface Funil { id: string; nome: string; etapas: Etapa[] }
 interface Board { funis: Funil[]; total: number; pendentes: number; integracao: { status?: string; last_success_at?: string | null; last_error?: string | null } }
-interface Mensagem { id: number; direction: string; author: string | null; text: string | null; at: string | null; source: string | null; status?: string | null; error?: string | null; starred?: number | null }
-interface LeadDetalhe { lead: Lead; mensagens: Mensagem[]; aviso: string | null; responder_habilitado: boolean; chat_ligado: boolean }
+interface Mensagem { id: number; direction: string; author: string | null; text: string | null; at: string | null; source: string | null; status?: string | null; error?: string | null; starred?: number | null; confirmado_em?: string | null; tentativas?: number | null }
+interface LeadDetalhe { lead: Lead; mensagens: Mensagem[]; aviso: string | null; responder_habilitado: boolean; chat_ligado: boolean; recibo_ativo?: boolean }
 interface EtapaViva { id: string; nome: string; ordem: number }
 interface FunilVivo { id: string; nome: string; etapas: EtapaViva[] }
 interface Inbox { conversas: Lead[]; pendentes: number }
@@ -216,8 +216,18 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
               </div>
             : <div className={`msg ${m.direction === 'entrada' ? 'ai' : m.direction === 'nota' ? 'nota' : 'me'}`}>
                 <div className="meta">{m.direction === 'entrada' ? (m.author || nomeDo(l)) : m.direction === 'nota' ? `nota · ${m.author || 'painel'}` : (m.author || 'nós')}{m.at && ` · ${fmtTime(m.at)}`}
-                  {m.direction === 'saida' && m.status === 'queued' && <Chip tone="warn">na fila</Chip>}
-                  {m.direction === 'saida' && m.status === 'sent' && <Chip tone="ok">entregue</Chip>}
+                  {/* "entregue" só quando o próprio Kommo devolveu a mensagem. Sem o recibo, o
+                      que o painel sabe é que mandou — e é isso que ele diz (21/09). */}
+                  {m.direction === 'saida' && (m.status === 'queued' || m.status === 'sending') &&
+                    <Chip tone="warn" title={`Na fila: o painel insiste com o bot do Kommo a cada meio minuto${m.tentativas ? ` · ${m.tentativas} tentativa(s)` : ''}`}>na fila{m.tentativas ? ` · ${m.tentativas}ª` : ''}</Chip>}
+                  {m.direction === 'saida' && m.status === 'sent' && m.confirmado_em &&
+                    <Chip tone="ok" title={`O Kommo confirmou em ${fmtTime(m.confirmado_em)}`}>entregue ✓</Chip>}
+                  {m.direction === 'saida' && m.status === 'sent' && !m.confirmado_em &&
+                    <Chip tone={d.data?.recibo_ativo ? 'warn' : 'neutral'}
+                      title={d.data?.recibo_ativo
+                        ? 'O painel entregou ao bot, mas o Kommo ainda não devolveu esta mensagem. Confira no Kommo.'
+                        : 'O painel entregou ao bot do Kommo. Esta conta não devolve as mensagens, então não há como confirmar por aqui.'}>
+                      enviada{d.data?.recibo_ativo ? ' · sem confirmação' : ''}</Chip>}
                   {m.direction === 'saida' && m.status === 'failed' && <Chip tone="crit">não entregue</Chip>}
                 </div>
                 <div className="bub-row"><div className="bub">{m.text}</div><button className={`star sm${m.starred ? ' on' : ''}`} onClick={() => estrelaMsg(m)} aria-label={m.starred ? 'Tirar favorita' : 'Favoritar mensagem'} title={m.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={14} /></button></div>

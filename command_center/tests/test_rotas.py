@@ -647,16 +647,19 @@ def test_agenda_chave_devida_e_roda_uma_vez_por_horario(cli, monkeypatch):
         monkeypatch.setitem(agenda.ROTINAS, "varredura_clientes", lambda c: chamadas.append("varredura") or {"iniciada": True})
         # 18/09: a Rate Card entrou às 07:30 (só age na segunda; aqui é só o laço da agenda)
         monkeypatch.setitem(agenda.ROTINAS, "ratecard_semanal", lambda c: chamadas.append("ratecard") or {"pulou": "não é segunda"})
+        # 21/09: a conferência do chat entrou às 08:10 (garantir que toda mensagem chegou)
+        monkeypatch.setitem(agenda.ROTINAS, "conferir_chat", lambda c: chamadas.append("conferencia") or {"nao_chegou": 0})
         t = datetime(2026, 9, 9, 7, 5, tzinfo=fuso)
         feitas = agenda.rodar(con, t)
         assert sorted(n for n, _, ok in feitas) == ["gmail_triagem", "sondagem_integracoes", "varredura_clientes"] and all(ok for _, _, ok in feitas)
         assert agenda.rodar(con, t) == []                        # mesmo horário não repete
         # às 13:01 vencem a triagem das 13:00 e os lembretes das 09:00 (16/09)
         assert sorted(agenda.rodar(con, datetime(2026, 9, 9, 13, 1, tzinfo=fuso))) == [
+            ("conferir_chat", "2026-09-09 08:10", True),
             ("gmail_triagem", "2026-09-09 13:00", True),
             ("lembrete_invoice", "2026-09-09 09:00", True),
             ("ratecard_semanal", "2026-09-09 07:30", True)]
-        assert sorted(chamadas) == ["lembretes", "ratecard", "sonda", "triagem", "triagem", "varredura"]
+        assert sorted(chamadas) == ["conferencia", "lembretes", "ratecard", "sonda", "triagem", "triagem", "varredura"]
         r = um(con, "SELECT last_run_at, last_result FROM automation_rules WHERE name='gmail_triagem'")
         assert r["last_run_at"] == "2026-09-09 13:00" and '"ok": true' in r["last_result"]
         # regra desligada não roda

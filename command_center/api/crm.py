@@ -69,6 +69,15 @@ def _erro(e):
     return HTTPException(502, str(e)[:300])
 
 
+def _permanente(e):
+    """Erro que insistir não conserta: bot não configurado, Kommo não conectado.
+
+    A fila insiste sozinha com falha passageira (rede, 5xx) — mas insistir com "sem
+    KOMMO_BOT_ID" seria enganar quem escreveu: aquilo nunca vai sair. "RECUSADO:" é a
+    marca que os MCP usam para dizer "não é problema de tentar de novo"."""
+    return isinstance(e, NaoConectado) or "RECUSADO:" in str(e)
+
+
 def _lead(con, lid):
     l = um(con, """SELECT c.*, cl.name AS client_name, cl.pilot_name AS client_pilot
                    FROM crm_leads c LEFT JOIN clients cl ON cl.id=c.client_id WHERE c.id=?""", (lid,))
@@ -142,7 +151,9 @@ def lead(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
     l = _lead(con, lid)
     return {"lead": l, "mensagens": mensagens, "aviso": aviso,
             "responder_habilitado": bool(os.environ.get("KOMMO_BOT_ID")) or _return_fresco(l),
-            "chat_ligado": bool(_chave_hook()) and bool(os.environ.get("KOMMO_BOT_ID"))}
+            "chat_ligado": bool(_chave_hook()) and bool(os.environ.get("KOMMO_BOT_ID")),
+            # esta conta devolve as nossas mensagens? só então "sem recibo" quer dizer algo
+            "recibo_ativo": confirmacao_confiavel(con)}
 
 
 @r.get("/leads/{lid}/detail")
@@ -340,7 +351,9 @@ def nota(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("OPERA
 
 
 JANELA_RETURN_S = 50          # o bot espera >= 58 s (provado 24/08); usamos com folga
-PRAZO_FILA_S = 150            # sem entrega até aqui, a mensagem vira nota no Kommo e fica marcada
+PRAZO_FILA_S = 900            # 15 min insistindo antes de desistir (era 150 s: uma tentativa e adeus)
+ESPERA_TENTATIVA_S = 60       # entre uma cutucada no bot e a seguinte
+CONFIRMA_PRAZO_S = 600        # entregue e sem eco do Kommo depois disto: suspeita, não certeza
 
 
 def _reivindicar_fila(con, lead_id):
@@ -396,7 +409,8 @@ def varrer_fila(con):
     velhas = todos(con, """SELECT m.*, l.external_id AS lead_ext FROM crm_messages m JOIN crm_leads l ON l.id=m.lead_id
                            WHERE m.direction='saida' AND m.status IN ('queued','sending') AND m.at < ?""", (limite,))
     for m in velhas:
-        motivo = "o bot não abriu o chat a tempo (Salesbot ligado? gatilho na etapa? KOMMO_BOT_ID?)"
+        motivo = (f"o bot não abriu o chat em {PRAZO_FILA_S // 60} min, depois de "
+                  f"{m['tentativas'] or 0} tentativa(s) (Salesbot ligado? gatilho na etapa? KOMMO_BOT_ID?)")
         try:
             _aplicando(modulo(SISTEMA).nota_humana, m["lead_ext"],
                        f"[Command Center — NÃO chegou ao cliente, enviar manualmente]\n{m['text']}")
@@ -406,6 +420,70 @@ def varrer_fila(con):
         atualizar(con, "crm_messages", m["id"], status="failed", error=motivo[:300])
         auditar(con, "crm.reply.failed", "system", entity_type="crm_lead", entity_id=m["lead_id"], detail={"msg": m["id"]})
     return len(velhas)
+
+
+def empurrar_fila(con):
+    """Insiste com o que está na fila. Roda sozinho a cada meio minuto (laço `cc-chat`).
+
+    Antes, o painel tentava UMA vez: se o Salesbot não abrisse o chat naquele instante, a
+    mensagem apodrecia na fila até alguém abrir a conversa na tela — e virava nota interna,
+    que o cliente nunca vê. Agora cada lead com fila é cutucado de novo a cada minuto, até
+    PRAZO_FILA_S. Quem desiste é a varredura, e só depois de insistir.
+
+    Devolve o que aconteceu, para o laço registrar."""
+    from datetime import datetime, timedelta, timezone
+    agora_dt = datetime.now(timezone.utc)
+    corte = (agora_dt - timedelta(seconds=ESPERA_TENTATIVA_S)).strftime("%Y-%m-%dT%H:%M:%S")
+    leads = todos(con, """SELECT l.*, MIN(m.at) AS primeira, COUNT(m.id) AS n,
+                                 MAX(COALESCE(m.ultima_tentativa,'')) AS ultima
+                          FROM crm_messages m JOIN crm_leads l ON l.id = m.lead_id
+                          WHERE m.direction='saida' AND m.status='queued'
+                          GROUP BY l.id""")
+    entregues, cutucados, falhas = 0, 0, []
+    for l in leads:
+        lead = dict(l)
+        if _return_fresco(lead):                       # o bot ainda espera: entrega agora
+            minhas = _reivindicar_fila(con, lead["id"])
+            if minhas:
+                ok, det = _aplicando(_entregar, con, lead, minhas)
+                entregues += len(minhas) if ok else 0
+                if not ok:
+                    falhas.append({"lead": lead["id"], "erro": det[:120]})
+                continue
+        if lead["ultima"] and lead["ultima"] > corte:   # já cutucado há menos de um minuto
+            continue
+        con.execute("""UPDATE crm_messages SET tentativas = COALESCE(tentativas,0) + 1, ultima_tentativa = ?
+                       WHERE lead_id=? AND direction='saida' AND status='queued'""", (agora(), lead["id"]))
+        con.commit()
+        try:
+            _aplicando(modulo(SISTEMA).abrir_canal_humano, lead["external_id"])
+            cutucados += 1
+        except Exception as e:                          # noqa: BLE001
+            falhas.append({"lead": lead["id"], "erro": str(e)[:120]})
+    return {"entregues": entregues, "cutucados": cutucados, "falhas": falhas}
+
+
+def confirmar_entrega(con, lead_id, texto, em):
+    """O Kommo devolveu uma mensagem NOSSA: é o recibo. Carimba a resposta do painel que
+    tem o mesmo texto por perto e ainda estava sem confirmação.
+
+    Este é o único sinal de que a mensagem apareceu de verdade no chat do cliente — a
+    continuação do Salesbot responder "202" só diz que o Kommo aceitou o pedido."""
+    alvo = um(con, """SELECT id FROM crm_messages WHERE lead_id=? AND direction='saida' AND confirmado_em IS NULL
+                      AND text=? AND ABS(strftime('%s', at) - strftime('%s', ?)) <= 900
+                      ORDER BY at DESC LIMIT 1""", (lead_id, (texto or "")[:8000], em))
+    if not alvo:
+        return False
+    atualizar(con, "crm_messages", alvo["id"], confirmado_em=em, status="sent", error=None)
+    return True
+
+
+def confirmacao_confiavel(con, dias=7):
+    """A conta devolve as nossas mensagens? Se nunca devolveu, falta de recibo não quer
+    dizer nada — e o painel não vai acusar o que não consegue ver (lição de 21/09)."""
+    r = um(con, """SELECT COUNT(*) AS n FROM crm_messages WHERE confirmado_em IS NOT NULL
+                   AND confirmado_em >= strftime('%Y-%m-%dT%H:%M:%S', 'now', ?)""", (f"-{int(dias)} days",))
+    return bool(r and r["n"])
 
 
 @r.post("/leads/{lid}/reply")
@@ -436,15 +514,22 @@ def responder(lid: int, dados: TextoIn, request: Request, u=Depends(auth.exige("
         try:
             _aplicando(modulo(SISTEMA).abrir_canal_humano, l["external_id"])
             como = "bot disparado"
-        except Exception as e:
-            atualizar(con, "crm_messages", mid, status="failed", error=str(e)[:300])
-            con.commit()
-            raise _erro(e)
+        except Exception as e:                            # noqa: BLE001
+            # Falhar aqui NÃO é desistir: a mensagem fica na fila e o laço `cc-chat` insiste
+            # sozinho a cada meio minuto. Marcar como falha na primeira tentativa foi o que
+            # fez resposta boa morrer por uma piscada de rede (21/09). Só o erro permanente
+            # (bot desligado) volta na cara de quem escreveu — porque aí insistir é mentira.
+            if _permanente(e):
+                atualizar(con, "crm_messages", mid, status="failed", error=str(e)[:300])
+                con.commit()
+                raise _erro(e)
+            atualizar(con, "crm_messages", mid, error=str(e)[:300], tentativas=1, ultima_tentativa=agora())
+            det = str(e)[:200]
     con.commit()
     return {"ok": True, "msg_id": mid, "como": como, "detalhe": det,
             "aviso": ("Enviada no chat do lead." if como == "entregue" else
-                      "Na fila: o bot do Kommo vai abrir o chat e entregar em segundos. Se em 2-3 min não sair, "
-                      "vira nota no lead e fica marcada aqui como não entregue.")}
+                      f"Na fila: o painel insiste com o bot do Kommo a cada meio minuto. Se em "
+                      f"{PRAZO_FILA_S // 60} min não sair, vira nota no lead e acende o aviso aqui.")}
 
 
 class ReenviarIn(BaseModel):
@@ -487,10 +572,13 @@ def reenviar(lid: int, mid: int, dados: ReenviarIn, request: Request, u=Depends(
         try:
             _aplicando(modulo(SISTEMA).abrir_canal_humano, l["external_id"])
             como = "bot disparado"
-        except Exception as e:
-            atualizar(con, "crm_messages", novo, status="failed", error=str(e)[:300])
-            con.commit()
-            raise _erro(e)
+        except Exception as e:                            # noqa: BLE001
+            if _permanente(e):
+                atualizar(con, "crm_messages", novo, status="failed", error=str(e)[:300])
+                con.commit()
+                raise _erro(e)
+            atualizar(con, "crm_messages", novo, error=str(e)[:300], tentativas=1, ultima_tentativa=agora())
+            det = str(e)[:200]                            # fica na fila; o laço `cc-chat` insiste
     con.commit()
     return {"ok": True, "msg_id": novo, "como": como, "detalhe": det}
 
@@ -874,7 +962,7 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
                  "autor": corpo.get("author") or corpo.get("name"), "origem": corpo.get("source"), "criado_em": None, "anexo": None,
                  "_nome": corpo.get("name"), "_simples": True}]
     from adminai.mcp.kommo_mcp import canal_da_origem
-    guardadas, leads = 0, set()
+    guardadas, confirmadas, leads = 0, 0, set()
     for m in msgs:
         ext = m["lead_id"]
         if not ext and m["contato_id"]:                       # mensagem só com contato: acha o lead
@@ -910,9 +998,12 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
         ext_msg = (m["id"] if m.get("_simples") and m["id"] else None) or (f"msg:{m['id']}" if m["id"] else f"msg:{lid}:{em}")
         if um(con, "SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND external_id=?", (lid, ext_msg)):
             continue
-        # resposta nossa que o Kommo devolve como "outgoing": se o painel mandou o mesmo texto há pouco, é a mesma
+        # Resposta nossa que o Kommo devolve como "outgoing". Não é lixo: é o RECIBO da mensagem
+        # que o painel mandou. Carimba a original em vez de largar a informação no chão (21/09).
         if m["direcao"] == "saida" and um(con, """SELECT 1 AS x FROM crm_messages WHERE lead_id=? AND direction='saida' AND text=?
                                                   AND ABS(strftime('%s', at) - strftime('%s', ?)) <= 900 LIMIT 1""", (lid, texto[:8000], em)):
+            if confirmar_entrega(con, lid, texto, em):
+                confirmadas += 1
             continue
         # o hook do bot pode já ter posto a MESMA mensagem (só texto): vale esta, com id e canal
         if m["direcao"] == "entrada":
@@ -934,6 +1025,8 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
         if novo:
             background.add_task(_enriquecer_lead, lid, ext)
     for lid in leads:
-        auditar(con, "crm.webhook", "kommo", entity_type="crm_lead", entity_id=lid, detail={"mensagens": guardadas, "formato": "kommo" if corpo.get("message") else "simples"})
+        auditar(con, "crm.webhook", "kommo", entity_type="crm_lead", entity_id=lid,
+                detail={"mensagens": guardadas, "confirmadas": confirmadas,
+                        "formato": "kommo" if corpo.get("message") else "simples"})
     con.commit()
-    return {"ok": True, "leads": sorted(leads), "mensagens": guardadas}
+    return {"ok": True, "leads": sorted(leads), "mensagens": guardadas, "confirmadas": confirmadas}

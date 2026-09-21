@@ -280,6 +280,29 @@ def _coletar(con):
                                  ("Estado", m.get("status") or "—"),
                                  ("Texto", (m.get("text") or "")[:120] or "—")]))
 
+    # ---- 9b. entregue ao bot, mas sem recibo do Kommo
+    # "Enviada" até 21/09 queria dizer só que o Kommo aceitou o pedido. O recibo é o próprio
+    # Kommo devolver a mensagem pelo webhook. Se esta conta nunca devolve, o painel NÃO
+    # cobra recibo — silêncio de quem nunca fala não prova nada (lição da conferência).
+    from command_center.api import crm as _crm
+    if _crm.confirmacao_confiavel(con):
+        limite = (datetime.utcnow() - timedelta(seconds=_crm.CONFIRMA_PRAZO_S)).strftime("%Y-%m-%dT%H:%M:%S")
+        for m in todos(con, """SELECT m.*, l.name AS lead, l.id AS lead_id FROM crm_messages m
+                               JOIN crm_leads l ON l.id = m.lead_id
+                               WHERE m.direction='saida' AND m.status='sent' AND m.confirmado_em IS NULL
+                                 AND m.source='painel' AND m.at < ? AND m.at >= ?
+                               ORDER BY m.at DESC LIMIT 8""",
+                       (limite, (datetime.utcnow() - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M:%S"))):
+            itens.append(dict(key=_chave("crm-sem-recibo", "crm_message", m["id"]),
+                              level="HIGH",
+                              title=f"Sem confirmação de que chegou em {m['lead']}",
+                              why=("O painel entregou ao bot do Kommo e o Kommo não devolveu esta mensagem, "
+                                   "como faz com as outras. Confira no Kommo; se não estiver lá, mande de novo."),
+                              entity={"type": "crm_message", "id": m["id"]}, client_id=None,
+                              link=f"/crm/chat?lead={m['lead_id']}", action="Conferir e reenviar",
+                              facts=[("Quando", (m.get("at") or "—")[:16].replace("T", " ")),
+                                     ("Texto", (m.get("text") or "")[:120] or "—")]))
+
     # ---- 10. o chat parou de RECEBER (o webhook do Kommo emudeceu)
     # Sintoma que o dono viu em 21/09: "algumas msgs não foram e outras não chegaram".
     # O Kommo desliga o webhook depois de falhas seguidas — e o painel ficava calado.

@@ -153,12 +153,40 @@ def _rodar_varredura(con):
     return {"iniciada": True, "em_segundo_plano": True}
 
 
+def _rodar_conferencia(con):
+    """Confere o chat contra o Kommo e levanta o que o painel não recebeu (dono, 21/09:
+    *"preciso garantir que todas cheguem"*). Não escreve no Kommo; só compara e avisa.
+
+    Só acusa na direção em que enxerga: conversa que o Kommo devolve vazia vira "não deu
+    para conferir", nunca "sumiu" — foi o erro que a primeira versão cometeu."""
+    from command_center.db import agora, atualizar, inserir
+    from command_center.providers import conferencia
+    r = conferencia.conferir(con, dias=2)
+    faltando = [(c["lead"], k) for c in r["leads"] for k in c["nao_chegou"]]
+    ja = um(con, "SELECT id FROM ai_events WHERE kind='crm.nao_chegou' AND status='NEW'")
+    if not faltando:
+        if ja:
+            atualizar(con, "ai_events", ja["id"], status="DONE")
+            con.commit()
+        return {"ok": True, "nao_chegou": 0, "conferidas": len(r["leads"]), "sem_dados": r["sem_dados"]}
+    quem = ", ".join(sorted({(l.get("name") or l["external_id"])[:24] for l, _ in faltando})[:4])
+    resumo = (f"{len(faltando)} mensagem(ns) de cliente estão no Kommo e não no painel: {quem}"
+              + ("…" if len(faltando) > 4 else ""))
+    if ja:
+        atualizar(con, "ai_events", ja["id"], summary=resumo, detected_at=agora())
+    else:
+        inserir(con, "ai_events", kind="crm.nao_chegou", entity_type="crm_lead", summary=resumo, status="NEW")
+    con.commit()
+    return {"ok": True, "nao_chegou": len(faltando), "conferidas": len(r["leads"])}
+
+
 ROTINAS = {
     "varredura_clientes": _rodar_varredura,        # dono, 17/09: varrer Gmail + DocuSign dos clientes é da IA, todo dia
     "gmail_triagem": _rodar_triagem,
     "sondagem_integracoes": lambda con: sondar(con, por="agenda"),
     "lembrete_invoice": _rodar_lembretes,          # dono, 16/09: lembrete recorrente de invoice em aberto, 09:00
     "ratecard_semanal": _rodar_ratecard,           # dono, 18/09: "faça ele ler isso uma vez por semana"
+    "conferir_chat": _rodar_conferencia,           # dono, 21/09: "garantir que todas cheguem"
 }
 
 
