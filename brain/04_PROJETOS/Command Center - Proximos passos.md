@@ -177,9 +177,14 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       tarefa; a atribuição decide por **contato antes do título**; `--ler-descricoes` busca no
       Asana o que ficou em dúvida
 - [x] 🤖 `[Canceled] Erik Mendoza Jr_…` → Erik Mendoza (tag na frente sai; Jr é marca de criança)
-- [ ] 👤 Abrir o card do David Pera no painel e confirmar que está como você queria
-- [ ] 👤 Rodar `python3 adminai/atribuir_servicos.py --ler-descricoes` uma vez: os baldes
-      (`Mike`, `Sean`, `Liam`, `Martin`…) podem se resolver sozinhos pela descrição
+- [x] 🤖 **Fechado em 22/09: a varredura convergiu** (segunda rodada seguida: 0 movidos,
+      0 cards novos, 0 para unir). De 508 para **956 serviços no card certo**; David Pera
+      com os 3 dele; "sem nome no título" de 266 para 228 (corridas e tarefas internas).
+- [x] 🤖 Revisão adversarial (6 lentes, 3 céticos por achado): 12 defeitos confirmados,
+      5 críticos, todos corrigidos — ver a decisão
+- [ ] 👤 `Charles Andrew Marron` e `Charlie Marron` parecem a mesma criança — unir?
+- [ ] 👤 Olhar os baldes que sobraram (`Isabel`, `Calix`, `Enzo`, `Mia`, `Baturalp`,
+      `Enrico BR`) e unir os que você reconhecer
 - [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
 
 ## Para logo depois da organização dos cards (dono, 22/09)

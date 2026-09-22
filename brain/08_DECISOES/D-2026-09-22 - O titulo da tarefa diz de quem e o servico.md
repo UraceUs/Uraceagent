@@ -154,6 +154,34 @@ Savage, `Brason` → Branson). Mais 12 palavras soltas que apareciam como "clien
 (`Trackhouse`, `Endurance`, `Florida`, `Closed`, `Photos`, `Goals`, `To-Do`, `AMR`,
 `JFC`, `RMC`, `Mycron`, `Skapa`) entraram no vocabulário do que não é gente.
 
+## O que a revisão adversarial cobrou (22/09, à noite)
+
+Rodei 6 lentes com 3 céticos por achado sobre tudo que mudou no dia: **12 defeitos
+confirmados com repro, 41 refutados**. Cinco eram críticos, e o pior estava
+corrompendo dados **a cada 15 minutos**:
+
+| Defeito | O que fazia |
+|---|---|
+| `deduplicar` a cada sincronia | unia o balde `Alex` no primeiro card com piloto "Alex" — serviço ia para a família errada sozinho |
+| `redistribuir` ignorava `client_merges` | a união feita à mão pelo dono era desfeita na varredura seguinte |
+| "nome igual" com piloto de 1 palavra | card com piloto "Alex" capturava todo `Alex_…`; a ambiguidade nunca era checada |
+| Levenshtein de 1 letra | **Daniel → Daniela**, Bruno → Bruna, Martin → Bruno Martins |
+| apelido por prefixo | **Gabriel → Gabriela**, Maria → Mariana — irmãos |
+
+A separação que isso obrigou, e que é o aprendizado que fica:
+
+> **Sugestão pode ser frouxa; atribuição tem de ser estrita.** Quem decide parecença é
+> o dono — 1 letra, prefixo, sobrenome vão para a lista "para você unir". Quem decide
+> certeza é o código, e certeza é contato, responsável ou nome inteiro.
+
+E a distinção que faltava na regra do dono, descoberta quando a varredura quis tirar
+`AIDEN - KARTING SCHOOL` do card do Aidan Mills:
+
+> **"Não pôr no card de OUTRO" não é "mexer em quem já está certo".** O serviço fica
+> onde está quando o card atual é o único candidato plausível, tem exatamente aquele
+> nome, ou é forte parecido (mesmo sobrenome, 1 letra no primeiro nome). Havendo dois
+> ou mais candidatos, o card atual foi escolhido pela máquina e não por evidência: aí sai.
+
 ## Como rodar
 
 ```
