@@ -417,3 +417,36 @@ def test_operator_nao_aplica(cli):
         con.close()
     h = _entra(cli, "op@urace.us")
     assert cli.post("/ops/api/service-attribution", headers=h).status_code == 403
+
+
+# --------------------------------------------- o princípio do dono: contato confirma
+def test_mesmo_contato_confirma_e_nome_parecido_so_sugere(con):
+    """"O princípio para cruzar e confirmar é usar o nome do responsável e informações
+    de contato" (dono, 22/09). O Alex do Edward Donnell não é o Alex Xikis."""
+    a = {"name": "Edward Donnell", "pilot_name": "Alex", "email": "ed@x.com", "phone": None}
+    b = {"name": "Maria Xikis", "pilot_name": "Alex Xikis", "email": "mx@x.com", "phone": None}
+    assert identidade.mesmo_contato(a, b) is None
+    assert atribuicao.grau_de_igualdade(a, b) is None, "primeiro nome igual não é nada"
+    c = {"name": "Edward Donnell", "pilot_name": "Alex Donnell", "email": "ed@x.com", "phone": None}
+    assert identidade.mesmo_contato(a, c).startswith("mesmo e-mail")
+    assert atribuicao.grau_de_igualdade(a, c) == "confirmado"
+    d = {"name": "Charlie Marrom", "pilot_name": "Charlie Marrom", "email": None, "phone": None}
+    e = {"name": "Charlie Marron", "pilot_name": "Charlie Marron", "email": None, "phone": None}
+    assert atribuicao.grau_de_igualdade(d, e) == "parece", "sem contato, é só suspeita"
+
+
+def test_candidatos_duplicados_acha_mesmo_email_e_telefone_antes_do_nome(con):
+    """Antes só o nome parecido virava par. Dois cards com o mesmo e-mail e nomes
+    diferentes passavam despercebidos — e é a evidência mais forte que existe."""
+    x = _cliente(con, "Fernanda Lima", piloto="Pedro Lima", email="fer@x.com")
+    y = _cliente(con, "Fernanda L.", piloto="Pedrinho", email="FER@x.com")
+    z = _cliente(con, "Joao Silva", piloto="Rui Silva")
+    con.execute("UPDATE clients SET phone='(407) 555-0199' WHERE id=?", (z,))
+    w = _cliente(con, "J. Silva", piloto="Ruy")
+    con.execute("UPDATE clients SET phone='407-555-0199' WHERE id=?", (w,))
+    con.commit()
+    pares = identidade.candidatos_duplicados(con)
+    fortes = {frozenset((p["a"]["id"], p["b"]["id"])): p["why"] for p in pares if p.get("forte")}
+    assert fortes[frozenset((x, y))].startswith("mesmo e-mail")
+    assert fortes[frozenset((z, w))].startswith("mesmo telefone")
+    assert pares[0].get("forte"), "contato vem antes de nome parecido"

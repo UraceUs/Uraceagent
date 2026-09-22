@@ -57,7 +57,9 @@ def _mostra(rotulo, c, n):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--unir", action="append", required=True, metavar="A+B[+C]=NOME")
+    ap.add_argument("--unir", action="append", default=[], metavar="A+B[+C]=NOME")
+    ap.add_argument("--piloto", action="append", default=[], metavar="ID=NOME",
+                    help="corrige o nome do piloto de um card (dono: '#238 é Alex Donnell')")
     ap.add_argument("--aplicar", action="store_true")
     a = ap.parse_args()
 
@@ -110,6 +112,20 @@ def main():
                         (nome, piloto, agora(), keep["id"]))
             con.commit()
             print("  feito.")
+        for esp in a.piloto:
+            if "=" not in esp:
+                sys.exit(f"--piloto precisa ser 'id=nome': {esp!r}")
+            cid, nome = esp.split("=", 1)
+            c, n = _card(con, cid.strip())
+            print(f"\n#{c['id']} {c['name']!r}: piloto {c['pilot_name']!r} -> {nome.strip()!r}")
+            if a.aplicar:
+                con.execute("UPDATE clients SET pilot_name=?, updated_at=? WHERE id=?", (nome.strip(), agora(), c["id"]))
+                auditar(con, "client.update", "owner:cli", entity_type="client", entity_id=c["id"],
+                        detail={"pilot_name": {"de": c["pilot_name"], "para": nome.strip()}, "reason": "dono, 22/09"})
+                con.commit()
+                print("  feito.")
+        if not a.unir and not a.piloto:
+            sys.exit("nada a fazer: passe --unir e/ou --piloto")
         if not a.aplicar:
             print("\nNada foi escrito. Para aplicar, repita com --aplicar.")
     finally:

@@ -7,6 +7,13 @@ Regras do dono (04/09/2026):
 - Um card por pessoa: mesmo e-mail, mesmo telefone ou nome igual/quase
   igual (Alonso/Alonzo) é a mesma pessoa. Casos duvidosos ficam para
   revisão humana (com ajuda da IA), nunca são unidos no escuro.
+
+Regra do dono (22/09/2026), depois do card do David Pera:
+- "Nunca colocar serviço de outro cliente em card de outro cliente."
+  Na dúvida, card próprio com o nome como está no título.
+- "O princípio para cruzar e confirmar é usar o nome do responsável e
+  informações de contato." Primeiro nome do piloto parecido é SUSPEITA;
+  e-mail, telefone ou responsável igual é CONFIRMAÇÃO (`mesmo_contato`).
 """
 import json
 import re
@@ -491,11 +498,38 @@ def _nomes(c):
     return [n for n in (c.get("pilot_name"), c.get("name")) if n and len(normaliza(n)) >= 2]
 
 
+def mesmo_contato(a, b):
+    """O que CONFIRMA que dois cards são a mesma pessoa, na regra do dono (22/09):
+    mesmo e-mail, mesmo telefone ou mesmo responsável. Devolve o motivo, ou None.
+    Nome de piloto parecido não entra aqui — isso é só suspeita."""
+    ea, eb = (a.get("email") or "").strip().lower(), (b.get("email") or "").strip().lower()
+    if ea and ea == eb:
+        return f"mesmo e-mail: {ea}"
+    ta, tb = so_digitos(a.get("phone")), so_digitos(b.get("phone"))
+    if ta and ta == tb:
+        return f"mesmo telefone: {a.get('phone')}"
+    ra, rb = chave_exata(a.get("name")), chave_exata(b.get("name"))
+    if ra and ra == rb and len(ra.split()) >= 2:
+        return f"mesmo responsável: {a.get('name')}"
+    return None
+
+
 def candidatos_duplicados(con, para=None):
     """Pares que PARECEM a mesma pessoa (Alonso/Alonzo, Brian/Bryan, piloto de um =
     responsável do outro) — decisão humana, com a IA ajudando. `para` restringe a um cliente."""
     cs = todos(con, "SELECT id, name, pilot_name, email, phone FROM clients ORDER BY name")
     pares, vistos = [], set()
+    # Princípio do dono (22/09): "para cruzar e confirmar, use o nome do responsável e
+    # as informações de contato". Mesmo e-mail ou mesmo telefone é a evidência mais
+    # forte que existe — e vem ANTES do nome parecido.
+    for i, a in enumerate(cs):
+        for b in cs[i + 1:]:
+            if para and para not in (a["id"], b["id"]):
+                continue
+            porque = mesmo_contato(a, b)
+            if porque and (a["id"], b["id"]) not in vistos:
+                vistos.add((a["id"], b["id"]))
+                pares.append({"a": a, "b": b, "why": porque, "forte": True})
     for i, a in enumerate(cs):
         for b in cs[i + 1:]:
             if para and para not in (a["id"], b["id"]):

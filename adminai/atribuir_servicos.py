@@ -61,12 +61,13 @@ def main():
 
         if rel["unir"]:
             print(f"\n--- PARA VOCÊ UNIR: card novo que pode ser alguém que já existe ({len(rel['unir'])}) ---")
+            print("    (= confirmado por contato/responsável · ~ só o nome parece · ? nada)")
             for x in rel["unir"][:a.limite]:
-                iguais = [p for p in x["parecidos"] if p["mesma_pessoa"]]
-                marca = "  <<< parece a MESMA pessoa" if iguais else ""
-                print(f"  {x['nome']:<24} {x['servicos']:>3} serviço(s){marca}")
+                print(f"  {x['nome']:<24} {x['servicos']:>3} serviço(s)")
                 for p in x["parecidos"]:
-                    print(f"       {'=' if p['mesma_pessoa'] else '?'} #{p['id']} {p['nome']}")
+                    sinal = {"confirmado": "=", "parece": "~"}.get(p.get("grau"), "?")
+                    print(f"       {sinal} #{p['id']} {p['nome']:<22} resp. {p['responsavel'] or '-':<22} "
+                          f"{p['email'] or '-'}  {p['phone'] or '-'}")
 
         if rel["sem_nome"]:
             print(f"\n--- títulos sem gente reconhecível ({len(rel['sem_nome'])}) ---")

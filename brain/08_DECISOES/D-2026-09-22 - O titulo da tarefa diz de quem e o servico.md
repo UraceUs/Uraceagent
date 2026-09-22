@@ -89,6 +89,21 @@ O card novo nasce com uma nota dizendo de onde veio, e a varredura devolve a lis
 existe. Unir continua sendo decisão humana — foi justamente uma união no escuro que
 levou 112 serviços para o card do David Pera.
 
+## O princípio para confirmar (dono, 22/09)
+
+> *"O princípio para cruzar e confirmar é usar o nome do responsável e informações
+> de contato."*
+
+Foi a resposta dele às três dúvidas que sobraram depois da distribuição — e a que
+explica o erro do `Alex`: o #238 Edward Donnell (piloto Alex) **é o Alex Donnell**, não
+o Alex Xikis; primeiro nome igual não diz nada. Ele decidiu também: o balde `Charlie`
+é o Charlie Marron; `Savage`, `Savege`, #15 e #465 são um só, e o nome certo é
+**Alexander Savage**.
+
+No código: `identidade.mesmo_contato` (e-mail, telefone ou responsável igual) é o que
+CONFIRMA; `candidatos_duplicados` lista esses pares primeiro, marcados `forte`; a
+lista "para você unir" marca `=` só com contato/responsável e `~` quando é só o nome.
+
 ## O cadastro também está sujo
 
 A varredura expôs uma segunda camada do problema: boa parte dos "ambíguos" eram **cards

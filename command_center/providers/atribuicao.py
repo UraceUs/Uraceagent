@@ -135,6 +135,17 @@ def candidatos_para(con, nome, clientes=None):
     return []
 
 
+def grau_de_igualdade(a, b):
+    """'confirmado' (contato ou responsável iguais — regra do dono), 'parece' (só o
+    nome) ou None. O relatório marca = para o primeiro e ~ para o segundo: o dono
+    decide de olho no responsável e no contato, não no primeiro nome do piloto."""
+    if identidade.mesmo_contato(a, b):
+        return "confirmado"
+    if parecem_a_mesma_pessoa(a, b):
+        return "parece"
+    return None
+
+
 def parecem_a_mesma_pessoa(a, b):
     """Dois CARDS que provavelmente são a mesma criança, escrita de dois jeitos.
 
@@ -205,7 +216,9 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
                             "titulos": [t["title"] for t in por_nome[nome][:3]]})
             if parecidos:
                 unir.append({"nome": nome, "servicos": len(por_nome[nome]), "parecidos": [
-                    {"id": c["id"], "nome": c["pilot_name"] or c["name"],
+                    {"id": c["id"], "nome": c["pilot_name"] or c["name"], "responsavel": c["name"],
+                     "email": c["email"], "phone": c["phone"],
+                     "grau": grau_de_igualdade({"name": nome, "pilot_name": None, "email": None, "phone": None}, c),
                      "mesma_pessoa": parecem_a_mesma_pessoa({"name": nome, "pilot_name": None}, c)}
                     for c in parecidos[:5]]})
             if not criar_cards:

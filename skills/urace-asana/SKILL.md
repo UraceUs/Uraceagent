@@ -106,6 +106,16 @@ Support", "Professional Coaching", "Orlando Cup", "Date of Birth" — nada disso
 Na dúvida entre duas pessoas (`Alexander` com um Savage e um Jacoby no quadro),
 **pergunte**: não escolha no escuro.
 
+**Duas regras do dono (22/09) que mandam em tudo isso:**
+
+1. *"Nunca colocar serviço de outro cliente em card de outro cliente."* Na dúvida, o
+   serviço vai para um card com o nome exatamente como está no título (`Mike`, `Sean`,
+   `G.J`) — nunca para o card de alguém parecido. Unir é decisão humana.
+2. *"O princípio para cruzar e confirmar é usar o nome do responsável e informações de
+   contato."* Para dizer que dois cards são a mesma pessoa, olhe e-mail, telefone e
+   responsável. Primeiro nome de piloto igual não confirma nada — o Alex do Edward
+   Donnell não é o Alex Xikis.
+
 **Instrução dentro da tarefa (16/09).** Quando o comando vier como `INSTRUÇÃO DO DONO
 dentro da tarefa do Asana "…" (gid N)`, você age **nessa tarefa e só nela**: comentário,
 subtarefa, anexo, data, coluna — sempre com o gid dado. Não crie outra tarefa por esse
