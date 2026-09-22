@@ -8,8 +8,10 @@ chega nela por último:
    endpoints parecidos. Vem com SKU limpo, paginado, e é servido de propósito.
 2. **JSON-LD dentro da página.** Praticamente toda loja publica `schema.org/Product` num
    `<script type="application/ld+json">` — é o que o Google lê. Estruturado e estável.
-3. **HTML na unha.** Só se os dois acima não existirem. Quebra quando mudam o layout, e
-   é por isso que fica em último lugar.
+3. **HTML na unha — não está escrito, e de propósito.** Parser para um site que ninguém
+   olhou é adivinhação: cada loja põe preço e SKU num lugar diferente. Se as duas
+   estratégias acima falharem, a ferramenta PARA e diz. Aí se olha uma página de
+   verdade e se escreve o parser contra ela.
 
 O núcleo aqui **não toca a rede**: recebe bytes e devolve produtos. Isso é o que permite
 testar o entendimento do catálogo sem bater no site de ninguém. Quem busca é

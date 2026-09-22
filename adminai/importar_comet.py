@@ -18,6 +18,9 @@ Dono, 22/09: *"a base para as peças serão as peças e códigos de SKU desse si
 - tenta o JSON da loja ANTES de qualquer página: uma chamada paginada no lugar de
   milhares de páginas.
 
+Se as duas estratégias estruturadas falharem, a ferramenta PARA e diz. Não existe aqui
+raspador de HTML genérico: parser escrito contra um site que ninguém olhou é adivinhação.
+
 Nada aqui apaga catálogo: produto que sumiu é marcado com `gone_at`.
 """
 import argparse

@@ -23,6 +23,76 @@ ordem. Tarefa sem essa marca está dentro das suas permissões e pode rodar.
 
 ## ABERTO
 
+### T-009 — Puxar o catálogo da Comet (plano B, caso não mandem o arquivo)
+
+O dono pediu o catálogo de peças à Comet Kart Sales pelo formulário do site, em 22/09.
+Enquanto não responde, ele quer a raspagem andando. A ferramenta já existe:
+`adminai/importar_comet.py`.
+
+**Contexto para você decidir com a cabeça certa:** o catálogo deles vai ser a referência
+de compra do módulo de estoque — o SKU é o que o módulo de compras futuro vai usar para
+pedir. É uso interno, não vamos republicar nada.
+
+**Passo 1 — a prova curta, sem gravar nada:**
+
+```bash
+cd /home/ubuntu/Uraceagent && git pull --rebase origin claude/configurar-open-claw-ooqo8x
+COMET_CONTATO=urace@urace.us python3 adminai/importar_comet.py --limite 50 --ver
+```
+
+O `COMET_CONTATO` entra no User-Agent para o site saber quem está batendo na porta. É o
+mesmo e-mail que o dono acabou de escrever no formulário deles, então não há nada sendo
+revelado que eles já não tenham.
+
+**Traga a saída inteira.** É ela que decide o passo 2. Três desfechos possíveis:
+
+1. **Veio SKU pelo `/products.json`.** É o melhor caso: é Shopify e o catálogo sai
+   inteiro em poucas chamadas. Rode a carga completa e grave:
+
+   ```bash
+   COMET_CONTATO=urace@urace.us python3 adminai/importar_comet.py --aplicar --completo
+   ```
+
+   Depois me traga: quantos SKU entraram, quantos itens de estoque ficaram ligados, e a
+   lista de "SKU que o estoque usa e o catálogo não conhece", se houver.
+
+2. **Veio SKU pelo sitemap + JSON-LD.** Funciona, mas é uma página por produto e pesa
+   para o site deles. **Não rode a carga completa sem falar comigo.** Traga quantas
+   páginas o sitemap tem e quantos SKU saíram nas 50, que eu calculo se vale e com que
+   pausa.
+
+3. **Não veio nada, ou o robots.txt barrou.** Se o robots proíbe, **acabou por aí** —
+   não existe contorno e não quero um. Me diga exatamente o que a saída falou.
+   Se o robots permite mas as duas estratégias vieram vazias, faça só isto:
+
+   ```bash
+   mkdir -p /home/ubuntu/Uraceagent/amostras
+   COMET_CONTATO=urace@urace.us python3 - <<'EOF'
+   import os, sys; sys.path.insert(0, "/home/ubuntu/Uraceagent")
+   from adminai.importar_comet import Educado
+   bus = Educado()
+   # UMA página de produto, escolhida por você navegando no site: a que for.
+   url = os.environ.get("AMOSTRA") or input("cole a URL de uma página de produto: ")
+   open("/home/ubuntu/Uraceagent/amostras/produto-comet.html", "wb").write(bus.pegar(url))
+   print("salvo:", url)
+   EOF
+   ```
+
+   **Uma página só**, e me diga qual URL foi. Com o HTML real na mão eu escrevo o parser
+   contra a estrutura deles. Escrever parser contra um site que ninguém olhou é
+   adivinhação, e é por isso que a ferramenta para em vez de chutar.
+
+**O que a ferramenta já faz sozinha, e você não precisa vigiar:** lê e obedece o
+`robots.txt` (sem robots legível ela para), se identifica, espera 1,5 s entre páginas,
+obedece quando o site pede calma, e guarda em disco o que já buscou — repetir a
+importação não volta a bater lá.
+
+**O que NÃO fazer:** `--completo` junto com `--limite` (a ferramenta recusa, mas para
+você saber por quê: marcaria como sumido todo produto que o limite cortou). E não baixe
+o site inteiro "para garantir" — a prova de 50 existe justamente para decidir antes.
+
+---
+
 ### T-008 — URGENTE: o defeito do Martin está corrigido, pode voltar a aplicar
 
 Você parou certo: a varredura ia tirar os 26 serviços do `#374 Martin Jaramillo` e
