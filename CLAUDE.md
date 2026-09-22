@@ -99,3 +99,8 @@ tentar usa Salesbot ou a UI, nunca esse client.
   pode liberar exceção pontual explicitamente. Sempre perguntar antes de
   escrever numa thread congelada, mesmo com instrução direta do Italo —
   confirmar que ele sabe da trava antes de agir.
+- **Ler o contexto antes de mandar qualquer mensagem, sempre** — card no
+  Kommo, notas no Asana, histórico no Dialpad/e-mail, invoice no QuickBooks.
+  Nunca escrever pra um lead ou cliente com base só no que foi pedido na
+  hora; confirmar nome certo, o que já foi dito, o que já foi pago/assinado,
+  antes de compor a mensagem.
