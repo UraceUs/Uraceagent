@@ -49,3 +49,15 @@ def test_oneshot_de_agente_carimba_como_morreu(nome):
     assert "$SERVICE_RESULT" in pós and "$EXIT_STATUS" in pós, f"{nome}: o carimbo não diz por que morreu"
     destino = re.search(r"(?m)^StandardOutput=append:(.+)$", s)
     assert destino and destino.group(1).strip() in pós, f"{nome}: o carimbo tem de ir para o mesmo log"
+
+
+def test_o_instalador_copia_todas_as_unidades():
+    """Lista escrita à mão esquece; glob não. Em 22/09 um comando copiou 3 unidades e
+    deixou a 4ª (urace-brain-health) com o aviso de specifier."""
+    sh = os.path.join(RAIZ, "adminai", "deploy", "instalar_unidades.sh")
+    assert os.path.exists(sh), "falta o instalador das unidades"
+    texto = _texto(sh)
+    assert "find" in texto and "*.service" in texto, "o instalador tem de varrer, não listar"
+    for caminho in UNIDADES:
+        assert os.path.basename(caminho) not in texto, \
+            f"{os.path.basename(caminho)} está escrito à mão no instalador — use o glob"
