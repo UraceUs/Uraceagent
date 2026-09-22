@@ -23,73 +23,47 @@ ordem. Tarefa sem essa marca está dentro das suas permissões e pode rodar.
 
 ## ABERTO
 
-### T-009 — Puxar o catálogo da Comet (plano B, caso não mandem o arquivo)
+### T-009 — Catálogo da Comet: passo 2, com a paginação consertada
 
-O dono pediu o catálogo de peças à Comet Kart Sales pelo formulário do site, em 22/09.
-Enquanto não responde, ele quer a raspagem andando. A ferramenta já existe:
-`adminai/importar_comet.py`.
+**Respondendo à sua pergunta, que valeu mais que a carga:** 479 **não** é o catálogo
+inteiro. A ferramenta pede páginas de 250 produtos; a página 1 veio cheia, 250 produtos
+com ~1,9 variantes cada = 479 SKU, e aí o `--limite 50` cortou. O "total 479" era rótulo
+meu mal escrito — era acumulado, não total da loja. Já corrigi a mensagem.
 
-**Contexto para você decidir com a cabeça certa:** o catálogo deles vai ser a referência
-de compra do módulo de estoque — o SKU é o que o módulo de compras futuro vai usar para
-pedir. É uso interno, não vamos republicar nada.
+**Mas a sua dúvida descobriu um defeito de verdade.** O `?page=` é obsoleto no
+`/products.json` público e várias lojas ignoram, devolvendo a página 1 de novo. Se a
+Comet fizesse isso, o laço teria buscado a mesma página **400 vezes** — 400 batidas no
+site deles, invisíveis no resultado, porque o SKU repetido é descartado no fim. Agora a
+ferramenta compara a página com a anterior e para na hora.
 
-**Passo 1 — a prova curta, sem gravar nada:**
+E veio junto a trava que faltava: a varredura passou a dizer se **terminou** ou se
+**parou no meio**, e `--completo` é **recusado depois de varredura parcial**. Sem isso,
+uma paginação truncada mais um `--completo` marcariam como sumido todo o catálogo que
+não chegou a ser lido — numa base carregada, seriam milhares de peças sumindo da vista de uma vez.
+
+**Passo 2, agora:**
 
 ```bash
 cd /home/ubuntu/Uraceagent && git pull --rebase origin claude/configurar-open-claw-ooqo8x
-COMET_CONTATO=urace@urace.us python3 adminai/importar_comet.py --limite 50 --ver
+COMET_CONTATO=urace@urace.us python3 adminai/importar_comet.py --aplicar --completo
 ```
 
-O `COMET_CONTATO` entra no User-Agent para o site saber quem está batendo na porta. É o
-mesmo e-mail que o dono acabou de escrever no formulário deles, então não há nada sendo
-revelado que eles já não tenham.
+O dono confirmou a carga; quando o pedido de permissão aparecer, é ele quem aprova.
 
-**Traga a saída inteira.** É ela que decide o passo 2. Três desfechos possíveis:
+**Leia a linha "varredura COMPLETA/PARCIAL" antes de tudo.** Três desfechos:
 
-1. **Veio SKU pelo `/products.json`.** É o melhor caso: é Shopify e o catálogo sai
-   inteiro em poucas chamadas. Rode a carga completa e grave:
+- **COMPLETA** e um número de SKU bem maior que 479: é o catálogo inteiro. Perfeito.
+- **PARCIAL por página repetida**: a Comet ignora `?page=`. A ferramenta grava o que veio
+  e recusa o `--completo` sozinha — **não force**. Me traga quantos SKU saíram; nesse
+  caso o caminho é outro (`since_id`, coleções, ou o export que o dono pediu a eles).
+- **COMPLETA com ~479 SKU**: aí sim o catálogo público deles é pequeno mesmo, e o que
+  interessa é o export com preço de revenda.
 
-   ```bash
-   COMET_CONTATO=urace@urace.us python3 adminai/importar_comet.py --aplicar --completo
-   ```
+Me traga, em qualquer caso: a linha COMPLETA/PARCIAL, quantos SKU entraram, quantos itens
+de estoque ficaram ligados, e a lista de "SKU que o estoque usa e o catálogo não conhece".
 
-   Depois me traga: quantos SKU entraram, quantos itens de estoque ficaram ligados, e a
-   lista de "SKU que o estoque usa e o catálogo não conhece", se houver.
-
-2. **Veio SKU pelo sitemap + JSON-LD.** Funciona, mas é uma página por produto e pesa
-   para o site deles. **Não rode a carga completa sem falar comigo.** Traga quantas
-   páginas o sitemap tem e quantos SKU saíram nas 50, que eu calculo se vale e com que
-   pausa.
-
-3. **Não veio nada, ou o robots.txt barrou.** Se o robots proíbe, **acabou por aí** —
-   não existe contorno e não quero um. Me diga exatamente o que a saída falou.
-   Se o robots permite mas as duas estratégias vieram vazias, faça só isto:
-
-   ```bash
-   mkdir -p /home/ubuntu/Uraceagent/amostras
-   COMET_CONTATO=urace@urace.us python3 - <<'EOF'
-   import os, sys; sys.path.insert(0, "/home/ubuntu/Uraceagent")
-   from adminai.importar_comet import Educado
-   bus = Educado()
-   # UMA página de produto, escolhida por você navegando no site: a que for.
-   url = os.environ.get("AMOSTRA") or input("cole a URL de uma página de produto: ")
-   open("/home/ubuntu/Uraceagent/amostras/produto-comet.html", "wb").write(bus.pegar(url))
-   print("salvo:", url)
-   EOF
-   ```
-
-   **Uma página só**, e me diga qual URL foi. Com o HTML real na mão eu escrevo o parser
-   contra a estrutura deles. Escrever parser contra um site que ninguém olhou é
-   adivinhação, e é por isso que a ferramenta para em vez de chutar.
-
-**O que a ferramenta já faz sozinha, e você não precisa vigiar:** lê e obedece o
-`robots.txt` (sem robots legível ela para), se identifica, espera 1,5 s entre páginas,
-obedece quando o site pede calma, e guarda em disco o que já buscou — repetir a
-importação não volta a bater lá.
-
-**O que NÃO fazer:** `--completo` junto com `--limite` (a ferramenta recusa, mas para
-você saber por quê: marcaria como sumido todo produto que o limite cortou). E não baixe
-o site inteiro "para garantir" — a prova de 50 existe justamente para decidir antes.
+**Não use `--completo` junto com `--limite`** (a ferramenta recusa) e não tente contornar
+uma recusa de `--completo`: ela existe para não esconder catálogo.
 
 ---
 

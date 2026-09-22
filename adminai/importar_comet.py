@@ -129,28 +129,49 @@ class Educado:
 
 # ------------------------------------------------------------ as três estratégias
 def pelo_json_da_loja(bus, limite=None):
-    """Shopify e parecidos: `/products.json` paginado. Uma chamada por 250 produtos."""
-    achados, pagina = [], 1
+    """Shopify e parecidos: `/products.json` paginado. Uma chamada por 250 produtos.
+
+    Devolve `(produtos, varredura_completa)`. "Completa" quer dizer que a loja disse que
+    acabou — não que o laço parou. A diferença decide se dá para marcar produto como
+    sumido depois, e marcar errado apagaria meio catálogo da vista.
+
+    **A trava que importa:** `?page=` é obsoleto no `/products.json` público e várias
+    lojas simplesmente ignoram, devolvendo a página 1 de novo. Sem detectar isso, o laço
+    buscaria a mesma página 400 vezes — 400 batidas no site dos outros, invisíveis no
+    resultado porque o SKU repetido é descartado no fim. Se a página se repete, para.
+    """
+    achados, pagina, anterior = [], 1, None
     while True:
         url = urllib.parse.urljoin(bus.site, f"/products.json?limit=250&page={pagina}")
         if not bus.permitido(url):
             print("    /products.json bloqueado pelo robots.txt — pulando estratégia")
-            return []
+            return [], False
         try:
             dados = json.loads(bus.pegar(url))
         except (urllib.error.HTTPError, ValueError, PermissionError):
-            return achados                    # não é Shopify, ou acabou
-        lote = fornecedor.do_shopify(dados, base=bus.site)
-        if not (dados.get("products") or []):
-            break
-        achados += lote
-        print(f"    página {pagina}: {len(lote)} SKU (total {len(achados)})")
+            # Depois de uma exceção nunca se diz "completa": ou a loja não é Shopify
+            # (e aí vem vazio e tenta-se a outra estratégia), ou a varredura foi
+            # interrompida no meio. Nos dois casos, alegar completude seria mentira.
+            return achados, False
+        produtos = dados.get("products") or []
+        if not produtos:
+            return achados, True              # a loja disse que acabou
+        ids = tuple(p.get("id") for p in produtos)
+        if ids == anterior:
+            print(f"    página {pagina} repetiu a anterior: a loja ignora ?page=. "
+                  f"Parando — {len(achados)} SKU até aqui, catálogo PARCIAL.")
+            return achados, False
+        anterior = ids
+        achados += fornecedor.do_shopify(dados, base=bus.site)
+        print(f"    página {pagina}: {len(produtos)} produtos · "
+              f"{len(achados)} SKU acumulados")
         if limite and len(achados) >= limite:
-            break
+            print(f"    --limite {limite} atingido: parcial de propósito")
+            return achados, False
         pagina += 1
-        if pagina > 400:                       # trava de segurança contra laço infinito
-            break
-    return achados
+        if pagina > 400:
+            print("    400 páginas: parando por segurança. Catálogo PARCIAL.")
+            return achados, False
 
 
 def pelo_sitemap(bus, limite=None):
@@ -181,19 +202,23 @@ def pelo_sitemap(bus, limite=None):
             break
     urls = list(dict.fromkeys(urls))
     if not urls:
-        return []
+        return [], False
     print(f"    {len(urls)} páginas de produto no sitemap")
-    achados = []
-    for n, u in enumerate(urls[:limite] if limite else urls, 1):
+    alvos = urls[:limite] if limite else urls
+    achados, falhas = [], 0
+    for n, u in enumerate(alvos, 1):
         if not bus.permitido(u):
             continue
         try:
             achados += fornecedor.do_jsonld(bus.pegar(u), url=u)
         except Exception as e:
+            falhas += 1
             print(f"    !! {u}: {e}")
         if n % 25 == 0:
-            print(f"    {n}/{len(urls)} páginas · {len(achados)} SKU")
-    return achados
+            print(f"    {n}/{len(alvos)} páginas · {len(achados)} SKU")
+    # Só é completa se varreu TUDO que o sitemap listou e nenhuma página falhou: uma
+    # página que caiu é um produto que "sumiu" sem ter sumido.
+    return achados, (len(alvos) == len(urls) and falhas == 0)
 
 
 def de_arquivo(caminho):
@@ -250,17 +275,19 @@ def main():
     if a.arquivo:
         print(f"lendo export: {a.arquivo}")
         produtos = de_arquivo(a.arquivo)
-        origem = "arquivo"
+        origem, completa = "arquivo", True     # export é o catálogo inteiro por definição
     else:
         bus = Educado(site=a.site, pausa=a.pausa, usar_cache=not a.sem_cache)
         print(f"site: {a.site}\nagente: {AGENTE}")
         if not CONTATO:
             print("dica: ponha COMET_CONTATO=<e-mail ou telefone> para o site saber quem somos")
         print("\n1) JSON da loja (/products.json)")
-        produtos, origem = pelo_json_da_loja(bus, a.limite), "products.json"
+        produtos, completa = pelo_json_da_loja(bus, a.limite)
+        origem = "products.json"
         if not produtos:
             print("   nada. 2) sitemap + JSON-LD")
-            produtos, origem = pelo_sitemap(bus, a.limite), "sitemap+json-ld"
+            produtos, completa = pelo_sitemap(bus, a.limite)
+            origem = "sitemap+json-ld"
         print(f"\nbuscadas {bus.buscadas} página(s) · {bus.do_cache} vieram do cache")
 
     if not produtos:
@@ -273,7 +300,19 @@ def main():
     for p in produtos:                     # o mesmo SKU pode vir por dois caminhos
         if p.get("sku"):
             unicos[p["sku"]] = p
-    print(f"\n{len(unicos)} SKU distintos ({origem})")
+    print(f"\n{len(unicos)} SKU distintos ({origem}) · varredura "
+          f"{'COMPLETA' if completa else 'PARCIAL'}")
+
+    # A trava que a extensão da VPS provocou sem querer, em 22/09, ao perguntar se 479
+    # era o catálogo inteiro: se a varredura parou cedo (limite, página repetida, erro),
+    # `--completo` marcaria como sumido todo o resto do catálogo. Numa base já carregada
+    # isso apaga milhares de peças da vista de uma vez.
+    if a.completo and not completa:
+        print("\nRECUSADO: --completo só vale depois de uma varredura COMPLETA, e esta")
+        print("parou antes do fim (veja a linha acima). Marcar sumido agora esconderia")
+        print("todo o catálogo que não chegou a ser lido.")
+        print("Rode sem --completo para gravar o que veio, ou resolva o que truncou.")
+        return 2
     if a.ver or not a.aplicar:
         for p in list(unicos.values())[:20]:
             preco = f"${p['price']:,.2f}" if p.get("price") else "—"
