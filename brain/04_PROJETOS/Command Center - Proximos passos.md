@@ -107,10 +107,10 @@ Suits, peças da loja do eBay, peças específicas compradas para clientes.
 Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do cliente**
 (normalmente cliente Pro).
 
-- [ ] 👤 **Decidir o nível de controle por tipo.** Chassi e motor têm número de série e
-      merecem ficha individual; pneu e peça de consumo são quantidade. Misturar os dois no
-      mesmo modelo é o erro clássico que trava o sistema depois.
-- [ ] 👤 Onde o estoque fica fisicamente (uma sede? trailer de corrida? os dois?)
+- [x] 👤 **Dois tipos, decidido em 22/09.** Chassi e motor: ficha individual com número de
+      série. Pneu e peça de consumo: quantidade. São dois comportamentos no mesmo módulo —
+      misturar num modelo só é o erro clássico que trava o sistema depois.
+- [x] 👤 **Dois locais, decidido em 22/09:** sede e trailer de corrida.
 - [ ] Modelo: item → tipo → quantidade ou série → local → **dono** (URACE ou cliente)
 - [ ] Peça de cliente: ligada ao card do cliente, nunca vendável para outro, aparece no
       card dele
@@ -121,6 +121,7 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
 - [ ] 👤 **Decidir a fronteira com o QuickBooks.** Proposta: o painel manda no estoque
       físico, o QuickBooks manda no financeiro. Controlar quantidade nos dois lados gera
       divergência garantida, e aí ninguém acredita em nenhum dos dois.
+- [ ] 🤖 Construir o módulo (agora destravado pelas duas decisões acima)
 
 ## 6. PDV no celular, integrado
 
@@ -140,6 +141,19 @@ Mecânico vende peça direto ao cliente pelo celular, com ou sem ajuda da IA.
 - [ ] Ajuda da IA: achar a peça pela descrição do mecânico ("pastilha do kart do Pedro")
 
 ---
+
+## Decisões do portão — fechadas em 22/09
+
+Ver [[D-2026-09-22 - Lembrete de waiver, arquivar no Gmail e o guarda-chuva do apagar]].
+
+- [x] 👤 As 8 decisões pendentes respondidas na página editável
+- [x] 🤖 `apagar_qualquer_coisa` → `REQUIRES_APPROVAL`, e voltou a ser **piso** de todo
+      apagar: ação nova com apagar/excluir/deletar/remover no nome não passa mais por baixo
+- [x] 🤖 `gmail_rotular` → `SAFE`, com a trava: arquivar só com marcador **confirmado** no
+      painel. Sem banco, volta à regra estreita de antes (só `wNews`)
+- [x] 🤖 `docusign_send_reminder` → `SAFE`, com a trava: só cliente com serviço marcado,
+      3 dias antes e 1 dia antes, **no máximo 2 por envelope**
+- [x] 🤖 23 testes das três travas (`test_travas_decididas.py`)
 
 ## Vem de antes (21/09, aprovado e ainda devendo)
 

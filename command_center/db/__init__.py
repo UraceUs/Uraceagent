@@ -197,15 +197,15 @@ def _semear_marcadores(con):
 # troca a política SE ela ainda for a que estava valendo — o que ele mudar depois no painel
 # fica. Isso é o que torna a revisão idempotente e não atropela decisão posterior.
 #
-# NÃO ESTÁ AQUI, de propósito, e por quê:
-#   · apagar_cliente, apagar_qualquer_coisa, qbo_apagar — ele marcou para SAIR de "nunca".
-#     Apagar não tem volta, e contraria a regra que ele mesmo me deu ("não destrua dados").
-#     Fica bloqueado até ele confirmar de viva voz, item a item.
-#   · docusign_send_reminder e gmail_rotular — a resposta dele foi CONDICIONAL ("só se o
-#     cliente tem serviço futuro agendado", "só move os 100% confirmados"). Condição não
-#     cabe numa política: vira trava no servidor, e é lá que vai ser escrita.
-#   · venda_tarefa — ele marcou APROVAÇÃO para criar tarefa interna, o oposto de todo o
-#     resto. Parece toque errado; perguntei antes de apertar.
+# 22/09, segunda rodada: perguntei as seis que tinha segurado e ele respondeu uma a uma.
+#   · apagar_cliente e qbo_apagar: MANTER em "nunca" — ele confirmou o que eu tinha
+#     segurado. Cliente e contabilidade não se apagam, ponto.
+#   · apagar_qualquer_coisa: ele ABRIU para aprovação. É a regra guarda-chuva — e abrir só
+#     faz sentido se ela de fato guardar alguma coisa, o que até ontem não acontecia (ver
+#     `piso_de_apagar` em api/ia.py).
+#   · docusign_send_reminder e gmail_rotular: ele escolheu a REGRA, não só o portão. A
+#     política abre, e a condição virou trava no servidor — é lá que ela protege.
+#   · venda_tarefa: era toque errado mesmo. Continua fazendo sozinha.
 REVISAO_21_09 = [
     # afrouxaram (decisão dele)
     ("docusign_enviar_waiver", "REQUIRES_APPROVAL", "SAFE"),
@@ -218,6 +218,10 @@ REVISAO_21_09 = [
     ("gmail_enviar", "BLOCKED", "REQUIRES_APPROVAL"),
     # apertou (decisão dele)
     ("venda_mover_etapa", "SAFE", "REQUIRES_CONFIRMATION"),
+    # 22/09, com a regra escrita no servidor junto (sem a trava, isto seria perigoso)
+    ("apagar_qualquer_coisa", "BLOCKED", "REQUIRES_APPROVAL"),
+    ("gmail_rotular", "REQUIRES_CONFIRMATION", "SAFE"),
+    ("docusign_send_reminder", "BLOCKED", "SAFE"),
 ]
 
 POS_MIGRACAO = [

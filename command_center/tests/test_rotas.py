@@ -1990,13 +1990,15 @@ def test_revisao_do_portao_de_21_09_e_o_que_ficou_de_fora():
         assert p["qbo_enviar_invoice"] == "REQUIRES_CONFIRMATION"
         assert p["gmail_enviar"] == "REQUIRES_APPROVAL"
         assert p["venda_mover_etapa"] == "REQUIRES_CONFIRMATION"
-        # o que ficou de fora, e continua trancado
-        assert p["apagar_cliente"] == "BLOCKED"
-        assert p["apagar_qualquer_coisa"] == "BLOCKED"
-        assert p["qbo_apagar"] == "BLOCKED"
-        assert p["docusign_send_reminder"] == "BLOCKED"       # a resposta era condicional
-        assert p["gmail_rotular"] == "REQUIRES_CONFIRMATION"  # idem
-        assert p["venda_tarefa"] == "SAFE"                    # parecia toque errado
+        # o que ficou de fora em 21/09 e o dono FECHOU em 22/09, ponto a ponto
+        assert p["apagar_cliente"] == "BLOCKED"               # "manter"
+        assert p["qbo_apagar"] == "BLOCKED"                   # "manter"
+        assert p["venda_tarefa"] == "SAFE"                    # o toque estranho era dele mesmo
+        # as três que ele abriu — e cada uma veio com condição, que virou trava no
+        # servidor (test_travas_decididas.py). A política é só a porta.
+        assert p["apagar_qualquer_coisa"] == "REQUIRES_APPROVAL"
+        assert p["gmail_rotular"] == "SAFE"                   # arquivar só com marcador confirmado
+        assert p["docusign_send_reminder"] == "SAFE"          # 2x, e só com serviço marcado
     finally:
         con.close()
         if antes is None:

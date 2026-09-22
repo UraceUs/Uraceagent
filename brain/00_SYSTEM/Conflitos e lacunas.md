@@ -49,7 +49,7 @@ Fica aqui como memória: **estes assuntos não precisam ser reabertos.**
 | F-06 | Templates vazios do [[DocuSign]] | 31/08 | Não serão usados **nem apagados** → escolher template por ID |
 | C-01 | Rate Card × QuickBooks: 4 células | 18/09 | **A Rate Card manda, sempre** — e ela é mantida atualizada no Drive: "sempre consultar lá" (dono) |
 | C-02 | Terça é dia de serviço? | 18/09 | **É dia de serviço, sim.** A coluna TUESDAY do Asana vale; o horário público de quarta a domingo não é a regra interna |
-| U-01 | `sendReminder` do DocuSign | 18/09 | **A IA não cutuca o cliente** — avisa só o dono, como já fazia |
+| U-01 | `sendReminder` do DocuSign | 22/09 | **Fechado: a IA pode lembrar, 2x.** Só quem tem serviço marcado, 3 dias antes e 1 dia antes. Fora disso o servidor recusa — ver [[D-2026-09-22 - Lembrete de waiver, arquivar no Gmail e o guarda-chuva do apagar]] |
 | U-03 | Devolução do security deposit | 18/09 | **A IA prepara, o dono devolve.** Ele informa peças e serviços a subtrair do valor |
 | U-04 | Política de desconto | 18/09 | **Existe em casos raros, com o motivo explicado** — e a decisão continua sendo do dono, caso a caso |
 | U-05 | Data do serviço a partir da invoice paga | 18/09 | **A data já está na tarefa do Asana** — não há o que deduzir |

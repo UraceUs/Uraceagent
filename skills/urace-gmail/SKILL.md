@@ -35,7 +35,9 @@ A caixa está organizada há anos: **manter, não reinventar.**
 4. **Não apagar e não marcar spam.** Arquivar, só propaganda (item 6).
 5. **Na dúvida, perguntar** — deixa na inbox e relata. Chute errado custa
    mais caro que pergunta.
-6. **Arquivar só `wNews`.** Propaganda sai da inbox ao ser etiquetada;
+6. **Arquivar só com marcador confirmado.** Desde 22/09 tirar da inbox exige que a
+   thread fique com um marcador que o dono CONFIRMOU no painel (ou com a família
+   `wNews`). Marcador que a IA sugeriu não arquiva nada. Propaganda sai da inbox ao ser etiquetada;
    **todo o resto fica visível na inbox**, mesmo já classificado. A IA
    limpa o ruído, não esconde o que precisa de decisão do dono.
 7. **Rascunho só para lead/orçamento e cliente atual.** Parceria e

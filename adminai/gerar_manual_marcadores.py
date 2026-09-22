@@ -64,7 +64,9 @@ def gerar():
         "2. **Só classifica com marcador confirmado aqui.** Marcador que aparecer na",
         "   caixa depois disto entra como `pendente` e a IA **não o enxerga** até o",
         "   dono confirmar no painel. Marcador fora desta lista NÃO EXISTE para ela.",
-        "3. **Nada de apagar e nada de spam.** Arquivar, só `wNews`.",
+        "3. **Nada de apagar e nada de spam.** Arquivar (tirar da inbox), só com "
+        "marcador CONFIRMADO no painel — `wNews` inclusive. O que não está no manual "
+        "confirmado fica na inbox (dono, 22/09).",
         "4. Na dúvida, **não chutar**: deixa na inbox e pergunta.",
         "",
         "## O que chega → onde vai",

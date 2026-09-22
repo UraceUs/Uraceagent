@@ -16,8 +16,10 @@ As regras do dono que viram código:
   - Template só pelo ID, e só os dois reais. Nome nunca.
   - Base `demo.docusign.net` → envio SEMPRE recusado. Waiver de demo não
     tem validade jurídica. Leitura no demo é permitida (é a homologação).
-  - Não existe void, não existe editar template, não existe
-    `sendReminder` (U-01, não decidido). Se precisar, é humano.
+  - `sendReminder` existe desde 22/09, e só nas condições que o dono deu
+    ao decidir U-01: cliente com serviço MARCADO no futuro, 3 dias antes
+    ou 1 dia antes, no máximo 2 por envelope. A política abriu a porta; a
+    condição virou trava aqui dentro — ver `avaliar_lembrete`.
   - APLICAR=0 (padrão) transforma o envio em simulação.
 
 Ver skills/urace-docusign/SKILL.md e brain/40_SISTEMAS/DocuSign.md.
@@ -308,6 +310,124 @@ def reenviar_humano(envelopeId, novo_email=None, novo_nome=None):
     return {"aplicado": True, "reenviado": True, "email": alvo.get("email")}
 
 
+# --------------------------------------- lembrete de waiver (trava do dono, 22/09)
+DIAS_LEMBRETE = (3, 1)        # as duas únicas janelas: 3 dias antes e 1 dia antes
+MAX_LEMBRETES = 2             # "2x" — o dono contou os lembretes, não as janelas
+FUSO_CASA = "America/New_York"   # tudo no sistema roda no fuso de Orlando
+
+
+def _painel():
+    """O banco do Command Center, ou None se não der para abrir.
+
+    O lembrete depende de um dado que só o painel tem: se aquele cliente tem
+    serviço marcado. Sem banco não há como saber — e o que não se sabe não vira
+    e-mail para cliente."""
+    try:
+        raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if raiz not in sys.path:
+            sys.path.insert(0, raiz)
+        from command_center.db import conectar
+        return conectar()
+    except Exception as e:                       # noqa: BLE001 - abrir banco é o extra, não o caminho
+        log(f"lembrete: nao consegui abrir o banco do painel ({type(e).__name__}: {e})")
+        return None
+
+
+def _dia_local(iso):
+    """A DATA de Orlando de um instante ISO, ou None se não der para ler.
+
+    Contar em dias corridos (24h) daria "2 dias" para um serviço de amanhã de
+    manhã visto hoje à noite. O dono falou em dias do calendário — é o que a
+    pessoa vê na agenda."""
+    from zoneinfo import ZoneInfo
+    t = (iso or "").strip().replace("Z", "+00:00")
+    if not t:
+        return None
+    try:
+        d = dt.datetime.fromisoformat(t)
+    except ValueError:
+        try:
+            d = dt.datetime.fromisoformat(t[:19])
+        except ValueError:
+            return None
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=dt.timezone.utc)
+    return d.astimezone(ZoneInfo(FUSO_CASA)).date()
+
+
+def _clientes_do_email(con, email):
+    linhas = con.execute(
+        "SELECT id FROM clients WHERE email = ? "
+        "UNION SELECT client_id FROM waivers WHERE signer_email = ? AND client_id IS NOT NULL",
+        (email, email)).fetchall()
+    return [r[0] for r in linhas if r[0] is not None]
+
+
+def avaliar_lembrete(con, envelopeId, email, agora=None):
+    """Decide se PODE lembrar aquele signatário. Devolve dict com `pode`, `motivo`
+    e, quando pode, `dias` e `servico_em`.
+
+    Dono (22/09), fechando U-01: pode lembrar, "2x". A condição inteira dele:
+      - tem de haver serviço MARCADO no futuro para aquele e-mail;
+      - só em duas janelas: 3 dias antes e 1 dia antes;
+      - no máximo 2 lembretes por envelope, contados em `waiver_reminders`;
+      - e a mesma janela não se repete (chamar duas vezes no mesmo dia não vale
+        por dois).
+
+    De propósito sem DocuSign nenhum aqui dentro: a regra é testável sozinha."""
+    agora = agora or dt.datetime.now(dt.timezone.utc)
+    email = (email or "").strip().lower()
+    if not email:
+        return {"pode": False, "motivo": "envelope sem e-mail de signatário"}
+
+    feitos = con.execute("SELECT days_before FROM waiver_reminders WHERE envelope_id = ?",
+                         (str(envelopeId),)).fetchall()
+    if len(feitos) >= MAX_LEMBRETES:
+        return {"pode": False,
+                "motivo": f"já foram {len(feitos)} lembretes deste envelope; o dono autorizou {MAX_LEMBRETES}"}
+    janelas_usadas = {r[0] for r in feitos}
+
+    ids = _clientes_do_email(con, email)
+    if not ids:
+        return {"pode": False, "motivo": f"{email} não é cliente conhecido do painel"}
+    marca = ",".join("?" * len(ids))
+    eventos = con.execute(
+        f"SELECT starts_at, COALESCE(title,'') FROM calendar_events "
+        f"WHERE client_id IN ({marca}) AND starts_at IS NOT NULL ORDER BY starts_at", ids).fetchall()
+
+    hoje = _dia_local(agora.isoformat())
+    futuros = []
+    for quando, titulo in eventos:
+        dia = _dia_local(quando)
+        if dia is None or dia < hoje:
+            continue
+        futuros.append(((dia - hoje).days, quando, titulo))
+    if not futuros:
+        return {"pode": False, "motivo": f"{email} não tem serviço marcado no futuro — sem serviço, sem lembrete"}
+
+    futuros.sort()
+    for dias, quando, titulo in futuros:
+        if dias not in DIAS_LEMBRETE:
+            continue
+        if dias in janelas_usadas:
+            continue
+        return {"pode": True, "motivo": f"serviço em {dias} dia(s)", "dias": dias,
+                "servico_em": quando, "servico": titulo}
+    proximo = futuros[0][0]
+    if proximo in janelas_usadas:
+        return {"pode": False, "motivo": f"o lembrete de {proximo} dia(s) antes já foi mandado"}
+    return {"pode": False,
+            "motivo": f"o serviço mais próximo é daqui a {proximo} dia(s); só lembro a "
+                      f"{DIAS_LEMBRETE[0]} e a {DIAS_LEMBRETE[1]} dia(s)"}
+
+
+def registrar_lembrete(con, envelopeId, email, dias, servico_em):
+    """Guarda o lembrete. É esta linha que impede o terceiro."""
+    con.execute("INSERT INTO waiver_reminders (envelope_id, signer_email, days_before, service_at) "
+                "VALUES (?,?,?,?)", (str(envelopeId), (email or "").strip().lower(), dias, servico_em))
+    con.commit()
+
+
 def enviar_waiver_humano(templateId, nome, email, servico=""):
     """Botão 'Enviar waiver' do Command Center. Não é ferramenta do agente. Não passa por APLICAR
     (a pessoa clicou), mas as travas de duplicidade (waiver válida / envelope aberto) continuam."""
@@ -503,6 +623,47 @@ def docusign_reenviar_waiver(envelopeId, novo_email=None, novo_nome=None):
     if not _aplicar():
         return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"reenviar {envelopeId}" + (f" para {novo_email}" if novo_email else "")}
     return reenviar_humano(envelopeId, novo_email, novo_nome)
+
+
+@srv.ferramenta(
+    "docusign_send_reminder",
+    "Lembra o signatário de uma waiver EM ABERTO. Regras em código (dono, 22/09): só para "
+    "quem tem serviço MARCADO no futuro, só 3 dias antes ou 1 dia antes, e no máximo 2 por "
+    "envelope — a terceira chamada é recusada. Sem o banco do painel, recusa. "
+    "Com APLICAR=0 é simulação.",
+    {"envelopeId": {"type": "string"}}, ["envelopeId"])
+def docusign_send_reminder(envelopeId):
+    e = _req(f"/envelopes/{envelopeId}?include=recipients")
+    if e.get("status") not in ABERTOS:
+        raise ErroFerramenta(f"RECUSADO: só waiver em aberto recebe lembrete (está {e.get('status')}).")
+    signers = (e.get("recipients") or {}).get("signers", [])
+    if not signers:
+        raise ErroFerramenta("envelope sem signatário")
+    alvo = signers[0]
+    con = _painel()
+    if con is None:
+        raise ErroFerramenta("RECUSADO: sem o banco do painel não dá para saber se existe serviço "
+                             "marcado — e sem saber não se manda e-mail para cliente.")
+    try:
+        d = avaliar_lembrete(con, envelopeId, alvo.get("email"))
+        if not d["pode"]:
+            raise ErroFerramenta(f"RECUSADO: {d['motivo']}.")
+        if not _aplicar():
+            return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)",
+                    "teria_feito": f"lembrar {alvo.get('email')} do envelope {envelopeId} "
+                                   f"({d['dias']} dia(s) antes do serviço)"}
+        # O DocuSign manda o lembrete pelo mesmo caminho do reenvio: a notificação
+        # volta para o signatário, com o link original.
+        _req(f"/envelopes/{envelopeId}/recipients?resend_envelope=true", "PUT",
+             {"signers": [{"recipientId": alvo["recipientId"]}]})
+        registrar_lembrete(con, envelopeId, alvo.get("email"), d["dias"], d["servico_em"])
+        return {"aplicado": True, "envelopeId": envelopeId, "email": alvo.get("email"),
+                "dias_antes": d["dias"], "servico_em": d["servico_em"],
+                "lembretes_usados": con.execute(
+                    "SELECT COUNT(*) FROM waiver_reminders WHERE envelope_id=?",
+                    (str(envelopeId),)).fetchone()[0], "limite": MAX_LEMBRETES}
+    finally:
+        con.close()
 
 
 @srv.ferramenta(

@@ -246,7 +246,7 @@ As quatro políticas:
 | `SAFE` | executa sozinha (leitura, registro interno, comentário, tarefa) |
 | `REQUIRES_CONFIRMATION` | alguém precisa clicar; muda o estado de um sistema |
 | `REQUIRES_APPROVAL` | **sai da empresa** ou é dinheiro: waiver, invoice, reenvio |
-| `BLOCKED` | a IA nunca faz. Hoje: `gmail_enviar`, `docusign_void`, `docusign_send_reminder`, `qbo_apagar`, `apagar_cliente`, `apagar_qualquer_coisa` |
+| `BLOCKED` | a IA nunca faz. Hoje: `docusign_void`, `qbo_apagar`, `apagar_cliente`. `apagar_qualquer_coisa` saiu daqui em 22/09: virou `REQUIRES_APPROVAL` e voltou a valer como **piso** para qualquer ação com apagar/excluir/deletar/remover no nome |
 
 Ação que não está na tabela cai em `REQUIRES_CONFIRMATION` por padrão
 (`ia._politica`) — o sistema erra para o lado de perguntar.

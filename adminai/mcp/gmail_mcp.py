@@ -51,6 +51,52 @@ def _e_propaganda(nome):
 PROIBIDOS = {"TRASH", "SPAM"}            # nunca, por nenhuma ferramenta
 
 
+def _confirmados_no_painel(conta):
+    """Os marcadores que o DONO confirmou no painel para esta caixa
+    (`gmail_labels.status='confirmado'`), em minúsculas. None quando não dá para
+    ler o banco — e aí quem chama volta para a regra estreita.
+
+    É o mesmo manual que o gerador de filtros lê. Marcador confirmado é marcador
+    que ele olhou e disse "esse é meu"; o resto é palpite da IA."""
+    try:
+        raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        if raiz not in sys.path:
+            sys.path.insert(0, raiz)
+        from command_center.db import conectar
+        con = conectar()
+        try:
+            linhas = con.execute(
+                """SELECT name FROM gmail_labels
+                    WHERE status='confirmado' AND in_gmail=1
+                      AND EXISTS (SELECT 1 FROM json_each(COALESCE(mailboxes,'["urace"]'))
+                                  WHERE json_each.value = ?)""", (conta,)).fetchall()
+            return {(r[0] or "").lower() for r in linhas}
+        finally:
+            con.close()
+    except Exception as e:                   # noqa: BLE001 - ler o manual é o extra
+        log(f"arquivar: nao consegui ler o manual do painel ({type(e).__name__}: {e})")
+        return None
+
+
+def _pode_arquivar(conta, nomes):
+    """`nomes` = os marcadores que a thread VAI TER. Devolve (pode, por causa de quê).
+
+    Dono, 22/09: rotular é livre, mas tirar da inbox só com marcador CONFIRMADO no
+    painel. Antes daqui só `wNews` arquivava; a decisão abriu para o manual inteiro,
+    e nada mais — marcador que a IA inventou continua sem tirar e-mail da inbox.
+    Sem banco, a regra volta a ser só `wNews`: o estreito é o seguro."""
+    for n in nomes:
+        if _e_propaganda(n):
+            return True, n
+    confirmados = _confirmados_no_painel(conta)
+    if confirmados is None:
+        return False, None
+    for n in nomes:
+        if (n or "").lower() in confirmados:
+            return True, n
+    return False, None
+
+
 # ------------------------------------------------------------- ambiente
 def _carregar_env():
     caminho = os.environ.get("URACE_ENV", os.path.expanduser("~/.urace/adminai.env"))
@@ -457,7 +503,9 @@ def criar_filtro_humano(conta, criterio, marcador, arquivar=False):
 
     As regras do dono viram código aqui também:
       - marcador tem de existir (`_label_id` recusa o que não existe: a IA não cria marcador);
-      - arquivar (tirar da INBOX) só com a família `wNews` — a mesma trava de gmail_rotular;
+      - arquivar (tirar da INBOX) só com a família `wNews`. Filtro é regra permanente,
+        e vale para todo e-mail que ainda vai chegar: aqui a trava ficou estreita de
+        propósito, mesmo depois de 22/09 ter aberto `gmail_rotular` para o manual;
       - TRASH e SPAM nunca;
       - não apaga nem edita filtro nenhum: só cria, e pula o que já existe igual.
     Devolve (criado: bool, detalhe)."""
@@ -529,8 +577,9 @@ def triar_ia(conta, thread_id, marcadores, principal):
 @srv.ferramenta(
     "gmail_rotular",
     "Aplica e/ou remove marcadores numa thread. Regras em código: nunca TRASH/SPAM; "
-    "remover INBOX (arquivar) só se a thread receber ou já tiver 'wNews' — "
-    "propaganda é o único tipo que sai da inbox sozinho. Com APLICAR=0 é simulação.",
+    "remover INBOX (arquivar) só se a thread ficar com um marcador CONFIRMADO no painel "
+    "(ou com a família 'wNews'). Marcador fora do manual do dono não tira nada da inbox. "
+    "Com APLICAR=0 é simulação.",
     {"conta": CONTA, "thread_id": {"type": "string"},
      "adicionar": {"type": "array", "items": {"type": "string"}, "default": []},
      "remover": {"type": "array", "items": {"type": "string"}, "default": []}},
@@ -547,11 +596,17 @@ def gmail_rotular(conta, thread_id, adicionar=None, remover=None):
         atuais = set()
         for m in th.get("messages", []):
             atuais.update(m.get("labelIds") or [])
-        ids_propaganda = {i for n, i in _mapa_labels(conta).items() if _e_propaganda(n)}
-        vai_ter_wnews = bool(ids_propaganda & atuais) or any(_e_propaganda(l) for l in adicionar)
-        if not vai_ter_wnews:
-            raise ErroFerramenta(f"RECUSADO: arquivar (remover INBOX) só com '{MARCADOR_ARQUIVAVEL}'. "
-                                 "Todo o resto fica na inbox — regra do dono.")
+        inv = {i: n for n, i in _mapa_labels(conta).items()}
+        tirados = {l.lower() for l in remover}
+        nomes = [n for n in (inv.get(i) for i in atuais) if n and n.lower() not in tirados]
+        nomes += [l for l in adicionar if l.upper() not in ("INBOX", "UNREAD", "STARRED")]
+        pode, por_causa = _pode_arquivar(conta, nomes)
+        if not pode:
+            raise ErroFerramenta(
+                "RECUSADO: arquivar (remover INBOX) só quando a thread fica com um marcador "
+                f"CONFIRMADO no painel (ou a família '{MARCADOR_ARQUIVAVEL}'). Esta ficaria com "
+                f"{sorted(set(nomes)) or 'nenhum'} — todos fora do manual do dono.")
+        log(f"arquivar {thread_id} ({conta}): liberado por '{por_causa}'")
     add_ids = [_label_id(conta, l) if l.upper() not in ("INBOX", "UNREAD", "STARRED") else l.upper() for l in adicionar]
     rem_ids = [_label_id(conta, l) if l.upper() not in ("INBOX", "UNREAD", "STARRED") else l.upper() for l in remover]
     desc = f"thread {thread_id} ({conta}): +{adicionar} -{remover}"

@@ -180,9 +180,30 @@ def _adivinha(descricao):
     return "acao_desconhecida"
 
 
+NIVEL_POLITICA = {"SAFE": 0, "REQUIRES_CONFIRMATION": 1, "REQUIRES_APPROVAL": 2, "BLOCKED": 3}
+RX_APAGAR = __import__("re").compile(r"(^|_)(apagar|excluir|deletar|delete|remover|destruir)(_|$)")
+
+
+def piso_de_apagar(con, acao):
+    """`apagar_qualquer_coisa` é a regra guarda-chuva — e até 22/09 ela não guardava nada.
+
+    Uma ação nova chamada `asana_apagar_tarefa` não tinha política própria e caía no padrão
+    (pergunta antes), passando por baixo da guarda-chuva que dizia "a IA nunca apaga". O
+    dono abriu a guarda-chuva para aprovação nesse dia; abrir só faz sentido se ela de fato
+    guardar. Agora qualquer ação com cara de apagar tem, no mínimo, a política dela."""
+    if not RX_APAGAR.search(acao or ""):
+        return None
+    g = um(con, "SELECT policy FROM action_policies WHERE action='apagar_qualquer_coisa'")
+    return g["policy"] if g else None
+
+
 def _politica(con, acao):
     p = um(con, "SELECT policy FROM action_policies WHERE action=?", (acao,))
-    return p["policy"] if p else "REQUIRES_CONFIRMATION"
+    propria = p["policy"] if p else "REQUIRES_CONFIRMATION"
+    piso = piso_de_apagar(con, acao)
+    if piso and NIVEL_POLITICA.get(piso, 0) > NIVEL_POLITICA.get(propria, 0):
+        return piso                            # a guarda-chuva só aperta, nunca afrouxa
+    return propria
 
 
 def _buscar_item_qbo(nome):

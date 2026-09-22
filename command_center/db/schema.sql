@@ -248,6 +248,20 @@ CREATE TABLE IF NOT EXISTS invoice_reminders (
 );
 CREATE INDEX IF NOT EXISTS invoice_reminders_due ON invoice_reminders(enabled, next_on);
 
+-- Lembretes de waiver (dono, 22/09). A política virou SAFE, mas com condição:
+-- só para quem tem serviço marcado, 3 dias antes e 1 dia antes, no máximo 2 por
+-- envelope. A política abre a porta; a condição mora aqui e no servidor — é a
+-- contagem desta tabela que impede o terceiro lembrete.
+CREATE TABLE IF NOT EXISTS waiver_reminders (
+  id            INTEGER PRIMARY KEY,
+  envelope_id   TEXT NOT NULL,
+  signer_email  TEXT COLLATE NOCASE,
+  days_before   INTEGER,                  -- 3 ou 1: qual das duas janelas foi
+  service_at    TEXT,                     -- o serviço que justificou o lembrete
+  sent_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS waiver_reminders_env ON waiver_reminders(envelope_id);
+
 CREATE TABLE IF NOT EXISTS emails (
   id            INTEGER PRIMARY KEY,
   client_id     INTEGER REFERENCES clients(id),

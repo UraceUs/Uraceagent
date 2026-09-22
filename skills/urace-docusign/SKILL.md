@@ -34,7 +34,7 @@ explícita à regra "a IA não manda e-mail".
 | Baixar PDF assinado e anexar no Asana | ✅ livre |
 | Marcar subtarefa "Signed waiver?" e comentar | ✅ livre |
 | **Enviar waiver** (`createEnvelopeFromTemplate`) | ✅ **autorizado**, com as 4 travas abaixo |
-| **Lembrete** (`sendReminder`) | ⏳ **não decidido** — alertar o Italo, não o cliente |
+| **Lembrete** (`docusign_send_reminder`) | ✅ liberado em 22/09 (U-01 fechado) — **2x no máximo**, só para cliente com serviço marcado, 3 dias antes e 1 dia antes. A trava está no servidor |
 | **Reenviar / corrigir e-mail** (`docusign_reenviar_waiver`) | ✅ liberado em 17/09 — **com aprovação** no painel (sai da empresa) |
 | **Anular envelope em aberto** (`docusign_anular_envelope`) | ✅ liberado em 17/09 — **com aprovação**; assinado nunca |
 | **Lixeira do painel** (`painel_waiver_lixeira`) | ✅ com confirmação; em aberto anula, assinado só some do painel |
