@@ -829,3 +829,120 @@ CREATE TABLE IF NOT EXISTS contracts (
   added_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS contracts_client ON contracts(client_id);
+
+-- ------------------------------------------------- ESTOQUE (módulo 5, a espinha)
+-- Duas decisões do dono, 22/09, e o modelo inteiro sai delas:
+--   1. "chassi e motor: ficha individual com número de série; pneu e peça: quantidade"
+--      → dois comportamentos, duas tabelas de saldo: `stock_units` e `stock_levels`.
+--      Misturar num modelo só é o erro clássico que trava o sistema depois.
+--   2. "dois locais: sede e trailer de corrida" → `stock_locations`, e transferência
+--      entre eles é um movimento como qualquer outro, não uma edição de número.
+-- Fronteira com o QuickBooks: o painel manda no estoque FÍSICO, o QuickBooks manda no
+-- FINANCEIRO. Quantidade controlada dos dois lados diverge, e aí ninguém acredita em
+-- nenhum dos dois.
+CREATE TABLE IF NOT EXISTS stock_locations (
+  id          INTEGER PRIMARY KEY,
+  code        TEXT NOT NULL UNIQUE,      -- sede | trailer
+  name        TEXT NOT NULL,
+  kind        TEXT NOT NULL DEFAULT 'fixo' CHECK (kind IN ('fixo','movel')),
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+INSERT OR IGNORE INTO stock_locations (id, code, name, kind) VALUES
+  (1, 'sede',    'Sede',             'fixo'),
+  (2, 'trailer', 'Trailer de corrida','movel');
+
+-- O QUE é, não a peça física. Liga no catálogo quando o modelo já existe lá.
+CREATE TABLE IF NOT EXISTS stock_items (
+  id            INTEGER PRIMARY KEY,
+  kind          TEXT NOT NULL CHECK (kind IN ('chassi','motor','pneu','peca')),
+  -- `tracking` é derivado de `kind`, mas fica explícito: é ele que o código lê, e um
+  -- dia pode existir peça cara com número de série.
+  tracking      TEXT NOT NULL CHECK (tracking IN ('serie','quantidade')),
+  name          TEXT NOT NULL,
+  -- A base das peças é o catálogo da Comet Kart Sales (dono, 22/09), e o SKU é
+  -- **referência de compra**, não identidade do item: é por ele que o módulo de compras
+  -- (futuro) vai saber o que pedir e onde. Item pode existir sem SKU — peça avulsa,
+  -- usado, coisa que veio de outro lugar. Fornecedor fica explícito porque um dia
+  -- haverá outro.
+  sku           TEXT,
+  supplier      TEXT DEFAULT 'comet',
+  supplier_url  TEXT,
+  part_number   TEXT,                          -- número do fabricante (IAME, OTK…), quando houver
+  chassis_id    INTEGER REFERENCES catalog_chassis(id),
+  engine_id     INTEGER REFERENCES catalog_engines(id),
+  part_id       INTEGER REFERENCES catalog_parts(id),
+  unit          TEXT NOT NULL DEFAULT 'un',   -- un, par, jogo, litro
+  min_qty       REAL,                          -- estoque mínimo; só vale em 'quantidade'
+  notes         TEXT,
+  active        INTEGER NOT NULL DEFAULT 1,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS stock_items_kind ON stock_items(kind, active);
+CREATE INDEX IF NOT EXISTS stock_items_pn ON stock_items(part_number);
+-- Dois itens com o mesmo SKU do mesmo fornecedor são o mesmo item cadastrado duas vezes
+-- — e aí a compra pediria em dobro. Item sem SKU não entra no índice.
+CREATE UNIQUE INDEX IF NOT EXISTS stock_items_sku
+  ON stock_items(supplier, sku) WHERE sku IS NOT NULL;
+
+-- Unidade física com número de série: chassi e motor. Uma linha = uma coisa que existe.
+CREATE TABLE IF NOT EXISTS stock_units (
+  id           INTEGER PRIMARY KEY,
+  item_id      INTEGER NOT NULL REFERENCES stock_items(id),
+  serial       TEXT NOT NULL,
+  location_id  INTEGER REFERENCES stock_locations(id),
+  -- "peça que está com a URACE mas é do cliente" (dono): `client_id` preenchido é peça
+  -- de cliente. Ela NUNCA é vendável para outro — a trava está em `estoque.py`.
+  client_id    INTEGER REFERENCES clients(id),
+  status       TEXT NOT NULL DEFAULT 'disponivel'
+               CHECK (status IN ('disponivel','em_uso','em_servico','emprestado','vendido','baixado')),
+  acquired_at  TEXT,
+  notes        TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- Número de série não repete dentro do mesmo item. Entre itens diferentes pode.
+CREATE UNIQUE INDEX IF NOT EXISTS stock_units_serie ON stock_units(item_id, serial);
+CREATE INDEX IF NOT EXISTS stock_units_local ON stock_units(location_id, status);
+CREATE INDEX IF NOT EXISTS stock_units_cliente ON stock_units(client_id);
+
+-- Saldo de quantidade: pneu e peça de consumo. Uma linha por item × local × dono.
+CREATE TABLE IF NOT EXISTS stock_levels (
+  id           INTEGER PRIMARY KEY,
+  item_id      INTEGER NOT NULL REFERENCES stock_items(id),
+  location_id  INTEGER NOT NULL REFERENCES stock_locations(id),
+  client_id    INTEGER REFERENCES clients(id),   -- NULL = da URACE
+  qty          REAL NOT NULL DEFAULT 0,
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- COALESCE no índice porque NULL não é igual a NULL em UNIQUE: sem isto, o estoque da
+-- URACE criaria uma linha nova a cada movimento e o saldo se espalharia em pedaços.
+CREATE UNIQUE INDEX IF NOT EXISTS stock_levels_chave
+  ON stock_levels(item_id, location_id, COALESCE(client_id, 0));
+
+-- O razão: toda mudança de saldo passa por aqui, e daqui nada sai. `conferir()` refaz o
+-- saldo a partir destes movimentos e acusa divergência — é o que impede o número de
+-- virar opinião.
+CREATE TABLE IF NOT EXISTS stock_moves (
+  id           INTEGER PRIMARY KEY,
+  kind         TEXT NOT NULL
+               CHECK (kind IN ('entrada','saida','ajuste','transferencia','contagem')),
+  item_id      INTEGER NOT NULL REFERENCES stock_items(id),
+  unit_id      INTEGER REFERENCES stock_units(id),   -- quando é chassi/motor
+  qty          REAL NOT NULL DEFAULT 0,              -- sempre positiva; `kind` diz o sinal
+  from_location_id INTEGER REFERENCES stock_locations(id),
+  to_location_id   INTEGER REFERENCES stock_locations(id),
+  client_id    INTEGER REFERENCES clients(id),       -- dono da peça movida
+  reason       TEXT,                                  -- venda, uso em serviço, envio, compra…
+  task_id      INTEGER REFERENCES tasks(id),
+  invoice_id   INTEGER REFERENCES invoices(id),
+  qty_before   REAL,                                  -- saldo antes/depois, para conferência
+  qty_after    REAL,
+  by_user_id   INTEGER REFERENCES users(id),
+  source       TEXT NOT NULL DEFAULT 'painel',        -- painel | ia | sync
+  notes        TEXT,
+  at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS stock_moves_item ON stock_moves(item_id, at);
+CREATE INDEX IF NOT EXISTS stock_moves_unit ON stock_moves(unit_id, at);
+CREATE INDEX IF NOT EXISTS stock_moves_cliente ON stock_moves(client_id, at);

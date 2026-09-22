@@ -111,13 +111,22 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
       série. Pneu e peça de consumo: quantidade. São dois comportamentos no mesmo módulo —
       misturar num modelo só é o erro clássico que trava o sistema depois.
 - [x] 👤 **Dois locais, decidido em 22/09:** sede e trailer de corrida.
-- [ ] Modelo: item → tipo → quantidade ou série → local → **dono** (URACE ou cliente)
-- [ ] Peça de cliente: ligada ao card do cliente, nunca vendável para outro, aparece no
-      card dele
-- [ ] Movimentos: entrada (pedido chegou), saída (venda, uso em serviço, envio), ajuste
-      (contagem), transferência (sede ↔ trailer)
-- [ ] Contagem física / inventário, com quem contou e quando
-- [ ] Estoque mínimo por item → avisa em "Precisa de atenção" antes de faltar
+- [x] 👤 **A base das peças é o catálogo da Comet Kart Sales** (dono, 22/09), e o **SKU é
+      referência de compra** para o módulo de compras futuro — não é a identidade do item.
+      Peça avulsa e usado existem sem SKU.
+- [x] 🤖 Modelo: item → tipo → quantidade ou série → local → **dono** (URACE ou cliente)
+- [x] 🤖 Peça de cliente: nunca vendável para outro (trava em `estoque.py`), e
+      `do_cliente()` devolve o que é dele para o card
+- [x] 🤖 Movimentos: entrada, saída, ajuste, transferência (sede ↔ trailer) e contagem —
+      todos no razão `stock_moves`, com saldo antes e depois
+- [x] 🤖 Contagem física, com quem contou e quando; `conferir()` refaz o saldo pelo razão
+      e **acusa divergência sem consertar sozinho**
+- [x] 🤖 Estoque mínimo por item → `abaixo_do_minimo()` já devolve SKU e link do fornecedor
+- [ ] 🤖 Ligar o mínimo em "Precisa de atenção" e abrir a API/tela do módulo
+- [ ] 🔒 **Carga do catálogo da Comet: bloqueada nesta sessão.** A política de saída
+      recusou `cometkartsales.com` (403 no CONNECT). Não contornei. Ou o dono libera o
+      host, ou a carga entra por export (CSV/JSON) — o importador lê por SKU de qualquer
+      um dos dois.
 - [ ] 👤 **Decidir a fronteira com o QuickBooks.** Proposta: o painel manda no estoque
       físico, o QuickBooks manda no financeiro. Controlar quantidade nos dois lados gera
       divergência garantida, e aí ninguém acredita em nenhum dos dois.
