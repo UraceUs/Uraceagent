@@ -88,6 +88,16 @@ _NAO_E_GENTE = {"trackhouse", "endurance", "florida", "guardar", "closed", "phot
                 "pista", "galpao", "galpão", "ferramenta", "ferramentas", "bandeiras", "banners",
                 "calendario", "calendário", "chassi", "chassis", "motor", "motores", "pneus",
                 "faturas", "fatura", "invoices", "not", "going", "usf",   # USF Pro 2000: série
+                # recado de quadro (verbo/tarefa na frente): "Inventário Hank Lai_ caixa" moveu
+                # um serviço PARA FORA do Hank Lai em 22/09 à noite. Tarefa não é gente.
+                "inventario", "inventário", "inventory", "organizar", "organize", "arrumar", "preparar",
+                "comprar", "buscar", "levar", "trazer", "pagar", "cobrar", "enviar", "mandar", "ligar",
+                "checar", "conferir", "check", "fix", "consertar", "limpar", "montar", "desmontar",
+                "trocar", "revisar", "separar", "pedir", "encomendar", "vender", "alugar", "receber",
+                "entregar", "instalar", "testar", "verificar", "lembrar", "agendar", "marcar",
+                "cancelar", "fazer", "colocar", "tirar", "pegar", "devolver", "reminder", "order",
+                "pack", "load", "unload", "clean", "prepare", "buy", "sell", "rent", "return",
+                "caixa", "estoque", "peças", "pecas", "ferramentas",
                 # artigo nunca abre nome de gente: "The North Florida Kart Club"
                 "the", "a", "an", "o", "os", "as", "um", "uma", "la", "el", "los"}
 

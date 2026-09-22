@@ -41,6 +41,23 @@ def _vivos(con):
     return todos(con, "SELECT * FROM clients WHERE kind<>?", (identidade.SEPARADO,))
 
 
+def _descricao_lida(t):
+    """Já se perguntou ao Asana por esta tarefa? Vale o carimbo `desc_read_at` — descrição
+    sem contato nenhum também conta como lida, senão seria relida a cada varredura."""
+    keys = t.keys()
+    if "desc_read_at" in keys and t["desc_read_at"]:
+        return True
+    return any(t[k] for k in ("resp_name", "resp_email", "resp_phone") if k in keys)
+
+
+def e_balde(c):
+    """Card sem contato e sem piloto, com nome de uma palavra só ou aberto pela varredura:
+    é o "na dúvida, card próprio". Serviço nele não está confirmado — está esperando."""
+    if c["email"] or c["phone"] or c["pilot_name"]:
+        return False
+    return len((c["name"] or "").split()) == 1 or (c["notes"] or "").startswith("Card aberto pela varredura")
+
+
 def por_contato(con, tarefa, clientes=None):
     """O dono do serviço pelo que a DESCRIÇÃO diz — e-mail, telefone, responsável —
     antes de qualquer olhar para o título.
@@ -245,9 +262,20 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
 
     # 1ª passada — o CONTATO da descrição decide, antes do título (princípio do dono)
     vivos = _vivos(con)
+    baldes = {c["id"] for c in vivos if e_balde(c)}
     restantes = []
     for t in tarefas:
         cliente, motivo = por_contato(con, t, vivos)
+        # Serviço que está num BALDE ("Mike", "Sean"…) não é "já certo": está esperando.
+        # Com --ler-descricoes, ele vai buscar responsável/contato no Asana — é assim que
+        # o balde se esvazia sozinho (dono, 22/09: "aplique o princípio de agora em diante").
+        if not cliente and ler_descricoes and t["client_id"] in baldes and not _descricao_lida(t):
+            t, erro = _ler_descricao(con, t); lidas += 1
+            if erro:
+                falhas_leitura.append({"task_id": t["id"], "title": t["title"], "erro": erro})
+            cliente, motivo = por_contato(con, t, vivos)
+            if cliente:
+                motivo = f"saiu do balde: {motivo}"
         if cliente:
             _move(t, cliente, motivo); pelo_contato += 1
         else:
@@ -271,7 +299,7 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
             # guardada na tarefa, então a próxima varredura não pergunta ao Asana de novo.
             ainda = []
             for t in por_nome[nome]:
-                if not any(t[k] for k in ("resp_name", "resp_email", "resp_phone")):
+                if not _descricao_lida(t):
                     t, erro = _ler_descricao(con, t); lidas += 1
                     if erro:
                         falhas_leitura.append({"task_id": t["id"], "title": t["title"], "erro": erro})
@@ -332,8 +360,8 @@ def _ler_descricao(con, tarefa):
     except Exception as e:                                    # noqa: BLE001 - ler é o extra
         return tarefa, f"{type(e).__name__}: {str(e)[:160]}"
     r = sync._resp_da_descricao(sync.parse_descricao(full.get("notas")))
-    con.execute("UPDATE tasks SET resp_name=?, resp_email=?, resp_phone=? WHERE id=?",
-                (r["resp_name"], r["resp_email"], r["resp_phone"], tarefa["id"]))
+    con.execute("UPDATE tasks SET resp_name=?, resp_email=?, resp_phone=?, desc_read_at=? WHERE id=?",
+                (r["resp_name"], r["resp_email"], r["resp_phone"], r["desc_read_at"], tarefa["id"]))
     con.commit()
     return um(con, "SELECT * FROM tasks WHERE id=?", (tarefa["id"],)), None
 

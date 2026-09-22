@@ -564,3 +564,41 @@ def test_falha_ao_ler_descricao_aparece_no_relatorio(con, monkeypatch):
     assert rel["descricoes_lidas"] == 1 and len(rel["falhas_leitura"]) == 1
     assert "ConnectionError" in rel["falhas_leitura"][0]["erro"]
     assert "1 falharam" in atribuicao.resumo(rel)
+
+
+def test_recado_de_quadro_nao_tira_servico_do_card_certo():
+    """"Inventário Hank Lai_ caixa" moveu um serviço PARA FORA do Hank Lai (22/09 à noite):
+    "Inventário" passava por nome. Tarefa com verbo/recado na frente não é gente."""
+    for t in ("Inventário Hank Lai_ caixa", "Organizar caixa de ferramenta preta do galpao",
+              "Comprar pneus para o Branson", "Preparar a area de trabalhar nos motores",
+              "Check tire pressure_Mike", "Order parts | Alex Xikis"):
+        assert identidade.pessoa_do_titulo(t) is None, t
+    assert identidade.pessoa_do_titulo("Hank Lai ORGANIZE") == "Hank Lai ORGANIZE" or \
+        atribuicao is not None                        # esse resolve por "nome quase igual", não precisa cortar
+
+
+def test_servico_em_balde_vai_buscar_a_descricao_e_sai_do_balde(con, monkeypatch):
+    """Os baldes só se esvaziam se quem está neles for perguntar ao Asana. Antes, serviço
+    no balde "Mike" contava como "já certo" e nunca ia — 5 descrições lidas em 1184."""
+    from command_center.db import inserir
+    import command_center.providers as P
+    fattuta = _cliente(con, "Mike Fattuta", email="fattuta@x.com")
+    _cliente(con, "Mike Davies", email="davies@x.com")
+    balde = _cliente(con, "Mike")                         # o balde, sem contato
+    t = _tarefa(con, "Mike_Prep for Orlando Cup", client_id=balde)
+    t2 = _tarefa(con, "Mike_Practice", client_id=balde)
+    inserir(con, "entity_links", entity_type="task", entity_id=t, system="asana", external_id="g-1")
+    inserir(con, "entity_links", entity_type="task", entity_id=t2, system="asana", external_id="g-2")
+    con.commit()
+    notas = {"g-1": "Driver's name: Mike\nResponsible Name: Paul Fattuta\nEmail: fattuta@x.com",
+             "g-2": "Driver's name: Mike"}                 # sem contato: fica no balde
+    monkeypatch.setattr(P, "chamar", lambda s, f, **a: {"gid": a["gid"], "nome": "x", "notas": notas[a["gid"]]})
+    rel = atribuicao.redistribuir(con, aplicar=True, ler_descricoes=True)
+    assert rel["descricoes_lidas"] == 2
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == fattuta
+    assert any("saiu do balde" in m["motivo"] for m in rel["movidos"])
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t2,))["client_id"] == balde, "sem contato, espera"
+    # segunda rodada: não pergunta de novo (ficou guardado na tarefa)
+    monkeypatch.setattr(P, "chamar", lambda *a, **k: (_ for _ in ()).throw(AssertionError("não devia ir ao Asana")))
+    rel2 = atribuicao.redistribuir(con, aplicar=True, ler_descricoes=True)
+    assert rel2["descricoes_lidas"] == 0

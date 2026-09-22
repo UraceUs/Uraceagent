@@ -186,7 +186,8 @@ def _resp_da_descricao(d):
     para frente". Antes isso era lido e jogado fora depois de ligar o card."""
     return dict(resp_name=_nome_valido(d.get("responsavel")),
                 resp_email=(d.get("email") or "").strip().lower() or None,
-                resp_phone=(d.get("telefone") or "").strip() or None)
+                resp_phone=(d.get("telefone") or "").strip() or None,
+                desc_read_at=agora())          # lida — mesmo vazia, não se lê de novo
 
 
 def _nome_valido(n):
