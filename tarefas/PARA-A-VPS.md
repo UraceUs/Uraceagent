@@ -23,25 +23,24 @@ ordem. Tarefa sem essa marca está dentro das suas permissões e pode rodar.
 
 ## ABERTO
 
-### T-005 — Refazer o plano, agora com o script corrigido
+### T-008 — URGENTE: o defeito do Martin está corrigido, pode voltar a aplicar
 
-A T-002 fez o serviço: o plano **não batia** com o que o dono aprovou, e você parou.
-Os três defeitos eram da ferramenta, não do quadro, e estão consertados:
+Você parou certo: a varredura ia tirar os 26 serviços do `#374 Martin Jaramillo` e
+recriar o balde, **desfazendo a união que o dono acabara de fazer**. O defeito era meu.
 
-- o carimbo pegava os **70** serviços do card; agora exige `--nome` e pega só os
-  `Savage`/`Savege` do `#15` e o `Alex` do `#238`. Ele mostra o que ficou de fora —
-  a corrida `Lucas Oil … | Sebring` entre eles;
-- a união do Luciano achava o card só pelo **responsável**; agora acha pelo **piloto**
-  também (`#105` é "Alonso Delgado" com "Luciano Delgado" no piloto), e o responsável
-  continua sendo o pai;
-- um grupo que não resolve **não para mais o plano**: os outros aparecem do mesmo jeito.
+A causa: **uma** tarefa (`Martin 03/08 próprio motor Rok vlr`) fazia o nome "Martin"
+contar como truncado, e esse ramo do código **pulava a checagem da união do dono**. Sem
+ela, os homônimos (Bruno Martins, Ethan Martins, Andres Marin) faziam o nome parecer
+ambíguo. Agora a decisão do dono vem **antes de qualquer heurística**.
 
 ```bash
 git pull --rebase origin claude/configurar-open-claw-ooqo8x
-bash adminai/fechar_pendencias_22_09.sh
+python3 adminai/atribuir_servicos.py --limite 60
 ```
 
-Traga o plano inteiro no relatório, como na T-002.
+Esperado agora: **0 movidos e 0 cards novos** — e a tarefa solta do Martin indo para o
+card dele (27 no total). Se der isso, pode aplicar; se ainda quiser tirar alguém de um
+card que o dono uniu, **não aplique** e reporte.
 
 ### T-006 — Tirar do card o que não é serviço de ninguém
 
@@ -49,30 +48,22 @@ O dono respondeu (22/09): **"é uma tarefa paralela, não gera card"**. Não ger
 bastava — a corrida `Lucas Oil … | Sebring` estava *dentro* do card do Alexander Savage,
 e `#384 "Buscar as coisas no Mauricio"` é recado de quadro.
 
-Primeiro veja a lista (só leitura):
+Veja a lista primeiro (só leitura):
 
 ```bash
 python3 adminai/atribuir_servicos.py --limite 60
 ```
 
 A seção **"NÃO É SERVIÇO DE NINGUÉM, mas está num card de cliente"** mostra tudo. Traga-a
-inteira no relatório. Se for só corrida, tarefa interna e recado — nada com cara de
-serviço de gente — aplique:
+inteira. Se for só corrida, tarefa interna e recado — nada com cara de serviço de gente —
+aplique:
 
 ```bash
 python3 adminai/atribuir_servicos.py --soltar-nao-servicos --aplicar
 ```
 
-Isso só tira o vínculo com o cliente (`client_id` vazio). A tarefa continua lá, e o que
-o dono carimbou não é tocado. Se aparecer algo que pareça serviço de alguém, **não
-aplique** e reporte.
-
-### T-007 — RESOLVIDA, sem ação
-
-O dono respondeu: *"a waiver dele já foi assinada antes e vale por um ano"*. Era alarme
-falso do meu relatório, que não checava se já existia waiver válida. Corrigido: agora há
-o grupo **"coberto por waiver válida"**, com o número e a data da que vale. Não cobre
-ninguém pelo Enzo.
+Só tira o vínculo com o cliente; a tarefa continua lá, e o que o dono carimbou não é
+tocado.
 
 ---
 
@@ -80,6 +71,7 @@ ninguém pelo Enzo.
 
 | Tarefa | Quando | O que saiu |
 |---|---|---|
+| T-005 / T-003 | 22/09 | Aplicadas: 20 carimbos no #15, 1 no #238, 5 uniões. E a varredura depois **pegou um defeito meu** — ver T-008. |
 | T-007 | 22/09 | **Alarme falso meu.** O relatório não checava waiver válida anterior; o Enzo tinha uma, assinada e dentro do ano. Corrigido. |
 | T-002 | 22/09 | Rodou em modo plano e **achou três defeitos nas ferramentas** (carimbo sem filtro, união que só olhava o responsável, plano que parava no primeiro erro). Todos consertados; ver T-005. |
 | T-001 | 22/09 | **Recusada pela extensão, com razão**: pedia `--aplicar` com autorização vinda de arquivo. Substituída por T-002 (leitura) + T-003 (com o dono). |

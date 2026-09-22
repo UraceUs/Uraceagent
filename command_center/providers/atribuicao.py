@@ -368,15 +368,22 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
     ordem = sorted(por_nome, key=lambda n: (-len(n.split()), -len(n), n.lower()))
     for nome in ordem:
         clientes = _vivos(con)                                  # relê: pode ter nascido card na volta anterior
-        if nome in truncados:
+        # A DECISÃO DO DONO VEM PRIMEIRO, antes de qualquer heurística: se ele uniu à
+        # mão um card com este nome, é ali que o serviço vai. Mesmo que o nome tenha
+        # saído truncado de algum título, mesmo que haja homônimos no cadastro.
+        #
+        # Isto estava DEPOIS do ramo `truncados`, e era um buraco sério: bastava UMA
+        # tarefa como "Martin 03/08 próprio motor Rok vlr" para o nome inteiro virar
+        # "cortado", pular esta checagem, e os 26 serviços do Martin saírem do card que
+        # o dono tinha acabado de unir. A extensão da VPS pegou em 22/09, no plano,
+        # antes de aplicar — e por isso nada se perdeu.
+        decidido = _decidido_pelo_dono(con, nome, clientes)
+        if decidido:
+            cliente, motivo = decidido
+        elif nome in truncados:
             cliente, motivo = None, "nome cortado, de uma palavra só"
         else:
             cliente, motivo = resolver(con, nome, clientes)
-            if cliente is None:
-                # O dono já decidiu isto à mão? Se ele uniu um balde com este nome a um
-                # card, a decisão dele manda — sem isto, a varredura seguinte recriava o
-                # balde e tirava o serviço do card que ele escolheu.
-                cliente, motivo = _decidido_pelo_dono(con, nome, clientes) or (None, motivo)
         if cliente is None and ler_descricoes:
             # Em dúvida pelo título, a descrição pode resolver — e a partir daqui fica
             # guardada na tarefa, então a próxima varredura não pergunta ao Asana de novo.

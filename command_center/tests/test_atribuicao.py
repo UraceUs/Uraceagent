@@ -963,3 +963,44 @@ def test_soltar_nao_tira_o_que_o_dono_carimbou(con):
     con.commit()
     atribuicao.redistribuir(con, aplicar=True, soltar_nao_servicos=True)
     assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == alex
+
+
+def test_uniao_do_dono_vence_ate_nome_truncado_e_homonimo(con):
+    """O pior defeito do dia, pego pela extensão da VPS no plano — antes de aplicar.
+
+    Depois de o dono unir o balde "Martin" ao card "Martin Jaramillo", a varredura
+    queria tirar os 26 serviços de lá e recriar o balde. Causa: UMA tarefa
+    ("Martin 03/08 próprio motor Rok vlr") marcava o nome como truncado, e esse ramo
+    pulava a checagem da união. Sem a checagem, os homônimos (Bruno Martins, Ethan
+    Martins, Andres Marin) faziam o nome parecer ambíguo.
+
+    A decisão do dono vem antes de qualquer heurística. Ponto."""
+    mj = _cliente(con, "Martin Jaramillo", email="mj@x.com")
+    for n, e in (("Bruno Martins", "bm@x.com"), ("Ethan Martins", "em@x.com"), ("Andres Marin", "am@x.com")):
+        _cliente(con, n, email=e)
+    balde = _cliente(con, "Martin")
+    for i in range(26):
+        _tarefa(con, f"Martin_KA100 {{caso {i}}}", client_id=balde)
+    solta = _tarefa(con, "Martin 03/08 próprio motor Rok vlr")     # a que estragava tudo
+    con.commit()
+    identidade.unir(con, mj, balde, "owner:cli", "dono, 22/09: mesma pessoa"); con.commit()
+
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert rel["criados"] == [], "não recria o balde que o dono uniu"
+    assert um(con, "SELECT COUNT(*) n FROM tasks WHERE client_id=?", (mj,))["n"] == 27
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (solta,))["client_id"] == mj
+    assert atribuicao.redistribuir(con, aplicar=True)["movidos"] == [], "e é estável"
+
+
+def test_uniao_do_dono_nao_vence_contato_que_diz_outra_coisa(con):
+    """O limite da regra acima: a descrição com contato ainda manda, porque é evidência
+    sobre AQUELE serviço, não sobre o nome em geral."""
+    mj = _cliente(con, "Martin Jaramillo", email="mj@x.com")
+    outro = _cliente(con, "Paulo Souza", email="ps@x.com")
+    balde = _cliente(con, "Martin")
+    t = _tarefa(con, "Martin_Practice", client_id=balde)
+    con.execute("UPDATE tasks SET resp_email='ps@x.com' WHERE id=?", (t,))
+    con.commit()
+    identidade.unir(con, mj, balde, "owner:cli", "mesma pessoa"); con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == outro
