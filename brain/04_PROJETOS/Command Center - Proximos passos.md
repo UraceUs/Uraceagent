@@ -123,10 +123,17 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
       e **acusa divergência sem consertar sozinho**
 - [x] 🤖 Estoque mínimo por item → `abaixo_do_minimo()` já devolve SKU e link do fornecedor
 - [ ] 🤖 Ligar o mínimo em "Precisa de atenção" e abrir a API/tela do módulo
-- [ ] 🔒 **Carga do catálogo da Comet: bloqueada nesta sessão.** A política de saída
-      recusou `cometkartsales.com` (403 no CONNECT). Não contornei. Ou o dono libera o
-      host, ou a carga entra por export (CSV/JSON) — o importador lê por SKU de qualquer
-      um dos dois.
+- [x] 🤖 **Importador do catálogo da Comet construído** (`adminai/importar_comet.py`).
+      Tenta o JSON da loja → sitemap + JSON-LD → e só então HTML. Obedece `robots.txt`,
+      se identifica, pausa entre páginas, respeita `Retry-After` e guarda em disco o que
+      já buscou. `supplier_products` é espelho do catálogo deles — separado do nosso
+      estoque, porque eles vendem milhares de peças e nós carregamos uma fração.
+- [ ] 👤 **Rodar a importação: escolher o caminho.** Esta sessão não alcança o site (a
+      política de saída recusa `cometkartsales.com`, 403 — não contornei). Duas saídas:
+      rodar na VPS, que tem rede própria (`python3 adminai/importar_comet.py --limite 50`
+      primeiro), **ou** pedir o export do catálogo ao fornecedor e rodar com
+      `--arquivo catalogo.csv`. O export é o caminho melhor: é o dado na fonte, não
+      incomoda o site e não quebra quando mudam o layout.
 - [ ] 👤 **Decidir a fronteira com o QuickBooks.** Proposta: o painel manda no estoque
       físico, o QuickBooks manda no financeiro. Controlar quantidade nos dois lados gera
       divergência garantida, e aí ninguém acredita em nenhum dos dois.

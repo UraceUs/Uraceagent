@@ -946,3 +946,33 @@ CREATE TABLE IF NOT EXISTS stock_moves (
 CREATE INDEX IF NOT EXISTS stock_moves_item ON stock_moves(item_id, at);
 CREATE INDEX IF NOT EXISTS stock_moves_unit ON stock_moves(unit_id, at);
 CREATE INDEX IF NOT EXISTS stock_moves_cliente ON stock_moves(client_id, at);
+
+-- ------------------------------------------------- catálogo do fornecedor (espelho)
+-- O catálogo da Comet é REFERÊNCIA DE COMPRA (dono, 22/09), não o nosso estoque: eles
+-- vendem milhares de peças e nós carregamos uma fração. Por isso duas tabelas —
+-- `supplier_products` é o que dá para comprar, `stock_items` é o que temos. Um item
+-- vira estoque quando passamos a carregá-lo, ligado pelo SKU.
+CREATE TABLE IF NOT EXISTS supplier_products (
+  id            INTEGER PRIMARY KEY,
+  supplier      TEXT NOT NULL DEFAULT 'comet',
+  sku           TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  url           TEXT,
+  price         REAL,
+  currency      TEXT NOT NULL DEFAULT 'USD',
+  brand         TEXT,
+  category      TEXT,
+  available     INTEGER,
+  image_url     TEXT,
+  -- O json de origem inteiro. O que hoje não sei mapear não se perde, e amanhã dá para
+  -- reprocessar sem incomodar o site deles de novo.
+  raw           TEXT,
+  first_seen_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  last_seen_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  -- Produto que sumiu do catálogo é MARCADO, nunca apagado: o histórico de compra
+  -- continua apontando para ele.
+  gone_at       TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS supplier_products_sku ON supplier_products(supplier, sku);
+CREATE INDEX IF NOT EXISTS supplier_products_nome ON supplier_products(name);
+CREATE INDEX IF NOT EXISTS supplier_products_cat ON supplier_products(supplier, category);
