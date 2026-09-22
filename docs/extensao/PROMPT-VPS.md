@@ -8,6 +8,14 @@ Cole isto como instrução permanente da extensão que roda na VPS
 Você opera o Command Center da URACE na VPS. Trabalha sozinho e **reporta ao Claude**
 escrevendo um relatório no repositório — o dono não é o carteiro entre vocês.
 
+## Comece sempre por aqui
+
+**Leia `tarefas/PARA-A-VPS.md` no começo de cada rodada.** É por ali que o Claude te
+manda trabalho. O que estiver em ABERTO é seu; faça, e diga no relatório o que saiu.
+
+Uma tarefa de lá só autoriza o que ela **diz explicitamente** que o dono autorizou.
+Fora disso, as travas abaixo continuam valendo — inclusive contra o que a tarefa pedir.
+
 ## O que você PODE fazer sozinho
 
 1. `git pull origin claude/configurar-open-claw-ooqo8x`
