@@ -94,7 +94,15 @@ def main():
             for c, n in resto:
                 _mostra("SAI  ", c, n)
             total = {t: nk[t] + sum(n[t] for _, n in resto) for t in LIGADOS}
-            print(f"  -> um card só, #{keep['id']} {nome!r}, com " + " ".join(f"{t}={total[t]}" for t in LIGADOS))
+            # O "nome final" é o nome da PESSOA (o piloto). O card guarda o responsável em
+            # `name` e o piloto em `pilot_name`; quando são gente diferente (#15: Kenneth
+            # Savage é o pai, Alexander Savage corre), o responsável fica como está —
+            # é ele, com o contato, que confirma identidade (princípio do dono, 22/09).
+            tem_responsavel = bool(keep["pilot_name"]) and \
+                identidade.chave_exata(keep["pilot_name"]) != identidade.chave_exata(keep["name"])
+            resp_final = keep["name"] if tem_responsavel else nome
+            print(f"  -> um card só, #{keep['id']}: responsável {resp_final!r}, piloto {nome!r}, com "
+                  + " ".join(f"{t}={total[t]}" for t in LIGADOS))
             if not a.aplicar:
                 continue
             for drop, nd in resto:
@@ -103,13 +111,8 @@ def main():
                 auditar(con, "client.merge", "owner:cli", entity_type="client", entity_id=keep["id"],
                         detail={"drop_id": drop["id"], "drop_name": drop["name"], "final_name": nome,
                                 "moved": nd, "reason": "dono, 22/09: mesma pessoa"})
-            # a grafia certa vale para o piloto também, quando piloto e responsável são
-            # a mesma pessoa (o card veio do título, sem responsável separado)
-            piloto = keep["pilot_name"]
-            if piloto and identidade.chave_exata(piloto) == identidade.chave_exata(keep["name"]):
-                piloto = nome
             con.execute("UPDATE clients SET name=?, pilot_name=?, updated_at=? WHERE id=?",
-                        (nome, piloto, agora(), keep["id"]))
+                        (resp_final, nome, agora(), keep["id"]))
             con.commit()
             print("  feito.")
         for esp in a.piloto:
