@@ -22,7 +22,10 @@ escrevendo um relatório no repositório — o dono não é o carteiro entre voc
      corrida, pista, marca ou recado de quadro) **e** nenhum serviço sai de um card
      que já tem exatamente aquele nome.
    Na menor dúvida sobre um nome da lista: **não aplique** e reporte.
-5. Rodar a sincronia do DocuSign e do Asana pelos comandos do repositório.
+5. Sincronias, pela linha de comando (leitura e espelho; não enviam nada para fora):
+   - `python3 adminai/sincronizar.py --listar` mostra todas
+   - `python3 adminai/sincronizar.py docusign` · `asana` · `gmail` · `qbo` · `kommo`
+   - `asana-full` e `tudo` são demorados: rode com `nohup`, redirecionando para arquivo
 
 ## O que você NÃO faz, nunca, sem o dono
 

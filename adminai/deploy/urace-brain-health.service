@@ -1,6 +1,6 @@
 [Unit]
 Description=URACE — saude do grafo do segundo cerebro
-Documentation=file:///home/ubuntu/Uraceagent/brain/00_SYSTEM/Como%20o%20cerebro%20cresce.md
+Documentation=file:///home/ubuntu/Uraceagent/brain/00_SYSTEM/Como%%20o%%20cerebro%%20cresce.md
 
 [Service]
 Type=oneshot

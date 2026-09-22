@@ -1,6 +1,6 @@
 [Unit]
 Description=URACE — sincronia status x quadro no Shipping Orders (Asana)
-Documentation=file:///home/ubuntu/Uraceagent/brain/10_PROCESSOS/Compra%20e%20envio.md
+Documentation=file:///home/ubuntu/Uraceagent/brain/10_PROCESSOS/Compra%%20e%%20envio.md
 After=network-online.target
 Wants=network-online.target
 
@@ -11,5 +11,6 @@ WorkingDirectory=/home/ubuntu/Uraceagent
 EnvironmentFile=/home/ubuntu/.urace/adminai.env
 # APLICAR=1 no env troca a simulação por escrita real (ver install_adminai.sh)
 ExecStart=/bin/bash -lc 'python3 adminai/asana_status_sync.py $ARGS_SYNC'
+ExecStopPost=/bin/bash -lc 'echo "[$(date -Is)] urace-asana-sync terminou: resultado=$SERVICE_RESULT saida=$EXIT_STATUS/$EXIT_CODE" >> /home/ubuntu/.urace/logs/asana-sync.log'
 StandardOutput=append:/home/ubuntu/.urace/logs/asana-sync.log
 StandardError=append:/home/ubuntu/.urace/logs/asana-sync.log

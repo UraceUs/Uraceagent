@@ -187,6 +187,28 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       `Enrico BR`) e unir os que você reconhecer
 - [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
 
+## Primeira rodada da extensão na VPS (22/09) — o que ela achou
+
+A extensão rodou a rodada completa e reportou honestamente, inclusive a própria falha.
+
+- [x] 🤖 **Sem comando de linha para as sincronias.** Ela precisou rodar a do DocuSign e
+      só achou o botão do painel, que exige login. Não improvisou — reportou. Agora existe
+      `python3 adminai/sincronizar.py docusign` (e `--listar` mostra todas).
+- [x] 🤖 **`%20` no `Documentation=` das unidades systemd.** `%` abre especificador no
+      systemd, então `%20` vira "Unknown specifier" a cada recarga. Escapado nas 4 unidades.
+- [x] 🤖 **Serviço de waivers morreu 07:33, código 1, sem mensagem.** A causa não dá para
+      saber sem rastro — então agora as três unidades de agente carimbam
+      `resultado` e `código de saída` no próprio log ao morrer. A próxima falha se explica.
+- [ ] 🔒👤 **A ponte está furada: o token da VPS só LÊ o repositório.** O push foi recusado
+      4× com 403 (`Permission to UraceUs/Uraceagent.git denied to UraceUs`). Enquanto não
+      houver permissão de escrita, nada que a extensão escrever chega ao Claude por esse
+      caminho. O relatório `0ecc3cf` está commitado só na máquina.
+- [ ] 👤 **Savage:** 18 serviços "Savage" e 2 "Savege" estão no #15, que foi alcançado pelo
+      sobrenome do **Kenneth** Savage. Confirmar que são do Alexander.
+- [ ] 👤 **Alex:** 1 serviço está no #238 Alex Donnell e 4 no #558 Alex. Confirmar o solitário.
+- [ ] 👤 Unir (ou não): Martin/Martin Jaramillo · Mikey/Mikey Collins · Sanghera/Levi
+      Sanghera · Luciano/Luciano Delgado · Mauricio/Mauricio Pardomo
+
 ## Para logo depois da organização dos cards (dono, 22/09)
 
 - [x] 🤖 **RESOLVIDO em 22/09: era paginação.** `docusign_envelopes` pedia `count=100` e
