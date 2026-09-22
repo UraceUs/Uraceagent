@@ -182,6 +182,19 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       (`Mike`, `Sean`, `Liam`, `Martin`…) podem se resolver sozinhos pela descrição
 - [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
 
+## Para logo depois da organização dos cards (dono, 22/09)
+
+- [ ] 🤖 **Waiver assinada aparecendo como "enviada, não assinada" no painel.** Envelope
+      `1ceee462-2383-8726-825b-424ddf410785`, Parental Consent, assinado por Nadine Kozora
+      Garcia (nkozora1@gmail.com) em 17/09/2026 16:21 — no DocuSign está **Completed**; o
+      Command Center ainda mostra como enviada. Dono: *"é um erro, né?"* — é. Suspeitos, na
+      ordem: (a) a sincronia de waivers só relê envelopes de uma janela/estado e este ficou
+      de fora; (b) o espelho `waivers` guarda o status da primeira leitura e não atualiza
+      `completed_at`; (c) o envelope está ligado a outro card e a tela do cliente lê o errado.
+      Conferir os três antes de mexer; corrigir na sincronia, não à mão.
+- [ ] 🤖 Depois de corrigir: varrer todos os envelopes `sent/delivered` do espelho contra o
+      DocuSign — se um ficou para trás, outros ficaram
+
 ## Vem de antes (21/09, aprovado e ainda devendo)
 
 - [ ] 🤖 Artifact editável do APLICAR=1: o que o agente escreveria sozinho × o que ainda
