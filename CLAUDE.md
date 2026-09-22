@@ -104,3 +104,33 @@ tentar usa Salesbot ou a UI, nunca esse client.
   Nunca escrever pra um lead ou cliente com base só no que foi pedido na
   hora; confirmar nome certo, o que já foi dito, o que já foi pago/assinado,
   antes de compor a mensagem.
+
+## Banco de dados central de leads — `data/leads_master.xlsx`
+
+**Fonte de verdade pra "quem é, quem já falou com a gente, quem falta
+falar."** 3.166 linhas, uma por lead/cliente. Antes de qualquer contato em
+lote (SMS, e-mail, limpeza de pipeline), consultar esse arquivo primeiro —
+ele sabe coisas que o Kommo sozinho não mostra (motivo de não disparar,
+histórico de disparo, valor já consumido).
+
+Colunas: `Status`, `Proximo_passo`, `Nome`, `Piloto`, `Idade`, `Telefone`,
+`Email`, `Origem`, `Produtos`, `Sessoes`, `Pacotes`, `Ja_consumiu_USD`,
+`Potencial_estimado_USD`, `Ultimo`, `Dias`, `Criado`, `Secao`,
+`Leads_Kommo`, `Canal`, `SMS_enviado`, `Email_enviado`, `Fonte`, `Resposta`.
+
+Valores reais de `Status` (não inventar outros): `NOVO`, `NAO CONTATADO`,
+`CONTATADO <data>`, `NAO DISPARAR` (tem motivo em `Proximo_passo` — falta
+nome, aguardando resposta, notificação de sistema — não é "não mexer pra
+sempre"), `CLIENTE ASANA`, `NAO E LEAD`, `OPT-OUT`.
+
+**Depois de qualquer contato real** (SMS ou e-mail, de qualquer sessão),
+atualizar a linha da pessoa: `SMS_enviado`/`Email_enviado` com
+data/hora, `Status` para `CONTATADO <data>`, `Proximo_passo` com um
+resumo curto do que foi dito. Sem isso o arquivo mente pra próxima sessão
+que ler — foi exatamente o erro que gerou a necessidade dessa planilha
+(agentes reconstruindo "quem já foi contatado" do zero, via API, achando
+números errados).
+
+Ler com `openpyxl` (`pip install openpyxl` se não estiver instalado —
+não vem por padrão neste ambiente). Nunca `cat`/abrir como texto — é xlsx
+binário.
