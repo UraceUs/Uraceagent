@@ -30,6 +30,28 @@ garantir_venv()
 from command_center.db import aplicar_schema, conectar, todos, um  # noqa: E402
 
 ABERTAS = ("sent", "delivered")
+VALIDADE_DIAS = 365        # PARAMETROS: waiver assinada vale 1 ano (mesma regra do docusign_mcp)
+
+
+def waiver_valida(con, w):
+    """Existe OUTRA waiver assinada e ainda dentro do ano, para a mesma pessoa?
+
+    Dono, 22/09, sobre o Enzo (Joseph Kurian, #107): *"a waiver dele já foi assinada
+    antes e vale por um ano"*. Sem esta checagem o relatório gritava lobo — e relatório
+    que grita lobo é relatório que ninguém lê. Uma waiver aberta só é problema quando
+    NÃO há uma válida por trás."""
+    limite = (dt.date.today() - dt.timedelta(days=VALIDADE_DIAS)).isoformat()
+    onde, p = [], []
+    if w["client_id"]:
+        onde.append("client_id = ?"); p.append(w["client_id"])
+    if w["signer_email"]:
+        onde.append("LOWER(signer_email) = ?"); p.append(w["signer_email"].lower())
+    if not onde:
+        return None
+    return um(con, f"SELECT id, signer_name, completed_at FROM waivers "
+                   f"WHERE ({' OR '.join(onde)}) AND status='completed' AND id <> ? "
+                   f"AND COALESCE(completed_at,'') >= ? ORDER BY completed_at DESC",
+              (*p, w["id"], limite))
 
 
 def _dias(iso):
@@ -55,12 +77,14 @@ def main():
         abertas = todos(con, f"SELECT * FROM waivers WHERE status IN ({marcas}) "
                              "AND COALESCE(hidden,0)=0 ORDER BY sent_at", ABERTAS)
         print(f"\n{len(abertas)} waiver(s) em aberto\n" + "=" * 78)
-        grupos = {"JÁ RODOU SEM WAIVER": [], "VAI RODAR SEM WAIVER": [], "só esquecida": []}
+        grupos = {"JÁ RODOU SEM WAIVER": [], "VAI RODAR SEM WAIVER": [],
+                   "coberto por waiver válida": [], "só esquecida": []}
         for w in abertas:
             idade = _dias(w["sent_at"])
             cid = w["client_id"]
             passado = futuro = 0
             cliente = None
+            valida = waiver_valida(con, w)
             if cid:
                 cliente = um(con, "SELECT name, pilot_name FROM clients WHERE id=?", (cid,))
                 passado = um(con, "SELECT COUNT(*) n FROM tasks WHERE client_id=? AND status='completed' "
@@ -68,19 +92,26 @@ def main():
                              (cid, (w["sent_at"] or "")[:10], hoje))["n"]
                 futuro = um(con, "SELECT COUNT(*) n FROM tasks WHERE client_id=? AND status='open' "
                                  "AND due_on >= ?", (cid, hoje))["n"]
-            onde = "JÁ RODOU SEM WAIVER" if passado else "VAI RODAR SEM WAIVER" if futuro else "só esquecida"
-            grupos[onde].append((w, cliente, idade, passado, futuro))
+            if valida:
+                onde = "coberto por waiver válida"
+            else:
+                onde = "JÁ RODOU SEM WAIVER" if passado else "VAI RODAR SEM WAIVER" if futuro else "só esquecida"
+            grupos[onde].append((w, cliente, idade, passado, futuro, valida))
 
         for titulo, linhas in grupos.items():
             if not linhas:
                 continue
             print(f"\n--- {titulo} ({len(linhas)}) ---")
-            for w, c, idade, passado, futuro in sorted(linhas, key=lambda x: -(x[2] or 0)):
+            for w, c, idade, passado, futuro, valida in sorted(linhas, key=lambda x: -(x[2] or 0)):
                 quem = (c["pilot_name"] or c["name"]) if c else "(sem card)"
                 print(f"  #{w['id']:<5} {w['status']:<10} {str(w['signer_name'] or '-')[:26]:<26} "
                       f"{str(w['signer_email'] or '-')[:32]:<32} {idade if idade is not None else '?'} dias")
-                print(f"         cliente: {quem}  ·  serviços já feitos desde o envio: {passado}"
-                      f"  ·  marcados à frente: {futuro}")
+                if valida:
+                    print(f"         coberto pela waiver #{valida['id']} de {valida['signer_name']}, "
+                          f"assinada em {(valida['completed_at'] or '')[:10]} (vale 1 ano)")
+                else:
+                    print(f"         cliente: {quem}  ·  serviços já feitos desde o envio: {passado}"
+                          f"  ·  marcados à frente: {futuro}")
         print("\n(só leitura — nada foi enviado nem alterado)")
     finally:
         con.close()

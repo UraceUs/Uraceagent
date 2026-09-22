@@ -37,6 +37,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--aplicar", action="store_true", help="move de verdade (sem isto é só varredura)")
     ap.add_argument("--limite", type=int, default=40, help="quantas linhas mostrar por lista")
+    ap.add_argument("--soltar-nao-servicos", action="store_true",
+                    help="tira do card do cliente o que não é serviço de ninguém (corrida, tarefa interna)")
     ap.add_argument("--ler-descricoes", action="store_true",
                     help="para o que ficar em dúvida pelo título, busca a descrição no Asana (responsável + contato)")
     a = ap.parse_args()
@@ -44,7 +46,8 @@ def main():
     con = conectar()
     aplicar_schema(con)          # a migração não espera o deploy: a ferramenta se serve
     try:
-        rel = atribuicao.redistribuir(con, aplicar=a.aplicar, ler_descricoes=a.ler_descricoes)
+        rel = atribuicao.redistribuir(con, aplicar=a.aplicar, ler_descricoes=a.ler_descricoes,
+                                      soltar_nao_servicos=a.soltar_nao_servicos)
         print("\n" + ("APLICADO" if a.aplicar else "VARREDURA (nada foi escrito)"))
         print("=" * 72)
         print(atribuicao.resumo(rel))
@@ -79,6 +82,16 @@ def main():
                     sinal = {"confirmado": "=", "parece": "~"}.get(p.get("grau"), "?")
                     print(f"       {sinal} #{p['id']} {p['nome']:<22} resp. {p['responsavel'] or '-':<22} "
                           f"{p['email'] or '-'}  {p['phone'] or '-'}")
+
+        if rel.get("nao_servicos_em_card"):
+            n = rel["nao_servicos_em_card"]
+            print(f"\n--- NÃO É SERVIÇO DE NINGUÉM, mas está num card de cliente ({len(n)}) ---")
+            print("    (corrida, tarefa interna, recado de quadro. Com --soltar-nao-servicos sai do card.)")
+            for x in n[:a.limite]:
+                c = um(con, "SELECT name, pilot_name FROM clients WHERE id=?", (x["client_id"],))
+                print(f"  {x['title'][:58]:<58} em {(c['pilot_name'] or c['name']) if c else '?'}")
+            if rel.get("soltos"):
+                print(f"    -> {rel['soltos']} solto(s) do card.")
 
         if rel["sem_nome"]:
             print(f"\n--- títulos sem gente reconhecível ({len(rel['sem_nome'])}) ---")

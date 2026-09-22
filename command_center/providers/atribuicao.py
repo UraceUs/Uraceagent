@@ -290,7 +290,8 @@ def _criar_card(con, nome):
                    email=None, notes=NOTA_CARD_NOVO, updated_at=agora())
 
 
-def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_descricoes=False):
+def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_descricoes=False,
+                soltar_nao_servicos=False):
     """Varre TODOS os serviços e põe cada um no card de quem é.
 
     `aplicar=False` é a varredura: não escreve nada, só diz o que mudaria. Com
@@ -461,9 +462,19 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
                 continue
         for t in por_nome[nome]:
             _move(t, cliente, motivo)
+    # Corrida e tarefa interna não são serviço de ninguém — e não podem ficar no card de
+    # alguém. O dono, 22/09: "é uma tarefa paralela, não gera card". `Lucas Oil Winter
+    # Series Race | Sebring` estava no card do Alexander Savage como se fosse dele.
+    soltos = [x for x in sem_nome if x["client_id"]]
+    if soltar_nao_servicos and aplicar and soltos:
+        marcas = ",".join("?" * len(soltos))
+        con.execute(f"UPDATE tasks SET client_id=NULL, synced_at=? WHERE id IN ({marcas}) "
+                    "AND COALESCE(client_by,'') <> 'human'",
+                    (agora(), *[x["task_id"] for x in soltos]))
     if aplicar:
         con.commit()
     return {"aplicado": bool(aplicar), "tarefas": len(tarefas), "confirmados": confirmadas,
+            "nao_servicos_em_card": soltos, "soltos": len(soltos) if (soltar_nao_servicos and aplicar) else 0,
             "ja_certos": ja_certos,
             "pelo_contato": pelo_contato, "descricoes_lidas": lidas, "falhas_leitura": falhas_leitura,
             "movidos": movidos, "criados": criados, "unir": unir, "sem_nome": sem_nome}
@@ -497,4 +508,5 @@ def resumo(rel):
             f"{rel.get('pelo_contato', 0)} decididos por contato · "
             f"{rel.get('descricoes_lidas', 0)} descrições lidas ({len(rel.get('falhas_leitura', []))} falharam) · "
             f"{len(rel['criados'])} cards novos · {len(rel['unir'])} para você unir · "
-            f"{len(rel['sem_nome'])} sem nome no título")
+            f"{len(rel['sem_nome'])} sem nome no título "
+            f"({len(rel.get('nao_servicos_em_card', []))} deles num card de cliente)")

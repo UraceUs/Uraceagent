@@ -937,3 +937,29 @@ def test_confirmar_nao_esconde_o_servico_do_relatorio(con):
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=False)
     assert rel["confirmados"] == 1 and "confirmados por você" in atribuicao.resumo(rel)
+
+
+def test_corrida_no_card_de_cliente_e_apontada_e_pode_sair(con):
+    """Dono, 22/09: "é uma tarefa paralela, não gera card". Não gerar card não basta —
+    `Lucas Oil Winter Series Race | Sebring` estava DENTRO do card do Alexander Savage."""
+    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=alex)
+    servico = _tarefa(con, "Savage_RWC RD2", client_id=alex)
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert [x["task_id"] for x in rel["nao_servicos_em_card"]] == [corrida]
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (corrida,))["client_id"] == alex, "só aponta"
+    rel2 = atribuicao.redistribuir(con, aplicar=True, soltar_nao_servicos=True)
+    assert rel2["soltos"] == 1
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (corrida,))["client_id"] is None
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (servico,))["client_id"] == alex
+
+
+def test_soltar_nao_tira_o_que_o_dono_carimbou(con):
+    """Se ele carimbou, ele decidiu. Nem a limpeza passa por cima."""
+    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    t = _tarefa(con, "Endurance Race - OKC", client_id=alex)
+    con.execute("UPDATE tasks SET client_by='human' WHERE id=?", (t,))
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True, soltar_nao_servicos=True)
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == alex
