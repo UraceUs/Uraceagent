@@ -291,7 +291,7 @@ def _criar_card(con, nome):
 
 
 def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_descricoes=False,
-                soltar_nao_servicos=False):
+                soltar_nao_servicos=False, soltar_ids=None):
     """Varre TODOS os serviços e põe cada um no card de quem é.
 
     `aplicar=False` é a varredura: não escreve nada, só diz o que mudaria. Com
@@ -473,15 +473,37 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
     # alguém. O dono, 22/09: "é uma tarefa paralela, não gera card". `Lucas Oil Winter
     # Series Race | Sebring` estava no card do Alexander Savage como se fosse dele.
     soltos = [x for x in sem_nome if x["client_id"]]
-    if soltar_nao_servicos and aplicar and soltos:
-        marcas = ",".join("?" * len(soltos))
+    # `soltar_ids` é a versão cirúrgica: a extensão da VPS pediu, em 22/09, um jeito de
+    # soltar SÓ a corrida sem levar junto "Inventário Hank Lai_ caixa", que pode ser
+    # trabalho para o cliente. Id que não está nesta lista é recusado: isto não é uma
+    # porta para desligar serviço de gente do card certo.
+    pedidos = set(soltar_ids or ())
+    fora_da_lista = pedidos - {x["task_id"] for x in soltos}
+    if fora_da_lista:
+        # Duas razões diferentes para recusar, e quem lê precisa saber qual é: a tarefa
+        # tem o carimbo do dono (e aí a palavra final já foi dada) ou ela simplesmente
+        # não é uma das "não é serviço de ninguém".
+        marcas = ",".join("?" * len(fora_da_lista))
+        carimbadas = {x["id"] for x in todos(
+            con, f"SELECT id FROM tasks WHERE id IN ({marcas}) AND client_by='human'",
+            tuple(sorted(fora_da_lista)))}
+        partes = []
+        if carimbadas:
+            partes.append(f"você já confirmou à mão, não se mexe: {sorted(carimbadas)}")
+        resto = fora_da_lista - carimbadas
+        if resto:
+            partes.append(f"não estão na lista de 'não é serviço de ninguém': {sorted(resto)}")
+        raise ValueError("estas tarefas não podem ser soltas — " + "; ".join(partes))
+    alvos = [x for x in soltos if x["task_id"] in pedidos] if pedidos else (soltos if soltar_nao_servicos else [])
+    if aplicar and alvos:
+        marcas = ",".join("?" * len(alvos))
         con.execute(f"UPDATE tasks SET client_id=NULL, synced_at=? WHERE id IN ({marcas}) "
                     "AND COALESCE(client_by,'') <> 'human'",
-                    (agora(), *[x["task_id"] for x in soltos]))
+                    (agora(), *[x["task_id"] for x in alvos]))
     if aplicar:
         con.commit()
     return {"aplicado": bool(aplicar), "tarefas": len(tarefas), "confirmados": confirmadas,
-            "nao_servicos_em_card": soltos, "soltos": len(soltos) if (soltar_nao_servicos and aplicar) else 0,
+            "nao_servicos_em_card": soltos, "soltos": len(alvos) if aplicar else 0,
             "ja_certos": ja_certos,
             "pelo_contato": pelo_contato, "descricoes_lidas": lidas, "falhas_leitura": falhas_leitura,
             "movidos": movidos, "criados": criados, "unir": unir, "sem_nome": sem_nome}

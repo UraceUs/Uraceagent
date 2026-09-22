@@ -965,6 +965,63 @@ def test_soltar_nao_tira_o_que_o_dono_carimbou(con):
     assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == alex
 
 
+def test_soltar_um_id_nao_leva_junto_o_que_pode_ser_do_cliente(con):
+    """A extensão da VPS recusou a T-006 e estava certa: `--soltar-nao-servicos` era
+    tudo-ou-nada. No card do Hank Lai havia duas linhas sem nome de pessoa no título —
+    uma corrida (`Lucas Oil...`), que não é serviço de ninguém, e
+    `Inventário Hank Lai_ caixa`, que PODE ser trabalho feito para ele. Soltar as duas
+    para resolver uma era perder a segunda. Agora se solta só a que o dono mandou."""
+    hank = _cliente(con, "Hank Lai", email="hl@x.com")
+    corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=hank)
+    inventario = _tarefa(con, "Inventário Hank Lai_ caixa", client_id=hank)
+    con.commit()
+    apontados = atribuicao.redistribuir(con, aplicar=False)["nao_servicos_em_card"]
+    assert {x["task_id"] for x in apontados} == {corrida, inventario}, "as duas são apontadas"
+
+    rel = atribuicao.redistribuir(con, aplicar=True, soltar_ids=[corrida])
+    assert rel["soltos"] == 1
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (corrida,))["client_id"] is None
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (inventario,))["client_id"] == hank
+
+
+def test_soltar_recusa_id_que_nao_esta_na_lista_e_nao_escreve_nada(con):
+    """`--soltar` não é uma porta para tirar serviço de gente do card certo. Só aceita
+    id que a própria varredura já classificou como "não é serviço de ninguém"."""
+    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=alex)
+    servico = _tarefa(con, "Savage_RWC RD2", client_id=alex)
+    con.commit()
+    with pytest.raises(ValueError) as erro:
+        atribuicao.redistribuir(con, aplicar=True, soltar_ids=[servico])
+    assert "não é serviço de ninguém" in str(erro.value) and str(servico) in str(erro.value)
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (servico,))["client_id"] == alex
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (corrida,))["client_id"] == alex, \
+        "recusou o pedido inteiro: nem a corrida saiu"
+
+
+def test_soltar_um_id_tambem_respeita_o_carimbo_do_dono(con):
+    """O carimbo é a palavra final em qualquer caminho, inclusive no cirúrgico — e a
+    recusa diz QUAL das duas razões é, senão quem lê acha que errou o id."""
+    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    t = _tarefa(con, "Endurance Race - OKC", client_id=alex)
+    con.execute("UPDATE tasks SET client_by='human' WHERE id=?", (t,))
+    con.commit()
+    with pytest.raises(ValueError) as erro:
+        atribuicao.redistribuir(con, aplicar=True, soltar_ids=[t])
+    assert "confirmou à mão" in str(erro.value) and str(t) in str(erro.value)
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == alex
+
+
+def test_varredura_sem_aplicar_nunca_solta_nada(con):
+    """Pedir `--soltar` sem `--aplicar` é ver o que aconteceria, não fazer acontecer."""
+    hank = _cliente(con, "Hank Lai", email="hl@x.com")
+    corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=hank)
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=False, soltar_ids=[corrida])
+    assert rel["soltos"] == 0
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (corrida,))["client_id"] == hank
+
+
 def test_uniao_do_dono_vence_ate_nome_truncado_e_homonimo(con):
     """O pior defeito do dia, pego pela extensão da VPS no plano — antes de aplicar.
 

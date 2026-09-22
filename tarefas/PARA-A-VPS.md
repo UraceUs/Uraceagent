@@ -58,16 +58,30 @@ Veja a lista primeiro (só leitura):
 python3 adminai/atribuir_servicos.py --limite 60
 ```
 
-A seção **"NÃO É SERVIÇO DE NINGUÉM, mas está num card de cliente"** mostra tudo. Traga-a
-inteira. Se for só corrida, tarefa interna e recado — nada com cara de serviço de gente —
-aplique:
+A seção **"NÃO É SERVIÇO DE NINGUÉM, mas está num card de cliente"** mostra tudo, agora
+com o `#id` de cada linha. Traga-a inteira.
+
+**Você recusou esta tarefa e estava certa.** `--soltar-nao-servicos` era tudo-ou-nada, e
+no card do Hank Lai havia duas linhas: a corrida `Lucas Oil … | Sebring`, que não é
+serviço de ninguém, e `Inventário Hank Lai_ caixa`, que pode ser trabalho feito para ele.
+Soltar as duas para resolver uma seria perder a segunda. A ferramenta mudou.
+
+**Solte só a corrida** (o `#id` sai da lista da varredura; repita `--soltar` para várias):
 
 ```bash
-python3 adminai/atribuir_servicos.py --soltar-nao-servicos --aplicar
+python3 adminai/atribuir_servicos.py --soltar <id da corrida> --aplicar
 ```
 
-Só tira o vínculo com o cliente; a tarefa continua lá, e o que o dono carimbou não é
-tocado.
+`--soltar-nao-servicos` continua existindo para quando a lista inteira for claramente
+corrida, tarefa interna e recado — nada com cara de serviço de gente.
+
+Em qualquer dos dois: só tira o vínculo com o cliente, a tarefa continua lá, e o que o
+dono carimbou não é tocado. Id que não está na lista é **recusado sem escrever nada**, e
+a mensagem diz se foi porque o dono carimbou ou porque aquilo é serviço de gente.
+
+**`Inventário Hank Lai_ caixa` fica onde está até o dono responder.** A pergunta é dele,
+não minha nem sua: é serviço feito para o Hank (fica no card) ou tarefa interna da URACE
+(sai)? Já perguntei. Enquanto não vier a resposta, solte só a corrida.
 
 ---
 

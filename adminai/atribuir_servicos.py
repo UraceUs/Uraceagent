@@ -38,7 +38,9 @@ def main():
     ap.add_argument("--aplicar", action="store_true", help="move de verdade (sem isto é só varredura)")
     ap.add_argument("--limite", type=int, default=40, help="quantas linhas mostrar por lista")
     ap.add_argument("--soltar-nao-servicos", action="store_true",
-                    help="tira do card do cliente o que não é serviço de ninguém (corrida, tarefa interna)")
+                    help="tira do card do cliente TUDO que não é serviço de ninguém (corrida, tarefa interna)")
+    ap.add_argument("--soltar", action="append", type=int, default=[], metavar="ID",
+                    help="tira do card SÓ estas tarefas (repita para várias). Id fora da lista é recusado")
     ap.add_argument("--ler-descricoes", action="store_true",
                     help="para o que ficar em dúvida pelo título, busca a descrição no Asana (responsável + contato)")
     a = ap.parse_args()
@@ -46,8 +48,16 @@ def main():
     con = conectar()
     aplicar_schema(con)          # a migração não espera o deploy: a ferramenta se serve
     try:
-        rel = atribuicao.redistribuir(con, aplicar=a.aplicar, ler_descricoes=a.ler_descricoes,
-                                      soltar_nao_servicos=a.soltar_nao_servicos)
+        try:
+            rel = atribuicao.redistribuir(con, aplicar=a.aplicar, ler_descricoes=a.ler_descricoes,
+                                          soltar_nao_servicos=a.soltar_nao_servicos,
+                                          soltar_ids=a.soltar)
+        except ValueError as e:
+            # Pedido de --soltar recusado. Erro de quem chamou, não defeito: uma linha
+            # explicando, sem despejar traceback em cima de quem está no terminal.
+            print(f"\nRECUSADO (nada foi escrito): {e}")
+            print("Rode sem --soltar para ver a lista com os #id que podem sair.")
+            return 2
         print("\n" + ("APLICADO" if a.aplicar else "VARREDURA (nada foi escrito)"))
         print("=" * 72)
         print(atribuicao.resumo(rel))
@@ -89,7 +99,8 @@ def main():
             print("    (corrida, tarefa interna, recado de quadro. Com --soltar-nao-servicos sai do card.)")
             for x in n[:a.limite]:
                 c = um(con, "SELECT name, pilot_name FROM clients WHERE id=?", (x["client_id"],))
-                print(f"  {x['title'][:58]:<58} em {(c['pilot_name'] or c['name']) if c else '?'}")
+                print(f"  #{x['task_id']:<6} {x['title'][:52]:<52} em {(c['pilot_name'] or c['name']) if c else '?'}")
+            print("    (--soltar ID tira só uma; --soltar-nao-servicos tira todas)")
             if rel.get("soltos"):
                 print(f"    -> {rel['soltos']} solto(s) do card.")
 
@@ -117,4 +128,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)      # pedido recusado sai com código != 0, para script perceber
