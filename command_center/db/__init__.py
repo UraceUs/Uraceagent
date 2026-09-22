@@ -145,7 +145,11 @@ MIGRACOES = [
     ("tasks", "resp_name", "TEXT"),
     ("tasks", "resp_email", "TEXT"),
     ("tasks", "resp_phone", "TEXT"),
-    ("tasks", "desc_read_at", "TEXT"),   # quando a descrição foi lida — mesmo que não tivesse contato nenhum
+    ("tasks", "desc_read_at", "TEXT"),
+    # 22/09 — o dono CONFIRMOU de quem é o serviço. A varredura nunca mexe nisso de novo:
+    # "está certo hoje" não basta, porque um homônimo novo no cadastro faria o serviço sair.
+    ("tasks", "client_by", "TEXT"),        # sync | human
+    ("tasks", "client_at", "TEXT"),   # quando a descrição foi lida — mesmo que não tivesse contato nenhum
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

@@ -203,11 +203,13 @@ A extensão rodou a rodada completa e reportou honestamente, inclusive a própri
       4× com 403 (`Permission to UraceUs/Uraceagent.git denied to UraceUs`). Enquanto não
       houver permissão de escrita, nada que a extensão escrever chega ao Claude por esse
       caminho. O relatório `0ecc3cf` está commitado só na máquina.
-- [ ] 👤 **Savage:** 18 serviços "Savage" e 2 "Savege" estão no #15, que foi alcançado pelo
-      sobrenome do **Kenneth** Savage. Confirmar que são do Alexander.
-- [ ] 👤 **Alex:** 1 serviço está no #238 Alex Donnell e 4 no #558 Alex. Confirmar o solitário.
-- [ ] 👤 Unir (ou não): Martin/Martin Jaramillo · Mikey/Mikey Collins · Sanghera/Levi
-      Sanghera · Luciano/Luciano Delgado · Mauricio/Mauricio Pardomo
+- [x] 👤 **Savage: sim**, os 18 "Savage" e 2 "Savege" do #15 são do Alexander.
+- [x] 👤 **Alex: sim**, o solitário do #238 é do Alex Donnell.
+- [x] 👤 **Unir: sim**, os cinco pares.
+- [x] 🤖 As duas confirmações viraram **carimbo** (`tasks.client_by='human'`): a varredura
+      nunca mais mexe neles. "Está certo hoje" não durava — bastava um homônimo novo no
+      cadastro para o nome virar ambíguo e o serviço sair de lá.
+- [ ] 👤 Rodar o bloco que carimba (#15 e #238) e une os cinco pares
 
 ## Para logo depois da organização dos cards (dono, 22/09)
 

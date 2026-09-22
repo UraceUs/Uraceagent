@@ -299,7 +299,14 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
     Processa os nomes do mais completo para o mais curto de propósito: assim
     "Charlie Marron" ganha (ou acha) o card antes de "Charlie M" ser procurado, e
     a forma curta cai no card certo em vez de abrir um segundo."""
-    tarefas = todos(con, "SELECT * FROM tasks WHERE project=? OR ? IS NULL", (projeto, projeto))
+    # Serviço cuja atribuição o DONO confirmou não é mexido por varredura nenhuma.
+    # Ele confirmou em 22/09 que os 18 "Savage" e 2 "Savege" do #15 são do Alexander
+    # (o card foi alcançado pelo sobrenome do Kenneth) e que o "Alex" do #238 é do
+    # Alex Donnell. Sem carimbo, um homônimo novo no cadastro tiraria os dois de lá.
+    tarefas = todos(con, "SELECT * FROM tasks WHERE (project=? OR ? IS NULL) "
+                         "AND COALESCE(client_by,'') <> 'human'", (projeto, projeto))
+    confirmadas = todos(con, "SELECT COUNT(*) AS n FROM tasks WHERE (project=? OR ? IS NULL) "
+                             "AND client_by='human'", (projeto, projeto))[0]["n"]
     movidos, ja_certos, criados, unir, pelo_contato, lidas = [], 0, [], [], 0, 0
     falhas_leitura = []                                     # (task_id, título, erro): NUNCA em silêncio
 
@@ -456,7 +463,8 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
             _move(t, cliente, motivo)
     if aplicar:
         con.commit()
-    return {"aplicado": bool(aplicar), "tarefas": len(tarefas), "ja_certos": ja_certos,
+    return {"aplicado": bool(aplicar), "tarefas": len(tarefas), "confirmados": confirmadas,
+            "ja_certos": ja_certos,
             "pelo_contato": pelo_contato, "descricoes_lidas": lidas, "falhas_leitura": falhas_leitura,
             "movidos": movidos, "criados": criados, "unir": unir, "sem_nome": sem_nome}
 
@@ -485,6 +493,7 @@ def _ler_descricao(con, tarefa):
 def resumo(rel):
     """Uma linha por bucket, para log e para a tela."""
     return (f"RESUMO: {rel['tarefas']} serviços · {len(rel['movidos'])} movidos · {rel['ja_certos']} já certos · "
+            f"{rel.get('confirmados', 0)} confirmados por você (intocáveis) · "
             f"{rel.get('pelo_contato', 0)} decididos por contato · "
             f"{rel.get('descricoes_lidas', 0)} descrições lidas ({len(rel.get('falhas_leitura', []))} falharam) · "
             f"{len(rel['criados'])} cards novos · {len(rel['unir'])} para você unir · "

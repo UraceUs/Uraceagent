@@ -27,6 +27,9 @@ escrevendo um relatório no repositório — o dono não é o carteiro entre voc
    - `python3 adminai/sincronizar.py docusign` · `asana` · `gmail` · `qbo` · `kommo`
    - `asana-full` e `tudo` são demorados: rode com `nohup`, redirecionando para arquivo
 
+6. `python3 adminai/confirmar_servicos.py <ids>` — **só em modo plano**, para mostrar ao
+   dono o que seria carimbado. O `--aplicar` é dele.
+
 ## O que você NÃO faz, nunca, sem o dono
 
 - `adminai/unir_cards.py` com `--aplicar` (unir cards é decisão humana)

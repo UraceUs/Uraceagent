@@ -895,3 +895,45 @@ def test_servico_fica_no_card_que_tem_exatamente_aquele_nome(con):
     rel = atribuicao.redistribuir(con, aplicar=True)
     assert rel["movidos"] == []
     assert len(todos(con, "SELECT id FROM clients WHERE name='Isabel'")) == 1
+
+
+# ============ o dono confirmou: a varredura não mexe mais ============
+def test_servico_confirmado_pelo_dono_nao_e_movido_nunca(con):
+    """Dono, 22/09: os 18 "Savage" e 2 "Savege" do #15 são do Alexander — mesmo o card
+    tendo sido alcançado pelo sobrenome do KENNETH Savage.
+
+    "Está certo hoje" não dura: basta um homônimo novo entrar no cadastro para o nome
+    virar ambíguo e a varredura tirar o serviço de lá. O carimbo é o que faz a decisão
+    dele valer mais que qualquer regra automática."""
+    c15 = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    t1 = _tarefa(con, "Savage_RWC RD2", client_id=c15)
+    t2 = _tarefa(con, "Savege_RWC RD2", client_id=c15)
+    con.execute("UPDATE tasks SET client_by='human', client_at=? WHERE id IN (?,?)",
+                ("2026-09-22T18:00:00Z", t1, t2))
+    con.commit()
+    # chega outro Savage: sem carimbo, "Savage" viraria ambíguo e o serviço sairia
+    _cliente(con, "Bruno Savage", piloto="Tito Savage", email="bs@x.com")
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert rel["movidos"] == [] and rel["confirmados"] == 2
+    assert um(con, "SELECT COUNT(*) n FROM tasks WHERE client_id=?", (c15,))["n"] == 2
+
+
+def test_sem_carimbo_o_homonimo_novo_tira_o_servico_de_la(con):
+    """O contraste que justifica o carimbo: exatamente o mesmo cenário, sem confirmar."""
+    c15 = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    _tarefa(con, "Savage_RWC RD2", client_id=c15)
+    _cliente(con, "Bruno Savage", piloto="Tito Savage", email="bs@x.com")
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Savage%'")["client_id"] != c15
+
+
+def test_confirmar_nao_esconde_o_servico_do_relatorio(con):
+    """Confirmado não é invisível: o RESUMO diz quantos são intocáveis."""
+    c = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    t = _tarefa(con, "Savage_RWC", client_id=c)
+    con.execute("UPDATE tasks SET client_by='human' WHERE id=?", (t,))
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=False)
+    assert rel["confirmados"] == 1 and "confirmados por você" in atribuicao.resumo(rel)
