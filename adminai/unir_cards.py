@@ -40,12 +40,22 @@ def _card(con, membro):
         if not c:
             sys.exit(f"card #{m} não existe")
     else:
+        # Procura no RESPONSÁVEL e no PILOTO. O card do Luciano está como "Alonso
+        # Delgado" (o pai) com "Luciano Delgado" no piloto — procurar só pelo nome do
+        # responsável não achava, e o script parava antes de planejar as outras uniões.
+        # A extensão da VPS pegou isso em 22/09.
         achados = todos(con, "SELECT * FROM clients WHERE lower(name)=lower(?)", (m,))
+        onde = "responsável"
         if not achados:
-            sys.exit(f"nenhum card chamado exatamente {m!r}")
+            achados = todos(con, "SELECT * FROM clients WHERE lower(pilot_name)=lower(?)", (m,))
+            onde = "piloto"
+        if not achados:
+            sys.exit(f"nenhum card com {m!r} no nome do responsável nem do piloto")
         if len(achados) > 1:
-            sys.exit(f"{len(achados)} cards chamados {m!r}: {[x['id'] for x in achados]} — use o id")
+            sys.exit(f"{len(achados)} cards com {m!r} no {onde}: {[x['id'] for x in achados]} — use o id")
         c = achados[0]
+        if onde == "piloto":
+            print(f"  (achei {m!r} como PILOTO do card #{c['id']} {c['name']!r})")
     n = {t: um(con, f"SELECT COUNT(*) AS n FROM {t} WHERE client_id=?", (c["id"],))["n"] for t in LIGADOS}
     return c, n
 
@@ -86,9 +96,17 @@ def main():
         print("=" * 72)
         # resolve TODOS os grupos antes de escrever qualquer um: um nome errado no
         # segundo grupo não pode deixar o primeiro unido pela metade
-        grupos = []
+        grupos, quebrados = [], []
         for membros, nome in planos:
-            cards = [_card(con, m) for m in membros]
+            try:
+                cards = [_card(con, m) for m in membros]
+            except SystemExit as e:
+                # No PLANO, um grupo que não resolve não pode esconder os outros: a
+                # extensão ficou sem ver 4 uniões porque a do Luciano parou o script.
+                if a.aplicar:
+                    raise
+                quebrados.append((membros, nome, str(e)))
+                continue
             ids = [c["id"] for c, _ in cards]
             if len(set(ids)) != len(ids):
                 sys.exit(f"membro repetido em {membros}")
@@ -146,6 +164,11 @@ def main():
                         detail={"name": {"de": c["name"], "para": nome.strip()}, "reason": "dono, 22/09"})
                 con.commit()
                 print("  feito.")
+        for membros, nome, erro in quebrados:
+            print(f"\n{' + '.join(membros)}  ->  {nome}")
+            print(f"  !! NÃO DÁ PARA PLANEJAR: {erro}")
+        if quebrados and not a.aplicar:
+            print(f"\n{len(quebrados)} grupo(s) não resolveram. Os outros acima estão planejados.")
         if not a.unir and not a.piloto and not a.responsavel:
             sys.exit("nada a fazer: passe --unir, --piloto e/ou --responsavel")
         if not a.aplicar:
