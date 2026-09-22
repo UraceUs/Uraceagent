@@ -32,8 +32,8 @@ from command_center.providers import identidade
 #
 # O mesmo vale para nome de uma palavra só sem card: "G.J" tem 19 serviços e não
 # tem nome completo — "pode colocar como G.J" (dono).
-NOTA_CARD_NOVO = ("Card aberto pela varredura de 22/09 com o nome como aparece no título "
-                  "do Asana. Se for a mesma pessoa de outro card, una pelo painel.")
+NOTA_CARD_NOVO = identidade.NOTA_CARD_NOVO
+e_balde = identidade.e_balde
 
 
 def _vivos(con):
@@ -48,14 +48,6 @@ def _descricao_lida(t):
     if "desc_read_at" in keys and t["desc_read_at"]:
         return True
     return any(t[k] for k in ("resp_name", "resp_email", "resp_phone") if k in keys)
-
-
-def e_balde(c):
-    """Card sem contato e sem piloto, com nome de uma palavra só ou aberto pela varredura:
-    é o "na dúvida, card próprio". Serviço nele não está confirmado — está esperando."""
-    if c["email"] or c["phone"] or c["pilot_name"]:
-        return False
-    return len((c["name"] or "").split()) == 1 or (c["notes"] or "").startswith("Card aberto pela varredura")
 
 
 def por_contato(con, tarefa, clientes=None):
@@ -121,28 +113,31 @@ def candidatos_para(con, nome, clientes=None):
     chave = identidade.chave_exata(alvo)
     partes = _partes(alvo)
 
-    exatos = [(c, "nome igual") for c in clientes
-              if chave and (identidade.chave_exata(c["name"]) == chave
-                            or identidade.chave_exata(c["pilot_name"]) == chave)]
-    if exatos:
-        return exatos
-
+    # UMA PALAVRA SÓ nunca passa pelo "nome igual": um card cujo piloto é só "Alex" bate
+    # exato e a checagem de ambiguidade nunca roda — o serviço do Alex Xikis ia para o
+    # Alex do Edward. Nome curto vai direto para a camada de partes, que junta TODOS os
+    # candidatos e deixa a dúvida aparecer. Revisão adversarial de 22/09.
     if len(partes) >= 2:
+        exatos = [(c, "nome igual") for c in clientes
+                  if chave and (identidade.chave_exata(c["name"]) == chave
+                                or identidade.chave_exata(c["pilot_name"]) == chave)]
+        if exatos:
+            return exatos
+
         quase = [(c, "nome quase igual") for c in clientes
                  if identidade.mesmo_nome(alvo, c["name"] or "")
                  or (c["pilot_name"] and identidade.mesmo_nome(alvo, c["pilot_name"]))]
         if quase:
             return quase
 
-    # "Alex Savage" → Alexander Savage: sobrenome igual e primeiro nome encurtado.
-    # `mesmo_nome` não serve aqui de propósito — ela decide UNIÃO de cards, e alargá-la
-    # faria o painel unir gente no escuro. Aqui só se escolhe para onde vai o serviço.
-    if len(partes) >= 2:
+        # "Alex Savage" → Alexander Savage: sobrenome igual e primeiro nome ENCURTADO,
+        # e só para apelido conhecido. Prefixo solto casava Gabriel×Gabriela e
+        # Maria×Mariana — irmãos, o caso mais comum numa escola de kart.
         apelidos = []
         for c in clientes:
             for campo in ("pilot_name", "name"):
                 p = _partes(c[campo])
-                if len(p) >= 2 and p[-1] == partes[-1] and _um_encurta_o_outro(partes[0], p[0]):
+                if len(p) >= 2 and p[-1] == partes[-1] and _e_apelido_de(partes[0], p[0]):
                     apelidos.append((c, f"apelido de {c[campo]}"))
                     break
         if apelidos:
@@ -161,31 +156,71 @@ def candidatos_para(con, nome, clientes=None):
         if por_inicial:
             return por_inicial
 
-    # uma palavra só: bate com o primeiro OU o último nome de alguém ("Savage" →
-    # Alexander Savage, "Branson" → Branson Silva, "Brason" → Branson por 1 letra)
     if len(partes) == 1:
         p0 = partes[0]
-        iguais, quase = [], []
+        # O card com exatamente este nome (o balde) entra junto: se houver outro
+        # candidato, a coisa é ambígua e o serviço fica no balde — que é onde já está.
+        iguais = []
         for c in clientes:
-            for campo in ("pilot_name", "name"):
+            for campo in ("name", "pilot_name"):
                 p = _partes(c[campo])
                 if not p:
                     continue
                 if p0 in (p[0], p[-1]):
                     iguais.append((c, f"{'primeiro' if p0 == p[0] else 'último'} nome de {c[campo]}"))
                     break
-                perto = next((x for x in (p[0], p[-1])
-                              if len(p0) >= 5 and identidade._lev(p0, x) <= 1), None)
-                if perto:
-                    quase.append((c, f"quase o {'primeiro' if perto == p[0] else 'último'} "
-                                     f"nome de {c[campo]} (1 letra)"))
-                    break
-        # igual ganha de parecido: "Martin" é o Martin Jaramillo, não o Bruno Martins
+        # Sem Levenshtein aqui: "Daniel" pegava "Daniela", "Bruno" pegava "Bruna",
+        # "Martin" pegava "Bruno Martins". Uma letra não separa duas pessoas.
         if iguais:
             return iguais
-        if quase:
-            return quase
     return []
+
+
+# Apelidos que o dono usa no quadro. Prefixo solto não vale: Gabriel≠Gabriela.
+_APELIDOS = {
+    "alex": {"alexander", "alexandre", "alexis"}, "mike": {"michael"}, "mikey": {"michael", "mike"},
+    "dan": {"daniel"}, "danny": {"daniel"}, "chris": {"christopher", "christian"},
+    "matt": {"matthew"}, "nick": {"nicholas", "nicolas"}, "tony": {"anthony"},
+    "will": {"william"}, "bill": {"william"}, "rob": {"robert"}, "bob": {"robert"},
+    "tom": {"thomas"}, "ben": {"benjamin"}, "sam": {"samuel"}, "joe": {"joseph"},
+    "jim": {"james"}, "andy": {"andrew"}, "charlie": {"charles"}, "liam": {"william"},
+    "zé": {"jose"}, "ze": {"jose"}, "bia": {"beatriz"}, "gui": {"guilherme"},
+    "rafa": {"rafael", "rafaela"}, "cacá": {"carlos"}, "duda": {"eduarda", "eduardo"},
+}
+
+
+def _e_apelido_de(curto, longo):
+    """'alex' é apelido de 'alexander'? Só pela tabela, nos dois sentidos."""
+    if curto == longo:
+        return True
+    return longo in _APELIDOS.get(curto, ()) or curto in _APELIDOS.get(longo, ())
+
+
+def sugestoes_para(con, nome, clientes=None):
+    """Cards que PODEM ser esta pessoa — para a lista "para você unir", nunca para
+    atribuir. Aqui pode ser frouxo (1 letra, prefixo, sobrenome) porque quem decide é o
+    dono; `candidatos_para` é que ficou estrito depois da revisão de 22/09."""
+    clientes = clientes if clientes is not None else _vivos(con)
+    partes = _partes(nome)
+    if not partes:
+        return []
+    achados, vistos = [], set()
+    for c in clientes:
+        if c["id"] in vistos or e_balde(c):
+            continue
+        for campo in ("pilot_name", "name"):
+            p = _partes(c[campo])
+            if not p:
+                continue
+            perto = (partes[0] in (p[0], p[-1]) or partes[-1] in (p[0], p[-1])
+                     or (len(partes[-1]) >= 5 and min(identidade._lev(partes[-1], x) for x in (p[0], p[-1])) <= 1)
+                     or (len(partes[0]) >= 5 and min(identidade._lev(partes[0], x) for x in (p[0], p[-1])) <= 1)
+                     or (len(partes) >= 2 and len(p) >= 2 and p[-1] == partes[-1]
+                         and _um_encurta_o_outro(partes[0], p[0])))
+            if perto:
+                achados.append((c, f"parecido com {c[campo]}")); vistos.add(c["id"])
+                break
+    return achados
 
 
 def grau_de_igualdade(a, b):
@@ -229,6 +264,23 @@ def resolver(con, nome, clientes=None):
         return None, "sem card"
     quem = ", ".join(f"#{c['id']} {c['pilot_name'] or c['name']}" for c, _ in cands[:4])
     return None, f"ambíguo entre {quem}"
+
+
+def _decidido_pelo_dono(con, nome, clientes):
+    """O dono já uniu um card com este nome a outro? Então é ali que o serviço vai.
+
+    `client_merges` guarda toda união feita à mão. Sem consultar isto, a varredura
+    seguinte via "Mike" como ambíguo, abria um balde novo e tirava o serviço do card
+    que ele tinha escolhido — desfazendo a decisão dele a cada rodada. Revisão
+    adversarial de 22/09."""
+    linhas = todos(con, "SELECT keep_id, merged_by FROM client_merges WHERE LOWER(drop_name)=LOWER(?) "
+                        "ORDER BY id DESC", (nome,))
+    por_mao = [l for l in linhas if (l["merged_by"] or "").startswith(("user:", "owner:"))]
+    for l in (por_mao or linhas):
+        alvo = next((c for c in clientes if c["id"] == l["keep_id"]), None)
+        if alvo is not None:
+            return alvo, f"você uniu '{nome}' a este card"
+    return None
 
 
 def _criar_card(con, nome):
@@ -283,17 +335,32 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
 
     # 2ª passada — o título, agrupado por nome
     por_nome, sem_nome = {}, []
+    truncados = set()
     for t in restantes:
-        pessoa = identidade.pessoa_do_titulo(t["title"])
+        d = identidade.pessoa_do_titulo_detalhe(t["title"])
+        pessoa = d["nome"]
         if not pessoa:
             sem_nome.append({"task_id": t["id"], "title": t["title"], "client_id": t["client_id"]})
             continue
+        # Nome que sobrou de um CORTE e ficou com uma palavra só é pista fraca: o
+        # sobrenome pode ter caído no vocabulário de serviço. Não serve para achar card
+        # pelo primeiro nome — vai direto para card próprio.
+        if d["truncado"] and len(pessoa.split()) == 1:
+            truncados.add(pessoa)
         por_nome.setdefault(pessoa, []).append(t)
 
     ordem = sorted(por_nome, key=lambda n: (-len(n.split()), -len(n), n.lower()))
     for nome in ordem:
         clientes = _vivos(con)                                  # relê: pode ter nascido card na volta anterior
-        cliente, motivo = resolver(con, nome, clientes)
+        if nome in truncados:
+            cliente, motivo = None, "nome cortado, de uma palavra só"
+        else:
+            cliente, motivo = resolver(con, nome, clientes)
+            if cliente is None:
+                # O dono já decidiu isto à mão? Se ele uniu um balde com este nome a um
+                # card, a decisão dele manda — sem isto, a varredura seguinte recriava o
+                # balde e tirava o serviço do card que ele escolheu.
+                cliente, motivo = _decidido_pelo_dono(con, nome, clientes) or (None, motivo)
         if cliente is None and ler_descricoes:
             # Em dúvida pelo título, a descrição pode resolver — e a partir daqui fica
             # guardada na tarefa, então a próxima varredura não pergunta ao Asana de novo.
@@ -314,9 +381,14 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
         if cliente is None:
             # Sem card, ou mais de um candidato. A regra do dono não abre exceção:
             # na dúvida o serviço NÃO encosta no card de ninguém — abre o seu.
-            parecidos = [c for c, _ in candidatos_para(con, nome, clientes)]
-            criados.append({"nome": nome, "servicos": len(por_nome[nome]), "porque": motivo,
-                            "titulos": [t["title"] for t in por_nome[nome][:3]]})
+            # O balde que já existe é reaproveitado: sem isso, cada varredura criava
+            # mais um "Alex" e o serviço mudava de balde para sempre.
+            balde = next((c for c in clientes
+                          if identidade.chave_exata(c["name"]) == identidade.chave_exata(nome) and e_balde(c)), None)
+            parecidos = [c for c, _ in sugestoes_para(con, nome, clientes)]
+            if balde is None:
+                criados.append({"nome": nome, "servicos": len(por_nome[nome]), "porque": motivo,
+                                "titulos": [t["title"] for t in por_nome[nome][:3]]})
             if parecidos:
                 unir.append({"nome": nome, "servicos": len(por_nome[nome]), "parecidos": [
                     {"id": c["id"], "nome": c["pilot_name"] or c["name"], "responsavel": c["name"],
@@ -326,7 +398,9 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
                     for c in parecidos[:5]]})
             if not criar_cards:
                 continue
-            if aplicar:
+            if balde is not None:
+                cliente, motivo = balde, "balde que já existe (na dúvida, nunca o de outro)"
+            elif aplicar:
                 cid = _criar_card(con, nome)
                 cliente = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
                 motivo = "card próprio (na dúvida, nunca o de outro)"

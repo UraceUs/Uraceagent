@@ -98,6 +98,14 @@ _NAO_E_GENTE = {"trackhouse", "endurance", "florida", "guardar", "closed", "phot
                 "cancelar", "fazer", "colocar", "tirar", "pegar", "devolver", "reminder", "order",
                 "pack", "load", "unload", "clean", "prepare", "buy", "sell", "rent", "return",
                 "caixa", "estoque", "peças", "pecas", "ferramentas",
+                # pistas, marcas e palavras de evento que a revisão adversarial de 22/09 achou
+                "ocala", "vegas", "lancaster", "andersen", "charlotte", "atlanta", "pittsburgh",
+                "daytona", "sebring", "homestead", "monticello", "speedsportz", "musselman",
+                "swift", "cadet", "master", "masters", "shifter", "briggs", "lo206",
+                "iame", "vortex", "tillotson", "otk", "kosmic", "birel", "crg", "parolin",
+                "praga", "mojo", "vega", "lecont", "maxxis",
+                "meeting", "reuniao", "reunião", "final", "heat", "qualifying", "warmup",
+                "briefing", "podium", "trophy", "plate", "round", "rd",
                 # artigo nunca abre nome de gente: "The North Florida Kart Club"
                 "the", "a", "an", "o", "os", "as", "um", "uma", "la", "el", "los"}
 
@@ -224,7 +232,7 @@ def _nome_plausivel(t):
     return True
 
 
-def pessoa_do_titulo(titulo):
+def pessoa_do_titulo(titulo, detalhe=False):
     """Nome da pessoa no título da tarefa, ou None quando não é gente.
 
     O quadro do Asana escreve o cliente ANTES do serviço, em quatro formas — e o dono
@@ -248,20 +256,48 @@ def pessoa_do_titulo(titulo):
     t = re.sub(r"^\s*[\[(][^\])]*[\])]\s*", "", t)      # "[Canceled] Erik Mendoza Jr_…": a tag na frente sai
     t = SERVICO_SUFIXO.sub("", t)
     t = _corta_no_separador(t)
-    t = _corta_na_palavra_de_servico(t)
-    t = _separa_grudado(_tira_categoria(t).strip(" &-"))
+
+    # As checagens que CONDENAM rodam sobre a parte da pessoa INTEIRA, antes do corte por
+    # palavra de serviço. Rodando depois, o corte tirava justamente a palavra que
+    # condenava: "FLKC Round 5&6 | Daytona Speedway" virava "Daytona", "The North Florida
+    # Kart Club" virava "The North Florida". Revisão adversarial de 22/09.
+    # Só as palavras que NUNCA cabem num nome de gente condenam a parte da pessoa INTEIRA,
+    # antes do corte — senão o corte tira justamente a palavra que condenava
+    # ("Daytona Speedway Practice" → "Daytona"). `eh_rotulo_ou_servico` NÃO entra aqui:
+    # ela casa frases de serviço que vêm legitimamente depois do nome ("Giovanni Barrera
+    # 2 Stroke Karting School"). Revisão adversarial de 22/09.
+    if any(re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", x).lower() in _NUNCA_NO_NOME for x in t.split()):
+        return {"nome": None, "truncado": False} if detalhe else None
+
+    cortado = _corta_na_palavra_de_servico(t)
+    truncado = cortado != t
+    t = _separa_grudado(_tira_categoria(cortado).strip(" &-"))
     # a palavra de corrida/serviço que condena é a que está na PARTE DA PESSOA: "Mike
     # Fattuta_Professional Coach Rotax" tem gente antes do separador e serviço depois
     if not t or re.search(r"\d", t) or CORRIDA.search(t):
-        return None
+        return {"nome": None, "truncado": False} if detalhe else None
     if eh_rotulo_ou_servico(t):
-        return None
+        return {"nome": None, "truncado": False} if detalhe else None
     if not _nome_plausivel(t):
-        return None
+        return {"nome": None, "truncado": False} if detalhe else None
+    if truncado and len(t.split()) == 1:
+        # Sobrou UM nome depois de cortar: pode ser sobrenome que caiu no vocabulário de
+        # serviço ("Ana Prado" → "Ana"?). Nome assim não pode ser usado para achar card
+        # pelo primeiro nome — quem usa isto é `pessoa_do_titulo_detalhe`.
+        pass
     # "Erik Mendoza Jr" é o Erik Mendoza (dono, 22/09) — no quadro, Jr marca a criança,
     # não faz parte do nome. "Sr" fica: é como o pai se distingue do filho.
     t = re.sub(r"\s+jr\.?$", "", t, flags=re.I)
-    return " ".join(p if p.isupper() and len(p) > 3 else p for p in t.split()).title() if t.isupper() else t
+    nome = " ".join(p if p.isupper() and len(p) > 3 else p for p in t.split()).title() if t.isupper() else t
+    return {"nome": nome, "truncado": truncado} if detalhe else nome
+
+
+def pessoa_do_titulo_detalhe(titulo):
+    """Como `pessoa_do_titulo`, mas diz se o nome saiu TRUNCADO (cortado numa palavra de
+    serviço). Nome truncado é pista fraca: pode ser um sobrenome que caiu no vocabulário.
+    A atribuição usa isto para não ligar serviço a card pelo primeiro nome."""
+    d = pessoa_do_titulo(titulo, detalhe=True)
+    return d if isinstance(d, dict) else {"nome": None, "truncado": False}
 
 
 def _lev(a, b):
@@ -392,8 +428,13 @@ def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
         for c in todos(con, "SELECT * FROM clients WHERE phone IS NOT NULL AND kind<>?", (SEPARADO,)):
             if so_digitos(c["phone"]) == tel:
                 return c, "telefone"
-    for alvo, campo in ((piloto, "pilot_name"), (nome, "name")):
+    # Responsável ANTES do piloto (dono, 22/09: "é o nome do responsável e o contato que
+    # confirmam"). E piloto de uma palavra só nunca decide sozinho: "Alex" bate no balde
+    # "Alex", no Alex Xikis e no Alex Donnell.
+    for alvo, campo in ((nome, "name"), (piloto, "pilot_name")):
         if not alvo:
+            continue
+        if campo == "pilot_name" and len(normaliza(alvo)) < 2:
             continue
         k = chave_exata(alvo)
         for c in todos(con, "SELECT * FROM clients WHERE kind<>?", (SEPARADO,)):
@@ -413,13 +454,24 @@ LIGACOES_OBRIGATORIAS = ("race_invites", "contracts")
 
 
 def _repontar(con, de_id, para_id):
-    """Passa tudo do cliente `de_id` para `para_id` (união)."""
+    """Passa tudo do cliente `de_id` para `para_id` (união). Devolve o que COLIDIU.
+
+    Convite de corrida e contrato têm UNIQUE(race_id, client_id): quando os dois cards
+    estão na mesma corrida, o do perdedor não cabe. Antes era apagado em silêncio —
+    junto com status e orçamento. Agora volta daqui e é guardado em `client_merges`
+    (revisão adversarial de 22/09)."""
+    orfaos = {}
     for t in LIGACOES_SOLTAVEIS + LIGACOES_OBRIGATORIAS:
         try:
             con.execute(f"UPDATE OR IGNORE {t} SET client_id=? WHERE client_id=?", (para_id, de_id))
-            con.execute(f"DELETE FROM {t} WHERE client_id=?", (de_id,)) if t in LIGACOES_OBRIGATORIAS else None
+            if t in LIGACOES_OBRIGATORIAS:
+                sobrou = todos(con, f"SELECT * FROM {t} WHERE client_id=?", (de_id,))
+                if sobrou:
+                    orfaos[t] = sobrou
+                    con.execute(f"DELETE FROM {t} WHERE client_id=?", (de_id,))
         except Exception:
             pass
+    return orfaos
 
 
 def _soltar(con, cid):
@@ -448,7 +500,7 @@ def unir(con, keep_id, drop_id, por, motivo):
     k = um(con, "SELECT * FROM clients WHERE id=?", (keep_id,)); d = um(con, "SELECT * FROM clients WHERE id=?", (drop_id,))
     if not k or not d:
         return
-    _repontar(con, drop_id, keep_id)
+    orfaos = _repontar(con, drop_id, keep_id)
     con.execute("UPDATE OR IGNORE entity_links SET entity_id=? WHERE entity_type='client' AND entity_id=?", (str(keep_id), str(drop_id)))
     con.execute("DELETE FROM entity_links WHERE entity_type='client' AND entity_id=?", (str(drop_id),))
     # completa o principal com o que só o duplicado tinha
@@ -461,7 +513,10 @@ def unir(con, keep_id, drop_id, por, motivo):
     if campos:
         sets = ", ".join(f"{c}=?" for c in campos)
         con.execute(f"UPDATE clients SET {sets}, updated_at=? WHERE id=?", (*campos.values(), agora(), keep_id))
-    inserir(con, "client_merges", keep_id=keep_id, drop_id=drop_id, drop_name=d["name"], drop_json=json.dumps(d, ensure_ascii=False, default=str),
+    guardado = dict(d)
+    if orfaos:
+        guardado["_colidiram_e_foram_guardados"] = orfaos
+    inserir(con, "client_merges", keep_id=keep_id, drop_id=drop_id, drop_name=d["name"], drop_json=json.dumps(guardado, ensure_ascii=False, default=str),
             merged_by=por, reason=motivo)
     con.execute("DELETE FROM clients WHERE id=?", (drop_id,))
 
@@ -470,13 +525,15 @@ def deduplicar(con, por="sync"):
     """Une o que é certamente a mesma pessoa: mesmo e-mail, mesmo telefone,
     ou nome normalizado idêntico. Devolve quantos uniu."""
     n = 0
-    for chave, sql in (("email", "SELECT LOWER(email) AS k, GROUP_CONCAT(id) AS ids FROM clients WHERE email IS NOT NULL AND email<>'' GROUP BY LOWER(email) HAVING COUNT(*)>1"),):
+    for chave, sql in (("email", "SELECT LOWER(email) AS k, GROUP_CONCAT(id) AS ids FROM clients "
+                                 f"WHERE email IS NOT NULL AND email<>'' AND kind<>'{SEPARADO}' "
+                                 "GROUP BY LOWER(email) HAVING COUNT(*)>1"),):
         for g in todos(con, sql):
             ids = sorted(int(i) for i in g["ids"].split(","))
             for dup in ids[1:]:
                 unir(con, ids[0], dup, por, f"mesmo {chave}: {g['k']}"); n += 1
     vistos = {}
-    for c in todos(con, "SELECT id, phone FROM clients WHERE phone IS NOT NULL ORDER BY id"):
+    for c in todos(con, "SELECT id, phone FROM clients WHERE phone IS NOT NULL AND kind<>? ORDER BY id", (SEPARADO,)):
         t = so_digitos(c["phone"])
         if not t:
             continue
@@ -484,10 +541,19 @@ def deduplicar(con, por="sync"):
             unir(con, vistos[t], c["id"], por, f"mesmo telefone: {t}"); n += 1
         else:
             vistos[t] = c["id"]
+    # Nome igual só une quando é NOME INTEIRO (2+ palavras). Primeiro nome sozinho não
+    # identifica ninguém — "Alex" é o Alex Xikis, o Alex Donnell e o balde "Alex" ao
+    # mesmo tempo. E balde nunca é unido automaticamente: ele existe justamente porque
+    # não se sabe de quem é (dono, 22/09). Revisão adversarial de 22/09.
     vistos = {}
-    for c in todos(con, "SELECT id, name, pilot_name FROM clients ORDER BY id"):
+    for c in todos(con, "SELECT * FROM clients WHERE kind<>? ORDER BY id", (SEPARADO,)):
+        if e_balde(c):
+            continue
         for k in {chave_exata(c["name"]), chave_exata(c["pilot_name"])} - {""}:
-            if k in vistos and vistos[k] != c["id"] and um(con, "SELECT id FROM clients WHERE id=?", (vistos[k],)) and um(con, "SELECT id FROM clients WHERE id=?", (c["id"],)):
+            if len(k.split()) < 2:
+                continue
+            alvo = um(con, "SELECT * FROM clients WHERE id=?", (vistos[k],)) if k in vistos else None
+            if alvo and vistos[k] != c["id"] and not e_balde(alvo) and um(con, "SELECT id FROM clients WHERE id=?", (c["id"],)):
                 unir(con, vistos[k], c["id"], por, f"mesmo nome: {k}"); n += 1
                 break
             vistos.setdefault(k, c["id"])
@@ -558,6 +624,20 @@ def candidatos_duplicados(con, para=None):
 
 # ------------------------------------------------------------- limpeza e status
 SEPARADO = "separado"          # clients.kind: não é cliente (corrida, tarefa, rótulo); fica, mas fora da lista
+
+# Card aberto por "na dúvida, card próprio" (dono, 22/09). Não é uma pessoa confirmada:
+# é um serviço esperando dono. NADA automático pode uni-lo a outro card — foi o que a
+# revisão de 22/09 pegou: `deduplicar` engolia o balde "Alex" no primeiro card que
+# tivesse piloto "Alex", e o serviço acabava na família errada a cada 15 minutos.
+NOTA_CARD_NOVO = ("Card aberto pela varredura de 22/09 com o nome como aparece no título "
+                  "do Asana. Se for a mesma pessoa de outro card, una pelo painel.")
+
+
+def e_balde(c):
+    """Card sem contato e sem piloto, de uma palavra só ou aberto pela varredura."""
+    if c["email"] or c["phone"] or c["pilot_name"]:
+        return False
+    return len((c["name"] or "").split()) == 1 or (c["notes"] or "").startswith("Card aberto pela varredura")
 
 
 def limpar_nao_clientes(con):

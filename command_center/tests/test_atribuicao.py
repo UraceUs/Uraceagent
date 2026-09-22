@@ -128,14 +128,18 @@ def test_as_regras_novas_nao_comem_gente_de_verdade(titulo, esperado):
     assert identidade.pessoa_do_titulo(titulo) == esperado
 
 
-def test_erro_de_digitacao_no_sobrenome_acha_a_pessoa(con):
-    """"Savege" e "Brason" apareceram na varredura com 2 e 4 serviços, sem card. O
-    parecido só era comparado com o PRIMEIRO nome; agora também com o último."""
-    savage = _cliente(con, "Alexander Savage")
-    branson = _cliente(con, "Tom Branson")
+def test_erro_de_digitacao_vira_sugestao_de_uniao_nao_atribuicao(con):
+    """"Savege" e "Brason" continuam aparecendo na lista "para você unir" — mas o
+    serviço vai para card próprio, não para o card parecido. Quem une é o dono."""
+    _cliente(con, "Alexander Savage")
+    _cliente(con, "Tom Branson")
+    _tarefa(con, "Savege_RWC RD2")
     con.commit()
-    assert atribuicao.resolver(con, "Savege")[0]["id"] == savage
-    assert atribuicao.resolver(con, "Brason")[0]["id"] == branson
+    assert atribuicao.resolver(con, "Savege")[0] is None
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    dono = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Savege%'")["client_id"]
+    assert um(con, "SELECT name FROM clients WHERE id=?", (dono,))["name"] == "Savege"
+    assert any(u["nome"] == "Savege" for u in rel["unir"]), "sai na lista para unir"
 
 
 def test_nome_de_verdade_com_palavra_de_servico_no_meio_nao_some():
@@ -155,13 +159,35 @@ def test_apelido_e_inicial_caem_no_card_certo(con):
     assert atribuicao.resolver(con, "Bourghol")[0]["id"] == liam
 
 
-def test_sobrenome_sozinho_e_erro_de_digitacao_acham_a_pessoa(con):
+def test_sobrenome_sozinho_acha_quem_e_unico_mas_uma_letra_nao(con):
+    """Sobrenome sozinho, batendo em UM card só, resolve. Uma letra de diferença NÃO:
+    a revisão adversarial de 22/09 mostrou que isso manda o serviço do Daniel para a
+    Daniela e o do Martin para o Bruno Martins. Uma letra não separa duas pessoas."""
     savage = _cliente(con, "Alexander Savage")
-    branson = _cliente(con, "Branson Lee")
+    _cliente(con, "Branson Lee")
     con.commit()
     assert atribuicao.resolver(con, "Savage")[0]["id"] == savage
-    assert atribuicao.resolver(con, "Alex Savage")[0]["id"] == savage
-    assert atribuicao.resolver(con, "Brason")[0]["id"] == branson, "1 letra trocada ainda é a pessoa"
+    assert atribuicao.resolver(con, "Alex Savage")[0]["id"] == savage, "apelido conhecido"
+    assert atribuicao.resolver(con, "Brason")[0] is None, "1 letra vira card próprio + sugestão"
+
+
+def test_uma_letra_de_diferenca_nunca_troca_a_pessoa(con):
+    """Os pares que a revisão apontou: gênero e sobrenome-virando-primeiro-nome."""
+    _cliente(con, "Daniela Rocha"); _cliente(con, "Bruna Martins"); _cliente(con, "Bruno Martins")
+    con.commit()
+    for nome in ("Daniel", "Brunt", "Martin"):
+        assert atribuicao.resolver(con, nome)[0] is None, nome
+
+
+def test_apelido_so_pela_tabela_nunca_por_prefixo(con):
+    """Gabriel × Gabriela e Maria × Mariana são irmãos, não apelido — o caso mais comum
+    numa escola de kart. Só apelido conhecido resolve."""
+    _cliente(con, "Gabriela Costa"); _cliente(con, "Mariana Silva")
+    alexander = _cliente(con, "Alexander Prado")
+    con.commit()
+    assert atribuicao.resolver(con, "Gabriel Costa")[0] is None
+    assert atribuicao.resolver(con, "Maria Silva")[0] is None
+    assert atribuicao.resolver(con, "Alex Prado")[0]["id"] == alexander
 
 
 def test_nome_ambiguo_nao_e_chutado(con):
@@ -602,3 +628,135 @@ def test_servico_em_balde_vai_buscar_a_descricao_e_sai_do_balde(con, monkeypatch
     monkeypatch.setattr(P, "chamar", lambda *a, **k: (_ for _ in ()).throw(AssertionError("não devia ir ao Asana")))
     rel2 = atribuicao.redistribuir(con, aplicar=True, ler_descricoes=True)
     assert rel2["descricoes_lidas"] == 0
+
+
+# ============ o que a revisão adversarial de 22/09 pegou (12 defeitos, 5 críticos) ============
+def test_sync_nao_engole_o_balde_no_card_de_outra_familia(con):
+    """O CRÍTICO nº1: `deduplicar` roda a cada 15 min e unia o balde "Alex" no primeiro
+    card com piloto "Alex" — o serviço acabava na família errada sozinho, desfazendo a
+    regra do dono. Balde nunca é unido automaticamente."""
+    edward = _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
+    maria = _cliente(con, "Maria Xikis", piloto="Alex", email="mx@x.com")
+    _tarefa(con, "Alex_Trackside Support")
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    balde = um(con, "SELECT id FROM clients WHERE name='Alex'")["id"]
+    identidade.deduplicar(con); con.commit()
+    assert um(con, "SELECT id FROM clients WHERE id=?", (balde,)), "o balde sobrevive à sincronia"
+    assert um(con, "SELECT id FROM clients WHERE id=?", (maria,)), "e a Maria não é engolida pelo Edward"
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Alex_%'")["client_id"] == balde
+    assert um(con, "SELECT id FROM clients WHERE id=?", (edward,))
+
+
+def test_deduplicar_so_une_nome_inteiro(con):
+    """Primeiro nome sozinho não identifica ninguém. Nome inteiro igual, sim."""
+    a = _cliente(con, "Pedro Alves", piloto="Ruy")
+    b = _cliente(con, "Joana Lima", piloto="Ruy")
+    c1 = _cliente(con, "Carlos Neves", email="c1@x.com")
+    c2 = _cliente(con, "Carlos Neves", email="c2@x.com")
+    con.commit()
+    identidade.deduplicar(con); con.commit()
+    assert um(con, "SELECT id FROM clients WHERE id=?", (a,)) and um(con, "SELECT id FROM clients WHERE id=?", (b,))
+    vivos = [x["id"] for x in todos(con, "SELECT id FROM clients WHERE id IN (?,?)", (c1, c2))]
+    assert len(vivos) == 1, "nome INTEIRO igual continua unindo"
+
+
+def test_deduplicar_nao_mexe_em_separado(con):
+    corrida = _cliente(con, "Battle for Orlando")
+    con.execute("UPDATE clients SET kind=? WHERE id=?", (identidade.SEPARADO, corrida))
+    vivo = _cliente(con, "Battle for Orlando", email="gente@x.com")
+    con.commit()
+    identidade.deduplicar(con); con.commit()
+    assert um(con, "SELECT id FROM clients WHERE id=?", (vivo,)), "o card vivo não some dentro do separado"
+    assert um(con, "SELECT id FROM clients WHERE id=?", (corrida,))
+
+
+def test_uniao_do_dono_nao_e_desfeita_na_varredura_seguinte(con):
+    """O CRÍTICO nº2: o dono unia o balde "Mike" ao Mike Davies e a varredura seguinte
+    recriava o balde e tirava o serviço de volta."""
+    _cliente(con, "Mike Fattuta", email="f@x.com")
+    davies = _cliente(con, "Mike Davies", email="d@x.com")
+    _tarefa(con, "Mike_Prep for Orlando Cup")
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    balde = um(con, "SELECT id FROM clients WHERE name='Mike'")["id"]
+    identidade.unir(con, davies, balde, "user:1", "mesma pessoa"); con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Mike_%'")["client_id"] == davies
+    assert not any(c["nome"] == "Mike" for c in rel["criados"]), "não recria o balde que ele uniu"
+
+
+def test_varredura_reaproveita_o_balde_em_vez_de_criar_outro(con):
+    """O balde tem de ser estável: antes, cada rodada criava mais um "Alex"."""
+    _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
+    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    _tarefa(con, "Alex_Trackside Support")
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    atribuicao.redistribuir(con, aplicar=True)
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert len(todos(con, "SELECT id FROM clients WHERE name='Alex'")) == 1
+    assert rel["movidos"] == [] and rel["criados"] == []
+
+
+def test_piloto_de_uma_palavra_nao_captura_o_servico_de_outro(con):
+    """O CRÍTICO nº3: card com piloto "Alex" batia exato e a checagem de ambiguidade
+    nunca rodava — o serviço do Alex Xikis ia para o Alex do Edward."""
+    _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
+    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    con.commit()
+    cliente, motivo = atribuicao.resolver(con, "Alex")
+    assert cliente is None and "ambíguo" in motivo
+
+
+def test_nome_cortado_de_uma_palavra_vai_para_card_proprio(con):
+    """Sobrenome que caiu no vocabulário de serviço deixa um primeiro nome solto. Pista
+    fraca demais para ligar a um card pelo primeiro nome."""
+    _cliente(con, "Callan Barfield", email="cb@x.com")
+    _tarefa(con, "Callan Lead & Follow Vanderlan _Bushnell [5/8]")
+    con.commit()
+    d = identidade.pessoa_do_titulo_detalhe("Callan Lead & Follow Vanderlan _Bushnell [5/8]")
+    assert d == {"nome": "Callan", "truncado": True}
+    atribuicao.redistribuir(con, aplicar=True)
+    dono = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Callan%'")["client_id"]
+    assert um(con, "SELECT name FROM clients WHERE id=?", (dono,))["name"] == "Callan"
+
+
+def test_pista_serie_e_marca_nunca_viram_gente(con):
+    """Corte antes da condenação fazia "Daytona Speedway Practice" virar "Daytona"."""
+    for lixo in ("Daytona Speedway Practice", "FLKC Round 5&6 | Daytona Speedway",
+                 "Endurance | OKC Florida, FL", "Lucas Oil | Sebring, FL",
+                 "Star Champions Series - King Castle | New Castle Motorsports",
+                 "The North Florida Kart Club #10", "Inventário Hank Lai_ caixa"):
+        assert identidade.pessoa_do_titulo(lixo) is None, lixo
+    for titulo, esperado in (("Giovanni Barrera 2 Stroke Karting School", "Giovanni Barrera"),
+                             ("Joe Li - Karting School - Rotax Sr Urace", "Joe Li"),
+                             ("Heavenly Fuster - KARTING SCHOOL - Rok GP Urace", "Heavenly Fuster")):
+        assert identidade.pessoa_do_titulo(titulo) == esperado, titulo
+
+
+def test_acha_pessoa_poe_o_responsavel_na_frente_do_piloto(con):
+    """O princípio do dono também na sincronia: responsável decide antes do piloto, e
+    piloto de uma palavra só não decide sozinho."""
+    balde = _cliente(con, "Alex")
+    edward = _cliente(con, "Edward Donnell", piloto="Alex Donnell", email="ed@x.com")
+    con.commit()
+    achado, _ = identidade.acha_pessoa(con, nome="Edward Donnell", piloto="Alex")
+    assert achado["id"] == edward, "o responsável manda"
+    achado2, _ = identidade.acha_pessoa(con, piloto="Alex")
+    assert achado2 is None or achado2["id"] == balde
+
+
+def test_uniao_guarda_o_convite_de_corrida_que_colide(con):
+    """UNIQUE(race_id, client_id): o convite do card perdedor não cabe no vencedor.
+    Era apagado em silêncio, com status e orçamento junto."""
+    from command_center.db import inserir
+    a = _cliente(con, "Pai Um", email="a@x.com")
+    b = _cliente(con, "Pai Dois", email="b@x.com")
+    r = inserir(con, "races", name="Orlando Cup", date_start="2026-10-01")
+    inserir(con, "race_invites", race_id=r, client_id=a, status="confirmed")
+    inserir(con, "race_invites", race_id=r, client_id=b, status="declined")
+    con.commit()
+    identidade.unir(con, a, b, "user:1", "mesma pessoa"); con.commit()
+    guardado = um(con, "SELECT drop_json FROM client_merges ORDER BY id DESC")["drop_json"]
+    assert "_colidiram_e_foram_guardados" in guardado and "declined" in guardado
