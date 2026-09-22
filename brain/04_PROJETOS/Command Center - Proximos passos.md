@@ -187,6 +187,17 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       `Enrico BR`) e unir os que você reconhecer
 - [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
 
+## Bancada de testes (22/09) — o instável era um teste fraco
+
+- [x] 🤖 **Caçado em 30 rodadas: `test_criar_e_revogar_ficam_na_auditoria`.** A causa não
+      era ordem nem tempo: `chave.split("_")[2]` supunha que o segredo não tem underscore,
+      mas `secrets.token_urlsafe` usa o alfabeto `A-Za-z0-9-_`. **47,4%** das chaves reais
+      têm underscore no segredo — nessas, a asserção "o segredo não vazou" conferia só um
+      **fragmento**, e quase não provava nada. Em 5,1% o fragmento saía com 1–2 letras
+      ("e" está em qualquer JSON) e o teste falhava sozinho.
+- [x] 🤖 `split("_", 2)` nas duas ocorrências: o teste ficou **estável e mais forte** ao
+      mesmo tempo. O instável era o sintoma; o buraco era a asserção fraca.
+
 ## Segunda rodada da extensão (22/09) — a waiver destravou
 
 - [x] ✅ **Waiver da Nadine: `completed`, assinada 17/09 20:21.** A paginação era a causa.

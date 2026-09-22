@@ -21,6 +21,18 @@ B = BASE + "/api"
 SENHA = "senha-forte-123"
 
 
+def _segredo(chave):
+    """A parte secreta de `urk_<id>_<segredo>`.
+
+    `split("_")[2]` estava errado: `secrets.token_urlsafe` usa o alfabeto
+    `A-Za-z0-9-_`, então o SEGREDO pode conter underscore. Quando calhava de o segundo
+    caractere ser `_`, o pedaço virava uma letra só — e "e" está em qualquer JSON, então
+    a suíte falhava sozinha ~1 vez em 30. Pior que o falso alarme: nas outras 29 ela
+    conferia só um FRAGMENTO do segredo, então quase não provava nada.
+    `split("_", 2)` corta no máximo duas vezes e devolve o segredo inteiro."""
+    return chave.split("_", 2)[2]
+
+
 @pytest.fixture()
 def cli():
     os.environ["CC_DB_PATH"] = os.path.join(tempfile.mkdtemp(), "cc.sqlite")
@@ -62,7 +74,7 @@ def test_chave_abre_a_api_sem_navegador_e_so_aparece_uma_vez(cli):
     assert len(lista) == 1 and lista[0]["name"] == "n8n" and "chave" not in lista[0]
     con = conectar()
     guardado = um(con, "SELECT * FROM api_keys")
-    assert chave.split("_")[2] not in str(dict(guardado))       # o segredo não está no banco
+    assert _segredo(chave) not in str(dict(guardado))           # o segredo não está no banco
     assert guardado["uses"] >= 1 and guardado["last_used_at"]
     con.close()
 
@@ -166,7 +178,7 @@ def test_criar_e_revogar_ficam_na_auditoria(cli):
     ev = [a["event"] for a in todos(con, "SELECT event FROM audit_logs WHERE event LIKE 'apikey%'")]
     assert ev == ["apikey.create", "apikey.revoke"]
     detalhes = str([dict(a) for a in todos(con, "SELECT * FROM audit_logs WHERE event LIKE 'apikey%'")])
-    assert r["chave"].split("_")[2] not in detalhes              # a chave não vaza nem na auditoria
+    assert _segredo(r["chave"]) not in detalhes                  # a chave não vaza nem na auditoria
     con.close()
 
 
@@ -213,3 +225,21 @@ def test_chave_que_escreve_escreve_e_avisa_que_escreve(cli):
     con = conectar()
     assert um(con, "SELECT id FROM clients WHERE name='Cliente da chave'")
     con.close()
+
+
+def test_o_segredo_e_lido_inteiro_mesmo_com_underscore_dentro():
+    """O defeito que fazia a suíte falhar 1 em ~30 (caçado em 22/09 com 30 rodadas).
+
+    Com `split("_")[2]`, esta chave devolveria "e" — que está em qualquer texto, então
+    a asserção "o segredo não vazou" passava por acaso ou falhava por acaso."""
+    assert _segredo("urk_abc123_e_Kq9xZ-tuvw") == "e_Kq9xZ-tuvw"
+    assert _segredo("urk_abc123_semunderscore") == "semunderscore"
+    assert _segredo("urk_abc123_a_b_c_d") == "a_b_c_d"
+
+
+def test_chave_de_verdade_tem_segredo_longo(cli):
+    """Prova no formato real, não no inventado: o segredo é o token inteiro."""
+    h = entra(cli)
+    chave = cli.post(f"{B}/keys", headers=h, json={"name": "formato", "role": "VIEWER"}).json()["chave"]
+    seg = _segredo(chave)
+    assert chave == f"urk_{chave.split('_')[1]}_{seg}" and len(seg) >= 40
