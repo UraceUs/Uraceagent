@@ -107,6 +107,7 @@ def test_recado_de_quadro_e_pista_nao_viram_cliente(lixo):
     "Lucas Oil  Winter Series Race | Sebring International Raceway",
     "NOT GOING 2026 Star Champions Series -Night Fight | Trackhouse Motorplex",
     "Buscar as coisas no Mauricio",                 # tarefa que tinha virado cliente
+    "Usf_Prep", "USF Pro 2000 | Sebring",           # série de corrida (3ª rodada)
 ])
 def test_a_segunda_varredura_real_pegou_cinco_que_nao_sao_gente(lixo):
     """Cinco dos 32 cards que nasceriam na varredura de 22/09 (2ª rodada) não eram

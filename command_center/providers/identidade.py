@@ -80,7 +80,7 @@ _NAO_E_GENTE = {"trackhouse", "endurance", "florida", "guardar", "closed", "phot
                 "van", "box", "old", "new", "no", "nao", "sim", "cancelado", "cancelled", "canceled",
                 "pista", "galpao", "galpão", "ferramenta", "ferramentas", "bandeiras", "banners",
                 "calendario", "calendário", "chassi", "chassis", "motor", "motores", "pneus",
-                "faturas", "fatura", "invoices", "not", "going",
+                "faturas", "fatura", "invoices", "not", "going", "usf",   # USF Pro 2000: série
                 # artigo nunca abre nome de gente: "The North Florida Kart Club"
                 "the", "a", "an", "o", "os", "as", "um", "uma", "la", "el", "los"}
 
