@@ -60,6 +60,8 @@ def main():
     ap.add_argument("--unir", action="append", default=[], metavar="A+B[+C]=NOME")
     ap.add_argument("--piloto", action="append", default=[], metavar="ID=NOME",
                     help="corrige o nome do piloto de um card (dono: '#238 é Alex Donnell')")
+    ap.add_argument("--responsavel", action="append", default=[], metavar="ID=NOME",
+                    help="corrige o nome do responsável de um card (rótulo 'Email:' grudado, etc.)")
     ap.add_argument("--aplicar", action="store_true")
     a = ap.parse_args()
 
@@ -127,8 +129,20 @@ def main():
                         detail={"pilot_name": {"de": c["pilot_name"], "para": nome.strip()}, "reason": "dono, 22/09"})
                 con.commit()
                 print("  feito.")
-        if not a.unir and not a.piloto:
-            sys.exit("nada a fazer: passe --unir e/ou --piloto")
+        for esp in a.responsavel:
+            if "=" not in esp:
+                sys.exit(f"--responsavel precisa ser 'id=nome': {esp!r}")
+            cid, nome = esp.split("=", 1)
+            c, n = _card(con, cid.strip())
+            print(f"\n#{c['id']}: responsável {c['name']!r} -> {nome.strip()!r}  (piloto {c['pilot_name']!r}, e-mail {c['email'] or '-'})")
+            if a.aplicar:
+                con.execute("UPDATE clients SET name=?, updated_at=? WHERE id=?", (nome.strip(), agora(), c["id"]))
+                auditar(con, "client.update", "owner:cli", entity_type="client", entity_id=c["id"],
+                        detail={"name": {"de": c["name"], "para": nome.strip()}, "reason": "dono, 22/09"})
+                con.commit()
+                print("  feito.")
+        if not a.unir and not a.piloto and not a.responsavel:
+            sys.exit("nada a fazer: passe --unir, --piloto e/ou --responsavel")
         if not a.aplicar:
             print("\nNada foi escrito. Para aplicar, repita com --aplicar.")
     finally:
