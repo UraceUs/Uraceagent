@@ -43,6 +43,10 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, "adminai", "mcp"))
 
 import gmail_mcp  # noqa: E402
+from adminai._venv import garantir_venv  # noqa: E402
+
+garantir_venv()          # o python3 do sistema não tem as dependências (22/09)
+
 from command_center.providers.classificar import SISTEMA  # noqa: E402
 from command_center.providers.taxonomia_gmail import FORA, MANUAL, MANUAL_SUPPORT, OK  # noqa: E402
 

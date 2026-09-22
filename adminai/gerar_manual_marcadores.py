@@ -20,6 +20,10 @@ import sys
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
+from adminai._venv import garantir_venv  # noqa: E402
+
+garantir_venv()          # o python3 do sistema não tem as dependências (22/09)
+
 from command_center.providers.taxonomia_gmail import (  # noqa: E402
     CONFIRMADO_EM, EXEMPLOS, FORA, MANUAL, OK,
 )

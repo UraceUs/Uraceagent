@@ -25,6 +25,10 @@ import urllib.parse
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
+
+from adminai._venv import garantir_venv  # noqa: E402
+
+garantir_venv()          # o python3 do sistema não tem as dependências (22/09)
 sys.path.insert(0, os.path.join(RAIZ, "adminai", "mcp"))
 
 import gmail_mcp  # noqa: E402

@@ -18,6 +18,28 @@ CANDIDATOS = (
     "/home/ubuntu/.urace/cc-venv/bin/python",
 )
 SENTINELA = "fastapi"          # se isto importa, estamos no Python certo
+MARCA = "CC_VENV_REEXEC"       # impede laço: só se tenta trocar de interpretador uma vez
+
+
+def escolher_python():
+    """O Python do Command Center, ou None se já estamos nele (ou não há venv).
+
+    Compara caminho ABSOLUTO, não `realpath`: o `bin/python` de um venv é um symlink
+    para o Python do sistema, então `realpath` dá o mesmo dos dois lados e a troca
+    nunca acontecia. Foi assim que a extensão da VPS continuou batendo em
+    "No module named 'fastapi'" mesmo com este módulo no lugar (22/09)."""
+    if importlib.util.find_spec(SENTINELA) is not None:
+        return None
+    if os.environ.get(MARCA):
+        return None                      # já tentamos uma vez; deixa o erro aparecer
+    atual = os.path.abspath(sys.executable)
+    for cand in CANDIDATOS:
+        if not cand:
+            continue
+        cand = os.path.abspath(os.path.expanduser(cand))
+        if os.path.exists(cand) and cand != atual:
+            return cand
+    return None
 
 
 def garantir_venv():
@@ -25,13 +47,9 @@ def garantir_venv():
 
     Não instala nada, não mexe em `~/.urace/`: só troca de interpretador. Sem venv à
     vista, deixa o `ImportError` falar por si — errar alto é melhor que errar quieto."""
-    if importlib.util.find_spec(SENTINELA) is not None:
+    cand = escolher_python()
+    if not cand:
         return
-    atual = os.path.realpath(sys.executable)
-    for cand in CANDIDATOS:
-        if not cand:
-            continue
-        cand = os.path.expanduser(cand)
-        if os.path.exists(cand) and os.path.realpath(cand) != atual:
-            print(f"(usando o Python do Command Center: {cand})", file=sys.stderr)
-            os.execv(cand, [cand, os.path.abspath(sys.argv[0]), *sys.argv[1:]])
+    print(f"(usando o Python do Command Center: {cand})", file=sys.stderr)
+    ambiente = dict(os.environ, **{MARCA: "1"})
+    os.execve(cand, [cand, os.path.abspath(sys.argv[0]), *sys.argv[1:]], ambiente)
