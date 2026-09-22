@@ -76,6 +76,24 @@ Em camadas, da mais forte para a mais fraca, e **só a primeira camada que tiver
   partir de duas palavras, e o nome mais completo é processado primeiro justamente para
   ganhar o card antes do apelido procurar.
 
+## O que a primeira varredura real achou (22/09, na VPS)
+
+Rodar contra o quadro inteiro pagou na hora: apareceram quatro formas que nem a lista
+do dono tinha, e todas viraram teste.
+
+| Título | Estava dando | Por quê |
+|---|---|---|
+| `Bella M Wagner - Professional Coach` | nada | inicial **no meio** do nome era recusada |
+| `Alex Savage– Old Chassis \| Adjustments` | nada | travessão colado no nome |
+| `Branson KA100 01/09` | nada | data colada era lida como sobrenome |
+| `MauricioPardomo_Coach` | `MauricioPardomo` | nome grudado, sem espaço |
+
+E do outro lado: `Savege` e `Brason` não achavam ninguém porque o parecido só era
+comparado com o **primeiro** nome — agora também com o último (`Savege` → Alexander
+Savage, `Brason` → Branson). Mais 12 palavras soltas que apareciam como "cliente"
+(`Trackhouse`, `Endurance`, `Florida`, `Closed`, `Photos`, `Goals`, `To-Do`, `AMR`,
+`JFC`, `RMC`, `Mycron`, `Skapa`) entraram no vocabulário do que não é gente.
+
 ## Como rodar
 
 ```

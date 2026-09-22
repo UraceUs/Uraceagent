@@ -42,6 +42,7 @@ _RX_CATEGORIA = re.compile(r"^(ka\d+|x\d+|rok|vlr|gp|rotax|\d+t|mini|micro|junio
                            r"shifter|kz\d*|briggs|lo206)\w*$", re.I)
 # Inicial abreviada no fim do nome: "Charlie M", "Liam B", "Callan B.", "G.J".
 _RX_INICIAL = re.compile(r"^[A-Za-zÀ-ÿ]\.?$")
+_RX_SO_NUMERO = re.compile(r"^[\d/.\-|]+$")      # "01/09", "2026", "4|6": data ou contagem, nunca nome
 
 
 def normaliza(txt):
@@ -72,13 +73,22 @@ _RX_CORRIDA_EXTRA = re.compile(r"\b(skusa|uspks|rok|fwt|wka|rotax|superkarts|flk
                                r"rd\s*\d|round\s*\d|race\s*\d|cup|series|championship|nationals|karting challenge)\b", re.I)
 
 
+# Palavra solta que apareceu como "cliente" na varredura de 22/09 e não é gente:
+# pista, série, marca de equipamento e recado de quadro.
+_NAO_E_GENTE = {"trackhouse", "endurance", "florida", "guardar", "closed", "photos", "goals",
+                "mycron", "skapa", "to-do", "todo", "amr", "jfc", "rmc", "ckna", "flkc",
+                "van", "box", "old", "new", "no", "nao", "sim", "cancelado", "cancelled",
+                "pista", "galpao", "galpão", "ferramenta", "ferramentas", "bandeiras", "banners",
+                "calendario", "calendário", "chassi", "chassis", "motor", "motores", "pneus"}
+
+
 def eh_rotulo_ou_servico(texto):
     """True quando o 'nome' é rótulo do modelo, nome de serviço ou de corrida — não é gente."""
     t = re.sub(r"[:\-–]+\s*$", "", (texto or "").strip()).strip()
     if not t:
         return True
     baixo = t.lower()
-    if baixo in _ROTULOS or baixo in _SERVICOS:
+    if baixo in _ROTULOS or baixo in _SERVICOS or baixo in _NAO_E_GENTE:
         return True
     if ":" in t:                                   # "Date of Birth: Age: 13" e afins
         return True
@@ -100,9 +110,13 @@ def _corta_no_separador(t):
     ("Elliott Hubbard-Summer Camp") é contextual (dono, 16/09): só separa quando o que
     vem depois tem cara de serviço ou tem número; "Jean-Luc Picard" e "Ana-Maria"
     continuam sendo um nome só."""
-    t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s+–\s+|\s*,\s*", t)[0].strip()
+    t = t.replace("–", "-").replace("—", "-")            # travessão é hífen para esta leitura
+    t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s*,\s*", t)[0].strip()
+    # hífen COLADO no nome mas com espaço depois ("Alex Savage- Old Chassis") separa
+    # sempre: nome composto não tem espaço do outro lado ("Jean-Luc Picard").
+    t = re.split(r"-\s+", t)[0].strip()
     t = re.split(r"(?<!\d)\s*/\s*(?!\d)", t)[0].strip()
-    m = re.match(r"^([^-]+?)-(.+)$", t)
+    m = re.match(r"^([^-–]+?)[-–](.+)$", t)
     if m:
         antes, depois = m.group(1).strip(), m.group(2).strip()
         if antes and depois and (re.search(r"\d", depois) or eh_rotulo_ou_servico(depois)):
@@ -123,6 +137,8 @@ def _corta_na_palavra_de_servico(t):
         limpa = re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", p).lower()
         if limpa in _PALAVRA_DE_SERVICO:
             return " ".join(palavras[:i]).strip()
+        if _RX_SO_NUMERO.match(p):          # "01/09", "03/08", "2026": data, não sobrenome
+            return " ".join(palavras[:i]).strip()
     return t
 
 
@@ -132,6 +148,19 @@ def _tira_categoria(t):
     while len(palavras) > 1 and _RX_CATEGORIA.match(palavras[-1]):
         palavras.pop()
     return " ".join(palavras)
+
+
+def _separa_grudado(t):
+    """'MauricioPardomo' → 'Mauricio Pardomo'. Só quando é UMA palavra e a maiúscula
+    aparece depois de minúscula — 'McDonald' e 'DeSouza' continuam inteiros porque
+    o pedaço da frente teria menos de 3 letras."""
+    if len(t.split()) != 1:
+        return t
+    partido = re.sub(r"(?<=[a-zà-ÿ])(?=[A-ZÀ-Þ])", " ", t)
+    pedacos = partido.split()
+    if len(pedacos) == 2 and all(len(x) >= 3 for x in pedacos):
+        return partido
+    return t
 
 
 def _nome_plausivel(t):
@@ -146,16 +175,15 @@ def _nome_plausivel(t):
     # Se a PRIMEIRA palavra já abre serviço, não sobrou pessoa nenhuma: "Lead and
     # Follow" cortaria em "Follow" e devolveria "Lead and". O corte por palavra de
     # serviço só vale quando existe um nome antes dele.
-    if re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", palavras[0]).lower() in _PALAVRA_DE_SERVICO:
+    if re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", palavras[0]).lower() in (_PALAVRA_DE_SERVICO | _NAO_E_GENTE):
         return False
     if not all(re.match(r"^[A-Za-zÀ-ÿ'.&-]+$", p) for p in palavras):
         return False
     if len(palavras[0]) < 2:                     # inicial sozinha na frente não é nome
         return False
-    # "Charlie M", "Liam B", "Callan B." — inicial abreviada só vale no fim
-    for p in palavras[1:-1]:
-        if _RX_INICIAL.match(p):
-            return False
+    # Inicial abreviada é normal no meio ("Bella M Wagner") e no fim ("Charlie M").
+    # Na frente não: "M Wagner" sozinho não identifica ninguém — e isso já é barrado
+    # pela regra acima, que exige 2 letras na primeira palavra.
     return True
 
 
@@ -183,7 +211,7 @@ def pessoa_do_titulo(titulo):
     t = SERVICO_SUFIXO.sub("", t)
     t = _corta_no_separador(t)
     t = _corta_na_palavra_de_servico(t)
-    t = _tira_categoria(t).strip(" &-")
+    t = _separa_grudado(_tira_categoria(t).strip(" &-"))
     # a palavra de corrida/serviço que condena é a que está na PARTE DA PESSOA: "Mike
     # Fattuta_Professional Coach Rotax" tem gente antes do separador e serviço depois
     if not t or re.search(r"\d", t) or CORRIDA.search(t):

@@ -73,6 +73,43 @@ def test_nome_de_servico_e_de_corrida_nunca_e_gente(lixo):
     assert identidade.pessoa_do_titulo(lixo) is None
 
 
+# --------------------------------------------- o que a varredura real de 22/09 achou
+@pytest.mark.parametrize("titulo,esperado", [
+    # inicial NO MEIO é normal: "Bella M Wagner" estava sendo jogada fora inteira
+    ("Bella M Wagner - Professional Coach [Baby Kart] Bushnell", "Bella M Wagner"),
+    # travessão colado com espaço depois separa; nome composto não tem espaço do outro lado
+    ("Alex Savage– Old Chassis | Adjustments", "Alex Savage"),
+    # data colada no título não é sobrenome
+    ("Branson KA100 01/09", "Branson"),
+    ("Branson 11/09_Cancelado", "Branson"),
+    ("Martin 03/08 próprio motor Rok vlr", "Martin"),
+    # nome grudado sem espaço
+    ("MauricioPardomo_Coach", "Mauricio Pardomo"),
+])
+def test_formas_que_a_varredura_de_22_09_pegou(titulo, esperado):
+    assert identidade.pessoa_do_titulo(titulo) == esperado
+
+
+@pytest.mark.parametrize("lixo", [
+    "Trackhouse", "Endurance", "Florida", "Closed", "Photos", "Goals", "To-Do",
+    "Guardar", "Mycron", "Skapa", "AMR", "JFC", "RMC", "Bandeiras e banners",
+    "Arrumar carrinho do desmontador de pneus da pista.",
+])
+def test_recado_de_quadro_e_pista_nao_viram_cliente(lixo):
+    """A varredura real devolveu 27 "pessoas" de uma palavra só, e metade era isto."""
+    assert identidade.pessoa_do_titulo(lixo) is None
+
+
+def test_erro_de_digitacao_no_sobrenome_acha_a_pessoa(con):
+    """"Savege" e "Brason" apareceram na varredura com 2 e 4 serviços, sem card. O
+    parecido só era comparado com o PRIMEIRO nome; agora também com o último."""
+    savage = _cliente(con, "Alexander Savage")
+    branson = _cliente(con, "Tom Branson")
+    con.commit()
+    assert atribuicao.resolver(con, "Savege")[0]["id"] == savage
+    assert atribuicao.resolver(con, "Brason")[0]["id"] == branson
+
+
 def test_nome_de_verdade_com_palavra_de_servico_no_meio_nao_some():
     """A primeira palavra nunca é cortada: senão "Summer Camp" viraria a pessoa "Summer"."""
     assert identidade.pessoa_do_titulo("Jean-Luc Picard") == "Jean-Luc Picard"

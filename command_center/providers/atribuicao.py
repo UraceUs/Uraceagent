@@ -112,8 +112,11 @@ def candidatos_para(con, nome, clientes=None):
                 if p0 in (p[0], p[-1]):
                     por_parte.append((c, f"{'primeiro' if p0 == p[0] else 'último'} nome de {c[campo]}"))
                     break
-                if len(p0) >= 5 and identidade._lev(p0, p[0]) <= 1:
-                    por_parte.append((c, f"quase o primeiro nome de {c[campo]}"))
+                perto = next((x for x in (p[0], p[-1])
+                               if len(p0) >= 5 and identidade._lev(p0, x) <= 1), None)
+                if perto:
+                    por_parte.append((c, f"quase o {'primeiro' if perto == p[0] else 'último'} "
+                                         f"nome de {c[campo]} (1 letra)"))
                     break
         if por_parte:
             return por_parte
@@ -178,7 +181,8 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
                     continue
             else:
                 sem_card.append({"nome": nome, "servicos": len(por_nome[nome]),
-                                 "porque": "nome de uma palavra só: não invento card"})
+                                 "porque": "nome de uma palavra só: não invento card",
+                                 "titulos": [t["title"] for t in por_nome[nome][:3]]})
                 continue
         if cliente is None:
             if motivo != "sem card":

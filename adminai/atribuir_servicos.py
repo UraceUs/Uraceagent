@@ -67,6 +67,8 @@ def main():
             print(f"\n--- PRECISA DE VOCÊ: sem card e nome curto demais ({len(rel['sem_card'])}) ---")
             for x in rel["sem_card"][:a.limite]:
                 print(f"  {x['nome']:<20} {x['servicos']:>3} serviço(s)  ({x['porque']})")
+                for t in x.get("titulos", []):
+                    print(f"       ex.: {t[:64]}")
 
         if rel["sem_nome"]:
             print(f"\n--- títulos sem gente reconhecível ({len(rel['sem_nome'])}) ---")
