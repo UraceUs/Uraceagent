@@ -187,6 +187,19 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       `Enrico BR`) e unir os que você reconhecer
 - [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
 
+## Segunda rodada da extensão (22/09) — a waiver destravou
+
+- [x] ✅ **Waiver da Nadine: `completed`, assinada 17/09 20:21.** A paginação era a causa.
+      113 envelopes, 69 ligados a cliente, em 17s.
+- [x] 🤖 **As ferramentas rodavam no `python3` do sistema**, que não tem as dependências.
+      A extensão achou o venv (`~/.urace/cc-venv`) e repetiu sozinha — mas quem usa não
+      deveria precisar saber. `adminai/_venv.py` re-executa no Python certo.
+- [x] 🤖 **Eu esqueci uma unidade.** O comando que passei copiava 3 e deixava a 4ª, e o
+      aviso de specifier continuou no `urace-brain-health`. Agora
+      `adminai/deploy/instalar_unidades.sh` varre todas, com teste que proíbe lista fixa.
+- [ ] 👤 Ainda há **6 waivers em sent/delivered** — conferir se são mesmo não assinadas
+- [ ] 🔒👤 **O push da VPS segue bloqueado (403).** O relatório continua preso na máquina.
+
 ## Primeira rodada da extensão na VPS (22/09) — o que ela achou
 
 A extensão rodou a rodada completa e reportou honestamente, inclusive a própria falha.

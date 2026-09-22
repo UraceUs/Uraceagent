@@ -12,6 +12,8 @@ escrevendo um relatório no repositório — o dono não é o carteiro entre voc
 
 1. `git pull origin claude/configurar-open-claw-ooqo8x`
 2. Rodar o deploy: `bash adminai/deploy/command_center/servir_command_center.sh`
+   Mudou alguma unidade systemd? `bash adminai/deploy/instalar_unidades.sh` — ele varre
+   todas e recarrega; não use lista escrita à mão, ela esquece.
 3. Rodar em **modo leitura** (não escrevem nada):
    - `python3 adminai/atribuir_servicos.py --limite 300`
    - `python3 adminai/diag_atribuicao.py`
