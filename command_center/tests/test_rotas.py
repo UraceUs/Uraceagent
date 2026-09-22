@@ -326,7 +326,8 @@ def test_deduplicar_e_status(cli):
     corrida = inserir(con, "clients", name="2026 SKUSA Winter Series RD1/2", status="ACTIVE", source="asana")
     inserir(con, "tasks", client_id=b, title="Alex Alonso_Kart", project="U-RACE", section="Finished Services", status="completed", due_on="2025-01-10")
     inserir(con, "tasks", client_id=corrida, title="2026 SKUSA Winter Series RD1/2", project="U-RACE", section="Finished Services", status="completed", due_on="2026-01-10")
-    assert I.limpar_nao_clientes(con) >= 1 and not con.execute("SELECT 1 FROM clients WHERE id=?", (corrida,)).fetchone()
+    # 22/09 — dono: "pode só separar". A corrida fica no banco, marcada, fora da lista.
+    assert I.limpar_nao_clientes(con) >= 1 and con.execute("SELECT kind FROM clients WHERE id=?", (corrida,)).fetchone()[0] == I.SEPARADO
     n = I.deduplicar(con)
     assert n >= 1 and not con.execute("SELECT 1 FROM clients WHERE id=?", (b,)).fetchone()
     # o sobrevivente pode ser a nota do cérebro com o mesmo nome (id menor): resolve pelo e-mail
@@ -888,6 +889,9 @@ def test_historico_completo_do_asana_liga_servicos_a_pessoa_e_sugere_duplicados(
         assert brian and bryan and brian["id"] != bryan["id"]
         assert con.execute("SELECT COUNT(*) FROM tasks WHERE client_id=?", (brian["id"],)).fetchone()[0] == 8   # 7 concluídos + 1 aberto
         assert con.execute("SELECT COUNT(*) FROM tasks WHERE client_id=?", (bryan["id"],)).fetchone()[0] == 1
+        # 22/09 — "de agora para frente": o que a descrição diz sobre o cliente fica na tarefa
+        t9500 = um(con, "SELECT resp_name, resp_email, resp_phone FROM tasks WHERE title='Tiago Belluci_Practice OKC'")
+        assert (t9500["resp_name"], t9500["resp_email"], t9500["resp_phone"]) == ("Tiago Belluci Sr", "tiago@example.com", "407-555-0500")
         assert res["candidatos"] >= 1 and any({p["a"]["id"], p["b"]["id"]} == {brian["id"], bryan["id"]} for p in identidade.candidatos_duplicados(con))
         # segunda rodada: nada relido por inteiro (já estão na pessoa certa)
         n = len(chamadas["tarefa"]); sync.sync_asana_completo(con); con.commit()
@@ -1003,9 +1007,11 @@ def test_limpeza_tira_cliente_falso_e_nascimento_invalido(cli):
         t = inserir(con, "tasks", client_id=falso, title="serviço solto", project="U-RACE", section="SATURDAY", status="open", due_on="2026-09-12")
         con.commit()
         assert idt.limpar_nao_clientes(con) >= 2
-        assert um(con, "SELECT id FROM clients WHERE id=?", (falso,)) is None
-        assert um(con, "SELECT id FROM clients WHERE id=?", (corrida,)) is None
-        assert um(con, "SELECT id FROM clients WHERE id=?", (bom,)) is not None      # gente de verdade fica
+        # 22/09 — dono: "pode só separar". O card não some: sai da lista de clientes.
+        assert um(con, "SELECT kind FROM clients WHERE id=?", (falso,))["kind"] == idt.SEPARADO
+        assert um(con, "SELECT kind FROM clients WHERE id=?", (corrida,))["kind"] == idt.SEPARADO
+        assert um(con, "SELECT kind FROM clients WHERE id=?", (bom,))["kind"] == "cliente"   # gente de verdade fica
+        assert idt.limpar_nao_clientes(con) == 0, "segunda passada não conta de novo"
         assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] is None   # a tarefa fica, só perde o vínculo errado
         assert idt.limpar_nascimentos(con) >= 1
         assert um(con, "SELECT pilot_dob FROM clients WHERE id=?", (bom,))["pilot_dob"] is None
@@ -1086,7 +1092,7 @@ def test_apagar_e_unir_cliente_nao_quebra_chave_estrangeira(cli):
         inserir(con, "race_invites", race_id=rid, client_id=comConvite, invited_by=1)
         con.commit()
         idt.limpar_nao_clientes(con); con.commit()
-        assert um(con, "SELECT id FROM clients WHERE id=?", (falso,)) is None
+        assert um(con, "SELECT kind FROM clients WHERE id=?", (falso,))["kind"] == idt.SEPARADO   # 22/09: separa, não apaga
         assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] is None
         assert um(con, "SELECT client_id FROM invoices WHERE id=?", (i,))["client_id"] is None
         assert um(con, "SELECT client_id FROM ai_events WHERE id=?", (ev,))["client_id"] is None

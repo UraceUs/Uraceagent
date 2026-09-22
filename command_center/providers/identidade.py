@@ -235,6 +235,7 @@ def pessoa_do_titulo(titulo):
     """
     t = (titulo or "").strip()
     t = re.sub(r"^\s*session setup\s*\|\s*", "", t, flags=re.I)
+    t = re.sub(r"^\s*[\[(][^\])]*[\])]\s*", "", t)      # "[Canceled] Erik Mendoza Jr_…": a tag na frente sai
     t = SERVICO_SUFIXO.sub("", t)
     t = _corta_no_separador(t)
     t = _corta_na_palavra_de_servico(t)
@@ -247,6 +248,9 @@ def pessoa_do_titulo(titulo):
         return None
     if not _nome_plausivel(t):
         return None
+    # "Erik Mendoza Jr" é o Erik Mendoza (dono, 22/09) — no quadro, Jr marca a criança,
+    # não faz parte do nome. "Sr" fica: é como o pai se distingue do filho.
+    t = re.sub(r"\s+jr\.?$", "", t, flags=re.I)
     return " ".join(p if p.isupper() and len(p) > 3 else p for p in t.split()).title() if t.isupper() else t
 
 
@@ -370,22 +374,22 @@ def limpar_contatos(con):
 def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
     """Cliente existente para esta identidade, na ordem de confiança."""
     if email:
-        c = um(con, "SELECT * FROM clients WHERE email = ?", (email.lower(),))
+        c = um(con, "SELECT * FROM clients WHERE email = ? AND kind<>?", (email.lower(), SEPARADO))
         if c:
             return c, "e-mail"
     tel = so_digitos(telefone)
     if tel:
-        for c in todos(con, "SELECT * FROM clients WHERE phone IS NOT NULL"):
+        for c in todos(con, "SELECT * FROM clients WHERE phone IS NOT NULL AND kind<>?", (SEPARADO,)):
             if so_digitos(c["phone"]) == tel:
                 return c, "telefone"
     for alvo, campo in ((piloto, "pilot_name"), (nome, "name")):
         if not alvo:
             continue
         k = chave_exata(alvo)
-        for c in todos(con, "SELECT * FROM clients"):
+        for c in todos(con, "SELECT * FROM clients WHERE kind<>?", (SEPARADO,)):
             if k and (chave_exata(c["pilot_name"]) == k or chave_exata(c["name"]) == k):
                 return c, f"{campo} igual"
-        for c in todos(con, "SELECT * FROM clients"):
+        for c in todos(con, "SELECT * FROM clients WHERE kind<>?", (SEPARADO,)):
             if (c["pilot_name"] and mesmo_nome(alvo, c["pilot_name"])) or mesmo_nome(alvo, c["name"]):
                 return c, f"{campo} quase igual"
     return None, None
@@ -517,7 +521,7 @@ def mesmo_contato(a, b):
 def candidatos_duplicados(con, para=None):
     """Pares que PARECEM a mesma pessoa (Alonso/Alonzo, Brian/Bryan, piloto de um =
     responsável do outro) — decisão humana, com a IA ajudando. `para` restringe a um cliente."""
-    cs = todos(con, "SELECT id, name, pilot_name, email, phone FROM clients ORDER BY name")
+    cs = todos(con, "SELECT id, name, pilot_name, email, phone FROM clients WHERE kind<>? ORDER BY name", (SEPARADO,))
     pares, vistos = [], set()
     # Princípio do dono (22/09): "para cruzar e confirmar, use o nome do responsável e
     # as informações de contato". Mesmo e-mail ou mesmo telefone é a evidência mais
@@ -543,19 +547,27 @@ def candidatos_duplicados(con, para=None):
 
 
 # ------------------------------------------------------------- limpeza e status
+SEPARADO = "separado"          # clients.kind: não é cliente (corrida, tarefa, rótulo); fica, mas fora da lista
+
+
 def limpar_nao_clientes(con):
-    """Tira do espelho o que virou 'cliente' sem ser gente (corrida, evento) e
-    não tem nada humano ligado (e-mail, telefone, waiver, e-mail, VIP)."""
+    """SEPARA (não apaga) o que virou 'cliente' sem ser gente — corrida, evento, tarefa,
+    rótulo do modelo — e não tem nada humano ligado (e-mail, telefone, waiver, VIP).
+
+    Até 22/09 apagava. Dono: "pode só separar". O card fica com kind='separado', sai
+    da lista de clientes e de toda busca de identidade; os serviços que apontavam para
+    ele ficam sem dono (a atribuição decide depois). Quem tem convite de corrida ou
+    contrato não é tocado: alguém agiu ali."""
     n = 0
-    for c in todos(con, "SELECT * FROM clients WHERE source='asana'"):
+    for c in todos(con, "SELECT * FROM clients WHERE source='asana' AND kind<>?", (SEPARADO,)):
         falso = eh_rotulo_ou_servico(c["name"]) or (c["pilot_name"] and eh_rotulo_ou_servico(c["pilot_name"]))
         if not falso and (pessoa_do_titulo(c["name"]) or c["email"] or c["phone"] or c["vip"]):
             continue
         if um(con, "SELECT 1 FROM waivers WHERE client_id=?", (c["id"],)) or um(con, "SELECT 1 FROM emails WHERE client_id=?", (c["id"],)):
             continue
         if not _soltar(con, c["id"]):
-            continue                                   # tem convite de corrida ou contrato: alguém agiu, não se apaga
-        con.execute("DELETE FROM clients WHERE id=?", (c["id"],))
+            continue                                   # tem convite de corrida ou contrato: alguém agiu
+        con.execute("UPDATE clients SET kind=?, updated_at=? WHERE id=?", (SEPARADO, agora(), c["id"]))
         n += 1
     return n
 

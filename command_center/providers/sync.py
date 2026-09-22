@@ -179,6 +179,16 @@ def _grava_tarefa(con, gid, campos):
     return nid, True
 
 
+def _resp_da_descricao(d):
+    """O que a descrição diz sobre QUEM é o cliente — responsável, e-mail, telefone —
+    guardado na própria tarefa. Dono, 22/09: "o princípio para cruzar e confirmar é
+    usar o nome do responsável e informações de contato; aplique como base de agora
+    para frente". Antes isso era lido e jogado fora depois de ligar o card."""
+    return dict(resp_name=_nome_valido(d.get("responsavel")),
+                resp_email=(d.get("email") or "").strip().lower() or None,
+                resp_phone=(d.get("telefone") or "").strip() or None)
+
+
 def _nome_valido(n):
     """Nome de gente vindo da descrição. Rótulo do modelo ("Date of Birth:"), nome de
     serviço ("Karting School") e nome de corrida NUNCA viram cliente (dono, 10/09)."""
@@ -237,13 +247,13 @@ def sync_asana_completo(con, progresso=None):
                     subs = full.get("subtarefas_lista") or []
                     feitas = sum(1 for x in subs if x.get("concluida"))
                     if not resp:
-                        _grava_tarefa(con, t["gid"], dict(client_id=None, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **comum))
+                        _grava_tarefa(con, t["gid"], dict(client_id=None, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **_resp_da_descricao(d), **comum))
                     else:
                         cid, novo = _upsert_cliente(con, resp, d["email"], d["telefone"],
                                                     piloto if piloto and identidade.chave_exata(piloto) != identidade.chave_exata(resp) else None, d["nascimento"], email_alt=d.get("email_alt"))
                         novos += novo
                         _liga(con, "client", cid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
-                        _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **comum))
+                        _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"), subtasks_total=len(subs), subtasks_done=feitas, **_resp_da_descricao(d), **comum))
                 tarefas += 1
                 if tarefas % 10 == 0:
                     con.commit()
@@ -312,7 +322,8 @@ def sync_asana(con):
                 subs = full.get("subtarefas_lista") or []
                 if not resp:                                   # corrida, evento, coisa: tarefa sem cliente
                     _grava_tarefa(con, t["gid"], dict(client_id=None, title=full.get("nome"), subtasks_total=len(subs),
-                                                     subtasks_done=sum(1 for x in subs if x.get("concluida")), **comum))
+                                                     subtasks_done=sum(1 for x in subs if x.get("concluida")),
+                                                     **_resp_da_descricao(d), **comum))
                     tarefas += 1
                     continue
                 cid, novo = _upsert_cliente(con, resp, d["email"], d["telefone"],
@@ -322,7 +333,8 @@ def sync_asana(con):
                 _liga(con, "client", cid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
                 _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"),
                                                  subtasks_total=len(subs),
-                                                 subtasks_done=sum(1 for s in subs if s.get("concluida")), **comum))
+                                                 subtasks_done=sum(1 for s in subs if s.get("concluida")),
+                                                 **_resp_da_descricao(d), **comum))
                 tarefas += 1
         # coluna RACES vira a lista de corridas (para convidar os Pro Racing Drivers)
         sincronizar_corridas(con)

@@ -33,11 +33,13 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--aplicar", action="store_true", help="move de verdade (sem isto é só varredura)")
     ap.add_argument("--limite", type=int, default=40, help="quantas linhas mostrar por lista")
+    ap.add_argument("--ler-descricoes", action="store_true",
+                    help="para o que ficar em dúvida pelo título, busca a descrição no Asana (responsável + contato)")
     a = ap.parse_args()
 
     con = conectar()
     try:
-        rel = atribuicao.redistribuir(con, aplicar=a.aplicar)
+        rel = atribuicao.redistribuir(con, aplicar=a.aplicar, ler_descricoes=a.ler_descricoes)
         print("\n" + ("APLICADO" if a.aplicar else "VARREDURA (nada foi escrito)"))
         print("=" * 72)
         print(atribuicao.resumo(rel))

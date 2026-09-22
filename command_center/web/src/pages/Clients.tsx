@@ -135,7 +135,7 @@ export function Clients() {
     <div className="row wrap toolbar-page">
       <input className="input" style={{ maxWidth: 320 }} placeholder="Piloto, responsável ou e-mail" value={q} onChange={e => setQ(e.target.value)} aria-label="Filtrar" />
       <select className="input" style={{ width: 190 }} value={status} onChange={e => set('status', e.target.value)} aria-label="Status">
-        <option value="">Ativos e inativos</option><option value="ACTIVE">Ativos (6 meses)</option><option value="INACTIVE">Inativos</option><option value="NEW">Novos</option><option value="PENDING">Pendentes</option><option value="AT_RISK">Em risco</option><option value="COMPLETED">Concluídos</option>
+        <option value="">Ativos e inativos</option><option value="ACTIVE">Ativos (6 meses)</option><option value="INACTIVE">Inativos</option><option value="NEW">Novos</option><option value="PENDING">Pendentes</option><option value="AT_RISK">Em risco</option><option value="COMPLETED">Concluídos</option><option value="SEPARADO">Separados (não são clientes)</option>
       </select>
       <select className="input" style={{ width: 130 }} value={vip} onChange={e => set('vip', e.target.value)} aria-label="VIP">
         <option value="">VIP e não</option><option value="1">Só VIP</option><option value="0">Sem VIP</option>

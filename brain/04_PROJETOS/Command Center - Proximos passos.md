@@ -164,10 +164,23 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
 - [x] 🤖 Camadas para achar o card certo; ambíguo volta para humano, nunca é chutado
 - [x] 🤖 Varredura e conserto do quadro inteiro (`/service-attribution` e
       `adminai/atribuir_servicos.py`), auditado
-- [ ] 👤 **Rodar a varredura na VPS e olhar a lista antes de aplicar**
-- [ ] 👤 Decidir os nomes ambíguos que a varredura apontar (ex.: `Alexander` — Savage ou Jacoby?)
-- [ ] 👤 Decidir os nomes de uma palavra só que não têm card (ex.: `Mariano`, `G.J`, `Levi`)
-- [ ] 🤖 Depois de aplicar: rever os pares de duplicados que aparecerem no painel
+- [x] 👤 Varredura rodada na VPS 4 vezes, lista olhada, **distribuição aplicada** (189 movidos)
+- [x] 👤 Regra dada: *"nunca colocar serviço de outro cliente em card de outro cliente"* — na
+      dúvida, card próprio com o nome do título (`Mike`, `Sean`, `G.J`)
+- [x] 👤 Princípio dado: *"para cruzar e confirmar, use o nome do responsável e informações de
+      contato"* — virou `mesmo_contato` e `por_contato`
+- [x] 👤 Cards unidos pelo dono: Liam Bourghol (4→1), Charlie Marron (4→1), Alexander Savage
+      (4→1, Kenneth fica como responsável), Alex Alonzo, Hank Lai, Reinaldo Arroyo; #238 é Alex Donnell
+- [x] 🤖 "Pode só separar": card que é corrida/tarefa não é apagado — `kind='separado'`, fora
+      da lista (filtro "Separados" na tela de clientes)
+- [x] 🤖 Princípio na fonte: a sincronia guarda responsável/e-mail/telefone da descrição na
+      tarefa; a atribuição decide por **contato antes do título**; `--ler-descricoes` busca no
+      Asana o que ficou em dúvida
+- [x] 🤖 `[Canceled] Erik Mendoza Jr_…` → Erik Mendoza (tag na frente sai; Jr é marca de criança)
+- [ ] 👤 Abrir o card do David Pera no painel e confirmar que está como você queria
+- [ ] 👤 Rodar `python3 adminai/atribuir_servicos.py --ler-descricoes` uma vez: os baldes
+      (`Mike`, `Sean`, `Liam`, `Martin`…) podem se resolver sozinhos pela descrição
+- [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
 
 ## Vem de antes (21/09, aprovado e ainda devendo)
 

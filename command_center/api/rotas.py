@@ -192,8 +192,13 @@ def attention_restore(dados: RestaurarIn, request: Request, u=Depends(auth.exige
 def clients(status: str | None = None, q: str | None = None, vip: bool | None = None, pro: bool | None = None,
             u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     where, p = ["1=1"], []
-    if status:
-        where.append("c.status=?"); p.append(status.upper())
+    # 22/09: corrida/tarefa que virou card fica 'separado' — fora da lista, mas consultável
+    if (status or "").upper() == "SEPARADO":
+        where.append("c.kind=?"); p.append(identidade.SEPARADO)
+    else:
+        where.append("c.kind<>?"); p.append(identidade.SEPARADO)
+        if status:
+            where.append("c.status=?"); p.append(status.upper())
     if vip is not None:
         where.append("c.vip=?"); p.append(1 if vip else 0)
     if pro is not None:

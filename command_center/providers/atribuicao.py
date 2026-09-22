@@ -36,6 +36,42 @@ NOTA_CARD_NOVO = ("Card aberto pela varredura de 22/09 com o nome como aparece n
                   "do Asana. Se for a mesma pessoa de outro card, una pelo painel.")
 
 
+def _vivos(con):
+    """Os cards que contam: 'separado' (corrida, tarefa) não é dono de serviço nenhum."""
+    return todos(con, "SELECT * FROM clients WHERE kind<>?", (identidade.SEPARADO,))
+
+
+def por_contato(con, tarefa, clientes=None):
+    """O dono do serviço pelo que a DESCRIÇÃO diz — e-mail, telefone, responsável —
+    antes de qualquer olhar para o título.
+
+    Dono, 22/09: "o princípio para cruzar e confirmar é usar o nome do responsável e
+    informações de contato. Aplique como base de agora para frente." O título diz
+    "Alex"; a descrição diz Edward Donnell, ed@…: é o Alex do Edward, e ponto.
+    Devolve (cliente, motivo) ou (None, None). Só decide quando bate UM card."""
+    clientes = clientes if clientes is not None else _vivos(con)
+    email = (tarefa["resp_email"] or "").strip().lower() if "resp_email" in tarefa.keys() else ""
+    if email:
+        achados = [c for c in clientes if (c["email"] or "").strip().lower() == email
+                   or (c["email_alt"] or "").strip().lower() == email]
+        if len(achados) == 1:
+            return achados[0], f"e-mail da descrição ({email})"
+    tel = identidade.so_digitos(tarefa["resp_phone"]) if "resp_phone" in tarefa.keys() else None
+    if tel:
+        achados = [c for c in clientes if c["phone"] and identidade.so_digitos(c["phone"]) == tel]
+        if len(achados) == 1:
+            return achados[0], f"telefone da descrição ({tarefa['resp_phone']})"
+    resp = tarefa["resp_name"] if "resp_name" in tarefa.keys() else None
+    if resp and len(_partes(resp)) >= 2:
+        chave = identidade.chave_exata(resp)
+        achados = [c for c in clientes if identidade.chave_exata(c["name"]) == chave]
+        if not achados:
+            achados = [c for c in clientes if identidade.mesmo_nome(resp, c["name"] or "")]
+        if len(achados) == 1:
+            return achados[0], f"responsável da descrição ({resp})"
+    return None, None
+
+
 def _partes(nome):
     return identidade.normaliza(nome)
 
@@ -64,7 +100,7 @@ def candidatos_para(con, nome, clientes=None):
     alvo = (nome or "").strip()
     if not alvo:
         return []
-    clientes = clientes if clientes is not None else todos(con, "SELECT * FROM clients")
+    clientes = clientes if clientes is not None else _vivos(con)
     chave = identidade.chave_exata(alvo)
     partes = _partes(alvo)
 
@@ -183,7 +219,7 @@ def _criar_card(con, nome):
                    email=None, notes=NOTA_CARD_NOVO, updated_at=agora())
 
 
-def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
+def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_descricoes=False):
     """Varre TODOS os serviços e põe cada um no card de quem é.
 
     `aplicar=False` é a varredura: não escreve nada, só diz o que mudaria. Com
@@ -192,22 +228,58 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
     Processa os nomes do mais completo para o mais curto de propósito: assim
     "Charlie Marron" ganha (ou acha) o card antes de "Charlie M" ser procurado, e
     a forma curta cai no card certo em vez de abrir um segundo."""
-    tarefas = todos(con, "SELECT id, client_id, title FROM tasks WHERE project=? OR ? IS NULL",
-                    (projeto, projeto))
-    por_nome = {}
-    sem_nome = []
+    tarefas = todos(con, "SELECT * FROM tasks WHERE project=? OR ? IS NULL", (projeto, projeto))
+    movidos, ja_certos, criados, unir, pelo_contato, lidas = [], 0, [], [], 0, 0
+
+    def _move(t, cliente, motivo):
+        nonlocal ja_certos
+        if t["client_id"] == cliente["id"]:
+            ja_certos += 1
+            return
+        movidos.append({"task_id": t["id"], "title": t["title"], "pessoa": cliente["pilot_name"] or cliente["name"],
+                        "de": t["client_id"], "para": cliente["id"],
+                        "para_nome": cliente["pilot_name"] or cliente["name"], "motivo": motivo})
+        if aplicar:
+            con.execute("UPDATE tasks SET client_id=?, synced_at=? WHERE id=?", (cliente["id"], agora(), t["id"]))
+
+    # 1ª passada — o CONTATO da descrição decide, antes do título (princípio do dono)
+    vivos = _vivos(con)
+    restantes = []
     for t in tarefas:
+        cliente, motivo = por_contato(con, t, vivos)
+        if cliente:
+            _move(t, cliente, motivo); pelo_contato += 1
+        else:
+            restantes.append(t)
+
+    # 2ª passada — o título, agrupado por nome
+    por_nome, sem_nome = {}, []
+    for t in restantes:
         pessoa = identidade.pessoa_do_titulo(t["title"])
         if not pessoa:
             sem_nome.append({"task_id": t["id"], "title": t["title"], "client_id": t["client_id"]})
             continue
         por_nome.setdefault(pessoa, []).append(t)
 
-    movidos, ja_certos, criados, unir = [], 0, [], []
     ordem = sorted(por_nome, key=lambda n: (-len(n.split()), -len(n), n.lower()))
     for nome in ordem:
-        clientes = todos(con, "SELECT * FROM clients")          # relê: pode ter nascido card na volta anterior
+        clientes = _vivos(con)                                  # relê: pode ter nascido card na volta anterior
         cliente, motivo = resolver(con, nome, clientes)
+        if cliente is None and ler_descricoes:
+            # Em dúvida pelo título, a descrição pode resolver — e a partir daqui fica
+            # guardada na tarefa, então a próxima varredura não pergunta ao Asana de novo.
+            ainda = []
+            for t in por_nome[nome]:
+                if not any(t[k] for k in ("resp_name", "resp_email", "resp_phone")):
+                    t = _ler_descricao(con, t); lidas += 1
+                c2, m2 = por_contato(con, t, clientes)
+                if c2:
+                    _move(t, c2, m2); pelo_contato += 1
+                else:
+                    ainda.append(t)
+            por_nome[nome] = ainda
+            if not ainda:
+                continue
         if cliente is None:
             # Sem card, ou mais de um candidato. A regra do dono não abre exceção:
             # na dúvida o serviço NÃO encosta no card de ninguém — abre o seu.
@@ -234,23 +306,36 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
                                     "para_nome": f"{nome} (card novo)", "motivo": motivo})
                 continue
         for t in por_nome[nome]:
-            if t["client_id"] == cliente["id"]:
-                ja_certos += 1
-                continue
-            movidos.append({"task_id": t["id"], "title": t["title"], "pessoa": nome,
-                            "de": t["client_id"], "para": cliente["id"],
-                            "para_nome": cliente["pilot_name"] or cliente["name"], "motivo": motivo})
-            if aplicar:
-                con.execute("UPDATE tasks SET client_id=?, synced_at=? WHERE id=?",
-                            (cliente["id"], agora(), t["id"]))
+            _move(t, cliente, motivo)
     if aplicar:
         con.commit()
     return {"aplicado": bool(aplicar), "tarefas": len(tarefas), "ja_certos": ja_certos,
+            "pelo_contato": pelo_contato, "descricoes_lidas": lidas,
             "movidos": movidos, "criados": criados, "unir": unir, "sem_nome": sem_nome}
+
+
+def _ler_descricao(con, tarefa):
+    """Busca a descrição da tarefa no Asana e guarda responsável/e-mail/telefone nela.
+    Devolve a tarefa relida. Falha de rede não derruba a varredura: devolve como veio."""
+    from command_center.providers import chamar, sync
+    gid = um(con, "SELECT external_id FROM entity_links WHERE entity_type='task' AND entity_id=? AND system='asana'",
+             (tarefa["id"],))
+    if not gid:
+        return tarefa
+    try:
+        full = chamar("asana", "asana_tarefa", gid=gid["external_id"])
+    except Exception:                                    # noqa: BLE001 - ler é o extra
+        return tarefa
+    r = sync._resp_da_descricao(sync.parse_descricao(full.get("notas")))
+    con.execute("UPDATE tasks SET resp_name=?, resp_email=?, resp_phone=? WHERE id=?",
+                (r["resp_name"], r["resp_email"], r["resp_phone"], tarefa["id"]))
+    con.commit()
+    return um(con, "SELECT * FROM tasks WHERE id=?", (tarefa["id"],))
 
 
 def resumo(rel):
     """Uma linha por bucket, para log e para a tela."""
     return (f"{rel['tarefas']} serviços · {len(rel['movidos'])} movidos · {rel['ja_certos']} já certos · "
+            f"{rel.get('pelo_contato', 0)} decididos por contato · "
             f"{len(rel['criados'])} cards novos · {len(rel['unir'])} para você unir · "
             f"{len(rel['sem_nome'])} sem nome no título")

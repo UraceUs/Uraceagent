@@ -104,6 +104,20 @@ No código: `identidade.mesmo_contato` (e-mail, telefone ou responsável igual) 
 CONFIRMA; `candidatos_duplicados` lista esses pares primeiro, marcados `forte`; a
 lista "para você unir" marca `=` só com contato/responsável e `~` quando é só o nome.
 
+## À noite: as três instruções finais
+
+1. *"Pode só separar"* — card que é corrida/tarefa não é mais apagado por
+   `limpar_nao_clientes`: ganha `kind='separado'`, sai da lista e de toda busca de
+   identidade, e aparece no filtro **Separados** da tela de clientes.
+2. *"Aplique o princípio como base de agora para frente"* — a sincronia passou a
+   guardar na tarefa o que a descrição diz (`resp_name`, `resp_email`, `resp_phone`).
+   A atribuição decide por **contato antes do título** (`por_contato`): o título diz
+   "Alex", a descrição diz Edward Donnell, ed@… — é o Alex do Edward. Contato que bate
+   em dois cards não decide (é problema de cadastro, não licença para chutar).
+   `--ler-descricoes` busca no Asana só o que o título deixou em dúvida, uma vez.
+3. *"Nesse caso o nome é Erik Mendoza"* — tag na frente (`[Canceled]`) sai; `Jr` no
+   fim é marca de criança, não nome. `Sr` fica: é o pai.
+
 ## O cadastro também está sujo
 
 A varredura expôs uma segunda camada do problema: boa parte dos "ambíguos" eram **cards

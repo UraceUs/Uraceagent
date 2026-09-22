@@ -135,6 +135,16 @@ MIGRACOES = [
     # conversa direta entre duas pessoas: "menor-maior" dos ids. O UNIQUE é o que impede
     # duas conversas paralelas entre as mesmas pessoas — cada uma com metade do histórico.
     ("team_channels", "dm_key", "TEXT"),
+    # 22/09 — dono: "pode só separar". Card que é corrida/tarefa não é apagado: sai da
+    # lista de clientes com kind='separado', e continua consultável.
+    ("clients", "kind", "TEXT NOT NULL DEFAULT 'cliente'"),
+    # 22/09 — dono: "o princípio para cruzar e confirmar é usar o nome do responsável e
+    # informações de contato" — e "aplique como base de agora para frente". A sincronia
+    # já lia isso da descrição da tarefa e jogava fora; agora fica na tarefa, para a
+    # atribuição decidir por contato antes de olhar o título.
+    ("tasks", "resp_name", "TEXT"),
+    ("tasks", "resp_email", "TEXT"),
+    ("tasks", "resp_phone", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

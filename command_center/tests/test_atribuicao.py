@@ -450,3 +450,98 @@ def test_candidatos_duplicados_acha_mesmo_email_e_telefone_antes_do_nome(con):
     assert fortes[frozenset((x, y))].startswith("mesmo e-mail")
     assert fortes[frozenset((z, w))].startswith("mesmo telefone")
     assert pares[0].get("forte"), "contato vem antes de nome parecido"
+
+
+# --------------------------------------------- 22/09, à noite: as três instruções finais
+def test_tag_na_frente_e_jr_no_fim():
+    """"[Canceled] Erik Mendoza Jr_Karting School" — dono: "nesse caso o nome é Erik Mendoza"."""
+    assert identidade.pessoa_do_titulo("[Canceled] Erik Mendoza Jr_Karting School [4/4 Mini] Lead and follow") == "Erik Mendoza"
+    assert identidade.pessoa_do_titulo("Erik Mendoza Jr._Prep") == "Erik Mendoza"
+    assert identidade.pessoa_do_titulo("Thiago Belluci Sr") == "Thiago Belluci Sr", "Sr é o pai; fica"
+
+
+def test_contato_da_descricao_decide_antes_do_titulo(con):
+    """O título diz "Alex"; a descrição diz Edward Donnell, ed@… — é o Alex do Edward, e
+    não vai para balde nenhum nem para o Alex Xikis. Princípio do dono na fonte."""
+    edward = _cliente(con, "Edward Donnell", piloto="Alex Donnell", email="ed@x.com")
+    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    t1 = _tarefa(con, "Alex_Prep Orlando Cup {KA100}")
+    con.execute("UPDATE tasks SET resp_email='ED@x.com' WHERE id=?", (t1,))
+    t2 = _tarefa(con, "Alex_Practice")
+    con.execute("UPDATE tasks SET resp_name='Edward Donnell' WHERE id=?", (t2,))
+    t3 = _tarefa(con, "Alex_Trackside")                       # sem descrição: título ambíguo → balde
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert rel["pelo_contato"] == 2
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t1,))["client_id"] == edward
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t2,))["client_id"] == edward
+    balde = um(con, "SELECT client_id FROM tasks WHERE id=?", (t3,))["client_id"]
+    assert balde not in (edward,) and um(con, "SELECT name FROM clients WHERE id=?", (balde,))["name"] == "Alex"
+
+
+def test_telefone_da_descricao_tambem_decide(con):
+    c = _cliente(con, "Joao Silva", piloto="Rui Silva")
+    con.execute("UPDATE clients SET phone='(407) 555-0199' WHERE id=?", (c,))
+    t = _tarefa(con, "Rui_Practice")
+    con.execute("UPDATE tasks SET resp_phone='407-555-0199' WHERE id=?", (t,))
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == c
+
+
+def test_contato_que_bate_em_dois_cards_nao_decide(con):
+    """Dois cards com o mesmo e-mail é problema de cadastro, não licença para chutar."""
+    a = _cliente(con, "Pai Um", email="dup@x.com")
+    b = _cliente(con, "Pai Dois", email="dup@x.com")
+    t = _tarefa(con, "Zezinho_Practice")
+    con.execute("UPDATE tasks SET resp_email='dup@x.com' WHERE id=?", (t,))
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    dono = um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"]
+    assert dono not in (a, b)
+
+
+def test_ler_descricoes_busca_no_asana_so_o_que_ficou_em_duvida(con, monkeypatch):
+    """Com --ler-descricoes, o que o título não resolve vai buscar responsável e contato
+    no Asana — uma vez: fica guardado na tarefa."""
+    from command_center.db import inserir
+    from command_center.providers import atribuicao as A
+    edward = _cliente(con, "Edward Donnell", piloto="Alex Donnell", email="ed@x.com")
+    _cliente(con, "Maria Xikis", piloto="Alex Xikis")
+    certo = _cliente(con, "Brody Robbin")
+    t_duvida = _tarefa(con, "Alex_Prep Orlando Cup {KA100}")
+    t_certo = _tarefa(con, "Brody Robbin_Professional Coach")
+    inserir(con, "entity_links", entity_type="task", entity_id=t_duvida, system="asana", external_id="g-alex")
+    inserir(con, "entity_links", entity_type="task", entity_id=t_certo, system="asana", external_id="g-brody")
+    con.commit()
+    pedidos = []
+
+    def chamar_falso(sistema, ferramenta, **a):
+        pedidos.append(a["gid"])
+        return {"gid": a["gid"], "nome": "x", "notas": "Driver's name: Alex\nResponsible Name: Edward Donnell\nEmail: ed@x.com\nPhone: 407-555-0100"}
+    import command_center.providers as P
+    monkeypatch.setattr(P, "chamar", chamar_falso)
+    rel = A.redistribuir(con, aplicar=True, ler_descricoes=True)
+    assert pedidos == ["g-alex"], "só a tarefa em dúvida foi ao Asana; a do Brody resolveu pelo título"
+    assert rel["descricoes_lidas"] == 1
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t_duvida,))["client_id"] == edward
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t_certo,))["client_id"] == certo
+    assert um(con, "SELECT resp_email FROM tasks WHERE id=?", (t_duvida,))["resp_email"] == "ed@x.com"
+    # segunda vez: não pergunta ao Asana de novo
+    pedidos.clear()
+    A.redistribuir(con, aplicar=True, ler_descricoes=True)
+    assert pedidos == []
+
+
+def test_card_separado_nao_e_dono_de_nada_nem_aparece_na_lista(cli):
+    """Dono, 22/09: "pode só separar". A corrida que virou card fica, mas fora."""
+    con = conectar()
+    corrida = _cliente(con, "Battle for Orlando")
+    con.execute("UPDATE clients SET kind=? WHERE id=?", (identidade.SEPARADO, corrida))
+    con.commit()
+    assert atribuicao.resolver(con, "Battle for Orlando")[0] is None
+    assert corrida not in [c["id"] for c in atribuicao._vivos(con)]
+    con.close()
+    _entra(cli, "admin@urace.us")
+    assert corrida not in [c["id"] for c in cli.get("/ops/api/clients").json()]
+    assert corrida in [c["id"] for c in cli.get("/ops/api/clients?status=SEPARADO").json()]
