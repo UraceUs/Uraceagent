@@ -62,8 +62,9 @@ A seção **"NÃO É SERVIÇO DE NINGUÉM, mas está num card de cliente"** most
 com o `#id` de cada linha. Traga-a inteira.
 
 **Você recusou esta tarefa e estava certa.** `--soltar-nao-servicos` era tudo-ou-nada, e
-no card do Hank Lai havia duas linhas: a corrida `Lucas Oil … | Sebring`, que não é
-serviço de ninguém, e `Inventário Hank Lai_ caixa`, que pode ser trabalho feito para ele.
+a lista tem duas linhas de naturezas diferentes: a corrida `Lucas Oil … | Sebring`, no
+card `#15 Alexander Savage`, que não é serviço de ninguém e o dono já mandou tirar; e
+`Inventário Hank Lai_ caixa`, no card do Hank, que pode ser trabalho feito para ele.
 Soltar as duas para resolver uma seria perder a segunda. A ferramenta mudou.
 
 **Solte só a corrida** (o `#id` sai da lista da varredura; repita `--soltar` para várias):

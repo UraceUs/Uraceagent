@@ -186,6 +186,14 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
 - [ ] 👤 Olhar os baldes que sobraram (`Isabel`, `Calix`, `Enzo`, `Mia`, `Baturalp`,
       `Enrico BR`) e unir os que você reconhecer
 - [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
+- [x] 🤖 **Soltar uma linha por vez** (`--soltar ID`): a extensão da VPS recusou tirar a
+      corrida `Lucas Oil … | Sebring` do card `#15 Alexander Savage` porque a flag levaria
+      junto `Inventário Hank Lai_ caixa`. Ela estava certa. Recusa id que não está na lista
+      e respeita o carimbo; sem `--aplicar` não escreve.
+- [ ] 👤 **`Inventário Hank Lai_ caixa` — é serviço do Hank ou tarefa interna da URACE?**
+      Se for serviço dele, fica no card e a regra de "não é serviço de ninguém" precisa
+      aprender que `Inventário <nome de cliente>` pode ser trabalho cobrado. Se for interna,
+      sai junto com a corrida. Enquanto não vier a resposta, só a corrida sai.
 
 ## Bancada de testes (22/09) — o instável era um teste fraco
 

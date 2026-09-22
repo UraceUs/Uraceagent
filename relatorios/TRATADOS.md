@@ -11,6 +11,7 @@ Esta lista é a memória dela entre sessões: relatório que está aqui não se 
 | `vps-20260922T...` (T-003 + varredura) | 22/09 | A união do Martin seria desfeita pela varredura: uma tarefa truncada fazia o ramo `truncados` pular a checagem da união do dono. **Decisão do dono agora vem antes de qualquer heurística.** |
 | `vps-20260922T194631Z.md` | 22/09 20:0x | Os 3 pedidos dela já estavam feitos em `cb07856` (filtro `--nome`, união pelo piloto, plano que não para). A T-005 que ela pediu também já estava na fila. |
 | `vps-20260922T195050Z.md` | 22/09 20:0x | **O defeito do Martin**, corrigido em `5dee9d4`: a decisão do dono passou a vir antes de qualquer heurística. A pergunta dela — "o mesmo pode acontecer com Mikey/Sanghera/Luciano/Mauricio?" — está respondida: a checagem é por `drop_name` e vale para os cinco. Também tirei o `DeprecationWarning` do `utcnow()` que sujava o relatório de waivers. |
+| `vps-20260922T200033Z.md` (T-008 + T-006) | 22/09 | **T-008 confirmada em produção**: 0 movidos, 0 cards novos, e os 26 do Martin apareceram em "já certos" (909 → 935). **T-006: a recusa dela estava certa outra vez.** `--soltar-nao-servicos` era tudo-ou-nada e levaria junto `Inventário Hank Lai_ caixa`, que pode ser serviço do cliente. Agora existe `--soltar ID` (cirúrgico, recusa id que não está na lista, respeita o carimbo do dono) — commit desta rodada. A pergunta "inventário é do Hank ou é tarefa interna?" é do dono e foi levada a ele. |
 
 ## Como a rotina usa isto
 
