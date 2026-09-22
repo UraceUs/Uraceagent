@@ -337,7 +337,7 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
 
     # 2ª passada — o título, agrupado por nome
     por_nome, sem_nome = {}, []
-    truncados = set()
+    truncados, por_chave = set(), {}
     for t in restantes:
         d = identidade.pessoa_do_titulo_detalhe(t["title"])
         pessoa = d["nome"]
@@ -349,8 +349,14 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
         # pelo primeiro nome — vai direto para card próprio.
         if d["truncado"] and len(pessoa.split()) == 1:
             truncados.add(pessoa)
-        por_nome.setdefault(pessoa, []).append(t)
+        chave = identidade.chave_exata(pessoa)
+        if chave in por_chave:
+            por_chave[chave][1].append(t)
+        else:
+            por_chave[chave] = (pessoa, [t])
 
+    # "JOSE MIGUEL Abed" e "Jose Miguel Abed" são a mesma pessoa: grafia não abre card.
+    por_nome = {nome: tarefas_ for nome, tarefas_ in por_chave.values()}
     ordem = sorted(por_nome, key=lambda n: (-len(n.split()), -len(n), n.lower()))
     for nome in ordem:
         clientes = _vivos(con)                                  # relê: pode ter nascido card na volta anterior
@@ -397,6 +403,13 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
                     return False
                 if balde is not None and cid == balde["id"]:
                     return True                      # já está no balde deste nome
+                atual = next((c for c in clientes if c["id"] == cid), None)
+                # Card atual é FORTE parecido ("Henryk McKay" no "Henryl McKay": mesmo
+                # sobrenome, 1 letra no primeiro nome)? Então não é escolha entre duas
+                # pessoas — é a mesma, escrita errada. Fica, mesmo havendo outros nomes
+                # parecidos por aí.
+                if atual is not None and any(identidade.parecido(nome, n) for n in identidade._nomes(atual)):
+                    return True
                 # UM candidato plausível só: é ele mesmo, escrito de outro jeito
                 # ("AIDEN" no Aidan Mills). Havendo mais de um, o card atual foi
                 # escolhido pela máquina e não por evidência — aí sai.

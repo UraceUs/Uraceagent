@@ -40,6 +40,7 @@ _PALAVRA_DE_SERVICO = {
     "arrive", "drive", "test", "using", "use", "used", "motor", "chassi", "chassis", "kart",
     "karting", "engine", "weekend", "cup", "rwc", "skusa", "fwt", "rok", "uspks", "wka",
     "winter", "summer", "spring", "fall", "orlando", "bushnell", "okc", "vanderlan", "matt",
+    "baby", "babykart", "experience", "experiencia", "experiência", "sessions", "sessoes", "sessões",
     "urace", "u-race", "tuesday", "monday", "wednesday", "thursday", "friday", "saturday", "sunday",
 }
 # Categoria/motor colados no nome: "Alex Xikis KA100", "Branson KA100sr".
@@ -154,9 +155,10 @@ def _corta_no_separador(t):
     continuam sendo um nome só."""
     t = t.replace("–", "-").replace("—", "-")            # travessão é hífen para esta leitura
     t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s*,\s*", t)[0].strip()
-    # hífen COLADO no nome mas com espaço depois ("Alex Savage- Old Chassis") separa
-    # sempre: nome composto não tem espaço do outro lado ("Jean-Luc Picard").
-    t = re.split(r"-\s+", t)[0].strip()
+    # Hífen com espaço de QUALQUER lado separa sempre: nome composto não tem espaço
+    # nenhum ao redor do hífen ("Jean-Luc Picard", "Ana-Maria"). Pega tanto
+    # "Alex Savage- Old Chassis" quanto "Cayetano Sanin -BABYKART".
+    t = re.split(r"-\s+|\s+-", t)[0].strip()
     t = re.split(r"(?<!\d)\s*/\s*(?!\d)", t)[0].strip()
     m = re.match(r"^([^-–]+?)[-–](.+)$", t)
     if m:
@@ -222,7 +224,7 @@ def _nome_plausivel(t):
         return False
     if any(x in _NUNCA_NO_NOME for x in limpas):
         return False
-    if any(x in _LIGACAO for x in limpas[1:]):
+    if any(x in _LIGACAO for x in limpas):
         return False
     if not all(re.match(r"^[A-Za-zÀ-ÿ'.&-]+$", p) for p in palavras):
         return False
@@ -261,8 +263,10 @@ def _so_servico(pedaco):
     baixo = pedaco.lower()
     if any(sv in baixo for sv in _SERVICOS):
         return True
+    # SÓ palavra de serviço. Recado de quadro ("CLOSED", "NOT GOING") não conta: pular
+    # o pedaço fazia "CLOSED_for driver's" virar a pessoa "for driver's".
     palavras = [re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", x).lower() for x in pedaco.split()]
-    return bool(palavras) and all(p in _PALAVRA_DE_SERVICO or p in _NAO_E_GENTE or not p for p in palavras)
+    return bool(palavras) and all(p in _PALAVRA_DE_SERVICO for p in palavras if p)
 
 
 def pessoa_do_titulo(titulo, detalhe=False):

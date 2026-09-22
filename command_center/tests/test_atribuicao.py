@@ -831,3 +831,46 @@ def test_pular_pedaco_nunca_atravessa_uma_corrida(titulo):
     """Se pulasse pedaço em corrida, "Star Champions Series - King Castle" viraria a
     pessoa "King Castle"."""
     assert identidade.pessoa_do_titulo(titulo) is None
+
+
+# ============ a varredura com o nome no meio: quatro defeitos que ela expôs ============
+@pytest.mark.parametrize("titulo,esperado", [
+    ("Karting School -  Cayetano Sanin -BABYKART", "Cayetano Sanin"),   # hífen colado no FIM
+    ("Karting School - Landon Silvers BABY - NO CHASSIS", "Landon Silvers"),
+    ("Karting School PRO -  Guillermo Jimenez - Micro PRO URACE", "Guillermo Jimenez"),
+    ("DRIVING EXPERIENCE - ALI ALHANOOTI (vlr engine)", "Ali Alhanooti"),
+    ("Karting School - Sean Portnov - NO CHASSIS", "Sean Portnov"),
+])
+def test_nome_no_meio_sem_categoria_grudada(titulo, esperado):
+    assert (identidade.pessoa_do_titulo(titulo) or "").lower() == esperado.lower()
+
+
+def test_recado_de_quadro_nao_vira_pessoa_pulando_pedaco(con):
+    """"CLOSED_for driver's" virava a pessoa "for driver's": pular pedaço só vale
+    quando o pedaço pulado é SERVIÇO, não recado de quadro."""
+    for lixo in ("CLOSED_for driver's", "NOT GOING - Star Champions Series", "Photos_Baby Kart"):
+        assert identidade.pessoa_do_titulo(lixo) is None, lixo
+
+
+def test_grafia_diferente_nao_abre_dois_cards(con):
+    """"JOSE MIGUEL Abed" e "Jose Miguel Abed" são a mesma criança."""
+    _tarefa(con, "KART SCHOOL - JOSE MIGUEL Abed (Mexico)")
+    _tarefa(con, "KART SCHOOL - Jose Miguel Abed (Mexico)")
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    cards = todos(con, "SELECT id FROM clients WHERE LOWER(name) LIKE '%abed%'")
+    assert len(cards) == 1, "um card só"
+    assert um(con, "SELECT COUNT(*) n FROM tasks WHERE client_id=?", (cards[0]["id"],))["n"] == 2
+
+
+def test_erro_de_digitacao_no_card_atual_segura_o_servico(con):
+    """"Henryk McKay" no card "Henryl McKay": mesmo sobrenome, 1 letra no primeiro nome.
+    Não é escolha entre duas pessoas — é a mesma, escrita errada. Fica, mesmo havendo
+    outros nomes parecidos no cadastro."""
+    henryl = _cliente(con, "Henryl McKay")
+    _cliente(con, "Henry McKayla")                 # outro parecido, para não haver candidato único
+    _tarefa(con, "Karting School - Henryk McKay - Cadet Urace", client_id=henryl)
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert rel["movidos"] == []
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE '%Henryk%'")["client_id"] == henryl
