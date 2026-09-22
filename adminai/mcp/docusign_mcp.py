@@ -176,13 +176,40 @@ def _resumo_envelope(e):
     }
 
 
+PAGINA = 100                 # o máximo que o listStatusChanges devolve por vez
+TETO_ENVELOPES = 5000        # backstop: nunca varrer o infinito
+
+
+def _listar_envelopes(params, maximo=TETO_ENVELOPES):
+    """TODOS os envelopes da consulta, paginando. Devolve (lista, total_na_conta).
+
+    Sem paginação vinham só os 100 primeiros — e o resto do ano ficava congelado no
+    status da última vez que coube na janela. Foi assim que a waiver da Nadine Kozora
+    Garcia, Completed no DocuSign em 17/09, continuou aparecendo como "enviada" no
+    painel (dono, 22/09)."""
+    achados, inicio, total = [], 0, None
+    while len(achados) < maximo:
+        q = urllib.parse.urlencode({**params, "count": PAGINA, "start_position": inicio})
+        r = _req(f"/envelopes?{q}")
+        pagina = r.get("envelopes") or []
+        achados.extend(pagina)
+        if total is None:
+            try:
+                total = int(r.get("totalSetSize") or r.get("resultSetSize") or len(pagina))
+            except (TypeError, ValueError):
+                total = len(pagina)
+        if len(pagina) < PAGINA or len(achados) >= (total or 0):
+            break
+        inicio += len(pagina)
+    return achados[:maximo], (total if total is not None else len(achados))
+
+
 def _envelopes_de(email, desde_dias):
     """Todos os envelopes (qualquer status) que tenham esse e-mail como signatário."""
     email = email.strip().lower()
-    q = urllib.parse.urlencode({"from_date": _iso_dias_atras(desde_dias),
-                                "include": "recipients", "count": 100})
+    todos_, _total = _listar_envelopes({"from_date": _iso_dias_atras(desde_dias), "include": "recipients"})
     achados = []
-    for e in _req(f"/envelopes?{q}").get("envelopes", []):
+    for e in todos_:
         for s in (e.get("recipients") or {}).get("signers", []):
             if (s.get("email") or "").strip().lower() == email:
                 achados.append(e)
@@ -489,10 +516,10 @@ def docusign_templates():
      "desde_dias": {"type": "integer", "default": 120}},
     ["status"])
 def docusign_envelopes(status, desde_dias=120):
-    q = urllib.parse.urlencode({"from_date": _iso_dias_atras(desde_dias), "status": status,
-                                "include": "recipients", "count": 100})
-    envs = _req(f"/envelopes?{q}").get("envelopes", [])
+    envs, total = _listar_envelopes({"from_date": _iso_dias_atras(desde_dias), "status": status,
+                                     "include": "recipients"})
     return {"ambiente": "DEMO" if _eh_demo() else "PRODUÇÃO", "total": len(envs),
+            "total_na_conta": total, "completo": len(envs) >= total,
             "envelopes": [_resumo_envelope(e) for e in envs]}
 
 

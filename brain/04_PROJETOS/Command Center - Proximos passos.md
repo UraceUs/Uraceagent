@@ -189,7 +189,13 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
 
 ## Para logo depois da organização dos cards (dono, 22/09)
 
-- [ ] 🤖 **Waiver assinada aparecendo como "enviada, não assinada" no painel.** Envelope
+- [x] 🤖 **RESOLVIDO em 22/09: era paginação.** `docusign_envelopes` pedia `count=100` e
+      não paginava — só os 100 primeiros envelopes do ano voltavam, e o resto ficava
+      congelado no status da última vez que coube na janela. Era o suspeito (a). Agora
+      pagina até o fim e diz `completo: true/false`. `_envelopes_de` tinha o mesmo bug,
+      o que também afetava a trava de "waiver válida" antes de enviar uma nova.
+- [ ] 👤 Conferir no painel que a waiver da Nadine virou "assinada" depois da sincronia
+- [ ] 🤖 (contexto original) **Waiver assinada aparecendo como "enviada, não assinada".** Envelope
       `1ceee462-2383-8726-825b-424ddf410785`, Parental Consent, assinado por Nadine Kozora
       Garcia (nkozora1@gmail.com) em 17/09/2026 16:21 — no DocuSign está **Completed**; o
       Command Center ainda mostra como enviada. Dono: *"é um erro, né?"* — é. Suspeitos, na
