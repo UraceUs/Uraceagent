@@ -38,6 +38,10 @@ git pull --rebase origin claude/configurar-open-claw-ooqo8x
 python3 adminai/atribuir_servicos.py --limite 60
 ```
 
+Você perguntou se o mesmo pode acontecer com Mikey, Sanghera, Luciano e Mauricio: a
+checagem é pelo nome do card que SAIU na união (`drop_name`), então vale para os cinco
+do mesmo jeito. Se algum ainda aparecer querendo sair, é defeito e eu quero saber.
+
 Esperado agora: **0 movidos e 0 cards novos** — e a tarefa solta do Martin indo para o
 card dele (27 no total). Se der isso, pode aplicar; se ainda quiser tirar alguém de um
 card que o dono uniu, **não aplique** e reporte.

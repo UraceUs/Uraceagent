@@ -61,7 +61,9 @@ def _dias(iso):
         d = dt.datetime.fromisoformat(str(iso)[:19].replace("Z", ""))
     except ValueError:
         return None
-    return (dt.datetime.utcnow() - d).days
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=dt.timezone.utc)
+    return (dt.datetime.now(dt.timezone.utc) - d).days
 
 
 def main():
