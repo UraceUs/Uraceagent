@@ -100,6 +100,33 @@ def test_recado_de_quadro_e_pista_nao_viram_cliente(lixo):
     assert identidade.pessoa_do_titulo(lixo) is None
 
 
+@pytest.mark.parametrize("lixo", [
+    "The North Florida Kart Club #10",              # artigo na frente: clube, não gente
+    "Faturas a cobrar",                             # coluna do quadro, com palavra de ligação
+    "Lucas Oil | Sebring, FL",                      # patrocinador de série, não o Lucas
+    "Lucas Oil  Winter Series Race | Sebring International Raceway",
+    "NOT GOING 2026 Star Champions Series -Night Fight | Trackhouse Motorplex",
+    "Buscar as coisas no Mauricio",                 # tarefa que tinha virado cliente
+])
+def test_a_segunda_varredura_real_pegou_cinco_que_nao_sao_gente(lixo):
+    """Cinco dos 32 cards que nasceriam na varredura de 22/09 (2ª rodada) não eram
+    pessoa. Cada um virou regra: artigo nunca abre nome, palavra de ligação no meio
+    denuncia frase, e há palavras que não cabem em nome nenhum ("oil", "club")."""
+    assert identidade.pessoa_do_titulo(lixo) is None
+
+
+@pytest.mark.parametrize("titulo,esperado", [
+    ("Maria de Souza", "Maria de Souza"),           # partícula de nome NÃO é ligação
+    ("Joao dos Santos", "Joao dos Santos"),
+    ("Lucas_Professional Coach 4T Senior", "Lucas"),   # o Lucas continua existindo
+    ("Shawn Scioto VLR 100", "Shawn Scioto"),
+    ("Giovanni Barrera 2 Stroke Karting School", "Giovanni Barrera"),
+    ("Reinaldo Andres Arroyo Son_Driving Experience[Junior_4 stroke]", "Reinaldo Andres Arroyo Son"),
+])
+def test_as_regras_novas_nao_comem_gente_de_verdade(titulo, esperado):
+    assert identidade.pessoa_do_titulo(titulo) == esperado
+
+
 def test_erro_de_digitacao_no_sobrenome_acha_a_pessoa(con):
     """"Savege" e "Brason" apareceram na varredura com 2 e 4 serviços, sem card. O
     parecido só era comparado com o PRIMEIRO nome; agora também com o último."""

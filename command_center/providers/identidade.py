@@ -73,13 +73,28 @@ _RX_CORRIDA_EXTRA = re.compile(r"\b(skusa|uspks|rok|fwt|wka|rotax|superkarts|flk
                                r"rd\s*\d|round\s*\d|race\s*\d|cup|series|championship|nationals|karting challenge)\b", re.I)
 
 
-# Palavra solta que apareceu como "cliente" na varredura de 22/09 e não é gente:
-# pista, série, marca de equipamento e recado de quadro.
+# Palavra solta que apareceu como "cliente" nas varreduras de 22/09 e não é gente:
+# pista, série, marca de equipamento e recado de quadro. Vale como PRIMEIRA palavra.
 _NAO_E_GENTE = {"trackhouse", "endurance", "florida", "guardar", "closed", "photos", "goals",
                 "mycron", "skapa", "to-do", "todo", "amr", "jfc", "rmc", "ckna", "flkc",
-                "van", "box", "old", "new", "no", "nao", "sim", "cancelado", "cancelled",
+                "van", "box", "old", "new", "no", "nao", "sim", "cancelado", "cancelled", "canceled",
                 "pista", "galpao", "galpão", "ferramenta", "ferramentas", "bandeiras", "banners",
-                "calendario", "calendário", "chassi", "chassis", "motor", "motores", "pneus"}
+                "calendario", "calendário", "chassi", "chassis", "motor", "motores", "pneus",
+                "faturas", "fatura", "invoices", "not", "going",
+                # artigo nunca abre nome de gente: "The North Florida Kart Club"
+                "the", "a", "an", "o", "os", "as", "um", "uma", "la", "el", "los"}
+
+# Palavra que NUNCA aparece no nome de uma pessoa, em QUALQUER posição. Lista curta de
+# propósito: cada uma destas inviabiliza o nome inteiro, então só entra o que não pode
+# ser sobrenome de ninguém. ("Lucas Oil" é patrocinador de série, não o Lucas.)
+_NUNCA_NO_NOME = {"oil", "club", "clube", "series", "championship", "motorplex", "kartplex",
+                  "raceway", "speedway", "faturas", "invoices"}
+
+# Palavra de ligação no meio denuncia FRASE, não nome: "Faturas a cobrar", "Buscar as
+# coisas no Mauricio", "Lead and Follow". As partículas de nome em português ("de",
+# "da", "do", "dos", "das") ficam de fora — "Maria de Souza" é gente.
+_LIGACAO = {"a", "as", "o", "os", "e", "and", "the", "no", "na", "nos", "nas",
+            "com", "para", "for", "in", "at", "of", "um", "uma"}
 
 
 def eh_rotulo_ou_servico(texto):
@@ -175,7 +190,12 @@ def _nome_plausivel(t):
     # Se a PRIMEIRA palavra já abre serviço, não sobrou pessoa nenhuma: "Lead and
     # Follow" cortaria em "Follow" e devolveria "Lead and". O corte por palavra de
     # serviço só vale quando existe um nome antes dele.
-    if re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", palavras[0]).lower() in (_PALAVRA_DE_SERVICO | _NAO_E_GENTE):
+    limpas = [re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", x).lower() for x in palavras]
+    if limpas[0] in (_PALAVRA_DE_SERVICO | _NAO_E_GENTE):
+        return False
+    if any(x in _NUNCA_NO_NOME for x in limpas):
+        return False
+    if any(x in _LIGACAO for x in limpas[1:]):
         return False
     if not all(re.match(r"^[A-Za-zÀ-ÿ'.&-]+$", p) for p in palavras):
         return False
