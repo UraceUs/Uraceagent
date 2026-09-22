@@ -20,7 +20,28 @@ CORRIDA = re.compile(r"\b(series|tour|round|rd\s?\d|rd\d|nats|cup|championship|c
                      r"kart center|raceway|speedway|motorsports? park|circuit|track|trackside|test day|practice day|"
                      r"skusa|rok\b|rotax|superkarts|usac|wka|f4\b|fia\b|winter|summer|spring|fall\b|festival|"
                      r"invoice|payment|order|shipping|suit|macac|template|created by|nothing is done|todo|checklist)\b", re.I)
-SERVICO_SUFIXO = re.compile(r"\s*[\[(].*$")          # '[4 strokes]', '(created by…)'
+SERVICO_SUFIXO = re.compile(r"\s*[\[({].*$")         # '[4 strokes]', '(created by…)', '{His own kart}'
+
+# O quadro escreve "Piloto_Serviço [categoria]", mas nem sempre com separador. Estas
+# palavras abrem a parte do SERVIÇO: da primeira delas em diante não é mais nome de
+# gente. Dono, 22/09: "às vezes aparece junto, só separado por um espaço".
+# Nunca cortam a PRIMEIRA palavra — "Summer" pode ser primeiro nome de alguém.
+_PALAVRA_DE_SERVICO = {
+    "lead", "follow", "leads", "practice", "pratice", "preatice", "pretice", "prep", "preparation",
+    "trackside", "professional", "coach", "coaching", "racing", "race", "training", "program",
+    "academy", "daily", "camp", "school", "session", "setup", "support", "suport", "suportt",
+    "arrive", "drive", "test", "using", "use", "used", "motor", "chassi", "chassis", "kart",
+    "karting", "engine", "weekend", "cup", "rwc", "skusa", "fwt", "rok", "uspks", "wka",
+    "winter", "summer", "spring", "fall", "orlando", "bushnell", "okc", "vanderlan", "matt",
+    "urace", "u-race", "tuesday", "monday", "wednesday", "thursday", "friday", "saturday", "sunday",
+}
+# Categoria/motor colados no nome: "Alex Xikis KA100", "Branson KA100sr".
+# "jr" e "sr" NÃO entram: em "Thiago Belluci Sr" é sufixo de nome, não categoria.
+# Quando são categoria vêm colados ("KA100sr") ou depois do serviço ("Rotax jr").
+_RX_CATEGORIA = re.compile(r"^(ka\d+|x\d+|rok|vlr|gp|rotax|\d+t|mini|micro|junior|senior|cadet|"
+                           r"shifter|kz\d*|briggs|lo206)\w*$", re.I)
+# Inicial abreviada no fim do nome: "Charlie M", "Liam B", "Callan B.", "G.J".
+_RX_INICIAL = re.compile(r"^[A-Za-zÀ-ÿ]\.?$")
 
 
 def normaliza(txt):
@@ -74,10 +95,13 @@ def _corta_no_separador(t):
     """A parte que vem antes do separador de serviço.
 
     `_`, `|`, `:`, `,` e o hífen COM espaço separam sempre — é o padrão do quadro
-    ("Piloto_Serviço_Categoria [n/t]"). O hífen colado ("Elliott Hubbard-Summer Camp")
-    é contextual (dono, 16/09): só separa quando o que vem depois tem cara de serviço
-    ou tem número; "Jean-Luc Picard" e "Ana-Maria" continuam sendo um nome só."""
+    ("Piloto_Serviço_Categoria [n/t]"). A barra separa quando não está entre números
+    ("Jude cook/Harley client" separa; "3/6" e "Junior/Senior" não). O hífen colado
+    ("Elliott Hubbard-Summer Camp") é contextual (dono, 16/09): só separa quando o que
+    vem depois tem cara de serviço ou tem número; "Jean-Luc Picard" e "Ana-Maria"
+    continuam sendo um nome só."""
     t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s+–\s+|\s*,\s*", t)[0].strip()
+    t = re.split(r"(?<!\d)\s*/\s*(?!\d)", t)[0].strip()
     m = re.match(r"^([^-]+?)-(.+)$", t)
     if m:
         antes, depois = m.group(1).strip(), m.group(2).strip()
@@ -86,30 +110,89 @@ def _corta_no_separador(t):
     return t
 
 
+def _corta_na_palavra_de_servico(t):
+    """Corta na primeira palavra que abre o serviço, da segunda em diante.
+
+    "David Pera Using his own Kart" → "David Pera".
+    "Callan Lead & Follow Vanderlan" → "Callan".
+    Nunca corta na primeira palavra: senão "Summer Camp" viraria a pessoa "Summer"."""
+    palavras = t.split()
+    for i, p in enumerate(palavras):
+        if i == 0:
+            continue
+        limpa = re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", p).lower()
+        if limpa in _PALAVRA_DE_SERVICO:
+            return " ".join(palavras[:i]).strip()
+    return t
+
+
+def _tira_categoria(t):
+    """Tira a categoria/motor colada no fim do nome: "Alex Xikis KA100" → "Alex Xikis"."""
+    palavras = t.split()
+    while len(palavras) > 1 and _RX_CATEGORIA.match(palavras[-1]):
+        palavras.pop()
+    return " ".join(palavras)
+
+
+def _nome_plausivel(t):
+    """O que sobrou tem cara de nome de gente?
+
+    Uma palavra só VALE (dono, 22/09: metade do quadro é "Branson_…", "G.J_…",
+    "Charlie_…"). O que segura o lixo não é a contagem de palavras, é o vocabulário:
+    rótulo, serviço e corrida continuam sendo recusados antes de chegar aqui."""
+    palavras = [p for p in t.split() if p]
+    if not (1 <= len(palavras) <= 5):
+        return False
+    # Se a PRIMEIRA palavra já abre serviço, não sobrou pessoa nenhuma: "Lead and
+    # Follow" cortaria em "Follow" e devolveria "Lead and". O corte por palavra de
+    # serviço só vale quando existe um nome antes dele.
+    if re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", palavras[0]).lower() in _PALAVRA_DE_SERVICO:
+        return False
+    if not all(re.match(r"^[A-Za-zÀ-ÿ'.&-]+$", p) for p in palavras):
+        return False
+    if len(palavras[0]) < 2:                     # inicial sozinha na frente não é nome
+        return False
+    # "Charlie M", "Liam B", "Callan B." — inicial abreviada só vale no fim
+    for p in palavras[1:-1]:
+        if _RX_INICIAL.match(p):
+            return False
+    return True
+
+
 def pessoa_do_titulo(titulo):
     """Nome da pessoa no título da tarefa, ou None quando não é gente.
 
-    'Session Setup | Aaron Benoit_Kart [Practice_2T]' → 'Aaron Benoit'
-    'Aaron Benoit_Trackside Support' → 'Aaron Benoit'
-    'Elliott Hubbard_Summer Camp 2026 1/4' → 'Elliott Hubbard'
-    '2026 SKUSA Winter Series RD1/2 | …' → None
+    O quadro do Asana escreve o cliente ANTES do serviço, em quatro formas — e o dono
+    mandou (22/09) a IA reconhecer as quatro, depois de achar 112 serviços de outras
+    pessoas dentro do card do David Pera:
+
+      'Aaron Benoit_Trackside Support'          → 'Aaron Benoit'   (underline)
+      'Harley Keeble - Rotax [3/3]'             → 'Harley Keeble'  (hífen com espaço)
+      'Alexander Jacoby | KA100'                → 'Alexander Jacoby' (barra vertical)
+      'David Pera Using his own Kart'           → 'David Pera'     (só espaço)
+
+    E ainda: primeiro nome sozinho ('Branson_Practice KA100' → 'Branson'), inicial
+    abreviada ('Charlie M_Racing Program 3/6' → 'Charlie M'), categoria colada
+    ('Alex Xikis KA100_Professional Coaching' → 'Alex Xikis') e barra entre pessoas
+    ('Jude cook/Harley client - Kart proprio' → 'Jude cook').
+
+    '2026 SKUSA Winter Series RD1/2 | …' → None: corrida não é gente.
     """
     t = (titulo or "").strip()
     t = re.sub(r"^\s*session setup\s*\|\s*", "", t, flags=re.I)
     t = SERVICO_SUFIXO.sub("", t)
     t = _corta_no_separador(t)
+    t = _corta_na_palavra_de_servico(t)
+    t = _tira_categoria(t).strip(" &-")
     # a palavra de corrida/serviço que condena é a que está na PARTE DA PESSOA: "Mike
     # Fattuta_Professional Coach Rotax" tem gente antes do separador e serviço depois
     if not t or re.search(r"\d", t) or CORRIDA.search(t):
         return None
     if eh_rotulo_ou_servico(t):
         return None
-    palavras = [p for p in t.split() if p]
-    if not (2 <= len(palavras) <= 5) or any(len(p) < 2 for p in palavras[:2]):
+    if not _nome_plausivel(t):
         return None
-    if not all(re.match(r"^[A-Za-zÀ-ÿ'.-]+$", p) for p in palavras):
-        return None
-    return " ".join(p if p.isupper() and len(p) > 3 else p for p in palavras).title() if t.isupper() else t
+    return " ".join(p if p.isupper() and len(p) > 3 else p for p in t.split()).title() if t.isupper() else t
 
 
 def _lev(a, b):

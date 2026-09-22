@@ -76,12 +76,35 @@ Security deposit:    Price:
 Referência boa: *Jayden Lago_Professional Coaching_4T [1/1]*.
 Tarefa fora do modelo é tarefa que a automação não lê.
 
-**Piloto ≠ serviço (dono, 16/09).** No título, o que vem antes do primeiro separador
-é a pessoa; o resto é serviço. Separadores: `_`, `|`, hífen com espaço (` - `). O hífen
-colado (`Elliott Hubbard-Summer Camp 2026`) só separa quando o que vem depois é serviço
-ou tem número — `Jean-Luc Picard` é um nome só. Nunca use o título inteiro como nome de
-gente: "Elliott Hubbard_Summer Camp 2026 1/4" é o piloto **Elliott Hubbard** no serviço
-**Summer Camp 2026**, sessão 1 de 4.
+**Piloto ≠ serviço (dono, 16/09, reforçado em 22/09).** No título, o que vem antes do
+primeiro separador é a **pessoa**; o resto é serviço. Nunca use o título inteiro como
+nome de gente: "Elliott Hubbard_Summer Camp 2026 1/4" é o piloto **Elliott Hubbard** no
+serviço **Summer Camp 2026**, sessão 1 de 4.
+
+O quadro escreve o cliente de seis formas. Reconheça as seis:
+
+| No título | Cliente | O que separa |
+|---|---|---|
+| `Aaron Benoit_Trackside Support` | Aaron Benoit | `_` |
+| `Harley Keeble - Rotax [3/3]` | Harley Keeble | hífen **com espaço** |
+| `Alexander Jacoby \| KA100` | Alexander Jacoby | `\|` |
+| `David Pera Using his own Kart` | David Pera | **só o espaço** — corta na palavra de serviço |
+| `Jude cook/Harley client - Kart proprio` | Jude cook | `/` entre pessoas (nunca entre números: `3/6`) |
+| `Alex Xikis KA100_Professional Coaching` | Alex Xikis | categoria colada no nome, sai fora |
+
+E o nome nem sempre vem completo: `Branson_Practice KA100` é **Branson**,
+`Charlie M_Racing Program 3/6` é **Charlie M** (= Charlie Marron), `G.J_Orlando Cup` é
+**G.J**. Primeiro nome sozinho e inicial abreviada VALEM — foi o que faltava até 22/09,
+quando o dono achou 112 serviços de outras pessoas dentro do card do David Pera.
+
+O hífen colado (`Elliott Hubbard-Summer Camp 2026`) só separa quando o que vem depois é
+serviço ou tem número — `Jean-Luc Picard` é um nome só. E `Sr`/`Jr` no fim do nome são
+do nome (`Thiago Belluci Sr`), não categoria de kart.
+
+**Nome de serviço nunca é cliente.** "Lead and Follow", "Urace Daily", "Trackside
+Support", "Professional Coaching", "Orlando Cup", "Date of Birth" — nada disso é gente.
+Na dúvida entre duas pessoas (`Alexander` com um Savage e um Jacoby no quadro),
+**pergunte**: não escolha no escuro.
 
 **Instrução dentro da tarefa (16/09).** Quando o comando vier como `INSTRUÇÃO DO DONO
 dentro da tarefa do Asana "…" (gid N)`, você age **nessa tarefa e só nela**: comentário,

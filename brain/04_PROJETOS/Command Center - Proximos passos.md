@@ -155,6 +155,20 @@ Ver [[D-2026-09-22 - Lembrete de waiver, arquivar no Gmail e o guarda-chuva do a
       3 dias antes e 1 dia antes, **no máximo 2 por envelope**
 - [x] 🤖 23 testes das três travas (`test_travas_decididas.py`)
 
+## De quem é cada serviço (22/09) — o card do David Pera
+
+Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
+
+- [x] 🤖 Extrator do nome no título reescrito com o gabarito do dono: de 27/70 para 70/70
+- [x] 🤖 Primeiro nome sozinho, inicial abreviada e categoria colada passaram a ser lidos
+- [x] 🤖 Camadas para achar o card certo; ambíguo volta para humano, nunca é chutado
+- [x] 🤖 Varredura e conserto do quadro inteiro (`/service-attribution` e
+      `adminai/atribuir_servicos.py`), auditado
+- [ ] 👤 **Rodar a varredura na VPS e olhar a lista antes de aplicar**
+- [ ] 👤 Decidir os nomes ambíguos que a varredura apontar (ex.: `Alexander` — Savage ou Jacoby?)
+- [ ] 👤 Decidir os nomes de uma palavra só que não têm card (ex.: `Mariano`, `G.J`, `Levi`)
+- [ ] 🤖 Depois de aplicar: rever os pares de duplicados que aparecerem no painel
+
 ## Vem de antes (21/09, aprovado e ainda devendo)
 
 - [ ] 🤖 Artifact editável do APLICAR=1: o que o agente escreveria sozinho × o que ainda

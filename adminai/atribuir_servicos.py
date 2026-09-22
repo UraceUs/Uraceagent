@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""De quem é cada serviço — varredura e conserto do quadro inteiro.
+
+Dono, 22/09: ao marcar uma sessão nova para o David Pera ele achou 113 serviços no
+card, e 112 eram de outras pessoas. O título do Asana sempre diz de quem é; o
+painel é que não estava lendo.
+
+    python3 adminai/atribuir_servicos.py            # varredura: não escreve nada
+    python3 adminai/atribuir_servicos.py --aplicar  # move cada serviço para o card certo
+
+Move só o que é certo. Nome ambíguo e nome de uma palavra só sem card saem na
+lista para decisão humana — unir no escuro é criar o mesmo problema do outro lado.
+"""
+import argparse
+import os
+import sys
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, RAIZ)
+
+from command_center.db import conectar, um  # noqa: E402
+from command_center.providers import atribuicao, identidade  # noqa: E402
+
+
+def _nome(con, cid):
+    if not cid:
+        return "(sem card)"
+    c = um(con, "SELECT name, pilot_name FROM clients WHERE id=?", (cid,))
+    return f"#{cid} {(c['pilot_name'] or c['name']) if c else '?'}"
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--aplicar", action="store_true", help="move de verdade (sem isto é só varredura)")
+    ap.add_argument("--limite", type=int, default=40, help="quantas linhas mostrar por lista")
+    a = ap.parse_args()
+
+    con = conectar()
+    try:
+        rel = atribuicao.redistribuir(con, aplicar=a.aplicar)
+        print("\n" + ("APLICADO" if a.aplicar else "VARREDURA (nada foi escrito)"))
+        print("=" * 72)
+        print(atribuicao.resumo(rel))
+
+        if rel["movidos"]:
+            print(f"\n--- serviços que {'foram' if a.aplicar else 'seriam'} movidos "
+                  f"({len(rel['movidos'])}) ---")
+            for m in rel["movidos"][:a.limite]:
+                print(f"  {m['title'][:56]:<56} {_nome(con, m['de'])} -> "
+                      f"{m['para_nome']} ({m['motivo']})")
+            if len(rel["movidos"]) > a.limite:
+                print(f"  … e mais {len(rel['movidos']) - a.limite}")
+
+        if rel["criados"]:
+            print(f"\n--- cards {'criados' if a.aplicar else 'que nasceriam'} ({len(rel['criados'])}) ---")
+            for c in rel["criados"][:a.limite]:
+                print(f"  {c['nome']:<36} {c['servicos']} serviço(s)")
+
+        if rel["ambiguos"]:
+            print(f"\n--- PRECISA DE VOCÊ: nome ambíguo ({len(rel['ambiguos'])}) ---")
+            for x in rel["ambiguos"][:a.limite]:
+                print(f"  {x['nome']:<20} {x['servicos']:>3} serviço(s)  {x['porque']}")
+                for t in x["titulos"]:
+                    print(f"       ex.: {t[:64]}")
+
+        if rel["sem_card"]:
+            print(f"\n--- PRECISA DE VOCÊ: sem card e nome curto demais ({len(rel['sem_card'])}) ---")
+            for x in rel["sem_card"][:a.limite]:
+                print(f"  {x['nome']:<20} {x['servicos']:>3} serviço(s)  ({x['porque']})")
+
+        if rel["sem_nome"]:
+            print(f"\n--- títulos sem gente reconhecível ({len(rel['sem_nome'])}) ---")
+            for x in rel["sem_nome"][:a.limite]:
+                print(f"  {x['title'][:60]:<60} hoje em {_nome(con, x['client_id'])}")
+            if len(rel["sem_nome"]) > a.limite:
+                print(f"  … e mais {len(rel['sem_nome']) - a.limite}")
+
+        if a.aplicar:
+            identidade.recalcular_status(con)
+            con.commit()
+            pares = identidade.candidatos_duplicados(con)
+            if pares:
+                print(f"\n--- pares que parecem a mesma pessoa ({len(pares)}) — decidir no painel ---")
+                for p in pares[:a.limite]:
+                    print(f"  #{p['a']['id']} {p['a']['pilot_name'] or p['a']['name']:<24} × "
+                          f"#{p['b']['id']} {p['b']['pilot_name'] or p['b']['name']:<24} {p['why']}")
+        else:
+            print("\nNada foi escrito. Para aplicar: "
+                  "python3 adminai/atribuir_servicos.py --aplicar")
+    finally:
+        con.close()
+
+
+if __name__ == "__main__":
+    main()

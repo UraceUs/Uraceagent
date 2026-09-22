@@ -1036,6 +1036,38 @@ def sync_full_status(u=Depends(auth.usuario_atual)):
     return _FULL
 
 
+from command_center.providers import atribuicao  # noqa: E402
+
+
+@r.get("/service-attribution")
+def service_attribution(u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    """VARREDURA: de quem é cada serviço, segundo o título do Asana. Não escreve nada.
+
+    Nasceu de 22/09: o dono abriu o card do David Pera para marcar uma sessão e achou
+    113 serviços, 112 de outras pessoas."""
+    rel = atribuicao.redistribuir(con, aplicar=False)
+    return {**rel, "resumo": atribuicao.resumo(rel)}
+
+
+@r.post("/service-attribution")
+def service_attribution_apply(request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
+    """APLICA: move cada serviço para o card de quem é.
+
+    Move só o que é certo. Nome ambíguo ("Alexander" com um Savage e um Jacoby no
+    quadro) e nome de uma palavra só sem card voltam na lista para decisão humana —
+    unir no escuro é o que cria o problema do outro lado."""
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    identidade.recalcular_status(con)
+    con.commit()
+    auditar(con, "clients.service_attribution", f"user:{u['id']}", user_id=u["id"],
+            detail={"resumo": atribuicao.resumo(rel), "movidos": len(rel["movidos"]),
+                    "criados": rel["criados"], "ambiguos": rel["ambiguos"],
+                    "sem_card": rel["sem_card"], "amostra": rel["movidos"][:40]},
+            ip=auth._ip(request))
+    return {**rel, "resumo": atribuicao.resumo(rel),
+            "pares_para_decidir": identidade.candidatos_duplicados(con)}
+
+
 @r.get("/clients/{cid}/duplicates")
 def client_duplicates_of(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """Quem parece ser a mesma pessoa que este cliente (para o botão 'Unir com…')."""
