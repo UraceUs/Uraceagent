@@ -273,10 +273,12 @@ def _decidido_pelo_dono(con, nome, clientes):
     seguinte via "Mike" como ambíguo, abria um balde novo e tirava o serviço do card
     que ele tinha escolhido — desfazendo a decisão dele a cada rodada. Revisão
     adversarial de 22/09."""
+    # SÓ união feita à mão. União automática ("sync") não é decisão de ninguém — e foi
+    # justamente ela que comeu o balde "Alex" dentro do Edward Donnell às 13:46 de
+    # 22/09. Cair de volta nela aqui cimentaria o erro em vez de desfazê-lo.
     linhas = todos(con, "SELECT keep_id, merged_by FROM client_merges WHERE LOWER(drop_name)=LOWER(?) "
-                        "ORDER BY id DESC", (nome,))
-    por_mao = [l for l in linhas if (l["merged_by"] or "").startswith(("user:", "owner:"))]
-    for l in (por_mao or linhas):
+                        "AND (merged_by LIKE 'user:%' OR merged_by LIKE 'owner:%') ORDER BY id DESC", (nome,))
+    for l in linhas:
         alvo = next((c for c in clientes if c["id"] == l["keep_id"]), None)
         if alvo is not None:
             return alvo, f"você uniu '{nome}' a este card"

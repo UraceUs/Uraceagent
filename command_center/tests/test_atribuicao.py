@@ -760,3 +760,19 @@ def test_uniao_guarda_o_convite_de_corrida_que_colide(con):
     identidade.unir(con, a, b, "user:1", "mesma pessoa"); con.commit()
     guardado = um(con, "SELECT drop_json FROM client_merges ORDER BY id DESC")["drop_json"]
     assert "_colidiram_e_foram_guardados" in guardado and "declined" in guardado
+
+
+def test_uniao_automatica_nao_conta_como_decisao_do_dono(con):
+    """A sincronia comeu o balde "Alex" dentro do Edward Donnell (22/09, 13:46). Se a
+    varredura tratasse essa união como decisão, cimentaria o erro em vez de desfazê-lo:
+    só união feita à mão manda."""
+    edward = _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
+    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    _tarefa(con, "Alex_Trackside Support", client_id=edward)
+    balde = _cliente(con, "Alex")
+    con.commit()
+    identidade.unir(con, edward, balde, "sync", "mesmo nome: alex"); con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    dono = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Alex_%'")["client_id"]
+    assert dono != edward, "o serviço em dúvida sai do card que a sincronia escolheu"
+    assert um(con, "SELECT name FROM clients WHERE id=?", (dono,))["name"] == "Alex"
