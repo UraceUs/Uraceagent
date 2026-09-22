@@ -404,6 +404,10 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
                 if balde is not None and cid == balde["id"]:
                     return True                      # já está no balde deste nome
                 atual = next((c for c in clientes if c["id"] == cid), None)
+                # Card com EXATAMENTE este nome: o serviço já está em casa. Sem isto,
+                # "Isabel" saía do card "Isabel" para um card novo "Isabel".
+                if atual is not None and identidade.chave_exata(atual["name"]) == identidade.chave_exata(nome):
+                    return True
                 # Card atual é FORTE parecido ("Henryk McKay" no "Henryl McKay": mesmo
                 # sobrenome, 1 letra no primeiro nome)? Então não é escolha entre duas
                 # pessoas — é a mesma, escrita errada. Fica, mesmo havendo outros nomes

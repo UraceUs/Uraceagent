@@ -37,7 +37,7 @@ _PALAVRA_DE_SERVICO = {
     "lead", "follow", "leads", "practice", "pratice", "preatice", "pretice", "prep", "preparation",
     "trackside", "professional", "coach", "coaching", "racing", "race", "training", "program",
     "academy", "daily", "camp", "school", "session", "setup", "support", "suport", "suportt",
-    "arrive", "drive", "test", "using", "use", "used", "motor", "chassi", "chassis", "kart",
+    "arrive", "drive", "driving", "go", "test", "using", "use", "used", "motor", "chassi", "chassis", "kart",
     "karting", "engine", "weekend", "cup", "rwc", "skusa", "fwt", "rok", "uspks", "wka",
     "winter", "summer", "spring", "fall", "orlando", "bushnell", "okc", "vanderlan", "matt",
     "baby", "babykart", "experience", "experiencia", "experiência", "sessions", "sessoes", "sessões",
@@ -251,7 +251,21 @@ def _primeiro_pedaco_com_gente(t):
             break
         if not _so_servico(pedaco):
             return _corta_no_separador(pedaco if i else t)
-    return _corta_no_separador(t)
+    # Todos os pedaços são serviço: o nome pode estar colado no fim, sem separador
+    # ("Driving Experience Duffy Merrill"). Tira as palavras de serviço da frente e vê
+    # se sobra gente.
+    return _sem_o_servico_da_frente(pedacos[0]) if pedacos else t
+
+
+def _sem_o_servico_da_frente(pedaco):
+    """'Driving Experience Duffy Merrill' → 'Duffy Merrill'. Devolve o pedaço inteiro
+    quando não sobra nada — quem julga se é gente é `_nome_plausivel`."""
+    palavras = pedaco.split()
+    i = 0
+    while i < len(palavras) and re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", palavras[i]).lower() in _PALAVRA_DE_SERVICO:
+        i += 1
+    sobra = " ".join(palavras[i:]).strip()
+    return sobra or pedaco
 
 
 def _so_servico(pedaco):

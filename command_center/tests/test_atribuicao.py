@@ -874,3 +874,24 @@ def test_erro_de_digitacao_no_card_atual_segura_o_servico(con):
     rel = atribuicao.redistribuir(con, aplicar=True)
     assert rel["movidos"] == []
     assert um(con, "SELECT client_id FROM tasks WHERE title LIKE '%Henryk%'")["client_id"] == henryl
+
+
+def test_nome_colado_no_servico_sem_separador(con):
+    """"Driving Experience Duffy Merrill" é um card real do quadro: serviço colado no
+    nome, sem separador nenhum. Tira o serviço da frente e vê se sobra gente."""
+    assert identidade.pessoa_do_titulo("Driving Experience Duffy Merrill") == "Duffy Merrill"
+    assert identidade.pessoa_do_titulo("Go Kart Driving Experience") is None
+    assert identidade.pessoa_do_titulo("Karting School") is None
+    assert identidade.pessoa_do_titulo("Gonzalo Peres_Practice") == "Gonzalo Peres"
+
+
+def test_servico_fica_no_card_que_tem_exatamente_aquele_nome(con):
+    """"Isabel" saía do card "Isabel" para um card novo "Isabel" porque havia uma
+    "Isabel Meijá" no cadastro. Card com o nome exato é casa, ponto."""
+    isabel = _cliente(con, "Isabel", piloto="Isabel Ramos")
+    _cliente(con, "Isabel Meijá", email="im@x.com")
+    _tarefa(con, "Isabel_Driving Experience 2T Junior", client_id=isabel)
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert rel["movidos"] == []
+    assert len(todos(con, "SELECT id FROM clients WHERE name='Isabel'")) == 1
