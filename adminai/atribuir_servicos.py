@@ -53,22 +53,20 @@ def main():
 
         if rel["criados"]:
             print(f"\n--- cards {'criados' if a.aplicar else 'que nasceriam'} ({len(rel['criados'])}) ---")
+            print("    (regra do dono: na dúvida o serviço NUNCA vai para o card de outra pessoa)")
             for c in rel["criados"][:a.limite]:
-                print(f"  {c['nome']:<36} {c['servicos']} serviço(s)")
-
-        if rel["ambiguos"]:
-            print(f"\n--- PRECISA DE VOCÊ: nome ambíguo ({len(rel['ambiguos'])}) ---")
-            for x in rel["ambiguos"][:a.limite]:
-                print(f"  {x['nome']:<20} {x['servicos']:>3} serviço(s)  {x['porque']}")
-                for t in x["titulos"]:
+                print(f"  {c['nome']:<24} {c['servicos']:>3} serviço(s)  — {c['porque']}")
+                for t in c.get("titulos", []):
                     print(f"       ex.: {t[:64]}")
 
-        if rel["sem_card"]:
-            print(f"\n--- PRECISA DE VOCÊ: sem card e nome curto demais ({len(rel['sem_card'])}) ---")
-            for x in rel["sem_card"][:a.limite]:
-                print(f"  {x['nome']:<20} {x['servicos']:>3} serviço(s)  ({x['porque']})")
-                for t in x.get("titulos", []):
-                    print(f"       ex.: {t[:64]}")
+        if rel["unir"]:
+            print(f"\n--- PARA VOCÊ UNIR: card novo que pode ser alguém que já existe ({len(rel['unir'])}) ---")
+            for x in rel["unir"][:a.limite]:
+                iguais = [p for p in x["parecidos"] if p["mesma_pessoa"]]
+                marca = "  <<< parece a MESMA pessoa" if iguais else ""
+                print(f"  {x['nome']:<24} {x['servicos']:>3} serviço(s){marca}")
+                for p in x["parecidos"]:
+                    print(f"       {'=' if p['mesma_pessoa'] else '?'} #{p['id']} {p['nome']}")
 
         if rel["sem_nome"]:
             print(f"\n--- títulos sem gente reconhecível ({len(rel['sem_nome'])}) ---")

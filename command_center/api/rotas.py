@@ -1061,8 +1061,8 @@ def service_attribution_apply(request: Request, u=Depends(auth.exige("ADMIN")), 
     con.commit()
     auditar(con, "clients.service_attribution", f"user:{u['id']}", user_id=u["id"],
             detail={"resumo": atribuicao.resumo(rel), "movidos": len(rel["movidos"]),
-                    "criados": rel["criados"], "ambiguos": rel["ambiguos"],
-                    "sem_card": rel["sem_card"], "amostra": rel["movidos"][:40]},
+                    "criados": rel["criados"], "unir": rel["unir"],
+                    "amostra": rel["movidos"][:40]},
             ip=auth._ip(request))
     return {**rel, "resumo": atribuicao.resumo(rel),
             "pares_para_decidir": identidade.candidatos_duplicados(con)}

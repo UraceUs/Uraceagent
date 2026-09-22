@@ -20,11 +20,20 @@ import re
 from command_center.db import agora, inserir, todos, um
 from command_center.providers import identidade
 
-# Nome de uma palavra só é sinal fraco: serve para achar o card, nunca para criar
-# um. "Charlie" vira serviço do Charlie Marron se ele existir; se não existir,
-# fica para o humano — criar um card "Charlie" ao lado de "Charlie Marron" é
-# fabricar o duplicado que a gente passa a vida unindo.
-MINIMO_PARA_CRIAR = 2          # palavras
+# REGRA DO DONO (22/09), e ela manda em tudo aqui dentro:
+#
+#     "Nunca colocar serviço de outro cliente em card de outro cliente."
+#
+# Então na dúvida NÃO se escolhe: abre-se um card com o nome exatamente como está
+# no título. "Mike_Prep for Orlando Cup" vira um card "Mike" ao lado do Mike
+# Fattuta e do Mike Davies — ele pediu assim, e a lógica é dele: um card "Mike"
+# com um serviço é ruído que ele une num clique; o serviço do Mike Davies dentro
+# do card do Mike Fattuta é dado errado que ninguém vê.
+#
+# O mesmo vale para nome de uma palavra só sem card: "G.J" tem 19 serviços e não
+# tem nome completo — "pode colocar como G.J" (dono).
+NOTA_CARD_NOVO = ("Card aberto pela varredura de 22/09 com o nome como aparece no título "
+                  "do Asana. Se for a mesma pessoa de outro card, una pelo painel.")
 
 
 def _partes(nome):
@@ -103,24 +112,48 @@ def candidatos_para(con, nome, clientes=None):
     # Alexander Savage, "Branson" → Branson Silva, "Brason" → Branson por 1 letra)
     if len(partes) == 1:
         p0 = partes[0]
-        por_parte = []
+        iguais, quase = [], []
         for c in clientes:
             for campo in ("pilot_name", "name"):
                 p = _partes(c[campo])
                 if not p:
                     continue
                 if p0 in (p[0], p[-1]):
-                    por_parte.append((c, f"{'primeiro' if p0 == p[0] else 'último'} nome de {c[campo]}"))
+                    iguais.append((c, f"{'primeiro' if p0 == p[0] else 'último'} nome de {c[campo]}"))
                     break
                 perto = next((x for x in (p[0], p[-1])
-                               if len(p0) >= 5 and identidade._lev(p0, x) <= 1), None)
+                              if len(p0) >= 5 and identidade._lev(p0, x) <= 1), None)
                 if perto:
-                    por_parte.append((c, f"quase o {'primeiro' if perto == p[0] else 'último'} "
-                                         f"nome de {c[campo]} (1 letra)"))
+                    quase.append((c, f"quase o {'primeiro' if perto == p[0] else 'último'} "
+                                     f"nome de {c[campo]} (1 letra)"))
                     break
-        if por_parte:
-            return por_parte
+        # igual ganha de parecido: "Martin" é o Martin Jaramillo, não o Bruno Martins
+        if iguais:
+            return iguais
+        if quase:
+            return quase
     return []
+
+
+def parecem_a_mesma_pessoa(a, b):
+    """Dois CARDS que provavelmente são a mesma criança, escrita de dois jeitos.
+
+    Mais largo que `identidade.parecido` de propósito, porque aqui não se une nada:
+    serve só para dizer ao dono "una estes dois quando quiser". Pega o que ele achou
+    no cadastro em 22/09: Charlie Marron × Charlie Marrom, Liam Burghol ×
+    Liam Bourgnhol, Alexander Savage × Alex savage."""
+    for na in identidade._nomes(a):
+        for nb in identidade._nomes(b):
+            if identidade.parecido(na, nb):
+                return True
+            pa, pb = _partes(na), _partes(nb)
+            if len(pa) < 2 or len(pb) < 2:
+                continue
+            if pa[-1] == pb[-1] and _um_encurta_o_outro(pa[0], pb[0]):
+                return True                      # Alexander Savage × Alex savage
+            if pa[0] == pb[0] and identidade._lev(pa[-1], pb[-1]) <= 2:
+                return True                      # Liam Burghol × Liam Bourgnhol
+    return False
 
 
 def resolver(con, nome, clientes=None):
@@ -136,7 +169,7 @@ def resolver(con, nome, clientes=None):
 
 def _criar_card(con, nome):
     return inserir(con, "clients", source="asana", status="ACTIVE", name=nome,
-                   email=None, updated_at=agora())
+                   email=None, notes=NOTA_CARD_NOVO, updated_at=agora())
 
 
 def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
@@ -159,36 +192,34 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
             continue
         por_nome.setdefault(pessoa, []).append(t)
 
-    movidos, ja_certos, ambiguos, criados, sem_card = [], 0, [], [], []
+    movidos, ja_certos, criados, unir = [], 0, [], []
     ordem = sorted(por_nome, key=lambda n: (-len(n.split()), -len(n), n.lower()))
     for nome in ordem:
         clientes = todos(con, "SELECT * FROM clients")          # relê: pode ter nascido card na volta anterior
         cliente, motivo = resolver(con, nome, clientes)
-        if cliente is None and motivo == "sem card":
-            if criar_cards and len(nome.split()) >= MINIMO_PARA_CRIAR:
-                criados.append({"nome": nome, "servicos": len(por_nome[nome])})
-                motivo = "card novo"
-                if aplicar:
-                    cid = _criar_card(con, nome)
-                    cliente = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
-                else:
-                    # varredura: o card ainda não existe, mas o movimento existe e
-                    # tem de aparecer no relatório — senão o dono vê menos do que vai acontecer
-                    for t in por_nome[nome]:
-                        movidos.append({"task_id": t["id"], "title": t["title"], "pessoa": nome,
-                                        "de": t["client_id"], "para": None, "para_nome": nome,
-                                        "motivo": motivo})
-                    continue
-            else:
-                sem_card.append({"nome": nome, "servicos": len(por_nome[nome]),
-                                 "porque": "nome de uma palavra só: não invento card",
-                                 "titulos": [t["title"] for t in por_nome[nome][:3]]})
-                continue
         if cliente is None:
-            if motivo != "sem card":
-                ambiguos.append({"nome": nome, "servicos": len(por_nome[nome]), "porque": motivo,
-                                 "titulos": [t["title"] for t in por_nome[nome][:3]]})
-            continue
+            # Sem card, ou mais de um candidato. A regra do dono não abre exceção:
+            # na dúvida o serviço NÃO encosta no card de ninguém — abre o seu.
+            parecidos = [c for c, _ in candidatos_para(con, nome, clientes)]
+            criados.append({"nome": nome, "servicos": len(por_nome[nome]), "porque": motivo,
+                            "titulos": [t["title"] for t in por_nome[nome][:3]]})
+            if parecidos:
+                unir.append({"nome": nome, "servicos": len(por_nome[nome]), "parecidos": [
+                    {"id": c["id"], "nome": c["pilot_name"] or c["name"],
+                     "mesma_pessoa": parecem_a_mesma_pessoa({"name": nome, "pilot_name": None}, c)}
+                    for c in parecidos[:5]]})
+            if not criar_cards:
+                continue
+            if aplicar:
+                cid = _criar_card(con, nome)
+                cliente = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
+                motivo = "card próprio (na dúvida, nunca o de outro)"
+            else:
+                for t in por_nome[nome]:
+                    movidos.append({"task_id": t["id"], "title": t["title"], "pessoa": nome,
+                                    "de": t["client_id"], "para": None,
+                                    "para_nome": f"{nome} (card novo)", "motivo": motivo})
+                continue
         for t in por_nome[nome]:
             if t["client_id"] == cliente["id"]:
                 ja_certos += 1
@@ -202,12 +233,11 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE"):
     if aplicar:
         con.commit()
     return {"aplicado": bool(aplicar), "tarefas": len(tarefas), "ja_certos": ja_certos,
-            "movidos": movidos, "criados": criados, "ambiguos": ambiguos,
-            "sem_card": sem_card, "sem_nome": sem_nome}
+            "movidos": movidos, "criados": criados, "unir": unir, "sem_nome": sem_nome}
 
 
 def resumo(rel):
     """Uma linha por bucket, para log e para a tela."""
     return (f"{rel['tarefas']} serviços · {len(rel['movidos'])} movidos · {rel['ja_certos']} já certos · "
-            f"{len(rel['criados'])} cards novos · {len(rel['ambiguos'])} ambíguos · "
-            f"{len(rel['sem_card'])} sem card · {len(rel['sem_nome'])} sem nome no título")
+            f"{len(rel['criados'])} cards novos · {len(rel['unir'])} para você unir · "
+            f"{len(rel['sem_nome'])} sem nome no título")

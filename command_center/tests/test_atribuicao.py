@@ -208,20 +208,70 @@ def test_distribui_cada_servico_no_card_de_quem_e(con):
     assert dono_de("Alexander Jacoby | KA100") == "Alexander Jacoby"
     # só o que é dele sobrou no card do David
     restam = todos(con, "SELECT title FROM tasks WHERE client_id=?", (david,))
+    assert dono_de("Mariano_Lead and Follow Van [1/4]") == "Mariano", "card próprio, com o nome do título"
     assert sorted(t["title"] for t in restam) == sorted([
         "David Pera_Urace Daily_Using Own Kart [1/1]",
         "David Pera Using his own Kart",
         "Lead and Follow",                        # rótulo, não é serviço de ninguém
-        "Mariano_Lead and Follow Van [1/4]",      # "Mariano" sem card: fica para o humano
     ])
 
 
-def test_nome_de_uma_palavra_so_nao_fabrica_card(con):
-    """"Mariano" não tem card e é sinal fraco demais para abrir um: vai para o humano."""
+def test_na_duvida_abre_card_proprio_com_o_nome_do_titulo(con):
+    """Dono, 22/09: "nunca colocar serviço de outro cliente em card de outro cliente".
+
+    "Mariano" não tem card; antes ficava esperando decisão e o serviço continuava no
+    card errado. Agora abre o card dele, com o nome exatamente como está no título."""
     _quadro_do_dono(con)
     rel = atribuicao.redistribuir(con, aplicar=True)
-    assert any(x["nome"] == "Mariano" for x in rel["sem_card"])
-    assert not um(con, "SELECT 1 FROM clients WHERE name='Mariano'")
+    assert any(x["nome"] == "Mariano" for x in rel["criados"])
+    novo = um(con, "SELECT * FROM clients WHERE name='Mariano'")
+    assert novo and "una pelo painel" in (novo["notes"] or "")
+
+
+def test_nome_ambiguo_nunca_cai_no_card_de_outro(con):
+    """A regra que manda em tudo. Havendo dois Mike, o serviço do "Mike_…" não entra
+    em nenhum dos dois — ele ganha o card "Mike". O dono decidiu assim em 22/09:
+    "crie o mike, mike fattuta e o davies separados"."""
+    fattuta = _cliente(con, "Mike Fattuta")
+    davies = _cliente(con, "Mike Davies")
+    _tarefa(con, "Mike_Prep for Orlando Cup (3PM)")
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    t = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Mike_Prep%'")
+    assert t["client_id"] not in (fattuta, davies), "serviço em dúvida não encosta em card de ninguém"
+    assert um(con, "SELECT * FROM clients WHERE id=?", (t["client_id"],))["name"] == "Mike"
+
+
+def test_o_card_novo_ambiguo_sai_na_lista_para_unir(con):
+    """Card próprio não é o fim: a varredura diz quais parecem a mesma pessoa."""
+    _cliente(con, "Charlie Marron")
+    _cliente(con, "Charlie Marrom")                 # o duplicado que existe no cadastro real
+    _tarefa(con, "Charlie_Orlando Cup 8 e 9")
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    x = next(u for u in rel["unir"] if u["nome"] == "Charlie")
+    assert {p["nome"] for p in x["parecidos"]} == {"Charlie Marron", "Charlie Marrom"}
+
+
+def test_parecem_a_mesma_pessoa_pega_os_duplicados_reais(con):
+    """Os três pares que a varredura de 22/09 achou no cadastro do dono."""
+    for a, b in (("Charlie Marron", "Charlie Marrom"),
+                 ("Liam Burghol", "Liam Bourgnhol"),
+                 ("Alexander Savage", "Alex savage")):
+        assert atribuicao.parecem_a_mesma_pessoa({"name": a, "pilot_name": None},
+                                                 {"name": b, "pilot_name": None}), f"{a} × {b}"
+    assert not atribuicao.parecem_a_mesma_pessoa({"name": "Mike Fattuta", "pilot_name": None},
+                                                 {"name": "Mike Davies", "pilot_name": None})
+
+
+def test_parte_exata_do_nome_ganha_de_parecido_por_uma_letra(con):
+    """"Martin" tem 26 serviços e ficava ambíguo entre Martin Jaramillo, Bruno Martins
+    e Ethan Martins. Nome igual ganha de nome parecido."""
+    martin = _cliente(con, "Martin Jaramillo")
+    _cliente(con, "Bruno Martins")
+    _cliente(con, "Ethan Martins")
+    con.commit()
+    assert atribuicao.resolver(con, "Martin")[0]["id"] == martin
 
 
 def test_titulo_sem_gente_fica_onde_esta_e_e_reportado(con):
@@ -300,7 +350,7 @@ def test_varredura_pela_api_nao_escreve_nada(cli):
     assert rel["aplicado"] is False
     alvos = {m["title"]: m["para_nome"] for m in rel["movidos"]}
     assert alvos["Charlie M_Racing Program 3/6 [Junior KA100]"] == "Charlie Marron"
-    assert alvos["Brody Robbin_Professional Coach [His own kart] Bushnell"] == "Brody Robbin"
+    assert alvos["Brody Robbin_Professional Coach [His own kart] Bushnell"] == "Brody Robbin (card novo)"
     assert "David Pera Using his own Kart" not in alvos, "o que já é dele não se move"
     con = conectar()
     try:
