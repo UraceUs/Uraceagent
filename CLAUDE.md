@@ -82,3 +82,20 @@ client.update_lead(12345, custom_fields_values=[{"field_id": 1331943, "values": 
 Kommo não manda mensagem de Instagram/Facebook/WhatsApp, só o Salesbot ou a
 tela manual. Isso é estrutural no código, não um lembrete de prompt: quem
 tentar usa Salesbot ou a UI, nunca esse client.
+
+## Regras operacionais aprendidas na marra
+
+- **Cliente terminou o serviço → pedir review.** Depois que uma sessão
+  (Arrive and Drive, Academy, etc.) acontece, o próximo passo padrão é pedir
+  avaliação pro responsável (link do Google review). Não é opcional nem
+  precisa ser pedido toda vez — é parte do ciclo de atendimento.
+- **Nunca declare algo "pendente" (invoice não criada, pagamento faltando)
+  sem checar o QuickBooks primeiro.** A nota do Asana pode estar
+  desatualizada ou catalogar sob o nome do responsável, não do piloto —
+  aconteceu com o Dinai Amankwa (invoice existia, mas sob "Nya Amankwa",
+  a mãe). Buscar por família/responsável, não só pelo nome do piloto.
+- **Threads marcadas "só o Lucas escreve" (Joseph Kurian, Syed Gillani, etc.)
+  são reais e devem ser respeitadas por padrão** — mas o Italo, como dono,
+  pode liberar exceção pontual explicitamente. Sempre perguntar antes de
+  escrever numa thread congelada, mesmo com instrução direta do Italo —
+  confirmar que ele sabe da trava antes de agir.
