@@ -21,7 +21,7 @@ import sys
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
-from command_center.db import agora, auditar, conectar, todos, um  # noqa: E402
+from command_center.db import agora, aplicar_schema, auditar, conectar, todos, um  # noqa: E402
 from command_center.providers import identidade  # noqa: E402
 
 LIGADOS = ("tasks", "waivers", "emails", "invoices")
@@ -76,6 +76,7 @@ def main():
         planos.append((membros, nome.strip()))
 
     con = conectar()
+    aplicar_schema(con)          # a migração não espera o deploy: a ferramenta se serve
     try:
         print("\n" + ("APLICANDO" if a.aplicar else "PLANO (nada foi escrito)"))
         print("=" * 72)

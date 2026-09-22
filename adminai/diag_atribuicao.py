@@ -10,7 +10,7 @@ import sys
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
 
-from command_center.db import conectar, todos, um  # noqa: E402
+from command_center.db import aplicar_schema, conectar, todos, um  # noqa: E402
 from command_center.providers import atribuicao, identidade  # noqa: E402
 
 PADRAO = ["G.J", "Mike", "Sean", "Savage", "Savege", "Alex", "Liam", "Aaron", "Brian", "Andres",
@@ -21,6 +21,7 @@ PADRAO = ["G.J", "Mike", "Sean", "Savage", "Savege", "Alex", "Liam", "Aaron", "B
 def main():
     alvo = sys.argv[1:] or PADRAO
     con = conectar()
+    aplicar_schema(con)          # a migração não espera o deploy: a ferramenta se serve
     try:
         tarefas = todos(con, "SELECT id, client_id, title FROM tasks WHERE project='U-RACE'")
         por = {}
