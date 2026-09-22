@@ -23,49 +23,6 @@ ordem. Tarefa sem essa marca está dentro das suas permissões e pode rodar.
 
 ## ABERTO
 
-### T-009 — Catálogo da Comet: passo 2, com a paginação consertada
-
-**Respondendo à sua pergunta, que valeu mais que a carga:** 479 **não** é o catálogo
-inteiro. A ferramenta pede páginas de 250 produtos; a página 1 veio cheia, 250 produtos
-com ~1,9 variantes cada = 479 SKU, e aí o `--limite 50` cortou. O "total 479" era rótulo
-meu mal escrito — era acumulado, não total da loja. Já corrigi a mensagem.
-
-**Mas a sua dúvida descobriu um defeito de verdade.** O `?page=` é obsoleto no
-`/products.json` público e várias lojas ignoram, devolvendo a página 1 de novo. Se a
-Comet fizesse isso, o laço teria buscado a mesma página **400 vezes** — 400 batidas no
-site deles, invisíveis no resultado, porque o SKU repetido é descartado no fim. Agora a
-ferramenta compara a página com a anterior e para na hora.
-
-E veio junto a trava que faltava: a varredura passou a dizer se **terminou** ou se
-**parou no meio**, e `--completo` é **recusado depois de varredura parcial**. Sem isso,
-uma paginação truncada mais um `--completo` marcariam como sumido todo o catálogo que
-não chegou a ser lido — numa base carregada, seriam milhares de peças sumindo da vista de uma vez.
-
-**Passo 2, agora:**
-
-```bash
-cd /home/ubuntu/Uraceagent && git pull --rebase origin claude/configurar-open-claw-ooqo8x
-COMET_CONTATO=urace@urace.us python3 adminai/importar_comet.py --aplicar --completo
-```
-
-O dono confirmou a carga; quando o pedido de permissão aparecer, é ele quem aprova.
-
-**Leia a linha "varredura COMPLETA/PARCIAL" antes de tudo.** Três desfechos:
-
-- **COMPLETA** e um número de SKU bem maior que 479: é o catálogo inteiro. Perfeito.
-- **PARCIAL por página repetida**: a Comet ignora `?page=`. A ferramenta grava o que veio
-  e recusa o `--completo` sozinha — **não force**. Me traga quantos SKU saíram; nesse
-  caso o caminho é outro (`since_id`, coleções, ou o export que o dono pediu a eles).
-- **COMPLETA com ~479 SKU**: aí sim o catálogo público deles é pequeno mesmo, e o que
-  interessa é o export com preço de revenda.
-
-Me traga, em qualquer caso: a linha COMPLETA/PARCIAL, quantos SKU entraram, quantos itens
-de estoque ficaram ligados, e a lista de "SKU que o estoque usa e o catálogo não conhece".
-
-**Não use `--completo` junto com `--limite`** (a ferramenta recusa) e não tente contornar
-uma recusa de `--completo`: ela existe para não esconder catálogo.
-
----
 
 ### T-008 — URGENTE: o defeito do Martin está corrigido, pode voltar a aplicar
 
@@ -131,6 +88,7 @@ a mensagem diz se foi porque o dono carimbou ou porque aquilo é serviço de gen
 
 | Tarefa | Quando | O que saiu |
 |---|---|---|
+| T-009 | 22/09 | **Catálogo da Comet carregado: 12.315 SKU, varredura COMPLETA em 32 páginas.** A pergunta dela no passo 1 ("479 é o catálogo inteiro?") achou dois defeitos meus antes da carga — ver `bae523f`. No passo 2 ela estranhou "0 itens ligados" e estava certa de novo: eu contava links preenchidos em vez de itens casados pelo SKU. Corrigido. |
 | T-005 / T-003 | 22/09 | Aplicadas: 20 carimbos no #15, 1 no #238, 5 uniões. E a varredura depois **pegou um defeito meu** — ver T-008. |
 | T-007 | 22/09 | **Alarme falso meu.** O relatório não checava waiver válida anterior; o Enzo tinha uma, assinada e dentro do ano. Corrigido. |
 | T-002 | 22/09 | Rodou em modo plano e **achou três defeitos nas ferramentas** (carimbo sem filtro, união que só olhava o responsável, plano que parava no primeiro erro). Todos consertados; ver T-005. |

@@ -128,7 +128,15 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
       se identifica, pausa entre páginas, respeita `Retry-After` e guarda em disco o que
       já buscou. `supplier_products` é espelho do catálogo deles — separado do nosso
       estoque, porque eles vendem milhares de peças e nós carregamos uma fração.
-- [ ] 👤 **Rodar a importação: escolher o caminho.** Esta sessão não alcança o site (a
+- [x] 🤖 **Catálogo da Comet carregado na VPS (22/09): 12.315 SKU, varredura COMPLETA**
+      em 32 páginas do `/products.json`. A paginação corrigida foi o que destravou — a
+      prova de 50 tinha trazido 479 e parecia ser tudo.
+- [ ] 👤 **Quais peças a URACE realmente carrega?** O catálogo tem 12.315 SKU; o estoque
+      tem zero item. O catálogo é a prateleira DELES, não a nossa — nenhum item vira
+      estoque sozinho, e não sou eu que decido o que você estoca. Precisa de uma lista
+      inicial (pneu, corrente, vela, pastilha, óleo…) para eu cadastrar com SKU e
+      estoque mínimo. Pode ser curta: os 20 que mais saem já valem.
+- [ ] 👤 (resolvido em parte) **Importação: caminho escolhido foi a raspagem.** Esta sessão não alcança o site (a
       política de saída recusa `cometkartsales.com`, 403 — não contornei). Duas saídas:
       rodar na VPS, que tem rede própria (`python3 adminai/importar_comet.py --limite 50`
       primeiro), **ou** pedir o export do catálogo ao fornecedor e rodar com

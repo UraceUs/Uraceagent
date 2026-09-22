@@ -214,3 +214,54 @@ def test_export_de_arquivo_conta_como_completo(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(sys, "argv", ["x", "--arquivo", str(f), "--aplicar", "--completo"])
     assert importar_comet.main() == 0
     assert "COMPLETA" in capsys.readouterr().out
+
+
+# ------------------------------- "0 ligados" tem de dizer POR QUE, não só o número
+def _rodar_importacao(monkeypatch, tmp_path, produtos, semear=None):
+    f = tmp_path / "c.json"
+    f.write_text(json.dumps({"products": produtos}))
+    monkeypatch.setenv("CC_DB_PATH", str(tmp_path / "cc.sqlite"))
+    if semear:
+        from command_center.db import aplicar_schema, conectar
+        con = conectar(); aplicar_schema(con); semear(con); con.commit(); con.close()
+    monkeypatch.setattr(sys, "argv", ["x", "--arquivo", str(f), "--aplicar"])
+    assert importar_comet.main() == 0
+
+
+PRODUTO = [{"id": 1, "title": "Pneu", "handle": "pneu", "variants": [
+    {"id": 11, "sku": "A-1", "title": "Default Title", "price": "10.00", "available": True}]}]
+
+
+def test_estoque_vazio_explica_o_zero_em_vez_de_parecer_defeito(monkeypatch, tmp_path, capsys):
+    """A extensão da VPS estranhou "0 itens ligados" depois de gravar 12.315 SKU, e
+    estava certa em estranhar: o número sozinho parece defeito. Quase sempre é o estoque
+    ainda sem item — o catálogo é a prateleira do fornecedor, não a nossa."""
+    _rodar_importacao(monkeypatch, tmp_path, PRODUTO)
+    assert "não tem item nenhum" in capsys.readouterr().out
+
+
+def test_item_sem_sku_explica_o_zero(monkeypatch, tmp_path, capsys):
+    from command_center.providers import estoque
+    _rodar_importacao(monkeypatch, tmp_path, PRODUTO,
+                      semear=lambda con: estoque.criar_item(con, "peca", "Corrente avulsa"))
+    assert "nenhum com SKU preenchido" in capsys.readouterr().out
+
+
+def test_quando_ha_o_que_ligar_o_numero_aparece(monkeypatch, tmp_path, capsys):
+    """O contraste: com SKU casando, liga e não imprime desculpa nenhuma."""
+    from command_center.providers import estoque
+    _rodar_importacao(monkeypatch, tmp_path, PRODUTO,
+                      semear=lambda con: estoque.criar_item(con, "peca", "Pneu nosso", sku="A-1"))
+    saida = capsys.readouterr().out
+    assert "1 item(ns) casados pelo SKU" in saida
+    assert "não tem item nenhum" not in saida
+
+
+def test_casou_mas_o_catalogo_nao_tem_link_nao_e_falha(monkeypatch, tmp_path, capsys):
+    """O caso que desmascarou a contagem errada: o SKU casa, mas aquele produto não
+    trazia URL. Contar só os links dizia "0" e parecia que nada tinha casado."""
+    from command_center.providers import estoque
+    _rodar_importacao(monkeypatch, tmp_path, PRODUTO,          # export sem URL
+                      semear=lambda con: estoque.criar_item(con, "peca", "Pneu nosso", sku="A-1"))
+    saida = capsys.readouterr().out
+    assert "1 item(ns) casados pelo SKU (0 ganharam link" in saida

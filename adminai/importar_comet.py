@@ -41,7 +41,7 @@ from adminai._venv import garantir_venv  # noqa: E402
 
 garantir_venv()
 
-from command_center.db import aplicar_schema, conectar  # noqa: E402
+from command_center.db import aplicar_schema, conectar, um  # noqa: E402
 from command_center.providers import fornecedor  # noqa: E402
 
 SITE = os.environ.get("COMET_SITE", "https://cometkartsales.com")
@@ -328,10 +328,24 @@ def main():
     aplicar_schema(con)
     try:
         r = fornecedor.salvar(con, list(unicos.values()), marcar_sumidos=a.completo)
-        ligados = fornecedor.ligar_no_estoque(con)
+        lig = fornecedor.ligar_no_estoque(con)
         con.commit()
         print(f"\nGRAVADO: {r['novos']} novos · {r['atualizados']} atualizados · "
-              f"{r['sumidos']} marcados como sumidos · {ligados} item(ns) de estoque ligados")
+              f"{r['sumidos']} marcados como sumidos")
+        # "0 ligados" sozinho parece defeito — a extensão da VPS estranhou, com razão,
+        # em 22/09. Dizer QUAL dos casos é vale mais que o número.
+        print(f"ESTOQUE × CATÁLOGO: {lig['casados']} item(ns) casados pelo SKU "
+              f"({lig['links']} ganharam link do fornecedor agora)")
+        if not lig["casados"]:
+            total = um(con, "SELECT COUNT(*) n FROM stock_items WHERE active=1")["n"]
+            com_sku = um(con, "SELECT COUNT(*) n FROM stock_items "
+                              "WHERE sku IS NOT NULL AND active=1")["n"]
+            if not total:
+                print("   (o estoque ainda não tem item nenhum: não há o que casar. "
+                      "O catálogo é a prateleira do fornecedor, não a nossa.)")
+            elif not com_sku:
+                print(f"   ({total} item(ns) de estoque, nenhum com SKU preenchido: "
+                      "é pelo SKU que o casamento acontece.)")
         orfaos = fornecedor.sem_cadastro(con)
         if orfaos:
             print(f"\n!! {len(orfaos)} SKU que o estoque usa e o catálogo não conhece:")

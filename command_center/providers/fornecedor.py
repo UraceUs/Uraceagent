@@ -227,21 +227,28 @@ def salvar(con, produtos, supplier=PADRAO, marcar_sumidos=False):
 
 
 def ligar_no_estoque(con, supplier=PADRAO):
-    """Preenche nome e link do fornecedor nos itens de estoque que têm SKU dele.
+    """Casa o estoque com o catálogo pelo SKU e completa o link do fornecedor.
 
-    Só completa o que está vazio: o nome que a equipe deu ao item no painel é o nome
-    que a equipe usa, e sobrescrever isso com o nome de catálogo seria trocar a língua
-    da casa pela do fornecedor.
+    Devolve `{"casados", "links", "sem_par"}`. Contar só os links preenchidos era medir
+    a coisa errada — foi o que fez "0 ligados" parecer defeito quando na verdade o
+    catálogo daquele SKU simplesmente não trazia URL. O que o operador quer saber é
+    **quantos itens do estoque acharam par no catálogo**; o link é consequência.
+
+    Só completa o que está vazio: o nome que a equipe deu ao item é o nome que a equipe
+    usa, e trocá-lo pelo de catálogo seria trocar a língua da casa pela do fornecedor.
     """
-    ligados = 0
-    for i in todos(con, "SELECT * FROM stock_items WHERE sku IS NOT NULL AND supplier=?", (supplier,)):
+    casados = links = sem_par = 0
+    for i in todos(con, "SELECT * FROM stock_items WHERE sku IS NOT NULL AND supplier=? AND active=1",
+                   (supplier,)):
         p = um(con, "SELECT * FROM supplier_products WHERE supplier=? AND sku=?", (supplier, i["sku"]))
         if not p:
+            sem_par += 1
             continue
+        casados += 1
         if not i["supplier_url"] and p["url"]:
             con.execute("UPDATE stock_items SET supplier_url=? WHERE id=?", (p["url"], i["id"]))
-            ligados += 1
-    return ligados
+            links += 1
+    return {"casados": casados, "links": links, "sem_par": sem_par}
 
 
 def sem_cadastro(con, supplier=PADRAO):

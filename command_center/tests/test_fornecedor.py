@@ -185,9 +185,27 @@ def test_campo_que_nao_veio_nao_apaga_o_que_ja_se_sabia(con):
 def test_o_catalogo_completa_o_link_do_item_de_estoque(con):
     fornecedor.salvar(con, fornecedor.do_shopify(SHOPIFY, base="https://cometkartsales.com"))
     i = estoque.criar_item(con, "pneu", "Pneu dianteiro MG", sku="MG-YEL-F", unit="un")
-    assert fornecedor.ligar_no_estoque(con) == 1
+    r = fornecedor.ligar_no_estoque(con)
+    assert (r["casados"], r["links"], r["sem_par"]) == (1, 1, 0)
     assert um(con, "SELECT supplier_url FROM stock_items WHERE id=?", (i,))["supplier_url"] \
         == "https://cometkartsales.com/products/mg-yellow"
+
+
+def test_casado_e_link_sao_coisas_diferentes(con):
+    """"0 ligados" parecia defeito quando o SKU casava mas o catálogo não trazia URL.
+    Casar é o que importa; o link é consequência."""
+    fornecedor.salvar(con, [{"sku": "SEM-URL", "name": "Peça sem link no catálogo"}])
+    estoque.criar_item(con, "peca", "Peça nossa", sku="SEM-URL")
+    r = fornecedor.ligar_no_estoque(con)
+    assert (r["casados"], r["links"]) == (1, 0)
+
+
+def test_sku_que_nao_acha_par_e_contado_a_parte(con):
+    fornecedor.salvar(con, fornecedor.do_shopify(SHOPIFY))
+    estoque.criar_item(con, "peca", "SKU errado", sku="NAO-EXISTE")
+    estoque.criar_item(con, "peca", "SKU certo", sku="IAME-KA-PIS")
+    r = fornecedor.ligar_no_estoque(con)
+    assert (r["casados"], r["sem_par"]) == (1, 1)
 
 
 def test_o_nome_que_a_equipe_deu_ao_item_nao_e_sobrescrito(con):
