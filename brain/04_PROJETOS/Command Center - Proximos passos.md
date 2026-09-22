@@ -190,10 +190,13 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       corrida `Lucas Oil … | Sebring` do card `#15 Alexander Savage` porque a flag levaria
       junto `Inventário Hank Lai_ caixa`. Ela estava certa. Recusa id que não está na lista
       e respeita o carimbo; sem `--aplicar` não escreve.
-- [ ] 👤 **`Inventário Hank Lai_ caixa` — é serviço do Hank ou tarefa interna da URACE?**
-      Se for serviço dele, fica no card e a regra de "não é serviço de ninguém" precisa
-      aprender que `Inventário <nome de cliente>` pode ser trabalho cobrado. Se for interna,
-      sai junto com a corrida. Enquanto não vier a resposta, só a corrida sai.
+- [x] 👤 **`Inventário Hank Lai_ caixa`: "tarefa interna"** (dono, 22/09). Sai do card junto
+      com a corrida, e a regra que lê `Inventário <nome>` como tarefa de galpão fica como
+      está — travada em teste, com a resposta dele escrita lá.
+- [x] 👤 **Waiver `#31` Pablo Santiago: "desconsiderar por hora"** (dono, 22/09). Fica no
+      relatório, não vira tarefa.
+- [x] 🤖 **`urace-waivers` morto às 07:33: encerrado sem causa.** As unidades agora carimbam
+      o código de saída; a próxima falha se explica sozinha. Não vale caçar log que não existe.
 
 ## Bancada de testes (22/09) — o instável era um teste fraco
 

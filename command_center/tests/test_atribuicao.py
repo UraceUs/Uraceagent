@@ -594,7 +594,13 @@ def test_falha_ao_ler_descricao_aparece_no_relatorio(con, monkeypatch):
 
 def test_recado_de_quadro_nao_tira_servico_do_card_certo():
     """"Inventário Hank Lai_ caixa" moveu um serviço PARA FORA do Hank Lai (22/09 à noite):
-    "Inventário" passava por nome. Tarefa com verbo/recado na frente não é gente."""
+    "Inventário" passava por nome. Tarefa com verbo/recado na frente não é gente.
+
+    A extensão da VPS levantou a dúvida certa: e se "Inventário <cliente>" for trabalho
+    cobrado do cliente? O dono respondeu em 22/09: **"tarefa interna"**. A regra fica
+    como está — `Inventário <nome>` é tarefa de galpão, não serviço de ninguém, e sai
+    do card. Se um dia virar serviço cobrado, é decisão do dono, e este teste é o lugar
+    de mudar."""
     for t in ("Inventário Hank Lai_ caixa", "Organizar caixa de ferramenta preta do galpao",
               "Comprar pneus para o Branson", "Preparar a area de trabalhar nos motores",
               "Check tire pressure_Mike", "Order parts | Alex Xikis"):

@@ -46,43 +46,40 @@ Esperado agora: **0 movidos e 0 cards novos** — e a tarefa solta do Martin ind
 card dele (27 no total). Se der isso, pode aplicar; se ainda quiser tirar alguém de um
 card que o dono uniu, **não aplique** e reporte.
 
-### T-006 — Tirar do card o que não é serviço de ninguém
+### T-006 — Tirar do card o que não é serviço de ninguém  ·  DESTRAVADA
 
 O dono respondeu (22/09): **"é uma tarefa paralela, não gera card"**. Não gerar card não
-bastava — a corrida `Lucas Oil … | Sebring` estava *dentro* do card do Alexander Savage,
-e `#384 "Buscar as coisas no Mauricio"` é recado de quadro.
+bastava — a corrida `Lucas Oil … | Sebring` estava *dentro* do card `#15 Alexander Savage`.
 
-Veja a lista primeiro (só leitura):
+**Você recusou e estava certa.** `--soltar-nao-servicos` era tudo-ou-nada e levaria junto
+`Inventário Hank Lai_ caixa`, que podia ser trabalho cobrado do Hank. Você parou e
+perguntou. **O dono respondeu: "tarefa interna".** Então as duas saem, e a regra que lê
+`Inventário <nome>` como tarefa de galpão fica como está (travada em teste).
+
+Veja a lista primeiro (só leitura), e traga-a inteira:
 
 ```bash
 python3 adminai/atribuir_servicos.py --limite 60
 ```
 
-A seção **"NÃO É SERVIÇO DE NINGUÉM, mas está num card de cliente"** mostra tudo, agora
-com o `#id` de cada linha. Traga-a inteira.
-
-**Você recusou esta tarefa e estava certa.** `--soltar-nao-servicos` era tudo-ou-nada, e
-a lista tem duas linhas de naturezas diferentes: a corrida `Lucas Oil … | Sebring`, no
-card `#15 Alexander Savage`, que não é serviço de ninguém e o dono já mandou tirar; e
-`Inventário Hank Lai_ caixa`, no card do Hank, que pode ser trabalho feito para ele.
-Soltar as duas para resolver uma seria perder a segunda. A ferramenta mudou.
-
-**Solte só a corrida** (o `#id` sai da lista da varredura; repita `--soltar` para várias):
+Se a seção **"NÃO É SERVIÇO DE NINGUÉM, mas está num card de cliente"** tiver só essas
+duas linhas — a corrida e o inventário —, aplique:
 
 ```bash
-python3 adminai/atribuir_servicos.py --soltar <id da corrida> --aplicar
+python3 adminai/atribuir_servicos.py --soltar-nao-servicos --aplicar
 ```
 
-`--soltar-nao-servicos` continua existindo para quando a lista inteira for claramente
-corrida, tarefa interna e recado — nada com cara de serviço de gente.
+**Se aparecer qualquer linha nova que você não reconheça como corrida, tarefa interna ou
+recado de quadro**, não use a flag geral. Solte só as que o dono já decidiu, pelo `#id`
+que agora sai na lista, e me traga a linha nova:
+
+```bash
+python3 adminai/atribuir_servicos.py --soltar <id da corrida> --soltar <id do inventário> --aplicar
+```
 
 Em qualquer dos dois: só tira o vínculo com o cliente, a tarefa continua lá, e o que o
 dono carimbou não é tocado. Id que não está na lista é **recusado sem escrever nada**, e
 a mensagem diz se foi porque o dono carimbou ou porque aquilo é serviço de gente.
-
-**`Inventário Hank Lai_ caixa` fica onde está até o dono responder.** A pergunta é dele,
-não minha nem sua: é serviço feito para o Hank (fica no card) ou tarefa interna da URACE
-(sai)? Já perguntei. Enquanto não vier a resposta, solte só a corrida.
 
 ---
 
