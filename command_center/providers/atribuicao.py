@@ -230,6 +230,7 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
     a forma curta cai no card certo em vez de abrir um segundo."""
     tarefas = todos(con, "SELECT * FROM tasks WHERE project=? OR ? IS NULL", (projeto, projeto))
     movidos, ja_certos, criados, unir, pelo_contato, lidas = [], 0, [], [], 0, 0
+    falhas_leitura = []                                     # (task_id, título, erro): NUNCA em silêncio
 
     def _move(t, cliente, motivo):
         nonlocal ja_certos
@@ -271,7 +272,9 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
             ainda = []
             for t in por_nome[nome]:
                 if not any(t[k] for k in ("resp_name", "resp_email", "resp_phone")):
-                    t = _ler_descricao(con, t); lidas += 1
+                    t, erro = _ler_descricao(con, t); lidas += 1
+                    if erro:
+                        falhas_leitura.append({"task_id": t["id"], "title": t["title"], "erro": erro})
                 c2, m2 = por_contato(con, t, clientes)
                 if c2:
                     _move(t, c2, m2); pelo_contato += 1
@@ -310,32 +313,35 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
     if aplicar:
         con.commit()
     return {"aplicado": bool(aplicar), "tarefas": len(tarefas), "ja_certos": ja_certos,
-            "pelo_contato": pelo_contato, "descricoes_lidas": lidas,
+            "pelo_contato": pelo_contato, "descricoes_lidas": lidas, "falhas_leitura": falhas_leitura,
             "movidos": movidos, "criados": criados, "unir": unir, "sem_nome": sem_nome}
 
 
 def _ler_descricao(con, tarefa):
     """Busca a descrição da tarefa no Asana e guarda responsável/e-mail/telefone nela.
-    Devolve a tarefa relida. Falha de rede não derruba a varredura: devolve como veio."""
+    Devolve (tarefa relida, erro). Falha de rede não derruba a varredura — mas também
+    não some: volta em `erro`, e o relatório mostra. Engolir erro aqui foi o que fez a
+    varredura de 22/09 à noite parecer "nada a resolver" sem dizer por quê."""
     from command_center.providers import chamar, sync
     gid = um(con, "SELECT external_id FROM entity_links WHERE entity_type='task' AND entity_id=? AND system='asana'",
              (tarefa["id"],))
     if not gid:
-        return tarefa
+        return tarefa, "tarefa sem gid do Asana em entity_links"
     try:
         full = chamar("asana", "asana_tarefa", gid=gid["external_id"])
-    except Exception:                                    # noqa: BLE001 - ler é o extra
-        return tarefa
+    except Exception as e:                                    # noqa: BLE001 - ler é o extra
+        return tarefa, f"{type(e).__name__}: {str(e)[:160]}"
     r = sync._resp_da_descricao(sync.parse_descricao(full.get("notas")))
     con.execute("UPDATE tasks SET resp_name=?, resp_email=?, resp_phone=? WHERE id=?",
                 (r["resp_name"], r["resp_email"], r["resp_phone"], tarefa["id"]))
     con.commit()
-    return um(con, "SELECT * FROM tasks WHERE id=?", (tarefa["id"],))
+    return um(con, "SELECT * FROM tasks WHERE id=?", (tarefa["id"],)), None
 
 
 def resumo(rel):
     """Uma linha por bucket, para log e para a tela."""
-    return (f"{rel['tarefas']} serviços · {len(rel['movidos'])} movidos · {rel['ja_certos']} já certos · "
+    return (f"RESUMO: {rel['tarefas']} serviços · {len(rel['movidos'])} movidos · {rel['ja_certos']} já certos · "
             f"{rel.get('pelo_contato', 0)} decididos por contato · "
+            f"{rel.get('descricoes_lidas', 0)} descrições lidas ({len(rel.get('falhas_leitura', []))} falharam) · "
             f"{len(rel['criados'])} cards novos · {len(rel['unir'])} para você unir · "
             f"{len(rel['sem_nome'])} sem nome no título")

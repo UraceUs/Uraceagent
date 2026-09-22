@@ -44,6 +44,10 @@ def main():
         print("\n" + ("APLICADO" if a.aplicar else "VARREDURA (nada foi escrito)"))
         print("=" * 72)
         print(atribuicao.resumo(rel))
+        if rel.get("falhas_leitura"):
+            f = rel["falhas_leitura"]
+            print(f"\n!!! {len(f)} descrição(ões) NÃO puderam ser lidas no Asana. Primeiro erro:")
+            print(f"    {f[0]['title'][:60]} -> {f[0]['erro']}")
 
         if rel["movidos"]:
             print(f"\n--- serviços que {'foram' if a.aplicar else 'seriam'} movidos "

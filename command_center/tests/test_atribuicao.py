@@ -545,3 +545,22 @@ def test_card_separado_nao_e_dono_de_nada_nem_aparece_na_lista(cli):
     _entra(cli, "admin@urace.us")
     assert corrida not in [c["id"] for c in cli.get("/ops/api/clients").json()]
     assert corrida in [c["id"] for c in cli.get("/ops/api/clients?status=SEPARADO").json()]
+
+
+def test_falha_ao_ler_descricao_aparece_no_relatorio(con, monkeypatch):
+    """A varredura de 22/09 à noite voltou "vazia" e ninguém soube por quê: o erro de
+    rede era engolido. Agora conta e mostra."""
+    from command_center.db import inserir
+    import command_center.providers as P
+    _cliente(con, "Mike Fattuta"); _cliente(con, "Mike Davies")
+    t = _tarefa(con, "Mike_Prep for Orlando Cup")
+    inserir(con, "entity_links", entity_type="task", entity_id=t, system="asana", external_id="g-mike")
+    con.commit()
+
+    def quebra(*a, **k):
+        raise ConnectionError("Asana fora do ar")
+    monkeypatch.setattr(P, "chamar", quebra)
+    rel = atribuicao.redistribuir(con, aplicar=False, ler_descricoes=True)
+    assert rel["descricoes_lidas"] == 1 and len(rel["falhas_leitura"]) == 1
+    assert "ConnectionError" in rel["falhas_leitura"][0]["erro"]
+    assert "1 falharam" in atribuicao.resumo(rel)
