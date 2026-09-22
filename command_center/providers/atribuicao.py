@@ -381,12 +381,35 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
             if not ainda:
                 continue
         if cliente is None:
+            # ANTES de abrir balde: serviço que JÁ ESTÁ num card plausível fica onde
+            # está. "AIDEN - KARTING SCHOOL" está no Aidan Mills, "Garret" no Garrett
+            # Curtis, "Isabel" no card Isabel — tirar de lá para um balde novo é
+            # estragar o que estava certo. A regra do dono é não pôr no card de OUTRO;
+            # não é mexer em quem já está em casa.
+            plausiveis = {c["id"] for c, _ in candidatos_para(con, nome, clientes)}
+            plausiveis |= {c["id"] for c, _ in sugestoes_para(con, nome, clientes)}
+            balde = next((c for c in clientes
+                          if identidade.chave_exata(c["name"]) == identidade.chave_exata(nome) and e_balde(c)), None)
+
+            def _fica_em_casa(t):
+                cid = t["client_id"]
+                if cid is None:
+                    return False
+                if balde is not None and cid == balde["id"]:
+                    return True                      # já está no balde deste nome
+                # UM candidato plausível só: é ele mesmo, escrito de outro jeito
+                # ("AIDEN" no Aidan Mills). Havendo mais de um, o card atual foi
+                # escolhido pela máquina e não por evidência — aí sai.
+                return cid in plausiveis and len(plausiveis) == 1
+
+            ja_certos += sum(1 for t in por_nome[nome] if _fica_em_casa(t))
+            por_nome[nome] = [t for t in por_nome[nome] if not _fica_em_casa(t)]
+            if not por_nome[nome]:
+                continue
             # Sem card, ou mais de um candidato. A regra do dono não abre exceção:
             # na dúvida o serviço NÃO encosta no card de ninguém — abre o seu.
             # O balde que já existe é reaproveitado: sem isso, cada varredura criava
             # mais um "Alex" e o serviço mudava de balde para sempre.
-            balde = next((c for c in clientes
-                          if identidade.chave_exata(c["name"]) == identidade.chave_exata(nome) and e_balde(c)), None)
             parecidos = [c for c, _ in sugestoes_para(con, nome, clientes)]
             if balde is None:
                 criados.append({"nome": nome, "servicos": len(por_nome[nome]), "porque": motivo,

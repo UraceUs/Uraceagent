@@ -71,6 +71,8 @@ _ROTULOS = {"driver", "driver's name", "drivers name", "date of birth", "birth",
             "service dates for this month", "name", "notes", "tbd", "n/a", "na", "none", "-", "--"}
 _SERVICOS = {"karting school", "kart school", "kart racing school", "professional coaching", "coaching",
              "arrive and drive", "urace daily", "urace academy", "academy", "summer camp", "test drive",
+             "driving experience", "drive experience", "karting experience", "kart experience",
+             "go kart", "go kart driving experience",
              "lead and follow", "race support", "trackside support", "trackside", "practice", "pratice",
              "session setup", "shipping orders", "kart setup", "new race", "race weekend", "track day"}
 _RX_CORRIDA_EXTRA = re.compile(r"\b(skusa|uspks|rok|fwt|wka|rotax|superkarts|flkc|f4|nola|"                       # séries
@@ -232,6 +234,37 @@ def _nome_plausivel(t):
     return True
 
 
+_SEPARADORES = re.compile(r"\s*[_|:]\s*|\s+-\s+|\s*,\s*")
+
+
+def _primeiro_pedaco_com_gente(t):
+    """Normalmente a pessoa vem primeiro. Quando o primeiro pedaço é SÓ serviço, ela
+    vem depois: "Go Kart Driving Experience - Allan Ramos - 2 STROKE" é o Allan Ramos.
+
+    Só pula pedaço que é serviço reconhecido — nunca corrida, pista ou série, senão
+    "Star Champions Series - King Castle" viraria a pessoa "King Castle"."""
+    pedacos = [p.strip() for p in _SEPARADORES.split(t.replace("–", "-").replace("—", "-")) if p.strip()]
+    for i, pedaco in enumerate(pedacos):
+        if i and (CORRIDA.search(pedaco) or _RX_CORRIDA_EXTRA.search(pedaco)):
+            break
+        if not _so_servico(pedaco):
+            return _corta_no_separador(pedaco if i else t)
+    return _corta_no_separador(t)
+
+
+def _so_servico(pedaco):
+    """O pedaço é SÓ nome de serviço (nada de gente dentro)? E não é corrida/pista."""
+    if CORRIDA.search(pedaco) or _RX_CORRIDA_EXTRA.search(pedaco):
+        return False
+    if any(re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", x).lower() in _NUNCA_NO_NOME for x in pedaco.split()):
+        return False
+    baixo = pedaco.lower()
+    if any(sv in baixo for sv in _SERVICOS):
+        return True
+    palavras = [re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", x).lower() for x in pedaco.split()]
+    return bool(palavras) and all(p in _PALAVRA_DE_SERVICO or p in _NAO_E_GENTE or not p for p in palavras)
+
+
 def pessoa_do_titulo(titulo, detalhe=False):
     """Nome da pessoa no título da tarefa, ou None quando não é gente.
 
@@ -255,7 +288,7 @@ def pessoa_do_titulo(titulo, detalhe=False):
     t = re.sub(r"^\s*session setup\s*\|\s*", "", t, flags=re.I)
     t = re.sub(r"^\s*[\[(][^\])]*[\])]\s*", "", t)      # "[Canceled] Erik Mendoza Jr_…": a tag na frente sai
     t = SERVICO_SUFIXO.sub("", t)
-    t = _corta_no_separador(t)
+    t = _primeiro_pedaco_com_gente(t)
 
     # As checagens que CONDENAM rodam sobre a parte da pessoa INTEIRA, antes do corte por
     # palavra de serviço. Rodando depois, o corte tirava justamente a palavra que

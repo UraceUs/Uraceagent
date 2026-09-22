@@ -776,3 +776,58 @@ def test_uniao_automatica_nao_conta_como_decisao_do_dono(con):
     dono = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Alex_%'")["client_id"]
     assert dono != edward, "o serviço em dúvida sai do card que a sincronia escolheu"
     assert um(con, "SELECT name FROM clients WHERE id=?", (dono,))["name"] == "Alex"
+
+
+# ============ a varredura de 22/09 à noite: o que ela queria estragar ============
+def test_servico_que_ja_esta_num_card_plausivel_nao_sai_dele(con):
+    """A regra do dono é não pôr no card de OUTRO — não é mexer em quem já está em casa.
+
+    "AIDEN - KARTING SCHOOL" estava no Aidan Mills (1 letra), "Garret" no Garrett
+    Curtis, "Isabel" no card Isabel. A varredura queria tirar os três para baldes
+    novos, estragando o que estava certo."""
+    aidan = _cliente(con, "Aidan Mills", email="am@x.com")
+    garrett = _cliente(con, "Garrett Curtis", email="gc@x.com")
+    isabel = _cliente(con, "Isabel")
+    _cliente(con, "Isabel Meijá", email="im@x.com")
+    _tarefa(con, "AIDEN - KARTING SCHOOL TILLOTSON", client_id=aidan)
+    _tarefa(con, "Garret  [Kart Experience - 4 SESSIONS]", client_id=garrett)
+    _tarefa(con, "Isabel_Driving Experience  2T Junior", client_id=isabel)
+    con.commit()
+    rel = atribuicao.redistribuir(con, aplicar=True)
+    assert rel["movidos"] == [], "ninguém sai de casa"
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'AIDEN%'")["client_id"] == aidan
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Garret %'")["client_id"] == garrett
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Isabel_%'")["client_id"] == isabel
+    assert len(todos(con, "SELECT id FROM clients WHERE name='Isabel'")) == 1
+
+
+def test_servico_no_card_de_outra_pessoa_ainda_sai(con):
+    """A regra de ficar em casa não pode virar desculpa para deixar errado onde está."""
+    tyron = _cliente(con, "Tyron Brouta", email="tb@x.com")
+    matias = _cliente(con, "Matías Lopez", email="ml@x.com")
+    _tarefa(con, "Matías Lopez_ Driving Experience[6 sessions Baby Kart]", client_id=tyron)
+    con.commit()
+    atribuicao.redistribuir(con, aplicar=True)
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Matías%'")["client_id"] == matias
+
+
+@pytest.mark.parametrize("titulo,esperado", [
+    ("Go Kart Driving Experience - Allan Ramos- 2 STROKE Urace", "Allan Ramos"),
+    ("Driving Experience - Bruno Reis", "Bruno Reis"),
+    ("Karting School - Marcos Vinicius - Cadet", "Marcos Vinicius"),
+])
+def test_nome_no_meio_do_titulo_quando_o_servico_vem_na_frente(titulo, esperado):
+    """A pessoa quase sempre vem primeiro; quando o primeiro pedaço é SÓ serviço, ela
+    vem depois. "Go Kart Driving Experience - Allan Ramos" virava a pessoa "Go"."""
+    assert identidade.pessoa_do_titulo(titulo) == esperado
+
+
+@pytest.mark.parametrize("titulo", [
+    "Star Champions Series - King Castle | New Castle Motorsports",
+    "FLKC Round 5&6 | Daytona Speedway",
+    "2026 SKUSA Pro Tour WinterNats RD1/2 | Musselman Honda Circuit",
+])
+def test_pular_pedaco_nunca_atravessa_uma_corrida(titulo):
+    """Se pulasse pedaço em corrida, "Star Champions Series - King Castle" viraria a
+    pessoa "King Castle"."""
+    assert identidade.pessoa_do_titulo(titulo) is None
