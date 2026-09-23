@@ -8,7 +8,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "-- unidades encontradas:"
-mapfile -t UNIDADES < <(find . -maxdepth 2 -name '*.service' -o -maxdepth 2 -name '*.timer' | sort)
+# -maxdepth é opção GLOBAL: posta depois do -name, o find avisa e a profundidade
+# passa a valer para tudo, inclusive o que veio antes. Vem primeiro, e os dois -name
+# ficam num parêntese — senão o -o separa a expressão e o resultado é outro (23/09).
+mapfile -t UNIDADES < <(find . -maxdepth 2 \( -name '*.service' -o -name '*.timer' \) | sort)
 for u in "${UNIDADES[@]}"; do echo "   $(basename "$u")"; done
 
 for u in "${UNIDADES[@]}"; do

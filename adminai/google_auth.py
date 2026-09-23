@@ -48,6 +48,11 @@ ESCOPOS = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/drive.readonly",
     "https://www.googleapis.com/auth/spreadsheets.readonly",
+    # drive.file: backup semanal para o Drive (dono, 23/09). É o escopo MÍNIMO que
+    # serve — o app só enxerga o que ele mesmo criou, então ele consegue criar a pasta
+    # "Backup urace command center" e escrever lá dentro, e **não** consegue ler o resto
+    # do Drive. O escopo `drive` cheio faria o trabalho e abriria tudo; não é preciso.
+    "https://www.googleapis.com/auth/drive.file",
 ]
 REDIRECT = "http://localhost:1/"   # porta 1: garante que nada responde
 

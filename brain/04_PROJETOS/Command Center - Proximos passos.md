@@ -260,11 +260,23 @@ Ele perguntou antes de olhar a tela, e a pergunta achou um buraco.
 - [x] 🤖 Conferido e **está bem**: scrypt com sal por usuário, chave de API só em hash,
       `audit_logs` append-only por gatilho, arquivo 600 e pasta 700, `journal=wal` com
       `synchronous=FULL`, nenhum segredo no repositório.
-- [ ] 👤 **Rodar a auditoria na VPS** — o que está acima foi provado em banco de teste;
-      a VPS pode ter permissão ou órfão que o teste não tem.
-- [ ] 👤 **Backup fora da VPS.** O que existe hoje protege de `rm` errado e de banco
-      corrompido, **não** de perder a máquina. Cópia diária para fora (S3, Backblaze,
-      Drive) é decisão sua: custo baixo, e é o que separa um susto de um fim.
+- [x] 👤 **Auditoria rodada na VPS (23/09): tudo verde.** 20,2 MB, sem corrupção, **sem
+      um único órfão** entre 3.831 vínculos externos. 272 clientes · 510 invoices · 1.184
+      serviços · 132 corridas · 108 waivers · 12.315 SKUs · 3.865 registros de auditoria.
+      Primeiro backup feito (2,5 MB comprimidos) e timer diário ativo.
+- [x] 👤 **Backup fora da VPS: o Drive** (dono, 23/09, *"pasta no drive com o nome Backup
+      urace command center com o backup semanal"*). `adminai/backup_drive.py`, toda
+      segunda às 04:00. Escopo `drive.file` — o app só enxerga o que ele mesmo criou, e
+      não lê o resto do Drive.
+- [ ] 👤 **Reautorizar o Google na VPS** — é o único passo travado: o token atual é
+      `drive.readonly` e não escreve. `python3 adminai/google_auth.py --conta urace`.
+- [ ] 👤 **Não compartilhar a pasta do Drive.** Dentro dela está a base inteira: nome,
+      e-mail, telefone e valor de cada cliente. Um link "qualquer pessoa com o link" ali
+      é o vazamento de tudo de uma vez.
+- [ ] 👤 Segundo ADMIN no painel: hoje há um só. Perder esse acesso é ficar sem
+      administração.
+- [ ] 🤖 19 sessões vencidas sem limpeza — sujeira, não risco. Posso pôr a faxina no
+      mesmo trabalho noturno do backup.
 
 ## Bancada de testes (22/09) — o instável era um teste fraco
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=URACE — backup semanal do banco para o Google Drive (a cópia fora da VPS)
+Documentation=file:///home/ubuntu/Uraceagent/adminai/backup_drive.py
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+Environment=HOME=/home/ubuntu
+Environment=URACE_DIR=/home/ubuntu/.urace
+EnvironmentFile=-/home/ubuntu/.urace/adminai.env
+ExecStart=/bin/bash -lc '/home/ubuntu/.urace/cc-venv/bin/python adminai/backup_drive.py --aplicar; echo "saida=$?"'
+StandardOutput=append:/home/ubuntu/.urace/backup.log
+StandardError=append:/home/ubuntu/.urace/backup.log
+NoNewPrivileges=true

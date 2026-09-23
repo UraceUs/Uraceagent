@@ -1,0 +1,12 @@
+[Unit]
+Description=URACE — envia o backup para o Drive toda segunda de madrugada
+
+[Timer]
+# Segunda, 04:00 local — depois do backup diário das 03:15, para mandar a cópia do dia.
+OnCalendar=Mon *-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=900
+Unit=urace-backup-drive.service
+
+[Install]
+WantedBy=timers.target
