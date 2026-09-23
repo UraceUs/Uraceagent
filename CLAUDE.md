@@ -32,11 +32,14 @@ curl -o /dev/null -w "%{http_code}\n" https://urace.kommo.com
 `CONNECT tunnel failed` = domínio fora da allowlist — precisa adicionar
 `kommo.com`, `*.kommo.com` e `api-g.kommo.com` nas configurações de rede do
 ambiente (Nuvem → engrenagem do ambiente → Acesso à rede → Personalizado →
-Domínios permitidos), depois salvar. `dialpad.com` tem o mesmo problema e,
-até a data deste commit, **continuou bloqueado mesmo depois de adicionado**
-— há indício de que existe também uma política a nível de organização, não
-só de ambiente, para esse domínio específico. Não gaste tempo tentando de
-novo sem antes confirmar isso em `claude.ai/admin-settings`.
+Domínios permitidos), depois salvar.
+
+**`dialpad.com` funciona nesta sessão de nuvem, confirmado em 23/09/2026**
+(`POST https://dialpad.com/api/v2/sms` — 19 SMS reais enviados e aceitos,
+`status_code 200`). A nota antiga dizendo que ele continuava bloqueado
+mesmo depois de allowlisted não vale mais — o bloqueio parece ter sido
+resolvido a nível de organização em algum momento entre commits. Token em
+`~/.urace/dialpad_token.txt`, mesma convenção do token do Kommo.
 
 **Gerar o token** (se ainda não tiver um): no Kommo, Configurações →
 Integrações → Create integration → preenche Nome/Redirect URL (qualquer
@@ -83,6 +86,17 @@ client.update_lead(12345, custom_fields_values=[{"field_id": 1331943, "values": 
 Kommo não manda mensagem de Instagram/Facebook/WhatsApp, só o Salesbot ou a
 tela manual. Isso é estrutural no código, não um lembrete de prompt: quem
 tentar usa Salesbot ou a UI, nunca esse client.
+
+**Confirmado ao vivo em 23/09/2026, não só por inferência** — não gaste
+tempo reabrindo essa investigação numa sessão futura: `GET /talks/{id}`
+funciona (mostra a conversa real, `chat_id`, canal `instagram_business`),
+mas `GET /talks/{id}/messages` devolve `403 Invalid scope`. A própria tela
+"Keys and scopes" do Kommo pra essa integração privada não tem seletor de
+escopo nenhum (só secret key, ID e token de longa duração) — não existe
+opção pra marcar, nem gerando token novo. Acesso à Chats API é reservado a
+app aprovado no Marketplace do Kommo + revisão do próprio Meta pra
+mensageria de negócio; integração privada não consegue isso de jeito
+nenhum. **Fechado no nível do produto**, não é falta de configuração.
 
 ## Regras operacionais aprendidas na marra
 

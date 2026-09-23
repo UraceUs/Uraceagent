@@ -160,7 +160,20 @@ class KommoClient:
         """Structural, not a reminder: the Kommo API cannot deliver Instagram/
         Facebook/WhatsApp text (see CLAUDE.md, 'restrições'). A caller that
         reaches this finds out immediately, rather than the message silently
-        never arriving or a note being mistaken for a sent reply."""
+        never arriving or a note being mistaken for a sent reply.
+
+        Confirmed live on 23/09/2026, not just inferred: GET /talks/{id} works
+        (lists the real conversation — talk_id, chat_id, origin, e.g.
+        "instagram_business") but /talks/{id}/messages returns 403 "Invalid
+        scope". The Kommo UI's own "Keys and scopes" screen for this private
+        integration has no scope selector at all (just secret key, ID,
+        long-lived token) — there is nothing to check to unlock this. Chats
+        API access is reserved for apps that went through Kommo Marketplace
+        review plus Meta's own business-messaging app review; a private/
+        custom integration cannot get it by generating a new token. This is
+        closed at the product level — don't re-attempt it in a future
+        session without a materially new fact (e.g. Kommo actually granting
+        a public/reviewed app)."""
         raise NotImplementedError(
             "Kommo's API does not send native-channel messages (Instagram/"
             "Facebook/WhatsApp). Only Salesbot, configured in the Kommo UI, "
