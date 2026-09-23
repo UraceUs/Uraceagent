@@ -42,7 +42,8 @@ def cli():
     inserir(con, "waivers", client_id=joseph, signer_name="Joseph Kurian", signer_email="joekur001@gmail.com",
             template="parental", status="completed", sent_at="2026-08-29", completed_at="2026-08-31")
     inserir(con, "waivers", client_id=None, signer_name="Matthew Hubbard", signer_email="misterhubbbard@gmail.com",
-            template="parental", status="autoresponded", sent_at="2026-05-27", expires_at="2026-09-24")
+            template="parental", status="autoresponded", sent_at="2026-05-27",
+            expires_at=(HOJE + timedelta(days=1)).isoformat())   # vence amanhã, relativo ao dia do teste
     # a atenção "cliente escreveu" só olha os últimos 14 dias (atencao.py), então a data
     # aqui é relativa: com 2026-09-04 fixo o teste passava até 17/09 e quebrava no dia 18.
     inserir(con, "emails", client_id=rafael, mailbox="urace", subject="Sobre o treino de sábado",
@@ -708,11 +709,16 @@ def test_triagem_move_para_principal_e_guarda_quem_precisa_humano(cli, monkeypat
     con = conectar()
     try:
         cliente = um(con, "SELECT id FROM clients ORDER BY id LIMIT 1")["id"]
+        # Data RELATIVA, não fixa: "Precisa de atenção" só olha os últimos 14 dias, e uma
+        # data cravada envelhece para fora dessa janela sozinha. Este teste passou por
+        # meses e quebrou em 23/09 sem ninguém mexer em nada — o e-mail 2026-09-09
+        # completou 14 dias. Data fixa em teste com janela relativa é bomba-relógio.
+        ontem = (HOJE - timedelta(days=1)).isoformat()
         e1 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Your Amazon.com order", sender="auto-confirm@amazon.com",
-                     last_at="2026-09-09T10:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Order shipped")
+                     last_at=f"{ontem}T10:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Order shipped")
         e2 = inserir(con, "emails", client_id=cliente, mailbox="urace", subject="Posso trocar o dia do treino?", sender="Rafael Pionti <rafael@spmesportes.com.br>",
-                     last_at="2026-09-09T11:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Consigo ir domingo?")
-        e3 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Sei lá", sender="x@y.com", last_at="2026-09-09T12:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
+                     last_at=f"{ontem}T11:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Consigo ir domingo?")
+        e3 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Sei lá", sender="x@y.com", last_at=f"{ontem}T12:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
         for e in (e1, e2, e3):
             inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail", external_id=f"th{e}", deep_link="https://mail.google.com/x")
         # o manual precisa estar confirmado: sem isso a triagem nem começa (dono, 11/09)
@@ -1205,12 +1211,13 @@ def test_triagem_confirma_o_filtro_e_classifica_so_o_resto(cli, monkeypatch):
     from command_center.db import conectar, inserir, um
     con = conectar()
     try:
+        ontem = (HOJE - timedelta(days=1)).isoformat()      # relativo: ver o comentário acima
         ja = inserir(con, "emails", mailbox="urace", subject="Your receipt", sender="service@paypal.com",
-                     last_at="2026-09-14T10:00:00", handled=0, is_inbox=1, labels='["INBOX","Finances/Receipt"]')
+                     last_at=f"{ontem}T10:00:00", handled=0, is_inbox=1, labels='["INBOX","Finances/Receipt"]')
         sem = inserir(con, "emails", mailbox="urace", subject="Posso trocar o treino?", sender="piloto@exemplo.com",
-                      last_at="2026-09-14T11:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
+                      last_at=f"{ontem}T11:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
         errado = inserir(con, "emails", mailbox="urace", subject="Fatura em aberto", sender="promo@loja.com",
-                         last_at="2026-09-14T12:00:00", handled=0, is_inbox=1, labels='["INBOX","wNews"]')
+                         last_at=f"{(HOJE - timedelta(days=1)).isoformat()}T12:00:00", handled=0, is_inbox=1, labels='["INBOX","wNews"]')
         for e in (ja, sem, errado):
             inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail",
                     external_id=f"th{e}", deep_link="https://mail.google.com/x")
@@ -1278,7 +1285,7 @@ def test_triagem_mantem_o_filtro_quando_a_ia_nao_responde(cli, monkeypatch):
     con = conectar()
     try:
         e = inserir(con, "emails", mailbox="urace", subject="Your receipt", sender="service@paypal.com",
-                    last_at="2026-09-14T13:00:00", handled=0, is_inbox=1, labels='["INBOX","Finances/Receipt"]')
+                    last_at=f"{(HOJE - timedelta(days=1)).isoformat()}T13:00:00", handled=0, is_inbox=1, labels='["INBOX","Finances/Receipt"]')
         inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail",
                 external_id=f"th{e}", deep_link="https://mail.google.com/x")
         con.commit()
@@ -1374,7 +1381,7 @@ def test_listagem_poe_a_inbox_na_frente_do_limite(cli):
                          last_at="2020-01-01T00:00:00", is_inbox=1, handled=1, labels='["INBOX"]')
         for i in range(3):
             inserir(con, "emails", mailbox="support", subject=f"arquivado {i}", sender="b@x.com",
-                    last_at="2026-09-14T10:00:00", is_inbox=0, handled=1, labels='["wNews"]')
+                    last_at=f"{(HOJE - timedelta(days=1)).isoformat()}T10:00:00", is_inbox=0, handled=1, labels='["wNews"]')
         con.commit()
     finally:
         con.close()
@@ -1411,7 +1418,7 @@ def test_ia_sugere_marcador_e_ele_espera_o_dono(cli, monkeypatch):
     con = conectar()
     try:
         e = inserir(con, "emails", mailbox="urace", subject="Contrato de patrocinio 2027",
-                    sender="juridico@patrocinador.com", last_at="2026-09-14T15:00:00",
+                    sender="juridico@patrocinador.com", last_at=f"{(HOJE - timedelta(days=1)).isoformat()}T15:00:00",
                     handled=0, is_inbox=1, labels='["INBOX"]')
         inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail",
                 external_id=f"th{e}", deep_link="https://mail.google.com/x")
@@ -1581,7 +1588,7 @@ def test_triagem_dispara_o_fluxo_da_waiver_quando_o_email_e_waiver(cli, monkeypa
                        ON CONFLICT(name) DO UPDATE SET status='confirmado', mailboxes='["support"]', in_gmail=1""")
         # (um teste anterior relê a support@ com outra lista e tira o Waivers daquela caixa)
         e = inserir(con, "emails", mailbox="support", subject="Completed: … Waiver of Liability", sender="dse_na4@docusign.net",
-                    last_at="2026-09-16T10:00:00", handled=0, is_inbox=1, labels='["INBOX","Waivers"]')
+                    last_at=f"{(HOJE - timedelta(days=1)).isoformat()}T10:00:00", handled=0, is_inbox=1, labels='["INBOX","Waivers"]')
         inserir(con, "entity_links", entity_type="email", entity_id=e, system="gmail", external_id=f"th{e}", deep_link="x")
         con.commit()
         chamadas = []

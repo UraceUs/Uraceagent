@@ -5,8 +5,15 @@ import json
 import os
 import tempfile
 import time
+from datetime import date, timedelta
 
 import pytest
+
+
+def _dias(n):
+    """Data relativa a hoje, em ISO. Data fixa em campo de validade envelhece para o
+    vencimento e quebra o teste sozinha — ver `test_datas_relativas.py`."""
+    return (date.today() + timedelta(days=n)).isoformat()
 
 from fastapi.testclient import TestClient
 
@@ -395,7 +402,7 @@ def test_contexto_do_piloto_citado_e_invoice_resolvida_sem_perguntar(cli, monkey
         cid = inserir(con, "clients", name="Nicolas Pera", email="peranicolas2106@gmail.com", phone="305-906-2542", pilot_name="David Pera", pilot_dob="2014-05-02", vip=0, status="ACTIVE", source="asana")
         inserir(con, "tasks", client_id=cid, title="David Pera_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="Finished Services", status="completed", due_on="2026-08-23")
         inserir(con, "invoices", client_id=cid, doc_number="1031", amount=500, balance=0, status="paid", issued_on="2026-08-20", memo="Using Own Kart - David Pera", customer_email="peranicolas2106@gmail.com", customer_ref="696")
-        inserir(con, "waivers", client_id=cid, signer_name="Nicolas Pera", signer_email="peranicolas2106@gmail.com", template="parental", status="completed", sent_at="2026-08-15", completed_at="2026-08-16", expires_at="2027-08-16")
+        inserir(con, "waivers", client_id=cid, signer_name="Nicolas Pera", signer_email="peranicolas2106@gmail.com", template="parental", status="completed", sent_at=_dias(-39), completed_at=_dias(-38), expires_at=_dias(327))
         con.execute("INSERT OR REPLACE INTO qbo_items (id, name, full_name, price, type, active) VALUES ('31','Arrive and Drive daily','Arrive and Drive daily',500,'Service',1), ('32','Race Support','Race Support',1200,'Service',1)")
         con.commit()
         assert motor.cliente_citado(con, "Filho do Nicolas Pera - David Pera. Coloca na agenda pro Domingo esta semana.") == cid
@@ -761,7 +768,8 @@ def test_waiver_assinada_vai_anexada_em_toda_tarefa_criada(cli, monkeypatch, tmp
     try:
         cid = inserir(con, "clients", name="Pai do Théo", pilot_name="Théo Teste", status="ACTIVE", email="pai@teste.com")
         wid = inserir(con, "waivers", client_id=cid, signer_name="Pai do Théo", signer_email="pai@teste.com",
-                      template="parental", status="completed", sent_at="2026-09-01", completed_at="2026-09-02", expires_at="2027-09-02")
+                      template="parental", status="completed",
+                      sent_at=_dias(-22), completed_at=_dias(-21), expires_at=_dias(344))
         inserir(con, "entity_links", entity_type="waiver", entity_id=wid, system="docusign", external_id="env-123")
         tid = inserir(con, "tasks", client_id=cid, title="Théo Teste_Urace Daily [1/1]", project="U-RACE",
                       section="Sunday", status="open", due_on="2026-09-20")
@@ -786,7 +794,7 @@ def test_waiver_assinada_vai_anexada_em_toda_tarefa_criada(cli, monkeypatch, tmp
         con.commit()
         assert motor.anexar_waiver_na_tarefa(con, t2)["motivo"] == "cliente sem waiver assinada na validade"
         # e a waiver vencida não vale
-        con.execute("UPDATE waivers SET expires_at='2026-01-01' WHERE id=?", (wid,)); con.commit()
+        con.execute("UPDATE waivers SET expires_at=? WHERE id=?", (_dias(-1), wid)); con.commit()
         assert motor.waiver_do_cliente(con, cid) is None
     finally:
         con.close()
@@ -814,7 +822,8 @@ def test_waiver_fecha_a_subtarefa_e_entra_nas_tarefas_que_ja_existiam(cli, monke
     try:
         cid = inserir(con, "clients", name="Mãe da Ana", pilot_name="Ana Teste", status="ACTIVE", email="mae@teste.com")
         wid = inserir(con, "waivers", client_id=cid, signer_name="Mãe da Ana", signer_email="mae@teste.com",
-                      template="parental", status="completed", sent_at="2026-09-10", completed_at="2026-09-15", expires_at="2027-09-15")
+                      template="parental", status="completed",
+                      sent_at=_dias(-13), completed_at=_dias(-8), expires_at=_dias(357))
         inserir(con, "entity_links", entity_type="waiver", entity_id=wid, system="docusign", external_id="env-9")
         # duas tarefas abertas que já existiam, uma fechada
         t1 = inserir(con, "tasks", client_id=cid, title="Ana Teste_Urace Daily", status="open", due_on="2026-09-20")
@@ -860,7 +869,8 @@ def test_waiver_do_email_liga_ao_cliente_e_usa_o_anexo_quando_a_api_falha(cli, m
     try:
         cid = inserir(con, "clients", name="Pai do Nya", pilot_name="Nya Amankwa", status="ACTIVE")
         wid = inserir(con, "waivers", client_id=cid, signer_name="Pai do Nya", minor_name="Nya Amankwa",
-                      template="parental", status="completed", sent_at="2026-09-10", completed_at="2026-09-15", expires_at="2027-09-15")
+                      template="parental", status="completed",
+                      sent_at=_dias(-13), completed_at=_dias(-8), expires_at=_dias(357))
         inserir(con, "entity_links", entity_type="waiver", entity_id=wid, system="docusign", external_id="env-7")
         tid = inserir(con, "tasks", client_id=cid, title="Nya Amankwa_Urace Daily", status="open", due_on="2026-09-20")
         inserir(con, "entity_links", entity_type="task", entity_id=tid, system="asana", external_id="g7")

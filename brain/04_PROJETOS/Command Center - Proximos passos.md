@@ -131,11 +131,26 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
 - [x] 🤖 **Catálogo da Comet carregado na VPS (22/09): 12.315 SKU, varredura COMPLETA**
       em 32 páginas do `/products.json`. A paginação corrigida foi o que destravou — a
       prova de 50 tinha trazido 479 e parecia ser tudo.
-- [ ] 👤 **Quais peças a URACE realmente carrega?** O catálogo tem 12.315 SKU; o estoque
-      tem zero item. O catálogo é a prateleira DELES, não a nossa — nenhum item vira
-      estoque sozinho, e não sou eu que decido o que você estoca. Precisa de uma lista
-      inicial (pneu, corrente, vela, pastilha, óleo…) para eu cadastrar com SKU e
-      estoque mínimo. Pode ser curta: os 20 que mais saem já valem.
+- [x] 👤 **"Quais peças a URACE carrega?" — respondido pelas invoices** (dono, 23/09:
+      *"leia todas as invoices criadas desde o início do ano"*). 348 invoices do
+      QuickBooks, linha a linha, 02/01 a 22/09: **161 itens físicos distintos, 32 em 3+
+      vendas, 16 em 5+**. Em `dados/pecas-mais-usadas-2026.json`.
+- [x] 🤖 O relatório pronto do QuickBooks teria mentido: põe **Travel Fee no topo com
+      684** (milhas a $0,85) e joga fora o prefixo que separa peça de serviço. Ler
+      invoice por invoice foi a decisão certa do dono.
+- [ ] 👤 **Conferir a lista dos 16 antes de semear** (é o único passo que falta):
+      `Rear sprocket` (31 vendas), `Rk Non Oring Chain` (29), `Fuel charge Jr/Senior`
+      (27), `Spark Plug` (18), `Tonykart brake pads` (17), `MG SH2 Red Tires` (16),
+      `Tie rod` (15), `Levanto KRT Tires` (13), `Evinco Tires` (12), `Fuel mix` (10),
+      `Tonykart Steering column` (10), `Tonykart Rear bumper fixing bolt` (7),
+      `Number Sticker` (6), `MG SW2 Rain Tire` (6), `RK Oring Chain` (6),
+      `IAME Front Sprocket Z10` (5).
+- [ ] 👤 **Os mínimos são chute honesto**: um mês de consumo medido nessas invoices.
+      Faltam três coisas que os números não mostram e você sabe — prazo de entrega da
+      Comet, peça que quebra em lote, e corrida grande no calendário.
+- [ ] 👤 **Ficaram de fora de propósito, discorde se quiser:** roupa sob medida (suit,
+      camisa — feito por encomenda), tenda/parede/bandeira (estrutura de evento) e kart
+      completo (é ficha com número de série, não quantidade).
 - [ ] 👤 (resolvido em parte) **Importação: caminho escolhido foi a raspagem.** Esta sessão não alcança o site (a
       política de saída recusa `cometkartsales.com`, 403 — não contornei). Duas saídas:
       rodar na VPS, que tem rede própria (`python3 adminai/importar_comet.py --limite 50`
