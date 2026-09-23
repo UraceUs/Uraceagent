@@ -1,10 +1,11 @@
 # Antes de fazer qualquer coisa neste repositório
 
-Leia `docs/mapa-de-agentes.md`. Ele lista as sessões que operam sobre este
-mesmo repositório — **U RACE**, **CRM**, **COMERCIAL**, **AGREGADOR** — e o
-que cada uma faz. Você é uma dessas sessões (o nome da sessão, na barra
-lateral do Claude Code, diz qual). Se não estiver claro qual, **pergunte ao
-usuário antes de agir** — não assuma.
+Leia `docs/mapa-de-agentes.md`. Desde 23/09/2026 é **um agente só** operando
+este repositório (a divisão antiga em 4 sessões — U RACE/CRM/COMERCIAL/
+AGREGADOR — foi aposentada; motivo documentado no arquivo). Leia também
+`prompts/LOOP_URACE.md` (o loop recorrente que roda disparo, follow-up,
+C&S e administrativo) e `prompts/PLAYBOOK_COMERCIAL.md` (regras de venda e
+de loop aprendidas na operação irmã) antes de agir.
 
 Leia também `docs/urace-ai-agent-arquitetura.md` para a arquitetura técnica
 do agente de vendas em si (Orchestrator, schema, catálogo) — esse documento
