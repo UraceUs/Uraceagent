@@ -172,6 +172,8 @@ from command_center.api import push  # noqa: E402
 app.include_router(push.r)
 from command_center.api import estoque as api_estoque  # noqa: E402
 app.include_router(api_estoque.r)
+from command_center.api import mcp_http  # noqa: E402
+app.include_router(mcp_http.r)
 
 
 # ------------------------------------------------------------- saúde

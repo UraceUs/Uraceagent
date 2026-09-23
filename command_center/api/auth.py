@@ -349,7 +349,13 @@ def chave_valida(con, request, tocar=True):
 def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
     porchave = chave_valida(con, request)
     if porchave:
-        if porchave["somente_leitura"] and request.method not in ("GET", "HEAD", "OPTIONS"):
+        # O MCP manda TUDO por POST, inclusive leitura: é assim que JSON-RPC funciona.
+        # A trava por método barraria uma chave só-leitura de sequer listar ferramentas.
+        # A isenção é estreita e se paga: aquela rota abre o banco em `mode=ro`, onde
+        # escrever é impossível pelo SQLite — não é confiança, é impedimento.
+        so_leitura_por_construcao = request.url.path.rstrip("/").endswith("/ops/mcp")
+        if (porchave["somente_leitura"] and not so_leitura_por_construcao
+                and request.method not in ("GET", "HEAD", "OPTIONS")):
             raise HTTPException(status.HTTP_403_FORBIDDEN,
                                 "Esta chave é só de leitura: ela consulta o painel e não muda nada. "
                                 "Para deixá-la agir, crie outra chave sem 'só leitura'.")

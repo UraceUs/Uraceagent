@@ -243,6 +243,22 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
 - [x] 🤖 **`urace-waivers` morto às 07:33: encerrado sem causa.** As unidades agora carimbam
       o código de saída; a próxima falha se explica sozinha. Não vale caçar log que não existe.
 
+## Conector MCP (23/09) — o painel como ferramenta de um Claude de fora
+
+- [x] 🤖 **`POST /ops/mcp`**: MCP por HTTP com nove ferramentas de leitura. O servidor
+      MCP já existia desde 21/09, em stdio; faltava só o transporte.
+- [x] 🤖 **"Só leitura" deixou de ser promessa.** A rota abre o banco em `mode=ro` — o
+      SQLite recusa escrita por ela. Foi o que permitiu isentar o MCP da trava por método
+      HTTP (JSON-RPC manda leitura por POST) sem abrir buraco.
+- [x] 🤖 Vai atrás do mesmo `handle /ops*` do Caddy: nada novo no servidor web.
+- [ ] 👤 **Criar a chave** (Usuários → Chaves de API, papel VIEWER, só leitura) e
+      **conectar** em claude.ai/customize/connectors, depois abrir sessão nova.
+- [ ] 👤 **Incerteza honesta:** se a tela do conector exigir OAuth em vez de chave fixa,
+      é outro trabalho (servidor de autorização). Só dá para saber tentando.
+- [ ] 👤 Liberar `urace-bridge.duckdns.org` na política de rede **só** se quiser que eu
+      alcance a VPS direto daqui — o conector não precisa disso, porque roda pelo
+      claude.ai.
+
 ## Banco: estrutura e segurança (23/09) — o dono pediu a garantia
 
 Ele perguntou antes de olhar a tela, e a pergunta achou um buraco.

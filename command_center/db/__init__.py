@@ -62,6 +62,23 @@ def conectar(caminho=None):
     return con
 
 
+def conectar_somente_leitura(caminho=None):
+    """Conexão que o SQLite **recusa** usar para escrever (`mode=ro`).
+
+    Existe para o MCP: JSON-RPC manda leitura por POST, então a trava de "chave só de
+    leitura" — que olha o método HTTP — não serve ali. Em vez de abrir uma exceção
+    baseada em confiança, a rota abre o banco num modo em que escrever é impossível.
+    Promessa vira garantia: se um dia alguém acrescentar por engano uma ferramenta que
+    escreve, ela falha em vez de gravar.
+    """
+    caminho = caminho or db_path()
+    con = sqlite3.connect(f"file:{caminho}?mode=ro", uri=True, timeout=10,
+                          check_same_thread=False)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA busy_timeout = 10000")
+    return con
+
+
 # Colunas acrescentadas depois do primeiro deploy: CREATE TABLE IF NOT EXISTS
 # não as adiciona em banco existente; cada linha aqui é idempotente.
 MIGRACOES = [
