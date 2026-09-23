@@ -138,7 +138,13 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
 - [x] 🤖 O relatório pronto do QuickBooks teria mentido: põe **Travel Fee no topo com
       684** (milhas a $0,85) e joga fora o prefixo que separa peça de serviço. Ler
       invoice por invoice foi a decisão certa do dono.
-- [ ] 👤 **Conferir a lista dos 16 antes de semear** (é o único passo que falta):
+- [x] 👤 **Os 16 itens criados na VPS em 23/09** — fichas sem saldo, como tem de ser.
+- [x] 🤖 **Contagem física existe como comando** (`adminai/contar_estoque.py`): imprime a
+      folha com os `#id` e recebe `--contar 3=12 5=0`. Item não contado **fica como
+      está**, nunca vira zero; contar zero é registro válido e diferente de não contar.
+- [ ] 👤 **Contar a prateleira** — é o que tira o estoque do zero. Depois da contagem a
+      lista de reposição passa a valer de verdade.
+- [ ] 👤 (conferido) A lista dos 16:
       `Rear sprocket` (31 vendas), `Rk Non Oring Chain` (29), `Fuel charge Jr/Senior`
       (27), `Spark Plug` (18), `Tonykart brake pads` (17), `MG SH2 Red Tires` (16),
       `Tie rod` (15), `Levanto KRT Tires` (13), `Evinco Tires` (12), `Fuel mix` (10),
