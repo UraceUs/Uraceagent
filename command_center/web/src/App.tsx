@@ -11,6 +11,8 @@ import { AttentionPage } from './pages/Attention'
 import { Automation } from './pages/Automation'
 import { Capabilities } from './pages/Capabilities'
 import { Races } from './pages/Races'
+import { Estoque } from './pages/Estoque'
+import { Compras, Pedidos, Planejamento } from './pages/Logistica'
 import { Client360 } from './pages/Client360'
 import { Clients } from './pages/Clients'
 import { CRM } from './pages/CRM'
@@ -41,6 +43,11 @@ export default function App() {
         <Route element={<Guard><Shell /></Guard>}>
           <Route index element={<Dashboard />} />
           <Route path="attention" element={<AttentionPage />} />
+          {/* Logística (dono, 23/09) */}
+          <Route path="estoque" element={<Estoque />} />
+          <Route path="pedidos" element={<Pedidos />} />
+          <Route path="compras" element={<Compras />} />
+          <Route path="planejamento" element={<Planejamento />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:id" element={<Client360 />} />
           <Route path="asana" element={<AsanaPage />} />

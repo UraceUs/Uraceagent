@@ -252,7 +252,7 @@ select.input{padding-right:30px}
 .pal .grp{font-family:var(--font-cond)}
 kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .toast{border-radius:16px;background:var(--surface);color:var(--ink);border:1px solid var(--glass-line-2);box-shadow:var(--shadow-pop)}
-.toast.ok{background:var(--surface);color:var(--ok)}.toast.crit{background:var(--surface);color:var(--crit)}
+.toast.ok{background:var(--surface);color:var(--ok)}.toast.crit{background:var(--surface);color:var(--crit)}.toast.warn{background:var(--surface);color:var(--warn)}
 .toast .tt{font-family:var(--font);text-transform:none;letter-spacing:0;font-size:12.5px}
 .progress::before{background:var(--brand)}
 

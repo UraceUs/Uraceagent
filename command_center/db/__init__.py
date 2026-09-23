@@ -150,6 +150,9 @@ MIGRACOES = [
     # "está certo hoje" não basta, porque um homônimo novo no cadastro faria o serviço sair.
     ("tasks", "client_by", "TEXT"),        # sync | human
     ("tasks", "client_at", "TEXT"),   # quando a descrição foi lida — mesmo que não tivesse contato nenhum
+    # Foto da peça, tirada pelo mecânico no celular (dono, 23/09). Só o nome do arquivo:
+    # a imagem mora em ~/.urace/estoque, fora do banco e fora do repositório.
+    ("stock_items", "image_path", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

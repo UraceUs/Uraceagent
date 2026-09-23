@@ -49,8 +49,33 @@ async function req<T>(method: string, path: string, body?: unknown, opts: { sile
   return res.json() as Promise<T>
 }
 
+/** Envio de formulário com arquivo (foto de peça). O navegador monta o `Content-Type`
+ *  com o `boundary` — se a gente escrever o header à mão, o servidor não consegue
+ *  separar os campos e a foto chega vazia. */
+async function reqForm<T>(path: string, form: FormData): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(API + path, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF': csrf() },
+      credentials: 'same-origin', body: form })
+  } catch {
+    throw new ApiError(0, 'Sem conexão com o servidor.')
+  }
+  if (res.status === 401) onUnauthorized.forEach(fn => fn())
+  if (!res.ok) {
+    let msg = res.statusText || `HTTP ${res.status}`
+    try {
+      const j = await res.json()
+      if (typeof j?.detail === 'string') msg = j.detail
+      else if (j?.detail?.[0]?.msg) msg = j.detail[0].msg
+    } catch { /* corpo não-JSON */ }
+    throw new ApiError(res.status, msg)
+  }
+  return res.json() as Promise<T>
+}
+
 export const api = {
   get: <T>(path: string, opts?: { silent401?: boolean }) => req<T>('GET', path, undefined, opts),
+  postForm: <T>(path: string, form: FormData) => reqForm<T>(path, form),
   post: <T>(path: string, body?: unknown) => req<T>('POST', path, body ?? {}),
   put: <T>(path: string, body?: unknown) => req<T>('PUT', path, body ?? {}),
   patch: <T>(path: string, body?: unknown) => req<T>('PATCH', path, body ?? {}),

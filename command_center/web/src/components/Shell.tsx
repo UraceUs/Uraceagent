@@ -76,10 +76,14 @@ export function Shell() {
   }, [])
   const ask = useCallback((text: string) => nav('/ai', { state: { ask: text } }), [nav])
   const d = dash.data
+  const estoq = useGet<{ repor: unknown[] }>(can('OPERATOR') ? '/estoque' : null, 300000)
   const alerts: Attention[] = (d?.needs_attention || []).filter(a => a.level === 'CRITICAL' || a.level === 'HIGH')
   const crit = (d?.needs_attention || []).filter(a => a.level === 'CRITICAL').length
   const pend = d?.ai_pending_approval || 0
   const attn = d?.needs_attention_total || 0
+  // Contador do Estoque no menu: só é buscado por quem pode ver estoque, e sem
+  // atrapalhar quem não usa — falha em silêncio, porque contador não derruba menu.
+  const repor = estoq.data?.repor?.length || 0
   const bad = (d?.integrations || []).filter(i => i.status !== 'CONNECTED' && i.status !== 'SYNCING')
   const badInt = bad.length
   const nInt = (d?.integrations || []).length
@@ -97,7 +101,14 @@ export function Shell() {
         <div className="grp">Hoje</div>
         <NL to="/" end icon="home">Hoje</NL>
         <NL to="/attention" icon="alert" n={attn} tone={crit ? undefined : 'warn'}>Precisa de atenção</NL>
+        {/* Logística (dono, 23/09). "Corridas" saiu de "Hoje" e veio para cá: o mesmo link
+            em dois lugares do menu faz a pessoa se perguntar qual dos dois é o certo. */}
+        <div className="grp">Logística</div>
+        <NL to="/estoque" icon="box" n={repor} tone="warn">Estoque</NL>
         <NL to="/races" icon="flag">Corridas</NL>
+        <NL to="/pedidos" icon="list">Pedidos</NL>
+        <NL to="/compras" icon="cart">Compras</NL>
+        <NL to="/planejamento" icon="chart">Planejamento</NL>
         <div className="grp">Vendas</div>
         <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">Oportunidades</NL>
         <NL to="/sales/agenda" icon="cal">Agenda de vendas</NL>
