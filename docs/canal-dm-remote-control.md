@@ -57,6 +57,16 @@ mas:
    temos) — **não testado ainda**, não prometer que funciona antes de
    confirmar.
 
+**Atualização 23/09, mesmo dia — rede já liberada, testado:** com
+`amojo.amocrm.ru`/`amojo.amocrm.com` na allowlist, os dois hosts
+respondem (deixaram de dar `CONNECT tunnel failed`). Mas
+`GET /v2/origin/custom/{amojo_id}` e `GET /v2/chats/{chat_id}` com o
+Bearer token da API v4 devolvem `404` vazio — o amoJo usa esquema de
+autenticação próprio (normalmente assinatura HMAC com `secret_key` do
+canal, não o Bearer token do Kommo). **Confirmado: falta mesmo o
+registro de canal** — rede aberta não bastou. Sem esse `secret_key`
+próprio, não tem endpoint a mais pra tentar por tentativa e erro.
+
 ## Função de clique/cursor (como a AZ opera) — via Remote Control
 
 A AZ usa uma sessão de Claude Code **local** (Mac/Windows), com a
