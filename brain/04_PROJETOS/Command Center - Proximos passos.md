@@ -243,6 +243,29 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
 - [x] 🤖 **`urace-waivers` morto às 07:33: encerrado sem causa.** As unidades agora carimbam
       o código de saída; a próxima falha se explica sozinha. Não vale caçar log que não existe.
 
+## Banco: estrutura e segurança (23/09) — o dono pediu a garantia
+
+Ele perguntou antes de olhar a tela, e a pergunta achou um buraco.
+
+- [x] 🤖 **Auditoria que roda e responde** (`adminai/auditar_banco.py`, só leitura):
+      integridade do arquivo, órfãos entre tabelas, durabilidade, permissões, backup,
+      gatilhos de auditoria, senha/chave só em hash, e quantos ADMIN existem. Fecha com
+      o que há por área — clientes, financeiro, estoque, contratos, operação, segurança.
+- [x] 🤖 **O buraco: não havia backup nenhum.** Tudo num arquivo só, numa máquina só.
+      `adminai/backup_banco.py` faz cópia com `VACUUM INTO` (consistente, não `cp`),
+      **abre e confere cada cópia** antes de contar, comprime, guarda 14 dias e só apaga
+      o velho depois de o novo existir. `--restaurar` guarda o banco atual antes.
+- [x] 🤖 Timer `urace-backup` às 03:15, com `Persistent=true` — backup que só acontece
+      com a máquina de pé não protege de queda.
+- [x] 🤖 Conferido e **está bem**: scrypt com sal por usuário, chave de API só em hash,
+      `audit_logs` append-only por gatilho, arquivo 600 e pasta 700, `journal=wal` com
+      `synchronous=FULL`, nenhum segredo no repositório.
+- [ ] 👤 **Rodar a auditoria na VPS** — o que está acima foi provado em banco de teste;
+      a VPS pode ter permissão ou órfão que o teste não tem.
+- [ ] 👤 **Backup fora da VPS.** O que existe hoje protege de `rm` errado e de banco
+      corrompido, **não** de perder a máquina. Cópia diária para fora (S3, Backblaze,
+      Drive) é decisão sua: custo baixo, e é o que separa um susto de um fim.
+
 ## Bancada de testes (22/09) — o instável era um teste fraco
 
 - [x] 🤖 **Caçado em 30 rodadas: `test_criar_e_revogar_ficam_na_auditoria`.** A causa não

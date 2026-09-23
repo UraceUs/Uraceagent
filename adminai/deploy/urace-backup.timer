@@ -1,0 +1,13 @@
+[Unit]
+Description=URACE — backup do banco, todo dia de madrugada (fuso EDT da Flórida)
+
+[Timer]
+# 03:15 local. Persistent: se a VPS estava desligada na hora, roda ao voltar —
+# backup que só acontece quando a máquina está de pé não protege de queda.
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=urace-backup.service
+
+[Install]
+WantedBy=timers.target

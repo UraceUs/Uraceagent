@@ -1,0 +1,16 @@
+[Unit]
+Description=URACE — backup verificado do banco do Command Center
+Documentation=file:///home/ubuntu/Uraceagent/adminai/backup_banco.py
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+Environment=HOME=/home/ubuntu
+Environment=URACE_DIR=/home/ubuntu/.urace
+EnvironmentFile=-/home/ubuntu/.urace/adminai.env
+ExecStart=/bin/bash -lc '/home/ubuntu/.urace/cc-venv/bin/python adminai/backup_banco.py --aplicar; echo "saida=$?"'
+StandardOutput=append:/home/ubuntu/.urace/backup.log
+StandardError=append:/home/ubuntu/.urace/backup.log
+NoNewPrivileges=true
