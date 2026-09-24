@@ -89,3 +89,72 @@ Pra ligar isso:
 
 Sem esse passo, `ListAgents` desta sessão sempre vai retornar "nenhuma
 sessão alcançável" — não é bug, é a ausência real dessa ligação.
+
+## Procedimento de envio por clique, quando o Remote Control estiver ligado
+
+Portado de `ENVIO_POR_CLIQUE_KOMMO.md` da AZ (24/09) — as armadilhas já
+custaram tempo real na operação irmã, não reaprender na marra aqui.
+Adaptado: onde a AZ usa `kommo_pipe.py`, a URACE usa `agent/kommo_client.py`
+(`add_note()` + `update_lead(status_id=...)`) — mesma ideia, tooling local.
+
+**Antes de abrir a tela — decidir se vale abrir:**
+1. O lead tem canal social conectado? Se só tem telefone, não é aqui —
+   é SMS pelo Dialpad.
+2. A última mensagem é DELE e tem menos de 24h? Mais velha, o Meta
+   recusa e volta `Error` — não adianta mudar o texto, é a janela de
+   24h do Meta, não o conteúdo.
+3. Alguém mais já está nessa thread? Registrar quem pegou (nome, canal,
+   hora) antes de escrever, pra dois agentes não abrirem a mesma
+   conversa ao mesmo tempo (vira spam pro cliente).
+
+**Passo a passo:**
+1. Abrir o card pelo ID direto: `https://urace.kommo.com/leads/detail/<lead_id>`
+   — o Kommo perde clique se você procurar o card pela lista.
+2. Ler as duas últimas mensagens da thread na hora, na tela — nunca
+   confiar no que foi lido minutos antes nem no espelho da API (que
+   atrasa horas). O cliente pode ter escrito no meio.
+3. Clicar no campo de escrita e conferir a aba **antes de digitar**. O
+   compose do Kommo **volta sozinho pra "Nota interna"** — se escrever
+   com a aba errada, o texto vira nota interna e o cliente não recebe
+   nada, mas parece que mandou. Selecionar o canal (Instagram/Facebook)
+   antes de digitar, confirmar de novo depois.
+4. Escrever o texto de uma vez (inserir/colar, nunca digitação
+   simulada caractere a caractere — corrompe o compose do Kommo, some
+   caractere e quebra emoji). Reler na tela antes de mandar.
+5. Enviar.
+6. Confirmar a entrega **na própria tela** — a mensagem tem que virar
+   **Delivered**. `Error` é quase sempre a janela de 24h; registrar e
+   não tentar de novo. Só o `Delivered` prova que saiu — sem ele,
+   considerar que não foi.
+7. Registrar por API, não na tela:
+   ```python
+   from agent.kommo_client import KommoClient
+   client = KommoClient()
+   client.add_note(lead_id, "respondido no IG: <resumo> — Delivered HH:MM")
+   client.update_lead(lead_id, status_id=<id_do_follow_up_1>)
+   ```
+   Depois lançar em `data/leads_master.xlsx`: fala literal, idade se
+   veio, próximo passo — mesma disciplina do Passo 4 do
+   `prompts/LOOP_URACE.md`.
+
+**Armadilhas, todas já pagas (na AZ):**
+
+| Armadilha | O que acontece | O que fazer |
+|---|---|---|
+| Compose volta pra "nota interna" | "manda" e o cliente não recebe nada | conferir a aba antes **e** depois de digitar |
+| Digitação simulada corrompe o texto | mensagem sai truncada ou com lixo | inserir de uma vez, reler antes de mandar |
+| Janela de 24h do Meta | volta `Error` | checar a última mensagem do cliente antes de abrir a tela |
+| Reload na aba | derruba a sessão, ninguém aqui faz login de novo | ⛔ nunca dar reload |
+| Print de tela pra ler a conversa | caro, lento, ainda erra | ler por API/JS; print só sem alternativa nenhuma |
+| Dois agentes na mesma thread | cliente recebe duas aberturas, vira spam | registrar quem pegou, antes de escrever |
+
+**O que nunca sai por aqui, nem com Remote Control ligado:** data
+confirmada, desconto ou preço fora da tabela, waiver, caução, cobrança,
+promessa de filmagem na pista — tudo isso é do Lucas/Italo. O agente
+escreve o achado e para, mesmo com a tela na mão.
+
+**Quando o SMS estiver sem crédito (Dialpad):** não existe contorno
+técnico — é a mesma conta e a mesma carteira, API ou tela. Nesse caso
+a saída é mudar de canal: responder quem está dentro da janela de 24h
+no Instagram (de graça) e deixar o SMS em fila até alguém recarregar
+em Settings → Billing do Dialpad.
