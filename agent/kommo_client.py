@@ -137,10 +137,28 @@ class KommoClient:
     # -------------------------------------------------------------------
 
     def update_lead(self, lead_id: int, custom_fields_values: list[dict] | None = None,
-                    status_id: int | None = None, pipeline_id: int | None = None) -> dict:
+                    status_id: int | None = None, pipeline_id: int | None = None,
+                    price: int | None = None) -> dict:
         """PATCH semantics: fields left out are left alone. Never send a full
         custom_fields_values list unless the intent is to overwrite every
-        field currently on the card."""
+        field currently on the card.
+
+        price and custom_fields_values are never sent in the same PATCH.
+        Learned from the AZ sister operation (PROMPT_MAC_COTAR.md, "price e
+        custom_fields no mesmo PATCH falham inteiro") — not independently
+        reproduced against this account (a live test combining a real custom
+        field with price was blocked before it ran), so this is a precaution
+        carried over, not a confirmed local failure mode. Cheap to keep either
+        way: two PATCH calls instead of one.
+
+        Also confirmed live here (23/09): a 200 on this call does not prove
+        the value stuck — the PATCH response body doesn't echo price back.
+        Callers that need certainty should re-read the lead with get_lead()
+        after writing, not trust this call's return value alone."""
+        if price is not None and custom_fields_values is not None:
+            raise ValueError(
+                "update_lead: pass price and custom_fields_values in separate "
+                "calls, never together (see docstring)")
         body: dict[str, Any] = {}
         if custom_fields_values is not None:
             body["custom_fields_values"] = custom_fields_values
@@ -148,6 +166,8 @@ class KommoClient:
             body["status_id"] = status_id
         if pipeline_id is not None:
             body["pipeline_id"] = pipeline_id
+        if price is not None:
+            body["price"] = price
         if not body:
             raise ValueError("update_lead called with nothing to update")
         return self._request("PATCH", f"/leads/{lead_id}", body=body)
@@ -160,7 +180,20 @@ class KommoClient:
         """Structural, not a reminder: the Kommo API cannot deliver Instagram/
         Facebook/WhatsApp text (see CLAUDE.md, 'restrições'). A caller that
         reaches this finds out immediately, rather than the message silently
-        never arriving or a note being mistaken for a sent reply."""
+        never arriving or a note being mistaken for a sent reply.
+
+        Confirmed live on 23/09/2026, not just inferred: GET /talks/{id} works
+        (lists the real conversation — talk_id, chat_id, origin, e.g.
+        "instagram_business") but /talks/{id}/messages returns 403 "Invalid
+        scope". The Kommo UI's own "Keys and scopes" screen for this private
+        integration has no scope selector at all (just secret key, ID,
+        long-lived token) — there is nothing to check to unlock this. Chats
+        API access is reserved for apps that went through Kommo Marketplace
+        review plus Meta's own business-messaging app review; a private/
+        custom integration cannot get it by generating a new token. This is
+        closed at the product level — don't re-attempt it in a future
+        session without a materially new fact (e.g. Kommo actually granting
+        a public/reviewed app)."""
         raise NotImplementedError(
             "Kommo's API does not send native-channel messages (Instagram/"
             "Facebook/WhatsApp). Only Salesbot, configured in the Kommo UI, "
@@ -207,7 +240,13 @@ def _self_test() -> None:
     except ValueError:
         checks += 1
 
-    print(f"kommo_client --self-test: {checks}/4 OK")
+    try:
+        client.update_lead(1, custom_fields_values=[], price=100)
+        raise AssertionError("expected ValueError on price + custom_fields_values together")
+    except ValueError:
+        checks += 1
+
+    print(f"kommo_client --self-test: {checks}/5 OK")
 
 
 def main() -> None:
