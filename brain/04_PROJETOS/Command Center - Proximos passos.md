@@ -253,8 +253,18 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
 - [x] 🤖 Vai atrás do mesmo `handle /ops*` do Caddy: nada novo no servidor web.
 - [ ] 👤 **Criar a chave** (Usuários → Chaves de API, papel VIEWER, só leitura) e
       **conectar** em claude.ai/customize/connectors, depois abrir sessão nova.
-- [ ] 👤 **Incerteza honesta:** se a tela do conector exigir OAuth em vez de chave fixa,
-      é outro trabalho (servidor de autorização). Só dá para saber tentando.
+- [x] 🤖 **A incerteza se resolveu do jeito difícil (24/09): exigia OAuth.** O conector
+      recusou chave fixa e falhou em "registrar no serviço de login". O painel virou
+      servidor OAuth — descoberta na raiz, registro dinâmico, consentimento humano,
+      PKCE, código de uso único que revoga tudo se reusado. No ar, 761 testes.
+- [x] 🤖 O caminho até lá teve três defeitos de diagnóstico que custaram tempo, e cada
+      um virou trava: o serviço antigo servia HTML com 200 em `/ops/mcp` (agora 404), o
+      POST caía na regra só-GET do painel (405), e uma asserção de data escrita à mão
+      quebrou sozinha no dia seguinte.
+- [ ] 👤 **Confirmar o conector**: ✓ na lista de conectores e, numa conversa nova,
+      `urace_resumo` respondendo com os números reais.
+- [ ] 👤 **Revogar a chave `urk_a4cb58019a_…`**, que apareceu inteira num print em 24/09.
+      Só leitura, mas da base inteira. Usuários → Chaves de API → revogar.
 - [ ] 👤 Liberar `urace-bridge.duckdns.org` na política de rede **só** se quiser que eu
       alcance a VPS direto daqui — o conector não precisa disso, porque roda pelo
       claude.ai.
