@@ -319,3 +319,27 @@ def test_a_isencao_do_post_vale_so_para_o_mcp(cli):
     assert r.status_code == 403 and "só de leitura" in r.json()["detail"]
     assert cli.post(MCP, json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
                     headers=h).status_code == 200, "no MCP, passa"
+
+
+def test_caminho_de_maquina_nunca_devolve_html(cli):
+    """Em 24/09 o botão de conectar do claude.ai "não fazia nada": o serviço rodava uma
+    versão sem a rota, `/ops/mcp` caía na regra do SPA e devolvia a PÁGINA do painel com
+    HTTP 200. O cliente pediu MCP e recebeu HTML, sem erro e sem pista.
+
+    Agora um caminho de máquina que não existe responde 404 — que é a verdade."""
+    h = entra(cli)
+    for caminho in ("/ops/mcp/nao-existe", "/ops/mcparaiso", "/ops/api/nao-existe"):
+        r = cli.get(caminho, headers=h)
+        assert r.status_code == 404, caminho
+        assert "<!doctype html" not in r.text.lower()[:40], f"{caminho} devolveu página"
+
+
+def test_a_rota_de_verdade_continua_respondendo(cli):
+    """O contraste: a exclusão não pode ter levado junto o endpoint que existe."""
+    assert cli.get(MCP, headers=entra(cli)).status_code == 200
+
+
+def test_sem_sessao_o_mcp_responde_401_e_nao_200(cli):
+    """401 é o sinal de que a rota EXISTE. Foi o 200 que denunciou o serviço velho."""
+    cli.cookies.clear()
+    assert cli.get(MCP).status_code == 401

@@ -407,7 +407,12 @@ def test_contexto_do_piloto_citado_e_invoice_resolvida_sem_perguntar(cli, monkey
         con.commit()
         assert motor.cliente_citado(con, "Filho do Nicolas Pera - David Pera. Coloca na agenda pro Domingo esta semana.") == cid
         ctx = motor.contexto_do_comando(con, "David Pera domingo, mesmo esquema")
-        assert "cliente_id=696" in ctx and "ASSINADA em 2026-08-16" in ctx and "31: Arrive and Drive daily" in ctx and '"idade": 12' in ctx and "Using Own Kart" in ctx
+        # A data vem do MESMO ajudante que semeou a waiver. Em 23/09 eu troquei a fixture
+        # para data relativa e deixei aqui a literal "2026-08-16": passou naquele dia e
+        # quebrou sozinha no seguinte. Bomba-relógio criada enquanto eu consertava
+        # bombas-relógio — asserção sobre data também tem de ser relativa.
+        assert f"ASSINADA em {_dias(-38)}" in ctx
+        assert "cliente_id=696" in ctx and "31: Arrive and Drive daily" in ctx and '"idade": 12' in ctx and "Using Own Kart" in ctx
         assert motor.contexto_do_comando(con, "quem tem invoice vencida?") == ""
         # invoice com placeholders → cliente pelo espelho (última invoice), item pelo catálogo, valor do texto
         args, prob = acoes.normalizar_invoice({"cliente_id": "<id de qbo_clientes_buscar>", "linhas": [{"item_id": "<id de qbo_itens_buscar>", "quantidade": 1, "unitario": 0, "descricao": "Arrive and Drive daily - Using Own Kart - David Pera - 2026-09-13"}], "vence_em": "2026-09-13"},

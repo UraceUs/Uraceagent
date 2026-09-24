@@ -409,7 +409,11 @@ def spa(caminho: str = ""):
     """Tudo que não é /api nem /assets devolve o index do SPA — menos os arquivos soltos do
     build (o que o Vite copia de `web/public`: a foto do login, favicon). Sem isso o `<img>`
     do login recebia o index e achava que a foto não existia (17/09)."""
-    if caminho.startswith("api/") or caminho.startswith("assets/"):
+    # Caminho de máquina nunca devolve HTML. Em 24/09 o `/ops/mcp` caiu aqui porque o
+    # serviço em execução ainda era a versão sem aquela rota: o claude.ai pediu um
+    # endpoint MCP, recebeu a página do painel com HTTP 200, e o botão de conectar não
+    # fazia nada — sem erro, sem pista. 404 diz a verdade; 200 com HTML mente.
+    if caminho.startswith(("api/", "assets/", "mcp")):
         raise HTTPException(404)
     if caminho and "\\" not in caminho:
         alvo = os.path.normpath(os.path.join(DIST, caminho))

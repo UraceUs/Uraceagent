@@ -14,7 +14,19 @@ A regra: campo que alimenta janela relativa (`last_at`, `expires_at`) não leva 
 literal recente. Ou é relativa a `HOJE`, ou é claramente antiga de propósito — como
 `2020-01-01`, que existe para provar que e-mail velho NÃO aparece, e cuja idade só
 aumenta.
+
+**O que esta varredura NÃO pega, e por que não tentei forçar.** Em 24/09 quebrou uma
+ASSERÇÃO: eu trocara a fixture para data relativa e deixara `"ASSINADA em 2026-08-16"`
+escrito à mão. Tentei estender a regra para asserções e ela acusou inocentes — testes
+que conferem `vence_em == "2026-09-11"` a partir de um serviço em `"2026-09-13"`, que é
+aritmética entre datas FIXAS e nunca envelhece. Guarda que acusa inocente é guarda que
+alguém silencia, e aí ela não protege mais nada.
+
+Se isso voltar a morder, o conserto certo não é uma regra estática mais esperta: é rodar
+a suíte com o relógio adiantado alguns meses. Isso pega tudo — atribuição e asserção —
+sem acusar ninguém à toa.
 """
+import ast
 import os
 import re
 from datetime import date
