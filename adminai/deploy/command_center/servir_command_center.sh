@@ -136,12 +136,20 @@ caddyfile = "/etc/caddy/Caddyfile"
 dominio, porta = os.environ["DOMINIO"], os.environ["PORTA"]
 s = open(caddyfile).read()
 # handle (não handle_path): o FastAPI espera o prefixo /ops
+# `/.well-known/oauth-*` vai junto porque a descoberta do OAuth mora na RAIZ do domínio,
+# não sob /ops — é a especificação que manda assim (RFC 8414 e 9728), e sem isso o
+# conector do claude.ai não acha o serviço de login (24/09).
 bloco = ("\n\thandle /ops* {\n"
+         f"\t\treverse_proxy 127.0.0.1:{porta}\n"
+         "\t}\n"
+         "\n\thandle /.well-known/oauth-* {\n"
          f"\t\treverse_proxy 127.0.0.1:{porta}\n"
          "\t}\n")
 if "/ops*" in s:
+    # tira o bloco antigo do oauth, se houver, para não duplicar a cada deploy
+    s = re.sub(r"\n\thandle /\.well-known/oauth-\*\s*\{.*?\n\t\}\n", "", s, flags=re.S)
     s = re.sub(r"\n\thandle /ops\*\s*\{.*?\n\t\}\n", bloco, s, count=1, flags=re.S)
-    open(caddyfile, "w").write(s); print("-- bloco /ops atualizado")
+    open(caddyfile, "w").write(s); print("-- blocos /ops e /.well-known/oauth-* atualizados")
 elif re.search(re.escape(dominio) + r"\s*\{", s):
     s = re.sub(re.escape(dominio) + r"\s*\{", lambda m: m.group(0) + bloco, s, count=1)
     open(caddyfile, "w").write(s); print("-- handle /ops inserido no bloco existente")

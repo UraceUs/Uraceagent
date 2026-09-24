@@ -174,6 +174,39 @@ from command_center.api import estoque as api_estoque  # noqa: E402
 app.include_router(api_estoque.r)
 from command_center.api import mcp_http  # noqa: E402
 app.include_router(mcp_http.r)
+from command_center.api import oauth as api_oauth  # noqa: E402
+app.include_router(api_oauth.r)
+
+
+# Descoberta do OAuth: a especificação manda na RAIZ do domínio, não sob /ops. O Caddy
+# precisa mandar `/.well-known/oauth-*` para cá — o script de deploy cuida disso.
+@app.get("/.well-known/oauth-authorization-server")
+@app.get("/.well-known/oauth-authorization-server/ops")
+def _meta_as():
+    return api_oauth.metadados_servidor()
+
+
+@app.exception_handler(HTTPException)
+async def _com_dica_de_login(request: Request, exc: HTTPException):
+    """401 no MCP não é só "não entra": é "não entra, e o login fica ali".
+
+    Sem esse cabeçalho o cliente não tem como descobrir o servidor de autorização — foi
+    exatamente onde o conector do claude.ai parou em 24/09, com "não foi possível
+    registrar no serviço de login"."""
+    from fastapi.exception_handlers import http_exception_handler
+    resp = await http_exception_handler(request, exc)
+    if exc.status_code == 401 and request.url.path.rstrip("/").endswith("/ops/mcp"):
+        base = api_oauth.emissor()
+        resp.headers["WWW-Authenticate"] = (
+            f'Bearer realm="URACE Command Center", '
+            f'resource_metadata="{base}/.well-known/oauth-protected-resource"')
+    return resp
+
+
+@app.get("/.well-known/oauth-protected-resource")
+@app.get("/.well-known/oauth-protected-resource/ops/mcp")
+def _meta_rs():
+    return api_oauth.metadados_recurso()
 
 
 # ------------------------------------------------------------- saúde

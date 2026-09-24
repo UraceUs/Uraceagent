@@ -346,19 +346,45 @@ def chave_valida(con, request, tocar=True):
 
 
 # ------------------------------------------------------------ guardas
+def _trava_de_leitura(request, quem, mensagem):
+    """A mesma trava para toda credencial só-leitura, seja chave de API ou token OAuth.
+
+    Em 24/09 eu liguei o OAuth devolvendo o usuário ANTES desta checagem, e o token
+    conseguiu escrever — o teste pegou na hora. A conferência mora num lugar só desde
+    então: credencial nova que esqueça de passar por aqui é credencial que fura a trava.
+
+    A exceção é o `/ops/mcp`: JSON-RPC manda TUDO por POST, inclusive leitura, então a
+    trava por método barraria até listar ferramentas. Ela se paga porque aquela rota abre
+    o banco em `mode=ro`, onde escrever é impossível pelo SQLite — não é confiança, é
+    impedimento.
+    """
+    if not quem.get("somente_leitura"):
+        return
+    if request.url.path.rstrip("/").endswith("/ops/mcp"):
+        return
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return
+    raise HTTPException(status.HTTP_403_FORBIDDEN, mensagem)
+
+
 def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
+    # Token de OAuth (conector do claude.ai). Vem antes da chave de API porque os dois
+    # usam `Authorization: Bearer` e só o prefixo distingue: chave começa com `urk_`.
+    cab = request.headers.get("authorization", "")
+    if cab.lower().startswith("bearer ") and not cab[7:].startswith("urk_"):
+        from command_center.api import oauth as _oauth
+        porToken = _oauth.usuario_do_token(con, cab[7:].strip())
+        if porToken:
+            _trava_de_leitura(request, porToken,
+                              "Este acesso é só de leitura: ele consulta o painel pelo MCP e "
+                              "não muda nada.")
+            return porToken
+
     porchave = chave_valida(con, request)
     if porchave:
-        # O MCP manda TUDO por POST, inclusive leitura: é assim que JSON-RPC funciona.
-        # A trava por método barraria uma chave só-leitura de sequer listar ferramentas.
-        # A isenção é estreita e se paga: aquela rota abre o banco em `mode=ro`, onde
-        # escrever é impossível pelo SQLite — não é confiança, é impedimento.
-        so_leitura_por_construcao = request.url.path.rstrip("/").endswith("/ops/mcp")
-        if (porchave["somente_leitura"] and not so_leitura_por_construcao
-                and request.method not in ("GET", "HEAD", "OPTIONS")):
-            raise HTTPException(status.HTTP_403_FORBIDDEN,
-                                "Esta chave é só de leitura: ela consulta o painel e não muda nada. "
-                                "Para deixá-la agir, crie outra chave sem 'só leitura'.")
+        _trava_de_leitura(request, porchave,
+                          "Esta chave é só de leitura: ela consulta o painel e não muda nada. "
+                          "Para deixá-la agir, crie outra chave sem 'só leitura'.")
         return porchave                       # sem cookie, sem CSRF: não há cookie para abusar
     s = sessao_valida(con, request.cookies.get(COOKIE_SESSAO))
     if not s:

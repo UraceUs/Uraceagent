@@ -976,3 +976,50 @@ CREATE TABLE IF NOT EXISTS supplier_products (
 CREATE UNIQUE INDEX IF NOT EXISTS supplier_products_sku ON supplier_products(supplier, sku);
 CREATE INDEX IF NOT EXISTS supplier_products_nome ON supplier_products(name);
 CREATE INDEX IF NOT EXISTS supplier_products_cat ON supplier_products(supplier, category);
+
+-- ------------------------------------------------- OAuth: o painel como serviço de login
+-- Dono, 24/09: o conector do claude.ai recusou a chave fixa e tentou **registro dinâmico
+-- de cliente** (RFC 7591) num serviço de login que não existia. Este é o serviço.
+--
+-- Três tabelas e nenhum segredo em claro: o que é credencial vira hash, como a senha de
+-- usuário e a chave de API já faziam.
+CREATE TABLE IF NOT EXISTS oauth_clients (
+  client_id     TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  secret_hash   TEXT,                      -- NULL = cliente público (PKCE obrigatório)
+  secret_salt   TEXT,
+  redirect_uris TEXT NOT NULL,             -- json: lista fechada, conferida no /authorize
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  created_ip    TEXT,
+  revoked_at    TEXT
+);
+
+-- Código de autorização: vive minutos, serve UMA vez.
+CREATE TABLE IF NOT EXISTS oauth_codes (
+  code_hash     TEXT PRIMARY KEY,
+  client_id     TEXT NOT NULL REFERENCES oauth_clients(client_id),
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  redirect_uri  TEXT NOT NULL,
+  code_challenge TEXT,                     -- PKCE S256
+  scope         TEXT,
+  expires_at    TEXT NOT NULL,
+  used_at       TEXT,                      -- usado duas vezes = ataque; a segunda falha
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS oauth_codes_exp ON oauth_codes(expires_at);
+
+-- Token de acesso. Só o hash fica aqui — igual à chave de API.
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  token_hash    TEXT PRIMARY KEY,
+  kind          TEXT NOT NULL DEFAULT 'access' CHECK (kind IN ('access','refresh')),
+  client_id     TEXT NOT NULL REFERENCES oauth_clients(client_id),
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  scope         TEXT,
+  expires_at    TEXT,
+  revoked_at    TEXT,
+  last_used_at  TEXT,
+  uses          INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS oauth_tokens_user ON oauth_tokens(user_id, revoked_at);
+CREATE INDEX IF NOT EXISTS oauth_tokens_cli ON oauth_tokens(client_id, revoked_at);

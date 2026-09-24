@@ -57,12 +57,43 @@ serviço, então **não há nada novo para configurar no servidor web**.
 `https://urace-bridge.duckdns.org/ops/mcp`. Depois **abra uma sessão nova**: conector é
 lido quando a sessão começa.
 
-## O que ainda não sabemos
+## Login: o painel virou servidor OAuth (24/09)
 
-Como o claude.ai apresenta a autenticação de um conector remoto pode pedir **OAuth** em
-vez de aceitar uma chave fixa no cabeçalho. Este servidor fala Bearer, que é o que a
-especificação do MCP usa. Se a tela pedir OAuth, é outro trabalho — um servidor de
-autorização — e não adianta eu afirmar que funciona antes de você tentar.
+A dúvida acima foi respondida do jeito difícil. O conector recusou a chave fixa e falhou
+com *"não foi possível registrar no serviço de login"* — ele tenta **registro dinâmico de
+cliente** (RFC 7591). Então o painel passou a ser esse serviço de login.
+
+O que existe agora:
+
+| endereço | para quê |
+|---|---|
+| `/.well-known/oauth-authorization-server` | onde ficam os endereços de login (RFC 8414) |
+| `/.well-known/oauth-protected-resource` | qual login vale para o `/ops/mcp` (RFC 9728) |
+| `/ops/oauth/register` | o cliente se apresenta e ganha um `client_id` |
+| `/ops/oauth/authorize` | **a tela onde uma pessoa aprova**, logada no painel |
+| `/ops/oauth/token` | troca do código pelo token, com PKCE |
+| `/ops/oauth/revoke` | derruba o acesso na hora |
+
+E o 401 do `/ops/mcp` passou a trazer `WWW-Authenticate` apontando para a descoberta —
+sem isso o cliente não tem como achar o login, que foi onde ele parou.
+
+**As travas, e o que cada uma impede:**
+
+- **PKCE obrigatório (S256).** Código interceptado na volta do navegador não vira token.
+- **`redirect_uri` conferido byte a byte.** `startswith` aqui já foi ataque real:
+  `https://meusite.com` casaria com `https://meusite.com.invasor.net`.
+- **Código de uso único.** Reuso é sinal de interceptação: a segunda tentativa falha e
+  **todos os tokens daquele cliente são revogados**, porque nesse ponto não dá para saber
+  quem é o legítimo. Fica na auditoria.
+- **Refresh rotativo.** O refresh usado morre; um roubado só vale até o dono renovar, e a
+  renovação denuncia o roubo.
+- **Nada em claro.** Código, token e segredo de cliente viram hash antes de tocar o banco.
+- **Quem autoriza é gente.** O `/authorize` exige sessão do painel e mostra o que está
+  sendo aprovado. Não existe caminho em que um programa se autorize sozinho.
+- **O token não escreve.** Vale a mesma trava da chave só-leitura — conferida num lugar
+  só para as duas credenciais, depois de um defeito meu em que o token OAuth escreveu.
+
+O Caddy precisa entregar `/.well-known/oauth-*` ao painel. O script de deploy já cuida.
 
 ## Revogar
 
