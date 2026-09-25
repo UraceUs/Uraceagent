@@ -143,7 +143,9 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
       folha com os `#id` e recebe `--contar 3=12 5=0`. Item não contado **fica como
       está**, nunca vira zero; contar zero é registro válido e diferente de não contar.
 - [ ] 👤 **Contar a prateleira** — é o que tira o estoque do zero. Depois da contagem a
-      lista de reposição passa a valer de verdade.
+      lista de reposição passa a valer de verdade. (25/09: pelo conector, os 16 estão
+      com total 0 e nenhum é peça de cliente — o "16 abaixo do mínimo" é estoque nunca
+      contado, não falta confirmada.)
 - [ ] 👤 (conferido) A lista dos 16:
       `Rear sprocket` (31 vendas), `Rk Non Oring Chain` (29), `Fuel charge Jr/Senior`
       (27), `Spark Plug` (18), `Tonykart brake pads` (17), `MG SH2 Red Tires` (16),
@@ -261,8 +263,12 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       um virou trava: o serviço antigo servia HTML com 200 em `/ops/mcp` (agora 404), o
       POST caía na regra só-GET do painel (405), e uma asserção de data escrita à mão
       quebrou sozinha no dia seguinte.
-- [ ] 👤 **Confirmar o conector**: ✓ na lista de conectores e, numa conversa nova,
-      `urace_resumo` respondendo com os números reais.
+- [x] 👤 **Conector confirmado (25/09)**: login pelo claude.ai completo e `urace_resumo`
+      com os números reais (257 clientes, 1.186 serviços, 43 invoices abertas). Faltava a
+      tela de login voltar ao `next` da autorização — o cookie `SameSite=Strict` não
+      acompanha a chegada vinda do claude.ai. Corrigido em `6a65332`, provado num
+      Chromium de verdade. O Kommo entrou no conector (`urace_kommo_*`, só leitura,
+      `3821fdd`); `urace_kommo_conta` respondeu Support Urace, 7 funis.
 - [ ] 👤 **Revogar a chave `urk_a4cb58019a_…`**, que apareceu inteira num print em 24/09.
       Só leitura, mas da base inteira. Usuários → Chaves de API → revogar.
 - [ ] 👤 Liberar `urace-bridge.duckdns.org` na política de rede **só** se quiser que eu
