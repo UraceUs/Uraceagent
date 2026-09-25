@@ -194,6 +194,6 @@ Se nada sobrar, sai a mensagem de espera (`holding.py`).
 - **Portfólio que o robô oferece.** O material de venda do Chase está em
   `90_ARQUIVO`. Enquanto não for reescrito com fonte confirmada, o robô não
   afirma preço, idade mínima nem política: manda o link (G1) ou escala.
-- **Qual robô responde no Novo funil.** O Salesbot da ponte (162247) e o chat do
+- **Qual robô responde no Novo funil.** O Salesbot da ponte (162247, "Salesbot #9") e o chat do
   Command Center (`/ops/api/crm/hook`) usam o mesmo circuito, e o Kommo não
   roda dois bots no mesmo lead ao mesmo tempo.

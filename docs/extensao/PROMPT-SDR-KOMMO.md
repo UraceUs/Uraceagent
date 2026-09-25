@@ -64,8 +64,9 @@ PARTE 1 — INVENTÁRIO (só leitura)
     funis ele permite? Dá para ter um 8º?
 1.4 Salesbots: liste todos os bots, com nome, id (aparece na URL do editor),
     ativo ou não e em quais funis e etapas têm gatilho (Automate / Digital
-    Pipeline). Procure em especial o bot 162247 (chase-bridge) e o bot que o
-    Command Center usa para o chat. Diga se há algum gatilho ATIVO nos funis
+    Pipeline). Procure em especial o bot 162247 ("Salesbot #9", da integração
+    Chase Bridge) e o bot command-center (167973), que o chat do Command Center
+    usa. Diga se há algum gatilho ATIVO nos funis
     "Chase — AI Sales Funnel" e Urace.
 1.5 Web hooks (Settings > Integrations > Web hooks): liste cada um só com
     DOMÍNIO e CAMINHO (corte tudo depois do "?"), mais os eventos marcados.
@@ -109,13 +110,17 @@ PARTE 3 — [DONO] WEBHOOK DE CONTA PARA A PONTE
 3.1 Primeiro abra https://urace-bridge.duckdns.org/health. Tem de mostrar
     {"ok": true, ...}. Se não mostrar, a ponte ainda não foi religada (tarefa
     T-011 da VPS, que depende de mim): PULE a Parte 3 e diga isso.
-3.2 Settings > Integrations > Web hooks > Add. URL:
+3.2 Já existe um web hook para urace-bridge.duckdns.org/ops/api/crm/webhook:
+    é do Command Center. NÃO mexa nele. O novo é um SEGUNDO web hook, para
+    outro serviço (a ponte do SDR): cada um recebe a sua cópia e não há
+    duplicação dentro de nenhum dos dois.
+    Settings > Integrations > Web hooks > Add. URL:
       https://urace-bridge.duckdns.org/kommo/eventos?key=
     PARE aqui e me peça para colar a chave depois do "key=". Eu colo; você não
     lê em voz alta nem repete.
-3.3 Evento: SÓ o de mensagem recebida ("Incoming message" / "Message
-    received"; o nome exato depende da interface). Nenhum outro. Me diga o
-    nome exato que você marcou.
+3.3 Evento: SÓ o de mensagem recebida, o mesmo que aparece como "add_message"
+    no web hook do Command Center. Nenhum outro. Me diga o nome exato que
+    você marcou.
 3.4 Salve e confirme que aparece na lista. No relatório, descreva só domínio
     e caminho.
 
@@ -123,7 +128,11 @@ PARTE 4 — [DONO] UM CANAL DE TESTE NO NOVO FUNIL
 Isso muda para onde vão as conversas NOVAS daquele canal. Comece por um só,
 o que eu escolher.
 4.1 Pergunte qual canal. Antes de mudar, repita como está hoje (da 1.7), para
-    podermos voltar.
+    podermos voltar. Lembre ao dono o custo: hoje WhatsApp "Urace" e o chat do
+    site nascem no Urace, etapa First Contact, onde rodam o bot command-center,
+    o Website bot, a tag Website e o AI agent. Conversa nova do canal que for
+    para o Novo funil deixa de passar por essas automações. Ele responde pelo
+    chat do Kommo ou do Command Center, que continua vendo tudo pelo web hook.
 4.2 Aponte esse canal para o Novo funil, primeira etapa (Triagem). Não mexa
     em nenhum outro canal.
 4.3 Releia a configuração e confirme.
@@ -133,7 +142,7 @@ PARTE 5 — SALESBOT (não fazer, a menos que eu diga "ligar atender")
     ponte não responde lead; quem responde é gente.
 5.2 Só se eu disser, com estas palavras, "ligar atender": coloque no Novo
     funil, nas etapas 1 a 5, o gatilho "qualquer conversa nova" apontando para
-    o bot 162247 (chase-bridge), igual ao que existia no funil do Chase. Antes,
+    o bot 162247 ("Salesbot #9"), igual ao que existe no funil do Chase. Antes,
     confirme comigo que o bot do chat do Command Center NÃO tem gatilho nesses
     mesmos leads: o Kommo não roda dois bots no mesmo lead.
 
