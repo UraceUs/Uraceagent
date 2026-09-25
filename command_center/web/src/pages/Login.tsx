@@ -5,10 +5,11 @@
  * A foto real entra em `web/public/pista.jpg`, em preto e branco e com degradê nas beiradas.
  * Enquanto o arquivo não estiver lá, fica um fundo escuro de asfalto — sem desenho nenhum.
  */
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { destinoOAuth } from '../auth/oauthNext'
 import { Banner } from '../components/ui'
 import { Icon } from '../components/Icon'
 
@@ -25,20 +26,29 @@ function Pista() {
 export function Login() {
   const { user, ready, login } = useAuth()
   const nav = useNavigate()
-  const loc = useLocation() as { state?: { from?: string } }
+  const loc = useLocation() as { state?: { from?: string }; search: string }
+  const oauth = destinoOAuth(loc.search)
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [remember, setRemember] = useState(false)
   const [show, setShow] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  if (ready && user) return <Navigate to={loc.state?.from || '/'} replace />
+  // Já logado e vindo da autorização do conector: volta para ela. É navegação de página
+  // inteira porque /ops/oauth/authorize é do servidor, não deste app — e, saindo daqui,
+  // é navegação do próprio site, então o cookie de sessão vai junto.
+  useEffect(() => { if (ready && user && oauth) window.location.replace(oauth) }, [ready, user, oauth])
+  if (ready && user) return oauth ? <div className="login" /> : <Navigate to={loc.state?.from || '/'} replace />
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (busy) return
     setErr(null); setBusy(true)
-    try { await login(email.trim(), pw, remember); nav(loc.state?.from || '/', { replace: true }) }
+    try {
+      await login(email.trim(), pw, remember)
+      if (oauth) { window.location.assign(oauth); return }
+      nav(loc.state?.from || '/', { replace: true })
+    }
     catch (ex) {
       const a = ex as ApiError
       setErr(a instanceof ApiError ? (a.offline ? 'Sem conexão com o servidor.' : a.message) : 'Falha ao entrar.')

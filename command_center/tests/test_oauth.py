@@ -372,3 +372,88 @@ def test_a_tela_entrega_a_marca_para_o_formulario(cli):
         "response_type": "code", "client_id": cid, "redirect_uri": VOLTA,
         "code_challenge": desafio, "code_challenge_method": "S256"})
     assert 'name="csrf"' in r.text and cli.cookies.get("cc_csrf") in r.text
+
+
+# ------------------------------------------------ 25/09: o login que não voltava
+def test_sem_sessao_vai_ao_login_levando_a_volta(cli):
+    """No navegador de verdade o cookie `SameSite=Strict` NÃO acompanha a chegada vinda
+    do claude.ai. O servidor manda para o login com `next` apontando de volta para a
+    autorização, com todos os parâmetros — é isso que a tela de login usa para voltar."""
+    from urllib.parse import unquote
+    cid = registrar(cli)
+    _, desafio = pkce()
+    cli.cookies.clear()
+    p = {"response_type": "code", "client_id": cid, "redirect_uri": VOLTA,
+         "code_challenge": desafio, "code_challenge_method": "S256", "state": "s1"}
+    r = cli.get("/ops/oauth/authorize", params=p)
+    assert r.status_code == 303
+    alvo = urlparse(r.headers["location"])
+    assert alvo.path == "/ops/login"
+    volta = parse_qs(alvo.query)["next"][0]
+    assert volta.startswith("/ops/oauth/authorize?"), volta
+    assert parse_qs(urlparse(volta).query)["client_id"] == [cid]
+    assert parse_qs(urlparse(volta).query)["code_challenge"] == [desafio]
+
+
+def _registrar_confidencial(cli, metodo):
+    r = cli.post("/ops/oauth/register", json={
+        "client_name": "Claude", "redirect_uris": [VOLTA], "token_endpoint_auth_method": metodo})
+    assert r.status_code == 201, r.text
+    j = r.json()
+    assert j["token_endpoint_auth_method"] == metodo
+    return j["client_id"], j["client_secret"]
+
+
+def test_cliente_que_se_identifica_por_basic_recebe_token(cli):
+    """RFC 6749 §2.3.1: cliente confidencial manda id e segredo no cabeçalho Basic. Antes
+    o /token só lia o segredo do formulário e recusava esse cliente com 401."""
+    cid, seg = _registrar_confidencial(cli, "client_secret_basic")
+    verificador, desafio = pkce()
+    codigo = autorizar(cli, cid, desafio)
+    cli.cookies.clear()
+    basic = base64.b64encode(f"{cid}:{seg}".encode()).decode()
+    r = cli.post("/ops/oauth/token", data={
+        "grant_type": "authorization_code", "code": codigo, "redirect_uri": VOLTA,
+        "code_verifier": verificador}, headers={"Authorization": f"Basic {basic}"})
+    assert r.status_code == 200, r.text
+    assert r.json()["access_token"]
+
+
+def test_basic_com_segredo_errado_e_recusado(cli):
+    cid, _ = _registrar_confidencial(cli, "client_secret_basic")
+    verificador, desafio = pkce()
+    codigo = autorizar(cli, cid, desafio)
+    cli.cookies.clear()
+    basic = base64.b64encode(f"{cid}:errado".encode()).decode()
+    r = cli.post("/ops/oauth/token", data={
+        "grant_type": "authorization_code", "code": codigo, "redirect_uri": VOLTA,
+        "code_verifier": verificador}, headers={"Authorization": f"Basic {basic}"})
+    assert r.status_code == 401 and r.json()["error"] == "invalid_client"
+
+
+def test_basic_de_um_cliente_com_client_id_de_outro_e_recusado(cli):
+    cid, seg = _registrar_confidencial(cli, "client_secret_basic")
+    verificador, desafio = pkce()
+    codigo = autorizar(cli, cid, desafio)
+    cli.cookies.clear()
+    basic = base64.b64encode(f"{cid}:{seg}".encode()).decode()
+    r = cli.post("/ops/oauth/token", data={
+        "grant_type": "authorization_code", "code": codigo, "redirect_uri": VOLTA,
+        "client_id": "ucc_outro", "code_verifier": verificador},
+        headers={"Authorization": f"Basic {basic}"})
+    assert r.status_code == 401
+
+
+def test_segredo_por_formulario_continua_valendo(cli):
+    cid, seg = _registrar_confidencial(cli, "client_secret_post")
+    verificador, desafio = pkce()
+    codigo = autorizar(cli, cid, desafio)
+    cli.cookies.clear()
+    r = cli.post("/ops/oauth/token", data={
+        "grant_type": "authorization_code", "code": codigo, "redirect_uri": VOLTA,
+        "client_id": cid, "client_secret": seg, "code_verifier": verificador})
+    assert r.status_code == 200, r.text
+
+
+def test_os_metadados_anunciam_o_basic():
+    assert "client_secret_basic" in oauth.metadados_servidor()["token_endpoint_auth_methods_supported"]

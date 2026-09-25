@@ -71,7 +71,7 @@ def metadados_servidor():
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": ["none", "client_secret_post"],
+        "token_endpoint_auth_methods_supported": ["none", "client_secret_post", "client_secret_basic"],
         "scopes_supported": [ESCOPO],
         "service_documentation": f"{base}/ops/",
     }
@@ -100,7 +100,10 @@ def registrar(dados: dict, request: Request, con: sqlite3.Connection = Depends(g
             raise HTTPException(400, f"redirect_uri precisa ser https (ou localhost): {u}")
     nome = (dados.get("client_name") or "cliente sem nome")[:120]
     cid = "ucc_" + secrets.token_urlsafe(18)
-    publico = (dados.get("token_endpoint_auth_method") or "none") == "none"
+    metodo = dados.get("token_endpoint_auth_method") or "none"
+    if metodo not in ("none", "client_secret_post", "client_secret_basic"):
+        metodo = "client_secret_post"
+    publico = metodo == "none"
     segredo = None if publico else secrets.token_urlsafe(32)
     sal = None if publico else secrets.token_hex(16)
     inserir(con, "oauth_clients", client_id=cid, name=nome,
@@ -112,7 +115,7 @@ def registrar(dados: dict, request: Request, con: sqlite3.Connection = Depends(g
             ip=(request.client.host if request.client else None))
     con.commit()
     saida = {"client_id": cid, "client_name": nome, "redirect_uris": uris,
-             "token_endpoint_auth_method": "none" if publico else "client_secret_post",
+             "token_endpoint_auth_method": metodo,
              "grant_types": ["authorization_code", "refresh_token"],
              "response_types": ["code"], "client_id_issued_at": int(datetime.now().timestamp())}
     if segredo:
@@ -278,6 +281,22 @@ def _emitir(con, client_id, user_id, escopo):
             "expires_in": TOKEN_VALE_HORAS * 3600, "refresh_token": refresh, "scope": escopo}
 
 
+def _credencial_basic(request):
+    """`Authorization: Basic base64(client_id:client_secret)` — o jeito padrão (RFC 6749
+    §2.3.1) de um cliente confidencial se identificar no /token. Cada parte vem
+    codificada como formulário antes do base64, por isso o `unquote_plus`."""
+    import base64
+    from urllib.parse import unquote_plus
+    cab = request.headers.get("authorization") or ""
+    if not cab.lower().startswith("basic "):
+        return None
+    try:
+        cid, _, seg = base64.b64decode(cab[6:].strip()).decode().partition(":")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    return unquote_plus(cid), unquote_plus(seg)
+
+
 def _erro_oauth(codigo, descricao, http=400):
     return JSONResponse({"error": codigo, "error_description": descricao}, status_code=http)
 
@@ -287,6 +306,11 @@ def token(request: Request, con: sqlite3.Connection = Depends(get_db),
           grant_type: str = Form(...), code: str = Form(None), redirect_uri: str = Form(None),
           client_id: str = Form(None), code_verifier: str = Form(None),
           refresh_token: str = Form(None), client_secret: str = Form(None)):
+    basico = _credencial_basic(request)
+    if basico:
+        if client_id and client_id != basico[0]:
+            return _erro_oauth("invalid_client", "client_id do cabeçalho e do formulário não batem", 401)
+        client_id, client_secret = basico[0], client_secret or basico[1]
     if grant_type == "refresh_token":
         return _renovar(con, refresh_token, client_id)
     if grant_type != "authorization_code":
