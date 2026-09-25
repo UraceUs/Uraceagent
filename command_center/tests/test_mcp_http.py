@@ -21,6 +21,7 @@ from command_center.api import auth  # noqa: E402
 from command_center.api import mcp_http  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir  # noqa: E402
+from command_center import providers  # noqa: E402
 from command_center.providers import estoque  # noqa: E402
 
 SENHA = "senha-forte-123"
@@ -45,6 +46,14 @@ def cli():
     con.commit(); con.close()
     with TestClient(app, base_url="https://cc.test") as c:
         yield c
+
+
+@pytest.fixture(autouse=True)
+def sem_kommo_de_verdade(monkeypatch):
+    """Nenhum teste daqui fala com o Kommo real. Sem isto, um módulo do Kommo que outro
+    arquivo de teste deixou carregado (com token falso) faria estes testes esperarem a
+    rede. Quem precisa do Kommo põe o seu, com `_req` gravado."""
+    monkeypatch.setitem(providers._mods, "kommo", providers.NaoConectado("teste: sem Kommo"))
 
 
 def entra(cli):
@@ -93,7 +102,7 @@ def test_as_ferramentas_so_leem_de_verdade(cli):
              for t in ("clients", "tasks", "invoices", "stock_items", "stock_moves", "audit_logs")}
     con.close()
     for nome, (_, props, obrig, _fn) in mcp_http.FERRAMENTAS.items():
-        args = {"id": 1} if "id" in obrig else {}
+        args = {k: 1 for k in obrig}
         r = rpc(cli, "tools/call", {"name": nome, "arguments": args}, headers=h)
         assert r.status_code == 200, nome
     con = conectar()
@@ -263,7 +272,7 @@ def test_chave_somente_leitura_usa_todas_as_ferramentas(cli):
     cli.cookies.clear()
     h = {"Authorization": f"Bearer {chave}"}
     for nome, (_, _p, obrig, _fn) in mcp_http.FERRAMENTAS.items():
-        args = {"id": 1} if "id" in obrig else {}
+        args = {k: 1 for k in obrig}
         r = cli.post(MCP, json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                                 "params": {"name": nome, "arguments": args}}, headers=h)
         assert r.status_code == 200, nome
@@ -343,3 +352,112 @@ def test_sem_sessao_o_mcp_responde_401_e_nao_200(cli):
     """401 é o sinal de que a rota EXISTE. Foi o 200 que denunciou o serviço velho."""
     cli.cookies.clear()
     assert cli.get(MCP).status_code == 401
+
+
+# ------------------------------------------------------------------- Kommo
+KOMMO = [n for n in mcp_http.FERRAMENTAS if n.startswith("urace_kommo_")]
+
+
+def _kommo_gravado(monkeypatch):
+    """O módulo de verdade do Kommo, com a rede trocada por um gravador no nível mais baixo
+    (`urlopen`): cada pedido que sairia para o Kommo fica anotado com o VERBO real do
+    `Request` montado pelo módulo — inclusive o caminho dos eventos, que não passa por
+    `_req`. Nada sai para a rede."""
+    import kommo_mcp
+    idas = []
+
+    class Vazio:
+        status = 204
+
+        def read(self):
+            return b""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def falso(req, timeout=None):
+        idas.append((req.get_method(), req.full_url.split("/api/v4", 1)[-1].split("?")[0]))
+        return Vazio()
+    monkeypatch.setattr(kommo_mcp.urllib.request, "urlopen", falso)
+    monkeypatch.setitem(providers._mods, "kommo", kommo_mcp)
+    monkeypatch.setenv("KOMMO_DOMAIN", "urace.kommo.com")
+    monkeypatch.setenv("KOMMO_TOKEN", "falso")
+    monkeypatch.setitem(kommo_mcp._cache_funis, "dados", None)
+    return idas
+
+
+def test_o_kommo_entrou_no_conector():
+    assert set(KOMMO) == {"urace_kommo_conta", "urace_kommo_funis", "urace_kommo_leads",
+                          "urace_kommo_lead", "urace_kommo_conversa", "urace_kommo_chats"}
+
+
+def test_o_kommo_pelo_conector_so_faz_get(cli, monkeypatch):
+    """A trava do Kommo: o módulo dele TEM portas de escrita (mover etapa, tag, nota,
+    responder). Aqui roda cada ferramenta contra o módulo de verdade e confere, na ida à
+    rede, que nenhuma chamada saiu com outro verbo que não GET."""
+    idas = _kommo_gravado(monkeypatch)
+    h = entra(cli)
+    for nome in KOMMO:
+        _, props, obrig, _fn = mcp_http.FERRAMENTAS[nome]
+        for extra in ({}, {"completo": True}) if "completo" in props else ({},):
+            args = {**{k: "1" for k in obrig}, **extra}
+            antes = len(idas)
+            r = rpc(cli, "tools/call", {"name": nome, "arguments": args}, headers=h)
+            assert r.status_code == 200 and "error" not in r.json(), (nome, r.text)
+            assert len(idas) > antes, f"{nome} nem chegou ao Kommo"
+    assert idas and {m for m, _ in idas} == {"GET"}, idas
+
+
+def test_as_portas_de_escrita_do_kommo_nao_sao_alcancaveis(cli, monkeypatch):
+    """O que o conector chama no módulo do Kommo — tudo, com todos os argumentos. Nenhum
+    nome de porta humana (`*_humano`) pode aparecer, nem com completo=true."""
+    chamadas = []
+
+    def grava(sistema, ferramenta, **args):
+        chamadas.append((sistema, ferramenta))
+        return {}
+    monkeypatch.setattr(providers, "chamar", grava)
+    h = entra(cli)
+    for nome in KOMMO:
+        _, props, obrig, _fn = mcp_http.FERRAMENTAS[nome]
+        args = {**{k: "1" for k in obrig}, **({"completo": True} if "completo" in props else {})}
+        rpc(cli, "tools/call", {"name": nome, "arguments": args}, headers=h)
+    usadas = {f for _, f in chamadas}
+    assert usadas <= {"kommo_conta", "kommo_funis", "kommo_leads", "kommo_lead",
+                      "kommo_lead_completo", "kommo_conversa", "kommo_chats"}, usadas
+    assert {s for s, _ in chamadas} == {"kommo"}
+
+
+def test_limite_do_kommo_tem_teto(cli, monkeypatch):
+    """Cada página é uma ida ao Kommo e o conector tem prazo: pedir 10 mil vira o teto."""
+    visto = {}
+    monkeypatch.setattr(providers, "chamar", lambda s, f, **a: visto.update({f: a}) or [])
+    h = entra(cli)
+    rpc(cli, "tools/call", {"name": "urace_kommo_leads", "arguments": {"limite": 10000}}, headers=h)
+    rpc(cli, "tools/call", {"name": "urace_kommo_chats", "arguments": {"dias": 400, "limite": 99999}}, headers=h)
+    rpc(cli, "tools/call", {"name": "urace_kommo_conversa", "arguments": {"lead_id": "7", "limite": 5000}}, headers=h)
+    assert visto["kommo_leads"]["maximo"] == 250
+    assert visto["kommo_chats"] == {"desde_dias": 30, "maximo": 1000}
+    assert visto["kommo_conversa"] == {"lead_id": "7", "maximo": 500}
+
+
+def test_kommo_sem_credencial_diz_o_motivo(cli):
+    """Sem kommo.env o conector não cai nem finge: devolve o motivo para o modelo ler."""
+    res, corpo = chamar(cli, "urace_kommo_conta")
+    assert res["isError"] is True
+    assert "Kommo não está conectado" in res["content"][0]["text"]
+
+
+def test_token_vencido_do_kommo_vira_resultado_legivel(cli, monkeypatch):
+    import kommo_mcp
+    from mcp_stdio import ErroFerramenta
+
+    def recusa(*a, **k):
+        raise ErroFerramenta("Kommo recusou a credencial (401). O token longo pode ter expirado")
+    monkeypatch.setattr(kommo_mcp, "_req", recusa)
+    monkeypatch.setitem(providers._mods, "kommo", kommo_mcp)
+    res, _ = chamar(cli, "urace_kommo_leads")
+    assert res["isError"] is True and "401" in res["content"][0]["text"]

@@ -9,7 +9,7 @@ HTTP. É só isso que foi acrescentado: `POST /ops/mcp`, com as mesmas ferrament
 
 ## O que ele dá
 
-Nove ferramentas, **todas de leitura**:
+Quinze ferramentas, **todas de leitura** — nove do painel e seis do Kommo:
 
 | ferramenta | o que responde |
 |---|---|
@@ -22,6 +22,23 @@ Nove ferramentas, **todas de leitura**:
 | `urace_invoices` | quem deve, quanto, desde quando |
 | `urace_corridas` | calendário da equipe |
 | `urace_auditoria` | quem fez o quê e quando |
+| `urace_kommo_conta` | a conta do Kommo ligada (nome, moeda, funis) |
+| `urace_kommo_funis` | funis e etapas, com os ids para filtrar |
+| `urace_kommo_leads` | leads recentes, por funil, etapa ou texto |
+| `urace_kommo_lead` | um lead; com `completo=true`, tudo: contatos, perfis, eventos, conversa |
+| `urace_kommo_conversa` | conversa e anotações de um lead, em ordem |
+| `urace_kommo_chats` | movimento do chat por canal (até 30 dias) |
+
+### O Kommo (25/09)
+
+As `urace_kommo_*` chamam as funções de **leitura** do servidor MCP do Kommo
+(`adminai/mcp/kommo_mcp.py`) pelo mesmo carregador que o painel já usa. O token continua
+em `~/.urace/kommo.env` — o conector nunca o vê. As portas de escrita do módulo
+(`*_humano`: mover etapa, tag, nota, responder, atribuir) **não são registradas**; um teste
+roda cada ferramenta contra o módulo de verdade e confere, na ida à rede, que nenhum
+pedido sai com outro verbo que não GET. Sem `kommo.env`, a ferramenta responde o motivo em
+vez de cair. As chamadas rodam fora do laço de eventos, para uma consulta lenta ao Kommo
+não travar o painel.
 
 ## Por que não há nenhuma que escreve
 

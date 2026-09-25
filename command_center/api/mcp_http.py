@@ -24,7 +24,9 @@ import json
 import sqlite3
 
 from fastapi import APIRouter, Depends, Request, Response
+from starlette.concurrency import run_in_threadpool
 
+from command_center import providers
 from command_center.api import atencao, auth
 from command_center.db import conectar_somente_leitura, get_db, todos, um
 from command_center.providers import estoque
@@ -137,6 +139,53 @@ def _f_resumo(con, **_):
     }
 
 
+# ---------------------------------------------------------------- Kommo (CRM)
+# Dono, 25/09: "sim" — o Kommo dentro deste conector. As ferramentas são as de LEITURA do
+# servidor MCP do Kommo (`adminai/mcp/kommo_mcp.py`), chamadas pelo mesmo carregador que o
+# painel usa. As portas de escrita dele (`*_humano`: mover etapa, tag, nota, responder) não
+# são registradas aqui — e sem registro não há como chamá-las. O token fica onde sempre
+# esteve, em ~/.urace/kommo.env; o conector nunca o vê.
+def _kommo(ferramenta, **args):
+    try:
+        return providers.chamar("kommo", ferramenta, **args)
+    except providers.NaoConectado as e:
+        raise ValueError(f"Kommo não está conectado neste servidor: {e}") from None
+    except Exception as e:                       # noqa: BLE001
+        if type(e).__name__ == "ErroFerramenta":   # token vencido, lead que não existe…
+            raise ValueError(str(e)) from None
+        raise
+
+
+def _teto(valor, padrao, teto):
+    return max(1, min(int(valor or padrao), teto))
+
+
+def _f_kommo_conta(con, **_):
+    return _kommo("kommo_conta")
+
+
+def _f_kommo_funis(con, **_):
+    return {"funis": _kommo("kommo_funis")}
+
+
+def _f_kommo_leads(con, funil_id=None, etapa_id=None, texto=None, limite=50, **_):
+    return {"leads": _kommo("kommo_leads", funil_id=funil_id, etapa_id=etapa_id, texto=texto,
+                            maximo=_teto(limite, 50, 250))}
+
+
+def _f_kommo_lead(con, lead_id=None, completo=False, **_):
+    return _kommo("kommo_lead_completo" if completo else "kommo_lead", lead_id=str(lead_id))
+
+
+def _f_kommo_conversa(con, lead_id=None, limite=100, **_):
+    return {"mensagens": _kommo("kommo_conversa", lead_id=str(lead_id), maximo=_teto(limite, 100, 500))}
+
+
+def _f_kommo_chats(con, dias=7, limite=300, **_):
+    # Teto curto de propósito: cada página é uma ida ao Kommo, e o conector tem prazo.
+    return {"eventos": _kommo("kommo_chats", desde_dias=_teto(dias, 7, 30), maximo=_teto(limite, 300, 1000))}
+
+
 FERRAMENTAS = {
     "urace_resumo": (
         "Panorama do negócio em números: clientes, serviços, invoices em aberto, waivers, "
@@ -171,6 +220,34 @@ FERRAMENTAS = {
         "Rastro de auditoria do painel: quem fez o quê e quando. Append-only por gatilho "
         "no banco — nem um bug apaga.",
         {"limite": {"type": "integer", "description": "padrão 100, teto 500"}}, [], _f_auditoria),
+    "urace_kommo_conta": (
+        "Kommo (CRM comercial): a conta ligada — nome, subdomínio, moeda, quantos funis.",
+        {}, [], _f_kommo_conta),
+    "urace_kommo_funis": (
+        "Kommo: funis de venda com as etapas em ordem (ids para filtrar os leads).",
+        {}, [], _f_kommo_funis),
+    "urace_kommo_leads": (
+        "Kommo: leads mais recentes primeiro, com etapa, tags, origem e contato. Filtra por "
+        "funil, etapa ou texto (nome, e-mail, telefone).",
+        {"funil_id": {"type": "string"}, "etapa_id": {"type": "string"},
+         "texto": {"type": "string", "description": "nome, e-mail ou telefone"},
+         "limite": {"type": "integer", "description": "padrão 50, teto 250"}}, [], _f_kommo_leads),
+    "urace_kommo_lead": (
+        "Kommo: um lead pelo id. Com completo=true traz tudo — todos os campos, contatos, "
+        "perfis (Instagram, WhatsApp…), responsável, histórico de eventos e estado da conversa.",
+        {"lead_id": {"type": "string", "description": "id do lead no Kommo"},
+         "completo": {"type": "boolean", "description": "padrão false"}}, ["lead_id"], _f_kommo_lead),
+    "urace_kommo_conversa": (
+        "Kommo: conversa e anotações de um lead em ordem de tempo (quem, quando, o quê). "
+        "O que é anterior à integração não vem pela API do Kommo.",
+        {"lead_id": {"type": "string"},
+         "limite": {"type": "integer", "description": "padrão 100, teto 500"}}, ["lead_id"], _f_kommo_conversa),
+    "urace_kommo_chats": (
+        "Kommo: movimento do chat (Instagram, Facebook, WhatsApp) — para cada mensagem, o lead, "
+        "o canal, a direção e a hora. O TEXTO dos canais nativos não vem pela API; use "
+        "urace_kommo_conversa para o que vier.",
+        {"dias": {"type": "integer", "description": "padrão 7, teto 30"},
+         "limite": {"type": "integer", "description": "padrão 300, teto 1000"}}, [], _f_kommo_chats),
 }
 
 
@@ -214,7 +291,8 @@ def tratar(mensagem, con, quem):
                 "Painel de operações da URACE.US (kart racing, Orlando). Todas as "
                 "ferramentas são SÓ LEITURA: não existe aqui nada que escreva, por "
                 "construção. Comece por urace_resumo para o panorama, ou urace_atencao "
-                "para o que precisa de gente hoje."),
+                "para o que precisa de gente hoje. As urace_kommo_* leem o CRM "
+                "comercial (Kommo) — também só leitura."),
         })
 
     if metodo == "ping":
@@ -266,11 +344,18 @@ async def rota_mcp(request: Request, u=Depends(auth.exige("VIEWER"))):
 
     lote = isinstance(corpo, list)
     mensagens = corpo if lote else [corpo]
-    con = conectar_somente_leitura()
-    try:
-        respostas = [x for x in (tratar(m, con, u) for m in mensagens) if x is not None]
-    finally:
-        con.close()
+
+    # Fora do laço de eventos: as ferramentas do Kommo esperam a rede (até 40 s por
+    # página), e rodar isso aqui dentro pararia o painel inteiro enquanto isso. A conexão
+    # nasce e morre na mesma thread — o SQLite não aceita ser passado de uma para outra.
+    def _rodar():
+        con = conectar_somente_leitura()
+        try:
+            return [x for x in (tratar(m, con, u) for m in mensagens) if x is not None]
+        finally:
+            con.close()
+
+    respostas = await run_in_threadpool(_rodar)
     if not respostas:
         return Response(status_code=202)          # só notificações
     saida = respostas if lote else respostas[0]
