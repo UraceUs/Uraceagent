@@ -29,12 +29,13 @@ import human_intents
 import kommo_client as kommo
 import knowledge_writer
 import scheduler
+import sdr_ponte
 import state
 import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
                     FOLLOWUP_BOT_ID, HUMAN_OPERATORS, HUMAN_REPLY_TOKEN,
                     HUMAN_WHATSAPP, HUMAN_WHATSAPP_LIST, KOMMO_BOT_SECRET,
-                    KOMMO_TOKEN, SALESBOT_DISPLAY)
+                    KOMMO_TOKEN, SALESBOT_DISPLAY, SDR_MODO)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -209,6 +210,39 @@ async def kommo_hook(request: Request, background: BackgroundTasks,
     return {"ok": True}
 
 
+@app.post("/kommo/eventos")
+async def kommo_eventos(request: Request, background: BackgroundTasks,
+                        x_api_key: str | None = Header(None), key: str | None = None):
+    """Webhook de CONTA do Kommo (mensagem recebida) — os olhos do SDR.
+
+    Nos níveis observar e organizar a ponte não conversa com ninguém: é por
+    aqui que ela vê cada mensagem e decide a etapa do card no Novo funil.
+    No nível atender quem trata a mensagem é o /kommo/hook (Salesbot), e
+    este endpoint só confirma o recebimento, para não triar duas vezes.
+    ACK imediato: o Kommo desliga webhook que demora."""
+    _auth(x_api_key or key)
+    raw_body = await request.body()
+    payload = _parse_hook_body(raw_body)
+    if SDR_MODO == "atender":
+        return {"ok": True, "tratado_por": "/kommo/hook"}
+    background.add_task(sdr_ponte.processar_eventos, payload)
+    return {"ok": True}
+
+
+@app.post("/tools/sdr")
+async def tool_sdr(request: Request, x_api_key: str | None = Header(None)):
+    """Avalia uma mensagem com as regras do SDR, sem tocar em nada.
+    É o teste de balcão: curl com um texto e ver o que o SDR decidiria."""
+    _auth(x_api_key)
+    p = await request.json()
+    card = p.get("card") or {}
+    r = sdr_ponte.sdr.avaliar(str(p.get("texto", "")), card=card,
+                              remetente_email=p.get("remetente_email"))
+    return {"ok": True, "modo": SDR_MODO, "triagem": r["triagem"], "roteamento": r["roteamento"],
+            "sinais": {k: r["analise"][k] for k in ("intencoes", "score", "automatico", "spam",
+                                                     "opt_out", "sensivel", "conversao", "compete")}}
+
+
 def process_inbound(payload: dict) -> None:
     """Worker assíncrono: roteia a mensagem para o agente e devolve ao Kommo."""
     lead_id, text, return_url, token, contact_name = _extract_inbound(payload)
@@ -243,6 +277,32 @@ def process_inbound(payload: dict) -> None:
     # B2: lead respondeu — qualquer trilha de follow-up ativa morre agora.
     scheduler.cancel(lead_id, "lead respondeu")
 
+    # SDR (D-2026-09-25). Abaixo de "atender" a ponte não fala com o lead —
+    # os leads seguem humanos (D-08-27) e o Salesbot nem deveria estar ligado.
+    # Se a mensagem chegou mesmo assim, ela só organiza o card e registra.
+    if SDR_MODO != "atender":
+        state.log("sdr", lead_id, f"nível {SDR_MODO}: mensagem do Salesbot sem resposta da ponte")
+        sdr_ponte.triar_em_segundo_plano(lead_id, text)
+        _pending_returns.pop(lead_id, None)
+        return
+
+    rota = sdr_ponte.rotear(text)
+    sdr_ponte.triar_em_segundo_plano(lead_id, text, rota)
+    if rota["acao"] == "silenciar":
+        # Não é lead (e-mail automático, código, spam, grupo): não recebe
+        # resposta. "Toda mensagem de LEAD recebe resposta" segue valendo.
+        # last_outbound_at evita que o resgate do agendador responda por nós.
+        state.update_conversation(lead_id, last_outbound_at=int(time.time()))
+        state.log("gate", lead_id, f"SDR: sem resposta ({rota['motivo']}) — não é lead")
+        _pending_returns.pop(lead_id, None)
+        return
+    if rota["acao"] == "confirmar_opt_out":
+        send_to_lead(lead_id, sdr_ponte.confirmacao_opt_out(text))
+        state.transition(lead_id, "CLOSED", "opt-out do lead")
+        scheduler.cancel(lead_id, "opt-out")
+        kommo_tags_seguras(lead_id, ["opt_out"])
+        return
+
     # A PARTIR DAQUI existe UM só caminho de saída, e ele sempre envia algo.
     # Antes (até 25/08) havia três `return` mudos aqui -- gatilho B4, estado
     # escalado (G3) e agente vazio -- e cada um deixava o lead falando
@@ -251,7 +311,15 @@ def process_inbound(payload: dict) -> None:
     # Escalar é sobre quem RESPONDE, nunca sobre responder ou não.
     reply = ""
     triggers = gates.escalation_triggers(text)
-    if triggers and state.get_conversation(lead_id)["state"] == "AI_ACTIVE":
+    estado_atual = state.get_conversation(lead_id)["state"]
+    if rota["acao"] == "escalar" and estado_atual in ("AI_ACTIVE", "RESUMED"):
+        # Sinais do SDR que o B4 não tinha (conversão, piloto que compete,
+        # corporativo, grupo grande) e os que ele já tinha, com prioridade:
+        # alta chama a pessoa agora; média vira tarefa na fila dela.
+        escalate(lead_id, f"SDR {rota['motivo']}: {rota['descricao']}", context=text,
+                 prioridade=rota["prioridade"])
+        reply = _holding_reply(lead_id, text)
+    elif triggers and estado_atual == "AI_ACTIVE":
         # B4: assuntos sensíveis (desconto, refund, jurídico...) escalam
         # ANTES do modelo -- ele nunca vê a mensagem, então também não pode
         # ser convencido a responder. Quem acusa o recebimento é a ponte.
@@ -604,6 +672,7 @@ async def _start_scheduler():
     scheduler.rescue_fn = rescue_lead
     scheduler.task_fn = kommo.add_task
     scheduler.note_fn = kommo.add_note
+    scheduler.close_fn = sdr_ponte.ao_fechar if SDR_MODO in ("organizar", "atender") else None
     scheduler.start()
 
 
@@ -615,6 +684,12 @@ def send_to_lead(lead_id: int, text: str) -> None:
     mensagem). Fallback: nota no lead — não chega ao cliente, mas nada se
     perde e fica visível pro time no card.
     """
+    if SDR_MODO == "atender":
+        limpo = sdr_ponte.limpar(lead_id, text)
+        if not limpo:
+            conv = state.get_conversation(lead_id)
+            limpo = _holding_reply(lead_id, conv.get("last_inbound_text") or "")
+        text = limpo
     state.update_conversation(lead_id, last_outbound_at=int(time.time()))
     pending = _pending_returns.pop(lead_id, None)
     if pending and _salesbot_continue(lead_id, pending[0], pending[1], text):
@@ -729,11 +804,13 @@ def _salesbot_continue(lead_id: int, return_url: str, token: str | None,
 
 
 # ------------------------------------------------------------------ escalação
-def escalate(lead_id: int, reason: str, context: str = "") -> None:
+def escalate(lead_id: int, reason: str, context: str = "", prioridade: str = "alta") -> None:
     state.transition(lead_id, "WAITING_HUMAN", reason)
     scheduler.cancel(lead_id, "conversa escalada")  # G3: sem follow-up comercial
-    kommo.add_tags(lead_id, ["escalated"])
-    kommo.add_note(lead_id, f"[escalação] {reason}")
+    kommo_tags_seguras(lead_id, ["escalated"])
+    _kommo_seguro(lead_id, "nota de escalação", kommo.add_note, lead_id, f"[escalação] {reason}")
+    if SDR_MODO in ("organizar", "atender"):
+        sdr_ponte.mover_para(lead_id, "Atendimento humano", reason)
     conv = state.get_conversation(lead_id)
     nome = conv.get("contact_name") or "sem nome no Kommo"
     if context.strip():
@@ -754,8 +831,34 @@ def escalate(lead_id: int, reason: str, context: str = "") -> None:
                 f"Pergunta do lead: {context[:400] or '(sem texto)'}\n"
                 f"Responda esta mensagem com o texto para o lead — eu entrego "
                 f"no chat e devolvo a conversa ao Chase.")
+    if SDR_MODO in ("organizar", "atender") and prioridade != "alta":
+        # Uma pessoa só no comercial: só prioridade alta interrompe. O resto
+        # entra na fila como tarefa no Kommo, com o prazo da prioridade.
+        from sdr import regras as _sdr_regras
+        from config import KOMMO_RESPONSAVEL_ID
+        prazo = int(time.time()) + _sdr_regras.SLA_MINUTOS.get(prioridade, 15) * 60
+        _kommo_seguro(lead_id, "tarefa de handoff", kommo.add_task, lead_id,
+                      f"SDR ({prioridade}): {reason}"[:500], prazo, KOMMO_RESPONSAVEL_ID or None)
+        state.log("escalation", lead_id, f"{reason} [fila, prioridade {prioridade}]")
+        return
     notify_human(briefing)
     state.log("escalation", lead_id, reason)
+
+
+def _kommo_seguro(lead_id: int, o_que: str, fn, *args) -> bool:
+    """Chamada ao Kommo que NUNCA derruba o turno. Até 25/09 um erro do
+    Kommo dentro de escalate() matava a tarefa antes da resposta ao lead
+    (raise_for_status) e só o resgate de 180s cobria."""
+    try:
+        fn(*args)
+        return True
+    except Exception as exc:
+        state.log("error", lead_id, f"kommo: {o_que} falhou: {exc}")
+        return False
+
+
+def kommo_tags_seguras(lead_id: int, tags: list[str]) -> bool:
+    return _kommo_seguro(lead_id, "tags " + ",".join(tags), kommo.add_tags, lead_id, tags)
 
 
 def notify_human(text: str) -> None:
@@ -1074,7 +1177,7 @@ async def tool_crm(request: Request, x_api_key: str | None = Header(None)):
     op = p.get("op")
     if op not in ("note", "tags", "task", "stage"):
         raise HTTPException(400, f"op desconhecida: {op}")
-    if op == "stage" and p.get("stage") in ("closed_won", "suppliers"):  # G9 + never_touch
+    if op == "stage" and directive_engine.etapa_proibida(p.get("stage")):  # G9 + never_touch + SDR
         raise HTTPException(403, f"estágio {p['stage']} não permitido ao agente")
     kwargs = dict(p)
     if op == "tags" and isinstance(p.get("tags"), list):

@@ -95,7 +95,7 @@ def apply_crm(lead_id: int, kwargs: dict) -> None:
         kommo.add_task(lead_id, kwargs["text"], parse_due(kwargs.get("due", "")))
     elif op == "stage" and kwargs.get("stage"):
         stage_key = kwargs["stage"]
-        if stage_key in ("closed_won", "suppliers"):  # G9 + never_touch
+        if etapa_proibida(stage_key):  # G9 + never_touch + SDR
             state.log("gate", lead_id, f"G9: estágio {stage_key} recusado (diretiva do modelo)")
             return
         stage_id = config.STAGES.get(stage_key)
@@ -184,3 +184,20 @@ def execute(lead_id: int, raw_directives: list[str], escalate_fn) -> dict:
         except Exception as exc:
             state.log("error", lead_id, f"falha executando diretiva {name}: {exc}")
     return {"price_results": price_results, "kb_results": kb_results}
+
+
+def etapa_proibida(stage_key) -> bool:
+    """G9 pelo ID, não pelo nome da chave. Até 25/09 a checagem comparava a
+    chave literal "closed_won", e no funil do Chase a chave é "closed___won"
+    (id 142) — o fechamento passava. Agora: qualquer chave que resolva para
+    142/143, Suppliers, ou qualquer mudança de etapa quando o SDR está
+    ligado (organizar/atender: a etapa é decidida pela ponte, não pelo
+    modelo) é recusada."""
+    if config.SDR_MODO in ("organizar", "atender"):
+        return True
+    if not stage_key:
+        return True
+    chave = str(stage_key).lower()
+    if "won" in chave or "lost" in chave or "supplier" in chave:
+        return True
+    return config.STAGES.get(stage_key) in (142, 143)

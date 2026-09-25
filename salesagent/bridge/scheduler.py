@@ -58,6 +58,7 @@ notify_fn = None       # notify_fn(text) -> None  (WhatsApp interno)
 task_fn = None         # task_fn(lead_id, text, due_ts) -> None (tarefa Kommo)
 note_fn = None         # note_fn(lead_id, text) -> None (nota Kommo)
 rescue_fn = None       # rescue_fn(conv) -> bool (entrega a resposta devida ao lead)
+close_fn = None        # close_fn(lead_id) -> None (SDR: card vai para Perdido no Novo funil)
 
 
 def in_business_hours(now_ts: int | None = None) -> bool:
@@ -217,6 +218,8 @@ def _fire_followup(conv: dict, now: int) -> None:
     else:  # trilha esgotada
         if track == "initial":
             transition(lead_id, "CLOSED", "trilha initial esgotada sem resposta")
+            if close_fn:
+                close_fn(lead_id)
             if note_fn:
                 note_fn(lead_id, "[follow-up] trilha de classificação esgotada — lead fechado")
         else:  # link_sent: humano decide manter ou fechar

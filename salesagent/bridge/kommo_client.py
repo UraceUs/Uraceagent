@@ -38,28 +38,53 @@ def add_note(lead_id: int, text: str) -> None:
         r.raise_for_status()
 
 
-def add_task(lead_id: int, text: str, complete_till_ts: int) -> None:
-    """Cria a próxima tarefa do lead (regra B2: nenhum lead sem próxima ação)."""
+def add_task(lead_id: int, text: str, complete_till_ts: int,
+             responsible_user_id: int | str | None = None) -> None:
+    """Cria a próxima tarefa do lead (regra B2: nenhum lead sem próxima ação).
+    `responsible_user_id` (SDR): o responsável único dos handoffs."""
+    tarefa = {
+        "entity_id": lead_id,
+        "entity_type": "leads",
+        "text": text[:500],
+        "complete_till": complete_till_ts,
+    }
+    if responsible_user_id and str(responsible_user_id).isdigit():
+        tarefa["responsible_user_id"] = int(responsible_user_id)
     with _client() as c:
-        r = c.post(
-            f"{BASE}/tasks",
-            json=[{
-                "entity_id": lead_id,
-                "entity_type": "leads",
-                "text": text[:500],
-                "complete_till": complete_till_ts,
-            }],
-        )
+        r = c.post(f"{BASE}/tasks", json=[tarefa])
         r.raise_for_status()
 
 
 def add_tags(lead_id: int, tags: list[str]) -> None:
+    """ACRESCENTA tags. Até 25/09 era PATCH em `_embedded.tags`, que no
+    Kommo SUBSTITUI a lista inteira: pôr "escalated" apagava as tags que a
+    equipe já tinha no card (nao_e_lead, opt_out, origem do anúncio...).
+    `tags_to_add` só soma."""
     with _client() as c:
         r = c.patch(
             f"{BASE}/leads/{lead_id}",
-            json={"_embedded": {"tags": [{"name": t} for t in tags]}},
+            json={"tags_to_add": [{"name": t} for t in tags]},
         )
         r.raise_for_status()
+
+
+def move_lead(lead_id: int, pipeline_id: int, status_id: int) -> dict:
+    """Move o card para funil+etapa explícitos (SDR: Novo funil)."""
+    return update_lead(lead_id, {"pipeline_id": int(pipeline_id), "status_id": int(status_id)})
+
+
+def list_pipelines() -> list[dict]:
+    with _client() as c:
+        r = c.get(f"{BASE}/leads/pipelines")
+        r.raise_for_status()
+        return (r.json().get("_embedded") or {}).get("pipelines", [])
+
+
+def create_pipelines(body: list[dict]) -> dict:
+    with _client() as c:
+        r = c.post(f"{BASE}/leads/pipelines", json=body)
+        r.raise_for_status()
+        return r.json()
 
 
 def run_bot(bot_id: str | int, lead_id: int) -> bool:
