@@ -23,6 +23,77 @@ ordem. Tarefa sem essa marca está dentro das suas permissões e pode rodar.
 
 ## ABERTO
 
+### T-011 — SDR: conferir o Chase reorganizado (Parte A) e religar em observação (Parte B)
+
+O código do Chase foi reorganizado como SDR em 25/09
+(`salesagent/docs/sdr.md`, D-2026-09-25). Ele só chega aqui depois do merge
+do PR `claude/chase-sdr-reestruturacao` na branch da VPS. **Se o `grep` da
+Parte A responder 0, o merge ainda não aconteceu: pare e diga isso no
+relatório.**
+
+---
+
+#### Parte A — é sua (teste offline e leitura do Kommo; não escreve nada)
+
+```bash
+cd /home/ubuntu/Uraceagent; git pull origin claude/configurar-open-claw-ooqo8x; grep -c 'SDR_MODO' salesagent/bridge/config.py
+```
+
+```bash
+cd /home/ubuntu/Uraceagent; PY=salesagent/bridge/.venv/bin/python; [ -x "$PY" ] || PY=python3; for t in test_sdr test_never_silent test_escalation_alarm test_lead_rescue test_human_loop test_customer_memory; do echo "== $t"; $PY salesagent/tests/$t.py 2>&1 | tail -3; done
+```
+
+```bash
+cd /home/ubuntu/Uraceagent; python3 salesagent/tools/sdr_avaliar.py --tabela; python3 salesagent/tools/sdr_funil.py
+```
+
+Me traga as quatro saídas. O que espero:
+- o `grep` responde **2 ou mais**;
+- as seis suítes terminam em **PASSOU**. Uma que falhar é bloqueio: não
+  ajuste nada, traga a saída;
+- o `sdr_funil.py` **sem** `--aplicar` só lê. Ele diz se o "Novo funil" já
+  existe (a extensão do Kommo pode ter criado) e se falta alguma etapa. **Não
+  rode com `--aplicar`**: criar funil no Kommo é do dono.
+
+---
+
+#### Parte B — [PRECISA DO DONO] religar a ponte em observação
+
+O serviço `sales-bridge` está desligado desde a D-2026-08-27. Religar, mesmo
+em `observar` (decide e só registra; não escreve no Kommo e não fala com
+lead), é decisão dele. **Só rode com o sim dele no seu chat.**
+
+```bash
+cd /home/ubuntu/Uraceagent; grep '^SDR_MODO=' ~/.urace/bridge.env || echo 'SDR_MODO ausente (o instalador grava observar)'; bash salesagent/deploy/install_bridge_service.sh; grep '^SDR_MODO=' ~/.urace/bridge.env; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8800/health
+```
+
+Tem de sair `SDR_MODO=observar` e `200`. Se aparecer outro nível, pare: quem
+troca o nível é o dono, à mão.
+
+Depois, a rota nova no Caddy. **Não copie o Caddyfile do repositório por
+cima do que está lá**, porque o de lá tem as rotas do Command Center:
+
+```bash
+sudo grep -c '@public path /kommo/hook /health /human/whatsapp' /etc/caddy/Caddyfile
+```
+
+Se responder **1**:
+
+```bash
+sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-sdr; sudo sed -i 's#@public path /kommo/hook /health /human/whatsapp#@public path /kommo/hook /kommo/eventos /health /human/whatsapp#' /etc/caddy/Caddyfile; sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy; curl -s -o /dev/null -w '%{http_code}\n' -X POST https://urace-bridge.duckdns.org/kommo/eventos
+```
+
+O último `curl`, sem chave, tem de dar **401**, e não 404. Se o `grep`
+responder outra coisa que não 1, **não mexa**: traga a saída de
+`sudo grep -n '@public' /etc/caddy/Caddyfile`.
+
+A URL do webhook que a extensão do Kommo vai cadastrar é
+`https://urace-bridge.duckdns.org/kommo/eventos?key=<AGENT_API_KEY>`. **Não
+transcreva a chave** no relatório nem em lugar nenhum. Quem copia de
+`~/.urace/bridge.env` para o Kommo é o dono.
+
+---
+
 ### T-010 — Backup semanal para o Drive: a parte que é sua
 
 O dono pediu (23/09) uma pasta no Drive chamada **Backup urace command center** com o

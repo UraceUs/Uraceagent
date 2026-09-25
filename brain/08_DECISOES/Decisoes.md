@@ -17,7 +17,7 @@ revogada por outra decisão** — a IA nunca revoga por conta própria.
 Nome do arquivo: `D-AAAA-MM-DD - assunto`. Decisão superada **não é
 apagada**: vira `status: superado`, com link para a que a substituiu.
 
-## Todas (18)
+## Todas (19)
 
 - [[D-2026-08-27 - Descontinuar o Chase]]
 - [[D-2026-08-28 - ADM URACE e somente leitura]]
@@ -74,3 +74,4 @@ X?"*. Agora dá.
 - [[D-2026-09-18 - As travas respondidas, uma a uma]] — as 19 travas da operação respondidas pelo dono: terça é dia de serviço; desconto só em caso raro com motivo; a IA não cutuca cliente por waiver; ela prepara a devolução do depósito e ele devolve; Lucas é comercial; "Offsight" não existe; azul oficial #0057B4; Pit Wall aposentado; agente com APLICAR=1 nas rotinas; catálogo atualizado pela Rate Card, que mora no Drive
 - [[D-2026-09-18 - Menu em trilho que revela, e a tela manda no layout]] — o menu fecha virando trilho de 68px com o contador em bolinha, e ao encostar o mouse abre por cima do conteúdo sem empurrar nada; o estado fica guardado no navegador; largura máxima só nas páginas de leitura; no celular o menu segue gaveta e toda tela é montada para a largura do aparelho
 - [[D-2026-09-17 - Login com a foto da pista]] — login em duas metades com a foto da pista cortada na diagonal e a linha vermelha; só marca, título e formulário; foto em `web/public/pista.jpg` com fallback de asfalto; o teal sai e entra o azul da marca em todo o painel
+- [[D-2026-09-25 - Chase reorganizado como SDR]] — o código do Chase vira o SDR do Kommo: Novo funil próprio (triagem + venda), triagem determinística com `nao_e_lead`, escalação alta/média para o responsável único, guarda de estilo; três níveis (`observar` padrão, `organizar`, `atender`) e subir de nível é palavra do dono

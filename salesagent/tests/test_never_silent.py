@@ -28,6 +28,10 @@ BRIDGE_DIR = HERE.parent / "bridge"
 # temporário descartável -- o teste nunca toca no estado real do VPS.
 _TMP = tempfile.mkdtemp(prefix="urace-test-")
 os.environ["URACE_DIR"] = _TMP
+# O Chase respondendo é o nível "atender" do SDR (D-2026-09-25). O padrão
+# agora é "observar", que não responde ninguém — estes testes provam o
+# caminho de quem responde, então fixam o nível.
+os.environ.setdefault("SDR_MODO", "atender")
 sys.path.insert(0, str(BRIDGE_DIR))
 
 import app  # noqa: E402

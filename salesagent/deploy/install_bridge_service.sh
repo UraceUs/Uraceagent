@@ -48,6 +48,15 @@ if ! grep -q '^HUMAN_WHATSAPP=' "$BRIDGE_ENV"; then
     echo "HUMAN_WHATSAPP=+14074878143" >> "$BRIDGE_ENV"
     echo "-- HUMAN_WHATSAPP padrao gravado (Italo)"
 fi
+# Nivel do SDR (D-2026-09-25). Sempre nasce em "observar": decide e so
+# registra; nao escreve no Kommo e nao responde lead. Subir para
+# "organizar" ou "atender" e palavra do dono -- troca-se a linha a mao.
+if ! grep -q '^SDR_MODO=' "$BRIDGE_ENV"; then
+    echo "SDR_MODO=observar" >> "$BRIDGE_ENV"
+    echo "-- SDR_MODO=observar gravado (padrao seguro)"
+else
+    echo "-- $(grep '^SDR_MODO=' "$BRIDGE_ENV")"
+fi
 chmod 600 "$BRIDGE_ENV"
 
 # 3. unit do systemd, ajustando usuario/caminhos para o ambiente real

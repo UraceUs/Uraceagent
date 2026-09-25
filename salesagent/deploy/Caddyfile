@@ -28,7 +28,17 @@ urace-bridge.duckdns.org {
 	# 404. O endpoint foi desenhado para exposicao: exige o HUMAN_REPLY_TOKEN
 	# (escopo minimo, so essa rota), valida o TELEFONE do operador contra a
 	# lista cadastrada, e na duvida pergunta em vez de agir.
-	@public path /kommo/hook /health /human/whatsapp
+	#
+	# /kommo/eventos entrou em 25/09 (SDR): e o webhook de CONTA do Kommo
+	# (mensagem recebida), pelo qual a ponte ve as conversas nos niveis
+	# observar e organizar sem Salesbot nenhum. Exige ?key= (AGENT_API_KEY).
+	#
+	# ATENCAO: no VPS o /etc/caddy/Caddyfile tambem tem os handles do
+	# Command Center (/ops*, /.well-known/oauth-*), inseridos pelo
+	# servir_command_center.sh. NAO copie este arquivo por cima do de la:
+	# acrescente so a rota nova na linha @public, rode `caddy validate` e
+	# so entao recarregue (incidente 12 do Chase).
+	@public path /kommo/hook /kommo/eventos /health /human/whatsapp
 	handle @public {
 		reverse_proxy 127.0.0.1:8800
 	}

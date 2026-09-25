@@ -22,7 +22,19 @@ todo campo de texto.
 → **Código:** `command_center/` (FastAPI + SQLite + React) · **deploy:**
 `adminai/deploy/command_center/servir_command_center.sh`
 
-## Em stand-by: agente de vendas (Chase)
+## Reorganizado como SDR, em observação: agente de vendas (Chase)
+
+**25/09/2026:** o código do Chase foi reorganizado como **SDR do Kommo**
+([`salesagent/docs/sdr.md`](salesagent/docs/sdr.md),
+[D-2026-09-25](brain/08_DECISOES/D-2026-09-25%20-%20Chase%20reorganizado%20como%20SDR.md)).
+Ele separa lead de não-lead num funil próprio ("Novo funil"), organiza o card e
+escala com prioridade para o responsável único. Tem três níveis (`SDR_MODO`):
+`observar` é o padrão e só decide e registra; `organizar` e `atender` dependem
+do dono. Configuração no Kommo pela extensão:
+[`docs/extensao/PROMPT-SDR-KOMMO.md`](docs/extensao/PROMPT-SDR-KOMMO.md).
+
+O histórico abaixo continua valendo como documentação do agente.
+
 
 Agente comercial que atendia leads no Kommo, qualificava pela
 classificação A/B/C/D, recomendava o programa e passava para uma pessoa
@@ -76,7 +88,9 @@ Página visual completa: peça o artifact "Arquitetura do Chase", ou veja
 ## Estrutura do repositório
 
 ```
-salesagent/     O agente de vendas em produção
+salesagent/     O agente de vendas (Chase), reorganizado como SDR em 25/09
+  sdr/            Diretivas do SDR: classificador, triagem, roteador, estilo,
+                  Novo funil e executor (puro, testado offline)
   bridge/         A ponte (FastAPI): app, gates, state, directives,
                   textproc, scheduler, brain_kb, kommo_client
   instructions/   Instruções canônicas do Chase (sincronizadas pro OpenClaw)

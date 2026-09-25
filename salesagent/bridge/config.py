@@ -96,6 +96,19 @@ SALESBOT_DISPLAY = _bridge.get("SALESBOT_DISPLAY", "balloons")
 
 DB_PATH = URACE_DIR / "salesbridge.db"
 
+# SDR (D-2026-09-25): o Chase reorganizado como SDR, em três níveis.
+#   "observar"  (padrão) decide e registra no log; não escreve no Kommo e a
+#               ponte não responde ao lead (D-08-27: leads 100% humanos);
+#   "organizar" move etapa/tag/nota/tarefa no Novo funil; não responde;
+#   "atender"   organiza e responde (o Chase completo, com as diretivas SDR).
+# Subir de "observar" é palavra do dono (D-09-17: etapa, tag e resposta no
+# Kommo são dele). A variável de ambiente vence o arquivo (testes).
+SDR_MODO = (os.environ.get("SDR_MODO") or _bridge.get("SDR_MODO", "observar")).strip().lower()
+if SDR_MODO not in ("observar", "organizar", "atender"):
+    SDR_MODO = "observar"
+# Usuário do Kommo que recebe as tarefas de handoff (responsável único).
+KOMMO_RESPONSAVEL_ID = _bridge.get("KOMMO_RESPONSAVEL_ID", "")
+
 # Autoridade humana (§3): identidade e escopo vêm do repo, contato vem do env.
 _operators_path = REPO_DIR / "config" / "human-operators.json"
 HUMAN_OPERATORS = (json.loads(_operators_path.read_text())

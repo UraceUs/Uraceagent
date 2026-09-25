@@ -24,6 +24,14 @@ leads da URACE.
 desligada; banco, vault e gateway ficaram intactos. Leads no Kommo
 voltaram a ser 100% humanos.
 
+## 25/09/2026: reorganizado como SDR
+
+O código foi reorganizado pelas diretivas do SDR
+([[D-2026-09-25 - Chase reorganizado como SDR]]): `salesagent/sdr/` e
+`salesagent/docs/sdr.md`. Ele nasce em **observar**, que só decide e registra.
+Falar com lead ou escrever no Kommo continua dependendo do dono. O estado
+acima ("encerrado") segue valendo até ele dizer outra coisa.
+
 ## O que sobrou
 
 - Registro completo: `docs/resumo-chase-pre-pivot.md`
