@@ -247,6 +247,8 @@ PALAVRAS = {
         # dias, nenhum era lead).
         "seu codigo para", "codigo para fazer login", "alerta de seguranca", "security alert",
         "personal access token", "reconnect your", "new notifications", "new seller message",
+        # Vistos no Kommo em 28/09 (Urace > Cold Leads, 120 leads mais recentes).
+        "novas notificacoes", "e-mail de recuperacao", "email de recuperacao", "recovery email",
     ],
     "opt_out": [
         "nao quero mais receber", "nao quero mais mensagem", "pare de mandar", "parem de mandar",

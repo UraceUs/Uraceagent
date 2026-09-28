@@ -138,7 +138,9 @@ def camada_pacote():
                   "[GitHub] A fine-grained personal access token has been added",
                   "Reconnect your Bank of America account",
                   "URace Support, you have 23 new notifications",
-                  "New seller message (Alibaba)"]:
+                  "New seller message (Alibaba)",
+                  "URace Support, você tem 135 novas notificações",
+                  "Alguém adicionou este endereço como o próprio e-mail de recuperação"]:
         check(f"relatório 25/09, lixo de e-mail: {texto[:34]}", classificador.classificar(texto)["automatico"])
     for texto in ["Carlos Mendes", "Lead #15712502"]:
         check(f"nome de gente não é lixo: {texto}", not classificador.classificar(texto)["automatico"])
