@@ -74,6 +74,11 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
 3. Qual robô responde em cada canal. Hoje respondem os bots da equipe; ligar
    o Chase num canal é tirar o canal de `CANAIS_COM_BOT_DA_EQUIPE` e desligar
    o bot da equipe ali. O Kommo não roda dois bots no mesmo lead.
+3a. **Decidido pelo dono em 28/09**, no chat do Claude Code: o agente de IA
+   do Kommo (*Agente qualificador de leads*) fica **sempre ligado** e é quem
+   responde ao lead em Urace; o SDR segue sem responder nesses canais. E o
+   SDR não precisa respeitar `nao_e_lead` posto antes num card que volta com
+   sinal comercial: "IAs vão operar, não tem risco de erro humano".
 4. ~~Quem é o responsável único~~ — **decidido pelo dono em 28/09**, no chat
    do Claude Code: URace Support (usuário 12209643 do Kommo). O Lucas não é
    usuário do Kommo. `KOMMO_RESPONSAVEL_ID=12209643` no `bridge.env`.

@@ -162,9 +162,10 @@ como atendida para o resgate do agendador não responder no lugar dela.
 **Opt-out:** uma confirmação no idioma do lead, conversa fechada, card em
 perdido com a tag `opt_out`.
 
-**Canais com bot da equipe** (`CANAIS_COM_BOT_DA_EQUIPE`): o chatbot *URACE -
-Atendimento inicial DM* responde no Instagram e no Messenger; WhatsApp e chat
-do site têm bot próprio. Nesses canais o roteador não deixa a ponte falar
+**Canais com bot da equipe** (`CANAIS_COM_BOT_DA_EQUIPE`): quem responde ao
+lead em Urace é o agente de IA do Kommo (*Agente qualificador de leads*),
+**sempre ligado** por decisão do dono em 28/09, ao lado dos bots da equipe
+(*URACE - Atendimento inicial DM*, *Website bot*). Nesses canais o roteador não deixa a ponte falar
 (`BOT_DA_EQUIPE_NO_CANAL`); as escalações da tabela acima continuam, marcadas
 `sem_resposta`, e viram tarefa. Tirar um canal da lista é decisão do dono,
 junto com desligar o bot da equipe naquele canal.
@@ -239,7 +240,7 @@ Se nada sobrar, sai a mensagem de espera (`holding.py`).
   e o Kommo não roda dois bots no mesmo lead ao mesmo tempo. Ligar o Chase para
   responder num canal é tirar aquele canal de `CANAIS_COM_BOT_DA_EQUIPE` e
   desligar o bot da equipe ali.
-- **Pendências do relatório fora do SDR:** agente de IA do Kommo (revelar que
-  é IA, ligar), o que `NAO_TOCAR` significa, seis bots dividindo o gatilho de
+- **Pendências do relatório fora do SDR:** agente de IA do Kommo (ligado
+  sempre, decisão do dono em 28/09; falta decidir se revela que é IA), o que `NAO_TOCAR` significa, seis bots dividindo o gatilho de
   conversa, gatilhos em "Integração deletada", formulário de anúncio sem
   contato, 33 conversas sem resposta.

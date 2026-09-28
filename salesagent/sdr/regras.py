@@ -21,11 +21,11 @@ VERSAO = "3.0.0"
 # robô pode responder sozinho.
 CANAIS_CONHECIDOS = ["whatsapp", "instagram", "messenger", "telegram", "site", "email", "telefone"]
 
-# Canais onde a equipe já tem bot respondendo (relatório Meta e Kommo de
-# 25/09/2026): "URACE - Atendimento inicial DM" no Instagram e no Messenger;
-# WhatsApp e chat do site com bot próprio. Um segundo robô ali responderia em
-# dobro ao mesmo lead: o SDR só organiza e chama gente. Tirar um canal daqui
-# é decisão do dono, junto com desligar o bot da equipe naquele canal.
+# Canais onde a equipe já tem quem responda: o agente de IA do Kommo
+# ("Agente qualificador de leads"), sempre ligado por decisão do dono em
+# 28/09, e os bots da equipe (relatório Meta e Kommo de 25/09/2026). Um
+# segundo robô ali responderia em dobro ao mesmo lead: o SDR só organiza e
+# chama gente. Tirar um canal daqui é decisão do dono.
 CANAIS_COM_BOT_DA_EQUIPE = ["instagram", "messenger", "whatsapp", "site"]
 CANAIS_COM_ROBO = [c for c in ["whatsapp", "instagram", "messenger", "telegram", "site"]
                    if c not in CANAIS_COM_BOT_DA_EQUIPE]
