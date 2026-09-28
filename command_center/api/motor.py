@@ -135,6 +135,56 @@ def contexto_do_comando(con, texto, user_id=None):
     return "\n".join(linhas)
 
 
+_RX_FINANCEIRO = re.compile(r"invoice|fatura|cobr|pre[çc]o|valor|price|estimate|or[çc]amento|pe[çc]as?\b", re.I)
+_RX_EMAIL = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+
+
+def contexto_de_precos(con, texto, user_id=None):
+    """Preços já cobrados no QuickBooks e o id de cliente de cada e-mail citado — o que faltava
+    para a IA fechar invoice de peça sem perguntar ao dono (28/09: ela travou em 'me passa o
+    valor unitário de chain 108, fuel mix, rear bumper bolt…', e esses valores estavam nas
+    invoices já enviadas).
+
+    Entra quando a conversa do dia fala de invoice/preço. Lê a mensagem e as últimas trocas do
+    dia (a lista de peças costuma estar na pergunta anterior da IA, não na resposta do dono).
+    Só o espelho: sem histórico, diz que não há — nunca inventa valor."""
+    from command_center.providers import precos_cobrados as pc
+    conversa = [texto or ""]
+    if user_id:
+        for c in todos(con, "SELECT text, output FROM ai_commands WHERE user_id=? AND created_at >= date('now') "
+                            "AND text NOT LIKE 'EVENTO AUTOMÁTICO%' ORDER BY id DESC LIMIT 6", (user_id,)):
+            conversa += [c["text"] or "", c["output"] or ""]
+    junto = "\n".join(conversa)
+    if not _RX_FINANCEIRO.search(junto):
+        return ""
+    linhas = ["\n\nPREÇOS JÁ COBRADOS NO QUICKBOOKS (lidos das invoices da URACE, linha por linha). É a referência de "
+              "preço de peça e de serviço: use sem perguntar ao dono. O valor que o dono disser manda sobre esta tabela; "
+              "sem histórico para uma peça, aí sim pergunte."]
+    if not um(con, "SELECT 1 AS x FROM invoice_lines LIMIT 1"):
+        linhas.append("- (o espelho ainda não tem as linhas das invoices; a próxima sincronia do QuickBooks preenche. "
+                      "Até lá, peça o valor ao dono.)")
+    else:
+        termos = pc.termos_do_catalogo(con, junto)
+        tab = pc.tabela(con, termos, limite=40) if termos else []
+        if not tab:
+            tab = pc.tabela(con, None, limite=40)
+            linhas.append("- (nenhuma peça da conversa bateu com o histórico; abaixo, os itens mais cobrados)")
+        for t in tab:
+            faixa = f"${t['minimo']:,.2f}" if t["minimo"] == t["maximo"] else f"${t['minimo']:,.2f}–${t['maximo']:,.2f}"
+            linhas.append(f"- {t['item']} (item_id {t['item_id'] or '?'}): último ${t['ultimo']:,.2f} em {t['ultimo_em'] or '?'}"
+                          f" ({t['ultimo_cliente'] or '?'}); mais comum ${t['mais_comum']:,.2f}; faixa {faixa}; {t['vezes']}x")
+    emails = sorted({e.lower().rstrip(".") for e in _RX_EMAIL.findall(junto)} - {"urace@urace.us"})
+    for e in emails[:6]:
+        inv = um(con, "SELECT customer_ref FROM invoices WHERE LOWER(customer_email)=? AND customer_ref IS NOT NULL "
+                      "ORDER BY issued_on DESC LIMIT 1", (e,))
+        if inv:
+            linhas.append(f"- Cliente no QuickBooks de {e}: cliente_id={inv['customer_ref']}")
+        else:
+            linhas.append(f"- {e}: sem invoice no espelho. Proponha a invoice com \"email\":\"{e}\" — o painel acha o "
+                          "cliente no QuickBooks pelo e-mail; se ele não existir lá, proponha antes qbo_criar_cliente.")
+    return "\n".join(linhas)
+
+
 _RE_OPP = re.compile(r"\[oportunidade #(\d+)")
 
 # O closer conversa com a IA dentro da oportunidade. Sem este bloco a IA responde bonito e

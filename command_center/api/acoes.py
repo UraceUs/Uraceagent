@@ -100,7 +100,7 @@ def _pega(d, aliases):
 
 
 # Ferramentas de LEITURA: o agente executa na hora; nunca viram "ação" para aprovar.
-_CONSULTA_RX = re.compile(r"(_buscar|_listar|_ler)$|^(qbo_invoices|qbo_invoice|qbo_empresa|qbo_itens|qbo_estimates|qbo_contas_a_receber|"
+_CONSULTA_RX = re.compile(r"(_buscar|_listar|_ler)$|^(qbo_invoices|qbo_invoice|qbo_empresa|qbo_itens|qbo_estimates|qbo_contas_a_receber|qbo_historico_precos|"
                           r"asana_tarefa|asana_tarefas_da_secao|asana_projetos|asana_secoes|asana_comentarios|asana_anexos|"
                           r"docusign_waivers_de|docusign_ambiente|docusign_envelope|gmail_thread|gmail_marcadores|gmail_contas|calendar_eventos|sheets_ler)$")
 
@@ -292,11 +292,15 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None,
             continue                                     # valor dito no comando: o dono manda
         if preco and abs(preco - l["unitario"]) < 0.01:
             continue                                     # bate com o catálogo do QuickBooks
+        if con and l.get("item_id"):
+            from command_center.providers import precos_cobrados
+            if precos_cobrados.ja_cobrado(con, l["item_id"], l["unitario"]):
+                continue                                 # já cobrado deste item em invoice anterior (28/09)
         if preco:
             conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não bate com o catálogo do QuickBooks (${preco:,.2f}). "
                             "Confira na Rate Card (corrida → aba Racing team; treino → aba Academy) antes de aprovar.")
         else:
-            conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não veio do comando nem do catálogo. "
+            conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não veio do comando, do catálogo nem de invoice anterior. "
                             "Confira na Rate Card antes de aprovar.")
     if conferir:
         saida["_conferir"] = conferir

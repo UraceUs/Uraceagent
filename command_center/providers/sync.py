@@ -602,7 +602,7 @@ def sync_qbo(con, desde_dias=365):
     ou pelo nome do responsável. Só leitura."""
     inicio = agora()
     try:
-        r = chamar("quickbooks", "qbo_invoices", status="all", desde_dias=desde_dias, maximo=500)
+        r = chamar("quickbooks", "qbo_invoices", status="all", desde_dias=desde_dias, maximo=1000)
         n = ligadas = 0
         for inv in r.get("invoices", []):
             email = (inv.get("email") or "").lower() or None
@@ -622,6 +622,7 @@ def sync_qbo(con, desde_dias=365):
             else:
                 nid = inserir(con, "invoices", **campos)
                 _liga(con, "invoice", nid, "quickbooks", inv["id"], inv.get("link"))
+            _grava_linhas(con, iid["entity_id"] if iid else nid, inv.get("linhas"))
             n += 1; ligadas += 1 if cli else 0
         itens = sincronizar_itens_qbo(con)
         _marca(con, "quickbooks", True, n, f"{n} invoices, {ligadas} ligadas a cliente, {itens} itens do catálogo", inicio)
@@ -632,6 +633,22 @@ def sync_qbo(con, desde_dias=365):
     except Exception as e:
         _marca(con, "quickbooks", False, 0, f"{type(e).__name__}: {str(e)[:300]}", inicio)
         return {"ok": False, "motivo": str(e)[:300]}
+
+
+def _grava_linhas(con, invoice_id, linhas):
+    """Linhas da invoice no espelho, na ordem do QuickBooks. `None` (resposta sem o campo) não
+    mexe em nada; lista vazia é invoice sem linha de item. Linha que sumiu no QuickBooks
+    (invoice editada lá) sai daqui também — o espelho acompanha a fonte."""
+    if linhas is None or not invoice_id:
+        return
+    for i, l in enumerate(linhas):
+        con.execute("""INSERT INTO invoice_lines (invoice_id, line_no, item_id, item_name, description, qty, unit_price, amount)
+                       VALUES (?,?,?,?,?,?,?,?)
+                       ON CONFLICT(invoice_id, line_no) DO UPDATE SET item_id=excluded.item_id, item_name=excluded.item_name,
+                       description=excluded.description, qty=excluded.qty, unit_price=excluded.unit_price, amount=excluded.amount""",
+                    (invoice_id, i, str(l["item_id"]) if l.get("item_id") else None, l.get("item"), l.get("descricao"),
+                     l.get("qtd"), l.get("unitario"), l.get("total")))
+    con.execute("DELETE FROM invoice_lines WHERE invoice_id=? AND line_no>=?", (invoice_id, len(linhas)))
 
 
 def sincronizar_itens_qbo(con):

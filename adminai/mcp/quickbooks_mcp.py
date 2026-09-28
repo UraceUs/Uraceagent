@@ -191,6 +191,7 @@ def _resumo_invoice(inv):
     hoje = dt.date.today().isoformat()
     cr = inv.get("CustomerRef") or {}
     linhas = [{"item": ((l.get("SalesItemLineDetail") or {}).get("ItemRef") or {}).get("name"),
+               "item_id": ((l.get("SalesItemLineDetail") or {}).get("ItemRef") or {}).get("value"),
                "qtd": (l.get("SalesItemLineDetail") or {}).get("Qty"), "unitario": (l.get("SalesItemLineDetail") or {}).get("UnitPrice"),
                "total": l.get("Amount"), "descricao": l.get("Description")}
               for l in inv.get("Line", []) if l.get("DetailType") == "SalesItemLineDetail"]
@@ -277,6 +278,57 @@ def qbo_invoices(status="open", cliente_id=None, desde_dias=365, maximo=100):
 @srv.ferramenta("qbo_invoice", "Uma invoice completa pelo id (txnId).", {"id": {"type": "string"}}, ["id"])
 def qbo_invoice(id):
     return _resumo_invoice(_req(f"/invoice/{id}").get("Invoice", {}))
+
+
+def _normaliza(s):
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", (s or "").lower())).strip()
+
+
+@srv.ferramenta("qbo_historico_precos",
+                "Quanto a URACE JÁ COBROU de cada peça/serviço, invoice por invoice: para cada termo, as linhas de "
+                "invoice cujo item ou descrição contém o termo (data, número, cliente, quantidade, unitário) e o "
+                "resumo (último valor, mais comum, mínimo, máximo). Opcional cliente_id para só aquele cliente. "
+                "É a fonte de preço de peça quando o dono não disse o valor. Só leitura.",
+                {"termos": {"type": "array", "items": {"type": "string"}}, "cliente_id": {"type": "string"},
+                 "desde_dias": {"type": "integer", "default": 730}, "maximo_por_termo": {"type": "integer", "default": 12}},
+                ["termos"])
+def qbo_historico_precos(termos=None, cliente_id=None, desde_dias=730, maximo_por_termo=12, texto=None):
+    if termos is None and texto:
+        termos = [texto]
+    if isinstance(termos, str):
+        termos = [termos]
+    termos = [t for t in (termos or []) if str(t).strip()][:20]
+    if not termos:
+        raise ErroFerramenta("informe pelo menos um termo (nome da peça ou do serviço)")
+    corte = (dt.date.today() - dt.timedelta(days=int(desde_dias or 730))).isoformat()
+    cond = f"TxnDate >= '{corte}'" + (f" and CustomerRef = '{_esc(cliente_id)}'" if cliente_id else "")
+    faturas, inicio = [], 1
+    while len(faturas) < 5000:                      # a API entrega até 1000 por página
+        pag = _query(f"select * from Invoice where {cond} orderby TxnDate desc startposition {inicio} maxresults 1000").get("Invoice", [])
+        faturas += pag
+        if len(pag) < 1000:
+            break
+        inicio += 1000
+    saida = []
+    for termo in termos:
+        alvo = _normaliza(termo)
+        achados = []
+        for inv in faturas:
+            r = _resumo_invoice(inv)
+            for l in r["linhas"]:
+                if alvo and (alvo in _normaliza(l.get("item")) or alvo in _normaliza(l.get("descricao"))):
+                    achados.append({"data": r["emitida_em"], "numero": r["numero"], "cliente": r["cliente"],
+                                    "cliente_id": r["cliente_id"], "item": l.get("item"), "item_id": l.get("item_id"),
+                                    "qtd": l.get("qtd"), "unitario": l.get("unitario"), "descricao": l.get("descricao")})
+        valores = [float(a["unitario"]) for a in achados if a.get("unitario") not in (None, "")]
+        resumo = None
+        if valores:
+            from collections import Counter
+            resumo = {"vezes": len(valores), "ultimo": valores[0], "ultimo_em": achados[0]["data"],
+                      "mais_comum": Counter(valores).most_common(1)[0][0], "minimo": min(valores), "maximo": max(valores)}
+        saida.append({"termo": termo, "found": bool(achados), "resumo": resumo,
+                      "cobrancas": achados[:int(maximo_por_termo or 12)]})
+    return {"desde": corte, "invoices_lidas": len(faturas), "resultado": saida}
 
 
 @srv.ferramenta("qbo_estimates", "Estimates recentes (pré-corrida). Opcional cliente_id.",

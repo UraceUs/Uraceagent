@@ -139,6 +139,16 @@ def _f_resumo(con, **_):
     }
 
 
+def _f_precos_cobrados(con, busca=None, limite=40, **_):
+    from command_center.providers import precos_cobrados as pc
+    lim = max(1, min(int(limite or 40), 200))
+    termos = [busca] if busca else None
+    out = {"tabela": pc.tabela(con, termos, limite=lim)}
+    if busca:
+        out["cobrancas"] = pc.historico(con, termo=busca, limite=lim)
+    return out
+
+
 # ---------------------------------------------------------------- Kommo (CRM)
 # Dono, 25/09: "sim" — o Kommo dentro deste conector. As ferramentas são as de LEITURA do
 # servidor MCP do Kommo (`adminai/mcp/kommo_mcp.py`), chamadas pelo mesmo carregador que o
@@ -220,6 +230,12 @@ FERRAMENTAS = {
         "Rastro de auditoria do painel: quem fez o quê e quando. Append-only por gatilho "
         "no banco — nem um bug apaga.",
         {"limite": {"type": "integer", "description": "padrão 100, teto 500"}}, [], _f_auditoria),
+    "urace_precos_cobrados": (
+        "Quanto a URACE já cobrou de cada peça e serviço, lido das invoices do QuickBooks linha por "
+        "linha: último valor (quando e de quem), mais comum, faixa e quantas vezes. Com busca, também "
+        "a lista de cobranças daquela peça.",
+        {"busca": {"type": "string", "description": "peça ou serviço, ex.: chain 108, fuel mix"},
+         "limite": {"type": "integer", "description": "padrão 40, teto 200"}}, [], _f_precos_cobrados),
     "urace_kommo_conta": (
         "Kommo (CRM comercial): a conta ligada — nome, subdomínio, moeda, quantos funis.",
         {}, [], _f_kommo_conta),

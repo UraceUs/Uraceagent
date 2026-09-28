@@ -9,7 +9,7 @@ HTTP. É só isso que foi acrescentado: `POST /ops/mcp`, com as mesmas ferrament
 
 ## O que ele dá
 
-Quinze ferramentas, **todas de leitura** — nove do painel e seis do Kommo:
+Dezesseis ferramentas, **todas de leitura** — dez do painel e seis do Kommo:
 
 | ferramenta | o que responde |
 |---|---|
@@ -22,6 +22,7 @@ Quinze ferramentas, **todas de leitura** — nove do painel e seis do Kommo:
 | `urace_invoices` | quem deve, quanto, desde quando |
 | `urace_corridas` | calendário da equipe |
 | `urace_auditoria` | quem fez o quê e quando |
+| `urace_precos_cobrados` | quanto já se cobrou de cada peça e serviço (das invoices, linha por linha) |
 | `urace_kommo_conta` | a conta do Kommo ligada (nome, moeda, funis) |
 | `urace_kommo_funis` | funis e etapas, com os ids para filtrar |
 | `urace_kommo_leads` | leads recentes, por funil, etapa ou texto |

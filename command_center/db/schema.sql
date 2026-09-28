@@ -229,6 +229,23 @@ CREATE TABLE IF NOT EXISTS invoices (
   synced_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- Linhas das invoices do QuickBooks (espelho, dono 28/09): o que foi cobrado de cada peça e
+-- serviço, invoice por invoice. É daqui que a IA tira o preço de peça quando o dono não diz.
+-- Reescrito a cada sincronia a partir do QuickBooks (fonte da verdade); nada nasce aqui.
+CREATE TABLE IF NOT EXISTS invoice_lines (
+  id            INTEGER PRIMARY KEY,
+  invoice_id    INTEGER NOT NULL REFERENCES invoices(id),
+  line_no       INTEGER NOT NULL,
+  item_id       TEXT,                     -- id do item no QuickBooks
+  item_name     TEXT,
+  description   TEXT,
+  qty           REAL,
+  unit_price    REAL,
+  amount        REAL,
+  UNIQUE (invoice_id, line_no)
+);
+CREATE INDEX IF NOT EXISTS ix_invoice_lines_item ON invoice_lines(item_id);
+
 -- Lembretes recorrentes de invoice em aberto (dono, 16/09): um por invoice, cadência em dias.
 CREATE TABLE IF NOT EXISTS invoice_reminders (
   id            INTEGER PRIMARY KEY,

@@ -142,7 +142,9 @@ SUFIXO = (
     "Português direto, frases curtas, sem jargão interno: não cite 'trava', 'APLICAR', 'política', ids de template ou nomes de ferramenta no texto. "
     "Se faltar dado, faça as perguntas numa lista curta (só o que realmente impede agir) e pare. "
     "Se der para agir com o que tem, aja e diga o que fez em uma linha. Não explique regras internas, aplique-as. "
-    "Se precisar de preço, leia a Rate Card (planilha) antes de perguntar ao dono."
+    "Se precisar de preço: serviço → Rate Card (planilha); peça → PREÇOS JÁ COBRADOS NO QUICKBOOKS do contexto "
+    "(o último cobrado é a referência). Só pergunte ao dono o preço do que não estiver em nenhum dos dois. "
+    "Para ver o histórico de outra peça, use qbo_historico_precos com os termos."
     "\nAo terminar, liste TODAS as ações que você executaria em produção, "
     "uma por linha, exatamente neste formato e nada mais nessas linhas:\n"
     "ACAO: <nome_da_ferramenta_mcp> | <alvo (pessoa, gid, e-mail)> | <resumo curto> | <JSON com os argumentos EXATOS da ferramenta>\n"
@@ -432,7 +434,8 @@ def command_create(dados: ComandoIn, request: Request, u=Depends(auth.exige("OPE
         raise HTTPException(400, "Command must be between 1 and 4000 characters.")
     from command_center.api import acoes, motor
     prompt = (texto + motor.aprendizados(con) + motor.contexto_da_venda(con, texto)
-              + motor.contexto_do_comando(con, texto, u["id"]) + acoes.estado_do_dia(con, u["id"]))
+              + motor.contexto_do_comando(con, texto, u["id"]) + motor.contexto_de_precos(con, texto, u["id"])
+              + acoes.estado_do_dia(con, u["id"]))
     session_key = f"agent:{AGENTE}:web-{u['id']}-{date.today().isoformat()}"
     cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, prompt=prompt, session_key=session_key)
     auditar(con, "ai.command", f"user:{u['id']}", user_id=u["id"], entity_type="ai_command",

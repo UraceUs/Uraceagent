@@ -386,3 +386,18 @@ A extensão rodou a rodada completa e reportou honestamente, inclusive a própri
 - [ ] 👤 Responder Charles (#33988589) e True X Miami (#33998731) — sem resposta desde 19/09
 - [ ] 👤 Anular o envelope duplicado da Letícia no DocuSign
 - [ ] 👤 Decidir se o Austin precisa de waiver nova
+
+## Preços já cobrados no AI Command (28/09)
+
+O dono montou as invoices do Bryan, do Frankie e do Brody pelo AI Command e a IA travou
+pedindo o valor de cada peça ("não consigo puxar o histórico de faturas"). O valor estava nas
+invoices já enviadas; faltava o painel guardar as **linhas** delas.
+
+- [x] 🤖 Sincronia do QuickBooks guarda cada linha de invoice (`invoice_lines`, com id do item).
+- [x] 🤖 Todo comando que fala de invoice/preço leva a tabela **PREÇOS JÁ COBRADOS NO
+      QUICKBOOKS** (último valor, quando e de quem, mais comum, faixa) das peças da conversa —
+      inclusive as que estavam na pergunta anterior da IA — e o `cliente_id` de cada e-mail.
+- [x] 🤖 Valor já cobrado do mesmo item deixa de sair marcado "confira na Rate Card".
+- [x] 🤖 `qbo_historico_precos` no conector do QuickBooks (a IA consulta outra peça ao vivo)
+      e `urace_precos_cobrados` no conector do claude.ai.
+- [ ] 👤 Rodar o bloco de deploy + reinstalar o Admin AI (registra a consulta nova no agente).
