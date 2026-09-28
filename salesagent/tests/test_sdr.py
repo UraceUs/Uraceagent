@@ -313,6 +313,21 @@ def camada_ponte():
             corpo["leads"] = {"add": [{"id": str(lid), "name": nome} for lid, nome in leads]}
         return corpo
 
+    # O agendador fala sozinho com o lead (follow-up, resgate): só roda em
+    # atender. Em observar e organizar ele nem liga.
+    import asyncio
+    partidas = []
+    start_original = app.scheduler.start
+    app.scheduler.start = lambda *a, **k: partidas.append(app.SDR_MODO)
+    try:
+        for modo in ("observar", "organizar", "atender"):
+            nivel(modo)
+            asyncio.run(app._start_scheduler())
+    finally:
+        app.scheduler.start = start_original
+    check("agendador só liga em atender (observar e organizar não falam com lead)",
+          partidas == ["atender"], str(partidas))
+
     # --- observar
     nivel("observar")
     falso, entregues, _ = preparar()
