@@ -58,6 +58,7 @@ notify_fn = None       # notify_fn(text) -> None  (WhatsApp interno)
 task_fn = None         # task_fn(lead_id, text, due_ts) -> None (tarefa Kommo)
 note_fn = None         # note_fn(lead_id, text) -> None (nota Kommo)
 rescue_fn = None       # rescue_fn(conv) -> bool (entrega a resposta devida ao lead)
+close_fn = None        # close_fn(lead_id) -> None (SDR: card vai para PERDIDO / NÃO QUALIFICADO)
 
 
 def in_business_hours(now_ts: int | None = None) -> bool:
@@ -185,6 +186,16 @@ def _maybe_daily_brain_maintenance(now: int) -> bool:
     return True
 
 
+def _fora_da_janela_24h(conv: dict, now: int) -> bool:
+    salesagent = str(Path(__file__).resolve().parent.parent)
+    if salesagent not in sys.path:
+        sys.path.insert(0, salesagent)
+    from sdr import regras as sdr_regras
+    ultimo_lead = conv.get("last_inbound_at") or 0
+    limite = sdr_regras.JANELA_MENSAGEM_LIVRE_HORAS * 3600 - sdr_regras.JANELA_24H_MARGEM_MINUTOS * 60
+    return bool(ultimo_lead) and now - ultimo_lead >= limite
+
+
 def _fire_followup(conv: dict, now: int) -> None:
     lead_id = conv["lead_id"]
     track = conv["followup_track"]
@@ -193,6 +204,21 @@ def _fire_followup(conv: dict, now: int) -> None:
     # G3 vale aqui também: conversa escalada não recebe follow-up comercial.
     if conv["state"] not in ("AI_ACTIVE", "RESUMED"):
         cancel(lead_id, f"estado {conv['state']} não permite follow-up")
+        return
+
+    # Janela de 24 h da Meta (relatório de 25/09): no WhatsApp, Instagram e
+    # Messenger não há mensagem livre 24 h depois da última mensagem do lead.
+    # O Chase só conversa por esses canais, então toque que cairia fora da
+    # janela não sai: vira tarefa para uma pessoa (modelo aprovado ou ligação)
+    # e a trilha para ali.
+    if _fora_da_janela_24h(conv, now):
+        if task_fn:
+            task_fn(lead_id, "Janela de 24 h da Meta fechada: retomar o lead só com modelo aprovado "
+                             "ou por uma pessoa", now + 3600)
+        if note_fn:
+            note_fn(lead_id, f"[follow-up] {track} #{attempt + 1} não enviado: a última mensagem do lead "
+                             "passou da janela de 24 h da Meta")
+        cancel(lead_id, "janela de 24 h da Meta fechada")
         return
 
     text = compose_fn(lead_id, track, attempt) if compose_fn else ""
@@ -217,6 +243,8 @@ def _fire_followup(conv: dict, now: int) -> None:
     else:  # trilha esgotada
         if track == "initial":
             transition(lead_id, "CLOSED", "trilha initial esgotada sem resposta")
+            if close_fn:
+                close_fn(lead_id)
             if note_fn:
                 note_fn(lead_id, "[follow-up] trilha de classificação esgotada — lead fechado")
         else:  # link_sent: humano decide manter ou fechar

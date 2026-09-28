@@ -24,6 +24,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 BRIDGE = HERE.parent / "bridge"
 os.environ["URACE_DIR"] = tempfile.mkdtemp(prefix="urace-mem-")
+# O Chase respondendo é o nível "atender" do SDR (D-2026-09-25). O padrão
+# agora é "observar", que não responde ninguém — estes testes provam o
+# caminho de quem responde, então fixam o nível.
+os.environ.setdefault("SDR_MODO", "atender")
 sys.path.insert(0, str(BRIDGE))
 
 import app  # noqa: E402
