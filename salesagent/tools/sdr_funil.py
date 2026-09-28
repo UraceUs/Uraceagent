@@ -20,13 +20,17 @@ sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parent / "bridge"))
 
 # Mesmo padrão dos outros scripts (incidente 11 do Chase): se o python do
-# sistema não tem httpx, reexecuta no venv da ponte.
+# sistema não tem httpx, reexecuta no venv da ponte. A trava é a variável de
+# ambiente, não o caminho do executável: o python do venv é um link para o
+# do sistema, e comparar os dois resolvidos dava "iguais" e nunca trocava
+# (T-011, 28/09).
 try:
     import httpx  # noqa: F401
 except ModuleNotFoundError:
-    venv = HERE.parent / "bridge" / ".venv" / "bin" / "python3"
-    if venv.exists() and Path(sys.executable).resolve() != venv.resolve():
-        os.execv(str(venv), [str(venv), *sys.argv])
+    venv = HERE.parent / "bridge" / ".venv" / "bin" / "python"
+    if venv.exists() and not os.environ.get("SDR_FUNIL_REEXEC"):
+        os.environ["SDR_FUNIL_REEXEC"] = "1"
+        os.execv(str(venv), [str(venv), str(Path(__file__).resolve()), *sys.argv[1:]])
     raise
 
 import kommo_client as kommo  # noqa: E402
