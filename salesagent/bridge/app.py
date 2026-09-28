@@ -667,6 +667,14 @@ def rescue_lead(conv: dict) -> bool:
 
 @app.on_event("startup")
 async def _start_scheduler():
+    # Abaixo de "atender" o agendador fica parado. Ele é quem fala sozinho
+    # com o lead (follow-up, resgate da resposta devida), escreve nota e
+    # tarefa no Kommo e manda re-alerta no WhatsApp interno. Ligado em
+    # observar/organizar, ele pegaria as conversas antigas do banco (de antes
+    # da D-2026-08-27) e mandaria mensagem a lead na primeira varredura.
+    if SDR_MODO != "atender":
+        state.log("sdr", None, f"nível {SDR_MODO}: agendador parado (follow-up, resgate e re-alerta desligados)")
+        return
     scheduler.compose_fn = compose_followup
     scheduler.deliver_fn = deliver_followup
     scheduler.notify_fn = notify_human

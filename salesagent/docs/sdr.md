@@ -24,6 +24,11 @@ nada.
 | `organizar` | sim, pelo webhook de conta | sim, em Urace/Comercial (§2) | **não**: gente responde | **dono** |
 | `atender` | sim, pelo Salesbot | sim, em Urace/Comercial (§2) | sim (o Chase completo) | **dono** |
 
+O **agendador** da ponte (follow-up, resgate da resposta devida, re-alerta
+no WhatsApp interno) só liga em `atender`. Em `observar` e `organizar` ele
+fica parado: é ele quem falaria sozinho com o lead, inclusive com as
+conversas antigas que ficaram no banco de antes da D-2026-08-27.
+
 Por que o dono: escrever etapa, tag e resposta no Kommo é ato dele
 (D-2026-09-17), e desde D-2026-08-27 os leads são 100% humanos. `observar` não
 fere nenhuma das duas: não escreve, não fala. É o nível para conferir as

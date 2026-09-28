@@ -66,8 +66,13 @@ em `observar` (decide e só registra; não escreve no Kommo e não fala com
 lead), é decisão dele. **Só rode com o sim dele no seu chat.**
 
 ```bash
-cd /home/ubuntu/Uraceagent; grep '^SDR_MODO=' ~/.urace/bridge.env || echo 'SDR_MODO ausente (o instalador grava observar)'; grep -q '^KOMMO_RESPONSAVEL_ID=' ~/.urace/bridge.env || echo 'KOMMO_RESPONSAVEL_ID=12209643' >> ~/.urace/bridge.env; bash salesagent/deploy/install_bridge_service.sh; grep -E '^(SDR_MODO|KOMMO_RESPONSAVEL_ID)=' ~/.urace/bridge.env; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8800/health
+cd /home/ubuntu/Uraceagent; git pull --ff-only origin claude/configurar-open-claw-ooqo8x; grep -c 'agendador parado' salesagent/bridge/app.py; grep '^SDR_MODO=' ~/.urace/bridge.env || echo 'SDR_MODO ausente (o instalador grava observar)'; grep -q '^KOMMO_RESPONSAVEL_ID=' ~/.urace/bridge.env || echo 'KOMMO_RESPONSAVEL_ID=12209643' >> ~/.urace/bridge.env; bash salesagent/deploy/install_bridge_service.sh; grep -E '^(SDR_MODO|KOMMO_RESPONSAVEL_ID)=' ~/.urace/bridge.env; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8800/health
 ```
+
+O `grep -c 'agendador parado'` tem de responder **1**: é a trava que deixa o
+agendador (follow-up, resgate, re-alerta) desligado fora do nível atender.
+Se responder 0, **pare antes do instalador**: o código novo ainda não chegou
+e a ponte religada mandaria mensagem a lead de conversa antiga.
 
 Tem de sair `SDR_MODO=observar`, `KOMMO_RESPONSAVEL_ID=12209643` (URace
 Support, escolhido pelo dono em 28/09; id de usuário, não é segredo) e `200`.
