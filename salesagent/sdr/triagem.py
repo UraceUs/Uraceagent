@@ -1,8 +1,9 @@
 """Triagem — decide a zona do card: fica na Entrada ou passa para venda.
 
 Regra central: toda mensagem continua chegando pelo canal de origem. O que se
-decide aqui é só onde o card mora no Novo funil e, se não é lead, em que
-etapa da Entrada ele fica.
+decide aqui é só a zona do card — Entrada (funil Urace, página 1) ou
+Comercial (funil Comercial, página 2) — e a etapa. Quem traduz isso em
+movimento, respeitando as REGRAS 1 e 2 da equipe, é o executor.
 
 Entrada:
     evento  {tipo, canal, interno, grupo, qualificacao{...}}

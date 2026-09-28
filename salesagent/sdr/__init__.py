@@ -1,7 +1,8 @@
 """SDR da URACE — o Chase reorganizado pelas diretivas de 25/09/2026.
 
-Pacote puro (sem rede, sem banco): classifica a mensagem, decide a zona do
-card no Novo funil (triagem), decide responder/calar/escalar antes do modelo
+Pacote puro (sem rede, sem banco): classifica a mensagem, decide onde o card
+fica — Urace (página 1) ou Comercial (página 2) — (triagem), decide
+responder/calar/escalar antes do modelo
 (roteador), limpa o que sai para o lead (estilo) e aplica no Kommo conforme o
 nível (executor). A ponte (bridge/sdr_ponte.py) liga isto ao mundo real.
 
@@ -16,7 +17,7 @@ def avaliar(texto, card=None, evento_extra=None, remetente_email=None):
     ev = {"tipo": "mensagem"}
     ev.update(evento_extra or {})
     decisao = triagem.triar(ev, analise, card or {})
-    rota = roteador.rotear(analise, decisao)
+    rota = roteador.rotear(analise, decisao, canal=ev.get("canal"))
     if rota["acao"] == roteador.ESCALAR:
         decisao = triagem.para_atendimento_humano(decisao, card or {})
     return {"analise": analise, "triagem": decisao, "roteamento": rota}

@@ -2,7 +2,7 @@
 tipo: decisao
 tipo_info: DECISION
 data: 2026-09-25
-fonte: pedido no chat do Claude Code, 25/09/2026 (conta urace@urace.us) — "reestruture todo o projeto do chase para que se adeque às novas diretivas para o SDR"
+fonte: pedido no chat do Claude Code, 25/09/2026 (conta urace@urace.us) — "reestruture todo o projeto do chase para que se adeque às novas diretivas para o SDR"; em 28/09/2026, no mesmo chat, o dono mandou levar em conta o relatório do time de vendas ("URACE — Meta e Kommo", 25/09) e escolheu os funis Urace → Comercial
 responsavel: Italo Silveira
 status: ativo
 ---
@@ -21,9 +21,19 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
 
 ## Como ficou
 
-- **Um funil próprio, "Novo funil".** Tem etapas de triagem (recebem tudo) e
-  etapas de venda (só lead). Os funis da equipe não são tocados. A tabela das
-  etapas está em `salesagent/docs/sdr.md`.
+- **Os funis da equipe: Urace → Comercial** (atualizado em 28/09, escolha do
+  dono a partir do relatório do time de vendas). Urace › First Contact recebe
+  tudo; as REGRAS 1 e 2 da equipe sobem o lead para Comercial › ENTRADA. O
+  SDR não cria funil nem etapa: marca `nao_e_lead` no lixo antes da REGRA 1,
+  resgata conversa enterrada em Cold Leads, avisa quando contato antigo de
+  outro funil volta com sinal comercial e, no Comercial, só anda para frente.
+  O "Novo funil" da primeira versão foi abandonado. A tabela "Quem move o
+  quê" está em `salesagent/docs/sdr.md`.
+- **Bots da equipe primeiro.** Onde a equipe já tem bot respondendo
+  (Instagram, Messenger, WhatsApp, chat do site), a ponte não fala; só
+  escala, como tarefa.
+- **Janela de 24 h da Meta.** Follow-up que cairia fora dela não sai: vira
+  tarefa para uma pessoa.
 - **Triagem determinística** (`salesagent/sdr/`): código, e-mail de sistema,
   spam e fornecedor ficam fora da venda, com a tag `nao_e_lead`, que a equipe
   já usava à mão. Preço, agenda, conversão, pedido de pessoa e evento do site
@@ -54,6 +64,8 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
 1. Ligar `organizar`, e depois `atender`.
 2. Horário de atendimento humano. O valor atual é provisório: quarta a
    domingo, 9h–18h. A pista opera 8h–13h.
-3. Qual robô responde no Novo funil: o Salesbot da ponte ou o chat do Command
-   Center. O Kommo não roda dois bots no mesmo lead.
-4. Quem é o responsável único (`KOMMO_RESPONSAVEL_ID`).
+3. Qual robô responde em cada canal. Hoje respondem os bots da equipe; ligar
+   o Chase num canal é tirar o canal de `CANAIS_COM_BOT_DA_EQUIPE` e desligar
+   o bot da equipe ali. O Kommo não roda dois bots no mesmo lead.
+4. Quem é o responsável único (`KOMMO_RESPONSAVEL_ID`). O bot da equipe
+   apresenta o Lucas.

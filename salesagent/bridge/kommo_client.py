@@ -69,7 +69,7 @@ def add_tags(lead_id: int, tags: list[str]) -> None:
 
 
 def move_lead(lead_id: int, pipeline_id: int, status_id: int) -> dict:
-    """Move o card para funil+etapa explícitos (SDR: Novo funil)."""
+    """Move o card para funil+etapa explícitos (SDR: Urace/Comercial)."""
     return update_lead(lead_id, {"pipeline_id": int(pipeline_id), "status_id": int(status_id)})
 
 
@@ -78,13 +78,6 @@ def list_pipelines() -> list[dict]:
         r = c.get(f"{BASE}/leads/pipelines")
         r.raise_for_status()
         return (r.json().get("_embedded") or {}).get("pipelines", [])
-
-
-def create_pipelines(body: list[dict]) -> dict:
-    with _client() as c:
-        r = c.post(f"{BASE}/leads/pipelines", json=body)
-        r.raise_for_status()
-        return r.json()
 
 
 def run_bot(bot_id: str | int, lead_id: int) -> bool:

@@ -51,9 +51,11 @@ Me traga as quatro saídas. O que espero:
 - o `grep` responde **2 ou mais**;
 - as seis suítes terminam em **PASSOU**. Uma que falhar é bloqueio: não
   ajuste nada, traga a saída;
-- o `sdr_funil.py` **sem** `--aplicar` só lê. Ele diz se o "Novo funil" já
-  existe (a extensão do Kommo pode ter criado) e se falta alguma etapa. **Não
-  rode com `--aplicar`**: criar funil no Kommo é do dono.
+- o `sdr_funil.py` só lê (não tem mais `--aplicar`). Ele confere se Urace e
+  Comercial têm as etapas que as regras usam (First Contact, Cold Leads,
+  Follow Up 1, ENTRADA, QUALIFICADO, ATENDIMENTO, PERDIDO / NÃO QUALIFICADO)
+  e deve terminar em **OK**. Se apontar etapa faltando, traga a saída: alguém
+  renomeou e quem corrige é o dono.
 
 ---
 

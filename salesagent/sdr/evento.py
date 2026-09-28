@@ -1,8 +1,10 @@
-"""Webhook de conta do Kommo ("mensagem recebida") -> mensagens do lead.
+"""Webhook de conta do Kommo -> mensagens do lead e leads criados.
 
-O Kommo manda form-urlencoded com colchetes (message[add][0][text]); a ponte
-já desdobra isso em dicionário (_parse_hook_body). Aqui só se extrai o que
-interessa, e só mensagens que o lead mandou (type=incoming).
+O Kommo manda form-urlencoded com colchetes (message[add][0][text],
+leads[add][0][name]); a ponte já desdobra isso em dicionário
+(_parse_hook_body). Aqui só se extrai o que interessa: mensagens que o lead
+mandou (type=incoming) e leads novos (para marcar lixo do Inbox de e-mail
+antes da REGRA 1 da equipe).
 """
 
 
@@ -47,4 +49,14 @@ def mensagens_recebidas(payload):
             "canal": canal_por_origem(m.get("origin")),
             "midia": (anexo.get("type") if isinstance(anexo, dict) else None) or ("anexo" if anexo else None),
         })
+    return saida
+
+
+def leads_criados(payload):
+    leads = (payload or {}).get("leads") or {}
+    saida = []
+    for lead in _itens(leads.get("add")):
+        if not isinstance(lead, dict) or not str(lead.get("id") or "").isdigit():
+            continue
+        saida.append({"id": int(lead["id"]), "nome": lead.get("name") or ""})
     return saida

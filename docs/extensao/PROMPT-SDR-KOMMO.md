@@ -1,30 +1,39 @@
 # Prompt da extensão — ajustar, implementar, verificar e testar o SDR no Kommo
 
 Cole o bloco abaixo na extensão do navegador **logada no Kommo da URACE**. Ela
-faz o lado da tela: inventário, Novo funil, webhook, canal de teste e teste
-ponta a ponta. O lado da VPS (testes offline e religar a ponte em observação)
-está em `tarefas/PARA-A-VPS.md`, T-011.
+faz o lado da tela: inventário, webhook e teste ponta a ponta. O lado da VPS
+(testes offline e religar a ponte em observação) está em
+`tarefas/PARA-A-VPS.md`, T-011.
+
+**Mudou em 28/09:** o SDR trabalha nos funis da equipe, **Urace → Comercial**,
+o desenho do time de vendas (relatório *URACE — Meta e Kommo*, 25/09). O "Novo
+funil" foi abandonado: a extensão **não cria funil, não cria etapa e não mexe
+em canal**. As REGRAS 1 e 2 e o chatbot *URACE - Atendimento inicial DM*, que
+o time já pôs no ar, continuam como estão.
 
 **Pontos que precisam do seu sim, no chat da extensão:**
-- Parte 2: criar o Novo funil.
-- Parte 3: cadastrar o webhook. Você cola a chave; ela não transcreve.
-- Parte 4: apontar um canal para o Novo funil. Isso muda para onde vão as
-  conversas novas daquele canal.
-- Parte 5: só se você decidir ligar o nível `atender`.
+- Parte 2: cadastrar ou completar o webhook. Você cola a chave; ela não
+  transcreve.
+- Parte 4.3: o teste ponta a ponta com mensagens do seu celular.
+- Parte 3: só se você decidir ligar o nível `atender`.
 
-As Partes 1 e 6, de leitura e verificação, ela faz sozinha.
+As Partes 0, 1 e 4 (menos a 4.3), de leitura e verificação, ela faz sozinha.
 
-Referência das regras: `salesagent/docs/sdr.md`.
+Referência das regras: `salesagent/docs/sdr.md`, seção 2 ("Quem move o quê").
 
 ---
 
 ```text
 Você é meu assistente operando no navegador, logado no Kommo da URACE
 (https://urace.kommo.com, conta "Support Urace"). Vamos preparar o Kommo para o
-SDR: um funil próprio, o "Novo funil", onde as etapas de triagem recebem tudo e as
-etapas de venda só recebem lead. Quem decide a etapa de cada conversa é a ponte
-na VPS (https://urace-bridge.duckdns.org). Hoje ela roda em modo OBSERVAR: só
-registra o que faria, não escreve no Kommo e não fala com ninguém.
+SDR. Ele trabalha nos funis que a equipe já usa: Urace (página 1, recebe tudo
+em First Contact) e Comercial (página 2, só lead, a partir de ENTRADA). Quem
+sobe o card de uma página para a outra são as REGRAS 1 e 2 que o time de vendas
+já pôs no ar em Urace > First Contact. O SDR roda na ponte da VPS
+(https://urace-bridge.duckdns.org) e hoje está em modo OBSERVAR: só registra o
+que faria, não escreve no Kommo e não fala com ninguém. Você não cria funil,
+não cria etapa e não muda canal nenhum: seu trabalho é ler, cadastrar o
+webhook (com o meu sim) e testar.
 
 REGRAS DURAS (não negocie com elas):
 - NÃO envie mensagem a nenhum lead ou cliente. NÃO responda chat nenhum.
@@ -55,123 +64,107 @@ PARTE 0 — CONTA
 
 PARTE 1 — INVENTÁRIO (só leitura)
 1.1 Leads: liste TODOS os funis, na ordem, com o número de leads de cada um.
-    Espero 7: Urace, Pós Venda, Contact list, Operacional Vendas, Emails,
-    "Chase — AI Sales Funnel" e Comercial. Já existe um "Novo funil"? Se
-    existir, liste as etapas dele, na ordem e com o nome exato.
-1.2 No funil Comercial, confirme se existem DUAS etapas chamadas "FECHAMENTO".
-    Só reporte, não mexa.
-1.3 Plano da conta (Settings > General/Billing): qual é o plano e quantos
-    funis ele permite? Dá para ter um 8º?
+    Espero: Urace, Pós Venda, Contact list, Operacional Vendas, Emails,
+    "Chase — AI Sales Funnel" e Comercial. Se existir um "Novo funil" (de uma
+    versão anterior deste plano), só reporte: não mexa, não apague.
+1.2 Etapas que o SDR usa, com o nome EXATO como aparece (a ponte acha cada
+    etapa PELO NOME; uma letra diferente e ela deixa de existir para a ponte):
+      Urace:     First Contact, Cold Leads, Follow Up 1
+      Comercial: ENTRADA, QUALIFICADO, ATENDIMENTO, PERDIDO / NÃO QUALIFICADO
+    Confirme cada uma e diga se alguma tem nome diferente. No Comercial,
+    confirme também se há DUAS etapas chamadas "FECHAMENTO" (só reporte).
+1.3 Regras da equipe em Urace > First Contact (Automate / Digital Pipeline).
+    Espero duas:
+      REGRA 1  SE não tem Meta_Ads / Website / Ads Forms / nao_e_lead,
+               +5 min de criado → adiciona a tag DM
+      REGRA 2  SE tem DM / Meta_Ads / Ads Forms / Website,
+               +10 min de criado → move para Comercial > ENTRADA
+    Para cada uma: condições, atraso, ação e se "aplicar a todos os leads já
+    nesta etapa" está desmarcado. Só leia.
 1.4 Salesbots: liste todos os bots, com nome, id (aparece na URL do editor),
-    ativo ou não e em quais funis e etapas têm gatilho (Automate / Digital
-    Pipeline). Procure em especial o bot 162247 ("Salesbot #9", da integração
-    Chase Bridge) e o bot command-center (167973), que o chat do Command Center
-    usa. Diga se há algum gatilho ATIVO nos funis
-    "Chase — AI Sales Funnel" e Urace.
+    ativo ou não, e em quais funis, etapas e canais têm gatilho. Procure em
+    especial: "URACE - Atendimento inicial DM" (Instagram e Messenger, pausa
+    de 5 min), o bot 162247 ("Salesbot #9", da integração Chase Bridge), o bot
+    command-center (167973), "Mensagem Pusher" (KF5) e "[SXS] Qualificar LEADS
+    DO DIRECT". Diga quais gatilhos apontam para "Integração deletada".
 1.5 Web hooks (Settings > Integrations > Web hooks): liste cada um só com
     DOMÍNIO e CAMINHO (corte tudo depois do "?"), mais os eventos marcados.
 1.6 Integrações privadas (Settings > Integrations): liste os nomes. Não abra
     "Keys and scopes" e não gere token.
 1.7 Fontes de lead: para cada canal (WhatsApp, Instagram, Facebook/Messenger,
-    chat do site, e-mail, formulários), em qual funil nasce o lead novo hoje?
-    Isso fica nas configurações de cada funil ("Lead sources") e nas dos
-    canais. Anote exatamente, porque é o que permite voltar atrás na Parte 4.
-1.8 Tags: existem "nao_e_lead" e "opt_out"? Quantos leads têm cada uma?
+    chat do site, e-mail, formulários), em qual funil e etapa nasce o lead
+    novo hoje? Espero Urace > First Contact. Só anote.
+1.8 Tags: quantos leads têm cada uma destas? nao_e_lead, opt_out, DM,
+    Meta_Ads, Website, Ads Forms, Quer atendimento, Quer call.
+1.9 Usuários (Settings > Users): liste nome e id de cada usuário (o id aparece
+    na URL do perfil). Em especial o do Lucas: é o candidato a responsável
+    único que recebe as tarefas do SDR. Id de usuário não é segredo.
 
-PARTE 2 — [DONO] CRIAR O NOVO FUNIL
-Só se na 1.1 ele NÃO existir, e só com o meu sim.
-2.1 Crie um funil com o nome exato:  Novo funil
-    - NÃO marque como funil principal.
-    - DESLIGUE a etapa "Incoming leads" (unsorted). Conversa nova tem de cair
-      direto na primeira etapa.
-    - Nenhuma fonte de lead por enquanto: isso é a Parte 4.
-2.2 Etapas, NESTA ordem e com o nome EXATO (copie e cole, com acento e
-    parênteses):
-      1. Triagem
-      2. Aguardando contexto
-      3. Lead novo
-      4. Em qualificação (robô)
-      5. Atendimento humano
-      6. Reserva Etapa 1 (Pit ID)
-      7. Briefing Etapa 2
-      8. Sem sinal comercial
-      9. Automáticos (e-mails e códigos)
-      10. Ruído (spam e fornecedores)
-    Ganho e Perdido são os fechamentos que o Kommo já cria: não crie etapa com
-    esses nomes. A ponte acha cada etapa PELO NOME; uma letra diferente e
-    aquela etapa deixa de existir para ela.
-2.3 Antes de salvar, me mostre a lista e espere o meu sim.
-2.4 Depois de salvar, releia o funil e copie os 10 nomes como aparecem.
-    Confira um a um contra a lista da 2.2. PASSOU só se forem idênticos, na
-    ordem, e sem "Incoming leads".
-
-PARTE 3 — [DONO] WEBHOOK DE CONTA PARA A PONTE
-É por ele que a ponte vê as mensagens no modo observar, sem bot nenhum.
-3.1 Primeiro abra https://urace-bridge.duckdns.org/health. Tem de mostrar
+PARTE 2 — [DONO] WEBHOOK DE CONTA PARA A PONTE
+É por ele que a ponte vê as mensagens e os leads novos no modo observar, sem
+bot nenhum.
+2.1 Primeiro abra https://urace-bridge.duckdns.org/health. Tem de mostrar
     {"ok": true, ...}. Se não mostrar, a ponte ainda não foi religada (tarefa
-    T-011 da VPS, que depende de mim): PULE a Parte 3 e diga isso.
-3.2 Já existe um web hook para urace-bridge.duckdns.org/ops/api/crm/webhook:
-    é do Command Center. NÃO mexa nele. O novo é um SEGUNDO web hook, para
-    outro serviço (a ponte do SDR): cada um recebe a sua cópia e não há
-    duplicação dentro de nenhum dos dois.
+    T-011 da VPS, que depende de mim): PULE a Parte 2 e diga isso.
+2.2 Já existe um web hook para urace-bridge.duckdns.org/ops/api/crm/webhook:
+    é do Command Center. NÃO mexa nele. O do SDR é outro, para
+    urace-bridge.duckdns.org/kommo/eventos. Se na 1.5 ele já existir, vá para
+    a 2.4.
     Settings > Integrations > Web hooks > Add. URL:
       https://urace-bridge.duckdns.org/kommo/eventos?key=
     PARE aqui e me peça para colar a chave depois do "key=". Eu colo; você não
     lê em voz alta nem repete.
-3.3 Evento: SÓ o de mensagem recebida, o mesmo que aparece como "add_message"
-    no web hook do Command Center. Nenhum outro. Me diga o nome exato que
-    você marcou.
-3.4 Salve e confirme que aparece na lista. No relatório, descreva só domínio
-    e caminho.
+2.3 Eventos: SÓ estes dois, nenhum outro:
+      - mensagem recebida (aparece como "add_message" no web hook do Command
+        Center);
+      - lead adicionado ("add_lead"): é o que deixa a ponte marcar nao_e_lead
+        no lixo do Inbox de e-mail antes dos 5 min da REGRA 1.
+    Me diga o nome exato de cada evento que você marcou.
+2.4 Se o web hook do SDR já existia só com mensagem recebida, [DONO]: com o
+    meu sim, acrescente "lead adicionado" nele. Não troque a URL.
+2.5 Salve e confirme que aparece na lista. No relatório, descreva só domínio,
+    caminho e eventos.
 
-PARTE 4 — [DONO] UM CANAL DE TESTE NO NOVO FUNIL
-Isso muda para onde vão as conversas NOVAS daquele canal. Comece por um só,
-o que eu escolher.
-4.1 Pergunte qual canal. Antes de mudar, repita como está hoje (da 1.7), para
-    podermos voltar. Lembre ao dono o custo: hoje WhatsApp "Urace" e o chat do
-    site nascem no Urace, etapa First Contact, onde rodam o bot command-center,
-    o Website bot, a tag Website e o AI agent. Conversa nova do canal que for
-    para o Novo funil deixa de passar por essas automações. Ele responde pelo
-    chat do Kommo ou do Command Center, que continua vendo tudo pelo web hook.
-4.2 Aponte esse canal para o Novo funil, primeira etapa (Triagem). Não mexa
-    em nenhum outro canal.
-4.3 Releia a configuração e confirme.
+PARTE 3 — SALESBOT (não fazer, a menos que eu diga "ligar atender")
+3.1 NÃO ligue, desligue nem edite bot nenhum. Nos níveis observar e organizar
+    a ponte não responde lead: quem responde são os bots da equipe e gente.
+3.2 Só se eu disser, com estas palavras, "ligar atender" E disser o canal:
+    antes de tudo, me mostre qual bot da equipe responde naquele canal hoje
+    (da 1.4). O Kommo não roda dois bots no mesmo lead, e a ponte não fala em
+    canal onde o bot da equipe responde. Não faça mais nada nesta parte sem
+    um novo sim meu para cada passo.
 
-PARTE 5 — SALESBOT (não fazer, a menos que eu diga "ligar atender")
-5.1 NÃO ligue bot nenhum no Novo funil. No nível observar e no organizar, a
-    ponte não responde lead; quem responde é gente.
-5.2 Só se eu disser, com estas palavras, "ligar atender": coloque no Novo
-    funil, nas etapas 1 a 5, o gatilho "qualquer conversa nova" apontando para
-    o bot 162247 ("Salesbot #9"), igual ao que existe no funil do Chase. Antes,
-    confirme comigo que o bot do chat do Command Center NÃO tem gatilho nesses
-    mesmos leads: o Kommo não roda dois bots no mesmo lead.
-
-PARTE 6 — TESTES (verificação; o que for [DONO] está marcado)
-6.1 Estrutura: releia o Novo funil e repita a checagem da 2.4.
-6.2 Funis da equipe intactos: repita a 1.1 e a 1.4 e compare. Se algo mudou
-    fora do Novo funil, diga o que foi.
-6.3 [DONO] Ponta a ponta. Peça para eu mandar, do meu celular, para o canal da
-    Parte 4, três mensagens com um minuto entre elas:
+PARTE 4 — TESTES (verificação; o que for [DONO] está marcado)
+4.1 Estrutura: repita a 1.2. PASSOU só se os sete nomes existirem exatamente.
+4.2 Nada mudou fora do webhook: repita a 1.1, 1.3 e 1.4 e compare. Se algo
+    mudou, diga o que foi.
+4.3 [DONO] Ponta a ponta. Peça para eu mandar, do meu celular, por DM no
+    Instagram da URACE, três mensagens com um minuto entre elas:
       a) "oi"
-      b) "quanto custa o 1-Day?"
+      b) "how much is a single day on track?"
       c) "713157 is your code to log in to Kommo"
     Depois confira no Kommo:
-      - nasceu um lead no Novo funil, etapa Triagem?
-      - em modo observar, ele NÃO muda de etapa, NÃO ganha tag e ninguém
-        responde sozinho. Se mudar, tiver tag ou alguém responder, FALHOU:
-        quero saber o quê e quando.
+      - nasceu (ou já existia) um lead em Urace > First Contact?
+      - o chatbot da equipe e as REGRAS 1 e 2 agiram como sempre (menu depois
+        de 5 min, tag DM em +5 min, Comercial > ENTRADA em +10 min)? Isso é o
+        esperado e NÃO é falha.
+      - em modo observar a ponte não escreve nada: nenhuma tag sdr:*, nenhuma
+        nota "[SDR]", nenhuma tarefa "SDR:". Se aparecer, FALHOU: quero saber
+        o quê e quando.
     A decisão que a ponte teria tomado aparece no log da VPS, não no Kommo.
-    Espero: a) Aguardando contexto, b) Em qualificação (robô),
-    c) Automáticos (e-mails e códigos). Quem confere isso é a extensão da VPS,
-    com `python3 salesagent/tools/show_recent_audit.py --kind sdr -n 10`.
-6.4 Web hook: na tela de web hooks, o Kommo mostra erro ou entrega com falha
+    Espero: a) fica em First Contact, sem tag; b) "segurado:
+    REGRA_2_DA_EQUIPE" (quem sobe é a REGRA 2, não a ponte); c) tags
+    nao_e_lead e sdr:automatico. Quem confere é a extensão da VPS, com
+    `python3 salesagent/tools/show_recent_audit.py --kind sdr -n 10`.
+4.4 Web hook: na tela de web hooks, o Kommo mostra erro ou entrega com falha
     para a URL da ponte? Reporte.
-6.5 Limpeza: liste tudo que você criou com "[TESTE]". NÃO apague; eu decido.
+4.5 Limpeza: liste tudo que você criou com "[TESTE]". NÃO apague; eu decido.
 
 RELATÓRIO FINAL (neste formato, sempre):
-A. Inventário: tabela da Parte 1 (funis, bots e gatilhos, web hooks sem a
-   chave, fontes por canal, plano e limite, tags).
-B. Itens: para cada item de 0.1 a 6.5, uma linha com PASSOU, FALHOU ou PULADO,
+A. Inventário: tabela da Parte 1 (funis, etapas usadas pelo SDR, regras 1 e
+   2, bots e gatilhos, web hooks sem a chave, fontes por canal, tags,
+   usuários e ids).
+B. Itens: para cada item de 0.1 a 4.5, uma linha com PASSOU, FALHOU ou PULADO,
    o motivo e a evidência.
 C. O que mudou no Kommo: cada mudança, onde, e como desfazer.
 D. Precisa do dono: o que ficou esperando o meu sim ou uma decisão minha.

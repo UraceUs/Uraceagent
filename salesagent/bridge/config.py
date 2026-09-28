@@ -99,7 +99,8 @@ DB_PATH = URACE_DIR / "salesbridge.db"
 # SDR (D-2026-09-25): o Chase reorganizado como SDR, em três níveis.
 #   "observar"  (padrão) decide e registra no log; não escreve no Kommo e a
 #               ponte não responde ao lead (D-08-27: leads 100% humanos);
-#   "organizar" move etapa/tag/nota/tarefa no Novo funil; não responde;
+#   "organizar" tag/nota/tarefa e movimento em Urace/Comercial (os funis da
+#               equipe, sempre para frente); não responde;
 #   "atender"   organiza e responde (o Chase completo, com as diretivas SDR).
 # Subir de "observar" é palavra do dono (D-09-17: etapa, tag e resposta no
 # Kommo são dele). A variável de ambiente vence o arquivo (testes).

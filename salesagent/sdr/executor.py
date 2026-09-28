@@ -39,11 +39,15 @@ def texto_da_nota(decisao, roteamento=None):
     return "\n".join(linhas)
 
 
-def aplicar(api, lead, decisao, mapa, modo, roteamento=None, responsavel_id=None, agora=None):
+def aplicar(api, lead, decisao, mapa, modo, roteamento=None, responsavel_id=None, agora=None,
+            segurar_na_entrada=False):
     """Aplica a decisão num lead. `api` precisa de move/add_tags/add_note/add_task.
 
     Devolve o que foi (ou seria, em observar) feito — vai para o log de
     auditoria nos dois casos, que é o que permite conferir antes de ligar.
+
+    `segurar_na_entrada`: card em Urace > First Contact não sobe pelo SDR —
+    quem sobe é a REGRA 2 da equipe; subir antes pularia a tag DM da REGRA 1.
     """
     agora = agora or time.time()
     gravar = escreve(modo)
@@ -51,20 +55,40 @@ def aplicar(api, lead, decisao, mapa, modo, roteamento=None, responsavel_id=None
              "motivo": decisao["motivo"], "moveu": None, "tags": [], "nota": False,
              "tarefa": None, "aviso": None}
 
+    pipeline_atual = int(lead.get("pipeline_id") or 0)
+    status_atual = int(lead.get("status_id") or 0)
+    sai_da_entrada = pipeline_atual == (mapa.pipeline_id(regras.ENTRADA) or -1)
     destino = decisao.get("destino") or {}
     if destino.get("mover") and destino.get("etapa"):
-        status = mapa.status_id(destino["etapa"])
+        pipeline, status = mapa.status_id(destino["etapa"], destino.get("zona"))
+        muda = bool(status) and (status_atual != status or pipeline_atual != pipeline)
+        # Dentro do mesmo funil o SDR só anda para frente: etapa anterior é
+        # trabalho do vendedor desfeito.
+        ordem_atual, ordem_destino = mapa.ordem(pipeline_atual, status_atual), mapa.ordem(pipeline, status)
+        volta = (muda and pipeline == pipeline_atual and ordem_atual is not None
+                 and ordem_destino is not None and ordem_destino < ordem_atual)
         if not status:
-            feito["aviso"] = f"etapa não encontrada no Novo funil: {destino['etapa']}"
-        elif int(lead.get("status_id") or 0) != status:
+            feito["aviso"] = f"etapa não encontrada no Kommo: {destino.get('zona')} / {destino['etapa']}"
+        elif muda and segurar_na_entrada and destino.get("zona") == regras.COMERCIAL:
+            feito["segurado"] = "REGRA_2_DA_EQUIPE"
+        elif volta:
+            feito["nao_voltou"] = {"de": mapa.localizar(pipeline_atual, status_atual)["etapa"],
+                                   "para": destino["etapa"]}
+        elif muda:
             feito["moveu"] = destino["etapa"]
             if gravar:
-                api.move(lead["id"], mapa.pipeline_id, status)
+                api.move(lead["id"], pipeline, status)
 
     existentes = {t.get("name") for t in (lead.get("_embedded") or {}).get("tags", [])}
     novas = [t for t in dict.fromkeys(decisao.get("tags") or []) if t not in existentes]
     if roteamento and roteamento.get("acao") == "escalar":
         novas += [t for t in ("sdr:handoff", f"handoff:{roteamento['motivo'].lower()}") if t not in existentes]
+    # Card que sobe da página 1 sem passar pela REGRA 1 recebe a tag de origem
+    # que ela daria (DM), para os relatórios da equipe continuarem batendo.
+    if sai_da_entrada and feito["moveu"] and destino.get("zona") == regras.COMERCIAL:
+        origem = mapa.tag_de_origem_faltando(existentes | set(novas))
+        if origem:
+            novas.append(origem)
     if novas:
         feito["tags"] = novas
         if gravar:
@@ -72,7 +96,7 @@ def aplicar(api, lead, decisao, mapa, modo, roteamento=None, responsavel_id=None
 
     # Nota só quando o card entra em venda ou vai para uma pessoa: o que fica
     # na triagem não polui o histórico.
-    entrou = decisao["acao"] in (regras.CRIAR, regras.PROMOVER, regras.REABRIR)
+    entrou = decisao["acao"] in (regras.CRIAR, regras.PROMOVER, regras.REABRIR) and not feito.get("segurado")
     escalou = bool(roteamento and roteamento.get("acao") == "escalar")
     if entrou or escalou:
         feito["nota"] = True

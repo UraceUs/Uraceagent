@@ -27,8 +27,9 @@ todo campo de texto.
 **25/09/2026:** o código do Chase foi reorganizado como **SDR do Kommo**
 ([`salesagent/docs/sdr.md`](salesagent/docs/sdr.md),
 [D-2026-09-25](brain/08_DECISOES/D-2026-09-25%20-%20Chase%20reorganizado%20como%20SDR.md)).
-Ele separa lead de não-lead num funil próprio ("Novo funil"), organiza o card e
-escala com prioridade para o responsável único. Tem três níveis (`SDR_MODO`):
+Ele separa lead de não-lead nos funis da equipe (Urace → Comercial, o desenho
+do time de vendas), organiza o card e escala com prioridade para o responsável
+único. Tem três níveis (`SDR_MODO`):
 `observar` é o padrão e só decide e registra; `organizar` e `atender` dependem
 do dono. Configuração no Kommo pela extensão:
 [`docs/extensao/PROMPT-SDR-KOMMO.md`](docs/extensao/PROMPT-SDR-KOMMO.md).
@@ -90,7 +91,7 @@ Página visual completa: peça o artifact "Arquitetura do Chase", ou veja
 ```
 salesagent/     O agente de vendas (Chase), reorganizado como SDR em 25/09
   sdr/            Diretivas do SDR: classificador, triagem, roteador, estilo,
-                  Novo funil e executor (puro, testado offline)
+                  funis Urace/Comercial e executor (puro, testado offline)
   bridge/         A ponte (FastAPI): app, gates, state, directives,
                   textproc, scheduler, brain_kb, kommo_client
   instructions/   Instruções canônicas do Chase (sincronizadas pro OpenClaw)

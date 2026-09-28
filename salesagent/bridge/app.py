@@ -216,7 +216,8 @@ async def kommo_eventos(request: Request, background: BackgroundTasks,
     """Webhook de CONTA do Kommo (mensagem recebida) — os olhos do SDR.
 
     Nos níveis observar e organizar a ponte não conversa com ninguém: é por
-    aqui que ela vê cada mensagem e decide a etapa do card no Novo funil.
+    aqui que ela vê cada mensagem (e cada lead criado) e organiza o card em
+    Urace/Comercial.
     No nível atender quem trata a mensagem é o /kommo/hook (Salesbot), e
     este endpoint só confirma o recebimento, para não triar duas vezes.
     ACK imediato: o Kommo desliga webhook que demora."""
@@ -810,7 +811,7 @@ def escalate(lead_id: int, reason: str, context: str = "", prioridade: str = "al
     kommo_tags_seguras(lead_id, ["escalated"])
     _kommo_seguro(lead_id, "nota de escalação", kommo.add_note, lead_id, f"[escalação] {reason}")
     if SDR_MODO in ("organizar", "atender"):
-        sdr_ponte.mover_para(lead_id, "Atendimento humano", reason)
+        sdr_ponte.mover_para(lead_id, sdr_ponte.regras.ETAPAS_COMERCIAL["HUMANO"], reason)
     conv = state.get_conversation(lead_id)
     nome = conv.get("contact_name") or "sem nome no Kommo"
     if context.strip():

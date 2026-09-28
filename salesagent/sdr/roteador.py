@@ -32,9 +32,22 @@ def _escalar(motivo):
     }
 
 
-def rotear(analise, triagem):
+def rotear(analise, triagem, canal=None):
     """Decisão antes do modelo. A ordem importa: o que não é lead sai
-    primeiro; entre as escalações, a mais grave vence."""
+    primeiro; entre as escalações, a mais grave vence.
+
+    Canal com bot da equipe (regras.CANAIS_COM_BOT_DA_EQUIPE): quem conversa
+    é o bot de lá. A ponte não responde nada; só as escalações continuam,
+    marcadas `sem_resposta`, para virar tarefa de uma pessoa."""
+    rota = _rotear(analise, triagem)
+    if canal in regras.CANAIS_COM_BOT_DA_EQUIPE:
+        if rota["acao"] == ESCALAR:
+            return dict(rota, sem_resposta=True)
+        return {"acao": SILENCIAR, "motivo": "BOT_DA_EQUIPE_NO_CANAL", "motivo_original": rota["motivo"]}
+    return rota
+
+
+def _rotear(analise, triagem):
     if triagem["acao"] == regras.IGNORAR:
         return {"acao": SILENCIAR, "motivo": triagem["motivo"]}
     if analise["automatico"]:

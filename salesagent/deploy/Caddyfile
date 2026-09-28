@@ -30,7 +30,7 @@ urace-bridge.duckdns.org {
 	# lista cadastrada, e na duvida pergunta em vez de agir.
 	#
 	# /kommo/eventos entrou em 25/09 (SDR): e o webhook de CONTA do Kommo
-	# (mensagem recebida), pelo qual a ponte ve as conversas nos niveis
+	# (mensagem recebida e lead criado), pelo qual a ponte ve as conversas nos niveis
 	# observar e organizar sem Salesbot nenhum. Exige ?key= (AGENT_API_KEY).
 	#
 	# ATENCAO: no VPS o /etc/caddy/Caddyfile tambem tem os handles do

@@ -3,7 +3,8 @@
 O Chase volta como SDR (D-2026-09-25). Estas são as regras que decidem, para
 cada mensagem que chega no Kommo:
 
-  1. se ela é lead ou não (e em que etapa do Novo funil o card fica);
+  1. se ela é lead ou não (e onde o card fica: Urace, a página 1, ou
+     Comercial, a página 2);
   2. se o robô responde, cala ou chama uma pessoa — antes do modelo.
 
 Mudar política de atendimento = mudar este arquivo. A lógica (classificador,
@@ -13,63 +14,83 @@ salesagent/tests/test_sdr.py travam o comportamento.
 Texto dos termos: minúsculo e sem acento (o classificador normaliza antes).
 """
 
-VERSAO = "2.0.0"
+VERSAO = "3.0.0"
 
 # ---------------------------------------------------------------- canais
-# Todos os canais continuam recebendo normalmente. Esta lista só diz onde o
+# Todos os canais continuam recebendo normalmente. As listas só dizem onde o
 # robô pode responder sozinho.
 CANAIS_CONHECIDOS = ["whatsapp", "instagram", "messenger", "telegram", "site", "email", "telefone"]
-CANAIS_COM_ROBO = ["whatsapp", "instagram", "messenger", "telegram", "site"]
+
+# Canais onde a equipe já tem bot respondendo (relatório Meta e Kommo de
+# 25/09/2026): "URACE - Atendimento inicial DM" no Instagram e no Messenger;
+# WhatsApp e chat do site com bot próprio. Um segundo robô ali responderia em
+# dobro ao mesmo lead: o SDR só organiza e chama gente. Tirar um canal daqui
+# é decisão do dono, junto com desligar o bot da equipe naquele canal.
+CANAIS_COM_BOT_DA_EQUIPE = ["instagram", "messenger", "whatsapp", "site"]
+CANAIS_COM_ROBO = [c for c in ["whatsapp", "instagram", "messenger", "telegram", "site"]
+                   if c not in CANAIS_COM_BOT_DA_EQUIPE]
+
+# Janela de 24 h da Meta: 24 h depois da última mensagem do lead não existe
+# mensagem livre no Instagram, no Messenger nem no WhatsApp (só modelo
+# aprovado). Follow-up automático só vale dentro dela.
+CANAIS_JANELA_24H = ["whatsapp", "instagram", "messenger"]
+JANELA_MENSAGEM_LIVRE_HORAS = 24
 
 # ---------------------------------------------------------------- zonas
-# Um funil só no Kommo ("Novo funil"), com duas zonas:
-#   ENTRADA   triagem: recebe tudo; nada aqui é trabalho de quem vende;
-#   COMERCIAL venda: só entra o que é lead, por regra.
+# Duas páginas no Kommo, que já são da equipe (desenho do time de vendas,
+# relatório de 25/09/2026):
+#   ENTRADA   = funil Urace. Recebe tudo na etapa First Contact.
+#   COMERCIAL = funil Comercial. Só lead, a partir de ENTRADA.
+# Quem sobe o card novo de uma página para a outra são as regras do próprio
+# Kommo, já no ar em Urace > First Contact:
+#   REGRA 1  sem Meta_Ads / Website / Ads Forms / nao_e_lead, +5 min: tag DM
+#   REGRA 2  com DM / Meta_Ads / Ads Forms / Website, +10 min: Comercial > ENTRADA
+# O SDR complementa, não duplica: marca nao_e_lead no lixo antes dos 5 min
+# (para a REGRA 1 não carimbar DM nele), resgata conversa antiga que volta
+# com sinal comercial e cuida do card depois que ele chegou ao Comercial.
 ENTRADA = "Entrada"
 COMERCIAL = "Comercial"
 
+FUNIS = {ENTRADA: "Urace", COMERCIAL: "Comercial"}
+
+# Na página 1 o card fica onde a REGRA 1/2 espera por ele: First Contact. O
+# que separa lixo de lead ali é a tag nao_e_lead, não a etapa.
 ETAPAS_ENTRADA = {
-    "TRIAGEM": "Triagem",
-    "AGUARDANDO_CONTEXTO": "Aguardando contexto",
-    "SEM_SINAL": "Sem sinal comercial",
-    "AUTOMATICO": "Automáticos (e-mails e códigos)",
-    "RUIDO": "Ruído (spam e fornecedores)",
+    "TRIAGEM": "First Contact",
+    "AGUARDANDO_CONTEXTO": "First Contact",
+    "SEM_SINAL": "First Contact",
+    "AUTOMATICO": "First Contact",
+    "RUIDO": "First Contact",
     "NAO_CONTATAR": "PERDIDO",  # fechamento nativo 143 + tag opt_out
 }
 
+# Página 2. Depois de ENTRADA quem move é o vendedor; o SDR só avança
+# (nunca devolve card para etapa anterior).
 ETAPAS_COMERCIAL = {
-    "NOVO": "Lead novo",
-    "QUALIFICANDO": "Em qualificação (robô)",
-    "HUMANO": "Atendimento humano",
-    "ETAPA1": "Reserva Etapa 1 (Pit ID)",
-    "ETAPA2": "Briefing Etapa 2",
+    "NOVO": "ENTRADA",
+    "QUALIFICANDO": "ENTRADA",
+    "HUMANO": "ATENDIMENTO",
+    "ETAPA1": "QUALIFICADO",
+    "ETAPA2": "QUALIFICADO",
     "CONFIRMADA": "GANHO",  # fechamento nativo 142
-    "PERDIDO": "PERDIDO",   # fechamento nativo 143
+    "PERDIDO": "PERDIDO / NÃO QUALIFICADO",
 }
 
+# Etapas da página 1 onde conversa antiga fica enterrada (107 DMs em 60 dias
+# foram parar em Cold Leads). Mensagem nova com sinal comercial num card
+# daqui sobe para Comercial > ENTRADA. Nas demais etapas da Urace (Hot Leads,
+# Closing the sale...) a equipe está trabalhando: o SDR não mexe.
+ETAPAS_RESGATE = ["Cold Leads", "Follow Up 1"]
+
 # ---------------------------------------------------------------- Kommo
-# Tudo roda num funil próprio, criado pelo setup. Os funis da equipe (Urace,
-# Comercial, Contact list, Emails, Pós Venda, Operacional Vendas e o antigo
-# "Chase — AI Sales Funnel") não são tocados.
-NOVO_FUNIL = "Novo funil"
+# O SDR não cria funil nem etapa: tudo aponta para etapas que a equipe usa.
 STATUS_GANHO = 142
 STATUS_PERDIDO = 143
 
-# Ordem das etapas no funil: o caminho do lead primeiro; o que não é lead no
-# fim, fora da vista de quem vende. Sem "Incoming leads": conversa nova cai
-# direto em Triagem, onde a ponte consegue movê-la.
-ORDEM_ETAPAS = [
-    ETAPAS_ENTRADA["TRIAGEM"],
-    ETAPAS_ENTRADA["AGUARDANDO_CONTEXTO"],
-    ETAPAS_COMERCIAL["NOVO"],
-    ETAPAS_COMERCIAL["QUALIFICANDO"],
-    ETAPAS_COMERCIAL["HUMANO"],
-    ETAPAS_COMERCIAL["ETAPA1"],
-    ETAPAS_COMERCIAL["ETAPA2"],
-    ETAPAS_ENTRADA["SEM_SINAL"],
-    ETAPAS_ENTRADA["AUTOMATICO"],
-    ETAPAS_ENTRADA["RUIDO"],
-]
+# Tags de origem que a REGRA 1 da equipe usa. Card que o SDR sobe para o
+# Comercial sem nenhuma delas ganha DM, como a REGRA 1 faria.
+TAGS_DE_ORIGEM = ["DM", "Meta_Ads", "Website", "Ads Forms"]
+TAG_SEM_ORIGEM = "DM"
 
 # Convenções de tag que a equipe já usa no Kommo.
 TAGS_POR_MOTIVO = {
@@ -77,6 +98,7 @@ TAGS_POR_MOTIVO = {
     "SPAM_OU_OFERTA": ["nao_e_lead"],
     "CONTATO_INTERNO": ["nao_e_lead"],
     "OPT_OUT": ["opt_out"],
+    "PEDIDO_HUMANO": ["Quer atendimento"],
 }
 TAG_ROBO_SILENCIADO = "sdr:bot-silenciado"
 
@@ -221,6 +243,10 @@ PALAVRAS = {
         # Vistos no Kommo da URACE marcados à mão como nao_e_lead.
         "is your code", "your code to log in", "verify a new device", "senha de acesso foi alterada",
         "sua senha foi alterada", "periodo de avaliacao expirou", "validacao de email",
+        # Cards do Inbox de e-mail listados no relatório de 25/09 (37 em 60
+        # dias, nenhum era lead).
+        "seu codigo para", "codigo para fazer login", "alerta de seguranca", "security alert",
+        "personal access token", "reconnect your", "new notifications", "new seller message",
     ],
     "opt_out": [
         "nao quero mais receber", "nao quero mais mensagem", "pare de mandar", "parem de mandar",
@@ -315,6 +341,12 @@ NUNCA_DIZER = [
 # ---------------------------------------------------------------- cadência
 # Trilha 1 (C11 do Chase): +2h, +1 dia, +3 dias, +7 dias, fecha como perdido.
 FOLLOW_UP_MINUTOS = [120, 1440, 4320, 10080]
+# Nos canais da Meta a trilha cabe inteira na janela de 24 h contada da
+# última mensagem do lead: +2 h e mais +20 h (22 h no total), e para.
+FOLLOW_UP_MINUTOS_JANELA_24H = [120, 1200]
+# Margem da ponte: toque de follow-up com a última mensagem do lead mais
+# velha que isto não sai; vira tarefa para uma pessoa.
+JANELA_24H_MARGEM_MINUTOS = 60
 MAX_REALERTAS = 4
 SLA_MINUTOS = {"alta": 5, "media": 15}
 

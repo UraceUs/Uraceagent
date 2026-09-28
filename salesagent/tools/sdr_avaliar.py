@@ -9,6 +9,7 @@ Uso:
     python3 salesagent/tools/sdr_avaliar.py "Quanto custa o 1-Day?"
     python3 salesagent/tools/sdr_avaliar.py --zona Comercial "quero falar com alguém"
     python3 salesagent/tools/sdr_avaliar.py --email mfa@kommo.com "713157 is your code"
+    python3 salesagent/tools/sdr_avaliar.py --canal instagram "how much is a day?"
     python3 salesagent/tools/sdr_avaliar.py --tabela      # a bateria de exemplos
 """
 import argparse
@@ -24,12 +25,14 @@ EXEMPLOS = [
     "Nossa empresa oferece tráfego pago", "Pare de mandar mensagem", "Lets do it, when can he start?",
     "He currently races in SKUSA", "Tem desconto?", "Obrigado!", "Onde fica a pista?",
     "Quero falar com alguém", "Evento da empresa para 12 pessoas",
+    # Cards do Inbox de e-mail do relatório de 25/09.
+    "Seu código para fazer login é 343929", "URace Support, you have 23 new notifications",
 ]
 
 
-def linha(texto, zona, email):
+def linha(texto, zona, email, canal):
     card = {"existe": True, "zona": zona} if zona else {}
-    r = sdr.avaliar(texto, card=card, remetente_email=email)
+    r = sdr.avaliar(texto, card=card, remetente_email=email, evento_extra={"canal": canal} if canal else None)
     t, ro = r["triagem"], r["roteamento"]
     etapa = t["destino"]["etapa"] if t["destino"]["mover"] else "(não mexe)"
     extra = f" [{ro['prioridade']}]" if ro.get("prioridade") else ""
@@ -40,14 +43,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("texto", nargs="*")
     ap.add_argument("--zona", choices=["Entrada", "Comercial"], default="Entrada",
-                    help="onde o card está hoje (padrão: Entrada)")
+                    help="onde o card está hoje: Entrada = Urace, Comercial = Comercial (padrão: Entrada)")
+    ap.add_argument("--canal", default=None,
+                    help="canal da mensagem (instagram, messenger, whatsapp, site têm bot da equipe)")
     ap.add_argument("--email", default=None, help="e-mail do remetente, se houver")
     ap.add_argument("--tabela", action="store_true")
     a = ap.parse_args()
     textos = EXEMPLOS if a.tabela or not a.texto else [" ".join(a.texto)]
-    print(f"{'mensagem':44} | {'ação':16} | {'etapa no Novo funil':32} | robô")
+    print(f"{'mensagem':44} | {'ação':16} | {'etapa (Urace/Comercial)':32} | robô")
     for texto in textos:
-        print(linha(texto, a.zona, a.email))
+        print(linha(texto, a.zona, a.email, a.canal))
     return 0
 
 
