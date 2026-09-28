@@ -208,8 +208,8 @@ Se nada sobrar, sai a mensagem de espera (`holding.py`).
   (quarta a domingo, 9h–18h) e não vale como regra (D-2026-08-31). A pista
   opera de quarta a domingo, 8h–13h. O relatório de 25/09 achou três arquivos
   com QUI–DOM 8h–15h e uma mensagem a cliente dizendo 5pm.
-- **Responsável único** (`KOMMO_RESPONSAVEL_ID`). O bot da equipe apresenta o
-  Lucas ("Lucas will come in right here"); confirmar e usar o id dele.
+- ~~Responsável único~~: decidido em 28/09, URace Support
+  (`KOMMO_RESPONSAVEL_ID=12209643`). O Lucas não é usuário do Kommo.
 - **Portfólio que o robô oferece.** O material de venda do Chase está em
   `90_ARQUIVO`. Enquanto não for reescrito com fonte confirmada, o robô não
   afirma preço, idade mínima nem política: manda o link (G1) ou escala.

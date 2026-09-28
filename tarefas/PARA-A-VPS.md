@@ -66,10 +66,13 @@ em `observar` (decide e só registra; não escreve no Kommo e não fala com
 lead), é decisão dele. **Só rode com o sim dele no seu chat.**
 
 ```bash
-cd /home/ubuntu/Uraceagent; grep '^SDR_MODO=' ~/.urace/bridge.env || echo 'SDR_MODO ausente (o instalador grava observar)'; bash salesagent/deploy/install_bridge_service.sh; grep '^SDR_MODO=' ~/.urace/bridge.env; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8800/health
+cd /home/ubuntu/Uraceagent; grep '^SDR_MODO=' ~/.urace/bridge.env || echo 'SDR_MODO ausente (o instalador grava observar)'; grep -q '^KOMMO_RESPONSAVEL_ID=' ~/.urace/bridge.env || echo 'KOMMO_RESPONSAVEL_ID=12209643' >> ~/.urace/bridge.env; bash salesagent/deploy/install_bridge_service.sh; grep -E '^(SDR_MODO|KOMMO_RESPONSAVEL_ID)=' ~/.urace/bridge.env; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8800/health
 ```
 
-Tem de sair `SDR_MODO=observar` e `200`. Se aparecer outro nível, pare: quem
+Tem de sair `SDR_MODO=observar`, `KOMMO_RESPONSAVEL_ID=12209643` (URace
+Support, escolhido pelo dono em 28/09; id de usuário, não é segredo) e `200`.
+Se `KOMMO_RESPONSAVEL_ID` já existia com outro valor, não troque: traga a
+saída. Se aparecer outro nível, pare: quem
 troca o nível é o dono, à mão.
 
 Depois, a rota nova no Caddy. **Não copie o Caddyfile do repositório por

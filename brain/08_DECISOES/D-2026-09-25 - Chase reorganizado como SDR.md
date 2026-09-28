@@ -67,5 +67,6 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
 3. Qual robô responde em cada canal. Hoje respondem os bots da equipe; ligar
    o Chase num canal é tirar o canal de `CANAIS_COM_BOT_DA_EQUIPE` e desligar
    o bot da equipe ali. O Kommo não roda dois bots no mesmo lead.
-4. Quem é o responsável único (`KOMMO_RESPONSAVEL_ID`). O bot da equipe
-   apresenta o Lucas.
+4. ~~Quem é o responsável único~~ — **decidido pelo dono em 28/09**, no chat
+   do Claude Code: URace Support (usuário 12209643 do Kommo). O Lucas não é
+   usuário do Kommo. `KOMMO_RESPONSAVEL_ID=12209643` no `bridge.env`.
