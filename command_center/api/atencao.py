@@ -173,6 +173,30 @@ def _coletar(con):
                                  ("Em aberto", _usd(i["balance"])), ("Emitida", _dbr(i.get("issued_on"))), ("Venceu", _dbr(i.get("due_on"))),
                                  ("E-mail de cobrança", i.get("customer_email") or "—")]))
 
+    # ---- 4c. estoque: contar primeiro, repor depois (roadmap, item do estoque)
+    # Ficha nunca contada tem zero porque ninguém olhou, não porque acabou: vira UM pedido
+    # de contagem, e fica fora do "repor" — mandar comprar o que talvez esteja na prateleira
+    # é o alarme falso que faz a equipe parar de ler o painel (25/09).
+    from command_center.providers import estoque as _est
+    a_contar = _est.nunca_contados(con)
+    if a_contar:
+        itens.append(dict(key=_chave("estoque-contar", "stock", "primeira"), level="MEDIUM",
+                          title=f"{len(a_contar)} peça(s) do estoque nunca foram contadas",
+                          why="O zero delas é 'ninguém contou', não 'acabou'. Enquanto não contar, a lista de "
+                              "reposição não vale. Estoque → Contar prateleira: em branco fica como está.",
+                          entity={"type": "stock", "id": None}, client_id=None, link=None, action="Contar prateleira",
+                          facts=[("Peças", ", ".join(i["name"] for i in a_contar[:8]) + (" …" if len(a_contar) > 8 else ""))]))
+    nao_contados = {i["id"] for i in a_contar}
+    repor = [f for f in _est.abaixo_do_minimo(con) if f["id"] not in nao_contados]
+    if repor:
+        itens.append(dict(key=_chave("estoque-repor", "stock", "minimo"), level="MEDIUM",
+                          title=(f"Repor {repor[0]['name']}: faltam {repor[0]['falta']:g} {repor[0]['unit']}" if len(repor) == 1
+                                 else f"{len(repor)} peças abaixo do mínimo"),
+                          why="Contadas e abaixo do mínimo definido. O link do fornecedor sai junto quando a peça já está ligada ao catálogo.",
+                          entity={"type": "stock", "id": None}, client_id=None, link=None, action="Ver estoque",
+                          facts=[(f["name"], f"faltam {f['falta']:g} {f['unit']}" + (f" · SKU {f['sku']}" if f.get("sku") else ""))
+                                 for f in repor[:6]]))
+
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",

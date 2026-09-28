@@ -55,7 +55,12 @@ def _f_estoque(con, busca=None, **_):
     if busca:
         t = busca.lower()
         itens = [i for i in itens if t in (i["name"] or "").lower() or t in (i["sku"] or "").lower()]
-    return {"itens": itens, "repor": estoque.abaixo_do_minimo(con)}
+    mov = estoque.ultimos_movimentos(con)
+    for i in itens:
+        i["contado"] = i["id"] in mov
+    return {"itens": itens, "repor": estoque.abaixo_do_minimo(con),
+            "nunca_contados": [x["name"] for x in estoque.nunca_contados(con)],
+            "aviso": "item nunca contado tem saldo 0 porque ninguém contou, não porque acabou"}
 
 
 def _f_estoque_item(con, id=None, **_):
@@ -134,6 +139,7 @@ def _f_resumo(con, **_):
         "corridas": n("races"),
         "itens_de_estoque": n("stock_items", "WHERE active=1"),
         "itens_a_repor": len(estoque.abaixo_do_minimo(con)),
+        "itens_nunca_contados": len(estoque.nunca_contados(con)),
         "catalogo_fornecedor": n("supplier_products"),
         "precisa_de_atencao": len(atencao.coletar(con)),
     }

@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from pydantic import BaseModel
 
 from command_center.api import auth
-from command_center.db import auditar, get_db, todos, um
+from command_center.db import auditar, get_db, todos, transacao, um
 from command_center.providers import estoque
 
 r = APIRouter(prefix="/ops/api/estoque", tags=["estoque"])
@@ -63,6 +63,7 @@ def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_d
                u=Depends(auth.exige("OPERATOR"))):
     """A prateleira: cada item com saldo total, o que é nosso e o que é de cliente."""
     loc = estoque.local(con, local)["id"] if local else None
+    mov = estoque.ultimos_movimentos(con)
     itens = []
     for i in todos(con, "SELECT * FROM stock_items WHERE active=1 ORDER BY kind, name"):
         total = estoque.saldo(con, i["id"], loc)
@@ -72,8 +73,10 @@ def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_d
             unit=i["unit"], min_qty=i["min_qty"], sku=i["sku"], supplier_url=i["supplier_url"],
             notes=i["notes"], tem_foto=bool(i["image_path"]),
             total=total, nosso=nosso, de_clientes=round(total - nosso, 4),
-            abaixo=bool(i["min_qty"] and nosso < float(i["min_qty"]))))
+            abaixo=bool(i["min_qty"] and nosso < float(i["min_qty"])),
+            contado=i["id"] in mov, ultima_contagem=(mov.get(i["id"]) or {}).get("contagem")))
     return {"itens": itens,
+            "a_contar": [x["id"] for x in estoque.nunca_contados(con)],
             "locais": [dict(l) for l in todos(con, "SELECT * FROM stock_locations WHERE active=1")],
             "repor": estoque.abaixo_do_minimo(con),
             "divergencias": estoque.conferir(con)}
@@ -129,6 +132,91 @@ def rota_contar(dados: ContarIn, request: Request, con: sqlite3.Connection = Dep
              {"qty": dados.qty, "local": dados.local, **res})
     con.commit()
     return res
+
+
+class ContagemIn(BaseModel):
+    local: str = estoque.SEDE
+    itens: list[ContarIn]
+
+
+@r.post("/contagem")
+def rota_contagem(dados: ContagemIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                  u=Depends(auth.exige("OPERATOR"))):
+    """A contagem da prateleira inteira, de uma vez — é o que tira o estoque do zero.
+
+    **Tudo ou nada**: se uma linha não serve (quantidade negativa, item com número de série,
+    item que não existe), nenhuma é gravada e a resposta diz qual. Meia contagem gravada
+    deixaria o mecânico sem saber o que precisa refazer. Item que **não veio** na lista fica
+    como está — em branco é "não contei", não "zero"."""
+    if not dados.itens:
+        raise HTTPException(400, "Nenhuma quantidade informada.")
+    vistos = set()
+    for linha in dados.itens:
+        if linha.item_id in vistos:
+            raise HTTPException(400, "O mesmo item apareceu duas vezes na contagem.")
+        vistos.add(linha.item_id)
+    resultado = []
+    # A conexão é autocommit: sem BEGIN explícito, cada contar() já estaria gravado quando
+    # a linha ruim aparecesse, e o "tudo ou nada" seria só promessa.
+    try:
+        with transacao(con):
+            for linha in dados.itens:
+                it = estoque.item(con, linha.item_id)
+                res = estoque.contar(con, linha.item_id, linha.qty, onde=dados.local,
+                                     by_user_id=u["id"], notes=linha.nota or "contagem da prateleira")
+                resultado.append({"item_id": linha.item_id, "name": it["name"], **res})
+            for x in resultado:
+                _auditar(con, request, u, "stock.count", x["item_id"],
+                         {"qty": x["depois"], "local": dados.local, "antes": x["antes"],
+                          "diferenca": x["diferenca"], "lote": True})
+    except estoque.ErroEstoque as e:
+        raise _erro(e)
+    return {"contados": len(resultado), "local": dados.local,
+            "com_diferenca": [x for x in resultado if x["diferenca"]], "itens": resultado}
+
+
+@r.get("/item/{item_id}/sku-sugestoes")
+def rota_sugestoes_sku(item_id: int, con: sqlite3.Connection = Depends(get_db),
+                       u=Depends(auth.exige("OPERATOR"))):
+    """Produtos do catálogo da Comet que parecem esta peça. A escolha é de gente."""
+    from command_center.providers import fornecedor
+    try:
+        it = estoque.item(con, item_id)
+    except estoque.ErroEstoque as e:
+        raise HTTPException(404, str(e))
+    tem_catalogo = bool(um(con, "SELECT 1 AS x FROM supplier_products WHERE supplier=? LIMIT 1",
+                           (it["supplier"] or fornecedor.PADRAO,)))
+    return {"item": {"id": it["id"], "name": it["name"], "sku": it["sku"], "supplier_url": it["supplier_url"]},
+            "tem_catalogo": tem_catalogo,
+            "sugestoes": fornecedor.sugerir_sku(con, it["name"], it["supplier"] or fornecedor.PADRAO)}
+
+
+class SkuIn(BaseModel):
+    sku: str
+
+
+@r.post("/item/{item_id}/sku")
+def rota_ligar_sku(item_id: int, dados: SkuIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                   u=Depends(auth.exige("MANAGER"))):
+    """Liga a peça a um produto do catálogo (SKU + link). É **gerente**: o SKU decide o que
+    o módulo de compras vai pedir, e casar errado é comprar a peça errada. O nome que a
+    equipe deu ao item não muda — é a língua da casa."""
+    from command_center.providers import fornecedor
+    try:
+        it = estoque.item(con, item_id)
+    except estoque.ErroEstoque as e:
+        raise HTTPException(404, str(e))
+    sup = it["supplier"] or fornecedor.PADRAO
+    p = um(con, "SELECT sku, name, url FROM supplier_products WHERE supplier=? AND sku=? AND gone_at IS NULL",
+           (sup, dados.sku.strip()))
+    if not p:
+        raise HTTPException(400, "Esse SKU não está no catálogo do fornecedor.")
+    antes = {"sku": it["sku"], "supplier_url": it["supplier_url"]}
+    con.execute("UPDATE stock_items SET sku=?, supplier_url=? WHERE id=?", (p["sku"], p["url"], item_id))
+    _auditar(con, request, u, "stock.item.sku", item_id,
+             {"antes": antes, "sku": p["sku"], "produto": p["name"], "url": p["url"]})
+    con.commit()
+    return {"ok": True, "sku": p["sku"], "supplier_url": p["url"], "produto": p["name"]}
 
 
 @r.post("/entrada")

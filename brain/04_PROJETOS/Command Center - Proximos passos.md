@@ -122,7 +122,20 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
 - [x] 🤖 Contagem física, com quem contou e quando; `conferir()` refaz o saldo pelo razão
       e **acusa divergência sem consertar sozinho**
 - [x] 🤖 Estoque mínimo por item → `abaixo_do_minimo()` já devolve SKU e link do fornecedor
-- [ ] 🤖 Ligar o mínimo em "Precisa de atenção" e abrir a API/tela do módulo
+- [x] 🤖 Ligar o mínimo em "Precisa de atenção" e abrir a API/tela do módulo (28/09).
+      Em "Precisa de atenção" são **dois itens separados**: *"N peças nunca foram contadas"*
+      (leva direto para a contagem) e *"Repor …"*, que só lista peça **já contada** abaixo
+      do mínimo. Ficha nunca contada fica fora da reposição — mandar comprar o que talvez
+      esteja na prateleira é o alarme falso que faz a equipe parar de ler o painel.
+- [x] 🤖 **Tela do estoque, fase 2 (28/09):** botão **"Contar prateleira"** (sede ou
+      trailer; filtro "só as nunca contadas"; em branco fica como está; grava **tudo ou
+      nada** — uma linha ruim e nenhuma é gravada, e a tela diz qual). Clicar numa peça
+      abre a ficha: histórico de movimentos, **Movimentar** (uso em serviço, compra,
+      sede ↔ trailer) e **Catálogo da Comet** (sugestões de SKU pelo nome; número da peça
+      pesa o dobro). Mecânico vê as sugestões; **só gerente liga o SKU**, e só SKU que
+      existe no catálogo — casar errado é comprar a peça errada. O nome da casa não muda.
+- [x] 🤖 O conector do claude.ai (`urace_estoque`, `urace_resumo`) agora diz quais peças
+      **nunca foram contadas** e avisa que o zero delas não é falta.
 - [x] 🤖 **Importador do catálogo da Comet construído** (`adminai/importar_comet.py`).
       Tenta o JSON da loja → sitemap + JSON-LD → e só então HTML. Obedece `robots.txt`,
       se identifica, pausa entre páginas, respeita `Retry-After` e guarda em disco o que
@@ -142,7 +155,8 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
 - [x] 🤖 **Contagem física existe como comando** (`adminai/contar_estoque.py`): imprime a
       folha com os `#id` e recebe `--contar 3=12 5=0`. Item não contado **fica como
       está**, nunca vira zero; contar zero é registro válido e diferente de não contar.
-- [ ] 👤 **Contar a prateleira** — é o que tira o estoque do zero. Depois da contagem a
+- [ ] 👤 **Contar a prateleira** (Estoque → *Contar prateleira*, ou o item de "Precisa de
+      atenção") — é o que tira o estoque do zero. Depois da contagem a
       lista de reposição passa a valer de verdade. (25/09: pelo conector, os 16 estão
       com total 0 e nenhum é peça de cliente — o "16 abaixo do mínimo" é estoque nunca
       contado, não falta confirmada.)

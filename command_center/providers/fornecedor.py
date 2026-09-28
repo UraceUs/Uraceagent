@@ -259,3 +259,33 @@ def sem_cadastro(con, supplier=PADRAO):
                             AND NOT EXISTS (SELECT 1 FROM supplier_products p
                                              WHERE p.supplier=i.supplier AND p.sku=i.sku)""",
                  (supplier,))
+
+
+_VAZIAS = {"jr", "sr", "de", "do", "da", "the", "and", "for", "set", "un", "kit", "com", "para", "e"}
+
+
+def _tokens(s):
+    return [t for t in re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).split() if len(t) >= 2 and t not in _VAZIAS]
+
+
+def sugerir_sku(con, nome, supplier=PADRAO, limite=8):
+    """Produtos do catálogo que mais parecem o item — para uma PESSOA escolher (dono, 22/09:
+    o SKU é referência de compra; casar errado manda comprar a peça errada, então a máquina
+    só sugere). Pontua pelas palavras do nome do item presentes no produto; número e código
+    (108, Z10, SH2) valem o dobro, porque são o que separa uma corrente da outra. Produto
+    que saiu do catálogo não entra."""
+    alvo = _tokens(nome)
+    if not alvo:
+        return []
+    peso = {t: (2.0 if any(ch.isdigit() for ch in t) else 1.0) for t in alvo}
+    total = sum(peso.values())
+    achados = []
+    for p in todos(con, """SELECT id, sku, name, url, price, brand, available, image_url FROM supplier_products
+                            WHERE supplier=? AND gone_at IS NULL""", (supplier,)):
+        toks = set(_tokens(p["name"]) + _tokens(p["brand"]))
+        pts = sum(w for t, w in peso.items() if t in toks)
+        if pts <= 0:
+            continue
+        achados.append(dict(p, score=round(pts / total, 3)))
+    achados.sort(key=lambda x: (-x["score"], len(x["name"] or ""), x["sku"]))
+    return achados[:limite]

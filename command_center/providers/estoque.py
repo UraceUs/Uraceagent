@@ -397,6 +397,27 @@ def abaixo_do_minimo(con):
             for l in linhas if float(l["tem"]) < float(l["min_qty"])]
 
 
+def ultimos_movimentos(con):
+    """{item_id: {"ultimo": at, "contagem": at da última contagem física}} — o que diz se a
+    ficha tem história. Ficha sem movimento nenhum **nunca foi contada**: o zero dela é
+    "ninguém olhou", não "acabou" (25/09: os 16 itens semeados das invoices estavam todos
+    assim, e o painel os mostrava como falta)."""
+    out = {}
+    for m in todos(con, """SELECT item_id, MAX(at) AS ultimo,
+                                  MAX(CASE WHEN kind='contagem' THEN at END) AS contagem
+                             FROM stock_moves GROUP BY item_id"""):
+        out[m["item_id"]] = {"ultimo": m["ultimo"], "contagem": m["contagem"]}
+    return out
+
+
+def nunca_contados(con):
+    """Fichas de quantidade, ativas, sem movimento nenhum — a folha da primeira contagem."""
+    mov = ultimos_movimentos(con)
+    return [dict(i) for i in todos(con, """SELECT id, name, unit, min_qty, kind FROM stock_items
+                                             WHERE active=1 AND tracking='quantidade' ORDER BY name""")
+            if i["id"] not in mov]
+
+
 def do_cliente(con, client_id):
     """O que é dele e está com a gente — para aparecer no card do cliente."""
     unidades = todos(con, """SELECT u.*, i.name, i.kind, lo.name AS local
