@@ -102,6 +102,21 @@ TAGS_POR_MOTIVO = {
 }
 TAG_ROBO_SILENCIADO = "sdr:bot-silenciado"
 
+# nao_e_lead tira o card da REGRA 1 para sempre. Por isso o SDR só marca a
+# partir do nome do lead criado (assunto de e-mail de sistema) ou de mensagem
+# de e-mail. Numa conversa de chat (Instagram, WhatsApp, site) uma frase com
+# cara de código não pode tirar uma pessoa do funil: ali fica só
+# sdr:automatico no log (teste ponta a ponta de 28/09).
+TAG_NAO_LEAD = "nao_e_lead"
+CANAIS_QUE_MARCAM_NAO_LEAD = ["email"]
+
+# A REGRA 2 da equipe sobe o card +10 min depois de ele nascer em First
+# Contact. O SDR só segura o card para ela nessa janela, com folga. Card mais
+# velho em First Contact (movido para lá, ou que já estava) não recebe a
+# REGRA 2 (teste de 28/09: 32 min parado); com sinal comercial, o SDR sobe
+# ele mesmo para Comercial > ENTRADA, com a tag DM que a REGRA 1 daria.
+JANELA_REGRA_2_MINUTOS = 15
+
 # ---------------------------------------------------------------- ações
 CRIAR = "criar_card"          # contato sem card: nasce direto na zona Comercial
 PROMOVER = "promover_card"    # card da Entrada passa para a zona Comercial

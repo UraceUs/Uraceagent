@@ -29,6 +29,13 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
   outro funil volta com sinal comercial e, no Comercial, só anda para frente.
   O "Novo funil" da primeira versão foi abandonado. A tabela "Quem move o
   quê" está em `salesagent/docs/sdr.md`.
+- **Teste ponta a ponta de 28/09** (DMs do dono, ponte em observar): as três
+  decisões saíram como previsto e nada foi escrito. Duas correções vieram
+  dele, com o sim do dono no mesmo chat: (a) as REGRAS 1 e 2 só rodam para
+  card que nasce em First Contact, então o SDR só segura para a REGRA 2 o
+  card criado há menos de 15 min; card mais antigo com sinal comercial ele
+  sobe para Comercial › ENTRADA com a tag DM; (b) `nao_e_lead` não vem mais
+  de conversa de chat, só do nome do lead criado ou de e-mail.
 - **Bots da equipe primeiro.** Onde a equipe já tem bot respondendo
   (Instagram, Messenger, WhatsApp, chat do site), a ponte não fala; só
   escala, como tarefa.
