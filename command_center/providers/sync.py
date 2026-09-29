@@ -170,6 +170,11 @@ def _grava_tarefa(con, gid, campos):
     """Devolve (id, nova). Tarefa nova de cliente em coluna de dia acorda a IA (task.created)."""
     tid = um(con, "SELECT entity_id FROM entity_links WHERE system='asana' AND external_id=? AND entity_type='task'", (gid,))
     if tid:
+        # De quem é o serviço, quando uma pessoa confirmou, não se decide mais pela descrição
+        # (dono, 29/09: "vincular ao cliente correto" pelo card). Sem isto, a próxima sincronia
+        # releria a tarefa e a devolveria para o card errado.
+        if "client_id" in campos and um(con, "SELECT 1 AS x FROM tasks WHERE id=? AND client_by='human'", (tid["entity_id"],)):
+            campos = {k: v for k, v in campos.items() if k != "client_id"}
         atualizar(con, "tasks", tid["entity_id"], **campos)
         return tid["entity_id"], False
     nid = inserir(con, "tasks", **campos)

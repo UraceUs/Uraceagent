@@ -5,10 +5,10 @@ import { useGet } from '../api/hooks'
 import { CatalogoEditor } from './Garage'
 import { LembreteChip, LembreteModal } from './Systems'
 import { PecasDoCliente } from './Estoque'
-import { UnirModal } from '../components/Unir'
-import type { Catalog, Client360 as C360, Monthly, Race } from '../api/types'
+import { Picker, UnirModal } from '../components/Unir'
+import type { Catalog, Client, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Section, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Scrim, Section, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
@@ -50,6 +50,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const [scanning, setScanning] = useState(false)
   const [selInv, setSelInv] = useState<number[]>([])
   const [lemb, setLemb] = useState(false)
+  const [renomear, setRenomear] = useState<number | null>(null)
+  const [mover, setMover] = useState<number | null>(null)
   if (error && !data) return <ErrorState error={error} retry={reload} />
   if (loading && !data) return <Loading rows={8} />
   if (!data) return null
@@ -169,12 +171,15 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       })}</div>)}
       {tab === 'monthly' && <Mensalidade id={c.id} m={monthly.data} loading={monthly.loading} reload={monthly.reload} plan={c.plan_type} fin={can('MANAGER')} />}
       {tab === 'equip' && <Equipamento c={c} cat={catalog.data} reload={() => { reload(); catalog.reload() }} />}
+      {renomear !== null && <RenomearServico tarefa={data.tasks.find(t => t.id === renomear)!} outras={data.tasks.filter(t => t.id !== renomear)} onClose={() => setRenomear(null)} onDone={reload} />}
+      {mover !== null && <MoverServico tarefa={data.tasks.find(t => t.id === mover)!} atual={c} onClose={() => setMover(null)} onDone={reload} />}
       {unir && <UnirModal keep={c} onClose={() => setUnir(false)} onDone={(kid) => { if (kid !== c.id) nav(`/clients/${kid}`); else reload() }} />}
       {tab === 'pecas' && <PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} />}
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th>Waiver</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>Sem serviços vinculados.</Empty></td></tr>}
-        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Status s={t.status} /></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title="A waiver assinada foi anexada nesta tarefa">📎 waiver</a> : <span className="muted">—</span>}</td><td><SysLink links={t.links} /></td></tr>)}
+        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Status s={t.status} /></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title="A waiver assinada foi anexada nesta tarefa">📎 waiver</a> : <span className="muted">—</span>}</td>
+          <td className="nowrap"><SysLink links={t.links} />{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title="trocar o nome do serviço (no Asana também)">Renomear</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title="este serviço é de outro cliente">Mover</button>}</td></tr>)}
       </tbody></table></div>}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>Nenhum envelope para este e-mail.</Empty></td></tr>}
@@ -198,6 +203,142 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   </>
 }
 
+
+interface Recorrencia { id: number; qbo_id: string | null; name: string | null; amount: number; months: number; start_on: string; end_on: string; email: string | null; status: string; criado_por: string | null; created_at: string; result: string | null }
+interface Mensal { monthly_plan: string | null; monthly_amount: number | null; monthly_item_id: string | null; item: { id: string; name: string; price: number | null } | null
+  itens: { id: string; name: string; full_name: string | null; price: number | null }[]; email: string | null; opcoes_meses: number[]; padrao_meses: number; proximo_inicio: string; recorrencias: Recorrencia[] }
+const REC_ROTULO: Record<string, [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { active: ['ativa', 'ok'], simulated: ['simulação — nada criado', 'warn'], failed: ['falhou', 'crit'], ended: ['encerrada', 'neutral'] }
+const mesAno = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+
+/** Dono, 29/09: o valor da mensalidade é do cliente ("às vezes um deal diferente"), e vira
+ *  invoice recorrente no QuickBooks — padrão 6 meses, ou 12, ou personalizado. Só gerente. */
+function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number | null }) {
+  const toast = useToast()
+  const perguntar = usePerguntar()
+  const d = useGet<Mensal>(`/clients/${id}/mensal`)
+  const [valor, setValor] = useState<string | null>(null)
+  const [item, setItem] = useState<string | null>(null)
+  const [meses, setMeses] = useState<number | 'outro'>(6)
+  const [outro, setOutro] = useState('3')
+  const [inicio, setInicio] = useState<string | null>(null)
+  const [salvando, setSalvando] = useState(false)
+  if (d.error) return <ErrorState error={d.error} retry={d.reload} />
+  if (!d.data) return <Loading rows={2} />
+  const m = d.data
+  const v = valor ?? (m.monthly_amount != null ? String(m.monthly_amount) : '')
+  const it = item ?? (m.monthly_item_id || '')
+  const ini = inicio ?? m.proximo_inicio
+  const nMeses = meses === 'outro' ? Number(outro) : meses
+  const mudou = v !== (m.monthly_amount != null ? String(m.monthly_amount) : '') || it !== (m.monthly_item_id || '')
+  const inicios = Array.from({ length: 6 }, (_, k) => { const b = new Date(m.proximo_inicio + 'T12:00:00Z'); b.setUTCMonth(b.getUTCMonth() + k - 1); return b.toISOString().slice(0, 10) })
+  const itemDoCard = m.item && !m.itens.some(x => x.id === m.item!.id) ? [m.item] : []
+
+  async function salvar() {
+    const n = Number(v.replace(',', '.'))
+    if (v.trim() && (!n || n <= 0)) { toast('Valor mensal inválido.', 'warn'); return }
+    setSalvando(true)
+    try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: v.trim() ? n : null, monthly_item_id: it || null }); toast('Mensalidade salva. É ela que vai na invoice do dia 1.', 'ok'); setValor(null); setItem(null); d.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
+  }
+  async function recorrencia() {
+    if (!Number.isInteger(nMeses) || nMeses < 1 || nMeses > 36) { toast('Escolha de 1 a 36 meses.', 'warn'); return }
+    if (!await perguntar({ titulo: `Criar a invoice recorrente no QuickBooks?`, texto: `${money(m.monthly_amount || 0)} por mês, todo dia 1, de ${mesAno(ini)} por ${nMeses} meses, enviada para ${m.email || 'o e-mail do cliente no QuickBooks'}. O dia 1 do painel deixa de montar a invoice deste cliente enquanto ela estiver ativa.`, ok: 'Criar recorrência' })) return
+    setSalvando(true)
+    try {
+      const r = await api.post<{ status: string; aviso: string | null }>(`/clients/${id}/mensal/recorrencia`, { meses: nMeses, inicio: ini })
+      toast(r.status === 'active' ? 'Recorrência criada no QuickBooks.' : `Simulação: ${r.aviso || 'nada foi criado no QuickBooks'}`, r.status === 'active' ? 'ok' : 'warn'); d.reload()
+    } catch (e) { toast((e as ApiError).message, 'crit'); d.reload() } finally { setSalvando(false) }
+  }
+  return <Section title="Valor da mensalidade e recorrência">
+    <div className="grid g3">
+      <div className="field"><label>Valor mensal deste cliente</label>
+        <input className="input" type="number" inputMode="decimal" min={0} value={v} onChange={e => setValor(e.target.value)}
+               placeholder={lastAmount != null ? `última: ${lastAmount}` : 'US$'} /></div>
+      <div className="field"><label>Item do QuickBooks</label>
+        <select className="input" value={it} onChange={e => setItem(e.target.value)}>
+          <option value="">escolha…</option>
+          {[...itemDoCard, ...m.itens].map(x => <option key={x.id} value={x.id}>{x.name}{x.price ? ` (tabela ${money(x.price)})` : ''}</option>)}
+        </select></div>
+      <div className="field"><label>&nbsp;</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>Salvar mensalidade</button></div>
+    </div>
+    <p className="small muted" style={{ marginTop: 6 }}>O valor daqui é o que vai na invoice do dia 1 — manda sobre a tabela quando o combinado com o cliente é outro.</p>
+    <div className="row wrap" style={{ gap: 12, marginTop: 14, alignItems: 'flex-end' }}>
+      <div className="field"><label>Recorrência</label>
+        <div className="row wrap" style={{ gap: 6 }}>
+          {m.opcoes_meses.map(n => <button key={n} className={`btn sm${meses === n ? ' primary' : ''}`} onClick={() => setMeses(n)}>{n} meses{n === m.padrao_meses ? ' (padrão)' : ''}</button>)}
+          <button className={`btn sm${meses === 'outro' ? ' primary' : ''}`} onClick={() => setMeses('outro')}>Personalizado</button>
+          {meses === 'outro' && <input className="input" type="number" min={1} max={36} value={outro} onChange={e => setOutro(e.target.value)} style={{ width: 90 }} aria-label="meses" />}
+        </div></div>
+      <div className="field"><label>Primeira mensalidade</label>
+        <select className="input" value={ini} onChange={e => setInicio(e.target.value)}>{inicios.map(x => <option key={x} value={x}>dia 1 de {mesAno(x)}</option>)}</select></div>
+      <button className="btn" disabled={salvando || mudou || !m.monthly_amount || !m.monthly_item_id} onClick={recorrencia}
+              title={mudou ? 'salve a mensalidade antes' : !m.monthly_amount || !m.monthly_item_id ? 'defina valor e item antes' : ''}>Criar invoice recorrente no QuickBooks</button>
+    </div>
+    {m.recorrencias.length > 0 && <div className="tbl-wrap" style={{ marginTop: 12 }}><table className="tbl"><thead><tr><th>De</th><th>Até</th><th>Meses</th><th>Valor</th><th>Situação</th><th>Criada</th></tr></thead><tbody>
+      {m.recorrencias.map(x => <tr key={x.id}><td className="mono">{mesAno(x.start_on)}</td><td className="mono">{mesAno(x.end_on)}</td><td className="mono">{x.months}</td><td className="mono">{money(x.amount)}</td>
+        <td><Chip tone={(REC_ROTULO[x.status] || [x.status, 'neutral'])[1]}>{(REC_ROTULO[x.status] || [x.status])[0]}</Chip>{x.qbo_id && <span className="small muted"> · QBO {x.qbo_id}</span>}</td>
+        <td className="small">{fmtDateTime(x.created_at)}{x.criado_por ? ` · ${x.criado_por}` : ''}</td></tr>)}
+    </tbody></table></div>}
+  </Section>
+}
+
+type TarefaCard = { id: number; title: string; due_on: string | null; section: string | null }
+
+/** Renomear o serviço — no Asana também — e, se quiser, dar o mesmo nome a outros (dono, 29/09). */
+function RenomearServico({ tarefa, outras, onClose, onDone }: { tarefa: TarefaCard; outras: TarefaCard[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast()
+  const [nome, setNome] = useState(tarefa.title)
+  const [marcadas, setMarcadas] = useState<number[]>([])
+  const [indo, setIndo] = useState(false)
+  async function salvar() {
+    if (!nome.trim()) { toast('O nome não pode ficar vazio.', 'warn'); return }
+    setIndo(true)
+    try {
+      const r = await api.post<{ renomeados: unknown[]; falhas: { titulo: string; motivo: string }[] }>('/tasks/renomear', { task_ids: [tarefa.id, ...marcadas], nome: nome.trim() })
+      if (r.falhas.length) toast(`${r.renomeados.length} renomeado(s); ${r.falhas.length} não: ${r.falhas[0].motivo}`, 'warn')
+      else toast(r.renomeados.length > 1 ? `${r.renomeados.length} serviços renomeados, no Asana também.` : 'Serviço renomeado, no Asana também.', 'ok')
+      onDone(); onClose()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 620 }} onMouseDown={e => e.stopPropagation()}>
+    <h2 className="h2">Renomear serviço</h2>
+    <p className="small muted">Muda o nome no Asana e aqui. O que está escrito dentro da tarefa (descrição, subtarefas) não muda.</p>
+    <div className="field"><label>Nome</label><input className="input" value={nome} onChange={e => setNome(e.target.value)} autoFocus /></div>
+    {outras.length > 0 && <div className="field" style={{ marginTop: 12 }}><label>Dar o mesmo nome também a</label>
+      <div className="tbl" style={{ maxHeight: '38vh', overflow: 'auto' }}>
+        {outras.map(t => <label key={t.id} className="check" style={{ padding: '6px 2px' }}>
+          <input type="checkbox" checked={marcadas.includes(t.id)} onChange={() => setMarcadas(m => m.includes(t.id) ? m.filter(x => x !== t.id) : [...m, t.id])} />
+          <span className="mono small">{fmtDate(t.due_on)}</span> <span>{t.title}</span></label>)}
+      </div></div>}
+    <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
+      <button className="btn" onClick={onClose}>Cancelar</button>
+      <button className="btn primary" disabled={indo || !nome.trim() || (nome.trim() === tarefa.title && !marcadas.length)} onClick={salvar}>{indo ? <span className="spin" /> : `Renomear${marcadas.length ? ` (${marcadas.length + 1})` : ''}`}</button>
+    </div>
+  </div></Scrim>
+}
+
+/** Levar o serviço para o card do cliente certo. A sincronia do Asana não desfaz. */
+function MoverServico({ tarefa, atual, onClose, onDone }: { tarefa: TarefaCard; atual: { id: number; name: string; pilot_name?: string | null }; onClose: () => void; onDone: () => void }) {
+  const toast = useToast()
+  const [dest, setDest] = useState<Client | null>(null)
+  const [indo, setIndo] = useState(false)
+  async function mover() {
+    if (!dest) return
+    setIndo(true)
+    try { await api.post(`/tasks/${tarefa.id}/cliente`, { client_id: dest.id }); toast(`Movido para ${dest.pilot_name || dest.name}.`, 'ok'); onDone(); onClose() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+    <h2 className="h2">Mover serviço para outro cliente</h2>
+    <p className="small"><b>{tarefa.title}</b></p>
+    <p className="small muted">Sai do card de {atual.pilot_name || atual.name} e vai para o cliente escolhido. A sincronia do Asana passa a respeitar a sua escolha.</p>
+    <Picker label="Cliente certo" value={dest} onPick={setDest} exclude={atual.id} />
+    <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
+      <button className="btn" onClick={onClose}>Cancelar</button>
+      <button className="btn primary" disabled={indo || !dest} onClick={mover}>{indo ? <span className="spin" /> : 'Mover'}</button>
+    </div>
+  </div></Scrim>
+}
 
 function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Monthly | null; loading: boolean; reload: () => void; plan?: string | null; fin: boolean }) {
   const { can } = useAuth()
@@ -225,6 +366,7 @@ function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Mon
       <div className="card kpi"><div className="lbl">Sessões este mês</div><div className="val">{m.months[0]?.sessions_used ?? 0}<span className="muted" style={{ fontSize: 18 }}> / {m.sessions_per_month}</span></div><div className="foot">{m.months[0]?.sessions_left ?? 0} restante(s)</div></div>
       <div className="card kpi"><div className="lbl">Invoice do mês</div><div className={`val ${m.months[0]?.invoice ? 'ok' : 'warn'}`} style={{ fontSize: 22 }}>{m.months[0]?.invoice ? (m.months[0].invoice.status || 'emitida') : 'falta'}</div><div className="foot">{m.months[0]?.invoice?.doc_number || (m.months[0]?.needs_invoice ? 'a IA monta no dia 1, você aprova' : '')}</div></div>
     </div>
+    {fin && <ValorERecorrencia id={id} lastAmount={m.last_monthly_amount} />}
     <Section title="Meses" tight><div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mês</th><th>Invoice</th><th>Sessões usadas</th><th>Restantes</th><th>Situação</th></tr></thead><tbody>
       {m.months.map(x => <tr key={x.month}><td style={{ textTransform: 'capitalize' }}>{mesNome(x.month)}</td>
         <td>{x.invoice ? <><span className="mono">{x.invoice.doc_number}</span> <Chip tone={statusTone(x.invoice.status === 'open' ? 'PENDING' : x.invoice.status)}>{x.invoice.status}</Chip>{fin && x.invoice.amount != null && <span className="mono"> {money(x.invoice.amount)}</span>}<div className="small muted">{x.invoice.memo}</div></> : <span className="muted">—</span>}</td>

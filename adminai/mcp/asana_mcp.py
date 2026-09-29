@@ -303,6 +303,31 @@ def asana_comentar(gid, texto):
 
 
 @srv.ferramenta(
+    "asana_renomear",
+    "Troca o NOME de uma tarefa (o serviço como aparece no quadro). Só o nome; descrição, "
+    "data e subtarefas ficam. Recusado em ADM URACE e 'Matt tasks'. Com APLICAR=0 é simulação.",
+    {"gid": {"type": "string"}, "nome": {"type": "string"}}, ["gid", "nome"])
+def asana_renomear(gid, nome):
+    """Dono, 29/09: renomear o serviço pelo card do cliente, para deixar tudo organizado.
+    O nome muda no Asana — senão a próxima sincronia traria o antigo de volta."""
+    nome = (nome or "").strip()
+    if not nome:
+        raise ErroFerramenta("nome vazio")
+    if len(nome) > 250:
+        raise ErroFerramenta("nome longo demais (máximo 250)")
+    t = _ler_tarefa(gid)
+    _recusar_se_protegida(t, "renomear")
+    antes = t.get("name") or ""
+    if antes == nome:
+        return {"aplicado": False, "motivo": "já tem esse nome", "tarefa": nome}
+    if not _aplicar():
+        return _simulado(f"renomear '{antes}' ({gid}) para '{nome}'")
+    _req(f"/tasks/{gid}", "PUT", {"name": nome})
+    _anotar_rastro(gid, f"Nome trocado pelo painel: '{antes}' → '{nome}'")
+    return {"aplicado": True, "antes": antes, "tarefa": nome}
+
+
+@srv.ferramenta(
     "asana_mover_para_secao",
     "Move uma tarefa para uma seção do mesmo projeto. Recusado em ADM URACE e "
     "'Matt tasks' (origem OU destino). Com APLICAR=0 é simulação.",

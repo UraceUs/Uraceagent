@@ -444,3 +444,28 @@ invoices já enviadas; faltava o painel guardar as **linhas** delas.
 - [x] 🤖 `qbo_historico_precos` no conector do QuickBooks (a IA consulta outra peça ao vivo)
       e `urace_precos_cobrados` no conector do claude.ai.
 - [ ] 👤 Rodar o bloco de deploy + reinstalar o Admin AI (registra a consulta nova no agente).
+
+## Card do cliente: mensalidade combinada e serviços (29/09)
+
+Dono, no card do Enzo Kurian: o valor da mensalidade tem de ser editável ("às vezes um
+deal diferente"), virar invoice recorrente no QuickBooks, e os serviços têm de poder ir para
+o cliente certo e mudar de nome.
+
+- [x] 🤖 **Mensalidade e contrato → "Valor da mensalidade e recorrência"** (só gerente):
+      valor mensal deste cliente + item do QuickBooks. É o que vai na invoice do dia 1 — a IA
+      recebe `monthly_amount` e ele manda sobre a Rate Card.
+- [x] 🤖 **Invoice recorrente no QuickBooks**: 6 meses (padrão), 12 ou personalizado (1–36),
+      todo dia 1, enviada sozinha. Com recorrência ativa, o dia 1 do painel **não** monta outra
+      invoice do cliente (cobrar duas vezes, não). Cada pedido fica registrado — ativa,
+      simulação ou falha, com a resposta do QuickBooks.
+- [ ] 👤 **Conferir a primeira recorrência no QuickBooks** (Sales → Recurring transactions):
+      numeração da invoice gerada e o envio automático do e-mail. Não deu para testar contra o
+      QuickBooks de verdade daqui; o formato segue a API da Intuit.
+- [x] 🤖 **Serviços → Mover** (gerente): leva o serviço para o cliente certo e grava o carimbo
+      "confirmado por gente" — a sincronia do Asana passou a respeitar esse carimbo (antes ela
+      relia a tarefa aberta e decidia o cliente de novo pela descrição).
+- [x] 🤖 **Serviços → Renomear** (operador): troca o nome **no Asana** e no painel; dá para
+      marcar outros serviços para receberem o mesmo nome. Se o Asana não confirmar (modo
+      simulação, tarefa protegida), o nome do painel não muda.
+- [x] 🤖 O servidor stdio do QuickBooks registrava as ferramentas só até o meio do arquivo —
+      o lembrete de invoice nunca existia por ali. Corrigido junto.

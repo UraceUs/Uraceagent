@@ -176,6 +176,10 @@ from command_center.api import mcp_http  # noqa: E402
 app.include_router(mcp_http.r)
 from command_center.api import oauth as api_oauth  # noqa: E402
 app.include_router(api_oauth.r)
+from command_center.api import mensal  # noqa: E402
+app.include_router(mensal.r)
+from command_center.api import servicos  # noqa: E402
+app.include_router(servicos.r)
 
 
 # Descoberta do OAuth: a especificação manda na RAIZ do domínio, não sob /ops. O Caddy

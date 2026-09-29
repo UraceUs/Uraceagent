@@ -180,6 +180,10 @@ MIGRACOES = [
     ("stock_items", "cost", "REAL"),
     ("stock_items", "markup", "TEXT"),
     ("stock_items", "price", "REAL"),
+    # 29/09 — dono: o valor da mensalidade é do cliente, não só da tabela ("às vezes um
+    # deal diferente"). É ele que vai na invoice do dia 1 e na recorrência do QuickBooks.
+    ("clients", "monthly_amount", "REAL"),
+    ("clients", "monthly_item_id", "TEXT"),        # item do catálogo do QuickBooks da mensalidade
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

@@ -1041,3 +1041,26 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
 );
 CREATE INDEX IF NOT EXISTS oauth_tokens_user ON oauth_tokens(user_id, revoked_at);
 CREATE INDEX IF NOT EXISTS oauth_tokens_cli ON oauth_tokens(client_id, revoked_at);
+
+-- ------------------------------------------------- recorrência da mensalidade no QuickBooks
+-- Dono, 29/09: "seria interessante se o Command Center já deixasse como invoice recorrente
+-- no QuickBooks. Padrão seis meses; pode ser 12 meses ou personalizado." Cada linha é uma
+-- recorrência pedida pelo painel — com o que o QuickBooks respondeu. Enquanto houver uma
+-- ativa cobrindo o mês, o dia 1 NÃO monta outra invoice: seria cobrar duas vezes.
+CREATE TABLE IF NOT EXISTS monthly_recurring (
+  id          INTEGER PRIMARY KEY,
+  client_id   INTEGER NOT NULL REFERENCES clients(id),
+  qbo_id      TEXT,                          -- id da RecurringTransaction no QuickBooks
+  name        TEXT,
+  amount      REAL NOT NULL,
+  item_id     TEXT NOT NULL,
+  months      INTEGER NOT NULL,
+  start_on    TEXT NOT NULL,                 -- AAAA-MM-01
+  end_on      TEXT NOT NULL,                 -- dia 1 do último mês cobrado
+  email       TEXT,
+  status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','simulated','failed','ended')),
+  result      TEXT,                          -- json do que o QuickBooks respondeu (ou o erro)
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS monthly_recurring_cliente ON monthly_recurring(client_id, status);

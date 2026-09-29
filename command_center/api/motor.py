@@ -72,7 +72,9 @@ def _contexto_cliente(con, client_id):
         return ""
     ws = todos(con, "SELECT status, template, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (client_id,))
     ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? ORDER BY due_on DESC LIMIT 5", (client_id,))
-    return ("\nCLIENTE: " + json.dumps({k: c[k] for k in ("id", "name", "pilot_name", "pilot_dob", "email", "phone", "vip", "status") if k in c.keys()}, ensure_ascii=False)
+    campos = ("id", "name", "pilot_name", "pilot_dob", "email", "phone", "vip", "status",
+              "monthly_plan", "monthly_note", "monthly_amount", "monthly_item_id")
+    return ("\nCLIENTE: " + json.dumps({k: c[k] for k in campos if k in c.keys() and c[k] not in (None, "")}, ensure_ascii=False)
             + "\nWAIVERS NO ESPELHO: " + json.dumps(ws, ensure_ascii=False)
             + "\nSERVIÇOS NO ESPELHO: " + json.dumps(ts, ensure_ascii=False))
 
@@ -247,6 +249,8 @@ def _prompt_evento(con, ev):
              "waiver.completed": "A waiver deste cliente foi assinada. Comente na tarefa do Asana correspondente que a waiver chegou (asana_comentar).",
              "billing.monthly": "É dia 1: monte a invoice MENSAL deste cliente conforme o plano (campo monthly_plan e monthly_note do cliente) "
                                 "e os preços da aba Academy da Rate Card (mensal sem contrato; extra = mensal ÷ 4; +$250/sessão fora do OKC). "
+                                "Se o cliente tiver monthly_amount, ESSE é o valor combinado com ele (deal próprio) e manda sobre a Rate Card; "
+                                "com monthly_item_id, use esse item do catálogo. "
                                 "Ache o cliente no QuickBooks (qbo_clientes_buscar pelo e-mail do responsável) e o item no catálogo (qbo_itens_buscar). "
                                 "Declare UMA ação: ACAO: qbo_criar_e_enviar_invoice | <cliente> | mensalidade <mês> | {json com cliente_id, linhas[item_id, quantidade, unitario, descricao], vence_em, memo, email}. "
                                 "Não invente valor: se algo faltar, diga o que falta e não proponha a ação.",
@@ -815,6 +819,10 @@ def eventos_do_dia_1(con, hoje=None):
     n = 0
     for c in todos(con, "SELECT id, name, pilot_name, monthly_plan FROM clients WHERE monthly_plan IS NOT NULL AND monthly_plan<>'' AND status IN ('ACTIVE','NEW','PENDING')"):
         if um(con, "SELECT 1 FROM ai_events WHERE kind='billing.monthly' AND entity_type='client' AND entity_id=? AND summary LIKE ?", (c["id"], f"mensalidade {mes}%")):
+            continue
+        # recorrência ativa no QuickBooks já cobra este mês (29/09): montar outra seria cobrar duas vezes
+        from command_center.api.mensal import recorrencia_ativa
+        if recorrencia_ativa(con, c["id"], mes):
             continue
         # a chave única é (kind, tipo, id): para permitir um por mês, o id do evento leva o mês no summary e o entity_id é o cliente
         con.execute("DELETE FROM ai_events WHERE kind='billing.monthly' AND entity_type='client' AND entity_id=? AND status IN ('DONE','FAILED','SKIPPED')", (c["id"],))

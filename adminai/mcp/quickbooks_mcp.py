@@ -583,12 +583,6 @@ def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, ema
     return {**_resumo_invoice(r or inv), "enviado": True, "enviado_para": destino}
 
 
-if __name__ == "__main__":
-    _carregar_env()
-    log("realm:", os.environ.get("QBO_REALM_ID"), "| APLICAR =", os.environ.get("APLICAR", "0"))
-    srv.rodar()
-
-
 @srv.ferramenta("qbo_lembrete_invoice",
                 "LEMBRETE de invoice em aberto: reenvia a invoice por e-mail pelo QuickBooks. Só para invoice "
                 "com lembrete LIGADO pelo gerente no painel (o painel confere; fora disso a ação falha). "
@@ -596,3 +590,60 @@ if __name__ == "__main__":
                 {"id": {"type": "string", "description": "id da invoice no QuickBooks (txnId)"}}, ["id"])
 def qbo_lembrete_invoice(id):
     return qbo_enviar_invoice(id)
+
+
+@srv.ferramenta("qbo_criar_recorrencia",
+                "Cria a INVOICE RECORRENTE mensal de um cliente no QuickBooks (dia 1 de cada mês, enviada "
+                "automaticamente por e-mail), por N meses. É da tela Mensalidade do painel, com aprovação do "
+                "gerente no clique. Com APLICAR=0 é simulação.",
+                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA,
+                 "meses": {"type": "integer", "description": "quantas mensalidades (6 é o padrão)"},
+                 "inicio": {"type": "string", "description": "AAAA-MM-01 — a primeira mensalidade"},
+                 "nome": {"type": "string", "description": "nome do modelo no QuickBooks"},
+                 "email": {"type": "string"}, "memo": {"type": "string"}},
+                ["cliente_id", "linhas", "meses", "inicio"])
+def qbo_criar_recorrencia(cliente_id, linhas, meses, inicio, nome=None, email=None, memo=None):
+    """Dono, 29/09: a mensalidade vira invoice recorrente no QuickBooks — padrão 6 meses.
+
+    `RecurType: Automated` + `EmailStatus: NeedToSend` é o "criar e enviar sozinho" do
+    QuickBooks; o intervalo é mensal, no dia 1, e termina depois de `meses` ocorrências."""
+    meses = int(meses)
+    if not 1 <= meses <= 36:
+        raise ErroFerramenta("recorrência entre 1 e 36 meses")
+    try:
+        d0 = dt.date.fromisoformat(str(inicio)[:10])
+    except ValueError:
+        raise ErroFerramenta(f"início inválido: {inicio!r} (use AAAA-MM-01)")
+    if d0.day != 1:
+        raise ErroFerramenta("a mensalidade começa no dia 1")
+    fim_m = d0.month - 1 + meses - 1
+    d1 = dt.date(d0.year + fim_m // 12, fim_m % 12 + 1, 1)
+    nome = (nome or f"Mensalidade {cliente_id}")[:100]
+    inv = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas), "EmailStatus": "NeedToSend",
+           "RecurringInfo": {"Name": nome, "RecurType": "Automated", "Active": True,
+                             "ScheduleInfo": {"IntervalType": "Monthly", "NumInterval": 1, "DayOfMonth": 1,
+                                              "StartDate": d0.isoformat(), "EndDate": d1.isoformat(),
+                                              "MaxOccurrences": meses}}}
+    if email:
+        inv["BillEmail"] = {"Address": email}
+    if memo:
+        inv["CustomerMemo"] = {"value": memo[:1000]}
+        inv["PrivateNote"] = memo[:4000]
+    total = sum(l["Amount"] for l in inv["Line"])
+    desc = f"recorrência mensal de {total:.2f} para cliente {cliente_id}, {meses} meses, de {d0} a {d1}"
+    if not _aplicar():
+        return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": desc,
+                "inicio": d0.isoformat(), "fim": d1.isoformat()}
+    r = _req("/recurringtransaction", "POST", {"Invoice": inv}).get("RecurringTransaction", {})
+    modelo = r.get("Invoice") or {}
+    log("QBO recorrência", desc, "id", modelo.get("Id"))
+    return {"aplicado": True, "id": modelo.get("Id"), "nome": (modelo.get("RecurringInfo") or {}).get("Name") or nome,
+            "total": modelo.get("TotalAmt", total), "inicio": d0.isoformat(), "fim": d1.isoformat(), "meses": meses}
+
+
+if __name__ == "__main__":
+    # No fim do arquivo: antes ficava no meio, e toda ferramenta declarada depois dele
+    # (o lembrete de invoice) não existia quando o servidor rodava por stdio.
+    _carregar_env()
+    log("realm:", os.environ.get("QBO_REALM_ID"), "| APLICAR =", os.environ.get("APLICAR", "0"))
+    srv.rodar()
