@@ -87,6 +87,16 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
    primeiro toque. O diagnóstico mostrou que o agente estava desligado (22 de
    2.500 créditos usados) e que a voz "Instagram" nas conversas é a própria
    Meta. O SDR continua sem responder nesses canais.
+3c. **Agente de IA, decidido pelo dono em 29/09:**
+   - revela que é IA na 5ª mensagem, sem emoji, e nunca nega se o lead
+     perguntar antes;
+   - responde no idioma do lead;
+   - não responde a 1ª mensagem de conversa nova (é da Meta e do menu) e
+     responde o texto livre que vem depois, em qualquer conversa; sai a regra
+     dos 7 dias;
+   - o passo 6 da persona passa a citar os dois preços: $689 por dia de
+     treino na Academy e $719 no Arrive and Drive.
+   Aplicado no Kommo pela extensão, item por item, com o sim do dono.
 4. ~~Quem é o responsável único~~ — **decidido pelo dono em 28/09**, no chat
    do Claude Code: URace Support (usuário 12209643 do Kommo). O Lucas não é
    usuário do Kommo. `KOMMO_RESPONSAVEL_ID=12209643` no `bridge.env`.
