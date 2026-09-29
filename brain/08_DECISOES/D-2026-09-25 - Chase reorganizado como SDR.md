@@ -79,6 +79,14 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
    responde ao lead em Urace; o SDR segue sem responder nesses canais. E o
    SDR não precisa respeitar `nao_e_lead` posto antes num card que volta com
    sinal comercial: "IAs vão operar, não tem risco de erro humano".
+3b. **Decidido pelo dono em 29/09** (depois do diagnóstico dos bots pela
+   extensão): quem fala com o lead em Urace é **o menu do chatbot + o agente
+   de IA**. O menu *URACE - Atendimento inicial DM* abre a conversa e grava o
+   e-mail no card; o agente de IA responde o que fica fora do menu. As
+   automações da Meta (Auto reply, Away e keywords de preço) continuam como
+   primeiro toque. O diagnóstico mostrou que o agente estava desligado (22 de
+   2.500 créditos usados) e que a voz "Instagram" nas conversas é a própria
+   Meta. O SDR continua sem responder nesses canais.
 4. ~~Quem é o responsável único~~ — **decidido pelo dono em 28/09**, no chat
    do Claude Code: URace Support (usuário 12209643 do Kommo). O Lucas não é
    usuário do Kommo. `KOMMO_RESPONSAVEL_ID=12209643` no `bridge.env`.

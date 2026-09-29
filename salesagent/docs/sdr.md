@@ -163,9 +163,11 @@ como atendida para o resgate do agendador não responder no lugar dela.
 perdido com a tag `opt_out`.
 
 **Canais com bot da equipe** (`CANAIS_COM_BOT_DA_EQUIPE`): quem responde ao
-lead em Urace é o agente de IA do Kommo (*Agente qualificador de leads*),
-**sempre ligado** por decisão do dono em 28/09, ao lado dos bots da equipe
-(*URACE - Atendimento inicial DM*, *Website bot*). Nesses canais o roteador não deixa a ponte falar
+lead em Urace são, pela ordem: as automações da Meta (Auto reply, Away e
+keywords de preço), o menu *URACE - Atendimento inicial DM* (Instagram,
+Messenger e WhatsApp; grava o e-mail no card) ou o *Website bot* (chat do
+site), e o agente de IA do Kommo (*Agente qualificador de leads*) no que fica
+fora do menu. Decisões do dono em 28 e 29/09. Nesses canais o roteador não deixa a ponte falar
 (`BOT_DA_EQUIPE_NO_CANAL`); as escalações da tabela acima continuam, marcadas
 `sem_resposta`, e viram tarefa. Tirar um canal da lista é decisão do dono,
 junto com desligar o bot da equipe naquele canal.
