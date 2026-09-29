@@ -866,8 +866,9 @@ CREATE TABLE IF NOT EXISTS stock_locations (
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 INSERT OR IGNORE INTO stock_locations (id, code, name, kind) VALUES
-  (1, 'sede',    'Sede',             'fixo'),
-  (2, 'trailer', 'Trailer de corrida','movel');
+  (1, 'sede',    'Galpão',           'fixo'),
+  (2, 'trailer', 'Trailer de corrida','movel'),
+  (3, 'pista',   'Pista (OKC)',      'fixo');   -- 29/09: o dono pediu o terceiro local
 
 -- O QUE é, não a peça física. Liga no catálogo quando o modelo já existe lá.
 CREATE TABLE IF NOT EXISTS stock_items (

@@ -296,3 +296,56 @@ def test_assinalar_e_do_mecanico_devolver_e_do_gerente(cli):
     ev = [a["event"] for a in todos(_db(), "SELECT event FROM audit_logs WHERE entity_id=? ORDER BY id", (str(iid),))]
     assert "stock.assign" in ev and "stock.unassign" in ev
     assert cli.get(B, headers=h).json()["divergencias"] == []
+
+
+# ------------------------------------------------------------------ 29/09, segunda rodada
+def test_locais_sao_galpao_trailer_e_pista(con):
+    """Dono: "galpão, trailer de corrida e pista (OKC)". O código 'sede' fica — é o que o
+    razão guarda —, só o nome muda."""
+    locs = {l["code"]: l["name"] for l in todos(con, "SELECT code, name FROM stock_locations")}
+    assert locs == {"sede": "Galpão", "trailer": "Trailer de corrida", "pista": "Pista (OKC)"}
+    iid = estoque.criar_item(con, "pneu", "MG SW2", category="pneus")
+    estoque.contar(con, iid, 2, onde="pista")
+    assert estoque.saldo(con, iid, estoque.local(con, "pista")["id"]) == 2
+
+
+def test_banco_antigo_ganha_o_nome_novo_mas_nome_trocado_a_mao_fica(con):
+    con.execute("UPDATE stock_locations SET name='Sede' WHERE code='sede'")
+    aplicar_schema(con)
+    assert estoque.local(con, "sede")["name"] == "Galpão"
+    con.execute("UPDATE stock_locations SET name='Oficina do Italo' WHERE code='sede'")
+    aplicar_schema(con)
+    assert estoque.local(con, "sede")["name"] == "Oficina do Italo"
+
+
+def test_alpha_line_e_o_nome_da_ultima_fileira():
+    assert prateleiras.PRATELEIRAS[-1]["nome"] == "Alpha Line"
+    assert "Macacões" in prateleiras.PRATELEIRAS[-1]["subcategorias"]
+    assert prateleiras.sugerir("peca", "Macacão URACE (standard)") == "vestuario"
+
+
+def test_fichas_da_alpha_line_sem_quantidade_nem_preco_e_sem_duplicar(con):
+    import importlib
+    semear = importlib.import_module("adminai.semear_alpha_line")
+    assert semear.semear(con, aplicar=False)["criados"] and um(con, "SELECT COUNT(*) n FROM stock_items")["n"] == 0
+    r = semear.semear(con, aplicar=True)
+    assert r["criados"] == ["Boné URACE", "Camisa URACE", "Moletom URACE", "Macacão URACE (standard)"]
+    linhas = todos(con, "SELECT * FROM stock_items")
+    assert all(l["category"] == "vestuario" and l["price"] is None for l in linhas)
+    assert todos(con, "SELECT * FROM stock_moves") == [], "quanto tem é o mecânico que diz"
+    assert semear.semear(con, aplicar=True)["criados"] == []
+    assert um(con, "SELECT COUNT(*) n FROM stock_items")["n"] == 4
+
+
+def test_registrar_ja_dizendo_que_e_do_cliente(cli):
+    """Dono: 'quando tiver registrando, já precisa ter um campo para colocar que é de algum
+    cliente' — contagem e chegada com dono, sem passo extra."""
+    h = entra(cli, "mec@urace.us")
+    iid = cli.post(f"{B}/item", headers=h, data={"name": "LeVanto KRT", "category": "pneus"}).json()["id"]
+    r = cli.post(f"{B}/contar", headers=h, json={"item_id": iid, "qty": 2, "local": "pista", "client_id": _brian()})
+    assert r.status_code == 200, r.text
+    r = cli.post(f"{B}/entrada", headers=h, json={"item_id": iid, "qty": 1, "client_id": _brian(), "motivo": "recebido do cliente"})
+    assert r.status_code == 200, r.text
+    linha = _itens(cli, h)["LeVanto KRT"]
+    assert linha["nosso"] == 0 and linha["clientes"][0]["qty"] == 3
+    assert cli.get(B, headers=h).json()["divergencias"] == []

@@ -185,7 +185,7 @@ def test_a_ficha_conta_a_historia_do_saldo(cli):
     ficha = cli.get(f"{B}/{iid}", headers=h).json()
     assert [m["kind"] for m in ficha["movimentos"]] == ["saida", "transferencia", "contagem"]
     assert ficha["total"] == 9
-    assert {s["local"] for s in ficha["saldos"]} == {"Sede", "Trailer de corrida"}
+    assert {s["local"] for s in ficha["saldos"]} == {"Galpão", "Trailer de corrida"}
 
 
 def test_cadastro_fica_na_auditoria(cli):

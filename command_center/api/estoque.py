@@ -47,6 +47,7 @@ class ContarIn(BaseModel):
     qty: float
     local: str = estoque.SEDE
     nota: str | None = None
+    client_id: int | None = None      # contando a peça de um cliente guardada com a gente
 
 
 class MoverIn(BaseModel):
@@ -170,12 +171,12 @@ def rota_contar(dados: ContarIn, request: Request, con: sqlite3.Connection = Dep
     """Contagem física. **Só mexe no item contado** — o que não veio no pedido fica como
     está, porque contagem parcial que zera o resto some com o estoque inteiro."""
     try:
-        res = estoque.contar(con, dados.item_id, dados.qty, onde=dados.local,
+        res = estoque.contar(con, dados.item_id, dados.qty, onde=dados.local, client_id=dados.client_id,
                              by_user_id=u["id"], notes=dados.nota)
     except estoque.ErroEstoque as e:
         raise _erro(e)
     _auditar(con, request, u, "stock.count", dados.item_id,
-             {"qty": dados.qty, "local": dados.local, **res})
+             {"qty": dados.qty, "local": dados.local, "client_id": dados.client_id, **res})
     con.commit()
     return res
 

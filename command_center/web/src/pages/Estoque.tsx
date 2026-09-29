@@ -71,39 +71,68 @@ function precoFinal(custo: number | null, margem: string): number | null | 'erro
 }
 
 /** Valor de compra, margem e preço final — só aparece para gerente. */
+/** Valor de compra, margem e preço final — só aparece para gerente.
+ *  A margem tem uma chave: % (porcentagem sobre a compra) ou $ (valor fixo somado). O
+ *  servidor recebe "15%" ou "20", o mesmo formato de antes. */
 function CamposPreco({ custo, setCusto, margem, setMargem, preco, setPreco }: {
   custo: string; setCusto: (v: string) => void; margem: string; setMargem: (v: string) => void; preco: string; setPreco: (v: string) => void
 }) {
+  const [tipo, setTipo] = useState<'pct' | 'fixo'>(margem.trim() && !margem.includes('%') ? 'fixo' : 'pct')
+  const valor = margem.replace(/[%$\s]/g, '').replace(/^\+/, '')
+  const montar = (v: string, t: 'pct' | 'fixo') => setMargem(v.trim() ? (t === 'pct' ? `${v.trim()}%` : v.trim()) : '')
   const calc = precoFinal(num(custo), margem)
   const manual = preco.trim() !== ''
   return <>
     <div className="row gap wrap">
       <label className="fld grow"><span>Valor de compra</span>
         <input type="number" inputMode="decimal" min={0} value={custo} onChange={e => setCusto(e.target.value)} placeholder="$ que a URACE paga" /></label>
-      <label className="fld grow"><span>Margem <i className="muted">(15% ou 20)</i></span>
-        <input value={margem} onChange={e => setMargem(e.target.value)} placeholder="15%" /></label>
+      <div className="fld grow"><span>Margem</span>
+        <div className="margem">
+          <input type="number" inputMode="decimal" min={0} value={valor} aria-label="margem"
+                 onChange={e => montar(e.target.value, tipo)} placeholder={tipo === 'pct' ? '15' : '20'} />
+          <div className="switch" role="radiogroup" aria-label="tipo de margem">
+            <button type="button" role="radio" aria-checked={tipo === 'pct'} className={tipo === 'pct' ? 'on' : ''}
+                    title="porcentagem sobre o valor de compra" onClick={() => { setTipo('pct'); montar(valor, 'pct') }}>%</button>
+            <button type="button" role="radio" aria-checked={tipo === 'fixo'} className={tipo === 'fixo' ? 'on' : ''}
+                    title="valor fixo em dólar somado ao valor de compra" onClick={() => { setTipo('fixo'); montar(valor, 'fixo') }}>$</button>
+          </div>
+        </div></div>
       <label className="fld grow"><span>Preço final ao cliente</span>
         <input type="number" inputMode="decimal" min={0} value={preco} onChange={e => setPreco(e.target.value)}
                placeholder={typeof calc === 'number' ? calc.toFixed(2) : 'calculado'} /></label>
     </div>
     <div className="preco-previa">
-      {calc === 'erro' ? <span style={{ color: 'var(--crit)' }}>Não entendi a margem. Use 15% (porcentagem) ou 20 (valor fixo em dólar).</span>
+      {calc === 'erro' ? <span style={{ color: 'var(--crit)' }}>Margem inválida.</span>
         : manual ? <>Vai para a invoice: <b>{usd(num(preco))}</b> <span className="muted">(digitado)</span></>
-        : typeof calc === 'number' ? <>Vai para a invoice: <b>{usd(calc)}</b> <span className="muted">= {usd(num(custo))} + {margem.trim()}</span></>
+        : typeof calc === 'number' ? <>Vai para a invoice: <b>{usd(calc)}</b> <span className="muted">= {usd(num(custo))} + {tipo === 'pct' ? `${valor}%` : usd(num(valor))}</span></>
         : <span className="muted">Com valor de compra e margem, o preço final sai sozinho. Ou digite o preço final direto.</span>}
     </div>
   </>
 }
 
 /** Foto grande e fácil de tocar: no celular abre a câmera. */
-function CampoFoto({ previa, onFile, rotulo = 'Tirar foto da peça' }: { previa: string | null; onFile: (f: File | null) => void; rotulo?: string }) {
+function CampoFoto({ previa, onFile, rotulo = 'Adicionar imagem' }: { previa: string | null; onFile: (f: File | null) => void; rotulo?: string }) {
   const ref = useRef<HTMLInputElement>(null)
   return <>
     <button type="button" className="foto-btn" onClick={() => ref.current?.click()}>
-      {previa ? <img src={previa} alt="foto da peça" /> : <><Icon name="box" size={22} /> {rotulo}</>}
+      {previa ? <img src={previa} alt="imagem da peça" /> : <><Icon name="box" size={22} /> {rotulo}</>}
     </button>
     <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp" capture="environment" hidden
            onChange={e => onFile(e.target.files?.[0] || null)} />
+  </>
+}
+
+/** De quem é a peça: da URACE ou de um cliente — já na hora de registrar (dono, 29/09). */
+function DeQuemE({ deCliente, setDeCliente, cliente, setCliente }: {
+  deCliente: boolean; setDeCliente: (v: boolean) => void; cliente: Client | null; setCliente: (c: Client | null) => void
+}) {
+  return <>
+    <div className="fld"><span>De quem é</span>
+      <div className="seg">
+        <button type="button" className={`btn sm${deCliente ? ' ghost' : ''}`} onClick={() => setDeCliente(false)}>Da URACE</button>
+        <button type="button" className={`btn sm${deCliente ? '' : ' ghost'}`} onClick={() => setDeCliente(true)}>De um cliente</button>
+      </div></div>
+    {deCliente && <Picker label="Cliente dono da peça" value={cliente} onPick={setCliente} />}
   </>
 }
 
@@ -204,12 +233,7 @@ function Adicionar({ d, inicial, onClose, reload }: { d: Lista; inicial: string 
     {serie && d.locais.length > 1 && <label className="fld"><span>Onde</span>
       <select value={local} onChange={e => setLocal(e.target.value)}>{d.locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
 
-    <div className="fld"><span>De quem é</span>
-      <div className="seg">
-        <button type="button" className={`btn sm${deCliente ? ' ghost' : ''}`} onClick={() => setDeCliente(false)}>Da URACE</button>
-        <button type="button" className={`btn sm${deCliente ? '' : ' ghost'}`} onClick={() => setDeCliente(true)}>De um cliente (guardada com a gente)</button>
-      </div></div>
-    {deCliente && <Picker label="Cliente dono da peça" value={cliente} onPick={setCliente} />}
+    <DeQuemE deCliente={deCliente} setDeCliente={setDeCliente} cliente={cliente} setCliente={setCliente} />
 
     <label className="fld"><span>Descrição <i className="muted">(onde fica, para que serve)</i></span>
       <textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={2} /></label>
@@ -239,6 +263,8 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
   const [de, setDe] = useState(locais[0]?.code || 'sede')
   const [para, setPara] = useState(locais[1]?.code || 'trailer')
   const [nota, setNota] = useState('')
+  const [deCliente, setDeCliente] = useState(false)
+  const [cliente, setCliente] = useState<Client | null>(null)
   const [indo, setIndo] = useState(false)
   if (ficha.item.tracking !== 'quantidade') return <p className="small muted">Motor e chassi andam por unidade (número de série).
     Para cadastrar mais uma unidade, use <b>Adicionar peça</b> com o número de série.</p>
@@ -246,14 +272,17 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
   async function enviar() {
     const q = num(qtd)
     if (q === null || Number.isNaN(q) || q < 0 || (q === 0 && tipo !== 'contar')) { toast('Informe a quantidade.', 'warn'); return }
+    if (deCliente && !cliente) { toast('Escolha o cliente dono da peça.', 'warn'); return }
+    const dono = deCliente && cliente ? cliente.id : null
     setIndo(true)
     try {
       if (tipo === 'contar') {
-        const r = await api.post<{ antes: number; depois: number }>('/estoque/contar', { item_id: ficha.item.id, qty: q, local: de, nota: nota.trim() || null })
+        const r = await api.post<{ antes: number; depois: number }>('/estoque/contar', { item_id: ficha.item.id, qty: q, local: de, client_id: dono, nota: nota.trim() || null })
         toast(r.antes === r.depois ? `Conferido: ${r.depois} ${ficha.item.unit}.` : `Agora são ${r.depois} ${ficha.item.unit} (eram ${r.antes}).`, 'ok')
       } else {
         await api.post(`/estoque/${tipo}`, { item_id: ficha.item.id, qty: q, local: de, para, nota: nota.trim() || null,
-                                             motivo: tipo === 'entrada' ? 'compra' : tipo === 'saida' ? 'uso em serviço' : null })
+                                             client_id: dono, para_cliente_id: tipo === 'saida' ? dono : null,
+                                             motivo: tipo === 'entrada' ? (dono ? 'recebido do cliente' : 'compra') : tipo === 'saida' ? 'uso em serviço' : null })
         toast(tipo === 'entrada' ? 'Entrada registrada.' : tipo === 'saida' ? 'Saída registrada.' : 'Transferência registrada.', 'ok')
       }
       setQtd(''); setNota(''); onDone()
@@ -262,7 +291,7 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
     } finally { setIndo(false) }
   }
 
-  const ROT = { contar: 'Quanto tem agora', saida: 'Usei em serviço', entrada: 'Chegou (compra)', transferir: 'Levar para outro local' }
+  const ROT = { contar: 'Quanto tem agora', saida: 'Usei em serviço', entrada: 'Chegou', transferir: 'Levar para outro local' }
   return <div>
     <div className="seg">
       {(['contar', 'saida', 'entrada', 'transferir'] as const).map(t => <button key={t} className={`btn sm${tipo === t ? '' : ' ghost'}`} onClick={() => setTipo(t)}>{ROT[t]}</button>)}
@@ -276,7 +305,8 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
       {tipo === 'transferir' && <label className="fld grow"><span>Para</span>
         <select value={para} onChange={e => setPara(e.target.value)}>{locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
     </div>
-    <label className="fld"><span>Nota <i className="muted">(qual kart, qual cliente, nota fiscal)</i></span>
+    <DeQuemE deCliente={deCliente} setDeCliente={setDeCliente} cliente={cliente} setCliente={setCliente} />
+    <label className="fld"><span>Nota <i className="muted">(qual kart, nota fiscal)</i></span>
       <input value={nota} onChange={e => setNota(e.target.value)} /></label>
     <button className="btn" disabled={indo || !qtd} onClick={enviar}>{indo ? 'Registrando…' : 'Registrar'}</button>
   </div>
@@ -442,7 +472,7 @@ function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: 
     {f.error && <ErrorState error={f.error} retry={f.reload} />}
     {f.loading && !f.data && <Loading />}
     {f.data && it && <>
-      <CampoFoto previa={it.image_path ? `/ops/api/estoque/item/${it.id}/foto?v=${versao}` : null} onFile={trocarFoto} rotulo="Pôr foto" />
+      <CampoFoto previa={it.image_path ? `/ops/api/estoque/item/${it.id}/foto?v=${versao}` : null} onFile={trocarFoto} rotulo="Adicionar imagem" />
       <h3 style={{ marginTop: 10 }}>{it.name}</h3>
       <p className="small muted">{prat?.nome || it.category}{it.subcategory ? ` · ${it.subcategory}` : ''}{it.size ? ` · ${it.size}` : ''}
         {it.min_qty ? ` · mínimo ${it.min_qty} ${it.unit}` : ''}</p>
@@ -479,7 +509,7 @@ function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: 
 function CardPeca({ i, gerente, onOpen }: { i: ItemEstoque; gerente: boolean; onOpen: () => void }) {
   const semQtd = i.tracking === 'quantidade' && !i.contado
   return <button className="pcard" onClick={onOpen}>
-    <div className="ph">{i.tem_foto ? <img src={`/ops/api/estoque/item/${i.id}/foto`} alt="" loading="lazy" /> : <Icon name="box" size={28} />}</div>
+    <div className="ph">{i.tem_foto ? <img src={`/ops/api/estoque/item/${i.id}/foto`} alt="" loading="lazy" draggable={false} /> : <Icon name="box" size={28} />}</div>
     <div className="bd">
       <div className="nm">{i.name}</div>
       <div className="sb">{[i.subcategory, i.size].filter(Boolean).join(' · ') || ' '}</div>
@@ -495,9 +525,47 @@ function CardPeca({ i, gerente, onOpen }: { i: ItemEstoque; gerente: boolean; on
   </button>
 }
 
+/** Clicar, segurar e arrastar a fileira para o lado — sem barra de rolagem (dono, 29/09).
+ *  Só para mouse: no celular o dedo já rola nativo. Se arrastou, o clique que termina o
+ *  gesto não abre o card. */
+function useArrastar() {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let x0 = 0, s0 = 0, ativo = false, moveu = false
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return
+      ativo = true; moveu = false; x0 = e.clientX; s0 = el.scrollLeft
+    }
+    const move = (e: PointerEvent) => {
+      if (!ativo) return
+      const dx = e.clientX - x0
+      if (!moveu && Math.abs(dx) > 5) { moveu = true; el.classList.add('arrastando'); el.setPointerCapture(e.pointerId) }
+      if (moveu) el.scrollLeft = s0 - dx
+    }
+    const up = (e: PointerEvent) => {
+      if (!ativo) return
+      ativo = false; el.classList.remove('arrastando')
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId)
+    }
+    const click = (e: MouseEvent) => { if (moveu) { e.preventDefault(); e.stopPropagation(); moveu = false } }
+    el.addEventListener('pointerdown', down); el.addEventListener('pointermove', move)
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up)
+    el.addEventListener('click', click, true)
+    return () => {
+      el.removeEventListener('pointerdown', down); el.removeEventListener('pointermove', move)
+      el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
+      el.removeEventListener('click', click, true)
+    }
+  }, [])
+  return ref
+}
+
 /** Uma fileira: a prateleira, com as marcas/tipos como filtro. */
 function Fileira({ p, itens, gerente, onOpen, onAdd, podeAdd }: { p: Prateleira; itens: ItemEstoque[]; gerente: boolean; onOpen: (id: number) => void; onAdd: () => void; podeAdd: boolean }) {
   const [filtro, setFiltro] = useState<string | null>(null)
+  const arrasto = useArrastar()
   const subs = useMemo(() => [...new Set(itens.map(i => i.subcategory).filter(Boolean) as string[])].sort(), [itens])
   const vis = filtro ? itens.filter(i => i.subcategory === filtro) : itens
   return <div className="shelf">
@@ -508,7 +576,7 @@ function Fileira({ p, itens, gerente, onOpen, onAdd, podeAdd }: { p: Prateleira;
         {subs.map(s => <button key={s} className={`btn sm${filtro === s ? '' : ' ghost'}`} onClick={() => setFiltro(filtro === s ? null : s)}>{s}</button>)}
       </div>}
     </div>
-    <div className="shelf-row">
+    <div className="shelf-row" ref={arrasto}>
       {vis.map(i => <CardPeca key={i.id} i={i} gerente={gerente} onOpen={() => onOpen(i.id)} />)}
       {podeAdd && <button className="pcard novo" onClick={onAdd}><Icon name="plus" size={22} />Adicionar em {p.nome}</button>}
     </div>

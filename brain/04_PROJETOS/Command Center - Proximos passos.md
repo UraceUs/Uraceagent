@@ -151,6 +151,13 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
       **"20"** é valor fixo, "15% + 10" soma) = preço final; ou o preço final digitado
       direto. Esse preço entra no contexto do AI Command como o valor da invoice da peça, e
       a linha com esse valor não é marcada para conferir.
+- [x] 👤 **Ajustes do dono (29/09, segunda rodada):** "De quem é" (URACE ou cliente) já no
+      registro — quanto tem agora, chegou, usei, levar; locais **Galpão · Trailer de
+      corrida · Pista (OKC)**; "Adicionar imagem"; margem com **chave % / $**; última
+      fileira se chama **Alpha Line**, com Boné, Camisa, Moletom e Macacão URACE (standard)
+      criados sem quantidade e sem preço (`adminai/semear_alpha_line.py`); fileira sem
+      barra de rolagem — no computador, clicar, segurar e arrastar.
+- [ ] 🤖 Painel todo em inglês: mais para frente (dono, 29/09). Por ora, português.
 - [ ] 👤 **Confirmar três escolhas minhas** (fáceis de mudar): (1) mecânico = papel
       Operador — um papel "Mecânico" que só vê o estoque exige mexer na tabela de usuários
       do banco, e isso eu só faço com sua autorização; (2) custo e margem só o gerente vê,

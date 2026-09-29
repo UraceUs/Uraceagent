@@ -453,3 +453,14 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 @media(max-width:700px){.fld input,.fld select,.fld textarea,input.inp{font-size:16px}}
 .modal-foot{display:flex;gap:10px;justify-content:flex-end;align-items:center;margin-top:16px;flex-wrap:wrap}
 @media(max-width:700px){.modal-foot{position:sticky;bottom:calc(-22px - env(safe-area-inset-bottom));background:var(--surface);padding:10px 0 calc(12px + env(safe-area-inset-bottom));margin-bottom:-4px}.modal-foot .btn{min-height:46px;flex:1}}
+/* 29/09: fileira sem barra de rolagem; no computador, clicar e arrastar */
+.shelf-row{scrollbar-width:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.shelf-row::-webkit-scrollbar{display:none}
+.shelf-row.arrastando{cursor:grabbing;scroll-snap-type:none}
+.shelf-row.arrastando .pcard{pointer-events:none}
+/* margem: número + chave % / $ */
+.margem{display:flex;gap:8px;align-items:stretch}
+.margem input{flex:1;min-width:0}
+.switch{display:inline-flex;border:1px solid var(--glass-line-2);border-radius:999px;padding:3px;background:var(--surface-2);flex:none}
+.switch button{border:0;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:15px;min-width:38px;border-radius:999px;cursor:pointer;padding:0 10px}
+.switch button.on{background:var(--accent);color:#fff}

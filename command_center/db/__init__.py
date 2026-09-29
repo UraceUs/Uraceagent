@@ -270,6 +270,10 @@ REVISAO_21_09 = [
 ]
 
 POS_MIGRACAO = [
+    # 29/09 — dono: os locais são "galpão, trailer de corrida e pista (OKC)". O código
+    # continua 'sede' (é ele que o razão guarda); só o nome que aparece muda — e só se
+    # ainda for o que eu escrevi, para não desfazer um nome que alguém tenha trocado.
+    "UPDATE stock_locations SET name='Galpão' WHERE code='sede' AND name='Sede'",
     # 16/09: o dono ditou a regra Docusign x Waivers depois de já ter confirmado os dois.
     # Troca o texto só se ainda for o que eu escrevi em 14/09 — o que ele editar fica.
     """UPDATE gmail_labels SET what='TODO e-mail do DocuSign, sem exceção (regra do dono, 16/09): enviado, visualizado, concluído, anulado, aviso da conta. Se for waiver enviada ou assinada, leva TAMBÉM o marcador ''Waivers''.'

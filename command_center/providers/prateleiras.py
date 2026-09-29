@@ -2,7 +2,7 @@
 
 Dono, 29/09: *"a visualização que eu quero no estoque é por cards, separados em fileiras
 horizontais de categorias"* — pneus numa, motores noutra, peças de motor, hardware…, e
-vestuário (bonés, suits, camisetas, moletons) **na última**. Dentro de cada fileira, as
+vestuário (bonés, suits, camisetas, moletons) **na última** (a fileira "Alpha Line"). Dentro de cada fileira, as
 subcategorias: pneu por marca e medida, motor por família.
 
 As listas de marca, medida e família saem da **apostila de kartismo da equipe** (11/06):
@@ -45,8 +45,10 @@ PRATELEIRAS = [
      "subcategorias": ["MyChron", "Sensores", "Baterias", "Chicote"], "medidas": [], "dica": ""},
     {"code": "outros", "nome": "Outros", "kind": "peca", "unit": "un",
      "subcategorias": ["Adesivos", "Ferramentas", "Oficina"], "medidas": [], "dica": ""},
-    {"code": "vestuario", "nome": "Vestuário · Alpha Line", "kind": "peca", "unit": "un",
-     "subcategorias": ["Bonés", "Suits de corrida", "Camisetas", "Moletons", "Luvas", "Capacetes"],
+    # 29/09: a fileira se chama "Alpha Line" — boné, camisa, moletom e o macacão
+    # standard da URACE. O código continua 'vestuario' (é o que fica gravado na peça).
+    {"code": "vestuario", "nome": "Alpha Line", "kind": "peca", "unit": "un",
+     "subcategorias": ["Bonés", "Camisetas", "Moletons", "Macacões", "Luvas", "Capacetes"],
      "medidas": ["PP", "P", "M", "G", "GG", "XG", "Infantil"], "dica": "tipo · tamanho"},
 ]
 POR_CODIGO = {p["code"]: p for p in PRATELEIRAS}
@@ -54,7 +56,7 @@ CODIGOS = tuple(POR_CODIGO)
 
 # Palavra do nome → prateleira. Só para a SUGESTÃO de peça antiga sem prateleira.
 _PISTAS = [
-    ("vestuario", r"\b(suit|shirt|camiset|bon[eé]|cap|hoodie|moletom|jacket|glove|luva|helmet|capacete)"),
+    ("vestuario", r"\b(suit|shirt|camis|bon[eé]|cap|hoodie|moletom|jacket|glove|luva|helmet|capacete|macac[aã]o)"),
     ("pneus", r"\b(tire|tires|pneu|evinco|levanto|leconte|mojo|sh2|sm2|sw2)"),
     ("fluidos", r"\b(fuel|combust|oil|[oó]leo|mix)\b"),
     ("pecas-motor", r"\b(spark|plug|vela|carb|carburador|clutch|embreagem|piston|pist[aã]o|header|exhaust|escape|radiator|radiador|gasket|junta|filter|filtro)"),
