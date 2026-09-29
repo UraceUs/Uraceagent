@@ -16,6 +16,10 @@ A tela de Logística fala com estas rotas. As regras todas moram em
   há nela, e obrigar a pedir para o gerente é o jeito certo de o cadastro nunca acontecer.
 - **vender e ajustar** é MANAGER: ajuste sem dono vira estoque que não bate, e venda
   mexe em dinheiro.
+- **assinalar peça para um cliente** é OPERATOR (29/09): é quem separa na prateleira.
+  **Devolver para a URACE** é MANAGER: transforma o que era dos outros em vendável.
+- **valor de compra, margem e preço final** são MANAGER, e custo e margem nem aparecem
+  para o mecânico: ele vê o preço que vai para o cliente, não quanto a casa ganha.
 
 A quantidade informada no cadastro entra como **contagem física**, não como compra: o
 mecânico está dizendo "tem isto aqui agora", e é exatamente o que contagem quer dizer.
@@ -28,7 +32,7 @@ from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, todos, transacao, um
-from command_center.providers import estoque
+from command_center.providers import estoque, prateleiras
 
 r = APIRouter(prefix="/ops/api/estoque", tags=["estoque"])
 
@@ -58,12 +62,46 @@ class MoverIn(BaseModel):
     nota: str | None = None
 
 
+def _gerente(u):
+    return bool(u.get("free")) or auth.pode(u.get("role"), "MANAGER")
+
+
+def _vitrine(i, u):
+    """Os campos da prateleira e do preço. **Custo e margem só para gerente**: o mecânico
+    vê o preço que vai para o cliente, não quanto a URACE ganha em cima."""
+    cat, sugerida = prateleiras.prateleira_de(i)
+    out = dict(category=cat, prateleira_sugerida=sugerida, subcategory=i["subcategory"],
+               size=i["size"], price=i["price"])
+    if _gerente(u):
+        out.update(cost=i["cost"], markup=i["markup"])
+    return out
+
+
+def _donos(con):
+    """{item_id: [{client_id, cliente, qty}]} — peça de cliente guardada com a gente."""
+    out = {}
+    for l in todos(con, """SELECT l.item_id, l.client_id, COALESCE(c.pilot_name, c.name) AS cliente,
+                                  SUM(l.qty) AS qty
+                             FROM stock_levels l JOIN clients c ON c.id = l.client_id
+                            WHERE l.qty > 0 GROUP BY l.item_id, l.client_id"""):
+        out.setdefault(l["item_id"], []).append(dict(l))
+    marcas = ",".join("?" * len(estoque.EM_CASA))
+    for l in todos(con, f"""SELECT un.item_id, un.client_id, COALESCE(c.pilot_name, c.name) AS cliente,
+                                   COUNT(*) AS qty
+                              FROM stock_units un JOIN clients c ON c.id = un.client_id
+                             WHERE un.status IN ({marcas}) GROUP BY un.item_id, un.client_id""",
+                   estoque.EM_CASA):
+        out.setdefault(l["item_id"], []).append(dict(l))
+    return out
+
+
 @r.get("")
 def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_db),
                u=Depends(auth.exige("OPERATOR"))):
     """A prateleira: cada item com saldo total, o que é nosso e o que é de cliente."""
     loc = estoque.local(con, local)["id"] if local else None
     mov = estoque.ultimos_movimentos(con)
+    donos = _donos(con)
     itens = []
     for i in todos(con, "SELECT * FROM stock_items WHERE active=1 ORDER BY kind, name"):
         total = estoque.saldo(con, i["id"], loc)
@@ -74,8 +112,11 @@ def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_d
             notes=i["notes"], tem_foto=bool(i["image_path"]),
             total=total, nosso=nosso, de_clientes=round(total - nosso, 4),
             abaixo=bool(i["min_qty"] and nosso < float(i["min_qty"])),
-            contado=i["id"] in mov, ultima_contagem=(mov.get(i["id"]) or {}).get("contagem")))
+            contado=i["id"] in mov, ultima_contagem=(mov.get(i["id"]) or {}).get("contagem"),
+            clientes=donos.get(i["id"], []), **_vitrine(i, u)))
     return {"itens": itens,
+            "prateleiras": prateleiras.PRATELEIRAS,
+            "gerente": _gerente(u),
             "a_contar": [x["id"] for x in estoque.nunca_contados(con)],
             "locais": [dict(l) for l in todos(con, "SELECT * FROM stock_locations WHERE active=1")],
             "repor": estoque.abaixo_do_minimo(con),
@@ -96,17 +137,22 @@ def rota_item(item_id: int, con: sqlite3.Connection = Depends(get_db),
                                  LEFT JOIN stock_locations lo ON lo.id = m.from_location_id
                                  LEFT JOIN stock_locations ld ON ld.id = m.to_location_id
                                 WHERE m.item_id=? ORDER BY m.id DESC LIMIT 100""", (item_id,))
-    saldos = todos(con, """SELECT l.*, lo.name AS local, c.name AS cliente
+    saldos = todos(con, """SELECT l.*, lo.name AS local, lo.code AS local_code, COALESCE(c.pilot_name, c.name) AS cliente
                              FROM stock_levels l
                              JOIN stock_locations lo ON lo.id = l.location_id
                              LEFT JOIN clients c ON c.id = l.client_id
                             WHERE l.item_id=? AND l.qty <> 0""", (item_id,))
-    unidades = todos(con, """SELECT un.*, lo.name AS local, c.name AS cliente
+    unidades = todos(con, """SELECT un.*, lo.name AS local, lo.code AS local_code, COALESCE(c.pilot_name, c.name) AS cliente
                                FROM stock_units un
                                LEFT JOIN stock_locations lo ON lo.id = un.location_id
                                LEFT JOIN clients c ON c.id = un.client_id
                               WHERE un.item_id=? ORDER BY un.serial""", (item_id,))
-    return {"item": dict(it), "saldos": [dict(x) for x in saldos],
+    ficha = dict(it)
+    for k in ("cost", "markup"):
+        if not _gerente(u):
+            ficha.pop(k, None)
+    ficha.update(_vitrine(it, u))
+    return {"item": ficha, "saldos": [dict(x) for x in saldos],
             "unidades": [dict(x) for x in unidades],
             "movimentos": [dict(x) for x in movimentos],
             "total": estoque.saldo(con, item_id), "nosso": estoque.vendavel(con, item_id)}
@@ -295,10 +341,14 @@ def _pasta_fotos():
 @r.post("/item")
 async def rota_criar_item(request: Request, con: sqlite3.Connection = Depends(get_db),
                           u=Depends(auth.exige("OPERATOR")),
-                          name: str = Form(...), kind: str = Form("peca"),
-                          unit: str = Form("un"), notes: str | None = Form(None),
+                          name: str = Form(...), kind: str | None = Form(None),
+                          unit: str | None = Form(None), notes: str | None = Form(None),
                           sku: str | None = Form(None), min_qty: float | None = Form(None),
                           qty: float | None = Form(None), local: str = Form(estoque.SEDE),
+                          category: str | None = Form(None), subcategory: str | None = Form(None),
+                          size: str | None = Form(None), cost: str | None = Form(None),
+                          markup: str | None = Form(None), price: str | None = Form(None),
+                          client_id: int | None = Form(None), serial: str | None = Form(None),
                           foto: UploadFile | None = File(None)):
     """O botão "Adicionar" do mecânico: nome, descrição, quantidade e foto.
 
@@ -309,19 +359,31 @@ async def rota_criar_item(request: Request, con: sqlite3.Connection = Depends(ge
     Se a foto falhar, a peça **continua cadastrada**: perder o cadastro inteiro porque a
     imagem não subiu seria trocar o que importa pelo enfeite.
     """
+    if any((v or "").strip() for v in (cost, markup, price)) and not _gerente(u):
+        raise HTTPException(403, "Valor de compra, margem e preço final são do gerente. "
+                                 "Cadastre a peça sem eles; o gerente completa depois.")
+    prat = prateleiras.POR_CODIGO.get(category or "")
+    kind = kind or (prat["kind"] if prat else "peca")
+    unit = unit or (prat["unit"] if prat else "un")
+    seriais = [x.strip() for x in (serial or "").replace(",", "\n").splitlines() if x.strip()]
+    contado, unidades = None, []
+    # Tudo numa transação: peça cadastrada pela metade (ficha sem a quantidade, ou com
+    # dois dos três números de série) é pior do que peça nenhuma — ninguém percebe.
     try:
-        iid = estoque.criar_item(con, kind, name, sku=sku or None, unit=unit,
-                                 min_qty=min_qty, notes=notes)
+        with transacao(con):
+            iid = estoque.criar_item(con, kind, name, sku=sku or None, unit=unit,
+                                     min_qty=min_qty, notes=notes, category=category,
+                                     subcategory=subcategory, size=size, cost=cost,
+                                     markup=markup, price=price)
+            if qty is not None:
+                contado = estoque.contar(con, iid, qty, onde=local, client_id=client_id,
+                                         by_user_id=u["id"], notes="quantidade informada no cadastro")
+            for sn in seriais:
+                unidades.append(estoque.entrada(con, iid, serial=sn, para=local, client_id=client_id,
+                                                reason="cadastro (já estava com a gente)",
+                                                by_user_id=u["id"]))
     except estoque.ErroEstoque as e:
         raise _erro(e)
-
-    contado = None
-    if qty is not None:
-        try:
-            contado = estoque.contar(con, iid, qty, onde=local, by_user_id=u["id"],
-                                     notes="quantidade informada no cadastro")
-        except estoque.ErroEstoque as e:
-            raise _erro(e)
 
     aviso = None
     if foto is not None and getattr(foto, "filename", None):
@@ -339,10 +401,90 @@ async def rota_criar_item(request: Request, con: sqlite3.Connection = Depends(ge
                 con.execute("UPDATE stock_items SET image_path=? WHERE id=?", (nome_arq, iid))
 
     _auditar(con, request, u, "stock.item.create", iid,
-             {"name": name, "kind": kind, "qty": qty, "com_foto": bool(aviso is None and foto
-                                                                        and getattr(foto, "filename", None))})
+             {"name": name, "kind": kind, "qty": qty, "category": category, "client_id": client_id,
+              "seriais": seriais, "com_preco": price is not None or cost is not None,
+              "com_foto": bool(aviso is None and foto and getattr(foto, "filename", None))})
     con.commit()
-    return {"id": iid, "contado": contado, "aviso": aviso}
+    return {"id": iid, "contado": contado, "unidades": unidades, "aviso": aviso}
+
+
+class EditarIn(BaseModel):
+    model_config = {"extra": "forbid"}
+    name: str | None = None
+    notes: str | None = None
+    unit: str | None = None
+    min_qty: float | None = None
+    category: str | None = None
+    subcategory: str | None = None
+    size: str | None = None
+    cost: float | None = None
+    markup: str | None = None
+    price: float | None = None
+
+
+@r.patch("/item/{item_id}")
+def rota_editar(item_id: int, dados: EditarIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                u=Depends(auth.exige("OPERATOR"))):
+    """Editar a ficha: nome, descrição, prateleira, medida — do mecânico. Valor de compra,
+    margem e preço final — do gerente. Só o que veio no pedido muda."""
+    campos = dados.model_dump(exclude_unset=True)
+    if set(campos) & set(estoque.DE_PRECO) and not _gerente(u):
+        raise HTTPException(403, "Valor de compra, margem e preço final são do gerente.")
+    try:
+        estoque.item(con, item_id)
+    except estoque.ErroEstoque as e:
+        raise HTTPException(404, str(e))
+    try:
+        mudou = estoque.atualizar_item(con, item_id, **campos)
+    except estoque.ErroEstoque as e:
+        raise _erro(e)
+    if mudou:
+        _auditar(con, request, u, "stock.item.edit", item_id,
+                 {k: {"antes": a, "depois": d} for k, (a, d) in mudou.items()})
+    con.commit()
+    it = estoque.item(con, item_id)
+    return {"ok": True, "mudou": sorted(mudou), **_vitrine(it, u)}
+
+
+class DonoIn(BaseModel):
+    item_id: int
+    client_id: int
+    qty: float | None = None
+    unit_id: int | None = None
+    local: str = estoque.SEDE
+    nota: str | None = None
+
+
+@r.post("/assinalar")
+def rota_assinalar(dados: DonoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                   u=Depends(auth.exige("OPERATOR"))):
+    """Assinalar peça da URACE para um cliente — o pneu dele guardado com a gente.
+    É do mecânico: é ele quem separa na prateleira, e o histórico diz quem fez."""
+    try:
+        with transacao(con):
+            res = estoque.trocar_dono(con, dados.item_id, para_cliente_id=dados.client_id, qty=dados.qty,
+                                      unit_id=dados.unit_id, onde=dados.local, by_user_id=u["id"],
+                                      notes=dados.nota)
+            _auditar(con, request, u, "stock.assign", dados.item_id, {**dados.model_dump(), **res})
+    except estoque.ErroEstoque as e:
+        raise _erro(e)
+    return res
+
+
+@r.post("/devolver")
+def rota_devolver(dados: DonoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                  u=Depends(auth.exige("MANAGER"))):
+    """A peça do cliente volta a ser da URACE (assinalada por engano, ou ele vendeu para
+    nós). É do **gerente**: transforma o que era dos outros em algo que a casa pode vender."""
+    try:
+        with transacao(con):
+            res = estoque.trocar_dono(con, dados.item_id, de_cliente_id=dados.client_id, qty=dados.qty,
+                                      unit_id=dados.unit_id, onde=dados.local, by_user_id=u["id"],
+                                      notes=dados.nota)
+            _auditar(con, request, u, "stock.unassign", dados.item_id, {**dados.model_dump(), **res})
+    except estoque.ErroEstoque as e:
+        raise _erro(e)
+    return res
 
 
 @r.post("/item/{item_id}/foto")

@@ -181,10 +181,10 @@ def _coletar(con):
     a_contar = _est.nunca_contados(con)
     if a_contar:
         itens.append(dict(key=_chave("estoque-contar", "stock", "primeira"), level="MEDIUM",
-                          title=f"{len(a_contar)} peça(s) do estoque nunca foram contadas",
-                          why="O zero delas é 'ninguém contou', não 'acabou'. Enquanto não contar, a lista de "
-                              "reposição não vale. Estoque → Contar prateleira: em branco fica como está.",
-                          entity={"type": "stock", "id": None}, client_id=None, link=None, action="Contar prateleira",
+                          title=f"{len(a_contar)} peça(s) do estoque sem quantidade informada",
+                          why="O zero delas é 'ninguém contou', não 'acabou'. Enquanto ninguém informar quanto tem, "
+                              "a lista de reposição não vale. Estoque → toque na peça → 'Quanto tem agora'.",
+                          entity={"type": "stock", "id": None}, client_id=None, link=None, action="Informar quantidade",
                           facts=[("Peças", ", ".join(i["name"] for i in a_contar[:8]) + (" …" if len(a_contar) > 8 else ""))]))
     nao_contados = {i["id"] for i in a_contar}
     repor = [f for f in _est.abaixo_do_minimo(con) if f["id"] not in nao_contados]

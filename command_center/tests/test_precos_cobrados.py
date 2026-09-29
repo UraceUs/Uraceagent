@@ -195,6 +195,19 @@ def test_valor_nunca_cobrado_continua_marcado_para_conferir(con):
     assert args.get("_conferir") and "invoice anterior" in args["_conferir"][0]
 
 
+def test_preco_final_do_estoque_nao_pede_conferencia(con):
+    """29/09: o preço final da peça, definido no estoque (custo + margem), é o valor da
+    invoice. Vindo de lá, a linha não é marcada "de onde veio este valor?"."""
+    from command_center.api import acoes
+    from command_center.providers import estoque
+    _sincroniza(con)
+    estoque.criar_item(con, "peca", "Chain 108", category="hardware", cost=80, markup="$19")
+    args, _ = acoes.normalizar_invoice(_invoice(99), "", None, None, con)
+    assert "_conferir" not in args
+    args, _ = acoes.normalizar_invoice(_invoice(98), "", None, None, con)
+    assert args.get("_conferir"), "valor que não bate com nada continua marcado"
+
+
 # ------------------------------------------------------------------ conector do QuickBooks
 @pytest.fixture
 def qb(monkeypatch, tmp_path):

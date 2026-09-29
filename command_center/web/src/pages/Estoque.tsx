@@ -1,144 +1,277 @@
 /* Estoque — o que existe, onde está e de quem é.
  *
- * Duas decisões do dono mandam nesta tela:
+ * Decisões do dono que mandam nesta tela:
  *   22/09: chassi e motor têm ficha com número de série; pneu e peça são quantidade.
- *   23/09: "o acesso de mecânico consiga, ao clicar em estoque, ter um botão de
- *          adicionar; aí ele consegue colocar foto, descrição, nome e quantidade".
+ *   23/09: o mecânico, pelo celular, adiciona a peça: foto, nome, descrição, quantidade.
+ *   29/09: "a visualização que eu quero é por cards, em fileiras horizontais de
+ *          categorias" — pneus numa, motores noutra… vestuário na última. Dentro de cada
+ *          fileira, as subcategorias (marca e medida do pneu, família do motor). A peça
+ *          pode ser assinalada para um cliente, e tem valor de compra, margem (campo livre:
+ *          15% ou um valor fixo) e o preço final que vai para a invoice.
  *
- * Por isso o botão Adicionar é a primeira coisa da página, e não um item escondido num
- * menu de três pontinhos: quem está na prateleira com o celular na mão é quem cadastra.
+ * "Contar prateleira" virou "Adicionar peça" (29/09). Informar quanto tem de uma peça que
+ * já existe é tocar no card: a primeira coisa da ficha é "Quanto tem agora".
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
+import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Kpi, Loading, PageHeader, Scrim, Section } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim } from '../components/ui'
 import { Icon } from '../components/Icon'
 import { useToast } from '../components/Toast'
+import { Picker } from '../components/Unir'
 
+interface Dono { client_id: number; cliente: string; qty: number }
 interface ItemEstoque {
   id: number; name: string; kind: string; tracking: string; unit: string
   min_qty: number | null; sku: string | null; supplier_url: string | null
   notes: string | null; tem_foto: boolean
   total: number; nosso: number; de_clientes: number; abaixo: boolean
   contado: boolean; ultima_contagem: string | null
+  category: string; prateleira_sugerida: boolean; subcategory: string | null; size: string | null
+  price: number | null; cost?: number | null; markup?: string | null
+  clientes: Dono[]
 }
+interface Prateleira { code: string; nome: string; kind: string; unit: string; subcategorias: string[]; medidas: string[]; dica: string }
 interface Repor { id: number; name: string; unit: string; falta: number; sku: string | null; supplier_url: string | null }
 interface Local { id: number; code: string; name: string }
-interface Lista { itens: ItemEstoque[]; locais: Local[]; repor: Repor[]; divergencias: unknown[]; a_contar: number[] }
+interface Lista { itens: ItemEstoque[]; prateleiras: Prateleira[]; gerente: boolean; locais: Local[]; repor: Repor[]; divergencias: unknown[]; a_contar: number[] }
 interface Movimento { id: number; kind: string; qty: number; qty_before: number | null; qty_after: number | null
   reason: string | null; notes: string | null; at: string; quem: string | null; de_nome: string | null; para_nome: string | null }
-interface Ficha { item: ItemEstoque & { supplier: string | null }; total: number; nosso: number
-  saldos: { local: string; qty: number; cliente: string | null }[]; movimentos: Movimento[] }
+interface Saldo { local: string; local_code: string; qty: number; client_id: number | null; cliente: string | null }
+interface Unidade { id: number; serial: string; status: string; local: string | null; local_code: string | null; client_id: number | null; cliente: string | null }
+interface Ficha { item: ItemEstoque & { supplier: string | null; image_path: string | null }; total: number; nosso: number
+  saldos: Saldo[]; unidades: Unidade[]; movimentos: Movimento[] }
 interface Sugestao { sku: string; name: string; url: string | null; price: number | null; brand: string | null; score: number }
 
 const MOV_ROTULO: Record<string, string> = { entrada: 'entrada', saida: 'saída', ajuste: 'ajuste', transferencia: 'transferência', contagem: 'contagem' }
+const EM_CASA = ['disponivel', 'em_uso', 'em_servico', 'emprestado']
 
 function quando(iso: string | null) {
   if (!iso) return '—'
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)} ${iso.slice(11, 16)}`
 }
+const usd = (v: number | null | undefined) => v === null || v === undefined ? '—' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const num = (s: string) => s.trim() === '' ? null : Number(s.replace(',', '.'))
 
-/** Contar a prateleira — o que tira o estoque do zero.
- *  Em branco é "não contei" e fica como está; zero é "contei e não tem". A gravação é tudo
- *  ou nada: se uma linha não serve, nenhuma entra e a mensagem diz qual. */
-function Contar({ d, onClose, reload }: { d: Lista; onClose: () => void; reload: () => void }) {
+/** Espelho de `prateleiras.preco_final` — só para a prévia; quem decide é o servidor.
+ *  "15%" é porcentagem, "20" é valor fixo em dólar, "15% + 10" soma os dois. */
+function precoFinal(custo: number | null, margem: string): number | null | 'erro' {
+  if (custo === null || Number.isNaN(custo)) return null
+  const t = margem.trim().replace(/^\+/, '')
+  if (!t) return null
+  let v = custo
+  for (const bruto of t.split(/\s*\+\s*/)) {
+    const m = bruto.replace(/US\$|\$|\s/g, '').replace(',', '.').match(/^(\d+(?:\.\d+)?)(%?)$/)
+    if (!m) return 'erro'
+    v = m[2] ? v * (1 + Number(m[1]) / 100) : v + Number(m[1])
+  }
+  return Math.round(v * 100) / 100
+}
+
+/** Valor de compra, margem e preço final — só aparece para gerente. */
+function CamposPreco({ custo, setCusto, margem, setMargem, preco, setPreco }: {
+  custo: string; setCusto: (v: string) => void; margem: string; setMargem: (v: string) => void; preco: string; setPreco: (v: string) => void
+}) {
+  const calc = precoFinal(num(custo), margem)
+  const manual = preco.trim() !== ''
+  return <>
+    <div className="row gap wrap">
+      <label className="fld grow"><span>Valor de compra</span>
+        <input type="number" inputMode="decimal" min={0} value={custo} onChange={e => setCusto(e.target.value)} placeholder="$ que a URACE paga" /></label>
+      <label className="fld grow"><span>Margem <i className="muted">(15% ou 20)</i></span>
+        <input value={margem} onChange={e => setMargem(e.target.value)} placeholder="15%" /></label>
+      <label className="fld grow"><span>Preço final ao cliente</span>
+        <input type="number" inputMode="decimal" min={0} value={preco} onChange={e => setPreco(e.target.value)}
+               placeholder={typeof calc === 'number' ? calc.toFixed(2) : 'calculado'} /></label>
+    </div>
+    <div className="preco-previa">
+      {calc === 'erro' ? <span style={{ color: 'var(--crit)' }}>Não entendi a margem. Use 15% (porcentagem) ou 20 (valor fixo em dólar).</span>
+        : manual ? <>Vai para a invoice: <b>{usd(num(preco))}</b> <span className="muted">(digitado)</span></>
+        : typeof calc === 'number' ? <>Vai para a invoice: <b>{usd(calc)}</b> <span className="muted">= {usd(num(custo))} + {margem.trim()}</span></>
+        : <span className="muted">Com valor de compra e margem, o preço final sai sozinho. Ou digite o preço final direto.</span>}
+    </div>
+  </>
+}
+
+/** Foto grande e fácil de tocar: no celular abre a câmera. */
+function CampoFoto({ previa, onFile, rotulo = 'Tirar foto da peça' }: { previa: string | null; onFile: (f: File | null) => void; rotulo?: string }) {
+  const ref = useRef<HTMLInputElement>(null)
+  return <>
+    <button type="button" className="foto-btn" onClick={() => ref.current?.click()}>
+      {previa ? <img src={previa} alt="foto da peça" /> : <><Icon name="box" size={22} /> {rotulo}</>}
+    </button>
+    <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp" capture="environment" hidden
+           onChange={e => onFile(e.target.files?.[0] || null)} />
+  </>
+}
+
+/** Adicionar peça — o botão do mecânico, no celular. Foto, nome, prateleira, quanto tem, de quem é. */
+function Adicionar({ d, inicial, onClose, reload }: { d: Lista; inicial: string | null; onClose: () => void; reload: () => void }) {
   const toast = useToast()
+  const [prat, setPrat] = useState(inicial || d.prateleiras[0]?.code || 'outros')
+  const p = d.prateleiras.find(x => x.code === prat)
+  const serie = p?.kind === 'motor' || p?.kind === 'chassi'
+  const [nome, setNome] = useState('')
+  const [sub, setSub] = useState('')
+  const [medida, setMedida] = useState('')
+  const [descricao, setDescricao] = useState('')
+  const [qtd, setQtd] = useState('')
+  const [seriais, setSeriais] = useState('')
   const [local, setLocal] = useState(d.locais[0]?.code || 'sede')
-  const [so, setSo] = useState(d.a_contar.length > 0)
-  const [busca, setBusca] = useState('')
-  const [qtd, setQtd] = useState<Record<number, string>>({})
+  const [deCliente, setDeCliente] = useState(false)
+  const [cliente, setCliente] = useState<Client | null>(null)
+  const [minimo, setMinimo] = useState('')
+  const [unidade, setUnidade] = useState('')
+  const [custo, setCusto] = useState('')
+  const [margem, setMargem] = useState('')
+  const [preco, setPreco] = useState('')
+  const [foto, setFoto] = useState<File | null>(null)
+  const [previa, setPrevia] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
-  const nunca = useMemo(() => new Set(d.a_contar), [d])
-  const lista = d.itens.filter(i => i.tracking === 'quantidade')
-    .filter(i => !so || nunca.has(i.id))
-    .filter(i => !busca.trim() || i.name.toLowerCase().includes(busca.trim().toLowerCase()))
-  const preenchidas = Object.entries(qtd).filter(([, v]) => v.trim() !== '')
+
+  function escolher(f: File | null) {
+    setFoto(f)
+    setPrevia(old => { if (old) URL.revokeObjectURL(old); return f ? URL.createObjectURL(f) : null })
+  }
 
   async function salvar() {
-    const itens = preenchidas.map(([id, v]) => ({ item_id: Number(id), qty: Number(v.replace(',', '.')) }))
-    if (itens.some(i => Number.isNaN(i.qty) || i.qty < 0)) { toast('Quantidade precisa ser um número, zero ou mais.', 'warn'); return }
+    if (!nome.trim()) { toast('A peça precisa de um nome.', 'warn'); return }
+    if (deCliente && !cliente) { toast('Escolha o cliente dono da peça.', 'warn'); return }
+    if (d.gerente && precoFinal(num(custo), margem) === 'erro') { toast('Não entendi a margem.', 'warn'); return }
     setSalvando(true)
     try {
-      const r = await api.post<{ contados: number; com_diferenca: { name: string; antes: number; depois: number }[] }>(
-        '/estoque/contagem', { local, itens })
-      const dif = r.com_diferenca.length
-      toast(`${r.contados} contagem(ns) gravada(s)` + (dif ? ` · ${dif} com diferença do que o painel tinha` : ''), 'ok')
+      const fd = new FormData()
+      fd.append('name', nome.trim())
+      fd.append('category', prat)
+      fd.append('local', local)
+      if (sub.trim()) fd.append('subcategory', sub.trim())
+      if (medida.trim()) fd.append('size', medida.trim())
+      if (descricao.trim()) fd.append('notes', descricao.trim())
+      if (unidade.trim()) fd.append('unit', unidade.trim())
+      if (serie) { if (seriais.trim()) fd.append('serial', seriais.trim()) }
+      else {
+        if (qtd.trim()) fd.append('qty', qtd.trim().replace(',', '.'))
+        if (minimo.trim()) fd.append('min_qty', minimo.trim().replace(',', '.'))
+      }
+      if (deCliente && cliente) fd.append('client_id', String(cliente.id))
+      if (d.gerente) {
+        if (custo.trim()) fd.append('cost', custo.trim())
+        if (margem.trim()) fd.append('markup', margem.trim())
+        if (preco.trim()) fd.append('price', preco.trim())
+      }
+      if (foto) fd.append('foto', foto)
+      const res = await api.postForm<{ id: number; aviso: string | null }>('/estoque/item', fd)
+      toast(res.aviso || `${nome.trim()} adicionada em ${p?.nome || 'estoque'}.`, res.aviso ? 'warn' : 'ok')
       reload(); onClose()
     } catch (e) {
       toast((e as ApiError).message, 'crit')
     } finally { setSalvando(false) }
   }
 
-  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 620 }} onMouseDown={e => e.stopPropagation()}>
-    <h3>Contar prateleira</h3>
-    <p className="small muted">Digite quanto tem de cada peça. <b>Em branco fica como está</b>; zero quer dizer
-      "contei e não tem". Nada é gravado até você salvar.</p>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+    <h3>Adicionar peça</h3>
+    <CampoFoto previa={previa} onFile={escolher} />
+
+    <label className="fld"><span>Nome da peça</span>
+      <input value={nome} onChange={e => setNome(e.target.value)} placeholder={prat === 'pneus' ? 'MG SH2 Red' : 'Pastilha de freio Tonykart'} /></label>
+
+    <label className="fld"><span>Prateleira</span>
+      <select value={prat} onChange={e => { setPrat(e.target.value); setSub(''); setMedida('') }}>
+        {d.prateleiras.map(x => <option key={x.code} value={x.code}>{x.nome}</option>)}
+      </select></label>
+
     <div className="row gap wrap">
-      {d.locais.length > 1 && <label className="fld grow"><span>Onde você está contando</span>
-        <select value={local} onChange={e => setLocal(e.target.value)}>
-          {d.locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
-        </select></label>}
-      <label className="fld grow"><span>Buscar</span>
-        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="nome da peça" /></label>
+      <label className="fld grow"><span>{prat === 'pneus' || prat === 'motores' || prat === 'chassis' ? 'Marca' : 'Tipo'}</span>
+        <input list={`sub-${prat}`} value={sub} onChange={e => setSub(e.target.value)} placeholder={p?.subcategorias[0] || ''} />
+        <datalist id={`sub-${prat}`}>{p?.subcategorias.map(s => <option key={s} value={s} />)}</datalist></label>
+      <label className="fld grow"><span>{prat === 'vestuario' ? 'Tamanho' : 'Medida'}</span>
+        <input list={`med-${prat}`} value={medida} onChange={e => setMedida(e.target.value)} placeholder={p?.medidas[0] || ''} />
+        <datalist id={`med-${prat}`}>{p?.medidas.map(s => <option key={s} value={s} />)}</datalist></label>
     </div>
-    {!!d.a_contar.length && <label className="check small"><input type="checkbox" checked={so} onChange={e => setSo(e.target.checked)} />
-      só as {d.a_contar.length} que nunca foram contadas</label>}
-    <div className="tbl" style={{ maxHeight: '52vh', overflow: 'auto' }}>
-      {!lista.length && <Empty title="Nada para contar aqui" />}
-      {lista.map(i => <label className="tr" key={i.id} style={{ cursor: 'text' }}>
-        <div className="grow"><b>{i.name}</b>
-          <div className="small muted">{nunca.has(i.id) ? 'nunca contada' : `painel diz ${i.nosso} ${i.unit}`}{i.min_qty ? ` · mín ${i.min_qty}` : ''}</div></div>
-        <input className="inp sm" style={{ width: 90, textAlign: 'right' }} type="number" inputMode="decimal" min={0}
-               value={qtd[i.id] ?? ''} placeholder={i.unit} aria-label={`quantidade de ${i.name}`}
-               onChange={e => setQtd(q => ({ ...q, [i.id]: e.target.value }))} />
-      </label>)}
-    </div>
+    {p?.dica && <p className="small muted" style={{ marginTop: -4 }}>{p.dica}</p>}
+
+    {serie
+      ? <label className="fld"><span>Número de série <i className="muted">(um por linha — cada motor/chassi é uma ficha)</i></span>
+        <textarea rows={2} value={seriais} onChange={e => setSeriais(e.target.value)} placeholder="X30-123456" /></label>
+      : <div className="row gap wrap">
+        <label className="fld grow"><span>Quantidade que tem agora</span>
+          <input type="number" inputMode="decimal" min={0} value={qtd} onChange={e => setQtd(e.target.value)} placeholder={p?.unit || 'un'} /></label>
+        {d.locais.length > 1 && <label className="fld grow"><span>Onde</span>
+          <select value={local} onChange={e => setLocal(e.target.value)}>{d.locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
+      </div>}
+    {serie && d.locais.length > 1 && <label className="fld"><span>Onde</span>
+      <select value={local} onChange={e => setLocal(e.target.value)}>{d.locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
+
+    <div className="fld"><span>De quem é</span>
+      <div className="seg">
+        <button type="button" className={`btn sm${deCliente ? ' ghost' : ''}`} onClick={() => setDeCliente(false)}>Da URACE</button>
+        <button type="button" className={`btn sm${deCliente ? '' : ' ghost'}`} onClick={() => setDeCliente(true)}>De um cliente (guardada com a gente)</button>
+      </div></div>
+    {deCliente && <Picker label="Cliente dono da peça" value={cliente} onPick={setCliente} />}
+
+    <label className="fld"><span>Descrição <i className="muted">(onde fica, para que serve)</i></span>
+      <textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={2} /></label>
+
+    {d.gerente && <CamposPreco custo={custo} setCusto={setCusto} margem={margem} setMargem={setMargem} preco={preco} setPreco={setPreco} />}
+
+    <details className="small" style={{ margin: '8px 0' }}><summary style={{ cursor: 'pointer' }}>Mais: mínimo e unidade</summary>
+      <div className="row gap wrap">
+        {!serie && <label className="fld grow"><span>Avisar quando faltar <i className="muted">(mínimo)</i></span>
+          <input type="number" inputMode="decimal" value={minimo} onChange={e => setMinimo(e.target.value)} placeholder="4" /></label>}
+        <label className="fld grow"><span>Unidade</span>
+          <input value={unidade} onChange={e => setUnidade(e.target.value)} placeholder={p?.unit || 'un'} /></label>
+      </div></details>
+
     <div className="modal-foot">
-      <span className="small muted grow">{preenchidas.length ? `${preenchidas.length} preenchida(s)` : 'nenhuma preenchida'}</span>
       <button className="btn ghost" onClick={onClose}>Cancelar</button>
-      <button className="btn" disabled={salvando || !preenchidas.length} onClick={salvar}>
-        {salvando ? 'Salvando…' : `Salvar contagem`}</button>
+      <button className="btn" disabled={salvando || !nome.trim()} onClick={salvar}>{salvando ? 'Salvando…' : 'Adicionar peça'}</button>
     </div>
   </div></Scrim>
 }
 
-/** Mexer numa peça: chegou, usei, levei para o trailer. Cada botão é um movimento no razão. */
+/** Mexer numa peça: quanto tem agora, usei, chegou, levei para o trailer. */
 function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDone: () => void }) {
   const toast = useToast()
-  const [tipo, setTipo] = useState<'entrada' | 'saida' | 'transferir'>('saida')
+  const [tipo, setTipo] = useState<'contar' | 'entrada' | 'saida' | 'transferir'>('contar')
   const [qtd, setQtd] = useState('')
   const [de, setDe] = useState(locais[0]?.code || 'sede')
   const [para, setPara] = useState(locais[1]?.code || 'trailer')
   const [nota, setNota] = useState('')
   const [indo, setIndo] = useState(false)
-  if (ficha.item.tracking !== 'quantidade') return <p className="small muted">Motor e chassi andam por unidade (número de série).</p>
+  if (ficha.item.tracking !== 'quantidade') return <p className="small muted">Motor e chassi andam por unidade (número de série).
+    Para cadastrar mais uma unidade, use <b>Adicionar peça</b> com o número de série.</p>
 
   async function enviar() {
-    const q = Number(qtd.replace(',', '.'))
-    if (!q || q <= 0) { toast('Informe a quantidade.', 'warn'); return }
+    const q = num(qtd)
+    if (q === null || Number.isNaN(q) || q < 0 || (q === 0 && tipo !== 'contar')) { toast('Informe a quantidade.', 'warn'); return }
     setIndo(true)
     try {
-      const corpo = { item_id: ficha.item.id, qty: q, local: de, para, nota: nota.trim() || null,
-                      motivo: tipo === 'entrada' ? 'compra' : tipo === 'saida' ? 'uso em serviço' : null }
-      await api.post(`/estoque/${tipo}`, corpo)
-      toast(tipo === 'entrada' ? 'Entrada registrada.' : tipo === 'saida' ? 'Saída registrada.' : 'Transferência registrada.', 'ok')
+      if (tipo === 'contar') {
+        const r = await api.post<{ antes: number; depois: number }>('/estoque/contar', { item_id: ficha.item.id, qty: q, local: de, nota: nota.trim() || null })
+        toast(r.antes === r.depois ? `Conferido: ${r.depois} ${ficha.item.unit}.` : `Agora são ${r.depois} ${ficha.item.unit} (eram ${r.antes}).`, 'ok')
+      } else {
+        await api.post(`/estoque/${tipo}`, { item_id: ficha.item.id, qty: q, local: de, para, nota: nota.trim() || null,
+                                             motivo: tipo === 'entrada' ? 'compra' : tipo === 'saida' ? 'uso em serviço' : null })
+        toast(tipo === 'entrada' ? 'Entrada registrada.' : tipo === 'saida' ? 'Saída registrada.' : 'Transferência registrada.', 'ok')
+      }
       setQtd(''); setNota(''); onDone()
     } catch (e) {
       toast((e as ApiError).message, 'crit')
     } finally { setIndo(false) }
   }
 
+  const ROT = { contar: 'Quanto tem agora', saida: 'Usei em serviço', entrada: 'Chegou (compra)', transferir: 'Levar para outro local' }
   return <div>
-    <div className="row gap wrap">
-      {(['saida', 'entrada', 'transferir'] as const).map(t => <button key={t} className={`btn sm${tipo === t ? '' : ' ghost'}`} onClick={() => setTipo(t)}>
-        {t === 'saida' ? 'Usei em serviço' : t === 'entrada' ? 'Chegou (compra)' : 'Levar para outro local'}</button>)}
+    <div className="seg">
+      {(['contar', 'saida', 'entrada', 'transferir'] as const).map(t => <button key={t} className={`btn sm${tipo === t ? '' : ' ghost'}`} onClick={() => setTipo(t)}>{ROT[t]}</button>)}
     </div>
+    {tipo === 'contar' && <p className="small muted">O número que você contou na prateleira vira o saldo; a diferença fica no histórico.</p>}
     <div className="row gap wrap">
       <label className="fld grow"><span>Quantidade</span>
-        <input type="number" inputMode="decimal" min={0} value={qtd} onChange={e => setQtd(e.target.value)} placeholder={ficha.item.unit} /></label>
-      {locais.length > 1 && <label className="fld grow"><span>{tipo === 'entrada' ? 'Para' : 'De'}</span>
+        <input type="number" inputMode="decimal" min={0} value={qtd} onChange={e => setQtd(e.target.value)} placeholder={ficha.item.unit} autoFocus /></label>
+      {locais.length > 1 && <label className="fld grow"><span>{tipo === 'entrada' ? 'Para' : tipo === 'contar' ? 'Onde' : 'De'}</span>
         <select value={de} onChange={e => setDe(e.target.value)}>{locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
       {tipo === 'transferir' && <label className="fld grow"><span>Para</span>
         <select value={para} onChange={e => setPara(e.target.value)}>{locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
@@ -149,20 +282,129 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
   </div>
 }
 
-/** Ligar a peça ao catálogo da Comet: a máquina sugere, gente escolhe (SKU é o que compras vai pedir). */
+/** De quem é: assinalar para um cliente (mecânico) e devolver para a URACE (gerente). */
+function DonoDaPeca({ ficha, locais, gerente, onDone }: { ficha: Ficha; locais: Local[]; gerente: boolean; onDone: () => void }) {
+  const toast = useToast()
+  const serie = ficha.item.tracking === 'serie'
+  const [cliente, setCliente] = useState<Client | null>(null)
+  const [qtd, setQtd] = useState('')
+  const [local, setLocal] = useState(locais[0]?.code || 'sede')
+  const [unidade, setUnidade] = useState<number | null>(null)
+  const [indo, setIndo] = useState(false)
+  const nossas = ficha.unidades.filter(u => !u.client_id && EM_CASA.includes(u.status))
+  const nossoAqui = ficha.saldos.filter(s => !s.client_id && s.local_code === local).reduce((a, s) => a + s.qty, 0)
+  const deClientes = [...ficha.saldos.filter(s => s.client_id && s.qty > 0).map(s => ({ chave: `l${s.client_id}${s.local_code}`, client_id: s.client_id!, cliente: s.cliente, qty: s.qty, local: s.local, local_code: s.local_code, unit_id: null as number | null })),
+                      ...ficha.unidades.filter(u => u.client_id && EM_CASA.includes(u.status)).map(u => ({ chave: `u${u.id}`, client_id: u.client_id!, cliente: u.cliente, qty: 1, local: u.local || '', local_code: u.local_code || 'sede', unit_id: u.id as number | null, serial: u.serial }))]
+
+  async function assinalar() {
+    if (!cliente) { toast('Escolha o cliente.', 'warn'); return }
+    const q = num(qtd)
+    if (!serie && (!q || q <= 0)) { toast('Informe quantos são dele.', 'warn'); return }
+    if (serie && !unidade) { toast('Escolha qual unidade.', 'warn'); return }
+    setIndo(true)
+    try {
+      await api.post('/estoque/assinalar', { item_id: ficha.item.id, client_id: cliente.id, qty: serie ? null : q, unit_id: serie ? unidade : null, local })
+      toast(`Assinalado para ${cliente.pilot_name || cliente.name}.`, 'ok')
+      setCliente(null); setQtd(''); setUnidade(null); onDone()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  async function devolver(x: typeof deClientes[number]) {
+    setIndo(true)
+    try {
+      await api.post('/estoque/devolver', { item_id: ficha.item.id, client_id: x.client_id, qty: x.unit_id ? null : x.qty, unit_id: x.unit_id, local: x.local_code })
+      toast('Voltou a ser da URACE.', 'ok'); onDone()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+
+  return <div>
+    {deClientes.length
+      ? <div className="tbl" style={{ marginBottom: 10 }}>{deClientes.map(x => <div className="tr" key={x.chave}>
+        <div className="grow"><b>{x.cliente}</b><div className="small muted">{'serial' in x ? `série ${x.serial} · ` : `${x.qty} ${ficha.item.unit} · `}{x.local}</div></div>
+        {gerente && <button className="btn ghost sm" disabled={indo} onClick={() => devolver(x)} title="assinalado por engano, ou o cliente vendeu para a URACE">devolver p/ URACE</button>}
+      </div>)}</div>
+      : <p className="small muted">Nenhuma unidade desta peça é de cliente.</p>}
+    <h4 style={{ margin: '6px 0' }}>Assinalar para um cliente</h4>
+    <p className="small muted">A peça continua na prateleira; passa a ser do cliente e nunca sai para outro.</p>
+    <Picker label="Cliente" value={cliente} onPick={setCliente} />
+    {serie
+      ? <label className="fld"><span>Qual unidade</span>
+        <select value={unidade ?? ''} onChange={e => setUnidade(e.target.value ? Number(e.target.value) : null)}>
+          <option value="">—</option>{nossas.map(u => <option key={u.id} value={u.id}>série {u.serial}{u.local ? ` · ${u.local}` : ''}</option>)}
+        </select></label>
+      : <div className="row gap wrap">
+        <label className="fld grow"><span>Quantos são dele <i className="muted">(da URACE aqui: {nossoAqui})</i></span>
+          <input type="number" inputMode="decimal" min={0} value={qtd} onChange={e => setQtd(e.target.value)} placeholder={ficha.item.unit} /></label>
+        {locais.length > 1 && <label className="fld grow"><span>Onde</span>
+          <select value={local} onChange={e => setLocal(e.target.value)}>{locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
+      </div>}
+    <button className="btn" disabled={indo || !cliente} onClick={assinalar}>{indo ? 'Salvando…' : 'Assinalar'}</button>
+  </div>
+}
+
+/** Editar a ficha: o mecânico mexe em nome, prateleira e medida; o gerente, no preço. */
+function Editar({ ficha, d, onDone }: { ficha: Ficha; d: Lista; onDone: () => void }) {
+  const toast = useToast()
+  const it = ficha.item
+  const [nome, setNome] = useState(it.name)
+  const [prat, setPrat] = useState(it.category)
+  const [sub, setSub] = useState(it.subcategory || '')
+  const [medida, setMedida] = useState(it.size || '')
+  const [notas, setNotas] = useState(it.notes || '')
+  const [minimo, setMinimo] = useState(it.min_qty === null ? '' : String(it.min_qty))
+  const [custo, setCusto] = useState(it.cost === null || it.cost === undefined ? '' : String(it.cost))
+  const [margem, setMargem] = useState(it.markup || '')
+  const [preco, setPreco] = useState(it.price === null ? '' : String(it.price))
+  const [indo, setIndo] = useState(false)
+  const p = d.prateleiras.find(x => x.code === prat)
+  const precoCalculado = !it.markup || it.cost === null || it.cost === undefined ? null : precoFinal(it.cost, it.markup)
+
+  async function salvar() {
+    const corpo: Record<string, unknown> = { name: nome.trim(), category: prat, subcategory: sub.trim() || null, size: medida.trim() || null,
+                                             notes: notas.trim() || null }
+    if (it.tracking === 'quantidade') corpo.min_qty = num(minimo)
+    if (d.gerente) {
+      if (precoFinal(num(custo), margem) === 'erro') { toast('Não entendi a margem.', 'warn'); return }
+      corpo.cost = num(custo); corpo.markup = margem.trim() || null
+      // preço que só repete a conta vai vazio: assim, mudar custo ou margem refaz o preço final
+      const pv = num(preco)
+      corpo.price = pv !== null && typeof precoCalculado === 'number' && Math.abs(pv - precoCalculado) < 0.005 ? null : pv
+    }
+    setIndo(true)
+    try {
+      await api.patch(`/estoque/item/${it.id}`, corpo)
+      toast('Ficha salva.', 'ok'); onDone()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+
+  return <div>
+    <label className="fld"><span>Nome</span><input value={nome} onChange={e => setNome(e.target.value)} /></label>
+    <label className="fld"><span>Prateleira{it.prateleira_sugerida && <i className="muted"> (sugerida pelo nome — confirme)</i>}</span>
+      <select value={prat} onChange={e => setPrat(e.target.value)}>{d.prateleiras.map(x => <option key={x.code} value={x.code}>{x.nome}</option>)}</select></label>
+    <div className="row gap wrap">
+      <label className="fld grow"><span>{prat === 'pneus' || prat === 'motores' || prat === 'chassis' ? 'Marca' : 'Tipo'}</span>
+        <input list={`esub-${prat}`} value={sub} onChange={e => setSub(e.target.value)} />
+        <datalist id={`esub-${prat}`}>{p?.subcategorias.map(s => <option key={s} value={s} />)}</datalist></label>
+      <label className="fld grow"><span>{prat === 'vestuario' ? 'Tamanho' : 'Medida'}</span>
+        <input list={`emed-${prat}`} value={medida} onChange={e => setMedida(e.target.value)} />
+        <datalist id={`emed-${prat}`}>{p?.medidas.map(s => <option key={s} value={s} />)}</datalist></label>
+      {it.tracking === 'quantidade' && <label className="fld grow"><span>Mínimo</span>
+        <input type="number" inputMode="decimal" value={minimo} onChange={e => setMinimo(e.target.value)} /></label>}
+    </div>
+    <label className="fld"><span>Descrição</span><textarea rows={2} value={notas} onChange={e => setNotas(e.target.value)} /></label>
+    {d.gerente && <CamposPreco custo={custo} setCusto={setCusto} margem={margem} setMargem={setMargem} preco={preco} setPreco={setPreco} />}
+    <button className="btn" disabled={indo || !nome.trim()} onClick={salvar} style={{ marginTop: 10 }}>{indo ? 'Salvando…' : 'Salvar ficha'}</button>
+  </div>
+}
+
+/** Ligar a peça ao catálogo da Comet (gerente). O dono deixou o SKU para depois (29/09). */
 function LigarSku({ ficha, onDone }: { ficha: Ficha; onDone: () => void }) {
-  const { can } = useAuth()
   const toast = useToast()
   const sug = useGet<{ tem_catalogo: boolean; sugestoes: Sugestao[] }>(`/estoque/item/${ficha.item.id}/sku-sugestoes`)
   const [indo, setIndo] = useState<string | null>(null)
   async function ligar(sku: string) {
     setIndo(sku)
-    try {
-      await api.post(`/estoque/item/${ficha.item.id}/sku`, { sku })
-      toast(`Ligada ao SKU ${sku}.`, 'ok'); onDone()
-    } catch (e) {
-      toast((e as ApiError).message, 'crit')
-    } finally { setIndo(null) }
+    try { await api.post(`/estoque/item/${ficha.item.id}/sku`, { sku }); toast(`Ligada ao SKU ${sku}.`, 'ok'); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(null) }
   }
   if (sug.loading && !sug.data) return <Loading rows={2} />
   if (sug.error) return <ErrorState error={sug.error} retry={sug.reload} />
@@ -171,239 +413,251 @@ function LigarSku({ ficha, onDone }: { ficha: Ficha; onDone: () => void }) {
   return <div className="tbl">
     {sug.data.sugestoes.map(x => <div className="tr" key={x.sku}>
       <div className="grow"><b>{x.name}</b>
-        <div className="small muted">SKU {x.sku}{x.brand ? ` · ${x.brand}` : ''}{x.price ? ` · $${x.price.toFixed(2)}` : ''} · {Math.round(x.score * 100)}% das palavras</div></div>
+        <div className="small muted">SKU {x.sku}{x.brand ? ` · ${x.brand}` : ''}{x.price ? ` · $${x.price.toFixed(2)}` : ''}</div></div>
       {x.url && <a className="btn ghost sm" href={x.url} target="_blank" rel="noreferrer">ver</a>}
       {ficha.item.sku === x.sku ? <Chip tone="ok">ligada</Chip>
-        : can('MANAGER') && <button className="btn sm" disabled={!!indo} onClick={() => ligar(x.sku)}>{indo === x.sku ? '…' : 'É este'}</button>}
+        : <button className="btn sm" disabled={!!indo} onClick={() => ligar(x.sku)}>{indo === x.sku ? '…' : 'É este'}</button>}
     </div>)}
-    {!can('MANAGER') && <p className="small muted">Quem liga ao SKU é o gerente — o SKU decide o que se compra.</p>}
   </div>
 }
 
-function FichaPeca({ id, locais, onClose, reload }: { id: number; locais: Local[]; onClose: () => void; reload: () => void }) {
-  const { can } = useAuth()
+function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: () => void; reload: () => void }) {
+  const toast = useToast()
   const f = useGet<Ficha>(`/estoque/${id}`)
-  const [aba, setAba] = useState<'historico' | 'mover' | 'sku'>('historico')
-  const recarregar = () => { f.reload(); reload() }
+  const [aba, setAba] = useState<'mover' | 'dono' | 'editar' | 'historico' | 'sku'>('mover')
+  const [versao, setVersao] = useState(0)
+  const recarregar = () => { f.reload(); reload(); setVersao(v => v + 1) }
+  const it = f.data?.item
+  const prat = d.prateleiras.find(x => x.code === it?.category)
+
+  async function trocarFoto(file: File | null) {
+    if (!file || !it) return
+    const fd = new FormData(); fd.append('foto', file)
+    try { await api.postForm(`/estoque/item/${it.id}/foto`, fd); toast('Foto trocada.', 'ok'); recarregar() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+
+  const ABAS = { mover: 'Quantidade', dono: 'Cliente', editar: 'Editar', historico: 'Histórico', sku: 'SKU' } as const
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 620 }} onMouseDown={e => e.stopPropagation()}>
     {f.error && <ErrorState error={f.error} retry={f.reload} />}
     {f.loading && !f.data && <Loading />}
-    {f.data && <>
-      <h3>{f.data.item.name}</h3>
-      <p className="small muted">{TIPO_ROTULO[f.data.item.kind] || f.data.item.kind}
-        {f.data.item.sku ? <> · SKU {f.data.item.sku}</> : ' · sem SKU'}
-        {f.data.item.min_qty ? <> · mínimo {f.data.item.min_qty} {f.data.item.unit}</> : null}</p>
+    {f.data && it && <>
+      <CampoFoto previa={it.image_path ? `/ops/api/estoque/item/${it.id}/foto?v=${versao}` : null} onFile={trocarFoto} rotulo="Pôr foto" />
+      <h3 style={{ marginTop: 10 }}>{it.name}</h3>
+      <p className="small muted">{prat?.nome || it.category}{it.subcategory ? ` · ${it.subcategory}` : ''}{it.size ? ` · ${it.size}` : ''}
+        {it.min_qty ? ` · mínimo ${it.min_qty} ${it.unit}` : ''}</p>
       <div className="row gap wrap">
-        <Chip tone="neutral">nosso: {f.data.nosso} {f.data.item.unit}</Chip>
+        <Chip tone={it.tracking === 'quantidade' && !f.data.movimentos.length ? 'neutral' : 'ok'}>da URACE: {f.data.nosso} {it.unit}</Chip>
         {f.data.total !== f.data.nosso && <Chip tone="info">de clientes: {f.data.total - f.data.nosso}</Chip>}
-        {f.data.saldos.map(sd => <Chip key={sd.local + (sd.cliente || '')} tone="outline">{sd.local}{sd.cliente ? ` (${sd.cliente})` : ''}: {sd.qty}</Chip>)}
+        {it.price !== null && <Chip tone="accent">preço final {usd(it.price)}</Chip>}
+        {d.gerente && it.cost !== null && it.cost !== undefined && <Chip tone="outline">compra {usd(it.cost)}{it.markup ? ` · margem ${it.markup}` : ''}</Chip>}
       </div>
-      <div className="row gap wrap" style={{ margin: '10px 0' }}>
-        <button className={`btn sm${aba === 'historico' ? '' : ' ghost'}`} onClick={() => setAba('historico')}>Histórico</button>
-        {can('OPERATOR') && <button className={`btn sm${aba === 'mover' ? '' : ' ghost'}`} onClick={() => setAba('mover')}>Movimentar</button>}
-        <button className={`btn sm${aba === 'sku' ? '' : ' ghost'}`} onClick={() => setAba('sku')}>Catálogo da Comet</button>
+      <div className="seg" style={{ margin: '12px 0' }}>
+        {(Object.keys(ABAS) as (keyof typeof ABAS)[]).filter(k => k !== 'sku' || d.gerente).map(k =>
+          <button key={k} className={`btn sm${aba === k ? '' : ' ghost'}`} onClick={() => setAba(k)}>{ABAS[k]}</button>)}
       </div>
+      {aba === 'mover' && <Mover ficha={f.data} locais={d.locais} onDone={recarregar} />}
+      {aba === 'dono' && <DonoDaPeca ficha={f.data} locais={d.locais} gerente={d.gerente} onDone={recarregar} />}
+      {aba === 'editar' && <Editar ficha={f.data} d={d} onDone={recarregar} />}
       {aba === 'historico' && (f.data.movimentos.length
         ? <div className="tbl" style={{ maxHeight: '40vh', overflow: 'auto' }}>
           {f.data.movimentos.map(m => <div className="tr" key={m.id}>
-            <div className="grow"><b>{MOV_ROTULO[m.kind] || m.kind}</b> {m.qty} {f.data!.item.unit}
-              {m.para_nome && m.de_nome ? ` · ${m.de_nome} → ${m.para_nome}` : m.para_nome ? ` · ${m.para_nome}` : m.de_nome ? ` · ${m.de_nome}` : ''}
+            <div className="grow"><b>{MOV_ROTULO[m.kind] || m.kind}</b> {m.qty} {it.unit}
+              {m.para_nome && m.de_nome && m.para_nome !== m.de_nome ? ` · ${m.de_nome} → ${m.para_nome}` : m.para_nome ? ` · ${m.para_nome}` : m.de_nome ? ` · ${m.de_nome}` : ''}
               <div className="small muted">{quando(m.at)} · {m.quem || 'sistema'}{m.reason ? ` · ${m.reason}` : ''}{m.notes ? ` · ${m.notes}` : ''}</div></div>
             {m.qty_before !== null && m.qty_after !== null && <span className="small muted">{m.qty_before} → {m.qty_after}</span>}
           </div>)}
         </div>
-        : <Empty title="Nunca foi contada">O zero desta peça é "ninguém contou", não "acabou".</Empty>)}
-      {aba === 'mover' && <Mover ficha={f.data} locais={locais} onDone={recarregar} />}
+        : <Empty title="Sem histórico">Ninguém informou a quantidade desta peça ainda: o zero dela é "ninguém contou", não "acabou".</Empty>)}
       {aba === 'sku' && <LigarSku ficha={f.data} onDone={recarregar} />}
       <div className="modal-foot"><button className="btn ghost" onClick={onClose}>Fechar</button></div>
     </>}
   </div></Scrim>
 }
 
-const TIPO_ROTULO: Record<string, string> = { peca: 'peça', pneu: 'pneu', motor: 'motor', chassi: 'chassi' }
-
-/** O formulário que o dono pediu: nome, descrição, quantidade e foto. Nada além. */
-function Adicionar({ locais, onClose, reload }: { locais: Local[]; onClose: () => void; reload: () => void }) {
-  const toast = useToast()
-  const [nome, setNome] = useState('')
-  const [tipo, setTipo] = useState('peca')
-  const [unidade, setUnidade] = useState('un')
-  const [descricao, setDescricao] = useState('')
-  const [qtd, setQtd] = useState('')
-  const [minimo, setMinimo] = useState('')
-  const [local, setLocal] = useState(locais[0]?.code || 'sede')
-  const [foto, setFoto] = useState<File | null>(null)
-  const [previa, setPrevia] = useState<string | null>(null)
-  const [salvando, setSalvando] = useState(false)
-  const arquivo = useRef<HTMLInputElement>(null)
-  const serie = tipo === 'motor' || tipo === 'chassi'
-
-  function escolher(f: File | null) {
-    setFoto(f)
-    setPrevia(p => { if (p) URL.revokeObjectURL(p); return f ? URL.createObjectURL(f) : null })
-  }
-
-  async function salvar() {
-    if (!nome.trim()) { toast('A peça precisa de um nome.', 'warn'); return }
-    setSalvando(true)
-    try {
-      const fd = new FormData()
-      fd.append('name', nome.trim())
-      fd.append('kind', tipo)
-      fd.append('unit', unidade)
-      fd.append('local', local)
-      if (descricao.trim()) fd.append('notes', descricao.trim())
-      if (qtd.trim() && !serie) fd.append('qty', qtd.trim())
-      if (minimo.trim() && !serie) fd.append('min_qty', minimo.trim())
-      if (foto) fd.append('foto', foto)
-      const res = await api.postForm<{ id: number; aviso: string | null }>('/estoque/item', fd)
-      toast(res.aviso || `${nome.trim()} cadastrado.`, res.aviso ? 'warn' : 'ok')
-      reload(); onClose()
-    } catch (e) {
-      toast((e as ApiError).message, 'crit')
-    } finally { setSalvando(false) }
-  }
-
-  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
-    <h3>Adicionar ao estoque</h3>
-    <p className="small muted">O que está na prateleira agora. A quantidade entra como contagem —
-      você está dizendo quanto tem hoje, não registrando uma compra.</p>
-
-    <label className="fld"><span>Nome da peça</span>
-      <input value={nome} onChange={e => setNome(e.target.value)} placeholder="Pastilha de freio Tonykart" autoFocus /></label>
-
-    <label className="fld"><span>Descrição <i className="muted">(onde fica, para que serve, qual kart)</i></span>
-      <textarea value={descricao} onChange={e => setDescricao(e.target.value)} rows={2}
-                placeholder="Prateleira A. Serve no OTK do Savage e no Parolin." /></label>
-
-    <div className="row gap">
-      <label className="fld grow"><span>Tipo</span>
-        <select value={tipo} onChange={e => { setTipo(e.target.value); setUnidade(e.target.value === 'pneu' ? 'jogo' : 'un') }}>
-          <option value="peca">peça</option><option value="pneu">pneu</option>
-          <option value="motor">motor</option><option value="chassi">chassi</option>
-        </select></label>
-      <label className="fld grow"><span>Unidade</span>
-        <input value={unidade} onChange={e => setUnidade(e.target.value)} placeholder="un, jogo, litro" /></label>
+/** Um card da prateleira: foto, nome, marca/medida, quanto tem, de quem é, preço. */
+function CardPeca({ i, gerente, onOpen }: { i: ItemEstoque; gerente: boolean; onOpen: () => void }) {
+  const semQtd = i.tracking === 'quantidade' && !i.contado
+  return <button className="pcard" onClick={onOpen}>
+    <div className="ph">{i.tem_foto ? <img src={`/ops/api/estoque/item/${i.id}/foto`} alt="" loading="lazy" /> : <Icon name="box" size={28} />}</div>
+    <div className="bd">
+      <div className="nm">{i.name}</div>
+      <div className="sb">{[i.subcategory, i.size].filter(Boolean).join(' · ') || ' '}</div>
+      {semQtd ? <div className="qt"><small style={{ marginLeft: 0 }}>sem quantidade</small></div>
+        : <div className={`qt${i.abaixo ? ' warn' : ''}`}>{i.nosso}<small>{i.unit}</small></div>}
+      <div className="ft">
+        {i.clientes.slice(0, 2).map(c => <Chip key={c.client_id} tone="info" title="peça de cliente guardada com a gente">{c.qty} · {c.cliente}</Chip>)}
+        {i.clientes.length > 2 && <Chip tone="info">+{i.clientes.length - 2}</Chip>}
+        {i.abaixo && !semQtd && <Chip tone="warn">repor</Chip>}
+        {i.price !== null ? <Chip tone="accent">{usd(i.price)}</Chip> : gerente && <Chip tone="outline">sem preço</Chip>}
+      </div>
     </div>
+  </button>
+}
 
-    {serie
-      ? <Banner tone="info">Motor e chassi têm ficha individual, com número de série — um por um,
-        para você saber qual está no trailer. Cadastre aqui e depois dê entrada de cada unidade.</Banner>
-      : <div className="row gap">
-        <label className="fld grow"><span>Quantidade que temos</span>
-          <input type="number" inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)} placeholder="6" /></label>
-        <label className="fld grow"><span>Avisar quando faltar <i className="muted">(mínimo)</i></span>
-          <input type="number" inputMode="decimal" value={minimo} onChange={e => setMinimo(e.target.value)} placeholder="4" /></label>
-        {locais.length > 1 && <label className="fld grow"><span>Onde</span>
-          <select value={local} onChange={e => setLocal(e.target.value)}>
-            {locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}
-          </select></label>}
+/** Uma fileira: a prateleira, com as marcas/tipos como filtro. */
+function Fileira({ p, itens, gerente, onOpen, onAdd, podeAdd }: { p: Prateleira; itens: ItemEstoque[]; gerente: boolean; onOpen: (id: number) => void; onAdd: () => void; podeAdd: boolean }) {
+  const [filtro, setFiltro] = useState<string | null>(null)
+  const subs = useMemo(() => [...new Set(itens.map(i => i.subcategory).filter(Boolean) as string[])].sort(), [itens])
+  const vis = filtro ? itens.filter(i => i.subcategory === filtro) : itens
+  return <div className="shelf">
+    <div className="shelf-h">
+      <h2>{p.nome}</h2><span className="small muted">{itens.length}</span>
+      {subs.length > 1 && <div className="chips">
+        <button className={`btn sm${filtro ? ' ghost' : ''}`} onClick={() => setFiltro(null)}>todas</button>
+        {subs.map(s => <button key={s} className={`btn sm${filtro === s ? '' : ' ghost'}`} onClick={() => setFiltro(filtro === s ? null : s)}>{s}</button>)}
       </div>}
-
-    <label className="fld"><span>Foto</span>
-      <input ref={arquivo} type="file" accept="image/png,image/jpeg,image/webp" capture="environment"
-             onChange={e => escolher(e.target.files?.[0] || null)} /></label>
-    {previa && <div className="row gap" style={{ alignItems: 'center' }}>
-      <img src={previa} alt="prévia da foto" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 10 }} />
-      <button className="btn ghost" onClick={() => { escolher(null); if (arquivo.current) arquivo.current.value = '' }}>Tirar a foto</button>
-    </div>}
-
-    <div className="modal-foot">
-      <button className="btn ghost" onClick={onClose}>Cancelar</button>
-      <button className="btn" disabled={salvando || !nome.trim()} onClick={salvar}>
-        {salvando ? 'Salvando…' : 'Adicionar'}</button>
     </div>
-  </div></Scrim>
+    <div className="shelf-row">
+      {vis.map(i => <CardPeca key={i.id} i={i} gerente={gerente} onOpen={() => onOpen(i.id)} />)}
+      {podeAdd && <button className="pcard novo" onClick={onAdd}><Icon name="plus" size={22} />Adicionar em {p.nome}</button>}
+    </div>
+  </div>
 }
 
 export function Estoque() {
   const { can } = useAuth()
   const lista = useGet<Lista>('/estoque')
-  const [abrir, setAbrir] = useState(false)
-  const [sp, setSp] = useSearchParams()
-  const [contar, setContar] = useState(sp.get('contar') === '1')
+  const [abrir, setAbrir] = useState<string | null | false>(false)
   const [ficha, setFicha] = useState<number | null>(null)
   const [busca, setBusca] = useState('')
+  const [vazias, setVazias] = useState(false)
   const d = lista.data
-  useEffect(() => { if (sp.get('contar') === '1') { sp.delete('contar'); setSp(sp, { replace: true }) } }, [sp, setSp])
 
   const itens = useMemo(() => {
     const t = busca.trim().toLowerCase()
-    return (d?.itens || []).filter(i => !t || i.name.toLowerCase().includes(t) || (i.sku || '').toLowerCase().includes(t))
+    return (d?.itens || []).filter(i => !t || [i.name, i.sku, i.subcategory, i.size, ...i.clientes.map(c => c.cliente)]
+      .some(x => (x || '').toLowerCase().includes(t)))
   }, [d, busca])
+  const porPrateleira = useMemo(() => {
+    const m: Record<string, ItemEstoque[]> = {}
+    for (const i of itens) (m[i.category] ||= []).push(i)
+    for (const k of Object.keys(m)) m[k].sort((a, b) => (a.subcategory || '').localeCompare(b.subcategory || '') || a.name.localeCompare(b.name))
+    return m
+  }, [itens])
+  useEffect(() => { if (busca) setVazias(false) }, [busca])
 
   const deClientes = (d?.itens || []).filter(i => i.de_clientes > 0)
+  const semQtd = d?.a_contar.length || 0
+  // repor só o que alguém contou: zero de peça sem quantidade informada não é falta (25/09)
+  const faltando = (d?.repor || []).filter(r => !d?.a_contar.includes(r.id))
 
   return <>
-    <PageHeader title="Estoque" help="O que existe, onde está e de quem é. Peça de cliente nunca sai para outro.">
-      {can('OPERATOR') && <button className="btn ghost" onClick={() => setContar(true)}>Contar prateleira</button>}
-      {can('OPERATOR') && <button className="btn" onClick={() => setAbrir(true)}>
-        <Icon name="plus" size={16} /> Adicionar</button>}
+    <PageHeader title="Estoque" help="Uma fileira por prateleira. Toque na peça para informar quanto tem, assinalar para um cliente ou editar.">
+      {can('OPERATOR') && <button className="btn" onClick={() => setAbrir(null)}><Icon name="plus" size={16} /> Adicionar peça</button>}
     </PageHeader>
 
     {lista.error && <ErrorState error={lista.error} retry={lista.reload} />}
     {lista.loading && !d && <Loading />}
 
     {d && <>
-      <div className="kpis">
-        <Kpi label="Itens cadastrados" value={d.itens.length} lead />
-        <Kpi label="Precisa repor" value={d.repor.length} tone={d.repor.length ? 'warn' : undefined}
-             foot={d.repor.length ? 'abaixo do mínimo' : 'nada faltando'} />
-        <Kpi label="Nunca contadas" value={d.a_contar.length} tone={d.a_contar.length ? 'warn' : undefined}
-             foot={d.a_contar.length ? 'zero aqui é "ninguém contou"' : 'todas já contadas'}
-             onClick={d.a_contar.length && can('OPERATOR') ? () => setContar(true) : undefined} />
-        <Kpi label="De clientes, com a gente" value={deClientes.length}
-             foot={deClientes.length ? 'não é nosso para vender' : undefined} />
+      <div className="est-resumo">
+        <Chip tone="neutral">{d.itens.length} peças</Chip>
+        {!!faltando.length && <Chip tone="warn">{faltando.length} para repor</Chip>}
+        {!!semQtd && <Chip tone="warn" title="o zero delas é 'ninguém contou', não 'acabou'">{semQtd} sem quantidade</Chip>}
+        {!!deClientes.length && <Chip tone="info">{deClientes.length} com peça de cliente</Chip>}
       </div>
-
-      {!!d.a_contar.length && <Banner tone="warn">
-        {d.a_contar.length} peça(s) nunca foram contadas. O zero delas é "ninguém contou", não "acabou" —
-        por isso a lista "Precisa comprar" só vale depois da contagem.
-        {can('OPERATOR') && <> <button className="btn sm" onClick={() => setContar(true)}>Contar agora</button></>}</Banner>}
 
       {!!d.divergencias.length && <Banner tone="crit">
         {d.divergencias.length} saldo(s) não batem com o histórico de movimentos. Alguém mexeu
         no banco por fora, ou há defeito. Vale conferir antes de confiar nos números.</Banner>}
 
-      {!!d.repor.length && <Section title="Precisa comprar" count={d.repor.length}>
-        <div className="tbl">
-          {d.repor.map(r => <div className="tr" key={r.id}>
-            <div className="grow"><b>{r.name}</b>{r.sku && <span className="small muted"> · SKU {r.sku}</span>}
-              {d.a_contar.includes(r.id) && <span className="small muted"> · nunca contada</span>}</div>
+      {!!faltando.length && <details className="card card-b" style={{ margin: '8px 0' }}>
+        <summary style={{ cursor: 'pointer' }}><b>Precisa comprar</b> <span className="small muted">· {faltando.length} abaixo do mínimo</span></summary>
+        <div className="tbl" style={{ marginTop: 8 }}>
+          {faltando.map(r => <div className="tr" key={r.id} role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setFicha(r.id)}>
+            <div className="grow"><b>{r.name}</b>{r.sku && <span className="small muted"> · SKU {r.sku}</span>}</div>
             <Chip tone="warn">faltam {r.falta} {r.unit}</Chip>
-            {r.supplier_url && <a className="btn ghost sm" href={r.supplier_url} target="_blank" rel="noreferrer">ver no fornecedor</a>}
+            {r.supplier_url && <a className="btn ghost sm" href={r.supplier_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>fornecedor</a>}
           </div>)}
         </div>
-      </Section>}
+      </details>}
 
-      <Section title="Na prateleira" count={itens.length} right={
-        <input className="inp sm" placeholder="Buscar peça ou SKU" value={busca} onChange={e => setBusca(e.target.value)} />}>
-        {!itens.length
-          ? <Empty title={busca ? 'Nada com esse nome' : 'O estoque está vazio'}>
-            {!busca && <>Use <b>Adicionar</b> para cadastrar o que está na prateleira.</>}</Empty>
-          : <div className="tbl">
-            {itens.map(i => <div className="tr" key={i.id} role="button" tabIndex={0} style={{ cursor: 'pointer' }}
-                                 onClick={() => setFicha(i.id)} onKeyDown={e => { if (e.key === 'Enter') setFicha(i.id) }}>
-              {i.tem_foto
-                ? <img src={`/ops/api/estoque/item/${i.id}/foto`} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 8 }} />
-                : <span className="avatar sq" aria-hidden="true"><Icon name="box" size={18} /></span>}
-              <div className="grow">
-                <b>{i.name}</b> <span className="small muted">{TIPO_ROTULO[i.kind] || i.kind}</span>
-                {i.notes && <div className="small muted truncate">{i.notes}</div>}
-              </div>
-              {i.de_clientes > 0 && <Chip tone="info" title="peça de cliente guardada com a gente">
-                {i.de_clientes} de cliente</Chip>}
-              {!i.contado && i.tracking === 'quantidade'
-                ? <Chip tone="neutral" title="nenhum movimento registrado: ninguém contou ainda">não contada</Chip>
-                : <Chip tone={i.abaixo ? 'warn' : i.nosso > 0 ? 'ok' : 'neutral'}>
-                  {i.nosso} {i.unit}{i.min_qty ? ` · mín ${i.min_qty}` : ''}</Chip>}
-            </div>)}
-          </div>}
-      </Section>
+      <div className="row gap wrap" style={{ marginTop: 10, alignItems: 'center' }}>
+        <input className="inp grow" style={{ flex: '1 1 220px' }} placeholder="Buscar peça, marca, medida ou cliente" value={busca} onChange={e => setBusca(e.target.value)} />
+        {!busca && <label className="check small"><input type="checkbox" checked={vazias} onChange={e => setVazias(e.target.checked)} /> mostrar prateleiras vazias</label>}
+      </div>
+
+      {!itens.length && busca && <Empty title="Nada com esse nome" />}
+      {!d.itens.length && !busca && <Empty title="O estoque está vazio">Use <b>Adicionar peça</b> para cadastrar o que está na prateleira.</Empty>}
+      {d.prateleiras.filter(p => (porPrateleira[p.code] || []).length || (vazias && !busca)).map(p =>
+        <Fileira key={p.code} p={p} itens={porPrateleira[p.code] || []} gerente={d.gerente} podeAdd={can('OPERATOR')}
+                 onOpen={setFicha} onAdd={() => setAbrir(p.code)} />)}
     </>}
 
-    {abrir && d && <Adicionar locais={d.locais} onClose={() => setAbrir(false)} reload={lista.reload} />}
-    {contar && d && <Contar d={d} onClose={() => setContar(false)} reload={lista.reload} />}
-    {ficha !== null && d && <FichaPeca id={ficha} locais={d.locais} onClose={() => setFicha(null)} reload={lista.reload} />}
+    {abrir !== false && d && <Adicionar d={d} inicial={abrir} onClose={() => setAbrir(false)} reload={lista.reload} />}
+    {ficha !== null && d && <FichaPeca id={ficha} d={d} onClose={() => setFicha(null)} reload={lista.reload} />}
   </>
+}
+
+/** No card do cliente (29/09): o que é dele e está guardado com a gente, e assinalar mais. */
+export function PecasDoCliente({ cid, nome }: { cid: number; nome: string }) {
+  const toast = useToast()
+  const { can } = useAuth()
+  const dele = useGet<{ unidades: (Unidade & { item_id: number; name: string; kind: string })[]; pecas: { id: number; item_id: number; name: string; unit: string; qty: number; local: string; local_code: string; size: string | null; subcategory: string | null }[] }>(`/estoque/cliente/${cid}`)
+  const est = useGet<Lista>('/estoque')
+  const [item, setItem] = useState<number | ''>('')
+  const [qtd, setQtd] = useState('')
+  const [local, setLocal] = useState('sede')
+  const [unidade, setUnidade] = useState<number | ''>('')
+  const [indo, setIndo] = useState(false)
+  const escolhido = est.data?.itens.find(i => i.id === item)
+  const fichaEscolhida = useGet<Ficha>(escolhido?.tracking === 'serie' ? `/estoque/${escolhido.id}` : null)
+  const nossas = (fichaEscolhida.data?.unidades || []).filter(u => !u.client_id && EM_CASA.includes(u.status))
+  const recarregar = () => { dele.reload(); est.reload() }
+
+  async function assinalar() {
+    if (!escolhido) return
+    const serie = escolhido.tracking === 'serie'
+    const q = num(qtd)
+    if (!serie && (!q || q <= 0)) { toast('Informe quantos são dele.', 'warn'); return }
+    setIndo(true)
+    try {
+      await api.post('/estoque/assinalar', { item_id: escolhido.id, client_id: cid, qty: serie ? null : q, unit_id: serie ? unidade || null : null, local })
+      toast(`Assinalado para ${nome}.`, 'ok'); setItem(''); setQtd(''); setUnidade(''); recarregar()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  async function devolver(corpo: Record<string, unknown>) {
+    setIndo(true)
+    try { await api.post('/estoque/devolver', { client_id: cid, ...corpo }); toast('Voltou a ser da URACE.', 'ok'); recarregar() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+
+  if (dele.error) return <ErrorState error={dele.error} retry={dele.reload} />
+  if (dele.loading && !dele.data) return <Loading rows={2} />
+  const nada = !dele.data?.pecas.length && !dele.data?.unidades.length
+  const disponiveis = (est.data?.itens || []).filter(i => i.tracking === 'serie' || i.nosso > 0)
+  return <div>
+    {nada ? <Empty title="Nada guardado">Nenhuma peça deste cliente está com a gente.</Empty>
+      : <div className="tbl">
+        {dele.data!.pecas.map(p => <div className="tr" key={`l${p.id}`}>
+          <div className="grow"><b>{p.name}</b><div className="small muted">{[p.subcategory, p.size].filter(Boolean).join(' · ')}{p.subcategory || p.size ? ' · ' : ''}{p.local}</div></div>
+          <Chip tone="info">{p.qty} {p.unit}</Chip>
+          {can('MANAGER') && <button className="btn ghost sm" disabled={indo} onClick={() => devolver({ item_id: p.item_id, qty: p.qty, local: p.local_code })}>devolver p/ URACE</button>}
+        </div>)}
+        {dele.data!.unidades.map(u => <div className="tr" key={`u${u.id}`}>
+          <div className="grow"><b>{u.name}</b><div className="small muted">série {u.serial}{u.local ? ` · ${u.local}` : ''}</div></div>
+          {can('MANAGER') && <button className="btn ghost sm" disabled={indo} onClick={() => devolver({ item_id: u.item_id, unit_id: u.id, local: u.local_code || 'sede' })}>devolver p/ URACE</button>}
+        </div>)}
+      </div>}
+    {can('OPERATOR') && <>
+      <h4 style={{ margin: '14px 0 6px' }}>Assinalar peça do estoque para {nome}</h4>
+      <div className="row gap wrap">
+        <label className="fld grow"><span>Peça</span>
+          <select value={item} onChange={e => { setItem(e.target.value ? Number(e.target.value) : ''); setUnidade('') }}>
+            <option value="">escolha…</option>
+            {disponiveis.map(i => <option key={i.id} value={i.id}>{i.name}{i.size ? ` · ${i.size}` : ''}{i.tracking === 'quantidade' ? ` (${i.nosso} ${i.unit} da URACE)` : ''}</option>)}
+          </select></label>
+        {escolhido?.tracking === 'serie'
+          ? <label className="fld grow"><span>Qual unidade</span>
+            <select value={unidade} onChange={e => setUnidade(e.target.value ? Number(e.target.value) : '')}>
+              <option value="">—</option>{nossas.map(u => <option key={u.id} value={u.id}>série {u.serial}</option>)}</select></label>
+          : <label className="fld grow"><span>Quantos</span>
+            <input type="number" inputMode="decimal" min={0} value={qtd} onChange={e => setQtd(e.target.value)} placeholder={escolhido?.unit || ''} /></label>}
+        {(est.data?.locais.length || 0) > 1 && <label className="fld grow"><span>Onde</span>
+          <select value={local} onChange={e => setLocal(e.target.value)}>{est.data!.locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
+      </div>
+      <button className="btn" disabled={indo || !escolhido} onClick={assinalar}>{indo ? 'Salvando…' : 'Assinalar'}</button>
+    </>}
+  </div>
 }

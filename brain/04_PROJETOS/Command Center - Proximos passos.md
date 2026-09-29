@@ -136,6 +136,28 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
       existe no catálogo — casar errado é comprar a peça errada. O nome da casa não muda.
 - [x] 🤖 O conector do claude.ai (`urace_estoque`, `urace_resumo`) agora diz quais peças
       **nunca foram contadas** e avisa que o zero delas não é falta.
+- [x] 👤 **Estoque em prateleiras, decidido em 29/09.** *"Contar prateleira"* virou
+      **"Adicionar peça"**. A tela é uma **fileira horizontal de cards por prateleira**:
+      Pneus · Motores · Peças de motor · Chassis · Hardware e chassi · Combustível e óleo ·
+      Telemetria e eletrônica · Outros · **Vestuário (Alpha Line) por último**. Dentro de
+      cada fileira, filtro por marca/tipo; cada peça tem marca e medida (pneu 4.60-5, 7.10-5…
+      — vocabulário tirado da apostila de kartismo da equipe, como sugestão, não trava).
+- [x] 🤖 Peça antiga sem prateleira aparece na **sugerida pelo nome** (só na tela; o banco
+      não é reescrito por palpite). Ao editar e salvar, a escolha passa a ser de gente.
+- [x] 🤖 **Assinalar para cliente** — pelo card da peça (aba Cliente) ou pelo card do
+      cliente (aba **Peças guardadas**). A peça fica na prateleira e passa a ser dele; de um
+      cliente para outro não vai. Também dá para cadastrar já como "de um cliente".
+- [x] 🤖 **Preço**: valor de compra + margem em campo livre (**"15%"** é porcentagem,
+      **"20"** é valor fixo, "15% + 10" soma) = preço final; ou o preço final digitado
+      direto. Esse preço entra no contexto do AI Command como o valor da invoice da peça, e
+      a linha com esse valor não é marcada para conferir.
+- [ ] 👤 **Confirmar três escolhas minhas** (fáceis de mudar): (1) mecânico = papel
+      Operador — um papel "Mecânico" que só vê o estoque exige mexer na tabela de usuários
+      do banco, e isso eu só faço com sua autorização; (2) custo e margem só o gerente vê,
+      o mecânico vê o preço final; (3) devolver peça do cliente para a URACE é do gerente.
+- [ ] 👤 Mandar os arquivos que a equipe usava para diferenciar as peças (a apostila já
+      entrou). Com eles, as marcas/tipos de cada prateleira ficam mais completos.
+- [ ] 🤖 SKU da Comet: fica para depois (dono, 29/09). A aba existe só para gerente.
 - [x] 🤖 **Importador do catálogo da Comet construído** (`adminai/importar_comet.py`).
       Tenta o JSON da loja → sitemap + JSON-LD → e só então HTML. Obedece `robots.txt`,
       se identifica, pausa entre páginas, respeita `Retry-After` e guarda em disco o que

@@ -11,7 +11,7 @@ import { useToast } from './Toast'
 
 type Sug = Client & { why?: string }
 
-function Picker({ label, value, onPick, exclude, sugestoes }: { label: string; value: Client | null; onPick: (c: Client | null) => void; exclude?: number; sugestoes?: Sug[] }) {
+export function Picker({ label, value, onPick, exclude, sugestoes }: { label: string; value: Client | null; onPick: (c: Client | null) => void; exclude?: number; sugestoes?: Sug[] }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const lista = useGet<Client[]>(q.trim().length >= 2 ? `/clients?q=${encodeURIComponent(q.trim())}` : null)

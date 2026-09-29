@@ -296,11 +296,15 @@ def normalizar_invoice(args, texto_ia="", buscar_item=None, buscar_cliente=None,
             from command_center.providers import precos_cobrados
             if precos_cobrados.ja_cobrado(con, l["item_id"], l["unitario"]):
                 continue                                 # já cobrado deste item em invoice anterior (28/09)
+        if con:
+            from command_center.providers import estoque as _estoque
+            if _estoque.preco_de_tabela(con, [l.get("descricao") or "", (cat or {}).get("nome") or ""], l["unitario"]):
+                continue                                 # preço final da peça no estoque (29/09)
         if preco:
             conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não bate com o catálogo do QuickBooks (${preco:,.2f}). "
                             "Confira na Rate Card (corrida → aba Racing team; treino → aba Academy) antes de aprovar.")
         else:
-            conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não veio do comando, do catálogo nem de invoice anterior. "
+            conferir.append(f"{rotulo}: ${l['unitario']:,.2f} não veio do comando, do catálogo, de invoice anterior nem da tabela do estoque. "
                             "Confira na Rate Card antes de aprovar.")
     if conferir:
         saida["_conferir"] = conferir

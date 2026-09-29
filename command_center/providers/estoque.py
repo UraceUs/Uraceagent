@@ -84,8 +84,11 @@ def item(con, item_id):
 
 def criar_item(con, kind, name, sku=None, supplier="comet", supplier_url=None,
                part_number=None, unit="un", min_qty=None, notes=None,
-               chassis_id=None, engine_id=None, part_id=None, tracking=None):
+               chassis_id=None, engine_id=None, part_id=None, tracking=None,
+               category=None, subcategory=None, size=None, cost=None, markup=None, price=None):
     """Cria o QUE é. Não cria saldo: saldo só nasce de movimento."""
+    extras = _campos_de_vitrine(category=category, subcategory=subcategory, size=size,
+                                cost=cost, markup=markup, price=price)
     if kind not in KINDS:
         raise ErroEstoque(f"tipo de item inválido: {kind!r} (use {', '.join(KINDS)})")
     tracking = tracking or TRACKING[kind]
@@ -101,7 +104,94 @@ def criar_item(con, kind, name, sku=None, supplier="comet", supplier_url=None,
     return inserir(con, "stock_items", kind=kind, tracking=tracking, name=name.strip(),
                    sku=sku, supplier=supplier if sku else None, supplier_url=supplier_url,
                    part_number=part_number, unit=unit, min_qty=min_qty, notes=notes,
-                   chassis_id=chassis_id, engine_id=engine_id, part_id=part_id)
+                   chassis_id=chassis_id, engine_id=engine_id, part_id=part_id, **extras)
+
+
+def _texto(v):
+    v = (v or "").strip() if isinstance(v, str) else v
+    return v or None
+
+
+def _dinheiro(v, rotulo):
+    if v is None or v == "":
+        return None
+    try:
+        v = float(str(v).replace("$", "").replace(",", ".").strip())
+    except ValueError:
+        raise ErroEstoque(f"{rotulo} precisa ser um número")
+    if v < 0:
+        raise ErroEstoque(f"{rotulo} não pode ser negativo")
+    return round(v, 2)
+
+
+def _campos_de_vitrine(**c):
+    """Prateleira, subcategoria, medida e preço — validados e com o preço final resolvido.
+
+    Preço final digitado vale como está (o dono às vezes fecha um valor redondo). Sem ele,
+    sai do custo + margem. A margem é texto livre ("15%", "20") e é lida na hora, para
+    que um valor que o painel não entende seja recusado em vez de virar preço errado."""
+    from command_center.providers import prateleiras
+    out = {}
+    if "category" in c:
+        cat = _texto(c["category"])
+        if cat and cat not in prateleiras.POR_CODIGO:
+            raise ErroEstoque(f"prateleira desconhecida: {cat!r}")
+        out["category"] = cat
+    for k in ("subcategory", "size"):
+        if k in c:
+            out[k] = _texto(c[k])
+    if "cost" in c:
+        out["cost"] = _dinheiro(c["cost"], "o valor de compra")
+    if "markup" in c:
+        out["markup"] = _texto(c["markup"])
+        try:
+            prateleiras.ler_margem(out["markup"])
+        except prateleiras.MargemInvalida as e:
+            raise ErroEstoque(str(e))
+    if "price" in c:
+        out["price"] = _dinheiro(c["price"], "o preço final")
+        if out["price"] is None and out.get("cost") is not None:
+            out["price"] = prateleiras.preco_final(out["cost"], out.get("markup"))
+    return out
+
+
+EDITAVEIS = ("name", "notes", "unit", "min_qty", "category", "subcategory", "size")
+DE_PRECO = ("cost", "markup", "price")
+
+
+def atualizar_item(con, item_id, **campos):
+    """Edita a ficha. `kind` e `tracking` ficam de fora de propósito: trocar uma peça de
+    quantidade para número de série apagaria o sentido do saldo que ela já tem."""
+    it = item(con, item_id)
+    desconhecidos = set(campos) - set(EDITAVEIS) - set(DE_PRECO)
+    if desconhecidos:
+        raise ErroEstoque(f"campo não editável: {', '.join(sorted(desconhecidos))}")
+    mudar = {}
+    if "name" in campos:
+        if not _texto(campos["name"]):
+            raise ErroEstoque("item de estoque precisa de nome")
+        mudar["name"] = campos["name"].strip()
+    if "notes" in campos:
+        mudar["notes"] = _texto(campos["notes"])
+    if "unit" in campos:
+        mudar["unit"] = _texto(campos["unit"]) or "un"
+    if "min_qty" in campos:
+        mq = campos["min_qty"]
+        if mq not in (None, "") and it["tracking"] == "serie":
+            raise ErroEstoque("estoque mínimo não vale para item com número de série")
+        mudar["min_qty"] = None if mq in (None, "") else float(mq)
+    vitrine = {k: campos[k] for k in ("category", "subcategory", "size") if k in campos}
+    if any(k in campos for k in DE_PRECO):
+        # custo, margem e preço são uma conta só: o que não veio é o que já estava
+        preco = {k: campos.get(k, it[k]) for k in DE_PRECO}
+        if "price" not in campos and ("cost" in campos or "markup" in campos):
+            preco["price"] = None          # custo ou margem mudou: o preço final é refeito
+        vitrine.update(preco)
+    mudar.update(_campos_de_vitrine(**vitrine))
+    if mudar:
+        sets = ", ".join(f"{k}=?" for k in mudar)
+        con.execute(f"UPDATE stock_items SET {sets} WHERE id=?", (*mudar.values(), item_id))
+    return {k: (it[k], v) for k, v in mudar.items() if it[k] != v}
 
 
 # --------------------------------------------------------------------- saldo
@@ -283,6 +373,52 @@ def transferir(con, item_id, qty=None, unit_id=None, de=SEDE, para=TRAILER, clie
     return {"de": o["code"], "para": d["code"], "qty": qty}
 
 
+def trocar_dono(con, item_id, para_cliente_id=None, de_cliente_id=None, qty=None, unit_id=None,
+                onde=SEDE, by_user_id=None, source="painel", notes=None):
+    """Assinalar a peça para um cliente — ou devolvê-la para a URACE.
+
+    Dono, 29/09: *"assinalar aqueles dois sets de pneus para o cliente"*, pelo estoque ou
+    pelo card dele. A peça não sai da prateleira; muda de quem ela é. No razão viram dois
+    movimentos (sai da URACE, entra no cliente), para `conferir()` continuar refazendo o
+    saldo sem nenhuma regra nova.
+
+    De um cliente para **outro** não: é a mesma trava de sempre. Primeiro volta para a
+    URACE (quem vendeu a peça de volta), depois vai para o outro — dois passos, cada um
+    com nome e hora no histórico.
+    """
+    it, loc = item(con, item_id), local(con, onde)
+    if bool(para_cliente_id) == bool(de_cliente_id):
+        raise ErroEstoque("a troca de dono é da URACE para um cliente, ou de um cliente de volta "
+                          "para a URACE — nunca de um cliente direto para outro")
+    alvo = para_cliente_id or de_cliente_id
+    c = um(con, "SELECT id, name, pilot_name FROM clients WHERE id=?", (alvo,))
+    if not c:
+        raise ErroEstoque(f"cliente #{alvo} não existe")
+    nome = c["pilot_name"] or c["name"]
+    motivo = f"assinalado para {nome}" if para_cliente_id else f"devolvido por {nome} para a URACE"
+    if it["tracking"] == "serie":
+        u = _unidade(con, unit_id, it)
+        if (u["client_id"] or None) != (de_cliente_id or None):
+            dono = "da URACE" if not u["client_id"] else "de outro cliente"
+            raise ErroEstoque(f"a unidade {u['serial']} é {dono}")
+        con.execute("UPDATE stock_units SET client_id=?, updated_at=? WHERE id=?",
+                    (para_cliente_id, agora(), u["id"]))
+        _registrar(con, "transferencia", it, unit_id=u["id"], qty=1, from_location_id=u["location_id"],
+                   to_location_id=u["location_id"], client_id=para_cliente_id, reason=motivo,
+                   by_user_id=by_user_id, source=source, notes=notes)
+        return {"unit_id": u["id"], "cliente": nome}
+    qty = _quantidade(qty, it)
+    a0, a1 = _mexer_saldo(con, it["id"], loc["id"], de_cliente_id, -qty)
+    b0, b1 = _mexer_saldo(con, it["id"], loc["id"], para_cliente_id, qty)
+    _registrar(con, "saida", it, qty=qty, from_location_id=loc["id"], client_id=de_cliente_id,
+               reason=motivo, by_user_id=by_user_id, source=source, notes=notes,
+               qty_before=a0, qty_after=a1)
+    _registrar(con, "entrada", it, qty=qty, to_location_id=loc["id"], client_id=para_cliente_id,
+               reason=motivo, by_user_id=by_user_id, source=source, notes=notes,
+               qty_before=b0, qty_after=b1)
+    return {"qty": qty, "cliente": nome, "local": loc["code"]}
+
+
 def contar(con, item_id, qty, onde=SEDE, client_id=None, by_user_id=None,
            source="painel", notes=None):
     """Contagem física: o que a mão contou vira o saldo, e a diferença fica registrada.
@@ -420,13 +556,43 @@ def nunca_contados(con):
 
 def do_cliente(con, client_id):
     """O que é dele e está com a gente — para aparecer no card do cliente."""
-    unidades = todos(con, """SELECT u.*, i.name, i.kind, lo.name AS local
+    unidades = todos(con, """SELECT u.*, i.name, i.kind, i.price, lo.name AS local, lo.code AS local_code
                                FROM stock_units u JOIN stock_items i ON i.id=u.item_id
                                LEFT JOIN stock_locations lo ON lo.id=u.location_id
                               WHERE u.client_id=? AND u.status IN {}""".format(
         "(" + ",".join("?" * len(EM_CASA)) + ")"), (client_id, *EM_CASA))
-    pecas = todos(con, """SELECT l.*, i.name, i.unit, lo.name AS local
+    pecas = todos(con, """SELECT l.*, i.name, i.unit, i.size, i.subcategory, i.image_path IS NOT NULL AS tem_foto,
+                                 lo.name AS local, lo.code AS local_code
                             FROM stock_levels l JOIN stock_items i ON i.id=l.item_id
                             JOIN stock_locations lo ON lo.id=l.location_id
                            WHERE l.client_id=? AND l.qty > 0""", (client_id,))
     return {"unidades": [dict(u) for u in unidades], "pecas": [dict(p) for p in pecas]}
+
+
+# --------------------------------------------------------------------- preço de tabela
+def _norm(s):
+    """Só letras e números, sem espaço: "O-Ring" e "Oring" são a mesma peça."""
+    import re
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def tabela_de_precos(con):
+    """Peças com preço final definido no painel — o que vai para a invoice de quem usou a
+    peça (dono, 29/09). Só leitura, e só o que alguém de fato preencheu."""
+    return [dict(r) for r in todos(con, """SELECT id, name, subcategory, size, unit, price FROM stock_items
+                                            WHERE active=1 AND price IS NOT NULL AND price > 0
+                                            ORDER BY name""")]
+
+
+def preco_de_tabela(con, nomes, valor):
+    """A peça do estoque cujo nome bate com algum dos `nomes` e cujo preço final é `valor`,
+    ou None. É o que faz a invoice montada pela IA não ser marcada "de onde veio este
+    valor?" quando ele saiu da tabela do estoque."""
+    if valor is None:
+        return None
+    alvos = [n for n in (_norm(x) for x in nomes) if len(n) >= 3]
+    for t in tabela_de_precos(con):
+        nome = _norm(t["name"])
+        if abs(float(t["price"]) - float(valor)) < 0.01 and any(a == nome or a in nome or nome in a for a in alvos):
+            return t
+    return None

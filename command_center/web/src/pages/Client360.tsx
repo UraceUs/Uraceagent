@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { CatalogoEditor } from './Garage'
 import { LembreteChip, LembreteModal } from './Systems'
+import { PecasDoCliente } from './Estoque'
 import { UnirModal } from '../components/Unir'
 import type { Catalog, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
@@ -37,7 +38,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const perguntar = usePerguntar()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
-  const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'races' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
+  const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'races' | 'pecas' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
   const [proBusy, setProBusy] = useState(false)
   const [unir, setUnir] = useState(false)
   const monthly = useGet<Monthly>(id && tab === 'monthly' ? `/clients/${id}/monthly` : null)
@@ -150,8 +151,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     </Section>}
     {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>Notas:</b> {c.notes}</div>}
     <div className="tabs">
-      {(['timeline', 'monthly', 'equip', 'races', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => c.pro_driver || (t !== 'equip' && t !== 'races')).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: '★ Equipamento', races: `★ Corridas`, tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
+      {(['timeline', 'monthly', 'equip', 'races', 'pecas', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && (t !== 'pecas' || can('OPERATOR'))).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: '★ Equipamento', races: `★ Corridas`, pecas: 'Peças guardadas', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
       </button>)}
     </div>
     <div className="card card-b">
@@ -169,6 +170,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'monthly' && <Mensalidade id={c.id} m={monthly.data} loading={monthly.loading} reload={monthly.reload} plan={c.plan_type} fin={can('MANAGER')} />}
       {tab === 'equip' && <Equipamento c={c} cat={catalog.data} reload={() => { reload(); catalog.reload() }} />}
       {unir && <UnirModal keep={c} onClose={() => setUnir(false)} onDone={(kid) => { if (kid !== c.id) nav(`/clients/${kid}`); else reload() }} />}
+      {tab === 'pecas' && <PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} />}
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th>Waiver</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>Sem serviços vinculados.</Empty></td></tr>}

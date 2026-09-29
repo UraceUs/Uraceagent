@@ -170,6 +170,16 @@ MIGRACOES = [
     # Foto da peça, tirada pelo mecânico no celular (dono, 23/09). Só o nome do arquivo:
     # a imagem mora em ~/.urace/estoque, fora do banco e fora do repositório.
     ("stock_items", "image_path", "TEXT"),
+    # 29/09 — dono: estoque em fileiras de categoria (pneus, motores, peças de motor,
+    # hardware… vestuário por último), subcategoria (marca do pneu, família do motor) e
+    # medida; e o preço: quanto pagamos, a margem (campo livre: "15%" ou "20") e o valor
+    # final que vai para a invoice do cliente. Prateleira é onde aparece; o `kind` não muda.
+    ("stock_items", "category", "TEXT"),
+    ("stock_items", "subcategory", "TEXT"),
+    ("stock_items", "size", "TEXT"),
+    ("stock_items", "cost", "REAL"),
+    ("stock_items", "markup", "TEXT"),
+    ("stock_items", "price", "REAL"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

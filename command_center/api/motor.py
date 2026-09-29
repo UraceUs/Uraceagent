@@ -173,6 +173,14 @@ def contexto_de_precos(con, texto, user_id=None):
             faixa = f"${t['minimo']:,.2f}" if t["minimo"] == t["maximo"] else f"${t['minimo']:,.2f}–${t['maximo']:,.2f}"
             linhas.append(f"- {t['item']} (item_id {t['item_id'] or '?'}): último ${t['ultimo']:,.2f} em {t['ultimo_em'] or '?'}"
                           f" ({t['ultimo_cliente'] or '?'}); mais comum ${t['mais_comum']:,.2f}; faixa {faixa}; {t['vezes']}x")
+    from command_center.providers import estoque as _estoque
+    tabela = _estoque.tabela_de_precos(con)
+    if tabela:
+        linhas.append("PREÇO FINAL DAS PEÇAS DO ESTOQUE (definido no painel pelo gerente: custo + margem). Para peça "
+                      "que saiu do nosso estoque, ESTE é o valor da invoice e manda sobre o histórico acima:")
+        for t in tabela[:80]:
+            det = " · ".join(x for x in (t["subcategory"], t["size"]) if x)
+            linhas.append(f"- {t['name']}{f' ({det})' if det else ''}: ${float(t['price']):,.2f} por {t['unit']}")
     emails = sorted({e.lower().rstrip(".") for e in _RX_EMAIL.findall(junto)} - {"urace@urace.us"})
     for e in emails[:6]:
         inv = um(con, "SELECT customer_ref FROM invoices WHERE LOWER(customer_email)=? AND customer_ref IS NOT NULL "
