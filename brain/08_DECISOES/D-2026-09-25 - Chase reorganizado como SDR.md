@@ -96,6 +96,7 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
      dos 7 dias;
    - o passo 6 da persona passa a citar os dois preços: $689 por dia de
      treino na Academy e $719 no Arrive and Drive.
+   - o agente se chama **Chase** (a persona dizia "George"; dono, 29/09).
    Aplicado no Kommo pela extensão, item por item, com o sim do dono.
 4. ~~Quem é o responsável único~~ — **decidido pelo dono em 28/09**, no chat
    do Claude Code: URace Support (usuário 12209643 do Kommo). O Lucas não é
