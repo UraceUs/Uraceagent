@@ -204,7 +204,10 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
 }
 
 
-interface Recorrencia { id: number; qbo_id: string | null; name: string | null; amount: number; months: number; start_on: string; end_on: string; email: string | null; status: string; criado_por: string | null; created_at: string; result: string | null }
+interface Recorrencia { id: number; qbo_id: string | null; name: string | null; amount: number; months: number; start_on: string; end_on: string; email: string | null; status: string; criado_por: string | null; created_at: string; result: string | null; source: string }
+interface RecQbo { id: string; nome: string | null; ativa: boolean; total: number | null; inicio: string | null; fim: string | null; proxima: string | null
+  ocorrencias: number | null; email: string | null; linhas: { item: string | null; unitario: number | null }[]; vinculada_id: number | null; de_outro_cliente: boolean }
+interface NoQbo { conectado: boolean; erro?: string; recorrencias: RecQbo[]; soltas: number }
 interface Mensal { monthly_plan: string | null; monthly_amount: number | null; monthly_item_id: string | null; item: { id: string; name: string; price: number | null } | null
   itens: { id: string; name: string; full_name: string | null; price: number | null }[]; email: string | null; opcoes_meses: number[]; padrao_meses: number; proximo_inicio: string; recorrencias: Recorrencia[] }
 const REC_ROTULO: Record<string, [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { active: ['ativa', 'ok'], simulated: ['simulação — nada criado', 'warn'], failed: ['falhou', 'crit'], ended: ['encerrada', 'neutral'] }
@@ -229,6 +232,7 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   const toast = useToast()
   const perguntar = usePerguntar()
   const d = useGet<Mensal>(`/clients/${id}/mensal`)
+  const q = useGet<NoQbo>(`/clients/${id}/mensal/qbo`)
   const [valor, setValor] = useState<string | null>(null)
   const [item, setItem] = useState<string | null>(null)
   const [meses, setMeses] = useState<number | 'outro'>(6)
@@ -260,6 +264,19 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
     try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: n, monthly_item_id: it || null }); toast('Mensalidade salva. É ela que vai na invoice do dia 1.', 'ok'); setValor(null); setItem(null); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
+  const soltas = (q.data?.recorrencias || []).filter(x => x.ativa && !x.vinculada_id && !x.de_outro_cliente)
+  const ativaNoPainel = m.recorrencias.find(x => x.status === 'active')
+  const noQbo = new Map((q.data?.recorrencias || []).map(x => [String(x.id), x]))
+  const bloqueio = !q.data ? 'conferindo o QuickBooks…' : !q.data.conectado ? 'sem conferir o QuickBooks não dá para criar'
+    : soltas.length ? 'já existe cobrança recorrente no QuickBooks: vincule' : ativaNoPainel ? 'já existe recorrência ativa' : ''
+  async function vincular(x: RecQbo) {
+    if (!await perguntar({ titulo: 'Vincular esta recorrência ao Command Center?',
+      texto: `A cobrança continua sendo a do QuickBooks (“${x.nome || x.id}”, $${fmtDolar(x.total || 0)}), sem criar outra. O valor mensal do card passa a ser $${fmtDolar(x.total || 0)}, e o dia 1 do painel não prepara outra invoice para este cliente.`,
+      ok: 'Vincular' })) return
+    setSalvando(true)
+    try { await api.post(`/clients/${id}/mensal/vincular`, { qbo_id: x.id }); toast('Vinculada: agora é uma cobrança só, a do QuickBooks.', 'ok'); setValor(null); setItem(null); d.reload(); q.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
+  }
   async function recorrencia() {
     if (!Number.isInteger(nMeses) || nMeses < 1 || nMeses > 36) { toast('Escolha de 1 a 36 meses.', 'warn'); return }
     const ultimo = somaMeses(ini, nMeses - 1)
@@ -275,6 +292,16 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
     } catch (e) { toast((e as ApiError).message, 'crit'); d.reload() } finally { setSalvando(false) }
   }
   return <Section title="Valor da mensalidade e recorrência">
+    {soltas.length > 0 && <div className="banner crit" role="alert" style={{ marginBottom: 14, padding: '14px 16px' }}><div className="grow">
+      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>⚠ Este cliente já tem cobrança recorrente no QuickBooks</div>
+      <div className="small" style={{ marginBottom: 8 }}>Para não cobrar duas vezes, não crie outra: vincule a que já existe ao Command Center.</div>
+      {soltas.map(x => <div key={x.id} className="row wrap" style={{ gap: 10, padding: '6px 0', borderTop: '1px solid var(--glass-line)' }}>
+        <div className="grow"><b>{x.nome || `recorrência ${x.id}`}</b> · ${fmtDolar(x.total || 0)} por mês
+          <div className="small muted">desde {x.inicio ? mesExtenso(x.inicio) : '?'}{x.fim ? ` até ${mesExtenso(x.fim)}` : x.ocorrencias ? ` · ${x.ocorrencias} vezes` : ' · sem fim'}{x.proxima ? ` · próxima ${fmtDate(x.proxima)}` : ''}{x.email ? ` · ${x.email}` : ''}{x.linhas[0]?.item ? ` · ${x.linhas[0].item}` : ''}</div></div>
+        <button className="btn primary" disabled={salvando || !!ativaNoPainel} title={ativaNoPainel ? 'o card já tem outra recorrência ativa' : ''} onClick={() => vincular(x)}>Vincular ao Command Center</button>
+      </div>)}
+    </div></div>}
+    {q.data && !q.data.conectado && <Banner tone="warn">Não deu para conferir o QuickBooks ({q.data.erro}). Criar recorrência fica bloqueado até conferir — uma cobrança só.</Banner>}
     <div className="grid g3">
       <div className="field"><label>Valor mensal deste cliente</label>
         <div className="dolar"><span aria-hidden="true">$</span>
@@ -299,12 +326,16 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
         </div></div>
       <div className="field"><label>Primeira mensalidade</label>
         <select className="input" value={ini} onChange={e => setInicio(e.target.value)}>{inicios.map(x => <option key={x} value={x}>dia 1 de {mesAno(x)}</option>)}</select></div>
-      <button className="btn" disabled={salvando || mudou || !m.monthly_amount || !m.monthly_item_id} onClick={recorrencia}
-              title={mudou ? 'salve a mensalidade antes' : !m.monthly_amount || !m.monthly_item_id ? 'defina valor e item antes' : ''}>Criar invoice recorrente no QuickBooks</button>
+      <button className="btn" disabled={salvando || mudou || !m.monthly_amount || !m.monthly_item_id || !!bloqueio} onClick={recorrencia}
+              title={mudou ? 'salve a mensalidade antes' : !m.monthly_amount || !m.monthly_item_id ? 'defina valor e item antes' : bloqueio}>Criar invoice recorrente no QuickBooks</button>
+      {bloqueio && !soltas.length && <span className="small muted">{bloqueio}</span>}
     </div>
-    {m.recorrencias.length > 0 && <div className="tbl-wrap" style={{ marginTop: 12 }}><table className="tbl"><thead><tr><th>De</th><th>Até</th><th>Meses</th><th>Valor</th><th>Situação</th><th>Criada</th></tr></thead><tbody>
-      {m.recorrencias.map(x => <tr key={x.id}><td className="mono">{mesAno(x.start_on)}</td><td className="mono">{mesAno(x.end_on)}</td><td className="mono">{x.months}</td><td className="mono">{money(x.amount)}</td>
-        <td><Chip tone={(REC_ROTULO[x.status] || [x.status, 'neutral'])[1]}>{(REC_ROTULO[x.status] || [x.status])[0]}</Chip>{x.qbo_id && <span className="small muted"> · QBO {x.qbo_id}</span>}</td>
+    {m.recorrencias.length > 0 && <div className="tbl-wrap" style={{ marginTop: 12 }}><table className="tbl"><thead><tr><th>De</th><th>Até</th><th>Meses</th><th>Valor</th><th>Origem</th><th>Situação</th><th>No QuickBooks</th><th>Criada</th></tr></thead><tbody>
+      {m.recorrencias.map(x => <tr key={x.id}><td className="mono">{mesAno(x.start_on)}</td><td className="mono">{x.end_on >= '2099' ? 'sem fim' : mesAno(x.end_on)}</td><td className="mono">{x.months || '—'}</td><td className="mono">${fmtDolar(x.amount)}</td>
+        <td className="small">{x.source === 'qbo' ? 'vinculada do QuickBooks' : 'criada pelo painel'}</td>
+        <td><Chip tone={(REC_ROTULO[x.status] || [x.status, 'neutral'])[1]}>{(REC_ROTULO[x.status] || [x.status])[0]}</Chip></td>
+        <td className="small">{!x.qbo_id ? <span className="muted">—</span> : !q.data?.conectado ? <span className="muted">QBO {x.qbo_id}</span>
+          : noQbo.get(String(x.qbo_id))?.ativa ? <Chip tone="ok">vinculada ✓</Chip> : noQbo.has(String(x.qbo_id)) ? <Chip tone="warn">inativa lá</Chip> : <Chip tone="crit">não encontrada lá</Chip>}</td>
         <td className="small">{fmtDateTime(x.created_at)}{x.criado_por ? ` · ${x.criado_por}` : ''}</td></tr>)}
     </tbody></table></div>}
   </Section>

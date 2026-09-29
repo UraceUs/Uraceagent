@@ -184,6 +184,9 @@ MIGRACOES = [
     # deal diferente"). É ele que vai na invoice do dia 1 e na recorrência do QuickBooks.
     ("clients", "monthly_amount", "REAL"),
     ("clients", "monthly_item_id", "TEXT"),        # item do catálogo do QuickBooks da mensalidade
+    # 29/09 — dono: "é para ser uma recorrência só, vinculada uma à outra". painel = criada
+    # por aqui; qbo = já existia no QuickBooks e foi VINCULADA ao card (não criada de novo).
+    ("monthly_recurring", "source", "TEXT NOT NULL DEFAULT 'painel'"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

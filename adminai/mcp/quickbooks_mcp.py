@@ -592,6 +592,43 @@ def qbo_lembrete_invoice(id):
     return qbo_enviar_invoice(id)
 
 
+def _resumo_recorrencia(rt):
+    """Uma RecurringTransaction (de invoice) no formato do painel."""
+    inv = rt.get("Invoice") if isinstance(rt.get("Invoice"), dict) else rt
+    info = inv.get("RecurringInfo") or {}
+    sched = info.get("ScheduleInfo") or {}
+    linhas = [{"item_id": (l.get("SalesItemLineDetail") or {}).get("ItemRef", {}).get("value"),
+               "item": (l.get("SalesItemLineDetail") or {}).get("ItemRef", {}).get("name"),
+               "unitario": (l.get("SalesItemLineDetail") or {}).get("UnitPrice"), "descricao": l.get("Description")}
+              for l in inv.get("Line", []) if l.get("DetailType") == "SalesItemLineDetail"]
+    return {"id": inv.get("Id"), "nome": info.get("Name"), "ativa": info.get("Active") is not False,
+            "tipo": info.get("RecurType"), "cliente_id": (inv.get("CustomerRef") or {}).get("value"),
+            "cliente": (inv.get("CustomerRef") or {}).get("name"), "total": inv.get("TotalAmt"),
+            "intervalo": sched.get("IntervalType"), "a_cada": sched.get("NumInterval"), "dia": sched.get("DayOfMonth"),
+            "inicio": sched.get("StartDate"), "fim": sched.get("EndDate"), "proxima": sched.get("NextDate"),
+            "ocorrencias": sched.get("MaxOccurrences"),
+            "email": (inv.get("BillEmail") or {}).get("Address"), "linhas": linhas}
+
+
+@srv.ferramenta("qbo_recorrencias",
+                "Invoices RECORRENTES que já existem no QuickBooks (Sales → Recurring transactions), de um "
+                "cliente ou de todos. Só leitura. É o que o painel confere antes de criar outra, para não "
+                "cobrar duas vezes.",
+                {"cliente_id": {"type": "string", "description": "id do cliente no QBO (opcional)"}})
+def qbo_recorrencias(cliente_id=None):
+    achadas, inicio = [], 1
+    while True:
+        r = _query(f"select * from RecurringTransaction startposition {inicio} maxresults 1000")
+        lote = r.get("RecurringTransaction") or []
+        for rt in lote:
+            x = _resumo_recorrencia(rt)
+            if x["id"] and (not cliente_id or str(x["cliente_id"]) == str(cliente_id)):
+                achadas.append(x)
+        if len(lote) < 1000:
+            return achadas
+        inicio += 1000
+
+
 @srv.ferramenta("qbo_criar_recorrencia",
                 "Cria a INVOICE RECORRENTE mensal de um cliente no QuickBooks (dia 1 de cada mês, enviada "
                 "automaticamente por e-mail), por N meses. É da tela Mensalidade do painel, com aprovação do "

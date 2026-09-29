@@ -458,6 +458,13 @@ o cliente certo e mudar de nome.
       todo dia 1, enviada sozinha. Com recorrência ativa, o dia 1 do painel **não** monta outra
       invoice do cliente (cobrar duas vezes, não). Cada pedido fica registrado — ativa,
       simulação ou falha, com a resposta do QuickBooks.
+- [x] 👤 **Uma recorrência só (dono, 29/09):** ao abrir a aba, o painel lê as recorrências do
+      cliente no QuickBooks. Se já houver uma ativa que o painel não conhece, aparece um aviso
+      grande com **"Vincular ao Command Center"** e o botão de criar fica bloqueado (o
+      servidor também recusa). Vincular liga a do QuickBooks ao card — o valor do card passa
+      a ser o dela — e a tabela mostra se cada recorrência do painel existe mesmo lá
+      ("vinculada ✓", "inativa lá", "não encontrada lá"). Sem conseguir ler o QuickBooks,
+      criar fica bloqueado: sem conferir, não se cria cobrança.
 - [ ] 👤 **Conferir a primeira recorrência no QuickBooks** (Sales → Recurring transactions):
       numeração da invoice gerada e o envio automático do e-mail. Não deu para testar contra o
       QuickBooks de verdade daqui; o formato segue a API da Intuit.

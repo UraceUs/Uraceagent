@@ -197,6 +197,8 @@ def test_recorrencia_pelo_painel_e_sem_cobrar_duas_vezes(cli, monkeypatch):
 
     def falso(sistema, ferramenta, **a):
         chamadas.append((sistema, ferramenta, a))
+        if ferramenta == "qbo_recorrencias":
+            return []                       # nada no QuickBooks ainda: pode criar
         return {"aplicado": True, "id": "77", "inicio": a["inicio"]}
     monkeypatch.setattr(providers, "chamar", falso)
     h = entra(cli, "ger@urace.us")
@@ -205,6 +207,7 @@ def test_recorrencia_pelo_painel_e_sem_cobrar_duas_vezes(cli, monkeypatch):
     r = cli.post(f"/ops/api/clients/{enzo}/mensal/recorrencia", headers=h, json={"meses": 6, "inicio": inicio})
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "active" and r.json()["fim"] == f"{date.today().year + 1}-06-01"
+    assert [f for _, f, _ in chamadas] == ["qbo_recorrencias", "qbo_criar_recorrencia"], "confere antes de criar"
     _, ferramenta, a = chamadas[-1]
     assert ferramenta == "qbo_criar_recorrencia" and a["cliente_id"] == "485", "cliente do QBO pela última invoice"
     assert a["linhas"][0]["unitario"] == 450 and a["email"] == "joekur001@gmail.com"
@@ -221,6 +224,8 @@ def test_recorrencia_simulada_fica_registrada_como_simulacao(cli, monkeypatch):
     def falso(sistema, ferramenta, **a):
         if ferramenta == "qbo_clientes_buscar":
             return [{"id": "900", "email": "levi@x.com"}]
+        if ferramenta == "qbo_recorrencias":
+            return []
         return {"aplicado": False, "teria_feito": "criar recorrência"}
     monkeypatch.setattr(providers, "chamar", falso)
     h = entra(cli, "ger@urace.us")
@@ -301,3 +306,99 @@ def test_asana_renomear_respeita_simulacao_e_protecao(monkeypatch):
                                                                     "memberships": [{"project": {"gid": a.PROJETO_ADM}}]})
     with pytest.raises(a.ErroFerramenta):
         a.asana_renomear("2", "novo")
+
+
+# ------------------------------------------------------------------ uma recorrência só (29/09)
+def _rec_qbo(**kw):
+    base = {"id": "555", "nome": "Enzo monthly", "ativa": True, "tipo": "Automated", "cliente_id": "485",
+            "total": 2756.9, "inicio": "2026-08-01", "fim": None, "ocorrencias": None, "email": "joekur001@gmail.com",
+            "linhas": [{"item_id": "7", "item": "Academy 4 stroke", "unitario": 2756.9}]}
+    base.update(kw)
+    return base
+
+
+def test_existe_no_quickbooks_entao_nao_cria_outra(cli, monkeypatch):
+    """Dono: 'é para ser uma recorrência só, não é para ter duplicação'."""
+    novo = inserir(c := conectar(), "clients", name="Joe Duplo", email="joe@dup.com", status="ACTIVE", source="manual",
+                   monthly_amount=500, monthly_item_id="7")
+    inserir(c, "invoices", client_id=novo, doc_number="3001", amount=500, balance=0, status="paid",
+            issued_on="2026-09-01", customer_ref="486"); c.close()
+    chamadas = []
+
+    def falso(sistema, ferramenta, **a):
+        chamadas.append(ferramenta)
+        return [_rec_qbo(id="600", cliente_id="486")] if ferramenta == "qbo_recorrencias" else {"aplicado": True, "id": "x"}
+    monkeypatch.setattr(providers, "chamar", falso)
+    h = entra(cli, "ger@urace.us")
+    v = cli.get(f"/ops/api/clients/{novo}/mensal/qbo", headers=h).json()
+    assert v["conectado"] and v["soltas"] == 1 and v["recorrencias"][0]["vinculada_id"] is None
+    r = cli.post(f"/ops/api/clients/{novo}/mensal/recorrencia", headers=h, json={"meses": 6})
+    assert r.status_code == 409 and "JÁ tem cobrança recorrente" in r.json()["detail"]
+    assert "qbo_criar_recorrencia" not in chamadas, "nada foi criado no QuickBooks"
+
+
+def test_vincular_a_do_quickbooks_ao_card(cli, monkeypatch):
+    novo = inserir(c := conectar(), "clients", name="Joe Vinculo", email="joe@vin.com", status="ACTIVE", source="manual",
+                   monthly_amount=400, monthly_item_id="7")
+    inserir(c, "invoices", client_id=novo, doc_number="3002", amount=500, balance=0, status="paid",
+            issued_on="2026-09-01", customer_ref="487"); c.close()
+    monkeypatch.setattr(providers, "chamar", lambda s, f, **a: [_rec_qbo(id="700", cliente_id="487")] if f == "qbo_recorrencias" else {})
+    h = entra(cli, "ger@urace.us")
+    r = cli.post(f"/ops/api/clients/{novo}/mensal/vincular", headers=h, json={"qbo_id": "700"})
+    assert r.status_code == 200, r.text
+    rec = um(conectar(), "SELECT * FROM monthly_recurring WHERE client_id=?", (novo,))
+    assert (rec["qbo_id"], rec["source"], rec["status"], rec["amount"], rec["end_on"]) == ("700", "qbo", "active", 2756.9, "2099-12-01")
+    cl = um(conectar(), "SELECT monthly_amount FROM clients WHERE id=?", (novo,))
+    assert cl["monthly_amount"] == 2756.9, "o valor do card passa a ser o da cobrança"
+    v = cli.get(f"/ops/api/clients/{novo}/mensal/qbo", headers=h).json()
+    assert v["soltas"] == 0 and v["recorrencias"][0]["vinculada_id"] == rec["id"]
+    assert cli.post(f"/ops/api/clients/{novo}/mensal/vincular", headers=h, json={"qbo_id": "700"}).json()["ja_estava"]
+    assert cli.post(f"/ops/api/clients/{novo}/mensal/recorrencia", headers=h, json={"meses": 6}).status_code == 409
+    assert um(conectar(), "SELECT COUNT(*) n FROM monthly_recurring WHERE client_id=?", (novo,))["n"] == 1
+    assert any(a["event"] == "client.monthly.link" for a in todos(conectar(), "SELECT event FROM audit_logs"))
+
+
+def test_recorrencia_de_outro_cliente_nao_se_vincula(cli, monkeypatch):
+    a = inserir(c := conectar(), "clients", name="Dono A", email="a@x.com", status="ACTIVE", source="manual")
+    b = inserir(c, "clients", name="Dono B", email="b@x.com", status="ACTIVE", source="manual")
+    for cid in (a, b):
+        inserir(c, "invoices", client_id=cid, doc_number=f"40{cid}", amount=1, balance=0, status="paid",
+                issued_on="2026-09-01", customer_ref="488")
+    c.close()
+    monkeypatch.setattr(providers, "chamar", lambda s, f, **k: [_rec_qbo(id="800", cliente_id="488")] if f == "qbo_recorrencias" else {})
+    h = entra(cli, "ger@urace.us")
+    assert cli.post(f"/ops/api/clients/{a}/mensal/vincular", headers=h, json={"qbo_id": "800"}).status_code == 200
+    assert cli.post(f"/ops/api/clients/{b}/mensal/vincular", headers=h, json={"qbo_id": "800"}).status_code == 409
+    assert cli.post(f"/ops/api/clients/{b}/mensal/vincular", headers=h, json={"qbo_id": "999"}).status_code == 404
+
+
+def test_sem_quickbooks_a_tela_sabe_que_nao_conferiu(cli, monkeypatch):
+    def fora(*a, **k):
+        raise providers.NaoConectado("sem token")
+    monkeypatch.setattr(providers, "chamar", fora)
+    h = entra(cli, "ger@urace.us")
+    v = cli.get(f"/ops/api/clients/{_id('Enzo Kurian')}/mensal/qbo", headers=h).json()
+    assert v["conectado"] is False and "não está conectado" in v["erro"]
+
+
+def test_dia_1_respeita_a_recorrencia_vinculada_sem_fim(con):
+    enzo = _cliente(con, "Enzo Kurian", monthly_plan="Academy 4 stroke")
+    inserir(con, "monthly_recurring", client_id=enzo, qbo_id="555", amount=2756.9, item_id="7", months=0,
+            start_on="2026-08-01", end_on="2099-12-01", status="active", source="qbo")
+    assert motor.eventos_do_dia_1(con, date(2027, 5, 1)) == 0
+
+
+def test_conector_lista_recorrencias_do_cliente(qb, monkeypatch):
+    q, _ = qb
+    rts = [{"Invoice": {"Id": "1", "TotalAmt": 450, "CustomerRef": {"value": "485", "name": "Joe"},
+                        "BillEmail": {"Address": "j@x.com"},
+                        "RecurringInfo": {"Name": "Enzo", "RecurType": "Automated", "Active": True,
+                                          "ScheduleInfo": {"IntervalType": "Monthly", "DayOfMonth": 1, "StartDate": "2026-08-01",
+                                                           "MaxOccurrences": 6}},
+                        "Line": [{"DetailType": "SalesItemLineDetail", "SalesItemLineDetail": {"ItemRef": {"value": "7", "name": "A4"}, "UnitPrice": 450}}]}},
+           {"Invoice": {"Id": "2", "CustomerRef": {"value": "999"}, "RecurringInfo": {"Active": False}, "Line": []}},
+           {"Bill": {"Id": "3"}}]
+    monkeypatch.setattr(q, "_query", lambda sql: {"RecurringTransaction": rts})
+    r = q.qbo_recorrencias("485")
+    assert len(r) == 1 and r[0]["id"] == "1" and r[0]["ocorrencias"] == 6 and r[0]["linhas"][0]["item_id"] == "7"
+    assert {x["id"] for x in q.qbo_recorrencias()} == {"1", "2"}, "recorrência que não é de invoice não entra"
