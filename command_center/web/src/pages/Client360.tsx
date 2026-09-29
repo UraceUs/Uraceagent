@@ -209,6 +209,19 @@ interface Mensal { monthly_plan: string | null; monthly_amount: number | null; m
   itens: { id: string; name: string; full_name: string | null; price: number | null }[]; email: string | null; opcoes_meses: number[]; padrao_meses: number; proximo_inicio: string; recorrencias: Recorrencia[] }
 const REC_ROTULO: Record<string, [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { active: ['ativa', 'ok'], simulated: ['simulação — nada criado', 'warn'], failed: ['falhou', 'crit'], ended: ['encerrada', 'neutral'] }
 const mesAno = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+const mesExtenso = (iso: string) => new Date(iso.slice(0, 7) + '-15T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+const somaMeses = (iso: string, n: number) => { const b = new Date(iso.slice(0, 7) + '-15T12:00:00Z'); b.setUTCMonth(b.getUTCMonth() + n); return b.toISOString().slice(0, 10) }
+/** Valor em dólar como a pessoa digita: "2756,9", "2.756,90", "2,756.90", "$ 450" → número.
+ *  O último separador seguido de 1 ou 2 dígitos é o decimal; os outros são milhar. */
+function lerDolar(s: string): number | null {
+  const t = s.replace(/US\$|\$|\s/g, '')
+  if (!t) return null
+  const m = t.match(/^(.*)[.,](\d{1,2})$/)
+  const inteiro = (m ? m[1] : t).replace(/[.,]/g, '')
+  if (!/^\d+$/.test(inteiro) && !(m && inteiro === '')) return NaN
+  return Number(`${inteiro || '0'}.${m ? m[2] : '0'}`)
+}
+const fmtDolar = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /** Dono, 29/09: o valor da mensalidade é do cliente ("às vezes um deal diferente"), e vira
  *  invoice recorrente no QuickBooks — padrão 6 meses, ou 12, ou personalizado. Só gerente. */
@@ -225,24 +238,36 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   if (d.error) return <ErrorState error={d.error} retry={d.reload} />
   if (!d.data) return <Loading rows={2} />
   const m = d.data
-  const v = valor ?? (m.monthly_amount != null ? String(m.monthly_amount) : '')
+  const v = valor ?? (m.monthly_amount != null ? fmtDolar(m.monthly_amount) : '')
+  const vNum = lerDolar(v)
   const it = item ?? (m.monthly_item_id || '')
   const ini = inicio ?? m.proximo_inicio
   const nMeses = meses === 'outro' ? Number(outro) : meses
-  const mudou = v !== (m.monthly_amount != null ? String(m.monthly_amount) : '') || it !== (m.monthly_item_id || '')
+  const mudou = (vNum ?? null) !== (m.monthly_amount ?? null) || it !== (m.monthly_item_id || '')
+  const todosItens = [...(m.item && !m.itens.some(x => x.id === m.item!.id) ? [m.item] : []), ...m.itens]
+  function escolherItem(id: string) {
+    setItem(id)
+    // o preço de tabela do item entra no valor — e continua editável (deal próprio)
+    const preco = todosItens.find(x => x.id === id)?.price
+    if (preco) setValor(fmtDolar(preco))
+  }
   const inicios = Array.from({ length: 6 }, (_, k) => { const b = new Date(m.proximo_inicio + 'T12:00:00Z'); b.setUTCMonth(b.getUTCMonth() + k - 1); return b.toISOString().slice(0, 10) })
-  const itemDoCard = m.item && !m.itens.some(x => x.id === m.item!.id) ? [m.item] : []
 
   async function salvar() {
-    const n = Number(v.replace(',', '.'))
-    if (v.trim() && (!n || n <= 0)) { toast('Valor mensal inválido.', 'warn'); return }
+    const n = vNum
+    if (n !== null && (Number.isNaN(n) || n <= 0)) { toast('Valor mensal inválido. Ex.: 2,756.90', 'warn'); return }
     setSalvando(true)
-    try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: v.trim() ? n : null, monthly_item_id: it || null }); toast('Mensalidade salva. É ela que vai na invoice do dia 1.', 'ok'); setValor(null); setItem(null); d.reload() }
+    try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: n, monthly_item_id: it || null }); toast('Mensalidade salva. É ela que vai na invoice do dia 1.', 'ok'); setValor(null); setItem(null); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
   async function recorrencia() {
     if (!Number.isInteger(nMeses) || nMeses < 1 || nMeses > 36) { toast('Escolha de 1 a 36 meses.', 'warn'); return }
-    if (!await perguntar({ titulo: `Criar a invoice recorrente no QuickBooks?`, texto: `${money(m.monthly_amount || 0)} por mês, todo dia 1, de ${mesAno(ini)} por ${nMeses} meses, enviada para ${m.email || 'o e-mail do cliente no QuickBooks'}. O dia 1 do painel deixa de montar a invoice deste cliente enquanto ela estiver ativa.`, ok: 'Criar recorrência' })) return
+    const ultimo = somaMeses(ini, nMeses - 1)
+    if (!await perguntar({ titulo: `Criar a invoice recorrente no QuickBooks?`,
+      texto: `O QuickBooks vai gerar e enviar sozinho, todo dia 1, uma invoice de $${fmtDolar(m.monthly_amount || 0)} para ${m.email || 'o e-mail do cliente no QuickBooks'} — ` +
+             `de ${mesExtenso(ini)} a ${mesExtenso(ultimo)} (${nMeses} invoice${nMeses > 1 ? 's' : ''}). ` +
+             `Nesses meses o painel não prepara outra invoice de mensalidade para este cliente, para ele não ser cobrado duas vezes.`,
+      ok: 'Criar recorrência' })) return
     setSalvando(true)
     try {
       const r = await api.post<{ status: string; aviso: string | null }>(`/clients/${id}/mensal/recorrencia`, { meses: nMeses, inicio: ini })
@@ -252,16 +277,19 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   return <Section title="Valor da mensalidade e recorrência">
     <div className="grid g3">
       <div className="field"><label>Valor mensal deste cliente</label>
-        <input className="input" type="number" inputMode="decimal" min={0} value={v} onChange={e => setValor(e.target.value)}
-               placeholder={lastAmount != null ? `última: ${lastAmount}` : 'US$'} /></div>
+        <div className="dolar"><span aria-hidden="true">$</span>
+          <input className="input" inputMode="decimal" value={v} onChange={e => setValor(e.target.value)}
+                 onBlur={() => { if (vNum !== null && !Number.isNaN(vNum)) setValor(fmtDolar(vNum)) }}
+                 placeholder={lastAmount != null ? `última: ${fmtDolar(lastAmount)}` : '0.00'} aria-label="valor mensal em dólar" /></div>
+        {v.trim() !== '' && vNum !== null && Number.isNaN(vNum) && <span className="small" style={{ color: 'var(--crit)' }}>Valor não entendido. Ex.: 2,756.90</span>}</div>
       <div className="field"><label>Item do QuickBooks</label>
-        <select className="input" value={it} onChange={e => setItem(e.target.value)}>
+        <select className="input" value={it} onChange={e => escolherItem(e.target.value)}>
           <option value="">escolha…</option>
-          {[...itemDoCard, ...m.itens].map(x => <option key={x.id} value={x.id}>{x.name}{x.price ? ` (tabela ${money(x.price)})` : ''}</option>)}
+          {todosItens.map(x => <option key={x.id} value={x.id}>{x.name}{x.price ? ` (tabela ${money(x.price)})` : ''}</option>)}
         </select></div>
       <div className="field"><label>&nbsp;</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>Salvar mensalidade</button></div>
     </div>
-    <p className="small muted" style={{ marginTop: 6 }}>O valor daqui é o que vai na invoice do dia 1 — manda sobre a tabela quando o combinado com o cliente é outro.</p>
+    <p className="small muted" style={{ marginTop: 6 }}>Ao escolher o item, o preço de tabela entra no valor; mude se o combinado com o cliente for outro. O que estiver salvo aqui é o valor da invoice de todo dia 1.</p>
     <div className="row wrap" style={{ gap: 12, marginTop: 14, alignItems: 'flex-end' }}>
       <div className="field"><label>Recorrência</label>
         <div className="row wrap" style={{ gap: 6 }}>
