@@ -210,6 +210,8 @@ from command_center.api import publico  # noqa: E402
 app.include_router(publico.r)
 from command_center.api import portal as api_portal  # noqa: E402
 app.include_router(api_portal.r)
+from command_center.api import site_publico  # noqa: E402
+app.include_router(site_publico.r)
 
 
 # Descoberta do OAuth: a especificação manda na RAIZ do domínio, não sob /ops. O Caddy

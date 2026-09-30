@@ -42,6 +42,7 @@ const AgendaVendas = tela(() => import('./pages/Vendas'), 'AgendaVendas')
 const Oportunidade = tela(() => import('./pages/Vendas'), 'Oportunidade')
 const Oportunidades = tela(() => import('./pages/Vendas'), 'Oportunidades')
 
+const SitePublico = tela(() => import('./pages/SitePublico'), 'SitePublico')
 const PortalApp = tela(() => import('./portal/Portal'), 'PortalApp')
 
 const PAPEL_PT: Record<string, string> = { ADMIN: 'administrador', MANAGER: 'gerente', OPERATOR: 'operador', VIEWER: 'leitura' }
@@ -86,6 +87,8 @@ export default function App() {
           <Route path="kommo" element={<Navigate to="/crm/chat" replace />} />
           <Route path="equipe" element={<Equipe />} />
           <Route path="equipe/:canal" element={<Equipe />} />
+          <Route path="site" element={<Guard min="OPERATOR"><SitePublico /></Guard>} />
+          <Route path="site/:aba" element={<Guard min="OPERATOR"><SitePublico /></Guard>} />
           <Route path="sales" element={<Guard min="OPERATOR"><Oportunidades /></Guard>} />
           <Route path="sales/agenda" element={<Guard min="OPERATOR"><AgendaVendas /></Guard>} />
           <Route path="sales/:id" element={<Guard min="OPERATOR"><Oportunidade /></Guard>} />

@@ -37,3 +37,10 @@ export interface Driver { id: number; name: string; birth_date: string | null; i
 export interface Account { id: number; email: string; name: string; birth_date: string; phone: string | null
   address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; zip: string | null
   linked: boolean; drivers: Driver[] }
+
+export interface Periodo { open: boolean; spots: number }
+export interface Dia { date: string; weekday: number; any_open: boolean; periods: { manha: Periodo; tarde: Periodo; dia: Periodo } }
+export interface AgendaCfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string
+  horizon_days: number; min_notice_hours: number; auto_confirm: number }
+export interface Booking { id: number; date: string; period: 'manha' | 'tarde' | 'dia'; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'
+  notes: string | null; decision_note: string | null; driver: string | null; created_at: string }

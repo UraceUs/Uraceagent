@@ -257,6 +257,20 @@ def _coletar(con):
                           entity={"type": "purchase", "id": c["id"]}, client_id=None, link=None, action="Ver compra",
                           facts=[("Previsão", _dbr(c["expected_at"])), ("Referência", c["reference"] or "—")]))
 
+    # ---- 4f. agenda do site (#41): o cliente marcou e espera a confirmação da equipe
+    pedidos_site = todos(con, """SELECT b.id, b.date, b.period, a.name AS conta, p.name AS piloto
+                                   FROM bookings b JOIN portal_accounts a ON a.id=b.account_id
+                                   LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                                  WHERE b.status='pendente' AND b.date>=? ORDER BY b.date, b.id""", (hoje.isoformat(),))
+    if pedidos_site:
+        per = {"manha": "manhã", "tarde": "tarde", "dia": "dia todo"}
+        itens.append(dict(key=_chave("agenda-site", "booking", "pendentes"), level="HIGH",
+                          title=f"{len(pedidos_site)} sessão(ões) pedida(s) pelo site esperando confirmação",
+                          why="O cliente marcou pela área do cliente e só vê a sessão confirmada depois que a equipe confirmar.",
+                          entity={"type": "booking", "id": None}, client_id=None, link=None, action="Ver agenda",
+                          facts=[(f"{_dbr(b['date'])} · {per.get(b['period'], b['period'])}", (b["piloto"] or b["conta"]))
+                                 for b in pedidos_site[:6]]))
+
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",

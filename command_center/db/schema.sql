@@ -1243,3 +1243,58 @@ CREATE TABLE IF NOT EXISTS portal_sessions (
   revoked_at  TEXT,
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- ------------------------------------------------------------ agenda de sessões (#41)
+-- Dono, 30/09: "o próprio cliente consiga ver os dias disponíveis e agendar a sua sessão;
+-- a gente parametriza: bloquear esse dia toda semana, bloquear datas específicas,
+-- bloquear período; dias só pela manhã, só pela tarde, ou o dia todo".
+-- Nada aberto por padrão: quem abre a agenda é a equipe.
+CREATE TABLE IF NOT EXISTS booking_config (
+  id               INTEGER PRIMARY KEY CHECK (id = 1),
+  morning_start    TEXT NOT NULL DEFAULT '09:00',
+  morning_end      TEXT NOT NULL DEFAULT '13:00',
+  afternoon_start  TEXT NOT NULL DEFAULT '13:00',
+  afternoon_end    TEXT NOT NULL DEFAULT '17:00',
+  auto_confirm     INTEGER NOT NULL DEFAULT 0,    -- 0: a equipe confirma cada pedido
+  horizon_days     INTEGER NOT NULL DEFAULT 60,   -- até quantos dias à frente o cliente vê
+  min_notice_hours INTEGER NOT NULL DEFAULT 24,   -- antecedência mínima, até o início do período
+  updated_by       INTEGER REFERENCES users(id),
+  updated_at       TEXT
+);
+CREATE TABLE IF NOT EXISTS booking_weekly (
+  weekday   INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),   -- 0 = segunda (Python)
+  period    TEXT NOT NULL CHECK (period IN ('manha','tarde')),
+  open      INTEGER NOT NULL DEFAULT 0,
+  capacity  INTEGER NOT NULL DEFAULT 1 CHECK (capacity BETWEEN 1 AND 50),
+  PRIMARY KEY (weekday, period)
+);
+CREATE TABLE IF NOT EXISTS booking_blocks (
+  id          INTEGER PRIMARY KEY,
+  date_from   TEXT NOT NULL,
+  date_to     TEXT NOT NULL,
+  period      TEXT NOT NULL CHECK (period IN ('dia','manha','tarde')),
+  reason      TEXT,
+  active      INTEGER NOT NULL DEFAULT 1,           -- desbloquear não apaga: fica o histórico
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  removed_by  INTEGER REFERENCES users(id),
+  removed_at  TEXT
+);
+CREATE TABLE IF NOT EXISTS bookings (
+  id             INTEGER PRIMARY KEY,
+  account_id     INTEGER NOT NULL REFERENCES portal_accounts(id),
+  pilot_id       INTEGER REFERENCES portal_pilots(id),
+  date           TEXT NOT NULL,
+  period         TEXT NOT NULL CHECK (period IN ('dia','manha','tarde')),
+  status         TEXT NOT NULL DEFAULT 'pendente'
+                 CHECK (status IN ('pendente','confirmada','recusada','cancelada')),
+  notes          TEXT,
+  decided_by     INTEGER REFERENCES users(id),
+  decided_at     TEXT,
+  decision_note  TEXT,
+  cancelled_by   TEXT,                              -- cliente | equipe
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS bookings_data ON bookings(date, status);
+CREATE INDEX IF NOT EXISTS bookings_conta ON bookings(account_id);

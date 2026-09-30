@@ -88,8 +88,8 @@ select.input{padding-right:30px}
 
 /* ---------- controle segmentado (no lugar das abas sublinhadas) */
 .tabs{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--glass);border:1px solid var(--glass-line);max-width:100%;align-self:flex-start}
-.tabs button{padding:0 14px;height:32px;border-radius:999px;border:0;margin:0;font-family:var(--font);text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--muted)}
-.tabs button.on{color:var(--ink);background:var(--glass-2);box-shadow:0 1px 0 rgba(239,235,229,.08) inset,0 6px 14px -8px rgba(0,0,0,.8)}
+.tabs button,.tabs a{text-decoration:none;display:inline-flex;align-items:center;padding:0 14px;height:32px;border-radius:999px;border:0;margin:0;font-family:var(--font);text-transform:none;letter-spacing:0;font-size:13px;font-weight:600;color:var(--muted)}
+.tabs button.on,.tabs a.on{color:var(--ink);background:var(--glass-2);box-shadow:0 1px 0 rgba(239,235,229,.08) inset,0 6px 14px -8px rgba(0,0,0,.8)}
 [data-theme="light"] .tabs button.on{background:var(--surface);box-shadow:0 2px 8px -4px rgba(25,23,20,.35)}
 .tabs button::after,.tabs button.on::before{display:none}
 .tabs .count{color:var(--muted)}
@@ -475,7 +475,7 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
    Botão pequeno (.sm, ghost, quiet), ícone e aba sobem para 40; o "?" do título e os
    ícones de 24 px mantêm o desenho e ganham uma área de toque invisível em volta. */
 @media (max-width: 720px), (pointer: coarse) {
-  .btn, .btn.sm, .btn.ghost, .btn.quiet, .tabs button, .seg .btn { min-height: 40px }
+  .btn, .btn.sm, .btn.ghost, .btn.quiet, .tabs button, .tabs a, .seg .btn { min-height: 40px }
   .iconbtn, .mic, .mic.sm, .top .who { min-width: 40px; min-height: 40px }
   .iconbtn { width: 40px; height: 40px }
   .page-h .help, .ic, .star { position: relative }
@@ -499,3 +499,19 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .portal-dl div{background:var(--glass-2);border-radius:var(--r);padding:8px 10px}
 .portal-dl dt{font-size:12px;color:var(--muted)}.portal-dl dd{margin:2px 0 0;font-weight:700}
 .h3{font-size:16px;font-weight:700;margin:0}
+/* agenda do cliente (#41) */
+.portal-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.portal-cal-s{font-size:11px;color:var(--muted);text-align:center;padding:2px 0}
+.portal-cal-d{min-height:42px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--muted);font:inherit;font-weight:600;opacity:.45}
+.portal-cal-d.aberto{opacity:1;color:var(--ink);background:var(--glass-2);border-color:var(--glass-line-2);cursor:pointer}
+.portal-cal-d.aberto:hover{border-color:var(--accent)}
+.portal-cal-d.on{background:var(--brand);color:#fff;border-color:transparent}
+.portal-periodos{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+.portal-periodos .btn{flex-direction:column;align-items:flex-start;gap:0;white-space:normal;min-height:52px}
+/* site público › próximos dias (#41) */
+.site-mes{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:6px}
+.site-dia{display:flex;flex-direction:column;gap:3px;padding:8px;border:1px solid var(--glass-line);border-radius:var(--r);background:var(--glass-2)}
+.site-p{font-size:11.5px;font-weight:700;border-radius:6px;padding:1px 6px}
+.site-p.ok{background:var(--ok-wash);color:var(--ok)}.site-p.warn{background:var(--warn-wash);color:var(--warn)}
+.site-p.crit{background:var(--crit-wash);color:var(--crit)}.site-p.neutral{color:var(--muted)}
+.site-semana{display:grid;grid-template-columns:44px repeat(2,minmax(0,1fr));gap:8px 12px;align-items:center;max-width:520px}

@@ -22,8 +22,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
 
 from command_center.api import auth
-from command_center.db import agora, atualizar, auditar, get_db, inserir, um
-from command_center.providers import portal
+from command_center.db import agora, atualizar, auditar, get_db, inserir, transacao, um
+from command_center.providers import agenda_sessoes as ag, portal
 
 r = APIRouter(prefix="/ops/api/portal", tags=["portal"])
 
@@ -236,3 +236,54 @@ def editar_piloto(pid: int, dados: PilotoIn, request: Request, cid=Depends(clien
     _aud(con, request, "portal.driver.update", cid, {"piloto": pid, "campos": mudou})
     con.commit()
     return portal.conta(con, cid)
+
+
+# ------------------------------------------------------------------ agenda (#41)
+@r.get("/availability")
+def disponibilidade(start: str | None = None, end: str | None = None, cid=Depends(cliente_atual),
+                    con: sqlite3.Connection = Depends(get_db)):
+    """O que o cliente pode marcar: só aberto/fechado e vagas, sem o motivo interno."""
+    from datetime import date
+    try:
+        d = ag.disponibilidade(con, date.fromisoformat(start) if start else None, date.fromisoformat(end) if end else None)
+    except (ValueError, ag.ErroAgenda):
+        raise HTTPException(400, "Choose a valid date range.")
+    for dia in d["dias"]:
+        for p in ("manha", "tarde"):
+            dia["periods"][p] = {"open": dia["periods"][p]["open"], "spots": dia["periods"][p]["spots"]}
+    return d
+
+
+@r.get("/bookings")
+def meus_agendamentos(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    return {"bookings": ag.do_cliente(con, cid)}
+
+
+class AgendarIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    date: str
+    period: str
+    driver_id: int | None = None
+    notes: str | None = None
+
+
+@r.post("/bookings", status_code=201)
+def agendar(dados: AgendarIn, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    try:
+        with transacao(con):                  # duas pessoas na última vaga: só uma leva
+            bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes)
+            _aud(con, request, "portal.booking", cid, {"agendamento": bid, "data": dados.date, "periodo": dados.period})
+    except ag.ErroAgenda as e:
+        raise HTTPException(400, str(e))
+    return {"id": bid, "bookings": ag.do_cliente(con, cid)}
+
+
+@r.post("/bookings/{bid}/cancel")
+def cancelar(bid: int, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    try:
+        ag.cancelar_pelo_cliente(con, cid, bid)
+    except ag.ErroAgenda as e:
+        raise HTTPException(404 if "not found" in str(e) else 400, str(e))
+    _aud(con, request, "portal.booking.cancel", cid, {"agendamento": bid})
+    con.commit()
+    return {"bookings": ag.do_cliente(con, cid)}
