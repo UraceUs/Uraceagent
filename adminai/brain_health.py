@@ -104,7 +104,7 @@ def main():
     print(f"hubs (>={HUB_MINIMO} entradas) {len(hubs)}")
     print()
 
-    print(f"-- os hubs, do maior para o menor --")
+    print("-- os hubs, do maior para o menor --")
     for nome, contagem in hubs[:15]:
         print(f"   {contagem:4}  {nome}")
     print()

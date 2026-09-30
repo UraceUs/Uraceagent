@@ -268,7 +268,7 @@ def test_eventos_viram_comandos_conforme_regra(cli):
 
 def test_safe_executa_sozinho_e_finished(cli):
     from command_center.api import ia
-    import json, time
+    import time
     h = entra(cli, "admin@urace.us")
     ia.RUNNER = lambda texto, sk: (True, 'ok\nACAO: asana_mover_para_finished | 999 | mover | {"gid":"999"}\nACAO: asana_mover_para_secao | 999 | mover | {"gid":"999","secao_gid":"1"}', None)
     cid = cli.post(B + "/commands", headers=h, json={"text": "vencida"}).json()["id"]
@@ -441,7 +441,7 @@ def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, mo
     from command_center.db import conectar, inserir, um
     con = conectar()
     try:
-        cid = um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")["id"]
+        assert um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")
         n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pera_Urace Daily_Using Own Kart [1/1]",
                                                      "notas": "Driver's name: David Pera\nInvoice link:   Price: $500", "vence_em": "2026-09-13"}, con, "David Pera domingo mesmo esquema")
         assert n == "asana_criar_do_modelo" and a["campos"] == {"Race": "Practice OKC"}
@@ -543,7 +543,7 @@ def test_uma_conversa_por_usuario_e_automatica_separada(cli):
     finally:
         con.close()
     # operador: só a própria conversa; sem a automática; sem ver a do admin
-    h = entra(cli, "op@urace.us")
+    entra(cli, "op@urace.us")
     t = cli.get(f"{B}/threads").json()
     assert [x["id"] for x in t["threads"]] == [op] and t["auto"] is None
     mine = cli.get(f"{B}/thread").json()
@@ -552,7 +552,7 @@ def test_uma_conversa_por_usuario_e_automatica_separada(cli):
     assert all(c["user_id"] == op for c in cli.get(f"{B}/thread?user_id=1").json()["commands"])     # não escala para outro usuário
     assert cli.get(f"{B}/thread?kind=auto").status_code == 403
     # admin: vê todas, a do operador e a automática; ordem cronológica com ações embutidas
-    h = entra(cli, "admin@urace.us")
+    entra(cli, "admin@urace.us")
     t = cli.get(f"{B}/threads").json()
     assert op in [x["id"] for x in t["threads"]] and t["auto"]["n"] >= 1
     do_op = cli.get(f"{B}/thread?user_id={op}").json()["commands"]
@@ -736,7 +736,7 @@ def test_pagamento_confirmado_fecha_a_subtarefa_de_pagamento_no_asana(cli, monke
 
 def test_pagamento_sem_tarefa_batendo_nao_quebra(cli, monkeypatch):
     from command_center.api import motor
-    from command_center.db import conectar, inserir, um
+    from command_center.db import conectar, inserir
     import command_center.providers as prov
     con = conectar()
     try:

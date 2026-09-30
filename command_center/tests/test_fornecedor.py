@@ -10,7 +10,7 @@ import tempfile
 
 import pytest
 
-from command_center.db import aplicar_schema, conectar, inserir, todos, um
+from command_center.db import aplicar_schema, conectar, um
 from command_center.providers import estoque, fornecedor
 
 

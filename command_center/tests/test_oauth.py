@@ -10,7 +10,6 @@ quando reusado, e nenhum segredo em claro no banco.
 """
 import base64
 import hashlib
-import json
 import os
 import secrets
 import tempfile
@@ -379,7 +378,6 @@ def test_sem_sessao_vai_ao_login_levando_a_volta(cli):
     """No navegador de verdade o cookie `SameSite=Strict` NÃO acompanha a chegada vinda
     do claude.ai. O servidor manda para o login com `next` apontando de volta para a
     autorização, com todos os parâmetros — é isso que a tela de login usa para voltar."""
-    from urllib.parse import unquote
     cid = registrar(cli)
     _, desafio = pkce()
     cli.cookies.clear()

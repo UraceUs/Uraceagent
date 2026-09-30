@@ -5,7 +5,6 @@ adicionar; aí ele consegue colocar foto, descrição, nome e quantidade do item
 temos"*. Eu tinha posto o cadastro em MANAGER por conta própria; estava errado. Quem
 está na prateleira é quem sabe o que há nela.
 """
-import io
 import os
 import tempfile
 

@@ -35,7 +35,7 @@ import urllib.request
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mcp_stdio import AGENTE, ASSINATURA, ErroFerramenta, Servidor, assinar, rastro  # noqa: E402
+from mcp_stdio import ErroFerramenta, Servidor, assinar, rastro  # noqa: E402
 from mcp_stdio import log  # noqa: E402
 
 API = "https://app.asana.com/api/1.0"

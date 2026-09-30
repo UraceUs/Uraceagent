@@ -69,7 +69,7 @@ def _dias(iso):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dias", type=int, default=400, help="olhar waivers enviadas nos últimos N dias")
-    a = ap.parse_args()
+    ap.parse_args()
 
     con = conectar()
     aplicar_schema(con)

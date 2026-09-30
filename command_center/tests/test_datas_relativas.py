@@ -26,12 +26,10 @@ Se isso voltar a morder, o conserto certo não é uma regra estática mais esper
 a suíte com o relógio adiantado alguns meses. Isso pega tudo — atribuição e asserção —
 sem acusar ninguém à toa.
 """
-import ast
 import os
 import re
 from datetime import date
 
-import pytest
 
 TESTES = os.path.dirname(os.path.abspath(__file__))
 # Campos que o código filtra por "últimos N dias" ou "vence em N dias".

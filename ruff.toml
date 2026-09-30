@@ -1,0 +1,9 @@
+# Lint do Python (issue #16). Começa pelo que é defeito, não estilo: erro de sintaxe,
+# nome indefinido, import e variável sem uso. Regra nova entra quando o código já
+# estiver limpo nela — lint que ninguém consegue deixar verde vira ruído.
+target-version = "py311"
+line-length = 160
+extend-exclude = ["legacy-v1", "salesagent", "admagent", "command_center/web", "**/node_modules"]
+
+[lint]
+select = ["E9", "F"]

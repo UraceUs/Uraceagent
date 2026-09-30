@@ -443,7 +443,6 @@ def anexar_waiver_na_tarefa(con, task_id):
     """Toda tarefa criada leva a waiver assinada do piloto junto (dono, 10/09): o painel
     busca a waiver do cliente, guarda o PDF no card e anexa na tarefa do Asana.
     Mecânico: não passa pelo agente nem por aprovação, e nunca anexa duas vezes."""
-    from command_center.providers import modulo
     t = um(con, """SELECT t.*, l.external_id AS gid FROM tasks t
                    LEFT JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
                    WHERE t.id=?""", (task_id,))

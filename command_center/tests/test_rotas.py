@@ -677,7 +677,7 @@ def test_agenda_chave_devida_e_roda_uma_vez_por_horario(cli, monkeypatch):
 
 def test_sondagem_apos_falha_respeita_intervalo(cli, monkeypatch):
     from command_center.api import agenda
-    from command_center.db import conectar, um
+    from command_center.db import conectar
     con = conectar()
     try:
         con.execute("UPDATE integrations SET last_attempt_at=NULL WHERE system='asana'")
@@ -864,7 +864,7 @@ def test_historico_completo_do_asana_liga_servicos_a_pessoa_e_sugere_duplicados(
     """Todas as colunas, concluídas incluídas, sem teto: cada treino vai para a pessoa certa;
     Brian/Bryan vira par para decidir; unir à mão passa tudo para um card."""
     from command_center.api import rotas
-    from command_center.db import conectar, um, todos
+    from command_center.db import conectar, um
     from command_center.providers import identidade, sync
     secoes = [{"gid": "1208640396741022", "nome": "Finished Services"}, {"gid": "s-sat", "nome": "SATURDAY"}, {"gid": "s-matt", "nome": "Matt tasks"}]
     lista = {"1208640396741022": [{"gid": f"9{i:03d}", "nome": f"Thiago Belluci_Academy [{i}/4]", "concluida": True, "vence_em": f"2026-0{1 + i % 6}-1{i % 9}", "subtarefas": 3} for i in range(1, 8)]
@@ -969,7 +969,7 @@ def test_avisos_descritivos_invoice_e_tarefa(cli):
         inserir(con, "entity_links", entity_type="invoice", entity_id=inv, system="quickbooks", external_id="1077", deep_link="https://qbo.intuit.com/app/invoice?txnId=1077")
         t = inserir(con, "tasks", client_id=c, title="Théo Mendes_Urace Daily_2 stroke [1/1]", project="U-RACE", section="SATURDAY", status="open",
                     due_on=(date.today() - timedelta(days=5)).isoformat(), subtasks_total=12, subtasks_done=9)
-        ev = inserir(con, "ai_events", kind="task.overdue", entity_type="task", entity_id=t, client_id=c, summary="x", status="FAILED")
+        inserir(con, "ai_events", kind="task.overdue", entity_type="task", entity_id=t, client_id=c, summary="x", status="FAILED")
         con.commit()
     finally:
         con.close()
@@ -1091,7 +1091,8 @@ def test_apagar_e_unir_cliente_nao_quebra_chave_estrangeira(cli):
         t = inserir(con, "tasks", client_id=falso, title="x", project="U-RACE", section="SATURDAY", status="open", due_on="2026-09-12")
         i = inserir(con, "invoices", client_id=falso, doc_number="9001", amount=10, balance=0, status="paid")
         ev = inserir(con, "ai_events", kind="task.created", entity_type="task", entity_id=t, client_id=falso, summary="x")
-        w = inserir(con, "ai_workflows", client_id=falso, kind="x", status="DONE") if um(con, "SELECT name FROM sqlite_master WHERE name='ai_workflows'") else None
+        if um(con, "SELECT name FROM sqlite_master WHERE name='ai_workflows'"):
+            inserir(con, "ai_workflows", client_id=falso, kind="x", status="DONE")
         # outro falso, mas com convite de corrida: alguém agiu, não se apaga
         comConvite = inserir(con, "clients", name="Karting School", vip=0, status="ACTIVE", source="asana")
         rid = inserir(con, "races", name="[teste] corrida", source="manual", active=1)
@@ -1610,7 +1611,6 @@ def test_filtros_aplicados_pela_api_pulam_o_que_ja_existe(cli, monkeypatch, tmp_
     travou (conta delegada pede reautenticação) e um clique a mais disparou a criação
     em dobro. Pela API não há nem um nem outro."""
     from command_center.api import rotas
-    import command_center.providers as prov
     h = entra(cli, "admin@urace.us")
     os.makedirs(rotas.FILTROS_DIR, exist_ok=True)
     with open(os.path.join(rotas.FILTROS_DIR, "mailFilters-urace.xml"), "w", encoding="utf-8") as f:
@@ -1818,7 +1818,7 @@ def test_lembretes_de_invoice(cli, monkeypatch):
     """Dono: botão nos clientes e no QuickBooks para mandar reminders — diário, semanal ou a
     cada N dias, com toggle. Quem liga é MANAGER; a rotina das 09:00 manda o que está devido,
     reenviando a invoice pelo QuickBooks; invoice paga desliga sozinha."""
-    from datetime import date, timedelta
+    from datetime import timedelta
     from command_center.api import agenda, lembretes
     from command_center.db import conectar, inserir, um
     con = conectar()

@@ -615,7 +615,6 @@ def test_fila_e_reivindicada_uma_vez_e_sai_junta(cli, chat):
     assert cli.post(f"{B}/crm/leads/{lid}/reply", headers=h, json={"text": "segunda"}).json()["como"] == "bot disparado"
     con = conectar()
     try:
-        l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lid,))
         assert len(crm._reivindicar_fila(con, lid)) == 2                # leva as duas
         assert crm._reivindicar_fila(con, lid) == []                    # ninguém mais leva
         con.execute("UPDATE crm_messages SET status='queued' WHERE lead_id=? AND status='sending'", (lid,)); con.commit()

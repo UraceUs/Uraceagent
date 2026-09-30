@@ -36,7 +36,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from command_center.api import auth
-from command_center.db import agora, auditar, get_db, inserir, todos, um
+from command_center.db import agora, auditar, get_db, inserir, um
 
 r = APIRouter(prefix="/ops/oauth", tags=["oauth"])
 

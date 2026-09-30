@@ -44,7 +44,6 @@ def _limpar_sandboxes():
 def _autosync():
     """A cada N minutos: espelha as fontes e acorda a IA para o que mudou.
     É o que faz "a IA agir a cada alteração" sem ninguém clicar."""
-    import threading
     import time
     from command_center.api import motor
     from command_center.db import agora, um

@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from command_center.api import atencao, auth, crm  # noqa: E402
 from command_center.api.main import app  # noqa: E402
-from command_center.db import agora, aplicar_schema, conectar, inserir, todos, um  # noqa: E402
+from command_center.db import agora, aplicar_schema, conectar, inserir, um  # noqa: E402
 
 B = "/ops/api"
 SENHA = "senha-forte-123"

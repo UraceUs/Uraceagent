@@ -8,7 +8,6 @@ cópia nova estar lá e conferida**, e upload truncado não conta como backup. U
 remoto que apaga o anterior e sobe pela metade é pior que backup nenhum, porque dá a
 impressão de existir.
 """
-import gzip
 import importlib
 import os
 import sys

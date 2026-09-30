@@ -16,7 +16,7 @@ Como funciona:
 - Quem liga o lembrete é um MANAGER, na tela: essa é a aprovação humana — por isso a
   ação da IA é SAFE e não passa pela fila de aprovações. "Enviar agora" é botão humano.
 """
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from command_center.db import agora, auditar, inserir, todos, um
 

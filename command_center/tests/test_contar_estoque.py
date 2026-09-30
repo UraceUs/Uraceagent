@@ -14,7 +14,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 if RAIZ not in sys.path:
     sys.path.insert(0, RAIZ)
 
-from command_center.db import aplicar_schema, conectar, todos, um  # noqa: E402
+from command_center.db import aplicar_schema, conectar, um  # noqa: E402
 from command_center.providers import estoque  # noqa: E402
 
 contar_estoque = importlib.import_module("adminai.contar_estoque")
