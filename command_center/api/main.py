@@ -10,6 +10,7 @@ import sqlite3
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -134,12 +135,26 @@ app = FastAPI(title="URACE Command Center", docs_url=None, redoc_url=None,
               openapi_url=None, lifespan=_ciclo)
 
 
+# Resposta grande vai comprimida (JSON de lista, JS e CSS do build): no 4G faz diferença.
+# Registrado ANTES dos outros = fica por dentro deles e vê a resposta inteira, então o
+# mínimo de 1 KB vale (por fora, a resposta chega em pedaços e tudo seria comprimido).
+app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+def cache_de(caminho):
+    """Arquivo do build com hash no nome (/ops/assets/index-Co7pDqj7.js) nunca muda: o
+    navegador guarda por um ano e nem pergunta (issue #19). O resto segue sem cache."""
+    if caminho.startswith(BASE + "/assets/"):
+        return "public, max-age=31536000, immutable"
+    return None
+
+
 @app.middleware("http")
 async def _cabecalhos(request: Request, call_next):
     resp = await call_next(request)
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
-    resp.headers["Cache-Control"] = resp.headers.get("Cache-Control", "no-store")
+    resp.headers["Cache-Control"] = cache_de(request.url.path) or resp.headers.get("Cache-Control", "no-store")
     if "Content-Security-Policy" in resp.headers:      # rota com política própria (corpo de e-mail em iframe)
         return resp
     resp.headers["X-Frame-Options"] = "DENY"

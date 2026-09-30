@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { lazy, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { Role } from './api/types'
 import { AuthProvider, useAuth } from './auth/AuthContext'
@@ -6,24 +6,41 @@ import { Shell } from './components/Shell'
 import { PerguntarProvider } from './components/Perguntar'
 import { ToastProvider } from './components/Toast'
 import { Empty, PageHeader } from './components/ui'
-import { AICommand, Activity, Approvals } from './pages/AI'
-import { AttentionPage } from './pages/Attention'
-import { Automation } from './pages/Automation'
-import { Capabilities } from './pages/Capabilities'
-import { Races } from './pages/Races'
-import { Estoque } from './pages/Estoque'
-import { Planejamento } from './pages/Logistica'
-import { Compras, Pedidos } from './pages/Compras'
-import { Client360 } from './pages/Client360'
-import { Clients } from './pages/Clients'
-import { CRM } from './pages/CRM'
-import { Equipe } from './pages/Equipe'
-import { GmailManual } from './pages/GmailManual'
-import { Dashboard } from './pages/Dashboard'
-import { AsanaPage, DocuSignPage, GmailPage, QuickBooksPage } from './pages/Systems'
 import { Login } from './pages/Login'
-import { Account, Audit, Integrations, Policies, Users } from './pages/System'
-import { AgendaVendas, Oportunidade, Oportunidades } from './pages/Vendas'
+
+// Cada tela é um pedaço próprio do JavaScript (issue #19): o celular baixa o que abre,
+// não o painel inteiro. O login fica no pacote inicial — é a primeira coisa que aparece.
+const tela = <N extends string>(carregar: () => Promise<Record<N, ComponentType<any>>>, nome: N) =>
+  lazy(() => carregar().then(m => ({ default: m[nome] })))
+const AICommand = tela(() => import('./pages/AI'), 'AICommand')
+const Activity = tela(() => import('./pages/AI'), 'Activity')
+const Approvals = tela(() => import('./pages/AI'), 'Approvals')
+const AttentionPage = tela(() => import('./pages/Attention'), 'AttentionPage')
+const Automation = tela(() => import('./pages/Automation'), 'Automation')
+const Capabilities = tela(() => import('./pages/Capabilities'), 'Capabilities')
+const Races = tela(() => import('./pages/Races'), 'Races')
+const Estoque = tela(() => import('./pages/Estoque'), 'Estoque')
+const Planejamento = tela(() => import('./pages/Logistica'), 'Planejamento')
+const Compras = tela(() => import('./pages/Compras'), 'Compras')
+const Pedidos = tela(() => import('./pages/Compras'), 'Pedidos')
+const Client360 = tela(() => import('./pages/Client360'), 'Client360')
+const Clients = tela(() => import('./pages/Clients'), 'Clients')
+const CRM = tela(() => import('./pages/CRM'), 'CRM')
+const Equipe = tela(() => import('./pages/Equipe'), 'Equipe')
+const GmailManual = tela(() => import('./pages/GmailManual'), 'GmailManual')
+const Dashboard = tela(() => import('./pages/Dashboard'), 'Dashboard')
+const AsanaPage = tela(() => import('./pages/Systems'), 'AsanaPage')
+const DocuSignPage = tela(() => import('./pages/Systems'), 'DocuSignPage')
+const GmailPage = tela(() => import('./pages/Systems'), 'GmailPage')
+const QuickBooksPage = tela(() => import('./pages/Systems'), 'QuickBooksPage')
+const Account = tela(() => import('./pages/System'), 'Account')
+const Audit = tela(() => import('./pages/System'), 'Audit')
+const Integrations = tela(() => import('./pages/System'), 'Integrations')
+const Policies = tela(() => import('./pages/System'), 'Policies')
+const Users = tela(() => import('./pages/System'), 'Users')
+const AgendaVendas = tela(() => import('./pages/Vendas'), 'AgendaVendas')
+const Oportunidade = tela(() => import('./pages/Vendas'), 'Oportunidade')
+const Oportunidades = tela(() => import('./pages/Vendas'), 'Oportunidades')
 
 const PAPEL_PT: Record<string, string> = { ADMIN: 'administrador', MANAGER: 'gerente', OPERATOR: 'operador', VIEWER: 'leitura' }
 
