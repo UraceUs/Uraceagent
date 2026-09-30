@@ -79,10 +79,17 @@ _REMETENTES_FORA = ("urace.us", "intuit.com", "quickbooks", "docusign", "kommo",
 _MARCADORES_FORA = ("URace Store/", "Customer Service/", "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "SENT", "DRAFT", "SPAM", "TRASH")
 
 
+# Dono, 30/09: recibo do Orlando Kart Center (passe de pista) NÃO vira compra.
+_LOJAS_FORA = ("orlandokartcenter", "orlando kart center")
+
+
 def _ignorar(msg):
     """Motivo para não ser compra, ou None."""
     de = (msg.get("de") or "").lower()
     email = parseaddr(msg.get("de") or "")[1].lower()
+    marcas = " ".join(str(m).lower() for m in (msg.get("marcadores") or []))
+    if any(x in de or x in email.replace(".", "").replace("-", "") or x in marcas for x in _LOJAS_FORA):
+        return "Orlando Kart Center (dono: passe de pista não é compra)"
     if any(email.endswith(d) or d in email.split("@")[-1] for d in _REMETENTES_FORA):
         return "remetente fora (nosso ou de sistema)"
     marc = msg.get("marcadores") or []

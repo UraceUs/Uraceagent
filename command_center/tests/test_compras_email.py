@@ -101,6 +101,8 @@ def test_fornecedor_pelo_remetente():
     msg("Your order shipped", "Tracking number 1Z999AA10123456784", de="Kart <x@kart.com>", marcadores=["CATEGORY_PROMOTIONS"]),
     msg("Order #77 shipped", "", de="Shop <a@b.com>", marcadores=["URace Store/Shipped Orders"]),
     msg("Your subscription receipt", "Order #A123", de="Canva <no-reply@canva.com>"),
+    msg("Receipt for your purchase", "Order #TP-4410 Amount paid: $60.00", de="Orlando Kart Center <noreply@orlandokartcenter.com>"),
+    msg("Your receipt", "Order #8812", de="Receipts <no-reply@okc-mail.com>", marcadores=["Finances/Shopping/Orlando Kart Center/Track Pass"]),
 ])
 def test_venda_nossa_cobranca_e_propaganda_nao_viram_compra(m):
     assert ce.ler(m) is None
@@ -207,7 +209,7 @@ def test_sku_no_email_liga_o_pedido_sozinho_e_nome_so_sugere(con):
 
 def test_concluir_compra_que_nao_e_de_estoque(con):
     pid, _ = aplica(con, msg("Receipt for your payment", "Order #TP-4410 Amount paid: $60.00",
-                             de="Orlando Kart Center <noreply@orlandokartcenter.com>"))
+                             de="Kart Tools <noreply@karttools.com>"))
     rid = compras.criar_pedido(con, None, 1, description="Passe de pista")
     compras.ligar_pedidos(con, pid, [rid])
     compras.concluir(con, pid)
