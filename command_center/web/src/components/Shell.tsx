@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { useGet, useOnline } from '../api/hooks'
 import type { Attention, Dashboard } from '../api/types'
 import { Palette } from './Palette'
-import { Chip, statusTone } from './ui'
+import { Chip, Loading, statusTone } from './ui'
 import { Icon, type IconName } from './Icon'
 import { ago, initials } from './fmt'
 
@@ -172,7 +172,7 @@ export function Shell() {
         </div>
       </header>
       </div>
-      <main className={`page${larguraDa(loc.pathname)}`}><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Outlet context={{ dash }} /></div></main>
+      <main className={`page${larguraDa(loc.pathname)}`}><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Suspense fallback={<Loading />}><Outlet context={{ dash }} /></Suspense></div></main>
     </div>
     <nav className="tabbar" aria-label="Abas">
       <TB to="/" end icon="home">Hoje</TB>
