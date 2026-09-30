@@ -23,7 +23,7 @@ function csrf(): string {
   return m ? decodeURIComponent(m[1]) : ''
 }
 
-async function req<T>(method: string, path: string, body?: unknown, opts: { silent401?: boolean } = {}): Promise<T> {
+async function req<T>(method: string, path: string, body?: unknown, opts: { silent401?: boolean; total?: (n: number) => void } = {}): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (method !== 'GET') headers['X-CSRF'] = csrf()
@@ -46,6 +46,8 @@ async function req<T>(method: string, path: string, body?: unknown, opts: { sile
     throw new ApiError(res.status, msg)
   }
   if (res.status === 204) return undefined as T
+  const total = res.headers.get('X-Total-Count')
+  if (opts.total && total !== null) opts.total(Number(total))
   return res.json() as Promise<T>
 }
 
@@ -75,6 +77,8 @@ async function reqForm<T>(path: string, form: FormData): Promise<T> {
 
 export const api = {
   get: <T>(path: string, opts?: { silent401?: boolean }) => req<T>('GET', path, undefined, opts),
+  /** Lista paginada no servidor (issue #20): uma página e o total (cabeçalho X-Total-Count). */
+  pagina: async <T>(path: string) => { let total = 0; const itens = await req<T[]>('GET', path, undefined, { total: n => { total = n } }); return { itens, total } },
   postForm: <T>(path: string, form: FormData) => reqForm<T>(path, form),
   post: <T>(path: string, body?: unknown) => req<T>('POST', path, body ?? {}),
   put: <T>(path: string, body?: unknown) => req<T>('PUT', path, body ?? {}),

@@ -35,7 +35,7 @@ def test_resposta_grande_vai_comprimida_e_pequena_nao(cli):
     grande = cli.get("/ops/api/policies", headers={"Accept-Encoding": "gzip"})
     assert grande.status_code == 200 and len(grande.content) > 1024
     assert grande.headers.get("content-encoding") == "gzip"
-    assert grande.headers["cache-control"] == "no-store", "dado da API continua sem cache"
+    assert grande.headers["cache-control"] == "private, no-cache", "dado da API: só no navegador, sempre revalidado (#20)"
     cli.cookies.clear()
     pequena = cli.get("/ops/api/dashboard", headers={"Accept-Encoding": "gzip"})
     assert pequena.status_code == 401 and pequena.headers.get("content-encoding") is None, "menos de 1 KB não compensa"

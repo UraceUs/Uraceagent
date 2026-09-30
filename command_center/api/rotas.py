@@ -8,10 +8,11 @@ import sqlite3
 import threading
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from command_center.api import atencao, auth, equipe, vendas
+from command_center.api.cache_api import paginar
 from command_center.db import agora, atualizar, auditar, conectar, get_db, inserir, todos, um
 from command_center.providers import sync as sy
 
@@ -188,7 +189,8 @@ def attention_restore(dados: RestaurarIn, request: Request, u=Depends(auth.exige
 
 # ----------------------------------------------------------- clientes
 @r.get("/clients")
-def clients(status: str | None = None, q: str | None = None, vip: bool | None = None, pro: bool | None = None,
+def clients(response: Response, status: str | None = None, q: str | None = None, vip: bool | None = None,
+            pro: bool | None = None, limit: int | None = None, offset: int = 0,
             u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     where, p = ["1=1"], []
     # 22/09: corrida/tarefa que virou card fica 'separado' — fora da lista, mas consultável
@@ -204,7 +206,7 @@ def clients(status: str | None = None, q: str | None = None, vip: bool | None = 
         where.append("c.pro_driver=?"); p.append(1 if pro else 0)
     if q:
         where.append("(c.name LIKE ? OR c.pilot_name LIKE ? OR c.email LIKE ?)"); p += [f"%{q}%"] * 3
-    rows = todos(con, f"""
+    return paginar(con, f"""
         SELECT c.*, s.label AS stage,
           (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status='open') AS open_tasks,
           (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status='completed') AS done_tasks,
@@ -214,8 +216,8 @@ def clients(status: str | None = None, q: str | None = None, vip: bool | None = 
           (SELECT COUNT(*) FROM emails e WHERE e.client_id=c.id AND e.handled=0) AS emails_open,
           (SELECT MAX(synced_at) FROM tasks t WHERE t.client_id=c.id) AS last_activity
         FROM clients c LEFT JOIN client_stages s ON s.code=c.stage_code
-        WHERE {' AND '.join(where)} ORDER BY MAX(COALESCE(next_service, ''), COALESCE(last_service, '')) DESC, COALESCE(c.pilot_name, c.name)""", p)
-    return rows
+        WHERE {' AND '.join(where)} ORDER BY MAX(COALESCE(next_service, ''), COALESCE(last_service, '')) DESC,
+              COALESCE(c.pilot_name, c.name), c.id""", p, response, limit=limit, offset=offset)
 
 
 @r.get("/clients/{cid}")
@@ -345,14 +347,16 @@ def waivers(hidden: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Co
 
 
 @r.get("/emails")
-def emails(mailbox: str | None = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+def emails(response: Response, mailbox: str | None = None, limit: int | None = None, offset: int = 0,
+           u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     sql = "SELECT e.*, c.name AS client_name FROM emails e LEFT JOIN clients c ON c.id=e.client_id"
     p = []
     if mailbox:
         sql += " WHERE e.mailbox=?"; p.append(mailbox)
     # inbox primeiro: o e-mail que o dono ainda não arquivou não pode cair fora do
     # LIMIT por ser antigo (regra dele, 14/09). O já arquivado é que pode.
-    rows = todos(con, sql + " ORDER BY e.is_inbox DESC, e.last_at DESC LIMIT 300", p)
+    rows = paginar(con, sql + " ORDER BY e.is_inbox DESC, e.last_at DESC, e.id DESC", p, response,
+                   limit=limit, offset=offset, padrao=300)
     for e in rows:
         e["links"] = _links(con, "email", e["id"])
     return rows
@@ -1437,13 +1441,15 @@ def automation_rule_put(name: str, dados: RegraIn, request: Request, u=Depends(a
 
 # ============================================================ QuickBooks (financeiro: MANAGER+)
 @r.get("/invoices")
-def invoices(status: str = None, u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+def invoices(response: Response, status: str = None, limit: int | None = None, offset: int = 0,
+             u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
     from command_center.api import lembretes
     sql = f"SELECT i.*, c.name AS client_name, c.pilot_name, {lembretes.CAMPOS_NA_INVOICE} FROM invoices i LEFT JOIN clients c ON c.id=i.client_id"
     p = []
     if status:
         sql += " WHERE i.status=?"; p.append(status)
-    rows = todos(con, sql + " ORDER BY CASE i.status WHEN 'overdue' THEN 0 WHEN 'open' THEN 1 WHEN 'sent' THEN 1 ELSE 2 END, i.due_on DESC LIMIT 500", p)
+    rows = paginar(con, sql + " ORDER BY CASE i.status WHEN 'overdue' THEN 0 WHEN 'open' THEN 1 WHEN 'sent' THEN 1 ELSE 2 END, i.due_on DESC, i.id DESC",
+                   p, response, limit=limit, offset=offset, padrao=500)
     for i in rows:
         i["links"] = _links(con, "invoice", i["id"])
     return rows

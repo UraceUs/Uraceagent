@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from command_center.api import auth, dialpad, ia, rotas
+from command_center.api.cache_api import ETagAPI, paginar
 from command_center.db import auditar, aplicar_schema, conectar, get_db, todos, um
 
 BASE = "/ops"
@@ -138,6 +139,8 @@ app = FastAPI(title="URACE Command Center", docs_url=None, redoc_url=None,
 # Resposta grande vai comprimida (JSON de lista, JS e CSS do build): no 4G faz diferença.
 # Registrado ANTES dos outros = fica por dentro deles e vê a resposta inteira, então o
 # mínimo de 1 KB vale (por fora, a resposta chega em pedaços e tudo seria comprimido).
+# ETag nos GET da API (issue #20): o mais de dentro de todos — vê o corpo inteiro, antes do gzip.
+app.add_middleware(ETagAPI)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
@@ -451,10 +454,16 @@ def api_keys_revoke(ident: str, request: Request, u=Depends(auth.exige("ADMIN"))
 
 # ------------------------------------------------------------- audit
 @app.get(BASE + "/api/audit")
-def api_audit(limit: int = 100, u=Depends(auth.exige("MANAGER")),
-              con: sqlite3.Connection = Depends(get_db)):
-    limit = max(1, min(limit, 500))
-    return todos(con, "SELECT * FROM audit_logs ORDER BY id DESC LIMIT ?", (limit,))
+def api_audit(response: Response, limit: int = 100, offset: int = 0, q: str | None = None,
+              u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
+    """Paginada no banco (issue #20): a tela pede 100 de cada vez e busca no servidor, não
+    filtrando só o que já baixou."""
+    sql, p = "SELECT * FROM audit_logs", []
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        sql += " WHERE event LIKE ? OR actor LIKE ? OR entity_type LIKE ? OR entity_id LIKE ? OR detail LIKE ?"
+        p = [like] * 5
+    return paginar(con, sql + " ORDER BY id DESC", p, response, limit=limit, offset=offset)
 
 
 # ---------------------------------------------------------- frontend

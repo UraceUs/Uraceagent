@@ -53,7 +53,7 @@ def criar_pedido(con, por, qty, item_id=None, description=None, unit=None, clien
                    notes=_texto(notes), requested_by=por)
 
 
-def pedidos(con, status=None):
+def pedidos(con, status=None, limit=None, offset=0):
     sql = """SELECT r.*, u.name AS pedido_por, COALESCE(c.pilot_name, c.name) AS cliente, i.name AS item,
                     o.ship_status AS envio, o.tracking AS rastreio, o.carrier AS transportadora, o.supplier AS fornecedor
                FROM purchase_requests r LEFT JOIN users u ON u.id=r.requested_by
@@ -62,7 +62,15 @@ def pedidos(con, status=None):
     p = ()
     if status:
         sql += " WHERE r.status=?"; p = (status,)
-    return [dict(x) for x in todos(con, sql + " ORDER BY r.urgent DESC, COALESCE(r.needed_by,'9999') , r.id", p)]
+    sql += " ORDER BY r.urgent DESC, COALESCE(r.needed_by,'9999') , r.id"
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"; p = (*p, int(limit), int(offset or 0))
+    return [dict(x) for x in todos(con, sql, p)]
+
+
+def total_pedidos(con, status=None):
+    return um(con, "SELECT COUNT(*) AS n FROM purchase_requests" + (" WHERE status=?" if status else ""),
+              (status,) if status else ())["n"]
 
 
 def mudar_pedido(con, rid, novo):
@@ -214,12 +222,18 @@ def pedidos_sugeridos(con, pid):
     return saida
 
 
-def compras(con, status=None):
+def compras(con, status=None, limit=200, offset=0):
     sql = "SELECT id FROM purchase_orders"
     p = ()
     if status:
         sql += " WHERE status=?"; p = (status,)
-    return [compra(con, x["id"]) for x in todos(con, sql + " ORDER BY id DESC LIMIT 200", p)]
+    return [compra(con, x["id"]) for x in todos(con, sql + " ORDER BY id DESC LIMIT ? OFFSET ?",
+                                                (*p, int(limit), int(offset or 0)))]
+
+
+def total_compras(con, status=None):
+    return um(con, "SELECT COUNT(*) AS n FROM purchase_orders" + (" WHERE status=?" if status else ""),
+              (status,) if status else ())["n"]
 
 
 def marcar_pedida(con, pid, reference=None, expected_at=None):

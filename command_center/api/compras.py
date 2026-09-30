@@ -37,8 +37,11 @@ def _sem_custo(c, u):
 
 # --------------------------------------------------------------------- pedidos
 @r.get("/pedidos")
-def listar_pedidos(status: str | None = None, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    return {"pedidos": compras.pedidos(con, status or None)}
+def listar_pedidos(status: str | None = None, limit: int | None = None, offset: int = 0,
+                   con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    lim = None if limit is None else max(1, min(limit, 500))
+    return {"pedidos": compras.pedidos(con, status or None, lim, offset),
+            "total": compras.total_pedidos(con, status or None)}
 
 
 class PedidoIn(BaseModel):
@@ -105,11 +108,12 @@ def resumo(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPER
 
 # --------------------------------------------------------------------- compras
 @r.get("")
-def listar(status: str | None = None, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    lista = [_sem_custo(c, u) for c in compras.compras(con, status or None)]
+def listar(status: str | None = None, limit: int = 200, offset: int = 0,
+           con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    lista = [_sem_custo(c, u) for c in compras.compras(con, status or None, max(1, min(limit, 500)), offset)]
     if not _gerente(u):
         lista = [dict(c, email_total=None) for c in lista]
-    return {"compras": lista, "gerente": _gerente(u)}
+    return {"compras": lista, "gerente": _gerente(u), "total": compras.total_compras(con, status or None)}
 
 
 @r.get("/{pid}")
