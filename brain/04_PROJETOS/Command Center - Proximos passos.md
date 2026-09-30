@@ -72,6 +72,7 @@ Command Center.
 - [ ] 👤 **Número próprio para a equipe** (não pode ser o 2291 do Kommo) + app na Meta,
       token, `~/.urace/whatsapp.env` e o webhook `…/ops/api/whatsapp/webhook`.
 - [ ] 🤖 Tela: contatos da equipe no WhatsApp e status de cada mensagem no chat.
+      **Em standby por decisão do dono (30/09).**
 - [ ] 👤 **Número 2291 (clientes, Kommo)**: está na API oficial (canal `waba` do Kommo), por
       isso não abre no celular. O caminho para ter os dois é a **coexistência** da Meta
       (app WhatsApp Business + API no mesmo número) — depende do Kommo suportar e de alguém
@@ -99,13 +100,22 @@ O que mecânicos e staff preenchem hoje no Google Forms.
 
 O que a URACE compra para si.
 
+- [x] 🤖 **Construído em 30/09** (dono: *"siga com a tela de pedidos e compras"*), no
+      desenho mínimo — ajustável quando o fluxo real for contado:
+      **Pedido** (qualquer um da equipe, pelo celular): peça do estoque ou "outra coisa",
+      quantidade, para quando, urgente, para o kart de quem → aberto → comprando → chegou →
+      entregue. **Compra** (gerente): fornecedor (Comet por padrão), itens com custo, junta
+      pedidos e o que está abaixo do mínimo → rascunho → pedida → parcial/recebida.
+      **Receber** (quem abre a caixa): o que chegou **entra no estoque sozinho**, atualiza o
+      custo da peça (e o preço final, se ela tem margem), e o pedido vira "chegou". Chegou
+      mais do que foi pedido: recusado. Compra com algo recebido não cancela; cancelada,
+      os pedidos voltam para a fila. "Precisa de atenção": pedido urgente parado e compra
+      com previsão vencida. Custo só aparece para gerente.
 - [ ] 👤 Como o pedido nasce hoje? (alguém pede no WhatsApp? Eduardo compra? tem
-      aprovação?) — o fluxo real, não o ideal
-- [ ] Modelo: pedido → itens → fornecedor → status → chegada
-- [ ] Estados do pedido (pedido, confirmado, em trânsito, chegou, conferido)
-- [ ] Quando chega, **entra no estoque** (liga com o módulo 5)
-- [ ] Nota fiscal / recibo anexado e ligado ao QuickBooks (despesa)
-- [ ] Aviso de pedido que não chegou no prazo
+      aprovação?) — o fluxo real, para ajustar o que foi construído
+- [ ] Nota fiscal / recibo anexado e ligado ao QuickBooks (despesa) — depende da
+      fronteira com o QuickBooks
+- [x] Aviso de pedido que não chegou no prazo (compra com previsão vencida)
 
 ## 4. Tracking de envios
 

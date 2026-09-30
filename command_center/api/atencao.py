@@ -212,6 +212,26 @@ def _coletar(con):
                           facts=[("Total", _usd(g["total"]) + (f" + {g['sem_preco']} sem preço" if g["sem_preco"] else "")),
                                  ("Desde", _dbr(g["desde"]))]))
 
+    # ---- 4e. pedidos e compras (30/09): pedido urgente parado e compra que não chegou
+    urg = todos(con, """SELECT r.id, r.description, r.qty, r.unit, r.needed_by, u.name AS quem
+                          FROM purchase_requests r LEFT JOIN users u ON u.id=r.requested_by
+                         WHERE r.status='aberto' AND r.urgent=1 ORDER BY r.id""")
+    if urg:
+        itens.append(dict(key=_chave("pedido-urgente", "purchase", "abertos"), level="HIGH",
+                          title=f"{len(urg)} pedido(s) urgente(s) esperando compra",
+                          why="Alguém da equipe marcou como urgente e ainda não entrou em nenhuma compra.",
+                          entity={"type": "purchase", "id": None}, client_id=None, link=None, action="Ver pedidos",
+                          facts=[(p["description"], f"{p['qty']:g} {p['unit']}" + (f" · pedido por {p['quem']}" if p["quem"] else "")
+                                  + (f" · até {_dbr(p['needed_by'])}" if p["needed_by"] else "")) for p in urg[:6]]))
+    hoje_iso = hoje.isoformat()
+    for c in todos(con, """SELECT id, supplier, reference, expected_at FROM purchase_orders
+                            WHERE status IN ('pedida','parcial') AND expected_at IS NOT NULL AND expected_at < ?""", (hoje_iso,)):
+        itens.append(dict(key=_chave("compra-atrasada", "purchase", c["id"]), level="MEDIUM",
+                          title=f"Compra #{c['id']} ({c['supplier']}) não chegou",
+                          why="A previsão de chegada já passou e ninguém deu o recebimento. Confira o rastreio com o fornecedor.",
+                          entity={"type": "purchase", "id": c["id"]}, client_id=None, link=None, action="Ver compra",
+                          facts=[("Previsão", _dbr(c["expected_at"])), ("Referência", c["reference"] or "—")]))
+
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",

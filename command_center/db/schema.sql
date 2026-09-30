@@ -1106,3 +1106,52 @@ CREATE TABLE IF NOT EXISTS team_contacts (
   created_by      INTEGER REFERENCES users(id),
   created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- ------------------------------------------------- pedidos internos e compras (módulo 3)
+-- Dono, 30/09: "siga com a tela de pedidos e compras". O pedido é de quem precisa (o
+-- mecânico pede a peça); a compra é de quem gasta (gerente). Receber a compra dá entrada
+-- no estoque sozinho — ninguém redigita o que chegou.
+CREATE TABLE IF NOT EXISTS purchase_requests (
+  id           INTEGER PRIMARY KEY,
+  item_id      INTEGER REFERENCES stock_items(id),   -- peça do estoque, quando for uma
+  description  TEXT NOT NULL,                        -- o que é, legível mesmo sem ficha
+  qty          REAL NOT NULL,
+  unit         TEXT NOT NULL DEFAULT 'un',
+  client_id    INTEGER REFERENCES clients(id),       -- para o kart de quem (opcional)
+  needed_by    TEXT,                                 -- para quando (AAAA-MM-DD)
+  urgent       INTEGER NOT NULL DEFAULT 0,
+  notes        TEXT,
+  status       TEXT NOT NULL DEFAULT 'aberto'
+               CHECK (status IN ('aberto','comprando','chegou','entregue','cancelado')),
+  purchase_id  INTEGER REFERENCES purchase_orders(id),
+  requested_by INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS purchase_requests_status ON purchase_requests(status);
+
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id           INTEGER PRIMARY KEY,
+  supplier     TEXT NOT NULL DEFAULT 'Comet Kart Sales',
+  status       TEXT NOT NULL DEFAULT 'rascunho'
+               CHECK (status IN ('rascunho','pedida','parcial','recebida','cancelada')),
+  reference    TEXT,                    -- nº do pedido no fornecedor, rastreio
+  ordered_at   TEXT,
+  expected_at  TEXT,                    -- previsão de chegada (AAAA-MM-DD)
+  notes        TEXT,
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS purchase_lines (
+  id           INTEGER PRIMARY KEY,
+  purchase_id  INTEGER NOT NULL REFERENCES purchase_orders(id),
+  item_id      INTEGER REFERENCES stock_items(id),
+  description  TEXT NOT NULL,
+  qty          REAL NOT NULL,
+  qty_received REAL NOT NULL DEFAULT 0,
+  unit_cost    REAL,
+  request_id   INTEGER REFERENCES purchase_requests(id)
+);
+CREATE INDEX IF NOT EXISTS purchase_lines_compra ON purchase_lines(purchase_id);
