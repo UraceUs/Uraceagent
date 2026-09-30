@@ -127,6 +127,14 @@ if systemctl is-enabled --quiet urace-triagem-email.timer 2>/dev/null; then
     echo "-- urace-triagem-email.timer desligado: a triagem agora é do painel (Automação > Triagem do Gmail)"
 fi
 
+# páginas legais (issue #25: canonical, descrição e schema markup): se já foram publicadas
+# uma vez por servir_legal.sh, cada deploy leva a versão nova
+if [ -d /var/www/urace-legal ]; then
+    sudo cp "$REPO/adminai/deploy/legal/privacy.html" "$REPO/adminai/deploy/legal/eula.html" /var/www/urace-legal/
+    sudo chmod 644 /var/www/urace-legal/*.html
+    echo "-- páginas legais atualizadas em /var/www/urace-legal"
+fi
+
 # ----------------------------------------------------------------- 6. Caddy
 echo "-- 6/7 Caddy"
 sudo cp "$CADDYFILE" "$CADDYFILE.bak-$(date +%Y%m%d-%H%M%S)"
@@ -144,10 +152,18 @@ bloco = ("\n\thandle /ops* {\n"
          "\t}\n"
          "\n\thandle /.well-known/oauth-* {\n"
          f"\t\treverse_proxy 127.0.0.1:{porta}\n"
+         "\t}\n"
+         # issue #25: o que os buscadores podem ver (o painel fica de fora; /legal/ entra)
+         "\n\thandle /robots.txt {\n"
+         f"\t\treverse_proxy 127.0.0.1:{porta}\n"
+         "\t}\n"
+         "\n\thandle /sitemap.xml {\n"
+         f"\t\treverse_proxy 127.0.0.1:{porta}\n"
          "\t}\n")
 if "/ops*" in s:
-    # tira o bloco antigo do oauth, se houver, para não duplicar a cada deploy
+    # tira os blocos antigos (oauth, robots, sitemap), se houver, para não duplicar a cada deploy
     s = re.sub(r"\n\thandle /\.well-known/oauth-\*\s*\{.*?\n\t\}\n", "", s, flags=re.S)
+    s = re.sub(r"\n\thandle /(robots\.txt|sitemap\.xml)\s*\{.*?\n\t\}\n", "", s, flags=re.S)
     s = re.sub(r"\n\thandle /ops\*\s*\{.*?\n\t\}\n", bloco, s, count=1, flags=re.S)
     open(caddyfile, "w").write(s); print("-- blocos /ops e /.well-known/oauth-* atualizados")
 elif re.search(re.escape(dominio) + r"\s*\{", s):
@@ -180,6 +196,8 @@ else:
         f"\n{extra} {{\n\tredir / /ops/ 302\n"
         f"\thandle /ops* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
         f"\thandle /.well-known/oauth-* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+        f"\thandle /robots.txt {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+        f"\thandle /sitemap.xml {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
         f"\thandle {{\n\t\trespond \"not found\" 404\n\t}}\n}}\n")
     print(f"-- {extra}: site criado (o certificado sai sozinho no primeiro acesso)")
 PY2
@@ -198,6 +216,7 @@ TEM_APP=$(grep -c 'id="root"' /tmp/ops.html 2>/dev/null || echo 0)
 VAZOU=$(grep -ciE 'Renato|Hubbard|Pionti|envelope' /tmp/ops.html 2>/dev/null || true); VAZOU=${VAZOU:-0}
 API="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMINIO/ops/api/dashboard" || echo 000)"
 LEGAL="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMINIO/legal/privacy.html" || echo 000)"
+ROBOTS="$(curl -s "https://$DOMINIO/robots.txt" | grep -c 'Disallow: /ops/' || true)"
 PAINEL="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMINIO/painel/" || echo 000)"
 rm -f /tmp/ops.html
 echo "   /ops/ sem sessão           -> HTTP $SPA  (200, SPA com login)"
@@ -205,6 +224,7 @@ echo "   SPA montado                -> $TEM_APP  (tem que ser 1)"
 echo "   dado de cliente no HTML    -> $VAZOU  (tem que ser 0)"
 echo "   /ops/api/dashboard sem sessão -> HTTP $API  (tem que ser 401)"
 echo "   /legal/privacy.html        -> HTTP $LEGAL  (continua 200)"
+echo "   /robots.txt bloqueia /ops/ -> $ROBOTS  (tem que ser 1)"
 echo "   /painel/                   -> HTTP $PAINEL  (404 esperado: Pit Wall aposentado pelo dono em 18/09)"
 echo
 if [ "$SPA" = "200" ] && [ "$TEM_APP" = "1" ] && [ "$VAZOU" = "0" ] && [ "$API" = "401" ] && [ "$LEGAL" = "200" ]; then

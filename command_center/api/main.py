@@ -206,6 +206,8 @@ from command_center.api import whatsapp as api_whatsapp  # noqa: E402
 app.include_router(api_whatsapp.r)
 from command_center.api import compras as api_compras  # noqa: E402
 app.include_router(api_compras.r)
+from command_center.api import publico  # noqa: E402
+app.include_router(publico.r)
 
 
 # Descoberta do OAuth: a especificação manda na RAIZ do domínio, não sob /ops. O Caddy
