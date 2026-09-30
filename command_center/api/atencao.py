@@ -359,7 +359,7 @@ def _coletar(con):
                           title=f"Sua resposta para {m['lead']} não chegou",
                           why=(m.get("error") or "Está parada na fila: o bot do Kommo não abriu o chat.")[:200],
                           entity={"type": "crm_message", "id": m["id"]}, client_id=None,
-                          link=f"/crm/chat?lead={m['lead_id']}", action="Tentar de novo",
+                          link=f"/crm/chat/{m['lead_id']}", action="Tentar de novo",
                           facts=[("Quando", (m.get("at") or "—")[:16].replace("T", " ")),
                                  ("Estado", m.get("status") or "—"),
                                  ("Texto", (m.get("text") or "")[:120] or "—")]))
@@ -383,7 +383,7 @@ def _coletar(con):
                               why=("O painel entregou ao bot do Kommo e o Kommo não devolveu esta mensagem, "
                                    "como faz com as outras. Confira no Kommo; se não estiver lá, mande de novo."),
                               entity={"type": "crm_message", "id": m["id"]}, client_id=None,
-                              link=f"/crm/chat?lead={m['lead_id']}", action="Conferir e reenviar",
+                              link=f"/crm/chat/{m['lead_id']}", action="Conferir e reenviar",
                               facts=[("Quando", (m.get("at") or "—")[:16].replace("T", " ")),
                                      ("Texto", (m.get("text") or "")[:120] or "—")]))
 

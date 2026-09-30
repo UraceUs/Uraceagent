@@ -66,6 +66,7 @@ export default function App() {
           <Route path="estoque" element={<Estoque />} />
           <Route path="pedidos" element={<Pedidos />} />
           <Route path="compras" element={<Compras />} />
+          <Route path="compras/:id" element={<Compras />} />
           <Route path="planejamento" element={<Planejamento />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:id" element={<Client360 />} />
@@ -76,9 +77,11 @@ export default function App() {
           <Route path="quickbooks" element={<QuickBooksPage />} />
           <Route path="crm" element={<Navigate to="/crm/chat" replace />} />
           <Route path="crm/chat" element={<CRM vista="chat" />} />
+          <Route path="crm/chat/:lead" element={<CRM vista="chat" />} />
           <Route path="crm/funil" element={<CRM vista="funil" />} />
           <Route path="kommo" element={<Navigate to="/crm/chat" replace />} />
           <Route path="equipe" element={<Equipe />} />
+          <Route path="equipe/:canal" element={<Equipe />} />
           <Route path="sales" element={<Guard min="OPERATOR"><Oportunidades /></Guard>} />
           <Route path="sales/agenda" element={<Guard min="OPERATOR"><AgendaVendas /></Guard>} />
           <Route path="sales/:id" element={<Guard min="OPERATOR"><Oportunidade /></Guard>} />

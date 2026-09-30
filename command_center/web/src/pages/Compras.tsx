@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
+import { useItemNaRota } from '../api/rota'
 import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
@@ -158,7 +159,7 @@ export function Pedidos() {
           <div className="grow">
             <b>{p.qty}× {p.description}</b> {!!p.urgent && <Chip tone="crit">urgente</Chip>}
             <div className="small muted">{p.pedido_por || '—'} · {dia(p.created_at)}{p.cliente ? ` · kart de ${p.cliente}` : ''}{p.needed_by ? ` · até ${dia(p.needed_by)}` : ''}
-              {p.purchase_id ? <> · <Link to={`/compras?c=${p.purchase_id}`}>compra #{p.purchase_id}</Link></> : null}{p.notes ? ` · ${p.notes}` : ''}</div>
+              {p.purchase_id ? <> · <Link to={`/compras/${p.purchase_id}`}>compra #{p.purchase_id}</Link></> : null}{p.notes ? ` · ${p.notes}` : ''}</div>
             {p.status === 'comprando' && p.rastreio && <div className="row gap wrap"><Rastreios tracking={p.rastreio} carrier={p.transportadora} /></div>}
           </div>
           {p.status === 'comprando' && p.envio && ST_ENVIO[p.envio] && <Chip tone={ST_ENVIO[p.envio][1]}>{ST_ENVIO[p.envio][0]}</Chip>}
@@ -398,7 +399,7 @@ export function Compras() {
   const pedidosAbertos = useGet<{ pedidos: Pedido[] }>(gerente ? '/compras/pedidos?status=aberto' : null)
   const est = useGet<{ itens: ItemEst[]; locais: Local[] }>('/estoque')
   const [nova_, setNova] = useState<LinhaNova[] | null>(null)
-  const [ficha, setFicha] = useState<number | null>(Number(sp.get('c')) || null)
+  const [ficha, setFicha] = useItemNaRota('/compras', 'id', 'c')
   const [marcadosRepor, setMarcadosRepor] = useState<number[]>([])
   const [marcadosPed, setMarcadosPed] = useState<number[]>([])
   const recarregar = () => { lista.reload(); resumo.reload(); pedidosAbertos.reload() }
@@ -483,6 +484,6 @@ export function Compras() {
     </Section>
 
     {nova_ !== null && <NovaCompra inicial={nova_} itens={est.data?.itens || []} onClose={() => setNova(null)} onDone={id => { recarregar(); setFicha(id) }} />}
-    {ficha !== null && <FichaCompra id={ficha} gerente={gerente} locais={est.data?.locais || []} itens={est.data?.itens || []} onClose={() => { setFicha(null); if (sp.get('c')) { sp.delete('c'); setSp(sp, { replace: true }) } }} onDone={recarregar} />}
+    {ficha !== null && <FichaCompra id={ficha} gerente={gerente} locais={est.data?.locais || []} itens={est.data?.itens || []} onClose={() => setFicha(null)} onDone={recarregar} />}
   </>
 }

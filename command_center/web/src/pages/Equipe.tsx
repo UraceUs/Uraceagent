@@ -9,9 +9,9 @@
  * A conversa se atualiza pedindo só o que é novo (`?desde=<último id>`): baixar tudo a
  * cada cinco segundos aparece no celular do mecânico como lentidão e bateria. */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
+import { useItemNaRota } from '../api/rota'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Spinner } from '../components/ui'
 import { Icon } from '../components/Icon'
@@ -53,8 +53,7 @@ const ORIGEM_PT: Record<string, string> = { gchat: 'Google Chat', whatsapp: 'Wha
 const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
 
 export function Equipe() {
-  const [params, setParams] = useSearchParams()
-  const aberto = Number(params.get('c') || 0) || null
+  const [aberto, abrirCanal] = useItemNaRota('/equipe', 'canal', 'c')
   const { data, error, loading, reload } = useGet<{ canais: Canal[]; total_nao_lidas: number }>('/equipe/canais', 15000)
   const pessoas = useGet<Pessoa[]>('/equipe/pessoas', 60000)
   const { can } = useAuth()
@@ -72,7 +71,7 @@ export function Equipe() {
   async function abrirDireto(p: Pessoa) {
     try {
       const id = p.canal_id ?? (await api.post<{ id: number }>(`/equipe/direto/${p.id}`)).id
-      setParams({ c: String(id) }); reload(); pessoas.reload()
+      abrirCanal(id); reload(); pessoas.reload()
     } catch (e) { toast((e as ApiError).message, 'crit') }
   }
 
@@ -84,7 +83,7 @@ export function Equipe() {
     <div className="card" style={{ padding: '10px 14px', marginBottom: 12 }}><Avisos /></div>
 
     {novoGrupo && <NovoGrupo pessoas={pessoas.data || []} onPronto={id => {
-      setNovoGrupo(false); reload(); setParams({ c: String(id) })
+      setNovoGrupo(false); reload(); abrirCanal(id)
     }} onCancelar={() => setNovoGrupo(false)} />}
 
     <div className="grid" style={{ gridTemplateColumns: aberto ? 'minmax(0,340px) minmax(0,1fr)' : 'minmax(0,1fr)' }}>
@@ -121,7 +120,7 @@ export function Equipe() {
                 Abra uma em <b>Pessoas</b>, ou crie um grupo em <b>Novo grupo</b>.
               </Empty> :
                 <div className="stack" style={{ gap: 0 }}>
-                  {canais.map(c => <button key={c.id} className={`tcard${c.id === aberto ? ' on' : ''}`} onClick={() => setParams({ c: String(c.id) })}>
+                  {canais.map(c => <button key={c.id} className={`tcard${c.id === aberto ? ' on' : ''}`} onClick={() => abrirCanal(c.id)}>
                     <div className="row" style={{ gap: 10, alignItems: 'flex-start' }}>
                       <Cara c={c} size={36} />
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -142,7 +141,7 @@ export function Equipe() {
           )}
         </Section>
       </div>
-      {aberto && <Conversa id={aberto} onVoltar={() => setParams({})} onMudou={() => { reload(); pessoas.reload() }} />}
+      {aberto && <Conversa id={aberto} onVoltar={() => abrirCanal(null)} onMudou={() => { reload(); pessoas.reload() }} />}
     </div>
   </>
 }
