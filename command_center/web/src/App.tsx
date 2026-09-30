@@ -1,4 +1,4 @@
-import { lazy, type ComponentType, type ReactNode } from 'react'
+import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { Role } from './api/types'
 import { AuthProvider, useAuth } from './auth/AuthContext'
@@ -42,6 +42,8 @@ const AgendaVendas = tela(() => import('./pages/Vendas'), 'AgendaVendas')
 const Oportunidade = tela(() => import('./pages/Vendas'), 'Oportunidade')
 const Oportunidades = tela(() => import('./pages/Vendas'), 'Oportunidades')
 
+const PortalApp = tela(() => import('./portal/Portal'), 'PortalApp')
+
 const PAPEL_PT: Record<string, string> = { ADMIN: 'administrador', MANAGER: 'gerente', OPERATOR: 'operador', VIEWER: 'leitura' }
 
 function Guard({ min, children }: { min?: Role; children: ReactNode }) {
@@ -59,6 +61,8 @@ export default function App() {
     <AuthProvider><ToastProvider><PerguntarProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        {/* área do cliente (#40): fora do Shell e da sessão da equipe */}
+        <Route path="/portal/*" element={<Suspense fallback={null}><PortalApp /></Suspense>} />
         <Route element={<Guard><Shell /></Guard>}>
           <Route index element={<Dashboard />} />
           <Route path="attention" element={<AttentionPage />} />

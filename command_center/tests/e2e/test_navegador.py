@@ -250,3 +250,74 @@ def test_abrir_e_fechar_a_compra_muda_o_endereco(servidor, navegador):
     pg.get_by_role("button", name="Fechar", exact=True).click()
     pg.wait_for_url("**/ops/compras")
     pg.close()
+
+
+# ------------------------------------------------------------------ área do cliente (#40)
+ROTAS_PORTAL = ["/portal", "/portal/signup"]
+
+
+def test_cliente_cria_a_conta_poe_o_piloto_com_medidas_e_volta_a_entrar(servidor, navegador):
+    pg = navegador.new_page(viewport={"width": 390, "height": 844})
+    pg.erros_js = []
+    pg.on("pageerror", lambda e: pg.erros_js.append(str(e)))
+    pg.goto(servidor + "/portal")
+    pg.get_by_role("link", name="Create an account").click()
+    pg.get_by_label("Full name").fill("Ana Driver")
+    pg.get_by_label("Date of birth").fill("1988-03-02")
+    pg.get_by_label("Phone").fill("407 555 0101")
+    pg.get_by_label("Email").fill("ana.e2e@example.com")
+    pg.get_by_label("Password").fill("pista-molhada-7")
+    pg.get_by_label("City").fill("Orlando")
+    pg.get_by_label("ZIP").fill("32809")
+    pg.get_by_label("I accept the").check()
+    pg.get_by_role("button", name="Create account").click()
+    pg.wait_for_url("**/ops/portal/account")
+    pg.get_by_role("heading", name="My account", level=1).wait_for()
+    # sem piloto ainda: o formulário já vem aberto
+    pg.get_by_label("Driver's name").fill("Bia Driver")
+    pg.get_by_label("Height (in)").fill("50")
+    pg.get_by_label("Suit size").fill("130")
+    pg.get_by_role("button", name="Save driver").click()
+    pg.get_by_role("heading", name="Bia Driver", level=3).wait_for()
+    assert pg.get_by_text("Suit size").is_visible()
+    assert pg.title() == "My account · URACE"
+    pg.get_by_role("button", name="Sign out").click()
+    pg.wait_for_url("**/ops/portal")
+    pg.get_by_label("Email").fill("ana.e2e@example.com")
+    pg.get_by_label("Password").fill("pista-molhada-7")
+    pg.get_by_role("button", name="Sign in").click()
+    pg.get_by_role("heading", name="Bia Driver", level=3).wait_for()
+    assert not pg.erros_js, pg.erros_js
+    # conta de cliente não abre o painel
+    assert pg.request.get(servidor + "/api/clients").status == 401
+    pg.close()
+
+
+def test_menor_de_idade_nao_abre_a_conta(servidor, navegador):
+    pg = navegador.new_page()
+    pg.goto(servidor + "/portal/signup")
+    pg.get_by_label("Full name").fill("Teen Driver")
+    pg.get_by_label("Date of birth").fill("2012-05-05")
+    pg.get_by_label("Email").fill("teen.e2e@example.com")
+    pg.get_by_label("Password").fill("pista-molhada-7")
+    pg.get_by_label("I accept the").check()
+    pg.get_by_role("button", name="Create account").click()
+    pg.get_by_role("alert").wait_for()
+    assert "18 or older" in pg.get_by_role("alert").inner_text() and "/portal/signup" in pg.url
+    pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_area_do_cliente_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
+    pg = navegador.new_page(viewport={"width": largura, "height": 800})
+    problemas = []
+    for rota in ROTAS_PORTAL:
+        pg.goto(servidor + rota); pg.wait_for_load_state("networkidle")
+        h1 = [t for n, t in _cabecalhos(pg) if n == 1]
+        if len(h1) != 1:
+            problemas.append(f"{rota}: {len(h1)} h1")
+        r = pg.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            problemas.append(f"{rota}: rola {r['culpados']}")
+    pg.close()
+    assert not problemas, "\n".join(problemas)

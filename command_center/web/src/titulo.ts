@@ -16,7 +16,8 @@ export function iniciarTituloAutomatico() {
     pendente = 0
     const h = document.querySelector('h1')
     const t = h ? textoDoH1(h) : ''
-    const novo = t ? `${t.slice(0, 60)} · ${SUFIXO}` : SUFIXO
+    const sufixo = location.pathname.startsWith('/ops/portal') ? 'URACE' : SUFIXO   // área do cliente: a marca, não o painel
+    const novo = t ? `${t.slice(0, 60)} · ${sufixo}` : sufixo
     if (document.title !== novo) document.title = novo
   }
   new MutationObserver(() => { if (!pendente) pendente = window.setTimeout(atualizar, 50) })

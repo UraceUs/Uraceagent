@@ -1186,3 +1186,60 @@ CREATE TABLE IF NOT EXISTS purchase_email_threads (
   decision     TEXT,                    -- compra | ignorado:<motivo>
   seen_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- ------------------------------------------------------------ área do cliente (#40)
+-- Conta do CLIENTE no site (hoje em /ops/portal; depois no site público). Separada da
+-- equipe de propósito: outra tabela, outra sessão, outro cookie — conta de cliente nunca
+-- alcança a API do painel. Quem abre a conta é maior de idade (18+, EUA).
+CREATE TABLE IF NOT EXISTS portal_accounts (
+  id                 INTEGER PRIMARY KEY,
+  email              TEXT NOT NULL COLLATE NOCASE UNIQUE,
+  pw_salt            TEXT NOT NULL,
+  pw_hash            TEXT NOT NULL,
+  name               TEXT NOT NULL,              -- o responsável pela conta
+  birth_date         TEXT NOT NULL,              -- AAAA-MM-DD (18+ na abertura)
+  phone              TEXT,
+  address_line1      TEXT,
+  address_line2      TEXT,
+  city               TEXT,
+  state              TEXT,
+  zip                TEXT,
+  country            TEXT NOT NULL DEFAULT 'US',
+  terms_accepted_at  TEXT NOT NULL,
+  client_id          INTEGER REFERENCES clients(id),   -- vínculo com o site interno (#42)
+  linked_by          INTEGER REFERENCES users(id),
+  linked_at          TEXT,
+  active             INTEGER NOT NULL DEFAULT 1,
+  last_login_at      TEXT,
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- um cliente interno ↔ uma conta do site
+CREATE UNIQUE INDEX IF NOT EXISTS portal_accounts_client ON portal_accounts(client_id) WHERE client_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS portal_pilots (
+  id                   INTEGER PRIMARY KEY,
+  account_id           INTEGER NOT NULL REFERENCES portal_accounts(id),
+  name                 TEXT NOT NULL,
+  birth_date           TEXT,
+  is_self              INTEGER NOT NULL DEFAULT 0,   -- o piloto é o próprio responsável
+  email                TEXT,
+  phone                TEXT,
+  measures             TEXT,                         -- json (polegadas / libras / tamanhos)
+  measures_updated_at  TEXT,
+  notes                TEXT,
+  active               INTEGER NOT NULL DEFAULT 1,
+  created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS portal_pilots_conta ON portal_pilots(account_id);
+
+CREATE TABLE IF NOT EXISTS portal_sessions (
+  id          TEXT PRIMARY KEY,                     -- sha256 do token; o token só vai no cookie
+  account_id  INTEGER NOT NULL REFERENCES portal_accounts(id),
+  expires_at  TEXT NOT NULL,
+  ip          TEXT,
+  user_agent  TEXT,
+  revoked_at  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
