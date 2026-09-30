@@ -188,7 +188,7 @@ export function Oportunidade() {
     <div className="row wrap" style={{ gap: 8 }}>
       <Link className="small" to="/sales">← Oportunidades</Link>
       <span className="grow" />
-      {o.crm_lead_id && <Link className="btn sm" to={`/crm/chat?lead=${o.crm_lead_id}`}><Icon name="chat" size={15} /> Chat</Link>}
+      {o.crm_lead_id && <Link className="btn sm" to={`/crm/chat/${o.crm_lead_id}`}><Icon name="chat" size={15} /> Chat</Link>}
       {o.client_id && <Link className="btn sm" to={`/clients/${o.client_id}`}><Icon name="people" size={15} /> Card do cliente</Link>}
     </div>
 

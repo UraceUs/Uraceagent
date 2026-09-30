@@ -224,3 +224,29 @@ def test_botoes_com_alvo_de_toque_de_40px_no_celular(servidor, navegador):
             problemas.append(f"{rota}: {', '.join(r)}")
     pg.close()
     assert not problemas, "\n".join(problemas)
+
+
+@pytest.mark.parametrize("antigo,novo", [("/compras?c=7", "/compras/7"), ("/crm/chat?lead=3", "/crm/chat/3"),
+                                         ("/equipe?c=2", "/equipe/2")])
+def test_endereco_antigo_redireciona_para_o_caminho(servidor, navegador, antigo, novo):
+    """Issue #24: item abre pelo caminho; o link antigo (salvo, notificação, atenção) ainda funciona."""
+    pg = entrar(navegador, servidor)
+    abrir(pg, servidor, antigo)
+    assert pg.url.endswith("/ops" + novo), pg.url
+    pg.close()
+
+
+def test_abrir_e_fechar_a_compra_muda_o_endereco(servidor, navegador):
+    # a semente não cria compra: cria uma pelo próprio painel (gerente)
+    pg = entrar(navegador, servidor)
+    r = pg.request.post(servidor + "/api/compras", data={"pedir": True, "linhas": [{"description": "Corrente 106", "qty": 2}]},
+                        headers={"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")})
+    assert r.ok, r.text()
+    pid = r.json()["id"]
+    abrir(pg, servidor, "/compras")
+    pg.get_by_text(f"#{pid} · Comet Kart Sales").click()
+    pg.wait_for_url(f"**/ops/compras/{pid}")
+    pg.get_by_role("heading", name=f"Compra #{pid} · Comet Kart Sales").wait_for(timeout=8000)
+    pg.get_by_role("button", name="Fechar", exact=True).click()
+    pg.wait_for_url("**/ops/compras")
+    pg.close()

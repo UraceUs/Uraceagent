@@ -172,7 +172,7 @@ export function Shell() {
         </div>
       </header>
       </div>
-      <main className={`page${larguraDa(loc.pathname)}`}><div key={loc.pathname} className="page-in stack" style={{ gap: 18 }}><Suspense fallback={<Loading />}><Outlet context={{ dash }} /></Suspense></div></main>
+      <main className={`page${larguraDa(loc.pathname)}`}><div key={loc.pathname.replace(/^(\/(?:compras|crm\/chat|equipe))\/\d+$/, '$1')} className="page-in stack" style={{ gap: 18 }}><Suspense fallback={<Loading />}><Outlet context={{ dash }} /></Suspense></div></main>
     </div>
     <nav className="tabbar" aria-label="Abas">
       <TB to="/" end icon="home">Hoje</TB>

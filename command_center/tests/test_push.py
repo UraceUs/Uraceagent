@@ -234,7 +234,7 @@ def test_o_aviso_nao_leva_o_texto_da_conversa(cli, monkeypatch):
     assert falso.enviados, "o mecânico devia ter sido avisado"
     ponta, carga = falso.enviados[-1]
     assert segredo not in json.dumps(carga)
-    assert carga["titulo"].startswith("Chefe em Corrida Ocala") and carga["url"] == f"/ops/equipe?c={cid}"
+    assert carga["titulo"].startswith("Chefe em Corrida Ocala") and carga["url"] == f"/ops/equipe/{cid}", "URL limpa (#24)"
 
 
 def test_quem_escreveu_nao_recebe_o_proprio_aviso(cli, monkeypatch):

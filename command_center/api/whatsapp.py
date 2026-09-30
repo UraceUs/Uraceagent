@@ -127,7 +127,7 @@ def _avisar(con, cid, autor, canal_nome):
         alvos = [x["id"] for x in todos(con, "SELECT id FROM users WHERE active=1 AND role IN ('ADMIN','MANAGER')")]
     try:
         push.avisar(con, alvos, f"{autor.split(' ')[0]} no WhatsApp", "Nova mensagem no chat da equipe.",
-                    f"/ops/equipe?c={cid}")
+                    f"/ops/equipe/{cid}")
     except Exception:                                  # noqa: BLE001
         pass
 

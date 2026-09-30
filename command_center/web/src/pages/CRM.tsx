@@ -5,9 +5,10 @@
    do Salesbot (provado em 24/08). O funil é a segunda aba. Cada link fica junto do seu
    item — nunca uma fila de links no topo. */
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
+import { useItemNaRota } from '../api/rota'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, Scrim, Spinner, statusTone, type Tone } from '../components/ui'
 import { Icon } from '../components/Icon'
@@ -363,9 +364,8 @@ export function DadosDoLead({ id, l, onClose, onChange }: { id: number; l: Lead;
 
 // ------------------------------------------------------------------ caixa de entrada
 function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
-  const [sp, setSp] = useSearchParams()
   const inbox = useGet<Inbox>('/crm/inbox', 20000)
-  const aberto = Number(sp.get('lead')) || null
+  const [aberto, abrirLead] = useItemNaRota('/crm/chat', 'lead', 'lead')
   const [filtro, setFiltro] = useState('')
   const [dados, setDados] = useState(false)
   const [vista, setVista] = useState<'todas' | 'esperando' | 'fav'>('todas')
@@ -384,7 +384,7 @@ function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
       <div style={{ padding: 8, borderBottom: '1px solid var(--rule)' }} className="stack"><input className="input" placeholder="Buscar conversa…" value={filtro} onChange={e => setFiltro(e.target.value)} />
         <div className="tabs" style={{ alignSelf: 'stretch' }}><button className={vista === 'todas' ? 'on' : ''} onClick={() => setVista('todas')}>Todas</button><button className={vista === 'esperando' ? 'on' : ''} onClick={() => setVista('esperando')}>Esperando <span className="count">{inbox.data?.pendentes || 0}</span></button><button className={vista === 'fav' ? 'on' : ''} onClick={() => setVista('fav')}>★ Favoritas</button></div></div>
       {lista.length === 0 && <div style={{ padding: 16 }}><Empty title="Nenhuma conversa ainda">Quando o chat estiver ligado no Kommo, cada mensagem do Instagram, Facebook e WhatsApp aparece aqui na hora.</Empty></div>}
-      {lista.map(l => <div key={l.id} className={`item com-foto${aberto === l.id ? ' on' : ''}`} onClick={() => setSp({ lead: String(l.id) })}>
+      {lista.map(l => <div key={l.id} className={`item com-foto${aberto === l.id ? ' on' : ''}`} onClick={() => abrirLead(l.id)}>
         <Foto l={l} size={36} />
         <div className="from">{!!l.needs_reply && <span style={{ color: 'var(--warn)' }}>● </span>}{nomeDo(l)}</div>
         <div className="when"><button className={`star sm${l.starred ? ' on' : ''}`} onClick={e => estrela(l, e)} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar'}><Icon name="star" size={13} /></button> {l.last_message_at ? ago(l.last_message_at) : ''}</div>
@@ -507,6 +507,6 @@ export function CRM({ vista }: { vista: 'chat' | 'funil' }) {
     </div>
     {desconectado && <Banner tone="warn"><b>Kommo não conectado.</b> {b.data?.integracao?.last_error || 'Falta o token da integração privada em ~/.urace/kommo.env (KOMMO_DOMAIN, KOMMO_TOKEN).'} A tela mostra o que já foi espelhado; nada é inventado.</Banner>}
     {vista === 'chat' && can('ADMIN') && <LigarChat />}
-    {vista === 'chat' ? <CaixaDeEntrada conectado={!desconectado} /> : b.data && <Funil b={b.data} abrir={id => nav(`/crm/chat?lead=${id}`)} />}
+    {vista === 'chat' ? <CaixaDeEntrada conectado={!desconectado} /> : b.data && <Funil b={b.data} abrir={id => nav(`/crm/chat/${id}`)} />}
   </div>
 }

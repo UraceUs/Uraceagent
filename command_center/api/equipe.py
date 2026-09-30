@@ -240,7 +240,7 @@ def _avisar_quem_nao_esta_vendo(cid, autor_id, autor_nome, canal_nome, texto):
                                              (cid, autor_id))]
         if alvos:
             push.avisar(con, alvos, f"{autor_nome.split(' ')[0]} em {canal_nome}",
-                        "Nova mensagem no chat da equipe.", f"/ops/equipe?c={cid}")
+                        "Nova mensagem no chat da equipe.", f"/ops/equipe/{cid}")
     except Exception:                                  # noqa: BLE001
         pass                                           # aviso que falha não estraga a conversa
     finally:
