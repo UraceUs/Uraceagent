@@ -151,6 +151,8 @@ select.input{padding-right:30px}
 @media(min-width:901px){
   .railbtn{display:inline-flex}
   .app.rail{grid-template-columns:80px 1fr}
+  /* exceção consciente ao "só transform e opacity" (#23): o menu recolhido se abre POR CIMA da
+     página (z-index), então só ele recalcula — a tela embaixo não se mexe */
   .app.rail .side{width:80px;z-index:30;transition:width var(--t) var(--ease)}
   .app.rail .side::before{transition:background var(--t) var(--ease),box-shadow var(--t) var(--ease),border-color var(--t) var(--ease)}
   .app.rail .side:hover,.app.rail .side:focus-within{width:256px}
@@ -321,7 +323,7 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 
 /* ---------- movimento: mais suave (iOS), mesma curva; sem sublinhado deslizante nas abas */
 .page-in{animation-duration:.26s}
-.modal{animation:sheet .26s var(--ease) both}
+.modal{animation:sheet var(--dur-lenta) var(--ease-saida) both}
 @keyframes sheet{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.modal{animation:none}}
 
@@ -350,10 +352,10 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .icbox.teal,.icbox.azul{background:var(--accent-wash);color:var(--accent-ink);border-color:transparent}
 .icbox.crit{background:var(--crit-wash);color:var(--crit);border-color:transparent}
 /* chave liga/desliga (vem do iOS): usada no "o que acontece ao confirmar" */
-.sw{position:relative;width:46px;height:28px;flex:0 0 auto;border-radius:999px;border:1px solid transparent;background:var(--ok);cursor:pointer;transition:background .18s ease}
-.sw::after{content:"";position:absolute;top:2px;left:20px;width:22px;height:22px;border-radius:999px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:left .18s ease}
+.sw{position:relative;width:46px;height:28px;flex:0 0 auto;border-radius:999px;border:1px solid transparent;background:var(--ok);cursor:pointer;transition:background var(--dur-rapida) var(--ease-saida)}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:999px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35);transform:translateX(18px);transition:transform var(--dur-rapida) var(--ease-saida)}
 .sw.off{background:var(--glass-2);border-color:var(--glass-line-2)}
-.sw.off::after{left:2px}
+.sw.off::after{transform:none}
 .sw:disabled{opacity:.5;cursor:not-allowed}
 @media(prefers-reduced-motion:reduce){.sw,.sw::after{transition:none}}
 .ld-ev{display:grid;grid-template-columns:112px minmax(0,1fr);gap:8px;padding:5px 14px;border-top:1px solid var(--glass-line);font-size:13px}
@@ -394,7 +396,7 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .mic.sm{min-width:30px;min-height:30px;padding:0 8px}
 .mic:disabled{opacity:.5;cursor:not-allowed}
 .mic .onda{display:inline-flex;align-items:flex-end;gap:2px;height:12px}
-.mic .onda i{display:block;width:2px;height:4px;background:currentColor;border-radius:1px;animation:eq 1s ease-in-out infinite}
+.mic .onda i{display:block;width:2px;height:12px;background:currentColor;border-radius:1px;transform:scaleY(.29);transform-origin:bottom;animation:eq 1s ease-in-out infinite}
 .mic .onda i:nth-child(2){animation-delay:.15s}.mic .onda i:nth-child(3){animation-delay:.3s}
 .vozwrap{position:relative;min-width:0}
 .vozwrap textarea{padding-right:52px}
