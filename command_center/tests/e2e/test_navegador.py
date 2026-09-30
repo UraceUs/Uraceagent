@@ -29,7 +29,7 @@ SENHA = "senha-de-teste-123"
 ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
-         "/pedidos", "/compras", "/planejamento", "/equipe"]
+         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade"]
 
 
 def _porta_livre():
@@ -321,3 +321,46 @@ def test_area_do_cliente_um_h1_e_sem_rolagem_lateral(servidor, navegador, largur
             problemas.append(f"{rota}: rola {r['culpados']}")
     pg.close()
     assert not problemas, "\n".join(problemas)
+
+
+
+# ------------------------------------------------------------------ agenda (#41)
+def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegador):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    # 1. gerente abre sábado de manhã pela tela
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/site/disponibilidade")
+    g.get_by_label("Sáb Manhã aberto").check()
+    g.get_by_role("button", name="Salvar a semana").click()
+    g.get_by_text("Semana salva").wait_for()
+    # 2. cliente cria a conta pela API e marca pela tela
+    c = navegador.new_page(viewport={"width": 390, "height": 844})
+    r = c.request.post(servidor + "/api/portal/signup", data={"name": "Cleo Agenda", "email": "cleo.e2e@example.com", "password": "pista-molhada-7",
+                                                             "birth_date": "1980-01-01", "accept_terms": True, "i_am_driver": True})
+    assert r.ok, r.text()
+    c.goto(servidor + "/portal/account")
+    sab = datetime.now(ZoneInfo("America/New_York")).date() + timedelta(days=3)
+    while sab.weekday() != 5:
+        sab += timedelta(days=1)
+    rotulo = sab.strftime("%A, %B ") + str(sab.day)
+    c.locator(".portal-cal-d.aberto").first.wait_for()          # o calendário carregou
+    for _ in range(3):                              # o sábado pode estar no mês seguinte
+        if c.get_by_role("gridcell", name=f"{rotulo}, available").count():
+            break
+        c.get_by_role("button", name="Next month").click()
+    c.get_by_role("gridcell", name=f"{rotulo}, available").click()
+    c.get_by_role("button", name="Morning").click()
+    c.get_by_role("button", name="Request session").click()
+    c.get_by_text("Request sent!").wait_for()
+    c.get_by_text("Waiting for confirmation").wait_for()
+    # 3. equipe vê em "Precisa de atenção" e confirma na agenda
+    abrir(g, servidor, "/attention")
+    g.get_by_text("sessão(ões) pedida(s) pelo site").first.wait_for()
+    abrir(g, servidor, "/site")
+    g.get_by_text("Cleo Agenda").first.wait_for()
+    g.get_by_role("button", name="Confirmar").first.click()
+    g.get_by_text("Sessão confirmada.").wait_for()
+    c.reload()
+    c.get_by_text("Confirmed").wait_for()
+    g.close(); c.close()

@@ -3,6 +3,7 @@
  * sessão da equipe: tem a própria conta, o próprio login e o próprio cabeçalho. */
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Agendar } from './Agendar'
 import { papi, PortalError, type Account, type Driver } from './api'
 
 type Estado = Account | null | undefined           // undefined = carregando; null = sem sessão
@@ -182,7 +183,8 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
 
 function MinhaConta({ conta, setConta }: { conta: Account; setConta: (a: Account) => void }) {
   return <div className="stack" style={{ gap: 20 }}>
-    <div><h1 className="h1">My account</h1><p className="muted" style={{ margin: '4px 0 0' }}>Hi, {conta.name.split(' ')[0]}. Keep your drivers and sizes up to date.</p></div>
+    <div><h1 className="h1">My account</h1><p className="muted" style={{ margin: '4px 0 0' }}>Hi, {conta.name.split(' ')[0]}. Book your sessions and keep your drivers and sizes up to date.</p></div>
+    <Agendar conta={conta} />
     <Pilotos conta={conta} onSalvo={setConta} />
     <DadosDoResponsavel conta={conta} onSalvo={setConta} />
   </div>
