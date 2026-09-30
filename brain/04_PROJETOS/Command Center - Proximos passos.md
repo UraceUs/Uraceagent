@@ -132,8 +132,8 @@ O que a URACE compra para si.
       pedidos da equipe**. Liga sozinho só quando o SKU da peça pedida aparece no e-mail;
       nome parecido fica como sugestão. Pedido ligado mostra o envio e o rastreio. Compra
       que não é de estoque (passe de pista, serviço) fecha com "Concluir sem estoque".
-- [ ] 👤 Recibos do Orlando Kart Center (passe de pista) também viram compra — manter, ou
-      ignorar esse remetente?
+- [x] Recibos do Orlando Kart Center (passe de pista) **não** viram compra — dono, 30/09: "não"
+      (PR #27, issue #15).
 
 ## 4. Tracking de envios
 
@@ -541,6 +541,39 @@ colocar o command center lá dentro"* (o domínio está na Hostinger, com o site
       automático. Só entra se o DNS do nome novo já aponta para este servidor.
       O duckdns continua: webhooks do Kommo, OAuth do QuickBooks e o conector do claude.ai
       apontam para ele — trocar esses é um segundo passo, um por um.
-- [ ] 👤 Na Hostinger → Domínios → urace.us → Gerenciar DNS: registro **CNAME**, nome `ops`,
-      aponta para `urace-bridge.duckdns.org`, TTL 300. Não mexer nos registros da raiz/www
-      (são o site). Depois, rodar o deploy com a variável.
+- [ ] 👤 **O DNS do urace.us não está na Hostinger**: em "Gerenciar DNS" ela mostra o domínio como
+      externo ("conecte um domínio externo ou transfira"). O registro tem de ser criado onde o
+      domínio foi comprado / para onde os nameservers apontam (consulta:
+      https://lookup.icann.org/en/lookup?name=urace.us). Lá: **CNAME** `ops` →
+      `urace-bridge.duckdns.org`, TTL 300, sem mexer na raiz e no www. Depois, o deploy com
+      `CC_DOMINIOS_EXTRAS=ops.urace.us`. Issue #26.
+
+## Padrão de engenharia (30/09) — issue #14, vale daqui em diante
+
+Dono: *"preciso que faça também nos nossos projetos de agora pra frente"* (otimização de
+interface, paginação no backend, sitemap, hierarquia de cabeçalho, meta, Core Web Vitals,
+cache de API, slugs, canonical, imagens, schema, um h1, robots.txt, mobile, issues e PRs
+ligados, motion, observabilidade, lint, testes unitários, de integração e end-to-end).
+E: *"vc faz [o merge] e garante que tudo vá para a vps"*.
+
+O padrão está escrito em `CLAUDE.md` (lido em toda sessão). Feito em 30/09, um PR por issue,
+cada um com CI verde antes do merge:
+
+| Issue | PR | O quê |
+|---|---|---|
+| #15 | #27 | recibo do Orlando Kart Center fora das compras |
+| #16 | #28 | ruff + oxlint + CI (pytest, build, e2e com Playwright) + templates + CLAUDE.md |
+| #17 | #29 | request id, log JSON por requisição, métricas por rota, erros e Web Vitals do navegador (Integrações › Saúde do painel) |
+| #18 | #30 | um h1 por tela, sem pular nível, título da aba por tela |
+| #19 | #31 | JS inicial 688 → 261 KB (código por tela), build com cache imutável, gzip |
+| #20 | #32 | ETag/304 nos GET da API, paginação no backend (auditoria com busca no servidor) |
+| #21 | #33 | foto vira WebP ≤ 1600 px sem EXIF; foto do login 363 → 142 KB; script para as antigas |
+| #22 | #34 | nenhuma tela rola para o lado (360/390 px); alvo de toque de 40 px |
+| #23 | #35 | tokens de motion; animação só em transform/opacity |
+| #24 | #36 | /compras/12, /crm/chat/57, /equipe/3 (o endereço antigo redireciona) |
+| #25 | #37 | robots.txt, sitemap.xml, canonical, meta e JSON-LD nas páginas legais |
+
+- [ ] 👤 O **site urace.us** (Hostinger) não está no repositório: SEO, imagens e Web Vitals dele
+      se fazem no construtor da Hostinger — dizer se quer que eu escreva o passo a passo.
+- [ ] Comprimir as fotos já salvas no VPS: `~/.urace/cc-venv/bin/python adminai/comprimir_fotos.py`
+      (mostra) e `--aplicar` (grava .webp ao lado, sem apagar a original).
