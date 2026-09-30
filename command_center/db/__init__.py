@@ -187,6 +187,10 @@ MIGRACOES = [
     # 29/09 — dono: "é para ser uma recorrência só, vinculada uma à outra". painel = criada
     # por aqui; qbo = já existia no QuickBooks e foi VINCULADA ao card (não criada de novo).
     ("monthly_recurring", "source", "TEXT NOT NULL DEFAULT 'painel'"),
+    # 30/09 — ponte do chat da equipe com o WhatsApp: o que aconteceu com a mensagem lá fora
+    # (enviado, entregue, lido, falhou, fora da janela de 24 h, simulação) e o porquê.
+    ("team_messages", "wa_status", "TEXT"),
+    ("team_messages", "wa_error", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

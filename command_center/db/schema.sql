@@ -1088,3 +1088,21 @@ CREATE TABLE IF NOT EXISTS stock_charges (
   resolved_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS stock_charges_cliente ON stock_charges(client_id, status);
+
+-- ------------------------------------------------- equipe no WhatsApp (ponte do chat interno)
+-- Dono, 30/09: o Command Center manda mensagem para o time interno (administrativo,
+-- mecânicos, coaches) pelo WhatsApp, e a resposta volta para o painel. Número PRÓPRIO
+-- (nunca o do Kommo: um número só vive numa conexão de API). Cada contato tem uma conversa
+-- no chat da equipe (team_channels com bridge='whatsapp', bridge_id=telefone).
+CREATE TABLE IF NOT EXISTS team_contacts (
+  id              INTEGER PRIMARY KEY,
+  name            TEXT NOT NULL,
+  funcao          TEXT,                       -- administrativo | mecânico | coach | …
+  phone           TEXT NOT NULL UNIQUE,       -- só dígitos, com DDI (ex.: 14075551234)
+  channel_id      INTEGER REFERENCES team_channels(id),
+  active          INTEGER NOT NULL DEFAULT 1,
+  last_inbound_at TEXT,                       -- última mensagem DELA: abre a janela de 24 h
+  notes           TEXT,
+  created_by      INTEGER REFERENCES users(id),
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);

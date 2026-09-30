@@ -61,6 +61,22 @@ Command Center.
       bloqueio que sobrou** nesta frente
 - [ ] 🤖 Ponte do Google Chat (depois do admin liberar)
 
+- [x] 🤖 **WhatsApp da equipe — reaberto pelo dono em 30/09** (*"quero que o Command Center
+      envie mensagem como se fosse uma pessoa para o time interno"*). Backend pronto, em
+      **simulação** até ter o número: cada pessoa da equipe (mecânico, coach, administrativo)
+      é um contato com uma conversa no chat da equipe; o que se escreve ali sai no WhatsApp
+      dela assinado com o primeiro nome ("*Italo:* …"), e a resposta volta para a mesma
+      conversa (webhook assinado pela Meta). Sem aprovação, só para quem o gerente cadastrou;
+      número desconhecido não vira conversa. Janela de 24 h respeitada: fora dela, só com
+      template aprovado (`WA_TEMPLATE`) — senão a mensagem fica marcada "fora da janela".
+- [ ] 👤 **Número próprio para a equipe** (não pode ser o 2291 do Kommo) + app na Meta,
+      token, `~/.urace/whatsapp.env` e o webhook `…/ops/api/whatsapp/webhook`.
+- [ ] 🤖 Tela: contatos da equipe no WhatsApp e status de cada mensagem no chat.
+- [ ] 👤 **Número 2291 (clientes, Kommo)**: está na API oficial (canal `waba` do Kommo), por
+      isso não abre no celular. O caminho para ter os dois é a **coexistência** da Meta
+      (app WhatsApp Business + API no mesmo número) — depende do Kommo suportar e de alguém
+      receber o código de verificação no próprio 2291. Ver conversa de 30/09.
+
 **WhatsApp: parado por decisão do dono em 21/09** — *"não vamos usar o wpp por enquanto"*.
 Os limites já estão medidos em [[D-2026-09-21 - Chat interno e a ponte com WhatsApp e Google Chat]];
 quando voltar, ninguém precisa redescobrir. O WhatsApp de cliente segue pelo Kommo, como

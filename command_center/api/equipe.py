@@ -265,6 +265,13 @@ def escrever(cid: int, dados: MensagemIn, fundo: BackgroundTasks, u=Depends(auth
     con.commit()
     c = _canal(con, cid)
     fundo.add_task(_avisar_quem_nao_esta_vendo, cid, u["id"], u["name"], c["name"], texto)
+    if c["bridge"] == "whatsapp":
+        # conversa com alguém da equipe no WhatsApp (30/09): sai por lá, em segundo plano;
+        # o que aconteceu (enviado, fora da janela, simulação) fica na própria mensagem
+        con.execute("UPDATE team_messages SET wa_status='enviando' WHERE id=?", (mid,))
+        con.commit()
+        from command_center.api.whatsapp import encaminhar
+        fundo.add_task(encaminhar, mid)
     return {"id": mid}
 
 
