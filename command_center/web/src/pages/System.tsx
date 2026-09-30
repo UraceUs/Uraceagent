@@ -120,11 +120,57 @@ function Atualizacao() {
   </div>
 }
 
+interface Metricas { desde: string; uptime_s: number; requisicoes: number; erros_5xx: number
+  rotas: { rota: string; n: number; erros_4xx: number; erros_5xx: number; lentas: number; p50_ms: number | null; p95_ms: number | null }[]
+  vitais: { metrica: string; rota: string; n: number; p75: number | null }[]
+  erros_js: { em: string; rota: string; mensagem: string | null; origem: string | null }[] }
+
+// limites do Google para "bom" (p75): LCP 2,5 s · INP 200 ms · CLS 0,1 · FCP 1,8 s · TTFB 0,8 s
+const BOM: Record<string, number> = { LCP: 2500, INP: 200, CLS: 0.1, FCP: 1800, TTFB: 800 }
+
+/** Integrações › Saúde do painel (issue #17): o que o servidor e os navegadores estão vivendo. */
+function SaudeDoPainel() {
+  const { data, error, loading, reload } = useGet<Metricas>('/system/metricas', 30000)
+  if (error && !data) return <ErrorState error={error} retry={reload} />
+  if (loading && !data) return <Loading />
+  if (!data) return null
+  const lentas = data.rotas.filter(r => r.n >= 3).slice(0, 12)
+  const fmt = (m: string, v: number | null) => v == null ? '—' : m === 'CLS' ? v.toFixed(3) : `${Math.round(v)} ms`
+  return <>
+    <div className="est-resumo" style={{ margin: '4px 0 12px' }}>
+      <Chip tone="neutral">no ar há {Math.floor(data.uptime_s / 3600)} h {Math.floor(data.uptime_s % 3600 / 60)} min</Chip>
+      <Chip tone="info">{data.requisicoes} requisições</Chip>
+      <Chip tone={data.erros_5xx ? 'crit' : 'ok'}>{data.erros_5xx} erro(s) do servidor</Chip>
+      <Chip tone={data.erros_js.length ? 'warn' : 'ok'}>{data.erros_js.length} erro(s) no navegador</Chip>
+    </div>
+    <Section title="Rotas (mais lentas e com erro primeiro)" count={lentas.length}>
+      {!lentas.length ? <Empty title="Pouco uso desde o último restart" /> : <div className="tbl">{lentas.map(r => <div className="tr" key={r.rota}>
+        <span className="grow mono small" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{r.rota}</span>
+        <span className="small muted">{r.n}×</span>
+        <span className="small">p95 <b>{r.p95_ms == null ? '—' : `${Math.round(r.p95_ms)} ms`}</b></span>
+        {r.erros_5xx > 0 && <Chip tone="crit">{r.erros_5xx} erro(s)</Chip>}
+      </div>)}</div>}
+    </Section>
+    <Section title="Web Vitals (p75, celulares e computadores reais)" count={data.vitais.length}>
+      {!data.vitais.length ? <Empty title="Nenhuma medida ainda" /> : <div className="tbl">{data.vitais.slice(0, 20).map(v => <div className="tr" key={v.metrica + v.rota}>
+        <b style={{ width: 52 }}>{v.metrica}</b><span className="grow mono small" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{v.rota}</span>
+        <span className="small muted">{v.n}×</span>
+        <Chip tone={v.p75 != null && v.p75 <= (BOM[v.metrica] ?? Infinity) ? 'ok' : 'warn'}>{fmt(v.metrica, v.p75)}</Chip>
+      </div>)}</div>}
+    </Section>
+    {data.erros_js.length > 0 && <Section title="Erros no navegador" count={data.erros_js.length}>
+      <div className="tbl">{data.erros_js.map((e, i) => <div className="tr" key={i}><div className="grow" style={{ minWidth: 0 }}>
+        <b className="small" style={{ overflowWrap: 'anywhere' }}>{e.mensagem}</b>
+        <div className="small muted">{fmtDateTime(e.em)} · {e.rota}{e.origem ? ` · ${e.origem}` : ''}</div></div></div>)}</div>
+    </Section>}
+  </>
+}
+
 export function Integrations() {
   const { can } = useAuth()
   const toast = useToast()
   const [sp, setSp] = useSearchParams()
-  const tab = (sp.get('v') as 'sys' | 'sheets' | 'files') || 'sys'
+  const tab = (sp.get('v') as 'sys' | 'sheets' | 'files' | 'saude') || 'sys'
   const setTab = (t: string) => { const n = new URLSearchParams(sp); n.set('v', t); setSp(n, { replace: true }) }
   const { data, error, loading, reload } = useGet<Integration[]>('/integrations', 60000)
   const ctx = useGet<ContextSource[]>('/context', 120000)
@@ -138,7 +184,7 @@ export function Integrations() {
     <PageHeader title="Integrações" help={<>Estado real de cada sistema, mais as planilhas e arquivos que a IA pode consultar. “Verificar” faz UMA chamada real por sistema.</>}>
       {can('OPERATOR') && tab === 'sys' && <button className="btn primary" onClick={check} disabled={busy}>{busy ? <Spinner /> : '⚡'} Verificar agora</button>}</PageHeader>
     {can('ADMIN') && tab === 'sys' && <Atualizacao />}
-    <div className="tabs">{([['sys', 'Sistemas'], ['sheets', 'Planilhas e links'], ['files', 'Arquivos']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+    <div className="tabs">{([['sys', 'Sistemas'], ['sheets', 'Planilhas e links'], ['files', 'Arquivos'], ...(can('MANAGER') ? [['saude', 'Saúde do painel']] as const : [])] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
     {tab === 'sys' && (error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
       <div className="grid g2">{(data || []).map(i => { const det = safeJson(i.detail); const ruim = i.status !== 'CONNECTED' && i.status !== 'SYNCING'; return <div className="card card-b lead" key={i.system} style={{ borderLeftColor: ruim ? 'var(--crit)' : 'var(--ok)' }}>
         <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{SYS_NAME[i.system] || i.system}</h2><Status s={i.status} /><span className="grow" /><span className="small muted mono" title={i.last_success_at ? fmtDateTime(i.last_success_at) : ''}>{i.last_success_at ? `respondeu há ${ago(i.last_success_at)}` : 'nunca respondeu'}</span></div>
@@ -156,6 +202,7 @@ export function Integrations() {
       </div>)}
     {tab === 'sheets' && <Contexto kind="sheet" />}
     {tab === 'files' && <Contexto kind="file" />}
+    {tab === 'saude' && can('MANAGER') && <SaudeDoPainel />}
   </>
 }
 
