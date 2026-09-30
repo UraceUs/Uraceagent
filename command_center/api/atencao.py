@@ -52,6 +52,16 @@ def _usd(v):
     return "—" if v is None else f"${float(v):,.2f}"
 
 
+def _dia_fl(iso_utc):
+    """Data do dia em Orlando de um instante UTC (entrega às 21h EDT ainda é hoje, não amanhã)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        return datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    except (ValueError, AttributeError):
+        return (iso_utc or "")[:10]
+
+
 def _dbr(iso):
     return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}" if iso and len(iso) >= 10 else "—"
 
@@ -224,8 +234,23 @@ def _coletar(con):
                           facts=[(p["description"], f"{p['qty']:g} {p['unit']}" + (f" · pedido por {p['quem']}" if p["quem"] else "")
                                   + (f" · até {_dbr(p['needed_by'])}" if p["needed_by"] else "")) for p in urg[:6]]))
     hoje_iso = hoje.isoformat()
+    # entregue pela transportadora (e-mail) e ninguém deu entrada: caixa parada no galpão
+    for c in todos(con, """SELECT id, supplier, reference, tracking, carrier, delivered_at, items_hint,
+                                  (SELECT COUNT(*) FROM purchase_lines l WHERE l.purchase_id=p.id) AS n_linhas
+                             FROM purchase_orders p WHERE status IN ('rascunho','pedida','parcial') AND ship_status='entregue'"""):
+        itens.append(dict(key=_chave("compra-entregue", "purchase", c["id"]), level="MEDIUM",
+                          title=f"Compra #{c['id']} ({c['supplier']}) foi entregue — falta dar entrada",
+                          why=("A transportadora avisou por e-mail que entregou. Confira a caixa e receba no painel: "
+                               "é o que põe a peça no estoque." if c["n_linhas"] else
+                               "A transportadora avisou por e-mail que entregou, e a compra ainda não tem itens. "
+                               "Ponha o que veio (ou ligue os pedidos da equipe) e receba — ou conclua, se não é de estoque."),
+                          entity={"type": "purchase", "id": c["id"]}, client_id=None, link=None, action="Ver compra",
+                          facts=[("Entregue", _dbr(_dia_fl(c["delivered_at"])) if c["delivered_at"] else "—"),
+                                 ("Pedido", c["reference"] or "—"), ("Rastreio", c["tracking"] or "—")]
+                          + ([("O que é", c["items_hint"])] if c["items_hint"] else [])))
     for c in todos(con, """SELECT id, supplier, reference, expected_at FROM purchase_orders
-                            WHERE status IN ('pedida','parcial') AND expected_at IS NOT NULL AND expected_at < ?""", (hoje_iso,)):
+                            WHERE status IN ('pedida','parcial') AND expected_at IS NOT NULL AND expected_at < ?
+                              AND COALESCE(ship_status,'') != 'entregue'""", (hoje_iso,)):
         itens.append(dict(key=_chave("compra-atrasada", "purchase", c["id"]), level="MEDIUM",
                           title=f"Compra #{c['id']} ({c['supplier']}) não chegou",
                           why="A previsão de chegada já passou e ninguém deu o recebimento. Confira o rastreio com o fornecedor.",

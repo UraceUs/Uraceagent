@@ -890,7 +890,14 @@ def sincronizar_chats_kommo(con, desde_dias=30, maximo=500, enriquecer=40):
     return {"conversas": len(por_lead), "eventos": len(eventos), "conversas_novas": novos, "filtro_de_eventos": modo}
 
 
+def sync_compras_email(con):
+    """E-mail de compra no urace@ vira compra no painel (dono, 30/09). Ver compras_email."""
+    from command_center.providers import compras_email
+    return compras_email.sincronizar(con)
+
+
 def sync_tudo(con):
     return {"cerebro": sync_cerebro(con), "asana": sync_asana(con),
-            "docusign": sync_docusign(con), "gmail": sync_gmail(con), "quickbooks": sync_qbo(con),
+            "docusign": sync_docusign(con), "gmail": sync_gmail(con), "gmail_compras": sync_compras_email(con),
+            "quickbooks": sync_qbo(con),
             "kommo": sync_kommo(con)}

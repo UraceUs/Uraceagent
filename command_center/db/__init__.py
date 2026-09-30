@@ -191,6 +191,20 @@ MIGRACOES = [
     # (enviado, entregue, lido, falhou, fora da janela de 24 h, simulação) e o porquê.
     ("team_messages", "wa_status", "TEXT"),
     ("team_messages", "wa_error", "TEXT"),
+    # 30/09 — dono: "todo email relacionado a compra que chegar no urace@ se torne um item de
+    # compra, e toda atualização de envio / pagamento / entregue atualize". O andamento da
+    # ENTREGA (e-mail) é separado do status do ESTOQUE: "entregue" pela transportadora não é
+    # "recebida" — alguém ainda conta o que chegou e dá entrada.
+    ("purchase_orders", "source", "TEXT NOT NULL DEFAULT 'painel'"),   # painel | email
+    ("purchase_orders", "order_number", "TEXT"),     # nº do pedido na loja, lido do e-mail
+    ("purchase_orders", "tracking", "TEXT"),         # rastreio(s), separados por espaço
+    ("purchase_orders", "carrier", "TEXT"),          # UPS, FedEx, USPS, DHL, Amazon
+    ("purchase_orders", "ship_status", "TEXT"),      # pedido | pago | enviado | entregue | cancelado
+    ("purchase_orders", "paid_at", "TEXT"),
+    ("purchase_orders", "shipped_at", "TEXT"),
+    ("purchase_orders", "delivered_at", "TEXT"),
+    ("purchase_orders", "email_total", "REAL"),      # total que a loja disse no e-mail
+    ("purchase_orders", "items_hint", "TEXT"),       # o que a loja disse que foi (assunto)
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

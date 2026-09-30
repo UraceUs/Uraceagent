@@ -156,6 +156,34 @@ elif re.search(re.escape(dominio) + r"\s*\{", s):
 else:
     open(caddyfile, "a").write(f"\n{dominio} {{{bloco}}}\n"); print("-- bloco de site criado")
 PY
+# Endereço da URACE (dono, 30/09: "conseguimos deixar a url do site como o da urace?").
+# CC_DOMINIOS_EXTRAS="ops.urace.us" cria um site a mais no Caddy com o MESMO painel, sem
+# tirar o duckdns (webhooks do Kommo, OAuth do QuickBooks e o conector do claude.ai
+# continuam apontando para lá). Só entra se o DNS do nome novo já aponta para ESTE
+# servidor: sem isso o Let's Encrypt falha e o Caddy fica tentando à toa.
+for EXTRA in ${CC_DOMINIOS_EXTRAS:-}; do
+    IP_NOVO="$(getent ahostsv4 "$EXTRA" | awk 'NR==1{print $1}')"
+    IP_NOSSO="$(getent ahostsv4 "$DOMINIO" | awk 'NR==1{print $1}')"
+    if [ -z "$IP_NOVO" ] || [ "$IP_NOVO" != "$IP_NOSSO" ]; then
+        echo "!! $EXTRA ainda não aponta para este servidor (DNS: ${IP_NOVO:-nada}; aqui: $IP_NOSSO) — pulei. Crie o registro A e rode de novo."
+        continue
+    fi
+    sudo EXTRA="$EXTRA" PORTA="$PORTA" python3 - <<'PY2'
+import os, re
+caddyfile = "/etc/caddy/Caddyfile"
+extra, porta = os.environ["EXTRA"], os.environ["PORTA"]
+s = open(caddyfile).read()
+if re.search(r"(^|\n)" + re.escape(extra) + r"\s*\{", s):
+    print(f"-- {extra}: site já existe no Caddy")
+else:
+    open(caddyfile, "a").write(
+        f"\n{extra} {{\n\tredir / /ops/ 302\n"
+        f"\thandle /ops* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+        f"\thandle /.well-known/oauth-* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+        f"\thandle {{\n\t\trespond \"not found\" 404\n\t}}\n}}\n")
+    print(f"-- {extra}: site criado (o certificado sai sozinho no primeiro acesso)")
+PY2
+done
 sudo caddy fmt --overwrite "$CADDYFILE"
 sudo caddy validate --config "$CADDYFILE" >/dev/null 2>&1 \
     && echo "-- Caddyfile válido" \

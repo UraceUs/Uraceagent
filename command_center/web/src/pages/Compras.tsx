@@ -3,6 +3,9 @@
  * Pedido é de quem precisa: o mecânico pede a peça pelo celular. Compra é de quem gasta: o
  * gerente junta pedidos e o que está abaixo do mínimo numa compra do fornecedor. Receber a
  * compra dá entrada no estoque sozinho — ninguém redigita o que chegou.
+ *
+ * 30/09: os e-mails de compra do urace@ viram compras sozinhos, e envio / pagamento /
+ * entrega atualizam a compra (providers/compras_email.py).
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -16,13 +19,20 @@ import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
 
 interface Pedido { id: number; item_id: number | null; description: string; qty: number; unit: string; client_id: number | null; cliente: string | null
-  needed_by: string | null; urgent: number; notes: string | null; status: string; purchase_id: number | null; pedido_por: string | null; created_at: string }
+  needed_by: string | null; urgent: number; notes: string | null; status: string; purchase_id: number | null; pedido_por: string | null; created_at: string
+  envio?: string | null; rastreio?: string | null; transportadora?: string | null; fornecedor?: string | null }
 interface Linha { id: number; item_id: number | null; description: string; qty: number; qty_received: number; unit_cost: number | null; request_id: number | null
   item: string | null; unit: string | null; pedido_por: string | null; cliente: string | null }
+interface Evento { id: number; kind: string; at: string | null; subject: string | null; sender: string | null; order_number: string | null
+  tracking: string | null; carrier: string | null; amount: number | null; link: string | null }
+interface Sugerido { id: number; description: string; qty: number; unit: string; pedido_por: string | null; cliente: string | null; por_sku: boolean }
 interface Compra { id: number; supplier: string; status: string; reference: string | null; ordered_at: string | null; expected_at: string | null; notes: string | null
-  criada_por: string | null; created_at: string; linhas: Linha[]; total: number | null; sem_custo: number; atrasada: boolean }
+  criada_por: string | null; created_at: string; linhas: Linha[]; total: number | null; sem_custo: number; atrasada: boolean
+  source?: string; order_number?: string | null; tracking?: string | null; carrier?: string | null; ship_status?: string | null
+  paid_at?: string | null; shipped_at?: string | null; delivered_at?: string | null; email_total?: number | null; items_hint?: string | null
+  eventos?: Evento[]; pedidos_sugeridos?: Sugerido[]; entregue_sem_entrada?: boolean }
 interface Repor { id: number; name: string; unit: string; falta: number; sku: string | null; supplier_url: string | null }
-interface Resumo { pedidos_abertos: number; urgentes: number; rascunhos: number; a_caminho: number; atrasadas: number; repor: Repor[] }
+interface Resumo { pedidos_abertos: number; urgentes: number; rascunhos: number; a_caminho: number; atrasadas: number; entregues?: number; repor: Repor[] }
 interface ItemEst { id: number; name: string; unit: string; nosso: number; cost?: number | null; category: string }
 interface Local { code: string; name: string }
 
@@ -30,6 +40,26 @@ const ST_PEDIDO: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'a
   aberto: ['aberto', 'warn'], comprando: ['comprando', 'info'], chegou: ['chegou', 'accent'], entregue: ['entregue', 'ok'], cancelado: ['cancelado', 'neutral'] }
 const ST_COMPRA: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent']> = {
   rascunho: ['rascunho', 'neutral'], pedida: ['pedida', 'info'], parcial: ['chegou em parte', 'accent'], recebida: ['recebida', 'ok'], cancelada: ['cancelada', 'neutral'] }
+// andamento da ENTREGA, lido dos e-mails da loja/transportadora — não é o status do estoque
+const ST_ENVIO: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit']> = {
+  pedido: ['pedido feito', 'neutral'], pago: ['pago', 'info'], enviado: ['a caminho', 'info'], entregue: ['entregue', 'accent'], cancelado: ['cancelado na loja', 'crit'] }
+const EV: Record<string, string> = { pedido: 'Pedido', pagamento: 'Pagamento', envio: 'Envio', entregue: 'Entregue', cancelado: 'Cancelado', reembolso: 'Reembolso' }
+export function linkRastreio(n: string, transp?: string | null) {
+  const t = (transp || '').toLowerCase(), u = n.toUpperCase()
+  if (u.startsWith('1Z') || t === 'ups') return `https://www.ups.com/track?tracknum=${encodeURIComponent(n)}`
+  if (t === 'fedex') return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(n)}`
+  if (t === 'usps') return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(n)}`
+  if (t === 'dhl') return `https://www.dhl.com/us-en/home/tracking/tracking-express.html?tracking-id=${encodeURIComponent(n)}`
+  return null
+}
+function Rastreios({ tracking, carrier }: { tracking?: string | null; carrier?: string | null }) {
+  if (!tracking) return null
+  return <>{tracking.split(/\s+/).filter(Boolean).map(n => { const url = linkRastreio(n, carrier)
+    return <span key={n} className="small">{carrier ? `${carrier} ` : ''}{url ? <a href={url} target="_blank" rel="noreferrer">{n}</a> : n}</span> })}</>
+}
+// o sistema roda no fuso da Flórida (dono): o e-mail chega em UTC e é mostrado em Orlando
+const horaFL = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? iso
+  : d.toLocaleString('pt-BR', { timeZone: 'America/New_York', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '') }
 const dia = (iso: string | null) => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—'
 const usd = (v: number | null | undefined) => v == null ? '—' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -108,7 +138,7 @@ export function Pedidos() {
   }
 
   return <>
-    <PageHeader title="Pedidos" help="O que a equipe precisa que se compre. Quem compra vê a fila aqui; quando a compra chega, o pedido avisa.">
+    <PageHeader title="Pedidos" help="O que a equipe PRECISA que se compre (a lista de desejos). Quem compra junta os pedidos numa compra; aí o pedido mostra o envio e avisa quando chegou.">
       {gerente && marcados.length > 0 && <button className="btn" onClick={() => nav(`/compras?pedidos=${marcados.join(',')}`)}>Comprar {marcados.length} pedido(s)</button>}
       {can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}><Icon name="plus" size={16} /> Novo pedido</button>}
     </PageHeader>
@@ -129,7 +159,9 @@ export function Pedidos() {
             <b>{p.qty}× {p.description}</b> {!!p.urgent && <Chip tone="crit">urgente</Chip>}
             <div className="small muted">{p.pedido_por || '—'} · {dia(p.created_at)}{p.cliente ? ` · kart de ${p.cliente}` : ''}{p.needed_by ? ` · até ${dia(p.needed_by)}` : ''}
               {p.purchase_id ? <> · <Link to={`/compras?c=${p.purchase_id}`}>compra #{p.purchase_id}</Link></> : null}{p.notes ? ` · ${p.notes}` : ''}</div>
+            {p.status === 'comprando' && p.rastreio && <div className="row gap wrap"><Rastreios tracking={p.rastreio} carrier={p.transportadora} /></div>}
           </div>
+          {p.status === 'comprando' && p.envio && ST_ENVIO[p.envio] && <Chip tone={ST_ENVIO[p.envio][1]}>{ST_ENVIO[p.envio][0]}</Chip>}
           <Chip tone={tom}>{rot}</Chip>
           {p.status === 'aberto' && (gerente || p.pedido_por === user?.name) && <button className="btn ghost sm" onClick={() => acao(p, 'cancelar')}>cancelar</button>}
           {p.status === 'chegou' && <button className="btn sm" onClick={() => acao(p, 'entregue')}>entreguei</button>}
@@ -199,7 +231,77 @@ function NovaCompra({ inicial, itens, onClose, onDone }: { inicial: LinhaNova[];
   </div></Scrim>
 }
 
-function FichaCompra({ id, gerente, locais, onClose, onDone }: { id: number; gerente: boolean; locais: Local[]; onClose: () => void; onDone: () => void }) {
+/* Compra que nasceu de e-mail vem sem itens: quem comprou diz o que foi — da ficha do estoque,
+ * escrito à mão, ou ligando os pedidos da equipe (que já têm quantidade e quem pediu). */
+function PorItens({ id, itens, sugeridos, onDone }: { id: number; itens: ItemEst[]; sugeridos: Sugerido[]; onDone: () => void }) {
+  const toast = useToast()
+  const abertos = useGet<{ pedidos: Pedido[] }>('/compras/pedidos?status=aberto')
+  const [linhas, setLinhas] = useState<LinhaNova[]>([])
+  const [ligar, setLigar] = useState<number[]>([])
+  const [indo, setIndo] = useState(false)
+  const muda = (k: string, c: Partial<LinhaNova>) => setLinhas(ls => ls.map(l => l.chave === k ? { ...l, ...c } : l))
+  const sugIds = new Set(sugeridos.map(x => x.id))
+  const outros = (abertos.data?.pedidos || []).filter(p => !sugIds.has(p.id))
+
+  async function salvar() {
+    const corpo = linhas.filter(l => l.item_id || l.description.trim()).map(l => ({ item_id: l.item_id, description: l.description.trim() || null,
+      qty: Number(l.qty.replace(',', '.')) || null, unit_cost: l.unit_cost.trim() ? Number(l.unit_cost.replace(',', '.')) : null }))
+    if (!corpo.length && !ligar.length) { toast('Escolha um pedido ou ponha um item.', 'warn'); return }
+    setIndo(true)
+    try {
+      if (ligar.length) await api.post(`/compras/${id}/pedidos`, { request_ids: ligar })
+      if (corpo.length) await api.post(`/compras/${id}/linhas`, corpo)
+      toast('Itens na compra.', 'ok'); setLinhas([]); setLigar([]); abertos.reload(); onDone()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  const marca = (rid: number) => setLigar(m => m.includes(rid) ? m.filter(x => x !== rid) : [...m, rid])
+
+  return <div className="stack" style={{ gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--glass-line)' }}>
+    <b>O que veio nesta compra</b>
+    {sugeridos.length > 0 && <div><div className="small muted" style={{ marginBottom: 4 }}>Pedidos da equipe que aparecem no e-mail da loja:</div>
+      <div className="tbl">{sugeridos.map(p => <label className="tr" key={p.id} style={{ cursor: 'pointer' }}>
+        <input type="checkbox" checked={ligar.includes(p.id)} onChange={() => marca(p.id)} />
+        <div className="grow"><b>{p.qty}× {p.description}</b><div className="small muted">{p.pedido_por || '—'}{p.cliente ? ` · kart de ${p.cliente}` : ''}</div></div>
+        <Chip tone="accent">parece ser</Chip></label>)}</div></div>}
+    {outros.length > 0 && <label className="fld" style={{ margin: 0 }}><span>Ligar outro pedido aberto</span>
+      <select value="" onChange={e => { const v = Number(e.target.value); if (v) marca(v) }}>
+        <option value="">— escolha —</option>
+        {outros.map(p => <option key={p.id} value={p.id}>{ligar.includes(p.id) ? '✓ ' : ''}#{p.id} · {p.qty}× {p.description}{p.pedido_por ? ` (${p.pedido_por})` : ''}</option>)}
+      </select></label>}
+    {ligar.filter(x => !sugIds.has(x)).length > 0 && <span className="small">Vai ligar: {ligar.filter(x => !sugIds.has(x)).map(x => `#${x}`).join(', ')}</span>}
+    {linhas.map(l => <div key={l.chave} className="row gap wrap" style={{ alignItems: 'flex-end' }}>
+      <label className="fld grow" style={{ flexBasis: 220, margin: 0 }}><span>Item</span>
+        <select value={l.item_id ?? ''} onChange={e => { const v = e.target.value ? Number(e.target.value) : null; const it = itens.find(i => i.id === v)
+          muda(l.chave, { item_id: v, unit_cost: l.unit_cost || (it?.cost != null ? String(it.cost) : '') }) }}>
+          <option value="">— fora do estoque (escreva abaixo) —</option>
+          {itens.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+        </select>
+        {!l.item_id && <input value={l.description} onChange={e => muda(l.chave, { description: e.target.value })} placeholder="o que é" style={{ marginTop: 6 }} />}</label>
+      <label className="fld" style={{ width: 80, margin: 0 }}><span>Qtd</span><input type="number" inputMode="decimal" min={0} value={l.qty} onChange={e => muda(l.chave, { qty: e.target.value })} /></label>
+      <label className="fld" style={{ width: 110, margin: 0 }}><span>Custo unit.</span><input type="number" inputMode="decimal" min={0} value={l.unit_cost} onChange={e => muda(l.chave, { unit_cost: e.target.value })} placeholder="$" /></label>
+      <button className="btn ghost sm" aria-label="tirar item" onClick={() => setLinhas(ls => ls.filter(x => x.chave !== l.chave))}>✕</button>
+    </div>)}
+    <div className="row gap wrap">
+      <button className="btn ghost sm" onClick={() => setLinhas(ls => [...ls, nova({})])}><Icon name="plus" size={14} /> item</button>
+      <span className="grow" />
+      {(linhas.length > 0 || ligar.length > 0) && <button className="btn sm" disabled={indo} onClick={salvar}>{indo ? 'Salvando…' : 'Pôr na compra'}</button>}
+    </div>
+  </div>
+}
+
+function LinhaDoTempo({ eventos }: { eventos: Evento[] }) {
+  if (!eventos.length) return null
+  return <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--glass-line)' }}>
+    <b>E-mails desta compra</b>
+    <div className="tbl" style={{ marginTop: 6 }}>{eventos.map(e => <div className="tr" key={e.id}>
+      <Chip tone={e.kind === 'entregue' ? 'accent' : e.kind === 'cancelado' ? 'crit' : e.kind === 'envio' ? 'info' : 'neutral'}>{EV[e.kind] || e.kind}</Chip>
+      <div className="grow" style={{ minWidth: 0 }}>{e.link ? <a href={e.link} target="_blank" rel="noreferrer">{e.subject || '(sem assunto)'}</a> : e.subject}
+        <div className="small muted">{e.at ? horaFL(e.at) : ''}{e.sender ? ` · ${e.sender.replace(/<.*>/, '').trim()}` : ''}</div></div>
+    </div>)}</div>
+  </div>
+}
+
+function FichaCompra({ id, gerente, locais, itens, onClose, onDone }: { id: number; gerente: boolean; locais: Local[]; itens: ItemEst[]; onClose: () => void; onDone: () => void }) {
   const toast = useToast()
   const c = useGet<Compra>(`/compras/${id}`)
   const [receber, setReceber] = useState<Record<number, string>>({})
@@ -232,8 +334,19 @@ function FichaCompra({ id, gerente, locais, onClose, onDone }: { id: number; ger
       <Chip tone={tom}>{rot}</Chip>{d.atrasada && <Chip tone="crit">atrasada</Chip>}
       {d.reference && <span className="small muted">ref. {d.reference}</span>}
       {d.expected_at && <span className="small muted">previsão {dia(d.expected_at)}</span>}
-      {gerente && d.total != null && <span className="small">total <b>{usd(d.total)}</b>{d.sem_custo ? ` + ${d.sem_custo} sem custo` : ''}</span>}
+      {gerente && d.total != null && d.linhas.length > 0 && <span className="small">total <b>{usd(d.total)}</b>{d.sem_custo ? ` + ${d.sem_custo} sem custo` : ''}</span>}
     </div>
+    {(d.ship_status || d.tracking || d.source === 'email') && <div className="row gap wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
+      {d.source === 'email' && <Chip tone="neutral">veio do e-mail</Chip>}
+      {d.ship_status && ST_ENVIO[d.ship_status] && <Chip tone={ST_ENVIO[d.ship_status][1]}>{ST_ENVIO[d.ship_status][0]}</Chip>}
+      {d.order_number && d.order_number !== d.reference && <span className="small muted">pedido {d.order_number}</span>}
+      <Rastreios tracking={d.tracking} carrier={d.carrier} />
+      {gerente && d.email_total != null && <span className="small">a loja cobrou <b>{usd(d.email_total)}</b></span>}
+    </div>}
+    {d.items_hint && <div className="small" style={{ marginBottom: 8 }}>A loja disse: <b>{d.items_hint}</b></div>}
+    {d.entregue_sem_entrada && <div className="small" style={{ marginBottom: 10, color: 'var(--warn, #b7791f)' }}>
+      A transportadora entregou. {d.linhas.length ? 'Confira a caixa e receba abaixo: é o que põe a peça no estoque.' : 'Diga o que veio (ou ligue os pedidos) e receba — ou conclua, se não é de estoque.'}</div>}
+    {!d.linhas.length && <div className="small muted" style={{ marginBottom: 8 }}>Sem itens ainda{gerente ? ' — ponha abaixo o que foi comprado.' : '. Quem comprou põe os itens.'}</div>}
     <div className="tbl">{d.linhas.map(l => {
       const falta = l.qty - l.qty_received
       return <div className="tr" key={l.id}>
@@ -248,12 +361,15 @@ function FichaCompra({ id, gerente, locais, onClose, onDone }: { id: number; ger
       </div>
     })}</div>
 
-    {aberta && <div className="row gap wrap" style={{ marginTop: 12, alignItems: 'flex-end' }}>
+    {aberta && d.linhas.some(l => l.qty_received < l.qty) && <div className="row gap wrap" style={{ marginTop: 12, alignItems: 'flex-end' }}>
       {locais.length > 1 && <label className="fld" style={{ margin: 0 }}><span>Chegou em</span>
         <select value={local} onChange={e => setLocal(e.target.value)}>{locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
       <button className="btn primary" disabled={indo || !itensReceber.length}
         onClick={() => fazer('receber', { local, itens: itensReceber }, 'Recebido: já entrou no estoque.')}>Receber o que chegou</button>
     </div>}
+
+    {gerente && aberta && <PorItens id={d.id} itens={itens} sugeridos={d.pedidos_sugeridos || []} onDone={recarregar} />}
+    <LinhaDoTempo eventos={d.eventos || []} />
 
     {gerente && d.status === 'rascunho' && <div className="row gap wrap" style={{ marginTop: 14, alignItems: 'flex-end' }}>
       <label className="fld grow" style={{ margin: 0 }}><span>Nº do pedido / rastreio</span><input value={ref} onChange={e => setRef(e.target.value)} /></label>
@@ -264,6 +380,8 @@ function FichaCompra({ id, gerente, locais, onClose, onDone }: { id: number; ger
     <div className="modal-foot">
       {gerente && aberta && !d.linhas.some(l => l.qty_received > 0) && <button className="btn ghost" disabled={indo}
         onClick={() => fazer('cancelar', {}, 'Compra cancelada; os pedidos voltaram para a fila.')}>Cancelar compra</button>}
+      {gerente && aberta && <button className="btn ghost" disabled={indo} title="Serviço, passe de pista, ferramenta que já foi para o uso"
+        onClick={() => { if (window.confirm('Concluir sem dar entrada no estoque? Use para o que não é peça de estoque (serviço, passe de pista…).')) fazer('concluir', {}, 'Compra concluída.') }}>Concluir sem estoque</button>}
       <span className="grow" />
       <button className="btn ghost" onClick={onClose}>Fechar</button>
     </div>
@@ -311,7 +429,7 @@ export function Compras() {
   const selecionados = marcadosRepor.length + marcadosPed.length
 
   return <>
-    <PageHeader title="Compras" help="O que comprar, o que já foi pedido ao fornecedor e o que chegou. Receber dá entrada no estoque sozinho.">
+    <PageHeader title="Compras" help="O que a URACE comprou: pedido ao fornecedor, envio e chegada. Os e-mails de compra do urace@ entram aqui sozinhos, e cada envio/pagamento/entrega atualiza a compra. Receber dá entrada no estoque.">
       {gerente && selecionados > 0 && <button className="btn" onClick={comprarSelecionados}>Comprar {selecionados} selecionado(s)</button>}
       {gerente && <button className="btn primary" onClick={() => setNova([])}><Icon name="plus" size={16} /> Nova compra</button>}
     </PageHeader>
@@ -323,6 +441,7 @@ export function Compras() {
       {!!r.rascunhos && <Chip tone="neutral">{r.rascunhos} rascunho(s)</Chip>}
       <Chip tone="info">{r.a_caminho} a caminho</Chip>
       {!!r.atrasadas && <Chip tone="crit">{r.atrasadas} atrasada(s)</Chip>}
+      {!!r.entregues && <Chip tone="warn">{r.entregues} entregue(s) sem entrada</Chip>}
     </div>}
 
     {gerente && !!pedidosAbertos.data?.pedidos.length && <Section title="Pedidos esperando compra" count={pedidosAbertos.data.pedidos.length}>
@@ -352,16 +471,18 @@ export function Compras() {
           const [rot, tom] = ST_COMPRA[c.status] || [c.status, 'neutral']
           return <div className="tr" key={c.id} role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setFicha(c.id)}
             onKeyDown={e => { if (e.key === 'Enter') setFicha(c.id) }}>
-            <div className="grow"><b>#{c.id} · {c.supplier}</b>
-              <div className="small muted">{c.linhas.length} item(ns){c.reference ? ` · ref. ${c.reference}` : ''}{c.expected_at ? ` · previsão ${dia(c.expected_at)}` : ''} · {c.criada_por || '—'}</div></div>
-            {gerente && c.total != null && <span className="small">{usd(c.total)}</span>}
+            <div className="grow" style={{ minWidth: 0 }}><b>#{c.id} · {c.supplier}</b>
+              <div className="small muted">{c.linhas.length ? `${c.linhas.length} item(ns)` : 'sem itens'}{c.items_hint ? ` · ${c.items_hint}` : ''}{c.reference ? ` · ref. ${c.reference}` : ''}{c.expected_at ? ` · previsão ${dia(c.expected_at)}` : ''} · {c.source === 'email' ? 'veio do e-mail' : c.criada_por || '—'}</div></div>
+            {gerente && (c.linhas.length ? c.total != null : c.email_total != null) && <span className="small">{usd(c.linhas.length ? c.total : c.email_total)}</span>}
             {c.atrasada && <Chip tone="crit">atrasada</Chip>}
+            {c.entregue_sem_entrada ? <Chip tone="warn">entregue · falta entrada</Chip>
+              : c.ship_status && c.ship_status !== 'pedido' && ST_ENVIO[c.ship_status] && ['pedida', 'parcial', 'rascunho'].includes(c.status) && <Chip tone={ST_ENVIO[c.ship_status][1]}>{ST_ENVIO[c.ship_status][0]}</Chip>}
             <Chip tone={tom}>{rot}</Chip>
           </div>
         })}</div>)}
     </Section>
 
     {nova_ !== null && <NovaCompra inicial={nova_} itens={est.data?.itens || []} onClose={() => setNova(null)} onDone={id => { recarregar(); setFicha(id) }} />}
-    {ficha !== null && <FichaCompra id={ficha} gerente={gerente} locais={est.data?.locais || []} onClose={() => { setFicha(null); if (sp.get('c')) { sp.delete('c'); setSp(sp, { replace: true }) } }} onDone={recarregar} />}
+    {ficha !== null && <FichaCompra id={ficha} gerente={gerente} locais={est.data?.locais || []} itens={est.data?.itens || []} onClose={() => { setFicha(null); if (sp.get('c')) { sp.delete('c'); setSp(sp, { replace: true }) } }} onDone={recarregar} />}
   </>
 }

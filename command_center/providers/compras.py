@@ -17,6 +17,7 @@ dá para ajustar depois sem perder dado:
 Peça comprada para o kart de um cliente entra como estoque DA URACE: quando o mecânico usar
 ("usada no kart de"), ela vira cobrança do cliente pelo caminho que já existe (29/09).
 """
+import re
 from datetime import date
 
 from command_center.db import agora, inserir, todos, um
@@ -53,9 +54,11 @@ def criar_pedido(con, por, qty, item_id=None, description=None, unit=None, clien
 
 
 def pedidos(con, status=None):
-    sql = """SELECT r.*, u.name AS pedido_por, COALESCE(c.pilot_name, c.name) AS cliente, i.name AS item
+    sql = """SELECT r.*, u.name AS pedido_por, COALESCE(c.pilot_name, c.name) AS cliente, i.name AS item,
+                    o.ship_status AS envio, o.tracking AS rastreio, o.carrier AS transportadora, o.supplier AS fornecedor
                FROM purchase_requests r LEFT JOIN users u ON u.id=r.requested_by
-               LEFT JOIN clients c ON c.id=r.client_id LEFT JOIN stock_items i ON i.id=r.item_id"""
+               LEFT JOIN clients c ON c.id=r.client_id LEFT JOIN stock_items i ON i.id=r.item_id
+               LEFT JOIN purchase_orders o ON o.id=r.purchase_id"""
     p = ()
     if status:
         sql += " WHERE r.status=?"; p = (status,)
@@ -74,40 +77,80 @@ def mudar_pedido(con, rid, novo):
 
 
 # --------------------------------------------------------------------- compras
+def _linha(con, pid, l):
+    """Uma linha da compra. Pedido que entra numa compra sai de "aberto" — e não pode entrar em duas."""
+    req = None
+    if l.get("request_id"):
+        req = um(con, "SELECT * FROM purchase_requests WHERE id=?", (l["request_id"],))
+        if not req:
+            raise ErroCompra(f"pedido #{l['request_id']} não existe")
+        if req["status"] != "aberto":
+            raise ErroCompra(f"o pedido #{req['id']} ({req['description']}) já está {req['status']}")
+    item_id = l.get("item_id") or (req["item_id"] if req else None)
+    it = estoque.item(con, item_id) if item_id else None
+    desc = _texto(l.get("description")) or (req["description"] if req else None) or (it["name"] if it else None)
+    if not desc:
+        raise ErroCompra("cada item da compra precisa de nome")
+    qty = float(l.get("qty") or (req["qty"] if req else 0))
+    if qty <= 0:
+        raise ErroCompra(f"quantidade de {desc} tem de ser maior que zero")
+    custo = l.get("unit_cost")
+    if custo is not None and custo != "" and float(custo) < 0:
+        raise ErroCompra("custo não pode ser negativo")
+    lid = inserir(con, "purchase_lines", purchase_id=pid, item_id=it["id"] if it else None, description=desc[:200],
+                  qty=qty, unit_cost=None if custo in (None, "") else round(float(custo), 2),
+                  request_id=req["id"] if req else None)
+    if req:
+        con.execute("UPDATE purchase_requests SET status='comprando', purchase_id=?, updated_at=? WHERE id=?",
+                    (pid, agora(), req["id"]))
+    return lid
+
+
 def criar_compra(con, por, linhas, supplier=None, reference=None, expected_at=None, notes=None, pedir=False):
-    """`linhas`: [{item_id?, description?, qty, unit_cost?, request_id?}]. Pedido que entra
-    numa compra sai de "aberto" — e não pode entrar em duas."""
+    """`linhas`: [{item_id?, description?, qty, unit_cost?, request_id?}]."""
     if not linhas:
         raise ErroCompra("a compra precisa de pelo menos um item")
     pid = inserir(con, "purchase_orders", supplier=_texto(supplier) or "Comet Kart Sales", reference=_texto(reference),
                   expected_at=(expected_at or None) and expected_at[:10], notes=_texto(notes), created_by=por,
                   status="pedida" if pedir else "rascunho", ordered_at=agora() if pedir else None)
     for l in linhas:
-        req = None
-        if l.get("request_id"):
-            req = um(con, "SELECT * FROM purchase_requests WHERE id=?", (l["request_id"],))
-            if not req:
-                raise ErroCompra(f"pedido #{l['request_id']} não existe")
-            if req["status"] != "aberto":
-                raise ErroCompra(f"o pedido #{req['id']} ({req['description']}) já está {req['status']}")
-        item_id = l.get("item_id") or (req["item_id"] if req else None)
-        it = estoque.item(con, item_id) if item_id else None
-        desc = _texto(l.get("description")) or (req["description"] if req else None) or (it["name"] if it else None)
-        if not desc:
-            raise ErroCompra("cada item da compra precisa de nome")
-        qty = float(l.get("qty") or (req["qty"] if req else 0))
-        if qty <= 0:
-            raise ErroCompra(f"quantidade de {desc} tem de ser maior que zero")
-        custo = l.get("unit_cost")
-        if custo is not None and float(custo) < 0:
-            raise ErroCompra("custo não pode ser negativo")
-        inserir(con, "purchase_lines", purchase_id=pid, item_id=it["id"] if it else None, description=desc[:200],
-                qty=qty, unit_cost=None if custo in (None, "") else round(float(custo), 2),
-                request_id=req["id"] if req else None)
-        if req:
-            con.execute("UPDATE purchase_requests SET status='comprando', purchase_id=?, updated_at=? WHERE id=?",
-                        (pid, agora(), req["id"]))
+        _linha(con, pid, l)
     return pid
+
+
+def adicionar_linhas(con, pid, linhas):
+    """Põe itens numa compra que já existe — é o caminho da compra que nasceu de um e-mail
+    (a loja diz que houve pedido; o que exatamente foi, quem sabe é quem comprou) e o de
+    ligar pedidos da equipe a uma compra já feita."""
+    c = um(con, "SELECT status FROM purchase_orders WHERE id=?", (pid,))
+    if not c:
+        raise ErroCompra("compra não existe")
+    if c["status"] in ("cancelada", "recebida"):
+        raise ErroCompra(f"a compra já está {c['status']}")
+    if not linhas:
+        raise ErroCompra("diga pelo menos um item")
+    ids = [_linha(con, pid, l) for l in linhas]
+    con.execute("UPDATE purchase_orders SET updated_at=? WHERE id=?", (agora(), pid))
+    return ids
+
+
+def ligar_pedidos(con, pid, request_ids):
+    """Os pedidos da equipe viram itens desta compra (com a quantidade que foi pedida)."""
+    return adicionar_linhas(con, pid, [{"request_id": r} for r in dict.fromkeys(request_ids or [])])
+
+
+def concluir(con, pid):
+    """Compra que não passa pelo estoque (serviço, passe de pista, assinatura, ferramenta
+    que já foi para o uso): fecha sem dar entrada. Os pedidos ligados viram "chegou"."""
+    c = um(con, "SELECT status FROM purchase_orders WHERE id=?", (pid,))
+    if not c:
+        raise ErroCompra("compra não existe")
+    if c["status"] not in ("rascunho", "pedida", "parcial"):
+        raise ErroCompra(f"a compra já está {c['status']}")
+    con.execute("UPDATE purchase_orders SET status='recebida', ordered_at=COALESCE(ordered_at, ?), updated_at=? WHERE id=?",
+                (agora(), agora(), pid))
+    con.execute("UPDATE purchase_requests SET status='chegou', updated_at=? WHERE purchase_id=? AND status='comprando'",
+                (agora(), pid))
 
 
 def compra(con, pid):
@@ -123,13 +166,52 @@ def compra(con, pid):
                                                 LEFT JOIN clients cl ON cl.id=r.client_id
                                                WHERE l.purchase_id=? ORDER BY l.id""", (pid,))]
     total = sum((l["unit_cost"] or 0) * l["qty"] for l in linhas)
+    eventos = [dict(e) for e in todos(con, """SELECT id, kind, at, mailbox, thread_id, subject, sender, order_number,
+                                                     tracking, carrier, amount
+                                                FROM purchase_events WHERE purchase_id=? ORDER BY COALESCE(at, created_at), id""", (pid,))]
     return {**c, "linhas": linhas, "total": round(total, 2),
             "sem_custo": sum(1 for l in linhas if l["unit_cost"] is None),
-            "atrasada": atrasada(c)}
+            "atrasada": atrasada(c), "eventos": eventos,
+            "entregue_sem_entrada": entregue_sem_entrada(c)}
 
 
 def atrasada(c):
-    return bool(c["status"] in ("pedida", "parcial") and c["expected_at"] and c["expected_at"] < date.today().isoformat())
+    """Previsão vencida e ninguém recebeu. Se a transportadora já entregou, não é atraso:
+    é caixa esperando alguém dar entrada (`entregue_sem_entrada`)."""
+    return bool(c["status"] in ("pedida", "parcial") and c["expected_at"] and c["expected_at"] < date.today().isoformat()
+                and c["ship_status"] != "entregue")
+
+
+def entregue_sem_entrada(c):
+    return bool(c["status"] in ("pedida", "parcial", "rascunho") and c["ship_status"] == "entregue")
+
+
+_PALAVRA = re.compile(r"[a-z0-9]{3,}")
+_VAZIAS = {"the", "and", "for", "com", "para", "with", "de", "do", "da", "kit", "set", "new", "pcs", "pack", "un"}
+
+
+def _palavras(t):
+    return {w for w in _PALAVRA.findall((t or "").lower()) if w not in _VAZIAS}
+
+
+def pedidos_sugeridos(con, pid):
+    """Pedidos abertos que parecem ser desta compra: TODAS as palavras do pedido (ou o SKU
+    da peça) aparecem no que a loja escreveu. É sugestão — quem liga é gente, com um toque."""
+    textos = " ".join((e["subject"] or "") + " " + (e["excerpt"] or "")
+                      for e in todos(con, "SELECT subject, excerpt FROM purchase_events WHERE purchase_id=?", (pid,)))
+    hint = um(con, "SELECT items_hint FROM purchase_orders WHERE id=?", (pid,))
+    textos += " " + ((hint and hint["items_hint"]) or "")
+    if not textos.strip():
+        return []
+    ditas, cru = _palavras(textos), estoque._norm(textos)
+    saida = []
+    for p in pedidos(con, "aberto"):
+        sku = (um(con, "SELECT sku FROM stock_items WHERE id=?", (p["item_id"],)) or {"sku": None})["sku"] if p["item_id"] else None
+        pal = _palavras(p["description"])
+        if (sku and len(estoque._norm(sku)) >= 4 and estoque._norm(sku) in cru) or (pal and pal <= ditas):
+            saida.append({"id": p["id"], "description": p["description"], "qty": p["qty"], "unit": p["unit"],
+                          "pedido_por": p["pedido_por"], "cliente": p["cliente"], "por_sku": bool(sku and estoque._norm(sku) in cru)})
+    return saida
 
 
 def compras(con, status=None):

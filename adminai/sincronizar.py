@@ -35,6 +35,7 @@ SINCRONIAS = {
     "asana-full": (sync.sync_asana_completo,   "histórico COMPLETO do quadro (demorado)"),
     "docusign":   (sync.sync_docusign,         "envelopes e waivers (pagina até o fim desde 22/09)"),
     "gmail":      (sync.sync_gmail,            "caixas urace@ e support@"),
+    "compras":    (sync.sync_compras_email,    "e-mails de compra do urace@ viram compras (pedido, pagamento, envio, entregue)"),
     "qbo":        (sync.sync_qbo,              "QuickBooks: invoices e pagamentos"),
     "kommo":      (sync.sync_kommo,            "CRM: leads e conversas"),
     "corridas":   (sync.sincronizar_corridas,  "coluna RACES vira o calendário de corridas"),

@@ -1155,3 +1155,34 @@ CREATE TABLE IF NOT EXISTS purchase_lines (
   request_id   INTEGER REFERENCES purchase_requests(id)
 );
 CREATE INDEX IF NOT EXISTS purchase_lines_compra ON purchase_lines(purchase_id);
+
+-- 30/09 — e-mails de compra que chegam no urace@: cada mensagem vira um EVENTO da compra
+-- (pedido, pagamento, envio, entregue, cancelado, reembolso). message_id único: a mesma
+-- mensagem lida duas vezes não conta duas vezes.
+CREATE TABLE IF NOT EXISTS purchase_events (
+  id           INTEGER PRIMARY KEY,
+  purchase_id  INTEGER NOT NULL REFERENCES purchase_orders(id),
+  kind         TEXT NOT NULL CHECK (kind IN ('pedido','pagamento','envio','entregue','cancelado','reembolso')),
+  at           TEXT,                    -- data do e-mail (UTC)
+  mailbox      TEXT,
+  thread_id    TEXT,
+  message_id   TEXT UNIQUE,
+  subject      TEXT,
+  sender       TEXT,
+  order_number TEXT,
+  tracking     TEXT,
+  carrier      TEXT,
+  amount       REAL,
+  excerpt      TEXT,                    -- trecho do e-mail (para ligar a pedidos e conferir)
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS purchase_events_compra ON purchase_events(purchase_id);
+
+-- Threads já olhadas: só relê a thread quando chega mensagem nova nela.
+CREATE TABLE IF NOT EXISTS purchase_email_threads (
+  thread_id    TEXT PRIMARY KEY,
+  mailbox      TEXT NOT NULL,
+  messages     INTEGER NOT NULL DEFAULT 0,
+  decision     TEXT,                    -- compra | ignorado:<motivo>
+  seen_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);

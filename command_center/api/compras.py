@@ -99,21 +99,32 @@ def resumo(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPER
     return {"pedidos_abertos": len(abertos), "urgentes": sum(1 for p in abertos if p["urgent"]),
             "rascunhos": len(compras.compras(con, "rascunho")), "a_caminho": len(caminho),
             "atrasadas": sum(1 for c in caminho if c["atrasada"]),
+            "entregues": sum(1 for c in caminho if c["entregue_sem_entrada"]),
             "repor": [x for x in estoque.abaixo_do_minimo(con) if x["id"] not in {n["id"] for n in estoque.nunca_contados(con)}]}
 
 
 # --------------------------------------------------------------------- compras
 @r.get("")
 def listar(status: str | None = None, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    return {"compras": [_sem_custo(c, u) for c in compras.compras(con, status or None)], "gerente": _gerente(u)}
+    lista = [_sem_custo(c, u) for c in compras.compras(con, status or None)]
+    if not _gerente(u):
+        lista = [dict(c, email_total=None) for c in lista]
+    return {"compras": lista, "gerente": _gerente(u)}
 
 
 @r.get("/{pid}")
 def ver(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     try:
-        return _sem_custo(compras.compra(con, pid), u)
+        c = _sem_custo(compras.compra(con, pid), u)
     except compras.ErroCompra as e:
         raise HTTPException(404, str(e))
+    for e in c["eventos"]:           # o e-mail no Gmail do urace@ (conta 0, como na caixa de entrada)
+        e["link"] = f"https://mail.google.com/mail/u/0/#all/{e['thread_id']}" if e.get("thread_id") else None
+    if c["status"] in ("rascunho", "pedida", "parcial"):
+        c["pedidos_sugeridos"] = compras.pedidos_sugeridos(con, pid)
+    if not _gerente(u):
+        c["email_total"] = None
+    return c
 
 
 class LinhaIn(BaseModel):
@@ -170,6 +181,48 @@ def cancelar(pid: int, request: Request, con: sqlite3.Connection = Depends(get_d
         with transacao(con):
             compras.cancelar_compra(con, pid)
             _aud(con, request, u, "purchase.cancel", pid, {})
+    except compras.ErroCompra as e:
+        raise HTTPException(400, str(e))
+    return {"ok": True}
+
+
+@r.post("/{pid}/linhas")
+def adicionar(pid: int, dados: list[LinhaIn], request: Request, con: sqlite3.Connection = Depends(get_db),
+              u=Depends(auth.exige("MANAGER"))):
+    """Itens numa compra que já existe (a que nasceu de um e-mail vem sem itens)."""
+    try:
+        with transacao(con):
+            ids = compras.adicionar_linhas(con, pid, [l.model_dump() for l in dados])
+            _aud(con, request, u, "purchase.lines", pid, {"linhas": len(ids)})
+    except compras.ErroCompra as e:
+        raise HTTPException(400, str(e))
+    return {"ids": ids}
+
+
+class LigarIn(BaseModel):
+    request_ids: list[int]
+
+
+@r.post("/{pid}/pedidos")
+def ligar(pid: int, dados: LigarIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+          u=Depends(auth.exige("MANAGER"))):
+    """Os pedidos da equipe entram nesta compra: quem pediu passa a ver o envio."""
+    try:
+        with transacao(con):
+            ids = compras.ligar_pedidos(con, pid, dados.request_ids)
+            _aud(con, request, u, "purchase.link_requests", pid, {"pedidos": dados.request_ids})
+    except compras.ErroCompra as e:
+        raise HTTPException(400, str(e))
+    return {"ids": ids}
+
+
+@r.post("/{pid}/concluir")
+def concluir(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    """Fecha sem dar entrada no estoque: serviço, passe de pista, ferramenta que já foi para o uso."""
+    try:
+        with transacao(con):
+            compras.concluir(con, pid)
+            _aud(con, request, u, "purchase.close", pid, {})
     except compras.ErroCompra as e:
         raise HTTPException(400, str(e))
     return {"ok": True}

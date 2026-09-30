@@ -116,12 +116,32 @@ O que a URACE compra para si.
 - [ ] Nota fiscal / recibo anexado e ligado ao QuickBooks (despesa) — depende da
       fronteira com o QuickBooks
 - [x] Aviso de pedido que não chegou no prazo (compra com previsão vencida)
+- [x] 🤖 **E-mail de compra vira compra (30/09).** Dono: *"todo email relacionado a compra
+      que chegar no urace@ se torne um item de compra, e toda atualização de envio /
+      pagamento / entregue atualize; se tiver só a atualização do envio, crie também"*.
+      A cada sincronia (15 min) o painel busca no urace@ (a caixa inteira — os filtros
+      arquivam Finances/Shopping e Shipping Status), classifica cada mensagem em pedido ·
+      pagamento · envio · entregue · cancelado · reembolso, tira nº do pedido, rastreio,
+      transportadora, total e previsão, e acha a compra pelo nº do pedido (ou referência
+      digitada), depois pelo rastreio; não achou, cria (origem e-mail). Cada e-mail vira
+      evento na linha do tempo da compra, com link para o Gmail. Só lê o Gmail.
+      **Fora, de propósito:** venda da nossa loja, pagamento de invoice nossa (QuickBooks),
+      assinatura/renovação e propaganda. **Entregue ≠ recebido:** "delivered" não dá
+      entrada no estoque — vira "Precisa de atenção: foi entregue, falta dar entrada".
+      Compra do e-mail vem **sem itens** (não inventa): o gerente põe os itens ou **liga os
+      pedidos da equipe**. Liga sozinho só quando o SKU da peça pedida aparece no e-mail;
+      nome parecido fica como sugestão. Pedido ligado mostra o envio e o rastreio. Compra
+      que não é de estoque (passe de pista, serviço) fecha com "Concluir sem estoque".
+- [ ] 👤 Recibos do Orlando Kart Center (passe de pista) também viram compra — manter, ou
+      ignorar esse remetente?
 
 ## 4. Tracking de envios
 
 Suits, peças da loja do eBay, peças específicas compradas para clientes.
 
 - [ ] 👤 Quais transportadoras e quais lojas (eBay, outras?)
+- [x] 🤖 Rastreio das COMPRAS (o que chega para nós) sai dos e-mails desde 30/09 — ver módulo 3.
+      O que falta aqui é o envio que a URACE DESPACHA (suits, eBay, peça para cliente).
 - [ ] Modelo: envio → itens → destinatário (cliente ou endereço) → rastreio → status
 - [ ] Rastreio automático (código da transportadora), se a API permitir
 - [ ] Ligar ao cliente: o envio aparece no card dele
@@ -510,3 +530,17 @@ o cliente certo e mudar de nome.
       simulação, tarefa protegida), o nome do painel não muda.
 - [x] 🤖 O servidor stdio do QuickBooks registrava as ferramentas só até o meio do arquivo —
       o lembrete de invoice nunca existia por ali. Corrigido junto.
+
+## Endereço da URACE para o painel (30/09)
+
+Dono: *"conseguimos deixar a url do site como o da urace?"* / *"tenho esse urace.us que quero
+colocar o command center lá dentro"* (o domínio está na Hostinger, com o site na raiz).
+
+- [x] 🤖 `servir_command_center.sh` aceita `CC_DOMINIOS_EXTRAS="ops.urace.us"`: cria um
+      site a mais no Caddy com o mesmo painel (raiz redireciona para /ops/), certificado
+      automático. Só entra se o DNS do nome novo já aponta para este servidor.
+      O duckdns continua: webhooks do Kommo, OAuth do QuickBooks e o conector do claude.ai
+      apontam para ele — trocar esses é um segundo passo, um por um.
+- [ ] 👤 Na Hostinger → Domínios → urace.us → Gerenciar DNS: registro **CNAME**, nome `ops`,
+      aponta para `urace-bridge.duckdns.org`, TTL 300. Não mexer nos registros da raiz/www
+      (são o site). Depois, rodar o deploy com a variável.

@@ -52,7 +52,7 @@ def _sync_thread(user_id, ip):
         res = {}
         # uma etapa por sistema, com o nome visível em GET /sync (a tela mostra "sincronizando: asana")
         for nome, fn in (("cerebro", sy.sync_cerebro), ("asana", sy.sync_asana), ("docusign", sy.sync_docusign),
-                         ("gmail", sy.sync_gmail), ("quickbooks", sy.sync_qbo)):
+                         ("gmail", sy.sync_gmail), ("gmail_compras", sy.sync_compras_email), ("quickbooks", sy.sync_qbo)):
             _SYNC["stage"] = nome; _SYNC["stage_started_at"] = agora()
             try:
                 res[nome] = fn(con)
