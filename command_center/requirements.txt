@@ -6,3 +6,4 @@ pydantic>=2,<3
 python-multipart>=0.0.9   # upload de arquivos de contexto
 pypdf>=4,<6              # texto de PDF para a IA ler
 pywebpush>=2,<3          # notificação no celular (Web Push: VAPID + criptografia)
+Pillow>=10,<13            # foto comprimida para WebP, sem EXIF (issue #21)

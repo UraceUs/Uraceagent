@@ -232,12 +232,17 @@ def test_grupo_com_nome_participantes_e_icone(cli):
 def test_foto_do_grupo_entra_sai_pelo_servidor_e_recusa_o_que_nao_e_imagem(cli):
     h = entra(cli, "chefe@urace.us")
     cid = cli.post(f"{B}/equipe/canais", headers=h, json={"name": "Comercial"}).json()["id"]
-    png = (b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+    import io
+    from PIL import Image
+    buf = io.BytesIO(); Image.new("RGB", (900, 600), "red").save(buf, "PNG"); png = buf.getvalue()
     r = cli.post(f"{B}/equipe/canais/{cid}/imagem", headers=h,
                  files={"arquivo": ("logo.png", png, "image/png")})
     assert r.status_code == 200
     foto = cli.get(f"{B}/equipe/canais/{cid}/imagem", headers=h)
-    assert foto.status_code == 200 and foto.content == png
+    assert foto.status_code == 200 and foto.content[:4] == b"RIFF" and foto.content[8:12] == b"WEBP", "sai comprimida (#21)"
+    assert Image.open(io.BytesIO(foto.content)).size == (512, 341), "foto de grupo: no máximo 512 px"
+    assert cli.post(f"{B}/equipe/canais/{cid}/imagem", headers=h,
+                    files={"arquivo": ("falsa.png", b"\x89PNG" + b"0" * 64, "image/png")}).status_code == 400
     # só imagem, e só de quem participa
     assert cli.post(f"{B}/equipe/canais/{cid}/imagem", headers=h,
                     files={"arquivo": ("x.exe", b"MZ", "application/octet-stream")}).status_code == 400

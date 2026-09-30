@@ -585,7 +585,12 @@ def test_catalogo_editavel_e_corridas(cli):
     ka = [e for e in cat["engines"] if e["model"] == "KA100"][0]
     assert cli.post(B + "/catalog/parts", headers=h, json={"engine_id": ka["id"], "name": "Reed petal", "part_number": "X-10", "price": 21.25}).status_code == 201
     assert any(p["name"] == "Reed petal" for p in cli.get(B + "/catalog").json()["parts"])
-    assert cli.post(B + f"/catalog/chassis/{cid}/image", headers=h, files={"file": ("x.png", b"\x89PNG fake", "image/png")}).status_code == 200
+    import io
+    from PIL import Image
+    buf = io.BytesIO(); Image.new("RGB", (40, 30), "blue").save(buf, "PNG")
+    assert cli.post(B + f"/catalog/chassis/{cid}/image", headers=h, files={"file": ("x.png", b"\x89PNG fake", "image/png")}).status_code == 400, \
+        "arquivo que não abre como imagem é recusado (#21)"
+    assert cli.post(B + f"/catalog/chassis/{cid}/image", headers=h, files={"file": ("x.png", buf.getvalue(), "image/png")}).status_code == 200
     assert cli.get(B + f"/catalog/chassis/{cid}/image").status_code == 200
     # corridas e convites
     # sem Asana: criar do modelo dá 503 (nunca 500); "só no painel" cria local

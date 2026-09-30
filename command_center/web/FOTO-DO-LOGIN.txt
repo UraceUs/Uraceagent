@@ -1,6 +1,7 @@
 Arquivos desta pasta vão para a raiz do site publicado (/ops/...).
 
-pista.jpg  — a foto da pista que aparece no login (lado esquerdo, cortada na diagonal).
+pista.webp — a foto da pista em WebP, 1600 px (é a que o navegador baixa; issue #21).
+pista.jpg  — a mesma foto em JPG, para navegador antigo. A foto da pista que aparece no login (lado esquerdo, cortada na diagonal).
              JPG, ~2400 px de largura, comprimido para menos de 400 KB.
              Enquanto o arquivo não estiver aqui, o login desenha um fundo em preto e
              branco no lugar dela: nada quebra e nada fica em branco.

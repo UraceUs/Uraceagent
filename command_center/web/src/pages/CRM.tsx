@@ -68,7 +68,7 @@ function Foto({ l, size = 36 }: { l: Lead; size?: number }) {
   const n = nomeDo(l)
   const ini = <span className="foto ini" style={{ width: size, height: size, fontSize: Math.round(size * .36) }}>{n.split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('')}</span>
   if (!l.contact_avatar || erro) return ini
-  return <img className="foto" src={`/ops/api/crm/leads/${l.id}/avatar?v=${encodeURIComponent(l.contact_avatar.slice(-24))}`} alt="" width={size} height={size} style={{ width: size, height: size }} onError={() => setErro(true)} />
+  return <img className="foto" loading="lazy" decoding="async" src={`/ops/api/crm/leads/${l.id}/avatar?v=${encodeURIComponent(l.contact_avatar.slice(-24))}`} alt="" width={size} height={size} style={{ width: size, height: size }} onError={() => setErro(true)} />
 }
 const nomeDo = (l: Lead) => l.contact_name || l.name || `Lead ${l.external_id}`
 
