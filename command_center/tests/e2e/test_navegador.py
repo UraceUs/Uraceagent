@@ -125,3 +125,47 @@ def test_operador_nao_ve_tela_de_gerente(servidor, navegador):
     r = pg.request.get(servidor + "/api/users")
     assert r.status in (401, 403)
     pg.close()
+
+
+def _cabecalhos(pg):
+    """[(nível, texto)] na ordem do documento, só o que está visível."""
+    return pg.evaluate("""() => [...document.querySelectorAll('h1,h2,h3,h4,h5,h6')]
+        .filter(h => h.offsetParent !== null || getComputedStyle(h).position === 'fixed')
+        .map(h => [Number(h.tagName[1]), h.textContent.trim().slice(0, 40)])""")
+
+
+def test_um_h1_por_tela_e_sem_pular_nivel(servidor, navegador):
+    """Issue #18: exatamente um h1; e nenhum cabeçalho desce mais de um nível de uma vez (h1 → h3)."""
+    pg = entrar(navegador, servidor)
+    problemas = []
+    for rota in ["/login-deslogado"] + ROTAS + ["/nao-existe"]:
+        if rota == "/login-deslogado":
+            p2 = navegador.new_page(); p2.goto(servidor + "/login"); p2.wait_for_load_state("networkidle")
+            cab, alvo = _cabecalhos(p2), "/login"
+            p2.close()
+        else:
+            abrir(pg, servidor, rota)
+            cab, alvo = _cabecalhos(pg), rota
+        h1 = [t for n, t in cab if n == 1]
+        if len(h1) != 1:
+            problemas.append(f"{alvo}: {len(h1)} h1 {h1}")
+        anterior = 0
+        for n, t in cab:
+            if n > anterior + 1:
+                problemas.append(f"{alvo}: pulou de h{anterior} para h{n} ({t!r})")
+                break
+            anterior = n
+    pg.close()
+    assert not problemas, "\n".join(problemas)
+
+
+def test_titulo_da_aba_por_tela(servidor, navegador):
+    pg = entrar(navegador, servidor)
+    titulos = {}
+    for rota in ["/compras", "/estoque", "/clients", "/attention"]:
+        abrir(pg, servidor, rota)
+        titulos[rota] = pg.title()
+    pg.close()
+    assert all(t.endswith("· URACE Command Center") for t in titulos.values()), titulos
+    assert len(set(titulos.values())) == len(titulos), f"cada tela com o seu título: {titulos}"
+    assert titulos["/compras"].startswith("Compras")

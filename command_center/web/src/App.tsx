@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from './auth/AuthContext'
 import { Shell } from './components/Shell'
 import { PerguntarProvider } from './components/Perguntar'
 import { ToastProvider } from './components/Toast'
-import { Empty } from './components/ui'
+import { Empty, PageHeader } from './components/ui'
 import { AICommand, Activity, Approvals } from './pages/AI'
 import { AttentionPage } from './pages/Attention'
 import { Automation } from './pages/Automation'
@@ -32,7 +32,8 @@ function Guard({ min, children }: { min?: Role; children: ReactNode }) {
   const loc = useLocation()
   if (!ready) return <div className="state" style={{ minHeight: '100vh', justifyContent: 'center' }}><span className="spin" /></div>
   if (!user) return <Navigate to="/login" replace state={loc.pathname === '/login' ? null : { from: loc.pathname + loc.search }} />
-  if (min && !can(min)) return <div className="card"><Empty title="Sem permissão">Esta área exige acesso de {PAPEL_PT[min] || min} ou acima. Fale com o administrador.</Empty></div>
+  if (min && !can(min)) return <><PageHeader title="Sem permissão" />
+    <div className="card"><Empty title="Esta área não é do seu acesso">Ela exige acesso de {PAPEL_PT[min] || min} ou acima. Fale com o administrador.</Empty></div></>
   return <>{children}</>
 }
 
@@ -81,7 +82,7 @@ export default function App() {
           <Route path="policies" element={<Guard min="ADMIN"><Policies /></Guard>} />
           <Route path="users" element={<Guard min="ADMIN"><Users /></Guard>} />
           <Route path="account" element={<Account />} />
-          <Route path="*" element={<div className="card"><Empty title="Página não encontrada">Use o menu ou ⌘K.</Empty></div>} />
+          <Route path="*" element={<><PageHeader title="Página não encontrada" /><div className="card"><Empty title="Este endereço não existe">Use o menu ou ⌘K.</Empty></div></>} />
         </Route>
       </Routes>
     </PerguntarProvider></ToastProvider></AuthProvider>
