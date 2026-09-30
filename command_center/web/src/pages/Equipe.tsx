@@ -39,7 +39,7 @@ interface Conversa { canal: Canal; mensagens: Msg[]; membros: Membro[]; particip
 function Cara({ c, size = 36 }: { c: { id: number; name: string; icon?: string | null; image_path?: string | null }; size?: number }) {
   const [erro, setErro] = useState(false)
   const estilo = { width: size, height: size, fontSize: Math.round(size * .42) }
-  if (c.image_path && !erro) return <img className="foto" src={`/ops/api/equipe/canais/${c.id}/imagem`} alt=""
+  if (c.image_path && !erro) return <img className="foto" loading="lazy" decoding="async" src={`/ops/api/equipe/canais/${c.id}/imagem`} alt=""
     width={size} height={size} style={{ width: size, height: size }} onError={() => setErro(true)} />
   if (c.icon) return <span className="foto ini" style={estilo}>{c.icon}</span>
   return <span className="foto ini" style={{ ...estilo, fontSize: Math.round(size * .36) }}>

@@ -32,7 +32,7 @@ from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import agora, auditar, get_db, todos, transacao, um
-from command_center.providers import estoque, prateleiras
+from command_center.providers import estoque, imagem, prateleiras
 
 r = APIRouter(prefix="/ops/api/estoque", tags=["estoque"])
 
@@ -416,10 +416,15 @@ async def rota_criar_item(request: Request, con: sqlite3.Connection = Depends(ge
             if len(dados_foto) > IMAGEM_MAX:
                 aviso = "A peça foi cadastrada, mas a foto é grande demais (máximo 6 MB)."
             else:
-                nome_arq = f"item-{iid}{ext}"
-                with open(os.path.join(_pasta_fotos(), nome_arq), "wb") as f:
-                    f.write(dados_foto)
-                con.execute("UPDATE stock_items SET image_path=? WHERE id=?", (nome_arq, iid))
+                try:
+                    dados_foto, ext = imagem.comprimir(dados_foto)
+                except imagem.ImagemInvalida:
+                    aviso = "A peça foi cadastrada, mas a foto não abriu: tente outra."
+                else:
+                    nome_arq = f"item-{iid}{ext}"
+                    with open(os.path.join(_pasta_fotos(), nome_arq), "wb") as f:
+                        f.write(dados_foto)
+                    con.execute("UPDATE stock_items SET image_path=? WHERE id=?", (nome_arq, iid))
 
     _auditar(con, request, u, "stock.item.create", iid,
              {"name": name, "kind": kind, "qty": qty, "category": category, "client_id": client_id,
@@ -523,6 +528,10 @@ async def rota_foto(item_id: int, request: Request, foto: UploadFile = File(...)
     dados = await foto.read(IMAGEM_MAX + 1)
     if len(dados) > IMAGEM_MAX:
         raise HTTPException(400, "Foto grande demais (máximo 6 MB).")
+    try:
+        dados, ext = imagem.comprimir(dados)
+    except imagem.ImagemInvalida:
+        raise HTTPException(400, "Essa foto não abriu. Tente outra (PNG, JPG ou WEBP).")
     nome = f"item-{item_id}{ext}"
     with open(os.path.join(_pasta_fotos(), nome), "wb") as f:
         f.write(dados)

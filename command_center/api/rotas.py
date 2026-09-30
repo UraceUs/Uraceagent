@@ -2217,6 +2217,11 @@ async def catalog_image(kind: str, cid: int, request: Request, file: UploadFile 
     dados = await file.read()
     if not dados or len(dados) > 5 * 1024 * 1024:
         raise HTTPException(400, "Imagem vazia ou maior que 5 MB.")
+    from command_center.providers import imagem
+    try:
+        dados, ext = imagem.comprimir(dados)
+    except imagem.ImagemInvalida:
+        raise HTTPException(400, "Essa imagem não abriu. Tente outra.")
     os.makedirs(IMAGE_DIR, exist_ok=True)
     caminho = os.path.join(IMAGE_DIR, f"{kind}-{cid}{ext}")
     with open(caminho, "wb") as f:

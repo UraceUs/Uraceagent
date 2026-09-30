@@ -365,6 +365,11 @@ async def subir_imagem(cid: int, arquivo: UploadFile = File(...), u=Depends(auth
     dados = await arquivo.read(IMAGEM_MAX + 1)
     if len(dados) > IMAGEM_MAX:
         raise HTTPException(400, "Imagem grande demais (máximo 4 MB).")
+    from command_center.providers import imagem
+    try:
+        dados, ext = imagem.comprimir(dados, lado_max=512)      # foto de grupo aparece pequena
+    except imagem.ImagemInvalida:
+        raise HTTPException(400, "Essa imagem não abriu. Tente outra.")
     nome = f"canal-{cid}{ext}"
     with open(os.path.join(_pasta_imagens(), nome), "wb") as f:
         f.write(dados)
