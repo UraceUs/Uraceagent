@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
-import { useGet } from '../api/hooks'
+import { useGet, usePaginado } from '../api/hooks'
 import type { ActionPolicy, AuditRow, ContextSource, Integration, Policy } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, POLICY_LABEL, Section, Spinner, Status, statusTone, SYS_NAME, Thinking } from '../components/ui'
@@ -469,17 +469,22 @@ export function Users() {
 }
 
 export function Audit() {
-  const { data, error, loading, reload } = useGet<AuditRow[]>('/audit?limit=300')
+  // Paginada e buscada no servidor (issue #20): antes baixava 300 e filtrava só esses.
   const [q, setQ] = useState('')
-  const rows = (data || []).filter(r => !q || `${r.event} ${r.actor} ${r.entity_type} ${r.entity_id} ${r.detail}`.toLowerCase().includes(q.toLowerCase()))
+  const [busca, setBusca] = useState('')
+  useEffect(() => { const t = setTimeout(() => setBusca(q.trim()), 300); return () => clearTimeout(t) }, [q])
+  const pg = usePaginado<AuditRow>('/audit' + (busca ? `?q=${encodeURIComponent(busca)}` : ''), 100)
+  const rows = pg.itens, data = pg.itens, error = pg.erro, loading = pg.carregando, reload = pg.recarregar
   return <>
     <PageHeader title="Auditoria" help={<>Registro imutável (gatilhos no banco impedem UPDATE/DELETE). Logins, comandos, decisões, mudanças de política.</>}>
       <input className="input" style={{ width: 260 }} placeholder="Filtrar" value={q} onChange={e => setQ(e.target.value)} /><button className="btn" onClick={reload}>↻</button></PageHeader>
-    <Section title="Eventos" count={rows.length} tight>
+    <Section title="Eventos" count={pg.total} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : rows.length === 0 ? <Empty>Nada registrado.</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Evento</th><th>Quem</th><th>IP</th><th>Entidade</th><th>Detalhe</th></tr></thead><tbody>
           {rows.map((r, i) => { const d = safeJson(r.detail); return <tr key={r.id ?? i}><td className="mono nowrap">{fmtDateTime(r.at)}</td><td><Chip tone={/fail|reject|denied/.test(r.event) ? 'crit' : /login|approve|create/.test(r.event) ? 'ok' : 'neutral'}>{r.event}</Chip></td><td className="mono small">{r.actor}</td><td className="mono small muted">{r.ip}</td><td className="small">{r.entity_type} {r.entity_id}</td><td className="small ink2" style={{ maxWidth: 420 }}>{typeof d === 'string' ? d : d ? JSON.stringify(d).slice(0, 220) : ''}</td></tr> })}
         </tbody></table></div>}
+      {pg.temMais && <div className="row" style={{ justifyContent: 'center', padding: 12 }}>
+        <button className="btn ghost" disabled={loading} onClick={pg.mais}>{loading ? 'Carregando…' : `Carregar mais (${rows.length} de ${pg.total})`}</button></div>}
     </Section>
   </>
 }
