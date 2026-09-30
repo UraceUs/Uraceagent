@@ -596,3 +596,55 @@ def preco_de_tabela(con, nomes, valor):
         if abs(float(t["price"]) - float(valor)) < 0.01 and any(a == nome or a in nome or nome in a for a in alvos):
             return t
     return None
+
+
+# --------------------------------------------------------------------- peça usada → cobrança
+def registrar_cobranca(con, item_id, client_id, qty, move_id=None, by_user_id=None, task_id=None, notes=None):
+    """A peça da URACE foi usada no kart deste cliente: fica a cobrar, com o preço de agora.
+    Sem preço final na ficha, a cobrança nasce sem valor — e o gerente vê isso no card."""
+    it = item(con, item_id)
+    if not um(con, "SELECT 1 AS x FROM clients WHERE id=?", (client_id,)):
+        raise ErroEstoque(f"cliente #{client_id} não existe")
+    return inserir(con, "stock_charges", client_id=client_id, item_id=it["id"], move_id=move_id, task_id=task_id,
+                   qty=float(qty), unit_price=it["price"], notes=notes, created_by=by_user_id)
+
+
+def cobrancas(con, client_id=None, status="pending"):
+    sql = """SELECT ch.*, i.name, i.unit, i.size, i.subcategory, COALESCE(c.pilot_name, c.name) AS cliente,
+                    u.name AS por, inv.doc_number
+               FROM stock_charges ch JOIN stock_items i ON i.id=ch.item_id JOIN clients c ON c.id=ch.client_id
+               LEFT JOIN users u ON u.id=ch.created_by LEFT JOIN invoices inv ON inv.id=ch.invoice_id WHERE 1=1"""
+    p = []
+    if client_id:
+        sql += " AND ch.client_id=?"; p.append(client_id)
+    if status:
+        sql += " AND ch.status=?"; p.append(status)
+    return [dict(r, total=None if r["unit_price"] is None else round(r["unit_price"] * r["qty"], 2))
+            for r in todos(con, sql + " ORDER BY ch.id DESC", tuple(p))]
+
+
+def conciliar_cobrancas(con, invoice_id):
+    """A invoice chegou do QuickBooks: as peças a cobrar do cliente que estão nela saem de
+    pendente. Bate pelo nome (a peça aparece no item ou na descrição da linha) E pelo preço
+    unitário — nome sem preço igual não conta, porque aí a cobrança não é esta."""
+    inv = um(con, "SELECT id, client_id FROM invoices WHERE id=?", (invoice_id,))
+    if not inv or not inv["client_id"]:
+        return []
+    pend = [c for c in cobrancas(con, inv["client_id"]) if c["unit_price"] is not None]
+    if not pend:
+        return []
+    linhas = [dict(l, sobra=float(l["qty"] or 1)) for l in todos(
+        con, "SELECT item_name, description, qty, unit_price FROM invoice_lines WHERE invoice_id=?", (invoice_id,))]
+    baixadas = []
+    for ch in sorted(pend, key=lambda x: x["id"]):
+        nome = _norm(ch["name"])
+        for l in linhas:
+            texto = _norm(l["item_name"]) + "|" + _norm(l["description"])
+            if (l["unit_price"] is not None and abs(float(l["unit_price"]) - ch["unit_price"]) < 0.01
+                    and nome and nome in texto and l["sobra"] >= ch["qty"] - 1e-9):
+                l["sobra"] -= ch["qty"]
+                con.execute("UPDATE stock_charges SET status='invoiced', invoice_id=?, resolved_at=? WHERE id=?",
+                            (invoice_id, agora(), ch["id"]))
+                baixadas.append(ch["id"])
+                break
+    return baixadas

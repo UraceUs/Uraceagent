@@ -74,7 +74,9 @@ def _contexto_cliente(con, client_id):
     ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? ORDER BY due_on DESC LIMIT 5", (client_id,))
     campos = ("id", "name", "pilot_name", "pilot_dob", "email", "phone", "vip", "status",
               "monthly_plan", "monthly_note", "monthly_amount", "monthly_item_id")
+    pecas = _pecas_a_cobrar(con, client_id)
     return ("\nCLIENTE: " + json.dumps({k: c[k] for k in campos if k in c.keys() and c[k] not in (None, "")}, ensure_ascii=False)
+            + ("\n" + pecas if pecas else "")
             + "\nWAIVERS NO ESPELHO: " + json.dumps(ws, ensure_ascii=False)
             + "\nSERVIÇOS NO ESPELHO: " + json.dumps(ts, ensure_ascii=False))
 
@@ -90,6 +92,19 @@ def cliente_citado(con, texto):
             if len(toks) >= 2 and (" " + " ".join(toks) + " ") in t and len(toks) > tam:
                 melhor, tam = c["id"], len(toks)
     return melhor
+
+
+def _pecas_a_cobrar(con, client_id):
+    """Peças do estoque usadas no kart do cliente e ainda não cobradas (29/09). Vão na próxima
+    invoice dele, pelo preço final do estoque; a sincronia dá baixa quando a invoice chega."""
+    from command_center.providers import estoque as _estoque
+    pend = _estoque.cobrancas(con, client_id)
+    if not pend:
+        return ""
+    partes = [f"{p['qty']:g}× {p['name']}" + (f" a ${p['unit_price']:,.2f}" if p["unit_price"] is not None else " (SEM PREÇO: pergunte ao dono)")
+              + f" (usada em {p['created_at'][:10]})" for p in pend]
+    return ("- PEÇAS DO ESTOQUE USADAS E AINDA NÃO COBRADAS — inclua na próxima invoice deste cliente, uma linha por peça, "
+            "com o nome da peça na descrição e este preço unitário: " + "; ".join(partes))
 
 
 def contexto_do_comando(con, texto, user_id=None):
@@ -131,6 +146,9 @@ def contexto_do_comando(con, texto, user_id=None):
               ]
     if inv and inv["customer_ref"]:
         linhas.append(f"- Para invoice: cliente_id={inv['customer_ref']} (id do responsável no QBO), email={inv['customer_email'] or c.get('email')}")
+    pecas = _pecas_a_cobrar(con, cid)
+    if pecas:
+        linhas.append(pecas)
     if itens:
         linhas.append("- Itens do QuickBooks (item_id: nome, preço de lista; o preço válido é o da Rate Card): " +
                       "; ".join(f"{i['id']}: {i['name']}" + (f" (${i['price']:.0f})" if i.get("price") else "") for i in itens))

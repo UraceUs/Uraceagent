@@ -31,7 +31,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from pydantic import BaseModel
 
 from command_center.api import auth
-from command_center.db import auditar, get_db, todos, transacao, um
+from command_center.db import agora, auditar, get_db, todos, transacao, um
 from command_center.providers import estoque, prateleiras
 
 r = APIRouter(prefix="/ops/api/estoque", tags=["estoque"])
@@ -122,6 +122,17 @@ def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_d
             "locais": [dict(l) for l in todos(con, "SELECT * FROM stock_locations WHERE active=1")],
             "repor": estoque.abaixo_do_minimo(con),
             "divergencias": estoque.conferir(con)}
+
+
+@r.get("/cobrancas")
+def rota_cobrancas(client_id: int | None = None, status: str = "pending", con: sqlite3.Connection = Depends(get_db),
+                   u=Depends(auth.exige("OPERATOR"))):
+    """Peças do estoque usadas e ainda não cobradas — por cliente, ou todas."""
+    if status not in ("pending", "invoiced", "waived", ""):
+        raise HTTPException(400, "status: pending, invoiced ou waived")
+    itens = estoque.cobrancas(con, client_id, status or None)
+    return {"itens": itens, "total": round(sum(x["total"] or 0 for x in itens), 2),
+            "sem_preco": sum(1 for x in itens if x["unit_price"] is None)}
 
 
 @r.get("/{item_id}")
@@ -286,16 +297,25 @@ def rota_saida(dados: MoverIn, request: Request, con: sqlite3.Connection = Depen
     """Uso em serviço é do mecânico; **venda é do gerente**, porque mexe em dinheiro."""
     if (dados.motivo or "") == "venda" and not auth.pode(u.get("role"), "MANAGER"):
         raise HTTPException(403, "Venda de peça é do gerente. Para uso em serviço, deixe o motivo.")
+    # Peça DA URACE usada no kart de um cliente vira cobrança dele (dono, 29/09: o preço final
+    # "vai entrar na invoice daquele cliente que usar aquela peça"). Peça que já era do cliente
+    # não se cobra: é dele.
+    cobra = bool(dados.para_cliente_id) and not dados.client_id
     try:
-        res = estoque.saida(con, dados.item_id, qty=dados.qty, unit_id=dados.unit_id,
-                            de=dados.local, client_id=dados.client_id,
-                            para_cliente_id=dados.para_cliente_id,
-                            reason=dados.motivo or "uso em serviço",
-                            by_user_id=u["id"], notes=dados.nota)
+        with transacao(con):
+            res = estoque.saida(con, dados.item_id, qty=dados.qty, unit_id=dados.unit_id,
+                                de=dados.local, client_id=dados.client_id,
+                                para_cliente_id=dados.para_cliente_id,
+                                reason=dados.motivo or "uso em serviço",
+                                by_user_id=u["id"], notes=dados.nota)
+            if cobra:
+                mov = um(con, "SELECT MAX(id) AS id FROM stock_moves WHERE item_id=?", (dados.item_id,))
+                res["cobranca_id"] = estoque.registrar_cobranca(
+                    con, dados.item_id, dados.para_cliente_id, dados.qty or 1, move_id=mov["id"],
+                    by_user_id=u["id"], notes=dados.nota)
+            _auditar(con, request, u, "stock.out", dados.item_id, {**dados.model_dump(), **res})
     except estoque.ErroEstoque as e:
         raise _erro(e)
-    _auditar(con, request, u, "stock.out", dados.item_id, {**dados.model_dump(), **res})
-    con.commit()
     return res
 
 
@@ -531,3 +551,40 @@ def rota_do_cliente(client_id: int, con: sqlite3.Connection = Depends(get_db),
                     u=Depends(auth.exige("OPERATOR"))):
     """O que é do cliente e está com a gente — para aparecer no card dele."""
     return estoque.do_cliente(con, client_id)
+
+
+
+class CobrancaIn(BaseModel):
+    acao: str                     # cobrada | nao_cobrar | reabrir | preco
+    unit_price: float | None = None
+    nota: str | None = None
+
+
+@r.post("/cobrancas/{cid}")
+def rota_resolver_cobranca(cid: int, dados: CobrancaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                           u=Depends(auth.exige("MANAGER"))):
+    """O gerente decide o que a conciliação automática não decidiu: pôr o preço de uma peça
+    que estava sem, dar por cobrada (foi por fora) ou não cobrar (garantia, cortesia)."""
+    ch = um(con, "SELECT * FROM stock_charges WHERE id=?", (cid,))
+    if not ch:
+        raise HTTPException(404, "Cobrança não encontrada.")
+    if dados.acao == "preco":
+        if dados.unit_price is None or not 0 <= dados.unit_price <= 100000:
+            raise HTTPException(400, "Preço inválido.")
+        con.execute("UPDATE stock_charges SET unit_price=? WHERE id=?", (round(dados.unit_price, 2), cid))
+    elif dados.acao in ("cobrada", "nao_cobrar"):
+        if ch["status"] != "pending":
+            raise HTTPException(409, "Essa cobrança já foi resolvida.")
+        novo = "invoiced" if dados.acao == "cobrada" else "waived"
+        con.execute("UPDATE stock_charges SET status=?, resolved_by=?, resolved_at=?, notes=COALESCE(?, notes) WHERE id=?",
+                    (novo, u["id"], agora(), dados.nota, cid))
+    elif dados.acao == "reabrir":
+        con.execute("UPDATE stock_charges SET status='pending', invoice_id=NULL, resolved_by=NULL, resolved_at=NULL WHERE id=?", (cid,))
+    else:
+        raise HTTPException(400, "acao: cobrada, nao_cobrar, reabrir ou preco")
+    auditar(con, "stock.charge", f"user:{u['id']}", user_id=u["id"], entity_type="stock_charge", entity_id=cid,
+            detail={"acao": dados.acao, "antes": {"status": ch["status"], "unit_price": ch["unit_price"]},
+                    "unit_price": dados.unit_price, "nota": dados.nota},
+            ip=(request.client.host if request and request.client else None))
+    con.commit()
+    return {"ok": True, **dict(um(con, "SELECT * FROM stock_charges WHERE id=?", (cid,)))}

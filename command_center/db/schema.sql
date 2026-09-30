@@ -1064,3 +1064,27 @@ CREATE TABLE IF NOT EXISTS monthly_recurring (
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS monthly_recurring_cliente ON monthly_recurring(client_id, status);
+
+-- ------------------------------------------------- peça do estoque usada → cobrança do cliente
+-- Dono, 29/09: o preço final da peça "vai ser o valor que vai entrar na invoice daquele cliente
+-- que usar aquela peça". Cada peça DA URACE que sai para um cliente vira uma linha aqui, com o
+-- preço congelado no momento do uso (mudar o preço depois não muda o que já foi usado). Ela sai
+-- de "pendente" quando a invoice do QuickBooks que a contém chega no espelho, ou quando o
+-- gerente decide (cobrada por fora, ou não cobrar — garantia, cortesia).
+CREATE TABLE IF NOT EXISTS stock_charges (
+  id           INTEGER PRIMARY KEY,
+  client_id    INTEGER NOT NULL REFERENCES clients(id),
+  item_id      INTEGER NOT NULL REFERENCES stock_items(id),
+  move_id      INTEGER REFERENCES stock_moves(id),
+  task_id      INTEGER REFERENCES tasks(id),
+  qty          REAL NOT NULL,
+  unit_price   REAL,                        -- NULL = peça sem preço final: o gerente define
+  status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','invoiced','waived')),
+  invoice_id   INTEGER REFERENCES invoices(id),
+  notes        TEXT,
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  resolved_by  INTEGER REFERENCES users(id),
+  resolved_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS stock_charges_cliente ON stock_charges(client_id, status);

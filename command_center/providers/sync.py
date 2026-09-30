@@ -628,6 +628,10 @@ def sync_qbo(con, desde_dias=365):
                 nid = inserir(con, "invoices", **campos)
                 _liga(con, "invoice", nid, "quickbooks", inv["id"], inv.get("link"))
             _grava_linhas(con, iid["entity_id"] if iid else nid, inv.get("linhas"))
+            if cli and inv.get("linhas"):
+                # peça do estoque que está nesta invoice sai de "a cobrar" (29/09)
+                from command_center.providers import estoque as _estoque
+                _estoque.conciliar_cobrancas(con, iid["entity_id"] if iid else nid)
             n += 1; ligadas += 1 if cli else 0
         itens = sincronizar_itens_qbo(con)
         _marca(con, "quickbooks", True, n, f"{n} invoices, {ligadas} ligadas a cliente, {itens} itens do catálogo", inicio)

@@ -43,6 +43,7 @@ interface Saldo { local: string; local_code: string; qty: number; client_id: num
 interface Unidade { id: number; serial: string; status: string; local: string | null; local_code: string | null; client_id: number | null; cliente: string | null }
 interface Ficha { item: ItemEstoque & { supplier: string | null; image_path: string | null }; total: number; nosso: number
   saldos: Saldo[]; unidades: Unidade[]; movimentos: Movimento[] }
+interface Cobranca { id: number; item_id: number; name: string; qty: number; unit_price: number | null; total: number | null; created_at: string; por: string | null; notes: string | null }
 interface Sugestao { sku: string; name: string; url: string | null; price: number | null; brand: string | null; score: number }
 
 const MOV_ROTULO: Record<string, string> = { entrada: 'entrada', saida: 'saída', ajuste: 'ajuste', transferencia: 'transferência', contagem: 'contagem' }
@@ -265,6 +266,7 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
   const [nota, setNota] = useState('')
   const [deCliente, setDeCliente] = useState(false)
   const [cliente, setCliente] = useState<Client | null>(null)
+  const [usadaEm, setUsadaEm] = useState<Client | null>(null)
   const [indo, setIndo] = useState(false)
   if (ficha.item.tracking !== 'quantidade') return <p className="small muted">Motor e chassi andam por unidade (número de série).
     Para cadastrar mais uma unidade, use <b>Adicionar peça</b> com o número de série.</p>
@@ -274,16 +276,20 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
     if (q === null || Number.isNaN(q) || q < 0 || (q === 0 && tipo !== 'contar')) { toast('Informe a quantidade.', 'warn'); return }
     if (deCliente && !cliente) { toast('Escolha o cliente dono da peça.', 'warn'); return }
     const dono = deCliente && cliente ? cliente.id : null
+    // peça da URACE usada no kart de um cliente: vai para a cobrança dele (29/09)
+    const paraQuem = tipo === 'saida' ? (dono ?? usadaEm?.id ?? null) : null
     setIndo(true)
     try {
       if (tipo === 'contar') {
         const r = await api.post<{ antes: number; depois: number }>('/estoque/contar', { item_id: ficha.item.id, qty: q, local: de, client_id: dono, nota: nota.trim() || null })
         toast(r.antes === r.depois ? `Conferido: ${r.depois} ${ficha.item.unit}.` : `Agora são ${r.depois} ${ficha.item.unit} (eram ${r.antes}).`, 'ok')
       } else {
-        await api.post(`/estoque/${tipo}`, { item_id: ficha.item.id, qty: q, local: de, para, nota: nota.trim() || null,
-                                             client_id: dono, para_cliente_id: tipo === 'saida' ? dono : null,
+        const r = await api.post<{ cobranca_id?: number }>(`/estoque/${tipo}`, { item_id: ficha.item.id, qty: q, local: de, para, nota: nota.trim() || null,
+                                             client_id: dono, para_cliente_id: paraQuem,
                                              motivo: tipo === 'entrada' ? (dono ? 'recebido do cliente' : 'compra') : tipo === 'saida' ? 'uso em serviço' : null })
-        toast(tipo === 'entrada' ? 'Entrada registrada.' : tipo === 'saida' ? 'Saída registrada.' : 'Transferência registrada.', 'ok')
+        toast(tipo === 'entrada' ? 'Entrada registrada.' : tipo === 'transferir' ? 'Transferência registrada.'
+          : r.cobranca_id ? `Saída registrada — ficou a cobrar de ${usadaEm?.pilot_name || usadaEm?.name}${ficha.item.price != null ? ` ($${(ficha.item.price * q).toFixed(2)})` : ' (sem preço final: o gerente define)'}.` : 'Saída registrada.', 'ok')
+        setUsadaEm(null)
       }
       setQtd(''); setNota(''); onDone()
     } catch (e) {
@@ -306,6 +312,12 @@ function Mover({ ficha, locais, onDone }: { ficha: Ficha; locais: Local[]; onDon
         <select value={para} onChange={e => setPara(e.target.value)}>{locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
     </div>
     <DeQuemE deCliente={deCliente} setDeCliente={setDeCliente} cliente={cliente} setCliente={setCliente} />
+    {tipo === 'saida' && !deCliente && <>
+      <Picker label="Usada no kart de (opcional — vai para a cobrança do cliente)" value={usadaEm} onPick={setUsadaEm} />
+      {usadaEm && <p className="small muted" style={{ marginTop: -4 }}>{ficha.item.price != null
+        ? <>Fica a cobrar de {usadaEm.pilot_name || usadaEm.name}: {qtd || '?'} × ${ficha.item.price.toFixed(2)}. Entra na próxima invoice dele.</>
+        : <>Esta peça ainda não tem preço final: a cobrança fica registrada e o gerente põe o valor.</>}</p>}
+    </>}
     <label className="fld"><span>Nota <i className="muted">(qual kart, nota fiscal)</i></span>
       <input value={nota} onChange={e => setNota(e.target.value)} /></label>
     <button className="btn" disabled={indo || !qtd} onClick={enviar}>{indo ? 'Registrando…' : 'Registrar'}</button>
@@ -672,7 +684,20 @@ export function PecasDoCliente({ cid, nome }: { cid: number; nome: string }) {
   const escolhido = est.data?.itens.find(i => i.id === item)
   const fichaEscolhida = useGet<Ficha>(escolhido?.tracking === 'serie' ? `/estoque/${escolhido.id}` : null)
   const nossas = (fichaEscolhida.data?.unidades || []).filter(u => !u.client_id && EM_CASA.includes(u.status))
-  const recarregar = () => { dele.reload(); est.reload() }
+  const cob = useGet<{ itens: Cobranca[]; total: number; sem_preco: number }>(`/estoque/cobrancas?client_id=${cid}`)
+  const recarregar = () => { dele.reload(); est.reload(); cob.reload() }
+  async function resolver(ch: Cobranca, acao: 'cobrada' | 'nao_cobrar' | 'preco') {
+    let unit_price: number | undefined
+    if (acao === 'preco') {
+      const v = window.prompt(`Preço unitário de ${ch.name} (US$)`, ch.unit_price != null ? String(ch.unit_price) : '')
+      if (v === null) return
+      unit_price = Number(v.replace(',', '.'))
+      if (!(unit_price >= 0)) { toast('Preço inválido.', 'warn'); return }
+    }
+    setIndo(true)
+    try { await api.post(`/estoque/cobrancas/${ch.id}`, { acao, unit_price }); toast(acao === 'preco' ? 'Preço definido.' : acao === 'cobrada' ? 'Marcada como cobrada.' : 'Não será cobrada.', 'ok'); recarregar() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
 
   async function assinalar() {
     if (!escolhido) return
@@ -696,6 +721,20 @@ export function PecasDoCliente({ cid, nome }: { cid: number; nome: string }) {
   const nada = !dele.data?.pecas.length && !dele.data?.unidades.length
   const disponiveis = (est.data?.itens || []).filter(i => i.tracking === 'serie' || i.nosso > 0)
   return <div>
+    {!!cob.data?.itens.length && <div style={{ marginBottom: 16 }}>
+      <h4 style={{ margin: '0 0 6px' }}>Peças do estoque usadas — a cobrar <span className="muted">· ${cob.data.total.toFixed(2)}{cob.data.sem_preco ? ` + ${cob.data.sem_preco} sem preço` : ''}</span></h4>
+      <p className="small muted" style={{ marginTop: 0 }}>Entram na próxima invoice deste cliente pelo preço final do estoque. Quando a invoice chega do QuickBooks com a peça, sai daqui sozinha.</p>
+      <div className="tbl">{cob.data.itens.map(ch => <div className="tr" key={ch.id}>
+        <div className="grow"><b>{ch.qty}× {ch.name}</b>
+          <div className="small muted">usada em {quando(ch.created_at)}{ch.por ? ` · ${ch.por}` : ''}{ch.notes ? ` · ${ch.notes}` : ''}</div></div>
+        {ch.unit_price != null ? <Chip tone="accent">${(ch.total ?? 0).toFixed(2)}</Chip> : <Chip tone="warn">sem preço</Chip>}
+        {can('MANAGER') && <>
+          <button className="btn ghost sm" disabled={indo} onClick={() => resolver(ch, 'preco')}>preço</button>
+          <button className="btn ghost sm" disabled={indo} onClick={() => resolver(ch, 'cobrada')} title="já foi cobrada por fora">cobrada</button>
+          <button className="btn ghost sm" disabled={indo} onClick={() => resolver(ch, 'nao_cobrar')} title="garantia, cortesia">não cobrar</button>
+        </>}
+      </div>)}</div>
+    </div>}
     {nada ? <Empty title="Nada guardado">Nenhuma peça deste cliente está com a gente.</Empty>
       : <div className="tbl">
         {dele.data!.pecas.map(p => <div className="tr" key={`l${p.id}`}>

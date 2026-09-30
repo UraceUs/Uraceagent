@@ -197,6 +197,21 @@ def _coletar(con):
                           facts=[(f["name"], f"faltam {f['falta']:g} {f['unit']}" + (f" · SKU {f['sku']}" if f.get("sku") else ""))
                                  for f in repor[:6]]))
 
+    # ---- 4d. peças do estoque usadas e ainda não cobradas (29/09): uma por cliente
+    for g in todos(con, """SELECT ch.client_id, COALESCE(c.pilot_name, c.name) AS cliente, COUNT(*) AS n,
+                                  SUM(ch.qty * ch.unit_price) AS total, SUM(ch.unit_price IS NULL) AS sem_preco,
+                                  MIN(ch.created_at) AS desde
+                             FROM stock_charges ch JOIN clients c ON c.id=ch.client_id
+                            WHERE ch.status='pending' GROUP BY ch.client_id"""):
+        itens.append(dict(key=_chave("estoque-cobrar", "client", g["client_id"]), level="MEDIUM",
+                          title=f"Cobrar peças do estoque: {g['cliente']} — {g['n']} peça(s)",
+                          why="Peças da URACE usadas no kart deste cliente e que ainda não apareceram em invoice. "
+                              "Entram na próxima invoice dele pelo preço final do estoque.",
+                          entity={"type": "client", "id": g["client_id"]}, client_id=g["client_id"], link=None,
+                          action="Ver peças",
+                          facts=[("Total", _usd(g["total"]) + (f" + {g['sem_preco']} sem preço" if g["sem_preco"] else "")),
+                                 ("Desde", _dbr(g["desde"]))]))
+
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",

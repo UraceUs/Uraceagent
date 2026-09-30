@@ -157,6 +157,14 @@ Chassis, motores, pneus e peças. Inclui **peça que está com a URACE mas é do
       fileira se chama **Alpha Line**, com Boné, Camisa, Moletom e Macacão URACE (standard)
       criados sem quantidade e sem preço (`adminai/semear_alpha_line.py`); fileira sem
       barra de rolagem — no computador, clicar, segurar e arrastar.
+- [x] 🤖 **Peça usada → cobrança do cliente (30/09).** Em "Usei em serviço", o mecânico diz
+      em qual kart (cliente) a peça foi usada. Peça DA URACE vira **cobrança pendente** dele,
+      com o preço final congelado naquele momento (peça que já era do cliente não se cobra).
+      A lista aparece no card do cliente (aba **Peças**) e em "Precisa de atenção"; a IA
+      recebe as peças a cobrar quando monta a invoice dele (comando e dia 1). Quando a invoice
+      chega do QuickBooks com a peça — mesmo nome e mesmo preço —, a cobrança sai sozinha. O
+      gerente resolve o resto: pôr preço em peça que estava sem, "cobrada" (foi por fora) ou
+      "não cobrar" (garantia, cortesia).
 - [ ] 🤖 Painel todo em inglês: mais para frente (dono, 29/09). Por ora, português.
 - [ ] 👤 **Confirmar três escolhas minhas** (fáceis de mudar): (1) mecânico = papel
       Operador — um papel "Mecânico" que só vê o estoque exige mexer na tabela de usuários
