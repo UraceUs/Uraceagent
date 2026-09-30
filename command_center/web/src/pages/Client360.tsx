@@ -38,7 +38,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const perguntar = usePerguntar()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
-  const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'races' | 'pecas' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
+  const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'races' | 'pecas' | 'site' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
   const [proBusy, setProBusy] = useState(false)
   const [unir, setUnir] = useState(false)
   const monthly = useGet<Monthly>(id && tab === 'monthly' ? `/clients/${id}/monthly` : null)
@@ -153,8 +153,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     </Section>}
     {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>Notas:</b> {c.notes}</div>}
     <div className="tabs">
-      {(['timeline', 'monthly', 'equip', 'races', 'pecas', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && (t !== 'pecas' || can('OPERATOR'))).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: '★ Equipamento', races: `★ Corridas`, pecas: 'Peças', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
+      {(['timeline', 'monthly', 'equip', 'races', 'pecas', 'site', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && ((t !== 'pecas' && t !== 'site') || can('OPERATOR'))).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: '★ Equipamento', races: `★ Corridas`, pecas: 'Peças', site: 'Conta no site', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
       </button>)}
     </div>
     <div className="card card-b">
@@ -175,6 +175,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {mover !== null && <MoverServico tarefa={data.tasks.find(t => t.id === mover)!} atual={c} onClose={() => setMover(null)} onDone={reload} />}
       {unir && <UnirModal keep={c} onClose={() => setUnir(false)} onDone={(kid) => { if (kid !== c.id) nav(`/clients/${kid}`); else reload() }} />}
       {tab === 'pecas' && <PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} />}
+      {tab === 'site' && <ContaNoSite cid={c.id} />}
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th>Waiver</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>Sem serviços vinculados.</Empty></td></tr>}
@@ -478,5 +479,27 @@ function CorridasDoPiloto({ rs, loading, cid }: { rs: Race[] | null; loading: bo
         <td className="small">{i?.estimate_text ? <Link to={i.estimate_cmd ? `/ai/${i.estimate_cmd}` : '/races'}>ver prévia</Link> : <span className="muted">—</span>}</td></tr> })}
     </tbody></table></div>}
     <div className="small muted">Convidar, confirmar e pedir a prévia de custo é no calendário de <Link to="/races">Corridas</Link>.</div>
+  </div>
+}
+
+/* Conta no site (#42): a conta da área do cliente ligada a este card, os pilotos e as medidas. */
+const MEDIDA_PT: Record<string, string> = { height_in: 'Altura (pol)', weight_lb: 'Peso (lb)', chest_in: 'Peito (pol)', waist_in: 'Cintura (pol)',
+  hips_in: 'Quadril (pol)', inseam_in: 'Entreperna (pol)', sleeve_in: 'Braço (pol)', suit_size: 'Macacão', helmet_size: 'Capacete', glove_size: 'Luva', shoe_size: 'Sapatilha (US)' }
+interface ContaCard { email: string; name: string; phone: string | null; birth_date: string; address_line1: string | null; city: string | null; state: string | null; zip: string | null
+  linked_at: string | null; last_login_at: string | null; drivers: { id: number; name: string; birth_date: string | null; is_self: number; measures: Record<string, number | string>; measures_updated_at: string | null }[] }
+function ContaNoSite({ cid }: { cid: number }) {
+  const d = useGet<{ conta: ContaCard | null }>(`/site/contas/do-cliente/${cid}`)
+  if (d.error) return <ErrorState error={d.error} retry={d.reload} />
+  if (!d.data) return <Loading />
+  const c = d.data.conta
+  if (!c) return <Empty title="Sem conta no site">Quando a conta da área do cliente for ligada a este card (Site público › Contas de clientes), os pilotos e as medidas aparecem aqui.</Empty>
+  return <div className="stack">
+    <div><b>{c.name}</b> <span className="small muted">· {c.email}{c.phone ? ` · ${c.phone}` : ''}</span>
+      <div className="small muted">{[c.address_line1, c.city, c.state, c.zip].filter(Boolean).join(', ') || 'sem endereço'}{c.last_login_at ? ` · último acesso ${c.last_login_at.slice(8, 10)}/${c.last_login_at.slice(5, 7)}` : ''}</div></div>
+    {c.drivers.map(p => <div key={p.id} className="card card-b">
+      <b>{p.name}</b>{p.is_self ? <span className="small muted"> · o próprio responsável</span> : null}
+      <div className="small muted">{p.birth_date ? `nascimento ${p.birth_date.slice(8, 10)}/${p.birth_date.slice(5, 7)}/${p.birth_date.slice(0, 4)}` : 'sem nascimento'}{p.measures_updated_at ? ` · medido em ${p.measures_updated_at.slice(8, 10)}/${p.measures_updated_at.slice(5, 7)}` : ''}</div>
+      {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{Object.entries(p.measures).map(([k, v]) => <div key={k}><dt>{MEDIDA_PT[k] || k}</dt><dd>{String(v)}</dd></div>)}</dl>}
+    </div>)}
   </div>
 }

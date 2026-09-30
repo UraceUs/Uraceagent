@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict
 
 from command_center.api import auth
 from command_center.db import agora, atualizar, auditar, get_db, inserir, transacao, um
-from command_center.providers import agenda_sessoes as ag, portal
+from command_center.providers import agenda_sessoes as ag, portal, vinculo_site
 
 r = APIRouter(prefix="/ops/api/portal", tags=["portal"])
 
@@ -287,3 +287,10 @@ def cancelar(bid: int, request: Request, cid=Depends(cliente_atual), con: sqlite
     _aud(con, request, "portal.booking.cancel", cid, {"agendamento": bid})
     con.commit()
     return {"bookings": ag.do_cliente(con, cid)}
+
+
+# ------------------------------------------------------------------ histórico (#42)
+@r.get("/history")
+def historico(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Só depois que a equipe liga a conta ao cliente do site interno."""
+    return vinculo_site.historico(con, cid)

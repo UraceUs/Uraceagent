@@ -8,6 +8,9 @@ import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
 import { usePerguntar } from '../components/Perguntar'
+import { Picker } from '../components/Unir'
+import type { Client } from '../api/types'
+import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 
 type Tom = 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'
@@ -158,6 +161,54 @@ function Disponibilidade() {
   </div>
 }
 
+interface Sugestao { client_id: number; name: string; pilot_name: string | null; email: string | null; phone: string | null; motivo: string }
+interface ContaSite { id: number; email: string; name: string; phone: string | null; city: string | null; state: string | null; created_at: string
+  client_id: number | null; client_name: string | null; client_pilot: string | null; linked_at: string | null; linked_by_name: string | null
+  drivers: number; pilotos: string[]; sugestao: Sugestao | null }
+
+/* Contas de clientes (#42): o sistema sugere o cliente interno; uma pessoa confirma. O vínculo
+ * abre para o cliente o histórico daquele card — por isso nunca é automático. */
+function Contas() {
+  const { can } = useAuth()
+  const toast = useToast()
+  const perguntar = usePerguntar()
+  const [filtro, setFiltro] = useState<'sem_vinculo' | 'vinculadas' | 'todas'>('sem_vinculo')
+  const l = useGet<{ contas: ContaSite[] }>(`/site/contas?filtro=${filtro}`, 30000)
+  const [outro, setOutro] = useState<Record<number, Client | null>>({})
+  async function vincular(c: ContaSite, clientId: number, nome: string) {
+    if (!await perguntar({ titulo: `Ligar ${c.email} a ${nome}?`, texto: 'O cliente passa a ver na área do cliente o histórico de serviços deste card. Confira se é mesmo a mesma família.', ok: 'Vincular' })) return
+    try { await api.post(`/site/contas/${c.id}/vincular`, { client_id: clientId }); toast('Vinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function desvincular(c: ContaSite) {
+    if (!await perguntar({ titulo: `Desligar ${c.email} de ${c.client_pilot || c.client_name}?`, texto: 'O cliente deixa de ver o histórico.', ok: 'Desvincular', perigo: true })) return
+    try { await api.post(`/site/contas/${c.id}/desvincular`); toast('Desvinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  return <>
+    <div className="seg" style={{ marginBottom: 12 }}>{([['sem_vinculo', 'Esperando vínculo'], ['vinculadas', 'Vinculadas'], ['todas', 'Todas']] as const).map(([k, r]) =>
+      <button key={k} className={`btn sm${filtro === k ? '' : ' ghost'}`} onClick={() => setFiltro(k)}>{r}</button>)}</div>
+    {l.error && <ErrorState error={l.error} retry={l.reload} />}
+    {l.loading && !l.data && <Loading />}
+    {l.data && (!l.data.contas.length ? <Empty title={filtro === 'sem_vinculo' ? 'Nenhuma conta esperando vínculo' : 'Nada aqui'}>As contas criadas na área do cliente aparecem aqui.</Empty>
+      : <div className="stack" style={{ gap: 10 }}>{l.data.contas.map(c => <div className="card card-b stack" key={c.id} style={{ gap: 8 }}>
+        <div className="row wrap"><div className="grow" style={{ minWidth: 0 }}><b>{c.name}</b>
+          <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{c.email}{c.phone ? ` · ${c.phone}` : ''}{c.city ? ` · ${c.city}${c.state ? `/${c.state}` : ''}` : ''}</div>
+          <div className="small">{c.pilotos.length ? `Pilotos: ${c.pilotos.join(', ')}` : 'Nenhum piloto ainda'}</div></div>
+          {c.client_id ? <Chip tone="ok">vinculada</Chip> : <Chip tone="warn">sem vínculo</Chip>}</div>
+        {c.client_id ? <div className="row wrap"><span className="small grow">Cliente: <Link to={`/clients/${c.client_id}`}>{c.client_pilot || c.client_name}</Link>{c.linked_by_name ? ` · por ${c.linked_by_name}` : ''}</span>
+          {can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincular(c)}>Desvincular</button>}</div>
+          : <>
+            {c.sugestao ? <div className="row wrap" style={{ gap: 8 }}><span className="small grow">✦ Sugestão: <Link to={`/clients/${c.sugestao.client_id}`}><b>{c.sugestao.pilot_name || c.sugestao.name}</b></Link>
+              {c.sugestao.pilot_name && c.sugestao.pilot_name !== c.sugestao.name ? ` (resp. ${c.sugestao.name})` : ''} · {c.sugestao.motivo}</span>
+              <button className="btn sm primary" onClick={() => vincular(c, c.sugestao!.client_id, c.sugestao!.pilot_name || c.sugestao!.name)}>Vincular a este</button></div>
+              : <span className="small muted">Nenhum cliente parecido no site interno. Escolha abaixo, ou deixe para quando o cliente entrar pelo Asana.</span>}
+            <div className="row wrap" style={{ alignItems: 'flex-end', gap: 8 }}><div className="grow" style={{ minWidth: 220 }}>
+              <Picker label="Outro cliente" value={outro[c.id] || null} onPick={x => setOutro(o => ({ ...o, [c.id]: x }))} /></div>
+              {outro[c.id] && <button className="btn sm" onClick={() => vincular(c, outro[c.id]!.id, outro[c.id]!.pilot_name || outro[c.id]!.name)}>Vincular</button>}</div>
+          </>}
+      </div>)}</div>)}
+  </>
+}
+
 export function SitePublico() {
   const { aba } = useParams()
   return <>
@@ -167,7 +218,8 @@ export function SitePublico() {
     <div className="tabs">
       <NavLink to="/site" end className={({ isActive }) => isActive ? 'on' : ''}>Agendamentos</NavLink>
       <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>Disponibilidade</NavLink>
+      <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>Contas de clientes</NavLink>
     </div>
-    {aba === 'disponibilidade' ? <Disponibilidade /> : <Agendamentos />}
+    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'contas' ? <Contas /> : <Agendamentos />}
   </>
 }

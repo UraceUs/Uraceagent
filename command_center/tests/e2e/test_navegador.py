@@ -364,3 +364,24 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     c.reload()
     c.get_by_text("Confirmed").wait_for()
     g.close(); c.close()
+
+
+# ------------------------------------------------------------------ vínculo (#42)
+def test_equipe_vincula_pela_sugestao_e_o_cliente_ve_o_historico(servidor, navegador):
+    c = navegador.new_page(viewport={"width": 390, "height": 844})
+    r = c.request.post(servidor + "/api/portal/signup", data={"name": "Carla Mendes", "email": "carla@example.com", "password": "pista-molhada-7",
+                                                             "birth_date": "1982-02-02", "accept_terms": True})
+    assert r.ok, r.text()
+    c.goto(servidor + "/portal/account")
+    c.get_by_text("once our team connects your account").wait_for()
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/site/contas")
+    cartao = g.locator(".card", has_text="carla@example.com").first
+    cartao.get_by_text("mesmo e-mail").wait_for()
+    cartao.get_by_role("button", name="Vincular a este").click()
+    g.get_by_role("button", name="Vincular", exact=True).click()
+    g.get_by_text("Vinculado.").wait_for()
+    c.reload()
+    c.get_by_role("heading", name="Service history").wait_for()
+    assert c.locator("section", has_text="Service history").locator(".tr").count() >= 1, "o histórico do card aparece"
+    g.close(); c.close()

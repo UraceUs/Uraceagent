@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, transacao
-from command_center.providers import agenda_sessoes as ag
+from command_center.providers import agenda_sessoes as ag, vinculo_site as vs
 
 r = APIRouter(prefix="/ops/api/site", tags=["site"])
 
@@ -127,3 +127,46 @@ def decidir(bid: int, decisao: str, dados: DecisaoIn, request: Request, con: sql
     _aud(con, request, u, f"booking.{decisao}", bid, {"nota": dados.nota})
     con.commit()
     return {"status": novo}
+
+
+# ------------------------------------------------------------------ contas do site (#42)
+@r.get("/contas")
+def contas(filtro: str = "sem_vinculo", con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    if filtro not in ("sem_vinculo", "vinculadas", "todas"):
+        raise HTTPException(400, "filtro inválido")
+    return {"contas": vs.contas(con, filtro)}
+
+
+class VincularIn(BaseModel):
+    client_id: int
+
+
+@r.post("/contas/{conta_id}/vincular")
+def vincular(conta_id: int, dados: VincularIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+             u=Depends(auth.exige("OPERATOR"))):
+    """Uma pessoa confirma: é o vínculo que abre para o cliente o histórico daquele card."""
+    try:
+        res = vs.vincular(con, conta_id, dados.client_id, u["id"])
+    except vs.ErroVinculo as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "portal.link", f"user:{u['id']}", user_id=u["id"], entity_type="portal_account", entity_id=conta_id,
+            detail=res, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True}
+
+
+@r.post("/contas/{conta_id}/desvincular")
+def desvincular(conta_id: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    try:
+        res = vs.desvincular(con, conta_id)
+    except vs.ErroVinculo as e:
+        raise HTTPException(404, str(e))
+    auditar(con, "portal.unlink", f"user:{u['id']}", user_id=u["id"], entity_type="portal_account", entity_id=conta_id,
+            detail=res, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True}
+
+
+@r.get("/contas/do-cliente/{client_id}")
+def do_cliente(client_id: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    return {"conta": vs.conta_do_cliente(con, client_id)}

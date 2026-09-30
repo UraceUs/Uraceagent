@@ -271,6 +271,16 @@ def _coletar(con):
                           facts=[(f"{_dbr(b['date'])} · {per.get(b['period'], b['period'])}", (b["piloto"] or b["conta"]))
                                  for b in pedidos_site[:6]]))
 
+    # ---- 4g. contas do site sem vínculo com o cliente interno (#42)
+    soltas = todos(con, "SELECT id, name, email, created_at FROM portal_accounts WHERE active=1 AND client_id IS NULL ORDER BY id")
+    if soltas:
+        itens.append(dict(key=_chave("conta-site", "portal_account", "sem_vinculo"), level="MEDIUM",
+                          title=f"{len(soltas)} conta(s) do site esperando vínculo com o cliente",
+                          why="Sem o vínculo, o cliente não vê o histórico e o card dele não mostra os pilotos e as medidas. "
+                              "O sistema sugere; uma pessoa confirma.",
+                          entity={"type": "portal_account", "id": None}, client_id=None, link=None, action="Ver contas",
+                          facts=[(a["name"], a["email"]) for a in soltas[:6]]))
+
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",

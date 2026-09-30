@@ -181,11 +181,28 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
   </section>
 }
 
+/* Histórico de serviços (#42): só aparece depois que a equipe liga a conta ao cliente do
+ * site interno — antes disso, a conta de outra pessoa com o mesmo telefone veria o histórico errado. */
+function Historico() {
+  const [h, setH] = useState<{ linked: boolean; services: { date: string; service: string; status: string }[] } | null>(null)
+  useEffect(() => { papi<typeof h>('GET', '/history').then(setH).catch(() => setH({ linked: false, services: [] })) }, [])
+  return <section className="stack" aria-labelledby="hist-h">
+    <h2 className="h2" id="hist-h">Service history</h2>
+    {!h ? <div className="state"><span className="spin" /></div>
+      : !h.linked ? <p className="muted small" style={{ margin: 0 }}>Your history with URACE will show here once our team connects your account to your records.</p>
+      : !h.services.length ? <p className="muted small" style={{ margin: 0 }}>No services yet.</p>
+      : <div className="card"><div className="tbl">{h.services.map((x, i) => <div className="tr" key={i}>
+        <span style={{ width: 92 }} className="small">{dataUS(x.date)}</span><span className="grow">{x.service}</span>
+        <span className={`chip ${x.status === 'done' ? 'ok' : 'neutral'}`}>{x.status === 'done' ? 'Done' : 'Scheduled'}</span></div>)}</div></div>}
+  </section>
+}
+
 function MinhaConta({ conta, setConta }: { conta: Account; setConta: (a: Account) => void }) {
   return <div className="stack" style={{ gap: 20 }}>
     <div><h1 className="h1">My account</h1><p className="muted" style={{ margin: '4px 0 0' }}>Hi, {conta.name.split(' ')[0]}. Book your sessions and keep your drivers and sizes up to date.</p></div>
     <Agendar conta={conta} />
     <Pilotos conta={conta} onSalvo={setConta} />
+    <Historico />
     <DadosDoResponsavel conta={conta} onSalvo={setConta} />
   </div>
 }
