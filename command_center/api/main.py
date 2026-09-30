@@ -152,6 +152,11 @@ async def _cabecalhos(request: Request, call_next):
     return resp
 
 
+from command_center.api import observabilidade  # noqa: E402
+# registrado depois do _cabecalhos = fica por fora dele: mede e loga a requisição inteira
+app.middleware("http")(observabilidade.middleware)
+app.include_router(observabilidade.r)
+
 app.include_router(rotas.r)
 app.include_router(ia.r)
 from command_center.api import qbo  # noqa: E402

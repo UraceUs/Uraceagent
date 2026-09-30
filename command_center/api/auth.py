@@ -378,6 +378,7 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
             _trava_de_leitura(request, porToken,
                               "Este acesso é só de leitura: ele consulta o painel pelo MCP e "
                               "não muda nada.")
+            request.state.cc_user = porToken.get("id")
             return porToken
 
     porchave = chave_valida(con, request)
@@ -385,6 +386,7 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
         _trava_de_leitura(request, porchave,
                           "Esta chave é só de leitura: ela consulta o painel e não muda nada. "
                           "Para deixá-la agir, crie outra chave sem 'só leitura'.")
+        request.state.cc_user = porchave.get("id")
         return porchave                       # sem cookie, sem CSRF: não há cookie para abusar
     s = sessao_valida(con, request.cookies.get(COOKIE_SESSAO))
     if not s:
@@ -394,6 +396,7 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
         csrf_header = request.headers.get("x-csrf", "")
         if not csrf_cookie or not hmac.compare_digest(csrf_cookie, csrf_header):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "CSRF check failed.")
+    request.state.cc_user = s["user_id"]           # para o log da requisição (observabilidade)
     return {"id": s["user_id"], "email": s["email"], "name": s["name"],
             "role": s["role"], "free": livre(s["email"])}
 
