@@ -169,3 +169,58 @@ def test_titulo_da_aba_por_tela(servidor, navegador):
     assert all(t.endswith("· URACE Command Center") for t in titulos.values()), titulos
     assert len(set(titulos.values())) == len(titulos), f"cada tela com o seu título: {titulos}"
     assert titulos["/compras"].startswith("Compras")
+
+
+_VAZA = """() => {
+  const W = document.documentElement.clientWidth
+  const rola = document.documentElement.scrollWidth > W + 1 || document.body.scrollWidth > W + 1
+  const recortado = el => { for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowX; if (o === 'auto' || o === 'scroll' || o === 'hidden' || o === 'clip') return true } return false }
+  const culpados = []
+  document.querySelectorAll('body *').forEach(el => {
+    const b = el.getBoundingClientRect()
+    if (b.width < 8 || b.height < 4 || getComputedStyle(el).position === 'fixed') return
+    if (b.right > W + 1 && !recortado(el)) culpados.push(`${el.tagName.toLowerCase()}.${String(el.className || '').split(' ').slice(0, 2).join('.')} (${Math.round(b.right)}px)`)
+  })
+  return { rola, culpados: culpados.slice(0, 4) }
+}"""
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_nenhuma_tela_rola_para_o_lado_no_celular(servidor, navegador, largura):
+    """Issue #22: em 360 e 390 px, nenhuma tela empurra a página para o lado."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    problemas = []
+    for rota in ROTAS:
+        abrir(pg, servidor, rota)
+        r = pg.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            problemas.append(f"{rota}: {'rola; ' if r['rola'] else ''}{', '.join(r['culpados'])}")
+    pg.close()
+    assert not problemas, "\n".join(problemas)
+
+
+_PEQUENOS = """() => {
+  const out = []
+  document.querySelectorAll('.btn, .iconbtn, .mic, .tabs button').forEach(el => {
+    const b = el.getBoundingClientRect()
+    if (b.width < 2 || b.height < 2 || getComputedStyle(el).visibility === 'hidden') return
+    if (b.bottom < 0 || b.top > innerHeight * 3) return
+    // offsetHeight é o tamanho de layout: a animação de entrada (scale .985) não conta
+    if (el.offsetHeight < 40) out.push(`${el.tagName.toLowerCase()}.${String(el.className).split(' ').slice(0, 3).join('.')}=${el.offsetHeight}px "${(el.textContent || '').trim().slice(0, 20)}"`)
+  })
+  return out.slice(0, 5)
+}"""
+
+
+def test_botoes_com_alvo_de_toque_de_40px_no_celular(servidor, navegador):
+    """Issue #22: botão, ícone e aba com pelo menos 40 px de altura em 390 px."""
+    pg = entrar(navegador, servidor, largura=390, altura=800)
+    problemas = []
+    for rota in ROTAS:
+        abrir(pg, servidor, rota)
+        r = pg.evaluate(_PEQUENOS)
+        if r:
+            problemas.append(f"{rota}: {', '.join(r)}")
+    pg.close()
+    assert not problemas, "\n".join(problemas)

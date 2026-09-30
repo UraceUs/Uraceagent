@@ -468,3 +468,14 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .dolar{position:relative}
 .dolar>span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600;pointer-events:none}
 .dolar>.input{padding-left:26px}
+
+/* ---- Alvo de toque no celular (issue #22): nada que se toca fica abaixo de 40 px.
+   Botão pequeno (.sm, ghost, quiet), ícone e aba sobem para 40; o "?" do título e os
+   ícones de 24 px mantêm o desenho e ganham uma área de toque invisível em volta. */
+@media (max-width: 720px), (pointer: coarse) {
+  .btn, .btn.sm, .btn.ghost, .btn.quiet, .tabs button, .seg .btn { min-height: 40px }
+  .iconbtn, .mic, .mic.sm, .top .who { min-width: 40px; min-height: 40px }
+  .iconbtn { width: 40px; height: 40px }
+  .page-h .help, .ic, .star { position: relative }
+  .page-h .help::after, .ic::after, .star::after { content: ''; position: absolute; inset: -9px }
+}
