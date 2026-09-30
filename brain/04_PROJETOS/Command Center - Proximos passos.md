@@ -577,3 +577,28 @@ cada um com CI verde antes do merge:
       se fazem no construtor da Hostinger — dizer se quer que eu escreva o passo a passo.
 - [ ] Comprimir as fotos já salvas no VPS: `~/.urace/cc-venv/bin/python adminai/comprimir_fotos.py`
       (mostra) e `--aplicar` (grava .webp ao lado, sem apagar a original).
+
+## Site público + área do cliente + agenda (30/09) — issue #38
+
+Dono: *"esse site continua sendo o site onde todos os clientes terão acesso, e o Command
+Center vai ser como uma área escondida dele […] um calendário conectado ao site e ao Command
+Center, onde o cliente marca a sessão dele […] uma área do cliente […] vincular o perfil do
+cliente no site público com o perfil no site interno"*. **Nomes:** site interno = Command
+Center; site público = urace.us. Tudo nasce e é testado no site interno, em `/ops/portal`.
+
+| Issue | PR | O quê |
+|---|---|---|
+| #40 | #43 | área do cliente: conta 18+, responsável, pilotos, medidas (em inglês, como o site público) |
+| #41 | #44 | agenda: semana por período com vagas, bloqueios, antecedência, horizonte; cliente marca, equipe confirma |
+| #42 | #45 | vínculo conta ↔ cliente interno: o sistema sugere, a equipe confirma; histórico só depois do vínculo |
+| #39 | — | mapa do urace.us (`docs/site-publico/mapa-2026-09-30.md`) + prompt da Hostinger (`docs/extensao/PROMPT-HOSTINGER.md`) |
+
+- [ ] 👤 Abrir a agenda: Site público › Disponibilidade (ela nasce **fechada**, sem dia inventado)
+- [ ] 👤 Testar como cliente em `/ops/portal` (criar conta, piloto, marcar) e como equipe (confirmar, vincular)
+- [ ] 👤 Rodar o prompt da Hostinger na extensão e me trazer o relatório
+- [ ] 👤 Decidir: **4 dos 5 botões "Book" do urace.us levam a 404** (Kart School, Intensive Camp,
+      Corporate Events, Professional Coaching) — o produto foi apagado ou mudou de endereço?
+- [ ] 👤 Decidir: qual é o endereço certo (10724 Cosmonaut Blvd, "Cosmonaut Blvd Box 5" ou 6149 Cyril Ave)?
+- [ ] 👤 Decidir: como a área do cliente vai para o urace.us (proposta: endereço próprio apontando para
+      a VPS e o WordPress só linka) e se o pagamento da sessão fica no WooCommerce ou vira invoice do QuickBooks
+- [ ] Falta (depois): e-mail de confirmação e "esqueci a senha" — precisam de envio de e-mail, que hoje o painel não faz
