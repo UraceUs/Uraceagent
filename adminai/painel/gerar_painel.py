@@ -26,7 +26,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 URACE_DIR = os.environ.get("URACE_DIR", os.path.expanduser("~/.urace"))

@@ -14,7 +14,7 @@ import glob
 import json
 import os
 import re
-from datetime import date, datetime
+from datetime import datetime
 
 from command_center.db import agora, atualizar, inserir, todos, um
 from command_center.providers import NaoConectado, REPO, chamar
@@ -298,7 +298,6 @@ def sync_asana(con):
             sec_gid, sec_nome = sec["gid"], sec["nome"]
             if (sec_nome or "").strip().lower() == SECAO_SEM_ESPELHO:
                 continue
-            eh_dia = sec_gid in SECOES_DIAS
             eh_finished = sec_gid == SECAO_FINISHED
             # toda coluna que não seja corrida tem serviço de cliente — inclusive
             # "Pending Reschedule", que ficava de fora e escondia serviço do piloto (dono, 10/09)

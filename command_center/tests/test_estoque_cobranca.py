@@ -46,7 +46,7 @@ def _invoice(con, cid, linhas):
 
 def test_preco_da_cobranca_fica_congelado(con):
     enzo, iid = _base(con)
-    ch = estoque.registrar_cobranca(con, iid, enzo, 1)
+    estoque.registrar_cobranca(con, iid, enzo, 1)
     estoque.atualizar_item(con, iid, price=60)
     assert estoque.cobrancas(con, enzo)[0]["unit_price"] == 45.0, "mudar o preço depois não muda o que já foi usado"
 

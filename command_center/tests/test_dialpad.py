@@ -18,7 +18,7 @@ os.environ["URACE_ENV"] = "/nao/existe"
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from command_center.api import auth, dialpad  # noqa: E402
+from command_center.api import auth  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir, todos, um  # noqa: E402
 

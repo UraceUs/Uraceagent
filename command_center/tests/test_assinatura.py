@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
 
 import asana_mcp as A  # noqa: E402
 import kommo_mcp as K  # noqa: E402
-from mcp_stdio import AGENTE, ASSINATURA, assinar, rastro  # noqa: E402
+from mcp_stdio import AGENTE, ASSINATURA, assinar  # noqa: E402
 
 TAREFA = {"gid": "1", "name": "Serviço do Pedro", "notes": "",
           "memberships": [{"project": {"gid": A.PROJETO_URACE, "name": "U-RACE"},

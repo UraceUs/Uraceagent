@@ -13,7 +13,6 @@ from pydantic import BaseModel
 
 from command_center.api import atencao, auth, equipe, vendas
 from command_center.db import agora, atualizar, auditar, conectar, get_db, inserir, todos, um
-from command_center.providers import SISTEMAS, recarregar, saude
 from command_center.providers import sync as sy
 
 BASE = "/ops/api"

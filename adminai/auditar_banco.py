@@ -15,7 +15,6 @@ Nada de "parece tudo certo": ou a checagem rodou e tem resposta, ou ela diz que 
 conseguiu olhar.
 """
 import os
-import sqlite3
 import stat
 import sys
 import time

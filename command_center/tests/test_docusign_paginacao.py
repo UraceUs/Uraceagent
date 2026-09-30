@@ -8,7 +8,6 @@ coube nos 100 primeiros.
 """
 import os
 import sys
-import tempfile
 import urllib.parse
 
 import pytest

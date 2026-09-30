@@ -15,7 +15,6 @@ Duas metades no conserto:
      o Savage ou o Jacoby, e unir no escuro é criar o mesmo problema do outro
      lado. Regra da casa desde 04/09.
 """
-import re
 
 from command_center.db import agora, inserir, todos, um
 from command_center.providers import identidade

@@ -5,7 +5,6 @@ peças que mais são usadas"*. O gabarito destes testes é o arquivo gerado daqu
 `dados/pecas-mais-usadas-2026.json` — 348 invoices reais do QuickBooks.
 """
 import importlib
-import json
 import os
 import sys
 

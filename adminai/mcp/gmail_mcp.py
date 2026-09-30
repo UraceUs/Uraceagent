@@ -357,7 +357,6 @@ def gmail_buscar(conta, consulta, so_inbox=True, maximo=20, pagina=None):
     if so_inbox:
         params["labelIds"] = "INBOX"
     r = _req(conta, f"{GMAIL}/threads?{urllib.parse.urlencode(params)}")
-    ids = {}
     saida = []
     for t in r.get("threads", []):
         th = _req(conta, f"{GMAIL}/threads/{t['id']}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date")

@@ -21,14 +21,13 @@ Vai atrás do mesmo `handle /ops*` do Caddy, então não há nada novo para conf
 servidor web.
 """
 import json
-import sqlite3
 
 from fastapi import APIRouter, Depends, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from command_center import providers
 from command_center.api import atencao, auth
-from command_center.db import conectar_somente_leitura, get_db, todos, um
+from command_center.db import conectar_somente_leitura, todos, um
 from command_center.providers import estoque
 
 r = APIRouter(prefix="/ops/mcp", tags=["mcp"])

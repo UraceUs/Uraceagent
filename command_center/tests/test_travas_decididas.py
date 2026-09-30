@@ -10,7 +10,6 @@ teste aqui guarda uma dessas condições:
     no máximo 2 por envelope.
 """
 import datetime as dt
-import importlib.util
 import os
 import sys
 import tempfile

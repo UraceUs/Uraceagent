@@ -23,9 +23,9 @@ import sys
 import time
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, status
 
-from command_center.db import agora, atualizar, auditar, get_db, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, get_db, inserir, um
 
 SESSAO_HORAS = 12
 LEMBRAR_DIAS = 30
