@@ -12,6 +12,7 @@ from command_center.api import auth  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir, todos, um  # noqa: E402
 from command_center.providers import agenda_sessoes as ag, servicos_site as sv  # noqa: E402
+from command_center.tests.dados_portal import ENDERECO  # noqa: E402
 from command_center.tests.test_agenda_sessoes import abre, conta, proximo  # noqa: E402
 
 SENHA = "senha-forte-123"
@@ -108,7 +109,8 @@ def test_so_o_gerente_muda_o_preco_e_fica_auditado(cli):
     assert '"antes": 719.0' in aud[0]["detail"] and '"depois": 749.0' in aud[0]["detail"]
     cli.cookies.clear()
     r = cli.post("/ops/api/portal/signup", json={"name": "Maria Santos", "email": "m@example.com", "password": "corrida-segura-9",
-                                                 "birth_date": "1985-04-12", "accept_terms": True, "i_am_driver": True})
+                                                 "birth_date": "1985-04-12", "accept_terms": True, "i_am_driver": True, **ENDERECO})
+    assert r.status_code == 201, r.text
     disp = cli.get("/ops/api/portal/availability").json()
     assert disp["services"] == [{"id": sid, "name": "Arrive and Drive", "description": "One session with our kart", "price": 749.0}]
     assert "qbo_item_id" not in disp["services"][0], "o cliente não vê o item do QuickBooks"

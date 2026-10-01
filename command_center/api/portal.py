@@ -16,7 +16,7 @@ import hmac
 import secrets
 import sqlite3
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
@@ -79,12 +79,14 @@ class CadastroIn(BaseModel):
     email: str
     password: str
     birth_date: str
+    phone_country: str | None = None
     phone: str | None = None
     address_line1: str | None = None
     address_line2: str | None = None
     city: str | None = None
     state: str | None = None
     zip: str | None = None
+    country: str | None = None
     accept_terms: bool = False
     i_am_driver: bool = False
 
@@ -159,12 +161,14 @@ class ContaIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = None
     birth_date: str | None = None
+    phone_country: str | None = None
     phone: str | None = None
     address_line1: str | None = None
     address_line2: str | None = None
     city: str | None = None
     state: str | None = None
     zip: str | None = None
+    country: str | None = None
 
 
 @r.patch("/me")
@@ -209,6 +213,7 @@ class PilotoIn(BaseModel):
     email: str | None = None
     phone: str | None = None
     notes: str | None = None
+    social: str | None = None
     measures: dict | None = None
     is_self: bool = False
 
@@ -243,7 +248,6 @@ def editar_piloto(pid: int, dados: PilotoIn, request: Request, cid=Depends(clien
 def disponibilidade(start: str | None = None, end: str | None = None, cid=Depends(cliente_atual),
                     con: sqlite3.Connection = Depends(get_db)):
     """O que o cliente pode marcar: só aberto/fechado e vagas, sem o motivo interno."""
-    from datetime import date
     try:
         d = ag.disponibilidade(con, date.fromisoformat(start) if start else None, date.fromisoformat(end) if end else None)
     except (ValueError, ag.ErroAgenda):
@@ -289,6 +293,24 @@ def cancelar(bid: int, request: Request, cid=Depends(cliente_atual), con: sqlite
     _aud(con, request, "portal.booking.cancel", cid, {"agendamento": bid})
     con.commit()
     return {"bookings": ag.do_cliente(con, cid)}
+
+
+# ------------------------------------------------------------------ painel do cliente (#54)
+@r.get("/dashboard")
+def painel(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """O resumo da conta: o que falta, os pilotos (última sessão e medidas) e as sessões."""
+    c = portal.conta(con, cid)
+    sessoes = ag.do_cliente(con, cid)
+    hoje = portal.hoje().isoformat()
+    proximas = sorted((s for s in sessoes if s["status"] in ("pendente", "confirmada") and s["date"] >= hoje),
+                      key=lambda s: s["date"])
+    feitas = [s for s in sessoes if s["status"] == "confirmada" and s["date"] < hoje]
+    hist = vinculo_site.historico(con, cid)
+    ultimo = max([s["date"] for s in feitas] + [x["date"] for x in hist["services"] if x["status"] == "done"], default=None)
+    return {"account": c, "next_session": proximas[0] if proximas else None, "upcoming": len(proximas),
+            "last_session": ultimo, "days_since_last_session": (portal.hoje() - date.fromisoformat(ultimo)).days
+            if ultimo else None, "linked": hist["linked"],
+            "measures_warn_days": portal.MEDIDAS_AVISO_DIAS, "measures_limit_days": portal.MEDIDAS_LIMITE_DIAS}
 
 
 # ------------------------------------------------------------------ histórico (#42)

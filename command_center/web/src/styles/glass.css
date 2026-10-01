@@ -489,7 +489,41 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .portal-marca .mark-u{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--brand);color:#fff;font-weight:900}
 .portal-marca span:last-child{color:var(--muted);font-size:13px;white-space:nowrap}
 .portal-quem{max-width:30vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.portal-main{flex:1;width:100%;max-width:760px;margin:0 auto;padding:20px 16px 40px}
+.portal-marca .mark-u{flex:0 0 auto}
+@media (max-width:520px){.portal-quem{display:none}}
+.portal-main{flex:1;width:100%;max-width:760px;margin:0 auto;padding:20px 16px 40px;min-width:0}
+/* #54: menu da área do cliente — coluna à esquerda no computador, barra embaixo no celular */
+.portal-corpo{flex:1;display:flex;width:100%;max-width:1080px;margin:0 auto}
+.portal-nav{flex:0 0 220px;display:flex;flex-direction:column;gap:4px;padding:20px 0 20px 16px;position:sticky;top:56px;align-self:flex-start}
+.portal-nav a{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border-radius:var(--r-s);color:var(--ink-2);text-decoration:none;font-weight:600}
+.portal-nav a:hover{background:var(--glass-2);color:var(--ink)}
+.portal-nav a.on{background:var(--glass-2);color:var(--ink);box-shadow:inset 3px 0 0 var(--brand)}
+.portal-nav .curto{display:none}
+@media (max-width:760px){
+  .portal-nav{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:20;flex-direction:row;gap:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom));
+    background:var(--surface);border-top:1px solid var(--glass-line-2)}
+  .portal-nav a{flex:1 1 0;min-width:0;flex-direction:column;justify-content:center;gap:2px;min-height:56px;padding:4px 2px;font-size:11px;box-shadow:none}
+  .portal-nav a.on{box-shadow:inset 0 3px 0 var(--brand)}
+  .portal-nav .longo{display:none}.portal-nav .curto{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .portal-main{padding-bottom:96px}
+  .portal-rodape{padding-bottom:88px}
+}
+.portal-obr{color:var(--brand)}
+.portal-tel{display:grid;gap:0 12px;grid-template-columns:88px minmax(0,1fr)}
+.portal-kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.portal-kpi{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.portal-kpi .portal-sessao{width:100%;padding:0;background:transparent;border:0;box-shadow:none}
+.portal-num{font-size:24px;line-height:1.1}
+.portal-grade{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.portal-grade .portal-piloto{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.portal-mais summary{cursor:pointer;min-height:40px;display:flex;align-items:center}
+.portal-visual{background:none;border:0;padding:0;color:var(--accent-ink);font:inherit;cursor:pointer;text-decoration:underline;min-height:40px}
+.login .art .lema{position:relative;margin:0;font-family:var(--font-cond);font-weight:900;font-size:clamp(30px,3.4vw,50px);line-height:.95;text-transform:uppercase;
+  letter-spacing:-.008em;color:var(--ink);text-shadow:0 8px 34px rgba(0,0,0,.7);max-width:12ch}
+[data-theme="light"] .login .art .lema{color:#fff}
+.portal-login .form{overflow-y:auto}
+.portal-login .box .h1{margin:0}
+.portal-cadastro{max-width:460px;padding:8px 0}
 .portal-caixa{max-width:520px;margin:4vh auto 0}
 .portal-rodape{text-align:center;padding:18px 16px 26px}
 .portal-2,.portal-3{display:grid;gap:0 12px;grid-template-columns:1fr}

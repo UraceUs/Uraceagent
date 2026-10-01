@@ -12,22 +12,7 @@ import { useAuth } from '../auth/AuthContext'
 import { destinoOAuth } from '../auth/oauthNext'
 import { Banner } from '../components/ui'
 import { Icon } from '../components/Icon'
-
-/** O lado da pista: a foto quando existe; um fundo de asfalto quando ainda não foi colocada. */
-function Pista() {
-  const [semFoto, setSemFoto] = useState(false)
-  return <div className="pista" aria-hidden="true">
-    {/* issue #21: WebP de 1600 px (142 KB, 60% menor que o JPG de 363 KB); o JPG fica para navegador antigo.
-        É a maior imagem da tela de login — o LCP dela —, então vai com prioridade alta. */}
-    {!semFoto && <picture>
-      <source srcSet={`${import.meta.env.BASE_URL}pista.webp`} type="image/webp" />
-      <img className="foto-pista" src={`${import.meta.env.BASE_URL}pista.jpg`} alt="" width={1600} height={1070}
-        fetchPriority="high" decoding="async" onError={() => setSemFoto(true)} />
-    </picture>}
-    {semFoto && <div className="tk"><i className="asf" /><i className="def" /></div>}
-    <i className="veu" /><i className="brasa" /><i className="grao" />
-  </div>
-}
+import { Pista } from '../components/Pista'
 
 export function Login() {
   const { user, ready, login } = useAuth()

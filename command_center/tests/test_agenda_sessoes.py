@@ -12,6 +12,7 @@ from command_center.api import atencao, auth  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir, todos  # noqa: E402
 from command_center.providers import agenda_sessoes as ag, servicos_site  # noqa: E402
+from command_center.tests.dados_portal import ENDERECO, completa  # noqa: E402
 
 SENHA = "senha-forte-123"
 FL = ag.FUSO
@@ -37,6 +38,7 @@ def conta(con, email="c@example.com"):
     cid = inserir(con, "portal_accounts", email=email, pw_salt="x", pw_hash="x", name="Cliente Teste", birth_date="1980-01-01",
                   terms_accepted_at="2026-09-30T00:00:00Z")
     pid = inserir(con, "portal_pilots", account_id=cid, name="Piloto Teste")
+    completa(con, cid, pid)
     return cid, pid
 
 
@@ -214,9 +216,13 @@ def equipe(cli, email):
 def cliente(cli, email="maria@example.com"):
     cli.cookies.clear()
     r = cli.post("/ops/api/portal/signup", json={"name": "Maria Santos", "email": email, "password": "corrida-segura-9",
-                                                 "birth_date": "1985-04-12", "accept_terms": True, "i_am_driver": True})
+                                                 "birth_date": "1985-04-12", "accept_terms": True, "i_am_driver": True, **ENDERECO})
     assert r.status_code == 201, r.text
-    return {"X-CSRF": cli.cookies.get("cp_csrf")}, r.json()["drivers"][0]["id"]
+    h = {"X-CSRF": cli.cookies.get("cp_csrf")}
+    pid = r.json()["drivers"][0]["id"]
+    from command_center.tests.dados_portal import MEDIDAS
+    assert cli.patch(f"/ops/api/portal/drivers/{pid}", headers=h, json={"measures": MEDIDAS, "notes": "First time."}).status_code == 200
+    return h, pid
 
 
 def test_fluxo_completo_pela_api(cli):

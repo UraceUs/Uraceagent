@@ -252,8 +252,23 @@ def test_abrir_e_fechar_a_compra_muda_o_endereco(servidor, navegador):
     pg.close()
 
 
-# ------------------------------------------------------------------ área do cliente (#40)
+# ------------------------------------------------------------------ área do cliente (#40, #54)
 ROTAS_PORTAL = ["/portal", "/portal/signup"]
+ROTAS_PORTAL_DENTRO = ["/portal/dashboard", "/portal/book", "/portal/sessions", "/portal/drivers", "/portal/history", "/portal/account"]
+CONTATO = {"phone": "(407) 555-0101", "address_line1": "100 Main St", "city": "Orlando", "state": "FL", "zip": "32809"}
+PILOTO_OK = {"birth_date": "2014-05-01", "notes": "Two seasons in Mini kart.",
+             "measures": {"height_in": 60, "weight_lb": 110, "chest_in": 30, "waist_in": 26, "hips_in": 30}}
+
+
+def cliente_pela_api(pg, servidor, nome, email, piloto=None):
+    """Cria a conta (e um piloto completo) pela API, na sessão do navegador da página."""
+    r = pg.request.post(servidor + "/api/portal/signup", data={"name": nome, "email": email, "password": "pista-molhada-7",
+                                                              "birth_date": "1980-01-01", "accept_terms": True, **CONTATO})
+    assert r.ok, r.text()
+    if piloto:
+        csrf = next(c["value"] for c in pg.context.cookies() if c["name"] == "cp_csrf")
+        r = pg.request.post(servidor + "/api/portal/drivers", data={"name": piloto, **PILOTO_OK}, headers={"X-CSRF": csrf})
+        assert r.ok, r.text()
 
 
 def test_cliente_cria_a_conta_poe_o_piloto_com_medidas_e_volta_a_entrar(servidor, navegador):
@@ -261,32 +276,43 @@ def test_cliente_cria_a_conta_poe_o_piloto_com_medidas_e_volta_a_entrar(servidor
     pg.erros_js = []
     pg.on("pageerror", lambda e: pg.erros_js.append(str(e)))
     pg.goto(servidor + "/portal")
+    pg.locator(".login .pista").wait_for()                      # o login do cliente tem o desenho do login da equipe
     pg.get_by_role("link", name="Create an account").click()
     pg.get_by_label("Full name").fill("Ana Driver")
     pg.get_by_label("Date of birth").fill("1988-03-02")
-    pg.get_by_label("Phone").fill("407 555 0101")
     pg.get_by_label("Email").fill("ana.e2e@example.com")
     pg.get_by_label("Password").fill("pista-molhada-7")
+    pg.get_by_label("Phone").fill("407 555 0101")
+    pg.get_by_label("Street address").fill("100 Main St")
     pg.get_by_label("City").fill("Orlando")
+    pg.get_by_role("textbox", name="State").fill("FL")
     pg.get_by_label("ZIP").fill("32809")
     pg.get_by_label("I accept the").check()
     pg.get_by_role("button", name="Create account").click()
-    pg.wait_for_url("**/ops/portal/account")
-    pg.get_by_role("heading", name="My account", level=1).wait_for()
-    # sem piloto ainda: o formulário já vem aberto
-    pg.get_by_label("Driver's name").fill("Bia Driver")
-    pg.get_by_label("Height (in)").fill("50")
+    pg.wait_for_url("**/ops/portal/dashboard")
+    pg.get_by_role("heading", name="Dashboard", level=1).wait_for()
+    pg.get_by_role("link", name="Drivers", exact=True).click()
+    pg.get_by_role("heading", name="Drivers", level=1).wait_for()
+    # sem piloto ainda: o formulário já vem aberto, e as medidas são obrigatórias
+    pg.get_by_label("Driver's full name").fill("Bia Driver")
+    pg.get_by_label("Date of birth").fill("2015-06-01")
+    pg.get_by_role("button", name="Save driver").click()
+    assert "Please fill in" in pg.get_by_role("alert").inner_text()
+    for rot, v in (("Height (in)", "50"), ("Weight (lb)", "70"), ("Chest (in)", "26"), ("Waist (in)", "24"), ("Hips (in)", "27")):
+        pg.get_by_label(rot).fill(v)
+    pg.get_by_label("Karting experience").fill("First year, Baby kart.")
+    pg.get_by_text("More sizes").click()
     pg.get_by_label("Suit size").fill("130")
     pg.get_by_role("button", name="Save driver").click()
-    pg.get_by_role("heading", name="Bia Driver", level=3).wait_for()
-    assert pg.get_by_text("Suit size").is_visible()
-    assert pg.title() == "My account · URACE"
+    pg.get_by_role("heading", name="Bia Driver", level=2).wait_for()
+    assert pg.get_by_text("Suit size").is_visible() and pg.get_by_text("Measurements up to date").is_visible()
+    assert pg.title() == "Drivers · URACE"
     pg.get_by_role("button", name="Sign out").click()
     pg.wait_for_url("**/ops/portal")
     pg.get_by_label("Email").fill("ana.e2e@example.com")
-    pg.get_by_label("Password").fill("pista-molhada-7")
+    pg.get_by_label("Password", exact=True).fill("pista-molhada-7")
     pg.get_by_role("button", name="Sign in").click()
-    pg.get_by_role("heading", name="Bia Driver", level=3).wait_for()
+    pg.get_by_role("heading", name="Bia Driver", level=3).wait_for()      # no dashboard
     assert not pg.erros_js, pg.erros_js
     # conta de cliente não abre o painel
     assert pg.request.get(servidor + "/api/clients").status == 401
@@ -323,6 +349,23 @@ def test_area_do_cliente_um_h1_e_sem_rolagem_lateral(servidor, navegador, largur
     assert not problemas, "\n".join(problemas)
 
 
+@pytest.mark.parametrize("largura", [360, 390])
+def test_area_do_cliente_por_dentro_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
+    pg = navegador.new_page(viewport={"width": largura, "height": 800})
+    cliente_pela_api(pg, servidor, "Dora Dentro", f"dora{largura}.e2e@example.com", piloto="Duda Dentro")
+    problemas = []
+    for rota in ROTAS_PORTAL_DENTRO:
+        pg.goto(servidor + rota); pg.wait_for_load_state("networkidle")
+        h1 = [t for n, t in _cabecalhos(pg) if n == 1]
+        if len(h1) != 1:
+            problemas.append(f"{rota}: {len(h1)} h1")
+        r = pg.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            problemas.append(f"{rota}: rola {r['culpados']}")
+    pg.close()
+    assert not problemas, "\n".join(problemas)
+
+
 
 # ------------------------------------------------------------------ agenda (#41)
 def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegador):
@@ -343,10 +386,8 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     g.get_by_text("Serviço criado").wait_for()
     # 2. cliente cria a conta pela API e marca pela tela
     c = navegador.new_page(viewport={"width": 390, "height": 844})
-    r = c.request.post(servidor + "/api/portal/signup", data={"name": "Cleo Agenda", "email": "cleo.e2e@example.com", "password": "pista-molhada-7",
-                                                             "birth_date": "1980-01-01", "accept_terms": True, "i_am_driver": True})
-    assert r.ok, r.text()
-    c.goto(servidor + "/portal/account")
+    cliente_pela_api(c, servidor, "Cleo Agenda", "cleo.e2e@example.com", piloto="Caio Agenda")
+    c.goto(servidor + "/portal/book")
     sab = datetime.now(ZoneInfo("America/New_York")).date() + timedelta(days=3)
     while sab.weekday() != 5:
         sab += timedelta(days=1)
@@ -362,6 +403,7 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     assert "$719.00" in c.locator(".portal-servicos").inner_text()
     c.get_by_role("button", name="Request session").click()
     c.get_by_text("Request sent!").wait_for()
+    c.get_by_role("link", name="My sessions").first.click()
     c.get_by_text("Waiting for confirmation").wait_for()
     # 3. equipe vê em "Precisa de atenção" e confirma na agenda
     abrir(g, servidor, "/attention")
@@ -378,10 +420,8 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
 # ------------------------------------------------------------------ vínculo (#42)
 def test_equipe_vincula_pela_sugestao_e_o_cliente_ve_o_historico(servidor, navegador):
     c = navegador.new_page(viewport={"width": 390, "height": 844})
-    r = c.request.post(servidor + "/api/portal/signup", data={"name": "Carla Mendes", "email": "carla@example.com", "password": "pista-molhada-7",
-                                                             "birth_date": "1982-02-02", "accept_terms": True})
-    assert r.ok, r.text()
-    c.goto(servidor + "/portal/account")
+    cliente_pela_api(c, servidor, "Carla Mendes", "carla@example.com")
+    c.goto(servidor + "/portal/history")
     c.get_by_text("once our team connects your account").wait_for()
     g = entrar(navegador, servidor)
     abrir(g, servidor, "/site/contas")
@@ -392,5 +432,6 @@ def test_equipe_vincula_pela_sugestao_e_o_cliente_ve_o_historico(servidor, naveg
     g.get_by_text("Vinculado.").wait_for()
     c.reload()
     c.get_by_role("heading", name="Service history").wait_for()
-    assert c.locator("section", has_text="Service history").locator(".tr").count() >= 1, "o histórico do card aparece"
+    c.locator(".tbl .tr").first.wait_for()
+    assert c.locator(".tbl .tr").count() >= 1, "o histórico do card aparece"
     g.close(); c.close()
