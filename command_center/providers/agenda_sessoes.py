@@ -20,6 +20,7 @@ from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from command_center.db import agora, atualizar, inserir, todos, um
+from command_center.providers import servicos_site
 
 FUSO = ZoneInfo("America/New_York")
 PERIODOS = ("manha", "tarde")
@@ -195,15 +196,22 @@ def _publica(cfg):
 
 
 # ------------------------------------------------------------------ agendamentos
-def agendar(con, conta_id, data_iso, periodo, piloto_id=None, notes=None):
+def agendar(con, conta_id, data_iso, periodo, piloto_id=None, notes=None, servico_id=None):
+    """O cliente marca um serviço, para um piloto da conta, num período aberto. O preço
+    do serviço fica gravado no agendamento (#50): mudar a tabela depois não muda isso."""
+    try:
+        servico = servicos_site.do_agendamento(con, servico_id)
+    except servicos_site.ErroServico as e:
+        raise ErroAgenda(str(e))
+    if piloto_id is None:
+        raise ErroAgenda("Choose the driver for this session.")
     if periodo not in ("dia", "manha", "tarde"):
         raise ErroAgenda("Choose morning, afternoon or full day.")
     try:
         dia = date.fromisoformat(data_iso)
     except (TypeError, ValueError):
         raise ErroAgenda("Choose a valid date.")
-    if piloto_id is not None and not um(con, "SELECT 1 AS x FROM portal_pilots WHERE id=? AND account_id=? AND active=1",
-                                        (piloto_id, conta_id)):
+    if not um(con, "SELECT 1 AS x FROM portal_pilots WHERE id=? AND account_id=? AND active=1", (piloto_id, conta_id)):
         raise ErroAgenda("Driver not found on your account.")
     disp = disponibilidade(con, dia, dia)["dias"]
     if not disp or not disp[0]["periods"][periodo]["open"]:
@@ -216,6 +224,7 @@ def agendar(con, conta_id, data_iso, periodo, piloto_id=None, notes=None):
     status = "confirmada" if config(con)["auto_confirm"] else "pendente"
     return inserir(con, "bookings", account_id=conta_id, pilot_id=piloto_id, date=data_iso, period=periodo,
                    status=status, notes=(notes or "").strip()[:500] or None,
+                   service_id=servico["id"], service_name=servico["name"], price=servico["price"],
                    decided_at=agora() if status == "confirmada" else None)
 
 
@@ -253,7 +262,7 @@ def cancelar_pelo_cliente(con, conta_id, bid):
 
 def do_cliente(con, conta_id):
     return [dict(b) for b in todos(con, """SELECT b.id, b.date, b.period, b.status, b.notes, b.decision_note, b.created_at,
-                                                 p.name AS driver FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                                                 b.service_name AS service, b.price, p.name AS driver FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
                                             WHERE b.account_id=? ORDER BY b.date DESC, b.id DESC LIMIT 100""", (conta_id,))]
 
 

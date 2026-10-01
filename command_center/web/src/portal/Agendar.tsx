@@ -1,7 +1,7 @@
 /* Agendar sessão (#41): o cliente vê o mês com o que está aberto e marca para um piloto
  * da conta. Quem decide o que abre é a equipe, no site interno (Site público › Agenda). */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { papi, PortalError, type Account, type AgendaCfg, type Booking, type Dia } from './api'
+import { papi, PortalError, usd, type Account, type AgendaCfg, type Booking, type Dia, type Servico } from './api'
 
 const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
 const STATUS: Record<string, [string, string]> = { pendente: ['Waiting for confirmation', 'warn'], confirmada: ['Confirmed', 'ok'],
@@ -25,6 +25,7 @@ export function MinhasSessoes({ sessoes, cfg, onCancelar }: { sessoes: Booking[]
     return <div className="card card-b row wrap portal-sessao" key={s.id}>
       <div className="grow"><b>{dataLonga(s.date)}</b>
         <div className="small muted">{PERIODO[s.period]}{cfg ? ` · ${faixa(cfg, s.period)}` : ''}{s.driver ? ` · ${s.driver}` : ''}</div>
+        {s.service && <div className="small">{s.service}{s.price != null ? ` · ${usd(s.price)}` : ''}</div>}
         {s.decision_note && <div className="small">{s.decision_note}</div>}</div>
       <span className={`chip ${tom}`}>{rot}</span>
       {ativa && <button className="btn ghost sm" onClick={() => onCancelar(s.id)}>Cancel</button>}
@@ -36,6 +37,8 @@ export function Agendar({ conta }: { conta: Account }) {
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })     // AAAA-MM-DD na Flórida
   const [dias, setDias] = useState<Dia[] | null>(null)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
+  const [servicos, setServicos] = useState<Servico[]>([])
+  const [servico, setServico] = useState<number | null>(null)
   const [mes, setMes] = useState(mesDe(hoje))
   const [dia, setDia] = useState<string | null>(null)
   const [periodo, setPeriodo] = useState<'manha' | 'tarde' | 'dia' | null>(null)
@@ -48,8 +51,9 @@ export function Agendar({ conta }: { conta: Account }) {
 
   const carregar = useCallback(async () => {
     try {
-      const d = await papi<{ config: AgendaCfg; dias: Dia[] }>('GET', '/availability')
-      setDias(d.dias); setCfg(d.config)
+      const d = await papi<{ config: AgendaCfg; dias: Dia[]; services: Servico[] }>('GET', '/availability')
+      setDias(d.dias); setCfg(d.config); setServicos(d.services)
+      setServico(s => d.services.some(x => x.id === s) ? s : d.services.length === 1 ? d.services[0].id : null)
       // abre no primeiro mês que tem dia aberto: no dia 30, o mês corrente pode não ter mais nada
       const primeiro = d.dias.find(x => x.any_open)
       setMes(m => (d.dias.some(x => x.any_open && mesDe(x.date) === m) || !primeiro) ? m : mesDe(primeiro.date))
@@ -66,13 +70,14 @@ export function Agendar({ conta }: { conta: Account }) {
     return [...Array(primeiro).fill(null), ...Array.from({ length: total }, (_, i) => `${mes}-${String(i + 1).padStart(2, '0')}`)]
   }, [mes])
   const escolhido = dia ? porData[dia] : null
-  const temAlgo = (dias || []).some(d => d.any_open)
+  const temAlgo = (dias || []).some(d => d.any_open) && servicos.length > 0
+  const escolhidoServico = servicos.find(x => x.id === servico)
 
   async function marcar() {
-    if (!dia || !periodo) return
+    if (!dia || !periodo || !servico) return
     setIndo(true); setErro(null); setOk(null)
     try {
-      const r = await papi<{ bookings: Booking[] }>('POST', '/bookings', { date: dia, period: periodo, driver_id: piloto || null, notes: nota || null })
+      const r = await papi<{ bookings: Booking[] }>('POST', '/bookings', { date: dia, period: periodo, service_id: servico, driver_id: piloto || null, notes: nota || null })
       setSessoes(r.bookings); setOk(cfg?.auto_confirm ? 'Your session is confirmed. See you at the track!' : 'Request sent! We will confirm your session soon.')
       setDia(null); setPeriodo(null); setNota(''); carregar()
     } catch (e) { setErro((e as PortalError).message); carregar() } finally { setIndo(false) }
@@ -91,6 +96,11 @@ export function Agendar({ conta }: { conta: Account }) {
       : dias === null ? <div className="state"><span className="spin" /></div>
       : !temAlgo ? <p className="muted">No dates open for booking right now. Please check back soon or contact us.</p>
       : <div className="card card-b stack">
+        <fieldset className="portal-servicos"><legend className="small">Session type</legend>
+          {servicos.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
+            <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />
+            <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span>
+            <b>{usd(x.price)}</b></label>)}</fieldset>
         <div className="row"><button className="btn ghost sm" aria-label="Previous month" disabled={meses.indexOf(mes) <= 0} onClick={() => setMes(meses[meses.indexOf(mes) - 1])}>‹</button>
           <b className="grow" style={{ textAlign: 'center' }}>{new Date(mes + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</b>
           <button className="btn ghost sm" aria-label="Next month" disabled={meses.indexOf(mes) >= meses.length - 1} onClick={() => setMes(meses[meses.indexOf(mes) + 1])}>›</button></div>
@@ -112,7 +122,8 @@ export function Agendar({ conta }: { conta: Account }) {
             <select value={piloto} onChange={e => setPiloto(e.target.value ? Number(e.target.value) : '')}>
               {conta.drivers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
           <label className="fld"><span>Anything we should know? <i>optional</i></span><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></label>
-          <div><button className="btn primary" disabled={!periodo || indo} onClick={marcar}>{indo ? 'Booking…' : cfg.auto_confirm ? 'Book session' : 'Request session'}</button></div>
+          {escolhidoServico && <p className="small" style={{ margin: 0 }}>{escolhidoServico.name} · <b>{usd(escolhidoServico.price)}</b> per driver</p>}
+          <div><button className="btn primary" disabled={!periodo || !servico || indo} onClick={marcar}>{indo ? 'Booking…' : cfg.auto_confirm ? 'Book session' : 'Request session'}</button></div>
         </div>}
       </div>}
     <h2 className="h2">Your sessions</h2>

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, transacao
-from command_center.providers import agenda_sessoes as ag, vinculo_site as vs
+from command_center.providers import agenda_sessoes as ag, servicos_site as sv, vinculo_site as vs
 
 r = APIRouter(prefix="/ops/api/site", tags=["site"])
 
@@ -127,6 +127,49 @@ def decidir(bid: int, decisao: str, dados: DecisaoIn, request: Request, con: sql
     _aud(con, request, u, f"booking.{decisao}", bid, {"nota": dados.nota})
     con.commit()
     return {"status": novo}
+
+
+# ------------------------------------------------------------------ serviços e preços (#50)
+@r.get("/servicos")
+def servicos(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    return {"servicos": sv.lista(con), "itens_qbo": sv.itens_qbo(con)}
+
+
+class ServicoIn(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    price: float | str | None = None
+    qbo_item_id: str | None = None
+    active: bool | None = None
+    sort: int | None = None
+
+
+@r.post("/servicos", status_code=201)
+def criar_servico(dados: ServicoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                  u=Depends(auth.exige("MANAGER"))):
+    try:
+        sid = sv.criar(con, u["id"], dados.model_dump(exclude_unset=True))
+    except sv.ErroServico as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "booking.service.create", f"user:{u['id']}", user_id=u["id"], entity_type="booking_service", entity_id=sid,
+            detail=dados.model_dump(exclude_unset=True), ip=auth._ip(request))
+    con.commit()
+    return {"id": sid, "servicos": sv.lista(con)}
+
+
+@r.patch("/servicos/{sid}")
+def mudar_servico(sid: int, dados: ServicoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                  u=Depends(auth.exige("MANAGER"))):
+    """Mudar o preço vale para os próximos agendamentos; quem já marcou fica com o valor do dia."""
+    try:
+        mud = sv.mudar(con, u["id"], sid, dados.model_dump(exclude_unset=True))
+    except sv.ErroServico as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    if mud:
+        auditar(con, "booking.service.update", f"user:{u['id']}", user_id=u["id"], entity_type="booking_service",
+                entity_id=sid, detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))
+    con.commit()
+    return {"servicos": sv.lista(con)}
 
 
 # ------------------------------------------------------------------ contas do site (#42)

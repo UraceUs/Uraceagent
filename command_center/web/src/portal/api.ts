@@ -42,5 +42,8 @@ export interface Periodo { open: boolean; spots: number }
 export interface Dia { date: string; weekday: number; any_open: boolean; periods: { manha: Periodo; tarde: Periodo; dia: Periodo } }
 export interface AgendaCfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string
   horizon_days: number; min_notice_hours: number; auto_confirm: number }
+export interface Servico { id: number; name: string; description: string | null; price: number }
 export interface Booking { id: number; date: string; period: 'manha' | 'tarde' | 'dia'; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'
-  notes: string | null; decision_note: string | null; driver: string | null; created_at: string }
+  notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null }
+
+export const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })

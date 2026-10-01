@@ -205,6 +205,10 @@ MIGRACOES = [
     ("purchase_orders", "delivered_at", "TEXT"),
     ("purchase_orders", "email_total", "REAL"),      # total que a loja disse no e-mail
     ("purchase_orders", "items_hint", "TEXT"),       # o que a loja disse que foi (assunto)
+    # 01/10 — dono: o preço é editável; o agendamento guarda o serviço e o valor do dia.
+    ("bookings", "service_id", "INTEGER"),
+    ("bookings", "service_name", "TEXT"),
+    ("bookings", "price", "REAL"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
