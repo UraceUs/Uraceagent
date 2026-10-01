@@ -262,12 +262,15 @@ def _servico(titulo):
 def historico(con, conta_id):
     """O que o cliente vê: data, serviço, situação e o driver (cada driver tem o seu card, #65).
     Nada de nota, coluna ou responsável interno."""
+    from command_center.providers.agenda_asana import GIDS_DE_AGENDAMENTO
     cards = cards_da_conta(con, conta_id)
     if not cards:
         return {"linked": False, "services": []}
     marca = ",".join("?" * len(cards))
     linhas = todos(con, f"""SELECT t.due_on, t.title, t.status, t.client_id, c.pilot_name FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
-                             WHERE t.client_id IN ({marca}) AND t.due_on IS NOT NULL ORDER BY t.due_on DESC LIMIT 200""", tuple(cards))
+                             WHERE t.client_id IN ({marca}) AND t.due_on IS NOT NULL
+                               AND t.id NOT IN ({GIDS_DE_AGENDAMENTO})     -- a do site já está em "Sessions" (#67)
+                             ORDER BY t.due_on DESC LIMIT 200""", tuple(cards))
     return {"linked": True, "services": [{"date": t["due_on"][:10], "service": _servico(t["title"]),
                                           "status": STATUS_SERVICO.get(t["status"], "scheduled"),
                                           "driver": cards[t["client_id"]] or t["pilot_name"]} for t in linhas]}

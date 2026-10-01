@@ -18,12 +18,12 @@ import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
 
 from command_center.api import auth
 from command_center.db import agora, atualizar, auditar, get_db, inserir, transacao, um
-from command_center.providers import agenda_sessoes as ag, portal, servicos_site, vinculo_site
+from command_center.providers import agenda_asana, agenda_sessoes as ag, portal, servicos_site, vinculo_site
 
 r = APIRouter(prefix="/ops/api/portal", tags=["portal"])
 
@@ -273,7 +273,8 @@ class AgendarIn(BaseModel):
 
 
 @r.post("/bookings", status_code=201)
-def agendar(dados: AgendarIn, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
+            con: sqlite3.Connection = Depends(get_db)):
     try:
         with transacao(con):                  # duas pessoas na última vaga: só uma leva
             bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes, dados.service_id)
@@ -281,17 +282,20 @@ def agendar(dados: AgendarIn, request: Request, cid=Depends(cliente_atual), con:
                                                         "servico": dados.service_id})
     except ag.ErroAgenda as e:
         raise HTTPException(400, str(e))
+    tarefas.add_task(agenda_asana.levar, bid)      # #67: todo agendamento vira tarefa no Asana
     return {"id": bid, "bookings": ag.do_cliente(con, cid)}
 
 
 @r.post("/bookings/{bid}/cancel")
-def cancelar(bid: int, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def cancelar(bid: int, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
+             con: sqlite3.Connection = Depends(get_db)):
     try:
         ag.cancelar_pelo_cliente(con, cid, bid)
     except ag.ErroAgenda as e:
         raise HTTPException(404 if "not found" in str(e) else 400, str(e))
     _aud(con, request, "portal.booking.cancel", cid, {"agendamento": bid})
     con.commit()
+    tarefas.add_task(agenda_asana.levar, bid)
     return {"bookings": ag.do_cliente(con, cid)}
 
 

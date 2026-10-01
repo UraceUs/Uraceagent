@@ -280,8 +280,8 @@ def ler(msg):
 
 
 def _data(rfc):
-    from command_center.providers.sync import _data_iso
-    return _data_iso(rfc) if rfc else agora()
+    from command_center.providers.sync import _data_rfc
+    return _data_rfc(rfc) if rfc else agora()
 
 
 def _dia(iso):

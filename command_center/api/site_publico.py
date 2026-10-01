@@ -3,12 +3,12 @@ clientes. Quem abre e fecha a agenda é o gerente; confirmar e recusar pedido é
 import sqlite3
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, todos, transacao
-from command_center.providers import agenda_sessoes as ag, contrato, servicos_site as sv, vinculo_site as vs
+from command_center.providers import agenda_asana, agenda_sessoes as ag, contrato, servicos_site as sv, vinculo_site as vs
 
 r = APIRouter(prefix="/ops/api/site", tags=["site"])
 
@@ -127,8 +127,8 @@ class DecisaoIn(BaseModel):
 
 
 @r.post("/agendamentos/{bid}/{decisao}")
-def decidir(bid: int, decisao: str, dados: DecisaoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
-            u=Depends(auth.exige("OPERATOR"))):
+def decidir(bid: int, decisao: str, dados: DecisaoIn, request: Request, tarefas: BackgroundTasks,
+            con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     if decisao not in ("confirmar", "recusar", "cancelar"):
         raise HTTPException(404, "decisão desconhecida")
     try:
@@ -137,6 +137,7 @@ def decidir(bid: int, decisao: str, dados: DecisaoIn, request: Request, con: sql
         raise HTTPException(400, str(e))
     _aud(con, request, u, f"booking.{decisao}", bid, {"nota": dados.nota})
     con.commit()
+    tarefas.add_task(agenda_asana.levar, bid)      # #67: a situação nova vai para a tarefa do Asana
     return {"status": novo}
 
 

@@ -18,7 +18,7 @@ from datetime import datetime
 
 from command_center.db import agora, atualizar, inserir, todos, um
 from command_center.providers import NaoConectado, REPO, chamar
-from command_center.providers import identidade
+from command_center.providers import agenda_asana, identidade
 
 # fonte: skills/urace-asana/SKILL.md — colunas do U-RACE
 PROJETO_URACE = "1205450093098920"
@@ -242,7 +242,11 @@ def sync_asana_completo(con, progresso=None):
                              synced_at=agora())
                 ja = um(con, """SELECT t.id, t.client_id FROM entity_links l JOIN tasks t ON t.id=l.entity_id
                                 WHERE l.system='asana' AND l.external_id=? AND l.entity_type='task'""", (t["gid"],))
-                if ja and ja["client_id"]:                      # já está na pessoa certa: só atualiza o resumo
+                bk = agenda_asana.agendamento_da_tarefa(con, t["gid"])
+                if bk:                                          # #67: tarefa de agendamento do site, no card do driver
+                    _grava_tarefa(con, t["gid"], dict(client_id=bk["card"], client_by="human" if bk["card"] else None,
+                                                     title=t.get("nome"), **comum))
+                elif ja and ja["client_id"]:                    # já está na pessoa certa: só atualiza o resumo
                     _grava_tarefa(con, t["gid"], dict(title=t.get("nome"), **comum))
                 else:
                     full = chamar("asana", "asana_tarefa", gid=t["gid"]); lidas += 1
@@ -317,6 +321,12 @@ def sync_asana(con):
                     if ja and ja["client_id"]:
                         campos.pop("subtasks_total")          # o resumo não sabe quantas estão feitas; mantém o lido
                     _grava_tarefa(con, t["gid"], campos)
+                    tarefas += 1
+                    continue
+                bk = agenda_asana.agendamento_da_tarefa(con, t["gid"])
+                if bk:                     # #67: tarefa de agendamento do site — o card é o do driver, não o da descrição
+                    _grava_tarefa(con, t["gid"], dict(client_id=bk["card"], client_by="human" if bk["card"] else None,
+                                                     title=t.get("nome"), **comum))
                     tarefas += 1
                     continue
                 full = chamar("asana", "asana_tarefa", gid=t["gid"])
@@ -545,7 +555,7 @@ def sync_gmail(con, dias=None):
                 email = (m.group(1) if m else remetente).strip().lower()
                 cli = _acha_cliente(con, email=email) if "@" in email else None
                 campos = dict(client_id=cli["id"] if cli else None, mailbox=conta, subject=t.get("assunto"),
-                              sender=remetente[:200], last_at=_data_iso(t.get("data")), snippet=(t.get("snippet") or "")[:300],
+                              sender=remetente[:200], last_at=_data_rfc(t.get("data")), snippet=(t.get("snippet") or "")[:300],
                               messages=t.get("mensagens"), is_inbox=1,
                               labels=json.dumps(t.get("marcadores") or [], ensure_ascii=False), synced_at=agora())
                 if eid:
@@ -588,7 +598,7 @@ def sync_gmail(con, dias=None):
         return {"ok": False, "motivo": str(e)[:300]}
 
 
-def _data_iso(rfc):
+def _data_rfc(rfc):
     """'Wed, 02 Sep 2026 18:25:11 -0400' -> ISO UTC; se não parsear, devolve como veio."""
     if not rfc:
         return None
