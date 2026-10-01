@@ -29,7 +29,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
-from command_center.db import agora, auditar, get_db, inserir, todos, um
+from command_center.db import agora, auditar, get_db, inserir, todos, transacao, um
+from command_center.providers import mensalidades
 
 r = APIRouter(prefix="/ops/api/clients", tags=["mensalidade"])
 
@@ -179,7 +180,7 @@ def ver(cid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
                            ORDER BY name LIMIT 60""")
     return {"monthly_plan": c["monthly_plan"], "monthly_note": c["monthly_note"],
             "monthly_amount": c["monthly_amount"], "monthly_item_id": c["monthly_item_id"], "item": item,
-            "monthly_sessions": c["monthly_sessions"],
+            "monthly_sessions": c["monthly_sessions"], "agendadas": mensalidades.do_cliente(con, cid),
             "itens": itens, "email": c["email"],
             "opcoes_meses": list(OPCOES_MESES), "padrao_meses": PADRAO_MESES,
             "proximo_inicio": proximo_dia_1().isoformat(),
@@ -231,9 +232,9 @@ class RecorrenciaIn(BaseModel):
 @r.post("/{cid}/mensal/recorrencia")
 def criar_recorrencia(cid: int, dados: RecorrenciaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
                       u=Depends(auth.exige("MANAGER"))):
-    """Cria a invoice recorrente no QuickBooks a partir do combinado. O clique do gerente é
-    a aprovação (a tela pergunta antes). O resultado — inclusive falha — fica registrado."""
-    from command_center import providers
+    """Agenda as mensalidades a partir do combinado: uma por mês, cada uma criada e enviada pelo
+    QuickBooks no dia 1 às 01:00 (#63). O clique do gerente é a aprovação (a tela pergunta antes,
+    com os meses)."""
     c = _cliente(con, cid)
     if not c["monthly_amount"] or not c["monthly_item_id"]:
         raise HTTPException(400, "Salve antes o valor mensal e o item do QuickBooks.")
@@ -243,7 +244,7 @@ def criar_recorrencia(cid: int, dados: RecorrenciaIn, request: Request, con: sql
         inicio = date.fromisoformat((dados.inicio or proximo_dia_1().isoformat())[:10])
     except ValueError:
         raise HTTPException(400, "Início inválido.")
-    if inicio.day != 1 or inicio < date.today().replace(day=1):
+    if inicio.day != 1 or inicio < mensalidades.agora_fl().date().replace(day=1):
         raise HTTPException(400, "A mensalidade começa num dia 1, deste mês em diante.")
     fim = _fim(inicio, dados.meses)
     ja = um(con, """SELECT * FROM monthly_recurring WHERE client_id=? AND status='active'
@@ -265,29 +266,39 @@ def criar_recorrencia(cid: int, dados: RecorrenciaIn, request: Request, con: sql
                                  "Vincule essa ao card em vez de criar outra.")
     item = um(con, "SELECT id, name FROM qbo_items WHERE id=?", (c["monthly_item_id"],))
     piloto = c["pilot_name"] or c["name"]
-    memo = dados.memo or f"{item['name'] if item else 'Academy'} | {piloto} | mensalidade"
     email = (dados.email or c["email"] or "").strip() or None
-    args = dict(cliente_id=qbo_id, meses=dados.meses, inicio=inicio.isoformat(), email=email, memo=memo,
-                nome=f"Mensalidade {piloto} {inicio:%Y-%m}",
-                linhas=[{"item_id": c["monthly_item_id"], "quantidade": 1, "unitario": float(c["monthly_amount"]),
-                         "descricao": f"{c['monthly_plan'] or 'Academy'} — {piloto}"}])
+    descricao = f"{item['name'] if item else (c['monthly_plan'] or 'Academy')} — {piloto}"
+    # 01/10 (#63): em vez do modelo de recorrência do QuickBooks (que saía em simulação e não
+    # dizia mês a mês o que foi), o painel cria agora UMA LINHA POR MÊS, e cada uma é criada e
+    # enviada pelo QuickBooks no dia 1 às 01:00. O clique do gerente é a aprovação dos meses.
     try:
-        res = providers.chamar("quickbooks", "qbo_criar_recorrencia", **args)
-        status = "active" if res.get("aplicado") else "simulated"
-    except providers.NaoConectado:
-        raise HTTPException(503, "QuickBooks não está conectado.")
-    except Exception as e:                                        # noqa: BLE001 - registra e mostra
-        res, status = {"erro": f"{type(e).__name__}: {str(e)[:400]}"}, "failed"
-    rid = inserir(con, "monthly_recurring", client_id=cid, qbo_id=res.get("id"), name=args["nome"],
-                  amount=float(c["monthly_amount"]), item_id=c["monthly_item_id"], months=dados.meses,
-                  start_on=inicio.isoformat(), end_on=fim.isoformat(), email=email, status=status,
-                  result=json.dumps(res, ensure_ascii=False)[:4000], created_by=u["id"])
-    auditar(con, "client.monthly.recurring", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid,
-            detail={"id": rid, "status": status, "cliente_qbo": qbo_id, "origem_cliente": origem,
-                    "meses": dados.meses, "inicio": inicio.isoformat(), "valor": c["monthly_amount"]},
-            ip=auth._ip(request))
+        with transacao(con):
+            rid = inserir(con, "monthly_recurring", client_id=cid, qbo_id=None, name=f"Mensalidade {piloto} {inicio:%Y-%m}",
+                          amount=float(c["monthly_amount"]), item_id=c["monthly_item_id"], months=dados.meses,
+                          start_on=inicio.isoformat(), end_on=fim.isoformat(), email=email, status="active",
+                          result=json.dumps({"modo": "agendada", "envio": f"dia 1 às {mensalidades.HORA_ENVIO}"}),
+                          created_by=u["id"])
+            linhas = mensalidades.agendar(con, u["id"], cid, rid, inicio, dados.meses, float(c["monthly_amount"]),
+                                          c["monthly_item_id"], descricao, email)
+            auditar(con, "client.monthly.recurring", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid,
+                    detail={"id": rid, "modo": "agendada", "cliente_qbo": qbo_id, "origem_cliente": origem,
+                            "meses": dados.meses, "inicio": inicio.isoformat(), "valor": c["monthly_amount"]},
+                    ip=auth._ip(request))
+    except mensalidades.ErroMensalidade as e:
+        raise HTTPException(409, str(e))
+    return {"id": rid, "status": "active", "inicio": inicio.isoformat(), "fim": fim.isoformat(), "meses": dados.meses,
+            "agendadas": [m for m in mensalidades.do_cliente(con, cid) if m["id"] in linhas]}
+
+
+@r.post("/{cid}/mensal/agendadas/{mid}/cancelar")
+def cancelar_mes(cid: int, mid: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                 u=Depends(auth.exige("MANAGER"))):
+    """Tira um mês "a enviar" da fila. Não apaga: fica "cancelada", com quem."""
+    try:
+        mensalidades.cancelar(con, u["id"], mid, cid)
+    except mensalidades.ErroMensalidade as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "client.monthly.cancel", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid,
+            detail={"mes": mid}, ip=auth._ip(request))
     con.commit()
-    if status == "failed":
-        raise HTTPException(502, f"O QuickBooks recusou: {res['erro']}")
-    return {"id": rid, "status": status, "inicio": inicio.isoformat(), "fim": fim.isoformat(), "meses": dados.meses,
-            "qbo_id": res.get("id"), "aviso": res.get("teria_feito") if status == "simulated" else None}
+    return {"agendadas": mensalidades.do_cliente(con, cid)}

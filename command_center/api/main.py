@@ -69,6 +69,10 @@ def _autosync():
                 auditar(con, "sandbox.cleanup", "system", detail={"parados": parados})
             from command_center.api import agenda   # rotinas por horário: triagem do Gmail, sondagem manhã/noite
             agenda.rodar(con)
+            from command_center.providers import mensalidades   # dono, 01/10 (#63): dia 1 às 01:00
+            enviadas = mensalidades.enviar_devidas(con)
+            if enviadas:
+                auditar(con, "client.monthly.round", "system", detail={"feitas": enviadas})
         except Exception as e:                            # nunca derruba o laço
             try:
                 auditar(con, "sync.auto.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
