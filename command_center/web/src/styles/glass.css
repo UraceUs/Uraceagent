@@ -558,3 +558,34 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .site-p.ok{background:var(--ok-wash);color:var(--ok)}.site-p.warn{background:var(--warn-wash);color:var(--warn)}
 .site-p.crit{background:var(--crit-wash);color:var(--crit)}.site-p.neutral{color:var(--muted)}
 .site-semana{display:grid;grid-template-columns:44px repeat(2,minmax(0,1fr));gap:8px 12px;align-items:center;max-width:520px}
+/* #52: calendário do mês (semana começa na segunda), com fim de semana e corridas */
+.site-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.site-cal-s{font-size:11.5px;color:var(--muted);text-align:center;padding:2px 0;font-weight:700}
+.site-cal-s.fds{color:var(--accent-ink)}
+.site-cal-d{min-height:78px;display:flex;flex-direction:column;gap:3px;padding:6px;border:1px solid var(--glass-line);border-radius:var(--r-s);background:var(--glass-2);min-width:0;overflow:hidden}
+.site-cal-d.fds{background:var(--accent-wash)}
+.site-cal-d.hoje{border-color:var(--brand)}
+.site-cal-d.corrida{box-shadow:inset 0 -3px 0 var(--brand)}
+.site-cal-p{display:flex;flex-wrap:wrap;gap:3px}
+.site-cal-corrida{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.site-cal-lista{margin:0;padding-left:0;list-style:none;display:grid;gap:4px}
+@media (max-width:600px){.site-cal-d{min-height:56px;padding:4px}.site-cal .n{display:none}.site-p{padding:1px 4px}}
+/* #52: a semana na horizontal (dias nas colunas); no celular, um dia por linha */
+.site-semana2{display:grid;grid-template-columns:72px repeat(7,minmax(0,1fr));gap:6px;align-items:stretch}
+.site-semana2-rot{display:grid;grid-template-rows:28px 1fr 1fr;gap:6px;font-size:12px;color:var(--muted);font-weight:700;align-items:center}
+.site-semana2-dia{display:grid;grid-template-rows:28px 1fr 1fr;gap:6px;text-align:center;min-width:0}
+.site-semana2-dia>b{align-self:center}
+.site-semana2-dia.fds>b{color:var(--accent-ink)}
+.site-slot{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;border:1px solid var(--glass-line);border-radius:var(--r-s);background:var(--glass-2);min-width:0}
+.site-slot.on{border-color:var(--ok);background:var(--ok-wash)}
+.site-slot .inp{width:100%;max-width:64px;text-align:center}
+.site-slot-rot{display:none}
+.site-horarios{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));margin-top:14px}
+@media (max-width:760px){
+  .site-semana2{grid-template-columns:1fr}
+  .site-semana2-rot{display:none}
+  .site-semana2-dia{grid-template-rows:none;grid-template-columns:48px 1fr 1fr;align-items:center;text-align:left}
+  .site-slot{flex-direction:row;justify-content:flex-start;padding:6px 8px}
+  .site-slot-rot{display:inline}
+  .site-slot .inp{max-width:56px}
+}

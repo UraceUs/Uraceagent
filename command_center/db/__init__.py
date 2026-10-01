@@ -212,6 +212,9 @@ MIGRACOES = [
     # 01/10 — dono (#54): cliente de outro país (telefone com código) e rede social do piloto.
     ("portal_accounts", "phone_country", "TEXT NOT NULL DEFAULT '+1'"),
     ("portal_pilots", "social", "TEXT"),
+    # 01/10 — dono (#52): "toda segunda fica bloqueado para não ter nenhuma aula". Bloqueio
+    # recorrente: vale só naquele dia da semana, dentro do intervalo (fim aberto = 9999-12-31).
+    ("booking_blocks", "weekday", "INTEGER"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

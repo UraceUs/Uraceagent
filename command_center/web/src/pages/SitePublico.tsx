@@ -1,7 +1,7 @@
 /* Site público, visto de dentro (#41): a agenda que o cliente usa na área do cliente.
  * Agendamentos: o que o cliente pediu (confirmar, recusar). Disponibilidade: a semana,
  * os horários, os bloqueios — quem mexe é o gerente; a operação vê. */
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
@@ -17,7 +17,7 @@ type Tom = 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'
 interface Per { open: boolean; spots: number; reason: string | null; capacity: number; used: number }
 interface Dia { date: string; weekday: number; any_open: boolean; periods: { manha: Per; tarde: Per; dia: { open: boolean } } }
 interface Regra { weekday: number; dia: string; period: 'manha' | 'tarde'; open: boolean; capacity: number }
-interface Bloqueio { id: number; date_from: string; date_to: string; period: string; reason: string | null; created_at: string }
+interface Bloqueio { id: number; date_from: string; date_to: string; period: string; reason: string | null; created_at: string; weekday: number | null }
 interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number }
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; active: number; sort: number; updated_at: string | null }
@@ -78,41 +78,72 @@ function Agendamentos() {
   </>
 }
 
-function Mes({ dias }: { dias: Dia[] }) {
+interface Corrida { id: number; name: string; series: string | null; track: string | null; city: string | null; date_start: string; date_end: string }
+const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+const DIAS_LONGOS = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
+const ultimoDia = (mes: string) => { const [a, m] = mes.split('-').map(Number); return `${mes}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}` }
+const somaMes = (mes: string, n: number) => { const [a, m] = mes.split('-').map(Number); const d = new Date(a, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
+
+/* Calendário do mês (#52): dono, 01/10 — "um calendário por mês, que mostre os finais de
+ * semana e os dias que a gente vai ter corridas". Semana começa na segunda. */
+function Calendario({ mes, setMes, dias, corridas }: { mes: string; setMes: (m: string) => void; dias: Dia[]; corridas: Corrida[] }) {
+  const porData = Object.fromEntries(dias.map(d => [d.date, d]))
+  const [a, m] = mes.split('-').map(Number)
+  const vazios = (new Date(a, m - 1, 1).getDay() + 6) % 7
+  const total = new Date(a, m, 0).getDate()
+  const hoje = hojeFL()
   const cor = (p: Per) => p.open ? 'ok' : p.reason === 'lotado' ? 'warn' : p.reason?.startsWith('bloqueado') ? 'crit' : 'neutral'
-  return <div className="site-mes">{dias.map(d => <div key={d.date} className="site-dia" title={`${d.periods.manha.reason || 'manhã aberta'} · ${d.periods.tarde.reason || 'tarde aberta'}`}>
-    <span className="small muted">{semanaDe(d.date)}</span><b>{dbr(d.date)}</b>
-    <span className={`site-p ${cor(d.periods.manha)}`}>M {d.periods.manha.capacity ? `${d.periods.manha.used}/${d.periods.manha.capacity}` : '—'}</span>
-    <span className={`site-p ${cor(d.periods.tarde)}`}>T {d.periods.tarde.capacity ? `${d.periods.tarde.used}/${d.periods.tarde.capacity}` : '—'}</span>
-  </div>)}</div>
+  const corridasDe = (iso: string) => corridas.filter(c => c.date_start <= iso && iso <= c.date_end)
+  return <div className="stack" style={{ gap: 10 }}>
+    <div className="row"><button className="btn ghost sm" aria-label="Mês anterior" onClick={() => setMes(somaMes(mes, -1))}>‹</button>
+      <h3 className="h3 grow" style={{ margin: 0, textAlign: 'center' }}>{MESES[m - 1][0].toUpperCase() + MESES[m - 1].slice(1)} de {a}</h3>
+      <button className="btn ghost sm" aria-label="Próximo mês" onClick={() => setMes(somaMes(mes, 1))}>›</button></div>
+    <div className="site-cal" role="grid" aria-label={`Agenda de ${MESES[m - 1]}`}>
+      {DIAS.map((d, i) => <div key={d} className={`site-cal-s${i >= 5 ? ' fds' : ''}`} role="columnheader">{d}</div>)}
+      {Array.from({ length: vazios }, (_, i) => <div key={`v${i}`} />)}
+      {Array.from({ length: total }, (_, i) => {
+        const iso = `${mes}-${String(i + 1).padStart(2, '0')}`, d = porData[iso], dsem = (vazios + i) % 7, cs = corridasDe(iso)
+        return <div key={iso} role="gridcell" className={`site-cal-d${dsem >= 5 ? ' fds' : ''}${iso === hoje ? ' hoje' : ''}${cs.length ? ' corrida' : ''}`}
+          title={[d ? `manhã: ${d.periods.manha.reason || 'aberta'} · tarde: ${d.periods.tarde.reason || 'aberta'}` : '', ...cs.map(c => `🏁 ${c.name}`)].filter(Boolean).join('\n')}>
+          <b>{i + 1}</b>
+          {d && <span className="site-cal-p"><span className={`site-p ${cor(d.periods.manha)}`}>M<span className="n"> {d.periods.manha.capacity ? `${d.periods.manha.used}/${d.periods.manha.capacity}` : ''}</span></span>
+            <span className={`site-p ${cor(d.periods.tarde)}`}>T<span className="n"> {d.periods.tarde.capacity ? `${d.periods.tarde.used}/${d.periods.tarde.capacity}` : ''}</span></span></span>}
+          {cs.map(c => <span key={c.id} className="site-cal-corrida">🏁 <span className="n">{c.series || c.name}</span></span>)}
+        </div>
+      })}
+    </div>
+    <p className="small muted" style={{ margin: 0 }}>M = manhã, T = tarde (marcadas/vagas). Verde aberto, laranja lotado, vermelho bloqueado, cinza fechado. Fim de semana em destaque; 🏁 = corrida do calendário de corridas.</p>
+    {corridas.length > 0 && <ul className="small site-cal-lista">{corridas.map(c => <li key={c.id}>🏁 <b>{dbr(c.date_start)}{c.date_end !== c.date_start ? `–${dbr(c.date_end)}` : ''}</b> {c.name}{c.track ? ` · ${c.track}` : ''}</li>)}</ul>}
+  </div>
 }
 
 function Disponibilidade() {
   const { can } = useAuth()
   const gerente = can('MANAGER')
   const toast = useToast()
-  const a = useGet<Agenda>('/site/agenda')
+  const [mes, setMes] = useState(hojeFL().slice(0, 7))
+  const a = useGet<Agenda & { corridas: Corrida[] }>(`/site/agenda?de=${mes}-01&ate=${ultimoDia(mes)}`)
   const [regras, setRegras] = useState<Regra[] | null>(null)
   const [cfg, setCfg] = useState<Cfg | null>(null)
-  const [bl, setBl] = useState({ date_from: '', date_to: '', period: 'dia', reason: '' })
+  const [bl, setBl] = useState({ modo: 'data' as 'data' | 'semana', weekday: 0, date_from: '', date_to: '', period: 'dia', reason: '' })
   const semana = regras || a.data?.semana || []
   const c = cfg || a.data?.config_completa
   const muda = (d: number, p: string, x: Partial<Regra>) => setRegras(semana.map(r => r.weekday === d && r.period === p ? { ...r, ...x } : r))
-  const proximos = useMemo(() => (a.data?.dias || []).slice(0, 35), [a.data])
 
-  async function salvarSemana() {
-    try { await api.put('/site/agenda/semana', semana.map(({ weekday, period, open, capacity }) => ({ weekday, period, open, capacity })))
-      toast('Semana salva: o cliente já vê.', 'ok'); setRegras(null); a.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
-  }
-  async function salvarCfg() {
-    if (!c) return
-    try { await api.patch('/site/agenda/config', { ...c, auto_confirm: !!c.auto_confirm }); toast('Regras salvas.', 'ok'); setCfg(null); a.reload() }
-    catch (e) { toast((e as ApiError).message, 'crit') }
+  async function salvar() {
+    try {
+      if (regras) await api.put('/site/agenda/semana', semana.map(({ weekday, period, open, capacity }) => ({ weekday, period, open, capacity })))
+      if (cfg && c) await api.patch('/site/agenda/config', { ...c, auto_confirm: !!c.auto_confirm })
+      toast(regras ? 'Semana salva: o cliente já vê.' : 'Regras salvas.', 'ok'); setRegras(null); setCfg(null); a.reload()
+    } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function bloquear() {
-    if (!bl.date_from) { toast('Diga a data.', 'warn'); return }
-    try { await api.post('/site/agenda/bloqueios', { ...bl, date_to: bl.date_to || null, reason: bl.reason || null }); toast('Bloqueado.', 'ok')
-      setBl({ date_from: '', date_to: '', period: 'dia', reason: '' }); a.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+    if (bl.modo === 'data' && !bl.date_from) { toast('Diga a data.', 'warn'); return }
+    const corpo = bl.modo === 'semana'
+      ? { weekday: bl.weekday, date_from: bl.date_from || null, date_to: bl.date_to || null, period: bl.period, reason: bl.reason || null }
+      : { date_from: bl.date_from, date_to: bl.date_to || null, period: bl.period, reason: bl.reason || null }
+    try { await api.post('/site/agenda/bloqueios', corpo); toast('Bloqueado.', 'ok')
+      setBl({ ...bl, date_from: '', date_to: '', reason: '' }); a.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function desbloquear(b: Bloqueio) {
     try { await api.post(`/site/agenda/bloqueios/${b.id}/remover`); toast('Desbloqueado.', 'ok'); a.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
@@ -120,46 +151,54 @@ function Disponibilidade() {
   if (a.error && !a.data) return <ErrorState error={a.error} retry={a.reload} />
   if (!a.data || !c) return <Loading />
   const nadaAberto = !a.data.semana.some(r => r.open)
+  const descreve = (b: Bloqueio) => b.weekday != null
+    ? <>toda <b>{DIAS_LONGOS[b.weekday]}</b>{b.date_to === '9999-12-31' ? ` · desde ${dbr(b.date_from)}` : ` · ${dbr(b.date_from)} a ${dbr(b.date_to)}`}</>
+    : <b>{dbr(b.date_from)}{b.date_to !== b.date_from ? ` a ${dbr(b.date_to)}` : ''}</b>
   return <div className="stack" style={{ gap: 18 }}>
     {nadaAberto && <div className="banner warn"><span className="bi">▲</span><div className="grow">A agenda está <b>fechada</b>: nenhum dia da semana aberto. Abra abaixo os dias e períodos em que o cliente pode marcar.</div></div>}
-    <Section title="Próximos dias" count={proximos.length}><Mes dias={proximos} />
-      <p className="small muted" style={{ margin: '8px 0 0' }}>M = manhã, T = tarde (marcadas/vagas). Verde aberto, laranja lotado, vermelho bloqueado, cinza fechado.</p></Section>
+    <Section title="Calendário do mês"><Calendario mes={mes} setMes={setMes} dias={a.data.dias} corridas={a.data.corridas || []} /></Section>
 
-    <Section title="A semana">
-      <div className="site-semana"><span /><b className="small muted">Manhã</b><b className="small muted">Tarde</b>
-        {DIAS.map((nome, d) => [<b key={`n${d}`}>{nome}</b>,
-        ...(['manha', 'tarde'] as const).map(p => { const r = semana.find(x => x.weekday === d && x.period === p)!
-          return <label key={`${d}${p}`} className="row" style={{ gap: 6 }}>
-            <input type="checkbox" disabled={!gerente} checked={r.open} onChange={e => muda(d, p, { open: e.target.checked })} aria-label={`${nome} ${PER[p]} aberto`} />
-            <input className="inp" style={{ width: 70 }} type="number" min={1} max={50} disabled={!gerente || !r.open} value={r.capacity}
-              onChange={e => muda(d, p, { capacity: Number(e.target.value) || 1 })} aria-label={`vagas ${nome} ${PER[p]}`} />
-            <span className="small muted">vagas</span></label> })])}
+    <Section title="Semana, horários e regras">
+      <div className="site-semana2" role="table" aria-label="Vagas por dia da semana">
+        <div className="site-semana2-rot" role="row" aria-hidden="true"><span /><span>Manhã</span><span>Tarde</span></div>
+        {DIAS.map((nome, d) => <div key={d} className={`site-semana2-dia${d >= 5 ? ' fds' : ''}`} role="row">
+          <b role="rowheader">{nome}</b>
+          {(['manha', 'tarde'] as const).map(p => { const r = semana.find(x => x.weekday === d && x.period === p)!
+            return <div key={p} className={`site-slot${r.open ? ' on' : ''}`} role="cell">
+              <label className="row" style={{ gap: 6 }}><input type="checkbox" disabled={!gerente} checked={r.open} onChange={e => muda(d, p, { open: e.target.checked })} aria-label={`${nome} ${PER[p]} aberto`} />
+                <span className="site-slot-rot">{PER[p]}</span></label>
+              <input className="inp" type="number" min={1} max={50} disabled={!gerente || !r.open} value={r.capacity}
+                onChange={e => muda(d, p, { capacity: Number(e.target.value) || 1 })} aria-label={`vagas ${nome} ${PER[p]}`} />
+              <span className="small muted">vagas</span></div> })}
+        </div>)}
       </div>
-      {gerente && regras && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvarSemana}>Salvar a semana</button></div>}
-    </Section>
-
-    <Section title="Horários e regras">
-      <div className="row gap wrap" style={{ alignItems: 'flex-end' }}>
+      <div className="site-horarios">
         {([['morning_start', 'Manhã começa'], ['morning_end', 'Manhã termina'], ['afternoon_start', 'Tarde começa'], ['afternoon_end', 'Tarde termina']] as const).map(([k, rot]) =>
           <label key={k} className="fld" style={{ margin: 0 }}><span>{rot}</span><input type="time" disabled={!gerente} value={c[k]} onChange={e => setCfg({ ...c, [k]: e.target.value })} /></label>)}
-        <label className="fld" style={{ margin: 0, width: 150 }}><span>Antecedência (horas)</span><input type="number" min={0} disabled={!gerente} value={c.min_notice_hours} onChange={e => setCfg({ ...c, min_notice_hours: Number(e.target.value) })} /></label>
-        <label className="fld" style={{ margin: 0, width: 150 }}><span>Mostra até (dias)</span><input type="number" min={1} disabled={!gerente} value={c.horizon_days} onChange={e => setCfg({ ...c, horizon_days: Number(e.target.value) })} /></label>
+        <label className="fld" style={{ margin: 0 }}><span>Antecedência (horas)</span><input type="number" min={0} disabled={!gerente} value={c.min_notice_hours} onChange={e => setCfg({ ...c, min_notice_hours: Number(e.target.value) })} /></label>
+        <label className="fld" style={{ margin: 0 }}><span>Mostra até (dias)</span><input type="number" min={1} disabled={!gerente} value={c.horizon_days} onChange={e => setCfg({ ...c, horizon_days: Number(e.target.value) })} /></label>
       </div>
       <label className="check" style={{ marginTop: 10 }}><input type="checkbox" disabled={!gerente} checked={!!c.auto_confirm} onChange={e => setCfg({ ...c, auto_confirm: e.target.checked ? 1 : 0 })} /> Confirmar sozinho <span className="small muted">(desligado: a equipe confirma cada pedido)</span></label>
-      {gerente && cfg && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvarCfg}>Salvar regras</button></div>}
+      {gerente && (regras || cfg) && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvar}>{regras ? 'Salvar a semana' : 'Salvar regras'}</button></div>}
     </Section>
 
     <Section title="Bloqueios" count={a.data.bloqueios.length}>
-      {gerente && <div className="row gap wrap" style={{ alignItems: 'flex-end', marginBottom: 10 }}>
-        <label className="fld" style={{ margin: 0 }}><span>De</span><input type="date" value={bl.date_from} onChange={e => setBl({ ...bl, date_from: e.target.value })} /></label>
-        <label className="fld" style={{ margin: 0 }}><span>Até <i>(opcional)</i></span><input type="date" value={bl.date_to} onChange={e => setBl({ ...bl, date_to: e.target.value })} /></label>
-        <label className="fld" style={{ margin: 0 }}><span>O quê</span><select value={bl.period} onChange={e => setBl({ ...bl, period: e.target.value })}>
-          <option value="dia">o dia todo</option><option value="manha">só a manhã</option><option value="tarde">só a tarde</option></select></label>
-        <label className="fld grow" style={{ margin: 0, minWidth: 160 }}><span>Motivo <i>(só a equipe vê)</i></span><input value={bl.reason} onChange={e => setBl({ ...bl, reason: e.target.value })} placeholder="corrida, manutenção, feriado" /></label>
-        <button className="btn" onClick={bloquear}>Bloquear</button>
-      </div>}
+      {gerente && <div className="stack" style={{ gap: 10, marginBottom: 10 }}>
+        <div className="seg" role="radiogroup" aria-label="Tipo de bloqueio">{([['data', 'Uma data ou período'], ['semana', 'Toda semana']] as const).map(([k, r]) =>
+          <button key={k} type="button" role="radio" aria-checked={bl.modo === k} className={`btn sm${bl.modo === k ? '' : ' ghost'}`} onClick={() => setBl({ ...bl, modo: k })}>{r}</button>)}</div>
+        <div className="row gap wrap" style={{ alignItems: 'flex-end' }}>
+          {bl.modo === 'semana' && <label className="fld" style={{ margin: 0 }}><span>Dia da semana</span><select value={bl.weekday} onChange={e => setBl({ ...bl, weekday: Number(e.target.value) })}>
+            {DIAS_LONGOS.map((d, i) => <option key={d} value={i}>toda {d}</option>)}</select></label>}
+          <label className="fld" style={{ margin: 0 }}><span>{bl.modo === 'semana' ? 'A partir de' : 'De'}{bl.modo === 'semana' && <i> (opcional)</i>}</span><input type="date" value={bl.date_from} onChange={e => setBl({ ...bl, date_from: e.target.value })} /></label>
+          <label className="fld" style={{ margin: 0 }}><span>Até <i>(opcional)</i></span><input type="date" value={bl.date_to} onChange={e => setBl({ ...bl, date_to: e.target.value })} /></label>
+          <label className="fld" style={{ margin: 0 }}><span>O quê</span><select value={bl.period} onChange={e => setBl({ ...bl, period: e.target.value })}>
+            <option value="dia">o dia todo</option><option value="manha">só a manhã</option><option value="tarde">só a tarde</option></select></label>
+          <label className="fld grow" style={{ margin: 0, minWidth: 160 }}><span>Motivo <i>(só a equipe vê)</i></span><input value={bl.reason} onChange={e => setBl({ ...bl, reason: e.target.value })} placeholder="corrida, manutenção, feriado" /></label>
+          <button className="btn" onClick={bloquear}>Bloquear</button>
+        </div></div>}
       {!a.data.bloqueios.length ? <Empty title="Nenhum bloqueio" /> : <div className="tbl">{a.data.bloqueios.map(b => <div className="tr" key={b.id}>
-        <div className="grow"><b>{dbr(b.date_from)}{b.date_to !== b.date_from ? ` a ${dbr(b.date_to)}` : ''}</b> · {PER[b.period]}{b.reason ? <span className="small muted"> · {b.reason}</span> : null}</div>
+        <div className="grow">{descreve(b)} · {PER[b.period]}{b.reason ? <span className="small muted"> · {b.reason}</span> : null}</div>
+        {b.weekday != null && <Chip tone="info">recorrente</Chip>}
         {gerente && <button className="btn sm ghost" onClick={() => desbloquear(b)}>Desbloquear</button>}
       </div>)}</div>}
     </Section>
@@ -171,8 +210,6 @@ interface ContaSite { id: number; email: string; name: string; phone: string | n
   client_id: number | null; client_name: string | null; client_pilot: string | null; linked_at: string | null; linked_by_name: string | null
   drivers: number; pilotos: string[]; sugestao: Sugestao | null }
 
-/* Contas de clientes (#42): o sistema sugere o cliente interno; uma pessoa confirma. O vínculo
- * abre para o cliente o histórico daquele card — por isso nunca é automático. */
 /* Serviços e preços (#50): o gerente muda o preço aqui, sem código. Quem já marcou fica
  * com o valor do dia; desativar tira da área do cliente sem apagar. */
 function Servicos() {
@@ -240,6 +277,9 @@ function Servicos() {
   </div>
 }
 
+/* Contas de clientes (#42, #52): o sistema sugere o cliente interno; uma pessoa confirma. O
+ * vínculo abre para o cliente o histórico daquele card — por isso nunca é automático. Quem
+ * não está na base ganha o botão "Criar cliente": o card nasce com os dados da conta. */
 function Contas() {
   const { can } = useAuth()
   const toast = useToast()
@@ -250,6 +290,11 @@ function Contas() {
   async function vincular(c: ContaSite, clientId: number, nome: string) {
     if (!await perguntar({ titulo: `Ligar ${c.email} a ${nome}?`, texto: 'O cliente passa a ver na área do cliente o histórico de serviços deste card. Confira se é mesmo a mesma família.', ok: 'Vincular' })) return
     try { await api.post(`/site/contas/${c.id}/vincular`, { client_id: clientId }); toast('Vinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function criar(c: ContaSite) {
+    if (!await perguntar({ titulo: `Criar o cliente ${c.name}?`, texto: `O card nasce com os dados da conta (${c.email}${c.pilotos.length ? `, piloto ${c.pilotos[0]}` : ''}) e já fica vinculado.`, ok: 'Criar cliente' })) return
+    try { await api.post(`/site/contas/${c.id}/criar-cliente`); toast('Cliente criado e vinculado.', 'ok'); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function desvincular(c: ContaSite) {
     if (!await perguntar({ titulo: `Desligar ${c.email} de ${c.client_pilot || c.client_name}?`, texto: 'O cliente deixa de ver o histórico.', ok: 'Desvincular', perigo: true })) return
@@ -272,7 +317,8 @@ function Contas() {
             {c.sugestao ? <div className="row wrap" style={{ gap: 8 }}><span className="small grow">✦ Sugestão: <Link to={`/clients/${c.sugestao.client_id}`}><b>{c.sugestao.pilot_name || c.sugestao.name}</b></Link>
               {c.sugestao.pilot_name && c.sugestao.pilot_name !== c.sugestao.name ? ` (resp. ${c.sugestao.name})` : ''} · {c.sugestao.motivo}</span>
               <button className="btn sm primary" onClick={() => vincular(c, c.sugestao!.client_id, c.sugestao!.pilot_name || c.sugestao!.name)}>Vincular a este</button></div>
-              : <span className="small muted">Nenhum cliente parecido no site interno. Escolha abaixo, ou deixe para quando o cliente entrar pelo Asana.</span>}
+              : <div className="row wrap" style={{ gap: 8 }}><span className="small muted grow">Nenhum cliente parecido no site interno (pelo e-mail, telefone, nome do responsável ou do piloto). Se é cliente novo, crie o card; se já existe, escolha abaixo.</span>
+                <button className="btn sm primary" onClick={() => criar(c)}>Criar cliente</button></div>}
             <div className="row wrap" style={{ alignItems: 'flex-end', gap: 8 }}><div className="grow" style={{ minWidth: 220 }}>
               <Picker label="Outro cliente" value={outro[c.id] || null} onPick={x => setOutro(o => ({ ...o, [c.id]: x }))} /></div>
               {outro[c.id] && <button className="btn sm" onClick={() => vincular(c, outro[c.id]!.id, outro[c.id]!.pilot_name || outro[c.id]!.name)}>Vincular</button>}</div>

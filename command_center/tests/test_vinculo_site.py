@@ -138,3 +138,27 @@ def test_atencao_conta_sem_vinculo(cli):
 def test_servico_do_titulo():
     assert vs._servico("David Pera_Urace Daily_Using Own Kart [1/1]") == "Urace Daily · Using Own Kart"
     assert vs._servico("Só um nome") == "Session"
+
+
+# ------------------------------------------------------------------ #52: criar o cliente pela conta
+def test_criar_cliente_pela_conta_e_ja_vincular(cli):
+    """Dono, 01/10: conta de quem não está na base ganha o botão de criar o cliente."""
+    h, a = cliente(cli, "eduardo@example.com", nome="Eduardo Fillipe Farias Resende", piloto="Lucas Farias Resende")
+    equipe(cli)
+    contas = {c["id"]: c for c in cli.get("/ops/api/site/contas").json()["contas"]}
+    assert contas[a]["sugestao"] is None, "não existe na base"
+    r = cli.post(f"/ops/api/site/contas/{a}/criar-cliente", headers=equipe(cli))
+    assert r.status_code == 201, r.text
+    c = um(conectar(), "SELECT * FROM clients WHERE id=?", (r.json()["client_id"],))
+    assert (c["name"], c["email"], c["pilot_name"], c["pilot_dob"], c["source"], c["status"]) == \
+        ("Eduardo Fillipe Farias Resende", "eduardo@example.com", "Lucas Farias Resende", "2014-05-01", "site", "NEW")
+    assert um(conectar(), "SELECT client_id FROM portal_accounts WHERE id=?", (a,))["client_id"] == c["id"], "já vinculada"
+    assert cli.post(f"/ops/api/site/contas/{a}/criar-cliente", headers=equipe(cli)).status_code == 400, "não cria dois"
+    assert "portal.client.create" in {x["event"] for x in todos(conectar(), "SELECT event FROM audit_logs")}
+
+
+def test_criar_cliente_recusa_quando_ja_existe_pelo_email(cli):
+    _, a = cliente(cli, "paulo@kurian.com", nome="Paulo Kurian")
+    r = cli.post(f"/ops/api/site/contas/{a}/criar-cliente", headers=equipe(cli))
+    assert r.status_code == 400 and "vincule a ele" in r.json()["detail"]
+    assert um(conectar(), "SELECT COUNT(*) AS n FROM clients WHERE email='paulo@kurian.com'")["n"] == 1

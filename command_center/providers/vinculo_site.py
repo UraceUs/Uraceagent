@@ -19,7 +19,7 @@ outro cliente em card de outro cliente".
 import json
 import re
 
-from command_center.db import agora, atualizar, todos, um
+from command_center.db import agora, atualizar, inserir, todos, um
 from command_center.providers import identidade
 
 STATUS_SERVICO = {"completed": "done", "open": "scheduled"}
@@ -80,6 +80,31 @@ def vincular(con, conta_id, client_id, por):
         raise ErroVinculo(f"esse cliente já está ligado à conta {outra['email']}")
     atualizar(con, "portal_accounts", conta_id, client_id=client_id, linked_by=por, linked_at=agora(), updated_at=agora())
     return {"antes": a["client_id"], "depois": client_id}
+
+
+def criar_cliente(con, conta_id, por):
+    """Conta de alguém que não está na base (#52): cria o card com os dados da conta — o
+    responsável, o e-mail, o telefone e o piloto (o primeiro que não é o próprio responsável,
+    senão ele mesmo) — e vincula. Antes, confere: se o e-mail ou o telefone já são de um
+    cliente, não cria outro (é para vincular àquele)."""
+    a = um(con, "SELECT * FROM portal_accounts WHERE id=? AND active=1", (conta_id,))
+    if not a:
+        raise ErroVinculo("conta do site não existe")
+    if a["client_id"]:
+        raise ErroVinculo("essa conta já está vinculada")
+    for campo, valor in (("email", a["email"]), ("telefone", a["phone"])):
+        c, _ = identidade.acha_pessoa(con, **{campo: valor}) if valor else (None, None)
+        if c:
+            raise ErroVinculo(f"já existe um cliente com esse {'e-mail' if campo == 'email' else 'telefone'}: "
+                              f"{c['pilot_name'] or c['name']} — vincule a ele")
+    pil = todos(con, "SELECT name, birth_date, is_self FROM portal_pilots WHERE account_id=? AND active=1 ORDER BY is_self, id",
+                (conta_id,))
+    p = pil[0] if pil else None
+    cid = inserir(con, "clients", name=a["name"], email=a["email"], phone=a["phone"],
+                  pilot_name=p["name"] if p else a["name"], pilot_dob=p["birth_date"] if p else None,
+                  status="NEW", source="site", notes=f"Criado pela conta do site #{conta_id}.")
+    vincular(con, conta_id, cid, por)
+    return cid
 
 
 def desvincular(con, conta_id):

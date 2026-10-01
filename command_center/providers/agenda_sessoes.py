@@ -9,7 +9,8 @@ O modelo é pequeno de propósito:
 - a **semana** diz, para cada dia e cada período (manhã, tarde), se abre e quantas vagas
   tem. "Bloquear esse dia toda semana" é fechar os dois períodos daquele dia;
 - **bloqueios** tiram de uma data ou de um intervalo de datas a manhã, a tarde ou o dia
-  todo, com motivo. Desbloquear não apaga: o bloqueio fica inativo, com quem e quando;
+  todo, com motivo. Desbloquear não apaga: o bloqueio fica inativo, com quem e quando.
+  O bloqueio **recorrente** (#52) vale só num dia da semana ("toda segunda");
 - **dia todo** é manhã + tarde: só abre se as duas estão abertas e com vaga, e ocupa as duas;
 - a **antecedência mínima** conta até o início do período; o **horizonte** é até quantos
   dias à frente o cliente enxerga. Tudo no relógio da Flórida.
@@ -103,19 +104,36 @@ def bloqueios(con, ativos=True):
     return [dict(b) for b in todos(con, sql)]
 
 
-def bloquear(con, por, date_from, date_to=None, period="dia", reason=None):
+SEM_FIM = "9999-12-31"
+
+
+def bloquear(con, por, date_from=None, date_to=None, period="dia", reason=None, weekday=None):
+    """Bloqueio de uma data, de um intervalo, ou **recorrente** (#52): `weekday` (0=segunda)
+    bloqueia só aquele dia da semana, de `date_from` (padrão: hoje) até `date_to` (padrão:
+    sem fim)."""
+    if weekday is not None:
+        if not 0 <= int(weekday) <= 6:
+            raise ErroAgenda("dia da semana inválido")
+        date_from = date_from or _agora_fl().date().isoformat()
+        date_to = date_to or SEM_FIM
     try:
         a, b = date.fromisoformat(date_from), date.fromisoformat(date_to or date_from)
     except (TypeError, ValueError):
         raise ErroAgenda("data inválida (AAAA-MM-DD)")
     if b < a:
         raise ErroAgenda("o fim do bloqueio vem antes do começo")
-    if (b - a).days > 366:
-        raise ErroAgenda("bloqueio de mais de um ano: feche o dia na semana em vez disso")
+    if weekday is None and (b - a).days > 366:
+        raise ErroAgenda("bloqueio de mais de um ano: use o bloqueio recorrente (toda semana) em vez disso")
     if period not in ("dia", "manha", "tarde"):
         raise ErroAgenda("período inválido")
     return inserir(con, "booking_blocks", date_from=a.isoformat(), date_to=b.isoformat(), period=period,
-                   reason=(reason or "").strip()[:200] or None, created_by=por)
+                   reason=(reason or "").strip()[:200] or None, created_by=por,
+                   weekday=int(weekday) if weekday is not None else None)
+
+
+def _bloqueia(b, iso, dia_semana, periodo):
+    return (b["date_from"] <= iso <= b["date_to"] and b["period"] in ("dia", periodo)
+            and (b["weekday"] is None or b["weekday"] == dia_semana))
 
 
 def desbloquear(con, por, bid):
@@ -171,7 +189,7 @@ def disponibilidade(con, de=None, ate=None, visao="cliente"):
             if not r or not r["open"]:
                 motivo = "fechado"
             else:
-                bl = next((b for b in blocos if b["date_from"] <= iso <= b["date_to"] and b["period"] in ("dia", p)), None)
+                bl = next((b for b in blocos if _bloqueia(b, iso, d.weekday(), p)), None)
                 if bl:
                     motivo = "bloqueado" + (f": {bl['reason']}" if bl["reason"] and visao != "cliente" else "")
                 elif visao == "cliente" and _inicio(cfg, d, p) - agora_ < timedelta(hours=cfg["min_notice_hours"]):
