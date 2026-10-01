@@ -1298,3 +1298,19 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 CREATE INDEX IF NOT EXISTS bookings_data ON bookings(date, status);
 CREATE INDEX IF NOT EXISTS bookings_conta ON bookings(account_id);
+-- ------------------------------------------------------------ serviços e preços (#50)
+-- Dono, 01/10: "deixe o campo dos preços para ter a possibilidade de ser facilmente
+-- alterados". O preço mora aqui, editado pela equipe; o agendamento guarda o valor do dia
+-- (mudar o preço não muda o que já foi marcado). Desativar não apaga.
+CREATE TABLE IF NOT EXISTS booking_services (
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,
+  description  TEXT,
+  price        REAL NOT NULL CHECK (price >= 0),
+  qbo_item_id  TEXT,                                -- item do QuickBooks que vai na invoice
+  active       INTEGER NOT NULL DEFAULT 1,
+  sort         INTEGER NOT NULL DEFAULT 0,
+  updated_by   INTEGER REFERENCES users(id),
+  updated_at   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);

@@ -29,7 +29,7 @@ SENHA = "senha-de-teste-123"
 ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
-         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade"]
+         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos"]
 
 
 def _porta_livre():
@@ -334,6 +334,13 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     g.get_by_label("Sáb Manhã aberto").check()
     g.get_by_role("button", name="Salvar a semana").click()
     g.get_by_text("Semana salva").wait_for()
+    # 1b. gerente cadastra o serviço e o preço pela tela (#50): sem serviço, ninguém marca
+    abrir(g, servidor, "/site/servicos")
+    g.get_by_text("o cliente não consegue marcar", exact=False).wait_for()
+    g.get_by_label("Nome", exact=True).fill("Arrive and Drive")
+    g.get_by_label("Preço (US$)").fill("719")
+    g.get_by_role("button", name="Criar").click()
+    g.get_by_text("Serviço criado").wait_for()
     # 2. cliente cria a conta pela API e marca pela tela
     c = navegador.new_page(viewport={"width": 390, "height": 844})
     r = c.request.post(servidor + "/api/portal/signup", data={"name": "Cleo Agenda", "email": "cleo.e2e@example.com", "password": "pista-molhada-7",
@@ -351,6 +358,8 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
         c.get_by_role("button", name="Next month").click()
     c.get_by_role("gridcell", name=f"{rotulo}, available").click()
     c.get_by_role("button", name="Morning").click()
+    c.get_by_text("per driver").wait_for()                        # o preço aparece antes de marcar
+    assert "$719.00" in c.locator(".portal-servicos").inner_text()
     c.get_by_role("button", name="Request session").click()
     c.get_by_text("Request sent!").wait_for()
     c.get_by_text("Waiting for confirmation").wait_for()

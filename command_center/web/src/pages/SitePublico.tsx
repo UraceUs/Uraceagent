@@ -20,11 +20,15 @@ interface Regra { weekday: number; dia: string; period: 'manha' | 'tarde'; open:
 interface Bloqueio { id: number; date_from: string; date_to: string; period: string; reason: string | null; created_at: string }
 interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number }
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
+interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; active: number; sort: number; updated_at: string | null }
+interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
+  service_name: string | null; price: number | null
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null }
 
 const PER: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde', dia: 'Dia todo' }
 const ST: Record<string, [string, Tom]> = { pendente: ['esperando confirmação', 'warn'], confirmada: ['confirmada', 'ok'], recusada: ['recusada', 'crit'], cancelada: ['cancelada', 'neutral'] }
+const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 const dbr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const semanaDe = (iso: string) => DIAS[(new Date(iso + 'T12:00:00').getDay() + 6) % 7]
@@ -62,6 +66,7 @@ function Agendamentos() {
             <b>{semanaDe(a.date)} {dbr(a.date)} · {PER[a.period]}</b>
             <div className="small">{a.driver || a.account_name}{anos != null ? ` (${anos} anos)` : ''}{a.driver && a.driver !== a.account_name ? ` · responsável ${a.account_name}` : ''}</div>
             <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : ' · conta ainda sem vínculo'}</div>
+            {a.service_name && <div className="small">{a.service_name}{a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
             {a.notes && <div className="small">“{a.notes}”</div>}
           </div>
           <Chip tone={tom}>{rot}</Chip>
@@ -168,6 +173,73 @@ interface ContaSite { id: number; email: string; name: string; phone: string | n
 
 /* Contas de clientes (#42): o sistema sugere o cliente interno; uma pessoa confirma. O vínculo
  * abre para o cliente o histórico daquele card — por isso nunca é automático. */
+/* Serviços e preços (#50): o gerente muda o preço aqui, sem código. Quem já marcou fica
+ * com o valor do dia; desativar tira da área do cliente sem apagar. */
+function Servicos() {
+  const { can } = useAuth()
+  const gerente = can('MANAGER')
+  const toast = useToast()
+  const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
+  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item_id: '' })
+  const [edit, setEdit] = useState<Record<number, Partial<Servico> & { price_txt?: string }>>({})
+  const itens = l.data?.itens_qbo || []
+  async function criar() {
+    try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item_id: novo.qbo_item_id || null })
+      toast('Serviço criado: o cliente já vê.', 'ok'); setNovo({ name: '', description: '', price: '', qbo_item_id: '' }); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function salvar(sv: Servico, extra?: Partial<Servico>) {
+    const e = edit[sv.id] || {}
+    const corpo: Record<string, unknown> = { ...extra }
+    if (e.name !== undefined) corpo.name = e.name
+    if (e.description !== undefined) corpo.description = e.description || null
+    if (e.price_txt !== undefined) corpo.price = e.price_txt
+    if (e.qbo_item_id !== undefined) corpo.qbo_item_id = e.qbo_item_id || null
+    try { await api.patch(`/site/servicos/${sv.id}`, corpo); toast('Salvo. Vale para os próximos agendamentos.', 'ok')
+      setEdit(x => { const y = { ...x }; delete y[sv.id]; return y }); l.reload() }
+    catch (er) { toast((er as ApiError).message, 'crit') }
+  }
+  if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
+  if (!l.data) return <Loading />
+  const muda = (id: number, x: Partial<Servico> & { price_txt?: string }) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  return <div className="stack" style={{ gap: 18 }}>
+    {!l.data.servicos.some(x => x.active) && <div className="banner warn"><span className="bi">▲</span><div className="grow">Nenhum serviço ativo: o cliente <b>não consegue marcar</b> até haver pelo menos um, com preço.</div></div>}
+    <Section title="Serviços" count={l.data.servicos.length}>
+      {!l.data.servicos.length ? <Empty title="Nenhum serviço ainda">Cadastre abaixo o que o cliente pode marcar e o preço de cada um.</Empty>
+        : <div className="stack" style={{ gap: 10 }}>{l.data.servicos.map(sv => {
+          const e = edit[sv.id] || {}
+          return <div key={sv.id} className="card card-b">
+            <div className="site-servico">
+              <label className="fld"><span>Nome (o cliente lê, em inglês)</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
+              <label className="fld"><span>Descrição <i>opcional</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
+              <label className="fld"><span>Preço (US$)</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
+              <label className="fld"><span>Item no QuickBooks</span><select value={e.qbo_item_id ?? sv.qbo_item_id ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { qbo_item_id: x.target.value })}>
+                <option value="">— escolher —</option>{itens.map(i => <option key={i.id} value={i.id}>{i.name}{i.price != null ? ` (${usd(i.price)})` : ''}</option>)}</select></label>
+              {gerente && <div className="row" style={{ gap: 6 }}>
+                <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>Salvar</button>
+                <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? 'Desativar' : 'Reativar'}</button></div>}
+            </div>
+            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">na área do cliente</Chip> : <Chip tone="neutral">desativado</Chip>}
+              {!sv.qbo_item_id && <> · <span>sem item do QuickBooks: a invoice não sai até escolher</span></>}</div>
+          </div>
+        })}</div>}
+    </Section>
+    {gerente && <Section title="Novo serviço">
+      <div className="card card-b"><div className="site-servico">
+        <label className="fld"><span>Nome</span><input value={novo.name} onChange={x => setNovo({ ...novo, name: x.target.value })} placeholder="Arrive and Drive" /></label>
+        <label className="fld"><span>Descrição <i>opcional</i></span><input value={novo.description} onChange={x => setNovo({ ...novo, description: x.target.value })} /></label>
+        <label className="fld"><span>Preço (US$)</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
+        <label className="fld"><span>Item no QuickBooks</span><select value={novo.qbo_item_id} onChange={x => {
+          const i = itens.find(y => y.id === x.target.value)
+          setNovo({ ...novo, qbo_item_id: x.target.value, price: novo.price || (i?.price != null ? String(i.price) : '') }) }}>
+          <option value="">— escolher —</option>{itens.map(i => <option key={i.id} value={i.id}>{i.name}{i.price != null ? ` (${usd(i.price)})` : ''}</option>)}</select></label>
+        <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>Criar</button>
+      </div></div>
+      <p className="small muted" style={{ margin: '8px 0 0' }}>Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista de itens é a do QuickBooks sincronizado.</p>
+    </Section>}
+  </div>
+}
+
 function Contas() {
   const { can } = useAuth()
   const toast = useToast()
@@ -218,8 +290,9 @@ export function SitePublico() {
     <div className="tabs">
       <NavLink to="/site" end className={({ isActive }) => isActive ? 'on' : ''}>Agendamentos</NavLink>
       <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>Disponibilidade</NavLink>
+      <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>Serviços e preços</NavLink>
       <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>Contas de clientes</NavLink>
     </div>
-    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'contas' ? <Contas /> : <Agendamentos />}
+    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'contas' ? <Contas /> : <Agendamentos />}
   </>
 }

@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict
 
 from command_center.api import auth
 from command_center.db import agora, atualizar, auditar, get_db, inserir, transacao, um
-from command_center.providers import agenda_sessoes as ag, portal, vinculo_site
+from command_center.providers import agenda_sessoes as ag, portal, servicos_site, vinculo_site
 
 r = APIRouter(prefix="/ops/api/portal", tags=["portal"])
 
@@ -251,7 +251,7 @@ def disponibilidade(start: str | None = None, end: str | None = None, cid=Depend
     for dia in d["dias"]:
         for p in ("manha", "tarde"):
             dia["periods"][p] = {"open": dia["periods"][p]["open"], "spots": dia["periods"][p]["spots"]}
-    return d
+    return {**d, "services": servicos_site.para_cliente(con)}
 
 
 @r.get("/bookings")
@@ -263,6 +263,7 @@ class AgendarIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     date: str
     period: str
+    service_id: int | None = None
     driver_id: int | None = None
     notes: str | None = None
 
@@ -271,8 +272,9 @@ class AgendarIn(BaseModel):
 def agendar(dados: AgendarIn, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     try:
         with transacao(con):                  # duas pessoas na última vaga: só uma leva
-            bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes)
-            _aud(con, request, "portal.booking", cid, {"agendamento": bid, "data": dados.date, "periodo": dados.period})
+            bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes, dados.service_id)
+            _aud(con, request, "portal.booking", cid, {"agendamento": bid, "data": dados.date, "periodo": dados.period,
+                                                        "servico": dados.service_id})
     except ag.ErroAgenda as e:
         raise HTTPException(400, str(e))
     return {"id": bid, "bookings": ag.do_cliente(con, cid)}

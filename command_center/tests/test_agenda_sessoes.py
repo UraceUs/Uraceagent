@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from command_center.api import atencao, auth  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir, todos  # noqa: E402
-from command_center.providers import agenda_sessoes as ag  # noqa: E402
+from command_center.providers import agenda_sessoes as ag, servicos_site  # noqa: E402
 
 SENHA = "senha-forte-123"
 FL = ag.FUSO
@@ -38,6 +38,12 @@ def conta(con, email="c@example.com"):
                   terms_accepted_at="2026-09-30T00:00:00Z")
     pid = inserir(con, "portal_pilots", account_id=cid, name="Piloto Teste")
     return cid, pid
+
+
+def sv(con):
+    """Um serviço ativo cadastrado pela equipe (#50): sem ele, ninguém marca."""
+    s = todos(con, "SELECT id FROM booking_services WHERE active=1 LIMIT 1")
+    return s[0]["id"] if s else servicos_site.criar(con, None, {"name": "Arrive and Drive", "price": 719})
 
 
 def abre(con, dias=range(7), periodos=("manha", "tarde"), cap=1):
@@ -121,13 +127,13 @@ def test_capacidade_e_dia_todo_ocupa_os_dois(con):
     abre(con, cap=2)
     d = proximo(2)
     c1, p1 = conta(con, "a@x.com"); c2, p2 = conta(con, "b@x.com"); c3, p3 = conta(con, "c@x.com")
-    ag.agendar(con, c1, d.isoformat(), "manha", p1)
+    ag.agendar(con, c1, d.isoformat(), "manha", p1, servico_id=sv(con))
     assert periodo(con, d, "manha")["spots"] == 1
-    ag.agendar(con, c2, d.isoformat(), "dia", p2)
+    ag.agendar(con, c2, d.isoformat(), "dia", p2, servico_id=sv(con))
     assert not periodo(con, d, "manha")["open"] and periodo(con, d, "tarde")["spots"] == 1
     with pytest.raises(ag.ErroAgenda, match="no longer available"):
-        ag.agendar(con, c3, d.isoformat(), "manha", p3)
-    ag.agendar(con, c3, d.isoformat(), "tarde", p3)
+        ag.agendar(con, c3, d.isoformat(), "manha", p3, servico_id=sv(con))
+    ag.agendar(con, c3, d.isoformat(), "tarde", p3, servico_id=sv(con))
     assert periodo(con, d, "tarde", "equipe")["reason"] == "lotado"
 
 
@@ -135,11 +141,11 @@ def test_cancelada_e_recusada_liberam_a_vaga(con):
     abre(con)
     d = proximo(2)
     c1, p1 = conta(con, "a@x.com"); c2, p2 = conta(con, "b@x.com")
-    b = ag.agendar(con, c1, d.isoformat(), "manha", p1)
+    b = ag.agendar(con, c1, d.isoformat(), "manha", p1, servico_id=sv(con))
     assert not periodo(con, d, "manha")["open"]
     ag.decidir(con, None, b, "recusar", "chuva")
     assert periodo(con, d, "manha")["open"]
-    b2 = ag.agendar(con, c2, d.isoformat(), "manha", p2)
+    b2 = ag.agendar(con, c2, d.isoformat(), "manha", p2, servico_id=sv(con))
     ag.cancelar_pelo_cliente(con, c2, b2)
     assert periodo(con, d, "manha")["open"]
 
@@ -148,33 +154,33 @@ def test_mesmo_piloto_nao_marca_duas_vezes_no_mesmo_periodo(con):
     abre(con, cap=3)
     d = proximo(2)
     c, p = conta(con)
-    ag.agendar(con, c, d.isoformat(), "manha", p)
+    ag.agendar(con, c, d.isoformat(), "manha", p, servico_id=sv(con))
     with pytest.raises(ag.ErroAgenda, match="already has"):
-        ag.agendar(con, c, d.isoformat(), "dia", p)
-    ag.agendar(con, c, d.isoformat(), "tarde", p)
+        ag.agendar(con, c, d.isoformat(), "dia", p, servico_id=sv(con))
+    ag.agendar(con, c, d.isoformat(), "tarde", p, servico_id=sv(con))
 
 
 def test_piloto_de_outra_conta_e_data_fechada(con):
     abre(con, dias=[2])
     c1, p1 = conta(con, "a@x.com"); c2, _ = conta(con, "b@x.com")
     with pytest.raises(ag.ErroAgenda, match="Driver not found"):
-        ag.agendar(con, c2, proximo(2).isoformat(), "manha", p1)
+        ag.agendar(con, c2, proximo(2).isoformat(), "manha", p1, servico_id=sv(con))
     with pytest.raises(ag.ErroAgenda, match="no longer available"):
-        ag.agendar(con, c1, proximo(3).isoformat(), "manha", p1)
+        ag.agendar(con, c1, proximo(3).isoformat(), "manha", p1, servico_id=sv(con))
 
 
 def test_confirmacao_automatica(con):
     abre(con)
     c, p = conta(con)
-    assert todos(con, "SELECT status FROM bookings WHERE id=?", (ag.agendar(con, c, proximo(2).isoformat(), "manha", p),))[0]["status"] == "pendente"
+    assert todos(con, "SELECT status FROM bookings WHERE id=?", (ag.agendar(con, c, proximo(2).isoformat(), "manha", p, servico_id=sv(con)),))[0]["status"] == "pendente"
     ag.mudar_config(con, None, auto_confirm=True)
-    assert todos(con, "SELECT status FROM bookings WHERE id=?", (ag.agendar(con, c, proximo(3).isoformat(), "manha", p),))[0]["status"] == "confirmada"
+    assert todos(con, "SELECT status FROM bookings WHERE id=?", (ag.agendar(con, c, proximo(3).isoformat(), "manha", p, servico_id=sv(con)),))[0]["status"] == "confirmada"
 
 
 def test_decisoes_validas(con):
     abre(con)
     c, p = conta(con)
-    b = ag.agendar(con, c, proximo(2).isoformat(), "manha", p)
+    b = ag.agendar(con, c, proximo(2).isoformat(), "manha", p, servico_id=sv(con))
     assert ag.decidir(con, None, b, "confirmar") == "confirmada"
     with pytest.raises(ag.ErroAgenda):
         ag.decidir(con, None, b, "recusar")
@@ -184,7 +190,7 @@ def test_decisoes_validas(con):
 def test_atencao_mostra_pedido_do_site(con):
     abre(con)
     c, p = conta(con)
-    ag.agendar(con, c, proximo(2).isoformat(), "manha", p)
+    ag.agendar(con, c, proximo(2).isoformat(), "manha", p, servico_id=sv(con))
     chaves = {i["key"]: i for i in atencao.coletar(con)}
     assert chaves["agenda-site:booking:pendentes"]["level"] == "HIGH"
 
@@ -221,11 +227,13 @@ def test_fluxo_completo_pela_api(cli):
     assert cli.put("/ops/api/site/agenda/semana", headers=h, json=regras).status_code == 200
     d = proximo(2)
     bid = cli.post("/ops/api/site/agenda/bloqueios", headers=h, json={"date_from": d.isoformat(), "period": "tarde", "reason": "manutenção"}).json()["id"]
+    servico = cli.post("/ops/api/site/servicos", headers=h, json={"name": "Arrive and Drive", "price": "719.00"}).json()["id"]
     hc, piloto = cliente(cli)
     disp = cli.get(f"/ops/api/portal/availability?start={d}&end={d}").json()["dias"][0]["periods"]
     assert disp["manha"] == {"open": True, "spots": 1} and disp["tarde"] == {"open": False, "spots": 0}, "sem motivo interno"
-    assert cli.post("/ops/api/portal/bookings", headers=hc, json={"date": d.isoformat(), "period": "tarde", "driver_id": piloto}).status_code == 400
-    r = cli.post("/ops/api/portal/bookings", headers=hc, json={"date": d.isoformat(), "period": "manha", "driver_id": piloto, "notes": "primeira vez"})
+    assert cli.post("/ops/api/portal/bookings", headers=hc, json={"date": d.isoformat(), "period": "tarde", "driver_id": piloto, "service_id": servico}).status_code == 400
+    r = cli.post("/ops/api/portal/bookings", headers=hc, json={"date": d.isoformat(), "period": "manha", "driver_id": piloto, "notes": "primeira vez",
+                                                               "service_id": servico})
     assert r.status_code == 201 and r.json()["bookings"][0]["status"] == "pendente"
     b = r.json()["id"]
     assert cli.get("/ops/api/site/agendamentos").status_code == 401, "cliente não vê a lista da equipe"
@@ -241,8 +249,10 @@ def test_fluxo_completo_pela_api(cli):
 def test_cliente_so_cancela_o_que_e_dele(cli):
     h = equipe(cli, "ger@urace.us")
     cli.put("/ops/api/site/agenda/semana", headers=h, json=[{"weekday": d, "period": "manha", "open": True, "capacity": 3} for d in range(7)])
+    servico = cli.post("/ops/api/site/servicos", headers=h, json={"name": "Arrive and Drive", "price": 719}).json()["id"]
     hc, piloto = cliente(cli, "a@example.com")
-    b = cli.post("/ops/api/portal/bookings", headers=hc, json={"date": proximo(2).isoformat(), "period": "manha", "driver_id": piloto}).json()["id"]
+    b = cli.post("/ops/api/portal/bookings", headers=hc, json={"date": proximo(2).isoformat(), "period": "manha", "driver_id": piloto,
+                                                               "service_id": servico}).json()["id"]
     hc2, _ = cliente(cli, "b@example.com")
     assert cli.post(f"/ops/api/portal/bookings/{b}/cancel", headers=hc2).status_code == 404
     assert cli.get("/ops/api/portal/bookings").json()["bookings"] == []
