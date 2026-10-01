@@ -605,11 +605,13 @@ Center; site público = urace.us. Tudo nasce e é testado no site interno, em `/
       do backup de 1,8 GB, sem apagar nada
 - [x] 🤖 Endereço: o site mostra o da pista, 10724 Cosmonaut Blvd. O 6149 Cyril Ave é o de cobrança
       e do galpão, e não estava no urace.us (o mapa de 30/09 errou nisso)
-- [ ] 👤 Dizer: o box no Orlando Kart Center é o **3** (schema do Google) ou o **5** (páginas de serviço)?
-- [ ] 👤 Decidir a área do cliente no urace.us. Recomendado: `my.urace.us` → VPS, criado no
-      **Google Cloud DNS** (o DNS não fica na Hostinger), e o WordPress só linka
-- [ ] 👤 Decidir o pagamento da sessão. Recomendado: invoice do QuickBooks com link de pagamento
-      quando a equipe confirma (no WooCommerce, 0 de 27 pedidos foram concluídos)
+- [x] 👤 Box no Orlando Kart Center: **3** (dono, 01/10)
+- [ ] 👤 Rodar `docs/extensao/PROMPT-HOSTINGER-COLINA.md`: Box 3, e-mails para a URACE, tira o
+      colaborador da agência e liga o registro de atividades (#49)
+- [ ] 👤 Pessoalmente: trocar a senha do admin `colinatech` do WP, confirmar o e-mail admin novo,
+      decidir a licença do Elementor Pro e pôr o token do Kommo no SXS LP
+- [x] 👤 Área do cliente: `my.urace.us` → VPS, aprovado em 01/10. O registro é criado no **Google Cloud DNS**
+- [x] 👤 Pagamento da sessão: QuickBooks (01/10). A sessão só é confirmada com o pagamento e a waiver (#50)
 - [ ] 👤 Responder as 11 perguntas do levantamento: a Colina Tech (e-mail admin, pop-up, licença do
       Elementor, colaborador com faturamento), o lp.urace.us vulnerável, o token do Kommo no SXS LP,
       os 9 admins e o fuso UTC+0 do WordPress
