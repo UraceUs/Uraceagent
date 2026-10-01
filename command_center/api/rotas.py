@@ -1104,6 +1104,8 @@ def clients_merge(dados: UnirIn, request: Request, u=Depends(auth.exige("OPERATO
         raise HTTPException(400, "Same client.")
     if not um(con, "SELECT id FROM clients WHERE id=?", (dados.keep_id,)) or not um(con, "SELECT id FROM clients WHERE id=?", (dados.drop_id,)):
         raise HTTPException(404, "Client not found.")
+    if (porque := identidade.nao_unir(con, dados.keep_id, dados.drop_id)):
+        raise HTTPException(409, f"Esses dois cards não se unem: {porque}.")
     antes = {t: um(con, f"SELECT COUNT(*) AS n FROM {t} WHERE client_id=?", (dados.drop_id,))["n"] for t in ("tasks", "waivers", "emails", "invoices")}
     identidade.unir(con, dados.keep_id, dados.drop_id, f"user:{u['id']}", dados.reason or "unido à mão")
     identidade.recalcular_status(con)

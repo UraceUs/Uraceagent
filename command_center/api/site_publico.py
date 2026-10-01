@@ -236,6 +236,48 @@ def desvincular(conta_id: int, request: Request, con: sqlite3.Connection = Depen
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ um card por driver (#65)
+@r.post("/drivers/{pilot_id}/vincular")
+def vincular_driver(pilot_id: int, dados: VincularIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                    u=Depends(auth.exige("OPERATOR"))):
+    """Cada driver tem o seu card (Client ID). Uma pessoa confirma qual."""
+    try:
+        res = vs.vincular_driver(con, pilot_id, dados.client_id, u["id"])
+    except vs.ErroVinculo as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "portal.driver.link", f"user:{u['id']}", user_id=u["id"], entity_type="portal_pilot", entity_id=pilot_id,
+            detail=res, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True}
+
+
+@r.post("/drivers/{pilot_id}/criar-cliente", status_code=201)
+def criar_cliente_driver(pilot_id: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                         u=Depends(auth.exige("OPERATOR"))):
+    """Card novo para o driver: o responsável e o contato da conta, o piloto é o driver."""
+    try:
+        with transacao(con):
+            cid = vs.criar_cliente_driver(con, pilot_id, u["id"])
+            auditar(con, "portal.driver.client.create", f"user:{u['id']}", user_id=u["id"], entity_type="portal_pilot",
+                    entity_id=pilot_id, detail={"client_id": cid}, ip=auth._ip(request))
+    except vs.ErroVinculo as e:
+        raise HTTPException(400, str(e))
+    return {"client_id": cid}
+
+
+@r.post("/drivers/{pilot_id}/desvincular")
+def desvincular_driver(pilot_id: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                       u=Depends(auth.exige("MANAGER"))):
+    try:
+        res = vs.desvincular_driver(con, pilot_id)
+    except vs.ErroVinculo as e:
+        raise HTTPException(404, str(e))
+    auditar(con, "portal.driver.unlink", f"user:{u['id']}", user_id=u["id"], entity_type="portal_pilot", entity_id=pilot_id,
+            detail=res, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True}
+
+
 @r.get("/contas/do-cliente/{client_id}")
 def do_cliente(client_id: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     return {"conta": vs.conta_do_cliente(con, client_id)}

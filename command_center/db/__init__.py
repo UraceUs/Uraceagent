@@ -219,8 +219,14 @@ MIGRACOES = [
     # e o contrato mensal diz quantas sessões cabem no mês.
     ("booking_services", "invoice_text", "TEXT"),
     ("clients", "monthly_sessions", "INTEGER"),
+    # 01/10 — dono (#65): "um client id para cada driver". Cada piloto da conta liga ao SEU
+    # card do site interno; a conta (o responsável) continua com o card principal.
+    ("portal_pilots", "client_id", "INTEGER REFERENCES clients(id)"),
+    ("portal_pilots", "linked_by", "INTEGER REFERENCES users(id)"),
+    ("portal_pilots", "linked_at", "TEXT"),
 ]
 INDICES_EXTRA = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS portal_pilots_client ON portal_pilots(client_id) WHERE client_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
 ]
 
@@ -235,9 +241,20 @@ def aplicar_schema(con):
     for sql in INDICES_EXTRA:        # índices de colunas que só existem depois da migração
         con.execute(sql)
     _migrar_papeis(con)              # o papel CLOSER foi desfeito: quem tiver vira OPERATOR
+    _herdar_card_do_piloto(con)      # #65: conta já vinculada → o piloto daquele card herda o card
     _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`
     for sql in POS_MIGRACAO:
         con.execute(sql)
+
+
+def _herdar_card_do_piloto(con):
+    """#65: antes, a conta inteira ligava a um card. O card é de UM piloto (`pilot_name`):
+    esse piloto herda o card — o que tem o mesmo nome, ou o único piloto da conta. Os outros
+    pilotos ficam sem card até a equipe vincular ou criar. Só preenche o que está vazio;
+    nunca troca um vínculo feito por uma pessoa."""
+    from command_center.providers.vinculo_site import herdar_card
+    for a in con.execute("SELECT id FROM portal_accounts WHERE client_id IS NOT NULL").fetchall():
+        herdar_card(con, a[0])
 
 
 def _migrar_papeis(con):

@@ -101,6 +101,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
           {!!c.vip && <Chip tone="warn">VIP</Chip>}
         </div>
         <div className="meta">
+          <span><span className="k">Client ID</span> <b className="mono">{c.id}</b></span>
           {c.pilot_name && c.pilot_name !== c.name && <span><span className="k">responsável</span> <b>{c.name}</b></span>}
           {anos !== null && <span><span className="k">idade</span> <b>{anos}</b>{menor && <Chip tone="warn">menor · waiver parental</Chip>}</span>}
           {c.email ? <span><span className="k">e-mail</span> <a href={`mailto:${c.email}`}>{c.email}</a>{c.email_alt && <> <span className="muted">·</span> <a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></>}</span> : <span className="muted">sem e-mail</span>}
@@ -523,7 +524,8 @@ function CorridasDoPiloto({ rs, loading, cid }: { rs: Race[] | null; loading: bo
 const MEDIDA_PT: Record<string, string> = { height_in: 'Altura (pol)', weight_lb: 'Peso (lb)', chest_in: 'Peito (pol)', waist_in: 'Cintura (pol)',
   hips_in: 'Quadril (pol)', inseam_in: 'Entreperna (pol)', sleeve_in: 'Braço (pol)', suit_size: 'Macacão', helmet_size: 'Capacete', glove_size: 'Luva', shoe_size: 'Sapatilha (US)' }
 interface ContaCard { email: string; name: string; phone: string | null; birth_date: string; address_line1: string | null; city: string | null; state: string | null; zip: string | null
-  linked_at: string | null; last_login_at: string | null; drivers: { id: number; name: string; birth_date: string | null; is_self: number; measures: Record<string, number | string>; measures_updated_at: string | null }[] }
+  linked_at: string | null; last_login_at: string | null; driver_id: number | null
+  drivers: { id: number; name: string; birth_date: string | null; is_self: number; client_id: number | null; measures: Record<string, number | string>; measures_updated_at: string | null }[] }
 function ContaNoSite({ cid }: { cid: number }) {
   const d = useGet<{ conta: ContaCard | null }>(`/site/contas/do-cliente/${cid}`)
   if (d.error) return <ErrorState error={d.error} retry={d.reload} />
@@ -535,6 +537,8 @@ function ContaNoSite({ cid }: { cid: number }) {
       <div className="small muted">{[c.address_line1, c.city, c.state, c.zip].filter(Boolean).join(', ') || 'sem endereço'}{c.last_login_at ? ` · último acesso ${c.last_login_at.slice(8, 10)}/${c.last_login_at.slice(5, 7)}` : ''}</div></div>
     {c.drivers.map(p => <div key={p.id} className="card card-b">
       <b>{p.name}</b>{p.is_self ? <span className="small muted"> · o próprio responsável</span> : null}
+      {' '}{p.id === c.driver_id ? <Chip tone="ok">este card</Chip> : p.client_id ? <Link className="small" to={`/clients/${p.client_id}`}>Client ID {p.client_id}</Link>
+        : <span className="small muted">· sem card ainda (Site público › Contas)</span>}
       <div className="small muted">{p.birth_date ? `nascimento ${p.birth_date.slice(8, 10)}/${p.birth_date.slice(5, 7)}/${p.birth_date.slice(0, 4)}` : 'sem nascimento'}{p.measures_updated_at ? ` · medido em ${p.measures_updated_at.slice(8, 10)}/${p.measures_updated_at.slice(5, 7)}` : ''}</div>
       {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{Object.entries(p.measures).map(([k, v]) => <div key={k}><dt>{MEDIDA_PT[k] || k}</dt><dd>{String(v)}</dd></div>)}</dl>}
     </div>)}

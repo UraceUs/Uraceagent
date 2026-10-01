@@ -36,7 +36,9 @@ export type SituacaoMedidas = 'ok' | 'aviso' | 'vencida' | 'faltando'
 export interface Driver { id: number; name: string; birth_date: string | null; is_self: boolean; email: string | null; phone: string | null
   measures: Record<string, number | string>; measures_updated_at: string | null; notes: string | null; social: string | null; age: number | null
   missing: string[]; measures_status: SituacaoMedidas; measures_days: number | null
-  last_session: string | null; days_since_last_session: number | null }
+  last_session: string | null; days_since_last_session: number | null
+  /** o card do driver na URACE (#65); vazio até a equipe ligar */
+  client_id: number | null }
 export interface Account { id: number; email: string; name: string; birth_date: string; phone_country: string; phone: string | null
   address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; zip: string | null; country: string
   linked: boolean; missing: string[]; drivers: Driver[] }

@@ -66,7 +66,8 @@ function Agendamentos() {
           <div className="grow" style={{ minWidth: 0 }}>
             <b>{semanaDe(a.date)} {dbr(a.date)} · {PER[a.period]}</b>
             <div className="small">{a.driver || a.account_name}{anos != null ? ` (${anos} anos)` : ''}{a.driver && a.driver !== a.account_name ? ` · responsável ${a.account_name}` : ''}</div>
-            <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : ' · conta ainda sem vínculo'}</div>
+            <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : ' · driver ainda sem card'}</div>
+            {a.client_id && <div className="small"><Link to={`/clients/${a.client_id}`}>Client ID {a.client_id}</Link></div>}
             {a.service_name && <div className="small">{a.service_name}{a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
             {a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
               ? `acima do contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`
@@ -212,7 +213,10 @@ function Disponibilidade() {
 interface Sugestao { client_id: number; name: string; pilot_name: string | null; email: string | null; phone: string | null; motivo: string }
 interface ContaSite { id: number; email: string; name: string; phone: string | null; city: string | null; state: string | null; created_at: string
   client_id: number | null; client_name: string | null; client_pilot: string | null; linked_at: string | null; linked_by_name: string | null
-  drivers: number; pilotos: string[]; sugestao: Sugestao | null }
+  drivers: number; pilotos: string[]; sugestao: Sugestao | null; drivers_list: DriverConta[] }
+/** Driver da conta e o card dele (#65): cada driver tem o seu Client ID. */
+interface DriverConta { id: number; name: string; birth_date: string | null; client_id: number | null; client_name: string | null; client_pilot: string | null
+  sugestao: { client_id: number; name: string; pilot_name: string | null; motivo: string } | null }
 
 /* Serviços e preços (#50): o gerente muda o preço aqui, sem código. Quem já marcou fica
  * com o valor do dia; desativar tira da área do cliente sem apagar. */
@@ -301,6 +305,19 @@ function Contas() {
     try { await api.post(`/site/contas/${c.id}/criar-cliente`); toast('Cliente criado e vinculado.', 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
+  async function vincularDriver(p: DriverConta, clientId: number, nome: string) {
+    if (!await perguntar({ titulo: `O card de ${p.name} é ${nome} (Client ID ${clientId})?`, texto: 'Cada driver tem o seu card: as sessões, o contrato e o histórico dele ficam ali, separados dos irmãos.', ok: 'Vincular' })) return
+    try { await api.post(`/site/drivers/${p.id}/vincular`, { client_id: clientId }); toast('Driver vinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function criarDriver(c: ContaSite, p: DriverConta) {
+    if (!await perguntar({ titulo: `Criar o card de ${p.name}?`, texto: `Responsável ${c.name} (${c.email}), piloto ${p.name}. O card nasce já vinculado a este driver, com o seu Client ID.`, ok: 'Criar card' })) return
+    try { const r = await api.post<{ client_id: number }>(`/site/drivers/${p.id}/criar-cliente`); toast(`Card criado: Client ID ${r.client_id}.`, 'ok'); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function desvincularDriver(p: DriverConta) {
+    if (!await perguntar({ titulo: `Desligar ${p.name} do Client ID ${p.client_id}?`, texto: 'O card não é apagado; só deixa de ser deste driver.', ok: 'Desvincular', perigo: true })) return
+    try { await api.post(`/site/drivers/${p.id}/desvincular`); toast('Driver desvinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
   async function desvincular(c: ContaSite) {
     if (!await perguntar({ titulo: `Desligar ${c.email} de ${c.client_pilot || c.client_name}?`, texto: 'O cliente deixa de ver o histórico.', ok: 'Desvincular', perigo: true })) return
     try { await api.post(`/site/contas/${c.id}/desvincular`); toast('Desvinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
@@ -328,6 +345,20 @@ function Contas() {
               <Picker label="Outro cliente" value={outro[c.id] || null} onPick={x => setOutro(o => ({ ...o, [c.id]: x }))} /></div>
               {outro[c.id] && <button className="btn sm" onClick={() => vincular(c, outro[c.id]!.id, outro[c.id]!.pilot_name || outro[c.id]!.name)}>Vincular</button>}</div>
           </>}
+        {c.client_id && c.drivers_list.length > 0 && <div className="stack" style={{ gap: 6 }}>
+          <h3 className="h3" style={{ fontSize: 14 }}>Drivers · cada um com o seu card</h3>
+          {c.drivers_list.map(p => <div key={p.id} className="row wrap" style={{ gap: 8, padding: '6px 0', borderTop: '1px solid var(--glass-line)' }}>
+            <span className="grow small" style={{ minWidth: 0 }}><b>{p.name}</b>{p.birth_date ? ` · ${idade(p.birth_date)} anos` : ''}
+              {p.client_id ? <> · <Link to={`/clients/${p.client_id}`}>Client ID {p.client_id}</Link></>
+                : p.sugestao ? <> · ✦ sugestão: <Link to={`/clients/${p.sugestao.client_id}`}>{p.sugestao.pilot_name || p.sugestao.name} (Client ID {p.sugestao.client_id})</Link> · {p.sugestao.motivo}</>
+                : <span className="muted"> · sem card</span>}</span>
+            {p.client_id ? can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincularDriver(p)}>Desvincular</button>
+              : <>{p.sugestao && <button className="btn sm primary" onClick={() => vincularDriver(p, p.sugestao!.client_id, p.sugestao!.pilot_name || p.sugestao!.name)}>Vincular a este</button>}
+                {!p.sugestao && <button className="btn sm primary" onClick={() => criarDriver(c, p)}>Criar card</button>}
+                <div style={{ minWidth: 200 }}><Picker label={`Outro card para ${p.name}`} value={outro[-p.id] || null} onPick={x => setOutro(o => ({ ...o, [-p.id]: x }))} /></div>
+                {outro[-p.id] && <button className="btn sm" onClick={() => vincularDriver(p, outro[-p.id]!.id, outro[-p.id]!.pilot_name || outro[-p.id]!.name)}>Vincular</button>}</>}
+          </div>)}
+        </div>}
       </div>)}</div>)}
   </>
 }

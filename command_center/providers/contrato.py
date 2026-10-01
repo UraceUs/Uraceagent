@@ -17,6 +17,11 @@ from command_center.db import todos, um
 PADRAO_SESSOES = 4
 
 
+# O card de um agendamento do site (#65): o do driver; sem driver marcado, o da conta.
+# Driver ainda sem card não cai no card do irmão — fica sem card até a equipe vincular.
+CARD_DO_AGENDAMENTO = "(CASE WHEN b.pilot_id IS NULL THEN a.client_id ELSE p.client_id END)"
+
+
 def sessoes_por_mes(con, cid):
     c = um(con, "SELECT monthly_sessions FROM clients WHERE id=?", (cid,))
     return (c and c["monthly_sessions"]) or PADRAO_SESSOES
@@ -35,10 +40,11 @@ def sessoes_asana(con, cid, mes):
 
 
 def sessoes_site(con, cid, mes):
-    """Agendamentos feitos na área do cliente pela conta ligada a este card."""
-    return todos(con, """SELECT b.date AS due_on, COALESCE(b.service_name, 'Site booking') AS title, b.status
-                           FROM bookings b JOIN portal_accounts a ON a.id=b.account_id
-                          WHERE a.client_id=? AND b.date LIKE ? AND b.status IN ('pendente','confirmada') ORDER BY b.date""",
+    """Agendamentos feitos na área do cliente para o driver deste card (#65: cada driver tem o
+    seu card; a sessão do irmão não conta aqui). Agendamento sem driver conta no card da conta."""
+    return todos(con, f"""SELECT b.date AS due_on, COALESCE(b.service_name, 'Site booking') AS title, b.status
+                           FROM bookings b JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                          WHERE {CARD_DO_AGENDAMENTO}=? AND b.date LIKE ? AND b.status IN ('pendente','confirmada') ORDER BY b.date""",
                  (cid, mes + "%"))
 
 
