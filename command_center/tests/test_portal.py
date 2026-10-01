@@ -220,19 +220,23 @@ def test_cliente_de_outro_pais(cli):
 
 def test_piloto_tem_os_campos_obrigatorios_e_rede_social(cli):
     cadastra(cli)
-    sem = {k: v for k, v in MEDIDAS.items() if k != "hips_in"}
+    sem = {k: v for k, v in MEDIDAS.items() if k != "waist_in"}
     r = cli.post(f"{P}/drivers", headers=csrf(cli), json=piloto("Lucas Santos", measures=sem))
-    assert r.status_code == 400 and r.json()["detail"] == "Please fill in: hips."
+    assert r.status_code == 400 and r.json()["detail"] == "Please fill in: waist."
+    sem_quadril = {k: v for k, v in MEDIDAS.items() if k != "hips_in"}
+    r = cli.post(f"{P}/drivers", headers=csrf(cli), json=piloto("Ana Santos", measures=sem_quadril))
+    assert r.status_code == 201 and r.json()["drivers"][-1]["measures_status"] == "ok", "quadril é opcional (dono, 01/10)"
     r = cli.post(f"{P}/drivers", headers=csrf(cli), json=piloto("Lucas Santos", notes=""))
     assert "karting experience" in r.json()["detail"]
     r = cli.post(f"{P}/drivers", headers=csrf(cli), json=piloto("Lucas Santos", birth_date=None))
     assert "date of birth" in r.json()["detail"]
     assert "full name" in cli.post(f"{P}/drivers", headers=csrf(cli), json=piloto("Lucas")).json()["detail"]
     d = cli.post(f"{P}/drivers", headers=csrf(cli), json=piloto("Lucas Santos", social="lucas.kart")).json()["drivers"]
-    assert d[0]["social"] == "@lucas.kart"
-    pid = d[0]["id"]
-    assert cli.patch(f"{P}/drivers/{pid}", headers=csrf(cli), json={"social": "instagram.com/lucas"}).json()["drivers"][0]["social"] \
-        == "https://instagram.com/lucas"
+    lucas = next(x for x in d if x["name"] == "Lucas Santos")
+    assert lucas["social"] == "@lucas.kart"
+    pid = lucas["id"]
+    d = cli.patch(f"{P}/drivers/{pid}", headers=csrf(cli), json={"social": "instagram.com/lucas"}).json()["drivers"]
+    assert next(x for x in d if x["id"] == pid)["social"] == "https://instagram.com/lucas"
     assert cli.patch(f"{P}/drivers/{pid}", headers=csrf(cli), json={"social": "não é perfil!!"}).status_code == 400
 
 

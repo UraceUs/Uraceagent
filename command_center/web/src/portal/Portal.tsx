@@ -19,7 +19,7 @@ type Estado = Account | null | undefined           // undefined = carregando; nu
 // [chave, rótulo, tipo, obrigatória]
 const MEDIDAS: [string, string, 'num' | 'txt', boolean][] = [
   ['height_in', 'Height (in)', 'num', true], ['weight_lb', 'Weight (lb)', 'num', true], ['chest_in', 'Chest (in)', 'num', true],
-  ['waist_in', 'Waist (in)', 'num', true], ['hips_in', 'Hips (in)', 'num', true], ['inseam_in', 'Inseam (in)', 'num', false],
+  ['waist_in', 'Waist (in)', 'num', true], ['hips_in', 'Hips (in)', 'num', false], ['inseam_in', 'Inseam (in)', 'num', false],
   ['sleeve_in', 'Sleeve (in)', 'num', false], ['suit_size', 'Suit size', 'txt', false], ['helmet_size', 'Helmet size', 'txt', false],
   ['glove_size', 'Glove size', 'txt', false], ['shoe_size', 'Shoe size (US)', 'txt', false],
 ]
