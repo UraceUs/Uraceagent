@@ -595,10 +595,22 @@ Center; site público = urace.us. Tudo nasce e é testado no site interno, em `/
 
 - [ ] 👤 Abrir a agenda: Site público › Disponibilidade (ela nasce **fechada**, sem dia inventado)
 - [ ] 👤 Testar como cliente em `/ops/portal` (criar conta, piloto, marcar) e como equipe (confirmar, vincular)
-- [ ] 👤 Rodar o prompt da Hostinger na extensão e me trazer o relatório
-- [ ] 👤 Decidir: **4 dos 5 botões "Book" do urace.us levam a 404** (Kart School, Intensive Camp,
-      Corporate Events, Professional Coaching) — o produto foi apagado ou mudou de endereço?
-- [ ] 👤 Decidir: qual é o endereço certo (10724 Cosmonaut Blvd, "Cosmonaut Blvd Box 5" ou 6149 Cyril Ave)?
-- [ ] 👤 Decidir: como a área do cliente vai para o urace.us (proposta: endereço próprio apontando para
-      a VPS e o WordPress só linka) e se o pagamento da sessão fica no WooCommerce ou vira invoice do QuickBooks
+- [x] 👤 Rodar o prompt da Hostinger na extensão. O relatório chegou em 01/10:
+      `docs/site-publico/levantamento-hostinger-2026-10-01.md` (#47)
+- [x] 🤖 Destino dos botões "Book" com 404 decidido (dono: *"resolva p onde elas teriam que ir"*):
+      Kart School → Academy 1 mês · Professional Coaching → Arrive and Drive (4787) ·
+      Intensive Camp e eventos → `/contact/`. Detalhes em `docs/site-publico/decisoes-2026-10-01.md`
+- [ ] 👤 Rodar `docs/extensao/PROMPT-HOSTINGER-BOTOES.md`, que só troca os links dos 25 botões
+- [ ] 👤 **Urgente**: rodar `docs/extensao/PROMPT-HOSTINGER-BACKUP.md`. Ele fecha o download público
+      do backup de 1,8 GB, sem apagar nada
+- [x] 🤖 Endereço: o site mostra o da pista, 10724 Cosmonaut Blvd. O 6149 Cyril Ave é o de cobrança
+      e do galpão, e não estava no urace.us (o mapa de 30/09 errou nisso)
+- [ ] 👤 Dizer: o box no Orlando Kart Center é o **3** (schema do Google) ou o **5** (páginas de serviço)?
+- [ ] 👤 Decidir a área do cliente no urace.us. Recomendado: `my.urace.us` → VPS, criado no
+      **Google Cloud DNS** (o DNS não fica na Hostinger), e o WordPress só linka
+- [ ] 👤 Decidir o pagamento da sessão. Recomendado: invoice do QuickBooks com link de pagamento
+      quando a equipe confirma (no WooCommerce, 0 de 27 pedidos foram concluídos)
+- [ ] 👤 Responder as 11 perguntas do levantamento: a Colina Tech (e-mail admin, pop-up, licença do
+      Elementor, colaborador com faturamento), o lp.urace.us vulnerável, o token do Kommo no SXS LP,
+      os 9 admins e o fuso UTC+0 do WordPress
 - [ ] Falta (depois): e-mail de confirmação e "esqueci a senha" — precisam de envio de e-mail, que hoje o painel não faz
