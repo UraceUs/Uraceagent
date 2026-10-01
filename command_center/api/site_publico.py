@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
-from command_center.db import auditar, get_db, transacao
+from command_center.db import auditar, get_db, todos, transacao
 from command_center.providers import agenda_sessoes as ag, servicos_site as sv, vinculo_site as vs
 
 r = APIRouter(prefix="/ops/api/site", tags=["site"])
@@ -33,7 +33,14 @@ def ver_agenda(de: str | None = None, ate: str | None = None, con: sqlite3.Conne
         disp = ag.disponibilidade(con, _d(de), _d(ate), visao="equipe")
     except ag.ErroAgenda as e:
         raise HTTPException(400, str(e))
-    return {**disp, "semana": ag.semana(con), "bloqueios": ag.bloqueios(con), "config_completa": ag.config(con)}
+    corridas = []
+    if disp["dias"]:
+        de_, ate_ = disp["dias"][0]["date"], disp["dias"][-1]["date"]
+        corridas = todos(con, """SELECT id, name, series, track, city, date_start, COALESCE(date_end, date_start) AS date_end
+                                   FROM races WHERE active=1 AND date_start IS NOT NULL AND date_start<=?
+                                    AND COALESCE(date_end, date_start)>=? ORDER BY date_start""", (ate_, de_))
+    return {**disp, "semana": ag.semana(con), "bloqueios": ag.bloqueios(con), "config_completa": ag.config(con),
+            "corridas": corridas}
 
 
 class ConfigIn(BaseModel):
@@ -77,10 +84,11 @@ def mudar_semana(regras: list[RegraIn], request: Request, con: sqlite3.Connectio
 
 
 class BloqueioIn(BaseModel):
-    date_from: str
+    date_from: str | None = None
     date_to: str | None = None
     period: str = "dia"
     reason: str | None = None
+    weekday: int | None = None             # recorrente: 0 = segunda
 
 
 @r.post("/agenda/bloqueios", status_code=201)
@@ -196,6 +204,20 @@ def vincular(conta_id: int, dados: VincularIn, request: Request, con: sqlite3.Co
             detail=res, ip=auth._ip(request))
     con.commit()
     return {"ok": True}
+
+
+@r.post("/contas/{conta_id}/criar-cliente", status_code=201)
+def criar_cliente(conta_id: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Cliente novo, que não existe no site interno: o card nasce com os dados da conta e já
+    fica vinculado (#52). Se já existe alguém com o mesmo e-mail ou telefone, recusa."""
+    try:
+        with transacao(con):
+            cid = vs.criar_cliente(con, conta_id, u["id"])
+            auditar(con, "portal.client.create", f"user:{u['id']}", user_id=u["id"], entity_type="portal_account",
+                    entity_id=conta_id, detail={"client_id": cid}, ip=auth._ip(request))
+    except vs.ErroVinculo as e:
+        raise HTTPException(400, str(e))
+    return {"client_id": cid}
 
 
 @r.post("/contas/{conta_id}/desvincular")

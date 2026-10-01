@@ -435,3 +435,27 @@ def test_equipe_vincula_pela_sugestao_e_o_cliente_ve_o_historico(servidor, naveg
     c.locator(".tbl .tr").first.wait_for()
     assert c.locator(".tbl .tr").count() >= 1, "o histórico do card aparece"
     g.close(); c.close()
+
+
+# ------------------------------------------------------------------ telas do site interno (#52)
+def test_bloqueio_recorrente_calendario_do_mes_e_criar_cliente_pela_conta(servidor, navegador):
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/site/disponibilidade")
+    g.get_by_role("heading", name="Calendário do mês").wait_for()
+    assert g.locator(".site-cal-d").count() >= 28 and g.locator(".site-cal-d.fds").count() >= 8, "o mês inteiro, com fim de semana"
+    g.get_by_role("radio", name="Toda semana").click()
+    g.get_by_role("combobox", name="Dia da semana").select_option(label="toda segunda")
+    g.get_by_label("Motivo").fill("sem aula")
+    g.get_by_role("button", name="Bloquear").click()
+    g.get_by_text("Bloqueado.").wait_for()
+    g.get_by_text("recorrente").first.wait_for()
+    assert "toda segunda" in g.locator(".tbl").inner_text()
+    # conta de quem não está na base: cria o card e já vincula
+    c = navegador.new_page(viewport={"width": 390, "height": 844})
+    cliente_pela_api(c, servidor, "Eduardo Fillipe Resende", "eduardo.novo@example.com", piloto="Lucas Fillipe Resende")
+    abrir(g, servidor, "/site/contas")
+    cartao = g.locator(".card", has_text="eduardo.novo@example.com").first
+    cartao.get_by_role("button", name="Criar cliente").click()
+    g.get_by_role("button", name="Criar cliente", exact=True).last.click()
+    g.get_by_text("Cliente criado e vinculado.").wait_for()
+    g.close(); c.close()

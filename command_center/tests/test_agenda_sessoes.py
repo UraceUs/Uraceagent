@@ -268,3 +268,38 @@ def test_agendamento_extra_e_recusado(cli):
     hc, _ = cliente(cli)
     assert cli.post("/ops/api/portal/bookings", headers=hc, json={"date": "2030-01-01", "period": "manha", "status": "confirmada"}).status_code == 422
     assert date.fromisoformat(cli.get("/ops/api/portal/availability").json()["dias"][0]["date"]) >= datetime.now(FL).date()
+
+
+# ------------------------------------------------------------------ #52: bloqueio recorrente e corridas
+def test_bloqueio_recorrente_toda_segunda(con):
+    """Dono, 01/10: "toda segunda fica bloqueado para não ter nenhuma aula"."""
+    abre(con)
+    seg, ter = proximo(0), proximo(1)
+    bid = ag.bloquear(con, None, weekday=0, reason="sem aula")
+    assert not periodo(con, seg, "manha")["open"] and not periodo(con, seg + timedelta(days=7), "tarde")["open"]
+    assert periodo(con, ter, "manha")["open"], "só a segunda"
+    b = [x for x in ag.bloqueios(con) if x["id"] == bid][0]
+    assert b["weekday"] == 0 and b["date_to"] == ag.SEM_FIM
+    ag.desbloquear(con, None, bid)
+    assert periodo(con, seg, "manha")["open"]
+    ag.bloquear(con, None, weekday=2, period="tarde", date_from=proximo(2).isoformat(),
+                date_to=(proximo(2) + timedelta(days=7)).isoformat())
+    qua = proximo(2)
+    assert periodo(con, qua, "manha")["open"] and not periodo(con, qua, "tarde")["open"]
+    assert periodo(con, qua + timedelta(days=14), "tarde")["open"], "depois do fim, volta a abrir"
+    with pytest.raises(ag.ErroAgenda):
+        ag.bloquear(con, None, weekday=9)
+
+
+def test_agenda_da_equipe_mostra_as_corridas(cli):
+    c = conectar()
+    d = proximo(5)
+    inserir(c, "races", name="SKUSA Winter Series", series="SKUSA", track="OKC", date_start=d.isoformat(),
+            date_end=(d + timedelta(days=1)).isoformat())
+    inserir(c, "races", name="Corrida antiga", date_start="2020-01-01", date_end="2020-01-02")
+    c.commit(); c.close()
+    equipe(cli, "op@urace.us")
+    r = cli.get(f"/ops/api/site/agenda?de={d - timedelta(days=3)}&ate={d + timedelta(days=10)}").json()
+    assert [x["name"] for x in r["corridas"]] == ["SKUSA Winter Series"]
+    h = equipe(cli, "ger@urace.us")
+    assert cli.post("/ops/api/site/agenda/bloqueios", headers=h, json={"weekday": 0, "period": "dia", "reason": "sem aula"}).status_code == 201
