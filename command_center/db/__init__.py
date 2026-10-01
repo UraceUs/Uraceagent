@@ -209,6 +209,9 @@ MIGRACOES = [
     ("bookings", "service_id", "INTEGER"),
     ("bookings", "service_name", "TEXT"),
     ("bookings", "price", "REAL"),
+    # 01/10 — dono (#54): cliente de outro país (telefone com código) e rede social do piloto.
+    ("portal_accounts", "phone_country", "TEXT NOT NULL DEFAULT '+1'"),
+    ("portal_pilots", "social", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

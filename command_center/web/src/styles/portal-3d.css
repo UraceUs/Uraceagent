@@ -1,0 +1,75 @@
+/* Visual "3D" da área do cliente (#54). Dono, 01/10: "algo um pouco mais 3D... se não,
+ * já deixe pronto para a gente poder reverter".
+ *
+ * Tudo aqui vale só sob `.portal.p3d`: sem a classe (portal/visual.ts), a tela volta ao
+ * desenho de antes. Profundidade com sombra em camadas, luz no alto do cartão e um leve
+ * levantar/inclinar ao passar o mouse. Animação só de `transform`/`opacity`, com as
+ * durações e curvas dos tokens; `prefers-reduced-motion` desliga o movimento. */
+
+.portal.p3d{
+  --p3d-luz:rgba(255,255,255,.07);
+  --p3d-sombra:0 1px 0 rgba(255,255,255,.05) inset, 0 -1px 0 rgba(0,0,0,.35) inset,
+    0 2px 4px rgba(0,0,0,.22), 0 12px 28px -10px rgba(0,0,0,.55), 0 30px 60px -30px rgba(0,0,0,.6);
+  background:
+    radial-gradient(1100px 520px at 85% -10%, rgba(0,87,180,.20), transparent 60%),
+    radial-gradient(900px 480px at -10% 110%, rgba(232,86,62,.16), transparent 60%),
+    var(--surface);
+  perspective:1400px;
+}
+[data-theme="light"] .portal.p3d{
+  --p3d-luz:rgba(255,255,255,.8);
+  --p3d-sombra:0 1px 0 rgba(255,255,255,.9) inset, 0 -1px 0 rgba(25,23,20,.06) inset,
+    0 2px 4px rgba(25,23,20,.06), 0 14px 30px -12px rgba(25,23,20,.22), 0 30px 60px -34px rgba(25,23,20,.3);
+}
+
+/* chão de pista em perspectiva, parado, atrás de tudo */
+.portal.p3d::before{
+  content:"";position:fixed;left:-20%;right:-20%;bottom:-10vh;height:55vh;z-index:0;pointer-events:none;
+  background:repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 1px, transparent 1px 72px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 72px);
+  transform:rotateX(62deg);transform-origin:50% 100%;
+  -webkit-mask-image:linear-gradient(0deg,#000 0%,transparent 85%);mask-image:linear-gradient(0deg,#000 0%,transparent 85%);
+}
+.portal.p3d>*{position:relative;z-index:1}
+.portal.p3d .portal-top{z-index:5}
+.portal.p3d .portal-corpo{z-index:3}         /* o menu de baixo (celular) fica por cima do rodapé */
+
+/* cartões com volume: luz no alto, sombra em camadas */
+.portal.p3d .card{
+  position:relative;background:linear-gradient(180deg, var(--p3d-luz), transparent 38%), var(--glass);
+  box-shadow:var(--p3d-sombra);border-color:var(--glass-line-2);
+  transform:translateZ(0);transition:transform var(--dur-media, 220ms) var(--ease-saida);
+}
+.portal.p3d .card::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+  background:radial-gradient(420px 160px at 20% 0%, rgba(255,255,255,.10), transparent 70%);
+  transition:opacity var(--dur-media, 220ms) var(--ease-saida);
+}
+.portal.p3d .portal-kpi:hover,.portal.p3d .portal-piloto:hover,.portal.p3d .portal-sessao:hover{transform:translateY(-3px) rotateX(2.5deg)}
+.portal.p3d .portal-kpi:hover::after,.portal.p3d .portal-piloto:hover::after,.portal.p3d .portal-sessao:hover::after{opacity:1}
+.portal.p3d .portal-kpi .portal-sessao:hover{transform:none}
+
+/* botões em relevo: apertar afunda */
+.portal.p3d .btn.primary{box-shadow:0 1px 0 rgba(255,255,255,.25) inset, 0 4px 0 rgba(0,0,0,.28), 0 12px 24px -10px var(--brand);
+  transition:transform var(--dur-rapida) var(--ease-saida)}
+.portal.p3d .btn.primary:hover:not(:disabled){transform:translateY(-1px)}
+.portal.p3d .btn.primary:active:not(:disabled){transform:translateY(3px)}
+
+/* dias do calendário como peças */
+.portal.p3d .portal-cal-d.aberto{box-shadow:0 1px 0 rgba(255,255,255,.08) inset, 0 3px 0 rgba(0,0,0,.35);
+  transition:transform var(--dur-rapida) var(--ease-saida)}
+.portal.p3d .portal-cal-d.aberto:hover{transform:translateY(-2px)}
+.portal.p3d .portal-cal-d.on{box-shadow:0 2px 0 rgba(0,0,0,.35), 0 10px 20px -8px var(--brand);transform:translateY(-2px)}
+.portal.p3d .portal-servico.on{box-shadow:0 0 0 1px var(--accent) inset, 0 10px 24px -14px var(--accent)}
+
+/* menu com profundidade */
+.portal.p3d .portal-nav a.on{background:linear-gradient(180deg, var(--p3d-luz), transparent), var(--glass-2);
+  box-shadow:inset 3px 0 0 var(--brand), 0 6px 16px -10px rgba(0,0,0,.6)}
+@media (max-width:760px){.portal.p3d .portal-nav a.on{box-shadow:inset 0 3px 0 var(--brand)}}
+
+@media (prefers-reduced-motion: reduce){
+  .portal.p3d .card,.portal.p3d .card::after,.portal.p3d .btn.primary,.portal.p3d .portal-cal-d.aberto{transition:none}
+  .portal.p3d .portal-kpi:hover,.portal.p3d .portal-piloto:hover,.portal.p3d .portal-sessao:hover,
+  .portal.p3d .btn.primary:hover:not(:disabled),.portal.p3d .btn.primary:active:not(:disabled),
+  .portal.p3d .portal-cal-d.aberto:hover,.portal.p3d .portal-cal-d.on{transform:none}
+}

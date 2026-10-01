@@ -32,11 +32,14 @@ export async function papi<T>(method: 'GET' | 'POST' | 'PATCH', path: string, bo
   return res.json() as Promise<T>
 }
 
+export type SituacaoMedidas = 'ok' | 'aviso' | 'vencida' | 'faltando'
 export interface Driver { id: number; name: string; birth_date: string | null; is_self: boolean; email: string | null; phone: string | null
-  measures: Record<string, number | string>; measures_updated_at: string | null; notes: string | null; age: number | null }
-export interface Account { id: number; email: string; name: string; birth_date: string; phone: string | null
-  address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; zip: string | null
-  linked: boolean; drivers: Driver[] }
+  measures: Record<string, number | string>; measures_updated_at: string | null; notes: string | null; social: string | null; age: number | null
+  missing: string[]; measures_status: SituacaoMedidas; measures_days: number | null
+  last_session: string | null; days_since_last_session: number | null }
+export interface Account { id: number; email: string; name: string; birth_date: string; phone_country: string; phone: string | null
+  address_line1: string | null; address_line2: string | null; city: string | null; state: string | null; zip: string | null; country: string
+  linked: boolean; missing: string[]; drivers: Driver[] }
 
 export interface Periodo { open: boolean; spots: number }
 export interface Dia { date: string; weekday: number; any_open: boolean; periods: { manha: Periodo; tarde: Periodo; dia: Periodo } }
@@ -47,3 +50,9 @@ export interface Booking { id: number; date: string; period: 'manha' | 'tarde' |
   notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null }
 
 export const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+
+export interface Painel { account: Account; next_session: Booking | null; upcoming: number; last_session: string | null
+  days_since_last_session: number | null; linked: boolean; measures_warn_days: number; measures_limit_days: number }
+
+/** "today", "1 day ago", "23 days ago" */
+export const haDias = (n: number | null) => n == null ? null : n === 0 ? 'today' : n === 1 ? '1 day ago' : `${n} days ago`

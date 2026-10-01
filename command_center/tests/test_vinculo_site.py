@@ -1,6 +1,7 @@
 """Conta do site ↔ cliente interno (#42): o sistema sugere, a equipe confirma, e só então o
 cliente vê o histórico — nunca o serviço de outra pessoa."""
 import os
+import zlib
 
 import pytest
 
@@ -12,6 +13,7 @@ from command_center.api import atencao, auth  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir, todos, um  # noqa: E402
 from command_center.providers import vinculo_site as vs  # noqa: E402
+from command_center.tests.dados_portal import ENDERECO, MEDIDAS, piloto as dados_piloto  # noqa: E402
 
 SENHA = "senha-forte-123"
 
@@ -38,11 +40,12 @@ def cli(tmp_path, monkeypatch):
 def cliente(cli, email, nome="Paulo Kurian", tel=None, piloto=None):
     cli.cookies.clear()
     r = cli.post("/ops/api/portal/signup", json={"name": nome, "email": email, "password": "corrida-segura-9", "birth_date": "1980-01-01",
-                                                 "phone": tel, "accept_terms": True})
+                                                 **ENDERECO, "phone": tel or f"(689) 555-{zlib.crc32(email.encode()) % 10000:04d}",
+                                                 "accept_terms": True})
     assert r.status_code == 201, r.text
     h = {"X-CSRF": cli.cookies.get("cp_csrf")}
     if piloto:
-        cli.post("/ops/api/portal/drivers", headers=h, json={"name": piloto})
+        assert cli.post("/ops/api/portal/drivers", headers=h, json=dados_piloto(piloto)).status_code == 201
     return h, r.json()["id"]
 
 
@@ -54,7 +57,7 @@ def equipe(cli, email="op@urace.us"):
 
 def test_sugere_por_email_telefone_e_nome_do_piloto(cli):
     _, a1 = cliente(cli, "paulo@kurian.com", nome="P. Kurian")
-    _, a2 = cliente(cli, "outro@mail.com", nome="Alguém", tel="(321) 555-0100")
+    _, a2 = cliente(cli, "outro@mail.com", nome="Alguém Silva", tel="(321) 555-0100")
     _, a3 = cliente(cli, "terceiro@mail.com", nome="Pai Qualquer", piloto="Enzo Kurian")
     _, a4 = cliente(cli, "ninguem@mail.com", nome="Zé Ninguém")
     equipe(cli)
@@ -117,12 +120,12 @@ def test_cliente_nao_se_vincula_e_desvincular_e_do_gerente(cli):
 
 def test_card_do_cliente_mostra_conta_pilotos_e_medidas(cli):
     hc, a = cliente(cli, "paulo@kurian.com")
-    cli.post("/ops/api/portal/drivers", headers=hc, json={"name": "Enzo Kurian", "measures": {"height_in": 55, "suit_size": "140"}})
+    cli.post("/ops/api/portal/drivers", headers=hc, json=dados_piloto("Enzo Kurian", measures={**MEDIDAS, "height_in": 55, "suit_size": "140"}))
     h = equipe(cli)
     assert cli.get(f"/ops/api/site/contas/do-cliente/{cli.ids['enzo']}").json()["conta"] is None
     cli.post(f"/ops/api/site/contas/{a}/vincular", headers=h, json={"client_id": cli.ids["enzo"]})
     conta = cli.get(f"/ops/api/site/contas/do-cliente/{cli.ids['enzo']}").json()["conta"]
-    assert conta["email"] == "paulo@kurian.com" and conta["drivers"][0]["measures"] == {"height_in": 55.0, "suit_size": "140"}
+    assert conta["email"] == "paulo@kurian.com" and conta["drivers"][0]["measures"]["height_in"] == 55.0 and conta["drivers"][0]["measures"]["suit_size"] == "140"
     assert "pw_hash" not in conta
 
 

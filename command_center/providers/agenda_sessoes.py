@@ -213,6 +213,10 @@ def agendar(con, conta_id, data_iso, periodo, piloto_id=None, notes=None, servic
         raise ErroAgenda("Choose a valid date.")
     if not um(con, "SELECT 1 AS x FROM portal_pilots WHERE id=? AND account_id=? AND active=1", (piloto_id, conta_id)):
         raise ErroAgenda("Driver not found on your account.")
+    from command_center.providers import portal            # import aqui: portal não depende da agenda
+    falta = portal.pode_marcar(con, conta_id, piloto_id)
+    if falta:
+        raise ErroAgenda(falta)
     disp = disponibilidade(con, dia, dia)["dias"]
     if not disp or not disp[0]["periods"][periodo]["open"]:
         raise ErroAgenda("This time is no longer available. Please pick another one.")
