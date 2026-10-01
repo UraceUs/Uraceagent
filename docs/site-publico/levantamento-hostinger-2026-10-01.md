@@ -31,7 +31,7 @@ Como acessei: hPanel com a sessão já aberta no Chrome. Entrei no wp-admin pelo
 
 - urace.us e lp.urace.us aparecem como **"Domínios externos"**: registrados fora da Hostinger (Domínios › Meus domínios).
 - O registrador **não foi encontrado**. O hPanel não mostra, e a consulta pública (RDAP .us) não respondeu.
-- Nameservers atuais: `ns-cloud-d1…d4.googledomains.com`, ou seja, **Google Cloud DNS** (Plano › Detalhes do plano › Nameservers). O DNS é gerido no Google, **não na Hostinger**. O editor de DNS do hPanel só oferece "Transferir".
+- Nameservers atuais: `ns-cloud-d1…d4.googledomains.com`, que são do **Squarespace Domains**, o antigo Google Domains. *Correção de 01/10: não é o Google Cloud DNS* (Plano › Detalhes do plano › Nameservers). O DNS é gerido no Google, **não na Hostinger**. O editor de DNS do hPanel só oferece "Transferir".
 - Registros públicos, consultados por DNS público:
 
 | Tipo | Nome | Destino |

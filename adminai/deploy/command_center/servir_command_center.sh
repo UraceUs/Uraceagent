@@ -173,7 +173,8 @@ else:
     open(caddyfile, "a").write(f"\n{dominio} {{{bloco}}}\n"); print("-- bloco de site criado")
 PY
 # Endereço da URACE (dono, 30/09: "conseguimos deixar a url do site como o da urace?").
-# CC_DOMINIOS_EXTRAS="ops.urace.us" cria um site a mais no Caddy com o MESMO painel, sem
+# CC_DOMINIOS_EXTRAS="ops.urace.us my.urace.us" cria um site a mais no Caddy para cada nome
+# (my.* abre na área do cliente), com o MESMO servidor, sem
 # tirar o duckdns (webhooks do Kommo, OAuth do QuickBooks e o conector do claude.ai
 # continuam apontando para lá). Só entra se o DNS do nome novo já aponta para ESTE
 # servidor: sem isso o Let's Encrypt falha e o Caddy fica tentando à toa.
@@ -184,16 +185,19 @@ for EXTRA in ${CC_DOMINIOS_EXTRAS:-}; do
         echo "!! $EXTRA ainda não aponta para este servidor (DNS: ${IP_NOVO:-nada}; aqui: $IP_NOSSO) — pulei. Crie o registro A e rode de novo."
         continue
     fi
-    sudo EXTRA="$EXTRA" PORTA="$PORTA" python3 - <<'PY2'
+    sudo EXTRA="$EXTRA" PORTA="$PORTA" CADDYFILE="$CADDYFILE" python3 - <<'PY2'
 import os, re
-caddyfile = "/etc/caddy/Caddyfile"
+caddyfile = os.environ.get("CADDYFILE", "/etc/caddy/Caddyfile")
 extra, porta = os.environ["EXTRA"], os.environ["PORTA"]
+# my.urace.us é o endereço do CLIENTE (dono, 01/10): a raiz abre a área do cliente. Os
+# outros (ops.urace.us) abrem o painel da equipe.
+destino = "/ops/portal" if extra.split(".")[0] == "my" else "/ops/"
 s = open(caddyfile).read()
 if re.search(r"(^|\n)" + re.escape(extra) + r"\s*\{", s):
     print(f"-- {extra}: site já existe no Caddy")
 else:
     open(caddyfile, "a").write(
-        f"\n{extra} {{\n\tredir / /ops/ 302\n"
+        f"\n{extra} {{\n\tredir / {destino} 302\n"
         f"\thandle /ops* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
         f"\thandle /.well-known/oauth-* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
         f"\thandle /robots.txt {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
