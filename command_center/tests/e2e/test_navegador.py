@@ -298,7 +298,7 @@ def test_cliente_cria_a_conta_poe_o_piloto_com_medidas_e_volta_a_entrar(servidor
     pg.get_by_label("Date of birth").fill("2015-06-01")
     pg.get_by_role("button", name="Save driver").click()
     assert "Please fill in" in pg.get_by_role("alert").inner_text()
-    for rot, v in (("Height (in)", "50"), ("Weight (lb)", "70"), ("Chest (in)", "26"), ("Waist (in)", "24"), ("Hips (in)", "27")):
+    for rot, v in (("Height (in)", "50"), ("Weight (lb)", "70"), ("Chest (in)", "26"), ("Waist (in)", "24")):          # quadril é opcional
         pg.get_by_label(rot).fill(v)
     pg.get_by_label("Karting experience").fill("First year, Baby kart.")
     pg.get_by_text("More sizes").click()

@@ -16,7 +16,8 @@ Dono, 01/10 (#54):
 - os campos do responsável são **obrigatórios**, e o cliente pode ser de **outro país**:
   o telefone tem código de país (padrão +1) e o CEP só segue o formato americano nos EUA;
 - no piloto são obrigatórios o nome completo, a data de nascimento, altura, peso, peito,
-  cintura, quadril e a **experiência com kart**. A rede social é opcional;
+  cintura e a **experiência com kart**. Quadril e rede social são opcionais (dono, 01/10:
+  *"tire hips das medidas obrigatórias"*);
 - *"a cada trinta começa os avisos, com sessenta já tem que estar atualizado"*: medida com
   30 dias pede atualização; com 60, o piloto não marca sessão até atualizar. Salvar o
   formulário com as medidas confirma que estão certas (renova a data, mesmo sem mudar).
@@ -40,7 +41,7 @@ MEDIDAS = {
     "suit_size": ("txt", 1, 12), "helmet_size": ("txt", 1, 12), "glove_size": ("txt", 1, 12),
     "shoe_size": ("txt", 1, 12),
 }
-MEDIDAS_OBRIGATORIAS = ("height_in", "weight_lb", "chest_in", "waist_in", "hips_in")
+MEDIDAS_OBRIGATORIAS = ("height_in", "weight_lb", "chest_in", "waist_in")   # quadril opcional (dono, 01/10)
 MEDIDAS_AVISO_DIAS = 30
 MEDIDAS_LIMITE_DIAS = 60
 CAMPOS_CONTA = ("name", "birth_date", "phone_country", "phone", "address_line1", "address_line2", "city", "state", "zip",
