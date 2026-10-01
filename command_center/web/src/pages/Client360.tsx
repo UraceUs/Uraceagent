@@ -210,7 +210,20 @@ interface RecQbo { id: string; nome: string | null; ativa: boolean; total: numbe
   ocorrencias: number | null; email: string | null; linhas: { item: string | null; unitario: number | null }[]; vinculada_id: number | null; de_outro_cliente: boolean }
 interface NoQbo { conectado: boolean; erro?: string; recorrencias: RecQbo[]; soltas: number }
 interface Mensal { monthly_plan: string | null; monthly_amount: number | null; monthly_item_id: string | null; monthly_sessions: number | null; item: { id: string; name: string; price: number | null } | null
-  itens: { id: string; name: string; full_name: string | null; price: number | null }[]; email: string | null; opcoes_meses: number[]; padrao_meses: number; proximo_inicio: string; recorrencias: Recorrencia[] }
+  itens: { id: string; name: string; full_name: string | null; price: number | null }[]; email: string | null; opcoes_meses: number[]; padrao_meses: number; proximo_inicio: string; recorrencias: Recorrencia[]; agendadas: MesAgendado[] }
+/** Um mês da mensalidade agendada (#63): criado e enviado pelo QuickBooks no dia 1 às 01:00 (Flórida). */
+interface MesAgendado { id: number; month: string; amount: number; email: string | null; send_at: string; status: 'a_enviar' | 'enviada' | 'falhou' | 'cancelada'
+  doc_number: string | null; sent_at: string | null; error: string | null; attempts: number; note: string | null }
+const MES_ROTULO: Record<MesAgendado['status'], [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { a_enviar: ['a enviar', 'neutral'], enviada: ['enviada', 'ok'], falhou: ['falhou', 'crit'], cancelada: ['cancelada', 'neutral'] }
+/** "envia em 01/11 01:00" · "URACE-0021, enviada em …" · "falhou: motivo" — o horário é o da Flórida. */
+function situacaoMes(x: MesAgendado) {
+  const [dia, hora] = x.send_at.split(' ')
+  const quando = `${dia.slice(8, 10)}/${dia.slice(5, 7)} ${hora}`
+  if (x.status === 'a_enviar') return `envia em ${quando}`
+  if (x.status === 'enviada') return `${x.doc_number ? `${x.doc_number}, ` : ''}${x.sent_at ? `enviada em ${fmtDateTime(x.sent_at)}` : 'enviada'}${x.note ? ` · ${x.note}` : ''}`
+  if (x.status === 'falhou') return `${x.error || 'falhou'}${x.attempts < 3 ? ` · tenta de novo (${x.attempts}/3)` : ' · 3 tentativas: confira no QuickBooks'}`
+  return 'não será enviada'
+}
 const REC_ROTULO: Record<string, [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { active: ['ativa', 'ok'], simulated: ['simulação — nada criado', 'warn'], failed: ['falhou', 'crit'], ended: ['encerrada', 'neutral'] }
 const mesAno = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 const mesExtenso = (iso: string) => new Date(iso.slice(0, 7) + '-15T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -271,7 +284,7 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
   const soltas = (q.data?.recorrencias || []).filter(x => x.ativa && !x.vinculada_id && !x.de_outro_cliente)
-  const ativaNoPainel = m.recorrencias.find(x => x.status === 'active')
+  const ativaNoPainel = m.recorrencias.find(x => x.status === 'active' && x.end_on >= ini)
   const noQbo = new Map((q.data?.recorrencias || []).map(x => [String(x.id), x]))
   const bloqueio = !q.data ? 'conferindo o QuickBooks…' : !q.data.conectado ? 'sem conferir o QuickBooks não dá para criar'
     : soltas.length ? 'já existe cobrança recorrente no QuickBooks: vincule' : ativaNoPainel ? 'já existe recorrência ativa' : ''
@@ -286,16 +299,23 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   async function recorrencia() {
     if (!Number.isInteger(nMeses) || nMeses < 1 || nMeses > 36) { toast('Escolha de 1 a 36 meses.', 'warn'); return }
     const ultimo = somaMeses(ini, nMeses - 1)
-    if (!await perguntar({ titulo: `Criar a invoice recorrente no QuickBooks?`,
-      texto: `O QuickBooks vai gerar e enviar sozinho, todo dia 1, uma invoice de $${fmtDolar(m.monthly_amount || 0)} para ${m.email || 'o e-mail do cliente no QuickBooks'} — ` +
-             `de ${mesExtenso(ini)} a ${mesExtenso(ultimo)} (${nMeses} invoice${nMeses > 1 ? 's' : ''}). ` +
-             `Nesses meses o painel não prepara outra invoice de mensalidade para este cliente, para ele não ser cobrado duas vezes.`,
-      ok: 'Criar recorrência' })) return
+    if (!await perguntar({ titulo: `Criar as ${nMeses} mensalidade${nMeses > 1 ? 's' : ''}?`,
+      texto: `Ficam criadas agora, uma por mês, de ${mesExtenso(ini)} a ${mesExtenso(ultimo)}: $${fmtDolar(m.monthly_amount || 0)} cada, para ${m.email || 'o e-mail do cliente no QuickBooks'}. ` +
+             `Cada uma é criada e enviada pelo QuickBooks no dia 1 do mês, à 01:00 (Flórida) — o mês que já começou sai em até 15 minutos. ` +
+             `Este clique aprova todas. O mês que já tem invoice de mensalidade não é cobrado de novo, e dá para cancelar um mês antes de ele sair.`,
+      ok: 'Criar e agendar' })) return
     setSalvando(true)
     try {
-      const r = await api.post<{ status: string; aviso: string | null }>(`/clients/${id}/mensal/recorrencia`, { meses: nMeses, inicio: ini })
-      toast(r.status === 'active' ? 'Recorrência criada no QuickBooks.' : `Simulação: ${r.aviso || 'nada foi criado no QuickBooks'}`, r.status === 'active' ? 'ok' : 'warn'); d.reload()
+      const r = await api.post<{ agendadas: MesAgendado[] }>(`/clients/${id}/mensal/recorrencia`, { meses: nMeses, inicio: ini })
+      toast(`${r.agendadas.length} mensalidade${r.agendadas.length > 1 ? 's' : ''} agendada${r.agendadas.length > 1 ? 's' : ''}: cada uma sai no dia 1 à 01:00.`, 'ok'); d.reload()
     } catch (e) { toast((e as ApiError).message, 'crit'); d.reload() } finally { setSalvando(false) }
+  }
+  async function cancelarMes(x: MesAgendado) {
+    if (!await perguntar({ titulo: `Cancelar a mensalidade de ${mesExtenso(x.month + '-01')}?`,
+      texto: `Ela não será enviada. Nada é apagado: a linha fica "cancelada", com o seu nome.`, ok: 'Cancelar este mês', perigo: true })) return
+    setSalvando(true)
+    try { await api.post(`/clients/${id}/mensal/agendadas/${x.id}/cancelar`, {}); toast('Mês cancelado.', 'ok'); d.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
   return <Section title="Valor da mensalidade e recorrência">
     {soltas.length > 0 && <div className="banner crit" role="alert" style={{ marginBottom: 14, padding: '14px 16px' }}><div className="grow">
@@ -335,9 +355,17 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
       <div className="field"><label>Primeira mensalidade</label>
         <select className="input" value={ini} onChange={e => setInicio(e.target.value)}>{inicios.map(x => <option key={x} value={x}>dia 1 de {mesAno(x)}</option>)}</select></div>
       <button className="btn" disabled={salvando || mudou || !m.monthly_amount || !m.monthly_item_id || !!bloqueio} onClick={recorrencia}
-              title={mudou ? 'salve a mensalidade antes' : !m.monthly_amount || !m.monthly_item_id ? 'defina valor e item antes' : bloqueio}>Criar invoice recorrente no QuickBooks</button>
+              title={mudou ? 'salve a mensalidade antes' : !m.monthly_amount || !m.monthly_item_id ? 'defina valor e item antes' : bloqueio}>Criar invoice recorrente (todos os meses)</button>
       {bloqueio && !soltas.length && <span className="small muted">{bloqueio}</span>}
     </div>
+    {m.agendadas.length > 0 && <>
+      <h3 className="h3" style={{ marginTop: 16 }}>Mensalidades agendadas</h3>
+      <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mês</th><th>Valor</th><th>Situação</th><th>Envio</th><th></th></tr></thead><tbody>
+        {m.agendadas.map(x => <tr key={x.id}><td className="mono">{mesAno(x.month + '-01')}</td><td className="mono">${fmtDolar(x.amount)}</td>
+          <td><Chip tone={MES_ROTULO[x.status][1]}>{MES_ROTULO[x.status][0]}</Chip></td>
+          <td className="small">{situacaoMes(x)}</td>
+          <td>{(x.status === 'a_enviar' || x.status === 'falhou') && <button className="btn sm" disabled={salvando} onClick={() => cancelarMes(x)}>Cancelar</button>}</td></tr>)}
+      </tbody></table></div></>}
     {m.recorrencias.length > 0 && <div className="tbl-wrap" style={{ marginTop: 12 }}><table className="tbl"><thead><tr><th>De</th><th>Até</th><th>Meses</th><th>Valor</th><th>Origem</th><th>Situação</th><th>No QuickBooks</th><th>Criada</th></tr></thead><tbody>
       {m.recorrencias.map(x => <tr key={x.id}><td className="mono">{mesAno(x.start_on)}</td><td className="mono">{x.end_on >= '2099' ? 'sem fim' : mesAno(x.end_on)}</td><td className="mono">{x.months || '—'}</td><td className="mono">${fmtDolar(x.amount)}</td>
         <td className="small">{x.source === 'qbo' ? 'vinculada do QuickBooks' : 'criada pelo painel'}</td>

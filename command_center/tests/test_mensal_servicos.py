@@ -191,7 +191,9 @@ def test_valor_mensal_e_do_gerente(cli):
     assert any(a["event"] == "client.monthly.deal" for a in todos(conectar(), "SELECT event FROM audit_logs"))
 
 
-def test_recorrencia_pelo_painel_e_sem_cobrar_duas_vezes(cli, monkeypatch):
+def test_recorrencia_pelo_painel_agenda_todos_os_meses_e_sem_cobrar_duas_vezes(cli, monkeypatch):
+    """#63: criar a recorrência cria uma linha por mês, "a enviar" no dia 1 às 01:00; nada é
+    escrito no QuickBooks na hora do clique."""
     enzo = _id("Enzo Kurian")
     chamadas = []
 
@@ -199,39 +201,52 @@ def test_recorrencia_pelo_painel_e_sem_cobrar_duas_vezes(cli, monkeypatch):
         chamadas.append((sistema, ferramenta, a))
         if ferramenta == "qbo_recorrencias":
             return []                       # nada no QuickBooks ainda: pode criar
-        return {"aplicado": True, "id": "77", "inicio": a["inicio"]}
+        raise AssertionError(f"escreveu no QuickBooks ao agendar: {ferramenta}")
     monkeypatch.setattr(providers, "chamar", falso)
     h = entra(cli, "ger@urace.us")
     cli.patch(f"/ops/api/clients/{enzo}/mensal", headers=h, json={"monthly_amount": 450, "monthly_item_id": "7"})
-    inicio = f"{date.today().year + 1}-01-01"
-    r = cli.post(f"/ops/api/clients/{enzo}/mensal/recorrencia", headers=h, json={"meses": 6, "inicio": inicio})
+    ano = date.today().year + 1
+    r = cli.post(f"/ops/api/clients/{enzo}/mensal/recorrencia", headers=h, json={"meses": 6, "inicio": f"{ano}-01-01"})
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "active" and r.json()["fim"] == f"{date.today().year + 1}-06-01"
-    assert [f for _, f, _ in chamadas] == ["qbo_recorrencias", "qbo_criar_recorrencia"], "confere antes de criar"
-    _, ferramenta, a = chamadas[-1]
-    assert ferramenta == "qbo_criar_recorrencia" and a["cliente_id"] == "485", "cliente do QBO pela última invoice"
-    assert a["linhas"][0]["unitario"] == 450 and a["email"] == "joekur001@gmail.com"
-    r = cli.post(f"/ops/api/clients/{enzo}/mensal/recorrencia", headers=h, json={"meses": 12, "inicio": inicio})
+    d = r.json()
+    assert d["status"] == "active" and d["fim"] == f"{ano}-06-01"
+    assert [f for _, f, _ in chamadas] == ["qbo_recorrencias"], "confere antes de criar, e não cria modelo no QuickBooks"
+    assert [m["send_at"] for m in d["agendadas"]] == [f"{ano}-{k:02d}-01 01:00" for k in range(1, 7)]
+    assert {m["status"] for m in d["agendadas"]} == {"a_enviar"}
+    assert {(m["amount"], m["email"], m["item_id"]) for m in d["agendadas"]} == {(450, "joekur001@gmail.com", "7")}
+    r = cli.post(f"/ops/api/clients/{enzo}/mensal/recorrencia", headers=h, json={"meses": 12, "inicio": f"{ano}-01-01"})
     assert r.status_code == 409, "cobrar duas vezes, não"
     rec = um(conectar(), "SELECT * FROM monthly_recurring WHERE client_id=?", (enzo,))
-    assert rec["status"] == "active" and rec["qbo_id"] == "77" and rec["months"] == 6
+    assert rec["status"] == "active" and rec["qbo_id"] is None and rec["months"] == 6
+    g = cli.get(f"/ops/api/clients/{enzo}/mensal", headers=h).json()
+    assert len(g["agendadas"]) == 6, "o card mostra os meses"
+    primeiro = g["agendadas"][0]["id"]
+    h_op = entra(cli, "op@urace.us")
+    assert cli.post(f"/ops/api/clients/{enzo}/mensal/agendadas/{primeiro}/cancelar", headers=h_op).status_code == 403
+    h = entra(cli, "ger@urace.us")
+    r = cli.post(f"/ops/api/clients/{enzo}/mensal/agendadas/{primeiro}/cancelar", headers=h)
+    assert r.status_code == 200 and r.json()["agendadas"][0]["status"] == "cancelada", "cancelar não apaga"
+    assert cli.post(f"/ops/api/clients/{enzo}/mensal/agendadas/{primeiro}/cancelar", headers=h).status_code == 400
 
 
-def test_recorrencia_simulada_fica_registrada_como_simulacao(cli, monkeypatch):
+def test_mes_que_ja_tem_invoice_nasce_enviada(cli, monkeypatch):
+    """O mês com invoice de mensalidade no espelho (memo "[Month, AAAA]") não é cobrado de novo."""
     levi = _id("Levi Grezik")
-    con = conectar(); con.execute("UPDATE clients SET monthly_amount=300, monthly_item_id='7', email='levi@x.com' WHERE id=?", (levi,)); con.close()
+    ano = date.today().year + 1
+    con = conectar()
+    con.execute("UPDATE clients SET monthly_amount=300, monthly_item_id='7', email='levi@x.com' WHERE id=?", (levi,))
+    inserir(con, "invoices", client_id=levi, doc_number="URACE-0099", amount=300, balance=300, status="open",
+            issued_on=f"{ano - 1}-12-28", customer_ref="900", memo=f"Urace Academy Training Program [February, {ano}]")
+    con.close()
 
     def falso(sistema, ferramenta, **a):
-        if ferramenta == "qbo_clientes_buscar":
-            return [{"id": "900", "email": "levi@x.com"}]
-        if ferramenta == "qbo_recorrencias":
-            return []
-        return {"aplicado": False, "teria_feito": "criar recorrência"}
+        return [] if ferramenta == "qbo_recorrencias" else [{"id": "900", "email": "levi@x.com"}]
     monkeypatch.setattr(providers, "chamar", falso)
     h = entra(cli, "ger@urace.us")
-    r = cli.post(f"/ops/api/clients/{levi}/mensal/recorrencia", headers=h, json={"meses": 3})
-    assert r.status_code == 200 and r.json()["status"] == "simulated", r.text
-    assert um(conectar(), "SELECT status FROM monthly_recurring WHERE client_id=?", (levi,))["status"] == "simulated"
+    r = cli.post(f"/ops/api/clients/{levi}/mensal/recorrencia", headers=h, json={"meses": 3, "inicio": f"{ano}-01-01"})
+    assert r.status_code == 200, r.text
+    st = [(m["month"], m["status"], m["doc_number"]) for m in r.json()["agendadas"]]
+    assert st == [(f"{ano}-01", "a_enviar", None), (f"{ano}-02", "enviada", "URACE-0099"), (f"{ano}-03", "a_enviar", None)]
 
 
 def test_recorrencia_sem_valor_combinado_e_recusada(cli):

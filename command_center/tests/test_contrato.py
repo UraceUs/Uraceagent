@@ -113,3 +113,15 @@ def test_card_mostra_o_contrato_do_cliente_e_a_lista_da_equipe_tambem(cli, con):
     assert next(x for x in ag if x["date"].startswith(m))["contrato"] == {"usadas": 1, "sessoes_por_mes": 2, "acima": False}
     cli.cookies.clear()
     assert cli.get("/ops/api/portal/bookings").status_code == 401, "o cliente não vê nada disto"
+
+
+def test_card_reconhece_a_mensalidade_pelo_item_da_linha(con):
+    """#63: a invoice do Joseph Kurian de 17/09 não tem memo, só o item "Academy Monthly"."""
+    from command_center.api import rotas
+    cid, _, _ = cenario(con)
+    m = _mes()
+    iid = inserir(con, "invoices", client_id=cid, doc_number="1077", amount=2756, balance=0, status="paid",
+                  issued_on=f"{m}-17", customer_ref="485", memo=None)
+    inserir(con, "invoice_lines", invoice_id=iid, line_no=1, item_name="Academy Monthly", description="", amount=2756)
+    d = rotas.resumo_mensalidade(con, cid)
+    assert d["months"][0]["invoice"]["doc_number"] == "1077" and d["last_monthly_amount"] == 2756

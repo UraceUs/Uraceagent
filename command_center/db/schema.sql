@@ -1064,6 +1064,33 @@ CREATE TABLE IF NOT EXISTS monthly_recurring (
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS monthly_recurring_cliente ON monthly_recurring(client_id, status);
+-- Dono, 01/10 (#63): "sempre que colocar criar invoice recorrente, já crie todos os meses, a
+-- situação é só enviado ou a enviar e a data que vai ser enviada... uma hora da manhã".
+-- Uma linha por mês. Quem cria e envia é o painel, pelo QuickBooks, no dia 1 às 01:00 (Flórida).
+CREATE TABLE IF NOT EXISTS monthly_invoices (
+  id            INTEGER PRIMARY KEY,
+  recurring_id  INTEGER REFERENCES monthly_recurring(id),
+  client_id     INTEGER NOT NULL REFERENCES clients(id),
+  month         TEXT NOT NULL,                 -- AAAA-MM
+  amount        REAL NOT NULL,
+  item_id       TEXT NOT NULL,
+  description   TEXT,
+  email         TEXT,
+  send_at       TEXT NOT NULL,                 -- "AAAA-MM-DD HH:MM", hora da Flórida
+  status        TEXT NOT NULL DEFAULT 'a_enviar' CHECK (status IN ('a_enviar','enviada','falhou','cancelada')),
+  qbo_id        TEXT,
+  doc_number    TEXT,
+  sent_at       TEXT,
+  error         TEXT,
+  attempts      INTEGER NOT NULL DEFAULT 0,
+  note          TEXT,                          -- ex.: "já existia no QuickBooks"
+  cancelled_by  INTEGER REFERENCES users(id),
+  created_by    INTEGER REFERENCES users(id),
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- um mês, uma mensalidade (a cancelada não conta)
+CREATE UNIQUE INDEX IF NOT EXISTS monthly_invoices_mes ON monthly_invoices(client_id, month) WHERE status<>'cancelada';
 
 -- ------------------------------------------------- peça do estoque usada → cobrança do cliente
 -- Dono, 29/09: o preço final da peça "vai ser o valor que vai entrar na invoice daquele cliente

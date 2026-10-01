@@ -1969,7 +1969,12 @@ def resumo_mensalidade(con, cid, meses=4):
     invs = todos(con, "SELECT * FROM invoices WHERE client_id=? ORDER BY issued_on DESC", (cid,))
     por_mes = {}
     for i in invs:
-        if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + (i.get("doc_number") or ""), re.I):
+        # 01/10 (#63): a invoice de mensalidade também é reconhecida pelo item da linha (a de 17/09 do
+        # Joseph Kurian não tem memo, só o item "Academy Monthly")
+        linhas = " ".join(f"{x['item_name'] or ''} {x['description'] or ''}" for x in
+                          todos(con, "SELECT item_name, description FROM invoice_lines WHERE invoice_id=?", (i["id"],)))
+        i["_linhas"] = linhas
+        if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + (i.get("doc_number") or "") + " " + linhas, re.I):
             por_mes.setdefault(mes_da_invoice(i), i)
     saida = []
     por_mes_n = contrato.sessoes_por_mes(con, cid)      # o número do contrato do card (#61); sem número, 4
@@ -1985,7 +1990,7 @@ def resumo_mensalidade(con, cid, meses=4):
                       "sessions_used": len(usadas), "sessions_left": max(0, por_mes_n - len(usadas)), "sessions": usadas,
                       "sessions_over": max(0, len(usadas) - por_mes_n), "closed": k > 0,
                       "needs_invoice": inv is None and (k == 0 or len(usadas) > 0)})
-    ultimo = next((i for i in invs if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or ""), re.I)), None)
+    ultimo = next((i for i in invs if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + i.get("_linhas", ""), re.I)), None)
     return {"months": saida, "last_monthly_amount": ultimo["amount"] if ultimo else None, "last_monthly_memo": ultimo["memo"] if ultimo else None,
             "sessions_per_month": por_mes_n, "sessions_per_month_set": bool(um(con, "SELECT monthly_sessions FROM clients WHERE id=?", (cid,))["monthly_sessions"])}
 
