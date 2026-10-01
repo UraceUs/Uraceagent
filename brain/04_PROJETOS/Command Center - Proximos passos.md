@@ -610,7 +610,9 @@ Center; site público = urace.us. Tudo nasce e é testado no site interno, em `/
       colaborador da agência e liga o registro de atividades (#49)
 - [ ] 👤 Pessoalmente: trocar a senha do admin `colinatech` do WP, confirmar o e-mail admin novo,
       decidir a licença do Elementor Pro e pôr o token do Kommo no SXS LP
-- [x] 👤 Área do cliente: `my.urace.us` → VPS, aprovado em 01/10. O registro é criado no **Google Cloud DNS**
+- [x] 👤 Área do cliente: `my.urace.us` → VPS, aprovado em 01/10. O DNS está no **Squarespace Domains**
+      (conta urace@urace.us), e não no Google Cloud. Em 01/10 a extensão criou `ops` e `my` (CNAME para o
+      duckdns). `my.urace.us` abre direto a área do cliente (#57)
 - [x] 👤 Pagamento da sessão: QuickBooks (01/10). A sessão só é confirmada com o pagamento e a waiver (#50)
 - [ ] 👤 Responder as 11 perguntas do levantamento: a Colina Tech (e-mail admin, pop-up, licença do
       Elementor, colaborador com faturamento), o lp.urace.us vulnerável, o token do Kommo no SXS LP,
