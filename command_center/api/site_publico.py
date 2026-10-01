@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, todos, transacao
-from command_center.providers import agenda_sessoes as ag, servicos_site as sv, vinculo_site as vs
+from command_center.providers import agenda_sessoes as ag, contrato, servicos_site as sv, vinculo_site as vs
 
 r = APIRouter(prefix="/ops/api/site", tags=["site"])
 
@@ -116,7 +116,10 @@ def desbloquear(bid: int, request: Request, con: sqlite3.Connection = Depends(ge
 @r.get("/agendamentos")
 def agendamentos(status: str | None = None, de: str | None = None, ate: str | None = None,
                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    return {"agendamentos": ag.lista(con, status or None, de, ate)}
+    lista = ag.lista(con, status or None, de, ate)
+    for a in lista:                          # contrato mensal: só a equipe vê (#61)
+        a["contrato"] = contrato.situacao_do_agendamento(con, a["client_id"], a["date"])
+    return {"agendamentos": lista}
 
 
 class DecisaoIn(BaseModel):
@@ -148,6 +151,7 @@ class ServicoIn(BaseModel):
     description: str | None = None
     price: float | str | None = None
     qbo_item_id: str | None = None
+    qbo_item: str | None = None             # texto livre: o nome de um item, ou o texto da linha (#61)
     active: bool | None = None
     sort: int | None = None
 

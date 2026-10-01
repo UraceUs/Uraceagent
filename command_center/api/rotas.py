@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from command_center.api import atencao, auth, equipe, vendas
 from command_center.api.cache_api import paginar
 from command_center.db import agora, atualizar, auditar, conectar, get_db, inserir, todos, um
-from command_center.providers import sync as sy
+from command_center.providers import contrato, sync as sy
 
 BASE = "/ops/api"
 r = APIRouter(prefix=BASE)
@@ -1949,7 +1949,7 @@ def context_download(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Conne
 
 # ============================================================ Pro Racing Drivers, mensalidade, contrato, equipamento, corridas (09/09)
 MESES_EN = {m: i for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), 1)}
-SESSOES_MES = 4
+SESSOES_MES = 4                       # padrão da Academy; o card pode ter outro número (#61)
 CONTRACT_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "contracts")
 IMAGE_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "images")
 
@@ -1972,21 +1972,22 @@ def resumo_mensalidade(con, cid, meses=4):
         if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + (i.get("doc_number") or ""), re.I):
             por_mes.setdefault(mes_da_invoice(i), i)
     saida = []
+    por_mes_n = contrato.sessoes_por_mes(con, cid)      # o número do contrato do card (#61); sem número, 4
     for k in range(meses):
         y, mo = hoje.year, hoje.month - k
         while mo <= 0:
             mo += 12; y -= 1
         mes = f"{y}-{mo:02d}"
-        usadas = todos(con, """SELECT title, due_on, status FROM tasks WHERE client_id=? AND due_on LIKE ? AND project='U-RACE'
-                               AND LOWER(COALESCE(section,'')) NOT IN ('races','finished services') OR (client_id=? AND due_on LIKE ? AND status='completed' AND LOWER(COALESCE(section,''))='finished services')""",
-                       (cid, mes + "%", cid, mes + "%"))
+        u = contrato.usadas(con, cid, mes)          # Asana + agendamentos do site (#61)
+        usadas = u["asana"] + [{**x, "site": True} for x in u["site"]]
         inv = por_mes.get(mes)
         saida.append({"month": mes, "invoice": ({"id": inv["id"], "doc_number": inv["doc_number"], "amount": inv["amount"], "balance": inv["balance"], "status": inv["status"], "memo": inv["memo"]} if inv else None),
-                      "sessions_used": len(usadas), "sessions_left": max(0, SESSOES_MES - len(usadas)), "sessions": usadas,
+                      "sessions_used": len(usadas), "sessions_left": max(0, por_mes_n - len(usadas)), "sessions": usadas,
+                      "sessions_over": max(0, len(usadas) - por_mes_n), "closed": k > 0,
                       "needs_invoice": inv is None and (k == 0 or len(usadas) > 0)})
     ultimo = next((i for i in invs if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or ""), re.I)), None)
     return {"months": saida, "last_monthly_amount": ultimo["amount"] if ultimo else None, "last_monthly_memo": ultimo["memo"] if ultimo else None,
-            "sessions_per_month": SESSOES_MES}
+            "sessions_per_month": por_mes_n, "sessions_per_month_set": bool(um(con, "SELECT monthly_sessions FROM clients WHERE id=?", (cid,))["monthly_sessions"])}
 
 
 @r.get("/clients/{cid}/monthly")

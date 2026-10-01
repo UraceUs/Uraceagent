@@ -68,7 +68,7 @@ def test_desativar_tira_da_area_do_cliente_sem_apagar(con):
 def test_item_do_quickbooks_tem_de_existir_no_espelho(con):
     with pytest.raises(sv.ErroServico, match="QuickBooks"):
         sv.criar(con, None, {"name": "Coaching", "price": 369, "qbo_item_id": "999"})
-    inserir(con, "qbo_items", id="45", name="Urace Daily", type="Service", price=500)
+    inserir(con, "qbo_items", id="45", name="Urace Daily Using Own Kart", type="Service", price=500)   # a lista só mostra Academy e Daily Own Kart (#61)
     sid = sv.criar(con, None, {"name": "Coaching", "price": 369, "qbo_item_id": "45"})
     assert [i["id"] for i in sv.itens_qbo(con)] == ["45"]
     assert um(con, "SELECT qbo_item_id FROM booking_services WHERE id=?", (sid,))["qbo_item_id"] == "45"

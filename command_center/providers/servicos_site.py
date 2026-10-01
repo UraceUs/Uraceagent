@@ -42,7 +42,8 @@ def _texto(v, n):
 
 
 def lista(con, ativos=False):
-    sql = "SELECT * FROM booking_services" + (" WHERE active=1" if ativos else "") + " ORDER BY active DESC, sort, name"
+    sql = ("SELECT s.*, q.name AS qbo_item_name FROM booking_services s LEFT JOIN qbo_items q ON q.id=s.qbo_item_id"
+           + (" WHERE s.active=1" if ativos else "") + " ORDER BY s.active DESC, s.sort, s.name")
     return [dict(s) for s in todos(con, sql)]
 
 
@@ -52,9 +53,14 @@ def para_cliente(con):
 
 
 def itens_qbo(con):
-    """Itens de serviço do QuickBooks (espelho local), para a equipe escolher."""
+    """Itens do QuickBooks (espelho local) que a equipe pode escolher. Dono, 01/10: *"por
+    enquanto deixe só os academies e o race daily using own kart"*."""
     return [dict(i) for i in todos(con, """SELECT id, name, full_name, price FROM qbo_items
-                                            WHERE active=1 AND COALESCE(type,'Service')='Service' ORDER BY name""")]
+                                            WHERE active=1 AND COALESCE(type,'Service')='Service'
+                                              AND (LOWER(COALESCE(full_name, name)) LIKE '%academy%'
+                                                   OR (LOWER(COALESCE(full_name, name)) LIKE '%daily%'
+                                                       AND LOWER(COALESCE(full_name, name)) LIKE '%own kart%'))
+                                            ORDER BY name""")]
 
 
 def _dados(con, d, parcial):
@@ -68,7 +74,15 @@ def _dados(con, d, parcial):
         s["price"] = preco(d.get("price"))
     if "description" in d:
         s["description"] = _texto(d.get("description"), 300)
-    if "qbo_item_id" in d:
+    if "qbo_item" in d:
+        # dono, 01/10: "que seja possível que seja um texto personalizado". O que bate com
+        # o nome de um item vira o item; o resto é o texto da linha da invoice.
+        t = re.sub(r"\s+", " ", (d["qbo_item"] or "").strip())[:120]
+        item = um(con, """SELECT id FROM qbo_items WHERE active=1
+                           AND (LOWER(name)=LOWER(?) OR LOWER(COALESCE(full_name,''))=LOWER(?))""", (t, t)) if t else None
+        s["qbo_item_id"] = item["id"] if item else None
+        s["invoice_text"] = None if item else (t or None)
+    if "qbo_item_id" in d and "qbo_item" not in d:
         item = (str(d["qbo_item_id"]).strip() if d["qbo_item_id"] is not None else "") or None
         if item and not um(con, "SELECT 1 AS x FROM qbo_items WHERE id=?", (item,)):
             raise ErroServico("item do QuickBooks não encontrado (sincronize o QuickBooks e tente de novo)")

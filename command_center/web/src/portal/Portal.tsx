@@ -131,16 +131,16 @@ function Cadastro({ onEntrou }: { onEntrou: (a: Account) => void }) {
   return <CascaLogin lema="Your driver profile, sizes and sessions in one place">
     <form className="box portal-cadastro" onSubmit={enviar} noValidate>
       <div><div className="eyebrow">Driver area</div><h1 className="h1">Create your account</h1></div>
-      <p className="muted" style={{ margin: 0 }}>The account holder must be <b>18 or older</b>. Parents and guardians: create the account in your name and add your young driver next.</p>
+      <p className="muted" style={{ margin: 0 }}>The <b>account holder</b> is the adult responsible for the account (<b>18 or older</b>): the parent or guardian, or the driver themselves if they are an adult. The <b>driver</b> is the person who will drive the kart. You add drivers next.</p>
       <Aviso erro={erro} />
       <h2 className="h2">Account holder</h2>
-      <Campo rotulo="Full name" obrigatorio><input autoComplete="name" value={f.name} onChange={muda('name')} required /></Campo>
+      <Campo rotulo="Full name" dica="the parent, guardian or adult driver" obrigatorio><input autoComplete="name" value={f.name} onChange={muda('name')} required /></Campo>
       <Campo rotulo="Date of birth" obrigatorio><input type="date" autoComplete="bday" value={f.birth_date} onChange={muda('birth_date')} required /></Campo>
       <Campo rotulo="Email" obrigatorio><input type="email" autoComplete="email" value={f.email} onChange={muda('email')} required /></Campo>
       <Campo rotulo="Password" dica="at least 8 characters" obrigatorio><input type="password" autoComplete="new-password" value={f.password} onChange={muda('password')} required minLength={8} /></Campo>
       <h2 className="h2">Contact and address</h2>
       <Endereco f={f} set={setF} />
-      <label className="check"><input type="checkbox" checked={f.i_am_driver} onChange={muda('i_am_driver')} /> I am also a driver</label>
+      <label className="check"><input type="checkbox" checked={f.i_am_driver} onChange={muda('i_am_driver')} /> I am also a driver (I will drive the kart myself)</label>
       <label className="check"><input type="checkbox" checked={f.accept_terms} onChange={muda('accept_terms')} /> I accept the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the <a href="/legal/privacy.html" target="_blank" rel="noreferrer">privacy policy</a></label>
       <button className="btn primary block" disabled={indo}>{indo ? 'Creating…' : 'Create account'}</button>
       <p className="small" style={{ margin: 0 }}>Already have an account? <Link to="/portal">Sign in</Link></p>
@@ -280,7 +280,7 @@ function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onSalvo: (
     <h2 className="h3">{piloto ? `Edit ${piloto.name}` : 'Add a driver'}</h2>
     <Aviso erro={erro} />
     <div className="portal-2">
-      <Campo rotulo="Driver's full name" obrigatorio><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} required /></Campo>
+      <Campo rotulo="Driver's full name" dica="the person who will drive the kart" obrigatorio><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} required /></Campo>
       <Campo rotulo="Date of birth" obrigatorio><input type="date" value={f.birth_date} onChange={e => setF({ ...f, birth_date: e.target.value })} required /></Campo>
     </div>
     <div className="portal-2">
@@ -305,7 +305,7 @@ function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onSalvo: (
 function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => void }) {
   const [editando, setEditando] = useState<number | 'novo' | null>(conta.drivers.length ? null : 'novo')
   return <div className="stack" style={{ gap: 18 }}>
-    <div className="row"><div className="grow"><h1 className="h1">Drivers</h1><p className="muted" style={{ margin: '4px 0 0' }}>Everyone who drives on this account, with sizes and experience.</p></div>
+    <div className="row"><div className="grow"><h1 className="h1">Drivers</h1><p className="muted" style={{ margin: '4px 0 0' }}>The people who drive the kart: your child or children, or you. The account holder stays the responsible adult.</p></div>
       {editando === null && <button className="btn sm" onClick={() => setEditando('novo')}>+ Add a driver</button>}</div>
     {conta.drivers.map(p => editando === p.id
       ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} />

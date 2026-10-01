@@ -209,7 +209,7 @@ interface Recorrencia { id: number; qbo_id: string | null; name: string | null; 
 interface RecQbo { id: string; nome: string | null; ativa: boolean; total: number | null; inicio: string | null; fim: string | null; proxima: string | null
   ocorrencias: number | null; email: string | null; linhas: { item: string | null; unitario: number | null }[]; vinculada_id: number | null; de_outro_cliente: boolean }
 interface NoQbo { conectado: boolean; erro?: string; recorrencias: RecQbo[]; soltas: number }
-interface Mensal { monthly_plan: string | null; monthly_amount: number | null; monthly_item_id: string | null; item: { id: string; name: string; price: number | null } | null
+interface Mensal { monthly_plan: string | null; monthly_amount: number | null; monthly_item_id: string | null; monthly_sessions: number | null; item: { id: string; name: string; price: number | null } | null
   itens: { id: string; name: string; full_name: string | null; price: number | null }[]; email: string | null; opcoes_meses: number[]; padrao_meses: number; proximo_inicio: string; recorrencias: Recorrencia[] }
 const REC_ROTULO: Record<string, [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { active: ['ativa', 'ok'], simulated: ['simulação — nada criado', 'warn'], failed: ['falhou', 'crit'], ended: ['encerrada', 'neutral'] }
 const mesAno = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`
@@ -236,6 +236,7 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   const q = useGet<NoQbo>(`/clients/${id}/mensal/qbo`)
   const [valor, setValor] = useState<string | null>(null)
   const [item, setItem] = useState<string | null>(null)
+  const [sessoes, setSessoes] = useState<string | null>(null)
   const [meses, setMeses] = useState<number | 'outro'>(6)
   const [outro, setOutro] = useState('3')
   const [inicio, setInicio] = useState<string | null>(null)
@@ -248,7 +249,9 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   const it = item ?? (m.monthly_item_id || '')
   const ini = inicio ?? m.proximo_inicio
   const nMeses = meses === 'outro' ? Number(outro) : meses
-  const mudou = (vNum ?? null) !== (m.monthly_amount ?? null) || it !== (m.monthly_item_id || '')
+  const ses = sessoes ?? (m.monthly_sessions != null ? String(m.monthly_sessions) : '')
+  const sesNum = ses.trim() ? Number(ses) : null
+  const mudou = (vNum ?? null) !== (m.monthly_amount ?? null) || it !== (m.monthly_item_id || '') || sesNum !== (m.monthly_sessions ?? null)
   const todosItens = [...(m.item && !m.itens.some(x => x.id === m.item!.id) ? [m.item] : []), ...m.itens]
   function escolherItem(id: string) {
     setItem(id)
@@ -262,7 +265,9 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
     const n = vNum
     if (n !== null && (Number.isNaN(n) || n <= 0)) { toast('Valor mensal inválido. Ex.: 2,756.90', 'warn'); return }
     setSalvando(true)
-    try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: n, monthly_item_id: it || null }); toast('Mensalidade salva. É ela que vai na invoice do dia 1.', 'ok'); setValor(null); setItem(null); d.reload() }
+    if (sesNum !== null && (!Number.isInteger(sesNum) || sesNum < 1 || sesNum > 31)) { toast('Sessões por mês: de 1 a 31.', 'warn'); setSalvando(false); return }
+    try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: n, monthly_item_id: it || null, ...(sesNum !== null ? { monthly_sessions: sesNum } : {}) })
+      toast('Mensalidade salva. É ela que vai na invoice do dia 1.', 'ok'); setValor(null); setItem(null); setSessoes(null); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
   const soltas = (q.data?.recorrencias || []).filter(x => x.ativa && !x.vinculada_id && !x.de_outro_cliente)
@@ -315,6 +320,8 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
           <option value="">escolha…</option>
           {todosItens.map(x => <option key={x.id} value={x.id}>{x.name}{x.price ? ` (tabela ${money(x.price)})` : ''}</option>)}
         </select></div>
+      <div className="field"><label>Sessões por mês do contrato</label>
+        <input className="input" inputMode="numeric" value={ses} onChange={e => setSessoes(e.target.value)} placeholder="4" aria-label="sessões por mês do contrato" /></div>
       <div className="field"><label>&nbsp;</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>Salvar mensalidade</button></div>
     </div>
     <p className="small muted" style={{ marginTop: 6 }}>Ao escolher o item, o preço de tabela entra no valor; mude se o combinado com o cliente for outro. O que estiver salvo aqui é o valor da invoice de todo dia 1.</p>
@@ -423,14 +430,16 @@ function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Mon
     {plan !== 'monthly' && <Banner tone="info">Este piloto não está marcado como Academy Monthly. Marque em Editar → Tipo de piloto para o dia 1 gerar a mensalidade.</Banner>}
     <div className="grid g3">
       <div className="card kpi"><div className="lbl">Última mensalidade</div><div className="val" style={{ fontSize: 24 }}>{fin ? (m.last_monthly_amount != null ? money(m.last_monthly_amount) : '—') : '🔒'}</div><div className="foot truncate" title={m.last_monthly_memo || ''}>{m.last_monthly_memo || 'nenhuma invoice de Academy encontrada'}</div></div>
-      <div className="card kpi"><div className="lbl">Sessões este mês</div><div className="val">{m.months[0]?.sessions_used ?? 0}<span className="muted" style={{ fontSize: 18 }}> / {m.sessions_per_month}</span></div><div className="foot">{m.months[0]?.sessions_left ?? 0} restante(s)</div></div>
+      <div className="card kpi"><div className="lbl">Sessões este mês</div><div className="val">{m.months[0]?.sessions_used ?? 0}<span className="muted" style={{ fontSize: 18 }}> / {m.sessions_per_month}</span></div>
+        <div className="foot">{m.months[0]?.sessions_over ? `${m.months[0].sessions_over} acima do contrato` : `${m.months[0]?.sessions_left ?? 0} restante(s)`}{m.sessions_per_month_set ? '' : ' · padrão de 4 (defina o do contrato)'} · zera no dia 1 · só a equipe vê</div></div>
       <div className="card kpi"><div className="lbl">Invoice do mês</div><div className={`val ${m.months[0]?.invoice ? 'ok' : 'warn'}`} style={{ fontSize: 22 }}>{m.months[0]?.invoice ? (m.months[0].invoice.status || 'emitida') : 'falta'}</div><div className="foot">{m.months[0]?.invoice?.doc_number || (m.months[0]?.needs_invoice ? 'a IA monta no dia 1, você aprova' : '')}</div></div>
     </div>
     {fin && <ValorERecorrencia id={id} lastAmount={m.last_monthly_amount} />}
-    <Section title="Meses" tight><div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mês</th><th>Invoice</th><th>Sessões usadas</th><th>Restantes</th><th>Situação</th></tr></thead><tbody>
+    <Section title="Meses" tight><div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mês</th><th>Invoice</th><th>Sessões usadas</th><th>Restantes / não usadas</th><th>Situação</th></tr></thead><tbody>
       {m.months.map(x => <tr key={x.month}><td style={{ textTransform: 'capitalize' }}>{mesNome(x.month)}</td>
         <td>{x.invoice ? <><span className="mono">{x.invoice.doc_number}</span> <Chip tone={statusTone(x.invoice.status === 'open' ? 'PENDING' : x.invoice.status)}>{x.invoice.status}</Chip>{fin && x.invoice.amount != null && <span className="mono"> {money(x.invoice.amount)}</span>}<div className="small muted">{x.invoice.memo}</div></> : <span className="muted">—</span>}</td>
-        <td className="mono">{x.sessions_used}{x.sessions.length > 0 && <div className="small muted">{x.sessions.map(s => fmtDate(s.due_on)).join(' · ')}</div>}</td><td className="mono">{x.sessions_left}</td>
+        <td className="mono">{x.sessions_used}{x.sessions.length > 0 && <div className="small muted">{x.sessions.map(s => `${fmtDate(s.due_on)}${s.site ? ' (site)' : ''}`).join(' · ')}</div>}</td>
+        <td className="mono">{x.closed ? (x.sessions_left ? <Chip tone="warn">{x.sessions_left} não usada(s)</Chip> : '0') : x.sessions_left}{x.sessions_over ? <div className="small">{x.sessions_over} acima</div> : null}</td>
         <td>{x.needs_invoice ? <Chip tone="warn">falta invoice</Chip> : x.invoice ? <Chip tone="ok">ok</Chip> : <span className="muted">sem uso</span>}</td></tr>)}
     </tbody></table></div></Section>
     <Section title="Contrato da Academy" count={m.contracts.length}>
