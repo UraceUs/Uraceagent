@@ -20,10 +20,11 @@ interface Regra { weekday: number; dia: string; period: 'manha' | 'tarde'; open:
 interface Bloqueio { id: number; date_from: string; date_to: string; period: string; reason: string | null; created_at: string; weekday: number | null }
 interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number }
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
-interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; active: number; sort: number; updated_at: string | null }
+interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
+  invoice_text: string | null; active: number; sort: number; updated_at: string | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
-  service_name: string | null; price: number | null
+  service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null }
 
 const PER: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde', dia: 'Dia todo' }
@@ -67,6 +68,9 @@ function Agendamentos() {
             <div className="small">{a.driver || a.account_name}{anos != null ? ` (${anos} anos)` : ''}{a.driver && a.driver !== a.account_name ? ` · responsável ${a.account_name}` : ''}</div>
             <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : ' · conta ainda sem vínculo'}</div>
             {a.service_name && <div className="small">{a.service_name}{a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
+            {a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
+              ? `acima do contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`
+              : `contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`}</Chip></div>}
             {a.notes && <div className="small">“{a.notes}”</div>}
           </div>
           <Chip tone={tom}>{rot}</Chip>
@@ -217,12 +221,12 @@ function Servicos() {
   const gerente = can('MANAGER')
   const toast = useToast()
   const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
-  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item_id: '' })
-  const [edit, setEdit] = useState<Record<number, Partial<Servico> & { price_txt?: string }>>({})
+  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item: '' })
+  const [edit, setEdit] = useState<Record<number, Partial<Servico> & { price_txt?: string; qbo_item?: string }>>({})
   const itens = l.data?.itens_qbo || []
   async function criar() {
-    try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item_id: novo.qbo_item_id || null })
-      toast('Serviço criado: o cliente já vê.', 'ok'); setNovo({ name: '', description: '', price: '', qbo_item_id: '' }); l.reload() }
+    try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item: novo.qbo_item || null })
+      toast('Serviço criado: o cliente já vê.', 'ok'); setNovo({ name: '', description: '', price: '', qbo_item: '' }); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function salvar(sv: Servico, extra?: Partial<Servico>) {
@@ -231,16 +235,19 @@ function Servicos() {
     if (e.name !== undefined) corpo.name = e.name
     if (e.description !== undefined) corpo.description = e.description || null
     if (e.price_txt !== undefined) corpo.price = e.price_txt
-    if (e.qbo_item_id !== undefined) corpo.qbo_item_id = e.qbo_item_id || null
+    if (e.qbo_item !== undefined) corpo.qbo_item = e.qbo_item || null
     try { await api.patch(`/site/servicos/${sv.id}`, corpo); toast('Salvo. Vale para os próximos agendamentos.', 'ok')
       setEdit(x => { const y = { ...x }; delete y[sv.id]; return y }); l.reload() }
     catch (er) { toast((er as ApiError).message, 'crit') }
   }
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
   if (!l.data) return <Loading />
-  const muda = (id: number, x: Partial<Servico> & { price_txt?: string }) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  const muda = (id: number, x: Partial<Servico> & { price_txt?: string; qbo_item?: string }) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  // dono, 01/10: o item é um texto — escolhe da lista ou escreve; sem o preço no rótulo
+  const sugestoes = <datalist id="itens-qbo">{itens.map(i => <option key={i.id} value={i.name} />)}</datalist>
   return <div className="stack" style={{ gap: 18 }}>
     {!l.data.servicos.some(x => x.active) && <div className="banner warn"><span className="bi">▲</span><div className="grow">Nenhum serviço ativo: o cliente <b>não consegue marcar</b> até haver pelo menos um, com preço.</div></div>}
+    {sugestoes}
     <Section title="Serviços" count={l.data.servicos.length}>
       {!l.data.servicos.length ? <Empty title="Nenhum serviço ainda">Cadastre abaixo o que o cliente pode marcar e o preço de cada um.</Empty>
         : <div className="stack" style={{ gap: 10 }}>{l.data.servicos.map(sv => {
@@ -250,14 +257,14 @@ function Servicos() {
               <label className="fld"><span>Nome (o cliente lê, em inglês)</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
               <label className="fld"><span>Descrição <i>opcional</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
               <label className="fld"><span>Preço (US$)</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
-              <label className="fld"><span>Item no QuickBooks</span><select value={e.qbo_item_id ?? sv.qbo_item_id ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { qbo_item_id: x.target.value })}>
-                <option value="">— escolher —</option>{itens.map(i => <option key={i.id} value={i.id}>{i.name}{i.price != null ? ` (${usd(i.price)})` : ''}</option>)}</select></label>
+              <label className="fld"><span>Item no QuickBooks <i>ou texto</i></span><input list="itens-qbo" value={e.qbo_item ?? sv.qbo_item_name ?? sv.invoice_text ?? ''} disabled={!gerente}
+                onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder="escolha ou escreva" /></label>
               {gerente && <div className="row" style={{ gap: 6 }}>
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>Salvar</button>
                 <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? 'Desativar' : 'Reativar'}</button></div>}
             </div>
             <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">na área do cliente</Chip> : <Chip tone="neutral">desativado</Chip>}
-              {!sv.qbo_item_id && <> · <span>sem item do QuickBooks: a invoice não sai até escolher</span></>}</div>
+              {sv.qbo_item_id ? <> · <span>item do QuickBooks</span></> : sv.invoice_text ? <> · <span>texto personalizado na invoice</span></> : <> · <span>sem item: escolha um ou escreva o texto da invoice</span></>}</div>
           </div>
         })}</div>}
     </Section>
@@ -266,13 +273,11 @@ function Servicos() {
         <label className="fld"><span>Nome</span><input value={novo.name} onChange={x => setNovo({ ...novo, name: x.target.value })} placeholder="Arrive and Drive" /></label>
         <label className="fld"><span>Descrição <i>opcional</i></span><input value={novo.description} onChange={x => setNovo({ ...novo, description: x.target.value })} /></label>
         <label className="fld"><span>Preço (US$)</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
-        <label className="fld"><span>Item no QuickBooks</span><select value={novo.qbo_item_id} onChange={x => {
-          const i = itens.find(y => y.id === x.target.value)
-          setNovo({ ...novo, qbo_item_id: x.target.value, price: novo.price || (i?.price != null ? String(i.price) : '') }) }}>
-          <option value="">— escolher —</option>{itens.map(i => <option key={i.id} value={i.id}>{i.name}{i.price != null ? ` (${usd(i.price)})` : ''}</option>)}</select></label>
+        <label className="fld"><span>Item no QuickBooks <i>ou texto</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder="escolha ou escreva"
+          onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
         <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>Criar</button>
       </div></div>
-      <p className="small muted" style={{ margin: '8px 0 0' }}>Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista de itens é a do QuickBooks sincronizado.</p>
+      <p className="small muted" style={{ margin: '8px 0 0' }}>Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice.</p>
     </Section>}
   </div>
 }

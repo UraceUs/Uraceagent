@@ -215,6 +215,10 @@ MIGRACOES = [
     # 01/10 — dono (#52): "toda segunda fica bloqueado para não ter nenhuma aula". Bloqueio
     # recorrente: vale só naquele dia da semana, dentro do intervalo (fim aberto = 9999-12-31).
     ("booking_blocks", "weekday", "INTEGER"),
+    # 01/10 — dono (#61): o item do serviço pode ser um texto livre (vai na linha da invoice),
+    # e o contrato mensal diz quantas sessões cabem no mês.
+    ("booking_services", "invoice_text", "TEXT"),
+    ("clients", "monthly_sessions", "INTEGER"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",

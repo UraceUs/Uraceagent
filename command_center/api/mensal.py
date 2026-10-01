@@ -179,6 +179,7 @@ def ver(cid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
                            ORDER BY name LIMIT 60""")
     return {"monthly_plan": c["monthly_plan"], "monthly_note": c["monthly_note"],
             "monthly_amount": c["monthly_amount"], "monthly_item_id": c["monthly_item_id"], "item": item,
+            "monthly_sessions": c["monthly_sessions"],
             "itens": itens, "email": c["email"],
             "opcoes_meses": list(OPCOES_MESES), "padrao_meses": PADRAO_MESES,
             "proximo_inicio": proximo_dia_1().isoformat(),
@@ -191,6 +192,7 @@ class CombinadoIn(BaseModel):
     model_config = {"extra": "forbid"}
     monthly_amount: float | None = None
     monthly_item_id: str | None = None
+    monthly_sessions: int | None = None       # quantas sessões o contrato dá por mês (#61)
 
 
 @r.patch("/{cid}/mensal")
@@ -203,6 +205,8 @@ def combinar(cid: int, dados: CombinadoIn, request: Request, con: sqlite3.Connec
         if not 0 < campos["monthly_amount"] <= 100000:
             raise HTTPException(400, "Valor mensal fora da faixa.")
         campos["monthly_amount"] = round(campos["monthly_amount"], 2)
+    if campos.get("monthly_sessions") is not None and not 1 <= campos["monthly_sessions"] <= 31:
+        raise HTTPException(400, "Sessões por mês: de 1 a 31.")
     if campos.get("monthly_item_id"):
         if not um(con, "SELECT 1 AS x FROM qbo_items WHERE id=? AND active=1", (campos["monthly_item_id"],)):
             raise HTTPException(400, "Esse item não está ativo no catálogo do QuickBooks.")
