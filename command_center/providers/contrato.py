@@ -34,8 +34,10 @@ def tem_contrato(con, cid):
 
 def sessoes_asana(con, cid, mes):
     """As tarefas de treino do mês no Asana (o mesmo critério que o card usava desde 09/09)."""
-    return todos(con, """SELECT title, due_on, status FROM tasks WHERE client_id=? AND due_on LIKE ? AND project='U-RACE'
-                           AND LOWER(COALESCE(section,'')) NOT IN ('races','finished services') OR (client_id=? AND due_on LIKE ? AND status='completed' AND LOWER(COALESCE(section,''))='finished services')""",
+    from command_center.providers.agenda_asana import GIDS_DE_AGENDAMENTO   # #67: a do site já conta pelo agendamento
+    return todos(con, f"""SELECT title, due_on, status FROM tasks WHERE id NOT IN ({GIDS_DE_AGENDAMENTO}) AND (
+                           client_id=? AND due_on LIKE ? AND project='U-RACE'
+                           AND LOWER(COALESCE(section,'')) NOT IN ('races','finished services') OR (client_id=? AND due_on LIKE ? AND status='completed' AND LOWER(COALESCE(section,''))='finished services'))""",
                  (cid, mes + "%", cid, mes + "%"))
 
 

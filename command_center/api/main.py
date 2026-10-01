@@ -73,6 +73,10 @@ def _autosync():
             enviadas = mensalidades.enviar_devidas(con)
             if enviadas:
                 auditar(con, "client.monthly.round", "system", detail={"feitas": enviadas})
+            from command_center.providers import agenda_asana   # dono, 01/10 (#67): todo agendamento vira tarefa
+            r_asana = agenda_asana.rodar(con)
+            if r_asana["criadas"] or r_asana["avisadas"]:
+                auditar(con, "booking.asana.round", "system", detail=r_asana)
         except Exception as e:                            # nunca derruba o laço
             try:
                 auditar(con, "sync.auto.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})

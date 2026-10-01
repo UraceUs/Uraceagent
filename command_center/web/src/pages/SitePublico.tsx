@@ -25,7 +25,8 @@ interface Servico { id: number; name: string; description: string | null; price:
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
-  account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null }
+  account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null
+  asana_gid: string | null; asana_error: string | null }
 
 const PER: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde', dia: 'Dia todo' }
 const ST: Record<string, [string, Tom]> = { pendente: ['esperando confirmação', 'warn'], confirmada: ['confirmada', 'ok'], recusada: ['recusada', 'crit'], cancelada: ['cancelada', 'neutral'] }
@@ -67,7 +68,9 @@ function Agendamentos() {
             <b>{semanaDe(a.date)} {dbr(a.date)} · {PER[a.period]}</b>
             <div className="small">{a.driver || a.account_name}{anos != null ? ` (${anos} anos)` : ''}{a.driver && a.driver !== a.account_name ? ` · responsável ${a.account_name}` : ''}</div>
             <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : ' · driver ainda sem card'}</div>
-            {a.client_id && <div className="small"><Link to={`/clients/${a.client_id}`}>Client ID {a.client_id}</Link></div>}
+            <div className="small">{a.client_id && <><Link to={`/clients/${a.client_id}`}>Client ID {a.client_id}</Link> · </>}
+              {a.asana_gid ? <a href={`https://app.asana.com/0/1205450093098920/${a.asana_gid}/f`} target="_blank" rel="noreferrer">tarefa no Asana ↗</a>
+                : a.asana_error ? <span title={a.asana_error}>Asana: tenta de novo em até 15 min</span> : <span className="muted">indo para o Asana…</span>}</div>
             {a.service_name && <div className="small">{a.service_name}{a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
             {a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
               ? `acima do contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`

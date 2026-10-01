@@ -224,6 +224,11 @@ MIGRACOES = [
     ("portal_pilots", "client_id", "INTEGER REFERENCES clients(id)"),
     ("portal_pilots", "linked_by", "INTEGER REFERENCES users(id)"),
     ("portal_pilots", "linked_at", "TEXT"),
+    # 01/10 — dono (#67): "todo agendamento... vira uma tarefa no asana".
+    ("bookings", "asana_gid", "TEXT"),
+    ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana
+    ("bookings", "asana_error", "TEXT"),
+    ("bookings", "asana_attempts", "INTEGER NOT NULL DEFAULT 0"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS portal_pilots_client ON portal_pilots(client_id) WHERE client_id IS NOT NULL",

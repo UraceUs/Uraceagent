@@ -1189,7 +1189,7 @@ def _varrer_cliente(con, c):
                 marcadores = t.get("marcadores") or []
                 na_inbox = "INBOX" in marcadores
                 campos = dict(client_id=c["id"], mailbox=conta, subject=t.get("assunto"), sender=(t.get("de") or "")[:200],
-                              last_at=sy._data_iso(t.get("data")), snippet=(t.get("snippet") or "")[:300], messages=t.get("mensagens"),
+                              last_at=sy._data_rfc(t.get("data")), snippet=(t.get("snippet") or "")[:300], messages=t.get("mensagens"),
                               is_inbox=1 if na_inbox else 0, labels=json.dumps(marcadores, ensure_ascii=False), synced_at=agora(),
                               # histórico fora da inbox é contexto do cliente, não trabalho pendente
                               handled=0 if na_inbox else 1, handled_by=None if na_inbox else "auto",
