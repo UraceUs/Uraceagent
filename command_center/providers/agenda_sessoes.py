@@ -289,8 +289,9 @@ def do_cliente(con, conta_id):
 
 
 def lista(con, status=None, de=None, ate=None):
-    sql = """SELECT b.*, a.name AS account_name, a.email AS account_email, a.phone AS account_phone, a.client_id,
-                    p.name AS driver, p.birth_date AS driver_birth
+    from command_center.providers.contrato import CARD_DO_AGENDAMENTO
+    sql = f"""SELECT b.*, a.name AS account_name, a.email AS account_email, a.phone AS account_phone,
+                    {CARD_DO_AGENDAMENTO} AS client_id, p.name AS driver, p.birth_date AS driver_birth
                FROM bookings b JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id
               WHERE 1=1"""
     par = []

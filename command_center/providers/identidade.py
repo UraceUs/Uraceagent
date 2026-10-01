@@ -500,7 +500,8 @@ def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
 # --------------------------------------------- quem aponta para o cliente
 # Tabelas com client_id que ACEITA vazio (repontar ou soltar) e as que EXIGEM
 # cliente (bloqueiam a remoção: alguém agiu ali e não se apaga sem decisão humana).
-LIGACOES_SOLTAVEIS = ("tasks", "waivers", "emails", "invoices", "calendar_events", "ai_workflows", "ai_events", "crm_leads")
+LIGACOES_SOLTAVEIS = ("tasks", "waivers", "emails", "invoices", "calendar_events", "ai_workflows", "ai_events", "crm_leads",
+                      "portal_accounts", "portal_pilots")
 LIGACOES_OBRIGATORIAS = ("race_invites", "contracts")
 
 
@@ -544,13 +545,30 @@ def _soltar(con, cid):
 
 
 # ------------------------------------------------------------- unir
+def nao_unir(con, a_id, b_id):
+    """Por que dois cards NÃO podem virar um, ou None. #65 (dono, 01/10): cada driver tem o
+    seu card. Irmãos têm o mesmo responsável, e-mail e telefone — o que antes juntava a
+    família num card. Card ligado a um driver do site não se une ao card de OUTRO driver,
+    nem ao de outra conta do site: seria pôr o serviço de um no card do outro."""
+    pa = {r["id"] for r in todos(con, "SELECT id FROM portal_pilots WHERE client_id=?", (a_id,))}
+    pb = {r["id"] for r in todos(con, "SELECT id FROM portal_pilots WHERE client_id=?", (b_id,))}
+    if pa and pb and pa != pb:
+        return "são de drivers diferentes no site (cada driver tem o seu card)"
+    ca = {r["id"] for r in todos(con, "SELECT id FROM portal_accounts WHERE client_id=?", (a_id,))}
+    cb = {r["id"] for r in todos(con, "SELECT id FROM portal_accounts WHERE client_id=?", (b_id,))}
+    if ca and cb and ca != cb:
+        return "estão ligados a contas diferentes do site"
+    return None
+
+
 def unir(con, keep_id, drop_id, por, motivo):
-    """Um card só: tudo do duplicado passa para o principal; o duplicado sai do espelho."""
+    """Um card só: tudo do duplicado passa para o principal; o duplicado sai do espelho.
+    Devolve False quando não une (mesmo card, card que não existe, ou `nao_unir`)."""
     if keep_id == drop_id:
-        return
+        return False
     k = um(con, "SELECT * FROM clients WHERE id=?", (keep_id,)); d = um(con, "SELECT * FROM clients WHERE id=?", (drop_id,))
-    if not k or not d:
-        return
+    if not k or not d or nao_unir(con, keep_id, drop_id):
+        return False
     orfaos = _repontar(con, drop_id, keep_id)
     con.execute("UPDATE OR IGNORE entity_links SET entity_id=? WHERE entity_type='client' AND entity_id=?", (str(keep_id), str(drop_id)))
     con.execute("DELETE FROM entity_links WHERE entity_type='client' AND entity_id=?", (str(drop_id),))
@@ -570,6 +588,7 @@ def unir(con, keep_id, drop_id, por, motivo):
     inserir(con, "client_merges", keep_id=keep_id, drop_id=drop_id, drop_name=d["name"], drop_json=json.dumps(guardado, ensure_ascii=False, default=str),
             merged_by=por, reason=motivo)
     con.execute("DELETE FROM clients WHERE id=?", (drop_id,))
+    return True
 
 
 def deduplicar(con, por="sync"):
@@ -582,14 +601,14 @@ def deduplicar(con, por="sync"):
         for g in todos(con, sql):
             ids = sorted(int(i) for i in g["ids"].split(","))
             for dup in ids[1:]:
-                unir(con, ids[0], dup, por, f"mesmo {chave}: {g['k']}"); n += 1
+                n += bool(unir(con, ids[0], dup, por, f"mesmo {chave}: {g['k']}"))
     vistos = {}
     for c in todos(con, "SELECT id, phone FROM clients WHERE phone IS NOT NULL AND kind<>? ORDER BY id", (SEPARADO,)):
         t = so_digitos(c["phone"])
         if not t:
             continue
-        if t in vistos and um(con, "SELECT id FROM clients WHERE id=?", (vistos[t],)):
-            unir(con, vistos[t], c["id"], por, f"mesmo telefone: {t}"); n += 1
+        if t in vistos and um(con, "SELECT id FROM clients WHERE id=?", (vistos[t],)) and not nao_unir(con, vistos[t], c["id"]):
+            n += bool(unir(con, vistos[t], c["id"], por, f"mesmo telefone: {t}"))
         else:
             vistos[t] = c["id"]
     # Nome igual só une quando é NOME INTEIRO (2+ palavras). Primeiro nome sozinho não
@@ -604,8 +623,9 @@ def deduplicar(con, por="sync"):
             if len(k.split()) < 2:
                 continue
             alvo = um(con, "SELECT * FROM clients WHERE id=?", (vistos[k],)) if k in vistos else None
-            if alvo and vistos[k] != c["id"] and not e_balde(alvo) and um(con, "SELECT id FROM clients WHERE id=?", (c["id"],)):
-                unir(con, vistos[k], c["id"], por, f"mesmo nome: {k}"); n += 1
+            if alvo and vistos[k] != c["id"] and not e_balde(alvo) and um(con, "SELECT id FROM clients WHERE id=?", (c["id"],)) \
+                    and not nao_unir(con, vistos[k], c["id"]):
+                n += bool(unir(con, vistos[k], c["id"], por, f"mesmo nome: {k}"))
                 break
             vistos.setdefault(k, c["id"])
     return n
@@ -658,7 +678,7 @@ def candidatos_duplicados(con, para=None):
             if para and para not in (a["id"], b["id"]):
                 continue
             porque = mesmo_contato(a, b)
-            if porque and (a["id"], b["id"]) not in vistos:
+            if porque and (a["id"], b["id"]) not in vistos and not nao_unir(con, a["id"], b["id"]):
                 vistos.add((a["id"], b["id"]))
                 pares.append({"a": a, "b": b, "why": porque, "forte": True})
     for i, a in enumerate(cs):

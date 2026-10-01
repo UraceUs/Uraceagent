@@ -229,7 +229,8 @@ def conta(con, cid):
         raise ErroPortal("Account not found.")
     c = dict(c)
     c["phone_country"] = c["phone_country"] or "+1"
-    return {**c, "linked": bool(c["client_id"]), "missing": faltando_conta(c), "drivers": pilotos(con, cid)}
+    linked = bool(c["client_id"]) or bool(um(con, "SELECT 1 AS x FROM portal_pilots WHERE account_id=? AND client_id IS NOT NULL", (cid,)))
+    return {**c, "linked": linked, "missing": faltando_conta(c), "drivers": pilotos(con, cid)}
 
 
 def atualizar_conta(con, cid, dados):
@@ -296,7 +297,7 @@ def situacao_medidas(p):
 def pilotos(con, cid):
     saida = []
     for p in todos(con, """SELECT p.id, p.name, p.birth_date, p.is_self, p.email, p.phone, p.measures, p.measures_updated_at,
-                                  p.notes, p.social,
+                                  p.notes, p.social, p.client_id,
                                   (SELECT MAX(b.date) FROM bookings b WHERE b.pilot_id=p.id AND b.status='confirmada'
                                       AND b.date<=?) AS last_session
                              FROM portal_pilots p WHERE p.account_id=? AND p.active=1 ORDER BY p.is_self DESC, p.id""",

@@ -313,6 +313,7 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
         <div className="row wrap"><div className="grow"><h2 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h2>
           <div className="small muted">{p.age != null ? `${p.age} years old` : 'Date of birth not set'}{p.measures_updated_at ? ` · measured ${dataUS(p.measures_updated_at)}` : ''}
             {` · last session ${p.last_session ? haDias(p.days_since_last_session) : 'none yet'}`}</div>
+          <div className="small">{p.client_id ? <>Client ID <b>{p.client_id}</b></> : <span className="muted">Client ID: assigned by our team</span>}</div>
           {p.social && <div className="small">{p.social.startsWith('http') ? <a href={p.social} target="_blank" rel="noreferrer noopener">{p.social}</a> : p.social}</div>}</div>
           <ChipMedidas p={p} />
           <button className="btn ghost sm" onClick={() => setEditando(p.id)}>{p.measures_status === 'ok' ? 'Edit' : 'Update'}</button></div>
@@ -328,7 +329,7 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
 /* Histórico de serviços (#42): só aparece depois que a equipe liga a conta ao cliente do
  * site interno — antes disso, a conta de outra pessoa com o mesmo telefone veria o histórico errado. */
 function Historico() {
-  const [h, setH] = useState<{ linked: boolean; services: { date: string; service: string; status: string }[] } | null>(null)
+  const [h, setH] = useState<{ linked: boolean; services: { date: string; service: string; status: string; driver: string | null }[] } | null>(null)
   useEffect(() => { papi<typeof h>('GET', '/history').then(setH).catch(() => setH({ linked: false, services: [] })) }, [])
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Service history</h1><p className="muted" style={{ margin: '4px 0 0' }}>Every session and service with URACE.</p></div>
@@ -336,7 +337,7 @@ function Historico() {
       : !h.linked ? <p className="muted small" style={{ margin: 0 }}>Your history with URACE will show here once our team connects your account to your records.</p>
       : !h.services.length ? <p className="muted small" style={{ margin: 0 }}>No services yet.</p>
       : <div className="card"><div className="tbl">{h.services.map((x, i) => <div className="tr" key={i}>
-        <span style={{ width: 92 }} className="small">{dataUS(x.date)}</span><span className="grow">{x.service}</span>
+        <span style={{ width: 92 }} className="small">{dataUS(x.date)}</span><span className="grow">{x.service}{x.driver && <span className="small muted"> · {x.driver}</span>}</span>
         <span className={`chip ${x.status === 'done' ? 'ok' : 'neutral'}`}>{x.status === 'done' ? 'Done' : 'Scheduled'}</span></div>)}</div></div>}
   </div>
 }

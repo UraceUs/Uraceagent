@@ -35,7 +35,7 @@ def cenario(con, sessoes=4):
                   monthly_amount=3000, monthly_sessions=sessoes, monthly_plan="Academy 4 stroke", plan_type="monthly")
     conta = inserir(con, "portal_accounts", email="paulo@kurian.com", pw_salt="x", pw_hash="x", name="Paulo Kurian",
                     birth_date="1980-01-01", terms_accepted_at="2026-09-30T00:00:00Z", client_id=cid)
-    pil = inserir(con, "portal_pilots", account_id=conta, name="Enzo Kurian")
+    pil = inserir(con, "portal_pilots", account_id=conta, name="Enzo Kurian", client_id=cid)   # o card é do driver (#65)
     return cid, conta, pil
 
 

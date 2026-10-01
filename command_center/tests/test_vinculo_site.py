@@ -87,8 +87,8 @@ def test_historico_so_depois_do_vinculo_e_sem_nota_interna(cli):
     cli.post("/ops/api/portal/login", json={"email": "paulo@kurian.com", "password": "corrida-segura-9"})
     hist = cli.get("/ops/api/portal/history").json()
     assert hist["linked"] and hist["services"] == [
-        {"date": "2026-10-04", "service": "Urace Academy · 2 stroke", "status": "scheduled"},
-        {"date": "2026-09-12", "service": "Urace Daily · Using Own Kart", "status": "done"}]
+        {"date": "2026-10-04", "service": "Urace Academy · 2 stroke", "status": "scheduled", "driver": "Enzo Kurian"},
+        {"date": "2026-09-12", "service": "Urace Daily · Using Own Kart", "status": "done", "driver": "Enzo Kurian"}]
     assert "nota interna" not in str(hist) and "Rental" not in str(hist), "nada de nota, nada de outro cliente"
     assert cli.get("/ops/api/portal/me").json()["linked"] is True
 

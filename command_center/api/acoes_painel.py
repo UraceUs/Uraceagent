@@ -36,6 +36,8 @@ def painel_unir_clientes(con, user_id, keep_id, drop_id, motivo=None):
     a = um(con, "SELECT * FROM clients WHERE id=?", (keep_id,)); b = um(con, "SELECT * FROM clients WHERE id=?", (drop_id,))
     if not a or not b:
         return {"aplicado": False, "motivo": "cliente não encontrado"}
+    if (porque := identidade.nao_unir(con, keep_id, drop_id)):
+        return {"aplicado": False, "motivo": f"RECUSADO: {porque}"}
     iguais = _mesma_pessoa(a, b)
     if not iguais:
         return {"aplicado": False, "motivo": "RECUSADO: a IA só une cards com o mesmo e-mail, telefone ou responsável; "
