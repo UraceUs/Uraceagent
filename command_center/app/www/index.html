@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>URACE — offline</title>
+<style>
+  :root { --bg: #0d0f12; --fg: #e8eaed; --muted: #9aa0a6; --brand: #e8563e; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f6f5f2; --fg: #191714; --muted: #6b665e; } }
+  * { box-sizing: border-box }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg);
+         font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px }
+  .c { max-width: 360px; text-align: center }
+  .u { display: inline-grid; place-items: center; width: 64px; height: 64px; border-radius: 18px; background: var(--brand);
+       color: #fff; font-weight: 800; font-size: 34px; margin-bottom: 18px }
+  h1 { font-size: 22px; margin: 0 0 8px }
+  p { color: var(--muted); margin: 0 0 22px }
+  button { min-height: 44px; padding: 0 22px; border-radius: 12px; border: 0; background: var(--fg); color: var(--bg);
+           font: inherit; font-weight: 600 }
+</style>
+</head>
+<body>
+<main class="c">
+  <div class="u" aria-hidden="true">U</div>
+  <h1>No connection</h1>
+  <p>URACE needs the internet to show your sessions and drivers. Check your connection and try again.</p>
+  <button type="button" onclick="location.href='https://my.urace.us/ops/portal'">Try again</button>
+</main>
+</body>
+</html>

@@ -459,3 +459,21 @@ def test_bloqueio_recorrente_calendario_do_mes_e_criar_cliente_pela_conta(servid
     g.get_by_role("button", name="Criar cliente", exact=True).last.click()
     g.get_by_text("Cliente criado e vinculado.").wait_for()
     g.close(); c.close()
+
+
+def test_cinco_toques_no_u_abrem_o_login_da_equipe_e_ha_volta(servidor, navegador):
+    """#74 (dono, 02/10): no app, a primeira tela é a do cliente; o Command Center fica
+    escondido no "U". Quatro toques não fazem nada; o quinto abre o login da equipe."""
+    pg = navegador.new_page(viewport={"width": 390, "height": 844})
+    pg.goto(servidor + "/portal")
+    u = pg.locator(".portal-login .mark-u")
+    u.wait_for()
+    for _ in range(4):
+        u.click()
+    assert "/portal" in pg.url, "quatro toques: continua no login do cliente"
+    u.click()
+    pg.wait_for_url("**/ops/login")
+    pg.get_by_text("Acesso restrito").wait_for()
+    pg.get_by_role("link", name="Área do cliente").click()
+    pg.wait_for_url("**/ops/portal**")
+    pg.close()

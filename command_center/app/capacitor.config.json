@@ -1,0 +1,21 @@
+{
+  "appId": "us.urace.app",
+  "appName": "URACE",
+  "webDir": "www",
+  "server": {
+    "url": "https://my.urace.us/ops/portal",
+    "allowNavigation": ["my.urace.us", "ops.urace.us"],
+    "errorPath": "offline.html"
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "limitsNavigationsToAppBoundDomains": true
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 800, "backgroundColor": "#0d0f12", "showSpinner": false },
+    "StatusBar": { "style": "DARK", "backgroundColor": "#0d0f12" }
+  }
+}
