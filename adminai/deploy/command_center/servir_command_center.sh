@@ -160,13 +160,29 @@ bloco = ("\n\thandle /ops* {\n"
          "\n\thandle /sitemap.xml {\n"
          f"\t\treverse_proxy 127.0.0.1:{porta}\n"
          "\t}\n")
-if "/ops*" in s:
-    # tira os blocos antigos (oauth, robots, sitemap), se houver, para não duplicar a cada deploy
-    s = re.sub(r"\n\thandle /\.well-known/oauth-\*\s*\{.*?\n\t\}\n", "", s, flags=re.S)
-    s = re.sub(r"\n\thandle /(robots\.txt|sitemap\.xml)\s*\{.*?\n\t\}\n", "", s, flags=re.S)
-    s = re.sub(r"\n\thandle /ops\*\s*\{.*?\n\t\}\n", bloco, s, count=1, flags=re.S)
+def bloco_do_site(s, nome):
+    """(início, fim) do corpo do site `nome { ... }`, contando as chaves — ou None.
+    #71: a limpeza abaixo só pode mexer no site principal; antes ela rodava no arquivo
+    inteiro, apagava os handle de ops.urace.us e my.urace.us e o Caddyfile saía inválido."""
+    m = re.search(r"(^|\n)" + re.escape(nome) + r"\s*\{", s)
+    if not m:
+        return None
+    i = m.end()
+    nivel = 1
+    while i < len(s) and nivel:
+        nivel += {"{": 1, "}": -1}.get(s[i], 0)
+        i += 1
+    return m.end(), i - 1
+faixa = bloco_do_site(s, dominio)
+if faixa and "/ops*" in s[faixa[0]:faixa[1]]:
+    corpo = s[faixa[0]:faixa[1]]
+    # tira os blocos deste deploy (ops, oauth, robots, sitemap) e põe o conjunto novo no topo:
+    # rodar de novo dá o mesmo arquivo, sem duplicar nem acumular linha em branco
+    corpo = re.sub(r"\n\thandle /(ops\*|\.well-known/oauth-\*|robots\.txt|sitemap\.xml)\s*\{.*?\n\t\}\n", "\n", corpo, flags=re.S)
+    corpo = bloco + "\n" + re.sub(r"\n{3,}", "\n\n", corpo).lstrip("\n")
+    s = s[:faixa[0]] + corpo + s[faixa[1]:]
     open(caddyfile, "w").write(s); print("-- blocos /ops e /.well-known/oauth-* atualizados")
-elif re.search(re.escape(dominio) + r"\s*\{", s):
+elif faixa:
     s = re.sub(re.escape(dominio) + r"\s*\{", lambda m: m.group(0) + bloco, s, count=1)
     open(caddyfile, "w").write(s); print("-- handle /ops inserido no bloco existente")
 else:
@@ -207,10 +223,16 @@ else:
 PY2
 done
 sudo caddy fmt --overwrite "$CADDYFILE"
-sudo caddy validate --config "$CADDYFILE" >/dev/null 2>&1 \
-    && echo "-- Caddyfile válido" \
-    || { echo "!! Caddyfile INVÁLIDO — restaurando backup"; \
-         sudo cp "$(ls -t $CADDYFILE.bak-* | head -1)" "$CADDYFILE"; sudo systemctl reload caddy; exit 1; }
+if VALIDA="$(sudo caddy validate --config "$CADDYFILE" 2>&1)"; then
+    echo "-- Caddyfile válido"
+else
+    # #71: mostra o motivo e guarda a versão recusada, para dar para ver o que saiu errado
+    RECUSADO="$CADDYFILE.invalido-$(date +%Y%m%d-%H%M%S)"
+    sudo cp "$CADDYFILE" "$RECUSADO"
+    echo "!! Caddyfile INVÁLIDO — restaurando backup (a versão recusada ficou em $RECUSADO)"
+    echo "$VALIDA" | grep -i "error" | tail -3
+    sudo cp "$(ls -t $CADDYFILE.bak-* | head -1)" "$CADDYFILE"; sudo systemctl reload caddy; exit 1
+fi
 sudo systemctl reload caddy
 
 # ------------------------------------------------------------ 7. prova real
