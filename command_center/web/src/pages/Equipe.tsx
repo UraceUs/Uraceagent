@@ -18,6 +18,7 @@ import { Icon } from '../components/Icon'
 import { ago, fmtTime } from '../components/fmt'
 import { useToast } from '../components/Toast'
 import { Avisos } from '../components/Avisos'
+import { ConectarClaude } from '../components/ConectarClaude'
 import { TextoComVoz } from '../components/Voz'
 
 interface Canal {
@@ -81,6 +82,8 @@ export function Equipe() {
     </PageHeader>
 
     <div className="card" style={{ padding: '10px 14px', marginBottom: 12 }}><Avisos /></div>
+
+    <div style={{ marginBottom: 12 }}><ConectarClaude /></div>
 
     {novoGrupo && <NovoGrupo pessoas={pessoas.data || []} onPronto={id => {
       setNovoGrupo(false); reload(); abrirCanal(id)

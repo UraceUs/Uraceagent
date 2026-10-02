@@ -156,3 +156,16 @@ def test_catalogo_tem_o_dia_a_dia_de_vendas():
     assert any(c.startswith("/ops/api/sales") for m, c in caminhos if m == "POST")
     assert not any(c.startswith(("/ops/api/auth", "/ops/api/portal")) for _, c in caminhos)
     assert len(caminhos) > 150, "o painel inteiro, não um pedaço"
+
+
+def test_cartao_conectar_o_claude_mostra_o_endereco_do_login_e_o_papel(cli):
+    """#77 (dono, 02/10): "deixe o connector visível para os usuários". O endereço é o mesmo
+    que o servidor de login anuncia; quem é VIEWER fica sabendo que o acesso só lê."""
+    for email, opera in (("vendas@urace.us", True), ("ver@urace.us", False)):
+        cli.cookies.clear()
+        assert cli.post("/ops/api/auth/login", json={"email": email, "password": SENHA}).status_code == 200
+        d = cli.get("/ops/api/equipe/conector-claude").json()
+        assert d["url"] == oauth.emissor() + "/ops/mcp" and d["pode_operar"] is opera
+        assert d["terminal"] == f"claude mcp add --transport http urace {d['url']}"
+    cli.cookies.clear()
+    assert cli.get("/ops/api/equipe/conector-claude").status_code == 401

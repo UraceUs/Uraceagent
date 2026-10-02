@@ -55,8 +55,9 @@ Command Center.
       por pessoa e por aparelho, aviso sem o texto da conversa, aparelho morto limpo sozinho
 - [x] 🤖 Instalação na tela inicial (manifest, ícone, instrução própria para iPhone)
 - [ ] 👤 Ligar a notificação no seu celular e mandar o teste (Equipe → "Ligar notificação")
-- [x] 👤 **App nativo: não por ora.** PWA instalado na tela inicial; Capacitor só se
-      aparecer maquininha, código de barras pesado ou offline longo
+- [x] 👤 ~~**App nativo: não por ora.**~~ **Mudou em 02/10**: o dono quer o app nas lojas
+      (iOS e Android), com a área do cliente e o Command Center num app só. Ver a seção
+      "App URACE nas lojas" no fim desta nota (#74) e [[D-2026-10-02 - App nas lojas e o Claude que opera o painel]]
 - [ ] 👤 Admin do Google Workspace liberar o app do Chat na organização — **é o único
       bloqueio que sobrou** nesta frente
 - [ ] 🤖 Ponte do Google Chat (depois do admin liberar)
@@ -372,6 +373,9 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       alcance a VPS direto daqui — o conector não precisa disso, porque roda pelo
       claude.ai.
 
+> **02/10:** o conector deixou de ser só leitura para quem autoriza "operar". Ver a seção
+> "Command Center operável pelo Claude" no fim desta nota (#73).
+
 ## Banco: estrutura e segurança (23/09) — o dono pediu a garantia
 
 Ele perguntou antes de olhar a tela, e a pergunta achou um buraco.
@@ -592,6 +596,10 @@ Center; site público = urace.us. Tudo nasce e é testado no site interno, em `/
 | #41 | #44 | agenda: semana por período com vagas, bloqueios, antecedência, horizonte; cliente marca, equipe confirma |
 | #42 | #45 | vínculo conta ↔ cliente interno: o sistema sugere, a equipe confirma; histórico só depois do vínculo |
 | #39 | — | mapa do urace.us (`docs/site-publico/mapa-2026-09-30.md`) + prompt da Hostinger (`docs/extensao/PROMPT-HOSTINGER.md`) |
+| #50 | #53 | serviços e preços da agenda editáveis pela equipe (Site público › Serviços); quem já marcou fica com o preço do dia |
+| #54 | #55 | área do cliente refeita: login no desenho da equipe, menu por seção, painel com tempo desde a última sessão, campos obrigatórios, telefone internacional, medidas com aviso em 30 dias e exigência em 60, visual 3D reversível (`portal/visual.ts`) |
+| #52 | #56 | calendário do mês com corridas e fins de semana, semana na horizontal com horários, bloqueio recorrente ("toda segunda"), criar cliente pela conta do site com sugestão pelo nome |
+| #57 | #58 | `my.urace.us` abre a área do cliente; `ops.urace.us` abre o painel (mesmo servidor) |
 
 - [ ] 👤 Abrir a agenda: Site público › Disponibilidade (ela nasce **fechada**, sem dia inventado)
 - [ ] 👤 Testar como cliente em `/ops/portal` (criar conta, piloto, marcar) e como equipe (confirmar, vincular)
@@ -618,3 +626,77 @@ Center; site público = urace.us. Tudo nasce e é testado no site interno, em `/
       Elementor, colaborador com faturamento), o lp.urace.us vulnerável, o token do Kommo no SXS LP,
       os 9 admins e o fuso UTC+0 do WordPress
 - [ ] Falta (depois): e-mail de confirmação e "esqueci a senha" — precisam de envio de e-mail, que hoje o painel não faz
+
+## Mensalidade agendada, Client ID por driver e agenda no Asana (01–02/10)
+
+| Issue | PR | O quê |
+|---|---|---|
+| #59 | #60 | quadril deixou de ser medida obrigatória |
+| #61 | #62 | item do QuickBooks como texto livre; contador de sessões do contrato por mês (só a equipe vê) |
+| #63 | #64 | **mensalidade agendada**: "criar invoice recorrente" cria todos os meses; cada um sai pelo QuickBooks no dia 1 à 01:00 (Flórida) |
+| #65 | #66 | **Client ID por driver**: cada piloto da conta tem o seu card; irmãos não se misturam nem se unem sozinhos |
+| #67 | #68 | **todo agendamento do site vira tarefa no Asana** (pendente ou confirmado), comentário a cada mudança |
+| #69 | #70 | a tarefa do agendamento nasce do **modelo oficial** (subtarefas, medidas, experiência, `Piloto_Serviço [n/m]`) |
+| #71 | #72 | deploy: o passo do Caddy só mexe no site principal (o Caddyfile saía inválido no 2º deploy) |
+
+- [x] 🤖 Invoice de outubro do Joseph Kurian (pai do Enzo) criada e enviada: **URACE-0017**,
+      $2,756.90, vence 09/10. A de 17/09 (paga) é a de setembro (dono)
+- [ ] 👤 **Enzo:** recriar a recorrência no card a partir de 10/2026 (outubro aparece "enviada"
+      com a URACE-0017 quando o espelho do QuickBooks sincronizar; senão, começar em 11/2026)
+- [x] 🤖 Achado e corrigido no #67: o nascimento lido das tarefas do Asana nunca era gravado
+      (duas `_data_iso` em `sync.py`); agora preenche o card **só onde está vazio**
+- [x] 👤 **Regra nova (02/10):** cards ligados a drivers diferentes **não se unem**, nem sozinhos
+      nem à mão — irmãos têm o mesmo e-mail, telefone e responsável. A regra de 22/09 ("mesmo
+      contato confirma") continua valendo para quem não é driver do site
+- [ ] 👤 A tarefa de teste do Eduardo (agendamento #1, feita antes do #69) pode ser apagada no Asana
+- [ ] 👤 **Pagamento da sessão (PR B e C do #50)**: cobrança pelo QuickBooks + waiver, sessão só
+      confirmada com as duas; campo para o cliente informar invoice já paga, conferido pela IA
+
+## Command Center operável pelo Claude (02/10) — #73, PR #75
+
+Dono: *"todas as funcionalidades sejam operáveis pela API, não só como visualização... os
+nossos vendedores... usam o Claude nas máquinas deles... de acordo com o nível de hierarquia"*.
+
+- [x] 🤖 OAuth com escopo `mcp:write`: a pessoa marca **"Também operar o painel como você"** na
+      tela de autorização, e só aparece para OPERATOR ou acima. Rebaixada, o token volta a ler
+- [x] 🤖 `urace_operacoes` (o que **você** pode fazer, pelo seu papel) e `urace_api` (executa):
+      chamam **as mesmas rotas do painel**, com o papel, as travas e a auditoria de sempre
+- [x] 🤖 Invoice, waiver, e-mail, QuickBooks, DocuSign, Asana, Kommo e fechar venda só saem na
+      **segunda** chamada, com `confirmar: true`, depois de a pessoa ver o que vai acontecer
+- [x] 🤖 Fora do MCP: login, senha e chaves (`/ops/api/auth`) e a área do cliente (`/ops/api/portal`)
+- [x] 👤 Deploy confirmado em 02/10 (o servidor anuncia `mcp:read` e `mcp:write`)
+- [x] 🤖 **Cartão "Conectar o Claude"** na tela Equipe (#77): endereço para copiar, passo a passo
+      do app do Claude e do terminal, e se o papel da pessoa opera ou só lê
+- [ ] 👤 **Conectar cada vendedor**: no app do Claude, Conectores › Adicionar › Conector
+      personalizado, URL **`https://urace-bridge.duckdns.org/ops/mcp`** (só a URL); no terminal,
+      `claude mcp add --transport http urace https://urace-bridge.duckdns.org/ops/mcp`. Entrar
+      com o próprio usuário e deixar a caixa de operar marcada. Passo a passo no painel
+      (Equipe › Conectar o Claude) e em `docs/command-center-mcp-operar.md`
+- [ ] 👤 Se a conta do Claude for **Team/Enterprise**: adicionar o conector nas configurações da
+      organização (Conectores), para todos verem. Cada um ainda entra com o próprio usuário
+- [ ] 👤 O conector antigo, só de leitura: reconectar com a caixa marcada ou remover
+
+## App URACE nas lojas (02/10) — #74, PR #76
+
+Dono: *"preciso que realmente seja um aplicativo... nas bancas de aplicativos... versionado
+tanto para iOS quanto para Android... um aplicativo só... área do cliente... quanto o Command
+Center... clicar no ícone U"*.
+
+- [x] 🤖 Projeto Capacitor em `command_center/app/` (`us.urace.app`, "URACE"). As telas vêm do
+      servidor, então **cada deploy atualiza o app na hora**; a loja só vê versão nova quando
+      muda a parte nativa
+- [x] 🤖 Abre na área do cliente; **5 toques no "U"** abrem o login do Command Center (e de lá,
+      "Área do cliente" volta). O toque não dá acesso a nada sozinho
+- [x] 🤖 Versão = `package.json`; build = execução do Actions. Workflow `App (iOS e Android)`
+      compila os dois a cada merge (confirmado em 02/10: `.aab` do Android e iOS com validação de loja)
+- [ ] 👤 **Apple Developer Program** como organização (US$ 99/ano, exige D-U-N-S da URACE.US INC)
+- [ ] 👤 **Google Play Console** (US$ 25, uma vez); 1º `.aab` sobe à mão pelo Play Console
+- [ ] 👤 Secrets do GitHub (passo a passo em `docs/app-celular.md`): `ASC_KEY_ID`, `ASC_ISSUER_ID`,
+      `ASC_KEY_P8`, `APPLE_TEAM_ID`, `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`,
+      `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`, `PLAY_SERVICE_ACCOUNT_JSON`
+- [ ] 👤 Ficha das lojas: descrição, e-mail de suporte e uma **conta de cliente de demonstração**
+      para os revisores (sem dado real)
+- [ ] 👤 **Excluir a conta pelo app** (a Apple exige). Proposta: pedido de exclusão que desliga o
+      login e chega à equipe; nada é apagado sem decisão do dono
+- [ ] 🤖 Notificação push (precisa de projeto Firebase e chave APNs) · Face ID / digital
+

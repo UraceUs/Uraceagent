@@ -477,3 +477,14 @@ def test_cinco_toques_no_u_abrem_o_login_da_equipe_e_ha_volta(servidor, navegado
     pg.get_by_role("link", name="Área do cliente").click()
     pg.wait_for_url("**/ops/portal**")
     pg.close()
+
+
+def test_equipe_ve_como_conectar_o_claude(servidor, navegador):
+    """#77: o cartão está na tela Equipe, com o endereço do conector e o passo a passo."""
+    pg = entrar(navegador, servidor)
+    pg.goto(servidor + "/equipe")
+    pg.get_by_role("heading", name="Conectar o Claude").wait_for()
+    pg.get_by_role("button", name="Como conectar").click()
+    pg.get_by_text("/ops/mcp").first.wait_for()
+    pg.get_by_text("claude mcp add --transport http urace").wait_for()
+    pg.close()

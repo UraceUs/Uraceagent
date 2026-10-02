@@ -9,6 +9,9 @@ fonte: dono, 21/09/2026
 
 # D-2026-09-21 — Celular: PWA, sem app nativo
 
+> **Revista em 02/10:** o app vai para as lojas, agora porque é dos **clientes**. Ver
+> [[D-2026-10-02 - App nas lojas e o Claude que opera o painel]].
+
 [[URACE]] · [[Command Center - Proximos passos]]
 
 ## A pergunta
