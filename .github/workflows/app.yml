@@ -95,6 +95,7 @@ jobs:
       - name: Build sem assinatura (prova que compila)
         if: env.TEM_APPLE != 'true'
         run: |
+          set -o pipefail      # sem isto, o "| tail" esconderia uma falha do xcodebuild
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build | tail -20
       - name: Arquivo assinado e TestFlight
