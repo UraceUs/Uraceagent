@@ -27,7 +27,7 @@ class Asana:
         self.chamadas.append((ferramenta, kw))
         if self.falha:
             raise RuntimeError("Asana fora do ar")
-        if ferramenta == "asana_criar_tarefa":
+        if ferramenta == "asana_criar_do_modelo":
             self.n += 1
             return {"aplicado": True, "gid": f"9{self.n:03d}"}
         return {"aplicado": True}
@@ -38,17 +38,27 @@ def marca(con, conta, piloto, dia="2026-10-10", status="pendente", periodo="manh
                    service_name="Arrive and Drive", price=719.0, notes="first time")
 
 
-def test_pendente_vira_tarefa_na_coluna_do_dia_com_o_bloco_da_casa(con):
+def test_pendente_vira_tarefa_do_modelo_oficial_com_o_bloco_da_casa(con):
+    """#69 (dono, 02/10): "precisa vir com o corpo do template. Com todas as subtarefas"."""
+    from command_center.api.acoes import MODELO_SESSAO
     enzo, conta, p_enzo, _ = familia(con)
+    con.execute("UPDATE portal_pilots SET measures=?, notes=? WHERE id=?",
+                ('{"height_in": 58, "weight_lb": 92.5, "waist_in": 26, "chest_in": 30}', "2 years in rental karts", p_enzo))
     bid = marca(con, conta, p_enzo)                       # 10/10/2026 é sábado
     asana = Asana()
     assert aa.criar(con, bid, asana) == "9001"
     f, kw = asana.chamadas[0]
-    assert f == "asana_criar_tarefa" and kw["secao_gid"] == "1205141832260878" and kw["vence_em"] == "2026-10-10"
-    assert kw["nome"].startswith("Enzo Kurian_Arrive and Drive - 2026-10-10 ")
+    assert f == "asana_criar_do_modelo" and kw["modelo_gid"] == MODELO_SESSAO and kw["campos"] == {"Race": "Practice OKC"}
+    assert kw["secao_gid"] == "1205141832260878" and kw["vence_em"] == "2026-10-10"
+    assert kw["nome"] == "Enzo Kurian_Arrive and Drive [1/4]", "o padrão do quadro; Enzo tem contrato de 4 por mês"
     d = sync.parse_descricao(kw["notas"])
     assert (d["piloto"], d["responsavel"], d["email"], d["nascimento"]) == ("Enzo Kurian", "Joseph Kurian", "joekur001@gmail.com", "2014-03-02")
-    assert f"Client ID: {enzo}" in kw["notas"] and "PENDING CONFIRMATION" in kw["notas"]
+    for linha in ("Service Dates for this Month: 10/10/2026", "Height: 58 in", "Weight: 92.5 lb", "Waist: 26 in",
+                  "Karting Experience: 2 years in rental karts", "Product: Arrive and Drive", "Price: $719.00",
+                  f"Client ID: {enzo}", "Status: PENDING CONFIRMATION", "Client note: first time"):
+        assert linha in kw["notas"], linha
+    ev = um(con, "SELECT * FROM ai_events WHERE kind='task.created'")
+    assert ev and ev["client_id"] == enzo, "a IA acorda como na tarefa feita à mão"
     t = um(con, """SELECT t.* FROM tasks t JOIN entity_links l ON l.entity_id=t.id AND l.entity_type='task'
                    WHERE l.external_id='9001'""")
     assert t["client_id"] == enzo and t["client_by"] == "human", "aparece no card do driver na hora"
@@ -76,7 +86,7 @@ def test_mudanca_de_situacao_comenta_e_marca_o_titulo(con):
     aa.rodar(con, asana, hoje="2026-10-01")
     (f1, k1), (f2, k2) = asana.chamadas[-2:]
     assert f1 == "asana_comentar" and "CANCELLED by the client" in k1["texto"]
-    assert f2 == "asana_renomear" and k2["nome"].startswith("CANCELLED - Enzo Kurian_")
+    assert f2 == "asana_renomear" and k2["nome"] == "CANCELLED - Enzo Kurian_Arrive and Drive [1/4]"
     assert aa.rodar(con, asana, hoje="2026-10-01") == {"criadas": 0, "avisadas": 0, "falhas": 0}, "nada repetido"
 
 
