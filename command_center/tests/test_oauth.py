@@ -152,8 +152,9 @@ def test_a_tela_diz_que_e_so_leitura(cli):
     r = cli.get("/ops/oauth/authorize", params={
         "response_type": "code", "client_id": cid, "redirect_uri": VOLTA,
         "code_challenge": desafio, "code_challenge_method": "S256"})
-    assert "Somente leitura" in r.text and "não" in r.text
     assert "dono@urace.us" in r.text, "diz quem está autorizando"
+    # #73: quem tem papel para operar escolhe na tela se o acesso também opera
+    assert 'name="operar"' in r.text and "(ADMIN)" in r.text and "pede confirmação" in r.text
 
 
 def test_cancelar_nao_gera_codigo(cli):
