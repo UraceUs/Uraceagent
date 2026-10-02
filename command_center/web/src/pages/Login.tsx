@@ -71,6 +71,8 @@ export function Login() {
           </div></div>
         <label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> Manter conectado por 30 dias</label>
         <button className="btn primary block" disabled={busy || !email || !pw}>{busy ? <span className="spin" /> : 'Entrar'}</button>
+        {/* #74: no app, a equipe entra pelo "U" da área do cliente; daqui se volta para ela */}
+        <a className="small muted" href="/ops/portal" style={{ textAlign: 'center', padding: '10px 0' }}>Área do cliente</a>
       </form>
     </div>
   </div>

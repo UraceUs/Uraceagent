@@ -1,0 +1,118 @@
+# App URACE (iOS e Android) — issue #74. Dono, 02/10: "versionado tanto para iOS quanto para
+# Android. E que cada atualização nossa atualize esses aplicativos também."
+#
+# As telas do app vêm do servidor (my.urace.us), então cada deploy do site já chega ao app na
+# hora. Este workflow cuida da parte nativa: a cada push no branch do VPS (ou à mão), gera o
+# build com versão = package.json e número = execução do Actions, e:
+#   - Android: o .aab vai para a faixa INTERNA do Google Play (se os secrets existirem);
+#   - iOS: o .ipa vai para o TestFlight (se os secrets existirem).
+# Sem os secrets, o build roda mesmo assim (prova que compila) e o .aab fica como artefato.
+# Publicar para todo mundo continua sendo um clique do dono na loja. Passo a passo dos secrets:
+# docs/app-celular.md
+name: App (iOS e Android)
+
+on:
+  push:
+    branches: [claude/configurar-open-claw-ooqo8x]
+  pull_request:
+    paths: ["command_center/app/**", ".github/workflows/app.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android — build e Play (faixa interna)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: command_center/app
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
+      TEM_CHAVE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      TEM_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: command_center/app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci
+      - run: node scripts/versao.mjs
+      - run: npx cap sync android
+      - name: Chave de assinatura (secret)
+        if: env.TEM_CHAVE == 'true'
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/urace.keystore
+          {
+            echo "URACE_STORE_FILE=urace.keystore"
+            echo "URACE_STORE_PASSWORD=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            echo "URACE_KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS }}"
+            echo "URACE_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}"
+          } >> android/gradle.properties
+      - run: ./gradlew bundleRelease --no-daemon
+        working-directory: command_center/app/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: urace-android-${{ github.run_number }}
+          path: command_center/app/android/app/build/outputs/bundle/release/*.aab
+      - name: Google Play — faixa interna
+        if: env.TEM_CHAVE == 'true' && env.TEM_PLAY == 'true' && github.event_name != 'pull_request'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: us.urace.app
+          releaseFiles: command_center/app/android/app/build/outputs/bundle/release/*.aab
+          track: internal
+          status: completed
+
+  ios:
+    name: iOS — build e TestFlight
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: command_center/app
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
+      TEM_APPLE: ${{ secrets.ASC_KEY_P8 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: command_center/app/package-lock.json
+      - run: npm ci
+      - run: node scripts/versao.mjs
+      - run: npx cap sync ios
+      - name: Build sem assinatura (prova que compila)
+        if: env.TEM_APPLE != 'true'
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build | tail -20
+      - name: Arquivo assinado e TestFlight
+        if: env.TEM_APPLE == 'true' && github.event_name != 'pull_request'
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "${{ secrets.ASC_KEY_P8 }}" > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          CHAVE=~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/URACE.xcarchive archive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates \
+            -authenticationKeyPath "$CHAVE" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          sed "s/__TEAM__/$APPLE_TEAM_ID/" ios/ExportOptions.plist > build/ExportOptions.plist
+          xcodebuild -exportArchive -archivePath build/URACE.xcarchive -exportPath build/ipa \
+            -exportOptionsPlist build/ExportOptions.plist -allowProvisioningUpdates \
+            -authenticationKeyPath "$CHAVE" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          xcrun altool --upload-app -f build/ipa/App.ipa --type ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"

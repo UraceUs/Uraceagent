@@ -1,0 +1,8 @@
+node_modules/
+ios/App/App/public/
+android/app/src/main/assets/public/
+ios/DerivedData/
+*.ipa
+*.aab
+*.apk
+*.keystore

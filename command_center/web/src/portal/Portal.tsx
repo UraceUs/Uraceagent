@@ -4,7 +4,7 @@
  *
  * Dono, 01/10: o login é o mesmo desenho do Command Center; dentro, um menu com cada
  * seção numa tela (Dashboard, Book a session, My sessions, Drivers, History, Account). */
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Pista } from '../components/Pista'
@@ -49,11 +49,25 @@ function Visual({ tresD, mudar }: { tresD: boolean; mudar: (v: boolean) => void 
 }
 
 /* ------------------------------------------------------------ fora da conta: o login da equipe */
+/** O acesso da equipe fica escondido no "U" (dono, 02/10, #74: "um botão escondido... ou então
+ * clicar no ícone U"): 5 toques seguidos abrem o login do Command Center. Não dá acesso a nada
+ * sozinho — lá dentro vale o login e o papel de cada um. */
+function useToquesNoU(onAbrir: () => void, vezes = 5, janelaMs = 2500) {
+  const toques = useRef<number[]>([])
+  return () => {
+    const agora = Date.now()
+    toques.current = [...toques.current.filter(t => agora - t < janelaMs), agora]
+    if (toques.current.length >= vezes) { toques.current = []; onAbrir() }
+  }
+}
+
 function CascaLogin({ children, lema }: { children: ReactNode; lema: string }) {
+  const nav = useNavigate()
+  const tocar = useToquesNoU(() => nav('/login'))
   return <div className="login portal-login">
     <div className="art">
       <Pista />
-      <div className="mark"><span className="mark-u" aria-hidden="true">U</span><b>URACE</b><span>Driver area</span></div>
+      <div className="mark"><span className="mark-u" aria-hidden="true" onClick={tocar} data-acesso-equipe="">U</span><b>URACE</b><span>Driver area</span></div>
       <p className="lema">{lema}</p>
     </div>
     <i className="corte" aria-hidden="true" />
