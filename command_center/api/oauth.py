@@ -43,7 +43,13 @@ r = APIRouter(prefix="/ops/oauth", tags=["oauth"])
 CODIGO_VALE_MIN = 5          # tempo de vida do código de autorização
 TOKEN_VALE_HORAS = 12
 REFRESH_VALE_DIAS = 30
-ESCOPO = "mcp:read"          # o único que existe: ler o painel pelo MCP
+ESCOPO = "mcp:read"          # ler o painel pelo MCP (o padrão)
+# #73 (dono, 02/10): "todas as funcionalidades sejam operáveis... de acordo com o nível de
+# hierarquia ali do operador ou gerente". Operar é um escopo à parte, marcado pela pessoa na
+# tela de consentimento, e só para quem é OPERATOR ou acima. O token age como a pessoa: cada
+# rota continua conferindo o papel dela, e o que é só do gerente continua só do gerente.
+ESCOPO_OPERAR = "mcp:write"
+PAPEL_PARA_OPERAR = "OPERATOR"
 
 
 def emissor():
@@ -72,7 +78,7 @@ def metadados_servidor():
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["none", "client_secret_post", "client_secret_basic"],
-        "scopes_supported": [ESCOPO],
+        "scopes_supported": [ESCOPO, ESCOPO_OPERAR],
         "service_documentation": f"{base}/ops/",
     }
 
@@ -81,7 +87,7 @@ def metadados_recurso():
     """RFC 9728: quem protege o quê, e qual servidor de login vale para isso."""
     base = emissor()
     return {"resource": f"{base}/ops/mcp", "authorization_servers": [base],
-            "scopes_supported": [ESCOPO],
+            "scopes_supported": [ESCOPO, ESCOPO_OPERAR],
             "bearer_methods_supported": ["header"]}
 
 
@@ -162,8 +168,7 @@ border:1px solid #2d3139;font-size:14px;cursor:pointer;font-family:inherit}}
 <li>Ler o estoque e o que precisa de atenção</li>
 <li>Ler o rastro de auditoria</li>
 </ul>
-<div class="w">Somente leitura. Este acesso <b>não</b> altera dado nenhum, não fala com
-cliente e não mexe em dinheiro — nem se pedirem.</div>
+{operar}
 <p class="m">Você pode revogar quando quiser, no painel.</p>
 <form method="post" action="/ops/oauth/authorize">
 {campos}
@@ -171,6 +176,20 @@ cliente e não mexe em dinheiro — nem se pedirem.</div>
 <button class="no" name="decisao" value="nao" type="submit">Cancelar</button>
 <button class="ok" name="decisao" value="sim" type="submit">Autorizar</button>
 </form></div></body></html>"""
+
+
+SO_LEITURA = """<div class="w">Somente leitura. Este acesso <b>não</b> altera dado nenhum, não fala com
+cliente e não mexe em dinheiro — nem se pedirem.</div>"""
+
+OPERAR = """<label class="w" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
+<input type="checkbox" name="operar" value="1" checked style="margin-top:3px">
+<span><b>Também operar o painel como você ({papel})</b>: agendar, criar e editar clientes, fechar
+venda, enviar invoice e waiver. Só o que o seu papel já pode fazer no painel; o que vai para o
+cliente ou cobra pede confirmação antes. Tudo fica na auditoria com o seu nome.</span></label>"""
+
+
+def pode_operar(papel):
+    return auth.pode(papel or "", PAPEL_PARA_OPERAR)
 
 
 def _campos_ocultos(p):
@@ -202,6 +221,7 @@ def autorizar(request: Request, con: sqlite3.Connection = Depends(get_db)):
 
     return HTMLResponse(PAGINA.format(
         nome=cliente["name"], usuario=u.get("email") or u.get("name") or "você",
+        operar=OPERAR.format(papel=u.get("role")) if pode_operar(u.get("role")) else SO_LEITURA,
         campos=_campos_ocultos(p),
         csrf=(request.cookies.get(auth.COOKIE_CSRF) or "")))
 
@@ -221,7 +241,7 @@ def _volta_com_erro(redirect_uri, p, erro, descricao=None):
 def decidir(request: Request, con: sqlite3.Connection = Depends(get_db),
             decisao: str = Form(...), client_id: str = Form(...),
             redirect_uri: str = Form(...), code_challenge: str = Form(...),
-            state: str = Form(None), scope: str = Form(None), csrf: str = Form(""),
+            state: str = Form(None), scope: str = Form(None), csrf: str = Form(""), operar: str = Form(""),
             response_type: str = Form("code"), code_challenge_method: str = Form("S256")):
     """A decisão da pessoa. Só aqui nasce um código.
 
@@ -248,13 +268,16 @@ def decidir(request: Request, con: sqlite3.Connection = Depends(get_db),
         return _volta_com_erro(redirect_uri, {"state": state}, "access_denied",
                                "a pessoa não autorizou")
 
+    # o escopo de operar vem da caixa marcada pela PESSOA (e do papel dela), nunca só do
+    # que o cliente pediu na URL
+    escopo = f"{ESCOPO} {ESCOPO_OPERAR}" if operar == "1" and pode_operar(u["role"]) else ESCOPO
     codigo = secrets.token_urlsafe(32)
     inserir(con, "oauth_codes", code_hash=_hash(codigo), client_id=client_id,
             user_id=u["id"], redirect_uri=redirect_uri, code_challenge=code_challenge,
-            scope=scope or ESCOPO, expires_at=_agora_mais(minutes=CODIGO_VALE_MIN))
+            scope=escopo, expires_at=_agora_mais(minutes=CODIGO_VALE_MIN))
     auditar(con, "oauth.authorize", f"user:{u['id']}", user_id=u["id"],
             entity_type="oauth_client", entity_id=client_id,
-            detail={"cliente": cliente["name"], "escopo": scope or ESCOPO})
+            detail={"cliente": cliente["name"], "escopo": escopo, "pedido": scope})
     con.commit()
     q = {"code": codigo}
     if state:
@@ -392,8 +415,9 @@ def usuario_do_token(con, valor):
         return None
     con.execute("UPDATE oauth_tokens SET uses=uses+1, last_used_at=? WHERE token_hash=?",
                 (agora(), linha["token_hash"]))
+    # Só escreve quem autorizou "operar" E continua com papel para isso: rebaixada a
+    # pessoa, o token volta a ser de leitura sem ninguém lembrar de revogar (#73).
+    opera = ESCOPO_OPERAR in (linha["scope"] or "").split() and pode_operar(linha["role"])
     return {"id": linha["user_id"], "email": linha["email"], "name": linha["name"],
             "role": linha["role"], "via": "oauth", "client_id": linha["client_id"],
-            # O token OAuth existe para o MCP, que só lê. Marcar aqui mantém a trava de
-            # escrita valendo mesmo se um dia alguém apontar este token para outra rota.
-            "somente_leitura": True}
+            "escopo": linha["scope"], "somente_leitura": not opera}

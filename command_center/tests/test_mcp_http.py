@@ -124,7 +124,12 @@ def test_initialize_responde_versao_e_nome(cli):
     res = r.json()["result"]
     assert res["serverInfo"]["name"] == "urace-command-center"
     assert res["capabilities"]["tools"] is not None
-    assert "SÓ LEITURA" in res["instructions"]
+    assert "OPERA o painel" in res["instructions"], "pessoa logada no painel opera como ela mesma (#73)"
+    chave, _ = _chave(cli, somente_leitura=True)
+    cli.cookies.clear()
+    r = cli.post(MCP, json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
+                 headers={"Authorization": f"Bearer {chave}"})
+    assert "SÓ DE LEITURA" in r.json()["result"]["instructions"]
 
 
 def test_notificacao_nao_gera_corpo(cli):

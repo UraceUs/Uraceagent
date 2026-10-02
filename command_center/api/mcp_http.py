@@ -8,6 +8,11 @@ O servidor MCP do painel **já existia** (`adminai/mcp/command_center_mcp.py`, e
 ele fala **stdio**, que serve para quem roda na mesma máquina. Conector remoto precisa de
 HTTP. É isso que este módulo acrescenta — as mesmas ferramentas, a mesma trava.
 
+**Leitura e operação (#73, 02/10).** As ferramentas `urace_*` de consulta continuam lendo de uma
+conexão `mode=ro`. Operar é com `urace_operacoes` e `urace_api` (`mcp_operar.py`): elas chamam
+as MESMAS rotas do painel, com a credencial de quem está no Claude, e só escrevem se essa
+credencial tiver o escopo de operar. O texto abaixo é de 23/09, de quando tudo aqui só lia:
+
 **Só leitura, por construção.** Nenhuma ferramenta aqui escreve. Isso não é confiança no
 modelo: a ferramenta que não deve existir simplesmente não é registrada, e não há como
 desobedecer o que não existe. A chave de API usada também deve ser `read_only`; as duas
@@ -26,7 +31,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from command_center import providers
-from command_center.api import atencao, auth
+from command_center.api import atencao, auth, mcp_operar
 from command_center.db import conectar_somente_leitura, todos, um
 from command_center.providers import estoque
 
@@ -201,6 +206,14 @@ def _f_kommo_chats(con, dias=7, limite=300, **_):
     return {"eventos": _kommo("kommo_chats", desde_dias=_teto(dias, 7, 30), maximo=_teto(limite, 300, 1000))}
 
 
+def _f_operacoes(con, busca=None, limite=60, _quem=None, **_):
+    return mcp_operar.operacoes(_quem or {}, busca, limite)
+
+
+def _f_api(con, metodo=None, caminho=None, corpo=None, consulta=None, confirmar=False, _quem=None, _ctx=None, **_):
+    return mcp_operar.chamar(_quem or {}, _ctx or {}, metodo, caminho, corpo, consulta, bool(confirmar))
+
+
 FERRAMENTAS = {
     "urace_resumo": (
         "Panorama do negócio em números: clientes, serviços, invoices em aberto, waivers, "
@@ -269,10 +282,40 @@ FERRAMENTAS = {
         "urace_kommo_conversa para o que vier.",
         {"dias": {"type": "integer", "description": "padrão 7, teto 30"},
          "limite": {"type": "integer", "description": "padrão 300, teto 1000"}}, [], _f_kommo_chats),
+    # ----------------------------------------------------------- operar (#73)
+    "urace_operacoes": (
+        "O que VOCÊ pode fazer no Command Center pelo seu papel (operador, gerente…): cada operação "
+        "com método, caminho, papel, descrição e campos. Comece por aqui para agendar, criar cliente, "
+        "fechar venda, enviar invoice ou waiver. Filtre com busca (ex.: 'agendamento', 'invoice').",
+        {"busca": {"type": "string", "description": "palavras do caminho ou da descrição"},
+         "limite": {"type": "integer", "description": "padrão 60, teto 300"}}, [], _f_operacoes),
+    "urace_api": (
+        "Executa uma operação do Command Center (as mesmas do painel), como você: o seu papel vale, "
+        "a auditoria registra o seu nome. O que vai para o cliente ou cobra (invoice, waiver, e-mail, "
+        "QuickBooks, Asana) devolve primeiro o que vai fazer: mostre à pessoa e repita com confirmar=true.",
+        {"metodo": {"type": "string", "enum": list(mcp_operar.METODOS)},
+         "caminho": {"type": "string", "description": "ex.: /ops/api/clients/584/mensal"},
+         "corpo": {"type": "object", "description": "corpo JSON da operação"},
+         "consulta": {"type": "object", "description": "parâmetros da URL (?a=b)"},
+         "confirmar": {"type": "boolean", "description": "true só depois de a pessoa ver o que vai acontecer"}},
+        ["metodo", "caminho"], _f_api),
 }
 
 
 # ------------------------------------------------------------------ protocolo
+def _instrucoes(quem):
+    base = ("Painel de operações da URACE.US (kart racing, Orlando). Comece por urace_resumo para o "
+            "panorama, ou urace_atencao para o que precisa de gente hoje. As urace_kommo_* leem o CRM "
+            "comercial (Kommo). ")
+    if (quem or {}).get("somente_leitura"):
+        return base + ("Este acesso é SÓ DE LEITURA: nada aqui escreve. Para operar, a pessoa conecta de "
+                       "novo e marca 'Também operar o painel como você'.")
+    return base + (f"Este acesso OPERA o painel como {(quem or {}).get('name')} ({(quem or {}).get('role')}): "
+                   "use urace_operacoes para ver o que dá para fazer e urace_api para fazer. Valem as regras "
+                   "do painel e o papel da pessoa. Antes de enviar algo ao cliente ou cobrar, mostre o que vai "
+                   "acontecer e só repita com confirmar=true depois que a pessoa disser que sim.")
+
+
 def _resposta(ident, resultado):
     return {"jsonrpc": "2.0", "id": ident, "result": resultado}
 
@@ -293,7 +336,7 @@ def _texto(dado):
     return [{"type": "text", "text": json.dumps(dado, ensure_ascii=False, indent=1, default=str)}]
 
 
-def tratar(mensagem, con, quem):
+def tratar(mensagem, con, quem, ctx=None):
     """Uma mensagem JSON-RPC. Devolve o dicionário de resposta, ou None para notificação."""
     ident = mensagem.get("id")
     metodo = mensagem.get("method")
@@ -308,12 +351,7 @@ def tratar(mensagem, con, quem):
             "protocolVersion": PROTOCOLO,
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {"name": NOME, "version": VERSAO},
-            "instructions": (
-                "Painel de operações da URACE.US (kart racing, Orlando). Todas as "
-                "ferramentas são SÓ LEITURA: não existe aqui nada que escreva, por "
-                "construção. Comece por urace_resumo para o panorama, ou urace_atencao "
-                "para o que precisa de gente hoje. As urace_kommo_* leem o CRM "
-                "comercial (Kommo) — também só leitura."),
+            "instructions": _instrucoes(quem),
         })
 
     if metodo == "ping":
@@ -337,7 +375,7 @@ def tratar(mensagem, con, quem):
             # é melhor que ignorar em silêncio e devolver um resultado que não responde.
             return _erro(ident, -32602, f"parâmetro que não existe: {', '.join(extras)}")
         try:
-            dado = fn(con, **args)
+            dado = fn(con, **args, _quem=quem, _ctx=ctx)
         except ValueError as e:
             # Erro de uso vira resultado com isError, não erro de protocolo: o modelo
             # precisa LER o motivo para corrigir a chamada.
@@ -369,10 +407,16 @@ async def rota_mcp(request: Request, u=Depends(auth.exige("VIEWER"))):
     # Fora do laço de eventos: as ferramentas do Kommo esperam a rede (até 40 s por
     # página), e rodar isso aqui dentro pararia o painel inteiro enquanto isso. A conexão
     # nasce e morre na mesma thread — o SQLite não aceita ser passado de uma para outra.
+    # #73: as operações chamam as rotas do painel por dentro com a MESMA credencial de quem
+    # chamou (o papel e a trava de leitura dela valem lá), no mesmo endereço público
+    ctx = {"base_url": str(request.base_url).rstrip("/"),
+           "cabecalhos": {k: v for k, v in request.headers.items()
+                          if k.lower() in ("authorization", "x-api-key", "x-request-id", "user-agent", "cookie", "x-csrf")}}
+
     def _rodar():
         con = conectar_somente_leitura()
         try:
-            return [x for x in (tratar(m, con, u) for m in mensagens) if x is not None]
+            return [x for x in (tratar(m, con, u, ctx) for m in mensagens) if x is not None]
         finally:
             con.close()
 
@@ -391,6 +435,6 @@ def rota_mcp_get(u=Depends(auth.exige("VIEWER"))):
     canal que nunca manda nada."""
     return Response(json.dumps({"ok": True, "transporte": "streamable-http (só POST)",
                                 "servidor": NOME, "versao": VERSAO,
-                                "ferramentas": len(FERRAMENTAS), "somente_leitura": True},
+                                "ferramentas": len(FERRAMENTAS), "somente_leitura": bool(u.get("somente_leitura", True))},
                                ensure_ascii=False),
                     media_type="application/json", status_code=200)
