@@ -4,9 +4,23 @@ Dono, 02/10 (#73): *"os nossos vendedores... usam o Claude nas máquinas deles, 
 conectar por um MCP... de acordo com o nível de hierarquia ali do operador ou gerente... consiga
 fazer tudo, não só a leitura."*
 
-## Conectar (uma vez por computador)
+## Conectar
 
-No terminal do vendedor, com o Claude Code instalado:
+O passo a passo também está no painel: **Equipe › Conectar o Claude**, com o endereço pronto para copiar.
+
+### No app do Claude (celular, computador ou claude.ai)
+
+1. Configurações › **Conectores** › **Adicionar conector personalizado**.
+2. Nome: **URACE Command Center**. URL: **só** o endereço `https://urace-bridge.duckdns.org/ops/mcp`.
+   O campo não aceita o comando do terminal.
+3. **Conectar**: entre com o **seu** usuário do painel, deixe marcado **"Também operar o painel como
+   você"** e clique em **Autorizar**.
+
+Se a conta do Claude for **Team ou Enterprise**, o dono pode adicionar o conector nas configurações
+da **organização** (Conectores): ele aparece para todos os membros, e cada um ainda entra com o
+próprio usuário. Em conta individual, cada pessoa adiciona o seu.
+
+### No terminal (Claude Code), uma vez por computador
 
 ```
 claude mcp add --transport http urace https://urace-bridge.duckdns.org/ops/mcp

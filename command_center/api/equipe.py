@@ -145,6 +145,17 @@ def total_nao_lidas(con, user_id):
 
 
 # --------------------------------------------------------------------- rotas
+@r.get("/conector-claude")
+def conector_claude(u=Depends(auth.usuario_atual)):
+    """#77 (dono, 02/10: "deixe o connector visível para os usuários"): o endereço do conector
+    do Claude para a equipe, o mesmo que o servidor de login anuncia (sem diferença de
+    domínio), e se o papel da pessoa deixa o Claude dela operar ou só ler."""
+    from command_center.api import oauth
+    url = f"{oauth.emissor()}/ops/mcp"
+    return {"url": url, "papel": u.get("role"), "pode_operar": oauth.pode_operar(u.get("role")) or bool(u.get("free")),
+            "terminal": f"claude mcp add --transport http urace {url}"}
+
+
 @r.get("/canais")
 def canais(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """As conversas que a pessoa vê, com a última mensagem e quantas não leu."""
