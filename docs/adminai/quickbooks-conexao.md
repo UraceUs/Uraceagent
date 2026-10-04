@@ -15,12 +15,16 @@ HTTPS, e **um consentimento** feito pelo Command Center.
 
 Pré-requisito: o app precisa ter saído de `IN DEVELOPMENT`
 (`docs/adminai/intuit-app-review.md` tem as respostas de cada campo;
-as páginas legais já respondem em `https://urace-bridge.duckdns.org/legal/`).
+as páginas legais já respondem em `https://ops.urace.us/legal/`).
 
 Em *Dashboard → app → Keys & credentials → Production*:
 - copie **Client ID** e **Client Secret**;
 - em **Redirect URIs**, adicione exatamente:
-  `https://urace-bridge.duckdns.org/ops/api/qbo/callback`
+  `https://ops.urace.us/ops/api/qbo/callback`
+  (#79, 04/10: o endereço de volta agora é fixo em `ops.urace.us`. Se o app da Intuit ainda
+  só tem o antigo `https://urace-bridge.duckdns.org/ops/api/qbo/callback`, **acrescente** o
+  novo nas Redirect URIs de produção, sem tirar o antigo. Até lá, dá para manter o antigo
+  com `QBO_REDIRECT_URI=` no `~/.urace/adminai.env`.)
 
 Se a aba Production ainda estiver com cadeado, o app não foi aprovado:
 ver o que a Intuit está pedindo em *App details* e *Compliance*.
@@ -48,7 +52,7 @@ sudo systemctl restart urace-command-center && sleep 2 && curl -s -o /dev/null -
 
 ## 3. Consentimento (no navegador, como ADMIN)
 
-`https://urace-bridge.duckdns.org/ops/quickbooks` → **Conectar QuickBooks**.
+`https://ops.urace.us/ops/quickbooks` → **Conectar QuickBooks**.
 A Intuit pede para escolher a empresa (URACE US INC) e autorizar. Ao
 voltar, o painel mostra CONNECTED e o token fica em
 `~/.urace/qbo-token.json`.

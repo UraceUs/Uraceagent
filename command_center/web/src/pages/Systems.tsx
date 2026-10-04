@@ -664,7 +664,7 @@ export function QuickBooksPage() {
     {sp.get('erro') && <Banner tone="crit">A Intuit devolveu erro no consentimento: {sp.get('erro')}</Banner>}
     {!connected && <div className="card card-b stack">
       <div className="h2">Conectar</div>
-      <div className="small ink2">Três passos, todos no <code>docs/adminai/quickbooks-conexao.md</code>: (1) chaves de produção do app na Intuit com a redirect URI <span className="mono">https://urace-bridge.duckdns.org/ops/api/qbo/callback</span>; (2) as chaves no servidor; (3) o botão abaixo, que abre a tela de autorização da Intuit e volta para cá.</div>
+      <div className="small ink2">Três passos, todos no <code>docs/adminai/quickbooks-conexao.md</code>: (1) chaves de produção do app na Intuit com a redirect URI <span className="mono">https://ops.urace.us/ops/api/qbo/callback</span>; (2) as chaves no servidor; (3) o botão abaixo, que abre a tela de autorização da Intuit e volta para cá.</div>
       {i?.last_error && <Banner tone="warn">Último erro: {i.last_error}</Banner>}
       <div className="row">{can('ADMIN') ? <a className="btn primary" href="/ops/api/qbo/connect">Conectar QuickBooks</a> : <span className="muted small">Só o administrador conecta.</span>}<span className="small muted">{det?.nota}</span></div>
     </div>}

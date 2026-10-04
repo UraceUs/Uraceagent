@@ -109,7 +109,7 @@ def test_connect_exige_admin_e_chaves(cli, monkeypatch):
     monkeypatch.setenv("QBO_CLIENT_ID", "cid"); monkeypatch.setenv("QBO_CLIENT_SECRET", "sec")
     r = cli.get(B + "/qbo/connect", follow_redirects=False)
     assert r.status_code == 302 and "appcenter.intuit.com" in r.headers["location"] and "state=" in r.headers["location"]
-    assert "redirect_uri=https%3A%2F%2Fcc.test%2Fops%2Fapi%2Fqbo%2Fcallback" in r.headers["location"]
+    assert "redirect_uri=https%3A%2F%2Fops.urace.us%2Fops%2Fapi%2Fqbo%2Fcallback" in r.headers["location"], "volta fixa no endereço da URACE (#79)"
     # callback sem state válido: 400; com state válido troca o código e grava o token
     assert cli.get(B + "/qbo/callback?code=x&state=nada&realmId=1", follow_redirects=False).status_code == 400
     state = r.headers["location"].split("state=")[1].split("&")[0]

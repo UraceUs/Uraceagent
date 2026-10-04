@@ -149,7 +149,8 @@ def total_nao_lidas(con, user_id):
 def conector_claude(u=Depends(auth.usuario_atual)):
     """#77 (dono, 02/10: "deixe o connector visível para os usuários"): o endereço do conector
     do Claude para a equipe, o mesmo que o servidor de login anuncia (sem diferença de
-    domínio), e se o papel da pessoa deixa o Claude dela operar ou só ler."""
+    domínio), e se o papel da pessoa deixa o Claude dela operar ou só ler. #79: sempre o
+    endereço da URACE (`ops.urace.us`), venha a pessoa de onde vier."""
     from command_center.api import oauth
     url = f"{oauth.emissor()}/ops/mcp"
     return {"url": url, "papel": u.get("role"), "pode_operar": oauth.pode_operar(u.get("role")) or bool(u.get("free")),

@@ -226,8 +226,8 @@ app.include_router(site_publico.r)
 # precisa mandar `/.well-known/oauth-*` para cá — o script de deploy cuida disso.
 @app.get("/.well-known/oauth-authorization-server")
 @app.get("/.well-known/oauth-authorization-server/ops")
-def _meta_as():
-    return api_oauth.metadados_servidor()
+def _meta_as(request: Request):
+    return api_oauth.metadados_servidor(request)
 
 
 @app.exception_handler(HTTPException)
@@ -240,7 +240,7 @@ async def _com_dica_de_login(request: Request, exc: HTTPException):
     from fastapi.exception_handlers import http_exception_handler
     resp = await http_exception_handler(request, exc)
     if exc.status_code == 401 and request.url.path.rstrip("/").endswith("/ops/mcp"):
-        base = api_oauth.emissor()
+        base = api_oauth.emissor(request)
         resp.headers["WWW-Authenticate"] = (
             f'Bearer realm="URACE Command Center", '
             f'resource_metadata="{base}/.well-known/oauth-protected-resource"')
@@ -249,8 +249,8 @@ async def _com_dica_de_login(request: Request, exc: HTTPException):
 
 @app.get("/.well-known/oauth-protected-resource")
 @app.get("/.well-known/oauth-protected-resource/ops/mcp")
-def _meta_rs():
-    return api_oauth.metadados_recurso()
+def _meta_rs(request: Request):
+    return api_oauth.metadados_recurso(request)
 
 
 # ------------------------------------------------------------- saúde

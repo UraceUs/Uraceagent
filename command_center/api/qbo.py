@@ -1,7 +1,9 @@
 """Consentimento OAuth do QuickBooks feito pelo próprio Command Center.
 
 Por quê aqui: a Intuit exige redirect URI em HTTPS para chaves de
-produção, e o único HTTPS nosso é https://urace-bridge.duckdns.org. O
+produção. O endereço de volta é FIXO (#79): https://ops.urace.us, ou o que
+`QBO_REDIRECT_URI` disser — nunca o nome por onde a pessoa abriu o painel, porque
+a Intuit só aceita o endereço cadastrado no app. O
 callback chega sem cookie de sessão (SameSite=Strict não atravessa o
 redirect vindo de intuit.com), então a prova de quem iniciou é o `state`
 gerado em /connect, guardado com o usuário e validade de 10 minutos.
@@ -24,9 +26,9 @@ SCOPE = "com.intuit.quickbooks.accounting"
 _estados = {}                       # state -> (user_id, expira)
 
 
-def _redirect_uri(request: Request):
-    host = os.environ.get("CC_PUBLIC_HOST") or request.headers.get("x-forwarded-host") or request.headers.get("host")
-    return f"https://{host}/ops/api/qbo/callback"
+def _redirect_uri(request: Request = None):
+    from command_center import enderecos
+    return os.environ.get("QBO_REDIRECT_URI") or f"{enderecos.principal()}/ops/api/qbo/callback"
 
 
 def _client_id():

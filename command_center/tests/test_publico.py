@@ -40,10 +40,12 @@ def test_sitemap_e_xml_valido_com_as_paginas_publicas(cli):
     assert "/ops" not in r.text, "o painel nunca vai para o sitemap"
 
 
-def test_host_inventado_nao_vira_link(cli, monkeypatch):
-    assert "evil.example" not in cli.get("/sitemap.xml", headers={"Host": "evil.example"}).text
-    monkeypatch.setenv("CC_DOMINIOS_EXTRAS", "ops.urace.us")
+def test_host_inventado_nao_vira_link(cli):
+    """Host de fora cai no endereço da URACE (#79), nunca vira link."""
+    r = cli.get("/sitemap.xml", headers={"Host": "evil.example"}).text
+    assert "evil.example" not in r and "https://ops.urace.us/legal/eula.html" in r
     assert "https://ops.urace.us/legal/eula.html" in cli.get("/sitemap.xml", headers={"Host": "ops.urace.us"}).text
+    assert "Sitemap: https://ops.urace.us/sitemap.xml" in cli.get("/robots.txt", headers={"Host": "evil.example"}).text
 
 
 @pytest.mark.parametrize("nome", ["privacy", "eula"])
@@ -52,7 +54,7 @@ def test_pagina_legal_com_seo_completo(nome):
     assert len(re.findall(r"<h1[\s>]", html)) == 1, "um h1 só"
     niveis = [int(n) for n in re.findall(r"<h([1-6])[\s>]", html)]
     assert all(b <= a + 1 for a, b in zip(niveis, niveis[1:])), "sem pular nível de cabeçalho"
-    url = f"https://urace-bridge.duckdns.org/legal/{nome}.html"
+    url = f"https://ops.urace.us/legal/{nome}.html"           # #79: o endereço da URACE
     assert f'<link rel="canonical" href="{url}">' in html
     desc = re.search(r'<meta name="description" content="([^"]+)">', html).group(1)
     assert 70 <= len(desc) <= 200, "descrição do tamanho que o Google mostra"

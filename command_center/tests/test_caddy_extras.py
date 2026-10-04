@@ -73,3 +73,28 @@ def test_segundo_deploy_nao_estraga_os_sites_extras(tmp_path):
     principal = _site(segundo, "urace-bridge.duckdns.org")
     assert principal.count("handle /ops*") == 1 and principal.count("handle /robots.txt") == 1
     assert "handle /painel*" in principal, "o que já existia no site principal fica"
+
+
+def test_ops_serve_tudo_o_que_o_antigo_serve(tmp_path):
+    """#79 (dono, 04/10: "preciso que todas tenham a url urace.us"): ops.urace.us leva as
+    páginas legais e os webhooks públicos da ponte; my.urace.us (cliente) não leva a ponte."""
+    (tmp_path / "Caddyfile").write_text("urace-bridge.duckdns.org {\n}\n")
+    s = _deploy(tmp_path)
+    ops, my = _site(s, "ops.urace.us"), _site(s, "my.urace.us")
+    for h in ("handle_path /legal/*", "file_server", "handle /ops*", "handle /.well-known/oauth-*"):
+        assert h in ops and h in my, h
+    assert "@ponte path /kommo/hook /kommo/eventos /health /human/whatsapp" in ops
+    assert "reverse_proxy 127.0.0.1:8800" in ops
+    assert "@ponte" not in my, "o endereço do cliente não recebe webhook"
+    assert ops.rindex("handle {") > ops.rindex("handle @ponte"), "o 404 do resto fica por último"
+
+
+def test_site_antigo_so_com_login_ganha_o_resto(tmp_path):
+    """O ops.urace.us que já está no VPS (só /ops) é reescrito, não duplicado."""
+    (tmp_path / "Caddyfile").write_text(
+        "urace-bridge.duckdns.org {\n}\n\nops.urace.us {\n\tredir / /ops/ 302\n"
+        "\thandle /ops* {\n\t\treverse_proxy 127.0.0.1:8787\n\t}\n\thandle {\n\t\trespond \"not found\" 404\n\t}\n}\n")
+    s = _roda(tmp_path, "ops.urace.us")
+    assert s.count("ops.urace.us {") == 1 and s.count("{") == s.count("}")
+    assert "handle_path /legal/*" in _site(s, "ops.urace.us")
+    assert _roda(tmp_path, "ops.urace.us") == s, "rodar de novo não muda nada"

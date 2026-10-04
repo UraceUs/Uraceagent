@@ -817,7 +817,8 @@ def inbox(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_d
 @r.get("/setup")
 def setup(request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
     """O que falta para o chat funcionar, e a URL exata para colar no bloco do bot."""
-    host = os.environ.get("CC_PUBLIC_HOST") or request.headers.get("x-forwarded-host") or request.headers.get("host") or "urace-bridge.duckdns.org"
+    from command_center import enderecos
+    host = enderecos.host_principal()           # #79: o que se cola no Kommo é o endereço da URACE
     chave = _chave_hook()
     ultimo = um(con, "SELECT at AS created_at FROM audit_logs WHERE event='crm.hook' ORDER BY id DESC LIMIT 1")
     hoje = um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='crm.hook' AND at >= ?", (agora()[:10],))

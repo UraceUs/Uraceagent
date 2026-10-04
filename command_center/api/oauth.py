@@ -26,7 +26,6 @@ Decisões que vale registrar, porque cada uma fecha um buraco conhecido:
 import hashlib
 import hmac
 import json
-import os
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -52,9 +51,14 @@ ESCOPO_OPERAR = "mcp:write"
 PAPEL_PARA_OPERAR = "OPERATOR"
 
 
-def emissor():
-    """A identidade pública deste servidor. Tem de bater com o que o cliente descobriu."""
-    return os.environ.get("CC_PUBLIC_URL", "https://urace-bridge.duckdns.org").rstrip("/")
+def emissor(request=None):
+    """A identidade pública deste servidor. Tem de bater com o que o cliente descobriu.
+
+    #79: o principal é `https://ops.urace.us`. Quem entrou por outro nome nosso (o duckdns
+    antigo, em que conectores já ligados ainda batem) recebe o próprio nome — o emissor
+    tem de ser igual ao endereço de onde o cliente leu os metadados (RFC 8414)."""
+    from command_center import enderecos
+    return enderecos.base_da_requisicao(request) if request is not None else enderecos.principal()
 
 
 def _hash(valor):
@@ -65,9 +69,9 @@ def _agora_mais(**kw):
     return (datetime.now(timezone.utc) + timedelta(**kw)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
-def metadados_servidor():
+def metadados_servidor(request=None):
     """RFC 8414. É o que o cliente lê para saber onde bater."""
-    base = emissor()
+    base = emissor(request)
     return {
         "issuer": base,
         "authorization_endpoint": f"{base}/ops/oauth/authorize",
@@ -83,9 +87,9 @@ def metadados_servidor():
     }
 
 
-def metadados_recurso():
+def metadados_recurso(request=None):
     """RFC 9728: quem protege o quê, e qual servidor de login vale para isso."""
-    base = emissor()
+    base = emissor(request)
     return {"resource": f"{base}/ops/mcp", "authorization_servers": [base],
             "scopes_supported": [ESCOPO, ESCOPO_OPERAR],
             "bearer_methods_supported": ["header"]}

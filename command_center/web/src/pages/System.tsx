@@ -367,7 +367,7 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
  *  passo na mesma sessão das apis") — e não num documento que ninguém abre na hora. */
 function ComoUsar() {
   const toast = useToast()
-  const base = typeof window !== 'undefined' ? window.location.origin : 'https://urace-bridge.duckdns.org'
+  const base = typeof window !== 'undefined' ? window.location.origin : 'https://ops.urace.us'
   const curl = `curl -s -H "Authorization: Bearer SUA_CHAVE" ${base}/ops/api/dashboard`
   const prova = `curl -s -o /dev/null -w "%{http_code}\n" -X POST -H "Authorization: Bearer SUA_CHAVE" -H "Content-Type: application/json" -d '{"name":"teste"}' ${base}/ops/api/clients`
   const mcp = `claude mcp add urace-cc --env CC_API_KEY=SUA_CHAVE --env CC_URL=${base} -- /home/ubuntu/.urace/cc-venv/bin/python /home/ubuntu/Uraceagent/adminai/mcp/command_center_mcp.py`
