@@ -5,7 +5,7 @@ outro está em stand-by desde 27/08/2026.
 
 ## O que está no ar: Command Center
 
-**https://urace-bridge.duckdns.org/ops/** — a mesa de operação da URACE.
+**https://ops.urace.us/ops/** — a mesa de operação da URACE.
 Espelha Asana, DocuSign, Gmail, QuickBooks e Kommo em um lugar; a IA
 propõe o que fazer e a pessoa aprova; tudo fica em auditoria imutável.
 No ar desde 04/09/2026, com as cinco fontes conectadas.
@@ -75,7 +75,7 @@ podem falhar são código na ponte, não pedidos ao modelo:
 ```
 Lead (Instagram/WhatsApp/etc.)
   → Kommo CRM (funil "Chase — AI Sales Funnel", Salesbot + widget custom)
-  → Caddy HTTPS (urace-bridge.duckdns.org)
+  → Caddy HTTPS (ops.urace.us; o antigo urace-bridge.duckdns.org ainda responde)
   → sales-bridge (FastAPI no VPS: portões, estados, diretivas, agendador)
   → OpenClaw (agente Chase, sessão por lead)  ← brain/ (conhecimento, via retrieval)
   → resposta volta pelo mesmo caminho (mensagem única no chat)

@@ -275,7 +275,8 @@ def status(u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(
     """Conectado ou não, a URL para colar no Dialpad e o último evento que chegou.
     Sem credencial NÃO inventa nada: diz que falta configurar."""
     chave, segredo, api = _chave_hook(), _segredo(), _cfg("DIALPAD_API_KEY")
-    host = os.environ.get("CC_HOST", "urace-bridge.duckdns.org")
+    from command_center import enderecos
+    host = os.environ.get("CC_HOST") or enderecos.host_principal()   # #79
     ult = um(con, "SELECT at AS quando FROM audit_logs WHERE event='dialpad.webhook' ORDER BY id DESC LIMIT 1")
     n = um(con, "SELECT COUNT(*) AS n FROM calls")
     return {

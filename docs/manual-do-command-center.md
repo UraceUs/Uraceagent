@@ -4,7 +4,7 @@
 precise operar ou explicar o sistema. Tudo aqui foi conferido no código, não é
 lembrança: quando uma regra existe, o arquivo que a impõe está citado.
 
-**Painel:** https://urace-bridge.duckdns.org/ops/
+**Painel:** https://ops.urace.us/ops/
 **Última revisão:** 17/09/2026 · 207 testes automatizados passando
 
 ---
@@ -34,7 +34,7 @@ apaga nada pela IA, não mexe nos projetos **ADM URACE** e **Matt tasks** do Asa
 
 ## 2. Entrar
 
-1. Abra https://urace-bridge.duckdns.org/ops/
+1. Abra https://ops.urace.us/ops/
 2. E-mail e senha que o administrador cadastrou. Mínimo de 5 caracteres — o que
    segura a porta é o bloqueio por tentativas, não o tamanho da senha.
 3. "Manter conectado por 30 dias" é opcional; sem isso a sessão dura 12 horas.

@@ -52,7 +52,7 @@ A URL sai pronta no painel, em **Integrações → Dialpad** (ou em
 `GET /ops/api/dialpad/status`). É esta forma:
 
 ```
-https://urace-bridge.duckdns.org/ops/api/dialpad/webhook?key=<DIALPAD_HOOK_KEY>
+https://ops.urace.us/ops/api/dialpad/webhook?key=<DIALPAD_HOOK_KEY>
 ```
 
 Webhook no Dialpad se cria pela API (não tem tela). No VPS, com as variáveis já no arquivo:
@@ -61,7 +61,7 @@ Webhook no Dialpad se cria pela API (não tem tela). No VPS, com as variáveis j
 set -a && . ~/.urace/dialpad.env && set +a && \
 WH=$(curl -sS -X POST https://dialpad.com/api/v2/webhooks \
   -H "Authorization: Bearer $DIALPAD_API_KEY" -H "Content-Type: application/json" \
-  -d "{\"hook_url\":\"https://urace-bridge.duckdns.org/ops/api/dialpad/webhook?key=$DIALPAD_HOOK_KEY\",\"secret\":\"$DIALPAD_HOOK_SECRET\"}") && \
+  -d "{\"hook_url\":\"https://ops.urace.us/ops/api/dialpad/webhook?key=$DIALPAD_HOOK_KEY\",\"secret\":\"$DIALPAD_HOOK_SECRET\"}") && \
 echo "$WH" && ID=$(printf '%s' "$WH" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id",""))') && \
 curl -sS -X POST https://dialpad.com/api/v2/subscriptions/call \
   -H "Authorization: Bearer $DIALPAD_API_KEY" -H "Content-Type: application/json" \

@@ -65,14 +65,14 @@ existe no banco.
 **2. Confirme que a rota responde** (na VPS):
 
 ```bash
-curl -s -H "Authorization: Bearer urk_..." https://urace-bridge.duckdns.org/ops/mcp | head -3
+curl -s -H "Authorization: Bearer urk_..." https://ops.urace.us/ops/mcp | head -3
 ```
 
 Tem de vir `{"ok": true, ... "somente_leitura": true}`. O Caddy já manda `/ops*` para o
 serviço, então **não há nada novo para configurar no servidor web**.
 
 **3. Conecte** em https://claude.ai/customize/connectors, apontando para
-`https://urace-bridge.duckdns.org/ops/mcp`. Depois **abra uma sessão nova**: conector é
+`https://ops.urace.us/ops/mcp`. Depois **abra uma sessão nova**: conector é
 lido quando a sessão começa.
 
 ## Login: o painel virou servidor OAuth (24/09)

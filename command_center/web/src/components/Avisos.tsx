@@ -91,7 +91,7 @@ export function Avisos() {
 
   if (permissao === 'denied') return <Banner tone="crit">
     A notificação foi <b>bloqueada</b> neste aparelho. O site não consegue perguntar de novo: libere nos
-    ajustes do navegador (site urace-bridge.duckdns.org → Notificações → Permitir) e recarregue.
+    ajustes do navegador (site {typeof window !== 'undefined' ? window.location.host : 'ops.urace.us'} → Notificações → Permitir) e recarregue.
   </Banner>
 
   return <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>

@@ -9,7 +9,6 @@ não vira link no sitemap (injeção de cabeçalho).
 """
 import os
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse, Response
@@ -18,21 +17,12 @@ r = APIRouter(tags=["publico"])
 
 LEGAL = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "adminai", "deploy", "legal"))
 PAGINAS = ("privacy", "eula")
-PADRAO = "urace-bridge.duckdns.org"
-
-
-def _dominios():
-    nossos = {PADRAO}
-    for v in (os.environ.get("CC_PUBLIC_URL"), os.environ.get("CC_PUBLIC_HOST")):
-        if v:
-            nossos.add(urlsplit(v if "://" in v else "https://" + v).hostname or v)
-    nossos.update(d.strip() for d in os.environ.get("CC_DOMINIOS_EXTRAS", "").split() if d.strip())
-    return nossos
 
 
 def _host(request):
-    h = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(":")[0].lower()
-    return h if h in _dominios() else PADRAO
+    """#79: o nome por onde a pessoa entrou, se for nosso; senão, ops.urace.us."""
+    from command_center import enderecos
+    return enderecos.host_da_requisicao(request)
 
 
 @r.get("/robots.txt", response_class=PlainTextResponse)

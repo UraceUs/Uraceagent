@@ -188,13 +188,13 @@ elif faixa:
 else:
     open(caddyfile, "a").write(f"\n{dominio} {{{bloco}}}\n"); print("-- bloco de site criado")
 PY
-# Endereço da URACE (dono, 30/09: "conseguimos deixar a url do site como o da urace?").
-# CC_DOMINIOS_EXTRAS="ops.urace.us my.urace.us" cria um site a mais no Caddy para cada nome
-# (my.* abre na área do cliente), com o MESMO servidor, sem
-# tirar o duckdns (webhooks do Kommo, OAuth do QuickBooks e o conector do claude.ai
-# continuam apontando para lá). Só entra se o DNS do nome novo já aponta para ESTE
-# servidor: sem isso o Let's Encrypt falha e o Caddy fica tentando à toa.
-for EXTRA in ${CC_DOMINIOS_EXTRAS:-}; do
+# Endereço da URACE (dono, 30/09: "conseguimos deixar a url do site como o da urace?"; e 04/10,
+# #79: "preciso que todas tenham a url urace.us"). Cada nome de CC_DOMINIOS_EXTRAS vira um site
+# no Caddy com o MESMO servidor e TUDO o que o duckdns serve: painel, login do MCP (OAuth),
+# páginas legais, robots/sitemap e os webhooks da ponte do Kommo. O duckdns continua no ar
+# (Kommo, Dialpad, Intuit e conectores antigos batem lá até serem trocados). Só entra se o DNS
+# do nome novo já aponta para ESTE servidor: sem isso o Let's Encrypt falha à toa.
+for EXTRA in ${CC_DOMINIOS_EXTRAS:-ops.urace.us my.urace.us}; do
     IP_NOVO="$(getent ahostsv4 "$EXTRA" | awk 'NR==1{print $1}')"
     IP_NOSSO="$(getent ahostsv4 "$DOMINIO" | awk 'NR==1{print $1}')"
     if [ -z "$IP_NOVO" ] || [ "$IP_NOVO" != "$IP_NOSSO" ]; then
@@ -205,20 +205,37 @@ for EXTRA in ${CC_DOMINIOS_EXTRAS:-}; do
 import os, re
 caddyfile = os.environ.get("CADDYFILE", "/etc/caddy/Caddyfile")
 extra, porta = os.environ["EXTRA"], os.environ["PORTA"]
+ponte = os.environ.get("PONTE_PORTA", "8800")
+legal = os.environ.get("LEGAL_DIR", "/var/www/urace-legal")
 # my.urace.us é o endereço do CLIENTE (dono, 01/10): a raiz abre a área do cliente. Os
-# outros (ops.urace.us) abrem o painel da equipe.
-destino = "/ops/portal" if extra.split(".")[0] == "my" else "/ops/"
+# outros (ops.urace.us) abrem o painel da equipe e recebem também os webhooks da ponte.
+cliente = extra.split(".")[0] == "my"
+destino = "/ops/portal" if cliente else "/ops/"
+corpo = (f"\n\tredir / {destino} 302\n"
+         f"\thandle /ops* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+         f"\thandle /.well-known/oauth-* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+         f"\thandle /robots.txt {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+         f"\thandle /sitemap.xml {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
+         f"\thandle_path /legal/* {{\n\t\troot * {legal}\n\t\tfile_server\n\t}}\n")
+if not cliente:
+    # #79: os mesmos webhooks públicos da ponte do Kommo que o duckdns expõe — nada além deles
+    corpo += ("\t@ponte path /kommo/hook /kommo/eventos /health /human/whatsapp\n"
+              f"\thandle @ponte {{\n\t\treverse_proxy 127.0.0.1:{ponte}\n\t}}\n")
+corpo += "\thandle {\n\t\trespond \"not found\" 404\n\t}\n"
 s = open(caddyfile).read()
-if re.search(r"(^|\n)" + re.escape(extra) + r"\s*\{", s):
-    print(f"-- {extra}: site já existe no Caddy")
+m = re.search(r"(^|\n)" + re.escape(extra) + r"\s*\{", s)
+if m:
+    # reescreve o corpo inteiro (contando as chaves): rodar de novo dá o mesmo arquivo, e um
+    # site criado pela versão antiga (só /ops) ganha o resto
+    i, nivel = m.end(), 1
+    while i < len(s) and nivel:
+        nivel += {"{": 1, "}": -1}.get(s[i], 0)
+        i += 1
+    s = s[:m.end()] + corpo + s[i - 1:]
+    open(caddyfile, "w").write(s)
+    print(f"-- {extra}: site atualizado")
 else:
-    open(caddyfile, "a").write(
-        f"\n{extra} {{\n\tredir / {destino} 302\n"
-        f"\thandle /ops* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
-        f"\thandle /.well-known/oauth-* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
-        f"\thandle /robots.txt {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
-        f"\thandle /sitemap.xml {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
-        f"\thandle {{\n\t\trespond \"not found\" 404\n\t}}\n}}\n")
+    open(caddyfile, "a").write(f"\n{extra} {{{corpo}}}\n")
     print(f"-- {extra}: site criado (o certificado sai sozinho no primeiro acesso)")
 PY2
 done

@@ -19,7 +19,7 @@ aprovar, não ganhar uma chave que escreve.
 Ambiente (nunca no código, nunca no repositório):
 
     CC_API_KEY=urk_...        chave criada em Usuários → Chaves de API
-    CC_URL=https://urace-bridge.duckdns.org      (padrão)
+    CC_URL=https://ops.urace.us      (padrão; o antigo duckdns ainda responde)
 
 Lidos do ambiente ou de ~/.urace/command-center.env (ou URACE_ENV).
 
@@ -39,7 +39,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mcp_stdio import ErroFerramenta, Servidor, log  # noqa: E402
 
-PADRAO_URL = "https://urace-bridge.duckdns.org"
+PADRAO_URL = "https://ops.urace.us"          # #79: o endereço da URACE
 TEMPO_LIMITE = 45
 
 

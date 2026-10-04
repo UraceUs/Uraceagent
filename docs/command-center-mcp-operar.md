@@ -11,7 +11,7 @@ O passo a passo também está no painel: **Equipe › Conectar o Claude**, com o
 ### No app do Claude (celular, computador ou claude.ai)
 
 1. Configurações › **Conectores** › **Adicionar conector personalizado**.
-2. Nome: **URACE Command Center**. URL: **só** o endereço `https://urace-bridge.duckdns.org/ops/mcp`.
+2. Nome: **URACE Command Center**. URL: **só** o endereço `https://ops.urace.us/ops/mcp`.
    O campo não aceita o comando do terminal.
 3. **Conectar**: entre com o **seu** usuário do painel, deixe marcado **"Também operar o painel como
    você"** e clique em **Autorizar**.
@@ -23,7 +23,7 @@ próprio usuário. Em conta individual, cada pessoa adiciona o seu.
 ### No terminal (Claude Code), uma vez por computador
 
 ```
-claude mcp add --transport http urace https://urace-bridge.duckdns.org/ops/mcp
+claude mcp add --transport http urace https://ops.urace.us/ops/mcp
 ```
 
 Depois, dentro do Claude Code, digite `/mcp`, escolha **urace** e **Authenticate**. O navegador

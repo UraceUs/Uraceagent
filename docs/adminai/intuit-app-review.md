@@ -55,6 +55,10 @@ O script termina fazendo `curl` nas duas URLs e mostrando o código HTTP.
 | **App name** | `URACE Administrative AI` — vale renomear; hoje está "ia app", que não diz nada a um revisor |
 | **Description** | Internal operations tool for URACE.US INC. Prepares invoices and estimates from the company's own service records, tracks outstanding balances, and keeps accounting data consistent with the company's project management and document signing systems. Not distributed to third parties. |
 | **App category** | `Accounting` (segunda opção, se pedir: `Invoicing`) |
+> **04/10 (#79):** as mesmas páginas também respondem em `https://ops.urace.us/legal/`. Para trocar
+> na Intuit, é só substituir `urace-bridge.duckdns.org` por `ops.urace.us` nas linhas abaixo; o
+> antigo continua no ar até lá.
+
 | **Host domain** | `urace-bridge.duckdns.org` (sem `https://`) |
 | **Launch URL** | `https://urace-bridge.duckdns.org/legal/privacy.html` — o app é headless, não tem tela pública; aponta para uma página que existe |
 | **Disconnect URL** | `https://urace-bridge.duckdns.org/legal/privacy.html` |

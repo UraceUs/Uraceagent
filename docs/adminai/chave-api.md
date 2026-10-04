@@ -23,7 +23,7 @@ nem o ADMIN, nem a IA, consegue ler uma chave já criada.
 ## Usar
 
 ```bash
-curl -s https://urace-bridge.duckdns.org/ops/api/dashboard \
+curl -s https://ops.urace.us/ops/api/dashboard \
   -H "Authorization: Bearer urk_xxxxxxxxxx_SEGREDO"
 ```
 
@@ -99,7 +99,7 @@ juntas.
 Ligar no Claude Code, na máquina onde ele roda:
 
 ```bash
-claude mcp add urace-cc --env CC_API_KEY=urk_SUA_CHAVE --env CC_URL=https://urace-bridge.duckdns.org \
+claude mcp add urace-cc --env CC_API_KEY=urk_SUA_CHAVE --env CC_URL=https://ops.urace.us \
   -- /home/ubuntu/.urace/cc-venv/bin/python /home/ubuntu/Uraceagent/adminai/mcp/command_center_mcp.py
 ```
 

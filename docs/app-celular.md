@@ -68,7 +68,7 @@ Conta e assinatura são suas. **Nenhuma senha ou chave passa pelo chat:** tudo v
 ### 3. Ficha nas lojas
 
 - Nome, descrição curta e longa, e e-mail de suporte (`support@urace.us`?).
-- Política de privacidade: `https://urace-bridge.duckdns.org/legal/privacy.html` (já existe).
+- Política de privacidade: `https://ops.urace.us/legal/privacy.html` (já existe).
 - Uma **conta de cliente de demonstração** para os revisores da Apple e do Google entrarem. É uma
   conta de teste no portal, sem dado de cliente real.
 - Capturas de tela: eu tiro do app rodando quando as contas estiverem prontas.
