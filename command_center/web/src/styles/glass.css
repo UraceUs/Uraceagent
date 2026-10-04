@@ -512,7 +512,14 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .portal-tel{display:grid;gap:0 12px;grid-template-columns:88px minmax(0,1fr)}
 .portal-kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
 .portal-kpi{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
-.portal-kpi .portal-sessao{width:100%;padding:0;background:transparent;border:0;box-shadow:none}
+.portal-sessao-solta{width:100%;gap:8px}
+/* #81: o mesmo jeito em toda a área do cliente — dados do piloto um por linha, cabeçalho do
+   cartão que quebra ANTES de espremer o nome, e todo botão com a mesma letra */
+.portal-dados{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.portal-piloto-topo{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-start}
+.portal-piloto-topo>.grow{flex:1 1 240px;min-width:0}
+.portal-piloto-acoes{gap:8px;align-items:center}
+.portal .btn,.portal .btn.sm{font-size:14px}
 .portal-num{font-size:24px;line-height:1.1}
 .portal-grade{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
 .portal-grade .portal-piloto{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
