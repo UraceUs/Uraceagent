@@ -9,7 +9,7 @@ import { Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-route
 import { Icon } from '../components/Icon'
 import { Pista } from '../components/Pista'
 import { Agendar, CartaoSessao, Sessoes } from './Agendar'
-import { haDias, papi, PortalError, type Account, type Driver, type Painel } from './api'
+import { haDias, papi, PortalError, type Account, type AgendaCfg, type Driver, type Painel } from './api'
 import { ddiDe, PAISES } from './paises'
 import { guardarVisual, visual3d } from './visual'
 import '../styles/portal-3d.css'
@@ -182,6 +182,20 @@ function Casca({ conta, sair, children }: { conta: Account; sair: () => void; ch
   </div>
 }
 
+/** Os dados do piloto, um por linha e sempre "Rótulo: valor" (#81). O Dashboard mostra o
+ *  resumo; a tela Drivers mostra também medição, Client ID e rede social. */
+function DadosDoPiloto({ p, completo }: { p: Driver; completo?: boolean }) {
+  return <div className="portal-dados small">
+    <div className="muted">{p.age != null ? `${p.age} years old` : 'Date of birth not set'}</div>
+    <div>Last session: <b>{p.last_session ? haDias(p.days_since_last_session) : 'none yet'}</b></div>
+    {completo && <>
+      {p.measures_updated_at && <div>Measured: <b>{dataUS(p.measures_updated_at)}</b></div>}
+      <div>Client ID: {p.client_id ? <b>{p.client_id}</b> : <span className="muted">assigned by our team</span>}</div>
+      {p.social && <div>Social: {p.social.startsWith('http') ? <a href={p.social} target="_blank" rel="noreferrer noopener">{p.social}</a> : <b>{p.social}</b>}</div>}
+    </>}
+  </div>
+}
+
 function ChipMedidas({ p }: { p: Driver }) {
   const [rot, tom] = SITUACAO[p.measures_status]
   return <span className={`chip ${tom}`}>{rot}{p.measures_status === 'aviso' && p.measures_days != null ? ` · ${p.measures_days} days` : ''}</span>
@@ -189,8 +203,10 @@ function ChipMedidas({ p }: { p: Driver }) {
 
 function Dashboard({ conta }: { conta: Account }) {
   const [d, setD] = useState<Painel | null>(null)
+  const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   useEffect(() => { papi<Painel>('GET', '/dashboard').then(setD).catch(e => setErro((e as PortalError).message)) }, [])
+  useEffect(() => { papi<{ config: AgendaCfg }>('GET', '/availability').then(r => setCfg(r.config)).catch(() => setCfg(null)) }, [])
   const atencao = conta.drivers.filter(p => p.measures_status !== 'ok')
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Dashboard</h1><p className="muted" style={{ margin: '4px 0 0' }}>Hi, {conta.name.split(' ')[0]}. Here is everything about your account.</p></div>
@@ -203,10 +219,10 @@ function Dashboard({ conta }: { conta: Account }) {
         : `${p.name}: measurements are ${p.measures_days} days old. Please review them.`} <Link to="/portal/drivers">Update</Link></div></div>)}
     <div className="portal-kpis">
       <div className="card card-b portal-kpi"><span className="small muted">Next session</span>
-        {!d ? <span className="spin" /> : d.next_session ? <CartaoSessao s={d.next_session} cfg={null} /> : <><b>None booked</b><Link className="btn primary sm" to="/portal/book">Book a session</Link></>}</div>
+        {!d ? <span className="spin" /> : d.next_session ? <CartaoSessao s={d.next_session} cfg={cfg} solta /> : <><b>None booked</b><Link className="btn primary sm" to="/portal/book">Book a session</Link></>}</div>
       <div className="card card-b portal-kpi"><span className="small muted">Last session</span>
         <b className="portal-num">{d ? (d.last_session ? haDias(d.days_since_last_session) : '—') : '…'}</b>
-        <span className="small muted">{d?.last_session ? dataUS(d.last_session) : 'No sessions yet'}</span></div>
+        <span className="small muted">{d?.last_session ? dataUS(d.last_session) : 'None yet'}</span></div>
       <div className="card card-b portal-kpi"><span className="small muted">Upcoming</span>
         <b className="portal-num">{d ? d.upcoming : '…'}</b><Link className="small" to="/portal/sessions">My sessions</Link></div>
     </div>
@@ -214,8 +230,7 @@ function Dashboard({ conta }: { conta: Account }) {
       {!conta.drivers.length ? <p className="muted small" style={{ margin: 0 }}>No drivers yet. <Link to="/portal/drivers">Add a driver</Link></p>
         : <div className="portal-grade">{conta.drivers.map(p => <article key={p.id} className="card card-b portal-piloto">
           <h3 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h3>
-          <div className="small muted">{p.age != null ? `${p.age} years old` : 'Date of birth not set'}</div>
-          <div className="small">Last session: <b>{p.last_session ? haDias(p.days_since_last_session) : 'none yet'}</b></div>
+          <DadosDoPiloto p={p} />
           <ChipMedidas p={p} />
         </article>)}</div>}
     </section>
@@ -319,22 +334,19 @@ function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onSalvo: (
 function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => void }) {
   const [editando, setEditando] = useState<number | 'novo' | null>(conta.drivers.length ? null : 'novo')
   return <div className="stack" style={{ gap: 18 }}>
-    <div className="row"><div className="grow"><h1 className="h1">Drivers</h1><p className="muted" style={{ margin: '4px 0 0' }}>The people who drive the kart: your child or children, or you. The account holder stays the responsible adult.</p></div>
+    <div className="portal-piloto-topo"><div className="grow"><h1 className="h1">Drivers</h1><p className="muted" style={{ margin: '4px 0 0' }}>The people who drive the kart: your child or children, or you. The account holder stays the responsible adult.</p></div>
       {editando === null && <button className="btn sm" onClick={() => setEditando('novo')}>+ Add a driver</button>}</div>
     {conta.drivers.map(p => editando === p.id
       ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} />
       : <article className="card card-b portal-piloto" key={p.id}>
-        <div className="row wrap"><div className="grow"><h2 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h2>
-          <div className="small muted">{p.age != null ? `${p.age} years old` : 'Date of birth not set'}{p.measures_updated_at ? ` · measured ${dataUS(p.measures_updated_at)}` : ''}
-            {` · last session ${p.last_session ? haDias(p.days_since_last_session) : 'none yet'}`}</div>
-          <div className="small">{p.client_id ? <>Client ID <b>{p.client_id}</b></> : <span className="muted">Client ID: assigned by our team</span>}</div>
-          {p.social && <div className="small">{p.social.startsWith('http') ? <a href={p.social} target="_blank" rel="noreferrer noopener">{p.social}</a> : p.social}</div>}</div>
-          <ChipMedidas p={p} />
-          <button className="btn ghost sm" onClick={() => setEditando(p.id)}>{p.measures_status === 'ok' ? 'Edit' : 'Update'}</button></div>
+        <div className="portal-piloto-topo"><div className="grow"><h2 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h2>
+          <DadosDoPiloto p={p} completo /></div>
+          <div className="row wrap portal-piloto-acoes"><ChipMedidas p={p} />
+            <button className="btn sm" onClick={() => setEditando(p.id)}>{p.measures_status === 'ok' ? 'Edit' : 'Update'}</button></div></div>
         {p.missing.length > 0 && <p className="small" style={{ margin: '8px 0 0' }}>Missing: {p.missing.map(k => ROTULO[k] || k).join(', ')}.</p>}
         {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{MEDIDAS.filter(([k]) => p.measures[k] != null).map(([k, rot]) =>
           <div key={k}><dt>{rot}</dt><dd>{String(p.measures[k])}</dd></div>)}</dl>}
-        {p.notes && <p className="small" style={{ margin: '10px 0 0' }}><b>Experience:</b> {p.notes}</p>}
+        {p.notes && <p className="small" style={{ margin: '10px 0 0' }}>Experience: <b>{p.notes}</b></p>}
       </article>)}
     {editando === 'novo' && <FormPiloto onSalvo={onSalvo} onFechar={() => setEditando(null)} />}
   </div>

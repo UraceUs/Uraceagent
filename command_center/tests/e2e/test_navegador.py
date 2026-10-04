@@ -414,6 +414,13 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     g.get_by_text("Sessão confirmada.").wait_for()
     c.reload()
     c.get_by_text("Confirmed").wait_for()
+    # #81: no Dashboard, a próxima sessão é escrita como em "My sessions" (com o horário) e
+    # não vira cartão dentro do cartão — nem no visual 3D, que é o padrão
+    c.goto(servidor + "/portal/dashboard")
+    kpi = c.locator(".portal-kpi").first
+    kpi.get_by_text("Confirmed").wait_for()
+    assert kpi.locator(".card").count() == 0, "cartão dentro do cartão"
+    assert "Morning · " in kpi.inner_text() and "AM" in kpi.inner_text(), kpi.inner_text()
     g.close(); c.close()
 
 
@@ -487,4 +494,32 @@ def test_equipe_ve_como_conectar_o_claude(servidor, navegador):
     pg.get_by_role("button", name="Como conectar").click()
     pg.get_by_text("/ops/mcp").first.wait_for()
     pg.get_by_text("claude mcp add --transport http urace").wait_for()
+    pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_area_do_cliente_escreve_tudo_do_mesmo_jeito(servidor, navegador, largura):
+    """#81 (dono, 04/10: "veja as formatações que estão fora de padrão e padronize"): nome
+    comprido não quebra palavra por palavra, "Last session" igual nas duas telas, rede social
+    com rótulo e todos os botões com a mesma letra."""
+    pg = navegador.new_page(viewport={"width": largura, "height": 844})
+    cliente_pela_api(pg, servidor, "Paula Padrao", f"paula{largura}.e2e@example.com")
+    csrf = next(c["value"] for c in pg.context.cookies() if c["name"] == "cp_csrf")
+    r = pg.request.post(servidor + "/api/portal/drivers", headers={"X-CSRF": csrf},
+                        data={"name": "Gabriela Fernanda Albuquerque Montenegro", "social": "@gabi_kart", **PILOTO_OK})
+    assert r.ok, r.text()
+    pg.goto(servidor + "/portal/drivers"); pg.wait_for_load_state("networkidle")
+    nome = pg.locator(".portal-piloto h2").first
+    altura_linha = float(nome.evaluate("e => parseFloat(getComputedStyle(e).lineHeight) || 24"))
+    assert nome.bounding_box()["height"] <= altura_linha * 2.2, "o nome quebrou palavra por palavra"
+    cartao = pg.locator(".portal-piloto").first.inner_text()
+    assert "Last session: none yet" in cartao and "Social: @gabi_kart" in cartao and "Client ID:" in cartao, cartao
+    assert "last session none" not in cartao
+    tamanhos = set(pg.eval_on_selector_all(".portal .btn", "els => els.map(e => getComputedStyle(e).fontSize)"))
+    assert len(tamanhos) == 1, f"botões com letras diferentes: {tamanhos}"
+    pg.goto(servidor + "/portal/dashboard"); pg.wait_for_load_state("networkidle")
+    assert "Last session: none yet" in pg.locator(".portal-piloto").first.inner_text()
+    assert pg.get_by_text("None yet", exact=True).count() == 1, "o cartão Last session diz o mesmo"
+    tamanhos = set(pg.eval_on_selector_all(".portal .btn", "els => els.map(e => getComputedStyle(e).fontSize)"))
+    assert len(tamanhos) == 1, f"botões com letras diferentes: {tamanhos}"
     pg.close()

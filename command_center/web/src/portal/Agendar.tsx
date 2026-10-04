@@ -29,16 +29,19 @@ export function bloqueioDoPiloto(p: Driver): string | null {
   return null
 }
 
-export function CartaoSessao({ s, cfg, onCancelar }: { s: Booking; cfg: AgendaCfg | null; onCancelar?: (id: number) => void }) {
+/** Uma sessão, escrita do mesmo jeito em todas as telas (#81): dia, período com horário,
+ *  piloto, serviço com preço e a situação. `solta` é a versão sem cartão, para morar dentro
+ *  de outro cartão (o "Next session" do Dashboard) sem virar cartão dentro de cartão. */
+export function CartaoSessao({ s, cfg, onCancelar, solta }: { s: Booking; cfg: AgendaCfg | null; onCancelar?: (id: number) => void; solta?: boolean }) {
   const [rot, tom] = STATUS[s.status] || [s.status, 'neutral']
   const ativa = s.status === 'pendente' || s.status === 'confirmada'
-  return <div className="card card-b row wrap portal-sessao">
+  return <div className={solta ? 'row wrap portal-sessao portal-sessao-solta' : 'card card-b row wrap portal-sessao'}>
     <div className="grow"><b>{dataLonga(s.date)}</b>
       <div className="small muted">{PERIODO[s.period]}{cfg ? ` · ${faixa(cfg, s.period)}` : ''}{s.driver ? ` · ${s.driver}` : ''}</div>
       {s.service && <div className="small">{s.service}{s.price != null ? ` · ${usd(s.price)}` : ''}</div>}
       {s.decision_note && <div className="small">{s.decision_note}</div>}</div>
     <span className={`chip ${tom}`}>{rot}</span>
-    {ativa && onCancelar && <button className="btn ghost sm" onClick={() => onCancelar(s.id)}>Cancel</button>}
+    {ativa && onCancelar && <button className="btn sm" onClick={() => onCancelar(s.id)}>Cancel</button>}
   </div>
 }
 
