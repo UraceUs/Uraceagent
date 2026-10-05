@@ -523,3 +523,16 @@ def test_area_do_cliente_escreve_tudo_do_mesmo_jeito(servidor, navegador, largur
     tamanhos = set(pg.eval_on_selector_all(".portal .btn", "els => els.map(e => getComputedStyle(e).fontSize)"))
     assert len(tamanhos) == 1, f"botões com letras diferentes: {tamanhos}"
     pg.close()
+
+
+def test_integracoes_mostra_o_dialpad_sem_a_chave(servidor, navegador):
+    """#83 (dono, 05/10): ligou o Dialpad e o passo de conferir dizia "Integrações → Dialpad",
+    que não existia. O cartão mostra se está ligado e o último evento; a chave do webhook nunca."""
+    pg = entrar(navegador, servidor)
+    abrir(pg, servidor, "/integrations")
+    cartao = pg.locator(".card", has=pg.get_by_role("heading", name="Dialpad", exact=True))
+    cartao.wait_for()
+    texto = cartao.inner_text()
+    assert "falta configurar" in texto and "DIALPAD_API_KEY" in texto, texto
+    assert "key=" not in texto
+    pg.close()

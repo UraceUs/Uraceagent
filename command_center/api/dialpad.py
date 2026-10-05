@@ -279,10 +279,13 @@ def status(u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(
     host = os.environ.get("CC_HOST") or enderecos.host_principal()   # #79
     ult = um(con, "SELECT at AS quando FROM audit_logs WHERE event='dialpad.webhook' ORDER BY id DESC LIMIT 1")
     n = um(con, "SELECT COUNT(*) AS n FROM calls")
+    base = f"https://{host}/ops/api/dialpad/webhook"
     return {
         "connected": bool(chave and api),
         "falta": [x for x, v in (("DIALPAD_HOOK_KEY", chave), ("DIALPAD_HOOK_SECRET", segredo), ("DIALPAD_API_KEY", api)) if not v],
-        "webhook_url": (f"https://{host}/ops/api/dialpad/webhook?key={chave}" if chave else None),
+        # #83: a chave do webhook é segredo — só o ADMIN (quem cadastra no Dialpad) a vê
+        "webhook_url": (f"{base}?key={chave}" if chave and (u.get("free") or auth.pode(u.get("role"), "ADMIN")) else None),
+        "webhook_endereco": base if chave else None,
         "assinado": bool(segredo),
         "ultimo_evento": ult["quando"] if ult else None,
         "ligacoes": n["n"],

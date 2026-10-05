@@ -41,7 +41,7 @@ URACE_DIR="${URACE_DIR:-$HOME/.urace}"
 VENV="$URACE_DIR/cc-venv"
 UNIT=urace-command-center
 
-echo "== Command Center -> https://$DOMINIO/ops/ =="
+echo "== Command Center -> https://ops.urace.us/ops/ (o antigo https://$DOMINIO/ops/ continua respondendo) =="
 mkdir -p "$URACE_DIR"; chmod 700 "$URACE_DIR"
 
 # ---------------------------------------------------------------- 1. venv
@@ -271,7 +271,7 @@ echo "   /robots.txt bloqueia /ops/ -> $ROBOTS  (tem que ser 1)"
 echo "   /painel/                   -> HTTP $PAINEL  (404 esperado: Pit Wall aposentado pelo dono em 18/09)"
 echo
 if [ "$SPA" = "200" ] && [ "$TEM_APP" = "1" ] && [ "$VAZOU" = "0" ] && [ "$API" = "401" ] && [ "$LEGAL" = "200" ]; then
-    echo "✅ https://$DOMINIO/ops/ no ar. Entre com o ADMIN criado; a API só responde com sessão."
+    echo "✅ https://ops.urace.us/ops/ no ar (e https://$DOMINIO/ops/). Entre com o ADMIN criado; a API só responde com sessão."
 else
     echo "❌ Algo não bate. Para voltar atrás:"
     echo "   sudo cp \$(ls -t $CADDYFILE.bak-* | head -1) $CADDYFILE && sudo systemctl reload caddy"

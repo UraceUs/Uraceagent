@@ -166,6 +166,29 @@ function SaudeDoPainel() {
   </>
 }
 
+/** #83: o Dialpad não passa pela sondagem dos outros sistemas — ele fala com o painel pelo
+ *  webhook. O cartão mostra o que importa para conferir: está ligado, quando chegou o último
+ *  evento e quantas ligações já entraram. A chave do webhook nunca aparece na tela. */
+interface DialpadStatus { connected: boolean; falta: string[]; webhook_endereco: string | null; assinado: boolean; ultimo_evento: string | null; ligacoes: number }
+function CartaoDialpad() {
+  const { data } = useGet<DialpadStatus>('/dialpad/status', 60000)
+  if (!data) return null
+  const ok = data.connected
+  return <div className="card card-b lead" style={{ borderLeftColor: ok ? 'var(--ok)' : 'var(--warn)' }}>
+    <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>Dialpad</h2>
+      <Status kind={ok ? 'ok' : 'wait'} label={ok ? 'ok' : 'falta configurar'} /><span className="grow" />
+      <span className="small muted mono" title={data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : ''}>{data.ultimo_evento ? `último evento há ${ago(data.ultimo_evento)}` : 'nenhum evento ainda'}</span></div>
+    <div className="small ink2" style={{ margin: '6px 0 0' }}>Ligações do número da empresa. Perdida vira item em Precisa de atenção; atendida entra na linha do tempo da venda.</div>
+    {!ok && <div className="banner warn" style={{ marginTop: 8 }}><span className="bi">▲</span><div className="grow small">Falta no servidor: {data.falta.join(', ')} (docs/adminai/dialpad-conexao.md).</div></div>}
+    {ok && !data.ultimo_evento && <div className="small muted" style={{ marginTop: 8 }}>Para testar: ligue para o número da empresa e desligue. O último evento aparece aqui.</div>}
+    <dl className="dl" style={{ marginTop: 8 }}>
+      <dt>Último evento</dt><dd className="mono">{data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : '—'}</dd>
+      <dt>Ligações recebidas</dt><dd className="mono">{data.ligacoes}</dd>
+      <dt>Webhook</dt><dd className="mono small">{data.webhook_endereco || '—'}</dd>
+      <dt>Assinatura</dt><dd className="small">{data.assinado ? 'conferida (JWT)' : 'sem segredo'}</dd></dl>
+  </div>
+}
+
 export function Integrations() {
   const { can } = useAuth()
   const toast = useToast()
@@ -194,6 +217,7 @@ export function Integrations() {
           <dl className="dl" style={{ marginTop: 6 }}><dt>Última tentativa</dt><dd className="mono">{i.last_attempt_at ? fmtDateTime(i.last_attempt_at) : '—'}</dd><dt>Erros seguidos</dt><dd className="mono">{i.error_count}</dd>
             {det !== null && typeof det === 'object' && <><dt>Detalhe</dt><dd><pre className="mono small muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(det, null, 1).slice(0, 500)}</pre></dd></>}</dl></details>
       </div> })}
+      {can('OPERATOR') && <CartaoDialpad />}
       {rate && <div className="card card-b">
         <div className="row"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>Rate Card</h2><Status kind={rate.last_check_ok === null ? 'wait' : rate.last_check_ok ? 'ok' : 'crit'} label={rate.last_check_ok === null ? 'não testada' : rate.last_check_ok ? 'lida' : 'falhou'} /></div>
         <div className="small ink2" style={{ margin: '6px 0 10px' }}>Planilha de preços, fonte de verdade acima do catálogo do QuickBooks. A IA lê ao vivo pelo Google.</div>
