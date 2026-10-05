@@ -1203,6 +1203,77 @@ CREATE TABLE IF NOT EXISTS library_state (
   at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- ------------------------------------------------- checklists (#92)
+-- Dono, 05/10: "tem checklist para cada atendimento… o mecânico completa… abrir a câmera, tirar
+-- fotos ou subir a foto". O modelo nasce da planilha Master Checklist (importada, sem redigitar)
+-- e o gerente para cima edita. O preenchimento é uma CÓPIA do modelo no momento em que começa:
+-- editar o modelo depois não muda o que já foi preenchido.
+CREATE TABLE IF NOT EXISTS checklist_templates (
+  id             INTEGER PRIMARY KEY,
+  section        TEXT,                          -- Practice Day / Kart School, Race Event…
+  name           TEXT NOT NULL,
+  quando         TEXT NOT NULL DEFAULT 'avulso', -- treino | corrida | trimestral | avulso (vírgula: mais de um)
+  cargo          TEXT NOT NULL DEFAULT 'MECANICO' CHECK (cargo IN ('MECANICO','COACH','ADM')),
+  per_kart       INTEGER NOT NULL DEFAULT 0,    -- 1 = um por kart (por serviço/piloto); 0 = um por dia/corrida
+  photo_required INTEGER NOT NULL DEFAULT 0,    -- o checklist inteiro pede pelo menos uma foto
+  active         INTEGER NOT NULL DEFAULT 1,
+  sort           INTEGER NOT NULL DEFAULT 0,
+  source         TEXT NOT NULL DEFAULT 'painel',-- planilha | painel
+  updated_by     INTEGER REFERENCES users(id),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (section, name)
+);
+CREATE TABLE IF NOT EXISTS checklist_template_items (
+  id             INTEGER PRIMARY KEY,
+  template_id    INTEGER NOT NULL REFERENCES checklist_templates(id),
+  sort           INTEGER NOT NULL DEFAULT 0,
+  grupo          TEXT,                          -- "Engine:", "At arrival morning tasks: 7:00 - 7:30 am"
+  text           TEXT NOT NULL,
+  photo_required INTEGER NOT NULL DEFAULT 0,    -- este item pede foto (o gerente marca)
+  active         INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS checklist_template_items_t ON checklist_template_items(template_id, sort);
+CREATE TABLE IF NOT EXISTS checklist_runs (
+  id             INTEGER PRIMARY KEY,
+  template_id    INTEGER NOT NULL REFERENCES checklist_templates(id),
+  ctx            TEXT NOT NULL,                 -- dia:AAAA-MM-DD | task:N | race:N | race:N:client:M | avulso:…
+  run_date       TEXT NOT NULL,                 -- AAAA-MM-DD na Flórida
+  task_id        INTEGER REFERENCES tasks(id),
+  race_id        INTEGER REFERENCES races(id),
+  client_id      INTEGER REFERENCES clients(id),
+  title          TEXT NOT NULL,
+  photo_required INTEGER NOT NULL DEFAULT 0,
+  status         TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','completo')),
+  started_by     INTEGER REFERENCES users(id),
+  started_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  completed_by   INTEGER REFERENCES users(id),
+  completed_at   TEXT,
+  UNIQUE (template_id, ctx)
+);
+CREATE INDEX IF NOT EXISTS checklist_runs_data ON checklist_runs(run_date, status);
+CREATE TABLE IF NOT EXISTS checklist_run_items (
+  id             INTEGER PRIMARY KEY,
+  run_id         INTEGER NOT NULL REFERENCES checklist_runs(id),
+  item_id        INTEGER REFERENCES checklist_template_items(id),
+  sort           INTEGER NOT NULL DEFAULT 0,
+  grupo          TEXT,
+  text           TEXT NOT NULL,
+  photo_required INTEGER NOT NULL DEFAULT 0,
+  done           INTEGER NOT NULL DEFAULT 0,
+  done_by        INTEGER REFERENCES users(id),
+  done_at        TEXT,
+  note           TEXT
+);
+CREATE INDEX IF NOT EXISTS checklist_run_items_r ON checklist_run_items(run_id, sort);
+CREATE TABLE IF NOT EXISTS checklist_photos (
+  id             INTEGER PRIMARY KEY,
+  run_item_id    INTEGER NOT NULL REFERENCES checklist_run_items(id),
+  file_path      TEXT NOT NULL,
+  by_user_id     INTEGER REFERENCES users(id),
+  at             TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS checklist_photos_i ON checklist_photos(run_item_id);
+
 -- ------------------------------------------------- equipe no WhatsApp (ponte do chat interno)
 -- Dono, 30/09: o Command Center manda mensagem para o time interno (administrativo,
 -- mecânicos, coaches) pelo WhatsApp, e a resposta volta para o painel. Número PRÓPRIO

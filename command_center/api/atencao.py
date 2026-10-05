@@ -286,6 +286,16 @@ def _coletar(con):
                           facts=[(f"{_dbr(x['service_date'])} · {x['cliente']}", f"US$ {x['total']:,.2f}" + (" · erro" if x["qbo_error"] else ""))
                                  for x in pecas[:6]]))
 
+    # ---- 4f3. checklists (#92): começado e não concluído num dia que já passou
+    from command_center.providers import checklists as _ck
+    soltos = _ck.incompletos(con)
+    if soltos:
+        itens.append(dict(key=_chave("checklist", "checklist_run", "incompletos"), level="MEDIUM",
+                          title=f"{len(soltos)} checklist(s) incompleto(s)",
+                          why="Começaram e não foram concluídos. Confira com o mecânico ou o coach se o item foi feito.",
+                          entity={"type": "checklist_run", "id": None}, client_id=None, link=None, action="Ver checklists",
+                          facts=[(f"{_dbr(x['run_date'])} · {x['title']}", f"faltam {x['faltam']}") for x in soltos[:6]]))
+
     # ---- 4g. contas do site sem vínculo com o cliente interno (#42)
     soltas = todos(con, "SELECT id, name, email, created_at FROM portal_accounts WHERE active=1 AND client_id IS NULL ORDER BY id")
     if soltas:

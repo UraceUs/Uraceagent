@@ -242,6 +242,10 @@ MIGRACOES = [
     ("stock_items", "qbo_item_name", "TEXT"),
     # a peça cobrada pelo balcão entra na invoice de peças do dia daquele cliente
     ("stock_charges", "parts_invoice_id", "INTEGER REFERENCES parts_invoices(id)"),
+    # 05/10 — dono (#92): cargo de quem trabalha no box. O papel continua OPERATOR (é o que
+    # libera lançar peça, contar estoque…); o cargo RESTRINGE: o mecânico e o coach só alcançam
+    # as rotas da lista aprovada (auth.ROTAS_DO_CARGO). NULL = sem restrição de cargo.
+    ("users", "cargo", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

@@ -5,12 +5,13 @@
   "start_url": "/ops/",
   "scope": "/ops/",
   "display": "standalone",
-  "background_color": "#0B0E13",
+  "background_color": "#E8563E",
   "theme_color": "#0B0E13",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/ops/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/ops/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/ops/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/ops/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/ops/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
   ]
 }

@@ -254,7 +254,11 @@ export function Policies() {
   </>
 }
 
-interface U { id: number; email: string; name: string; role: string; active: number; created_at: string; last_login_at: string | null; free?: boolean }
+interface U { id: number; email: string; name: string; role: string; cargo?: string | null; active: number; created_at: string; last_login_at: string | null; free?: boolean }
+// #92: mecânico e coach são OPERATOR com o acesso só do box (Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes sem valores, Equipe)
+const CARGO_PT: Record<string, string> = { MECANICO: 'Mecânico', COACH: 'Coach' }
+const NIVEIS = ['ADMIN', 'MANAGER', 'OPERATOR', 'MECANICO', 'COACH', 'VIEWER']
+const nomeNivel = (k: string) => CARGO_PT[k] || ROLE_PT[k] || k
 const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
 const ROLE_O_QUE: Record<string, string> = {
   ADMIN: 'tudo, inclusive usuários, políticas da IA e integrações',
@@ -268,18 +272,24 @@ function PapelEditavel({ u, self, onChanged }: { u: U; self: boolean; onChanged:
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  async function mudar(role: string) {
-    if (role === u.role) { setOpen(false); return }
-    if (!await perguntar({ titulo: `Mudar ${u.name} de ${ROLE_PT[u.role]} para ${ROLE_PT[role]}?`, texto: 'A pessoa é desconectada e entra de novo já com o papel novo.', ok: 'Mudar papel' })) return
+  const atual = u.cargo || u.role
+  async function mudar(novo: string) {
+    if (novo === atual) { setOpen(false); return }
+    if (!await perguntar({ titulo: `Mudar ${u.name} de ${nomeNivel(atual)} para ${nomeNivel(novo)}?`, texto: CARGO_PT[novo] ? 'Mecânico e coach veem só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe. A pessoa é desconectada e entra de novo.' : 'A pessoa é desconectada e entra de novo já com o papel novo.', ok: 'Mudar' })) return
     setBusy(true)
-    try { await api.post(`/users/${u.id}/role`, { role }); toast(`${u.name} agora é ${ROLE_PT[role]}.`, 'ok'); setOpen(false); onChanged() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+    try {
+      if (CARGO_PT[novo]) await api.post(`/users/${u.id}/cargo`, { cargo: novo })
+      else if (novo === u.role) await api.post(`/users/${u.id}/cargo`, { cargo: null })
+      else await api.post(`/users/${u.id}/role`, { role: novo })
+      toast(`${u.name} agora é ${nomeNivel(novo)}.`, 'ok'); setOpen(false); onChanged()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   // conta de acesso livre (dono, 17/09): não tem cargo e ninguém muda
   if (u.free) return <Chip tone="accent" title="Opera em todas as áreas; não tem cargo">Acesso livre</Chip>
-  if (self) return <Chip tone="accent">{ROLE_PT[u.role] || u.role}</Chip>
-  if (!open) return <button className="chip accent" style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }} title="Clique para mudar o nível de acesso" onClick={() => setOpen(true)}>{ROLE_PT[u.role] || u.role} ▾</button>
-  return <span className="row"><select className="input" style={{ width: 160, padding: '4px 8px' }} autoFocus disabled={busy} value={u.role} onChange={e => mudar(e.target.value)} onBlur={() => !busy && setOpen(false)}>
-    {['ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>{busy && <Spinner />}</span>
+  if (self) return <Chip tone="accent">{nomeNivel(atual)}</Chip>
+  if (!open) return <button className="chip accent" style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }} title="Clique para mudar o nível de acesso" onClick={() => setOpen(true)}>{nomeNivel(atual)} ▾</button>
+  return <span className="row"><select className="input" aria-label={`Nível de acesso de ${u.name}`} style={{ width: 160, padding: '4px 8px' }} autoFocus disabled={busy} value={atual} onChange={e => mudar(e.target.value)} onBlur={() => !busy && setOpen(false)}>
+    {NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>{busy && <Spinner />}</span>
 }
 
 // ------------------------------------------------------------------ chaves de API
@@ -445,7 +455,7 @@ export function Users() {
   const [err, setErr] = useState<string | null>(null)
   async function create(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null)
-    try { await api.post('/users', f); toast('Usuário criado.', 'ok'); setF({ email: '', name: '', role: 'OPERATOR', password: '' }); reload() } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
+    try { await api.post('/users', CARGO_PT[f.role] ? { ...f, role: 'OPERATOR', cargo: f.role } : f); toast('Usuário criado.', 'ok'); setF({ email: '', name: '', role: 'OPERATOR', password: '' }); reload() } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
   }
   async function toggle(u: U) {
     if (!await perguntar({ titulo: `${u.active ? 'Desativar' : 'Reativar'} ${u.email}?`, ok: u.active ? 'Desativar' : 'Reativar', perigo: !!u.active })) return
@@ -482,8 +492,8 @@ export function Users() {
         {err && <Banner tone="crit">{err}</Banner>}
         <div className="field"><label>Nome</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
         <div className="field"><label>E-mail</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
-        <div className="field"><label>Papel</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{['ADMIN', 'MANAGER', 'OPERATOR', 'VIEWER'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>
-          <span className="small muted">{ROLE_O_QUE[f.role]}</span></div>
+        <div className="field"><label>Papel</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>
+          <span className="small muted">{ROLE_O_QUE[f.role] || 'só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe'}</span></div>
         <div className="field"><label>Senha inicial</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">Mínimo 5 caracteres. Peça para trocar no primeiro acesso.</span></div>
         <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : 'Criar'}</button>
       </form></Section>

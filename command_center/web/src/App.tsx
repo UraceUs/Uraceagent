@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentType, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { Role } from './api/types'
 import { AuthProvider, useAuth } from './auth/AuthContext'
+import { telaDoBox } from './auth/telas'
 import { Shell } from './components/Shell'
 import { PerguntarProvider } from './components/Perguntar'
 import { ToastProvider } from './components/Toast'
@@ -21,6 +22,9 @@ const Capabilities = tela(() => import('./pages/Capabilities'), 'Capabilities')
 const Races = tela(() => import('./pages/Races'), 'Races')
 const Estoque = tela(() => import('./pages/Estoque'), 'Estoque')
 const Balcao = tela(() => import('./pages/Balcao'), 'Balcao')
+const MeuDia = tela(() => import('./pages/MeuDia'), 'MeuDia')
+const Checklists = tela(() => import('./pages/Checklists'), 'Checklists')
+const Checklist = tela(() => import('./pages/Checklists'), 'Checklist')
 const Biblioteca = tela(() => import('./pages/Biblioteca'), 'Biblioteca')
 const PeloQr = tela(() => import('./pages/Balcao'), 'PeloQr')
 const Planejamento = tela(() => import('./pages/Logistica'), 'Planejamento')
@@ -51,13 +55,20 @@ const PortalApp = tela(() => import('./portal/Portal'), 'PortalApp')
 const PAPEL_PT: Record<string, string> = { ADMIN: 'administrador', MANAGER: 'gerente', OPERATOR: 'operador', VIEWER: 'leitura' }
 
 function Guard({ min, children }: { min?: Role; children: ReactNode }) {
-  const { user, ready, can } = useAuth()
+  const { user, ready, can, box } = useAuth()
   const loc = useLocation()
   if (!ready) return <div className="state" style={{ minHeight: '100vh', justifyContent: 'center' }}><span className="spin" /></div>
   if (!user) return <Navigate to="/login" replace state={loc.pathname === '/login' ? null : { from: loc.pathname + loc.search }} />
-  if (min && !can(min)) return <><PageHeader title="Sem permissão" />
-    <div className="card"><Empty title="Esta área não é do seu acesso">Ela exige acesso de {PAPEL_PT[min] || min} ou acima. Fale com o administrador.</Empty></div></>
+  // mecânico e coach (#92): fora das telas do box, a mesma porta fechada
+  if ((min && !can(min)) || (box && !telaDoBox(loc.pathname))) return <><PageHeader title="Sem permissão" />
+    <div className="card"><Empty title="Esta área não é do seu acesso">{min && !can(min) ? <>Ela exige acesso de {PAPEL_PT[min] || min} ou acima.</> : 'Ela não faz parte do acesso do box.'} Fale com o administrador.</Empty></div></>
   return <>{children}</>
+}
+
+/** A tela inicial: "Meu dia" para o mecânico e o coach (#92); o painel para os outros. */
+function Inicio() {
+  const { box } = useAuth()
+  return box ? <MeuDia /> : <Dashboard />
 }
 
 export default function App() {
@@ -68,7 +79,10 @@ export default function App() {
         {/* área do cliente (#40): fora do Shell e da sessão da equipe */}
         <Route path="/portal/*" element={<Suspense fallback={null}><PortalApp /></Suspense>} />
         <Route element={<Guard><Shell /></Guard>}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Inicio />} />
+          <Route path="meu-dia" element={<MeuDia />} />
+          <Route path="checklists" element={<Guard min="OPERATOR"><Checklists /></Guard>} />
+          <Route path="checklists/:runId" element={<Guard min="OPERATOR"><Checklist /></Guard>} />
           <Route path="attention" element={<AttentionPage />} />
           {/* Logística (dono, 23/09) */}
           <Route path="estoque" element={<Estoque />} />
