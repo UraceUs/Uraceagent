@@ -8,3 +8,4 @@ pypdf>=4,<6              # texto de PDF para a IA ler
 pywebpush>=2,<3          # notificação no celular (Web Push: VAPID + criptografia)
 Pillow>=10,<13            # foto comprimida para WebP, sem EXIF (issue #21)
 reportlab>=4,<5          # página de assinatura e certificado da waiver nativa (#85)
+segno>=1.6,<2            # QR do card do cliente no balcão (#87)

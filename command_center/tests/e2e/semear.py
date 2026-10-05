@@ -198,6 +198,14 @@ for i, (dirc, quando) in enumerate((("entrada", "T10:00:00Z"), ("saida", "T10:05
     inserir(con, "crm_messages", lead_id=lead1, external_id=f"ev:{i}", direction=dirc, author=None, text=None,
             at=d(-3) + quando, source="Instagram")
 
+# balcão (#87): uma peça com código de barras, preço e item do QuickBooks já ligado (no
+# sistema de verdade o gerente cria o item lá); 3 na prateleira da URACE.
+from command_center.providers import estoque as _est  # noqa: E402
+_para = _est.criar_item(con, "peca", "Front bumper (e2e)", category="hardware", price=89.5)
+con.execute("UPDATE stock_items SET qbo_item_id='e2e-1', qbo_item_name='Parts:Front bumper (e2e)' WHERE id=?", (_para,))
+inserir(con, "stock_barcodes", code="7890000000017", item_id=_para, origin="fabricante")
+_est.entrada(con, _para, qty=3)
+
 # waiver nativa (#85): os dois modelos "importados" — PDFs de TESTE gerados aqui (no sistema de
 # verdade vêm do DocuSign). Fica DESLIGADA, como nasce; o teste liga pela tela.
 def _pdf_teste(titulo):

@@ -447,6 +447,77 @@ def criar_item_sistema(nome, preco=0, descricao=None):
     return _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
 
 
+# ------------------------------------------------------------- balcão (#87): portas do Command Center
+# Não são ferramentas do agente: só o clique de uma pessoa no balcão chega aqui. O dono
+# decidiu (05/10) que a invoice de peças nasce no QuickBooks na hora e NÃO é enviada
+# sozinha; o envio é outro clique.
+def categorias_sistema():
+    """As categorias de produto do QuickBooks (Parts, Engine parts…), para a peça nova entrar na certa."""
+    r = _query("select * from Item where Type = 'Category' and Active = true maxresults 300")
+    return sorted(({"id": i.get("Id"), "nome": i.get("FullyQualifiedName") or i.get("Name")} for i in r.get("Item", [])),
+                  key=lambda x: (x["nome"] or "").lower())
+
+
+def criar_item_peca_sistema(nome, preco, categoria_id=None, sku=None, descricao=None):
+    """Item da peça no catálogo, dentro da categoria. Se já existe um com o mesmo nome na mesma
+    categoria, devolve esse (não duplica)."""
+    nome = (nome or "").strip()
+    if not nome or PROIBIDO_NO_NOME in nome:
+        raise ErroFerramenta("nome de item inválido (o QuickBooks não aceita ':' no nome)")
+    for i in _query(f"select * from Item where Name = '{_esc(nome)}' maxresults 20").get("Item", []):
+        pai = (i.get("ParentRef") or {}).get("value")
+        if (str(pai) == str(categoria_id)) if categoria_id else not pai:
+            return _resumo_item(i)
+    corpo = {"Name": nome, "Type": "Service", "Taxable": False, "UnitPrice": float(preco or 0),
+             "IncomeAccountRef": _conta_receita()}
+    if categoria_id:
+        corpo.update(SubItem=True, ParentRef={"value": str(categoria_id)})
+    if sku:
+        corpo["Sku"] = str(sku)[:100]
+    if descricao:
+        corpo["Description"] = descricao[:4000]
+    return _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
+
+
+def invoice_pecas_sistema(cliente_id, linhas, memo, data, invoice_id=None):
+    """Cria (sem `invoice_id`) ou reescreve as linhas da invoice de peças do dia. NÃO envia.
+    As linhas são sempre a lista inteira: o painel é a fonte, o QuickBooks é espelho. Invoice
+    já enviada não muda (a peça vai para outra); sem linha nenhuma, a invoice é anulada (void)."""
+    if invoice_id:
+        inv = _req(f"/invoice/{invoice_id}").get("Invoice") or {}
+        if not inv:
+            raise ErroFerramenta(f"invoice {invoice_id} não existe no QuickBooks")
+        if inv.get("EmailStatus") == "EmailSent":
+            raise ErroFerramenta(f"a invoice {inv.get('DocNumber')} já foi enviada pelo QuickBooks")
+        if not linhas:
+            r = _req("/invoice", "POST", {"Id": inv["Id"], "SyncToken": inv["SyncToken"]}, params={"operation": "void"})
+            return {**_resumo_invoice(r.get("Invoice") or inv), "anulada": True}
+        corpo = {"Id": inv["Id"], "SyncToken": inv["SyncToken"], "sparse": True, "Line": _linhas(linhas),
+                 "CustomerMemo": {"value": memo[:1000]}, "PrivateNote": memo[:4000]}
+        return _resumo_invoice(_req("/invoice", "POST", corpo).get("Invoice", {}))
+    if not linhas:
+        raise ErroFerramenta("invoice sem linha")
+    corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas), "TxnDate": data, "DueDate": data,
+             "DocNumber": _proximo_doc_number(), "CustomerMemo": {"value": memo[:1000]}, "PrivateNote": memo[:4000]}
+    return _resumo_invoice(_req("/invoice", "POST", corpo).get("Invoice", {}))
+
+
+def enviar_invoice_sistema(invoice_id):
+    """Envia pelo QuickBooks, para o e-mail de cobrança da invoice ou, sem ele, o do cliente."""
+    inv = _req(f"/invoice/{invoice_id}").get("Invoice") or {}
+    if not inv:
+        raise ErroFerramenta(f"invoice {invoice_id} não existe no QuickBooks")
+    destino = (inv.get("BillEmail") or {}).get("Address")
+    if not destino:
+        c = _req(f"/customer/{(inv.get('CustomerRef') or {}).get('value')}").get("Customer", {})
+        destino = (c.get("PrimaryEmailAddr") or {}).get("Address")
+    if not destino:
+        raise ErroFerramenta("o cliente não tem e-mail no QuickBooks: cadastre lá e envie de novo")
+    r = _req(f"/invoice/{invoice_id}/send", "POST", params={"sendTo": destino}).get("Invoice", {})
+    return {"id": invoice_id, "numero": r.get("DocNumber") or inv.get("DocNumber"), "enviado_para": destino,
+            "email_status": r.get("EmailStatus")}
+
+
 def _conta_receita():
     r = _query("select * from Account where AccountType = 'Income' and Active = true maxresults 5")
     contas = r.get("Account", [])

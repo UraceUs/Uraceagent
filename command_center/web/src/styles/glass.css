@@ -600,3 +600,22 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
   .site-slot-rot{display:inline}
   .site-slot .inp{max-width:56px}
 }
+
+/* #87 Balcão: COBRAR e GUARDAR não podem se confundir — cor, aviso fixo e botão grande */
+.balcao-modos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.balcao-modo{min-height:64px;border-radius:14px;border:2px solid var(--line,#444);background:transparent;color:var(--ink);font:inherit;font-weight:800;
+  letter-spacing:.06em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
+.balcao-modo small{font-weight:500;letter-spacing:0;opacity:.8}
+.balcao-modo.cobrar[aria-checked="true"]{background:var(--ok);border-color:var(--ok);color:#fff}
+.balcao-modo.guardar[aria-checked="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
+.balcao-aviso{border-radius:12px;padding:10px 12px;font-weight:700;position:sticky;top:0;z-index:5}
+.balcao-aviso.cobrar{background:var(--ok-wash);color:var(--ok);border:1px solid var(--ok)}
+.balcao-aviso.guardar{background:var(--warn-wash);color:var(--warn);border:2px solid var(--warn)}
+.balcao.modo-guardar .balcao-leitor input{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn-wash)}
+.balcao.modo-cobrar .balcao-leitor input{border-color:var(--ok)}
+.balcao-leitor{display:flex;flex-direction:column;gap:8px}
+.balcao-leitor input{font-size:18px;min-height:48px}
+.balcao-leitor select{min-height:40px}
+.balcao-video{width:100%;max-height:60vh;border-radius:12px;background:#000}
+.balcao-btn-guardar{background:var(--warn);border-color:var(--warn);color:#fff}
+.qr-cliente{width:160px;height:160px;background:#fff;border-radius:10px;padding:6px}

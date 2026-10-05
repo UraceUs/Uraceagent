@@ -388,3 +388,17 @@ def waiver_assinada_pdf(wid: int, cid=Depends(cliente_atual), con: sqlite3.Conne
     with open(w["pdf_path"], "rb") as f:
         return Response(content=f.read(), media_type="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="URACE-waiver-{wid}.pdf"', "Cache-Control": "no-store"})
+
+
+# ------------------------------------------------------------------ QR do balcão (#87)
+@r.get("/drivers/{pid}/qr.svg")
+def qr_do_piloto(pid: int, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """O QR que o cliente mostra no balcão. Só do piloto desta conta, e só depois que a equipe
+    ligou o piloto ao card dele (antes disso não há card para a peça entrar)."""
+    from command_center.providers import balcao
+    p = next((x for x in portal.pilotos(con, cid) if x["id"] == pid), None)
+    if not p or not p.get("client_id"):
+        raise HTTPException(404, "QR not available yet.")
+    svg = balcao.qr_svg(con, p["client_id"])
+    con.commit()
+    return Response(content=svg, media_type="image/svg+xml", headers={"Cache-Control": "private, no-store"})

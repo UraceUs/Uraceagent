@@ -30,7 +30,7 @@ ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
-         "/site/waiver"]
+         "/site/waiver", "/balcao"]
 
 
 def _porta_livre():
@@ -583,3 +583,48 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a.get_by_text("Rafa Waiver").wait_for()
     assert "parental · por Rita Waiver" in a.locator(".tr", has_text="Rafa Waiver").inner_text()
     a.close(); c.close()
+
+
+# ------------------------------------------------------------------ balcão (#87)
+def test_balcao_le_o_cliente_cobra_guarda_e_pergunta_antes_de_cobrar_peca_dele(servidor, navegador):
+    pg = entrar(navegador, servidor, largura=360, altura=800)
+    david = pg.request.get(servidor + "/api/clients?q=Pera").json()[0]["id"]
+    # o QR do card, como o leitor o "digita"
+    qr = pg.request.get(servidor + f"/api/balcao/cliente/{david}").json()["qr"]
+    abrir(pg, servidor, "/balcao")
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    campo = pg.get_by_label("Leia o QR do cliente")
+    campo.fill(qr); campo.press("Enter")
+    pg.wait_for_url(f"**/ops/balcao/{david}")
+    pg.get_by_role("heading", name="David Pera", level=2).wait_for()
+    # COBRAR: a peça entra na invoice de peças de hoje. Sem QuickBooks no e2e, a tela diz isso.
+    campo = pg.get_by_label("Leia a peça (ou outro cliente)")
+    campo.fill("7890000000017"); campo.press("Enter")
+    pg.get_by_text("Front bumper (e2e): cobrada.").wait_for()
+    pg.get_by_text("QuickBooks: QuickBooks não está conectado").wait_for()
+    assert pg.get_by_role("button", name="Tentar de novo").count() == 1
+    # GUARDAR: outra cor, outro aviso, vai para o estoque dele
+    pg.get_by_role("radio", name="GUARDAR").click()
+    pg.get_by_text("Modo GUARDAR: a peça vai para o estoque do cliente e NÃO é cobrada.").wait_for()
+    campo.fill("7890000000017"); campo.press("Enter")
+    pg.get_by_text("Front bumper (e2e): guardada para o cliente.").wait_for()
+    pg.get_by_text("Guardado deste cliente com a gente").wait_for()
+    # COBRAR uma peça que ele tem guardada pergunta antes
+    pg.get_by_role("radio", name="COBRAR").click()
+    campo.fill("7890000000017"); campo.press("Enter")
+    pg.get_by_role("heading", name="Esta peça é do cliente?").wait_for()
+    pg.get_by_role("button", name="Usar a dele (sem cobrar)").click()
+    pg.get_by_text("Front bumper (e2e): usada do estoque do cliente.").wait_for()
+    # código que ninguém conhece abre o cadastro
+    campo.fill("1234509876"); campo.press("Enter")
+    pg.get_by_role("heading", name="Código novo").wait_for()
+    pg.get_by_role("button", name="Cancelar").click()
+    # desfazer a primeira leitura (a cobrada)
+    pg.get_by_role("button", name="Desfazer").last.click()
+    pg.get_by_text("Desfeito.").wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
