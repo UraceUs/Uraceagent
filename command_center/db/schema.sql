@@ -1341,3 +1341,17 @@ CREATE TABLE IF NOT EXISTS booking_services (
   updated_at   TEXT,
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+
+-- #85: os modelos de waiver que a assinatura nativa usa. O PDF vem do DocuSign como está
+-- (o texto legal não é redigitado); o hash prova qual versão cada cliente assinou.
+CREATE TABLE IF NOT EXISTS waiver_templates (
+  kind         TEXT PRIMARY KEY CHECK (kind IN ('adult','parental')),
+  name         TEXT NOT NULL,
+  pdf_path     TEXT NOT NULL,
+  sha256       TEXT NOT NULL,
+  pages        INTEGER,
+  text         TEXT,
+  source       TEXT,                        -- docusign
+  imported_at  TEXT NOT NULL,
+  imported_by  INTEGER REFERENCES users(id)
+);

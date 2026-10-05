@@ -212,3 +212,12 @@ ainda é lacuna (U-07 em [[Conflitos e lacunas]]).
   valor, frequência ou nome. Tarefa de VIP aparece na varredura como
   "dispensada (VIP)", sem alerta, e a subtarefa "Signed waiver?" fica
   como estiver.
+
+## Assinatura na área do cliente (#85, 05/10)
+
+Além do DocuSign, a waiver pode ser assinada **na área do cliente** do Command Center.
+Ela nasce desligada; quem liga é o ADMIN, em *Site público → Waiver*. Ligada, o responsável
+vê "Sign now" no piloto sem waiver, lê o mesmo texto do modelo do DocuSign, marca as duas
+caixas, digita o nome e desenha a assinatura. A assinada entra no card do cliente como as
+do DocuSign, com o PDF e a página de certificado. Não há envelope: não se reenvia.
+Decisão: [[D-2026-10-05 - Waiver assinada na area do cliente]].

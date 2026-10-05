@@ -58,3 +58,9 @@ export interface Painel { account: Account; next_session: Booking | null; upcomi
 
 /** "today", "1 day ago", "23 days ago" */
 export const haDias = (n: number | null) => n == null ? null : n === 0 ? 'today' : n === 1 ? '1 day ago' : `${n} days ago`
+
+/** Waiver assinada aqui (#85): por piloto, qual vale (menor → parental) e se já está assinada. */
+export interface WaiverPiloto { driver_id: number; driver: string; kind: 'adult' | 'parental' | null; status: 'signed' | 'none'
+  waiver_id: number | null; signed_at: string | null; valid_until: string | null }
+export interface Waivers { enabled: boolean; drivers: WaiverPiloto[] }
+export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string }

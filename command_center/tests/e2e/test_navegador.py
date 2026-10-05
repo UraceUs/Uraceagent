@@ -29,7 +29,8 @@ SENHA = "senha-de-teste-123"
 ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
-         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos"]
+         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
+         "/site/waiver"]
 
 
 def _porta_livre():
@@ -536,3 +537,49 @@ def test_integracoes_mostra_o_dialpad_sem_a_chave(servidor, navegador):
     assert "falta configurar" in texto and "DIALPAD_API_KEY" in texto, texto
     assert "key=" not in texto
     pg.close()
+
+
+# ------------------------------------------------------------------ waiver nativa (#85)
+def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(servidor, navegador):
+    # 1. nasce desligada; o ADMIN liga pela tela (os modelos a semente já "importou")
+    a = entrar(navegador, servidor, "italo@urace.us")
+    abrir(a, servidor, "/site/waiver")
+    a.get_by_text("desligada", exact=True).wait_for()
+    a.get_by_role("button", name="Ligar", exact=True).click()
+    a.get_by_role("dialog").get_by_role("button", name="Ligar", exact=True).click()
+    a.get_by_text("Ligada: o cliente já vê").wait_for()
+    # 2. o responsável de um piloto menor assina pelo celular
+    c = navegador.new_page(viewport={"width": 360, "height": 800})
+    c.erros_js = []
+    c.on("pageerror", lambda e: c.erros_js.append(str(e)))
+    cliente_pela_api(c, servidor, "Rita Waiver", "rita.e2e@example.com", piloto="Rafa Waiver")
+    c.goto(servidor + "/portal/dashboard")
+    c.get_by_role("link", name="Sign it online").click()
+    c.get_by_role("heading", name="Sign the waiver", level=1).wait_for()
+    c.get_by_label("Waiver text").get_by_text("E2E TEST DOCUMENT").wait_for()   # o texto do modelo, para ler antes
+    assert len([t for n, t in _cabecalhos(c) if n == 1]) == 1
+    r = c.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    c.get_by_role("button", name="Sign the waiver").click()
+    assert "Check both boxes" in c.get_by_role("alert").inner_text()
+    c.get_by_label("I have read this waiver").check()
+    c.get_by_label("I agree to sign electronically").check()
+    c.get_by_label("Your full name").fill("Rita Waiver")
+    quadro = c.locator("canvas.portal-assinatura").bounding_box()
+    c.mouse.move(quadro["x"] + 20, quadro["y"] + 110)
+    c.mouse.down()
+    for i in range(1, 13):
+        c.mouse.move(quadro["x"] + 20 + i * 22, quadro["y"] + 110 - (i % 4) * 18, steps=2)
+    c.mouse.up()
+    c.get_by_role("button", name="Sign the waiver").click()
+    c.get_by_text("Signed. The waiver for Rafa Waiver is valid until").wait_for()
+    pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
+    assert pdf.ok and pdf.body().startswith(b"%PDF")
+    c.get_by_role("button", name="Back to Drivers").click()
+    c.get_by_text("Waiver: signed").wait_for()
+    assert not c.erros_js, c.erros_js
+    # 3. a equipe vê a assinada na aba Waiver
+    abrir(a, servidor, "/site/waiver")
+    a.get_by_text("Rafa Waiver").wait_for()
+    assert "parental · por Rita Waiver" in a.locator(".tr", has_text="Rafa Waiver").inner_text()
+    a.close(); c.close()

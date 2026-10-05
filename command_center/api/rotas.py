@@ -892,6 +892,16 @@ def waiver_download(wid: int, request: Request, u=Depends(auth.usuario_atual), c
     w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
     if not w:
         raise HTTPException(404, "Waiver not found.")
+    nome = re.sub(r"[^A-Za-z0-9._-]+", "_", f"waiver-{w['signer_name'] or w['signer_email'] or wid}")[:80]
+    if w["source"] == "urace":                      # #85: assinada aqui — o PDF já está guardado
+        if not w["pdf_path"] or not os.path.isfile(w["pdf_path"]):
+            raise HTTPException(410, "O PDF desta waiver não está mais no servidor.")
+        with open(w["pdf_path"], "rb") as f:
+            pdf = f.read()
+        auditar(con, "waiver.download", f"user:{u['id']}", user_id=u["id"], entity_type="waiver", entity_id=wid,
+                detail={"origem": "urace", "sha256": w["doc_sha256"]}, ip=auth._ip(request))
+        return Response(content=pdf, media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{nome}.pdf"', "Cache-Control": "no-store"})
     env = _envelope_id(con, wid)
     if not env:
         raise HTTPException(409, "Envelope sem vínculo com o DocuSign.")
@@ -907,7 +917,6 @@ def waiver_download(wid: int, request: Request, u=Depends(auth.usuario_atual), c
         raise HTTPException(502, str(ex)[:300])
     auditar(con, "waiver.download", f"user:{u['id']}", user_id=u["id"], entity_type="waiver", entity_id=wid,
             detail={"envelope": env}, ip=auth._ip(request))
-    nome = re.sub(r"[^A-Za-z0-9._-]+", "_", f"waiver-{w['signer_name'] or w['signer_email'] or wid}")[:80]
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{nome}.pdf"', "Cache-Control": "no-store"})
 
@@ -962,6 +971,8 @@ def waiver_resend(wid: int, dados: ReenviarIn, request: Request, u=Depends(auth.
     w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
     if not w:
         raise HTTPException(404, "Waiver not found.")
+    if w["source"] == "urace":
+        raise HTTPException(409, "Assinada na área do cliente: não há envelope para reenviar.")
     novo = (dados.email or "").strip().lower() or None
     if novo and ("@" not in novo or "." not in novo.split("@")[-1]):
         raise HTTPException(400, "E-mail inválido.")

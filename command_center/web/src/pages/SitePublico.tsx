@@ -12,6 +12,7 @@ import { Picker } from '../components/Unir'
 import type { Client } from '../api/types'
 import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
+import { fmtDate, fmtDateTime } from '../components/fmt'
 
 type Tom = 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'
 interface Per { open: boolean; spots: number; reason: string | null; capacity: number; used: number }
@@ -366,8 +367,75 @@ function Contas() {
   </>
 }
 
+/* Waiver assinada na área do cliente (#85), sem DocuSign. O texto vem dos dois modelos do
+ * DocuSign, importados como estão (com o hash). Nasce desligada: quem liga é o ADMIN, depois do
+ * sim do advogado. Desligar não apaga nada; o DocuSign segue como está. */
+interface ModeloW { kind: 'adult' | 'parental'; templateId: string; name: string | null; pages: number | null; sha256: string | null; imported_at: string | null }
+interface Assinada { id: number; client_id: number | null; signer_name: string; signer_email: string; minor_name: string | null; template: string
+  completed_at: string; expires_at: string; doc_sha256: string }
+interface WN { ligada: boolean; modelos: ModeloW[]; assinadas: { itens: Assinada[]; total: number; limit: number; offset: number } }
+const POR_PAGINA = 25
+
+function WaiverNativa() {
+  const { can } = useAuth()
+  const admin = can('ADMIN')
+  const toast = useToast()
+  const perguntar = usePerguntar()
+  const [offset, setOffset] = useState(0)
+  const l = useGet<WN>(`/site/waiver-nativa?limit=${POR_PAGINA}&offset=${offset}`)
+  const [indo, setIndo] = useState(false)
+  async function importar() {
+    setIndo(true)
+    try { await api.post('/site/waiver-nativa/importar', {}); toast('Modelos importados do DocuSign (só leitura lá).', 'ok'); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  async function ligar(ligada: boolean) {
+    if (ligada && !await perguntar({ titulo: 'Ligar a assinatura na área do cliente?', ok: 'Ligar',
+      texto: 'Os clientes passam a assinar a waiver pela área do cliente, sem DocuSign. Faça isso depois do sim do advogado. O DocuSign continua funcionando como hoje.' })) return
+    try { await api.post('/site/waiver-nativa/ligar', { ligada }); toast(ligada ? 'Ligada: o cliente já vê "Sign now".' : 'Desligada. Nada assinado foi apagado.', 'ok'); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
+  if (!l.data) return <Loading />
+  const d = l.data, a = d.assinadas
+  const prontos = d.modelos.every(m => m.sha256)
+  return <div className="stack" style={{ gap: 18 }}>
+    <Section title="Assinatura na área do cliente" right={d.ligada ? <Chip tone="ok">ligada</Chip> : <Chip tone="neutral">desligada</Chip>}>
+      <div className="card card-b stack" style={{ gap: 10 }}>
+        <p className="small" style={{ margin: 0 }}>O responsável assina pela área do cliente: lê o documento, marca as duas caixas, digita o nome e desenha a assinatura. Menor de 18 assina a parental; maior, a adult. Vale 1 ano. O PDF final é o original do DocuSign mais uma página de assinatura e certificado (data e hora da Flórida, IP, aparelho, hashes).</p>
+        {!d.ligada && <p className="small muted" style={{ margin: 0 }}>Antes de ligar: o advogado confirma que a assinatura eletrônica com essa página de certificado vale para a waiver de menor na Flórida.</p>}
+        {admin ? <div className="row wrap" style={{ gap: 8 }}>
+          {d.ligada ? <button className="btn sm ghost" onClick={() => ligar(false)}>Desligar</button>
+            : <button className="btn sm primary" disabled={!prontos} title={prontos ? undefined : 'Importe os dois modelos primeiro'} onClick={() => ligar(true)}>Ligar</button>}
+        </div> : <p className="small muted" style={{ margin: 0 }}>Só o ADMIN liga ou desliga.</p>}
+      </div>
+    </Section>
+    <Section title="Modelos (do DocuSign)" count={d.modelos.length} right={admin ? <button className="btn sm" disabled={indo} onClick={importar}>{indo ? <span className="spin" /> : 'Importar do DocuSign'}</button> : undefined}>
+      <div className="card"><div className="tbl">{d.modelos.map(m => <div className="tr" key={m.kind}>
+        <span className="grow"><b>{m.kind === 'adult' ? 'Adult' : 'Parental (menor)'}</b><div className="small muted">{m.name || 'ainda não importado'}</div></span>
+        <span className="small muted">{m.sha256 ? <>{m.pages} pág. · <span className="mono" title={m.sha256}>{m.sha256.slice(0, 12)}</span> · {fmtDateTime(m.imported_at)}</> : '—'}</span>
+      </div>)}</div></div>
+      <p className="small muted" style={{ margin: '8px 0 0' }}>Importar só LÊ os modelos no DocuSign. Se o texto mudar lá, importe de novo: as próximas assinaturas usam o novo, as já feitas ficam com o delas.</p>
+    </Section>
+    <Section title="Assinadas aqui" count={a.total}>
+      {!a.itens.length ? <Empty title="Nenhuma ainda">Quando um cliente assinar pela área do cliente, ela aparece aqui e no card do cliente.</Empty>
+        : <div className="card"><div className="tbl">{a.itens.map(w => <div className="tr" key={w.id}>
+          <span className="mono small" style={{ width: 92 }}>{fmtDate(w.completed_at)}</span>
+          <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? `parental · por ${w.signer_name}` : 'adult'} · vale até {fmtDate(w.expires_at)}</div></span>
+          {w.client_id ? <Link className="btn sm ghost" to={`/clients/${w.client_id}`}>Card</Link> : <span className="small muted">sem card</span>}
+          <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`}>PDF</a>
+        </div>)}</div></div>}
+      {a.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
+        <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>Anteriores</button>
+        <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, a.total)} de {a.total}</span>
+        <button className="btn sm ghost" disabled={offset + POR_PAGINA >= a.total} onClick={() => setOffset(offset + POR_PAGINA)}>Próximas</button></div>}
+    </Section>
+  </div>
+}
+
 export function SitePublico() {
   const { aba } = useParams()
+  const { can } = useAuth()
   return <>
     <PageHeader title="Site público" help={<>O que o cliente usa na área do cliente (hoje em <a href="/ops/portal" target="_blank" rel="noreferrer">/ops/portal</a>, depois no urace.us): os pedidos de sessão e a agenda que você abre e fecha.</>}>
       <a className="btn ghost" href="/ops/portal" target="_blank" rel="noreferrer">Abrir a área do cliente ↗</a>
@@ -377,7 +445,9 @@ export function SitePublico() {
       <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>Disponibilidade</NavLink>
       <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>Serviços e preços</NavLink>
       <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>Contas de clientes</NavLink>
+      {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>Waiver</NavLink>}
     </div>
-    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'contas' ? <Contas /> : <Agendamentos />}
+    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'contas' ? <Contas />
+      : aba === 'waiver' && can('MANAGER') ? <WaiverNativa /> : <Agendamentos />}
   </>
 }

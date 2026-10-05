@@ -198,6 +198,21 @@ for i, (dirc, quando) in enumerate((("entrada", "T10:00:00Z"), ("saida", "T10:05
     inserir(con, "crm_messages", lead_id=lead1, external_id=f"ev:{i}", direction=dirc, author=None, text=None,
             at=d(-3) + quando, source="Instagram")
 
+# waiver nativa (#85): os dois modelos "importados" — PDFs de TESTE gerados aqui (no sistema de
+# verdade vêm do DocuSign). Fica DESLIGADA, como nasce; o teste liga pela tela.
+def _pdf_teste(titulo):
+    import io
+    from reportlab.pdfgen import canvas
+    b = io.BytesIO(); c = canvas.Canvas(b)
+    c.drawString(72, 720, titulo); c.drawString(72, 700, "E2E TEST DOCUMENT - not a real waiver.")
+    c.showPage(); c.save()
+    return b.getvalue()
+
+
+from command_center.providers import waiver_nativa as wn  # noqa: E402
+wn.guardar_modelo(con, "adult", "Adult Waiver of Liability (e2e)", _pdf_teste("ADULT RELEASE AND WAIVER OF LIABILITY"), origem="e2e")
+wn.guardar_modelo(con, "parental", "Parental consent Waiver liability (e2e)", _pdf_teste("PARENTAL CONSENT AND WAIVER"), origem="e2e")
+
 # aprendizado do dono e fonte de contexto já vêm do schema
 con.commit()
 n = lambda t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]                       # noqa: E731
