@@ -38,6 +38,7 @@ def cli(monkeypatch):
     con = conectar(); aplicar_schema(con)
     auth.criar_usuario(con, "admin@urace.us", "Admin", "ADMIN", SENHA)
     auth.criar_usuario(con, "leitor@urace.us", "Leitor", "VIEWER", SENHA)
+    auth.criar_usuario(con, "operador@urace.us", "Operador", "OPERATOR", SENHA)
     inserir(con, "clients", name="Rafael Pionti", email="rafael@spmesportes.com.br",
             phone="+1 305-609-7845", status="ACTIVE", source="asana")
     inserir(con, "opportunities", name="Carla Mendes", phone="(305) 555-0142",
@@ -171,6 +172,15 @@ def test_status_nao_inventa_conexao(cli):
     s = cli.get(f"{B}/dialpad/status").json()
     assert s["connected"] is False and "DIALPAD_API_KEY" in s["falta"]
     assert s["webhook_url"].endswith(f"?key={CHAVE}") and s["assinado"] is True
+
+
+def test_so_o_admin_ve_a_chave_do_webhook(cli):
+    """#83: o cartão do Dialpad aparece para a equipe; a chave na URL é segredo de quem
+    cadastra o webhook no Dialpad (ADMIN)."""
+    entra(cli, "operador@urace.us")
+    s = cli.get(f"{B}/dialpad/status").json()
+    assert s["webhook_url"] is None and CHAVE not in json.dumps(s)
+    assert s["webhook_endereco"].endswith("/ops/api/dialpad/webhook")
 
 
 def test_politica_de_discar_e_confirmacao_obrigatoria(cli):
