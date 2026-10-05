@@ -232,12 +232,13 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     waivers = todos(con, "SELECT * FROM waivers WHERE client_id=? ORDER BY sent_at DESC", (cid,))
     for w in waivers:
         w["links"] = _links(con, "waiver", w["id"])
-    emails = todos(con, "SELECT * FROM emails WHERE client_id=? ORDER BY last_at DESC LIMIT 50", (cid,))
+    box = bool(u.get("cargo"))               # mecânico/coach (#92): o card sem e-mail, IA e valores
+    emails = [] if box else todos(con, "SELECT * FROM emails WHERE client_id=? ORDER BY last_at DESC LIMIT 50", (cid,))
     for e in emails:
         e["links"] = _links(con, "email", e["id"])
     from command_center.api import lembretes
     invoices = todos(con, f"SELECT i.*, {lembretes.CAMPOS_NA_INVOICE} FROM invoices i WHERE i.client_id=? ORDER BY i.issued_on DESC", (cid,)) if fin else None
-    acoes = todos(con, "SELECT a.* FROM ai_actions a JOIN ai_workflows w ON w.id=a.workflow_id WHERE w.client_id=? ORDER BY a.created_at DESC LIMIT 50", (cid,))
+    acoes = [] if box else todos(con, "SELECT a.* FROM ai_actions a JOIN ai_workflows w ON w.id=a.workflow_id WHERE w.client_id=? ORDER BY a.created_at DESC LIMIT 50", (cid,))
     # timeline: tudo junto, em ordem
     # cada item da linha do tempo leva o SEU link (Asana da tarefa, DocuSign do envelope, Gmail da thread, QBO da invoice)
     def _usd(v):

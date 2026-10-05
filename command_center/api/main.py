@@ -206,6 +206,9 @@ from command_center.api import balcao as api_balcao  # noqa: E402
 app.include_router(api_balcao.r)
 from command_center.api import biblioteca as api_biblioteca  # noqa: E402
 app.include_router(api_biblioteca.r)
+from command_center.api import checklists as api_checklists  # noqa: E402
+app.include_router(api_checklists.r)
+app.include_router(api_checklists.dia)
 from command_center.api import mcp_http  # noqa: E402
 app.include_router(mcp_http.r)
 from command_center.api import oauth as api_oauth  # noqa: E402
@@ -318,11 +321,12 @@ class UsuarioIn(BaseModel):
     name: str
     role: str
     password: str
+    cargo: str | None = None          # MECANICO | COACH (#92): o papel fica OPERATOR
 
 
 @app.get(BASE + "/api/users")
 def api_users(u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
-    lista = todos(con, "SELECT id, email, name, role, active, created_at, last_login_at FROM users ORDER BY id")
+    lista = todos(con, "SELECT id, email, name, role, cargo, active, created_at, last_login_at FROM users ORDER BY id")
     # `free` marca a conta de acesso livre (sem cargo) — o painel não mostra papel nela
     for r in lista:
         r["free"] = auth.livre(r["email"])
@@ -332,14 +336,47 @@ def api_users(u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(
 @app.post(BASE + "/api/users", status_code=201)
 def api_users_create(dados: UsuarioIn, request: Request, u=Depends(auth.exige("ADMIN")),
                      con: sqlite3.Connection = Depends(get_db)):
+    if dados.cargo and dados.cargo not in auth.CARGOS:
+        raise HTTPException(400, f"Cargo inválido. Use um de: {', '.join(auth.CARGOS)}.")
     try:
-        uid = auth.criar_usuario(con, dados.email, dados.name, dados.role, dados.password,
+        uid = auth.criar_usuario(con, dados.email, dados.name, "OPERATOR" if dados.cargo else dados.role, dados.password,
                                  por_user_id=u["id"], ip=auth._ip(request))
     except ValueError as e:
         raise HTTPException(400, str(e))
     except sqlite3.IntegrityError:
         raise HTTPException(409, "A user with this email already exists.")
+    if dados.cargo:
+        con.execute("UPDATE users SET cargo=? WHERE id=?", (dados.cargo, uid))
     return {"id": uid}
+
+
+class CargoIn(BaseModel):
+    cargo: str | None = None
+
+
+@app.post(BASE + "/api/users/{uid}/cargo")
+def api_users_cargo(uid: int, dados: CargoIn, request: Request, u=Depends(auth.exige("ADMIN")),
+                    con: sqlite3.Connection = Depends(get_db)):
+    """Mecânico ou coach (#92): o papel vira OPERATOR e o cargo restringe ao que é do box.
+    Sem cargo, a pessoa volta a ser OPERATOR comum. A pessoa é derrubada das sessões."""
+    if dados.cargo is not None and dados.cargo not in auth.CARGOS:
+        raise HTTPException(400, f"Cargo inválido. Use um de: {', '.join(auth.CARGOS)}.")
+    alvo = um(con, "SELECT id, email, role, cargo FROM users WHERE id = ?", (uid,))
+    if not alvo:
+        raise HTTPException(404, "User not found.")
+    if uid == u["id"] or auth.livre(alvo["email"]):
+        raise HTTPException(400, "Esta conta não recebe cargo.")
+    if dados.cargo and alvo["role"] == "ADMIN":
+        n = um(con, "SELECT COUNT(*) AS n FROM users WHERE role='ADMIN' AND active=1 AND id<>?", (uid,))
+        if not n or n["n"] == 0:
+            raise HTTPException(409, "Esse é o único administrador ativo; promova outro antes.")
+    con.execute("UPDATE users SET cargo=?, role=CASE WHEN ? IS NOT NULL THEN 'OPERATOR' ELSE role END WHERE id=?",
+                (dados.cargo, dados.cargo, uid))
+    auth.revogar_todas(con, uid)
+    from command_center.db import auditar as _aud
+    _aud(con, "user.cargo", f"user:{u['id']}", user_id=u["id"], entity_type="user", entity_id=uid,
+         detail={"from": alvo["cargo"], "to": dados.cargo, "papel_antes": alvo["role"]}, ip=auth._ip(request))
+    return {"ok": True, "cargo": dados.cargo}
 
 
 class AtivoIn(BaseModel):
@@ -387,7 +424,8 @@ def api_users_role(uid: int, dados: PapelIn, request: Request, u=Depends(auth.ex
             raise HTTPException(409, "Esse é o único administrador ativo; promova outro antes.")
     if alvo["role"] == dados.role:
         return {"ok": True, "role": dados.role}
-    con.execute("UPDATE users SET role = ? WHERE id = ?", (dados.role, uid))
+    # mudar o papel tira o cargo (#92): quem vira gerente deixa de ter a trava do box
+    con.execute("UPDATE users SET role = ?, cargo = NULL WHERE id = ?", (dados.role, uid))
     auth.revogar_todas(con, uid)
     from command_center.db import auditar as _aud
     _aud(con, "user.role", f"user:{u['id']}", user_id=u["id"], entity_type="user", entity_id=uid,

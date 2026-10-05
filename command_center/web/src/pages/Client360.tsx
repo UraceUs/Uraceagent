@@ -34,7 +34,9 @@ export function Client360() {
 /** Card completo do cliente. Em rota, sem onClose; em janela, com onClose. */
 export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }) {
   const nav = useNavigate()
-  const { can } = useAuth()
+  const { can: podeBase, box } = useAuth()
+  // mecânico e coach (#92): veem o card, não editam nem disparam nada daqui
+  const can: typeof podeBase = min => !box && podeBase(min)
   const perguntar = usePerguntar()
   const toast = useToast()
   const { data, error, loading, reload } = useGet<C360>(id ? `/clients/${id}` : null)
@@ -154,7 +156,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     </Section>}
     {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>Notas:</b> {c.notes}</div>}
     <div className="tabs">
-      {(['timeline', 'monthly', 'equip', 'races', 'pecas', 'site', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && ((t !== 'pecas' && t !== 'site') || can('OPERATOR'))).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
+      {(['timeline', 'monthly', 'equip', 'races', 'pecas', 'site', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && ((t !== 'pecas' && t !== 'site') || can('OPERATOR') || (box && t === 'pecas'))
+        && !(box && ['monthly', 'races', 'site', 'emails', 'invoices', 'ai'].includes(t))).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
         {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: '★ Equipamento', races: `★ Corridas`, pecas: 'Peças', site: 'Conta no site', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
       </button>)}
     </div>

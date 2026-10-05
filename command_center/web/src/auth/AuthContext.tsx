@@ -9,6 +9,8 @@ interface Ctx {
   can: (min: Role) => boolean
   /** conta de acesso livre: sem cargo, alcança tudo (decisão do dono, 17/09) */
   livre: boolean
+  /** mecânico ou coach (#92): só as telas do box */
+  box: boolean
   refresh: () => Promise<void>
 }
 const AuthCtx = createContext<Ctx | null>(null)
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout: async () => { try { await api.post('/auth/logout') } finally { setUser(null) } },
     can: (min) => (user?.free ? true : can(user?.role, min)),
     livre: !!user?.free,
+    box: !!user?.cargo && !user?.free,
   }), [user, ready, refresh])
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }
@@ -45,3 +48,4 @@ export function useAuth() {
   if (!c) throw new Error('useAuth fora do AuthProvider')
   return c
 }
+

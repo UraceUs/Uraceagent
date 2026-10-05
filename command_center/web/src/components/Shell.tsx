@@ -10,8 +10,9 @@ import { ago, initials } from './fmt'
 
 const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
 /** Conta de acesso livre não tem cargo (dono, 17/09) — o painel diz só que ela alcança tudo. */
-const cargoDe = (u?: { role?: string; free?: boolean } | null) =>
-  u?.free ? 'Acesso livre' : (ROLE_PT[u?.role || ''] || u?.role || '')
+const CARGO_PT: Record<string, string> = { MECANICO: 'Mecânico', COACH: 'Coach' }
+const cargoDe = (u?: { role?: string; free?: boolean; cargo?: string | null } | null) =>
+  u?.free ? 'Acesso livre' : u?.cargo ? CARGO_PT[u.cargo] : (ROLE_PT[u?.role || ''] || u?.role || '')
 
 /** Item do menu com ícone de traço à esquerda (padrão SF Symbols).
  *  O rótulo vai em `.lbl` e o contador em `.n` separados: no menu em trilho (18/09) o
@@ -45,7 +46,7 @@ function useOutside(ref: React.RefObject<HTMLElement | null>, close: () => void)
 }
 
 export function Shell() {
-  const { user, logout, can, livre } = useAuth()
+  const { user, logout, can, livre, box } = useAuth()
   const nav = useNavigate()
   const loc = useLocation()
   const online = useOnline()
@@ -66,7 +67,7 @@ export function Shell() {
   const menuRef = useRef<HTMLDivElement>(null)
   useOutside(menuRef, useCallback(() => setMenu('none'), []))
   // um único GET leve alimenta os contadores do menu e o sino (a cada 60 s)
-  const dash = useGet<Dashboard>('/dashboard', 60000)
+  const dash = useGet<Dashboard>(box ? null : '/dashboard', 60000)   // o box não lê o painel geral (#92)
   useEffect(() => { setSide(false); setMenu('none') }, [loc.pathname])
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -96,8 +97,20 @@ export function Shell() {
     <aside className={`side${side ? ' open' : ''}`}>
       <div className="brand"><span className="mark-u" aria-hidden="true">U</span><div className="mark"><b>Command Center</b><small>URACE · Orlando</small></div>
         <button className="iconbtn burger" aria-label="Fechar menu" onClick={() => setSide(false)}><Icon name="x" /></button></div>
-      <div className="search side-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}><Icon name="search" size={16} /><span>Buscar ou perguntar</span><kbd>⌘K</kbd></div>
-      <nav className="nav" aria-label="Principal">
+      {!box && <div className="search side-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}><Icon name="search" size={16} /><span>Buscar ou perguntar</span><kbd>⌘K</kbd></div>}
+      {box ? <nav className="nav" aria-label="Principal">
+        {/* mecânico e coach (#92): só o que é do box */}
+        <div className="grp">Meu trabalho</div>
+        <NL to="/" end icon="home">Meu dia</NL>
+        <NL to="/balcao" icon="tag">Balcão</NL>
+        <NL to="/checklists" icon="check">Checklists</NL>
+        <div className="grp">Logística</div>
+        <NL to="/estoque" icon="box">Estoque</NL>
+        <NL to="/pedidos" icon="list">Pedidos</NL>
+        <div className="grp">Pessoas</div>
+        <NL to="/clients" icon="people">Clientes</NL>
+        <NL to="/equipe" icon="chat">Equipe</NL>
+      </nav> : <nav className="nav" aria-label="Principal">
         <div className="grp">Hoje</div>
         <NL to="/" end icon="home">Hoje</NL>
         <NL to="/attention" icon="alert" n={attn} tone={crit ? undefined : 'warn'}>Precisa de atenção</NL>
@@ -137,7 +150,7 @@ export function Shell() {
         {can('MANAGER') && <NL to="/audit" icon="shield">Auditoria</NL>}
         {can('ADMIN') && <NL to="/policies" icon="key">Políticas da IA</NL>}
         {can('ADMIN') && <NL to="/users" icon="user">Usuários</NL>}
-      </nav>
+      </nav>}
       <div className="foot"><span className="avatar">{initials(user?.name)}</span><div className="grow"><div className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{user?.name}</div><div className="small muted">{cargoDe(user)}</div></div></div>
     </aside>
     <div className="main">
@@ -146,16 +159,16 @@ export function Shell() {
         <button className="iconbtn burger" aria-label="Menu" onClick={() => setSide(s => !s)}><Icon name="menu" /></button>
         <button className="iconbtn railbtn" aria-label={trilho ? 'Abrir o menu' : 'Fechar o menu'} aria-expanded={!trilho}
           title={trilho ? 'Abrir o menu' : 'Fechar o menu'} onClick={alternaTrilho}><Icon name="panel" /></button>
-        <div className="search top-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
+        {!box && <div className="search top-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
           <Icon name="search" size={16} /><span>Buscar ou perguntar à IA…</span><kbd>⌘K</kbd>
-        </div>
+        </div>}
         {/* Race control: o estado da operação em cápsulas, em toda tela. Cada item leva para onde se resolve. */}
-        <div className="rc" aria-label="Estado da operação">
+        {!box && <div className="rc" aria-label="Estado da operação">
           <button className={`it ${syncTone}`} title={lastSync ? `última sincronia: ${new Date(lastSync).toLocaleString('pt-BR')}` : 'nenhuma sincronia'} onClick={() => nav('/')}><span className="k">Espelho</span><b>{lastSync ? `há ${ago(lastSync)}` : 'nunca'}</b></button>
           <button className={`it ${badInt ? 'warn' : 'ok'}`} title={badInt ? bad.map(b => `${b.system}: ${b.status.toLowerCase()}`).join(' · ') : 'todas respondendo'} onClick={() => nav('/integrations')}><span className="k">Sistemas</span><b>{nInt ? `${nInt - badInt}/${nInt}` : '—'}{badInt > 0 && badInt <= 2 && ` · ${bad.map(b => b.system).join(', ')}`}{badInt > 2 && ` · ${badInt} com problema`}</b></button>
           <button className={`it ${crit ? 'crit' : alerts.length ? 'warn' : 'ok'}`} onClick={() => nav('/attention')}><span className="k">Atenção</span><b>{attn ? `${attn} item(ns)` : 'em ordem'}{crit > 0 && ` · ${crit} crítico(s)`}</b></button>
           <button className={`it ${pend ? 'warn' : ''}`} onClick={() => nav(pend ? '/approvals' : '/ai')}><span className="k">IA</span><b>{pend ? `${pend} esperando você` : 'nada pendente'}</b></button>
-        </div>
+        </div>}
         <div className="grow" />
         <span className="clock mono small muted" title="hora local">{clock.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
         {!online && <Chip tone="crit" dot>Offline</Chip>}
@@ -178,12 +191,19 @@ export function Shell() {
       <main className={`page${larguraDa(loc.pathname)}`}><div key={loc.pathname.replace(/^(\/(?:compras|crm\/chat|equipe))\/\d+$/, '$1')} className="page-in stack" style={{ gap: 18 }}><Suspense fallback={<Loading />}><Outlet context={{ dash }} /></Suspense></div></main>
     </div>
     <nav className="tabbar" aria-label="Abas">
+      {box ? <>
+        <TB to="/" end icon="home">Meu dia</TB>
+        <TB to="/balcao" icon="tag">Balcão</TB>
+        <TB to="/checklists" icon="check">Checklists</TB>
+        <TB to="/clients" icon="people">Clientes</TB>
+      </> : <>
       <TB to="/" end icon="home">Hoje</TB>
       <TB to="/attention" icon="alert" n={attn}>Atenção</TB>
       <TB to="/sales" icon="target" n={d?.sales_due || 0}>Vendas</TB>
       <TB to="/ai" icon="spark" n={pend}>IA</TB>
+      </>}
       <button className={`tb${side ? ' active' : ''}`} onClick={() => setSide(s => !s)} aria-label="Mais"><Icon name="more" />Mais</button>
     </nav>
-    <Palette open={pal} onClose={() => setPal(false)} ask={ask} />
+    {!box && <Palette open={pal} onClose={() => setPal(false)} ask={ask} />}
   </div>
 }

@@ -221,6 +221,24 @@ from command_center.providers import waiver_nativa as wn  # noqa: E402
 wn.guardar_modelo(con, "adult", "Adult Waiver of Liability (e2e)", _pdf_teste("ADULT RELEASE AND WAIVER OF LIABILITY"), origem="e2e")
 wn.guardar_modelo(con, "parental", "Parental consent Waiver liability (e2e)", _pdf_teste("PARENTAL CONSENT AND WAIVER"), origem="e2e")
 
+# mecânico e checklists (#92): o Luis é mecânico (OPERATOR com cargo); um serviço de HOJE na
+# Flórida; e os checklists como a importação da planilha os criaria (grade de TESTE: no sistema
+# de verdade eles vêm da planilha Master Checklist).
+from zoneinfo import ZoneInfo  # noqa: E402
+from datetime import datetime as _dt  # noqa: E402
+from command_center.providers import checklists as _ck  # noqa: E402
+_luis = auth.criar_usuario(con, "luis@urace.us", "Luis Barros", "OPERATOR", "senha-de-teste-123")
+con.execute("UPDATE users SET cargo='MECANICO' WHERE id=?", (_luis,))
+_hoje_fl = _dt.now(ZoneInfo("America/New_York")).date().isoformat()
+tarefa(david, "David Pera_Urace Daily_Arrive and Drive [1/1]", "SUNDAY", "open", _hoje_fl, 0, 12)
+_ck.importar(con, [
+    ["", "Practice Day / Kart School", "", "", "Technical Inspection"],
+    ["", "Mechanic Checklist", "Coach Checklist", "", "Kart Checklist"],
+    ["", "At arrival morning tasks: 7:00 - 7:30 am", "1. Open the VIP Lounge", "", "Engine:"],
+    ["", "1. Open the garage", "", "", "1. Check engine oil (change if needed)"],
+    ["", "2. Fuel the karts", "", "", "2. Check chain tension (+/- 25mm)"],
+])
+
 # biblioteca (#88): os históricos de serviço saem das tarefas semeadas (sem QuickBooks nem Drive no e2e)
 from command_center.providers import biblioteca as _bib  # noqa: E402
 _bib.sincronizar_historicos(con, log=lambda *_: None)

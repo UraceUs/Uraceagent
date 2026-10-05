@@ -39,6 +39,44 @@ PAPEIS = ("ADMIN", "MANAGER", "OPERATOR", "VIEWER")
 # vendas é uma tela do operador como qualquer outra. Banco antigo com role='CLOSER' é
 # convertido em OPERATOR na migração.
 NIVEL = {"ADMIN": 3, "MANAGER": 2, "OPERATOR": 1, "VIEWER": 0}
+# Cargos do box (#92). Dono, 05/10: o mecânico tem acesso "aos processos que ele está
+# envolvido"; o coach, por enquanto, o mesmo. O papel deles é OPERATOR; o cargo corta o resto.
+CARGOS = ("MECANICO", "COACH")
+# O que o cargo alcança, por método e caminho depois de /ops/api. Fora daqui: 403. É uma
+# LISTA DO QUE PODE (e não do que não pode): rota nova nasce fechada para o cargo.
+ROTAS_DO_CARGO = [
+    (None, r"^/auth/"),                                   # entrar, sair, trocar a senha
+    (None, r"^/meu-dia(/|$)"),                            # a tela inicial e o calendário dele
+    (None, r"^/checklists(/|$)"),                         # preencher, com foto
+    (None, r"^/balcao(/|$)"),                             # leitor: cobrar, guardar, código novo
+    (None, r"^/estoque(/|$)"),                            # ver, contar, entrada, transferir, cadastrar
+    (None, r"^/compras(/|$)"),                            # pedir e receber
+    (None, r"^/equipe(/|$)"),                             # chat da equipe
+    (None, r"^/push(/|$)"),                               # aviso no celular
+    ({"POST"}, r"^/system/cliente$"),                     # erro do navegador e Web Vitals
+    ({"GET"}, r"^/clients(/\d+)?$"),                     # lista e card (o card sai sem valores)
+    ({"GET"}, r"^/clients/\d+/equipment$"),
+    ({"GET"}, r"^/catalog/[a-z]+/\d+/image$"),
+    # corridas e agendamentos do site chegam pelo /meu-dia, sem valores nem contato do cliente
+]
+
+
+def cargo_alcanca(metodo, caminho):
+    """`caminho` é o de depois de /ops/api. Diz se o mecânico/coach pode chamar."""
+    import re as _re
+    return any((ms is None or metodo in ms) and _re.search(rx, caminho) for ms, rx in ROTAS_DO_CARGO)
+
+
+def _trava_de_cargo(request, u):
+    if not u.get("cargo"):
+        return
+    caminho = request.url.path
+    if caminho.startswith("/ops/api"):
+        caminho = caminho[len("/ops/api"):]
+    if request.method in ("HEAD", "OPTIONS"):
+        return
+    if not cargo_alcanca(request.method, caminho):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Esta área não é do seu acesso.")
 MSG_CREDENCIAL = "Invalid email or password."
 
 # Acesso livre (dono, 17/09): "ele opera em todas as áreas, então não precisa
@@ -153,7 +191,7 @@ def abrir_sessao(con, user_id, lembrar, ip, user_agent):
 def sessao_valida(con, token):
     if not token:
         return None
-    s = um(con, """SELECT s.id, s.user_id, s.expires_at, u.email, u.name, u.role, u.active
+    s = um(con, """SELECT s.id, s.user_id, s.expires_at, u.email, u.name, u.role, u.cargo, u.active
                    FROM sessions s JOIN users u ON u.id = s.user_id
                    WHERE s.id = ? AND s.revoked_at IS NULL""", (_hash_token(token),))
     if not s or not s["active"]:
@@ -216,7 +254,8 @@ def login(con, request, response, email, senha, lembrar=False):
     response.set_cookie(COOKIE_CSRF, csrf, max_age=max_age, httponly=False,
                         secure=seguro, samesite="strict", path="/")
     return {"id": u["id"], "email": u["email"], "name": u["name"],
-            "role": u["role"], "free": livre(u["email"])}
+            "role": u["role"], "free": livre(u["email"]),
+            "cargo": None if livre(u["email"]) else (u["cargo"] if "cargo" in u.keys() else None)}
 
 
 def logout(con, request, response):
@@ -397,8 +436,10 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
         if not csrf_cookie or not hmac.compare_digest(csrf_cookie, csrf_header):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "CSRF check failed.")
     request.state.cc_user = s["user_id"]           # para o log da requisição (observabilidade)
-    return {"id": s["user_id"], "email": s["email"], "name": s["name"],
-            "role": s["role"], "free": livre(s["email"])}
+    u = {"id": s["user_id"], "email": s["email"], "name": s["name"],
+         "role": s["role"], "free": livre(s["email"]), "cargo": None if livre(s["email"]) else s["cargo"]}
+    _trava_de_cargo(request, u)
+    return u
 
 
 def exige(papel_minimo):

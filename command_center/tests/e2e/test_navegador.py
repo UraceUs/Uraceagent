@@ -30,7 +30,7 @@ ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
-         "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos"]
+         "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists"]
 
 
 def _porta_livre():
@@ -650,4 +650,76 @@ def test_operador_nao_entra_na_biblioteca(servidor, navegador):
     abrir(pg, servidor, "/biblioteca")
     pg.get_by_text("Esta área não é do seu acesso").wait_for()
     assert pg.get_by_role("link", name="Biblioteca").count() == 0, "nem aparece no menu"
+    pg.close()
+
+
+# ------------------------------------------------------------------ mecânico e checklists (#92)
+def _png_pequeno(caminho):
+    from PIL import Image
+    Image.new("RGB", (60, 40), (40, 120, 200)).save(caminho, "PNG")
+    return caminho
+
+
+def test_meu_dia_do_mecanico_cabe_em_390(servidor, navegador):
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=800)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    pg.get_by_text("David Pera_Urace Daily_Arrive and Drive").wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.close()
+
+
+def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navegador, tmp_path):
+    largura = 360
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=largura, altura=800)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    servico = pg.locator(".card", has_text="David Pera_Urace Daily_Arrive and Drive")
+    servico.get_by_role("button", name="Kart Checklist").click()
+    pg.get_by_text("Kart Checklist · David Pera").wait_for()
+    pg.get_by_role("checkbox", name="Check engine oil (change if needed)").check()
+    pg.get_by_role("checkbox", name="Check chain tension (+/- 25mm)").check()
+    pg.locator("input[aria-label='Subir foto: Check chain tension (+/- 25mm)']").set_input_files(_png_pequeno(tmp_path / f"f{largura}.png"))
+    pg.get_by_text("Foto salva.").wait_for()
+    assert pg.locator("img.ck-foto").count() == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Concluir checklist").click()
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    pg.locator(".card", has_text="David Pera_Urace Daily_Arrive and Drive").get_by_text("completo").wait_for()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_mecanico_so_ve_o_que_e_do_box(servidor, navegador):
+    pg = entrar(navegador, servidor, "luis@urace.us")
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    menu = pg.get_by_role("navigation", name="Principal")
+    for ve in ("Balcão", "Checklists", "Estoque", "Clientes", "Equipe"):
+        assert menu.get_by_role("link", name=ve).count() == 1, ve
+    for nao in ("Oportunidades", "Chat do Kommo", "QuickBooks", "Biblioteca", "AI Command", "Site público"):
+        assert menu.get_by_role("link", name=nao).count() == 0, nao
+    for rota in ("/sales", "/quickbooks", "/biblioteca", "/attention"):
+        abrir(pg, servidor, rota)
+        pg.get_by_text("Esta área não é do seu acesso").wait_for()
+    abrir(pg, servidor, "/clients/1")
+    assert pg.get_by_role("button", name="Editar").count() == 0, "o mecânico vê o card, não edita"
+    assert pg.get_by_role("button", name="Invoices 🔒").count() == 0 and pg.get_by_role("button", name="Mensalidade e contrato").count() == 0
+    assert not pg.erros_js and not [e for e in pg.erros_api if "/api/" in e], (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_gerente_edita_o_modelo_do_checklist(servidor, navegador):
+    pg = entrar(navegador, servidor)
+    abrir(pg, servidor, "/checklists")
+    card = pg.locator(".card.card-b", has=pg.get_by_role("heading", name="Mechanic Checklist", exact=True))
+    card.get_by_role("button", name="Editar").click()
+    card.get_by_label("Foto obrigatória no checklist").check()
+    card.get_by_label("Novo item").fill("Check fire extinguisher")
+    card.get_by_role("button", name="Adicionar").click()
+    card.get_by_text("3 itens").wait_for()
+    assert card.get_by_label("Foto obrigatória no checklist").is_checked()
     pg.close()
