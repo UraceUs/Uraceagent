@@ -20,6 +20,8 @@ const Automation = tela(() => import('./pages/Automation'), 'Automation')
 const Capabilities = tela(() => import('./pages/Capabilities'), 'Capabilities')
 const Races = tela(() => import('./pages/Races'), 'Races')
 const Estoque = tela(() => import('./pages/Estoque'), 'Estoque')
+const Balcao = tela(() => import('./pages/Balcao'), 'Balcao')
+const PeloQr = tela(() => import('./pages/Balcao'), 'PeloQr')
 const Planejamento = tela(() => import('./pages/Logistica'), 'Planejamento')
 const Compras = tela(() => import('./pages/Compras'), 'Compras')
 const Pedidos = tela(() => import('./pages/Compras'), 'Pedidos')
@@ -69,6 +71,9 @@ export default function App() {
           <Route path="attention" element={<AttentionPage />} />
           {/* Logística (dono, 23/09) */}
           <Route path="estoque" element={<Estoque />} />
+          <Route path="balcao" element={<Guard min="OPERATOR"><Balcao /></Guard>} />
+          <Route path="balcao/:clientId" element={<Guard min="OPERATOR"><Balcao /></Guard>} />
+          <Route path="c/:codigo" element={<Guard min="OPERATOR"><PeloQr /></Guard>} />
           <Route path="pedidos" element={<Pedidos />} />
           <Route path="compras" element={<Compras />} />
           <Route path="compras/:id" element={<Compras />} />

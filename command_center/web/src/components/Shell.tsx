@@ -105,6 +105,7 @@ export function Shell() {
             em dois lugares do menu faz a pessoa se perguntar qual dos dois é o certo. */}
         <div className="grp">Logística</div>
         <NL to="/estoque" icon="box" n={repor} tone="warn">Estoque</NL>
+        {can('OPERATOR') && <NL to="/balcao" icon="tag">Balcão</NL>}
         <NL to="/races" icon="flag">Corridas</NL>
         <NL to="/pedidos" icon="list">Pedidos</NL>
         <NL to="/compras" icon="cart">Compras</NL>

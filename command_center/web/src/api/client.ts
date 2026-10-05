@@ -8,7 +8,9 @@ export const API = '/ops/api'
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) { super(message); this.status = status }
+  /** quando o servidor pede uma decisão (409 com {motivo, mensagem}): qual decisão */
+  motivo?: string
+  constructor(status: number, message: string, motivo?: string) { super(message); this.status = status; this.motivo = motivo }
   get unauthorized() { return this.status === 401 }
   get forbidden() { return this.status === 403 }
   get offline() { return this.status === 0 }
@@ -37,13 +39,15 @@ async function req<T>(method: string, path: string, body?: unknown, opts: { sile
   if (res.status === 401 && !opts.silent401) onUnauthorized.forEach(fn => fn())
   if (!res.ok) {
     let msg = res.statusText || `HTTP ${res.status}`
+    let motivo: string | undefined
     try {
       const j = await res.json()
       if (typeof j?.detail === 'string') msg = j.detail
       else if (j?.detail?.[0]?.msg) msg = j.detail[0].msg
+      else if (typeof j?.detail?.mensagem === 'string') { msg = j.detail.mensagem; motivo = j.detail.motivo }
       else if (typeof j?.error === 'string') msg = j.error
     } catch { /* corpo não-JSON */ }
-    throw new ApiError(res.status, msg)
+    throw new ApiError(res.status, msg, motivo)
   }
   if (res.status === 204) return undefined as T
   const total = res.headers.get('X-Total-Count')

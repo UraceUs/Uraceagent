@@ -175,7 +175,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {renomear !== null && <RenomearServico tarefa={data.tasks.find(t => t.id === renomear)!} outras={data.tasks.filter(t => t.id !== renomear)} onClose={() => setRenomear(null)} onDone={reload} />}
       {mover !== null && <MoverServico tarefa={data.tasks.find(t => t.id === mover)!} atual={c} onClose={() => setMover(null)} onDone={reload} />}
       {unir && <UnirModal keep={c} onClose={() => setUnir(false)} onDone={(kid) => { if (kid !== c.id) nav(`/clients/${kid}`); else reload() }} />}
-      {tab === 'pecas' && <PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} />}
+      {tab === 'pecas' && <><QrBalcao cid={c.id} nome={c.pilot_name || c.name} /><PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} /></>}
       {tab === 'site' && <ContaNoSite cid={c.id} />}
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th>Waiver</th><th></th></tr></thead><tbody>
@@ -542,5 +542,19 @@ function ContaNoSite({ cid }: { cid: number }) {
       <div className="small muted">{p.birth_date ? `nascimento ${p.birth_date.slice(8, 10)}/${p.birth_date.slice(5, 7)}/${p.birth_date.slice(0, 4)}` : 'sem nascimento'}{p.measures_updated_at ? ` · medido em ${p.measures_updated_at.slice(8, 10)}/${p.measures_updated_at.slice(5, 7)}` : ''}</div>
       {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{Object.entries(p.measures).map(([k, v]) => <div key={k}><dt>{MEDIDA_PT[k] || k}</dt><dd>{String(v)}</dd></div>)}</dl>}
     </div>)}
+  </div>
+}
+
+/** #87: o QR do card, para o leitor do balcão. Imprime num cartão ou adesivo; o código é aleatório, não o id. */
+function QrBalcao({ cid, nome }: { cid: number; nome: string }) {
+  const src = `/ops/api/balcao/cliente/${cid}/qr.svg`
+  return <div className="card card-b row wrap" style={{ gap: 14, alignItems: 'center', marginBottom: 12 }}>
+    <img className="qr-cliente" src={src} alt={`QR do balcão de ${nome}`} width={160} height={160} />
+    <div className="grow stack" style={{ gap: 6 }}>
+      <h3 className="h3" style={{ margin: 0 }}>QR do balcão</h3>
+      <p className="small muted" style={{ margin: 0 }}>O mecânico lê este QR e depois as peças: elas entram na invoice de peças do dia de {nome}.</p>
+      <div className="row wrap" style={{ gap: 8 }}><a className="btn sm" href={src} target="_blank" rel="noreferrer">Imprimir</a>
+        <Link className="btn sm ghost" to={`/balcao/${cid}`}>Abrir no balcão</Link></div>
+    </div>
   </div>
 }

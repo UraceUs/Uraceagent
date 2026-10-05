@@ -271,6 +271,21 @@ def _coletar(con):
                           facts=[(f"{_dbr(b['date'])} · {per.get(b['period'], b['period'])}", (b["piloto"] or b["conta"]))
                                  for b in pedidos_site[:6]]))
 
+    # ---- 4f2. balcão (#87): invoice de peças aberta, esperando alguém apertar "Enviar"
+    pecas = todos(con, """SELECT p.id, p.service_date, p.total, p.qbo_error, COALESCE(c.pilot_name, c.name) AS cliente
+                            FROM parts_invoices p JOIN clients c ON c.id=p.client_id
+                           WHERE p.status='aberta' AND p.total>0 ORDER BY p.service_date, p.id""")
+    if pecas:
+        erro = any(x["qbo_error"] for x in pecas)
+        itens.append(dict(key=_chave("balcao", "parts_invoice", "abertas"), level="HIGH" if erro else "MEDIUM",
+                          title=f"{len(pecas)} invoice(s) de peças para enviar",
+                          why="As peças lidas no balcão já estão na invoice do QuickBooks, que não é enviada sozinha. "
+                              "Confira e envie no fim do dia ou no dia seguinte."
+                              + (" Alguma não subiu para o QuickBooks: veja o erro no balcão." if erro else ""),
+                          entity={"type": "parts_invoice", "id": None}, client_id=None, link=None, action="Enviar no balcão",
+                          facts=[(f"{_dbr(x['service_date'])} · {x['cliente']}", f"US$ {x['total']:,.2f}" + (" · erro" if x["qbo_error"] else ""))
+                                 for x in pecas[:6]]))
+
     # ---- 4g. contas do site sem vínculo com o cliente interno (#42)
     soltas = todos(con, "SELECT id, name, email, created_at FROM portal_accounts WHERE active=1 AND client_id IS NULL ORDER BY id")
     if soltas:

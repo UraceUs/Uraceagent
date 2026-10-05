@@ -1116,6 +1116,59 @@ CREATE TABLE IF NOT EXISTS stock_charges (
 );
 CREATE INDEX IF NOT EXISTS stock_charges_cliente ON stock_charges(client_id, status);
 
+-- ------------------------------------------------- balcão: leitor de QR e código de barras (#87)
+-- Dono, 05/10: "o mecânico vai ler o QR Code do cliente e o código de barras da peça, e já
+-- sobe para aquele cliente uma invoice aberta de partes". Uma peça pode ter mais de um
+-- código: o que vem na embalagem (fabricante) e/ou a etiqueta que o sistema gera (urace).
+CREATE TABLE IF NOT EXISTS stock_barcodes (
+  code        TEXT PRIMARY KEY,
+  item_id     INTEGER NOT NULL REFERENCES stock_items(id),
+  origin      TEXT NOT NULL DEFAULT 'fabricante' CHECK (origin IN ('fabricante','urace')),
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS stock_barcodes_item ON stock_barcodes(item_id);
+
+-- Uma invoice de peças por cliente por dia (fuso da Flórida). Nasce no QuickBooks na
+-- primeira peça cobrada, recebe uma linha a cada peça e NÃO é enviada sozinha: alguém
+-- aperta "Enviar". O QuickBooks é espelho das linhas daqui (as cobranças), nunca o contrário.
+CREATE TABLE IF NOT EXISTS parts_invoices (
+  id              INTEGER PRIMARY KEY,
+  client_id       INTEGER NOT NULL REFERENCES clients(id),
+  service_date    TEXT NOT NULL,                 -- AAAA-MM-DD na Flórida
+  status          TEXT NOT NULL DEFAULT 'aberta' CHECK (status IN ('aberta','enviada','anulada')),
+  qbo_invoice_id  TEXT,
+  doc_number      TEXT,
+  total           REAL NOT NULL DEFAULT 0,
+  qbo_error       TEXT,                          -- a última recusa do QuickBooks (some quando sobe)
+  qbo_synced_at   TEXT,
+  created_by      INTEGER REFERENCES users(id),
+  created_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  sent_by         INTEGER REFERENCES users(id),
+  sent_at         TEXT,
+  sent_to         TEXT
+);
+CREATE INDEX IF NOT EXISTS parts_invoices_cliente ON parts_invoices(client_id, service_date, status);
+
+-- O que o leitor fez, em ordem: é a lista da tela e é o que o "desfazer" desfaz.
+CREATE TABLE IF NOT EXISTS counter_scans (
+  id               INTEGER PRIMARY KEY,
+  client_id        INTEGER NOT NULL REFERENCES clients(id),
+  item_id          INTEGER NOT NULL REFERENCES stock_items(id),
+  code             TEXT,
+  mode             TEXT NOT NULL CHECK (mode IN ('cobrar','guardar','usar_do_cliente')),
+  qty              REAL NOT NULL,
+  location_id      INTEGER REFERENCES stock_locations(id),
+  move_id          INTEGER REFERENCES stock_moves(id),
+  charge_id        INTEGER REFERENCES stock_charges(id),
+  parts_invoice_id INTEGER REFERENCES parts_invoices(id),
+  by_user_id       INTEGER REFERENCES users(id),
+  at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  undone_at        TEXT,
+  undone_by        INTEGER REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS counter_scans_cliente ON counter_scans(client_id, at);
+
 -- ------------------------------------------------- equipe no WhatsApp (ponte do chat interno)
 -- Dono, 30/09: o Command Center manda mensagem para o time interno (administrativo,
 -- mecânicos, coaches) pelo WhatsApp, e a resposta volta para o painel. Número PRÓPRIO

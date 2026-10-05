@@ -76,6 +76,7 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
         {a.entity.type === 'purchase' && <Link className="btn sm" to={a.entity.id ? `/compras/${a.entity.id}` : '/pedidos'}>{a.action || 'Ver compras'}</Link>}
         {a.entity.type === 'booking' && <Link className="btn sm" to="/site">{a.action || 'Ver agenda'}</Link>}
         {a.entity.type === 'portal_account' && <Link className="btn sm" to="/site/contas">{a.action || 'Ver contas'}</Link>}
+        {a.entity.type === 'parts_invoice' && <Link className="btn sm" to="/balcao">{a.action || 'Abrir o balcão'}</Link>}
         {!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action && <span className="chip outline">{a.action}</span>}
         <span className="grow" />
         {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title="Diga à IA o que fazer com este item">✦ Instruir a IA</button>}

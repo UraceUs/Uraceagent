@@ -235,8 +235,16 @@ MIGRACOES = [
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana
     ("bookings", "asana_error", "TEXT"),
     ("bookings", "asana_attempts", "INTEGER NOT NULL DEFAULT 0"),
+    # 05/10 — dono (#87): balcão com leitor. Cada card tem um QR próprio (código opaco, não
+    # o id); cada peça pode ter o item dela no QuickBooks, criado quando o código é cadastrado.
+    ("clients", "scan_code", "TEXT"),
+    ("stock_items", "qbo_item_id", "TEXT"),
+    ("stock_items", "qbo_item_name", "TEXT"),
+    # a peça cobrada pelo balcão entra na invoice de peças do dia daquele cliente
+    ("stock_charges", "parts_invoice_id", "INTEGER REFERENCES parts_invoices(id)"),
 ]
 INDICES_EXTRA = [
+    "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS portal_pilots_client ON portal_pilots(client_id) WHERE client_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
 ]
