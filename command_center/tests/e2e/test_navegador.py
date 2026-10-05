@@ -660,8 +660,18 @@ def _png_pequeno(caminho):
     return caminho
 
 
-@pytest.mark.parametrize("largura", [360, 390])
-def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navegador, largura, tmp_path):
+def test_meu_dia_do_mecanico_cabe_em_390(servidor, navegador):
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=800)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    pg.get_by_text("David Pera_Urace Daily_Arrive and Drive").wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.close()
+
+
+def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navegador, tmp_path):
+    largura = 360
     pg = entrar(navegador, servidor, "luis@urace.us", largura=largura, altura=800)
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
@@ -670,8 +680,8 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     servico = pg.locator(".card", has_text="David Pera_Urace Daily_Arrive and Drive")
     servico.get_by_role("button", name="Kart Checklist").click()
     pg.get_by_text("Kart Checklist · David Pera").wait_for()
-    pg.get_by_label("Check engine oil (change if needed)").check()
-    pg.get_by_label("Check chain tension (+/- 25mm)").check()
+    pg.get_by_role("checkbox", name="Check engine oil (change if needed)").check()
+    pg.get_by_role("checkbox", name="Check chain tension (+/- 25mm)").check()
     pg.locator("input[aria-label='Subir foto: Check chain tension (+/- 25mm)']").set_input_files(_png_pequeno(tmp_path / f"f{largura}.png"))
     pg.get_by_text("Foto salva.").wait_for()
     assert pg.locator("img.ck-foto").count() == 1

@@ -64,8 +64,11 @@ export function Checklist() {
   if (!r) return <Loading />
   const aberto = r.status === 'aberto'
   async function marcar(i: RunItem) {
-    try { setRun(await api.post<Run>(`/checklists/runs/${r!.id}/itens/${i.id}`, { done: !i.done })) }
-    catch (e) { toast((e as ApiError).message, 'crit') }
+    const antes = r!
+    // marca na hora (o mecânico está com luva, no sol): se o servidor recusar, volta
+    setRun({ ...antes, itens: antes.itens.map(x => x.id === i.id ? { ...x, done: i.done ? 0 : 1 } : x) })
+    try { setRun(await api.post<Run>(`/checklists/runs/${antes.id}/itens/${i.id}`, { done: !i.done })) }
+    catch (e) { setRun(antes); toast((e as ApiError).message, 'crit') }
   }
   async function concluir() {
     setIndo(true)
@@ -94,14 +97,22 @@ export function Checklist() {
   </>
 }
 
-function EditarModelo({ m, onMudou }: { m: Modelo; onMudou: () => void }) {
+function EditarModelo({ m: original, onMudou }: { m: Modelo; onMudou: () => void }) {
   const toast = useToast()
   const [novo, setNovo] = useState('')
+  // a marcação aparece na hora; se o servidor recusar, volta (sem esperar a lista recarregar)
+  const [ajuste, setAjuste] = useState<Partial<Modelo>>({})
+  const [ajusteItem, setAjusteItem] = useState<Record<number, Partial<ItemModelo>>>({})
+  const m: Modelo = { ...original, ...ajuste, itens: original.itens.map(i => ({ ...i, ...ajusteItem[i.id] })) }
   async function mudar(campos: Record<string, unknown>) {
-    try { await api.patch(`/checklists/modelos/${m.id}`, campos); onMudou() } catch (e) { toast((e as ApiError).message, 'crit') }
+    setAjuste(a => ({ ...a, ...campos as Partial<Modelo> }))
+    try { await api.patch(`/checklists/modelos/${m.id}`, campos); onMudou() }
+    catch (e) { setAjuste(a => { const b = { ...a }; for (const k of Object.keys(campos)) delete b[k as keyof Modelo]; return b }); toast((e as ApiError).message, 'crit') }
   }
   async function item(id: number, campos: Record<string, unknown>) {
-    try { await api.patch(`/checklists/itens/${id}`, campos); onMudou() } catch (e) { toast((e as ApiError).message, 'crit') }
+    setAjusteItem(a => ({ ...a, [id]: { ...a[id], ...campos as Partial<ItemModelo> } }))
+    try { await api.patch(`/checklists/itens/${id}`, campos); onMudou() }
+    catch (e) { setAjusteItem(a => { const b = { ...a }; delete b[id]; return b }); toast((e as ApiError).message, 'crit') }
   }
   async function adicionar() {
     try { await api.post(`/checklists/modelos/${m.id}/itens`, { text: novo, grupo: m.itens[m.itens.length - 1]?.grupo ?? null }); setNovo(''); onMudou() }
