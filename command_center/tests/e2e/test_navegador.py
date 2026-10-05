@@ -30,7 +30,7 @@ ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
-         "/site/waiver", "/balcao"]
+         "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos"]
 
 
 def _porta_livre():
@@ -627,4 +627,27 @@ def test_balcao_le_o_cliente_cobra_guarda_e_pergunta_antes_de_cobrar_peca_dele(s
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+# ------------------------------------------------------------------ biblioteca (#88)
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_biblioteca_do_gerente_com_os_historicos(servidor, navegador, largura):
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    abrir(pg, servidor, "/biblioteca/historicos")
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    pg.get_by_text("Histórico de serviço — David Pera").wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pdf = pg.request.get(servidor + "/" + pg.get_by_role("link", name="PDF").first.get_attribute("href").split("/ops/", 1)[1])
+    assert pdf.ok and pdf.body().startswith(b"%PDF")
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_operador_nao_entra_na_biblioteca(servidor, navegador):
+    pg = entrar(navegador, servidor, "op@urace.us")
+    abrir(pg, servidor, "/biblioteca")
+    pg.get_by_text("Esta área não é do seu acesso").wait_for()
+    assert pg.get_by_role("link", name="Biblioteca").count() == 0, "nem aparece no menu"
     pg.close()

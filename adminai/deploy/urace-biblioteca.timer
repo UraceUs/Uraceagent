@@ -1,0 +1,12 @@
+[Unit]
+Description=URACE — atualiza a Biblioteca e o Drive toda madrugada (sem IA)
+
+[Timer]
+# Todo dia, 03:40 na Flórida: depois do backup local das 03:15.
+OnCalendar=*-*-* 03:40:00 America/New_York
+Persistent=true
+RandomizedDelaySec=600
+Unit=urace-biblioteca.service
+
+[Install]
+WantedBy=timers.target

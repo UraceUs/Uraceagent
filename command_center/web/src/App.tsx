@@ -21,6 +21,7 @@ const Capabilities = tela(() => import('./pages/Capabilities'), 'Capabilities')
 const Races = tela(() => import('./pages/Races'), 'Races')
 const Estoque = tela(() => import('./pages/Estoque'), 'Estoque')
 const Balcao = tela(() => import('./pages/Balcao'), 'Balcao')
+const Biblioteca = tela(() => import('./pages/Biblioteca'), 'Biblioteca')
 const PeloQr = tela(() => import('./pages/Balcao'), 'PeloQr')
 const Planejamento = tela(() => import('./pages/Logistica'), 'Planejamento')
 const Compras = tela(() => import('./pages/Compras'), 'Compras')
@@ -74,6 +75,8 @@ export default function App() {
           <Route path="balcao" element={<Guard min="OPERATOR"><Balcao /></Guard>} />
           <Route path="balcao/:clientId" element={<Guard min="OPERATOR"><Balcao /></Guard>} />
           <Route path="c/:codigo" element={<Guard min="OPERATOR"><PeloQr /></Guard>} />
+          <Route path="biblioteca" element={<Guard min="MANAGER"><Biblioteca /></Guard>} />
+          <Route path="biblioteca/:aba" element={<Guard min="MANAGER"><Biblioteca /></Guard>} />
           <Route path="pedidos" element={<Pedidos />} />
           <Route path="compras" element={<Compras />} />
           <Route path="compras/:id" element={<Compras />} />

@@ -447,6 +447,61 @@ def criar_item_sistema(nome, preco=0, descricao=None):
     return _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
 
 
+# ------------------------------------------------------------- biblioteca (#88): portas do Command Center
+# Só LEITURA: a rotina diária guarda o PDF de cada invoice e de cada pagamento (o mesmo que o
+# QuickBooks imprime) e só baixa de novo o que mudou desde a última vez.
+def _resumo_doc(d, tipo):
+    cr = d.get("CustomerRef") or {}
+    meta = d.get("MetaData") or {}
+    out = {"id": d.get("Id"), "tipo": tipo, "numero": d.get("DocNumber") or d.get("PaymentRefNum"),
+           "data": d.get("TxnDate"), "total": d.get("TotalAmt"), "saldo": d.get("Balance"),
+           "cliente_id": cr.get("value"), "cliente": cr.get("name"),
+           "atualizado_em": meta.get("LastUpdatedTime"), "versao": d.get("SyncToken"),
+           "email": ((d.get("BillEmail") or {}).get("Address") or "").lower() or None,
+           "email_status": d.get("EmailStatus")}
+    if tipo == "payment":
+        out["invoices"] = [lt.get("TxnId") for linha in d.get("Line", []) for lt in linha.get("LinkedTxn", [])
+                           if lt.get("TxnType") == "Invoice"]
+        out["metodo"] = (d.get("PaymentMethodRef") or {}).get("name")
+    return out
+
+
+def documentos_sistema(tipo, desde=None, pagina=1000):
+    """Todas as invoices (`tipo='invoice'`) ou todos os pagamentos (`'payment'`), sem limite de
+    data; com `desde`, só os alterados a partir dali. Paginado como o QuickBooks pede."""
+    entidade = {"invoice": "Invoice", "payment": "Payment"}[tipo]
+    onde = f" where MetaData.LastUpdatedTime >= '{_esc(desde)}'" if desde else ""
+    saida, inicio = [], 1
+    while True:
+        r = _query(f"select * from {entidade}{onde} orderby MetaData.LastUpdatedTime "
+                   f"startposition {inicio} maxresults {int(pagina)}")
+        lote = r.get(entidade, [])
+        saida += [_resumo_doc(d, tipo) for d in lote]
+        if len(lote) < pagina:
+            return saida
+        inicio += pagina
+
+
+def pdf_sistema(tipo, id):
+    """O PDF que o QuickBooks gera (o mesmo de "Print"). Devolve bytes."""
+    if tipo not in ("invoice", "payment"):
+        raise ErroFerramenta("tipo de PDF inválido")
+    url = f"{API}/{_realm()}/{tipo}/{urllib.parse.quote(str(id))}/pdf?minorversion={MINOR}"
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {_access_token()}")
+    req.add_header("Accept", "application/pdf")
+    try:
+        with urllib.request.urlopen(req, timeout=90) as r:
+            dados = r.read()
+    except urllib.error.HTTPError as e:
+        raise ErroFerramenta(f"HTTP {e.code} ao baixar o PDF de {tipo} {id}: {e.read()[:200].decode(errors='replace')}")
+    except urllib.error.URLError as e:
+        raise ErroFerramenta(f"sem conexão com o QuickBooks: {e.reason}")
+    if not dados.startswith(b"%PDF"):
+        raise ErroFerramenta(f"o QuickBooks não devolveu um PDF para {tipo} {id}")
+    return dados
+
+
 # ------------------------------------------------------------- balcão (#87): portas do Command Center
 # Não são ferramentas do agente: só o clique de uma pessoa no balcão chega aqui. O dono
 # decidiu (05/10) que a invoice de peças nasce no QuickBooks na hora e NÃO é enviada

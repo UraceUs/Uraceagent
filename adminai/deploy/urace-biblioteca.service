@@ -1,0 +1,17 @@
+[Unit]
+Description=URACE — Biblioteca: PDFs de invoices, recibos, contratos, waivers e histórico, e o espelho no Drive
+Documentation=file:///home/ubuntu/Uraceagent/adminai/biblioteca_diaria.py
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/Uraceagent
+Environment=HOME=/home/ubuntu
+Environment=URACE_DIR=/home/ubuntu/.urace
+EnvironmentFile=-/home/ubuntu/.urace/adminai.env
+ExecStart=/bin/bash -lc '/home/ubuntu/.urace/cc-venv/bin/python adminai/biblioteca_diaria.py; echo "saida=$?"'
+StandardOutput=append:/home/ubuntu/.urace/biblioteca.log
+StandardError=append:/home/ubuntu/.urace/biblioteca.log
+NoNewPrivileges=true
