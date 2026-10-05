@@ -1169,6 +1169,40 @@ CREATE TABLE IF NOT EXISTS counter_scans (
 );
 CREATE INDEX IF NOT EXISTS counter_scans_cliente ON counter_scans(client_id, at);
 
+-- ------------------------------------------------- biblioteca (#88)
+-- Dono, 05/10: contratos, waivers, recibos, invoices e histórico de serviço reunidos, com o PDF
+-- de cada um, e um backup no Drive (urace@) organizado por cliente. Atualizada por uma ROTINA
+-- diária, sem IA. Cada linha é um documento; o arquivo mora em ~/.urace/biblioteca (ou no
+-- lugar onde o sistema já guardava, para contrato e waiver), nunca no banco.
+CREATE TABLE IF NOT EXISTS library_docs (
+  id             INTEGER PRIMARY KEY,
+  kind           TEXT NOT NULL CHECK (kind IN ('invoice','recibo','contrato','waiver','historico')),
+  ref            TEXT NOT NULL,                  -- id na origem: QBO, contracts.id, waivers.id, clients.id
+  client_id      INTEGER REFERENCES clients(id), -- NULL = sem cliente certo: vai para "Sem cliente"
+  title          TEXT NOT NULL,
+  number         TEXT,
+  doc_date       TEXT,
+  amount         REAL,
+  status         TEXT,
+  source_version TEXT,                           -- o que diz "mudou": LastUpdatedTime do QBO, hash…
+  file_path      TEXT,
+  sha256         TEXT,
+  error          TEXT,                           -- a última falha ao buscar o PDF (some quando dá certo)
+  drive_file_id  TEXT,
+  drive_sha256   TEXT,                           -- o que está no Drive; diferente de sha256 = subir de novo
+  drive_error    TEXT,
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (kind, ref)
+);
+CREATE INDEX IF NOT EXISTS library_docs_cliente ON library_docs(client_id, kind);
+CREATE INDEX IF NOT EXISTS library_docs_data ON library_docs(kind, doc_date);
+
+CREATE TABLE IF NOT EXISTS library_state (
+  key    TEXT PRIMARY KEY,
+  value  TEXT,
+  at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 -- ------------------------------------------------- equipe no WhatsApp (ponte do chat interno)
 -- Dono, 30/09: o Command Center manda mensagem para o time interno (administrativo,
 -- mecânicos, coaches) pelo WhatsApp, e a resposta volta para o painel. Número PRÓPRIO

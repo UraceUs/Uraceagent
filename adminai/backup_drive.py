@@ -43,7 +43,12 @@ garantir_venv()
 
 from adminai import backup_banco  # noqa: E402
 
-PASTA = os.environ.get("BACKUP_DRIVE_PASTA", "Backup urace command center")
+# Dono, 05/10 (#88): o backup fica DENTRO da pasta "Command Center", junto da Biblioteca.
+# Continua privado: a Biblioteca compartilha com a equipe só a subpasta "Clientes", nunca a
+# raiz, então ninguém além do dono da conta vê o banco. A pasta antiga "Backup urace command
+# center" não é apagada: as cópias que já estão lá ficam.
+RAIZ = os.environ.get("BACKUP_DRIVE_RAIZ", "Command Center")
+PASTA = os.environ.get("BACKUP_DRIVE_PASTA", "Backup do banco")
 API = "https://www.googleapis.com/drive/v3"
 UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
 GUARDAR = 8            # semanas no Drive (~2 meses)
@@ -77,26 +82,34 @@ def _pedir(url, token, metodo="GET", corpo=None, tipo="application/json"):
         raise RuntimeError(f"Drive: sem conexão — {e.reason}")
 
 
-def achar_pasta(token, nome=PASTA):
+def achar_pasta(token, nome=PASTA, pai=None):
     """A pasta que ESTA ferramenta criou. Com `drive.file` ela não enxerga outras."""
     q = (f"name = '{nome}' and mimeType = 'application/vnd.google-apps.folder' "
-         "and trashed = false")
+         "and trashed = false") + (f" and '{pai}' in parents" if pai else "")
     r = _pedir(f"{API}/files?q={urllib.parse.quote(q)}&fields=files(id,name)", token)
     achadas = r.get("files", [])
     return achadas[0]["id"] if achadas else None
 
 
-def criar_pasta(token, nome=PASTA):
-    r = _pedir(f"{API}/files?fields=id,name,webViewLink", token, "POST",
-               {"name": nome, "mimeType": "application/vnd.google-apps.folder"})
+def criar_pasta(token, nome=PASTA, pai=None):
+    corpo = {"name": nome, "mimeType": "application/vnd.google-apps.folder"}
+    if pai:
+        corpo["parents"] = [pai]
+    r = _pedir(f"{API}/files?fields=id,name,webViewLink", token, "POST", corpo)
     return r["id"]
 
 
 def pasta(token, nome=PASTA, criar=True):
-    ident = achar_pasta(token, nome)
+    """Command Center/<nome>: a raiz é a mesma da Biblioteca."""
+    raiz = achar_pasta(token, RAIZ)
+    if not raiz:
+        if not criar:
+            return None
+        raiz = criar_pasta(token, RAIZ)
+    ident = achar_pasta(token, nome, pai=raiz)
     if ident or not criar:
         return ident
-    return criar_pasta(token, nome)
+    return criar_pasta(token, nome, pai=raiz)
 
 
 def listar(token, pasta_id):
@@ -147,7 +160,7 @@ def semanal(aplicar=False, guardar=GUARDAR, token=None, caminho=None):
             return {"aplicado": False, "erro": "não há cópia local; faria uma antes de enviar"}
 
     plano = {"arquivo": local, "tamanho": os.path.getsize(local) if local else 0,
-             "pasta": PASTA, "aplicado": False}
+             "pasta": f"{RAIZ}/{PASTA}", "aplicado": False}
     if not aplicar:
         return plano
 

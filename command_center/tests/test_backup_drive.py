@@ -35,17 +35,17 @@ class DriveFalso:
     def instalar(self, monkeypatch):
         monkeypatch.setattr(backup_drive, "_token", lambda: "tok-de-teste")
         monkeypatch.setattr(backup_drive, "achar_pasta",
-                            lambda tok, nome=backup_drive.PASTA: self.pastas.get(nome))
+                            lambda tok, nome=backup_drive.PASTA, pai=None: self.pastas.get((pai, nome)))
         monkeypatch.setattr(backup_drive, "criar_pasta", self._criar_pasta)
         monkeypatch.setattr(backup_drive, "listar", self._listar)
         monkeypatch.setattr(backup_drive, "enviar", self._enviar)
         monkeypatch.setattr(backup_drive, "apagar", self._apagar)
         return self
 
-    def _criar_pasta(self, tok, nome=backup_drive.PASTA):
+    def _criar_pasta(self, tok, nome=backup_drive.PASTA, pai=None):
         self.seq += 1
-        self.pastas[nome] = f"pasta-{self.seq}"
-        return self.pastas[nome]
+        self.pastas[(pai, nome)] = f"pasta-{self.seq}"
+        return self.pastas[(pai, nome)]
 
     def _listar(self, tok, pid):
         return [f for f in sorted(self.arquivos.values(), key=lambda x: x["createdTime"], reverse=True)
@@ -90,9 +90,12 @@ def test_sem_aplicar_nao_envia_nada(banco, drive):
 
 
 def test_cria_a_pasta_com_o_nome_que_o_dono_pediu(banco, drive):
+    """Dono, 05/10 (#88): o backup vai para dentro de "Command Center" (era "Backup urace
+    command center", 23/09). A raiz é a mesma da Biblioteca; a subpasta do banco é privada."""
     backup_banco.fazer(banco, aplicar=True)
     backup_drive.semanal(aplicar=True)
-    assert "Backup urace command center" in drive.pastas
+    raiz = drive.pastas[(None, "Command Center")]
+    assert (raiz, "Backup do banco") in drive.pastas
     assert len(drive.arquivos) == 1
 
 
@@ -100,7 +103,7 @@ def test_a_pasta_nao_e_criada_duas_vezes(banco, drive):
     backup_banco.fazer(banco, aplicar=True)
     backup_drive.semanal(aplicar=True)
     backup_drive.semanal(aplicar=True)
-    assert len(drive.pastas) == 1 and len(drive.arquivos) == 2
+    assert len(drive.pastas) == 2 and len(drive.arquivos) == 2, "raiz + Backup do banco, uma vez cada"
 
 
 def test_sem_copia_local_ele_faz_uma_antes_de_enviar(banco, drive):

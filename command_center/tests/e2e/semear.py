@@ -221,6 +221,10 @@ from command_center.providers import waiver_nativa as wn  # noqa: E402
 wn.guardar_modelo(con, "adult", "Adult Waiver of Liability (e2e)", _pdf_teste("ADULT RELEASE AND WAIVER OF LIABILITY"), origem="e2e")
 wn.guardar_modelo(con, "parental", "Parental consent Waiver liability (e2e)", _pdf_teste("PARENTAL CONSENT AND WAIVER"), origem="e2e")
 
+# biblioteca (#88): os históricos de serviço saem das tarefas semeadas (sem QuickBooks nem Drive no e2e)
+from command_center.providers import biblioteca as _bib  # noqa: E402
+_bib.sincronizar_historicos(con, log=lambda *_: None)
+
 # aprendizado do dono e fonte de contexto já vêm do schema
 con.commit()
 n = lambda t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]                       # noqa: E731

@@ -118,6 +118,7 @@ export function Shell() {
         <div className="grp">Pessoas</div>
         <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">Equipe</NL>
         <NL to="/clients" icon="people">Clientes</NL>
+        {can('MANAGER') && <NL to="/biblioteca" icon="book">Biblioteca</NL>}
         <NL to="/crm/funil" icon="funnel">Funil do Kommo</NL>
         <div className="grp">Sistemas</div>
         <NL to="/asana" icon="list">Asana</NL>
