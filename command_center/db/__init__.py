@@ -125,6 +125,12 @@ MIGRACOES = [
     ("waivers", "pdf_path", "TEXT"),                      # PDF assinado guardado em ~/.urace/waivers (card e anexo usam)
     ("waivers", "subject", "TEXT"),                       # assunto do envelope: é o que identifica um documento interno
     ("waivers", "internal", "INTEGER NOT NULL DEFAULT 0"), # 1 = documento da empresa (support@ assina); não é waiver de cliente
+    # #85: waiver assinada no próprio sistema (sem DocuSign), na mesma tabela das do DocuSign
+    ("waivers", "source", "TEXT"),                        # urace = assinada aqui; NULL = DocuSign (espelho)
+    ("waivers", "pilot_id", "INTEGER"),                   # piloto da área do cliente a que ela vale
+    ("waivers", "doc_sha256", "TEXT"),                    # hash do PDF final (prova de que não mudou)
+    ("waivers", "audit", "TEXT"),                         # json: quem, quando, IP, aparelho, consentimentos, hashes
+    ("booking_config", "waiver_native", "INTEGER NOT NULL DEFAULT 0"),   # 0: desligada até o ADMIN ligar
     ("tasks", "waiver_id", "INTEGER"),                    # waiver que já foi anexada nesta tarefa (não anexa duas vezes)
     ("crm_messages", "status", "TEXT"),                   # saída: queued | sent | failed (entrada fica NULL)
     ("crm_messages", "error", "TEXT"),

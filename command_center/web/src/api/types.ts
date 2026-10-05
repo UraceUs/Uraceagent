@@ -60,6 +60,8 @@ export interface Waiver {
   template: string | null; status: string | null; sent_at: string | null; completed_at: string | null
   expires_at: string | null; hidden?: number; pdf_path?: string | null; minor_name?: string | null; link_reason?: string | null; link_by?: 'sync' | 'human' | null
   subject?: string | null; internal?: number
+  /** 'urace' = assinada na área do cliente (#85), sem DocuSign */
+  source?: string | null
   client_name?: string | null; client_pilot?: string | null; links?: Link[]
 }
 

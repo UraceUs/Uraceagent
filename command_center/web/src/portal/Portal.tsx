@@ -4,15 +4,17 @@
  *
  * Dono, 01/10: o login é o mesmo desenho do Command Center; dentro, um menu com cada
  * seção numa tela (Dashboard, Book a session, My sessions, Drivers, History, Account). */
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Pista } from '../components/Pista'
 import { Agendar, CartaoSessao, Sessoes } from './Agendar'
-import { haDias, papi, PortalError, type Account, type AgendaCfg, type Driver, type Painel } from './api'
+import { haDias, papi, PortalError, type Account, type AgendaCfg, type Driver, type Painel, type WaiverPiloto, type Waivers } from './api'
 import { ddiDe, PAISES } from './paises'
 import { guardarVisual, visual3d } from './visual'
 import '../styles/portal-3d.css'
+
+const AssinarWaiver = lazy(() => import('./Waiver').then(m => ({ default: m.AssinarWaiver })))   // o quadro de assinatura só nesta rota
 
 type Estado = Account | null | undefined           // undefined = carregando; null = sem sessão
 
@@ -196,6 +198,19 @@ function DadosDoPiloto({ p, completo }: { p: Driver; completo?: boolean }) {
   </div>
 }
 
+/** Waiver assinada aqui (#85): só aparece quando a equipe liga. Antes disso, segue o e-mail do DocuSign. */
+function useWaivers() {
+  const [w, setW] = useState<Waivers | null>(null)
+  useEffect(() => { papi<Waivers>('GET', '/waivers').then(setW).catch(() => setW(null)) }, [])
+  return w
+}
+
+function LinhaWaiver({ w }: { w: WaiverPiloto }) {
+  return w.status === 'signed'
+    ? <div className="small">Waiver: <b>signed</b>, valid until <b>{dataUS(w.valid_until)}</b> · <a href={`/ops/api/portal/waivers/${w.waiver_id}/pdf`}>Download PDF</a></div>
+    : <div className="small">Waiver: <b>not signed</b>{w.kind ? <> · <Link to={`/portal/drivers/${w.driver_id}/waiver`}>Sign now</Link></> : ' · add the date of birth first'}</div>
+}
+
 function ChipMedidas({ p }: { p: Driver }) {
   const [rot, tom] = SITUACAO[p.measures_status]
   return <span className={`chip ${tom}`}>{rot}{p.measures_status === 'aviso' && p.measures_days != null ? ` · ${p.measures_days} days` : ''}</span>
@@ -208,6 +223,8 @@ function Dashboard({ conta }: { conta: Account }) {
   useEffect(() => { papi<Painel>('GET', '/dashboard').then(setD).catch(e => setErro((e as PortalError).message)) }, [])
   useEffect(() => { papi<{ config: AgendaCfg }>('GET', '/availability').then(r => setCfg(r.config)).catch(() => setCfg(null)) }, [])
   const atencao = conta.drivers.filter(p => p.measures_status !== 'ok')
+  const waivers = useWaivers()
+  const semWaiver = waivers?.enabled ? waivers.drivers.filter(w => w.status !== 'signed' && w.kind) : []
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Dashboard</h1><p className="muted" style={{ margin: '4px 0 0' }}>Hi, {conta.name.split(' ')[0]}. Here is everything about your account.</p></div>
     <Aviso erro={erro} />
@@ -217,6 +234,8 @@ function Dashboard({ conta }: { conta: Account }) {
       {p.measures_status === 'faltando' ? `${p.name}: please complete the profile (${p.missing.map(k => ROTULO[k] || k).join(', ')}).`
         : p.measures_status === 'vencida' ? `${p.name}: measurements are ${d?.measures_limit_days ?? 60}+ days old. Update them to book.`
         : `${p.name}: measurements are ${p.measures_days} days old. Please review them.`} <Link to="/portal/drivers">Update</Link></div></div>)}
+    {semWaiver.map(w => <div key={`w${w.driver_id}`} className="banner warn"><span className="bi">▲</span><div className="grow">
+      {w.driver}: the waiver is not signed yet. <Link to={`/portal/drivers/${w.driver_id}/waiver`}>Sign it online</Link></div></div>)}
     <div className="portal-kpis">
       <div className="card card-b portal-kpi"><span className="small muted">Next session</span>
         {!d ? <span className="spin" /> : d.next_session ? <CartaoSessao s={d.next_session} cfg={cfg} solta /> : <><b>None booked</b><Link className="btn primary sm" to="/portal/book">Book a session</Link></>}</div>
@@ -333,6 +352,8 @@ function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onSalvo: (
 
 function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => void }) {
   const [editando, setEditando] = useState<number | 'novo' | null>(conta.drivers.length ? null : 'novo')
+  const waivers = useWaivers()
+  const waiverDe = (id: number) => waivers?.enabled ? waivers.drivers.find(w => w.driver_id === id) : undefined
   return <div className="stack" style={{ gap: 18 }}>
     <div className="portal-piloto-topo"><div className="grow"><h1 className="h1">Drivers</h1><p className="muted" style={{ margin: '4px 0 0' }}>The people who drive the kart: your child or children, or you. The account holder stays the responsible adult.</p></div>
       {editando === null && <button className="btn sm" onClick={() => setEditando('novo')}>+ Add a driver</button>}</div>
@@ -340,7 +361,7 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
       ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} />
       : <article className="card card-b portal-piloto" key={p.id}>
         <div className="portal-piloto-topo"><div className="grow"><h2 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h2>
-          <DadosDoPiloto p={p} completo /></div>
+          <DadosDoPiloto p={p} completo />{waiverDe(p.id) && <LinhaWaiver w={waiverDe(p.id)!} />}</div>
           <div className="row wrap portal-piloto-acoes"><ChipMedidas p={p} />
             <button className="btn sm" onClick={() => setEditando(p.id)}>{p.measures_status === 'ok' ? 'Edit' : 'Update'}</button></div></div>
         {p.missing.length > 0 && <p className="small" style={{ margin: '8px 0 0' }}>Missing: {p.missing.map(k => ROTULO[k] || k).join(', ')}.</p>}
@@ -391,6 +412,7 @@ export function PortalApp() {
       <Route path="book" element={<Agendar conta={conta} />} />
       <Route path="sessions" element={<Sessoes />} />
       <Route path="drivers" element={<Pilotos conta={conta} onSalvo={setConta} />} />
+      <Route path="drivers/:pid/waiver" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><AssinarWaiver conta={conta} /></Suspense>} />
       <Route path="history" element={<Historico />} />
       <Route path="account" element={<Conta conta={conta} setConta={setConta} />} />
       <Route path="*" element={<Navigate to="/portal/dashboard" replace />} />

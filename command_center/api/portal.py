@@ -13,6 +13,7 @@ depois vai para o site público.
 Mensagens em inglês: é o que o cliente lê (o site público é en-US).
 """
 import hmac
+import os
 import secrets
 import sqlite3
 import time
@@ -322,3 +323,68 @@ def painel(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)
 def historico(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """Só depois que a equipe liga a conta ao cliente do site interno."""
     return vinculo_site.historico(con, cid)
+
+
+# ------------------------------------------------------------------ waiver assinada aqui (#85)
+class WaiverIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    typed_name: str
+    signature: str                   # data:image/png;base64,... (desenhada no quadro)
+    read_and_agree: bool = False
+    consent_esign: bool = False
+
+
+@r.get("/waivers")
+def waivers(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Por piloto: qual waiver vale (menor → parental; maior → adult) e se já está assinada."""
+    from command_center.providers import waiver_nativa as wn
+    return wn.situacao(con, cid)
+
+
+@r.get("/waivers/model/{kind}")
+def waiver_modelo(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """O texto do documento para ler antes de assinar (o PDF original está em …/pdf)."""
+    from command_center.providers import waiver_nativa as wn
+    m = wn.modelo(con, kind) if wn.ligada(con) else None
+    if not m:
+        raise HTTPException(404, "Waiver not available.")
+    return {"kind": kind, "name": m["name"], "pages": m["pages"], "text": m["text"] or ""}
+
+
+@r.get("/waivers/model/{kind}/pdf")
+def waiver_modelo_pdf(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import waiver_nativa as wn
+    m = wn.modelo(con, kind) if wn.ligada(con) else None
+    if not m:
+        raise HTTPException(404, "Waiver not available.")
+    with open(m["pdf_path"], "rb") as f:
+        return Response(content=f.read(), media_type="application/pdf",
+                        headers={"Content-Disposition": f'inline; filename="URACE-waiver-{kind}.pdf"', "Cache-Control": "no-store"})
+
+
+@r.post("/drivers/{pid}/waiver", status_code=201)
+def assinar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(cliente_atual),
+                   con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import waiver_nativa as wn
+    try:
+        w = wn.assinar(con, cid, pid, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
+    except LookupError:
+        raise HTTPException(404, "Driver not found.")
+    except wn.ErroWaiver as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, "portal.waiver.sign", cid, {"piloto": pid, "waiver": w["id"], "modelo": w["template"],
+                                                   "sha256": w["doc_sha256"]})
+    con.commit()
+    return {"waiver_id": w["id"], "signed_at": w["completed_at"], "valid_until": w["expires_at"], **wn.situacao(con, cid)}
+
+
+@r.get("/waivers/{wid}/pdf")
+def waiver_assinada_pdf(wid: int, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """O PDF assinado (documento + página de assinatura e certificado), só da própria conta."""
+    from command_center.providers import waiver_nativa as wn
+    w = wn.da_conta(con, cid, wid)
+    if not w or not w["pdf_path"] or not os.path.isfile(w["pdf_path"]):
+        raise HTTPException(404, "Waiver not found.")
+    with open(w["pdf_path"], "rb") as f:
+        return Response(content=f.read(), media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="URACE-waiver-{wid}.pdf"', "Cache-Control": "no-store"})

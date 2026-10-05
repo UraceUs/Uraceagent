@@ -3,7 +3,7 @@ clientes. Quem abre e fecha a agenda é o gerente; confirmar e recusar pedido é
 import sqlite3
 from datetime import date
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
@@ -282,3 +282,46 @@ def desvincular_driver(pilot_id: int, request: Request, con: sqlite3.Connection 
 @r.get("/contas/do-cliente/{client_id}")
 def do_cliente(client_id: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     return {"conta": vs.conta_do_cliente(con, client_id)}
+
+
+# ------------------------------------------------------------------ waiver assinada aqui (#85)
+class WaiverNativaIn(BaseModel):
+    ligada: bool
+
+
+@r.get("/waiver-nativa")
+def waiver_nativa(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    """Ligada ou não, os dois modelos importados (nome, hash, quando) e as assinadas aqui (paginadas)."""
+    from command_center.providers import waiver_nativa as wn
+    return {"ligada": wn.ligada(con), "modelos": wn.modelos(con), "assinadas": wn.listar(con, limit, offset)}
+
+
+@r.post("/waiver-nativa/importar")
+def waiver_nativa_importar(request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("ADMIN"))):
+    """LÊ os dois modelos no DocuSign (nome + PDF) e guarda aqui. Não muda nada no DocuSign."""
+    from command_center.providers import NaoConectado
+    from command_center.providers import waiver_nativa as wn
+    try:
+        feitos = wn.importar_do_docusign(con, u["id"])
+    except NaoConectado as e:
+        raise HTTPException(503, f"DocuSign não conectado: {e}")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    _aud(con, request, u, "waiver_nativa.importar", None, {"modelos": feitos})
+    con.commit()
+    return {"modelos": wn.modelos(con)}
+
+
+@r.post("/waiver-nativa/ligar")
+def waiver_nativa_ligar(dados: WaiverNativaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                        u=Depends(auth.exige("ADMIN"))):
+    """Liga ou desliga a assinatura na área do cliente. Desligar não apaga nada já assinado."""
+    from command_center.providers import waiver_nativa as wn
+    try:
+        ligada = wn.ligar(con, dados.ligada, u["id"])
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    _aud(con, request, u, "waiver_nativa.ligar", None, {"ligada": ligada})
+    con.commit()
+    return {"ligada": ligada, "modelos": wn.modelos(con)}
