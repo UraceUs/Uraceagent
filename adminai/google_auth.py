@@ -36,6 +36,8 @@ import json
 import os
 import stat
 import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -55,6 +57,42 @@ ESCOPOS = [
     "https://www.googleapis.com/auth/drive.file",
 ]
 REDIRECT = "http://localhost:1/"   # porta 1: garante que nada responde
+TOKEN = {"urace": ("GOOGLE_TOKEN_JSON", "~/.urace/google-token.json"),
+         "support": ("GOOGLE_TOKEN_JSON_SUPPORT", "~/.urace/google-token-support.json")}
+_cache = {}            # conta -> (access_token, vence_em)
+
+
+def access_token(conta="urace"):
+    """Access token da caixa `conta`, a partir do refresh token gravado por este script.
+
+    É o que o backup do Drive e a Rate Card usam (#88: eles chamavam esta função e ela
+    não existia). Guarda o token em memória até 1 minuto antes de vencer. As mensagens de
+    erro dizem o que rodar e nunca carregam segredo."""
+    if conta in _cache and time.time() < _cache[conta][1] - 60:
+        return _cache[conta][0]
+    var, padrao = TOKEN[conta]
+    caminho = os.path.expanduser(os.environ.get(var) or padrao)
+    if not os.path.isfile(caminho):
+        raise RuntimeError(f"sem token do Google para {conta}@ ({caminho}). "
+                           f"Rode no VPS: python3 adminai/google_auth.py --conta {conta}")
+    with open(caminho, encoding="utf-8") as f:
+        tok = json.load(f)
+    dados = urllib.parse.urlencode({"client_id": tok["client_id"], "client_secret": tok["client_secret"],
+                                    "refresh_token": tok["refresh_token"], "grant_type": "refresh_token"}).encode()
+    req = urllib.request.Request("https://oauth2.googleapis.com/token", data=dados, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            resp = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        if "invalid_grant" in e.read().decode(errors="replace"):
+            raise RuntimeError(f"o acesso do Google para {conta}@ foi revogado ou expirou. "
+                               f"Refaça o consentimento: python3 adminai/google_auth.py --conta {conta}")
+        raise RuntimeError(f"o Google recusou o token de {conta}@ (HTTP {e.code}).")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"sem conexão com o Google: {e.reason}")
+    _cache[conta] = (resp["access_token"], time.time() + int(resp.get("expires_in", 3600)))
+    return _cache[conta][0]
 
 
 def main():
