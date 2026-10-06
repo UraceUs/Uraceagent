@@ -18,7 +18,8 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
   assinar eletronicamente"), nome digitado e assinatura desenhada.
 - **Prova**: data e hora (America/New_York e UTC), IP, aparelho, conta, os hashes do modelo
   e do PDF final, e uma página de assinatura e certificado anexada ao PDF original.
-- **Validade de 1 ano**, como o e-mail do modelo no DocuSign promete ao cliente.
+- **Validade de 1 ano**, como o e-mail do modelo no DocuSign promete ao cliente. A **parental
+  vence na véspera dos 18 anos** se isso vier antes (#106): adulto, o piloto assina a própria.
 - Grava na MESMA tabela `waivers` (source='urace'): card do cliente, anexo no Asana e
   "waiver assinada" para a agenda tratam as duas iguais.
 
@@ -45,6 +46,7 @@ MODELOS = {
 NOME = {"adult": "Adult Release and Waiver of Liability",
         "parental": "Parental Consent, Release and Waiver of Liability (minor)"}
 VALIDADE_DIAS = 365
+AVISO_18_DIAS = 30                  # a área do cliente avisa quem faz 18 nos próximos 30 dias
 MAX_ASSINATURA = 400_000            # bytes do PNG desenhado
 MIN_TINTA = 0.004                   # fração mínima de pixels pintados: quadro em branco não é assinatura
 
@@ -163,11 +165,43 @@ def tipo_para(piloto):
     return "parental" if portal.idade(date.fromisoformat(piloto["birth_date"])) < portal.MAIORIDADE else "adult"
 
 
+def dia_dos_18(nascimento):
+    """O dia em que o piloto faz 18 — pela mesma conta de `portal.idade` (29/02 vira 01/03)."""
+    try:
+        return nascimento.replace(year=nascimento.year + portal.MAIORIDADE)
+    except ValueError:
+        return date(nascimento.year + portal.MAIORIDADE, 3, 1)
+
+
+def validade(tipo, nascimento, dia):
+    """Até quando vale a waiver assinada em `dia`: 1 ano; a parental, no máximo até a véspera
+    dos 18 (#106) — adulto, a renúncia do pai já não cobre a participação dele."""
+    ate = dia + timedelta(days=VALIDADE_DIAS)
+    if tipo == "parental" and nascimento:
+        ate = min(ate, dia_dos_18(nascimento) - timedelta(days=1))
+    return ate
+
+
 def vigente(con, pid):
-    """A waiver nativa ainda válida deste piloto (ou None)."""
-    return um(con, """SELECT * FROM waivers WHERE pilot_id=? AND source='urace' AND status='completed'
-                      AND COALESCE(hidden,0)=0 AND expires_at >= ? ORDER BY completed_at DESC LIMIT 1""",
-              (pid, portal.hoje().isoformat()))
+    """A waiver nativa ainda válida deste piloto (ou None). A parental deixa de valer quando o
+    piloto faz 18, mesmo que a data gravada seja mais longa (assinada antes desta regra)."""
+    w = um(con, """SELECT * FROM waivers WHERE pilot_id=? AND source='urace' AND status='completed'
+                   AND COALESCE(hidden,0)=0 AND expires_at >= ? ORDER BY completed_at DESC LIMIT 1""",
+           (pid, portal.hoje().isoformat()))
+    if w and w["template"] == "parental":
+        p = um(con, "SELECT birth_date FROM portal_pilots WHERE id=?", (pid,))
+        if p and p["birth_date"] and portal.idade(date.fromisoformat(p["birth_date"])) >= portal.MAIORIDADE:
+            return None
+    return w
+
+
+def faz_18_em(piloto):
+    """A data dos 18 anos, se for nos próximos AVISO_18_DIAS dias (para avisar o responsável)."""
+    if not piloto.get("birth_date"):
+        return None
+    d = dia_dos_18(date.fromisoformat(piloto["birth_date"]))
+    hoje = portal.hoje()
+    return d.isoformat() if hoje < d <= hoje + timedelta(days=AVISO_18_DIAS) else None
 
 
 def situacao(con, conta_id):
@@ -181,7 +215,7 @@ def situacao(con, conta_id):
         except ErroWaiver:
             tipo = None
         saida.append({"driver_id": p["id"], "driver": p["name"], "kind": tipo,
-                      "own_signature_required": precisa_assinar_sozinho(p, tipo),
+                      "own_signature_required": precisa_assinar_sozinho(p, tipo), "turns_18_on": faz_18_em(p),
                       "status": "signed" if w else "none", "waiver_id": w["id"] if w else None,
                       "signed_at": w["completed_at"] if w else None, "valid_until": w["expires_at"] if w else None})
     return {"enabled": ativa, "drivers": saida}
@@ -238,7 +272,11 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         raise ErroWaiver("The waiver document could not be verified. Please contact us.")
     agora_utc = datetime.now(timezone.utc)
     ny = agora_utc.astimezone(portal.FUSO)
-    ate = (ny.date() + timedelta(days=VALIDADE_DIAS)).isoformat()
+    nasc = date.fromisoformat(p["birth_date"])
+    ate_d = validade(tipo, nasc, ny.date())
+    ate = ate_d.isoformat()
+    ate_motivo = ("the day before the minor turns 18" if tipo == "parental" and ate_d < ny.date() + timedelta(days=VALIDADE_DIAS)
+                  else "one year")
     sid = str(uuid.uuid4())
     trilha = {
         "signature_id": sid, "template": tipo, "template_name": m["name"], "template_sha256": m["sha256"],
@@ -248,7 +286,7 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         "signed_at_utc": agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "signed_at_local": ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "ip": ip, "user_agent": (aparelho or "")[:300], "read_and_agree": True, "consent_esign": True,
         "authentication": "URACE client account (email + password), signed in",
-        "signature_png_sha256": _sha(png), "valid_until": ate,
+        "signature_png_sha256": _sha(png), "valid_until": ate, "valid_until_reason": ate_motivo,
     }
     final = _pdf_assinado(base, trilha, png)
     caminho = os.path.join(pasta(), f"urace-{sid}.pdf")
@@ -332,7 +370,8 @@ def _pdf_assinado(base, t, png):
     cv.line(x, y, x + 300, y)
     y -= 14
     linha(f"Signature of {t['signer_name']}   ·   Typed name: {t['typed_name']}")
-    linha(f"Signed: {t['signed_at_local']}  ({t['signed_at_utc']} UTC)   ·   Valid until: {t['valid_until']}")
+    linha(f"Signed: {t['signed_at_local']}  ({t['signed_at_utc']} UTC)   ·   Valid until: {t['valid_until']}"
+          f" ({t.get('valid_until_reason') or 'one year'})")
     y -= 10
     linha("Audit trail", 11, "Helvetica-Bold", 16)
     for k, v in (("Authentication", t["authentication"]), ("IP address", t["ip"] or "—"),
