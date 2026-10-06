@@ -208,6 +208,7 @@ function useWaivers() {
 function LinhaWaiver({ w }: { w: WaiverPiloto }) {
   return w.status === 'signed'
     ? <div className="small">Waiver: <b>signed</b>, valid until <b>{dataUS(w.valid_until)}</b> · <a href={`/ops/api/portal/waivers/${w.waiver_id}/pdf`}>Download PDF</a></div>
+    : w.own_signature_required ? <div className="small">Waiver: <b>not signed</b> · {w.driver} is an adult and signs their own waiver (their own account, or in person at the track).</div>
     : <div className="small">Waiver: <b>not signed</b>{w.kind ? <> · <Link to={`/portal/drivers/${w.driver_id}/waiver`}>Sign now</Link></> : ' · add the date of birth first'}</div>
 }
 
@@ -246,7 +247,9 @@ function Dashboard({ conta }: { conta: Account }) {
         : p.measures_status === 'vencida' ? `${p.name}: measurements are ${d?.measures_limit_days ?? 60}+ days old. Update them to book.`
         : `${p.name}: measurements are ${p.measures_days} days old. Please review them.`} <Link to="/portal/drivers">Update</Link></div></div>)}
     {semWaiver.map(w => <div key={`w${w.driver_id}`} className="banner warn"><span className="bi">▲</span><div className="grow">
-      {w.driver}: the waiver is not signed yet. <Link to={`/portal/drivers/${w.driver_id}/waiver`}>Sign it online</Link></div></div>)}
+      {w.driver}: the waiver is not signed yet. {w.own_signature_required
+        ? <>{w.driver} is an adult and signs their own waiver: their own account, or in person at the track.</>
+        : <Link to={`/portal/drivers/${w.driver_id}/waiver`}>Sign it online</Link>}</div></div>)}
     <div className="portal-kpis">
       <div className="card card-b portal-kpi"><span className="small muted">Next session</span>
         {!d ? <span className="spin" /> : d.next_session ? <CartaoSessao s={d.next_session} cfg={cfg} solta /> : <><b>None booked</b><Link className="btn primary sm" to="/portal/book">Book a session</Link></>}</div>

@@ -3,7 +3,8 @@
  * O texto é o do PDF do DocuSign, importado como veio; o original abre em PDF. Para assinar:
  * ler, marcar as duas caixas (concordo / assino eletronicamente), digitar o nome completo e
  * desenhar a assinatura. Quem assina é o responsável logado; o servidor decide o modelo pela
- * idade do piloto e guarda a prova (hora, IP, aparelho, hashes). */
+ * idade do piloto e guarda a prova (hora, IP, aparelho, hashes). A adult só o próprio piloto
+ * assina (#104): para um adulto que não é o titular, a tela explica em vez de assinar. */
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { papi, PortalError, type Account, type WaiverModelo, type Waivers } from './api'
@@ -89,13 +90,18 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     <div className="row wrap" style={{ gap: 8 }}><a className="btn" href={`${BASE}/waivers/${meu.waiver_id}/pdf`}>Download the signed PDF</a><Link className="btn ghost" to="/portal/drivers">Back to Drivers</Link></div></div>
   if (!meu?.kind) return <div className="stack">{topo}<p className="muted">Add {piloto.name}'s date of birth first: it decides which waiver applies.</p>
     <Link to="/portal/drivers">Back to Drivers</Link></div>
+  if (meu.own_signature_required) return <div className="stack">{topo}
+    <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
+      <b>{piloto.name} is an adult and must sign their own waiver.</b> Only the driver can give up their own rights, so the account holder
+      can't sign for them. {piloto.name} can create their own account and sign it there, or sign in person at the track.</div></div>
+    <Link to="/portal/drivers">Back to Drivers</Link></div>
 
   const menor = meu.kind === 'parental'
   return <form className="stack" style={{ gap: 18 }} onSubmit={assinar} noValidate>
     {topo}
     <p className="muted" style={{ margin: 0 }}>{TIPO[meu.kind]}. {menor
       ? <>You sign as the <b>parent or legal guardian</b> of {piloto.name}.</>
-      : <>{piloto.is_self ? 'You sign for yourself.' : <>You sign as the account holder for {piloto.name}.</>}</>} Valid for one year.</p>
+      : 'You sign for yourself.'} Valid for one year.</p>
     {erro && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
     <section className="stack" aria-labelledby="w-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="w-doc">Read the document</h2>

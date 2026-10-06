@@ -577,6 +577,14 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     assert pdf.ok and pdf.body().startswith(b"%PDF")
     c.get_by_role("button", name="Back to Drivers").click()
     c.get_by_text("Waiver: signed").wait_for()
+    # 2b. #104: um piloto ADULTO que não é a Rita assina a própria waiver — a Rita não assina por ele
+    csrf = next(k["value"] for k in c.context.cookies() if k["name"] == "cp_csrf")
+    r = c.request.post(servidor + "/api/portal/drivers", data={"name": "Beto Adulto", **PILOTO_OK, "birth_date": "1990-02-02"},
+                       headers={"X-CSRF": csrf})
+    assert r.ok, r.text()
+    c.goto(servidor + "/portal/dashboard")
+    c.get_by_text("Beto Adulto is an adult and signs their own waiver").wait_for()
+    assert c.get_by_role("link", name="Sign it online").count() == 0
     assert not c.erros_js, c.erros_js
     # 3. a equipe vê a assinada na aba Waiver
     abrir(a, servidor, "/site/waiver")

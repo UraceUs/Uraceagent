@@ -144,6 +144,7 @@ def test_menor_assina_a_parental_e_vira_waiver_igual_as_do_docusign(cli):
     hc, (pid,) = cliente(cli)
     s = cli.get(f"{P}/waivers").json()
     assert s["enabled"] is True and s["drivers"][0]["kind"] == "parental" and s["drivers"][0]["status"] == "none"
+    assert s["drivers"][0]["own_signature_required"] is False, "pelo menor quem assina é o responsável"
     assert "PARENTAL CONSENT" in cli.get(f"{P}/waivers/model/parental").json()["text"]
     r = assina(cli, hc, pid)
     assert r.status_code == 201, r.text
@@ -172,12 +173,25 @@ def test_menor_assina_a_parental_e_vira_waiver_igual_as_do_docusign(cli):
     assert r.status_code == 200 and r.content == pdf
 
 
-def test_maior_assina_a_adult(cli):
+def test_maior_assina_a_adult_por_si_mesmo(cli):
     liga(cli)
-    hc, (pid,) = cliente(cli, pilotos=(("Maria Santos", "1985-04-12"),))
+    hc, _ = cliente(cli, conta={**CONTA, "i_am_driver": True}, pilotos=())
+    pid = next(d["id"] for d in cli.get(f"{P}/me").json()["drivers"] if d["is_self"])
     r = assina(cli, hc, pid)
     assert r.status_code == 201, r.text
     assert um(conectar(), "SELECT template FROM waivers WHERE id=?", (r.json()["waiver_id"],))["template"] == "adult"
+
+
+def test_titular_nao_assina_a_adult_de_outro_adulto(cli):
+    """#104: um adulto só renuncia aos próprios direitos (Sanislo, Fla. 2015). O titular da conta
+    não assina a waiver adult de um piloto adulto que não é ele: o servidor recusa e a tela explica."""
+    liga(cli)
+    hc, (pid,) = cliente(cli, pilotos=(("Pedro Santos", "1990-02-02"),))
+    s = cli.get(f"{P}/waivers").json()["drivers"][0]
+    assert s["kind"] == "adult" and s["own_signature_required"] is True
+    r = assina(cli, hc, pid)
+    assert r.status_code == 400 and "must sign their own waiver" in r.json()["detail"], r.text
+    assert not um(conectar(), "SELECT 1 AS x FROM waivers WHERE source='urace'")
 
 
 @pytest.mark.parametrize("mais,trecho", [
