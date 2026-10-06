@@ -273,3 +273,61 @@ def test_a_lista_das_assinadas_e_paginada(cli):
     r = cli.get(f"{S}/waiver-nativa?limit=2&offset=0").json()["assinadas"]
     assert r["total"] == 3 and len(r["itens"]) == 2 and r["itens"][0]["minor_name"] == "Leo Santos"
     assert len(cli.get(f"{S}/waiver-nativa?limit=2&offset=2").json()["assinadas"]["itens"]) == 1
+
+
+# ------------------------------------------------------------------ #106: a parental vence na véspera dos 18
+def _faz_18_daqui(dias):
+    """A data de nascimento de quem faz 18 daqui a `dias` dias (no fuso da Flórida)."""
+    d18 = portal.hoje() + timedelta(days=dias)
+    return d18.replace(year=d18.year - 18, day=min(d18.day, 28) if d18.month == 2 else d18.day).isoformat()
+
+
+def test_parental_vence_na_vespera_dos_18_e_nao_em_um_ano(cli):
+    liga(cli)
+    hc, (pid,) = cliente(cli, pilotos=(("Teen Santos", _faz_18_daqui(90)),))
+    r = assina(cli, hc, pid)
+    assert r.status_code == 201, r.text
+    w = um(conectar(), "SELECT * FROM waivers WHERE id=?", (r.json()["waiver_id"],))
+    assert w["expires_at"] == (portal.hoje() + timedelta(days=89)).isoformat(), "véspera dos 18, não 1 ano"
+    assert json.loads(w["audit"])["valid_until_reason"] == "the day before the minor turns 18"
+    from pypdf import PdfReader
+    assert "the day before the minor turns 18" in " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+
+
+def test_menor_longe_dos_18_continua_com_um_ano(cli):
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    w = um(conectar(), "SELECT * FROM waivers WHERE id=?", (assina(cli, hc, pid).json()["waiver_id"],))
+    assert w["expires_at"] == (portal.hoje() + timedelta(days=365)).isoformat()
+    assert json.loads(w["audit"])["valid_until_reason"] == "one year"
+
+
+def test_avisa_quem_faz_18_nos_proximos_30_dias(cli):
+    liga(cli)
+    cliente(cli, pilotos=(("Perto Santos", _faz_18_daqui(20)), ("Longe Santos", _faz_18_daqui(90))))
+    s = {d["driver"]: d for d in cli.get(f"{P}/waivers").json()["drivers"]}
+    assert s["Perto Santos"]["turns_18_on"] == (portal.hoje() + timedelta(days=20)).isoformat()
+    assert s["Longe Santos"]["turns_18_on"] is None
+
+
+def test_parental_antiga_deixa_de_valer_quando_o_piloto_faz_18(cli, monkeypatch):
+    """Uma parental gravada com validade além dos 18 (antes desta regra) não vale mais depois do aniversário:
+    o piloto passa a precisar da adult, assinada por ele."""
+    liga(cli)
+    hc, (pid,) = cliente(cli, pilotos=(("Teen Santos", _faz_18_daqui(100)),))
+    wid = assina(cli, hc, pid).json()["waiver_id"]
+    con = conectar()
+    con.execute("UPDATE waivers SET expires_at=? WHERE id=?", ((portal.hoje() + timedelta(days=365)).isoformat(), wid))
+    con.commit()
+    depois = portal.hoje() + timedelta(days=101)
+    monkeypatch.setattr(portal, "hoje", lambda: depois)
+    d = cli.get(f"{P}/waivers").json()["drivers"][0]
+    assert d["kind"] == "adult" and d["status"] == "none"
+
+
+def test_quem_nasceu_em_29_de_fevereiro_faz_18_em_1_de_marco_como_na_idade():
+    from datetime import date
+    assert wn.dia_dos_18(date(2008, 2, 29)) == date(2026, 3, 1)
+    assert portal.idade(date(2008, 2, 29), date(2026, 2, 28)) == 17 and portal.idade(date(2008, 2, 29), date(2026, 3, 1)) == 18
+    assert wn.validade("parental", date(2008, 2, 29), date(2025, 6, 1)) == date(2026, 2, 28)
+    assert wn.validade("adult", date(1990, 1, 1), date(2025, 6, 1)) == date(2026, 6, 1)

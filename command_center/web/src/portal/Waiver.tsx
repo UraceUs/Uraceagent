@@ -105,7 +105,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     {topo}
     <p className="muted" style={{ margin: 0 }}>{TIPO[meu.kind]}. {menor
       ? <>You sign as the <b>parent or legal guardian</b> of {piloto.name}.</>
-      : 'You sign for yourself.'} Valid for one year.</p>
+      : 'You sign for yourself.'} {menor ? <>Valid for one year, or until the day before {piloto.name} turns 18, whichever comes first.</> : 'Valid for one year.'}</p>
     {menor && <section className="stack" aria-labelledby="w-par" style={{ gap: 8 }}>
       <h2 className="h2" id="w-par">Who is signing</h2>
       <fieldset className="stack portal-parentesco" style={{ gap: 6 }}>
