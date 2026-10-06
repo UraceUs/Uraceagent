@@ -49,7 +49,10 @@ export interface AgendaCfg { morning_start: string; morning_end: string; afterno
   horizon_days: number; min_notice_hours: number; auto_confirm: number }
 export interface Servico { id: number; name: string; description: string | null; price: number }
 export interface Booking { id: number; date: string; period: 'manha' | 'tarde' | 'dia'; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'
-  notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null }
+  notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null
+  /** #50: aceita pela equipe — falta pagar a invoice e/ou assinar a waiver */
+  accepted?: string | null; charge_kind?: 'contrato' | 'invoice' | null; invoice_doc?: string | null; invoice_link?: string | null
+  invoice_sent?: number; waiver_sent?: number }
 
 export const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 

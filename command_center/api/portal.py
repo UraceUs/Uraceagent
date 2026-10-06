@@ -279,6 +279,8 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
     try:
         with transacao(con):                  # duas pessoas na última vaga: só uma leva
             bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes, dados.service_id)
+            from command_center.providers import cobranca_agenda
+            cobranca_agenda.ao_marcar(con, bid)      # contrato + waiver em dia: confirma sozinha (dono, 06/10)
             _aud(con, request, "portal.booking", cid, {"agendamento": bid, "data": dados.date, "periodo": dados.period,
                                                         "servico": dados.service_id})
     except ag.ErroAgenda as e:

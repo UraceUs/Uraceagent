@@ -246,10 +246,15 @@ def test_fluxo_completo_pela_api(cli):
     h = equipe(cli, "op@urace.us")
     lista = cli.get("/ops/api/site/agendamentos?status=pendente").json()["agendamentos"]
     assert lista[0]["account_name"] == "Maria Santos" and lista[0]["driver"] == "Maria Santos"
-    assert cli.post(f"/ops/api/site/agendamentos/{b}/confirmar", headers=h, json={"nota": "até lá"}).json()["status"] == "confirmada"
+    # #50 (dono, 06/10): a equipe ACEITA a vaga (cobra e pede a waiver); confirmar sem esperar é do gerente
+    assert cli.post(f"/ops/api/site/agendamentos/{b}/confirmar", headers=h, json={"nota": "até lá"}).status_code == 403
+    r = cli.post(f"/ops/api/site/agendamentos/{b}/aceitar", headers=h, json={}).json()
+    assert r["status"] == "pendente" and r["cobranca"]["aceita"] and r["cobranca"]["charge_error"], "sem card: fica escrito"
     assert cli.post(f"/ops/api/site/agenda/bloqueios/{bid}/remover", headers=h).status_code == 403, "desbloquear é do gerente"
+    h = equipe(cli, "ger@urace.us")
+    assert cli.post(f"/ops/api/site/agendamentos/{b}/confirmar", headers=h, json={"nota": "até lá"}).json()["status"] == "confirmada"
     eventos = {x["event"] for x in todos(conectar(), "SELECT event FROM audit_logs")}
-    assert {"booking.week", "booking.block", "portal.booking", "booking.confirmar"} <= eventos
+    assert {"booking.week", "booking.block", "portal.booking", "booking.aceitar", "booking.confirmar"} <= eventos
 
 
 def test_cliente_so_cancela_o_que_e_dele(cli):

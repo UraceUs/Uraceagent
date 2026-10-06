@@ -284,7 +284,10 @@ def cancelar_pelo_cliente(con, conta_id, bid):
 
 def do_cliente(con, conta_id):
     return [dict(b) for b in todos(con, """SELECT b.id, b.date, b.period, b.status, b.notes, b.decision_note, b.created_at,
-                                                 b.service_name AS service, b.price, p.name AS driver FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                                                 b.service_name AS service, b.price, p.name AS driver,
+                                                 b.accepted_at AS accepted, b.charge_kind, b.invoice_doc, b.invoice_link,
+                                                 b.qbo_invoice_id IS NOT NULL AS invoice_sent, b.waiver_ref IS NOT NULL AS waiver_sent
+                                            FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
                                             WHERE b.account_id=? ORDER BY b.date DESC, b.id DESC LIMIT 100""", (conta_id,))]
 
 

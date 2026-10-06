@@ -22,10 +22,12 @@ interface Bloqueio { id: number; date_from: string; date_to: string; period: str
 interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number }
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
-  invoice_text: string | null; active: number; sort: number; updated_at: string | null }
+  invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
+  accepted_at?: string | null; invoice_doc?: string | null; invoice_link?: string | null; charge_error?: string | null; waiver_error?: string | null; reminder_error?: string | null
+  cobranca?: { aceita: boolean; pagamento: 'contrato' | 'pago' | 'enviada' | 'erro' | 'pendente'; waiver: 'ok' | 'enviada' | 'erro' | 'pendente'; pronta: boolean } | null
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null
   asana_gid: string | null; asana_error: string | null }
 
@@ -44,15 +46,20 @@ function Agendamentos() {
   const [filtro, setFiltro] = useState<'pendente' | 'proximas' | 'todas'>('pendente')
   const q = filtro === 'pendente' ? '?status=pendente' : filtro === 'proximas' ? `?de=${hojeFL()}` : ''
   const l = useGet<{ agendamentos: Ag[] }>(`/site/agendamentos${q}`, 30000)
-  async function decidir(a: Ag, d: 'confirmar' | 'recusar' | 'cancelar') {
+  const { can } = useAuth()
+  async function decidir(a: Ag, d: 'aceitar' | 'confirmar' | 'recusar' | 'cancelar') {
     let nota: string | null = null
-    if (d !== 'confirmar') {
+    if (d === 'recusar' || d === 'cancelar') {
       const r = await perguntar({ titulo: d === 'recusar' ? 'Recusar o pedido?' : 'Cancelar a sessão?', texto: 'O cliente vê a nota na área do cliente.',
         campo: 'Nota para o cliente (opcional)', ok: d === 'recusar' ? 'Recusar' : 'Cancelar sessão', perigo: true })
       if (r === false || r === null || r === undefined) return
       nota = typeof r === 'string' ? r : null
     }
-    try { await api.post(`/site/agendamentos/${a.id}/${d}`, { nota }); toast(d === 'confirmar' ? 'Sessão confirmada.' : 'Feito.', 'ok'); l.reload() }
+    try {
+      const r = await api.post<{ status: string; cobranca: { charge_error: string | null; waiver_error: string | null } | null }>(`/site/agendamentos/${a.id}/${d}`, { nota })
+      toast(d === 'confirmar' ? 'Sessão confirmada.' : d === 'aceitar' ? (r.status === 'confirmada' ? 'Aceita e já confirmada (contrato + waiver em dia).'
+        : r.cobranca?.charge_error || r.cobranca?.waiver_error ? 'Aceita, mas falta resolver: veja no agendamento.' : 'Aceita: invoice e waiver enviadas. Confirma sozinha quando pagar e assinar.') : 'Feito.',
+        r.cobranca?.charge_error || r.cobranca?.waiver_error ? 'warn' : 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   return <>
@@ -62,7 +69,7 @@ function Agendamentos() {
     {l.loading && !l.data && <Loading />}
     {l.data && (!l.data.agendamentos.length ? <Empty title={filtro === 'pendente' ? 'Nenhum pedido esperando' : 'Nada aqui'}>Os pedidos feitos na área do cliente aparecem aqui.</Empty>
       : <div className="card"><div className="tbl">{l.data.agendamentos.map(a => {
-        const [rot, tom] = ST[a.status] || [a.status, 'neutral']
+        const [rot, tom]: [string, Tom] = a.status === 'pendente' && a.accepted_at ? ['aceita · esperando pagamento e waiver', 'info'] : ST[a.status] || [a.status, 'neutral']
         const anos = idade(a.driver_birth)
         return <div className="tr" key={a.id}>
           <div className="grow" style={{ minWidth: 0 }}>
@@ -77,9 +84,17 @@ function Agendamentos() {
               ? `acima do contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`
               : `contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`}</Chip></div>}
             {a.notes && <div className="small">“{a.notes}”</div>}
+            {a.cobranca && <div className="row wrap small" style={{ gap: 6 }}>
+              <Chip tone={a.cobranca.pagamento === 'pago' || a.cobranca.pagamento === 'contrato' ? 'ok' : a.cobranca.pagamento === 'erro' ? 'crit' : 'warn'}>
+                {a.cobranca.pagamento === 'contrato' ? 'sessão do contrato' : a.cobranca.pagamento === 'pago' ? `pago ${a.invoice_doc || ''}` : a.cobranca.pagamento === 'enviada' ? `invoice ${a.invoice_doc || ''} enviada` : a.cobranca.pagamento === 'erro' ? 'invoice não saiu' : 'invoice: tentando'}</Chip>
+              <Chip tone={a.cobranca.waiver === 'ok' ? 'ok' : a.cobranca.waiver === 'erro' ? 'crit' : 'warn'}>
+                {a.cobranca.waiver === 'ok' ? 'waiver em dia' : a.cobranca.waiver === 'enviada' ? 'waiver enviada' : a.cobranca.waiver === 'erro' ? 'waiver não saiu' : 'waiver: assina na área do cliente'}</Chip></div>}
+            {[a.charge_error, a.waiver_error, a.reminder_error].filter(Boolean).map(e => <div key={e} className="small" style={{ color: 'var(--crit)' }}>{e}</div>)}
           </div>
           <Chip tone={tom}>{rot}</Chip>
-          {a.status === 'pendente' && <><button className="btn sm primary" onClick={() => decidir(a, 'confirmar')}>Confirmar</button>
+          {a.status === 'pendente' && <>{!a.accepted_at && <button className="btn sm primary" onClick={() => decidir(a, 'aceitar')}
+            title="Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar">Aceitar</button>}
+            {can('MANAGER') && <button className="btn sm ghost" onClick={() => decidir(a, 'confirmar')} title="Confirmar sem esperar pagamento e waiver">Confirmar mesmo assim</button>}
             <button className="btn sm ghost" onClick={() => decidir(a, 'recusar')}>Recusar</button></>}
           {a.status === 'confirmada' && a.date >= hojeFL() && <button className="btn sm ghost" onClick={() => decidir(a, 'cancelar')}>Cancelar</button>}
         </div>
@@ -230,7 +245,7 @@ function Servicos() {
   const toast = useToast()
   const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
   const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item: '' })
-  const [edit, setEdit] = useState<Record<number, Partial<Servico> & { price_txt?: string; qbo_item?: string }>>({})
+  const [edit, setEdit] = useState<Record<number, Partial<Servico> & { price_txt?: string; qbo_item?: string; deposit_txt?: string }>>({})
   const itens = l.data?.itens_qbo || []
   async function criar() {
     try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item: novo.qbo_item || null })
@@ -244,13 +259,14 @@ function Servicos() {
     if (e.description !== undefined) corpo.description = e.description || null
     if (e.price_txt !== undefined) corpo.price = e.price_txt
     if (e.qbo_item !== undefined) corpo.qbo_item = e.qbo_item || null
+    if (e.deposit_txt !== undefined) corpo.deposit = e.deposit_txt || null
     try { await api.patch(`/site/servicos/${sv.id}`, corpo); toast('Salvo. Vale para os próximos agendamentos.', 'ok')
       setEdit(x => { const y = { ...x }; delete y[sv.id]; return y }); l.reload() }
     catch (er) { toast((er as ApiError).message, 'crit') }
   }
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
   if (!l.data) return <Loading />
-  const muda = (id: number, x: Partial<Servico> & { price_txt?: string; qbo_item?: string }) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  const muda = (id: number, x: Partial<Servico> & { price_txt?: string; qbo_item?: string; deposit_txt?: string }) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
   // dono, 01/10: o item é um texto — escolhe da lista ou escreve; sem o preço no rótulo
   const sugestoes = <datalist id="itens-qbo">{itens.map(i => <option key={i.id} value={i.name} />)}</datalist>
   return <div className="stack" style={{ gap: 18 }}>
@@ -267,6 +283,8 @@ function Servicos() {
               <label className="fld"><span>Preço (US$)</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
               <label className="fld"><span>Item no QuickBooks <i>ou texto</i></span><input list="itens-qbo" value={e.qbo_item ?? sv.qbo_item_name ?? sv.invoice_text ?? ''} disabled={!gerente}
                 onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder="escolha ou escreva" /></label>
+              <label className="fld"><span>Depósito por sessão (US$) <i>0 = sem</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
+                onChange={x => muda(sv.id, { deposit_txt: x.target.value })} /></label>
               {gerente && <div className="row" style={{ gap: 6 }}>
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>Salvar</button>
                 <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? 'Desativar' : 'Reativar'}</button></div>}
