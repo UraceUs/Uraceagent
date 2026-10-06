@@ -127,11 +127,11 @@ envio, atualização de status, entrega —, a IA atualiza o quadro
 |---|---|
 | **Nome da tarefa** | nome da peça / item comprado |
 | `Supplier` | de onde comprou |
-| `Order Number` | número do pedido |
+| `Order Number` | **só o número** do pedido (o link da página do pedido vai na descrição) |
 | `Created at` | data da compra |
-| `Tracking Number` | **link** de rastreio (regra do dono: sempre link) |
+| `Tracking Number` | **só o código** de rastreio (dono, 06/10: código no campo, link na descrição; substitui o "sempre link" de 28/08) |
 | `Status da ordem` | Order Created → Shipped → Arrived (+ quadro, ver `automacao-status-secao.md`) |
-| descrição | previsão de entrega |
+| descrição | previsão de entrega + `Rastreio: <link>` e `Pedido: <link>` |
 
 Dedupe pelo **número do pedido**: e-mail de atualização do mesmo pedido
 **atualiza** a tarefa existente, nunca cria outra.

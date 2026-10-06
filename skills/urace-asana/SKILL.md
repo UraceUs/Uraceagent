@@ -196,8 +196,12 @@ O vai-e-vem com o designer segue humano por decisão do dono.
 
 Sincronia nos dois sentidos; empate resolvido pela **última alteração**
 (ler o histórico da tarefa). Mapa e IDs em
-`docs/adminai/automacao-status-secao.md`. **Sempre link** em `Order
-Number` e `Tracking Number` — link que abre, não código solto.
+`docs/adminai/automacao-status-secao.md`. **Código no campo, link na descrição**
+(dono, 06/10, substitui o "sempre link" de 28/08): `Order Number` e `Tracking
+Number` guardam só o código (ex.: `1Z…`, `21-14956-03128`); o link que abre vai
+para a **descrição** da tarefa, numa linha `Rastreio: <link>` / `Pedido: <link>`.
+Sem código no link (Amazon, página de loja): campo vazio e o link na descrição —
+nunca adivinhar código.
 
 ## Nunca
 

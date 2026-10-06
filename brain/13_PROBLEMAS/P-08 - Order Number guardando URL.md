@@ -27,3 +27,11 @@ Ao tocar numa dessas tarefas, extrair o código e pôr no campo certo, guardando
 
 ## Fonte
 docs/adminai/mapa-asana-4-projetos.md
+
+## Decisão do dono — 06/10/2026
+
+- **Código no campo, link na descrição** (opção "a"). Substitui o "sempre link" de 28/08.
+- **Corrigir tudo de uma vez, com a lista aprovada antes.**
+- Levantamento de 06/10: são 36 campos com link em 31 tarefas do Shipping Orders. Em 14 o código sai com certeza (UPS, DHL, eBay, YunExpress). Os outros 22 são links da Amazon, páginas de loja, Newegg, Etsy e kartshop, que não trazem código: o campo fica vazio e o link vai para a descrição.
+- Tarefas concluídas, canceladas ou reembolsadas não são mexidas.
+- Regra atualizada em `skills/urace-asana/SKILL.md` e `docs/adminai/app-gmail-triagem.md`.
