@@ -131,6 +131,7 @@ MIGRACOES = [
     ("waivers", "doc_sha256", "TEXT"),                    # hash do PDF final (prova de que não mudou)
     ("waivers", "audit", "TEXT"),                         # json: quem, quando, IP, aparelho, consentimentos, hashes
     ("booking_config", "waiver_native", "INTEGER NOT NULL DEFAULT 0"),   # 0: desligada até o ADMIN ligar
+    ("portal_accounts", "email_verified_at", "TEXT"),       # #108: o e-mail da conta confirmado por código
     ("tasks", "waiver_id", "INTEGER"),                    # waiver que já foi anexada nesta tarefa (não anexa duas vezes)
     ("crm_messages", "status", "TEXT"),                   # saída: queued | sent | failed (entrada fica NULL)
     ("crm_messages", "error", "TEXT"),

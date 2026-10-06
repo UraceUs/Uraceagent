@@ -26,6 +26,16 @@ RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")
 DIST = os.path.join(RAIZ, "command_center", "web", "dist", "index.html")
 SENHA = "senha-de-teste-123"
 
+EMAILS = None
+
+
+def codigo_do_email(para):
+    """O código de 6 dígitos do último e-mail que o servidor "mandou" para `para` (#108)."""
+    import json
+    linhas = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
+    return re.search(r"\b(\d{6})\b", [x for x in linhas if x["to"] == para][-1]["text"]).group(1)
+
+
 # Toda tela do menu. Rota com :id usa o 1 que a semente cria.
 ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
@@ -45,8 +55,10 @@ def servidor(tmp_path_factory):
     if not os.path.exists(DIST):
         pytest.fail("frontend não construído: rode `npm run build` em command_center/web")
     pasta = tmp_path_factory.mktemp("e2e")
+    global EMAILS
+    EMAILS = str(pasta / "emails.jsonl")                 # #108: o e-mail do código vai para cá, nada sai da máquina
     env = dict(os.environ, CC_DB_PATH=str(pasta / "e2e.sqlite"), URACE_DIR=str(pasta), URACE_ENV="/nao/existe",
-               CC_AUTOSYNC="0", PYTHONPATH=RAIZ)
+               CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS)
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
     porta = _porta_livre()
@@ -578,6 +590,15 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     assert len([t for n, t in _cabecalhos(c) if n == 1]) == 1
     r = c.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
+    # #108: o e-mail da conta é confirmado por código (uma vez) e a assinatura pede um código novo
+    assert c.get_by_role("button", name="Sign the waiver").is_disabled()
+    c.get_by_role("button", name="Send the code to my email").click()
+    c.get_by_label("Code sent to").wait_for()
+    c.get_by_label("Code sent to").fill(codigo_do_email("rita.e2e@example.com"))
+    c.get_by_role("button", name="Confirm email").click()
+    c.get_by_role("button", name="Send me the signing code").click()
+    c.get_by_label("Signing code sent to").wait_for()
+    c.get_by_label("Signing code sent to").fill(codigo_do_email("rita.e2e@example.com"))
     c.get_by_role("button", name="Sign the waiver").click()
     assert "Check both boxes" in c.get_by_role("alert").inner_text()
     # #105: pelo menor, só pai ou mãe — "Other" explica e não deixa assinar

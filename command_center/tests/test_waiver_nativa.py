@@ -76,6 +76,7 @@ def cli(tmp_path, monkeypatch):
     monkeypatch.setenv("CC_DB_PATH", str(tmp_path / "cc.sqlite"))
     monkeypatch.setenv("URACE_DIR", str(tmp_path))
     monkeypatch.setenv("CC_WAIVERS_DIR", str(tmp_path / "waivers"))
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))      # #108: nenhum e-mail sai daqui
     import command_center.providers as prov
     monkeypatch.setattr(prov, "modulo", lambda nome: DocusignFalso() if nome == "docusign" else None)
     c = conectar(); aplicar_schema(c)
@@ -111,11 +112,32 @@ def liga(cli):
     assert r.status_code == 200 and r.json()["ligada"] is True
 
 
-def assina(cli, h, pid, ler=True, **mais):
-    """Como a tela: baixa o PDF do modelo (#107: o servidor registra a entrega), lê tudo e assina."""
+def ultimo_codigo(email):
+    """O código do último e-mail mandado para `email` (o arquivo do CC_EMAIL_FAKE)."""
+    import re
+    linhas = [json.loads(x) for x in open(os.environ["CC_EMAIL_FAKE"], encoding="utf-8").read().splitlines()]
+    return re.search(r"\b(\d{6})\b", [x for x in linhas if x["to"] == email][-1]["text"]).group(1)
+
+
+def confirma_email(cli, h):
+    s = cli.get(f"{P}/waivers").json()
+    if not s["email_verified"]:
+        assert cli.post(f"{P}/email/verify/send", headers=h).status_code == 200
+        r = cli.post(f"{P}/email/verify", json={"code": ultimo_codigo(s["email"])}, headers=h)
+        assert r.status_code == 200, r.text
+    return s["email"]
+
+
+def assina(cli, h, pid, ler=True, codigo=True, **mais):
+    """Como a tela: baixa o PDF do modelo (#107: o servidor registra a entrega), lê tudo, confirma o
+    e-mail e pede o código de assinar (#108), e assina."""
     if ler:
         for k in ("adult", "parental"):
             cli.get(f"{P}/waivers/model/{k}/pdf")
+    if codigo and "sign_code" not in mais:
+        email = confirma_email(cli, h)
+        cli.post(f"{P}/waivers/code", headers=h)          # pode ser 429 (pediu há menos de 1 min): vale o último
+        mais["sign_code"] = ultimo_codigo(email)
     from datetime import datetime, timezone
     corpo = {"typed_name": "Maria Santos", "signature": _assinatura(), "read_and_agree": True, "consent_esign": True,
              "relationship": "mother", "guardian_declaration": True,
@@ -374,3 +396,71 @@ def test_a_leitura_fica_na_trilha_e_no_certificado(cli):
     from pypdf import PdfReader
     texto = " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
     assert "Document delivered to the signer" in texto and "Whole document read" in texto
+
+
+# ------------------------------------------------------------------ #108: e-mail confirmado e código na hora
+def test_sem_email_confirmado_nao_assina(cli):
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    r = assina(cli, hc, pid, codigo=False)
+    assert r.status_code == 400 and "Confirm your email" in r.json()["detail"], r.text
+    assert cli.post(f"{P}/waivers/code", headers=hc).status_code == 400, "sem e-mail confirmado não manda código"
+
+
+def test_codigo_errado_vencido_ou_repetido_nao_assina(cli, monkeypatch):
+    from command_center.providers import codigos
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    email = confirma_email(cli, hc)
+    assert cli.post(f"{P}/waivers/code", headers=hc).json()["sent_to"] == "m••••@example.com"
+    certo = ultimo_codigo(email)
+    errado = "000000" if certo != "000000" else "111111"
+    r = assina(cli, hc, pid, sign_code=errado)
+    assert r.status_code == 400 and "not right" in r.json()["detail"]
+    for _ in range(4):
+        assina(cli, hc, pid, sign_code=errado)
+    r = assina(cli, hc, pid, sign_code=certo)
+    assert r.status_code == 400 and "Too many wrong tries" in r.json()["detail"], "5 erros queimam o código"
+    # pedir de novo em menos de 1 minuto: não manda
+    assert cli.post(f"{P}/waivers/code", headers=hc).status_code == 429
+    # depois do minuto, um código novo; vencido (15 min) não vale
+    real = codigos._agora
+    monkeypatch.setattr(codigos, "_agora", lambda: real() + timedelta(minutes=2))
+    assert cli.post(f"{P}/waivers/code", headers=hc).status_code == 200
+    novo = ultimo_codigo(email)
+    monkeypatch.setattr(codigos, "_agora", lambda: real() + timedelta(minutes=20))
+    r = assina(cli, hc, pid, sign_code=novo)
+    assert r.status_code == 400 and "expired" in r.json()["detail"]
+    assert not um(conectar(), "SELECT 1 AS x FROM waivers WHERE source='urace'")
+
+
+def test_codigo_vale_uma_vez_e_nunca_fica_guardado(cli):
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    r = assina(cli, hc, pid)
+    assert r.status_code == 201, r.text
+    con = conectar()
+    linhas = [dict(x) for x in con.execute("SELECT * FROM portal_codes").fetchall()]
+    codigos_mandados = [ultimo_codigo("maria@example.com")]
+    assert all(c not in json.dumps(linhas) for c in codigos_mandados), "o código não fica guardado, só o hash"
+    assert all(x["used_at"] for x in linhas), "cada código vale uma vez"
+    w = um(con, "SELECT * FROM waivers WHERE id=?", (r.json()["waiver_id"],))
+    t = json.loads(w["audit"])
+    assert t["email_verified_at"] and t["otp_sent_at"] and t["otp_verified_at"] and t["otp_sent_to"] == "maria@example.com"
+    assert t["session_login_at"] and "one-time code sent to maria@example.com" in t["authentication"]
+    from pypdf import PdfReader
+    texto = " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+    assert "one-time code sent to maria@example.com" in texto
+
+
+def test_o_email_sai_da_caixa_certa_e_o_falso_nao_sai_da_maquina(tmp_path, monkeypatch):
+    from command_center.providers import email_envio
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "e.jsonl"))
+    monkeypatch.delenv("CC_EMAIL_REMETENTE", raising=False)
+    email_envio.enviar("a@example.com", "Assunto", "Texto")
+    monkeypatch.setenv("CC_EMAIL_REMETENTE", "urace")
+    email_envio.enviar("a@example.com", "Assunto", "Texto")
+    monkeypatch.setenv("CC_EMAIL_REMETENTE", "qualquer")
+    email_envio.enviar("a@example.com", "Assunto", "Texto")
+    de = [json.loads(x)["from"] for x in open(tmp_path / "e.jsonl").read().splitlines()]
+    assert de == ["support@urace.us", "urace@urace.us", "support@urace.us"]

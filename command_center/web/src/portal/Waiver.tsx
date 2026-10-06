@@ -1,7 +1,9 @@
 /* Assinar a waiver na área do cliente (#85), sem DocuSign. Carregada só nesta rota.
  *
  * O documento é o PDF do DocuSign, importado como veio, mostrado página por página (#107); as
- * caixas só se liberam depois de todas as páginas passarem pela tela. Para assinar: ler, marcar as duas caixas (concordo / assino eletronicamente), digitar o nome completo e
+ * caixas só se liberam depois de todas as páginas passarem pela tela. O e-mail da conta é
+ * confirmado por código (uma vez) e cada assinatura pede um código novo nesse e-mail (#108).
+ * Para assinar: ler, marcar as duas caixas (concordo / assino eletronicamente), digitar o nome completo e
  * desenhar a assinatura. Quem assina é o responsável logado; o servidor decide o modelo pela
  * idade do piloto e guarda a prova (hora, IP, aparelho, hashes). A adult só o próprio piloto
  * assina (#104): para um adulto que não é o titular, a tela explica em vez de assinar. */
@@ -67,6 +69,10 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   // #107: as caixas só se liberam depois de o documento inteiro passar pela tela
   const [lido, setLido] = useState<{ em: string; modo: 'pdf_viewer' | 'pdf_opened_and_text' } | null>(null)
   const [semVisor, setSemVisor] = useState(false)
+  // #108: e-mail confirmado (uma vez por conta) e o código de uma vez para assinar
+  const [cod, setCod] = useState({ email: '', assinar: '' })
+  const [enviado, setEnviado] = useState<{ email?: string; assinar?: string }>({})
+  const [ocupado, setOcupado] = useState(false)
   const [abriuPdf, setAbriuPdf] = useState(false)
   const meu = sit?.drivers.find(d => d.driver_id === pid)
 
@@ -77,8 +83,22 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
 
   async function assinar(e: FormEvent) {
     e.preventDefault(); setErro(null); setIndo(true)
-    try { setFeita(await papi('POST', `/drivers/${pid}/waiver`, { ...f, document_read_at: lido?.em ?? null, document_read_mode: lido?.modo ?? null })) }
+    try { setFeita(await papi('POST', `/drivers/${pid}/waiver`, { ...f, document_read_at: lido?.em ?? null, document_read_mode: lido?.modo ?? null, sign_code: cod.assinar })) }
     catch (ex) { setErro((ex as PortalError).message) } finally { setIndo(false) }
+  }
+
+  async function mandarCodigo(qual: 'email' | 'assinar') {
+    setErro(null); setOcupado(true)
+    try {
+      const r = await papi<{ sent_to?: string; verified?: boolean }>('POST', qual === 'email' ? '/email/verify/send' : '/waivers/code')
+      if (r.verified) setSit(await papi<Waivers>('GET', '/waivers'))
+      else setEnviado(x => ({ ...x, [qual]: r.sent_to }))
+    } catch (ex) { setErro((ex as PortalError).message) } finally { setOcupado(false) }
+  }
+  async function confirmarEmail() {
+    setErro(null); setOcupado(true)
+    try { await papi('POST', '/email/verify', { code: cod.email }); setSit(await papi<Waivers>('GET', '/waivers')) }
+    catch (ex) { setErro((ex as PortalError).message) } finally { setOcupado(false) }
   }
 
   if (!piloto) return <div className="stack"><h1 className="h1">Waiver</h1><p className="muted">Driver not found. <Link to="/portal/drivers">Back to Drivers</Link></p></div>
@@ -151,8 +171,28 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
       <label className="fld"><span>Your full name<b className="portal-obr" aria-hidden="true"> *</b><i> · typed, as your signature</i></span>
         <input autoComplete="name" value={f.typed_name} onChange={e => setF({ ...f, typed_name: e.target.value })} required /></label>
       <Quadro onMuda={png => setF(x => ({ ...x, signature: png }))} />
-      <button className="btn primary block" disabled={indo || !modelo || naoOnline || !lido}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
-      <p className="small muted" style={{ margin: 0 }}>We record the date and time, your IP address and device with your signature. You get the signed PDF right after.</p>
+      {!sit.email_verified ? <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
+        <h3 className="h3" style={{ margin: 0 }}>Confirm your email</h3>
+        <p className="small muted" style={{ margin: 0 }}>Before you sign, we confirm that <b>{sit.email}</b> is yours with a 6-digit code. You do this once.</p>
+        {!enviado.email ? <button type="button" className="btn" disabled={ocupado} onClick={() => mandarCodigo('email')}>Send the code to my email</button>
+          : <>
+            <label className="fld"><span>Code sent to {enviado.email}</span>
+              <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={cod.email} onChange={e => setCod({ ...cod, email: e.target.value.replace(/\D/g, '') })} /></label>
+            <div className="row wrap" style={{ gap: 8 }}>
+              <button type="button" className="btn" disabled={ocupado || cod.email.length !== 6} onClick={confirmarEmail}>Confirm email</button>
+              <button type="button" className="btn ghost sm" disabled={ocupado} onClick={() => mandarCodigo('email')}>Send a new code</button></div>
+          </>}
+      </div> : <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
+        <p className="small muted" style={{ margin: 0 }}>To sign, enter the code we send to <b>{sit.email}</b> now. It shows that it is really you.</p>
+        {!enviado.assinar ? <button type="button" className="btn" disabled={ocupado || !lido} onClick={() => mandarCodigo('assinar')}>Send me the signing code</button>
+          : <>
+            <label className="fld"><span>Signing code sent to {enviado.assinar}</span>
+              <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={cod.assinar} onChange={e => setCod({ ...cod, assinar: e.target.value.replace(/\D/g, '') })} /></label>
+            <button type="button" className="btn ghost sm" disabled={ocupado} onClick={() => mandarCodigo('assinar')}>Send a new code</button>
+          </>}
+      </div>}
+      <button className="btn primary block" disabled={indo || !modelo || naoOnline || !lido || !sit.email_verified || cod.assinar.length !== 6}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
+      <p className="small muted" style={{ margin: 0 }}>We record the date and time, your IP address, device and the email code with your signature. You get the signed PDF right after.</p>
     </section>
   </form>
 }

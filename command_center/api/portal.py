@@ -336,6 +336,58 @@ class WaiverIn(BaseModel):
     guardian_declaration: bool = False
     document_read_at: str | None = None       # #107: quando a tela viu todas as páginas do PDF (ISO, UTC)
     document_read_mode: str | None = None     # pdf_viewer | pdf_opened_and_text (o navegador não desenhou o PDF)
+    sign_code: str | None = None              # #108: o código que chegou no e-mail da conta
+
+
+class CodigoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str
+
+
+def _emitir(con, request, cid, finalidade):
+    from command_center.providers import codigos, email_envio
+    c = um(con, "SELECT email FROM portal_accounts WHERE id=?", (cid,))
+    try:
+        r = codigos.emitir(con, cid, finalidade, c["email"], email_envio.enviar)
+    except codigos.ErroCodigo as e:
+        raise HTTPException(429, str(e))
+    except email_envio.ErroEnvio:
+        raise HTTPException(503, "We could not send the email right now. Try again in a few minutes.")
+    _aud(con, request, "portal.code.sent", cid, {"finalidade": finalidade})
+    con.commit()
+    return r
+
+
+@r.post("/email/verify/send")
+def email_codigo(request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """#108: manda o código que confirma o e-mail da conta."""
+    if um(con, "SELECT email_verified_at FROM portal_accounts WHERE id=?", (cid,))["email_verified_at"]:
+        return {"verified": True}
+    return _emitir(con, request, cid, "email_verify")
+
+
+@r.post("/email/verify")
+def email_confirmar(dados: CodigoIn, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import codigos
+    try:
+        codigos.conferir(con, cid, "email_verify", dados.code)
+    except codigos.ErroCodigo as e:
+        raise HTTPException(400, str(e))
+    con.execute("UPDATE portal_accounts SET email_verified_at=? WHERE id=?", (agora(), cid))
+    _aud(con, request, "portal.email.verified", cid)
+    con.commit()
+    return {"verified": True}
+
+
+@r.post("/waivers/code")
+def waiver_codigo(request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """#108: o código de uma vez, na hora de assinar a waiver."""
+    from command_center.providers import waiver_nativa as wn
+    if not wn.ligada(con):
+        raise HTTPException(404, "Waiver not available.")
+    if not um(con, "SELECT email_verified_at FROM portal_accounts WHERE id=?", (cid,))["email_verified_at"]:
+        raise HTTPException(400, "Confirm your email first.")
+    return _emitir(con, request, cid, "waiver_sign")
 
 
 @r.get("/waivers")

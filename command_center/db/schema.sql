@@ -1429,6 +1429,22 @@ CREATE TABLE IF NOT EXISTS portal_sessions (
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- ------------------------------------------------------------ código por e-mail (#108)
+-- Confirmar o e-mail da conta e assinar a waiver. O código nunca fica guardado: só o hash.
+CREATE TABLE IF NOT EXISTS portal_codes (
+  id          INTEGER PRIMARY KEY,
+  account_id  INTEGER NOT NULL REFERENCES portal_accounts(id),
+  purpose     TEXT NOT NULL CHECK (purpose IN ('email_verify','waiver_sign')),
+  code_hash   TEXT NOT NULL,
+  sent_to     TEXT NOT NULL,
+  message_id  TEXT,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS portal_codes_conta ON portal_codes(account_id, purpose, id);
+
 -- ------------------------------------------------------------ agenda de sessões (#41)
 -- Dono, 30/09: "o próprio cliente consiga ver os dias disponíveis e agendar a sua sessão;
 -- a gente parametriza: bloquear esse dia toda semana, bloquear datas específicas,
