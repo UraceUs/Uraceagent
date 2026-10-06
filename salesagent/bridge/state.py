@@ -3,6 +3,7 @@
 Estados (missão §19): AI_ACTIVE → WAITING_HUMAN → HUMAN_HANDOFF → RESUMED → CLOSED.
 Regra G3: conversa escalada não volta a vender; retomada só por comando humano.
 """
+import re
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -95,11 +96,30 @@ def db():
         conn.close()
 
 
+# Auditoria sem segredo nem telefone (pendência de 28/09): o corpo bruto do
+# Salesbot (hook_raw) trazia o JWT do bot, a URL de continuação e o telefone
+# do contato em texto aberto. Tudo que vai para a auditoria passa por aqui:
+# valor de campo com nome sensível, JWT solto e telefone em formato E.164.
+_CAMPO_SENSIVEL = r"[^=&\s\"':]*(?:token|secret|key|return_url|phone|telefone|email)[^=&\s\"':]*"
+_FORM = re.compile(r"((?:^|[&?\s])" + _CAMPO_SENSIVEL + r")=([^&\s]*)", re.I)
+_JSON = re.compile(r"(\"" + _CAMPO_SENSIVEL + r"\"\s*:\s*)(\"[^\"]*\"|[^,}\s]+)", re.I)
+_JWT = re.compile(r"eyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}")
+_TELEFONE = re.compile(r"(?:\+|%2B)\d{10,15}", re.I)
+OCULTO = "[oculto]"
+
+
+def mascarar(texto: str) -> str:
+    texto = _FORM.sub(lambda m: f"{m.group(1)}={OCULTO}" if m.group(2) else m.group(0), texto or "")
+    texto = _JSON.sub(lambda m: f'{m.group(1)}"{OCULTO}"', texto)
+    texto = _JWT.sub(OCULTO, texto)
+    return _TELEFONE.sub(OCULTO, texto)
+
+
 def log(kind: str, lead_id: int | None = None, detail: str = "") -> None:
     with db() as conn:
         conn.execute(
             "INSERT INTO audit (ts, lead_id, kind, detail) VALUES (?,?,?,?)",
-            (int(time.time()), lead_id, kind, detail[:4000]),
+            (int(time.time()), lead_id, kind, mascarar(detail)[:4000]),
         )
 
 

@@ -46,6 +46,7 @@ import hashlib
 import json
 import os
 import re
+import time
 import urllib.parse
 from datetime import date, datetime, timedelta, timezone
 from email.utils import parseaddr
@@ -62,6 +63,10 @@ MAX_THREADS = 400
 MAX_THREADS_VARREDURA = 4000
 CORPO_LIMITE = 12000       # caracteres do corpo lidos por mensagem
 JANELA_ACHAR_DIAS = 420    # compra mais velha que isso não recebe evento novo
+# 06/10: a primeira varredura (um ano) estourou o limite por minuto do Gmail. Na varredura, a
+# leitura das conversas vai num passo que cabe na cota (o _req do Gmail ainda espera e tenta
+# de novo se o Google pedir calma).
+PASSO_VARREDURA_S = 0.6
 
 CONSULTA = ("-in:sent -in:drafts -category:promotions -category:social newer_than:{dias}d "
             "{label:finances-shopping label:finances-shopping-amazon label:shipping-status label:canotops "
@@ -848,6 +853,8 @@ def sincronizar(con, dias=None, forcar=False, abrir_paginas=True):
             visto = um(con, "SELECT messages FROM purchase_email_threads WHERE thread_id=?", (t["thread_id"],))
             if visto and visto["messages"] >= (t.get("mensagens") or 0) and not forcar:
                 continue
+            if teto == MAX_THREADS_VARREDURA and lidas:
+                time.sleep(PASSO_VARREDURA_S)
             th = _thread(t["thread_id"])
             lidas.append((t, th))
             for m in th.get("mensagens", []):
