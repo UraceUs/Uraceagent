@@ -1,13 +1,14 @@
 /* Assinar a waiver na área do cliente (#85), sem DocuSign. Carregada só nesta rota.
  *
- * O texto é o do PDF do DocuSign, importado como veio; o original abre em PDF. Para assinar:
- * ler, marcar as duas caixas (concordo / assino eletronicamente), digitar o nome completo e
+ * O documento é o PDF do DocuSign, importado como veio, mostrado página por página (#107); as
+ * caixas só se liberam depois de todas as páginas passarem pela tela. Para assinar: ler, marcar as duas caixas (concordo / assino eletronicamente), digitar o nome completo e
  * desenhar a assinatura. Quem assina é o responsável logado; o servidor decide o modelo pela
  * idade do piloto e guarda a prova (hora, IP, aparelho, hashes). A adult só o próprio piloto
  * assina (#104): para um adulto que não é o titular, a tela explica em vez de assinar. */
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { papi, PortalError, type Account, type WaiverModelo, type Waivers } from './api'
+import { VisorPdf } from './VisorPdf'
 
 const BASE = '/ops/api/portal'
 const TIPO = { adult: 'Adult release and waiver', parental: 'Parental consent and waiver (minor)' }
@@ -63,6 +64,10 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
   const [feita, setFeita] = useState<{ waiver_id: number; valid_until: string } | null>(null)
+  // #107: as caixas só se liberam depois de o documento inteiro passar pela tela
+  const [lido, setLido] = useState<{ em: string; modo: 'pdf_viewer' | 'pdf_opened_and_text' } | null>(null)
+  const [semVisor, setSemVisor] = useState(false)
+  const [abriuPdf, setAbriuPdf] = useState(false)
   const meu = sit?.drivers.find(d => d.driver_id === pid)
 
   useEffect(() => { papi<Waivers>('GET', '/waivers').then(setSit).catch(e => setErro((e as PortalError).message)) }, [])
@@ -72,7 +77,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
 
   async function assinar(e: FormEvent) {
     e.preventDefault(); setErro(null); setIndo(true)
-    try { setFeita(await papi('POST', `/drivers/${pid}/waiver`, f)) }
+    try { setFeita(await papi('POST', `/drivers/${pid}/waiver`, { ...f, document_read_at: lido?.em ?? null, document_read_mode: lido?.modo ?? null })) }
     catch (ex) { setErro((ex as PortalError).message) } finally { setIndo(false) }
   }
 
@@ -104,7 +109,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   return <form className="stack" style={{ gap: 18 }} onSubmit={assinar} noValidate>
     {topo}
     <p className="muted" style={{ margin: 0 }}>{TIPO[meu.kind]}. {menor
-      ? <>You sign as the <b>parent or legal guardian</b> of {piloto.name}.</>
+      ? <>You sign as the <b>parent</b> of {piloto.name}.</>
       : 'You sign for yourself.'} {menor ? <>Valid for one year, or until the day before {piloto.name} turns 18, whichever comes first.</> : 'Valid for one year.'}</p>
     {menor && <section className="stack" aria-labelledby="w-par" style={{ gap: 8 }}>
       <h2 className="h2" id="w-par">Who is signing</h2>
@@ -123,19 +128,30 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     {erro && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
     <section className="stack" aria-labelledby="w-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="w-doc">Read the document</h2>
-        <a className="btn sm" href={`${BASE}/waivers/model/${meu.kind}/pdf`} target="_blank" rel="noreferrer">Open the PDF</a></div>
-      <div className="card card-b portal-waiver-texto" tabIndex={0} aria-label="Waiver text">{modelo ? modelo.text || 'Open the PDF to read the document.' : <span className="spin" />}</div>
+        <a className="btn sm" href={`${BASE}/waivers/model/${meu.kind}/pdf`} target="_blank" rel="noreferrer" onClick={() => setAbriuPdf(true)}>Open the PDF</a></div>
+      {!semVisor ? <VisorPdf url={`${BASE}/waivers/model/${meu.kind}/pdf`} onLido={em => setLido({ em, modo: 'pdf_viewer' })} onFalha={() => setSemVisor(true)} />
+        : <>
+          <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
+            This browser could not show the document here. Tap <b>Open the PDF</b>, read it, then read the text below to the end.</div></div>
+          <div className="card card-b portal-waiver-texto" tabIndex={0} aria-label="Waiver text"
+            onScroll={e => { const t = e.currentTarget; if (abriuPdf && t.scrollTop + t.clientHeight >= t.scrollHeight - 8 && !lido) setLido({ em: new Date().toISOString(), modo: 'pdf_opened_and_text' }) }}>
+            {modelo ? modelo.text || 'Open the PDF to read the document.' : <span className="spin" />}</div>
+          {abriuPdf && !lido && <button type="button" className="btn sm ghost" onClick={() => setLido({ em: new Date().toISOString(), modo: 'pdf_opened_and_text' })}>I have read the whole PDF</button>}
+        </>}
+      {!semVisor && modelo?.text && <details className="small"><summary>Text version (for screen readers)</summary>
+        <div className="portal-waiver-texto" aria-label="Waiver text">{modelo.text}</div></details>}
     </section>
     <section className="stack" aria-labelledby="w-ass" style={{ gap: 10 }}>
       <h2 className="h2" id="w-ass">Sign</h2>
-      <label className="check"><input type="checkbox" checked={f.read_and_agree} onChange={e => setF({ ...f, read_and_agree: e.target.checked })} />
+      {!lido && <p className="small muted" style={{ margin: 0 }}>Read the whole document above to unlock the boxes.</p>}
+      <label className="check"><input type="checkbox" disabled={!lido} checked={f.read_and_agree} onChange={e => setF({ ...f, read_and_agree: e.target.checked })} />
         I have read this waiver, I understand it gives up legal rights, and I agree to it{menor ? ` on behalf of ${piloto.name}` : ''}.</label>
-      <label className="check"><input type="checkbox" checked={f.consent_esign} onChange={e => setF({ ...f, consent_esign: e.target.checked })} />
+      <label className="check"><input type="checkbox" disabled={!lido} checked={f.consent_esign} onChange={e => setF({ ...f, consent_esign: e.target.checked })} />
         I agree to sign electronically. My electronic signature is legally binding, the same as a handwritten one.</label>
       <label className="fld"><span>Your full name<b className="portal-obr" aria-hidden="true"> *</b><i> · typed, as your signature</i></span>
         <input autoComplete="name" value={f.typed_name} onChange={e => setF({ ...f, typed_name: e.target.value })} required /></label>
       <Quadro onMuda={png => setF(x => ({ ...x, signature: png }))} />
-      <button className="btn primary block" disabled={indo || !modelo || naoOnline}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
+      <button className="btn primary block" disabled={indo || !modelo || naoOnline || !lido}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
       <p className="small muted" style={{ margin: 0 }}>We record the date and time, your IP address and device with your signature. You get the signed PDF right after.</p>
     </section>
   </form>

@@ -517,6 +517,9 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
   .portal-rodape{padding-bottom:88px}
 }
 .portal-obr{color:var(--brand)}
+.pdf-caixa{max-height:min(68vh,640px);overflow-y:auto;padding:8px;background:var(--surface-2)}
+.pdf-folha{margin:0 0 10px;display:grid;gap:4px}.pdf-folha canvas{width:100%;height:auto;display:block;background:#fff;border-radius:4px;box-shadow:var(--shadow)}
+.pdf-folha figcaption{font-size:12px;color:var(--muted);text-align:center}
 .portal-parentesco{border:0;margin:0;padding:0;min-width:0}.portal-parentesco legend{padding:0;margin:0 0 4px;font-weight:600;font-size:13.5px}
 .portal-parentesco .check{min-height:40px}
 .portal-tel{display:grid;gap:0 12px;grid-template-columns:88px minmax(0,1fr)}

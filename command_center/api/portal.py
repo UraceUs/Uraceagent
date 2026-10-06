@@ -334,6 +334,8 @@ class WaiverIn(BaseModel):
     consent_esign: bool = False
     relationship: str | None = None          # parental (#105): mother | father (tutor e outros: no balcão)
     guardian_declaration: bool = False
+    document_read_at: str | None = None       # #107: quando a tela viu todas as páginas do PDF (ISO, UTC)
+    document_read_mode: str | None = None     # pdf_viewer | pdf_opened_and_text (o navegador não desenhou o PDF)
 
 
 @r.get("/waivers")
@@ -355,14 +357,18 @@ def waiver_modelo(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection
 
 
 @r.get("/waivers/model/{kind}/pdf")
-def waiver_modelo_pdf(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def waiver_modelo_pdf(kind: str, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import waiver_nativa as wn
     m = wn.modelo(con, kind) if wn.ligada(con) else None
     if not m:
         raise HTTPException(404, "Waiver not available.")
     with open(m["pdf_path"], "rb") as f:
-        return Response(content=f.read(), media_type="application/pdf",
-                        headers={"Content-Disposition": f'inline; filename="URACE-waiver-{kind}.pdf"', "Cache-Control": "no-store"})
+        pdf = f.read()
+    # #107: a prova de que o documento chegou a quem assina — o assinar exige este registro
+    _aud(con, request, "portal.waiver.document_view", cid, {"kind": kind, "sha256": m["sha256"]})
+    con.commit()
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="URACE-waiver-{kind}.pdf"', "Cache-Control": "no-store"})
 
 
 @r.post("/drivers/{pid}/waiver", status_code=201)

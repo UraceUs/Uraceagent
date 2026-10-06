@@ -111,9 +111,15 @@ def liga(cli):
     assert r.status_code == 200 and r.json()["ligada"] is True
 
 
-def assina(cli, h, pid, **mais):
+def assina(cli, h, pid, ler=True, **mais):
+    """Como a tela: baixa o PDF do modelo (#107: o servidor registra a entrega), lê tudo e assina."""
+    if ler:
+        for k in ("adult", "parental"):
+            cli.get(f"{P}/waivers/model/{k}/pdf")
+    from datetime import datetime, timezone
     corpo = {"typed_name": "Maria Santos", "signature": _assinatura(), "read_and_agree": True, "consent_esign": True,
-             "relationship": "mother", "guardian_declaration": True, **mais}
+             "relationship": "mother", "guardian_declaration": True,
+             "document_read_at": datetime.now(timezone.utc).isoformat(), "document_read_mode": "pdf_viewer", **mais}
     return cli.post(f"{P}/drivers/{pid}/waiver", json=corpo, headers=h)
 
 
@@ -331,3 +337,40 @@ def test_quem_nasceu_em_29_de_fevereiro_faz_18_em_1_de_marco_como_na_idade():
     assert portal.idade(date(2008, 2, 29), date(2026, 2, 28)) == 17 and portal.idade(date(2008, 2, 29), date(2026, 3, 1)) == 18
     assert wn.validade("parental", date(2008, 2, 29), date(2025, 6, 1)) == date(2026, 2, 28)
     assert wn.validade("adult", date(1990, 1, 1), date(2025, 6, 1)) == date(2026, 6, 1)
+
+
+# ------------------------------------------------------------------ #107: o documento inteiro passa pela tela
+def test_sem_abrir_o_pdf_nao_assina(cli):
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    r = assina(cli, hc, pid, ler=False)
+    assert r.status_code == 400 and "Open and read the whole document" in r.json()["detail"], r.text
+    assert not um(conectar(), "SELECT 1 AS x FROM waivers WHERE source='urace'")
+
+
+@pytest.mark.parametrize("mais", [
+    {"document_read_at": None},
+    {"document_read_at": "ontem"},
+    {"document_read_at": "2026-10-06T10:00:00"},                      # sem fuso: não dá para saber quando foi
+    {"document_read_at": "2001-01-01T00:00:00Z"},                     # velha demais
+    {"document_read_mode": "pulei"},
+])
+def test_sem_a_leitura_completa_nao_assina(cli, mais):
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    r = assina(cli, hc, pid, **mais)
+    assert r.status_code == 400 and "Read the whole document" in r.json()["detail"], r.text
+
+
+def test_a_leitura_fica_na_trilha_e_no_certificado(cli):
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    w = um(conectar(), "SELECT * FROM waivers WHERE id=?", (assina(cli, hc, pid).json()["waiver_id"],))
+    t = json.loads(w["audit"])
+    assert t["document_delivered_at"] and t["document_all_pages_viewed_at"] and t["reading_mode"] == "pdf_viewer"
+    assert t["reading_requirement"] == "every page of the PDF shown on screen before the boxes unlock"
+    ev = um(conectar(), "SELECT detail FROM audit_logs WHERE event='portal.waiver.document_view' ORDER BY id DESC LIMIT 1")
+    assert json.loads(ev["detail"])["kind"] in ("adult", "parental")
+    from pypdf import PdfReader
+    texto = " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+    assert "Document delivered to the signer" in texto and "Whole document read" in texto
