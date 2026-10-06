@@ -38,6 +38,16 @@ def meu_dia(data: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"), con:
             "gerente": bool(u.get("free")) or auth.pode(u["role"], "MANAGER")}
 
 
+@dia.get("/periodo")
+def meu_periodo(de: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"), ate: str = Query(..., pattern=r"^\d{4}-\d{2}-\d{2}$"),
+                con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Mês e semana do calendário do mecânico: o resumo de cada dia, sem valor nem contato."""
+    try:
+        return ck.periodo(con, de, ate)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
 # ------------------------------------------------------------------ modelos
 @r.get("/modelos")
 def modelos(todos: bool = False, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):

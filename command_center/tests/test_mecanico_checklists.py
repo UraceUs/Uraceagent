@@ -218,3 +218,37 @@ def test_incompleto_de_ontem_vai_para_precisa_de_atencao(cli):
     entra(cli, "ger@urace.us")
     a = [x for x in cli.get("/ops/api/needs-attention").json() if x["entity"]["type"] == "checklist_run"]
     assert a and a[0]["title"] == "1 checklist(s) incompleto(s)"
+
+
+# ------------------------------------------------------------------ calendário: mês e semana (dono, 06/10)
+def test_calendario_do_mecanico_resume_o_mes_dia_a_dia(cli):
+    """Dono, 06/10: "uma visão do calendário mensal… continua tendo a visualização do dia… e também
+    da semana". Cada dia traz serviços, corridas (todos os dias que ela dura) e sessões do site."""
+    con = conectar()
+    conta = inserir(con, "portal_accounts", email="mae@example.com", pw_salt="x", pw_hash="x", name="Mãe", birth_date="1980-01-01",
+                   terms_accepted_at="2026-09-30T00:00:00Z")
+    piloto = inserir(con, "portal_pilots", account_id=conta, name="Leo Santos")
+    inserir(con, "bookings", account_id=conta, pilot_id=piloto, date="2026-10-20", period="manha", status="confirmada",
+            service_name="Arrive and Drive")
+    inserir(con, "bookings", account_id=conta, pilot_id=piloto, date="2026-10-21", period="tarde", status="cancelada")
+    con.commit(); con.close()
+    da_cargo(cli, cli.ids["mec"], "MECANICO")
+    entra(cli, "luis@urace.us")
+    r = cli.get("/ops/api/meu-dia/periodo?de=2026-10-01&ate=2026-10-31")
+    assert r.status_code == 200, r.text
+    d = r.json()["dias"]
+    assert len(d) == 31 and r.json()["hoje"] == HOJE
+    assert [s["cliente"] for s in d[HOJE]["servicos"]] == ["Leo Santos"]
+    assert [c["name"] for c in d["2026-10-05"]["corridas"]] == ["ROK Cup Florida"]
+    assert [c["name"] for c in d["2026-10-06"]["corridas"]] == ["ROK Cup Florida"], "a corrida aparece em todos os dias dela"
+    assert d["2026-10-07"] == {"servicos": [], "corridas": [], "sessoes": []}
+    assert [(x["period"], x["piloto"]) for x in d["2026-10-20"]["sessoes"]] == [("manha", "Leo Santos")]
+    assert d["2026-10-21"]["sessoes"] == [], "cancelada não aparece"
+    corpo = r.text
+    assert "familia@example.com" not in corpo and "500" not in corpo, "sem contato nem valor do cliente"
+
+
+@pytest.mark.parametrize("q", ["de=2026-10-31&ate=2026-10-01", "de=2026-01-01&ate=2026-06-30", "de=2026-02-30&ate=2026-03-01"])
+def test_calendario_recusa_periodo_invertido_grande_ou_data_que_nao_existe(cli, q):
+    entra(cli, "luis@urace.us")
+    assert cli.get(f"/ops/api/meu-dia/periodo?{q}").status_code == 400

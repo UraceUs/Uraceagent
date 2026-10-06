@@ -356,6 +356,40 @@ def meu_dia(con, data=None, cargo=None):
     return {"data": data, "servicos": servicos, "corridas": corridas, "sessoes": sessoes, "do_dia": do_dia, "avulsos": avulsos}
 
 
+MAX_PERIODO = 62
+
+
+def periodo(con, de, ate):
+    """O calendário do mecânico (dono, 06/10): mês e semana, com o que tem em cada dia. Só o
+    resumo — o detalhe e os checklists ficam no `meu_dia` do dia que ele tocar. Mesmas fontes e
+    mesmo corte do `meu_dia`: sem valor e sem contato do cliente."""
+    import datetime as _dt
+    a, b = _dt.date.fromisoformat(de), _dt.date.fromisoformat(ate)
+    if b < a:
+        raise ValueError("o fim vem antes do começo")
+    if (b - a).days + 1 > MAX_PERIODO:
+        raise ValueError(f"no máximo {MAX_PERIODO} dias por vez")
+    dias = {(a + _dt.timedelta(n)).isoformat(): {"servicos": [], "corridas": [], "sessoes": []}
+            for n in range((b - a).days + 1)}
+    for s in todos(con, """SELECT t.id, substr(t.due_on,1,10) AS dia, t.title, COALESCE(c.pilot_name, c.name) AS cliente
+                             FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
+                            WHERE substr(t.due_on,1,10) BETWEEN ? AND ? AND LOWER(COALESCE(t.section,''))!='races'
+                            ORDER BY t.title""", (de, ate)):
+        dias[s.pop("dia")]["servicos"].append(s)
+    for r in todos(con, """SELECT id, name, series, track, date_start, COALESCE(date_end, date_start) AS date_end FROM races
+                            WHERE active=1 AND date_start<=? AND COALESCE(date_end, date_start)>=? ORDER BY date_start""",
+                   (ate, de)):
+        for d in dias:
+            if r["date_start"] <= d <= r["date_end"]:
+                dias[d]["corridas"].append({"id": r["id"], "name": r["name"], "series": r["series"], "track": r["track"]})
+    for x in todos(con, """SELECT b.id, b.date AS dia, b.period, b.status, p.name AS piloto, b.service_name AS servico
+                             FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                            WHERE b.date BETWEEN ? AND ? AND b.status IN ('confirmada','pendente')
+                            ORDER BY b.period, b.id""", (de, ate)):
+        dias[x.pop("dia")]["sessoes"].append(x)
+    return {"de": de, "ate": ate, "hoje": hoje(), "dias": dias}
+
+
 def incompletos(con, antes_de=None):
     """Checklists começados e não concluídos de dias que já passaram: vão para Precisa de atenção."""
     return todos(con, """SELECT r.id, r.title, r.run_date, t.name AS modelo, (SELECT COUNT(*) FROM checklist_run_items i

@@ -694,6 +694,36 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     pg.close()
 
 
+@pytest.mark.parametrize("largura", [360, 390])
+def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegador, largura):
+    """Dono, 06/10: no celular do mecânico, "uma visão do calendário mensal… continua tendo a
+    visualização do dia… e também da semana". Tocar num dia abre o dia."""
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=largura, altura=800)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    pg.get_by_role("button", name="Semana", exact=True).click()
+    hoje = pg.locator(".md-semana-d.hoje")
+    hoje.get_by_text("David Pera").first.wait_for()
+    assert pg.locator(".md-semana-d").count() == 7
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Mês", exact=True).click()
+    celula = pg.locator(".md-cal-d.hoje")
+    celula.wait_for()
+    assert "marcado" in celula.get_attribute("aria-label")
+    caixa = celula.bounding_box()
+    assert caixa["height"] >= 40, caixa
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Próximo mês").click()
+    pg.get_by_role("button", name="Mês anterior").click()
+    pg.locator(".md-cal-d.hoje").click()                       # tocar no dia abre o dia, com os checklists
+    pg.locator(".card.card-b", has_text="David Pera_Urace Daily_Arrive and Drive").get_by_role("button", name="Kart Checklist").wait_for()
+    assert pg.get_by_role("button", name="Dia", exact=True).get_attribute("aria-pressed") == "true"
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_mecanico_cadastra_peca_nova_no_balcao_com_foto_e_ela_aparece_no_estoque(servidor, navegador, tmp_path):
     """Dono, 06/10: ao adicionar a peça, o mecânico tira a foto na hora ou escolhe da galeria,
     e a foto aparece no estoque no lugar da caixinha."""
