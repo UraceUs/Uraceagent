@@ -40,14 +40,18 @@ def texto_da_nota(decisao, roteamento=None):
 
 
 def aplicar(api, lead, decisao, mapa, modo, roteamento=None, responsavel_id=None, agora=None,
-            segurar_na_entrada=False):
+            segurar_na_entrada=False, marcar_nao_e_lead=False):
     """Aplica a decisão num lead. `api` precisa de move/add_tags/add_note/add_task.
 
     Devolve o que foi (ou seria, em observar) feito — vai para o log de
     auditoria nos dois casos, que é o que permite conferir antes de ligar.
 
-    `segurar_na_entrada`: card em Urace > First Contact não sobe pelo SDR —
-    quem sobe é a REGRA 2 da equipe; subir antes pularia a tag DM da REGRA 1.
+    `segurar_na_entrada`: card recém-criado em Urace > First Contact não sobe
+    pelo SDR — quem sobe é a REGRA 2 da equipe; subir antes pularia a tag DM
+    da REGRA 1. Quem chama decide a janela (regras.JANELA_REGRA_2_MINUTOS).
+
+    `marcar_nao_e_lead`: só com mensagem de e-mail. Em conversa de chat a tag
+    nao_e_lead não é posta (ver regras.CANAIS_QUE_MARCAM_NAO_LEAD).
     """
     agora = agora or time.time()
     gravar = escreve(modo)
@@ -89,6 +93,9 @@ def aplicar(api, lead, decisao, mapa, modo, roteamento=None, responsavel_id=None
         origem = mapa.tag_de_origem_faltando(existentes | set(novas))
         if origem:
             novas.append(origem)
+    if not marcar_nao_e_lead and regras.TAG_NAO_LEAD in novas:
+        novas.remove(regras.TAG_NAO_LEAD)
+        feito["nao_marcou"] = regras.TAG_NAO_LEAD
     if novas:
         feito["tags"] = novas
         if gravar:

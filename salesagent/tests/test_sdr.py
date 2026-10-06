@@ -374,10 +374,26 @@ def camada_ponte():
           any(e[0] == "tags" and e[1] == 304 and "nao_e_lead" in e[2] for e in falso.escritas)
           and not any(e[1] == 305 for e in falso.escritas) and r[3].get("ignorado") == "LEAD_DA_EQUIPE", str(r))
 
-    falso.lead(306, URACE, FIRST_CONTACT)
+    falso.lead(306, URACE, FIRST_CONTACT, created_at=int(time.time()) - 120)
     r = sdr_ponte.processar_eventos(evento(("o4", "How much is a single day?", 306, "incoming", "instagram")))
-    check("organizar: First Contact não sobe pelo SDR (REGRA 2 da equipe)",
+    check("organizar: card recém-criado em First Contact não sobe pelo SDR (REGRA 2 da equipe)",
           falso.leads[306]["status_id"] == FIRST_CONTACT and r[0].get("segurado") == "REGRA_2_DA_EQUIPE", str(r))
+
+    # Teste ponta a ponta de 28/09: card antigo movido para First Contact
+    # ficou 32 min parado; a REGRA 2 só roda para card que nasce ali.
+    falso.lead(308, URACE, FIRST_CONTACT, created_at=int(time.time()) - 90 * 86400,
+               _embedded={"tags": [{"name": "custom-kart-inquiry"}]})
+    r = sdr_ponte.processar_eventos(evento(("o8", "how much is a single day on track?", 308, "incoming", "instagram")))
+    check("organizar: card antigo em First Contact com sinal sobe para ENTRADA, com DM e nota",
+          falso.leads[308]["pipeline_id"] == COMERCIAL and falso.leads[308]["status_id"] == ENTRADA
+          and "DM" in r[0]["tags"] and r[0]["nota"] and not r[0].get("segurado")
+          and r[0].get("sem_regra_2") == "CARD_ANTIGO_EM_FIRST_CONTACT", str(r))
+
+    falso.lead(309, URACE, FIRST_CONTACT, created_at=int(time.time()) - 90 * 86400)
+    r = sdr_ponte.processar_eventos(evento(("o9", "713157 is your code to log in to Kommo", 309, "incoming", "instagram")))
+    check("organizar: código numa DM não põe nao_e_lead (conversa de chat), fica em First Contact",
+          not any(e[1] == 309 and "nao_e_lead" in e[2] for e in falso.escritas if e[0] == "tags")
+          and r[0].get("nao_marcou") == "nao_e_lead" and falso.leads[309]["status_id"] == FIRST_CONTACT, str(r))
 
     sdr_ponte.KOMMO_RESPONSAVEL_ID = "777"
     falso.lead(303, COMERCIAL, ENTRADA)
