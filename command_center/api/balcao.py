@@ -256,7 +256,7 @@ def conferir_pagamento(pinv_id: int, request: Request, con: sqlite3.Connection =
     """Depois de passar o cartão no GoPayment: confere no QuickBooks se a invoice ficou paga."""
     from command_center.providers import NaoConectado
     if not b.cartao_ligado():
-        raise HTTPException(404, "Cartão no balcão desligado (CC_BALCAO_CARTAO).")
+        raise HTTPException(404, "Cartão no balcão desligado (CC_BALCAO_CARTAO=0).")
     try:
         r = b.conferir_pagamento(con, pinv_id, u["id"])
     except LookupError:

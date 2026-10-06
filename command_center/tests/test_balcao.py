@@ -358,17 +358,20 @@ def test_invoice_aberta_aparece_em_precisa_de_atencao_ate_ser_enviada(cli):
     assert not pendencia()
 
 
-# ------------------------------------------------------------------ cartão no balcão (06/10, desligado por padrão)
-def test_cartao_desligado_nao_aparece_e_a_rota_responde_404(cli):
+# ------------------------------------------------------------------ as duas vias no balcão (dono, 06/10)
+def test_as_duas_vias_aparecem_e_o_cartao_pode_ser_desligado(cli, monkeypatch):
+    """Dono, 06/10: "tenha tanto a opção desse leitor quanto de montar invoice para poder enviar"."""
     cod = prepara_peca(cli, cli.para)
     h = entra(cli)
     inv = lanca(cli, h, cli.para, codigo=cod).json()["invoices"][0]
-    assert inv["cartao"] is False and inv["paga"] is False
+    assert inv["cartao"] is True and inv["paga"] is False, "o cartão aparece por padrão, ao lado do enviar"
+    monkeypatch.setenv("CC_BALCAO_CARTAO", "0")
+    inv = lanca(cli, h, cli.para).json()["invoices"][0]
+    assert inv["cartao"] is False
     assert cli.post(f"{B}/invoices/{inv['id']}/conferir-pagamento", headers=h).status_code == 404
 
 
 def test_cartao_no_gopayment_paga_a_invoice_e_a_proxima_peca_abre_outra(cli, monkeypatch):
-    monkeypatch.setenv("CC_BALCAO_CARTAO", "1")
     cod = prepara_peca(cli, cli.para)
     h = entra(cli)
     inv = lanca(cli, h, cli.para, codigo=cod).json()["invoices"][0]
@@ -383,7 +386,14 @@ def test_cartao_no_gopayment_paga_a_invoice_e_a_proxima_peca_abre_outra(cli, mon
     con = conectar()
     assert um(con, "SELECT paid_amount FROM parts_invoices WHERE id=?", (inv["id"],))["paid_amount"] == 89.5
     assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='balcao.invoice.paga'")
-    # paga no cartão: a próxima peça do mesmo dia vai para OUTRA invoice
+    # paga no cartão: sai da fila "a enviar" e de "Precisa de atenção", e não pode mais ser enviada
+    hg = entra(cli, "ger@urace.us")
+    assert cli.get(f"{B}/invoices", headers=hg).json()["total"] == 0
+    from command_center.api import atencao
+    assert not any(i["key"].startswith("balcao:parts_invoice") for i in atencao.coletar(conectar()))
+    assert cli.post(f"{B}/invoices/{inv['id']}/enviar", headers=hg).status_code == 400
+    # a próxima peça do mesmo dia vai para OUTRA invoice
+    h = entra(cli)
     r = lanca(cli, h, cli.para)
     ids = {i["id"] for i in r.json()["invoices"]}
     assert len(ids) == 2 and inv["id"] in ids

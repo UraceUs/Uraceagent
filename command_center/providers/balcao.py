@@ -352,6 +352,8 @@ def enviar(con, pinv_id, por=None):
         raise LookupError("invoice de peças não existe")
     if p["status"] != "aberta":
         raise ErroBalcao(f"esta invoice já está {p['status']}")
+    if p["paid_at"]:
+        raise ErroBalcao("esta invoice já foi paga no cartão: não há o que enviar")
     if not p["qbo_invoice_id"] or p["qbo_error"]:
         raise ErroBalcao("a invoice ainda não está no QuickBooks: toque em 'Tentar de novo' antes de enviar")
     r = _qbo().enviar_invoice_sistema(p["qbo_invoice_id"])
@@ -361,10 +363,10 @@ def enviar(con, pinv_id, por=None):
 
 # ------------------------------------------------------------------ cartão no balcão (GoPayment)
 def cartao_ligado():
-    """O botão "Cobrar no cartão" só aparece com CC_BALCAO_CARTAO=1 (dono, 06/10: o time ainda
-    decide a compra do coletor e do leitor de cartão)."""
+    """Dono, 06/10: o balcão tem as DUAS vias — montar a invoice e enviar, ou cobrar no leitor
+    de cartão. O cartão aparece por padrão; CC_BALCAO_CARTAO=0 esconde (sem leitor, sem botão)."""
     import os
-    return os.environ.get("CC_BALCAO_CARTAO") == "1"
+    return os.environ.get("CC_BALCAO_CARTAO", "1") != "0"
 
 
 def conferir_pagamento(con, pinv_id, por=None):
@@ -414,8 +416,8 @@ def do_cliente(con, client_id, data=None):
 
 
 def a_enviar(con, limit=50, offset=0):
-    """As invoices de peças abertas, para alguém apertar "Enviar"."""
-    total = um(con, "SELECT COUNT(*) AS n FROM parts_invoices WHERE status='aberta' AND total>0")["n"]
-    itens = todos(con, "SELECT * FROM parts_invoices WHERE status='aberta' AND total>0 ORDER BY service_date, id LIMIT ? OFFSET ?",
-                  (limit, offset))
+    """As invoices de peças abertas, para alguém apertar "Enviar" (a paga no cartão sai da fila)."""
+    total = um(con, "SELECT COUNT(*) AS n FROM parts_invoices WHERE status='aberta' AND total>0 AND paid_at IS NULL")["n"]
+    itens = todos(con, """SELECT * FROM parts_invoices WHERE status='aberta' AND total>0 AND paid_at IS NULL
+                          ORDER BY service_date, id LIMIT ? OFFSET ?""", (limit, offset))
     return {"itens": [invoice_publica(con, p) for p in itens], "total": total, "limit": limit, "offset": offset}

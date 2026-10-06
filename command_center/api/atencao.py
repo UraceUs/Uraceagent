@@ -296,7 +296,7 @@ def _coletar(con):
     # ---- 4f2. balcão (#87): invoice de peças aberta, esperando alguém apertar "Enviar"
     pecas = todos(con, """SELECT p.id, p.service_date, p.total, p.qbo_error, COALESCE(c.pilot_name, c.name) AS cliente
                             FROM parts_invoices p JOIN clients c ON c.id=p.client_id
-                           WHERE p.status='aberta' AND p.total>0 ORDER BY p.service_date, p.id""")
+                           WHERE p.status='aberta' AND p.total>0 AND p.paid_at IS NULL ORDER BY p.service_date, p.id""")
     if pecas:
         erro = any(x["qbo_error"] for x in pecas)
         itens.append(dict(key=_chave("balcao", "parts_invoice", "abertas"), level="HIGH" if erro else "MEDIUM",

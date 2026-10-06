@@ -247,10 +247,18 @@ function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean;
       <span className="small muted">{l.qty} × {usd(l.unit_price)}</span><b className="mono">{usd(l.total)}</b></div>)}</div>}
     <div className="row wrap" style={{ gap: 8 }}><b className="grow">Total {usd(p.total)}</b>
       {p.status === 'aberta' && p.qbo_error && <button className="btn sm" disabled={indo} onClick={() => acao('sincronizar')}>Tentar de novo</button>}
-      {p.cartao && !p.paga && p.status !== 'anulada' && p.total > 0 && p.qbo_invoice_id && !p.qbo_error
-        && <button className="btn sm primary" onClick={() => setCartao(true)}>Cobrar no cartão</button>}
-      {p.status === 'aberta' && !p.paga && gerente && p.total > 0 && !p.qbo_error && <button className={`btn sm${p.cartao ? '' : ' primary'}`} disabled={indo} onClick={() => acao('enviar')}>Enviar invoice de peças</button>}
     </div>
+    {/* Dono, 06/10: as duas vias — montar a invoice e enviar, ou cobrar no leitor de cartão */}
+    {!p.paga && p.status !== 'anulada' && p.total > 0 && p.qbo_invoice_id && !p.qbo_error && <div className="stack" style={{ gap: 6 }}>
+      <span className="small muted">Como o cliente paga?</span>
+      <div className="row wrap" style={{ gap: 8 }}>
+        {p.status === 'aberta' && (gerente
+          ? <button className="btn sm" disabled={indo} onClick={() => acao('enviar')}>Enviar invoice por e-mail</button>
+          : <span className="small muted">Enviar invoice: o gerente envia no fim do dia.</span>)}
+        {p.status === 'enviada' && <span className="small muted">Invoice enviada: o cliente paga pelo link do e-mail.</span>}
+        {p.cartao && <button className="btn sm primary" onClick={() => setCartao(true)}>Cobrar no cartão</button>}
+      </div>
+    </div>}
     {cartao && <CobrarNoCartao p={p} onFechar={() => setCartao(false)} onPago={onMudou} />}
   </div>
 }

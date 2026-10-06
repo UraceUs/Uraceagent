@@ -19,8 +19,16 @@ Tela **Balcão** no Command Center, feita para um coletor Android com leitor 1D/
   vira mais uma linha nela.
 - **Uma invoice de peças por cliente por dia** (Flórida). Memo:
   "Parts invoice — parts used | piloto | Service date: MM/DD/AAAA".
-- **Não é enviada sozinha.** Fica em *Precisa de atenção* e no Balcão com o botão
-  **"Enviar invoice de peças"**, que é do gerente.
+- **Não é enviada sozinha.** Fica em *Precisa de atenção* e no Balcão.
+- **Duas vias para o cliente pagar** (dono, 06/10: *"tenha tanto a opção desse leitor
+  quanto de montar invoice para poder enviar"*), lado a lado em "Como o cliente paga?":
+  - **"Enviar invoice por e-mail"**: o gerente envia pelo QuickBooks; o cliente paga pelo link;
+  - **"Cobrar no cartão"**: o leitor Bluetooth do QuickBooks com o app GoPayment, em
+    *Invoice payment* → cliente → esta invoice → *Charge*. Paga a PRÓPRIA invoice (nada em
+    dobro); o número do cartão nunca passa pelo Command Center. "Já passei o cartão" confere
+    o saldo no QuickBooks e marca **paga**: sai da fila "a enviar" e de *Precisa de atenção*,
+    e a próxima peça do dia abre outra invoice.
+  - Sem leitor no balcão, `CC_BALCAO_CARTAO=0` esconde o botão do cartão.
 - **O mecânico lança** (OPERATOR) e cada leitura já salva. Errou, desfaz, enquanto a
   invoice não foi enviada.
 - **Código novo:** o gerente diz o preço e a categoria do QuickBooks, e o Command Center
