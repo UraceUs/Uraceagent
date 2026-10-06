@@ -134,7 +134,9 @@ def test_leitura_nao_cria_e_quem_vende_tem_os_acessos_do_operador(cli):
     assert cli.get(B + "/audit", headers=h).status_code == 403
 
 
-def test_lead_do_chat_vira_oportunidade_uma_vez_so(cli):
+def test_passar_para_vendas_cria_e_o_mesmo_lead_ganha_nova_oportunidade(cli):
+    """Dono, 06/10: "caso não tenha, ele cria. Se já tiver aquele mesmo lead, ele só aponta uma
+    nova oportunidade." O toque duplo sem querer não vira duas."""
     con = conectar()
     try:
         lead = con.execute("""INSERT INTO crm_leads (external_id, name, contact_name, contact_phone,
@@ -145,11 +147,19 @@ def test_lead_do_chat_vira_oportunidade_uma_vez_so(cli):
         con.close()
     h = entra(cli, "closer@urace.us")
     r1 = cli.post(f"{B}/sales/from-lead/{lead}", headers=h)
-    assert r1.status_code == 201 and r1.json()["reaproveitada"] is False
+    assert r1.status_code == 201 and r1.json()["reaproveitada"] is False and r1.json()["do_lead"] == 1
     r2 = cli.post(f"{B}/sales/from-lead/{lead}", headers=h)
-    assert r2.json() == {"id": r1.json()["id"], "reaproveitada": True}
+    assert r2.json() == {"id": r1.json()["id"], "reaproveitada": True, "nova": False, "do_lead": 1}, "toque duplo"
     o = cli.get(f"{B}/sales/{r1.json()['id']}", headers=h).json()["oportunidade"]
     assert o["name"] == "Pedro Alves" and o["source"] == "Instagram" and o["crm_lead_id"] == lead
+    # passado o toque duplo, o mesmo lead ganha OUTRA oportunidade, ligada a ele
+    con = conectar()
+    con.execute("UPDATE opportunities SET created_at='2026-01-01T00:00:00.000Z' WHERE id=?", (r1.json()["id"],))
+    con.commit(); con.close()
+    r3 = cli.post(f"{B}/sales/from-lead/{lead}", headers=h)
+    assert r3.status_code == 201 and r3.json()["nova"] is True and r3.json()["id"] != r1.json()["id"] and r3.json()["do_lead"] == 2
+    o3 = cli.get(f"{B}/sales/{r3.json()['id']}", headers=h).json()
+    assert o3["oportunidade"]["crm_lead_id"] == lead
     assert cli.post(f"{B}/sales/from-lead/999999", headers=h).status_code == 404
 
 

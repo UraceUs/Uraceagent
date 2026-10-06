@@ -357,21 +357,38 @@ def mover(oid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("OPER
     return {"ok": True}
 
 
+TOQUE_DUPLO_S = 60     # o segundo toque no mesmo lead dentro deste tempo não cria outra
+
+
 @r.post("/from-lead/{lead_id}", status_code=201)
 def do_chat(lead_id: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
-    """"Passar para vendas": o lead do chat do Kommo vira oportunidade, com o que já se sabe."""
+    """"Passar para vendas": o lead do chat do Kommo vira oportunidade no painel de vendas.
+
+    Dono, 06/10: "eu continuo ali no chat, mas quando eu clico ele registra no painel de vendas
+    aquele lead como uma oportunidade. Caso não tenha, ele cria. Se já tiver aquele mesmo lead,
+    ele só aponta uma nova oportunidade." Cada toque é uma oportunidade (o cliente que volta é
+    negócio novo), ligada ao mesmo lead; só o toque duplo sem querer (o mesmo lead agora há
+    pouco) devolve a que acabou de nascer."""
+    from datetime import datetime, timedelta, timezone
     l = um(con, "SELECT * FROM crm_leads WHERE id=?", (lead_id,))
     if not l:
         raise HTTPException(404, "Lead não encontrado.")
-    ja = um(con, "SELECT id FROM opportunities WHERE crm_lead_id=?", (lead_id,))
-    if ja:
-        return {"id": ja["id"], "reaproveitada": True}
+    anteriores = todos(con, "SELECT id, stage, created_at FROM opportunities WHERE crm_lead_id=? ORDER BY id DESC", (lead_id,))
+    corte = (datetime.now(timezone.utc) - timedelta(seconds=TOQUE_DUPLO_S)).strftime("%Y-%m-%dT%H:%M:%S")
+    if anteriores and anteriores[0]["created_at"] >= corte:
+        return {"id": anteriores[0]["id"], "reaproveitada": True, "nova": False, "do_lead": len(anteriores)}
     oid = inserir(con, "opportunities", name=l["contact_name"] or l["name"] or f"Lead {l['external_id']}",
                   email=(l["contact_email"] or None), phone=l["contact_phone"], source=l["source"] or "Kommo",
                   crm_lead_id=lead_id, closer_user_id=u["id"], updated_at=agora())
-    _ev(con, oid, "stage", "Veio do chat do Kommo", {"lead": l["external_id"], "canal": l["source"]}, f"user:{u['id']}", 1)
+    if anteriores:
+        _ev(con, oid, "stage", f"Nova oportunidade do mesmo lead do Kommo (já tinha {len(anteriores)})",
+            {"lead": l["external_id"], "canal": l["source"], "anteriores": [a["id"] for a in anteriores]}, f"user:{u['id']}", 1)
+    else:
+        _ev(con, oid, "stage", "Veio do chat do Kommo", {"lead": l["external_id"], "canal": l["source"]}, f"user:{u['id']}", 1)
+    auditar(con, "sales.from_lead", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
+            detail={"lead": lead_id, "anteriores": [a["id"] for a in anteriores]})
     con.commit()
-    return {"id": oid, "reaproveitada": False}
+    return {"id": oid, "reaproveitada": False, "nova": True, "do_lead": len(anteriores) + 1}
 
 
 # --------------------------------------------------------------- fechamento
