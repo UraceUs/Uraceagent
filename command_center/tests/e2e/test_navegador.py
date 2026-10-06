@@ -562,6 +562,12 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     assert not r["rola"] and not r["culpados"], r
     c.get_by_role("button", name="Sign the waiver").click()
     assert "Check both boxes" in c.get_by_role("alert").inner_text()
+    # #105: pelo menor, só pai ou mãe — "Other" explica e não deixa assinar
+    c.get_by_label("Other (grandparent").check()
+    c.get_by_text("Only a parent (mother or father) can sign").wait_for()
+    assert c.get_by_role("button", name="Sign the waiver").is_disabled()
+    c.get_by_label("Mother").check()
+    c.get_by_label("I am the parent (natural guardian) of Rafa Waiver").check()
     c.get_by_label("I have read this waiver").check()
     c.get_by_label("I agree to sign electronically").check()
     c.get_by_label("Your full name").fill("Rita Waiver")
@@ -692,6 +698,7 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     pg.get_by_role("checkbox", name="Check chain tension (+/- 25mm)").check()
     pg.locator("input[aria-label='Subir foto: Check chain tension (+/- 25mm)']").set_input_files(_png_pequeno(tmp_path / f"f{largura}.png"))
     pg.get_by_text("Foto salva.").wait_for()
+    pg.locator("img.ck-foto").first.wait_for()       # o aviso pode chegar antes do quadro redesenhar a foto (CI, 06/10)
     assert pg.locator("img.ck-foto").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r

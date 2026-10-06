@@ -9,7 +9,11 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
 - **Quem assina** é o responsável, logado na área do cliente (conta 18+ com senha). O modelo
   sai da idade do piloto: menor → parental; maior → adult. A **adult só o próprio piloto**
   assina (#104): um adulto só renuncia aos próprios direitos (*Sanislo*, Fla. 2015), e a
-  waiver que o titular assinasse por outro adulto não protegeria nada.
+  waiver que o titular assinasse por outro adulto não protegeria nada. Pelo **menor**, só
+  **pai ou mãe** (#105): o §744.301(3) da Flórida só deixa o *natural guardian* renunciar
+  pelo filho, e sem isso *Kirton v. Fields* (2008) anula a waiver. Quem assina diz o
+  parentesco e declara a autoridade; os dois vão para a trilha e para o certificado. Tutor
+  nomeado por juiz assina no balcão, com a ordem judicial.
 - **Intenção e consentimento**: duas caixas obrigatórias ("li e concordo" e "concordo em
   assinar eletronicamente"), nome digitado e assinatura desenhada.
 - **Prova**: data e hora (America/New_York e UTC), IP, aparelho, conta, os hashes do modelo
@@ -52,6 +56,26 @@ class ErroWaiver(ValueError):
 def _so_ele_assina(nome):
     return (f"{nome} is an adult and must sign their own waiver: only the driver can give up their own rights. "
             f"{nome} can create their own account and sign it there, or sign in person at the track.")
+
+
+# Pelo menor, online, só pai ou mãe (#105). Tutor nomeado por juiz: no balcão, com a ordem judicial.
+PARENTESCOS = {"mother": "Mother", "father": "Father"}
+DECLARACAO = "I am the parent (natural guardian) of {minor} and I have the authority to sign this waiver for them."
+
+
+def _parentesco(dados, menor):
+    """O parentesco de quem assina a parental, validado; devolve (rótulo, declaração aceita)."""
+    rel = (dados.get("relationship") or "").strip().lower()
+    if rel == "legal_guardian":
+        raise ErroWaiver("A court-appointed legal guardian signs in person at the track, with a copy of the court order.")
+    if rel == "other":
+        raise ErroWaiver(f"Only a parent (mother or father) can sign the waiver for a minor. Ask {menor}'s mother or "
+                         "father to sign it, or come to the track together.")
+    if rel not in PARENTESCOS:
+        raise ErroWaiver(f"Tell us your relationship to {menor}: only a parent can sign the waiver for a minor.")
+    if not dados.get("guardian_declaration"):
+        raise ErroWaiver(f"Confirm that you are {menor}'s parent and have the authority to sign for them.")
+    return PARENTESCOS[rel], DECLARACAO.format(minor=menor)
 
 
 def precisa_assinar_sozinho(piloto, tipo):
@@ -200,6 +224,7 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
     tipo = tipo_para(p)
     if precisa_assinar_sozinho(p, tipo):
         raise ErroWaiver(_so_ele_assina(p["name"]))
+    parentesco, declaracao = _parentesco(dados, p["name"]) if tipo == "parental" else (None, None)
     m = modelo(con, tipo)
     if not m:
         raise ErroWaiver("Online waiver signing is not available yet. Our team will send you the waiver.")
@@ -219,6 +244,7 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         "signature_id": sid, "template": tipo, "template_name": m["name"], "template_sha256": m["sha256"],
         "template_pages": m["pages"], "account_id": conta_id, "account_email": c["email"], "signer_name": c["name"],
         "typed_name": nome, "driver_id": pid, "driver_name": p["name"], "driver_birth_date": p["birth_date"],
+        "signer_relationship": parentesco, "guardian_declaration": declaracao,
         "signed_at_utc": agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "signed_at_local": ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "ip": ip, "user_agent": (aparelho or "")[:300], "read_and_agree": True, "consent_esign": True,
         "authentication": "URACE client account (email + password), signed in",
@@ -287,10 +313,13 @@ def _pdf_assinado(base, t, png):
     linha(f"Document: {t['template_name']} ({t['template_pages']} page(s) above this one)")
     linha(f"Signature ID: {t['signature_id']}")
     y -= 6
-    rotulo = "Parent / legal guardian" if t["template"] == "parental" else "Participant"
+    rotulo = "Parent (natural guardian)" if t["template"] == "parental" else "Participant"
     linha(f"{rotulo}: {t['signer_name']}   ·   Account: {t['account_email']}", 11, "Helvetica-Bold", 16)
     if t["template"] == "parental":
         linha(f"Minor participant: {t['driver_name']}   ·   Date of birth: {t['driver_birth_date']}")
+        linha(f"Relationship to the minor: {t.get('signer_relationship') or '—'}")
+        if t.get("guardian_declaration"):
+            linha(f"Declaration accepted: \"{t['guardian_declaration']}\"")
     y -= 4
     linha("By signing below I confirm that I have read the document above, that I agree to its terms, and that I "
           "agree to sign it electronically. My electronic signature has the same effect as a handwritten signature.")

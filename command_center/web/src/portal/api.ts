@@ -65,4 +65,6 @@ export interface WaiverPiloto { driver_id: number; driver: string; kind: 'adult'
   own_signature_required: boolean
   waiver_id: number | null; signed_at: string | null; valid_until: string | null }
 export interface Waivers { enabled: boolean; drivers: WaiverPiloto[] }
-export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string }
+export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string
+  /** #105: a declaração do pai ou da mãe, com {minor} no lugar do nome */
+  declaration: string | null }
