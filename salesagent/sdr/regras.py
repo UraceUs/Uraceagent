@@ -367,16 +367,14 @@ JANELA_24H_MARGEM_MINUTOS = 60
 MAX_REALERTAS = 4
 SLA_MINUTOS = {"alta": 5, "media": 15}
 
-# Horário de atendimento humano. PENDENTE: o valor veio do arquivo do Chase e
-# não vale como regra até ser reconfirmado (D-2026-08-31). A pista opera
-# quarta a domingo, 8h-13h (Italo, atendimento real) — confirmar a janela
-# de atendimento com o dono.
+# Horário de atendimento humano — confirmado pelo dono em 06/10/2026:
+# segunda a sexta, das 8h às 18h, no fuso de Orlando.
 HORARIO = {
     "fuso": "America/New_York",
-    "dias": [2, 3, 4, 5, 6],  # seg=0 ... dom=6 → quarta a domingo
-    "inicio": 9,
+    "dias": [0, 1, 2, 3, 4],  # seg=0 ... dom=6 → segunda a sexta
+    "inicio": 8,
     "fim": 18,
-    "confirmacao_pendente": True,
+    "confirmacao_pendente": False,
 }
 
 # Remetentes de máquina: pelo nome antes do @ ou por subdomínio de sistema.

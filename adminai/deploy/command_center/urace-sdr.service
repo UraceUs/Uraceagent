@@ -1,0 +1,9 @@
+[Unit]
+Description=URACE — aplica o nível do Chase escolhido no painel (CRM → Chat → Chase)
+
+[Service]
+Type=oneshot
+# root: reiniciar outra unit pede privilégio. O comando é fixo; o nível já está no bridge.env.
+ExecStartPre=/bin/rm -f /home/ubuntu/.urace/sdr.request
+ExecStart=/bin/systemctl restart sales-bridge.service
+TimeoutStartSec=60

@@ -191,6 +191,8 @@ from command_center.api import crm  # noqa: E402
 app.include_router(crm.r)
 from command_center.api import sistema  # noqa: E402
 app.include_router(sistema.r)
+from command_center.api import sdr as api_sdr  # noqa: E402
+app.include_router(api_sdr.r)
 from command_center.api import vendas  # noqa: E402
 app.include_router(vendas.r)
 app.include_router(dialpad.r)

@@ -1,0 +1,9 @@
+[Unit]
+Description=URACE — reinicia a ponte de vendas quando o painel troca o nível do Chase (~/.urace/sdr.request)
+
+[Path]
+PathExists=/home/ubuntu/.urace/sdr.request
+Unit=urace-sdr.service
+
+[Install]
+WantedBy=multi-user.target

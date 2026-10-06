@@ -56,7 +56,9 @@ HUMAN_WHATSAPP_LIST = [n.strip() for n in
 HUMAN_WHATSAPP = HUMAN_WHATSAPP_LIST[0] if HUMAN_WHATSAPP_LIST else ""
 # Horário comercial para alarmes de escalação (decisão C2)
 BUSINESS_TZ = "America/New_York"
-BUSINESS_HOURS = (9, 18)
+# dono, 06/10: atendimento humano de segunda a sexta, das 8h às 18h (Orlando)
+BUSINESS_HOURS = (8, 18)
+BUSINESS_DAYS = (0, 1, 2, 3, 4)          # seg=0 ... dom=6
 ESCALATION_REALERT_MIN = int(_bridge.get("ESCALATION_REALERT_MIN", "15"))  # 10–30
 # Teto de re-alertas por escalação. Sem teto (até 25/08) o alarme repetia a
 # cada 15min indefinidamente: numa escalação real ele disparou 10x em 152min
