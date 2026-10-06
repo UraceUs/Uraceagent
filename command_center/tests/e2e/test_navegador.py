@@ -289,6 +289,21 @@ def test_compra_do_email_mostra_a_linha_do_tempo(servidor, navegador, largura):
     pg.close()
 
 
+def test_passar_para_vendas_registra_e_fica_no_chat(servidor, navegador):
+    """Dono, 06/10: "eu continuo ali no chat do Kommo, mas quando eu clico ele registra no painel
+    de vendas aquele lead como uma oportunidade" — sem abrir a página de vendas."""
+    pg = entrar(navegador, servidor)
+    lid = pg.request.get(servidor + "/api/crm/inbox").json()["conversas"][0]["id"]
+    abrir(pg, servidor, f"/crm/chat/{lid}")
+    pg.get_by_role("button", name=re.compile("Passar para vendas")).first.click()
+    pg.get_by_text("Registrado no painel de vendas como oportunidade.").wait_for(timeout=8000)
+    assert f"/crm/chat/{lid}" in pg.url, pg.url
+    assert pg.get_by_role("button", name=re.compile(r"Em vendas \(1\)")).count() >= 1
+    # sem credencial do Kommo no e2e, o detalhe ao vivo do lead responde 503 de propósito; vendas não pode falhar
+    assert not pg.erros_js and not [e for e in pg.erros_api if "/api/sales" in e], (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 # ------------------------------------------------------------------ área do cliente (#40, #54)
 ROTAS_PORTAL = ["/portal", "/portal/signup"]
 ROTAS_PORTAL_DENTRO = ["/portal/dashboard", "/portal/book", "/portal/sessions", "/portal/drivers", "/portal/history", "/portal/account"]

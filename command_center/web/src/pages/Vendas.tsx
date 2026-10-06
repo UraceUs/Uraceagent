@@ -501,17 +501,26 @@ export function AgendaVendas() {
 }
 
 /** Botão "Passar para vendas" usado no chat do Kommo. */
+/* Dono, 06/10: "eu continuo ali no chat, mas quando eu clico ele registra no painel de vendas
+ * aquele lead como uma oportunidade. Caso não tenha, ele cria. Se já tiver, aponta uma nova."
+ * Executa e fica no chat: nada de abrir a página de vendas. */
 export function PassarParaVendas({ leadId }: { leadId: number }) {
-  const nav = useNavigate()
   const toast = useToast()
   const { can } = useAuth()
   const [busy, setBusy] = useState(false)
+  const [feito, setFeito] = useState<number | null>(null)
   const ref = useRef(false)
   if (!can('OPERATOR')) return null
-  return <button className="btn sm" disabled={busy} title="Vira oportunidade na área de vendas" onClick={async () => {
+  return <button className="btn sm" disabled={busy} title="Registra este lead como oportunidade no painel de vendas, sem sair do chat" onClick={async () => {
     if (ref.current) return
     ref.current = true; setBusy(true)
-    try { const r = await api.post<{ id: number; reaproveitada: boolean }>(`/sales/from-lead/${leadId}`); toast(r.reaproveitada ? 'Já existia: abrindo.' : 'Oportunidade criada.', 'ok'); nav(`/sales/${r.id}`) }
+    try {
+      const r = await api.post<{ id: number; reaproveitada: boolean; nova: boolean; do_lead: number }>(`/sales/from-lead/${leadId}`)
+      toast(r.reaproveitada ? 'Já registrado agora há pouco no painel de vendas.'
+        : r.do_lead > 1 ? `Nova oportunidade no painel de vendas (este lead já tinha ${r.do_lead - 1}).`
+        : 'Registrado no painel de vendas como oportunidade.', 'ok')
+      setFeito(r.do_lead)
+    }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false); ref.current = false }
-  }}>{busy ? <Spinner /> : <><Icon name="target" size={14} /> Passar para vendas</>}</button>
+  }}>{busy ? <Spinner /> : <><Icon name="target" size={14} /> {feito ? `Em vendas (${feito}) · nova oportunidade` : 'Passar para vendas'}</>}</button>
 }
