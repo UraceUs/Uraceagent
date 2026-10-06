@@ -6,12 +6,13 @@
  * evidente: cada modo tem a sua cor, o aviso fica no topo e trocar pede um toque de propósito.
  *
  * O leitor (coletor Android) digita o código no campo e aperta Enter, como um teclado. A
- * câmera é a alternativa, onde o navegador tem o BarcodeDetector. */
+ * câmera é a alternativa, em qualquer celular: o leitor nativo do Chrome ou, no iPhone, o ZXing. */
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, PageHeader, Scrim, Section } from '../components/ui'
+import { FotoPeca } from '../components/FotoPeca'
 import { useToast } from '../components/Toast'
 
 type Modo = 'cobrar' | 'guardar'
@@ -32,31 +33,65 @@ const MODO_TXT: Record<string, string> = { cobrar: 'cobrada', guardar: 'guardada
 const lerLocal = () => { try { return localStorage.getItem('balcao.local') || 'sede' } catch { return 'sede' } }
 const vibrar = (ms: number) => { try { navigator.vibrate?.(ms) } catch { /* sem vibração */ } }
 
-/** Câmera, onde o navegador lê código sozinho (Chrome no Android). */
+/** Leitor nativo do navegador (Chrome no Android). No iPhone não existe: aí entra o ZXing. */
+type Detector = { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> }
 const BD = typeof window === 'undefined' ? undefined
-  : (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector
+  : (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => Detector }).BarcodeDetector
+/** Em http (sem TLS) o navegador nem oferece a câmera: mediaDevices some. */
+const temCamera = () => 'mediaDevices' in navigator && typeof navigator.mediaDevices.getUserMedia === 'function'
+const FORMATOS = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf']
+
+/** Leitor em JavaScript puro (dono, 06/10: "abrir a câmera para ler o QR code" — também no iPhone).
+ *  Carrega só quando a câmera abre, para não pesar a tela; sem WebAssembly, a CSP fica como está. */
+async function detectorZxing(): Promise<Detector> {
+  const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([import('@zxing/browser'), import('@zxing/library')])
+  const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE, BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+    BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF]]])
+  const leitor = new BrowserMultiFormatReader(hints)
+  const tela = document.createElement('canvas')
+  return {
+    async detect(v) {
+      if (!v.videoWidth) return []
+      tela.width = v.videoWidth; tela.height = v.videoHeight
+      tela.getContext('2d', { willReadFrequently: true })?.drawImage(v, 0, 0)
+      try { return [{ rawValue: leitor.decodeFromCanvas(tela).getText() }] } catch { return [] }   // quadro sem código
+    },
+  }
+}
 
 function Camera({ onLer, onFechar }: { onLer: (t: string) => void; onFechar: () => void }) {
   const video = useRef<HTMLVideoElement>(null)
-  const [erro, setErro] = useState<string | null>(BD ? null : 'Este navegador não lê código pela câmera. Use o leitor.')
+  const [erro, setErro] = useState<string | null>(temCamera() ? null
+    : 'Este navegador não abre a câmera aqui. Abra o painel pelo endereço https e permita a câmera.')
+  const [pronto, setPronto] = useState(false)
   useEffect(() => {
     let parar = false, stream: MediaStream | null = null
-    if (!BD) return
-    const det = new BD({ formats: ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf'] })
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(async s => {
-      stream = s
-      if (!video.current) return
-      video.current.srcObject = s; await video.current.play()
-      while (!parar) {
-        try { const r = await det.detect(video.current); if (r[0]?.rawValue) { onLer(r[0].rawValue); return } } catch { /* quadro ruim */ }
-        await new Promise(ok => setTimeout(ok, 180))
+    if (!temCamera()) return
+    ;(async () => {
+      try {
+        const [det, s] = await Promise.all([BD ? Promise.resolve(new BD({ formats: FORMATOS })) : detectorZxing(),
+          navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })])
+        stream = s
+        if (parar || !video.current) { s.getTracks().forEach(t => t.stop()); return }
+        video.current.srcObject = s; await video.current.play(); setPronto(true)
+        while (!parar) {
+          try { const r = await det.detect(video.current); if (r[0]?.rawValue) { vibrar(40); onLer(r[0].rawValue); return } } catch { /* quadro ruim */ }
+          await new Promise(ok => setTimeout(ok, 180))
+        }
+      } catch (e) {
+        if (!parar) setErro((e as Error)?.name === 'NotAllowedError'
+          ? 'A câmera foi negada. Libere a câmera para este site nas configurações do navegador e tente de novo.'
+          : 'Não deu para abrir a câmera.')
       }
-    }).catch(() => setErro('Sem acesso à câmera.'))
+    })()
     return () => { parar = true; stream?.getTracks().forEach(t => t.stop()) }
   }, [onLer])
   return <Scrim onMouseDown={onFechar}><div className="modal" style={{ maxWidth: 480 }} onMouseDown={e => e.stopPropagation()}>
     <h2 className="h3">Apontar para o código</h2>
-    {erro ? <Banner tone="warn">{erro}</Banner> : <video ref={video} className="balcao-video" muted playsInline />}
+    {erro ? <Banner tone="warn">{erro}</Banner> : <>
+      <video ref={video} className="balcao-video" muted playsInline aria-label="Imagem da câmera" />
+      <p className="small muted" style={{ margin: '8px 0 0' }}>{pronto ? 'QR do cliente ou código de barras da peça: segure parado até vibrar.' : 'Abrindo a câmera…'}</p>
+    </>}
     <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}><button className="btn" onClick={onFechar}>Fechar</button></div>
   </div></Scrim>
 }
@@ -70,6 +105,12 @@ function CodigoNovo({ codigo, gerente, onFeito, onFechar }: { codigo: string; ge
   const [f, setF] = useState({ item_id: '', nome: '', category: '', price: '', qbo_categoria_id: '' })
   const [indo, setIndo] = useState(false)
   const [qboFora, setQboFora] = useState(false)
+  const [foto, setFoto] = useState<File | null>(null)
+  const [previa, setPrevia] = useState<string | null>(null)
+  function escolher(arq: File | null) {
+    setFoto(arq)
+    setPrevia(old => { if (old) URL.revokeObjectURL(old); return arq ? URL.createObjectURL(arq) : null })
+  }
   useEffect(() => {
     api.get<{ itens: { id: number; name: string }[]; prateleiras: { code: string; nome: string }[] }>('/estoque')
       .then(r => { setItens(r.itens); setPrat(r.prateleiras) }).catch(() => undefined)
@@ -82,7 +123,13 @@ function CodigoNovo({ codigo, gerente, onFeito, onFechar }: { codigo: string; ge
       const r = await api.post<{ item: Item; aviso: string | null }>('/balcao/codigos', {
         codigo, item_id: f.item_id ? Number(f.item_id) : null, nome: f.nome || null, category: f.category || null,
         price: gerente && f.price ? Number(f.price) : null, qbo_categoria_id: gerente && f.qbo_categoria_id ? f.qbo_categoria_id : null })
-      if (r.aviso) toast(r.aviso, 'crit'); else toast('Código cadastrado.', 'ok')
+      // a foto vai depois do código: se ela falhar, o código continua cadastrado
+      let semFoto = false
+      if (foto) {
+        const fd = new FormData(); fd.append('foto', foto)
+        try { await api.postForm(`/estoque/item/${r.item.id}/foto`, fd) } catch (er) { semFoto = true; toast(`Código cadastrado, mas a foto não: ${(er as ApiError).message}`, 'warn') }
+      }
+      if (r.aviso) toast(r.aviso, 'crit'); else if (!semFoto) toast(foto ? 'Código e foto cadastrados.' : 'Código cadastrado.', 'ok')
       onFeito(r.item)
     } catch (er) { toast((er as ApiError).message, 'crit') } finally { setIndo(false) }
   }
@@ -97,6 +144,7 @@ function CodigoNovo({ codigo, gerente, onFeito, onFechar }: { codigo: string; ge
       <label className="fld"><span>Prateleira</span><select value={f.category} onChange={e => setF({ ...f, category: e.target.value })}>
         <option value="">—</option>{prat.map(p => <option key={p.code} value={p.code}>{p.nome}</option>)}</select></label>
     </>}
+    <FotoPeca previa={previa} onFile={escolher} rotulo={f.item_id ? 'Foto da peça (troca a atual)' : 'Foto da peça'} />
     {gerente ? <>
       <label className="fld"><span>Preço final (US$)</span><input inputMode="decimal" value={f.price} onChange={e => setF({ ...f, price: e.target.value })} /></label>
       <label className="fld"><span>Categoria no QuickBooks <i>cria o item lá agora</i></span><select value={f.qbo_categoria_id} onChange={e => setF({ ...f, qbo_categoria_id: e.target.value })}>
@@ -246,7 +294,7 @@ export function Balcao() {
         <input ref={campo} value={texto} onChange={e => setTexto(e.target.value)} autoComplete="off" autoCapitalize="off" spellCheck={false}
           inputMode={teclado ? 'text' : 'none'} enterKeyHint="go" disabled={indo} aria-describedby="balcao-dica" /></label>
       <div className="row wrap" style={{ gap: 8 }}>
-        <button type="button" className="btn sm" onClick={() => setCamera(true)}>Câmera</button>
+        <button type="button" className="btn primary" onClick={() => setCamera(true)}>Ler com a câmera</button>
         <button type="button" className="btn sm ghost" onClick={() => { setTeclado(x => !x); focar() }}>{teclado ? 'Esconder teclado' : 'Digitar'}</button>
         <select aria-label="Onde a peça está" value={local} onChange={e => { setLocal(e.target.value); try { localStorage.setItem('balcao.local', e.target.value) } catch { /* sem armazenamento */ } }}>
           {LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select>
