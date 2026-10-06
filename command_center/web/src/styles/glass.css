@@ -434,6 +434,11 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .pcard .qt.warn{color:var(--warn)}
 .pcard .ft{display:flex;gap:4px;flex-wrap:wrap}
 .pcard .ft .chip{font-size:11px;padding:1px 7px}
+.pcard-w{position:relative;display:flex;flex:0 0 168px;scroll-snap-align:start}
+.pcard-w>.pcard{flex:1 1 auto}
+.pcard-lixo{position:absolute;top:6px;right:6px;width:40px;height:40px;border-radius:999px;display:flex;align-items:center;justify-content:center;border:1px solid var(--glass-line);background:var(--surface);color:var(--muted);cursor:pointer;padding:0;opacity:.92;transition:opacity var(--t) var(--ease)}
+.pcard-lixo:hover,.pcard-lixo:focus-visible{color:var(--crit);opacity:1}
+.pcard-lixo:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .pcard.novo{align-items:center;justify-content:center;gap:6px;border-style:dashed;background:transparent;box-shadow:none;color:var(--muted);min-height:200px;font-weight:600}
 .foto-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;min-height:120px;border:1px dashed var(--glass-line-2);border-radius:var(--r-l);background:var(--surface-2);color:var(--ink-2);font-weight:600;cursor:pointer;overflow:hidden;padding:0}
 .foto-btn img{width:100%;height:180px;object-fit:cover}
@@ -442,7 +447,7 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .foto-peca .foto-btn{cursor:default}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .preco-previa{font-size:13px;padding:8px 10px;border-radius:var(--r);background:var(--surface-2)}
-@media(max-width:700px){.pcard{flex-basis:146px}.pcard .ph{height:96px}.shelf-row{margin:0 -16px;padding-left:16px;padding-right:16px;scroll-padding-left:16px}}
+@media(max-width:700px){.pcard,.pcard-w{flex-basis:146px}.pcard .ph{height:96px}.shelf-row{margin:0 -16px;padding-left:16px;padding-right:16px;scroll-padding-left:16px}}
 /* campos do estoque (e de quem mais usar .fld): rótulo em cima, campo largo, toque de celular */
 .fld{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;min-width:0}
 .fld>span{font-size:12.5px;font-weight:600;color:var(--muted)}

@@ -123,8 +123,9 @@ def ler(con, texto, client_id=None):
             raise ErroBalcao("QR de cliente não reconhecido")
         return {"tipo": "cliente", "cliente": resumo_cliente(c)}
     cod = _codigo(t)
-    b = um(con, "SELECT item_id FROM stock_barcodes WHERE code=?", (cod,))
-    if not b:
+    b = um(con, "SELECT b.item_id FROM stock_barcodes b JOIN stock_items i ON i.id=b.item_id "
+                "WHERE b.code=? AND i.active=1", (cod,))
+    if not b:                       # peça excluída lê como código novo: dá para cadastrar de novo
         return {"tipo": "desconhecido", "codigo": cod}
     return {"tipo": "peca", "codigo": cod, "item": item_publico(con, estoque.item(con, b["item_id"]), client_id)}
 
@@ -132,7 +133,10 @@ def ler(con, texto, client_id=None):
 def cadastrar_codigo(con, codigo, item_id, por=None, origem="fabricante"):
     cod = _codigo(codigo)
     it = estoque.item(con, item_id)
-    ja = um(con, "SELECT b.item_id, i.name FROM stock_barcodes b JOIN stock_items i ON i.id=b.item_id WHERE b.code=?", (cod,))
+    ja = um(con, "SELECT b.item_id, i.name, i.active FROM stock_barcodes b JOIN stock_items i ON i.id=b.item_id WHERE b.code=?", (cod,))
+    if ja and not ja["active"]:     # era de uma peça excluída: o código passa para a peça nova
+        con.execute("UPDATE stock_barcodes SET item_id=?, origin=?, created_by=? WHERE code=?", (it["id"], origem, por, cod))
+        return cod
     if ja:
         if ja["item_id"] == it["id"]:
             return cod

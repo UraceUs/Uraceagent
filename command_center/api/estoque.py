@@ -14,6 +14,8 @@ A tela de Logística fala com estas rotas. As regras todas moram em
   colocar foto, descrição, nome e quantidade do item que temos"*. Eu tinha posto isso em
   MANAGER por conta própria e estava errado: quem está na prateleira é quem sabe o que
   há nela, e obrigar a pedir para o gerente é o jeito certo de o cadastro nunca acontecer.
+- **excluir a peça** (a lixeira do card) é OPERATOR — **dono, 06/10**: mecânico, gerente e
+  acesso livre. Tira das prateleiras e guarda o histórico; peça de cliente guardada impede.
 - **vender e ajustar** é MANAGER: ajuste sem dono vira estoque que não bate, e venda
   mexe em dinheiro.
 - **assinalar peça para um cliente** é OPERATOR (29/09): é quem separa na prateleira.
@@ -470,6 +472,24 @@ def rota_editar(item_id: int, dados: EditarIn, request: Request, con: sqlite3.Co
     con.commit()
     it = estoque.item(con, item_id)
     return {"ok": True, "mudou": sorted(mudou), **_vitrine(it, u)}
+
+
+@r.delete("/item/{item_id}")
+def rota_excluir(item_id: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                 u=Depends(auth.exige("OPERATOR"))):
+    """A lixeira do card: mecânico, gerente e acesso livre (dono, 06/10). Tira das prateleiras
+    sem apagar o histórico; peça de cliente guardada impede (400 com o porquê)."""
+    try:
+        estoque.item(con, item_id)
+    except estoque.ErroEstoque as e:
+        raise HTTPException(404, str(e))
+    try:
+        it = estoque.remover_item(con, item_id)
+    except estoque.ErroEstoque as e:
+        raise _erro(e)
+    _auditar(con, request, u, "stock.item.remove", item_id, {"name": it["name"], "category": it["category"]})
+    con.commit()
+    return {"ok": True}
 
 
 class DonoIn(BaseModel):

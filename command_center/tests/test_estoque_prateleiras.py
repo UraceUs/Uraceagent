@@ -349,3 +349,48 @@ def test_registrar_ja_dizendo_que_e_do_cliente(cli):
     linha = _itens(cli, h)["LeVanto KRT"]
     assert linha["nosso"] == 0 and linha["clientes"][0]["qty"] == 3
     assert cli.get(B, headers=h).json()["divergencias"] == []
+
+
+# ------------------------------------------------------------------ lixeira (dono, 06/10)
+def test_mecanico_exclui_peca_e_ela_sai_da_prateleira_sem_apagar_o_historico(cli):
+    """Dono, 06/10: "dá a permissão para mecânico, gerente, acesso livre… excluir aquela peça
+    ali das prateleiras". Sai da prateleira; movimentos e auditoria ficam."""
+    h = entra(cli, "mec@urace.us")
+    iid = cli.post(f"{B}/item", headers=h, data={"name": "Peça de exemplo", "category": "outros", "qty": "3"}).json()["id"]
+    assert "Peça de exemplo" in _itens(cli, h)
+    r = cli.delete(f"{B}/item/{iid}", headers=h)
+    assert r.status_code == 200, r.text
+    assert "Peça de exemplo" not in _itens(cli, h)
+    assert estoque.item(_db(), iid)["active"] == 0, "a ficha fica, desligada"
+    assert um(_db(), "SELECT COUNT(*) n FROM stock_moves WHERE item_id=?", (iid,))["n"] >= 1
+    ev = [a["event"] for a in todos(_db(), "SELECT event FROM audit_logs WHERE entity_id=? ORDER BY id", (str(iid),))]
+    assert "stock.item.remove" in ev
+    assert cli.delete(f"{B}/item/{iid}", headers=h).status_code == 400, "excluir de novo diz que já foi"
+    assert cli.delete(f"{B}/item/999999", headers=h).status_code == 404
+    h = entra(cli, "ger@urace.us")
+    iid = cli.post(f"{B}/item", headers=h, data={"name": "Outra de exemplo"}).json()["id"]
+    assert cli.delete(f"{B}/item/{iid}", headers=h).status_code == 200
+
+
+def test_peca_de_cliente_guardada_nao_se_exclui(cli):
+    h = entra(cli, "mec@urace.us")
+    iid = cli.post(f"{B}/item", headers=h, data={"name": "Pneu do Brian", "category": "pneus", "qty": "2",
+                                                  "client_id": str(_brian())}).json()["id"]
+    r = cli.delete(f"{B}/item/{iid}", headers=h)
+    assert r.status_code == 400 and "cliente" in r.json()["detail"]
+    assert "Pneu do Brian" in _itens(cli, h)
+
+
+def test_codigo_de_peca_excluida_vira_codigo_novo_no_balcao(cli):
+    from command_center.providers import balcao
+    h = entra(cli, "mec@urace.us")
+    velha = cli.post(f"{B}/item", headers=h, data={"name": "Vela antiga"}).json()["id"]
+    c = _db()
+    balcao.cadastrar_codigo(c, "7891234567895", velha); c.commit()
+    assert balcao.ler(c, "7891234567895")["tipo"] == "peca"
+    assert cli.delete(f"{B}/item/{velha}", headers=h).status_code == 200
+    c = _db()
+    assert balcao.ler(c, "7891234567895")["tipo"] == "desconhecido"
+    nova = cli.post(f"{B}/item", headers=h, data={"name": "Vela nova"}).json()["id"]
+    balcao.cadastrar_codigo(c, "7891234567895", nova); c.commit()
+    assert balcao.ler(c, "7891234567895")["item"]["id"] == nova

@@ -744,6 +744,33 @@ def _video_do_qr(texto, caminho):
     return caminho
 
 
+def test_mecanico_exclui_peca_pela_lixeira_com_confirmacao(servidor, navegador):
+    """Dono, 06/10: "um íconezinho de lixeira… dá só um pop-up de confirmação: deseja realmente
+    excluir essa peça? E aí, só o sim ou não"."""
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=360, altura=800)
+    csrf = next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")
+    r = pg.request.post(servidor + "/api/estoque/item", headers={"X-CSRF": csrf},
+                        multipart={"name": "Peça de exemplo (e2e lixeira)", "category": "outros", "qty": "1"})
+    assert r.ok, r.text()
+    abrir(pg, servidor, "/estoque")
+    card = pg.locator(".pcard-w", has_text="Peça de exemplo (e2e lixeira)")
+    lixo = card.get_by_role("button", name="Excluir Peça de exemplo (e2e lixeira)")
+    caixa = lixo.bounding_box()
+    assert caixa["width"] >= 40 and caixa["height"] >= 40, caixa
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    lixo.click()
+    pg.get_by_text("Deseja realmente excluir esta peça?").wait_for()
+    pg.get_by_role("button", name="Não", exact=True).click()                   # não: nada muda
+    assert card.count() == 1
+    lixo.click()
+    pg.get_by_role("button", name="Sim, excluir").click()
+    pg.get_by_text("Peça de exemplo (e2e lixeira) excluída.").wait_for()
+    card.wait_for(state="detached")
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_mecanico_le_o_qr_do_cliente_pela_camera_e_abre_o_cliente(servidor, navegador, tmp_path):
     """Dono, 06/10: "quando colocar ler QR code, abrir a câmera para poder ler esse QR code" e já puxar
     o cliente. O Chromium de Linux não tem BarcodeDetector — é o mesmo caminho do iPhone (ZXing)."""
