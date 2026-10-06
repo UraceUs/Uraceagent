@@ -900,9 +900,19 @@ def sincronizar_chats_kommo(con, desde_dias=30, maximo=500, enriquecer=40):
 
 
 def sync_compras_email(con):
-    """E-mail de compra no urace@ vira compra no painel (dono, 30/09). Ver compras_email."""
-    from command_center.providers import compras_email
-    return compras_email.sincronizar(con)
+    """E-mail de compra no urace@ vira compra no painel (dono, 30/09) e a compra vai para o
+    quadro Shipping Orders do Asana (dono, 06/10). Ver compras_email e compras_asana."""
+    from command_center.providers import compras_asana, compras_email
+    r = compras_email.sincronizar(con)
+    if r.get("ok"):
+        inicio = agora()
+        a = compras_asana.espelhar(con)
+        if not a.get("desligado"):
+            _marca(con, "asana_pedidos", bool(a.get("ok")), (a.get("criadas") or 0) + (a.get("atualizadas") or 0),
+                   a.get("motivo") or f"{a.get('criadas', 0)} tarefa(s) nova(s), {a.get('atualizadas', 0)} atualizada(s) "
+                                      f"no Shipping Orders, {a.get('erros', 0)} erro(s)", inicio)
+        r["asana"] = a
+    return r
 
 
 def sync_tudo(con):

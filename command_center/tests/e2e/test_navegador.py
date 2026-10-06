@@ -266,6 +266,29 @@ def test_abrir_e_fechar_a_compra_muda_o_endereco(servidor, navegador):
     pg.close()
 
 
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_compra_do_email_mostra_a_linha_do_tempo(servidor, navegador, largura):
+    """Dono, 06/10: "no painel de pedidos mostre todas as informações daquele pedido: se está em
+    rota, se já foi entregue, se teve alguma atualização". A semente traz a compra da KartSport
+    do pedido à saída para entrega e uma fatura pendente."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    abrir(pg, servidor, "/compras")
+    pg.get_by_text("fatura(s) a pagar").wait_for(timeout=8000)
+    pg.get_by_text("KartSport North America", exact=False).first.click()
+    pg.get_by_role("heading", name="Linha do tempo").wait_for(timeout=8000)
+    corpo = pg.locator(".modal").inner_text()
+    for esperado in ("saiu para entrega", "previsão de entrega", "preparando", "Última atualização", "1ZK102480300000001"):
+        assert esperado in corpo, esperado
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Fechar", exact=True).click()
+    pg.get_by_text("Courtney Concepts Karting", exact=False).first.click()
+    pg.locator(".modal").get_by_text("pagamento pendente", exact=False).first.wait_for(timeout=8000)
+    assert "fatura 9999" in pg.locator(".modal").inner_text()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 # ------------------------------------------------------------------ área do cliente (#40, #54)
 ROTAS_PORTAL = ["/portal", "/portal/signup"]
 ROTAS_PORTAL_DENTRO = ["/portal/dashboard", "/portal/book", "/portal/sessions", "/portal/drivers", "/portal/history", "/portal/account"]

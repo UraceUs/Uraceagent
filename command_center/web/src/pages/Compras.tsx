@@ -24,16 +24,20 @@ interface Pedido { id: number; item_id: number | null; description: string; qty:
   envio?: string | null; rastreio?: string | null; transportadora?: string | null; fornecedor?: string | null }
 interface Linha { id: number; item_id: number | null; description: string; qty: number; qty_received: number; unit_cost: number | null; request_id: number | null
   item: string | null; unit: string | null; pedido_por: string | null; cliente: string | null }
-interface Evento { id: number; kind: string; at: string | null; subject: string | null; sender: string | null; order_number: string | null
-  tracking: string | null; carrier: string | null; amount: number | null; link: string | null }
+interface Evento { id: number; purchase_id?: number; kind: string; stage?: string | null; at: string | null; subject: string | null; sender: string | null
+  order_number: string | null; invoice_number?: string | null; tracking: string | null; carrier: string | null; amount: number | null
+  link: string | null; url?: string | null; mailbox?: string | null }
 interface Sugerido { id: number; description: string; qty: number; unit: string; pedido_por: string | null; cliente: string | null; por_sku: boolean }
 interface Compra { id: number; supplier: string; status: string; reference: string | null; ordered_at: string | null; expected_at: string | null; notes: string | null
   criada_por: string | null; created_at: string; linhas: Linha[]; total: number | null; sem_custo: number; atrasada: boolean
   source?: string; order_number?: string | null; tracking?: string | null; carrier?: string | null; ship_status?: string | null
   paid_at?: string | null; shipped_at?: string | null; delivered_at?: string | null; email_total?: number | null; items_hint?: string | null
-  eventos?: Evento[]; pedidos_sugeridos?: Sugerido[]; entregue_sem_entrada?: boolean }
+  eventos?: Evento[]; pedidos_sugeridos?: Sugerido[]; entregue_sem_entrada?: boolean
+  invoice_number?: string | null; payment_status?: string | null; amount_due?: number | null; order_url?: string | null
+  asana_gid?: string | null; asana_error?: string | null }
 interface Repor { id: number; name: string; unit: string; falta: number; sku: string | null; supplier_url: string | null }
-interface Resumo { pedidos_abertos: number; urgentes: number; rascunhos: number; a_caminho: number; atrasadas: number; entregues?: number; repor: Repor[] }
+interface Resumo { pedidos_abertos: number; urgentes: number; rascunhos: number; a_caminho: number; atrasadas: number; entregues?: number
+  a_pagar?: number; repor: Repor[] }
 interface ItemEst { id: number; name: string; unit: string; nosso: number; cost?: number | null; category: string }
 interface Local { code: string; name: string }
 
@@ -45,6 +49,18 @@ const ST_COMPRA: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'a
 const ST_ENVIO: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit']> = {
   pedido: ['pedido feito', 'neutral'], pago: ['pago', 'info'], enviado: ['a caminho', 'info'], entregue: ['entregue', 'accent'], cancelado: ['cancelado na loja', 'crit'] }
 const EV: Record<string, string> = { pedido: 'Pedido', pagamento: 'Pagamento', envio: 'Envio', entregue: 'Entregue', cancelado: 'Cancelado', reembolso: 'Reembolso' }
+// a etapa fina que o e-mail (ou a página de rastreio) disse — dono, 06/10: "se está em rota, se já foi entregue, se teve alguma atualização"
+const ETAPA: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit']> = {
+  pagamento_pendente: ['pagamento pendente', 'warn'], preparando: ['preparando', 'neutral'], mensagem: ['mensagem da loja', 'neutral'],
+  etiqueta: ['etiqueta criada', 'info'], em_transito: ['em trânsito', 'info'], previsao: ['previsão de entrega', 'info'],
+  saiu_para_entrega: ['saiu para entrega', 'accent'], atraso: ['atraso na entrega', 'crit'] }
+const TOM_EV: Record<string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'> = { entregue: 'accent', cancelado: 'crit', envio: 'info', pagamento: 'ok', reembolso: 'warn' }
+function rotuloEvento(e: Evento): [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'] {
+  if (e.stage && ETAPA[e.stage]) return ETAPA[e.stage]
+  return [EV[e.kind] || e.kind, TOM_EV[e.kind] || 'neutral']
+}
+const ultimoEvento = (c: Compra) => (c.eventos || []).length ? (c.eventos as Evento[])[(c.eventos as Evento[]).length - 1] : null
+const hostDe = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return 'link' } }
 export function linkRastreio(n: string, transp?: string | null) {
   const t = (transp || '').toLowerCase(), u = n.toUpperCase()
   if (u.startsWith('1Z') || t === 'ups') return `https://www.ups.com/track?tracknum=${encodeURIComponent(n)}`
@@ -290,15 +306,20 @@ function PorItens({ id, itens, sugeridos, onDone }: { id: number; itens: ItemEst
   </div>
 }
 
-function LinhaDoTempo({ eventos }: { eventos: Evento[] }) {
+function LinhaDoTempo({ eventos, id }: { eventos: Evento[]; id: number }) {
   if (!eventos.length) return null
   return <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--glass-line)' }}>
-    <b>E-mails desta compra</b>
-    <div className="tbl" style={{ marginTop: 6 }}>{eventos.map(e => <div className="tr" key={e.id}>
-      <Chip tone={e.kind === 'entregue' ? 'accent' : e.kind === 'cancelado' ? 'crit' : e.kind === 'envio' ? 'info' : 'neutral'}>{EV[e.kind] || e.kind}</Chip>
-      <div className="grow" style={{ minWidth: 0 }}>{e.link ? <a href={e.link} target="_blank" rel="noreferrer">{e.subject || '(sem assunto)'}</a> : e.subject}
-        <div className="small muted">{e.at ? horaFL(e.at) : ''}{e.sender ? ` · ${e.sender.replace(/<.*>/, '').trim()}` : ''}</div></div>
-    </div>)}</div>
+    <h4 style={{ fontSize: 'inherit', margin: 0 }}>Linha do tempo</h4>
+    <div className="small muted">Cada e-mail da loja, da transportadora e cada leitura da página de rastreio, na ordem em que chegaram.</div>
+    <div className="tbl" style={{ marginTop: 6 }}>{eventos.map(e => { const [rot, tom] = rotuloEvento(e)
+      return <div className="tr" key={e.id}>
+        <Chip tone={tom}>{rot}</Chip>
+        <div className="grow" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{e.link ? <a href={e.link} target="_blank" rel="noreferrer">{e.subject || '(sem assunto)'}</a> : e.subject}
+          <div className="small muted">{e.at ? horaFL(e.at) : ''}{e.mailbox === 'web' ? ' · página de rastreio' : e.sender ? ` · ${e.sender.replace(/<.*>/, '').trim()}` : ''}
+            {e.tracking ? ` · ${e.tracking}` : ''}{e.invoice_number ? ` · fatura ${e.invoice_number}` : ''}
+            {e.purchase_id && e.purchase_id !== id ? ' · mesma caixa de outra compra' : ''}
+            {e.url && <> · <a href={e.url} target="_blank" rel="noreferrer">abrir {hostDe(e.url)}</a></>}</div></div>
+      </div> })}</div>
   </div>
 }
 
@@ -340,9 +361,19 @@ function FichaCompra({ id, gerente, locais, itens, onClose, onDone }: { id: numb
     {(d.ship_status || d.tracking || d.source === 'email') && <div className="row gap wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
       {d.source === 'email' && <Chip tone="neutral">veio do e-mail</Chip>}
       {d.ship_status && ST_ENVIO[d.ship_status] && <Chip tone={ST_ENVIO[d.ship_status][1]}>{ST_ENVIO[d.ship_status][0]}</Chip>}
+      {d.payment_status === 'pendente' && <Chip tone="warn">pagamento pendente{gerente && d.amount_due != null ? ` · ${usd(d.amount_due)}` : ''}</Chip>}
+      {d.payment_status === 'pago' && <Chip tone="ok">pago</Chip>}
       {d.order_number && d.order_number !== d.reference && <span className="small muted">pedido {d.order_number}</span>}
+      {d.invoice_number && <span className="small muted">fatura {d.invoice_number}</span>}
       <Rastreios tracking={d.tracking} carrier={d.carrier} />
       {gerente && d.email_total != null && <span className="small">a loja cobrou <b>{usd(d.email_total)}</b></span>}
+    </div>}
+    {(() => { const u = ultimoEvento(d); if (!u) return null; const [rot] = rotuloEvento(u)
+      return <div className="small" style={{ marginBottom: 8 }}>Última atualização: <b>{rot}</b>{u.at ? ` · ${horaFL(u.at)}` : ''}</div> })()}
+    {(d.order_url || d.asana_gid) && <div className="row gap wrap small" style={{ marginBottom: 10 }}>
+      {d.order_url && <a href={d.order_url} target="_blank" rel="noreferrer">página do pedido ({hostDe(d.order_url)})</a>}
+      {d.asana_gid && <a href={`https://app.asana.com/0/1215968721507536/${d.asana_gid}`} target="_blank" rel="noreferrer">tarefa no Shipping Orders</a>}
+      {gerente && d.asana_error && <span className="muted">Asana: {d.asana_error}</span>}
     </div>}
     {d.items_hint && <div className="small" style={{ marginBottom: 8 }}>A loja disse: <b>{d.items_hint}</b></div>}
     {d.entregue_sem_entrada && <div className="small" style={{ marginBottom: 10, color: 'var(--warn, #b7791f)' }}>
@@ -370,7 +401,7 @@ function FichaCompra({ id, gerente, locais, itens, onClose, onDone }: { id: numb
     </div>}
 
     {gerente && aberta && <PorItens id={d.id} itens={itens} sugeridos={d.pedidos_sugeridos || []} onDone={recarregar} />}
-    <LinhaDoTempo eventos={d.eventos || []} />
+    <LinhaDoTempo eventos={d.eventos || []} id={d.id} />
 
     {gerente && d.status === 'rascunho' && <div className="row gap wrap" style={{ marginTop: 14, alignItems: 'flex-end' }}>
       <label className="fld grow" style={{ margin: 0 }}><span>Nº do pedido / rastreio</span><input value={ref} onChange={e => setRef(e.target.value)} /></label>
@@ -443,6 +474,7 @@ export function Compras() {
       <Chip tone="info">{r.a_caminho} a caminho</Chip>
       {!!r.atrasadas && <Chip tone="crit">{r.atrasadas} atrasada(s)</Chip>}
       {!!r.entregues && <Chip tone="warn">{r.entregues} entregue(s) sem entrada</Chip>}
+      {!!r.a_pagar && <Chip tone="warn">{r.a_pagar} fatura(s) a pagar</Chip>}
     </div>}
 
     {gerente && !!pedidosAbertos.data?.pedidos.length && <Section title="Pedidos esperando compra" count={pedidosAbertos.data.pedidos.length}>
@@ -473,11 +505,14 @@ export function Compras() {
           return <div className="tr" key={c.id} role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setFicha(c.id)}
             onKeyDown={e => { if (e.key === 'Enter') setFicha(c.id) }}>
             <div className="grow" style={{ minWidth: 0 }}><b>#{c.id} · {c.supplier}</b>
-              <div className="small muted">{c.linhas.length ? `${c.linhas.length} item(ns)` : 'sem itens'}{c.items_hint ? ` · ${c.items_hint}` : ''}{c.reference ? ` · ref. ${c.reference}` : ''}{c.expected_at ? ` · previsão ${dia(c.expected_at)}` : ''} · {c.source === 'email' ? 'veio do e-mail' : c.criada_por || '—'}</div></div>
+              <div className="small muted">{c.linhas.length ? `${c.linhas.length} item(ns)` : 'sem itens'}{c.items_hint ? ` · ${c.items_hint}` : ''}{c.reference ? ` · ref. ${c.reference}` : ''}{c.tracking ? ` · ${c.carrier || 'rastreio'} ${c.tracking.split(' ')[0]}` : ''}{(() => { const u = ultimoEvento(c); return u?.at ? ` · atualizado ${horaFL(u.at)}` : '' })()}{c.expected_at ? ` · previsão ${dia(c.expected_at)}` : ''} · {c.source === 'email' ? 'veio do e-mail' : c.criada_por || '—'}</div></div>
             {gerente && (c.linhas.length ? c.total != null : c.email_total != null) && <span className="small">{usd(c.linhas.length ? c.total : c.email_total)}</span>}
             {c.atrasada && <Chip tone="crit">atrasada</Chip>}
+            {c.payment_status === 'pendente' && ['pedida', 'parcial', 'rascunho'].includes(c.status) && <Chip tone="warn">a pagar</Chip>}
             {c.entregue_sem_entrada ? <Chip tone="warn">entregue · falta entrada</Chip>
-              : c.ship_status && c.ship_status !== 'pedido' && ST_ENVIO[c.ship_status] && ['pedida', 'parcial', 'rascunho'].includes(c.status) && <Chip tone={ST_ENVIO[c.ship_status][1]}>{ST_ENVIO[c.ship_status][0]}</Chip>}
+              : (() => { const u = ultimoEvento(c); if (!['pedida', 'parcial', 'rascunho'].includes(c.status)) return null
+                if (u?.stage && ETAPA[u.stage] && u.stage !== 'pagamento_pendente' && u.stage !== 'mensagem') return <Chip tone={ETAPA[u.stage][1]}>{ETAPA[u.stage][0]}</Chip>
+                return c.ship_status && c.ship_status !== 'pedido' && ST_ENVIO[c.ship_status] ? <Chip tone={ST_ENVIO[c.ship_status][1]}>{ST_ENVIO[c.ship_status][0]}</Chip> : null })()}
             <Chip tone={tom}>{rot}</Chip>
           </div>
         })}</div>)}

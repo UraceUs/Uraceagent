@@ -174,13 +174,29 @@ def compra(con, pid):
                                                 LEFT JOIN clients cl ON cl.id=r.client_id
                                                WHERE l.purchase_id=? ORDER BY l.id""", (pid,))]
     total = sum((l["unit_cost"] or 0) * l["qty"] for l in linhas)
-    eventos = [dict(e) for e in todos(con, """SELECT id, kind, at, mailbox, thread_id, subject, sender, order_number,
-                                                     tracking, carrier, amount
+    eventos = [dict(e) for e in todos(con, """SELECT id, purchase_id, kind, stage, at, mailbox, thread_id, subject, sender, order_number,
+                                                     invoice_number, tracking, carrier, amount, url
                                                 FROM purchase_events WHERE purchase_id=? ORDER BY COALESCE(at, created_at), id""", (pid,))]
+    eventos += _eventos_da_mesma_caixa(con, pid, c["tracking"], {e["id"] for e in eventos})
+    eventos.sort(key=lambda e: (e["at"] or "", e["id"]))
     return {**c, "linhas": linhas, "total": round(total, 2),
             "sem_custo": sum(1 for l in linhas if l["unit_cost"] is None),
             "atrasada": atrasada(c), "eventos": eventos,
             "entregue_sem_entrada": entregue_sem_entrada(c)}
+
+
+def _eventos_da_mesma_caixa(con, pid, tracking, ja):
+    """Aviso da transportadora (sem nº de pedido) de uma caixa que leva esta compra e outra:
+    o evento mora numa compra só, mas a linha do tempo das duas mostra."""
+    saida = []
+    for t in (tracking or "").split():
+        for e in todos(con, """SELECT id, purchase_id, kind, stage, at, mailbox, thread_id, subject, sender, order_number,
+                                      invoice_number, tracking, carrier, amount, url
+                                 FROM purchase_events WHERE purchase_id != ? AND order_number IS NULL AND tracking LIKE ?""",
+                       (pid, f"%{t}%")):
+            if e["id"] not in ja and t in (e["tracking"] or "").split():
+                ja.add(e["id"]); saida.append(dict(e))
+    return saida
 
 
 def atrasada(c):

@@ -99,8 +99,13 @@ dois lugares: anexos de tarefas anteriores do piloto **e** a caixa
 
 ## Compra → quadro Shipping Orders (`1215968721507536`)
 
-E-mail de pedido feito, envio, atualização de status ou entrega alimenta
-a tarefa:
+**Desde 06/10 quem faz isto é o Command Center, sozinho** (dono: *"não ter necessidade de
+inserção manual"*): todo e-mail de compra do urace@ vira/atualiza a compra na tela Compras e
+a tarefa do Shipping Orders (`command_center/providers/compras_email.py` e `compras_asana.py`).
+**Você não cria tarefa no Shipping Orders** — seria duplicata. Se um pedido ficou de fora
+(não aparece na tela Compras), avise o dono com o assunto e a data do e-mail.
+
+Como a tarefa fica (referência para conferir):
 
 | Campo | O que entra |
 |---|---|
@@ -108,9 +113,9 @@ a tarefa:
 | `Supplier` `1215973949234112` | de onde comprou |
 | `Order Number` `1215973949234125` | número do pedido |
 | `Created at` `1215973949234129` | data da compra |
-| `Tracking Number` `1215973949234127` | **link** de rastreio que abre |
+| `Tracking Number` `1215973949234127` | **código** de rastreio (`1Z…`); o link vai na descrição (P-08) |
 | `Status da ordem` `1215973949424917` | Order Created → Shipped → Arrived |
-| descrição | previsão de entrega |
+| descrição | bloco "Command Center": link de rastreio, página do pedido, previsão, fatura, última atualização |
 
 **Dedupe pelo número do pedido.** E-mail de atualização do mesmo pedido
 **atualiza** a tarefa existente — nunca cria outra. Mover a tarefa para o

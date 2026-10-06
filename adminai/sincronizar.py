@@ -27,7 +27,7 @@ from adminai._venv import garantir_venv  # noqa: E402
 garantir_venv()          # o python3 do sistema não tem as dependências (22/09)
 
 from command_center.db import aplicar_schema, conectar  # noqa: E402
-from command_center.providers import sync  # noqa: E402
+from command_center.providers import compras_asana, compras_email, sync  # noqa: E402
 
 # nome na linha de comando -> (função, o que faz)
 SINCRONIAS = {
@@ -35,7 +35,13 @@ SINCRONIAS = {
     "asana-full": (sync.sync_asana_completo,   "histórico COMPLETO do quadro (demorado)"),
     "docusign":   (sync.sync_docusign,         "envelopes e waivers (pagina até o fim desde 22/09)"),
     "gmail":      (sync.sync_gmail,            "caixas urace@ e support@"),
-    "compras":    (sync.sync_compras_email,    "e-mails de compra do urace@ viram compras (pedido, pagamento, envio, entregue)"),
+    "compras":    (sync.sync_compras_email,    "e-mails de compra do urace@ viram compras (pedido, pagamento, envio, entregue) + Asana"),
+    "compras-varrer": (lambda con: compras_email.varrer(con),
+                       "verificação COMPLETA da caixa urace@ (um ano; COMPRAS_DIAS=n muda) — não apaga nada"),
+    "compras-refazer": (lambda con: compras_email.refazer(con),
+                        "refaz do zero as compras que o e-mail criou e ninguém tocou (backup JSON antes) e varre a caixa"),
+    "compras-asana": (lambda con: compras_asana.espelhar(con, limite=500),
+                      "leva ao quadro Shipping Orders do Asana as compras dos últimos 60 dias"),
     "qbo":        (sync.sync_qbo,              "QuickBooks: invoices e pagamentos"),
     "kommo":      (sync.sync_kommo,            "CRM: leads e conversas"),
     "corridas":   (sync.sincronizar_corridas,  "coluna RACES vira o calendário de corridas"),

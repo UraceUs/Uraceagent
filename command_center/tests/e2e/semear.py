@@ -246,6 +246,25 @@ _ck.importar(con, [
 from command_center.providers import biblioteca as _bib  # noqa: E402
 _bib.sincronizar_historicos(con, log=lambda *_: None)
 
+# pedidos pelo e-mail (06/10): uma compra da KartSport do pedido à saída para entrega, com
+# rastreio longo e a página de rastreio lida, e uma fatura de fornecedor pendente. TESTE: os
+# números são inventados e nada aqui toca o Gmail.
+from command_center.providers import compras_email as _ce  # noqa: E402
+_ks = "Kartsport North America <store+1@t.shopifyemail.com>"
+for _i, (_assunto, _corpo, _de, _links) in enumerate([
+        ("Order #90001 confirmed", "Order #90001 Total $1,234.50 USD", _ks, []),
+        ("Order #90001 in final stages of processing", "Order #90001 UPS tracking number: 1ZK102480300000001", _ks, []),
+        ("UPS Update: Package Scheduled for Delivery Tomorrow", "UPS Ground 1ZK102480300000001", "UPS <mcinfo@ups.com>",
+         [{"texto": "Track", "url": "https://www.ups.com/track?track=yes&trackNums=1ZK102480300000001&loc=en_US&requester=ST/trackdetails/very/long/path"}]),
+        ("Your package is out for delivery", "UPS Ground 1ZK102480300000001", "UPS <mcinfo@ups.com>", [])]):
+    _m = {"message_id": f"e2e-compra-{_i}", "de": _de, "assunto": _assunto, "corpo": _corpo, "snippet": "",
+          "data": f"Mon, 05 Oct 2026 1{_i}:00:00 -0400", "marcadores": ["INBOX"], "links": _links}
+    _ce.aplicar(con, _ce.ler(_m), "urace", f"e2e-t{_i}", _m["message_id"])
+_m = {"message_id": "e2e-fatura", "de": "QuickBooks <quickbooks@notification.intuit.com>", "snippet": "",
+      "assunto": "New payment request from Courtney Concepts Karting - invoice 9999", "corpo": "BALANCE DUE$427.22",
+      "data": "Mon, 05 Oct 2026 16:00:00 -0400", "marcadores": ["INBOX"], "links": []}
+_ce.aplicar(con, _ce.ler(_m), "urace", "e2e-fat", _m["message_id"])
+
 # aprendizado do dono e fonte de contexto já vêm do schema
 con.commit()
 n = lambda t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]                       # noqa: E731
