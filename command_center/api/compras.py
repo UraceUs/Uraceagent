@@ -103,6 +103,7 @@ def resumo(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPER
             "rascunhos": len(compras.compras(con, "rascunho")), "a_caminho": len(caminho),
             "atrasadas": sum(1 for c in caminho if c["atrasada"]),
             "entregues": sum(1 for c in caminho if c["entregue_sem_entrada"]),
+            "a_pagar": sum(1 for c in caminho if c["payment_status"] == "pendente"),
             "repor": [x for x in estoque.abaixo_do_minimo(con) if x["id"] not in {n["id"] for n in estoque.nunca_contados(con)}]}
 
 
@@ -112,7 +113,7 @@ def listar(status: str | None = None, limit: int = 200, offset: int = 0,
            con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     lista = [_sem_custo(c, u) for c in compras.compras(con, status or None, max(1, min(limit, 500)), offset)]
     if not _gerente(u):
-        lista = [dict(c, email_total=None) for c in lista]
+        lista = [dict(c, email_total=None, amount_due=None) for c in lista]
     return {"compras": lista, "gerente": _gerente(u), "total": compras.total_compras(con, status or None)}
 
 
@@ -124,6 +125,8 @@ def ver(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
         raise HTTPException(404, str(e))
     for e in c["eventos"]:           # o e-mail no Gmail do urace@ (conta 0, como na caixa de entrada)
         e["link"] = f"https://mail.google.com/mail/u/0/#all/{e['thread_id']}" if e.get("thread_id") else None
+    if not _gerente(u):
+        c["amount_due"] = None
     if c["status"] in ("rascunho", "pedida", "parcial"):
         c["pedidos_sugeridos"] = compras.pedidos_sugeridos(con, pid)
     if not _gerente(u):

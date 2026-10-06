@@ -24,6 +24,7 @@ import datetime as dt
 import email
 import email.message
 import email.utils
+import html as _html
 import json
 import os
 import re
@@ -226,6 +227,44 @@ def _b64d(s):
     return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
 
 
+def _html_para_texto(html):
+    """HTML do e-mail em texto: sem <style>/<script>/<head> (o CSS de e-mail de loja é
+    maior que o texto e empurrava o rastreio para depois do corte; "border: 2px" virava
+    nº de pedido), com as entidades decodificadas e uma quebra por bloco."""
+    t = re.sub(r"(?is)<(style|script|head|title)\b.*?</\1\s*>", " ", html or "")
+    t = re.sub(r"(?is)<!--.*?-->", " ", t)
+    t = re.sub(r"(?i)<\s*(br|/p|/div|/tr|/li|/h\d|/table)\b[^>]*>", "\n", t)
+    t = re.sub(r"<[^>]+>", " ", t)
+    return _html.unescape(t).replace("\u00a0", " ").replace("\u034f", "").replace("\u200c", "")
+
+
+def links_do_html(html, limite=60):
+    """[{texto, url}] dos <a href> do e-mail, com o destino real do redirecionador do Google
+    (`google.com/url?q=` expira — armadilha anotada no urace-gmail). Só http(s)."""
+    saida, vistos = [], set()
+    for m in re.finditer(r"(?is)<a\b[^>]*?href\s*=\s*[\"']([^\"']+)[\"'][^>]*>(.*?)</a\s*>", html or ""):
+        url = _html.unescape(m.group(1)).strip()
+        if url.lower().startswith("www."):
+            url = "https://" + url
+        try:
+            u = urllib.parse.urlsplit(url)
+        except ValueError:
+            continue
+        if u.netloc.endswith("google.com") and u.path == "/url":
+            q = urllib.parse.parse_qs(u.query).get("q") or urllib.parse.parse_qs(u.query).get("url")
+            if q:
+                url = q[0]
+                u = urllib.parse.urlsplit(url)
+        if u.scheme not in ("http", "https") or not u.netloc or url in vistos:
+            continue
+        vistos.add(url)
+        texto = re.sub(r"\s+", " ", _html.unescape(re.sub(r"<[^>]+>", " ", m.group(2)))).strip()
+        saida.append({"texto": texto[:120], "url": url[:1500]})
+        if len(saida) >= limite:
+            break
+    return saida
+
+
 def _corpo(payload, com_html=False):
     """Prefere text/plain; cai para HTML sem tags. Lista anexos.
     Com com_html devolve também (html, imagens inline por Content-ID)."""
@@ -254,7 +293,7 @@ def _corpo(payload, com_html=False):
         for sub in p.get("parts", []) or []:
             walk(sub)
     walk(payload)
-    texto = "\n".join(textos) if textos else re.sub(r"<[^>]+>", " ", "\n".join(htmls))
+    texto = "\n".join(textos) if textos else _html_para_texto("\n".join(htmls))
     texto = re.sub(r"[ \t]+", " ", texto)
     texto = re.sub(r"\n\s*\n+", "\n\n", texto).strip()
     if com_html:
@@ -262,16 +301,18 @@ def _corpo(payload, com_html=False):
     return texto, anexos
 
 
-def _resumo_msg(m, com_corpo=False, limite=4000):
+def _resumo_msg(m, com_corpo=False, limite=4000, com_links=False):
     r = {"message_id": m["id"], "de": _cabecalho(m, "From"), "para": _cabecalho(m, "To"),
          "data": _cabecalho(m, "Date"), "assunto": _cabecalho(m, "Subject"),
-         "marcadores": m.get("labelIds"), "snippet": m.get("snippet")}
+         "marcadores": m.get("labelIds"), "snippet": _html.unescape(m.get("snippet") or "") or None}
     if com_corpo:
         texto, anexos, html, inline = _corpo(m.get("payload", {}), com_html=True)
         r["corpo"] = texto[:limite] + ("…[cortado]" if len(texto) > limite else "")
         r["anexos"] = anexos or None
         r["tem_html"] = bool(html)
         r["inline"] = len(inline)
+        if com_links:
+            r["links"] = links_do_html(html) if html else []
     return r
 
 
@@ -383,12 +424,12 @@ def gmail_buscar(conta, consulta, so_inbox=True, maximo=20, pagina=None):
     "Lê uma thread inteira: cada mensagem com remetente, data, corpo (texto) e "
     "anexos (nome + attachment_id, para gmail_baixar_anexo).",
     {"conta": CONTA, "thread_id": {"type": "string"}}, ["conta", "thread_id"])
-def gmail_thread(conta, thread_id):
+def gmail_thread(conta, thread_id, limite=4000, com_links=False):
     th = _req(conta, f"{GMAIL}/threads/{thread_id}?format=full")
     inv = {v: k for k, v in _mapa_labels(conta).items()}
     msgs = []
     for m in th.get("messages", []):
-        r = _resumo_msg(m, com_corpo=True)
+        r = _resumo_msg(m, com_corpo=True, limite=max(500, min(int(limite), 20000)), com_links=com_links)
         r["marcadores"] = [inv.get(l, l) for l in (m.get("labelIds") or [])]
         msgs.append(r)
     return {"conta": conta, "thread_id": thread_id, "mensagens": msgs}

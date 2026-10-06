@@ -212,6 +212,19 @@ MIGRACOES = [
     ("purchase_orders", "delivered_at", "TEXT"),
     ("purchase_orders", "email_total", "REAL"),      # total que a loja disse no e-mail
     ("purchase_orders", "items_hint", "TEXT"),       # o que a loja disse que foi (assunto)
+    # 06/10 — dono: "chegou uma fatura daquele pedido. Ah, está pendente o pagamento" e "tem que
+    # abrir o link". Fatura do fornecedor, pagamento pendente/pago, link do pedido e o espelho
+    # da compra no quadro Shipping Orders do Asana.
+    ("purchase_orders", "invoice_number", "TEXT"),   # nº da fatura do fornecedor (INV-116671, 1678)
+    ("purchase_orders", "payment_status", "TEXT"),   # pendente | pago
+    ("purchase_orders", "amount_due", "REAL"),       # quanto a fatura pede
+    ("purchase_orders", "order_url", "TEXT"),        # página do pedido / rastreio que veio no e-mail
+    ("purchase_orders", "asana_gid", "TEXT"),        # tarefa no Shipping Orders
+    ("purchase_orders", "asana_synced_at", "TEXT"),
+    ("purchase_orders", "asana_error", "TEXT"),
+    ("purchase_events", "stage", "TEXT"),            # pagamento_pendente, em_transito, saiu_para_entrega…
+    ("purchase_events", "url", "TEXT"),              # link de rastreio/pedido do e-mail (ou a página lida)
+    ("purchase_events", "invoice_number", "TEXT"),
     # 01/10 — dono: o preço é editável; o agendamento guarda o serviço e o valor do dia.
     ("bookings", "service_id", "INTEGER"),
     ("bookings", "service_name", "TEXT"),

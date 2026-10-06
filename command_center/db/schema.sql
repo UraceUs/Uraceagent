@@ -1363,6 +1363,18 @@ CREATE TABLE IF NOT EXISTS purchase_events (
 );
 CREATE INDEX IF NOT EXISTS purchase_events_compra ON purchase_events(purchase_id);
 
+-- 06/10 — página de rastreio/pedido aberta a partir do link do e-mail (providers/pagina.py):
+-- quando foi lida, o que disse e o erro, para não abrir a mesma página a cada 15 minutos.
+CREATE TABLE IF NOT EXISTS purchase_pages (
+  url_hash     TEXT PRIMARY KEY,
+  url          TEXT NOT NULL,
+  purchase_id  INTEGER REFERENCES purchase_orders(id),
+  fetched_at   TEXT NOT NULL,
+  ok           INTEGER NOT NULL DEFAULT 0,
+  result       TEXT,                    -- json: situação, rastreios, previsão
+  error        TEXT
+);
+
 -- Threads já olhadas: só relê a thread quando chega mensagem nova nela.
 CREATE TABLE IF NOT EXISTS purchase_email_threads (
   thread_id    TEXT PRIMARY KEY,

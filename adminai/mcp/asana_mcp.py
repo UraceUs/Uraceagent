@@ -406,6 +406,81 @@ def _definir_campo_enum(gid, nome_campo, nome_opcao):
     raise ErroFerramenta(f"campo '{nome_campo}' não existe nesta tarefa")
 
 
+# --------------------------------------------------------------- Shipping Orders (06/10)
+# Porta do Command Center: a compra que o e-mail criou/atualizou no painel vira (ou atualiza)
+# a tarefa do quadro Shipping Orders. Dono, 06/10: "esse projeto lá do Asana vai estar um pouco
+# desatualizado com pedidos mais antigos, mas vale de eles estarem lá também".
+PROJETO_SHIPPING = "1215968721507536"
+BLOCO_INICIO = "— Command Center (atualizado sozinho) —"
+BLOCO_FIM = "— fim do Command Center —"
+CAMPOS_SHIPPING = "gid,name,completed,notes,memberships.project.gid,memberships.section.gid,custom_fields.gid,custom_fields.display_value"
+
+
+def pedidos_do_shipping(limite=2000):
+    """Todas as tarefas do Shipping Orders com os campos, para achar o pedido (dedupe)."""
+    return _paginar(f"/projects/{PROJETO_SHIPPING}/tasks",
+                    {"opt_fields": "gid,name,completed,custom_fields.gid,custom_fields.display_value"}, limite)
+
+
+def _com_bloco(notas, bloco):
+    """Troca só o bloco do Command Center na descrição; o que a equipe escreveu fica."""
+    notas = notas or ""
+    novo = f"{BLOCO_INICIO}\n{bloco.strip()}\n{BLOCO_FIM}"
+    rx = re.compile(re.escape(BLOCO_INICIO) + r".*?" + re.escape(BLOCO_FIM), re.S)
+    if rx.search(notas):
+        return rx.sub(lambda _m: novo, notas, count=1)
+    return (notas.rstrip() + "\n\n" + novo).strip()
+
+
+def espelhar_pedido(gid, nome, campos, campos_se_vazio, secao_gid, bloco, mexer_status=True):
+    """Cria (gid=None) ou atualiza a tarefa do pedido no Shipping Orders.
+
+    - `campos` ({gid_do_campo: valor}) são escritos sempre — o status do pedido;
+      `campos_se_vazio` só quando a tarefa ainda não tem valor: o que alguém preencheu à mão
+      (P-08, regra do dono) nunca é sobrescrito;
+    - tarefa CONCLUÍDA é pedido fechado: não se mexe (regra do Asana do dono);
+    - a descrição ganha um bloco do Command Center, trocado a cada atualização.
+    Com APLICAR=0 é simulação."""
+    if gid is None:
+        corpo = {"name": nome[:250], "workspace": WORKSPACE, "projects": [PROJETO_SHIPPING],
+                 "custom_fields": {**campos_se_vazio, **campos},
+                 "notes": assinar(_com_bloco("", bloco), marca=rastro("Tarefa criada pelo Command Center (e-mail de compra)"))}
+        if not _aplicar():
+            return _simulado(f"criar '{nome}' no Shipping Orders")
+        r = _req("/tasks", "POST", corpo)["data"]
+        if secao_gid:
+            _req(f"/sections/{secao_gid}/addTask", "POST", {"task": r["gid"]})
+        return {"aplicado": True, "gid": r["gid"], "criada": True, "link": r.get("permalink_url")}
+    t = _ler_tarefa(gid, CAMPOS_SHIPPING + ",parent.gid,memberships.project.gid")
+    if t.get("completed"):
+        return {"aplicado": False, "gid": gid, "pulada": "tarefa concluída"}
+    if not any((m.get("project") or {}).get("gid") == PROJETO_SHIPPING for m in t.get("memberships", [])):
+        raise ErroFerramenta(f"a tarefa {gid} não é do Shipping Orders")
+    _recusar_se_protegida(t, "espelhar pedido")
+    atuais = {cf["gid"]: cf.get("display_value") for cf in t.get("custom_fields", []) or []}
+    mudar = {k: v for k, v in campos_se_vazio.items() if not atuais.get(k)}
+    if mexer_status:
+        mudar.update(campos)
+    notas = _com_bloco(t.get("notes"), bloco)
+    corpo = {}
+    if mudar:
+        corpo["custom_fields"] = mudar
+    if notas != (t.get("notes") or ""):
+        corpo["notes"] = notas
+    secao_atual = next(((m.get("section") or {}).get("gid") for m in t.get("memberships", [])
+                        if (m.get("project") or {}).get("gid") == PROJETO_SHIPPING), None)
+    mover = mexer_status and secao_gid and secao_gid != secao_atual
+    if not corpo and not mover:
+        return {"aplicado": False, "gid": gid, "sem_mudanca": True}
+    if not _aplicar():
+        return _simulado(f"atualizar a tarefa {gid} no Shipping Orders")
+    if corpo:
+        _req(f"/tasks/{gid}", "PUT", corpo)
+    if mover:
+        _req(f"/sections/{secao_gid}/addTask", "POST", {"task": gid})
+    return {"aplicado": True, "gid": gid, "criada": False}
+
+
 def preencher_invoice_na_tarefa(gid, link, valor=None, deposito=False):
     """Porta do Command Center (não é ferramenta do agente): depois da invoice sair do
     QuickBooks, grava o link (e o valor) na linha 'Invoice link:' da descrição — ou na

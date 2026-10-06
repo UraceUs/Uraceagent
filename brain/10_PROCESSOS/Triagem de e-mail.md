@@ -24,7 +24,8 @@ marcadores). Ver [[Taxonomia do Gmail]].
 1. Ler cada thread nova da inbox.
 2. Classificar e aplicar o marcador **do manual confirmado** ([[Taxonomia do Gmail]]).
 3. Propaganda → `wNews` **e arquivar**. Todo o resto **fica na inbox**.
-4. Compra nossa → alimentar [[Compra e envio]] no [[Asana]].
+4. Compra nossa → o Command Center já lê e leva ao [[Asana]] sozinho (desde 06/10, ver
+   [[Compra e envio]]); a triagem só **avisa** o pedido que ficou de fora, sem criar tarefa.
 5. **Rascunho** para lead/orçamento e cliente atual. Parceria e
    financeiro: [[Italo Silveira]] responde pessoalmente.
 6. Dúvida → perguntar.
