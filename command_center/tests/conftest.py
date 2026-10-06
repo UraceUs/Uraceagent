@@ -6,8 +6,16 @@ definido, e o teste "sem credencial" chamou o Gmail de verdade
 (04/09). Aqui HOME vira um diretório vazio e toda credencial conhecida
 é apagada do ambiente. Teste nunca fala com sistema real.
 """
+import atexit
 import os
+import shutil
 import tempfile
+
+# #125: todo mkdtemp/NamedTemporaryFile dos testes cai numa pasta desta execução, que sai inteira
+# no fim. Antes cada suíte deixava ~500 MB no /tmp — e o deploy do VPS roda a suíte a cada deploy.
+_TMP = tempfile.mkdtemp(prefix="cc-testes-")
+tempfile.tempdir = _TMP
+atexit.register(shutil.rmtree, _TMP, ignore_errors=True)
 
 os.environ["HOME"] = tempfile.mkdtemp(prefix="cc-home-")
 os.environ["URACE_DIR"] = os.path.join(os.environ["HOME"], ".urace")   # 17/09: no VPS o deploy exporta URACE_DIR real; teste nunca escreve lá
