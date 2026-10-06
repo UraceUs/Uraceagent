@@ -53,7 +53,9 @@ MODELOS = {
 NOME = {"adult": "Adult Release and Waiver of Liability",
         "parental": "Parental Consent, Release and Waiver of Liability (minor)"}
 VALIDADE_DIAS = 365
-AVISO_18_DIAS = 30                  # a área do cliente avisa quem faz 18 nos próximos 30 dias
+AVISO_18_DIAS = 7                   # dono, 06/10: avisar 7 dias antes dos 18 (era 30)
+# #119 (dono, 06/10: sem tradução por enquanto): quem assina confirma o idioma; vai para a trilha
+IDIOMA = "I read and understand English, or I had this document translated before signing."
 MAX_ASSINATURA = 400_000            # bytes do PNG desenhado
 MIN_TINTA = 0.004                   # fração mínima de pixels pintados: quadro em branco não é assinatura
 
@@ -289,6 +291,8 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         raise ErroWaiver("Online waiver signing is not available yet. Our team will send you the waiver.")
     if not dados.get("read_and_agree") or not dados.get("consent_esign"):
         raise ErroWaiver("Check both boxes to sign: that you read and agree, and that you agree to sign electronically.")
+    if not dados.get("english_understood"):
+        raise ErroWaiver("Confirm that you read and understand English, or that you had the document translated.")
     c = portal.conta(con, conta_id)
     p = next((x for x in portal.pilotos(con, conta_id) if x["id"] == pid), None)
     if not c or not p:
@@ -334,6 +338,7 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         "signer_relationship": parentesco, "guardian_declaration": declaracao,
         "signed_at_utc": agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "signed_at_local": ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "ip": ip, "user_agent": (aparelho or "")[:300], "read_and_agree": True, "consent_esign": True,
+        "language_ack": IDIOMA, "governing_law": "Florida law; courts in Orange County, Florida",
         "document_delivered_at": entregue, "document_all_pages_viewed_at": lido,
         "reading_mode": modo, "reading_requirement": MODOS_LEITURA[modo],
         "authentication": (f"URACE client account (email + password); email verified {verificado}; "
@@ -434,7 +439,9 @@ def _pdf_assinado(base, t, png):
                  ("Whole document read", f"{t.get('document_all_pages_viewed_at') or '—'} ({t.get('reading_requirement') or '—'})"),
                  ("IP address", t["ip"] or "—"),
                  ("Device", t["user_agent"] or "—"), ("Agreed: read and agree", "yes"),
-                 ("Agreed: sign electronically", "yes"), ("Document hash (SHA-256)", t["template_sha256"]),
+                 ("Agreed: sign electronically", "yes"),
+                 ("Language", t.get("language_ack") or "—"),
+                 ("Document hash (SHA-256)", t["template_sha256"]),
                  ("Signature image hash (SHA-256)", t["signature_png_sha256"])):
         linha(f"{k}: {v}", 9, "Helvetica", 12)
     y -= 6

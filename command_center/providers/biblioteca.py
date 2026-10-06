@@ -195,7 +195,8 @@ def sincronizar_contratos_e_waivers(con, log=print):
             feitos["erros"] += 1
         con.commit()
     from command_center.api.motor import pdf_da_waiver
-    for w in todos(con, "SELECT * FROM waivers WHERE status='completed' AND COALESCE(hidden,0)=0"):
+    # #118: ocultar no painel não tira do backup — toda assinada (inclusive oculta) vai para o Drive
+    for w in todos(con, "SELECT * FROM waivers WHERE status='completed'"):
         nome = w["minor_name"] or w["signer_name"] or "Waiver"
         campos = dict(client_id=w["client_id"], title=f"Waiver — {nome}", doc_date=(w["completed_at"] or "")[:10],
                       status="assinada" + (" na área do cliente" if w["source"] == "urace" else ""))
