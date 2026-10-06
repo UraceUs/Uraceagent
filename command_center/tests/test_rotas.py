@@ -410,9 +410,12 @@ def test_atencao_ignora_historico_e_notificacao(cli):
     from datetime import date, timedelta
     tid = inserir(con, "tasks", client_id=cid, title="Vencida_Kart", project="U-RACE", section="SATURDAY", section_gid="1205141832260878",
                   status="open", due_on=(date.today() - timedelta(days=3)).isoformat())
-    assert f"tarefa-vencida:task:{tid}" in {i["key"] for i in cli.get(B + "/needs-attention").json()}       # 3 dias, sem evento: aparece
+    # dono, 06/10: data que já passou some sozinha do quadro; fica em "mostrar ocultos", marcada automática
+    assert f"tarefa-vencida:task:{tid}" not in {i["key"] for i in cli.get(B + "/needs-attention").json()}
+    oculto = {i["key"]: i for i in cli.get(B + "/needs-attention?hidden=1").json()}[f"tarefa-vencida:task:{tid}"]
+    assert oculto["dismissed"] == {"by": None, "at": None, "reason": "a data já passou", "auto": True}
     con.execute("INSERT INTO ai_events (kind, entity_type, entity_id, client_id, summary, status) VALUES ('task.overdue','task',?,?, 'x','RUNNING')", (tid, cid))
-    assert f"tarefa-vencida:task:{tid}" not in {i["key"] for i in cli.get(B + "/needs-attention").json()}   # a IA está cuidando
+    assert f"tarefa-vencida:task:{tid}" not in {i["key"] for i in cli.get(B + "/needs-attention?hidden=1").json()}   # a IA está cuidando
     con.close()
 
 
@@ -979,7 +982,7 @@ def test_avisos_descritivos_invoice_e_tarefa(cli):
     finally:
         con.close()
     entra(cli, "admin@urace.us")
-    itens = cli.get(B + "/needs-attention").json()
+    itens = cli.get(B + "/needs-attention?hidden=1").json()      # a tarefa vencida fica entre os ocultos (06/10)
     inv_it = [i for i in itens if i["entity"] == {"type": "invoice", "id": inv}][0]
     assert "Carla Mendes" in inv_it["title"] and "$819.00" in inv_it["title"] and "1077" in inv_it["title"]
     fatos = dict(inv_it["facts"])

@@ -59,13 +59,15 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
       <div className="row wrap" style={{ gap: 8 }}>
         <span className="ti">{a.title}</span>
         <Chip tone={levelTone(a.level)} glyph={LEVEL_GLYPH[a.level]}>{LABEL[a.level]}</Chip>
-        {a.dismissed && <Chip tone="outline">oculto</Chip>}
+        {a.dismissed && <Chip tone="outline">{a.dismissed.auto ? 'passou' : 'oculto'}</Chip>}
         <span className="grow" />
         {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title="Abrir no sistema de origem">{sysOf(a.link)} ↗</a>}
       </div>
       <div className="why">{a.why}</div>
       {!!a.facts?.length && <div className="facts">{a.facts.filter(([, v]) => v && v !== '—').map(([k, v]) => <span key={k}><span className="k">{k}</span>{v}</span>)}</div>}
-      {a.dismissed && <div className="small muted">Ocultado por {a.dismissed.by || '?'} em {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</div>}
+      {a.dismissed && (a.dismissed.auto
+        ? <div className="small muted">Ocultado automaticamente: {a.dismissed.reason}.</div>
+        : <div className="small muted">Ocultado por {a.dismissed.by || '?'} em {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</div>)}
       <div className="row wrap small att-acts">
         {a.client_id && <Link className="btn sm" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? 'Abrir cliente e responder' : 'Abrir cliente'}</Link>}
         {a.entity.type === 'approvals' && <Link className="btn sm" to="/approvals">Ver aprovações</Link>}
@@ -82,7 +84,7 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
         <span className="grow" />
         {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title="Diga à IA o que fazer com este item">✦ Instruir a IA</button>}
         {can('OPERATOR') && !a.dismissed && <button className="btn quiet sm" disabled={busy === a.key} onClick={() => hide(a)} title="Esconde o aviso; não apaga a origem">ocultar</button>}
-        {can('OPERATOR') && a.dismissed && <button className="btn sm" disabled={busy === a.key} onClick={() => restore(a)}>Restaurar</button>}
+        {can('OPERATOR') && a.dismissed && !a.dismissed.auto && <button className="btn sm" disabled={busy === a.key} onClick={() => restore(a)}>Restaurar</button>}
       </div>
       {balao === a.key && <Balao a={a} onDone={() => setBalao(null)} />}
     </div>
