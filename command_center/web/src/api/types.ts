@@ -18,7 +18,8 @@ export interface Integration {
 
 export interface Attention {
   key: string; level: Level; title: string; why: string
-  dismissed: null | { by: string | null; at: string; reason: string | null }
+  // auto: some sozinho porque a data já passou — não tem Restaurar
+  dismissed: null | { by: string | null; at: string | null; reason: string | null; auto?: boolean }
   facts?: [string, string][]
   entity: { type: string; id: number | string | null }
   client_id: number | null; link: string | null; action: string

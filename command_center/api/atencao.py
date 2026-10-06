@@ -30,18 +30,36 @@ def _link(con, tipo, id_):
 
 
 def coletar(con, incluir_ocultos=False):
-    """Itens ativos; com incluir_ocultos=True devolve também os ocultos, marcados."""
+    """Itens ativos; com incluir_ocultos=True devolve também os ocultos, marcados.
+
+    Aviso cuja data já passou some sozinho (dono, 06/10: "venceu no dia 26, 27, esses aí já
+    oculta automaticamente; os futuros ficam ali"). Continua em "mostrar ocultos", marcado
+    como automático, e não tem "Restaurar": volta sozinho se a data mudar."""
     itens = _coletar(con)
     ocultos = {r["key"]: r for r in todos(con, """SELECT d.*, u.name AS dismissed_by_name FROM attention_dismissals d
                                                   LEFT JOIN users u ON u.id = d.dismissed_by""")}
     saida = []
     for it in itens:
         d = ocultos.get(it["key"])
-        if d and not incluir_ocultos:
+        auto = it.pop("auto_oculto", None)
+        if (d or auto) and not incluir_ocultos:
             continue
-        it["dismissed"] = {"by": d["dismissed_by_name"], "at": d["dismissed_at"], "reason": d["reason"]} if d else None
+        if d:
+            it["dismissed"] = {"by": d["dismissed_by_name"], "at": d["dismissed_at"], "reason": d["reason"], "auto": False}
+        elif auto:
+            it["dismissed"] = {"by": None, "at": None, "reason": auto, "auto": True}
+        else:
+            it["dismissed"] = None
         saida.append(it)
     return saida
+
+
+def _corta(texto, n):
+    """Corta no fim de uma palavra, com reticências — "só o que depende da IA esper" não se lê."""
+    texto = (texto or "").strip()
+    if len(texto) <= n:
+        return texto
+    return texto[:n].rsplit(" ", 1)[0].rstrip(" ,;:.") + "…"
 
 
 def _chave(regra, tipo, id_):
@@ -140,13 +158,16 @@ def _coletar(con):
         dias = _dias_ate(w["expires_at"])
         if dias is None or dias > 21:
             continue
+        expirou = dias < 0
         tem_servico = um(con, "SELECT 1 FROM tasks WHERE client_id=? AND status='open'", (w["client_id"],)) if w["client_id"] else None
         itens.append(dict(key=_chave("waiver-expira", "waiver", w["id"]), level="MEDIUM" if tem_servico else "LOW",
-                          title=f"Waiver de {w['signer_name'] or w['cliente']} expira em {dias} dia(s)",
+                          title=(f"Waiver de {w['signer_name'] or w['cliente']} expirou em {_dbr(w['expires_at'])}" if expirou
+                                 else f"Waiver de {w['signer_name'] or w['cliente']} expira em {dias} dia(s)"),
                           why=("Há serviço agendado para este cliente. " if tem_servico else "Sem serviço agendado. ")
                               + ("Aberta e não assinada." if w["status"] == "delivered" else "Enviada, nunca aberta."),
                           entity={"type": "waiver", "id": w["id"]}, client_id=w["client_id"],
-                          link=_link(con, "waiver", w["id"]), action="Decidir: cobrar ou deixar expirar", facts=_fatos_waiver(w)))
+                          link=_link(con, "waiver", w["id"]), action="Decidir: cobrar ou deixar expirar", facts=_fatos_waiver(w),
+                          auto_oculto="já expirou" if expirou else None))
 
     # ---- 4. tarefa vencida ainda aberta — só depois que a IA tentou (evento task.overdue DONE/FAILED)
     for t in todos(con, """SELECT t.*, c.name AS cliente, c.pilot_name, c.email, ev.status AS ev_status, cmd.output AS ia_out, cmd.error AS ia_err
@@ -160,12 +181,13 @@ def _coletar(con):
         dias = -(_dias_ate(t["due_on"]) or 0)
         if t["ev_status"] is None and dias <= 1:
             continue                                   # ainda vai virar evento na próxima sincronia
-        resumo_ia = ((t["ia_out"] or t["ia_err"] or "").strip().split("\n")[0][:160])
+        resumo_ia = _corta((t["ia_out"] or t["ia_err"] or "").strip().split("\n")[0], 160)
         itens.append(dict(key=_chave("tarefa-vencida", "task", t["id"]), level="LOW" if t["ev_status"] == "DONE" else "MEDIUM",
                           title=f"{t['title'][:70]} · venceu em {_dbr(t['due_on'])} ({dias} dia(s)) e continua aberta",
                           why=("A IA tentou e disse: " + resumo_ia) if resumo_ia else "Serviço concluído deve ir para Finished Services; ainda está na coluna do dia.",
                           entity={"type": "task", "id": t["id"]}, client_id=t["client_id"],
-                          link=_link(con, "task", t["id"]), action="Mover ou concluir", facts=_fatos_tarefa(t)))
+                          link=_link(con, "task", t["id"]), action="Mover ou concluir", facts=_fatos_tarefa(t),
+                          auto_oculto="a data já passou"))
 
     # ---- 4b. invoice vencida há mais de 30 dias (regra do dono: cobrança por lote, mas não some)
     for i in todos(con, """SELECT i.*, c.name AS cliente, c.pilot_name FROM invoices i LEFT JOIN clients c ON c.id=i.client_id
