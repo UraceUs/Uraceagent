@@ -212,8 +212,11 @@ def _pdf_teste(titulo):
     import io
     from reportlab.pdfgen import canvas
     b = io.BytesIO(); c = canvas.Canvas(b)
-    c.drawString(72, 720, titulo); c.drawString(72, 700, "E2E TEST DOCUMENT - not a real waiver.")
-    c.showPage(); c.save()
+    for n in range(1, 4):                       # 3 páginas: a tela só libera as caixas depois de ler todas (#107)
+        c.drawString(72, 720, titulo); c.drawString(72, 700, f"E2E TEST DOCUMENT - not a real waiver. Page {n} of 3.")
+        c.setFont("Helvetica-Bold", 28); c.drawString(72, 640, f"PAGE {n}"); c.setFont("Helvetica", 12)
+        c.showPage()
+    c.save()
     return b.getvalue()
 
 

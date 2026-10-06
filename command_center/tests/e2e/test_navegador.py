@@ -11,6 +11,7 @@ Nada aqui fala com Asana, Gmail, QuickBooks ou Kommo: o banco é descartável e 
 servidor sobe sem sincronia (CC_AUTOSYNC=0) e sem credencial (URACE_ENV inexistente).
 """
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -556,7 +557,24 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     c.goto(servidor + "/portal/dashboard")
     c.get_by_role("link", name="Sign it online").click()
     c.get_by_role("heading", name="Sign the waiver", level=1).wait_for()
-    c.get_by_label("Waiver text").get_by_text("E2E TEST DOCUMENT").wait_for()   # o texto do modelo, para ler antes
+    # #107: o PDF de verdade, desenhado na tela; as caixas só se liberam depois de ler tudo
+    tela = c.locator(".pdf-folha canvas").first
+    tela.wait_for()
+    assert c.get_by_label("I have read this waiver").is_disabled()
+    c.wait_for_function("""() => { const t = document.querySelector('.pdf-folha canvas');
+        if (!t) return false; const d = t.getContext('2d').getImageData(0, 0, t.width, t.height).data;
+        for (let i = 0; i < d.length; i += 4) if (d[i] < 128) return true; return false }""")   # tinta: não é página em branco
+    c.locator(".pdf-folha canvas").nth(2).wait_for()
+    c.get_by_text(re.compile(r"Scroll through every page to continue: \d of 3 read")).wait_for()
+    assert c.get_by_role("button", name="Sign the waiver").is_disabled()
+    c.locator(".pdf-caixa").evaluate("e => e.scrollTo(0, e.scrollHeight)")      # pular direto para o fim não conta a do meio
+    assert not c.get_by_text("All 3 pages read.").is_visible()
+    c.locator(".pdf-caixa").evaluate("""async e => { for (let y = 0; y <= e.scrollHeight; y += 120) {
+        e.scrollTo(0, y); await new Promise(ok => setTimeout(ok, 60)) } }""")   # rolar como gente, página por página
+    c.get_by_text("All 3 pages read.").wait_for()
+    assert c.get_by_label("I have read this waiver").is_enabled()
+    c.get_by_text("Text version (for screen readers)").click()
+    c.get_by_label("Waiver text").get_by_text("E2E TEST DOCUMENT").wait_for()   # o texto do modelo, para leitor de tela
     assert len([t for n, t in _cabecalhos(c) if n == 1]) == 1
     r = c.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r

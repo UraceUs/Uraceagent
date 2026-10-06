@@ -16,6 +16,10 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
   nomeado por juiz assina no balcão, com a ordem judicial.
 - **Intenção e consentimento**: duas caixas obrigatórias ("li e concordo" e "concordo em
   assinar eletronicamente"), nome digitado e assinatura desenhada.
+- **Leitura** (#107): a tela mostra o PDF de verdade (o aviso do §744.301(3) com a formatação
+  do documento) e só libera as caixas depois de todas as páginas passarem pela tela. O servidor
+  exige que o PDF tenha sido entregue a esta conta nas últimas 24 h (registro na auditoria) e
+  guarda as duas horas: a da entrega (servidor) e a da leitura completa (relatada pela tela).
 - **Prova**: data e hora (America/New_York e UTC), IP, aparelho, conta, os hashes do modelo
   e do PDF final, e uma página de assinatura e certificado anexada ao PDF original.
 - **Validade de 1 ano**, como o e-mail do modelo no DocuSign promete ao cliente. A **parental
@@ -63,6 +67,35 @@ def _so_ele_assina(nome):
 # Pelo menor, online, só pai ou mãe (#105). Tutor nomeado por juiz: no balcão, com a ordem judicial.
 PARENTESCOS = {"mother": "Mother", "father": "Father"}
 DECLARACAO = "I am the parent (natural guardian) of {minor} and I have the authority to sign this waiver for them."
+
+
+LEITURA_HORAS = 24
+MODOS_LEITURA = {
+    "pdf_viewer": "every page of the PDF shown on screen before the boxes unlock",
+    "pdf_opened_and_text": "the browser could not show the PDF: the signer opened the PDF and scrolled the text to the end",
+}
+
+
+def _leitura(con, conta_id, tipo, dados, agora_utc):
+    """#107: (quando o PDF foi entregue a esta conta, quando a tela viu todas as páginas)."""
+    entregue = um(con, """SELECT MAX(at) AS at FROM audit_logs WHERE event='portal.waiver.document_view'
+                           AND entity_type='portal_account' AND entity_id=? AND json_extract(detail, '$.kind')=?
+                           AND at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)""",
+                 (str(conta_id), tipo, f"-{LEITURA_HORAS} hours"))["at"]
+    if not entregue:
+        raise ErroWaiver("Open and read the whole document before signing.")
+    try:
+        lido = datetime.fromisoformat(str(dados.get("document_read_at") or "").replace("Z", "+00:00"))
+        if lido.tzinfo is None:
+            raise ValueError
+    except ValueError:
+        raise ErroWaiver("Read the whole document before signing: scroll through every page.")
+    if not (agora_utc - timedelta(hours=LEITURA_HORAS) <= lido <= agora_utc + timedelta(minutes=2)):
+        raise ErroWaiver("Read the whole document before signing: scroll through every page.")
+    modo = dados.get("document_read_mode") or "pdf_viewer"
+    if modo not in MODOS_LEITURA:
+        raise ErroWaiver("Read the whole document before signing: scroll through every page.")
+    return entregue, lido.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), modo
 
 
 def _parentesco(dados, menor):
@@ -271,6 +304,7 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
     if _sha(base) != m["sha256"]:                          # o modelo guardado mudou por fora: não assina
         raise ErroWaiver("The waiver document could not be verified. Please contact us.")
     agora_utc = datetime.now(timezone.utc)
+    entregue, lido, modo = _leitura(con, conta_id, tipo, dados, agora_utc)
     ny = agora_utc.astimezone(portal.FUSO)
     nasc = date.fromisoformat(p["birth_date"])
     ate_d = validade(tipo, nasc, ny.date())
@@ -285,6 +319,8 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         "signer_relationship": parentesco, "guardian_declaration": declaracao,
         "signed_at_utc": agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "signed_at_local": ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "ip": ip, "user_agent": (aparelho or "")[:300], "read_and_agree": True, "consent_esign": True,
+        "document_delivered_at": entregue, "document_all_pages_viewed_at": lido,
+        "reading_mode": modo, "reading_requirement": MODOS_LEITURA[modo],
         "authentication": "URACE client account (email + password), signed in",
         "signature_png_sha256": _sha(png), "valid_until": ate, "valid_until_reason": ate_motivo,
     }
@@ -374,7 +410,10 @@ def _pdf_assinado(base, t, png):
           f" ({t.get('valid_until_reason') or 'one year'})")
     y -= 10
     linha("Audit trail", 11, "Helvetica-Bold", 16)
-    for k, v in (("Authentication", t["authentication"]), ("IP address", t["ip"] or "—"),
+    for k, v in (("Authentication", t["authentication"]),
+                 ("Document delivered to the signer", t.get("document_delivered_at") or "—"),
+                 ("Whole document read", f"{t.get('document_all_pages_viewed_at') or '—'} ({t.get('reading_requirement') or '—'})"),
+                 ("IP address", t["ip"] or "—"),
                  ("Device", t["user_agent"] or "—"), ("Agreed: read and agree", "yes"),
                  ("Agreed: sign electronically", "yes"), ("Document hash (SHA-256)", t["template_sha256"]),
                  ("Signature image hash (SHA-256)", t["signature_png_sha256"])):
