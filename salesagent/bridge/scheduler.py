@@ -36,7 +36,7 @@ import zoneinfo
 from datetime import datetime
 from pathlib import Path
 
-from config import (BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_MAX_REALERTS,
+from config import (BUSINESS_DAYS, BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_MAX_REALERTS,
                     ESCALATION_REALERT_MIN, LEAD_REASSURE_MIN,
                     LEAD_RESCUE_AFTER_SEC,
                     FOLLOWUP_BOT_ID, REPO_DIR)
@@ -64,7 +64,7 @@ close_fn = None        # close_fn(lead_id) -> None (SDR: card vai para PERDIDO /
 def in_business_hours(now_ts: int | None = None) -> bool:
     now = datetime.fromtimestamp(now_ts or time.time(), tz=_TZ)
     start, end = BUSINESS_HOURS
-    return start <= now.hour < end
+    return now.weekday() in BUSINESS_DAYS and start <= now.hour < end
 
 
 # ------------------------------------------------------------- agendamento
