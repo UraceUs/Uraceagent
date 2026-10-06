@@ -62,7 +62,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   const piloto = conta.drivers.find(p => p.id === pid)
   const [sit, setSit] = useState<Waivers | null>(null)
   const [modelo, setModelo] = useState<WaiverModelo | null>(null)
-  const [f, setF] = useState({ typed_name: '', signature: '', read_and_agree: false, consent_esign: false, relationship: '', guardian_declaration: false })
+  const [f, setF] = useState({ typed_name: '', signature: '', read_and_agree: false, consent_esign: false, english_understood: false, relationship: '', guardian_declaration: false })
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
   const [feita, setFeita] = useState<{ waiver_id: number; valid_until: string } | null>(null)
@@ -164,6 +164,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     <section className="stack" aria-labelledby="w-ass" style={{ gap: 10 }}>
       <h2 className="h2" id="w-ass">Sign</h2>
       {!lido && <p className="small muted" style={{ margin: 0 }}>Read the whole document above to unlock the boxes.</p>}
+      <label className="check"><input type="checkbox" disabled={!lido} checked={f.english_understood} onChange={e => setF({ ...f, english_understood: e.target.checked })} /> I read and understand English, or I had this document translated before signing.</label>
       <label className="check"><input type="checkbox" disabled={!lido} checked={f.read_and_agree} onChange={e => setF({ ...f, read_and_agree: e.target.checked })} />
         I have read this waiver, I understand it gives up legal rights, and I agree to it{menor ? ` on behalf of ${piloto.name}` : ''}.</label>
       <label className="check"><input type="checkbox" disabled={!lido} checked={f.consent_esign} onChange={e => setF({ ...f, consent_esign: e.target.checked })} />

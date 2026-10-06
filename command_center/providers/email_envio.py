@@ -1,9 +1,9 @@
 """Envio de e-mail pela API do Gmail, da caixa da URACE (#108).
 
 Usado pelo código de verificação da área do cliente: confirmar o e-mail da conta e o código de
-uma vez na hora de assinar a waiver. A caixa é a de `CC_EMAIL_REMETENTE` (padrão `support`,
-a recomendada; decisão do dono em aberto), com o token que o VPS já tem — o escopo
-`gmail.modify` cobre o envio.
+uma vez na hora de assinar a waiver. A caixa é a de `CC_EMAIL_REMETENTE`, por padrão `noreply`
+(dono, 06/10: "uma caixa nova só para isso"), com o token gravado por
+`python3 adminai/google_auth.py --conta noreply`, que só pede `gmail.send`.
 
 Teste e end-to-end nunca mandam e-mail de verdade: com `CC_EMAIL_FAKE=<arquivo>` a mensagem vai
 para esse arquivo (uma linha JSON por e-mail) e nada sai da máquina.
@@ -15,12 +15,12 @@ import urllib.error
 import urllib.request
 from email.message import EmailMessage
 
-CAIXAS = {"support": "support@urace.us", "urace": "urace@urace.us"}
+CAIXAS = {"noreply": "noreply@urace.us", "support": "support@urace.us", "urace": "urace@urace.us"}
 
 
 def remetente():
-    conta = (os.environ.get("CC_EMAIL_REMETENTE") or "support").strip().lower()
-    return conta if conta in CAIXAS else "support"
+    conta = (os.environ.get("CC_EMAIL_REMETENTE") or "noreply").strip().lower()
+    return conta if conta in CAIXAS else "noreply"
 
 
 class ErroEnvio(RuntimeError):

@@ -332,6 +332,7 @@ class WaiverIn(BaseModel):
     signature: str                   # data:image/png;base64,... (desenhada no quadro)
     read_and_agree: bool = False
     consent_esign: bool = False
+    english_understood: bool = False     # #119: caixa de idioma
     relationship: str | None = None          # parental (#105): mother | father (tutor e outros: no balcão)
     guardian_declaration: bool = False
     document_read_at: str | None = None       # #107: quando a tela viu todas as páginas do PDF (ISO, UTC)

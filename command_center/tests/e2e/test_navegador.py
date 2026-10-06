@@ -607,6 +607,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     assert c.get_by_role("button", name="Sign the waiver").is_disabled()
     c.get_by_label("Mother").check()
     c.get_by_label("I am the parent (natural guardian) of Rafa Waiver").check()
+    c.get_by_label("I read and understand English").check()          # #119
     c.get_by_label("I have read this waiver").check()
     c.get_by_label("I agree to sign electronically").check()
     c.get_by_label("Your full name").fill("Rita Waiver")

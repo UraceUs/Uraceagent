@@ -934,6 +934,9 @@ def waiver_trash(wid: int, dados: LixeiraIn, request: Request, u=Depends(auth.ex
     w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
     if not w:
         raise HTTPException(404, "Waiver not found.")
+    # #118 (dono, 06/10: "nunca apagar"): a assinada aqui não tem cópia no DocuSign — este é o registro legal
+    if w["source"] == "urace" and w["status"] == "completed":
+        raise HTTPException(409, "Waiver assinada na área do cliente é registro legal e não vai para a lixeira.")
     env = _envelope_id(con, wid)
     anulado = None
     if env and w["status"] in ("sent", "delivered", "autoresponded"):

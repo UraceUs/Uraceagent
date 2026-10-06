@@ -140,6 +140,7 @@ def assina(cli, h, pid, ler=True, codigo=True, **mais):
         mais["sign_code"] = ultimo_codigo(email)
     from datetime import datetime, timezone
     corpo = {"typed_name": "Maria Santos", "signature": _assinatura(), "read_and_agree": True, "consent_esign": True,
+             "english_understood": True,
              "relationship": "mother", "guardian_declaration": True,
              "document_read_at": datetime.now(timezone.utc).isoformat(), "document_read_mode": "pdf_viewer", **mais}
     return cli.post(f"{P}/drivers/{pid}/waiver", json=corpo, headers=h)
@@ -332,9 +333,10 @@ def test_menor_longe_dos_18_continua_com_um_ano(cli):
 
 def test_avisa_quem_faz_18_nos_proximos_30_dias(cli):
     liga(cli)
-    cliente(cli, pilotos=(("Perto Santos", _faz_18_daqui(20)), ("Longe Santos", _faz_18_daqui(90))))
+    # dono, 06/10: o aviso vem 7 dias antes (era 30)
+    cliente(cli, pilotos=(("Perto Santos", _faz_18_daqui(5)), ("Longe Santos", _faz_18_daqui(20))))
     s = {d["driver"]: d for d in cli.get(f"{P}/waivers").json()["drivers"]}
-    assert s["Perto Santos"]["turns_18_on"] == (portal.hoje() + timedelta(days=20)).isoformat()
+    assert s["Perto Santos"]["turns_18_on"] == (portal.hoje() + timedelta(days=5)).isoformat()
     assert s["Longe Santos"]["turns_18_on"] is None
 
 
@@ -458,9 +460,44 @@ def test_o_email_sai_da_caixa_certa_e_o_falso_nao_sai_da_maquina(tmp_path, monke
     monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "e.jsonl"))
     monkeypatch.delenv("CC_EMAIL_REMETENTE", raising=False)
     email_envio.enviar("a@example.com", "Assunto", "Texto")
+    monkeypatch.setenv("CC_EMAIL_REMETENTE", "support")
+    email_envio.enviar("a@example.com", "Assunto", "Texto")
     monkeypatch.setenv("CC_EMAIL_REMETENTE", "urace")
     email_envio.enviar("a@example.com", "Assunto", "Texto")
     monkeypatch.setenv("CC_EMAIL_REMETENTE", "qualquer")
     email_envio.enviar("a@example.com", "Assunto", "Texto")
     de = [json.loads(x)["from"] for x in open(tmp_path / "e.jsonl").read().splitlines()]
-    assert de == ["support@urace.us", "urace@urace.us", "support@urace.us"]
+    assert de == ["noreply@urace.us", "support@urace.us", "urace@urace.us", "noreply@urace.us"], "padrão: noreply@ (dono, 06/10)"
+
+
+# ------------------------------------------------------------------ decisões do dono, 06/10
+def test_sem_a_caixa_de_ingles_nao_assina_e_com_ela_vai_para_a_trilha(cli):
+    """#119: sem tradução por enquanto; quem assina confirma que lê inglês (ou mandou traduzir)."""
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    r = assina(cli, hc, pid, english_understood=False)
+    assert r.status_code == 400 and "understand English" in r.json()["detail"], r.text
+    w = um(conectar(), "SELECT * FROM waivers WHERE id=?", (assina(cli, hc, pid).json()["waiver_id"],))
+    t = json.loads(w["audit"])
+    assert t["language_ack"] == wn.IDIOMA and "Orange County" in t["governing_law"]
+    from pypdf import PdfReader
+    assert "I read and understand English" in " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+
+
+def test_waiver_assinada_no_sistema_nao_vai_para_a_lixeira(cli):
+    """#118 (dono: nunca apagar): a assinada aqui é o registro legal — não há cópia no DocuSign."""
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    wid = assina(cli, hc, pid).json()["waiver_id"]
+    h = equipe(cli)
+    r = cli.post(f"/ops/api/waivers/{wid}/trash", headers=h, json={"reason": "teste"})
+    assert r.status_code == 409 and "registro legal" in r.json()["detail"]
+    assert um(conectar(), "SELECT hidden FROM waivers WHERE id=?", (wid,))["hidden"] == 0
+
+
+def test_o_backup_da_biblioteca_leva_tambem_a_waiver_oculta():
+    """#118: ocultar no painel não tira do backup."""
+    import inspect
+    from command_center.providers import biblioteca
+    fonte = inspect.getsource(biblioteca)
+    assert "WHERE status='completed'\")" in fonte and "status='completed' AND COALESCE(hidden,0)=0" not in fonte
