@@ -27,7 +27,8 @@ e estado. Não é lista de melhoria — é o que está quebrado ou arriscado.
 [[P-06 - Precos defasados no catalogo do QuickBooks]]
 
 **Assinatura**
-[[P-07 - Waivers paradas desde junho]]
+[[P-07 - Waivers paradas desde junho]] ·
+[[P-15 - Waiver nativa x lei de assinatura eletronica]] (06/10, waiver nativa desligada até a T1–T5 e o advogado; #103)
 
 **Sistemas**
 [[P-08 - Order Number guardando URL]]
