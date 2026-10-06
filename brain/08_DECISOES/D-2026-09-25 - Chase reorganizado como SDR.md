@@ -29,6 +29,13 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
   outro funil volta com sinal comercial e, no Comercial, só anda para frente.
   O "Novo funil" da primeira versão foi abandonado. A tabela "Quem move o
   quê" está em `salesagent/docs/sdr.md`.
+- **Teste ponta a ponta de 28/09** (DMs do dono, ponte em observar): as três
+  decisões saíram como previsto e nada foi escrito. Duas correções vieram
+  dele, com o sim do dono no mesmo chat: (a) as REGRAS 1 e 2 só rodam para
+  card que nasce em First Contact, então o SDR só segura para a REGRA 2 o
+  card criado há menos de 15 min; card mais antigo com sinal comercial ele
+  sobe para Comercial › ENTRADA com a tag DM; (b) `nao_e_lead` não vem mais
+  de conversa de chat, só do nome do lead criado ou de e-mail.
 - **Bots da equipe primeiro.** Onde a equipe já tem bot respondendo
   (Instagram, Messenger, WhatsApp, chat do site), a ponte não fala; só
   escala, como tarefa.
@@ -67,6 +74,36 @@ PR #1) e agora vivem aqui, em Python, dentro da ponte.
 3. Qual robô responde em cada canal. Hoje respondem os bots da equipe; ligar
    o Chase num canal é tirar o canal de `CANAIS_COM_BOT_DA_EQUIPE` e desligar
    o bot da equipe ali. O Kommo não roda dois bots no mesmo lead.
+3a. **Decidido pelo dono em 28/09**, no chat do Claude Code: o agente de IA
+   do Kommo (*Agente qualificador de leads*) fica **sempre ligado** e é quem
+   responde ao lead em Urace; o SDR segue sem responder nesses canais. E o
+   SDR não precisa respeitar `nao_e_lead` posto antes num card que volta com
+   sinal comercial: "IAs vão operar, não tem risco de erro humano".
+3b. **Decidido pelo dono em 29/09** (depois do diagnóstico dos bots pela
+   extensão): quem fala com o lead em Urace é **o menu do chatbot + o agente
+   de IA**. O menu *URACE - Atendimento inicial DM* abre a conversa e grava o
+   e-mail no card; o agente de IA responde o que fica fora do menu. As
+   automações da Meta (Auto reply, Away e keywords de preço) continuam como
+   primeiro toque. O diagnóstico mostrou que o agente estava desligado (22 de
+   2.500 créditos usados) e que a voz "Instagram" nas conversas é a própria
+   Meta. O SDR continua sem responder nesses canais.
+3c. **Agente de IA, decidido pelo dono em 29/09:**
+   - revela que é IA na 5ª mensagem, sem emoji, e nunca nega se o lead
+     perguntar antes;
+   - responde no idioma do lead;
+   - não responde a 1ª mensagem de conversa nova (é da Meta e do menu) e
+     responde o texto livre que vem depois, em qualquer conversa; sai a regra
+     dos 7 dias;
+   - o passo 6 da persona passa a citar os dois preços: $689 por dia de
+     treino na Academy e $719 no Arrive and Drive.
+   - o agente se chama **Chase** (a persona dizia "George"; dono, 29/09).
+   - 30/09: o dono mandou deixar o agente **desligado**, com os ajustes
+     salvos, pronto para ligar depois. Ligar = só a chave de status.
+     Conferido pela extensão em 30/09: idioma "Match incoming message", as 3
+     diretrizes novas, persona com Chase e preço só da PRICE RULES (2.978
+     caracteres), frase do $689 corrigida na ação de contato e na fonte
+     "Pergunta sobre budget", nenhum "George" nem $600 no agente.
+   Aplicado no Kommo pela extensão, item por item, com o sim do dono.
 4. ~~Quem é o responsável único~~ — **decidido pelo dono em 28/09**, no chat
    do Claude Code: URace Support (usuário 12209643 do Kommo). O Lucas não é
    usuário do Kommo. `KOMMO_RESPONSAVEL_ID=12209643` no `bridge.env`.

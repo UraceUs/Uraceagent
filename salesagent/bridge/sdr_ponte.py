@@ -7,7 +7,11 @@ as REGRAS 1 e 2 da própria equipe em Urace > First Contact. O SDR
 complementa (salesagent/docs/sdr.md, "Quem move o quê"):
   - lead criado em First Contact com nome de lixo: nao_e_lead antes dos
     5 min da REGRA 1;
-  - mensagem em First Contact: só tags; quem sobe é a REGRA 2;
+  - mensagem em First Contact, card recém-criado: só tags; quem sobe é a
+    REGRA 2. Card antigo em First Contact (a REGRA 2 não roda para ele),
+    com sinal comercial: sobe para Comercial > ENTRADA com a tag DM;
+  - nao_e_lead só por nome de lead criado ou mensagem de e-mail, nunca por
+    conversa de chat;
   - Cold Leads / Follow Up 1 ou fechado, com sinal comercial: sobe para
     Comercial > ENTRADA;
   - card de outro funil (Contact list, Pós Venda...) com sinal comercial:
@@ -170,10 +174,24 @@ def triar_lead(lead_id: int, texto: str, canal: str = "", midia: str | None = No
         return _registrar(lead_id, {"ignorado": "FECHADO_SEM_SINAL" if local["fechado"] else "RESGATE_SEM_SINAL",
                                     "motivo": decisao["motivo"]})
 
+    # First Contact: só segura para a REGRA 2 o card que acabou de nascer.
+    segurar = na_pagina1 and local["gerenciada"] and _na_janela_da_regra_2(lead)
     feito = executor.aplicar(_Api, lead, decisao, m, modo(), roteamento=rota,
                              responsavel_id=KOMMO_RESPONSAVEL_ID or lead.get("responsible_user_id"),
-                             segurar_na_entrada=na_pagina1 and local["gerenciada"])
+                             segurar_na_entrada=segurar,
+                             marcar_nao_e_lead=canal in regras.CANAIS_QUE_MARCAM_NAO_LEAD)
+    if na_pagina1 and local["gerenciada"] and not segurar and feito.get("moveu"):
+        feito["sem_regra_2"] = "CARD_ANTIGO_EM_FIRST_CONTACT"
     return _registrar(lead_id, feito)
+
+
+def _na_janela_da_regra_2(lead: dict) -> bool:
+    """O card nasceu há pouco (a REGRA 2 da equipe ainda vai subi-lo)? Sem
+    data de criação, segura: na dúvida, quem sobe é a equipe."""
+    criado = lead.get("created_at")
+    if not criado:
+        return True
+    return time.time() - int(criado) < regras.JANELA_REGRA_2_MINUTOS * 60
 
 
 def triar_lead_criado(lead_id: int, nome: str = "") -> dict:
