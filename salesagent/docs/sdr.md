@@ -62,13 +62,28 @@ PÁGINA 2 = funil Comercial (só lead)
 
 | Onde está o card | O que o SDR faz | O que o SDR não faz |
 |---|---|---|
-| Urace › First Contact | tags: `nao_e_lead` no lixo **antes dos 5 min da REGRA 1**, `opt_out` (fecha como perdido), `Quer atendimento`; escalação vira tarefa | não sobe o card: quem sobe é a REGRA 2 (subir antes pularia a tag DM) |
+| Urace › First Contact, card criado há menos de 15 min | tags: `opt_out` (fecha como perdido), `Quer atendimento`; escalação vira tarefa | não sobe o card: quem sobe é a REGRA 2 (subir antes pularia a tag DM) |
+| Urace › First Contact, card mais antigo (movido para lá, ou que já estava) | com sinal comercial sobe para Comercial › ENTRADA, com a tag DM se não houver tag de origem; o log marca `sem_regra_2` | sem sinal, não mexe |
 | Lead criado em First Contact com nome de lixo (webhook `add_lead`) | `nao_e_lead` na hora | nada com lead de nome de gente |
 | Urace › Cold Leads, Follow Up 1, ou fechado | mensagem com sinal comercial sobe para Comercial › ENTRADA, com a tag DM se não houver tag de origem | sem sinal, não mexe |
 | Urace › Hot Leads, Closing the sale e as demais | nada | é trabalho da equipe |
 | Comercial | escalação → ATENDIMENTO + tarefa; opt-out → PERDIDO / NÃO QUALIFICADO; perdido há até 30 dias que volta com sinal reabre em ENTRADA | **nunca** devolve card para etapa anterior: depois de ENTRADA quem move é o vendedor |
 | Outro funil (Contact list, Pós Venda…) | contato antigo com sinal comercial: **tarefa + nota** para o responsável, uma vez por dia | não move |
 | *Incoming leads* | nada | o Kommo não deixa mover por PATCH |
+
+**Por que a janela de 15 min.** As REGRAS 1 e 2 da equipe só rodam para o
+card que **nasce** em First Contact. No teste ponta a ponta de 28/09, um card
+antigo movido para First Contact ficou 32 minutos parado, sem tag DM e sem
+subir. Por isso o SDR só segura para a REGRA 2 o card criado há menos de
+`JANELA_REGRA_2_MINUTOS` (15, a REGRA 2 age em +10). Se a equipe também
+agir, dá no mesmo: mesma etapa, mesma tag.
+
+**`nao_e_lead` nunca vem de conversa de chat.** A tag tira o card da REGRA 1
+para sempre. O SDR só a põe pelo nome do lead criado (assunto de e-mail de
+sistema) ou por mensagem de e-mail (`CANAIS_QUE_MARCAM_NAO_LEAD`). No mesmo
+teste, uma DM com cara de código de login teria marcado `nao_e_lead` num card
+que um minuto antes perguntou preço. Em Instagram, WhatsApp, Messenger e
+site, o log registra `nao_marcou: nao_e_lead` e fica só `sdr:automatico`.
 
 **Mapa das etapas** (`sdr/regras.py`): triagem → First Contact; opt-out →
 perdido (143); novo lead e em qualificação → ENTRADA; atendimento humano →
@@ -147,9 +162,12 @@ como atendida para o resgate do agendador não responder no lugar dela.
 **Opt-out:** uma confirmação no idioma do lead, conversa fechada, card em
 perdido com a tag `opt_out`.
 
-**Canais com bot da equipe** (`CANAIS_COM_BOT_DA_EQUIPE`): o chatbot *URACE -
-Atendimento inicial DM* responde no Instagram e no Messenger; WhatsApp e chat
-do site têm bot próprio. Nesses canais o roteador não deixa a ponte falar
+**Canais com bot da equipe** (`CANAIS_COM_BOT_DA_EQUIPE`): quem responde ao
+lead em Urace são, pela ordem: as automações da Meta (Auto reply, Away e
+keywords de preço), o menu *URACE - Atendimento inicial DM* (Instagram,
+Messenger e WhatsApp; grava o e-mail no card) ou o *Website bot* (chat do
+site), e o agente de IA do Kommo (*Agente qualificador de leads*) no que fica
+fora do menu. Decisões do dono em 28 e 29/09. Nesses canais o roteador não deixa a ponte falar
 (`BOT_DA_EQUIPE_NO_CANAL`); as escalações da tabela acima continuam, marcadas
 `sem_resposta`, e viram tarefa. Tirar um canal da lista é decisão do dono,
 junto com desligar o bot da equipe naquele canal.
@@ -224,7 +242,7 @@ Se nada sobrar, sai a mensagem de espera (`holding.py`).
   e o Kommo não roda dois bots no mesmo lead ao mesmo tempo. Ligar o Chase para
   responder num canal é tirar aquele canal de `CANAIS_COM_BOT_DA_EQUIPE` e
   desligar o bot da equipe ali.
-- **Pendências do relatório fora do SDR:** agente de IA do Kommo (revelar que
-  é IA, ligar), o que `NAO_TOCAR` significa, seis bots dividindo o gatilho de
+- **Pendências do relatório fora do SDR:** agente de IA do Kommo (ligado
+  sempre, decisão do dono em 28/09; falta decidir se revela que é IA), o que `NAO_TOCAR` significa, seis bots dividindo o gatilho de
   conversa, gatilhos em "Integração deletada", formulário de anúncio sem
   contato, 33 conversas sem resposta.
