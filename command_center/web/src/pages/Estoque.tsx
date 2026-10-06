@@ -18,6 +18,7 @@ import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim } from '../components/ui'
+import { FotoPeca } from '../components/FotoPeca'
 import { Icon } from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
@@ -111,18 +112,6 @@ function CamposPreco({ custo, setCusto, margem, setMargem, preco, setPreco }: {
   </>
 }
 
-/** Foto grande e fácil de tocar: no celular abre a câmera. */
-function CampoFoto({ previa, onFile, rotulo = 'Adicionar imagem' }: { previa: string | null; onFile: (f: File | null) => void; rotulo?: string }) {
-  const ref = useRef<HTMLInputElement>(null)
-  return <>
-    <button type="button" className="foto-btn" onClick={() => ref.current?.click()}>
-      {previa ? <img src={previa} alt="imagem da peça" /> : <><Icon name="box" size={22} /> {rotulo}</>}
-    </button>
-    <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp" capture="environment" hidden
-           onChange={e => onFile(e.target.files?.[0] || null)} />
-  </>
-}
-
 /** De quem é a peça: da URACE ou de um cliente — já na hora de registrar (dono, 29/09). */
 function DeQuemE({ deCliente, setDeCliente, cliente, setCliente }: {
   deCliente: boolean; setDeCliente: (v: boolean) => void; cliente: Client | null; setCliente: (c: Client | null) => void
@@ -202,7 +191,7 @@ function Adicionar({ d, inicial, onClose, reload }: { d: Lista; inicial: string 
 
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
     <h3>Adicionar peça</h3>
-    <CampoFoto previa={previa} onFile={escolher} />
+    <FotoPeca previa={previa} onFile={escolher} />
 
     <label className="fld"><span>Nome da peça</span>
       <input value={nome} onChange={e => setNome(e.target.value)} placeholder={prat === 'pneus' ? 'MG SH2 Red' : 'Pastilha de freio Tonykart'} /></label>
@@ -484,7 +473,7 @@ function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: 
     {f.error && <ErrorState error={f.error} retry={f.reload} />}
     {f.loading && !f.data && <Loading />}
     {f.data && it && <>
-      <CampoFoto previa={it.image_path ? `/ops/api/estoque/item/${it.id}/foto?v=${versao}` : null} onFile={trocarFoto} rotulo="Adicionar imagem" />
+      <FotoPeca previa={it.image_path ? `/ops/api/estoque/item/${it.id}/foto?v=${versao}` : null} onFile={trocarFoto} rotulo="Adicionar imagem" />
       <h3 style={{ marginTop: 10 }}>{it.name}</h3>
       <p className="small muted">{prat?.nome || it.category}{it.subcategory ? ` · ${it.subcategory}` : ''}{it.size ? ` · ${it.size}` : ''}
         {it.min_qty ? ` · mínimo ${it.min_qty} ${it.unit}` : ''}</p>

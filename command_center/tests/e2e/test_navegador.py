@@ -694,6 +694,81 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     pg.close()
 
 
+def test_mecanico_cadastra_peca_nova_no_balcao_com_foto_e_ela_aparece_no_estoque(servidor, navegador, tmp_path):
+    """Dono, 06/10: ao adicionar a peça, o mecânico tira a foto na hora ou escolhe da galeria,
+    e a foto aparece no estoque no lugar da caixinha."""
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=360, altura=800)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    abrir(pg, servidor, "/balcao")
+    campo = pg.get_by_label("Leia o QR do cliente")
+    campo.fill("5550001112223"); campo.press("Enter")
+    pg.get_by_role("heading", name="Código novo").wait_for()
+    # dois caminhos: câmera na hora (capture) e galeria (sem capture, senão o Android esconde a galeria)
+    assert pg.get_by_role("button", name="Tirar foto").is_visible() and pg.get_by_role("button", name="Escolher da galeria").is_visible()
+    assert pg.locator("input[aria-label='Tirar foto da peça']").get_attribute("capture") == "environment"
+    assert pg.locator("input[aria-label='Escolher foto da galeria']").get_attribute("capture") is None
+    pg.get_by_label("Nome da peça nova").fill("Rear bumper (e2e foto)")
+    pg.locator("input[aria-label='Escolher foto da galeria']").set_input_files(_png_pequeno(tmp_path / "peca.png"))
+    pg.locator(".foto-peca img").wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Salvar código").click()
+    pg.get_by_text("Código e foto cadastrados.").wait_for()
+    abrir(pg, servidor, "/estoque")
+    card = pg.locator(".pcard", has_text="Rear bumper (e2e foto)")
+    card.locator(".ph img").wait_for()
+    assert card.locator(".ph img").evaluate("i => i.complete && i.naturalWidth > 0")
+    # o "Adicionar peça" do estoque tem os mesmos dois caminhos
+    pg.get_by_role("button", name="Adicionar peça").first.click()
+    pg.get_by_role("heading", name="Adicionar peça").wait_for()
+    assert pg.get_by_role("button", name="Escolher da galeria").is_visible()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def _video_do_qr(texto, caminho):
+    """Um .y4m de 2 s com o QR parado no meio: a "câmera" falsa do Chromium mostra isto."""
+    import io
+    import segno
+    from PIL import Image
+    buf = io.BytesIO(); segno.make(texto, error="m").save(buf, kind="png", scale=8, border=4)
+    qr = Image.open(buf).convert("RGB")
+    quadro = Image.new("RGB", (640, 480), (255, 255, 255))
+    qr.thumbnail((440, 440)); quadro.paste(qr, ((640 - qr.width) // 2, (480 - qr.height) // 2))
+    y, u, v = quadro.convert("YCbCr").split()
+    u, v = u.resize((320, 240)), v.resize((320, 240))
+    with open(caminho, "wb") as f:
+        f.write(b"YUV4MPEG2 W640 H480 F10:1 Ip A1:1 C420jpeg\n")
+        for _ in range(20):
+            f.write(b"FRAME\n" + y.tobytes() + u.tobytes() + v.tobytes())
+    return caminho
+
+
+def test_mecanico_le_o_qr_do_cliente_pela_camera_e_abre_o_cliente(servidor, navegador, tmp_path):
+    """Dono, 06/10: "quando colocar ler QR code, abrir a câmera para poder ler esse QR code" e já puxar
+    o cliente. O Chromium de Linux não tem BarcodeDetector — é o mesmo caminho do iPhone (ZXing)."""
+    adm = entrar(navegador, servidor)
+    david = adm.request.get(servidor + "/api/clients?q=Pera").json()[0]["id"]
+    qr = adm.request.get(servidor + f"/api/balcao/cliente/{david}").json()["qr"]
+    adm.close()
+    video = _video_do_qr(qr, tmp_path / "qr.y4m")
+    b = navegador.browser_type.launch(executable_path=os.environ.get("PW_CHROMIUM") or None, args=[
+        "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", f"--use-file-for-fake-video-capture={video}"])
+    try:
+        pg = entrar(b, servidor, "luis@urace.us", largura=390, altura=844)
+        pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+        abrir(pg, servidor, "/balcao")
+        assert pg.evaluate("() => 'BarcodeDetector' in window") is False      # sem o leitor nativo, como no iPhone
+        pg.get_by_role("button", name="Ler com a câmera").click()
+        pg.get_by_role("heading", name="Apontar para o código").wait_for()
+        pg.wait_for_url(f"**/ops/balcao/{david}", timeout=15000)
+        pg.get_by_role("heading", name="David Pera", level=2).wait_for()
+        assert pg.get_by_role("heading", name="Apontar para o código").count() == 0   # a câmera fechou sozinha
+        assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    finally:
+        b.close()
+
+
 def test_mecanico_so_ve_o_que_e_do_box(servidor, navegador):
     pg = entrar(navegador, servidor, "luis@urace.us")
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
