@@ -916,9 +916,15 @@ def test_mecanico_le_o_qr_do_cliente_pela_camera_e_abre_o_cliente(servidor, nave
         pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
         abrir(pg, servidor, "/balcao")
         assert pg.evaluate("() => 'BarcodeDetector' in window") is False      # sem o leitor nativo, como no iPhone
+        console = []
+        pg.on("console", lambda m: console.append(f"{m.type}: {m.text}"[:300]))
         pg.get_by_role("button", name="Ler com a câmera").click()
         pg.get_by_role("heading", name="Apontar para o código").wait_for()
-        pg.wait_for_url(f"**/ops/balcao/{david}", timeout=15000)
+        try:
+            pg.wait_for_url(f"**/ops/balcao/{david}", timeout=15000)
+        except Exception:                      # diga o que a tela mostrava: o CI não guarda print
+            raise AssertionError(f"a câmera não leu o QR em 15 s. url={pg.url}\ntela={pg.inner_text('body')[:1500]}\n"
+                                 f"console={console[-15:]}\njs={pg.erros_js}\napi={pg.erros_api}")
         pg.get_by_role("heading", name="David Pera", level=2).wait_for()
         assert pg.get_by_role("heading", name="Apontar para o código").count() == 0   # a câmera fechou sozinha
         assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
