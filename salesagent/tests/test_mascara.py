@@ -36,38 +36,48 @@ FORM = ("ct=application/x-www-form-urlencoded :: token=" + JWT +
 JSON = ('{"token": "' + JWT + '", "contact": {"phone": "+14075551234", "email": "a@b.com"},'
         ' "text": "how much is a day?", "lead_id": 31764961}')
 
-m = state.mascarar(FORM)
-check("form: JWT do bot some", JWT not in m and "token=[oculto]" in m, m)
-check("form: telefone some", "14075551234" not in m, m)
-check("form: URL de continuação some", "continue" not in m and "return_url=[oculto]" in m, m)
-check("form: texto da mensagem e id do lead continuam", "quanto+custa" in m and "31764961" in m, m)
 
-m = state.mascarar(JSON)
-check("json: token, telefone e e-mail somem",
-      JWT not in m and "14075551234" not in m and "a@b.com" not in m, m)
-check("json: texto e lead_id continuam", "how much is a day?" in m and "31764961" in m, m)
+def rodar() -> list[str]:
+    falhas.clear()
+    m = state.mascarar(FORM)
+    check("form: JWT do bot some", JWT not in m and "token=[oculto]" in m, m)
+    check("form: telefone some", "14075551234" not in m, m)
+    check("form: URL de continuação some", "continue" not in m and "return_url=[oculto]" in m, m)
+    check("form: texto da mensagem e id do lead continuam", "quanto+custa" in m and "31764961" in m, m)
 
-check("JWT solto em texto livre some", JWT not in state.mascarar(f"bot token {JWT} inválido"))
-check("?key= numa URL some", "segredo123" not in state.mascarar("https://x/kommo/hook?key=segredo123"))
-check("texto comum não muda", state.mascarar("lead 31764961 pediu preço às 1730000000") ==
-      "lead 31764961 pediu preço às 1730000000")
+    m = state.mascarar(JSON)
+    check("json: token, telefone e e-mail somem",
+          JWT not in m and "14075551234" not in m and "a@b.com" not in m, m)
+    check("json: texto e lead_id continuam", "how much is a day?" in m and "31764961" in m, m)
 
-state.log("hook_raw", None, FORM)
-with state.db() as conn:
-    gravado = conn.execute("SELECT detail FROM audit ORDER BY id DESC LIMIT 1").fetchone()[0]
-check("state.log grava mascarado", JWT not in gravado and "14075551234" not in gravado, gravado)
+    check("JWT solto em texto livre some", JWT not in state.mascarar(f"bot token {JWT} inválido"))
+    check("?key= numa URL some", "segredo123" not in state.mascarar("https://x/kommo/hook?key=segredo123"))
+    check("texto comum não muda", state.mascarar("lead 31764961 pediu preço às 1730000000") ==
+          "lead 31764961 pediu preço às 1730000000")
 
-# Linha antiga, gravada antes da máscara: o script de limpeza resolve.
-with state.db() as conn:
-    conn.execute("INSERT INTO audit (ts, lead_id, kind, detail) VALUES (1, NULL, 'hook_raw', ?)", (FORM,))
-sys.argv = ["mascarar_auditoria.py", "--aplicar"]
-sys.path.insert(0, str(HERE.parent / "tools"))
-import mascarar_auditoria  # noqa: E402
-mascarar_auditoria.main()
-with state.db() as conn:
-    restos = [d for (d,) in conn.execute("SELECT detail FROM audit") if JWT in d or "14075551234" in d]
-check("mascarar_auditoria limpa as linhas antigas", restos == [], str(restos))
+    state.log("hook_raw", None, FORM)
+    with state.db() as conn:
+        gravado = conn.execute("SELECT detail FROM audit ORDER BY id DESC LIMIT 1").fetchone()[0]
+    check("state.log grava mascarado", JWT not in gravado and "14075551234" not in gravado, gravado)
 
-print("\nPASSOU - a auditoria não guarda token, chave, URL de continuação nem telefone"
-      if not falhas else f"\nFALHOU - {len(falhas)} verificação(ões)")
-sys.exit(1 if falhas else 0)
+    # Linha antiga, gravada antes da máscara: o script de limpeza resolve.
+    with state.db() as conn:
+        conn.execute("INSERT INTO audit (ts, lead_id, kind, detail) VALUES (1, NULL, 'hook_raw', ?)", (FORM,))
+    sys.path.insert(0, str(HERE.parent / "tools"))
+    import mascarar_auditoria
+    mascarar_auditoria.main(["--aplicar"])
+    with state.db() as conn:
+        restos = [d for (d,) in conn.execute("SELECT detail FROM audit") if JWT in d or "14075551234" in d]
+    check("mascarar_auditoria limpa as linhas antigas", restos == [], str(restos))
+    return list(falhas)
+
+
+def test_mascara():
+    assert rodar() == []
+
+
+if __name__ == "__main__":
+    erros = rodar()
+    print("\nPASSOU - a auditoria não guarda token, chave, URL de continuação nem telefone"
+          if not erros else f"\nFALHOU - {len(erros)} verificação(ões)")
+    sys.exit(1 if erros else 0)

@@ -18,10 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bridge"))
 import state  # noqa: E402
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--aplicar", action="store_true", help="reescreve as linhas (sem isto, só conta)")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     mudam = []
     with state.db() as conn:
         for rid, detail in conn.execute("SELECT id, detail FROM audit").fetchall():
