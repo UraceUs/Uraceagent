@@ -48,7 +48,10 @@ para número de pedido passa a ser `Pedido`, que aceita qualquer texto.
 
 ## 2. Shipping Orders — links que funcionam
 
-Regra do dono: **sempre link**, para qualquer pessoa abrir e ver. O que
+> **Substituída em 06/10/2026 (P-08):** o dono escolheu código no campo e o link na
+> descrição da tarefa. Ver `skills/urace-asana/SKILL.md`.
+
+Regra do dono (até 06/10): **sempre link**, para qualquer pessoa abrir e ver. O que
 estava quebrado não era o uso de link — era link que não abre. 9 tarefas
 corrigidas (9/9):
 
