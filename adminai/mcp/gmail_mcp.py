@@ -177,21 +177,34 @@ def _access_token(nome):
     return _tokens[nome]["valor"]
 
 
+# 06/10: a varredura completa da caixa (um ano de compras) passou do limite por minuto da API
+# do Gmail ("Quota exceeded ... Units per minute per user") e parou no meio. A cota volta no
+# minuto seguinte: quem pede calma (429, 403 de cota, 5xx) é atendido de novo depois de esperar.
+ESPERAS_COTA = (5, 10, 20, 40, 60, 60)
+_COTA = re.compile(r"rateLimitExceeded|userRateLimitExceeded|Quota exceeded|RESOURCE_EXHAUSTED|backendError", re.I)
+
+
 def _req(nome, url, metodo="GET", corpo=None):
     dados = json.dumps(corpo).encode() if corpo is not None else None
-    req = urllib.request.Request(url, data=dados, method=metodo)
-    req.add_header("Authorization", f"Bearer {_access_token(nome)}")
-    if dados is not None:
-        req.add_header("Content-Type", "application/json")
-    try:
-        with urllib.request.urlopen(req, timeout=60) as r:
-            bruto = r.read()
-            return json.loads(bruto) if bruto else {}
-    except urllib.error.HTTPError as e:
-        raise ErroFerramenta(f"HTTP {e.code} em {metodo} {url.split('?')[0]}: "
-                             f"{e.read()[:300].decode(errors='replace')}")
-    except urllib.error.URLError as e:
-        raise ErroFerramenta(f"sem conexão com o Google: {e.reason}")
+    for tentativa in range(len(ESPERAS_COTA) + 1):
+        req = urllib.request.Request(url, data=dados, method=metodo)
+        req.add_header("Authorization", f"Bearer {_access_token(nome)}")
+        if dados is not None:
+            req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                bruto = r.read()
+                return json.loads(bruto) if bruto else {}
+        except urllib.error.HTTPError as e:
+            corpo_erro = e.read()[:600].decode(errors="replace")
+            de_novo = e.code in (429, 500, 502, 503, 504) or (e.code == 403 and _COTA.search(corpo_erro))
+            if de_novo and tentativa < len(ESPERAS_COTA):
+                log(f"Gmail pediu calma (HTTP {e.code}); tentando de novo em {ESPERAS_COTA[tentativa]}s")
+                time.sleep(ESPERAS_COTA[tentativa])
+                continue
+            raise ErroFerramenta(f"HTTP {e.code} em {metodo} {url.split('?')[0]}: {corpo_erro[:300]}")
+        except urllib.error.URLError as e:
+            raise ErroFerramenta(f"sem conexão com o Google: {e.reason}")
 
 
 # --------------------------------------------------------------- helpers

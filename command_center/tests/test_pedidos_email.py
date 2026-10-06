@@ -430,3 +430,41 @@ def test_o_que_o_email_real_ensinou_sobre_links_e_datas():
     assert ce._melhor_link(links) == links[3]["url"]
     assert not any(pagina.util(lk["url"], lk["texto"]) for lk in links[:3])
     assert ce.previsao("Estimated delivery date Tue, 09/29/2026") == "2026-09-29"
+
+
+def test_gmail_espera_e_tenta_de_novo_quando_passa_da_cota(monkeypatch):
+    """06/10 no VPS: a varredura de um ano parou com "Quota exceeded ... Units per minute per
+    user". A cota volta no minuto seguinte: esperar e tentar de novo, não desistir."""
+    import io
+    import urllib.error
+    import gmail_mcp
+    esperas, chamadas = [], []
+
+    class Resp:
+        def __init__(self, corpo): self.corpo = corpo
+        def read(self): return self.corpo
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def abre(req, timeout=0):
+        chamadas.append(req.full_url)
+        if len(chamadas) <= 2:
+            raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(
+                b'{"error":{"code":403,"message":"Quota exceeded for quota metric \'Total Query Cost\' and limit \'Units per minute per user\'"}}'))
+        return Resp(b'{"id":"t1"}')
+    monkeypatch.setattr(gmail_mcp, "_access_token", lambda nome: "tok")
+    monkeypatch.setattr(gmail_mcp.urllib.request, "urlopen", abre)
+    monkeypatch.setattr(gmail_mcp.time, "sleep", esperas.append)
+    assert gmail_mcp._req("urace", "https://gmail.googleapis.com/gmail/v1/users/me/threads/t1") == {"id": "t1"}
+    assert esperas == list(gmail_mcp.ESPERAS_COTA[:2]) and len(chamadas) == 3
+
+    # 403 que não é cota (sem permissão) não fica tentando: erro na hora
+    chamadas.clear(); esperas.clear()
+
+    def negado(req, timeout=0):
+        chamadas.append(1)
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b'{"error":{"message":"Insufficient Permission"}}'))
+    monkeypatch.setattr(gmail_mcp.urllib.request, "urlopen", negado)
+    with pytest.raises(gmail_mcp.ErroFerramenta):
+        gmail_mcp._req("urace", "https://gmail.googleapis.com/gmail/v1/users/me/threads/t1")
+    assert esperas == [] and len(chamadas) == 1
