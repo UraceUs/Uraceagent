@@ -250,6 +250,25 @@ def sincronizar(pinv_id: int, con: sqlite3.Connection = Depends(get_db), u=Depen
     return b.invoice_publica(con, p)
 
 
+@r.post("/invoices/{pinv_id}/conferir-pagamento")
+def conferir_pagamento(pinv_id: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                       u=Depends(auth.exige("OPERATOR"))):
+    """Depois de passar o cartão no GoPayment: confere no QuickBooks se a invoice ficou paga."""
+    from command_center.providers import NaoConectado
+    if not b.cartao_ligado():
+        raise HTTPException(404, "Cartão no balcão desligado (CC_BALCAO_CARTAO).")
+    try:
+        r = b.conferir_pagamento(con, pinv_id, u["id"])
+    except LookupError:
+        raise HTTPException(404, "Invoice de peças não encontrada.")
+    except b.ErroBalcao as e:
+        raise HTTPException(400, str(e))
+    except NaoConectado:
+        raise HTTPException(503, "QuickBooks não está conectado.")
+    con.commit()
+    return {**r, "invoice": b.invoice_publica(con, um(con, "SELECT * FROM parts_invoices WHERE id=?", (pinv_id,)))}
+
+
 @r.post("/invoices/{pinv_id}/enviar")
 def enviar(pinv_id: int, request: Request, con: sqlite3.Connection = Depends(get_db),
            u=Depends(auth.exige("MANAGER"))):

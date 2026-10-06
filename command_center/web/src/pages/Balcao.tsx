@@ -21,7 +21,8 @@ interface Item { id: number; name: string; price: number | null; unit: string; q
   codigos: string[]; nosso: number; do_cliente?: number }
 interface Linha { id: number; qty: number; unit_price: number; name: string; total: number }
 interface InvPecas { id: number; client_id: number; cliente: string | null; service_date: string; status: string; qbo_invoice_id: string | null
-  doc_number: string | null; total: number; qbo_error: string | null; sent_to: string | null; linhas: Linha[] }
+  doc_number: string | null; total: number; qbo_error: string | null; sent_to: string | null; linhas: Linha[]
+  paga?: boolean; cartao?: boolean; paid_at?: string | null }
 interface Leitura { id: number; name: string; mode: string; qty: number; at: string; undone_at: string | null; por: string | null }
 interface Estado { cliente: Cliente; data: string; invoices: InvPecas[]; leituras: Leitura[]; gerente: boolean
   guardado: { item_id: number; name: string; qty: number; local: string }[] }
@@ -183,9 +184,51 @@ function ItemQbo({ item, onFeito, onFechar }: { item: Item; onFeito: () => void;
   </div></Scrim>
 }
 
+/* Cartão no balcão (06/10, desligado até CC_BALCAO_CARTAO=1): o cartão passa no QuickBooks
+ * GoPayment, no leitor Bluetooth, em "Invoice payment" → cliente → esta invoice → Charge. O
+ * GoPayment paga a PRÓPRIA invoice no QuickBooks (nada em dobro) e o número do cartão nunca
+ * passa pelo Command Center. Aqui: o que procurar no app, o botão que abre o app e a conferência. */
+const GOPAYMENT = 'intent://#Intent;package=com.intuit.intuitgopayment;S.browser_fallback_url='
+  + encodeURIComponent('https://play.google.com/store/apps/details?id=com.intuit.intuitgopayment') + ';end'
+
+function CobrarNoCartao({ p, onFechar, onPago }: { p: InvPecas; onFechar: () => void; onPago: () => void }) {
+  const toast = useToast()
+  const [indo, setIndo] = useState(false)
+  const [saldo, setSaldo] = useState<number | null>(null)
+  async function conferir() {
+    setIndo(true)
+    try {
+      const r = await api.post<{ paga: boolean; saldo: number }>(`/balcao/invoices/${p.id}/conferir-pagamento`)
+      if (r.paga) { toast('Pago no cartão: o QuickBooks já marcou a invoice.', 'ok'); onPago(); onFechar() }
+      else setSaldo(r.saldo)
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Scrim onMouseDown={onFechar}><div className="modal stack" style={{ maxWidth: 440, gap: 12 }} onMouseDown={e => e.stopPropagation()}>
+    <h3 style={{ margin: 0 }}>Cobrar no cartão</h3>
+    <div className="card card-b" style={{ textAlign: 'center' }}>
+      <div className="small muted">{p.cliente || 'Cliente'}{p.doc_number ? ` · invoice ${p.doc_number}` : ''}</div>
+      <div style={{ fontSize: 34, fontWeight: 700 }} className="mono">{usd(p.total)}</div>
+    </div>
+    <ol className="small" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
+      <li>Abra o QuickBooks GoPayment (botão abaixo).</li>
+      <li>Toque em <b>+</b> e escolha <b>Invoice payment</b>.</li>
+      <li>Procure <b>{p.cliente || 'o cliente'}</b> e escolha a invoice <b>{p.doc_number || 'de peças de hoje'}</b> de <b>{usd(p.total)}</b>.</li>
+      <li>Toque em <b>Charge</b> e passe o cartão no leitor (chip ou aproximação).</li>
+      <li>Volte aqui e toque em <b>Já passei o cartão</b>.</li>
+    </ol>
+    {saldo !== null && <Banner tone="warn">O QuickBooks ainda mostra saldo de {usd(saldo)} nesta invoice. Confira no GoPayment se a cobrança foi aprovada e tente de novo.</Banner>}
+    <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>
+      <button className="btn" onClick={onFechar}>Fechar</button>
+      <a className="btn" href={GOPAYMENT}>Abrir o GoPayment</a>
+      <button className="btn primary" disabled={indo} onClick={conferir}>{indo ? <span className="spin" /> : 'Já passei o cartão'}</button>
+    </div>
+  </div></Scrim>
+}
+
 function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean; onMudou: () => void }) {
   const toast = useToast()
   const [indo, setIndo] = useState(false)
+  const [cartao, setCartao] = useState(false)
   async function acao(qual: 'sincronizar' | 'enviar') {
     setIndo(true)
     try { await api.post(`/balcao/invoices/${p.id}/${qual}`); toast(qual === 'enviar' ? 'Invoice enviada pelo QuickBooks.' : 'Atualizada no QuickBooks.', 'ok'); onMudou() }
@@ -196,6 +239,7 @@ function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean;
       <b className="grow">Peças de {p.service_date.slice(5, 7)}/{p.service_date.slice(8, 10)}{p.cliente ? ` · ${p.cliente}` : ''}</b>
       {p.status === 'enviada' ? <Chip tone="ok">enviada{p.sent_to ? ` para ${p.sent_to}` : ''}</Chip> : p.status === 'anulada' ? <Chip tone="neutral">anulada</Chip>
         : <Chip tone="warn">aberta · não enviada</Chip>}
+      {p.paga && <Chip tone="ok">paga</Chip>}
       {p.doc_number && <span className="mono small">{p.doc_number}</span>}
     </div>
     {p.qbo_error && <Banner tone="crit">QuickBooks: {p.qbo_error}</Banner>}
@@ -203,8 +247,11 @@ function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean;
       <span className="small muted">{l.qty} × {usd(l.unit_price)}</span><b className="mono">{usd(l.total)}</b></div>)}</div>}
     <div className="row wrap" style={{ gap: 8 }}><b className="grow">Total {usd(p.total)}</b>
       {p.status === 'aberta' && p.qbo_error && <button className="btn sm" disabled={indo} onClick={() => acao('sincronizar')}>Tentar de novo</button>}
-      {p.status === 'aberta' && gerente && p.total > 0 && !p.qbo_error && <button className="btn sm primary" disabled={indo} onClick={() => acao('enviar')}>Enviar invoice de peças</button>}
+      {p.cartao && !p.paga && p.status !== 'anulada' && p.total > 0 && p.qbo_invoice_id && !p.qbo_error
+        && <button className="btn sm primary" onClick={() => setCartao(true)}>Cobrar no cartão</button>}
+      {p.status === 'aberta' && !p.paga && gerente && p.total > 0 && !p.qbo_error && <button className={`btn sm${p.cartao ? '' : ' primary'}`} disabled={indo} onClick={() => acao('enviar')}>Enviar invoice de peças</button>}
     </div>
+    {cartao && <CobrarNoCartao p={p} onFechar={() => setCartao(false)} onPago={onMudou} />}
   </div>
 }
 

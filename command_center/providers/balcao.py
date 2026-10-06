@@ -28,7 +28,7 @@ import secrets
 import sqlite3
 
 from command_center import enderecos
-from command_center.db import agora, atualizar, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, inserir, todos, um
 from command_center.providers import estoque, portal
 
 MODOS = ("cobrar", "guardar", "usar_do_cliente")
@@ -215,8 +215,9 @@ def cliente_qbo(con, client_id):
 
 # ------------------------------------------------------------------ lançar
 def _invoice_do_dia(con, client_id, data, por):
-    p = um(con, "SELECT * FROM parts_invoices WHERE client_id=? AND service_date=? AND status='aberta' ORDER BY id DESC LIMIT 1",
-           (client_id, data))
+    # invoice já paga no cartão não recebe peça nova: a próxima peça do dia abre outra
+    p = um(con, """SELECT * FROM parts_invoices WHERE client_id=? AND service_date=? AND status='aberta' AND paid_at IS NULL
+                   ORDER BY id DESC LIMIT 1""", (client_id, data))
     if p:
         return p
     return um(con, "SELECT * FROM parts_invoices WHERE id=?",
@@ -358,10 +359,40 @@ def enviar(con, pinv_id, por=None):
     return um(con, "SELECT * FROM parts_invoices WHERE id=?", (p["id"],))
 
 
+# ------------------------------------------------------------------ cartão no balcão (GoPayment)
+def cartao_ligado():
+    """O botão "Cobrar no cartão" só aparece com CC_BALCAO_CARTAO=1 (dono, 06/10: o time ainda
+    decide a compra do coletor e do leitor de cartão)."""
+    import os
+    return os.environ.get("CC_BALCAO_CARTAO") == "1"
+
+
+def conferir_pagamento(con, pinv_id, por=None):
+    """O cartão foi passado no QuickBooks GoPayment ("Invoice payment" → cliente → invoice →
+    Charge), que paga a PRÓPRIA invoice no QuickBooks. Aqui só se confere lá: saldo zero é
+    paga. O número do cartão nunca passa pelo Command Center."""
+    p = um(con, "SELECT * FROM parts_invoices WHERE id=?", (pinv_id,))
+    if not p:
+        raise LookupError("invoice de peças não existe")
+    if not p["qbo_invoice_id"]:
+        raise ErroBalcao("a invoice ainda não está no QuickBooks")
+    from command_center.providers import modulo
+    inv = modulo("quickbooks").qbo_invoice(p["qbo_invoice_id"])
+    saldo = float(inv.get("saldo") or 0)
+    total = float(inv.get("total") or 0)
+    if saldo <= 0.004 and total > 0 and not p["paid_at"]:
+        atualizar(con, "parts_invoices", p["id"], paid_at=agora(), paid_amount=total)
+        auditar(con, "balcao.invoice.paga", f"user:{por}" if por else "system", user_id=por, entity_type="parts_invoice",
+                entity_id=p["id"], detail={"qbo_invoice": p["qbo_invoice_id"], "numero": inv.get("numero"), "valor": total})
+    return {"saldo": round(saldo, 2), "total": round(total, 2), "cliente_qbo": inv.get("cliente"), "numero": inv.get("numero"),
+            "paga": saldo <= 0.004 and total > 0}
+
+
 # ------------------------------------------------------------------ o que a tela mostra
 def invoice_publica(con, p):
     c = um(con, "SELECT id, name, pilot_name FROM clients WHERE id=?", (p["client_id"],))
-    return {**dict(p), "cliente": (c["pilot_name"] or c["name"]) if c else None,
+    return {**dict(p), "cliente": (c["pilot_name"] or c["name"]) if c else None, "paga": bool(p["paid_at"]),
+            "cartao": cartao_ligado(),
             "linhas": [dict(l, total=round(float(l["qty"]) * float(l["unit_price"]), 2)) for l in linhas(con, p["id"])]}
 
 

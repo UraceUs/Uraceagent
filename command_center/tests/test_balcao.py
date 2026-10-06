@@ -356,3 +356,34 @@ def test_invoice_aberta_aparece_em_precisa_de_atencao_ate_ser_enviada(cli):
     assert a and a[0]["title"] == "1 invoice(s) de peças para enviar" and "Leo Santos" in a[0]["facts"][0][0]
     cli.post(f"{B}/invoices/{pid}/enviar", headers=hg)
     assert not pendencia()
+
+
+# ------------------------------------------------------------------ cartão no balcão (06/10, desligado por padrão)
+def test_cartao_desligado_nao_aparece_e_a_rota_responde_404(cli):
+    cod = prepara_peca(cli, cli.para)
+    h = entra(cli)
+    inv = lanca(cli, h, cli.para, codigo=cod).json()["invoices"][0]
+    assert inv["cartao"] is False and inv["paga"] is False
+    assert cli.post(f"{B}/invoices/{inv['id']}/conferir-pagamento", headers=h).status_code == 404
+
+
+def test_cartao_no_gopayment_paga_a_invoice_e_a_proxima_peca_abre_outra(cli, monkeypatch):
+    monkeypatch.setenv("CC_BALCAO_CARTAO", "1")
+    cod = prepara_peca(cli, cli.para)
+    h = entra(cli)
+    inv = lanca(cli, h, cli.para, codigo=cod).json()["invoices"][0]
+    assert inv["cartao"] is True
+    saldos = {"inv-1": 89.5}
+    cli.qbo.qbo_invoice = lambda id: {"id": id, "numero": "URACE-0200", "cliente": "Maria Santos", "total": 89.5, "saldo": saldos[id]}
+    r = cli.post(f"{B}/invoices/{inv['id']}/conferir-pagamento", headers=h).json()
+    assert (r["paga"], r["saldo"]) == (False, 89.5), "ainda não passou o cartão"
+    saldos["inv-1"] = 0
+    r = cli.post(f"{B}/invoices/{inv['id']}/conferir-pagamento", headers=h).json()
+    assert r["paga"] is True and r["invoice"]["paga"] is True
+    con = conectar()
+    assert um(con, "SELECT paid_amount FROM parts_invoices WHERE id=?", (inv["id"],))["paid_amount"] == 89.5
+    assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='balcao.invoice.paga'")
+    # paga no cartão: a próxima peça do mesmo dia vai para OUTRA invoice
+    r = lanca(cli, h, cli.para)
+    ids = {i["id"] for i in r.json()["invoices"]}
+    assert len(ids) == 2 and inv["id"] in ids
