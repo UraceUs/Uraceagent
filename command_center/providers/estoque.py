@@ -159,6 +159,28 @@ EDITAVEIS = ("name", "notes", "unit", "min_qty", "category", "subcategory", "siz
 DE_PRECO = ("cost", "markup", "price")
 
 
+def remover_item(con, item_id):
+    """Tira a peça das prateleiras (dono, 06/10: "um íconezinho de lixeira… deseja realmente
+    excluir essa peça?"). A ficha fica com `active=0` e **nada se apaga**: movimentos, cobranças
+    e auditoria continuam apontando para ela, e o razão segue batendo.
+
+    Peça **de cliente** guardada com a gente não sai assim: sumiria da prateleira algo que não é
+    nosso. Primeiro devolve ou entrega; depois exclui."""
+    it = item(con, item_id)
+    if not it["active"]:
+        raise ErroEstoque("esta peça já foi excluída")
+    dele = um(con, "SELECT COALESCE(SUM(qty), 0) AS n FROM stock_levels WHERE item_id=? AND client_id IS NOT NULL AND qty > 0",
+              (item_id,))["n"]
+    marcas = ",".join("?" * len(EM_CASA))
+    dele += um(con, f"SELECT COUNT(*) AS n FROM stock_units WHERE item_id=? AND client_id IS NOT NULL AND status IN ({marcas})",
+               (item_id, *EM_CASA))["n"]
+    if dele:
+        raise ErroEstoque("Esta peça tem unidade de cliente guardada com a gente. "
+                          "Devolva ou entregue ao cliente antes de excluir.")
+    con.execute("UPDATE stock_items SET active=0 WHERE id=?", (item_id,))
+    return dict(it)
+
+
 def atualizar_item(con, item_id, **campos):
     """Edita a ficha. `kind` e `tracking` ficam de fora de propósito: trocar uma peça de
     quantidade para número de série apagaria o sentido do saldo que ela já tem."""

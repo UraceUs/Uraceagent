@@ -20,6 +20,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim } from '../components/ui'
 import { FotoPeca } from '../components/FotoPeca'
 import { Icon } from '../components/Icon'
+import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
 
@@ -507,9 +508,9 @@ function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: 
 }
 
 /** Um card da prateleira: foto, nome, marca/medida, quanto tem, de quem é, preço. */
-function CardPeca({ i, gerente, onOpen }: { i: ItemEstoque; gerente: boolean; onOpen: () => void }) {
+function CardPeca({ i, gerente, onOpen, onExcluir }: { i: ItemEstoque; gerente: boolean; onOpen: () => void; onExcluir?: () => void }) {
   const semQtd = i.tracking === 'quantidade' && !i.contado
-  return <button className="pcard" onClick={onOpen}>
+  const card = <button className="pcard" onClick={onOpen}>
     <div className="ph">{i.tem_foto ? <img src={`/ops/api/estoque/item/${i.id}/foto`} alt="" loading="lazy" draggable={false} /> : <Icon name="box" size={28} />}</div>
     <div className="bd">
       <div className="nm">{i.name}</div>
@@ -524,6 +525,11 @@ function CardPeca({ i, gerente, onOpen }: { i: ItemEstoque; gerente: boolean; on
       </div>
     </div>
   </button>
+  if (!onExcluir) return card
+  // A lixeira fica por cima da foto, fora do botão do card (botão dentro de botão não vale)
+  return <div className="pcard-w">{card}
+    <button className="pcard-lixo" aria-label={`Excluir ${i.name}`} title="Excluir peça" onClick={onExcluir}><Icon name="trash" size={18} /></button>
+  </div>
 }
 
 /** Clicar, segurar e arrastar a fileira para o lado — sem barra de rolagem (dono, 29/09).
@@ -564,7 +570,7 @@ function useArrastar() {
 }
 
 /** Uma fileira: a prateleira, com as marcas/tipos como filtro. */
-function Fileira({ p, itens, gerente, onOpen, onAdd, podeAdd }: { p: Prateleira; itens: ItemEstoque[]; gerente: boolean; onOpen: (id: number) => void; onAdd: () => void; podeAdd: boolean }) {
+function Fileira({ p, itens, gerente, onOpen, onAdd, podeAdd, onExcluir }: { p: Prateleira; itens: ItemEstoque[]; gerente: boolean; onOpen: (id: number) => void; onAdd: () => void; podeAdd: boolean; onExcluir?: (i: ItemEstoque) => void }) {
   const [filtro, setFiltro] = useState<string | null>(null)
   const arrasto = useArrastar()
   const subs = useMemo(() => [...new Set(itens.map(i => i.subcategory).filter(Boolean) as string[])].sort(), [itens])
@@ -578,7 +584,7 @@ function Fileira({ p, itens, gerente, onOpen, onAdd, podeAdd }: { p: Prateleira;
       </div>}
     </div>
     <div className="shelf-row" ref={arrasto}>
-      {vis.map(i => <CardPeca key={i.id} i={i} gerente={gerente} onOpen={() => onOpen(i.id)} />)}
+      {vis.map(i => <CardPeca key={i.id} i={i} gerente={gerente} onOpen={() => onOpen(i.id)} onExcluir={onExcluir && (() => onExcluir(i))} />)}
       {podeAdd && <button className="pcard novo" onClick={onAdd}><Icon name="plus" size={22} />Adicionar em {p.nome}</button>}
     </div>
   </div>
@@ -591,7 +597,20 @@ export function Estoque() {
   const [ficha, setFicha] = useState<number | null>(null)
   const [busca, setBusca] = useState('')
   const [vazias, setVazias] = useState(false)
+  const perguntar = usePerguntar()
+  const toast = useToast()
   const d = lista.data
+
+  // Dono, 06/10: lixeira no card, "deseja realmente excluir essa peça?", sim ou não.
+  async function excluir(i: ItemEstoque) {
+    if (!await perguntar({ titulo: 'Deseja realmente excluir esta peça?', texto: <><b>{i.name}</b> sai das prateleiras. O histórico dela fica guardado.</>,
+      ok: 'Sim, excluir', cancelar: 'Não', perigo: true })) return
+    try {
+      await api.del(`/estoque/item/${i.id}`)
+      toast(`${i.name} excluída.`, 'ok')
+      lista.reload()
+    } catch (e) { toast(e instanceof ApiError ? e.message : 'Não deu para excluir.', 'crit') }
+  }
 
   const itens = useMemo(() => {
     const t = busca.trim().toLowerCase()
@@ -651,7 +670,7 @@ export function Estoque() {
       {!d.itens.length && !busca && <Empty title="O estoque está vazio">Use <b>Adicionar peça</b> para cadastrar o que está na prateleira.</Empty>}
       {d.prateleiras.filter(p => (porPrateleira[p.code] || []).length || (vazias && !busca)).map(p =>
         <Fileira key={p.code} p={p} itens={porPrateleira[p.code] || []} gerente={d.gerente} podeAdd={can('OPERATOR')}
-                 onOpen={setFicha} onAdd={() => setAbrir(p.code)} />)}
+                 onOpen={setFicha} onAdd={() => setAbrir(p.code)} onExcluir={can('OPERATOR') ? excluir : undefined} />)}
     </>}
 
     {abrir !== false && d && <Adicionar d={d} inicial={abrir} onClose={() => setAbrir(false)} reload={lista.reload} />}
