@@ -698,6 +698,7 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     pg.get_by_role("checkbox", name="Check chain tension (+/- 25mm)").check()
     pg.locator("input[aria-label='Subir foto: Check chain tension (+/- 25mm)']").set_input_files(_png_pequeno(tmp_path / f"f{largura}.png"))
     pg.get_by_text("Foto salva.").wait_for()
+    pg.locator("img.ck-foto").first.wait_for()       # o aviso pode chegar antes do quadro redesenhar a foto (CI, 06/10)
     assert pg.locator("img.ck-foto").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
