@@ -562,6 +562,12 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     assert not r["rola"] and not r["culpados"], r
     c.get_by_role("button", name="Sign the waiver").click()
     assert "Check both boxes" in c.get_by_role("alert").inner_text()
+    # #105: pelo menor, só pai ou mãe — "Other" explica e não deixa assinar
+    c.get_by_label("Other (grandparent").check()
+    c.get_by_text("Only a parent (mother or father) can sign").wait_for()
+    assert c.get_by_role("button", name="Sign the waiver").is_disabled()
+    c.get_by_label("Mother").check()
+    c.get_by_label("I am the parent (natural guardian) of Rafa Waiver").check()
     c.get_by_label("I have read this waiver").check()
     c.get_by_label("I agree to sign electronically").check()
     c.get_by_label("Your full name").fill("Rita Waiver")

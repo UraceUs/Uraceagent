@@ -332,6 +332,8 @@ class WaiverIn(BaseModel):
     signature: str                   # data:image/png;base64,... (desenhada no quadro)
     read_and_agree: bool = False
     consent_esign: bool = False
+    relationship: str | None = None          # parental (#105): mother | father (tutor e outros: no balcão)
+    guardian_declaration: bool = False
 
 
 @r.get("/waivers")
@@ -348,7 +350,8 @@ def waiver_modelo(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection
     m = wn.modelo(con, kind) if wn.ligada(con) else None
     if not m:
         raise HTTPException(404, "Waiver not available.")
-    return {"kind": kind, "name": m["name"], "pages": m["pages"], "text": m["text"] or ""}
+    return {"kind": kind, "name": m["name"], "pages": m["pages"], "text": m["text"] or "",
+            "declaration": wn.DECLARACAO if kind == "parental" else None}
 
 
 @r.get("/waivers/model/{kind}/pdf")

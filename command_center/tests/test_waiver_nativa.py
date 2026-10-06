@@ -112,7 +112,8 @@ def liga(cli):
 
 
 def assina(cli, h, pid, **mais):
-    corpo = {"typed_name": "Maria Santos", "signature": _assinatura(), "read_and_agree": True, "consent_esign": True, **mais}
+    corpo = {"typed_name": "Maria Santos", "signature": _assinatura(), "read_and_agree": True, "consent_esign": True,
+             "relationship": "mother", "guardian_declaration": True, **mais}
     return cli.post(f"{P}/drivers/{pid}/waiver", json=corpo, headers=h)
 
 
@@ -168,6 +169,10 @@ def test_menor_assina_a_parental_e_vira_waiver_igual_as_do_docusign(cli):
         assert trecho in ultima, trecho
     trilha = json.loads(w["audit"])
     assert trilha["consent_esign"] and trilha["read_and_agree"] and trilha["ip"] and trilha["template_sha256"]
+    # #105: quem assina pelo menor diz o parentesco e declara a autoridade — na trilha e no certificado
+    assert trilha["signer_relationship"] == "Mother"
+    assert trilha["guardian_declaration"] == "I am the parent (natural guardian) of Leo Santos and I have the authority to sign this waiver for them."
+    assert "Relationship to the minor: Mother" in ultima and "natural guardian" in ultima
     # o cliente baixa o próprio
     r = cli.get(f"{P}/waivers/{w['id']}/pdf")
     assert r.status_code == 200 and r.content == pdf
@@ -204,6 +209,23 @@ def test_titular_nao_assina_a_adult_de_outro_adulto(cli):
 def test_sem_consentimento_ou_sem_assinatura_nao_assina(cli, mais, trecho):
     liga(cli)
     hc, (pid,) = cliente(cli)
+    r = assina(cli, hc, pid, **mais)
+    assert r.status_code == 400 and trecho in r.json()["detail"], r.text
+    assert not um(conectar(), "SELECT 1 AS x FROM waivers WHERE source='urace'")
+
+
+@pytest.mark.parametrize("mais,trecho", [
+    ({"relationship": None}, "only a parent can sign"),
+    ({"relationship": "other"}, "Only a parent (mother or father)"),
+    ({"relationship": "legal_guardian"}, "in person at the track"),
+    ({"relationship": "grandmother"}, "only a parent can sign"),
+    ({"guardian_declaration": False}, "have the authority to sign"),
+])
+def test_pelo_menor_so_pai_ou_mae_com_a_declaracao(cli, mais, trecho):
+    """#105: Fla. Stat. §744.301(3) só deixa o natural guardian renunciar pelo menor (Kirton v. Fields, 2008)."""
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    assert "natural guardian" in cli.get(f"{P}/waivers/model/parental").json()["declaration"]
     r = assina(cli, hc, pid, **mais)
     assert r.status_code == 400 and trecho in r.json()["detail"], r.text
     assert not um(conectar(), "SELECT 1 AS x FROM waivers WHERE source='urace'")

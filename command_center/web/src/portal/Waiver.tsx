@@ -11,6 +11,9 @@ import { papi, PortalError, type Account, type WaiverModelo, type Waivers } from
 
 const BASE = '/ops/api/portal'
 const TIPO = { adult: 'Adult release and waiver', parental: 'Parental consent and waiver (minor)' }
+/** #105: pelo menor, online, só pai ou mãe (Fla. Stat. §744.301(3)). Tutor nomeado por juiz e outros: no balcão. */
+const PARENTESCO: [string, string][] = [['mother', 'Mother'], ['father', 'Father'], ['legal_guardian', 'Court-appointed legal guardian'],
+  ['other', 'Other (grandparent, step-parent, relative, coach…)']]
 
 /** O quadro da assinatura: dedo, caneta ou mouse. Devolve o PNG (ou '' se vazio). */
 function Quadro({ onMuda }: { onMuda: (png: string) => void }) {
@@ -56,7 +59,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   const piloto = conta.drivers.find(p => p.id === pid)
   const [sit, setSit] = useState<Waivers | null>(null)
   const [modelo, setModelo] = useState<WaiverModelo | null>(null)
-  const [f, setF] = useState({ typed_name: '', signature: '', read_and_agree: false, consent_esign: false })
+  const [f, setF] = useState({ typed_name: '', signature: '', read_and_agree: false, consent_esign: false, relationship: '', guardian_declaration: false })
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
   const [feita, setFeita] = useState<{ waiver_id: number; valid_until: string } | null>(null)
@@ -97,11 +100,26 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     <Link to="/portal/drivers">Back to Drivers</Link></div>
 
   const menor = meu.kind === 'parental'
+  const naoOnline = menor && (f.relationship === 'legal_guardian' || f.relationship === 'other')
   return <form className="stack" style={{ gap: 18 }} onSubmit={assinar} noValidate>
     {topo}
     <p className="muted" style={{ margin: 0 }}>{TIPO[meu.kind]}. {menor
       ? <>You sign as the <b>parent or legal guardian</b> of {piloto.name}.</>
       : 'You sign for yourself.'} Valid for one year.</p>
+    {menor && <section className="stack" aria-labelledby="w-par" style={{ gap: 8 }}>
+      <h2 className="h2" id="w-par">Who is signing</h2>
+      <fieldset className="stack portal-parentesco" style={{ gap: 6 }}>
+        <legend>Your relationship to {piloto.name}<b className="portal-obr" aria-hidden="true"> *</b></legend>
+        {PARENTESCO.map(([v, rotulo]) => <label key={v} className="check"><input type="radio" name="relationship" value={v}
+          checked={f.relationship === v} onChange={() => setF({ ...f, relationship: v })} /> {rotulo}</label>)}
+      </fieldset>
+      {f.relationship === 'legal_guardian' && <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
+        A court-appointed legal guardian signs <b>in person at the track</b>, with a copy of the court order.</div></div>}
+      {f.relationship === 'other' && <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
+        Only a parent (mother or father) can sign the waiver for a minor. Ask {piloto.name}'s mother or father to sign it, or come to the track together.</div></div>}
+      {!naoOnline && modelo?.declaration && <label className="check"><input type="checkbox" checked={f.guardian_declaration}
+        onChange={e => setF({ ...f, guardian_declaration: e.target.checked })} /> {modelo.declaration.replace('{minor}', piloto.name)}</label>}
+    </section>}
     {erro && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
     <section className="stack" aria-labelledby="w-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="w-doc">Read the document</h2>
@@ -117,7 +135,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
       <label className="fld"><span>Your full name<b className="portal-obr" aria-hidden="true"> *</b><i> · typed, as your signature</i></span>
         <input autoComplete="name" value={f.typed_name} onChange={e => setF({ ...f, typed_name: e.target.value })} required /></label>
       <Quadro onMuda={png => setF(x => ({ ...x, signature: png }))} />
-      <button className="btn primary block" disabled={indo || !modelo}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
+      <button className="btn primary block" disabled={indo || !modelo || naoOnline}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
       <p className="small muted" style={{ margin: 0 }}>We record the date and time, your IP address and device with your signature. You get the signed PDF right after.</p>
     </section>
   </form>
