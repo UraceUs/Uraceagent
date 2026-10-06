@@ -424,7 +424,14 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     g.get_by_text("sessão(ões) pedida(s) pelo site").first.wait_for()
     abrir(g, servidor, "/site")
     g.get_by_text("Cleo Agenda").first.wait_for()
-    g.get_by_role("button", name="Confirmar").first.click()
+    # #50 (dono, 06/10): a equipe ACEITA — cobra e pede a waiver; aqui não há QuickBooks nem card,
+    # então fica escrito o que falta, e o gerente pode confirmar mesmo assim
+    g.get_by_role("button", name="Aceitar").first.click()
+    g.get_by_text("Aceita, mas falta resolver").wait_for()
+    g.get_by_text("aceita · esperando pagamento e waiver").first.wait_for()
+    c.reload()
+    c.get_by_text("Accepted: waiting for payment and waiver").wait_for()
+    g.get_by_role("button", name="Confirmar mesmo assim").first.click()
     g.get_by_text("Sessão confirmada.").wait_for()
     c.reload()
     c.get_by_text("Confirmed").wait_for()

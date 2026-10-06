@@ -236,6 +236,23 @@ MIGRACOES = [
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana
     ("bookings", "asana_error", "TEXT"),
     ("bookings", "asana_attempts", "INTEGER NOT NULL DEFAULT 0"),
+    # #50 PR B (dono, 06/10): aceitar a vaga cobra e pede a waiver; confirma sozinha com pago + waiver
+    ("bookings", "accepted_at", "TEXT"),
+    ("bookings", "accepted_by", "INTEGER"),
+    ("bookings", "charge_kind", "TEXT"),                # contrato | invoice
+    ("bookings", "qbo_invoice_id", "TEXT"),
+    ("bookings", "invoice_doc", "TEXT"),
+    ("bookings", "invoice_total", "REAL"),
+    ("bookings", "invoice_link", "TEXT"),
+    ("bookings", "invoice_sent_to", "TEXT"),
+    ("bookings", "charge_error", "TEXT"),
+    ("bookings", "charge_attempts", "INTEGER NOT NULL DEFAULT 0"),
+    ("bookings", "waiver_ref", "INTEGER"),               # waivers.id do envelope mandado ao aceitar
+    ("bookings", "waiver_error", "TEXT"),
+    ("bookings", "reminded_3d_at", "TEXT"),
+    ("bookings", "reminded_1d_at", "TEXT"),
+    ("bookings", "reminder_error", "TEXT"),
+    ("booking_services", "deposit", "REAL"),             # depósito por sessão (Arrive and Drive: 400)
     # 05/10 — dono (#87): balcão com leitor. Cada card tem um QR próprio (código opaco, não
     # o id); cada peça pode ter o item dela no QuickBooks, criado quando o código é cadastrado.
     ("clients", "scan_code", "TEXT"),
@@ -350,6 +367,10 @@ REVISAO_21_09 = [
 ]
 
 POS_MIGRACAO = [
+    # 06/10 (#50): o contrato da Academy (§2.3) pede depósito de US$ 400 no Arrive and Drive. Só preenche
+    # quem ainda não tem valor: o gerente pode mudar (0 = sem depósito) e a próxima subida não desfaz.
+    """UPDATE booking_services SET deposit=400 WHERE deposit IS NULL
+         AND LOWER(name) LIKE '%arrive%' AND LOWER(name) LIKE '%drive%'""",
     # 29/09 — dono: os locais são "galpão, trailer de corrida e pista (OKC)". O código
     # continua 'sede' (é ele que o razão guarda); só o nome que aparece muda — e só se
     # ainda for o que eu escrevi, para não desfazer um nome que alguém tenha trocado.

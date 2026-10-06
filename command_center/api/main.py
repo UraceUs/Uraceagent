@@ -73,6 +73,10 @@ def _autosync():
             enviadas = mensalidades.enviar_devidas(con)
             if enviadas:
                 auditar(con, "client.monthly.round", "system", detail={"feitas": enviadas})
+            from command_center.providers import cobranca_agenda   # #50 (dono, 06/10): cobra, confirma e lembra
+            r_cob = cobranca_agenda.rodar(con)
+            if any(r_cob.values()):
+                auditar(con, "booking.billing.round", "system", detail=r_cob)
             from command_center.providers import agenda_asana   # dono, 01/10 (#67): todo agendamento vira tarefa
             r_asana = agenda_asana.rodar(con)
             if r_asana["criadas"] or r_asana["avisadas"]:

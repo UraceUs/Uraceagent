@@ -87,6 +87,9 @@ def _dados(con, d, parcial):
         if item and not um(con, "SELECT 1 AS x FROM qbo_items WHERE id=?", (item,)):
             raise ErroServico("item do QuickBooks não encontrado (sincronize o QuickBooks e tente de novo)")
         s["qbo_item_id"] = item
+    if "deposit" in d:
+        # #50: depósito por sessão (Arrive and Drive: US$ 400); vazio ou 0 = sem depósito
+        s["deposit"] = preco(d["deposit"]) if d["deposit"] not in (None, "", 0, "0") else 0.0
     if "active" in d and d["active"] is not None:
         s["active"] = 1 if d["active"] else 0
     if "sort" in d and d["sort"] is not None:

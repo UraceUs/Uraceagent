@@ -33,13 +33,17 @@ export function bloqueioDoPiloto(p: Driver): string | null {
  *  piloto, serviço com preço e a situação. `solta` é a versão sem cartão, para morar dentro
  *  de outro cartão (o "Next session" do Dashboard) sem virar cartão dentro de cartão. */
 export function CartaoSessao({ s, cfg, onCancelar, solta }: { s: Booking; cfg: AgendaCfg | null; onCancelar?: (id: number) => void; solta?: boolean }) {
-  const [rot, tom] = STATUS[s.status] || [s.status, 'neutral']
+  const aceita = s.status === 'pendente' && !!s.accepted
+  const [rot, tom] = aceita ? ['Accepted: waiting for payment and waiver', 'info'] : STATUS[s.status] || [s.status, 'neutral']
   const ativa = s.status === 'pendente' || s.status === 'confirmada'
   return <div className={solta ? 'row wrap portal-sessao portal-sessao-solta' : 'card card-b row wrap portal-sessao'}>
     <div className="grow"><b>{dataLonga(s.date)}</b>
       <div className="small muted">{PERIODO[s.period]}{cfg ? ` · ${faixa(cfg, s.period)}` : ''}{s.driver ? ` · ${s.driver}` : ''}</div>
       {s.service && <div className="small">{s.service}{s.price != null ? ` · ${usd(s.price)}` : ''}</div>}
-      {s.decision_note && <div className="small">{s.decision_note}</div>}</div>
+      {s.decision_note && <div className="small">{s.decision_note}</div>}
+      {aceita && <div className="small">To confirm it: {s.charge_kind === 'contrato' ? 'it is part of your plan, ' : s.invoice_link
+        ? <><a href={s.invoice_link} target="_blank" rel="noreferrer">pay invoice {s.invoice_doc}</a> and </> : s.invoice_sent ? <>pay invoice {s.invoice_doc} (in your email) and </> : 'we are sending the invoice; '}
+        sign the waiver{s.waiver_sent ? ' (in your email from DocuSign)' : ''}. It confirms by itself.</div>}</div>
     <span className={`chip ${tom}`}>{rot}</span>
     {ativa && onCancelar && <button className="btn sm" onClick={() => onCancelar(s.id)}>Cancel</button>}
   </div>

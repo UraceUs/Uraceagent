@@ -117,8 +117,10 @@ def desbloquear(bid: int, request: Request, con: sqlite3.Connection = Depends(ge
 def agendamentos(status: str | None = None, de: str | None = None, ate: str | None = None,
                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     lista = ag.lista(con, status or None, de, ate)
+    from command_center.providers import cobranca_agenda
     for a in lista:                          # contrato mensal: só a equipe vê (#61)
         a["contrato"] = contrato.situacao_do_agendamento(con, a["client_id"], a["date"])
+        a["cobranca"] = cobranca_agenda.situacao(con, a) if a.get("accepted_at") else None
     return {"agendamentos": lista}
 
 
@@ -129,16 +131,25 @@ class DecisaoIn(BaseModel):
 @r.post("/agendamentos/{bid}/{decisao}")
 def decidir(bid: int, decisao: str, dados: DecisaoIn, request: Request, tarefas: BackgroundTasks,
             con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    if decisao not in ("confirmar", "recusar", "cancelar"):
+    if decisao not in ("aceitar", "confirmar", "recusar", "cancelar"):
         raise HTTPException(404, "decisão desconhecida")
+    if decisao == "confirmar" and not (u.get("free") or auth.pode(u["role"], "MANAGER")):
+        # #50: confirmar sem esperar pagamento e waiver é decisão do gerente; a equipe aceita a vaga
+        raise HTTPException(403, "Confirmar sem esperar pagamento e waiver é do gerente. Use Aceitar.")
     try:
-        novo = ag.decidir(con, u["id"], bid, decisao, dados.nota)
+        if decisao == "aceitar":
+            from command_center.providers import cobranca_agenda
+            res = cobranca_agenda.aceitar(con, u["id"], bid)
+            novo = res["status"]
+        else:
+            novo = ag.decidir(con, u["id"], bid, decisao, dados.nota)
+            res = None
     except ag.ErroAgenda as e:
         raise HTTPException(400, str(e))
-    _aud(con, request, u, f"booking.{decisao}", bid, {"nota": dados.nota})
+    _aud(con, request, u, f"booking.{decisao}", bid, {"nota": dados.nota, **({"cobranca": res} if res else {})})
     con.commit()
     tarefas.add_task(agenda_asana.levar, bid)      # #67: a situação nova vai para a tarefa do Asana
-    return {"status": novo}
+    return {"status": novo, "cobranca": res}
 
 
 # ------------------------------------------------------------------ serviços e preços (#50)
@@ -153,6 +164,7 @@ class ServicoIn(BaseModel):
     price: float | str | None = None
     qbo_item_id: str | None = None
     qbo_item: str | None = None             # texto livre: o nome de um item, ou o texto da linha (#61)
+    deposit: float | str | None = None      # #50: depósito por sessão; vazio ou 0 = sem depósito
     active: bool | None = None
     sort: int | None = None
 
