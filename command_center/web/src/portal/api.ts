@@ -61,6 +61,8 @@ export const haDias = (n: number | null) => n == null ? null : n === 0 ? 'today'
 
 /** Waiver assinada aqui (#85): por piloto, qual vale (menor → parental) e se já está assinada. */
 export interface WaiverPiloto { driver_id: number; driver: string; kind: 'adult' | 'parental' | null; status: 'signed' | 'none'
+  /** #104: piloto adulto que não é o titular assina a própria waiver */
+  own_signature_required: boolean
   waiver_id: number | null; signed_at: string | null; valid_until: string | null }
 export interface Waivers { enabled: boolean; drivers: WaiverPiloto[] }
 export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string }

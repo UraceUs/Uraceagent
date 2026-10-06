@@ -7,7 +7,9 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
 - **O texto legal é o mesmo**: o PDF de cada modelo vem do próprio DocuSign (importado pelo
   ADMIN), byte a byte, com o SHA-256 guardado. Ninguém redigita waiver.
 - **Quem assina** é o responsável, logado na área do cliente (conta 18+ com senha). O modelo
-  sai da idade do piloto: menor → parental; maior → adult.
+  sai da idade do piloto: menor → parental; maior → adult. A **adult só o próprio piloto**
+  assina (#104): um adulto só renuncia aos próprios direitos (*Sanislo*, Fla. 2015), e a
+  waiver que o titular assinasse por outro adulto não protegeria nada.
 - **Intenção e consentimento**: duas caixas obrigatórias ("li e concordo" e "concordo em
   assinar eletronicamente"), nome digitado e assinatura desenhada.
 - **Prova**: data e hora (America/New_York e UTC), IP, aparelho, conta, os hashes do modelo
@@ -45,6 +47,16 @@ MIN_TINTA = 0.004                   # fração mínima de pixels pintados: quadr
 
 class ErroWaiver(ValueError):
     """Mensagem em inglês: é o que o cliente lê."""
+
+
+def _so_ele_assina(nome):
+    return (f"{nome} is an adult and must sign their own waiver: only the driver can give up their own rights. "
+            f"{nome} can create their own account and sign it there, or sign in person at the track.")
+
+
+def precisa_assinar_sozinho(piloto, tipo):
+    """Piloto adulto que não é o titular da conta: o titular não assina por ele (#104)."""
+    return tipo == "adult" and not piloto.get("is_self")
 
 
 def pasta():
@@ -145,6 +157,7 @@ def situacao(con, conta_id):
         except ErroWaiver:
             tipo = None
         saida.append({"driver_id": p["id"], "driver": p["name"], "kind": tipo,
+                      "own_signature_required": precisa_assinar_sozinho(p, tipo),
                       "status": "signed" if w else "none", "waiver_id": w["id"] if w else None,
                       "signed_at": w["completed_at"] if w else None, "valid_until": w["expires_at"] if w else None})
     return {"enabled": ativa, "drivers": saida}
@@ -185,6 +198,8 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
     if not c or not p:
         raise LookupError("driver")
     tipo = tipo_para(p)
+    if precisa_assinar_sozinho(p, tipo):
+        raise ErroWaiver(_so_ele_assina(p["name"]))
     m = modelo(con, tipo)
     if not m:
         raise ErroWaiver("Online waiver signing is not available yet. Our team will send you the waiver.")
