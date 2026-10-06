@@ -66,7 +66,9 @@ export interface WaiverPiloto { driver_id: number; driver: string; kind: 'adult'
   /** #106: faz 18 nos próximos 30 dias: a parental vence na véspera e ele assina a adult */
   turns_18_on: string | null
   waiver_id: number | null; signed_at: string | null; valid_until: string | null }
-export interface Waivers { enabled: boolean; drivers: WaiverPiloto[] }
+export interface Waivers { enabled: boolean; drivers: WaiverPiloto[]
+  /** #108: o e-mail da conta e se já foi confirmado por código */
+  email: string | null; email_verified: boolean }
 export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string
   /** #105: a declaração do pai ou da mãe, com {minor} no lugar do nome */
   declaration: string | null }

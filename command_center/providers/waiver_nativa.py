@@ -16,6 +16,9 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
   nomeado por juiz assina no balcão, com a ordem judicial.
 - **Intenção e consentimento**: duas caixas obrigatórias ("li e concordo" e "concordo em
   assinar eletronicamente"), nome digitado e assinatura desenhada.
+- **Quem assina é quem tem a caixa de e-mail** (#108): a conta precisa do e-mail confirmado por
+  código, e na hora de assinar chega um código novo nessa caixa. Diante de um "não fui eu", é o
+  que mostra que só aquela pessoa podia ter assinado (*Ruiz v. Moss Bros.*; Fla. Stat. §668.50(9)).
 - **Leitura** (#107): a tela mostra o PDF de verdade (o aviso do §744.301(3) com a formatação
   do documento) e só libera as caixas depois de todas as páginas passarem pela tela. O servidor
   exige que o PDF tenha sido entregue a esta conta nas últimas 24 h (registro na auditoria) e
@@ -251,7 +254,9 @@ def situacao(con, conta_id):
                       "own_signature_required": precisa_assinar_sozinho(p, tipo), "turns_18_on": faz_18_em(p),
                       "status": "signed" if w else "none", "waiver_id": w["id"] if w else None,
                       "signed_at": w["completed_at"] if w else None, "valid_until": w["expires_at"] if w else None})
-    return {"enabled": ativa, "drivers": saida}
+    c = um(con, "SELECT email, email_verified_at FROM portal_accounts WHERE id=?", (conta_id,))
+    return {"enabled": ativa, "drivers": saida, "email": c["email"] if c else None,
+            "email_verified": bool(c and c["email_verified_at"])}
 
 
 # ------------------------------------------------------------------ assinar
@@ -305,6 +310,16 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         raise ErroWaiver("The waiver document could not be verified. Please contact us.")
     agora_utc = datetime.now(timezone.utc)
     entregue, lido, modo = _leitura(con, conta_id, tipo, dados, agora_utc)
+    verificado = um(con, "SELECT email_verified_at FROM portal_accounts WHERE id=?", (conta_id,))["email_verified_at"]
+    if not verificado:
+        raise ErroWaiver("Confirm your email before signing: we send a code to it.")
+    from command_center.providers import codigos
+    try:
+        cod = codigos.conferir(con, conta_id, "waiver_sign", dados.get("sign_code"))
+    except codigos.ErroCodigo as e:
+        raise ErroWaiver(str(e))
+    login = um(con, """SELECT created_at, ip FROM portal_sessions WHERE account_id=? AND revoked_at IS NULL
+                        ORDER BY created_at DESC LIMIT 1""", (conta_id,))
     ny = agora_utc.astimezone(portal.FUSO)
     nasc = date.fromisoformat(p["birth_date"])
     ate_d = validade(tipo, nasc, ny.date())
@@ -321,7 +336,11 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         "ip": ip, "user_agent": (aparelho or "")[:300], "read_and_agree": True, "consent_esign": True,
         "document_delivered_at": entregue, "document_all_pages_viewed_at": lido,
         "reading_mode": modo, "reading_requirement": MODOS_LEITURA[modo],
-        "authentication": "URACE client account (email + password), signed in",
+        "authentication": (f"URACE client account (email + password); email verified {verificado}; "
+                           f"one-time code sent to {cod['sent_to']} at {cod['created_at']}, confirmed {cod['used_at']}"),
+        "email_verified_at": verificado, "otp_sent_to": cod["sent_to"], "otp_sent_at": cod["created_at"],
+        "otp_verified_at": cod["used_at"], "otp_message_id": cod["message_id"],
+        "session_login_at": login["created_at"] if login else None, "session_login_ip": login["ip"] if login else None,
         "signature_png_sha256": _sha(png), "valid_until": ate, "valid_until_reason": ate_motivo,
     }
     final = _pdf_assinado(base, trilha, png)
