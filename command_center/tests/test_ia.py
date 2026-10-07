@@ -946,3 +946,45 @@ def test_instruir_dentro_da_tarefa(cli):
     assert cli.post(R + "/tasks/999999/instruct", headers=h, json={"text": "x"}).status_code == 404
     assert cli.post(R + f"/tasks/{tid}/instruct", headers=h, json={"text": ""}).status_code == 400
     ia.RUNNER = runner_falso
+
+
+def test_ia_le_cliente_e_invoices_do_quickbooks_em_rodadas(cli, monkeypatch):
+    """#150 (dono, 07/10): "preciso que a ia command tenha os mesmos acesso que vc tem aqui". A IA pede
+    leituras com CONSULTA:, o painel executa e devolve; dá para encadear (cliente → invoices → invoice)
+    e só depois propor a ação. E o prompt diz quais leituras existem."""
+    import command_center.providers as prov
+    lidas = []
+
+    class Qbo:
+        def qbo_clientes_buscar(self, texto, maximo=20):
+            lidas.append(("clientes", texto)); return [{"id": "501", "nome": "Jill Robins", "email": "jill@example.com"}]
+
+        def qbo_invoices(self, status="open", cliente_id=None, desde_dias=365, maximo=100):
+            lidas.append(("invoices", cliente_id, status)); return {"total": 1, "invoices": [{"id": "9001", "numero": "2290", "total": 576.4}]}
+
+        def qbo_invoice(self, id):
+            lidas.append(("invoice", id))
+            return {"id": id, "linhas": [{"item": "MG SH2 Red Jr/Sr", "qtd": 2, "unitario": 288.2, "descricao": "Pre-race tires - Brody"}]}
+    monkeypatch.setattr(prov, "modulo", lambda s: Qbo())
+    chamadas = []
+
+    def runner(texto, sk):
+        chamadas.append(texto)
+        if len(chamadas) == 1:
+            return True, 'Vou achar o cliente.\nCONSULTA: qbo_clientes_buscar | {"texto":"Jill Robins"}', None
+        if len(chamadas) == 2:
+            assert '"id": "501"' in texto
+            return True, 'CONSULTA: qbo_invoices | {"cliente_id":"501","status":"all"}\nCONSULTA: qbo_invoice | {"id":"9001"}', None
+        assert "Pre-race tires - Brody" in texto and '"qtd": 2' in texto
+        return True, "A pré-race já cobrou 2 sets de pneu do Brody: não entram de novo.\nACAO: nenhuma", None
+    ia.RUNNER = runner
+    try:
+        h = entra(cli, "admin@urace.us")
+        c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "puxe a pré-race do Brody"}).json()["id"], timeout=8)
+    finally:
+        ia.RUNNER = runner_falso
+    assert lidas == [("clientes", "Jill Robins"), ("invoices", "501", "all"), ("invoice", "9001")]
+    assert len(chamadas) == 3 and "já cobrou 2 sets" in c["output"]
+    assert not [a for a in c["actions"] if a["status"] == "PROPOSED"], "leitura nunca vira ação para aprovar"
+    for ferramenta in ("CONSULTA:", "qbo_clientes_buscar", "qbo_invoices", "qbo_invoice ", "qbo_historico_precos"):
+        assert ferramenta in ia.SUFIXO, ferramenta

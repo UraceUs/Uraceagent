@@ -260,3 +260,17 @@ def test_conector_historico_sem_termo_recusa(qb):
 def test_historico_e_consulta_nao_acao():
     from command_center.api import acoes
     assert acoes.eh_consulta("qbo_historico_precos")
+
+
+def test_historico_acha_peca_no_plural_e_em_todo_o_historico(qb):
+    """#150 (dono, 07/10): "essas peças ... todas ja foram vendidas anteriormente precisa somente verificar
+    em todas as invoices passadas". 'wheel nuts' acha a linha 'Wheel nut M8'; 'tie rods' acha 'Tie-rod';
+    e a busca vai até o começo do histórico, não só aos últimos 2 anos."""
+    q, consultas = qb
+    import datetime as dt
+    r = q.qbo_historico_precos(["chains", "rk chain", "chain fuel"])
+    chains, rk, misturado = r["resultado"]
+    assert chains["found"] and chains["resumo"]["vezes"] == 2, "plural acha o singular"
+    assert rk["found"] and rk["resumo"]["ultimo"] == 65.0, "palavras fora de ordem e separadas na descrição"
+    assert misturado["found"] is False, "as palavras têm de estar na MESMA linha"
+    assert int(r["desde"][:4]) <= dt.date.today().year - 9, "todas as invoices passadas"
