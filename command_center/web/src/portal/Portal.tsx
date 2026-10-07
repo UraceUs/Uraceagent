@@ -5,7 +5,7 @@
  * Dono, 01/10: o login é o mesmo desenho do Command Center; dentro, um menu com cada
  * seção numa tela (Dashboard, Book a session, My sessions, Drivers, History, Account). */
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Icon } from '../components/Icon'
 import { Pista } from '../components/Pista'
 import { Agendar, CartaoSessao, Sessoes } from './Agendar'
@@ -408,12 +408,33 @@ function Historico() {
 }
 
 /* ------------------------------------------------------------ app */
+const VOLTA = 'urace.portal.volta'
+function guardarVolta(caminho: string) {
+  try { sessionStorage.setItem(VOLTA, caminho) } catch { /* sem armazenamento: entra no painel inicial, como antes */ }
+}
+function lerVolta(): string | null {
+  try {
+    const v = sessionStorage.getItem(VOLTA)
+    return v && v.startsWith('/portal/book?') ? v : null
+  } catch { return null }
+}
+function limparVolta() {
+  try { sessionStorage.removeItem(VOLTA) } catch { /* nada guardado */ }
+}
+
 export function PortalApp() {
   const [conta, setConta] = useState<Estado>(undefined)
   const nav = useNavigate()
+  const loc = useLocation()
+  // #148: quem chega do site novo com dia e kart escolhidos e ainda precisa entrar (ou criar a
+  // conta) volta para a agenda com a escolha, e não para o painel inicial. Fica guardado na aba
+  // (sessionStorage) porque a tela de entrar troca o endereço e a área pode montar de novo.
+  if (loc.pathname === '/portal/book' && loc.search) guardarVolta(loc.pathname + loc.search)
   const carregar = useCallback(() => papi<Account>('GET', '/me').then(setConta).catch(() => setConta(null)), [])
   useEffect(() => { carregar() }, [carregar])
-  const entrou = (a: Account) => { setConta(a); nav('/portal/dashboard', { replace: true }) }
+  // chegou na agenda já com a conta aberta: a escolha do site foi usada, não volta de novo
+  useEffect(() => { if (conta && loc.pathname === '/portal/book') limparVolta() }, [conta, loc.pathname])
+  const entrou = (a: Account) => { setConta(a); nav(lerVolta() || '/portal/dashboard', { replace: true }) }
   async function sair() { try { await papi('POST', '/logout') } finally { setConta(null); nav('/portal', { replace: true }) } }
 
   if (conta === undefined) return <div className="portal"><div className="state" style={{ minHeight: '60vh' }}><span className="spin" /></div></div>
@@ -424,7 +445,7 @@ export function PortalApp() {
   </Routes>
   return <Casca conta={conta} sair={sair}>
     <Routes>
-      <Route index element={<Navigate to="/portal/dashboard" replace />} />
+      <Route index element={<Navigate to={lerVolta() || '/portal/dashboard'} replace />} />
       <Route path="signup" element={<Navigate to="/portal/dashboard" replace />} />
       <Route path="dashboard" element={<Dashboard conta={conta} />} />
       <Route path="book" element={<Agendar conta={conta} />} />

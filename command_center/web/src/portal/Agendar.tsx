@@ -3,7 +3,7 @@
  * equipe, no site interno (Site público › Disponibilidade e › Serviços e preços).
  * Piloto com medida vencida (60+ dias) ou cadastro incompleto não marca até atualizar. */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { papi, PortalError, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type Servico } from './api'
 
 const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
@@ -21,6 +21,19 @@ export const dataLonga = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDa
 export const PERIODOS = PERIODO
 export const STATUS_SESSAO = STATUS
 const mesDe = (iso: string) => iso.slice(0, 7)
+
+/** #148: o site novo manda o cliente para cá com o que ele já escolheu lá
+ * (`?date=2026-10-16&period=manha&kart=4-stroke`). Só vale o que tem formato certo. */
+export function escolhaDoSite(q: URLSearchParams) {
+  const data = q.get('date') || ''
+  const periodo = q.get('period') || ''
+  const kart = (q.get('kart') || '').slice(0, 40)
+  return {
+    dia: /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : null,
+    periodo: (['manha', 'tarde', 'dia'].includes(periodo) ? periodo : null) as 'manha' | 'tarde' | 'dia' | null,
+    kart: kart || null,
+  }
+}
 
 /** Por que este piloto não pode marcar agora (ou null). */
 export function bloqueioDoPiloto(p: Driver): string | null {
@@ -86,16 +99,18 @@ export function Sessoes() {
 /* ------------------------------------------------------------ Book a session */
 export function Agendar({ conta }: { conta: Account }) {
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })     // AAAA-MM-DD na Flórida
+  const [q] = useSearchParams()
+  const [doSite] = useState(() => escolhaDoSite(q))
   const [dias, setDias] = useState<Dia[] | null>(null)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [servicos, setServicos] = useState<Servico[]>([])
   const [servico, setServico] = useState<number | null>(null)
-  const [mes, setMes] = useState(mesDe(hoje))
-  const [dia, setDia] = useState<string | null>(null)
-  const [periodo, setPeriodo] = useState<'manha' | 'tarde' | 'dia' | null>(null)
+  const [mes, setMes] = useState(mesDe(doSite.dia || hoje))
+  const [dia, setDia] = useState<string | null>(doSite.dia)
+  const [periodo, setPeriodo] = useState<'manha' | 'tarde' | 'dia' | null>(doSite.dia ? doSite.periodo : null)
   const livres = conta.drivers.filter(p => !bloqueioDoPiloto(p))
   const [piloto, setPiloto] = useState<number | ''>(livres[0]?.id ?? '')
-  const [nota, setNota] = useState('')
+  const [nota, setNota] = useState(doSite.kart ? `Kart: ${doSite.kart}` : '')
   const [erro, setErro] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
@@ -104,12 +119,16 @@ export function Agendar({ conta }: { conta: Account }) {
     try {
       const d = await papi<{ config: AgendaCfg; dias: Dia[]; services: Servico[] }>('GET', '/availability')
       setDias(d.dias); setCfg(d.config); setServicos(d.services)
-      setServico(s => d.services.some(x => x.id === s) ? s : d.services.length === 1 ? d.services[0].id : null)
+      // o kart escolhido no site novo escolhe o serviço com esse nome, se houver um só
+      const doKart = doSite.kart ? d.services.filter(x => x.name.toLowerCase().includes(doSite.kart!.toLowerCase())) : []
+      setServico(s => d.services.some(x => x.id === s) ? s : doKart.length === 1 ? doKart[0].id : d.services.length === 1 ? d.services[0].id : null)
+      // o dia que veio do site já fechou ou lotou: some a escolha, o cliente escolhe outro
+      setDia(x => x && !d.dias.some(y => y.date === x && y.any_open) ? null : x)
       // abre no primeiro mês que tem dia aberto: no dia 30, o mês corrente pode não ter mais nada
       const primeiro = d.dias.find(x => x.any_open)
       setMes(m => (d.dias.some(x => x.any_open && mesDe(x.date) === m) || !primeiro) ? m : mesDe(primeiro.date))
     } catch (e) { setErro((e as PortalError).message) }
-  }, [])
+  }, [doSite])
   useEffect(() => { carregar() }, [carregar])
 
   const porData = useMemo(() => Object.fromEntries((dias || []).map(d => [d.date, d])), [dias])

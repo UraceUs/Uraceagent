@@ -98,3 +98,19 @@ def test_site_antigo_so_com_login_ganha_o_resto(tmp_path):
     assert s.count("ops.urace.us {") == 1 and s.count("{") == s.count("}")
     assert "handle_path /legal/*" in _site(s, "ops.urace.us")
     assert _roda(tmp_path, "ops.urace.us") == s, "rodar de novo não muda nada"
+
+
+def test_novo_abre_o_site_inteiro_no_mesmo_servidor(tmp_path):
+    """#148: em novo.urace.us o FastAPI responde tudo (páginas do site, agenda pública e a área do
+    cliente em /ops/portal); só as páginas legais saem direto do disco, como nos outros."""
+    s = _roda(tmp_path, "novo.urace.us")
+    novo = re.search(r"\nnovo\.urace\.us \{(.*?)\n\}", s, re.S).group(1)
+    assert "redir /" not in novo, "a raiz é a home do site, não o painel"
+    assert "handle {\n\t\treverse_proxy 127.0.0.1:8787\n\t}" in novo
+    assert "file_server" in novo and "not found" not in novo
+    assert "kommo" not in novo, "webhooks da ponte só em ops.urace.us"
+    assert _roda(tmp_path, "novo.urace.us").count("novo.urace.us {") == 1
+
+
+def test_deploy_ja_inclui_o_endereco_do_site():
+    assert "ops.urace.us my.urace.us novo.urace.us" in open(SCRIPT, encoding="utf-8").read()
