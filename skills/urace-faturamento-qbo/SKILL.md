@@ -22,6 +22,25 @@ cliente sem autorização**.
 > faturar** e **escrever o que aconteceu depois** (diário + comentário na
 > tarefa do Asana).
 
+## 🔎 Ler o QuickBooks no Command Center (dono, 07/10, #150)
+
+No painel, os nomes das ferramentas são os do **nosso** conector (`adminai/mcp/quickbooks_mcp.py`),
+não os do conector oficial da Intuit citados mais abaixo (`qbo_contact_search_customer`,
+`qbo_catalog_search_products`…). Ler é sempre permitido e nunca vira ação para aprovar. Se a
+leitura não estiver à mão, peça ao painel com `CONSULTA: <ferramenta> | <JSON>`: ele executa e
+devolve o resultado na mesma conversa (dá para encadear).
+
+| Para | Ferramenta |
+|---|---|
+| achar o cliente (responsável) por nome ou e-mail | `qbo_clientes_buscar {"texto": "…"}` |
+| listar as invoices de um cliente (inclusive a pré-race) | `qbo_invoices {"cliente_id": "…", "status": "all"}` |
+| abrir uma invoice com todas as linhas | `qbo_invoice {"id": "…"}` |
+| preço de peça já vendida, ou o cliente de um piloto pelo nome dele | `qbo_historico_precos {"termos": ["tie rod", "Brody"]}` — lê **todas** as invoices já emitidas |
+| item do catálogo | `qbo_itens_buscar {"termos": ["…"]}` |
+
+> Dono, 07/10: *"essas peças ... todas ja foram vendidas anteriormente precisa somente verificar em
+> todas as invoices passadas"*. Antes de dizer que uma peça "não tem preço", procure no histórico.
+
 ## ✅ O que esta skill PODE criar
 
 **Criar invoice, estimate, cliente e item de catálogo: pode** — é o

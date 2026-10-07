@@ -155,7 +155,16 @@ SUFIXO = (
     '{"cliente_id":"<id numérico do RESPONSÁVEL no QBO, via qbo_clientes_buscar>","linhas":[{"item_id":"<id numérico via qbo_itens_buscar>","quantidade":1,"unitario":<valor em dólares, nunca 0>,"descricao":"<serviço - piloto - data>"}],"vence_em":"AAAA-MM-DD","memo":"…","email":"…"}. '
     "Inclua \"data_servico\":\"AAAA-MM-DD\" (o dia do treino/corrida): o vencimento é 2 dias antes e o painel calcula. "
     "O valor que o dono disse manda sobre qualquer outro. Nunca proponha de novo uma ação que já foi aprovada ou feita hoje. "
-    "Consultas (buscar, ler, listar) você executa AGORA, durante a resposta — nunca as liste como ACAO. "
+    "\nLER (buscar, listar, abrir) é com você, e nunca vira ACAO: se a leitura não estiver à mão, peça ao painel "
+    "com uma linha 'CONSULTA: <ferramenta> | <JSON>' — o painel executa na hora e devolve o resultado nesta conversa; "
+    "dá para encadear (achar o cliente → listar as invoices → abrir uma). Leituras do QuickBooks: "
+    'qbo_clientes_buscar {"texto":"nome ou e-mail do responsável"}; '
+    'qbo_invoices {"cliente_id":"…","status":"all|open|paid|overdue","desde_dias":3650}; '
+    'qbo_invoice {"id":"…"} (a invoice inteira, com as linhas, inclusive a pré-race); '
+    'qbo_estimates {"cliente_id":"…"}; qbo_itens_buscar {"termos":["…"]}; '
+    'qbo_historico_precos {"termos":["tie rod","wheel nut"]} — procura em TODAS as invoices já emitidas, pelo item ou pela '
+    "descrição: é o preço de qualquer peça já vendida, e acha o cliente de um piloto pelo nome dele. "
+    "Nunca diga que não tem acesso a essas leituras, e não pergunte ao dono o que dá para ler no QuickBooks. "
     "Serviço novo é uma tarefa NOVA no quadro com os dados do cliente (o histórico é só referência): diga 'criar', nunca 'recriar'. "
     "Se o CONTEXTO DO PAINEL já trouxer o id do cliente e dos itens do QuickBooks, use-os sem buscar de novo.")
 
@@ -242,7 +251,7 @@ def executar_consultas(consultas):
     import inspect
     from command_center.providers import NaoConectado, modulo
     saida = []
-    for nome, args in consultas[:6]:
+    for nome, args in consultas[:8]:
         sistema = _SISTEMA_DO_NOME.get(nome.split("_")[0], nome.split("_")[0])
         try:
             fn = getattr(modulo(sistema), nome, None)
@@ -251,7 +260,8 @@ def executar_consultas(consultas):
             aceitos = inspect.signature(fn).parameters
             kw = {k: v for k, v in (args or {}).items() if k in aceitos} if not any(p.kind == p.VAR_KEYWORD for p in aceitos.values()) else dict(args or {})
             res = fn(**kw)
-            saida.append(f"- {nome} {json.dumps(kw, ensure_ascii=False)[:120]} → {json.dumps(res, ensure_ascii=False)[:1500]}")
+            # uma invoice inteira ou o histórico de uma peça não cabem em 1500 caracteres (#150)
+            saida.append(f"- {nome} {json.dumps(kw, ensure_ascii=False)[:160]} → {json.dumps(res, ensure_ascii=False)[:6000]}")
         except NaoConectado as e:
             saida.append(f"- {nome}: não conectado ({e})")
         except Exception as e:
@@ -275,7 +285,9 @@ def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
     def registra(nome, descricao, fonte, alvo=None, args=None):
         nome = acoes.nome_canonico(nome)
         nome, args = acoes.converter(nome, args, con, texto)
-        chave = (nome, (alvo or descricao)[:80])
+        # duas leituras da mesma ferramenta com argumentos diferentes (duas invoices) são duas leituras
+        chave = (nome, json.dumps(args, sort_keys=True, ensure_ascii=False) if acoes.eh_consulta(nome) and isinstance(args, dict)
+                 else (alvo or descricao)[:80])
         if chave in vistos:
             return
         vistos.add(chave)
@@ -313,9 +325,10 @@ def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
 
     for linha in (texto or "").split("\n"):
         l = linha.strip()
-        m = re.match(r"^ACAO:\s*(.+)$", l, re.I)
+        m = re.match(r"^(ACAO|CONSULTA):\s*(.+)$", l, re.I)
         if m:
-            corpo = m.group(1).strip()
+            pedido_de_leitura = m.group(1).upper() == "CONSULTA"
+            corpo = m.group(2).strip()
             if corpo.lower().startswith("nenhuma"):
                 continue
             args = None
@@ -328,6 +341,9 @@ def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
                 corpo = corpo[:mj.start()].rstrip()
             partes = [p.strip() for p in corpo.split("|")]
             nome = re.sub(r"[^a-z0-9_]", "", partes[0].lower()) or "acao_desconhecida"
+            if pedido_de_leitura and not acoes.eh_consulta(acoes.nome_canonico(nome)):
+                notas.append(f"{nome} não é leitura: CONSULTA só lê; o que muda algo vai como ACAO.")
+                continue
             registra(nome, " | ".join(partes[1:]) or corpo, "protocolo", partes[1] if len(partes) > 1 else None, args if isinstance(args, dict) else None)
             continue
         if "teria_feito" in l:
@@ -376,7 +392,7 @@ def _executa(command_id, texto, session_key, user_id, prompt=None):
             notas, consultas = [], []
             lista = extrair_acoes(con, command_id, saida, notas, consultas)
             incompletas = []
-            for _rodada in range(2):                      # buscas viram resultado; proposta incompleta ganha correção
+            for _rodada in range(3):                      # buscas viram resultado (dá para encadear); proposta incompleta ganha correção
                 resultados = executar_consultas(consultas) if consultas else []
                 incompletas = [a for a in lista if a.get("problemas")]
                 if not resultados and not incompletas:
@@ -387,10 +403,13 @@ def _executa(command_id, texto, session_key, user_id, prompt=None):
                 if incompletas:
                     pedido += "".join(_ac.pedido_de_correcao(a["action"], a["problemas"]) for a in incompletas[:3])
                 pedido += ("\n\nAgora CONCLUA o pedido do dono: reescreva SOMENTE as linhas ACAO finais que faltam, com os campos exatos "
-                           "(cliente_id e item_id numéricos, unitario com o valor dito). Nada de consulta: se um item não existir, use qbo_criar_item.")
+                           "(cliente_id e item_id numéricos, unitario com o valor dito). Se ainda faltar ler algo no QuickBooks, peça com "
+                           "CONSULTA (o painel lê e te devolve); se um item não existir no catálogo, use qbo_criar_item.")
                 with _PARALELO:
                     ok2, saida2, _ = RUNNER(pedido, session_key)
-                if not ok2 or not re.search(r"^ACAO:", saida2 or "", re.M):
+                if not ok2 or not re.search(r"^(ACAO|CONSULTA):", saida2 or "", re.M | re.I):
+                    if ok2 and (saida2 or "").strip():        # respondeu sem ação nem leitura: a resposta vale
+                        saida = saida + "\n\n" + saida2.strip()
                     break
                 for a in incompletas:
                     atualizar(con, "ai_actions", a["id"], status="REJECTED", finished_at=agora(), result="substituída pela correção da própria IA")

@@ -284,15 +284,27 @@ def _normaliza(s):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", (s or "").lower())).strip()
 
 
+def _palavras(termo):
+    """'Wheel nuts' → ['wheel', 'nut']: o plural não impede de achar a linha no singular."""
+    return [w[:-1] if len(w) > 3 and w.endswith("s") and not w.endswith("ss") else w for w in _normaliza(termo).split()]
+
+
+def _bate(palavras, *textos):
+    """Todas as palavras do termo aparecem na MESMA linha (no item ou na descrição), em qualquer ordem."""
+    alvo = " ".join(_normaliza(t) for t in textos if t)
+    return bool(palavras) and all(p in alvo for p in palavras)
+
+
 @srv.ferramenta("qbo_historico_precos",
                 "Quanto a URACE JÁ COBROU de cada peça/serviço, invoice por invoice: para cada termo, as linhas de "
                 "invoice cujo item ou descrição contém o termo (data, número, cliente, quantidade, unitário) e o "
                 "resumo (último valor, mais comum, mínimo, máximo). Opcional cliente_id para só aquele cliente. "
-                "É a fonte de preço de peça quando o dono não disse o valor. Só leitura.",
+                "É a fonte de preço de peça quando o dono não disse o valor, e acha o cliente de um piloto pelo nome dele "
+                "na descrição. Lê TODAS as invoices já emitidas (10 anos), aceita plural e palavras fora de ordem. Só leitura.",
                 {"termos": {"type": "array", "items": {"type": "string"}}, "cliente_id": {"type": "string"},
-                 "desde_dias": {"type": "integer", "default": 730}, "maximo_por_termo": {"type": "integer", "default": 12}},
+                 "desde_dias": {"type": "integer", "default": 3650}, "maximo_por_termo": {"type": "integer", "default": 12}},
                 ["termos"])
-def qbo_historico_precos(termos=None, cliente_id=None, desde_dias=730, maximo_por_termo=12, texto=None):
+def qbo_historico_precos(termos=None, cliente_id=None, desde_dias=3650, maximo_por_termo=12, texto=None):
     if termos is None and texto:
         termos = [texto]
     if isinstance(termos, str):
@@ -300,7 +312,8 @@ def qbo_historico_precos(termos=None, cliente_id=None, desde_dias=730, maximo_po
     termos = [t for t in (termos or []) if str(t).strip()][:20]
     if not termos:
         raise ErroFerramenta("informe pelo menos um termo (nome da peça ou do serviço)")
-    corte = (dt.date.today() - dt.timedelta(days=int(desde_dias or 730))).isoformat()
+    # #150 (dono, 07/10): "verificar em todas as invoices passadas" — o padrão é o histórico inteiro
+    corte = (dt.date.today() - dt.timedelta(days=int(desde_dias or 3650))).isoformat()
     cond = f"TxnDate >= '{corte}'" + (f" and CustomerRef = '{_esc(cliente_id)}'" if cliente_id else "")
     faturas, inicio = [], 1
     while len(faturas) < 5000:                      # a API entrega até 1000 por página
@@ -310,13 +323,13 @@ def qbo_historico_precos(termos=None, cliente_id=None, desde_dias=730, maximo_po
             break
         inicio += 1000
     saida = []
+    resumos = [_resumo_invoice(inv) for inv in faturas]
     for termo in termos:
-        alvo = _normaliza(termo)
+        palavras = _palavras(termo)
         achados = []
-        for inv in faturas:
-            r = _resumo_invoice(inv)
+        for r in resumos:
             for l in r["linhas"]:
-                if alvo and (alvo in _normaliza(l.get("item")) or alvo in _normaliza(l.get("descricao"))):
+                if _bate(palavras, l.get("item"), l.get("descricao")):
                     achados.append({"data": r["emitida_em"], "numero": r["numero"], "cliente": r["cliente"],
                                     "cliente_id": r["cliente_id"], "item": l.get("item"), "item_id": l.get("item_id"),
                                     "qtd": l.get("qtd"), "unitario": l.get("unitario"), "descricao": l.get("descricao")})
