@@ -22,6 +22,12 @@ porta e, no fim, fecha. Quem cola cada parte é o dono, e isso é a autorizaçã
 pedidos, senhas com hash, e as chaves do Stripe, do Kommo, do RD Station e do Meta que
 estão no banco e no `wp-config.php`. A pasta fica só na VPS, com permissão 700.
 
+**Como foi em 07/10.** A extensão do navegador **recusou** a Parte 2 (ligar SSH e cadastrar
+chave é mudança de segurança): o dono fez à mão no hPanel. A cópia saiu completa: 34.429
+arquivos dos dois lados (1,7 GB) e o banco com 112 tabelas (13 MB comprimido), pelo
+mysqldump. O dono decidiu **manter o SSH ligado** com essa chave, para o Claude consultar o
+site pela VPS; o uso é só de leitura, e qualquer mudança no site precisa do sim dele.
+
 ---
 
 ## Parte 1 — extensão da VPS: criar a chave
@@ -80,7 +86,7 @@ esta cópia.
 Dados da conexão: host <IP>, porta <PORTA>, usuário <USUARIO>, chave ~/.ssh/hostinger_copia.
 
 Regras:
-- Na Hostinger, só comandos de leitura: ls, du, cat, wp db export, mysqldump, rsync
+- Na Hostinger, só comandos de leitura: ls, du, cat, wp … list, mysqldump, rsync
   (sentido Hostinger → VPS). Nunca rm, mv, wp plugin, wp option update, nada que escreva.
 - Nunca imprima, copie para o relatório ou commite: senhas, conteúdo do wp-config.php,
   chaves de API, nem o dump. O relatório leva só tamanhos, contagens e versões.
@@ -97,14 +103,20 @@ Passos:
    Guarde o caminho em R (ex.: R=domains/urace.us/public_html).
 3. Meça antes de copiar (para o relatório):
      $S "du -sh $R; du -sh $R/wp-content/uploads $R/wp-content/ai1wm-backups $R/lp 2>/dev/null"
-4. Banco (o ativo é o u762058566_db_urace_2026; confirme pelo DB_NAME do wp-config sem
-   imprimir o resto do arquivo):
-     $S "cd $R && grep -c u762058566_db_urace_2026 wp-config.php"
-   - Se der 1, exporte com o WP-CLI da Hostinger, em transação, direto para a VPS:
-       $S "cd $R && wp db export - --single-transaction --quick --default-character-set=utf8mb4" \
-         | gzip > /home/ubuntu/site-urace/banco-$(date -u +%Y%m%d).sql.gz
-   - Se der 0 ou o `wp` não existir, pare e reporte (não tente outro banco por conta).
-   Confira: `zcat <arquivo> | tail -c 300` tem de terminar com "-- Dump completed".
+4. Banco (o ativo é o u762058566_db_urace_2026). Use o mysqldump da Hostinger: em 07/10
+   o `wp db export` por SSH devolveu um arquivo vazio. A senha do banco é lida do
+   wp-config.php e usada lá dentro; não aparece na tela nem chega à VPS:
+     B=/home/ubuntu/site-urace/banco-$(date -u +%Y%m%dT%H%MZ).sql.gz
+     ssh -i ~/.ssh/hostinger_copia -p <PORTA> -o BatchMode=yes <USUARIO>@<IP> bash -s <<'REMOTO' 2>/home/ubuntu/site-urace/banco-erros.txt | gzip > "$B"
+     cd domains/urace.us/public_html || exit 1
+     c(){ sed -n "s/^[[:space:]]*define([[:space:]]*['\"]$1['\"][[:space:]]*,[[:space:]]*['\"]\(.*\)['\"][[:space:]]*);.*/\1/p" wp-config.php | head -1; }
+     DBN=$(c DB_NAME); DBU=$(c DB_USER); DBH=$(c DB_HOST); export MYSQL_PWD="$(c DB_PASSWORD)"
+     [ "$DBN" = u762058566_db_urace_2026 ] || { echo "banco inesperado: $DBN" >&2; exit 1; }
+     mysqldump -h "${DBH:-localhost}" -u "$DBU" --single-transaction --quick --default-character-set=utf8mb4 --no-tablespaces "$DBN"
+     REMOTO
+   Confira: `zcat "$B" | grep -c '^CREATE TABLE'` (em 07/10 eram 112), a última linha
+   de `zcat "$B" | tail -n 1` é "-- Dump completed on …" e banco-erros.txt está vazio.
+   Se der "banco inesperado", pare e reporte (não tente outro banco por conta).
 5. Arquivos, sem os backups antigos (12 GB de .wpress que já são cópias), sem cache e sem
    o WordPress velho do lp (outro site, com plugins vulneráveis):
      rsync -a --info=stats2 -e "ssh -i ~/.ssh/hostinger_copia -p <PORTA> -o BatchMode=yes" \
