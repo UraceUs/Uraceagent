@@ -1,0 +1,213 @@
+/* Site novo da URACE (#148). O visual é o do urace.us de hoje: preto, vermelho de corrida,
+ * título largo e as fotos da pista. Mobile primeiro; nada rola para o lado em 360 px;
+ * alvo de toque ≥ 40 px; motion só em transform/opacity, com os tokens abaixo. */
+
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 700 800; font-stretch: 125%; font-display: swap;
+  src: url(fonts/archivo-expanded.woff2) format("woff2") }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(fonts/inter.woff2) format("woff2") }
+
+:root {
+  --preto: #0b0b0f;
+  --preto-2: #15151c;
+  --linha: #2a2a35;
+  --branco: #ffffff;
+  --papel: #f4f4f6;
+  --tinta: #121217;
+  --cinza: #717286;          /* o cinza-azulado do tema */
+  --cinza-claro: #a6a7b8;
+  --vermelho: #d91617;       /* o vermelho do tema */
+  --vermelho-2: #ff5051;
+  --ok: #1f9d55;
+  --aviso: #b7791f;
+  --titulo: "Archivo", "Arial Black", system-ui, sans-serif;
+  --texto: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --raio: 10px;
+  --dur: 180ms;
+  --curva: cubic-bezier(.2, .8, .2, 1);
+  --largura: 1180px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box }
+html { -webkit-text-size-adjust: 100% }
+body { margin: 0; background: var(--branco); color: var(--tinta); font: 16px/1.6 var(--texto) }
+img { max-width: 100%; height: auto; display: block }
+a { color: inherit }
+h1, h2, h3 { font-family: var(--titulo); font-stretch: 125%; font-weight: 800; line-height: 1.1; margin: 0; text-wrap: balance }
+h1 { font-size: clamp(1.9rem, 6vw, 3.6rem) }
+h2 { font-size: clamp(1.45rem, 3.6vw, 2.3rem) }
+h3 { font-size: 1.05rem; font-weight: 700 }
+h2 em { font-style: normal; color: var(--vermelho) }
+p { margin: 0 }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+.pular { position: absolute; left: -999px; top: 0; background: var(--vermelho); color: #fff; padding: 10px 14px; z-index: 10 }
+.pular:focus { left: 8px; top: 8px }
+:focus-visible { outline: 3px solid var(--vermelho-2); outline-offset: 2px }
+
+/* --------------------------------------------------------------- botões */
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 12px 22px;
+  background: var(--vermelho); color: #fff; border: 2px solid var(--vermelho); border-radius: 8px;
+  font: 700 .98rem/1.2 var(--texto); text-decoration: none; cursor: pointer;
+  transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
+.btn:hover { opacity: .92 }
+.btn:active { transform: scale(.98) }
+.btn-sm { min-height: 40px; padding: 8px 14px; font-size: .88rem }
+.btn-linha { background: transparent; border-color: rgba(255,255,255,.55) }
+.btn-branco { background: #fff; color: var(--vermelho); border-color: #fff }
+.btn-linha-branca { background: transparent; color: #fff; border-color: #fff }
+.btn-cheio { width: 100% }
+.btn[aria-disabled="true"] { opacity: .45; pointer-events: none }
+.seta { display: inline-flex; align-items: center; min-height: 40px; font-weight: 700; color: var(--vermelho); text-decoration: none }
+.seta::after { content: "→"; margin-left: 8px; transition: transform var(--dur) var(--curva) }
+.seta:hover::after { transform: translateX(3px) }
+
+/* --------------------------------------------------------------- topo */
+.topo { position: sticky; top: 0; z-index: 5; background: #000; color: #fff }
+.topo-in { max-width: var(--largura); margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 12px; min-height: 60px }
+.logo { display: inline-flex; min-height: 40px; align-items: center }
+.logo img { width: 104px }
+.menu { display: none }
+.menu ul, .menu-cel ul { list-style: none; margin: 0; padding: 0 }
+.conta { display: none }
+.topo .btn-sm { margin-left: auto }
+.menu-cel { order: 3 }
+.menu-cel summary { list-style: none; width: 44px; height: 44px; display: grid; place-content: center; gap: 5px; cursor: pointer }
+.menu-cel summary::-webkit-details-marker { display: none }
+.menu-cel summary span { width: 22px; height: 2px; background: #fff; display: block }
+.menu-cel[open] nav { position: absolute; left: 0; right: 0; top: 100%; background: #000; border-top: 1px solid var(--linha); padding: 8px 16px 16px }
+.menu-cel nav a { display: flex; align-items: center; min-height: 48px; color: #fff; text-decoration: none; border-bottom: 1px solid var(--linha) }
+@media (min-width: 1000px) {
+  .menu { display: block; flex: 1 }
+  .menu ul { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap }
+  .menu a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 10px; color: #cfd0dc; text-decoration: none; font-size: .9rem }
+  .menu a:hover, .menu a[aria-current="page"] { color: #fff }
+  .menu a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--vermelho) }
+  .menu-cel { display: none }
+  .conta { display: inline-flex; align-items: center; min-height: 40px; color: #fff; text-decoration: none; font-size: .9rem }
+  .topo .btn-sm { margin-left: 0 }
+}
+
+/* --------------------------------------------------------------- hero */
+.hero { position: relative; color: #fff; background: #000 center / cover no-repeat; display: grid; align-items: end; min-height: 440px }
+.hero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(0,0,0,.88) 100%) }
+.hero-home { background-image: url(img/home-hero.webp); text-align: center }
+.hero-arrive { background-image: url(img/arrive-and-drive-hero.webp) }
+.hero-arrive::before { background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.75) 100%) }
+.hero-in { position: relative; width: 100%; max-width: var(--largura); margin: 0 auto; padding: 72px 16px 40px; display: grid; gap: 14px }
+.hero-home .hero-in { justify-items: center }
+.hero-sub { color: #e2e2ea; max-width: 56ch; font-size: 1.05rem }
+.hero-acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 6px }
+.hero-acoes.centro { justify-content: center }
+.hero-preco { color: #fff; font-weight: 600 }
+.eyebrow { color: var(--vermelho-2); font-weight: 700 }
+
+/* --------------------------------------------------------------- faixas */
+.faixa { padding: 56px 16px }
+.escura { background: var(--preto); color: #fff }
+.clara { background: var(--branco) }
+.clara + .clara { padding-top: 0 }
+.vermelha { background: var(--vermelho); color: #fff }
+.largura { max-width: var(--largura); margin: 0 auto; display: grid; gap: 22px }
+.estreita { max-width: 820px }
+.centro { text-align: center; justify-items: center }
+.duas { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 28px }
+@media (min-width: 860px) { .duas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px } }
+.texto { display: grid; gap: 14px; min-width: 0 }
+.lede { color: var(--cinza-claro); margin-top: -10px }
+.clara .lede { color: var(--cinza) }
+
+.numeros { max-width: var(--largura); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px }
+.numero { display: grid; gap: 4px }
+.numero strong { font: 800 clamp(2.4rem, 7vw, 3.4rem)/1 var(--titulo); font-stretch: 125% }
+.numero span { color: var(--cinza-claro) }
+
+.servicos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px }
+.card-servico { background: var(--papel); border-radius: var(--raio); padding: 22px; display: grid; gap: 10px; align-content: start }
+.card-servico p { color: #3c3d50 }
+.card-servico .preco { color: var(--tinta); font-weight: 700 }
+
+.campeoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+@media (min-width: 860px) { .campeoes { grid-template-columns: repeat(4, minmax(0, 1fr)) } }
+.campeoes figure { margin: 0; display: grid; gap: 8px }
+.campeoes img { border-radius: var(--raio); aspect-ratio: 480 / 631; object-fit: cover; width: 100% }
+.campeoes figcaption { font-weight: 600 }
+
+.depoimentos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px }
+blockquote { margin: 0; background: var(--preto-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 18px; display: grid; gap: 10px }
+blockquote footer { color: var(--cinza-claro); font-size: .9rem; font-weight: 600 }
+
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px }
+.checks li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px }
+.checks li::before { content: "✓"; color: var(--vermelho); font-weight: 800 }
+.escura .checks li::before { color: var(--vermelho-2) }
+
+.porque { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px }
+.porque li { background: var(--papel); border-radius: var(--raio); padding: 18px; font-weight: 600 }
+
+.passos { margin: 0; padding: 0; list-style: none; counter-reset: p; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px }
+.passos li { counter-increment: p; background: var(--preto-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 18px; display: grid; gap: 8px }
+.passos li::before { content: counter(p); font: 800 1.6rem/1 var(--titulo); font-stretch: 125%; color: var(--vermelho-2) }
+
+.faq { display: grid; gap: 8px }
+.faq details { border: 1px solid #e3e3ea; border-radius: var(--raio); padding: 0 16px }
+.faq summary { min-height: 52px; display: flex; align-items: center; cursor: pointer; font-weight: 700 }
+.faq details p { padding-bottom: 12px; color: #3c3d50 }
+address { font-style: normal }
+
+/* --------------------------------------------------------------- reserva */
+.reserva-faixa { padding-top: 40px }
+.reserva-grade { grid-template-columns: minmax(0, 1fr); gap: 28px }
+@media (min-width: 900px) { .reserva-grade { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: start } }
+.reserva-info { display: grid; gap: 20px; min-width: 0 }
+.karts { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0 }
+.karts legend { font: 800 1rem/1.3 var(--titulo); font-stretch: 125%; margin-bottom: 8px; padding: 0 }
+.kart { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "r nome preco" "r idade preco";
+  column-gap: 12px; align-items: center; border: 1.5px solid #e3e3ea; border-radius: var(--raio); padding: 12px 14px; min-height: 56px; cursor: pointer }
+.kart input { grid-area: r; width: 20px; height: 20px; accent-color: var(--vermelho); margin: 0 }
+.kart-nome { grid-area: nome; font-weight: 700 }
+.kart-idade { grid-area: idade; color: var(--cinza); font-size: .85rem }
+.kart-preco { grid-area: preco; font-weight: 800; font-variant-numeric: tabular-nums }
+.kart:has(input:checked) { border-color: var(--vermelho); box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
+.inclui { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px }
+.inclui > div { background: var(--papel); border-radius: var(--raio); padding: 16px; display: grid; gap: 10px }
+
+.agenda { border: 1.5px solid #e3e3ea; border-radius: 14px; padding: 18px; display: grid; gap: 14px; min-width: 0 }
+@media (min-width: 900px) { .agenda { position: sticky; top: 76px } }
+.agenda-mes { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; text-align: center }
+.agenda-nav { width: 44px; height: 44px; border: 0; border-radius: 8px; background: var(--papel); font-size: 1.3rem; cursor: pointer }
+.agenda-nav:disabled { opacity: .3; cursor: default }
+.agenda-grade { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center }
+.agenda-grade .ds { font-size: .72rem; font-weight: 700; color: var(--cinza); padding-bottom: 2px }
+.agenda-dia { min-height: 40px; border: 0; border-radius: 8px; background: transparent; color: #b7b8c6; font: 600 .9rem var(--texto); font-variant-numeric: tabular-nums }
+.agenda-dia.aberto { background: var(--papel); color: var(--tinta); cursor: pointer }
+.agenda-dia.poucas { box-shadow: inset 0 -3px 0 var(--aviso) }
+.agenda-dia[aria-pressed="true"] { background: var(--vermelho); color: #fff }
+.agenda-turnos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.agenda-turno { min-height: 56px; border: 1.5px solid #e3e3ea; border-radius: var(--raio); background: #fff; text-align: left; padding: 8px 12px; font: inherit; cursor: pointer; color: var(--tinta) }
+.agenda-turno small { display: block; color: var(--cinza); font-size: .78rem }
+.agenda-turno[aria-pressed="true"] { border-color: var(--vermelho); box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
+.agenda-turno:disabled { opacity: .45; cursor: not-allowed }
+.agenda-aviso { color: var(--cinza); font-size: .9rem }
+.agenda-total { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; border-top: 1px solid #e3e3ea; padding-top: 12px; font-variant-numeric: tabular-nums }
+.agenda-preco { font-size: 1.3rem }
+.agenda-nota { color: var(--cinza); font-size: .82rem }
+
+/* --------------------------------------------------------------- rodapé */
+.rodape { background: #000; color: #fff; padding: 48px 16px 24px }
+.rodape-in { max-width: var(--largura); margin: 0 auto; display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 760px) { .rodape-in { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) } }
+.rodape-marca { display: grid; gap: 8px; color: #cfd0dc }
+.rodape-marca img { width: 120px; margin-bottom: 6px }
+.rodape .emails { display: grid }
+.rodape a { color: #cfd0dc; text-decoration: none; display: inline-flex; align-items: center; min-height: 40px }
+.rodape a:hover { color: #fff }
+.rodape ul { list-style: none; margin: 0; padding: 0 }
+.rodape-h { font-size: .95rem; margin-bottom: 6px }
+.rodape .muted { color: var(--cinza-claro) }
+.rodape-fim { max-width: var(--largura); margin: 28px auto 0; border-top: 1px solid var(--linha); padding-top: 16px; color: var(--cinza-claro); font-size: .85rem }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important }
+}
+html { scroll-behavior: smooth; scroll-padding-top: 72px }

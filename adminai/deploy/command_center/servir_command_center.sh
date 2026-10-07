@@ -196,7 +196,7 @@ PY
 # páginas legais, robots/sitemap e os webhooks da ponte do Kommo. O duckdns continua no ar
 # (Kommo, Dialpad, Intuit e conectores antigos batem lá até serem trocados). Só entra se o DNS
 # do nome novo já aponta para ESTE servidor: sem isso o Let's Encrypt falha à toa.
-for EXTRA in ${CC_DOMINIOS_EXTRAS:-ops.urace.us my.urace.us}; do
+for EXTRA in ${CC_DOMINIOS_EXTRAS:-ops.urace.us my.urace.us novo.urace.us}; do
     IP_NOVO="$(getent ahostsv4 "$EXTRA" | awk 'NR==1{print $1}')"
     IP_NOSSO="$(getent ahostsv4 "$DOMINIO" | awk 'NR==1{print $1}')"
     if [ -z "$IP_NOVO" ] || [ "$IP_NOVO" != "$IP_NOSSO" ]; then
@@ -212,6 +212,9 @@ legal = os.environ.get("LEGAL_DIR", "/var/www/urace-legal")
 # my.urace.us é o endereço do CLIENTE (dono, 01/10): a raiz abre a área do cliente. Os
 # outros (ops.urace.us) abrem o painel da equipe e recebem também os webhooks da ponte.
 cliente = extra.split(".")[0] == "my"
+# #148: novo.urace.us é o SITE novo. O FastAPI responde tudo nele (as páginas, a agenda pública,
+# a área do cliente em /ops/portal); o Caddy só serve as páginas legais, como nos outros.
+site = extra.split(".")[0] == "novo"
 destino = "/ops/portal" if cliente else "/ops/"
 corpo = (f"\n\tredir / {destino} 302\n"
          f"\thandle /ops* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
@@ -219,11 +222,15 @@ corpo = (f"\n\tredir / {destino} 302\n"
          f"\thandle /robots.txt {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
          f"\thandle /sitemap.xml {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
          f"\thandle_path /legal/* {{\n\t\troot * {legal}\n\t\tfile_server\n\t}}\n")
-if not cliente:
+if site:
+    corpo = (f"\n\thandle_path /legal/* {{\n\t\troot * {legal}\n\t\tfile_server\n\t}}\n"
+             f"\thandle {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n")
+elif not cliente:
     # #79: os mesmos webhooks públicos da ponte do Kommo que o duckdns expõe — nada além deles
     corpo += ("\t@ponte path /kommo/hook /kommo/eventos /health /human/whatsapp\n"
               f"\thandle @ponte {{\n\t\treverse_proxy 127.0.0.1:{ponte}\n\t}}\n")
-corpo += "\thandle {\n\t\trespond \"not found\" 404\n\t}\n"
+if not site:
+    corpo += "\thandle {\n\t\trespond \"not found\" 404\n\t}\n"
 s = open(caddyfile).read()
 m = re.search(r"(^|\n)" + re.escape(extra) + r"\s*\{", s)
 if m:

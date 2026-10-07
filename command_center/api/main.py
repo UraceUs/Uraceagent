@@ -161,6 +161,8 @@ def cache_de(caminho):
     navegador guarda por um ano e nem pergunta (issue #19). O resto segue sem cache."""
     if caminho.startswith(BASE + "/assets/"):
         return "public, max-age=31536000, immutable"
+    if caminho.startswith("/_s/"):           # CSS, fotos e fontes do site novo (#148): o CSS chama as fotos sem versão
+        return "public, max-age=604800"
     return None
 
 
@@ -233,6 +235,12 @@ from command_center.api import portal as api_portal  # noqa: E402
 app.include_router(api_portal.r)
 from command_center.api import site_publico  # noqa: E402
 app.include_router(site_publico.r)
+from command_center.api import vitrine as api_vitrine  # noqa: E402
+app.include_router(api_vitrine.r)        # #148: o site novo (só nos endereços do site)
+import mimetypes  # noqa: E402
+mimetypes.add_type("font/woff2", ".woff2"); mimetypes.add_type("image/webp", ".webp"); mimetypes.add_type("image/svg+xml", ".svg")
+from command_center.vitrine import paginas as _vitrine_paginas  # noqa: E402
+app.mount("/_s", StaticFiles(directory=_vitrine_paginas.STATIC), name="site-static")
 
 
 # Descoberta do OAuth: a especificação manda na RAIZ do domínio, não sob /ops. O Caddy
@@ -568,3 +576,12 @@ def spa(caminho: str = ""):
         return JSONResponse({"error": "frontend not built",
                              "hint": "cd command_center/web && npm ci && npm run build"}, 503)
     return FileResponse(index, headers={"Cache-Control": "no-store"})
+
+
+# ---------------------------------------------------------- site novo (#148)
+@app.get("/{caminho:path}", include_in_schema=False)
+def site_resto(caminho: str, request: Request):
+    """A última rota de todas: no endereço do site, um caminho que não existe recebe a página
+    "não encontrada" do site (e o endereço sem barra final, o 301). Nos outros endereços, 404
+    como sempre. Fica no fim porque casa com tudo: antes dela, nenhuma rota do painel perderia."""
+    return api_vitrine.pagina(request, "/" + caminho)

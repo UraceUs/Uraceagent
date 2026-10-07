@@ -58,7 +58,8 @@ def servidor(tmp_path_factory):
     global EMAILS
     EMAILS = str(pasta / "emails.jsonl")                 # #108: o e-mail do código vai para cá, nada sai da máquina
     env = dict(os.environ, CC_DB_PATH=str(pasta / "e2e.sqlite"), URACE_DIR=str(pasta), URACE_ENV="/nao/existe",
-               CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS)
+               CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
+               CC_SITE_HOSTS="127.0.0.1")              # #148: o site novo responde no endereço do teste
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
     porta = _porta_livre()
@@ -312,10 +313,12 @@ PILOTO_OK = {"birth_date": "2014-05-01", "notes": "Two seasons in Mini kart.",
              "measures": {"height_in": 60, "weight_lb": 110, "chest_in": 30, "waist_in": 26, "hips_in": 30}}
 
 
-def cliente_pela_api(pg, servidor, nome, email, piloto=None):
-    """Cria a conta (e um piloto completo) pela API, na sessão do navegador da página."""
+def cliente_pela_api(pg, servidor, nome, email, piloto=None, ip=None):
+    """Cria a conta (e um piloto completo) pela API, na sessão do navegador da página. `ip` faz o
+    cadastro vir de outra conexão (o limite é de 10 cadastros por hora por conexão)."""
     r = pg.request.post(servidor + "/api/portal/signup", data={"name": nome, "email": email, "password": "pista-molhada-7",
-                                                              "birth_date": "1980-01-01", "accept_terms": True, **CONTATO})
+                                                              "birth_date": "1980-01-01", "accept_terms": True, **CONTATO},
+                        headers={"X-Forwarded-For": ip} if ip else None)
     assert r.ok, r.text()
     if piloto:
         csrf = next(c["value"] for c in pg.context.cookies() if c["name"] == "cp_csrf")
@@ -961,3 +964,85 @@ def test_gerente_edita_o_modelo_do_checklist(servidor, navegador):
     card.get_by_text("3 itens").wait_for()
     assert card.get_by_label("Foto obrigatória no checklist").is_checked()
     pg.close()
+
+
+# ------------------------------------------------------------------ site novo (#148)
+@pytest.mark.parametrize("largura", [360, 390])
+def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 800})
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    problemas = []
+    for rota in ("/", "/services/arrive-and-drive/"):
+        pg.goto(site + rota); pg.wait_for_load_state("networkidle")
+        h1 = [t for n, t in _cabecalhos(pg) if n == 1]
+        if len(h1) != 1:
+            problemas.append(f"{rota}: {len(h1)} h1")
+        r = pg.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            problemas.append(f"{rota}: rola {r['culpados']}")
+        menor = pg.evaluate("""() => [...document.querySelectorAll('main a, main button, main label.kart, header a, header summary')]
+            .filter(e => e.offsetParent !== null).map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+            .filter(([h]) => h < 40)""")
+        if menor:
+            problemas.append(f"{rota}: alvo de toque < 40 px {menor[:3]}")
+    pg.close()
+    assert not problemas, "\n".join(problemas)
+    assert not erros, erros
+
+
+def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(servidor, navegador):
+    """O visitante escolhe no site; entra na conta; a agenda da área do cliente abre com o kart,
+    o dia e o turno escolhidos, e o pedido vai para a equipe como qualquer outro."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/site/disponibilidade")
+    sabado = g.get_by_label("Sáb Manhã aberto")
+    if not sabado.is_checked():                     # outro teste pode já ter aberto o sábado
+        sabado.check()
+        g.get_by_role("button", name="Salvar a semana").click()
+        g.get_by_text("Semana salva").wait_for()
+    abrir(g, servidor, "/site/servicos")
+    g.get_by_label("Nome", exact=True).fill("Arrive and Drive 2-stroke")
+    g.get_by_placeholder("719.00").fill("819")          # o campo do serviço novo (o de outro teste já existe)
+    g.get_by_role("button", name="Criar").click()
+    g.get_by_text("Serviço criado").wait_for()
+    g.close()
+    aux = navegador.new_page()
+    cliente_pela_api(aux, servidor, "Sara Site", "sara.site.e2e@example.com", piloto="Sami Site", ip="10.1.48.1")
+    aux.close()
+
+    v = navegador.new_page(viewport={"width": 390, "height": 844})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(site + "/services/arrive-and-drive/")
+    v.locator("label.kart", has_text="2-stroke").click()
+    # o primeiro dia aberto (só o sábado de manhã abre; o primeiro pode já ter lotado no outro teste)
+    dia = v.locator(".agenda-dia.aberto").first
+    dia.wait_for()                                                  # a agenda pública carregou
+    rotulo = dia.get_attribute("aria-label").removesuffix(", available")
+    hoje = datetime.now(ZoneInfo("America/New_York")).date()
+    sab = next(d for d in (hoje + timedelta(days=n) for n in range(120)) if d.strftime("%A, %B ") + str(d.day) == rotulo)
+    dia.click()
+    v.get_by_role("button", name=re.compile("^Morning")).click()
+    assert v.locator(".agenda-preco").inner_text() == "$819"
+    v.get_by_role("link", name="Request this session").click()
+    # sem conta aberta neste navegador: entra, e volta para a agenda com a escolha
+    v.locator("#p-email").fill("sara.site.e2e@example.com")
+    v.locator("#p-pw").fill("pista-molhada-7")
+    v.get_by_role("button", name="Sign in").click()
+    v.wait_for_url(re.compile(r"/ops/portal/book\?date=" + sab.isoformat()))
+    v.get_by_role("heading", name="Book a session").wait_for()
+    assert v.locator(".portal-cal-d.on").inner_text() == str(sab.day)
+    assert v.get_by_role("button", name=re.compile("^Morning")).get_attribute("aria-pressed") == "true"
+    assert v.get_by_role("radio", name=re.compile("Arrive and Drive 2-stroke")).is_checked(), "o kart escolheu o serviço"
+    assert v.locator("textarea").input_value() == "Kart: 2-stroke"
+    v.get_by_role("button", name="Request session").click()
+    v.get_by_text("Request sent!").wait_for()
+    v.close()
+    assert not erros, erros
+

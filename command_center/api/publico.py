@@ -27,6 +27,9 @@ def _host(request):
 
 @r.get("/robots.txt", response_class=PlainTextResponse)
 def robots(request: Request):
+    from command_center.api import vitrine
+    if vitrine.e_do_site(request):           # #148: o site novo tem o próprio
+        return vitrine.robots(request)
     return ("User-agent: *\n"
             "Disallow: /ops/\n"
             "Disallow: /kommo/\n"
@@ -38,6 +41,10 @@ def robots(request: Request):
 
 @r.get("/sitemap.xml")
 def sitemap(request: Request):
+    from command_center.api import vitrine
+    if vitrine.e_do_site(request):
+        return Response(vitrine.sitemap(request), media_type="application/xml",
+                        headers={"Cache-Control": "public, max-age=86400"})
     host = _host(request)
     urls = []
     for p in PAGINAS:
