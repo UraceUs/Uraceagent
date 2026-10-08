@@ -76,7 +76,7 @@ FERRAMENTAS_EMBUTIDAS = ["Read", "Glob", "Grep", "WebSearch", "WebFetch", "ToolS
 # Leituras que o `acoes.eh_consulta` (feito para o protocolo antigo) não conhece pelo nome.
 LEITURAS = {"docusign_templates", "docusign_envelopes", "qbo_recorrencias", "gmail_baixar_anexo",
             "qbo_itens", "qbo_invoices", "qbo_invoice", "qbo_estimates",
-            "suits_pedidos", "suits_pedido", "suits_leads", "suits_fornecedores"}
+            "suits_pedidos", "suits_pedido", "suits_leads", "suits_fornecedores", "suits_anexos"}
 RX_APROVAR = re.compile(r"(^|_)(enviar|reenviar|send|lembrete|reminder|apagar|excluir|deletar|delete|remover|"
                         r"void|anular|unir|merge|substituir|atualizar_preco|pagamento|payment|pagar|recorrencia)(_|$)")
 

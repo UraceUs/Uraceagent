@@ -1595,7 +1595,11 @@ CREATE TABLE IF NOT EXISTS suit_orders (
   paid_at      TEXT,
   sent_to_supplier_at TEXT,
   tracking     TEXT,
-  source       TEXT NOT NULL DEFAULT 'manual',   -- manual | asana | ia
+  source       TEXT NOT NULL DEFAULT 'manual',   -- manual | asana | ia | site
+  site_order   TEXT,                      -- nº do pedido no site (WooCommerce)
+  gmail_thread_cliente    TEXT,           -- a conversa com o cliente (a ponte lê e responde nela)
+  gmail_thread_designer   TEXT,           -- a conversa com o designer
+  gmail_thread_fornecedor TEXT,
   asana_gid    TEXT UNIQUE,
   asana_notes  TEXT,                      -- a descrição da tarefa, como estava no Asana
   asana_status TEXT,
@@ -1636,6 +1640,22 @@ CREATE TABLE IF NOT EXISTS suit_templates (
   key          TEXT PRIMARY KEY,           -- 'fornecedor': o pedido de produção
   subject      TEXT NOT NULL,
   body         TEXT NOT NULL,
+  updated_at   TEXT,
+  updated_by   INTEGER REFERENCES users(id)
+);
+
+-- Ponte de e-mail dos Suits (#153): o que já foi lido (cada mensagem uma vez) e a configuração.
+CREATE TABLE IF NOT EXISTS suit_email_seen (
+  message_id   TEXT PRIMARY KEY,
+  order_id     INTEGER REFERENCES suit_orders(id),
+  thread_id    TEXT,
+  papel        TEXT,                      -- venda | cliente | designer | fornecedor | marcador
+  seen_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+CREATE TABLE IF NOT EXISTS suit_settings (
+  key          TEXT PRIMARY KEY,          -- designer_nome, designer_email, envio_automatico, ponte_ligada…
+  value        TEXT,
   updated_at   TEXT,
   updated_by   INTEGER REFERENCES users(id)
 );

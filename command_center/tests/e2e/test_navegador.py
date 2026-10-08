@@ -41,7 +41,8 @@ ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
-         "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists"]
+         "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
+         "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo"]
 
 
 def _porta_livre():
@@ -1045,4 +1046,59 @@ def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(
     v.get_by_text("Request sent!").wait_for()
     v.close()
     assert not erros, erros
+
+
+# ------------------------------------------------------------- Suits · Alpha Line (#153)
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(servidor, navegador, tmp_path, largura):
+    """Dono, 08/10: "registrar novo pedido ... Sempre dê a oportunidade ali de eu adicionar uma nota, às vezes um
+    screenshot para IA poder entender, já avançar com aquilo ali no status que estiver"."""
+    pg = entrar(navegador, servidor, largura=largura, altura=900)
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("heading", name="Suits · Alpha Line", level=1).wait_for()
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill(f"Ryan Casner {largura}")
+    dlg.get_by_label("E-mail", exact=True).fill("ryan@example.com")
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name=f"Ryan Casner {largura}", level=1).wait_for()
+    assert re.search(r"/suits/\d+$", pg.url), pg.url
+    pg.get_by_label("Nota", exact=True).fill("Cliente mandou as medidas no print")
+    pg.locator(".suit-arquivo input[type=file]").set_input_files(_png_pequeno(tmp_path / f"print{largura}.png"))
+    pg.get_by_label("Etapa", exact=True).select_option("awaiting_measurements")
+    pg.get_by_label("Pedir à IA para seguir daqui").uncheck()
+    pg.get_by_role("button", name="Salvar nota").click()
+    pg.get_by_text("Nota salva.").wait_for()
+    foto = pg.locator(".suit-tempo img.suit-img").first
+    foto.wait_for(state="attached")                  # loading="lazy": só ganha tamanho quando aparece na tela
+    foto.scroll_into_view_if_needed()
+    pg.wait_for_function("() => { const i = document.querySelector('.suit-tempo img.suit-img'); return i && i.complete && i.naturalWidth > 0 }")
+    pg.locator(".suit-etapas li.atual", has_text="Awaiting Measurements").wait_for()
+    pg.get_by_role("button", name="Preencher").click()
+    pg.get_by_label("1 – Head circumference").fill("59")
+    pg.get_by_role("button", name="Salvar medidas").click()
+    pg.locator(".suit-med", has_text="Head circumference").get_by_text("59 cm / 1'11\"").wait_for()
+    assert "1 – Head circumference — 59 cm / 1'11\"" in pg.locator(".suit-pre").first.inner_text()   # já no e-mail ao fornecedor
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("link", name=re.compile(f"Ryan Casner {largura}")).wait_for()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_suits_ponte_comeca_em_simulacao_e_guarda_o_designer(servidor, navegador):
+    pg = entrar(navegador, servidor, largura=390, altura=900)
+    abrir(pg, servidor, "/suits/ponte")
+    pg.get_by_text("Em simulação:").wait_for()
+    pg.get_by_label("E-mail do designer").fill("designer@example.com")
+    pg.get_by_role("button", name="Salvar", exact=True).click()
+    pg.get_by_text("Ponte salva.").wait_for()
+    abrir(pg, servidor, "/suits/ponte")
+    assert pg.get_by_label("E-mail do designer").input_value() == "designer@example.com"
+    assert not pg.get_by_label("Envio automático (sem aprovação)").is_checked()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.close()
 

@@ -28,6 +28,7 @@ type Valor = { v: number; u: string } | { t: string }
 interface PedidoApi extends Omit<Linha, 'notas'> { customer_email: string | null; customer_phone: string | null; ship_address: string | null
   language: string | null; supplier_id: number | null; fornecedor_email: string | null; paid_at: string | null; tracking: string | null
   asana_gid: string | null; asana_notes: string | null; asana_status: string | null; measurements: Record<string, Valor>
+  site_order: string | null; gmail_thread_cliente: string | null; gmail_thread_designer: string | null; gmail_thread_fornecedor: string | null
   medidas_texto: Record<string, string>; faltam_medidas: string[]; design: Record<string, string>; criado_por: string | null; notas: Nota[] }
 interface Resumo { por_etapa: Record<string, number>; abertos: number; fechados: number; leads: number; fornecedores: number }
 interface Lead { id: number; name: string; email: string | null; phone: string | null; notes: string | null; status: string; order_id: number | null; created_at: string }
@@ -35,6 +36,9 @@ interface Fornecedor { id: number; name: string; contact: string | null; email: 
   status: string | null; price: string | null; shipping: string | null; payment: string | null; lead_time: string | null; comments: string | null
   is_current: number; pedidos: number; asana_gid: string | null }
 interface Email { para: string | null; assunto: string; corpo: string; faltam: string[]; fornecedor: Fornecedor | null }
+interface PonteCfg { ponte_ligada: string; envio_automatico: string; designer_nome: string; designer_email: string; assinatura: string; boas_vindas: string }
+interface Ponte { config: PonteCfg; manual: boolean; motor: string; ultima_rodada: { at: string; detail: string } | null }
+interface Anexo { nome: string; bytes: number }
 
 const TOM: Record<string, 'neutral' | 'warn' | 'info' | 'accent' | 'ok' | 'crit'> = {
   standby: 'neutral', awaiting_measurements: 'warn', design_pending: 'info', design_review: 'warn', approved: 'accent',
@@ -50,7 +54,7 @@ function nomeEtapa(meta: Meta | null, c: string) { return meta?.etapas.find(e =>
 function EtapaChip({ meta, s }: { meta: Meta | null; s: string }) { return <Chip tone={TOM[s] || 'neutral'}>{nomeEtapa(meta, s)}</Chip> }
 
 /* ============================================================ a aba */
-const ABAS: [string, string][] = [['', 'Pedidos'], ['leads', 'Leads'], ['fornecedores', 'Fornecedores'], ['modelo', 'E-mail ao fornecedor']]
+const ABAS: [string, string][] = [['', 'Pedidos'], ['leads', 'Leads'], ['fornecedores', 'Fornecedores'], ['ponte', 'Ponte de e-mail'], ['modelo', 'E-mail ao fornecedor']]
 
 export function Suits() {
   const { aba = '' } = useParams()
@@ -83,6 +87,7 @@ export function Suits() {
       : aba === 'leads' ? <Leads />
       : aba === 'fornecedores' ? <Fornecedores />
       : aba === 'modelo' ? <Modelo />
+      : aba === 'ponte' ? <Ponte />
       : <Pedidos meta={meta.data} resumo={resumo.data} />}
     {novo && <NovoPedido meta={meta.data} onClose={() => setNovo(false)} onDone={id => nav(`/suits/${id}`)} />}
   </>
@@ -161,7 +166,7 @@ function NovoPedido({ meta, onClose, onDone }: { meta: Meta | null; onClose: () 
 
 /* ============================================================ o pedido */
 export function SuitPedido() {
-  const { id } = useParams()
+  const { aba: id } = useParams()           // /suits/:aba — o número do pedido chega no mesmo segmento das abas
   const meta = useMeta()
   const p = useGet<PedidoApi>(`/suits/${id}`, 15000)
   if (p.error) return <><PageHeader title="Pedido de macacão" /><div className="card"><ErrorState error={p.error} retry={p.reload} /></div></>
@@ -176,6 +181,7 @@ export function SuitPedido() {
     <Cliente pedido={d} onDone={p.reload} />
     <Medidas meta={meta.data} pedido={d} onDone={p.reload} />
     <Design meta={meta.data} pedido={d} onDone={p.reload} />
+    <PonteDoPedido pedido={d} onDone={p.reload} />
     <EmailFornecedor pedido={d} onDone={p.reload} />
     <Linha_do_tempo meta={meta.data} notas={d.notas} />
     {d.asana_notes || d.asana_gid ? <Section title="Como estava no Asana">
@@ -219,7 +225,7 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
     <div className="suit-nota-op">
       <label className="btn ghost suit-arquivo"><Icon name="plus" size={16} /> {arquivo ? 'Trocar print' : 'Anexar print'}
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setArquivo(e.target.files?.[0] || null)} /></label>
-      <label className="fld suit-etapa"><span>Etapa</span><select value={etapa} onChange={e => setEtapa(e.target.value)}>
+      <label className="fld suit-etapa"><span>Etapa</span><select aria-label="Etapa" value={etapa} onChange={e => setEtapa(e.target.value)}>
         {meta.etapas.map(e => <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? `${e.nome} (atual)` : `mover para ${e.nome}`}</option>)}</select></label>
       <label className="check suit-ia"><input type="checkbox" checked={ia} onChange={e => setIa(e.target.checked)} /> Pedir à IA para seguir daqui</label>
       <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? 'Salvando…' : 'Salvar nota'}</button>
@@ -308,6 +314,100 @@ function Design({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onDon
       <div className="row gap"><button className="btn ghost" onClick={() => setEditando(false)}>Cancelar</button><button className="btn primary" onClick={salvar}>Salvar</button></div></>
       : <dl className="suit-dl">{meta.design.map(d => <div key={d.chave}><dt>{d.nome}</dt><dd>{pedido.design[d.chave] || <span className="muted">—</span>}</dd></div>)}</dl>}
   </Section>
+}
+
+const gmailLink = (t: string) => `https://mail.google.com/mail/?authuser=urace@urace.us#all/${t}`
+const tamanho = (b: number) => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`
+
+function PonteDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {
+  const toast = useToast()
+  const anexos = useGet<Anexo[]>(`/suits/${pedido.id}/anexos?v=${pedido.notas.length}`)
+  const [ed, setEd] = useState<Record<string, string> | null>(null)
+  const [indo, setIndo] = useState(false)
+  const papeis: [string, string][] = [['gmail_thread_cliente', 'Conversa com o cliente'], ['gmail_thread_designer', 'Conversa com o designer'],
+    ['gmail_thread_fornecedor', 'Conversa com o fornecedor']]
+  async function salvar() {
+    try { await api.patch(`/suits/${pedido.id}`, ed); toast('Conversas ligadas ao pedido.', 'ok'); setEd(null); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function simular() {
+    setIndo(true)
+    try { await api.post(`/suits/${pedido.id}/ponte/simular`); toast('Simulando: a IA faz o próximo passo e o e-mail que ela mandaria aparece na linha do tempo. Nada sai.', 'ok'); setTimeout(onDone, 4000) }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Section title="Ponte de e-mail" right={!ed && <button className="btn sm ghost" onClick={() => setEd(Object.fromEntries(papeis.map(([k]) => [k, String((pedido as unknown as Record<string, unknown>)[k] ?? '')])))}><Icon name="pencil" size={14} /> Ligar conversas</button>}>
+    <p className="small muted">A IA lê e responde nestas conversas do Gmail: com o cliente, com o designer (sem os dados do cliente) e com o fornecedor.{pedido.site_order ? ` Pedido do site #${pedido.site_order}.` : ''}</p>
+    {ed ? <><div className="suit-form">{papeis.map(([k, rot]) => <label key={k} className="fld"><span>{rot} (link ou id do Gmail)</span>
+        <input value={ed[k]} onChange={e => setEd(x => ({ ...x!, [k]: e.target.value }))} placeholder="cole o link da conversa" /></label>)}</div>
+      <div className="row gap"><button className="btn ghost" onClick={() => setEd(null)}>Cancelar</button><button className="btn primary" onClick={salvar}>Salvar</button></div></>
+      : <dl className="suit-dl">{papeis.map(([k, rot]) => { const v = (pedido as unknown as Record<string, string | null>)[k]
+        return <div key={k}><dt>{rot}</dt><dd>{v ? <a href={gmailLink(v)} target="_blank" rel="noreferrer">abrir no Gmail ↗</a> : <span className="muted">—</span>}</dd></div> })}</dl>}
+    <h3 className="h3" style={{ marginTop: 12 }}>Arquivos do pedido</h3>
+    {anexos.data && anexos.data.length ? <ul className="suit-lista">{anexos.data.map(a => <li key={a.nome}>
+        <a className="suit-linha" href={`/ops/api/suits/${pedido.id}/anexos/${encodeURIComponent(a.nome)}`} target="_blank" rel="noreferrer">
+          <span className="grow truncate">{a.nome}</span><span className="small muted">{tamanho(a.bytes)}</span></a></li>)}</ul>
+      : <p className="small muted">Nada ainda. O que chegar por e-mail (medidas, inspiração, logos, arte) fica aqui.</p>}
+    <div className="row gap wrap" style={{ marginTop: 10 }}><button className="btn" disabled={indo} onClick={simular}>{indo ? 'Simulando…' : 'Simular o próximo passo'}</button></div>
+  </Section>
+}
+
+function Ponte() {
+  const { can } = useAuth()
+  const toast = useToast()
+  const p = useGet<Ponte>('/suits/ponte')
+  const [ed, setEd] = useState<PonteCfg | null>(null)
+  const [indo, setIndo] = useState('')
+  if (p.error) return <div className="card"><ErrorState error={p.error} retry={p.reload} /></div>
+  if (!p.data) return <div className="card"><Loading /></div>
+  const cfg = ed || p.data.config
+  const gerente = can('MANAGER')
+  const set = (k: keyof PonteCfg, v: string) => setEd({ ...cfg, [k]: v })
+  async function salvar() {
+    setIndo('salvar')
+    try { await api.put('/suits/ponte', { ...cfg, ponte_ligada: cfg.ponte_ligada === '1', envio_automatico: cfg.envio_automatico === '1' }); setEd(null); p.reload(); toast('Ponte salva.', 'ok') }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo('') }
+  }
+  async function manualGmail() {
+    setIndo('gmail')
+    try { const r = await api.post<{ nome: string }>('/suits/ponte/manual/gmail'); p.reload(); toast(`Manual carregado do Gmail: ${r.nome}.`, 'ok') }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo('') }
+  }
+  async function subirManual(f: File | undefined) {
+    if (!f) return
+    const fd = new FormData(); fd.set('arquivo', f)
+    try { await api.postForm('/suits/ponte/manual', fd); p.reload(); toast('Manual carregado.', 'ok') } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function rodar() {
+    setIndo('rodar')
+    try { const r = await api.post<{ iniciada: boolean; nota: string | null }>('/suits/ponte/rodar'); toast(r.iniciada ? 'Rodando: em instantes os pedidos mostram o que a IA fez.' : (r.nota || ''), r.iniciada ? 'ok' : 'warn') }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo('') }
+  }
+  let ultima: Record<string, unknown> | null = null
+  try { ultima = p.data.ultima_rodada ? JSON.parse(p.data.ultima_rodada.detail) : null } catch { ultima = null }
+  const auto = cfg.envio_automatico === '1'
+  return <>
+    <Section title="Ponte de e-mail" right={gerente && <button className="btn sm" disabled={indo === 'rodar'} onClick={rodar}>{indo === 'rodar' ? 'Rodando…' : 'Rodar agora'}</button>}>
+      <p className="small muted">Venda de macacão no site → a IA agradece, manda o manual de medidas e pede o design. O cliente responde → a IA grava as medidas e o design e passa ao designer só o design. O designer pergunta ou entrega a arte → a IA leva ao cliente sem os dados do designer. Roda a cada 15 minutos.</p>
+      {p.data.motor !== 'sdk' && <p className="small" style={{ color: 'var(--warn)' }}>A ponte precisa da IA no motor novo: falta a chave da Anthropic no serviço.</p>}
+      {!auto && <p className="small" style={{ color: 'var(--warn)' }}><b>Em simulação:</b> nada sai. O e-mail que a IA mandaria aparece na linha do tempo do pedido, para conferir.</p>}
+      {auto && <p className="small" style={{ color: 'var(--ok)' }}><b>Envio automático ligado:</b> a IA manda sem esperar aprovação.</p>}
+      <div className="suit-form">
+        <label className="check suit-ia"><input type="checkbox" disabled={!gerente} checked={cfg.ponte_ligada === '1'} onChange={e => set('ponte_ligada', e.target.checked ? '1' : '0')} /> Ponte ligada</label>
+        <label className="check suit-ia"><input type="checkbox" disabled={!gerente} checked={auto} onChange={e => set('envio_automatico', e.target.checked ? '1' : '0')} /> Envio automático (sem aprovação)</label>
+        <label className="fld"><span>Designer (nome)</span><input disabled={!gerente} value={cfg.designer_nome} onChange={e => set('designer_nome', e.target.value)} placeholder="Matheus" /></label>
+        <label className="fld"><span>E-mail do designer</span><input disabled={!gerente} type="email" value={cfg.designer_email} onChange={e => set('designer_email', e.target.value)} /></label>
+      </div>
+      <label className="fld"><span>Boas-vindas (referência; a IA adapta ao idioma e ao pedido)</span><textarea disabled={!gerente} rows={9} value={cfg.boas_vindas} onChange={e => set('boas_vindas', e.target.value)} /></label>
+      <label className="fld"><span>Assinatura</span><textarea disabled={!gerente} rows={5} value={cfg.assinatura} onChange={e => set('assinatura', e.target.value)} /></label>
+      {gerente && ed && <div className="row gap"><button className="btn ghost" onClick={() => setEd(null)}>Cancelar</button><button className="btn primary" disabled={indo === 'salvar'} onClick={salvar}>Salvar</button></div>}
+    </Section>
+    <Section title="Manual de medidas (PDF)">
+      <p className="small">{p.data.manual ? <>Carregado. <a href="/ops/api/suits/ponte/manual" target="_blank" rel="noreferrer">Ver o PDF ↗</a></> : <span style={{ color: 'var(--warn)' }}>Ainda não carregado: as boas-vindas não saem sem ele.</span>}</p>
+      {gerente && <div className="row gap wrap"><button className="btn" disabled={indo === 'gmail'} onClick={manualGmail}>{indo === 'gmail' ? 'Buscando…' : 'Buscar no Gmail'}</button>
+        <label className="btn ghost suit-arquivo"><Icon name="plus" size={16} /> Subir o PDF<input type="file" accept="application/pdf" onChange={e => subirManual(e.target.files?.[0])} /></label></div>}
+    </Section>
+    {ultima && <Section title="Última rodada"><p className="small muted">{horaFL(p.data.ultima_rodada!.at)}</p><pre className="suit-pre">{JSON.stringify(ultima, null, 1)}</pre></Section>}
+  </>
 }
 
 function EmailFornecedor({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {

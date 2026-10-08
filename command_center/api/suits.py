@@ -6,6 +6,7 @@ Foto de cada nota fica em ~/.urace/suits (WebP, ≤ 1600 px, sem EXIF) e só sai
 """
 import json
 import os
+import re
 import sqlite3
 import threading
 from datetime import datetime
@@ -109,6 +110,10 @@ class PedidoIn(BaseModel):
     due_on: str | None = None
     paid_at: str | None = None
     tracking: str | None = None
+    site_order: str | None = None
+    gmail_thread_cliente: str | None = None
+    gmail_thread_designer: str | None = None
+    gmail_thread_fornecedor: str | None = None
     design: dict[str, str | None] | None = None
     medidas: MedidasIn | None = None
     status: str | None = None
@@ -116,16 +121,31 @@ class PedidoIn(BaseModel):
 
 
 CAMPOS = ("title", "product", "quantity", "customer_name", "customer_email", "customer_phone", "ship_address",
-          "driver_name", "language", "client_id", "supplier_id", "order_date", "due_on", "paid_at", "tracking")
+          "driver_name", "language", "client_id", "supplier_id", "order_date", "due_on", "paid_at", "tracking",
+          "site_order", "gmail_thread_cliente", "gmail_thread_designer", "gmail_thread_fornecedor")
 
 
 def _limpo(v):
     return v.strip() if isinstance(v, str) else v
 
 
+def thread_do_link(v):
+    """Aceita o id da thread (hex, como a API devolve) ou o link do Gmail colado: o 'thread-f:<número>'
+    do link é o mesmo id, em decimal."""
+    v = (v or "").strip()
+    m = re.search(r"thread-f:(\d+)", v)
+    if m:
+        return format(int(m.group(1)), "x")
+    m = re.search(r"\b([0-9a-f]{16})\b", v)
+    return m.group(1) if m else (v or None)
+
+
 def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
     """Cria (pid None) ou atualiza um pedido. `dados` no formato de PedidoIn. Devolve o id."""
     campos = {k: _limpo(dados[k]) for k in CAMPOS if k in dados and dados[k] is not None}
+    for k in ("gmail_thread_cliente", "gmail_thread_designer", "gmail_thread_fornecedor"):
+        if k in campos:
+            campos[k] = thread_do_link(campos[k])
     if "quantity" in campos and not (1 <= int(campos["quantity"]) <= 50):
         raise suits.Invalido("quantidade entre 1 e 50")
     if campos.get("supplier_id") and not um(con, "SELECT id FROM suit_suppliers WHERE id=?", (campos["supplier_id"],)):
@@ -331,6 +351,98 @@ def importar(request: Request, con: sqlite3.Connection = Depends(get_db), u=Depe
     return res
 
 
+# ------------------------------------------------------------ ponte de e-mail
+def _ponte():
+    from command_center.providers import suits_ponte
+    return suits_ponte
+
+
+@r.get("/ponte")
+def ver_ponte(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    from command_center.api import ia
+    sp = _ponte()
+    ult = um(con, "SELECT at, detail FROM audit_logs WHERE event='suit.bridge.round' ORDER BY id DESC LIMIT 1")
+    return {"config": sp.config(con), "manual": os.path.isfile(sp.manual_pdf()),
+            "motor": ia.motor_da_ia(), "ultima_rodada": dict(ult) if ult else None}
+
+
+class PonteIn(BaseModel):
+    ponte_ligada: bool | None = None
+    envio_automatico: bool | None = None
+    designer_nome: str | None = None
+    designer_email: str | None = None
+    assinatura: str | None = None
+    boas_vindas: str | None = None
+
+
+@r.put("/ponte")
+def salvar_ponte(dados: PonteIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    sp = _ponte()
+    d = dados.model_dump(exclude_unset=True)
+    for k in ("ponte_ligada", "envio_automatico"):
+        if k in d and d[k] is not None:
+            d[k] = "1" if d[k] else "0"
+    try:
+        cfg = sp.salvar_config(con, d, u["id"])
+    except sp.Recusado as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "suit.bridge.config", "ponte", {k: (v if k != "boas_vindas" else "…") for k, v in d.items()}, tipo="suit_bridge")
+    return {"config": cfg, "manual": os.path.isfile(sp.manual_pdf())}
+
+
+@r.post("/ponte/manual")
+async def subir_manual(request: Request, arquivo: UploadFile = File(...), con: sqlite3.Connection = Depends(get_db),
+                       u=Depends(auth.exige("MANAGER"))):
+    """O PDF do manual de medidas que vai nas boas-vindas."""
+    dados = await arquivo.read(IMAGEM_MAX + 1)
+    if not dados.startswith(b"%PDF") or len(dados) > IMAGEM_MAX:
+        raise HTTPException(400, "Mande o PDF do manual (até 8 MB).")
+    with open(_ponte().manual_pdf(), "wb") as f:
+        f.write(dados)
+    _aud(con, request, u, "suit.bridge.manual", "ponte", {"bytes": len(dados)}, tipo="suit_bridge")
+    return {"ok": True, "bytes": len(dados)}
+
+
+@r.post("/ponte/manual/gmail")
+def manual_do_gmail(request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    """Busca o 'GUIDE TO FILLING IN SIZING - URACE FORM.pdf' no último e-mail enviado com ele."""
+    from command_center.providers import NaoConectado, modulo
+    sp = _ponte()
+    try:
+        gm = modulo("gmail")
+        r = gm.gmail_buscar(sp.CONTA, 'in:sent filename:"GUIDE TO FILLING IN SIZING"', so_inbox=False, maximo=1)
+        for t in r.get("threads") or []:
+            for m in reversed(gm.mensagens_da_thread(sp.CONTA, t["thread_id"])["mensagens"]):
+                for a in m.get("anexos") or []:
+                    if (a.get("nome") or "").lower().endswith(".pdf") and "sizing" in (a.get("nome") or "").lower():
+                        dados = gm.anexo_bytes(sp.CONTA, m["message_id"], a["attachment_id"])
+                        with open(sp.manual_pdf(), "wb") as f:
+                            f.write(dados)
+                        _aud(con, request, u, "suit.bridge.manual", "ponte", {"de": "gmail", "bytes": len(dados)}, tipo="suit_bridge")
+                        return {"ok": True, "bytes": len(dados), "nome": a["nome"]}
+    except NaoConectado as e:
+        raise HTTPException(503, f"Gmail não conectado: {e}")
+    raise HTTPException(404, "Não achei o PDF do manual nos e-mails enviados. Suba o arquivo à mão.")
+
+
+@r.get("/ponte/manual")
+def baixar_manual(u=Depends(auth.exige("OPERATOR"))):
+    caminho = _ponte().manual_pdf()
+    if not os.path.isfile(caminho):
+        raise HTTPException(404)
+    from fastapi.responses import FileResponse
+    return FileResponse(caminho, media_type="application/pdf", filename="GUIDE TO FILLING IN SIZING - URACE FORM.pdf",
+                        headers={"Cache-Control": "private, max-age=60"})
+
+
+@r.post("/ponte/rodar")
+def rodar_ponte(request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    """Roda um ciclo agora (em segundo plano), em vez de esperar os 15 minutos."""
+    ok = _ponte().rodar_em_segundo_plano()
+    _aud(con, request, u, "suit.bridge.run", "ponte", {"iniciada": ok}, tipo="suit_bridge")
+    return {"iniciada": ok, "nota": None if ok else "Já tem um ciclo rodando."}
+
+
 # ------------------------------------------------------------------- pedido
 @r.get("/notas/{nid}/imagem")
 def imagem_da_nota(nid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
@@ -430,6 +542,45 @@ async def nova_nota(pid: int, request: Request, texto: str = Form(""), status: s
     return {"id": nid, "command_id": cid}
 
 
+@r.get("/{pid}/anexos")
+def anexos(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    if not um(con, "SELECT id FROM suit_orders WHERE id=?", (pid,)):
+        raise HTTPException(404, "Pedido não encontrado.")
+    sp = _ponte()
+    return [{"nome": n, "bytes": os.path.getsize(os.path.join(sp.pasta(pid), n))} for n in sp.anexos_do_pedido(pid)]
+
+
+@r.get("/{pid}/anexos/{nome}")
+def anexo(pid: int, nome: str, u=Depends(auth.exige("OPERATOR"))):
+    sp = _ponte()
+    caminho = os.path.join(sp.pasta(pid), os.path.basename(nome))
+    if not os.path.isfile(caminho):
+        raise HTTPException(404)
+    from fastapi.responses import FileResponse
+    return FileResponse(caminho, filename=os.path.basename(nome), headers={"Cache-Control": "private, max-age=300"})
+
+
+@r.post("/{pid}/ponte/simular", status_code=202)
+def simular(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """A IA faz o próximo passo da ponte neste pedido, sem mandar nada: os e-mails viram nota."""
+    if not um(con, "SELECT id FROM suit_orders WHERE id=?", (pid,)):
+        raise HTTPException(404, "Pedido não encontrado.")
+    sp = _ponte()
+
+    def _vai():
+        from command_center.db import conectar
+        c = conectar()
+        try:
+            sp.simular_pedido(c, pid)
+        except Exception as e:
+            suits.anotar(c, pid, f"A simulação não rodou: {type(e).__name__}: {str(e)[:200]}", "ia")
+        finally:
+            c.close()
+    threading.Thread(target=_vai, daemon=True, name=f"cc-suits-sim-{pid}").start()
+    _aud(con, request, u, "suit.bridge.simulate", pid)
+    return {"iniciada": True}
+
+
 @r.get("/{pid}/email-fornecedor")
 def email_fornecedor(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     p = um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,))
@@ -503,6 +654,22 @@ def ferramentas_ia():
             return {"erro": "pedido não encontrado"}
         return {"id": suits.anotar(con, int(id), texto, "ia", st["status"], user_id=uid)}
 
+    def email_(con, uid, id, para, assunto, corpo, anexos=None, responder=True, **_):
+        from command_center.providers import suits_ponte
+        try:
+            return suits_ponte.enviar(con, int(id), para, assunto, corpo, anexos or [], bool(responder), uid)
+        except suits_ponte.Recusado as e:
+            return {"recusado": str(e)}
+
+    def anexos_(con, uid, id, **_):
+        from command_center.providers import suits_ponte
+        return {"pasta": suits_ponte.pasta(int(id)), "arquivos": suits_ponte.anexos_do_pedido(int(id)),
+                "manual_medidas": os.path.isfile(suits_ponte.manual_pdf())}
+
+    def humano_(con, uid, id, motivo, **_):
+        from command_center.providers import suits_ponte
+        return suits_ponte.precisa_humano(con, int(id), motivo, uid)
+
     def leads_(con, uid, busca=None, **_):
         t = f"%{str(busca or '').lower()}%"
         return todos(con, "SELECT * FROM suit_leads WHERE lower(name) LIKE ? OR lower(coalesce(notes,'')) LIKE ? ORDER BY id DESC LIMIT 100", (t, t))
@@ -516,7 +683,8 @@ def ferramentas_ia():
                      "supplier_id": n, "order_date": s, "due_on": s, "paid_at": s, "tracking": s,
                      "design": dict(o, description="ideia, cores, logos, posicao_logos, nome, bandeira, observacoes"),
                      "medidas": dict(o, description='{"valores": {"head": 59, "foot": "42 EUR"}, "unidade": "cm|in", "unidade_peso": "kg|lb"}'),
-                     "status": dict(s, enum=suits.CODIGOS), "nota": s}
+                     "status": dict(s, enum=suits.CODIGOS), "nota": s, "site_order": s,
+                     "gmail_thread_cliente": s, "gmail_thread_designer": s, "gmail_thread_fornecedor": s}
     return [
         ("suits_pedidos", "Pedidos de macacão (aba Suits), mais recentes primeiro. Filtra por nome ou e-mail.",
          {"busca": s, "estado": dict(s, enum=["abertos", "fechados", "todos"])}, [], pedidos),
@@ -528,6 +696,18 @@ def ferramentas_ia():
          dict(campos_pedido, id=n), ["id"], atualizar_pedido),
         ("suits_anotar", "Escreve na linha do tempo do pedido o que a IA fez ou descobriu.", {"id": n, "texto": s},
          ["id", "texto"], anotar_),
+        ("suits_email", "Manda e-mail sobre o pedido para o CLIENTE, o DESIGNER ou o FORNECEDOR daquele pedido (o endereço "
+         "vem do pedido, não de você), respondendo na conversa que já existe. Anexos: nomes de suits_anexos, ou "
+         "\"manual_medidas\" (o PDF do manual de medidas). Para o designer, só o design e \"Suits #id\": nunca nome "
+         "completo, e-mail, telefone, endereço ou pagamento do cliente. Para o cliente, nunca o nome ou o contato do "
+         "designer. Se a ponte estiver em simulação, o e-mail vira nota no pedido e não sai.",
+         {"id": n, "para": dict(s, enum=["cliente", "designer", "fornecedor"]), "assunto": s, "corpo": s,
+          "anexos": {"type": "array", "items": s}, "responder": {"type": "boolean"}},
+         ["id", "para", "assunto", "corpo"], email_),
+        ("suits_anexos", "Os arquivos do pedido (o que chegou por e-mail: medidas, inspiração, logos, arte) e onde lê-los.",
+         {"id": n}, ["id"], anexos_),
+        ("suits_precisa_humano", "Para e chama a equipe: aparece em Precisa de atenção e na linha do tempo do pedido.",
+         {"id": n, "motivo": s}, ["id", "motivo"], humano_),
         ("suits_leads", "Leads de macacão (oportunidades guardadas para vender de novo).", {"busca": s}, [], leads_),
         ("suits_fornecedores", "Fornecedores de macacão com contato, FIA, preço e qual é o atual.", {}, [], fornecedores_),
     ]
