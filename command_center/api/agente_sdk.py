@@ -56,8 +56,13 @@ def _contexto_dir():
     return os.path.expanduser(f"~/.openclaw/workspace/{agente}/contexto")
 
 
+def _suits_dir():
+    """Os screenshots das notas da aba Suits (#153): a IA lê para entender a nota."""
+    return os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "suits")
+
+
 def pastas_de_leitura():
-    return [CEREBRO, SKILLS, _contexto_dir()]
+    return [CEREBRO, SKILLS, _contexto_dir(), _suits_dir()]
 
 
 # Servidores MCP do adminai que o agente usa (um processo cada, com APLICAR=1: quem segura o
@@ -65,11 +70,13 @@ def pastas_de_leitura():
 SERVIDORES = {"quickbooks": "quickbooks_mcp.py", "asana": "asana_mcp.py", "gmail": "gmail_mcp.py",
               "docusign": "docusign_mcp.py", "kommo": "kommo_mcp.py"}
 NOME_PAINEL = "painel"
+NOME_SUITS = "suits"
 FERRAMENTAS_EMBUTIDAS = ["Read", "Glob", "Grep", "WebSearch", "WebFetch", "ToolSearch"]
 
 # Leituras que o `acoes.eh_consulta` (feito para o protocolo antigo) não conhece pelo nome.
 LEITURAS = {"docusign_templates", "docusign_envelopes", "qbo_recorrencias", "gmail_baixar_anexo",
-            "qbo_itens", "qbo_invoices", "qbo_invoice", "qbo_estimates"}
+            "qbo_itens", "qbo_invoices", "qbo_invoice", "qbo_estimates",
+            "suits_pedidos", "suits_pedido", "suits_leads", "suits_fornecedores"}
 RX_APROVAR = re.compile(r"(^|_)(enviar|reenviar|send|lembrete|reminder|apagar|excluir|deletar|delete|remover|"
                         r"void|anular|unir|merge|substituir|atualizar_preco|pagamento|payment|pagar|recorrencia)(_|$)")
 
@@ -185,9 +192,10 @@ def _negar(motivo):
 class Portao:
     """Os ganchos PreToolUse/PostToolUse de UMA execução (sabe de que comando é)."""
 
-    def __init__(self, command_id=None, ferramentas=True):
+    def __init__(self, command_id=None, ferramentas=True, user_id=None):
         self.command_id = command_id
         self.ferramentas = ferramentas
+        self.user_id = user_id
         self.aprovar = []                 # ids dos cartões criados nesta execução
         self.feitas = []
 
@@ -293,6 +301,35 @@ def ferramentas_do_painel():
     return create_sdk_mcp_server(NOME_PAINEL, "1.0.0", lista)
 
 
+def ferramentas_dos_suits(user_id=None):
+    """A aba Suits (#153) para o agente: ler, registrar, atualizar e anotar pedidos de macacão.
+    Conexão normal (escreve): é trabalho interno, e o portão registra cada escrita como ação feita."""
+    from claude_agent_sdk import SdkMcpTool, create_sdk_mcp_server
+
+    from command_center.api import suits
+
+    def fabrica(fn):
+        def chamar(args):
+            con = conectar()
+            try:
+                return fn(con, user_id, **(args or {}))
+            finally:
+                con.close()
+
+        async def handler(args):
+            try:
+                res = await asyncio.to_thread(chamar, args)
+                return {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, default=str)[:20000]}]}
+            except Exception as e:
+                return {"content": [{"type": "text", "text": f"{type(e).__name__}: {str(e)[:300]}"}], "is_error": True}
+        return handler
+
+    return create_sdk_mcp_server(NOME_SUITS, "1.0.0", [
+        SdkMcpTool(name=nome, description=desc, input_schema={"type": "object", "properties": props, "required": obrig},
+                   handler=fabrica(fn))
+        for nome, desc, props, obrig, fn in suits.ferramentas_ia()])
+
+
 # ---------------------------------------------------------------- instruções
 def hoje():
     return datetime.now(FUSO)
@@ -320,6 +357,7 @@ REGRAS DO DONO (valem sempre)
 - Invoice: cliente_id do RESPONSÁVEL no QuickBooks; linhas com item_id do catálogo, quantidade, unitário (nunca 0) e descrição "serviço - piloto - data"; vence 2 dias antes do serviço.
 - Serviço novo é uma tarefa NOVA no quadro com os dados do cliente: diga "criar", nunca "recriar".
 - Não refaça o que já foi feito ou aprovado hoje (o contexto do painel, abaixo do pedido, diz o que já foi).
+- Macacão (Suits / Alpha Line): o pedido vive na aba Suits (suits_*); o processo está em 10_PROCESSOS/Pedido de macacão.md. Com o cliente e o designer, escreva no idioma do cliente, educado e comercial (ainda é venda) e respeite o que ele pediu; o designer recebe só o design, nunca pagamento ou contato do cliente.
 
 COMO RESPONDER
 - Português do Brasil, direto, frases curtas, sem jargão interno: não cite nomes de ferramenta, ids de template nem regras do painel.
@@ -372,6 +410,7 @@ def _opcoes(modelo, sistema, portao, limite, retomar, max_turnos):
     if portao.ferramentas:
         servidores = servidores_mcp()
         servidores[NOME_PAINEL] = ferramentas_do_painel()
+        servidores[NOME_SUITS] = ferramentas_dos_suits(portao.user_id)
     permitidas = list(FERRAMENTAS_EMBUTIDAS) + [f"mcp__{n}__*" for n in servidores]
     return ClaudeAgentOptions(
         model=modelo,
@@ -438,11 +477,11 @@ def _resultado(textos, fim, sessao, limite):
 
 
 def rodar(prompt, session_key=None, *, modelo=None, sistema=None, command_id=None, ferramentas=True,
-          limite=None, max_turnos=60):
+          limite=None, max_turnos=60, user_id=None):
     """Uma execução completa do agente. Bloqueia (chame de uma thread). Nunca levanta."""
     modelo = modelo or MODELO
     limite = LIMITE_USD if limite is None else limite
-    portao = Portao(command_id, ferramentas)
+    portao = Portao(command_id, ferramentas, user_id)
     retomar = _sessao_salva(session_key)
     prompt = prompt.replace("/workspace/contexto/", _contexto_dir().rstrip("/") + "/")
     inicio = datetime.now()

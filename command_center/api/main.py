@@ -229,6 +229,8 @@ from command_center.api import whatsapp as api_whatsapp  # noqa: E402
 app.include_router(api_whatsapp.r)
 from command_center.api import compras as api_compras  # noqa: E402
 app.include_router(api_compras.r)
+from command_center.api import suits as api_suits  # noqa: E402
+app.include_router(api_suits.r)             # #153: Suits / Alpha Line
 from command_center.api import publico  # noqa: E402
 app.include_router(publico.r)
 from command_center.api import portal as api_portal  # noqa: E402

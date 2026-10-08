@@ -1548,3 +1548,94 @@ CREATE TABLE IF NOT EXISTS waiver_templates (
   imported_at  TEXT NOT NULL,
   imported_by  INTEGER REFERENCES users(id)
 );
+
+-- ======================================================================
+-- Suits / Alpha Line (#153): pedidos de macacão, leads e fornecedores.
+-- Processo: brain/10_PROCESSOS/Pedido de macacão.md. Importado do projeto SUITS do Asana.
+-- ======================================================================
+CREATE TABLE IF NOT EXISTS suit_suppliers (
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,
+  contact      TEXT,
+  email        TEXT,
+  phone        TEXT,
+  has_fia      INTEGER,                   -- 1 sim, 0 não, NULL não sabemos
+  status       TEXT,                      -- em que pé está a conversa (Talking, Production…)
+  price        TEXT,
+  shipping     TEXT,
+  payment      TEXT,
+  lead_time    TEXT,
+  comments     TEXT,
+  is_current   INTEGER NOT NULL DEFAULT 0,  -- o fornecedor ATUAL: é para ele que o pedido vai
+  asana_gid    TEXT UNIQUE,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS suit_orders (
+  id           INTEGER PRIMARY KEY,
+  title        TEXT NOT NULL,             -- como aparece na lista (no Asana, o nome da tarefa)
+  product      TEXT NOT NULL DEFAULT 'Suit',
+  quantity     INTEGER NOT NULL DEFAULT 1,
+  customer_name  TEXT,
+  customer_email TEXT,
+  customer_phone TEXT,
+  ship_address TEXT,                      -- o fornecedor manda direto para o cliente
+  driver_name  TEXT,                      -- o piloto, se não for quem comprou
+  language     TEXT,                      -- idioma do cliente: a IA responde nele
+  client_id    INTEGER REFERENCES clients(id),
+  supplier_id  INTEGER REFERENCES suit_suppliers(id),
+  status       TEXT NOT NULL DEFAULT 'standby'
+               CHECK (status IN ('standby','awaiting_measurements','design_pending','design_review','approved',
+                                 'sent_to_supplier','in_production','in_transit','delivered','canceled')),
+  measurements TEXT,                      -- json {chave: {v, u}} ou {t} (tamanho do pé)
+  design       TEXT,                      -- json: ideia, cores, logos, posição, nome, bandeira, obs
+  order_date   TEXT,
+  due_on       TEXT,
+  paid_at      TEXT,
+  sent_to_supplier_at TEXT,
+  tracking     TEXT,
+  source       TEXT NOT NULL DEFAULT 'manual',   -- manual | asana | ia
+  asana_gid    TEXT UNIQUE,
+  asana_notes  TEXT,                      -- a descrição da tarefa, como estava no Asana
+  asana_status TEXT,
+  closed       INTEGER NOT NULL DEFAULT 0,      -- entregue, cancelado ou concluído no Asana
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS suit_orders_aberto ON suit_orders(closed, status);
+
+CREATE TABLE IF NOT EXISTS suit_notes (
+  id           INTEGER PRIMARY KEY,
+  order_id     INTEGER NOT NULL REFERENCES suit_orders(id),
+  status       TEXT,                      -- a etapa em que a nota foi escrita
+  kind         TEXT NOT NULL DEFAULT 'nota',    -- nota | etapa | ia | email
+  text         TEXT,
+  image_path   TEXT,                      -- nome do arquivo em ~/.urace/suits (WebP, sem EXIF)
+  user_id      INTEGER REFERENCES users(id),
+  command_id   INTEGER REFERENCES ai_commands(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS suit_notes_pedido ON suit_notes(order_id, id);
+
+CREATE TABLE IF NOT EXISTS suit_leads (
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,
+  email        TEXT,
+  phone        TEXT,
+  notes        TEXT,
+  status       TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','convertido','perdido')),
+  order_id     INTEGER REFERENCES suit_orders(id),
+  asana_gid    TEXT UNIQUE,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS suit_templates (
+  key          TEXT PRIMARY KEY,           -- 'fornecedor': o pedido de produção
+  subject      TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  updated_at   TEXT,
+  updated_by   INTEGER REFERENCES users(id)
+);

@@ -416,6 +416,21 @@ BLOCO_FIM = "— fim do Command Center —"
 CAMPOS_SHIPPING = "gid,name,completed,notes,memberships.project.gid,memberships.section.gid,custom_fields.gid,custom_fields.display_value"
 
 
+# Porta do Command Center (#153): o projeto SUITS inteiro, só leitura, para importar pedidos,
+# leads e fornecedores de macacão para a aba Suits do painel.
+PROJETO_SUITS = "1205661933760052"
+CAMPOS_SUITS = ("gid,name,completed,notes,due_on,created_at,memberships.project.gid,memberships.section.name,"
+                "custom_fields.name,custom_fields.display_value")
+
+
+def tarefas_do_suits(limite=2000):
+    """Todas as tarefas do SUITS (abertas e concluídas), com a seção, os campos e a descrição."""
+    tarefas = _paginar(f"/projects/{PROJETO_SUITS}/tasks", {"opt_fields": CAMPOS_SUITS}, limite)
+    for t in tarefas:                       # só a seção DESTE projeto (a tarefa pode estar em outros)
+        t["memberships"] = [m for m in t.get("memberships") or [] if (m.get("project") or {}).get("gid") == PROJETO_SUITS]
+    return tarefas
+
+
 def pedidos_do_shipping(limite=2000):
     """Todas as tarefas do Shipping Orders com os campos, para achar o pedido (dedupe)."""
     return _paginar(f"/projects/{PROJETO_SHIPPING}/tasks",
