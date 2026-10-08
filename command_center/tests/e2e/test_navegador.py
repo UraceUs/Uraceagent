@@ -1139,7 +1139,8 @@ def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pag
         adm.get_by_role("button", name="Salvar a semana").click()
         adm.get_by_text("Semana salva").wait_for()
     try:
-        v = navegador.new_page(viewport={"width": 360, "height": 800})
+        # IP próprio: o cadastro tem limite por IP/hora, e os outros testes já criaram contas pelo 127.0.0.1
+        v = navegador.new_page(viewport={"width": 360, "height": 800}, extra_http_headers={"X-Forwarded-For": "10.1.64.1"})
         erros = []
         v.on("pageerror", lambda e: erros.append(str(e)))
         v.goto(site + "/services/arrive-and-drive/?utm_source=instagram&utm_campaign=outubro")
