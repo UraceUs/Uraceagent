@@ -67,6 +67,8 @@ def invoice_paga(con, b):
     """A invoice desta sessão já aparece paga no espelho do QuickBooks?"""
     if not b["qbo_invoice_id"]:
         return False
+    if "paid_at" in b.keys() and b["paid_at"]:           # #164: conferido direto no QuickBooks
+        return True
     i = um(con, """SELECT i.balance, i.status FROM invoices i JOIN entity_links l
                      ON l.entity_type='invoice' AND l.entity_id=i.id AND l.system IN ('quickbooks','qbo')
                   WHERE l.external_id=?""", (str(b["qbo_invoice_id"]),))
@@ -116,8 +118,9 @@ def _enviar_padrao(**kw):
     return _aplicando(providers.modulo("quickbooks").qbo_criar_e_enviar_invoice, **kw)
 
 
-def cobrar(con, b, enviar=None):
-    """Cria e envia a invoice da sessão. Não cobra duas vezes; contrato não cobra."""
+def cobrar(con, b, enviar=None, criar_cliente=None):
+    """Cria e envia a invoice da sessão. Não cobra duas vezes; contrato não cobra. `criar_cliente`
+    (venda automática, #164) cria o cliente no QuickBooks quando o card ainda não tem."""
     b = dict(b)
     if b["charge_kind"] or b["qbo_invoice_id"]:
         return b["charge_kind"]
@@ -131,7 +134,12 @@ def cobrar(con, b, enviar=None):
         if not card:
             raise ErroCobranca("a conta do site ainda não está ligada a um card (Client ID)")
         from command_center.providers.mensalidades import _cliente_qbo
-        qbo = _cliente_qbo(con, card)
+        try:
+            qbo = _cliente_qbo(con, card)
+        except Exception as e:                                     # noqa: BLE001 — QuickBooks fora do ar
+            raise ErroCobranca(f"QuickBooks indisponível: {getattr(e, 'detail', e)}")
+        if not qbo and criar_cliente:
+            qbo = criar_cliente(card)
         if not qbo:
             raise ErroCobranca("o cliente não está no QuickBooks (crie o cliente lá ou ligue o card)")
         conta = um(con, "SELECT email FROM portal_accounts WHERE id=?", (b["account_id"],))
@@ -141,6 +149,7 @@ def cobrar(con, b, enviar=None):
             raise ErroCobranca("o QuickBooks não criou a invoice (simulação)")
         atualizar(con, "bookings", b["id"], charge_kind="invoice", qbo_invoice_id=str(res.get("id") or ""),
                   invoice_doc=res.get("numero"), invoice_total=res.get("total"), invoice_link=res.get("link"),
+                  pay_link=res.get("link_pagamento"),
                   invoice_sent_to=res.get("enviado_para"), charge_error=None if res.get("enviado", True) else
                   (res.get("aviso") or "criada, mas não enviada"), charge_attempts=(b["charge_attempts"] or 0) + 1,
                   updated_at=agora())
@@ -220,7 +229,7 @@ def verificar(con, bid):
     return True
 
 
-def aceitar(con, por, bid, enviar_invoice=None, enviar_waiver=None):
+def aceitar(con, por, bid, enviar_invoice=None, enviar_waiver=None, criar_cliente=None):
     """A equipe aceita a vaga: cobra (ou conta no contrato), pede a waiver e confirma se já pode."""
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
     if not b:
@@ -230,7 +239,7 @@ def aceitar(con, por, bid, enviar_invoice=None, enviar_waiver=None):
     if not b["accepted_at"]:
         atualizar(con, "bookings", bid, accepted_at=agora(), accepted_by=por, updated_at=agora())
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
-    cobrar(con, b, enviar_invoice)
+    cobrar(con, b, enviar_invoice, criar_cliente)
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
     pedir_waiver(con, b, enviar_waiver)
     verificar(con, bid)
@@ -267,20 +276,26 @@ def _texto_lembrete(b, s, dias):
             "\n\nIf you have questions, reply to support@urace.us.\n\nURACE.US · Orlando, FL")
 
 
-def rodar(con, hoje=None, enviar_invoice=None, enviar_waiver=None, enviar_email=None):
+def rodar(con, hoje=None, enviar_invoice=None, enviar_waiver=None, enviar_email=None, criar_qbo=None):
     """Laço do autosync: tenta de novo o que falhou, confirma o que ficou pronto e lembra o cliente
-    3 dias e 1 dia antes. Nada cancela sozinho."""
+    3 dias e 1 dia antes. Nada cancela sozinho. Com a venda automática (#164), também cria o cliente
+    no QuickBooks que faltou e avisa o cliente quando a sessão confirma."""
+    from command_center.providers import venda_site
+    auto = venda_site.ligada(con)
     hoje = hoje or ag._agora_fl().date()
     feito = {"confirmadas": 0, "cobradas": 0, "waivers": 0, "lembretes": 0}
     for b in con.execute("""SELECT * FROM bookings WHERE status='pendente' AND accepted_at IS NOT NULL
                               AND date >= ? ORDER BY date, id""", (hoje.isoformat(),)).fetchall():
-        if not b["charge_kind"] and (b["charge_attempts"] or 0) < TENTATIVAS and cobrar(con, b, enviar_invoice):
+        criar = venda_site.criador_de_cliente_qbo(con, b, criar_qbo) if auto else None
+        if not b["charge_kind"] and (b["charge_attempts"] or 0) < TENTATIVAS and cobrar(con, b, enviar_invoice, criar):
             feito["cobradas"] += 1
         b = um(con, "SELECT * FROM bookings WHERE id=?", (b["id"],))
         if not b["waiver_ref"] and pedir_waiver(con, b, enviar_waiver) == "enviada":
             feito["waivers"] += 1
         if verificar(con, b["id"]):
             feito["confirmadas"] += 1
+            if auto:
+                venda_site.avisar_confirmada(con, b["id"], enviar_email)
             continue
         b = um(con, "SELECT * FROM bookings WHERE id=?", (b["id"],))
         dias = (date.fromisoformat(b["date"]) - hoje).days

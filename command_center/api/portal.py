@@ -256,7 +256,7 @@ def disponibilidade(start: str | None = None, end: str | None = None, cid=Depend
     for dia in d["dias"]:
         for p in ("manha", "tarde"):
             dia["periods"][p] = {"open": dia["periods"][p]["open"], "spots": dia["periods"][p]["spots"]}
-    return {**d, "services": servicos_site.para_cliente(con)}
+    return {**d, "services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell"))}
 
 
 @r.get("/bookings")
@@ -271,6 +271,21 @@ class AgendarIn(BaseModel):
     service_id: int | None = None
     driver_id: int | None = None
     notes: str | None = None
+    origin: str | None = None                # #164: "site" quando veio do site novo
+    utm: dict | None = None                  # #164: utm_source, utm_campaign… (para o marketing)
+
+
+def _vender(bid):
+    """Venda automática (#164) fora da resposta: o QuickBooks e o DocuSign levam alguns segundos, e a
+    tela de acompanhamento mostra cada etapa chegando."""
+    from command_center.db import conectar
+    from command_center.providers import venda_site
+    con = conectar()
+    try:
+        venda_site.vender(con, bid)
+        con.commit()
+    finally:
+        con.close()
 
 
 @r.post("/bookings", status_code=201)
@@ -279,14 +294,32 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
     try:
         with transacao(con):                  # duas pessoas na última vaga: só uma leva
             bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes, dados.service_id)
-            from command_center.providers import cobranca_agenda
+            from command_center.providers import cobranca_agenda, venda_site
+            atualizar(con, "bookings", bid, origin="site" if dados.origin == "site" else "portal",
+                      utm=venda_site.utm_limpo(dados.utm))
             cobranca_agenda.ao_marcar(con, bid)      # contrato + waiver em dia: confirma sozinha (dono, 06/10)
             _aud(con, request, "portal.booking", cid, {"agendamento": bid, "data": dados.date, "periodo": dados.period,
                                                         "servico": dados.service_id})
     except ag.ErroAgenda as e:
         raise HTTPException(400, str(e))
     tarefas.add_task(agenda_asana.levar, bid)      # #67: todo agendamento vira tarefa no Asana
-    return {"id": bid, "bookings": ag.do_cliente(con, cid)}
+    from command_center.providers import venda_site
+    if venda_site.ligada(con):
+        tarefas.add_task(_vender, bid)
+    return {"id": bid, "bookings": ag.do_cliente(con, cid), "auto_sell": venda_site.ligada(con)}
+
+
+@r.get("/bookings/{bid}")
+def acompanhar(bid: int, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """As etapas de um pedido (#164): reservado → pagar → waiver → confirmado. Confere o pagamento
+    direto no QuickBooks no máximo 1 vez por minuto."""
+    from command_center.providers import venda_site
+    if not um(con, "SELECT 1 AS x FROM bookings WHERE id=? AND account_id=?", (bid, cid)):
+        raise HTTPException(404, "Booking not found.")
+    venda_site.conferir_pagamento(con, bid)
+    con.commit()
+    response.headers["Cache-Control"] = "private, no-store"
+    return venda_site.checkout(con, bid)
 
 
 @r.post("/bookings/{bid}/cancel")

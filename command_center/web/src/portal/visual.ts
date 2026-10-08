@@ -18,3 +18,10 @@ export function visual3d(): boolean {
 export function guardarVisual(tresD: boolean) {
   try { localStorage.setItem(CHAVE, tresD ? '3d' : 'classico') } catch { /* navegador sem armazenamento: vale só nesta visita */ }
 }
+
+/* #164 (dono, 08/10): a área do cliente com a identidade do site novo — "sem parecer que ela saiu do
+ * site, mesma identidade ... unificar os dois". Vale em todo endereço (my.urace.us e o site). Para
+ * voltar ao visual anterior (o "3D" acima), troque esta linha para false: o visual está todo em
+ * styles/portal-site.css, só sob `.psite`. */
+export const VISUAL_SITE_PADRAO = true
+export const visualSite = () => VISUAL_SITE_PADRAO

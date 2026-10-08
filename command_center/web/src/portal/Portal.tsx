@@ -11,10 +11,14 @@ import { Pista } from '../components/Pista'
 import { Agendar, CartaoSessao, Sessoes } from './Agendar'
 import { haDias, papi, PortalError, type Account, type AgendaCfg, type Driver, type Painel, type WaiverPiloto, type Waivers } from './api'
 import { ddiDe, PAISES } from './paises'
-import { guardarVisual, visual3d } from './visual'
+import { guardarVisual, visual3d, visualSite } from './visual'
 import '../styles/portal-3d.css'
+import '../styles/portal-site.css'
+import logoSite from '../assets/site/logo.svg'
 
 const AssinarWaiver = lazy(() => import('./Waiver').then(m => ({ default: m.AssinarWaiver })))   // o quadro de assinatura só nesta rota
+const Reservar = lazy(() => import('./Reservar').then(m => ({ default: m.Reservar })))         // #164: a reserva do site
+const Acompanhar = lazy(() => import('./Reservar').then(m => ({ default: m.Acompanhar })))
 
 type Estado = Account | null | undefined           // undefined = carregando; null = sem sessão
 
@@ -37,11 +41,11 @@ const dataUS = (iso: string | null) => iso ? new Date(iso.length === 10 ? iso + 
 const SITUACAO: Record<string, [string, string]> = { ok: ['Measurements up to date', 'ok'], aviso: ['Update measurements soon', 'warn'],
   vencida: ['Measurements expired', 'crit'], faltando: ['Profile incomplete', 'crit'] }
 
-function Aviso({ erro }: { erro: string | null }) {
+export function Aviso({ erro }: { erro: string | null }) {
   return erro ? <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div> : null
 }
 
-function Campo({ rotulo, children, dica, obrigatorio }: { rotulo: string; children: ReactNode; dica?: string; obrigatorio?: boolean }) {
+export function Campo({ rotulo, children, dica, obrigatorio }: { rotulo: string; children: ReactNode; dica?: string; obrigatorio?: boolean }) {
   return <label className="fld"><span>{rotulo}{obrigatorio && <b className="portal-obr" aria-hidden="true"> *</b>}{dica && <i> · {dica}</i>}</span>{children}</label>
 }
 
@@ -108,7 +112,7 @@ function Entrar({ onEntrou }: { onEntrou: (a: Account) => void }) {
 }
 
 /* Telefone com código do país, e endereço que muda de formato com o país. */
-function Endereco<T extends { country: string; phone_country: string; phone: string; address_line1: string; address_line2: string;
+export function Endereco<T extends { country: string; phone_country: string; phone: string; address_line1: string; address_line2: string;
   city: string; state: string; zip: string }>({ f, set }: { f: T; set: (x: T) => void }) {
   const eua = f.country === 'US'
   const m = (k: keyof T) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => set({ ...f, [k]: e.target.value })
@@ -165,14 +169,34 @@ function Cadastro({ onEntrou }: { onEntrou: (a: Account) => void }) {
 }
 
 /* ------------------------------------------------------------ dentro da conta */
+/** #164: o endereço das páginas do site (Arrive and Drive, início). No próprio site é o mesmo host;
+ * no my.urace.us e no ops.urace.us, até a troca do DNS do urace.us, é o novo.urace.us. */
+export function siteUrl(caminho = '/') {
+  const h = typeof location !== 'undefined' ? location.hostname : ''
+  return (h === 'my.urace.us' || h === 'ops.urace.us' ? 'https://novo.urace.us' : '') + caminho
+}
+
+/** O cabeçalho preto do site (#164): a mesma marca e o caminho de volta para as páginas. */
+function TopoSite({ children }: { children?: ReactNode }) {
+  return <header className="portal-top">
+    <a className="psite-logo" href={siteUrl('/')} aria-label="URACE home"><img src={logoSite} alt="URACE" width={120} height={20} /></a>
+    <nav className="psite-links" aria-label="Site"><a href={siteUrl('/services/arrive-and-drive/')}>Arrive and Drive</a></nav>
+    <span className="grow" />
+    {children}
+  </header>
+}
+
 function Casca({ conta, sair, children }: { conta: Account; sair: () => void; children: ReactNode }) {
   const [tresD, setTresD] = useState(visual3d)
-  return <div className={`portal${tresD ? ' p3d' : ''}`}>
-    <header className="portal-top">
+  const site = visualSite()
+  return <div className={`portal${site ? ' psite' : tresD ? ' p3d' : ''}`}>
+    {site ? <TopoSite><Link className="btn primary sm" to="/portal/reserve">Book now</Link>
+      <span className="small portal-quem">{conta.name}</span><button className="btn sm" onClick={sair}>Sign out</button></TopoSite>
+      : <header className="portal-top">
       <Link to="/portal/dashboard" className="portal-marca"><span className="mark-u" aria-hidden="true">U</span><b>URACE</b><span>Driver area</span></Link>
       <span className="grow" />
       <span className="small muted portal-quem">{conta.name}</span><button className="btn ghost sm" onClick={sair}>Sign out</button>
-    </header>
+    </header>}
     <div className="portal-corpo">
       <nav className="portal-nav" aria-label="Driver area">
         {MENU.map(([r, rot, curto, ic]) => <NavLink key={r} to={`/portal/${r}`} aria-label={rot} className={({ isActive }) => isActive ? 'on' : ''}>
@@ -180,7 +204,7 @@ function Casca({ conta, sair, children }: { conta: Account; sair: () => void; ch
       </nav>
       <main className="portal-main">{children}</main>
     </div>
-    <footer className="portal-rodape small muted">URACE.US INC · Orlando, FL · <a href="https://urace.us/">urace.us</a> · <Visual tresD={tresD} mudar={setTresD} /></footer>
+    <footer className="portal-rodape small muted">URACE.US INC · Orlando, FL · <a href={siteUrl('/')}>urace.us</a>{!site && <> · <Visual tresD={tresD} mudar={setTresD} /></>}</footer>
   </div>
 }
 
@@ -330,7 +354,7 @@ function Conta({ conta, setConta }: { conta: Account; setConta: (a: Account) => 
   </div>
 }
 
-function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onSalvo: (a: Account) => void; onFechar: () => void }) {
+export function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onSalvo: (a: Account) => void; onFechar: () => void }) {
   const [f, setF] = useState({ name: piloto?.name || '', birth_date: piloto?.birth_date || '', email: piloto?.email || '',
     phone: piloto?.phone || '', notes: piloto?.notes || '', social: piloto?.social || '' })
   const [m, setM] = useState<Record<string, string>>(Object.fromEntries(MEDIDAS.map(([k]) => [k, piloto?.measures?.[k] != null ? String(piloto.measures[k]) : ''])))
@@ -416,7 +440,7 @@ function guardarVolta(caminho: string) {
 function lerVolta(): string | null {
   try {
     const v = sessionStorage.getItem(VOLTA)
-    return v && v.startsWith('/portal/book?') ? v : null
+    return v && (v.startsWith('/portal/book?') || /^\/portal\/sessions\/\d+$/.test(v)) ? v : null
   } catch { return null }
 }
 function limparVolta() {
@@ -431,14 +455,22 @@ export function PortalApp() {
   // conta) volta para a agenda com a escolha, e não para o painel inicial. Fica guardado na aba
   // (sessionStorage) porque a tela de entrar troca o endereço e a área pode montar de novo.
   if (loc.pathname === '/portal/book' && loc.search) guardarVolta(loc.pathname + loc.search)
+  if (/^\/portal\/sessions\/\d+$/.test(loc.pathname)) guardarVolta(loc.pathname)      // #164: o link do e-mail
   const carregar = useCallback(() => papi<Account>('GET', '/me').then(setConta).catch(() => setConta(null)), [])
   useEffect(() => { carregar() }, [carregar])
   // chegou na agenda já com a conta aberta: a escolha do site foi usada, não volta de novo
-  useEffect(() => { if (conta && loc.pathname === '/portal/book') limparVolta() }, [conta, loc.pathname])
+  useEffect(() => { if (conta && (loc.pathname === '/portal/book' || loc.pathname.startsWith('/portal/sessions/'))) limparVolta() }, [conta, loc.pathname])
   const entrou = (a: Account) => { setConta(a); nav(lerVolta() || '/portal/dashboard', { replace: true }) }
   async function sair() { try { await papi('POST', '/logout') } finally { setConta(null); nav('/portal', { replace: true }) } }
 
   if (conta === undefined) return <div className="portal"><div className="state" style={{ minHeight: '60vh' }}><span className="spin" /></div></div>
+  // #164: a reserva do site é a mesma tela com ou sem conta (entrar ali dentro não desmonta o que já foi escolhido)
+  if (loc.pathname === '/portal/reserve') return <div className="portal psite reserva-casca">
+    <TopoSite>{conta ? <Link className="btn sm" to="/portal/dashboard">My account</Link> : <Link className="btn sm" to="/portal">Sign in</Link>}</TopoSite>
+    <main className="reserva-main"><Suspense fallback={<div className="state"><span className="spin" /></div>}>
+      <Reservar conta={conta} onConta={a => setConta(a)} /></Suspense></main>
+    <footer className="portal-rodape small">URACE.US INC · Orlando, FL · <a href={siteUrl('/')}>urace.us</a> · <a href="/legal/privacy.html">Privacy policy</a></footer>
+  </div>
   if (!conta) return <Routes>
     <Route index element={<Entrar onEntrou={entrou} />} />
     <Route path="signup" element={<Cadastro onEntrou={entrou} />} />
@@ -451,6 +483,7 @@ export function PortalApp() {
       <Route path="dashboard" element={<Dashboard conta={conta} />} />
       <Route path="book" element={<Agendar conta={conta} />} />
       <Route path="sessions" element={<Sessoes />} />
+      <Route path="sessions/:id" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><Acompanhar /></Suspense>} />
       <Route path="drivers" element={<Pilotos conta={conta} onSalvo={setConta} />} />
       <Route path="drivers/:pid/waiver" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><AssinarWaiver conta={conta} /></Suspense>} />
       <Route path="history" element={<Historico />} />

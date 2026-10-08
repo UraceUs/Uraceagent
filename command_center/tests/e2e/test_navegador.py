@@ -309,7 +309,7 @@ def test_passar_para_vendas_registra_e_fica_no_chat(servidor, navegador):
 
 
 # ------------------------------------------------------------------ área do cliente (#40, #54)
-ROTAS_PORTAL = ["/portal", "/portal/signup"]
+ROTAS_PORTAL = ["/portal", "/portal/signup", "/portal/reserve"]
 ROTAS_PORTAL_DENTRO = ["/portal/dashboard", "/portal/book", "/portal/sessions", "/portal/drivers", "/portal/history", "/portal/account"]
 CONTATO = {"phone": "(407) 555-0101", "address_line1": "100 Main St", "city": "Orlando", "state": "FL", "zip": "32809"}
 PILOTO_OK = {"birth_date": "2014-05-01", "notes": "Two seasons in Mini kart.",
@@ -696,6 +696,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     c.get_by_label("I have read this waiver").check()
     c.get_by_label("I agree to sign electronically").check()
     c.get_by_label("Your full name").fill("Rita Waiver")
+    c.locator("canvas.portal-assinatura").scroll_into_view_if_needed()      # fora do menu fixo de baixo (celular)
     quadro = c.locator("canvas.portal-assinatura").bounding_box()
     c.mouse.move(quadro["x"] + 20, quadro["y"] + 110)
     c.mouse.down()
@@ -1012,7 +1013,11 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     pg.on("pageerror", lambda e: erros.append(str(e)))
     pg.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
     problemas = []
-    for rota in ("/", "/services/arrive-and-drive/"):
+    from command_center.vitrine import paginas_site
+    post = paginas_site.dados("posts.json")["posts"][0]["slug"]
+    produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"])["slug"]
+    for rota in ("/", "/services/arrive-and-drive/", "/services/", "/services/birthday-party/", "/academy/", "/pro-team/",
+                 "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/"):
         pg.goto(site + rota); pg.wait_for_load_state("networkidle")
         h1 = [t for n, t in _cabecalhos(pg) if n == 1]
         if len(h1) != 1:
@@ -1021,13 +1026,42 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
         if r["rola"] or r["culpados"]:
             problemas.append(f"{rota}: rola {r['culpados']}")
         menor = pg.evaluate("""() => [...document.querySelectorAll('main a, main button, main label.kart, header a, header summary')]
-            .filter(e => e.offsetParent !== null).map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+            .filter(e => e.offsetParent !== null && !e.closest('p, li, dd, address, .post-corpo'))   // link no meio do texto não é botão
+            .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
             .filter(([h]) => h < 40)""")
         if menor:
             problemas.append(f"{rota}: alvo de toque < 40 px {menor[:3]}")
     pg.close()
     assert not problemas, "\n".join(problemas)
     assert not erros, erros
+
+
+def test_site_novo_contato_e_pedido_da_loja_chegam_em_vendas(servidor, navegador):
+    """#164: o formulário do site (e o pedido da loja) vira oportunidade em Vendas, origem Site."""
+    from command_center.vitrine import paginas_site
+    site = servidor.removesuffix("/ops")
+    v = navegador.new_page(viewport={"width": 390, "height": 844})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(site + "/contact/?assunto=event")
+    v.get_by_label("Your name").fill("Eva Evento")
+    v.get_by_label("Email").fill("eva.evento.e2e@example.com")
+    v.get_by_label("Message").fill("Birthday for 8 kids in November.")
+    v.get_by_role("button", name="Send").click()
+    v.get_by_text("Thank you! We got your message").wait_for()
+    produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"] and p["variations"][0].get("price"))
+    v.goto(site + f"/store/p/{produto['slug']}/")
+    v.get_by_label("Your name").fill("Eva Evento")
+    v.get_by_label("Email").fill("eva.evento.e2e@example.com")
+    v.get_by_role("button", name="Order this").click()
+    v.get_by_text("Thank you! We got your order request").wait_for()
+    v.close()
+    assert not erros, erros
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/sales")
+    g.get_by_text("Eva Evento").first.wait_for()
+    assert g.get_by_text("Eva Evento").count() >= 2, "contato e pedido, os dois no funil"
+    g.close()
 
 
 def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(servidor, navegador):
@@ -1067,21 +1101,98 @@ def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(
     dia.click()
     v.get_by_role("button", name=re.compile("^Morning")).click()
     assert v.locator(".agenda-preco").inner_text() == "$819"
-    v.get_by_role("link", name="Request this session").click()
-    # sem conta aberta neste navegador: entra, e volta para a agenda com a escolha
-    v.locator("#p-email").fill("sara.site.e2e@example.com")
-    v.locator("#p-pw").fill("pista-molhada-7")
-    v.get_by_role("button", name="Sign in").click()
-    v.wait_for_url(re.compile(r"/ops/portal/book\?date=" + sab.isoformat()))
-    v.get_by_role("heading", name="Book a session").wait_for()
-    assert v.locator(".portal-cal-d.on").inner_text() == str(sab.day)
-    assert v.get_by_role("button", name=re.compile("^Morning")).get_attribute("aria-pressed") == "true"
+    v.get_by_role("link", name="Continue to booking").click()
+    # #164: a reserva abre na mesma identidade do site, com a escolha; sem conta, entra ali mesmo
+    v.wait_for_url(re.compile(r"/ops/portal/reserve\?date=" + sab.isoformat()))
+    v.get_by_role("heading", name="Book your session", level=1).wait_for()
     assert v.get_by_role("radio", name=re.compile("Arrive and Drive 2-stroke")).is_checked(), "o kart escolheu o serviço"
+    assert v.get_by_role("button", name=re.compile("^Morning")).get_attribute("aria-pressed") == "true"
+    v.get_by_role("button", name="Continue", exact=True).click()
+    v.get_by_role("tab", name="I have an account").click()
+    v.get_by_label("Email").fill("sara.site.e2e@example.com")
+    v.get_by_label("Password").fill("pista-molhada-7")
+    v.get_by_role("button", name="Sign in and continue").click()
+    v.get_by_text("Signed in as").wait_for()
+    assert v.get_by_role("radio", name=re.compile("Sami Site")).is_checked(), "um piloto só: já vem escolhido"
     assert v.locator("textarea").input_value() == "Kart: 2-stroke"
-    v.get_by_role("button", name="Request session").click()
-    v.get_by_text("Request sent!").wait_for()
+    v.get_by_label("I agree to the").check()
+    v.get_by_role("button", name="Request this session").click()
+    v.wait_for_url(re.compile(r"/ops/portal/sessions/\d+$"))
+    v.get_by_text("Request received").wait_for()            # venda automática desligada: a equipe aceita
     v.close()
     assert not erros, erros
+
+
+def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pagamento(servidor, navegador):
+    """#164, dono 08/10: "a pessoa vai marcar o horário, o dia e o valor ... ou ela loga ou ela cria a conta
+    dela ... daí ela vai para a etapa de compra ... Um site totalmente automático que venda sozinho"."""
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, email="italo@urace.us")
+    csrf = {"X-CSRF": next(c["value"] for c in adm.context.cookies() if c["name"] == "cc_csrf")}
+    assert adm.request.patch(servidor + "/api/site/agenda/config", data={"auto_sell": True}, headers=csrf).ok
+    if not adm.request.get(servidor + "/api/vitrine/servicos").json()["services"]:
+        assert adm.request.post(servidor + "/api/site/servicos", data={"name": "Arrive and Drive 4-stroke", "price": 719}, headers=csrf).ok
+    abrir(adm, servidor, "/site/disponibilidade")
+    sabado = adm.get_by_label("Sáb Manhã aberto")
+    if not sabado.is_checked():
+        sabado.check()
+        adm.get_by_role("button", name="Salvar a semana").click()
+        adm.get_by_text("Semana salva").wait_for()
+    try:
+        # IP próprio: o cadastro tem limite por IP/hora, e os outros testes já criaram contas pelo 127.0.0.1
+        v = navegador.new_page(viewport={"width": 360, "height": 800}, extra_http_headers={"X-Forwarded-For": "10.1.64.1"})
+        erros = []
+        v.on("pageerror", lambda e: erros.append(str(e)))
+        v.goto(site + "/services/arrive-and-drive/?utm_source=instagram&utm_campaign=outubro")
+        v.locator(".agenda-dia.aberto").first.click()
+        v.get_by_role("button", name=re.compile("^Morning")).click()
+        ir = v.get_by_role("link", name="Continue to booking")
+        assert "utm_source=instagram" in ir.get_attribute("href"), "a campanha atravessa para a reserva"
+        ir.click()
+        v.get_by_role("heading", name="Book your session", level=1).wait_for()
+        if not v.get_by_role("radio").first.is_checked():
+            v.get_by_role("radio").first.check()
+        v.get_by_role("button", name="Continue", exact=True).click()
+        # 2 · conta nova sem sair da reserva
+        v.get_by_label("Full name").fill("Nina Nova")
+        v.get_by_label("Date of birth").fill("1984-02-10")
+        v.get_by_label("Email").fill("nina.nova.e2e@example.com")
+        v.get_by_label("Password").fill("pista-molhada-7")
+        v.get_by_label("Phone").fill("407 555 0188")
+        v.get_by_label("Street address").fill("200 Lake St")
+        v.get_by_label("City").fill("Orlando")
+        v.get_by_role("textbox", name="State").fill("FL")
+        v.get_by_label("ZIP").fill("32824")
+        v.get_by_label("I accept the").check()
+        v.get_by_role("button", name="Create account and continue").click()
+        v.get_by_text("Signed in as").wait_for()
+        # 3 · o piloto (sem nenhum ainda: o formulário já vem aberto)
+        v.get_by_label("Driver's full name").fill("Theo Nova")
+        v.get_by_label("Date of birth").fill("2013-07-01")
+        for rot, val in (("Height (in)", "56"), ("Weight (lb)", "85"), ("Chest (in)", "28"), ("Waist (in)", "25")):
+            v.get_by_label(rot).fill(val)
+        v.get_by_label("Karting experience").fill("First time")
+        v.get_by_role("button", name="Save driver").click()
+        v.get_by_role("radio", name=re.compile("Theo Nova")).wait_for()
+        assert v.get_by_role("radio", name=re.compile("Theo Nova")).is_checked()
+        # 4 · revisar e pagar
+        assert len([t for n, t in _cabecalhos(v) if n == 1]) == 1
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v.get_by_label("I agree to the").check()
+        v.get_by_role("button", name=re.compile("^Book and pay")).click()
+        v.wait_for_url(re.compile(r"/ops/portal/sessions/\d+$"))
+        v.get_by_role("heading", name="Almost there", level=1).wait_for()
+        v.get_by_text("Spot reserved").wait_for()
+        assert v.get_by_text(re.compile("Pay the invoice|Paid")).count() >= 1
+        assert v.get_by_text("Sign the waiver").count() == 1
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not erros, erros
+        v.close()
+    finally:
+        adm.request.patch(servidor + "/api/site/agenda/config", data={"auto_sell": False}, headers=csrf)
+        adm.close()
 
 
 # ------------------------------------------------------------- Suits · Alpha Line (#153)
@@ -1114,7 +1225,8 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     pg.get_by_label("1 – Head circumference").fill("59")
     pg.get_by_role("button", name="Salvar medidas").click()
     pg.locator(".suit-med", has_text="Head circumference").get_by_text("59 cm / 1'11\"").wait_for()
-    assert "1 – Head circumference — 59 cm / 1'11\"" in pg.locator(".suit-pre").first.inner_text()   # já no e-mail ao fornecedor
+    # já no e-mail ao fornecedor (a prévia é recalculada logo depois da lista das medidas: esperar por ela)
+    pg.locator(".suit-pre").first.get_by_text("1 – Head circumference — 59 cm / 1'11\"").wait_for()
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r

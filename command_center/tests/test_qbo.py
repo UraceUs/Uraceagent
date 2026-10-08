@@ -177,3 +177,32 @@ def test_invoice_que_vira_paga_gera_evento_uma_vez(cli, monkeypatch):
         assert um(con, "SELECT COUNT(*) AS n FROM ai_events WHERE kind='invoice.paid' AND entity_id=?", (iid,))["n"] == 1
     finally:
         con.close()
+
+
+def test_link_de_pagamento_do_cliente_e_nao_a_tela_da_equipe(monkeypatch):
+    """#164: o cliente recebe o InvoiceLink (pagar online); o deep_link é a tela da equipe no QuickBooks."""
+    import importlib, sys
+    sys.path.insert(0, "adminai/mcp")
+    qb = importlib.import_module("quickbooks_mcp")
+    pedidos = []
+
+    def _req(caminho, metodo="GET", corpo=None, params=None):
+        pedidos.append((metodo, caminho, params))
+        if metodo == "POST" and caminho == "/invoice":
+            return {"Invoice": {"Id": "9", "DocNumber": corpo["DocNumber"], "TotalAmt": 1119, "Balance": 1119, "Line": []}}
+        if caminho.endswith("/send"):
+            return {"Invoice": {"Id": "9", "DocNumber": "1042", "TotalAmt": 1119, "Balance": 1119, "EmailStatus": "EmailSent", "Line": []}}
+        if params and params.get("include") == "invoiceLink":
+            return {"Invoice": {"Id": "9", "DocNumber": "1042", "TotalAmt": 1119, "Balance": 1119, "Line": [],
+                                "InvoiceLink": "https://connect.intuit.com/pay/abc"}}
+        return {}
+    monkeypatch.setattr(qb, "_query", lambda sql: {"Invoice": [{"DocNumber": "1041"}]})
+    monkeypatch.setattr(qb, "_aplicar", lambda: True)
+    monkeypatch.setattr(qb, "_realm", lambda: "9341453113046421")
+    monkeypatch.setattr(qb, "_req", _req)
+    r = qb.qbo_criar_e_enviar_invoice("696", [{"item_id": "31", "quantidade": 1, "unitario": 1119, "descricao": "x"}], email="c@example.com")
+    assert r["link_pagamento"] == "https://connect.intuit.com/pay/abc" and "qbo.intuit.com/app" in r["link"]
+    assert qb.qbo_invoice_do_cliente("9") == {"id": "9", "numero": "1042", "total": 1119, "saldo": 1119, "status": "open",
+                                             "link_pagamento": "https://connect.intuit.com/pay/abc"}
+    monkeypatch.setattr(qb, "_req", lambda *a, **k: (_ for _ in ()).throw(qb.ErroFerramenta("sem pagamento online")))
+    assert qb.link_pagamento("9") is None

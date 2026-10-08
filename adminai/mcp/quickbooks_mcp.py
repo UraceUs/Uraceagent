@@ -160,6 +160,15 @@ def _esc(s):
     return (s or "").replace("'", "\\'")
 
 
+def link_pagamento(inv_id):
+    """O link de pagamento do CLIENTE (InvoiceLink, #164). O `deep_link` abaixo é a tela da equipe dentro
+    do QuickBooks e nunca vai para o cliente. Só existe com o pagamento online ligado e a invoice enviada."""
+    try:
+        return (_req(f"/invoice/{inv_id}", params={"include": "invoiceLink"}).get("Invoice") or {}).get("InvoiceLink") or None
+    except ErroFerramenta:
+        return None
+
+
 def deep_link(txn_id, tipo="invoice"):
     return f"https://qbo.intuit.com/app/login?pagereq={tipo}%3FtxnId%3D{txn_id}&deeplinkcompanyid={_realm()}"
 
@@ -278,6 +287,15 @@ def qbo_invoices(status="open", cliente_id=None, desde_dias=365, maximo=100):
 @srv.ferramenta("qbo_invoice", "Uma invoice completa pelo id (txnId).", {"id": {"type": "string"}}, ["id"])
 def qbo_invoice(id):
     return _resumo_invoice(_req(f"/invoice/{id}").get("Invoice", {}))
+
+
+@srv.ferramenta("qbo_invoice_do_cliente", "Saldo, situação e o link de pagamento do CLIENTE de uma invoice (só leitura).",
+                {"id": {"type": "string"}}, ["id"])
+def qbo_invoice_do_cliente(id):
+    inv = _req(f"/invoice/{id}", params={"include": "invoiceLink"}).get("Invoice", {})
+    r = _resumo_invoice(inv)
+    return {"id": r["id"], "numero": r["numero"], "total": r["total"], "saldo": r["saldo"], "status": r["status"],
+            "link_pagamento": inv.get("InvoiceLink") or None}
 
 
 def _normaliza(s):
@@ -719,7 +737,7 @@ def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, ema
     if not destino:
         return {**_resumo_invoice(inv), "enviado": False, "aviso": "criada, mas sem e-mail de cobrança: envie pelo QuickBooks"}
     r = _req(f"/invoice/{inv['Id']}/send", "POST", params={"sendTo": destino}).get("Invoice", {})
-    return {**_resumo_invoice(r or inv), "enviado": True, "enviado_para": destino}
+    return {**_resumo_invoice(r or inv), "enviado": True, "enviado_para": destino, "link_pagamento": link_pagamento(inv["Id"])}
 
 
 @srv.ferramenta("qbo_lembrete_invoice",

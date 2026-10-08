@@ -117,7 +117,8 @@ def _rodape():
 def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None):
     canon = f"https://{host}{caminho}"
     robots = '<meta name="robots" content="noindex, nofollow">' if preview() else ""
-    og_img = f'<meta property="og:image" content="https://{host}{estatico("img/" + foto)}">' if foto else ""
+    og_img = (f'<meta property="og:image" content="https://{host}{estatico("img/" + foto)}">'
+              f'<meta name="twitter:image" content="https://{host}{estatico("img/" + foto)}">') if foto else ""
     js = "".join(f'<script src="{estatico(s)}" defer></script>' for s in scripts)
     return f"""<!doctype html>
 <html lang="en">
@@ -130,6 +131,9 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
 <link rel="canonical" href="{e(canon)}">
 <meta property="og:type" content="website"><meta property="og:title" content="{e(titulo)}">
 <meta property="og:description" content="{e(descricao)}"><meta property="og:url" content="{e(canon)}">{og_img}
+<meta property="og:site_name" content="URACE"><meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{e(titulo)}">
+<meta name="twitter:description" content="{e(descricao)}">
 <meta name="theme-color" content="#0b0b0f">
 <link rel="icon" type="image/png" href="{estatico('img/favicon.png')}">
 <link rel="preload" href="/_s/fonts/archivo-expanded.woff2" as="font" type="font/woff2" crossorigin>
@@ -195,7 +199,7 @@ def home(host):
   <div class="largura duas">
     <div><h2 id="h-treino">Kart Driver Training</h2></div>
     <div class="texto">{''.join(f'<p>{e(p)}</p>' for p in h['treino'])}
-      <a class="seta" href="{e(C.ANTIGO + '/kart-training-packages/')}">See the Academy</a></div>
+      <a class="seta" href="/academy/">See the Academy</a></div>
   </div>
 </section>
 <section class="faixa escura" aria-labelledby="h-depo">
@@ -238,8 +242,18 @@ def arrive_and_drive(host):
         "serviceType": "Kart racing experience", "description": a["descricao"],
         "provider": {"@id": f"https://{host}/#business"}, "areaServed": "Orlando, FL",
         "offers": [{"@type": "Offer", "name": k["nome"], "price": f"{k['preco']:.2f}", "priceCurrency": "USD",
-                    "url": f"https://{host}{a['caminho']}"} for k in C.KARTS],
+                    "availability": "https://schema.org/InStock", "url": f"https://{host}{a['caminho']}"} for k in C.KARTS],
+        # #164: o botão de reservar, para o Google entender que dá para reservar online
+        "potentialAction": {"@type": "ReserveAction", "target": {"@type": "EntryPoint",
+                            "urlTemplate": f"https://{host}{PORTAL}/reserve", "actionPlatform": ["http://schema.org/DesktopWebPlatform",
+                                                                                                    "http://schema.org/MobileWebPlatform"]},
+                            "result": {"@type": "Reservation", "name": "Kart Arrive and Drive session"}},
     }
+    perguntas = {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+        {"@type": "Question", "name": t, "acceptedAnswer": {"@type": "Answer", "text": " ".join(ps)}} for t, ps in a["faq"]]}
+    trilha = {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": f"https://{host}/"},
+        {"@type": "ListItem", "position": 2, "name": "Arrive and Drive", "item": f"https://{host}{a['caminho']}"}]}
     corpo = f"""
 <section class="hero hero-servico hero-arrive">
   <div class="hero-in">
@@ -261,7 +275,7 @@ def arrive_and_drive(host):
         <div><h3>You bring</h3>{_lista(a['trazer'])}</div>
       </div>
     </div>
-    <div class="agenda" data-api="/ops/api/vitrine/agenda" data-portal="{PORTAL}/book">
+    <div class="agenda" data-api="/ops/api/vitrine/agenda" data-portal="{PORTAL}/reserve">
       <h3>2 · Pick a day</h3>
       <div class="agenda-mes" hidden>
         <button type="button" class="agenda-nav" data-ir="-1" aria-label="Previous month">‹</button>
@@ -272,8 +286,8 @@ def arrive_and_drive(host):
       <div class="agenda-turnos" role="group" aria-label="Morning or afternoon" hidden></div>
       <p class="agenda-aviso" role="status">Loading the open days…</p>
       <div class="agenda-total"><span class="agenda-resumo">4-stroke · per driver</span><strong class="agenda-preco">{usd(C.KARTS[1]['preco'])}</strong></div>
-      <a class="btn btn-cheio agenda-ir" href="{PORTAL}/book">Request this session</a>
-      <p class="agenda-nota">No payment now. You sign in or create your account, we confirm your spot and send the invoice and the waiver. Track fees are paid to the Orlando Kart Center.</p>
+      <a class="btn btn-cheio agenda-ir" href="{PORTAL}/reserve">Continue to booking</a>
+      <p class="agenda-nota">Next: sign in or create your account and choose the driver. Then you get the invoice (session + refundable security deposit) to pay online and the waiver to sign. Your spot is confirmed as soon as both are done. Track fees are paid to the Orlando Kart Center.</p>
     </div>
   </div>
 </section>
@@ -330,7 +344,7 @@ def arrive_and_drive(host):
   </div>
 </section>"""
     return layout(host=host, caminho=a["caminho"], titulo=a["titulo"], descricao=a["descricao"], corpo=corpo,
-                  schemas=(_negocio(host), oferta), scripts=("agenda.js",), foto=a["foto"])
+                  schemas=(_negocio(host), oferta, perguntas, trilha), scripts=("agenda.js",), foto=a["foto"])
 
 
 def nao_achou(host):

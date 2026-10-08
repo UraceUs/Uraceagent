@@ -508,6 +508,8 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .portal-nav a.on{background:var(--glass-2);color:var(--ink);box-shadow:inset 3px 0 0 var(--brand)}
 .portal-nav .curto{display:none}
 @media (max-width:760px){
+  /* o menu fixo de baixo cobre o fim da tela: scrollIntoView e o foco param acima dele (e abaixo do topo fixo) */
+  html:has(.portal-nav){scroll-padding-top:72px;scroll-padding-bottom:calc(84px + env(safe-area-inset-bottom))}
   .portal-nav{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:20;flex-direction:row;gap:0;padding:4px 4px calc(4px + env(safe-area-inset-bottom));
     background:var(--surface);border-top:1px solid var(--glass-line-2)}
   .portal-nav a{flex:1 1 0;min-width:0;flex-direction:column;justify-content:center;gap:2px;min-height:56px;padding:4px 2px;font-size:11px;box-shadow:none}

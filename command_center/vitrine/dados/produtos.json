@@ -1,0 +1,3250 @@
+{
+ "gerado_em": "2026-10-08",
+ "categorias": {
+  "apparel": "Apparel",
+  "apparel-gear": "Apparel &amp; Gear",
+  "chassis": "Chassis",
+  "classes-programs": "Classes &amp; Programs",
+  "competition-karts": "Competition Karts",
+  "custom-kart-suits": "Custom Kart Suits",
+  "engines": "Engines",
+  "kart-driver-training": "Kart Driver Training",
+  "karts-parts": "Karts &amp; Parts",
+  "official-urace-products": "Official Urace products",
+  "parts": "Parts",
+  "sem-categoria": "Sem categoria",
+  "suits": "Suits",
+  "tires": "Tires"
+ },
+ "produtos": [
+  {
+   "id": 235,
+   "slug": "fully-custom-kart-suit",
+   "name": "Fully Custom Kart Suit",
+   "type": "variable",
+   "price": 420.75,
+   "regular": 495.0,
+   "on_sale": true,
+   "price_min": 420.75,
+   "price_max": 500.75,
+   "short": "<p>Your style on the track</p>",
+   "description": "<p></p>\n<p>Elevate your racing experience with our race kart suits!</p>\n<p><strong>Order now to enjoy exceptional quality, personalized customization, and the industry&#8217;s best safety features.</strong></p>",
+   "images": [
+    {
+     "src": "rectangle-1.webp",
+     "alt": "Fully Custom Kart Suit"
+    },
+    {
+     "src": "4417874129.webp",
+     "alt": "pilot"
+    },
+    {
+     "src": "4417877853.webp",
+     "alt": "pilot"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "apparel",
+     "name": "Apparel"
+    },
+    {
+     "slug": "custom-kart-suits",
+     "name": "Custom Kart Suits"
+    },
+    {
+     "slug": "suits",
+     "name": "Suits"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Number of Sponsors",
+     "terms": [
+      "0",
+      "1 (FREE)",
+      "2",
+      "3",
+      "4+"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 370,
+     "attrs": [
+      "0"
+     ],
+     "price": 420.75,
+     "regular": 495.0,
+     "in_stock": true
+    },
+    {
+     "id": 371,
+     "attrs": [
+      "1-free"
+     ],
+     "price": 420.75,
+     "regular": 495.0,
+     "in_stock": true
+    },
+    {
+     "id": 372,
+     "attrs": [
+      "2"
+     ],
+     "price": 450.75,
+     "regular": 525.0,
+     "in_stock": true
+    },
+    {
+     "id": 373,
+     "attrs": [
+      "3"
+     ],
+     "price": 480.75,
+     "regular": 555.0,
+     "in_stock": true
+    },
+    {
+     "id": 374,
+     "attrs": [
+      "4"
+     ],
+     "price": 500.75,
+     "regular": 575.0,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "FSA002NSiz"
+  },
+  {
+   "id": 2916,
+   "slug": "tonykart-401-t-direct-drive-kart-chassis",
+   "name": "TONYKART 401 T DIRECT DRIVE KART CHASSIS",
+   "type": "simple",
+   "price": 6499.0,
+   "regular": 6499.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>OTK Kart Group Tony Kart Racing Kart, KA100 Yamaha, TaG, Leopard, Rotax Chassis for Junior and Senior Classes</p>\n<p>100cc / 125cc Single Speed Chassis, Rear Brake Only, Engine Sold Separately</p>\n\n<p><strong>Shown with optional equipment &#8211; Engine, Radiator and Tires Sold Separately</strong></p>\n<p>The Racer 401, in its evolution called &#8220;T&#8221;, confirms to be the top-range Tony Kart chassis. Available, as always, in the single-gear, shifter and DD2 versions, it introduces several new features, born from the synergy between OTK Kart Group&#8217;s R&amp;D department and the Tony Kart Racing Team. The key features of this historic model remain unchanged: the frame entirely made of Ø 30 mm tubes and a top manufacturing quality.</p>\n<p>The Racer 401 is the spearhead of Tony Kart&#8217;s success-rich history. Throughout its “sporting career,” from 2004 to the present, the flagship chassis of the Prevalle brand has been able to win more than 10 world titles and numerous victories at the international level. The desire to continue this path studded with victories also with the new “T” version, has led the R&amp;D team of the OTK Kart Group to introduce several innovations, among which the new braking systems, BWD for the single-gear classes and BWZ for the shifter classes stand out, as well as the new M11 fairings. To achieve outstanding results, however, it is essential to work on even the smallest details. For this reason, among the improvements introduced, the Racer 401 T also features a new chain tensioner, made of aluminum, attached to the bearing support. Tony Kart also renews itself aesthetically, with new graphics for the fairing stickers kit.</p>\n<p>The quest for an ever-increasing aerodynamic efficiency led OTK Kart Group&#8217;s R&amp;D department to develop the new M11 fairing kit, which complies with the current FIA regulations. Data obtained by OTK Kart Group&#8217;s R&amp;D department through CFD computerized simulations and wind tunnel testing, combined with data gathered through on-track testing by the Tony Kart Racing Team, led to the birth of a new front spoiler and a new fairing with unique designs that guarantee a substantial reduction in aerodynamic drag, resulting in better performances on-track. Coupled with the two parts named M11, we find the side bumpers and the rear protection of the M10 kit, introduced already with the previous homologation, as well as the full-coverage floorplate that maximizes aerodynamic efficiency. The entire package, moreover, is decorated with stickers with a new, more attractive design, but faithful as always to the colors and style of the brand from Prevalle.</p>\n<p>The novelty of this model, top of Tony Kart range, also includes other important components such as modern and efficient OTK adjustable aluminum pedals and MXJ magnesium wheels, of recent production, born by important challenging and effective research and development studies.<br>\nAmong the main novelties launched by Tony Kart, the new BWD braking system, reserved for Direct Drive classes, both Junior and Senior, undoubtedly stands out. The design activity carried out by the R&amp;D department focused on the use of the highest quality materials, aimed at ensuring an extremely high degree of component efficiency. The unprecedented concept behind the project has resulted in a braking system able of highly improving heat dissipation, consequently reducing the temperature at the brake oil charge, ensuring drivers fully efficient braking consistent over time and in all track conditions. The BWD system is available in two versions: with a 180 mm or 206 mm diameter disc, according to the needs.</p>\n<p>The evolution of the Racer 401 T also passes through several confirmations, such as the multi-adjustable pedals and the inclined steering wheel hub from the OTK Kart Parts line, which guarantee a nearly tailor-made driving position. Completing the package of parts kept unchanged from the past is the HGS steering wheel, whose high rubber handgrip significantly reduces driver effort while driving. The match of these pars, designed together with Tony Kart Racing Team drivers, guarantees, in a simple way, the achievement of an ideal driving position for kart drivers of all sizes.</p>\n<p>Kart must be shipped by truck or picked up at Comet, freight cost is an estimate and may be more than estimated depending on destination</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-8-49-36-am.webp",
+     "alt": "TONYKART 401 T DIRECT DRIVE KART CHASSIS"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-8-50-21-am.webp",
+     "alt": "TONYKART 401 T DIRECT DRIVE KART CHASSIS"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-8-50-29-am.webp",
+     "alt": "TONYKART 401 T DIRECT DRIVE KART CHASSIS"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-8-49-36-am.webp",
+     "alt": "TONYKART 401 T DIRECT DRIVE KART CHASSIS"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2993,
+   "slug": "compkart-covert-3-0-2021-with-rotax-junior",
+   "name": "Compkart Covert 3.0 2021 with Rotax Junior",
+   "type": "simple",
+   "price": 4300.0,
+   "regular": 4300.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>For sale is a <strong>2021 Compkart Covert 3.0</strong> chassis equipped with a <strong>Rotax Junior engine</strong>. This kart is in great condition, well maintained, and <strong>ready to hit the track</strong>. Ideal for junior drivers looking to compete or anyone wanting a reliable, competitive kart package.</p>\n<p><strong>Details:</strong></p>\n<ul>\n<li>\n<p>Chassis: Compkart Covert 3.0</p>\n</li>\n<li>\n<p>Year: 2021</p>\n</li>\n<li>\n<p>Engine: Rotax Junior</p>\n</li>\n<li>\n<p>Well maintained</p>\n</li>\n<li>\n<p>Strong performance and easy to drive</p>\n</li>\n<li>\n<p>Clean and straight chassis</p>\n</li>\n<li>\n<p>Ready to race / practice</p>\n</li>\n</ul>\n<p><strong>Great package for racing or training</strong></p>",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3047,
+   "slug": "tonykart-racer-401s-2022-speedconcepts",
+   "name": "Tonykart Racer 401S 2022 #SpeedConcepts",
+   "type": "simple",
+   "price": 3900.0,
+   "regular": 3900.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p><strong>Tony Kart Racer 401S – 2022</strong><br>#SpeedConcepts</p>\n<p>This kart is in <strong>like-new condition</strong> and has been <strong>barely used</strong>.<br>Originally sold by <strong>Speed Concepts</strong> in 2022 to a URace client <strong>after just one race</strong>.</p>\n<p>The owner attended <strong>only a handful of track days</strong> and then stepped away from karting, resulting in a kart that is <strong>exceptionally clean and well preserved</strong>.</p>\n<p>An excellent opportunity to own a <strong>near-new Tony Kart</strong> at a fraction of the cost of a new package.</p>\n<p>💲 <strong>$3,900</strong></p>",
+   "description": "",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    },
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3072,
+   "slug": "tony-kart-baby-kart-2024",
+   "name": "Tony Kart Baby Kart – 2024",
+   "type": "simple",
+   "price": 3500.0,
+   "regular": 3500.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p><strong>Tony Kart Baby Kart– 2024</strong><br>💲 <strong>$3,500</strong></p>\n<p>Ideal for <strong>young drivers ages 4–7</strong> who are starting in karting. This <strong>Tony Kart Baby Kart</strong> is <strong>race-ready</strong> and perfectly suited for <strong>training, practice, and entry-level racing</strong>.</p>\n<p>A great opportunity to start a young driver in the sport with a <strong>high-quality, reliable chassis from a top-tier brand</strong>.</p>",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3007,
+   "slug": "parolin-opportunity-2025",
+   "name": "Parolin Opportunity 2025",
+   "type": "simple",
+   "price": 3000.0,
+   "regular": 3000.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>For sale is a <strong>2025 Parolin Opportunity</strong> chassis. This kart is in great condition, well maintained, and <strong>ready to hit the track</strong>. Ideal for drivers looking for a competitive, reliable, and easy-to-drive kart for racing or practice.</p>\n<p><strong>Details:</strong></p>\n<ul>\n<li>\n<p>Chassis: Parolin Opportunity</p>\n</li>\n<li>\n<p>Year: 2025</p>\n</li>\n<li>\n<p>Well maintained</p>\n</li>\n<li>\n<p>Strong performance and excellent handling</p>\n</li>\n<li>\n<p>Clean and straight chassis</p>\n</li>\n<li>\n<p>Ready to race / practice</p>\n</li>\n</ul>",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3110,
+   "slug": "compkart-ranger-mini-2020",
+   "name": "CompKart Ranger – Mini – 2020",
+   "type": "simple",
+   "price": 2500.0,
+   "regular": 2500.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p><strong>CompKart Ranger – Mini – 2020</strong></p>\n<p>💲 <strong>Chassis:</strong> <strong>$1,200</strong></p>\n<p>The <strong>engine installed in the pictures is a ROK Mini — $1,300</strong><br><strong>Total as pictured:</strong> <strong>$2,500</strong></p>\n<p>Chassis is in <strong>great shape</strong>, straight, and well maintained. Ideal for <strong>Mini class racing, practice, or driver development</strong>.</p>\n<p>The buyer <strong>may choose any engine option</strong>. Available engine options:</p>\n<ul>\n<li>\n<p><strong>ROK Mini</strong> — <strong>$1,300 (used)</strong></p>\n</li>\n<li>\n<p><strong>IAME Mini Swift</strong> — <strong>$2,350 (new)</strong> / <strong>$1,700 (used)</strong></p>\n</li>\n<li>\n<p><strong>Predator</strong> — <strong>$900 (new)</strong></p>\n</li>\n</ul>",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    },
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3059,
+   "slug": "chassis-tonykart-racer-401r-2022",
+   "name": "Chassis Tonykart Racer 401R 2022",
+   "type": "simple",
+   "price": 1500.0,
+   "regular": 1500.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p><strong>Tony Kart Racer 401R – 2022</strong><br><em>(2021 model, purchased new in 2022)</em></p>\n<p>This chassis <strong>raced half of a National-level season in 2022</strong> before being moved to <strong>practice-only use</strong>. Since then, it has been used for <strong>lead-and-follow coaching sessions</strong> and <strong>arrive-and-drive practice rentals</strong>.</p>\n<p>The kart has been <strong>properly maintained</strong>, making it a solid and reliable option for <strong>practice, coaching programs, or entry-level racing</strong>, with the durability and handling Tony Kart is known for.</p>\n<p>💲 <strong>$1,500</strong></p>",
+   "description": "",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    },
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2887,
+   "slug": "energy-eclipse-kart-chassis-frame-used",
+   "name": "Energy Eclipse Kart Chassis Frame 017-CH-20 – Serial 2034 – Used, Great Shape",
+   "type": "simple",
+   "price": 500.0,
+   "regular": 500.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>For sale is an <strong>authentic Energy Corse Eclipse kart chassis</strong>, model <strong>017-CH-20</strong>, serial <strong>2034</strong>.<br>This chassis is in <strong>great condition</strong>, straight, clean, and ready for your next race setup.</p>\n<p><strong>Features:</strong></p>\n<ul>\n<li>\n<p>Original <strong>Energy Corse Eclipse</strong> frame</p>\n</li>\n<li>\n<p>High-performance tubing design</p>\n</li>\n<li>\n<p>Strong front-end grip with excellent rear stability</p>\n</li>\n<li>\n<p>Compatible with KZ, TAG, and OK setups (depending on components installed)</p>\n</li>\n<li>\n<p>No cracks or structural damage</p>\n</li>\n<li>\n<p>Perfect base for a competitive build</p>\n</li>\n</ul>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-12-13-pm.webp",
+     "alt": "Energy Eclipse Kart Chassis Frame 017-CH-20 – Serial 2034 – Used, Great Shape"
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-12-23-pm.webp",
+     "alt": "Energy Eclipse Kart Chassis Frame 017-CH-20 – Serial 2034 – Used, Great Shape"
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-12-35-pm.webp",
+     "alt": "Energy Eclipse Kart Chassis Frame 017-CH-20 – Serial 2034 – Used, Great Shape"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3097,
+   "slug": "compkart-chassi-covert-3-0-2020",
+   "name": "Compkart Chassi Covert 3.0 2020",
+   "type": "simple",
+   "price": 0.0,
+   "regular": 0.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p><strong>Covert 3.0 – 2020</strong><br><strong>With Tillotson T225 Engine</strong><br>💲 <strong>$2,500</strong></p>\n<p>Kart is <strong>ready for the track</strong>, well maintained, and ideal for <strong>practice, club racing, or arrive-and-drive programs</strong>. A solid and reliable package offering great performance and excellent value.</p>",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    },
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3085,
+   "slug": "benik-chassis",
+   "name": "Benik Chassis",
+   "type": "simple",
+   "price": 0.0,
+   "regular": 0.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p><strong>Benik Chassis</strong></p>\n<p>This chassis is a <strong>Benik</strong>, known for its durability and easy handling, making it <strong>perfect for beginners</strong>.<br>The kart is in <strong>excellent condition</strong> and can be assembled with <strong>any engine type</strong>, depending on your needs.</p>\n<h3>Options &amp; Pricing:</h3>\n<ul>\n<li>\n<p><strong>Kart with Predator engine</strong> (as shown in the pictures)<br>✔ Ready for track days<br>💲 <strong>$1,900</strong></p>\n</li>\n<li>\n<p><strong>Chassis only</strong> (engine required)<br>💲 <strong>$1,000</strong></p>\n</li>\n</ul>\n<h3>Ready-to-race packages with other engine options:</h3>\n<ul>\n<li>\n<p><strong>Benik chassis + used IAME Mini Swift engine</strong> — <strong>$2,700</strong></p>\n</li>\n<li>\n<p><strong>Benik chassis + used ROK Mini engine</strong> — <strong>$2,300</strong></p>\n</li>\n</ul>",
+   "images": [],
+   "categories": [
+    {
+     "slug": "chassis",
+     "name": "Chassis"
+    },
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 92,
+   "slug": "chassis-compkart-adult",
+   "name": "Chassis Compkart adult",
+   "type": "variable",
+   "price": 1495.0,
+   "regular": 1495.0,
+   "on_sale": false,
+   "price_min": 1495.0,
+   "price_max": 2295.0,
+   "short": "<p>This chassis proved to be a very competitive chassis.</p>",
+   "description": "<p>Brand: Compkart</p>\n<p>We have started working with Compkart in 2017. This chassis proved to be a very competitive chassis under all of the conditions and the baseline setup worked competitively on 90% of the tracks we have raced and gave us many wins and podiums.<br>\nCompkart is a little more loose than the other brands we have tested, making it very easy to drive on tight and twisty tracks and more challenging on fast track and on long corner radius.<br>\nThe brakes are touchy and powerful, the brake pads usually last longer than the competition.<br>\nCompkart also brings more options for fine tunning caster and camber angles, making it very easy to work with.</p>\n<p>Overall Compkarts are a great option!</p>\n<p><em>Used chassis, new engine. </em><strong><em>All options of engine are brand new out of the box.</em></strong></p>",
+   "images": [
+    {
+     "src": "3614860371.webp",
+     "alt": "Chassis Compkart adult"
+    },
+    {
+     "src": "3614860378.webp",
+     "alt": "kart urace"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Chassis Compkart Used 2019-2022",
+     "terms": [
+      "2019",
+      "2020",
+      "2021",
+      "2022"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 337,
+     "attrs": [
+      "2019"
+     ],
+     "price": 1495.0,
+     "regular": 1495.0,
+     "in_stock": true
+    },
+    {
+     "id": 338,
+     "attrs": [
+      "2020"
+     ],
+     "price": 1695.0,
+     "regular": 1695.0,
+     "in_stock": true
+    },
+    {
+     "id": 339,
+     "attrs": [
+      "2021"
+     ],
+     "price": 1945.0,
+     "regular": 1945.0,
+     "in_stock": true
+    },
+    {
+     "id": 340,
+     "attrs": [
+      "2022"
+     ],
+     "price": 2295.0,
+     "regular": 2295.0,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "00007"
+  },
+  {
+   "id": 3028,
+   "slug": "tonykart-racer-chassi-2019",
+   "name": "Tonykart Racer Chassi 2019",
+   "type": "simple",
+   "price": 1200.0,
+   "regular": 1200.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p>Chassis is in <strong>very good condition</strong>, straight and well maintained, with <strong>no cracks or structural repairs</strong>.<br>Still <strong>very competitive in 4-stroke classes</strong>, making it a great option for both beginners and experienced drivers looking for a reliable kart for racing or practice.</p>\n<p><strong>Features:</strong></p>\n<ul>\n<li>\n<p>Straight chassis</p>\n</li>\n<li>\n<p>Well maintained</p>\n</li>\n<li>\n<p>Race-ready</p>\n</li>\n<li>\n<p>Excellent value for the money</p>\n</li>\n</ul>\n<p>Tony Kart is known worldwide for its <strong>handling, consistency, and durability</strong>, making this chassis a solid choice for strong performance without a high investment.</p>\n<p><strong>Engines available (sold separately):</strong></p>\n<ul>\n<li>\n<p>Tillotson T225 — <strong>$1,965</strong></p>\n</li>\n<li>\n<p>Honda GX390 — <strong>$1,000</strong></p>\n</li>\n<li>\n<p>Briggs &amp; Stratton LO206 — <strong>$1,710</strong></p>\n</li>\n</ul>",
+   "description": "",
+   "images": [],
+   "categories": [
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 94,
+   "slug": "chassis-compkart-mini",
+   "name": "Chassis Compkart mini",
+   "type": "variable",
+   "price": 995.0,
+   "regular": 995.0,
+   "on_sale": false,
+   "price_min": 995.0,
+   "price_max": 2990.0,
+   "short": "<p>Experience the competitive edge with Compkart.</p>",
+   "description": "<p>Brand: Compkart</p>\n<p>We have started working with Compkart in 2017. This chassis proved to be a very competitive chassis under all of the conditions and the baseline setup worked competitively on 90% of the tracks we have raced and gave us many wins and podiums.</p>\n<p><strong>Compkart </strong>is a little more loose than the other brands we have tested, making it very easy to drive on tight and twisty tracks and more challenging on fast track and on long corner radius.</p>\n<p>The brakes are touchy and powerful, the brake pads usually last longer than the competition.<br>\nCompkart also brings more options for fine tunning caster and camber angles, making it very easy to work with.<br>\nOverall Compkarts are a great option!</p>\n<p><em>Used chassis, new engine. </em><em><strong>A</strong><strong>ll options of engine are brand new out of the box.</strong></em></p>",
+   "images": [
+    {
+     "src": "3669048630.webp",
+     "alt": "Chassis Compkart mini"
+    },
+    {
+     "src": "3669338266.webp",
+     "alt": "kart"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Engine options",
+     "terms": [
+      "Iame mini swift",
+      "No engine",
+      "Rok Mini"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 342,
+     "attrs": [
+      "no-engine"
+     ],
+     "price": 995.0,
+     "regular": 995.0,
+     "in_stock": true
+    },
+    {
+     "id": 343,
+     "attrs": [
+      "rok-mini"
+     ],
+     "price": 2990.0,
+     "regular": 2990.0,
+     "in_stock": true
+    },
+    {
+     "id": 341,
+     "attrs": [
+      "iame-mini-swift"
+     ],
+     "price": 2990.0,
+     "regular": 2990.0,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "00008"
+  },
+  {
+   "id": 90,
+   "slug": "chassis-benik-mini",
+   "name": "Chassis Benik mini",
+   "type": "variable",
+   "price": 995.0,
+   "regular": 995.0,
+   "on_sale": false,
+   "price_min": 995.0,
+   "price_max": 2990.0,
+   "short": "<p>Kart chassis Benik year 2020</p>",
+   "description": "<p>Brand: Benik</p>\n<p>The <strong>Benik </strong><strong>2020 </strong>kart chassis is a high-performance racing platform designed for competitive karting.</p>\n<p>Its sleek and lightweight frame offers exceptional agility and responsiveness on the track.</p>\n<p><strong>Used chassis, new engine.</strong></p>\n<p><strong>All options of engine are brand new out of the box</strong></p>",
+   "images": [
+    {
+     "src": "3669338416.webp",
+     "alt": "Chassis Benik mini"
+    },
+    {
+     "src": "3669134990.webp",
+     "alt": "kart"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Engine options",
+     "terms": [
+      "Iame mini swift",
+      "No engine",
+      "Rok Mini"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 334,
+     "attrs": [
+      "no-engine"
+     ],
+     "price": 995.0,
+     "regular": 995.0,
+     "in_stock": true
+    },
+    {
+     "id": 335,
+     "attrs": [
+      "rok-mini"
+     ],
+     "price": 2990.0,
+     "regular": 2990.0,
+     "in_stock": true
+    },
+    {
+     "id": 336,
+     "attrs": [
+      "iame-mini-swift"
+     ],
+     "price": 2990.0,
+     "regular": 2990.0,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "00009"
+  },
+  {
+   "id": 3037,
+   "slug": "tonykart-racer-401rr-2024",
+   "name": "Tonykart Racer 401RR 2024",
+   "type": "simple",
+   "price": 0.0,
+   "regular": 0.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p>This chassis was <strong>used during the 2024 Orlando Cup season</strong> and <strong>for practice purposes in the 2025 season</strong>. It has been properly maintained throughout its use and remains in <strong>very good condition</strong>, straight and competitive.</p>\n<p>The chassis is <strong>straight</strong>, with <strong>no cracks or structural repairs</strong>, and is still <strong>highly competitive</strong>, making it an excellent option for both <strong>club racing and practice</strong>, as well as for <strong>drivers moving up in competition</strong>.</p>\n<p>Tony Kart is known worldwide for its <strong>excellent handling, consistency, and durability</strong>, offering strong performance without requiring a large investment.</p>\n<h3>Details:</h3>\n<ul>\n<li>\n<p>Straight chassis</p>\n</li>\n<li>\n<p>Well maintained</p>\n</li>\n<li>\n<p>Race-ready</p>\n</li>\n<li>\n<p>Proven race history</p>\n</li>\n<li>\n<p>Excellent value for the money</p>\n</li>\n</ul>\n<h3>Pricing:</h3>\n<ul>\n<li>\n<p><strong>Chassis only:</strong> $1,900</p>\n</li>\n<li>\n<p><strong>KA100 Engine (used):</strong> $2,000</p>\n</li>\n</ul>\n<p><strong>Total as listed:</strong> <strong>$3,900</strong></p>",
+   "description": "",
+   "images": [],
+   "categories": [
+    {
+     "slug": "competition-karts",
+     "name": "Competition Karts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 102,
+   "slug": "race-custom-measured-kart-suit-stock-designs",
+   "name": "Custom measured kart suit [stock designs]",
+   "type": "variable",
+   "price": 385.9,
+   "regular": 385.9,
+   "on_sale": false,
+   "price_min": 385.9,
+   "price_max": 465.9,
+   "short": "<p>Racing Suit offer unmatched protection on the track.</p>",
+   "description": "<p>Our designs evolve regularly, ensuring each suit is exclusive and limited.<br>\nDon’t hesitate—if you find a design you love, seize it now before it’s gone!</p>",
+   "images": [
+    {
+     "src": "4678265481-scaled.webp",
+     "alt": "Custom measured kart suit"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "custom-kart-suits",
+     "name": "Custom Kart Suits"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Color",
+     "terms": [
+      "Black",
+      "Blue",
+      "Multicolor",
+      "Orange",
+      "White"
+     ]
+    },
+    {
+     "name": "Number of Sponsors",
+     "terms": [
+      "0",
+      "1 (FREE)",
+      "2",
+      "3",
+      "4+"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 345,
+     "attrs": [
+      "blue",
+      "0"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 346,
+     "attrs": [
+      "blue",
+      "1-free"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 347,
+     "attrs": [
+      "blue",
+      "2"
+     ],
+     "price": 415.9,
+     "regular": 415.9,
+     "in_stock": true
+    },
+    {
+     "id": 348,
+     "attrs": [
+      "blue",
+      "3"
+     ],
+     "price": 445.9,
+     "regular": 445.9,
+     "in_stock": true
+    },
+    {
+     "id": 349,
+     "attrs": [
+      "blue",
+      "4"
+     ],
+     "price": 465.9,
+     "regular": 465.9,
+     "in_stock": true
+    },
+    {
+     "id": 350,
+     "attrs": [
+      "white",
+      "0"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 351,
+     "attrs": [
+      "white",
+      "1-free"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 352,
+     "attrs": [
+      "white",
+      "2"
+     ],
+     "price": 415.9,
+     "regular": 415.9,
+     "in_stock": true
+    },
+    {
+     "id": 353,
+     "attrs": [
+      "white",
+      "3"
+     ],
+     "price": 445.9,
+     "regular": 445.9,
+     "in_stock": true
+    },
+    {
+     "id": 354,
+     "attrs": [
+      "white",
+      "4"
+     ],
+     "price": 465.9,
+     "regular": 465.9,
+     "in_stock": true
+    },
+    {
+     "id": 355,
+     "attrs": [
+      "multicolor",
+      "0"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 356,
+     "attrs": [
+      "multicolor",
+      "1-free"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 357,
+     "attrs": [
+      "multicolor",
+      "2"
+     ],
+     "price": 415.9,
+     "regular": 415.9,
+     "in_stock": true
+    },
+    {
+     "id": 358,
+     "attrs": [
+      "multicolor",
+      "3"
+     ],
+     "price": 445.9,
+     "regular": 445.9,
+     "in_stock": true
+    },
+    {
+     "id": 359,
+     "attrs": [
+      "multicolor",
+      "4"
+     ],
+     "price": 465.9,
+     "regular": 465.9,
+     "in_stock": true
+    },
+    {
+     "id": 360,
+     "attrs": [
+      "black",
+      "0"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 361,
+     "attrs": [
+      "black",
+      "1-free"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 362,
+     "attrs": [
+      "black",
+      "2"
+     ],
+     "price": 415.9,
+     "regular": 415.9,
+     "in_stock": true
+    },
+    {
+     "id": 363,
+     "attrs": [
+      "black",
+      "3"
+     ],
+     "price": 445.9,
+     "regular": 445.9,
+     "in_stock": true
+    },
+    {
+     "id": 364,
+     "attrs": [
+      "black",
+      "4"
+     ],
+     "price": 465.9,
+     "regular": 465.9,
+     "in_stock": true
+    },
+    {
+     "id": 365,
+     "attrs": [
+      "orange",
+      "0"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 366,
+     "attrs": [
+      "orange",
+      "1-free"
+     ],
+     "price": 385.9,
+     "regular": 385.9,
+     "in_stock": true
+    },
+    {
+     "id": 367,
+     "attrs": [
+      "orange",
+      "2"
+     ],
+     "price": 415.9,
+     "regular": 415.9,
+     "in_stock": true
+    },
+    {
+     "id": 368,
+     "attrs": [
+      "orange",
+      "3"
+     ],
+     "price": 445.9,
+     "regular": 445.9,
+     "in_stock": true
+    },
+    {
+     "id": 369,
+     "attrs": [
+      "orange",
+      "4"
+     ],
+     "price": 465.9,
+     "regular": 465.9,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "00005"
+  },
+  {
+   "id": 2935,
+   "slug": "iame-x30-tag-complete-engine-package",
+   "name": "IAME X30 TAG COMPLETE ENGINE PACKAGE",
+   "type": "simple",
+   "price": 3799.0,
+   "regular": 3799.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The best selling X30 is the most successful blend of innovation and tradition. Offering modern features such as an electric starter, balancer shaft and water-cooling, while preserving traditional specifications that include the diaphragm carburetor and the absence of the power valve. The result: an engine that is fun to drive, easy to use and long lasting. Pure karting!</p>\n<ul>\n<li><strong>Model</strong>: 30 125cc Junior – Spec- UK/USA</li>\n<li><strong>Description: </strong>Single cylinder – 2 stroke</li>\n<li><strong>Class: </strong>125cc Stock Class</li>\n<li><strong>Bore: </strong>Ø 54,00mm</li>\n<li><strong>Max-Bore: </strong>Ø 54,28mm</li>\n<li><strong>Stroke: </strong>54,00mm</li>\n<li><strong>Displacement: </strong>123,67cc</li>\n<li><strong>Ports: </strong>3</li>\n<li><strong>Inlet-System: </strong>Reed Valve</li>\n<li><strong>Lubrication: </strong>Oil mixture</li>\n<li><strong>Ignition-System: </strong>Digital</li>\n<li><strong>Transmission: </strong>Centrifugal Dry Clutch</li>\n<li><strong>Cooling-System: </strong>Water</li>\n<li><strong>Balancer-Shaft: </strong>Present</li>\n<li><strong>Starter: </strong>Electric</li>\n<li><strong>Carb-Model: </strong>Tillotson HW-27A</li>\n<li><strong>Max-Power: </strong>21 Hp</li>\n<li><strong>Max-Torque: </strong>11 Nm</li>\n<li><strong>Max-RPM-Limit: </strong>16.000 RP</li>\n</ul>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-17-59-am.webp",
+     "alt": "IAME X30 TAG COMPLETE ENGINE PACKAGE"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-20-43-am.webp",
+     "alt": "IAME REEDJET KA100 COMPLETE ENGINE"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-17-59-am.webp",
+     "alt": "IAME X30 TAG COMPLETE ENGINE PACKAGE"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "engines",
+     "name": "Engines"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2950,
+   "slug": "vortex-rok-gp-stock-engine-kit",
+   "name": "Vortex Rok GP Stock Engine Kit",
+   "type": "simple",
+   "price": 3599.0,
+   "regular": 3599.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Complete Rok GP Stock Engine Kit, Engine Mount Sold Separate</p>\n<p>Single-cylinder 2 stroke direct-drive engine<br>\nDisplacement 125 cc<br>\nReed valve intake in the crank case<br>\nLiquid-cooled through integrated pump<br>\nIntegrated electrical starter<br>\nMixture-lubricated<br>\nPVL digital ignition<br>\nCentrifugal dry-clutch<br>\nDellorto VHSH √ò 30mm carburetor<br>\nArrow intake silencer<br>\nDellorto fuel pump<br>\nBore and stroke 54.07x54mm<br>\nCast iron made cylinder and power valve<br>\n5/3 transfer ducts intake<br>\nOval exhaust and 2 boosters<br>\n34 HP at 12.500 Rpm<br>\nMax 15.000 Rpm (electronically limited)<br>\nBalance shaft<br>\nRok GP molded exhaust with integrated exhaust silencer<br>\nMax Torque 20.2 Nm at 11.500 Rpm<br>\nRadial bearing C4</p>\n<p>The Rok GP immediately conquered the hearts of drivers around the world, for his spirited soul and a practical structure, which aims to achieve high performance, while ensuring high reliability.</p>\n<p>The engine has the following features:<br>\nSingle-cylinder 2 stroke engine, displacement 125cc, reed valve intake in the crankcase. Liquid-cooled through integrated pump, equipped with centrifugal dry-clutch and integrated electrical starter. It is also equipped with a balance shaft that reduces vibrations and power valve that improves performance and driveability.</p>\n<p>The engine comes in a complete kit with Dell&#8217;Orto VHSH √ò 30mm carburetor, Dell&#8217;Orto fuel pump, Arrow intake silencer, molded exhaust and exhaust with integrated exhaust silencer, Radiator and hoses, wire loom complete with battery and battery support.<br>\nTrue to the philosophy that favors ease of use and management, Rok GP engine is aimed at all drivers who want to test themselves on a spirited and performing chassis</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-29-00-am.webp",
+     "alt": "Vortex Rok GP Stock Engine Kit"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-29-22-am.webp",
+     "alt": "Vortex Rok VLR Stock Engine Kit"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-30-00-am.webp",
+     "alt": "Vortex Rok VLR Stock Engine Kit"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-29-00-am.webp",
+     "alt": "Vortex Rok GP Stock Engine Kit"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "engines",
+     "name": "Engines"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2927,
+   "slug": "iame-reedjet-ka100-complete-engine",
+   "name": "IAME REEDJET KA100 COMPLETE ENGINE",
+   "type": "simple",
+   "price": 3150.0,
+   "regular": 3150.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The Reedjet KA 100 engine is specifically designed to meet the needs of the hobby classes. A traditional engine, designed for the professional/hobby driver; reliable, easy to use and service.</p>\n\n<ul>\n<li><strong>Model</strong>: Reedjet KA100</li>\n<li><strong>Description: </strong>Single cylinder – 2 stroke</li>\n<li><strong>Class: </strong>KA 100</li>\n<li><strong>Bore: </strong>Ø 48,20mm</li>\n<li><strong>Max-Bore: </strong>Ø 48,53mm</li>\n<li><strong>Stroke: </strong>54,00mm</li>\n<li><strong>Displacement: </strong>98,53cc</li>\n<li><strong>Ports: </strong>2</li>\n<li><strong>Inlet-System: </strong>Reed Valve</li>\n<li><strong>Lubrication: </strong>Oil mixture</li>\n<li><strong>Ignition-System: </strong>Analogic with adjustable timing</li>\n<li><strong>Transmission: </strong>Centrifugal Dry Clutch</li>\n<li><strong>Cooling-System: </strong>Air</li>\n<li><strong>Balancer-Shaft: </strong>–</li>\n<li><strong>Starter: </strong>Electric</li>\n<li><strong>Carb-Model</strong>: Tillotson HW-33A</li>\n<li><strong>Max-Power: </strong>22 Hp</li>\n<li><strong>Max-Torque: </strong>15 Nm</li>\n<li><strong>Max-RPM-Limit: </strong>–</li>\n</ul>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-8-59-03-am.webp",
+     "alt": "IAME REEDJET KA100 COMPLETE ENGINE"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-8-59-03-am.webp",
+     "alt": "IAME REEDJET KA100 COMPLETE ENGINE"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-8-58-06-am.webp",
+     "alt": "IAME REEDJET KA100 COMPLETE ENGINE"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "engines",
+     "name": "Engines"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2955,
+   "slug": "vortex-rok-vlr-stock-engine-kit",
+   "name": "Vortex Rok VLR Stock Engine Kit",
+   "type": "simple",
+   "price": 2699.0,
+   "regular": 2699.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Complete 100cc VLR Box Stock Engine Kit, Motor Mount Sold Separately</p>\n<p>Engine kit comes with Senior Header, Junior Header Sold Separately</p>\n<p>VLR Engine Specs &#8211;</p>\n<p>100cc 2-Stroke<br>\nBORE 48.20 mm<br>\nSTROKE 54.00 mm<br>\nConrod C-to-C Distance 102.00 mm<br>\nIntake System Reed Valve<br>\nCarburetor Butterfly Valve 24mm<br>\nIntake Silencer Arrow LA22<br>\nCylinder Liner/Sleeve Cast Iron Made Dry-Liner/Sleeve<br>\nTransfer Ports 3 Ports<br>\nEXHAUST PORTS 1 Elliptical Port + 2 Boosters<br>\nCOOLING SYSTEM Air Cooled<br>\nLUBRICATING SYSTEM Oil-Fuel Mixture Lubricated<br>\nIGNITION SYSTEM Selettra<br>\nSTART SYSTEM Integrated Starter Motor<br>\nTransmission W/ Clutch<br>\nCLUTCH SYSTEM Centrifugal Dry-Clutch System<br>\nCOMPRESSION RATIO 10.5 : 1<br>\nMAXIMUM POWER 20Hp at 9800 rpm<br>\nMAXIMUM TORQUE 1,4 Kgm at 9600 rpm<br>\nMAXIMUM SPEED 16000 rpm</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-34-04-am.webp",
+     "alt": "Vortex Rok VLR Stock Engine Kit"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-34-04-am.webp",
+     "alt": "Vortex Rok VLR Stock Engine Kit"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "engines",
+     "name": "Engines"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2944,
+   "slug": "iame-swift-60cc-complete-engine",
+   "name": "IAME SWIFT 60CC COMPLETE ENGINE",
+   "type": "simple",
+   "price": 2299.0,
+   "regular": 2299.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The IAME Mini Swift 60cc Pro-M is one of the most successful and widely utilized IAME engines. The Mini Swift Pro-M Spec. USA was designed to meet the requirements of the United States. It adopts a Tillotson HW-31A diaphragm carburetor and an electric starter system.</p>\n<ul>\n<li><strong>Model: </strong>Mini Swift 60cc USA</li>\n<li><strong>Description: </strong>Single cylinder – 2 stroke</li>\n<li><strong>Class: </strong>60cc Stock Class</li>\n<li><strong>Bore: </strong>Ø 41,81mm</li>\n<li><strong>Max-Bore:</strong> Ø 42,10mm</li>\n<li><strong>Stroke: </strong>43mm</li>\n<li><strong>Displacement: </strong>59cc</li>\n<li><strong>Port: </strong>2</li>\n<li><strong>Inlet-System: </strong>Piston Port</li>\n<li><strong>Lubrication: </strong>Oil mixture</li>\n<li><strong>Ignition-System: </strong>Electronic/Analogic</li>\n<li><strong>Transmission: </strong>Centrifugal Dry Clutch</li>\n<li><strong>Cooling-System: </strong>Air</li>\n<li><strong>Balancer-Shaft: </strong>–</li>\n<li><strong>Starter: </strong>Electric</li>\n<li><strong>Carb-Model: </strong>Tillotson HW-31A</li>\n<li><strong>Max-Power: </strong>10 Hp</li>\n<li><strong>Max-Torque: </strong>7 Nm</li>\n<li><strong>Max-RPM-Limit: &#8211;</strong></li>\n</ul>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-26-34-am.webp",
+     "alt": "IAME SWIFT 60CC COMPLETE ENGINE"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-26-34-am.webp",
+     "alt": "IAME SWIFT 60CC COMPLETE ENGINE"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-26-20-am.webp",
+     "alt": "IAME SWIFT 60CC COMPLETE ENGINE"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "engines",
+     "name": "Engines"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 4867,
+   "slug": "urace-academy",
+   "name": "URACE Academy",
+   "type": "variable",
+   "price": 2619.06,
+   "regular": 2619.06,
+   "on_sale": false,
+   "price_min": 2619.06,
+   "price_max": 5000.0,
+   "short": "<p>Structured driver development program with professional coaching, track experience, evaluation and mentorship. Pick the plan that fits your driver &#8212; 4 sessions a month on the Academy track, or 8 sessions a month on the Boost track for faster progression. Month-to-month, no long-term contract required.</p>",
+   "description": "",
+   "images": [
+    {
+     "src": "imagem-segunda-dobra.webp",
+     "alt": "URACE Academy coaching and go-kart racing at Orlando Kart Center"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "kart-driver-training",
+     "name": "Kart Driver Training"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Plan",
+     "terms": [
+      "Academy - 1 Month (4 sessions)",
+      "Academy - 3 Months (12 sessions)",
+      "Academy - 6 Months (24 sessions)",
+      "Boost - 1 Month (8 sessions)"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 4868,
+     "attrs": [
+      "Academy - 1 Month (4 sessions)"
+     ],
+     "price": 2756.9,
+     "regular": 2756.9,
+     "in_stock": true
+    },
+    {
+     "id": 4869,
+     "attrs": [
+      "Academy - 3 Months (12 sessions)"
+     ],
+     "price": 2688.43,
+     "regular": 2688.43,
+     "in_stock": true
+    },
+    {
+     "id": 4870,
+     "attrs": [
+      "Academy - 6 Months (24 sessions)"
+     ],
+     "price": 2619.06,
+     "regular": 2619.06,
+     "in_stock": true
+    },
+    {
+     "id": 4871,
+     "attrs": [
+      "Boost - 1 Month (8 sessions)"
+     ],
+     "price": 5000.0,
+     "regular": 5000.0,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 4787,
+   "slug": "arrive-and-drive",
+   "name": "Arrive and Drive",
+   "type": "variable",
+   "price": 719.0,
+   "regular": 719.0,
+   "on_sale": false,
+   "price_min": 719.0,
+   "price_max": 899.0,
+   "short": "<p>*Taxes and fees not included. Track access fee (Orlando Kart Center) is required and separate from this price — add it with the track-fee option at checkout, or pay directly at the track if you already have a pass. Rescheduling: requests made at least 24 hours before your session will be accommodated based on availability. Sessions missed without notice may be forfeited.</p>",
+   "description": "<p>Arrive and Drive is designed for all ages and experience levels, fully customizable to match your goals, skill level, and the intensity you want on track. Choose the kart type that fits your driver, tell us a bit about them, and our team tailors every detail from there &#8212; whether this is a first time on track or a warm-up between Academy sessions.</p>\n<p>.s-urace-shorts{background:#0b0b0b;padding:56px 0}<br>\n.s-urace-shorts .container{max-width:1200px;margin:0 auto;padding:0 16px}<br>\n.s-urace-shorts h2{color:#fff;font-size:clamp(22px,2.6vw,34px);margin:0 0 22px;letter-spacing:.02em}<br>\n.s-urace-shorts h2 strong{color:#D2232A}<br>\n.urace-shorts__row{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:10px;-webkit-overflow-scrolling:touch}<br>\n.urace-shorts__row::-webkit-scrollbar{height:6px}<br>\n.urace-shorts__row::-webkit-scrollbar-thumb{background:#333;border-radius:3px}<br>\n.urace-short{position:relative;flex:0 0 190px;scroll-snap-align:start;border:0;padding:0;background:#fff;border-radius:10px;overflow:hidden;cursor:pointer;aspect-ratio:9/16}<br>\n.urace-short img{width:100%;height:100%;object-fit:cover;display:block;opacity:.85;transition:opacity .2s,transform .3s}<br>\n.urace-short:hover img{opacity:1;transform:scale(1.04)}<br>\n.urace-short__play{position:absolute;inset:0;margin:auto;width:52px;height:52px;border-radius:50%;background:rgba(0,0,0,.55);border:2px solid #fff}<br>\n.urace-short__play:after{content:&#8221;&#8221;;position:absolute;top:50%;left:54%;transform:translate(-50%,-50%);border-style:solid;border-width:10px 0 10px 16px;border-color:transparent transparent transparent #fff}<br>\n.urace-short__title{position:absolute;left:0;right:0;bottom:0;padding:26px 10px 10px;color:#fff;font-size:13px;line-height:1.25;text-align:left;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.85))}<br>\n.urace-short iframe{width:100%;height:100%;border:0;display:block}<br>\n@media(max-width:600px){.urace-short{flex:0 0 150px}}</p>\n\n<h2>URACE <strong>SHORTS</strong></h2>\n\nURACE Karting Team Orlando<br>\nWatch Lando&#8217;s story<br>\nFrom Karting to Formula 1<br>\nWhat it takes to develop a driver<br>\nProfessional Kart Racing Team<br>\n2026: Your year to accelerate\n\n<p>(function(){var r=document.querySelector(&#8220;.urace-shorts__row&#8221;);if(!r)return;r.addEventListener(&#8220;click&#8221;,function(e){var b=e.target.closest(&#8220;.urace-short&#8221;);if(!b||b.dataset.on)return;var id=b.dataset.yt;b.dataset.on=&#8221;1&#8243;;b.innerHTML=&#8221;;});})();</p>",
+   "images": [
+    {
+     "src": "4599908362.webp",
+     "alt": "Driving Experience"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "kart-driver-training",
+     "name": "Kart Driver Training"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Kart Type",
+     "terms": [
+      "Baby Kart (4-7)",
+      "4-stroke (7+)",
+      "2-stroke (7+)",
+      "Adult Shifter (14+, experience required)"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 4790,
+     "attrs": [
+      "4-stroke (7+)"
+     ],
+     "price": 719.0,
+     "regular": 719.0,
+     "in_stock": true
+    },
+    {
+     "id": 4789,
+     "attrs": [
+      "Baby Kart (4-7)"
+     ],
+     "price": 719.0,
+     "regular": 719.0,
+     "in_stock": true
+    },
+    {
+     "id": 4791,
+     "attrs": [
+      "2-stroke (7+)"
+     ],
+     "price": 819.0,
+     "regular": 819.0,
+     "in_stock": true
+    },
+    {
+     "id": 4792,
+     "attrs": [
+      "Adult Shifter (14+, experience required)"
+     ],
+     "price": 899.0,
+     "regular": 899.0,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2771,
+   "slug": "otk-rudder-pedal-support",
+   "name": "OTK Rudder Pedal Support",
+   "type": "simple",
+   "price": 350.0,
+   "regular": 350.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The <strong>OTK Pedal Mount Support</strong> is a genuine OTK accessory designed to provide enhanced stability, comfort, and precision to your kart’s pedal system.</p>\n<p>Crafted from high-strength aluminum, it offers superior rigidity and eliminates flex under braking, delivering a more direct and consistent response on track.</p>\n<p>Compatible with most OTK chassis — including <strong>Tony Kart, Kosmic, Exprit, Redspeed, EOS, and Gillard</strong> — this support is easy to install and a must-have for drivers looking for maximum performance and control every lap.</p>\n<p><strong>Features:</strong></p>\n<ul>\n<li>\n<p>Material: High-quality aluminum</p>\n</li>\n<li>\n<p>Finish: Anodized for added durability</p>\n</li>\n<li>\n<p>Improves pedal stability and responsiveness</p>\n</li>\n<li>\n<p>Quick and simple installation</p>\n</li>\n<li>\n<p>Compatible with all major OTK chassis models</p>\n</li>\n</ul>\n<p><strong>Perfect for:</strong> Professional and amateur drivers who want to reinforce their pedal setup and boost overall kart performanc</p>",
+   "images": [
+    {
+     "src": "s-l1600-1.webp",
+     "alt": "OTK Rudder Pedal Support"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "official-urace-products",
+     "name": "Official Urace products"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": false,
+   "sku": null
+  },
+  {
+   "id": 326,
+   "slug": "urace-jacket",
+   "name": "Urace Jacket",
+   "type": "variable",
+   "price": 34.0,
+   "regular": 69.0,
+   "on_sale": true,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p>Stay ahead of the competition and keep essentials close with the Urace Kart Team official jacket.</p>",
+   "description": "<p>Stay ahead of the competition and keep essentials close with the Urace Kart Team official jacket. Designed with multiple functional pockets and crafted from durable, weather-resistant material, it’s the perfect blend of practicality and style for any racing enthusiast.</p>",
+   "images": [
+    {
+     "src": "4678285175.webp",
+     "alt": "Urace Jacket"
+    },
+    {
+     "src": "4678297795.webp",
+     "alt": "Urace Jacket"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "official-urace-products",
+     "name": "Official Urace products"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Size",
+     "terms": [
+      "2XL"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 415,
+     "attrs": [
+      "2xl"
+     ],
+     "price": 34.0,
+     "regular": 69.0,
+     "in_stock": false
+    }
+   ],
+   "in_stock": false,
+   "sku": "00016"
+  },
+  {
+   "id": 106,
+   "slug": "urace-kart-team-cap",
+   "name": "Urace Kart Team Cap",
+   "type": "variable",
+   "price": 24.95,
+   "regular": 24.95,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Discover the official Urace team caps for a style that reflects your passion for karting.</p>\n<p>These caps feature the embroidered Urace logo and are perfect for enthusiasts and team members alike.</p>\n<p>Get yours today!</p>",
+   "images": [
+    {
+     "src": "4678375405-scaled.webp",
+     "alt": "Urace Kart Team Cap"
+    },
+    {
+     "src": "4441446696-scaled.webp",
+     "alt": "cap"
+    },
+    {
+     "src": "4441446701-scaled.webp",
+     "alt": "cap"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "official-urace-products",
+     "name": "Official Urace products"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Color",
+     "terms": [
+      "Blue and White"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 420,
+     "attrs": [
+      "blue-and-white"
+     ],
+     "price": 24.95,
+     "regular": 24.95,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "00012"
+  },
+  {
+   "id": 323,
+   "slug": "urace-hoodies",
+   "name": "Urace Hoodies",
+   "type": "variable",
+   "price": 19.99,
+   "regular": 45.8,
+   "on_sale": true,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p>Represent the Urace Kart Team in style with this official team hoodie, crafted for ultimate comfort and durability.</p>",
+   "description": "<p>Represent the Urace Kart Team in style with this official team hoodie, crafted for ultimate comfort and durability. Made from premium fabric, it ensures you stay warm —perfect for track days, training sessions, or casual wear.</p>",
+   "images": [
+    {
+     "src": "4678273137.webp",
+     "alt": "Urace Hoodies"
+    },
+    {
+     "src": "4678265477.webp",
+     "alt": "Urace Hoodies"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "official-urace-products",
+     "name": "Official Urace products"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Size",
+     "terms": [
+      "3XL",
+      "L",
+      "M",
+      "S",
+      "XL",
+      "XS"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 401,
+     "attrs": [
+      "xs"
+     ],
+     "price": 19.99,
+     "regular": 45.8,
+     "in_stock": true
+    },
+    {
+     "id": 402,
+     "attrs": [
+      "s"
+     ],
+     "price": 19.99,
+     "regular": 45.8,
+     "in_stock": true
+    },
+    {
+     "id": 403,
+     "attrs": [
+      "m"
+     ],
+     "price": 19.99,
+     "regular": 45.8,
+     "in_stock": true
+    },
+    {
+     "id": 404,
+     "attrs": [
+      "l"
+     ],
+     "price": 19.99,
+     "regular": 45.8,
+     "in_stock": true
+    },
+    {
+     "id": 405,
+     "attrs": [
+      "xl"
+     ],
+     "price": 19.99,
+     "regular": 45.8,
+     "in_stock": true
+    },
+    {
+     "id": 406,
+     "attrs": [
+      "3xl"
+     ],
+     "price": 19.99,
+     "regular": 45.8,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "00015"
+  },
+  {
+   "id": 329,
+   "slug": "urace-t-shirts",
+   "name": "Urace T-shirts",
+   "type": "variable",
+   "price": 19.95,
+   "regular": 25.98,
+   "on_sale": true,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p>Represent the Urace Kart Team in style with this official team shirt, designed for maximum performance and comfort.</p>",
+   "description": "<p>Represent the Urace Kart Team in style with this official team shirt, designed for maximum performance and comfort. Made from high-quality, moisture-wicking fabric, it keeps you cool and dry during intense racing or training sessions.</p>\n<p><strong>Features:</strong></p>\n<ul>\n<li>Lightweight, breathable, and moisture-wicking fabric for all-day comfort</li>\n<li>Dynamic red and navy blue color scheme with white detailing for a sporty look</li>\n<li>Printed URace team logo and sponsor logos for authentic team representation</li>\n<li>Athletic fit that offers flexibility and freedom of movement</li>\n<li>Available in multiple sizes to fit URace fans and racers alike</li>\n</ul>",
+   "images": [
+    {
+     "src": "4627220476.webp",
+     "alt": "Urace T-shirts"
+    },
+    {
+     "src": "4627253534.webp",
+     "alt": "Pilot"
+    },
+    {
+     "src": "4627253539.webp",
+     "alt": "URACE coach and kart driver reviewing a session in Orlando"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "official-urace-products",
+     "name": "Official Urace products"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Size",
+     "terms": [
+      "3XL",
+      "3XS",
+      "M",
+      "XL",
+      "XS",
+      "XXL",
+      "XXS"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 421,
+     "attrs": [
+      "3xs"
+     ],
+     "price": 19.95,
+     "regular": 25.98,
+     "in_stock": true
+    },
+    {
+     "id": 422,
+     "attrs": [
+      "xxs"
+     ],
+     "price": 19.95,
+     "regular": 25.98,
+     "in_stock": true
+    },
+    {
+     "id": 423,
+     "attrs": [
+      "xs"
+     ],
+     "price": 19.95,
+     "regular": 25.98,
+     "in_stock": true
+    },
+    {
+     "id": 424,
+     "attrs": [
+      "m"
+     ],
+     "price": 19.95,
+     "regular": 25.98,
+     "in_stock": true
+    },
+    {
+     "id": 425,
+     "attrs": [
+      "xl"
+     ],
+     "price": 19.95,
+     "regular": 25.98,
+     "in_stock": true
+    },
+    {
+     "id": 426,
+     "attrs": [
+      "xxl"
+     ],
+     "price": 19.95,
+     "regular": 25.98,
+     "in_stock": true
+    },
+    {
+     "id": 427,
+     "attrs": [
+      "3xl"
+     ],
+     "price": 19.95,
+     "regular": 25.98,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "00013"
+  },
+  {
+   "id": 2860,
+   "slug": "aim-mychron-smartycam-3-sport-including-data-hub",
+   "name": "AIM Mychron SmartyCam 3 Sport Including data hub",
+   "type": "simple",
+   "price": 1074.0,
+   "regular": 1074.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>SmartyCam 3 Sport 84 degree FOV (wide angle)</p>\n<p>Available with or without Two Port Data Hub</p>\n<p>Pick up your SmartyCam 3 SPORT and put it whatever you want: its compact design is perfectly shaped to take up as little space as possible into your racing cockpit. The new quarter turn locking system assures the best performance in terms of safety and closing speed. The new SmartyCam 3 SPORT camera has been designed for motorsports with a single purpose, Providing great videos including all the information you need. The SmartyCam 3 SPORT camera overlays all the data from both GPS and AiM data loggers connected to your ECU. The perfect camera designed for club racing or karting.</p>\n<p><strong>Note:</strong> This camera is not designed to be used as a stand alone unit. Must be connected to a data logger with 12v power or 2 port data hub with external 12v power supply.<br>\nSmartyCam 3 Sport 84 degree FOV (wide angle)</p>\n<p>Global shutter CMOS sensor<br>\n1920&#215;1080 FHD 30 fps H.264<br>\nDisplay resolution 128&#215;125 pixel<br>\nLens angle: 84 degree<br>\nInternal, rechargeable lithium battery 350mAh<br>\n9-15 volt external power<br>\nSupport for up to 2TB micro SD card<br>\n-10C degree / +60C working temperature range<br>\nAuto power ON/OFF<br>\nAuto Start/Stop recording<br>\nCAN connection to all AiM systems<br>\nRaceStudio3 (RS3) Configuration</p>\n<p>High quality with small size video files &#8211; Generic HD cameras are focused on the highest pixel number. The result is that their video files are far too large, taking too much memory. SmartyCam 3 SPORT videos have the same quality as other FHD cameras but their files are smaller because the H.264 compression system parameters have been optimized to a perfect balance between video quality and file size.</p>\n<p>No &#8220;Wave Effect&#8221; with Global Shutter CMOS &#8211; Engine rumble causes vibrations, which are a big problem for video recording. You will never experience again that seasick &#8220;wave effect&#8221; you get watching videos recorded by a generic camera when the car rolls at 7,000 RPM. SmartyCam 3 SPORT cameras have been designed for that environment and for those vibrations. &#8220;Wave effect&#8221; is just a distant memory</p>\n<p>Designed for the extreme &#8211; An on-board camera designed for motorsport must guarantee great resistance against the extreme working conditions typical of racing and against the most adverse weather, such as: strong and prolonged vibrations, continuous rain and extremely high and low temperatures. IP65 waterproof and made in machinery molded aluminum, just like many competition car parts.</p>\n<p>Automatic Start &amp; Stop &#8211; You are on the starting grid, ready to sprint, your adrenaline reaching the climax: the last thing you can worry about is&#8230; switching on the camera. You have other things to worry about. SmartyCam 3 is aware of that. That is why it switches on/off automatically and starts/stops recording the same way.</p>\n<p>Full internal datalogger &#8211; All the data received from CAN and internal sensors are recorded in .mov files produced at the end of your test, your SD (or MSD) Card contains all the information you need for a deep data analysis. SD card sold separately.</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-11-as-10-49-59-am.webp",
+     "alt": "AIM Mychron SmartyCam 3 Sport Including data hub"
+    },
+    {
+     "src": "captura-de-tela-2025-12-11-as-10-50-20-am.webp",
+     "alt": "AIM Mychron SmartyCam 3 Sport Including data hub"
+    },
+    {
+     "src": "captura-de-tela-2025-12-11-as-10-50-14-am.webp",
+     "alt": "AIM Mychron SmartyCam 3 Sport Including data hub"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2850,
+   "slug": "aim-mychron-smartycam-3-sport-no-data-hub",
+   "name": "AIM Mychron SmartyCam 3 Sport – No data hub",
+   "type": "simple",
+   "price": 1020.42,
+   "regular": 1020.42,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>SmartyCam 3 Sport 84 degree FOV (wide angle)</p>\n<p>Available with or without Two Port Data Hub</p>\n<p>Pick up your SmartyCam 3 SPORT and put it whatever you want: its compact design is perfectly shaped to take up as little space as possible into your racing cockpit. The new quarter turn locking system assures the best performance in terms of safety and closing speed. The new SmartyCam 3 SPORT camera has been designed for motorsports with a single purpose, Providing great videos including all the information you need. The SmartyCam 3 SPORT camera overlays all the data from both GPS and AiM data loggers connected to your ECU. The perfect camera designed for club racing or karting.</p>\n<p>Note: This camera is not designed to be used as a stand alone unit. Must be connected to a data logger with 12v power or 2 port data hub with external 12v power supply.<br>\nSmartyCam 3 Sport 84 degree FOV (wide angle)</p>\n<p>Global shutter CMOS sensor<br>\n1920&#215;1080 FHD 30 fps H.264<br>\nDisplay resolution 128&#215;125 pixel<br>\nLens angle: 84 degree<br>\nInternal, rechargeable lithium battery 350mAh<br>\n9-15 volt external power<br>\nSupport for up to 2TB micro SD card<br>\n-10C degree / +60C working temperature range<br>\nAuto power ON/OFF<br>\nAuto Start/Stop recording<br>\nCAN connection to all AiM systems<br>\nRaceStudio3 (RS3) Configuration</p>\n<p>High quality with small size video files &#8211; Generic HD cameras are focused on the highest pixel number. The result is that their video files are far too large, taking too much memory. SmartyCam 3 SPORT videos have the same quality as other FHD cameras but their files are smaller because the H.264 compression system parameters have been optimized to a perfect balance between video quality and file size.</p>\n<p>No &#8220;Wave Effect&#8221; with Global Shutter CMOS &#8211; Engine rumble causes vibrations, which are a big problem for video recording. You will never experience again that seasick &#8220;wave effect&#8221; you get watching videos recorded by a generic camera when the car rolls at 7,000 RPM. SmartyCam 3 SPORT cameras have been designed for that environment and for those vibrations. &#8220;Wave effect&#8221; is just a distant memory</p>\n<p>Designed for the extreme &#8211; An on-board camera designed for motorsport must guarantee great resistance against the extreme working conditions typical of racing and against the most adverse weather, such as: strong and prolonged vibrations, continuous rain and extremely high and low temperatures. IP65 waterproof and made in machinery molded aluminum, just like many competition car parts.</p>\n<p>Automatic Start &amp; Stop &#8211; You are on the starting grid, ready to sprint, your adrenaline reaching the climax: the last thing you can worry about is&#8230; switching on the camera. You have other things to worry about. SmartyCam 3 is aware of that. That is why it switches on/off automatically and starts/stops recording the same way.</p>\n<p>Full internal datalogger &#8211; All the data received from CAN and internal sensors are recorded in .mov files produced at the end of your test, your SD (or MSD) Card contains all the information you need for a deep data analysis. SD card sold separately.</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-11-as-10-49-59-am.webp",
+     "alt": "AIM Mychron SmartyCam 3 Sport Including data hub"
+    },
+    {
+     "src": "captura-de-tela-2025-12-11-as-10-50-20-am.webp",
+     "alt": "AIM Mychron SmartyCam 3 Sport Including data hub"
+    },
+    {
+     "src": "captura-de-tela-2025-12-11-as-10-50-14-am.webp",
+     "alt": "AIM Mychron SmartyCam 3 Sport Including data hub"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3179,
+   "slug": "otk-tony-kart-mxq-forged-magnesium-wheel-set-130mm-and-212mm-x-5",
+   "name": "OTK Tony Kart MXQ Forged Magnesium Wheel Set 130mm and 212mm x 5″",
+   "type": "simple",
+   "price": 854.43,
+   "regular": 854.43,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Metric 3/58mm Pattern, OTK MXQ Magnesium Wheel Set</p>\n<p>MXQ Wheel Set (2) 130mm and (2) 212mm, Sold as a Set Only</p>\n<p>Includes Beadlocks and Valve Stems</p>\n<p>130mm wide x 5&#8243; wide<br>\n212mm wide x 5&#8243; wide</p>\n<p>&#8211; Construction method and material are the same as the MXC and MXL models.<br>\n&#8211; An effort to reduce the air volume inside the tire.<br>\n&#8211; Radius and final edge has been modified making it similar to the MXC model.</p>",
+   "images": [
+    {
+     "src": "otk-tony-kart-mxq-forged-magnesium-wheel-set-130mm-and-212mm-x-5.webp",
+     "alt": "OTK Tony Kart MXQ Forged Magnesium Wheel Set 130mm and 212mm x 5"
+    },
+    {
+     "src": "otk-tony-kart-mxq-forged-magnesium-wheel-set-130mm-and-212mm-x-5.webp",
+     "alt": "OTK Tony Kart MXQ Forged Magnesium Wheel Set 130mm and 212mm x 5"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "MXQKIT"
+  },
+  {
+   "id": 2957,
+   "slug": "aim-sports-mychron6-2t-karting-dash-and-data-logger-2-temperature-sensors",
+   "name": "AIM SPORTS MYCHRON6 2T KARTING DASH AND DATA LOGGER – 2 TEMPERATURE SENSORS",
+   "type": "simple",
+   "price": 799.0,
+   "regular": 799.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Mychron 6 Kart Gauge with Two Temperature Sensors, RPM Lead, GPS, Lap Timer</p>\n<p>The Aim MyChron 6 is a high-performance kart data logger and lap timer, packed with advanced features designed to help racers monitor and improve their performance on the track.</p>\n<p>Includes integrated track database, over 4,000 worldwide.</p>\n<p><strong>Key Features &#8211; </strong></p>\n\n<ul>\n<li>Integrated 25Hz GPS</li>\n<li>Configurable display pages</li>\n<li>8 configurable RGB backlights</li>\n<li>2 configurable Alarm LEDs</li>\n<li>Integrated GPS</li>\n<li>5 RGB LEDs configure for each gear</li>\n<li>Waterproof</li>\n<li>150 x 79 x 36.6mm</li>\n<li>370 grams</li>\n<li>320 x 136 Pixel Screen Display</li>\n<li>8 Configurable RGB Colors</li>\n</ul>\n<p><strong>In the Box &#8211;</strong></p>\n\n<ul>\n<li>MyChron 6 2T Gauge</li>\n<li>Battery Charger with Cable</li>\n<li>RPM Cable</li>\n<li>Choice of 2 temperature sensors</li>\n<li>Aim Sticker</li>\n</ul>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-37-46-am.webp",
+     "alt": "AIM SPORTS MYCHRON6 2T KARTING DASH AND DATA LOGGER - 2 TEMPERATURE SENSORS"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-38-02-am.webp",
+     "alt": "AIM SPORTS MYCHRON6 2T KARTING DASH AND DATA LOGGER - 2 TEMPERATURE SENSORS"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-37-46-am.webp",
+     "alt": "AIM SPORTS MYCHRON6 2T KARTING DASH AND DATA LOGGER - 2 TEMPERATURE SENSORS"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2962,
+   "slug": "aim-mychron-6-1t-kart-gauge-single-temp-sensor",
+   "name": "AIM Mychron 6 1T Kart Gauge, Single Temp Sensor",
+   "type": "simple",
+   "price": 659.0,
+   "regular": 659.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Mychron 6 Kart Gauge with Single Temperature, RPM Lead, GPS, Lap Timer</p>\n<p>The Aim MyChron 6 is a high-performance kart data logger and lap timer, packed with advanced features designed to help racers monitor and improve their performance on the track.</p>\n<p>Includes integrated track database, over 4,000 worldwide</p>\n<p><strong>Key Features &#8211; </strong></p>\n\n<ul>\n<li>Integrated 25Hz GPS</li>\n<li>Configurable display pages</li>\n<li>8 configurable RGB backlights</li>\n<li>2 configurable Alarm LEDs</li>\n<li>Integrated GPS</li>\n<li>5 RGB LEDs configure for each gear</li>\n<li>Waterproof</li>\n<li>150 x 79 x 36.6mm</li>\n<li>370 grams</li>\n<li>320 x 136 Pixel Screen Display</li>\n<li>8 Configurable RGB Colors</li>\n</ul>\n<p><strong>In the Box &#8211;</strong></p>\n\n<ul>\n<li>MyChron 6 Gauge</li>\n<li>Battery Charger with Cable</li>\n<li>RPM Cable</li>\n<li>Choice of 1 temperature sensor</li>\n<li>Aim Sticker</li>\n</ul>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-40-17-am.webp",
+     "alt": "AIM Mychron 6 1T Kart Gauge, Single Temp Sensor"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-40-40-am.webp",
+     "alt": "AIM SPORTS MYCHRON6"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-40-28-am.webp",
+     "alt": "AIM SPORTS MYCHRON6 2T KARTING DASH AND DATA LOGGER - 2 TEMPERATURE SENSORS"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-40-17-am.webp",
+     "alt": "AIM Mychron 6 1T Kart Gauge, Single Temp Sensor"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2888,
+   "slug": "freeline-df-magnesium-wheel-set-birel-compkart-wheels",
+   "name": "FREELINE DF MAGNESIUM WHEEL SET “BIREL/COMPKART WHEELS”",
+   "type": "simple",
+   "price": 600.0,
+   "regular": 600.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Freeline “DF” Magnesium Wheel Set – Full Set of 4</p>\n<p>These are genuine <strong>Freeline manufactured &#8220;DF&#8221; line magnesium wheels</strong>, the same wheels that come standard on all Freeline-produced chassis, including:</p>\n<ul>\n<li>\n<p><strong>BirelART</strong></p>\n</li>\n<li>\n<p><strong>Ricciardo Kart</strong></p>\n</li>\n<li>\n<p><strong>CL Kart</strong></p>\n</li>\n<li>\n<p><strong>Kubica Kart</strong></p>\n</li>\n<li>\n<p><strong>Synergy Kart</strong></p>\n</li>\n<li>\n<p><strong>CompKart</strong></p>\n</li>\n</ul>\n<p>Built with high-quality magnesium for maximum performance, these wheels offer excellent heat dissipation, improved grip consistency, and reduced rotating mass — a must-have upgrade for competitive kart racing</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-20-41-pm.webp",
+     "alt": "FREELINE DF MAGNESIUM WHEEL SET \"BIREL/COMPKART WHEELS\""
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-20-41-pm.webp",
+     "alt": "FREELINE DF MAGNESIUM WHEEL SET \"BIREL/COMPKART WHEELS\""
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-20-48-pm.webp",
+     "alt": "FREELINE DF MAGNESIUM WHEEL SET \"BIREL/COMPKART WHEELS\""
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2909,
+   "slug": "gakit-otk-tony-kart-full-size-rudder-pedal-kit",
+   "name": "GAKIT OTK Tony Kart Full Size Rudder Pedal Kit",
+   "type": "simple",
+   "price": 500.0,
+   "regular": 500.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Complete Rudder Pedal Kit for Pedal Relocation on Full Sized OTK Karts</p>\n<p>Uses Aluminum Pedals that Come on Kart</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-31-32-pm-1.webp",
+     "alt": "GAKIT OTK Tony Kart Full Size Rudder Pedal Kit"
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-31-40-pm.webp",
+     "alt": "GAKIT OTK Tony Kart Full Size Rudder Pedal Kit"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3186,
+   "slug": "otk-mini-cadet-cik-fia-rudder-pedal-kit",
+   "name": "OTK Mini Cadet CIK-FIA Rudder Pedal Kit",
+   "type": "simple",
+   "price": 497.28,
+   "regular": 497.28,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Tony Kart New Style Mini Cadet CIK-FIA Rudder Pedal Kit</p>",
+   "images": [],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "0010.00FKIT"
+  },
+  {
+   "id": 3189,
+   "slug": "otk-tony-kart-full-size-rudder-pedal-kit",
+   "name": "OTK Tony Kart Full Size Rudder Pedal Kit",
+   "type": "simple",
+   "price": 497.0,
+   "regular": 497.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Complete Rudder Pedal Kit for Pedal Relocation on Full Sized OTK Karts</p>\n<p>Uses Aluminum Pedals that Come on Kart</p>",
+   "images": [
+    {
+     "src": "otk-tony-kart-full-size-rudder-pedal-kit.webp",
+     "alt": "OTK Tony Kart Full Size Rudder Pedal Kit"
+    },
+    {
+     "src": "otk-tony-kart-full-size-rudder-pedal-kit.webp",
+     "alt": "OTK Tony Kart Full Size Rudder Pedal Kit"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3184,
+   "slug": "otk-tony-kart-mxj-magnesium-wheel-set-130mm-and-210mm",
+   "name": "OTK Tony Kart MXJ Magnesium Wheel Set 130mm and 210mm",
+   "type": "simple",
+   "price": 495.57,
+   "regular": 495.57,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Metric 3/58mm Pattern</p>\n<p>MXJ Wheel Set (2) 130mm and (2) 210mm, Sold as a Set Only</p>\n<p>Includes Beadlocks and Valve Stems</p>\n<p>Includes &#8211;<br>\n2 &#8211; 0071.G0D MXJ 130mm Width Wheel<br>\n2 &#8211; 0070.C0D MXJ 210mm Width Wheel</p>",
+   "images": [
+    {
+     "src": "otk-tony-kart-mxj-magnesium-wheel-set-130mm-and-210mm.webp",
+     "alt": "OTK Tony Kart MXJ Magnesium Wheel Set 130mm and 210mm"
+    },
+    {
+     "src": "otk-tony-kart-mxj-magnesium-wheel-set-130mm-and-210mm.webp",
+     "alt": "OTK Tony Kart MXJ Magnesium Wheel Set 130mm and 210mm"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "MXJKIT"
+  },
+  {
+   "id": 3242,
+   "slug": "brake-caliper-for-mini-ap-race-06",
+   "name": "BRAKE CALIPER FOR MINI AP-RACE 06",
+   "type": "simple",
+   "price": 443.67,
+   "regular": 443.67,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Brake caliper for mini cadet chassis, or front left KZ shifter Invader Chassis</p>",
+   "images": [
+    {
+     "src": "brake-caliper-for-mini-ap-race-06.webp",
+     "alt": "BRAKE CALIPER FOR MINI AP-RACE 06"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30PZIFAP06L"
+  },
+  {
+   "id": 2896,
+   "slug": "used-freeline-df-magnesium-wheel-set-birel-compkart-wheels",
+   "name": "USED FREELINE DF MAGNESIUM WHEEL SET “BIREL/COMPKART WHEELS”",
+   "type": "simple",
+   "price": 350.0,
+   "regular": 350.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Freeline “DF” Magnesium Wheel Set – Full Set of 4</p>\n\n<p>These are genuine <strong>Freeline manufactured &#8220;DF&#8221; line magnesium wheels</strong>, the same wheels that come standard on all Freeline-produced chassis, including:</p>\n<ul>\n<li>\n<p><strong>BirelART</strong></p>\n</li>\n<li>\n<p><strong>Ricciardo Kart</strong></p>\n</li>\n<li>\n<p><strong>CL Kart</strong></p>\n</li>\n<li>\n<p><strong>Kubica Kart</strong></p>\n</li>\n<li>\n<p><strong>Synergy Kart</strong></p>\n</li>\n<li>\n<p><strong>CompKart</strong></p>\n</li>\n</ul>\n<p>Built with high-quality magnesium for maximum performance, these wheels offer excellent heat dissipation, improved grip consistency, and reduced rotating mass — a must-have upgrade for competitive kart racing</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-23-54-pm.webp",
+     "alt": "USED FREELINE DF MAGNESIUM WHEEL SET \"BIREL/COMPKART WHEELS\""
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-23-54-pm.webp",
+     "alt": "USED FREELINE DF MAGNESIUM WHEEL SET \"BIREL/COMPKART WHEELS\""
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-24-01-pm.webp",
+     "alt": "USED FREELINE DF MAGNESIUM WHEEL SET \"BIREL/COMPKART WHEELS\""
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3201,
+   "slug": "eurostar-wheels-set-2-pc-front-132mm-groups-12-wheelbase-58-mg-hq-f",
+   "name": "Eurostar Wheels Set (2 PC) Front 132mm Groups 1&2 Wheelbase 58 MG HQ F",
+   "type": "simple",
+   "price": 335.89,
+   "regular": 335.89,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>EUROSTAR WHEELS SET (2 PC) FRONT 132MM GROUPS 1&amp;2 WHEELBASE 58 MG HQ F</p>",
+   "images": [
+    {
+     "src": "eurostar-wheels-set-2-pc-front-132mm-groups-12-wheelbase-58-mg-hq-f.webp",
+     "alt": "EUROSTAR WHEELS SET (2 PC) FRONT 132MM GROUPS 1&2 WHEELBASE 58 MG HQ F"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30WHFM008"
+  },
+  {
+   "id": 3199,
+   "slug": "parolin-mini-pedal-kit",
+   "name": "Parolin Mini Pedal Kit",
+   "type": "simple",
+   "price": 322.15,
+   "regular": 322.15,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>ONE-PIECE MINI PEDAL ADJUSTMENT KIT BLACK &#8211; COMPLETE</p>",
+   "images": [
+    {
+     "src": "mini-pedal-kit.webp",
+     "alt": "MINI PEDAL KIT"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30PDRMF2"
+  },
+  {
+   "id": 3246,
+   "slug": "jecko-seat-silver-standard",
+   "name": "Jecko Seat Silver Standard",
+   "type": "variable",
+   "price": 300.27,
+   "regular": 300.27,
+   "on_sale": false,
+   "price_min": 300.27,
+   "price_max": 333.9,
+   "short": "",
+   "description": "",
+   "images": [
+    {
+     "src": "jecko-seat-silver-standard.webp",
+     "alt": "Jecko Seat Silver Standard"
+    },
+    {
+     "src": "jecko-seat-silver-standard2.webp",
+     "alt": "Jecko Seat Silver Standard"
+    },
+    {
+     "src": "jecko-seat-silver-standard1.webp",
+     "alt": "Jecko Seat Silver Standard"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "jecko"
+   ],
+   "attributes": [
+    {
+     "name": "Size",
+     "terms": [
+      "A0",
+      "A1",
+      "B1",
+      "B3",
+      "BH3",
+      "BH5",
+      "C5",
+      "C7",
+      "D5",
+      "D7"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 3247,
+     "attrs": [
+      "A0"
+     ],
+     "price": 300.27,
+     "regular": 300.27,
+     "in_stock": true
+    },
+    {
+     "id": 3248,
+     "attrs": [
+      "A1"
+     ],
+     "price": 300.27,
+     "regular": 300.27,
+     "in_stock": true
+    },
+    {
+     "id": 3249,
+     "attrs": [
+      "B1"
+     ],
+     "price": 311.83,
+     "regular": 311.83,
+     "in_stock": true
+    },
+    {
+     "id": 3250,
+     "attrs": [
+      "B3"
+     ],
+     "price": 311.83,
+     "regular": 311.83,
+     "in_stock": true
+    },
+    {
+     "id": 3251,
+     "attrs": [
+      "BH3"
+     ],
+     "price": 300.27,
+     "regular": 300.27,
+     "in_stock": true
+    },
+    {
+     "id": 3252,
+     "attrs": [
+      "BH5"
+     ],
+     "price": 311.83,
+     "regular": 311.83,
+     "in_stock": true
+    },
+    {
+     "id": 3253,
+     "attrs": [
+      "C5"
+     ],
+     "price": 323.37,
+     "regular": 323.37,
+     "in_stock": true
+    },
+    {
+     "id": 3254,
+     "attrs": [
+      "C7"
+     ],
+     "price": 323.37,
+     "regular": 323.37,
+     "in_stock": true
+    },
+    {
+     "id": 3255,
+     "attrs": [
+      "D5"
+     ],
+     "price": 333.9,
+     "regular": 333.9,
+     "in_stock": true
+    },
+    {
+     "id": 3256,
+     "attrs": [
+      "D7"
+     ],
+     "price": 333.9,
+     "regular": 333.9,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "25J-BH5-S"
+  },
+  {
+   "id": 2906,
+   "slug": "odenthal-long-dual-camera-go-pro-mount",
+   "name": "Odenthal Long Dual Camera Go-Pro Mount",
+   "type": "simple",
+   "price": 260.0,
+   "regular": 260.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The EZGP mount is one of the most intricate products Odenthal has ever come out with. There is a great deal of machining that goes into these pieces. The camera mounts are precisely machined from 6061-T6 Aluminum which is aerospace grade material. Odenthal machines these to very tight tolerances to ensure every assembly fits perfect and won&#8217;t fail. They also use the best hardware to prevent rust or anything that could compromise the ability of the user to use the piece to its full potential.</p>\n<p>The Go Pro Mount mounts to the seat strut and is available in four versions. The &#8220;short&#8221; 7&#8243; bar version is for Air Cooled Karts and is available for a single or dual camera. The &#8220;long&#8221; version is designed for karts with radiators and comes with two 7&#8243; bars and is available for single or dual camera</p>\n<p>Odenthal Long Dual Camera Go-Pro Mount &#8211; OD-EZGPL2-20</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-29-31-pm.webp",
+     "alt": "Odenthal Long Dual Camera Go-Pro Mount"
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-29-31-pm.webp",
+     "alt": "Odenthal Long Dual Camera Go-Pro Mount"
+    },
+    {
+     "src": "captura-de-tela-2025-12-12-as-3-29-42-pm.webp",
+     "alt": "Odenthal Long Dual Camera Go-Pro Mount"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2866,
+   "slug": "odenthal-long-single-camera-go-pro-mount",
+   "name": "Odenthal Long Single Camera Go-Pro Mount",
+   "type": "simple",
+   "price": 225.0,
+   "regular": 225.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The EZGP mount is one of the most intricate products Odenthal has ever come out with. There is a great deal of machining that goes into these pieces. The camera mounts are precisely machined from 6061-T6 Aluminum which is aerospace grade material. Odenthal machines these to very tight tolerances to ensure every assembly fits perfect and won&#8217;t fail. They also use the best hardware to prevent rust or anything that could compromise the ability of the user to use the piece to its full potential.</p>\n<p>The Go Pro Mount mounts to the seat strut and is available in four versions. The &#8220;short&#8221; 7&#8243; bar version is for Air Cooled Karts and is available for a single or dual camera. The &#8220;long&#8221; version is designed for karts with radiators and comes with two 7&#8243; bars and is available for single or dual camera</p>\n<p>Odenthal Long Single Camera Go-Pro Mount &#8211; OD-EZGPL1-20</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-11-as-4-53-57-pm.webp",
+     "alt": "Odenthal Long Single Camera Go-Pro Mount"
+    },
+    {
+     "src": "captura-de-tela-2025-12-11-as-4-53-46-pm.webp",
+     "alt": "Odenthal Long Single Camera Go-Pro Mount"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2862,
+   "slug": "odenthal-short-dual-camera-go-pro-mount",
+   "name": "Odenthal Short Dual Camera Go-Pro Mount",
+   "type": "simple",
+   "price": 225.0,
+   "regular": 225.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The EZGP mount is one of the most intricate products Odenthal has ever come out with. There is a great deal of machining that goes into these pieces. The camera mounts are precisely machined from 6061-T6 Aluminum which is aerospace grade material.</p>\n<p>Odenthal machines these to very tight tolerances to ensure every assembly fits perfect and won&#8217;t fail. They also use the best hardware to prevent rust or anything that could compromise the ability of the user to use the piece to its full potential.</p>\n<p>The Go Pro Mount mounts to the seat strut and is available in four versions. The &#8220;short&#8221; 7&#8243; bar version is for Air Cooled Karts and is available for a single or dual camera. The &#8220;long&#8221; version is designed for karts with radiators and comes with two 7&#8243; bars and is available for single or dual cameras.</p>\n<p>OD-EZGPS2-20</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-11-as-1-13-17-pm.webp",
+     "alt": "Odenthal Short Dual Camera Go-Pro Mount"
+    },
+    {
+     "src": "captura-de-tela-2025-12-11-as-1-13-17-pm.webp",
+     "alt": "Odenthal Short Dual Camera Go-Pro Mount"
+    },
+    {
+     "src": "captura-de-tela-2025-12-11-as-1-13-28-pm.webp",
+     "alt": "Odenthal Long Single Camera Go-Pro Mount"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3203,
+   "slug": "parolin-steering-wheel-320mm",
+   "name": "PAROLIN STEERING WHEEL 320MM",
+   "type": "simple",
+   "price": 220.5,
+   "regular": 220.5,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>PAROLIN STEERING WHEEL 320MM CADET CHASSIS</p>",
+   "images": [
+    {
+     "src": "parolin-steering-wheel-320mm.webp",
+     "alt": "PAROLIN STEERING WHEEL 320MM"
+    },
+    {
+     "src": "parolin-steering-wheel-320mm5.webp",
+     "alt": "PAROLIN STEERING WHEEL 320MM5"
+    },
+    {
+     "src": "parolin-steering-wheel-320mm4.webp",
+     "alt": "PAROLIN STEERING WHEEL 320MM4"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "20VMNGP"
+  },
+  {
+   "id": 3211,
+   "slug": "rear-axle-30mm-medium-dot2",
+   "name": "REAR AXLE 30MM MEDIUM (DOT2)",
+   "type": "simple",
+   "price": 219.34,
+   "regular": 219.34,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "",
+   "images": [
+    {
+     "src": "rear-axle-30mm-medium-dot2.webp",
+     "alt": "REAR AXLE 30MM MEDIUM (DOT2)"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "10AX30MMB"
+  },
+  {
+   "id": 3209,
+   "slug": "rear-axle-30mm-hard-dot4",
+   "name": "REAR AXLE 30MM HARD (DOT4)",
+   "type": "simple",
+   "price": 219.34,
+   "regular": 219.34,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>REAR AXLE 30X5X960MM HARD BURNISHED H</p>",
+   "images": [
+    {
+     "src": "rear-axle-30x5x960mm-hard-burnished-h.webp",
+     "alt": "REAR AXLE 30X5X960MM HARD BURNISHED H"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "10AX30MHB"
+  },
+  {
+   "id": 3244,
+   "slug": "front-panel-mini-black-2025",
+   "name": "FRONT PANEL MINI BLACK 2025",
+   "type": "simple",
+   "price": 169.57,
+   "regular": 169.57,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>FRONT PANEL MINI BLACK COMPLETE Components of the item: BLACK NAKED FRONT PANEL EUROSTAR MINI LOWER PANEL PART EUROSTAR MINI M4X18 PANEL FIXING BUSHING TSEI BOLT M4X12 BOLT TSEI M5X16 &#8211; WHITE GALVANIZED RUBBER WASHER M6 To be used with 20SQEL11/C + 20SQEL9/C</p>",
+   "images": [
+    {
+     "src": "front-panel-mini-black-2025.webp",
+     "alt": "FRONT PANEL MINI BLACK 2025"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "20QEMDE1/B"
+  },
+  {
+   "id": 3213,
+   "slug": "rear-bumper-spolier-eurostar-mini-wings-csai-2014-20-black",
+   "name": "Rear Bumper Spolier Eurostar Mini Wings CSAI 2014-20 – BLACK",
+   "type": "simple",
+   "price": 155.82,
+   "regular": 155.82,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "",
+   "images": [
+    {
+     "src": "rear-bumper-spoiler-eurostar-mini-wings-csai-2014-20-black.webp",
+     "alt": "REAR BUMPER SPOILER EUROSTAR MINI WINGS CSAI 2014-20 - BLACK"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "20SPPM/B"
+  },
+  {
+   "id": 3227,
+   "slug": "front-hub-17mm-long-rain-l93mm",
+   "name": "FRONT HUB 17MM LONG RAIN L=93MM",
+   "type": "simple",
+   "price": 148.99,
+   "regular": 148.99,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>FRONT HUB 17MM FOR STUB AXLES INT58MM L=93MM -MAGNESIUM</p>",
+   "images": [
+    {
+     "src": "front-hub-17mm-for-stub-axles-int58mm-l93mm-magnesium.webp",
+     "alt": "FRONT HUB 17MM FOR STUB AXLES INT58MM L=93MM -MAGNESIUM"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30MZF17M93"
+  },
+  {
+   "id": 3218,
+   "slug": "spindle-stub-axle-cadet-17mm-left",
+   "name": "SPINDLE STUB AXLE CADET 17MM LEFT",
+   "type": "simple",
+   "price": 144.27,
+   "regular": 144.27,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>WELDED STUB AXLE MINI WITH SHORT PIN LH, 38MM,PIN 17/30, 10.5&amp;deg; 3 HOLES COMPLETE BEARING 10mm</p>",
+   "images": [
+    {
+     "src": "spindle-stub-axle-cadet-17mm-left.webp",
+     "alt": "SPINDLE STUB AXLE CADET 17MM LEFT"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30FSSL6/C"
+  },
+  {
+   "id": 3215,
+   "slug": "spindle-stub-axle-cadet-17mm-right",
+   "name": "SPINDLE STUB AXLE CADET 17MM RIGHT",
+   "type": "simple",
+   "price": 144.27,
+   "regular": 144.27,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>WELDED STUB AXLE MINI WITH SHORT PIN RH, 38MM,PIN 17/30 , 10.5° 3 HOLES BEARING 10mm</p>",
+   "images": [
+    {
+     "src": "spindle-stub-axle-cadet-17mm-right.webp",
+     "alt": "SPINDLE STUB AXLE CADET 17MM RIGHT"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30FSSR6/C"
+  },
+  {
+   "id": 3233,
+   "slug": "steering-column-mini-420mm-2025",
+   "name": "STEERING COLUMN MINI 420MM – 2025",
+   "type": "simple",
+   "price": 110.77,
+   "regular": 110.77,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>STEERING COLUMN 420MM WITH 2 BRACKETS &#8211; RC 2025 CHROMED</p>",
+   "images": [
+    {
+     "src": "steering-column-420mm-with-2-brackets-rc-2025-chromed.webp",
+     "alt": "STEERING COLUMN 420MM WITH 2 BRACKETS - RC 2025 CHROMED"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "10PS420R1/C"
+  },
+  {
+   "id": 3229,
+   "slug": "sprocket-carrier-30mm",
+   "name": "SPROCKET CARRIER 30MM",
+   "type": "simple",
+   "price": 110.25,
+   "regular": 110.25,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "",
+   "images": [
+    {
+     "src": "sprocket-carrier-30mm.webp",
+     "alt": "SPROCKET CARRIER 30MM"
+    },
+    {
+     "src": "sprocket-carrier-30mm3.webp",
+     "alt": "SPROCKET CARRIER 30MM3"
+    },
+    {
+     "src": "sprocket-carrier-30mm2.webp",
+     "alt": "SPROCKET CARRIER 30MM2"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30PC30/B"
+  },
+  {
+   "id": 3235,
+   "slug": "fuel-tank-40-l-mini",
+   "name": "FUEL TANK 4,0 L MINI",
+   "type": "simple",
+   "price": 103.84,
+   "regular": 103.84,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>EUROSTAR REMOVABLE FUEL TANK 4,0 L MINI</p>",
+   "images": [
+    {
+     "src": "fuel-tank-40-l-mini.webp",
+     "alt": "FUEL TANK 4,0 L MINI"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "30XE4000"
+  },
+  {
+   "id": 2843,
+   "slug": "mychron-4-5-6-two-port-datahub",
+   "name": "Mychron 4, 5, 6 – Two Port Datahub",
+   "type": "simple",
+   "price": 91.4,
+   "regular": 91.4,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>The <strong>Two Port Data Hub</strong> is the perfect accessory for MyChron 4, 5, and 6 systems, allowing you to expand your data collection with ease. Designed to connect multiple sensors or accessories to your MyChron unit, it ensures efficient and organized data flow without compromising accuracy.</p>\n<p><strong>Key Features:</strong></p>\n<ul>\n<li>\n<p>Compatible with <strong>MyChron 4, 5, and 6</strong></p>\n</li>\n<li>\n<p>Two-port design for connecting multiple sensors (e.g., GPS, Lambda, temperature)</p>\n</li>\n<li>\n<p>Rugged and compact build for easy integration</p>\n</li>\n<li>\n<p>Plug-and-play functionality — no setup required</p>\n</li>\n<li>\n<p>Durable connectors ensure reliable performance on and off the track</p>\n</li>\n</ul>\n<p><strong>Ideal for:</strong> Drivers and teams who want to monitor multiple data sources and streamline their kart’s telemetry setup.</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-11-as-12-42-35-pm.webp",
+     "alt": "Mychron 4, 5, 6 - Two Port Datahub"
+    },
+    {
+     "src": "s-l1600.webp",
+     "alt": "AIM Mychron SmartyCam 3 Sport Including data hub"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3238,
+   "slug": "fuel-tank-3-5-lt-for-minikart",
+   "name": "FUEL TANK 3.5 LT FOR MINIKART",
+   "type": "simple",
+   "price": 88.2,
+   "regular": 88.2,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "",
+   "images": [
+    {
+     "src": "fuel-tank-3-5-lt-for-minikart.webp",
+     "alt": "FUEL TANK 3.5 LT FOR MINIKART"
+    },
+    {
+     "src": "fuel-tank-3-5-lt-for-minikart2.webp",
+     "alt": "FUEL TANK 3.5 LT FOR MINIKART2"
+    },
+    {
+     "src": "fuel-tank-3-5-lt-for-minikart1.webp",
+     "alt": "FUEL TANK 3.5 LT FOR MINIKART1"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [
+    "parolin"
+   ],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "20XBMKE"
+  },
+  {
+   "id": 2977,
+   "slug": "mychron-10mm-water-temp-black-sensor-only",
+   "name": "Mychron 10mm Water Temp BLACK Sensor Only",
+   "type": "simple",
+   "price": 82.5,
+   "regular": 82.5,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Mychron 3, 4, 5, 6, Black Patch Cable Sold Separate</p>\n<p>10mm Water Temperature Sensor Only</p>\n<p>Threads into some engine heads (Rotax, IAME X30, Leopard and others) or can be used with Mychron</a> or Wild Kart</a> Inline Water Line Coupler</p>\n<p>Works with Mychron 3, Mychron 4, Mychron 5, Mychron 6 with proper patch cable</p>\n<p>M3, M4, M5, M6</p>\n<p>Thermo Resistor</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-52-46-am.webp",
+     "alt": "Mychron 10mm Water Temp BLACK Sensor Only"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-52-46-am.webp",
+     "alt": "Mychron 10mm Water Temp BLACK Sensor Only"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2974,
+   "slug": "mychron-egt-exhaust-gas-sensor-only-big-nut-style-with-open-tip-90-degree",
+   "name": "Mychron EGT Exhaust Gas Sensor Only, Big Nut Style with OPEN Tip, 90 Degree",
+   "type": "simple",
+   "price": 82.5,
+   "regular": 82.5,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>90 Degree Bend Exhaust Gas Sensor Probe, OPEN Tip Style Probe</p>\n<p>IAME X30, IAME Swift, IAME KA100, Vortex ROK VLR and More Engine Pipe</p>\n<p>Mychron EGT Exhaust Gas Sensor Probe</p>\n<p>Big Nut Style EGT Sensor</p>\n<p>Fits Mychron 4, Mychron 5, Mychron 6 Gauges with proper Yellow Patch Cable</p>\n<p>Thermocouple</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-50-20-am.webp",
+     "alt": "Mychron EGT Exhaust Gas Sensor Only, Big Nut Style with OPEN Tip, 90 Degree"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-50-32-am.webp",
+     "alt": "Mychron"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-50-20-am.webp",
+     "alt": "Mychron EGT Exhaust Gas Sensor Only, Big Nut Style with OPEN Tip, 90 Degree"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2972,
+   "slug": "mychron-cht-head-temperature-sensor-only-14mm",
+   "name": "Mychron CHT Head Temperature Sensor Only, 14mm",
+   "type": "simple",
+   "price": 82.5,
+   "regular": 82.5,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Cylinder Head Temperature sensor only, Patach Cable Sold Separately&#8221;</p>\n<p>For 14mm Spark Plug size</p>\n<p>Mychron Cylinder Head Temperature Sensor Fits Mychron 2, 3, 4, 5, 6 with use of proper patch cable</p>\n<p>M3, M4, M5, M6</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-48-18-am.webp",
+     "alt": "Mychron CHT Head Temperature Sensor Only, 14mm"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-48-18-am.webp",
+     "alt": "Mychron CHT Head Temperature Sensor Only, 14mm"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3195,
+   "slug": "tony-kart-otk-steering-column-for-mini-nordix-rookie",
+   "name": "Tony Kart OTK Steering Column for Mini, Nordix, Rookie",
+   "type": "simple",
+   "price": 82.05,
+   "regular": 82.05,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>OTK Cadet Size Kart Steering Shaft</p>\n<p>435mm Long Shaft, 20mm OD</p>",
+   "images": [
+    {
+     "src": "tony-kart-otk-steering-column-for-mini-nordix-rookie-1.webp",
+     "alt": "Tony Kart OTK Steering Column for Mini, Nordix, Rookie"
+    },
+    {
+     "src": "tony-kart-otk-steering-column-for-mini-nordix-rookie2.webp",
+     "alt": "Tony Kart OTK Steering Column for Mini, Nordix, Rookie2"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "0005.C0UK8"
+  },
+  {
+   "id": 3192,
+   "slug": "tony-kart-otk-steering-shaft-100cc-125cc-470mm-long-standard-ackerman-arm-stock-shaft",
+   "name": "Tony Kart OTK Steering Shaft 100cc, 125cc, 470mm Long, Standard Ackerman Arm, Stock Shaft",
+   "type": "simple",
+   "price": 82.05,
+   "regular": 82.05,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>470mm Long, 2mm Thick, 20mm OD</p>\n<p>OEM Stock Steering Shaft for Full Sized OTK Karts</p>",
+   "images": [
+    {
+     "src": "tony-kart-otk-steering-shaft-100cc-125cc-470mm-long-standard-ackerman-arm-stock-shaft.webp",
+     "alt": "Tony Kart OTK Steering Shaft 100cc, 125cc, 470mm Long, Standard Ackerman Arm, Stock Shaft"
+    },
+    {
+     "src": "tony-kart-otk-steering-shaft-100cc-125cc-470mm-long-standard-ackerman-arm-stock-shaft1.webp",
+     "alt": "Tony Kart OTK Steering Shaft 100cc, 125cc, 470mm Long, Standard Ackerman Arm, Stock Shaft1"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "0005.BA8"
+  },
+  {
+   "id": 2979,
+   "slug": "odenthal-gopro-aim-smartycam-camera-antivibration-isolator-mount",
+   "name": "Odenthal GoPro & AIM SmartyCam Camera Antivibration Isolator Mount",
+   "type": "simple",
+   "price": 75.0,
+   "regular": 75.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Odenthal Racing Products Billet Aluminum Go Pro Camera Mount Anti-Vibration Mount is Designed to Help Eliminate the Vibration from the Kart to the Camera.</p>\n<p>The new Camera Mount Isolator is designed to help dampen the vibration to the camera itself and work in conjunction with an aluminum camera housing. The Camera Mount Isolator has been tested through official Odenthal partner teams and drivers. It has helped solve the issue of cameras turning off due to excessive vibration. The Camera Mount Isolator is lightweight and machined from 6061 aluminum.</p>\n<p>*Isolator rubbers might be blue or red</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-56-00-am.webp",
+     "alt": "Odenthal GoPro & AIM SmartyCam Camera Antivibration Isolator Mount"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-54-59-am.webp",
+     "alt": "Odenthal GoPro & AIM SmartyCam Camera Antivibration"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-56-00-am.webp",
+     "alt": "Odenthal GoPro & AIM SmartyCam Camera Antivibration Isolator Mount"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2969,
+   "slug": "mychron-4-5-6-2t-patch-cable-one-black-one-yellow-end",
+   "name": "Mychron 4, 5, 6 2T Patch Cable, One Black, One Yellow End",
+   "type": "simple",
+   "price": 66.0,
+   "regular": 66.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Includes a black round plastic patch cable end and yellow box patch cable end</p>\n<p>*Patch Cable only work on Mychron 4, Mychron 5, Mychron 6 2T Gauges</p>\n<p>Patch cable from back of Gauge to sensors, 7 Pin Cable to Back of Gauge</p>\n<p>1 Thermocouple, 1 Thermoresistor Plug</p>\n<p>Mychron 4<br>\nMychron 5<br>\nMychron 6</p>\n<p>M4, M5, M6</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-46-32-am.webp",
+     "alt": "Mychron 4, 5, 6 2T Patch Cable, One Black, One Yellow End"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-46-38-am.webp",
+     "alt": "Mychron"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-46-32-am.webp",
+     "alt": "Mychron 4, 5, 6 2T Patch Cable, One Black, One Yellow End"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 2966,
+   "slug": "mychron-4-5-6-2t-double-yellow-patch-cable",
+   "name": "Mychron 4, 5, 6 2T Double Yellow Patch Cable",
+   "type": "simple",
+   "price": 66.0,
+   "regular": 66.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Two yellow patch cable ends for 2T gauge, 7 Pins for Back of Gauge</p>\n<p>*Patch Cable only work on Mychron 4, Mychron 5, Mychron 6 2T Gauges (Two Temp Gauges)</p>\n<p>Patch Cable from back of Gauge to Sensors, Thermocouple</p>\n<p>M4, M5</p>",
+   "images": [
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-44-13-am.webp",
+     "alt": "Mychron 4, 5, 6 2T Double Yellow Patch Cable"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-44-20-am.webp",
+     "alt": "Mychron"
+    },
+    {
+     "src": "captura-de-tela-2025-12-13-as-9-44-13-am.webp",
+     "alt": "Mychron 4, 5, 6 2T Double Yellow Patch Cable"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "parts",
+     "name": "Parts"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": null
+  },
+  {
+   "id": 3168,
+   "slug": "mg-sh2-red-tire",
+   "name": "MG SH2 Red Tire",
+   "type": "variable",
+   "price": 0.0,
+   "regular": 0.0,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "<p><img src=\"{IMG:mg-sh2-red-tire-2.webp}\" alt=\"\" loading=\"lazy\"></p>",
+   "description": "The SH2 is the perfect product for drivers and competitions that seek for higher durability while a good performance is demanded. It can be used in the most varied dry track conditions, including short and long term races. This tire is under CIK/FIA homologation process.\n\n<strong>BENEFITS</strong>\n<ul>\n<li>GREAT PERFORMANCE</li>\n<li>GREAT DURABILITY</li>\n</ul>\n\n<strong>RECOMMENDED FOR</strong>\n<ul>\n<li>ALL COMPETITION LEVELS</li>\n</ul>",
+   "images": [
+    {
+     "src": "mg-sh2-red-tire.webp",
+     "alt": "MG SH2 Red Tire"
+    },
+    {
+     "src": "mg-sh2-red-tire.webp",
+     "alt": "MG SH2 Red Tire"
+    },
+    {
+     "src": "mg-sh2-red-tire-4.webp",
+     "alt": "MG SH2 Red Tire 4"
+    },
+    {
+     "src": "mg-sh2-red-tire-2.webp",
+     "alt": "MG SH2 Red Tire 2"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "tires",
+     "name": "Tires"
+    }
+   ],
+   "tags": [],
+   "attributes": [
+    {
+     "name": "Size",
+     "terms": [
+      "FRONT 10X4.6X5",
+      "REAR 11 x 6.00 x 5",
+      "REAR 11 x 7.10 x 5"
+     ]
+    }
+   ],
+   "variations": [
+    {
+     "id": 3175,
+     "attrs": [
+      "front-10x4-6x5"
+     ],
+     "price": 0.0,
+     "regular": 0.0,
+     "in_stock": true
+    },
+    {
+     "id": 3176,
+     "attrs": [
+      "rear-11-x-6-00-x-5"
+     ],
+     "price": 0.0,
+     "regular": 0.0,
+     "in_stock": true
+    },
+    {
+     "id": 3177,
+     "attrs": [
+      "rear-11-x-7-10-x-5"
+     ],
+     "price": 0.0,
+     "regular": 0.0,
+     "in_stock": true
+    }
+   ],
+   "in_stock": true,
+   "sku": "8SH2F"
+  }
+ ]
+}

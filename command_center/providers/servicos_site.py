@@ -49,7 +49,8 @@ def lista(con, ativos=False):
 
 def para_cliente(con):
     """O que a área do cliente mostra: nome, descrição e preço. Nada do QuickBooks."""
-    return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"]} for s in lista(con, True)]
+    return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
+             "deposit": s["deposit"] or 0} for s in lista(con, True)]
 
 
 def itens_qbo(con):

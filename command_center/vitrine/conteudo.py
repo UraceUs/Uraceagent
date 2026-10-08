@@ -26,17 +26,17 @@ SITE = {
     "horario": "Open every day, 8 AM – 8 PM",
 }
 
-# Páginas que ainda não estão no site novo levam ao urace.us de hoje (etapas 2 a 4 do #148).
+# O site inteiro mora aqui (#164): nenhum link do menu volta ao WordPress.
 ANTIGO = "https://urace.us"
 MENU = (
     ("Arrive and Drive", "/services/arrive-and-drive/"),
-    ("Academy", ANTIGO + "/kart-training-packages/"),
-    ("Events", ANTIGO + "/corporate-events/"),
-    ("Pro Team", ANTIGO + "/professional-kart-team-racing-team/"),
-    ("Store", ANTIGO + "/store/"),
-    ("Blog", ANTIGO + "/blog/"),
-    ("About", ANTIGO + "/about/"),
-    ("Contact", ANTIGO + "/contact/"),
+    ("Services", "/services/"),
+    ("Academy", "/academy/"),
+    ("Pro Team", "/pro-team/"),
+    ("Store", "/store/"),
+    ("Blog", "/blog/"),
+    ("About", "/about/"),
+    ("Contact", "/contact/"),
 )
 
 # ------------------------------------------------------------------ home (urace.us/)
@@ -67,11 +67,11 @@ HOME = {
                                                  "in one season. Our professional driver development program includes "
                                                  "data analysis, on-board video study and explanation of the theories "
                                                  "involved in all the driving aspects we discuss."),
-         "link": ANTIGO + "/professional-kart-team-racing-team/"},
+         "link": "/pro-team/"},
         {"nome": "Group events", "texto": ("Bring your crew and get ready for an unforgettable adventure! Our high-speed "
                                             "racing kart experience is perfect for corporate events, birthday parties, "
                                             "and group outings."),
-         "link": ANTIGO + "/corporate-events/"},
+         "link": "/services/corporate-events/"},
     ),
     "depoimentos": (
         ("Aaron Benoit", "SKUSA X30",

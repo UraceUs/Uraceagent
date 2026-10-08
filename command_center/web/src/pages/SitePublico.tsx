@@ -19,7 +19,7 @@ interface Per { open: boolean; spots: number; reason: string | null; capacity: n
 interface Dia { date: string; weekday: number; any_open: boolean; periods: { manha: Per; tarde: Per; dia: { open: boolean } } }
 interface Regra { weekday: number; dia: string; period: 'manha' | 'tarde'; open: boolean; capacity: number }
 interface Bloqueio { id: number; date_from: string; date_to: string; period: string; reason: string | null; created_at: string; weekday: number | null }
-interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number }
+interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number; auto_sell?: number }
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
   invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null }
@@ -27,6 +27,7 @@ interface ItemQbo { id: string; name: string; full_name: string | null; price: n
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
   accepted_at?: string | null; invoice_doc?: string | null; invoice_link?: string | null; charge_error?: string | null; waiver_error?: string | null; reminder_error?: string | null
+  origin?: string | null; utm?: string | null; card_note?: string | null; paid_at?: string | null
   cobranca?: { aceita: boolean; pagamento: 'contrato' | 'pago' | 'enviada' | 'erro' | 'pendente'; waiver: 'ok' | 'enviada' | 'erro' | 'pendente'; pronta: boolean } | null
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null
   asana_gid: string | null; asana_error: string | null }
@@ -90,6 +91,9 @@ function Agendamentos() {
               <Chip tone={a.cobranca.waiver === 'ok' ? 'ok' : a.cobranca.waiver === 'erro' ? 'crit' : 'warn'}>
                 {a.cobranca.waiver === 'ok' ? 'waiver em dia' : a.cobranca.waiver === 'enviada' ? 'waiver enviada' : a.cobranca.waiver === 'erro' ? 'waiver não saiu' : 'waiver: assina na área do cliente'}</Chip></div>}
             {[a.charge_error, a.waiver_error, a.reminder_error].filter(Boolean).map(e => <div key={e} className="small" style={{ color: 'var(--crit)' }}>{e}</div>)}
+            {(a.origin === 'site' || a.card_note || a.utm) && <div className="small muted">{a.origin === 'site' ? 'pelo site' : 'pela área do cliente'}
+              {a.utm && (() => { try { const u = JSON.parse(a.utm) as Record<string, string>; return ` · campanha: ${[u.utm_source, u.utm_campaign].filter(Boolean).join(' / ') || Object.keys(u).join(', ')}` } catch { return '' } })()}
+              {a.card_note && <> · {a.card_note}</>}</div>}
           </div>
           <Chip tone={tom}>{rot}</Chip>
           {a.status === 'pendente' && <>{!a.accepted_at && <button className="btn sm primary" onClick={() => decidir(a, 'aceitar')}
@@ -142,8 +146,10 @@ function Calendario({ mes, setMes, dias, corridas }: { mes: string; setMes: (m: 
 }
 
 function Disponibilidade() {
-  const { can } = useAuth()
+  const { can, livre } = useAuth()
   const gerente = can('MANAGER')
+  const admin = livre || can('ADMIN')
+  const [salvandoVenda, setSalvandoVenda] = useState(false)
   const toast = useToast()
   const [mes, setMes] = useState(hojeFL().slice(0, 7))
   const a = useGet<Agenda & { corridas: Corrida[] }>(`/site/agenda?de=${mes}-01&ate=${ultimoDia(mes)}`)
@@ -157,7 +163,8 @@ function Disponibilidade() {
   async function salvar() {
     try {
       if (regras) await api.put('/site/agenda/semana', semana.map(({ weekday, period, open, capacity }) => ({ weekday, period, open, capacity })))
-      if (cfg && c) await api.patch('/site/agenda/config', { ...c, auto_confirm: !!c.auto_confirm })
+      if (cfg && c) { const { auto_sell: _vendaAutomatica, ...regrasDaAgenda } = c; void _vendaAutomatica     // a venda automática tem o próprio botão (só ADMIN)
+        await api.patch('/site/agenda/config', { ...regrasDaAgenda, auto_confirm: !!c.auto_confirm }) }
       toast(regras ? 'Semana salva: o cliente já vê.' : 'Regras salvas.', 'ok'); setRegras(null); setCfg(null); a.reload()
     } catch (e) { toast((e as ApiError).message, 'crit') }
   }
@@ -203,6 +210,12 @@ function Disponibilidade() {
         <label className="fld" style={{ margin: 0 }}><span>Mostra até (dias)</span><input type="number" min={1} disabled={!gerente} value={c.horizon_days} onChange={e => setCfg({ ...c, horizon_days: Number(e.target.value) })} /></label>
       </div>
       <label className="check" style={{ marginTop: 10 }}><input type="checkbox" disabled={!gerente} checked={!!c.auto_confirm} onChange={e => setCfg({ ...c, auto_confirm: e.target.checked ? 1 : 0 })} /> Confirmar sozinho <span className="small muted">(desligado: a equipe confirma cada pedido)</span></label>
+      {/* #164: venda automática — o site vende sozinho (só o administrador liga ou desliga) */}
+      <label className="check" style={{ marginTop: 6 }}><input type="checkbox" disabled={!admin || salvandoVenda} checked={!!c.auto_sell} onChange={async e => {
+        const ligar = e.target.checked
+        setSalvandoVenda(true)
+        try { await api.patch('/site/agenda/config', { auto_sell: ligar }); toast(ligar ? 'Venda automática ligada: o pedido do site vira invoice + depósito + waiver na hora.' : 'Venda automática desligada: a equipe aceita cada pedido.', 'ok'); setCfg(null); a.reload() }
+        catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setSalvandoVenda(false) } }} /> Venda automática <span className="small muted">(ligada: o pedido do site vira invoice do QuickBooks com o depósito e a waiver na hora, sem esperar "Aceitar"; {admin ? 'só o administrador liga ou desliga' : 'só o administrador muda'})</span></label>
       {gerente && (regras || cfg) && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvar}>{regras ? 'Salvar a semana' : 'Salvar regras'}</button></div>}
     </Section>
 
