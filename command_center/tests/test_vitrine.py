@@ -98,7 +98,7 @@ def test_arrive_and_drive_mostra_os_precos_de_hoje_e_leva_para_a_agenda(cli):
         assert f'value="{k["nome"]}" data-preco="{k["preco"]}"' in r.text
     assert {k["preco"] for k in conteudo.KARTS} == {719, 819, 899}, "os preços do urace.us em 07/10"
     assert "Your Own Kart" not in r.text, "não aparece no site público de hoje"
-    assert 'href="/ops/portal/book"' in r.text, "sem JavaScript, o botão leva para a agenda da área do cliente"
+    assert 'href="/ops/portal/reserve"' in r.text, "sem JavaScript, o botão leva para a reserva (#164)"
     assert 'data-api="/ops/api/vitrine/agenda"' in r.text
     ofertas = [x for x in _le(r.text).ld if x.get("@type") == "Service"][0]["offers"]
     assert sorted(float(o["price"]) for o in ofertas) == [719.0, 719.0, 819.0, 899.0]

@@ -1,0 +1,105 @@
+/* Área do cliente com a identidade do site (#164). Dono, 08/10: "redirecionar ela para uma nova tela
+ * ... sem parecer que ela saiu do site, mesma identidade ... a área do cliente precisa estar migrando
+ * para dentro do novo urace.us ... unificar os dois".
+ *
+ * Tudo aqui vale só sob `.psite` (portal/visual.ts liga): as cores, as letras e o cabeçalho preto do
+ * urace.us novo (vitrine/static/site.css). Sem a classe, volta o visual de antes. Motion só em
+ * transform/opacity, com os tokens; `prefers-reduced-motion` desliga. */
+
+@font-face { font-family: "Archivo"; font-style: normal; font-weight: 700 800; font-stretch: 125%; font-display: swap;
+  src: url(../assets/site/archivo-expanded.woff2) format("woff2") }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 400 700; font-display: swap;
+  src: url(../assets/site/inter.woff2) format("woff2") }
+
+.psite{
+  --paper:#f4f4f6;--surface:#ffffff;--surface-2:#f0f0f4;--surface-3:#e7e7ee;
+  --ink:#121217;--ink-2:#3b3c4a;--muted:#6b6c80;--rule:#e2e2ea;--rule-strong:#cfd0db;
+  --accent:#d91617;--accent-ink:#b01213;--accent-wash:#fde9e9;
+  --brand:#d91617;--brand-wash:rgba(217,22,23,.1);
+  --ok:#1f7a49;--ok-wash:#e4f4ea;--warn:#8a5a10;--warn-wash:#fbf0dc;--crit:#b3261e;--crit-wash:#fbe7e5;
+  --info:#2f4f86;--info-wash:#e6ecf7;
+  --glass:#ffffff;--glass-2:#f4f4f6;--glass-line:rgba(18,18,23,.09);--glass-line-2:rgba(18,18,23,.16);
+  --shadow:0 1px 2px rgba(18,18,23,.05),0 10px 26px -18px rgba(18,18,23,.28);
+  --shadow-pop:0 20px 60px -20px rgba(18,18,23,.4);
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-cond:"Archivo","Arial Black",system-ui,sans-serif;
+  --site-titulo:"Archivo","Arial Black",system-ui,sans-serif;
+  color-scheme:light;
+  background:var(--paper);color:var(--ink);font-family:var(--font);
+}
+.psite a{color:var(--accent-ink)}
+.psite .h1{font-family:var(--site-titulo);font-stretch:125%;font-weight:800;font-size:clamp(26px,5vw,34px);letter-spacing:0;line-height:1.1}
+.psite .h2{font-family:var(--site-titulo);font-stretch:125%;font-weight:800;font-size:18px;letter-spacing:0;text-transform:none;color:var(--ink)}
+.psite .h3{font-family:var(--font);font-weight:700}
+.psite .card{background:#fff;border-color:var(--glass-line);box-shadow:var(--shadow)}
+.psite .btn{border-radius:8px;backdrop-filter:none;-webkit-backdrop-filter:none;background:#fff;font-weight:700}
+.psite .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:none}
+.psite .btn.primary:hover:not(:disabled){background:#c01213;filter:none}
+.psite .btn.ghost{background:transparent;border-color:transparent}
+.psite .fld input,.psite .fld select,.psite .fld textarea,.psite .input{background:#fff;border-color:var(--rule-strong);color:var(--ink)}
+.psite .fld input:focus,.psite .fld select:focus,.psite .fld textarea:focus,.psite .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+.psite :focus-visible{outline:3px solid #ff5051;outline-offset:2px}
+
+/* cabeçalho preto do site, com a marca e o caminho de volta para as páginas */
+.psite .portal-top{background:#000;color:#fff;border-bottom:0;backdrop-filter:none;-webkit-backdrop-filter:none;min-height:60px}
+.psite .portal-top .btn{background:transparent;color:#fff;border-color:rgba(255,255,255,.4)}
+.psite .portal-top .btn.primary{background:var(--accent);border-color:var(--accent)}
+.psite .portal-top .portal-quem{color:#c9cad6}
+.psite-logo{display:inline-flex;align-items:center;min-height:40px}
+.psite-logo img{display:block;width:120px;height:20px}
+.psite-links{display:none;gap:4px;align-items:center}
+.psite-links a{color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:8px 10px;min-height:40px;display:inline-flex;align-items:center;border-radius:6px}
+.psite-links a:hover{background:rgba(255,255,255,.1);text-decoration:none}
+@media (min-width:860px){.psite-links{display:flex}}
+.psite .portal-nav a.on{background:var(--accent-wash);color:var(--accent-ink);box-shadow:inset 3px 0 0 var(--accent)}
+@media (max-width:760px){.psite .portal-nav{background:#fff}.psite .portal-nav a.on{box-shadow:inset 0 3px 0 var(--accent)}}
+.psite .portal-rodape{background:#0b0b0f;color:#a6a7b8;margin-top:24px}
+.psite .portal-rodape a{color:#fff}
+
+/* a página da reserva, fora da conta: o mesmo cabeçalho, uma coluna */
+.psite.reserva-casca{min-height:100vh;display:flex;flex-direction:column}
+.reserva-main{flex:1;width:100%;max-width:760px;margin:0 auto;padding:20px 16px 48px;min-width:0}
+.reserva-passos{list-style:none;margin:0;padding:0;display:grid;gap:14px}
+.reserva-passo{position:relative}
+.reserva-passo>.card{padding:16px 18px;display:grid;gap:12px}
+.reserva-passo.fechado>.card{opacity:.6}
+.reserva-passo.feito .reserva-num{background:var(--ok);color:#fff}
+.reserva-cab{display:flex;align-items:center;gap:10px;min-width:0}
+.reserva-cab .h2{margin:0;flex:1;min-width:0}
+.reserva-num{flex:0 0 auto;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#121217;color:#fff;font-weight:800;font-size:14px}
+.reserva-resumo{font-size:14px;color:var(--ink-2)}
+.reserva-opcoes{display:grid;gap:8px}
+.reserva-opcao{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--rule-strong);border-radius:8px;cursor:pointer;min-height:48px;min-width:0;background:#fff}
+.reserva-opcao.on{border-color:var(--accent);background:var(--accent-wash)}
+.reserva-opcao input{accent-color:var(--accent);width:18px;height:18px;flex:0 0 auto;margin:0}
+.reserva-opcao .grow{min-width:0;overflow-wrap:anywhere}
+.reserva-dias{display:flex;flex-wrap:wrap;gap:8px}
+.reserva-dia{min-height:44px;padding:6px 12px;border-radius:8px;border:1px solid var(--rule-strong);background:#fff;font:inherit;font-weight:600;cursor:pointer;color:var(--ink)}
+.reserva-dia[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:#fff}
+.reserva-turnos{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.reserva-turno{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:56px;padding:8px 12px;border-radius:8px;border:1px solid var(--rule-strong);background:#fff;font:inherit;cursor:pointer;color:var(--ink);text-align:left}
+.reserva-turno[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-wash)}
+.reserva-turno:disabled{opacity:.45;cursor:not-allowed}
+.reserva-conta{display:grid;gap:12px}
+.reserva-abas{display:flex;gap:6px;flex-wrap:wrap}
+.reserva-abas button{min-height:44px;padding:8px 14px;border-radius:8px;border:1px solid var(--rule-strong);background:#fff;font:inherit;font-weight:700;cursor:pointer;color:var(--ink)}
+.reserva-abas button[aria-selected="true"]{background:#121217;border-color:#121217;color:#fff}
+.reserva-conta-ok{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
+.reserva-total{display:grid;gap:4px;border-top:1px solid var(--rule);padding-top:10px}
+.reserva-total div{display:flex;justify-content:space-between;gap:12px}
+.reserva-total .soma{font-weight:800;font-size:17px}
+.reserva-politica{font-size:13.5px;color:var(--ink-2);display:grid;gap:4px;margin:0;padding-left:18px}
+
+/* o acompanhamento do pedido: reservado → pagar → waiver → confirmado */
+.etapas{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.etapa{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid var(--glass-line);border-radius:12px;background:#fff;min-width:0}
+.etapa .marca{flex:0 0 auto;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--surface-3);color:var(--ink-2);font-weight:800}
+.etapa.ok .marca{background:var(--ok);color:#fff}
+.etapa.agora{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+.etapa.agora .marca{background:var(--accent);color:#fff}
+.etapa .corpo{flex:1;min-width:0;display:grid;gap:6px;overflow-wrap:anywhere}
+.etapa .corpo b{font-size:15px}
+.etapas-fim{margin-top:6px}
+@media (prefers-reduced-motion:no-preference){
+  .reserva-passo>.card,.etapa{transition:opacity var(--dur-media) var(--ease-saida),transform var(--dur-media) var(--ease-saida)}
+}

@@ -3,7 +3,7 @@
  * equipe, no site interno (Site público › Disponibilidade e › Serviços e preços).
  * Piloto com medida vencida (60+ dias) ou cadastro incompleto não marca até atualizar. */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { papi, PortalError, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type Servico } from './api'
 
 const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
@@ -58,6 +58,7 @@ export function CartaoSessao({ s, cfg, onCancelar, solta }: { s: Booking; cfg: A
         ? <><a href={s.invoice_link} target="_blank" rel="noreferrer">pay invoice {s.invoice_doc}</a> and </> : s.invoice_sent ? <>pay invoice {s.invoice_doc} (in your email) and </> : 'we are sending the invoice; '}
         sign the waiver{s.waiver_sent ? ' (in your email from DocuSign)' : ''}. It confirms by itself.</div>}</div>
     <span className={`chip ${tom}`}>{rot}</span>
+    {ativa && !solta && <Link className="btn sm" to={`/portal/sessions/${s.id}`}>Details</Link>}
     {ativa && onCancelar && <button className="btn sm" onClick={() => onCancelar(s.id)}>Cancel</button>}
   </div>
 }
@@ -114,6 +115,7 @@ export function Agendar({ conta }: { conta: Account }) {
   const [erro, setErro] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
+  const nav = useNavigate()
 
   const carregar = useCallback(async () => {
     try {
@@ -147,7 +149,8 @@ export function Agendar({ conta }: { conta: Account }) {
     if (!dia || !periodo || !servico || !piloto) return
     setIndo(true); setErro(null); setOk(null)
     try {
-      await papi<{ bookings: Booking[] }>('POST', '/bookings', { date: dia, period: periodo, service_id: servico, driver_id: piloto, notes: nota || null })
+      const r = await papi<{ id: number; auto_sell: boolean }>('POST', '/bookings', { date: dia, period: periodo, service_id: servico, driver_id: piloto, notes: nota || null })
+      if (r.auto_sell) { nav(`/portal/sessions/${r.id}`); return }       // #164: venda automática: vai para as etapas (pagar, waiver)
       setOk('Request sent! We will confirm your session soon.')
       setDia(null); setPeriodo(null); setNota(''); carregar()
     } catch (e) { setErro((e as PortalError).message); carregar() } finally { setIndo(false) }

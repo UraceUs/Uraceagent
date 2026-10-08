@@ -112,5 +112,5 @@ def test_so_o_gerente_muda_o_preco_e_fica_auditado(cli):
                                                  "birth_date": "1985-04-12", "accept_terms": True, "i_am_driver": True, **ENDERECO})
     assert r.status_code == 201, r.text
     disp = cli.get("/ops/api/portal/availability").json()
-    assert disp["services"] == [{"id": sid, "name": "Arrive and Drive", "description": "One session with our kart", "price": 749.0}]
+    assert disp["services"] == [{"id": sid, "name": "Arrive and Drive", "description": "One session with our kart", "price": 749.0, "deposit": 0}]
     assert "qbo_item_id" not in disp["services"][0], "o cliente não vê o item do QuickBooks"

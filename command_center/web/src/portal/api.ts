@@ -47,7 +47,12 @@ export interface Periodo { open: boolean; spots: number }
 export interface Dia { date: string; weekday: number; any_open: boolean; periods: { manha: Periodo; tarde: Periodo; dia: Periodo } }
 export interface AgendaCfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string
   horizon_days: number; min_notice_hours: number; auto_confirm: number }
-export interface Servico { id: number; name: string; description: string | null; price: number }
+export interface Servico { id: number; name: string; description: string | null; price: number; deposit?: number }
+/** #164: as etapas de um pedido, como o servidor resume para o cliente. */
+export interface Checkout { id: number; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'; date: string; period: 'manha' | 'tarde' | 'dia'
+  service: string | null; price: number | null; driver: string | null; aceita: boolean; confirmada: boolean
+  pagamento: { estado: 'pagar' | 'pago' | 'contrato' | 'preparando'; link: string | null; invoice: string | null; total: number | null; para: string | null }
+  waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando'; link: string | null; para?: string | null } }
 export interface Booking { id: number; date: string; period: 'manha' | 'tarde' | 'dia'; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'
   notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null
   /** #50: aceita pela equipe — falta pagar a invoice e/ou assinar a waiver */

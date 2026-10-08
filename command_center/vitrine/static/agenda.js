@@ -1,7 +1,8 @@
 /* Agenda do site novo (#148): a mesma disponibilidade da área do cliente, só que pública
  * (dias abertos e vagas, nada além). Escolheu kart, dia e turno → o botão leva para a
- * agenda da área do cliente com tudo já marcado. Sem este script, o botão leva para a
- * mesma agenda, só que vazia. */
+ * reserva (#164: sessão → conta → piloto → pagar) com tudo já marcado, e com a campanha de
+ * onde a pessoa veio (utm_*, gclid, fbclid), para o marketing saber o que vendeu. Sem este
+ * script, o botão leva para a mesma reserva, só que vazia. */
 (function () {
   'use strict'
   var raiz = document.querySelector('.agenda')
@@ -19,6 +20,8 @@
   var SEMANA = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   var NOMES = { manha: 'Morning', tarde: 'Afternoon' }
   var dias = {}, meses = [], mes = null, dia = null, periodo = null, cfg = null, carregou = false
+  var CAMPANHA = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid', 'ref']
+  var daUrl = new URLSearchParams(window.location.search)
 
   function usd(n) { return '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 }) }
   function hora(h) {
@@ -47,10 +50,11 @@
     if (dia) q.push('date=' + encodeURIComponent(dia))
     if (dia && periodo) q.push('period=' + encodeURIComponent(periodo))
     if (k) q.push('kart=' + encodeURIComponent(k.nome))
+    CAMPANHA.forEach(function (c) { var v = daUrl.get(c); if (v) q.push(c + '=' + encodeURIComponent(v.slice(0, 120))) })
     ir.setAttribute('href', portal + (q.length ? '?' + q.join('&') : ''))
     // sem a agenda carregada (erro ou nada aberto), o botão continua levando à área do cliente
     var pronto = !carregou || (dia && periodo)
-    ir.textContent = !carregou ? 'Book in your account' : pronto ? 'Request this session' : 'Pick a day to continue'
+    ir.textContent = !carregou ? 'Book online' : pronto ? 'Continue to booking' : 'Pick a day to continue'
     if (pronto) ir.removeAttribute('aria-disabled'); else ir.setAttribute('aria-disabled', 'true')
   }
 

@@ -89,6 +89,14 @@ def agenda_publica(con: sqlite3.Connection = Depends(get_db)):
             "dias": dias}
 
 
+@r.get("/ops/api/vitrine/servicos")
+def servicos_publicos(con: sqlite3.Connection = Depends(get_db)):
+    """#164: o que o site vende, para a reserva montar o resumo antes do login: nome, preço e o
+    depósito reembolsável. Nada do QuickBooks."""
+    from command_center.providers import servicos_site
+    return {"services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell"))}
+
+
 def robots(request):
     """robots.txt do site: enquanto é prévia, ninguém indexa; depois, só o painel fica de fora."""
     if paginas.preview():
