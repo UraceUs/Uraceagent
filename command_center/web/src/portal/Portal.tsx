@@ -213,15 +213,15 @@ function LinhaWaiver({ w }: { w: WaiverPiloto }) {
     : <div className="small">Waiver: <b>not signed</b>{w.kind ? <> · <Link to={`/portal/drivers/${w.driver_id}/waiver`}>Sign now</Link></> : ' · add the date of birth first'}</div>}</>
 }
 
-/** #87: o QR que o piloto mostra no balcão — só depois que a equipe liga o piloto ao card. */
+/** #87/#165: o QR que o piloto mostra no balcão: o mecânico lê, depois lê a peça, e ela entra na
+ * conta deste piloto. Sempre à vista (dono, 08/10: "o cliente sempre ali na conta dele tem o QR Code dele").
+ * Sem card ainda (a equipe liga a conta ao cadastro), diz o porquê em vez de sumir. */
 function QrDoPiloto({ p }: { p: Driver }) {
-  const [aberto, setAberto] = useState(false)
-  return <details className="portal-mais small" onToggle={e => setAberto((e.target as HTMLDetailsElement).open)}>
-    <summary>Show my URACE QR</summary>
-    {aberto && <div className="stack" style={{ gap: 6, alignItems: 'flex-start', marginTop: 6 }}>
-      <img className="qr-cliente" src={`/ops/api/portal/drivers/${p.id}/qr.svg`} alt={`URACE QR of ${p.name}`} width={160} height={160} />
-      <span className="muted">Our mechanic scans it at the shop to add parts to {p.name}'s account.</span></div>}
-  </details>
+  if (!p.client_id) return <p className="small muted portal-qr-espera">{p.name}'s URACE QR appears here as soon as our team connects this driver to your URACE records.</p>
+  return <figure className="portal-qr">
+    <img className="qr-cliente" src={`/ops/api/portal/drivers/${p.id}/qr.svg`} alt={`URACE QR of ${p.name}`} width={180} height={180} />
+    <figcaption className="small muted">Show this at the shop: our mechanic scans it to add parts to {p.name}'s account.</figcaption>
+  </figure>
 }
 
 function ChipMedidas({ p }: { p: Driver }) {
@@ -268,6 +268,7 @@ function Dashboard({ conta }: { conta: Account }) {
           <h3 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h3>
           <DadosDoPiloto p={p} />
           <ChipMedidas p={p} />
+          <QrDoPiloto p={p} />
         </article>)}</div>}
     </section>
     <section className="stack" aria-labelledby="dash-conta"><h2 className="h2" id="dash-conta">Account holder</h2>
@@ -379,7 +380,7 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
       : <article className="card card-b portal-piloto" key={p.id}>
         <div className="portal-piloto-topo"><div className="grow"><h2 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h2>
           <DadosDoPiloto p={p} completo />{waiverDe(p.id) && <LinhaWaiver w={waiverDe(p.id)!} />}
-          {p.client_id && <QrDoPiloto p={p} />}</div>
+          <QrDoPiloto p={p} /></div>
           <div className="row wrap portal-piloto-acoes"><ChipMedidas p={p} />
             <button className="btn sm" onClick={() => setEditando(p.id)}>{p.measures_status === 'ok' ? 'Edit' : 'Update'}</button></div></div>
         {p.missing.length > 0 && <p className="small" style={{ margin: '8px 0 0' }}>Missing: {p.missing.map(k => ROTULO[k] || k).join(', ')}.</p>}
