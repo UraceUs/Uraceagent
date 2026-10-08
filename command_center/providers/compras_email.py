@@ -76,6 +76,22 @@ CONSULTA = ("-in:sent -in:drafts -category:promotions -category:social newer_tha
             "subject:payment subject:pedido subject:purchase subject:package subject:envio subject:entrega "
             "subject:rastreio subject:compra subject:invoice subject:fatura subject:waybill subject:\"payment request\"}")
 
+# Dono, 08/10 (#160): e-mail com estes marcadores entra em Compras mesmo quando o assunto não diz
+# que é compra. O Gmail entrega o nome ("Finances/Shopping/Amazon"); a busca escreve
+# "finances-shopping-amazon". As regras de fora (_ignorar) continuam valendo.
+GATILHOS = (("shipping-status", "envio"), ("finances-shopping", "pedido"))
+
+
+def gatilho(msg):
+    """O tipo que o marcador dá ao e-mail, ou None."""
+    for m in msg.get("marcadores") or []:
+        slug = re.sub(r"[/\s]+", "-", str(m).strip().lower())
+        for g, k in GATILHOS:
+            if slug == g or slug.startswith(g + "-"):
+                return k
+    return None
+
+
 ORDEM = {"pedido": 1, "pagamento": 2, "envio": 3, "entregue": 4}            # tipo do e-mail
 STATUS = {"pedido": "pedido", "pagamento": "pago", "envio": "enviado", "entregue": "entregue"}
 PESO = {"pedido": 1, "pago": 2, "enviado": 3, "entregue": 4}                 # andamento da compra
@@ -490,6 +506,7 @@ def ler(msg):
         k, stage = conta["kind"], conta["stage"]
     else:
         k, _onde = tipo(assunto, bool(track), bool(pedido or fatura))
+        k = k or gatilho(msg)
         if not k:
             return None
         stage = estagio(k, assunto, de)

@@ -307,3 +307,17 @@ def test_api_itens_pedidos_e_concluir(cli, con):
 def test_data_da_entrega_no_fuso_da_florida():
     assert atencao._dia_fl("2026-10-01T01:30:00Z") == "2026-09-30", "21h30 EDT ainda é dia 30"
     assert atencao._dia_fl("2026-10-01T15:00:00.000Z") == "2026-10-01"
+
+
+# ------------------------------------------------------------------ marcadores (#160)
+def test_marcador_do_dono_faz_o_email_entrar_mesmo_sem_assunto_de_compra():
+    """Dono, 08/10: "Shipping-status, finances-shopping"."""
+    assert ce.ler(msg("Update from Kart Parts", "Thanks!", de="Kart Parts <hi@kartparts.com>")) is None
+    env = ce.ler(msg("Update from Kart Parts", "Thanks!", de="Kart Parts <hi@kartparts.com>", marcadores=["Shipping Status"]))
+    assert env and env["kind"] == "envio"
+    ped = ce.ler(msg("Hello from Kart Parts", "Thanks!", de="Kart Parts <hi@kartparts.com>",
+                     marcadores=["INBOX", "Finances/Shopping/Kart Parts"]))
+    assert ped and ped["kind"] == "pedido"
+    # as regras de fora continuam: passe de pista do Orlando Kart Center não vira compra
+    assert ce.ler(msg("Your receipt", "Thanks", de="Receipts <no-reply@okc-mail.com>",
+                      marcadores=["Finances/Shopping/Orlando Kart Center/Track Pass"])) is None
