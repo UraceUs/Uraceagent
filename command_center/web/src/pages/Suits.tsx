@@ -9,11 +9,13 @@ import { useMemo, useState } from 'react'
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet, usePaginado } from '../api/hooks'
+import type { Client } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
 import { Icon } from '../components/Icon'
 import { Md } from '../components/Md'
 import { useToast } from '../components/Toast'
+import { Picker } from '../components/Unir'
 
 interface Etapa { codigo: string; nome: string; descricao: string }
 interface Medida { chave: string; numero: string; nome: string; tipo: 'comp' | 'peso' | 'texto' }
@@ -29,9 +31,21 @@ interface PedidoApi extends Omit<Linha, 'notas'> { customer_email: string | null
   language: string | null; supplier_id: number | null; fornecedor_email: string | null; paid_at: string | null; tracking: string | null
   asana_gid: string | null; asana_notes: string | null; asana_status: string | null; measurements: Record<string, Valor>
   site_order: string | null; gmail_thread_cliente: string | null; gmail_thread_designer: string | null; gmail_thread_fornecedor: string | null
-  medidas_texto: Record<string, string>; faltam_medidas: string[]; design: Record<string, string>; criado_por: string | null; notas: Nota[] }
+  medidas_texto: Record<string, string>; faltam_medidas: string[]; design: Record<string, string>; criado_por: string | null; notas: Nota[]
+  client_id: number | null; cliente_nome: string | null; cliente_piloto: string | null }
+/** O que o cadastro já sabe do cliente (#158: inserção manual sempre com "vincular ao cliente"). */
+interface DadosCliente { client_id: number; customer_name: string | null; customer_email: string | null; customer_phone: string | null
+  driver_name: string | null; ship_address: string | null; medidas: { valores: Record<string, number>; unidade: string; unidade_peso: string } | null
+  de_onde: { card: boolean; conta_do_site: boolean; piloto: string | null } }
+const puxarCliente = (id: number) => api.get<DadosCliente>(`/suits/cliente/${id}`)
+function oQuePuxou(d: DadosCliente) {
+  const itens = ['nome', d.customer_email && 'e-mail', d.customer_phone && 'telefone', d.driver_name && 'piloto',
+    d.ship_address && 'endereço da conta do site', d.medidas && `${Object.keys(d.medidas.valores).length} medida(s) do piloto ${d.de_onde.piloto || ''}`.trim()]
+  return 'Puxado do cadastro: ' + itens.filter(Boolean).join(', ') + '.'
+}
+const cartao = (id: number, nome: string | null, piloto: string | null) => ({ id, name: nome || '', pilot_name: piloto, email: null, phone: null } as unknown as Client)
 interface Resumo { por_etapa: Record<string, number>; abertos: number; fechados: number; leads: number; fornecedores: number }
-interface Lead { id: number; name: string; email: string | null; phone: string | null; notes: string | null; status: string; order_id: number | null; created_at: string }
+interface Lead { id: number; name: string; email: string | null; phone: string | null; notes: string | null; status: string; order_id: number | null; created_at: string; client_id: number | null }
 interface Fornecedor { id: number; name: string; contact: string | null; email: string | null; phone: string | null; has_fia: number | null
   status: string | null; price: string | null; shipping: string | null; payment: string | null; lead_time: string | null; comments: string | null
   is_current: number; pedidos: number; asana_gid: string | null }
@@ -129,21 +143,37 @@ function NovoPedido({ meta, onClose, onDone }: { meta: Meta | null; onClose: () 
   const [f, setF] = useState<Record<string, string>>({ language: 'en', product: 'Suit', quantity: '1' })
   const [design, setDesign] = useState<Record<string, string>>({})
   const [indo, setIndo] = useState(false)
+  const [cli, setCli] = useState<Client | null>(null)
+  const [puxado, setPuxado] = useState<DadosCliente | null>(null)
   const set = (k: string) => (e: { target: { value: string } }) => setF(x => ({ ...x, [k]: e.target.value }))
+  async function escolher(c: Client | null) {
+    setCli(c); setPuxado(null)
+    if (!c) return
+    try {
+      const d = await puxarCliente(c.id)
+      setPuxado(d)
+      setF(x => ({ ...x, customer_name: d.customer_name || x.customer_name || '', customer_email: d.customer_email || x.customer_email || '',
+        customer_phone: d.customer_phone || x.customer_phone || '', driver_name: d.driver_name || x.driver_name || '',
+        ship_address: d.ship_address || x.ship_address || '' }))
+    } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
   async function salvar() {
     if (!(f.customer_name || '').trim()) { toast('Diga o nome do cliente.', 'warn'); return }
     setIndo(true)
     try {
       const p = await api.post<{ id: number }>('/suits', { ...f, quantity: Number(f.quantity) || 1,
         supplier_id: f.supplier_id ? Number(f.supplier_id) : (forn.data || []).find(x => x.is_current)?.id ?? null,
+        client_id: cli?.id ?? null, medidas: puxado?.medidas ?? undefined,
         design, nota: f.nota || null })
       toast('Pedido registrado.', 'ok'); onDone(p.id); onClose()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Registrar novo pedido">
     <h3>Registrar novo pedido</h3>
+    <Picker label="Vincular ao cliente (puxa os dados do cadastro)" value={cli} onPick={escolher} />
+    {puxado && <p className="small muted" style={{ marginTop: 0 }}>{oQuePuxou(puxado)}</p>}
     <div className="suit-form">
-      <label className="fld"><span>Cliente</span><input value={f.customer_name || ''} onChange={set('customer_name')} autoFocus /></label>
+      <label className="fld"><span>Cliente</span><input value={f.customer_name || ''} onChange={set('customer_name')} /></label>
       <label className="fld"><span>Piloto (se não for o cliente)</span><input value={f.driver_name || ''} onChange={set('driver_name')} /></label>
       <label className="fld"><span>E-mail</span><input type="email" value={f.customer_email || ''} onChange={set('customer_email')} /></label>
       <label className="fld"><span>Telefone</span><input type="tel" value={f.customer_phone || ''} onChange={set('customer_phone')} /></label>
@@ -241,13 +271,29 @@ function Cliente({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) 
   const campos: [string, string, string?][] = [['customer_name', 'Cliente'], ['driver_name', 'Piloto'], ['customer_email', 'E-mail', 'email'],
     ['customer_phone', 'Telefone', 'tel'], ['ship_address', 'Endereço de entrega'], ['order_date', 'Data do pedido', 'date'],
     ['paid_at', 'Pago em', 'date'], ['due_on', 'Prazo', 'date'], ['tracking', 'Rastreio']]
-  const abrir = () => { setF(Object.fromEntries([...campos.map(([k]) => [k, String((pedido as unknown as Record<string, unknown>)[k] ?? '')]), ['language', pedido.language || 'en']])); setEditando(true) }
+  const [cli, setCli] = useState<Client | null>(null)
+  const abrir = () => {
+    setF(Object.fromEntries([...campos.map(([k]) => [k, String((pedido as unknown as Record<string, unknown>)[k] ?? '')]), ['language', pedido.language || 'en']]))
+    setCli(pedido.client_id ? cartao(pedido.client_id, pedido.cliente_nome, pedido.cliente_piloto) : null)
+    setEditando(true)
+  }
+  async function escolher(c: Client | null) {
+    setCli(c)
+    if (!c) return
+    try {     // vincular puxa do cadastro o que ainda está vazio aqui; o que a equipe escreveu fica
+      const d = await puxarCliente(c.id)
+      setF(x => ({ ...x, customer_name: x.customer_name || d.customer_name || '', customer_email: x.customer_email || d.customer_email || '',
+        customer_phone: x.customer_phone || d.customer_phone || '', driver_name: x.driver_name || d.driver_name || '',
+        ship_address: x.ship_address || d.ship_address || '' }))
+    } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
   async function salvar() {
-    try { await api.patch(`/suits/${pedido.id}`, f); toast('Salvo.', 'ok'); setEditando(false); onDone() }
+    try { await api.patch(`/suits/${pedido.id}`, { ...f, client_id: cli ? cli.id : 0 }); toast('Salvo.', 'ok'); setEditando(false); onDone() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   return <Section title="Cliente" right={!editando && <button className="btn sm ghost" onClick={abrir}><Icon name="pencil" size={14} /> Editar</button>}>
     {editando ? <>
+      <Picker label="Vincular ao cliente (puxa os dados do cadastro)" value={cli} onPick={escolher} />
       <div className="suit-form">{campos.map(([k, rot, tipo]) => <label key={k} className="fld"><span>{rot}</span>
         {k === 'ship_address' ? <textarea rows={2} value={f[k]} onChange={e => setF(x => ({ ...x, [k]: e.target.value }))} />
           : <input type={tipo || 'text'} value={f[k]} onChange={e => setF(x => ({ ...x, [k]: e.target.value }))} />}</label>)}
@@ -255,6 +301,8 @@ function Cliente({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) 
       </div>
       <div className="row gap"><button className="btn ghost" onClick={() => setEditando(false)}>Cancelar</button><button className="btn primary" onClick={salvar}>Salvar</button></div>
     </> : <dl className="suit-dl">
+      <div><dt>Card do cliente</dt><dd>{pedido.client_id ? <Link to={`/clients/${pedido.client_id}`}>{pedido.cliente_piloto || pedido.cliente_nome || `#${pedido.client_id}`} ↗</Link>
+        : <span className="muted">não vinculado — Editar para vincular</span>}</dd></div>
       {campos.map(([k, rot]) => { const v = (pedido as unknown as Record<string, unknown>)[k] as string | null
         return <div key={k}><dt>{rot}</dt><dd>{v ? (k.endsWith('_at') || k.endsWith('_on') || k === 'order_date' ? dia(v) : v) : <span className="muted">—</span>}</dd></div> })}
       <div><dt>Idioma</dt><dd>{IDIOMAS.find(([k]) => k === pedido.language)?.[1] || pedido.language || <span className="muted">—</span>}</dd></div>
@@ -453,8 +501,15 @@ function Leads() {
   const [busca, setBusca] = useState('')
   const { itens, total, erro, carregando, mais, temMais, recarregar } = usePaginado<Lead>(`/suits/leads${qs({ estado, q: busca.trim() || undefined })}`, 100)
   const [novo, setNovo] = useState<Record<string, string> | null>(null)
+  const [cli, setCli] = useState<Client | null>(null)
+  function escolher(c: Client | null) {
+    setCli(c)
+    if (c) setNovo(x => ({ ...x, name: c.pilot_name && c.pilot_name !== c.name ? `${c.pilot_name} (resp. ${c.name})` : c.name,
+      email: c.email || x?.email || '', phone: c.phone || x?.phone || '' }))
+  }
   async function criar() {
-    try { await api.post('/suits/leads', novo); setNovo(null); recarregar(); toast('Lead guardado.', 'ok') } catch (e) { toast((e as ApiError).message, 'crit') }
+    try { await api.post('/suits/leads', { ...novo, client_id: cli?.id ?? null }); setNovo(null); setCli(null); recarregar(); toast('Lead guardado.', 'ok') }
+    catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function virar(l: Lead) {
     try { const p = await api.post<{ id: number }>(`/suits/leads/${l.id}/pedido`); nav(`/suits/${p.id}`) } catch (e) { toast((e as ApiError).message, 'crit') }
@@ -467,6 +522,7 @@ function Leads() {
     <div className="row gap wrap"><div className="tabs">{[['aberto', 'Abertos'], ['convertido', 'Viraram pedido'], ['perdido', 'Perdidos']].map(([k, n]) =>
       <button key={k} className={estado === k ? 'on' : ''} onClick={() => setEstado(k)}>{n}</button>)}</div>
       <label className="fld grow" style={{ margin: 0 }}><span className="sr-only">Buscar</span><input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar" /></label></div>
+    {novo && <div className="card-in"><Picker label="Vincular ao cliente (puxa os dados do cadastro)" value={cli} onPick={escolher} /></div>}
     {novo && <div className="suit-form card-in">
       <label className="fld"><span>Nome</span><input value={novo.name || ''} onChange={e => setNovo(x => ({ ...x, name: e.target.value }))} autoFocus /></label>
       <label className="fld"><span>E-mail</span><input value={novo.email || ''} onChange={e => setNovo(x => ({ ...x, email: e.target.value }))} /></label>
@@ -480,6 +536,7 @@ function Leads() {
             <div className="small muted">{[l.email, l.phone].filter(Boolean).join(' · ') || '—'}</div>
             {l.notes && <div className="small suit-texto">{l.notes}</div>}</div>
           {l.status === 'aberto' && <div className="row gap wrap"><button className="btn sm" onClick={() => virar(l)}>Virar pedido</button><button className="btn sm ghost" onClick={() => perdido(l)}>Perdido</button></div>}
+          {l.client_id && <Link className="btn sm ghost" to={`/clients/${l.client_id}`}>Card do cliente</Link>}
           {l.order_id && <Link className="btn sm ghost" to={`/suits/${l.order_id}`}>Ver pedido</Link>}
         </li>)}</ul>}
     {temMais && <button className="btn ghost" disabled={carregando} onClick={mais}>Carregar mais</button>}

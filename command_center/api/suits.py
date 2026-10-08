@@ -150,6 +150,10 @@ def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
         raise suits.Invalido("quantidade entre 1 e 50")
     if campos.get("supplier_id") and not um(con, "SELECT id FROM suit_suppliers WHERE id=?", (campos["supplier_id"],)):
         raise suits.Invalido("fornecedor não existe")
+    if campos.get("client_id") and not um(con, "SELECT id FROM clients WHERE id=?", (campos["client_id"],)):
+        raise suits.Invalido("cliente não existe")
+    if dados.get("client_id") == 0:          # 0 = desvincular (a tela manda 0 quando tira o cliente)
+        campos["client_id"] = None
     atual = um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,)) if pid else None
     if pid and not atual:
         raise LookupError("Pedido não encontrado.")
@@ -186,6 +190,7 @@ def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
     if dados.get("nota"):
         p = um(con, "SELECT status FROM suit_orders WHERE id=?", (pid,))
         suits.anotar(con, pid, dados["nota"], "nota", p["status"], user_id=u_id)
+    suits.vincular_por_email(con, pid)
     return pid
 
 
@@ -242,14 +247,18 @@ class LeadIn(BaseModel):
     phone: str | None = None
     notes: str | None = None
     status: str | None = None
+    client_id: int | None = None
 
 
 @r.post("/leads", status_code=201)
 def criar_lead(dados: LeadIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     if not (dados.name or "").strip():
         raise HTTPException(400, "Diga o nome.")
+    if dados.client_id and not um(con, "SELECT id FROM clients WHERE id=?", (dados.client_id,)):
+        raise HTTPException(400, "Cliente não existe.")
     lid = inserir(con, "suit_leads", name=dados.name.strip(), email=_limpo(dados.email) or None,
-                  phone=_limpo(dados.phone) or None, notes=_limpo(dados.notes) or None, updated_at=agora())
+                  phone=_limpo(dados.phone) or None, notes=_limpo(dados.notes) or None, client_id=dados.client_id,
+                  updated_at=agora())
     _aud(con, request, u, "suit.lead.created", lid, tipo="suit_lead")
     return um(con, "SELECT * FROM suit_leads WHERE id=?", (lid,))
 
@@ -261,6 +270,8 @@ def mudar_lead(lid: int, dados: LeadIn, request: Request, con: sqlite3.Connectio
     campos = {k: _limpo(v) for k, v in dados.model_dump(exclude_unset=True).items()}
     if "status" in campos and campos["status"] not in ("aberto", "convertido", "perdido"):
         raise HTTPException(400, "Situação inválida.")
+    if campos.get("client_id") and not um(con, "SELECT id FROM clients WHERE id=?", (campos["client_id"],)):
+        raise HTTPException(400, "Cliente não existe.")
     if campos:
         atualizar(con, "suit_leads", lid, updated_at=agora(), **campos)
     _aud(con, request, u, "suit.lead.updated", lid, {"campos": list(campos)}, tipo="suit_lead")
@@ -275,6 +286,7 @@ def lead_vira_pedido(lid: int, request: Request, con: sqlite3.Connection = Depen
     if lead["order_id"]:
         return _pedido(con, lead["order_id"])
     pid = gravar(con, {"customer_name": lead["name"], "customer_email": lead["email"], "customer_phone": lead["phone"],
+                       "client_id": lead["client_id"],
                        "nota": f"Veio do lead: {lead['notes']}" if lead["notes"] else None}, u["id"])
     atualizar(con, "suit_leads", lid, status="convertido", order_id=pid, updated_at=agora())
     _aud(con, request, u, "suit.lead.converted", lid, {"pedido": pid}, tipo="suit_lead")
@@ -442,6 +454,16 @@ def rodar_ponte(request: Request, con: sqlite3.Connection = Depends(get_db), u=D
     ok = _ponte().rodar_em_segundo_plano()
     _aud(con, request, u, "suit.bridge.run", "ponte", {"iniciada": ok}, tipo="suit_bridge")
     return {"iniciada": ok, "nota": None if ok else "Já tem um ciclo rodando."}
+
+
+# ------------------------------------------------------------ vincular ao cliente
+@r.get("/cliente/{cid}")
+def dados_do_cliente(cid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """O que o cadastro já sabe do cliente, para o formulário puxar (#158)."""
+    d = suits.dados_do_cliente(con, cid)
+    if not d:
+        raise HTTPException(404, "Cliente não encontrado.")
+    return d
 
 
 # ------------------------------------------------------------------- pedido
@@ -684,6 +706,7 @@ def ferramentas_ia():
                      "supplier_id": n, "order_date": s, "due_on": s, "paid_at": s, "tracking": s,
                      "design": dict(o, description="ideia, cores, logos, posicao_logos, nome, bandeira, observacoes"),
                      "medidas": dict(o, description='{"valores": {"head": 59, "foot": "42 EUR"}, "unidade": "cm|in", "unidade_peso": "kg|lb"}'),
+                     "client_id": dict(n, description="o card do cliente no painel (urace_clientes), quando já existe"),
                      "status": dict(s, enum=suits.CODIGOS), "nota": s, "site_order": s,
                      "gmail_thread_cliente": s, "gmail_thread_designer": s, "gmail_thread_fornecedor": s}
     return [

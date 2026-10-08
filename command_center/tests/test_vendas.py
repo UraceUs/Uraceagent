@@ -401,3 +401,22 @@ def test_contexto_avisa_quando_a_ficha_esta_sem_email(cli):
         assert motor.contexto_da_venda(con, "[oportunidade #999999 — Fantasma] oi") == ""
     finally:
         con.close()
+
+
+def test_vincular_ao_cliente_na_criacao_fecha_no_card_escolhido(cli):
+    """#158: a oportunidade criada à mão já sai vinculada ao card escolhido, mesmo com outro e-mail."""
+    con = conectar()
+    try:
+        cid = con.execute("INSERT INTO clients (name, email, status) VALUES ('Bruno Vinculado','bruno@example.com','ACTIVE')").lastrowid
+        con.commit()
+    finally:
+        con.close()
+    h = entra(cli, "closer@urace.us")
+    assert cli.post(B + "/sales", headers=h, json={"name": "Bruno", "client_id": 999999}).status_code == 400
+    r = cli.post(B + "/sales", headers=h, json={"name": "Bruno V.", "email": "outro@example.com", "client_id": cid})
+    assert r.status_code == 201 and r.json()["ja_e_cliente"] == {"id": cid, "nome": "Bruno Vinculado"}
+    oid = r.json()["id"]
+    r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={
+        "service": "Arrive and Drive 4 Stroke", "amount": 350, "preco_tabela": 350,
+        "passos": {"cliente": True, "qbo": False, "waiver": False, "asana": False, "kommo": False}})
+    assert r.status_code == 200 and r.json()["client_id"] == cid
