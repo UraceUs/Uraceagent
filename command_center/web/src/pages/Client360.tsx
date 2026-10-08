@@ -54,6 +54,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const [lemb, setLemb] = useState(false)
   const [renomear, setRenomear] = useState<number | null>(null)
   const [mover, setMover] = useState<number | null>(null)
+  const [qr, setQr] = useState(false)
   if (error && !data) return <ErrorState error={error} retry={reload} />
   if (loading && !data) return <Loading rows={8} />
   if (!data) return null
@@ -114,6 +115,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       <div className="c360-acts">
         {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>✦ Perguntar à IA</button>}
         {can('MANAGER') && <button className={`btn${c.pro_driver ? '' : ''}`} disabled={proBusy} onClick={togglePro} title={c.pro_driver ? 'Tirar de Pro Racing Driver' : 'Vai para a aba Pro Racing Drivers e libera equipamento e corridas'}>{proBusy ? <span className="spin" /> : c.pro_driver ? '★ Pro Racing Driver' : '☆ Tornar Pro'}</button>}
+        {(can('OPERATOR') || box) && <button className="btn" onClick={() => setQr(true)} title="O QR que o mecânico lê no balcão">▣ QR do balcão</button>}
         {can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}
         {can('OPERATOR') && <details className="more"><summary className="btn" title="Mais ações">⋯</summary><div className="menu">
           <button className="btn ghost sm" disabled={scanning} onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? `Varredura parcial: ${r.avisos.join('; ')}` : `Achou ${r.gmail} thread(s) de e-mail e ligou ${r.docusign} waiver(s).`, r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} Buscar no Gmail e DocuSign</button>
@@ -178,6 +180,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {renomear !== null && <RenomearServico tarefa={data.tasks.find(t => t.id === renomear)!} outras={data.tasks.filter(t => t.id !== renomear)} onClose={() => setRenomear(null)} onDone={reload} />}
       {mover !== null && <MoverServico tarefa={data.tasks.find(t => t.id === mover)!} atual={c} onClose={() => setMover(null)} onDone={reload} />}
       {unir && <UnirModal keep={c} onClose={() => setUnir(false)} onDone={(kid) => { if (kid !== c.id) nav(`/clients/${kid}`); else reload() }} />}
+      {qr && <QrModal cid={c.id} nome={c.pilot_name || c.name} onClose={() => setQr(false)} />}
       {tab === 'pecas' && <><QrBalcao cid={c.id} nome={c.pilot_name || c.name} /><PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} /></>}
       {tab === 'site' && <ContaNoSite cid={c.id} />}
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
@@ -546,6 +549,19 @@ function ContaNoSite({ cid }: { cid: number }) {
       {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{Object.entries(p.measures).map(([k, v]) => <div key={k}><dt>{MEDIDA_PT[k] || k}</dt><dd>{String(v)}</dd></div>)}</dl>}
     </div>)}
   </div>
+}
+
+/** #165: o QR à mão, do topo do card (dono, 08/10: "precisa estar lá"). */
+function QrModal({ cid, nome, onClose }: { cid: number; nome: string; onClose: () => void }) {
+  const src = `/ops/api/balcao/cliente/${cid}/qr.svg`
+  return <Scrim onMouseDown={onClose}><div className="modal qr-modal" style={{ maxWidth: 380 }} role="dialog" aria-modal="true" aria-label={`QR do balcão de ${nome}`} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
+    <h3 className="h3" style={{ margin: 0 }}>QR do balcão · {nome}</h3>
+    <img className="qr-cliente" src={src} alt={`QR do balcão de ${nome}`} width={260} height={260} />
+    <p className="small muted" style={{ margin: 0 }}>O mecânico lê este QR e depois as peças: elas entram na invoice de peças do dia. O cliente tem o mesmo QR na área dele (my.urace.us).</p>
+    <div className="row wrap" style={{ gap: 8, justifyContent: 'center' }}><a className="btn sm" href={src} target="_blank" rel="noreferrer">Imprimir</a>
+      <Link className="btn sm primary" to={`/balcao/${cid}`}>Abrir no balcão</Link></div>
+  </div></Scrim>
 }
 
 /** #87: o QR do card, para o leitor do balcão. Imprime num cartão ou adesivo; o código é aleatório, não o id. */
