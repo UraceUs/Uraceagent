@@ -18,6 +18,28 @@ status: ativo
 O macacão é **100% personalizado**: medidas, design, cores, logos e a
 posição de cada logo são feitos para aquele cliente. Nada é padrão.
 
+## 🔁 Desde 08/10/2026: a aba Suits e a ponte de e-mail (#153)
+
+O pedido de macacão vive na aba **Suits · Alpha Line** do Command Center (não mais no
+quadro SUITS do Asana, que foi importado para lá): dez etapas, nota com print em qualquer
+etapa, as 29 medidas em cm/pol, design, leads e fornecedores.
+
+A **ponte de e-mail** roda o fluxo que o Ítalo montou no ChatGPT (áudio de 08/10):
+venda de macacão no site → a IA agradece, manda o manual de medidas (PDF) e pede o design
+→ o cliente responde → a IA grava medidas e design e passa **só o design** ao designer
+(Matheus), sem nome completo, e-mail, telefone, endereço ou pagamento do cliente → o designer
+pergunta ou entrega a arte → a IA leva ao cliente **sem os dados do designer**. Também lê o
+marcador `Suits` e as respostas do fornecedor.
+
+Ítalo: *"eu pedi para tudo passar por minha aprovação por isso que eu fui o gargalo"*. Por
+isso a ponte manda **sem aprovação** quando o "envio automático" está ligado. Começa em
+**simulação**: o e-mail que a IA mandaria aparece na linha do tempo do pedido para a equipe
+conferir, e só depois se liga o envio.
+
+Quem decide o destinatário é o painel (o cliente, o designer ou o fornecedor DAQUELE pedido),
+nunca o modelo. O que a tabela abaixo diz sobre "continua humano" no vai e vem do design foi
+substituído por esta decisão.
+
 ## O caminho, do contato à entrega
 
 1. **Contato e negociação** — cliente procura, negocia. (humano)

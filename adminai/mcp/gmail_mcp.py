@@ -706,6 +706,57 @@ def gmail_rascunho(conta, para, assunto, corpo, thread_id=None, responder_messag
             "aviso": "É rascunho. Ninguém recebeu nada. Quem envia é humano."}
 
 
+# ------------------------------------------------------- portas da aba Suits (#153)
+# A ponte de e-mail dos macacões ENVIA de verdade (dono, 08/10: "a IA faz aquele meio de campo
+# ... fala com o cliente, fala com o Matheus"). Não são ferramentas do agente: quem decide o
+# destinatário é o painel (o cliente, o designer ou o fornecedor DAQUELE pedido), nunca o modelo.
+def mensagens_da_thread(conta, thread_id, limite=8000):
+    """Cada mensagem da thread com corpo, anexos (inclusive imagem colada no corpo) e o
+    Message-ID, para responder na mesma conversa."""
+    th = _req(conta, f"{GMAIL}/threads/{thread_id}?format=full")
+    saida = []
+    for m in th.get("messages", []):
+        texto, anexos, _html_, inline = _corpo(m.get("payload", {}), com_html=True)
+        imgs = [dict(i, nome=i.get("nome") or f"imagem-{n + 1}.{(i.get('mime') or 'image/png').split('/')[-1]}")
+                for n, i in enumerate(inline) if i.get("attachment_id")]
+        saida.append({"message_id": m["id"], "de": _cabecalho(m, "From"), "para": _cabecalho(m, "To"),
+                      "data": _cabecalho(m, "Date"), "assunto": _cabecalho(m, "Subject"),
+                      "message_id_header": _cabecalho(m, "Message-ID"), "marcadores": m.get("labelIds") or [],
+                      "corpo": texto[:limite] + ("…[cortado]" if len(texto) > limite else ""),
+                      "anexos": [a for a in anexos if a.get("attachment_id")] + imgs})
+    return {"thread_id": thread_id, "mensagens": saida}
+
+
+def anexo_bytes(conta, message_id, attachment_id):
+    """O conteúdo de um anexo, em bytes."""
+    r = _req(conta, f"{GMAIL}/messages/{message_id}/attachments/{attachment_id}")
+    return _b64d(r["data"])
+
+
+def enviar_sistema(conta, para, assunto, corpo, anexos=None, thread_id=None, em_resposta_a=None):
+    """Envia (não é rascunho). `anexos`: [(nome, bytes, mime)]. `em_resposta_a`: o Message-ID
+    da mensagem respondida, para o cliente ver na mesma conversa. Devolve id e thread_id."""
+    if "@" not in (para or ""):
+        raise ErroFerramenta("destinatário inválido")
+    msg = email.message.EmailMessage()
+    msg["To"] = para
+    msg["Subject"] = assunto
+    msg["From"] = _conta(conta).get("email", "")
+    if em_resposta_a:
+        msg["In-Reply-To"] = em_resposta_a
+        msg["References"] = em_resposta_a
+    msg.set_content(corpo)
+    for nome, dados, mime in anexos or []:
+        principal, _, sub = (mime or "application/octet-stream").partition("/")
+        msg.add_attachment(dados, maintype=principal or "application", subtype=sub or "octet-stream", filename=nome)
+    corpo_api = {"raw": base64.urlsafe_b64encode(msg.as_bytes()).decode()}
+    if thread_id:
+        corpo_api["threadId"] = thread_id
+    r = _req(conta, f"{GMAIL}/messages/send", "POST", corpo_api)
+    log("e-mail enviado pela ponte dos Suits:", conta, "→", para, "|", assunto)
+    return {"id": r.get("id"), "thread_id": r.get("threadId")}
+
+
 if __name__ == "__main__":
     _carregar_env()
     _carregar_contas()

@@ -127,6 +127,7 @@ export function Shell() {
         <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">Oportunidades</NL>
         <NL to="/sales/agenda" icon="cal">Agenda de vendas</NL>
         <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>Chat do Kommo</NL>
+        {can('OPERATOR') && <NL to="/suits" icon="suit">Suits · Alpha Line</NL>}
         <NL to="/site" icon="globe">Site público</NL>
         <div className="grp">Pessoas</div>
         <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">Equipe</NL>

@@ -49,6 +49,8 @@ const AgendaVendas = tela(() => import('./pages/Vendas'), 'AgendaVendas')
 const Oportunidade = tela(() => import('./pages/Vendas'), 'Oportunidade')
 const Oportunidades = tela(() => import('./pages/Vendas'), 'Oportunidades')
 
+const Suits = tela(() => import('./pages/Suits'), 'Suits')
+const SuitPedido = tela(() => import('./pages/Suits'), 'SuitPedido')
 const SitePublico = tela(() => import('./pages/SitePublico'), 'SitePublico')
 const PortalApp = tela(() => import('./portal/Portal'), 'PortalApp')
 
@@ -63,6 +65,12 @@ function Guard({ min, children }: { min?: Role; children: ReactNode }) {
   if ((min && !can(min)) || (box && !telaDoBox(loc.pathname))) return <><PageHeader title="Sem permissão" />
     <div className="card"><Empty title="Esta área não é do seu acesso">{min && !can(min) ? <>Ela exige acesso de {PAPEL_PT[min] || min} ou acima.</> : 'Ela não faz parte do acesso do box.'} Fale com o administrador.</Empty></div></>
   return <>{children}</>
+}
+
+/** /suits/leads é uma aba; /suits/12 é um pedido. */
+function SuitsOuPedido() {
+  const loc = useLocation()
+  return /^\/suits\/\d+\/?$/.test(loc.pathname) ? <SuitPedido /> : <Suits />
 }
 
 /** A tela inicial: "Meu dia" para o mecânico e o coach (#92); o painel para os outros. */
@@ -111,6 +119,9 @@ export default function App() {
           <Route path="equipe/:canal" element={<Equipe />} />
           <Route path="site" element={<Guard min="OPERATOR"><SitePublico /></Guard>} />
           <Route path="site/:aba" element={<Guard min="OPERATOR"><SitePublico /></Guard>} />
+          {/* Suits · Alpha Line (#153): as abas são caminho; o pedido é /suits/12 */}
+          <Route path="suits" element={<Guard min="OPERATOR"><Suits /></Guard>} />
+          <Route path="suits/:aba" element={<Guard min="OPERATOR"><SuitsOuPedido /></Guard>} />
           <Route path="sales" element={<Guard min="OPERATOR"><Oportunidades /></Guard>} />
           <Route path="sales/agenda" element={<Guard min="OPERATOR"><AgendaVendas /></Guard>} />
           <Route path="sales/:id" element={<Guard min="OPERATOR"><Oportunidade /></Guard>} />

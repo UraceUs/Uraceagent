@@ -408,7 +408,7 @@ def _executa_sdk(con, command_id, prompt, session_key, user_id):
     from command_center.api import agente_sdk
     with _PARALELO:
         atualizar(con, "ai_commands", command_id, status="RUNNING", started_at=agora())
-        res = agente_sdk.rodar(prompt, session_key, command_id=command_id)
+        res = agente_sdk.rodar(prompt, session_key, command_id=command_id, user_id=user_id)
     if res.ok:
         atualizar(con, "ai_commands", command_id, status="DONE", finished_at=agora(), output=res.texto)
         n = um(con, """SELECT SUM(status='PROPOSED') AS aprovar, SUM(status='DONE') AS feitas
