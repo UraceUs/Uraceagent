@@ -1225,7 +1225,8 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     pg.get_by_label("1 – Head circumference").fill("59")
     pg.get_by_role("button", name="Salvar medidas").click()
     pg.locator(".suit-med", has_text="Head circumference").get_by_text("59 cm / 1'11\"").wait_for()
-    assert "1 – Head circumference — 59 cm / 1'11\"" in pg.locator(".suit-pre").first.inner_text()   # já no e-mail ao fornecedor
+    # já no e-mail ao fornecedor (a prévia é recalculada logo depois da lista das medidas: esperar por ela)
+    pg.locator(".suit-pre").first.get_by_text("1 – Head circumference — 59 cm / 1'11\"").wait_for()
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
