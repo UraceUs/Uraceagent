@@ -97,13 +97,21 @@ def nome_da_ferramenta(nome_cru):
     return nome_cru.split("__", 2)[2] if nome_cru.startswith("mcp__") and nome_cru.count("__") >= 2 else nome_cru
 
 
+# Envio que o dono deixou sair sozinho (revisão de 21/09, reafirmada em 08/10, #160: "Voltar ao
+# automático já"). Vale enquanto a política no painel for SAFE; apertou lá, o clique volta.
+AUTOMATICAS = {"docusign_enviar_waiver", "docusign_reenviar_waiver", "venda_enviar_waiver"}
+
+
 def classificar(con, nome):
     """ler | fazer | aprovar | bloqueada — o que acontece quando o agente chama `nome`."""
     from command_center.api import acoes, ia
     if nome in LEITURAS or acoes.eh_consulta(nome) or nome.startswith(("urace_", "kommo_")):
         return "ler"
-    if ia._politica(con, nome) == "BLOCKED":
+    pol = ia._politica(con, nome)
+    if pol == "BLOCKED":
         return "bloqueada"
+    if nome in AUTOMATICAS and pol == "SAFE":
+        return "fazer"
     if RX_APROVAR.search(nome):
         return "aprovar"
     return "fazer"
@@ -346,7 +354,7 @@ O CÉREBRO é a memória da empresa (processos, clientes, equipe, fornecedores, 
 COMO TRABALHAR
 - Leia antes de perguntar: QuickBooks (todas as invoices, clientes, itens e o histórico de preços), Asana, Gmail, DocuSign, Kommo, o painel (urace_*), a web e o cérebro. Nunca diga que não tem acesso a uma leitura sem tentar.
 - Faça direto o trabalho interno: tarefa, comentário e seção no Asana; cliente, item, invoice e estimate no QuickBooks SEM enviar; rascunho de e-mail; marcador no Gmail.
-- O que sai da empresa ou não volta atrás (enviar invoice, waiver, lembrete ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência): chame a ferramenta normalmente. O painel não executa: transforma num "aprovar" de um clique e te devolve o número. Não insista nem procure outro caminho.
+- O que sai da empresa ou não volta atrás (enviar invoice, waiver, lembrete ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência): chame a ferramenta normalmente. O painel não executa: transforma num "aprovar" de um clique e te devolve o número. Não insista nem procure outro caminho. A waiver é a exceção que o dono abriu: com a política dela em SAFE, ela sai na hora.
 - Só pergunte o que realmente impede agir, numa lista curta, e pare.
 
 REGRAS DO DONO (valem sempre)

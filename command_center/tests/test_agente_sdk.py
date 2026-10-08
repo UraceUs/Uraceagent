@@ -38,8 +38,9 @@ def test_classifica_ler_fazer_aprovar_e_bloqueada(con):
     for nome in ("asana_comentar", "asana_criar_tarefa", "asana_mover_para_secao", "asana_concluir", "qbo_criar_invoice",
                  "qbo_criar_estimate", "qbo_criar_cliente", "qbo_criar_item", "gmail_rascunho", "gmail_rotular"):
         assert c(con, nome) == "fazer", nome
-    for nome in ("qbo_enviar_invoice", "qbo_criar_e_enviar_invoice", "qbo_lembrete_invoice", "docusign_enviar_waiver",
-                 "docusign_reenviar_waiver", "docusign_send_reminder", "docusign_anular_envelope",
+    for nome in ("docusign_enviar_waiver", "docusign_reenviar_waiver"):    # política SAFE do dono (21/09; 08/10, #160)
+        assert c(con, nome) == "fazer", nome
+    for nome in ("qbo_enviar_invoice", "qbo_criar_e_enviar_invoice", "qbo_lembrete_invoice", "docusign_send_reminder", "docusign_anular_envelope",
                  "docusign_substituir_documento_modelo", "qbo_criar_recorrencia", "painel_unir_clientes",
                  "asana_apagar_tarefa", "qbo_atualizar_preco"):
         assert c(con, nome) == "aprovar", nome
@@ -180,6 +181,7 @@ def test_erro_do_agente_vira_falha(con, falso):
 def test_ai_command_no_sdk_resolve_de_uma_vez(con, monkeypatch):
     uid, cid = _comando(con)
     pedidos = []
+    con.execute("UPDATE action_policies SET policy='REQUIRES_APPROVAL' WHERE action='docusign_enviar_waiver'")  # o clique
 
     def rodar(prompt, session_key, command_id=None, **kw):
         pedidos.append(prompt)
@@ -261,3 +263,14 @@ def test_resultado_sem_fim_e_falha():
     assert not r.ok
     assert agente_sdk._resultado([], SimpleNamespace(subtype="error_max_turns", is_error=True, result=None,
                                                      total_cost_usd=1, errors=None), "s", 2).ok
+
+
+def test_waiver_sai_sozinha_enquanto_a_politica_do_dono_for_safe(con):
+    """#160, dono 08/10: "Voltar ao automático já" (a waiver, como na revisão de 21/09)."""
+    for nome in ("docusign_enviar_waiver", "docusign_reenviar_waiver", "venda_enviar_waiver"):
+        con.execute("INSERT OR REPLACE INTO action_policies (action, policy) VALUES (?, 'SAFE')", (nome,))
+        assert agente_sdk.classificar(con, nome) == "fazer", nome
+        con.execute("UPDATE action_policies SET policy='REQUIRES_APPROVAL' WHERE action=?", (nome,))
+        assert agente_sdk.classificar(con, nome) == "aprovar", nome          # apertou no painel: o clique volta
+    con.execute("INSERT OR REPLACE INTO action_policies (action, policy) VALUES ('qbo_enviar_invoice', 'SAFE')")
+    assert agente_sdk.classificar(con, "qbo_enviar_invoice") == "aprovar"   # só a waiver; invoice continua no clique
