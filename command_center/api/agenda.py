@@ -109,7 +109,7 @@ def _rodar_triagem(con):
         c2 = conectar()
         try:
             with ia._PARALELO:                           # nunca junto com outro agente
-                res = triagem.rodar(c2, ia.RUNNER, f"agent:{ia.AGENTE}:triagem-{datetime.now(FUSO).strftime('%Y-%m-%d')}",
+                res = triagem.rodar(c2, ia.runner_email, f"agent:{ia.AGENTE}:triagem-{datetime.now(FUSO).strftime('%Y-%m-%d')}",
                                     aprendizados=motor.aprendizados(c2), por="agenda")
             c2.execute("UPDATE automation_rules SET last_result=? WHERE name='gmail_triagem'",
                        (json.dumps({"em": agora(), "ok": not res.get("erros"), **res}, ensure_ascii=False)[:2000],))

@@ -477,6 +477,13 @@ CREATE TABLE IF NOT EXISTS ai_commands (
 );
 CREATE INDEX IF NOT EXISTS ai_commands_user ON ai_commands(user_id, created_at);
 
+-- #152: a conversa do Claude Agent SDK que cada session_key do painel retoma (uma por pessoa e dia)
+CREATE TABLE IF NOT EXISTS ai_sdk_sessions (
+  session_key  TEXT PRIMARY KEY,
+  sdk_session  TEXT NOT NULL,
+  updated_at   TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS ai_workflows (
   id           INTEGER PRIMARY KEY,
   command_id   INTEGER REFERENCES ai_commands(id),

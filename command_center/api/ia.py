@@ -129,7 +129,34 @@ def _extrai_texto(saida):
     return None
 
 
-RUNNER = runner_openclaw
+def motor_da_ia():
+    """'sdk' (Claude Agent SDK, #152) ou 'openclaw'. `CC_IA_MOTOR` manda; sem ele, o SDK quando
+    está instalado e há chave da Anthropic no serviço, senão o OpenClaw de antes."""
+    escolha = os.environ.get("CC_IA_MOTOR", "auto").strip().lower()
+    if escolha in ("sdk", "openclaw"):
+        return escolha
+    from command_center.api import agente_sdk
+    return "sdk" if agente_sdk.disponivel() else "openclaw"
+
+
+def runner_padrao(texto, session_key):
+    """O runner de sempre `(ok, saida, erro)`: no SDK, o Opus com o cérebro; senão, o OpenClaw."""
+    if motor_da_ia() == "sdk":
+        from command_center.api import agente_sdk
+        return agente_sdk.runner(texto, session_key)
+    return runner_openclaw(texto, session_key)
+
+
+RUNNER = runner_padrao
+
+
+def runner_email(texto, session_key):
+    """Triagem e classificação de e-mail: no SDK, o Haiku com escalada para o Opus (#152).
+    Se alguém trocou o RUNNER (teste, diagnóstico), é ele que responde."""
+    if RUNNER is runner_padrao and motor_da_ia() == "sdk":
+        from command_center.api import agente_sdk
+        return agente_sdk.runner_email(texto, session_key)
+    return RUNNER(texto, session_key)
 # Cada execução do agente sobe um processo Node + sandbox Docker. Em paralelo
 # isso derruba o VPS (09/09: 6 eventos → 6 agentes → site fora do ar).
 _PARALELO = threading.Semaphore(int(os.environ.get("CC_AI_PARALELO", "1")))
@@ -371,8 +398,28 @@ def motivo_amigavel(erro):
     """O erro do gateway em uma frase que o dono entende (e a causa certa: crédito do modelo, não o painel)."""
     e = (erro or "")
     if any(k in e.lower() for k in SEM_CREDITO):
-        return "O modelo da IA (conta Anthropic usada pelo OpenClaw) está sem crédito ou fora da cota. O painel, a sincronia e as regras continuam; só o que depende da IA espera. Reponha o crédito em console.anthropic.com (Plans & Billing) ou ligue a recarga automática."
+        return "O modelo da IA (conta Anthropic do AI Command) está sem crédito ou fora da cota. O painel, a sincronia e as regras continuam; só o que depende da IA espera. Reponha o crédito em console.anthropic.com (Plans & Billing) ou ligue a recarga automática."
     return e
+
+
+def _executa_sdk(con, command_id, prompt, session_key, user_id):
+    """O pedido inteiro numa execução só do agente (#152): ele lê, faz o interno e deixa o que sai
+    da empresa como "aprovar". Sem protocolo de texto e sem rodadas do painel."""
+    from command_center.api import agente_sdk
+    with _PARALELO:
+        atualizar(con, "ai_commands", command_id, status="RUNNING", started_at=agora())
+        res = agente_sdk.rodar(prompt, session_key, command_id=command_id)
+    if res.ok:
+        atualizar(con, "ai_commands", command_id, status="DONE", finished_at=agora(), output=res.texto)
+        n = um(con, """SELECT SUM(status='PROPOSED') AS aprovar, SUM(status='DONE') AS feitas
+                       FROM ai_actions WHERE command_id=?""", (command_id,))
+        auditar(con, "ai.command.done", "ai:agente_sdk", user_id=user_id, entity_type="ai_command", entity_id=command_id,
+                detail={"motor": "sdk", "aprovar": n["aprovar"] or 0, "feitas": n["feitas"] or 0, "parada": res.subtipo})
+    else:
+        atualizar(con, "ai_commands", command_id, status="FAILED", finished_at=agora(), error=motivo_amigavel(res.erro),
+                  output=res.texto or None)
+        auditar(con, "ai.command.failed", "ai:agente_sdk", user_id=user_id, entity_type="ai_command",
+                entity_id=command_id, detail={"motor": "sdk", "erro": (res.erro or "")[:300]})
 
 
 def _executa(command_id, texto, session_key, user_id, prompt=None):
@@ -380,6 +427,9 @@ def _executa(command_id, texto, session_key, user_id, prompt=None):
     con = conectar()
     try:
         prompt = prompt or texto
+        if RUNNER is runner_padrao and motor_da_ia() == "sdk":
+            _executa_sdk(con, command_id, prompt, session_key, user_id)
+            return
         with _PARALELO:                                   # fila: um agente por vez
             atualizar(con, "ai_commands", command_id, status="RUNNING", started_at=agora())
             ok, saida, erro = RUNNER(prompt + SUFIXO, session_key)
