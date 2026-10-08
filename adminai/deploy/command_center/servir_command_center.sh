@@ -93,6 +93,18 @@ if [ -f "$KENV" ] && ! grep -q '^KOMMO_HOOK_KEY=' "$KENV"; then
     echo "-- KOMMO_HOOK_KEY gerada em $KENV (a URL para o bot aparece em CRM → Ligar o chat)"
 fi
 
+# ---------------------------------------------------------- 4b. chave do cofre (#162)
+# Só CRIA quando ainda não existe: trocar a chave deixaria as senhas guardadas sem abrir. O valor
+# nunca aparece no terminal nem no log; fica só no adminai.env (600), que o serviço já lê.
+_ENVF="$URACE_DIR/adminai.env"
+touch "$_ENVF"; chmod 600 "$_ENVF"
+if ! grep -q '^CC_COFRE_CHAVE=.\+' "$_ENVF"; then
+    echo "CC_COFRE_CHAVE=$("$VENV/bin/python" -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("="))')" >> "$_ENVF"
+    echo "-- cofre: chave criada em $_ENVF (guarde uma cópia desse arquivo fora do VPS)"
+else
+    echo "-- cofre: chave já existe (mantida)"
+fi
+
 # --------------------------------------------------------------- 5. systemd
 echo "-- 5/7 serviço systemd"
 sudo cp "$REPO/adminai/deploy/command_center/$UNIT.service" "/etc/systemd/system/$UNIT.service"

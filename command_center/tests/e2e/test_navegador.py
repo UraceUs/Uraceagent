@@ -37,7 +37,7 @@ def codigo_do_email(para):
 
 
 # Toda tela do menu. Rota com :id usa o 1 que a semente cria.
-ROTAS = ["/", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
+ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
@@ -60,7 +60,9 @@ def servidor(tmp_path_factory):
     EMAILS = str(pasta / "emails.jsonl")                 # #108: o e-mail do código vai para cá, nada sai da máquina
     env = dict(os.environ, CC_DB_PATH=str(pasta / "e2e.sqlite"), URACE_DIR=str(pasta), URACE_ENV="/nao/existe",
                CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
-               CC_SITE_HOSTS="127.0.0.1")              # #148: o site novo responde no endereço do teste
+               CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
+               CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
+               CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM")  # 32 bytes de teste
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
     porta = _porta_livre()
@@ -1107,6 +1109,40 @@ def test_suits_novo_pedido_vincula_ao_cliente_e_puxa_o_cadastro(servidor, navega
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_cofre_abre_com_a_senha_guarda_e_mostra_so_para_o_acesso_livre(servidor, navegador):
+    """#162, dono 08/10: "somente no acesso livre crie uma sessão de logins e senhas de onde fiquem
+    seguras e consigam ser armazenadas por lá"."""
+    pg = entrar(navegador, servidor, email="livre@urace.us", largura=360, altura=800)
+    abrir(pg, servidor, "/cofre")
+    pg.get_by_role("heading", name="Cofre", level=1).wait_for()
+    assert pg.get_by_role("button", name="Novo login").count() == 0          # trancado: só depois da senha
+    pg.get_by_label("Confirme a sua senha de login para abrir").fill(SENHA)
+    pg.get_by_role("button", name="Abrir o cofre").click()
+    pg.get_by_role("button", name="Novo login").click()
+    dlg = pg.get_by_role("dialog", name="Novo login")
+    dlg.get_by_label("Serviço").fill("WordPress urace.us")
+    dlg.get_by_label("Usuário ou e-mail").fill("eduardo@urace.us")
+    dlg.get_by_label("Senha", exact=True).fill("segredo-de-teste-9")
+    dlg.get_by_role("button", name="Guardar").click()
+    pg.get_by_role("heading", name="WordPress urace.us", level=3).wait_for()
+    assert pg.get_by_text("segredo-de-teste-9").count() == 0                 # a senha não aparece sozinha
+    pg.get_by_role("button", name="Ver senha").click()
+    pg.get_by_text("segredo-de-teste-9").wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Trancar agora").click()
+    pg.get_by_role("button", name="Abrir o cofre").wait_for()
+    assert pg.get_by_text("segredo-de-teste-9").count() == 0
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+    pg = entrar(navegador, servidor, largura=390, altura=800)                # MANAGER comum: porta fechada
+    abrir(pg, servidor, "/cofre")
+    pg.get_by_text("O cofre é só da conta de acesso livre.").wait_for()
+    assert pg.get_by_role("link", name="Cofre").count() == 0
     pg.close()
 
 

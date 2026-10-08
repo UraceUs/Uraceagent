@@ -28,6 +28,7 @@ auth.criar_usuario(con, "italo@urace.us", "Italo Silveira", "ADMIN", "senha-de-t
 auth.criar_usuario(con, "eduardo@urace.us", "Eduardo Resende", "MANAGER", "senha-de-teste-123")
 auth.criar_usuario(con, "op@urace.us", "Operador Pista", "OPERATOR", "senha-de-teste-123")
 auth.criar_usuario(con, "leitor@urace.us", "Leitor", "VIEWER", "senha-de-teste-123")
+auth.criar_usuario(con, "livre@urace.us", "Dono Livre", "ADMIN", "senha-de-teste-123")   # acesso livre no teste (CC_ACESSO_LIVRE)
 
 # ---------------------------------------------------------------- clientes
 brian = inserir(con, "clients", name="Pablo Santiago", email="pablosantiago@outlook.com", email_alt="bryanlsantiago@outlook.com",

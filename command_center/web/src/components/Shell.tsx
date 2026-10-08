@@ -151,6 +151,7 @@ export function Shell() {
         {can('MANAGER') && <NL to="/audit" icon="shield">Auditoria</NL>}
         {can('ADMIN') && <NL to="/policies" icon="key">Políticas da IA</NL>}
         {can('ADMIN') && <NL to="/users" icon="user">Usuários</NL>}
+        {livre && <NL to="/cofre" icon="lock">Cofre</NL>}
       </nav>}
       <div className="foot"><span className="avatar">{initials(user?.name)}</span><div className="grow"><div className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{user?.name}</div><div className="small muted">{cargoDe(user)}</div></div></div>
     </aside>
