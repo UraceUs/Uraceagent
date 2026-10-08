@@ -186,6 +186,7 @@ def test_sem_destinatario_ou_sem_anexo_nao_sai(con):
     pid = _pedido(con, customer_email=None)
     with pytest.raises(sp.Recusado, match="e-mail do cliente"):
         sp.enviar(con, pid, "cliente", "a", "b")
+    sp.salvar_config(con, {"designer_email": ""})
     pid2 = _pedido(con)
     with pytest.raises(sp.Recusado, match="designer não está configurado"):
         sp.enviar(con, pid2, "designer", "a", "b")
@@ -267,3 +268,69 @@ def test_api_da_ponte(tmp_path, monkeypatch):
                 break
             time.sleep(0.05)
         assert feitos == [pid]
+
+
+# ------------------------------------------------- regras do robô do Ítalo (Mio, 08/10, #156)
+def test_padroes_do_mio_designer_assinatura_e_politica(con):
+    cfg = sp.config(con)
+    assert (cfg["designer_nome"], cfg["designer_email"]) == ("Mateus", "carvalhovisual1@gmail.com")
+    assert cfg["assinatura"].splitlines()[:4] == ["Best regards,", "George", "", "Urace"] and "Eduardo" not in cfg["assinatura"]
+    assert "three rounds of design revisions" in cfg["boas_vindas"] and "50% off" in cfg["boas_vindas"] and "33% off" in cfg["boas_vindas"]
+    assert "Três rodadas" in cfg["politica"] and "33%" in cfg["politica"]
+
+
+def test_o_prompt_leva_a_politica_e_nao_repete_as_boas_vindas(con):
+    _pedido(con, gmail_thread_cliente="t-cli")
+    gm, chamadas = Gmail(), []
+    gm.threads = {"t-cli": [{"message_id": "r1", "de": "Ryan <ryan@example.com>", "assunto": "Re: Order - Suit", "corpo": "Ideas attached", "anexos": []}]}
+    sp.rodar(con, gm, _executor(chamadas))
+    pr = chamadas[0]["prompt"]
+    assert "POLÍTICA DOS MACACÕES" in pr and "Três rodadas" in pr
+    assert "não mande de novo" in pr and "não mande adendo de política" in pr and "não fabricante" in pr
+    assert "George" in pr
+
+
+def _jpeg_com_exif(texto):
+    import io
+
+    from PIL import Image
+    im = Image.new("RGB", (64, 48), (200, 30, 30))
+    exif = Image.Exif()
+    exif[0x013B] = texto             # Artist
+    b = io.BytesIO()
+    im.save(b, "JPEG", exif=exif.tobytes())
+    return b.getvalue()
+
+
+def test_arte_do_designer_vai_ao_cliente_sem_nome_nem_metadados(con, tmp_path):
+    sp.salvar_config(con, {"envio_automatico": "1"})
+    pid = _pedido(con)
+    sujo = _jpeg_com_exif("Mateus Carvalho carvalhovisual1@gmail.com")
+    assert b"carvalhovisual1" in sujo
+    sp.guardar_anexo(pid, "mateus_mockup_final.jpg", sujo)
+    from pypdf import PdfWriter
+    w = PdfWriter(); w.add_blank_page(100, 100); w.add_metadata({"/Author": "Mateus", "/Creator": "carvalhovisual1@gmail.com"})
+    import io
+    b = io.BytesIO(); w.write(b)
+    sp.guardar_anexo(pid, "proof.pdf", b.getvalue())
+    sp.enviar(con, pid, "cliente", "Your mockup", "Here is your mockup for approval.", ["mateus_mockup_final.jpg", "proof.pdf"])
+    e = _enviados(tmp_path)[-1]
+    assert e["anexos"] == ["URACE-design-1.jpg", "proof.pdf"]
+    # o que saiu mesmo: os bytes limpos (o envio falso grava os nomes; aqui conferimos a limpeza direto)
+    limpos = sp.limpar_para_cliente([("mateus_mockup_final.jpg", sujo, "image/jpeg"), ("proof.pdf", b.getvalue(), "application/pdf")],
+                                    sp.config(con))
+    for nome, dados, _ in limpos:
+        assert b"carvalhovisual1" not in dados.lower() and b"mateus" not in dados.lower(), nome
+
+
+def test_arquivo_que_nao_da_para_limpar_e_carrega_o_designer_nao_sai(con):
+    sp.salvar_config(con, {"envio_automatico": "1"})
+    pid = _pedido(con)
+    sp.guardar_anexo(pid, "arte.ai", b"%!PS-Adobe Creator: carvalhovisual1@gmail.com")
+    with pytest.raises(sp.Recusado, match="designer"):
+        sp.enviar(con, pid, "cliente", "Your art", "Attached.", ["arte.ai"])
+    # o manual de medidas é nosso: passa como está
+    with open(sp.manual_pdf(), "wb") as f:
+        f.write(b"%PDF-1.4 manual")
+    assert sp.enviar(con, pid, "cliente", "Sizing", "Attached.", ["manual_medidas"])["simulado"] is False
+

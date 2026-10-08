@@ -373,6 +373,7 @@ class PonteIn(BaseModel):
     designer_email: str | None = None
     assinatura: str | None = None
     boas_vindas: str | None = None
+    politica: str | None = None
 
 
 @r.put("/ponte")

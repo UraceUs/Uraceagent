@@ -48,15 +48,29 @@ For the fit, please fill in the attached sizing form, it has diagrams showing ex
 
 A few things that make the measurements go faster: use a flexible tailor tape and have someone help you; take them against bare skin, with the muscles relaxed; if a number looks off, measure three times and use the average.
 
+Before production, three rounds of design revisions are included at no charge. Because every suit is made to order, custom suits are not eligible for voluntary returns or refunds. If anything is wrong on our side, we fix it at no cost; if a measurement error makes the suit unusable, we offer 50% off a replacement, and if a design you provided requires a new suit, 33% off a replacement. All subject to the terms of your purchase.
+
 Once I have the design and measurements, I'll send the mockup for approval and confirm the timeline!"""
+
+# Contexto do robô do Ítalo (Mio, 08/10, #156): a política que ele passou para os macacões. Vale para os
+# pedidos novos, sujeita aos termos da compra e aos direitos do cliente; conflito sobe para a equipe.
+POLITICA = """Três rodadas de revisão do design antes da produção, sem custo.
+Macacão personalizado não tem devolução voluntária nem reembolso.
+Erro causado pela URACE: corrigido sem custo.
+Erro de medida do cliente que torne o macacão inutilizável: 50% de desconto na troca.
+Erro do design fornecido pelo cliente que exija macacão novo: 33% de desconto na troca.
+Tudo sujeito aos termos da compra e aos direitos do cliente; conflito com isso sobe para a equipe."""
 
 PADROES = {
     "ponte_ligada": "1",
     "envio_automatico": "0",
-    "designer_nome": "",
-    "designer_email": "",
-    "assinatura": "Best regards,\nURACE Team\n+1 (407) 250-2291\nurace@urace.us\nwww.urace.us\n10724 Cosmonaut Blvd, Orlando, FL 32824, USA",
+    # Mio do Ítalo: "Mateus (carvalhovisual1@gmail.com) é designer de suits, não deve ser apresentado ao cliente como fabricante"
+    "designer_nome": "Mateus",
+    "designer_email": "carvalhovisual1@gmail.com",
+    # Mio do Ítalo: "replicate Eduardo Resende's URACE signature exactly except for the display name George"
+    "assinatura": "Best regards,\nGeorge\n\nUrace\n+1(407)2502291\nurace@urace.us\nwww.urace.us\n10724 Cosmonaut Blvd, Orlando, FL 32824, USA",
     "boas_vindas": BOAS_VINDAS,
+    "politica": POLITICA,
 }
 
 
@@ -77,7 +91,7 @@ def salvar_config(con, dados, uid=None):
     for k, v in dados.items():
         if k not in PADROES or v is None:
             continue
-        v = str(v).strip() if k != "boas_vindas" and k != "assinatura" else str(v)
+        v = str(v) if k in ("boas_vindas", "assinatura", "politica") else str(v).strip()
         if k in ("ponte_ligada", "envio_automatico"):
             v = "1" if v in ("1", "true", "True") else "0"
         if k == "designer_email" and v and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", v):
@@ -190,6 +204,68 @@ def _arquivos(pid, nomes):
     return saida
 
 
+def _marcas_do_designer(cfg):
+    m = []
+    email = (cfg.get("designer_email") or "").strip().lower()
+    if email:
+        m += [email, email.split("@")[0]]
+    nome = (cfg.get("designer_nome") or "").strip().lower()
+    if len(nome) >= 3:
+        m.append(nome)
+    return [x for x in m if len(x) >= 3]
+
+
+def _sem_metadados(nome, dados, mime):
+    """Imagem e PDF saem sem autor, EXIF, comentário ou XMP. O resto passa como está (e é conferido)."""
+    import io
+    ext = os.path.splitext(nome)[1].lower()
+    try:
+        if mime in ("image/jpeg", "image/png", "image/webp"):
+            from PIL import Image
+            im = Image.open(io.BytesIO(dados))
+            im.load()
+            im.info = {}
+            fmt = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}[mime]
+            if fmt == "JPEG" and im.mode not in ("RGB", "L", "CMYK"):
+                im = im.convert("RGB")
+            saida = io.BytesIO()
+            extra = {"quality": 95} if fmt in ("JPEG", "WEBP") else {"optimize": True}
+            im.save(saida, fmt, **extra)
+            return saida.getvalue()
+        if mime == "application/pdf" or ext == ".pdf":
+            from pypdf import PdfReader, PdfWriter
+            r, w = PdfReader(io.BytesIO(dados)), PdfWriter()
+            for pg in r.pages:
+                w.add_page(pg)
+            w.add_metadata({"/Producer": "URACE"})
+            saida = io.BytesIO()
+            w.write(saida)
+            return saida.getvalue()
+    except Exception:
+        return dados                    # não deu para limpar: a conferência abaixo decide
+    return dados
+
+
+def limpar_para_cliente(arquivos, cfg):
+    """Mio do Ítalo: nunca expor ao cliente o endereço, a assinatura ou os METADADOS do designer. O nome do
+    arquivo também não leva o designer; e se o conteúdo ainda carregar o nome ou o e-mail dele, não sai."""
+    marcas = _marcas_do_designer(cfg)
+    saida = []
+    for i, (nome, dados, mime) in enumerate(arquivos, 1):
+        if nome.startswith("GUIDE TO FILLING IN SIZING"):
+            saida.append((nome, dados, mime))
+            continue
+        dados = _sem_metadados(nome, dados, mime)
+        if any(m in nome.lower() for m in marcas):
+            nome = f"URACE-design-{i}{os.path.splitext(nome)[1].lower()}"
+        baixo = dados.lower()
+        if any(m.encode() in baixo for m in marcas):
+            raise Recusado(f"o arquivo {nome} ainda carrega o nome ou o contato do designer: peça a arte exportada de novo "
+                           "(ou em PNG/JPG/PDF) antes de mandar ao cliente.")
+        saida.append((nome, dados, mime))
+    return saida
+
+
 def _envio_real(para, assunto, corpo, anexos, thread_id, em_resposta_a):
     falso = os.environ.get("CC_EMAIL_FAKE")
     if falso:
@@ -219,6 +295,8 @@ def enviar(con, pid, papel, assunto, corpo, anexos=None, responder=True, user_id
         raise Recusado("assunto e corpo são obrigatórios")
     _guardas(pedido, papel, assunto + "\n" + corpo, cfg)
     arquivos = _arquivos(pid, anexos)
+    if papel == "cliente":
+        arquivos = limpar_para_cliente(arquivos, cfg)
     thread = pedido.get(f"gmail_thread_{papel}") if responder else None
     simulado = SIMULAR.get() or cfg["envio_automatico"] != "1"
     lista = ", ".join(a[0] for a in arquivos)
@@ -466,11 +544,15 @@ def prompt(con, ev, cfg, anexos_baixados):
             + f"Thread do Gmail: {ev.get('thread_id')}.\n\n"
             + QUE_FAZER[ev["tipo"]].replace("{id}", str(pid or "?"))
             + "\n\nSEMPRE: no idioma do cliente, educado e comercial (ainda é venda), respeitando o que ele pediu; não prometa "
-              "preço, prazo ou desconto que não esteja no pedido; assine com a ASSINATURA. Na dúvida (reclamação, reembolso, "
-              "cancelamento, mudança de preço, algo estranho), não responda: suits_precisa_humano com o motivo. No fim, "
-              "suits_anotar com o que fez em uma linha."
+              "preço, prazo ou desconto que não esteja no pedido ou na POLÍTICA; assine com a ASSINATURA. Se a conversa já tem "
+              "as boas-vindas da URACE (agradecimento + manual de medidas), não mande de novo: siga do ponto em que está; e em "
+              "pedido que começou antes da ponte não mande adendo de política por conta própria. O designer é designer, não "
+              "fabricante: nunca diga ao cliente quem desenha nem quem fabrica, nem repasse texto, assinatura ou conversa dele. "
+              "Na dúvida (reclamação, reembolso, cancelamento, troca, mudança de preço, conflito com a política, algo estranho), "
+              "não responda: suits_precisa_humano com o motivo. No fim, suits_anotar com o que fez em uma linha."
             + ("" if cfg.get("designer_email") else "\nO e-mail do designer ainda não foi configurado: se precisar falar com ele, "
                "use suits_precisa_humano dizendo o que mandaria.")
+            + f"\n\nPOLÍTICA DOS MACACÕES (do dono):\n{cfg['politica']}"
             + f"\n\nMODELO DE BOAS-VINDAS (referência; adapte ao idioma e ao pedido):\n{cfg['boas_vindas']}"
             + f"\n\nASSINATURA:\n{cfg['assinatura']}"
             + "\n\nMENSAGENS NOVAS:\n" + "\n".join(linhas) + historico)

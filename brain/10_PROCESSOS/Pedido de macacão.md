@@ -37,7 +37,26 @@ isso a ponte manda **sem aprovação** quando o "envio automático" está ligado
 conferir, e só depois se liga o envio.
 
 Quem decide o destinatário é o painel (o cliente, o designer ou o fornecedor DAQUELE pedido),
-nunca o modelo. O que a tabela abaixo diz sobre "continua humano" no vai e vem do design foi
+nunca o modelo.
+
+**Do robô do Ítalo (Mio, contexto de 08/10, #156)**:
+- **Designer: Mateus** (`carvalhovisual1@gmail.com`). É designer, **não** fabricante. Não se
+  apresenta ao cliente, e o cliente nunca recebe o contato, a assinatura, o texto, a conversa ou
+  os metadados dele. A arte sai para o cliente sem o nome dele no arquivo e sem EXIF/autor.
+- **Quem assina com o cliente: George**, com a assinatura da URACE do Eduardo trocando só o nome
+  (sem inventar sobrenome, telefone ou endereço).
+- **Política dos macacões**, nas boas-vindas dos pedidos novos e sujeita aos termos da compra e
+  aos direitos do cliente:
+  - três rodadas de revisão do design antes da produção, sem custo;
+  - personalizado não tem devolução voluntária nem reembolso;
+  - erro da URACE: corrigido sem custo;
+  - erro de medida do cliente que inutilize o macacão: 50% de desconto na troca;
+  - erro do design fornecido pelo cliente: 33% de desconto na troca.
+
+  Conflito com os termos ou os direitos do cliente sobe para a equipe.
+- **Ryan Casner, pedido #4738**: as boas-vindas (agradecimento + manual) saíram em 28/09
+  às 08h41 ET, pelo Eduardo. Não repetir nem mandar adendo de política; a próxima resposta dele
+  é com o George. O que a tabela abaixo diz sobre "continua humano" no vai e vem do design foi
 substituído por esta decisão.
 
 ## O caminho, do contato à entrega
