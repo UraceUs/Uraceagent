@@ -316,11 +316,13 @@ PILOTO_OK = {"birth_date": "2014-05-01", "notes": "Two seasons in Mini kart.",
              "measures": {"height_in": 60, "weight_lb": 110, "chest_in": 30, "waist_in": 26, "hips_in": 30}}
 
 
-def cliente_pela_api(pg, servidor, nome, email, piloto=None, ip=None):
+def cliente_pela_api(pg, servidor, nome, email, piloto=None, ip=None, telefone=None):
     """Cria a conta (e um piloto completo) pela API, na sessão do navegador da página. `ip` faz o
-    cadastro vir de outra conexão (o limite é de 10 cadastros por hora por conexão)."""
+    cadastro vir de outra conexão (o limite é de 10 cadastros por hora por conexão). `telefone`
+    próprio quando o teste cria o card: o mesmo telefone em dois cards de contas diferentes trava."""
     r = pg.request.post(servidor + "/api/portal/signup", data={"name": nome, "email": email, "password": "pista-molhada-7",
-                                                              "birth_date": "1980-01-01", "accept_terms": True, **CONTATO},
+                                                              "birth_date": "1980-01-01", "accept_terms": True,
+                                                              **CONTATO, **({"phone": telefone} if telefone else {})},
                         headers={"X-Forwarded-For": ip} if ip else None)
     assert r.ok, r.text()
     if piloto:
@@ -383,7 +385,7 @@ def test_qr_do_cliente_a_vista_na_area_do_cliente_e_no_card(servidor, navegador)
     cli = navegador.new_page(viewport={"width": 360, "height": 800})
     cli.erros_js = []
     cli.on("pageerror", lambda e: cli.erros_js.append(str(e)))
-    cliente_pela_api(cli, servidor, "Rita QR", "rita.qr.e2e@example.com", piloto="Leo QR", ip="10.9.9.9")
+    cliente_pela_api(cli, servidor, "Rita QR", "rita.qr.e2e@example.com", piloto="Leo QR", ip="10.9.9.9", telefone="(407) 555-0165")
     abrir(cli, servidor, "/portal/dashboard")
     cli.get_by_text("Leo QR's URACE QR appears here as soon as our team connects").wait_for()   # sem card: diz o porquê
     pid = cli.request.get(servidor + "/api/portal/me").json()["drivers"][0]["id"]
