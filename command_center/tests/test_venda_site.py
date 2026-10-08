@@ -192,6 +192,7 @@ def test_rodada_cria_o_cliente_do_quickbooks_que_faltou_e_avisa_quando_confirma(
         raise RuntimeError("QuickBooks fora do ar")
     venda_site.vender(con, bid, enviar_invoice=Qbo(), enviar_waiver=Docusign(), criar_qbo=criar_falha, enviar_email=Emails())
     assert "fora do ar" in b_(con, bid)["charge_error"] and not b_(con, bid)["qbo_invoice_id"]
+    assert venda_site.checkout(con, bid)["pagamento"]["estado"] == "equipe", "o cliente não fica olhando um 'preparando' eterno"
     qbo = Qbo()
     cob.rodar(con, enviar_invoice=qbo, enviar_waiver=Docusign(), enviar_email=Emails(), criar_qbo=cenario["criar_qbo"])
     b = b_(con, bid)

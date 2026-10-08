@@ -47,6 +47,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const [novoPiloto, setNovoPiloto] = useState(false)
   const [nota, setNota] = useState(inicial.kart ? `Kart: ${inicial.kart}` : '')
   const [aceite, setAceite] = useState(false)
+  const [maisDias, setMaisDias] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
 
@@ -111,9 +112,10 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
                 <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />
                 <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span><b>{usd(x.price)}</b></label>)}</fieldset>
             <div><div className="small muted" style={{ marginBottom: 6 }} id="r1-dia">Day</div>
-              <div className="reserva-dias" role="group" aria-labelledby="r1-dia">{abertos.slice(0, 16).map(d =>
+              <div className="reserva-dias" role="group" aria-labelledby="r1-dia">{abertos.filter((d, i) => maisDias || i < 8 || d.date === dia).map(d =>
                 <button key={d.date} type="button" className="reserva-dia" aria-pressed={dia === d.date} onClick={() => { setDia(d.date); setTurno(t => t && d[t].open ? t : null) }}>
-                  {new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</button>)}</div></div>
+                  {new Date(d.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</button>)}
+                {!maisDias && abertos.length > 8 && <button type="button" className="reserva-dia" onClick={() => setMaisDias(true)}>More dates…</button>}</div></div>
             {escolhidoDia && cfg && <div><div className="small muted" style={{ marginBottom: 6 }} id="r1-turno">Time</div>
               <div className="reserva-turnos" role="group" aria-labelledby="r1-turno">{(['manha', 'tarde'] as const).map(t =>
                 <button key={t} type="button" className="reserva-turno" aria-pressed={turno === t} disabled={!escolhidoDia[t].open} onClick={() => setTurno(t)}>
@@ -276,12 +278,14 @@ export function Acompanhar() {
           <b>{pg.estado === 'contrato' ? 'Part of your plan' : pagoOk ? 'Paid' : 'Pay the invoice'}</b>
           {pg.estado === 'pagar' && <>{pg.link ? <div><a className="btn primary" href={pg.link} target="_blank" rel="noopener noreferrer">Pay now{pg.total != null ? ` ${usd(pg.total)}` : ''}</a></div> : null}
             <span className="small muted">Invoice {pg.invoice}{pg.para ? `, also sent to ${pg.para}` : ''}. Session + refundable security deposit. It updates here by itself after you pay.</span></>}
-          {pg.estado === 'preparando' && <span className="small muted"><span className="spin" /> Preparing your invoice… it also goes to your email.</span>}</div></li>
+          {pg.estado === 'preparando' && <span className="small muted"><span className="spin" /> Preparing your invoice… it also goes to your email.</span>}
+          {pg.estado === 'equipe' && <span className="small muted">Our team is finishing your invoice and will email it to you shortly. Your spot stays reserved.</span>}</div></li>
         <li className={`etapa${waiverOk ? ' ok' : pagoOk ? ' agora' : ''}`}><span className="marca" aria-hidden="true">{waiverOk ? '✓' : '3'}</span><div className="corpo">
           <b>{waiverOk ? 'Waiver signed' : 'Sign the waiver'}</b>
           {w.estado === 'assinar_aqui' && w.link && <div><Link className="btn primary" to={w.link}>Sign now</Link></div>}
           {w.estado === 'email' && <span className="small muted">Check your email from DocuSign{w.para ? ` (sent to ${w.para})` : ''} and sign it there.</span>}
-          {w.estado === 'preparando' && <span className="small muted"><span className="spin" /> Sending the waiver…</span>}</div></li>
+          {w.estado === 'preparando' && <span className="small muted"><span className="spin" /> Sending the waiver…</span>}
+          {w.estado === 'equipe' && <span className="small muted">Our team will email you the waiver shortly.</span>}</div></li>
         <li className={`etapa${c.confirmada ? ' ok' : ''}`}><span className="marca" aria-hidden="true">{c.confirmada ? '✓' : '4'}</span><div className="corpo">
           <b>{c.confirmada ? 'Confirmed' : 'Confirmed by itself'}</b>
           <span className="small muted">{c.confirmada ? 'See you at the track! Your URACE QR is on your Dashboard: show it at the shop.' : 'As soon as the invoice is paid and the waiver is signed. We email you.'}</span></div></li>

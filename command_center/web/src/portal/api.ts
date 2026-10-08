@@ -51,8 +51,8 @@ export interface Servico { id: number; name: string; description: string | null;
 /** #164: as etapas de um pedido, como o servidor resume para o cliente. */
 export interface Checkout { id: number; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'; date: string; period: 'manha' | 'tarde' | 'dia'
   service: string | null; price: number | null; driver: string | null; aceita: boolean; confirmada: boolean
-  pagamento: { estado: 'pagar' | 'pago' | 'contrato' | 'preparando'; link: string | null; invoice: string | null; total: number | null; para: string | null }
-  waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando'; link: string | null; para?: string | null } }
+  pagamento: { estado: 'pagar' | 'pago' | 'contrato' | 'preparando' | 'equipe'; link: string | null; invoice: string | null; total: number | null; para: string | null }
+  waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando' | 'equipe'; link: string | null; para?: string | null } }
 export interface Booking { id: number; date: string; period: 'manha' | 'tarde' | 'dia'; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'
   notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null
   /** #50: aceita pela equipe — falta pagar a invoice e/ou assinar a waiver */

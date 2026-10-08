@@ -158,14 +158,16 @@ def checkout(con, bid):
     from command_center.providers import waiver_nativa
     nativa = waiver_nativa.ligada(con)
     w = s["waiver"]
-    waiver = {"estado": "ok" if w == "ok" else ("assinar_aqui" if nativa else ("email" if w == "enviada" else "preparando")),
+    waiver = {"estado": "ok" if w == "ok" else ("assinar_aqui" if nativa else ("email" if w == "enviada" else
+                                                                                 "equipe" if w == "erro" else "preparando")),
               "link": f"/portal/drivers/{b['pilot_id']}/waiver" if nativa and w != "ok" and b["pilot_id"] else None}
     if waiver["estado"] == "email":
         menor = b["birth_date"] and cob._idade(datetime.fromisoformat(b["birth_date"]).date(),
                                                 datetime.fromisoformat(b["date"]).date()) < cob.MAIORIDADE
         waiver["para"] = b["account_email"] if (menor or b["is_self"]) else (b["driver_email"] or b["account_email"])
     pg = s["pagamento"]
-    pagamento = {"estado": {"pago": "pago", "contrato": "contrato", "enviada": "pagar"}.get(pg, "preparando"),
+    # "erro" (sem item, QuickBooks fora…): a equipe resolve; o cliente não fica olhando um "preparando" eterno
+    pagamento = {"estado": {"pago": "pago", "contrato": "contrato", "enviada": "pagar", "erro": "equipe"}.get(pg, "preparando"),
                  "link": b["pay_link"] if pg == "enviada" else None, "invoice": b["invoice_doc"],
                  "total": b["invoice_total"], "para": b["invoice_sent_to"]}
     return {"id": b["id"], "status": b["status"], "date": b["date"], "period": b["period"], "service": b["service_name"],

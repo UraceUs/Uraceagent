@@ -171,6 +171,7 @@ address { font-style: normal }
 .kart:has(input:checked) { border-color: var(--vermelho); box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
 .inclui { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px }
 .inclui > div { background: var(--papel); border-radius: var(--raio); padding: 16px; display: grid; gap: 10px }
+.escura .inclui > div { background: var(--preto-2); border: 1px solid var(--linha) }
 
 .agenda { border: 1.5px solid #e3e3ea; border-radius: 14px; padding: 18px; display: grid; gap: 14px; min-width: 0 }
 @media (min-width: 900px) { .agenda { position: sticky; top: 76px } }
@@ -211,3 +212,159 @@ address { font-style: normal }
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important }
 }
 html { scroll-behavior: smooth; scroll-padding-top: 72px }
+
+/* --------------------------------------------------------------- o resto do site (#164) */
+.muted { color: var(--cinza) }
+.escura .muted, .vermelha .muted { color: #e6e6ee }
+.small { font-size: .88rem }
+.mt { margin-top: 18px }
+.escondido { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden }
+.hero-servico { min-height: 380px }
+.hero-foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0 }
+.hero::before { z-index: 1 }
+.hero-in { z-index: 2 }
+.hero-servico::before { background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,.86) 100%) }
+.hero-hub { background-image: url(img/arrive-and-drive-hero.webp) }
+.hero-sub-escura { color: var(--cinza); max-width: 60ch; font-size: 1.05rem }
+.lista { margin: 0; padding-left: 20px; display: grid; gap: 8px }
+.checks.claras li::before { color: #fff }
+.vermelha a:not(.btn) { color: #fff }
+.fecho-sub { max-width: 60ch; margin: 0 auto }
+.preco-grande { font: 800 clamp(1.4rem, 4vw, 2rem)/1.2 var(--titulo); font-stretch: 125% }
+.btn-linha-escura { background: transparent; color: var(--tinta); border-color: var(--tinta) }
+.aviso-ok { background: #e8f7ee; border: 1px solid #b9e4c9; color: #145a32; border-radius: var(--raio); padding: 14px 16px; margin: 8px 0 }
+.texto h2 { margin-top: 10px }
+.texto ul, .texto ol { padding-left: 20px; display: grid; gap: 6px }
+.foto-redonda { border-radius: 14px; width: 100%; object-fit: cover; aspect-ratio: 4 / 3 }
+.fotos-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-content: start }
+.fotos-duas img { border-radius: var(--raio); aspect-ratio: 640 / 420; object-fit: cover; width: 100% }
+
+/* cartões de texto (benefícios, suporte, garantias) */
+.cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px }
+.cartao { background: var(--papel); border-radius: var(--raio); padding: 18px; display: grid; gap: 8px; align-content: start }
+.escura .cartao { background: var(--preto-2); border: 1px solid var(--linha) }
+.cartao p { color: #3c3d50 }
+.escura .cartao p { color: var(--cinza-claro) }
+.faq-corpo { padding-bottom: 12px; color: #3c3d50; display: grid; gap: 8px }
+.escura .faq details { border-color: var(--linha) }
+.escura .faq-corpo { color: var(--cinza-claro) }
+.clara .passos li { background: var(--papel); border-color: #e3e3ea }
+.clara .passos li::before { color: var(--vermelho) }
+.escura .passos li { background: #1d1d26 }
+
+/* planos (Academy, Pro Team) */
+.planos { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px }
+.plano { background: var(--preto-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 20px; display: grid; gap: 8px; align-content: start }
+.clara .plano { background: var(--papel); border-color: #e3e3ea }
+.plano-sub { color: var(--vermelho-2); font-weight: 700; font-size: .9rem }
+.clara .plano-sub { color: var(--vermelho) }
+.plano p { color: var(--cinza-claro) }
+.clara .plano p { color: #3c3d50 }
+.plano-preco { display: grid; margin-top: 6px }
+.plano-preco strong { font: 800 1.5rem/1.1 var(--titulo); font-stretch: 125%; color: #fff }
+.clara .plano-preco strong { color: var(--tinta) }
+.plano-preco span { font-size: .85rem }
+.plano .btn { justify-self: start; margin-top: 4px }
+
+/* hub de serviços, dias do camp, etapas e degraus */
+.servicos-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px }
+.servico-card { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); overflow: hidden; text-decoration: none; color: inherit;
+  transition: transform var(--dur) var(--curva) }
+.servico-card:hover { transform: translateY(-2px) }
+.servico-card img { width: 100%; aspect-ratio: 640 / 400; object-fit: cover }
+.servico-txt { display: grid; gap: 6px; padding: 16px; align-content: start }
+.servico-txt strong { font: 800 1.05rem/1.2 var(--titulo); font-stretch: 125% }
+.servico-txt span { color: #3c3d50; font-size: .95rem }
+.servico-txt em { font-style: normal; font-weight: 700; color: var(--vermelho) }
+.dias { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px }
+.dia { background: var(--papel); border-radius: var(--raio); overflow: hidden; display: grid; gap: 8px; align-content: start; padding-bottom: 16px }
+.dia img { width: 100%; aspect-ratio: 640 / 420; object-fit: cover; margin-bottom: 6px }
+.dia h3, .dia p { padding: 0 16px }
+.dia p { color: #3c3d50 }
+.curriculo, .calendario { margin: 0; display: grid; gap: 10px }
+.curriculo div, .calendario div { border-left: 3px solid var(--vermelho); padding-left: 12px; display: grid; gap: 2px }
+.curriculo dt, .calendario dt { font-weight: 700 }
+.curriculo dd, .calendario dd { margin: 0; color: var(--cinza-claro) }
+.clara .curriculo dd, .clara .calendario dd { color: #3c3d50 }
+.etapas-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px }
+.etapa-card { background: rgba(0,0,0,.18); border-radius: var(--raio); padding: 18px; display: grid; gap: 8px; align-content: start }
+.etapa-card img { width: 56px; height: 56px; object-fit: contain }
+.degraus { list-style: none; margin: 0; padding: 0; counter-reset: d; display: grid; gap: 10px }
+.degraus li { counter-increment: d }
+.degraus a { display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "n t" "n s"; column-gap: 12px; align-items: center; min-height: 64px; padding: 12px 14px;
+  background: var(--papel); border-radius: var(--raio); text-decoration: none; color: inherit }
+.degraus a::before { grid-area: n; content: counter(d); font: 800 1.4rem/1 var(--titulo); font-stretch: 125%; color: var(--vermelho) }
+.degraus strong { grid-area: t; display: block }
+.degraus span { grid-area: s; color: #3c3d50; font-size: .92rem }
+.campeoes figcaption { color: var(--cinza-claro) }
+
+/* chips de categoria (blog e loja) */
+.chips { display: flex; flex-wrap: wrap; gap: 8px }
+.chip-link { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1.5px solid #e3e3ea;
+  color: var(--tinta); text-decoration: none; font-weight: 600; font-size: .9rem }
+.chip-link.on { background: var(--tinta); color: #fff; border-color: var(--tinta) }
+.chip-fora { display: inline-block; background: #fbe9e9; color: var(--vermelho); border-radius: 999px; padding: 2px 10px; font-size: .8rem; font-weight: 700 }
+
+/* blog */
+.posts-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px }
+.post-card a { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); overflow: hidden; text-decoration: none; color: inherit; height: 100%;
+  transition: transform var(--dur) var(--curva) }
+.escura .post-card a { background: var(--preto-2); border: 1px solid var(--linha) }
+.post-card a:hover { transform: translateY(-2px) }
+.post-card img { width: 100%; aspect-ratio: 640 / 400; object-fit: cover }
+.post-txt { display: grid; gap: 6px; padding: 16px; align-content: start }
+.post-txt small { color: var(--cinza); font-weight: 600 }
+.post-txt strong { font: 800 1.05rem/1.25 var(--titulo); font-stretch: 125% }
+.post-txt > span { color: #3c3d50; font-size: .92rem }
+.escura .post-txt > span { color: var(--cinza-claro) }
+.post-capa { border-radius: 14px; width: 100%; aspect-ratio: 16 / 9; object-fit: cover }
+.post-corpo { display: grid; gap: 14px; font-size: 1.05rem }
+.post-corpo h2, .post-corpo h3 { margin-top: 12px }
+.post-corpo img { border-radius: var(--raio); margin: 6px 0 }
+.post-corpo ul, .post-corpo ol { padding-left: 22px; display: grid; gap: 6px }
+.post-corpo a { color: var(--vermelho) }
+.post-corpo table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; font-size: .92rem }
+.post-corpo td, .post-corpo th { border: 1px solid #e3e3ea; padding: 6px 10px; text-align: left }
+
+/* loja */
+.produtos-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+@media (min-width: 700px) { .produtos-grade { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) } }
+.produto-card a { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); overflow: hidden; text-decoration: none; color: inherit; height: 100%;
+  transition: transform var(--dur) var(--curva) }
+.produto-card a:hover { transform: translateY(-2px) }
+.produto-card img, .sem-foto { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff }
+.sem-foto { display: grid; place-content: center; color: #d6d6de; font: 800 1.2rem var(--titulo); font-stretch: 125% }
+.produto-txt { display: grid; gap: 4px; padding: 12px; align-content: start }
+.produto-txt strong { font-size: .95rem; line-height: 1.3 }
+.produto-txt em { font-style: normal; font-weight: 800; color: var(--vermelho) }
+.produto-txt s { color: var(--cinza); font-weight: 400; margin-right: 4px }
+.produto-txt small { color: var(--cinza) }
+.produto { grid-template-columns: minmax(0, 1fr); gap: 24px }
+@media (min-width: 860px) { .produto { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start } }
+.produto-fotos { display: grid; gap: 10px }
+.produto-fotos img, .produto-fotos .sem-foto { border-radius: var(--raio); border: 1px solid #e3e3ea }
+.produto-fotos img + img { width: 50%; justify-self: start }
+.produto-info { display: grid; gap: 14px; min-width: 0 }
+.produto-info .eyebrow a { color: var(--vermelho); text-decoration: none }
+.produto-preco { font-size: 1.1rem }
+.produto-preco strong { font: 800 1.7rem/1.1 var(--titulo); font-stretch: 125% }
+.produto-preco s { color: var(--cinza); margin-right: 6px }
+.produto-short { color: #3c3d50; display: grid; gap: 8px }
+.produto-short ul { padding-left: 20px }
+
+/* formulários (contato e pedido) */
+.form-contato, .form-pedido { display: grid; gap: 12px; margin-top: 8px }
+.form-contato label, .form-pedido label { display: grid; gap: 4px; font-weight: 600; font-size: .92rem }
+.opcional { font-weight: 400; color: var(--cinza) }
+.form-contato input, .form-contato select, .form-contato textarea, .form-pedido input, .form-pedido select, .form-pedido textarea {
+  width: 100%; min-height: 46px; padding: 10px 12px; border: 1.5px solid #d9d9e1; border-radius: 8px; font: 400 1rem/1.4 var(--texto); color: var(--tinta); background: #fff }
+.form-contato textarea, .form-pedido textarea { resize: vertical }
+.form-contato input:focus, .form-contato select:focus, .form-contato textarea:focus, .form-pedido input:focus, .form-pedido select:focus, .form-pedido textarea:focus {
+  border-color: var(--vermelho); outline: none; box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
+.form-contato .btn, .form-pedido .btn { justify-self: start }
+.form-estado { min-height: 1.2em; color: var(--cinza) }
+.form-estado.erro { color: var(--vermelho) }
+.form-estado.ok { color: var(--ok); font-weight: 600 }
+.form-contato[data-enviado] > :not(.form-estado), .form-pedido[data-enviado] > :not(.form-estado) { display: none }
+.contato-lado { display: grid; gap: 10px; align-content: start; background: var(--papel); border-radius: 14px; padding: 22px }
+.contato-lado p { margin: 0 }

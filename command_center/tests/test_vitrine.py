@@ -15,10 +15,10 @@ from fastapi.testclient import TestClient  # noqa: E402
 from command_center.api.main import app  # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir  # noqa: E402
 from command_center.providers import agenda_sessoes as ag  # noqa: E402
-from command_center.vitrine import conteudo  # noqa: E402
+from command_center.vitrine import conteudo, paginas_site  # noqa: E402
 
 SITE = "https://novo.urace.us"
-PAGINAS = ("/", "/services/arrive-and-drive/")
+PAGINAS = tuple(paginas_site.caminhos())           # o site inteiro (#164): 100+ páginas
 
 
 @pytest.fixture()
@@ -92,6 +92,103 @@ def test_titulos_e_descricoes_unicos(cli):
     assert len(vistos) == len(PAGINAS)
 
 
+def test_nenhum_link_volta_ao_wordpress_e_nenhum_link_interno_quebra(cli):
+    """#164: o site inteiro mora aqui. O menu não aponta para urace.us, e todo link interno de
+    toda página abre (200) ou é um 301 que leva a uma página que abre."""
+    internos, externos_antigos = set(), set()
+    for c in PAGINAS:
+        html = cli.get(c).text
+        for h in re.findall(r'href="([^"#]+)', html):
+            if h.startswith("https://urace.us"):
+                externos_antigos.add((c, h))
+            elif h.startswith("/") and not h.startswith(("/ops/", "/_s/", "/legal/")):
+                internos.add(h.split("?")[0])
+    assert not externos_antigos
+    quebrados = []
+    for h in sorted(internos):
+        r = cli.get(h, follow_redirects=False)
+        if r.status_code == 301:
+            r = cli.get(r.headers["location"], follow_redirects=False)
+        if r.status_code != 200:
+            quebrados.append((h, r.status_code))
+    assert not quebrados
+
+
+@pytest.mark.parametrize("antigo, novo", [
+    ("/kart-training-packages/", "/academy/"),
+    ("/professional-kart-team-racing-team/", "/pro-team/"),
+    ("/the-driver-factory/", "/career/"),
+    ("/shop/", "/store/"),
+    ("/product-category/engines/", "/store/engines/"),
+    ("/book-online/", "/ops/portal/reserve"),
+    ("/corporate-events", "/services/corporate-events/"),
+])
+def test_endereco_do_urace_us_de_hoje_redireciona_para_o_novo(cli, antigo, novo):
+    r = cli.get(antigo, follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == novo
+
+
+def test_loja_e_blog_vieram_inteiros(cli):
+    d = paginas_site.dados("produtos.json")
+    assert len(d["produtos"]) >= 60 and sum(1 for p in d["produtos"] if p["images"]) >= 0.8 * len(d["produtos"])
+    r = cli.get("/store/")
+    assert r.status_code == 200 and r.text.count("produto-card") == len(d["produtos"])
+    um = d["produtos"][0]
+    r = cli.get(f"/store/p/{um['slug']}/")
+    assert um["name"] in r.text and 'action="/ops/api/vitrine/pedido"' in r.text
+    assert [x for x in _le(r.text).ld if x.get("@type") == "Product"][0]["offers"]["priceCurrency"] == "USD"
+    assert cli.get(f"/product/{um['slug']}/", follow_redirects=False).headers["location"] == f"/store/p/{um['slug']}/"
+    posts = paginas_site.dados("posts.json")["posts"]
+    assert len(posts) >= 7
+    r = cli.get(f"/blog/{posts[0]['slug']}/")
+    assert posts[0]["title"] in r.text and "{IMG:" not in r.text
+    assert [x for x in _le(r.text).ld if x.get("@type") == "BlogPosting"]
+    assert cli.get("/blog/nao-existe/").status_code == 404 and cli.get("/store/p/nao-existe/").status_code == 404
+
+
+def test_contato_do_site_vira_oportunidade_em_vendas_e_avisa_a_equipe(cli, tmp_path, monkeypatch):
+    """#164: tudo conectado pelo Command Center — o formulário entra no funil de Vendas (origem Site)."""
+    caixa = tmp_path / "emails.jsonl"
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(caixa))
+    r = cli.get("/contact/?assunto=academy&produto=3%20months")
+    assert '<option value="academy" selected>' in r.text and "About: 3 months" in r.text
+    r = cli.post("/ops/api/vitrine/contato", json={"nome": "Ana Lima", "email": "ana@exemplo.com", "telefone": "407 555 0101",
+                                                  "assunto": "academy", "mensagem": "My son is 9, when can he start?"})
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    con = conectar(); aplicar_schema(con)
+    o = con.execute("SELECT name, email, service, stage, source, notes FROM opportunities").fetchall()
+    assert [tuple(x) for x in o] == [("Ana Lima", "ana@exemplo.com", "URACE Academy", "NOVO", "Site", "[URACE Academy] My son is 9, when can he start?")]
+    emails = [json.loads(x) for x in caixa.read_text(encoding="utf-8").splitlines()]
+    assert [m["to"] for m in emails] == ["support@urace.us", "ana@exemplo.com"]
+    assert "ops.urace.us/ops/sales/" in emails[0]["text"] and "Ana" in emails[1]["text"]
+    # sem JavaScript: o formulário volta para a página com o aviso
+    r = cli.post("/ops/api/vitrine/contato", data={"nome": "Bia", "email": "bia@exemplo.com", "mensagem": "Hi"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/contact/?sent=1"
+    assert "aviso-ok" in cli.get("/contact/?sent=1").text
+    # robô (honeypot preenchido) e dado ruim não entram no funil
+    assert cli.post("/ops/api/vitrine/contato", json={"nome": "x", "email": "r@r.com", "mensagem": "spam", "site": "http://spam"}).json()["ok"]
+    assert cli.post("/ops/api/vitrine/contato", json={"nome": "Caio", "email": "sem-arroba", "mensagem": "oi"}).status_code == 400
+    assert con.execute("SELECT count(*) FROM opportunities").fetchone()[0] == 2
+    # e no painel o site não existe
+    with TestClient(app, base_url="https://ops.urace.us") as t:
+        assert t.post("/ops/api/vitrine/contato", json={"nome": "Z", "email": "z@z.com", "mensagem": "z"}).status_code == 404
+
+
+def test_pedido_da_loja_vira_oportunidade_com_o_valor(cli, tmp_path, monkeypatch):
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))
+    d = paginas_site.dados("produtos.json")
+    p = next(x for x in d["produtos"] if x["variations"] and x["variations"][0].get("price"))
+    v = p["variations"][0]
+    r = cli.post("/ops/api/vitrine/pedido", json={"produto": p["slug"], "variacao": " / ".join(v["attrs"]), "quantidade": "2",
+                                                 "nome": "Dan Reis", "email": "dan@exemplo.com", "mensagem": "Ship to Tampa"})
+    assert r.json() == {"ok": True}
+    con = conectar(); aplicar_schema(con)
+    o = con.execute("SELECT service, amount, notes FROM opportunities").fetchone()
+    assert o["service"] == f"Store: {p['name']} ({' / '.join(v['attrs'])}) × 2"
+    assert o["amount"] == round(v["price"] * 2, 2) and "Ship to Tampa" in o["notes"]
+    assert cli.post("/ops/api/vitrine/pedido", json={"produto": "nao-existe", "nome": "Dan", "email": "d@d.com"}).status_code == 400
+
+
 def test_arrive_and_drive_mostra_os_precos_de_hoje_e_leva_para_a_agenda(cli):
     r = cli.get("/services/arrive-and-drive/")
     for k in conteudo.KARTS:
@@ -108,6 +205,8 @@ def test_arrive_and_drive_mostra_os_precos_de_hoje_e_leva_para_a_agenda(cli):
 def test_sem_barra_final_redireciona(cli):
     r = cli.get("/services/arrive-and-drive", follow_redirects=False)
     assert r.status_code == 301 and r.headers["location"] == "/services/arrive-and-drive/"
+    r = cli.get("/blog", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/blog/"
 
 
 def test_pagina_que_nao_existe_e_404_do_site(cli):

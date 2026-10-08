@@ -199,7 +199,7 @@ def home(host):
   <div class="largura duas">
     <div><h2 id="h-treino">Kart Driver Training</h2></div>
     <div class="texto">{''.join(f'<p>{e(p)}</p>' for p in h['treino'])}
-      <a class="seta" href="{e(C.ANTIGO + '/kart-training-packages/')}">See the Academy</a></div>
+      <a class="seta" href="/academy/">See the Academy</a></div>
   </div>
 </section>
 <section class="faixa escura" aria-labelledby="h-depo">

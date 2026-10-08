@@ -39,6 +39,7 @@
 .psite .fld input,.psite .fld select,.psite .fld textarea,.psite .input{background:#fff;border-color:var(--rule-strong);color:var(--ink)}
 .psite .fld input:focus,.psite .fld select:focus,.psite .fld textarea:focus,.psite .input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
 .psite :focus-visible{outline:3px solid #ff5051;outline-offset:2px}
+.psite .chip{white-space:normal;max-width:100%;overflow-wrap:anywhere}
 
 /* cabeçalho preto do site, com a marca e o caminho de volta para as páginas */
 .psite .portal-top{background:#000;color:#fff;border-bottom:0;backdrop-filter:none;-webkit-backdrop-filter:none;min-height:60px}
