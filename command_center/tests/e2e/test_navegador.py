@@ -1088,6 +1088,28 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     pg.close()
 
 
+def test_suits_novo_pedido_vincula_ao_cliente_e_puxa_o_cadastro(servidor, navegador):
+    """#158, dono 08/10: "Todo lugar que a gente for fazer inserção manual, sempre coloque um para vincular
+    com o cliente ... para poder vincular e puxar as informações pré-definidas ali daquele cliente"."""
+    pg = entrar(navegador, servidor, largura=390, altura=900)
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Vincular ao cliente (puxa os dados do cadastro)").fill("Carla Mend")
+    dlg.locator(".lpick-menu .opt", has_text="Théo Mendes").click()
+    dlg.get_by_text("Puxado do cadastro").wait_for()
+    assert dlg.get_by_label("Cliente", exact=True).input_value() == "Carla Mendes"
+    assert dlg.get_by_label("E-mail", exact=True).input_value() == "carla@example.com"
+    assert dlg.get_by_label("Piloto (se não for o cliente)").input_value() == "Théo Mendes"
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name="Carla Mendes", level=1).wait_for()
+    pg.get_by_role("link", name=re.compile("Théo Mendes")).wait_for()          # o card do cliente, no pedido
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_suits_ponte_comeca_em_simulacao_e_guarda_o_designer(servidor, navegador):
     pg = entrar(navegador, servidor, largura=390, altura=900)
     abrir(pg, servidor, "/suits/ponte")

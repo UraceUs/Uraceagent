@@ -221,6 +221,7 @@ class OppIn(BaseModel):
     next_what: str | None = None
     crm_lead_id: int | None = None
     stage: str | None = None
+    client_id: int | None = None          # #158: vincular ao cliente já na criação
 
 
 def _campos(d: OppIn):
@@ -242,7 +243,11 @@ def criar(dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con
     if not campos.get("name"):
         raise HTTPException(400, "Nome é obrigatório.")
     ja = None
-    if campos.get("email"):
+    if campos.get("client_id"):            # vinculado no formulário (#158): o fechamento cai neste card
+        ja = um(con, "SELECT id, name FROM clients WHERE id=?", (campos["client_id"],))
+        if not ja:
+            raise HTTPException(400, "Cliente não existe.")
+    elif campos.get("email"):
         ja = um(con, "SELECT id, name FROM clients WHERE email=?", (campos["email"],))
     oid = inserir(con, "opportunities", closer_user_id=u["id"], updated_at=agora(), **campos)
     _ev(con, oid, "stage", f"Oportunidade criada em {ETAPA_PT[campos.get('stage', 'NOVO')]}",
@@ -257,6 +262,8 @@ def criar(dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con
 def editar(oid: int, dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     o = _opp(con, oid, u)
     campos = _campos(dados)
+    if campos.get("client_id") and not um(con, "SELECT id FROM clients WHERE id=?", (campos["client_id"],)):
+        raise HTTPException(400, "Cliente não existe.")
     atualizar(con, "opportunities", oid, updated_at=agora(), **campos)
     mudou = {k: v for k, v in campos.items() if str(o.get(k) or "") != str(v or "")}
     if mudou:
@@ -433,9 +440,10 @@ def _passo(saida, nome, ok, detalhe, extra=None):
 
 
 def _cliente_do_fechamento(con, o, nota):
-    """Card do cliente: liga ao que existe (mesmo e-mail) ou cria. Nunca duplica."""
-    achado = None
-    if o["email"]:
+    """Card do cliente: o vinculado no formulário (#158), o que existe (mesmo e-mail ou telefone) ou
+    um novo. Nunca duplica."""
+    achado = um(con, "SELECT * FROM clients WHERE id=?", (o["client_id"],)) if o.get("client_id") else None
+    if not achado and o["email"]:
         achado = um(con, "SELECT * FROM clients WHERE email=?", (o["email"],))
     if not achado and o["phone"]:
         from command_center.providers import identidade

@@ -244,6 +244,9 @@ MIGRACOES = [
     ("portal_pilots", "client_id", "INTEGER REFERENCES clients(id)"),
     ("portal_pilots", "linked_by", "INTEGER REFERENCES users(id)"),
     ("portal_pilots", "linked_at", "TEXT"),
+    # 08/10 — dono (#158): "Todo lugar que a gente for fazer inserção manual, sempre coloque um para
+    # vincular com o cliente". O lead de macacão também liga ao card.
+    ("suit_leads", "client_id", "INTEGER REFERENCES clients(id)"),
     # 01/10 — dono (#67): "todo agendamento... vira uma tarefa no asana".
     ("bookings", "asana_gid", "TEXT"),
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana
