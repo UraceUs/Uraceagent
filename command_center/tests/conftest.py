@@ -22,6 +22,8 @@ os.environ["URACE_DIR"] = os.path.join(os.environ["HOME"], ".urace")   # 17/09: 
 for k in ("URACE_ENV", "GOOGLE_TOKEN_JSON", "GOOGLE_TOKEN_JSON_SUPPORT"):
     os.environ[k] = "/nao/existe"
 for k in list(os.environ):
-    if k.startswith(("ASANA_", "DOCUSIGN_", "QBO_", "GOOGLE_CLIENT", "OPENCLAW_GATEWAY")) or k == "APLICAR":
+    # ANTHROPIC_/CLAUDE_CODE_OAUTH_TOKEN (#152): com a chave no ambiente, o AI Command iria ao Claude de verdade
+    if k.startswith(("ASANA_", "DOCUSIGN_", "QBO_", "GOOGLE_CLIENT", "OPENCLAW_GATEWAY", "ANTHROPIC_")) \
+            or k in ("APLICAR", "CLAUDE_CODE_OAUTH_TOKEN", "CC_IA_MOTOR"):
         del os.environ[k]
 os.environ["CC_AUTOSYNC"] = "0"          # teste não roda o laço de sincronia

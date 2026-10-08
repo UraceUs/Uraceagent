@@ -11,6 +11,14 @@ status: ativo
 
 [[Sistemas]] · [[Administrative AI]] · [[Etapa de conexão]]
 
+> **08/10/2026 (#152):** o **AI Command** e a **triagem de e-mail** do Command Center saíram do
+> OpenClaw e rodam no **Claude Agent SDK** (o motor das sessões do Claude Code): **Opus 5.5** nos
+> pedidos e **Haiku 5.5** no e-mail, que chama o Opus quando tem dificuldade. Os dois leem este
+> cérebro direto do repositório (sem cópia), fazem sozinhos o que é interno e deixam o que sai da
+> empresa (enviar, lembrete, apagar, anular, unir cards, preço do catálogo, pagamento) como um
+> "aprovar" de um clique. Teto de US$ 2 por pedido. O que segue abaixo continua valendo para as
+> rotinas que ainda usam o `openclaw agent` (waivers das 07:30).
+
 Onde o [[Administrative AI]] realmente mora. O Claude Code é backup e
 ambiente de desenvolvimento — **o destino é aqui**.
 

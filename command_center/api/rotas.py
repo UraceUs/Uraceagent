@@ -637,7 +637,7 @@ def _triagem_thread(user_id, mailboxes):
     con = conectar()
     try:
         with ia._PARALELO:
-            _TRIAGEM["result"] = triagem.rodar(con, ia.RUNNER, f"agent:{ia.AGENTE}:triagem-{date.today().isoformat()}",
+            _TRIAGEM["result"] = triagem.rodar(con, ia.runner_email, f"agent:{ia.AGENTE}:triagem-{date.today().isoformat()}",
                                                mailboxes=mailboxes, aprendizados=motor.aprendizados(con), por=f"user:{user_id}")
         _ = agenda   # a rotina automática usa o mesmo caminho
     except Exception as e:
@@ -718,7 +718,7 @@ def _classificar_thread(user_id, mailbox, ids):
         nomes = [n for n in nomes if n.upper() not in classificar.SISTEMA and not n.startswith("CATEGORY_")]
         for i in range(0, len(emails), 25):
             lote = emails[i:i + 25]
-            ok, texto, erro = ia.RUNNER(classificar.prompt_ia(lote, nomes, mailbox), f"agent:{ia.AGENTE}:classificar-{mailbox}")
+            ok, texto, erro = ia.runner_email(classificar.prompt_ia(lote, nomes, mailbox), f"agent:{ia.AGENTE}:classificar-{mailbox}")
             if not ok:
                 saida["erro"] = erro; break
             res = classificar.parse_ia(texto, nomes)
