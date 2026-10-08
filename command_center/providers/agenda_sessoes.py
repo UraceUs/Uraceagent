@@ -64,6 +64,8 @@ def mudar_config(con, por, **d):
             mud[k] = _hora(d[k])
     if "auto_confirm" in d and d["auto_confirm"] is not None:
         mud["auto_confirm"] = 1 if d["auto_confirm"] else 0
+    if "auto_sell" in d and d["auto_sell"] is not None:          # #164: venda automática
+        mud["auto_sell"] = 1 if d["auto_sell"] else 0
     for k, (mi, ma) in (("horizon_days", (1, 365)), ("min_notice_hours", (0, 24 * 30))):
         if k in d and d[k] is not None:
             v = int(d[k])
@@ -285,7 +287,8 @@ def cancelar_pelo_cliente(con, conta_id, bid):
 def do_cliente(con, conta_id):
     return [dict(b) for b in todos(con, """SELECT b.id, b.date, b.period, b.status, b.notes, b.decision_note, b.created_at,
                                                  b.service_name AS service, b.price, p.name AS driver,
-                                                 b.accepted_at AS accepted, b.charge_kind, b.invoice_doc, b.invoice_link,
+                                                 b.accepted_at AS accepted, b.charge_kind, b.invoice_doc,
+                                                 b.pay_link AS invoice_link,
                                                  b.qbo_invoice_id IS NOT NULL AS invoice_sent, b.waiver_ref IS NOT NULL AS waiver_sent
                                             FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
                                             WHERE b.account_id=? ORDER BY b.date DESC, b.id DESC LIMIT 100""", (conta_id,))]

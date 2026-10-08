@@ -49,12 +49,15 @@ class ConfigIn(BaseModel):
     afternoon_start: str | None = None
     afternoon_end: str | None = None
     auto_confirm: bool | None = None
+    auto_sell: bool | None = None          # #164: venda automática (só ADMIN ou o acesso livre liga ou desliga)
     horizon_days: int | None = None
     min_notice_hours: int | None = None
 
 
 @r.patch("/agenda/config")
 def mudar_config(dados: ConfigIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    if dados.auto_sell is not None and not (u.get("free") or u["role"] == "ADMIN"):
+        raise HTTPException(403, "Só o administrador liga ou desliga a venda automática.")
     try:
         cfg = ag.mudar_config(con, u["id"], **dados.model_dump(exclude_unset=True))
     except ag.ErroAgenda as e:

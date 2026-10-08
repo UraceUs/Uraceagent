@@ -268,6 +268,16 @@ MIGRACOES = [
     ("bookings", "reminded_3d_at", "TEXT"),
     ("bookings", "reminded_1d_at", "TEXT"),
     ("bookings", "reminder_error", "TEXT"),
+    # #164 (dono, 08/10): "um site totalmente automático que venda sozinho, sem precisar de um humano"
+    ("booking_config", "auto_sell", "INTEGER NOT NULL DEFAULT 0"),   # 0: a equipe aceita cada pedido (como antes)
+    ("bookings", "pay_link", "TEXT"),             # link de pagamento do CLIENTE (InvoiceLink do QuickBooks)
+    ("bookings", "paid_at", "TEXT"),              # o QuickBooks disse que a invoice está paga (conferência direta)
+    ("bookings", "pay_checked_at", "TEXT"),       # última conferência direta (no máximo 1 por minuto)
+    ("bookings", "origin", "TEXT"),               # site | portal
+    ("bookings", "utm", "TEXT"),                  # json: de onde veio a venda (utm_source, utm_campaign…)
+    ("bookings", "card_note", "TEXT"),            # o que a venda automática fez com o card (criado, ligado, possível duplicado)
+    ("bookings", "notified_received_at", "TEXT"),
+    ("bookings", "notified_confirmed_at", "TEXT"),
     ("booking_services", "deposit", "REAL"),             # depósito por sessão (Arrive and Drive: 400)
     # 05/10 — dono (#87): balcão com leitor. Cada card tem um QR próprio (código opaco, não
     # o id); cada peça pode ter o item dela no QuickBooks, criado quando o código é cadastrado.
