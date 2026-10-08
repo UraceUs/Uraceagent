@@ -1659,3 +1659,29 @@ CREATE TABLE IF NOT EXISTS suit_settings (
   updated_at   TEXT,
   updated_by   INTEGER REFERENCES users(id)
 );
+
+-- ------------------------------------------------------------ cofre (#162)
+-- Dono, 08/10: "somente no acesso livre crie uma sessão de logins e senhas de onde fiquem
+-- seguras e consigam ser armazenadas por lá". Senha e observação cifradas (AES-256-GCM);
+-- a chave mora no VPS (CC_COFRE_CHAVE), nunca aqui. Nada se apaga: arquiva.
+CREATE TABLE IF NOT EXISTS vault_items (
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,             -- o serviço (ex.: WordPress urace.us)
+  url          TEXT,
+  username     TEXT,
+  secret_enc   TEXT,                      -- "v1:" + base64(nonce + cifra)
+  notes_enc    TEXT,
+  key_fp       TEXT NOT NULL,             -- impressão da chave que cifrou (detecta chave trocada)
+  archived     INTEGER NOT NULL DEFAULT 0,
+  created_by   INTEGER REFERENCES users(id),
+  updated_by   INTEGER REFERENCES users(id),
+  revealed_at  TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- Desbloqueio por sessão (a pessoa confirma a senha de login): vale alguns minutos.
+CREATE TABLE IF NOT EXISTS vault_unlocks (
+  session_id   TEXT PRIMARY KEY,          -- o mesmo hash de sessions.id
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  until        TEXT NOT NULL
+);

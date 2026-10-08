@@ -41,6 +41,7 @@ const DocuSignPage = tela(() => import('./pages/Systems'), 'DocuSignPage')
 const GmailPage = tela(() => import('./pages/Systems'), 'GmailPage')
 const QuickBooksPage = tela(() => import('./pages/Systems'), 'QuickBooksPage')
 const Account = tela(() => import('./pages/System'), 'Account')
+const Cofre = tela(() => import('./pages/Cofre'), 'Cofre')
 const Audit = tela(() => import('./pages/System'), 'Audit')
 const Integrations = tela(() => import('./pages/System'), 'Integrations')
 const Policies = tela(() => import('./pages/System'), 'Policies')
@@ -142,6 +143,7 @@ export default function App() {
           <Route path="policies" element={<Guard min="ADMIN"><Policies /></Guard>} />
           <Route path="users" element={<Guard min="ADMIN"><Users /></Guard>} />
           <Route path="account" element={<Account />} />
+          <Route path="cofre" element={<Cofre />} />
           <Route path="*" element={<><PageHeader title="Página não encontrada" /><div className="card"><Empty title="Este endereço não existe">Use o menu ou ⌘K.</Empty></div></>} />
         </Route>
       </Routes>
