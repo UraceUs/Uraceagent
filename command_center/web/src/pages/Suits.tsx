@@ -36,7 +36,7 @@ interface Fornecedor { id: number; name: string; contact: string | null; email: 
   status: string | null; price: string | null; shipping: string | null; payment: string | null; lead_time: string | null; comments: string | null
   is_current: number; pedidos: number; asana_gid: string | null }
 interface Email { para: string | null; assunto: string; corpo: string; faltam: string[]; fornecedor: Fornecedor | null }
-interface PonteCfg { ponte_ligada: string; envio_automatico: string; designer_nome: string; designer_email: string; assinatura: string; boas_vindas: string }
+interface PonteCfg { ponte_ligada: string; envio_automatico: string; designer_nome: string; designer_email: string; assinatura: string; boas_vindas: string; politica: string }
 interface Ponte { config: PonteCfg; manual: boolean; motor: string; ultima_rodada: { at: string; detail: string } | null }
 interface Anexo { nome: string; bytes: number }
 
@@ -394,10 +394,11 @@ function Ponte() {
       <div className="suit-form">
         <label className="check suit-ia"><input type="checkbox" disabled={!gerente} checked={cfg.ponte_ligada === '1'} onChange={e => set('ponte_ligada', e.target.checked ? '1' : '0')} /> Ponte ligada</label>
         <label className="check suit-ia"><input type="checkbox" disabled={!gerente} checked={auto} onChange={e => set('envio_automatico', e.target.checked ? '1' : '0')} /> Envio automático (sem aprovação)</label>
-        <label className="fld"><span>Designer (nome)</span><input disabled={!gerente} value={cfg.designer_nome} onChange={e => set('designer_nome', e.target.value)} placeholder="Matheus" /></label>
+        <label className="fld"><span>Designer (nome)</span><input disabled={!gerente} value={cfg.designer_nome} onChange={e => set('designer_nome', e.target.value)} placeholder="Mateus" /></label>
         <label className="fld"><span>E-mail do designer</span><input disabled={!gerente} type="email" value={cfg.designer_email} onChange={e => set('designer_email', e.target.value)} /></label>
       </div>
       <label className="fld"><span>Boas-vindas (referência; a IA adapta ao idioma e ao pedido)</span><textarea disabled={!gerente} rows={9} value={cfg.boas_vindas} onChange={e => set('boas_vindas', e.target.value)} /></label>
+      <label className="fld"><span>Política dos macacões (a IA segue e explica ao cliente; conflito vem para a equipe)</span><textarea disabled={!gerente} rows={6} value={cfg.politica} onChange={e => set('politica', e.target.value)} /></label>
       <label className="fld"><span>Assinatura</span><textarea disabled={!gerente} rows={5} value={cfg.assinatura} onChange={e => set('assinatura', e.target.value)} /></label>
       {gerente && ed && <div className="row gap"><button className="btn ghost" onClick={() => setEd(null)}>Cancelar</button><button className="btn primary" disabled={indo === 'salvar'} onClick={salvar}>Salvar</button></div>}
     </Section>
