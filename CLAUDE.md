@@ -29,6 +29,9 @@ Dono, 30/09 (issue #14): *"preciso que faça também nos nossos projetos de agor
 - Imagem comprimida (WebP, ≤ 1600 px, sem EXIF), `loading="lazy"` nas listas
 - Código dividido por rota (`React.lazy`); o bundle inicial não cresce à toa
 - URL limpa: caminho, não parâmetro (`/compras/12`); endereço antigo redireciona
+- **Inserção manual sempre com "Vincular ao cliente"** (dono, 08/10, #158): todo formulário que
+  cria registro à mão tem o seletor de cliente (`Picker` de `components/Unir.tsx`), grava o
+  `client_id` e puxa do cadastro o que já existe (nome, e-mail, telefone, piloto, endereço, medidas)
 
 ## Backend
 - Lista que cresce é **paginada no backend** (`limit`/`offset` + `total`)

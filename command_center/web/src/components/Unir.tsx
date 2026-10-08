@@ -1,6 +1,6 @@
 /* Unir dois clientes à mão (Brian Santiago escrito de dois jeitos) e puxar o histórico
    completo do Asana — pedidos do dono em 09/09. */
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
@@ -14,11 +14,12 @@ type Sug = Client & { why?: string }
 export function Picker({ label, value, onPick, exclude, sugestoes }: { label: string; value: Client | null; onPick: (c: Client | null) => void; exclude?: number; sugestoes?: Sug[] }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
+  const id = useId()
   const lista = useGet<Client[]>(q.trim().length >= 2 ? `/clients?q=${encodeURIComponent(q.trim())}` : null)
   const hits = (lista.data || []).filter(c => c.id !== exclude).slice(0, 10)
   if (value) return <div className="field"><label>{label}</label><div className="row wrap"><b>{value.pilot_name || value.name}</b><span className="small muted">{value.pilot_name && value.pilot_name !== value.name ? `resp. ${value.name} · ` : ''}{value.email || 'sem e-mail'} · {value.phone || 'sem tel'}</span><button className="btn ghost sm" onClick={() => onPick(null)}>trocar</button></div></div>
-  return <div className="field"><label>{label}</label>
-    <div className="lpick"><input className="input" value={q} placeholder="Digite o nome do piloto ou do responsável…" onFocus={() => setOpen(true)} onChange={e => { setQ(e.target.value); setOpen(true) }} />
+  return <div className="field"><label htmlFor={id}>{label}</label>
+    <div className="lpick"><input id={id} className="input" value={q} placeholder="Digite o nome do piloto ou do responsável…" onFocus={() => setOpen(true)} onChange={e => { setQ(e.target.value); setOpen(true) }} />
       {open && (q.trim().length >= 2 || (sugestoes && sugestoes.length > 0)) && <div className="lpick-menu">
         {q.trim().length < 2 && sugestoes?.map(s => <div key={s.id} className="opt" onMouseDown={ev => { ev.preventDefault(); onPick(s); setOpen(false) }}><span className="truncate">✦ {s.pilot_name || s.name}</span><span className="c">{s.why}</span></div>)}
         {q.trim().length >= 2 && (lista.loading && !lista.data ? <div className="small muted" style={{ padding: '6px 10px' }}>buscando…</div> : hits.length === 0 ? <div className="small muted" style={{ padding: '6px 10px' }}>Nenhum cliente com “{q}”.</div> :

@@ -479,6 +479,7 @@ def conversas_novas(con, gm):
                 pid = inserir(con, "suit_orders", title=nome or "Pedido por e-mail", customer_name=nome or None,
                               customer_email=de or None, source="email", gmail_thread_cliente=th, status="standby", updated_at=agora())
                 suits.anotar(con, pid, f"Conversa com o marcador Suits ({assunto[:80]}): a IA vê se é pedido de macacão.", "etapa", "standby")
+                suits.vincular_por_email(con, pid)
                 eventos.append({"tipo": "marcador", "pedido_id": pid, "thread_id": th, "mensagens": novas, "historico": msgs})
     return eventos
 

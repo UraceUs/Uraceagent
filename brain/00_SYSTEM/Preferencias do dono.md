@@ -60,3 +60,9 @@ conciso e certeiro. Ver [[Escalonamento]].
 America/New_York (`fmt.ts` já formata assim; o backend guarda em UTC e converte na tela).
 Rotinas e horários de agenda também são lidos nesse fuso. Nunca mostrar hora do servidor
 nem do navegador.
+
+## Inserção manual sempre vinculada ao cliente (08/10, #158)
+"Todo lugar que a gente for fazer inserção manual, sempre coloque um para vincular com o cliente ...
+para poder vincular e puxar as informações pré-definidas ali daquele cliente." Todo formulário de
+criação manual tem "Vincular ao cliente", grava o card (`client_id`) e preenche com o que o cadastro
+já tem; só completa campo vazio, nunca inventa (NO FAKE DATA). Hoje: Suits (pedido, lead) e Vendas.

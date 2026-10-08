@@ -198,6 +198,67 @@ def email_fornecedor(con, pedido, fornecedor, quem):
     return {"para": (fornecedor or {}).get("email"), "assunto": assunto, "corpo": corpo, "faltam": faltam}
 
 
+# ------------------------------------------------------------ vincular ao cliente (#158)
+# Dono, 08/10: "Todo lugar que a gente for fazer inserção manual, sempre coloque um para vincular com o
+# cliente ... para poder vincular e puxar as informações pré-definidas ali daquele cliente."
+# Medidas da área do cliente (portal) que são as MESMAS do formulário do macacão. Inseam e manga não
+# entram: não são nenhuma das 29 (NO FAKE DATA).
+DO_PORTAL = {"height_in": ("height", "in"), "weight_lb": ("weight", "lb"), "chest_in": ("chest", "in"),
+             "waist_in": ("waist", "in"), "hips_in": ("hip", "in")}
+
+
+def _endereco(conta):
+    if not conta or not conta["address_line1"]:
+        return None
+    cidade = ", ".join(x for x in (conta["city"], " ".join(x for x in (conta["state"], conta["zip"]) if x)) if x)
+    linhas = [conta["address_line1"], conta["address_line2"], cidade,
+              conta["country"] if conta["country"] and conta["country"] != "US" else None]
+    return "\n".join(x for x in linhas if x)
+
+
+def dados_do_cliente(con, cid):
+    """O que o cadastro já sabe deste cliente, para preencher o pedido: o card, a conta do site
+    (endereço) e o piloto da área do cliente (medidas). Só o que existe; nada inventado."""
+    c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
+    if not c:
+        return None
+    piloto = um(con, "SELECT * FROM portal_pilots WHERE client_id=? AND active=1", (cid,))
+    conta = um(con, "SELECT * FROM portal_accounts WHERE client_id=?", (cid,)) or (
+        um(con, "SELECT * FROM portal_accounts WHERE id=?", (piloto["account_id"],)) if piloto else None)
+    if conta and not piloto:
+        pilotos = todos(con, "SELECT * FROM portal_pilots WHERE account_id=? AND active=1", (conta["id"],))
+        if len(pilotos) == 1:
+            piloto = pilotos[0]
+    medidas = {}
+    if piloto and piloto["measures"]:
+        try:
+            md = json.loads(piloto["measures"])
+        except ValueError:
+            md = {}
+        for k, (chave, _) in DO_PORTAL.items():
+            if isinstance(md.get(k), (int, float)) and md[k] > 0:
+                medidas[chave] = md[k]
+    return {"client_id": c["id"], "customer_name": c["name"], "customer_email": c["email"] or (conta["email"] if conta else None),
+            "customer_phone": c["phone"] or (conta["phone"] if conta else None),
+            "driver_name": c["pilot_name"] or (piloto["name"] if piloto and not piloto["is_self"] else None),
+            "ship_address": _endereco(conta),
+            "medidas": {"valores": medidas, "unidade": "in", "unidade_peso": "lb"} if medidas else None,
+            "de_onde": {"card": True, "conta_do_site": bool(conta), "piloto": piloto["name"] if piloto else None}}
+
+
+def vincular_por_email(con, pid):
+    """Pedido sem cliente, com e-mail: liga sozinho quando há EXATAMENTE um cliente com aquele e-mail."""
+    p = um(con, "SELECT client_id, customer_email FROM suit_orders WHERE id=?", (pid,))
+    if not p or p["client_id"] or not p["customer_email"]:
+        return None
+    achados = todos(con, "SELECT id FROM clients WHERE lower(email)=lower(?) OR lower(coalesce(email_alt,''))=lower(?)",
+                    (p["customer_email"].strip(), p["customer_email"].strip()))
+    if len(achados) != 1:
+        return None
+    con.execute("UPDATE suit_orders SET client_id=? WHERE id=?", (achados[0]["id"], pid))
+    return achados[0]["id"]
+
+
 # ------------------------------------------------------------------- pedidos
 def etapa_valida(s):
     if s not in CODIGOS:
@@ -206,9 +267,10 @@ def etapa_valida(s):
 
 
 def detalhe(con, pid):
-    p = um(con, """SELECT o.*, s.name AS fornecedor, s.email AS fornecedor_email, u.name AS criado_por
+    p = um(con, """SELECT o.*, s.name AS fornecedor, s.email AS fornecedor_email, u.name AS criado_por,
+                          c.name AS cliente_nome, c.pilot_name AS cliente_piloto
                    FROM suit_orders o LEFT JOIN suit_suppliers s ON s.id=o.supplier_id
-                   LEFT JOIN users u ON u.id=o.created_by WHERE o.id=?""", (pid,))
+                   LEFT JOIN users u ON u.id=o.created_by LEFT JOIN clients c ON c.id=o.client_id WHERE o.id=?""", (pid,))
     if not p:
         return None
     p = dict(p)

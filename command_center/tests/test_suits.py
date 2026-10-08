@@ -272,3 +272,72 @@ def test_ia_registra_e_avanca_pelas_ferramentas_dos_suits(tmp_path, monkeypatch)
         assert agente_sdk.classificar(con, nome) == "fazer"                # interno: faz direto e fica registrado
     assert json.loads(um(con, "SELECT measurements FROM suit_orders WHERE id=?", (pid,))["measurements"])["head"]["v"] == 55
     con.close()
+
+
+# ------------------------------------------------------------ vincular ao cliente (#158)
+# Dono, 08/10: "Todo lugar que a gente for fazer inserção manual, sempre coloque um para vincular com o
+# cliente ... para poder vincular e puxar as informações pré-definidas ali daquele cliente."
+def _cliente_com_conta_e_piloto(n=[0]):
+    n[0] += 1
+    email = f"paula.d{n[0]}@example.com"
+    con = conectar()
+    try:
+        cid = con.execute("INSERT INTO clients (name, email, phone, pilot_name, status) "
+                          "VALUES ('Paula Duarte',?,'+1 407 555 0101','Theo Duarte','ACTIVE')", (email,)).lastrowid
+        conta = con.execute("""INSERT INTO portal_accounts (email, pw_salt, pw_hash, name, birth_date, phone, address_line1,
+                               city, state, zip, terms_accepted_at, client_id)
+                               VALUES (?,'s','h','Paula Duarte','1985-02-01','+1 407 555 0101',
+                               '100 Pine St','Orlando','FL','32824','2026-09-01T00:00:00Z',?)""", (email, cid)).lastrowid
+        con.execute("INSERT INTO portal_pilots (account_id, name, measures) VALUES (?, 'Theo Duarte', ?)",
+                    (conta, json.dumps({"height_in": 55, "weight_lb": 80, "chest_in": 28, "inseam_in": 25})))
+        con.commit()
+        return cid
+    finally:
+        con.close()
+
+
+def test_vincular_puxa_card_endereco_e_so_as_medidas_que_existem(cli):
+    cid = _cliente_com_conta_e_piloto()
+    h = entra(cli, "op@urace.us")
+    d = cli.get(f"{B}/cliente/{cid}", headers=h).json()
+    assert d["customer_name"] == "Paula Duarte" and d["customer_email"].startswith("paula.d")
+    assert d["driver_name"] == "Theo Duarte" and d["ship_address"] == "100 Pine St\nOrlando, FL 32824"
+    # inseam não é nenhuma das 29 medidas: não entra (NO FAKE DATA)
+    assert d["medidas"] == {"valores": {"height": 55, "weight": 80, "chest": 28}, "unidade": "in", "unidade_peso": "lb"}
+    assert cli.get(f"{B}/cliente/999999", headers=h).status_code == 404
+    entra(cli, "viewer@urace.us")
+    assert cli.get(f"{B}/cliente/{cid}").status_code == 403
+
+
+def test_pedido_grava_o_cliente_recusa_o_que_nao_existe_e_desvincula_com_zero(cli):
+    cid = _cliente_com_conta_e_piloto()
+    h = entra(cli, "op@urace.us")
+    assert cli.post(B, headers=h, json={"customer_name": "X", "client_id": 999999}).status_code == 400
+    p = cli.post(B, headers=h, json={"customer_name": "Paula Duarte", "client_id": cid}).json()
+    assert p["client_id"] == cid and p["cliente_nome"] == "Paula Duarte"
+    p = cli.patch(f"{B}/{p['id']}", headers=h, json={"client_id": 0}).json()
+    assert p["client_id"] is None
+
+
+def test_pedido_sem_cliente_liga_sozinho_quando_o_email_e_de_um_so(cli):
+    con = conectar()
+    try:
+        cid = con.execute("INSERT INTO clients (name, email, status) VALUES ('Único','unico@example.com','ACTIVE')").lastrowid
+        for _ in range(2):
+            con.execute("INSERT INTO clients (name, email, status) VALUES ('Repetido','dois@example.com','ACTIVE')")
+        con.commit()
+    finally:
+        con.close()
+    h = entra(cli, "op@urace.us")
+    assert cli.post(B, headers=h, json={"customer_name": "U", "customer_email": "UNICO@example.com"}).json()["client_id"] == cid
+    assert cli.post(B, headers=h, json={"customer_name": "D", "customer_email": "dois@example.com"}).json()["client_id"] is None
+
+
+def test_lead_vinculado_leva_o_cliente_para_o_pedido(cli):
+    cid = _cliente_com_conta_e_piloto()
+    h = entra(cli, "op@urace.us")
+    assert cli.post(f"{B}/leads", headers=h, json={"name": "Paula", "client_id": 999999}).status_code == 400
+    lead = cli.post(f"{B}/leads", headers=h, json={"name": "Paula Duarte", "client_id": cid}).json()
+    assert lead["client_id"] == cid
+    p = cli.post(f"{B}/leads/{lead['id']}/pedido", headers=h).json()
+    assert p["client_id"] == cid

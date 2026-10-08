@@ -16,8 +16,9 @@ import { Mic, Ouvir, TextoComVoz } from '../components/Voz'
 import { diaLocal, fmtDate, fmtDateTime, fmtTime, hojeLocal, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { Picker } from '../components/Unir'
 import { Bolha } from './AI'
-import type { AiCommand } from '../api/types'
+import type { AiCommand, Client } from '../api/types'
 
 export interface Opp {
   id: number; name: string; email: string | null; phone: string | null
@@ -108,7 +109,14 @@ function NovaOportunidade({ onClose, onCriada, lead }: { onClose: () => void; on
   const toast = useToast()
   const [f, setF] = useState({ name: '', phone: '', email: '', pilot_name: '', pilot_age: '', service: '', amount: '', source: 'Ligação', notes: '' })
   const [busy, setBusy] = useState(false)
+  const [cli, setCli] = useState<Client | null>(null)
   const set = (k: keyof typeof f) => (v: string) => setF(x => ({ ...x, [k]: v }))
+  // #158 (dono, 08/10): inserção manual sempre com "vincular ao cliente" — puxa o cadastro e o fechamento cai no card dele
+  function escolher(c: Client | null) {
+    setCli(c)
+    if (c) setF(x => ({ ...x, name: c.name || x.name, phone: c.phone || x.phone, email: c.email || x.email,
+      pilot_name: c.pilot_name && c.pilot_name !== c.name ? c.pilot_name : x.pilot_name }))
+  }
   async function criar() {
     if (!f.name.trim()) { toast('Diga o nome de quem você falou.', 'crit'); return }
     setBusy(true)
@@ -117,6 +125,7 @@ function NovaOportunidade({ onClose, onCriada, lead }: { onClose: () => void; on
         name: f.name, phone: f.phone || undefined, email: f.email || undefined, pilot_name: f.pilot_name || undefined,
         pilot_age: f.pilot_age ? Number(f.pilot_age) : undefined, service: f.service || undefined,
         amount: f.amount ? Number(f.amount) : undefined, source: f.source, notes: f.notes || undefined, crm_lead_id: lead,
+        client_id: cli?.id ?? undefined,
       })
       toast(r.ja_e_cliente ? `Criada. Atenção: ${r.ja_e_cliente.nome} já é cliente — no fechamento o painel liga no card dele.` : 'Oportunidade criada.', 'ok')
       onCriada(r.id)
@@ -126,6 +135,7 @@ function NovaOportunidade({ onClose, onCriada, lead }: { onClose: () => void; on
     <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar" title="Fechar (Esc)"><Icon name="x" size={16} /></button>
     <div><div className="small muted cond">Vendas</div><h2 className="h1" style={{ fontSize: 22 }}>Nova oportunidade</h2>
       <div className="small muted">Durante a ligação: só o nome é obrigatório, o resto entra depois. Todo campo aceita ditado.</div></div>
+    <Picker label="Já é cliente? Vincular ao cliente (puxa os dados do cadastro)" value={cli} onPick={escolher} />
     <div className="grid g2">
       <div className="field"><label>Quem decide (responsável)</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.name} onChange={e => set('name')(e.target.value)} autoFocus /><Mic valor={f.name} onTexto={set('name')} /></div></div>
       <div className="field"><label>Telefone</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.phone} onChange={e => set('phone')(e.target.value)} placeholder="+1 407…" /><Mic valor={f.phone} onTexto={set('phone')} /></div></div>
