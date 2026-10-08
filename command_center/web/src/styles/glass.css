@@ -632,6 +632,11 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .balcao-video{width:100%;max-height:60vh;border-radius:12px;background:#000}
 .balcao-btn-guardar{background:var(--warn);border-color:var(--warn);color:#fff}
 .qr-cliente{width:160px;height:160px;background:#fff;border-radius:10px;padding:6px}
+.portal-qr{margin:8px 0 0;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.portal-qr .qr-cliente{width:180px;height:180px}
+.portal-qr-espera{margin:8px 0 0}
+.qr-modal{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.qr-modal .qr-cliente{width:min(260px,70vw);height:auto;aspect-ratio:1}
 
 /* #92 Meu dia e checklists: alvos de toque grandes, o celular é a ferramenta */
 .meudia-ck{width:100%;min-height:44px;justify-content:flex-start;gap:8px;text-align:left}

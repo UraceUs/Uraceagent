@@ -316,11 +316,13 @@ PILOTO_OK = {"birth_date": "2014-05-01", "notes": "Two seasons in Mini kart.",
              "measures": {"height_in": 60, "weight_lb": 110, "chest_in": 30, "waist_in": 26, "hips_in": 30}}
 
 
-def cliente_pela_api(pg, servidor, nome, email, piloto=None, ip=None):
+def cliente_pela_api(pg, servidor, nome, email, piloto=None, ip=None, telefone=None):
     """Cria a conta (e um piloto completo) pela API, na sessão do navegador da página. `ip` faz o
-    cadastro vir de outra conexão (o limite é de 10 cadastros por hora por conexão)."""
+    cadastro vir de outra conexão (o limite é de 10 cadastros por hora por conexão). `telefone`
+    próprio quando o teste cria o card: o mesmo telefone em dois cards de contas diferentes trava."""
     r = pg.request.post(servidor + "/api/portal/signup", data={"name": nome, "email": email, "password": "pista-molhada-7",
-                                                              "birth_date": "1980-01-01", "accept_terms": True, **CONTATO},
+                                                              "birth_date": "1980-01-01", "accept_terms": True,
+                                                              **CONTATO, **({"phone": telefone} if telefone else {})},
                         headers={"X-Forwarded-For": ip} if ip else None)
     assert r.ok, r.text()
     if piloto:
@@ -375,6 +377,38 @@ def test_cliente_cria_a_conta_poe_o_piloto_com_medidas_e_volta_a_entrar(servidor
     # conta de cliente não abre o painel
     assert pg.request.get(servidor + "/api/clients").status == 401
     pg.close()
+
+
+def test_qr_do_cliente_a_vista_na_area_do_cliente_e_no_card(servidor, navegador):
+    """#165, dono 08/10: "o cliente sempre ali na conta dele tem o QR Code dele, não está aparecendo lá.
+    Mesmo o QR Code do card do cliente lá no Command Center"."""
+    cli = navegador.new_page(viewport={"width": 360, "height": 800})
+    cli.erros_js = []
+    cli.on("pageerror", lambda e: cli.erros_js.append(str(e)))
+    cliente_pela_api(cli, servidor, "Rita QR", "rita.qr.e2e@example.com", piloto="Leo QR", ip="10.9.9.9", telefone="(407) 555-0165")
+    abrir(cli, servidor, "/portal/dashboard")
+    cli.get_by_text("Leo QR's URACE QR appears here as soon as our team connects").wait_for()   # sem card: diz o porquê
+    pid = cli.request.get(servidor + "/api/portal/me").json()["drivers"][0]["id"]
+    adm = entrar(navegador, servidor)
+    csrf = next(c["value"] for c in adm.context.cookies() if c["name"] == "cc_csrf")
+    r = adm.request.post(servidor + f"/api/site/drivers/{pid}/criar-cliente", headers={"X-CSRF": csrf})
+    assert r.ok, r.text()
+    cid = r.json()["client_id"]
+    abrir(cli, servidor, "/portal/dashboard")
+    qr = cli.get_by_role("img", name="URACE QR of Leo QR")
+    qr.wait_for()                                                            # aberto no painel, sem clicar em nada
+    cli.wait_for_function("() => { const i = document.querySelector('.portal-qr img'); return i && i.complete && i.naturalWidth > 0 }")
+    r = cli.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not cli.erros_js, cli.erros_js
+    abrir(adm, servidor, f"/clients/{cid}")
+    adm.get_by_role("button", name="QR do balcão").click()
+    dlg = adm.get_by_role("dialog", name="QR do balcão de Leo QR")
+    dlg.get_by_role("img", name="QR do balcão de Leo QR").wait_for()
+    adm.wait_for_function("() => { const i = document.querySelector('.qr-modal img'); return i && i.complete && i.naturalWidth > 0 }")
+    assert dlg.get_by_role("link", name="Abrir no balcão").get_attribute("href").endswith(f"/balcao/{cid}")
+    assert not adm.erros_js and not adm.erros_api, (adm.erros_js, adm.erros_api)
+    cli.close(); adm.close()
 
 
 def test_menor_de_idade_nao_abre_a_conta(servidor, navegador):
