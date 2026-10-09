@@ -35,3 +35,10 @@ Command Center). O dono respondeu as 10 dúvidas da noite:
 
 ## Área do cliente
 - **"Esqueci minha senha"**: fazer já, antes da troca do DNS.
+
+## Loja com Stripe (#174, tarde de 09/10)
+- Chaves do Stripe gravadas e testadas pelo dono no VPS (modo live, conta com cobranças liberadas).
+- **Sales tax da Flórida na loja: stand-by** (*"deixe em stand by por enquanto"*). A loja não cobra
+  imposto; Stripe Tax fica para quando o dono decidir.
+- **Conta dos repasses do Stripe no QuickBooks: stand-by**. O Sales Receipt entra em Undeposited
+  Funds até o financeiro escolher uma conta (`QBO_CONTA_STRIPE`).
