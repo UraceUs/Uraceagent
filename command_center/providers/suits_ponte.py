@@ -340,8 +340,9 @@ def precisa_humano(con, pid, motivo, user_id=None):
 
 # ------------------------------------------------------------------ os eventos
 def _nosso(de):
+    """A URACE: as caixas da lista e qualquer pessoa da equipe com e-mail @urace.us (#182)."""
     d = (de or "").lower()
-    return any(n in d for n in NOSSOS)
+    return any(n in d for n in NOSSOS) or _email_de(d).endswith("@urace.us")
 
 
 def _visto(con, mid):
@@ -473,14 +474,13 @@ def conversas_novas(con, gm):
                 pid = clientes[de]
                 con.execute("UPDATE suit_orders SET gmail_thread_cliente=coalesce(gmail_thread_cliente, ?) WHERE id=?", (th, pid))
                 eventos.append({"tipo": "cliente", "pedido_id": pid, "thread_id": th, "mensagens": novas, "historico": msgs})
-            else:                                   # marcador Suits de alguém sem pedido: abre um, a IA decide o resto
-                from command_center.providers import suits
-                nome = _nome_de(novas[-1].get("de")) or de
-                pid = inserir(con, "suit_orders", title=nome or "Pedido por e-mail", customer_name=nome or None,
-                              customer_email=de or None, source="email", gmail_thread_cliente=th, status="standby", updated_at=agora())
-                suits.anotar(con, pid, f"Conversa com o marcador Suits ({assunto[:80]}): a IA vê se é pedido de macacão.", "etapa", "standby")
-                suits.vincular_por_email(con, pid)
-                eventos.append({"tipo": "marcador", "pedido_id": pid, "thread_id": th, "mensagens": novas, "historico": msgs})
+            else:
+                # #182 (dono, 09/10: "quando for um pedido de suit, ele adiciona lá"): o marcador Suits de quem
+                # não tem pedido NÃO abre pedido. A IA lê primeiro e só cria se for pedido de macacão. Sem
+                # pedido, a conversa não fica ligada a nada: se não couber neste ciclo, volta no próximo do
+                # mesmo jeito (antes, voltava como "resposta do cliente" e o pedido ficava).
+                eventos.append({"tipo": "marcador", "pedido_id": None, "thread_id": th, "mensagens": novas, "historico": msgs,
+                                "remetente": {"nome": _nome_de(novas[-1].get("de")) or None, "email": de or None}})
     return eventos
 
 
@@ -518,11 +518,18 @@ QUE_FAZER = {
     "fornecedor": ("O FORNECEDOR ESCREVEU. Anote o que ele disse (suits_anotar); se avisou produção ou envio, mova a etapa "
                    "(in_production / in_transit, com o rastreio). Se pedir decisão ou houver problema (medida errada, cor), "
                    "suits_precisa_humano."),
-    "marcador": ("E-MAIL COM O MARCADOR SUITS DE QUEM AINDA NÃO TINHA PEDIDO. O painel abriu o pedido #{id} com o remetente. "
-                 "Leia a conversa: se for o mesmo cliente de outro pedido aberto (suits_pedidos), anote isso e mova este para "
-                 "canceled com o motivo; se for um pedido novo de macacão, preencha o pedido e responda com as boas-vindas "
-                 "(anexos=[\"manual_medidas\"]) ou com o próximo passo, se ele já mandou algo; se não for sobre macacão, mova "
-                 "para canceled com o motivo e pare."),
+    "marcador": ("E-MAIL COM O MARCADOR SUITS DE QUEM NÃO TEM PEDIDO ABERTO. NENHUM PEDIDO FOI CRIADO: classifique antes "
+                 "(dono, 09/10: \"quando for um pedido de suit, ele adiciona lá\"). Leia a conversa inteira.\n"
+                 "1) É PEDIDO DE MACACÃO só quando a pessoa (cliente, não a equipe nem fornecedor) quer comprar um macacão "
+                 "novo: pede orçamento ou preço para fazer o dela, manda medidas ou design para encomendar, confirma que quer "
+                 "fazer, ou pagou. Aí: veja em suits_pedidos se ela já tem pedido aberto (mesmo e-mail ou nome); se tem, "
+                 "suits_atualizar_pedido nele com gmail_thread_cliente=\"{thread}\" e siga do ponto em que está; se não tem, "
+                 "suits_criar_pedido com title e customer_name (o nome dela), customer_email, gmail_thread_cliente=\"{thread}\" "
+                 "e o que ela já mandou, e responda com as boas-vindas (anexos=[\"manual_medidas\"]) ou com o próximo passo.\n"
+                 "2) NÃO É PEDIDO (e não crie nada): fornecedor ou fábrica, homologação/FIA, nota fiscal, frete, propaganda, "
+                 "newsletter, conversa interna da equipe, dúvida geral sem intenção de comprar, agradecimento, assunto de outro "
+                 "serviço, ou qualquer dúvida sobre ser pedido. Na dúvida, NÃO crie: responda só \"não é pedido: <motivo>\" "
+                 "e pare. Não responda e-mail para quem não fez pedido."),
     "simulacao": ("SIMULAÇÃO NESTE PEDIDO (nada sai: os e-mails viram nota). Leia o pedido e as conversas abaixo e faça o próximo "
                   "passo do processo como se fosse de verdade."),
 }
@@ -543,14 +550,15 @@ def prompt(con, ev, cfg, anexos_baixados):
             "(processo: 10_PROCESSOS/Pedido de macacão.md). "
             + (f"Pedido Suits #{pid}: leia com suits_pedido e os anexos com suits_anexos. " if pid else "")
             + f"Thread do Gmail: {ev.get('thread_id')}.\n\n"
-            + QUE_FAZER[ev["tipo"]].replace("{id}", str(pid or "?"))
+            + QUE_FAZER[ev["tipo"]].replace("{id}", str(pid or "?")).replace("{thread}", str(ev.get("thread_id") or ""))
+            + (f"\nRemetente: {ev['remetente'].get('nome') or '—'} <{ev['remetente'].get('email') or '—'}>." if ev.get("remetente") else "")
             + "\n\nSEMPRE: no idioma do cliente, educado e comercial (ainda é venda), respeitando o que ele pediu; não prometa "
               "preço, prazo ou desconto que não esteja no pedido ou na POLÍTICA; assine com a ASSINATURA. Se a conversa já tem "
               "as boas-vindas da URACE (agradecimento + manual de medidas), não mande de novo: siga do ponto em que está; e em "
               "pedido que começou antes da ponte não mande adendo de política por conta própria. O designer é designer, não "
               "fabricante: nunca diga ao cliente quem desenha nem quem fabrica, nem repasse texto, assinatura ou conversa dele. "
               "Na dúvida (reclamação, reembolso, cancelamento, troca, mudança de preço, conflito com a política, algo estranho), "
-              "não responda: suits_precisa_humano com o motivo. No fim, suits_anotar com o que fez em uma linha."
+              "não responda: suits_precisa_humano com o motivo. No fim, se houver pedido, suits_anotar com o que fez em uma linha."
             + ("" if cfg.get("designer_email") else "\nO e-mail do designer ainda não foi configurado: se precisar falar com ele, "
                "use suits_precisa_humano dizendo o que mandaria.")
             + f"\n\nPOLÍTICA DOS MACACÕES (do dono):\n{cfg['politica']}"

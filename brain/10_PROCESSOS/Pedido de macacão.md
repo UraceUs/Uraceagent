@@ -31,6 +31,13 @@ venda de macacão no site → a IA agradece, manda o manual de medidas (PDF) e p
 pergunta ou entrega a arte → a IA leva ao cliente **sem os dados do designer**. Também lê o
 marcador `Suits` e as respostas do fornecedor.
 
+**Marcador `Suits` não é pedido** (dono, 09/10, #182: *"quando for um pedido de suit, ele adiciona
+lá"*). Conversa com o marcador de quem não tem pedido aberto vai para a IA **sem pedido criado**:
+ela só cria (ou liga ao pedido aberto da pessoa) quando é alguém querendo comprar um macacão —
+orçamento, medidas ou design para encomendar, confirmação, pagamento. Fornecedor, homologação,
+nota, frete, propaganda, conversa da equipe (todo `@urace.us` é nosso) ou dúvida: não cria nada.
+Na dúvida, não cria.
+
 Ítalo: *"eu pedi para tudo passar por minha aprovação por isso que eu fui o gargalo"*. Por
 isso a ponte manda **sem aprovação** quando o "envio automático" está ligado. Começa em
 **simulação**: o e-mail que a IA mandaria aparece na linha do tempo do pedido para a equipe
