@@ -535,7 +535,37 @@ def store(host, categoria=None):
                   schemas=(_negocio(host), lista, _trilha(host, ("Store", "/store/"))))
 
 
-def product(host, slug, enviado=False):
+def _form_comprar(p):
+    """#174: preço fechado e em estoque → paga na hora no Stripe Checkout (sem JavaScript: POST e 303)."""
+    opcoes = ""
+    if p["variations"]:
+        rows = []
+        for v in p["variations"]:
+            nome = " / ".join(v["attrs"])
+            ok = v.get("in_stock", True) and (v.get("price") or p["price"])
+            rows.append(f"<option value=\"{e(nome)}\"{'' if ok else ' disabled'}>{e(nome)}"
+                        f"{' — ' + usd(v.get('price') or p['price']) if ok else ' (out of stock)'}</option>")
+        rotulo = p["attributes"][0]["name"] if p["attributes"] else "Option"
+        opcoes = f'<label>{e(rotulo)}<select name="variacao">{"".join(rows)}</select></label>'
+    return f"""<form class="form-pedido form-comprar" method="post" action="/ops/api/vitrine/checkout">
+      <input type="hidden" name="produto" value="{e(p['slug'])}">
+      {opcoes}
+      <label>Quantity<input name="quantidade" type="number" min="1" max="20" value="1" inputmode="numeric"></label>
+      <fieldset class="entrega"><legend>Delivery</legend>
+        <label class="opcao"><input type="radio" name="entrega" value="retirada" checked> <span>Pick up at the track <span class="opcional">— Orlando Kart Center, free</span></span></label>
+        <label class="opcao"><input type="radio" name="entrega" value="envio"> <span>Ship to me <span class="opcional">— we confirm and bill shipping separately</span></span></label>
+      </fieldset>
+      <label class="escondido" aria-hidden="true">Leave this empty<input name="site" tabindex="-1" autocomplete="off"></label>
+      <button class="btn" type="submit">Buy now</button>
+      <p class="small muted">Secure checkout by Stripe: card, Apple Pay or Google Pay. The confirmation arrives by email.</p>
+    </form>"""
+
+
+ERRO_CHECKOUT = ('<p class="aviso-erro" role="alert">We couldn’t open the secure checkout just now. Please try again, '
+                 'or send us an order request below.</p>')
+
+
+def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
     d = dados("produtos.json")
     p = next((x for x in d["produtos"] if x["slug"] == slug), None)
     if not p:
@@ -552,6 +582,8 @@ def product(host, slug, enviado=False):
             break
     promo = f'<s>{usd(p["regular"])}</s> ' if p["on_sale"] and p["regular"] > p["price"] else ""
     cat = _categoria(p)
+    from command_center.providers.stripe_loja import compravel
+    comprar = stripe and compravel(p)
     corpo = f"""<section class="faixa clara" aria-labelledby="h-prod"><div class="largura produto">
   <div class="produto-fotos">{fotos or '<span class="sem-foto" aria-hidden="true">URACE</span>'}</div>
   <div class="produto-info">
@@ -560,6 +592,9 @@ def product(host, slug, enviado=False):
     <p class="produto-preco">{promo}<strong>{e(_preco(p))}</strong>{'' if p['in_stock'] else ' <span class="chip-fora">Out of stock</span>'}</p>
     {f'<div class="produto-short">{_niveis(p["short"], "p")}</div>' if p['short'] else ''}
     {ENVIADO.replace('your message', 'your order request') if enviado else ''}
+    {ERRO_CHECKOUT if erro_checkout else ''}
+    {_form_comprar(p) if comprar else ''}
+    {'<details class="pedido-alt"' + (' open' if enviado else '') + '><summary>Questions, sizes or a custom order? Send an order request</summary>' if comprar else ''}
     <form class="form-pedido" method="post" action="/ops/api/vitrine/pedido" data-pedido data-produto="{e(p['slug'])}">
       {opcoes}
       <label>Quantity<input name="quantidade" type="number" min="1" max="20" value="1" inputmode="numeric"></label>
@@ -568,10 +603,11 @@ def product(host, slug, enviado=False):
       <label>Phone <span class="opcional">(optional)</span><input name="telefone" type="tel" autocomplete="tel" maxlength="40"></label>
       <label>Notes <span class="opcional">(size, shipping address, questions)</span><textarea name="mensagem" maxlength="1000" rows="3"></textarea></label>
       <label class="escondido" aria-hidden="true">Leave this empty<input name="site" tabindex="-1" autocomplete="off"></label>
-      <button class="btn" type="submit">{'Order this' if p['in_stock'] else 'Ask about availability'}</button>
+      <button class="btn{' btn-linha-escura' if comprar else ''}" type="submit">{'Send order request' if comprar else 'Order this' if p['in_stock'] else 'Ask about availability'}</button>
       <p class="small muted">We confirm availability, shipping and the total, and send you the invoice to pay online. Nothing is charged now.</p>
       <p class="form-estado" role="status" aria-live="polite"></p>
     </form>
+    {'</details>' if comprar else ''}
   </div>
 </div></section>
 {f'<section class="faixa escura" aria-labelledby="h-desc"><div class="largura estreita texto"><h2 id="h-desc">About this product</h2>{_niveis(p["description"], "h3")}</div></section>' if p['description'] else ''}"""
@@ -586,6 +622,53 @@ def product(host, slug, enviado=False):
     return layout(host=host, caminho=f"/store/p/{p['slug']}/", titulo=f"{p['name']} | URACE Store", descricao=desc, corpo=corpo,
                   schemas=(_negocio(host), ld, _trilha(host, ("Store", "/store/"), (cat["name"], f"/store/{cat['slug']}/"), (p["name"], f"/store/p/{p['slug']}/"))),
                   scripts=("contato.js",), foto=p["images"][0]["src"] if p["images"] else None)
+
+
+def obrigado(host, pedido=None):
+    """#174: a volta do Stripe Checkout. Fora do sitemap e do Google (noindex)."""
+    if pedido and pedido["status"] == "pago":
+        valor = pedido["amount_paid"] if pedido["amount_paid"] is not None else pedido["amount"]
+        item = pedido["product_name"] + (f" ({pedido['variation']})" if pedido["variation"] else "") + \
+            (f" × {pedido['quantity']}" if pedido["quantity"] > 1 else "")
+        entrega = ("We'll email you when it's ready for pickup at the Orlando Kart Center." if pedido["delivery"] == "retirada"
+                   else "We'll confirm the shipping cost and send you the tracking number by email.")
+        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
+  <p class="eyebrow">Order #{pedido['id']}</p>
+  <h1 id="h-ok">Thank you! Your order is confirmed</h1>
+  <p class="aviso-ok" role="status">Payment received: <strong>{usd(valor)}</strong> for {e(item)}.</p>
+  <p>{entrega} A confirmation is on its way to {e(pedido['email'] or 'your email')}.</p>
+  <p><a class="btn" href="/store/">Back to the store</a></p>
+</div></section>"""
+    elif pedido:
+        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
+  <p class="eyebrow">Order #{pedido['id']}</p>
+  <h1 id="h-ok">Thanks! We're confirming your payment</h1>
+  <p role="status">Some payment methods take a moment to clear. You'll get an email as soon as it's confirmed — there's no need to pay again.</p>
+  <p><a class="btn" href="/store/">Back to the store</a></p>
+</div></section>"""
+    else:
+        corpo = """<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
+  <h1 id="h-ok">Thank you</h1>
+  <p>If you just paid, the confirmation is on its way to your email. Questions? Call or WhatsApp +1 (407) 250 2291.</p>
+  <p><a class="btn" href="/store/">Back to the store</a></p>
+</div></section>"""
+    return layout(host=host, caminho="/store/thanks/", titulo="Order confirmation | URACE Store",
+                  descricao="Your URACE Store order: payment confirmation and what happens next — pickup at the Orlando Kart Center or shipping.",
+                  corpo=corpo, indexar=False)
+
+
+def cancelado(host, slug=None):
+    d = dados("produtos.json")
+    p = next((x for x in d["produtos"] if x["slug"] == slug), None) if slug else None
+    volta = f'<a class="btn" href="/store/p/{e(p["slug"])}/">Back to {e(p["name"])}</a>' if p else '<a class="btn" href="/store/">Back to the store</a>'
+    corpo = f"""<section class="faixa clara" aria-labelledby="h-cancel"><div class="largura estreita texto">
+  <h1 id="h-cancel">Checkout cancelled</h1>
+  <p>Nothing was charged. You can try again whenever you like, or ask us anything first.</p>
+  <p>{volta} <a class="btn btn-linha-escura" href="/contact/?assunto=store">Ask a question</a></p>
+</div></section>"""
+    return layout(host=host, caminho="/store/cancelled/", titulo="Checkout cancelled | URACE Store",
+                  descricao="Your URACE Store checkout was cancelled and nothing was charged. Go back to the product or ask our team a question.",
+                  corpo=corpo, indexar=False)
 
 
 def _desc(texto, complemento):

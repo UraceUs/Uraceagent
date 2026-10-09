@@ -114,9 +114,9 @@ def _rodape():
 </footer>"""
 
 
-def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None):
+def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None, indexar=True):
     canon = f"https://{host}{caminho}"
-    robots = '<meta name="robots" content="noindex, nofollow">' if preview() else ""
+    robots = '<meta name="robots" content="noindex, nofollow">' if preview() or not indexar else ""
     og_img = (f'<meta property="og:image" content="https://{host}{estatico("img/" + foto)}">'
               f'<meta name="twitter:image" content="https://{host}{estatico("img/" + foto)}">') if foto else ""
     js = "".join(f'<script src="{estatico(s)}" defer></script>' for s in scripts)

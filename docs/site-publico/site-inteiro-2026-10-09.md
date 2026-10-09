@@ -38,8 +38,9 @@ URLs e também com … identidade visual mesclada de Command Center com o site n
   `support@urace.us` com o link da oportunidade e confirmação para a pessoa.
 - **Pedido da loja** (página do produto) → `POST /ops/api/vitrine/pedido`: oportunidade com o
   produto, a variação, a quantidade e o valor estimado; a equipe confirma estoque e frete e manda a
-  invoice do QuickBooks. **Nada é cobrado pelo site** (Stripe Checkout fica para quando a conta
-  existir — decisão do dono, 08/10, pendente das chaves no Cofre).
+  invoice do QuickBooks. Com o Stripe ligado (#174), o produto com preço e em estoque é **pago na
+  hora** pelo Stripe Checkout e entra pago em Vendas: veja `loja-stripe.md`. O pedido continua para
+  "Ask for price", fora de estoque e dúvidas.
 - **Planos mensais (#169, dono 09/10: "vender online já")**: a equipe cadastra o plano em Site ›
   Serviços (tipo *Plano mensal*, preço por mês, meses, sessões por mês, item do QuickBooks). A
   página da Academy passa a mostrar os planos cadastrados com o botão **Choose** →

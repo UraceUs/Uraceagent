@@ -77,6 +77,10 @@ def _autosync():
             r_cob = cobranca_agenda.rodar(con)
             if any(r_cob.values()):
                 auditar(con, "booking.billing.round", "system", detail=r_cob)
+            from command_center.providers import stripe_loja   # #174: pago na loja que ficou sem e-mail ou QuickBooks
+            r_loja = stripe_loja.rodar(con)
+            if any(r_loja.values()):
+                auditar(con, "store.round", "system", detail=r_loja)
             from command_center.providers import suits_ponte   # #153: a ponte de e-mail dos macacões, em segundo plano
             suits_ponte.rodar_em_segundo_plano()
             from command_center.providers import agenda_asana   # dono, 01/10 (#67): todo agendamento vira tarefa

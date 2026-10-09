@@ -45,6 +45,60 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo"]
 
 
+class _StripeFalso:
+    """#174: um Stripe de mentira no próprio teste (nada sai da máquina). Cria a sessão, mostra uma
+    "página do Checkout" e, no Pay, volta para o success_url como o de verdade."""
+    def __init__(self):
+        import json
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from urllib.parse import parse_qsl
+        sessoes = self.sessoes = {}
+        fake = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a):
+                pass
+
+            def _json(self, d):
+                b = json.dumps(d).encode()
+                self.send_response(200); self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+            def do_POST(self):
+                campos = dict(parse_qsl(self.rfile.read(int(self.headers["Content-Length"])).decode()))
+                sid = f"cs_test_e2e{len(sessoes) + 1:03d}"
+                sessoes[sid] = {"id": sid, "url": f"{fake.origem}/pay/{sid}", "payment_status": "unpaid",
+                                "client_reference_id": campos["client_reference_id"],
+                                "nome": campos["line_items[0][price_data][product_data][name]"],
+                                "amount_total": int(campos["line_items[0][price_data][unit_amount]"]) * int(campos["line_items[0][quantity]"]),
+                                "success_url": campos["success_url"], "cancel_url": campos["cancel_url"]}
+                self._json(sessoes[sid])
+
+            def do_GET(self):
+                partes = self.path.strip("/").split("/")
+                if partes[:3] == ["v1", "checkout", "sessions"]:
+                    return self._json(sessoes[partes[3]])
+                s = sessoes[partes[1]]
+                if len(partes) == 3:                   # /pay/<sid>/ok: pagou
+                    s.update(payment_status="paid", payment_intent="pi_e2e",
+                             customer_details={"email": "lia.loja.e2e@example.com", "name": "Lia Loja", "phone": None})
+                    self.send_response(303)
+                    self.send_header("Location", s["success_url"].replace("{CHECKOUT_SESSION_ID}", s["id"]))
+                    return self.end_headers()
+                b = (f"<!doctype html><title>Stripe Checkout (test)</title><h1>{s['nome']}</h1>"
+                     f"<p>Total US$ {s['amount_total'] / 100:.2f}</p><a href='/pay/{s['id']}/ok'>Pay</a>").encode()
+                self.send_response(200); self.send_header("Content-Type", "text/html")
+                self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
+
+        self.srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+        self.origem = f"http://127.0.0.1:{self.srv.server_address[1]}"
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+
+STRIPE = None
+
+
 def _porta_livre():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -56,12 +110,14 @@ def servidor(tmp_path_factory):
     if not os.path.exists(DIST):
         pytest.fail("frontend não construído: rode `npm run build` em command_center/web")
     pasta = tmp_path_factory.mktemp("e2e")
-    global EMAILS
+    global EMAILS, STRIPE
     EMAILS = str(pasta / "emails.jsonl")                 # #108: o e-mail do código vai para cá, nada sai da máquina
+    STRIPE = _StripeFalso()                              # #174: o Checkout é o falso, local
     env = dict(os.environ, CC_DB_PATH=str(pasta / "e2e.sqlite"), URACE_DIR=str(pasta), URACE_ENV="/nao/existe",
                CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
+               STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM")  # 32 bytes de teste
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
@@ -83,6 +139,7 @@ def servidor(tmp_path_factory):
     proc.terminate()
     proc.wait(timeout=10)
     log.close()
+    STRIPE.srv.shutdown()
 
 
 @pytest.fixture(scope="module")
@@ -1138,9 +1195,10 @@ def test_site_novo_contato_e_pedido_da_loja_chegam_em_vendas(servidor, navegador
     v.get_by_text("Thank you! We got your message").wait_for()
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"] and p["variations"][0].get("price"))
     v.goto(site + f"/store/p/{produto['slug']}/")
+    v.get_by_text("Send an order request").click()          # #174: com o Stripe ligado, o pedido fica no "perguntar antes"
     v.get_by_label("Your name").fill("Eva Evento")
     v.get_by_label("Email").fill("eva.evento.e2e@example.com")
-    v.get_by_role("button", name="Order this").click()
+    v.get_by_role("button", name="Send order request").click()
     v.get_by_text("Thank you! We got your order request").wait_for()
     v.close()
     assert not erros, erros
@@ -1148,6 +1206,35 @@ def test_site_novo_contato_e_pedido_da_loja_chegam_em_vendas(servidor, navegador
     abrir(g, servidor, "/sales")
     g.get_by_text("Eva Evento").first.wait_for()
     assert g.get_by_text("Eva Evento").count() >= 2, "contato e pedido, os dois no funil"
+    g.close()
+
+
+def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor, navegador):
+    """#174: Buy now → página do Checkout (o Stripe falso) → Pay → obrigado com o pedido confirmado,
+    e a venda GANHO em Vendas. No celular, nada rola para o lado."""
+    from command_center.vitrine import paginas_site
+    site = servidor.removesuffix("/ops")
+    produto = next(p for p in paginas_site.dados("produtos.json")["produtos"]
+                   if not p["variations"] and p["price"] and p["in_stock"] and p["images"])
+    v = navegador.new_page(viewport={"width": 360, "height": 780})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(site + f"/store/p/{produto['slug']}/")
+    assert v.evaluate("document.documentElement.scrollWidth") <= 360
+    v.get_by_label("Ship to me").check()
+    v.get_by_label("Pick up at the track").check()
+    v.get_by_role("button", name="Buy now").click()
+    v.wait_for_url(STRIPE.origem + "/pay/**")
+    assert v.title() == "Stripe Checkout (test)"
+    assert f"US$ {produto['price']:.2f}" in v.content()
+    v.get_by_role("link", name="Pay").click()
+    v.get_by_role("heading", name="Thank you! Your order is confirmed").wait_for()
+    assert "/store/thanks/?session_id=cs_test_e2e" in v.url
+    v.close()
+    assert not erros, erros
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/sales")
+    g.get_by_text("Lia Loja").first.wait_for()
     g.close()
 
 
