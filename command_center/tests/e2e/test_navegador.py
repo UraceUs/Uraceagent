@@ -1068,6 +1068,53 @@ def test_esqueci_a_senha_no_celular_do_link_do_email_ate_entrar(servidor, navega
     assert not erros, erros
 
 
+def test_plano_da_academy_vendido_pelo_site_no_celular(servidor, navegador):
+    """#169, dono 09/10: "Vender online já". O plano cadastrado no painel aparece na Academy com o botão
+    que vende; o cliente entra, escolhe o piloto e vai para o acompanhamento (primeira mensalidade + waiver)."""
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, email="italo@urace.us")
+    csrf = {"X-CSRF": next(c["value"] for c in adm.context.cookies() if c["name"] == "cc_csrf")}
+    assert adm.request.patch(servidor + "/api/site/agenda/config", data={"auto_sell": True}, headers=csrf).ok
+    if not adm.request.get(servidor + "/api/vitrine/planos").json()["plans"]:
+        assert adm.request.post(servidor + "/api/site/servicos", data={"name": "Academy 3 months e2e", "price": 2688.43, "kind": "plan",
+                                                                        "months": 3, "sessions_month": 4}, headers=csrf).ok
+    # o painel mostra o plano com os campos dele
+    abrir(adm, servidor, "/site/servicos")
+    adm.get_by_text("plano de 3 meses, 4 sessões/mês").first.wait_for()
+    adm.close()
+    aux = navegador.new_page()
+    cliente_pela_api(aux, servidor, "Paula Plano", "paula.plano.e2e@example.com", piloto="Pedro Plano", ip="10.1.69.1")
+    aux.close()
+    v = navegador.new_page(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-For": "10.1.69.2"})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(site + "/academy/")
+    assert v.get_by_text("Academy 3 months e2e").count() >= 1 and not v.evaluate(_VAZA)["rola"]
+    v.get_by_role("link", name="Choose").first.click()
+    v.get_by_role("heading", name="Join the plan", level=1).wait_for()
+    v.get_by_text("First month, invoiced today").wait_for()
+    v.get_by_role("button", name="Continue", exact=True).click()
+    v.get_by_role("tab", name="I have an account").click()
+    v.get_by_label("Email").fill("paula.plano.e2e@example.com")
+    v.get_by_label("Password").fill("pista-molhada-7")
+    v.get_by_role("button", name="Sign in and continue").click()
+    v.get_by_text("Signed in as").wait_for()
+    v.get_by_role("radio", name=re.compile("Pedro Plano")).wait_for()
+    assert v.get_by_role("radio", name=re.compile("Pedro Plano")).is_checked(), "um piloto só: já vem escolhido"
+    assert len([x for n, x in _cabecalhos(v) if n == 1]) == 1
+    r = v.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    v.get_by_label("I agree to the").check()
+    v.get_by_role("button", name=re.compile("^Join and pay")).click()
+    v.wait_for_url(re.compile(r"/ops/portal/plans/\d+$"))
+    v.get_by_role("heading", name="Almost there", level=1).wait_for()
+    v.get_by_text("Plan chosen").wait_for()
+    assert v.get_by_text(re.compile("Pay the first month|Paid")).count() >= 1
+    assert v.get_by_text("Sign the waiver").count() == 1
+    v.close()
+    assert not erros, erros
+
+
 def test_site_novo_contato_e_pedido_da_loja_chegam_em_vendas(servidor, navegador):
     """#164: o formulário do site (e o pedido da loja) vira oportunidade em Vendas, origem Site."""
     from command_center.vitrine import paginas_site

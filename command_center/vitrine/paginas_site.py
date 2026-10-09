@@ -225,7 +225,25 @@ def _planos(planos, assunto="academy"):
     return f'<div class="planos">{"".join(cards)}</div>'
 
 
-def academy(host):
+def _planos_do_painel(planos):
+    """#169: os planos cadastrados em Site › Serviços (tipo plano), com o botão que vende. Boost é o
+    de um mês com "boost" no nome; os outros são o compromisso (1, 3, 6 meses…)."""
+    def card(p):
+        meses = p["months"]
+        sub = f"{p['sessions_month']} sessions a month" if p.get("sessions_month") else "Monthly plan"
+        total = f" Total of {usd(p['total'])} over {meses} months." if meses > 1 else ""
+        return f"""<article class="plano"><h3>{e(p['name'])}</h3><p class="plano-sub">{e(sub)} · {meses} month{'s' if meses > 1 else ''}</p>
+  <p>{e(p['description'] or '')}{e(total)}</p>
+  <p class="plano-preco"><strong>{usd(p['price'])}</strong><span>per month</span></p><a class="btn btn-sm" href="{PORTAL}/reserve?plan={p['id']}">Choose</a></article>"""
+    boost = [p for p in planos if p["months"] == 1 and "boost" in p["name"].lower()]
+    compromisso = [p for p in planos if p not in boost]
+    html = f'<div class="planos">{"".join(card(p) for p in compromisso)}</div>' if compromisso else ""
+    if boost:
+        html += f'<h3 class="mt">URACE Boost</h3><div class="planos">{"".join(card(p) for p in boost)}</div>'
+    return html
+
+
+def academy(host, planos=None):
     d = P.ACADEMY
     etapas = "".join(f"""<article class="etapa-card"><img src="{estatico('img/' + f)}" alt="" width="64" height="64" loading="lazy"><h3>{e(t)}</h3><p>{e(p)}</p></article>""" for t, p, f in d["etapas"])
     corpo = f"""{_hero(d)}
@@ -234,8 +252,7 @@ def academy(host):
   <img src="{estatico('img/' + d['foto'])}" alt="URACE Academy coaching" width="800" height="600" loading="lazy" class="foto-redonda">
 </div></section>
 <section class="faixa escura" aria-labelledby="h-planos"><div class="largura">
-  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos(d['planos'])}
-  <h3 class="mt">URACE Boost</h3>{_planos((d['boost'],))}
+  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else _planos(d['planos']) + '<h3 class="mt">URACE Boost</h3>' + _planos((d['boost'],))}
 </div></section>
 <section class="faixa clara" aria-labelledby="h-quem"><div class="largura duas">
   <div><h2 id="h-quem">{e(d['para_quem_titulo'])}</h2>{_lista(d['para_quem'])}</div>

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { bloqueioDoPiloto, dataLonga, escolhaDoSite, faixa, PERIODOS } from './Agendar'
-import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Servico } from './api'
+import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Servico, type CheckoutPlano, type Plano } from './api'
 import { Aviso, Campo, Endereco, FormPiloto } from './Portal'
 
 interface DiaPublico { date: string; manha: { open: boolean; spots: number }; tarde: { open: boolean; spots: number } }
@@ -33,8 +33,11 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
     const utm = Object.fromEntries(CAMPANHA.map(k => [k, q.get(k) || g[k] || '']).filter(([, v]) => v))
     const t = site.periodo || g.turno
     return { dia: site.dia || g.dia || null, turno: (t === 'manha' || t === 'tarde' ? t : null) as Turno | null,
-      kart: site.kart || g.kart || null, servico: Number(q.get('service') || g.servico) || null, utm }
+      kart: site.kart || g.kart || null, servico: Number(q.get('service') || g.servico) || null,
+      plano: Number(q.get('plan') || g.plano) || null, utm }                   // #169: plano mensal (Academy, Boost)
   }, [q])
+  const [planos, setPlanos] = useState<Plano[] | null>(null)
+  const [planoOk, setPlanoOk] = useState(false)
   const [servicos, setServicos] = useState<Servico[] | null>(null)
   const [autoSell, setAutoSell] = useState(false)
   const [dias, setDias] = useState<DiaPublico[] | null>(null)
@@ -52,6 +55,13 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const [indo, setIndo] = useState(false)
 
   useEffect(() => {
+    if (!inicial.plano) return
+    fetch('/ops/api/vitrine/planos', { credentials: 'omit' }).then(r => r.json())
+      .then((x: { plans: Plano[]; auto_sell: boolean }) => { setPlanos(x.plans); setAutoSell(x.auto_sell) })
+      .catch(() => setErro('We could not load the plans. Please refresh the page.'))
+  }, [inicial])
+  useEffect(() => {
+    if (inicial.plano) return
     Promise.all([fetch('/ops/api/vitrine/servicos', { credentials: 'omit' }).then(r => r.json()),
       fetch('/ops/api/vitrine/agenda', { credentials: 'omit' }).then(r => r.json())])
       .then(([s, a]: [{ services: Servico[]; auto_sell: boolean }, { config: AgendaCfg; dias: DiaPublico[] }]) => {
@@ -67,15 +77,16 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   // guarda a escolha e a campanha a cada mudança (sobrevive ao login)
   useEffect(() => {
     guardar({ ...(dia ? { dia } : {}), ...(turno ? { turno } : {}), ...(inicial.kart ? { kart: inicial.kart } : {}),
-      ...(servico ? { servico: String(servico) } : {}), ...inicial.utm })
+      ...(servico ? { servico: String(servico) } : {}), ...(inicial.plano ? { plano: String(inicial.plano) } : {}), ...inicial.utm })
   }, [dia, turno, servico, inicial])
 
   const abertos = useMemo(() => (dias || []).filter(d => d.manha.open || d.tarde.open), [dias])
   const escolhidoDia = abertos.find(d => d.date === dia) || null
   const s = servicos?.find(x => x.id === servico) || null
   const deposito = s?.deposit || 0
-  const sessaoPronta = !!(s && escolhidoDia && turno && escolhidoDia[turno].open)
-  const passo1 = sessaoPronta && sessaoOk
+  const plano = inicial.plano ? planos?.find(x => x.id === inicial.plano) || null : null
+  const sessaoPronta = plano ? true : !!(s && escolhidoDia && turno && escolhidoDia[turno].open)
+  const passo1 = plano ? planoOk : sessaoPronta && sessaoOk
   const passo2 = passo1 && !!conta
   const livres = (conta?.drivers || []).filter(p => !bloqueioDoPiloto(p))
   const pilotoId = piloto ?? (livres.length === 1 ? livres[0].id : null)     // um piloto só: já vem escolhido
@@ -83,8 +94,18 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const passo3 = passo2 && !!p && !bloqueioDoPiloto(p) && !(conta?.missing.length)
 
   async function reservar() {
-    if (!passo3 || !s || !dia || !turno) return
+    if (!passo3) return
     setIndo(true); setErro(null)
+    if (plano) {
+      try {
+        const r = await papi<{ id: number; auto_sell: boolean }>('POST', '/plans', { service_id: plano.id, driver_id: pilotoId, origin: 'site',
+          utm: Object.keys(inicial.utm).length ? inicial.utm : null })
+        try { sessionStorage.removeItem(GUARDA) } catch { /* nada guardado */ }
+        nav(`/portal/plans/${r.id}`, { replace: true })
+      } catch (e) { setErro((e as PortalError).message) } finally { setIndo(false) }
+      return
+    }
+    if (!s || !dia || !turno) { setIndo(false); return }
     try {
       const r = await papi<{ id: number; auto_sell: boolean }>('POST', '/bookings', { date: dia, period: turno, service_id: s.id,
         driver_id: pilotoId, notes: nota || null, origin: 'site', utm: Object.keys(inicial.utm).length ? inicial.utm : null })
@@ -95,12 +116,29 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
 
   const estado = (pronto: boolean, aberto: boolean) => `reserva-passo${pronto ? ' feito' : aberto ? '' : ' fechado'}`
   return <div className="stack" style={{ gap: 16 }}>
-    <div><h1 className="h1">Book your session</h1>
-      <p className="muted" style={{ margin: '6px 0 0' }}>Four quick steps. Your spot is confirmed as soon as the invoice is paid and the waiver is signed.</p></div>
+    <div><h1 className="h1">{inicial.plano ? 'Join the plan' : 'Book your session'}</h1>
+      <p className="muted" style={{ margin: '6px 0 0' }}>{inicial.plano
+        ? 'Four quick steps. Your plan is active as soon as the first month is paid and the waiver is signed.'
+        : 'Four quick steps. Your spot is confirmed as soon as the invoice is paid and the waiver is signed.'}</p></div>
     <Aviso erro={erro} />
     <ol className="reserva-passos">
-      {/* 1 · a sessão */}
-      <li className={estado(passo1, true)}><section className="card" aria-labelledby="r1">
+      {/* 1 · a sessão (ou o plano, #169) */}
+      {inicial.plano ? <li className={estado(passo1, true)}><section className="card" aria-labelledby="r1">
+        <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">{passo1 ? '✓' : '1'}</span><h2 className="h2" id="r1">Your plan</h2>
+          {passo1 && <button className="btn ghost sm" onClick={() => setPlanoOk(false)}>Change</button>}</div>
+        {planos === null ? <div className="state"><span className="spin" /></div>
+          : !plano ? <p className="muted" style={{ margin: 0 }}>This plan is not available right now. <a href="/academy/">See the plans</a> or contact us at support@urace.us.</p>
+          : passo1 ? <p className="reserva-resumo" style={{ margin: 0 }}>{plano.name} · {plano.months} month{plano.months > 1 ? 's' : ''} · <b>{usd(plano.price)}</b> per month</p>
+          : <>
+            <div className="reserva-total" aria-live="polite">
+              <div><span><b>{plano.name}</b>{plano.description && <span className="small muted"> · {plano.description}</span>}</span><span>{usd(plano.price)}<span className="small muted">/month</span></span></div>
+              {plano.sessions_month > 0 && <div className="small muted"><span>{plano.sessions_month} sessions a month · {plano.months} month{plano.months > 1 ? 's' : ''}</span></div>}
+              <div className="soma"><span>First month, invoiced today</span><span>{usd(plano.price)}</span></div>
+              {plano.months > 1 && <div className="small muted"><span>Then {usd(plano.price)} on the 1st of each of the next {plano.months - 1} months (total {usd(plano.total)}).</span></div>}</div>
+            <div><button className="btn primary" onClick={() => setPlanoOk(true)}>Continue</button></div>
+          </>}
+      </section></li>
+      : <li className={estado(passo1, true)}><section className="card" aria-labelledby="r1">
         <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">{passo1 ? '✓' : '1'}</span><h2 className="h2" id="r1">Your session</h2>
           {passo1 && <button className="btn ghost sm" onClick={() => setSessaoOk(false)}>Change</button>}</div>
         {passo1 && s && dia && turno && cfg ? <p className="reserva-resumo" style={{ margin: 0 }}>{s.name} · {dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)}) · <b>{usd(s.price)}</b></p>
@@ -126,7 +164,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
               <div className="soma"><span>Total</span><span>{usd(s.price + deposito)}</span></div></div>}
             <div><button className="btn primary" disabled={!sessaoPronta} onClick={() => setSessaoOk(true)}>Continue</button></div>
           </>}
-      </section></li>
+      </section></li>}
 
       {/* 2 · a conta */}
       <li className={estado(passo2, passo1)}><section className="card" aria-labelledby="r2">
@@ -160,7 +198,21 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
       {/* 4 · revisar e pagar */}
       <li className={estado(false, passo3)}><section className="card" aria-labelledby="r4">
         <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">4</span><h2 className="h2" id="r4">{autoSell ? 'Review and pay' : 'Review and request'}</h2></div>
-        {!passo3 || !s || !dia || !turno || !cfg ? <p className="small muted" style={{ margin: 0 }}>{autoSell
+        {plano ? (!passo3 ? <p className="small muted" style={{ margin: 0 }}>{autoSell
+          ? 'You get the first month\'s invoice to pay online, and the waiver to sign. The next months are invoiced on the 1st.'
+          : 'We confirm your plan and send the invoice and the waiver.'}</p> : <>
+          <div className="reserva-total">
+            <div><span>{plano.name} · {p?.name}</span><span>{usd(plano.price)}<span className="small muted">/month</span></span></div>
+            <div className="small muted"><span>{plano.months} month{plano.months > 1 ? 's' : ''}{plano.sessions_month > 0 ? ` · ${plano.sessions_month} sessions a month` : ''}</span></div>
+            <div className="soma"><span>Today (first month)</span><span>{usd(plano.price)}</span></div></div>
+          <ul className="reserva-politica">
+            {plano.months > 1 && <li>The next {plano.months - 1} month{plano.months > 2 ? 's' : ''} are invoiced on the 1st of each month, {usd(plano.price)} each (total {usd(plano.total)}).</li>}
+            <li>Your plan is active as soon as the first month is paid and the waiver is signed. Then you book your sessions here, any time.</li>
+            <li>Track fees are paid to the Orlando Kart Center.</li>
+          </ul>
+          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the plan policy above</label>
+          <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Sending…' : autoSell ? `Join and pay ${usd(plano.price)}` : 'Request this plan'}</button></div>
+        </>) : !passo3 || !s || !dia || !turno || !cfg ? <p className="small muted" style={{ margin: 0 }}>{autoSell
           ? 'You get the invoice (session + refundable security deposit) to pay online, and the waiver to sign.'
           : 'We confirm your spot and send the invoice and the waiver.'}</p> : <>
           <div className="reserva-total">
@@ -245,40 +297,67 @@ function CriarConta({ onConta }: { onConta: (a: Account) => void }) {
 
 /* ------------------------------------------------------------ acompanhar o pedido */
 /** As etapas de um pedido: reservado → pagar → waiver → confirmado. Atualiza sozinho enquanto falta algo. */
-export function Acompanhar() {
+/** O acompanhamento serve à sessão (#164) e ao plano mensal (#169): o que muda é o resumo e o fim. */
+type Resumo = { titulo: string; sub: string; confirmada: boolean; encerrada: boolean; aceita: boolean; status: string
+  reservado: string; reservadoSub: string; pagar: string; pagarSub: string; fim: string; fimSub: string; fimOk: string; volta: string; voltaRotulo: string }
+
+function resumoSessao(c: Checkout, cfg: AgendaCfg | null): Resumo {
+  const encerrada = c.status === 'cancelada' || c.status === 'recusada'
+  return { titulo: c.confirmada ? "You're confirmed!" : encerrada ? 'Your booking' : 'Almost there',
+    sub: `${c.service} · ${dataLonga(c.date)} · ${PERIODOS[c.period]}${cfg ? ` (${faixa(cfg, c.period)})` : ''}${c.driver ? ` · ${c.driver}` : ''}`,
+    confirmada: c.confirmada, encerrada, aceita: c.aceita, status: c.status, reservado: 'Spot reserved', reservadoSub: 'We are holding it for you.',
+    pagar: 'Pay the invoice', pagarSub: 'Session + refundable security deposit. It updates here by itself after you pay.',
+    fim: 'Confirmed by itself', fimOk: 'Confirmed', fimSub: 'As soon as the invoice is paid and the waiver is signed. We email you.',
+    volta: '/portal/sessions', voltaRotulo: 'My sessions' }
+}
+
+function resumoPlano(c: CheckoutPlano): Resumo {
+  const mes = (m: string) => new Date(m + '-01T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return { titulo: c.ativo ? 'Your plan is active!' : c.status === 'cancelada' ? 'Your plan' : 'Almost there',
+    sub: `${c.plan} · ${c.months} month${c.months > 1 ? 's' : ''} · ${usd(c.price)} per month${c.driver ? ` · ${c.driver}` : ''}`,
+    confirmada: c.ativo, encerrada: c.status === 'cancelada', aceita: c.aceita, status: c.status,
+    reservado: 'Plan chosen', reservadoSub: c.next_months.length ? `The next months (${c.next_months.map(mes).join(', ')}) are invoiced on the 1st, ${usd(c.price)} each.` : 'One month, invoiced today.',
+    pagar: 'Pay the first month', pagarSub: 'It updates here by itself after you pay.',
+    fim: 'Active by itself', fimOk: 'Active', fimSub: 'As soon as the first month is paid and the waiver is signed. Then book your sessions here.',
+    volta: '/portal/book', voltaRotulo: 'Book a session' }
+}
+
+export function Acompanhar({ plano = false }: { plano?: boolean }) {
   const { id } = useParams()
-  const [c, setC] = useState<Checkout | null>(null)
+  const [c, setC] = useState<Checkout | CheckoutPlano | null>(null)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const carregar = useCallback(async () => {
-    try { setC(await papi<Checkout>('GET', `/bookings/${id}`)); setErro(null) } catch (e) { setErro((e as PortalError).message) }
-  }, [id])
+    try { setC(await papi<Checkout | CheckoutPlano>('GET', plano ? `/plans/${id}` : `/bookings/${id}`)); setErro(null) }
+    catch (e) { setErro((e as PortalError).message) }
+  }, [id, plano])
   useEffect(() => { carregar() }, [carregar])
-  useEffect(() => { fetch('/ops/api/vitrine/agenda', { credentials: 'omit' }).then(r => r.json()).then(a => setCfg(a.config)).catch(() => null) }, [])
+  useEffect(() => { if (plano) return; fetch('/ops/api/vitrine/agenda', { credentials: 'omit' }).then(r => r.json()).then(a => setCfg(a.config)).catch(() => null) }, [plano])
+  const r = c ? (plano ? resumoPlano(c as CheckoutPlano) : resumoSessao(c as Checkout, cfg)) : null
   const preparando = !!c && (c.pagamento.estado === 'preparando' || c.waiver.estado === 'preparando')
   useEffect(() => {
-    if (!c || c.confirmada || c.status === 'cancelada' || c.status === 'recusada') return
+    if (!c || !r || r.confirmada || r.encerrada) return
     const t = window.setTimeout(carregar, preparando ? 4000 : 20000)
     return () => window.clearTimeout(t)
-  }, [c, preparando, carregar])
+  }, [c, r, preparando, carregar])
 
-  if (erro && !c) return <div className="stack"><h1 className="h1">Your booking</h1><Aviso erro={erro} /><div><Link className="btn" to="/portal/sessions">My sessions</Link></div></div>
-  if (!c) return <div className="state"><span className="spin" /></div>
+  if (erro && !c) return <div className="stack"><h1 className="h1">{plano ? 'Your plan' : 'Your booking'}</h1><Aviso erro={erro} /><div><Link className="btn" to={plano ? '/portal/dashboard' : '/portal/sessions'}>{plano ? 'Dashboard' : 'My sessions'}</Link></div></div>
+  if (!c || !r) return <div className="state"><span className="spin" /></div>
   const pg = c.pagamento, w = c.waiver
   const pagoOk = pg.estado === 'pago' || pg.estado === 'contrato'
   const waiverOk = w.estado === 'ok'
-  const encerrada = c.status === 'cancelada' || c.status === 'recusada'
+  const encerrada = r.encerrada
   return <div className="stack" style={{ gap: 16 }}>
-    <div><h1 className="h1">{c.confirmada ? "You're confirmed!" : encerrada ? 'Your booking' : 'Almost there'}</h1>
-      <p className="muted" style={{ margin: '6px 0 0' }}>{c.service} · {dataLonga(c.date)} · {PERIODOS[c.period]}{cfg ? ` (${faixa(cfg, c.period)})` : ''}{c.driver ? ` · ${c.driver}` : ''}</p></div>
-    {encerrada ? <div className="banner warn"><span className="bi">▲</span><div className="grow">This booking was {c.status === 'cancelada' ? 'cancelled' : 'not accepted'}. <Link to="/portal/book">Book another session</Link></div></div>
-      : !c.aceita && !c.confirmada ? <div className="banner info" role="status"><span className="bi">●</span><div className="grow">Request received. We are holding your spot: our team confirms it and sends the invoice and the waiver by email.</div></div>
+    <div><h1 className="h1">{r.titulo}</h1>
+      <p className="muted" style={{ margin: '6px 0 0' }}>{r.sub}</p></div>
+    {encerrada ? <div className="banner warn"><span className="bi">▲</span><div className="grow">This {plano ? 'plan' : 'booking'} was {r.status === 'cancelada' ? 'cancelled' : 'not accepted'}. <Link to="/portal/book">Book another session</Link></div></div>
+      : !r.aceita && !r.confirmada ? <div className="banner info" role="status"><span className="bi">●</span><div className="grow">Request received. {plano ? 'Our team confirms your plan and sends the invoice and the waiver by email.' : 'We are holding your spot: our team confirms it and sends the invoice and the waiver by email.'}</div></div>
       : <ol className="etapas" aria-label="Steps to confirm">
-        <li className="etapa ok"><span className="marca" aria-hidden="true">✓</span><div className="corpo"><b>Spot reserved</b><span className="small muted">We are holding it for you.</span></div></li>
+        <li className="etapa ok"><span className="marca" aria-hidden="true">✓</span><div className="corpo"><b>{r.reservado}</b><span className="small muted">{r.reservadoSub}</span></div></li>
         <li className={`etapa${pagoOk ? ' ok' : ' agora'}`}><span className="marca" aria-hidden="true">{pagoOk ? '✓' : '2'}</span><div className="corpo">
-          <b>{pg.estado === 'contrato' ? 'Part of your plan' : pagoOk ? 'Paid' : 'Pay the invoice'}</b>
+          <b>{pg.estado === 'contrato' ? 'Part of your plan' : pagoOk ? 'Paid' : r.pagar}</b>
           {pg.estado === 'pagar' && <>{pg.link ? <div><a className="btn primary" href={pg.link} target="_blank" rel="noopener noreferrer">Pay now{pg.total != null ? ` ${usd(pg.total)}` : ''}</a></div> : null}
-            <span className="small muted">Invoice {pg.invoice}{pg.para ? `, also sent to ${pg.para}` : ''}. Session + refundable security deposit. It updates here by itself after you pay.</span></>}
+            <span className="small muted">Invoice {pg.invoice}{pg.para ? `, also sent to ${pg.para}` : ''}. {r.pagarSub}</span></>}
           {pg.estado === 'preparando' && <span className="small muted"><span className="spin" /> Preparing your invoice… it also goes to your email.</span>}
           {pg.estado === 'equipe' && <span className="small muted">Our team is finishing your invoice and will email it to you shortly. Your spot stays reserved.</span>}</div></li>
         <li className={`etapa${waiverOk ? ' ok' : pagoOk ? ' agora' : ''}`}><span className="marca" aria-hidden="true">{waiverOk ? '✓' : '3'}</span><div className="corpo">
@@ -287,10 +366,10 @@ export function Acompanhar() {
           {w.estado === 'email' && <span className="small muted">Check your email from DocuSign{w.para ? ` (sent to ${w.para})` : ''} and sign it there.</span>}
           {w.estado === 'preparando' && <span className="small muted"><span className="spin" /> Sending the waiver…</span>}
           {w.estado === 'equipe' && <span className="small muted">Our team will email you the waiver shortly.</span>}</div></li>
-        <li className={`etapa${c.confirmada ? ' ok' : ''}`}><span className="marca" aria-hidden="true">{c.confirmada ? '✓' : '4'}</span><div className="corpo">
-          <b>{c.confirmada ? 'Confirmed' : 'Confirmed by itself'}</b>
-          <span className="small muted">{c.confirmada ? 'See you at the track! Your URACE QR is on your Dashboard: show it at the shop.' : 'As soon as the invoice is paid and the waiver is signed. We email you.'}</span></div></li>
+        <li className={`etapa${r.confirmada ? ' ok' : ''}`}><span className="marca" aria-hidden="true">{r.confirmada ? '✓' : '4'}</span><div className="corpo">
+          <b>{r.confirmada ? r.fimOk : r.fim}</b>
+          <span className="small muted">{r.confirmada ? (plano ? 'Book your sessions any time. Your URACE QR is on your Dashboard: show it at the shop.' : 'See you at the track! Your URACE QR is on your Dashboard: show it at the shop.') : r.fimSub}</span></div></li>
       </ol>}
-    <div className="row wrap etapas-fim" style={{ gap: 8 }}><Link className="btn" to="/portal/sessions">My sessions</Link><Link className="btn ghost" to="/portal/dashboard">Dashboard</Link></div>
+    <div className="row wrap etapas-fim" style={{ gap: 8 }}><Link className="btn" to={r.volta}>{r.voltaRotulo}</Link><Link className="btn ghost" to="/portal/dashboard">Dashboard</Link></div>
   </div>
 }

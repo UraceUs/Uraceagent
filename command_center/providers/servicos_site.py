@@ -48,9 +48,24 @@ def lista(con, ativos=False):
 
 
 def para_cliente(con):
-    """O que a área do cliente mostra: nome, descrição e preço. Nada do QuickBooks."""
+    """O que a área do cliente mostra para marcar sessão: nome, descrição e preço. Nada do QuickBooks."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
-             "deposit": s["deposit"] or 0} for s in lista(con, True)]
+             "deposit": s["deposit"] or 0} for s in lista(con, True) if (s["kind"] or "session") == "session"]
+
+
+def planos_para_cliente(con):
+    """#169: os planos mensais que o site vende (Academy, Boost): preço por mês, meses, sessões por mês."""
+    return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
+             "months": s["months"] or 1, "sessions_month": s["sessions_month"] or 0,
+             "total": round(s["price"] * (s["months"] or 1), 2)}
+            for s in lista(con, True) if s["kind"] == "plan"]
+
+
+def plano(con, sid):
+    s = um(con, "SELECT * FROM booking_services WHERE id=? AND active=1 AND kind='plan'", (sid,)) if sid else None
+    if not s:
+        raise ErroServico("Choose a plan.")
+    return s
 
 
 def itens_qbo(con):
@@ -91,6 +106,20 @@ def _dados(con, d, parcial):
     if "deposit" in d:
         # #50: depósito por sessão (Arrive and Drive: US$ 400); vazio ou 0 = sem depósito
         s["deposit"] = preco(d["deposit"]) if d["deposit"] not in (None, "", 0, "0") else 0.0
+    if "kind" in d and d["kind"] is not None:
+        if d["kind"] not in ("session", "plan"):
+            raise ErroServico("tipo inválido: session (sessão avulsa) ou plan (plano mensal)")
+        s["kind"] = d["kind"]
+    if "months" in d:
+        m = int(d["months"]) if d["months"] not in (None, "") else None
+        if m is not None and not 1 <= m <= 36:
+            raise ErroServico("meses do plano: de 1 a 36")
+        s["months"] = m
+    if "sessions_month" in d:
+        n = int(d["sessions_month"]) if d["sessions_month"] not in (None, "") else None
+        if n is not None and not 0 <= n <= 31:
+            raise ErroServico("sessões por mês: de 0 a 31")
+        s["sessions_month"] = n
     if "active" in d and d["active"] is not None:
         s["active"] = 1 if d["active"] else 0
     if "sort" in d and d["sort"] is not None:
@@ -100,6 +129,8 @@ def _dados(con, d, parcial):
 
 def criar(con, por, d):
     s = _dados(con, d, parcial=False)
+    if s.get("kind") == "plan" and not s.get("months"):
+        s["months"] = 1
     if um(con, "SELECT 1 AS x FROM booking_services WHERE lower(name)=lower(?) AND active=1", (s["name"],)):
         raise ErroServico("já existe um serviço ativo com esse nome")
     return inserir(con, "booking_services", **s, updated_by=por, updated_at=agora())

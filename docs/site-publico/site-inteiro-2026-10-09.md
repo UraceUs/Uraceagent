@@ -40,8 +40,15 @@ URLs e também com … identidade visual mesclada de Command Center com o site n
   produto, a variação, a quantidade e o valor estimado; a equipe confirma estoque e frete e manda a
   invoice do QuickBooks. **Nada é cobrado pelo site** (Stripe Checkout fica para quando a conta
   existir — decisão do dono, 08/10, pendente das chaves no Cofre).
-- Planos mensais (Academy, Pro Team): o botão abre o contato com o plano escrito. Mensalidade
-  online (invoice recorrente) é frente própria, se o dono quiser.
+- **Planos mensais (#169, dono 09/10: "vender online já")**: a equipe cadastra o plano em Site ›
+  Serviços (tipo *Plano mensal*, preço por mês, meses, sessões por mês, item do QuickBooks). A
+  página da Academy passa a mostrar os planos cadastrados com o botão **Choose** →
+  `/ops/portal/reserve?plan=<id>` (sem plano cadastrado, a página pede contato). O cliente entra,
+  escolhe o piloto e paga: o card ganha o contrato (`plan_type=monthly`, valor, item, sessões/mês),
+  a **primeira mensalidade sai na hora** pelo QuickBooks (link de pagamento) e as outras ficam
+  agendadas no dia 1 às 01:00 (`monthly_invoices`, a mesma tela Mensalidade do painel); waiver
+  pelo DocuSign; pago + waiver → plano **ativo** (`/ops/portal/plans/<id>`), e as sessões marcadas
+  depois contam no plano sem cobrar de novo. Pro Team continua pelo contato.
 - Proteções dos formulários: honeypot (`site`), 8 envios por IP a cada 10 min, validação de e-mail,
   só texto. Funcionam sem JavaScript (POST normal e volta com `?sent=1`).
 

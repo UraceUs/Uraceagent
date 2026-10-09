@@ -53,6 +53,12 @@ export interface Checkout { id: number; status: 'pendente' | 'confirmada' | 'rec
   service: string | null; price: number | null; driver: string | null; aceita: boolean; confirmada: boolean
   pagamento: { estado: 'pagar' | 'pago' | 'contrato' | 'preparando' | 'equipe'; link: string | null; invoice: string | null; total: number | null; para: string | null }
   waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando' | 'equipe'; link: string | null; para?: string | null } }
+/** #169: um plano mensal que o site vende (Academy, Boost). */
+export interface Plano { id: number; name: string; description: string | null; price: number; months: number; sessions_month: number; total: number }
+/** #169: as etapas do plano, como o servidor resume para o cliente. */
+export interface CheckoutPlano { id: number; status: 'pendente' | 'ativa' | 'cancelada'; plan: string; price: number; months: number
+  sessions_month: number | null; total: number; driver: string | null; start_month: string; next_months: string[]; aceita: boolean; ativo: boolean
+  pagamento: Checkout['pagamento']; waiver: Checkout['waiver'] }
 export interface Booking { id: number; date: string; period: 'manha' | 'tarde' | 'dia'; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'
   notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null
   /** #50: aceita pela equipe — falta pagar a invoice e/ou assinar a waiver */

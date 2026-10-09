@@ -172,11 +172,11 @@ def _enviar_waiver_padrao(template, nome, email, servico):
     return modulo("docusign").enviar_waiver_humano(modelos[template], nome, email, servico)
 
 
-def pedir_waiver(con, b, enviar=None):
+def pedir_waiver(con, b, enviar=None, tabela="bookings", card=None, motivo=None):
     """Sem waiver válida, manda a do DocuSign (as 4 travas valem lá). Com a nativa ligada, não manda:
-    o cliente assina na área do cliente."""
+    o cliente assina na área do cliente. `tabela`/`card`/`motivo`: o plano mensal (#169) usa o mesmo."""
     b = dict(b)
-    if b["waiver_ref"] or waiver_em_dia(con, b):
+    if b["waiver_ref"] or waiver_em_dia(con, b, card):
         return "ok"
     from command_center.providers import waiver_nativa
     if waiver_nativa.ligada(con):
@@ -196,20 +196,21 @@ def pedir_waiver(con, b, enviar=None):
         template = "parental" if menor else "adult"
         res = (enviar or _enviar_waiver_padrao)(template, nome, email.lower(), b["service_name"] or "")
         env = res.get("envelopeId") if isinstance(res, dict) else None
-        card = card_do_agendamento(con, b)
+        card = card if card is not None else card_do_agendamento(con, b)
         wid = inserir(con, "waivers", client_id=card, signer_name=nome, signer_email=email.lower(), template=template,
-                      status="sent", sent_at=agora(), link_reason=f"agenda: sessão #{b['id']} aceita",
+                      status="sent", sent_at=agora(), link_reason=motivo or f"agenda: sessão #{b['id']} aceita",
                       link_by="system" if card else None, minor_name=p["name"] if menor else None, synced_at=agora())
         if env:
             con.execute("""INSERT OR IGNORE INTO entity_links (entity_type, entity_id, system, external_id, deep_link)
                            VALUES ('waiver', ?, 'docusign', ?, ?)""",
                         (wid, env, f"https://apps.docusign.com/send/documents/details/{env}"))
-        atualizar(con, "bookings", b["id"], waiver_ref=wid, waiver_error=None, updated_at=agora())
-        auditar(con, "booking.waiver", "system", entity_type="booking", entity_id=b["id"],
+        atualizar(con, tabela, b["id"], waiver_ref=wid, waiver_error=None, updated_at=agora())
+        auditar(con, "booking.waiver" if tabela == "bookings" else "plan.waiver", "system",
+                entity_type="booking" if tabela == "bookings" else "plan_order", entity_id=b["id"],
                 detail={"waiver": wid, "envelope": env, "template": template, "email": email.lower()})
         return "enviada"
     except Exception as e:                                         # noqa: BLE001 — trava do DocuSign ou dado faltando
-        atualizar(con, "bookings", b["id"], waiver_error=str(e)[:300], updated_at=agora())
+        atualizar(con, tabela, b["id"], waiver_error=str(e)[:300], updated_at=agora())
         return None
 
 
