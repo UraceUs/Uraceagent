@@ -604,6 +604,46 @@ def enviar_invoice_sistema(invoice_id):
             "email_status": r.get("EmailStatus")}
 
 
+def item_loja_sistema(nome, preco, descricao=None):
+    """#174: o item do produto da loja no catálogo, pelo nome. Se já existe (em qualquer categoria),
+    usa esse; senão cria um (tipo Service, sem imposto, como manda a regra de item novo)."""
+    nome = (nome or "").strip().replace(PROIBIDO_NO_NOME, " -")[:100]
+    if not nome:
+        raise ErroFerramenta("nome de item vazio")
+    achados = _query(f"select * from Item where Name = '{_esc(nome)}' maxresults 20").get("Item", [])
+    ativos = [i for i in achados if i.get("Active") is not False]
+    if ativos:
+        return _resumo_item(ativos[0])
+    corpo = {"Name": nome, "Type": "Service", "Taxable": False, "UnitPrice": float(preco or 0),
+             "IncomeAccountRef": _conta_receita()}
+    if descricao:
+        corpo["Description"] = descricao[:4000]
+    return _resumo_item(_req("/item", "POST", corpo).get("Item", {}))
+
+
+def recibo_venda_sistema(cliente_id, linhas, memo, data, numero, email=None):
+    """#174: a venda paga no Stripe vira Sales Receipt (já pago, nada a cobrar). Idempotente pelo
+    número: se o recibo `numero` já existe, devolve esse em vez de criar outro. O dinheiro entra em
+    Undeposited Funds, ou na conta de QBO_CONTA_STRIPE quando o financeiro definir uma."""
+    if not linhas:
+        raise ErroFerramenta("recibo sem linha")
+    ja = _query(f"select * from SalesReceipt where DocNumber = '{_esc(numero)}' maxresults 1").get("SalesReceipt", [])
+    if ja:
+        r = ja[0]
+        return {"id": r.get("Id"), "numero": r.get("DocNumber"), "total": r.get("TotalAmt"), "ja_existia": True,
+                "link": deep_link(r.get("Id"), "salesreceipt")}
+    corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas), "TxnDate": data,
+             "DocNumber": str(numero)[:21], "CustomerMemo": {"value": memo[:1000]}, "PrivateNote": memo[:4000]}
+    if email:
+        corpo["BillEmail"] = {"Address": email}
+    conta = os.environ.get("QBO_CONTA_STRIPE")
+    if conta:
+        corpo["DepositToAccountRef"] = {"value": str(conta)}
+    r = _req("/salesreceipt", "POST", corpo).get("SalesReceipt", {})
+    return {"id": r.get("Id"), "numero": r.get("DocNumber"), "total": r.get("TotalAmt"), "ja_existia": False,
+            "link": deep_link(r.get("Id"), "salesreceipt")}
+
+
 def _conta_receita():
     r = _query("select * from Account where AccountType = 'Income' and Active = true maxresults 5")
     contas = r.get("Account", [])

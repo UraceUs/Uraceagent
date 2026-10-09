@@ -1516,6 +1516,53 @@ CREATE TABLE IF NOT EXISTS plan_orders (
 );
 CREATE INDEX IF NOT EXISTS plan_orders_conta ON plan_orders(account_id, id);
 
+-- ------------------------------------------------------------ loja paga no Stripe (#174)
+-- Dono, 08/10: "Stripe Checkout" na loja; 09/10: "tbm tenho a conta da stripe". O produto com
+-- preço e em estoque é pago na hora; o Stripe avisa pelo webhook e o pedido entra pago em Vendas.
+CREATE TABLE IF NOT EXISTS store_orders (
+  id                INTEGER PRIMARY KEY,
+  product_slug      TEXT NOT NULL,
+  product_name      TEXT NOT NULL,
+  variation         TEXT,
+  quantity          INTEGER NOT NULL,
+  unit_price        REAL NOT NULL,                        -- do catálogo, no dia do pedido
+  amount            REAL NOT NULL,                        -- unitário × quantidade
+  delivery          TEXT NOT NULL CHECK (delivery IN ('retirada','envio')),
+  status            TEXT NOT NULL DEFAULT 'aberto'
+                    CHECK (status IN ('aberto','aguardando','pago','falhou','expirado')),
+  stripe_session_id TEXT UNIQUE,
+  stripe_url        TEXT,
+  payment_intent    TEXT,
+  amount_paid       REAL,
+  email             TEXT COLLATE NOCASE,
+  name              TEXT,
+  phone             TEXT,
+  shipping          TEXT,                                 -- json: endereço que a pessoa deu no Checkout
+  paid_at           TEXT,
+  client_id         INTEGER REFERENCES clients(id),
+  link_note         TEXT,                                 -- por que ligou (ou não) a um card
+  opp_id            INTEGER REFERENCES opportunities(id),
+  qbo_customer_id   TEXT,
+  qbo_receipt_id    TEXT,
+  qbo_receipt_doc   TEXT,
+  qbo_error         TEXT,
+  notified_at       TEXT,
+  notify_error      TEXT,
+  origin            TEXT,                                 -- o endereço do site em que comprou
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS store_orders_status ON store_orders(status, id);
+
+-- Cada evento do webhook entra uma vez só: o Stripe reenvia e o mesmo evento não vira dois pedidos.
+CREATE TABLE IF NOT EXISTS stripe_events (
+  id           TEXT PRIMARY KEY,                          -- evt_…
+  type         TEXT NOT NULL,
+  order_id     INTEGER REFERENCES store_orders(id),
+  result       TEXT,
+  received_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 -- ------------------------------------------------------------ agenda de sessões (#41)
 -- Dono, 30/09: "o próprio cliente consiga ver os dias disponíveis e agendar a sua sessão;
 -- a gente parametriza: bloquear esse dia toda semana, bloquear datas específicas,

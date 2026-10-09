@@ -23,7 +23,7 @@ import time
 from functools import lru_cache
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from command_center.db import agora, get_db, inserir
@@ -34,8 +34,13 @@ from command_center.vitrine import paginas_site as ps
 r = APIRouter(tags=["vitrine"])
 
 # Política própria do site: nada de fora (fontes e fotos são nossas), nenhum script inline.
-CSP = ("default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; "
-       "connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+# #174: o formulário de comprar termina num 303 para o checkout.stripe.com, e o Chrome confere o
+# form-action também no redirecionamento — só esse endereço de fora entra, e só aí. (O e2e troca
+# pelo Stripe falso dele em STRIPE_CHECKOUT_ORIGEM.)
+def csp():
+    checkout = os.environ.get("STRIPE_CHECKOUT_ORIGEM", "https://checkout.stripe.com")
+    return ("default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; "
+            f"connect-src 'self'; base-uri 'none'; form-action 'self' {checkout}; frame-ancestors 'none'")
 
 # Páginas fixas: caminho → função(host). As dinâmicas (blog, loja, contato) estão em `_dinamica`.
 PAGINAS = {
@@ -69,7 +74,7 @@ def e_do_site(request):
 
 def _html(conteudo, status=200):
     return HTMLResponse(conteudo, status_code=status, headers={
-        "Content-Security-Policy": CSP,
+        "Content-Security-Policy": csp(),
         "X-Frame-Options": "DENY",
         # página pública, igual para todo mundo: pode ficar 5 min no navegador
         "Cache-Control": "public, max-age=300",
@@ -95,7 +100,9 @@ def _dinamica(host, caminho, q):
         return ps.post(host, _slug(m.group(1)))
     m = re.fullmatch(r"/store/p/([^/]+)/", caminho)
     if m:
-        return ps.product(host, _slug(m.group(1)), enviado=q.get("sent") == "1")
+        from command_center.providers import stripe_loja
+        return ps.product(host, _slug(m.group(1)), enviado=q.get("sent") == "1", stripe=stripe_loja.ligado(),
+                          erro_checkout=q.get("checkout") == "erro")
     m = re.fullmatch(r"/store/([^/]+)/", caminho)
     if m:
         return ps.store(host, _slug(m.group(1)))
@@ -342,6 +349,114 @@ async def pedido(request: Request, con: sqlite3.Connection = Depends(get_db)):
                       f"and send you an invoice to pay online. Nothing has been charged.\n\nQuestions? Call or WhatsApp +1 (407) 250 2291.\n\n"
                       f"URACE — the Champion's Factory")
     return _responde(request, True, volta + "?sent=1")
+
+
+# ------------------------------------------------------------------ loja paga no Stripe (#174)
+def _origem(request):
+    """https://<endereço do site> para a volta do Stripe (no teste local, http com a porta)."""
+    h = (request.headers.get("host") or "").strip().lower()
+    local = host_de(request) in ("127.0.0.1", "localhost")
+    return ("http://" if local else "https://") + h
+
+
+@r.post("/ops/api/vitrine/checkout", include_in_schema=False)
+async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """O botão "Buy now": confere produto, variação e preço no catálogo e manda ao Stripe Checkout."""
+    from command_center.providers import stripe_loja
+    if not e_do_site(request):
+        raise HTTPException(404)
+    c = await _campos(request)
+    produtos = {p["slug"]: p for p in ps.dados("produtos.json")["produtos"]}
+    p = produtos.get(c.get("produto") or "")
+    volta = f"/store/p/{p['slug']}/" if p else "/store/"
+    quer_json = "application/json" in (request.headers.get("accept") or "")
+
+    def erro(msg):
+        if quer_json:
+            return JSONResponse({"ok": False, "erro": msg}, status_code=400, headers={"Cache-Control": "no-store"})
+        return RedirectResponse(volta + "?checkout=erro", status_code=303)
+
+    if c.get("site"):
+        return RedirectResponse(volta, status_code=303)            # honeypot: um robô
+    if not p:
+        return erro("Product not found.")
+    if not stripe_loja.ligado():
+        return erro("Online payment isn't available right now. Please send us an order request.")
+    if _estourou(_ip(request)):
+        return erro("Too many requests in a row. Please try again in a few minutes.")
+    try:
+        qtd = int(c.get("quantidade") or 1)
+    except ValueError:
+        qtd = 1
+    foto = None
+    if p["images"] and not _origem(request).startswith("http://"):
+        foto = _origem(request) + paginas.estatico("img/" + p["images"][0]["src"])
+    try:
+        _, url = stripe_loja.criar_sessao(con, p, c.get("variacao") or "", qtd, c.get("entrega"), _origem(request),
+                                          host_de(request), foto_url=foto)
+    except ValueError as e:
+        return erro(str(e))
+    except stripe_loja.ErroStripe as e:
+        import logging
+        logging.getLogger("urace.loja").warning("checkout do Stripe falhou: %s", str(e)[:200])
+        return erro("We couldn’t open the secure checkout just now. Please try again in a minute.")
+    if quer_json:
+        return JSONResponse({"ok": True, "url": url}, headers={"Cache-Control": "no-store"})
+    return RedirectResponse(url, status_code=303)
+
+
+@r.post("/ops/api/stripe/webhook", include_in_schema=False)
+async def stripe_webhook(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+    """O Stripe avisa aqui (qualquer endereço do servidor). Sem assinatura válida: 400 e nada muda.
+    A resposta sai logo; os e-mails e o QuickBooks vêm depois, em segundo plano."""
+    from command_center.providers import stripe_loja
+    corpo = await request.body()
+    segredo = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+    if not segredo:
+        raise HTTPException(503, "webhook do Stripe sem segredo configurado")
+    if not stripe_loja.assinatura_ok(corpo, request.headers.get("stripe-signature") or "", segredo):
+        raise HTTPException(400, "assinatura inválida")
+    try:
+        evento = json.loads(corpo)
+    except ValueError:
+        raise HTTPException(400, "JSON inválido")
+    if not isinstance(evento, dict) or not evento.get("id"):
+        raise HTTPException(400, "evento sem id")
+    resultado, pago = stripe_loja.receber_evento(con, evento)
+    if pago:
+        background.add_task(stripe_loja.avisar_e_registrar, pago)
+    return JSONResponse({"recebido": True, "resultado": resultado}, headers={"Cache-Control": "no-store"})
+
+
+def _sem_cache(html):
+    resp = _html(html)
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+@r.get("/store/thanks/", include_in_schema=False)
+def loja_obrigado(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import stripe_loja
+    if not e_do_site(request):
+        raise HTTPException(404)
+    sid = (request.query_params.get("session_id") or "")[:200]
+    pedido = None
+    if re.fullmatch(r"cs_[A-Za-z0-9_]+", sid):
+        try:
+            pedido, agora_pago = stripe_loja.conferir_sessao(con, sid)
+            if agora_pago:
+                background.add_task(stripe_loja.avisar_e_registrar, pedido["id"])
+        except stripe_loja.ErroStripe:
+            from command_center.db import um
+            pedido = um(con, "SELECT * FROM store_orders WHERE stripe_session_id=?", (sid,))
+    return _sem_cache(ps.obrigado(host_de(request), pedido))
+
+
+@r.get("/store/cancelled/", include_in_schema=False)
+def loja_cancelado(request: Request):
+    if not e_do_site(request):
+        raise HTTPException(404)
+    return _sem_cache(ps.cancelado(host_de(request), _slug(request.query_params.get("p") or "")))
 
 
 def robots(request):
