@@ -1464,6 +1464,19 @@ CREATE TABLE IF NOT EXISTS portal_codes (
 );
 CREATE INDEX IF NOT EXISTS portal_codes_conta ON portal_codes(account_id, purpose, id);
 
+-- ------------------------------------------------------------ "esqueci minha senha" (#168)
+-- Link de uso único por e-mail; só o hash do token fica aqui. Vale 30 minutos.
+CREATE TABLE IF NOT EXISTS portal_resets (
+  id          INTEGER PRIMARY KEY,
+  account_id  INTEGER NOT NULL REFERENCES portal_accounts(id),
+  token_hash  TEXT NOT NULL UNIQUE,
+  ip          TEXT,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS portal_resets_conta ON portal_resets(account_id, id);
+
 -- ------------------------------------------------------------ agenda de sessões (#41)
 -- Dono, 30/09: "o próprio cliente consiga ver os dias disponíveis e agendar a sua sessão;
 -- a gente parametriza: bloquear esse dia toda semana, bloquear datas específicas,

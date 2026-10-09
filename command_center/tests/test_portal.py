@@ -292,3 +292,76 @@ def test_painel_do_cliente(cli):
     assert d["next_session"] is None and d["last_session"] is None and d["upcoming"] == 0
     assert (d["measures_warn_days"], d["measures_limit_days"]) == (30, 60)
     assert d["account"]["name"] == "Maria Santos"
+
+
+# ------------------------------------------------------------------ esqueci minha senha (#168)
+def _emails(tmp_path):
+    import json
+    f = tmp_path / "emails.jsonl"
+    return [json.loads(x) for x in f.read_text(encoding="utf-8").splitlines()] if f.exists() else []
+
+
+def _token(email):
+    import re
+    return re.search(r"token=([\w-]+)", email["text"]).group(1)
+
+
+def test_esqueci_a_senha_manda_o_link_e_nao_revela_quem_tem_conta(cli, tmp_path, monkeypatch):
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))
+    cadastra(cli)
+    cli.cookies.clear()
+    r1 = cli.post(f"{P}/password/forgot", json={"email": "MARIA@example.com "})
+    r2 = cli.post(f"{P}/password/forgot", json={"email": "ninguem@example.com"})
+    assert r1.status_code == r2.status_code == 200 and r1.json() == r2.json(), "a mesma resposta, com ou sem conta"
+    emails = _emails(tmp_path)
+    assert [m["to"] for m in emails] == ["maria@example.com"], "só quem tem conta recebe"
+    assert "https://my.urace.us/ops/portal/reset?token=" in emails[0]["text"], "um Host que não é nosso não vira link"
+    c = conectar()
+    assert um(c, "SELECT token_hash, used_at FROM portal_resets")["used_at"] is None
+    assert _token(emails[0]) not in um(c, "SELECT token_hash FROM portal_resets")["token_hash"], "só o hash fica guardado"
+    eventos = [a["event"] for a in todos(c, "SELECT event FROM audit_logs WHERE event LIKE 'portal.password%'")]
+    assert eventos == ["portal.password.reset.sent"]
+
+
+def test_link_de_redefinicao_troca_a_senha_entra_e_so_vale_uma_vez(cli, tmp_path, monkeypatch):
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))
+    cadastra(cli)
+    antiga = dict(cli.cookies)                                    # a sessão aberta no cadastro
+    cli.post(f"{P}/password/forgot", json={"email": CONTA["email"]})
+    tok = _token(_emails(tmp_path)[-1])
+    cli.cookies.clear()
+    assert cli.post(f"{P}/password/reset", json={"token": tok, "password": "curta"}).status_code == 400
+    r = cli.post(f"{P}/password/reset", json={"token": tok, "password": "nova-senha-123"})
+    assert r.status_code == 200 and r.json()["email"] == CONTA["email"] and cli.cookies.get("cp_session"), "entra na hora"
+    assert cli.get(f"{P}/me").status_code == 200
+    # o link não vale duas vezes; a sessão antiga caiu; a senha antiga não entra mais; a nova entra
+    assert cli.post(f"{P}/password/reset", json={"token": tok, "password": "outra-senha-123"}).status_code == 400
+    cli.cookies.clear(); cli.cookies.update(antiga)
+    assert cli.get(f"{P}/me").status_code == 401
+    cli.cookies.clear()
+    assert cli.post(f"{P}/login", json={"email": CONTA["email"], "password": CONTA["password"]}).status_code == 401
+    assert cli.post(f"{P}/login", json={"email": CONTA["email"], "password": "nova-senha-123"}).status_code == 200
+    assert cli.post(f"{P}/password/reset", json={"token": "nao-existe", "password": "nova-senha-123"}).status_code == 400
+
+
+def test_link_de_redefinicao_expira_em_30_minutos(cli, tmp_path, monkeypatch):
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))
+    cadastra(cli)
+    cli.post(f"{P}/password/forgot", json={"email": CONTA["email"]})
+    tok = _token(_emails(tmp_path)[-1])
+    c = conectar(); c.execute("UPDATE portal_resets SET expires_at='2020-01-01T00:00:00.000Z'"); c.commit(); c.close()
+    r = cli.post(f"{P}/password/reset", json={"token": tok, "password": "nova-senha-123"})
+    assert r.status_code == 400 and "expired" in r.json()["detail"]
+
+
+def test_esqueci_a_senha_tem_limite_por_email_e_por_conexao(cli, tmp_path, monkeypatch):
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))
+    cadastra(cli)
+    for _ in range(3):
+        assert cli.post(f"{P}/password/forgot", json={"email": CONTA["email"]}).status_code == 200
+    assert cli.post(f"{P}/password/forgot", json={"email": CONTA["email"]}).status_code == 429, "3 por e-mail na hora"
+    assert len(_emails(tmp_path)) == 3
+    for i in range(2):
+        assert cli.post(f"{P}/password/forgot", json={"email": f"x{i}@example.com"}).status_code == 200
+    assert cli.post(f"{P}/password/forgot", json={"email": "x9@example.com"}).status_code == 429, "5 por conexão na hora"
+

@@ -106,7 +106,70 @@ function Entrar({ onEntrou }: { onEntrou: (a: Account) => void }) {
             <Icon name={ver ? 'x' : 'eye'} size={17} /></button>
         </div></div>
       <button className="btn primary block" disabled={indo || !email || !senha}>{indo ? <span className="spin" /> : 'Sign in'}</button>
-      <p className="small" style={{ margin: 0 }}>New to URACE? <Link to="/portal/signup">Create an account</Link></p>
+      <p className="small" style={{ margin: 0 }}>New to URACE? <Link to="/portal/signup">Create an account</Link> · <Link to="/portal/forgot">Forgot your password?</Link></p>
+    </form>
+  </CascaLogin>
+}
+
+/* #168: "esqueci minha senha" — pede o e-mail; a resposta é a mesma existindo ou não a conta. */
+function EsqueciSenha() {
+  const [email, setEmail] = useState('')
+  const [erro, setErro] = useState<string | null>(null)
+  const [mensagem, setMensagem] = useState<string | null>(null)
+  const [indo, setIndo] = useState(false)
+  async function enviar(e: FormEvent) {
+    e.preventDefault(); setErro(null); setIndo(true)
+    try { setMensagem((await papi<{ message: string }>('POST', '/password/forgot', { email })).message) }
+    catch (ex) { setErro((ex as PortalError).message) } finally { setIndo(false) }
+  }
+  return <CascaLogin lema="Book, train and race with URACE">
+    <form className="box" onSubmit={enviar} noValidate>
+      <div><div className="eyebrow">Driver area</div><h1 className="h1">Forgot your password?</h1></div>
+      {mensagem ? <>
+        <p className="banner ok" role="status" style={{ margin: 0 }}>{mensagem}</p>
+        <p className="small" style={{ margin: 0 }}><Link to="/portal">Back to sign in</Link></p>
+      </> : <>
+        <p className="muted" style={{ margin: 0 }}>Tell us the email of your account and we will send you a link to choose a new password.</p>
+        <Aviso erro={erro} />
+        <div className="field"><label htmlFor="p-email">Email</label>
+          <input id="p-email" className="input" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required autoFocus /></div>
+        <button className="btn primary block" disabled={indo || !email}>{indo ? <span className="spin" /> : 'Send me the link'}</button>
+        <p className="small" style={{ margin: 0 }}><Link to="/portal">Back to sign in</Link></p>
+      </>}
+    </form>
+  </CascaLogin>
+}
+
+/* #168: a tela do link — senha nova duas vezes; entra na conta ao terminar. */
+function NovaSenha({ onEntrou }: { onEntrou: (a: Account) => void }) {
+  const token = new URLSearchParams(window.location.search).get('token') || ''
+  const [senha, setSenha] = useState('')
+  const [senha2, setSenha2] = useState('')
+  const [ver, setVer] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [indo, setIndo] = useState(false)
+  async function enviar(e: FormEvent) {
+    e.preventDefault(); setErro(null)
+    if (senha !== senha2) { setErro('The two passwords are not the same.'); return }
+    setIndo(true)
+    try { onEntrou(await papi<Account>('POST', '/password/reset', { token, password: senha })) }
+    catch (ex) { setErro((ex as PortalError).message) } finally { setIndo(false) }
+  }
+  return <CascaLogin lema="Book, train and race with URACE">
+    <form className="box" onSubmit={enviar} noValidate>
+      <div><div className="eyebrow">Driver area</div><h1 className="h1">Choose a new password</h1></div>
+      {!token && <p className="muted" style={{ margin: 0 }}>This link is incomplete. <Link to="/portal/forgot">Ask for a new one</Link>.</p>}
+      <Aviso erro={erro} />
+      <div className="field"><label htmlFor="p-pw">New password</label>
+        <div className="pwwrap">
+          <input id="p-pw" className="input" type={ver ? 'text' : 'password'} autoComplete="new-password" minLength={8} value={senha} onChange={e => setSenha(e.target.value)} required autoFocus />
+          <button type="button" className="olho" onClick={() => setVer(v => !v)} aria-label={ver ? 'Hide password' : 'Show password'} aria-pressed={ver}>
+            <Icon name={ver ? 'x' : 'eye'} size={17} /></button>
+        </div>
+        <div className="small muted">At least 8 characters.</div></div>
+      <div className="field"><label htmlFor="p-pw2">Repeat the new password</label>
+        <input id="p-pw2" className="input" type={ver ? 'text' : 'password'} autoComplete="new-password" minLength={8} value={senha2} onChange={e => setSenha2(e.target.value)} required /></div>
+      <button className="btn primary block" disabled={indo || !token || senha.length < 8 || !senha2}>{indo ? <span className="spin" /> : 'Save and sign in'}</button>
     </form>
   </CascaLogin>
 }
@@ -474,12 +537,16 @@ export function PortalApp() {
   if (!conta) return <Routes>
     <Route index element={<Entrar onEntrou={entrou} />} />
     <Route path="signup" element={<Cadastro onEntrou={entrou} />} />
+    <Route path="forgot" element={<EsqueciSenha />} />
+    <Route path="reset" element={<NovaSenha onEntrou={entrou} />} />
     <Route path="*" element={<Navigate to="/portal" replace />} />
   </Routes>
   return <Casca conta={conta} sair={sair}>
     <Routes>
       <Route index element={<Navigate to={lerVolta() || '/portal/dashboard'} replace />} />
       <Route path="signup" element={<Navigate to="/portal/dashboard" replace />} />
+      <Route path="forgot" element={<Navigate to="/portal/account" replace />} />
+      <Route path="reset" element={<Navigate to="/portal/account" replace />} />
       <Route path="dashboard" element={<Dashboard conta={conta} />} />
       <Route path="book" element={<Agendar conta={conta} />} />
       <Route path="sessions" element={<Sessoes />} />

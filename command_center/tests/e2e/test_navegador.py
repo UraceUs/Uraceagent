@@ -1036,6 +1036,38 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     assert not erros, erros
 
 
+def test_esqueci_a_senha_no_celular_do_link_do_email_ate_entrar(servidor, navegador):
+    """#168: quem esqueceu a senha pede o link na tela de entrar, abre o link do e-mail, escolhe a
+    senha nova e já entra na conta — tudo no celular."""
+    import json
+    aux = navegador.new_page()
+    cliente_pela_api(aux, servidor, "Olga Esqueci", "olga.esqueci.e2e@example.com", ip="10.1.68.1")
+    aux.close()
+    v = navegador.new_page(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-For": "10.1.68.2"})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(servidor + "/portal")
+    v.get_by_role("link", name="Forgot your password?").click()
+    v.get_by_role("heading", name="Forgot your password?").wait_for()
+    v.get_by_label("Email").fill("olga.esqueci.e2e@example.com")
+    v.get_by_role("button", name="Send me the link").click()
+    v.get_by_text("we just sent a link").wait_for()
+    assert not v.evaluate(_VAZA)["rola"]
+    linhas = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
+    texto = [x for x in linhas if x["to"] == "olga.esqueci.e2e@example.com"][-1]["text"]
+    link = re.search(r"https?://\S+/ops/portal/reset\?token=[\w-]+", texto).group(0)
+    assert link.startswith(servidor.removesuffix("/ops")), "o link aponta para o endereço que a pessoa usou"
+    v.goto(link)
+    v.get_by_role("heading", name="Choose a new password").wait_for()
+    v.get_by_label("New password", exact=True).fill("pista-seca-2026")
+    v.get_by_label("Repeat the new password").fill("pista-seca-2026")
+    v.get_by_role("button", name="Save and sign in").click()
+    v.wait_for_url(re.compile(r"/portal/dashboard"))             # entrou na conta
+    assert v.get_by_text("Olga Esqueci").count() >= 1
+    v.close()
+    assert not erros, erros
+
+
 def test_site_novo_contato_e_pedido_da_loja_chegam_em_vendas(servidor, navegador):
     """#164: o formulário do site (e o pedido da loja) vira oportunidade em Vendas, origem Site."""
     from command_center.vitrine import paginas_site
