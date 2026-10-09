@@ -228,7 +228,7 @@ def _ultimo_movimento(con, item_id):
     return um(con, "SELECT MAX(id) AS id FROM stock_moves WHERE item_id=?", (item_id,))["id"]
 
 
-def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, codigo=None, confirmado=False):
+def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, codigo=None, confirmado=False, data=None):
     """Uma leitura. Devolve a linha de `counter_scans`. Não fala com o QuickBooks: quem chama
     grava (commit) e depois chama `sincronizar_qbo` com a invoice da linha."""
     if modo not in MODOS:
@@ -256,7 +256,7 @@ def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, c
         estoque.saida(con, it["id"], qty=qty, de=loc, client_id=None, para_cliente_id=client_id, reason="venda",
                       by_user_id=por, source="balcao", notes="balcão")
         move = _ultimo_movimento(con, it["id"])
-        pinv_id = _invoice_do_dia(con, client_id, hoje(), por)["id"]
+        pinv_id = _invoice_do_dia(con, client_id, data or hoje(), por)["id"]   # #180: a da data da leitura
         charge_id = estoque.registrar_cobranca(con, it["id"], client_id, qty, move_id=move, by_user_id=por, notes="balcão")
         atualizar(con, "stock_charges", charge_id, parts_invoice_id=pinv_id)
     elif modo == "guardar":

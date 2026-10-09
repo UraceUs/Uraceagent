@@ -1176,6 +1176,29 @@ CREATE TABLE IF NOT EXISTS counter_scans (
 );
 CREATE INDEX IF NOT EXISTS counter_scans_cliente ON counter_scans(client_id, at);
 
+-- #180 (dono, 09/10): o mecânico lê a PEÇA com a câmera do celular e toca no piloto do dia; nada
+-- é cobrado nem sai do estoque ali. A leitura espera aqui até o gerente confirmar (vira uma linha
+-- de counter_scans, com as regras do balcão) ou descartar. Código desconhecido também espera.
+CREATE TABLE IF NOT EXISTS counter_pending (
+  id            INTEGER PRIMARY KEY,
+  code          TEXT NOT NULL,
+  item_id       INTEGER REFERENCES stock_items(id),       -- NULL: código que o sistema ainda não conhece
+  client_id     INTEGER REFERENCES clients(id),           -- NULL: piloto sem card ou "decidir depois"
+  pilot_id      INTEGER REFERENCES portal_pilots(id),
+  pilot_name    TEXT,
+  service_date  TEXT NOT NULL,                            -- AAAA-MM-DD (Flórida): a invoice de peças do dia
+  qty           REAL NOT NULL DEFAULT 1,
+  status        TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','confirmada','descartada')),
+  by_user_id    INTEGER REFERENCES users(id),
+  at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  mode          TEXT,                                     -- o que o gerente escolheu ao confirmar
+  scan_id       INTEGER REFERENCES counter_scans(id),
+  reviewed_by   INTEGER REFERENCES users(id),
+  reviewed_at   TEXT,
+  review_note   TEXT
+);
+CREATE INDEX IF NOT EXISTS counter_pending_status ON counter_pending(status, service_date, id);
+
 -- ------------------------------------------------- biblioteca (#88)
 -- Dono, 05/10: contratos, waivers, recibos, invoices e histórico de serviço reunidos, com o PDF
 -- de cada um, e um backup no Drive (urace@) organizado por cliente. Atualizada por uma ROTINA

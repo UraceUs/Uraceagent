@@ -8,7 +8,9 @@ export type Policy = 'SAFE' | 'REQUIRES_CONFIRMATION' | 'REQUIRES_APPROVAL' | 'B
 // `free`: conta de acesso livre e irrestrito (o dono pediu: sem cargo nenhum).
 export interface User { id: number; email: string; name: string; role: Role; free?: boolean
   /** #92: mecânico ou coach — OPERATOR com o acesso só do box */
-  cargo?: 'MECANICO' | 'COACH' | null }
+  cargo?: 'MECANICO' | 'COACH' | null
+  /** #180: aberto em balcao.urace.us — a única tela é o balcão do celular */
+  so_balcao?: boolean }
 
 export interface Integration {
   system: string; status: 'CONNECTED' | 'SYNCING' | 'DEGRADED' | 'ERROR' | 'DISCONNECTED'

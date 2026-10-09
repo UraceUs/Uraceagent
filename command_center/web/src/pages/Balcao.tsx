@@ -15,6 +15,9 @@ import { Banner, Chip, Empty, PageHeader, Scrim, Section } from '../components/u
 import { FotoPeca } from '../components/FotoPeca'
 import { useToast } from '../components/Toast'
 import { tr } from '../i18n'
+import { novoDetector, temCamera, vibrar } from '../components/Leitor'
+import { Picker } from '../components/Unir'
+import type { Client } from '../api/types'
 
 type Modo = 'cobrar' | 'guardar'
 interface Cliente { id: number; nome: string; responsavel: string }
@@ -33,33 +36,6 @@ const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', curren
 const LOCAIS: [string, string][] = [['sede', tr("Galpão")], ['trailer', tr("Trailer")], ['pista', tr("Pista")]]
 const MODO_TXT: Record<string, string> = { cobrar: tr("cobrada"), guardar: tr("guardada para o cliente"), usar_do_cliente: tr("usada do estoque do cliente") }
 const lerLocal = () => { try { return localStorage.getItem('balcao.local') || 'sede' } catch { return 'sede' } }
-const vibrar = (ms: number) => { try { navigator.vibrate?.(ms) } catch { /* sem vibração */ } }
-
-/** Leitor nativo do navegador (Chrome no Android). No iPhone não existe: aí entra o ZXing. */
-type Detector = { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> }
-const BD = typeof window === 'undefined' ? undefined
-  : (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => Detector }).BarcodeDetector
-/** Em http (sem TLS) o navegador nem oferece a câmera: mediaDevices some. */
-const temCamera = () => 'mediaDevices' in navigator && typeof navigator.mediaDevices.getUserMedia === 'function'
-const FORMATOS = ['qr_code', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf']
-
-/** Leitor em JavaScript puro (dono, 06/10: "abrir a câmera para ler o QR code" — também no iPhone).
- *  Carrega só quando a câmera abre, para não pesar a tela; sem WebAssembly, a CSP fica como está. */
-async function detectorZxing(): Promise<Detector> {
-  const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([import('@zxing/browser'), import('@zxing/library')])
-  const hints = new Map([[DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE, BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
-    BarcodeFormat.UPC_A, BarcodeFormat.UPC_E, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF]]])
-  const leitor = new BrowserMultiFormatReader(hints)
-  const tela = document.createElement('canvas')
-  return {
-    async detect(v) {
-      if (!v.videoWidth) return []
-      tela.width = v.videoWidth; tela.height = v.videoHeight
-      tela.getContext('2d', { willReadFrequently: true })?.drawImage(v, 0, 0)
-      try { return [{ rawValue: leitor.decodeFromCanvas(tela).getText() }] } catch { return [] }   // quadro sem código
-    },
-  }
-}
 
 function Camera({ onLer, onFechar }: { onLer: (t: string) => void; onFechar: () => void }) {
   const video = useRef<HTMLVideoElement>(null)
@@ -71,7 +47,7 @@ function Camera({ onLer, onFechar }: { onLer: (t: string) => void; onFechar: () 
     if (!temCamera()) return
     ;(async () => {
       try {
-        const [det, s] = await Promise.all([BD ? Promise.resolve(new BD({ formats: FORMATOS })) : detectorZxing(),
+        const [det, s] = await Promise.all([novoDetector(),
           navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })])
         stream = s
         if (parar || !video.current) { s.getTracks().forEach(t => t.stop()); return }
@@ -275,7 +251,70 @@ function AEnviar() {
   </Section>
 }
 
+/* #180: o que o mecânico leu no celular (peça → piloto do dia) espera aqui. O gerente confirma
+ * — aí sim entra no estoque e na invoice de peças do dia da leitura — ou descarta. */
+interface Pend { id: number; code: string; peca: string | null; pilot_name: string | null; client_id: number | null
+  service_date: string; at: string; por: string | null
+  item?: { id: number; name: string; price: number | null; qbo_item_id: string | null; do_cliente: number } }
+
+function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; total: number }) => void }) {
+  const toast = useToast()
+  const [cliente, setCliente] = useState<Client | null>(null)
+  const [item, setItem] = useState<Item | null>(null)
+  const [novo, setNovo] = useState(false)
+  const [doCliente, setDoCliente] = useState<string | null>(null)
+  const [indo, setIndo] = useState(false)
+  const temItem = !!(p.item || item)
+  const temCliente = !!(p.client_id || cliente)
+  async function confirmar(modo: string, confirmado = false) {
+    setIndo(true)
+    try {
+      const r = await api.post<{ itens: Pend[]; total: number }>(`/balcao/revisao/${p.id}/confirmar`,
+        { modo, client_id: cliente?.id ?? null, item_id: item?.id ?? null, confirmado })
+      toast(tr("Peça confirmada: {0}.", MODO_TXT[modo]), 'ok'); onMudou(r)
+    } catch (e) {
+      const er = e as ApiError
+      if (er.motivo === 'tem_do_cliente') setDoCliente(er.message); else toast(er.message, 'crit')
+    } finally { setIndo(false) }
+  }
+  async function descartar() {
+    setIndo(true)
+    try { onMudou(await api.post<{ itens: Pend[]; total: number }>(`/balcao/revisao/${p.id}/descartar`, {})); toast(tr("Descartada."), 'ok') }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  const nome = item?.name || p.item?.name
+  return <div className="card card-b stack" style={{ gap: 8 }}>
+    <div className="row wrap" style={{ gap: 8 }}>
+      <div className="grow"><b>{nome || tr("Código novo")}</b> <span className="mono small muted">{p.code}</span>
+        <div className="small muted">{p.pilot_name || tr("sem piloto")} · {p.service_date} · {tr("lida por {0}", p.por || '—')}
+          {p.item?.price != null ? ` · ${usd(p.item.price)}` : ''}</div></div>
+      {!temItem && <Chip tone="warn">{tr("código novo")}</Chip>}
+      {!temCliente && <Chip tone="warn">{tr("sem cliente")}</Chip>}
+    </div>
+    {!p.client_id && <Picker label={tr("Cliente desta peça")} value={cliente} onPick={setCliente} />}
+    {!temItem && <button className="btn sm" onClick={() => setNovo(true)}>{tr("Dizer que peça é")}</button>}
+    {doCliente && <Banner tone="warn">{doCliente}</Banner>}
+    <div className="row wrap" style={{ gap: 8 }}>
+      <button className="btn sm primary" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('cobrar', !!doCliente)}>{doCliente ? tr("Cobrar mesmo assim") : tr("Cobrar")}</button>
+      <button className="btn sm balcao-btn-guardar" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('guardar')}>{tr("Guardar para o cliente")}</button>
+      {(doCliente || (p.item?.do_cliente ?? 0) > 0) && <button className="btn sm" disabled={indo} onClick={() => confirmar('usar_do_cliente')}>{tr("Usar a do cliente")}</button>}
+      <button className="btn sm ghost" disabled={indo} onClick={descartar}>{tr("Descartar")}</button>
+    </div>
+    {novo && <CodigoNovo codigo={p.code} gerente onFechar={() => setNovo(false)} onFeito={i => { setNovo(false); setItem(i) }} />}
+  </div>
+}
+
+function Revisao() {
+  const [d, setD] = useState<{ itens: Pend[]; total: number } | null>(null)
+  useEffect(() => { api.get<{ itens: Pend[]; total: number }>('/balcao/revisao').then(setD).catch(() => setD({ itens: [], total: 0 })) }, [])
+  return <Section title={tr("Revisão: lidas no celular")} count={d?.total}>
+    {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para revisar")}>{tr("O que o mecânico registra no celular aparece aqui para você confirmar.")}</Empty>
+      : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <ItemRevisao key={p.id} p={p} onMudou={setD} />)}</div>}
+  </Section>
+}
+
 export function Balcao() {
+  const { can } = useAuth()
   const { clientId } = useParams()
   const nav = useNavigate()
   const toast = useToast()
@@ -337,7 +376,8 @@ export function Balcao() {
 
   const guardar = modo === 'guardar'
   return <div className={`stack balcao ${guardar ? 'modo-guardar' : 'modo-cobrar'}`} style={{ gap: 14 }}>
-    <PageHeader title={tr("Balcão")} help={tr("Leia o QR do cliente e depois cada peça. Cobrar: a peça entra na invoice de peças do dia (não é enviada sozinha). Guardar: vai para o estoque do cliente, sem cobrar.")} />
+    <PageHeader title={tr("Balcão")} help={tr("Leia o QR do cliente e depois cada peça. Cobrar: a peça entra na invoice de peças do dia (não é enviada sozinha). Guardar: vai para o estoque do cliente, sem cobrar.")}>
+      <Link className="btn primary" to="/balcao/rapido">{tr("Abrir o balcão do celular")}</Link></PageHeader>
     <div className="balcao-modos" role="radiogroup" aria-label={tr("O que fazer com a peça lida")}>
       <button role="radio" aria-checked={!guardar} className="balcao-modo cobrar" onClick={() => setModo('cobrar')}>{tr("COBRAR")}<small>{tr("entra na invoice")}</small></button>
       <button role="radio" aria-checked={guardar} className="balcao-modo guardar" onClick={() => setModo('guardar')}>{tr("GUARDAR")}<small>{tr("estoque do cliente")}</small></button>
@@ -379,6 +419,7 @@ export function Balcao() {
           </div>)}</div></div>}
       </Section>
     </>}
+    {!cid && can('MANAGER') && <Revisao />}
     {!cid && <AEnviar />}
 
     {camera && <Camera onLer={ler} onFechar={() => { setCamera(false); focar() }} />}
