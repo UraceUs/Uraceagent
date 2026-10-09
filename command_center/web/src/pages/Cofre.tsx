@@ -11,14 +11,15 @@ import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { tr, LOCALE } from '../i18n'
 
 interface Item { id: number; name: string; url: string | null; username: string | null; tem_senha: number; tem_nota: number
   archived: number; updated_at: string; revealed_at: string | null; outra_chave: boolean }
 interface Lista { ligado: boolean; motivo: string | null; impressao: string | null; desbloqueado_ate: string | null; itens: Item[] }
 interface Aberto { senha: string | null; nota: string | null }
 
-const hora = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' })
-const dia = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/New_York', day: '2-digit', month: '2-digit', year: '2-digit' })
+const hora = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE(), { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' })
+const dia = (iso: string) => new Date(iso).toLocaleDateString(LOCALE(), { timeZone: 'America/New_York', day: '2-digit', month: '2-digit', year: '2-digit' })
 
 function gerarSenha(n = 20) {
   const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*-_+='
@@ -28,7 +29,7 @@ function gerarSenha(n = 20) {
 }
 
 async function copiar(texto: string, toast: ReturnType<typeof useToast>, oque: string) {
-  try { await navigator.clipboard.writeText(texto); toast(`${oque} copiado.`, 'ok') } catch { toast('Não deu para copiar neste navegador.', 'warn') }
+  try { await navigator.clipboard.writeText(texto); toast(tr("{0} copiado.", oque), 'ok') } catch { toast(tr("Não deu para copiar neste navegador."), 'warn') }
 }
 
 export function Cofre() {
@@ -49,8 +50,8 @@ export function Cofre() {
     return () => window.clearTimeout(t)
   }, [abertos])
 
-  if (!livre) return <><PageHeader title="Cofre" />
-    <div className="card"><Empty title="Esta área não é do seu acesso">O cofre é só da conta de acesso livre.</Empty></div></>
+  if (!livre) return <><PageHeader title={tr("Cofre")} />
+    <div className="card"><Empty title={tr("Esta área não é do seu acesso")}>{tr("O cofre é só da conta de acesso livre.")}</Empty></div></>
 
   const d = l.data
   const aberto = !!d?.desbloqueado_ate
@@ -67,49 +68,49 @@ export function Cofre() {
     catch (err) { toast((err as ApiError).message, 'crit'); if ((err as ApiError).status === 423) l.reload() }
   }
   async function arquivar(it: Item) {
-    try { await api.post(`/cofre/${it.id}/${it.archived ? 'restaurar' : 'arquivar'}`, {}); toast(it.archived ? 'Restaurado.' : 'Arquivado. Fica em “Arquivados”.', 'ok'); l.reload() }
+    try { await api.post(`/cofre/${it.id}/${it.archived ? 'restaurar' : 'arquivar'}`, {}); toast(it.archived ? tr("Restaurado.") : tr("Arquivado. Fica em “Arquivados”."), 'ok'); l.reload() }
     catch (err) { toast((err as ApiError).message, 'crit') }
   }
   const itens = (d?.itens || []).filter(i => !busca.trim() || `${i.name} ${i.username || ''} ${i.url || ''}`.toLowerCase().includes(busca.trim().toLowerCase()))
 
   return <>
-    <PageHeader title="Cofre" help="Logins e senhas da URACE. Só a conta de acesso livre entra; a senha fica cifrada no servidor e só aparece depois de confirmar a sua senha de login. A IA não tem acesso." />
+    <PageHeader title={tr("Cofre")} help={tr("Logins e senhas da URACE. Só a conta de acesso livre entra; a senha fica cifrada no servidor e só aparece depois de confirmar a sua senha de login. A IA não tem acesso.")} />
     {l.error ? <ErrorState error={l.error} retry={l.reload} /> : !d ? <Loading /> : <>
-      {!d.ligado && <Banner tone="warn">{d.motivo} Rode o bloco de deploy do cofre no VPS.</Banner>}
+      {!d.ligado && <Banner tone="warn">{d.motivo} {tr("Rode o bloco de deploy do cofre no VPS.")}</Banner>}
       {d.ligado && (aberto
-        ? <div className="cofre-estado card"><Chip tone="ok" dot>Aberto até {hora(d.desbloqueado_ate!)}</Chip><span className="small muted">chave {d.impressao}</span>
-            <button className="btn sm" onClick={travar}>Trancar agora</button></div>
+        ? <div className="cofre-estado card"><Chip tone="ok" dot>{tr("Aberto até")} {hora(d.desbloqueado_ate!)}</Chip><span className="small muted">{tr("chave")} {d.impressao}</span>
+            <button className="btn sm" onClick={travar}>{tr("Trancar agora")}</button></div>
         : <form className="cofre-estado card" onSubmit={desbloquear}>
-            <label className="fld grow"><span>Confirme a sua senha de login para abrir</span>
+            <label className="fld grow"><span>{tr("Confirme a sua senha de login para abrir")}</span>
               <input type="password" autoComplete="current-password" value={senha} onChange={e => setSenha(e.target.value)} required /></label>
-            <button className="btn primary" disabled={indo || !senha}>Abrir o cofre</button>
+            <button className="btn primary" disabled={indo || !senha}>{tr("Abrir o cofre")}</button>
           </form>)}
-      <Section title={arquivados ? 'Arquivados' : 'Logins'} count={d.itens.length}
+      <Section title={arquivados ? tr("Arquivados") : tr("Logins")} count={d.itens.length}
         right={<div className="row wrap gap">
-          <button className="btn sm ghost" onClick={() => { setArquivados(a => !a); setAbertos({}) }}>{arquivados ? 'Ver os ativos' : 'Arquivados'}</button>
-          {d.ligado && aberto && !arquivados && <button className="btn sm primary" onClick={() => setEditar('novo')}>Novo login</button>}
+          <button className="btn sm ghost" onClick={() => { setArquivados(a => !a); setAbertos({}) }}>{arquivados ? tr("Ver os ativos") : tr("Arquivados")}</button>
+          {d.ligado && aberto && !arquivados && <button className="btn sm primary" onClick={() => setEditar('novo')}>{tr("Novo login")}</button>}
         </div>}>
-        {d.itens.length > 4 && <label className="fld"><span>Buscar</span><input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder="serviço, usuário ou endereço" /></label>}
-        {!itens.length ? <Empty title={arquivados ? 'Nada arquivado' : 'Nenhum login guardado'}>{arquivados ? '' : aberto ? 'Use “Novo login”.' : 'Abra o cofre para guardar o primeiro.'}</Empty> :
+        {d.itens.length > 4 && <label className="fld"><span>{tr("Buscar")}</span><input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder={tr("serviço, usuário ou endereço")} /></label>}
+        {!itens.length ? <Empty title={arquivados ? tr("Nada arquivado") : tr("Nenhum login guardado")}>{arquivados ? '' : aberto ? tr("Use “Novo login”.") : tr("Abra o cofre para guardar o primeiro.")}</Empty> :
           <ul className="cofre-lista">
             {itens.map(it => {
               const a = abertos[it.id]
               return <li key={it.id} className="cofre-item">
                 <div className="cofre-topo">
                   <h3>{it.name}</h3>
-                  {it.outra_chave && <Chip tone="warn" title="Guardado com outra chave do cofre">outra chave</Chip>}
+                  {it.outra_chave && <Chip tone="warn" title={tr("Guardado com outra chave do cofre")}>{tr("outra chave")}</Chip>}
                 </div>
                 {it.url && <a className="small truncate" href={it.url} target="_blank" rel="noopener noreferrer">{it.url}</a>}
-                {it.username && <div className="cofre-linha"><span className="small muted">Usuário</span><b className="truncate">{it.username}</b>
-                  <button className="btn sm ghost" onClick={() => copiar(it.username!, toast, 'Usuário')}>Copiar</button></div>}
-                {a && <div className="cofre-linha cofre-segredo"><span className="small muted">Senha</span><code className="truncate">{a.senha || '(sem senha)'}</code>
-                  {a.senha && <button className="btn sm ghost" onClick={() => copiar(a.senha!, toast, 'Senha')}>Copiar</button>}</div>}
+                {it.username && <div className="cofre-linha"><span className="small muted">{tr("Usuário")}</span><b className="truncate">{it.username}</b>
+                  <button className="btn sm ghost" onClick={() => copiar(it.username!, toast, 'Usuário')}>{tr("Copiar")}</button></div>}
+                {a && <div className="cofre-linha cofre-segredo"><span className="small muted">{tr("Senha")}</span><code className="truncate">{a.senha || tr("(sem senha)")}</code>
+                  {a.senha && <button className="btn sm ghost" onClick={() => copiar(a.senha!, toast, 'Senha')}>{tr("Copiar")}</button>}</div>}
                 {a?.nota && <p className="small cofre-nota">{a.nota}</p>}
                 <div className="cofre-acoes">
-                  {aberto && (it.tem_senha || it.tem_nota) ? <button className="btn sm" onClick={() => ver(it)}>{a ? 'Esconder' : 'Ver senha'}</button> : null}
-                  {aberto && !it.archived && <button className="btn sm ghost" onClick={() => setEditar(it)}>Editar</button>}
-                  <button className="btn sm ghost" onClick={() => arquivar(it)}>{it.archived ? 'Restaurar' : 'Arquivar'}</button>
-                  <span className="small muted">mudou em {dia(it.updated_at)}</span>
+                  {aberto && (it.tem_senha || it.tem_nota) ? <button className="btn sm" onClick={() => ver(it)}>{a ? tr("Esconder") : tr("Ver senha")}</button> : null}
+                  {aberto && !it.archived && <button className="btn sm ghost" onClick={() => setEditar(it)}>{tr("Editar")}</button>}
+                  <button className="btn sm ghost" onClick={() => arquivar(it)}>{it.archived ? tr("Restaurar") : tr("Arquivar")}</button>
+                  <span className="small muted">{tr("mudou em")} {dia(it.updated_at)}</span>
                 </div>
               </li>
             })}
@@ -135,26 +136,26 @@ function Editar({ item, onClose, onDone }: { item: Item | null; onClose: () => v
     if (trocar) { corpo.senha = f.senha; corpo.nota = f.nota }
     try {
       if (item) await api.patch(`/cofre/${item.id}`, corpo); else await api.post('/cofre', corpo)
-      toast(item ? 'Login atualizado.' : 'Login guardado.', 'ok'); onDone(); onClose()
+      toast(item ? tr("Login atualizado.") : tr("Login guardado."), 'ok'); onDone(); onClose()
     } catch (err) { toast((err as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   const titulo = item ? `Editar ${item.name}` : 'Novo login'
   return <Scrim onMouseDown={onClose}><form className="modal" style={{ maxWidth: 520 }} onMouseDown={e => e.stopPropagation()} onSubmit={salvar}
     role="dialog" aria-modal="true" aria-label={titulo}>
-    <button type="button" className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
+    <button type="button" className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}>✕</button>
     <h3>{titulo}</h3>
-    <label className="fld"><span>Serviço</span><input value={f.name} onChange={set('name')} placeholder="ex.: WordPress urace.us" required /></label>
-    <label className="fld"><span>Endereço</span><input type="url" value={f.url} onChange={set('url')} placeholder="https://" /></label>
-    <label className="fld"><span>Usuário ou e-mail</span><input value={f.username} onChange={set('username')} autoComplete="off" /></label>
-    {item && <label className="check"><input type="checkbox" checked={trocar} onChange={e => setTrocar(e.target.checked)} /> Trocar a senha e a observação</label>}
+    <label className="fld"><span>{tr("Serviço")}</span><input value={f.name} onChange={set('name')} placeholder={tr("ex.: WordPress urace.us")} required /></label>
+    <label className="fld"><span>{tr("Endereço")}</span><input type="url" value={f.url} onChange={set('url')} placeholder={tr("https://")} /></label>
+    <label className="fld"><span>{tr("Usuário ou e-mail")}</span><input value={f.username} onChange={set('username')} autoComplete="off" /></label>
+    {item && <label className="check"><input type="checkbox" checked={trocar} onChange={e => setTrocar(e.target.checked)} /> {tr("Trocar a senha e a observação")}</label>}
     {trocar && <>
-      <div className="fld"><label htmlFor={idSenha}>Senha</label>
+      <div className="fld"><label htmlFor={idSenha}>{tr("Senha")}</label>
         <span className="row gap"><input id={idSenha} className="inp grow" type={mostrar ? 'text' : 'password'} value={f.senha} onChange={set('senha')} autoComplete="new-password" />
-          <button type="button" className="btn sm ghost" onClick={() => setMostrar(m => !m)}>{mostrar ? 'Ocultar' : 'Mostrar'}</button>
-          <button type="button" className="btn sm ghost" onClick={() => { setF(x => ({ ...x, senha: gerarSenha() })); setMostrar(true) }}>Gerar</button></span></div>
-      <label className="fld"><span>Observação (fica cifrada)</span><textarea value={f.nota} onChange={set('nota')} placeholder="pergunta de segurança, PIN do 2FA de reserva…" /></label>
+          <button type="button" className="btn sm ghost" onClick={() => setMostrar(m => !m)}>{mostrar ? tr("Ocultar") : tr("Mostrar")}</button>
+          <button type="button" className="btn sm ghost" onClick={() => { setF(x => ({ ...x, senha: gerarSenha() })); setMostrar(true) }}>{tr("Gerar")}</button></span></div>
+      <label className="fld"><span>{tr("Observação (fica cifrada)")}</span><textarea value={f.nota} onChange={set('nota')} placeholder={tr("pergunta de segurança, PIN do 2FA de reserva…")} /></label>
     </>}
-    <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn" onClick={onClose}>Cancelar</button>
-      <button className="btn primary" disabled={indo}>{item ? 'Salvar' : 'Guardar'}</button></div>
+    <div className="row" style={{ justifyContent: 'flex-end' }}><button type="button" className="btn" onClick={onClose}>{tr("Cancelar")}</button>
+      <button className="btn primary" disabled={indo}>{item ? tr("Salvar") : tr("Guardar")}</button></div>
   </form></Scrim>
 }

@@ -13,6 +13,8 @@ import { destinoOAuth } from '../auth/oauthNext'
 import { Banner } from '../components/ui'
 import { Icon } from '../components/Icon'
 import { Pista } from '../components/Pista'
+import { tr } from '../i18n'
+import { Bandeiras } from '../i18n/Bandeiras'
 
 export function Login() {
   const { user, ready, login } = useAuth()
@@ -42,37 +44,38 @@ export function Login() {
     }
     catch (ex) {
       const a = ex as ApiError
-      setErr(a instanceof ApiError ? (a.offline ? 'Sem conexão com o servidor.' : a.message) : 'Falha ao entrar.')
+      setErr(a instanceof ApiError ? (a.offline ? tr("Sem conexão com o servidor.") : a.message) : tr("Falha ao entrar."))
     } finally { setBusy(false) }
   }
 
   return <div className="login">
     <div className="art">
       <Pista />
-      <div className="mark"><span className="mark-u" aria-hidden="true">U</span><b>URACE</b><span>Command Center</span></div>
-      <h1>A operação inteira<br />no mesmo lugar</h1>
+      <div className="mark"><span className="mark-u" aria-hidden="true">{tr("U")}</span><b>{tr("URACE")}</b><span>{tr("Command Center")}</span></div>
+      <h1>{tr("A operação inteira")}<br />{tr("no mesmo lugar")}</h1>
     </div>
     <i className="corte" aria-hidden="true" />
+    <Bandeiras />
     <div className="form">
       <form className="box" onSubmit={submit} noValidate>
         <div>
-          <div className="eyebrow">Acesso restrito</div>
-          <div className="h1">Entrar</div>
+          <div className="eyebrow">{tr("Acesso restrito")}</div>
+          <div className="h1">{tr("Entrar")}</div>
         </div>
         {err && <Banner tone="crit">{err}</Banner>}
-        <div className="field"><label htmlFor="email">E-mail</label>
+        <div className="field"><label htmlFor="email">{tr("E-mail")}</label>
           <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required autoFocus aria-invalid={!!err} /></div>
-        <div className="field"><label htmlFor="pw">Senha</label>
+        <div className="field"><label htmlFor="pw">{tr("Senha")}</label>
           <div className="pwwrap">
             <input id="pw" className="input" type={show ? 'text' : 'password'} autoComplete="current-password" value={pw} onChange={e => setPw(e.target.value)} required aria-invalid={!!err} />
-            <button type="button" className="olho" onClick={() => setShow(s => !s)} aria-label={show ? 'Esconder a senha' : 'Mostrar a senha'} aria-pressed={show} title={show ? 'Esconder' : 'Mostrar'}>
+            <button type="button" className="olho" onClick={() => setShow(s => !s)} aria-label={show ? tr("Esconder a senha") : tr("Mostrar a senha")} aria-pressed={show} title={show ? tr("Esconder") : tr("Mostrar")}>
               <Icon name={show ? 'x' : 'eye'} size={17} />
             </button>
           </div></div>
-        <label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> Manter conectado por 30 dias</label>
-        <button className="btn primary block" disabled={busy || !email || !pw}>{busy ? <span className="spin" /> : 'Entrar'}</button>
+        <label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> {tr("Manter conectado por 30 dias")}</label>
+        <button className="btn primary block" disabled={busy || !email || !pw}>{busy ? <span className="spin" /> : tr("Entrar")}</button>
         {/* #74: no app, a equipe entra pelo "U" da área do cliente; daqui se volta para ela */}
-        <a className="small muted" href="/ops/portal" style={{ textAlign: 'center', padding: '10px 0' }}>Área do cliente</a>
+        <a className="small muted" href="/ops/portal" style={{ textAlign: 'center', padding: '10px 0' }}>{tr("Área do cliente")}</a>
       </form>
     </div>
   </div>

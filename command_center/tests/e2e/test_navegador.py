@@ -1338,3 +1338,43 @@ def test_suits_ponte_comeca_em_simulacao_e_guarda_o_designer(servidor, navegador
     assert not r["rola"] and not r["culpados"], r
     pg.close()
 
+
+# ------------------------------------------------------------- idioma (#177)
+@pytest.mark.parametrize("largura", [390, 1280])
+def test_bandeiras_trocam_o_command_center_para_ingles_e_de_volta(servidor, navegador, largura):
+    """Dono, 09/10: "o command center inteiro com versão português e inglês, com um switch com a bandeira
+    americana e a bandeira brasileira no topo de cada página"."""
+    pg = entrar(navegador, servidor, largura=largura, altura=844)
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    try:
+        pg.get_by_role("button", name="English").click()
+        pg.wait_for_function("() => document.documentElement.lang === 'en'")
+        assert pg.get_by_role("button", name="English").get_attribute("aria-pressed") == "true"
+        for rota, h1 in (("/", "Today"), ("/clients", "Clients"), ("/estoque", "Inventory"), ("/attention", "Needs attention")):
+            abrir(pg, servidor, rota)
+            pg.get_by_role("heading", level=1, name=h1).wait_for()
+            r = pg.evaluate(_VAZA)
+            assert not r["rola"], (rota, r)
+        assert pg.title().startswith("Needs attention")
+        # a escolha fica: outra aba, mesma língua
+        abrir(pg, servidor, "/clients")
+        pg.get_by_role("heading", level=1, name="Clients").wait_for()
+    finally:
+        pg.get_by_role("button", name="Português").click()
+        pg.wait_for_function("() => document.documentElement.lang === 'pt-BR'")
+    pg.get_by_role("heading", level=1, name="Clientes").wait_for()
+    pg.close()
+    assert not erros, erros
+
+
+def test_bandeiras_tambem_no_login(servidor, navegador):
+    pg = navegador.new_page(viewport={"width": 360, "height": 740})
+    pg.goto(servidor + "/login")
+    pg.get_by_role("button", name="English").click()
+    pg.get_by_role("button", name="Sign in").wait_for()
+    assert not pg.evaluate(_VAZA)["rola"]
+    pg.get_by_role("button", name="Português").click()
+    pg.get_by_role("button", name="Entrar").wait_for()
+    pg.close()
+

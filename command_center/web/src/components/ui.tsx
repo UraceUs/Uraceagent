@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
 import type { Level, Policy } from '../api/types'
+import { tr } from '../i18n'
 
 export type Tone = 'ok' | 'warn' | 'crit' | 'info' | 'neutral' | 'accent' | 'outline'
 
@@ -27,10 +28,10 @@ export function statusKind(s?: string | null): StatusKind {
 const KIND_TONE: Record<StatusKind, Tone | 'run' | 'wait'> = { ok: 'ok', run: 'run', wait: 'wait', warn: 'warn', crit: 'crit', off: 'neutral' }
 /** Nome em português de cada estado cru que a API devolve. O que não estiver aqui aparece como veio. */
 export const STATUS_PT: Record<string, string> = {
-  CONNECTED: 'ok', DEGRADED: 'degradado', ERROR: 'erro', DISCONNECTED: 'desligado', SYNCING: 'sincronizando',
-  ACTIVE: 'ativo', INACTIVE: 'inativo', NEW: 'novo', PENDING: 'pendente', AT_RISK: 'em risco', COMPLETED: 'concluído',
-  open: 'aberto', completed: 'concluído', paid: 'paga', overdue: 'vencida', sent: 'enviada', draft: 'rascunho',
-  PROPOSED: 'esperando você', APPROVED: 'aprovada', RUNNING: 'executando', QUEUED: 'na fila', DONE: 'feita', FAILED: 'falhou', REJECTED: 'rejeitada', BLOCKED: 'bloqueada', SKIPPED: 'pulado',
+  CONNECTED: 'ok', DEGRADED: tr("degradado"), ERROR: tr("erro"), DISCONNECTED: tr("desligado"), SYNCING: tr("sincronizando"),
+  ACTIVE: tr("ativo"), INACTIVE: tr("inativo"), NEW: tr("novo"), PENDING: tr("pendente"), AT_RISK: tr("em risco"), COMPLETED: tr("concluído"),
+  open: tr("aberto"), completed: tr("concluído"), paid: tr("paga"), overdue: tr("vencida"), sent: tr("enviada"), draft: tr("rascunho"),
+  PROPOSED: tr("esperando você"), APPROVED: tr("aprovada"), RUNNING: tr("executando"), QUEUED: tr("na fila"), DONE: tr("feita"), FAILED: tr("falhou"), REJECTED: tr("rejeitada"), BLOCKED: tr("bloqueada"), SKIPPED: tr("pulado"),
 }
 export function Status({ s, label, kind }: { s?: string | null; label?: ReactNode; kind?: StatusKind }) {
   const k = kind || statusKind(s)
@@ -52,14 +53,14 @@ export function statusTone(s?: string | null): Tone {
   }
 }
 export const POLICY_LABEL: Record<Policy, string> = {
-  SAFE: 'Automática', REQUIRES_CONFIRMATION: 'Confirmar', REQUIRES_APPROVAL: 'Aprovação', BLOCKED: 'Bloqueada',
+  SAFE: tr("Automática"), REQUIRES_CONFIRMATION: tr("Confirmar"), REQUIRES_APPROVAL: tr("Aprovação"), BLOCKED: tr("Bloqueada"),
 }
 export const WAIVER_LABEL: Record<string, string> = {
-  completed: 'assinada', delivered: 'aberta, não assinada', sent: 'enviada, não aberta',
-  autoresponded: 'e-mail devolveu', declined: 'recusada', voided: 'anulada',
+  completed: tr("assinada"), delivered: tr("aberta, não assinada"), sent: tr("enviada, não aberta"),
+  autoresponded: tr("e-mail devolveu"), declined: tr("recusada"), voided: tr("anulada"),
 }
 
-export function Spinner() { return <span className="spin" aria-label="carregando" /> }
+export function Spinner() { return <span className="spin" aria-label={tr("carregando")} /> }
 
 export function Loading({ rows = 4 }: { rows?: number }) {
   return <div className="stack" style={{ padding: 16 }} aria-busy="true">
@@ -67,7 +68,7 @@ export function Loading({ rows = 4 }: { rows?: number }) {
   </div>
 }
 
-export function Empty({ title = 'Nada aqui', children }: { title?: string; children?: ReactNode }) {
+export function Empty({ title = tr("Nada aqui"), children }: { title?: string; children?: ReactNode }) {
   return <div className="state"><div className="t">{title}</div>{children && <p>{children}</p>}</div>
 }
 
@@ -76,9 +77,9 @@ export function ErrorState({ error, retry }: { error: ApiError | Error; retry?: 
   const off = e instanceof ApiError && e.offline
   const forb = e instanceof ApiError && e.forbidden
   return <div className="state" role="alert">
-    <div className="t">{off ? 'Sem conexão' : forb ? 'Sem permissão' : 'Não deu para carregar'}</div>
-    <p>{off ? 'O servidor não respondeu. Verifique a rede e tente de novo.' : e.message}</p>
-    {retry && !forb && <button className="btn sm" onClick={retry}>Tentar de novo</button>}
+    <div className="t">{off ? tr("Sem conexão") : forb ? tr("Sem permissão") : tr("Não deu para carregar")}</div>
+    <p>{off ? tr("O servidor não respondeu. Verifique a rede e tente de novo.") : e.message}</p>
+    {retry && !forb && <button className="btn sm" onClick={retry}>{tr("Tentar de novo")}</button>}
   </div>
 }
 
@@ -109,7 +110,7 @@ export function PageHeader({ title, help, children, eyebrow }: { title: ReactNod
   const [open, setOpen] = useState(false)
   return <div className="page-h">
     <div className="grow">{eyebrow && <div className="small muted cond">{eyebrow}</div>}
-      <h1 className="h1">{title}{help && <button type="button" className={`help${open ? ' on' : ''}`} aria-label="O que é esta tela" aria-expanded={open} title="O que é esta tela" onClick={() => setOpen(o => !o)}>?</button>}</h1>
+      <h1 className="h1">{title}{help && <button type="button" className={`help${open ? ' on' : ''}`} aria-label={tr("O que é esta tela")} aria-expanded={open} title={tr("O que é esta tela")} onClick={() => setOpen(o => !o)}>?</button>}</h1>
       {help && open && <div className="sub small">{help}</div>}</div>
     {children && <div className="row wrap">{children}</div>}
   </div>
@@ -117,7 +118,7 @@ export function PageHeader({ title, help, children, eyebrow }: { title: ReactNod
 
 /** Barra fina no topo enquanto algo roda em segundo plano (sincronia, triagem, geração). */
 export function Progress({ on }: { on: boolean }) {
-  return on ? <div className="progress" role="progressbar" aria-label="em andamento" /> : null
+  return on ? <div className="progress" role="progressbar" aria-label={tr("em andamento")} /> : null
 }
 
 export function Ext({ href, children }: { href?: string | null; children: ReactNode }) {
@@ -127,11 +128,11 @@ export function Ext({ href, children }: { href?: string | null; children: ReactN
 
 
 /** Nome legível de cada sistema, para o link ficar ao lado do SEU item — nunca solto no topo. */
-export const SYS_NAME: Record<string, string> = { asana: 'Asana', docusign: 'DocuSign', gmail: 'Gmail', quickbooks: 'QuickBooks', qbo: 'QuickBooks', brain: 'Cérebro', kommo: 'Kommo' }
+export const SYS_NAME: Record<string, string> = { asana: tr("Asana"), docusign: tr("DocuSign"), gmail: tr("Gmail"), quickbooks: tr("QuickBooks"), qbo: tr("QuickBooks"), brain: tr("Cérebro"), kommo: tr("Kommo") }
 export function SysLink({ links, one }: { links?: { system: string; external_id: string; deep_link: string | null }[] | null; one?: boolean }) {
   const ls = (links || []).filter(l => l.deep_link)
   if (ls.length === 0) return null
-  return <span className="syslinks">{(one ? ls.slice(0, 1) : ls).map(l => <a key={l.system + l.external_id} className={`syslink ${l.system}`} href={l.deep_link!} target="_blank" rel="noopener noreferrer" title={`Abrir no ${SYS_NAME[l.system] || l.system}`}>{SYS_NAME[l.system] || l.system} ↗</a>)}</span>
+  return <span className="syslinks">{(one ? ls.slice(0, 1) : ls).map(l => <a key={l.system + l.external_id} className={`syslink ${l.system}`} href={l.deep_link!} target="_blank" rel="noopener noreferrer" title={tr("Abrir no {0}", SYS_NAME[l.system] || l.system)}>{SYS_NAME[l.system] || l.system} ↗</a>)}</span>
 }
 
 /** Fita de números de contexto (nível 2): nome à esquerda, valor à direita. */
@@ -169,7 +170,7 @@ export function Dots({ done, total, tone }: { done: number; total: number; tone?
   const n = Math.max(0, Math.min(total, 24)), d = Math.max(0, Math.min(done, n))
   if (total <= 0) return null
   if (total > 24) return <span className="bar" title={`${done}/${total}`}><i style={{ width: `${Math.round(100 * done / total)}%` }} /></span>
-  return <span className={`dots ${tone || 'accent'}`} title={`${done} de ${total}`} aria-label={`${done} de ${total}`}>
+  return <span className={`dots ${tone || 'accent'}`} title={tr("{0} de {1}", done, total)} aria-label={tr("{0} de {1}", done, total)}>
     {Array.from({ length: n }).map((_, i) => <i key={i} className={i < d ? 'on' : ''} style={{ animationDelay: `${i * 25}ms` }} />)}
   </span>
 }

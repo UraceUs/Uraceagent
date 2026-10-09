@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { tr } from '../i18n'
 
 /* `warn` entrou em 23/09 com o cadastro de peça: "a peça foi cadastrada, mas a foto
    não" não é sucesso nem falha, e usar 'crit' ali assustaria por causa de uma imagem. */
@@ -15,7 +16,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [])
   const v = useMemo(() => push, [push])
   return <Ctx.Provider value={v}>{children}
-    <div className="toast-wrap" aria-live="polite">{list.map(t => <div key={t.id} className={`toast ${t.tone || ''}`}><span className="ic" aria-hidden="true">{t.tone === 'ok' ? '✓' : t.tone === 'crit' ? '✕' : t.tone === 'warn' ? '▲' : '●'}</span><div className="grow"><div className="tt">{t.tone === 'ok' ? 'Feito' : t.tone === 'crit' ? 'Não deu' : t.tone === 'warn' ? 'Quase' : 'Aviso'}</div>{t.text}</div></div>)}</div>
+    <div className="toast-wrap" aria-live="polite">{list.map(t => <div key={t.id} className={`toast ${t.tone || ''}`}><span className="ic" aria-hidden="true">{t.tone === 'ok' ? '✓' : t.tone === 'crit' ? '✕' : t.tone === 'warn' ? '▲' : '●'}</span><div className="grow"><div className="tt">{t.tone === 'ok' ? tr("Feito") : t.tone === 'crit' ? tr("Não deu") : t.tone === 'warn' ? tr("Quase") : tr("Aviso")}</div>{t.text}</div></div>)}</div>
   </Ctx.Provider>
 }
 export const useToast = () => useContext(Ctx)

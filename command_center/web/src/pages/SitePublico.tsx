@@ -13,6 +13,7 @@ import type { Client } from '../api/types'
 import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { fmtDate, fmtDateTime } from '../components/fmt'
+import { tr } from '../i18n'
 
 type Tom = 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'
 interface Per { open: boolean; spots: number; reason: string | null; capacity: number; used: number }
@@ -32,10 +33,10 @@ interface Ag { id: number; date: string; period: string; status: string; notes: 
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null
   asana_gid: string | null; asana_error: string | null }
 
-const PER: Record<string, string> = { manha: 'Manhã', tarde: 'Tarde', dia: 'Dia todo' }
-const ST: Record<string, [string, Tom]> = { pendente: ['esperando confirmação', 'warn'], confirmada: ['confirmada', 'ok'], recusada: ['recusada', 'crit'], cancelada: ['cancelada', 'neutral'] }
+const PER: Record<string, string> = { manha: tr("Manhã"), tarde: tr("Tarde"), dia: tr("Dia todo") }
+const ST: Record<string, [string, Tom]> = { pendente: [tr("esperando confirmação"), 'warn'], confirmada: ['confirmada', 'ok'], recusada: ['recusada', 'crit'], cancelada: ['cancelada', 'neutral'] }
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-const DIAS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+const DIAS = [tr("Seg"), tr("Ter"), tr("Qua"), tr("Qui"), tr("Sex"), tr("Sáb"), tr("Dom")]
 const dbr = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const semanaDe = (iso: string) => DIAS[(new Date(iso + 'T12:00:00').getDay() + 6) % 7]
 const hojeFL = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
@@ -51,64 +52,64 @@ function Agendamentos() {
   async function decidir(a: Ag, d: 'aceitar' | 'confirmar' | 'recusar' | 'cancelar') {
     let nota: string | null = null
     if (d === 'recusar' || d === 'cancelar') {
-      const r = await perguntar({ titulo: d === 'recusar' ? 'Recusar o pedido?' : 'Cancelar a sessão?', texto: 'O cliente vê a nota na área do cliente.',
-        campo: 'Nota para o cliente (opcional)', ok: d === 'recusar' ? 'Recusar' : 'Cancelar sessão', perigo: true })
+      const r = await perguntar({ titulo: d === 'recusar' ? tr("Recusar o pedido?") : tr("Cancelar a sessão?"), texto: tr("O cliente vê a nota na área do cliente."),
+        campo: tr("Nota para o cliente (opcional)"), ok: d === 'recusar' ? tr("Recusar") : tr("Cancelar sessão"), perigo: true })
       if (r === false || r === null || r === undefined) return
       nota = typeof r === 'string' ? r : null
     }
     try {
       const r = await api.post<{ status: string; cobranca: { charge_error: string | null; waiver_error: string | null } | null }>(`/site/agendamentos/${a.id}/${d}`, { nota })
-      toast(d === 'confirmar' ? 'Sessão confirmada.' : d === 'aceitar' ? (r.status === 'confirmada' ? 'Aceita e já confirmada (contrato + waiver em dia).'
-        : r.cobranca?.charge_error || r.cobranca?.waiver_error ? 'Aceita, mas falta resolver: veja no agendamento.' : 'Aceita: invoice e waiver enviadas. Confirma sozinha quando pagar e assinar.') : 'Feito.',
+      toast(d === 'confirmar' ? tr("Sessão confirmada.") : d === 'aceitar' ? (r.status === 'confirmada' ? tr("Aceita e já confirmada (contrato + waiver em dia).")
+        : r.cobranca?.charge_error || r.cobranca?.waiver_error ? tr("Aceita, mas falta resolver: veja no agendamento.") : tr("Aceita: invoice e waiver enviadas. Confirma sozinha quando pagar e assinar.")) : tr("Feito."),
         r.cobranca?.charge_error || r.cobranca?.waiver_error ? 'warn' : 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   return <>
-    <div className="seg" style={{ marginBottom: 12 }}>{([['pendente', 'Esperando confirmação'], ['proximas', 'Próximas'], ['todas', 'Todas']] as const).map(([k, r]) =>
+    <div className="seg" style={{ marginBottom: 12 }}>{([['pendente', tr("Esperando confirmação")], ['proximas', tr("Próximas")], ['todas', tr("Todas")]] as const).map(([k, r]) =>
       <button key={k} className={`btn sm${filtro === k ? '' : ' ghost'}`} onClick={() => setFiltro(k)}>{r}</button>)}</div>
     {l.error && <ErrorState error={l.error} retry={l.reload} />}
     {l.loading && !l.data && <Loading />}
-    {l.data && (!l.data.agendamentos.length ? <Empty title={filtro === 'pendente' ? 'Nenhum pedido esperando' : 'Nada aqui'}>Os pedidos feitos na área do cliente aparecem aqui.</Empty>
+    {l.data && (!l.data.agendamentos.length ? <Empty title={filtro === 'pendente' ? tr("Nenhum pedido esperando") : tr("Nada aqui")}>{tr("Os pedidos feitos na área do cliente aparecem aqui.")}</Empty>
       : <div className="card"><div className="tbl">{l.data.agendamentos.map(a => {
         const [rot, tom]: [string, Tom] = a.status === 'pendente' && a.accepted_at ? ['aceita · esperando pagamento e waiver', 'info'] : ST[a.status] || [a.status, 'neutral']
         const anos = idade(a.driver_birth)
         return <div className="tr" key={a.id}>
           <div className="grow" style={{ minWidth: 0 }}>
             <b>{semanaDe(a.date)} {dbr(a.date)} · {PER[a.period]}</b>
-            <div className="small">{a.driver || a.account_name}{anos != null ? ` (${anos} anos)` : ''}{a.driver && a.driver !== a.account_name ? ` · responsável ${a.account_name}` : ''}</div>
-            <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : ' · driver ainda sem card'}</div>
-            <div className="small">{a.client_id && <><Link to={`/clients/${a.client_id}`}>Client ID {a.client_id}</Link> · </>}
-              {a.asana_gid ? <a href={`https://app.asana.com/0/1205450093098920/${a.asana_gid}/f`} target="_blank" rel="noreferrer">tarefa no Asana ↗</a>
-                : a.asana_error ? <span title={a.asana_error}>Asana: tenta de novo em até 15 min</span> : <span className="muted">indo para o Asana…</span>}</div>
+            <div className="small">{a.driver || a.account_name}{anos != null ? tr(" ({0} anos)", anos) : ''}{a.driver && a.driver !== a.account_name ? tr(" · responsável {0}", a.account_name) : ''}</div>
+            <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : tr(" · driver ainda sem card")}</div>
+            <div className="small">{a.client_id && <><Link to={`/clients/${a.client_id}`}>{tr("Client ID")} {a.client_id}</Link> · </>}
+              {a.asana_gid ? <a href={`https://app.asana.com/0/1205450093098920/${a.asana_gid}/f`} target="_blank" rel="noreferrer">{tr("tarefa no Asana ↗")}</a>
+                : a.asana_error ? <span title={a.asana_error}>{tr("Asana: tenta de novo em até 15 min")}</span> : <span className="muted">{tr("indo para o Asana…")}</span>}</div>
             {a.service_name && <div className="small">{a.service_name}{a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
             {a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
-              ? `acima do contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`
-              : `contrato: ${a.contrato.usadas} de ${a.contrato.sessoes_por_mes} no mês`}</Chip></div>}
+              ? tr("acima do contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)
+              : tr("contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</Chip></div>}
             {a.notes && <div className="small">“{a.notes}”</div>}
             {a.cobranca && <div className="row wrap small" style={{ gap: 6 }}>
               <Chip tone={a.cobranca.pagamento === 'pago' || a.cobranca.pagamento === 'contrato' ? 'ok' : a.cobranca.pagamento === 'erro' ? 'crit' : 'warn'}>
-                {a.cobranca.pagamento === 'contrato' ? 'sessão do contrato' : a.cobranca.pagamento === 'pago' ? `pago ${a.invoice_doc || ''}` : a.cobranca.pagamento === 'enviada' ? `invoice ${a.invoice_doc || ''} enviada` : a.cobranca.pagamento === 'erro' ? 'invoice não saiu' : 'invoice: tentando'}</Chip>
+                {a.cobranca.pagamento === 'contrato' ? tr("sessão do contrato") : a.cobranca.pagamento === 'pago' ? tr("pago {0}", a.invoice_doc || '') : a.cobranca.pagamento === 'enviada' ? tr("invoice {0} enviada", a.invoice_doc || '') : a.cobranca.pagamento === 'erro' ? tr("invoice não saiu") : tr("invoice: tentando")}</Chip>
               <Chip tone={a.cobranca.waiver === 'ok' ? 'ok' : a.cobranca.waiver === 'erro' ? 'crit' : 'warn'}>
-                {a.cobranca.waiver === 'ok' ? 'waiver em dia' : a.cobranca.waiver === 'enviada' ? 'waiver enviada' : a.cobranca.waiver === 'erro' ? 'waiver não saiu' : 'waiver: assina na área do cliente'}</Chip></div>}
+                {a.cobranca.waiver === 'ok' ? tr("waiver em dia") : a.cobranca.waiver === 'enviada' ? tr("waiver enviada") : a.cobranca.waiver === 'erro' ? tr("waiver não saiu") : tr("waiver: assina na área do cliente")}</Chip></div>}
             {[a.charge_error, a.waiver_error, a.reminder_error].filter(Boolean).map(e => <div key={e} className="small" style={{ color: 'var(--crit)' }}>{e}</div>)}
-            {(a.origin === 'site' || a.card_note || a.utm) && <div className="small muted">{a.origin === 'site' ? 'pelo site' : 'pela área do cliente'}
+            {(a.origin === 'site' || a.card_note || a.utm) && <div className="small muted">{a.origin === 'site' ? tr("pelo site") : tr("pela área do cliente")}
               {a.utm && (() => { try { const u = JSON.parse(a.utm) as Record<string, string>; return ` · campanha: ${[u.utm_source, u.utm_campaign].filter(Boolean).join(' / ') || Object.keys(u).join(', ')}` } catch { return '' } })()}
               {a.card_note && <> · {a.card_note}</>}</div>}
           </div>
           <Chip tone={tom}>{rot}</Chip>
           {a.status === 'pendente' && <>{!a.accepted_at && <button className="btn sm primary" onClick={() => decidir(a, 'aceitar')}
-            title="Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar">Aceitar</button>}
-            {can('MANAGER') && <button className="btn sm ghost" onClick={() => decidir(a, 'confirmar')} title="Confirmar sem esperar pagamento e waiver">Confirmar mesmo assim</button>}
-            <button className="btn sm ghost" onClick={() => decidir(a, 'recusar')}>Recusar</button></>}
-          {a.status === 'confirmada' && a.date >= hojeFL() && <button className="btn sm ghost" onClick={() => decidir(a, 'cancelar')}>Cancelar</button>}
+            title={tr("Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar")}>{tr("Aceitar")}</button>}
+            {can('MANAGER') && <button className="btn sm ghost" onClick={() => decidir(a, 'confirmar')} title={tr("Confirmar sem esperar pagamento e waiver")}>{tr("Confirmar mesmo assim")}</button>}
+            <button className="btn sm ghost" onClick={() => decidir(a, 'recusar')}>{tr("Recusar")}</button></>}
+          {a.status === 'confirmada' && a.date >= hojeFL() && <button className="btn sm ghost" onClick={() => decidir(a, 'cancelar')}>{tr("Cancelar")}</button>}
         </div>
       })}</div></div>)}
   </>
 }
 
 interface Corrida { id: number; name: string; series: string | null; track: string | null; city: string | null; date_start: string; date_end: string }
-const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
-const DIAS_LONGOS = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']
+const MESES = [tr("janeiro"), tr("fevereiro"), tr("março"), tr("abril"), tr("maio"), tr("junho"), tr("julho"), tr("agosto"), tr("setembro"), tr("outubro"), tr("novembro"), tr("dezembro")]
+const DIAS_LONGOS = [tr("segunda"), tr("terça"), tr("quarta"), tr("quinta"), tr("sexta"), tr("sábado"), tr("domingo")]
 const ultimoDia = (mes: string) => { const [a, m] = mes.split('-').map(Number); return `${mes}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}` }
 const somaMes = (mes: string, n: number) => { const [a, m] = mes.split('-').map(Number); const d = new Date(a, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` }
 
@@ -123,24 +124,24 @@ function Calendario({ mes, setMes, dias, corridas }: { mes: string; setMes: (m: 
   const cor = (p: Per) => p.open ? 'ok' : p.reason === 'lotado' ? 'warn' : p.reason?.startsWith('bloqueado') ? 'crit' : 'neutral'
   const corridasDe = (iso: string) => corridas.filter(c => c.date_start <= iso && iso <= c.date_end)
   return <div className="stack" style={{ gap: 10 }}>
-    <div className="row"><button className="btn ghost sm" aria-label="Mês anterior" onClick={() => setMes(somaMes(mes, -1))}>‹</button>
-      <h3 className="h3 grow" style={{ margin: 0, textAlign: 'center' }}>{MESES[m - 1][0].toUpperCase() + MESES[m - 1].slice(1)} de {a}</h3>
-      <button className="btn ghost sm" aria-label="Próximo mês" onClick={() => setMes(somaMes(mes, 1))}>›</button></div>
-    <div className="site-cal" role="grid" aria-label={`Agenda de ${MESES[m - 1]}`}>
+    <div className="row"><button className="btn ghost sm" aria-label={tr("Mês anterior")} onClick={() => setMes(somaMes(mes, -1))}>‹</button>
+      <h3 className="h3 grow" style={{ margin: 0, textAlign: 'center' }}>{MESES[m - 1][0].toUpperCase() + MESES[m - 1].slice(1)} {tr("de")} {a}</h3>
+      <button className="btn ghost sm" aria-label={tr("Próximo mês")} onClick={() => setMes(somaMes(mes, 1))}>›</button></div>
+    <div className="site-cal" role="grid" aria-label={tr("Agenda de {0}", MESES[m - 1])}>
       {DIAS.map((d, i) => <div key={d} className={`site-cal-s${i >= 5 ? ' fds' : ''}`} role="columnheader">{d}</div>)}
       {Array.from({ length: vazios }, (_, i) => <div key={`v${i}`} />)}
       {Array.from({ length: total }, (_, i) => {
         const iso = `${mes}-${String(i + 1).padStart(2, '0')}`, d = porData[iso], dsem = (vazios + i) % 7, cs = corridasDe(iso)
         return <div key={iso} role="gridcell" className={`site-cal-d${dsem >= 5 ? ' fds' : ''}${iso === hoje ? ' hoje' : ''}${cs.length ? ' corrida' : ''}`}
-          title={[d ? `manhã: ${d.periods.manha.reason || 'aberta'} · tarde: ${d.periods.tarde.reason || 'aberta'}` : '', ...cs.map(c => `🏁 ${c.name}`)].filter(Boolean).join('\n')}>
+          title={[d ? tr('manhã: {0} · tarde: {1}', d.periods.manha.reason || tr('aberta'), d.periods.tarde.reason || tr('aberta')) : '', ...cs.map(c => `🏁 ${c.name}`)].filter(Boolean).join('\n')}>
           <b>{i + 1}</b>
-          {d && <span className="site-cal-p"><span className={`site-p ${cor(d.periods.manha)}`}>M<span className="n"> {d.periods.manha.capacity ? `${d.periods.manha.used}/${d.periods.manha.capacity}` : ''}</span></span>
-            <span className={`site-p ${cor(d.periods.tarde)}`}>T<span className="n"> {d.periods.tarde.capacity ? `${d.periods.tarde.used}/${d.periods.tarde.capacity}` : ''}</span></span></span>}
+          {d && <span className="site-cal-p"><span className={`site-p ${cor(d.periods.manha)}`}>{tr("M")}<span className="n"> {d.periods.manha.capacity ? `${d.periods.manha.used}/${d.periods.manha.capacity}` : ''}</span></span>
+            <span className={`site-p ${cor(d.periods.tarde)}`}>{tr("T")}<span className="n"> {d.periods.tarde.capacity ? `${d.periods.tarde.used}/${d.periods.tarde.capacity}` : ''}</span></span></span>}
           {cs.map(c => <span key={c.id} className="site-cal-corrida">🏁 <span className="n">{c.series || c.name}</span></span>)}
         </div>
       })}
     </div>
-    <p className="small muted" style={{ margin: 0 }}>M = manhã, T = tarde (marcadas/vagas). Verde aberto, laranja lotado, vermelho bloqueado, cinza fechado. Fim de semana em destaque; 🏁 = corrida do calendário de corridas.</p>
+    <p className="small muted" style={{ margin: 0 }}>{tr("M = manhã, T = tarde (marcadas/vagas). Verde aberto, laranja lotado, vermelho bloqueado, cinza fechado. Fim de semana em destaque; 🏁 = corrida do calendário de corridas.")}</p>
     {corridas.length > 0 && <ul className="small site-cal-lista">{corridas.map(c => <li key={c.id}>🏁 <b>{dbr(c.date_start)}{c.date_end !== c.date_start ? `–${dbr(c.date_end)}` : ''}</b> {c.name}{c.track ? ` · ${c.track}` : ''}</li>)}</ul>}
   </div>
 }
@@ -165,78 +166,78 @@ function Disponibilidade() {
       if (regras) await api.put('/site/agenda/semana', semana.map(({ weekday, period, open, capacity }) => ({ weekday, period, open, capacity })))
       if (cfg && c) { const { auto_sell: _vendaAutomatica, ...regrasDaAgenda } = c; void _vendaAutomatica     // a venda automática tem o próprio botão (só ADMIN)
         await api.patch('/site/agenda/config', { ...regrasDaAgenda, auto_confirm: !!c.auto_confirm }) }
-      toast(regras ? 'Semana salva: o cliente já vê.' : 'Regras salvas.', 'ok'); setRegras(null); setCfg(null); a.reload()
+      toast(regras ? tr("Semana salva: o cliente já vê.") : tr("Regras salvas."), 'ok'); setRegras(null); setCfg(null); a.reload()
     } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function bloquear() {
-    if (bl.modo === 'data' && !bl.date_from) { toast('Diga a data.', 'warn'); return }
+    if (bl.modo === 'data' && !bl.date_from) { toast(tr("Diga a data."), 'warn'); return }
     const corpo = bl.modo === 'semana'
       ? { weekday: bl.weekday, date_from: bl.date_from || null, date_to: bl.date_to || null, period: bl.period, reason: bl.reason || null }
       : { date_from: bl.date_from, date_to: bl.date_to || null, period: bl.period, reason: bl.reason || null }
-    try { await api.post('/site/agenda/bloqueios', corpo); toast('Bloqueado.', 'ok')
+    try { await api.post('/site/agenda/bloqueios', corpo); toast(tr("Bloqueado."), 'ok')
       setBl({ ...bl, date_from: '', date_to: '', reason: '' }); a.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function desbloquear(b: Bloqueio) {
-    try { await api.post(`/site/agenda/bloqueios/${b.id}/remover`); toast('Desbloqueado.', 'ok'); a.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+    try { await api.post(`/site/agenda/bloqueios/${b.id}/remover`); toast(tr("Desbloqueado."), 'ok'); a.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   if (a.error && !a.data) return <ErrorState error={a.error} retry={a.reload} />
   if (!a.data || !c) return <Loading />
   const nadaAberto = !a.data.semana.some(r => r.open)
   const descreve = (b: Bloqueio) => b.weekday != null
-    ? <>toda <b>{DIAS_LONGOS[b.weekday]}</b>{b.date_to === '9999-12-31' ? ` · desde ${dbr(b.date_from)}` : ` · ${dbr(b.date_from)} a ${dbr(b.date_to)}`}</>
-    : <b>{dbr(b.date_from)}{b.date_to !== b.date_from ? ` a ${dbr(b.date_to)}` : ''}</b>
+    ? <>{tr("toda")} <b>{DIAS_LONGOS[b.weekday]}</b>{b.date_to === '9999-12-31' ? tr(" · desde {0}", dbr(b.date_from)) : tr(" · {0} a {1}", dbr(b.date_from), dbr(b.date_to))}</>
+    : <b>{dbr(b.date_from)}{b.date_to !== b.date_from ? tr(" a {0}", dbr(b.date_to)) : ''}</b>
   return <div className="stack" style={{ gap: 18 }}>
-    {nadaAberto && <div className="banner warn"><span className="bi">▲</span><div className="grow">A agenda está <b>fechada</b>: nenhum dia da semana aberto. Abra abaixo os dias e períodos em que o cliente pode marcar.</div></div>}
-    <Section title="Calendário do mês"><Calendario mes={mes} setMes={setMes} dias={a.data.dias} corridas={a.data.corridas || []} /></Section>
+    {nadaAberto && <div className="banner warn"><span className="bi">▲</span><div className="grow">{tr("A agenda está")} <b>{tr("fechada")}</b>{tr(": nenhum dia da semana aberto. Abra abaixo os dias e períodos em que o cliente pode marcar.")}</div></div>}
+    <Section title={tr("Calendário do mês")}><Calendario mes={mes} setMes={setMes} dias={a.data.dias} corridas={a.data.corridas || []} /></Section>
 
-    <Section title="Semana, horários e regras">
-      <div className="site-semana2" role="table" aria-label="Vagas por dia da semana">
-        <div className="site-semana2-rot" role="row" aria-hidden="true"><span /><span>Manhã</span><span>Tarde</span></div>
+    <Section title={tr("Semana, horários e regras")}>
+      <div className="site-semana2" role="table" aria-label={tr("Vagas por dia da semana")}>
+        <div className="site-semana2-rot" role="row" aria-hidden="true"><span /><span>{tr("Manhã")}</span><span>{tr("Tarde")}</span></div>
         {DIAS.map((nome, d) => <div key={d} className={`site-semana2-dia${d >= 5 ? ' fds' : ''}`} role="row">
           <b role="rowheader">{nome}</b>
           {(['manha', 'tarde'] as const).map(p => { const r = semana.find(x => x.weekday === d && x.period === p)!
             return <div key={p} className={`site-slot${r.open ? ' on' : ''}`} role="cell">
-              <label className="row" style={{ gap: 6 }}><input type="checkbox" disabled={!gerente} checked={r.open} onChange={e => muda(d, p, { open: e.target.checked })} aria-label={`${nome} ${PER[p]} aberto`} />
+              <label className="row" style={{ gap: 6 }}><input type="checkbox" disabled={!gerente} checked={r.open} onChange={e => muda(d, p, { open: e.target.checked })} aria-label={tr("{0} {1} aberto", nome, PER[p])} />
                 <span className="site-slot-rot">{PER[p]}</span></label>
               <input className="inp" type="number" min={1} max={50} disabled={!gerente || !r.open} value={r.capacity}
-                onChange={e => muda(d, p, { capacity: Number(e.target.value) || 1 })} aria-label={`vagas ${nome} ${PER[p]}`} />
-              <span className="small muted">vagas</span></div> })}
+                onChange={e => muda(d, p, { capacity: Number(e.target.value) || 1 })} aria-label={tr("vagas {0} {1}", nome, PER[p])} />
+              <span className="small muted">{tr("vagas")}</span></div> })}
         </div>)}
       </div>
       <div className="site-horarios">
-        {([['morning_start', 'Manhã começa'], ['morning_end', 'Manhã termina'], ['afternoon_start', 'Tarde começa'], ['afternoon_end', 'Tarde termina']] as const).map(([k, rot]) =>
+        {([['morning_start', tr("Manhã começa")], ['morning_end', tr("Manhã termina")], ['afternoon_start', tr("Tarde começa")], ['afternoon_end', tr("Tarde termina")]] as const).map(([k, rot]) =>
           <label key={k} className="fld" style={{ margin: 0 }}><span>{rot}</span><input type="time" disabled={!gerente} value={c[k]} onChange={e => setCfg({ ...c, [k]: e.target.value })} /></label>)}
-        <label className="fld" style={{ margin: 0 }}><span>Antecedência (horas)</span><input type="number" min={0} disabled={!gerente} value={c.min_notice_hours} onChange={e => setCfg({ ...c, min_notice_hours: Number(e.target.value) })} /></label>
-        <label className="fld" style={{ margin: 0 }}><span>Mostra até (dias)</span><input type="number" min={1} disabled={!gerente} value={c.horizon_days} onChange={e => setCfg({ ...c, horizon_days: Number(e.target.value) })} /></label>
+        <label className="fld" style={{ margin: 0 }}><span>{tr("Antecedência (horas)")}</span><input type="number" min={0} disabled={!gerente} value={c.min_notice_hours} onChange={e => setCfg({ ...c, min_notice_hours: Number(e.target.value) })} /></label>
+        <label className="fld" style={{ margin: 0 }}><span>{tr("Mostra até (dias)")}</span><input type="number" min={1} disabled={!gerente} value={c.horizon_days} onChange={e => setCfg({ ...c, horizon_days: Number(e.target.value) })} /></label>
       </div>
-      <label className="check" style={{ marginTop: 10 }}><input type="checkbox" disabled={!gerente} checked={!!c.auto_confirm} onChange={e => setCfg({ ...c, auto_confirm: e.target.checked ? 1 : 0 })} /> Confirmar sozinho <span className="small muted">(desligado: a equipe confirma cada pedido)</span></label>
+      <label className="check" style={{ marginTop: 10 }}><input type="checkbox" disabled={!gerente} checked={!!c.auto_confirm} onChange={e => setCfg({ ...c, auto_confirm: e.target.checked ? 1 : 0 })} /> {tr("Confirmar sozinho")} <span className="small muted">{tr("(desligado: a equipe confirma cada pedido)")}</span></label>
       {/* #164: venda automática — o site vende sozinho (só o administrador liga ou desliga) */}
       <label className="check" style={{ marginTop: 6 }}><input type="checkbox" disabled={!admin || salvandoVenda} checked={!!c.auto_sell} onChange={async e => {
         const ligar = e.target.checked
         setSalvandoVenda(true)
-        try { await api.patch('/site/agenda/config', { auto_sell: ligar }); toast(ligar ? 'Venda automática ligada: o pedido do site vira invoice + depósito + waiver na hora.' : 'Venda automática desligada: a equipe aceita cada pedido.', 'ok'); setCfg(null); a.reload() }
-        catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setSalvandoVenda(false) } }} /> Venda automática <span className="small muted">(ligada: o pedido do site vira invoice do QuickBooks com o depósito e a waiver na hora, sem esperar "Aceitar"; {admin ? 'só o administrador liga ou desliga' : 'só o administrador muda'})</span></label>
-      {gerente && (regras || cfg) && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvar}>{regras ? 'Salvar a semana' : 'Salvar regras'}</button></div>}
+        try { await api.patch('/site/agenda/config', { auto_sell: ligar }); toast(ligar ? tr("Venda automática ligada: o pedido do site vira invoice + depósito + waiver na hora.") : tr("Venda automática desligada: a equipe aceita cada pedido."), 'ok'); setCfg(null); a.reload() }
+        catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setSalvandoVenda(false) } }} /> {tr("Venda automática")} <span className="small muted">{tr("(ligada: o pedido do site vira invoice do QuickBooks com o depósito e a waiver na hora, sem esperar \"Aceitar\";")} {admin ? tr("só o administrador liga ou desliga") : tr("só o administrador muda")})</span></label>
+      {gerente && (regras || cfg) && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvar}>{regras ? tr("Salvar a semana") : tr("Salvar regras")}</button></div>}
     </Section>
 
-    <Section title="Bloqueios" count={a.data.bloqueios.length}>
+    <Section title={tr("Bloqueios")} count={a.data.bloqueios.length}>
       {gerente && <div className="stack" style={{ gap: 10, marginBottom: 10 }}>
-        <div className="seg" role="radiogroup" aria-label="Tipo de bloqueio">{([['data', 'Uma data ou período'], ['semana', 'Toda semana']] as const).map(([k, r]) =>
+        <div className="seg" role="radiogroup" aria-label={tr("Tipo de bloqueio")}>{([['data', tr("Uma data ou período")], ['semana', tr("Toda semana")]] as const).map(([k, r]) =>
           <button key={k} type="button" role="radio" aria-checked={bl.modo === k} className={`btn sm${bl.modo === k ? '' : ' ghost'}`} onClick={() => setBl({ ...bl, modo: k })}>{r}</button>)}</div>
         <div className="row gap wrap" style={{ alignItems: 'flex-end' }}>
-          {bl.modo === 'semana' && <label className="fld" style={{ margin: 0 }}><span>Dia da semana</span><select value={bl.weekday} onChange={e => setBl({ ...bl, weekday: Number(e.target.value) })}>
-            {DIAS_LONGOS.map((d, i) => <option key={d} value={i}>toda {d}</option>)}</select></label>}
-          <label className="fld" style={{ margin: 0 }}><span>{bl.modo === 'semana' ? 'A partir de' : 'De'}{bl.modo === 'semana' && <i> (opcional)</i>}</span><input type="date" value={bl.date_from} onChange={e => setBl({ ...bl, date_from: e.target.value })} /></label>
-          <label className="fld" style={{ margin: 0 }}><span>Até <i>(opcional)</i></span><input type="date" value={bl.date_to} onChange={e => setBl({ ...bl, date_to: e.target.value })} /></label>
-          <label className="fld" style={{ margin: 0 }}><span>O quê</span><select value={bl.period} onChange={e => setBl({ ...bl, period: e.target.value })}>
-            <option value="dia">o dia todo</option><option value="manha">só a manhã</option><option value="tarde">só a tarde</option></select></label>
-          <label className="fld grow" style={{ margin: 0, minWidth: 160 }}><span>Motivo <i>(só a equipe vê)</i></span><input value={bl.reason} onChange={e => setBl({ ...bl, reason: e.target.value })} placeholder="corrida, manutenção, feriado" /></label>
-          <button className="btn" onClick={bloquear}>Bloquear</button>
+          {bl.modo === 'semana' && <label className="fld" style={{ margin: 0 }}><span>{tr("Dia da semana")}</span><select value={bl.weekday} onChange={e => setBl({ ...bl, weekday: Number(e.target.value) })}>
+            {DIAS_LONGOS.map((d, i) => <option key={d} value={i}>{tr("toda")} {d}</option>)}</select></label>}
+          <label className="fld" style={{ margin: 0 }}><span>{bl.modo === 'semana' ? tr("A partir de") : tr("De")}{bl.modo === 'semana' && <i> {tr("(opcional)")}</i>}</span><input type="date" value={bl.date_from} onChange={e => setBl({ ...bl, date_from: e.target.value })} /></label>
+          <label className="fld" style={{ margin: 0 }}><span>{tr("Até")} <i>{tr("(opcional)")}</i></span><input type="date" value={bl.date_to} onChange={e => setBl({ ...bl, date_to: e.target.value })} /></label>
+          <label className="fld" style={{ margin: 0 }}><span>{tr("O quê")}</span><select value={bl.period} onChange={e => setBl({ ...bl, period: e.target.value })}>
+            <option value="dia">{tr("o dia todo")}</option><option value="manha">{tr("só a manhã")}</option><option value="tarde">{tr("só a tarde")}</option></select></label>
+          <label className="fld grow" style={{ margin: 0, minWidth: 160 }}><span>{tr("Motivo")} <i>{tr("(só a equipe vê)")}</i></span><input value={bl.reason} onChange={e => setBl({ ...bl, reason: e.target.value })} placeholder={tr("corrida, manutenção, feriado")} /></label>
+          <button className="btn" onClick={bloquear}>{tr("Bloquear")}</button>
         </div></div>}
-      {!a.data.bloqueios.length ? <Empty title="Nenhum bloqueio" /> : <div className="tbl">{a.data.bloqueios.map(b => <div className="tr" key={b.id}>
+      {!a.data.bloqueios.length ? <Empty title={tr("Nenhum bloqueio")} /> : <div className="tbl">{a.data.bloqueios.map(b => <div className="tr" key={b.id}>
         <div className="grow">{descreve(b)} · {PER[b.period]}{b.reason ? <span className="small muted"> · {b.reason}</span> : null}</div>
-        {b.weekday != null && <Chip tone="info">recorrente</Chip>}
-        {gerente && <button className="btn sm ghost" onClick={() => desbloquear(b)}>Desbloquear</button>}
+        {b.weekday != null && <Chip tone="info">{tr("recorrente")}</Chip>}
+        {gerente && <button className="btn sm ghost" onClick={() => desbloquear(b)}>{tr("Desbloquear")}</button>}
       </div>)}</div>}
     </Section>
   </div>
@@ -262,7 +263,7 @@ function Servicos() {
   const itens = l.data?.itens_qbo || []
   async function criar() {
     try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item: novo.qbo_item || null })
-      toast('Serviço criado: o cliente já vê.', 'ok'); setNovo({ name: '', description: '', price: '', qbo_item: '' }); l.reload() }
+      toast(tr("Serviço criado: o cliente já vê."), 'ok'); setNovo({ name: '', description: '', price: '', qbo_item: '' }); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function salvar(sv: Servico, extra?: Partial<Servico>) {
@@ -273,7 +274,7 @@ function Servicos() {
     if (e.price_txt !== undefined) corpo.price = e.price_txt
     if (e.qbo_item !== undefined) corpo.qbo_item = e.qbo_item || null
     if (e.deposit_txt !== undefined) corpo.deposit = e.deposit_txt || null
-    try { await api.patch(`/site/servicos/${sv.id}`, corpo); toast('Salvo. Vale para os próximos agendamentos.', 'ok')
+    try { await api.patch(`/site/servicos/${sv.id}`, corpo); toast(tr("Salvo. Vale para os próximos agendamentos."), 'ok')
       setEdit(x => { const y = { ...x }; delete y[sv.id]; return y }); l.reload() }
     catch (er) { toast((er as ApiError).message, 'crit') }
   }
@@ -283,40 +284,40 @@ function Servicos() {
   // dono, 01/10: o item é um texto — escolhe da lista ou escreve; sem o preço no rótulo
   const sugestoes = <datalist id="itens-qbo">{itens.map(i => <option key={i.id} value={i.name} />)}</datalist>
   return <div className="stack" style={{ gap: 18 }}>
-    {!l.data.servicos.some(x => x.active) && <div className="banner warn"><span className="bi">▲</span><div className="grow">Nenhum serviço ativo: o cliente <b>não consegue marcar</b> até haver pelo menos um, com preço.</div></div>}
+    {!l.data.servicos.some(x => x.active) && <div className="banner warn"><span className="bi">▲</span><div className="grow">{tr("Nenhum serviço ativo: o cliente")} <b>{tr("não consegue marcar")}</b> {tr("até haver pelo menos um, com preço.")}</div></div>}
     {sugestoes}
-    <Section title="Serviços" count={l.data.servicos.length}>
-      {!l.data.servicos.length ? <Empty title="Nenhum serviço ainda">Cadastre abaixo o que o cliente pode marcar e o preço de cada um.</Empty>
+    <Section title={tr("Serviços")} count={l.data.servicos.length}>
+      {!l.data.servicos.length ? <Empty title={tr("Nenhum serviço ainda")}>{tr("Cadastre abaixo o que o cliente pode marcar e o preço de cada um.")}</Empty>
         : <div className="stack" style={{ gap: 10 }}>{l.data.servicos.map(sv => {
           const e = edit[sv.id] || {}
           return <div key={sv.id} className="card card-b">
             <div className="site-servico">
-              <label className="fld"><span>Nome (o cliente lê, em inglês)</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
-              <label className="fld"><span>Descrição <i>opcional</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
-              <label className="fld"><span>Preço (US$)</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
-              <label className="fld"><span>Item no QuickBooks <i>ou texto</i></span><input list="itens-qbo" value={e.qbo_item ?? sv.qbo_item_name ?? sv.invoice_text ?? ''} disabled={!gerente}
-                onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder="escolha ou escreva" /></label>
-              <label className="fld"><span>Depósito por sessão (US$) <i>0 = sem</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
+              <label className="fld"><span>{tr("Nome (o cliente lê, em inglês)")}</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
+              <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
+              <label className="fld"><span>{tr("Preço (US$)")}</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
+              <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={e.qbo_item ?? sv.qbo_item_name ?? sv.invoice_text ?? ''} disabled={!gerente}
+                onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder={tr("escolha ou escreva")} /></label>
+              <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{tr("0 = sem")}</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
                 onChange={x => muda(sv.id, { deposit_txt: x.target.value })} /></label>
               {gerente && <div className="row" style={{ gap: 6 }}>
-                <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>Salvar</button>
-                <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? 'Desativar' : 'Reativar'}</button></div>}
+                <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
+                <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></div>}
             </div>
-            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">na área do cliente</Chip> : <Chip tone="neutral">desativado</Chip>}
-              {sv.qbo_item_id ? <> · <span>item do QuickBooks</span></> : sv.invoice_text ? <> · <span>texto personalizado na invoice</span></> : <> · <span>sem item: escolha um ou escreva o texto da invoice</span></>}</div>
+            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
+              {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: escolha um ou escreva o texto da invoice")}</span></>}</div>
           </div>
         })}</div>}
     </Section>
-    {gerente && <Section title="Novo serviço">
+    {gerente && <Section title={tr("Novo serviço")}>
       <div className="card card-b"><div className="site-servico">
-        <label className="fld"><span>Nome</span><input value={novo.name} onChange={x => setNovo({ ...novo, name: x.target.value })} placeholder="Arrive and Drive" /></label>
-        <label className="fld"><span>Descrição <i>opcional</i></span><input value={novo.description} onChange={x => setNovo({ ...novo, description: x.target.value })} /></label>
-        <label className="fld"><span>Preço (US$)</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
-        <label className="fld"><span>Item no QuickBooks <i>ou texto</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder="escolha ou escreva"
+        <label className="fld"><span>{tr("Nome")}</span><input value={novo.name} onChange={x => setNovo({ ...novo, name: x.target.value })} placeholder={tr("Arrive and Drive")} /></label>
+        <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={novo.description} onChange={x => setNovo({ ...novo, description: x.target.value })} /></label>
+        <label className="fld"><span>{tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
+        <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder={tr("escolha ou escreva")}
           onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
-        <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>Criar</button>
+        <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>{tr("Criar")}</button>
       </div></div>
-      <p className="small muted" style={{ margin: '8px 0 0' }}>Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice.</p>
+      <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice.")}</p>
     </Section>}
   </div>
 }
@@ -332,66 +333,66 @@ function Contas() {
   const l = useGet<{ contas: ContaSite[] }>(`/site/contas?filtro=${filtro}`, 30000)
   const [outro, setOutro] = useState<Record<number, Client | null>>({})
   async function vincular(c: ContaSite, clientId: number, nome: string) {
-    if (!await perguntar({ titulo: `Ligar ${c.email} a ${nome}?`, texto: 'O cliente passa a ver na área do cliente o histórico de serviços deste card. Confira se é mesmo a mesma família.', ok: 'Vincular' })) return
-    try { await api.post(`/site/contas/${c.id}/vincular`, { client_id: clientId }); toast('Vinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+    if (!await perguntar({ titulo: tr("Ligar {0} a {1}?", c.email, nome), texto: tr("O cliente passa a ver na área do cliente o histórico de serviços deste card. Confira se é mesmo a mesma família."), ok: tr("Vincular") })) return
+    try { await api.post(`/site/contas/${c.id}/vincular`, { client_id: clientId }); toast(tr("Vinculado."), 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function criar(c: ContaSite) {
-    if (!await perguntar({ titulo: `Criar o cliente ${c.name}?`, texto: `O card nasce com os dados da conta (${c.email}${c.pilotos.length ? `, piloto ${c.pilotos[0]}` : ''}) e já fica vinculado.`, ok: 'Criar cliente' })) return
-    try { await api.post(`/site/contas/${c.id}/criar-cliente`); toast('Cliente criado e vinculado.', 'ok'); l.reload() }
+    if (!await perguntar({ titulo: tr("Criar o cliente {0}?", c.name), texto: tr("O card nasce com os dados da conta ({0}{1}) e já fica vinculado.", c.email, c.pilotos.length ? `, piloto ${c.pilotos[0]}` : ''), ok: tr("Criar cliente") })) return
+    try { await api.post(`/site/contas/${c.id}/criar-cliente`); toast(tr("Cliente criado e vinculado."), 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function vincularDriver(p: DriverConta, clientId: number, nome: string) {
-    if (!await perguntar({ titulo: `O card de ${p.name} é ${nome} (Client ID ${clientId})?`, texto: 'Cada driver tem o seu card: as sessões, o contrato e o histórico dele ficam ali, separados dos irmãos.', ok: 'Vincular' })) return
-    try { await api.post(`/site/drivers/${p.id}/vincular`, { client_id: clientId }); toast('Driver vinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+    if (!await perguntar({ titulo: tr("O card de {0} é {1} (Client ID {2})?", p.name, nome, clientId), texto: tr("Cada driver tem o seu card: as sessões, o contrato e o histórico dele ficam ali, separados dos irmãos."), ok: tr("Vincular") })) return
+    try { await api.post(`/site/drivers/${p.id}/vincular`, { client_id: clientId }); toast(tr("Driver vinculado."), 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function criarDriver(c: ContaSite, p: DriverConta) {
-    if (!await perguntar({ titulo: `Criar o card de ${p.name}?`, texto: `Responsável ${c.name} (${c.email}), piloto ${p.name}. O card nasce já vinculado a este driver, com o seu Client ID.`, ok: 'Criar card' })) return
-    try { const r = await api.post<{ client_id: number }>(`/site/drivers/${p.id}/criar-cliente`); toast(`Card criado: Client ID ${r.client_id}.`, 'ok'); l.reload() }
+    if (!await perguntar({ titulo: tr("Criar o card de {0}?", p.name), texto: tr("Responsável {0} ({1}), piloto {2}. O card nasce já vinculado a este driver, com o seu Client ID.", c.name, c.email, p.name), ok: tr("Criar card") })) return
+    try { const r = await api.post<{ client_id: number }>(`/site/drivers/${p.id}/criar-cliente`); toast(tr("Card criado: Client ID {0}.", r.client_id), 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function desvincularDriver(p: DriverConta) {
-    if (!await perguntar({ titulo: `Desligar ${p.name} do Client ID ${p.client_id}?`, texto: 'O card não é apagado; só deixa de ser deste driver.', ok: 'Desvincular', perigo: true })) return
-    try { await api.post(`/site/drivers/${p.id}/desvincular`); toast('Driver desvinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+    if (!await perguntar({ titulo: tr("Desligar {0} do Client ID {1}?", p.name, p.client_id), texto: tr("O card não é apagado; só deixa de ser deste driver."), ok: tr("Desvincular"), perigo: true })) return
+    try { await api.post(`/site/drivers/${p.id}/desvincular`); toast(tr("Driver desvinculado."), 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function desvincular(c: ContaSite) {
-    if (!await perguntar({ titulo: `Desligar ${c.email} de ${c.client_pilot || c.client_name}?`, texto: 'O cliente deixa de ver o histórico.', ok: 'Desvincular', perigo: true })) return
-    try { await api.post(`/site/contas/${c.id}/desvincular`); toast('Desvinculado.', 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
+    if (!await perguntar({ titulo: tr("Desligar {0} de {1}?", c.email, c.client_pilot || c.client_name), texto: tr("O cliente deixa de ver o histórico."), ok: tr("Desvincular"), perigo: true })) return
+    try { await api.post(`/site/contas/${c.id}/desvincular`); toast(tr("Desvinculado."), 'ok'); l.reload() } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   return <>
-    <div className="seg" style={{ marginBottom: 12 }}>{([['sem_vinculo', 'Esperando vínculo'], ['vinculadas', 'Vinculadas'], ['todas', 'Todas']] as const).map(([k, r]) =>
+    <div className="seg" style={{ marginBottom: 12 }}>{([['sem_vinculo', tr("Esperando vínculo")], ['vinculadas', tr("Vinculadas")], ['todas', tr("Todas")]] as const).map(([k, r]) =>
       <button key={k} className={`btn sm${filtro === k ? '' : ' ghost'}`} onClick={() => setFiltro(k)}>{r}</button>)}</div>
     {l.error && <ErrorState error={l.error} retry={l.reload} />}
     {l.loading && !l.data && <Loading />}
-    {l.data && (!l.data.contas.length ? <Empty title={filtro === 'sem_vinculo' ? 'Nenhuma conta esperando vínculo' : 'Nada aqui'}>As contas criadas na área do cliente aparecem aqui.</Empty>
+    {l.data && (!l.data.contas.length ? <Empty title={filtro === 'sem_vinculo' ? tr("Nenhuma conta esperando vínculo") : tr("Nada aqui")}>{tr("As contas criadas na área do cliente aparecem aqui.")}</Empty>
       : <div className="stack" style={{ gap: 10 }}>{l.data.contas.map(c => <div className="card card-b stack" key={c.id} style={{ gap: 8 }}>
         <div className="row wrap"><div className="grow" style={{ minWidth: 0 }}><b>{c.name}</b>
           <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{c.email}{c.phone ? ` · ${c.phone}` : ''}{c.city ? ` · ${c.city}${c.state ? `/${c.state}` : ''}` : ''}</div>
-          <div className="small">{c.pilotos.length ? `Pilotos: ${c.pilotos.join(', ')}` : 'Nenhum piloto ainda'}</div></div>
-          {c.client_id ? <Chip tone="ok">vinculada</Chip> : <Chip tone="warn">sem vínculo</Chip>}</div>
-        {c.client_id ? <div className="row wrap"><span className="small grow">Cliente: <Link to={`/clients/${c.client_id}`}>{c.client_pilot || c.client_name}</Link>{c.linked_by_name ? ` · por ${c.linked_by_name}` : ''}</span>
-          {can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincular(c)}>Desvincular</button>}</div>
+          <div className="small">{c.pilotos.length ? tr("Pilotos: {0}", c.pilotos.join(', ')) : tr("Nenhum piloto ainda")}</div></div>
+          {c.client_id ? <Chip tone="ok">{tr("vinculada")}</Chip> : <Chip tone="warn">{tr("sem vínculo")}</Chip>}</div>
+        {c.client_id ? <div className="row wrap"><span className="small grow">{tr("Cliente:")} <Link to={`/clients/${c.client_id}`}>{c.client_pilot || c.client_name}</Link>{c.linked_by_name ? tr(" · por {0}", c.linked_by_name) : ''}</span>
+          {can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincular(c)}>{tr("Desvincular")}</button>}</div>
           : <>
-            {c.sugestao ? <div className="row wrap" style={{ gap: 8 }}><span className="small grow">✦ Sugestão: <Link to={`/clients/${c.sugestao.client_id}`}><b>{c.sugestao.pilot_name || c.sugestao.name}</b></Link>
-              {c.sugestao.pilot_name && c.sugestao.pilot_name !== c.sugestao.name ? ` (resp. ${c.sugestao.name})` : ''} · {c.sugestao.motivo}</span>
-              <button className="btn sm primary" onClick={() => vincular(c, c.sugestao!.client_id, c.sugestao!.pilot_name || c.sugestao!.name)}>Vincular a este</button></div>
-              : <div className="row wrap" style={{ gap: 8 }}><span className="small muted grow">Nenhum cliente parecido no site interno (pelo e-mail, telefone, nome do responsável ou do piloto). Se é cliente novo, crie o card; se já existe, escolha abaixo.</span>
-                <button className="btn sm primary" onClick={() => criar(c)}>Criar cliente</button></div>}
+            {c.sugestao ? <div className="row wrap" style={{ gap: 8 }}><span className="small grow">{tr("✦ Sugestão:")} <Link to={`/clients/${c.sugestao.client_id}`}><b>{c.sugestao.pilot_name || c.sugestao.name}</b></Link>
+              {c.sugestao.pilot_name && c.sugestao.pilot_name !== c.sugestao.name ? tr(" (resp. {0})", c.sugestao.name) : ''} · {c.sugestao.motivo}</span>
+              <button className="btn sm primary" onClick={() => vincular(c, c.sugestao!.client_id, c.sugestao!.pilot_name || c.sugestao!.name)}>{tr("Vincular a este")}</button></div>
+              : <div className="row wrap" style={{ gap: 8 }}><span className="small muted grow">{tr("Nenhum cliente parecido no site interno (pelo e-mail, telefone, nome do responsável ou do piloto). Se é cliente novo, crie o card; se já existe, escolha abaixo.")}</span>
+                <button className="btn sm primary" onClick={() => criar(c)}>{tr("Criar cliente")}</button></div>}
             <div className="row wrap" style={{ alignItems: 'flex-end', gap: 8 }}><div className="grow" style={{ minWidth: 220 }}>
-              <Picker label="Outro cliente" value={outro[c.id] || null} onPick={x => setOutro(o => ({ ...o, [c.id]: x }))} /></div>
-              {outro[c.id] && <button className="btn sm" onClick={() => vincular(c, outro[c.id]!.id, outro[c.id]!.pilot_name || outro[c.id]!.name)}>Vincular</button>}</div>
+              <Picker label={tr("Outro cliente")} value={outro[c.id] || null} onPick={x => setOutro(o => ({ ...o, [c.id]: x }))} /></div>
+              {outro[c.id] && <button className="btn sm" onClick={() => vincular(c, outro[c.id]!.id, outro[c.id]!.pilot_name || outro[c.id]!.name)}>{tr("Vincular")}</button>}</div>
           </>}
         {c.client_id && c.drivers_list.length > 0 && <div className="stack" style={{ gap: 6 }}>
-          <h3 className="h3" style={{ fontSize: 14 }}>Drivers · cada um com o seu card</h3>
+          <h3 className="h3" style={{ fontSize: 14 }}>{tr("Drivers · cada um com o seu card")}</h3>
           {c.drivers_list.map(p => <div key={p.id} className="row wrap" style={{ gap: 8, padding: '6px 0', borderTop: '1px solid var(--glass-line)' }}>
-            <span className="grow small" style={{ minWidth: 0 }}><b>{p.name}</b>{p.birth_date ? ` · ${idade(p.birth_date)} anos` : ''}
-              {p.client_id ? <> · <Link to={`/clients/${p.client_id}`}>Client ID {p.client_id}</Link></>
-                : p.sugestao ? <> · ✦ sugestão: <Link to={`/clients/${p.sugestao.client_id}`}>{p.sugestao.pilot_name || p.sugestao.name} (Client ID {p.sugestao.client_id})</Link> · {p.sugestao.motivo}</>
-                : <span className="muted"> · sem card</span>}</span>
-            {p.client_id ? can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincularDriver(p)}>Desvincular</button>
-              : <>{p.sugestao && <button className="btn sm primary" onClick={() => vincularDriver(p, p.sugestao!.client_id, p.sugestao!.pilot_name || p.sugestao!.name)}>Vincular a este</button>}
-                {!p.sugestao && <button className="btn sm primary" onClick={() => criarDriver(c, p)}>Criar card</button>}
-                <div style={{ minWidth: 200 }}><Picker label={`Outro card para ${p.name}`} value={outro[-p.id] || null} onPick={x => setOutro(o => ({ ...o, [-p.id]: x }))} /></div>
-                {outro[-p.id] && <button className="btn sm" onClick={() => vincularDriver(p, outro[-p.id]!.id, outro[-p.id]!.pilot_name || outro[-p.id]!.name)}>Vincular</button>}</>}
+            <span className="grow small" style={{ minWidth: 0 }}><b>{p.name}</b>{p.birth_date ? tr(" · {0} anos", idade(p.birth_date)) : ''}
+              {p.client_id ? <> · <Link to={`/clients/${p.client_id}`}>{tr("Client ID")} {p.client_id}</Link></>
+                : p.sugestao ? <> {tr("· ✦ sugestão:")} <Link to={`/clients/${p.sugestao.client_id}`}>{p.sugestao.pilot_name || p.sugestao.name} {tr("(Client ID")} {p.sugestao.client_id})</Link> · {p.sugestao.motivo}</>
+                : <span className="muted"> {tr("· sem card")}</span>}</span>
+            {p.client_id ? can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincularDriver(p)}>{tr("Desvincular")}</button>
+              : <>{p.sugestao && <button className="btn sm primary" onClick={() => vincularDriver(p, p.sugestao!.client_id, p.sugestao!.pilot_name || p.sugestao!.name)}>{tr("Vincular a este")}</button>}
+                {!p.sugestao && <button className="btn sm primary" onClick={() => criarDriver(c, p)}>{tr("Criar card")}</button>}
+                <div style={{ minWidth: 200 }}><Picker label={tr("Outro card para {0}", p.name)} value={outro[-p.id] || null} onPick={x => setOutro(o => ({ ...o, [-p.id]: x }))} /></div>
+                {outro[-p.id] && <button className="btn sm" onClick={() => vincularDriver(p, outro[-p.id]!.id, outro[-p.id]!.pilot_name || outro[-p.id]!.name)}>{tr("Vincular")}</button>}</>}
           </div>)}
         </div>}
       </div>)}</div>)}
@@ -417,13 +418,13 @@ function WaiverNativa() {
   const [indo, setIndo] = useState(false)
   async function importar() {
     setIndo(true)
-    try { await api.post('/site/waiver-nativa/importar', {}); toast('Modelos importados do DocuSign (só leitura lá).', 'ok'); l.reload() }
+    try { await api.post('/site/waiver-nativa/importar', {}); toast(tr("Modelos importados do DocuSign (só leitura lá)."), 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   async function ligar(ligada: boolean) {
-    if (ligada && !await perguntar({ titulo: 'Ligar a assinatura na área do cliente?', ok: 'Ligar',
-      texto: 'Os clientes passam a assinar a waiver pela área do cliente, sem DocuSign. Faça isso depois do sim do advogado. O DocuSign continua funcionando como hoje.' })) return
-    try { await api.post('/site/waiver-nativa/ligar', { ligada }); toast(ligada ? 'Ligada: o cliente já vê "Sign now".' : 'Desligada. Nada assinado foi apagado.', 'ok'); l.reload() }
+    if (ligada && !await perguntar({ titulo: tr("Ligar a assinatura na área do cliente?"), ok: tr("Ligar"),
+      texto: tr("Os clientes passam a assinar a waiver pela área do cliente, sem DocuSign. Faça isso depois do sim do advogado. O DocuSign continua funcionando como hoje.") })) return
+    try { await api.post('/site/waiver-nativa/ligar', { ligada }); toast(ligada ? tr("Ligada: o cliente já vê \"Sign now\".") : tr("Desligada. Nada assinado foi apagado."), 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
@@ -431,35 +432,35 @@ function WaiverNativa() {
   const d = l.data, a = d.assinadas
   const prontos = d.modelos.every(m => m.sha256)
   return <div className="stack" style={{ gap: 18 }}>
-    <Section title="Assinatura na área do cliente" right={d.ligada ? <Chip tone="ok">ligada</Chip> : <Chip tone="neutral">desligada</Chip>}>
+    <Section title={tr("Assinatura na área do cliente")} right={d.ligada ? <Chip tone="ok">{tr("ligada")}</Chip> : <Chip tone="neutral">{tr("desligada")}</Chip>}>
       <div className="card card-b stack" style={{ gap: 10 }}>
-        <p className="small" style={{ margin: 0 }}>O responsável assina pela área do cliente: lê o documento, marca as duas caixas, digita o nome e desenha a assinatura. Menor de 18 assina a parental; maior, a adult. Vale 1 ano. O PDF final é o original do DocuSign mais uma página de assinatura e certificado (data e hora da Flórida, IP, aparelho, hashes).</p>
-        {!d.ligada && <p className="small muted" style={{ margin: 0 }}>Antes de ligar: o advogado confirma que a assinatura eletrônica com essa página de certificado vale para a waiver de menor na Flórida.</p>}
+        <p className="small" style={{ margin: 0 }}>{tr("O responsável assina pela área do cliente: lê o documento, marca as duas caixas, digita o nome e desenha a assinatura. Menor de 18 assina a parental; maior, a adult. Vale 1 ano. O PDF final é o original do DocuSign mais uma página de assinatura e certificado (data e hora da Flórida, IP, aparelho, hashes).")}</p>
+        {!d.ligada && <p className="small muted" style={{ margin: 0 }}>{tr("Antes de ligar: o advogado confirma que a assinatura eletrônica com essa página de certificado vale para a waiver de menor na Flórida.")}</p>}
         {admin ? <div className="row wrap" style={{ gap: 8 }}>
-          {d.ligada ? <button className="btn sm ghost" onClick={() => ligar(false)}>Desligar</button>
-            : <button className="btn sm primary" disabled={!prontos} title={prontos ? undefined : 'Importe os dois modelos primeiro'} onClick={() => ligar(true)}>Ligar</button>}
-        </div> : <p className="small muted" style={{ margin: 0 }}>Só o ADMIN liga ou desliga.</p>}
+          {d.ligada ? <button className="btn sm ghost" onClick={() => ligar(false)}>{tr("Desligar")}</button>
+            : <button className="btn sm primary" disabled={!prontos} title={prontos ? undefined : tr("Importe os dois modelos primeiro")} onClick={() => ligar(true)}>{tr("Ligar")}</button>}
+        </div> : <p className="small muted" style={{ margin: 0 }}>{tr("Só o ADMIN liga ou desliga.")}</p>}
       </div>
     </Section>
-    <Section title="Modelos (do DocuSign)" count={d.modelos.length} right={admin ? <button className="btn sm" disabled={indo} onClick={importar}>{indo ? <span className="spin" /> : 'Importar do DocuSign'}</button> : undefined}>
+    <Section title={tr("Modelos (do DocuSign)")} count={d.modelos.length} right={admin ? <button className="btn sm" disabled={indo} onClick={importar}>{indo ? <span className="spin" /> : tr("Importar do DocuSign")}</button> : undefined}>
       <div className="card"><div className="tbl">{d.modelos.map(m => <div className="tr" key={m.kind}>
-        <span className="grow"><b>{m.kind === 'adult' ? 'Adult' : 'Parental (menor)'}</b><div className="small muted">{m.name || 'ainda não importado'}</div></span>
-        <span className="small muted">{m.sha256 ? <>{m.pages} pág. · <span className="mono" title={m.sha256}>{m.sha256.slice(0, 12)}</span> · {fmtDateTime(m.imported_at)}</> : '—'}</span>
+        <span className="grow"><b>{m.kind === 'adult' ? tr("Adult") : tr("Parental (menor)")}</b><div className="small muted">{m.name || tr("ainda não importado")}</div></span>
+        <span className="small muted">{m.sha256 ? <>{m.pages} {tr("pág. ·")} <span className="mono" title={m.sha256}>{m.sha256.slice(0, 12)}</span> · {fmtDateTime(m.imported_at)}</> : '—'}</span>
       </div>)}</div></div>
-      <p className="small muted" style={{ margin: '8px 0 0' }}>Importar só LÊ os modelos no DocuSign. Se o texto mudar lá, importe de novo: as próximas assinaturas usam o novo, as já feitas ficam com o delas.</p>
+      <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Importar só LÊ os modelos no DocuSign. Se o texto mudar lá, importe de novo: as próximas assinaturas usam o novo, as já feitas ficam com o delas.")}</p>
     </Section>
-    <Section title="Assinadas aqui" count={a.total}>
-      {!a.itens.length ? <Empty title="Nenhuma ainda">Quando um cliente assinar pela área do cliente, ela aparece aqui e no card do cliente.</Empty>
+    <Section title={tr("Assinadas aqui")} count={a.total}>
+      {!a.itens.length ? <Empty title={tr("Nenhuma ainda")}>{tr("Quando um cliente assinar pela área do cliente, ela aparece aqui e no card do cliente.")}</Empty>
         : <div className="card"><div className="tbl">{a.itens.map(w => <div className="tr" key={w.id}>
           <span className="mono small" style={{ width: 92 }}>{fmtDate(w.completed_at)}</span>
-          <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? `parental · por ${w.signer_name}` : 'adult'} · vale até {fmtDate(w.expires_at)}</div></span>
-          {w.client_id ? <Link className="btn sm ghost" to={`/clients/${w.client_id}`}>Card</Link> : <span className="small muted">sem card</span>}
-          <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`}>PDF</a>
+          <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")} {tr("· vale até")} {fmtDate(w.expires_at)}</div></span>
+          {w.client_id ? <Link className="btn sm ghost" to={`/clients/${w.client_id}`}>{tr("Card")}</Link> : <span className="small muted">{tr("sem card")}</span>}
+          <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
         </div>)}</div></div>}
       {a.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
-        <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>Anteriores</button>
-        <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, a.total)} de {a.total}</span>
-        <button className="btn sm ghost" disabled={offset + POR_PAGINA >= a.total} onClick={() => setOffset(offset + POR_PAGINA)}>Próximas</button></div>}
+        <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>
+        <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, a.total)} {tr("de")} {a.total}</span>
+        <button className="btn sm ghost" disabled={offset + POR_PAGINA >= a.total} onClick={() => setOffset(offset + POR_PAGINA)}>{tr("Próximas")}</button></div>}
     </Section>
   </div>
 }
@@ -468,15 +469,15 @@ export function SitePublico() {
   const { aba } = useParams()
   const { can } = useAuth()
   return <>
-    <PageHeader title="Site público" help={<>O que o cliente usa na área do cliente (hoje em <a href="/ops/portal" target="_blank" rel="noreferrer">/ops/portal</a>, depois no urace.us): os pedidos de sessão e a agenda que você abre e fecha.</>}>
-      <a className="btn ghost" href="/ops/portal" target="_blank" rel="noreferrer">Abrir a área do cliente ↗</a>
+    <PageHeader title={tr("Site público")} help={<>{tr("O que o cliente usa na área do cliente (hoje em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>{tr(", depois no urace.us): os pedidos de sessão e a agenda que você abre e fecha.")}</>}>
+      <a className="btn ghost" href="/ops/portal" target="_blank" rel="noreferrer">{tr("Abrir a área do cliente ↗")}</a>
     </PageHeader>
     <div className="tabs">
-      <NavLink to="/site" end className={({ isActive }) => isActive ? 'on' : ''}>Agendamentos</NavLink>
-      <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>Disponibilidade</NavLink>
-      <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>Serviços e preços</NavLink>
-      <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>Contas de clientes</NavLink>
-      {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>Waiver</NavLink>}
+      <NavLink to="/site" end className={({ isActive }) => isActive ? 'on' : ''}>{tr("Agendamentos")}</NavLink>
+      <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Disponibilidade")}</NavLink>
+      <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Serviços e preços")}</NavLink>
+      <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Contas de clientes")}</NavLink>
+      {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Waiver")}</NavLink>}
     </div>
     {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'contas' ? <Contas />
       : aba === 'waiver' && can('MANAGER') ? <WaiverNativa /> : <Agendamentos />}

@@ -13,6 +13,7 @@ import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
+import { tr, LOCALE } from '../i18n'
 
 function idade(dob?: string | null) {
   if (!dob) return null
@@ -23,7 +24,7 @@ function idade(dob?: string | null) {
 }
 
 const KIND: Record<string, [string, 'ok' | 'warn' | 'crit' | 'info' | '']> = {
-  SERVICE: ['Serviço', 'info'], WAIVER_SENT: ['Waiver enviada', 'warn'], WAIVER_SIGNED: ['Waiver assinada', 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: ['Ação da IA', 'info'], INVOICE: ['Invoice', 'ok'],
+  SERVICE: [tr("Serviço"), 'info'], WAIVER_SENT: [tr("Waiver enviada"), 'warn'], WAIVER_SIGNED: [tr("Waiver assinada"), 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: [tr("Ação da IA"), 'info'], INVOICE: [tr("Invoice"), 'ok'],
 }
 
 export function Client360() {
@@ -68,9 +69,9 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
 
   async function togglePro() {
     const vai = !c.pro_driver
-    if (!await perguntar(vai ? { titulo: `Tornar ${c.pilot_name || c.name} um ★ Pro Racing Driver?`, texto: 'Ele vai para a aba Pro Racing Drivers e o card ganha Equipamento e Corridas.', ok: 'Tornar Pro' } : { titulo: `Tirar ${c.pilot_name || c.name} de Pro Racing Driver?`, ok: 'Tirar' })) return
+    if (!await perguntar(vai ? { titulo: tr("Tornar {0} um ★ Pro Racing Driver?", c.pilot_name || c.name), texto: tr("Ele vai para a aba Pro Racing Drivers e o card ganha Equipamento e Corridas."), ok: tr("Tornar Pro") } : { titulo: tr("Tirar {0} de Pro Racing Driver?", c.pilot_name || c.name), ok: tr("Tirar") })) return
     setProBusy(true)
-    try { await api.patch(`/clients/${c.id}/profile`, { pro_driver: vai }); toast(vai ? 'Agora é Pro Racing Driver.' : 'Saiu de Pro Racing Driver.', 'ok'); if (!vai && (tab === 'equip' || tab === 'races')) setTab('timeline'); reload() }
+    try { await api.patch(`/clients/${c.id}/profile`, { pro_driver: vai }); toast(vai ? tr("Agora é Pro Racing Driver.") : tr("Saiu de Pro Racing Driver."), 'ok'); if (!vai && (tab === 'equip' || tab === 'races')) setTab('timeline'); reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setProBusy(false) }
   }
   function openEdit() { setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '', plan_type: c.plan_type || '', pro_driver: !!c.pro_driver }); setEdit(true) }
@@ -83,7 +84,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       const perfil: Record<string, unknown> = { plan_type: form.plan_type }
       if (can('MANAGER')) perfil.pro_driver = form.pro_driver
       await api.patch(`/clients/${c.id}/profile`, perfil)
-      toast('Cliente atualizado.', 'ok'); setEdit(false); reload()
+      toast(tr("Cliente atualizado."), 'ok'); setEdit(false); reload()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setSaving(false) }
   }
 
@@ -95,80 +96,80 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   return <>
     <div className="c360-h">
       <div className="who">
-        {!onClose && <div className="small"><a onClick={() => nav(-1)} style={{ cursor: 'pointer' }}>← voltar</a></div>}
+        {!onClose && <div className="small"><a onClick={() => nav(-1)} style={{ cursor: 'pointer' }}>{tr("← voltar")}</a></div>}
         <div className="row wrap" style={{ gap: 10 }}>
-          {!!c.pro_driver && <span className="star" title="Pro Racing Driver">★</span>}
+          {!!c.pro_driver && <span className="star" title={tr("Pro Racing Driver")}>★</span>}
           <h1 className="h1" style={{ fontSize: 32 }}>{c.pilot_name || c.name}</h1>
           <Status s={c.status} />
-          {c.plan_type === 'monthly' && <Chip tone="accent">Academy Monthly</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">Academy Day</Chip>}
-          {!!c.vip && <Chip tone="warn">VIP</Chip>}
+          {c.plan_type === 'monthly' && <Chip tone="accent">{tr("Academy Monthly")}</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">{tr("Academy Day")}</Chip>}
+          {!!c.vip && <Chip tone="warn">{tr("VIP")}</Chip>}
         </div>
         <div className="meta">
-          <span><span className="k">Client ID</span> <b className="mono">{c.id}</b></span>
-          {c.pilot_name && c.pilot_name !== c.name && <span><span className="k">responsável</span> <b>{c.name}</b></span>}
-          {anos !== null && <span><span className="k">idade</span> <b>{anos}</b>{menor && <Chip tone="warn">menor · waiver parental</Chip>}</span>}
-          {c.email ? <span><span className="k">e-mail</span> <a href={`mailto:${c.email}`}>{c.email}</a>{c.email_alt && <> <span className="muted">·</span> <a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></>}</span> : <span className="muted">sem e-mail</span>}
-          {c.phone && <span><span className="k">tel</span> <a href={`tel:${c.phone}`}>{c.phone}</a></span>}
-          {c.company && <span><span className="k">empresa</span> {c.company}</span>}
+          <span><span className="k">{tr("Client ID")}</span> <b className="mono">{c.id}</b></span>
+          {c.pilot_name && c.pilot_name !== c.name && <span><span className="k">{tr("responsável")}</span> <b>{c.name}</b></span>}
+          {anos !== null && <span><span className="k">{tr("idade")}</span> <b>{anos}</b>{menor && <Chip tone="warn">{tr("menor · waiver parental")}</Chip>}</span>}
+          {c.email ? <span><span className="k">{tr("e-mail")}</span> <a href={`mailto:${c.email}`}>{c.email}</a>{c.email_alt && <> <span className="muted">·</span> <a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></>}</span> : <span className="muted">{tr("sem e-mail")}</span>}
+          {c.phone && <span><span className="k">{tr("tel")}</span> <a href={`tel:${c.phone}`}>{c.phone}</a></span>}
+          {c.company && <span><span className="k">{tr("empresa")}</span> {c.company}</span>}
         </div>
       </div>
       <div className="c360-acts">
-        {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>✦ Perguntar à IA</button>}
-        {can('MANAGER') && <button className={`btn${c.pro_driver ? '' : ''}`} disabled={proBusy} onClick={togglePro} title={c.pro_driver ? 'Tirar de Pro Racing Driver' : 'Vai para a aba Pro Racing Drivers e libera equipamento e corridas'}>{proBusy ? <span className="spin" /> : c.pro_driver ? '★ Pro Racing Driver' : '☆ Tornar Pro'}</button>}
-        {(can('OPERATOR') || box) && <button className="btn" onClick={() => setQr(true)} title="O QR que o mecânico lê no balcão">▣ QR do balcão</button>}
-        {can('OPERATOR') && <button className="btn" onClick={openEdit}>Editar</button>}
-        {can('OPERATOR') && <details className="more"><summary className="btn" title="Mais ações">⋯</summary><div className="menu">
-          <button className="btn ghost sm" disabled={scanning} onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? `Varredura parcial: ${r.avisos.join('; ')}` : `Achou ${r.gmail} thread(s) de e-mail e ligou ${r.docusign} waiver(s).`, r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} Buscar no Gmail e DocuSign</button>
-          <button className="btn ghost sm" onClick={() => setUnir(true)}>⧉ Unir com outro card</button>
+        {can('OPERATOR') && <button className="btn primary" onClick={() => { onClose?.(); nav('/ai', { state: { ask: `Sobre o cliente ${c.name}${c.pilot_name ? ` (piloto ${c.pilot_name})` : ''}: ` } }) }}>{tr("✦ Perguntar à IA")}</button>}
+        {can('MANAGER') && <button className={`btn${c.pro_driver ? '' : ''}`} disabled={proBusy} onClick={togglePro} title={c.pro_driver ? tr("Tirar de Pro Racing Driver") : tr("Vai para a aba Pro Racing Drivers e libera equipamento e corridas")}>{proBusy ? <span className="spin" /> : c.pro_driver ? tr("★ Pro Racing Driver") : tr("☆ Tornar Pro")}</button>}
+        {(can('OPERATOR') || box) && <button className="btn" onClick={() => setQr(true)} title={tr("O QR que o mecânico lê no balcão")}>{tr("▣ QR do balcão")}</button>}
+        {can('OPERATOR') && <button className="btn" onClick={openEdit}>{tr("Editar")}</button>}
+        {can('OPERATOR') && <details className="more"><summary className="btn" title={tr("Mais ações")}>⋯</summary><div className="menu">
+          <button className="btn ghost sm" disabled={scanning} onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? tr("Varredura parcial: {0}", r.avisos.join('; ')) : tr("Achou {0} thread(s) de e-mail e ligou {1} waiver(s).", r.gmail, r.docusign), r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} {tr("Buscar no Gmail e DocuSign")}</button>
+          <button className="btn ghost sm" onClick={() => setUnir(true)}>{tr("⧉ Unir com outro card")}</button>
         </div></details>}
       </div>
     </div>
-    {risco && <Banner tone="crit"><b>Serviço em {dias === 0 ? 'HOJE' : `${dias} dia(s)`} sem waiver assinada.</b> {wBad ? `O e-mail ${wBad.signer_email} devolveu: corrija e reenvie.` : wOpen ? `Envelope ${WAIVER_LABEL[wOpen.status!]}; cobre a assinatura.` : 'Nenhum envelope enviado.'}</Banner>}
-    {!!c.vip && <Banner tone="info">Cliente VIP: dispensa waiver por decisão do dono (04/09/2026). Nada de cobrança automática.</Banner>}
+    {risco && <Banner tone="crit"><b>{tr("Serviço em")} {dias === 0 ? tr("HOJE") : tr("{0} dia(s)", dias)} {tr("sem waiver assinada.")}</b> {wBad ? tr("O e-mail {0} devolveu: corrija e reenvie.", wBad.signer_email) : wOpen ? tr("Envelope {0}; cobre a assinatura.", WAIVER_LABEL[wOpen.status!]) : tr("Nenhum envelope enviado.")}</Banner>}
+    {!!c.vip && <Banner tone="info">{tr("Cliente VIP: dispensa waiver por decisão do dono (04/09/2026). Nada de cobrança automática.")}</Banner>}
     <div className="grid g5 c360-k">
-      <div className="card kpi"><div className="lbl">Próximo serviço</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : 'nada agendado'}</div></div>
-      <div className="card kpi"><div className="lbl">Último serviço</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot truncate" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : 'nenhum concluído'}</div></div>
-      <div className="card kpi"><div className="lbl">Waiver</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? 'dispensada' : wOk ? 'assinada' : wBad ? 'devolveu' : wOpen ? WAIVER_LABEL[wOpen.status!] : 'nenhuma'}</div><div className="foot">{wOk?.expires_at ? <>vale até {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>expira {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one /></div></div>
-      <div className="card kpi"><div className="lbl">Serviços</div><div className="val">{abertos}<span className="of">/{data.tasks.length}</span></div><div className="foot">{abertos === 1 ? '1 aberto' : `${abertos} abertos`} · {data.tasks.length - abertos} concluídos</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Próximo serviço")}</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : tr("nada agendado")}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Último serviço")}</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot truncate" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : tr("nenhum concluído")}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Waiver")}</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? tr("dispensada") : wOk ? tr("assinada") : wBad ? tr("devolveu") : wOpen ? WAIVER_LABEL[wOpen.status!] : tr("nenhuma")}</div><div className="foot">{wOk?.expires_at ? <>{tr("vale até")} {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>{tr("expira")} {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one /></div></div>
+      <div className="card kpi"><div className="lbl">{tr("Serviços")}</div><div className="val">{abertos}<span className="of">/{data.tasks.length}</span></div><div className="foot">{abertos === 1 ? tr("1 aberto") : tr("{0} abertos", abertos)} · {data.tasks.length - abertos} {tr("concluídos")}</div></div>
       {data.invoices !== null
-        ? <div className="card kpi"><div className="lbl">Em aberto (QBO)</div><div className={`val ${(data.open_balance || 0) > 0 ? 'warn' : 'ok'}`} style={{ fontSize: 22 }}>{money(data.open_balance || 0)}</div><div className="foot">{data.invoices.length} invoice(s) · {emailsAbertos ? <span style={{ color: 'var(--warn)' }}>{emailsAbertos} e-mail(s) sem resposta</span> : 'e-mails em dia'}</div></div>
-        : <div className="card kpi"><div className="lbl">E-mails</div><div className={`val ${emailsAbertos ? 'warn' : ''}`}>{emailsAbertos}</div><div className="foot">sem resposta · {data.emails.length} conhecidos</div></div>}
+        ? <div className="card kpi"><div className="lbl">{tr("Em aberto (QBO)")}</div><div className={`val ${(data.open_balance || 0) > 0 ? 'warn' : 'ok'}`} style={{ fontSize: 22 }}>{money(data.open_balance || 0)}</div><div className="foot">{data.invoices.length} {tr("invoice(s) ·")} {emailsAbertos ? <span style={{ color: 'var(--warn)' }}>{emailsAbertos} {tr("e-mail(s) sem resposta")}</span> : tr("e-mails em dia")}</div></div>
+        : <div className="card kpi"><div className="lbl">{tr("E-mails")}</div><div className={`val ${emailsAbertos ? 'warn' : ''}`}>{emailsAbertos}</div><div className="foot">{tr("sem resposta ·")} {data.emails.length} {tr("conhecidos")}</div></div>}
     </div>
-    <details className="card c360-d"><summary className="card-h" style={{ cursor: 'pointer' }}><h2 className="h2">Dados completos</h2><span className="grow" /><span className="small muted">{c.source || '—'} · desde {fmtDate(c.created_at)}{c.scanned_at && <> · varrido {fmtDateTime(c.scanned_at)}</>}</span></summary>
+    <details className="card c360-d"><summary className="card-h" style={{ cursor: 'pointer' }}><h2 className="h2">{tr("Dados completos")}</h2><span className="grow" /><span className="small muted">{c.source || '—'} {tr("· desde")} {fmtDate(c.created_at)}{c.scanned_at && <> {tr("· varrido")} {fmtDateTime(c.scanned_at)}</>}</span></summary>
       <div className="card-b grid g3">
-        <dl className="dl"><dt>Piloto</dt><dd>{c.pilot_name || <span className="muted">o próprio</span>}</dd><dt>Nascimento</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd><dt>Responsável</dt><dd>{c.name}</dd></dl>
-        <dl className="dl"><dt>E-mail</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}{c.email_alt && <div className="small"><a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></div>}</dd><dt>Telefone</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd><dt>Empresa</dt><dd>{c.company || '—'}</dd></dl>
-        <dl className="dl"><dt>Plano mensal</dt><dd>{c.monthly_plan || <span className="muted">—</span>}{c.monthly_note && <div className="small muted">{c.monthly_note}</div>}</dd><dt>Etapa</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>Tipo</dt><dd>{c.plan_type === 'monthly' ? 'Academy Monthly' : c.plan_type === 'daily' ? 'Academy Day' : '—'}{!!c.pro_driver && ' · ★ Pro'}</dd></dl>
+        <dl className="dl"><dt>{tr("Piloto")}</dt><dd>{c.pilot_name || <span className="muted">{tr("o próprio")}</span>}</dd><dt>{tr("Nascimento")}</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd><dt>{tr("Responsável")}</dt><dd>{c.name}</dd></dl>
+        <dl className="dl"><dt>{tr("E-mail")}</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}{c.email_alt && <div className="small"><a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></div>}</dd><dt>{tr("Telefone")}</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd><dt>{tr("Empresa")}</dt><dd>{c.company || '—'}</dd></dl>
+        <dl className="dl"><dt>{tr("Plano mensal")}</dt><dd>{c.monthly_plan || <span className="muted">—</span>}{c.monthly_note && <div className="small muted">{c.monthly_note}</div>}</dd><dt>{tr("Etapa")}</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>{tr("Tipo")}</dt><dd>{c.plan_type === 'monthly' ? tr("Academy Monthly") : c.plan_type === 'daily' ? tr("Academy Day") : '—'}{!!c.pro_driver && tr(" · ★ Pro")}</dd></dl>
       </div>
     </details>
-    {edit && <Section title="Editar cliente">
+    {edit && <Section title={tr("Editar cliente")}>
       <div className="grid g3">
-        <div className="field"><label>Status</label><select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{['ACTIVE', 'NEW', 'PENDING', 'AT_RISK', 'COMPLETED', 'INACTIVE'].map(s => <option key={s}>{s}</option>)}</select></div>
-        <div className="field"><label>Etapa</label><select className="input" value={form.stage_code} onChange={e => setForm({ ...form, stage_code: e.target.value })}><option value="">—</option>{data.stages.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}</select></div>
-        <div className="field"><label>VIP</label><label className="check"><input type="checkbox" disabled={!can('MANAGER')} checked={form.vip} onChange={e => setForm({ ...form, vip: e.target.checked })} /> dispensa waiver {!can('MANAGER') && <span className="muted">(só gerente)</span>}</label></div>
+        <div className="field"><label>{tr("Status")}</label><select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{['ACTIVE', 'NEW', 'PENDING', 'AT_RISK', 'COMPLETED', 'INACTIVE'].map(s => <option key={s}>{s}</option>)}</select></div>
+        <div className="field"><label>{tr("Etapa")}</label><select className="input" value={form.stage_code} onChange={e => setForm({ ...form, stage_code: e.target.value })}><option value="">—</option>{data.stages.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}</select></div>
+        <div className="field"><label>{tr("VIP")}</label><label className="check"><input type="checkbox" disabled={!can('MANAGER')} checked={form.vip} onChange={e => setForm({ ...form, vip: e.target.checked })} /> {tr("dispensa waiver")} {!can('MANAGER') && <span className="muted">{tr("(só gerente)")}</span>}</label></div>
       </div>
       <div className="grid g2" style={{ marginTop: 12 }}>
-        <div className="field"><label>Tipo de piloto</label><select className="input" value={form.plan_type} onChange={e => setForm({ ...form, plan_type: e.target.value })}><option value="">não definido</option><option value="monthly">Urace Academy Monthly (mensal)</option><option value="daily">Urace Academy Day (diária)</option></select></div>
-        <div className="field"><label>★ Pro Racing Driver</label><label className="check"><input type="checkbox" disabled={!can('MANAGER')} checked={form.pro_driver} onChange={e => setForm({ ...form, pro_driver: e.target.checked })} /> pronto para ser convidado para corridas {!can('MANAGER') && <span className="muted">(só gerente)</span>}</label></div>
-        <div className="field"><label>Plano mensal (gera a invoice do dia 1)</label><select className="input" value={form.monthly_plan} onChange={e => setForm({ ...form, monthly_plan: e.target.value })}><option value="">sem plano mensal</option>{['Academy Baby Kart', 'Academy 4 stroke', 'Academy 2 stroke', 'Academy kart próprio', 'Academy kart próprio + mecânico', 'Contrato 6 meses', 'Contrato 12 meses'].map(x => <option key={x}>{x}</option>)}</select></div>
-        <div className="field"><label>Ajustes do plano</label><input className="input" value={form.monthly_note} onChange={e => setForm({ ...form, monthly_note: e.target.value })} placeholder="ex.: 1 sessão extra em setembro; treino fora do OKC" /></div>
+        <div className="field"><label>{tr("Tipo de piloto")}</label><select className="input" value={form.plan_type} onChange={e => setForm({ ...form, plan_type: e.target.value })}><option value="">{tr("não definido")}</option><option value="monthly">{tr("Urace Academy Monthly (mensal)")}</option><option value="daily">{tr("Urace Academy Day (diária)")}</option></select></div>
+        <div className="field"><label>{tr("★ Pro Racing Driver")}</label><label className="check"><input type="checkbox" disabled={!can('MANAGER')} checked={form.pro_driver} onChange={e => setForm({ ...form, pro_driver: e.target.checked })} /> {tr("pronto para ser convidado para corridas")} {!can('MANAGER') && <span className="muted">{tr("(só gerente)")}</span>}</label></div>
+        <div className="field"><label>{tr("Plano mensal (gera a invoice do dia 1)")}</label><select className="input" value={form.monthly_plan} onChange={e => setForm({ ...form, monthly_plan: e.target.value })}><option value="">{tr("sem plano mensal")}</option>{['Academy Baby Kart', 'Academy 4 stroke', 'Academy 2 stroke', 'Academy kart próprio', 'Academy kart próprio + mecânico', 'Contrato 6 meses', 'Contrato 12 meses'].map(x => <option key={x}>{x}</option>)}</select></div>
+        <div className="field"><label>{tr("Ajustes do plano")}</label><input className="input" value={form.monthly_note} onChange={e => setForm({ ...form, monthly_note: e.target.value })} placeholder={tr("ex.: 1 sessão extra em setembro; treino fora do OKC")} /></div>
       </div>
-      <div className="field" style={{ marginTop: 12 }}><label>Notas</label><TextoComVoz valor={form.notes} onChange={t => setForm({ ...form, notes: t })} linhas={3} placeholder="Dá para ditar" /></div>
-      <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}><button className="btn" onClick={() => setEdit(false)}>Cancelar</button><button className="btn primary" disabled={saving} onClick={save}>{saving ? <span className="spin" /> : 'Salvar'}</button></div>
+      <div className="field" style={{ marginTop: 12 }}><label>{tr("Notas")}</label><TextoComVoz valor={form.notes} onChange={t => setForm({ ...form, notes: t })} linhas={3} placeholder={tr("Dá para ditar")} /></div>
+      <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}><button className="btn" onClick={() => setEdit(false)}>{tr("Cancelar")}</button><button className="btn primary" disabled={saving} onClick={save}>{saving ? <span className="spin" /> : tr("Salvar")}</button></div>
     </Section>}
-    {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>Notas:</b> {c.notes}</div>}
+    {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>{tr("Notas:")}</b> {c.notes}</div>}
     <div className="tabs">
       {(['timeline', 'monthly', 'equip', 'races', 'pecas', 'site', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && ((t !== 'pecas' && t !== 'site') || can('OPERATOR') || (box && t === 'pecas'))
         && !(box && ['monthly', 'races', 'site', 'emails', 'invoices', 'ai'].includes(t))).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
-        {{ timeline: 'Linha do tempo', monthly: 'Mensalidade e contrato', equip: '★ Equipamento', races: `★ Corridas`, pecas: 'Peças', site: 'Conta no site', tasks: `Serviços (${data.tasks.length})`, waivers: `Waivers (${data.waivers.length})`, emails: `E-mails (${data.emails.length})`, invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: `IA (${data.ai_actions.length})` }[t]}
+        {{ timeline: tr("Linha do tempo"), monthly: tr("Mensalidade e contrato"), equip: tr("★ Equipamento"), races: tr("★ Corridas"), pecas: tr("Peças"), site: tr("Conta no site"), tasks: tr("Serviços ({0})", data.tasks.length), waivers: tr("Waivers ({0})", data.waivers.length), emails: tr("E-mails ({0})", data.emails.length), invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: tr("IA ({0})", data.ai_actions.length) }[t]}
       </button>)}
     </div>
     <div className="card card-b">
-      {tab === 'timeline' && (data.timeline.length === 0 ? <Empty>Nenhum evento ainda.</Empty> : <div className="tl">{data.timeline.map((e, i) => {
+      {tab === 'timeline' && (data.timeline.length === 0 ? <Empty>{tr("Nenhum evento ainda.")}</Empty> : <div className="tl">{data.timeline.map((e, i) => {
         const [lbl, tone] = KIND[e.kind] || [e.kind, '']
         const mes = (e.at || '').slice(0, 7); const antes = (data.timeline[i - 1]?.at || '').slice(0, 7)
         return <div key={i}>
-          {mes !== antes && <div className="tl-m">{mes ? new Date(mes + '-02T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : 'sem data'}</div>}
+          {mes !== antes && <div className="tl-m">{mes ? new Date(mes + '-02T12:00:00').toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric' }) : tr("sem data")}</div>}
           <div className="ev"><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div className="b">
             <div className="row wrap" style={{ gap: 8 }}><span className={`kind ${tone}`}>{lbl}</span><span className="t">{e.title}</span><Status s={e.status} label={e.kind.startsWith('WAIVER') ? (WAIVER_LABEL[(e.status || '').toLowerCase()] || e.status) : undefined} /><span className="grow" /><SysLink links={e.links} /></div>
             {e.detail && <div className="small muted">{e.detail}</div>}
@@ -184,28 +185,28 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'pecas' && <><QrBalcao cid={c.id} nome={c.pilot_name || c.name} /><PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} /></>}
       {tab === 'site' && <ContaNoSite cid={c.id} />}
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
-      {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Serviço</th><th>Coluna</th><th>Status</th><th>Subtarefas</th><th>Waiver</th><th></th></tr></thead><tbody>
-        {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>Sem serviços vinculados.</Empty></td></tr>}
-        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Status s={t.status} /></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title="A waiver assinada foi anexada nesta tarefa">📎 waiver</a> : <span className="muted">—</span>}</td>
-          <td className="nowrap"><SysLink links={t.links} />{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title="trocar o nome do serviço (no Asana também)">Renomear</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title="este serviço é de outro cliente">Mover</button>}</td></tr>)}
+      {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Data")}</th><th>{tr("Serviço")}</th><th>{tr("Coluna")}</th><th>{tr("Status")}</th><th>{tr("Subtarefas")}</th><th>{tr("Waiver")}</th><th></th></tr></thead><tbody>
+        {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>{tr("Sem serviços vinculados.")}</Empty></td></tr>}
+        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Status s={t.status} /></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title={tr("A waiver assinada foi anexada nesta tarefa")}>{tr("📎 waiver")}</a> : <span className="muted">—</span>}</td>
+          <td className="nowrap"><SysLink links={t.links} />{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title={tr("trocar o nome do serviço (no Asana também)")}>{tr("Renomear")}</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title={tr("este serviço é de outro cliente")}>{tr("Mover")}</button>}</td></tr>)}
       </tbody></table></div>}
-      {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Signatário</th><th>Modelo</th><th>Status</th><th>Enviada</th><th>Assinada</th><th>Expira</th><th></th></tr></thead><tbody>
-        {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>Nenhum envelope para este e-mail.</Empty></td></tr>}
-        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}{w.source === 'urace' && <div className="small muted">área do cliente</div>}</td><td><Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} /></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.source === 'urace' ? 'PDF assinado na área do cliente (com página de certificado)' : w.pdf_path ? 'PDF assinado guardado no card' : 'Baixar PDF assinado do DocuSign'}>⬇ PDF{w.pdf_path ? ' ✓' : ''}</a>} <SysLink links={w.links} /></td></tr>)}
+      {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Signatário")}</th><th>{tr("Modelo")}</th><th>{tr("Status")}</th><th>{tr("Enviada")}</th><th>{tr("Assinada")}</th><th>{tr("Expira")}</th><th></th></tr></thead><tbody>
+        {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum envelope para este e-mail.")}</Empty></td></tr>}
+        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}{w.source === 'urace' && <div className="small muted">{tr("área do cliente")}</div>}</td><td><Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} /></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.source === 'urace' ? tr("PDF assinado na área do cliente (com página de certificado)") : w.pdf_path ? tr("PDF assinado guardado no card") : tr("Baixar PDF assinado do DocuSign")}>{tr("⬇ PDF")}{w.pdf_path ? ' ✓' : ''}</a>} <SysLink links={w.links} /></td></tr>)}
       </tbody></table></div>}
-      {tab === 'emails' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Caixa</th><th>Assunto</th><th>De</th><th>Prioridade</th><th>Tratado</th><th></th></tr></thead><tbody>
-        {data.emails.length === 0 && <tr><td colSpan={7}><Empty>Nenhum e-mail vinculado.</Empty></td></tr>}
-        {data.emails.map(e => <tr key={e.id}><td className="mono">{fmtDateTime(e.last_at)}</td><td>{e.mailbox}@</td><td>{e.subject}</td><td className="small">{e.sender}</td><td>{e.priority && <Chip tone={statusTone(e.priority === 'CRITICAL' ? 'ERROR' : e.priority === 'HIGH' ? 'PENDING' : 'ACTIVE')}>{e.priority}</Chip>}</td><td>{e.handled ? '✓' : <span style={{ color: 'var(--warn)' }}>não</span>}</td><td><SysLink links={e.links} /></td></tr>)}
+      {tab === 'emails' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Quando")}</th><th>{tr("Caixa")}</th><th>{tr("Assunto")}</th><th>{tr("De")}</th><th>{tr("Prioridade")}</th><th>{tr("Tratado")}</th><th></th></tr></thead><tbody>
+        {data.emails.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum e-mail vinculado.")}</Empty></td></tr>}
+        {data.emails.map(e => <tr key={e.id}><td className="mono">{fmtDateTime(e.last_at)}</td><td>{e.mailbox}@</td><td>{e.subject}</td><td className="small">{e.sender}</td><td>{e.priority && <Chip tone={statusTone(e.priority === 'CRITICAL' ? 'ERROR' : e.priority === 'HIGH' ? 'PENDING' : 'ACTIVE')}>{e.priority}</Chip>}</td><td>{e.handled ? '✓' : <span style={{ color: 'var(--warn)' }}>{tr("não")}</span>}</td><td><SysLink links={e.links} /></td></tr>)}
       </tbody></table></div>}
-      {tab === 'invoices' && (data.invoices === null ? <Empty title="Financeiro restrito">Invoices são visíveis para gerentes e administradores.</Empty> :
-        data.invoices.length === 0 ? <Empty>Nenhuma invoice. QuickBooks está em stand-by; nada é inventado aqui.</Empty> : <>
-        {(() => { const abertas = data.invoices.filter(i => ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0); return abertas.length > 0 && can('MANAGER') && <div className="row wrap" style={{ marginBottom: 8 }}><span className="small muted"><b className="ink2">{abertas.length}</b> em aberto · {money(abertas.reduce((s, i) => s + (i.balance || 0), 0))}</span><span className="grow" /><button className="btn sm" onClick={() => setSelInv(s => s.length === abertas.length ? [] : abertas.map(i => i.id))}>{selInv.length === abertas.length ? 'desmarcar' : 'marcar todas em aberto'}</button><button className="btn primary sm" disabled={selInv.length === 0} onClick={() => setLemb(true)}>⏰ Lembretes{selInv.length ? ` (${selInv.length})` : ''}</button></div> })()}
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th></th><th>Nº</th><th>Emitida</th><th>Vence</th><th>Valor</th><th>Saldo</th><th>Status</th><th>Lembrete</th></tr></thead><tbody>
-          {data.invoices.map(i => { const aberta = ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0; return <tr key={i.id}><td>{aberta && can('MANAGER') && <input type="checkbox" checked={selInv.includes(i.id)} onChange={() => setSelInv(s => s.includes(i.id) ? s.filter(x => x !== i.id) : [...s, i.id])} aria-label={`Selecionar ${i.doc_number}`} />}</td><td className="mono">{i.doc_number}{i.memo && <div className="small muted truncate" style={{ maxWidth: 220 }} title={i.memo}>{i.memo}</div>}</td><td className="mono">{fmtDate(i.issued_on)}</td><td className="mono">{fmtDate(i.due_on)}</td><td className="mono">{money(i.amount)}</td><td className="mono">{money(i.balance)}</td><td><Status s={i.status} /></td><td><LembreteChip i={i} onChange={reload} /></td></tr> })}
+      {tab === 'invoices' && (data.invoices === null ? <Empty title={tr("Financeiro restrito")}>{tr("Invoices são visíveis para gerentes e administradores.")}</Empty> :
+        data.invoices.length === 0 ? <Empty>{tr("Nenhuma invoice. QuickBooks está em stand-by; nada é inventado aqui.")}</Empty> : <>
+        {(() => { const abertas = data.invoices.filter(i => ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0); return abertas.length > 0 && can('MANAGER') && <div className="row wrap" style={{ marginBottom: 8 }}><span className="small muted"><b className="ink2">{abertas.length}</b> {tr("em aberto ·")} {money(abertas.reduce((s, i) => s + (i.balance || 0), 0))}</span><span className="grow" /><button className="btn sm" onClick={() => setSelInv(s => s.length === abertas.length ? [] : abertas.map(i => i.id))}>{selInv.length === abertas.length ? tr("desmarcar") : tr("marcar todas em aberto")}</button><button className="btn primary sm" disabled={selInv.length === 0} onClick={() => setLemb(true)}>{tr("⏰ Lembretes")}{selInv.length ? ` (${selInv.length})` : ''}</button></div> })()}
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th></th><th>{tr("Nº")}</th><th>{tr("Emitida")}</th><th>{tr("Vence")}</th><th>{tr("Valor")}</th><th>{tr("Saldo")}</th><th>{tr("Status")}</th><th>{tr("Lembrete")}</th></tr></thead><tbody>
+          {data.invoices.map(i => { const aberta = ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0; return <tr key={i.id}><td>{aberta && can('MANAGER') && <input type="checkbox" checked={selInv.includes(i.id)} onChange={() => setSelInv(s => s.includes(i.id) ? s.filter(x => x !== i.id) : [...s, i.id])} aria-label={tr("Selecionar {0}", i.doc_number)} />}</td><td className="mono">{i.doc_number}{i.memo && <div className="small muted truncate" style={{ maxWidth: 220 }} title={i.memo}>{i.memo}</div>}</td><td className="mono">{fmtDate(i.issued_on)}</td><td className="mono">{fmtDate(i.due_on)}</td><td className="mono">{money(i.amount)}</td><td className="mono">{money(i.balance)}</td><td><Status s={i.status} /></td><td><LembreteChip i={i} onChange={reload} /></td></tr> })}
         </tbody></table></div>
         {lemb && <LembreteModal invoices={data.invoices.filter(i => selInv.includes(i.id))} onClose={() => setLemb(false)} onDone={() => { reload(); setSelInv([]) }} />}
       </>)}
-      {tab === 'ai' && (data.ai_actions.length === 0 ? <Empty>A IA ainda não propôs nada para este cliente.</Empty> :
+      {tab === 'ai' && (data.ai_actions.length === 0 ? <Empty>{tr("A IA ainda não propôs nada para este cliente.")}</Empty> :
         <div className="acts">{data.ai_actions.map(a => <div className="act" key={a.id}><span className="what">{a.action}</span><Chip tone={statusTone(a.policy)}>{POLICY_LABEL[a.policy]}</Chip><Chip tone={statusTone(a.status)}>{a.status}</Chip><span className="small muted">{fmtDateTime(a.created_at)}</span>{a.reason && <div className="small ink2" style={{ width: '100%' }}>{a.reason}</div>}</div>)}</div>)}
     </div>
   </>
@@ -221,7 +222,7 @@ interface Mensal { monthly_plan: string | null; monthly_amount: number | null; m
 /** Um mês da mensalidade agendada (#63): criado e enviado pelo QuickBooks no dia 1 às 01:00 (Flórida). */
 interface MesAgendado { id: number; month: string; amount: number; email: string | null; send_at: string; status: 'a_enviar' | 'enviada' | 'falhou' | 'cancelada'
   doc_number: string | null; sent_at: string | null; error: string | null; attempts: number; note: string | null }
-const MES_ROTULO: Record<MesAgendado['status'], [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { a_enviar: ['a enviar', 'neutral'], enviada: ['enviada', 'ok'], falhou: ['falhou', 'crit'], cancelada: ['cancelada', 'neutral'] }
+const MES_ROTULO: Record<MesAgendado['status'], [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { a_enviar: [tr("a enviar"), 'neutral'], enviada: ['enviada', 'ok'], falhou: ['falhou', 'crit'], cancelada: ['cancelada', 'neutral'] }
 /** "envia em 01/11 01:00" · "URACE-0021, enviada em …" · "falhou: motivo" — o horário é o da Flórida. */
 function situacaoMes(x: MesAgendado) {
   const [dia, hora] = x.send_at.split(' ')
@@ -229,11 +230,11 @@ function situacaoMes(x: MesAgendado) {
   if (x.status === 'a_enviar') return `envia em ${quando}`
   if (x.status === 'enviada') return `${x.doc_number ? `${x.doc_number}, ` : ''}${x.sent_at ? `enviada em ${fmtDateTime(x.sent_at)}` : 'enviada'}${x.note ? ` · ${x.note}` : ''}`
   if (x.status === 'falhou') return `${x.error || 'falhou'}${x.attempts < 3 ? ` · tenta de novo (${x.attempts}/3)` : ' · 3 tentativas: confira no QuickBooks'}`
-  return 'não será enviada'
+  return tr('não será enviada')
 }
-const REC_ROTULO: Record<string, [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { active: ['ativa', 'ok'], simulated: ['simulação — nada criado', 'warn'], failed: ['falhou', 'crit'], ended: ['encerrada', 'neutral'] }
+const REC_ROTULO: Record<string, [string, 'ok' | 'warn' | 'crit' | 'neutral']> = { active: ['ativa', 'ok'], simulated: [tr("simulação — nada criado"), 'warn'], failed: ['falhou', 'crit'], ended: ['encerrada', 'neutral'] }
 const mesAno = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`
-const mesExtenso = (iso: string) => new Date(iso.slice(0, 7) + '-15T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+const mesExtenso = (iso: string) => new Date(iso.slice(0, 7) + '-15T12:00:00Z').toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const somaMeses = (iso: string, n: number) => { const b = new Date(iso.slice(0, 7) + '-15T12:00:00Z'); b.setUTCMonth(b.getUTCMonth() + n); return b.toISOString().slice(0, 10) }
 /** Valor em dólar como a pessoa digita: "2756,9", "2.756,90", "2,756.90", "$ 450" → número.
  *  O último separador seguido de 1 ou 2 dígitos é o decimal; os outros são milhar. */
@@ -283,102 +284,102 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
 
   async function salvar() {
     const n = vNum
-    if (n !== null && (Number.isNaN(n) || n <= 0)) { toast('Valor mensal inválido. Ex.: 2,756.90', 'warn'); return }
+    if (n !== null && (Number.isNaN(n) || n <= 0)) { toast(tr("Valor mensal inválido. Ex.: 2,756.90"), 'warn'); return }
     setSalvando(true)
-    if (sesNum !== null && (!Number.isInteger(sesNum) || sesNum < 1 || sesNum > 31)) { toast('Sessões por mês: de 1 a 31.', 'warn'); setSalvando(false); return }
+    if (sesNum !== null && (!Number.isInteger(sesNum) || sesNum < 1 || sesNum > 31)) { toast(tr("Sessões por mês: de 1 a 31."), 'warn'); setSalvando(false); return }
     try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: n, monthly_item_id: it || null, ...(sesNum !== null ? { monthly_sessions: sesNum } : {}) })
-      toast('Mensalidade salva. É ela que vai na invoice do dia 1.', 'ok'); setValor(null); setItem(null); setSessoes(null); d.reload() }
+      toast(tr("Mensalidade salva. É ela que vai na invoice do dia 1."), 'ok'); setValor(null); setItem(null); setSessoes(null); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
   const soltas = (q.data?.recorrencias || []).filter(x => x.ativa && !x.vinculada_id && !x.de_outro_cliente)
   const ativaNoPainel = m.recorrencias.find(x => x.status === 'active' && x.end_on >= ini)
   const noQbo = new Map((q.data?.recorrencias || []).map(x => [String(x.id), x]))
-  const bloqueio = !q.data ? 'conferindo o QuickBooks…' : !q.data.conectado ? 'sem conferir o QuickBooks não dá para criar'
-    : soltas.length ? 'já existe cobrança recorrente no QuickBooks: vincule' : ativaNoPainel ? 'já existe recorrência ativa' : ''
+  const bloqueio = !q.data ? tr('conferindo o QuickBooks…') : !q.data.conectado ? tr('sem conferir o QuickBooks não dá para criar')
+    : soltas.length ? tr('já existe cobrança recorrente no QuickBooks: vincule') : ativaNoPainel ? tr('já existe recorrência ativa') : ''
   async function vincular(x: RecQbo) {
-    if (!await perguntar({ titulo: 'Vincular esta recorrência ao Command Center?',
-      texto: `A cobrança continua sendo a do QuickBooks (“${x.nome || x.id}”, $${fmtDolar(x.total || 0)}), sem criar outra. O valor mensal do card passa a ser $${fmtDolar(x.total || 0)}, e o dia 1 do painel não prepara outra invoice para este cliente.`,
-      ok: 'Vincular' })) return
+    if (!await perguntar({ titulo: tr("Vincular esta recorrência ao Command Center?"),
+      texto: tr("A cobrança continua sendo a do QuickBooks (“{0}”, ${1}), sem criar outra. O valor mensal do card passa a ser ${2}, e o dia 1 do painel não prepara outra invoice para este cliente.", x.nome || x.id, fmtDolar(x.total || 0), fmtDolar(x.total || 0)),
+      ok: tr("Vincular") })) return
     setSalvando(true)
-    try { await api.post(`/clients/${id}/mensal/vincular`, { qbo_id: x.id }); toast('Vinculada: agora é uma cobrança só, a do QuickBooks.', 'ok'); setValor(null); setItem(null); d.reload(); q.reload() }
+    try { await api.post(`/clients/${id}/mensal/vincular`, { qbo_id: x.id }); toast(tr("Vinculada: agora é uma cobrança só, a do QuickBooks."), 'ok'); setValor(null); setItem(null); d.reload(); q.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
   async function recorrencia() {
-    if (!Number.isInteger(nMeses) || nMeses < 1 || nMeses > 36) { toast('Escolha de 1 a 36 meses.', 'warn'); return }
+    if (!Number.isInteger(nMeses) || nMeses < 1 || nMeses > 36) { toast(tr("Escolha de 1 a 36 meses."), 'warn'); return }
     const ultimo = somaMeses(ini, nMeses - 1)
-    if (!await perguntar({ titulo: `Criar as ${nMeses} mensalidade${nMeses > 1 ? 's' : ''}?`,
-      texto: `Ficam criadas agora, uma por mês, de ${mesExtenso(ini)} a ${mesExtenso(ultimo)}: $${fmtDolar(m.monthly_amount || 0)} cada, para ${m.email || 'o e-mail do cliente no QuickBooks'}. ` +
-             `Cada uma é criada e enviada pelo QuickBooks no dia 1 do mês, à 01:00 (Flórida) — o mês que já começou sai em até 15 minutos. ` +
-             `Este clique aprova todas. O mês que já tem invoice de mensalidade não é cobrado de novo, e dá para cancelar um mês antes de ele sair.`,
-      ok: 'Criar e agendar' })) return
+    if (!await perguntar({ titulo: tr("Criar as {0} mensalidade{1}?", nMeses, nMeses > 1 ? 's' : ''),
+      texto: tr("Ficam criadas agora, uma por mês, de {0} a {1}: ${2} cada, para {3}. ", mesExtenso(ini), mesExtenso(ultimo), fmtDolar(m.monthly_amount || 0), m.email || 'o e-mail do cliente no QuickBooks') +
+             tr("Cada uma é criada e enviada pelo QuickBooks no dia 1 do mês, à 01:00 (Flórida) — o mês que já começou sai em até 15 minutos. ") +
+             tr("Este clique aprova todas. O mês que já tem invoice de mensalidade não é cobrado de novo, e dá para cancelar um mês antes de ele sair."),
+      ok: tr("Criar e agendar") })) return
     setSalvando(true)
     try {
       const r = await api.post<{ agendadas: MesAgendado[] }>(`/clients/${id}/mensal/recorrencia`, { meses: nMeses, inicio: ini })
-      toast(`${r.agendadas.length} mensalidade${r.agendadas.length > 1 ? 's' : ''} agendada${r.agendadas.length > 1 ? 's' : ''}: cada uma sai no dia 1 à 01:00.`, 'ok'); d.reload()
+      toast(tr("{0} mensalidade{1} agendada{2}: cada uma sai no dia 1 à 01:00.", r.agendadas.length, r.agendadas.length > 1 ? 's' : '', r.agendadas.length > 1 ? 's' : ''), 'ok'); d.reload()
     } catch (e) { toast((e as ApiError).message, 'crit'); d.reload() } finally { setSalvando(false) }
   }
   async function cancelarMes(x: MesAgendado) {
-    if (!await perguntar({ titulo: `Cancelar a mensalidade de ${mesExtenso(x.month + '-01')}?`,
-      texto: `Ela não será enviada. Nada é apagado: a linha fica "cancelada", com o seu nome.`, ok: 'Cancelar este mês', perigo: true })) return
+    if (!await perguntar({ titulo: tr("Cancelar a mensalidade de {0}?", mesExtenso(x.month + '-01')),
+      texto: tr("Ela não será enviada. Nada é apagado: a linha fica \"cancelada\", com o seu nome."), ok: tr("Cancelar este mês"), perigo: true })) return
     setSalvando(true)
-    try { await api.post(`/clients/${id}/mensal/agendadas/${x.id}/cancelar`, {}); toast('Mês cancelado.', 'ok'); d.reload() }
+    try { await api.post(`/clients/${id}/mensal/agendadas/${x.id}/cancelar`, {}); toast(tr("Mês cancelado."), 'ok'); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
-  return <Section title="Valor da mensalidade e recorrência">
+  return <Section title={tr("Valor da mensalidade e recorrência")}>
     {soltas.length > 0 && <div className="banner crit" role="alert" style={{ marginBottom: 14, padding: '14px 16px' }}><div className="grow">
-      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>⚠ Este cliente já tem cobrança recorrente no QuickBooks</div>
-      <div className="small" style={{ marginBottom: 8 }}>Para não cobrar duas vezes, não crie outra: vincule a que já existe ao Command Center.</div>
+      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 6 }}>{tr("⚠ Este cliente já tem cobrança recorrente no QuickBooks")}</div>
+      <div className="small" style={{ marginBottom: 8 }}>{tr("Para não cobrar duas vezes, não crie outra: vincule a que já existe ao Command Center.")}</div>
       {soltas.map(x => <div key={x.id} className="row wrap" style={{ gap: 10, padding: '6px 0', borderTop: '1px solid var(--glass-line)' }}>
-        <div className="grow"><b>{x.nome || `recorrência ${x.id}`}</b> · ${fmtDolar(x.total || 0)} por mês
-          <div className="small muted">desde {x.inicio ? mesExtenso(x.inicio) : '?'}{x.fim ? ` até ${mesExtenso(x.fim)}` : x.ocorrencias ? ` · ${x.ocorrencias} vezes` : ' · sem fim'}{x.proxima ? ` · próxima ${fmtDate(x.proxima)}` : ''}{x.email ? ` · ${x.email}` : ''}{x.linhas[0]?.item ? ` · ${x.linhas[0].item}` : ''}</div></div>
-        <button className="btn primary" disabled={salvando || !!ativaNoPainel} title={ativaNoPainel ? 'o card já tem outra recorrência ativa' : ''} onClick={() => vincular(x)}>Vincular ao Command Center</button>
+        <div className="grow"><b>{x.nome || tr("recorrência {0}", x.id)}</b> · ${fmtDolar(x.total || 0)} {tr("por mês")}
+          <div className="small muted">{tr("desde")} {x.inicio ? mesExtenso(x.inicio) : '?'}{x.fim ? tr(" até {0}", mesExtenso(x.fim)) : x.ocorrencias ? tr(" · {0} vezes", x.ocorrencias) : tr(" · sem fim")}{x.proxima ? tr(" · próxima {0}", fmtDate(x.proxima)) : ''}{x.email ? ` · ${x.email}` : ''}{x.linhas[0]?.item ? ` · ${x.linhas[0].item}` : ''}</div></div>
+        <button className="btn primary" disabled={salvando || !!ativaNoPainel} title={ativaNoPainel ? tr("o card já tem outra recorrência ativa") : ''} onClick={() => vincular(x)}>{tr("Vincular ao Command Center")}</button>
       </div>)}
     </div></div>}
-    {q.data && !q.data.conectado && <Banner tone="warn">Não deu para conferir o QuickBooks ({q.data.erro}). Criar recorrência fica bloqueado até conferir — uma cobrança só.</Banner>}
+    {q.data && !q.data.conectado && <Banner tone="warn">{tr("Não deu para conferir o QuickBooks (")}{q.data.erro}{tr("). Criar recorrência fica bloqueado até conferir — uma cobrança só.")}</Banner>}
     <div className="grid g3">
-      <div className="field"><label>Valor mensal deste cliente</label>
+      <div className="field"><label>{tr("Valor mensal deste cliente")}</label>
         <div className="dolar"><span aria-hidden="true">$</span>
           <input className="input" inputMode="decimal" value={v} onChange={e => setValor(e.target.value)}
                  onBlur={() => { if (vNum !== null && !Number.isNaN(vNum)) setValor(fmtDolar(vNum)) }}
-                 placeholder={lastAmount != null ? `última: ${fmtDolar(lastAmount)}` : '0.00'} aria-label="valor mensal em dólar" /></div>
-        {v.trim() !== '' && vNum !== null && Number.isNaN(vNum) && <span className="small" style={{ color: 'var(--crit)' }}>Valor não entendido. Ex.: 2,756.90</span>}</div>
-      <div className="field"><label>Item do QuickBooks</label>
+                 placeholder={lastAmount != null ? tr("última: {0}", fmtDolar(lastAmount)) : '0.00'} aria-label={tr("valor mensal em dólar")} /></div>
+        {v.trim() !== '' && vNum !== null && Number.isNaN(vNum) && <span className="small" style={{ color: 'var(--crit)' }}>{tr("Valor não entendido. Ex.: 2,756.90")}</span>}</div>
+      <div className="field"><label>{tr("Item do QuickBooks")}</label>
         <select className="input" value={it} onChange={e => escolherItem(e.target.value)}>
-          <option value="">escolha…</option>
-          {todosItens.map(x => <option key={x.id} value={x.id}>{x.name}{x.price ? ` (tabela ${money(x.price)})` : ''}</option>)}
+          <option value="">{tr("escolha…")}</option>
+          {todosItens.map(x => <option key={x.id} value={x.id}>{x.name}{x.price ? tr(" (tabela {0})", money(x.price)) : ''}</option>)}
         </select></div>
-      <div className="field"><label>Sessões por mês do contrato</label>
-        <input className="input" inputMode="numeric" value={ses} onChange={e => setSessoes(e.target.value)} placeholder="4" aria-label="sessões por mês do contrato" /></div>
-      <div className="field"><label>&nbsp;</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>Salvar mensalidade</button></div>
+      <div className="field"><label>{tr("Sessões por mês do contrato")}</label>
+        <input className="input" inputMode="numeric" value={ses} onChange={e => setSessoes(e.target.value)} placeholder="4" aria-label={tr("sessões por mês do contrato")} /></div>
+      <div className="field"><label>{tr("&nbsp;")}</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>{tr("Salvar mensalidade")}</button></div>
     </div>
-    <p className="small muted" style={{ marginTop: 6 }}>Ao escolher o item, o preço de tabela entra no valor; mude se o combinado com o cliente for outro. O que estiver salvo aqui é o valor da invoice de todo dia 1.</p>
+    <p className="small muted" style={{ marginTop: 6 }}>{tr("Ao escolher o item, o preço de tabela entra no valor; mude se o combinado com o cliente for outro. O que estiver salvo aqui é o valor da invoice de todo dia 1.")}</p>
     <div className="row wrap" style={{ gap: 12, marginTop: 14, alignItems: 'flex-end' }}>
-      <div className="field"><label>Recorrência</label>
+      <div className="field"><label>{tr("Recorrência")}</label>
         <div className="row wrap" style={{ gap: 6 }}>
-          {m.opcoes_meses.map(n => <button key={n} className={`btn sm${meses === n ? ' primary' : ''}`} onClick={() => setMeses(n)}>{n} meses{n === m.padrao_meses ? ' (padrão)' : ''}</button>)}
-          <button className={`btn sm${meses === 'outro' ? ' primary' : ''}`} onClick={() => setMeses('outro')}>Personalizado</button>
-          {meses === 'outro' && <input className="input" type="number" min={1} max={36} value={outro} onChange={e => setOutro(e.target.value)} style={{ width: 90 }} aria-label="meses" />}
+          {m.opcoes_meses.map(n => <button key={n} className={`btn sm${meses === n ? ' primary' : ''}`} onClick={() => setMeses(n)}>{n} {tr("meses")}{n === m.padrao_meses ? tr(" (padrão)") : ''}</button>)}
+          <button className={`btn sm${meses === 'outro' ? ' primary' : ''}`} onClick={() => setMeses('outro')}>{tr("Personalizado")}</button>
+          {meses === 'outro' && <input className="input" type="number" min={1} max={36} value={outro} onChange={e => setOutro(e.target.value)} style={{ width: 90 }} aria-label={tr("meses")} />}
         </div></div>
-      <div className="field"><label>Primeira mensalidade</label>
-        <select className="input" value={ini} onChange={e => setInicio(e.target.value)}>{inicios.map(x => <option key={x} value={x}>dia 1 de {mesAno(x)}</option>)}</select></div>
+      <div className="field"><label>{tr("Primeira mensalidade")}</label>
+        <select className="input" value={ini} onChange={e => setInicio(e.target.value)}>{inicios.map(x => <option key={x} value={x}>{tr("dia 1 de")} {mesAno(x)}</option>)}</select></div>
       <button className="btn" disabled={salvando || mudou || !m.monthly_amount || !m.monthly_item_id || !!bloqueio} onClick={recorrencia}
-              title={mudou ? 'salve a mensalidade antes' : !m.monthly_amount || !m.monthly_item_id ? 'defina valor e item antes' : bloqueio}>Criar invoice recorrente (todos os meses)</button>
+              title={mudou ? tr("salve a mensalidade antes") : !m.monthly_amount || !m.monthly_item_id ? tr("defina valor e item antes") : bloqueio}>{tr("Criar invoice recorrente (todos os meses)")}</button>
       {bloqueio && !soltas.length && <span className="small muted">{bloqueio}</span>}
     </div>
     {m.agendadas.length > 0 && <>
-      <h3 className="h3" style={{ marginTop: 16 }}>Mensalidades agendadas</h3>
-      <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mês</th><th>Valor</th><th>Situação</th><th>Envio</th><th></th></tr></thead><tbody>
+      <h3 className="h3" style={{ marginTop: 16 }}>{tr("Mensalidades agendadas")}</h3>
+      <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Mês")}</th><th>{tr("Valor")}</th><th>{tr("Situação")}</th><th>{tr("Envio")}</th><th></th></tr></thead><tbody>
         {m.agendadas.map(x => <tr key={x.id}><td className="mono">{mesAno(x.month + '-01')}</td><td className="mono">${fmtDolar(x.amount)}</td>
           <td><Chip tone={MES_ROTULO[x.status][1]}>{MES_ROTULO[x.status][0]}</Chip></td>
           <td className="small">{situacaoMes(x)}</td>
-          <td>{(x.status === 'a_enviar' || x.status === 'falhou') && <button className="btn sm" disabled={salvando} onClick={() => cancelarMes(x)}>Cancelar</button>}</td></tr>)}
+          <td>{(x.status === 'a_enviar' || x.status === 'falhou') && <button className="btn sm" disabled={salvando} onClick={() => cancelarMes(x)}>{tr("Cancelar")}</button>}</td></tr>)}
       </tbody></table></div></>}
-    {m.recorrencias.length > 0 && <div className="tbl-wrap" style={{ marginTop: 12 }}><table className="tbl"><thead><tr><th>De</th><th>Até</th><th>Meses</th><th>Valor</th><th>Origem</th><th>Situação</th><th>No QuickBooks</th><th>Criada</th></tr></thead><tbody>
-      {m.recorrencias.map(x => <tr key={x.id}><td className="mono">{mesAno(x.start_on)}</td><td className="mono">{x.end_on >= '2099' ? 'sem fim' : mesAno(x.end_on)}</td><td className="mono">{x.months || '—'}</td><td className="mono">${fmtDolar(x.amount)}</td>
-        <td className="small">{x.source === 'qbo' ? 'vinculada do QuickBooks' : 'criada pelo painel'}</td>
+    {m.recorrencias.length > 0 && <div className="tbl-wrap" style={{ marginTop: 12 }}><table className="tbl"><thead><tr><th>{tr("De")}</th><th>{tr("Até")}</th><th>{tr("Meses")}</th><th>{tr("Valor")}</th><th>{tr("Origem")}</th><th>{tr("Situação")}</th><th>{tr("No QuickBooks")}</th><th>{tr("Criada")}</th></tr></thead><tbody>
+      {m.recorrencias.map(x => <tr key={x.id}><td className="mono">{mesAno(x.start_on)}</td><td className="mono">{x.end_on >= '2099' ? tr("sem fim") : mesAno(x.end_on)}</td><td className="mono">{x.months || '—'}</td><td className="mono">${fmtDolar(x.amount)}</td>
+        <td className="small">{x.source === 'qbo' ? tr("vinculada do QuickBooks") : tr("criada pelo painel")}</td>
         <td><Chip tone={(REC_ROTULO[x.status] || [x.status, 'neutral'])[1]}>{(REC_ROTULO[x.status] || [x.status])[0]}</Chip></td>
-        <td className="small">{!x.qbo_id ? <span className="muted">—</span> : !q.data?.conectado ? <span className="muted">QBO {x.qbo_id}</span>
-          : noQbo.get(String(x.qbo_id))?.ativa ? <Chip tone="ok">vinculada ✓</Chip> : noQbo.has(String(x.qbo_id)) ? <Chip tone="warn">inativa lá</Chip> : <Chip tone="crit">não encontrada lá</Chip>}</td>
+        <td className="small">{!x.qbo_id ? <span className="muted">—</span> : !q.data?.conectado ? <span className="muted">{tr("QBO")} {x.qbo_id}</span>
+          : noQbo.get(String(x.qbo_id))?.ativa ? <Chip tone="ok">{tr("vinculada ✓")}</Chip> : noQbo.has(String(x.qbo_id)) ? <Chip tone="warn">{tr("inativa lá")}</Chip> : <Chip tone="crit">{tr("não encontrada lá")}</Chip>}</td>
         <td className="small">{fmtDateTime(x.created_at)}{x.criado_por ? ` · ${x.criado_por}` : ''}</td></tr>)}
     </tbody></table></div>}
   </Section>
@@ -393,28 +394,28 @@ function RenomearServico({ tarefa, outras, onClose, onDone }: { tarefa: TarefaCa
   const [marcadas, setMarcadas] = useState<number[]>([])
   const [indo, setIndo] = useState(false)
   async function salvar() {
-    if (!nome.trim()) { toast('O nome não pode ficar vazio.', 'warn'); return }
+    if (!nome.trim()) { toast(tr("O nome não pode ficar vazio."), 'warn'); return }
     setIndo(true)
     try {
       const r = await api.post<{ renomeados: unknown[]; falhas: { titulo: string; motivo: string }[] }>('/tasks/renomear', { task_ids: [tarefa.id, ...marcadas], nome: nome.trim() })
-      if (r.falhas.length) toast(`${r.renomeados.length} renomeado(s); ${r.falhas.length} não: ${r.falhas[0].motivo}`, 'warn')
-      else toast(r.renomeados.length > 1 ? `${r.renomeados.length} serviços renomeados, no Asana também.` : 'Serviço renomeado, no Asana também.', 'ok')
+      if (r.falhas.length) toast(tr("{0} renomeado(s); {1} não: {2}", r.renomeados.length, r.falhas.length, r.falhas[0].motivo), 'warn')
+      else toast(r.renomeados.length > 1 ? tr("{0} serviços renomeados, no Asana também.", r.renomeados.length) : tr("Serviço renomeado, no Asana também."), 'ok')
       onDone(); onClose()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 620 }} onMouseDown={e => e.stopPropagation()}>
-    <h2 className="h2">Renomear serviço</h2>
-    <p className="small muted">Muda o nome no Asana e aqui. O que está escrito dentro da tarefa (descrição, subtarefas) não muda.</p>
-    <div className="field"><label>Nome</label><input className="input" value={nome} onChange={e => setNome(e.target.value)} autoFocus /></div>
-    {outras.length > 0 && <div className="field" style={{ marginTop: 12 }}><label>Dar o mesmo nome também a</label>
+    <h2 className="h2">{tr("Renomear serviço")}</h2>
+    <p className="small muted">{tr("Muda o nome no Asana e aqui. O que está escrito dentro da tarefa (descrição, subtarefas) não muda.")}</p>
+    <div className="field"><label>{tr("Nome")}</label><input className="input" value={nome} onChange={e => setNome(e.target.value)} autoFocus /></div>
+    {outras.length > 0 && <div className="field" style={{ marginTop: 12 }}><label>{tr("Dar o mesmo nome também a")}</label>
       <div className="tbl" style={{ maxHeight: '38vh', overflow: 'auto' }}>
         {outras.map(t => <label key={t.id} className="check" style={{ padding: '6px 2px' }}>
           <input type="checkbox" checked={marcadas.includes(t.id)} onChange={() => setMarcadas(m => m.includes(t.id) ? m.filter(x => x !== t.id) : [...m, t.id])} />
           <span className="mono small">{fmtDate(t.due_on)}</span> <span>{t.title}</span></label>)}
       </div></div>}
     <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
-      <button className="btn" onClick={onClose}>Cancelar</button>
-      <button className="btn primary" disabled={indo || !nome.trim() || (nome.trim() === tarefa.title && !marcadas.length)} onClick={salvar}>{indo ? <span className="spin" /> : `Renomear${marcadas.length ? ` (${marcadas.length + 1})` : ''}`}</button>
+      <button className="btn" onClick={onClose}>{tr("Cancelar")}</button>
+      <button className="btn primary" disabled={indo || !nome.trim() || (nome.trim() === tarefa.title && !marcadas.length)} onClick={salvar}>{indo ? <span className="spin" /> : tr("Renomear{0}", marcadas.length ? ` (${marcadas.length + 1})` : '')}</button>
     </div>
   </div></Scrim>
 }
@@ -427,17 +428,17 @@ function MoverServico({ tarefa, atual, onClose, onDone }: { tarefa: TarefaCard; 
   async function mover() {
     if (!dest) return
     setIndo(true)
-    try { await api.post(`/tasks/${tarefa.id}/cliente`, { client_id: dest.id }); toast(`Movido para ${dest.pilot_name || dest.name}.`, 'ok'); onDone(); onClose() }
+    try { await api.post(`/tasks/${tarefa.id}/cliente`, { client_id: dest.id }); toast(tr("Movido para {0}.", dest.pilot_name || dest.name), 'ok'); onDone(); onClose() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
-    <h2 className="h2">Mover serviço para outro cliente</h2>
+    <h2 className="h2">{tr("Mover serviço para outro cliente")}</h2>
     <p className="small"><b>{tarefa.title}</b></p>
-    <p className="small muted">Sai do card de {atual.pilot_name || atual.name} e vai para o cliente escolhido. A sincronia do Asana passa a respeitar a sua escolha.</p>
-    <Picker label="Cliente certo" value={dest} onPick={setDest} exclude={atual.id} />
+    <p className="small muted">{tr("Sai do card de")} {atual.pilot_name || atual.name} {tr("e vai para o cliente escolhido. A sincronia do Asana passa a respeitar a sua escolha.")}</p>
+    <Picker label={tr("Cliente certo")} value={dest} onPick={setDest} exclude={atual.id} />
     <div className="row" style={{ marginTop: 14, justifyContent: 'flex-end' }}>
-      <button className="btn" onClick={onClose}>Cancelar</button>
-      <button className="btn primary" disabled={indo || !dest} onClick={mover}>{indo ? <span className="spin" /> : 'Mover'}</button>
+      <button className="btn" onClick={onClose}>{tr("Cancelar")}</button>
+      <button className="btn primary" disabled={indo || !dest} onClick={mover}>{indo ? <span className="spin" /> : tr("Mover")}</button>
     </div>
   </div></Scrim>
 }
@@ -455,34 +456,34 @@ function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Mon
       const csrf = document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || ''
       const res = await fetch(`/ops/api/clients/${id}/contract`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': decodeURIComponent(csrf) } })
       if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || `HTTP ${res.status}`) }
-      toast('Contrato guardado.', 'ok'); setFile(null); reload()
+      toast(tr("Contrato guardado."), 'ok'); setFile(null); reload()
     } catch (e) { toast((e as Error).message, 'crit') } finally { setBusy(false) }
   }
   if (loading && !m) return <Loading />
   if (!m) return null
-  const mesNome = (k: string) => new Date(k + '-15T12:00:00Z').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const mesNome = (k: string) => new Date(k + '-15T12:00:00Z').toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric', timeZone: 'UTC' })
   return <div className="stack">
-    {plan !== 'monthly' && <Banner tone="info">Este piloto não está marcado como Academy Monthly. Marque em Editar → Tipo de piloto para o dia 1 gerar a mensalidade.</Banner>}
+    {plan !== 'monthly' && <Banner tone="info">{tr("Este piloto não está marcado como Academy Monthly. Marque em Editar → Tipo de piloto para o dia 1 gerar a mensalidade.")}</Banner>}
     <div className="grid g3">
-      <div className="card kpi"><div className="lbl">Última mensalidade</div><div className="val" style={{ fontSize: 24 }}>{fin ? (m.last_monthly_amount != null ? money(m.last_monthly_amount) : '—') : '🔒'}</div><div className="foot truncate" title={m.last_monthly_memo || ''}>{m.last_monthly_memo || 'nenhuma invoice de Academy encontrada'}</div></div>
-      <div className="card kpi"><div className="lbl">Sessões este mês</div><div className="val">{m.months[0]?.sessions_used ?? 0}<span className="muted" style={{ fontSize: 18 }}> / {m.sessions_per_month}</span></div>
-        <div className="foot">{m.months[0]?.sessions_over ? `${m.months[0].sessions_over} acima do contrato` : `${m.months[0]?.sessions_left ?? 0} restante(s)`}{m.sessions_per_month_set ? '' : ' · padrão de 4 (defina o do contrato)'} · zera no dia 1 · só a equipe vê</div></div>
-      <div className="card kpi"><div className="lbl">Invoice do mês</div><div className={`val ${m.months[0]?.invoice ? 'ok' : 'warn'}`} style={{ fontSize: 22 }}>{m.months[0]?.invoice ? (m.months[0].invoice.status || 'emitida') : 'falta'}</div><div className="foot">{m.months[0]?.invoice?.doc_number || (m.months[0]?.needs_invoice ? 'a IA monta no dia 1, você aprova' : '')}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Última mensalidade")}</div><div className="val" style={{ fontSize: 24 }}>{fin ? (m.last_monthly_amount != null ? money(m.last_monthly_amount) : '—') : '🔒'}</div><div className="foot truncate" title={m.last_monthly_memo || ''}>{m.last_monthly_memo || tr("nenhuma invoice de Academy encontrada")}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Sessões este mês")}</div><div className="val">{m.months[0]?.sessions_used ?? 0}<span className="muted" style={{ fontSize: 18 }}> / {m.sessions_per_month}</span></div>
+        <div className="foot">{m.months[0]?.sessions_over ? tr("{0} acima do contrato", m.months[0].sessions_over) : tr("{0} restante(s)", m.months[0]?.sessions_left ?? 0)}{m.sessions_per_month_set ? '' : tr(" · padrão de 4 (defina o do contrato)")} {tr("· zera no dia 1 · só a equipe vê")}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Invoice do mês")}</div><div className={`val ${m.months[0]?.invoice ? 'ok' : 'warn'}`} style={{ fontSize: 22 }}>{m.months[0]?.invoice ? (m.months[0].invoice.status || tr("emitida")) : tr("falta")}</div><div className="foot">{m.months[0]?.invoice?.doc_number || (m.months[0]?.needs_invoice ? tr("a IA monta no dia 1, você aprova") : '')}</div></div>
     </div>
     {fin && <ValorERecorrencia id={id} lastAmount={m.last_monthly_amount} />}
-    <Section title="Meses" tight><div className="tbl-wrap"><table className="tbl"><thead><tr><th>Mês</th><th>Invoice</th><th>Sessões usadas</th><th>Restantes / não usadas</th><th>Situação</th></tr></thead><tbody>
+    <Section title={tr("Meses")} tight><div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Mês")}</th><th>{tr("Invoice")}</th><th>{tr("Sessões usadas")}</th><th>{tr("Restantes / não usadas")}</th><th>{tr("Situação")}</th></tr></thead><tbody>
       {m.months.map(x => <tr key={x.month}><td style={{ textTransform: 'capitalize' }}>{mesNome(x.month)}</td>
         <td>{x.invoice ? <><span className="mono">{x.invoice.doc_number}</span> <Chip tone={statusTone(x.invoice.status === 'open' ? 'PENDING' : x.invoice.status)}>{x.invoice.status}</Chip>{fin && x.invoice.amount != null && <span className="mono"> {money(x.invoice.amount)}</span>}<div className="small muted">{x.invoice.memo}</div></> : <span className="muted">—</span>}</td>
         <td className="mono">{x.sessions_used}{x.sessions.length > 0 && <div className="small muted">{x.sessions.map(s => `${fmtDate(s.due_on)}${s.site ? ' (site)' : ''}`).join(' · ')}</div>}</td>
-        <td className="mono">{x.closed ? (x.sessions_left ? <Chip tone="warn">{x.sessions_left} não usada(s)</Chip> : '0') : x.sessions_left}{x.sessions_over ? <div className="small">{x.sessions_over} acima</div> : null}</td>
-        <td>{x.needs_invoice ? <Chip tone="warn">falta invoice</Chip> : x.invoice ? <Chip tone="ok">ok</Chip> : <span className="muted">sem uso</span>}</td></tr>)}
+        <td className="mono">{x.closed ? (x.sessions_left ? <Chip tone="warn">{x.sessions_left} {tr("não usada(s)")}</Chip> : '0') : x.sessions_left}{x.sessions_over ? <div className="small">{x.sessions_over} {tr("acima")}</div> : null}</td>
+        <td>{x.needs_invoice ? <Chip tone="warn">{tr("falta invoice")}</Chip> : x.invoice ? <Chip tone="ok">{tr("ok")}</Chip> : <span className="muted">{tr("sem uso")}</span>}</td></tr>)}
     </tbody></table></div></Section>
-    <Section title="Contrato da Academy" count={m.contracts.length}>
-      {m.contracts.length === 0 ? <div className="small muted">Nenhum contrato. Use "Buscar nas plataformas" para achar no DocuSign (assunto com Academy/contract) ou suba o PDF abaixo.</div> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Contrato</th><th>Origem</th><th>Status</th><th>Assinado</th><th></th></tr></thead><tbody>
-          {m.contracts.map(k => <tr key={k.id}><td>{k.title}</td><td>{k.source === 'docusign' ? 'DocuSign' : `upload (${k.added_by_name || ''})`}</td><td><Chip tone={statusTone(k.status)}>{k.status || '—'}</Chip></td><td className="mono">{fmtDate(k.signed_at)}</td><td><a className="btn sm" href={`/ops/api/contracts/${k.id}/download`}>⬇ PDF</a></td></tr>)}
+    <Section title={tr("Contrato da Academy")} count={m.contracts.length}>
+      {m.contracts.length === 0 ? <div className="small muted">{tr("Nenhum contrato. Use \"Buscar nas plataformas\" para achar no DocuSign (assunto com Academy/contract) ou suba o PDF abaixo.")}</div> :
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Contrato")}</th><th>{tr("Origem")}</th><th>{tr("Status")}</th><th>{tr("Assinado")}</th><th></th></tr></thead><tbody>
+          {m.contracts.map(k => <tr key={k.id}><td>{k.title}</td><td>{k.source === 'docusign' ? tr("DocuSign") : tr("upload ({0})", k.added_by_name || '')}</td><td><Chip tone={statusTone(k.status)}>{k.status || '—'}</Chip></td><td className="mono">{fmtDate(k.signed_at)}</td><td><a className="btn sm" href={`/ops/api/contracts/${k.id}/download`}>{tr("⬇ PDF")}</a></td></tr>)}
         </tbody></table></div>}
-      {can('OPERATOR') && <div className="row wrap" style={{ marginTop: 10 }}><input className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : 'Subir contrato'}</button></div>}
+      {can('OPERATOR') && <div className="row wrap" style={{ marginTop: 10 }}><input className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : tr("Subir contrato")}</button></div>}
     </Section>
   </div>
 }
@@ -495,20 +496,20 @@ function Equipamento({ c, cat, reload }: { c: { id: number; chassis_id?: number 
   if (!cat) return <Loading />
   const ch = cat.chassis.find(x => x.id === Number(f.chassis_id)); const en = cat.engines.find(x => x.id === Number(f.engine_id))
   const parts = cat.parts.filter(p => p.engine_id === Number(f.engine_id) && p.active)
-  async function save() { setBusy(true); try { await api.patch(`/clients/${c.id}/profile`, { chassis_id: f.chassis_id || null, engine_id: f.engine_id || null, equipment_notes: f.equipment_notes }); toast('Equipamento salvo.', 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) } }
+  async function save() { setBusy(true); try { await api.patch(`/clients/${c.id}/profile`, { chassis_id: f.chassis_id || null, engine_id: f.engine_id || null, equipment_notes: f.equipment_notes }); toast(tr("Equipamento salvo."), 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) } }
   return <div className="stack">
     <div className="grid g2">
-      <div className="field"><label>Chassi</label><select className="input" disabled={!can('OPERATOR')} value={f.chassis_id} onChange={e => setF({ ...f, chassis_id: Number(e.target.value) })}><option value={0}>—</option>{cat.chassis.filter(x => x.active).map(x => <option key={x.id} value={x.id}>{x.brand} {x.model || ''} {x.size ? `(${x.size})` : ''}</option>)}</select></div>
-      <div className="field"><label>Motor</label><select className="input" disabled={!can('OPERATOR')} value={f.engine_id} onChange={e => setF({ ...f, engine_id: Number(e.target.value) })}><option value={0}>—</option>{cat.engines.filter(x => x.active).map(x => <option key={x.id} value={x.id}>{x.brand} {x.model} {x.stroke ? `· ${x.stroke}` : ''}</option>)}</select></div>
+      <div className="field"><label>{tr("Chassi")}</label><select className="input" disabled={!can('OPERATOR')} value={f.chassis_id} onChange={e => setF({ ...f, chassis_id: Number(e.target.value) })}><option value={0}>—</option>{cat.chassis.filter(x => x.active).map(x => <option key={x.id} value={x.id}>{x.brand} {x.model || ''} {x.size ? `(${x.size})` : ''}</option>)}</select></div>
+      <div className="field"><label>{tr("Motor")}</label><select className="input" disabled={!can('OPERATOR')} value={f.engine_id} onChange={e => setF({ ...f, engine_id: Number(e.target.value) })}><option value={0}>—</option>{cat.engines.filter(x => x.active).map(x => <option key={x.id} value={x.id}>{x.brand} {x.model} {x.stroke ? `· ${x.stroke}` : ''}</option>)}</select></div>
     </div>
     <div className="grid g2">
-      {ch && <div className="card card-b"><div className="h2">Chassi</div>{ch.image_path && <img loading="lazy" decoding="async" src={`/ops/api/catalog/chassis/${ch.id}/image`} alt="" style={{ maxHeight: 140, borderRadius: 3, margin: '8px 0' }} />}<dl className="dl"><dt>Marca</dt><dd>{ch.brand} {ch.model}</dd><dt>Tamanho</dt><dd>{ch.size || '—'}</dd><dt>Pneu diant.</dt><dd className="mono">{ch.tire_front || '—'}</dd><dt>Pneu tras.</dt><dd className="mono">{ch.tire_rear || '—'}</dd>{ch.notes && <><dt>Notas</dt><dd className="small">{ch.notes}</dd></>}</dl></div>}
-      {en && <div className="card card-b"><div className="h2">Motor</div>{en.image_path && <img loading="lazy" decoding="async" src={`/ops/api/catalog/engines/${en.id}/image`} alt="" style={{ maxHeight: 140, borderRadius: 3, margin: '8px 0' }} />}<dl className="dl"><dt>Motor</dt><dd>{en.brand} {en.model}</dd><dt>Tempos</dt><dd>{en.stroke || '—'}</dd><dt>Categoria</dt><dd>{en.category || '—'}</dd>{en.notes && <><dt>Notas</dt><dd className="small">{en.notes}</dd></>}</dl>
-        <div className="h2" style={{ marginTop: 10 }}>Peças deste motor ({parts.length})</div>{parts.length === 0 ? <div className="small muted">Nenhuma peça cadastrada. Cadastre em Equipamentos.</div> : <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{parts.map(p => <li key={p.id} className="small">{p.name}{p.part_number && <span className="mono muted"> {p.part_number}</span>}{p.price != null && <span className="muted"> · {money(p.price)}</span>}</li>)}</ul>}</div>}
+      {ch && <div className="card card-b"><div className="h2">{tr("Chassi")}</div>{ch.image_path && <img loading="lazy" decoding="async" src={`/ops/api/catalog/chassis/${ch.id}/image`} alt="" style={{ maxHeight: 140, borderRadius: 3, margin: '8px 0' }} />}<dl className="dl"><dt>{tr("Marca")}</dt><dd>{ch.brand} {ch.model}</dd><dt>{tr("Tamanho")}</dt><dd>{ch.size || '—'}</dd><dt>{tr("Pneu diant.")}</dt><dd className="mono">{ch.tire_front || '—'}</dd><dt>{tr("Pneu tras.")}</dt><dd className="mono">{ch.tire_rear || '—'}</dd>{ch.notes && <><dt>{tr("Notas")}</dt><dd className="small">{ch.notes}</dd></>}</dl></div>}
+      {en && <div className="card card-b"><div className="h2">{tr("Motor")}</div>{en.image_path && <img loading="lazy" decoding="async" src={`/ops/api/catalog/engines/${en.id}/image`} alt="" style={{ maxHeight: 140, borderRadius: 3, margin: '8px 0' }} />}<dl className="dl"><dt>{tr("Motor")}</dt><dd>{en.brand} {en.model}</dd><dt>{tr("Tempos")}</dt><dd>{en.stroke || '—'}</dd><dt>{tr("Categoria")}</dt><dd>{en.category || '—'}</dd>{en.notes && <><dt>{tr("Notas")}</dt><dd className="small">{en.notes}</dd></>}</dl>
+        <div className="h2" style={{ marginTop: 10 }}>{tr("Peças deste motor (")}{parts.length})</div>{parts.length === 0 ? <div className="small muted">{tr("Nenhuma peça cadastrada. Cadastre em Equipamentos.")}</div> : <ul style={{ margin: '4px 0', paddingLeft: 18 }}>{parts.map(p => <li key={p.id} className="small">{p.name}{p.part_number && <span className="mono muted"> {p.part_number}</span>}{p.price != null && <span className="muted"> · {money(p.price)}</span>}</li>)}</ul>}</div>}
     </div>
-    <div className="field"><label>Notas de equipamento</label><TextoComVoz valor={f.equipment_notes} onChange={t => setF({ ...f, equipment_notes: t })} linhas={2} disabled={!can('OPERATOR')} placeholder="ajustes, pneus usados, número do chassi, histórico (dá para ditar)" /></div>
-    {can('OPERATOR') && <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={busy} onClick={save}>{busy ? <span className="spin" /> : 'Salvar equipamento'}</button></div>}
-    <details className="card card-b" style={{ marginTop: 4 }}><summary style={{ cursor: 'pointer' }}><b>Cadastrar ou editar chassis, motores e peças</b> <span className="small muted">(catálogo, vale para todos os pilotos)</span></summary>
+    <div className="field"><label>{tr("Notas de equipamento")}</label><TextoComVoz valor={f.equipment_notes} onChange={t => setF({ ...f, equipment_notes: t })} linhas={2} disabled={!can('OPERATOR')} placeholder={tr("ajustes, pneus usados, número do chassi, histórico (dá para ditar)")} /></div>
+    {can('OPERATOR') && <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={busy} onClick={save}>{busy ? <span className="spin" /> : tr("Salvar equipamento")}</button></div>}
+    <details className="card card-b" style={{ marginTop: 4 }}><summary style={{ cursor: 'pointer' }}><b>{tr("Cadastrar ou editar chassis, motores e peças")}</b> <span className="small muted">{tr("(catálogo, vale para todos os pilotos)")}</span></summary>
       <div style={{ marginTop: 10 }}><CatalogoEditor data={cat} reload={reload} /></div></details>
   </div>
 }
@@ -517,18 +518,18 @@ function CorridasDoPiloto({ rs, loading, cid }: { rs: Race[] | null; loading: bo
   if (loading && !rs) return <Loading />
   const lista = rs || []
   return <div className="stack">
-    {lista.length === 0 ? <Empty title="Nenhuma corrida ainda">Convide este piloto no calendário de <Link to="/races">Corridas</Link>.</Empty> : <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Data</th><th>Corrida</th><th>Onde</th><th>Situação</th><th>Prévia</th></tr></thead><tbody>
-      {lista.map(r => { const i = r.invited.find(x => x.client_id === cid); return <tr key={r.id}><td className="mono nowrap">{fmtDate(r.date_start)}</td><td><Link to="/races">{r.name}</Link>{!r.active && <span className="small muted"> (fora do calendário)</span>}</td><td className="small">{[r.track, r.city].filter(Boolean).join(' · ') || '—'}</td>
-        <td>{i && <Chip tone={statusTone(i.status === 'confirmed' || i.status === 'done' ? 'COMPLETED' : i.status === 'declined' ? 'REJECTED' : 'PENDING')}>{({ invited: 'aguardando confirmação', confirmed: 'confirmado', declined: 'não vai', done: 'correu' } as Record<string, string>)[i.status] || i.status}</Chip>}</td>
-        <td className="small">{i?.estimate_text ? <Link to={i.estimate_cmd ? `/ai/${i.estimate_cmd}` : '/races'}>ver prévia</Link> : <span className="muted">—</span>}</td></tr> })}
+    {lista.length === 0 ? <Empty title={tr("Nenhuma corrida ainda")}>{tr("Convide este piloto no calendário de")} <Link to="/races">{tr("Corridas")}</Link>.</Empty> : <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Data")}</th><th>{tr("Corrida")}</th><th>{tr("Onde")}</th><th>{tr("Situação")}</th><th>{tr("Prévia")}</th></tr></thead><tbody>
+      {lista.map(r => { const i = r.invited.find(x => x.client_id === cid); return <tr key={r.id}><td className="mono nowrap">{fmtDate(r.date_start)}</td><td><Link to="/races">{r.name}</Link>{!r.active && <span className="small muted"> {tr("(fora do calendário)")}</span>}</td><td className="small">{[r.track, r.city].filter(Boolean).join(' · ') || '—'}</td>
+        <td>{i && <Chip tone={statusTone(i.status === 'confirmed' || i.status === 'done' ? 'COMPLETED' : i.status === 'declined' ? 'REJECTED' : 'PENDING')}>{({ invited: tr('aguardando confirmação'), confirmed: tr('confirmado'), declined: tr('não vai'), done: tr('correu') } as Record<string, string>)[i.status] || i.status}</Chip>}</td>
+        <td className="small">{i?.estimate_text ? <Link to={i.estimate_cmd ? `/ai/${i.estimate_cmd}` : '/races'}>{tr("ver prévia")}</Link> : <span className="muted">—</span>}</td></tr> })}
     </tbody></table></div>}
-    <div className="small muted">Convidar, confirmar e pedir a prévia de custo é no calendário de <Link to="/races">Corridas</Link>.</div>
+    <div className="small muted">{tr("Convidar, confirmar e pedir a prévia de custo é no calendário de")} <Link to="/races">{tr("Corridas")}</Link>.</div>
   </div>
 }
 
 /* Conta no site (#42): a conta da área do cliente ligada a este card, os pilotos e as medidas. */
-const MEDIDA_PT: Record<string, string> = { height_in: 'Altura (pol)', weight_lb: 'Peso (lb)', chest_in: 'Peito (pol)', waist_in: 'Cintura (pol)',
-  hips_in: 'Quadril (pol)', inseam_in: 'Entreperna (pol)', sleeve_in: 'Braço (pol)', suit_size: 'Macacão', helmet_size: 'Capacete', glove_size: 'Luva', shoe_size: 'Sapatilha (US)' }
+const MEDIDA_PT: Record<string, string> = { height_in: tr("Altura (pol)"), weight_lb: tr("Peso (lb)"), chest_in: tr("Peito (pol)"), waist_in: tr("Cintura (pol)"),
+  hips_in: tr("Quadril (pol)"), inseam_in: tr("Entreperna (pol)"), sleeve_in: tr("Braço (pol)"), suit_size: tr("Macacão"), helmet_size: tr("Capacete"), glove_size: tr("Luva"), shoe_size: tr("Sapatilha (US)") }
 interface ContaCard { email: string; name: string; phone: string | null; birth_date: string; address_line1: string | null; city: string | null; state: string | null; zip: string | null
   linked_at: string | null; last_login_at: string | null; driver_id: number | null
   drivers: { id: number; name: string; birth_date: string | null; is_self: number; client_id: number | null; measures: Record<string, number | string>; measures_updated_at: string | null }[] }
@@ -537,15 +538,15 @@ function ContaNoSite({ cid }: { cid: number }) {
   if (d.error) return <ErrorState error={d.error} retry={d.reload} />
   if (!d.data) return <Loading />
   const c = d.data.conta
-  if (!c) return <Empty title="Sem conta no site">Quando a conta da área do cliente for ligada a este card (Site público › Contas de clientes), os pilotos e as medidas aparecem aqui.</Empty>
+  if (!c) return <Empty title={tr("Sem conta no site")}>{tr("Quando a conta da área do cliente for ligada a este card (Site público › Contas de clientes), os pilotos e as medidas aparecem aqui.")}</Empty>
   return <div className="stack">
     <div><b>{c.name}</b> <span className="small muted">· {c.email}{c.phone ? ` · ${c.phone}` : ''}</span>
-      <div className="small muted">{[c.address_line1, c.city, c.state, c.zip].filter(Boolean).join(', ') || 'sem endereço'}{c.last_login_at ? ` · último acesso ${c.last_login_at.slice(8, 10)}/${c.last_login_at.slice(5, 7)}` : ''}</div></div>
+      <div className="small muted">{[c.address_line1, c.city, c.state, c.zip].filter(Boolean).join(', ') || tr("sem endereço")}{c.last_login_at ? tr(" · último acesso {0}/{1}", c.last_login_at.slice(8, 10), c.last_login_at.slice(5, 7)) : ''}</div></div>
     {c.drivers.map(p => <div key={p.id} className="card card-b">
-      <b>{p.name}</b>{p.is_self ? <span className="small muted"> · o próprio responsável</span> : null}
-      {' '}{p.id === c.driver_id ? <Chip tone="ok">este card</Chip> : p.client_id ? <Link className="small" to={`/clients/${p.client_id}`}>Client ID {p.client_id}</Link>
-        : <span className="small muted">· sem card ainda (Site público › Contas)</span>}
-      <div className="small muted">{p.birth_date ? `nascimento ${p.birth_date.slice(8, 10)}/${p.birth_date.slice(5, 7)}/${p.birth_date.slice(0, 4)}` : 'sem nascimento'}{p.measures_updated_at ? ` · medido em ${p.measures_updated_at.slice(8, 10)}/${p.measures_updated_at.slice(5, 7)}` : ''}</div>
+      <b>{p.name}</b>{p.is_self ? <span className="small muted"> {tr("· o próprio responsável")}</span> : null}
+      {' '}{p.id === c.driver_id ? <Chip tone="ok">{tr("este card")}</Chip> : p.client_id ? <Link className="small" to={`/clients/${p.client_id}`}>{tr("Client ID")} {p.client_id}</Link>
+        : <span className="small muted">{tr("· sem card ainda (Site público › Contas)")}</span>}
+      <div className="small muted">{p.birth_date ? tr("nascimento {0}/{1}/{2}", p.birth_date.slice(8, 10), p.birth_date.slice(5, 7), p.birth_date.slice(0, 4)) : tr("sem nascimento")}{p.measures_updated_at ? tr(" · medido em {0}/{1}", p.measures_updated_at.slice(8, 10), p.measures_updated_at.slice(5, 7)) : ''}</div>
       {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{Object.entries(p.measures).map(([k, v]) => <div key={k}><dt>{MEDIDA_PT[k] || k}</dt><dd>{String(v)}</dd></div>)}</dl>}
     </div>)}
   </div>
@@ -554,13 +555,13 @@ function ContaNoSite({ cid }: { cid: number }) {
 /** #165: o QR à mão, do topo do card (dono, 08/10: "precisa estar lá"). */
 function QrModal({ cid, nome, onClose }: { cid: number; nome: string; onClose: () => void }) {
   const src = `/ops/api/balcao/cliente/${cid}/qr.svg`
-  return <Scrim onMouseDown={onClose}><div className="modal qr-modal" style={{ maxWidth: 380 }} role="dialog" aria-modal="true" aria-label={`QR do balcão de ${nome}`} onMouseDown={e => e.stopPropagation()}>
-    <button className="btn ghost sm close" onClick={onClose} aria-label="Fechar">✕</button>
-    <h3 className="h3" style={{ margin: 0 }}>QR do balcão · {nome}</h3>
-    <img className="qr-cliente" src={src} alt={`QR do balcão de ${nome}`} width={260} height={260} />
-    <p className="small muted" style={{ margin: 0 }}>O mecânico lê este QR e depois as peças: elas entram na invoice de peças do dia. O cliente tem o mesmo QR na área dele (my.urace.us).</p>
-    <div className="row wrap" style={{ gap: 8, justifyContent: 'center' }}><a className="btn sm" href={src} target="_blank" rel="noreferrer">Imprimir</a>
-      <Link className="btn sm primary" to={`/balcao/${cid}`}>Abrir no balcão</Link></div>
+  return <Scrim onMouseDown={onClose}><div className="modal qr-modal" style={{ maxWidth: 380 }} role="dialog" aria-modal="true" aria-label={tr("QR do balcão de {0}", nome)} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}>✕</button>
+    <h3 className="h3" style={{ margin: 0 }}>{tr("QR do balcão ·")} {nome}</h3>
+    <img className="qr-cliente" src={src} alt={tr("QR do balcão de {0}", nome)} width={260} height={260} />
+    <p className="small muted" style={{ margin: 0 }}>{tr("O mecânico lê este QR e depois as peças: elas entram na invoice de peças do dia. O cliente tem o mesmo QR na área dele (my.urace.us).")}</p>
+    <div className="row wrap" style={{ gap: 8, justifyContent: 'center' }}><a className="btn sm" href={src} target="_blank" rel="noreferrer">{tr("Imprimir")}</a>
+      <Link className="btn sm primary" to={`/balcao/${cid}`}>{tr("Abrir no balcão")}</Link></div>
   </div></Scrim>
 }
 
@@ -568,12 +569,12 @@ function QrModal({ cid, nome, onClose }: { cid: number; nome: string; onClose: (
 function QrBalcao({ cid, nome }: { cid: number; nome: string }) {
   const src = `/ops/api/balcao/cliente/${cid}/qr.svg`
   return <div className="card card-b row wrap" style={{ gap: 14, alignItems: 'center', marginBottom: 12 }}>
-    <img className="qr-cliente" src={src} alt={`QR do balcão de ${nome}`} width={160} height={160} />
+    <img className="qr-cliente" src={src} alt={tr("QR do balcão de {0}", nome)} width={160} height={160} />
     <div className="grow stack" style={{ gap: 6 }}>
-      <h3 className="h3" style={{ margin: 0 }}>QR do balcão</h3>
-      <p className="small muted" style={{ margin: 0 }}>O mecânico lê este QR e depois as peças: elas entram na invoice de peças do dia de {nome}.</p>
-      <div className="row wrap" style={{ gap: 8 }}><a className="btn sm" href={src} target="_blank" rel="noreferrer">Imprimir</a>
-        <Link className="btn sm ghost" to={`/balcao/${cid}`}>Abrir no balcão</Link></div>
+      <h3 className="h3" style={{ margin: 0 }}>{tr("QR do balcão")}</h3>
+      <p className="small muted" style={{ margin: 0 }}>{tr("O mecânico lê este QR e depois as peças: elas entram na invoice de peças do dia de")} {nome}.</p>
+      <div className="row wrap" style={{ gap: 8 }}><a className="btn sm" href={src} target="_blank" rel="noreferrer">{tr("Imprimir")}</a>
+        <Link className="btn sm ghost" to={`/balcao/${cid}`}>{tr("Abrir no balcão")}</Link></div>
     </div>
   </div>
 }

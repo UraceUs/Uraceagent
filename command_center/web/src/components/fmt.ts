@@ -1,28 +1,29 @@
+import { LOCALE } from '../i18n'
 const TZ = 'America/New_York'   // Orlando
 
 export function fmtDate(iso?: string | null) {
   if (!iso) return '—'
   const d = iso.length <= 10 ? new Date(iso + 'T12:00:00Z') : new Date(iso)
   if (isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: iso.length <= 10 ? 'UTC' : TZ })
+  return d.toLocaleDateString(LOCALE(), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: iso.length <= 10 ? 'UTC' : TZ })
 }
 export function fmtDateTime(iso?: string | null) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso
-  return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ })
+  return d.toLocaleString(LOCALE(), { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: TZ })
 }
 export function fmtTime(iso?: string | null) {
   if (!iso) return ''
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: TZ })
+  return d.toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit', timeZone: TZ })
 }
 export function fmtDateLong(iso?: string | null) {
   if (!iso) return ''
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso
-  return d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short', timeZone: TZ })
+  return d.toLocaleDateString(LOCALE(), { weekday: 'short', day: '2-digit', month: 'short', timeZone: TZ })
 }
 /** Dia (na Florida) de um instante — é assim que agrupamos agenda e listas. */
 export function diaLocal(iso?: string | null) {

@@ -9,9 +9,10 @@ import { fmtDateTime } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
+import { tr } from '../i18n'
 
 const LEVELS: Level[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
-const LABEL: Record<Level, string> = { CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Médio', LOW: 'Baixo' }
+const LABEL: Record<Level, string> = { CRITICAL: tr("Crítico"), HIGH: tr("Alto"), MEDIUM: tr("Médio"), LOW: tr("Baixo") }
 
 function Balao({ a, onDone }: { a: A; onDone: () => void }) {
   const toast = useToast()
@@ -24,12 +25,12 @@ function Balao({ a, onDone }: { a: A; onDone: () => void }) {
     setBusy(true)
     try {
       const r = await api.post<{ command_id: number; remembered: boolean }>('/needs-attention/instruct', { key: a.key, text, remember, title: a.title, why: a.why, client_id: a.client_id, entity_type: a.entity.type, entity_id: a.entity.id === null ? null : String(a.entity.id) })
-      toast(r.remembered ? 'Instrução enviada à IA e guardada na memória dela.' : 'Instrução enviada à IA.', 'ok'); onDone(); nav(`/ai/${r.command_id}`)
+      toast(r.remembered ? tr("Instrução enviada à IA e guardada na memória dela.") : tr("Instrução enviada à IA."), 'ok'); onDone(); nav(`/ai/${r.command_id}`)
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <div className="balao" onClick={e => e.stopPropagation()}>
-    <TextoComVoz valor={text} onChange={setText} linhas={3} autoFocus placeholder={`Diga (ou dite) à IA o que fazer com isto. Ex.: "o valor deste serviço é $350, produto Practice 2T; envie a invoice e a waiver parental".`} />
-    <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> guardar na memória da IA {a.client_id ? '(deste cliente)' : `(itens do tipo ${a.entity.type})`}</label><span className="grow" /><button className="btn ghost sm" onClick={onDone}>cancelar</button><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : '✦ Enviar à IA'}</button></div>
+    <TextoComVoz valor={text} onChange={setText} linhas={3} autoFocus placeholder={tr("Diga (ou dite) à IA o que fazer com isto. Ex.: \"o valor deste serviço é $350, produto Practice 2T; envie a invoice e a waiver parental\".")} />
+    <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> {tr("guardar na memória da IA")} {a.client_id ? tr("(deste cliente)") : tr("(itens do tipo {0})", a.entity.type)}</label><span className="grow" /><button className="btn ghost sm" onClick={onDone}>{tr("cancelar")}</button><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : tr("✦ Enviar à IA")}</button></div>
   </div>
 }
 
@@ -40,18 +41,18 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
   const [busy, setBusy] = useState<string | null>(null)
   const [balao, setBalao] = useState<string | null>(null)
   async function hide(a: A) {
-    const reason = await perguntar({ titulo: 'Ocultar este aviso?', texto: `"${a.title}"\n\nA tarefa, o envelope ou o e-mail de origem NÃO são apagados.`, campo: 'Motivo (opcional)', ok: 'Ocultar' }) as string | null
+    const reason = await perguntar({ titulo: tr("Ocultar este aviso?"), texto: tr("\"{0}\"\n\nA tarefa, o envelope ou o e-mail de origem NÃO são apagados.", a.title), campo: tr("Motivo (opcional)"), ok: tr("Ocultar") }) as string | null
     if (reason === null) return
     setBusy(a.key)
-    try { await api.post('/needs-attention/dismiss', { key: a.key, title: a.title, level: a.level, reason }); toast('Aviso ocultado. Dá para restaurar em "ocultos".', 'ok'); onChange?.() }
+    try { await api.post('/needs-attention/dismiss', { key: a.key, title: a.title, level: a.level, reason }); toast(tr("Aviso ocultado. Dá para restaurar em \"ocultos\"."), 'ok'); onChange?.() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   async function restore(a: A) {
     setBusy(a.key)
-    try { await api.post('/needs-attention/restore', { key: a.key }); toast('Aviso restaurado.', 'ok'); onChange?.() }
+    try { await api.post('/needs-attention/restore', { key: a.key }); toast(tr("Aviso restaurado."), 'ok'); onChange?.() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
-  if (items.length === 0) return <Empty title="Tudo em ordem">Nenhum item precisa de humano agora.</Empty>
+  if (items.length === 0) return <Empty title={tr("Tudo em ordem")}>{tr("Nenhum item precisa de humano agora.")}</Empty>
   const sysOf = (l: string) => /asana\.com/.test(l) ? 'Asana' : /docusign/.test(l) ? 'DocuSign' : /google\.com/.test(l) ? 'Gmail' : /intuit|qbo/.test(l) ? 'QuickBooks' : 'Origem'
   return <div>{items.map(a => <div className={`att${a.dismissed ? ' dim' : ''}`} key={a.key}>
     <div className={`lv ${a.level}`} />
@@ -59,32 +60,32 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
       <div className="row wrap" style={{ gap: 8 }}>
         <span className="ti">{a.title}</span>
         <Chip tone={levelTone(a.level)} glyph={LEVEL_GLYPH[a.level]}>{LABEL[a.level]}</Chip>
-        {a.dismissed && <Chip tone="outline">{a.dismissed.auto ? 'passou' : 'oculto'}</Chip>}
+        {a.dismissed && <Chip tone="outline">{a.dismissed.auto ? tr("passou") : tr("oculto")}</Chip>}
         <span className="grow" />
-        {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title="Abrir no sistema de origem">{sysOf(a.link)} ↗</a>}
+        {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title={tr("Abrir no sistema de origem")}>{sysOf(a.link)} ↗</a>}
       </div>
       <div className="why">{a.why}</div>
       {!!a.facts?.length && <div className="facts">{a.facts.filter(([, v]) => v && v !== '—').map(([k, v]) => <span key={k}><span className="k">{k}</span>{v}</span>)}</div>}
       {a.dismissed && (a.dismissed.auto
-        ? <div className="small muted">Ocultado automaticamente: {a.dismissed.reason}.</div>
-        : <div className="small muted">Ocultado por {a.dismissed.by || '?'} em {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</div>)}
+        ? <div className="small muted">{tr("Ocultado automaticamente:")} {a.dismissed.reason}.</div>
+        : <div className="small muted">{tr("Ocultado por")} {a.dismissed.by || '?'} {tr("em")} {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</div>)}
       <div className="row wrap small att-acts">
-        {a.client_id && <Link className="btn sm" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? 'Abrir cliente e responder' : 'Abrir cliente'}</Link>}
-        {a.entity.type === 'approvals' && <Link className="btn sm" to="/approvals">Ver aprovações</Link>}
-        {a.entity.type === 'ai' && <Link className="btn sm" to="/ai">Ver conversa da IA</Link>}
-        {a.entity.type === 'integration' && <Link className="btn sm" to="/integrations">Ver integrações</Link>}
-        {a.entity.type === 'email' && !a.client_id && <Link className="btn sm" to="/gmail">Abrir na inbox</Link>}
-        {a.entity.type === 'stock' && <Link className="btn sm" to="/estoque">{a.action || 'Ver estoque'}</Link>}
-        {a.entity.type === 'purchase' && <Link className="btn sm" to={a.entity.id ? `/compras/${a.entity.id}` : '/pedidos'}>{a.action || 'Ver compras'}</Link>}
-        {a.entity.type === 'booking' && <Link className="btn sm" to="/site">{a.action || 'Ver agenda'}</Link>}
-        {a.entity.type === 'portal_account' && <Link className="btn sm" to="/site/contas">{a.action || 'Ver contas'}</Link>}
-        {a.entity.type === 'parts_invoice' && <Link className="btn sm" to="/balcao">{a.action || 'Abrir o balcão'}</Link>}
-        {a.entity.type === 'checklist_run' && <Link className="btn sm" to="/checklists">{a.action || 'Ver checklists'}</Link>}
+        {a.client_id && <Link className="btn sm" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? tr("Abrir cliente e responder") : tr("Abrir cliente")}</Link>}
+        {a.entity.type === 'approvals' && <Link className="btn sm" to="/approvals">{tr("Ver aprovações")}</Link>}
+        {a.entity.type === 'ai' && <Link className="btn sm" to="/ai">{tr("Ver conversa da IA")}</Link>}
+        {a.entity.type === 'integration' && <Link className="btn sm" to="/integrations">{tr("Ver integrações")}</Link>}
+        {a.entity.type === 'email' && !a.client_id && <Link className="btn sm" to="/gmail">{tr("Abrir na inbox")}</Link>}
+        {a.entity.type === 'stock' && <Link className="btn sm" to="/estoque">{a.action || tr("Ver estoque")}</Link>}
+        {a.entity.type === 'purchase' && <Link className="btn sm" to={a.entity.id ? `/compras/${a.entity.id}` : '/pedidos'}>{a.action || tr("Ver compras")}</Link>}
+        {a.entity.type === 'booking' && <Link className="btn sm" to="/site">{a.action || tr("Ver agenda")}</Link>}
+        {a.entity.type === 'portal_account' && <Link className="btn sm" to="/site/contas">{a.action || tr("Ver contas")}</Link>}
+        {a.entity.type === 'parts_invoice' && <Link className="btn sm" to="/balcao">{a.action || tr("Abrir o balcão")}</Link>}
+        {a.entity.type === 'checklist_run' && <Link className="btn sm" to="/checklists">{a.action || tr("Ver checklists")}</Link>}
         {!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action && <span className="chip outline">{a.action}</span>}
         <span className="grow" />
-        {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title="Diga à IA o que fazer com este item">✦ Instruir a IA</button>}
-        {can('OPERATOR') && !a.dismissed && <button className="btn quiet sm" disabled={busy === a.key} onClick={() => hide(a)} title="Esconde o aviso; não apaga a origem">ocultar</button>}
-        {can('OPERATOR') && a.dismissed && !a.dismissed.auto && <button className="btn sm" disabled={busy === a.key} onClick={() => restore(a)}>Restaurar</button>}
+        {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title={tr("Diga à IA o que fazer com este item")}>{tr("✦ Instruir a IA")}</button>}
+        {can('OPERATOR') && !a.dismissed && <button className="btn quiet sm" disabled={busy === a.key} onClick={() => hide(a)} title={tr("Esconde o aviso; não apaga a origem")}>{tr("ocultar")}</button>}
+        {can('OPERATOR') && a.dismissed && !a.dismissed.auto && <button className="btn sm" disabled={busy === a.key} onClick={() => restore(a)}>{tr("Restaurar")}</button>}
       </div>
       {balao === a.key && <Balao a={a} onDone={() => setBalao(null)} />}
     </div>
@@ -100,13 +101,13 @@ export function AttentionPage() {
   const count = (l: Level) => (data || []).filter(a => a.level === l).length
   const hidden = (data || []).filter(a => a.dismissed).length
   return <>
-    <PageHeader title="Precisa de atenção" help="Só o que a IA não resolveu sozinha, do mais grave para o menos. Ocultar esconde o aviso; a origem (tarefa, envelope, e-mail) fica onde está.">
-      <label className="check"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> mostrar ocultos{showHidden && hidden > 0 && <> ({hidden})</>}</label><button className="btn" onClick={reload}>↻</button>
+    <PageHeader title={tr("Precisa de atenção")} help={tr("Só o que a IA não resolveu sozinha, do mais grave para o menos. Ocultar esconde o aviso; a origem (tarefa, envelope, e-mail) fica onde está.")}>
+      <label className="check"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> {tr("mostrar ocultos")}{showHidden && hidden > 0 && <> ({hidden})</>}</label><button className="btn" onClick={reload}>↻</button>
     </PageHeader>
     <div className="tabs">
-      <button className={f === 'ALL' ? 'on' : ''} onClick={() => setF('ALL')}>Todos <span className="count">{data?.length ?? 0}</span></button>
+      <button className={f === 'ALL' ? 'on' : ''} onClick={() => setF('ALL')}>{tr("Todos")} <span className="count">{data?.length ?? 0}</span></button>
       {LEVELS.map(l => <button key={l} className={f === l ? 'on' : ''} onClick={() => setF(l)}>{LEVEL_GLYPH[l]} {LABEL[l]} <span className="count">{count(l)}</span></button>)}
     </div>
-    <Section title={f === 'ALL' ? 'Do mais grave para o menos' : LABEL[f]} count={items.length} tight>{loading && !data ? <Loading /> : <AttentionList items={items} onChange={reload} />}</Section>
+    <Section title={f === 'ALL' ? tr("Do mais grave para o menos") : LABEL[f]} count={items.length} tight>{loading && !data ? <Loading /> : <AttentionList items={items} onChange={reload} />}</Section>
   </>
 }

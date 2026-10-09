@@ -4,6 +4,7 @@ import { api, qs } from '../api/client'
 import type { SearchResult } from '../api/types'
 import { Chip, Scrim } from './ui'
 import { fmtDate } from './fmt'
+import { tr } from '../i18n'
 
 interface Item { group: string; label: string; hint?: string; go: () => void; tone?: 'ok' | 'warn' | 'crit' | 'neutral' | 'info' }
 
@@ -32,15 +33,15 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
     const go = (p: string) => () => { onClose(); nav(p) }
     const s = q.trim()
     if (res) {
-      res.clients.forEach(c => out.push({ group: 'Clientes', label: c.name + (c.pilot_name ? ` · piloto ${c.pilot_name}` : ''), hint: c.email || '', go: go(`/clients/${c.id}`), tone: c.vip ? 'warn' : undefined }))
+      res.clients.forEach(c => out.push({ group: 'Clientes', label: c.name + (c.pilot_name ? tr(" · piloto {0}", c.pilot_name) : ''), hint: c.email || '', go: go(`/clients/${c.id}`), tone: c.vip ? 'warn' : undefined }))
       res.tasks.forEach(t => out.push({ group: 'Serviços', label: t.title, hint: `${t.section || ''} ${fmtDate(t.due_on)}`, go: go(t.client_id ? `/clients/${t.client_id}` : '/asana') }))
-      res.waivers.forEach(w => out.push({ group: 'Waivers', label: `${w.signer_name || w.signer_email} · ${w.status}`, hint: 'expira ' + fmtDate(w.expires_at), go: go(w.client_id ? `/clients/${w.client_id}` : '/docusign') }))
-      res.emails.forEach(e => out.push({ group: 'E-mails', label: e.subject || '(sem assunto)', hint: `${e.mailbox}@ · ${e.sender || ''}`, go: go(e.client_id ? `/clients/${e.client_id}` : '/gmail') }))
+      res.waivers.forEach(w => out.push({ group: 'Waivers', label: `${w.signer_name || w.signer_email} · ${w.status}`, hint: tr("expira ") + fmtDate(w.expires_at), go: go(w.client_id ? `/clients/${w.client_id}` : '/docusign') }))
+      res.emails.forEach(e => out.push({ group: 'E-mails', label: e.subject || tr("(sem assunto)"), hint: `${e.mailbox}@ · ${e.sender || ''}`, go: go(e.client_id ? `/clients/${e.client_id}` : '/gmail') }))
       res.commands.forEach(c => out.push({ group: 'Comandos', label: c.text, hint: c.status, go: go(`/ai/${c.id}`) }))
     }
-    if (s.length >= 2) out.push({ group: 'IA', label: `Perguntar à IA: "${s}"`, hint: 'Enter', go: () => { onClose(); ask(s) } })
-    const pages: [string, string][] = [['Hoje', '/'], ['Precisa de atenção', '/attention'], ['Clientes', '/clients'], ['Pro Racing Drivers', '/clients?v=pro'], ['Corridas', '/races'], ['Oportunidades · vendas', '/sales'], ['Agenda de vendas', '/sales/agenda'], ['AI Command', '/ai'],
-      ['Aprovações', '/approvals'], ['O que a IA pode fazer', '/ai/capabilities'], ['Asana', '/asana'], ['DocuSign', '/docusign'], ['Gmail', '/gmail'], ['Manual dos marcadores', '/gmail/manual'], ['QuickBooks', '/quickbooks'], ['Chat · Kommo', '/crm/chat'], ['Funil de vendas · Kommo', '/crm/funil'], ['Integrações', '/integrations'], ['Automação e memória', '/automation'], ['Atividade da IA', '/activity'], ['Políticas', '/policies'], ['Auditoria', '/audit'], ['Usuários', '/users']]
+    if (s.length >= 2) out.push({ group: 'IA', label: tr("Perguntar à IA: \"{0}\"", s), hint: tr("Enter"), go: () => { onClose(); ask(s) } })
+    const pages: [string, string][] = [[tr("Hoje"), '/'], [tr("Precisa de atenção"), '/attention'], [tr("Clientes"), '/clients'], [tr("Pro Racing Drivers"), '/clients?v=pro'], [tr("Corridas"), '/races'], [tr("Oportunidades · vendas"), '/sales'], [tr("Agenda de vendas"), '/sales/agenda'], [tr("AI Command"), '/ai'],
+      [tr("Aprovações"), '/approvals'], [tr("O que a IA pode fazer"), '/ai/capabilities'], [tr("Asana"), '/asana'], [tr("DocuSign"), '/docusign'], [tr("Gmail"), '/gmail'], [tr("Manual dos marcadores"), '/gmail/manual'], [tr("QuickBooks"), '/quickbooks'], [tr("Chat · Kommo"), '/crm/chat'], [tr("Funil de vendas · Kommo"), '/crm/funil'], [tr("Integrações"), '/integrations'], [tr("Automação e memória"), '/automation'], [tr("Atividade da IA"), '/activity'], [tr("Políticas"), '/policies'], [tr("Auditoria"), '/audit'], [tr("Usuários"), '/users']]
     pages.filter(([n]) => !s || n.toLowerCase().includes(s.toLowerCase())).forEach(([n, p]) => out.push({ group: 'Ir para', label: n, go: go(p) }))
     return out
   }, [res, q, nav, onClose, ask])
@@ -60,22 +61,22 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
   if (!open) return null
   let lastGroup = ''
   return <Scrim className="pal-scrim" onMouseDown={onClose}>
-    <div className="pal" role="dialog" aria-label="Busca" onMouseDown={e => e.stopPropagation()}>
-      <input ref={inp} value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar cliente, piloto, e-mail, serviço… ou perguntar à IA" aria-label="Buscar" />
+    <div className="pal" role="dialog" aria-label={tr("Busca")} onMouseDown={e => e.stopPropagation()}>
+      <input ref={inp} value={q} onChange={e => setQ(e.target.value)} placeholder={tr("Buscar cliente, piloto, e-mail, serviço… ou perguntar à IA")} aria-label={tr("Buscar")} />
       <div className="res">
-        {items.length === 0 && <div className="state"><p>{busy ? 'Buscando…' : 'Digite ao menos 2 letras.'}</p></div>}
+        {items.length === 0 && <div className="state"><p>{busy ? tr("Buscando…") : tr("Digite ao menos 2 letras.")}</p></div>}
         {items.map((it, i) => {
           const head = it.group !== lastGroup ? <div className="grp" key={'g' + i}>{it.group}</div> : null
           lastGroup = it.group
           return <div key={i}>{head}
             <div className={`it${i === sel ? ' sel' : ''}`} onMouseEnter={() => setSel(i)} onClick={it.go}>
               <span className="truncate">{it.label}</span>
-              {it.tone && <Chip tone={it.tone}>VIP</Chip>}
+              {it.tone && <Chip tone={it.tone}>{tr("VIP")}</Chip>}
               {it.hint && <span className="k truncate" style={{ maxWidth: 220 }}>{it.hint}</span>}
             </div></div>
         })}
       </div>
-      <div className="ft"><span><kbd className="k">↑↓</kbd> navegar</span><span><kbd className="k">↵</kbd> abrir</span><span><kbd className="k">esc</kbd> fechar</span>{busy && <span className="spin" style={{ marginLeft: 'auto', width: 12, height: 12 }} />}</div>
+      <div className="ft"><span><kbd className="k">↑↓</kbd> {tr("navegar")}</span><span><kbd className="k">↵</kbd> {tr("abrir")}</span><span><kbd className="k">{tr("esc")}</kbd> {tr("fechar")}</span>{busy && <span className="spin" style={{ marginLeft: 'auto', width: 12, height: 12 }} />}</div>
     </div>
   </Scrim>
 }

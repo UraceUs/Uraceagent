@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useToast } from './Toast'
 import { Banner, Chip, Spinner } from './ui'
+import { tr } from '../i18n'
 
 const naTelaInicial = () => window.matchMedia('(display-mode: standalone)').matches ||
   (window.navigator as unknown as { standalone?: boolean }).standalone === true
@@ -48,7 +49,7 @@ export function Avisos() {
       if (!ativo || !chave) throw new Error('O servidor ainda não está pronto para notificar.')
       const permissao = await Notification.requestPermission()
       setPermissao(permissao)
-      if (permissao !== 'granted') { toast('Sem permissão, o aviso não chega.', 'crit'); return }
+      if (permissao !== 'granted') { toast(tr("Sem permissão, o aviso não chega."), 'crit'); return }
       const reg = await navigator.serviceWorker.register('/ops/sw.js', { scope: '/ops/' })
       await navigator.serviceWorker.ready
       const assinatura = await reg.pushManager.subscribe({
@@ -57,7 +58,7 @@ export function Avisos() {
       const j = assinatura.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } }
       await api.post('/push/assinar', { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth })
       setAssinado(true)
-      toast('Notificação ligada neste aparelho.', 'ok')
+      toast(tr("Notificação ligada neste aparelho."), 'ok')
     } catch (e) {
       toast(e instanceof Error ? e.message : (e as ApiError).message, 'crit')
     } finally { setBusy(null) }
@@ -69,39 +70,36 @@ export function Avisos() {
       const reg = await navigator.serviceWorker.getRegistration()
       const s = await reg?.pushManager.getSubscription()
       if (s) { await api.post('/push/cancelar', { endpoint: s.endpoint }); await s.unsubscribe() }
-      setAssinado(false); toast('Notificação desligada neste aparelho.', 'ok')
+      setAssinado(false); toast(tr("Notificação desligada neste aparelho."), 'ok')
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
 
   async function testar() {
     setBusy('teste')
-    try { await api.post('/push/teste'); toast('Mandei. Deve chegar em segundos.', 'ok') }
+    try { await api.post('/push/teste'); toast(tr("Mandei. Deve chegar em segundos."), 'ok') }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
 
-  if (permissao === 'indisponivel') return <Banner tone="warn">Este navegador não faz notificação. No celular, use o Chrome (Android) ou o Safari (iPhone).</Banner>
-  if (servidorOk === false) return <Banner tone="warn">O servidor ainda não está pronto para notificar — falta a biblioteca de push. Me avise.</Banner>
+  if (permissao === 'indisponivel') return <Banner tone="warn">{tr("Este navegador não faz notificação. No celular, use o Chrome (Android) ou o Safari (iPhone).")}</Banner>
+  if (servidorOk === false) return <Banner tone="warn">{tr("O servidor ainda não está pronto para notificar — falta a biblioteca de push. Me avise.")}</Banner>
 
   // iPhone: sem estar na tela inicial, pedir permissão falha calado
   if (ehIOS() && !naTelaInicial()) return <Banner tone="warn">
-    <b>No iPhone, primeiro instale o painel na tela inicial.</b> Toque em Compartilhar
-    (o quadrado com a seta) → <b>Adicionar à Tela de Início</b>. Depois abra o painel por esse ícone
-    e volte aqui para ligar a notificação. É exigência da Apple, não do painel.
+    <b>{tr("No iPhone, primeiro instale o painel na tela inicial.")}</b> {tr("Toque em Compartilhar (o quadrado com a seta) →")} <b>{tr("Adicionar à Tela de Início")}</b>{tr(". Depois abra o painel por esse ícone e volte aqui para ligar a notificação. É exigência da Apple, não do painel.")}
   </Banner>
 
   if (permissao === 'denied') return <Banner tone="crit">
-    A notificação foi <b>bloqueada</b> neste aparelho. O site não consegue perguntar de novo: libere nos
-    ajustes do navegador (site {typeof window !== 'undefined' ? window.location.host : 'ops.urace.us'} → Notificações → Permitir) e recarregue.
+    {tr("A notificação foi")} <b>{tr("bloqueada")}</b> {tr("neste aparelho. O site não consegue perguntar de novo: libere nos ajustes do navegador (site")} {typeof window !== 'undefined' ? window.location.host : tr("ops.urace.us")} {tr("→ Notificações → Permitir) e recarregue.")}
   </Banner>
 
   return <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
     {assinado ? <>
-      <Chip tone="ok">avisos ligados neste aparelho</Chip>
-      <button className="btn sm" disabled={!!busy} onClick={testar}>{busy === 'teste' ? <Spinner /> : 'Mandar um teste'}</button>
-      <button className="btn sm" disabled={!!busy} onClick={desligar}>{busy === 'desligar' ? <Spinner /> : 'Desligar aqui'}</button>
+      <Chip tone="ok">{tr("avisos ligados neste aparelho")}</Chip>
+      <button className="btn sm" disabled={!!busy} onClick={testar}>{busy === 'teste' ? <Spinner /> : tr("Mandar um teste")}</button>
+      <button className="btn sm" disabled={!!busy} onClick={desligar}>{busy === 'desligar' ? <Spinner /> : tr("Desligar aqui")}</button>
     </> : <>
-      <button className="btn primary sm" disabled={!!busy} onClick={ligar}>{busy === 'ligar' ? <Spinner /> : 'Ligar notificação neste aparelho'}</button>
-      <span className="small muted">Avisa quando alguém escrever para você, mesmo com o painel fechado.</span>
+      <button className="btn primary sm" disabled={!!busy} onClick={ligar}>{busy === 'ligar' ? <Spinner /> : tr("Ligar notificação neste aparelho")}</button>
+      <span className="small muted">{tr("Avisa quando alguém escrever para você, mesmo com o painel fechado.")}</span>
     </>}
   </div>
 }
