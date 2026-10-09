@@ -172,7 +172,8 @@ def cache_de(caminho):
     return None
 
 
-# #180: balcao.urace.us é o balcão do celular e só ele (dono, 09/10: "login, senha e pronto …
+# #180: parts.urace.us (dono, 09/10: "coloque como parts.urace.us") é o balcão do celular e só ele
+# (dono, 09/10: "login, senha e pronto …
 # sem ter o risco de abrir outras seções"). Nesse endereço a API responde só ao que a tela usa,
 # para qualquer conta; o resto é 403. O painel inteiro continua em ops.urace.us.
 API_DO_BALCAO = (
@@ -184,7 +185,7 @@ API_DO_BALCAO = (
 
 
 def hosts_do_balcao():
-    return {h.strip().lower() for h in os.environ.get("CC_BALCAO_HOSTS", "balcao.urace.us").split(",") if h.strip()}
+    return {h.strip().lower() for h in os.environ.get("CC_BALCAO_HOSTS", "parts.urace.us").split(",") if h.strip()}
 
 
 def so_balcao(request):
@@ -353,7 +354,7 @@ def api_logout(request: Request, response: Response, con: sqlite3.Connection = D
 
 @app.get(BASE + "/api/auth/me")
 def api_me(request: Request, u=Depends(auth.usuario_atual)):
-    return {**u, "so_balcao": so_balcao(request)}      # #180: no balcao.urace.us a tela é só o balcão
+    return {**u, "so_balcao": so_balcao(request)}      # #180: no parts.urace.us a tela é só o balcão
 
 
 class SenhaIn(BaseModel):

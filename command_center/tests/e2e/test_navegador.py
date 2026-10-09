@@ -117,7 +117,7 @@ def servidor(tmp_path_factory):
                CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
-               CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de balcao.urace.us
+               CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de parts.urace.us
                STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM")  # 32 bytes de teste
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
@@ -1240,7 +1240,7 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
 
 
 def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, navegador):
-    """#180: em balcao.urace.us (aqui, localhost) o mecânico entra e só existe o balcão. Lê a peça
+    """#180: em parts.urace.us (aqui, localhost) o mecânico entra e só existe o balcão. Lê a peça
     (o código digitado faz o papel da câmera), toca no piloto do dia e pronto; o gerente confirma
     na Revisão do painel. Uma mão: nada rola para o lado em 360 px, botões grandes."""
     balcao = servidor.replace("127.0.0.1", "localhost")

@@ -9,7 +9,7 @@ export type Policy = 'SAFE' | 'REQUIRES_CONFIRMATION' | 'REQUIRES_APPROVAL' | 'B
 export interface User { id: number; email: string; name: string; role: Role; free?: boolean
   /** #92: mecânico ou coach — OPERATOR com o acesso só do box */
   cargo?: 'MECANICO' | 'COACH' | null
-  /** #180: aberto em balcao.urace.us — a única tela é o balcão do celular */
+  /** #180: aberto em parts.urace.us — a única tela é o balcão do celular */
   so_balcao?: boolean }
 
 export interface Integration {

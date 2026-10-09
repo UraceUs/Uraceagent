@@ -208,7 +208,7 @@ PY
 # páginas legais, robots/sitemap e os webhooks da ponte do Kommo. O duckdns continua no ar
 # (Kommo, Dialpad, Intuit e conectores antigos batem lá até serem trocados). Só entra se o DNS
 # do nome novo já aponta para ESTE servidor: sem isso o Let's Encrypt falha à toa.
-for EXTRA in ${CC_DOMINIOS_EXTRAS:-ops.urace.us my.urace.us novo.urace.us balcao.urace.us}; do
+for EXTRA in ${CC_DOMINIOS_EXTRAS:-ops.urace.us my.urace.us novo.urace.us parts.urace.us}; do
     IP_NOVO="$(getent ahostsv4 "$EXTRA" | awk 'NR==1{print $1}')"
     IP_NOSSO="$(getent ahostsv4 "$DOMINIO" | awk 'NR==1{print $1}')"
     if [ -z "$IP_NOVO" ] || [ "$IP_NOVO" != "$IP_NOSSO" ]; then
@@ -227,9 +227,9 @@ cliente = extra.split(".")[0] == "my"
 # #148: novo.urace.us é o SITE novo. O FastAPI responde tudo nele (as páginas, a agenda pública,
 # a área do cliente em /ops/portal); o Caddy só serve as páginas legais, como nos outros.
 site = extra.split(".")[0] == "novo"
-# #180: balcao.urace.us é o balcão do celular e só ele. O FastAPI trava a API nesse endereço;
+# #180: parts.urace.us é o balcão do celular e só ele. O FastAPI trava a API nesse endereço;
 # aqui só passam /ops (a tela e a API do balcão) e as páginas legais.
-balcao = extra.split(".")[0] == "balcao"
+balcao = extra.split(".")[0] in ("parts", "balcao")
 destino = "/ops/portal" if cliente else "/ops/"
 corpo = (f"\n\tredir / {destino} 302\n"
          f"\thandle /ops* {{\n\t\treverse_proxy 127.0.0.1:{porta}\n\t}}\n"
