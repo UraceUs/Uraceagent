@@ -209,6 +209,7 @@ function EntrarNaReserva({ onConta }: { onConta: (a: Account) => void }) {
     <Campo rotulo="Email"><input type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required /></Campo>
     <Campo rotulo="Password"><input type="password" autoComplete="current-password" value={senha} onChange={e => setSenha(e.target.value)} required /></Campo>
     <div><button className="btn primary" disabled={indo || !email || !senha}>{indo ? 'Signing in…' : 'Sign in and continue'}</button></div>
+    <p className="small muted" style={{ margin: 0 }}><Link to="/portal/forgot">Forgot your password?</Link> We will keep your session choice.</p>
   </form>
 }
 

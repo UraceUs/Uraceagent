@@ -206,6 +206,96 @@ def trocar_senha(dados: SenhaIn, request: Request, response: Response, cid=Depen
     return {"ok": True}
 
 
+# ------------------------------------------------------------------ esqueci minha senha (#168)
+RESET_MIN = 30
+MAX_PEDIDOS_RESET_IP, MAX_PEDIDOS_RESET_EMAIL = 5, 3          # por hora
+HOSTS_NOSSOS = {"urace.us", "www.urace.us", "my.urace.us", "ops.urace.us", "novo.urace.us"}
+MSG_RESET_OK = "If that email has an account with us, we just sent a link to choose a new password. Check your inbox and spam."
+
+
+class EsqueciIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str
+
+
+class RedefinirIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    token: str
+    password: str
+
+
+def _base_do_link(request):
+    """Onde o link de redefinição aponta: o endereço que a pessoa está usando, desde que seja nosso
+    (um cabeçalho Host inventado não vira link no e-mail). Fora da lista, my.urace.us."""
+    cheio = (request.headers.get("host") or "").strip().lower()
+    host = cheio.split(":")[0]
+    nossos = HOSTS_NOSSOS | {h.strip().lower() for h in os.environ.get("CC_SITE_HOSTS", "").split(",") if h.strip()}
+    if host in nossos or host in {"127.0.0.1", "localhost"}:
+        # sem TLS na frente (desenvolvimento e testes), o endereço é o que veio, com a porta
+        return f"https://{host}" if auth._seguro(request) else f"{request.url.scheme}://{cheio}"
+    return "https://my.urace.us"
+
+
+def _pedidos_na_hora(con, chave):
+    desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    return um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?", (chave, desde))["n"]
+
+
+@r.post("/password/forgot")
+def esqueci_senha(dados: EsqueciIn, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """Manda o link de redefinição. A resposta é a mesma existindo ou não a conta: a tela não
+    revela quais e-mails estão cadastrados. Limite por IP e por e-mail."""
+    from command_center.providers import email_envio
+    email = (dados.email or "").strip().lower()
+    ip = auth._ip(request)
+    if _pedidos_na_hora(con, f"portal-reset-ip:{ip}") >= MAX_PEDIDOS_RESET_IP or \
+            _pedidos_na_hora(con, f"portal-reset-email:{email}") >= MAX_PEDIDOS_RESET_EMAIL:
+        raise HTTPException(429, "Too many requests. Try again in an hour.")
+    inserir(con, "login_attempts", key=f"portal-reset-ip:{ip}", ok=1)
+    inserir(con, "login_attempts", key=f"portal-reset-email:{email}", ok=1)
+    c = um(con, "SELECT id, name FROM portal_accounts WHERE email=? AND active=1", (email,))
+    if c:
+        token = secrets.token_urlsafe(32)
+        criado = datetime.now(timezone.utc)
+        inserir(con, "portal_resets", account_id=c["id"], token_hash=_token_hash(token), ip=ip,
+                created_at=criado.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                expires_at=(criado + timedelta(minutes=RESET_MIN)).strftime("%Y-%m-%dT%H:%M:%S.000Z"))
+        link = f"{_base_do_link(request)}/ops/portal/reset?token={token}"
+        texto = (f"Hi {c['name'].split()[0]},\n\nSomeone asked to reset the password of your URACE account. "
+                 f"If it was you, open this link and choose a new password:\n\n{link}\n\n"
+                 f"The link works once and expires in {RESET_MIN} minutes. If you did not ask for it, ignore this email: "
+                 "your password stays the same.\n\nURACE.US · Orlando, FL")
+        try:
+            email_envio.enviar(email, "Reset your URACE password", texto)
+        except email_envio.ErroEnvio:
+            con.rollback()
+            raise HTTPException(503, "We could not send the email right now. Try again in a few minutes.")
+        _aud(con, request, "portal.password.reset.sent", c["id"])
+    con.commit()
+    return {"ok": True, "message": MSG_RESET_OK}
+
+
+@r.post("/password/reset")
+def redefinir_senha(dados: RedefinirIn, request: Request, response: Response, con: sqlite3.Connection = Depends(get_db)):
+    """Troca a senha pelo link (uso único, 30 min), derruba as outras sessões e entra."""
+    h = _token_hash((dados.token or "").strip())
+    t = um(con, "SELECT id, account_id, expires_at, used_at FROM portal_resets WHERE token_hash=?", (h,))
+    agora_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    if not t or t["used_at"] or t["expires_at"] < agora_iso:
+        raise HTTPException(400, "This link has expired or was already used. Ask for a new one.")
+    if not auth.senha_aceitavel(dados.password) or len(dados.password) < 8:
+        raise HTTPException(400, "Use a password with at least 8 characters.")
+    cid = t["account_id"]
+    sal, ph = auth.hash_senha(dados.password)
+    atualizar(con, "portal_accounts", cid, pw_salt=sal, pw_hash=ph, updated_at=agora())
+    con.execute("UPDATE portal_resets SET used_at=? WHERE account_id=? AND used_at IS NULL", (agora_iso, cid))
+    con.execute("UPDATE portal_sessions SET revoked_at=? WHERE account_id=? AND revoked_at IS NULL", (agora(), cid))
+    _abrir(con, request, response, cid)
+    _aud(con, request, "portal.password.reset", cid)
+    con.commit()
+    return portal.conta(con, cid)
+
+
 # ------------------------------------------------------------------ pilotos
 class PilotoIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
