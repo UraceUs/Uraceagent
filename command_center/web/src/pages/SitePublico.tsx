@@ -23,7 +23,8 @@ interface Bloqueio { id: number; date_from: string; date_to: string; period: str
 interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number; auto_sell?: number }
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
-  invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null }
+  invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null
+  kind?: 'session' | 'plan' | null; months?: number | null; sessions_month?: number | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
@@ -258,12 +259,15 @@ function Servicos() {
   const gerente = can('MANAGER')
   const toast = useToast()
   const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
-  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item: '' })
-  const [edit, setEdit] = useState<Record<number, Partial<Servico> & { price_txt?: string; qbo_item?: string; deposit_txt?: string }>>({})
+  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '' })
+  type Edicao = Partial<Servico> & { price_txt?: string; qbo_item?: string; deposit_txt?: string; months_txt?: string; sessions_txt?: string }
+  const [edit, setEdit] = useState<Record<number, Edicao>>({})
   const itens = l.data?.itens_qbo || []
   async function criar() {
-    try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item: novo.qbo_item || null })
-      toast(tr("Serviço criado: o cliente já vê."), 'ok'); setNovo({ name: '', description: '', price: '', qbo_item: '' }); l.reload() }
+    try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item: novo.qbo_item || null,
+      months: novo.kind === 'plan' ? (novo.months || '1') : null, sessions_month: novo.kind === 'plan' ? (novo.sessions_month || null) : null })
+      toast(novo.kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : tr("Serviço criado: o cliente já vê."), 'ok')
+      setNovo({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '' }); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function salvar(sv: Servico, extra?: Partial<Servico>) {
@@ -274,13 +278,16 @@ function Servicos() {
     if (e.price_txt !== undefined) corpo.price = e.price_txt
     if (e.qbo_item !== undefined) corpo.qbo_item = e.qbo_item || null
     if (e.deposit_txt !== undefined) corpo.deposit = e.deposit_txt || null
+    if (e.kind !== undefined) corpo.kind = e.kind
+    if (e.months_txt !== undefined) corpo.months = e.months_txt || null
+    if (e.sessions_txt !== undefined) corpo.sessions_month = e.sessions_txt || null
     try { await api.patch(`/site/servicos/${sv.id}`, corpo); toast(tr("Salvo. Vale para os próximos agendamentos."), 'ok')
       setEdit(x => { const y = { ...x }; delete y[sv.id]; return y }); l.reload() }
     catch (er) { toast((er as ApiError).message, 'crit') }
   }
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
   if (!l.data) return <Loading />
-  const muda = (id: number, x: Partial<Servico> & { price_txt?: string; qbo_item?: string; deposit_txt?: string }) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  const muda = (id: number, x: Edicao) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
   // dono, 01/10: o item é um texto — escolhe da lista ou escreve; sem o preço no rótulo
   const sugestoes = <datalist id="itens-qbo">{itens.map(i => <option key={i.id} value={i.name} />)}</datalist>
   return <div className="stack" style={{ gap: 18 }}>
@@ -294,7 +301,12 @@ function Servicos() {
             <div className="site-servico">
               <label className="fld"><span>{tr("Nome (o cliente lê, em inglês)")}</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
               <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
-              <label className="fld"><span>{tr("Preço (US$)")}</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
+              <label className="fld"><span>{tr("Tipo")}</span><select value={e.kind ?? sv.kind ?? 'session'} disabled={!gerente} onChange={x => muda(sv.id, { kind: x.target.value as 'session' | 'plan' })}>
+                <option value="session">{tr("Sessão avulsa")}</option><option value="plan">{tr("Plano mensal (Academy, Boost)")}</option></select></label>
+              <label className="fld"><span>{(e.kind ?? sv.kind) === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
+              {(e.kind ?? sv.kind) === 'plan' && <>
+                <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={e.months_txt ?? String(sv.months ?? 1)} disabled={!gerente} onChange={x => muda(sv.id, { months_txt: x.target.value })} /></label>
+                <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={e.sessions_txt ?? String(sv.sessions_month ?? '')} disabled={!gerente} onChange={x => muda(sv.id, { sessions_txt: x.target.value })} /></label></>}
               <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={e.qbo_item ?? sv.qbo_item_name ?? sv.invoice_text ?? ''} disabled={!gerente}
                 onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder={tr("escolha ou escreva")} /></label>
               <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{tr("0 = sem")}</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
@@ -303,7 +315,8 @@ function Servicos() {
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
                 <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></div>}
             </div>
-            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
+            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{sv.kind === 'plan' ? tr("na página da Academy") : tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
+              {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}
               {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: escolha um ou escreva o texto da invoice")}</span></>}</div>
           </div>
         })}</div>}
@@ -312,7 +325,12 @@ function Servicos() {
       <div className="card card-b"><div className="site-servico">
         <label className="fld"><span>{tr("Nome")}</span><input value={novo.name} onChange={x => setNovo({ ...novo, name: x.target.value })} placeholder={tr("Arrive and Drive")} /></label>
         <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={novo.description} onChange={x => setNovo({ ...novo, description: x.target.value })} /></label>
-        <label className="fld"><span>{tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
+        <label className="fld"><span>{tr("Tipo")}</span><select value={novo.kind} onChange={x => setNovo({ ...novo, kind: x.target.value })}>
+          <option value="session">{tr("Sessão avulsa")}</option><option value="plan">{tr("Plano mensal (Academy, Boost)")}</option></select></label>
+        <label className="fld"><span>{novo.kind === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
+        {novo.kind === 'plan' && <>
+          <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={novo.months} onChange={x => setNovo({ ...novo, months: x.target.value })} placeholder="3" /></label>
+          <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={novo.sessions_month} onChange={x => setNovo({ ...novo, sessions_month: x.target.value })} placeholder="4" /></label></>}
         <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder={tr("escolha ou escreva")}
           onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
         <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>{tr("Criar")}</button>

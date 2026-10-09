@@ -1477,6 +1477,45 @@ CREATE TABLE IF NOT EXISTS portal_resets (
 );
 CREATE INDEX IF NOT EXISTS portal_resets_conta ON portal_resets(account_id, id);
 
+-- ------------------------------------------------------------ plano mensal vendido pelo site (#169)
+-- Dono, 09/10: "Vender online já: invoice recorrente do QuickBooks criada pelo site". O pedido do
+-- plano: a primeira mensalidade sai na hora (com link de pagamento), as outras ficam agendadas no
+-- dia 1 (monthly_invoices, como a tela Mensalidade do painel); o card ganha o contrato.
+CREATE TABLE IF NOT EXISTS plan_orders (
+  id                    INTEGER PRIMARY KEY,
+  account_id            INTEGER NOT NULL REFERENCES portal_accounts(id),
+  pilot_id              INTEGER REFERENCES portal_pilots(id),
+  service_id            INTEGER NOT NULL REFERENCES booking_services(id),
+  service_name          TEXT NOT NULL,
+  price                 REAL NOT NULL,                    -- por mês, no dia do pedido
+  months                INTEGER NOT NULL,
+  sessions_month        INTEGER,
+  start_month           TEXT NOT NULL,                    -- AAAA-MM
+  status                TEXT NOT NULL DEFAULT 'pendente' CHECK (status IN ('pendente','ativa','cancelada')),
+  client_id             INTEGER REFERENCES clients(id),
+  card_note             TEXT,
+  recurring_id          INTEGER REFERENCES monthly_recurring(id),
+  qbo_invoice_id        TEXT,
+  invoice_doc           TEXT,
+  invoice_total         REAL,
+  invoice_link          TEXT,
+  pay_link              TEXT,
+  invoice_sent_to       TEXT,
+  paid_at               TEXT,
+  pay_checked_at        TEXT,
+  charge_error          TEXT,
+  waiver_ref            INTEGER,
+  waiver_error          TEXT,
+  origin                TEXT,
+  utm                   TEXT,
+  notified_received_at  TEXT,
+  notified_confirmed_at TEXT,
+  notify_error          TEXT,
+  created_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS plan_orders_conta ON plan_orders(account_id, id);
+
 -- ------------------------------------------------------------ agenda de sessões (#41)
 -- Dono, 30/09: "o próprio cliente consiga ver os dias disponíveis e agendar a sua sessão;
 -- a gente parametriza: bloquear esse dia toda semana, bloquear datas específicas,

@@ -503,7 +503,7 @@ function guardarVolta(caminho: string) {
 function lerVolta(): string | null {
   try {
     const v = sessionStorage.getItem(VOLTA)
-    return v && (v.startsWith('/portal/book?') || /^\/portal\/sessions\/\d+$/.test(v)) ? v : null
+    return v && (v.startsWith('/portal/book?') || /^\/portal\/(sessions|plans)\/\d+$/.test(v)) ? v : null
   } catch { return null }
 }
 function limparVolta() {
@@ -551,6 +551,7 @@ export function PortalApp() {
       <Route path="book" element={<Agendar conta={conta} />} />
       <Route path="sessions" element={<Sessoes />} />
       <Route path="sessions/:id" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><Acompanhar /></Suspense>} />
+      <Route path="plans/:id" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><Acompanhar plano /></Suspense>} />
       <Route path="drivers" element={<Pilotos conta={conta} onSalvo={setConta} />} />
       <Route path="drivers/:pid/waiver" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><AssinarWaiver conta={conta} /></Suspense>} />
       <Route path="history" element={<Historico />} />

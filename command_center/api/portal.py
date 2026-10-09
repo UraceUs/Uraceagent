@@ -399,6 +399,54 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
     return {"id": bid, "bookings": ag.do_cliente(con, cid), "auto_sell": venda_site.ligada(con)}
 
 
+# ------------------------------------------------------------------ plano mensal (#169)
+class PlanoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    service_id: int
+    driver_id: int
+    origin: str | None = None
+    utm: dict | None = None
+
+
+def _vender_plano(oid):
+    from command_center.db import conectar
+    from command_center.providers import venda_plano
+    con = conectar()
+    try:
+        venda_plano.vender(con, oid)
+        con.commit()
+    finally:
+        con.close()
+
+
+@r.post("/plans", status_code=201)
+def assinar_plano(dados: PlanoIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
+                  con: sqlite3.Connection = Depends(get_db)):
+    """O cliente escolhe o plano (Academy, Boost) e o piloto; com a venda automática ligada, a primeira
+    mensalidade sai na hora e as outras ficam agendadas no dia 1."""
+    from command_center.providers import venda_plano, venda_site
+    try:
+        oid = venda_plano.pedir(con, cid, dados.service_id, dados.driver_id, dados.origin, dados.utm)
+    except venda_plano.ErroPlano as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, "portal.plan", cid, {"plano": oid, "servico": dados.service_id, "piloto": dados.driver_id})
+    con.commit()
+    if venda_site.ligada(con):
+        tarefas.add_task(_vender_plano, oid)
+    return {"id": oid, "auto_sell": venda_site.ligada(con)}
+
+
+@r.get("/plans/{oid}")
+def acompanhar_plano(oid: int, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import venda_plano
+    if not um(con, "SELECT 1 AS x FROM plan_orders WHERE id=? AND account_id=?", (oid, cid)):
+        raise HTTPException(404, "Plan not found.")
+    venda_plano.conferir_pagamento(con, oid)
+    con.commit()
+    response.headers["Cache-Control"] = "private, no-store"
+    return venda_plano.checkout(con, oid)
+
+
 @r.get("/bookings/{bid}")
 def acompanhar(bid: int, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """As etapas de um pedido (#164): reservado → pagar → waiver → confirmado. Confere o pagamento
