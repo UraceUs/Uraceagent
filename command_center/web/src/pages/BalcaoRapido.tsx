@@ -7,7 +7,7 @@
  *
  * Metade de cima: a câmera, sempre lendo. Metade de baixo: a peça lida e os pilotos do dia em
  * botões grandes, ao alcance do polegar. Um toque registra (pendente: o gerente confirma na
- * Revisão do balcão) e a câmera volta a ler sozinha. Em balcao.urace.us esta é a única tela. */
+ * Revisão do balcão) e a câmera volta a ler sozinha. Em parts.urace.us esta é a única tela. */
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'

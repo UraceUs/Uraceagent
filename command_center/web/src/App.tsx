@@ -82,7 +82,7 @@ function Inicio() {
   return box ? <MeuDia /> : <Dashboard />
 }
 
-/** #180: em balcao.urace.us a única tela é o balcão do celular — qualquer endereço abre ele. */
+/** #180: em parts.urace.us a única tela é o balcão do celular — qualquer endereço abre ele. */
 function SoBalcao() {
   return <Routes>
     <Route path="/login" element={<Login />} />

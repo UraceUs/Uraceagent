@@ -199,9 +199,9 @@ def test_descartar(cli):
     assert (p["status"], p["review_note"]) == ("descartada", "lida duas vezes")
 
 
-# ------------------------------------------------------------------ balcao.urace.us: só o balcão
+# ------------------------------------------------------------------ parts.urace.us: só o balcão
 def test_no_endereco_do_balcao_so_o_balcao_responde(cli):
-    with TestClient(app, base_url="https://balcao.urace.us") as bc:
+    with TestClient(app, base_url="https://parts.urace.us") as bc:
         r = bc.post("/ops/api/auth/login", json={"email": "ger@urace.us", "password": SENHA})
         assert r.status_code == 200 and r.json()["so_balcao"] is True
         h = {"X-CSRF": bc.cookies.get("cc_csrf")}
