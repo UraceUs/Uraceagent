@@ -4,6 +4,8 @@
  * - 401 => sessão caiu: avisa o AuthContext (que manda para /login).
  * - Nunca guarda token no JS. Nenhum segredo aqui.
  */
+import { tr } from '../i18n'
+
 export const API = '/ops/api'
 
 export class ApiError extends Error {
@@ -34,7 +36,7 @@ async function req<T>(method: string, path: string, body?: unknown, opts: { sile
     res = await fetch(API + path, { method, headers, credentials: 'same-origin',
       body: body === undefined ? undefined : JSON.stringify(body) })
   } catch {
-    throw new ApiError(0, 'Sem conexão com o servidor.')
+    throw new ApiError(0, tr('Sem conexão com o servidor.'))
   }
   if (res.status === 401 && !opts.silent401) onUnauthorized.forEach(fn => fn())
   if (!res.ok) {
@@ -47,7 +49,7 @@ async function req<T>(method: string, path: string, body?: unknown, opts: { sile
       else if (typeof j?.detail?.mensagem === 'string') { msg = j.detail.mensagem; motivo = j.detail.motivo }
       else if (typeof j?.error === 'string') msg = j.error
     } catch { /* corpo não-JSON */ }
-    throw new ApiError(res.status, msg, motivo)
+    throw new ApiError(res.status, tr(msg), motivo)          // #177: mensagem do servidor no idioma escolhido
   }
   if (res.status === 204) return undefined as T
   const total = res.headers.get('X-Total-Count')
@@ -64,7 +66,7 @@ async function reqForm<T>(path: string, form: FormData): Promise<T> {
     res = await fetch(API + path, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF': csrf() },
       credentials: 'same-origin', body: form })
   } catch {
-    throw new ApiError(0, 'Sem conexão com o servidor.')
+    throw new ApiError(0, tr('Sem conexão com o servidor.'))
   }
   if (res.status === 401) onUnauthorized.forEach(fn => fn())
   if (!res.ok) {
@@ -74,7 +76,7 @@ async function reqForm<T>(path: string, form: FormData): Promise<T> {
       if (typeof j?.detail === 'string') msg = j.detail
       else if (j?.detail?.[0]?.msg) msg = j.detail[0].msg
     } catch { /* corpo não-JSON */ }
-    throw new ApiError(res.status, msg)
+    throw new ApiError(res.status, tr(msg))
   }
   return res.json() as Promise<T>
 }

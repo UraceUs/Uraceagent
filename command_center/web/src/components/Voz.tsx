@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
+import { tr, LOCALE } from '../i18n'
 
 type Rec = {
   lang: string; continuous: boolean; interimResults: boolean
@@ -34,7 +35,7 @@ export function falar(texto: string) {
   const vozes = s.getVoices()
   const pt = vozes.find(v => /pt.?BR/i.test(v.lang)) || vozes.find(v => /^pt/i.test(v.lang))
   if (pt) f.voice = pt
-  f.lang = pt?.lang || 'pt-BR'
+  f.lang = pt?.lang || LOCALE()
   f.rate = 1.03
   s.speak(f)
 }
@@ -53,10 +54,10 @@ export function useDitado(aoFinal?: (texto: string) => void) {
 
   const ligar = useCallback(() => {
     const M = Motor()
-    if (!M) { setErro('Este navegador não tem ditado. No celular use o microfone do teclado; no computador, o Chrome.'); return }
+    if (!M) { setErro(tr("Este navegador não tem ditado. No celular use o microfone do teclado; no computador, o Chrome.")); return }
     setErro(null)
     const r = new M()
-    r.lang = 'pt-BR'
+    r.lang = LOCALE()
     r.continuous = true
     r.interimResults = true
     r.onresult = e => {
@@ -72,8 +73,8 @@ export function useDitado(aoFinal?: (texto: string) => void) {
     r.onerror = e => {
       const k = e?.error || ''
       setErro(k === 'not-allowed' || k === 'service-not-allowed'
-        ? 'O navegador bloqueou o microfone. Libere o microfone para este site e tente de novo.'
-        : k === 'no-speech' ? null : `Ditado parou (${k || 'erro'}).`)
+        ? tr("O navegador bloqueou o microfone. Libere o microfone para este site e tente de novo.")
+        : k === 'no-speech' ? null : tr("Ditado parou ({0}).", k || 'erro'))
       setLigado(false)
     }
     r.onend = () => { setLigado(false); setParcial('') }
@@ -92,8 +93,8 @@ export function Mic({ valor, onTexto, titulo, className }: { valor: string; onTe
   useEffect(() => { if (!d.ligado) base.current = valor }, [valor, d.ligado])
   if (!d.disponivel) return null
   return <button type="button" className={`mic${d.ligado ? ' on' : ''}${className ? ' ' + className : ''}`} onClick={d.alternar}
-    title={d.erro || titulo || (d.ligado ? 'Parar de ditar' : 'Ditar (falar em vez de digitar)')}
-    aria-label={d.ligado ? 'Parar de ditar' : 'Ditar'} aria-pressed={d.ligado}>
+    title={d.erro || titulo || (d.ligado ? tr("Parar de ditar") : tr("Ditar (falar em vez de digitar)"))}
+    aria-label={d.ligado ? tr("Parar de ditar") : tr("Ditar")} aria-pressed={d.ligado}>
     <Icon name="mic" size={16} />{d.ligado && <i className="onda" aria-hidden="true"><i /><i /><i /></i>}
   </button>
 }
@@ -110,7 +111,7 @@ export function TextoComVoz({ valor, onChange, linhas = 3, placeholder, disabled
       onChange={e => onChange(e.target.value)}
       onKeyDown={e => { if (onEnter && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onEnter() } }} />
     {d.disponivel && <button type="button" className={`mic dentro${d.ligado ? ' on' : ''}`} onClick={d.alternar} disabled={disabled}
-      title={d.erro || (d.ligado ? 'Parar de ditar' : 'Ditar')} aria-label="Ditar" aria-pressed={d.ligado}>
+      title={d.erro || (d.ligado ? tr("Parar de ditar") : tr("Ditar"))} aria-label={tr("Ditar")} aria-pressed={d.ligado}>
       <Icon name="mic" size={16} />{d.ligado && <i className="onda" aria-hidden="true"><i /><i /><i /></i>}
     </button>}
     {d.erro && <div className="small" style={{ color: 'var(--warn)', marginTop: 4 }}>{d.erro}</div>}
@@ -126,7 +127,7 @@ export function Ouvir({ texto, titulo }: { texto: string; titulo?: string }) {
     return () => clearInterval(t)
   }, [])
   if (!temFala() || !texto.trim()) return null
-  return <button type="button" className={`mic sm${falando ? ' on' : ''}`} title={titulo || 'Ouvir em voz alta'} aria-label="Ouvir"
+  return <button type="button" className={`mic sm${falando ? ' on' : ''}`} title={titulo || tr("Ouvir em voz alta")} aria-label={tr("Ouvir")}
     onClick={() => { if (window.speechSynthesis.speaking) { calar(); setFalando(false) } else { falar(texto); setFalando(true) } }}>
     <Icon name={falando ? 'x' : 'som'} size={15} />
   </button>

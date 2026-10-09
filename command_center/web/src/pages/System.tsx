@@ -9,13 +9,14 @@ import { Icon } from '../components/Icon'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { tr } from '../i18n'
 
 const DESC: Record<string, string> = {
-  asana: 'Quadro U-RACE, sessões e clientes. ADM URACE e Matt tasks são só leitura.',
-  docusign: 'Waivers (produção, conta na4). Delivered ≠ assinada.',
-  gmail: 'Caixas urace@ e support@. Sem envio a partir daqui.',
-  quickbooks: 'Em stand-by por decisão do dono. Invoices só depois de aprovação humana.',
-  kommo: 'Funil comercial (Instagram, Facebook, WhatsApp). Token da integração privada em ~/.urace/kommo.env. Resposta pelo painel sai como mensagem do bot da conta.',
+  asana: tr("Quadro U-RACE, sessões e clientes. ADM URACE e Matt tasks são só leitura."),
+  docusign: tr("Waivers (produção, conta na4). Delivered ≠ assinada."),
+  gmail: tr("Caixas urace@ e support@. Sem envio a partir daqui."),
+  quickbooks: tr("Em stand-by por decisão do dono. Invoices só depois de aprovação humana."),
+  kommo: tr("Funil comercial (Instagram, Facebook, WhatsApp). Token da integração privada em ~/.urace/kommo.env. Resposta pelo painel sai como mensagem do bot da conta."),
 }
 
 /** O erro da sondagem às vezes vem como JSON ({"motivo": "…"}); a pessoa lê o motivo, não o JSON. */
@@ -31,7 +32,7 @@ function Contexto({ kind }: { kind: 'sheet' | 'file' }) {
   const rows = (data || []).filter(c => kind === 'sheet' ? c.kind !== 'file' : c.kind === 'file')
   async function addSheet() {
     setBusy('add')
-    try { const r = await api.post<{ id: number; ok: boolean; msg: string }>(f.url.includes('/spreadsheets/') ? '/context/sheet' : '/context/link', f); toast(r.ok === false ? `Cadastrada, mas a leitura falhou: ${r.msg}` : 'Cadastrada e lida.', r.ok === false ? undefined : 'ok'); setF({ title: '', url: '', description: '', sheet_range: '' }); reload() }
+    try { const r = await api.post<{ id: number; ok: boolean; msg: string }>(f.url.includes('/spreadsheets/') ? '/context/sheet' : '/context/link', f); toast(r.ok === false ? tr("Cadastrada, mas a leitura falhou: {0}", r.msg) : tr("Cadastrada e lida."), r.ok === false ? undefined : 'ok'); setF({ title: '', url: '', description: '', sheet_range: '' }); reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   async function addFile() {
@@ -42,37 +43,37 @@ function Contexto({ kind }: { kind: 'sheet' | 'file' }) {
       const csrf = document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || ''
       const res = await fetch('/ops/api/context/file', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': decodeURIComponent(csrf) } })
       if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || `HTTP ${res.status}`) }
-      const j = await res.json(); toast(j.text ? 'Arquivo guardado e texto extraído para a IA.' : 'Arquivo guardado. Sem texto extraído: a IA só vê o nome.', 'ok'); setFile(null); setF({ title: '', url: '', description: '', sheet_range: '' }); reload()
+      const j = await res.json(); toast(j.text ? tr("Arquivo guardado e texto extraído para a IA.") : tr("Arquivo guardado. Sem texto extraído: a IA só vê o nome."), 'ok'); setFile(null); setF({ title: '', url: '', description: '', sheet_range: '' }); reload()
     } catch (e) { toast((e as Error).message, 'crit') } finally { setBusy(null) }
   }
   async function check(c: ContextSource) { setBusy(c.id); try { const r = await api.post<{ ok: boolean; msg: string }>(`/context/${c.id}/check`); toast(r.msg, r.ok ? 'ok' : 'crit'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) } }
   async function toggle(c: ContextSource) { try { await api.post(`/context/${c.id}/toggle`); reload() } catch (e) { toast((e as ApiError).message, 'crit') } }
   return <div className="stack">
     {can('OPERATOR') && <div className="card card-b">
-      <div className="h2" style={{ marginBottom: 10 }}>{kind === 'sheet' ? 'Cadastrar planilha ou link' : 'Subir arquivo'}</div>
+      <div className="h2" style={{ marginBottom: 10 }}>{kind === 'sheet' ? tr("Cadastrar planilha ou link") : tr("Subir arquivo")}</div>
       <div className="grid g2">
-        <div className="field"><label>Título</label><input className="input" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder={kind === 'sheet' ? 'ex.: Tabela de corridas 2026' : 'ex.: Regulamento SKUSA 2026'} /></div>
-        {kind === 'sheet' ? <div className="field"><label>Link (Google Sheets ou outro)</label><input className="input" value={f.url} onChange={e => setF({ ...f, url: e.target.value })} placeholder="https://docs.google.com/spreadsheets/d/…" /></div>
-          : <div className="field"><label>Arquivo (PDF, TXT, MD, CSV, DOCX, XLSX, imagem; até 25 MB)</label><input className="input" type="file" onChange={e => setFile(e.target.files?.[0] || null)} /></div>}
-        {kind === 'sheet' && f.url.includes('/spreadsheets/') && <div className="field"><label>Aba/intervalo (opcional)</label><input className="input" value={f.sheet_range} onChange={e => setF({ ...f, sheet_range: e.target.value })} placeholder="ex.: Sheet1!A1:F80" /></div>}
-        <div className="field" style={{ gridColumn: '1 / -1' }}><label>Para que serve (a IA lê isto para decidir quando consultar)</label><input className="input" value={f.description} onChange={e => setF({ ...f, description: e.target.value })} placeholder="ex.: preços de corrida por série; consultar ao montar estimate de pré-corrida" /></div>
+        <div className="field"><label>{tr("Título")}</label><input className="input" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder={kind === 'sheet' ? tr("ex.: Tabela de corridas 2026") : tr("ex.: Regulamento SKUSA 2026")} /></div>
+        {kind === 'sheet' ? <div className="field"><label>{tr("Link (Google Sheets ou outro)")}</label><input className="input" value={f.url} onChange={e => setF({ ...f, url: e.target.value })} placeholder={tr("https://docs.google.com/spreadsheets/d/…")} /></div>
+          : <div className="field"><label>{tr("Arquivo (PDF, TXT, MD, CSV, DOCX, XLSX, imagem; até 25 MB)")}</label><input className="input" type="file" onChange={e => setFile(e.target.files?.[0] || null)} /></div>}
+        {kind === 'sheet' && f.url.includes('/spreadsheets/') && <div className="field"><label>{tr("Aba/intervalo (opcional)")}</label><input className="input" value={f.sheet_range} onChange={e => setF({ ...f, sheet_range: e.target.value })} placeholder={tr("ex.: Sheet1!A1:F80")} /></div>}
+        <div className="field" style={{ gridColumn: '1 / -1' }}><label>{tr("Para que serve (a IA lê isto para decidir quando consultar)")}</label><input className="input" value={f.description} onChange={e => setF({ ...f, description: e.target.value })} placeholder={tr("ex.: preços de corrida por série; consultar ao montar estimate de pré-corrida")} /></div>
       </div>
-      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 10 }}><button className="btn primary" disabled={busy === 'add' || (kind === 'sheet' ? !f.url || !f.title : !file)} onClick={kind === 'sheet' ? addSheet : addFile}>{busy === 'add' ? <Spinner /> : kind === 'sheet' ? 'Cadastrar e testar leitura' : 'Subir'}</button></div>
+      <div className="row" style={{ justifyContent: 'flex-end', marginTop: 10 }}><button className="btn primary" disabled={busy === 'add' || (kind === 'sheet' ? !f.url || !f.title : !file)} onClick={kind === 'sheet' ? addSheet : addFile}>{busy === 'add' ? <Spinner /> : kind === 'sheet' ? tr("Cadastrar e testar leitura") : tr("Subir")}</button></div>
     </div>}
-    <Section title={kind === 'sheet' ? 'Planilhas e links' : 'Arquivos'} count={rows.length} tight>
-      {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : rows.length === 0 ? <Empty>{kind === 'sheet' ? 'Nenhuma planilha cadastrada.' : 'Nenhum arquivo. Suba PDFs, regulamentos, tabelas: a IA passa a saber que existem e onde ler.'}</Empty> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Título</th><th>Para que serve</th><th>{kind === 'sheet' ? 'Onde' : 'Arquivo'}</th><th>Leitura</th><th>Ativo</th><th></th></tr></thead><tbody>
+    <Section title={kind === 'sheet' ? tr("Planilhas e links") : tr("Arquivos")} count={rows.length} tight>
+      {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : rows.length === 0 ? <Empty>{kind === 'sheet' ? tr("Nenhuma planilha cadastrada.") : tr("Nenhum arquivo. Suba PDFs, regulamentos, tabelas: a IA passa a saber que existem e onde ler.")}</Empty> :
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Título")}</th><th>{tr("Para que serve")}</th><th>{kind === 'sheet' ? tr("Onde") : tr("Arquivo")}</th><th>{tr("Leitura")}</th><th>{tr("Ativo")}</th><th></th></tr></thead><tbody>
           {rows.map(c => <tr key={c.id} className={c.active ? '' : 'dim'} style={{ opacity: c.active ? 1 : 0.55 }}>
-            <td><b>{c.title}</b><div className="small muted">{c.kind === 'sheet' ? 'planilha' : c.kind === 'link' ? 'link' : (c.mime || '')} · {c.added_by_name || '—'} · {fmtDateTime(c.added_at)}</div></td>
+            <td><b>{c.title}</b><div className="small muted">{c.kind === 'sheet' ? tr("planilha") : c.kind === 'link' ? tr("link") : (c.mime || '')} · {c.added_by_name || '—'} · {fmtDateTime(c.added_at)}</div></td>
             <td className="small ink2" style={{ maxWidth: 320 }}>{c.description}</td>
-            <td className="small">{c.kind === 'file' ? <><span className="mono">{c.workspace_name}</span>{c.size ? <div className="muted">{Math.round(c.size / 1024)} KB{c.text_path ? ' · texto extraído' : ' · sem texto'}</div> : null}</> : <a href={c.url || '#'} target="_blank" rel="noopener noreferrer">{c.sheet_range || 'abrir'} ↗</a>}</td>
-            <td>{c.last_check_ok === null ? <Chip tone="neutral">não testada</Chip> : <Chip tone={c.last_check_ok ? 'ok' : 'crit'} dot>{c.last_check_ok ? 'ok' : 'falhou'}</Chip>}<div className="small muted" style={{ maxWidth: 260 }}>{c.last_check_msg}</div></td>
-            <td>{c.active ? 'sim' : 'não'}</td>
-            <td className="nowrap">{can('OPERATOR') && <button className="btn sm" disabled={busy === c.id} onClick={() => check(c)}>{busy === c.id ? <Spinner /> : 'Testar'}</button>} {c.kind === 'file' && <a className="btn sm" href={`/ops/api/context/${c.id}/download`}>⬇</a>} {can('OPERATOR') && <button className="btn ghost sm" onClick={() => toggle(c)}>{c.active ? 'desativar' : 'reativar'}</button>}</td>
+            <td className="small">{c.kind === 'file' ? <><span className="mono">{c.workspace_name}</span>{c.size ? <div className="muted">{Math.round(c.size / 1024)} {tr("KB")}{c.text_path ? tr(" · texto extraído") : tr(" · sem texto")}</div> : null}</> : <a href={c.url || '#'} target="_blank" rel="noopener noreferrer">{c.sheet_range || tr("abrir")} ↗</a>}</td>
+            <td>{c.last_check_ok === null ? <Chip tone="neutral">{tr("não testada")}</Chip> : <Chip tone={c.last_check_ok ? 'ok' : 'crit'} dot>{c.last_check_ok ? tr("ok") : tr("falhou")}</Chip>}<div className="small muted" style={{ maxWidth: 260 }}>{c.last_check_msg}</div></td>
+            <td>{c.active ? tr("sim") : tr("não")}</td>
+            <td className="nowrap">{can('OPERATOR') && <button className="btn sm" disabled={busy === c.id} onClick={() => check(c)}>{busy === c.id ? <Spinner /> : tr("Testar")}</button>} {c.kind === 'file' && <a className="btn sm" href={`/ops/api/context/${c.id}/download`}>⬇</a>} {can('OPERATOR') && <button className="btn ghost sm" onClick={() => toggle(c)}>{c.active ? tr("desativar") : tr("reativar")}</button>}</td>
           </tr>)}
         </tbody></table></div>}
     </Section>
-    <div className="small muted">Tudo que está ativo aqui entra no contexto de todo comando da IA, com o título e o "para que serve". Planilhas ela lê ao vivo; arquivos ficam na pasta <span className="mono">contexto/</span> do agente.</div>
+    <div className="small muted">{tr("Tudo que está ativo aqui entra no contexto de todo comando da IA, com o título e o \"para que serve\". Planilhas ela lê ao vivo; arquivos ficam na pasta")} <span className="mono">{tr("contexto/")}</span> {tr("do agente.")}</div>
   </div>
 }
 
@@ -93,7 +94,7 @@ function Atualizacao() {
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight }, [d?.ultima?.log])
   async function atualizar() {
     setPedido(true)
-    try { await api.post('/system/update'); toast('Atualização pedida. O servidor começa em segundos; acompanhe o log.', 'ok'); setAberto(true); st.reload() }
+    try { await api.post('/system/update'); toast(tr("Atualização pedida. O servidor começa em segundos; acompanhe o log."), 'ok'); setAberto(true); st.reload() }
     catch (e) { setPedido(false); toast((e as ApiError).message, 'crit') }
   }
   const reiniciando = !!st.error && (rodando || pedido)
@@ -102,21 +103,21 @@ function Atualizacao() {
     <div className="row wrap" style={{ gap: 10 }}>
       <span className="icbox red"><Icon name="refresh" /></span>
       <div className="grow" style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 700 }}>Atualização do sistema</div>
-        <div className="small muted">{d?.versao?.commit ? <>versão <span className="mono">{d.versao.commit}</span> · {d.versao.quando ? fmtDateTime(d.versao.quando) : ''} · {d.versao.mensagem}</> : st.error ? 'servidor reiniciando…' : 'lendo a versão…'}</div>
+        <div style={{ fontWeight: 700 }}>{tr("Atualização do sistema")}</div>
+        <div className="small muted">{d?.versao?.commit ? <>{tr("versão")} <span className="mono">{d.versao.commit}</span> · {d.versao.quando ? fmtDateTime(d.versao.quando) : ''} · {d.versao.mensagem}</> : st.error ? tr("servidor reiniciando…") : tr("lendo a versão…")}</div>
       </div>
-      {rodando || reiniciando ? <Thinking label={reiniciando ? 'reiniciando o serviço…' : 'atualizando…'} /> : d?.ultima?.resultado === true && d.ultima.inicio ? <Chip tone="ok" glyph="✓">última: ok · {fmtDateTime(d.ultima.inicio)}</Chip> : d?.ultima?.resultado === false ? <Chip tone="crit" glyph="✕">última falhou</Chip> : null}
-      {!verificar ? <button className="btn" onClick={() => setVerificar(true)}>Ver novidades</button>
-        : nov?.erro ? <Chip tone="warn">{nov.erro}</Chip> : nov ? <Chip tone={nov.atras ? 'warn' : 'ok'}>{nov.atras ? `${nov.atras} atualização(ões) esperando` : 'já está na versão mais nova'}</Chip> : <Spinner />}
-      <button className="btn primary" disabled={rodando || pedido || reiniciando || d?.instalado === false} onClick={atualizar}>{rodando || pedido ? <Spinner /> : <Icon name="refresh" size={16} />} Atualizar agora</button>
+      {rodando || reiniciando ? <Thinking label={reiniciando ? tr("reiniciando o serviço…") : tr("atualizando…")} /> : d?.ultima?.resultado === true && d.ultima.inicio ? <Chip tone="ok" glyph="✓">{tr("última: ok ·")} {fmtDateTime(d.ultima.inicio)}</Chip> : d?.ultima?.resultado === false ? <Chip tone="crit" glyph="✕">{tr("última falhou")}</Chip> : null}
+      {!verificar ? <button className="btn" onClick={() => setVerificar(true)}>{tr("Ver novidades")}</button>
+        : nov?.erro ? <Chip tone="warn">{nov.erro}</Chip> : nov ? <Chip tone={nov.atras ? 'warn' : 'ok'}>{nov.atras ? tr("{0} atualização(ões) esperando", nov.atras) : tr("já está na versão mais nova")}</Chip> : <Spinner />}
+      <button className="btn primary" disabled={rodando || pedido || reiniciando || d?.instalado === false} onClick={atualizar}>{rodando || pedido ? <Spinner /> : <Icon name="refresh" size={16} />} {tr("Atualizar agora")}</button>
     </div>
-    {d && !d.instalado && <Banner tone="warn">O botão ainda não está instalado no servidor: rode o deploy uma vez pelo terminal. A partir daí, tudo por aqui.</Banner>}
+    {d && !d.instalado && <Banner tone="warn">{tr("O botão ainda não está instalado no servidor: rode o deploy uma vez pelo terminal. A partir daí, tudo por aqui.")}</Banner>}
     {!!nov?.commits?.length && <ul className="small ink2" style={{ margin: 0, paddingLeft: 18 }}>{nov.commits.map((c, i) => <li key={i}>{c}</li>)}</ul>}
     {(d?.ultima?.log || rodando) && <details open={aberto} onToggle={e => setAberto((e.target as HTMLDetailsElement).open)}>
-      <summary className="small muted" style={{ cursor: 'pointer' }}>log da última rodada{d?.ultima?.inicio ? ` · ${fmtDateTime(d.ultima.inicio)}` : ''}</summary>
-      <pre ref={logRef} className="mono small" style={{ margin: '8px 0 0', maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,.3)', padding: 12, borderRadius: 12 }}>{d?.ultima?.log || 'esperando o servidor começar…'}</pre>
+      <summary className="small muted" style={{ cursor: 'pointer' }}>{tr("log da última rodada")}{d?.ultima?.inicio ? ` · ${fmtDateTime(d.ultima.inicio)}` : ''}</summary>
+      <pre ref={logRef} className="mono small" style={{ margin: '8px 0 0', maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap', background: 'rgba(0,0,0,.3)', padding: 12, borderRadius: 12 }}>{d?.ultima?.log || tr("esperando o servidor começar…")}</pre>
     </details>}
-    <div className="xs muted">Roda no servidor o mesmo deploy de sempre (git pull, build, testes, serviço, Caddy). Leva 2–3 min; o painel some por uns segundos quando o serviço reinicia e volta sozinho.</div>
+    <div className="xs muted">{tr("Roda no servidor o mesmo deploy de sempre (git pull, build, testes, serviço, Caddy). Leva 2–3 min; o painel some por uns segundos quando o serviço reinicia e volta sozinho.")}</div>
   </div>
 }
 
@@ -138,27 +139,27 @@ function SaudeDoPainel() {
   const fmt = (m: string, v: number | null) => v == null ? '—' : m === 'CLS' ? v.toFixed(3) : `${Math.round(v)} ms`
   return <>
     <div className="est-resumo" style={{ margin: '4px 0 12px' }}>
-      <Chip tone="neutral">no ar há {Math.floor(data.uptime_s / 3600)} h {Math.floor(data.uptime_s % 3600 / 60)} min</Chip>
-      <Chip tone="info">{data.requisicoes} requisições</Chip>
-      <Chip tone={data.erros_5xx ? 'crit' : 'ok'}>{data.erros_5xx} erro(s) do servidor</Chip>
-      <Chip tone={data.erros_js.length ? 'warn' : 'ok'}>{data.erros_js.length} erro(s) no navegador</Chip>
+      <Chip tone="neutral">{tr("no ar há")} {Math.floor(data.uptime_s / 3600)} {tr("h")} {Math.floor(data.uptime_s % 3600 / 60)} {tr("min")}</Chip>
+      <Chip tone="info">{data.requisicoes} {tr("requisições")}</Chip>
+      <Chip tone={data.erros_5xx ? 'crit' : 'ok'}>{data.erros_5xx} {tr("erro(s) do servidor")}</Chip>
+      <Chip tone={data.erros_js.length ? 'warn' : 'ok'}>{data.erros_js.length} {tr("erro(s) no navegador")}</Chip>
     </div>
-    <Section title="Rotas (mais lentas e com erro primeiro)" count={lentas.length}>
-      {!lentas.length ? <Empty title="Pouco uso desde o último restart" /> : <div className="tbl">{lentas.map(r => <div className="tr" key={r.rota}>
+    <Section title={tr("Rotas (mais lentas e com erro primeiro)")} count={lentas.length}>
+      {!lentas.length ? <Empty title={tr("Pouco uso desde o último restart")} /> : <div className="tbl">{lentas.map(r => <div className="tr" key={r.rota}>
         <span className="grow mono small" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{r.rota}</span>
-        <span className="small muted">{r.n}×</span>
-        <span className="small">p95 <b>{r.p95_ms == null ? '—' : `${Math.round(r.p95_ms)} ms`}</b></span>
-        {r.erros_5xx > 0 && <Chip tone="crit">{r.erros_5xx} erro(s)</Chip>}
+        <span className="small muted">{r.n}{tr("×")}</span>
+        <span className="small">{tr("p95")} <b>{r.p95_ms == null ? '—' : tr("{0} ms", Math.round(r.p95_ms))}</b></span>
+        {r.erros_5xx > 0 && <Chip tone="crit">{r.erros_5xx} {tr("erro(s)")}</Chip>}
       </div>)}</div>}
     </Section>
-    <Section title="Web Vitals (p75, celulares e computadores reais)" count={data.vitais.length}>
-      {!data.vitais.length ? <Empty title="Nenhuma medida ainda" /> : <div className="tbl">{data.vitais.slice(0, 20).map(v => <div className="tr" key={v.metrica + v.rota}>
+    <Section title={tr("Web Vitals (p75, celulares e computadores reais)")} count={data.vitais.length}>
+      {!data.vitais.length ? <Empty title={tr("Nenhuma medida ainda")} /> : <div className="tbl">{data.vitais.slice(0, 20).map(v => <div className="tr" key={v.metrica + v.rota}>
         <b style={{ width: 52 }}>{v.metrica}</b><span className="grow mono small" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{v.rota}</span>
-        <span className="small muted">{v.n}×</span>
+        <span className="small muted">{v.n}{tr("×")}</span>
         <Chip tone={v.p75 != null && v.p75 <= (BOM[v.metrica] ?? Infinity) ? 'ok' : 'warn'}>{fmt(v.metrica, v.p75)}</Chip>
       </div>)}</div>}
     </Section>
-    {data.erros_js.length > 0 && <Section title="Erros no navegador" count={data.erros_js.length}>
+    {data.erros_js.length > 0 && <Section title={tr("Erros no navegador")} count={data.erros_js.length}>
       <div className="tbl">{data.erros_js.map((e, i) => <div className="tr" key={i}><div className="grow" style={{ minWidth: 0 }}>
         <b className="small" style={{ overflowWrap: 'anywhere' }}>{e.mensagem}</b>
         <div className="small muted">{fmtDateTime(e.em)} · {e.rota}{e.origem ? ` · ${e.origem}` : ''}</div></div></div>)}</div>
@@ -175,17 +176,17 @@ function CartaoDialpad() {
   if (!data) return null
   const ok = data.connected
   return <div className="card card-b lead" style={{ borderLeftColor: ok ? 'var(--ok)' : 'var(--warn)' }}>
-    <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>Dialpad</h2>
-      <Status kind={ok ? 'ok' : 'wait'} label={ok ? 'ok' : 'falta configurar'} /><span className="grow" />
-      <span className="small muted mono" title={data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : ''}>{data.ultimo_evento ? `último evento há ${ago(data.ultimo_evento)}` : 'nenhum evento ainda'}</span></div>
-    <div className="small ink2" style={{ margin: '6px 0 0' }}>Ligações do número da empresa. Perdida vira item em Precisa de atenção; atendida entra na linha do tempo da venda.</div>
-    {!ok && <div className="banner warn" style={{ marginTop: 8 }}><span className="bi">▲</span><div className="grow small">Falta no servidor: {data.falta.join(', ')} (docs/adminai/dialpad-conexao.md).</div></div>}
-    {ok && !data.ultimo_evento && <div className="small muted" style={{ marginTop: 8 }}>Para testar: ligue para o número da empresa e desligue. O último evento aparece aqui.</div>}
+    <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{tr("Dialpad")}</h2>
+      <Status kind={ok ? 'ok' : 'wait'} label={ok ? tr("ok") : tr("falta configurar")} /><span className="grow" />
+      <span className="small muted mono" title={data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : ''}>{data.ultimo_evento ? tr("último evento há {0}", ago(data.ultimo_evento)) : tr("nenhum evento ainda")}</span></div>
+    <div className="small ink2" style={{ margin: '6px 0 0' }}>{tr("Ligações do número da empresa. Perdida vira item em Precisa de atenção; atendida entra na linha do tempo da venda.")}</div>
+    {!ok && <div className="banner warn" style={{ marginTop: 8 }}><span className="bi">▲</span><div className="grow small">{tr("Falta no servidor:")} {data.falta.join(', ')} {tr("(docs/adminai/dialpad-conexao.md).")}</div></div>}
+    {ok && !data.ultimo_evento && <div className="small muted" style={{ marginTop: 8 }}>{tr("Para testar: ligue para o número da empresa e desligue. O último evento aparece aqui.")}</div>}
     <dl className="dl" style={{ marginTop: 8 }}>
-      <dt>Último evento</dt><dd className="mono">{data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : '—'}</dd>
-      <dt>Ligações recebidas</dt><dd className="mono">{data.ligacoes}</dd>
-      <dt>Webhook</dt><dd className="mono small">{data.webhook_endereco || '—'}</dd>
-      <dt>Assinatura</dt><dd className="small">{data.assinado ? 'conferida (JWT)' : 'sem segredo'}</dd></dl>
+      <dt>{tr("Último evento")}</dt><dd className="mono">{data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : '—'}</dd>
+      <dt>{tr("Ligações recebidas")}</dt><dd className="mono">{data.ligacoes}</dd>
+      <dt>{tr("Webhook")}</dt><dd className="mono small">{data.webhook_endereco || '—'}</dd>
+      <dt>{tr("Assinatura")}</dt><dd className="small">{data.assinado ? tr("conferida (JWT)") : tr("sem segredo")}</dd></dl>
   </div>
 }
 
@@ -201,27 +202,27 @@ export function Integrations() {
   const [busy, setBusy] = useState(false)
   async function check() {
     setBusy(true)
-    try { await api.post('/integrations/check'); if (rate) await api.post(`/context/${rate.id}/check`); toast('Sondagem concluída.', 'ok'); reload(); ctx.reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+    try { await api.post('/integrations/check'); if (rate) await api.post(`/context/${rate.id}/check`); toast(tr("Sondagem concluída."), 'ok'); reload(); ctx.reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <>
-    <PageHeader title="Integrações" help={<>Estado real de cada sistema, mais as planilhas e arquivos que a IA pode consultar. “Verificar” faz UMA chamada real por sistema.</>}>
-      {can('OPERATOR') && tab === 'sys' && <button className="btn primary" onClick={check} disabled={busy}>{busy ? <Spinner /> : '⚡'} Verificar agora</button>}</PageHeader>
+    <PageHeader title={tr("Integrações")} help={<>{tr("Estado real de cada sistema, mais as planilhas e arquivos que a IA pode consultar. “Verificar” faz UMA chamada real por sistema.")}</>}>
+      {can('OPERATOR') && tab === 'sys' && <button className="btn primary" onClick={check} disabled={busy}>{busy ? <Spinner /> : '⚡'} {tr("Verificar agora")}</button>}</PageHeader>
     {can('ADMIN') && tab === 'sys' && <Atualizacao />}
-    <div className="tabs">{([['sys', 'Sistemas'], ['sheets', 'Planilhas e links'], ['files', 'Arquivos'], ...(can('MANAGER') ? [['saude', 'Saúde do painel']] as const : [])] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
+    <div className="tabs">{([['sys', 'Sistemas'], ['sheets', 'Planilhas e links'], ['files', 'Arquivos'], ...(can('MANAGER') ? [['saude', tr("Saúde do painel")]] as const : [])] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
     {tab === 'sys' && (error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
       <div className="grid g2">{(data || []).map(i => { const det = safeJson(i.detail); const ruim = i.status !== 'CONNECTED' && i.status !== 'SYNCING'; return <div className="card card-b lead" key={i.system} style={{ borderLeftColor: ruim ? 'var(--crit)' : 'var(--ok)' }}>
-        <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{SYS_NAME[i.system] || i.system}</h2><Status s={i.status} /><span className="grow" /><span className="small muted mono" title={i.last_success_at ? fmtDateTime(i.last_success_at) : ''}>{i.last_success_at ? `respondeu há ${ago(i.last_success_at)}` : 'nunca respondeu'}</span></div>
+        <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{SYS_NAME[i.system] || i.system}</h2><Status s={i.status} /><span className="grow" /><span className="small muted mono" title={i.last_success_at ? fmtDateTime(i.last_success_at) : ''}>{i.last_success_at ? tr("respondeu há {0}", ago(i.last_success_at)) : tr("nunca respondeu")}</span></div>
         <div className="small ink2" style={{ margin: '6px 0 0' }}>{DESC[i.system]}</div>
         {i.last_error && <div className="banner crit" style={{ marginTop: 8 }}><span className="bi">✕</span><div className="grow small">{motivo(i.last_error)}</div></div>}
-        <details className="small muted" style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer' }}>detalhes técnicos</summary>
-          <dl className="dl" style={{ marginTop: 6 }}><dt>Última tentativa</dt><dd className="mono">{i.last_attempt_at ? fmtDateTime(i.last_attempt_at) : '—'}</dd><dt>Erros seguidos</dt><dd className="mono">{i.error_count}</dd>
-            {det !== null && typeof det === 'object' && <><dt>Detalhe</dt><dd><pre className="mono small muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(det, null, 1).slice(0, 500)}</pre></dd></>}</dl></details>
+        <details className="small muted" style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer' }}>{tr("detalhes técnicos")}</summary>
+          <dl className="dl" style={{ marginTop: 6 }}><dt>{tr("Última tentativa")}</dt><dd className="mono">{i.last_attempt_at ? fmtDateTime(i.last_attempt_at) : '—'}</dd><dt>{tr("Erros seguidos")}</dt><dd className="mono">{i.error_count}</dd>
+            {det !== null && typeof det === 'object' && <><dt>{tr("Detalhe")}</dt><dd><pre className="mono small muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(det, null, 1).slice(0, 500)}</pre></dd></>}</dl></details>
       </div> })}
       {can('OPERATOR') && <CartaoDialpad />}
       {rate && <div className="card card-b">
-        <div className="row"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>Rate Card</h2><Status kind={rate.last_check_ok === null ? 'wait' : rate.last_check_ok ? 'ok' : 'crit'} label={rate.last_check_ok === null ? 'não testada' : rate.last_check_ok ? 'lida' : 'falhou'} /></div>
-        <div className="small ink2" style={{ margin: '6px 0 10px' }}>Planilha de preços, fonte de verdade acima do catálogo do QuickBooks. A IA lê ao vivo pelo Google.</div>
-        <dl className="dl"><dt>Última leitura</dt><dd className="mono">{rate.last_check_at ? `${fmtDateTime(rate.last_check_at)} (${ago(rate.last_check_at)})` : '—'}</dd><dt>Resultado</dt><dd className="small">{rate.last_check_msg || '—'}</dd><dt>Planilha</dt><dd><a href={rate.url || '#'} target="_blank" rel="noopener noreferrer">abrir ↗</a></dd></dl>
+        <div className="row"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{tr("Rate Card")}</h2><Status kind={rate.last_check_ok === null ? 'wait' : rate.last_check_ok ? 'ok' : 'crit'} label={rate.last_check_ok === null ? tr("não testada") : rate.last_check_ok ? tr("lida") : tr("falhou")} /></div>
+        <div className="small ink2" style={{ margin: '6px 0 10px' }}>{tr("Planilha de preços, fonte de verdade acima do catálogo do QuickBooks. A IA lê ao vivo pelo Google.")}</div>
+        <dl className="dl"><dt>{tr("Última leitura")}</dt><dd className="mono">{rate.last_check_at ? `${fmtDateTime(rate.last_check_at)} (${ago(rate.last_check_at)})` : '—'}</dd><dt>{tr("Resultado")}</dt><dd className="small">{rate.last_check_msg || '—'}</dd><dt>{tr("Planilha")}</dt><dd><a href={rate.url || '#'} target="_blank" rel="noopener noreferrer">{tr("abrir ↗")}</a></dd></dl>
       </div>}
       </div>)}
     {tab === 'sheets' && <Contexto kind="sheet" />}
@@ -236,16 +237,16 @@ export function Policies() {
   const { data, error, loading, reload } = useGet<ActionPolicy[]>('/policies')
   const [busy, setBusy] = useState<string | null>(null)
   async function set(action: string, policy: Policy) {
-    if (!await perguntar({ titulo: `Mudar "${action}" para ${POLICY_LABEL[policy]}?`, texto: 'Muda o que a IA pode fazer sozinha. Fica auditado.', ok: 'Mudar' })) return
+    if (!await perguntar({ titulo: tr("Mudar \"{0}\" para {1}?", action, POLICY_LABEL[policy]), texto: tr("Muda o que a IA pode fazer sozinha. Fica auditado."), ok: tr("Mudar") })) return
     setBusy(action)
-    try { await api.put(`/policies/${action}`, { policy }); toast('Política atualizada e auditada.', 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+    try { await api.put(`/policies/${action}`, { policy }); toast(tr("Política atualizada e auditada."), 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   return <>
-    <PageHeader title="Políticas da IA" help={<>O que a IA pode fazer sozinha, o que pede confirmação, o que exige aprovação e o que está bloqueado. Apagar nunca destrava.</>} />
-    <Banner tone="info">Decisões do dono já em código: invoice só depois de aprovada (04/09); IA não envia e-mail; nada é apagado; Matt tasks e ADM URACE são só leitura.</Banner>
-    <Section title="Ações" count={data?.length} tight>
+    <PageHeader title={tr("Políticas da IA")} help={<>{tr("O que a IA pode fazer sozinha, o que pede confirmação, o que exige aprovação e o que está bloqueado. Apagar nunca destrava.")}</>} />
+    <Banner tone="info">{tr("Decisões do dono já em código: invoice só depois de aprovada (04/09); IA não envia e-mail; nada é apagado; Matt tasks e ADM URACE são só leitura.")}</Banner>
+    <Section title={tr("Ações")} count={data?.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Ação</th><th>Sistema</th><th>Política</th><th>Nota</th><th>Mudar para</th></tr></thead><tbody>
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Ação")}</th><th>{tr("Sistema")}</th><th>{tr("Política")}</th><th>{tr("Nota")}</th><th>{tr("Mudar para")}</th></tr></thead><tbody>
           {(data || []).map(p => <tr key={p.action}><td className="mono">{p.action}</td><td>{p.system}</td><td><Chip tone={statusTone(p.policy)}>{POLICY_LABEL[p.policy]}</Chip></td><td className="small ink2">{p.note}</td>
             <td><select className="input" style={{ width: 170 }} value={p.policy} disabled={busy === p.action || p.action.startsWith('apagar')} onChange={e => set(p.action, e.target.value as Policy)}>
               {(['SAFE', 'REQUIRES_CONFIRMATION', 'REQUIRES_APPROVAL', 'BLOCKED'] as Policy[]).map(x => <option key={x} value={x}>{POLICY_LABEL[x]}</option>)}</select></td></tr>)}
@@ -256,15 +257,15 @@ export function Policies() {
 
 interface U { id: number; email: string; name: string; role: string; cargo?: string | null; active: number; created_at: string; last_login_at: string | null; free?: boolean }
 // #92: mecânico e coach são OPERATOR com o acesso só do box (Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes sem valores, Equipe)
-const CARGO_PT: Record<string, string> = { MECANICO: 'Mecânico', COACH: 'Coach' }
+const CARGO_PT: Record<string, string> = { MECANICO: tr("Mecânico"), COACH: tr("Coach") }
 const NIVEIS = ['ADMIN', 'MANAGER', 'OPERATOR', 'MECANICO', 'COACH', 'VIEWER']
 const nomeNivel = (k: string) => CARGO_PT[k] || ROLE_PT[k] || k
-const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
+const ROLE_PT: Record<string, string> = { ADMIN: tr("Administrador"), MANAGER: tr("Gerente"), OPERATOR: tr("Operador"), VIEWER: tr("Leitura") }
 const ROLE_O_QUE: Record<string, string> = {
-  ADMIN: 'tudo, inclusive usuários, políticas da IA e integrações',
-  MANAGER: 'tudo do operador + financeiro (QuickBooks e invoices) e auditoria',
-  OPERATOR: 'o dia a dia e as vendas: clientes, serviços, waivers, e-mails, chat, oportunidades e IA — e aprova o que a IA propõe nesses módulos (invoice e QuickBooks ficam com o gerente)',
-  VIEWER: 'só leitura',
+  ADMIN: tr("tudo, inclusive usuários, políticas da IA e integrações"),
+  MANAGER: tr("tudo do operador + financeiro (QuickBooks e invoices) e auditoria"),
+  OPERATOR: tr("o dia a dia e as vendas: clientes, serviços, waivers, e-mails, chat, oportunidades e IA — e aprova o que a IA propõe nesses módulos (invoice e QuickBooks ficam com o gerente)"),
+  VIEWER: tr("só leitura"),
 }
 
 function PapelEditavel({ u, self, onChanged }: { u: U; self: boolean; onChanged: () => void }) {
@@ -275,20 +276,20 @@ function PapelEditavel({ u, self, onChanged }: { u: U; self: boolean; onChanged:
   const atual = u.cargo || u.role
   async function mudar(novo: string) {
     if (novo === atual) { setOpen(false); return }
-    if (!await perguntar({ titulo: `Mudar ${u.name} de ${nomeNivel(atual)} para ${nomeNivel(novo)}?`, texto: CARGO_PT[novo] ? 'Mecânico e coach veem só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe. A pessoa é desconectada e entra de novo.' : 'A pessoa é desconectada e entra de novo já com o papel novo.', ok: 'Mudar' })) return
+    if (!await perguntar({ titulo: tr("Mudar {0} de {1} para {2}?", u.name, nomeNivel(atual), nomeNivel(novo)), texto: CARGO_PT[novo] ? tr("Mecânico e coach veem só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe. A pessoa é desconectada e entra de novo.") : tr("A pessoa é desconectada e entra de novo já com o papel novo."), ok: tr("Mudar") })) return
     setBusy(true)
     try {
       if (CARGO_PT[novo]) await api.post(`/users/${u.id}/cargo`, { cargo: novo })
       else if (novo === u.role) await api.post(`/users/${u.id}/cargo`, { cargo: null })
       else await api.post(`/users/${u.id}/role`, { role: novo })
-      toast(`${u.name} agora é ${nomeNivel(novo)}.`, 'ok'); setOpen(false); onChanged()
+      toast(tr("{0} agora é {1}.", u.name, nomeNivel(novo)), 'ok'); setOpen(false); onChanged()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   // conta de acesso livre (dono, 17/09): não tem cargo e ninguém muda
-  if (u.free) return <Chip tone="accent" title="Opera em todas as áreas; não tem cargo">Acesso livre</Chip>
+  if (u.free) return <Chip tone="accent" title={tr("Opera em todas as áreas; não tem cargo")}>{tr("Acesso livre")}</Chip>
   if (self) return <Chip tone="accent">{nomeNivel(atual)}</Chip>
-  if (!open) return <button className="chip accent" style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }} title="Clique para mudar o nível de acesso" onClick={() => setOpen(true)}>{nomeNivel(atual)} ▾</button>
-  return <span className="row"><select className="input" aria-label={`Nível de acesso de ${u.name}`} style={{ width: 160, padding: '4px 8px' }} autoFocus disabled={busy} value={atual} onChange={e => mudar(e.target.value)} onBlur={() => !busy && setOpen(false)}>
+  if (!open) return <button className="chip accent" style={{ cursor: 'pointer', border: '1px dashed var(--accent)' }} title={tr("Clique para mudar o nível de acesso")} onClick={() => setOpen(true)}>{nomeNivel(atual)} ▾</button>
+  return <span className="row"><select className="input" aria-label={tr("Nível de acesso de {0}", u.name)} style={{ width: 160, padding: '4px 8px' }} autoFocus disabled={busy} value={atual} onChange={e => mudar(e.target.value)} onBlur={() => !busy && setOpen(false)}>
     {NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>{busy && <Spinner />}</span>
 }
 
@@ -325,72 +326,70 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
   }
   async function revogar(k: K) {
     if (!await perguntar({
-      titulo: `Revogar a chave "${k.name}"?`,
-      texto: 'Quem estiver usando esta chave recebe erro no pedido seguinte. Não dá para desfazer: crie outra.',
-      ok: 'Revogar', perigo: true,
+      titulo: tr("Revogar a chave \"{0}\"?", k.name),
+      texto: tr("Quem estiver usando esta chave recebe erro no pedido seguinte. Não dá para desfazer: crie outra."),
+      ok: tr("Revogar"), perigo: true,
     })) return
-    try { await api.post(`/keys/${k.id}/revoke`); toast('Chave revogada.', 'ok'); reload() }
+    try { await api.post(`/keys/${k.id}/revoke`); toast(tr("Chave revogada."), 'ok'); reload() }
     catch (ex) { toast((ex as ApiError).message, 'crit') }
   }
 
   const eu = usuarios.find(x => x.id === user?.id)
   const tetoDe = (id: string) => usuarios.find(x => String(x.id) === id)?.role
-  return <Section title="Chaves de API" count={(data || []).filter(k => !k.revoked_at).length}>
+  return <Section title={tr("Chaves de API")} count={(data || []).filter(k => !k.revoked_at).length}>
     {nova && <Banner tone={nova.read_only ? 'ok' : 'warn'}>
-      <div><b>Guarde agora: esta é a única vez que a chave aparece.</b> Ela não fica no banco — só o resumo dela.
-        Se perder, revogue esta e crie outra.</div>
+      <div><b>{tr("Guarde agora: esta é a única vez que a chave aparece.")}</b> {tr("Ela não fica no banco — só o resumo dela. Se perder, revogue esta e crie outra.")}</div>
       <div className="small" style={{ marginTop: 4 }}>{nova.read_only
-        ? 'Esta chave consulta o painel e não muda nada.'
-        : 'Atenção: esta chave ESCREVE. O que ela fizer acontece de verdade — mensagem sai para o cliente, preço muda no QuickBooks — sem passar por aprovação.'}</div>
+        ? tr("Esta chave consulta o painel e não muda nada.")
+        : tr("Atenção: esta chave ESCREVE. O que ela fizer acontece de verdade — mensagem sai para o cliente, preço muda no QuickBooks — sem passar por aprovação.")}</div>
       <div className="row wrap" style={{ marginTop: 8 }}>
         <code className="mono small" style={{ wordBreak: 'break-all' }}>{nova.chave}</code>
-        <button className="btn sm" onClick={() => navigator.clipboard?.writeText(nova.chave).then(() => toast('Chave copiada.', 'ok'))}>copiar</button>
-        <button className="btn sm" onClick={() => setNova(null)}>já guardei</button>
+        <button className="btn sm" onClick={() => navigator.clipboard?.writeText(nova.chave).then(() => toast(tr("Chave copiada."), 'ok'))}>{tr("copiar")}</button>
+        <button className="btn sm" onClick={() => setNova(null)}>{tr("já guardei")}</button>
       </div></Banner>}
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
       <div>
         {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-          (data || []).length === 0 ? <Empty>Nenhuma chave criada. O painel só responde a quem tem sessão.</Empty> :
+          (data || []).length === 0 ? <Empty>{tr("Nenhuma chave criada. O painel só responde a quem tem sessão.")}</Empty> :
             <div className="tbl-wrap"><table className="tbl"><thead><tr>
-              <th>Nome</th><th>Papel</th><th>Age como</th><th>Último uso</th><th>Validade</th><th></th></tr></thead><tbody>
+              <th>{tr("Nome")}</th><th>{tr("Papel")}</th><th>{tr("Age como")}</th><th>{tr("Último uso")}</th><th>{tr("Validade")}</th><th></th></tr></thead><tbody>
               {(data || []).map(k => <tr key={k.id} style={k.revoked_at ? { opacity: .5 } : undefined}>
-                <td><div>{k.name}</div><div className="mono small muted">urk_{k.id}_…{k.note ? ` · ${k.note}` : ''}</div></td>
-                <td>{k.revoked_at ? <Chip tone="neutral">revogada</Chip> : <div className="row wrap" style={{ gap: 4 }}>
+                <td><div>{k.name}</div><div className="mono small muted">{tr("urk_")}{k.id}_…{k.note ? ` · ${k.note}` : ''}</div></td>
+                <td>{k.revoked_at ? <Chip tone="neutral">{tr("revogada")}</Chip> : <div className="row wrap" style={{ gap: 4 }}>
                   <Chip tone={k.role === 'VIEWER' ? 'neutral' : 'accent'}>{ROLE_PT[k.role] || k.role}</Chip>
-                  {k.read_only ? <Chip tone="ok" title="Consulta e não muda nada">só leitura</Chip>
-                    : <Chip tone="warn" title="O que esta chave fizer acontece de verdade, sem aprovação">escreve</Chip>}</div>}</td>
+                  {k.read_only ? <Chip tone="ok" title={tr("Consulta e não muda nada")}>{tr("só leitura")}</Chip>
+                    : <Chip tone="warn" title={tr("O que esta chave fizer acontece de verdade, sem aprovação")}>{tr("escreve")}</Chip>}</div>}</td>
                 <td className="small">{k.como_nome}<div className="muted">{k.como}</div></td>
-                <td className="small">{k.last_used_at ? <>{fmtDateTime(k.last_used_at)}<div className="muted">{k.uses} uso(s){k.last_ip ? ` · ${k.last_ip}` : ''}</div></> : <span className="muted">nunca usada</span>}</td>
-                <td className="small">{k.expires_at ? fmtDateTime(k.expires_at) : <span className="muted">não expira</span>}</td>
-                <td>{!k.revoked_at && <button className="btn sm danger" onClick={() => revogar(k)}>Revogar</button>}</td></tr>)}
+                <td className="small">{k.last_used_at ? <>{fmtDateTime(k.last_used_at)}<div className="muted">{k.uses} {tr("uso(s)")}{k.last_ip ? ` · ${k.last_ip}` : ''}</div></> : <span className="muted">{tr("nunca usada")}</span>}</td>
+                <td className="small">{k.expires_at ? fmtDateTime(k.expires_at) : <span className="muted">{tr("não expira")}</span>}</td>
+                <td>{!k.revoked_at && <button className="btn sm danger" onClick={() => revogar(k)}>{tr("Revogar")}</button>}</td></tr>)}
             </tbody></table></div>}
       </div>
       <form className="stack" onSubmit={criar}>
         {err && <Banner tone="crit">{err}</Banner>}
-        <div className="field"><label>Para que serve</label>
-          <input className="input" required placeholder="n8n — leitura do painel" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
-        <div className="field"><label>Papel</label>
+        <div className="field"><label>{tr("Para que serve")}</label>
+          <input className="input" required placeholder={tr("n8n — leitura do painel")} value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+        <div className="field"><label>{tr("Papel")}</label>
           <select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>
             {['VIEWER', 'OPERATOR', 'MANAGER', 'ADMIN'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>
           <span className="small muted">{ROLE_O_QUE[f.role]}</span></div>
-        <div className="field"><label>Age como</label>
+        <div className="field"><label>{tr("Age como")}</label>
           <select className="input" value={f.user_id} onChange={e => setF({ ...f, user_id: e.target.value })}>
-            <option value="">{eu ? `${eu.name} (você)` : 'você'}</option>
+            <option value="">{eu ? tr("{0} (você)", eu.name) : tr("você")}</option>
             {usuarios.filter(x => x.id !== user?.id && x.active).map(x => <option key={x.id} value={x.id}>{x.name} — {ROLE_PT[x.role] || x.role}</option>)}</select>
-          <span className="small muted">A chave nunca alcança mais do que esta pessoa alcança{f.user_id && tetoDe(f.user_id) ? ` (${ROLE_PT[tetoDe(f.user_id)!]})` : ''}. Rebaixou a pessoa, a chave desce junto.</span></div>
-        <div className="field"><label>O que ela pode fazer</label>
+          <span className="small muted">{tr("A chave nunca alcança mais do que esta pessoa alcança")}{f.user_id && tetoDe(f.user_id) ? ` (${ROLE_PT[tetoDe(f.user_id)!]})` : ''}{tr(". Rebaixou a pessoa, a chave desce junto.")}</span></div>
+        <div className="field"><label>{tr("O que ela pode fazer")}</label>
           <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={f.read_only} onChange={e => setF({ ...f, read_only: e.target.checked })} />
-            <span className="small">Só leitura — consulta e não muda nada</span></label>
+            <span className="small">{tr("Só leitura — consulta e não muda nada")}</span></label>
           {!f.read_only && <span className="small" style={{ color: 'var(--warn)' }}>
-            Esta chave vai ESCREVER: mensagem sai para o cliente, preço muda no QuickBooks, tudo sem passar por aprovação.
-            Papel e escrita são coisas separadas de propósito — dê escrita só se for mesmo necessário.</span>}</div>
-        <div className="field"><label>Validade (dias)</label>
-          <input className="input" type="number" min={1} placeholder="em branco = não expira" value={f.days} onChange={e => setF({ ...f, days: e.target.value })} /></div>
-        <div className="field"><label>Anotação</label>
-          <input className="input" placeholder="opcional: quem pediu, onde está usada" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></div>
-        <button className="btn primary" disabled={busy || !f.name.trim()}>{busy ? <Spinner /> : 'Criar chave'}</button>
-        <div className="small muted">Use em <code className="mono">Authorization: Bearer urk_…</code> ou <code className="mono">X-API-Key: urk_…</code>. Chave não precisa de CSRF e não abre sessão.</div>
+            {tr("Esta chave vai ESCREVER: mensagem sai para o cliente, preço muda no QuickBooks, tudo sem passar por aprovação. Papel e escrita são coisas separadas de propósito — dê escrita só se for mesmo necessário.")}</span>}</div>
+        <div className="field"><label>{tr("Validade (dias)")}</label>
+          <input className="input" type="number" min={1} placeholder={tr("em branco = não expira")} value={f.days} onChange={e => setF({ ...f, days: e.target.value })} /></div>
+        <div className="field"><label>{tr("Anotação")}</label>
+          <input className="input" placeholder={tr("opcional: quem pediu, onde está usada")} value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></div>
+        <button className="btn primary" disabled={busy || !f.name.trim()}>{busy ? <Spinner /> : tr("Criar chave")}</button>
+        <div className="small muted">{tr("Use em")} <code className="mono">{tr("Authorization: Bearer urk_…")}</code> {tr("ou")} <code className="mono">{tr("X-API-Key: urk_…")}</code>{tr(". Chave não precisa de CSRF e não abre sessão.")}</div>
       </form>
     </div>
     <ComoUsar />
@@ -408,38 +407,35 @@ function ComoUsar() {
   const Linha = ({ cmd, rotulo }: { cmd: string; rotulo: string }) =>
     <div className="row wrap" style={{ gap: 8, marginTop: 6, alignItems: 'flex-start' }}>
       <code className="mono small" style={{ wordBreak: 'break-all', flex: '1 1 320px' }}>{cmd}</code>
-      <button className="btn sm" onClick={() => navigator.clipboard?.writeText(cmd).then(() => toast(`${rotulo} copiado.`, 'ok'))}>copiar</button>
+      <button className="btn sm" onClick={() => navigator.clipboard?.writeText(cmd).then(() => toast(tr("{0} copiado.", rotulo), 'ok'))}>{tr("copiar")}</button>
     </div>
 
   return <details style={{ marginTop: 14 }}>
-    <summary style={{ cursor: 'pointer' }}><b>Como usar a chave</b> <span className="small muted">— script, agente de IA e o que fazer se vazar</span></summary>
+    <summary style={{ cursor: 'pointer' }}><b>{tr("Como usar a chave")}</b> <span className="small muted">{tr("— script, agente de IA e o que fazer se vazar")}</span></summary>
     <div className="stack" style={{ gap: 14, marginTop: 10 }}>
       <div className="card" style={{ padding: '12px 14px' }}>
-        <b>1. Em script, integração ou terminal</b>
-        <div className="small ink2">A chave vai no cabeçalho. Serve <code className="mono">Authorization: Bearer</code> ou <code className="mono">X-API-Key</code>. Não precisa de CSRF e não abre sessão.</div>
-        <Linha cmd={curl} rotulo="Comando" />
-        <div className="small muted" style={{ marginTop: 6 }}>Voltou JSON com os números do dia? Funcionando.</div>
+        <b>{tr("1. Em script, integração ou terminal")}</b>
+        <div className="small ink2">{tr("A chave vai no cabeçalho. Serve")} <code className="mono">{tr("Authorization: Bearer")}</code> {tr("ou")} <code className="mono">{tr("X-API-Key")}</code>{tr(". Não precisa de CSRF e não abre sessão.")}</div>
+        <Linha cmd={curl} rotulo={tr("Comando")} />
+        <div className="small muted" style={{ marginTop: 6 }}>{tr("Voltou JSON com os números do dia? Funcionando.")}</div>
       </div>
 
       <div className="card" style={{ padding: '12px 14px' }}>
-        <b>2. Confira que ela não escreve</b>
-        <div className="small ink2">Com "só leitura" marcado, isto tem que responder <b>403</b>. Se responder 200, a chave está escrevendo — revogue e crie outra.</div>
-        <Linha cmd={prova} rotulo="Comando" />
+        <b>{tr("2. Confira que ela não escreve")}</b>
+        <div className="small ink2">{tr("Com \"só leitura\" marcado, isto tem que responder")} <b>403</b>{tr(". Se responder 200, a chave está escrevendo — revogue e crie outra.")}</div>
+        <Linha cmd={prova} rotulo={tr("Comando")} />
       </div>
 
       <div className="card" style={{ padding: '12px 14px' }}>
-        <b>3. Ligar num Claude (MCP)</b>
-        <div className="small ink2">Um Claude não usa a chave crua: ele fala MCP. O servidor <code className="mono">command_center_mcp.py</code> traduz o painel em ferramentas
-          (<span className="mono">cc_dashboard</span>, <span className="mono">cc_atencao</span>, <span className="mono">cc_invoices</span>, <span className="mono">cc_financeiro</span>, <span className="mono">cc_conversas</span>, <span className="mono">cc_auditoria</span>…).
-          Rode este comando <b>na máquina onde o Claude roda</b>:</div>
-        <Linha cmd={mcp} rotulo="Comando" />
-        <div className="small muted" style={{ marginTop: 6 }}>Nenhuma ferramenta desse servidor escreve — ele não sabe fazer outro verbo além de GET. Vale para o Claude Code e para qualquer agente que aceite MCP por stdio; o claude.ai (web/app) pede conector remoto com OAuth, que é outro caminho.</div>
+        <b>{tr("3. Ligar num Claude (MCP)")}</b>
+        <div className="small ink2">{tr("Um Claude não usa a chave crua: ele fala MCP. O servidor")} <code className="mono">{tr("command_center_mcp.py")}</code> {tr("traduz o painel em ferramentas (")}<span className="mono">{tr("cc_dashboard")}</span>, <span className="mono">{tr("cc_atencao")}</span>, <span className="mono">{tr("cc_invoices")}</span>, <span className="mono">{tr("cc_financeiro")}</span>, <span className="mono">{tr("cc_conversas")}</span>, <span className="mono">{tr("cc_auditoria")}</span>{tr("…). Rode este comando")} <b>{tr("na máquina onde o Claude roda")}</b>:</div>
+        <Linha cmd={mcp} rotulo={tr("Comando")} />
+        <div className="small muted" style={{ marginTop: 6 }}>{tr("Nenhuma ferramenta desse servidor escreve — ele não sabe fazer outro verbo além de GET. Vale para o Claude Code e para qualquer agente que aceite MCP por stdio; o claude.ai (web/app) pede conector remoto com OAuth, que é outro caminho.")}</div>
       </div>
 
       <div className="card" style={{ padding: '12px 14px' }}>
-        <b>4. Se a chave vazar</b>
-        <div className="small ink2">Revogue aqui — corta na hora, o pedido seguinte já recebe erro — e crie outra. Não existe "trocar o segredo": a identidade da chave é o segredo.
-          O <span className="mono">urk_&lt;id&gt;</span> que aparece na lista é público de propósito (vai no log e na auditoria) e sozinho não abre nada.</div>
+        <b>{tr("4. Se a chave vazar")}</b>
+        <div className="small ink2">{tr("Revogue aqui — corta na hora, o pedido seguinte já recebe erro — e crie outra. Não existe \"trocar o segredo\": a identidade da chave é o segredo. O")} <span className="mono">{tr("urk_&lt;id&gt;")}</span> {tr("que aparece na lista é público de propósito (vai no log e na auditoria) e sozinho não abre nada.")}</div>
       </div>
     </div>
   </details>
@@ -455,47 +451,47 @@ export function Users() {
   const [err, setErr] = useState<string | null>(null)
   async function create(e: FormEvent) {
     e.preventDefault(); setBusy(true); setErr(null)
-    try { await api.post('/users', CARGO_PT[f.role] ? { ...f, role: 'OPERATOR', cargo: f.role } : f); toast('Usuário criado.', 'ok'); setF({ email: '', name: '', role: 'OPERATOR', password: '' }); reload() } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
+    try { await api.post('/users', CARGO_PT[f.role] ? { ...f, role: 'OPERATOR', cargo: f.role } : f); toast(tr("Usuário criado."), 'ok'); setF({ email: '', name: '', role: 'OPERATOR', password: '' }); reload() } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
   }
   async function toggle(u: U) {
-    if (!await perguntar({ titulo: `${u.active ? 'Desativar' : 'Reativar'} ${u.email}?`, ok: u.active ? 'Desativar' : 'Reativar', perigo: !!u.active })) return
+    if (!await perguntar({ titulo: `${u.active ? 'Desativar' : 'Reativar'} ${u.email}?`, ok: u.active ? tr("Desativar") : tr("Reativar"), perigo: !!u.active })) return
     try { await api.post(`/users/${u.id}/active`, { active: !u.active }); reload() } catch (ex) { toast((ex as ApiError).message, 'crit') }
   }
   // 21/09: quem esquece a senha não tem como provar a antiga. O administrador define uma nova,
   // fica na auditoria, e as sessões abertas daquela pessoa caem na hora.
   async function senha(u: U) {
     const nova = await perguntar({
-      titulo: `Definir uma senha nova para ${u.name}`,
-      texto: `${u.email} entra com a senha que você digitar aqui. As sessões abertas dela caem na hora. Mínimo 5 caracteres — combine a senha com a pessoa por fora do painel.`,
-      campo: 'Senha nova', segredo: true, ok: 'Definir senha',
+      titulo: tr("Definir uma senha nova para {0}", u.name),
+      texto: tr("{0} entra com a senha que você digitar aqui. As sessões abertas dela caem na hora. Mínimo 5 caracteres — combine a senha com a pessoa por fora do painel.", u.email),
+      campo: tr("Senha nova"), segredo: true, ok: tr("Definir senha"),
     })
     if (typeof nova !== 'string' || !nova) return
-    try { await api.post(`/users/${u.id}/password`, { password: nova }); toast(`Senha definida para ${u.email}.`, 'ok'); reload() }
+    try { await api.post(`/users/${u.id}/password`, { password: nova }); toast(tr("Senha definida para {0}.", u.email), 'ok'); reload() }
     catch (ex) { toast((ex as ApiError).message, 'crit') }
   }
   return <>
-    <PageHeader title="Usuários" help={<>Administrador: {ROLE_O_QUE.ADMIN}. Gerente: {ROLE_O_QUE.MANAGER}. Operador: {ROLE_O_QUE.OPERATOR}. Leitura: {ROLE_O_QUE.VIEWER}. Conta de acesso livre não tem cargo e alcança tudo.</>} />
+    <PageHeader title={tr("Usuários")} help={<>{tr("Administrador:")} {ROLE_O_QUE.ADMIN}{tr(". Gerente:")} {ROLE_O_QUE.MANAGER}{tr(". Operador:")} {ROLE_O_QUE.OPERATOR}{tr(". Leitura:")} {ROLE_O_QUE.VIEWER}{tr(". Conta de acesso livre não tem cargo e alcança tudo.")}</>} />
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
-      <Section title="Cadastrados" count={data?.length} tight>
+      <Section title={tr("Cadastrados")} count={data?.length} tight>
         {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Ativo</th><th>Último login</th><th></th></tr></thead><tbody>
-            {(data || []).map(u => <tr key={u.id}><td>{u.name}</td><td className="small">{u.email}</td><td><PapelEditavel u={u} self={u.id === user?.id} onChanged={reload} /></td><td>{u.active ? <Chip tone="ok">sim</Chip> : <Chip tone="neutral">não</Chip>}</td><td className="small nowrap">{u.last_login_at
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Nome")}</th><th>{tr("E-mail")}</th><th>{tr("Papel")}</th><th>{tr("Ativo")}</th><th>{tr("Último login")}</th><th></th></tr></thead><tbody>
+            {(data || []).map(u => <tr key={u.id}><td>{u.name}</td><td className="small">{u.email}</td><td><PapelEditavel u={u} self={u.id === user?.id} onChanged={reload} /></td><td>{u.active ? <Chip tone="ok">{tr("sim")}</Chip> : <Chip tone="neutral">{tr("não")}</Chip>}</td><td className="small nowrap">{u.last_login_at
                 ? <><span className="mono">{fmtDateTime(u.last_login_at)}</span><div className="muted">{ago(u.last_login_at)}</div></>
-                : <span className="muted">nunca entrou</span>}</td>
+                : <span className="muted">{tr("nunca entrou")}</span>}</td>
               <td><div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                <button className="btn sm" onClick={() => senha(u)} title="Definir uma senha nova para esta pessoa">Definir senha</button>
-                {u.id !== user?.id && <button className="btn sm" onClick={() => toggle(u)}>{u.active ? 'Desativar' : 'Reativar'}</button>}
+                <button className="btn sm" onClick={() => senha(u)} title={tr("Definir uma senha nova para esta pessoa")}>{tr("Definir senha")}</button>
+                {u.id !== user?.id && <button className="btn sm" onClick={() => toggle(u)}>{u.active ? tr("Desativar") : tr("Reativar")}</button>}
               </div></td></tr>)}
           </tbody></table></div>}
       </Section>
-      <Section title="Novo usuário"><form className="stack" onSubmit={create}>
+      <Section title={tr("Novo usuário")}><form className="stack" onSubmit={create}>
         {err && <Banner tone="crit">{err}</Banner>}
-        <div className="field"><label>Nome</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
-        <div className="field"><label>E-mail</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
-        <div className="field"><label>Papel</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>
-          <span className="small muted">{ROLE_O_QUE[f.role] || 'só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe'}</span></div>
-        <div className="field"><label>Senha inicial</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">Mínimo 5 caracteres. Peça para trocar no primeiro acesso.</span></div>
-        <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : 'Criar'}</button>
+        <div className="field"><label>{tr("Nome")}</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+        <div className="field"><label>{tr("E-mail")}</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
+        <div className="field"><label>{tr("Papel")}</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>
+          <span className="small muted">{ROLE_O_QUE[f.role] || tr("só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe")}</span></div>
+        <div className="field"><label>{tr("Senha inicial")}</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">{tr("Mínimo 5 caracteres. Peça para trocar no primeiro acesso.")}</span></div>
+        <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : tr("Criar")}</button>
       </form></Section>
     </div>
     <Chaves usuarios={data || []} />
@@ -510,15 +506,15 @@ export function Audit() {
   const pg = usePaginado<AuditRow>('/audit' + (busca ? `?q=${encodeURIComponent(busca)}` : ''), 100)
   const rows = pg.itens, data = pg.itens, error = pg.erro, loading = pg.carregando, reload = pg.recarregar
   return <>
-    <PageHeader title="Auditoria" help={<>Registro imutável (gatilhos no banco impedem UPDATE/DELETE). Logins, comandos, decisões, mudanças de política.</>}>
-      <input className="input" style={{ width: 260 }} placeholder="Filtrar" value={q} onChange={e => setQ(e.target.value)} /><button className="btn" onClick={reload}>↻</button></PageHeader>
-    <Section title="Eventos" count={pg.total} tight>
-      {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : rows.length === 0 ? <Empty>Nada registrado.</Empty> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Quando</th><th>Evento</th><th>Quem</th><th>IP</th><th>Entidade</th><th>Detalhe</th></tr></thead><tbody>
+    <PageHeader title={tr("Auditoria")} help={<>{tr("Registro imutável (gatilhos no banco impedem UPDATE/DELETE). Logins, comandos, decisões, mudanças de política.")}</>}>
+      <input className="input" style={{ width: 260 }} placeholder={tr("Filtrar")} value={q} onChange={e => setQ(e.target.value)} /><button className="btn" onClick={reload}>↻</button></PageHeader>
+    <Section title={tr("Eventos")} count={pg.total} tight>
+      {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : rows.length === 0 ? <Empty>{tr("Nada registrado.")}</Empty> :
+        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Quando")}</th><th>{tr("Evento")}</th><th>{tr("Quem")}</th><th>{tr("IP")}</th><th>{tr("Entidade")}</th><th>{tr("Detalhe")}</th></tr></thead><tbody>
           {rows.map((r, i) => { const d = safeJson(r.detail); return <tr key={r.id ?? i}><td className="mono nowrap">{fmtDateTime(r.at)}</td><td><Chip tone={/fail|reject|denied/.test(r.event) ? 'crit' : /login|approve|create/.test(r.event) ? 'ok' : 'neutral'}>{r.event}</Chip></td><td className="mono small">{r.actor}</td><td className="mono small muted">{r.ip}</td><td className="small">{r.entity_type} {r.entity_id}</td><td className="small ink2" style={{ maxWidth: 420 }}>{typeof d === 'string' ? d : d ? JSON.stringify(d).slice(0, 220) : ''}</td></tr> })}
         </tbody></table></div>}
       {pg.temMais && <div className="row" style={{ justifyContent: 'center', padding: 12 }}>
-        <button className="btn ghost" disabled={loading} onClick={pg.mais}>{loading ? 'Carregando…' : `Carregar mais (${rows.length} de ${pg.total})`}</button></div>}
+        <button className="btn ghost" disabled={loading} onClick={pg.mais}>{loading ? tr("Carregando…") : tr("Carregar mais ({0} de {1})", rows.length, pg.total)}</button></div>}
     </Section>
   </>
 }
@@ -530,20 +526,20 @@ export function Account() {
   const [busy, setBusy] = useState(false)
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (f.new_password !== f.again) { setMsg({ tone: 'crit', text: 'As senhas novas não conferem.' }); return }
+    if (f.new_password !== f.again) { setMsg({ tone: 'crit', text: tr("As senhas novas não conferem.") }); return }
     setBusy(true); setMsg(null)
     try { const r = await api.post<{ message: string }>('/auth/password', { current_password: f.current_password, new_password: f.new_password }); setMsg({ tone: 'ok', text: r.message }); setTimeout(() => logout(), 1500) }
     catch (ex) { setMsg({ tone: 'crit', text: (ex as ApiError).message }) } finally { setBusy(false) }
   }
   return <>
-    <PageHeader title="Minha conta" help={<>{user?.name} · {user?.email} · {user?.free ? 'acesso livre (sem cargo)' : ROLE_PT[user?.role || ''] || user?.role}</>} />
-    <div style={{ maxWidth: 420 }}><Section title="Trocar senha"><form className="stack" onSubmit={submit}>
+    <PageHeader title={tr("Minha conta")} help={<>{user?.name} · {user?.email} · {user?.free ? tr("acesso livre (sem cargo)") : ROLE_PT[user?.role || ''] || user?.role}</>} />
+    <div style={{ maxWidth: 420 }}><Section title={tr("Trocar senha")}><form className="stack" onSubmit={submit}>
       {msg && <Banner tone={msg.tone}>{msg.text}</Banner>}
-      <div className="field"><label>Senha atual</label><input className="input" type="password" autoComplete="current-password" required value={f.current_password} onChange={e => setF({ ...f, current_password: e.target.value })} /></div>
-      <div className="field"><label>Nova senha</label><input className="input" type="password" autoComplete="new-password" required minLength={5} value={f.new_password} onChange={e => setF({ ...f, new_password: e.target.value })} /></div>
-      <div className="field"><label>Repita a nova</label><input className="input" type="password" autoComplete="new-password" required value={f.again} onChange={e => setF({ ...f, again: e.target.value })} /></div>
-      <div className="small muted">Ao trocar, todas as sessões são encerradas e você entra de novo.</div>
-      <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : 'Trocar senha'}</button>
+      <div className="field"><label>{tr("Senha atual")}</label><input className="input" type="password" autoComplete="current-password" required value={f.current_password} onChange={e => setF({ ...f, current_password: e.target.value })} /></div>
+      <div className="field"><label>{tr("Nova senha")}</label><input className="input" type="password" autoComplete="new-password" required minLength={5} value={f.new_password} onChange={e => setF({ ...f, new_password: e.target.value })} /></div>
+      <div className="field"><label>{tr("Repita a nova")}</label><input className="input" type="password" autoComplete="new-password" required value={f.again} onChange={e => setF({ ...f, again: e.target.value })} /></div>
+      <div className="small muted">{tr("Ao trocar, todas as sessões são encerradas e você entra de novo.")}</div>
+      <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : tr("Trocar senha")}</button>
     </form></Section></div>
   </>
 }

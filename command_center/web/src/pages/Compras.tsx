@@ -18,6 +18,7 @@ import { Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '..
 import { Icon } from '../components/Icon'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
+import { tr, LOCALE } from '../i18n'
 
 interface Pedido { id: number; item_id: number | null; description: string; qty: number; unit: string; client_id: number | null; cliente: string | null
   needed_by: string | null; urgent: number; notes: string | null; status: string; purchase_id: number | null; pedido_por: string | null; created_at: string
@@ -44,16 +45,16 @@ interface Local { code: string; name: string }
 const ST_PEDIDO: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent']> = {
   aberto: ['aberto', 'warn'], comprando: ['comprando', 'info'], chegou: ['chegou', 'accent'], entregue: ['entregue', 'ok'], cancelado: ['cancelado', 'neutral'] }
 const ST_COMPRA: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent']> = {
-  rascunho: ['rascunho', 'neutral'], pedida: ['pedida', 'info'], parcial: ['chegou em parte', 'accent'], recebida: ['recebida', 'ok'], cancelada: ['cancelada', 'neutral'] }
+  rascunho: ['rascunho', 'neutral'], pedida: ['pedida', 'info'], parcial: [tr("chegou em parte"), 'accent'], recebida: ['recebida', 'ok'], cancelada: ['cancelada', 'neutral'] }
 // andamento da ENTREGA, lido dos e-mails da loja/transportadora — não é o status do estoque
 const ST_ENVIO: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit']> = {
-  pedido: ['pedido feito', 'neutral'], pago: ['pago', 'info'], enviado: ['a caminho', 'info'], entregue: ['entregue', 'accent'], cancelado: ['cancelado na loja', 'crit'] }
-const EV: Record<string, string> = { pedido: 'Pedido', pagamento: 'Pagamento', envio: 'Envio', entregue: 'Entregue', cancelado: 'Cancelado', reembolso: 'Reembolso' }
+  pedido: [tr("pedido feito"), 'neutral'], pago: ['pago', 'info'], enviado: [tr("a caminho"), 'info'], entregue: ['entregue', 'accent'], cancelado: [tr("cancelado na loja"), 'crit'] }
+const EV: Record<string, string> = { pedido: tr("Pedido"), pagamento: tr("Pagamento"), envio: tr("Envio"), entregue: tr("Entregue"), cancelado: tr("Cancelado"), reembolso: tr("Reembolso") }
 // a etapa fina que o e-mail (ou a página de rastreio) disse — dono, 06/10: "se está em rota, se já foi entregue, se teve alguma atualização"
 const ETAPA: Record<string, [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit']> = {
-  pagamento_pendente: ['pagamento pendente', 'warn'], preparando: ['preparando', 'neutral'], mensagem: ['mensagem da loja', 'neutral'],
-  etiqueta: ['etiqueta criada', 'info'], em_transito: ['em trânsito', 'info'], previsao: ['previsão de entrega', 'info'],
-  saiu_para_entrega: ['saiu para entrega', 'accent'], atraso: ['atraso na entrega', 'crit'] }
+  pagamento_pendente: [tr("pagamento pendente"), 'warn'], preparando: ['preparando', 'neutral'], mensagem: [tr("mensagem da loja"), 'neutral'],
+  etiqueta: [tr("etiqueta criada"), 'info'], em_transito: [tr("em trânsito"), 'info'], previsao: [tr("previsão de entrega"), 'info'],
+  saiu_para_entrega: [tr("saiu para entrega"), 'accent'], atraso: [tr("atraso na entrega"), 'crit'] }
 const TOM_EV: Record<string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'> = { entregue: 'accent', cancelado: 'crit', envio: 'info', pagamento: 'ok', reembolso: 'warn' }
 function rotuloEvento(e: Evento): [string, 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'] {
   if (e.stage && ETAPA[e.stage]) return ETAPA[e.stage]
@@ -76,7 +77,7 @@ function Rastreios({ tracking, carrier }: { tracking?: string | null; carrier?: 
 }
 // o sistema roda no fuso da Flórida (dono): o e-mail chega em UTC e é mostrado em Orlando
 const horaFL = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? iso
-  : d.toLocaleString('pt-BR', { timeZone: 'America/New_York', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '') }
+  : d.toLocaleString(LOCALE(), { timeZone: 'America/New_York', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '') }
 const dia = (iso: string | null) => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—'
 const usd = (v: number | null | undefined) => v == null ? '—' : `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -100,42 +101,42 @@ function NovoPedido({ onClose, onDone }: { onClose: () => void; onDone: () => vo
 
   async function salvar() {
     const q = Number(qtd.replace(',', '.'))
-    if (!(q > 0)) { toast('Quantidade maior que zero.', 'warn'); return }
-    if (modo === 'estoque' ? !item : !desc.trim()) { toast('Diga o que precisa.', 'warn'); return }
+    if (!(q > 0)) { toast(tr("Quantidade maior que zero."), 'warn'); return }
+    if (modo === 'estoque' ? !item : !desc.trim()) { toast(tr("Diga o que precisa."), 'warn'); return }
     setIndo(true)
     try {
       await api.post('/compras/pedidos', { item_id: modo === 'estoque' ? item!.id : null, description: modo === 'livre' ? desc.trim() : null,
         qty: q, unit: modo === 'livre' ? unidade : null, needed_by: quando || null, urgent: urgente, client_id: cliente?.id ?? null, notes: nota.trim() || null })
-      toast('Pedido feito. Quem compra já vê na fila.', 'ok'); onDone(); onClose()
+      toast(tr("Pedido feito. Quem compra já vê na fila."), 'ok'); onDone(); onClose()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
 
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
-    <h3>Novo pedido</h3>
+    <h3>{tr("Novo pedido")}</h3>
     <div className="seg" style={{ marginBottom: 10 }}>
-      <button className={`btn sm${modo === 'estoque' ? '' : ' ghost'}`} onClick={() => setModo('estoque')}>Peça do estoque</button>
-      <button className={`btn sm${modo === 'livre' ? '' : ' ghost'}`} onClick={() => setModo('livre')}>Outra coisa</button>
+      <button className={`btn sm${modo === 'estoque' ? '' : ' ghost'}`} onClick={() => setModo('estoque')}>{tr("Peça do estoque")}</button>
+      <button className={`btn sm${modo === 'livre' ? '' : ' ghost'}`} onClick={() => setModo('livre')}>{tr("Outra coisa")}</button>
     </div>
     {modo === 'estoque'
       ? item ? <div className="row gap" style={{ alignItems: 'center', marginBottom: 12 }}><b className="grow">{item.name}</b>
-          <span className="small muted">tem {item.nosso} {item.unit}</span><button className="btn ghost sm" onClick={() => setItem(null)}>trocar</button></div>
-        : <label className="fld"><span>Qual peça</span>
-          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="digite o nome (2 letras)" autoFocus />
+          <span className="small muted">{tr("tem")} {item.nosso} {item.unit}</span><button className="btn ghost sm" onClick={() => setItem(null)}>{tr("trocar")}</button></div>
+        : <label className="fld"><span>{tr("Qual peça")}</span>
+          <input value={busca} onChange={e => setBusca(e.target.value)} placeholder={tr("digite o nome (2 letras)")} autoFocus />
           {achados.length > 0 && <div className="tbl">{achados.map(i => <button key={i.id} className="tr" style={{ textAlign: 'left', width: '100%', background: 'none', border: 0, cursor: 'pointer', color: 'inherit' }}
-            onClick={() => { setItem(i); setUnidade(i.unit) }}><span className="grow">{i.name}</span><span className="small muted">tem {i.nosso} {i.unit}</span></button>)}</div>}
-          {busca.trim().length >= 2 && !achados.length && <span className="small muted">Não está no estoque — use "Outra coisa".</span>}
+            onClick={() => { setItem(i); setUnidade(i.unit) }}><span className="grow">{i.name}</span><span className="small muted">{tr("tem")} {i.nosso} {i.unit}</span></button>)}</div>}
+          {busca.trim().length >= 2 && !achados.length && <span className="small muted">{tr("Não está no estoque — use \"Outra coisa\".")}</span>}
         </label>
-      : <label className="fld"><span>O que precisa</span><input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Fita de freio, chave 10mm…" autoFocus /></label>}
+      : <label className="fld"><span>{tr("O que precisa")}</span><input value={desc} onChange={e => setDesc(e.target.value)} placeholder={tr("Fita de freio, chave 10mm…")} autoFocus /></label>}
     <div className="row gap wrap">
-      <label className="fld grow"><span>Quantidade</span><input type="number" inputMode="decimal" min={0} value={qtd} onChange={e => setQtd(e.target.value)} /></label>
-      {modo === 'livre' && <label className="fld grow"><span>Unidade</span><input value={unidade} onChange={e => setUnidade(e.target.value)} /></label>}
-      <label className="fld grow"><span>Para quando</span><input type="date" value={quando} onChange={e => setQuando(e.target.value)} /></label>
+      <label className="fld grow"><span>{tr("Quantidade")}</span><input type="number" inputMode="decimal" min={0} value={qtd} onChange={e => setQtd(e.target.value)} /></label>
+      {modo === 'livre' && <label className="fld grow"><span>{tr("Unidade")}</span><input value={unidade} onChange={e => setUnidade(e.target.value)} /></label>}
+      <label className="fld grow"><span>{tr("Para quando")}</span><input type="date" value={quando} onChange={e => setQuando(e.target.value)} /></label>
     </div>
-    <label className="check" style={{ margin: '0 0 12px' }}><input type="checkbox" checked={urgente} onChange={e => setUrgente(e.target.checked)} /> Urgente <span className="small muted">(entra em "Precisa de atenção")</span></label>
-    <Picker label="Para o kart de (opcional)" value={cliente} onPick={setCliente} />
-    <label className="fld"><span>Nota</span><input value={nota} onChange={e => setNota(e.target.value)} placeholder="qual kart, modelo, link" /></label>
-    <div className="modal-foot"><button className="btn ghost" onClick={onClose}>Cancelar</button>
-      <button className="btn" disabled={indo} onClick={salvar}>{indo ? 'Enviando…' : 'Pedir'}</button></div>
+    <label className="check" style={{ margin: '0 0 12px' }}><input type="checkbox" checked={urgente} onChange={e => setUrgente(e.target.checked)} /> {tr("Urgente")} <span className="small muted">{tr("(entra em \"Precisa de atenção\")")}</span></label>
+    <Picker label={tr("Para o kart de (opcional)")} value={cliente} onPick={setCliente} />
+    <label className="fld"><span>{tr("Nota")}</span><input value={nota} onChange={e => setNota(e.target.value)} placeholder={tr("qual kart, modelo, link")} /></label>
+    <div className="modal-foot"><button className="btn ghost" onClick={onClose}>{tr("Cancelar")}</button>
+      <button className="btn" disabled={indo} onClick={salvar}>{indo ? tr("Enviando…") : tr("Pedir")}</button></div>
   </div></Scrim>
 }
 
@@ -150,14 +151,14 @@ export function Pedidos() {
   const gerente = can('MANAGER')
 
   async function acao(p: Pedido, qual: 'cancelar' | 'entregue') {
-    try { await api.post(`/compras/pedidos/${p.id}/${qual}`); toast(qual === 'cancelar' ? 'Pedido cancelado.' : 'Entregue a quem pediu.', 'ok'); lista.reload() }
+    try { await api.post(`/compras/pedidos/${p.id}/${qual}`); toast(qual === 'cancelar' ? tr("Pedido cancelado.") : tr("Entregue a quem pediu."), 'ok'); lista.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
 
   return <>
-    <PageHeader title="Pedidos" help="O que a equipe PRECISA que se compre (a lista de desejos). Quem compra junta os pedidos numa compra; aí o pedido mostra o envio e avisa quando chegou.">
-      {gerente && marcados.length > 0 && <button className="btn" onClick={() => nav(`/compras?pedidos=${marcados.join(',')}`)}>Comprar {marcados.length} pedido(s)</button>}
-      {can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}><Icon name="plus" size={16} /> Novo pedido</button>}
+    <PageHeader title={tr("Pedidos")} help={tr("O que a equipe PRECISA que se compre (a lista de desejos). Quem compra junta os pedidos numa compra; aí o pedido mostra o envio e avisa quando chegou.")}>
+      {gerente && marcados.length > 0 && <button className="btn" onClick={() => nav(`/compras?pedidos=${marcados.join(',')}`)}>{tr("Comprar")} {marcados.length} {tr("pedido(s)")}</button>}
+      {can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}><Icon name="plus" size={16} /> {tr("Novo pedido")}</button>}
     </PageHeader>
     <div className="seg" style={{ marginBottom: 12 }}>
       {[['aberto', 'Abertos'], ['comprando', 'Comprando'], ['chegou', 'Chegou'], ['entregue', 'Entregues'], ['cancelado', 'Cancelados'], ['', 'Todos']].map(([k, r]) =>
@@ -166,22 +167,22 @@ export function Pedidos() {
     {lista.error && <ErrorState error={lista.error} retry={lista.reload} />}
     {lista.loading && !lista.data && <Loading />}
     {lista.data && (!lista.data.pedidos.length
-      ? <Empty title="Nenhum pedido aqui">{filtro === 'aberto' ? <>Precisa de algo? <b>Novo pedido</b>.</> : null}</Empty>
+      ? <Empty title={tr("Nenhum pedido aqui")}>{filtro === 'aberto' ? <>{tr("Precisa de algo?")} <b>{tr("Novo pedido")}</b>.</> : null}</Empty>
       : <div className="card"><div className="tbl">{lista.data.pedidos.map(p => {
         const [rot, tom] = ST_PEDIDO[p.status] || [p.status, 'neutral']
         return <div className="tr" key={p.id}>
-          {gerente && p.status === 'aberto' && <input type="checkbox" aria-label={`comprar ${p.description}`} checked={marcados.includes(p.id)}
+          {gerente && p.status === 'aberto' && <input type="checkbox" aria-label={tr("comprar {0}", p.description)} checked={marcados.includes(p.id)}
             onChange={() => setMarcados(m => m.includes(p.id) ? m.filter(x => x !== p.id) : [...m, p.id])} />}
           <div className="grow">
-            <b>{p.qty}× {p.description}</b> {!!p.urgent && <Chip tone="crit">urgente</Chip>}
-            <div className="small muted">{p.pedido_por || '—'} · {dia(p.created_at)}{p.cliente ? ` · kart de ${p.cliente}` : ''}{p.needed_by ? ` · até ${dia(p.needed_by)}` : ''}
-              {p.purchase_id ? <> · <Link to={`/compras/${p.purchase_id}`}>compra #{p.purchase_id}</Link></> : null}{p.notes ? ` · ${p.notes}` : ''}</div>
+            <b>{p.qty}{tr("×")} {p.description}</b> {!!p.urgent && <Chip tone="crit">{tr("urgente")}</Chip>}
+            <div className="small muted">{p.pedido_por || '—'} · {dia(p.created_at)}{p.cliente ? tr(" · kart de {0}", p.cliente) : ''}{p.needed_by ? tr(" · até {0}", dia(p.needed_by)) : ''}
+              {p.purchase_id ? <> · <Link to={`/compras/${p.purchase_id}`}>{tr("compra #")}{p.purchase_id}</Link></> : null}{p.notes ? ` · ${p.notes}` : ''}</div>
             {p.status === 'comprando' && p.rastreio && <div className="row gap wrap"><Rastreios tracking={p.rastreio} carrier={p.transportadora} /></div>}
           </div>
           {p.status === 'comprando' && p.envio && ST_ENVIO[p.envio] && <Chip tone={ST_ENVIO[p.envio][1]}>{ST_ENVIO[p.envio][0]}</Chip>}
           <Chip tone={tom}>{rot}</Chip>
-          {p.status === 'aberto' && (gerente || p.pedido_por === user?.name) && <button className="btn ghost sm" onClick={() => acao(p, 'cancelar')}>cancelar</button>}
-          {p.status === 'chegou' && <button className="btn sm" onClick={() => acao(p, 'entregue')}>entreguei</button>}
+          {p.status === 'aberto' && (gerente || p.pedido_por === user?.name) && <button className="btn ghost sm" onClick={() => acao(p, 'cancelar')}>{tr("cancelar")}</button>}
+          {p.status === 'chegou' && <button className="btn sm" onClick={() => acao(p, 'entregue')}>{tr("entreguei")}</button>}
         </div>
       })}</div></div>)}
     {novo && <NovoPedido onClose={() => setNovo(false)} onDone={lista.reload} />}
@@ -209,42 +210,42 @@ function NovaCompra({ inicial, itens, onClose, onDone }: { inicial: LinhaNova[];
     const corpo = linhas.filter(l => l.item_id || l.description.trim() || l.request_id).map(l => ({
       item_id: l.item_id, description: l.description.trim() || null, qty: Number(l.qty.replace(',', '.')) || null,
       unit_cost: l.unit_cost.trim() ? Number(l.unit_cost.replace(',', '.')) : null, request_id: l.request_id }))
-    if (!corpo.length) { toast('Ponha pelo menos um item.', 'warn'); return }
+    if (!corpo.length) { toast(tr("Ponha pelo menos um item."), 'warn'); return }
     setIndo(true)
     try {
       const r = await api.post<{ id: number }>('/compras', { supplier: fornecedor, reference: ref || null, expected_at: previsao || null, pedir, linhas: corpo })
-      toast(pedir ? `Compra #${r.id} registrada como pedida.` : `Rascunho #${r.id} salvo.`, 'ok'); onDone(r.id); onClose()
+      toast(pedir ? tr("Compra #{0} registrada como pedida.", r.id) : tr("Rascunho #{0} salvo.", r.id), 'ok'); onDone(r.id); onClose()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
 
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
-    <h3>Nova compra</h3>
-    <label className="fld"><span>Fornecedor</span><input value={fornecedor} onChange={e => setFornecedor(e.target.value)} list="fornecedores" />
+    <h3>{tr("Nova compra")}</h3>
+    <label className="fld"><span>{tr("Fornecedor")}</span><input value={fornecedor} onChange={e => setFornecedor(e.target.value)} list="fornecedores" />
       <datalist id="fornecedores"><option value="Comet Kart Sales" /><option value="KartSport (IAME)" /><option value="Tillotson" /><option value="Harbor Freight" /></datalist></label>
     <div className="stack" style={{ gap: 8 }}>
       {linhas.map(l => <div key={l.chave} className="row gap wrap" style={{ alignItems: 'flex-end', paddingBottom: 8, borderBottom: '1px solid var(--glass-line)' }}>
-        <label className="fld grow" style={{ flexBasis: 240, margin: 0 }}><span>{l.request_id ? `Pedido #${l.request_id}` : 'Item'}</span>
+        <label className="fld grow" style={{ flexBasis: 240, margin: 0 }}><span>{l.request_id ? tr("Pedido #{0}", l.request_id) : tr("Item")}</span>
           <select value={l.item_id ?? ''} onChange={e => { const id = e.target.value ? Number(e.target.value) : null; const it = itens.find(i => i.id === id)
             muda(l.chave, { item_id: id, description: id ? '' : l.description, unit_cost: l.unit_cost || (it?.cost != null ? String(it.cost) : '') }) }}>
-            <option value="">— fora do estoque (escreva abaixo) —</option>
+            <option value="">{tr("— fora do estoque (escreva abaixo) —")}</option>
             {itens.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
-          {!l.item_id && <input value={l.description} onChange={e => muda(l.chave, { description: e.target.value })} placeholder="o que é" style={{ marginTop: 6 }} />}
+          {!l.item_id && <input value={l.description} onChange={e => muda(l.chave, { description: e.target.value })} placeholder={tr("o que é")} style={{ marginTop: 6 }} />}
         </label>
-        <label className="fld" style={{ width: 90, margin: 0 }}><span>Qtd</span><input type="number" inputMode="decimal" min={0} value={l.qty} onChange={e => muda(l.chave, { qty: e.target.value })} /></label>
-        <label className="fld" style={{ width: 120, margin: 0 }}><span>Custo unit.</span><input type="number" inputMode="decimal" min={0} value={l.unit_cost} onChange={e => muda(l.chave, { unit_cost: e.target.value })} placeholder="$" /></label>
-        <button className="btn ghost sm" aria-label="tirar item" onClick={() => setLinhas(ls => ls.filter(x => x.chave !== l.chave))}>✕</button>
+        <label className="fld" style={{ width: 90, margin: 0 }}><span>{tr("Qtd")}</span><input type="number" inputMode="decimal" min={0} value={l.qty} onChange={e => muda(l.chave, { qty: e.target.value })} /></label>
+        <label className="fld" style={{ width: 120, margin: 0 }}><span>{tr("Custo unit.")}</span><input type="number" inputMode="decimal" min={0} value={l.unit_cost} onChange={e => muda(l.chave, { unit_cost: e.target.value })} placeholder="$" /></label>
+        <button className="btn ghost sm" aria-label={tr("tirar item")} onClick={() => setLinhas(ls => ls.filter(x => x.chave !== l.chave))}>✕</button>
       </div>)}
-      <button className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setLinhas(ls => [...ls, nova({})])}><Icon name="plus" size={14} /> item</button>
+      <button className="btn ghost sm" style={{ alignSelf: 'flex-start' }} onClick={() => setLinhas(ls => [...ls, nova({})])}><Icon name="plus" size={14} /> {tr("item")}</button>
     </div>
     <div className="row gap wrap" style={{ marginTop: 12 }}>
-      <label className="fld grow"><span>Nº do pedido / rastreio</span><input value={ref} onChange={e => setRef(e.target.value)} /></label>
-      <label className="fld grow"><span>Previsão de chegada</span><input type="date" value={previsao} onChange={e => setPrevisao(e.target.value)} /></label>
+      <label className="fld grow"><span>{tr("Nº do pedido / rastreio")}</span><input value={ref} onChange={e => setRef(e.target.value)} /></label>
+      <label className="fld grow"><span>{tr("Previsão de chegada")}</span><input type="date" value={previsao} onChange={e => setPrevisao(e.target.value)} /></label>
     </div>
-    <label className="check"><input type="checkbox" checked={pedir} onChange={e => setPedir(e.target.checked)} /> Já pedi ao fornecedor <span className="small muted">(senão fica como rascunho)</span></label>
-    <div className="modal-foot"><span className="grow small">Total: <b>{usd(total)}</b></span>
-      <button className="btn ghost" onClick={onClose}>Cancelar</button>
-      <button className="btn" disabled={indo} onClick={salvar}>{indo ? 'Salvando…' : pedir ? 'Registrar compra' : 'Salvar rascunho'}</button></div>
+    <label className="check"><input type="checkbox" checked={pedir} onChange={e => setPedir(e.target.checked)} /> {tr("Já pedi ao fornecedor")} <span className="small muted">{tr("(senão fica como rascunho)")}</span></label>
+    <div className="modal-foot"><span className="grow small">{tr("Total:")} <b>{usd(total)}</b></span>
+      <button className="btn ghost" onClick={onClose}>{tr("Cancelar")}</button>
+      <button className="btn" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : pedir ? tr("Registrar compra") : tr("Salvar rascunho")}</button></div>
   </div></Scrim>
 }
 
@@ -263,45 +264,45 @@ function PorItens({ id, itens, sugeridos, onDone }: { id: number; itens: ItemEst
   async function salvar() {
     const corpo = linhas.filter(l => l.item_id || l.description.trim()).map(l => ({ item_id: l.item_id, description: l.description.trim() || null,
       qty: Number(l.qty.replace(',', '.')) || null, unit_cost: l.unit_cost.trim() ? Number(l.unit_cost.replace(',', '.')) : null }))
-    if (!corpo.length && !ligar.length) { toast('Escolha um pedido ou ponha um item.', 'warn'); return }
+    if (!corpo.length && !ligar.length) { toast(tr("Escolha um pedido ou ponha um item."), 'warn'); return }
     setIndo(true)
     try {
       if (ligar.length) await api.post(`/compras/${id}/pedidos`, { request_ids: ligar })
       if (corpo.length) await api.post(`/compras/${id}/linhas`, corpo)
-      toast('Itens na compra.', 'ok'); setLinhas([]); setLigar([]); abertos.reload(); onDone()
+      toast(tr("Itens na compra."), 'ok'); setLinhas([]); setLigar([]); abertos.reload(); onDone()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   const marca = (rid: number) => setLigar(m => m.includes(rid) ? m.filter(x => x !== rid) : [...m, rid])
 
   return <div className="stack" style={{ gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--glass-line)' }}>
-    <b>O que veio nesta compra</b>
-    {sugeridos.length > 0 && <div><div className="small muted" style={{ marginBottom: 4 }}>Pedidos da equipe que aparecem no e-mail da loja:</div>
+    <b>{tr("O que veio nesta compra")}</b>
+    {sugeridos.length > 0 && <div><div className="small muted" style={{ marginBottom: 4 }}>{tr("Pedidos da equipe que aparecem no e-mail da loja:")}</div>
       <div className="tbl">{sugeridos.map(p => <label className="tr" key={p.id} style={{ cursor: 'pointer' }}>
         <input type="checkbox" checked={ligar.includes(p.id)} onChange={() => marca(p.id)} />
-        <div className="grow"><b>{p.qty}× {p.description}</b><div className="small muted">{p.pedido_por || '—'}{p.cliente ? ` · kart de ${p.cliente}` : ''}</div></div>
-        <Chip tone="accent">parece ser</Chip></label>)}</div></div>}
-    {outros.length > 0 && <label className="fld" style={{ margin: 0 }}><span>Ligar outro pedido aberto</span>
+        <div className="grow"><b>{p.qty}{tr("×")} {p.description}</b><div className="small muted">{p.pedido_por || '—'}{p.cliente ? tr(" · kart de {0}", p.cliente) : ''}</div></div>
+        <Chip tone="accent">{tr("parece ser")}</Chip></label>)}</div></div>}
+    {outros.length > 0 && <label className="fld" style={{ margin: 0 }}><span>{tr("Ligar outro pedido aberto")}</span>
       <select value="" onChange={e => { const v = Number(e.target.value); if (v) marca(v) }}>
-        <option value="">— escolha —</option>
-        {outros.map(p => <option key={p.id} value={p.id}>{ligar.includes(p.id) ? '✓ ' : ''}#{p.id} · {p.qty}× {p.description}{p.pedido_por ? ` (${p.pedido_por})` : ''}</option>)}
+        <option value="">{tr("— escolha —")}</option>
+        {outros.map(p => <option key={p.id} value={p.id}>{ligar.includes(p.id) ? '✓ ' : ''}#{p.id} · {p.qty}{tr("×")} {p.description}{p.pedido_por ? ` (${p.pedido_por})` : ''}</option>)}
       </select></label>}
-    {ligar.filter(x => !sugIds.has(x)).length > 0 && <span className="small">Vai ligar: {ligar.filter(x => !sugIds.has(x)).map(x => `#${x}`).join(', ')}</span>}
+    {ligar.filter(x => !sugIds.has(x)).length > 0 && <span className="small">{tr("Vai ligar:")} {ligar.filter(x => !sugIds.has(x)).map(x => `#${x}`).join(', ')}</span>}
     {linhas.map(l => <div key={l.chave} className="row gap wrap" style={{ alignItems: 'flex-end' }}>
-      <label className="fld grow" style={{ flexBasis: 220, margin: 0 }}><span>Item</span>
+      <label className="fld grow" style={{ flexBasis: 220, margin: 0 }}><span>{tr("Item")}</span>
         <select value={l.item_id ?? ''} onChange={e => { const v = e.target.value ? Number(e.target.value) : null; const it = itens.find(i => i.id === v)
           muda(l.chave, { item_id: v, unit_cost: l.unit_cost || (it?.cost != null ? String(it.cost) : '') }) }}>
-          <option value="">— fora do estoque (escreva abaixo) —</option>
+          <option value="">{tr("— fora do estoque (escreva abaixo) —")}</option>
           {itens.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
-        {!l.item_id && <input value={l.description} onChange={e => muda(l.chave, { description: e.target.value })} placeholder="o que é" style={{ marginTop: 6 }} />}</label>
-      <label className="fld" style={{ width: 80, margin: 0 }}><span>Qtd</span><input type="number" inputMode="decimal" min={0} value={l.qty} onChange={e => muda(l.chave, { qty: e.target.value })} /></label>
-      <label className="fld" style={{ width: 110, margin: 0 }}><span>Custo unit.</span><input type="number" inputMode="decimal" min={0} value={l.unit_cost} onChange={e => muda(l.chave, { unit_cost: e.target.value })} placeholder="$" /></label>
-      <button className="btn ghost sm" aria-label="tirar item" onClick={() => setLinhas(ls => ls.filter(x => x.chave !== l.chave))}>✕</button>
+        {!l.item_id && <input value={l.description} onChange={e => muda(l.chave, { description: e.target.value })} placeholder={tr("o que é")} style={{ marginTop: 6 }} />}</label>
+      <label className="fld" style={{ width: 80, margin: 0 }}><span>{tr("Qtd")}</span><input type="number" inputMode="decimal" min={0} value={l.qty} onChange={e => muda(l.chave, { qty: e.target.value })} /></label>
+      <label className="fld" style={{ width: 110, margin: 0 }}><span>{tr("Custo unit.")}</span><input type="number" inputMode="decimal" min={0} value={l.unit_cost} onChange={e => muda(l.chave, { unit_cost: e.target.value })} placeholder="$" /></label>
+      <button className="btn ghost sm" aria-label={tr("tirar item")} onClick={() => setLinhas(ls => ls.filter(x => x.chave !== l.chave))}>✕</button>
     </div>)}
     <div className="row gap wrap">
-      <button className="btn ghost sm" onClick={() => setLinhas(ls => [...ls, nova({})])}><Icon name="plus" size={14} /> item</button>
+      <button className="btn ghost sm" onClick={() => setLinhas(ls => [...ls, nova({})])}><Icon name="plus" size={14} /> {tr("item")}</button>
       <span className="grow" />
-      {(linhas.length > 0 || ligar.length > 0) && <button className="btn sm" disabled={indo} onClick={salvar}>{indo ? 'Salvando…' : 'Pôr na compra'}</button>}
+      {(linhas.length > 0 || ligar.length > 0) && <button className="btn sm" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : tr("Pôr na compra")}</button>}
     </div>
   </div>
 }
@@ -309,16 +310,16 @@ function PorItens({ id, itens, sugeridos, onDone }: { id: number; itens: ItemEst
 function LinhaDoTempo({ eventos, id }: { eventos: Evento[]; id: number }) {
   if (!eventos.length) return null
   return <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--glass-line)' }}>
-    <h4 style={{ fontSize: 'inherit', margin: 0 }}>Linha do tempo</h4>
-    <div className="small muted">Cada e-mail da loja, da transportadora e cada leitura da página de rastreio, na ordem em que chegaram.</div>
+    <h4 style={{ fontSize: 'inherit', margin: 0 }}>{tr("Linha do tempo")}</h4>
+    <div className="small muted">{tr("Cada e-mail da loja, da transportadora e cada leitura da página de rastreio, na ordem em que chegaram.")}</div>
     <div className="tbl" style={{ marginTop: 6 }}>{eventos.map(e => { const [rot, tom] = rotuloEvento(e)
       return <div className="tr" key={e.id}>
         <Chip tone={tom}>{rot}</Chip>
-        <div className="grow" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{e.link ? <a href={e.link} target="_blank" rel="noreferrer">{e.subject || '(sem assunto)'}</a> : e.subject}
-          <div className="small muted">{e.at ? horaFL(e.at) : ''}{e.mailbox === 'web' ? ' · página de rastreio' : e.sender ? ` · ${e.sender.replace(/<.*>/, '').trim()}` : ''}
-            {e.tracking ? ` · ${e.tracking}` : ''}{e.invoice_number ? ` · fatura ${e.invoice_number}` : ''}
-            {e.purchase_id && e.purchase_id !== id ? ' · mesma caixa de outra compra' : ''}
-            {e.url && <> · <a href={e.url} target="_blank" rel="noreferrer">abrir {hostDe(e.url)}</a></>}</div></div>
+        <div className="grow" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{e.link ? <a href={e.link} target="_blank" rel="noreferrer">{e.subject || tr("(sem assunto)")}</a> : e.subject}
+          <div className="small muted">{e.at ? horaFL(e.at) : ''}{e.mailbox === 'web' ? tr(" · página de rastreio") : e.sender ? ` · ${e.sender.replace(/<.*>/, '').trim()}` : ''}
+            {e.tracking ? ` · ${e.tracking}` : ''}{e.invoice_number ? tr(" · fatura {0}", e.invoice_number) : ''}
+            {e.purchase_id && e.purchase_id !== id ? tr(" · mesma caixa de outra compra") : ''}
+            {e.url && <> · <a href={e.url} target="_blank" rel="noreferrer">{tr("abrir")} {hostDe(e.url)}</a></>}</div></div>
       </div> })}</div>
   </div>
 }
@@ -351,71 +352,71 @@ function FichaCompra({ id, gerente, locais, itens, onClose, onDone }: { id: numb
     .filter(x => x.qty > 0)
 
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
-    <h3>Compra #{d.id} · {d.supplier}</h3>
+    <h3>{tr("Compra #")}{d.id} · {d.supplier}</h3>
     <div className="row gap wrap" style={{ marginBottom: 10 }}>
-      <Chip tone={tom}>{rot}</Chip>{d.atrasada && <Chip tone="crit">atrasada</Chip>}
-      {d.reference && <span className="small muted">ref. {d.reference}</span>}
-      {d.expected_at && <span className="small muted">previsão {dia(d.expected_at)}</span>}
-      {gerente && d.total != null && d.linhas.length > 0 && <span className="small">total <b>{usd(d.total)}</b>{d.sem_custo ? ` + ${d.sem_custo} sem custo` : ''}</span>}
+      <Chip tone={tom}>{rot}</Chip>{d.atrasada && <Chip tone="crit">{tr("atrasada")}</Chip>}
+      {d.reference && <span className="small muted">{tr("ref.")} {d.reference}</span>}
+      {d.expected_at && <span className="small muted">{tr("previsão")} {dia(d.expected_at)}</span>}
+      {gerente && d.total != null && d.linhas.length > 0 && <span className="small">{tr("total")} <b>{usd(d.total)}</b>{d.sem_custo ? tr(" + {0} sem custo", d.sem_custo) : ''}</span>}
     </div>
     {(d.ship_status || d.tracking || d.source === 'email') && <div className="row gap wrap" style={{ marginBottom: 10, alignItems: 'center' }}>
-      {d.source === 'email' && <Chip tone="neutral">veio do e-mail</Chip>}
+      {d.source === 'email' && <Chip tone="neutral">{tr("veio do e-mail")}</Chip>}
       {d.ship_status && ST_ENVIO[d.ship_status] && <Chip tone={ST_ENVIO[d.ship_status][1]}>{ST_ENVIO[d.ship_status][0]}</Chip>}
-      {d.payment_status === 'pendente' && <Chip tone="warn">pagamento pendente{gerente && d.amount_due != null ? ` · ${usd(d.amount_due)}` : ''}</Chip>}
-      {d.payment_status === 'pago' && <Chip tone="ok">pago</Chip>}
-      {d.order_number && d.order_number !== d.reference && <span className="small muted">pedido {d.order_number}</span>}
-      {d.invoice_number && <span className="small muted">fatura {d.invoice_number}</span>}
+      {d.payment_status === 'pendente' && <Chip tone="warn">{tr("pagamento pendente")}{gerente && d.amount_due != null ? ` · ${usd(d.amount_due)}` : ''}</Chip>}
+      {d.payment_status === 'pago' && <Chip tone="ok">{tr("pago")}</Chip>}
+      {d.order_number && d.order_number !== d.reference && <span className="small muted">{tr("pedido")} {d.order_number}</span>}
+      {d.invoice_number && <span className="small muted">{tr("fatura")} {d.invoice_number}</span>}
       <Rastreios tracking={d.tracking} carrier={d.carrier} />
-      {gerente && d.email_total != null && <span className="small">a loja cobrou <b>{usd(d.email_total)}</b></span>}
+      {gerente && d.email_total != null && <span className="small">{tr("a loja cobrou")} <b>{usd(d.email_total)}</b></span>}
     </div>}
     {(() => { const u = ultimoEvento(d); if (!u) return null; const [rot] = rotuloEvento(u)
-      return <div className="small" style={{ marginBottom: 8 }}>Última atualização: <b>{rot}</b>{u.at ? ` · ${horaFL(u.at)}` : ''}</div> })()}
+      return <div className="small" style={{ marginBottom: 8 }}>{tr("Última atualização:")} <b>{rot}</b>{u.at ? ` · ${horaFL(u.at)}` : ''}</div> })()}
     {(d.order_url || d.asana_gid) && <div className="row gap wrap small" style={{ marginBottom: 10 }}>
-      {d.order_url && <a href={d.order_url} target="_blank" rel="noreferrer">página do pedido ({hostDe(d.order_url)})</a>}
-      {d.asana_gid && <a href={`https://app.asana.com/0/1215968721507536/${d.asana_gid}`} target="_blank" rel="noreferrer">tarefa no Shipping Orders</a>}
-      {gerente && d.asana_error && <span className="muted">Asana: {d.asana_error}</span>}
+      {d.order_url && <a href={d.order_url} target="_blank" rel="noreferrer">{tr("página do pedido (")}{hostDe(d.order_url)})</a>}
+      {d.asana_gid && <a href={`https://app.asana.com/0/1215968721507536/${d.asana_gid}`} target="_blank" rel="noreferrer">{tr("tarefa no Shipping Orders")}</a>}
+      {gerente && d.asana_error && <span className="muted">{tr("Asana:")} {d.asana_error}</span>}
     </div>}
-    {d.items_hint && <div className="small" style={{ marginBottom: 8 }}>A loja disse: <b>{d.items_hint}</b></div>}
+    {d.items_hint && <div className="small" style={{ marginBottom: 8 }}>{tr("A loja disse:")} <b>{d.items_hint}</b></div>}
     {d.entregue_sem_entrada && <div className="small" style={{ marginBottom: 10, color: 'var(--warn, #b7791f)' }}>
-      A transportadora entregou. {d.linhas.length ? 'Confira a caixa e receba abaixo: é o que põe a peça no estoque.' : 'Diga o que veio (ou ligue os pedidos) e receba — ou conclua, se não é de estoque.'}</div>}
-    {!d.linhas.length && <div className="small muted" style={{ marginBottom: 8 }}>Sem itens ainda{gerente ? ' — ponha abaixo o que foi comprado.' : '. Quem comprou põe os itens.'}</div>}
+      {tr("A transportadora entregou.")} {d.linhas.length ? tr("Confira a caixa e receba abaixo: é o que põe a peça no estoque.") : tr("Diga o que veio (ou ligue os pedidos) e receba — ou conclua, se não é de estoque.")}</div>}
+    {!d.linhas.length && <div className="small muted" style={{ marginBottom: 8 }}>{tr("Sem itens ainda")}{gerente ? tr(" — ponha abaixo o que foi comprado.") : tr(". Quem comprou põe os itens.")}</div>}
     <div className="tbl">{d.linhas.map(l => {
       const falta = l.qty - l.qty_received
       return <div className="tr" key={l.id}>
         <div className="grow"><b>{l.item || l.description}</b>
-          <div className="small muted">{l.qty_received}/{l.qty} recebido{gerente && l.unit_cost != null ? ` · ${usd(l.unit_cost)} cada` : ''}
-            {l.pedido_por ? ` · pedido por ${l.pedido_por}` : ''}{l.cliente ? ` · kart de ${l.cliente}` : ''}{!l.item_id ? ' · fora do estoque' : ''}</div>
-          {aberta && falta > 0 && !l.item_id && <label className="check small"><input type="checkbox" checked={!!criar[l.id]} onChange={e => setCriar(x => ({ ...x, [l.id]: e.target.checked }))} /> criar ficha no estoque ao receber</label>}
+          <div className="small muted">{l.qty_received}/{l.qty} {tr("recebido")}{gerente && l.unit_cost != null ? tr(" · {0} cada", usd(l.unit_cost)) : ''}
+            {l.pedido_por ? tr(" · pedido por {0}", l.pedido_por) : ''}{l.cliente ? tr(" · kart de {0}", l.cliente) : ''}{!l.item_id ? tr(" · fora do estoque") : ''}</div>
+          {aberta && falta > 0 && !l.item_id && <label className="check small"><input type="checkbox" checked={!!criar[l.id]} onChange={e => setCriar(x => ({ ...x, [l.id]: e.target.checked }))} /> {tr("criar ficha no estoque ao receber")}</label>}
         </div>
-        {aberta && falta > 0 && <input className="inp" style={{ width: 80, minHeight: 36 }} type="number" inputMode="decimal" min={0} max={falta} aria-label={`quanto chegou de ${l.description}`}
+        {aberta && falta > 0 && <input className="inp" style={{ width: 80, minHeight: 36 }} type="number" inputMode="decimal" min={0} max={falta} aria-label={tr("quanto chegou de {0}", l.description)}
           value={receber[l.id] ?? ''} onChange={e => setReceber(x => ({ ...x, [l.id]: e.target.value }))} />}
-        {falta <= 0 && <Chip tone="ok">completo</Chip>}
+        {falta <= 0 && <Chip tone="ok">{tr("completo")}</Chip>}
       </div>
     })}</div>
 
     {aberta && d.linhas.some(l => l.qty_received < l.qty) && <div className="row gap wrap" style={{ marginTop: 12, alignItems: 'flex-end' }}>
-      {locais.length > 1 && <label className="fld" style={{ margin: 0 }}><span>Chegou em</span>
+      {locais.length > 1 && <label className="fld" style={{ margin: 0 }}><span>{tr("Chegou em")}</span>
         <select value={local} onChange={e => setLocal(e.target.value)}>{locais.map(l => <option key={l.code} value={l.code}>{l.name}</option>)}</select></label>}
       <button className="btn primary" disabled={indo || !itensReceber.length}
-        onClick={() => fazer('receber', { local, itens: itensReceber }, 'Recebido: já entrou no estoque.')}>Receber o que chegou</button>
+        onClick={() => fazer('receber', { local, itens: itensReceber }, tr('Recebido: já entrou no estoque.'))}>{tr("Receber o que chegou")}</button>
     </div>}
 
     {gerente && aberta && <PorItens id={d.id} itens={itens} sugeridos={d.pedidos_sugeridos || []} onDone={recarregar} />}
     <LinhaDoTempo eventos={d.eventos || []} id={d.id} />
 
     {gerente && d.status === 'rascunho' && <div className="row gap wrap" style={{ marginTop: 14, alignItems: 'flex-end' }}>
-      <label className="fld grow" style={{ margin: 0 }}><span>Nº do pedido / rastreio</span><input value={ref} onChange={e => setRef(e.target.value)} /></label>
-      <label className="fld" style={{ margin: 0 }}><span>Previsão</span><input type="date" value={previsao} onChange={e => setPrevisao(e.target.value)} /></label>
-      <button className="btn" disabled={indo} onClick={() => fazer('pedida', { reference: ref || null, expected_at: previsao || null }, 'Marcada como pedida.')}>Marcar como pedida</button>
+      <label className="fld grow" style={{ margin: 0 }}><span>{tr("Nº do pedido / rastreio")}</span><input value={ref} onChange={e => setRef(e.target.value)} /></label>
+      <label className="fld" style={{ margin: 0 }}><span>{tr("Previsão")}</span><input type="date" value={previsao} onChange={e => setPrevisao(e.target.value)} /></label>
+      <button className="btn" disabled={indo} onClick={() => fazer('pedida', { reference: ref || null, expected_at: previsao || null }, 'Marcada como pedida.')}>{tr("Marcar como pedida")}</button>
     </div>}
 
     <div className="modal-foot">
       {gerente && aberta && !d.linhas.some(l => l.qty_received > 0) && <button className="btn ghost" disabled={indo}
-        onClick={() => fazer('cancelar', {}, 'Compra cancelada; os pedidos voltaram para a fila.')}>Cancelar compra</button>}
-      {gerente && aberta && <button className="btn ghost" disabled={indo} title="Serviço, passe de pista, ferramenta que já foi para o uso"
-        onClick={() => { if (window.confirm('Concluir sem dar entrada no estoque? Use para o que não é peça de estoque (serviço, passe de pista…).')) fazer('concluir', {}, 'Compra concluída.') }}>Concluir sem estoque</button>}
+        onClick={() => fazer('cancelar', {}, 'Compra cancelada; os pedidos voltaram para a fila.')}>{tr("Cancelar compra")}</button>}
+      {gerente && aberta && <button className="btn ghost" disabled={indo} title={tr("Serviço, passe de pista, ferramenta que já foi para o uso")}
+        onClick={() => { if (window.confirm(tr("Concluir sem dar entrada no estoque? Use para o que não é peça de estoque (serviço, passe de pista…)."))) fazer('concluir', {}, tr('Compra concluída.')) }}>{tr("Concluir sem estoque")}</button>}
       <span className="grow" />
-      <button className="btn ghost" onClick={onClose}>Fechar</button>
+      <button className="btn ghost" onClick={onClose}>{tr("Fechar")}</button>
     </div>
   </div></Scrim>
 }
@@ -461,55 +462,55 @@ export function Compras() {
   const selecionados = marcadosRepor.length + marcadosPed.length
 
   return <>
-    <PageHeader title="Compras" help="O que a URACE comprou: pedido ao fornecedor, envio e chegada. Os e-mails de compra do urace@ entram aqui sozinhos, e cada envio/pagamento/entrega atualiza a compra. Receber dá entrada no estoque.">
-      {gerente && selecionados > 0 && <button className="btn" onClick={comprarSelecionados}>Comprar {selecionados} selecionado(s)</button>}
-      {gerente && <button className="btn primary" onClick={() => setNova([])}><Icon name="plus" size={16} /> Nova compra</button>}
+    <PageHeader title={tr("Compras")} help={tr("O que a URACE comprou: pedido ao fornecedor, envio e chegada. Os e-mails de compra do urace@ entram aqui sozinhos, e cada envio/pagamento/entrega atualiza a compra. Receber dá entrada no estoque.")}>
+      {gerente && selecionados > 0 && <button className="btn" onClick={comprarSelecionados}>{tr("Comprar")} {selecionados} {tr("selecionado(s)")}</button>}
+      {gerente && <button className="btn primary" onClick={() => setNova([])}><Icon name="plus" size={16} /> {tr("Nova compra")}</button>}
     </PageHeader>
 
     {r && <div className="est-resumo">
-      <Link to="/pedidos"><Chip tone={r.pedidos_abertos ? 'warn' : 'neutral'}>{r.pedidos_abertos} pedido(s) aberto(s)</Chip></Link>
-      {!!r.urgentes && <Chip tone="crit">{r.urgentes} urgente(s)</Chip>}
-      {!!r.repor.length && <Chip tone="warn">{r.repor.length} abaixo do mínimo</Chip>}
-      {!!r.rascunhos && <Chip tone="neutral">{r.rascunhos} rascunho(s)</Chip>}
-      <Chip tone="info">{r.a_caminho} a caminho</Chip>
-      {!!r.atrasadas && <Chip tone="crit">{r.atrasadas} atrasada(s)</Chip>}
-      {!!r.entregues && <Chip tone="warn">{r.entregues} entregue(s) sem entrada</Chip>}
-      {!!r.a_pagar && <Chip tone="warn">{r.a_pagar} fatura(s) a pagar</Chip>}
+      <Link to="/pedidos"><Chip tone={r.pedidos_abertos ? 'warn' : 'neutral'}>{r.pedidos_abertos} {tr("pedido(s) aberto(s)")}</Chip></Link>
+      {!!r.urgentes && <Chip tone="crit">{r.urgentes} {tr("urgente(s)")}</Chip>}
+      {!!r.repor.length && <Chip tone="warn">{r.repor.length} {tr("abaixo do mínimo")}</Chip>}
+      {!!r.rascunhos && <Chip tone="neutral">{r.rascunhos} {tr("rascunho(s)")}</Chip>}
+      <Chip tone="info">{r.a_caminho} {tr("a caminho")}</Chip>
+      {!!r.atrasadas && <Chip tone="crit">{r.atrasadas} {tr("atrasada(s)")}</Chip>}
+      {!!r.entregues && <Chip tone="warn">{r.entregues} {tr("entregue(s) sem entrada")}</Chip>}
+      {!!r.a_pagar && <Chip tone="warn">{r.a_pagar} {tr("fatura(s) a pagar")}</Chip>}
     </div>}
 
-    {gerente && !!pedidosAbertos.data?.pedidos.length && <Section title="Pedidos esperando compra" count={pedidosAbertos.data.pedidos.length}>
+    {gerente && !!pedidosAbertos.data?.pedidos.length && <Section title={tr("Pedidos esperando compra")} count={pedidosAbertos.data.pedidos.length}>
       <div className="tbl">{pedidosAbertos.data.pedidos.map(p => <label className="tr" key={p.id} style={{ cursor: 'pointer' }}>
         <input type="checkbox" checked={marcadosPed.includes(p.id)} onChange={() => setMarcadosPed(m => m.includes(p.id) ? m.filter(x => x !== p.id) : [...m, p.id])} />
-        <div className="grow"><b>{p.qty}× {p.description}</b> {!!p.urgent && <Chip tone="crit">urgente</Chip>}
-          <div className="small muted">{p.pedido_por || '—'}{p.cliente ? ` · kart de ${p.cliente}` : ''}{p.needed_by ? ` · até ${dia(p.needed_by)}` : ''}</div></div>
+        <div className="grow"><b>{p.qty}{tr("×")} {p.description}</b> {!!p.urgent && <Chip tone="crit">{tr("urgente")}</Chip>}
+          <div className="small muted">{p.pedido_por || '—'}{p.cliente ? tr(" · kart de {0}", p.cliente) : ''}{p.needed_by ? tr(" · até {0}", dia(p.needed_by)) : ''}</div></div>
       </label>)}</div>
     </Section>}
 
-    {!!r?.repor.length && <Section title="Abaixo do mínimo" count={r.repor.length}>
+    {!!r?.repor.length && <Section title={tr("Abaixo do mínimo")} count={r.repor.length}>
       <div className="tbl">{r.repor.map(x => <label className="tr" key={x.id} style={{ cursor: gerente ? 'pointer' : undefined }}>
         {gerente && <input type="checkbox" checked={marcadosRepor.includes(x.id)} onChange={() => setMarcadosRepor(m => m.includes(x.id) ? m.filter(y => y !== x.id) : [...m, x.id])} />}
-        <div className="grow"><b>{x.name}</b>{x.sku && <span className="small muted"> · SKU {x.sku}</span>}</div>
-        <span className="small">faltam <b>{x.falta}</b> {x.unit}</span>
-        {x.supplier_url && <a className="btn ghost sm" href={x.supplier_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>fornecedor</a>}
+        <div className="grow"><b>{x.name}</b>{x.sku && <span className="small muted"> {tr("· SKU")} {x.sku}</span>}</div>
+        <span className="small">{tr("faltam")} <b>{x.falta}</b> {x.unit}</span>
+        {x.supplier_url && <a className="btn ghost sm" href={x.supplier_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{tr("fornecedor")}</a>}
       </label>)}</div>
     </Section>}
 
-    <Section title="Compras" count={compras.length} right={<div className="seg">
-      {([['abertas', 'Em aberto'], ['recebida', 'Recebidas'], ['cancelada', 'Canceladas']] as const).map(([k, rot]) =>
+    <Section title={tr("Compras")} count={compras.length} right={<div className="seg">
+      {([['abertas', tr("Em aberto")], ['recebida', tr("Recebidas")], ['cancelada', tr("Canceladas")]] as const).map(([k, rot]) =>
         <button key={k} className={`btn sm${filtro === k ? '' : ' ghost'}`} onClick={() => setFiltro(k)}>{rot}</button>)}</div>}>
       {lista.error && <ErrorState error={lista.error} retry={lista.reload} />}
       {lista.loading && !lista.data && <Loading />}
-      {lista.data && (!compras.length ? <Empty title={filtro === 'abertas' ? 'Nenhuma compra em aberto' : 'Nada aqui'} />
+      {lista.data && (!compras.length ? <Empty title={filtro === 'abertas' ? tr("Nenhuma compra em aberto") : tr("Nada aqui")} />
         : <div className="tbl">{compras.map(c => {
           const [rot, tom] = ST_COMPRA[c.status] || [c.status, 'neutral']
           return <div className="tr" key={c.id} role="button" tabIndex={0} style={{ cursor: 'pointer' }} onClick={() => setFicha(c.id)}
             onKeyDown={e => { if (e.key === 'Enter') setFicha(c.id) }}>
             <div className="grow" style={{ minWidth: 0 }}><b>#{c.id} · {c.supplier}</b>
-              <div className="small muted">{c.linhas.length ? `${c.linhas.length} item(ns)` : 'sem itens'}{c.items_hint ? ` · ${c.items_hint}` : ''}{c.reference ? ` · ref. ${c.reference}` : ''}{c.tracking ? ` · ${c.carrier || 'rastreio'} ${c.tracking.split(' ')[0]}` : ''}{(() => { const u = ultimoEvento(c); return u?.at ? ` · atualizado ${horaFL(u.at)}` : '' })()}{c.expected_at ? ` · previsão ${dia(c.expected_at)}` : ''} · {c.source === 'email' ? 'veio do e-mail' : c.criada_por || '—'}</div></div>
+              <div className="small muted">{c.linhas.length ? tr("{0} item(ns)", c.linhas.length) : tr("sem itens")}{c.items_hint ? ` · ${c.items_hint}` : ''}{c.reference ? tr(" · ref. {0}", c.reference) : ''}{c.tracking ? ` · ${c.carrier || 'rastreio'} ${c.tracking.split(' ')[0]}` : ''}{(() => { const u = ultimoEvento(c); return u?.at ? ` · atualizado ${horaFL(u.at)}` : '' })()}{c.expected_at ? tr(" · previsão {0}", dia(c.expected_at)) : ''} · {c.source === 'email' ? tr("veio do e-mail") : c.criada_por || '—'}</div></div>
             {gerente && (c.linhas.length ? c.total != null : c.email_total != null) && <span className="small">{usd(c.linhas.length ? c.total : c.email_total)}</span>}
-            {c.atrasada && <Chip tone="crit">atrasada</Chip>}
-            {c.payment_status === 'pendente' && ['pedida', 'parcial', 'rascunho'].includes(c.status) && <Chip tone="warn">a pagar</Chip>}
-            {c.entregue_sem_entrada ? <Chip tone="warn">entregue · falta entrada</Chip>
+            {c.atrasada && <Chip tone="crit">{tr("atrasada")}</Chip>}
+            {c.payment_status === 'pendente' && ['pedida', 'parcial', 'rascunho'].includes(c.status) && <Chip tone="warn">{tr("a pagar")}</Chip>}
+            {c.entregue_sem_entrada ? <Chip tone="warn">{tr("entregue · falta entrada")}</Chip>
               : (() => { const u = ultimoEvento(c); if (!['pedida', 'parcial', 'rascunho'].includes(c.status)) return null
                 if (u?.stage && ETAPA[u.stage] && u.stage !== 'pagamento_pendente' && u.stage !== 'mensagem') return <Chip tone={ETAPA[u.stage][1]}>{ETAPA[u.stage][0]}</Chip>
                 return c.ship_status && c.ship_status !== 'pedido' && ST_ENVIO[c.ship_status] ? <Chip tone={ST_ENVIO[c.ship_status][1]}>{ST_ENVIO[c.ship_status][0]}</Chip> : null })()}

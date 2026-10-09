@@ -17,6 +17,7 @@ import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
 import { PassarParaVendas } from './Vendas'
+import { tr } from '../i18n'
 
 export interface Lead {
   id: number; external_id: string; client_id: number | null; name: string | null
@@ -114,20 +115,20 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
 
   async function mover(stage: string) {
     setBusy('m')
-    try { await api.post(`/crm/leads/${id}/stage`, { stage_id: stage, pipeline_id: l?.pipeline_id }); toast('Lead movido de etapa no Kommo.', 'ok'); d.reload(); onChange() }
+    try { await api.post(`/crm/leads/${id}/stage`, { stage_id: stage, pipeline_id: l?.pipeline_id }); toast(tr("Lead movido de etapa no Kommo."), 'ok'); d.reload(); onChange() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   async function marcar() {
-    const t = await perguntar({ titulo: 'Marcar tag neste lead', campo: 'Tag (ou várias separadas por vírgula)' })
+    const t = await perguntar({ titulo: tr("Marcar tag neste lead"), campo: tr("Tag (ou várias separadas por vírgula)") })
     if (typeof t !== 'string' || !t.trim()) return
     setBusy('t')
-    try { await api.post(`/crm/leads/${id}/tags`, { tags: t.split(',').map(x => x.trim()).filter(Boolean) }); toast('Tag marcada no Kommo.', 'ok'); d.reload(); onChange() }
+    try { await api.post(`/crm/leads/${id}/tags`, { tags: t.split(',').map(x => x.trim()).filter(Boolean) }); toast(tr("Tag marcada no Kommo."), 'ok'); d.reload(); onChange() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   async function anotar() {
     if (!nota.trim()) return
     setBusy('n')
-    try { await api.post(`/crm/leads/${id}/note`, { text: nota }); setNota(''); toast('Anotação guardada no lead (não vai para o cliente).', 'ok'); d.reload() }
+    try { await api.post(`/crm/leads/${id}/note`, { text: nota }); setNota(''); toast(tr("Anotação guardada no lead (não vai para o cliente)."), 'ok'); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
   // 21/09: o dono respondeu pelo painel e algumas mensagens não saíram. O estado já aparecia
@@ -136,7 +137,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     setBusy(`r${m.id}`)
     try {
       const r = await api.post<{ como: string }>(`/crm/leads/${id}/messages/${m.id}/resend`, {})
-      toast(r.como === 'entregue' ? 'Entregue agora.' : 'Na fila: o bot do Kommo abre o chat em segundos.', 'ok')
+      toast(r.como === 'entregue' ? tr("Entregue agora.") : tr("Na fila: o bot do Kommo abre o chat em segundos."), 'ok')
       d.reload()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
   }
@@ -153,15 +154,15 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     try {
       const rr = await api.post<{ como: string; aviso?: string }>(`/crm/leads/${id}/reply`, { text: t })
       setTexto(v => (v.trim() === t ? '' : v))  // o que foi digitado durante o envio fica
-      toast(rr.aviso || 'Enviada.', rr.como === 'entregue' ? 'ok' : undefined); d.reload(); onChange()
+      toast(rr.aviso || tr("Enviada."), rr.como === 'entregue' ? 'ok' : undefined); d.reload(); onChange()
       if (rr.como !== 'entregue') setTimeout(() => d.reload(), 6000)
     } catch (e) {
       // o texto NÃO é apagado e o aviso NÃO some sozinho: mensagem que não saiu tem de doer na tela
       const err = e as ApiError
-      setFalhou(err.unauthorized ? 'Sua sessão tinha caído: a mensagem NÃO foi enviada. Entre de novo — o texto continua aqui.'
-        : err.offline ? 'Sem conexão: a mensagem NÃO foi enviada. O texto continua aqui; toque em Enviar de novo.'
-          : `A mensagem NÃO foi enviada: ${err.message}`)
-      toast('A mensagem não foi enviada.', 'crit')
+      setFalhou(err.unauthorized ? tr("Sua sessão tinha caído: a mensagem NÃO foi enviada. Entre de novo — o texto continua aqui.")
+        : err.offline ? tr("Sem conexão: a mensagem NÃO foi enviada. O texto continua aqui; toque em Enviar de novo.")
+          : tr("A mensagem NÃO foi enviada: {0}", err.message))
+      toast(tr("A mensagem não foi enviada."), 'crit')
     } finally { setBusy(null) }
   }
 
@@ -174,36 +175,36 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     <div className="toolbar">
       <div className="grow" style={{ minWidth: 0 }}>
         <div className="row wrap" style={{ gap: 8 }}>
-          <button className={`star${l.starred ? ' on' : ''}`} onClick={estrelaLead} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar conversa'} title={l.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={18} /></button>
+          <button className={`star${l.starred ? ' on' : ''}`} onClick={estrelaLead} aria-label={l.starred ? tr("Tirar dos favoritos") : tr("Favoritar conversa")} title={l.starred ? tr("Favorita") : tr("Favoritar")}><Icon name="star" size={18} /></button>
           <Foto l={l} size={40} />
           <b style={{ fontSize: 16 }}>{nomeDo(l)}</b>
           <ChipCanal source={l.source} perfis={det.data?.detalhe?.perfis} nome={nomeDo(l)} />
-          {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
-          {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> Dados do lead</button>}
+          {!!l.needs_reply && <Chip tone="warn">{tr("esperando resposta")}</Chip>}
+          {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> {tr("Dados do lead")}</button>}
           <PassarParaVendas leadId={l.id} />
         </div>
         <div className="row wrap small muted" style={{ gap: 10 }}>
           {l.contact_phone && <a href={`tel:${l.contact_phone.replace(/[^\d+]/g, '')}`}>{l.contact_phone}</a>}
           {l.contact_email && <a href={`mailto:${l.contact_email}`}>{l.contact_email}</a>}
           {!!l.price && <span className="mono">{money(l.price)}</span>}
-          {l.client_id ? <Link to={`/clients/${l.client_id}`}>card: {l.client_pilot || l.client_name}</Link> : <span>ainda não é cliente</span>}
-          {l.link && <a href={l.link} target="_blank" rel="noopener noreferrer">abrir no Kommo ↗</a>}
+          {l.client_id ? <Link to={`/clients/${l.client_id}`}>{tr("card:")} {l.client_pilot || l.client_name}</Link> : <span>{tr("ainda não é cliente")}</span>}
+          {l.link && <a href={l.link} target="_blank" rel="noopener noreferrer">{tr("abrir no Kommo ↗")}</a>}
         </div>
       </div>
       <div className="row wrap" style={{ gap: 6 }}>
-        <select className="input" style={{ width: 200, padding: '4px 8px' }} title="Etapa no funil (mudar aqui move no Kommo)" disabled={!can('OPERATOR') || busy === 'm' || etapas.length === 0} value={l.stage_id || ''} onChange={e => mover(e.target.value)}>
-          {etapas.length === 0 && <option value={l.stage_id || ''}>{l.stage_name || 'etapa —'}</option>}
+        <select className="input" style={{ width: 200, padding: '4px 8px' }} title={tr("Etapa no funil (mudar aqui move no Kommo)")} disabled={!can('OPERATOR') || busy === 'm' || etapas.length === 0} value={l.stage_id || ''} onChange={e => mover(e.target.value)}>
+          {etapas.length === 0 && <option value={l.stage_id || ''}>{l.stage_name || tr("etapa —")}</option>}
           {etapas.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
         </select>
         {l.tags.map(t => <span key={t} className="lchip">{t}</span>)}
-        {can('OPERATOR') && <button className="btn ghost sm" disabled={busy === 't'} onClick={marcar}>{busy === 't' ? <Spinner /> : '+ tag'}</button>}
-        <button className={`btn ghost sm${soFav ? ' on' : ''}`} onClick={() => setSoFav(v => !v)} title="Só as mensagens favoritas"><Icon name="star" size={14} /> {soFav ? 'todas' : 'favoritas'}</button>
+        {can('OPERATOR') && <button className="btn ghost sm" disabled={busy === 't'} onClick={marcar}>{busy === 't' ? <Spinner /> : tr("+ tag")}</button>}
+        <button className={`btn ghost sm${soFav ? ' on' : ''}`} onClick={() => setSoFav(v => !v)} title={tr("Só as mensagens favoritas")}><Icon name="star" size={14} /> {soFav ? tr("todas") : tr("favoritas")}</button>
       </div>
     </div>
     {d.data?.aviso && <Banner tone="warn">{d.data.aviso}</Banner>}
     <div className="chat" style={{ flex: 1 }}>
-      {msgs.length === 0 && <Empty title="Sem mensagens guardadas">O que o lead escreveu antes do chat ser ligado fica só no Kommo. A partir de agora, cada mensagem entra aqui na hora.</Empty>}
-      {soFav && !msgs.some(m => m.starred) && <Empty title="Nenhuma mensagem favorita">Passe o mouse numa mensagem e clique na estrela.</Empty>}
+      {msgs.length === 0 && <Empty title={tr("Sem mensagens guardadas")}>{tr("O que o lead escreveu antes do chat ser ligado fica só no Kommo. A partir de agora, cada mensagem entra aqui na hora.")}</Empty>}
+      {soFav && !msgs.some(m => m.starred) && <Empty title={tr("Nenhuma mensagem favorita")}>{tr("Passe o mouse numa mensagem e clique na estrela.")}</Empty>}
       {msgs.filter(m => !soFav || m.starred).map(m => {
         const d0 = m.at ? fmtDate(m.at) : ''
         const sep = d0 && d0 !== dia
@@ -212,44 +213,44 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
         return <Fragment key={m.id}>
           {sep && <div className="chat-day">{fmtDateLong(m.at)}</div>}
           {semTexto
-            ? <div className={`msg marca ${m.direction === 'entrada' ? 'ai' : 'me'}`} title="A API do Kommo não entrega o texto das mensagens de antes do painel">
-                <div className="bub"><Icon name={iconeDaRede(m.source || l.source)} size={14} /> {m.direction === 'entrada' ? 'cliente escreveu' : 'respondemos'} · {fmtTime(m.at)}{m.source && m.source !== 'kommo-evento' ? ` · ${m.source}` : ''}{l.link && <> · <a href={l.link} target="_blank" rel="noopener noreferrer">texto no Kommo ↗</a></>}</div>
+            ? <div className={`msg marca ${m.direction === 'entrada' ? 'ai' : 'me'}`} title={tr("A API do Kommo não entrega o texto das mensagens de antes do painel")}>
+                <div className="bub"><Icon name={iconeDaRede(m.source || l.source)} size={14} /> {m.direction === 'entrada' ? tr("cliente escreveu") : tr("respondemos")} · {fmtTime(m.at)}{m.source && m.source !== 'kommo-evento' ? ` · ${m.source}` : ''}{l.link && <> · <a href={l.link} target="_blank" rel="noopener noreferrer">{tr("texto no Kommo ↗")}</a></>}</div>
               </div>
             : <div className={`msg ${m.direction === 'entrada' ? 'ai' : m.direction === 'nota' ? 'nota' : 'me'}`}>
-                <div className="meta">{m.direction === 'entrada' ? (m.author || nomeDo(l)) : m.direction === 'nota' ? `nota · ${m.author || 'painel'}` : (m.author || 'nós')}{m.at && ` · ${fmtTime(m.at)}`}
+                <div className="meta">{m.direction === 'entrada' ? (m.author || nomeDo(l)) : m.direction === 'nota' ? tr("nota · {0}", m.author || 'painel') : (m.author || tr("nós"))}{m.at && ` · ${fmtTime(m.at)}`}
                   {/* "entregue" só quando o próprio Kommo devolveu a mensagem. Sem o recibo, o
                       que o painel sabe é que mandou — e é isso que ele diz (21/09). */}
                   {m.direction === 'saida' && (m.status === 'queued' || m.status === 'sending') &&
-                    <Chip tone="warn" title={`Na fila: o painel insiste com o bot do Kommo a cada meio minuto${m.tentativas ? ` · ${m.tentativas} tentativa(s)` : ''}`}>na fila{m.tentativas ? ` · ${m.tentativas}ª` : ''}</Chip>}
+                    <Chip tone="warn" title={tr("Na fila: o painel insiste com o bot do Kommo a cada meio minuto{0}", m.tentativas ? ` · ${m.tentativas} tentativa(s)` : '')}>{tr("na fila")}{m.tentativas ? ` · ${m.tentativas}ª` : ''}</Chip>}
                   {m.direction === 'saida' && m.status === 'sent' && m.confirmado_em &&
-                    <Chip tone="ok" title={`O Kommo confirmou em ${fmtTime(m.confirmado_em)}`}>entregue ✓</Chip>}
+                    <Chip tone="ok" title={tr("O Kommo confirmou em {0}", fmtTime(m.confirmado_em))}>{tr("entregue ✓")}</Chip>}
                   {m.direction === 'saida' && m.status === 'sent' && !m.confirmado_em &&
                     <Chip tone={d.data?.recibo_ativo ? 'warn' : 'neutral'}
                       title={d.data?.recibo_ativo
-                        ? 'O painel entregou ao bot, mas o Kommo ainda não devolveu esta mensagem. Confira no Kommo.'
-                        : 'O painel entregou ao bot do Kommo. Esta conta não devolve as mensagens, então não há como confirmar por aqui.'}>
-                      enviada{d.data?.recibo_ativo ? ' · sem confirmação' : ''}</Chip>}
-                  {m.direction === 'saida' && m.status === 'failed' && <Chip tone="crit">não entregue</Chip>}
+                        ? tr("O painel entregou ao bot, mas o Kommo ainda não devolveu esta mensagem. Confira no Kommo.")
+                        : tr("O painel entregou ao bot do Kommo. Esta conta não devolve as mensagens, então não há como confirmar por aqui.")}>
+                      {tr("enviada")}{d.data?.recibo_ativo ? tr(" · sem confirmação") : ''}</Chip>}
+                  {m.direction === 'saida' && m.status === 'failed' && <Chip tone="crit">{tr("não entregue")}</Chip>}
                 </div>
-                <div className="bub-row"><div className="bub">{m.text}</div><button className={`star sm${m.starred ? ' on' : ''}`} onClick={() => estrelaMsg(m)} aria-label={m.starred ? 'Tirar favorita' : 'Favoritar mensagem'} title={m.starred ? 'Favorita' : 'Favoritar'}><Icon name="star" size={14} /></button></div>
+                <div className="bub-row"><div className="bub">{m.text}</div><button className={`star sm${m.starred ? ' on' : ''}`} onClick={() => estrelaMsg(m)} aria-label={m.starred ? tr("Tirar favorita") : tr("Favoritar mensagem")} title={m.starred ? tr("Favorita") : tr("Favoritar")}><Icon name="star" size={14} /></button></div>
                 {m.status === 'failed' && m.error && <div className="small" style={{ color: 'var(--crit)' }}>{m.error}</div>}
                 {m.direction === 'saida' && (m.status === 'failed' || m.status === 'queued') && can('OPERATOR') &&
                   <button className="btn sm" style={{ marginTop: 6 }} disabled={busy === `r${m.id}`}
-                    onClick={() => reenviar(m)}>{busy === `r${m.id}` ? <Spinner /> : <><Icon name="refresh" size={14} /> Tentar de novo</>}</button>}
+                    onClick={() => reenviar(m)}>{busy === `r${m.id}` ? <Spinner /> : <><Icon name="refresh" size={14} /> {tr("Tentar de novo")}</>}</button>}
               </div>}
         </Fragment>
       })}
       <div ref={fim} />
     </div>
     {can('OPERATOR') && <div className="stack" style={{ gap: 8 }}>
-      {!d.data?.chat_ligado && <Banner tone="warn">{d.data?.responder_habilitado ? 'O bot ainda está esperando esta conversa: dá para responder agora.' : 'O chat ainda não está ligado no Kommo (Salesbot + KOMMO_BOT_ID). Até lá, responda pelo Kommo; a anotação abaixo funciona.'}</Banner>}
-      {falhou && <Banner tone="crit">{falhou} <button className="btn sm" style={{ marginLeft: 8 }} disabled={busy === 'r' || !texto.trim()} onClick={responder}>Enviar de novo</button></Banner>}
-      <div className="field"><label>Responder no chat do lead {l.source ? `(${l.source})` : ''}</label>
-        <TextoComVoz valor={texto} onChange={setTexto} linhas={3} placeholder="Escreva ou dite a resposta… Enter envia, Shift+Enter quebra a linha" disabled={!d.data?.responder_habilitado} onEnter={responder} />
-        <div className="row wrap"><button className="btn primary sm" disabled={busy === 'r' || !texto.trim() || !d.data?.responder_habilitado} onClick={responder}>{busy === 'r' ? <Spinner /> : 'Enviar no chat'}</button><span className="small muted">Sai pelo bot da conta no canal do lead, com o seu texto.</span></div></div>
-      <details><summary className="small">Anotação interna (não vai para o cliente)</summary>
-        <div className="field" style={{ marginTop: 6 }}><TextoComVoz valor={nota} onChange={setNota} linhas={2} placeholder="O que ficou combinado… (dá para ditar)" />
-          <button className="btn sm" disabled={busy === 'n' || !nota.trim()} onClick={anotar}>{busy === 'n' ? <Spinner /> : 'Anotar no lead'}</button></div></details>
+      {!d.data?.chat_ligado && <Banner tone="warn">{d.data?.responder_habilitado ? tr("O bot ainda está esperando esta conversa: dá para responder agora.") : tr("O chat ainda não está ligado no Kommo (Salesbot + KOMMO_BOT_ID). Até lá, responda pelo Kommo; a anotação abaixo funciona.")}</Banner>}
+      {falhou && <Banner tone="crit">{falhou} <button className="btn sm" style={{ marginLeft: 8 }} disabled={busy === 'r' || !texto.trim()} onClick={responder}>{tr("Enviar de novo")}</button></Banner>}
+      <div className="field"><label>{tr("Responder no chat do lead")} {l.source ? `(${l.source})` : ''}</label>
+        <TextoComVoz valor={texto} onChange={setTexto} linhas={3} placeholder={tr("Escreva ou dite a resposta… Enter envia, Shift+Enter quebra a linha")} disabled={!d.data?.responder_habilitado} onEnter={responder} />
+        <div className="row wrap"><button className="btn primary sm" disabled={busy === 'r' || !texto.trim() || !d.data?.responder_habilitado} onClick={responder}>{busy === 'r' ? <Spinner /> : tr("Enviar no chat")}</button><span className="small muted">{tr("Sai pelo bot da conta no canal do lead, com o seu texto.")}</span></div></div>
+      <details><summary className="small">{tr("Anotação interna (não vai para o cliente)")}</summary>
+        <div className="field" style={{ marginTop: 6 }}><TextoComVoz valor={nota} onChange={setNota} linhas={2} placeholder={tr("O que ficou combinado… (dá para ditar)")} />
+          <button className="btn sm" disabled={busy === 'n' || !nota.trim()} onClick={anotar}>{busy === 'n' ? <Spinner /> : tr("Anotar no lead")}</button></div></details>
     </div>}
   </div>
 }
@@ -276,15 +277,15 @@ function InformarPerfis({ id, l, atual, onDone }: { id: number; l: Lead; atual: 
   const temIg = atual.some(p => p.rede === 'Instagram' && p.informado), temFb = atual.some(p => p.rede === 'Facebook' && p.informado)
   async function salvar() {
     setBusy(true)
-    try { await api.post(`/crm/leads/${id}/profiles`, { instagram: ig, facebook: fb }); toast('Perfil guardado. O chip do canal já abre direto.', 'ok'); setAberto(false); onDone() }
+    try { await api.post(`/crm/leads/${id}/profiles`, { instagram: ig, facebook: fb }); toast(tr("Perfil guardado. O chip do canal já abre direto."), 'ok'); setAberto(false); onDone() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <div style={{ padding: '0 14px 6px' }}>
-    {!aberto && <button className="btn ghost sm" onClick={() => setAberto(true)}><Icon name="pencil" size={14} /> {temIg || temFb ? 'editar @ / perfil' : 'informar @ do Instagram ou perfil do Facebook'}</button>}
+    {!aberto && <button className="btn ghost sm" onClick={() => setAberto(true)}><Icon name="pencil" size={14} /> {temIg || temFb ? tr("editar @ / perfil") : tr("informar @ do Instagram ou perfil do Facebook")}</button>}
     {aberto && <div className="stack" style={{ gap: 6 }}>
-      <div className="field"><label>Instagram (@usuário)</label><input className="input" value={ig} placeholder="@usuario" onChange={e => setIg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvar() }} /></div>
-      <div className="field"><label>Facebook (link do perfil)</label><input className="input" value={fb} placeholder="facebook.com/…" onChange={e => setFb(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvar() }} /></div>
-      <div className="row"><button className="btn primary sm" disabled={busy} onClick={salvar}>{busy ? <Spinner /> : 'Guardar'}</button><button className="btn ghost sm" onClick={() => setAberto(false)}>cancelar</button></div>
+      <div className="field"><label>{tr("Instagram (@usuário)")}</label><input className="input" value={ig} placeholder={tr("@usuario")} onChange={e => setIg(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvar() }} /></div>
+      <div className="field"><label>{tr("Facebook (link do perfil)")}</label><input className="input" value={fb} placeholder={tr("facebook.com/…")} onChange={e => setFb(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') salvar() }} /></div>
+      <div className="row"><button className="btn primary sm" disabled={busy} onClick={salvar}>{busy ? <Spinner /> : tr("Guardar")}</button><button className="btn ghost sm" onClick={() => setAberto(false)}>{tr("cancelar")}</button></div>
     </div>}
   </div>
 }
@@ -299,64 +300,64 @@ export function DadosDoLead({ id, l, onClose, onChange }: { id: number; l: Lead;
   const outrosLead = (lead.campos_lista || []).filter(x => !CAMPO_OCULTO.test(`${x.campo} ${x.codigo || ''}`))
   const historico = det.eventos.filter(e => !e.mensagem).slice(-40).reverse()
   return <div className="ld">
-    <div className="ld-h"><b>Dados do lead</b><span className="small muted">{d.data!.ao_vivo ? `ao vivo · ${fmtTime(det.lido_em)}` : `retrato de ${fmtDateTime(d.data!.em)}`}</span>
-      <button className="btn ghost sm" style={{ marginLeft: 'auto' }} title="Reler no Kommo" onClick={d.reload} aria-label="Reler"><Icon name="refresh" size={16} /></button>
-      {onClose && <button className="btn ghost sm" onClick={onClose} aria-label="Fechar"><Icon name="x" size={16} /></button>}</div>
+    <div className="ld-h"><b>{tr("Dados do lead")}</b><span className="small muted">{d.data!.ao_vivo ? tr("ao vivo · {0}", fmtTime(det.lido_em)) : tr("retrato de {0}", fmtDateTime(d.data!.em))}</span>
+      <button className="btn ghost sm" style={{ marginLeft: 'auto' }} title={tr("Reler no Kommo")} onClick={d.reload} aria-label={tr("Reler")}><Icon name="refresh" size={16} /></button>
+      {onClose && <button className="btn ghost sm" onClick={onClose} aria-label={tr("Fechar")}><Icon name="x" size={16} /></button>}</div>
     {d.data!.aviso && <div className="small" style={{ color: 'var(--warn)', padding: '0 14px 8px' }}>{d.data!.aviso}</div>}
 
     <section className="ld-sec">
-      <div className="ld-t">Perfis e canais</div>
+      <div className="ld-t">{tr("Perfis e canais")}</div>
       <InformarPerfis id={id} l={l} onDone={() => { d.reload(); onChange?.() }} atual={det.perfis} />
-      {det.perfis.map(p => <a key={p.url} className="ld-perfil" href={p.url} target="_blank" rel="noopener noreferrer" title={p.inferido ? 'deduzido do nome/telefone' : 'campo do Kommo'}>
+      {det.perfis.map(p => <a key={p.url} className="ld-perfil" href={p.url} target="_blank" rel="noopener noreferrer" title={p.inferido ? tr("deduzido do nome/telefone") : tr("campo do Kommo")}>
         <span className={`icbox ${iconeDaRede(p.rede) === 'instagram' ? 'red' : iconeDaRede(p.rede) === 'whatsapp' ? 'ok' : iconeDaRede(p.rede) === 'facebook' ? 'info' : ''}`}><Icon name={iconeDaRede(p.rede)} /></span>
-        <span className="grow" style={{ minWidth: 0 }}><span className="t truncate">{p.rotulo}</span><span className="s">{p.rede}{p.inferido ? ' · deduzido' : ''}</span></span>
+        <span className="grow" style={{ minWidth: 0 }}><span className="t truncate">{p.rotulo}</span><span className="s">{p.rede}{p.inferido ? tr(" · deduzido") : ''}</span></span>
         <Icon name="out" size={16} className="muted" /></a>)}
-      {det.perfis.length === 0 && <div className="xs muted" style={{ padding: '0 14px 8px' }}>O Kommo não entrega o @ do Instagram nem o perfil do Facebook pela API. Copie de lá uma vez (Open profile) e informe acima: o chip do canal passa a abrir o perfil direto.</div>}
+      {det.perfis.length === 0 && <div className="xs muted" style={{ padding: '0 14px 8px' }}>{tr("O Kommo não entrega o @ do Instagram nem o perfil do Facebook pela API. Copie de lá uma vez (Open profile) e informe acima: o chip do canal passa a abrir o perfil direto.")}</div>}
     </section>
 
     <section className="ld-sec">
-      <div className="ld-t">Contato{det.contatos.length > 1 ? ` (${det.contatos.length})` : ''}</div>
-      {!c && <div className="small muted" style={{ padding: '0 14px 8px' }}>Lead sem contato ligado no Kommo.</div>}
+      <div className="ld-t">{tr("Contato")}{det.contatos.length > 1 ? ` (${det.contatos.length})` : ''}</div>
+      {!c && <div className="small muted" style={{ padding: '0 14px 8px' }}>{tr("Lead sem contato ligado no Kommo.")}</div>}
       {c && <>
-        <Linha k="Nome">{c.nome || '—'}{c.link && <> <a href={c.link} target="_blank" rel="noopener noreferrer" className="small">no Kommo ↗</a></>}</Linha>
-        {(c.telefones.length ? c.telefones : c.telefone ? [c.telefone] : []).map(t => <Linha key={t} k="Telefone"><a href={`tel:${t.replace(/[^\d+]/g, '')}`}>{t}</a></Linha>)}
-        {(c.emails.length ? c.emails : c.email ? [c.email] : []).map(e => <Linha key={e} k="E-mail"><a href={`mailto:${e}`}>{e}</a></Linha>)}
+        <Linha k={tr("Nome")}>{c.nome || '—'}{c.link && <> <a href={c.link} target="_blank" rel="noopener noreferrer" className="small">{tr("no Kommo ↗")}</a></>}</Linha>
+        {(c.telefones.length ? c.telefones : c.telefone ? [c.telefone] : []).map(t => <Linha key={t} k={tr("Telefone")}><a href={`tel:${t.replace(/[^\d+]/g, '')}`}>{t}</a></Linha>)}
+        {(c.emails.length ? c.emails : c.email ? [c.email] : []).map(e => <Linha key={e} k={tr("E-mail")}><a href={`mailto:${e}`}>{e}</a></Linha>)}
         {outrosContato.map((x, i) => <Linha key={i} k={x.campo}><ValorCampo v={x.valor} />{x.enum ? <span className="muted small"> · {x.enum}</span> : null}</Linha>)}
-        {c.tags.length > 0 && <Linha k="Tags">{c.tags.join(', ')}</Linha>}
-        {c.responsavel && <Linha k="Responsável">{c.responsavel}</Linha>}
-        {c.criado_em && <Linha k="Criado">{fmtDateTime(c.criado_em)}</Linha>}
+        {c.tags.length > 0 && <Linha k={tr("Tags")}>{c.tags.join(', ')}</Linha>}
+        {c.responsavel && <Linha k={tr("Responsável")}>{c.responsavel}</Linha>}
+        {c.criado_em && <Linha k={tr("Criado")}>{fmtDateTime(c.criado_em)}</Linha>}
       </>}
-      {det.contatos.slice(1).map(o => <Linha key={o.id || o.nome || ''} k="Também">{o.nome}{o.telefone ? ` · ${o.telefone}` : ''}{o.email ? ` · ${o.email}` : ''}</Linha>)}
+      {det.contatos.slice(1).map(o => <Linha key={o.id || o.nome || ''} k={tr("Também")}>{o.nome}{o.telefone ? ` · ${o.telefone}` : ''}{o.email ? ` · ${o.email}` : ''}</Linha>)}
     </section>
 
     <section className="ld-sec">
-      <div className="ld-t">Lead</div>
-      <Linha k="Funil">{lead.funil || '—'}{lead.etapa ? <> · <b>{lead.etapa}</b></> : null}</Linha>
-      <Linha k="Origem">{lead.origem || lead.origem_kommo || conv?.canal || '—'}</Linha>
-      <Linha k="Valor">{lead.valor ? money(lead.valor) : '—'}</Linha>
-      <Linha k="Responsável">{lead.responsavel || l.responsible || '—'}</Linha>
-      {lead.tags.length > 0 && <Linha k="Tags">{lead.tags.join(', ')}</Linha>}
+      <div className="ld-t">{tr("Lead")}</div>
+      <Linha k={tr("Funil")}>{lead.funil || '—'}{lead.etapa ? <> · <b>{lead.etapa}</b></> : null}</Linha>
+      <Linha k={tr("Origem")}>{lead.origem || lead.origem_kommo || conv?.canal || '—'}</Linha>
+      <Linha k={tr("Valor")}>{lead.valor ? money(lead.valor) : '—'}</Linha>
+      <Linha k={tr("Responsável")}>{lead.responsavel || l.responsible || '—'}</Linha>
+      {lead.tags.length > 0 && <Linha k={tr("Tags")}>{lead.tags.join(', ')}</Linha>}
       {outrosLead.map((x, i) => <Linha key={i} k={x.campo}><ValorCampo v={x.valor} /></Linha>)}
-      <Linha k="Criado">{lead.criado_em ? fmtDateTime(lead.criado_em) : '—'}{lead.criado_por ? <span className="muted small"> · {lead.criado_por}</span> : null}</Linha>
-      <Linha k="Atualizado">{lead.atualizado_em ? fmtDateTime(lead.atualizado_em) : '—'}</Linha>
-      {lead.fechado_em && <Linha k="Fechado">{fmtDateTime(lead.fechado_em)}{lead.perdido_motivo ? ` · ${lead.perdido_motivo}` : ''}</Linha>}
-      <Linha k="Id">{lead.id}{lead.link && <> · <a href={lead.link} target="_blank" rel="noopener noreferrer">abrir no Kommo ↗</a></>}</Linha>
+      <Linha k={tr("Criado")}>{lead.criado_em ? fmtDateTime(lead.criado_em) : '—'}{lead.criado_por ? <span className="muted small"> · {lead.criado_por}</span> : null}</Linha>
+      <Linha k={tr("Atualizado")}>{lead.atualizado_em ? fmtDateTime(lead.atualizado_em) : '—'}</Linha>
+      {lead.fechado_em && <Linha k={tr("Fechado")}>{fmtDateTime(lead.fechado_em)}{lead.perdido_motivo ? ` · ${lead.perdido_motivo}` : ''}</Linha>}
+      <Linha k={tr("Id")}>{lead.id}{lead.link && <> · <a href={lead.link} target="_blank" rel="noopener noreferrer">{tr("abrir no Kommo ↗")}</a></>}</Linha>
     </section>
 
     {conv && <section className="ld-sec">
-      <div className="ld-t">Conversa</div>
-      {conv.canal && <Linha k="Canal">{conv.canal}{conv.origem ? <span className="muted small"> · {conv.origem}</span> : null}</Linha>}
-      {conv.lida !== undefined && conv.lida !== null && <Linha k="Lida">{conv.lida ? 'sim' : <span style={{ color: 'var(--warn)' }}>não</span>}</Linha>}
-      {conv.em_trabalho !== undefined && conv.em_trabalho !== null && <Linha k="Em atendimento">{conv.em_trabalho ? 'sim' : 'não'}</Linha>}
-      <Linha k="Do cliente">{conv.ultima_do_cliente ? fmtDateTime(conv.ultima_do_cliente) : '—'}</Linha>
-      <Linha k="Nossa">{conv.ultima_nossa ? fmtDateTime(conv.ultima_nossa) : '—'}</Linha>
-      {typeof conv.mensagens === 'number' && <Linha k="Mensagens">{conv.mensagens} <span className="muted small">· {conv.recebidas} do cliente · {conv.enviadas} nossas</span></Linha>}
-      {conv.criada_em && <Linha k="Aberta">{fmtDateTime(conv.criada_em)}</Linha>}
+      <div className="ld-t">{tr("Conversa")}</div>
+      {conv.canal && <Linha k={tr("Canal")}>{conv.canal}{conv.origem ? <span className="muted small"> · {conv.origem}</span> : null}</Linha>}
+      {conv.lida !== undefined && conv.lida !== null && <Linha k={tr("Lida")}>{conv.lida ? tr("sim") : <span style={{ color: 'var(--warn)' }}>{tr("não")}</span>}</Linha>}
+      {conv.em_trabalho !== undefined && conv.em_trabalho !== null && <Linha k={tr("Em atendimento")}>{conv.em_trabalho ? tr("sim") : tr("não")}</Linha>}
+      <Linha k={tr("Do cliente")}>{conv.ultima_do_cliente ? fmtDateTime(conv.ultima_do_cliente) : '—'}</Linha>
+      <Linha k={tr("Nossa")}>{conv.ultima_nossa ? fmtDateTime(conv.ultima_nossa) : '—'}</Linha>
+      {typeof conv.mensagens === 'number' && <Linha k={tr("Mensagens")}>{conv.mensagens} <span className="muted small">· {conv.recebidas} {tr("do cliente ·")} {conv.enviadas} {tr("nossas")}</span></Linha>}
+      {conv.criada_em && <Linha k={tr("Aberta")}>{fmtDateTime(conv.criada_em)}</Linha>}
     </section>}
 
     <section className="ld-sec">
-      <div className="ld-t">Histórico no Kommo</div>
-      {historico.length === 0 && <div className="small muted" style={{ padding: '0 14px 8px' }}>{lead.aviso_eventos || 'Nenhum evento além das mensagens.'}</div>}
+      <div className="ld-t">{tr("Histórico no Kommo")}</div>
+      {historico.length === 0 && <div className="small muted" style={{ padding: '0 14px 8px' }}>{lead.aviso_eventos || tr("Nenhum evento além das mensagens.")}</div>}
       {historico.map(e => <div key={e.id} className="ld-ev"><span className="mono small muted">{fmtDateTime(e.em)}</span><span><b>{e.rotulo}</b>{e.texto ? ` · ${e.texto}` : ''}{e.por ? <span className="muted small"> · {e.por}</span> : null}</span></div>)}
     </section>
   </div>
@@ -381,18 +382,18 @@ function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
   if (inbox.error) return <ErrorState error={inbox.error} retry={inbox.reload} />
   return <div className={`mail inbox${aberto ? ' com-dados' : ''}`}>
     <div className="list">
-      <div style={{ padding: 8, borderBottom: '1px solid var(--rule)' }} className="stack"><input className="input" placeholder="Buscar conversa…" value={filtro} onChange={e => setFiltro(e.target.value)} />
-        <div className="tabs" style={{ alignSelf: 'stretch' }}><button className={vista === 'todas' ? 'on' : ''} onClick={() => setVista('todas')}>Todas</button><button className={vista === 'esperando' ? 'on' : ''} onClick={() => setVista('esperando')}>Esperando <span className="count">{inbox.data?.pendentes || 0}</span></button><button className={vista === 'fav' ? 'on' : ''} onClick={() => setVista('fav')}>★ Favoritas</button></div></div>
-      {lista.length === 0 && <div style={{ padding: 16 }}><Empty title="Nenhuma conversa ainda">Quando o chat estiver ligado no Kommo, cada mensagem do Instagram, Facebook e WhatsApp aparece aqui na hora.</Empty></div>}
+      <div style={{ padding: 8, borderBottom: '1px solid var(--rule)' }} className="stack"><input className="input" placeholder={tr("Buscar conversa…")} value={filtro} onChange={e => setFiltro(e.target.value)} />
+        <div className="tabs" style={{ alignSelf: 'stretch' }}><button className={vista === 'todas' ? 'on' : ''} onClick={() => setVista('todas')}>{tr("Todas")}</button><button className={vista === 'esperando' ? 'on' : ''} onClick={() => setVista('esperando')}>{tr("Esperando")} <span className="count">{inbox.data?.pendentes || 0}</span></button><button className={vista === 'fav' ? 'on' : ''} onClick={() => setVista('fav')}>{tr("★ Favoritas")}</button></div></div>
+      {lista.length === 0 && <div style={{ padding: 16 }}><Empty title={tr("Nenhuma conversa ainda")}>{tr("Quando o chat estiver ligado no Kommo, cada mensagem do Instagram, Facebook e WhatsApp aparece aqui na hora.")}</Empty></div>}
       {lista.map(l => <div key={l.id} className={`item com-foto${aberto === l.id ? ' on' : ''}`} onClick={() => abrirLead(l.id)}>
         <Foto l={l} size={36} />
         <div className="from">{!!l.needs_reply && <span style={{ color: 'var(--warn)' }}>● </span>}{nomeDo(l)}</div>
-        <div className="when"><button className={`star sm${l.starred ? ' on' : ''}`} onClick={e => estrela(l, e)} aria-label={l.starred ? 'Tirar dos favoritos' : 'Favoritar'}><Icon name="star" size={13} /></button> {l.last_message_at ? ago(l.last_message_at) : ''}</div>
-        <div className="subj">{l.snippet || <span className="muted">{l.msgs ? `${l.msgs} mensagem(ns) · texto no Kommo` : 'sem mensagem guardada'}</span>}</div>
-        <div className="sug">{l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}{l.stage_name && <span className="small muted">{l.stage_name}</span>}{!!l.falhas && <Chip tone="crit">{l.falhas} não entregue</Chip>}{l.client_id && <span className="small muted">· {l.client_pilot || l.client_name}</span>}</div>
+        <div className="when"><button className={`star sm${l.starred ? ' on' : ''}`} onClick={e => estrela(l, e)} aria-label={l.starred ? tr("Tirar dos favoritos") : tr("Favoritar")}><Icon name="star" size={13} /></button> {l.last_message_at ? ago(l.last_message_at) : ''}</div>
+        <div className="subj">{l.snippet || <span className="muted">{l.msgs ? tr("{0} mensagem(ns) · texto no Kommo", l.msgs) : tr("sem mensagem guardada")}</span>}</div>
+        <div className="sug">{l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}{l.stage_name && <span className="small muted">{l.stage_name}</span>}{!!l.falhas && <Chip tone="crit">{l.falhas} {tr("não entregue")}</Chip>}{l.client_id && <span className="small muted">· {l.client_pilot || l.client_name}</span>}</div>
       </div>)}
     </div>
-    {aberto ? <Conversa key={aberto} id={aberto} conectado={conectado} onChange={inbox.reload} onDados={() => setDados(true)} /> : <div className="read"><Empty title="Escolha uma conversa">A lista ao lado mostra quem falou por último; quem espera resposta fica no topo com ●.</Empty></div>}
+    {aberto ? <Conversa key={aberto} id={aberto} conectado={conectado} onChange={inbox.reload} onDados={() => setDados(true)} /> : <div className="read"><Empty title={tr("Escolha uma conversa")}>{tr("A lista ao lado mostra quem falou por último; quem espera resposta fica no topo com ●.")}</Empty></div>}
     {aberto && leadAberto && <aside className="ld-col"><DadosDoLead key={`c${aberto}`} id={aberto} l={leadAberto} onChange={inbox.reload} /></aside>}
     {dados && aberto && leadAberto && <Scrim onMouseDown={() => setDados(false)}><div className="modal" style={{ maxWidth: 560, padding: 0 }} onMouseDown={e => e.stopPropagation()}><DadosDoLead key={`m${aberto}`} id={aberto} l={leadAberto} onClose={() => setDados(false)} onChange={inbox.reload} /></div></Scrim>}
   </div>
@@ -403,7 +404,7 @@ function LeadCard({ l, onOpen }: { l: Lead; onOpen: () => void }) {
   return <button className={`tcard lead${l.needs_reply ? ' esperando' : ''}`} onClick={onOpen}>
     <div className="row wrap" style={{ gap: 6 }}>
       <b className="truncate">{nomeDo(l)}</b>
-      {!!l.needs_reply && <Chip tone="warn">esperando resposta</Chip>}
+      {!!l.needs_reply && <Chip tone="warn">{tr("esperando resposta")}</Chip>}
     </div>
     <div className="row wrap small muted" style={{ gap: 6 }}>
       {l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}
@@ -411,7 +412,7 @@ function LeadCard({ l, onOpen }: { l: Lead; onOpen: () => void }) {
       {l.last_message_at && <span>{fmtDateTime(l.last_message_at)}</span>}
     </div>
     {l.tags.length > 0 && <div className="row wrap" style={{ gap: 4 }}>{l.tags.slice(0, 4).map(t => <span key={t} className="lchip">{t}</span>)}</div>}
-    {l.client_id && <div className="small muted truncate">card: {l.client_pilot || l.client_name}</div>}
+    {l.client_id && <div className="small muted truncate">{tr("card:")} {l.client_pilot || l.client_name}</div>}
   </button>
 }
 
@@ -419,14 +420,14 @@ function Funil({ b, abrir }: { b: Board; abrir: (id: number) => void }) {
   const [funil, setFunil] = useState<string | null>(null)
   const funis = b.funis
   const atual = funis.find(f => f.id === funil) || funis[0]
-  if (!atual || atual.etapas.length === 0) return <Empty title="Nenhum lead espelhado">Clique em “Sincronizar” para trazer o funil do Kommo.</Empty>
+  if (!atual || atual.etapas.length === 0) return <Empty title={tr("Nenhum lead espelhado")}>{tr("Clique em “Sincronizar” para trazer o funil do Kommo.")}</Empty>
   return <>
     {funis.length > 1 && <div className="tabs">{funis.map(f => <button key={f.id} className={atual.id === f.id ? 'on' : ''} onClick={() => setFunil(f.id)}>{f.nome} <span className="count">{f.etapas.reduce((n, e) => n + e.leads.length, 0)}</span></button>)}</div>}
     <div className="board">
       {atual.etapas.map(e => <div className="col" key={e.id}>
         <div className="ch"><span className="truncate">{e.nome}</span><span className="count">{e.leads.length}</span></div>
         <div className="cards">
-          {e.leads.length === 0 && <div className="small muted" style={{ padding: 8 }}>vazia</div>}
+          {e.leads.length === 0 && <div className="small muted" style={{ padding: 8 }}>{tr("vazia")}</div>}
           {e.leads.map(l => <LeadCard key={l.id} l={l} onOpen={() => abrir(l.id)} />)}
         </div>
       </div>)}
@@ -442,38 +443,38 @@ function LigarChat() {
   const d = s.data
   const pronto = d.hook_key && !!d.bot_id && d.token
   const textoVivo = !!d.ultimo_webhook
-  return <details className="card" open={!pronto || !textoVivo}><summary style={{ padding: '10px 14px', cursor: 'pointer' }}><b>Ligar o chat</b> <span className="small muted">— {pronto ? (d.ultimo_hook ? `bot ligado · último sinal ${ago(d.ultimo_hook)} · ${d.hooks_hoje} hoje` : 'bot configurado, esperando o primeiro sinal') : 'falta configurar no Kommo'}{textoVivo ? ` · texto das mensagens chegando (último ${ago(d.ultimo_webhook)})` : ' · texto das mensagens ainda NÃO chega: falta o webhook do Kommo (abaixo)'}
+  return <details className="card" open={!pronto || !textoVivo}><summary style={{ padding: '10px 14px', cursor: 'pointer' }}><b>{tr("Ligar o chat")}</b> <span className="small muted">— {pronto ? (d.ultimo_hook ? tr("bot ligado · último sinal {0} · {1} hoje", ago(d.ultimo_hook), d.hooks_hoje) : tr("bot configurado, esperando o primeiro sinal")) : tr("falta configurar no Kommo")}{textoVivo ? tr(" · texto das mensagens chegando (último {0})", ago(d.ultimo_webhook)) : tr(" · texto das mensagens ainda NÃO chega: falta o webhook do Kommo (abaixo)")}
       {/* 21/09: a fila deixou de depender de alguém abrir a tela. Se este laço parar, resposta
           fica presa — então ele diz aqui, em voz alta, quando bateu pela última vez. */}
       {d.laco_em
-        ? <> · <span title={`${d.laco_ciclos || 0} ciclo(s) desde que o serviço subiu`}>entrega automática ativa (bateu {ago(d.laco_em)})</span></>
-        : <> · <b style={{ color: 'var(--warn)' }}>entrega automática parada</b> — resposta na fila só sai quando alguém abre a conversa</>}
-      {d.fila ? ` · ${d.fila} na fila` : ''}{d.falhas ? ` · ${d.falhas} não entregue(s)` : ''}</span></summary>
+        ? <> · <span title={tr("{0} ciclo(s) desde que o serviço subiu", d.laco_ciclos || 0)}>{tr("entrega automática ativa (bateu")} {ago(d.laco_em)})</span></>
+        : <> · <b style={{ color: 'var(--warn)' }}>{tr("entrega automática parada")}</b> {tr("— resposta na fila só sai quando alguém abre a conversa")}</>}
+      {d.fila ? tr(" · {0} na fila", d.fila) : ''}{d.falhas ? tr(" · {0} não entregue(s)", d.falhas) : ''}</span></summary>
     <div className="card-b stack">
       {d.webhook_url && <div className="card" style={{ padding: '12px 14px', background: textoVivo ? 'var(--ok-wash)' : 'var(--warn-wash)', borderColor: 'transparent' }}>
-        <div className="row wrap" style={{ gap: 8 }}><b>1. Texto de toda mensagem recebida (Instagram, Facebook, WhatsApp) — webhook de conta do Kommo</b>{textoVivo ? <Chip tone="ok">ativo</Chip> : <Chip tone="warn">falta ligar</Chip>}</div>
-        <div className="row wrap" style={{ marginTop: 6 }}><code className="mono small" style={{ wordBreak: 'break-all' }}>{d.webhook_url}</code><button className="btn sm" onClick={() => { navigator.clipboard?.writeText(d.webhook_url!).then(() => toast('URL do webhook copiada.', 'ok')) }}>copiar</button></div>
+        <div className="row wrap" style={{ gap: 8 }}><b>{tr("1. Texto de toda mensagem recebida (Instagram, Facebook, WhatsApp) — webhook de conta do Kommo")}</b>{textoVivo ? <Chip tone="ok">{tr("ativo")}</Chip> : <Chip tone="warn">{tr("falta ligar")}</Chip>}</div>
+        <div className="row wrap" style={{ marginTop: 6 }}><code className="mono small" style={{ wordBreak: 'break-all' }}>{d.webhook_url}</code><button className="btn sm" onClick={() => { navigator.clipboard?.writeText(d.webhook_url!).then(() => toast(tr("URL do webhook copiada."), 'ok')) }}>{tr("copiar")}</button></div>
         <ol className="small" style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.7 }}>
-          <li>Kommo → <b>Settings → Integrations → Webhooks</b> → <b>Add webhook</b> → cole a URL acima.</li>
-          <li>Marque <b>Incoming message received</b> (e, se aparecerem, <b>Talk added</b> e <b>Talk edited</b>) → <b>Save</b>.</li>
-          <li>Mande uma mensagem de teste pelo Instagram: em segundos ela aparece aqui com o texto, sem depender de bot nem de etapa.</li>
+          <li>{tr("Kommo →")} <b>{tr("Settings → Integrations → Webhooks")}</b> → <b>{tr("Add webhook")}</b> {tr("→ cole a URL acima.")}</li>
+          <li>{tr("Marque")} <b>{tr("Incoming message received")}</b> {tr("(e, se aparecerem,")} <b>{tr("Talk added")}</b> {tr("e")} <b>{tr("Talk edited")}</b>) → <b>{tr("Save")}</b>.</li>
+          <li>{tr("Mande uma mensagem de teste pelo Instagram: em segundos ela aparece aqui com o texto, sem depender de bot nem de etapa.")}</li>
         </ol>
       </div>}
-      <div className="row wrap" style={{ gap: 8 }}><b>2. Responder daqui — bot command-center (Salesbot)</b></div>
+      <div className="row wrap" style={{ gap: 8 }}><b>{tr("2. Responder daqui — bot command-center (Salesbot)")}</b></div>
       <div className="row wrap">
-        <Chip tone={d.token ? 'ok' : 'crit'}>{d.token ? 'token ✓' : 'sem token'}</Chip>
-        <Chip tone={d.hook_key ? 'ok' : 'crit'}>{d.hook_key ? 'chave do hook ✓' : 'sem chave do hook (rode o deploy)'}</Chip>
-        <Chip tone={d.bot_id ? 'ok' : 'warn'}>{d.bot_id ? `bot ${d.bot_id} ✓` : 'sem KOMMO_BOT_ID'}</Chip>
-        <Chip tone={d.bot_secret ? 'ok' : 'neutral'}>{d.bot_secret ? 'assinatura do bot ✓' : 'sem assinatura (opcional)'}</Chip>
-        {!!d.fila && <Chip tone="warn">{d.fila} na fila</Chip>}{!!d.falhas && <Chip tone="crit">{d.falhas} não entregue(s)</Chip>}
+        <Chip tone={d.token ? 'ok' : 'crit'}>{d.token ? tr("token ✓") : tr("sem token")}</Chip>
+        <Chip tone={d.hook_key ? 'ok' : 'crit'}>{d.hook_key ? tr("chave do hook ✓") : tr("sem chave do hook (rode o deploy)")}</Chip>
+        <Chip tone={d.bot_id ? 'ok' : 'warn'}>{d.bot_id ? tr("bot {0} ✓", d.bot_id) : tr("sem KOMMO_BOT_ID")}</Chip>
+        <Chip tone={d.bot_secret ? 'ok' : 'neutral'}>{d.bot_secret ? tr("assinatura do bot ✓") : tr("sem assinatura (opcional)")}</Chip>
+        {!!d.fila && <Chip tone="warn">{d.fila} {tr("na fila")}</Chip>}{!!d.falhas && <Chip tone="crit">{d.falhas} {tr("não entregue(s)")}</Chip>}
       </div>
-      {d.hook_url && <div className="field"><label>URL do hook — cole no bloco do widget do Salesbot</label>
-        <div className="row wrap"><code className="mono small" style={{ wordBreak: 'break-all' }}>{d.hook_url}</code><button className="btn sm" onClick={() => { navigator.clipboard?.writeText(d.hook_url!).then(() => toast('URL copiada.', 'ok')) }}>copiar</button></div></div>}
+      {d.hook_url && <div className="field"><label>{tr("URL do hook — cole no bloco do widget do Salesbot")}</label>
+        <div className="row wrap"><code className="mono small" style={{ wordBreak: 'break-all' }}>{d.hook_url}</code><button className="btn sm" onClick={() => { navigator.clipboard?.writeText(d.hook_url!).then(() => toast(tr("URL copiada."), 'ok')) }}>{tr("copiar")}</button></div></div>}
       <ol className="small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-        <li>Kommo → <b>Communication tools → Salesbots</b> → novo bot <b>command-center</b>: um único bloco, o do widget <b>“Chase — responder ao lead”</b> (já instalado), com a URL acima no campo. Nada depois do bloco.</li>
-        <li>Kommo → <b>Leads → Sales funnel → Automate</b>: em cada etapa onde o lead conversa, gatilho <b>mensagem recebida</b> → bot <b>command-center</b>.</li>
-        <li>Pegue o id do bot na lista (<code>list_item_&lt;id&gt;</code>) e grave <code>KOMMO_BOT_ID=&lt;id&gt;</code> em <code>~/.urace/kommo.env</code>; reinicie o serviço (<code>sudo systemctl restart urace-command-center</code>).</li>
-        <li>Mande uma mensagem de teste pelo Instagram: ela aparece em Conversas. Responda daqui: sai no chat como mensagem do bot, com o seu texto.</li>
+        <li>{tr("Kommo →")} <b>{tr("Communication tools → Salesbots")}</b> {tr("→ novo bot")} <b>{tr("command-center")}</b>{tr(": um único bloco, o do widget")} <b>{tr("“Chase — responder ao lead”")}</b> {tr("(já instalado), com a URL acima no campo. Nada depois do bloco.")}</li>
+        <li>{tr("Kommo →")} <b>{tr("Leads → Sales funnel → Automate")}</b>{tr(": em cada etapa onde o lead conversa, gatilho")} <b>{tr("mensagem recebida")}</b> {tr("→ bot")} <b>{tr("command-center")}</b>.</li>
+        <li>{tr("Pegue o id do bot na lista (")}<code>{tr("list_item_&lt;id&gt;")}</code>{tr(") e grave")} <code>{tr("KOMMO_BOT_ID=&lt;id&gt;")}</code> {tr("em")} <code>{tr("~/.urace/kommo.env")}</code>{tr("; reinicie o serviço (")}<code>{tr("sudo systemctl restart urace-command-center")}</code>).</li>
+        <li>{tr("Mande uma mensagem de teste pelo Instagram: ela aparece em Conversas. Responda daqui: sai no chat como mensagem do bot, com o seu texto.")}</li>
       </ol>
     </div></details>
 }
@@ -481,9 +482,9 @@ function LigarChat() {
 // ------------------------------------------------------------------ Chase (06/10)
 interface Sdr { nivel: 'observar' | 'organizar' | 'atender'; chase_ligado: boolean; ponte_no_ar: boolean; reiniciando: boolean; instalado: boolean }
 const NIVEL_TEXTO: Record<Sdr['nivel'], string> = {
-  observar: 'Observar: decide e registra, não mexe no Kommo.',
-  organizar: 'Organizar: etiqueta, nota, tarefa e etapa no Kommo; não responde ao lead.',
-  atender: 'Atender: organiza e responde os leads.',
+  observar: tr("Observar: decide e registra, não mexe no Kommo."),
+  organizar: tr("Organizar: etiqueta, nota, tarefa e etapa no Kommo; não responde ao lead."),
+  atender: tr("Atender: organiza e responde os leads."),
 }
 /** Dono, 06/10: um interruptor para ligar e desligar o Chase. Ligado = atender; desligado = organizar. */
 function InterruptorChase() {
@@ -492,20 +493,20 @@ function InterruptorChase() {
   const [indo, setIndo] = useState(false)
   async function trocar(nivel: Sdr['nivel']) {
     setIndo(true)
-    try { await api.put<Sdr>('/sdr', { nivel }); s.reload(); toast(nivel === 'atender' ? 'Chase ligado: a ponte reinicia em segundos.' : 'Chase desligado: fica só organizando o Kommo.', 'ok') }
+    try { await api.put<Sdr>('/sdr', { nivel }); s.reload(); toast(nivel === 'atender' ? tr("Chase ligado: a ponte reinicia em segundos.") : tr("Chase desligado: fica só organizando o Kommo."), 'ok') }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   if (!s.data) return null
   const d = s.data
   return <div className="card card-b row wrap" style={{ gap: 12 }}>
     <div className="grow" style={{ minWidth: 0 }}>
-      <h2 className="h3" style={{ margin: 0 }}>Chase (agente de vendas)</h2>
-      <div className="small ink2">{NIVEL_TEXTO[d.nivel]} {d.reiniciando ? '· aplicando…' : d.ponte_no_ar ? '· ponte no ar' : '· ponte fora do ar'}</div>
-      {!d.instalado && <div className="small ink2">O interruptor passa a valer depois do próximo deploy no servidor.</div>}
+      <h2 className="h3" style={{ margin: 0 }}>{tr("Chase (agente de vendas)")}</h2>
+      <div className="small ink2">{NIVEL_TEXTO[d.nivel]} {d.reiniciando ? tr("· aplicando…") : d.ponte_no_ar ? tr("· ponte no ar") : tr("· ponte fora do ar")}</div>
+      {!d.instalado && <div className="small ink2">{tr("O interruptor passa a valer depois do próximo deploy no servidor.")}</div>}
     </div>
     <label className="check" style={{ minHeight: 40 }}>
-      <input type="checkbox" role="switch" aria-label="Chase responde os leads" checked={d.chase_ligado} disabled={indo}
-        onChange={e => trocar(e.target.checked ? 'atender' : 'organizar')} /> Responde os leads
+      <input type="checkbox" role="switch" aria-label={tr("Chase responde os leads")} checked={d.chase_ligado} disabled={indo}
+        onChange={e => trocar(e.target.checked ? 'atender' : 'organizar')} /> {tr("Responde os leads")}
     </label>
   </div>
 }
@@ -521,7 +522,7 @@ export function CRM({ vista }: { vista: 'chat' | 'funil' }) {
 
   async function sincronizar() {
     setBusy(true)
-    try { const r = await api.post<{ ok: boolean; leads?: number; ligados?: number; motivo?: string }>('/crm/sync', {}); toast(r.ok ? `${r.leads} leads do Kommo, ${r.ligados} ligados a um card.` : `Kommo: ${r.motivo}`, r.ok ? 'ok' : 'crit'); b.reload() }
+    try { const r = await api.post<{ ok: boolean; leads?: number; ligados?: number; motivo?: string }>('/crm/sync', {}); toast(r.ok ? tr("{0} leads do Kommo, {1} ligados a um card.", r.leads, r.ligados) : tr("Kommo: {0}", r.motivo), r.ok ? 'ok' : 'crit'); b.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
 
@@ -529,15 +530,15 @@ export function CRM({ vista }: { vista: 'chat' | 'funil' }) {
   if (b.error) return <ErrorState error={b.error} retry={b.reload} />
   return <div className="stack">
     <div className="card-h">
-      <div><h1 className="h1">{vista === 'chat' ? 'Chat · Kommo' : 'Funil de vendas · Kommo'}</h1>
-        <div className="small ink2">{b.data?.total || 0} leads{b.data?.pendentes ? <> · <b>{b.data.pendentes}</b> esperando resposta</> : null}</div></div>
+      <div><h1 className="h1">{vista === 'chat' ? tr("Chat · Kommo") : tr("Funil de vendas · Kommo")}</h1>
+        <div className="small ink2">{b.data?.total || 0} {tr("leads")}{b.data?.pendentes ? <> · <b>{b.data.pendentes}</b> {tr("esperando resposta")}</> : null}</div></div>
       <div className="grow" />
       <div className="row wrap">
-        <Chip tone={statusTone(b.data?.integracao?.status)} dot>{b.data?.integracao?.status || 'DISCONNECTED'}</Chip>
-        {can('MANAGER') && <button className="btn" disabled={busy} onClick={sincronizar}>{busy ? <Spinner /> : '⟳ Sincronizar'}</button>}
+        <Chip tone={statusTone(b.data?.integracao?.status)} dot>{b.data?.integracao?.status || tr("DISCONNECTED")}</Chip>
+        {can('MANAGER') && <button className="btn" disabled={busy} onClick={sincronizar}>{busy ? <Spinner /> : tr("⟳ Sincronizar")}</button>}
       </div>
     </div>
-    {desconectado && <Banner tone="warn"><b>Kommo não conectado.</b> {b.data?.integracao?.last_error || 'Falta o token da integração privada em ~/.urace/kommo.env (KOMMO_DOMAIN, KOMMO_TOKEN).'} A tela mostra o que já foi espelhado; nada é inventado.</Banner>}
+    {desconectado && <Banner tone="warn"><b>{tr("Kommo não conectado.")}</b> {b.data?.integracao?.last_error || tr("Falta o token da integração privada em ~/.urace/kommo.env (KOMMO_DOMAIN, KOMMO_TOKEN).")} {tr("A tela mostra o que já foi espelhado; nada é inventado.")}</Banner>}
     {vista === 'chat' && can('ADMIN') && <LigarChat />}
     {vista === 'chat' && can('ADMIN') && <InterruptorChase />}
     {vista === 'chat' ? <CaixaDeEntrada conectado={!desconectado} /> : b.data && <Funil b={b.data} abrir={id => nav(`/crm/chat/${id}`)} />}

@@ -13,6 +13,7 @@ import { Scrim } from './ui'
 */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Mic } from './Voz'
+import { tr } from '../i18n'
 
 export interface Pergunta {
   titulo: string
@@ -68,8 +69,8 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
             {!p.segredo && <Mic valor={texto} onTexto={setTexto} />}
           </div></div>}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn" onClick={() => fechar(p.campo ? null : false)}>{p.cancelar || 'Cancelar'}</button>
-          <button ref={inicial} className={`btn ${p.perigo ? 'danger' : 'primary'}`} onClick={() => fechar(p.campo ? texto : true)}>{p.ok || 'Confirmar'}</button>
+          <button className="btn" onClick={() => fechar(p.campo ? null : false)}>{p.cancelar || tr("Cancelar")}</button>
+          <button ref={inicial} className={`btn ${p.perigo ? 'danger' : 'primary'}`} onClick={() => fechar(p.campo ? texto : true)}>{p.ok || tr("Confirmar")}</button>
         </div>
       </div>
     </Scrim>}

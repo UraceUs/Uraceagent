@@ -20,6 +20,7 @@ import { useToast } from '../components/Toast'
 import { Avisos } from '../components/Avisos'
 import { ConectarClaude } from '../components/ConectarClaude'
 import { TextoComVoz } from '../components/Voz'
+import { tr } from '../i18n'
 
 interface Canal {
   id: number; name: string; kind: string; entity_type: string | null; entity_id: number | null
@@ -48,10 +49,10 @@ function Cara({ c, size = 36 }: { c: { id: number; name: string; icon?: string |
 }
 
 const TIPO_PT: Record<string, string> = {
-  EQUIPE: 'Equipe', CORRIDA: 'Corrida', SERVICO: 'Serviço', CLIENTE: 'Cliente', DIRETO: 'Direto',
+  EQUIPE: tr("Equipe"), CORRIDA: tr("Corrida"), SERVICO: tr("Serviço"), CLIENTE: tr("Cliente"), DIRETO: tr("Direto"),
 }
-const ORIGEM_PT: Record<string, string> = { gchat: 'Google Chat', whatsapp: 'WhatsApp' }
-const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
+const ORIGEM_PT: Record<string, string> = { gchat: tr("Google Chat"), whatsapp: tr("WhatsApp") }
+const ROLE_PT: Record<string, string> = { ADMIN: tr("Administrador"), MANAGER: tr("Gerente"), OPERATOR: tr("Operador"), VIEWER: tr("Leitura") }
 
 export function Equipe() {
   const [aberto, abrirCanal] = useItemNaRota('/equipe', 'canal', 'c')
@@ -77,8 +78,8 @@ export function Equipe() {
   }
 
   return <>
-    <PageHeader title="Equipe" help={<>Conversa com quem trabalha aqui: direto com uma pessoa ou em grupo. O que for de cliente continua no Chat do Kommo.</>}>
-      {can('OPERATOR') && <button className="btn primary" onClick={() => setNovoGrupo(true)}>Novo grupo</button>}
+    <PageHeader title={tr("Equipe")} help={<>{tr("Conversa com quem trabalha aqui: direto com uma pessoa ou em grupo. O que for de cliente continua no Chat do Kommo.")}</>}>
+      {can('OPERATOR') && <button className="btn primary" onClick={() => setNovoGrupo(true)}>{tr("Novo grupo")}</button>}
     </PageHeader>
 
     <div className="card" style={{ padding: '10px 14px', marginBottom: 12 }}><Avisos /></div>
@@ -91,27 +92,27 @@ export function Equipe() {
 
     <div className="grid" style={{ gridTemplateColumns: aberto ? 'minmax(0,340px) minmax(0,1fr)' : 'minmax(0,1fr)' }}>
       <div className={aberto ? 'so-desktop' : ''}>
-        <Section title="Chat da equipe" count={aba === 'conversas' ? canais.length : gente.length} tight>
+        <Section title={tr("Chat da equipe")} count={aba === 'conversas' ? canais.length : gente.length} tight>
           <div className="stack" style={{ padding: '8px 10px', gap: 8 }}>
             <div className="row" style={{ gap: 0 }}>
               <button className={`tab${aba === 'conversas' ? ' on' : ''}`} onClick={() => setAba('conversas')}>
-                Conversas{data?.total_nao_lidas ? ` (${data.total_nao_lidas})` : ''}</button>
-              <button className={`tab${aba === 'pessoas' ? ' on' : ''}`} onClick={() => setAba('pessoas')}>Pessoas</button>
+                {tr("Conversas")}{data?.total_nao_lidas ? ` (${data.total_nao_lidas})` : ''}</button>
+              <button className={`tab${aba === 'pessoas' ? ' on' : ''}`} onClick={() => setAba('pessoas')}>{tr("Pessoas")}</button>
             </div>
-            <input className="input" placeholder={aba === 'conversas' ? 'Buscar conversa…' : 'Buscar pessoa…'}
+            <input className="input" placeholder={aba === 'conversas' ? tr("Buscar conversa…") : tr("Buscar pessoa…")}
               value={busca} onChange={e => setBusca(e.target.value)} />
           </div>
 
           {aba === 'pessoas' ? (
             pessoas.loading && !pessoas.data ? <Loading /> :
-              gente.length === 0 ? <Empty>Ninguém mais cadastrado.</Empty> :
+              gente.length === 0 ? <Empty>{tr("Ninguém mais cadastrado.")}</Empty> :
                 <div className="stack" style={{ gap: 0 }}>
                   {gente.map(p => <button key={p.id} className={`tcard${p.canal_id === aberto ? ' on' : ''}`} onClick={() => abrirDireto(p)}>
                     <div className="row" style={{ gap: 10, alignItems: 'center' }}>
                       <Cara c={{ id: p.canal_id || 0, name: p.name }} size={34} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div className="from">{!!p.nao_lidas && <span style={{ color: 'var(--warn)' }}>● </span>}{p.name}</div>
-                        <div className="small muted">{ROLE_PT[p.role] || p.role}{p.canal_id ? '' : ' · nunca conversaram'}</div>
+                        <div className="small muted">{ROLE_PT[p.role] || p.role}{p.canal_id ? '' : tr(" · nunca conversaram")}</div>
                       </div>
                       {!!p.nao_lidas && <Chip tone="warn">{p.nao_lidas}</Chip>}
                     </div>
@@ -119,8 +120,8 @@ export function Equipe() {
                 </div>
           ) : (
             error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-              canais.length === 0 ? <Empty title="Nenhuma conversa ainda">
-                Abra uma em <b>Pessoas</b>, ou crie um grupo em <b>Novo grupo</b>.
+              canais.length === 0 ? <Empty title={tr("Nenhuma conversa ainda")}>
+                {tr("Abra uma em")} <b>{tr("Pessoas")}</b>{tr(", ou crie um grupo em")} <b>{tr("Novo grupo")}</b>.
               </Empty> :
                 <div className="stack" style={{ gap: 0 }}>
                   {canais.map(c => <button key={c.id} className={`tcard${c.id === aberto ? ' on' : ''}`} onClick={() => abrirCanal(c.id)}>
@@ -131,11 +132,11 @@ export function Equipe() {
                           <div className="from">{!!c.nao_lidas && !c.mudo && <span style={{ color: 'var(--warn)' }}>● </span>}{c.name}</div>
                           <span className="small muted nowrap">{c.ultima_em ? ago(c.ultima_em) : ''}</span>
                         </div>
-                        <div className="subj">{c.ultima ? <>{c.ultimo_autor && c.kind !== 'DIRETO' ? <b>{c.ultimo_autor.split(' ')[0]}: </b> : null}{c.ultima}</> : <span className="muted">sem mensagem ainda</span>}</div>
+                        <div className="subj">{c.ultima ? <>{c.ultimo_autor && c.kind !== 'DIRETO' ? <b>{c.ultimo_autor.split(' ')[0]}: </b> : null}{c.ultima}</> : <span className="muted">{tr("sem mensagem ainda")}</span>}</div>
                         <div className="row wrap" style={{ gap: 6 }}>
                           {c.kind !== 'DIRETO' && <Chip tone="neutral">{TIPO_PT[c.kind] || c.kind}{c.kind !== 'DIRETO' ? ` · ${c.membros}` : ''}</Chip>}
-                          {!!c.nao_lidas && <Chip tone={c.mudo ? 'neutral' : 'warn'}>{c.nao_lidas > 99 ? '99+' : c.nao_lidas} nova(s)</Chip>}
-                          {c.mudo && <Chip tone="neutral" title="Silenciada: não avisa no celular">silenciada</Chip>}
+                          {!!c.nao_lidas && <Chip tone={c.mudo ? 'neutral' : 'warn'}>{c.nao_lidas > 99 ? '99+' : c.nao_lidas} {tr("nova(s)")}</Chip>}
+                          {c.mudo && <Chip tone="neutral" title={tr("Silenciada: não avisa no celular")}>{tr("silenciada")}</Chip>}
                         </div>
                       </div>
                     </div>
@@ -172,37 +173,37 @@ function NovoGrupo({ pessoas, onPronto, onCancelar }: { pessoas: Pessoa[]; onPro
           headers: { 'X-CSRF': document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || '' },
         })
       }
-      toast('Grupo criado.', 'ok'); onPronto(r.id)
+      toast(tr("Grupo criado."), 'ok'); onPronto(r.id)
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
 
-  return <Section title="Novo grupo">
+  return <Section title={tr("Novo grupo")}>
     <div className="stack" style={{ gap: 12 }}>
       <div className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }}>
-        <div className="field" style={{ flex: '1 1 240px' }}><label>Nome do grupo</label>
-          <input className="input" autoFocus placeholder="Comercial, Mecânicos, Corrida Ocala…"
+        <div className="field" style={{ flex: '1 1 240px' }}><label>{tr("Nome do grupo")}</label>
+          <input className="input" autoFocus placeholder={tr("Comercial, Mecânicos, Corrida Ocala…")}
             value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
-        <div className="field" style={{ width: 160 }}><label>Tipo</label>
+        <div className="field" style={{ width: 160 }}><label>{tr("Tipo")}</label>
           <select className="input" value={f.kind} onChange={e => setF({ ...f, kind: e.target.value })}>
             {Object.entries(TIPO_PT).filter(([k]) => k !== 'DIRETO').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select></div>
       </div>
 
-      <div className="field"><label>Ícone</label>
+      <div className="field"><label>{tr("Ícone")}</label>
         <div className="row wrap" style={{ gap: 6, alignItems: 'center' }}>
           {EMOJIS.map(e => <button key={e} type="button" className={`btn sm${f.icone === e ? ' primary' : ''}`}
             onClick={() => { setF({ ...f, icone: f.icone === e ? '' : e }); setImagem(null) }}>{e}</button>)}
-          <span className="small muted">ou</span>
+          <span className="small muted">{tr("ou")}</span>
           <label className="btn sm" style={{ cursor: 'pointer' }}>
-            {imagem ? imagem.name.slice(0, 22) : 'Escolher foto'}
+            {imagem ? imagem.name.slice(0, 22) : tr("Escolher foto")}
             <input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }}
               onChange={e => { const a = e.target.files?.[0] || null; setImagem(a); if (a) setF({ ...f, icone: '' }) }} />
           </label>
-          {imagem && <button type="button" className="btn sm" onClick={() => setImagem(null)}>tirar</button>}
+          {imagem && <button type="button" className="btn sm" onClick={() => setImagem(null)}>{tr("tirar")}</button>}
         </div>
       </div>
 
-      <div className="field"><label>Participantes ({membros.length})</label>
+      <div className="field"><label>{tr("Participantes (")}{membros.length})</label>
         <div className="row wrap" style={{ gap: 6 }}>
           {pessoas.map(p => {
             const dentro = membros.includes(p.id)
@@ -211,12 +212,12 @@ function NovoGrupo({ pessoas, onPronto, onCancelar }: { pessoas: Pessoa[]; onPro
               {dentro ? '✓ ' : ''}{p.name}</button>
           })}
         </div>
-        <span className="small muted">Você entra automaticamente. Dá para acrescentar gente depois.</span>
+        <span className="small muted">{tr("Você entra automaticamente. Dá para acrescentar gente depois.")}</span>
       </div>
 
       <div className="row">
-        <button className="btn primary" disabled={busy || !f.name.trim()} onClick={criar}>{busy ? <Spinner /> : 'Criar grupo'}</button>
-        <button className="btn" onClick={onCancelar}>Cancelar</button>
+        <button className="btn primary" disabled={busy || !f.name.trim()} onClick={criar}>{busy ? <Spinner /> : tr("Criar grupo")}</button>
+        <button className="btn" onClick={onCancelar}>{tr("Cancelar")}</button>
       </div>
     </div>
   </Section>
@@ -276,7 +277,7 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
     try {
       const r = await api.post<{ mudo: boolean }>(`/equipe/canais/${id}/silenciar`, { mudo: !mudo })
       setMudo(r.mudo); onMudou()
-      toast(r.mudo ? 'Silenciada: as mensagens continuam chegando, o celular não toca.' : 'Voltou a avisar.', 'ok')
+      toast(r.mudo ? tr("Silenciada: as mensagens continuam chegando, o celular não toca.") : tr("Voltou a avisar."), 'ok')
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusyLocal(null) }
   }
 
@@ -293,10 +294,10 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
       onMudou()
     } catch (e) {
       const err = e as ApiError
-      setFalhou(err.unauthorized ? 'Sua sessão tinha caído: a mensagem NÃO foi enviada. Entre de novo — o texto continua aqui.'
-        : err.offline ? 'Sem conexão: a mensagem NÃO foi enviada. O texto continua aqui.'
-          : `A mensagem NÃO foi enviada: ${err.message}`)
-      toast('A mensagem não foi enviada.', 'crit')
+      setFalhou(err.unauthorized ? tr("Sua sessão tinha caído: a mensagem NÃO foi enviada. Entre de novo — o texto continua aqui.")
+        : err.offline ? tr("Sem conexão: a mensagem NÃO foi enviada. O texto continua aqui.")
+          : tr("A mensagem NÃO foi enviada: {0}", err.message))
+      toast(tr("A mensagem não foi enviada."), 'crit')
     } finally { setEnviando(false) }
   }
 
@@ -306,27 +307,27 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
   return <div className="stack" style={{ gap: 10, minWidth: 0 }}>
     <div className="card page-h" style={{ padding: '10px 14px' }}>
       <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
-        <button className="btn sm so-mobile" onClick={onVoltar}><Icon name="left" size={14} /> Voltar</button>
+        <button className="btn sm so-mobile" onClick={onVoltar}><Icon name="left" size={14} /> {tr("Voltar")}</button>
         <Cara c={c} size={34} />
         <b>{c.name}</b>
         {c.kind !== 'DIRETO' && <Chip tone="neutral">{TIPO_PT[c.kind] || c.kind}</Chip>}
         <span className="small muted" style={{ flex: 1 }}>
-          {c.kind === 'DIRETO' ? 'conversa direta' : conversa.membros.map(m => m.name.split(' ')[0]).join(', ')}</span>
+          {c.kind === 'DIRETO' ? tr("conversa direta") : conversa.membros.map(m => m.name.split(' ')[0]).join(', ')}</span>
         {/* silenciar é por pessoa: eu calo para mim, não para os outros */}
         <button className="btn sm" disabled={!!busy} onClick={silenciar}
-          title={mudo ? 'Voltar a avisar no celular' : 'Parar de avisar no celular (as mensagens continuam chegando)'}>
-          {busy === 'mudo' ? <Spinner /> : mudo ? '🔕 silenciada' : '🔔 avisando'}</button>
+          title={mudo ? tr("Voltar a avisar no celular") : tr("Parar de avisar no celular (as mensagens continuam chegando)")}>
+          {busy === 'mudo' ? <Spinner /> : mudo ? tr("🔕 silenciada") : tr("🔔 avisando")}</button>
       </div>
       {c.topic && <div className="small ink2">{c.topic}</div>}
     </div>
 
     <div className="card chat" style={{ padding: 12, minHeight: 240, maxHeight: '58vh', overflowY: 'auto' }}>
-      {conversa.mensagens.length === 0 ? <Empty>Sem mensagens. Escreva a primeira.</Empty> :
+      {conversa.mensagens.length === 0 ? <Empty>{tr("Sem mensagens. Escreva a primeira.")}</Empty> :
         conversa.mensagens.map(m => {
           const meu = m.user_id && m.user_id === user?.id
           return <div key={m.id} className={`msg ${meu ? 'me' : 'ai'}`}>
             <div className="meta">{m.author}{m.at && ` · ${fmtTime(m.at)}`}
-              {m.origem !== 'painel' && <Chip tone="info" title={`Veio do ${ORIGEM_PT[m.origem] || m.origem}`}>{ORIGEM_PT[m.origem] || m.origem}</Chip>}
+              {m.origem !== 'painel' && <Chip tone="info" title={tr("Veio do {0}", ORIGEM_PT[m.origem] || m.origem)}>{ORIGEM_PT[m.origem] || m.origem}</Chip>}
             </div>
             <div className="bub">{m.text}</div>
           </div>
@@ -335,11 +336,11 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
     </div>
 
     {can('OPERATOR') ? <div className="stack" style={{ gap: 8 }}>
-      {falhou && <Banner tone="crit">{falhou} <button className="btn sm" style={{ marginLeft: 8 }} disabled={enviando || !texto.trim()} onClick={enviar}>Enviar de novo</button></Banner>}
+      {falhou && <Banner tone="crit">{falhou} <button className="btn sm" style={{ marginLeft: 8 }} disabled={enviando || !texto.trim()} onClick={enviar}>{tr("Enviar de novo")}</button></Banner>}
       <div className="field">
-        <TextoComVoz valor={texto} onChange={setTexto} linhas={2} placeholder="Escreva ou dite… Enter envia, Shift+Enter quebra a linha" onEnter={enviar} />
-        <div className="row"><button className="btn primary sm" disabled={enviando || !texto.trim()} onClick={enviar}>{enviando ? <Spinner /> : 'Enviar'}</button></div>
+        <TextoComVoz valor={texto} onChange={setTexto} linhas={2} placeholder={tr("Escreva ou dite… Enter envia, Shift+Enter quebra a linha")} onEnter={enviar} />
+        <div className="row"><button className="btn primary sm" disabled={enviando || !texto.trim()} onClick={enviar}>{enviando ? <Spinner /> : tr("Enviar")}</button></div>
       </div>
-    </div> : <div className="small muted">Seu acesso é de leitura: você acompanha a conversa e não escreve nela.</div>}
+    </div> : <div className="small muted">{tr("Seu acesso é de leitura: você acompanha a conversa e não escreve nela.")}</div>}
   </div>
 }

@@ -7,10 +7,12 @@ import { Palette } from './Palette'
 import { Chip, Loading, statusTone } from './ui'
 import { Icon, type IconName } from './Icon'
 import { ago, initials } from './fmt'
+import { tr, LOCALE } from '../i18n'
+import { Bandeiras } from '../i18n/Bandeiras'
 
-const ROLE_PT: Record<string, string> = { ADMIN: 'Administrador', MANAGER: 'Gerente', OPERATOR: 'Operador', VIEWER: 'Leitura' }
+const ROLE_PT: Record<string, string> = { ADMIN: tr("Administrador"), MANAGER: tr("Gerente"), OPERATOR: tr("Operador"), VIEWER: tr("Leitura") }
 /** Conta de acesso livre não tem cargo (dono, 17/09) — o painel diz só que ela alcança tudo. */
-const CARGO_PT: Record<string, string> = { MECANICO: 'Mecânico', COACH: 'Coach' }
+const CARGO_PT: Record<string, string> = { MECANICO: tr("Mecânico"), COACH: tr("Coach") }
 const cargoDe = (u?: { role?: string; free?: boolean; cargo?: string | null } | null) =>
   u?.free ? 'Acesso livre' : u?.cargo ? CARGO_PT[u.cargo] : (ROLE_PT[u?.role || ''] || u?.role || '')
 
@@ -95,86 +97,87 @@ export function Shell() {
   return <div className={`app${trilho ? ' rail' : ''}`}>
     {side && <div className="scrim" onClick={() => setSide(false)} />}
     <aside className={`side${side ? ' open' : ''}`}>
-      <div className="brand"><span className="mark-u" aria-hidden="true">U</span><div className="mark"><b>Command Center</b><small>URACE · Orlando</small></div>
-        <button className="iconbtn burger" aria-label="Fechar menu" onClick={() => setSide(false)}><Icon name="x" /></button></div>
-      {!box && <div className="search side-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}><Icon name="search" size={16} /><span>Buscar ou perguntar</span><kbd>⌘K</kbd></div>}
-      {box ? <nav className="nav" aria-label="Principal">
+      <div className="brand"><span className="mark-u" aria-hidden="true">{tr("U")}</span><div className="mark"><b>{tr("Command Center")}</b><small>{tr("URACE · Orlando")}</small></div>
+        <button className="iconbtn burger" aria-label={tr("Fechar menu")} onClick={() => setSide(false)}><Icon name="x" /></button></div>
+      {!box && <div className="search side-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}><Icon name="search" size={16} /><span>{tr("Buscar ou perguntar")}</span><kbd>{tr("⌘K")}</kbd></div>}
+      {box ? <nav className="nav" aria-label={tr("Principal")}>
         {/* mecânico e coach (#92): só o que é do box */}
-        <div className="grp">Meu trabalho</div>
-        <NL to="/" end icon="home">Meu dia</NL>
-        <NL to="/balcao" icon="tag">Balcão</NL>
-        <NL to="/checklists" icon="check">Checklists</NL>
-        <div className="grp">Logística</div>
-        <NL to="/estoque" icon="box">Estoque</NL>
-        <NL to="/pedidos" icon="list">Pedidos</NL>
-        <div className="grp">Pessoas</div>
-        <NL to="/clients" icon="people">Clientes</NL>
-        <NL to="/equipe" icon="chat">Equipe</NL>
-      </nav> : <nav className="nav" aria-label="Principal">
-        <div className="grp">Hoje</div>
-        <NL to="/" end icon="home">Hoje</NL>
-        <NL to="/attention" icon="alert" n={attn} tone={crit ? undefined : 'warn'}>Precisa de atenção</NL>
+        <div className="grp">{tr("Meu trabalho")}</div>
+        <NL to="/" end icon="home">{tr("Meu dia")}</NL>
+        <NL to="/balcao" icon="tag">{tr("Balcão")}</NL>
+        <NL to="/checklists" icon="check">{tr("Checklists")}</NL>
+        <div className="grp">{tr("Logística")}</div>
+        <NL to="/estoque" icon="box">{tr("Estoque")}</NL>
+        <NL to="/pedidos" icon="list">{tr("Pedidos")}</NL>
+        <div className="grp">{tr("Pessoas")}</div>
+        <NL to="/clients" icon="people">{tr("Clientes")}</NL>
+        <NL to="/equipe" icon="chat">{tr("Equipe")}</NL>
+      </nav> : <nav className="nav" aria-label={tr("Principal")}>
+        <div className="grp">{tr("Hoje")}</div>
+        <NL to="/" end icon="home">{tr("Hoje")}</NL>
+        <NL to="/attention" icon="alert" n={attn} tone={crit ? undefined : 'warn'}>{tr("Precisa de atenção")}</NL>
         {/* Logística (dono, 23/09). "Corridas" saiu de "Hoje" e veio para cá: o mesmo link
             em dois lugares do menu faz a pessoa se perguntar qual dos dois é o certo. */}
-        <div className="grp">Logística</div>
-        <NL to="/estoque" icon="box" n={repor} tone="warn">Estoque</NL>
-        {can('OPERATOR') && <NL to="/balcao" icon="tag">Balcão</NL>}
-        <NL to="/races" icon="flag">Corridas</NL>
-        <NL to="/pedidos" icon="list">Pedidos</NL>
-        <NL to="/compras" icon="cart">Compras</NL>
-        <NL to="/planejamento" icon="chart">Planejamento</NL>
-        <div className="grp">Vendas</div>
-        <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">Oportunidades</NL>
-        <NL to="/sales/agenda" icon="cal">Agenda de vendas</NL>
-        <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>Chat do Kommo</NL>
-        {can('OPERATOR') && <NL to="/suits" icon="suit">Suits · Alpha Line</NL>}
-        <NL to="/site" icon="globe">Site público</NL>
-        <div className="grp">Pessoas</div>
-        <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">Equipe</NL>
-        <NL to="/clients" icon="people">Clientes</NL>
-        {can('MANAGER') && <NL to="/biblioteca" icon="book">Biblioteca</NL>}
-        <NL to="/crm/funil" icon="funnel">Funil do Kommo</NL>
-        <div className="grp">Sistemas</div>
-        <NL to="/asana" icon="list">Asana</NL>
-        <NL to="/docusign" icon="doc" n={d?.waivers_bounced || 0}>DocuSign</NL>
-        <NL to="/gmail" icon="mail" n={d?.emails_attention || 0} tone="soft">Gmail</NL>
-        <NavLink to="/gmail/manual" className="sub">Manual dos marcadores</NavLink>
-        <NL to="/quickbooks" icon="dollar">QuickBooks</NL>
-        <div className="grp">Inteligência</div>
-        <NL to="/ai" end icon="spark">AI Command</NL>
-        <NL to="/approvals" icon="seal" n={pend} tone="warn">Aprovações</NL>
-        <NL to="/automation" icon="gear">Automação e memória</NL>
-        <NL to="/ai/capabilities" icon="book">O que a IA pode fazer</NL>
-        <NL to="/activity" icon="activity">Atividade da IA</NL>
-        <div className="grp">Administração</div>
-        <NL to="/integrations" icon="plug" n={badInt} tone="warn">Integrações</NL>
-        {can('MANAGER') && <NL to="/audit" icon="shield">Auditoria</NL>}
-        {can('ADMIN') && <NL to="/policies" icon="key">Políticas da IA</NL>}
-        {can('ADMIN') && <NL to="/users" icon="user">Usuários</NL>}
-        {livre && <NL to="/cofre" icon="lock">Cofre</NL>}
+        <div className="grp">{tr("Logística")}</div>
+        <NL to="/estoque" icon="box" n={repor} tone="warn">{tr("Estoque")}</NL>
+        {can('OPERATOR') && <NL to="/balcao" icon="tag">{tr("Balcão")}</NL>}
+        <NL to="/races" icon="flag">{tr("Corridas")}</NL>
+        <NL to="/pedidos" icon="list">{tr("Pedidos")}</NL>
+        <NL to="/compras" icon="cart">{tr("Compras")}</NL>
+        <NL to="/planejamento" icon="chart">{tr("Planejamento")}</NL>
+        <div className="grp">{tr("Vendas")}</div>
+        <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">{tr("Oportunidades")}</NL>
+        <NL to="/sales/agenda" icon="cal">{tr("Agenda de vendas")}</NL>
+        <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>{tr("Chat do Kommo")}</NL>
+        {can('OPERATOR') && <NL to="/suits" icon="suit">{tr("Suits · Alpha Line")}</NL>}
+        <NL to="/site" icon="globe">{tr("Site público")}</NL>
+        <div className="grp">{tr("Pessoas")}</div>
+        <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">{tr("Equipe")}</NL>
+        <NL to="/clients" icon="people">{tr("Clientes")}</NL>
+        {can('MANAGER') && <NL to="/biblioteca" icon="book">{tr("Biblioteca")}</NL>}
+        <NL to="/crm/funil" icon="funnel">{tr("Funil do Kommo")}</NL>
+        <div className="grp">{tr("Sistemas")}</div>
+        <NL to="/asana" icon="list">{tr("Asana")}</NL>
+        <NL to="/docusign" icon="doc" n={d?.waivers_bounced || 0}>{tr("DocuSign")}</NL>
+        <NL to="/gmail" icon="mail" n={d?.emails_attention || 0} tone="soft">{tr("Gmail")}</NL>
+        <NavLink to="/gmail/manual" className="sub">{tr("Manual dos marcadores")}</NavLink>
+        <NL to="/quickbooks" icon="dollar">{tr("QuickBooks")}</NL>
+        <div className="grp">{tr("Inteligência")}</div>
+        <NL to="/ai" end icon="spark">{tr("AI Command")}</NL>
+        <NL to="/approvals" icon="seal" n={pend} tone="warn">{tr("Aprovações")}</NL>
+        <NL to="/automation" icon="gear">{tr("Automação e memória")}</NL>
+        <NL to="/ai/capabilities" icon="book">{tr("O que a IA pode fazer")}</NL>
+        <NL to="/activity" icon="activity">{tr("Atividade da IA")}</NL>
+        <div className="grp">{tr("Administração")}</div>
+        <NL to="/integrations" icon="plug" n={badInt} tone="warn">{tr("Integrações")}</NL>
+        {can('MANAGER') && <NL to="/audit" icon="shield">{tr("Auditoria")}</NL>}
+        {can('ADMIN') && <NL to="/policies" icon="key">{tr("Políticas da IA")}</NL>}
+        {can('ADMIN') && <NL to="/users" icon="user">{tr("Usuários")}</NL>}
+        {livre && <NL to="/cofre" icon="lock">{tr("Cofre")}</NL>}
       </nav>}
       <div className="foot"><span className="avatar">{initials(user?.name)}</span><div className="grow"><div className="truncate" style={{ fontWeight: 600, fontSize: 13 }}>{user?.name}</div><div className="small muted">{cargoDe(user)}</div></div></div>
     </aside>
     <div className="main">
       <div className="topbar">
       <header className="top">
-        <button className="iconbtn burger" aria-label="Menu" onClick={() => setSide(s => !s)}><Icon name="menu" /></button>
-        <button className="iconbtn railbtn" aria-label={trilho ? 'Abrir o menu' : 'Fechar o menu'} aria-expanded={!trilho}
-          title={trilho ? 'Abrir o menu' : 'Fechar o menu'} onClick={alternaTrilho}><Icon name="panel" /></button>
+        <button className="iconbtn burger" aria-label={tr("Menu")} onClick={() => setSide(s => !s)}><Icon name="menu" /></button>
+        <button className="iconbtn railbtn" aria-label={trilho ? tr("Abrir o menu") : tr("Fechar o menu")} aria-expanded={!trilho}
+          title={trilho ? tr("Abrir o menu") : tr("Fechar o menu")} onClick={alternaTrilho}><Icon name="panel" /></button>
         {!box && <div className="search top-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
-          <Icon name="search" size={16} /><span>Buscar ou perguntar à IA…</span><kbd>⌘K</kbd>
+          <Icon name="search" size={16} /><span>{tr("Buscar ou perguntar à IA…")}</span><kbd>{tr("⌘K")}</kbd>
         </div>}
         {/* Race control: o estado da operação em cápsulas, em toda tela. Cada item leva para onde se resolve. */}
-        {!box && <div className="rc" aria-label="Estado da operação">
-          <button className={`it ${syncTone}`} title={lastSync ? `última sincronia: ${new Date(lastSync).toLocaleString('pt-BR')}` : 'nenhuma sincronia'} onClick={() => nav('/')}><span className="k">Espelho</span><b>{lastSync ? `há ${ago(lastSync)}` : 'nunca'}</b></button>
-          <button className={`it ${badInt ? 'warn' : 'ok'}`} title={badInt ? bad.map(b => `${b.system}: ${b.status.toLowerCase()}`).join(' · ') : 'todas respondendo'} onClick={() => nav('/integrations')}><span className="k">Sistemas</span><b>{nInt ? `${nInt - badInt}/${nInt}` : '—'}{badInt > 0 && badInt <= 2 && ` · ${bad.map(b => b.system).join(', ')}`}{badInt > 2 && ` · ${badInt} com problema`}</b></button>
-          <button className={`it ${crit ? 'crit' : alerts.length ? 'warn' : 'ok'}`} onClick={() => nav('/attention')}><span className="k">Atenção</span><b>{attn ? `${attn} item(ns)` : 'em ordem'}{crit > 0 && ` · ${crit} crítico(s)`}</b></button>
-          <button className={`it ${pend ? 'warn' : ''}`} onClick={() => nav(pend ? '/approvals' : '/ai')}><span className="k">IA</span><b>{pend ? `${pend} esperando você` : 'nada pendente'}</b></button>
+        {!box && <div className="rc" aria-label={tr("Estado da operação")}>
+          <button className={`it ${syncTone}`} title={lastSync ? tr("última sincronia: {0}", new Date(lastSync).toLocaleString(LOCALE())) : tr("nenhuma sincronia")} onClick={() => nav('/')}><span className="k">{tr("Espelho")}</span><b>{lastSync ? tr("há {0}", ago(lastSync)) : tr("nunca")}</b></button>
+          <button className={`it ${badInt ? 'warn' : 'ok'}`} title={badInt ? bad.map(b => `${b.system}: ${b.status.toLowerCase()}`).join(' · ') : tr("todas respondendo")} onClick={() => nav('/integrations')}><span className="k">{tr("Sistemas")}</span><b>{nInt ? `${nInt - badInt}/${nInt}` : '—'}{badInt > 0 && badInt <= 2 && ` · ${bad.map(b => b.system).join(', ')}`}{badInt > 2 && tr(" · {0} com problema", badInt)}</b></button>
+          <button className={`it ${crit ? 'crit' : alerts.length ? 'warn' : 'ok'}`} onClick={() => nav('/attention')}><span className="k">{tr("Atenção")}</span><b>{attn ? tr("{0} item(ns)", attn) : tr("em ordem")}{crit > 0 && tr(" · {0} crítico(s)", crit)}</b></button>
+          <button className={`it ${pend ? 'warn' : ''}`} onClick={() => nav(pend ? '/approvals' : '/ai')}><span className="k">{tr("IA")}</span><b>{pend ? tr("{0} esperando você", pend) : tr("nada pendente")}</b></button>
         </div>}
         <div className="grow" />
-        <span className="clock mono small muted" title="hora local">{clock.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' })} · {clock.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-        {!online && <Chip tone="crit" dot>Offline</Chip>}
-        {online && dash.error?.offline && <Chip tone="warn" dot>Servidor fora</Chip>}
+        <Bandeiras />
+        <span className="clock mono small muted" title={tr("hora local")}>{clock.toLocaleDateString(LOCALE(), { weekday: 'short', day: '2-digit', month: '2-digit' })} · {clock.toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' })}</span>
+        {!online && <Chip tone="crit" dot>{tr("Offline")}</Chip>}
+        {online && dash.error?.offline && <Chip tone="warn" dot>{tr("Servidor fora")}</Chip>}
         <div ref={menuRef} style={{ position: 'relative', display: 'flex', gap: 4 }}>
           <button className="who" onClick={() => setMenu(m => m === 'who' ? 'none' : 'who')} aria-haspopup="menu">
             <span className="avatar">{initials(user?.name)}</span><span className="small ink2">{user?.name?.split(' ')[0]}</span>
@@ -182,29 +185,29 @@ export function Shell() {
           {menu === 'who' && <div className="menu" role="menu">
             <div className="mh">{user?.email}<br /><Chip tone={livre ? 'accent' : statusTone('ACTIVE')}>{cargoDe(user)}</Chip></div>
             <hr />
-            <button className="mi" onClick={() => nav('/account')}>Minha conta e senha</button>
-            <button className="mi" onClick={() => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('cc.theme', r.dataset.theme) } catch { /* ignore */ } }}>Alternar tema</button>
+            <button className="mi" onClick={() => nav('/account')}>{tr("Minha conta e senha")}</button>
+            <button className="mi" onClick={() => { const r = document.documentElement; r.dataset.theme = r.dataset.theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('cc.theme', r.dataset.theme) } catch { /* ignore */ } }}>{tr("Alternar tema")}</button>
             <hr />
-            <button className="mi" onClick={() => { nav('/login', { replace: true, state: null }); logout() }}>Sair</button>
+            <button className="mi" onClick={() => { nav('/login', { replace: true, state: null }); logout() }}>{tr("Sair")}</button>
           </div>}
         </div>
       </header>
       </div>
       <main className={`page${larguraDa(loc.pathname)}`}><div key={loc.pathname.replace(/^(\/(?:compras|crm\/chat|equipe))\/\d+$/, '$1')} className="page-in stack" style={{ gap: 18 }}><Suspense fallback={<Loading />}><Outlet context={{ dash }} /></Suspense></div></main>
     </div>
-    <nav className="tabbar" aria-label="Abas">
+    <nav className="tabbar" aria-label={tr("Abas")}>
       {box ? <>
-        <TB to="/" end icon="home">Meu dia</TB>
-        <TB to="/balcao" icon="tag">Balcão</TB>
-        <TB to="/checklists" icon="check">Checklists</TB>
-        <TB to="/clients" icon="people">Clientes</TB>
+        <TB to="/" end icon="home">{tr("Meu dia")}</TB>
+        <TB to="/balcao" icon="tag">{tr("Balcão")}</TB>
+        <TB to="/checklists" icon="check">{tr("Checklists")}</TB>
+        <TB to="/clients" icon="people">{tr("Clientes")}</TB>
       </> : <>
-      <TB to="/" end icon="home">Hoje</TB>
-      <TB to="/attention" icon="alert" n={attn}>Atenção</TB>
-      <TB to="/sales" icon="target" n={d?.sales_due || 0}>Vendas</TB>
-      <TB to="/ai" icon="spark" n={pend}>IA</TB>
+      <TB to="/" end icon="home">{tr("Hoje")}</TB>
+      <TB to="/attention" icon="alert" n={attn}>{tr("Atenção")}</TB>
+      <TB to="/sales" icon="target" n={d?.sales_due || 0}>{tr("Vendas")}</TB>
+      <TB to="/ai" icon="spark" n={pend}>{tr("IA")}</TB>
       </>}
-      <button className={`tb${side ? ' active' : ''}`} onClick={() => setSide(s => !s)} aria-label="Mais"><Icon name="more" />Mais</button>
+      <button className={`tb${side ? ' active' : ''}`} onClick={() => setSide(s => !s)} aria-label={tr("Mais")}><Icon name="more" />{tr("Mais")}</button>
     </nav>
     {!box && <Palette open={pal} onClose={() => setPal(false)} ask={ask} />}
   </div>
