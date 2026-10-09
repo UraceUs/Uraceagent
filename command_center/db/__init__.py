@@ -279,6 +279,10 @@ MIGRACOES = [
     ("bookings", "notified_received_at", "TEXT"),
     ("bookings", "notified_confirmed_at", "TEXT"),
     ("booking_services", "deposit", "REAL"),             # depósito por sessão (Arrive and Drive: 400)
+    # #169: plano mensal vendido pelo site (Academy, Boost): preço por mês, meses do compromisso, sessões por mês
+    ("booking_services", "kind", "TEXT NOT NULL DEFAULT 'session'"),
+    ("booking_services", "months", "INTEGER"),
+    ("booking_services", "sessions_month", "INTEGER"),
     # 05/10 — dono (#87): balcão com leitor. Cada card tem um QR próprio (código opaco, não
     # o id); cada peça pode ter o item dela no QuickBooks, criado quando o código é cadastrado.
     ("clients", "scan_code", "TEXT"),

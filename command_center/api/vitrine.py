@@ -105,6 +105,27 @@ def _dinamica(host, caminho, q):
     return None
 
 
+@r.get("/ops/api/vitrine/planos")
+def planos_publicos(con: sqlite3.Connection = Depends(get_db)):
+    """#169: os planos mensais que o site vende (preço por mês, meses, sessões por mês)."""
+    from command_center.providers import servicos_site
+    return {"plans": servicos_site.planos_para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell"))}
+
+
+def _planos():
+    """Os planos cadastrados no painel, para a página da Academy (sem plano, a página pede contato)."""
+    from command_center.db import conectar
+    from command_center.providers import servicos_site
+    try:
+        con = conectar()
+        try:
+            return servicos_site.planos_para_cliente(con)
+        finally:
+            con.close()
+    except Exception:                                   # noqa: BLE001 — banco fora: a página sai sem os planos
+        return []
+
+
 def existe(caminho, host="novo.urace.us"):
     return caminho in PAGINAS or _dinamica(host, caminho, {}) is not None
 
@@ -115,6 +136,8 @@ def pagina(request: Request, caminho: str):
         raise HTTPException(404)
     host = host_de(request)
     q = dict(request.query_params)
+    if caminho == "/academy/":
+        return _html(ps.academy(host, planos=_planos()))
     if caminho in PAGINAS:
         return _html(PAGINAS[caminho](host))
     html = _dinamica(host, caminho, q)
