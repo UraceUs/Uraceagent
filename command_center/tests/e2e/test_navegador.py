@@ -1081,7 +1081,15 @@ def test_plano_da_academy_vendido_pelo_site_no_celular(servidor, navegador):
     # o painel mostra o plano com os campos dele
     abrir(adm, servidor, "/site/servicos")
     adm.get_by_text("plano de 3 meses, 4 sessões/mês").first.wait_for()
-    adm.close()
+    try:
+        _plano_no_celular(navegador, servidor, site)
+    finally:
+        # a venda automática volta a desligada: os testes seguintes do site esperam o pedido para a equipe
+        adm.request.patch(servidor + "/api/site/agenda/config", data={"auto_sell": False}, headers=csrf)
+        adm.close()
+
+
+def _plano_no_celular(navegador, servidor, site):
     aux = navegador.new_page()
     cliente_pela_api(aux, servidor, "Paula Plano", "paula.plano.e2e@example.com", piloto="Pedro Plano", ip="10.1.69.1")
     aux.close()
