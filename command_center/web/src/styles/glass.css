@@ -727,3 +727,36 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .bandeira svg{border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.12)}
 .login .bandeiras{position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;z-index:3}
 @media (max-width:420px){.top .bandeira{min-width:36px;padding:0 4px}.top .bandeira svg{width:20px;height:14px}}
+/* #180: balcão no celular, com uma mão — câmera em cima, peça e pilotos embaixo */
+.br{position:fixed;inset:0;display:grid;grid-template-rows:minmax(0,46fr) minmax(0,54fr);background:var(--paper);z-index:30}
+.br-camera{position:relative;overflow:hidden;background:#000}
+.br-camera video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.br-topo{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 10px;background:linear-gradient(rgba(0,0,0,.55),transparent)}
+.br-dias{display:flex;gap:6px}
+.br-dias button,.br-sair{min-height:40px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.45);color:#fff;font:inherit;font-weight:600;display:inline-flex;align-items:center;text-decoration:none}
+.br-dias button[aria-checked="true"]{background:#fff;color:#000;border-color:#fff}
+.br-mira{position:absolute;left:12%;right:12%;top:30%;bottom:22%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.18);transition:opacity var(--dur-media) var(--ease-saida),transform var(--dur-media) var(--ease-saida)}
+.br-mira.pausa{opacity:.35;transform:scale(.96)}
+.br-status{position:absolute;left:0;right:0;bottom:0;margin:0;padding:10px 14px;color:#fff;font-weight:600;text-align:center;background:linear-gradient(transparent,rgba(0,0,0,.6))}
+.br-painel{display:flex;flex-direction:column;gap:10px;padding:12px 12px max(12px,env(safe-area-inset-bottom));overflow-y:auto;background:var(--surface,#111);border-top:1px solid var(--rule)}
+.br-peca h2,.br-dica h2{margin:0;font-size:20px;line-height:1.25}
+.br-dica p{margin:4px 0 0}
+.br-quem{margin:0;font-size:14px;color:var(--muted);font-weight:600}
+.br-pilotos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.br-piloto{min-height:64px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:8px 12px;border-radius:14px;border:2px solid var(--accent);background:var(--accent-wash);color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:transform var(--dur-rapida) var(--ease-saida),opacity var(--dur-rapida) var(--ease-saida)}
+.br-piloto b{font-size:17px;overflow-wrap:anywhere}
+.br-piloto small{color:var(--muted)}
+.br-piloto:active{transform:scale(.97)}
+.br-piloto:disabled{opacity:.5}
+.br-acoes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}
+.br-acoes .btn,.br-teclado,.br-feito .btn{min-height:48px}
+.br-feito{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;background:var(--ok-wash);color:var(--ok);border:1px solid var(--ok);font-weight:700;animation:br-entra var(--dur-media) var(--ease-saida)}
+.br-erro{margin:0;padding:10px 12px;border-radius:12px;background:var(--crit-wash);color:var(--crit);border:1px solid var(--crit);font-weight:600}
+.br-minhas{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.br-minhas li{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-2,rgba(255,255,255,.04));font-size:14px}
+.br-teclado{margin-top:auto}
+.br-digitar{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:auto}
+.br-digitar input{min-height:48px;font-size:18px;min-width:0}
+@keyframes br-entra{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.br-feito{animation:none}.br-mira,.br-piloto{transition:none}}
+@media(min-width:720px){.br{grid-template-rows:none;grid-template-columns:1fr 1fr}}

@@ -28,6 +28,7 @@ const Checklists = tela(() => import('./pages/Checklists'), 'Checklists')
 const Checklist = tela(() => import('./pages/Checklists'), 'Checklist')
 const Biblioteca = tela(() => import('./pages/Biblioteca'), 'Biblioteca')
 const PeloQr = tela(() => import('./pages/Balcao'), 'PeloQr')
+const BalcaoRapido = tela(() => import('./pages/BalcaoRapido'), 'BalcaoRapido')
 const Planejamento = tela(() => import('./pages/Logistica'), 'Planejamento')
 const Compras = tela(() => import('./pages/Compras'), 'Compras')
 const Pedidos = tela(() => import('./pages/Compras'), 'Pedidos')
@@ -81,11 +82,21 @@ function Inicio() {
   return box ? <MeuDia /> : <Dashboard />
 }
 
-export default function App() {
-  return <BrowserRouter basename="/ops">
-    <AuthProvider><ToastProvider><PerguntarProvider>
-      <Routes>
+/** #180: em balcao.urace.us a única tela é o balcão do celular — qualquer endereço abre ele. */
+function SoBalcao() {
+  return <Routes>
+    <Route path="/login" element={<Login />} />
+    <Route path="*" element={<Guard><Suspense fallback={null}><BalcaoRapido /></Suspense></Guard>} />
+  </Routes>
+}
+
+function Rotas() {
+  const { user } = useAuth()
+  if (user?.so_balcao) return <SoBalcao />
+  return <Routes>
         <Route path="/login" element={<Login />} />
+        {/* #180: o balcão do celular ocupa a tela inteira, fora do Shell */}
+        <Route path="/balcao/rapido" element={<Guard min="OPERATOR"><Suspense fallback={null}><BalcaoRapido /></Suspense></Guard>} />
         {/* área do cliente (#40): fora do Shell e da sessão da equipe */}
         <Route path="/portal/*" element={<Suspense fallback={null}><PortalApp /></Suspense>} />
         <Route element={<Guard><Shell /></Guard>}>
@@ -148,6 +159,12 @@ export default function App() {
           <Route path="*" element={<><PageHeader title={tr("Página não encontrada")} /><div className="card"><Empty title={tr("Este endereço não existe")}>{tr("Use o menu ou ⌘K.")}</Empty></div></>} />
         </Route>
       </Routes>
+}
+
+export default function App() {
+  return <BrowserRouter basename="/ops">
+    <AuthProvider><ToastProvider><PerguntarProvider>
+      <Rotas />
     </PerguntarProvider></ToastProvider></AuthProvider>
   </BrowserRouter>
 }

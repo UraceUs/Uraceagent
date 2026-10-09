@@ -287,3 +287,108 @@ def enviar(pinv_id: int, request: Request, con: sqlite3.Connection = Depends(get
          {"invoice_pecas": p["id"], "qbo": p["qbo_invoice_id"], "para": p["sent_to"]})
     con.commit()
     return b.invoice_publica(con, um(con, "SELECT * FROM parts_invoices WHERE id=?", (p["id"],)))
+
+
+# ------------------------------------------------------------------ #180: celular, uma mão
+# O mecânico lê a peça e toca no piloto do dia; a leitura fica PENDENTE e o gerente confirma na
+# Revisão. Ler e registrar é OPERATOR (o mecânico); revisar é MANAGER (dono, 09/10: "eles não
+# precisam ter acesso disso pelo celular").
+from command_center.providers import balcao_rapido as br  # noqa: E402
+
+_DATA = r"^\d{4}-\d{2}-\d{2}$"
+
+
+@r.get("/rapido")
+def rapido(data: str | None = Query(None, pattern=_DATA), con: sqlite3.Connection = Depends(get_db),
+           u=Depends(auth.exige("OPERATOR"))):
+    """A tela do celular: os pilotos do dia (botões) e as últimas leituras de quem está lendo."""
+    data = data or b.hoje()
+    return {"data": data, "hoje": b.hoje(), "pilotos": br.pilotos_do_dia(con, data), "minhas": br.minhas(con, data, u["id"])}
+
+
+class RapidoIn(BaseModel):
+    codigo: str
+    data: str | None = None
+    client_id: int | None = None
+    pilot_id: int | None = None
+
+
+@r.post("/rapido", status_code=201)
+def rapido_registrar(dados: RapidoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("OPERATOR"))):
+    import re as _re
+    data = dados.data or b.hoje()
+    if not _re.fullmatch(_DATA, data):
+        raise HTTPException(400, "data inválida")
+    try:
+        p = br.registrar(con, dados.codigo, data, dados.client_id, dados.pilot_id, u["id"])
+    except (b.ErroBalcao, br.ErroRapido) as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "balcao.rapido", "counter_pending", p["id"],
+         {"codigo": p["code"], "cliente": p["client_id"], "piloto": p["pilot_id"], "data": data})
+    return p
+
+
+@r.post("/rapido/{pid}/desfazer")
+def rapido_desfazer(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                    u=Depends(auth.exige("OPERATOR"))):
+    try:
+        br.desfazer(con, pid, None if _gerente(u) else u["id"])
+    except LookupError:
+        raise HTTPException(404, "Leitura não encontrada.")
+    except br.ErroRapido as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "balcao.rapido.desfazer", "counter_pending", pid, None)
+    return {"ok": True}
+
+
+@r.get("/revisao")
+def revisao(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+            con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    return br.revisao(con, limit, offset)
+
+
+class ConfirmarIn(BaseModel):
+    modo: str
+    client_id: int | None = None
+    item_id: int | None = None
+    confirmado: bool = False
+
+
+@r.post("/revisao/{pid}/confirmar")
+def revisao_confirmar(pid: int, dados: ConfirmarIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                      u=Depends(auth.exige("MANAGER"))):
+    con.execute("BEGIN IMMEDIATE")
+    try:
+        s = br.confirmar(con, pid, dados.modo, u["id"], dados.client_id, dados.item_id, dados.confirmado)
+    except LookupError as e:
+        con.execute("ROLLBACK")
+        raise HTTPException(404, str(e))
+    except (b.ErroBalcao, br.ErroRapido, estoque.ErroEstoque) as e:
+        con.execute("ROLLBACK")
+        raise _erro(e)
+    except Exception:
+        con.execute("ROLLBACK")
+        raise
+    _aud(con, request, u, f"balcao.revisao.{dados.modo}", "counter_pending", pid,
+         {"leitura": s["id"], "cliente": s["client_id"], "item": s["item_id"], "invoice_pecas": s["parts_invoice_id"]})
+    con.execute("COMMIT")
+    _sincronizar(con, s["parts_invoice_id"])
+    return {"leitura": dict(s), **br.revisao(con)}
+
+
+class DescartarIn(BaseModel):
+    nota: str | None = None
+
+
+@r.post("/revisao/{pid}/descartar")
+def revisao_descartar(pid: int, dados: DescartarIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                      u=Depends(auth.exige("MANAGER"))):
+    try:
+        br.descartar(con, pid, u["id"], dados.nota)
+    except LookupError:
+        raise HTTPException(404, "Leitura não encontrada.")
+    except br.ErroRapido as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "balcao.revisao.descartar", "counter_pending", pid, {"nota": dados.nota})
+    return br.revisao(con)

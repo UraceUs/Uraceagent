@@ -117,6 +117,7 @@ def servidor(tmp_path_factory):
                CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
+               CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de balcao.urace.us
                STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM")  # 32 bytes de teste
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
@@ -1235,6 +1236,47 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     g = entrar(navegador, servidor)
     abrir(g, servidor, "/sales")
     g.get_by_text("Lia Loja").first.wait_for()
+    g.close()
+
+
+def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, navegador):
+    """#180: em balcao.urace.us (aqui, localhost) o mecânico entra e só existe o balcão. Lê a peça
+    (o código digitado faz o papel da câmera), toca no piloto do dia e pronto; o gerente confirma
+    na Revisão do painel. Uma mão: nada rola para o lado em 360 px, botões grandes."""
+    balcao = servidor.replace("127.0.0.1", "localhost")
+    v = navegador.new_page(viewport={"width": 360, "height": 740})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(balcao + "/login")
+    v.fill("#email", "luis@urace.us")
+    v.fill("#pw", SENHA)
+    v.keyboard.press("Enter")
+    v.get_by_role("heading", name="Leia a peça").wait_for()
+    assert v.evaluate("document.documentElement.scrollWidth") <= 360
+    v.get_by_role("button", name="Código apagado? Digitar").click()
+    v.get_by_label("Código da peça").fill("7890000000017")
+    v.get_by_role("button", name="Ler", exact=True).click()
+    v.get_by_role("heading", name="Front bumper (e2e)").wait_for()
+    piloto = v.locator(".br-piloto", has_text="David Pera").first
+    caixa = piloto.bounding_box()
+    assert caixa and caixa["height"] >= 48, "alvo grande para o polegar"
+    piloto.click()
+    v.get_by_text("✓ Front bumper (e2e) → David Pera").wait_for()
+    # nesse endereço, outra tela não abre e a API das outras seções responde 403
+    v.goto(balcao + "/clients")
+    v.get_by_role("heading", name="Leia a peça").wait_for()
+    r = v.evaluate("fetch('/ops/api/clients').then(r => r.status)")
+    assert r == 403
+    v.close()
+    assert not erros, erros
+
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/balcao")
+    item = g.locator(".card", has_text="Front bumper (e2e)").filter(has_text="Luis Barros").first
+    item.wait_for()
+    item.get_by_role("button", name="Guardar para o cliente").click()      # cobrar pede o QuickBooks, que o e2e não tem
+    g.get_by_text("Peça confirmada").wait_for()
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
 
 

@@ -172,6 +172,42 @@ def cache_de(caminho):
     return None
 
 
+# #180: balcao.urace.us é o balcão do celular e só ele (dono, 09/10: "login, senha e pronto …
+# sem ter o risco de abrir outras seções"). Nesse endereço a API responde só ao que a tela usa,
+# para qualquer conta; o resto é 403. O painel inteiro continua em ops.urace.us.
+API_DO_BALCAO = (
+    (None, r"^/auth/(me|login|logout)$"),
+    (None, r"^/balcao/(ler|rapido)(/|$)"),
+    ({"POST"}, r"^/system/cliente$"),
+    ({"GET"}, r"^/estoque/item/\d+/foto$"),
+)
+
+
+def hosts_do_balcao():
+    return {h.strip().lower() for h in os.environ.get("CC_BALCAO_HOSTS", "balcao.urace.us").split(",") if h.strip()}
+
+
+def so_balcao(request):
+    return (request.headers.get("host") or "").split(":")[0].strip().lower() in hosts_do_balcao()
+
+
+def balcao_alcanca(metodo, caminho):
+    import re as _re
+    return any((ms is None or metodo in ms) and _re.search(rx, caminho) for ms, rx in API_DO_BALCAO)
+
+
+@app.middleware("http")
+async def _so_o_balcao(request: Request, call_next):
+    if so_balcao(request):
+        caminho = request.url.path
+        if caminho.startswith(BASE + "/api/"):
+            if request.method not in ("HEAD", "OPTIONS") and not balcao_alcanca(request.method, caminho[len(BASE + "/api"):]):
+                return JSONResponse({"detail": "Este endereço é só do balcão."}, 403)
+        elif not caminho.startswith(BASE) or caminho.startswith((BASE + "/mcp", BASE + "/oauth")):
+            return JSONResponse({"detail": "Este endereço é só do balcão."}, 404)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _cabecalhos(request: Request, call_next):
     resp = await call_next(request)
@@ -306,7 +342,7 @@ class LoginIn(BaseModel):
 @app.post(BASE + "/api/auth/login")
 def api_login(dados: LoginIn, request: Request, response: Response,
               con: sqlite3.Connection = Depends(get_db)):
-    return auth.login(con, request, response, dados.email, dados.password, dados.remember)
+    return {**auth.login(con, request, response, dados.email, dados.password, dados.remember), "so_balcao": so_balcao(request)}
 
 
 @app.post(BASE + "/api/auth/logout")
@@ -316,8 +352,8 @@ def api_logout(request: Request, response: Response, con: sqlite3.Connection = D
 
 
 @app.get(BASE + "/api/auth/me")
-def api_me(u=Depends(auth.usuario_atual)):
-    return u
+def api_me(request: Request, u=Depends(auth.usuario_atual)):
+    return {**u, "so_balcao": so_balcao(request)}      # #180: no balcao.urace.us a tela é só o balcão
 
 
 class SenhaIn(BaseModel):
