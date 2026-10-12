@@ -153,21 +153,50 @@ def trocar(dados: NivelIn, request: Request, u=Depends(auth.exige("ADMIN")), con
 
 
 # ------------------------------------------------------------------ a auditoria da ponte (só leitura)
-def _ler_auditoria(limite=2000):
-    """As decisões do SDR em ~/.urace/salesbridge.db, mais novas primeiro. Sem o arquivo: None."""
+def _abrir_ponte():
+    """O salesbridge.db da ponte, só em leitura (mode=ro). None se o arquivo não existe ou não abre."""
     f = _dir() / "salesbridge.db"
     if not f.exists():
         return None
     con = sqlite3.connect(f"file:{f}?mode=ro", uri=True, timeout=5)
     con.row_factory = sqlite3.Row
+    return con
+
+
+def _ler_auditoria(limite=50, lead=None, desde=None):
+    """As decisões do SDR em ~/.urace/salesbridge.db, mais novas primeiro, filtradas no SQL
+    (lead e corte de tempo): o filtro nunca fica preso às N linhas mais recentes. Sem o arquivo: None."""
+    con = _abrir_ponte()
+    if con is None:
+        return None
+    where, par = ["kind='sdr'"], []
+    if lead not in (None, ""):
+        where.append("lead_id=?")
+        par.append(str(lead).strip())
+    if desde is not None:
+        where.append("ts>=?")
+        par.append(int(desde))
     try:
-        rows = con.execute("SELECT id, ts, lead_id, kind, detail FROM audit WHERE kind='sdr' ORDER BY ts DESC, id DESC LIMIT ?",
-                           (limite,)).fetchall()
+        rows = con.execute(f"SELECT id, ts, lead_id, kind, detail FROM audit WHERE {' AND '.join(where)} "
+                           "ORDER BY ts DESC, id DESC LIMIT ?", (*par, limite)).fetchall()
     except sqlite3.Error:
         return None
     finally:
         con.close()
     return [_decisao(x) for x in rows]
+
+
+def _contar_auditoria(desde):
+    """Quantas decisões do SDR desde `desde` (epoch), contadas no SQL. None sem a ponte."""
+    con = _abrir_ponte()
+    if con is None:
+        return None
+    try:
+        return con.execute("SELECT COUNT(*) FROM audit WHERE kind='sdr' AND ts>=?", (int(desde),)).fetchone()[0]
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
 
 
 def _decisao(x):
@@ -204,12 +233,11 @@ def _decisao(x):
 
 
 def auditoria_ponte(lead=None, acao=None, n=50):
-    itens = _ler_auditoria()
+    # a ação só existe dentro do JSON: filtra em Python, mas sobre um lote maior quando há filtro
+    itens = _ler_auditoria(limite=n if not acao else 2000, lead=lead)
     if itens is None:
         return {"itens": [], "motivo": "ponte sem auditoria"}
-    acoes = sorted({i["acao"] for i in itens if i["acao"]})
-    if lead:
-        itens = [i for i in itens if str(i["lead_id"] or "") == str(lead).strip()]
+    acoes = sorted({i["acao"] for i in (_ler_auditoria(limite=500) or []) if i["acao"]})
     if acao:
         itens = [i for i in itens if (i["acao"] or "") == acao]
     return {"itens": itens[:n], "acoes": acoes}
@@ -396,12 +424,11 @@ def relatos_status(rid: int, dados: StatusRelatoIn, request: Request, u=Depends(
 def painel(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """O estado do robô para todo papel (mudar o nível continua só ADMIN, em PUT /sdr)."""
     e = estado()
-    decisoes = _ler_auditoria(500)
-    corte = int(time.time()) - 86400
+    ultima = _ler_auditoria(limite=1)
     return {**e, "pode_trocar": auth.pode(u["role"], "ADMIN"), "pode_instruir": auth.pode(u["role"], "MANAGER"),
-            "decisoes_24h": None if decisoes is None else sum(1 for d in decisoes if d["ts"] >= corte),
-            "ultima_decisao": decisoes[0]["quando"] if decisoes else None,
-            "ponte_sem_auditoria": decisoes is None,
+            "decisoes_24h": _contar_auditoria(int(time.time()) - 86400),
+            "ultima_decisao": ultima[0]["quando"] if ultima else None,
+            "ponte_sem_auditoria": ultima is None,
             "instrucoes_em_vigor": (um(con, f"SELECT COUNT(*) AS n FROM sdr_instrucoes WHERE status IN ({','.join('?' * len(EM_VIGOR))})", EM_VIGOR) or {}).get("n", 0),
             "relatos_abertos": (um(con, "SELECT COUNT(*) AS n FROM sdr_relatos WHERE status='aberto'") or {}).get("n", 0),
             "horario_humano": HORARIO_HUMANO, "niveis": NIVEIS}

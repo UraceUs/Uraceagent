@@ -172,6 +172,19 @@ def test_auditoria_le_a_ponte_so_em_leitura_e_filtra(cli, pasta):
     con.close()
 
 
+def test_filtro_por_lead_e_contagem_nao_ficam_presos_as_linhas_mais_recentes(cli, pasta):
+    """Os filtros são no SQL: um lead antigo, atrás de 300 decisões de outro, continua sendo achado,
+    e a contagem das 24 h conta tudo, não só um lote."""
+    agora = int(time.time())
+    _ponte_db(pasta, [(agora - 20000, 7007, "sdr", json.dumps({"acao": "organizar", "motivo": "ANTIGO"}))]
+              + [(agora - 100 + i // 10, 5001, "sdr", json.dumps({"acao": "organizar", "motivo": f"N{i}"})) for i in range(300)])
+    entra(cli, "op@urace.us")
+    r = cli.get(B + "/sdr/auditoria", params={"lead": "7007"}).json()
+    assert [x["motivo"] for x in r["itens"]] == ["ANTIGO"]
+    assert len(cli.get(B + "/sdr/auditoria", params={"n": 200}).json()["itens"]) == 200
+    assert cli.get(B + "/sdr/painel").json()["decisoes_24h"] == 303
+
+
 def test_admin_troca_o_nivel_e_o_painel_mostra(cli, pasta):
     h = entra(cli, "admin@urace.us")
     assert cli.get(B + "/sdr/painel").json()["pode_trocar"] is True
