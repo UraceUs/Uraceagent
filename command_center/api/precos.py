@@ -28,7 +28,7 @@ SISTEMA = "qbo"
 
 def _itens_do_catalogo():
     from command_center.providers import chamar
-    return chamar(SISTEMA, "qbo_itens", maximo=400)
+    return chamar(SISTEMA, "qbo_itens", maximo=5000)
 
 
 def montar_plano():

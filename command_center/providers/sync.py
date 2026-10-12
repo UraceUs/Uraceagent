@@ -672,7 +672,7 @@ def _grava_linhas(con, invoice_id, linhas):
 def sincronizar_itens_qbo(con):
     """Catálogo de itens do QBO no espelho (ids que a IA precisa para a invoice)."""
     try:
-        itens = chamar("quickbooks", "qbo_itens", maximo=300)
+        itens = chamar("quickbooks", "qbo_itens", maximo=5000)   # o catálogo inteiro (#187)
     except Exception:
         return 0
     for i in itens:

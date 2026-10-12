@@ -767,3 +767,10 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .pend-l li{display:flex;align-items:center;gap:10px;justify-content:space-between;border-top:1px solid var(--rule);padding-top:8px;min-width:0}
 .pend-t{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
 .pend-l .btn{min-height:40px;flex:none}
+
+/* Balcão: etiquetas QR de prateleira e duplicatas do catálogo (#187) */
+.et-cats{display:flex;flex-wrap:wrap;gap:6px}
+.et-cats .btn{min-height:40px}
+.et-dup{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.et-dup>li{border-top:1px solid var(--rule);padding-top:8px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.et-dup ul{margin:0;padding-left:18px;overflow-wrap:anywhere}

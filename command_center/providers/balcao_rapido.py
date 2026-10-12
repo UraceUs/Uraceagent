@@ -79,6 +79,10 @@ def registrar(con, codigo, data, client_id=None, pilot_id=None, por=None):
     cod = b._codigo(codigo)                       # QR de cliente aqui é erro: o passo é a peça
     item = um(con, """SELECT i.id FROM stock_barcodes bc JOIN stock_items i ON i.id=bc.item_id
                        WHERE bc.code=? AND i.active=1""", (cod,))
+    if not item:
+        from command_center.providers import etiquetas
+        iid = etiquetas.item_do_qr(con, cod, por)     # etiqueta de prateleira (#187)
+        item = {"id": iid} if iid else None
     nome = None
     if pilot_id:
         pp = um(con, "SELECT id, name, client_id FROM portal_pilots WHERE id=?", (pilot_id,))

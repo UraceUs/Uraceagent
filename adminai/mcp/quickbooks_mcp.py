@@ -260,8 +260,18 @@ def qbo_itens_buscar(termos=None, texto=None):
 @srv.ferramenta("qbo_itens", "Todos os itens ATIVOS do catálogo (id, nome, preço de lista). O preço válido é o da Rate Card.",
                 {"maximo": {"type": "integer", "default": 300}}, [])
 def qbo_itens(maximo=300):
-    r = _query(f"select * from Item where Active = true maxresults {int(maximo)}")
-    return [_resumo_item(i) for i in r.get("Item", [])]
+    """Pagina de 1000 em 1000 (o teto de uma consulta no QuickBooks): o catálogo da URACE passa de
+    300 itens, e o espelho com corte deixava peça de fora do balcão e das etiquetas (#187)."""
+    saida, inicio, maximo = [], 1, int(maximo)
+    while len(saida) < maximo:
+        lote = min(1000, maximo - len(saida))
+        r = _query(f"select * from Item where Active = true startposition {inicio} maxresults {lote}")
+        itens = r.get("Item", [])
+        saida += [_resumo_item(i) for i in itens]
+        if len(itens) < lote:
+            break
+        inicio += lote
+    return saida
 
 
 @srv.ferramenta("qbo_invoices",
