@@ -47,6 +47,14 @@ const TIPO_NOME: Record<string, string> = {
   respondeu_errado: tr("o robô respondeu errado"), preco_errado: tr("preço errado"), ignorou_lead: tr("ignorou o lead"), outro: tr("outro"),
 }
 const temPreco = (t: string) => /\$|pre[çc]o|price/i.test(t)
+/** Hora em Orlando; com o dia na frente quando não é hoje. */
+function horaOrlando(iso: string) {
+  const tz = 'America/New_York'
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: tz })
+  const dia = new Date(iso).toLocaleDateString('en-CA', { timeZone: tz })
+  const hora = new Date(iso).toLocaleTimeString('en-US', { timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false })
+  return dia === hoje ? hora : `${new Date(iso).toLocaleDateString('en-US', { timeZone: tz, month: '2-digit', day: '2-digit' })} ${hora}`
+}
 
 // ------------------------------------------------------------------ ligar e desligar
 function LigarDesligar({ p, onMudou }: { p: Painel; onMudou: () => void }) {
@@ -197,7 +205,6 @@ function Decisoes() {
   const [q, setQ] = useState('')
   useEffect(() => { const t = setTimeout(() => setQ(lead.trim()), 300); return () => clearTimeout(t) }, [lead])
   const d = useGet<Auditoria>(`/sdr/auditoria?n=50${q ? `&lead=${encodeURIComponent(q)}` : ''}${acao ? `&acao=${encodeURIComponent(acao)}` : ''}`, 60000)
-  const hora = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
   return <Section title={tr("O que o robô decidiu")} count={d.data?.itens.length}
     right={<div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
       <input value={lead} onChange={e => setLead(e.target.value)} placeholder={tr("lead (id)")} aria-label={tr("Filtrar por lead")} style={{ width: 120 }} />
@@ -206,7 +213,7 @@ function Decisoes() {
     {d.error ? <ErrorState error={d.error} retry={d.reload} /> : !d.data ? <Loading rows={4} /> : d.data.motivo ? <Empty title={tr("Ponte sem auditoria")}>{tr("O banco da ponte de vendas ainda não existe neste servidor.")}</Empty>
       : !d.data.itens.length ? <Empty title={tr("Nenhuma decisão")}>{tr("Nada registrado com esse filtro.")}</Empty>
         : <div className="tbl-wrap"><table className="tbl sdr-tbl"><thead><tr><th>{tr("Hora (Orlando)")}</th><th>{tr("Lead")}</th><th>{tr("Ação")}</th><th>{tr("Motivo")}</th><th>{tr("O que fez ou faria")}</th><th>{tr("Nível")}</th></tr></thead>
-          <tbody>{d.data.itens.map(x => <tr key={x.id}><td className="mono small">{hora(x.quando)}</td><td className="mono">{x.lead_id ?? '—'}</td><td>{x.acao || '—'}</td><td className="small">{x.motivo || '—'}</td><td className="small">{x.fez || '—'}</td><td className="small">{x.nivel || '—'}</td></tr>)}</tbody></table></div>}
+          <tbody>{d.data.itens.map(x => <tr key={x.id}><td className="mono small">{horaOrlando(x.quando)}</td><td className="mono">{x.lead_id ?? '—'}</td><td>{x.acao || '—'}</td><td className="small">{x.motivo || '—'}</td><td className="small">{x.fez || '—'}</td><td className="small">{x.nivel || '—'}</td></tr>)}</tbody></table></div>}
   </Section>
 }
 
@@ -226,7 +233,7 @@ export function Sdr() {
         <Chip tone={d.ponte_no_ar ? 'ok' : 'crit'}>{d.ponte_no_ar ? tr("ponte no ar") : tr("ponte fora do ar")}</Chip>
         {d.reiniciando && <Chip tone="run">{tr("aplicando…")}</Chip>}
         {d.decisoes_24h !== null && <Chip tone="neutral">{tr("{0} decisão(ões) nas últimas 24 h", d.decisoes_24h)}</Chip>}
-        {d.ultima_decisao && <Chip tone="neutral">{tr("última decisão {0}", ago(d.ultima_decisao))}</Chip>}
+        {d.ultima_decisao && <Chip tone="neutral" title={ago(d.ultima_decisao)}>{tr("última decisão {0}", horaOrlando(d.ultima_decisao))}</Chip>}
       </div>}
     </PageHeader>
     {p.error ? <ErrorState error={p.error} retry={p.reload} /> : !d ? <Loading rows={4} /> : <div className="stack">
