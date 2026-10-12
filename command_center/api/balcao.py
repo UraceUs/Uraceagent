@@ -334,6 +334,22 @@ def rapido(data: str | None = Query(None, pattern=_DATA), con: sqlite3.Connectio
     return {"data": data, "hoje": b.hoje(), "pilotos": br.pilotos_do_dia(con, data), "minhas": br.minhas(con, data, u["id"])}
 
 
+@r.get("/rapido/auditoria")
+def rapido_auditoria(data: str = Query(..., pattern=_DATA), con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("OPERATOR"))):
+    """#189: quem lançou o quê naquele dia (gerente e acesso livre)."""
+    if not _gerente(u):
+        raise HTTPException(403, "A auditoria do balcão é do gerente.")
+    return br.auditoria(con, data)
+
+
+@r.get("/rapido/clientes")
+def rapido_clientes(q: str = Query(..., min_length=2, max_length=80), con: sqlite3.Connection = Depends(get_db),
+                    u=Depends(auth.exige("OPERATOR"))):
+    """#189: o piloto não está no calendário do dia — busca pelo nome (só o nome volta)."""
+    return br.buscar_clientes(con, q)
+
+
 class RapidoIn(BaseModel):
     codigo: str
     data: str | None = None

@@ -775,6 +775,23 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .et-dup>li{border-top:1px solid var(--rule);padding-top:8px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .et-dup ul{margin:0;padding-left:18px;overflow-wrap:anywhere}
 
+/* #189: outro dia (gerente e acesso livre), cliente fora da lista do dia e a auditoria */
+.br-dias{flex-wrap:wrap;min-width:0}
+.br-outro-dia{position:relative;min-height:40px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.45);color:#fff;font-weight:600;display:inline-flex;align-items:center;cursor:pointer}
+.br-outro-dia.on{background:#fff;color:#000;border-color:#fff}
+.br-outro-dia input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.br-outro{display:flex;flex-direction:column;gap:8px}
+.br-outro input{min-height:48px;font-size:16px;min-width:0;width:100%}
+.br-aud{display:flex;flex-direction:column;gap:8px}
+.br-aud h2{margin:0}
+.br-aud select{min-height:44px}
+.br-aud-l{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.br-aud-l li{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:var(--surface-2,rgba(255,255,255,.04));font-size:14px;min-width:0;overflow-wrap:anywhere}
+.br-sit{flex:none;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--rule)}
+.br-sit.confirmada,.br-sit.lançada{color:var(--ok);border-color:var(--ok)}
+.br-sit.descartada,.br-sit.desfeita{color:var(--muted)}
+.br-sit.pendente{color:var(--warn,#b7791f);border-color:currentColor}
+
 /* Robô SDR (12/10): níveis, instruções, relatos e as decisões da ponte */
 .sdr-niveis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
 .sdr-nivel{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1px solid var(--rule);background:var(--surface-2,rgba(255,255,255,.03));cursor:pointer;min-height:40px}
