@@ -171,3 +171,65 @@ def descartar(con, pid, por, nota=None):
         raise ErroRapido(f"esta leitura já está {p['status']}")
     atualizar(con, "counter_pending", pid, status="descartada", reviewed_by=por, reviewed_at=agora(),
               review_note=(nota or "")[:300] or None)
+
+
+# ------------------------------------------------------------------ #189: qualquer dia, auditoria, cliente fora da lista
+def buscar_clientes(con, q, limite=10):
+    """Quem não está no calendário do dia: busca pelo nome, e só o nome volta (sem contato)."""
+    t = " ".join((q or "").split())
+    if len(t) < 2:
+        return []
+    padrao = f"%{t.lower()}%"
+    out = []
+    for c in todos(con, """SELECT id, name, pilot_name FROM clients
+                            WHERE status!='INACTIVE' AND (lower(name) LIKE ? OR lower(COALESCE(pilot_name,'')) LIKE ?)
+                            ORDER BY (lower(COALESCE(pilot_name, name)) LIKE ?) DESC, COALESCE(pilot_name, name) LIMIT ?""",
+                   (padrao, padrao, f"{t.lower()}%", limite)):
+        nome = _nome(c)
+        resp = (c["name"] or "").strip()
+        out.append({"client_id": c["id"], "nome": nome, "responsavel": resp if resp and resp != nome else None})
+    return out
+
+
+def _dia_fl(iso_utc):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        return datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    except (AttributeError, ValueError):
+        return None
+
+
+def auditoria(con, data):
+    """Tudo o que foi lançado para aquela data: no celular (pendente, confirmada, descartada) e no
+    balcão do computador (lançada ou desfeita), com quem, quando, a peça e para quem."""
+    from datetime import date, timedelta
+    itens, do_celular = [], set()
+    for p in todos(con, """SELECT cp.*, u.name AS por, r.name AS revisor, i.name AS peca, COALESCE(c.pilot_name, c.name) AS cliente
+                             FROM counter_pending cp LEFT JOIN users u ON u.id=cp.by_user_id
+                             LEFT JOIN users r ON r.id=cp.reviewed_by LEFT JOIN stock_items i ON i.id=cp.item_id
+                             LEFT JOIN clients c ON c.id=cp.client_id
+                            WHERE cp.service_date=?""", (data,)):
+        if p["scan_id"]:
+            do_celular.add(p["scan_id"])
+        itens.append({"origem": "celular", "id": p["id"], "at": p["at"], "por": p["por"], "peca": p["peca"], "codigo": p["code"],
+                      "para": p["cliente"] or p["pilot_name"], "qtd": p["qty"], "situacao": p["status"],
+                      "revisado_por": p["revisor"], "revisado_em": p["reviewed_at"], "modo": p["mode"]})
+    d = date.fromisoformat(data)
+    de, ate = (d - timedelta(days=1)).isoformat(), (d + timedelta(days=2)).isoformat()
+    for s in todos(con, """SELECT s.*, u.name AS por, x.name AS desfez, i.name AS peca, COALESCE(c.pilot_name, c.name) AS cliente,
+                                  pi.service_date
+                             FROM counter_scans s LEFT JOIN users u ON u.id=s.by_user_id LEFT JOIN users x ON x.id=s.undone_by
+                             LEFT JOIN stock_items i ON i.id=s.item_id LEFT JOIN clients c ON c.id=s.client_id
+                             LEFT JOIN parts_invoices pi ON pi.id=s.parts_invoice_id
+                            WHERE pi.service_date=? OR (s.parts_invoice_id IS NULL AND s.at>=? AND s.at<?)""", (data, de, ate)):
+        if not s["service_date"] and _dia_fl(s["at"]) != data:
+            continue
+        if s["id"] in do_celular:
+            continue                                      # já está na linha do celular, como confirmada
+        itens.append({"origem": "balcão", "id": s["id"], "at": s["at"], "por": s["por"], "peca": s["peca"], "codigo": s["code"],
+                      "para": s["cliente"], "qtd": s["qty"], "situacao": "desfeita" if s["undone_at"] else "lançada",
+                      "revisado_por": s["desfez"], "revisado_em": s["undone_at"], "modo": s["mode"]})
+    itens.sort(key=lambda x: x["at"] or "")
+    pessoas = sorted({x["por"] for x in itens if x["por"]})
+    return {"data": data, "itens": itens, "total": len(itens), "pessoas": pessoas}
