@@ -42,6 +42,9 @@ ser alertado — é a diferença entre esperar e falhar em silêncio:
 Fora de prazo, a IA **não fica repetindo a pergunta.** Perguntou,
 registrou, seguiu. Insistência vira ruído e o humano para de ler.
 
+Exceção (12/10): registro que a IA **criou incompleto** a pedido de alguém da equipe. Esse
+segue [[Pedido incompleto]], com aviso às 09:00 e às 16:00 para quem pediu até completar.
+
 ## Ao receber a resposta
 
 1. Retomar **de onde parou** — não recomeçar, não pedir de novo o que já

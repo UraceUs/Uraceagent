@@ -760,3 +760,10 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 @keyframes br-entra{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.br-feito{animation:none}.br-mira,.br-piloto{transition:none}}
 @media(min-width:720px){.br{grid-template-rows:none;grid-template-columns:1fr 1fr}}
+
+/* AI Command: o que a IA criou incompleto e espera de quem pediu (#185) */
+.pend .card-b{padding-top:0}
+.pend-l{list-style:none;margin:0;padding:0 16px 12px;display:flex;flex-direction:column;gap:8px}
+.pend-l li{display:flex;align-items:center;gap:10px;justify-content:space-between;border-top:1px solid var(--rule);padding-top:8px;min-width:0}
+.pend-t{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+.pend-l .btn{min-height:40px;flex:none}

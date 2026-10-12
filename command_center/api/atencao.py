@@ -328,6 +328,19 @@ def _coletar(con):
                           entity={"type": "portal_account", "id": None}, client_id=None, link=None, action="Ver contas",
                           facts=[(a["name"], a["email"]) for a in soltas[:6]]))
 
+    # ---- 4h. pendências da IA (#185): registro criado incompleto, esperando o resto
+    faltas = todos(con, """SELECT p.id, p.titulo, p.faltando, p.campos, p.rodadas, u.name AS quem FROM ai_pendencias p
+                             LEFT JOIN users u ON u.id=p.user_id WHERE p.status='aberta' ORDER BY p.id""")
+    if faltas:
+        from command_center.providers import pendencias as _pd
+        itens.append(dict(key=_chave("pendencia", "ai_pendencia", "abertas"), level="MEDIUM",
+                          title=f"{len(faltas)} registro(s) criado(s) pela IA com informação faltando",
+                          why="A IA criou com o que tinha e anotou o que falta. Quem pediu recebe aviso duas vezes por dia "
+                              "até completar; o que é do card do cliente fecha sozinho quando preenchido.",
+                          entity={"type": "ai_pendencia", "id": None}, client_id=None, link=None, action="Ver no AI Command",
+                          facts=[(_corta(x["titulo"], 60), ", ".join(_pd.publica(x)["faltando"])[:80] + (f" · {x['quem']}" if x["quem"] else ""))
+                                 for x in faltas[:6]]))
+
     # ---- 5. integrações com erro
     for i in todos(con, "SELECT * FROM integrations WHERE status IN ('ERROR','DEGRADED')"):
         itens.append(dict(key=_chave("integracao", "integration", i["system"]), level="HIGH" if i["status"] == "ERROR" else "MEDIUM",

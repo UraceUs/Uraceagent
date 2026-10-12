@@ -495,16 +495,22 @@ def suggestions(u=Depends(auth.usuario_atual)):
     return SUGESTOES
 
 
+def montar_prompt(con, texto, user_id):
+    """O que vai ao agente: o pedido + tudo que o painel já sabe (o ensaio do VPS usa o mesmo)."""
+    from command_center.api import acoes, motor
+    from command_center.providers import pendencias
+    return (texto + motor.aprendizados(con) + motor.contexto_da_venda(con, texto)
+            + motor.contexto_do_comando(con, texto, user_id) + motor.contexto_de_precos(con, texto, user_id)
+            + acoes.estado_do_dia(con, user_id) + pendencias.contexto(con, user_id))
+
+
 @r.post("/commands", status_code=202)
 def command_create(dados: ComandoIn, request: Request, u=Depends(auth.exige("OPERATOR")),
                    con: sqlite3.Connection = Depends(get_db)):
     texto = (dados.text or "").strip()
     if not texto or len(texto) > 4000:
         raise HTTPException(400, "Command must be between 1 and 4000 characters.")
-    from command_center.api import acoes, motor
-    prompt = (texto + motor.aprendizados(con) + motor.contexto_da_venda(con, texto)
-              + motor.contexto_do_comando(con, texto, u["id"]) + motor.contexto_de_precos(con, texto, u["id"])
-              + acoes.estado_do_dia(con, u["id"]))
+    prompt = montar_prompt(con, texto, u["id"])
     session_key = f"agent:{AGENTE}:web-{u['id']}-{date.today().isoformat()}"
     cid = inserir(con, "ai_commands", user_id=u["id"], text=texto, prompt=prompt, session_key=session_key)
     auditar(con, "ai.command", f"user:{u['id']}", user_id=u["id"], entity_type="ai_command",
@@ -703,3 +709,29 @@ def activity(limit: int = 100, u=Depends(auth.usuario_atual), con: sqlite3.Conne
     limit = max(1, min(limit, 500))
     return todos(con, """SELECT at, actor, event, entity_type, entity_id, detail FROM audit_logs
                          WHERE event LIKE 'ai.%' OR event LIKE 'action.%' ORDER BY id DESC LIMIT ?""", (limit,))
+
+
+# ------------------------------------------------------------- pendências (#185)
+@r.get("/pendencias")
+def pendencias_lista(todas: bool = False, limit: int = 50, offset: int = 0, u=Depends(auth.usuario_atual),
+                     con: sqlite3.Connection = Depends(get_db)):
+    """As minhas; com `todas`, as da equipe inteira (gerente)."""
+    from command_center.providers import pendencias
+    limit, offset = max(1, min(limit, 200)), max(0, offset)
+    quem = None if todas and auth.pode(u["role"], "MANAGER") else u["id"]
+    return pendencias.abertas(con, quem, limit, offset)
+
+
+class ResolverIn(BaseModel):
+    resolucao: str | None = None
+
+
+@r.post("/pendencias/{pid}/resolver")
+def pendencias_resolver(pid: int, dados: ResolverIn, u=Depends(auth.exige("OPERATOR")),
+                        con: sqlite3.Connection = Depends(get_db)):
+    """"Completei": quem pediu ou um gerente."""
+    from command_center.providers import pendencias
+    p = um(con, "SELECT user_id FROM ai_pendencias WHERE id=?", (pid,))
+    if not p or (p["user_id"] != u["id"] and not auth.pode(u["role"], "MANAGER")):
+        raise HTTPException(404, "Pendência não encontrada.")
+    return pendencias.resolver(con, pid, f"user:{u['id']}", dados.resolucao, user_id=u["id"])

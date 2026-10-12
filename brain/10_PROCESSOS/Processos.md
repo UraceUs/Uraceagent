@@ -25,4 +25,5 @@ processo**.
 | [[Compra e envio]] | [[Asana]] | criar e mover tarefa |
 | [[Triagem de e-mail]] | [[Gmail]] | rascunhar · **não envia** |
 | [[Stand-by e escalação]] | — | como perguntar sem travar |
+| [[Pedido incompleto]] | AI Command | criar com o que tem · cobrar o resto em rodadas |
 | [[Etapa de conexão]] | — | o que falta de acesso |

@@ -180,6 +180,11 @@ def _rodar_conferencia(con):
     return {"ok": True, "nao_chegou": len(faltando), "conferidas": len(r["leads"])}
 
 
+def _rodar_pendencias(con):
+    from command_center.providers import pendencias
+    return pendencias.rodada(con)
+
+
 ROTINAS = {
     "varredura_clientes": _rodar_varredura,        # dono, 17/09: varrer Gmail + DocuSign dos clientes é da IA, todo dia
     "gmail_triagem": _rodar_triagem,
@@ -187,6 +192,7 @@ ROTINAS = {
     "lembrete_invoice": _rodar_lembretes,          # dono, 16/09: lembrete recorrente de invoice em aberto, 09:00
     "ratecard_semanal": _rodar_ratecard,           # dono, 18/09: "faça ele ler isso uma vez por semana"
     "conferir_chat": _rodar_conferencia,           # dono, 21/09: "garantir que todas cheguem"
+    "pendencias_aviso": _rodar_pendencias,         # dono, 12/10 (#185): "vai dando rodada de aviso até completar"
 }
 
 

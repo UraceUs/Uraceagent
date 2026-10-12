@@ -464,6 +464,11 @@ POS_MIGRACAO = [
     """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
        ('waiver_na_tarefa', 1, '{"event":"task.created","por":"sistema"}', NULL,
         '{"sistema":"anexar a waiver assinada do piloto na tarefa do Asana e guardar o PDF no card do cliente"}')""",
+    # dono, 12/10 (#185): "vai dando rodada de aviso até o usuário completar essas informações faltantes"
+    """INSERT OR IGNORE INTO automation_rules (name, enabled, trigger, conditions, actions) VALUES
+       ('pendencias_aviso', 1, '{"schedule":true}', NULL,
+        '{"sistema":"conferir as pendências da IA e avisar cada pessoa do que ela ainda precisa completar"}')""",
+    """UPDATE automation_rules SET schedule='["09:00","16:00"]' WHERE name='pendencias_aviso' AND schedule IS NULL""",
     # Por último, de propósito: os UPDATE abaixo só encontram a linha depois dos
     # INSERT OR IGNORE acima. Tentei colocá-los no topo e, em banco novo, metade não
     # pegou — a linha ainda não existia.
