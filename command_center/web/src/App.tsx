@@ -44,6 +44,7 @@ const GmailPage = tela(() => import('./pages/Systems'), 'GmailPage')
 const QuickBooksPage = tela(() => import('./pages/Systems'), 'QuickBooksPage')
 const Account = tela(() => import('./pages/System'), 'Account')
 const Cofre = tela(() => import('./pages/Cofre'), 'Cofre')
+const Sdr = tela(() => import('./pages/Sdr'), 'Sdr')
 const Audit = tela(() => import('./pages/System'), 'Audit')
 const Integrations = tela(() => import('./pages/System'), 'Integrations')
 const Policies = tela(() => import('./pages/System'), 'Policies')
@@ -127,6 +128,7 @@ function Rotas() {
           <Route path="crm/chat" element={<CRM vista="chat" />} />
           <Route path="crm/chat/:lead" element={<CRM vista="chat" />} />
           <Route path="crm/funil" element={<CRM vista="funil" />} />
+          <Route path="sdr" element={<Sdr />} />
           <Route path="kommo" element={<Navigate to="/crm/chat" replace />} />
           <Route path="equipe" element={<Equipe />} />
           <Route path="equipe/:canal" element={<Equipe />} />

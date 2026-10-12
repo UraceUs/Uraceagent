@@ -35,7 +35,7 @@ import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
                     FOLLOWUP_BOT_ID, HUMAN_OPERATORS, HUMAN_REPLY_TOKEN,
                     HUMAN_WHATSAPP, HUMAN_WHATSAPP_LIST, KOMMO_BOT_SECRET,
-                    KOMMO_TOKEN, SALESBOT_DISPLAY, SDR_MODO)
+                    KOMMO_TOKEN, SALESBOT_DISPLAY, SDR_MODO, URACE_DIR)
 
 app = FastAPI(title="urace-sales-bridge")
 
@@ -495,6 +495,24 @@ def _next_action(conv: dict) -> str:
             "detectada intenção de compra, conduzir ao fechamento")
 
 
+def _instrucoes_comercial(lead_id: int) -> str:
+    """O que o comercial escreveu na página Robô SDR do painel (12/10), em
+    URACE_DIR/sdr_instrucoes.md. Lido a cada turno (é pequeno); vale acima da
+    persona, menos preço (tabela) e travas. Falha na leitura: segue sem ele."""
+    arquivo = URACE_DIR / "sdr_instrucoes.md"
+    try:
+        if not arquivo.exists():
+            return ""
+        conteudo = arquivo.read_text(encoding="utf-8").strip()
+    except Exception as exc:
+        state.log("error", lead_id, f"sdr_instrucoes: {exc}")
+        return ""
+    if not conteudo:
+        return ""
+    return ("Instruções do comercial (valem acima da persona, exceto preço, que vem "
+            f"da tabela, e as travas de segurança):\n{conteudo}\n")
+
+
 def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     """Um turno do agente OpenClaw, com sessão isolada por lead.
 
@@ -515,6 +533,7 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     # [SYSTEM]. Ordem das camadas conforme brain/00_SYSTEM/Regras de
     # Retrieval.md; orçamento imposto pelo indexador (top 3, ~3.5k chars).
     text_for_agent = text
+    instrucoes = _instrucoes_comercial(lead_id)
     if BRAIN_RETRIEVAL == "on":
         import brain_kb
         conv = state.get_conversation(lead_id)
@@ -539,10 +558,13 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
             "para esta mensagem -- só use [[kb query=...]] se isto "
             "genuinamente não responder o que você precisa; chamar "
             "[[kb]] de novo aqui dobra o tempo de resposta ao lead.\n"
+            f"{instrucoes}"
             f"Memória do lead: {memory}\n"
             f"{conhecimento}"
             + (f"{nota}\n" if nota else "")
             + f"[FIM DO SYSTEM]\n\nMensagem do lead: {text}")
+    elif instrucoes:
+        text_for_agent = f"[SYSTEM] {instrucoes}[FIM DO SYSTEM]\n\nMensagem do lead: {text}"
 
     if escalated_guard:
         # Conversa escalada respondendo pergunta coberta pelo Brain: o

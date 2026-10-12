@@ -206,6 +206,25 @@ Se nada sobrar, sai a mensagem de espera (`holding.py`).
 
 ---
 
+## 6b. Instruções do comercial (página Robô SDR, 12/10)
+
+Dono, 12/10: *"uma sessão robô SDR onde ele consiga ligar e desligar, passar o que precisa ser
+feito pelo robô, reportar alguma coisa, gerir o robô"*.
+
+- A página `/sdr` do Command Center (`command_center/api/sdr.py`, `pages/Sdr.tsx`) tem o
+  interruptor dos três níveis (ADMIN), as **instruções** do comercial (MANAGER+ escreve), os
+  **relatos** da equipe e a auditoria das decisões (`kind='sdr'`, lida só em leitura).
+- Cada instrução criada, aplicada ou arquivada regrava `~/.urace/sdr_instrucoes.md`
+  (uma por linha, `- [categoria] texto`, escrita atômica). **É por esse arquivo que a ponte lê
+  as instruções**; o `bridge.env` continua só com o nível e as credenciais.
+- `run_agent` (`bridge/app.py`, `_instrucoes_comercial`) lê o arquivo a cada turno e o injeta no
+  bloco `[SYSTEM]`, antes de "Memória do lead:", como *"Instruções do comercial (valem acima da
+  persona, exceto preço, que vem da tabela, e as travas de segurança)"*. Sem arquivo ou vazio,
+  nada entra; falha de leitura vira `state.log("error", …, "sdr_instrucoes: …")` e o turno segue.
+- Só tem efeito no nível **atender** (nos outros a ponte não responde).
+- O agente de IA "Chase" dentro do Kommo não tem API: a página gera o texto pronto (linhas de até
+  300 caracteres) e alguém cola na tela do Kommo. Teste: `python3 salesagent/tests/test_sdr_instrucoes.py`.
+
 ## 7. Onde está cada coisa
 
 | Peça | Arquivo |

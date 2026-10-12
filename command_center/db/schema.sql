@@ -1830,3 +1830,35 @@ CREATE TABLE IF NOT EXISTS ai_pendencias (
   resolucao     TEXT
 );
 CREATE INDEX IF NOT EXISTS ai_pendencias_abertas ON ai_pendencias(status, user_id, id);
+
+-- ------------------------------------------- Robô SDR (12/10)
+-- Dono, 12/10: "uma sessão robô SDR onde ele consiga ligar e desligar, passar o que precisa ser
+-- feito pelo robô, reportar alguma coisa, gerir o robô". O comercial escreve as instruções
+-- (valem acima da persona, menos preço e travas); a ponte lê ~/.urace/sdr_instrucoes.md.
+CREATE TABLE IF NOT EXISTS sdr_instrucoes (
+  id           INTEGER PRIMARY KEY,
+  categoria    TEXT NOT NULL,                 -- tom, idioma, preco, horario, pessoa, followup, canal, nunca, outro
+  texto        TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'ativa' CHECK (status IN ('ativa','aplicada','arquivada')),
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  applied_at   TEXT,                          -- colada na tela do agente do Kommo
+  applied_by   INTEGER REFERENCES users(id),
+  archived_at  TEXT,
+  archived_by  INTEGER REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS sdr_instrucoes_status ON sdr_instrucoes(status, id);
+
+-- Relatos da equipe sobre o robô ("respondeu errado", "preço errado", "ignorou o lead", "outro").
+CREATE TABLE IF NOT EXISTS sdr_relatos (
+  id           INTEGER PRIMARY KEY,
+  tipo         TEXT NOT NULL,
+  texto        TEXT NOT NULL,
+  lead_ref     TEXT,                          -- id ou nome do lead, se a pessoa souber
+  status       TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','resolvido')),
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  resolved_at  TEXT,
+  resolved_by  INTEGER REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS sdr_relatos_status ON sdr_relatos(status, id);
