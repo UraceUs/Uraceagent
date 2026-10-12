@@ -234,6 +234,34 @@ def etiqueta(item_id: int, con: sqlite3.Connection = Depends(get_db), u=Depends(
                     headers={"Content-Disposition": f'inline; filename="etiqueta-{item_id}.pdf"', "Cache-Control": "no-store"})
 
 
+# ------------------------------------------------------------------ etiquetas de prateleira (#187)
+def _cats(categorias):
+    return [c for c in (x.strip() for x in (categorias or "").split("|")) if c] or None
+
+
+@r.get("/etiquetas")
+def etiquetas_resumo(categorias: str | None = None, con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("MANAGER"))):
+    """Os produtos do catálogo do QuickBooks que viram etiqueta, e as duplicatas (só relatório)."""
+    from command_center.providers import etiquetas as et
+    itens = et.produtos(con, _cats(categorias))
+    return {"categorias": et.categorias(con), "total": len(itens), "duplicatas": et.duplicatas(et.produtos(con)),
+            "atualizado": (um(con, "SELECT MAX(synced_at) AS m FROM qbo_items") or {}).get("m")}
+
+
+@r.get("/etiquetas.pdf")
+def etiquetas_pdf(categorias: str | None = None, formato: str = Query("folha", pattern="^(folha|uma)$"),
+                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    from command_center.providers import etiquetas as et
+    try:
+        pdf = et.pdf(et.produtos(con, _cats(categorias)), formato)
+    except et.ErroEtiqueta as e:
+        raise HTTPException(400, str(e))
+    return Response(pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="urace-etiquetas-{formato}.pdf"',
+                             "Cache-Control": "no-store"})
+
+
 @r.get("/invoices")
 def invoices(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
              con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
