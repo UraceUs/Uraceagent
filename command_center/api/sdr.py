@@ -153,21 +153,56 @@ def trocar(dados: NivelIn, request: Request, u=Depends(auth.exige("ADMIN")), con
 
 
 # ------------------------------------------------------------------ a auditoria da ponte (só leitura)
-def _ler_auditoria(limite=2000):
-    """As decisões do SDR em ~/.urace/salesbridge.db, mais novas primeiro. Sem o arquivo: None."""
+def _ponte(fn):
+    """Abre ~/.urace/salesbridge.db só em leitura e aplica fn(con). Sem o arquivo ou com erro: None."""
     f = _dir() / "salesbridge.db"
     if not f.exists():
         return None
     con = sqlite3.connect(f"file:{f}?mode=ro", uri=True, timeout=5)
     con.row_factory = sqlite3.Row
     try:
-        rows = con.execute("SELECT id, ts, lead_id, kind, detail FROM audit WHERE kind='sdr' ORDER BY ts DESC, id DESC LIMIT ?",
-                           (limite,)).fetchall()
+        return fn(con)
     except sqlite3.Error:
         return None
     finally:
         con.close()
-    return [_decisao(x) for x in rows]
+
+
+# a ação de uma linha, como _decisao a lê: detail.acao, ou "ignorado" quando só há detail.ignorado
+_SQL_ACAO = "COALESCE(json_extract(detail, '$.acao'), CASE WHEN json_extract(detail, '$.ignorado') IS NOT NULL THEN 'ignorado' END)"
+
+
+def _ler_auditoria(limite=2000, lead=None, acao=None):
+    """As decisões do SDR em ~/.urace/salesbridge.db, mais novas primeiro, filtradas no SQL (12/10: o filtro
+    por lead em Python só via as 2.000 mais novas). Sem o arquivo: None."""
+    where, par = ["kind='sdr'"], []
+    if lead:
+        where.append("CAST(lead_id AS TEXT) = ?")
+        par.append(str(lead).strip())
+    if acao:
+        where.append(f"json_valid(detail) AND {_SQL_ACAO} = ?")
+        par.append(acao)
+    rows = _ponte(lambda con: con.execute(
+        f"SELECT id, ts, lead_id, kind, detail FROM audit WHERE {' AND '.join(where)} ORDER BY ts DESC, id DESC LIMIT ?",
+        (*par, limite)).fetchall())
+    return None if rows is None else [_decisao(x) for x in rows]
+
+
+def _resumo_auditoria():
+    """Contagem das últimas 24 h e a última decisão, contadas no SQL (12/10: antes só olhava as 500 mais novas).
+    Sem o arquivo: None."""
+    corte = int(time.time()) - 86400
+    return _ponte(lambda con: {
+        "decisoes_24h": con.execute("SELECT COUNT(*) AS n FROM audit WHERE kind='sdr' AND ts >= ?", (corte,)).fetchone()["n"],
+        "ultima": con.execute("SELECT id, ts, lead_id, kind, detail FROM audit WHERE kind='sdr' ORDER BY ts DESC, id DESC LIMIT 1").fetchone(),
+    })
+
+
+def _acoes_vistas():
+    """As ações distintas da auditoria inteira, para o filtro da página."""
+    rows = _ponte(lambda con: con.execute(
+        f"SELECT DISTINCT {_SQL_ACAO} AS acao FROM audit WHERE kind='sdr' AND json_valid(detail)").fetchall())
+    return sorted(r["acao"] for r in rows or [] if r["acao"])
 
 
 def _decisao(x):
@@ -204,15 +239,10 @@ def _decisao(x):
 
 
 def auditoria_ponte(lead=None, acao=None, n=50):
-    itens = _ler_auditoria()
+    itens = _ler_auditoria(n, lead=lead, acao=acao)
     if itens is None:
         return {"itens": [], "motivo": "ponte sem auditoria"}
-    acoes = sorted({i["acao"] for i in itens if i["acao"]})
-    if lead:
-        itens = [i for i in itens if str(i["lead_id"] or "") == str(lead).strip()]
-    if acao:
-        itens = [i for i in itens if (i["acao"] or "") == acao]
-    return {"itens": itens[:n], "acoes": acoes}
+    return {"itens": itens, "acoes": _acoes_vistas()}
 
 
 # ------------------------------------------------------------------ as instruções
@@ -396,12 +426,11 @@ def relatos_status(rid: int, dados: StatusRelatoIn, request: Request, u=Depends(
 def painel(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """O estado do robô para todo papel (mudar o nível continua só ADMIN, em PUT /sdr)."""
     e = estado()
-    decisoes = _ler_auditoria(500)
-    corte = int(time.time()) - 86400
+    resumo = _resumo_auditoria()
     return {**e, "pode_trocar": auth.pode(u["role"], "ADMIN"), "pode_instruir": auth.pode(u["role"], "MANAGER"),
-            "decisoes_24h": None if decisoes is None else sum(1 for d in decisoes if d["ts"] >= corte),
-            "ultima_decisao": decisoes[0]["quando"] if decisoes else None,
-            "ponte_sem_auditoria": decisoes is None,
+            "decisoes_24h": None if resumo is None else resumo["decisoes_24h"],
+            "ultima_decisao": _decisao(resumo["ultima"])["quando"] if resumo and resumo["ultima"] else None,
+            "ponte_sem_auditoria": resumo is None,
             "instrucoes_em_vigor": (um(con, f"SELECT COUNT(*) AS n FROM sdr_instrucoes WHERE status IN ({','.join('?' * len(EM_VIGOR))})", EM_VIGOR) or {}).get("n", 0),
             "relatos_abertos": (um(con, "SELECT COUNT(*) AS n FROM sdr_relatos WHERE status='aberto'") or {}).get("n", 0),
             "horario_humano": HORARIO_HUMANO, "niveis": NIVEIS}

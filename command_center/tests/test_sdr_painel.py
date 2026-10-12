@@ -172,6 +172,28 @@ def test_auditoria_le_a_ponte_so_em_leitura_e_filtra(cli, pasta):
     con.close()
 
 
+def test_auditoria_conta_e_filtra_no_sql_e_nao_so_nas_mais_novas(cli, pasta):
+    """12/10: a contagem das 24 h olhava só as 500 mais novas e o filtro por lead só as 2.000 mais novas."""
+    (pasta / "salesbridge.db").unlink(missing_ok=True)  # a pasta é da sessão de testes; começa do zero
+    agora = int(time.time())
+    linhas = [(agora - i, 7000 + (i % 3), "sdr", json.dumps({"modo": "organizar", "acao": "organizar", "motivo": "LEAD_NOVO"}))
+              for i in range(2100)]
+    linhas.append((agora - 2 * 86400, 9999, "sdr", json.dumps({"modo": "observar", "acao": "somente_conversa", "motivo": "ANTIGA"})))
+    linhas.append((agora - 3000, 9998, "sdr", "não é json"))
+    _ponte_db(pasta, linhas)
+    entra(cli, "op@urace.us")
+    p = cli.get(B + "/sdr/painel").json()
+    assert p["decisoes_24h"] == 2101, "conta tudo, não só as 500 mais novas"
+    assert p["ultima_decisao"].startswith(time.strftime("%Y-"))
+    r = cli.get(B + "/sdr/auditoria", params={"lead": "9999"}).json()
+    assert [x["lead_id"] for x in r["itens"]] == [9999], "o lead mais antigo que as 2.000 mais novas aparece"
+    assert r["acoes"] == ["organizar", "somente_conversa"]
+    r = cli.get(B + "/sdr/auditoria", params={"acao": "somente_conversa"}).json()
+    assert [x["lead_id"] for x in r["itens"]] == [9999]
+    assert len(cli.get(B + "/sdr/auditoria", params={"n": 200}).json()["itens"]) == 200
+    assert cli.get(B + "/sdr/auditoria", params={"lead": "9998"}).json()["itens"][0]["fez"] == "não é json"
+
+
 def test_admin_troca_o_nivel_e_o_painel_mostra(cli, pasta):
     h = entra(cli, "admin@urace.us")
     assert cli.get(B + "/sdr/painel").json()["pode_trocar"] is True
