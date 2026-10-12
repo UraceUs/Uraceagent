@@ -19,6 +19,9 @@ interface Piloto { chave: string; client_id: number | null; pilot_id: number | n
 interface Pendente { id: number; code: string; peca: string | null; pilot_name: string | null; client_id: number | null }
 interface Dia { data: string; hoje: string; pilotos: Piloto[]; minhas: Pendente[] }
 interface Item { id: number; name: string }
+interface Achado { client_id: number; nome: string; responsavel: string | null }
+interface Lanc { origem: 'celular' | 'balcão'; id: number; at: string; por: string | null; peca: string | null; codigo: string | null; para: string | null; qtd: number; situacao: string; revisado_por: string | null; modo: string | null }
+interface Auditoria { data: string; itens: Lanc[]; total: number; pessoas: string[] }
 type Lido = { codigo: string; carregando: true } | { codigo: string; carregando: false; item: Item | null }
 
 const ESPERA_MESMO_CODIGO = 3500        // ms: a mesma peça ainda na frente da câmera não abre de novo
@@ -30,9 +33,51 @@ function somaDias(iso: string, n: number) {
   return d.toISOString().slice(0, 10)
 }
 const rotuloDia = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE(), { weekday: 'short', day: '2-digit', month: '2-digit' })
+const diaLongo = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE(), { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+const horaFl = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })
+const SITUACAO: Record<string, string> = { pendente: tr("pendente"), confirmada: tr("confirmada"), descartada: tr("descartada"), 'lançada': tr("lançada"), desfeita: tr("desfeita") }
+
+/** #189: o gerente e o acesso livre veem tudo o que foi lançado naquele dia, por quem. */
+function AuditoriaDia({ data }: { data: string }) {
+  const [a, setA] = useState<Auditoria | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [quem, setQuem] = useState('')
+  useEffect(() => { setA(null); setErro(null); api.get<Auditoria>(`/balcao/rapido/auditoria${qs({ data })}`).then(setA).catch(e => setErro((e as ApiError).message)) }, [data])
+  const itens = (a?.itens || []).filter(x => !quem || x.por === quem)
+  return <section className="br-aud" aria-labelledby="br-aud-h">
+    <h2 id="br-aud-h" className="h3">{tr("Auditoria · {0}", diaLongo(data))}</h2>
+    {erro ? <p className="br-erro" role="alert">{erro}</p> : !a ? <span className="spin" /> : !a.total ? <p className="small muted">{tr("Nada lançado neste dia.")}</p> : <>
+      {a.pessoas.length > 1 && <select value={quem} onChange={e => setQuem(e.target.value)} aria-label={tr("Quem lançou")}>
+        <option value="">{tr("Todos ({0})", a.total)}</option>{a.pessoas.map(p => <option key={p} value={p}>{p}</option>)}</select>}
+      <ul className="br-aud-l">{itens.map(x => <li key={x.origem + x.id}>
+        <span className="mono small">{horaFl(x.at)}</span>
+        <span className="grow"><b>{x.peca || tr("Código {0}", x.codigo || '')}</b>{x.qtd !== 1 ? ` ×${x.qtd}` : ''} → {x.para || tr("decidir depois")}
+          <span className="small muted"> · {x.por || '—'} · {x.origem === 'celular' ? tr("celular") : tr("balcão")}{x.revisado_por ? ` · ${x.revisado_por}` : ''}</span></span>
+        <span className={`br-sit ${x.situacao}`}>{SITUACAO[x.situacao] || x.situacao}</span>
+      </li>)}</ul>
+    </>}
+  </section>
+}
+
+/** #189: o piloto não está no calendário do dia — busca pelo nome entre os clientes. */
+function OutroCliente({ desativado, onEscolher }: { desativado: boolean; onEscolher: (c: Achado) => void }) {
+  const [q, setQ] = useState('')
+  const [lista, setLista] = useState<Achado[] | null>(null)
+  useEffect(() => {
+    const t = q.trim(); if (t.length < 2) { setLista(null); return }
+    const h = setTimeout(() => { api.get<Achado[]>(`/balcao/rapido/clientes${qs({ q: t })}`).then(setLista).catch(() => setLista([])) }, 250)
+    return () => clearTimeout(h)
+  }, [q])
+  return <div className="br-outro">
+    <input value={q} onChange={e => setQ(e.target.value)} placeholder={tr("Outro cliente: digite o nome")} aria-label={tr("Buscar cliente pelo nome")} autoComplete="off" />
+    {lista && (lista.length ? <div className="br-pilotos">{lista.map(c => <button key={c.client_id} className="br-piloto" disabled={desativado} onClick={() => onEscolher(c)}>
+      <b>{c.nome}</b>{c.responsavel && <small>{tr("resp. {0}", c.responsavel)}</small>}</button>)}</div>
+      : <p className="small muted">{tr("Nenhum cliente com esse nome.")}</p>)}
+  </div>
+}
 
 export function BalcaoRapido() {
-  const { user, logout } = useAuth()
+  const { user, logout, livre, can } = useAuth()
   const video = useRef<HTMLVideoElement>(null)
   const [dia, setDia] = useState<Dia | null>(null)
   const [data, setData] = useState<string | null>(null)
@@ -43,6 +88,8 @@ export function BalcaoRapido() {
   const [digitar, setDigitar] = useState(false)
   const [texto, setTexto] = useState('')
   const ultimo = useRef<{ codigo: string; em: number }>({ codigo: '', em: 0 })
+  const gerente = livre || can('MANAGER')
+  const [auditar, setAuditar] = useState(false)
 
   const carregar = useCallback((d?: string | null) => {
     api.get<Dia>(`/balcao/rapido${qs({ data: d || undefined })}`).then(r => { setDia(r); setData(r.data) })
@@ -73,11 +120,11 @@ export function BalcaoRapido() {
   const ativo = !lido && !indo && !digitar
   const { erro: erroCamera, pronto } = useLeitor(video, ativo, ler)
 
-  async function registrar(p: Piloto | null) {
+  async function registrar(p: Piloto | Achado | null) {
     if (!lido || lido.carregando || indo) return
     setIndo(true)
     try {
-      const r = await api.post<Pendente>('/balcao/rapido', { codigo: lido.codigo, data, client_id: p?.client_id ?? null, pilot_id: p?.pilot_id ?? null })
+      const r = await api.post<Pendente>('/balcao/rapido', { codigo: lido.codigo, data, client_id: p?.client_id ?? null, pilot_id: p && 'pilot_id' in p ? p.pilot_id : null })
       vibrar([30, 40, 30])
       const peca = lido.item?.name || tr("Código {0}", lido.codigo)
       setFeito({ id: r.id, texto: p ? `${peca} → ${p.nome}` : tr("{0} → decidir depois", peca) })
@@ -116,6 +163,10 @@ export function BalcaoRapido() {
       <div className="br-topo">
         <div className="br-dias" role="radiogroup" aria-label={tr("Dia das peças")}>
           {dias.map(([d, r]) => <button key={d} role="radio" aria-checked={d === data} onClick={() => setData(d)}>{r}</button>)}
+          {gerente && <label className={`br-outro-dia${data && !dias.some(([d]) => d === data) ? ' on' : ''}`}>
+            <span>{data && !dias.some(([d]) => d === data) ? rotuloDia(data) : tr("Outro dia")}</span>
+            <input type="date" value={data || ''} onChange={e => e.target.value && setData(e.target.value)} aria-label={tr("Escolher o dia")} />
+          </label>}
         </div>
         {soBalcao ? <button className="br-sair" onClick={() => logout()}>{tr("Sair")}</button>
           : <Link className="br-sair" to="/balcao">{tr("Painel")}</Link>}
@@ -144,8 +195,9 @@ export function BalcaoRapido() {
           {(dia?.pilotos || []).map(p => <button key={p.chave} className="br-piloto" disabled={indo || lido.carregando} onClick={() => registrar(p)}>
             <b>{p.nome}</b><small>{p.origens.map(o => ORIGEM[o] || o).join(' · ')}{p.pecas ? ` · ${tr("{0} peça(s)", p.pecas)}` : ''}</small>
           </button>)}
-          {dia && !dia.pilotos.length && <p className="small muted">{tr("Ninguém marcado neste dia.")}</p>}
+          {dia && !dia.pilotos.length && <p className="small muted">{tr("Ninguém marcado neste dia no Asana, nas sessões do site ou nas corridas. Busque o cliente pelo nome abaixo.")}</p>}
         </div>
+        <OutroCliente desativado={indo || lido.carregando} onEscolher={c => registrar(c)} />
         <div className="br-acoes">
           <button className="btn" disabled={indo || lido.carregando} onClick={() => registrar(null)}>{tr("Decidir depois")}</button>
           <button className="btn ghost" disabled={indo} onClick={cancelar}>{tr("Ler outra")}</button>
@@ -158,6 +210,8 @@ export function BalcaoRapido() {
         {!!dia?.minhas.length && <ul className="br-minhas" aria-label={tr("Suas últimas leituras")}>
           {dia.minhas.map(m => <li key={m.id}><span className="truncate">{m.peca || m.code}</span><span className="muted">{m.pilot_name || tr("decidir depois")}</span></li>)}
         </ul>}
+        {gerente && dia && <button className="btn ghost br-teclado" aria-expanded={auditar} onClick={() => setAuditar(v => !v)}>{auditar ? tr("Fechar a auditoria") : tr("Auditoria do dia: quem lançou o quê")}</button>}
+        {gerente && auditar && dia && <AuditoriaDia data={dia.data} />}
         {digitar ? <form className="br-digitar" onSubmit={enviarDigitado}>
           <input autoFocus value={texto} onChange={e => setTexto(e.target.value)} aria-label={tr("Código da peça")} autoComplete="off"
             autoCapitalize="off" spellCheck={false} enterKeyHint="go" />
