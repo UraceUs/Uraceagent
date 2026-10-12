@@ -791,3 +791,19 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .br-sit.confirmada,.br-sit.lançada{color:var(--ok);border-color:var(--ok)}
 .br-sit.descartada,.br-sit.desfeita{color:var(--muted)}
 .br-sit.pendente{color:var(--warn,#b7791f);border-color:currentColor}
+
+/* Robô SDR (12/10): níveis, instruções, relatos e as decisões da ponte */
+.sdr-niveis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.sdr-nivel{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:12px;border:1px solid var(--rule);background:var(--surface-2,rgba(255,255,255,.03));cursor:pointer;min-height:40px}
+.sdr-nivel.on{border-color:var(--accent);background:var(--accent-wash)}
+.sdr-nivel input{margin-top:3px;flex:none}
+.sdr-nivel span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sdr-nivel small{color:var(--muted);overflow-wrap:anywhere}
+.sdr-nivel:has(input:disabled){cursor:default}
+.sdr-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.sdr-lista li{display:flex;gap:10px;justify-content:space-between;border-top:1px solid var(--rule);padding-top:10px;min-width:0;flex-wrap:wrap}
+.sdr-form{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--rule);padding-top:12px}
+.sdr-form textarea,.sdr-kommo textarea{width:100%;min-width:0;font:inherit}
+.sdr-kommo{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--accent);background:var(--accent-wash)}
+.sdr-kommo textarea{font-family:var(--font-mono,monospace);font-size:12px}
+.sdr-tbl td,.sdr-tbl th{vertical-align:top;overflow-wrap:anywhere}

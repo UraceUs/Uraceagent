@@ -129,6 +129,7 @@ export function Shell() {
         <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">{tr("Oportunidades")}</NL>
         <NL to="/sales/agenda" icon="cal">{tr("Agenda de vendas")}</NL>
         <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>{tr("Chat do Kommo")}</NL>
+        <NL to="/sdr" icon="spark" n={d?.sdr_relatos_abertos || 0} tone="warn">{tr("Robô SDR")}</NL>
         {can('OPERATOR') && <NL to="/suits" icon="suit">{tr("Suits · Alpha Line")}</NL>}
         <NL to="/site" icon="globe">{tr("Site público")}</NL>
         <div className="grp">{tr("Pessoas")}</div>

@@ -480,37 +480,6 @@ function LigarChat() {
 }
 
 // ------------------------------------------------------------------ Chase (06/10)
-interface Sdr { nivel: 'observar' | 'organizar' | 'atender'; chase_ligado: boolean; ponte_no_ar: boolean; reiniciando: boolean; instalado: boolean }
-const NIVEL_TEXTO: Record<Sdr['nivel'], string> = {
-  observar: tr("Observar: decide e registra, não mexe no Kommo."),
-  organizar: tr("Organizar: etiqueta, nota, tarefa e etapa no Kommo; não responde ao lead."),
-  atender: tr("Atender: organiza e responde os leads."),
-}
-/** Dono, 06/10: um interruptor para ligar e desligar o Chase. Ligado = atender; desligado = organizar. */
-function InterruptorChase() {
-  const s = useGet<Sdr>('/sdr', 15000)
-  const toast = useToast()
-  const [indo, setIndo] = useState(false)
-  async function trocar(nivel: Sdr['nivel']) {
-    setIndo(true)
-    try { await api.put<Sdr>('/sdr', { nivel }); s.reload(); toast(nivel === 'atender' ? tr("Chase ligado: a ponte reinicia em segundos.") : tr("Chase desligado: fica só organizando o Kommo."), 'ok') }
-    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
-  }
-  if (!s.data) return null
-  const d = s.data
-  return <div className="card card-b row wrap" style={{ gap: 12 }}>
-    <div className="grow" style={{ minWidth: 0 }}>
-      <h2 className="h3" style={{ margin: 0 }}>{tr("Chase (agente de vendas)")}</h2>
-      <div className="small ink2">{NIVEL_TEXTO[d.nivel]} {d.reiniciando ? tr("· aplicando…") : d.ponte_no_ar ? tr("· ponte no ar") : tr("· ponte fora do ar")}</div>
-      {!d.instalado && <div className="small ink2">{tr("O interruptor passa a valer depois do próximo deploy no servidor.")}</div>}
-    </div>
-    <label className="check" style={{ minHeight: 40 }}>
-      <input type="checkbox" role="switch" aria-label={tr("Chase responde os leads")} checked={d.chase_ligado} disabled={indo}
-        onChange={e => trocar(e.target.checked ? 'atender' : 'organizar')} /> {tr("Responde os leads")}
-    </label>
-  </div>
-}
-
 // ------------------------------------------------------------------ página
 export function CRM({ vista }: { vista: 'chat' | 'funil' }) {
   const { can } = useAuth()
@@ -540,7 +509,6 @@ export function CRM({ vista }: { vista: 'chat' | 'funil' }) {
     </div>
     {desconectado && <Banner tone="warn"><b>{tr("Kommo não conectado.")}</b> {b.data?.integracao?.last_error || tr("Falta o token da integração privada em ~/.urace/kommo.env (KOMMO_DOMAIN, KOMMO_TOKEN).")} {tr("A tela mostra o que já foi espelhado; nada é inventado.")}</Banner>}
     {vista === 'chat' && can('ADMIN') && <LigarChat />}
-    {vista === 'chat' && can('ADMIN') && <InterruptorChase />}
     {vista === 'chat' ? <CaixaDeEntrada conectado={!desconectado} /> : b.data && <Funil b={b.data} abrir={id => nav(`/crm/chat/${id}`)} />}
   </div>
 }
