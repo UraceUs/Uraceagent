@@ -4,7 +4,7 @@ fonte: pedido do dono no chat do Claude Code (sessão do SDR/Kommo), 12/10/2026:
 "polir esse agente de IA, ajustar como ele responde… tudo que vem do comercial tem
 um grande peso sobre as decisões". Regras extraídas do histórico da sessão
 L-U RACE (urace-conversas, 2026-10-08) e aplicadas na tela do agente de IA
-"Agente qualificador de leads" (persona Chase) pela extensão do Kommo, em duas
+"Agente qualificador de leads" (persona Chase) pela extensão do Kommo, em quatro
 rodadas no mesmo dia. O agente **continua desligado** (decisão de 30/09).
 
 A configuração do agente vive só no Kommo (não há API). Este arquivo é o registro
@@ -51,12 +51,13 @@ Fonte dos valores: salesagent/config/ratecard-2026.json.
 - Mensagem de transferência (Settings e ação "Client wants to speak to a human"):
   "Let me get Lucas on this. He replies right here, Monday to Friday, 8 am to
   6 pm Orlando time." (horário humano decidido em 06/10). Aviso ao URace Support.
-- Ação de captura de contato: não cita preço; diz que o preço depende de idade e
-  experiência e pergunta a idade.
+- Ação de captura de contato (nome, e-mail ou telefone), resposta inteira:
+  "Perfect, thank you. Got your details. Pricing depends on the driver's age and
+  experience, so I can point you to the right program. How old is the driver?"
+  Agradece uma vez, uma pergunta, nenhum valor em dólar (ajustado em 12/10, em
+  duas rodadas: campo "Do" e campo "More").
 
 ## Em aberto
 
-- O campo "Do" da ação de captura ainda pergunta "how many days per month…", o
-  que junta duas perguntas numa resposta (ajuste pedido em 12/10).
 - Ligar o agente: decisão do dono. Ao ligar, testar com 4 DMs no card 31764961
   e ligar o limite de créditos.
