@@ -71,12 +71,14 @@ SERVIDORES = {"quickbooks": "quickbooks_mcp.py", "asana": "asana_mcp.py", "gmail
               "docusign": "docusign_mcp.py", "kommo": "kommo_mcp.py"}
 NOME_PAINEL = "painel"
 NOME_SUITS = "suits"
+NOME_PENDENCIAS = "pendencias"
 FERRAMENTAS_EMBUTIDAS = ["Read", "Glob", "Grep", "WebSearch", "WebFetch", "ToolSearch"]
 
 # Leituras que o `acoes.eh_consulta` (feito para o protocolo antigo) não conhece pelo nome.
 LEITURAS = {"docusign_templates", "docusign_envelopes", "qbo_recorrencias", "gmail_baixar_anexo",
             "qbo_itens", "qbo_invoices", "qbo_invoice", "qbo_estimates",
-            "suits_pedidos", "suits_pedido", "suits_leads", "suits_fornecedores", "suits_anexos"}
+            "suits_pedidos", "suits_pedido", "suits_leads", "suits_fornecedores", "suits_anexos",
+            "pendencias_abertas"}
 RX_APROVAR = re.compile(r"(^|_)(enviar|reenviar|send|lembrete|reminder|apagar|excluir|deletar|delete|remover|"
                         r"void|anular|unir|merge|substituir|atualizar_preco|pagamento|payment|pagar|recorrencia)(_|$)")
 
@@ -200,12 +202,18 @@ def _negar(motivo):
 class Portao:
     """Os ganchos PreToolUse/PostToolUse de UMA execução (sabe de que comando é)."""
 
-    def __init__(self, command_id=None, ferramentas=True, user_id=None):
+    def __init__(self, command_id=None, ferramentas=True, user_id=None, ensaio=False):
         self.command_id = command_id
         self.ferramentas = ferramentas
         self.user_id = user_id
         self.aprovar = []                 # ids dos cartões criados nesta execução
         self.feitas = []
+        # Ensaio (#185, o teste do motor no VPS): lê de verdade, não grava nada. Cada escrita
+        # que o agente tentou fica em `tentou`, e tudo que ele leu em `lido` (para conferir que
+        # ele não inventou dado).
+        self.ensaio = ensaio
+        self.tentou = []
+        self.lido = []
 
     def decidir(self, nome_cru, args):
         """None = pode rodar; texto = motivo para não rodar (o agente lê)."""
@@ -220,8 +228,15 @@ class Portao:
         con = conectar()
         try:
             tipo = classificar(con, nome)
+            if self.ensaio and tipo in ("fazer", "aprovar"):
+                self.tentou.append({"ferramenta": nome, "tipo": tipo, "args": args})
+                return (f"MODO ENSAIO: '{nome}' não foi gravada (é um teste), mas considere que deu certo e siga o "
+                        "pedido como se tivesse sido feita. Não há id nem link: não invente um.")
             if tipo in ("ler", "fazer"):
                 return None
+            if tipo == "bloqueada" and self.ensaio:
+                self.tentou.append({"ferramenta": nome, "tipo": tipo, "args": args})
+                return f"'{nome}' é bloqueada pela política do painel: não faça e diga ao dono que precisa ser feito à mão."
             if tipo == "bloqueada":
                 auditar(con, "ai.tool.blocked", "ai:agente_sdk", entity_type="ai_command", entity_id=self.command_id,
                         detail={"ferramenta": nome})
@@ -235,6 +250,9 @@ class Portao:
             con.close()
 
     def registrar(self, nome_cru, args, resposta):
+        if self.ensaio:
+            self.lido.append(resposta if isinstance(resposta, str) else json.dumps(resposta, ensure_ascii=False, default=str))
+            return
         if not nome_cru.startswith("mcp__") or self.command_id is None:
             return
         nome = nome_da_ferramenta(nome_cru)
@@ -338,6 +356,36 @@ def ferramentas_dos_suits(user_id=None):
         for nome, desc, props, obrig, fn in suits.ferramentas_ia()])
 
 
+def ferramentas_das_pendencias(command_id=None, user_id=None):
+    """As pendências (#185): o que ficou faltando num registro criado incompleto. Trabalho interno."""
+    from claude_agent_sdk import SdkMcpTool, create_sdk_mcp_server
+
+    from command_center.providers import pendencias
+
+    def fabrica(fn):
+        def chamar(args):
+            con = conectar()
+            try:
+                res = fn(con, user_id, command_id, **(args or {}))
+                con.commit()
+                return res
+            finally:
+                con.close()
+
+        async def handler(args):
+            try:
+                res = await asyncio.to_thread(chamar, args)
+                return {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, default=str)[:20000]}]}
+            except Exception as e:
+                return {"content": [{"type": "text", "text": f"{type(e).__name__}: {str(e)[:300]}"}], "is_error": True}
+        return handler
+
+    return create_sdk_mcp_server(NOME_PENDENCIAS, "1.0.0", [
+        SdkMcpTool(name=nome, description=desc, input_schema={"type": "object", "properties": props, "required": obrig},
+                   handler=fabrica(fn))
+        for nome, desc, props, obrig, fn in pendencias.ferramentas_ia()])
+
+
 # ---------------------------------------------------------------- instruções
 def hoje():
     return datetime.now(FUSO)
@@ -355,7 +403,14 @@ COMO TRABALHAR
 - Leia antes de perguntar: QuickBooks (todas as invoices, clientes, itens e o histórico de preços), Asana, Gmail, DocuSign, Kommo, o painel (urace_*), a web e o cérebro. Nunca diga que não tem acesso a uma leitura sem tentar.
 - Faça direto o trabalho interno: tarefa, comentário e seção no Asana; cliente, item, invoice e estimate no QuickBooks SEM enviar; rascunho de e-mail; marcador no Gmail.
 - O que sai da empresa ou não volta atrás (enviar invoice, waiver, lembrete ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência): chame a ferramenta normalmente. O painel não executa: transforma num "aprovar" de um clique e te devolve o número. Não insista nem procure outro caminho. A waiver é a exceção que o dono abriu: com a política dela em SAFE, ela sai na hora.
-- Só pergunte o que realmente impede agir, numa lista curta, e pare.
+
+PEDIDO INCOMPLETO (dono, 12/10: quem escreve aqui nem sempre sabe dar a instrução completa; o processo está em 10_PROCESSOS/Pedido incompleto.md)
+- Nunca trave por falta de informação. Primeiro procure o que falta: o painel (urace_cliente, urace_clientes), o QuickBooks, o Kommo, o Gmail e o cérebro. Muitas vezes só o nome basta para achar o cliente, o e-mail e o telefone.
+- O que continuar faltando: CRIE o registro com o que tem (tarefa, cliente, pedido, estimate) e deixe a lacuna visível no próprio registro (ex.: "horário: a confirmar"). Nunca preencha o buraco com um valor inventado ou "padrão".
+- Logo depois de criar, chame pendencia_registrar: o que criou, onde está (link), o que falta e o contato que achou para pedir (com de onde veio). Campo do card do cliente (e-mail, telefone, nome ou nascimento do piloto) vai em `campos` com o client_id: o painel confere sozinho e fecha quando preencherem.
+- Na resposta, diga com clareza: "Criei X. Falta: A, B. Contato para pedir: …". Quem pediu vai receber avisos até completar.
+- Quando a pessoa mandar o que faltava, complete o registro e chame pendencia_resolver.
+- Só pare sem criar quando criar com o que tem causaria dano: cobrar ou enviar algo ao cliente sem o valor ou o destinatário certo, ou não dar para saber nem de quem é o pedido. Aí pergunte numa lista curta.
 
 REGRAS DO DONO (valem sempre)
 - NO FAKE DATA: nunca invente valor, nome, e-mail, id, data ou link. Se não achou, diga que não achou.
@@ -419,6 +474,7 @@ def _opcoes(modelo, sistema, portao, limite, retomar, max_turnos):
         servidores = servidores_mcp()
         servidores[NOME_PAINEL] = ferramentas_do_painel()
         servidores[NOME_SUITS] = ferramentas_dos_suits(portao.user_id)
+        servidores[NOME_PENDENCIAS] = ferramentas_das_pendencias(portao.command_id, portao.user_id)
     permitidas = list(FERRAMENTAS_EMBUTIDAS) + [f"mcp__{n}__*" for n in servidores]
     return ClaudeAgentOptions(
         model=modelo,
@@ -485,11 +541,12 @@ def _resultado(textos, fim, sessao, limite):
 
 
 def rodar(prompt, session_key=None, *, modelo=None, sistema=None, command_id=None, ferramentas=True,
-          limite=None, max_turnos=60, user_id=None):
-    """Uma execução completa do agente. Bloqueia (chame de uma thread). Nunca levanta."""
+          limite=None, max_turnos=60, user_id=None, portao=None):
+    """Uma execução completa do agente. Bloqueia (chame de uma thread). Nunca levanta.
+    `portao` pronto (o ensaio passa o dele, para ler depois o que o agente tentou)."""
     modelo = modelo or MODELO
     limite = LIMITE_USD if limite is None else limite
-    portao = Portao(command_id, ferramentas, user_id)
+    portao = portao or Portao(command_id, ferramentas, user_id)
     retomar = _sessao_salva(session_key)
     prompt = prompt.replace("/workspace/contexto/", _contexto_dir().rstrip("/") + "/")
     inicio = datetime.now()

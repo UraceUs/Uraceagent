@@ -1807,3 +1807,26 @@ CREATE TABLE IF NOT EXISTS vault_unlocks (
   user_id      INTEGER NOT NULL REFERENCES users(id),
   until        TEXT NOT NULL
 );
+
+-- ------------------------------------------- pendências da IA (#185)
+-- Dono, 12/10: com informação faltando, a IA "coloca a tarefa com as informações que tem" e
+-- "vai dando rodada de aviso até o usuário completar". Uma linha por registro criado incompleto.
+CREATE TABLE IF NOT EXISTS ai_pendencias (
+  id            INTEGER PRIMARY KEY,
+  command_id    INTEGER REFERENCES ai_commands(id),
+  user_id       INTEGER REFERENCES users(id),          -- quem pediu: é quem recebe os avisos
+  titulo        TEXT NOT NULL,                         -- o que foi criado ("Tarefa: aula de kart do João")
+  onde          TEXT,                                  -- link ou lugar do registro criado
+  client_id     INTEGER REFERENCES clients(id),
+  faltando      TEXT NOT NULL,                         -- JSON: ["e-mail do responsável", "horário"]
+  campos        TEXT,                                  -- JSON: colunas de clients que o sistema confere sozinho
+  contato       TEXT,                                  -- como achar a pessoa (o que a IA encontrou)
+  status        TEXT NOT NULL DEFAULT 'aberta' CHECK (status IN ('aberta','resolvida')),
+  rodadas       INTEGER NOT NULL DEFAULT 0,            -- quantos avisos já saíram
+  ultimo_aviso  TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  resolved_at   TEXT,
+  resolved_by   TEXT,                                  -- user:<id> | ia | sistema
+  resolucao     TEXT
+);
+CREATE INDEX IF NOT EXISTS ai_pendencias_abertas ON ai_pendencias(status, user_id, id);

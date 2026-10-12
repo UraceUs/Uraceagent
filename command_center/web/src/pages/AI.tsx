@@ -19,7 +19,7 @@ type Args = Record<string, unknown>
 
 /** O que a pessoa escreveu, sem o contexto técnico que o painel cola no prompt (CLIENTE: {...},
  *  WAIVERS NO ESPELHO, O QUE O DONO JÁ ENSINOU…). Quem quiser o prompt inteiro abre "ver o que a IA recebeu". */
-const CORTES = ['\n\nO QUE O DONO JÁ ENSINOU', '\n\nCONTEXTO DO PAINEL', '\nCLIENTE: ', '\nTAREFA: ', '\nSUBTAREFAS (', '\nDESCRIÇÃO DA TAREFA', '\nWAIVERS NO ESPELHO', '\nSERVIÇOS NO ESPELHO', '\n\nFONTES DE CONTEXTO', '\n\nESTADO DO DIA', '\nCumpra a instrução', '\nAja NESTA tarefa']
+const CORTES = ['\n\nO QUE O DONO JÁ ENSINOU', '\n\nCONTEXTO DO PAINEL', '\nCLIENTE: ', '\nTAREFA: ', '\nSUBTAREFAS (', '\nDESCRIÇÃO DA TAREFA', '\nWAIVERS NO ESPELHO', '\nSERVIÇOS NO ESPELHO', '\n\nFONTES DE CONTEXTO', '\n\nESTADO DO DIA', '\n\nPENDÊNCIAS ABERTAS', '\nCumpra a instrução', '\nAja NESTA tarefa']
 export function textoHumano(text: string): { eyebrow?: string; texto: string; tecnico: boolean } {
   let corte = text.length
   for (const c of CORTES) { const i = text.indexOf(c); if (i >= 0 && i < corte) corte = i }
@@ -163,6 +163,32 @@ function CommandView({ id, onDone }: { id: number; onDone?: () => void }) {
 interface Threads { threads: { id: number; name: string; role: string; n: number; last_at: string | null }[]; auto: { n: number; last_at: string | null } | null }
 interface Thread { commands: AiCommand[]; has_more: boolean }
 
+interface Pendencia { id: number; titulo: string; onde: string | null; faltando: string[]; contato: string | null; rodadas: number; created_at: string }
+
+/** O que a IA criou incompleto e ainda espera de quem pediu (#185): fica no topo até completar. */
+function Pendencias() {
+  const p = useGet<{ itens: Pendencia[]; total: number }>('/ai/pendencias', 60000)
+  const toast = useToast()
+  const [busy, setBusy] = useState<number | null>(null)
+  const itens = p.data?.itens || []
+  if (!itens.length) return null
+  async function completei(x: Pendencia) {
+    setBusy(x.id)
+    try { await api.post(`/ai/pendencias/${x.id}/resolver`, { resolucao: tr("marcado como completo na tela") }); toast(tr("Pendência fechada."), 'ok'); p.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  return <div className="card pend">
+    <div className="card-h"><h2 className="h2">{tr("Falta completar ({0})", p.data?.total ?? itens.length)}</h2></div>
+    <div className="card-b small muted">{tr("A IA criou com o que tinha. Mande o que falta aqui na conversa, ou complete no registro e toque em Completei.")}</div>
+    <ul className="pend-l">{itens.map(x => <li key={x.id}>
+      <div className="pend-t"><b>{x.onde && /^https?:/.test(x.onde) ? <a href={x.onde} target="_blank" rel="noreferrer">{x.titulo}</a> : x.titulo}</b>
+        <span className="small">{tr("Falta: {0}", x.faltando.join(', '))}</span>
+        {x.contato && <span className="small muted">{tr("Contato: {0}", x.contato)}</span>}</div>
+      <button className="btn sm" disabled={busy === x.id} onClick={() => completei(x)}>{busy === x.id ? <span className="spin" /> : tr("Completei")}</button>
+    </li>)}</ul>
+  </div>
+}
+
 export function AICommand() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -213,6 +239,7 @@ export function AICommand() {
     <div className="grid" style={{ gridTemplateColumns: can('MANAGER') ? 'minmax(0,1fr) 260px' : 'minmax(0,1fr)' }}>
       <div className="stack">
         {!can('OPERATOR') && <Banner tone="info">{tr("Seu papel é de leitura: você vê a conversa, mas não envia comandos.")}</Banner>}
+        {minha && !cur && <Pendencias />}
         {cur ? <><div className="small"><a onClick={() => nav('/ai')} style={{ cursor: 'pointer' }}>{tr("← voltar à conversa")}</a></div><CommandView key={cur} id={cur} onDone={load} /></> : <>
           {sel === 'auto' && <Banner tone="info">{tr("Conversa automática: eventos do quadro, e-mails e waivers que acordaram a IA sozinha. Ninguém escreve aqui.")}</Banner>}
           {!minha && sel !== 'auto' && <Banner tone="info">{tr("Você está lendo a conversa de")} <b>{nomeDe(Number(sel))}</b>{tr(". Para falar com a IA, volte para a sua.")}</Banner>}
