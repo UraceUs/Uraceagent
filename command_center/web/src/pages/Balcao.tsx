@@ -313,6 +313,41 @@ function Revisao() {
   </Section>
 }
 
+interface Produto { id: string; name: string; full_name: string | null; price: number | null; categoria: string; codigo: string }
+interface Etiquetas { categorias: { nome: string; itens: number }[]; total: number; duplicatas: { motivo: string; itens: Produto[] }[]; atualizado: string | null }
+
+/** Etiqueta QR de prateleira para cada produto do QuickBooks (#187): o mecânico aponta a câmera
+ *  para a prateleira e a peça já entra; e as duplicatas do catálogo, só para conferir. */
+function EtiquetasPrateleira() {
+  const [d, setD] = useState<Etiquetas | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [sel, setSel] = useState<string[]>([])
+  const [verDup, setVerDup] = useState(false)
+  useEffect(() => { api.get<Etiquetas>('/balcao/etiquetas').then(setD).catch(e => setErro((e as ApiError).message)) }, [])
+  const total = d ? (sel.length ? d.categorias.filter(c => sel.includes(c.nome)).reduce((n, c) => n + c.itens, 0) : d.total) : 0
+  const link = (formato: string) => `/ops/api/balcao/etiquetas.pdf${qs({ formato, categorias: sel.length ? sel.join('|') : undefined })}`
+  const nomeCat = (c: string) => c || tr("Sem categoria")
+  return <Section title={tr("Etiquetas QR das prateleiras")} count={d?.total}>
+    {erro ? <Banner tone="crit">{erro}</Banner> : !d ? <span className="spin" /> : <div className="stack" style={{ gap: 12 }}>
+      <p className="small muted" style={{ margin: 0 }}>{tr("Uma etiqueta por produto do QuickBooks, com o QR e o nome em inglês. Na primeira leitura, o balcão liga a peça ao item do QuickBooks.")}</p>
+      <div className="et-cats" role="group" aria-label={tr("Categorias")}>
+        {d.categorias.map(c => <button key={c.nome} className={`btn sm${sel.includes(c.nome) ? ' on' : ''}`} aria-pressed={sel.includes(c.nome)}
+          onClick={() => setSel(v => v.includes(c.nome) ? v.filter(x => x !== c.nome) : [...v, c.nome])}>{nomeCat(c.nome)} <span className="muted">{c.itens}</span></button>)}
+      </div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <a className="btn primary" href={link('folha')}>{tr("Baixar folha (8 por página) · {0}", total)}</a>
+        <a className="btn" href={link('uma')}>{tr("Uma por página")}</a>
+      </div>
+      {d.duplicatas.length > 0 && <div>
+        <button className="btn sm ghost" aria-expanded={verDup} onClick={() => setVerDup(v => !v)}>{tr("{0} possível(is) duplicata(s) no catálogo", d.duplicatas.length)}</button>
+        {verDup && <><p className="small muted">{tr("Nomes que parecem o mesmo produto. Peça de chassi, marca, motor ou medida diferente não entra aqui. Nada é unido sozinho: confira no QuickBooks.")}</p>
+          <ul className="et-dup">{d.duplicatas.map((g, i) => <li key={i}><Chip tone={g.motivo === 'mesmo nome' ? 'warn' : 'neutral'}>{g.motivo === 'mesmo nome' ? tr("mesmo nome") : tr("nome parecido")}</Chip>
+            <ul>{g.itens.map(p => <li key={p.id}><span>{p.full_name || p.name}</span> <span className="small muted mono">#{p.id}{p.price ? ` · US$ ${p.price.toFixed(2)}` : ''}</span></li>)}</ul></li>)}</ul></>}
+      </div>}
+    </div>}
+  </Section>
+}
+
 export function Balcao() {
   const { can } = useAuth()
   const { clientId } = useParams()
@@ -420,6 +455,7 @@ export function Balcao() {
       </Section>
     </>}
     {!cid && can('MANAGER') && <Revisao />}
+    {!cid && can('MANAGER') && <EtiquetasPrateleira />}
     {!cid && <AEnviar />}
 
     {camera && <Camera onLer={ler} onFechar={() => { setCamera(false); focar() }} />}

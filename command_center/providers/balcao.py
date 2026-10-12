@@ -125,8 +125,12 @@ def ler(con, texto, client_id=None):
     cod = _codigo(t)
     b = um(con, "SELECT b.item_id FROM stock_barcodes b JOIN stock_items i ON i.id=b.item_id "
                 "WHERE b.code=? AND i.active=1", (cod,))
-    if not b:                       # peça excluída lê como código novo: dá para cadastrar de novo
-        return {"tipo": "desconhecido", "codigo": cod}
+    if not b:
+        from command_center.providers import etiquetas
+        iid = etiquetas.item_do_qr(con, cod)      # etiqueta de prateleira (#187): liga ao QuickBooks na 1ª leitura
+        if iid:
+            return {"tipo": "peca", "codigo": cod, "item": item_publico(con, estoque.item(con, iid), client_id)}
+        return {"tipo": "desconhecido", "codigo": cod}   # peça excluída lê como código novo: dá para cadastrar de novo
     return {"tipo": "peca", "codigo": cod, "item": item_publico(con, estoque.item(con, b["item_id"]), client_id)}
 
 
