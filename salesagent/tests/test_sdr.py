@@ -574,5 +574,13 @@ def main():
     return 0
 
 
+def test_sdr_em_processo_proprio():
+    """O pytest do CI só coleta funções test_*: roda o script inteiro num processo
+    à parte, para os módulos da ponte (config, app) não herdarem o estado dos outros testes."""
+    import subprocess
+    r = subprocess.run([sys.executable, __file__], capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-2000:]
+
+
 if __name__ == "__main__":
     sys.exit(main())

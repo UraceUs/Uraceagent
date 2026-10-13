@@ -694,7 +694,12 @@ def compose_followup(lead_id: int, track: str, attempt: int) -> str:
         if dirs:
             state.log("directives", lead_id,
                       "compose_followup (não executadas): " + " | ".join(dirs))
-        return textproc.customer_facing(raw)
+        texto = textproc.customer_facing(raw)
+        if SDR_MODO == "atender":
+            # Mesma guarda da resposta (estilo, um link, uma pergunta): o
+            # follow-up sai por bots/run e não passa pelo send_to_lead.
+            texto = sdr_ponte.limpar(lead_id, texto)
+        return texto
     except Exception as exc:
         state.log("error", lead_id, f"compose_followup: {exc}")
         return ""

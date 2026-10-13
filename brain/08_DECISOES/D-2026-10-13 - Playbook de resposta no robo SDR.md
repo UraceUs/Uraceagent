@@ -33,6 +33,8 @@ no Kommo (bridge + agente OpenClaw `urace-sales`).
   chamada dele, "You can see it all here:", saem juntos); depois, no máximo um
   link por mensagem; no máximo uma pergunta por mensagem (fica a primeira). Cada
   corte vai para o log como `SDR estilo: ...`.
+- A mesma guarda passa a valer no follow-up composto pelo agente (ele sai por
+  `bots/run` e não passava pelo `send_to_lead`).
 - `sdr/regras.NUNCA_DIZER` ganhou: "best regards", "i hope this message finds
   you well", "i hope this finds you well", "good to hear from you", "great
   question", "% off".
@@ -63,6 +65,11 @@ https://urace.us/product/go-kart-driving-experience/ How old is the driver?").
    ponte continua escalando "own kart" antes do modelo (inspeção do kart é da
    gerência). O lead recebe a mensagem de espera e o Lucas responde.
 6. Os descontos de contrato (4% / 8%) nunca são ditos ao cliente.
+7. **Cadência**: o Modo de Atendimento fala de reativação (mínimo 7 dias, no
+   máximo 2 tentativas, a 2ª muda de formato) e do loop de disparo por DDD,
+   que são do disparo ativo, não do robô que responde. A cadência do robô não
+   mudou: no Instagram/WhatsApp ela já é +2 h e +20 h e para (janela de 24 h
+   da Meta); nos outros canais segue `FOLLOW_UP_MINUTOS`.
 
 ## O que não muda
 
