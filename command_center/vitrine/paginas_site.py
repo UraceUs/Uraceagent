@@ -59,19 +59,24 @@ def _trilha(host, *passos):
     return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": itens}
 
 
-def _passos(titulo, passos):
+def _passos(titulo, passos, intro=None):
     return f"""<section class="faixa clara" aria-labelledby="h-passos"><div class="largura">
-  <h2 id="h-passos">{e(titulo)}</h2>
+  <h2 id="h-passos">{e(titulo)}</h2>{f'<p>{e(intro)}</p>' if intro else ''}
   <ol class="passos">{"".join(f"<li>{e(p)}</li>" for p in passos)}</ol>
 </div></section>"""
 
 
-def _depoimentos(itens):
+def _depoimentos(itens, titulo="What Our Clients Say", sub=None):
+    """Depoimentos: (nome, texto) ou (nome, cargo, texto)."""
     if not itens:
         return ""
+    def um(d):
+        n, *c, t = d
+        quem = e(n) + (f" · {e(c[0])}" if c and c[0] else "")
+        return f'<blockquote><p>{e(t)}</p><footer>{quem}</footer></blockquote>'
     return f"""<section class="faixa escura" aria-labelledby="h-depo"><div class="largura">
-  <h2 id="h-depo">What our clients say</h2>
-  <div class="depoimentos">{"".join(f'<blockquote><p>{e(t)}</p><footer>{e(n)}</footer></blockquote>' for n, t in itens)}</div>
+  <h2 id="h-depo">{e(titulo)}</h2>{f'<p class="lede">{e(sub)}</p>' if sub else ''}
+  <div class="depoimentos">{"".join(um(d) for d in itens)}</div>
 </div></section>"""
 
 
@@ -90,7 +95,7 @@ def _fecho(titulo, sub, cta, cor="vermelha"):
     return f"""<section class="faixa {cor}" aria-labelledby="h-fecho"><div class="largura centro">
   <h2 id="h-fecho">{e(titulo)}</h2>{f'<p class="fecho-sub">{e(sub)}</p>' if sub else ''}
   <div class="hero-acoes centro"><a class="btn {'btn-branco' if cor == 'vermelha' else ''}" href="{e(href)}">{e(rot)}</a>
-    <a class="btn btn-linha-branca" href="{e(C.SITE['whatsapp'])}" rel="noopener">Need more details? Let's chat</a></div>
+    <a class="btn btn-linha-branca" href="{e(C.SITE['whatsapp'])}" rel="noopener">Need more details before booking? Let’s chat.</a></div>
 </div></section>"""
 
 
@@ -132,17 +137,20 @@ def servico(host, d):
 </div></section>""")
     if d.get("fornece") or d.get("espera"):
         partes.append(f"""<section class="faixa escura" aria-labelledby="h-inclui"><div class="largura">
-  <h2 id="h-inclui">{e(d.get('fornece_titulo') or 'What to expect')}</h2>
+  <h2 id="h-inclui">{e(d.get('fornece_titulo') or 'What to expect')}</h2>{f"<p>{e(d['fornece_intro'])}</p>" if d.get('fornece_intro') else ''}
   <div class="inclui">
     {f"<div><h3>What to expect</h3>{_lista(d['espera'])}</div>" if d.get('espera') else ''}
-    {f"<div><h3>We provide</h3>{_lista(d['fornece'])}</div>" if d.get('fornece') else ''}
-    {f"<div><h3>You bring</h3>{_lista(d['trazer'])}</div>" if d.get('trazer') else ''}
+    {f"<div><h3>{e(d.get('fornece_rotulo') or 'What URACE Provides')}</h3>{_lista(d['fornece'])}</div>" if d.get('fornece') else ''}
+    {f"<div><h3>What YOU Need to Bring</h3>{_lista(d['trazer'])}</div>" if d.get('trazer') else ''}
   </div>
 </div></section>""")
     if d.get("formatos"):
         acc = []
         for t, intro, itens in d["formatos"]:
-            acc.append(f"<details><summary>{e(t)}</summary><div class='faq-corpo'><p>{e(intro)}</p>{_lista(itens) if itens else ''}</div></details>")
+            if intro or itens:
+                acc.append(f"<details><summary>{e(t)}</summary><div class='faq-corpo'>{f'<p>{e(intro)}</p>' if intro else ''}{_lista(itens) if itens else ''}</div></details>")
+            else:                       # o site atual mostra só o título (sem texto embaixo)
+                acc.append(f"<p class='formato'>{e(t)}</p>")
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-formatos"><div class="largura duas">
   <div><h2 id="h-formatos">{e(d['formatos_titulo'])}</h2><p>{e(d['formatos_intro'])}</p></div>
   <div class="faq">{"".join(acc)}</div>
@@ -151,22 +159,23 @@ def servico(host, d):
         partes.append(f"""<section class="faixa vermelha" aria-labelledby="h-porque"><div class="largura">
   <p class="eyebrow">Why URACE</p><h2 id="h-porque">{e(d['porque_titulo'])}</h2>
   {f"<p>{e(d['porque_intro'])}</p>" if d.get('porque_intro') else ''}{_lista(d['porque'], 'checks claras')}
+  {f"<p>{e(d['porque_fecho'])}</p>" if d.get('porque_fecho') else ''}
 </div></section>""")
     if d.get("dias"):
         cards = "".join(f"""<article class="dia"><img src="{estatico('img/' + f)}" alt="" width="640" height="420" loading="lazy"><h3>{e(t)}</h3><p>{e(p)}</p></article>"""
                         for t, p, f in d["dias"])
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-dias"><div class="largura">
-  <h2 id="h-dias">{e(d['dias_titulo'])}</h2><div class="dias">{cards}</div></div></section>""")
+  <h2 id="h-dias">{e(d['dias_titulo'])}</h2>{f"<p>{e(d['dias_intro'])}</p>" if d.get('dias_intro') else ''}<div class="dias">{cards}</div></div></section>""")
     if d.get("para_quem"):
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-quem"><div class="largura duas">
   <div><h2 id="h-quem">{e(d.get('para_quem_titulo') or 'Who is this for?')}</h2>{f"<p>{e(d['para_quem_intro'])}</p>" if d.get('para_quem_intro') else ''}</div>
-  {_lista(d['para_quem'])}
+  <div>{_lista(d['para_quem'])}{f"<p>{e(d['para_quem_fecho'])}</p>" if d.get('para_quem_fecho') else ''}</div>
 </div></section>""")
     if d.get("curriculo"):
         partes.append(f"""<section class="faixa escura" aria-labelledby="h-curr"><div class="largura duas">
-  <div><h2 id="h-curr">Curriculum highlights</h2>
+  <div><h2 id="h-curr">Curriculum Highlights</h2>
     <dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
-  <div><h2>Program objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
+  <div><h2>Program Objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
 </div></section>""")
     if d.get("logistica"):
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-log"><div class="largura duas">
@@ -174,12 +183,12 @@ def servico(host, d):
   <div><h2>{e(d['extras_titulo'])}</h2>{_lista(d['extras'], 'lista')}</div>
 </div></section>""")
     if d.get("passos"):
-        partes.append(_passos(d["passos_titulo"], d["passos"]))
-    if d.get("investimento"):
+        partes.append(_passos(d["passos_titulo"], d["passos"], d.get("passos_intro")))
+    if d.get("investimento"):          # o preço por piloto é o do Arrive and Drive (KARTS), não texto fixo
         partes.append(f"""<section class="faixa vermelha" aria-labelledby="h-inv"><div class="largura centro">
-  <h2 id="h-inv">Investment</h2><p class="preco-grande">{e(d['investimento'])}</p></div></section>""")
+  <h2 id="h-inv">Investment</h2><p class="preco-grande">{e(d['investimento'].format(preco=usd(C.preco_minimo())))}</p></div></section>""")
     partes.append(f"""<section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita">
-  <h2 id="h-faq">Frequently asked questions</h2>{_faq(d['faq'])}</div></section>""")
+  <h2 id="h-faq">Frequently Asked Questions</h2>{_faq(d['faq'])}</div></section>""")
     partes.append(_local())
     partes.append(_depoimentos(d.get("depoimentos")))
     partes.append(_fecho(d["fecho"], d.get("fecho_sub"), d["fecho_cta"]))
@@ -193,10 +202,13 @@ def servico(host, d):
 
 def hub(host):
     d = S.HUB
+    # preço só onde o sistema tem o valor: "kart" é o menor preço do Arrive and Drive (KARTS)
+    def preco(pr):
+        return f"<em>Starting at {usd(C.preco_minimo())}</em>" if pr == "kart" else ""
     cards = "".join(f"""<a class="servico-card" href="{e(h)}"><img src="{estatico('img/' + f)}" alt="" width="640" height="400" loading="lazy">
-  <span class="servico-txt"><strong>{e(t)}</strong><span>{e(p)}</span><em>{e(pr)}</em></span></a>""" for t, p, pr, h, f in d["cartoes"])
+  <span class="servico-txt"><strong>{e(t)}</strong><span>{e(p)}</span>{preco(pr)}</span></a>""" for t, p, pr, h, f in d["cartoes"])
     corpo = f"""<section class="hero hero-servico hero-hub"><div class="hero-in">
-  <p class="eyebrow">Services · Orlando, FL</p><h1>{e(d['h1'])}</h1><p class="hero-sub">{e(d['sub'])}</p>
+  <p class="eyebrow">{e(d['eyebrow'])}</p><h1>{e(d['h1'])}</h1><p class="hero-sub">{e(d['sub'])}</p>
   <div class="hero-acoes"><a class="btn" href="{PORTAL}/reserve">Book online</a><a class="btn btn-linha" href="/contact/">Talk to us</a></div>
 </div></section>
 <section class="faixa clara" aria-labelledby="h-lista"><div class="largura">
@@ -220,8 +232,9 @@ def _planos(planos, assunto="academy"):
     cards = []
     for nome, sub, texto, preco, por, *resto in planos:
         href = resto[0] if resto else f"/contact/?assunto={assunto}&produto={quote(nome)}"
+        valor = f'<p class="plano-preco"><strong>{e(preco)}</strong><span>{e(por)}</span></p>' if preco else ""
         cards.append(f"""<article class="plano"><h3>{e(nome)}</h3><p class="plano-sub">{e(sub)}</p><p>{e(texto)}</p>
-  <p class="plano-preco"><strong>{e(preco)}</strong><span>{e(por)}</span></p><a class="btn btn-sm" href="{e(href)}">Choose</a></article>""")
+  {valor}<a class="btn btn-sm" href="{e(href)}">Choose</a></article>""")
     return f'<div class="planos">{"".join(cards)}</div>'
 
 
@@ -259,12 +272,12 @@ def academy(host, planos=None):
   <div><h2>{e(d['inclui_titulo'])}</h2>{_lista(d['inclui'])}</div>
 </div></section>
 <section class="faixa escura" aria-labelledby="h-curr"><div class="largura duas">
-  <div><h2 id="h-curr">Curriculum highlights</h2><dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
-  <div><h2>Program objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
+  <div><h2 id="h-curr">Curriculum Highlights</h2><dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
+  <div><h2>Program Objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
 </div></section>
 <section class="faixa clara" aria-labelledby="h-carreira"><div class="largura estreita">
   <h2 id="h-carreira">{e(d['carreira_titulo'])}</h2><p>{e(d['carreira_intro'])}</p>{_lista(d['carreira'])}
-  <p class="muted">Available as paid add-ons, negotiated separately once a driver is ready for them:</p>{_lista(d['carreira_extras'], 'lista')}
+  <p class="muted">{e(d['carreira_extras_intro'])}</p>{_lista(d['carreira_extras'], 'lista')}
 </div></section>
 <section class="faixa vermelha" aria-labelledby="h-caminho"><div class="largura">
   <h2 id="h-caminho">{e(d['caminho_titulo'])}</h2>{_ps(d['caminho_texto'])}
@@ -280,12 +293,26 @@ def academy(host, planos=None):
                   schemas=(_negocio(host), oferta, _faq_ld(d["faq"]), _trilha(host, ("Academy", d["caminho"]))), foto=d["foto"])
 
 
-def pro_team(host):
+def _preco_plano(planos, qual):
+    """O preço por mês do plano do painel: "boost" (o de um mês com boost no nome) ou "academy" (o
+    mensal de um mês, ou o de menos meses). Sem plano cadastrado, sem preço."""
+    boost = [p for p in planos or () if p["months"] == 1 and "boost" in p["name"].lower()]
+    if qual == "boost":
+        return usd(boost[0]["price"]) if boost else ""
+    outros = sorted((p for p in planos or () if p not in boost), key=lambda p: p["months"])
+    return usd(outros[0]["price"]) if outros else ""
+
+
+def pro_team(host, planos=None):
     d = P.PRO_TEAM
+    opcoes = [(n, s, t, _preco_plano(planos, pr) if pr in ("academy", "boost") else pr, por, h)
+              for n, s, t, pr, por, h in d["opcoes"]]
+    suporte = "".join(f"<article class='cartao'><h3>{e(t)}</h3>{f'<p>{e(p)}</p>' if p else ''}</article>" for t, p in d['suporte'])
     corpo = f"""{_hero(d)}
 <section class="faixa clara" aria-labelledby="h-metodo"><div class="largura estreita"><h2 id="h-metodo">{e(d['suporte_titulo'])}</h2><p>{e(d['metodo'])}</p>
-  <div class="cartoes">{"".join(f"<article class='cartao'><h3>{e(t)}</h3><p>{e(p)}</p></article>" for t, p in d['suporte'])}</div></div></section>
-<section class="faixa escura" aria-labelledby="h-opcoes"><div class="largura"><h2 id="h-opcoes">{e(d['opcoes_titulo'])}</h2><p class="muted">{e(d['opcoes_sub'])}</p>{_planos(d['opcoes'], 'team')}</div></section>
+  <div class="cartoes">{suporte}</div></div></section>
+<section class="faixa clara" aria-labelledby="h-mais"><div class="largura estreita"><h2 id="h-mais">{e(d['mais_titulo'])}</h2>{_ps(d['mais'])}</div></section>
+<section class="faixa escura" aria-labelledby="h-opcoes"><div class="largura"><h2 id="h-opcoes">{e(d['opcoes_titulo'])}</h2><p class="muted">{e(d['opcoes_sub'])}</p>{_planos(opcoes, 'team')}</div></section>
 <section class="faixa clara" aria-labelledby="h-cal"><div class="largura duas">
   <div><h2 id="h-cal">{e(d['calendario_titulo'])}</h2><p>{e(d['calendario_sub'])}</p></div>
   <dl class="calendario">{"".join(f"<div><dt>{e(q)}</dt><dd>{e(n)}</dd></div>" for q, n in d['calendario'])}</dl>
@@ -299,12 +326,14 @@ def pro_team(host):
 
 def beginners(host):
     d = P.BEGINNERS
-    cards = "".join(f"""<article class="plano"><h3>{e(n)}</h3><p class="plano-sub">{e(s)}</p><p>{e(t)}</p><p class="plano-preco"><strong>{e(pr)}</strong></p><a class="btn btn-sm" href="{e(h)}">See more</a></article>"""
-                    for n, s, t, pr, h in d["proximo"])
+    def preco(pr):            # "kart": o menor preço do Arrive and Drive (KARTS); os outros não têm preço no sistema
+        return f'<p class="plano-preco"><span>Starting at</span><strong>{usd(C.preco_minimo())}</strong></p>' if pr == "kart" else ""
+    cards = "".join(f"""<article class="plano"><h3>{e(n)}</h3><p class="plano-sub">{e(s)}</p><p>{e(t)}</p>{preco(pr)}<a class="btn btn-sm" href="{e(h)}">{e(b)}</a></article>"""
+                    for n, s, t, pr, h, b in d["proximo"])
     corpo = f"""{_hero(d)}
 <section class="faixa clara" aria-labelledby="h-primeira"><div class="largura estreita"><h2 id="h-primeira">{e(d['primeira_titulo'])}</h2>{_ps(d['primeira'])}</div></section>
 <section class="faixa escura" aria-labelledby="h-contato"><div class="largura estreita"><h2 id="h-contato">{e(d['contato_titulo'])}</h2>{_ps(d['contato'])}
-  <p><a class="btn" href="/services/arrive-and-drive/">Book my first day</a></p></div></section>
+  <p><a class="btn" href="/services/arrive-and-drive/">{e(d['contato_cta'])}</a></p></div></section>
 <section class="faixa clara" aria-labelledby="h-proximo"><div class="largura"><h2 id="h-proximo">{e(d['proximo_titulo'])}</h2><div class="planos">{cards}</div></div></section>
 <section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita"><h2 id="h-faq">Questions beginners ask</h2>{_faq(d['faq'])}</div></section>
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'])}"""
@@ -317,10 +346,12 @@ def career(host):
     degraus = "".join(f"""<li><a href="{e(h)}"><strong>{e(t)}</strong><span>{e(p)}</span></a></li>""" for t, p, h in d["degraus"])
     fotos = "".join(f'<figure><img src="{estatico("img/" + f)}" alt="{e(a)}" width="480" height="600" loading="lazy"><figcaption>{e(a)}</figcaption></figure>' for f, a in d["fotos"])
     corpo = f"""{_hero(d)}
-<section class="faixa clara" aria-labelledby="h-degraus"><div class="largura"><h2 id="h-degraus">{e(d['degraus_titulo'])}</h2><ol class="degraus">{degraus}</ol>
-  <p class="muted small">{e(d['aviso'])}</p></div></section>
+<section class="faixa clara" aria-labelledby="h-degraus"><div class="largura"><h2 id="h-degraus">{e(d['degraus_titulo'])}</h2><p>{e(d['degraus_intro'])}</p><ol class="degraus">{degraus}</ol>
+  {_ps(d['aviso'], 'muted small')}</div></section>
 <section class="faixa escura" aria-labelledby="h-pessoa"><div class="largura duas"><div><h2 id="h-pessoa">{e(d['pessoa_titulo'])}</h2>{_ps(d['pessoa'])}</div><div class="campeoes">{fotos}</div></div></section>
-<section class="faixa clara" aria-labelledby="h-prof"><div class="largura estreita"><h2 id="h-prof">{e(d['profissional_titulo'])}</h2>{_ps(d['profissional'])}{_lista(d['profissional_itens'])}</div></section>
+<section class="faixa clara" aria-labelledby="h-prof"><div class="largura estreita"><h2 id="h-prof">{e(d['profissional_titulo'])}</h2>{_ps(d['profissional'])}{_lista(f"{t}: {p}" for t, p in d['profissional_itens'])}</div></section>
+<section class="faixa escura" aria-labelledby="h-eventos"><div class="largura estreita"><h2 id="h-eventos">{e(d['eventos_titulo'])}</h2>{_ps(d['eventos'])}{_faq(d['eventos_faq'], 'faq-eventos')}
+  <p class="hero-acoes"><a class="btn" href="/services/group-events/">Group Events &amp; Social Gatherings</a> <a class="btn" href="/services/corporate-events/">Corporate Events</a> <a class="btn" href="/services/birthday-party/">Birthday Party</a></p></div></section>
 <section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita"><h2 id="h-faq">{e(d['perguntas_titulo'])}</h2><p class="muted">{e(d['perguntas_sub'])}</p>{_faq(d['faq'])}</div></section>
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'])}"""
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
@@ -334,11 +365,11 @@ def about(host):
 <section class="faixa clara" aria-labelledby="h-hist"><div class="largura estreita"><h2 id="h-hist">{e(d['historia_titulo'])}</h2>{_ps(d['historia'])}{_lista(d['historia_itens'], 'lista')}<p>{e(d['historia_fecho'])}</p></div></section>
 <section class="faixa escura" aria-labelledby="h-met"><div class="largura duas"><div><h2 id="h-met">{e(d['metodo_titulo'])}</h2><p>{e(d['metodo_intro'])}</p>{_lista(d['metodo'])}<p>{e(d['metodo_fecho'])}</p></div>
   <div><h2>{e(d['diferente_titulo'])}</h2>{_ps(d['diferente'])}{_lista(d['diferente_itens'], 'lista')}<p>{e(d['diferente_fecho'])}</p></div></div></section>
-<section class="faixa clara" aria-labelledby="h-equipe"><div class="largura duas"><div><h2 id="h-equipe">{e(d['equipe_titulo'])}</h2>{_ps(d['equipe'])}{_lista(d['equipe_itens'], 'lista')}<p>{e(d['equipe_fecho'])}</p></div>
+<section class="faixa clara" aria-labelledby="h-equipe"><div class="largura duas"><div><h2 id="h-equipe">{e(d['equipe_titulo'])}</h2>{_ps(d['equipe'])}{_lista(d['equipe_itens'], 'lista')}{_ps(d['equipe_fecho'])}</div>
   <div><h2>Vision</h2><p>{e(d['visao'])}</p><h2>Mission</h2>{_ps(d['missao'])}</div></div></section>
 <section class="faixa vermelha" aria-labelledby="h-sup"><div class="largura duas"><div><h2 id="h-sup">{e(d['suporte_titulo'])}</h2>{_ps(d['suporte'])}</div>
   <div><h2>{e(d['seguranca_titulo'])}</h2><p>{e(d['seguranca_intro'])}</p>{_lista(d['seguranca'], 'checks claras')}<p>{e(d['seguranca_fecho'])}</p></div></div></section>
-{_depoimentos(C.ARRIVE['depoimentos'])}
+{_depoimentos(C.DEPOIMENTOS, d['depoimentos_titulo'], d['depoimentos_sub'])}
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'], 'escura')}"""
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
                   schemas=(_negocio(host), _trilha(host, ("About", d["caminho"]))), foto=d["foto"])
@@ -384,7 +415,7 @@ def accessibility(host):
   <h1>{e(d['h1'])}</h1>{_ps(d['texto'])}
   <h2>{e(d['conformidade_titulo'])}</h2>{_ps(d['conformidade'])}
   <h2>{e(d['feedback_titulo'])}</h2><p>{e(d['feedback'])}</p>
-  <ul><li>Phone: <a href="tel:{e(C.SITE['telefone_e164'])}">{e(C.SITE['telefone'])}</a></li><li>Email: <a href="mailto:{e(C.SITE['emails'][1])}">{e(C.SITE['emails'][1])}</a></li></ul>
+  <ul><li>Phone: <a href="tel:{e(C.SITE['telefone_e164'])}">{e(C.SITE['telefone'])}</a></li><li>E-mail: <a href="mailto:{e(C.SITE['emails'][1])}">{e(C.SITE['emails'][1])}</a></li></ul>
   <h2>{e(d['data_titulo'])}</h2><p>{e(d['data'])}</p>
 </div></section>"""
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo, schemas=(_negocio(host),))
@@ -407,6 +438,9 @@ def _data(iso):
     return date.fromisoformat(iso).strftime("%B %-d, %Y")
 
 
+BLOG_SUB = "Top tier nationally recognized kart team providing race-wide support, driver training."     # urace.us/blog/
+
+
 def blog(host, categoria=None):
     d = dados("posts.json")
     posts = d["posts"]
@@ -423,7 +457,7 @@ def blog(host, categoria=None):
                    for c in d["categorias"] if c["slug"] != "uncategorized")
     corpo = f"""<section class="faixa clara" aria-labelledby="h-blog"><div class="largura">
   <p class="eyebrow">Blog</p><h1 id="h-blog">{e(cat['name']) if cat else 'Take advantage of our materials'}</h1>
-  <p class="hero-sub-escura">{e(descricao)}</p>
+  <p class="hero-sub-escura">{e(descricao if cat else BLOG_SUB)}</p>
   <nav class="chips" aria-label="Categories"><a class="chip-link{'' if cat else ' on'}" href="/blog/">All</a>{cats}</nav>
   <div class="posts-grade">{"".join(_post_card(p) for p in posts)}</div>
 </div></section>"""
@@ -452,7 +486,7 @@ def post(host, slug):
               "datePublished": p["date"], "author": {"@type": "Organization", "name": "URACE"},
               "publisher": {"@id": f"https://{host}/#business"}, "mainEntityOfPage": f"https://{host}/blog/{p['slug']}/",
               **({"image": f"https://{host}{estatico('img/' + p['image'])}"} if p.get("image") else {})}
-    return layout(host=host, caminho=f"/blog/{p['slug']}/", titulo=f"{p['title']} | URACE", descricao=_desc(p["description"], "From the URACE blog, Orlando."), corpo=corpo,
+    return layout(host=host, caminho=f"/blog/{p['slug']}/", titulo=p.get("seo_title") or f"{p['title']} | URACE", descricao=_desc(p["description"], "From the URACE blog, Orlando."), corpo=corpo,
                   schemas=(_negocio(host), artigo, _trilha(host, ("Blog", "/blog/"), (p["title"], f"/blog/{p['slug']}/"))), foto=p.get("image"))
 
 
@@ -516,16 +550,17 @@ def store(host, categoria=None):
     corpo = f"""<section class="faixa clara" aria-labelledby="h-loja"><div class="largura">
   <p class="eyebrow">Store</p><h1 id="h-loja">{e(nomes[categoria]) if categoria else 'Everything you need to race faster'}</h1>
   <p class="hero-sub-escura">{e(LOJA_SUB) if not categoria else e(descricao)}</p>
+  {'' if categoria else '<p class="muted"><strong>What are you looking for?</strong> Browse by category and find exactly what your racing needs.</p>'}
   <nav class="chips" aria-label="Categories"><a class="chip-link{'' if categoria else ' on'}" href="/store/">All</a>{chips}</nav>
   <div class="produtos-grade">{"".join(_produto_card(p) for p in produtos)}</div>
 </div></section>
 <section class="faixa escura" aria-labelledby="h-garantia"><div class="largura">
   <h2 id="h-garantia">Backed by racers, built for racers</h2>
   <div class="cartoes">
+    <article class="cartao"><h3>Fast shipping</h3><p>Orders processed and shipped within 24 business hours.</p></article>
     <article class="cartao"><h3>Official gear</h3><p>Authentic parts and equipment from the best kart brands.</p></article>
     <article class="cartao"><h3>Expert support</h3><p>Our team knows karting from the inside. We help you choose the right product.</p></article>
-    <article class="cartao"><h3>Fitted at the track</h3><p>Parts can be installed by the URACE mechanic at the Orlando Kart Center.</p></article>
-    <article class="cartao"><h3>Fast answer</h3><p>Order online and the team confirms availability and shipping within one business day.</p></article>
+    <article class="cartao"><h3>Secure checkout</h3><p>Your data and payment are protected on every purchase.</p></article>
   </div>
 </div></section>
 {_fecho('Not sure what you need?', 'Our team can help you choose the right parts, suit, or chassis for your level and category.', ('Ask the team', '/contact/?assunto=store'))}"""

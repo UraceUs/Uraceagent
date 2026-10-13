@@ -118,6 +118,7 @@ p { margin: 0 }
 .clara .lede { color: var(--cinza) }
 
 .numeros { max-width: var(--largura); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px }
+.largura + .numeros { margin-top: 28px }
 .numero { display: grid; gap: 4px }
 .numero strong { font: 800 clamp(2.4rem, 7vw, 3.4rem)/1 var(--titulo); font-stretch: 125% }
 .numero span { color: var(--cinza-claro) }
@@ -153,6 +154,7 @@ blockquote footer { color: var(--cinza-claro); font-size: .9rem; font-weight: 60
 .faq details { border: 1px solid #e3e3ea; border-radius: var(--raio); padding: 0 16px }
 .faq summary { min-height: 52px; display: flex; align-items: center; cursor: pointer; font-weight: 700 }
 .faq details p { padding-bottom: 12px; color: #3c3d50 }
+.faq .formato { margin: 0; border: 1px solid #e3e3ea; border-radius: var(--raio); padding: 14px 16px; font-weight: 700 }
 address { font-style: normal }
 
 /* --------------------------------------------------------------- reserva */
