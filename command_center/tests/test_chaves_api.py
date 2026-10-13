@@ -227,6 +227,40 @@ def test_chave_que_escreve_escreve_e_avisa_que_escreve(cli):
     con.close()
 
 
+def test_chave_ja_criada_passa_de_leitura_para_operacao_e_volta(cli):
+    """#209 (dono, 13/10): "preciso tbm conseguir alterar as api ja criadas de so leitura para operação"."""
+    h = entra(cli)
+    r = cli.post(f"{B}/keys", headers=h, json={"name": "agente", "role": "OPERATOR"}).json()
+    ident, ch = r["id"], {"Authorization": f"Bearer {r['chave']}"}
+    cli.cookies.clear()
+    assert cli.post(f"{B}/clients", headers=ch, json={"name": "Antes"}).status_code == 403
+    h = entra(cli)
+    m = cli.post(f"{B}/keys/{ident}/modo", headers=h, json={"read_only": False}).json()
+    assert m["mudou"] is True and "ESCREVE" in m["aviso"]
+    assert cli.post(f"{B}/keys/{ident}/modo", headers=h, json={"read_only": False}).json()["mudou"] is False
+    cli.cookies.clear()
+    assert cli.post(f"{B}/clients", headers=ch, json={"name": "Depois"}).status_code in (200, 201), "a mesma chave, sem trocar o valor"
+    h = entra(cli)
+    assert cli.post(f"{B}/keys/{ident}/modo", headers=h, json={"read_only": True}).json()["mudou"] is True
+    cli.cookies.clear()
+    assert cli.post(f"{B}/clients", headers=ch, json={"name": "De novo"}).status_code == 403
+    con = conectar()
+    ev = [a["detail"] for a in con.execute("SELECT detail FROM audit_logs WHERE event='apikey.mode' ORDER BY id").fetchall()]
+    con.close()
+    assert len(ev) == 2 and '"para": "operação"' in ev[0] and '"para": "leitura"' in ev[1]
+
+
+def test_so_o_admin_muda_o_modo_e_chave_revogada_nao_volta(cli):
+    h = entra(cli)
+    ident = cli.post(f"{B}/keys", headers=h, json={"name": "x", "role": "VIEWER"}).json()["id"]
+    ho = entra(cli, "op@urace.us")
+    assert cli.post(f"{B}/keys/{ident}/modo", headers=ho, json={"read_only": False}).status_code == 403
+    h = entra(cli)
+    assert cli.post(f"{B}/keys/{ident}/revoke", headers=h).status_code == 200
+    assert cli.post(f"{B}/keys/{ident}/modo", headers=h, json={"read_only": False}).status_code == 404
+    assert cli.post(f"{B}/keys/nao-existe/modo", headers=h, json={"read_only": False}).status_code == 404
+
+
 def test_o_segredo_e_lido_inteiro_mesmo_com_underscore_dentro():
     """O defeito que fazia a suíte falhar 1 em ~30 (caçado em 22/09 com 30 rodadas).
 

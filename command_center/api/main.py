@@ -560,6 +560,23 @@ def api_keys_create(dados: ChaveIn, request: Request, u=Depends(auth.exige("ADMI
                                  "sem passar por aprovação."))}
 
 
+class ModoChaveIn(BaseModel):
+    read_only: bool
+
+
+@app.post(BASE + "/api/keys/{ident}/modo")
+def api_keys_mode(ident: str, dados: ModoChaveIn, request: Request, u=Depends(auth.exige("ADMIN")),
+                  con: sqlite3.Connection = Depends(get_db)):
+    """#209: a chave que já existe passa de só leitura para operação (ou volta), sem trocar o valor
+    — quem usa a chave não precisa mudar nada. Vale no pedido seguinte."""
+    r = auth.mudar_modo_chave(con, ident, dados.read_only, por_user_id=u["id"])
+    if r is None:
+        raise HTTPException(404, "Chave não encontrada (ou já revogada).")
+    return {"ok": True, "mudou": r, "read_only": dados.read_only,
+            "aviso": None if dados.read_only else ("ATENÇÃO: esta chave agora ESCREVE — o que ela fizer acontece de "
+                                                    "verdade, sem passar por aprovação.")}
+
+
 @app.post(BASE + "/api/keys/{ident}/revoke")
 def api_keys_revoke(ident: str, request: Request, u=Depends(auth.exige("ADMIN")),
                     con: sqlite3.Connection = Depends(get_db)):
