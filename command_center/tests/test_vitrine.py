@@ -286,3 +286,50 @@ def test_agenda_publica_desconta_quem_ja_marcou(cli):
     depois = {x["date"]: x for x in cli.get("/ops/api/vitrine/agenda").json()["dias"]}[dia["date"]]
     assert depois["tarde"]["spots"] == dia["tarde"]["spots"] - 1
     assert "Cliente Teste" not in cli.get("/ops/api/vitrine/agenda").text
+
+
+# ------------------------------------------------------------------ #207: o texto do urace.us de hoje
+def test_texto_do_urace_us_de_hoje_no_menu_na_home_e_no_blog(cli):
+    """Dono, 13/10: "vou pegar o copy que tá no site atual e jogar naquele outro site". Os rótulos do
+    menu e do rodapé, a home e o título dos artigos são os do urace.us de 13/10, nos caminhos novos."""
+    r = cli.get("/")
+    menu = r.text.split('<nav class="menu"')[1].split("</nav>")[0]
+    for rot, href in (("About URACE", "/about/"), ("Our Services", "/services/"), ("Plan Your Career", "/career/"),
+                      ("Racing Team", "/pro-team/"), ("Contact us", "/contact/")):
+        assert f'href="{href}">{rot}</a>' in menu
+    assert "<h1>The Champions Factory</h1>" in r.text
+    assert "The ladder ends on our grid" in r.text and "Our Contents" in r.text
+    assert "© 2026 URACE | All rights reserved" in r.text and ">Navigation<" in r.text
+    assert "invoice #" not in r.text, "o depoimento sai sem o pagamento do cliente"
+    titulo = cli.get("/blog/upgrading-your-kart-chassis-when-and-why/").text.split("<title>")[1].split("</title>")[0]
+    assert titulo == "Upgrading Your Kart Chassis: When It Is Worth It | URACE"
+
+
+def test_decisoes_do_dono_continuam_valendo_em_todo_o_site(cli):
+    """O texto novo não traz de volta o que o dono já decidiu: Box 3, remarcação com 24 h e o nome URACE."""
+    for c in PAGINAS:
+        if c.startswith("/store/"):
+            continue                                   # nome e descrição do produto são os da loja
+        texto = re.sub(r"<[^>]+>", " ", re.sub(r"<script.*?</script>", "", cli.get(c).text, flags=re.S))
+        assert "Box 5" not in texto and not re.search(r"\b48 ?h", texto), c
+        assert not re.search(r"\bU(race|Race|Rrace)\b", texto), c
+
+
+def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
+    """Regra 2 da #207: o preço do Arrive and Drive sai de KARTS; os planos, do painel. O que o sistema
+    não tem não vira número escrito na página."""
+    minimo = f"${min(k['preco'] for k in conteudo.KARTS):,}"
+    for c in ("/", "/services/", "/for-beginners/", "/services/birthday-party/"):
+        assert minimo in cli.get(c).text, c
+    for c in ("/services/", "/for-beginners/", "/career/", "/pro-team/"):
+        html = cli.get(c).text
+        for valor in ("$2,619.06", "$2,756.90", "$5,000", "$5K", "$3K", "$1,200", "$60 "):
+            assert valor not in html, (c, valor)
+    # com os planos no painel, o Pro Team mostra o preço deles
+    from command_center.providers import servicos_site
+    con = conectar(); aplicar_schema(con)
+    servicos_site.criar(con, None, {"name": "Academy 1 month", "price": 2756.9, "kind": "plan", "months": 1, "sessions_month": 4})
+    servicos_site.criar(con, None, {"name": "URACE Boost", "price": 5000, "kind": "plan", "months": 1, "sessions_month": 8})
+    con.commit()
+    html = cli.get("/pro-team/").text
+    assert "<strong>$2,756.90</strong>" in html and "<strong>$5,000</strong>" in html
