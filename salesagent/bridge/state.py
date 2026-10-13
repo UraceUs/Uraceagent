@@ -3,6 +3,7 @@
 Estados (missão §19): AI_ACTIVE → WAITING_HUMAN → HUMAN_HANDOFF → RESUMED → CLOSED.
 Regra G3: conversa escalada não volta a vender; retomada só por comando humano.
 """
+import logging
 import re
 import sqlite3
 import time
@@ -209,3 +210,27 @@ def get_confirmations(lead_id: int, limit: int = 5) -> list[dict]:
 def agent_may_sell(lead_id: int) -> bool:
     """G3: em estado escalado o agente não vende, não importa o que chegue."""
     return get_conversation(lead_id)["state"] in ("AI_ACTIVE", "RESUMED")
+
+
+# ------------------------------------------------------------------ o journal também não guarda segredo
+class _MascaraDeLog(logging.Filter):
+    """13/10: o log de acesso do uvicorn gravava a URL inteira de POST /kommo/eventos?key=..., e a
+    KOMMO_HOOK_KEY ficou em texto puro no journal. O filtro mascara os argumentos de cada linha
+    com a mesma regra da auditoria (form, JSON, JWT, telefone)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(mascarar(a) if isinstance(a, str) else a for a in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {k: (mascarar(v) if isinstance(v, str) else v) for k, v in record.args.items()}
+        if isinstance(record.msg, str) and record.args in ((), None):
+            record.msg = mascarar(record.msg)
+        return True
+
+
+def instalar_mascara_nos_logs(nomes=("uvicorn.access", "uvicorn.error", "uvicorn")) -> None:
+    """Idempotente: um filtro por logger."""
+    for nome in nomes:
+        lg = logging.getLogger(nome)
+        if not any(isinstance(f, _MascaraDeLog) for f in lg.filters):
+            lg.addFilter(_MascaraDeLog())
