@@ -71,7 +71,7 @@ def _contexto_cliente(con, client_id):
     if not c:
         return ""
     ws = todos(con, "SELECT status, template, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (client_id,))
-    ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? ORDER BY due_on DESC LIMIT 5", (client_id,))
+    ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? AND deleted_at IS NULL ORDER BY due_on DESC LIMIT 5", (client_id,))
     campos = ("id", "name", "pilot_name", "pilot_dob", "email", "phone", "vip", "status",
               "monthly_plan", "monthly_note", "monthly_amount", "monthly_item_id")
     pecas = _pecas_a_cobrar(con, client_id)
@@ -120,7 +120,7 @@ def contexto_do_comando(con, texto, user_id=None):
     if not cid:
         return ""
     c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
-    ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? ORDER BY due_on DESC LIMIT 5", (cid,))
+    ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? AND deleted_at IS NULL ORDER BY due_on DESC LIMIT 5", (cid,))
     inv = um(con, "SELECT doc_number, amount, memo, issued_on, customer_ref, customer_email FROM invoices WHERE client_id=? ORDER BY issued_on DESC LIMIT 1", (cid,))
     ws = todos(con, "SELECT status, template, signer_name, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (cid,))
     from datetime import date, timedelta
@@ -323,11 +323,11 @@ def marcar_pagamento_no_asana(con, invoice_id):
             alvo = None
     t = um(con, """SELECT t.id, t.title, l.external_id AS gid FROM tasks t
                    JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
-                   WHERE t.client_id=? AND t.due_on=?  ORDER BY t.id DESC LIMIT 1""", (inv["client_id"], alvo)) if alvo else None
+                   WHERE t.client_id=? AND t.due_on=? AND t.deleted_at IS NULL ORDER BY t.id DESC LIMIT 1""", (inv["client_id"], alvo)) if alvo else None
     if not t:
         t = um(con, """SELECT t.id, t.title, l.external_id AS gid FROM tasks t
                        JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
-                       WHERE t.client_id=? AND t.status='open' ORDER BY ABS(julianday(COALESCE(t.due_on, date('now'))) - julianday(?)) LIMIT 1""",
+                       WHERE t.client_id=? AND t.status='open' AND t.deleted_at IS NULL ORDER BY ABS(julianday(COALESCE(t.due_on, date('now'))) - julianday(?)) LIMIT 1""",
                 (inv["client_id"], alvo or agora()[:10]))
     if not t:
         return {"ok": False, "motivo": "nenhuma tarefa do cliente com data batendo"}
@@ -533,7 +533,7 @@ def waiver_assinada_nas_tarefas(con, waiver_id):
     if not w or w["status"] != "completed" or not w["client_id"]:
         return {"ok": False, "motivo": "waiver não assinada ou sem cliente", "tarefas": []}
     feitas = []
-    for t in todos(con, """SELECT id FROM tasks WHERE client_id=? AND status='open' AND waiver_id IS NULL
+    for t in todos(con, """SELECT id FROM tasks WHERE client_id=? AND status='open' AND deleted_at IS NULL AND waiver_id IS NULL
                            ORDER BY due_on""", (w["client_id"],)):
         try:
             r = anexar_waiver_na_tarefa(con, t["id"])
@@ -547,6 +547,9 @@ def processar_eventos(con, user_id, limite=3):
     """Transforma eventos NEW em comandos para o agente (um por evento), respeitando as regras."""
     disparados = 0
     for ev in todos(con, "SELECT * FROM ai_events WHERE status='NEW' ORDER BY id LIMIT ?", (limite,)):
+        if ev["entity_type"] == "task" and um(con, "SELECT 1 AS x FROM tasks WHERE id=? AND deleted_at IS NOT NULL", (ev["entity_id"],)):
+            atualizar(con, "ai_events", ev["id"], status="SKIPPED", handled_at=agora(), note="serviço excluído no painel")
+            continue                                      # #219: a IA não age em serviço excluído
         if ev["kind"] == "task.created" and regra_ligada_nome(con, "waiver_na_tarefa"):
             try:                                          # mecânico e independente da IA: a waiver vai junto
                 anexar_waiver_na_tarefa(con, ev["entity_id"])

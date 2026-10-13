@@ -104,3 +104,42 @@ def renomear(dados: RenomearIn, request: Request, con: sqlite3.Connection = Depe
     if not feitos and falhas:
         raise HTTPException(502, "Nenhum serviço foi renomeado: " + "; ".join(f["motivo"] for f in falhas[:3]))
     return {"renomeados": feitos, "falhas": falhas, "nome": nome}
+
+
+# ------------------------------------------------------------------ excluir e restaurar (#219)
+# Dono, 13/10: "somente o acesso livre e o gerente tenham a possibilidade de excluir uma tarefa
+# facilmente. Ela exclui, deixa de ser mostrada, mas lá no histórico de serviço ela continua sendo
+# armazenada como uma tarefa excluída, com todo o histórico de logs para auditoria."
+# Excluir é uma marca: a linha fica no banco, a tarefa fica no Asana (a sincronia só atualiza os
+# campos que lê, e a marca sobrevive), e o serviço some do Calendário, do balcão, dos contadores,
+# de Precisa de atenção e do que a IA faz sozinha. No card, continua no histórico, como excluído.
+class ExcluirIn(BaseModel):
+    motivo: str | None = None
+
+
+@r.post("/{tid}/excluir")
+def excluir(tid: int, dados: ExcluirIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+            u=Depends(auth.exige("MANAGER"))):
+    t = _tarefa(con, tid)
+    if t["deleted_at"]:
+        raise HTTPException(409, "Este serviço já foi excluído.")
+    motivo = (dados.motivo or "").strip()[:300] or None
+    con.execute("UPDATE tasks SET deleted_at=?, deleted_by=?, deleted_reason=? WHERE id=?", (agora(), u["id"], motivo, tid))
+    auditar(con, "task.deleted", f"user:{u['id']}", user_id=u["id"], entity_type="task", entity_id=tid,
+            detail={"titulo": t["title"], "data": t["due_on"], "client_id": t["client_id"], "motivo": motivo,
+                    "asana": _gid(con, tid)}, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True, "task_id": tid}
+
+
+@r.post("/{tid}/restaurar")
+def restaurar(tid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    t = _tarefa(con, tid)
+    if not t["deleted_at"]:
+        raise HTTPException(409, "Este serviço não está excluído.")
+    con.execute("UPDATE tasks SET deleted_at=NULL, deleted_by=NULL, deleted_reason=NULL WHERE id=?", (tid,))
+    auditar(con, "task.restored", f"user:{u['id']}", user_id=u["id"], entity_type="task", entity_id=tid,
+            detail={"titulo": t["title"], "data": t["due_on"], "excluido_em": t["deleted_at"], "motivo": t["deleted_reason"]},
+            ip=auth._ip(request))
+    con.commit()
+    return {"ok": True, "task_id": tid}

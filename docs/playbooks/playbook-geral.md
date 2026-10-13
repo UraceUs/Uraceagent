@@ -299,6 +299,7 @@ Primeiro nome parecido é só suspeita.
 | Caso | O que fazer |
 |---|---|
 | serviço caiu no card errado | no card, aba Serviços › **Mover** (gerente+) e escolha o cliente certo |
+| serviço que não devia estar no calendário | Calendário › no serviço, **Excluir** (gerente+ e acesso livre), com o motivo. Some do calendário, do balcão, dos contadores e dos avisos, e a IA não age mais nele. No card, aba Serviços, continua como **excluído** (quem, quando, por quê), com **Restaurar**. No Asana nada muda; a auditoria guarda `task.deleted` e `task.restored` (#219) |
 | dois cards da mesma pessoa | Clientes › **⧉ Unir dois clientes**. O registro unido fica guardado e auditado |
 | pares com nome quase igual | Clientes › **Possíveis duplicados**; dá para pedir o parecer da IA. A decisão é humana |
 

@@ -355,7 +355,7 @@ def sync_asana(con):
         sincronizar_corridas(con)
         # tarefa de dia passado ainda aberta: a IA confere e move sozinha (evento, uma vez por tarefa)
         hoje = __import__("datetime").date.today().isoformat()
-        for t in todos(con, "SELECT id, title, section, due_on, client_id FROM tasks WHERE status='open' AND due_on < ? AND section_gid IN (%s)" % ",".join("?" * len(SECOES_DIAS)),
+        for t in todos(con, "SELECT id, title, section, due_on, client_id FROM tasks WHERE status='open' AND deleted_at IS NULL AND due_on < ? AND section_gid IN (%s)" % ",".join("?" * len(SECOES_DIAS)),
                        (hoje, *SECOES_DIAS.keys())):
             _evento(con, "task.overdue", "task", t["id"], t["client_id"], f"{t['title']} ({t['section']}, {t['due_on']}) ainda aberta depois da data")
         limpos = identidade.limpar_nao_clientes(con)

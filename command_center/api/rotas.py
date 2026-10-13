@@ -116,9 +116,9 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
     atencao_itens = atencao.coletar(con)
     return {
         "active_clients": n("SELECT COUNT(*) AS n FROM clients WHERE status='ACTIVE'"),
-        "tasks_due_today": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND due_on=?", (hoje,)),
-        "overdue_tasks": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND due_on<?", (hoje,)),
-        "upcoming_7d": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND due_on BETWEEN ? AND ?",
+        "tasks_due_today": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND deleted_at IS NULL AND due_on=?", (hoje,)),
+        "overdue_tasks": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND deleted_at IS NULL AND due_on<?", (hoje,)),
+        "upcoming_7d": n("SELECT COUNT(*) AS n FROM tasks WHERE status='open' AND deleted_at IS NULL AND due_on BETWEEN ? AND ?",
                          (hoje, (date.today() + timedelta(days=7)).isoformat())),
         "waivers_open": n("SELECT COUNT(*) AS n FROM waivers WHERE status IN ('sent','delivered') AND COALESCE(internal,0)=0"),
         "waivers_bounced": n("SELECT COUNT(*) AS n FROM waivers WHERE status='autoresponded' AND COALESCE(internal,0)=0"),
@@ -209,10 +209,10 @@ def clients(response: Response, status: str | None = None, q: str | None = None,
         where.append("(c.name LIKE ? OR c.pilot_name LIKE ? OR c.email LIKE ?)"); p += [f"%{q}%"] * 3
     return paginar(con, f"""
         SELECT c.*, s.label AS stage,
-          (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status='open') AS open_tasks,
-          (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.status='completed') AS done_tasks,
-          (SELECT MAX(due_on) FROM tasks t WHERE t.client_id=c.id AND t.status='completed') AS last_service,
-          (SELECT MIN(due_on) FROM tasks t WHERE t.client_id=c.id AND t.status='open' AND due_on>=date('now')) AS next_service,
+          (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='open') AS open_tasks,
+          (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='completed') AS done_tasks,
+          (SELECT MAX(due_on) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='completed') AS last_service,
+          (SELECT MIN(due_on) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='open' AND due_on>=date('now')) AS next_service,
           (SELECT status FROM waivers w WHERE w.client_id=c.id ORDER BY sent_at DESC LIMIT 1) AS waiver_status,
           (SELECT COUNT(*) FROM emails e WHERE e.client_id=c.id AND e.handled=0) AS emails_open,
           (SELECT MAX(synced_at) FROM tasks t WHERE t.client_id=c.id) AS last_activity
@@ -227,7 +227,9 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     if not c:
         raise HTTPException(404, "Client not found.")
     fin = auth.pode(u["role"], "MANAGER")
-    tarefas = todos(con, "SELECT * FROM tasks WHERE client_id=? ORDER BY due_on DESC", (cid,))
+    # #219: o excluído continua no histórico do card, marcado, com quem excluiu
+    tarefas = todos(con, """SELECT t.*, ud.name AS deleted_by_name FROM tasks t LEFT JOIN users ud ON ud.id=t.deleted_by
+                            WHERE t.client_id=? ORDER BY t.due_on DESC""", (cid,))
     for t in tarefas:
         t["links"] = _links(con, "task", t["id"])
     waivers = todos(con, "SELECT * FROM waivers WHERE client_id=? ORDER BY sent_at DESC", (cid,))
@@ -249,7 +251,7 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
         return f"{d[8:10]}/{d[5:7]}/{d[:4]}" if d and len(d) >= 10 else (d or "")
     tl = []
     for t in tarefas:
-        tl.append({"at": t["due_on"], "kind": "SERVICE", "title": t["title"], "status": t["status"], "entity": {"type": "task", "id": t["id"]},
+        tl.append({"at": t["due_on"], "kind": "SERVICE", "title": t["title"], "status": "deleted" if t["deleted_at"] else t["status"], "entity": {"type": "task", "id": t["id"]},
                    "detail": f"{t['section'] or ''}" + (f" · subtarefas {t['subtasks_done'] or 0}/{t['subtasks_total']}" if t.get("subtasks_total") else ""), "links": t["links"]})
     for w in waivers:
         tl.append({"at": (w["sent_at"] or "")[:10], "kind": "WAIVER_SENT", "title": f"Waiver {w['template']} → {w['signer_name']}", "status": w["status"], "entity": {"type": "waiver", "id": w["id"]},

@@ -109,6 +109,8 @@ No mês, 🏁 marca dia com corrida, e o número mostra quantos serviços e sess
   - **Card** abre o card do cliente.
   - **Peças** abre o balcão já com esse cliente escolhido (capítulo 4).
   - Embaixo, os checklists daquele kart.
+  - **Excluir** só aparece para o gerente e o acesso livre. Viu um serviço que não devia estar
+    ali? Avise o gerente.
 - **Corridas:** as corridas do calendário naquele dia, com os pilotos inscritos e os
   checklists de cada um.
 - **Sessões marcadas pelo site:** manhã, tarde ou dia todo, com o piloto. "Esperando" quer

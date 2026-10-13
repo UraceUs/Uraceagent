@@ -58,6 +58,7 @@ export interface Task {
   subtasks_total: number | null; subtasks_done: number | null; synced_at: string
   fields?: string | null; section_gid?: string | null; waiver_id?: number | null
   client_name?: string | null; links?: Link[]
+  deleted_at?: string | null; deleted_by_name?: string | null; deleted_reason?: string | null
 }
 
 export interface Waiver {
