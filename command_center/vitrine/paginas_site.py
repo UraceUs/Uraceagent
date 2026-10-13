@@ -173,9 +173,9 @@ def servico(host, d):
 </div></section>""")
     if d.get("curriculo"):
         partes.append(f"""<section class="faixa escura" aria-labelledby="h-curr"><div class="largura duas">
-  <div><h2 id="h-curr">Curriculum highlights</h2>
+  <div><h2 id="h-curr">Curriculum Highlights</h2>
     <dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
-  <div><h2>Program objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
+  <div><h2>Program Objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
 </div></section>""")
     if d.get("logistica"):
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-log"><div class="largura duas">
@@ -272,8 +272,8 @@ def academy(host, planos=None):
   <div><h2>{e(d['inclui_titulo'])}</h2>{_lista(d['inclui'])}</div>
 </div></section>
 <section class="faixa escura" aria-labelledby="h-curr"><div class="largura duas">
-  <div><h2 id="h-curr">Curriculum highlights</h2><dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
-  <div><h2>Program objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
+  <div><h2 id="h-curr">Curriculum Highlights</h2><dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
+  <div><h2>Program Objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
 </div></section>
 <section class="faixa clara" aria-labelledby="h-carreira"><div class="largura estreita">
   <h2 id="h-carreira">{e(d['carreira_titulo'])}</h2><p>{e(d['carreira_intro'])}</p>{_lista(d['carreira'])}
