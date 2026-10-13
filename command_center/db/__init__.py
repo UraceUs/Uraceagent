@@ -254,6 +254,9 @@ MIGRACOES = [
     ("suit_orders", "discarded_by", "INTEGER REFERENCES users(id)"),
     # 13/10 — dono (#198): "um switch para poder ligar e desligar IA naquele pedido". 1 = a IA age no pedido.
     ("suit_orders", "ia_ligada", "INTEGER NOT NULL DEFAULT 1"),
+    # 13/10 — dono (#206): "Escaneou, selecionou o cliente, já finaliza. Não tem essa de ter que confirmar
+    # depois". A leitura do celular vai direto para a OS; só o que não pode ir fica pendente, com o motivo.
+    ("counter_pending", "motivo", "TEXT"),
     # 01/10 — dono (#67): "todo agendamento... vira uma tarefa no asana".
     ("bookings", "asana_gid", "TEXT"),
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana

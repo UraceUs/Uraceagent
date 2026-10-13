@@ -276,10 +276,11 @@ function AEnviar() {
   </Section>
 }
 
-/* #180: o que o mecânico leu no celular (peça → piloto do dia) espera aqui. O gerente confirma
- * — aí sim entra no estoque e na invoice de peças do dia da leitura — ou descarta. */
+/* #180 → #206: a leitura do celular com cliente vai direto para a OS (dono, 13/10: "Não tem essa de ter
+ * que confirmar depois"). Aqui ficam só as que não puderam ir, com o motivo: o gerente resolve e
+ * confirma — aí entra no estoque e na invoice de peças do dia da leitura — ou descarta. */
 interface Pend { id: number; code: string; peca: string | null; pilot_name: string | null; client_id: number | null
-  service_date: string; at: string; por: string | null
+  service_date: string; at: string; por: string | null; motivo?: string | null
   item?: { id: number; name: string; price: number | null; qbo_item_id: string | null; do_cliente: number; nosso?: number } }
 
 function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; total: number } | null) => void }) {
@@ -325,6 +326,7 @@ function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; to
       {p.item && p.item.price == null && <Chip tone="warn">{tr("sem preço")}</Chip>}
       {p.item && (p.item.nosso ?? 1) <= 0 && <Chip tone="warn">{tr("sem saldo na prateleira")}</Chip>}
     </div>
+    {p.motivo && <p className="small" style={{ margin: 0 }}><b>{tr("Por que não foi direto para a OS:")}</b> {p.motivo}</p>}
     {p.item && (p.item.nosso ?? 1) <= 0 && <p className="small muted" style={{ margin: 0 }}>{tr("A URACE não tem esta peça contada no estoque: para cobrar, conte a prateleira antes (Contar o estoque, nesta tela).")}</p>}
     {!p.client_id && <Picker label={tr("Cliente desta peça")} value={cliente} onPick={setCliente} />}
     {!temItem && <button className="btn sm" onClick={() => setNovo(true)}>{tr("Dizer que peça é")}</button>}
@@ -350,7 +352,7 @@ function Revisao() {
   const carregar = useCallback(() => { api.get<{ itens: Pend[]; total: number }>(`/balcao/revisao${qs({ limit: limite })}`).then(setD).catch(() => setD({ itens: [], total: 0 })) }, [limite])
   useEffect(() => { carregar() }, [carregar])
   return <Section title={tr("Revisão: lidas no celular")} count={d?.total}>
-    {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para revisar")}>{tr("O que o mecânico registra no celular aparece aqui para você confirmar.")}</Empty>
+    {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para revisar")}>{tr("A leitura do celular vai direto para a OS do cliente. Aqui aparece só a que precisa de você (código novo, sem cliente, sem preço, sem saldo).")}</Empty>
       : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <ItemRevisao key={p.id} p={p} onMudou={r => r ? setD(r) : carregar()} />)}
         {d.total > d.itens.length && <button className="btn ghost" onClick={() => setLimite(l => Math.min(200, l + 50))}>{tr("Carregar mais")}</button>}</div>}
   </Section>

@@ -134,11 +134,13 @@ use **Outro cliente** (capítulo 4).
 | Passo | Quem | O que acontece |
 |---|---|---|
 | 1. Ler a peça | você | a câmera lê o código da embalagem ou a etiqueta QR da prateleira |
-| 2. Tocar no piloto | você | a peça entra **pendente**, no dia escolhido, com o seu nome |
-| 3. Revisão | gerente | **cobrar**, **guardar para o cliente**, **usar a do cliente** ou **descartar** |
-| 4. Invoice de peças | gerente | uma por cliente por dia, no QuickBooks; quem envia ao cliente é o gerente |
+| 2. Tocar no piloto | você | a peça vai **direto para a OS** do piloto naquele dia: sai do estoque e entra na invoice de peças |
+| 3. Próximas peças | você | com a operação aberta, cada peça lida já vai para o mesmo piloto |
+| 4. Encerrar | você | toque em **Encerrar**: aparece o resumo e você passa para o próximo piloto |
+| 5. Enviar a invoice | gerente | uma por cliente por dia, no QuickBooks; ela **não é enviada sozinha** |
 
-Pendente **não cobra nada** e **não mexe no estoque** até o gerente decidir.
+**Não tem confirmação depois** (dono, 13/10: *"Escaneou, selecionou o cliente, já finaliza"*).
+Escaneou uma vez, já tem uma peça na OS do cliente. Escaneou duas, tem duas.
 
 Esta é a tarefa principal no box. O celular faz quase tudo sozinho: você **lê a peça** e
 **toca no piloto**.
@@ -151,7 +153,7 @@ Esta é a tarefa principal no box. O celular faz quase tudo sozinho: você **lê
 A tela tem duas metades: **em cima, a câmera**, sempre lendo. **Embaixo, a peça e os
 pilotos.**
 
-### Passo a passo
+### Passo a passo: as peças de um piloto
 
 1. Confira o dia no topo: **Ontem**, **Hoje** ou **Amanhã**. O padrão é hoje.
 2. Aponte a câmera para o **código da peça**: o código de barras da embalagem ou a
@@ -161,30 +163,36 @@ pilotos.**
    - **sessão** (marcada pelo site),
    - **corrida** (do calendário),
    - **serviço** (do Asana).
+5. Aparece **✓ peça → piloto · na OS**. A operação daquele piloto fica aberta: a faixa
+   **"Lançando para …"** mostra o nome e quantas peças já foram.
+6. Leia a próxima peça: ela **já vai para o mesmo piloto**, sem tocar de novo.
+7. Acabou? Toque em **Encerrar**. Aparece **"Operação encerrada"**, com a lista das peças.
+8. Toque em **Próximo piloto** e comece de novo.
 
-   O botão mostra também quantas peças daquele piloto, no dia, ainda esperam a revisão do
-   gerente.
-5. Pronto. Aparece **✓ peça → piloto** e a câmera volta a ler sozinha.
+Na faixa da operação, escolha de onde a peça sai: **Galpão**, **Trailer** ou **Pista**.
+
+Prefere começar pelo piloto? Toque em **"Escolher o piloto antes de ler"**, escolha o piloto e
+leia as peças.
 
 **Cada leitura vale uma peça.** Duas peças iguais: leia duas vezes. A mesma peça parada na
 frente da câmera não é lida de novo por uns 3 segundos.
 
-Embaixo aparecem as suas últimas leituras do dia que ainda esperam a revisão, para você
-conferir.
+Embaixo aparecem as suas últimas leituras do dia: ✓ foi para a OS, ⏳ ficou para o gerente.
 
-### O que acontece depois
+### Quando a peça fica para o gerente (⏳)
 
-1. A peça entra como **pendente**. Ela **ainda não cobra nada** e **ainda não mexe no
-   estoque**.
-2. O **gerente** vê a peça no Command Center, na **Revisão** do balcão, com o seu nome.
-3. O gerente decide:
-   - **Cobrar:** a peça entra na **invoice de peças** daquele cliente, daquele dia;
-   - **Guardar para o cliente:** a peça vai para o estoque do cliente, sem cobrar;
-   - **Usar a do cliente:** quando o cliente já tem aquela peça guardada com a gente;
-   - **Descartar:** quando a leitura estava errada.
-4. A invoice **não é enviada sozinha**. Quem envia ao cliente é o gerente.
+Às vezes a peça não pode ir direto para a OS. Ela não se perde: fica **para o gerente**, com o
+motivo escrito na tela. Acontece quando:
 
-Você **não precisa** revisar nada pelo celular. Leia e toque no piloto.
+- o código é **novo** (o sistema ainda não conhece a peça);
+- você tocou em **Decidir depois**, ou o piloto do site ainda **não tem card**;
+- a peça **não tem preço** ou **não tem item no QuickBooks**;
+- a URACE **não tem saldo** contado daquela peça (veja "Contar o estoque");
+- o cliente **tem aquela peça guardada** com a gente (usar a dele ou cobrar uma nova é o
+  gerente que decide).
+
+O gerente resolve isso na **Revisão** do balcão, no painel. Você não precisa fazer nada além
+de avisar se for urgente.
 
 ### O piloto não está na lista ("Outro cliente")
 
@@ -194,7 +202,7 @@ Você **não precisa** revisar nada pelo celular. Leia e toque no piloto.
 4. Confira o nome **antes** de tocar.
 
 Se não aparecer ninguém (**"Nenhum cliente com esse nome."**), toque em **Decidir depois**
-e avise o gerente. A peça fica pendente, **sem piloto**, e o gerente escolhe o cliente na
+e avise o gerente. A peça fica para o gerente, **sem piloto**, e ele escolhe o cliente na
 revisão.
 
 ### Outro dia
@@ -208,10 +216,10 @@ revisão.
 
 | Situação | O que fazer |
 |---|---|
-| Tocou no piloto errado e o **✓** ainda está na tela | Toque em **Desfazer** na faixa do ✓. Ela some em alguns segundos. |
-| O ✓ já sumiu | Embaixo, em **"Suas últimas leituras"**, toque em **Desfazer** ao lado da peça. Vale enquanto o gerente não revisou. Depois, leia de novo no piloto certo. |
+| Tocou no piloto errado e o **✓** ainda está na tela | Toque em **Desfazer** na faixa do ✓. A peça volta para a prateleira e sai da OS. |
+| O ✓ já sumiu | Embaixo, em **"Suas últimas leituras"**, toque em **Desfazer** ao lado da peça. Vale enquanto a invoice não foi enviada nem paga. Depois, leia de novo no piloto certo. |
 | Leu a peça, mas não quer lançar | Toque em **Ler outra**. Nada é registrado. |
-| O gerente já confirmou a peça | Fale com o gerente. Ele corrige no balcão do painel enquanto a invoice não foi enviada. Invoice já enviada só se ajusta no QuickBooks, pelo gerente. |
+| A invoice já foi enviada ou paga | Fale com o gerente. Invoice enviada ou paga só se ajusta no QuickBooks, pelo gerente. |
 
 Pelo celular, você desfaz **a sua própria leitura**, enquanto ela ainda espera a revisão. Depois
 que o gerente confirmou, só ele corrige.
@@ -262,7 +270,7 @@ Quem imprime as etiquetas é o **gerente**.
 
 A tela mostra **"Código novo"** e a frase **"O gerente diz que peça é na revisão."**
 
-1. Pode lançar normalmente: toque no piloto. A peça entra pendente, e o gerente diz que peça é.
+1. Pode lançar normalmente: toque no piloto. A peça fica para o gerente (⏳), e ele diz que peça é.
 2. Ou toque em **Ler outra**, se leu o código errado.
 3. Avise o gerente que a etiqueta ou o código não foi reconhecido.
 
@@ -463,8 +471,10 @@ Quem compra já vê o pedido. Quando a compra chega, a tela da compra tem
 
 - **Balcão:** onde a peça usada vira cobrança do cliente.
 - **Balcão do celular:** a tela de ler a peça e tocar no piloto (parts.urace.us).
-- **Pendente:** peça lida no celular, esperando o gerente confirmar.
-- **Revisão:** a lista do gerente com as peças pendentes.
+- **OS do cliente:** as peças daquele cliente naquele dia (a invoice de peças do dia).
+- **Operação:** as peças de um piloto, lidas uma atrás da outra, até tocar em **Encerrar**.
+- **Para o gerente (⏳):** peça lida que não pôde ir direto para a OS; o motivo aparece na tela.
+- **Revisão:** a lista do gerente com as peças que ficaram para ele.
 - **Invoice de peças:** a cobrança das peças de um cliente num dia. Uma por cliente por dia.
 - **COBRAR / GUARDAR:** os dois modos do balcão completo. Cobrar entra na invoice; guardar vai
   para o estoque do cliente, sem cobrar.

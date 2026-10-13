@@ -14,7 +14,8 @@ from command_center.tests.test_balcao_rapido import AMANHA, B, HOJE, cli  # noqa
 
 def _pendente(cli, data=HOJE):  # noqa: F811
     h = entra(cli)
-    return cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": data, "client_id": cli.leo}, headers=h).json()["id"]
+    # "decidir depois": a leitura que fica para a revisão (com cliente, ela vai direto para a OS)
+    return cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": data}, headers=h).json()["id"]
 
 
 # ------------------------------------------------------------------ a revisão diz de onde saiu
@@ -26,7 +27,7 @@ def test_revisao_confirma_tirando_do_local_escolhido(cli):  # noqa: F811
     h = entra(cli, "ger@urace.us")
     item = cli.get(f"{B}/revisao").json()["itens"][0]["item"]
     assert item["nosso"] == 5, "a revisão mostra quanto a URACE tem"
-    r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "local": "trailer"}, headers=h)
+    r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "local": "trailer", "client_id": cli.leo}, headers=h)
     assert r.status_code == 200, r.text
     con = conectar()
     trailer = estoque.local(con, "trailer")["id"]
@@ -37,7 +38,7 @@ def test_revisao_confirma_tirando_do_local_escolhido(cli):  # noqa: F811
 def test_revisao_sem_saldo_no_local_e_recusada_e_a_leitura_continua_pendente(cli):  # noqa: F811
     pid = _pendente(cli)
     h = entra(cli, "ger@urace.us")
-    r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "local": "pista"}, headers=h)
+    r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "local": "pista", "client_id": cli.leo}, headers=h)
     assert r.status_code == 400
     assert um(conectar(), "SELECT status FROM counter_pending WHERE id=?", (pid,))["status"] == "pendente"
 
@@ -46,7 +47,7 @@ def test_revisao_sem_saldo_no_local_e_recusada_e_a_leitura_continua_pendente(cli
 def _paga(cli):  # noqa: F811
     pid = _pendente(cli)
     h = entra(cli, "ger@urace.us")
-    s = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar"}, headers=h).json()["leitura"]
+    s = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "client_id": cli.leo}, headers=h).json()["leitura"]
     cli.qbo.qbo_invoice = lambda id: {"id": id, "numero": "URACE-0300", "cliente": "Maria Santos", "total": 89.5, "saldo": 0}
     r = cli.post(f"{B}/invoices/{s['parts_invoice_id']}/conferir-pagamento", headers=h).json()
     assert r["paga"] is True
@@ -73,7 +74,7 @@ def test_invoice_paga_sai_da_tela_do_cliente_no_dia_seguinte(cli, monkeypatch): 
 def test_enviar_confere_no_quickbooks_e_nao_manda_a_ja_paga(cli):  # noqa: F811
     pid = _pendente(cli)
     h = entra(cli, "ger@urace.us")
-    s = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar"}, headers=h).json()["leitura"]
+    s = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "client_id": cli.leo}, headers=h).json()["leitura"]
     cli.qbo.qbo_invoice = lambda id: {"id": id, "numero": "URACE-0300", "cliente": "Maria Santos", "total": 89.5, "saldo": 0}
     r = cli.post(f"{B}/invoices/{s['parts_invoice_id']}/enviar", headers=h)
     assert r.status_code == 400 and "já está paga" in r.json()["detail"]
@@ -85,7 +86,7 @@ def test_enviar_confere_no_quickbooks_e_nao_manda_a_ja_paga(cli):  # noqa: F811
 def test_enviar_com_saldo_manda(cli):  # noqa: F811
     pid = _pendente(cli)
     h = entra(cli, "ger@urace.us")
-    s = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar"}, headers=h).json()["leitura"]
+    s = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "client_id": cli.leo}, headers=h).json()["leitura"]
     cli.qbo.qbo_invoice = lambda id: {"id": id, "numero": "URACE-0300", "cliente": "Maria Santos", "total": 89.5, "saldo": 89.5}
     r = cli.post(f"{B}/invoices/{s['parts_invoice_id']}/enviar", headers=h)
     assert r.status_code == 200 and r.json()["status"] == "enviada"
