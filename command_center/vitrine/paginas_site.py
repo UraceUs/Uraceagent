@@ -59,19 +59,24 @@ def _trilha(host, *passos):
     return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": itens}
 
 
-def _passos(titulo, passos):
+def _passos(titulo, passos, intro=None):
     return f"""<section class="faixa clara" aria-labelledby="h-passos"><div class="largura">
-  <h2 id="h-passos">{e(titulo)}</h2>
+  <h2 id="h-passos">{e(titulo)}</h2>{f'<p>{e(intro)}</p>' if intro else ''}
   <ol class="passos">{"".join(f"<li>{e(p)}</li>" for p in passos)}</ol>
 </div></section>"""
 
 
-def _depoimentos(itens):
+def _depoimentos(itens, titulo="What Our Clients Say", sub=None):
+    """Depoimentos: (nome, texto) ou (nome, cargo, texto)."""
     if not itens:
         return ""
+    def um(d):
+        n, *c, t = d
+        quem = e(n) + (f" · {e(c[0])}" if c and c[0] else "")
+        return f'<blockquote><p>{e(t)}</p><footer>{quem}</footer></blockquote>'
     return f"""<section class="faixa escura" aria-labelledby="h-depo"><div class="largura">
-  <h2 id="h-depo">What our clients say</h2>
-  <div class="depoimentos">{"".join(f'<blockquote><p>{e(t)}</p><footer>{e(n)}</footer></blockquote>' for n, t in itens)}</div>
+  <h2 id="h-depo">{e(titulo)}</h2>{f'<p class="lede">{e(sub)}</p>' if sub else ''}
+  <div class="depoimentos">{"".join(um(d) for d in itens)}</div>
 </div></section>"""
 
 
@@ -90,7 +95,7 @@ def _fecho(titulo, sub, cta, cor="vermelha"):
     return f"""<section class="faixa {cor}" aria-labelledby="h-fecho"><div class="largura centro">
   <h2 id="h-fecho">{e(titulo)}</h2>{f'<p class="fecho-sub">{e(sub)}</p>' if sub else ''}
   <div class="hero-acoes centro"><a class="btn {'btn-branco' if cor == 'vermelha' else ''}" href="{e(href)}">{e(rot)}</a>
-    <a class="btn btn-linha-branca" href="{e(C.SITE['whatsapp'])}" rel="noopener">Need more details? Let's chat</a></div>
+    <a class="btn btn-linha-branca" href="{e(C.SITE['whatsapp'])}" rel="noopener">Need more details before booking? Let’s chat.</a></div>
 </div></section>"""
 
 
@@ -132,17 +137,20 @@ def servico(host, d):
 </div></section>""")
     if d.get("fornece") or d.get("espera"):
         partes.append(f"""<section class="faixa escura" aria-labelledby="h-inclui"><div class="largura">
-  <h2 id="h-inclui">{e(d.get('fornece_titulo') or 'What to expect')}</h2>
+  <h2 id="h-inclui">{e(d.get('fornece_titulo') or 'What to expect')}</h2>{f"<p>{e(d['fornece_intro'])}</p>" if d.get('fornece_intro') else ''}
   <div class="inclui">
     {f"<div><h3>What to expect</h3>{_lista(d['espera'])}</div>" if d.get('espera') else ''}
-    {f"<div><h3>We provide</h3>{_lista(d['fornece'])}</div>" if d.get('fornece') else ''}
-    {f"<div><h3>You bring</h3>{_lista(d['trazer'])}</div>" if d.get('trazer') else ''}
+    {f"<div><h3>{e(d.get('fornece_rotulo') or 'What URACE Provides')}</h3>{_lista(d['fornece'])}</div>" if d.get('fornece') else ''}
+    {f"<div><h3>What YOU Need to Bring</h3>{_lista(d['trazer'])}</div>" if d.get('trazer') else ''}
   </div>
 </div></section>""")
     if d.get("formatos"):
         acc = []
         for t, intro, itens in d["formatos"]:
-            acc.append(f"<details><summary>{e(t)}</summary><div class='faq-corpo'><p>{e(intro)}</p>{_lista(itens) if itens else ''}</div></details>")
+            if intro or itens:
+                acc.append(f"<details><summary>{e(t)}</summary><div class='faq-corpo'>{f'<p>{e(intro)}</p>' if intro else ''}{_lista(itens) if itens else ''}</div></details>")
+            else:                       # o site atual mostra só o título (sem texto embaixo)
+                acc.append(f"<p class='formato'>{e(t)}</p>")
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-formatos"><div class="largura duas">
   <div><h2 id="h-formatos">{e(d['formatos_titulo'])}</h2><p>{e(d['formatos_intro'])}</p></div>
   <div class="faq">{"".join(acc)}</div>
@@ -151,16 +159,17 @@ def servico(host, d):
         partes.append(f"""<section class="faixa vermelha" aria-labelledby="h-porque"><div class="largura">
   <p class="eyebrow">Why URACE</p><h2 id="h-porque">{e(d['porque_titulo'])}</h2>
   {f"<p>{e(d['porque_intro'])}</p>" if d.get('porque_intro') else ''}{_lista(d['porque'], 'checks claras')}
+  {f"<p>{e(d['porque_fecho'])}</p>" if d.get('porque_fecho') else ''}
 </div></section>""")
     if d.get("dias"):
         cards = "".join(f"""<article class="dia"><img src="{estatico('img/' + f)}" alt="" width="640" height="420" loading="lazy"><h3>{e(t)}</h3><p>{e(p)}</p></article>"""
                         for t, p, f in d["dias"])
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-dias"><div class="largura">
-  <h2 id="h-dias">{e(d['dias_titulo'])}</h2><div class="dias">{cards}</div></div></section>""")
+  <h2 id="h-dias">{e(d['dias_titulo'])}</h2>{f"<p>{e(d['dias_intro'])}</p>" if d.get('dias_intro') else ''}<div class="dias">{cards}</div></div></section>""")
     if d.get("para_quem"):
         partes.append(f"""<section class="faixa clara" aria-labelledby="h-quem"><div class="largura duas">
   <div><h2 id="h-quem">{e(d.get('para_quem_titulo') or 'Who is this for?')}</h2>{f"<p>{e(d['para_quem_intro'])}</p>" if d.get('para_quem_intro') else ''}</div>
-  {_lista(d['para_quem'])}
+  <div>{_lista(d['para_quem'])}{f"<p>{e(d['para_quem_fecho'])}</p>" if d.get('para_quem_fecho') else ''}</div>
 </div></section>""")
     if d.get("curriculo"):
         partes.append(f"""<section class="faixa escura" aria-labelledby="h-curr"><div class="largura duas">
@@ -174,12 +183,12 @@ def servico(host, d):
   <div><h2>{e(d['extras_titulo'])}</h2>{_lista(d['extras'], 'lista')}</div>
 </div></section>""")
     if d.get("passos"):
-        partes.append(_passos(d["passos_titulo"], d["passos"]))
-    if d.get("investimento"):
+        partes.append(_passos(d["passos_titulo"], d["passos"], d.get("passos_intro")))
+    if d.get("investimento"):          # o preço por piloto é o do Arrive and Drive (KARTS), não texto fixo
         partes.append(f"""<section class="faixa vermelha" aria-labelledby="h-inv"><div class="largura centro">
-  <h2 id="h-inv">Investment</h2><p class="preco-grande">{e(d['investimento'])}</p></div></section>""")
+  <h2 id="h-inv">Investment</h2><p class="preco-grande">{e(d['investimento'].format(preco=usd(C.preco_minimo())))}</p></div></section>""")
     partes.append(f"""<section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita">
-  <h2 id="h-faq">Frequently asked questions</h2>{_faq(d['faq'])}</div></section>""")
+  <h2 id="h-faq">Frequently Asked Questions</h2>{_faq(d['faq'])}</div></section>""")
     partes.append(_local())
     partes.append(_depoimentos(d.get("depoimentos")))
     partes.append(_fecho(d["fecho"], d.get("fecho_sub"), d["fecho_cta"]))
@@ -193,10 +202,13 @@ def servico(host, d):
 
 def hub(host):
     d = S.HUB
+    # preço só onde o sistema tem o valor: "kart" é o menor preço do Arrive and Drive (KARTS)
+    def preco(pr):
+        return f"<em>Starting at {usd(C.preco_minimo())}</em>" if pr == "kart" else ""
     cards = "".join(f"""<a class="servico-card" href="{e(h)}"><img src="{estatico('img/' + f)}" alt="" width="640" height="400" loading="lazy">
-  <span class="servico-txt"><strong>{e(t)}</strong><span>{e(p)}</span><em>{e(pr)}</em></span></a>""" for t, p, pr, h, f in d["cartoes"])
+  <span class="servico-txt"><strong>{e(t)}</strong><span>{e(p)}</span>{preco(pr)}</span></a>""" for t, p, pr, h, f in d["cartoes"])
     corpo = f"""<section class="hero hero-servico hero-hub"><div class="hero-in">
-  <p class="eyebrow">Services · Orlando, FL</p><h1>{e(d['h1'])}</h1><p class="hero-sub">{e(d['sub'])}</p>
+  <p class="eyebrow">{e(d['eyebrow'])}</p><h1>{e(d['h1'])}</h1><p class="hero-sub">{e(d['sub'])}</p>
   <div class="hero-acoes"><a class="btn" href="{PORTAL}/reserve">Book online</a><a class="btn btn-linha" href="/contact/">Talk to us</a></div>
 </div></section>
 <section class="faixa clara" aria-labelledby="h-lista"><div class="largura">
