@@ -27,7 +27,7 @@ interface Linha { id: number; qty: number; unit_price: number; name: string; tot
 interface InvPecas { id: number; client_id: number; cliente: string | null; service_date: string; status: string; qbo_invoice_id: string | null
   doc_number: string | null; total: number; qbo_error: string | null; sent_to: string | null; linhas: Linha[]
   paga?: boolean; cartao?: boolean; paid_at?: string | null }
-interface Leitura { id: number; name: string; mode: string; qty: number; at: string; undone_at: string | null; por: string | null }
+interface Leitura { id: number; name: string; mode: string; qty: number; at: string; undone_at: string | null; por: string | null; travada?: number }
 interface Estado { cliente: Cliente; data: string; invoices: InvPecas[]; leituras: Leitura[]; gerente: boolean
   guardado: { item_id: number; name: string; qty: number; local: string }[] }
 type Lido = { tipo: 'cliente'; cliente: Cliente } | { tipo: 'peca'; codigo: string; item: Item } | { tipo: 'desconhecido'; codigo: string }
@@ -135,38 +135,61 @@ function CodigoNovo({ codigo, gerente, onFeito, onFechar }: { codigo: string; ge
   </form></Scrim>
 }
 
-/** Peça sem item no QuickBooks: o gerente escolhe a categoria e cria. */
-function ItemQbo({ item, onFeito, onFechar }: { item: Item; onFeito: () => void; onFechar: () => void }) {
+/** Peça sem item no QuickBooks ou sem preço: o gerente liga a um item que já existe lá, ou cria
+ *  dentro da categoria (#206: antes, só criar; e só no balcão com cliente aberto). */
+type ItemMin = Pick<Item, 'id' | 'name' | 'price'> & { qbo_item_id?: string | null }
+function ItemQbo({ item, onFeito, onFechar }: { item: ItemMin; onFeito: () => void; onFechar: () => void }) {
   const toast = useToast()
   const [cats, setCats] = useState<{ id: string; nome: string }[]>([])
+  const [existentes, setExistentes] = useState<{ id: string; name: string; full_name: string | null; price: number | null }[]>([])
+  const [como, setComo] = useState<'ligar' | 'criar'>('ligar')
   const [cat, setCat] = useState('')
+  const [qid, setQid] = useState(item.qbo_item_id || '')
+  const [busca, setBusca] = useState('')
   const [preco, setPreco] = useState(item.price != null ? String(item.price) : '')
   const [indo, setIndo] = useState(false)
   useEffect(() => {
-    api.get<{ categorias: { id: string; nome: string }[]; conectado: boolean }>('/balcao/categorias')
-      .then(r => { setCats(r.categorias); if (!r.conectado) toast(tr("QuickBooks não está conectado: não dá para criar o item agora."), 'crit') })
+    api.get<{ categorias: { id: string; nome: string }[]; itens: { id: string; name: string; full_name: string | null; price: number | null }[]; conectado: boolean }>('/balcao/categorias')
+      .then(r => { setCats(r.categorias); setExistentes(r.itens); if (!r.conectado) toast(tr("QuickBooks não está conectado: não dá para criar o item agora."), 'crit') })
       .catch(e => toast((e as ApiError).message, 'crit'))
   }, [toast])
-  async function criar() {
+  const termo = busca.trim().toLowerCase()
+  const lista = (termo ? existentes.filter(x => (x.full_name || x.name).toLowerCase().includes(termo)) : existentes).slice(0, 80)
+  async function salvar() {
     setIndo(true)
-    try { await api.post(`/balcao/itens/${item.id}/quickbooks`, { categoria_id: cat, price: preco ? Number(preco) : null }); toast(tr("Item criado no QuickBooks."), 'ok'); onFeito() }
-    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+    try {
+      await api.post(`/balcao/itens/${item.id}/quickbooks`, como === 'ligar'
+        ? { qbo_item_id: qid, price: preco ? Number(preco) : null }
+        : { categoria_id: cat, price: preco ? Number(preco) : null })
+      toast(como === 'ligar' ? tr("Peça ligada ao item do QuickBooks.") : tr("Item criado no QuickBooks."), 'ok'); onFeito()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
-  return <Scrim onMouseDown={onFechar}><div className="modal stack" style={{ maxWidth: 480, gap: 12 }} onMouseDown={e => e.stopPropagation()}>
+  const pronto = !!preco && (como === 'ligar' ? !!qid : !!cat)
+  return <Scrim onMouseDown={onFechar}><div className="modal stack" style={{ maxWidth: 520, gap: 12 }} onMouseDown={e => e.stopPropagation()}>
     <h2 className="h3">{item.name} {tr("no QuickBooks")}</h2>
+    <div className="row wrap" role="radiogroup" aria-label={tr("Como ligar")} style={{ gap: 8 }}>
+      <button type="button" role="radio" aria-checked={como === 'ligar'} className={`btn sm${como === 'ligar' ? ' primary' : ''}`} onClick={() => setComo('ligar')}>{tr("Item que já existe")}</button>
+      <button type="button" role="radio" aria-checked={como === 'criar'} className={`btn sm${como === 'criar' ? ' primary' : ''}`} onClick={() => setComo('criar')}>{tr("Criar item novo")}</button>
+    </div>
+    {como === 'ligar' ? <>
+      <label className="fld"><span>{tr("Buscar no catálogo")}</span><input value={busca} onChange={e => setBusca(e.target.value)} placeholder={tr("bumper, chain, MG…")} /></label>
+      <label className="fld"><span>{tr("Item do QuickBooks")}</span><select value={qid} onChange={e => { setQid(e.target.value); const x = existentes.find(i => i.id === e.target.value); if (x?.price != null && !preco) setPreco(String(x.price)) }}>
+        <option value="">—</option>{lista.map(x => <option key={x.id} value={x.id}>{x.full_name || x.name}{x.price != null ? ` · US$ ${x.price.toFixed(2)}` : ''}</option>)}</select></label>
+    </> : <label className="fld"><span>{tr("Categoria")}</span><select value={cat} onChange={e => setCat(e.target.value)}><option value="">—</option>{cats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>}
     <label className="fld"><span>{tr("Preço final (US$)")}</span><input inputMode="decimal" value={preco} onChange={e => setPreco(e.target.value)} /></label>
-    <label className="fld"><span>{tr("Categoria")}</span><select value={cat} onChange={e => setCat(e.target.value)}><option value="">—</option>{cats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onFechar}>{tr("Cancelar")}</button>
-      <button className="btn primary" disabled={indo || !cat || !preco} onClick={criar}>{indo ? <span className="spin" /> : tr("Criar item")}</button></div>
+      <button className="btn primary" disabled={indo || !pronto} onClick={salvar}>{indo ? <span className="spin" /> : como === 'ligar' ? tr("Ligar") : tr("Criar item")}</button></div>
   </div></Scrim>
 }
 
-/* Cartão no balcão (06/10, desligado até CC_BALCAO_CARTAO=1): o cartão passa no QuickBooks
+/* Cartão no balcão (06/10; aparece por padrão, CC_BALCAO_CARTAO=0 esconde): o cartão passa no QuickBooks
  * GoPayment, no leitor Bluetooth, em "Invoice payment" → cliente → esta invoice → Charge. O
  * GoPayment paga a PRÓPRIA invoice no QuickBooks (nada em dobro) e o número do cartão nunca
  * passa pelo Command Center. Aqui: o que procurar no app, o botão que abre o app e a conferência. */
 const GOPAYMENT = 'intent://#Intent;package=com.intuit.intuitgopayment;S.browser_fallback_url='
   + encodeURIComponent('https://play.google.com/store/apps/details?id=com.intuit.intuitgopayment') + ';end'
+// #206: o link "intent://" só o Android entende; no iPhone o app abre pela tela de início
+const ANDROID = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
 
 function CobrarNoCartao({ p, onFechar, onPago }: { p: InvPecas; onFechar: () => void; onPago: () => void }) {
   const toast = useToast()
@@ -187,7 +210,7 @@ function CobrarNoCartao({ p, onFechar, onPago }: { p: InvPecas; onFechar: () => 
       <div style={{ fontSize: 34, fontWeight: 700 }} className="mono">{usd(p.total)}</div>
     </div>
     <ol className="small" style={{ margin: 0, paddingLeft: 20, lineHeight: 1.6 }}>
-      <li>{tr("Abra o QuickBooks GoPayment (botão abaixo).")}</li>
+      <li>{ANDROID ? tr("Abra o QuickBooks GoPayment (botão abaixo).") : tr("Abra o app QuickBooks GoPayment no aparelho.")}</li>
       <li>{tr("Toque em")} <b>+</b> {tr("e escolha")} <b>{tr("Invoice payment")}</b>.</li>
       <li>{tr("Procure")} <b>{p.cliente || tr("o cliente")}</b> {tr("e escolha a invoice")} <b>{p.doc_number || tr("de peças de hoje")}</b> {tr("de")} <b>{usd(p.total)}</b>.</li>
       <li>{tr("Toque em")} <b>{tr("Charge")}</b> {tr("e passe o cartão no leitor (chip ou aproximação).")}</li>
@@ -196,7 +219,7 @@ function CobrarNoCartao({ p, onFechar, onPago }: { p: InvPecas; onFechar: () => 
     {saldo !== null && <Banner tone="warn">{tr("O QuickBooks ainda mostra saldo de")} {usd(saldo)} {tr("nesta invoice. Confira no GoPayment se a cobrança foi aprovada e tente de novo.")}</Banner>}
     <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>
       <button className="btn" onClick={onFechar}>{tr("Fechar")}</button>
-      <a className="btn" href={GOPAYMENT}>{tr("Abrir o GoPayment")}</a>
+      {ANDROID && <a className="btn" href={GOPAYMENT}>{tr("Abrir o GoPayment")}</a>}
       <button className="btn primary" disabled={indo} onClick={conferir}>{indo ? <span className="spin" /> : tr("Já passei o cartão")}</button>
     </div>
   </div></Scrim>
@@ -243,38 +266,47 @@ function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean;
 function AEnviar() {
   const { can } = useAuth()
   const [d, setD] = useState<{ itens: InvPecas[]; total: number } | null>(null)
-  const carregar = useCallback(() => { api.get<{ itens: InvPecas[]; total: number }>('/balcao/invoices').then(setD).catch(() => setD({ itens: [], total: 0 })) }, [])
+  const [limite, setLimite] = useState(50)
+  const carregar = useCallback(() => { api.get<{ itens: InvPecas[]; total: number }>(`/balcao/invoices${qs({ limit: limite })}`).then(setD).catch(() => setD({ itens: [], total: 0 })) }, [limite])
   useEffect(() => { carregar() }, [carregar])
   return <Section title={tr("Invoices de peças para enviar")} count={d?.total}>
     {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para enviar")}>{tr("As invoices de peças abertas aparecem aqui até alguém enviar.")}</Empty>
-      : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <CartaoInvoice key={p.id} p={p} gerente={can('MANAGER')} onMudou={carregar} />)}</div>}
+      : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <CartaoInvoice key={p.id} p={p} gerente={can('MANAGER')} onMudou={carregar} />)}
+        {d.total > d.itens.length && <button className="btn ghost" onClick={() => setLimite(l => Math.min(200, l + 50))}>{tr("Carregar mais")}</button>}</div>}
   </Section>
 }
 
-/* #180: o que o mecânico leu no celular (peça → piloto do dia) espera aqui. O gerente confirma
- * — aí sim entra no estoque e na invoice de peças do dia da leitura — ou descarta. */
+/* #180 → #206: a leitura do celular com cliente vai direto para a OS (dono, 13/10: "Não tem essa de ter
+ * que confirmar depois"). Aqui ficam só as que não puderam ir, com o motivo: o gerente resolve e
+ * confirma — aí entra no estoque e na invoice de peças do dia da leitura — ou descarta. */
 interface Pend { id: number; code: string; peca: string | null; pilot_name: string | null; client_id: number | null
-  service_date: string; at: string; por: string | null
-  item?: { id: number; name: string; price: number | null; qbo_item_id: string | null; do_cliente: number } }
+  service_date: string; at: string; por: string | null; motivo?: string | null
+  item?: { id: number; name: string; price: number | null; qbo_item_id: string | null; do_cliente: number; nosso?: number } }
 
-function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; total: number }) => void }) {
+function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; total: number } | null) => void }) {
   const toast = useToast()
   const [cliente, setCliente] = useState<Client | null>(null)
   const [item, setItem] = useState<Item | null>(null)
   const [novo, setNovo] = useState(false)
   const [doCliente, setDoCliente] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
+  const [local, setLocal] = useState(lerLocal)          // #206: de onde a peça saiu (antes, sempre o galpão)
+  const [qbo, setQbo] = useState<ItemMin | null>(null)  // #206: sem item no QuickBooks ou sem preço, resolve aqui
+  const [depois, setDepois] = useState<{ modo: string; confirmado: boolean } | null>(null)
   const temItem = !!(p.item || item)
   const temCliente = !!(p.client_id || cliente)
+  const it: ItemMin | null = item ? { id: item.id, name: item.name, price: item.price, qbo_item_id: item.qbo_item_id } : p.item ? p.item : null
   async function confirmar(modo: string, confirmado = false) {
     setIndo(true)
     try {
       const r = await api.post<{ itens: Pend[]; total: number }>(`/balcao/revisao/${p.id}/confirmar`,
-        { modo, client_id: cliente?.id ?? null, item_id: item?.id ?? null, confirmado })
+        { modo, client_id: cliente?.id ?? null, item_id: item?.id ?? null, confirmado, local })
       toast(tr("Peça confirmada: {0}.", MODO_TXT[modo]), 'ok'); onMudou(r)
     } catch (e) {
       const er = e as ApiError
-      if (er.motivo === 'tem_do_cliente') setDoCliente(er.message); else toast(er.message, 'crit')
+      if (er.motivo === 'tem_do_cliente') setDoCliente(er.message)
+      else if (it && (er.motivo === 'precisa_item_qbo' || /preço final/.test(er.message))) { setDepois({ modo, confirmado }); setQbo(it) }
+      else toast(er.message, 'crit')
     } finally { setIndo(false) }
   }
   async function descartar() {
@@ -290,10 +322,18 @@ function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; to
           {p.item?.price != null ? ` · ${usd(p.item.price)}` : ''}</div></div>
       {!temItem && <Chip tone="warn">{tr("código novo")}</Chip>}
       {!temCliente && <Chip tone="warn">{tr("sem cliente")}</Chip>}
+      {p.item && !p.item.qbo_item_id && <Chip tone="warn">{tr("sem item no QuickBooks")}</Chip>}
+      {p.item && p.item.price == null && <Chip tone="warn">{tr("sem preço")}</Chip>}
+      {p.item && (p.item.nosso ?? 1) <= 0 && <Chip tone="warn">{tr("sem saldo na prateleira")}</Chip>}
     </div>
+    {p.motivo && <p className="small" style={{ margin: 0 }}><b>{tr("Por que não foi direto para a OS:")}</b> {p.motivo}</p>}
+    {p.item && (p.item.nosso ?? 1) <= 0 && <p className="small muted" style={{ margin: 0 }}>{tr("A URACE não tem esta peça contada no estoque: para cobrar, conte a prateleira antes (Contar o estoque, nesta tela).")}</p>}
     {!p.client_id && <Picker label={tr("Cliente desta peça")} value={cliente} onPick={setCliente} />}
     {!temItem && <button className="btn sm" onClick={() => setNovo(true)}>{tr("Dizer que peça é")}</button>}
+    {it && (!it.qbo_item_id || it.price == null) && <button className="btn sm" onClick={() => setQbo(it)}>{tr("Ligar ao QuickBooks e definir o preço")}</button>}
     {doCliente && <Banner tone="warn">{doCliente}</Banner>}
+    <label className="fld" style={{ maxWidth: 220 }}><span>{tr("A peça saiu de")}</span>
+      <select value={local} onChange={e => setLocal(e.target.value)}>{LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select></label>
     <div className="row wrap" style={{ gap: 8 }}>
       <button className="btn sm primary" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('cobrar', !!doCliente)}>{doCliente ? tr("Cobrar mesmo assim") : tr("Cobrar")}</button>
       <button className="btn sm balcao-btn-guardar" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('guardar')}>{tr("Guardar para o cliente")}</button>
@@ -301,16 +341,126 @@ function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; to
       <button className="btn sm ghost" disabled={indo} onClick={descartar}>{tr("Descartar")}</button>
     </div>
     {novo && <CodigoNovo codigo={p.code} gerente onFechar={() => setNovo(false)} onFeito={i => { setNovo(false); setItem(i) }} />}
+    {qbo && <ItemQbo item={qbo} onFechar={() => { setQbo(null); setDepois(null) }}
+      onFeito={() => { setQbo(null); const d = depois; setDepois(null); if (d) confirmar(d.modo, d.confirmado); else onMudou(null) }} />}
   </div>
 }
 
 function Revisao() {
   const [d, setD] = useState<{ itens: Pend[]; total: number } | null>(null)
-  useEffect(() => { api.get<{ itens: Pend[]; total: number }>('/balcao/revisao').then(setD).catch(() => setD({ itens: [], total: 0 })) }, [])
+  const [limite, setLimite] = useState(50)
+  const carregar = useCallback(() => { api.get<{ itens: Pend[]; total: number }>(`/balcao/revisao${qs({ limit: limite })}`).then(setD).catch(() => setD({ itens: [], total: 0 })) }, [limite])
+  useEffect(() => { carregar() }, [carregar])
   return <Section title={tr("Revisão: lidas no celular")} count={d?.total}>
-    {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para revisar")}>{tr("O que o mecânico registra no celular aparece aqui para você confirmar.")}</Empty>
-      : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <ItemRevisao key={p.id} p={p} onMudou={setD} />)}</div>}
+    {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para revisar")}>{tr("A leitura do celular vai direto para a OS do cliente. Aqui aparece só a que precisa de você (código novo, sem cliente, sem preço, sem saldo).")}</Empty>
+      : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <ItemRevisao key={p.id} p={p} onMudou={r => r ? setD(r) : carregar()} />)}
+        {d.total > d.itens.length && <button className="btn ghost" onClick={() => setLimite(l => Math.min(200, l + 50))}>{tr("Carregar mais")}</button>}</div>}
   </Section>
+}
+
+/* #206: o estoque de produção estava todo em zero, nunca contado — e sem saldo o balcão não cobra
+ * (D-2026-10-05: "primeiro conte ou dê entrada"). Contar a prateleira: ler a peça (ou a etiqueta),
+ * digitar quanto tem, gravar; o próximo item já aparece. E a peça sem código ganha a etiqueta URACE. */
+interface Contado { id: number; nome: string; qty: number; antes: number }
+function ContarEstoque() {
+  const toast = useToast()
+  const [aberto, setAberto] = useState(false)
+  const [local, setLocal] = useState(lerLocal)
+  const [texto, setTexto] = useState('')
+  const [camera, setCamera] = useState(false)
+  const [atual, setAtual] = useState<Item | null>(null)
+  const [qtd, setQtd] = useState('')
+  const [novo, setNovo] = useState<string | null>(null)
+  const [feitos, setFeitos] = useState<Contado[]>([])
+  const [indo, setIndo] = useState(false)
+  const [semCodigo, setSemCodigo] = useState(false)
+  const campo = useRef<HTMLInputElement>(null)
+  const qtdRef = useRef<HTMLInputElement>(null)
+  const ler = useCallback(async (bruto: string) => {
+    const t = bruto.trim(); setTexto(''); setCamera(false)
+    if (!t) return
+    try {
+      const r = await api.get<Lido>(`/balcao/ler${qs({ codigo: t })}`)
+      if (r.tipo === 'cliente') { vibrar(250); toast(tr("Este é o QR de um cliente. Para contar, leia a peça."), 'warn'); return }
+      if (r.tipo === 'desconhecido') { setNovo(r.codigo); return }
+      vibrar(40); setAtual(r.item); setQtd(''); setTimeout(() => qtdRef.current?.focus(), 30)
+    } catch (e) { vibrar(250); toast((e as ApiError).message, 'crit') }
+  }, [toast])
+  async function gravar(e: FormEvent) {
+    e.preventDefault()
+    if (!atual || qtd.trim() === '') return
+    setIndo(true)
+    try {
+      const r = await api.post<{ antes: number; depois: number }>('/estoque/contar', { item_id: atual.id, qty: Number(qtd), local })
+      setFeitos(f => [{ id: atual.id, nome: atual.name, qty: r.depois, antes: r.antes }, ...f.filter(x => x.id !== atual.id)])
+      toast(tr("{0}: {1} contado(s).", atual.name, r.depois), 'ok'); setAtual(null); setQtd('')
+      setTimeout(() => campo.current?.focus(), 30)
+    } catch (er) { toast((er as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Section title={tr("Contar o estoque")} count={feitos.length || undefined}>
+    <p className="small muted" style={{ marginTop: 0 }}>{tr("Sem saldo contado, o balcão não cobra a peça. Leia a peça ou a etiqueta da prateleira, digite quanto tem e grave: o próximo item já aparece.")}</p>
+    {!aberto ? <div className="row wrap" style={{ gap: 8 }}>
+      <button className="btn primary" onClick={() => { setAberto(true); setTimeout(() => campo.current?.focus(), 30) }}>{tr("Começar a contar")}</button>
+      <button className="btn" onClick={() => setSemCodigo(true)}>{tr("Peça sem código: etiqueta URACE")}</button>
+    </div> : <div className="stack" style={{ gap: 10 }}>
+      <label className="fld" style={{ maxWidth: 220 }}><span>{tr("Contando em")}</span>
+        <select value={local} onChange={e => setLocal(e.target.value)}>{LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select></label>
+      {!atual ? <form className="row wrap" style={{ gap: 8, alignItems: 'flex-end' }} onSubmit={e => { e.preventDefault(); ler(texto) }}>
+        <label className="fld grow"><span>{tr("Leia a peça")}</span>
+          <input ref={campo} value={texto} onChange={e => setTexto(e.target.value)} autoComplete="off" autoCapitalize="off" spellCheck={false} enterKeyHint="go" /></label>
+        <button type="button" className="btn primary" onClick={() => setCamera(true)}>{tr("Ler com a câmera")}</button>
+      </form> : <form className="card card-b stack" style={{ gap: 8 }} onSubmit={gravar}>
+        <b>{atual.name}</b>
+        <span className="small muted">{tr("O sistema diz que a URACE tem {0} (todos os locais).", atual.nosso)}</span>
+        <label className="fld" style={{ maxWidth: 200 }}><span>{tr("Quanto tem aqui agora")}</span>
+          <input ref={qtdRef} inputMode="decimal" value={qtd} onChange={e => setQtd(e.target.value)} /></label>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <button className="btn primary" disabled={indo || qtd.trim() === ''}>{indo ? <span className="spin" /> : tr("Gravar contagem")}</button>
+          <button type="button" className="btn ghost" onClick={() => { setAtual(null); setTimeout(() => campo.current?.focus(), 30) }}>{tr("Ler outra")}</button>
+        </div>
+      </form>}
+      {feitos.length > 0 && <div className="card"><div className="tbl">{feitos.map(f => <div className="tr" key={f.id}>
+        <span className="grow">{f.nome}</span><span className="small muted">{tr("era {0}", f.antes)}</span><b className="mono">{f.qty}</b></div>)}</div></div>}
+      <div className="row wrap" style={{ gap: 8 }}>
+        <button className="btn" onClick={() => setSemCodigo(true)}>{tr("Peça sem código: etiqueta URACE")}</button>
+        <button className="btn ghost" onClick={() => { setAberto(false); setAtual(null) }}>{tr("Terminar")}</button>
+      </div>
+    </div>}
+    {camera && <Camera onLer={ler} onFechar={() => setCamera(false)} />}
+    {novo && <CodigoNovo codigo={novo} gerente={false} onFechar={() => setNovo(null)} onFeito={i => { setNovo(null); setAtual(i); setQtd(''); setTimeout(() => qtdRef.current?.focus(), 30) }} />}
+    {semCodigo && <EtiquetaUrace onFechar={() => setSemCodigo(false)} />}
+  </Section>
+}
+
+/** Peça sem código de fábrica: o sistema dá um código URACE (Code 128) e imprime a etiqueta. */
+function EtiquetaUrace({ onFechar }: { onFechar: () => void }) {
+  const toast = useToast()
+  const [itens, setItens] = useState<{ id: number; name: string }[]>([])
+  const [id, setId] = useState('')
+  const [busca, setBusca] = useState('')
+  const [indo, setIndo] = useState(false)
+  const [pronto, setPronto] = useState<string | null>(null)
+  useEffect(() => { api.get<{ itens: { id: number; name: string }[] }>('/estoque').then(r => setItens(r.itens)).catch(() => undefined) }, [])
+  const termo = busca.trim().toLowerCase()
+  const lista = (termo ? itens.filter(i => i.name.toLowerCase().includes(termo)) : itens).slice(0, 100)
+  async function gerar() {
+    setIndo(true)
+    try {
+      const r = await api.post<{ codigo: string }>(`/balcao/itens/${id}/codigo-urace`)
+      setPronto(r.codigo)          // o PDF abre num toque (o iPhone bloqueia janela aberta depois da espera)
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Scrim onMouseDown={onFechar}><div className="modal stack" style={{ maxWidth: 480, gap: 12 }} onMouseDown={e => e.stopPropagation()}>
+    <h2 className="h3">{tr("Etiqueta URACE para peça sem código")}</h2>
+    <p className="small muted" style={{ margin: 0 }}>{tr("A peça ganha um código de barras da URACE (62 × 29 mm). Daí em diante, ler a etiqueta já identifica a peça.")}</p>
+    <label className="fld"><span>{tr("Buscar peça")}</span><input value={busca} onChange={e => setBusca(e.target.value)} /></label>
+    <label className="fld"><span>{tr("Peça")}</span><select value={id} onChange={e => { setId(e.target.value); setPronto(null) }}>
+      <option value="">—</option>{lista.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}</select></label>
+    {pronto && <Banner tone="ok">{tr("Código {0} pronto. Imprima e cole na peça ou na prateleira.", pronto)}</Banner>}
+    <div className="row wrap" style={{ justifyContent: 'flex-end', gap: 8 }}><button className="btn" onClick={onFechar}>{pronto ? tr("Fechar") : tr("Cancelar")}</button>
+      {pronto ? <a className="btn primary" href={`/ops/api/balcao/itens/${id}/etiqueta.pdf`} target="_blank" rel="noopener noreferrer">{tr("Abrir a etiqueta (PDF)")}</a>
+        : <button className="btn primary" disabled={indo || !id} onClick={gerar}>{indo ? <span className="spin" /> : tr("Gerar código")}</button>}</div>
+  </div></Scrim>
 }
 
 interface Produto { id: string; name: string; full_name: string | null; price: number | null; categoria: string; codigo: string }
@@ -450,11 +600,17 @@ export function Balcao() {
         {!est.leituras.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nada lido ainda.")}</p>
           : <div className="card"><div className="tbl">{est.leituras.map(l => <div className="tr" key={l.id}>
             <span className="grow">{l.name} <span className="small muted">{tr("×")} {l.qty} · {MODO_TXT[l.mode]}</span></span>
-            {l.undone_at ? <Chip tone="neutral">{tr("desfeita")}</Chip> : <button className="btn sm ghost" onClick={() => desfazer(l)}>{tr("Desfazer")}</button>}
+            {l.undone_at ? <Chip tone="neutral">{tr("desfeita")}</Chip> : l.travada ? <Chip tone="neutral" title={tr("A invoice já foi enviada ou paga: ajuste pelo QuickBooks.")}>{tr("na invoice fechada")}</Chip>
+              : <button className="btn sm ghost" onClick={() => desfazer(l)}>{tr("Desfazer")}</button>}
           </div>)}</div></div>}
       </Section>
     </>}
+    {!cid && <Section title={tr("Abrir um cliente")}>
+      <p className="small muted" style={{ marginTop: 0 }}>{tr("Sem o QR à mão? Escolha o cliente pelo nome.")}</p>
+      <Picker label={tr("Cliente")} value={null} onPick={(c: Client | null) => { if (c) nav(`/balcao/${c.id}`) }} />
+    </Section>}
     {!cid && can('MANAGER') && <Revisao />}
+    {!cid && <ContarEstoque />}
     {!cid && can('MANAGER') && <EtiquetasPrateleira />}
     {!cid && <AEnviar />}
 

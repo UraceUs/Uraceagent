@@ -29,11 +29,11 @@ def test_registra_para_quem_nao_esta_no_dia(cli):  # noqa: F811
 
 def test_auditoria_mostra_quem_lancou_o_que_no_dia(cli):  # noqa: F811
     h = entra(cli)
-    a = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA, "client_id": cli.leo}, headers=h).json()["id"]
+    a = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA}, headers=h).json()["id"]   # decidir depois
     b = cli.post(f"{B}/rapido", json={"codigo": "999000111", "data": AMANHA}, headers=h).json()["id"]
     cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": HOJE, "client_id": cli.ana}, headers=h)
     h = entra(cli, "ger@urace.us")
-    assert cli.post(f"{B}/revisao/{a}/confirmar", json={"modo": "cobrar"}, headers=h).status_code == 200
+    assert cli.post(f"{B}/revisao/{a}/confirmar", json={"modo": "cobrar", "client_id": cli.leo}, headers=h).status_code == 200
     assert cli.post(f"{B}/revisao/{b}/descartar", json={}, headers=h).status_code == 200
     r = cli.get(f"{B}/rapido/auditoria", params={"data": AMANHA}).json()
     assert r["total"] == 2, "a confirmada aparece uma vez só (não duplica com a linha do balcão)"

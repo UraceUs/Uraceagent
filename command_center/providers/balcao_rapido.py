@@ -6,10 +6,16 @@ selecionar os pilotos que estão no dia … quando ele clicar no cliente, já re
 peça"* e *"já sobe … no balcão, no Command Center, só que na seção de revisão para poder só
 confirmar depois aquelas peças, mas eles não precisam ter acesso disso pelo celular"*.
 
-Por isso a leitura do celular NÃO mexe em estoque nem em invoice: ela entra em
-`counter_pending`. O gerente confirma na Revisão do balcão (aí sim `balcao.lancar`, com as
-regras de sempre: peça do cliente, preço, item do QuickBooks, invoice de peças daquele dia) ou
-descarta. Código que o sistema ainda não conhece também entra: o gerente diz que peça é.
+**Mudou em 13/10 (#206).** Dono: *"quando você escaneia e joga para o cliente que está no dia, ele
+já vai ali para aquele cliente ... Escaneou uma vez, já tem uma peça daquela ali na OS do cliente
+... Escaneou, selecionou o cliente, já finaliza. Não tem essa de ter que confirmar depois."*
+
+Agora a leitura com cliente vai **direto** para a OS do cliente naquele dia (`balcao.lancar` em modo
+cobrar: estoque, invoice de peças do dia no QuickBooks). Só fica **pendente**, com o motivo dito na
+tela, o que não pode ir direto — e nada se perde: código novo, piloto do site ainda sem card,
+"decidir depois", peça sem preço ou sem item no QuickBooks, sem saldo na prateleira, card sem
+cliente no QuickBooks, ou peça que o cliente tem guardada (usar a dele ou cobrar nova é o gerente).
+O gerente resolve esses na Revisão do balcão.
 
 Os pilotos do dia saem das mesmas fontes do "Meu dia" (#92): sessões do site, corridas e
 serviços daquela data. Sem valor e sem contato do cliente — só o nome no botão.
@@ -64,6 +70,9 @@ def pilotos_do_dia(con, data):
         chave = f"c:{x['client_id']}" if x["client_id"] else (f"p:{x['pilot_id']}" if x["pilot_id"] else None)
         if chave:
             pend[chave] = pend.get(chave, 0) + x["n"]
+    for x in todos(con, """SELECT s.client_id, COUNT(*) AS n FROM counter_scans s JOIN parts_invoices pi ON pi.id=s.parts_invoice_id
+                            WHERE pi.service_date=? AND s.mode='cobrar' AND s.undone_at IS NULL GROUP BY s.client_id""", (data,)):
+        pend[f"c:{x['client_id']}"] = pend.get(f"c:{x['client_id']}", 0) + x["n"]     # #206: as que já foram para a OS
     for p in out:
         p["pecas"] = pend.get(p["chave"], 0)
     return sorted(out, key=lambda p: p["nome"].lower())
@@ -74,8 +83,9 @@ def _publica(con, p):
     return {**dict(p), "peca": it["name"] if it else None}
 
 
-def registrar(con, codigo, data, client_id=None, pilot_id=None, por=None):
-    """Um toque no piloto: a leitura entra pendente. Nunca cobra, nunca mexe no estoque."""
+def registrar(con, codigo, data, client_id=None, pilot_id=None, por=None, local=None):
+    """Um toque no piloto: com card e peça conhecida, vai direto para a OS do cliente no dia (#206).
+    O que não pode ir direto fica pendente, com o motivo. Devolve a leitura com `direto` e `motivo`."""
     cod = b._codigo(codigo)                       # QR de cliente aqui é erro: o passo é a peça
     item = um(con, """SELECT i.id FROM stock_barcodes bc JOIN stock_items i ON i.id=bc.item_id
                        WHERE bc.code=? AND i.active=1""", (cod,))
@@ -97,9 +107,39 @@ def registrar(con, codigo, data, client_id=None, pilot_id=None, por=None):
         if not c:
             raise ErroRapido("cliente não encontrado")
         nome = _nome(c) or nome
-    cur = con.execute("""INSERT INTO counter_pending (code, item_id, client_id, pilot_id, pilot_name, service_date, by_user_id)
-                         VALUES (?,?,?,?,?,?,?)""", (cod, item["id"] if item else None, client_id, pilot_id, nome, data, por))
-    return _publica(con, um(con, "SELECT * FROM counter_pending WHERE id=?", (cur.lastrowid,)))
+    motivo = None
+    if not item:
+        motivo = "código novo: o gerente diz que peça é"
+    elif not client_id:
+        motivo = "piloto ainda sem card: o gerente escolhe o cliente" if pilot_id else "decidir depois: o gerente escolhe o cliente"
+    else:
+        con.execute("SAVEPOINT balcao_direto")
+        try:
+            s = b.lancar(con, client_id, item["id"], "cobrar", qty=1, local=local or estoque.SEDE, por=por, codigo=cod, data=data)
+        except (b.ErroBalcao, estoque.ErroEstoque) as e:
+            con.execute("ROLLBACK TO balcao_direto")
+            con.execute("RELEASE balcao_direto")
+            motivo = str(e)[:300]
+        else:
+            con.execute("RELEASE balcao_direto")
+            it = um(con, "SELECT name FROM stock_items WHERE id=?", (item["id"],))
+            return {"id": s["id"], "tipo": "lancada", "direto": True, "motivo": None, "code": cod, "item_id": item["id"],
+                    "peca": it["name"], "client_id": client_id, "pilot_id": pilot_id, "pilot_name": nome,
+                    "service_date": data, "parts_invoice_id": s["parts_invoice_id"]}
+    cur = con.execute("""INSERT INTO counter_pending (code, item_id, client_id, pilot_id, pilot_name, service_date, by_user_id, motivo)
+                         VALUES (?,?,?,?,?,?,?,?)""", (cod, item["id"] if item else None, client_id, pilot_id, nome, data, por, motivo))
+    return {**_publica(con, um(con, "SELECT * FROM counter_pending WHERE id=?", (cur.lastrowid,))), "tipo": "pendente", "direto": False}
+
+
+def desfazer_lancada(con, scan_id, por, gerente=False):
+    """#206: o celular desfaz a peça que foi direto para a OS — a de quem leu (o gerente, qualquer uma),
+    enquanto a invoice não foi enviada nem paga (as regras de `balcao.desfazer`)."""
+    s = um(con, "SELECT * FROM counter_scans WHERE id=?", (scan_id,))
+    if not s:
+        raise LookupError("leitura não existe")
+    if not gerente and s["by_user_id"] != por:
+        raise ErroRapido("só quem leu desfaz por aqui")
+    return b.desfazer(con, scan_id, por)
 
 
 def desfazer(con, pid, por):
@@ -114,9 +154,20 @@ def desfazer(con, pid, por):
     con.execute("DELETE FROM counter_pending WHERE id=? AND status='pendente'", (pid,))
 
 
-def minhas(con, data, por, limite=5):
-    return [_publica(con, p) for p in todos(con, """SELECT * FROM counter_pending WHERE service_date=? AND by_user_id IS ?
-                                                     AND status='pendente' ORDER BY id DESC LIMIT ?""", (data, por, limite))]
+def minhas(con, data, por, limite=8):
+    """As últimas leituras de quem está lendo, naquele dia: as que foram para a OS e as pendentes."""
+    pend = [{**_publica(con, p), "tipo": "pendente"} for p in todos(con, """SELECT * FROM counter_pending WHERE service_date=?
+                                    AND by_user_id IS ? AND status='pendente' ORDER BY id DESC LIMIT ?""", (data, por, limite))]
+    lanc = [{"id": s["id"], "tipo": "lancada", "code": s["code"], "peca": s["peca"], "client_id": s["client_id"],
+             "pilot_name": s["cliente"], "at": s["at"], "motivo": None}
+            for s in todos(con, """SELECT s.id, s.code, s.client_id, s.at, i.name AS peca,
+                                          COALESCE(c.pilot_name, c.name) AS cliente
+                                     FROM counter_scans s JOIN parts_invoices pi ON pi.id=s.parts_invoice_id
+                                     JOIN stock_items i ON i.id=s.item_id JOIN clients c ON c.id=s.client_id
+                                    WHERE pi.service_date=? AND s.by_user_id IS ? AND s.mode='cobrar' AND s.undone_at IS NULL
+                                      AND pi.status='aberta' AND pi.paid_at IS NULL
+                                    ORDER BY s.id DESC LIMIT ?""", (data, por, limite))]
+    return sorted(pend + lanc, key=lambda x: x.get("at") or "", reverse=True)[:limite]
 
 
 # ------------------------------------------------------------------ a revisão (Command Center)
@@ -129,12 +180,14 @@ def revisao(con, limit=50, offset=0):
         if p["item_id"]:
             it = estoque.item(con, p["item_id"])
             x["item"] = {"id": it["id"], "name": it["name"], "price": it["price"], "qbo_item_id": it["qbo_item_id"],
-                         "do_cliente": estoque.saldo(con, it["id"], client_id=p["client_id"]) if p["client_id"] else 0}
+                         "do_cliente": estoque.saldo(con, it["id"], client_id=p["client_id"]) if p["client_id"] else 0,
+                         # #206: o que a URACE tem na prateleira — sem saldo, "Cobrar" é recusado
+                         "nosso": estoque.saldo(con, it["id"], client_id=None)}
         itens.append(x)
     return {"itens": itens, "total": total, "limit": limit, "offset": offset}
 
 
-def confirmar(con, pid, modo, por, client_id=None, item_id=None, confirmado=False):
+def confirmar(con, pid, modo, por, client_id=None, item_id=None, confirmado=False, local=None):
     """Vira uma leitura do balcão de verdade (estoque, cobrança, invoice do dia da leitura).
     Devolve a linha de `counter_scans`; quem chama grava e leva a invoice ao QuickBooks."""
     p = um(con, "SELECT * FROM counter_pending WHERE id=?", (pid,))
@@ -156,8 +209,8 @@ def confirmar(con, pid, modo, por, client_id=None, item_id=None, confirmado=Fals
         iid = achado["id"] if achado else None
     if not iid:
         raise ErroRapido("código novo: diga que peça é antes de confirmar")
-    scan = b.lancar(con, cid, iid, modo, qty=p["qty"], por=por, codigo=p["code"], confirmado=confirmado,
-                    data=p["service_date"])
+    scan = b.lancar(con, cid, iid, modo, qty=p["qty"], local=local or estoque.SEDE, por=por, codigo=p["code"],
+                    confirmado=confirmado, data=p["service_date"])   # #206: o gerente diz de onde a peça saiu
     atualizar(con, "counter_pending", pid, status="confirmada", mode=modo, client_id=cid, item_id=iid, scan_id=scan["id"],
               reviewed_by=por, reviewed_at=agora())
     return scan

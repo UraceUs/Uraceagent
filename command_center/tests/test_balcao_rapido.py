@@ -81,23 +81,59 @@ def test_pilotos_do_dia_saem_das_sessoes_corridas_e_servicos(cli):
 
 
 # ------------------------------------------------------------------ o celular: peça → piloto
-def test_ler_a_peca_e_tocar_no_piloto_registra_pendente_sem_cobrar(cli):
+def test_ler_a_peca_e_tocar_no_piloto_vai_direto_para_a_os(cli):
+    """#206 (dono, 13/10): "Escaneou, selecionou o cliente, já finaliza. Não tem essa de ter que confirmar depois"."""
     h = entra(cli)
     r = cli.get(f"{B}/ler", params={"codigo": "7891234567895"})
     assert r.json()["tipo"] == "peca" and r.json()["item"]["name"] == "Front bumper Tony Kart"
     r = cli.post(f"{B}/rapido", json={"codigo": " 7891234567895 ", "data": AMANHA, "client_id": cli.leo}, headers=h)
     assert r.status_code == 201
     p = r.json()
-    assert (p["status"], p["item_id"], p["client_id"], p["pilot_name"], p["service_date"], p["peca"]) == \
-        ("pendente", cli.para, cli.leo, "Leo Santos", AMANHA, "Front bumper Tony Kart")
+    assert (p["tipo"], p["direto"], p["item_id"], p["client_id"], p["pilot_name"], p["service_date"], p["peca"]) == \
+        ("lancada", True, cli.para, cli.leo, "Leo Santos", AMANHA, "Front bumper Tony Kart")
     con = _con()
-    assert con.execute("SELECT COUNT(*) FROM counter_scans").fetchone()[0] == 0
-    assert con.execute("SELECT COUNT(*) FROM stock_charges").fetchone()[0] == 0
-    assert estoque.saldo(con, cli.para) == 5, "o estoque só muda quando o gerente confirma"
-    assert not cli.qbo.chamadas, "nada vai ao QuickBooks pelo celular"
+    s = um(con, "SELECT * FROM counter_scans WHERE id=?", (p["id"],))
+    inv = um(con, "SELECT * FROM parts_invoices WHERE id=?", (s["parts_invoice_id"],))
+    assert (s["mode"], s["by_user_id"], inv["service_date"], inv["status"]) == ("cobrar", cli.mec, AMANHA, "aberta")
+    assert estoque.saldo(con, cli.para, client_id=None) == 4, "a peça saiu da prateleira"
+    assert cli.qbo.chamadas[-1][0] == "invoice" and cli.qbo.chamadas[-1][1]["data"] == AMANHA, "a OS do dia sobe ao QuickBooks"
+    assert not any(c[0] == "enviar" for c in cli.qbo.chamadas), "a OS não é enviada sozinha"
+    assert con.execute("SELECT COUNT(*) FROM counter_pending").fetchone()[0] == 0, "nada para confirmar depois"
     tela = cli.get(f"{B}/rapido", params={"data": AMANHA}).json()
-    assert [m["id"] for m in tela["minhas"]] == [p["id"]]
+    assert [(m["id"], m["tipo"]) for m in tela["minhas"]] == [(p["id"], "lancada")]
     assert next(x for x in tela["pilotos"] if x["client_id"] == cli.leo)["pecas"] == 1
+    # a segunda leitura vai para a MESMA OS do dia
+    p2 = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA, "client_id": cli.leo}, headers=h).json()
+    assert um(con, "SELECT parts_invoice_id FROM counter_scans WHERE id=?", (p2["id"],))["parts_invoice_id"] == s["parts_invoice_id"]
+
+
+def test_o_que_nao_pode_ir_direto_fica_pendente_com_o_motivo(cli):
+    h = entra(cli)
+    r = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA, "client_id": cli.ana}, headers=h).json()
+    assert (r["tipo"], r["direto"]) == ("pendente", False) and "QuickBooks" in r["motivo"], "card sem cliente no QuickBooks"
+    r = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA}, headers=h).json()
+    assert r["tipo"] == "pendente" and r["motivo"].startswith("decidir depois")
+    r = cli.post(f"{B}/rapido", json={"codigo": "NOVO-1", "data": AMANHA, "client_id": cli.leo}, headers=h).json()
+    assert r["tipo"] == "pendente" and r["motivo"].startswith("código novo")
+    con = _con()
+    con.execute("UPDATE stock_levels SET qty=0 WHERE item_id=?", (cli.para,))
+    r = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA, "client_id": cli.leo}, headers=h).json()
+    assert r["tipo"] == "pendente" and "tem 0" in r["motivo"], "sem saldo: vai para o gerente, nada se perde"
+    assert con.execute("SELECT COUNT(*) FROM counter_scans").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM stock_charges").fetchone()[0] == 0, "o que falhou não deixou meia cobrança"
+
+
+def test_desfazer_pelo_celular_a_peca_que_foi_para_a_os(cli):
+    h = entra(cli)
+    sid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "client_id": cli.leo}, headers=h).json()["id"]
+    h2 = entra(cli, "mec2@urace.us")
+    assert cli.post(f"{B}/rapido/lancada/{sid}/desfazer", headers=h2).status_code == 400, "só quem leu"
+    h = entra(cli)
+    assert cli.post(f"{B}/rapido/lancada/{sid}/desfazer", headers=h).status_code == 200
+    con = _con()
+    assert um(con, "SELECT undone_at FROM counter_scans WHERE id=?", (sid,))["undone_at"]
+    assert estoque.saldo(con, cli.para, client_id=None) == 5, "a peça volta para a prateleira"
+    assert cli.get(f"{B}/rapido").json()["minhas"] == []
 
 
 def test_codigo_desconhecido_tambem_entra_e_qr_de_cliente_nao(cli):
@@ -120,7 +156,7 @@ def test_sem_piloto_fica_para_decidir_e_piloto_de_outro_card_e_recusado(cli):
 
 def test_desfazer_so_a_propria_leitura_pendente(cli):
     h = entra(cli)
-    pid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "client_id": cli.leo}, headers=h).json()["id"]
+    pid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895"}, headers=h).json()["id"]      # decidir depois
     h2 = entra(cli, "mec2@urace.us")
     assert cli.post(f"{B}/rapido/{pid}/desfazer", headers=h2).status_code == 400
     h = entra(cli)
@@ -138,11 +174,11 @@ def test_o_mecanico_nao_ve_a_revisao(cli):
 
 def test_confirmar_cobra_na_invoice_do_dia_da_leitura(cli):
     h = entra(cli)
-    pid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA, "client_id": cli.leo}, headers=h).json()["id"]
+    pid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA}, headers=h).json()["id"]   # decidir depois
     h = entra(cli, "ger@urace.us")
     rev = cli.get(f"{B}/revisao").json()
     assert rev["total"] == 1 and rev["itens"][0]["por"] == "Mecânico" and rev["itens"][0]["item"]["price"] == 89.5
-    r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar"}, headers=h)
+    r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "client_id": cli.leo}, headers=h)
     assert r.status_code == 200 and r.json()["total"] == 0
     con = _con()
     p = um(con, "SELECT * FROM counter_pending WHERE id=?", (pid,))
@@ -151,7 +187,7 @@ def test_confirmar_cobra_na_invoice_do_dia_da_leitura(cli):
     assert (p["status"], p["mode"], s["mode"], inv["service_date"]) == ("confirmada", "cobrar", "cobrar", AMANHA)
     assert estoque.saldo(con, cli.para) == 4
     assert cli.qbo.chamadas[-1][0] == "invoice" and cli.qbo.chamadas[-1][1]["data"] == AMANHA
-    assert cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar"}, headers=h).status_code == 400
+    assert cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "client_id": cli.leo}, headers=h).status_code == 400
 
 
 def test_codigo_novo_so_confirma_depois_de_dizer_que_peca_e(cli):
@@ -181,7 +217,9 @@ def test_peca_que_o_cliente_tem_guardada_pede_decisao_e_nada_muda(cli):
     con = _con()
     estoque.entrada(con, cli.para, qty=1, client_id=cli.leo, reason="guardado do cliente")
     h = entra(cli)
-    pid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "client_id": cli.leo}, headers=h).json()["id"]
+    r = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "client_id": cli.leo}, headers=h).json()
+    assert r["tipo"] == "pendente" and "guardado" in r["motivo"], "peça do cliente: o gerente decide (usar a dele ou cobrar nova)"
+    pid = r["id"]
     h = entra(cli, "ger@urace.us")
     r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar"}, headers=h)
     assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tem_do_cliente"
@@ -192,7 +230,7 @@ def test_peca_que_o_cliente_tem_guardada_pede_decisao_e_nada_muda(cli):
 
 def test_descartar(cli):
     h = entra(cli)
-    pid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "client_id": cli.leo}, headers=h).json()["id"]
+    pid = cli.post(f"{B}/rapido", json={"codigo": "7891234567895"}, headers=h).json()["id"]
     h = entra(cli, "ger@urace.us")
     assert cli.post(f"{B}/revisao/{pid}/descartar", json={"nota": "lida duas vezes"}, headers=h).json()["total"] == 0
     p = um(_con(), "SELECT * FROM counter_pending WHERE id=?", (pid,))
