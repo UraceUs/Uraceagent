@@ -276,6 +276,8 @@ from command_center.api import suits as api_suits  # noqa: E402
 from command_center.api import cofre as api_cofre  # noqa: E402
 app.include_router(api_suits.r)             # #153: Suits / Alpha Line
 app.include_router(api_cofre.r)             # #162: cofre de logins e senhas (só acesso livre)
+from command_center.api import guia as api_guia  # noqa: E402
+app.include_router(api_guia.r)              # #223: Como usar — os guias e o MD para a IA
 from command_center.api import publico  # noqa: E402
 app.include_router(publico.r)
 from command_center.api import portal as api_portal  # noqa: E402

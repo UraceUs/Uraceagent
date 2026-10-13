@@ -44,6 +44,7 @@ const GmailPage = tela(() => import('./pages/Systems'), 'GmailPage')
 const QuickBooksPage = tela(() => import('./pages/Systems'), 'QuickBooksPage')
 const Account = tela(() => import('./pages/System'), 'Account')
 const Cofre = tela(() => import('./pages/Cofre'), 'Cofre')
+const ComoUsar = tela(() => import('./pages/ComoUsar'), 'ComoUsar')
 const Sdr = tela(() => import('./pages/Sdr'), 'Sdr')
 const Audit = tela(() => import('./pages/System'), 'Audit')
 const Integrations = tela(() => import('./pages/System'), 'Integrations')
@@ -158,6 +159,8 @@ function Rotas() {
           <Route path="users" element={<Guard min="ADMIN"><Users /></Guard>} />
           <Route path="account" element={<Account />} />
           <Route path="cofre" element={<Cofre />} />
+          <Route path="como-usar" element={<ComoUsar />} />
+          <Route path="como-usar/:guia" element={<ComoUsar />} />
           <Route path="*" element={<><PageHeader title={tr("Página não encontrada")} /><div className="card"><Empty title={tr("Este endereço não existe")}>{tr("Use o menu ou ⌘K.")}</Empty></div></>} />
         </Route>
       </Routes>
