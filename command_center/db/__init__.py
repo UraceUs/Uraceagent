@@ -252,6 +252,8 @@ MIGRACOES = [
     ("suit_orders", "discarded_at", "TEXT"),
     ("suit_orders", "discard_reason", "TEXT"),
     ("suit_orders", "discarded_by", "INTEGER REFERENCES users(id)"),
+    # 13/10 — dono (#198): "um switch para poder ligar e desligar IA naquele pedido". 1 = a IA age no pedido.
+    ("suit_orders", "ia_ligada", "INTEGER NOT NULL DEFAULT 1"),
     # 01/10 — dono (#67): "todo agendamento... vira uma tarefa no asana".
     ("bookings", "asana_gid", "TEXT"),
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana

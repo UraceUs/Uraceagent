@@ -51,6 +51,11 @@ deixa de contar como cliente. Fica na aba **Descartados** e pode ser restaurado.
 só pelo marcador, foram descartados assim. Guia para operar Suits pelo Claude:
 `docs/suits-guia-do-lucas.md`.
 
+**A chave "IA neste pedido"** (dono, 13/10, #198: *"um switch para poder ligar e desligar IA naquele
+pedido"*). Ligada por padrão. Desligada, a IA não responde, não manda e-mail, não altera nem anota
+o pedido, e não dá para simular nem pedir à IA pela nota. O e-mail que chegar fica guardado com os
+anexos e vira "Precisa de alguém da equipe". Quem liga ou desliga fica na linha do tempo e na auditoria.
+
 Ítalo: *"eu pedi para tudo passar por minha aprovação por isso que eu fui o gargalo"*. Por
 isso a ponte manda **sem aprovação** quando o "envio automático" está ligado. Começa em
 **simulação**: o e-mail que a IA mandaria aparece na linha do tempo do pedido para a equipe

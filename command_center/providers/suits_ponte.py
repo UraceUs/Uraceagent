@@ -286,6 +286,8 @@ def enviar(con, pid, papel, assunto, corpo, anexos=None, responder=True, user_id
         raise Recusado("pedido não encontrado")
     if pedido.get("discarded_at"):
         raise Recusado("pedido descartado (não é pedido de macacão): nada sai por ele")
+    if not pedido.get("ia_ligada", 1):
+        raise Recusado("a IA está desligada neste pedido (#198): quem responde é a equipe")
     cfg = config(con)
     para = destinatario(con, pedido, papel, cfg)
     if not para:
@@ -639,7 +641,7 @@ def tratar(con, ev, gm=None, executar=None, simular=False):
 def rodar(con, gm=None, executar=None):
     """Um ciclo da ponte. Devolve o resumo (vai para a auditoria)."""
     from command_center.api import ia
-    from command_center.providers import modulo
+    from command_center.providers import modulo, suits
     cfg = config(con)
     if cfg["ponte_ligada"] != "1":
         return {"pulada": "ponte desligada"}
@@ -656,6 +658,16 @@ def rodar(con, gm=None, executar=None):
     feitos = []
     for ev in eventos[:POR_CICLO]:
         _marcar(con, ev["mensagens"], ev.get("pedido_id"), ev.get("thread_id"), ev["tipo"])   # antes: se a IA cair, não repete em laço
+        if ev.get("pedido_id") and suits.ia_desligada(con, ev["pedido_id"]):
+            try:
+                feitos.append({"tipo": ev["tipo"], "pedido": ev["pedido_id"], "ia_desligada": True,
+                               "anexos": [n for m in ev["mensagens"] for n in baixar_anexos(gm, ev["pedido_id"], m)]})
+                quem = {"venda": "a venda do site", "cliente": "e-mail do cliente", "designer": "e-mail do designer",
+                        "fornecedor": "e-mail do fornecedor"}.get(ev["tipo"], "e-mail")
+                precisa_humano(con, ev["pedido_id"], f"chegou {quem} e a IA está desligada neste pedido: a equipe responde")
+            except Exception as e:
+                erros.append(f"{ev['tipo']} #{ev.get('pedido_id')}: {type(e).__name__}: {str(e)[:160]}")
+            continue
         try:
             feitos.append({"tipo": ev["tipo"], "pedido": ev.get("pedido_id"), "comando": tratar(con, ev, gm, executar)})
         except Exception as e:
@@ -675,6 +687,8 @@ def simular_pedido(con, pid, gm=None, executar=None):
         raise Recusado("pedido não encontrado")
     if p["discarded_at"]:
         raise Recusado("pedido descartado: restaure antes de simular")
+    if not p["ia_ligada"]:
+        raise Recusado("a IA está desligada neste pedido: ligue antes de simular")
     gm = gm or modulo("gmail")
     msgs = []
     for papel in ("cliente", "designer", "fornecedor"):

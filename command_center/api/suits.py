@@ -85,7 +85,7 @@ def listar(response: Response, estado: str = "abertos", status: str | None = Non
                      "OR lower(coalesce(o.customer_email,'')) LIKE ?)")
         p += [t, t, t, t]
     sql = f"""SELECT o.id, o.title, o.product, o.quantity, o.customer_name, o.driver_name, o.status, o.closed, o.order_date, o.due_on,
-                     o.source, o.created_at, o.updated_at, o.discarded_at, o.discard_reason, s.name AS fornecedor,
+                     o.source, o.created_at, o.updated_at, o.discarded_at, o.discard_reason, o.ia_ligada, s.name AS fornecedor,
                      (SELECT COUNT(*) FROM suit_notes n WHERE n.order_id=o.id AND n.kind!='etapa') AS notas,
                      (SELECT MAX(created_at) FROM suit_notes n WHERE n.order_id=o.id) AS ultima_nota
               FROM suit_orders o LEFT JOIN suit_suppliers s ON s.id=o.supplier_id
@@ -518,6 +518,22 @@ def descartar(pid: int, dados: DescarteIn, request: Request, con: sqlite3.Connec
     return ver(pid, con, u)
 
 
+class IaIn(BaseModel):
+    ligada: bool
+
+
+@r.post("/{pid}/ia")
+def ligar_ia(pid: int, dados: IaIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """#198: a chave "IA neste pedido"."""
+    try:
+        feito = suits.ligar_ia(con, pid, dados.ligada, u["id"])
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    if feito:
+        _aud(con, request, u, "suit.ai.on" if dados.ligada else "suit.ai.off", pid)
+    return ver(pid, con, u)
+
+
 @r.post("/{pid}/restaurar")
 def restaurar(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     try:
@@ -599,7 +615,7 @@ async def nova_nota(pid: int, request: Request, texto: str = Form(""), status: s
     if texto or nome_img:
         nid = suits.anotar(con, pid, texto, "nota", status or p["status"], nome_img, u["id"])
         atualizar(con, "suit_orders", pid, updated_at=agora())
-    cid = pedir_a_ia(con, pid, u, nid, texto, nome_img) if pedir_ia and nid else None
+    cid = pedir_a_ia(con, pid, u, nid, texto, nome_img) if pedir_ia and nid and not suits.ia_desligada(con, pid) else None
     _aud(con, request, u, "suit.note", pid, {"nota": nid, "imagem": bool(nome_img), "etapa": status or None, "ia": cid})
     return {"id": nid, "command_id": cid}
 
@@ -630,6 +646,8 @@ def simular(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db
         raise HTTPException(404, "Pedido não encontrado.")
     if p["discarded_at"]:
         raise HTTPException(409, "Pedido descartado (não é pedido de macacão): restaure antes de simular.")
+    if suits.ia_desligada(con, pid):
+        raise HTTPException(409, "A IA está desligada neste pedido: ligue a chave antes de simular.")
     sp = _ponte()
 
     def _vai():
@@ -693,8 +711,8 @@ def ferramentas_ia():
             t = f"%{str(busca).lower()}%"
             where.append("(lower(title) LIKE ? OR lower(coalesce(customer_name,'')) LIKE ? OR lower(coalesce(customer_email,'')) LIKE ?)")
             p += [t, t, t]
-        return todos(con, f"""SELECT id, title, product, customer_name, customer_email, driver_name, status, order_date, due_on
-                               FROM suit_orders WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT 100""", p)
+        return todos(con, f"""SELECT id, title, product, customer_name, customer_email, driver_name, status, order_date, due_on,
+                                      ia_ligada FROM suit_orders WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT 100""", p)
 
     def pedido(con, uid, id, **_):
         p = suits.detalhe(con, int(id))
@@ -712,6 +730,8 @@ def ferramentas_ia():
     def atualizar_pedido(con, uid, id, **args):
         if (um(con, "SELECT discarded_at FROM suit_orders WHERE id=?", (int(id),)) or {}).get("discarded_at"):
             return {"erro": "pedido descartado (não é pedido de macacão): não mexa nele"}
+        if suits.ia_desligada(con, id):
+            return {"erro": "a IA está desligada neste pedido (a chave no pedido): não mexa nele, a equipe cuida"}
         gravar(con, args, uid, int(id))
         return {"ok": True, "id": int(id)}
 
@@ -721,6 +741,8 @@ def ferramentas_ia():
             return {"erro": "pedido não encontrado"}
         if st["discarded_at"]:
             return {"erro": "pedido descartado (não é pedido de macacão): não anote nele"}
+        if suits.ia_desligada(con, id):
+            return {"erro": "a IA está desligada neste pedido (a chave no pedido): a equipe cuida"}
         return {"id": suits.anotar(con, int(id), texto, "ia", st["status"], user_id=uid)}
 
     def email_(con, uid, id, para, assunto, corpo, anexos=None, responder=True, **_):

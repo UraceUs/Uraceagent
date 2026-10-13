@@ -1462,6 +1462,18 @@ def test_suits_descarta_o_que_nao_e_pedido_e_restaura(servidor, navegador, largu
     dlg.get_by_label("Cliente", exact=True).fill(f"OpenAI {largura}")
     dlg.get_by_role("button", name="Registrar", exact=True).click()
     pg.get_by_role("heading", name=f"OpenAI {largura}", level=1).wait_for()
+    # #198: a chave "IA neste pedido" — desliga, some o "Pedir à IA" da nota, liga de novo
+    chave = pg.get_by_role("switch", name=re.compile("IA neste pedido"))
+    assert chave.get_attribute("aria-checked") == "true" and pg.get_by_label("Pedir à IA para seguir daqui").count() == 1
+    chave.click()
+    pg.get_by_text("IA desligada neste pedido: o que chegar por e-mail fica para a equipe.").wait_for()
+    pg.wait_for_function("() => document.querySelector('[role=switch]').getAttribute('aria-checked') === 'false'")
+    assert pg.get_by_label("Pedir à IA para seguir daqui").count() == 0
+    assert chave.bounding_box()["height"] >= 40
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    chave.click()
+    pg.wait_for_function("() => document.querySelector('[role=switch]').getAttribute('aria-checked') === 'true'")
     pg.get_by_role("button", name="Não é pedido de suit").click()
     dlg = pg.get_by_role("dialog", name=re.compile("Descartar o pedido"))
     dlg.get_by_label("Por quê (opcional)").fill("fatura da OpenAI")

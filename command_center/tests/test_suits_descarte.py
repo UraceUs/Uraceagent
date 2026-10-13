@@ -201,3 +201,69 @@ def test_comando_descarta_os_numeros_e_lista_suspeitos_sem_mexer(con, monkeypatc
     assert um(con, "SELECT discard_reason FROM suit_orders WHERE id=?", (lixo[0],))["discard_reason"] == "dono, 13/10: não é suit"
     assert manage.main(["manage", "suits-restaurar", str(lixo[1])]) == 0
     assert um(con, "SELECT discarded_at FROM suit_orders WHERE id=?", (lixo[1],))["discarded_at"] is None
+
+
+# ------------------------------------------------------------------ #198: a chave "IA neste pedido"
+# Dono, 13/10: "um switch para poder ligar e desligar IA naquele pedido ali".
+CLIENTE = {"message_id": "c9", "de": "Ryan <ryan@example.com>", "assunto": "Re: Order - Suit", "corpo": "Head 59 cm, logo attached",
+           "anexos": [{"nome": "logo.png", "mime": "image/png", "attachment_id": "a-png", "bytes": 10}]}
+
+
+def test_ia_desligada_a_ponte_nao_chama_a_ia_e_chama_a_equipe(con):
+    pid = _lixo(con, "Ryan", "ryan@example.com", "t-ryan")
+    assert suits.ligar_ia(con, pid, False) is True and suits.ligar_ia(con, pid, False) is False
+    gm, chamadas = Gmail(), []
+    gm.threads = {"t-ryan": [CLIENTE]}
+    r = sp.rodar(con, gm, _executor(chamadas))
+    assert chamadas == [], "a IA não é chamada"
+    assert r["tratados"] == [{"tipo": "cliente", "pedido": pid, "ia_desligada": True, "anexos": ["logo.png"]}]
+    assert sp.anexos_do_pedido(pid) == ["logo.png"], "o anexo fica guardado para a equipe"
+    notas = [n["text"] for n in todos(con, "SELECT text FROM suit_notes WHERE order_id=? ORDER BY id", (pid,))]
+    assert notas[0].startswith("IA desligada neste pedido") and "a IA está desligada neste pedido: a equipe responde" in notas[-1]
+    assert um(con, "SELECT status FROM ai_events WHERE kind='suit.humano' AND entity_id=?", (pid,))["status"] == "NEW"
+    assert sp.rodar(con, gm, _executor(chamadas))["eventos"] == 0, "o e-mail é lido uma vez"
+    assert suits.ligar_ia(con, pid, True) is True
+    gm.threads["t-ryan"].append(dict(CLIENTE, message_id="c10", corpo="Chest 92 cm", anexos=[]))
+    sp.rodar(con, gm, _executor(chamadas))
+    assert len(chamadas) == 1 and "O CLIENTE RESPONDEU" in chamadas[0]["prompt"], "religada, volta a tratar"
+
+
+def test_ia_desligada_nao_manda_nao_altera_nao_simula(con):
+    f = _ferramentas()
+    pid = _lixo(con, "Ryan", "ryan@example.com", "t-ryan")
+    suits.ligar_ia(con, pid, False)
+    with pytest.raises(sp.Recusado):
+        sp.enviar(con, pid, "cliente", "Hi", "Thanks")
+    assert "recusado" in f["suits_email"](con, 1, pid, "cliente", "Hi", "Thanks")
+    assert "erro" in f["suits_atualizar_pedido"](con, 1, pid, driver_name="X")
+    assert "erro" in f["suits_anotar"](con, 1, pid, "oi")
+    with pytest.raises(sp.Recusado):
+        sp.simular_pedido(con, pid, Gmail(), _executor([]))
+    assert [p["ia_ligada"] for p in f["suits_pedidos"](con, 1)] == [0], "a IA vê que está desligada"
+
+
+def test_api_chave_da_ia(tmp_path, monkeypatch):
+    monkeypatch.setenv("CC_DB_PATH", str(tmp_path / "api.sqlite"))
+    monkeypatch.setenv("URACE_DIR", str(tmp_path / "urace"))
+    c = conectar(); aplicar_schema(c)
+    auth.criar_usuario(c, "op@urace.us", "Op", "OPERATOR", SENHA)
+    pid = _lixo(c, "Ryan", "ryan@example.com", "t-ryan")
+    c.close()
+    chamou = []
+    monkeypatch.setattr(api_suits, "pedir_a_ia", lambda *a, **k: chamou.append(a) or 99)
+    with TestClient(app, base_url="https://cc.test") as cli:
+        assert cli.post("/ops/api/auth/login", json={"email": "op@urace.us", "password": SENHA}).status_code == 200
+        h = {"X-CSRF": cli.cookies.get("cc_csrf")}
+        assert cli.get(f"/ops/api/suits/{pid}").json()["ia_ligada"] == 1, "começa ligada"
+        assert cli.post(f"/ops/api/suits/{pid}/ia", headers=h, json={"ligada": False}).json()["ia_ligada"] == 0
+        assert [p["ia_ligada"] for p in cli.get("/ops/api/suits").json()] == [0]
+        assert cli.post(f"/ops/api/suits/{pid}/ponte/simular", headers=h).status_code == 409
+        r = cli.post(f"/ops/api/suits/{pid}/notas", headers=h, data={"texto": "cliente ligou", "pedir_ia": "true"})
+        assert r.status_code == 201 and r.json()["command_id"] is None and chamou == [], "a nota não chama a IA"
+        assert cli.post(f"/ops/api/suits/{pid}/ia", headers=h, json={"ligada": True}).json()["ia_ligada"] == 1
+        assert cli.post(f"/ops/api/suits/{pid}/notas", headers=h, data={"texto": "segue", "pedir_ia": "true"}).json()["command_id"] == 99
+        assert cli.post("/ops/api/suits/999/ia", headers=h, json={"ligada": False}).status_code == 404
+        c = conectar()
+        ev = [a["event"] for a in todos(c, "SELECT event FROM audit_logs WHERE entity_id=? AND event LIKE 'suit.ai.%' ORDER BY id", (pid,))]
+        c.close()
+        assert ev == ["suit.ai.off", "suit.ai.on"]
