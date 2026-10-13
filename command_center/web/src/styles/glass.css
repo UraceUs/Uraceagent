@@ -765,10 +765,29 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 /* #206: a operação de um piloto (lê as peças dele, uma atrás da outra) e o resumo ao encerrar */
 .br-sessao{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:var(--accent-wash);border:1px solid var(--accent)}
 .br-sessao .grow{display:flex;flex-direction:column;min-width:0;flex:1 1 140px}
-.br-sessao b{font-size:17px;overflow-wrap:anywhere}
+.br-sessao small{font-size:12px;opacity:.8}
+.br-sessao-nome{font-size:15px;font-weight:600;overflow-wrap:anywhere}
 .br-sessao select{min-height:40px}
 .br-sessao .btn{min-height:44px}
 .br-feito.pend{background:var(--warn-wash);color:var(--warn);border-color:var(--warn)}
+.br-add{display:grid;grid-template-columns:1fr auto;align-items:end;gap:4px 12px;padding:14px;border-radius:14px;background:var(--ok-wash);border:2px solid var(--ok);animation:br-entra var(--dur-media) var(--ease-saida)}
+.br-add-selo{grid-column:1/-1;font-size:14px;font-weight:800;letter-spacing:.02em;color:var(--ok);text-transform:uppercase}
+.br-add-peca{grid-column:1/-1;margin:0;font-size:26px;line-height:1.15;font-weight:800;overflow-wrap:anywhere}
+.br-add-para{margin:0;font-size:14px;opacity:.85}
+.br-add .btn{min-height:44px}
+.br-add.pend{background:var(--warn-wash);border-color:var(--warn)}
+.br-add.pend .br-add-selo{color:var(--warn)}
+.br-op{display:flex;flex-direction:column;gap:6px}
+.br-op h2{margin:0}
+.br-op-l{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.br-op-l li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--surface-2,rgba(255,255,255,.04));border-left:4px solid var(--ok)}
+.br-op-l li.pend{border-left-color:var(--warn)}
+.br-op-l li .grow{display:flex;flex-direction:column;min-width:0;flex:1}
+.br-op-l li b{font-size:17px;overflow-wrap:anywhere}
+.br-op-l li small{font-size:12px;opacity:.75}
+.br-op-l li .btn{min-height:40px;flex:none}
+.br-op-icone{font-size:18px;font-weight:800;color:var(--ok)}
+.br-op-l li.pend .br-op-icone{color:var(--warn)}
 .br-motivo{display:block;font-weight:500;font-size:13px;opacity:.9}
 .br-resumo{padding:12px;border-radius:12px;background:var(--ok-wash);border:1px solid var(--ok)}
 .br-resumo h2{font-size:18px;margin:0 0 4px}
@@ -780,7 +799,7 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .br-digitar{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:auto}
 .br-digitar input{min-height:48px;font-size:18px;min-width:0}
 @keyframes br-entra{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@media(prefers-reduced-motion:reduce){.br-feito{animation:none}.br-mira,.br-piloto{transition:none}}
+@media(prefers-reduced-motion:reduce){.br-feito,.br-add{animation:none}.br-mira,.br-piloto{transition:none}}
 @media(min-width:720px){.br{grid-template-rows:none;grid-template-columns:1fr 1fr}}
 
 /* AI Command: o que a IA criou incompleto e espera de quem pediu (#185) */

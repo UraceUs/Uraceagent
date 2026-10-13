@@ -18,7 +18,7 @@ type Nivel = 'observar' | 'organizar' | 'atender'
 interface Painel {
   nivel: Nivel; chase_ligado: boolean; ponte_no_ar: boolean; reiniciando: boolean; instalado: boolean
   pode_trocar: boolean; pode_instruir: boolean; decisoes_24h: number | null; ultima_decisao: string | null
-  ponte_sem_auditoria: boolean; instrucoes_em_vigor: number; relatos_abertos: number
+  ponte_sem_auditoria: boolean; instrucoes_em_vigor: number; relatos_abertos: number; conversas_pausadas?: number
   horario_humano: { texto: string }; niveis: Nivel[]
 }
 interface Instrucao { id: number; categoria: string; texto: string; status: 'ativa' | 'aplicada' | 'arquivada'; quem: string | null; created_at: string; applied_at: string | null; aplicada_por: string | null; aviso_preco: boolean }
@@ -78,6 +78,48 @@ function LigarDesligar({ p, onMudou }: { p: Painel; onMudou: () => void }) {
         <span><b>{NIVEL_NOME[n]}</b><small>{NIVEL_TEXTO[n]}</small></span>
       </label>)}
     </div>
+  </Section>
+}
+
+// ------------------------------------------------------------------ IA pausada por conversa
+export interface Pausa { lead_id: number; por?: string | null; em?: string | null; motivo?: string | null }
+function PausasCard({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
+  const d = useGet<{ itens: Pausa[] }>('/sdr/pausas', 30000)
+  const toast = useToast()
+  const [lead, setLead] = useState('')
+  const [motivo, setMotivo] = useState('')
+  const [busy, setBusy] = useState<number | 'novo' | null>(null)
+  async function trocar(id: number, pausada: boolean, m?: string) {
+    setBusy(pausada ? 'novo' : id)
+    try {
+      await api.put(`/sdr/pausas/${id}`, { pausada, motivo: m || null })
+      toast(pausada ? tr("IA pausada nesta conversa. A pessoa responde a partir de agora.") : tr("IA reativada nesta conversa."), 'ok')
+      if (pausada) { setLead(''); setMotivo('') }
+      d.reload(); onMudou()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  const id = Number(lead.replace(/\D/g, ''))
+  return <Section title={tr("Conversas com a IA pausada")} count={d.data?.itens.length}>
+    {d.error ? <ErrorState error={d.error} retry={d.reload} /> : !d.data ? <Loading rows={2} /> : <div className="stack" style={{ gap: 12 }}>
+      <p className="small muted" style={{ margin: 0 }}>{tr("Numa conversa pausada o robô não responde, não manda follow-up nem resgate: quem fala é a pessoa. O card continua sendo organizado. Também dá para pausar direto no Chat do Kommo.")}</p>
+      {!d.data.itens.length ? <Empty title={tr("Nenhuma conversa pausada")}>{tr("O robô responde todas as conversas no escopo dele.")}</Empty>
+        : <ul className="sdr-lista">{d.data.itens.map(x => <li key={x.lead_id}>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}><Chip tone="warn">{tr("IA pausada")}</Chip>
+              <a className="mono" href={`https://urace.kommo.com/leads/detail/${x.lead_id}`} target="_blank" rel="noopener noreferrer">{tr("lead {0}", x.lead_id)} ↗</a></div>
+            {x.motivo && <div style={{ marginTop: 4 }}>{x.motivo}</div>}
+            <div className="small muted">{x.por || '—'}{x.em ? ` · ${ago(x.em)}` : ''}</div>
+          </div>
+          {pode && <button className="btn sm" style={{ alignSelf: 'start' }} disabled={busy === x.lead_id} onClick={() => trocar(x.lead_id, false)}>{busy === x.lead_id ? <span className="spin" /> : tr("Reativar IA")}</button>}
+        </li>)}</ul>}
+      {pode && <form className="sdr-form" onSubmit={e => { e.preventDefault(); if (id > 0) trocar(id, true, motivo.trim()) }}>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <label className="fld" style={{ minWidth: 180 }}><span>{tr("Lead no Kommo (id)")}</span><input value={lead} onChange={e => setLead(e.target.value)} inputMode="numeric" placeholder="31764961" /></label>
+          <label className="fld grow" style={{ minWidth: 200 }}><span>{tr("Motivo (opcional)")}</span><input value={motivo} onChange={e => setMotivo(e.target.value)} maxLength={200} /></label>
+        </div>
+        <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn primary" disabled={!(id > 0) || busy === 'novo'}>{busy === 'novo' ? <span className="spin" /> : tr("Pausar IA")}</button></div>
+      </form>}
+    </div>}
   </Section>
 }
 
@@ -234,11 +276,13 @@ export function Sdr() {
         {d.reiniciando && <Chip tone="run">{tr("aplicando…")}</Chip>}
         {d.decisoes_24h !== null && <Chip tone="neutral">{tr("{0} decisão(ões) nas últimas 24 h", d.decisoes_24h)}</Chip>}
         {d.ultima_decisao && <Chip tone="neutral" title={ago(d.ultima_decisao)}>{tr("última decisão {0}", horaOrlando(d.ultima_decisao))}</Chip>}
+        {!!d.conversas_pausadas && <Chip tone="warn">{tr("{0} conversa(s) com a IA pausada", d.conversas_pausadas)}</Chip>}
       </div>}
     </PageHeader>
     {p.error ? <ErrorState error={p.error} retry={p.reload} /> : !d ? <Loading rows={4} /> : <div className="stack">
       <p className="small muted" style={{ margin: 0 }}>{tr("Horário de atendimento humano: {0}", d.horario_humano.texto)}</p>
       <LigarDesligar p={d} onMudou={() => setTick(x => x + 1)} />
+      <PausasCard pode={can('OPERATOR')} onMudou={() => setTick(x => x + 1)} />
       <Instrucoes pode={d.pode_instruir || can('MANAGER')} onMudou={() => setTick(x => x + 1)} />
       <RelatosCard podeResolver={can('MANAGER')} onMudou={() => setTick(x => x + 1)} />
       <Decisoes />

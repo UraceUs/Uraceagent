@@ -28,6 +28,7 @@ import holding
 import human_intents
 import kommo_client as kommo
 import knowledge_writer
+import pausas
 import scheduler
 import sdr_ponte
 import state
@@ -226,9 +227,51 @@ async def kommo_eventos(request: Request, background: BackgroundTasks,
     raw_body = await request.body()
     payload = _parse_hook_body(raw_body)
     if SDR_MODO == "atender":
-        return {"ok": True, "tratado_por": "/kommo/hook"}
+        background.add_task(responder_eventos, payload)
+        return {"ok": True, "modo": "atender"}
     background.add_task(sdr_ponte.processar_eventos, payload)
     return {"ok": True}
+
+
+# Quanto a resposta pelo webhook de conta espera antes de agir: se o Salesbot do Kommo também
+# disparou com a mesma mensagem, o /kommo/hook chega primeiro e a ponte não responde duas vezes.
+ESPERA_PELO_SALESBOT_S = 8
+
+
+def responder_eventos(payload: dict, espera: float = ESPERA_PELO_SALESBOT_S) -> list[dict]:
+    """Nível atender, 13/10 (dono: "precisa ser em todas as msg"): toda mensagem recebida que chega
+    pelo webhook de conta é respondida pela ponte, sem depender de gatilho de Salesbot no Kommo (o
+    menor intervalo que o Kommo aceita lá é 5 min). A entrega usa o mesmo canal do follow-up:
+    bots/run no Salesbot de entrega. Lead fora do escopo do robô só é organizado."""
+    saida = []
+    for msg in sdr_ponte.evento.mensagens_recebidas(payload):
+        lead_id, texto = msg["lead_id"], (msg["texto"] or "").strip()
+        if not lead_id or not sdr_ponte._primeira_vez(f"atender-{msg['id']}"):
+            continue
+        if not texto:
+            saida.append({"lead_id": lead_id, "resposta": "SEM_TEXTO"})
+            continue
+        t0 = int(time.time())
+        try:
+            pode, motivo = sdr_ponte.pode_responder(lead_id)
+        except Exception as exc:
+            state.log("error", lead_id, f"atender: leitura do card falhou: {exc}")
+            saida.append({"lead_id": lead_id, "resposta": "ERRO_KOMMO"})
+            continue
+        if not pode:
+            state.log("gate", lead_id, f"atender: sem resposta da ponte ({motivo}) — só organiza")
+            sdr_ponte.triar_em_segundo_plano(lead_id, texto)
+            saida.append({"lead_id": lead_id, "resposta": motivo})
+            continue
+        if espera:
+            time.sleep(espera)
+        conv = state.get_conversation(lead_id)
+        if (conv.get("last_inbound_text") or "") == texto[:500] and (conv.get("last_inbound_at") or 0) >= t0 - 60:
+            saida.append({"lead_id": lead_id, "resposta": "JA_TRATADA_PELO_SALESBOT"})
+            continue
+        tratar_mensagem(lead_id, texto)
+        saida.append({"lead_id": lead_id, "resposta": "RESPONDIDA"})
+    return saida
 
 
 @app.post("/tools/sdr")
@@ -263,14 +306,20 @@ def process_inbound(payload: dict) -> None:
             state.update_conversation(lead_id, pending_followup_text=None,
                                       last_outbound_at=int(time.time()))
             if _salesbot_continue(lead_id, return_url, token, pending):
-                state.log("followup", lead_id, "follow-up entregue no chat via bots/run")
+                state.log("followup", lead_id, "texto pendente entregue no chat via bots/run")
             else:
                 kommo.add_note(lead_id, f"[follow-up — enviar manualmente]\n{pending}")
             _pending_returns.pop(lead_id, None)
             return
         state.log("error", lead_id, "payload sem texto de mensagem reconhecível")
         return
+    tratar_mensagem(lead_id, text, contact_name)
 
+
+def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) -> None:
+    """Uma mensagem do lead, venha do Salesbot (/kommo/hook) ou do webhook de conta
+    (/kommo/eventos, nível atender). A resposta sai pelo return_url do Salesbot quando há um, e
+    pelo bots/run quando não há (ver send_to_lead)."""
     state.log("inbound", lead_id, text)
     campos = {"last_inbound_at": int(time.time()), "last_inbound_text": text[:500]}
     if contact_name:
@@ -284,6 +333,14 @@ def process_inbound(payload: dict) -> None:
     # Se a mensagem chegou mesmo assim, ela só organiza o card e registra.
     if SDR_MODO != "atender":
         state.log("sdr", lead_id, f"nível {SDR_MODO}: mensagem do Salesbot sem resposta da ponte")
+        sdr_ponte.triar_em_segundo_plano(lead_id, text)
+        _pending_returns.pop(lead_id, None)
+        return
+
+    if pausas.ia_pausada(lead_id):
+        # A equipe pausou a IA nesta conversa no Command Center: quem responde é a pessoa. O card
+        # continua sendo organizado; follow-up e resgate também ficam parados (scheduler).
+        state.log("gate", lead_id, "IA pausada nesta conversa (Command Center) — sem resposta da ponte")
         sdr_ponte.triar_em_segundo_plano(lead_id, text)
         _pending_returns.pop(lead_id, None)
         return
@@ -651,6 +708,9 @@ def deliver_followup(lead_id: int, text: str) -> bool:
     fallback nota+tarefa."""
     if not FOLLOWUP_BOT_ID:
         return False
+    if pausas.ia_pausada(lead_id):
+        state.log("gate", lead_id, "IA pausada nesta conversa — entrega espontânea cancelada")
+        return False
     state.update_conversation(lead_id, pending_followup_text=text)
     try:
         ok = kommo.run_bot(FOLLOWUP_BOT_ID, lead_id)
@@ -725,6 +785,11 @@ def send_to_lead(lead_id: int, text: str) -> None:
     state.update_conversation(lead_id, last_outbound_at=int(time.time()))
     pending = _pending_returns.pop(lead_id, None)
     if pending and _salesbot_continue(lead_id, pending[0], pending[1], text):
+        return
+    if not pending and SDR_MODO == "atender" and deliver_followup(lead_id, text):
+        # Mensagem que veio pelo webhook de conta: não há Salesbot esperando, então a ponte dispara
+        # o bot de entrega (bots/run) e ele busca o texto pendente no /kommo/hook.
+        state.log("outbound", lead_id, f"via bots/run: {text}")
         return
     kommo.add_note(lead_id, f"[agent] {text}")
     state.log("outbound_fallback", lead_id,

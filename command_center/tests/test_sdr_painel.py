@@ -192,3 +192,43 @@ def test_admin_troca_o_nivel_e_o_painel_mostra(cli, pasta):
     assert cli.get(B + "/sdr/painel").json()["nivel"] == "organizar"
     assert "KOMMO_TOKEN=segredo-123" in (pasta / "bridge.env").read_text(), "o token continua"
     cli.put(B + "/sdr", json={"nivel": "observar"}, headers=h)
+
+
+# ------------------------------------------------------------------ IA pausada por conversa (13/10)
+def test_quem_atende_pausa_e_reativa_a_ia_numa_conversa(cli, pasta):
+    """Dono, 13/10: desativar pelo Command Center as respostas da IA numa conversa específica.
+    O arquivo ~/.urace/sdr_pausas.json é o que a ponte lê a cada mensagem."""
+    arq = pasta / "sdr_pausas.json"
+    arq.unlink(missing_ok=True)
+    con = conectar()
+    if not um(con, "SELECT id FROM users WHERE email='ver@urace.us'"):
+        auth.criar_usuario(con, "ver@urace.us", "Só vê", "VIEWER", SENHA)
+        con.commit()
+    con.close()
+    h = entra(cli, "ver@urace.us")
+    assert cli.put(B + "/sdr/pausas/31764961", json={"pausada": True}, headers=h).status_code == 403
+    assert not arq.exists()
+
+    h = entra(cli, "op@urace.us")
+    assert cli.get(B + "/sdr/pausas").json() == {"itens": []}
+    r = cli.put(B + "/sdr/pausas/31764961", json={"pausada": True, "motivo": "  Lucas assumiu   a conversa "}, headers=h)
+    assert r.status_code == 200 and r.json() == {"lead_id": 31764961, "pausada": True, "total": 1}
+    d = json.loads(arq.read_text(encoding="utf-8"))
+    assert d["31764961"]["por"] == "Operador" and d["31764961"]["motivo"] == "Lucas assumiu a conversa"
+    assert d["31764961"]["em"].endswith(("-04:00", "-05:00")), "hora em Orlando"
+    assert oct(arq.stat().st_mode & 0o777) == "0o644", "a ponte (outro usuário de serviço) precisa ler"
+    cli.put(B + "/sdr/pausas/34233393", json={"pausada": True}, headers=h)
+    itens = cli.get(B + "/sdr/pausas").json()["itens"]
+    assert {i["lead_id"] for i in itens} == {31764961, 34233393}
+    assert cli.get(B + "/sdr/painel").json()["conversas_pausadas"] == 2
+
+    assert cli.put(B + "/sdr/pausas/31764961", json={"pausada": False}, headers=h).json()["total"] == 1
+    assert "31764961" not in json.loads(arq.read_text(encoding="utf-8"))
+    assert cli.put(B + "/sdr/pausas/0", json={"pausada": True}, headers=h).status_code == 400
+    assert cli.put(B + "/sdr/pausas/5", json={"pausada": True, "x": 1}, headers=h).status_code == 422
+    a = um(conectar(), "SELECT detail, entity_id FROM audit_logs WHERE event='sdr.pausa' ORDER BY id DESC LIMIT 1")
+    assert '"pausada": false' in a["detail"] and str(a["entity_id"]) == "31764961", "a reativação fica no histórico"
+
+    arq.write_text("{ quebrado", encoding="utf-8")
+    assert cli.get(B + "/sdr/pausas").json() == {"itens": []}, "arquivo ilegível não derruba o painel"
+    arq.unlink()

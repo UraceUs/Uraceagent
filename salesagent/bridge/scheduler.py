@@ -95,6 +95,15 @@ def cancel(lead_id: int, reason: str = "lead respondeu") -> None:
 
 
 # ------------------------------------------------------------------ o tick
+def _pausadas() -> dict:
+    try:
+        import pausas
+        return pausas.pausadas()
+    except Exception as exc:  # pausa ilegível não para o agendador
+        log("error", None, f"scheduler pausas: {exc}")
+        return {}
+
+
 def tick(now: int | None = None) -> dict:
     """Uma varredura. Devolve contagens (para teste e observabilidade)."""
     now = now or int(time.time())
@@ -115,6 +124,12 @@ def tick(now: int | None = None) -> dict:
             "  OR (state IN ('WAITING_HUMAN','HUMAN_HANDOFF')"
             "      AND COALESCE(last_outbound_at, 0) < ?))",
             (now - LEAD_REASSURE_MIN * 60,))]
+
+    # Conversa com a IA pausada no Command Center: sem follow-up e sem resgate (é a pessoa que
+    # responde). O re-alerta interno continua: ele avisa a equipe, não fala com o lead.
+    pausadas = _pausadas()
+    due = [c for c in due if str(c["lead_id"]) not in pausadas]
+    devendo = [c for c in devendo if str(c["lead_id"]) not in pausadas]
 
     for conv in due:
         try:
