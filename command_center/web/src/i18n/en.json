@@ -3434,5 +3434,20 @@
 "🏁 corrida · número = serviços e sessões do dia. Toque no dia para abrir.": "🏁 race · number = services and sessions of the day. Tap a day to open.",
 "📎 waiver": "📎 waiver",
 "🔔 avisando": "🔔 alerting",
-"🔕 silenciada": "🔕 muted"
+"🔕 silenciada": "🔕 muted",
+"IA pausada nesta conversa. A pessoa responde a partir de agora.": "AI paused in this conversation. A person replies from now on.",
+"IA reativada nesta conversa.": "AI turned back on in this conversation.",
+"Conversas com a IA pausada": "Conversations with the AI paused",
+"Numa conversa pausada o robô não responde, não manda follow-up nem resgate: quem fala é a pessoa. O card continua sendo organizado. Também dá para pausar direto no Chat do Kommo.": "In a paused conversation the robot does not reply or send follow-ups or rescues: a person does the talking. The card keeps being organized. You can also pause right from Kommo chat.",
+"Nenhuma conversa pausada": "No paused conversations",
+"O robô responde todas as conversas no escopo dele.": "The robot replies to every conversation in its scope.",
+"IA pausada": "AI paused",
+"Reativar IA": "Turn AI back on",
+"Lead no Kommo (id)": "Kommo lead (id)",
+"Pausar IA": "Pause AI",
+"{0} conversa(s) com a IA pausada": "{0} conversation(s) with the AI paused",
+"O robô não responde nesta conversa. Toque para devolver a ele.": "The robot does not reply in this conversation. Tap to hand it back.",
+"O robô para de responder nesta conversa; quem fala é a pessoa.": "The robot stops replying in this conversation; a person does the talking.",
+"IA pausada · reativar": "AI paused · turn back on",
+"Pausar IA nesta conversa": "Pause AI in this conversation"
 }

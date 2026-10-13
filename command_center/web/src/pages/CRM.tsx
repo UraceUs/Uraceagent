@@ -182,6 +182,7 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
           {!!l.needs_reply && <Chip tone="warn">{tr("esperando resposta")}</Chip>}
           {onDados && <button className="btn sm ld-btn" onClick={onDados}><Icon name="user" size={15} /> {tr("Dados do lead")}</button>}
           <PassarParaVendas leadId={l.id} />
+          {/^\d+$/.test(l.external_id || '') && <PausaIA kommoId={Number(l.external_id)} />}
         </div>
         <div className="row wrap small muted" style={{ gap: 10 }}>
           {l.contact_phone && <a href={`tel:${l.contact_phone.replace(/[^\d+]/g, '')}`}>{l.contact_phone}</a>}
@@ -256,6 +257,28 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
 }
 
 // ------------------------------------------------------------------ dados do lead (tudo que o Kommo mostra)
+/** IA pausada nesta conversa (dono, 13/10): a pessoa assume e o robô para de responder aqui. */
+function PausaIA({ kommoId }: { kommoId: number }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const d = useGet<{ itens: { lead_id: number }[] }>('/sdr/pausas', 30000)
+  const [busy, setBusy] = useState(false)
+  const pausada = !!d.data?.itens.some(x => x.lead_id === kommoId)
+  async function trocar() {
+    setBusy(true)
+    try {
+      await api.put(`/sdr/pausas/${kommoId}`, { pausada: !pausada })
+      toast(pausada ? tr("IA reativada nesta conversa.") : tr("IA pausada nesta conversa. A pessoa responde a partir de agora."), 'ok'); d.reload()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  if (!d.data) return null
+  if (!can('OPERATOR')) return pausada ? <Chip tone="warn">{tr("IA pausada")}</Chip> : null
+  return <button className={`btn sm${pausada ? ' danger' : ' ghost'}`} disabled={busy} onClick={trocar}
+    title={pausada ? tr("O robô não responde nesta conversa. Toque para devolver a ele.") : tr("O robô para de responder nesta conversa; quem fala é a pessoa.")}>
+    {busy ? <Spinner /> : pausada ? tr("IA pausada · reativar") : tr("Pausar IA nesta conversa")}
+  </button>
+}
+
 function Linha({ k, children }: { k: string; children: React.ReactNode }) {
   return <div className="ld-row"><span className="k">{k}</span><span className="v">{children}</span></div>
 }
