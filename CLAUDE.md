@@ -19,6 +19,8 @@ Dono, 30/09 (issue #14): *"preciso que faça também nos nossos projetos de agor
 - Teste novo **falha sem a mudança** (confira com `git stash` só do código)
 - Tela mexida: end-to-end `CC_E2E=1 python -m pytest -q command_center/tests/e2e`
 - CI em `.github/workflows/ci.yml` roda tudo isso em cada PR
+- **Playbook junto** (dono, 13/10, #199): mudou tela, rota ou processo, o playbook do assunto em
+  `docs/playbooks/` (geral, vendas, mecânicos e coaches) e o guia de Suits mudam no mesmo PR
 
 ## Interface (toda tela)
 - **Um `h1` por página**; seções `h2`, subitens e modais `h3`, sem pular nível

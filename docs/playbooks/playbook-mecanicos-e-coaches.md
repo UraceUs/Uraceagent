@@ -1,0 +1,471 @@
+# Playbook dos mecânicos e coaches
+
+**Command Center da URACE — calendário e balcão de peças**
+
+Para quem trabalha no box, com o celular na mão. Atualizado em 13/10/2026.
+O guia do painel inteiro está no playbook geral (`docs/playbooks/playbook-geral.md`).
+
+---
+
+## 1. Para quem é
+
+Este guia é para quem tem o cargo **Mecânico** ou **Coach** no Command Center.
+
+**Mecânico e coach têm o mesmo acesso.** As mesmas telas, os mesmos botões e as mesmas
+regras. A única diferença está nos **checklists**: cada pessoa vê e preenche os do seu cargo.
+
+As duas coisas que você mais vai usar:
+
+1. **O calendário (Meu dia):** quem está marcado hoje, na semana e no mês, e o que fazer em cada kart.
+2. **O balcão de peças:** ler a peça com a câmera e tocar no piloto que usou.
+
+O resto (checklists, estoque, pedidos) está no fim deste guia.
+
+---
+
+## 2. Entrar e deixar no celular
+
+### Onde entrar
+
+Há dois endereços. Os dois pedem o seu e-mail e a sua senha do Command Center.
+
+| Endereço | O que abre |
+|---|---|
+| **ops.urace.us** | O painel com todas as telas do seu cargo. |
+| **parts.urace.us** | **Só o balcão do celular** (ler peça e escolher o piloto). Nada mais abre ali. |
+
+Quem cria a sua conta e escolhe o seu cargo é o **administrador**. Nunca mande senha por
+mensagem para ninguém, nem peça a senha de outra pessoa.
+
+### Passo a passo
+
+1. Abra **ops.urace.us** no navegador do celular (Chrome no Android, Safari no iPhone).
+2. Digite o **e-mail** e a **senha**.
+3. Se o celular é só seu, marque **"Manter conectado por 30 dias"**. Sem isso, a entrada vale
+   por 12 horas.
+4. Toque em **Entrar**.
+5. Para trocar a senha: toque no seu nome, no canto de cima, e depois em
+   **"Minha conta e senha"** → **Trocar senha**.
+
+### Deixar o painel na tela do celular
+
+- **iPhone:** no Safari, toque em **Compartilhar** (o quadrado com a seta) →
+  **Adicionar à Tela de Início**. Abra o painel sempre por esse ícone.
+- O ícone é o **U de pista, com a bandeira quadriculada**, em fundo laranja.
+- Se a URACE te passou o **app URACE**, ele abre na área do cliente. Para chegar ao login da
+  equipe, toque **5 vezes seguidas no "U"** da tela de entrada. Os 5 toques só abrem o login:
+  quem entra continua precisando do próprio e-mail e senha.
+
+### Ligar o aviso no celular
+
+1. Abra **Equipe** no menu.
+2. Toque em **"Ligar notificação neste aparelho"**.
+3. No iPhone, isso só funciona depois de pôr o painel na tela de início (passo acima).
+
+O aviso chega quando alguém escreve para você no chat da equipe.
+
+### O que aparece na tela
+
+A primeira tela é **Meu dia**.
+
+Embaixo ficam as abas: **Meu dia**, **Balcão**, **Checklists**, **Clientes** e **Mais**.
+Em **Mais** (ou no botão de três linhas) abre o menu completo:
+
+- **Meu trabalho:** Meu dia · Balcão · Checklists
+- **Logística:** Estoque · Pedidos
+- **Pessoas:** Clientes · Equipe
+
+As bandeiras no topo trocam o idioma (português ou inglês).
+
+### O que você não vê, e por quê
+
+Vendas, financeiro, invoices, e-mails de clientes, CRM, IA, integrações e administração **não
+aparecem para o seu cargo**. Isso é de propósito: o acesso do box é o que o box usa.
+
+Se você abrir um link de outra área, a tela mostra **"Esta área não é do seu acesso"**. Não é
+defeito. Se precisar de algo de lá, fale com o gerente ou com o administrador.
+
+No card do cliente, você vê o nome, os serviços, as waivers, as peças e, se o piloto é Pro,
+os equipamentos.
+**Não vê** e-mail, invoices, mensalidade nem valores. E **não edita** o card: só olha.
+
+---
+
+## 3. O calendário: Meu dia
+
+### Abrir o calendário
+
+1. Abra o painel. A tela **Meu dia** já mostra **hoje** (o dia da Flórida).
+2. Use **‹** e **›** para ir ao dia anterior ou ao próximo. **Hoje** volta para hoje.
+3. Use **Dia**, **Semana** ou **Mês** para mudar a vista. Na semana e no mês, toque num dia
+   para abrir esse dia.
+
+No mês, 🏁 marca dia com corrida, e o número mostra quantos serviços e sessões há no dia.
+
+### O que tem em cada dia
+
+- **Checklists do dia:** os checklists gerais do dia de treino ou serviço.
+- **Serviços:** cada serviço marcado no **Asana** para aquele dia, com o nome do piloto.
+  - **Card** abre o card do cliente.
+  - **Peças** abre o balcão já com esse cliente escolhido (capítulo 4).
+  - Embaixo, os checklists daquele kart.
+- **Corridas:** as corridas do calendário naquele dia, com os pilotos inscritos e os
+  checklists de cada um.
+- **Sessões marcadas pelo site:** manhã, tarde ou dia todo, com o piloto. "Esperando" quer
+  dizer que a sessão ainda não foi confirmada.
+
+O Meu dia **não mostra valores nem contato do cliente**. É o calendário do box.
+
+### Do calendário para o balcão
+
+Num serviço do Meu dia, o botão **Peças** abre o balcão **já com esse cliente escolhido**. É o
+jeito mais rápido de lançar peça no kart certo: abra o dia, ache o piloto, toque em **Peças**.
+
+No balcão do celular, os botões de piloto **são o próprio calendário**: aparecem os pilotos com
+sessão, corrida ou serviço marcado no dia escolhido. Se o piloto não está no calendário do dia,
+use **Outro cliente** (capítulo 4).
+
+---
+
+## 4. O balcão de peças
+
+### O caminho da peça
+
+| Passo | Quem | O que acontece |
+|---|---|---|
+| 1. Ler a peça | você | a câmera lê o código da embalagem ou a etiqueta QR da prateleira |
+| 2. Tocar no piloto | você | a peça entra **pendente**, no dia escolhido, com o seu nome |
+| 3. Revisão | gerente | **cobrar**, **guardar para o cliente**, **usar a do cliente** ou **descartar** |
+| 4. Invoice de peças | gerente | uma por cliente por dia, no QuickBooks; quem envia ao cliente é o gerente |
+
+Pendente **não cobra nada** e **não mexe no estoque** até o gerente decidir.
+
+Esta é a tarefa principal no box. O celular faz quase tudo sozinho: você **lê a peça** e
+**toca no piloto**.
+
+### Abrir o balcão do celular
+
+- Pelo endereço **parts.urace.us**; ou
+- no painel, em **Balcão** → **"Abrir o balcão do celular"**.
+
+A tela tem duas metades: **em cima, a câmera**, sempre lendo. **Embaixo, a peça e os
+pilotos.**
+
+### Passo a passo
+
+1. Confira o dia no topo: **Ontem**, **Hoje** ou **Amanhã**. O padrão é hoje.
+2. Aponte a câmera para o **código da peça**: o código de barras da embalagem ou a
+   **etiqueta QR da prateleira** (veja "Etiquetas QR das prateleiras", mais abaixo). Segure parado.
+3. O celular vibra. Aparece o **nome da peça** e a pergunta **"De quem é?"**.
+4. Toque no **piloto** certo. Os botões são os pilotos que têm algo marcado naquele dia:
+   - **sessão** (marcada pelo site),
+   - **corrida** (do calendário),
+   - **serviço** (do Asana).
+
+   O botão mostra também quantas peças daquele piloto, no dia, ainda esperam a revisão do
+   gerente.
+5. Pronto. Aparece **✓ peça → piloto** e a câmera volta a ler sozinha.
+
+**Cada leitura vale uma peça.** Duas peças iguais: leia duas vezes. A mesma peça parada na
+frente da câmera não é lida de novo por uns 3 segundos.
+
+Embaixo aparecem as suas últimas leituras do dia que ainda esperam a revisão, para você
+conferir.
+
+### O que acontece depois
+
+1. A peça entra como **pendente**. Ela **ainda não cobra nada** e **ainda não mexe no
+   estoque**.
+2. O **gerente** vê a peça no Command Center, na **Revisão** do balcão, com o seu nome.
+3. O gerente decide:
+   - **Cobrar:** a peça entra na **invoice de peças** daquele cliente, daquele dia;
+   - **Guardar para o cliente:** a peça vai para o estoque do cliente, sem cobrar;
+   - **Usar a do cliente:** quando o cliente já tem aquela peça guardada com a gente;
+   - **Descartar:** quando a leitura estava errada.
+4. A invoice **não é enviada sozinha**. Quem envia ao cliente é o gerente.
+
+Você **não precisa** revisar nada pelo celular. Leia e toque no piloto.
+
+### O piloto não está na lista ("Outro cliente")
+
+1. Embaixo dos pilotos, toque em **"Outro cliente: digite o nome"**.
+2. Digite pelo menos 2 letras do nome do piloto ou do responsável.
+3. Toque no nome certo. Se aparecer **"resp."**, é o nome do responsável pelo piloto.
+4. Confira o nome **antes** de tocar.
+
+Se não aparecer ninguém (**"Nenhum cliente com esse nome."**), toque em **Decidir depois**
+e avise o gerente. A peça fica pendente, **sem piloto**, e o gerente escolhe o cliente na
+revisão.
+
+### Outro dia
+
+- Você escolhe entre **Ontem**, **Hoje** e **Amanhã**.
+- A peça entra na invoice **do dia escolhido**. Confira o dia antes de ler.
+- Qualquer outra data (**"Outro dia"**) e a **"Auditoria do dia: quem lançou o quê"** são do
+  gerente. Precisou lançar numa data mais antiga? Peça ao gerente.
+
+### Errou? Como corrigir
+
+| Situação | O que fazer |
+|---|---|
+| Tocou no piloto errado e o **✓** ainda está na tela | Toque em **Desfazer** na faixa do ✓. Ela some em alguns segundos. |
+| O ✓ já sumiu | Avise o gerente. Ele **descarta** a leitura na revisão. Depois, leia de novo no piloto certo. |
+| Leu a peça, mas não quer lançar | Toque em **Ler outra**. Nada é registrado. |
+| O gerente já confirmou a peça | Fale com o gerente. Ele corrige no balcão do painel enquanto a invoice não foi enviada. Invoice já enviada só se ajusta no QuickBooks, pelo gerente. |
+
+Quem descarta leitura pendente é o **gerente**. Pelo celular, você só desfaz a sua própria
+leitura, logo depois de fazer.
+
+### O balcão completo (no painel)
+
+Em **Balcão**, no painel, existe também o balcão completo. Ele é usado com o leitor de
+código de barras (coletor) ou com **"Ler com a câmera"**. Ele funciona diferente:
+
+1. Primeiro leia o **QR do cliente** (ou toque em **Peças** num serviço do Meu dia).
+2. Escolha o modo, no topo:
+   - **COBRAR**: cada peça lida **entra direto** na invoice de peças de hoje daquele cliente;
+   - **GUARDAR**: a peça vai para o estoque do cliente e **não é cobrada**.
+3. Escolha onde a peça está: **Galpão**, **Trailer** ou **Pista**.
+4. Leia cada peça.
+5. Errou? Em **Leituras**, toque em **Desfazer**. Funciona enquanto a invoice não foi
+   enviada.
+
+Aqui **não há revisão**: a peça já cobra. Confira o modo e o cliente antes de ler.
+
+Se a peça já é do cliente (guardada com a gente), o sistema pergunta antes:
+**"Usar a dele (sem cobrar)"** ou **"Cobrar uma nova"**.
+
+O QR do cliente fica no card dele, no botão **"▣ QR do balcão"**.
+
+Se o gerente ligou o cartão no balcão, a invoice mostra **"Cobrar no cartão"**, com os
+passos no app GoPayment. Enviar a invoice por e-mail é do gerente.
+
+**Na dúvida, use o balcão do celular:** ele passa pela revisão do gerente.
+
+### Etiquetas QR das prateleiras
+
+Cada produto do catálogo do QuickBooks pode ter uma **etiqueta QR na prateleira**, com o nome
+da peça em inglês. O código da etiqueta começa com **URQ**.
+
+#### Como ler
+
+1. No balcão do celular, aponte a câmera para a **etiqueta da prateleira**.
+2. A peça aparece pelo nome, como se você tivesse lido a embalagem.
+3. Toque no piloto.
+
+Na primeira vez que alguém lê uma etiqueta, o sistema já cria a peça no estoque, ligada ao
+QuickBooks. Depois disso, ela funciona como qualquer peça.
+
+Quem imprime as etiquetas é o **gerente**.
+
+#### Se o código não for reconhecido
+
+A tela mostra **"Código novo"** e a frase **"O gerente diz que peça é na revisão."**
+
+1. Pode lançar normalmente: toque no piloto. A peça entra pendente, e o gerente diz que peça é.
+2. Ou toque em **Ler outra**, se leu o código errado.
+3. Avise o gerente que a etiqueta ou o código não foi reconhecido.
+
+No balcão completo (painel), código novo abre a janela **"Código novo"**. Ali você diz que peça
+é: escolhe uma peça do estoque **ou** cria uma peça nova (nome, prateleira e foto). O preço e o
+item do QuickBooks o gerente completa antes de cobrar.
+
+### Problemas no calendário e no balcão
+
+| O que aparece | O que fazer |
+|---|---|
+| **"Este navegador não abre a câmera aqui."** | Abra pelo endereço com **https** (ops.urace.us ou parts.urace.us) e permita a câmera. |
+| **"A câmera foi negada."** | Libere a câmera para o site nos ajustes do navegador e abra de novo. |
+| A câmera não lê o código | Chegue mais perto, procure luz e segure parado. Código apagado? Toque em **"Código apagado? Digitar"** e digite o código. |
+| **"código inválido: leia de novo"** | O código veio cortado. Leia de novo. |
+| **"Este é o QR de um cliente. Aqui o primeiro passo é a peça."** | No balcão do celular, leia a **peça**, não o cliente. |
+| **"Código novo"** | Veja "Etiquetas QR das prateleiras". Lance no piloto e o gerente diz que peça é, ou toque em **Ler outra**. |
+| A mesma peça não lê de novo | Espere uns 3 segundos ou toque em **Ler outra**. |
+| O piloto não aparece | Confira o dia (Ontem, Hoje, Amanhã). Depois use **Outro cliente**. Se não achar, **Decidir depois** e avise o gerente. |
+| **"Ninguém marcado neste dia no Asana, nas sessões do site ou nas corridas."** | O dia está vazio no calendário. Busque o cliente pelo nome, embaixo. |
+| Chip **"Offline"** ou **"Sem conexão com o servidor."** | O celular está sem internet. **Nada fica guardado para depois.** Quando a internet voltar, confira nas suas últimas leituras e lance de novo o que não entrou. |
+| **"... não tem preço final: chame o gerente para definir"** (balcão completo) | Chame o gerente. Peça sem preço não é cobrada. |
+| **"... ainda não tem item no QuickBooks"** (balcão completo) | O gerente cria o item. Ou use o balcão do celular, que vai para a revisão. |
+| **"QuickBooks não está conectado: não dá para cobrar agora"** | Avise o gerente. Guardar no estoque do cliente continua funcionando. |
+| **"... tem número de série: lance pela tela de Estoque"** | Motor e chassi andam por número de série. Lance pelo Estoque. |
+
+---
+
+## 5. Regras de ouro
+
+1. **Peça certa, piloto certo.** Nunca lance a peça de um piloto no card de outro. Confira o
+   nome no botão antes de tocar.
+2. **Na dúvida, pergunte ao gerente.** Melhor **Decidir depois** do que chutar o piloto.
+3. **Não invente.** Não lance peça que não foi usada. Não marque item de checklist que não
+   foi feito. Não informe quantidade que você não contou.
+4. **Errou? Corrija na hora** (Desfazer) ou **avise o gerente**. Não tente "compensar" com
+   outra leitura.
+5. **Foto sem dado pessoal.** Só a peça ou o kart. Sem rosto de cliente, documento ou placa.
+6. **Tudo no horário da Flórida.** "Hoje", "Ontem" e "Amanhã" são os dias da Flórida.
+7. **Peça do cliente é do cliente.** O que está guardado para um cliente nunca vai para
+   outro.
+8. **Senha é sua.** Não empreste, não mande por mensagem, não peça a de ninguém.
+9. **Tudo fica registrado com o seu nome:** cada peça, cada checklist, cada mudança no
+   estoque.
+
+---
+
+## 6. Checklists
+
+### Preencher um checklist
+
+1. Toque no checklist (no Meu dia). O estado aparece ao lado: **a fazer**, **3/10** (em
+   andamento) ou **completo**.
+2. Marque cada item conforme for fazendo. A marca aparece na hora.
+3. Para pôr foto num item:
+   - **Câmera** tira a foto na hora;
+   - **Do celular** escolhe uma foto que já está no aparelho.
+4. Item com **"foto obrigatória"** só deixa concluir com foto. Se o checklist inteiro pede
+   foto, aparece o aviso **"Este checklist pede pelo menos uma foto."**
+5. Embaixo, **"Falta:"** diz o que ainda impede de concluir.
+6. Toque em **Concluir checklist**.
+
+Depois de concluído, o checklist **não muda mais**.
+
+Checklist começado e não concluído num dia que já passou vai para o gerente, na lista do que
+precisa de atenção. Então: **começou, termine no mesmo dia.**
+
+### Checklist que não é de um dia (trimestral e avulso)
+
+1. Abra **Checklists** no menu.
+2. Ache o checklist e toque em **Começar hoje**.
+
+Quem cria e muda os checklists (itens, foto obrigatória, quando aparecem) é o **gerente**.
+Se um item está errado ou faltando, avise o gerente.
+
+### Coach e mecânico: o que muda
+
+**O acesso é igual ao do mecânico.** As mesmas telas e os mesmos botões, inclusive o balcão
+e o estoque.
+
+**A única diferença são os checklists.** Cada checklist tem um dono: **Mecânico**, **Coach**
+ou **Administração**. Você vê e preenche só os do seu cargo. Se tentar abrir um checklist do
+outro cargo, a tela diz **"Este checklist não é do seu cargo."**
+
+Quando os checklists vêm da planilha Master Checklist, cada um entra assim (o gerente pode
+mudar depois, e o que vale é o que aparece na sua tela):
+
+| Coach | Mecânico |
+|---|---|
+| Coach checklist (dia de treino) | The day before checklist |
+| Lounge/VIP area checklist | Mechanic checklist |
+| Coach checklist (corrida) | Kart checklist (um por kart, treino e corrida) |
+| | Preparation before travel |
+| | Wednesday |
+| | Mechanic checklist (race) |
+| | Quarterly team checklist (trimestral) |
+
+Os nomes ficam em inglês, como na planilha.
+
+---
+
+## 7. Estoque, foto da peça e pedidos
+
+O seu cargo **alcança o Estoque**. Abra **Estoque** no menu.
+
+A tela mostra uma fileira por prateleira. Use **"Buscar peça, marca, medida ou cliente"**.
+
+### O que você pode fazer
+
+- **Adicionar peça:** foto, nome, prateleira, quanto tem e de quem é. A quantidade que você
+  informa é **a contagem da prateleira agora**.
+- Tocar numa peça e:
+  - **Quanto tem agora**: o número que você contou vira o saldo;
+  - **Usei em serviço**: tira a peça do estoque. Se informar o kart do cliente, a peça fica
+    **a cobrar** desse cliente;
+  - **Chegou**: dá entrada;
+  - **Levar para outro local**: muda de lugar (por exemplo, para o trailer);
+  - **Assinalar para um cliente**: a peça continua na prateleira, mas passa a ser do cliente;
+  - **Editar** a ficha e **trocar a foto**.
+- **Excluir peça:** a lixeira no card → **"Deseja realmente excluir esta peça?"** →
+  **Sim, excluir**. A peça sai das prateleiras, mas o histórico fica guardado. Peça de
+  cliente guardada com a gente **não sai** assim.
+
+### O que é do gerente
+
+- preço final, valor de compra e margem (você não vê custo nem margem);
+- vender peça e ajustar saldo;
+- devolver para a URACE uma peça que era de cliente.
+
+### Foto da peça
+
+1. Toque em **Tirar foto** (abre a câmera) ou **Escolher da galeria**.
+2. Fotografe **só a peça**. Sem rosto, sem placa, sem documento, sem tela com dado de
+   cliente.
+3. Formatos: PNG, JPG ou WEBP. Até 6 MB na foto da peça e 15 MB na foto do checklist.
+
+O sistema reduz a foto e tira a localização (GPS) dela antes de guardar.
+
+### Pedidos
+
+Precisa de uma peça que não tem? Abra **Pedidos** → **Novo pedido**.
+
+1. Escolha **Peça do estoque** ou **Outra coisa**.
+2. Diga quanto precisa, para quando e se é **urgente**.
+3. Se é para o kart de um cliente, escolha em **"Para o kart de"**.
+4. Toque em **Pedir**.
+
+Quem compra já vê o pedido. Quando a compra chega, a tela da compra tem
+**"Receber o que chegou"**, que dá entrada no estoque.
+
+---
+
+## 8. Outros problemas
+
+| O que aparece | O que fazer |
+|---|---|
+| **"Esta área não é do seu acesso"** | É de propósito: a tela não é do box. Fale com o administrador se precisar. |
+| O item do checklist desmarcou sozinho | O servidor não recebeu (internet). Marque de novo quando a conexão voltar. |
+| **"Falta: ..."** e o botão Concluir não funciona | Faça o que a lista diz: marcar item ou pôr foto. |
+| **"Este checklist já foi concluído"** | Checklist concluído não muda. Fale com o gerente se algo ficou errado. |
+| **"Foto grande demais"** | Tire de novo ou escolha uma foto menor. |
+| **"Invalid email or password."** | Confira o e-mail e a senha. |
+| **"Too many attempts. Try again in a few minutes."** | Errou a senha várias vezes. Espere uns 15 minutos. Esqueceu a senha? Fale com o administrador. |
+| **"Your session has expired."** | Entre de novo. Isso também acontece quando o administrador muda o seu cargo. |
+| No iPhone, a notificação não liga | Primeiro ponha o painel na **Tela de Início** e abra por esse ícone. |
+| O relógio do topo está diferente | Ele mostra a hora do **seu celular**. Os dias do sistema são os da Flórida. |
+
+---
+
+## 9. Glossário
+
+- **Balcão:** onde a peça usada vira cobrança do cliente.
+- **Balcão do celular:** a tela de ler a peça e tocar no piloto (parts.urace.us).
+- **Pendente:** peça lida no celular, esperando o gerente confirmar.
+- **Revisão:** a lista do gerente com as peças pendentes.
+- **Invoice de peças:** a cobrança das peças de um cliente num dia. Uma por cliente por dia.
+- **COBRAR / GUARDAR:** os dois modos do balcão completo. Cobrar entra na invoice; guardar vai
+  para o estoque do cliente, sem cobrar.
+- **Peça do cliente:** peça que é do cliente e fica guardada com a gente.
+- **Código novo:** código que o sistema ainda não conhece.
+- **Etiqueta de prateleira (URQ):** o QR na prateleira, ligado ao produto do QuickBooks.
+- **QR do cliente:** o código do card do cliente, para o balcão completo.
+- **Meu dia:** a sua tela inicial e o seu calendário.
+- **Checklist:** a lista do que conferir em cada atendimento.
+- **Um por kart:** checklist que se preenche para cada kart (cada serviço ou cada piloto da
+  corrida).
+- **Sessão do site:** horário que o piloto marcou pelo site.
+- **Asana:** onde os serviços do dia são marcados. Eles aparecem no Meu dia.
+- **Cargo:** Mecânico ou Coach. Define o que você alcança no painel.
+
+---
+
+## 10. Se você usa o Claude
+
+**Por enquanto, mecânico e coach não usam o Claude conectado ao painel.** É de propósito.
+
+- O conector do Claude ("Conectar o Claude", na tela Equipe) responde **"Esta área não é do seu
+  acesso."** para o cargo de mecânico e de coach.
+- O motivo: o Claude conectado consegue ler partes do painel que não são do box, como vendas,
+  auditoria e financeiro. Até existir uma lista de ferramentas só para o box, ele fica fechado
+  para o cargo (correção de segurança de 13/10, #201).
+- Uma chave de API no seu nome também respeita o seu cargo: ela só alcança o que você alcança
+  nas telas.
+
+Tudo deste guia funciona sem o Claude, no celular ou no computador. Nunca cole senha ou código
+de acesso em nenhum chat, nem no Claude, nem no WhatsApp.
