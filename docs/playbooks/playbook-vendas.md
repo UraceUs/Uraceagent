@@ -67,7 +67,7 @@ Você opera o Command Center da URACE como a pessoa que vende (papel Operador).
    confirmar=true depois de ela dizer "pode mandar".
 4. Antes de fechar uma venda, leia GET /ops/api/sales/{id}: se "closing" não for null,
    ela já foi fechada. Não feche de novo: refaça só o passo que falhou.
-5. Preço só da tabela (Rate Card ou Site público › Serviços e preços). Não sabe? Pergunte.
+5. Preço só da tabela (Rate Card ou Agendamentos do site › Serviços e preços). Não sabe? Pergunte.
 6. Idade do piloto antes de qualquer waiver: menor de 18 = parental para o responsável.
 7. Datas e horas no fuso da Flórida. Na API, mande em UTC com "Z".
 8. Resposta ao lead no Kommo: só o texto que a pessoa aprovou, palavra por palavra.
@@ -84,7 +84,7 @@ Você opera o Command Center da URACE como a pessoa que vende (papel Operador).
 LEAD            Kommo (Instagram, Facebook, WhatsApp, chat do site) · telefone · indicação
   │             └ no painel: Chat do Kommo (/ops/crm/chat) · ligação perdida em Precisa de atenção
   ▼
-OPORTUNIDADE    Vendas › Oportunidades (/ops/sales) — ainda NÃO é cliente
+OPORTUNIDADE    Comercial › Oportunidades (/ops/sales) — ainda NÃO é cliente
   │             Novo → Em conversa → Proposta → Fechamento
   │             cada ligação, retorno e anotação fica na linha do tempo dela
   ▼
@@ -99,7 +99,7 @@ PRONTO          invoice paga + waiver assinada → o serviço acontece
 O cliente também pode marcar sozinho pelo site. Esse caminho é outro (seção 5):
 
 ```
-PEDIDO NO SITE  área do cliente → Site público › Agendamentos (/ops/site), "pendente"
+PEDIDO NO SITE  área do cliente → Agendamentos do site › Agendamentos (/ops/site), "pendente"
   ▼
 ACEITAR         invoice (serviço + depósito, se o serviço pede) e waiver saem sozinhas
   ▼
@@ -157,7 +157,7 @@ tela: todo operador vê todas as oportunidades.
 - **Cuidado:** o painel reconhece "pessoa que já existe" por e-mail ou telefone. Ao criar o card
   de um irmão com o mesmo e-mail, ele pode devolver o card do outro irmão. **Sempre confira o
   piloto do card que voltou.** Se for de outro piloto, pare e chame a gerência: não ponha o serviço
-  ali. Se a família tem conta no site, o card do irmão nasce em **Site público › Contas de
+  ali. Se a família tem conta no site, o card do irmão nasce em **Agendamentos do site › Contas de
   clientes**, pelo driver (seção 5): ali o e-mail repetido dos irmãos não bloqueia.
 - Mover um serviço de um card para outro é do **gerente** (`POST /tasks/{id}/cliente`).
 - Unir dois cards (`POST /client-merge`, Operador) só quando são a mesma pessoa. O painel recusa
@@ -234,7 +234,7 @@ Preço nunca é de memória. A ordem (`brain/00_SYSTEM/PARAMETROS.md`):
 3. invoice anterior do mesmo serviço e cliente (dizendo que reaproveitou);
 4. catálogo do QuickBooks (defasado, só referência).
 
-Para sessão do site, o preço está em **Site público › Serviços e preços** (`GET /ops/api/site/servicos`).
+Para sessão do site, o preço está em **Agendamentos do site › Serviços e preços** (`GET /ops/api/site/servicos`).
 Mudar preço é da gerência.
 
 ### 4.5 Fechar a venda
@@ -304,7 +304,7 @@ Confira serviço, valor, idade e e-mail na ficha antes de aprovar.
 
 ## 5. Agendamentos do site
 
-Tela: **Site público › Agendamentos** (`/ops/site`). Rotas em `/ops/api/site/…`.
+Tela: **Agendamentos do site › Agendamentos** (`/ops/site`). Rotas em `/ops/api/site/…`.
 
 ### Os estados de um pedido
 
@@ -362,7 +362,7 @@ marcado "POSSÍVEL DUPLICADO" para a equipe conferir e unir.
 mensalidade sai na hora e as outras ficam agendadas no dia 1. Nada é cobrado sem a venda
 automática ligada.
 
-### Contas de clientes (Site público › Contas de clientes)
+### Contas de clientes (Agendamentos do site › Contas de clientes)
 
 Quem cria conta no site precisa estar ligado ao card certo. Cada driver tem o seu card.
 
@@ -597,7 +597,7 @@ instrução à gerência.
 
 1. Agenda de vendas: retornos de hoje e atrasados.
 2. Chat do Kommo: conversas com ●.
-3. Site público › Agendamentos › Esperando confirmação.
+3. Agendamentos do site › Agendamentos › Esperando confirmação.
 4. Precisa de atenção: ligação perdida, waiver parada, pedido do site.
 
 ### Frases para dizer ao seu Claude
@@ -653,7 +653,7 @@ instrução à gerência.
 | Passo "não conectado: …" (QuickBooks, DocuSign, Asana, Kommo) | integração fora do ar: veja Integrações; quando voltar, **tentar de novo** só nesse passo |
 | "invoice esperando aprovação do dono" | valor fora da tabela: avise a gerência; não refaça o passo |
 | Passo Kommo "feito", mas com a nota "não achei a etapa 'Closed won' neste funil do Kommo" | o lead não se mexeu: mova a etapa à mão no chat ou avise a gerência |
-| Site: "a conta do site ainda não está ligada a um card (Client ID)" | Site público › Contas de clientes: ligue o driver ao card certo; o painel tenta a invoice de novo |
+| Site: "a conta do site ainda não está ligada a um card (Client ID)" | Agendamentos do site › Contas de clientes: ligue o driver ao card certo; o painel tenta a invoice de novo |
 | Site: "o serviço não tem item do QuickBooks…" | é da gerência: escolher o item em Serviços e preços |
 | Site: "o cliente não está no QuickBooks…" | avise a gerência |
 | Site: "não achei o item "Security deposit" no QuickBooks…" | avise a gerência (sincronizar o QuickBooks) |

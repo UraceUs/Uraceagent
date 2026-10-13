@@ -136,36 +136,39 @@ pedem acesso de operador.
 |---|---|---|---|---|
 | Hoje | **Hoje** | `/ops/` | a abertura do dia: pista de hoje, o que precisa de gente, o que espera aprovação, waivers abertas, próximos 7 dias, sistemas | todos |
 | Hoje | **Precisa de atenção** | `/ops/attention` | a fila do que a IA não resolveu sozinha, do mais grave para o menos | todos |
-| Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente | todos |
-| Logística | **Balcão** | `/ops/balcao` | ler o QR do cliente e as peças: cobrar ou guardar | operador+ |
+| Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists | todos |
+| Comercial | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
+| Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação | operador+ |
+| Comercial | **Chat do Kommo** | `/ops/crm/chat` | a conversa do lead dentro do painel | todos |
+| Comercial | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
+| Comercial | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |
+| Comercial | **Clientes** | `/ops/clients` | um card por pessoa; o card abre em `/ops/clients/<n>` | todos |
+| Logística | **Agendamentos do site** | `/ops/site` | os pedidos de sessão da área do cliente, a agenda que abre e fecha, serviços e preços, contas | operador+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
-| Logística | **Pedidos** | `/ops/pedidos` | a lista do que a equipe **precisa** que se compre | todos |
-| Logística | **Compras** | `/ops/compras` | o que a URACE comprou: pedido, envio, chegada. Os e-mails de compra entram sozinhos | todos |
-| Logística | **Planejamento** | `/ops/planejamento` | peças e corridas: o que vai faltar, e quando | todos |
-| Vendas | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
-| Vendas | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação | operador+ |
-| Vendas | **Chat do Kommo** | `/ops/crm/chat` | a conversa do lead dentro do painel | todos |
-| Vendas | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |
-| Vendas | **Suits · Alpha Line** | `/ops/suits` | os pedidos de macacão sob medida, em dez etapas | operador+ |
-| Vendas | **Site público** | `/ops/site` | os pedidos de sessão da área do cliente e a agenda que abre e fecha | operador+ |
-| Pessoas | **Equipe** | `/ops/equipe` | o chat interno (direto ou em grupo), "Conectar o Claude" e o aviso no celular | todos |
-| Pessoas | **Clientes** | `/ops/clients` | um card por pessoa; o card abre em `/ops/clients/<n>` | todos |
-| Pessoas | **Biblioteca** | `/ops/biblioteca` | os documentos de cada cliente, com o PDF; cópia no Drive | gerente+ |
-| Pessoas | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
-| Sistemas | **Asana** | `/ops/asana` | o quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services | todos |
-| Sistemas | **DocuSign** | `/ops/docusign` | as waivers. Entregue não é assinada; devolvida é e-mail errado | todos |
-| Sistemas | **Gmail** | `/ops/gmail` | o que a triagem da IA não decidiu; mais o **Manual dos marcadores** | todos |
-| Sistemas | **QuickBooks** | `/ops/quickbooks` | invoices e pagamentos. A IA prepara; enviar pede aprovação | todos veem a tela; financeiro é gerente+ |
-| Inteligência | **AI Command** | `/ops/ai` | a conversa com a IA, e o quadro "Falta completar" | todos (mandar comando: operador+) |
-| Inteligência | **Aprovações** | `/ops/approvals` | o que a IA propôs e espera uma pessoa decidir | todos (decidir: operador+) |
-| Inteligência | **Automação e memória** | `/ops/automation` | as rotinas automáticas e o que a IA aprendeu | todos |
-| Inteligência | **O que a IA pode fazer** | `/ops/ai/capabilities` | cada ferramenta da IA e a política dela, lido do código | todos |
-| Inteligência | **Atividade da IA** | `/ops/activity` | tudo o que a IA fez, em ordem | todos |
-| Administração | **Integrações** | `/ops/integrations` | o estado de cada sistema; "Verificar agora"; atualizar o sistema | todos (atualizar: administrador) |
-| Administração | **Auditoria** | `/ops/audit` | o registro imutável de tudo | gerente+ |
-| Administração | **Políticas da IA** | `/ops/policies` | o que a IA faz sozinha, o que pede confirmação, aprovação ou está bloqueado | administrador |
-| Administração | **Usuários** | `/ops/users` | criar, desativar, mudar papel e cargo; chaves de API | administrador |
-| Administração | **Cofre** | `/ops/cofre` | logins e senhas da URACE, cifrados. A IA não tem acesso | só acesso livre |
+| Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
+| Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente | todos |
+| Logística | **Checklists** | `/ops/checklists` | os checklists do dia, do kart e os trimestrais | operador+ |
+| Pedidos e compras | **Pedidos** | `/ops/pedidos` | a lista do que a equipe **precisa** que se compre | todos |
+| Pedidos e compras | **Suits · Alpha Line** | `/ops/suits` | os pedidos de macacão sob medida, em dez etapas | operador+ |
+| Pedidos e compras | **Compras** | `/ops/compras` | o que a URACE comprou: pedido, envio, chegada. Os e-mails de compra entram sozinhos | todos |
+| Pedidos e compras | **Planejamento** | `/ops/planejamento` | peças e corridas: o que vai faltar, e quando | todos |
+| IA e inserções manuais | **AI Command** | `/ops/ai` | a conversa com a IA, e o quadro "Falta completar" | todos (mandar comando: operador+) |
+| IA e inserções manuais | **Aprovações** | `/ops/approvals` | o que a IA propôs e espera uma pessoa decidir | todos (decidir: operador+) |
+| IA e inserções manuais | **Automação e memória** | `/ops/automation` | as rotinas automáticas e o que a IA aprendeu | todos |
+| IA e inserções manuais | **Manual dos marcadores** | `/ops/gmail/manual` | como marcar e-mail à mão para a triagem da IA aprender | todos |
+| IA e inserções manuais | **O que a IA pode fazer** | `/ops/ai/capabilities` | cada ferramenta da IA e a política dela, lido do código | todos |
+| IA e inserções manuais | **Atividade da IA** | `/ops/activity` | tudo o que a IA fez, em ordem | todos |
+| Equipe | **Equipe** | `/ops/equipe` | o chat interno (direto ou em grupo), "Conectar o Claude" e o aviso no celular | todos |
+| Equipe | **Biblioteca** | `/ops/biblioteca` | os documentos de cada cliente, com o PDF; cópia no Drive | gerente+ |
+| Administrativo | **QuickBooks** | `/ops/quickbooks` | invoices e pagamentos. A IA prepara; enviar pede aprovação | todos veem a tela; financeiro é gerente+ |
+| Administrativo | **DocuSign** | `/ops/docusign` | as waivers. Entregue não é assinada; devolvida é e-mail errado | todos |
+| Administrativo | **Gmail** | `/ops/gmail` | o que a triagem da IA não decidiu | todos |
+| Administrativo | **Asana** | `/ops/asana` | o quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services | todos |
+| Administrativo | **Integrações** | `/ops/integrations` | o estado de cada sistema; "Verificar agora"; atualizar o sistema | todos (atualizar: administrador) |
+| Administrativo | **Auditoria** | `/ops/audit` | o registro imutável de tudo | gerente+ |
+| Administrativo | **Políticas da IA** | `/ops/policies` | o que a IA faz sozinha, o que pede confirmação, aprovação ou está bloqueado | administrador |
+| Administrativo | **Usuários** | `/ops/users` | criar, desativar, mudar papel e cargo; chaves de API | administrador |
+| Administrativo | **Cofre** | `/ops/cofre` | logins e senhas da URACE, cifrados. A IA não tem acesso | só acesso livre |
 | (menu do nome) | **Minha conta** | `/ops/account` | trocar a própria senha | todos |
 
 ### Menu do box (mecânico e coach)
@@ -239,7 +242,7 @@ marcadas pelo site no dia, com o checklist de cada um. Detalhe no
 | falta peça | **Pedidos** (o pedido); quem compra junta em **Compras** |
 | lead conversando | **Chat do Kommo** |
 | pedido de macacão | **Suits · Alpha Line** |
-| pedido de sessão pelo site | **Site público** |
+| pedido de sessão pelo site | **Agendamentos do site** |
 | preciso que a IA faça algo | **AI Command**, ou **✦ Instruir a IA** no item de atenção |
 | conversa com colega | **Equipe** (o que é de cliente fica no Chat do Kommo) |
 
@@ -323,7 +326,7 @@ abre o card dele).
 | **Box** | Meu dia, checklists com foto, balcão (cobrar ou guardar peça), estoque, pedidos e compras | [playbook-mecanicos-e-coaches.md](playbook-mecanicos-e-coaches.md) |
 | **Suits · Alpha Line** | pedido de macacão sob medida, das 29 medidas e do design até a entrega, com a ponte de e-mail | [../suits-guia-do-lucas.md](../suits-guia-do-lucas.md) |
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
-| **Site público** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Site público |
+| **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada | tela DocuSign |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |

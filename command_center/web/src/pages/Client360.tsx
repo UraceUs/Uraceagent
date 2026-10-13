@@ -538,14 +538,14 @@ function ContaNoSite({ cid }: { cid: number }) {
   if (d.error) return <ErrorState error={d.error} retry={d.reload} />
   if (!d.data) return <Loading />
   const c = d.data.conta
-  if (!c) return <Empty title={tr("Sem conta no site")}>{tr("Quando a conta da área do cliente for ligada a este card (Site público › Contas de clientes), os pilotos e as medidas aparecem aqui.")}</Empty>
+  if (!c) return <Empty title={tr("Sem conta no site")}>{tr("Quando a conta da área do cliente for ligada a este card (Agendamentos do site › Contas de clientes), os pilotos e as medidas aparecem aqui.")}</Empty>
   return <div className="stack">
     <div><b>{c.name}</b> <span className="small muted">· {c.email}{c.phone ? ` · ${c.phone}` : ''}</span>
       <div className="small muted">{[c.address_line1, c.city, c.state, c.zip].filter(Boolean).join(', ') || tr("sem endereço")}{c.last_login_at ? tr(" · último acesso {0}/{1}", c.last_login_at.slice(8, 10), c.last_login_at.slice(5, 7)) : ''}</div></div>
     {c.drivers.map(p => <div key={p.id} className="card card-b">
       <b>{p.name}</b>{p.is_self ? <span className="small muted"> {tr("· o próprio responsável")}</span> : null}
       {' '}{p.id === c.driver_id ? <Chip tone="ok">{tr("este card")}</Chip> : p.client_id ? <Link className="small" to={`/clients/${p.client_id}`}>{tr("Client ID")} {p.client_id}</Link>
-        : <span className="small muted">{tr("· sem card ainda (Site público › Contas)")}</span>}
+        : <span className="small muted">{tr("· sem card ainda (Agendamentos do site › Contas)")}</span>}
       <div className="small muted">{p.birth_date ? tr("nascimento {0}/{1}/{2}", p.birth_date.slice(8, 10), p.birth_date.slice(5, 7), p.birth_date.slice(0, 4)) : tr("sem nascimento")}{p.measures_updated_at ? tr(" · medido em {0}/{1}", p.measures_updated_at.slice(8, 10), p.measures_updated_at.slice(5, 7)) : ''}</div>
       {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{Object.entries(p.measures).map(([k, v]) => <div key={k}><dt>{MEDIDA_PT[k] || k}</dt><dd>{String(v)}</dd></div>)}</dl>}
     </div>)}
