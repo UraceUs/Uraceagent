@@ -87,7 +87,8 @@ aparecem para o seu cargo**. Isso é de propósito: o acesso do box é o que o b
 Se você abrir um link de outra área, a tela mostra **"Esta área não é do seu acesso"**. Não é
 defeito. Se precisar de algo de lá, fale com o gerente ou com o administrador.
 
-No card do cliente, você vê o nome, os serviços, as waivers, os equipamentos e as peças.
+No card do cliente, você vê o nome, os serviços, as waivers, as peças e, se o piloto é Pro,
+os equipamentos.
 **Não vê** e-mail, invoices, mensalidade nem valores. E **não edita** o card: só olha.
 
 ---
@@ -169,13 +170,15 @@ pilotos.**
    - **corrida** (do calendário),
    - **serviço** (do Asana).
 
-   O botão mostra também quantas peças já foram lançadas para aquele piloto no dia.
+   O botão mostra também quantas peças daquele piloto, no dia, ainda esperam a revisão do
+   gerente.
 5. Pronto. Aparece **✓ peça → piloto** e a câmera volta a ler sozinha.
 
 **Cada leitura vale uma peça.** Duas peças iguais: leia duas vezes. A mesma peça parada na
 frente da câmera não é lida de novo por uns 3 segundos.
 
-Embaixo aparecem as suas últimas leituras do dia, para você conferir.
+Embaixo aparecem as suas últimas leituras do dia que ainda esperam a revisão, para você
+conferir.
 
 ### O que acontece depois
 
@@ -339,17 +342,18 @@ e o estoque.
 ou **Administração**. Você vê e preenche só os do seu cargo. Se tentar abrir um checklist do
 outro cargo, a tela diz **"Este checklist não é do seu cargo."**
 
-Como vieram da planilha Master Checklist (o gerente pode mudar depois):
+Quando os checklists vêm da planilha Master Checklist, cada um entra assim (o gerente pode
+mudar depois, e o que vale é o que aparece na sua tela):
 
 | Coach | Mecânico |
 |---|---|
-| Coach Checklist (dia de treino) | The Day Before Checklist |
-| Lounge/VIP Area Checklist | Mechanic Checklist |
-| Coach checklist (corrida) | Kart Checklist (um por kart, treino e corrida) |
+| Coach checklist (dia de treino) | The day before checklist |
+| Lounge/VIP area checklist | Mechanic checklist |
+| Coach checklist (corrida) | Kart checklist (um por kart, treino e corrida) |
 | | Preparation before travel |
 | | Wednesday |
 | | Mechanic checklist (race) |
-| | Quarterly Team Checklist (trimestral) |
+| | Quarterly team checklist (trimestral) |
 
 Os nomes ficam em inglês, como na planilha.
 
@@ -428,18 +432,18 @@ Os nomes ficam em inglês, como na planilha.
 
 ---
 
-## 11. Se você usa o Claude (opcional)
+## 11. Se você usa o Claude
 
-Na tela **Equipe** existe o quadro **"Conectar o Claude"**, com o passo a passo.
+**Por enquanto, mecânico e coach não usam o Claude conectado ao painel.** É de propósito.
 
-- O Claude entra com o **seu** usuário e age **como você**. Tudo o que ele fizer fica na
-  auditoria com o seu nome.
-- O que vai para o cliente ou cobra pede a sua confirmação antes. Leia antes de confirmar.
-- Nunca cole senha ou chave no chat do Claude. O login é pelo navegador.
-- Para desligar, remova o conector no Claude.
+- O conector do Claude ("Conectar o Claude", na tela Equipe) responde **"Esta área não é do seu
+  acesso."** para o cargo de mecânico e de coach.
+- O motivo: o Claude conectado consegue ler partes do painel que não são do box, como vendas,
+  auditoria e financeiro. Até existir uma lista de ferramentas só para o box, ele fica fechado
+  para o cargo (correção de segurança de 13/10, #201).
+- Uma chave de API no seu nome também respeita o seu cargo: ela só alcança o que você alcança
+  nas telas.
 
-**Atenção:** a trava do cargo (as telas que o box não vê) está conferida nas telas do painel.
-Pelo Claude, ela ainda não está confirmada. **Antes de conectar o Claude, fale com o
-administrador.** E use o Claude só para o trabalho do box.
+Tudo deste guia funciona sem o Claude, no celular ou no computador.
 
-Não é obrigatório: tudo deste guia funciona sem o Claude.
+Nunca cole senha ou código de acesso em nenhum chat, nem no Claude, nem no WhatsApp.

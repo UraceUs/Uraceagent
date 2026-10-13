@@ -106,6 +106,10 @@ mostra só o que é do box.
 Fora dessas telas, o painel mostra "Esta área não é do seu acesso". Rota nova do sistema nasce
 **fechada** para o box: só abre se alguém incluir na lista.
 
+A trava do cargo vale nas três portas: navegador, Claude conectado e chave de API (#201). Por
+enquanto, o conector do Claude fica **fechado** para mecânico e coach, porque as ferramentas de
+leitura dele alcançam partes do painel que não são do box.
+
 O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mecanicos-e-coaches.md).
 
 ### Outros endereços
@@ -329,7 +333,7 @@ abre o card dele).
 - **"Não é pedido de suit"**: botão no pedido para **descartar** o que não é pedido de macacão
   (fatura, newsletter, conversa com fornecedor...). Nada é apagado: o pedido sai das listas, a
   ponte para de ler aquela conversa, e dá para **restaurar**.
-- **Chave "IA neste pedido"** (issue #198, sendo entregue hoje, 13/10): liga e desliga a IA só
+- **Chave "IA neste pedido"** (#198, 13/10): liga e desliga a IA só
   naquele pedido. Desligada, a IA não responde, não manda e-mail e não mexe no pedido; o e-mail
   que chegar aparece como "Precisa de alguém da equipe" e quem responde é a equipe. Use quando o
   cliente pede atendimento humano ou a negociação está delicada.
@@ -586,7 +590,7 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | marcar pendência como completa | `POST /ai/pendencias/{id}/resolver` (operador; quem pediu ou gerente) |
 | o que a IA pode fazer e a política | `GET /ai/capabilities` (logado) |
 | Suits: descartar / restaurar | `POST /suits/{id}/descartar` com `{"motivo": "…"}` · `POST /suits/{id}/restaurar` (operador) |
-| Suits: ligar/desligar a IA no pedido (#198, entrando hoje) | `POST /suits/{id}/ia` com `{"ligada": false}` (operador) |
+| Suits: ligar/desligar a IA no pedido (#198) | `POST /suits/{id}/ia` com `{"ligada": false}` (operador) |
 
 As rotas de vendas, do box e de Suits estão nos playbooks de cada área (links no topo).
 
