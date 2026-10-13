@@ -38,6 +38,7 @@ from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
                     KOMMO_TOKEN, SALESBOT_DISPLAY, SDR_MODO, URACE_DIR)
 
 app = FastAPI(title="urace-sales-bridge")
+state.instalar_mascara_nos_logs()  # 13/10: a chave do webhook não vai para o journal
 
 SALES_AGENT = "urace-sales"  # agente no OpenClaw (criado na implantação)
 

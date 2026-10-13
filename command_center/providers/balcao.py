@@ -285,9 +285,11 @@ def desfazer(con, scan_id, por=None):
     if s["undone_at"]:
         raise ErroBalcao("esta leitura já foi desfeita")
     if s["mode"] == "cobrar":
-        p = um(con, "SELECT status FROM parts_invoices WHERE id=?", (s["parts_invoice_id"],))
+        p = um(con, "SELECT status, paid_at FROM parts_invoices WHERE id=?", (s["parts_invoice_id"],))
         if p and p["status"] != "aberta":
             raise ErroBalcao("a invoice desta peça já foi enviada: ajuste pelo QuickBooks")
+        if p and p["paid_at"]:                    # #206: paga no cartão, o QuickBooks já tem o dinheiro dela
+            raise ErroBalcao("a invoice desta peça já foi paga: ajuste (reembolso) pelo QuickBooks")
         estoque.entrada(con, s["item_id"], qty=s["qty"], para=s["location_id"], client_id=None,
                         reason="estorno do balcão", by_user_id=por, source="balcao")
         atualizar(con, "stock_charges", s["charge_id"], status="waived", notes="desfeito no balcão",
@@ -360,6 +362,15 @@ def enviar(con, pinv_id, por=None):
         raise ErroBalcao("esta invoice já foi paga no cartão: não há o que enviar")
     if not p["qbo_invoice_id"] or p["qbo_error"]:
         raise ErroBalcao("a invoice ainda não está no QuickBooks: toque em 'Tentar de novo' antes de enviar")
+    # #206: antes de mandar cobrança por e-mail, confere se o cartão já pagou (sem "Já passei o cartão")
+    try:
+        ja = conferir_pagamento(con, p["id"], por)
+    except ErroBalcao:
+        raise
+    except Exception:                                  # noqa: BLE001 — sem a conferência, o envio decide
+        ja = {"paga": False}
+    if ja.get("paga"):
+        raise ErroBalcao("esta invoice já está paga no QuickBooks (cartão): marcada como paga, não há o que enviar")
     r = _qbo().enviar_invoice_sistema(p["qbo_invoice_id"])
     atualizar(con, "parts_invoices", p["id"], status="enviada", sent_by=por, sent_at=agora(), sent_to=r.get("enviado_para"))
     return um(con, "SELECT * FROM parts_invoices WHERE id=?", (p["id"],))
@@ -408,12 +419,17 @@ def do_cliente(con, client_id, data=None):
     if not c:
         raise LookupError("cliente não existe")
     data = data or hoje()
-    leituras = todos(con, """SELECT s.*, i.name, i.unit, u.name AS por FROM counter_scans s
-                               JOIN stock_items i ON i.id=s.item_id LEFT JOIN users u ON u.id=s.by_user_id
+    # `travada`: a invoice da peça já foi enviada ou paga — o desfazer não vale mais (#206)
+    leituras = todos(con, """SELECT s.*, i.name, i.unit, u.name AS por,
+                                    CASE WHEN s.mode='cobrar' AND (pi.status!='aberta' OR pi.paid_at IS NOT NULL)
+                                         THEN 1 ELSE 0 END AS travada
+                               FROM counter_scans s JOIN stock_items i ON i.id=s.item_id LEFT JOIN users u ON u.id=s.by_user_id
+                               LEFT JOIN parts_invoices pi ON pi.id=s.parts_invoice_id
                               WHERE s.client_id=? AND substr(s.at,1,10)>=? ORDER BY s.id DESC LIMIT 50""",
                      (client_id, data[:8] + "01"))
-    invs = todos(con, "SELECT * FROM parts_invoices WHERE client_id=? AND (status='aberta' OR service_date=?) ORDER BY id DESC",
-                 (client_id, data))
+    # a paga sai da tela no dia seguinte (antes ficava para sempre como "aberta · não enviada")
+    invs = todos(con, """SELECT * FROM parts_invoices WHERE client_id=? AND ((status='aberta' AND paid_at IS NULL) OR service_date=?)
+                         ORDER BY id DESC""", (client_id, data))
     return {"cliente": resumo_cliente(c), "data": data, "qr": url_do_cliente(codigo_do_cliente(con, client_id)),
             "invoices": [invoice_publica(con, p) for p in invs],
             "leituras": [dict(x) for x in leituras], "guardado": estoque.do_cliente(con, client_id)["pecas"]}
