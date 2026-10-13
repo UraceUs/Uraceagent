@@ -50,6 +50,7 @@ PONTE = os.environ.get("CC_PONTE_URL", "http://127.0.0.1:8800")
 FUSO = ZoneInfo("America/New_York")
 
 ARQUIVO_INSTRUCOES = "sdr_instrucoes.md"
+ARQUIVO_PAUSAS = "sdr_pausas.json"    # conversas com a IA pausada (13/10); a ponte lê a cada mensagem
 CATEGORIAS = {"tom": "tom", "idioma": "idioma", "preco": "preço e condições", "horario": "horário",
               "pessoa": "passar para pessoa", "followup": "follow-up", "canal": "canal",
               "nunca": "nunca dizer", "outro": "outro"}
@@ -419,6 +420,65 @@ def relatos_status(rid: int, dados: StatusRelatoIn, request: Request, u=Depends(
     return _relato(con, rid)
 
 
+# ------------------------------------------------------------------ IA pausada por conversa
+# Dono, 13/10: "ter a possibilidade de desativar pelo command center ... respostas da ia em uma
+# conversa específica". Quem pausa é quem atende (OPERATOR+): a pessoa assume a conversa e o robô
+# para de responder ali, inclusive follow-up e resgate. O card continua sendo organizado.
+# O arquivo ~/.urace/sdr_pausas.json é a fonte da verdade para a ponte; o histórico fica no audit.
+def ler_pausas():
+    f = _dir() / ARQUIVO_PAUSAS
+    try:
+        d = json.loads(f.read_text(encoding="utf-8") or "{}")
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):
+        return {}
+    return d if isinstance(d, dict) else {}
+
+
+def gravar_pausas(d):
+    f = _dir() / ARQUIVO_PAUSAS
+    f.parent.mkdir(parents=True, exist_ok=True)
+    tmp = f.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, f)
+
+
+class PausaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    pausada: bool
+    motivo: str | None = None
+
+
+@r.get("/pausas")
+def pausas_lista(u=Depends(auth.usuario_atual)):
+    itens = [{"lead_id": int(k), **(v if isinstance(v, dict) else {})} for k, v in ler_pausas().items() if str(k).isdigit()]
+    itens.sort(key=lambda i: str(i.get("em") or ""), reverse=True)
+    return {"itens": itens}
+
+
+@r.put("/pausas/{lead_id}")
+def pausa_trocar(lead_id: int, dados: PausaIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+                 con: sqlite3.Connection = Depends(get_db)):
+    """lead_id é o id do lead no Kommo (o mesmo da URL /leads/detail/<id>)."""
+    if lead_id <= 0:
+        raise HTTPException(400, "Informe o id do lead no Kommo.")
+    d = ler_pausas()
+    chave = str(lead_id)
+    motivo = " ".join((dados.motivo or "").split())[:200] or None
+    if dados.pausada:
+        d[chave] = {"por": u.get("name") or u.get("email") or f"user:{u['id']}", "por_id": u["id"],
+                    "em": datetime.now(FUSO).isoformat(timespec="seconds"), "motivo": motivo}
+    else:
+        d.pop(chave, None)
+    gravar_pausas(d)
+    auditar(con, "sdr.pausa", f"user:{u['id']}", user_id=u["id"], entity_type="kommo_lead", entity_id=lead_id,
+            detail={"pausada": dados.pausada, "motivo": motivo}, ip=auth._ip(request))
+    con.commit()
+    return {"lead_id": lead_id, "pausada": dados.pausada, "total": len(d)}
+
+
 # ------------------------------------------------------------------ o painel
 @r.get("/painel")
 def painel(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
@@ -429,6 +489,7 @@ def painel(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_
             "decisoes_24h": _contar_auditoria(int(time.time()) - 86400),
             "ultima_decisao": ultima[0]["quando"] if ultima else None,
             "ponte_sem_auditoria": ultima is None,
+            "conversas_pausadas": len(ler_pausas()),
             "instrucoes_em_vigor": (um(con, f"SELECT COUNT(*) AS n FROM sdr_instrucoes WHERE status IN ({','.join('?' * len(EM_VIGOR))})", EM_VIGOR) or {}).get("n", 0),
             "relatos_abertos": (um(con, "SELECT COUNT(*) AS n FROM sdr_relatos WHERE status='aberto'") or {}).get("n", 0),
             "horario_humano": HORARIO_HUMANO, "niveis": NIVEIS}

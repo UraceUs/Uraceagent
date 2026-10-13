@@ -109,6 +109,10 @@ DB_PATH = URACE_DIR / "salesbridge.db"
 SDR_MODO = (os.environ.get("SDR_MODO") or _bridge.get("SDR_MODO", "observar")).strip().lower()
 if SDR_MODO not in ("observar", "organizar", "atender"):
     SDR_MODO = "observar"
+
+# Nível atender, fase de teste (13/10): com uma tag aqui, a ponte só responde a lead que tem essa
+# tag no Kommo (ex.: teste-sdr, só no card de teste). Vazio = responde a todo lead no escopo do SDR.
+SDR_ATENDER_SO_TAG = _bridge.get("SDR_ATENDER_SO_TAG", "").strip()
 # Usuário do Kommo que recebe as tarefas de handoff (responsável único).
 KOMMO_RESPONSAVEL_ID = _bridge.get("KOMMO_RESPONSAVEL_ID", "")
 
