@@ -130,11 +130,12 @@ def test_email_com_marcador_que_nao_e_pedido_nao_deixa_pedido_nenhum(con):
     gm, chamadas = Gmail(), []
     gm.threads = {
         "t-fia": [{"message_id": "f1", "de": "FIA Homologation <homologation@example.org>", "assunto": "Homologation 8856-2018",
-                   "corpo": "Please find the certificate attached."}],
+                   "corpo": "Please find the certificate for the suit attached."}],
         "t-news": [{"message_id": "w1", "de": "Sparco <news@example.com>", "assunto": "New 2027 suits!", "corpo": "Shop now"}]}
     gm.buscas = {"label:Suits": ["t-fia", "t-news"]}
     r = sp.rodar(con, gm, _executor(chamadas))
-    assert r["eventos"] == 2 and len(chamadas) == 2
+    assert r["eventos"] == 1 and len(chamadas) == 1, "a newsletter (robô) nem chega à IA (#195)"
+    assert [x["thread_id"] for x in r["nao_sao_de_suit"]] == ["t-news"]
     assert todos(con, "SELECT id FROM suit_orders") == [], "o painel não cria nada: quem decide é a IA, e ela não criou"
     assert all("Na dúvida, NÃO crie" in c["prompt"] for c in chamadas)
     assert sp.rodar(con, gm, _executor(chamadas))["eventos"] == 0, "cada e-mail é lido uma vez"
@@ -143,7 +144,7 @@ def test_email_com_marcador_que_nao_e_pedido_nao_deixa_pedido_nenhum(con):
 def test_mais_conversas_que_o_ciclo_voltam_como_marcador_e_nao_como_cliente(con, monkeypatch):
     monkeypatch.setattr(sp, "POR_CICLO", 2)
     gm, chamadas = Gmail(), []
-    gm.threads = {f"t{i}": [{"message_id": f"m{i}", "de": f"Pessoa {i} <p{i}@example.com>", "assunto": f"assunto {i}", "corpo": "oi"}]
+    gm.threads = {f"t{i}": [{"message_id": f"m{i}", "de": f"Pessoa {i} <p{i}@example.com>", "assunto": f"assunto {i}", "corpo": "I need a race suit"}]
                   for i in range(5)}
     gm.buscas = {"label:Suits": [f"t{i}" for i in range(5)]}
     r1 = sp.rodar(con, gm, _executor(chamadas))

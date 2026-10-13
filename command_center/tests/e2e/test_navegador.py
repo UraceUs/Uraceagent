@@ -1452,6 +1452,39 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     pg.close()
 
 
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_suits_descarta_o_que_nao_e_pedido_e_restaura(servidor, navegador, largura):
+    """#195 (dono, 13/10): "nenhum desse aí foi e-mail de suit … cessa isso, limpa esses daí"."""
+    pg = entrar(navegador, servidor, largura=largura, altura=900)
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill(f"OpenAI {largura}")
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name=f"OpenAI {largura}", level=1).wait_for()
+    pg.get_by_role("button", name="Não é pedido de suit").click()
+    dlg = pg.get_by_role("dialog", name=re.compile("Descartar o pedido"))
+    dlg.get_by_label("Por quê (opcional)").fill("fatura da OpenAI")
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    dlg.get_by_role("button", name="Descartar", exact=True).click()
+    pg.get_by_text(re.compile("Descartado em")).wait_for()
+    pg.get_by_text("fatura da OpenAI").first.wait_for()
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("heading", name="Em andamento", level=2).wait_for()
+    pg.wait_for_load_state("networkidle")
+    assert pg.get_by_role("link", name=re.compile(f"OpenAI {largura}")).count() == 0, "saiu de Em andamento"
+    pg.get_by_role("button", name="Descartados").click()
+    pg.get_by_role("link", name=re.compile(f"OpenAI {largura}")).click()
+    pg.get_by_role("button", name="Restaurar o pedido").click()
+    pg.get_by_role("button", name="Não é pedido de suit").wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_suits_novo_pedido_vincula_ao_cliente_e_puxa_o_cadastro(servidor, navegador):
     """#158, dono 08/10: "Todo lugar que a gente for fazer inserção manual, sempre coloque um para vincular
     com o cliente ... para poder vincular e puxar as informações pré-definidas ali daquele cliente"."""

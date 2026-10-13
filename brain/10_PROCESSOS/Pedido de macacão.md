@@ -38,6 +38,19 @@ orçamento, medidas ou design para encomendar, confirmação, pagamento. Fornece
 nota, frete, propaganda, conversa da equipe (todo `@urace.us` é nosso) ou dúvida: não cria nada.
 Na dúvida, não cria.
 
+**Só e-mail que fala de macacão** (dono, 13/10, #195: *"Vai estar claro na mensagem, no corpo ou no
+título do e-mail que vai ser um pedido de suit"*). Antes de chegar à IA, a ponte confere: o assunto
+ou o texto têm de falar de macacão (suit, race suit, macacão, mono de karting, combinaison…) e o
+remetente não pode ser robô (noreply, cobrança, recibo, newsletter, aviso). Sem isso, o e-mail é
+lido uma vez e esquecido. Nem a URACE (`@urace.us`) nem um robô contam como "o cliente" de um pedido.
+
+**Descartar, nunca apagar** (#195). Pedido que não é de macacão é **descartado**: sai de Em
+andamento e do Histórico, a ponte não lê, não responde nem anota mais nada nele, e o e-mail dele
+deixa de contar como cliente. Fica na aba **Descartados** e pode ser restaurado. Os #153 a #163
+(Stripe, OpenAI, Anthropic, newsletters, conversa da equipe), abertos pela versão antiga da ponte
+só pelo marcador, foram descartados assim. Guia para operar Suits pelo Claude:
+`docs/suits-guia-do-lucas.md`.
+
 Ítalo: *"eu pedi para tudo passar por minha aprovação por isso que eu fui o gargalo"*. Por
 isso a ponte manda **sem aprovação** quando o "envio automático" está ligado. Começa em
 **simulação**: o e-mail que a IA mandaria aparece na linha do tempo do pedido para a equipe

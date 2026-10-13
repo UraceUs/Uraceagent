@@ -5,6 +5,9 @@
     python3 -m command_center.manage set-password EMAIL
     python3 -m command_center.manage list-users
     python3 -m command_center.manage conferir-chat [DIAS]   # o que não foi e o que não chegou
+    python3 -m command_center.manage suits-suspeitos        # pedidos de Suits que não parecem de macacão (só lê)
+    python3 -m command_center.manage suits-descartar ID [ID ...] [--motivo TEXTO]   # tira das listas e da ponte
+    python3 -m command_center.manage suits-restaurar ID [ID ...]
 """
 import sys
 from getpass import getpass
@@ -57,6 +60,52 @@ def _conferir_chat(con, dias):
     return 0
 
 
+def _suits_ids(args):
+    ids, motivo, i = [], None, 0
+    while i < len(args):
+        if args[i] == "--motivo" and i + 1 < len(args):
+            motivo, i = args[i + 1], i + 2
+            continue
+        if not args[i].isdigit():
+            sys.exit(f"id inválido: {args[i]}")
+        ids.append(int(args[i]))
+        i += 1
+    if not ids:
+        sys.exit("diga os números dos pedidos")
+    return ids, motivo
+
+
+def _suits(con, cmd, args):
+    """#195: descartar o que não é pedido de macacão (nada é apagado) e listar os suspeitos."""
+    from command_center.db import auditar
+    from command_center.providers import suits, suits_ponte
+    if cmd == "suits-suspeitos":
+        lista = suits_ponte.suspeitos(con)
+        for s in lista:
+            print(f"#{s['id']:<5} {s['title'][:34]:<34} {s['customer_email'] or '—':<34} {'; '.join(s['motivos'])}"
+                  + (f"  [{s['assunto'][:60]}]" if s.get("assunto") else ""))
+        print(f"{len(lista)} suspeito(s). Nada foi mudado: para tirar, rode suits-descartar com os números.")
+        return 0
+    ids, motivo = _suits_ids(args)
+    for pid in ids:
+        p = um(con, "SELECT id, title, customer_email, discarded_at FROM suit_orders WHERE id=?", (pid,))
+        if not p:
+            print(f"#{pid}: não existe"); continue
+        if cmd == "suits-descartar":
+            feito = suits.descartar(con, pid, motivo)
+            if feito:
+                auditar(con, "suit.discarded", "manage", entity_type="suit_order", entity_id=pid,
+                        detail={"motivo": motivo or suits.MOTIVO_PADRAO})
+            print(f"#{pid} {p['title']} <{p['customer_email'] or '—'}>: " + ("descartado" if feito else "já estava descartado"))
+        else:
+            feito = suits.restaurar(con, pid)
+            if feito:
+                auditar(con, "suit.restored", "manage", entity_type="suit_order", entity_id=pid)
+            print(f"#{pid} {p['title']}: " + ("restaurado" if feito else "não estava descartado"))
+    con.commit()
+    return 0
+
+
 def main(argv):
     con = conectar()
     aplicar_schema(con)
@@ -89,6 +138,8 @@ def main(argv):
     elif cmd == "list-users":
         for r in todos(con, "SELECT id, email, name, role, active, last_login_at FROM users ORDER BY id"):
             print(f"{r['id']:>3}  {r['email']:<30} {r['role']:<9} {'ativo' if r['active'] else 'INATIVO':<8} {r['last_login_at'] or '—'}")
+    elif cmd in ("suits-suspeitos", "suits-descartar", "suits-restaurar"):
+        return _suits(con, cmd, argv[2:])
     elif cmd == "conferir-chat":
         return _conferir_chat(con, int(argv[2]) if len(argv) > 2 else 7)
     else:

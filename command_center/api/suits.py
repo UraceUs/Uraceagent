@@ -58,9 +58,11 @@ def etapas(u=Depends(auth.exige("OPERATOR"))):
 
 @r.get("/resumo")
 def resumo(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    por = {x["status"]: x["n"] for x in todos(con, "SELECT status, COUNT(*) AS n FROM suit_orders WHERE closed=0 GROUP BY status")}
+    por = {x["status"]: x["n"] for x in todos(con, """SELECT status, COUNT(*) AS n FROM suit_orders
+                                                      WHERE closed=0 AND discarded_at IS NULL GROUP BY status""")}
     return {"por_etapa": por, "abertos": sum(por.values()),
-            "fechados": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE closed=1")["n"],
+            "fechados": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE closed=1 AND discarded_at IS NULL")["n"],
+            "descartados": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE discarded_at IS NOT NULL")["n"],
             "leads": um(con, "SELECT COUNT(*) AS n FROM suit_leads WHERE status='aberto'")["n"],
             "fornecedores": um(con, "SELECT COUNT(*) AS n FROM suit_suppliers")["n"]}
 
@@ -69,8 +71,12 @@ def resumo(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPER
 def listar(response: Response, estado: str = "abertos", status: str | None = None, q: str | None = None,
            limit: int | None = 50, offset: int = 0, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     where, p = [], []
-    if estado in ("abertos", "fechados"):
-        where.append("o.closed=?"); p.append(1 if estado == "fechados" else 0)
+    if estado == "descartados":                   # #195: o que não era pedido de macacão, guardado para conferência
+        where.append("o.discarded_at IS NOT NULL")
+    else:
+        where.append("o.discarded_at IS NULL")
+        if estado in ("abertos", "fechados"):
+            where.append("o.closed=?"); p.append(1 if estado == "fechados" else 0)
     if status:
         where.append("o.status=?"); p.append(suits.etapa_valida(status) if status in suits.CODIGOS else "_")
     if q and q.strip():
@@ -79,12 +85,12 @@ def listar(response: Response, estado: str = "abertos", status: str | None = Non
                      "OR lower(coalesce(o.customer_email,'')) LIKE ?)")
         p += [t, t, t, t]
     sql = f"""SELECT o.id, o.title, o.product, o.quantity, o.customer_name, o.driver_name, o.status, o.closed, o.order_date, o.due_on,
-                     o.source, o.created_at, o.updated_at, s.name AS fornecedor,
+                     o.source, o.created_at, o.updated_at, o.discarded_at, o.discard_reason, s.name AS fornecedor,
                      (SELECT COUNT(*) FROM suit_notes n WHERE n.order_id=o.id AND n.kind!='etapa') AS notas,
                      (SELECT MAX(created_at) FROM suit_notes n WHERE n.order_id=o.id) AS ultima_nota
               FROM suit_orders o LEFT JOIN suit_suppliers s ON s.id=o.supplier_id
               {'WHERE ' + ' AND '.join(where) if where else ''}
-              ORDER BY o.closed, coalesce(o.updated_at, o.created_at) DESC, o.id DESC"""
+              ORDER BY o.closed, coalesce(o.discarded_at, o.updated_at, o.created_at) DESC, o.id DESC"""
     return paginar(con, sql, p, response, limit, offset)
 
 
@@ -143,6 +149,11 @@ def thread_do_link(v):
 def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
     """Cria (pid None) ou atualiza um pedido. `dados` no formato de PedidoIn. Devolve o id."""
     campos = {k: _limpo(dados[k]) for k in CAMPOS if k in dados and dados[k] is not None}
+    if fonte == "ia" and not pid and campos.get("customer_email"):
+        from command_center.providers import suits_ponte
+        e = suits_ponte._email_de(campos["customer_email"])
+        if suits_ponte._nosso(e) or suits_ponte.robo(e):          # #195: a URACE ou um robô não encomendam macacão
+            raise suits.Invalido("este e-mail é da URACE ou de um remetente automático: não é pedido de macacão")
     for k in ("gmail_thread_cliente", "gmail_thread_designer", "gmail_thread_fornecedor"):
         if k in campos:
             campos[k] = thread_do_link(campos[k])
@@ -490,6 +501,34 @@ def ver(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
     return p
 
 
+class DescarteIn(BaseModel):
+    motivo: str | None = None
+
+
+@r.post("/{pid}/descartar")
+def descartar(pid: int, dados: DescarteIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+              u=Depends(auth.exige("OPERATOR"))):
+    """#195: "não é pedido de macacão". Sai das listas e da ponte; nada é apagado."""
+    try:
+        feito = suits.descartar(con, pid, dados.motivo, u["id"])
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    if feito:
+        _aud(con, request, u, "suit.discarded", pid, {"motivo": (dados.motivo or suits.MOTIVO_PADRAO)[:200]})
+    return ver(pid, con, u)
+
+
+@r.post("/{pid}/restaurar")
+def restaurar(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    try:
+        feito = suits.restaurar(con, pid, u["id"])
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    if feito:
+        _aud(con, request, u, "suit.restored", pid)
+    return ver(pid, con, u)
+
+
 @r.patch("/{pid}")
 def mudar(pid: int, dados: PedidoIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     d = dados.model_dump(exclude_unset=True)
@@ -586,8 +625,11 @@ def anexo(pid: int, nome: str, u=Depends(auth.exige("OPERATOR"))):
 @r.post("/{pid}/ponte/simular", status_code=202)
 def simular(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     """A IA faz o próximo passo da ponte neste pedido, sem mandar nada: os e-mails viram nota."""
-    if not um(con, "SELECT id FROM suit_orders WHERE id=?", (pid,)):
+    p = um(con, "SELECT id, discarded_at FROM suit_orders WHERE id=?", (pid,))
+    if not p:
         raise HTTPException(404, "Pedido não encontrado.")
+    if p["discarded_at"]:
+        raise HTTPException(409, "Pedido descartado (não é pedido de macacão): restaure antes de simular.")
     sp = _ponte()
 
     def _vai():
@@ -644,7 +686,7 @@ def ferramentas_ia():
     """As ferramentas da aba Suits para o agente do AI Command: (nome, descrição, propriedades,
     obrigatórios, função(con, user_id, **args)). Ler e trabalho interno — nada sai da empresa."""
     def pedidos(con, uid, busca=None, estado="abertos", **_):
-        where, p = ["1=1"], []
+        where, p = ["discarded_at IS NULL"], []          # #195: descartado não é pedido
         if estado in ("abertos", "fechados"):
             where.append("closed=?"); p.append(1 if estado == "fechados" else 0)
         if busca:
@@ -668,13 +710,17 @@ def ferramentas_ia():
         return {"id": gravar(con, args, uid, fonte="ia")}
 
     def atualizar_pedido(con, uid, id, **args):
+        if (um(con, "SELECT discarded_at FROM suit_orders WHERE id=?", (int(id),)) or {}).get("discarded_at"):
+            return {"erro": "pedido descartado (não é pedido de macacão): não mexa nele"}
         gravar(con, args, uid, int(id))
         return {"ok": True, "id": int(id)}
 
     def anotar_(con, uid, id, texto, **_):
-        st = um(con, "SELECT status FROM suit_orders WHERE id=?", (int(id),))
+        st = um(con, "SELECT status, discarded_at FROM suit_orders WHERE id=?", (int(id),))
         if not st:
             return {"erro": "pedido não encontrado"}
+        if st["discarded_at"]:
+            return {"erro": "pedido descartado (não é pedido de macacão): não anote nele"}
         return {"id": suits.anotar(con, int(id), texto, "ia", st["status"], user_id=uid)}
 
     def email_(con, uid, id, para, assunto, corpo, anexos=None, responder=True, **_):
