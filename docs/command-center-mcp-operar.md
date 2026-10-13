@@ -75,6 +75,8 @@ repete com `confirmar: true` depois do seu "pode mandar".
 
 - O servidor de login é o próprio painel (OAuth 2.1 com PKCE). O escopo `mcp:write` só sai quando
   a pessoa marca a caixa **e** é OPERATOR ou acima; rebaixada a pessoa, o token volta a ler.
-- Chave de API (`urk_…`) sem "só leitura" também opera, pelo papel da chave.
+- Chave de API (`urk_…`) sem "só leitura" também opera, pelo papel da chave. A chave já criada passa de
+  "só leitura" para operação (e volta) em **Usuários › Chaves de API › Liberar para operar**, sem
+  trocar o valor; só o administrador muda, e fica na auditoria (`apikey.mode`, #209).
 - Ficam fora do MCP: login, senha e chaves (`/ops/api/auth/*`) e a área do cliente (`/ops/api/portal/*`).
 - Código: `command_center/api/mcp_operar.py`; testes: `command_center/tests/test_mcp_operar.py`.

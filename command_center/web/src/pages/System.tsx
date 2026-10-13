@@ -324,6 +324,24 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
       setNova(r); setF({ name: '', role: 'VIEWER', user_id: '', days: '', note: '', read_only: true }); reload()
     } catch (ex) { setErr((ex as ApiError).message) } finally { setBusy(false) }
   }
+  // #209 (dono, 13/10): "alterar as api ja criadas de so leitura para operação" — sem trocar a chave
+  async function mudarModo(k: K) {
+    const operar = !!k.read_only
+    if (!await perguntar(operar ? {
+      titulo: tr("Liberar a chave \"{0}\" para operar?", k.name),
+      texto: tr("A partir do próximo pedido, o que esta chave fizer acontece de verdade (mensagem para o cliente, preço no QuickBooks), sem aprovação. O papel ({0}) continua o mesmo.", ROLE_PT[k.role] || k.role),
+      ok: tr("Liberar para operar"), perigo: true,
+    } : {
+      titulo: tr("Voltar a chave \"{0}\" para só leitura?", k.name),
+      texto: tr("A partir do próximo pedido, ela só consulta o painel e não muda nada."),
+      ok: tr("Voltar para só leitura"),
+    })) return
+    try {
+      await api.post(`/keys/${k.id}/modo`, { read_only: !operar })
+      toast(operar ? tr("Chave liberada para operar.") : tr("Chave voltou para só leitura."), operar ? 'warn' : 'ok'); reload()
+    } catch (ex) { toast((ex as ApiError).message, 'crit') }
+  }
+
   async function revogar(k: K) {
     if (!await perguntar({
       titulo: tr("Revogar a chave \"{0}\"?", k.name),
@@ -362,7 +380,9 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
                 <td className="small">{k.como_nome}<div className="muted">{k.como}</div></td>
                 <td className="small">{k.last_used_at ? <>{fmtDateTime(k.last_used_at)}<div className="muted">{k.uses} {tr("uso(s)")}{k.last_ip ? ` · ${k.last_ip}` : ''}</div></> : <span className="muted">{tr("nunca usada")}</span>}</td>
                 <td className="small">{k.expires_at ? fmtDateTime(k.expires_at) : <span className="muted">{tr("não expira")}</span>}</td>
-                <td>{!k.revoked_at && <button className="btn sm danger" onClick={() => revogar(k)}>{tr("Revogar")}</button>}</td></tr>)}
+                <td>{!k.revoked_at && <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                  <button className="btn sm" onClick={() => mudarModo(k)}>{k.read_only ? tr("Liberar para operar") : tr("Só leitura")}</button>
+                  <button className="btn sm danger" onClick={() => revogar(k)}>{tr("Revogar")}</button></div>}</td></tr>)}
             </tbody></table></div>}
       </div>
       <form className="stack" onSubmit={criar}>
