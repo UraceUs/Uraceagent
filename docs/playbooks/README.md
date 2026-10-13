@@ -7,7 +7,7 @@ tanto por IA quanto por um humano, para eu poder estar passando isso para o time
 |---|---|---|
 | [Geral](playbook-geral.md) | todo mundo da equipe e o Claude de cada um | ler primeiro; a IA cola nas instruções do Projeto do Claude ou num `CLAUDE.md` |
 | [Vendas](playbook-vendas.md) | quem vende e o Claude dessa pessoa | depois do geral; os roteiros da seção 9 são o dia a dia |
-| [Mecânicos e coaches](playbook-mecanicos-e-coaches.md) | o box: mecânico e coach têm o mesmo acesso | linguagem simples, celular na mão |
+| [Mecânicos e coaches](playbook-mecanicos-e-coaches.md) · [PDF](playbook-mecanicos-e-coaches.pdf) | o box: mecânico e coach têm o mesmo acesso | foco no calendário (Meu dia) e no balcão de peças; o PDF sai de `gerar_pdf_mecanicos.py` |
 | [Suits](../suits-guia-do-lucas.md) | quem opera os macacões e o Claude dessa pessoa | guia da aba Suits |
 
 Os playbooks descrevem o que o código faz hoje. Mudou tela ou processo, o playbook do assunto
