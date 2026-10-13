@@ -308,6 +308,24 @@ def _coletar(con):
                           facts=[(f"{_dbr(x['service_date'])} · {x['cliente']}", f"US$ {x['total']:,.2f}" + (" · erro" if x["qbo_error"] else ""))
                                  for x in pecas[:6]]))
 
+    # ---- 4f2b. balcão do celular (#206): leitura pendente esperando a revisão do gerente
+    pend = todos(con, """SELECT cp.id, cp.service_date, cp.code, cp.pilot_name, i.name AS peca, u.name AS por
+                           FROM counter_pending cp LEFT JOIN stock_items i ON i.id=cp.item_id
+                           LEFT JOIN users u ON u.id=cp.by_user_id
+                          WHERE cp.status='pendente' ORDER BY cp.service_date, cp.id""")
+    if pend:
+        velha = any(x["service_date"] < hoje.isoformat() for x in pend)
+        itens.append(dict(key=_chave("balcao", "counter_pending", "pendentes"), level="HIGH" if velha else "MEDIUM",
+                          title=f"{len(pend)} peça(s) lida(s) no celular esperando a revisão",
+                          why="O mecânico leu a peça e tocou no piloto. Ela só cobra (ou vai para o estoque do cliente) "
+                              "depois que o gerente confirma na Revisão do balcão."
+                              + (" Há leitura de dia que já passou." if velha else ""),
+                          entity={"type": "counter_pending", "id": None}, client_id=None, link="/balcao",
+                          action="Revisar no balcão",
+                          facts=[(f"{_dbr(x['service_date'])} · {x['pilot_name'] or 'sem piloto'}",
+                                  (x["peca"] or f"código novo {x['code']}") + (f" · {x['por']}" if x["por"] else ""))
+                                 for x in pend[:6]]))
+
     # ---- 4f3. checklists (#92): começado e não concluído num dia que já passou
     from command_center.providers import checklists as _ck
     soltos = _ck.incompletos(con)

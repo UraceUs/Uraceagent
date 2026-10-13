@@ -1261,7 +1261,12 @@ def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, nav
     caixa = piloto.bounding_box()
     assert caixa and caixa["height"] >= 48, "alvo grande para o polegar"
     piloto.click()
-    v.get_by_text("✓ Front bumper (e2e) → David Pera").wait_for()
+    # #206 (dono, 13/10: "Escaneou, selecionou o cliente, já finaliza"): vai direto para a OS do David
+    v.get_by_text("Front bumper (e2e) → David Pera · na OS").wait_for()
+    v.get_by_text("Lançando para").wait_for()
+    v.get_by_role("button", name="Encerrar").click()
+    v.get_by_role("heading", name="Operação encerrada").wait_for()
+    v.get_by_role("button", name="Próximo piloto").click()
     # nesse endereço, outra tela não abre e a API das outras seções responde 403
     v.goto(balcao + "/clients")
     v.get_by_role("heading", name="Leia a peça").wait_for()
@@ -1270,12 +1275,66 @@ def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, nav
     v.close()
     assert not erros, erros
 
+    # o gerente não confirma nada: a peça já está nas leituras do David, no balcão do painel
     g = entrar(navegador, servidor)
+    ids = g.evaluate("fetch('/ops/api/clients?q=David%20Pera').then(r => r.json())")
+    lista = ids["itens"] if isinstance(ids, dict) else ids
+    cid = next(c["id"] for c in lista if (c.get("pilot_name") or "") == "David Pera")
+    abrir(g, servidor, f"/balcao/{cid}")
+    g.locator(".tbl .tr", has_text="Front bumper (e2e)").first.wait_for()
+    assert not g.erros_js, g.erros_js
+    g.close()
+
+
+def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(servidor, navegador):
+    """#206 (dono, 13/10: "finalizar o balcão de peças urgentemente"): a própria leitura pendente se
+    desfaz a qualquer hora; a contagem rápida tira o estoque do zero; o cliente abre pelo nome."""
+    balcao = servidor.replace("127.0.0.1", "localhost")
+    v = navegador.new_page(viewport={"width": 360, "height": 740})
+    v.goto(balcao + "/login")
+    v.fill("#email", "luis@urace.us")
+    v.fill("#pw", SENHA)
+    v.keyboard.press("Enter")
+    v.get_by_role("heading", name="Leia a peça").wait_for()
+    v.get_by_role("button", name="Código apagado? Digitar").click()
+    v.get_by_label("Código da peça").fill("7890000000017")
+    v.get_by_role("button", name="Ler", exact=True).click()
+    v.get_by_role("heading", name="Front bumper (e2e)").wait_for()
+    v.locator(".br-piloto", has_text="David Pera").first.click()
+    v.get_by_text("Front bumper (e2e) → David Pera").first.wait_for()
+    # a operação fica aberta: a próxima peça já vai para o mesmo piloto, sem tocar de novo
+    v.get_by_role("button", name="Código apagado? Digitar").click()
+    v.get_by_label("Código da peça").fill("7890000000017")
+    v.get_by_role("button", name="Ler", exact=True).click()
+    v.get_by_text("2 peça(s) nesta operação").wait_for()
+    assert v.evaluate("document.documentElement.scrollWidth") <= 360
+    v.wait_for_timeout(6500)                                    # o aviso com "Desfazer" some
+    lista = v.get_by_role("list", name="Suas últimas leituras")
+    antes = lista.get_by_role("listitem").count()
+    botao = lista.get_by_role("button", name="Desfazer Front bumper (e2e)").first
+    assert botao.bounding_box()["height"] >= 40
+    botao.click()
+    v.wait_for_function(f"() => document.querySelectorAll('.br-minhas li').length < {antes}")
+    assert v.evaluate("document.documentElement.scrollWidth") <= 360
+    v.get_by_role("button", name="Encerrar").click()
+    v.get_by_role("heading", name="Operação encerrada").wait_for()
+    v.close()
+
+    g = entrar(navegador, servidor, largura=360, altura=900)
     abrir(g, servidor, "/balcao")
-    item = g.locator(".card", has_text="Front bumper (e2e)").filter(has_text="Luis Barros").first
-    item.wait_for()
-    item.get_by_role("button", name="Guardar para o cliente").click()      # cobrar pede o QuickBooks, que o e2e não tem
-    g.get_by_text("Peça confirmada").wait_for()
+    g.get_by_role("heading", name="Contar o estoque").wait_for()
+    g.get_by_role("button", name="Começar a contar").click()
+    g.get_by_label("Leia a peça").fill("7890000000017")
+    g.get_by_label("Leia a peça").press("Enter")
+    g.get_by_text("Front bumper (e2e)", exact=True).first.wait_for()
+    g.get_by_label("Quanto tem aqui agora").fill("4")
+    g.get_by_role("button", name="Gravar contagem").click()
+    g.get_by_text("Front bumper (e2e): 4 contado(s).").wait_for()
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    g.get_by_role("button", name="Terminar").click()
+    g.get_by_role("heading", name="Abrir um cliente").wait_for()
+    assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
 

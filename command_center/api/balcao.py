@@ -355,6 +355,7 @@ class RapidoIn(BaseModel):
     data: str | None = None
     client_id: int | None = None
     pilot_id: int | None = None
+    local: str | None = None                      # #206: de onde a peça sai (galpão, trailer, pista)
 
 
 @r.post("/rapido", status_code=201)
@@ -365,11 +366,15 @@ def rapido_registrar(dados: RapidoIn, request: Request, con: sqlite3.Connection 
     if not _re.fullmatch(_DATA, data):
         raise HTTPException(400, "data inválida")
     try:
-        p = br.registrar(con, dados.codigo, data, dados.client_id, dados.pilot_id, u["id"])
-    except (b.ErroBalcao, br.ErroRapido) as e:
+        p = br.registrar(con, dados.codigo, data, dados.client_id, dados.pilot_id, u["id"], dados.local)
+    except (b.ErroBalcao, br.ErroRapido, estoque.ErroEstoque) as e:
         raise HTTPException(400, str(e))
-    _aud(con, request, u, "balcao.rapido", "counter_pending", p["id"],
-         {"codigo": p["code"], "cliente": p["client_id"], "piloto": p["pilot_id"], "data": data})
+    _aud(con, request, u, "balcao.rapido.os" if p["direto"] else "balcao.rapido",
+         "counter_scan" if p["direto"] else "counter_pending", p["id"],
+         {"codigo": p["code"], "cliente": p["client_id"], "piloto": p["pilot_id"], "data": data, "motivo": p.get("motivo")})
+    con.commit()
+    if p["direto"]:
+        _sincronizar(con, p["parts_invoice_id"])   # a OS do dia sobe para o QuickBooks (não é enviada)
     return p
 
 
@@ -386,6 +391,23 @@ def rapido_desfazer(pid: int, request: Request, con: sqlite3.Connection = Depend
     return {"ok": True}
 
 
+@r.post("/rapido/lancada/{scan_id}/desfazer")
+def rapido_desfazer_lancada(scan_id: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                            u=Depends(auth.exige("OPERATOR"))):
+    """#206: desfazer pelo celular a peça que foi direto para a OS."""
+    try:
+        s = br.desfazer_lancada(con, scan_id, u["id"], _gerente(u))
+    except LookupError:
+        raise HTTPException(404, "Leitura não encontrada.")
+    except (b.ErroBalcao, br.ErroRapido, estoque.ErroEstoque) as e:
+        con.rollback()
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "balcao.rapido.desfazer_os", "client", s["client_id"], {"leitura": scan_id})
+    con.commit()
+    _sincronizar(con, s["parts_invoice_id"])
+    return {"ok": True}
+
+
 @r.get("/revisao")
 def revisao(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
             con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
@@ -397,6 +419,7 @@ class ConfirmarIn(BaseModel):
     client_id: int | None = None
     item_id: int | None = None
     confirmado: bool = False
+    local: str | None = None                      # #206: galpão, trailer ou pista (antes, sempre o galpão)
 
 
 @r.post("/revisao/{pid}/confirmar")
@@ -404,7 +427,7 @@ def revisao_confirmar(pid: int, dados: ConfirmarIn, request: Request, con: sqlit
                       u=Depends(auth.exige("MANAGER"))):
     con.execute("BEGIN IMMEDIATE")
     try:
-        s = br.confirmar(con, pid, dados.modo, u["id"], dados.client_id, dados.item_id, dados.confirmado)
+        s = br.confirmar(con, pid, dados.modo, u["id"], dados.client_id, dados.item_id, dados.confirmado, dados.local)
     except LookupError as e:
         con.execute("ROLLBACK")
         raise HTTPException(404, str(e))

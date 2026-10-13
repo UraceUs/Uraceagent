@@ -500,7 +500,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | **Pelo Claude:** `precisa_confirmar` | vai sair da empresa ou cobrar | mostre à pessoa e repita com `confirmar: true` só depois do "pode mandar" |
 | **Pelo Claude:** "… não existe no painel (veja urace_operacoes)" | caminho errado | procure a operação certa com `urace_operacoes` |
 | **Pelo Claude:** "login, chaves e área do cliente não são operados pelo MCP" | rota fora do MCP | faça pelo painel |
-| Chave de API: "Esta chave é só de leitura" | a chave foi criada como só leitura | o administrador cria outra sem "só leitura" |
+| Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |
 
 ---
 

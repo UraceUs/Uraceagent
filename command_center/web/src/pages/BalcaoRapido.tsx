@@ -16,7 +16,11 @@ import { useLeitor, vibrar } from '../components/Leitor'
 import { LOCALE, tr } from '../i18n'
 
 interface Piloto { chave: string; client_id: number | null; pilot_id: number | null; nome: string; origens: string[]; pecas: number }
-interface Pendente { id: number; code: string; peca: string | null; pilot_name: string | null; client_id: number | null }
+/** #206: `lancada` foi direto para a OS do cliente; `pendente` ficou para o gerente (com o motivo). */
+interface Pendente { id: number; tipo: 'lancada' | 'pendente'; code: string; peca: string | null; pilot_name: string | null
+  client_id: number | null; motivo?: string | null }
+/** A operação de um piloto: lê as peças dele, uma atrás da outra, e encerra. */
+interface Alvo { client_id: number | null; pilot_id: number | null; nome: string }
 interface Dia { data: string; hoje: string; pilotos: Piloto[]; minhas: Pendente[] }
 interface Item { id: number; name: string }
 interface Achado { client_id: number; nome: string; responsavel: string | null }
@@ -82,7 +86,14 @@ export function BalcaoRapido() {
   const [dia, setDia] = useState<Dia | null>(null)
   const [data, setData] = useState<string | null>(null)
   const [lido, setLido] = useState<Lido | null>(null)
-  const [feito, setFeito] = useState<{ id: number; texto: string } | null>(null)
+  const [feito, setFeito] = useState<{ id: number; tipo: Pendente['tipo']; texto: string; motivo?: string | null } | null>(null)
+  // #206 (dono, 13/10): "escaneia ... fecha a operação, passa para o próximo cliente". Com um piloto
+  // escolhido, cada peça lida já vai para ele, sem tocar de novo; "Encerrar" fecha e mostra o resumo.
+  const [alvo, setAlvo] = useState<Alvo | null>(null)
+  const alvoRef = useRef<Alvo | null>(null)
+  const [sessao, setSessao] = useState<Pendente[]>([])
+  const [resumo, setResumo] = useState<{ nome: string; itens: Pendente[] } | null>(null)
+  const [local, setLocal] = useState(() => { try { return localStorage.getItem('balcao.local') || 'sede' } catch { return 'sede' } })
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
   const [digitar, setDigitar] = useState(false)
@@ -102,6 +113,28 @@ export function BalcaoRapido() {
     return () => clearTimeout(t)
   }, [feito])
 
+  useEffect(() => { alvoRef.current = alvo }, [alvo])
+
+  const lancar = useCallback(async (codigo: string, item: Item | null, p: Alvo | Piloto | Achado | null) => {
+    setIndo(true)
+    try {
+      const r = await api.post<Pendente>('/balcao/rapido', { codigo, data, local, client_id: p?.client_id ?? null,
+        pilot_id: p && 'pilot_id' in p ? p.pilot_id : null })
+      vibrar(r.tipo === 'lancada' ? [30, 40, 30] : [80, 60, 80])
+      const peca = r.peca || item?.name || tr("Código {0}", codigo)
+      const quem = p ? p.nome : tr("decidir depois")
+      setFeito({ id: r.id, tipo: r.tipo, motivo: r.motivo, texto: `${peca} → ${quem}` })
+      if (p) {
+        const novo: Alvo = { client_id: p.client_id, pilot_id: 'pilot_id' in p ? p.pilot_id : null, nome: p.nome }
+        if (!alvoRef.current) { setAlvo(novo); setSessao([]) }
+        setSessao(s => [...s, { ...r, peca }])
+      }
+      ultimo.current = { codigo, em: Date.now() }
+      setLido(null)
+      carregar(data)
+    } catch (e) { vibrar(250); setErro((e as ApiError).message) } finally { setIndo(false) }
+  }, [data, local, carregar])
+
   const ler = useCallback(async (bruto: string) => {
     const codigo = bruto.trim()
     if (!codigo) return
@@ -113,37 +146,48 @@ export function BalcaoRapido() {
     try {
       const r = await api.get<{ tipo: string; codigo?: string; item?: Item }>(`/balcao/ler${qs({ codigo })}`)
       if (r.tipo === 'cliente') { setLido(null); vibrar(250); setErro(tr("Este é o QR de um cliente. Aqui o primeiro passo é a peça.")); return }
-      setLido({ codigo: r.codigo || codigo, carregando: false, item: r.tipo === 'peca' && r.item ? r.item : null })
+      const item = r.tipo === 'peca' && r.item ? r.item : null
+      if (alvoRef.current) { await lancar(r.codigo || codigo, item, alvoRef.current); return }   // operação aberta: vai direto
+      setLido({ codigo: r.codigo || codigo, carregando: false, item })
     } catch (e) { setLido(null); vibrar(250); setErro((e as ApiError).message) }
-  }, [])
+  }, [lancar])
 
   const ativo = !lido && !indo && !digitar
   const { erro: erroCamera, pronto } = useLeitor(video, ativo, ler)
 
   async function registrar(p: Piloto | Achado | null) {
     if (!lido || lido.carregando || indo) return
-    setIndo(true)
-    try {
-      const r = await api.post<Pendente>('/balcao/rapido', { codigo: lido.codigo, data, client_id: p?.client_id ?? null, pilot_id: p && 'pilot_id' in p ? p.pilot_id : null })
-      vibrar([30, 40, 30])
-      const peca = lido.item?.name || tr("Código {0}", lido.codigo)
-      setFeito({ id: r.id, texto: p ? `${peca} → ${p.nome}` : tr("{0} → decidir depois", peca) })
-      ultimo.current = { codigo: lido.codigo, em: Date.now() }
-      setLido(null)
-      carregar(data)
-    } catch (e) { vibrar(250); setErro((e as ApiError).message) } finally { setIndo(false) }
+    await lancar(lido.codigo, lido.item, p)
   }
+
+  function escolherAntes(p: Piloto | Achado) {          // começar pelo piloto, antes da primeira peça
+    setResumo(null); setFeito(null); setErro(null)
+    setAlvo({ client_id: p.client_id, pilot_id: 'pilot_id' in p ? p.pilot_id : null, nome: p.nome }); setSessao([])
+  }
+
+  function encerrar() {
+    if (alvo) setResumo({ nome: alvo.nome, itens: sessao })
+    setAlvo(null); setSessao([]); setFeito(null)
+  }
+
+  function mudarLocal(v: string) { setLocal(v); try { localStorage.setItem('balcao.local', v) } catch { /* sem armazenamento */ } }
 
   function cancelar() {
     if (lido) ultimo.current = { codigo: lido.codigo, em: Date.now() }
     setLido(null)
   }
 
-  async function desfazer() {
-    if (!feito) return
-    try { await api.post(`/balcao/rapido/${feito.id}/desfazer`); setFeito(null); vibrar(40); carregar(data) }
-    catch (e) { setErro((e as ApiError).message) }
+  // #206: a própria leitura se desfaz a qualquer hora — a que foi para a OS (enquanto a OS não foi
+  // enviada nem paga) e a que ficou pendente (enquanto o gerente não revisou)
+  async function desfazerLeitura(id: number, tipo: Pendente['tipo']) {
+    try {
+      await api.post(tipo === 'lancada' ? `/balcao/rapido/lancada/${id}/desfazer` : `/balcao/rapido/${id}/desfazer`)
+      vibrar(40); if (feito?.id === id && feito.tipo === tipo) setFeito(null)
+      setSessao(s => s.filter(x => !(x.id === id && x.tipo === tipo))); carregar(data)
+    } catch (e) { setErro((e as ApiError).message) }
   }
+
+  async function desfazer() { if (feito) await desfazerLeitura(feito.id, feito.tipo) }
 
   function enviarDigitado(e: FormEvent) {
     e.preventDefault()
@@ -173,15 +217,31 @@ export function BalcaoRapido() {
       </div>
       {!erroCamera && <div className={`br-mira${lido ? ' pausa' : ''}`} aria-hidden="true" />}
       <p className="br-status" role="status">
-        {erroCamera || (lido ? tr("Lido. Escolha o piloto embaixo.") : pronto ? tr("Aponte para o código da peça") : tr("Abrindo a câmera…"))}
+        {erroCamera || (lido ? tr("Lido. Escolha o piloto embaixo.") : !pronto ? tr("Abrindo a câmera…")
+          : alvo ? tr("Peças de {0}: leia a próxima", alvo.nome) : tr("Aponte para o código da peça"))}
       </p>
     </section>
 
     <section className="br-painel" aria-label={tr("Peça e pilotos")}>
       {erro && <p className="br-erro" role="alert">{erro}</p>}
-      {feito && <div className="br-feito" role="status">
-        <span>✓ {feito.texto}</span>
+      {alvo && <div className="br-sessao" role="status">
+        <div className="grow"><small>{tr("Lançando para")}</small><b>{alvo.nome}</b>
+          <small>{tr("{0} peça(s) nesta operação", sessao.length)}</small></div>
+        <select value={local} onChange={e => mudarLocal(e.target.value)} aria-label={tr("A peça sai de")}>
+          <option value="sede">{tr("Galpão")}</option><option value="trailer">{tr("Trailer")}</option><option value="pista">{tr("Pista")}</option></select>
+        <button className="btn primary" onClick={encerrar}>{tr("Encerrar")}</button>
+      </div>}
+      {feito && <div className={`br-feito${feito.tipo === 'pendente' ? ' pend' : ''}`} role="status">
+        <span>{feito.tipo === 'lancada' ? `✓ ${feito.texto} · ${tr("na OS")}` : `⏳ ${feito.texto} · ${tr("ficou para o gerente")}`}
+          {feito.motivo && <small className="br-motivo">{feito.motivo}</small>}</span>
         <button className="btn" onClick={desfazer}>{tr("Desfazer")}</button>
+      </div>}
+      {resumo && !alvo && <div className="br-resumo" role="status">
+        <h2>{tr("Operação encerrada")}</h2>
+        <p><b>{resumo.nome}</b> · {tr("{0} peça(s)", resumo.itens.length)}</p>
+        {resumo.itens.length > 0 && <ul>{resumo.itens.map(x => <li key={x.tipo + x.id}>{x.tipo === 'lancada' ? '✓' : '⏳'} {x.peca || x.code}
+          {x.tipo === 'pendente' && <small className="muted"> · {tr("ficou para o gerente")}</small>}</li>)}</ul>}
+        <button className="btn primary" onClick={() => setResumo(null)}>{tr("Próximo piloto")}</button>
       </div>}
 
       {lido ? <>
@@ -198,17 +258,27 @@ export function BalcaoRapido() {
           {dia && !dia.pilotos.length && <p className="small muted">{tr("Ninguém marcado neste dia no Asana, nas sessões do site ou nas corridas. Busque o cliente pelo nome abaixo.")}</p>}
         </div>
         <OutroCliente desativado={indo || lido.carregando} onEscolher={c => registrar(c)} />
+        <p className="small muted" style={{ margin: 0 }}>{tr("Depois do toque, as próximas peças lidas já vão para o mesmo piloto, até você tocar em Encerrar.")}</p>
         <div className="br-acoes">
           <button className="btn" disabled={indo || lido.carregando} onClick={() => registrar(null)}>{tr("Decidir depois")}</button>
           <button className="btn ghost" disabled={indo} onClick={cancelar}>{tr("Ler outra")}</button>
         </div>
       </> : <>
         <div className="br-dica">
-          <h2>{tr("Leia a peça")}</h2>
-          <p className="small muted">{dia ? tr("{0} piloto(s) em {1}. Depois de ler, um toque no piloto registra.", dia.pilotos.length, rotuloDia(dia.data)) : ''}</p>
+          <h2>{alvo ? tr("Leia a próxima peça") : tr("Leia a peça")}</h2>
+          <p className="small muted">{alvo ? tr("Cada peça lida vai direto para a OS de {0}. Acabou? Toque em Encerrar.", alvo.nome)
+            : dia ? tr("{0} piloto(s) em {1}. Leia a peça e toque no piloto, ou escolha o piloto antes.", dia.pilotos.length, rotuloDia(dia.data)) : ''}</p>
         </div>
+        {!alvo && !resumo && !!dia?.pilotos.length && <details className="br-antes">
+          <summary>{tr("Escolher o piloto antes de ler")}</summary>
+          <div className="br-pilotos">{dia.pilotos.map(p => <button key={p.chave} className="br-piloto" onClick={() => escolherAntes(p)}>
+            <b>{p.nome}</b><small>{p.origens.map(o => ORIGEM[o] || o).join(' · ')}{p.pecas ? ` · ${tr("{0} peça(s)", p.pecas)}` : ''}</small></button>)}</div>
+          <OutroCliente desativado={false} onEscolher={c => escolherAntes(c)} />
+        </details>}
         {!!dia?.minhas.length && <ul className="br-minhas" aria-label={tr("Suas últimas leituras")}>
-          {dia.minhas.map(m => <li key={m.id}><span className="truncate">{m.peca || m.code}</span><span className="muted">{m.pilot_name || tr("decidir depois")}</span></li>)}
+          {dia.minhas.map(m => <li key={m.tipo + m.id}><span className="truncate">{m.tipo === 'lancada' ? '✓ ' : '⏳ '}{m.peca || m.code}</span>
+            <span className="muted">{m.pilot_name || tr("decidir depois")}</span>
+            <button className="btn sm ghost" onClick={() => desfazerLeitura(m.id, m.tipo)} aria-label={tr("Desfazer {0}", m.peca || m.code)}>{tr("Desfazer")}</button></li>)}
         </ul>}
         {gerente && dia && <button className="btn ghost br-teclado" aria-expanded={auditar} onClick={() => setAuditar(v => !v)}>{auditar ? tr("Fechar a auditoria") : tr("Auditoria do dia: quem lançou o quê")}</button>}
         {gerente && auditar && dia && <AuditoriaDia data={dia.data} />}

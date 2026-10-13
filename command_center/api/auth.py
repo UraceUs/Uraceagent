@@ -337,6 +337,25 @@ def revogar_chave(con, ident, por_user_id=None):
     return True
 
 
+def mudar_modo_chave(con, ident, somente_leitura, por_user_id=None):
+    """Dono, 13/10 (#209): "preciso tbm conseguir alterar as api ja criadas de so leitura para
+    operação". Troca só a permissão de escrever; o papel e o teto da pessoa continuam valendo.
+    Devolve None (não existe ou revogada), False (já estava assim) ou True."""
+    k = um(con, "SELECT id, name, read_only FROM api_keys WHERE id = ? AND revoked_at IS NULL", (ident,))
+    if not k:
+        return None
+    novo = 1 if somente_leitura else 0
+    if k["read_only"] == novo:
+        return False
+    con.execute("UPDATE api_keys SET read_only = ? WHERE id = ?", (novo, ident))
+    auditar(con, "apikey.mode", f"user:{por_user_id}" if por_user_id else "system", user_id=por_user_id,
+            entity_type="api_key", entity_id=None,
+            detail={"chave": ident, "nome": k["name"], "de": "leitura" if k["read_only"] else "operação",
+                    "para": "leitura" if novo else "operação"})
+    con.commit()
+    return True
+
+
 def _chave_do_pedido(request):
     """`Authorization: Bearer urk_...` ou `X-API-Key: urk_...`."""
     bruto = request.headers.get("x-api-key") or ""
