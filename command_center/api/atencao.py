@@ -113,7 +113,7 @@ def _coletar(con):
     # ---- 1. serviço próximo sem waiver (a regra que mais custa)
     for t in todos(con, """SELECT t.*, c.name AS cliente, c.email, c.vip, c.pilot_name
                            FROM tasks t LEFT JOIN clients c ON c.id = t.client_id
-                           WHERE t.status='open' AND t.due_on IS NOT NULL AND t.project='U-RACE'"""):
+                           WHERE t.status='open' AND t.due_on IS NOT NULL AND t.project='U-RACE' AND t.deleted_at IS NULL"""):
         dias = _dias_ate(t["due_on"])
         if dias is None or dias < 0 or dias > 7:
             continue
@@ -159,7 +159,7 @@ def _coletar(con):
         if dias is None or dias > 21:
             continue
         expirou = dias < 0
-        tem_servico = um(con, "SELECT 1 FROM tasks WHERE client_id=? AND status='open'", (w["client_id"],)) if w["client_id"] else None
+        tem_servico = um(con, "SELECT 1 FROM tasks WHERE client_id=? AND status='open' AND deleted_at IS NULL", (w["client_id"],)) if w["client_id"] else None
         itens.append(dict(key=_chave("waiver-expira", "waiver", w["id"]), level="MEDIUM" if tem_servico else "LOW",
                           title=(f"Waiver de {w['signer_name'] or w['cliente']} expirou em {_dbr(w['expires_at'])}" if expirou
                                  else f"Waiver de {w['signer_name'] or w['cliente']} expira em {dias} dia(s)"),
@@ -174,7 +174,7 @@ def _coletar(con):
                            FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
                            LEFT JOIN ai_events ev ON ev.kind='task.overdue' AND ev.entity_type='task' AND ev.entity_id=t.id
                            LEFT JOIN ai_commands cmd ON cmd.id=ev.command_id
-                           WHERE t.status='open' AND t.due_on < ? AND t.project='U-RACE' AND LOWER(COALESCE(t.section,'')) NOT IN ('races','finished services')""",
+                           WHERE t.status='open' AND t.deleted_at IS NULL AND t.due_on < ? AND t.project='U-RACE' AND LOWER(COALESCE(t.section,'')) NOT IN ('races','finished services')""",
                    (hoje.isoformat(),)):
         if t["ev_status"] in ("NEW", "RUNNING"):
             continue                                   # a IA está cuidando; não incomoda o humano

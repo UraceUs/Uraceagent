@@ -95,7 +95,7 @@ def _f_cliente(con, id=None, **_):
         raise ValueError(f"cliente {id} não existe")
     return {"cliente": dict(c),
             "servicos": [dict(t) for t in todos(
-                con, "SELECT id, title, section, status, due_on FROM tasks WHERE client_id=? "
+                con, "SELECT id, title, section, status, due_on FROM tasks WHERE client_id=? AND deleted_at IS NULL "
                      "ORDER BY COALESCE(due_on,'') DESC LIMIT 60", (id,))],
             "invoices": [dict(i) for i in todos(
                 con, "SELECT doc_number, amount, balance, status, issued_on, due_on FROM invoices "

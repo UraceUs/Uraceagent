@@ -257,6 +257,11 @@ MIGRACOES = [
     # 13/10 — dono (#206): "Escaneou, selecionou o cliente, já finaliza. Não tem essa de ter que confirmar
     # depois". A leitura do celular vai direto para a OS; só o que não pode ir fica pendente, com o motivo.
     ("counter_pending", "motivo", "TEXT"),
+    # 13/10 — dono (#219): "ela exclui, deixa de ser mostrada, mas lá no histórico de serviço ela continua
+    # sendo armazenada como uma tarefa excluída". Nada sai do banco nem do Asana; só deixa de aparecer.
+    ("tasks", "deleted_at", "TEXT"),
+    ("tasks", "deleted_by", "INTEGER"),
+    ("tasks", "deleted_reason", "TEXT"),
     # 01/10 — dono (#67): "todo agendamento... vira uma tarefa no asana".
     ("bookings", "asana_gid", "TEXT"),
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana

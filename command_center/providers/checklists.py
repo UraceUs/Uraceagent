@@ -324,7 +324,7 @@ def meu_dia(con, data=None, cargo=None):
     ts = [t for t in modelos(con) if _cargo_ve(cargo, t["cargo"])]
     servicos = todos(con, """SELECT t.id, t.title, t.status, t.section, t.client_id, COALESCE(c.pilot_name, c.name) AS cliente
                                FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
-                              WHERE substr(t.due_on,1,10)=? AND LOWER(COALESCE(t.section,''))!='races'
+                              WHERE substr(t.due_on,1,10)=? AND LOWER(COALESCE(t.section,''))!='races' AND t.deleted_at IS NULL
                               ORDER BY t.title""", (data,))
     corridas = todos(con, """SELECT id, name, series, track, city, date_start, date_end FROM races
                               WHERE active=1 AND date_start<=? AND COALESCE(date_end, date_start)>=? ORDER BY date_start""",
@@ -373,7 +373,7 @@ def periodo(con, de, ate):
             for n in range((b - a).days + 1)}
     for s in todos(con, """SELECT t.id, substr(t.due_on,1,10) AS dia, t.title, COALESCE(c.pilot_name, c.name) AS cliente
                              FROM tasks t LEFT JOIN clients c ON c.id=t.client_id
-                            WHERE substr(t.due_on,1,10) BETWEEN ? AND ? AND LOWER(COALESCE(t.section,''))!='races'
+                            WHERE substr(t.due_on,1,10) BETWEEN ? AND ? AND LOWER(COALESCE(t.section,''))!='races' AND t.deleted_at IS NULL
                             ORDER BY t.title""", (de, ate)):
         dias[s.pop("dia")]["servicos"].append(s)
     for r in todos(con, """SELECT id, name, series, track, date_start, COALESCE(date_end, date_start) AS date_end FROM races

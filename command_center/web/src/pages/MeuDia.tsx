@@ -6,7 +6,7 @@ import { useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
-import { Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
+import { Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
 import { useToast } from '../components/Toast'
 import { tr, LOCALE } from '../i18n'
 
@@ -15,7 +15,7 @@ interface Servico { id: number; title: string; status: string; client_id: number
 interface Corrida { id: number; name: string; track: string | null; city: string | null; date_start: string; date_end: string | null
   checklists: Ck[]; pilotos: { client_id: number; piloto: string; checklists: Ck[] }[] }
 interface Dia { data: string; servicos: Servico[]; corridas: Corrida[]; sessoes: { id: number; period: string; status: string; piloto: string | null; servico: string | null }[]
-  do_dia: Ck[]; avulsos: { template_id: number; nome: string; quando: string }[]; cargo: string | null }
+  do_dia: Ck[]; avulsos: { template_id: number; nome: string; quando: string }[]; cargo: string | null; gerente?: boolean }
 
 const PERIODO: Record<string, string> = { manha: tr("Manhã"), tarde: tr("Tarde"), dia: tr("Dia todo") }
 const hojeFL = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
@@ -104,10 +104,34 @@ function Mes({ data, abrir, nav }: { data: string; abrir: (iso: string) => void;
   </Section>
 }
 
+/** #219 (dono, 13/10): "somente o acesso livre e o gerente tenham a possibilidade de excluir uma
+ *  tarefa facilmente". Some do calendário; no card do cliente fica como excluída, com a auditoria. */
+function ExcluirServico({ s, onFechar, onFeito }: { s: Servico; onFechar: () => void; onFeito: () => void }) {
+  const toast = useToast()
+  const [motivo, setMotivo] = useState('')
+  const [indo, setIndo] = useState(false)
+  async function excluir() {
+    setIndo(true)
+    try { await api.post(`/tasks/${s.id}/excluir`, { motivo: motivo.trim() || null }); toast(tr("Serviço excluído. Ele continua no histórico do card."), 'ok'); onFeito() }
+    catch (e) { toast((e as ApiError).message, 'crit'); setIndo(false) }
+  }
+  return <Scrim onMouseDown={onFechar}><div className="modal stack" role="dialog" aria-modal="true" aria-labelledby="ex-h" style={{ maxWidth: 460, gap: 12 }} onMouseDown={e => e.stopPropagation()}>
+    <h2 id="ex-h" className="h3">{tr("Excluir serviço?")}</h2>
+    <p style={{ margin: 0 }}><b>{s.cliente || s.title}</b><br /><span className="small muted">{s.title}</span></p>
+    <p className="small muted" style={{ margin: 0 }}>{tr("Some do calendário, do balcão e dos avisos. No card do cliente, continua no histórico como excluído. No Asana, nada muda.")}</p>
+    <label className="fld"><span>{tr("Motivo (opcional)")}</span><input value={motivo} onChange={e => setMotivo(e.target.value)} maxLength={300} /></label>
+    <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+      <button className="btn ghost" onClick={onFechar}>{tr("Cancelar")}</button>
+      <button className="btn danger" disabled={indo} onClick={excluir}>{indo ? <span className="spin" /> : tr("Excluir")}</button>
+    </div>
+  </div></Scrim>
+}
+
 export function MeuDia() {
   const [data, setData] = useState(hojeFL)
   const [vista, setVista] = useState<Vista>('dia')
   const d = useGet<Dia>(`/meu-dia${qs({ data })}`, 60000)
+  const [excluir, setExcluir] = useState<Servico | null>(null)
   const passo = (n: number) => setData(x => vista === 'mes' ? outroMes(x, n) : somar(x, vista === 'semana' ? 7 * n : n))
   const abrirDia = (iso: string) => { setData(iso); setVista('dia'); window.scrollTo({ top: 0 }) }
   const nome = { dia: tr("dia"), semana: tr("semana"), mes: tr("mês") }[vista]
@@ -139,11 +163,13 @@ export function MeuDia() {
         {!d.data.servicos.length ? <Empty title={tr("Nenhum serviço neste dia")} /> : <div className="stack" style={{ gap: 10 }}>{d.data.servicos.map(s => <div key={s.id} className="card card-b stack" style={{ gap: 8 }}>
           <div className="row wrap" style={{ gap: 8 }}><h3 className="h3 grow" style={{ margin: 0 }}>{s.cliente || s.title}</h3>
             {s.client_id && <Link className="btn sm ghost" to={`/clients/${s.client_id}`}>{tr("Card")}</Link>}
-            {s.client_id && <Link className="btn sm ghost" to={`/balcao/${s.client_id}`}>{tr("Peças")}</Link>}</div>
+            {s.client_id && <Link className="btn sm ghost" to={`/balcao/${s.client_id}`}>{tr("Peças")}</Link>}
+            {d.data?.gerente && <button className="btn sm ghost" onClick={() => setExcluir(s)} aria-label={tr("Excluir o serviço {0}", s.title)}>{tr("Excluir")}</button>}</div>
           <div className="small muted">{s.title}</div>
           {s.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}
         </div>)}</div>}
       </Section>
+      {excluir && <ExcluirServico s={excluir} onFechar={() => setExcluir(null)} onFeito={() => { setExcluir(null); d.reload() }} />}
       {d.data.corridas.length > 0 && <Section title={tr("Corridas")} count={d.data.corridas.length}>
         <div className="stack" style={{ gap: 10 }}>{d.data.corridas.map(r => <div key={r.id} className="card card-b stack" style={{ gap: 8 }}>
           <h3 className="h3" style={{ margin: 0 }}>{r.name}</h3>

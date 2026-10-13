@@ -848,3 +848,4 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .sdr-kommo{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--accent);background:var(--accent-wash)}
 .sdr-kommo textarea{font-family:var(--font-mono,monospace);font-size:12px}
 .sdr-tbl td,.sdr-tbl th{vertical-align:top;overflow-wrap:anywhere}
+.tbl tr.tr-excluido td{opacity:.6}

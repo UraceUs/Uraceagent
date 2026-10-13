@@ -1738,5 +1738,37 @@ def test_menu_lateral_por_areas_cada_tela_num_lugar_so(servidor, navegador):
     assert len(hrefs) == len(set(hrefs)), sorted(h for h in hrefs if hrefs.count(h) > 1)
     abrir(g, servidor, "/site")
     g.get_by_role("heading", name="Agendamentos do site", level=1).wait_for()
+def test_calendario_gerente_exclui_servico_e_ele_fica_no_historico_do_card(servidor, navegador):
+    """#219 (dono, 13/10): "somente o acesso livre e o gerente tenham a possibilidade de excluir uma
+    tarefa … ela exclui, deixa de ser mostrada, mas lá no histórico de serviço ela continua"."""
+    m = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=844)
+    abrir(m, servidor, "/meu-dia")
+    m.get_by_role("button", name="Próximo dia").click()
+    m.get_by_role("heading", name="Renato Frota Pionti", level=3).wait_for()
+    assert m.get_by_role("button", name="Excluir", exact=False).count() == 0, "o mecânico não exclui"
+    m.close()
+
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    abrir(g, servidor, "/meu-dia")
+    g.get_by_role("button", name="Próximo dia").click()
+    g.get_by_role("heading", name="Renato Frota Pionti", level=3).wait_for()
+    g.get_by_role("button", name="Excluir o serviço Renato Frota Pionti_Professional Coaching_2T [1/1]").click()
+    g.get_by_role("heading", name="Excluir serviço?").wait_for()
+    g.get_by_label("Motivo (opcional)").fill("teste e2e")
+    g.get_by_role("dialog").get_by_role("button", name="Excluir").click()
+    g.get_by_text("Serviço excluído. Ele continua no histórico do card.").wait_for()
+    g.get_by_role("heading", name="Renato Frota Pionti", level=3).wait_for(state="detached")
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    cid = g.evaluate("fetch('/ops/api/clients?q=Pionti').then(r => r.json())")
+    cid = (cid["itens"] if isinstance(cid, dict) else cid)[0]["id"]
+    abrir(g, servidor, f"/clients/{cid}")
+    g.get_by_role("button", name="Serviços", exact=False).first.click()
+    linha = g.locator("tr.tr-excluido", has_text="Professional Coaching")
+    linha.wait_for()
+    assert "teste e2e" in linha.inner_text() and "excluído" in linha.inner_text()
+    linha.get_by_role("button", name="Restaurar").click()
+    g.get_by_text("Serviço restaurado.").wait_for()
+    assert g.locator("tr.tr-excluido", has_text="Professional Coaching").count() == 0
     assert not g.erros_js, g.erros_js
     g.close()

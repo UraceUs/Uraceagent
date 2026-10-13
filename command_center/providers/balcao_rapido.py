@@ -62,7 +62,7 @@ def pilotos_do_dia(con, data):
                               AND i.status IN ('invited','confirmed') ORDER BY r.date_start, c.name""", (data, data)):
         junta(f"c:{r['client_id']}", r["client_id"], None, _nome(r), "corrida")
     for t in todos(con, """SELECT t.client_id, c.name, c.pilot_name FROM tasks t JOIN clients c ON c.id=t.client_id
-                            WHERE substr(t.due_on,1,10)=? ORDER BY c.name""", (data,)):
+                            WHERE substr(t.due_on,1,10)=? AND t.deleted_at IS NULL ORDER BY c.name""", (data,)):
         junta(f"c:{t['client_id']}", t["client_id"], None, _nome(t), "serviço")
     pend = {}
     for x in todos(con, """SELECT client_id, pilot_id, COUNT(*) AS n FROM counter_pending

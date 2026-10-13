@@ -55,12 +55,17 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const [lemb, setLemb] = useState(false)
   const [renomear, setRenomear] = useState<number | null>(null)
   const [mover, setMover] = useState<number | null>(null)
+  async function restaurar(tid: number) {              // #219: o gerente desfaz a exclusão
+    try { await api.post(`/tasks/${tid}/restaurar`); toast(tr("Serviço restaurado."), 'ok'); reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
   const [qr, setQr] = useState(false)
   if (error && !data) return <ErrorState error={error} retry={reload} />
   if (loading && !data) return <Loading rows={8} />
   if (!data) return null
   const c = data.client
-  const prox = data.tasks.filter(t => t.status === 'open' && t.due_on && (daysUntil(t.due_on) ?? -1) >= 0).sort((a, b) => (a.due_on! < b.due_on! ? -1 : 1))[0]
+  const vivos = data.tasks.filter(t => !t.deleted_at)      // #219: o excluído fica no histórico, fora das contas
+  const prox = vivos.filter(t => t.status === 'open' && t.due_on && (daysUntil(t.due_on) ?? -1) >= 0).sort((a, b) => (a.due_on! < b.due_on! ? -1 : 1))[0]
   const wOk = data.waivers.find(w => w.status === 'completed')
   const wOpen = data.waivers.find(w => w.status === 'sent' || w.status === 'delivered')
   const wBad = data.waivers.find(w => w.status === 'autoresponded')
@@ -92,7 +97,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const menor = anos !== null && anos < 18
   const ultimo = data.last_service
   const emailsAbertos = data.emails.filter(e => !e.handled).length
-  const abertos = data.tasks.filter(t => t.status === 'open').length
+  const abertos = vivos.filter(t => t.status === 'open').length
   return <>
     <div className="c360-h">
       <div className="who">
@@ -130,7 +135,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       <div className="card kpi"><div className="lbl">{tr("Próximo serviço")}</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : tr("nada agendado")}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Último serviço")}</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot truncate" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : tr("nenhum concluído")}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Waiver")}</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? tr("dispensada") : wOk ? tr("assinada") : wBad ? tr("devolveu") : wOpen ? WAIVER_LABEL[wOpen.status!] : tr("nenhuma")}</div><div className="foot">{wOk?.expires_at ? <>{tr("vale até")} {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>{tr("expira")} {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one /></div></div>
-      <div className="card kpi"><div className="lbl">{tr("Serviços")}</div><div className="val">{abertos}<span className="of">/{data.tasks.length}</span></div><div className="foot">{abertos === 1 ? tr("1 aberto") : tr("{0} abertos", abertos)} · {data.tasks.length - abertos} {tr("concluídos")}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Serviços")}</div><div className="val">{abertos}<span className="of">/{vivos.length}</span></div><div className="foot">{abertos === 1 ? tr("1 aberto") : tr("{0} abertos", abertos)} · {vivos.length - abertos} {tr("concluídos")}</div></div>
       {data.invoices !== null
         ? <div className="card kpi"><div className="lbl">{tr("Em aberto (QBO)")}</div><div className={`val ${(data.open_balance || 0) > 0 ? 'warn' : 'ok'}`} style={{ fontSize: 22 }}>{money(data.open_balance || 0)}</div><div className="foot">{data.invoices.length} {tr("invoice(s) ·")} {emailsAbertos ? <span style={{ color: 'var(--warn)' }}>{emailsAbertos} {tr("e-mail(s) sem resposta")}</span> : tr("e-mails em dia")}</div></div>
         : <div className="card kpi"><div className="lbl">{tr("E-mails")}</div><div className={`val ${emailsAbertos ? 'warn' : ''}`}>{emailsAbertos}</div><div className="foot">{tr("sem resposta ·")} {data.emails.length} {tr("conhecidos")}</div></div>}
@@ -187,8 +192,9 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Data")}</th><th>{tr("Serviço")}</th><th>{tr("Coluna")}</th><th>{tr("Status")}</th><th>{tr("Subtarefas")}</th><th>{tr("Waiver")}</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>{tr("Sem serviços vinculados.")}</Empty></td></tr>}
-        {data.tasks.map(t => <tr key={t.id}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}</td><td>{t.section}</td><td><Status s={t.status} /></td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title={tr("A waiver assinada foi anexada nesta tarefa")}>{tr("📎 waiver")}</a> : <span className="muted">—</span>}</td>
-          <td className="nowrap"><SysLink links={t.links} />{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title={tr("trocar o nome do serviço (no Asana também)")}>{tr("Renomear")}</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title={tr("este serviço é de outro cliente")}>{tr("Mover")}</button>}</td></tr>)}
+        {data.tasks.map(t => <tr key={t.id} className={t.deleted_at ? 'tr-excluido' : undefined}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}
+          {t.deleted_at && <div className="small muted">{tr("Excluído por {0} em {1}", t.deleted_by_name || '—', fmtDate(t.deleted_at))}{t.deleted_reason ? ` · ${t.deleted_reason}` : ''}</div>}</td><td>{t.section}</td><td>{t.deleted_at ? <Chip tone="crit">{tr("excluído")}</Chip> : <Status s={t.status} />}</td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title={tr("A waiver assinada foi anexada nesta tarefa")}>{tr("📎 waiver")}</a> : <span className="muted">—</span>}</td>
+          <td className="nowrap"><SysLink links={t.links} />{t.deleted_at ? (can('MANAGER') && <button className="btn ghost sm" onClick={() => restaurar(t.id)}>{tr("Restaurar")}</button>) : <>{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title={tr("trocar o nome do serviço (no Asana também)")}>{tr("Renomear")}</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title={tr("este serviço é de outro cliente")}>{tr("Mover")}</button>}</>}</td></tr>)}
       </tbody></table></div>}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Signatário")}</th><th>{tr("Modelo")}</th><th>{tr("Status")}</th><th>{tr("Enviada")}</th><th>{tr("Assinada")}</th><th>{tr("Expira")}</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum envelope para este e-mail.")}</Empty></td></tr>}
