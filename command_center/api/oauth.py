@@ -410,7 +410,7 @@ def revogar(con: sqlite3.Connection = Depends(get_db), token: str = Form(...)):
 def usuario_do_token(con, valor):
     """Valida um Bearer de OAuth. Devolve o usuário como as outras portas devolvem, para
     o resto do painel não precisar saber por onde ele entrou."""
-    linha = um(con, """SELECT t.*, u.email, u.name, u.role, u.active
+    linha = um(con, """SELECT t.*, u.email, u.name, u.role, u.active, u.cargo
                          FROM oauth_tokens t JOIN users u ON u.id = t.user_id
                         WHERE t.token_hash=? AND t.kind='access'""", (_hash(valor or ""),))
     if not linha or linha["revoked_at"] or not linha["active"]:
@@ -422,6 +422,7 @@ def usuario_do_token(con, valor):
     # Só escreve quem autorizou "operar" E continua com papel para isso: rebaixada a
     # pessoa, o token volta a ser de leitura sem ninguém lembrar de revogar (#73).
     opera = ESCOPO_OPERAR in (linha["scope"] or "").split() and pode_operar(linha["role"])
+    # #201: o cargo (mecânico/coach) vale também por aqui: o Claude conectado nunca alcança mais que a pessoa.
     return {"id": linha["user_id"], "email": linha["email"], "name": linha["name"],
-            "role": linha["role"], "via": "oauth", "client_id": linha["client_id"],
+            "role": linha["role"], "cargo": None if auth.livre(linha["email"]) else linha["cargo"], "via": "oauth", "client_id": linha["client_id"],
             "escopo": linha["scope"], "somente_leitura": not opera}

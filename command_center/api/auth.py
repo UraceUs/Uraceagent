@@ -359,7 +359,7 @@ def chave_valida(con, request, tocar=True):
     ident, segredo = _chave_do_pedido(request)
     if not ident:
         return None
-    k = um(con, """SELECT k.*, u.email, u.name, u.role AS papel_pessoa, u.active
+    k = um(con, """SELECT k.*, u.email, u.name, u.role AS papel_pessoa, u.active, u.cargo
                    FROM api_keys k JOIN users u ON u.id = k.user_id
                    WHERE k.id = ? AND k.revoked_at IS NULL""", (ident,))
     if not k or not k["active"]:
@@ -381,6 +381,7 @@ def chave_valida(con, request, tocar=True):
     # `free` fica FALSO de propósito: acesso livre é da pessoa no navegador, não da chave.
     return {"id": k["user_id"], "email": k["email"], "name": f"{k['name']} (chave)",
             "role": papel, "free": False, "via": f"key:{ident}",
+            "cargo": None if livre(k["email"]) else k["cargo"],      # #201: a chave não escapa da trava do cargo
             "somente_leitura": bool(k["read_only"])}
 
 
@@ -414,6 +415,7 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
         from command_center.api import oauth as _oauth
         porToken = _oauth.usuario_do_token(con, cab[7:].strip())
         if porToken:
+            _trava_de_cargo(request, porToken)        # #201: antes, só o login pelo navegador tinha a trava
             _trava_de_leitura(request, porToken,
                               "Este acesso é só de leitura: ele consulta o painel pelo MCP e "
                               "não muda nada.")
@@ -422,6 +424,7 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
 
     porchave = chave_valida(con, request)
     if porchave:
+        _trava_de_cargo(request, porchave)
         _trava_de_leitura(request, porchave,
                           "Esta chave é só de leitura: ela consulta o painel e não muda nada. "
                           "Para deixá-la agir, crie outra chave sem 'só leitura'.")
