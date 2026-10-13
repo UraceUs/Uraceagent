@@ -145,6 +145,8 @@ def pagina(request: Request, caminho: str):
     q = dict(request.query_params)
     if caminho == "/academy/":
         return _html(ps.academy(host, planos=_planos()))
+    if caminho == "/pro-team/":                         # #207: o preço da Academy e do Boost é o do painel
+        return _html(ps.pro_team(host, planos=_planos()))
     if caminho in PAGINAS:
         return _html(PAGINAS[caminho](host))
     html = _dinamica(host, caminho, q)
