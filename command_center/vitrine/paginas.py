@@ -95,7 +95,7 @@ def _cabecalho(atual):
 def _rodape():
     end = C.SITE["endereco"]
     redes = "".join(f'<li><a href="{e(u)}" rel="noopener">{e(n)}</a></li>' for n, u in C.SITE["redes"].items())
-    nav = "".join(f'<li><a href="{e(h)}">{e(r)}</a></li>' for r, h in C.MENU)
+    nav = "".join(f'<li><a href="{e(h)}">{e(r)}</a></li>' for r, h in C.RODAPE)
     emails = "".join(f'<a href="mailto:{e(m)}">{e(m)}</a>' for m in C.SITE["emails"])
     return f"""<footer class="rodape">
   <div class="rodape-in">
@@ -110,7 +110,7 @@ def _rodape():
     <nav aria-label="Footer"><h2 class="rodape-h">Navigation</h2><ul>{nav}</ul></nav>
     <div><h2 class="rodape-h">Socials</h2><ul>{redes}</ul></div>
   </div>
-  <p class="rodape-fim">© 2026 URACE · <a href="/legal/privacy.html">Privacy policy</a></p>
+  <p class="rodape-fim">© 2026 URACE | All rights reserved · <a href="/legal/privacy.html">Privacy policy</a></p>
 </footer>"""
 
 
@@ -157,18 +157,22 @@ def _lista(itens, classe="checks"):
 
 # ------------------------------------------------------------------ páginas
 def home(host):
+    from command_center.vitrine.paginas_site import _post_card, dados     # paginas_site importa este módulo
     h = C.HOME
     numeros = "".join(f'<div class="numero"><strong>{e(n)}</strong><span>{e(t)}</span></div>' for n, t in h["numeros"])
     campeoes = "".join(f'<figure><img src="{estatico("img/" + f)}" alt="" width="480" height="631" loading="lazy">'
-                       f'<figcaption>{e(n)}</figcaption></figure>'
-                       for f, n in zip(h["fotos_campeoes"], h["campeoes"]))
+                       f'<figcaption>{e(n)}{f"<br><small>{e(d)}</small>" if d else ""}</figcaption></figure>'
+                       for f, (n, d) in zip(h["fotos_campeoes"], h["campeoes"]))
+    # o preço do Arrive and Drive é o de KARTS, o mesmo que a página e a reserva mostram
     servicos = "".join(
         f'<article class="card-servico"><h3>{e(s["nome"])}</h3><p>{e(s["texto"])}</p>'
-        + (f'<p class="preco">{e(s["preco"])}</p>' if s.get("preco") else "")
+        + (f'<p class="preco">Starting at {usd(C.preco_minimo())}</p>' if s.get("preco_kart") else "")
         + f'<a class="seta" href="{e(s["link"])}">See {e(s["nome"])}</a></article>'
         for s in h["servicos"])
     depo = "".join(f'<blockquote><p>{e(t)}</p><footer>{e(n)}{(" · " + e(c)) if c else ""}</footer></blockquote>'
                    for n, c, t in h["depoimentos"])
+    eventos = " · ".join(f'<a href="{e(href)}">{e(r)}</a>' for r, href in h["eventos_links"])
+    posts = "".join(_post_card(p) for p in dados("posts.json")["posts"][:3])
     corpo = f"""
 <section class="hero hero-home">
   <div class="hero-in">
@@ -178,9 +182,18 @@ def home(host):
       <a class="btn btn-linha" href="{e(C.SITE['whatsapp'])}" rel="noopener">Talk to us</a></div>
   </div>
 </section>
+<section class="faixa clara" aria-labelledby="h-metodo">
+  <div class="largura duas">
+    <div class="texto"><h2 id="h-metodo">{e(h['metodo'][0])}</h2><p>{e(h['metodo'][1])}</p></div>
+    <div class="texto"><h2>{e(h['eventos'][0])}</h2><p>{e(h['eventos'][1])}</p><p>{eventos}</p></div>
+  </div>
+</section>
 <section class="faixa escura" aria-labelledby="h-numeros">
-  <h2 id="h-numeros" class="sr">URACE in numbers</h2>
-  <div class="numeros">{numeros}</div>
+  <div class="largura">
+    <h2 id="h-numeros">{e(h['escada'][0])}</h2>
+    <p class="lede">{e(h['escada'][1])}</p>
+    <div class="numeros">{numeros}</div>
+  </div>
 </section>
 <section class="faixa clara" aria-labelledby="h-servicos">
   <div class="largura">
@@ -191,7 +204,7 @@ def home(host):
 <section class="faixa escura" aria-labelledby="h-campeoes">
   <div class="largura">
     <h2 id="h-campeoes">We build <em>Champions</em></h2>
-    <p class="lede">Urace, built to win!</p>
+    <p class="lede">URACE, built to win!</p>
     <div class="campeoes">{campeoes}</div>
   </div>
 </section>
@@ -204,8 +217,8 @@ def home(host):
 </section>
 <section class="faixa escura" aria-labelledby="h-depo">
   <div class="largura">
-    <h2 id="h-depo">Built by Urace</h2>
-    <p class="lede">Testimonials from parents and drivers</p>
+    <h2 id="h-depo">{e(h['depoimentos_titulo'])}</h2>
+    <p class="lede">{e(h['depoimentos_sub'])}</p>
     <div class="depoimentos">{depo}</div>
   </div>
 </section>
@@ -215,10 +228,17 @@ def home(host):
     <div class="texto"><h2 id="h-sobre">About</h2><p>{e(h['sobre'])}</p></div>
   </div>
 </section>
+<section class="faixa escura" aria-labelledby="h-blog">
+  <div class="largura">
+    <h2 id="h-blog">{e(h['blog_titulo'])}</h2>
+    <p class="lede">{e(h['blog_sub'])}</p>
+    <div class="posts-grade">{posts}</div>
+  </div>
+</section>
 <section class="faixa vermelha" aria-labelledby="h-duvidas">
   <div class="largura centro">
-    <h2 id="h-duvidas">Do you still have questions?</h2>
-    <p>Contact our team to get all the information about our products and services.</p>
+    <h2 id="h-duvidas">{e(h['fecho'][0])}</h2>
+    <p>{e(h['fecho'][1])}</p>
     <a class="btn btn-branco" href="{e(C.SITE['whatsapp'])}" rel="noopener">Talk to us on WhatsApp</a>
   </div>
 </section>"""
@@ -271,8 +291,8 @@ def arrive_and_drive(host):
       <h2 id="h-reservar">Book your session</h2>
       <fieldset class="karts"><legend>1 · Choose your kart</legend>{karts}</fieldset>
       <div class="inclui">
-        <div><h3>We provide</h3>{_lista(a['fornece'])}</div>
-        <div><h3>You bring</h3>{_lista(a['trazer'])}</div>
+        <div><h3>What URACE Provides</h3>{_lista(a['fornece'])}</div>
+        <div><h3>What YOU Need to Bring</h3>{_lista(a['trazer'])}</div>
       </div>
     </div>
     <div class="agenda" data-api="/ops/api/vitrine/agenda" data-portal="{PORTAL}/reserve">
@@ -303,6 +323,7 @@ def arrive_and_drive(host):
   <div class="largura">
     <h2 id="h-porque">Why URACE</h2>
     <ul class="porque">{''.join(f'<li>{e(p)}</li>' for p in a['porque'])}</ul>
+    <p>{e(a['porque_fecho'])}</p>
   </div>
 </section>
 
@@ -316,7 +337,7 @@ def arrive_and_drive(host):
 
 <section class="faixa escura" aria-labelledby="h-como">
   <div class="largura">
-    <h2 id="h-como">How it works</h2>
+    <h2 id="h-como">How It Works</h2>
     <ol class="passos">{passos}</ol>
   </div>
 </section>
@@ -339,8 +360,9 @@ def arrive_and_drive(host):
 <section class="faixa vermelha" aria-labelledby="h-fecho">
   <div class="largura centro">
     <h2 id="h-fecho">{e(a['fecho'])}</h2>
+    <p class="fecho-sub">{e(a['fecho_sub'])}</p>
     <div class="hero-acoes centro"><a class="btn btn-branco" href="#reservar">Book my experience</a>
-      <a class="btn btn-linha-branca" href="{e(C.SITE['whatsapp'])}" rel="noopener">Need more details? Let’s chat</a></div>
+      <a class="btn btn-linha-branca" href="{e(C.SITE['whatsapp'])}" rel="noopener">Need more details before booking? Let’s chat.</a></div>
   </div>
 </section>"""
     return layout(host=host, caminho=a["caminho"], titulo=a["titulo"], descricao=a["descricao"], corpo=corpo,
