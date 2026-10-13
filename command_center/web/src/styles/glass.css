@@ -774,7 +774,8 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .br-resumo h2{font-size:18px;margin:0 0 4px}
 .br-resumo ul{margin:6px 0 10px;padding-left:18px}
 .br-resumo .btn{min-height:44px;width:100%}
-.br-antes summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-weight:600}
+.br-antes{display:flex;flex-direction:column;gap:8px}
+.br-antes h2{margin:0}
 .br-teclado{margin-top:auto}
 .br-digitar{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:auto}
 .br-digitar input{min-height:48px;font-size:18px;min-width:0}

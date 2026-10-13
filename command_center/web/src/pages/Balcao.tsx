@@ -15,7 +15,7 @@ import { Banner, Chip, Empty, PageHeader, Scrim, Section } from '../components/u
 import { FotoPeca } from '../components/FotoPeca'
 import { useToast } from '../components/Toast'
 import { tr } from '../i18n'
-import { novoDetector, temCamera, vibrar } from '../components/Leitor'
+import { CAMERA, novoDetector, temCamera, vibrar } from '../components/Leitor'
 import { Picker } from '../components/Unir'
 import type { Client } from '../api/types'
 
@@ -48,7 +48,7 @@ function Camera({ onLer, onFechar }: { onLer: (t: string) => void; onFechar: () 
     ;(async () => {
       try {
         const [det, s] = await Promise.all([novoDetector(),
-          navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })])
+          navigator.mediaDevices.getUserMedia(CAMERA)])
         stream = s
         if (parar || !video.current) { s.getTracks().forEach(t => t.stop()); return }
         video.current.srcObject = s; await video.current.play(); setPronto(true)
@@ -498,6 +498,32 @@ function EtiquetasPrateleira() {
   </Section>
 }
 
+interface PilotoDia { chave: string; client_id: number | null; nome: string; origens: string[] }
+const ORIGEM: Record<string, string> = { 'sessão': tr("sessão"), corrida: tr("corrida"), 'serviço': tr("serviço") }
+
+/** Os pilotos de hoje (sessão do site, corrida e serviço do Asana), os mesmos do balcão do celular.
+ *  Dono, 13/10: "quando eu ler, aparecer qual o piloto que tem ali no dia, para poder selecionar". */
+function PilotosDoDia({ onEscolher, desativado }: { onEscolher: (id: number, nome: string) => void; desativado?: boolean }) {
+  const [p, setP] = useState<PilotoDia[] | null>(null)
+  useEffect(() => { api.get<{ pilotos: PilotoDia[] }>('/balcao/rapido').then(r => setP(r.pilotos.filter(x => x.client_id))).catch(() => setP([])) }, [])
+  if (!p) return <span className="spin" />
+  if (!p.length) return <p className="small muted" style={{ margin: 0 }}>{tr("Ninguém marcado hoje no Asana, nas sessões do site ou nas corridas.")}</p>
+  return <div className="br-pilotos">{p.map(x => <button key={x.chave} className="br-piloto" disabled={desativado} onClick={() => onEscolher(x.client_id as number, x.nome)}>
+    <b>{x.nome}</b><small>{x.origens.map(o => ORIGEM[o] || o).join(' · ')}</small></button>)}</div>
+}
+
+/** Peça lida sem cliente aberto: em vez de "leia primeiro o QR do cliente", pergunta de quem é. */
+function DeQuemE({ item, onEscolher, onFechar }: { item: Item; onEscolher: (id: number, nome: string) => void; onFechar: () => void }) {
+  return <Scrim onMouseDown={onFechar}><div className="modal stack" style={{ maxWidth: 520, gap: 12 }} onMouseDown={e => e.stopPropagation()}
+    role="dialog" aria-modal="true" aria-labelledby="dqe-h">
+    <h2 id="dqe-h" className="h3">{tr("De quem é?")}</h2>
+    <p style={{ margin: 0 }}><b>{item.name}</b></p>
+    <PilotosDoDia onEscolher={onEscolher} />
+    <Picker label={tr("Outro cliente")} value={null} onPick={(c: Client | null) => { if (c) onEscolher(c.id, c.pilot_name || c.name) }} />
+    <button className="btn ghost" onClick={onFechar}>{tr("Cancelar")}</button>
+  </div></Scrim>
+}
+
 export function Balcao() {
   const { can } = useAuth()
   const { clientId } = useParams()
@@ -512,6 +538,7 @@ export function Balcao() {
   const [novo, setNovo] = useState<string | null>(null)
   const [semQbo, setSemQbo] = useState<Item | null>(null)
   const [doCliente, setDoCliente] = useState<{ item: Item; codigo: string; msg: string } | null>(null)
+  const [semCliente, setSemCliente] = useState<{ item: Item; codigo: string } | null>(null)
   const [indo, setIndo] = useState(false)
   const campo = useRef<HTMLInputElement>(null)
   const cid = clientId ? Number(clientId) : null
@@ -548,11 +575,22 @@ export function Balcao() {
       const r = await api.get<Lido>(`/balcao/ler${qs({ codigo: t, client_id: cid })}`)
       if (r.tipo === 'cliente') { vibrar(40); nav(`/balcao/${r.cliente.id}`); return }
       if (r.tipo === 'desconhecido') { setNovo(r.codigo); return }
-      if (!cid) { toast(tr("Leia primeiro o QR do cliente."), 'crit'); vibrar(250); return }
+      if (!cid) { vibrar(40); setSemCliente({ item: r.item, codigo: r.codigo }); return }
       await lancar(r.item, r.codigo, modo === 'cobrar' ? 'cobrar' : 'guardar')
     } catch (e) { toast((e as ApiError).message, 'crit'); vibrar(250) } finally { focar() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cid, modo, local, est?.gerente])
+
+  async function paraOCliente(id: number, nome: string) {
+    const lido = semCliente
+    setSemCliente(null)
+    if (!lido) return
+    try {
+      await api.post('/balcao/lancar', { client_id: id, item_id: lido.item.id, modo, codigo: lido.codigo, local })
+      vibrar(40); toast(`${lido.item.name} → ${nome}: ${MODO_TXT[modo]}.`, 'ok')
+    } catch (e) { vibrar(250); toast((e as ApiError).message, 'crit') }
+    nav(`/balcao/${id}`)
+  }
 
   async function desfazer(l: Leitura) {
     try { const r = await api.post<Estado>(`/balcao/leituras/${l.id}/desfazer`); setEst(e => e ? { ...e, ...r } : e); toast(tr("Desfeito."), 'ok') }
@@ -606,7 +644,8 @@ export function Balcao() {
       </Section>
     </>}
     {!cid && <Section title={tr("Abrir um cliente")}>
-      <p className="small muted" style={{ marginTop: 0 }}>{tr("Sem o QR à mão? Escolha o cliente pelo nome.")}</p>
+      <p className="small muted" style={{ marginTop: 0 }}>{tr("Os pilotos de hoje, ou escolha o cliente pelo nome.")}</p>
+      <PilotosDoDia onEscolher={id => nav(`/balcao/${id}`)} />
       <Picker label={tr("Cliente")} value={null} onPick={(c: Client | null) => { if (c) nav(`/balcao/${c.id}`) }} />
     </Section>}
     {!cid && can('MANAGER') && <Revisao />}
@@ -614,6 +653,7 @@ export function Balcao() {
     {!cid && can('MANAGER') && <EtiquetasPrateleira />}
     {!cid && <AEnviar />}
 
+    {semCliente && <DeQuemE item={semCliente.item} onEscolher={paraOCliente} onFechar={() => { setSemCliente(null); focar() }} />}
     {camera && <Camera onLer={ler} onFechar={() => { setCamera(false); focar() }} />}
     {novo && <CodigoNovo codigo={novo} gerente={!!est?.gerente} onFechar={() => { setNovo(null); focar() }}
       onFeito={i => { const c = novo; setNovo(null); if (cid && c) lancar(i, c, guardar ? 'guardar' : 'cobrar') }} />}

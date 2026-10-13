@@ -267,14 +267,18 @@ export function BalcaoRapido() {
         <div className="br-dica">
           <h2>{alvo ? tr("Leia a próxima peça") : tr("Leia a peça")}</h2>
           <p className="small muted">{alvo ? tr("Cada peça lida vai direto para a OS de {0}. Acabou? Toque em Encerrar.", alvo.nome)
-            : dia ? tr("{0} piloto(s) em {1}. Leia a peça e toque no piloto, ou escolha o piloto antes.", dia.pilotos.length, rotuloDia(dia.data)) : ''}</p>
+            : tr("Leia a peça e toque no piloto, ou toque no piloto primeiro.")}</p>
         </div>
-        {!alvo && !resumo && !!dia?.pilotos.length && <details className="br-antes">
-          <summary>{tr("Escolher o piloto antes de ler")}</summary>
-          <div className="br-pilotos">{dia.pilotos.map(p => <button key={p.chave} className="br-piloto" onClick={() => escolherAntes(p)}>
+        {!alvo && !resumo && dia && <section className="br-antes" aria-labelledby="br-dia-h">
+          {/* dono, 13/10: "não tá aparecendo nenhum cliente nos dias que tiveram clientes" — a lista
+              ficava fechada, e só abria depois de a câmera ler uma peça */}
+          <h2 id="br-dia-h" className="h3">{tr("Pilotos de {0}", rotuloDia(dia.data))}</h2>
+          {dia.pilotos.length ? <div className="br-pilotos">{dia.pilotos.map(p => <button key={p.chave} className="br-piloto" onClick={() => escolherAntes(p)}>
             <b>{p.nome}</b><small>{p.origens.map(o => ORIGEM[o] || o).join(' · ')}{p.pecas ? ` · ${tr("{0} peça(s)", p.pecas)}` : ''}</small></button>)}</div>
+            : <p className="small muted">{tr("Ninguém marcado neste dia no Asana, nas sessões do site ou nas corridas. Busque o cliente pelo nome abaixo.")}</p>}
+          <p className="small muted" style={{ margin: 0 }}>{tr("Toque no piloto e leia as peças dele. O que é marcado no Asana aparece aqui em até 15 minutos.")}</p>
           <OutroCliente desativado={false} onEscolher={c => escolherAntes(c)} />
-        </details>}
+        </section>}
         {!!dia?.minhas.length && <ul className="br-minhas" aria-label={tr("Suas últimas leituras")}>
           {dia.minhas.map(m => <li key={m.tipo + m.id}><span className="truncate">{m.tipo === 'lancada' ? '✓ ' : '⏳ '}{m.peca || m.code}</span>
             <span className="muted">{m.pilot_name || tr("decidir depois")}</span>

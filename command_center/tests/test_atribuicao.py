@@ -1067,3 +1067,18 @@ def test_uniao_do_dono_nao_vence_contato_que_diz_outra_coisa(con):
     identidade.unir(con, mj, balde, "owner:cli", "mesma pessoa"); con.commit()
     atribuicao.redistribuir(con, aplicar=True)
     assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == outro
+
+
+# --------------------------------------------- 13/10: o teste do dono no Asana (#212)
+@pytest.mark.parametrize("titulo,esperado", [
+    ("TESTE - Eduardo Fillipe Farias Resende", "Eduardo Fillipe Farias Resende"),
+    ("TEST: Max Westerberg", "Max Westerberg"),
+    ("Teste | Max Westerberg_Arrive and Drive", "Max Westerberg"),
+    ("TESTE Max Westerberg_Academy", "Max Westerberg"),
+    ("testing - Harley Keeble - Rotax [3/3]", "Harley Keeble"),
+    ("Testa Rossi - Rotax", "Testa Rossi"),           # nome que só começa parecido fica
+])
+def test_teste_na_frente_e_etiqueta_nao_e_o_piloto(titulo, esperado):
+    """Dono, 13/10: pôs "TESTE - Eduardo …" no Asana e o balcão não mostrou o piloto. O título
+    virava o piloto "Teste" (um card novo, de ninguém)."""
+    assert identidade.pessoa_do_titulo(titulo) == esperado

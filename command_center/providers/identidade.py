@@ -305,6 +305,9 @@ def pessoa_do_titulo(titulo, detalhe=False):
     t = (titulo or "").strip()
     t = re.sub(r"^\s*session setup\s*\|\s*", "", t, flags=re.I)
     t = re.sub(r"^\s*[\[(][^\])]*[\])]\s*", "", t)      # "[Canceled] Erik Mendoza Jr_…": a tag na frente sai
+    # "TESTE - Eduardo …" também é etiqueta: virava o piloto "Teste" (dono, 13/10, #212)
+    # Só com separador ou em maiúsculas: "Test Day" é nome de serviço, não etiqueta.
+    t = re.sub(r"^\s*(?:(?i:teste|test|testing)\s*[-–:|_]+|(?:TESTE|TEST|TESTING)\s)\s*", "", t)
     t = SERVICO_SUFIXO.sub("", t)
     t = _primeiro_pedaco_com_gente(t)
 
