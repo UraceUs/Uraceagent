@@ -198,6 +198,7 @@ export function BalcaoRapido() {
   }
 
   const hoje = dia?.hoje
+  const ultima = sessao.length ? sessao[sessao.length - 1] : null
   const dias = hoje ? [[somaDias(hoje, -1), tr("Ontem")], [hoje, tr("Hoje")], [somaDias(hoje, 1), tr("Amanhã")]] : []
   const soBalcao = !!user?.so_balcao
   return <div className="br">
@@ -224,23 +225,32 @@ export function BalcaoRapido() {
 
     <section className="br-painel" aria-label={tr("Peça e pilotos")}>
       {erro && <p className="br-erro" role="alert">{erro}</p>}
-      {alvo && <div className="br-sessao" role="status">
-        <div className="grow"><small>{tr("Lançando para")}</small><b>{alvo.nome}</b>
-          <small>{tr("{0} peça(s) nesta operação", sessao.length)}</small></div>
+      {/* #215 (dono, 13/10): "o nome do cliente fica como a maior coisa ali, e o nome da peça quase
+          não dá para ver". Com a operação aberta, o cliente vai para a faixa de cima, pequeno; a
+          última peça lida fica num cartão grande e fixo, com a confirmação de que entrou para ele. */}
+      {alvo && <div className="br-sessao" role="group" aria-label={tr("Operação aberta")}>
+        <div className="grow"><small>{tr("Peças de")}</small><span className="br-sessao-nome">{alvo.nome}</span></div>
         <select value={local} onChange={e => mudarLocal(e.target.value)} aria-label={tr("A peça sai de")}>
           <option value="sede">{tr("Galpão")}</option><option value="trailer">{tr("Trailer")}</option><option value="pista">{tr("Pista")}</option></select>
         <button className="btn primary" onClick={encerrar}>{tr("Encerrar")}</button>
       </div>}
-      {feito && <div className={`br-feito${feito.tipo === 'pendente' ? ' pend' : ''}`} role="status">
+      {alvo && ultima && <div key={ultima.tipo + ultima.id} className={`br-add${ultima.tipo === 'pendente' ? ' pend' : ''}`} role="status">
+        <span className="br-add-selo">{ultima.tipo === 'lancada' ? tr("✓ Peça adicionada") : tr("⏳ Ficou para o gerente")}</span>
+        <h2 className="br-add-peca">{ultima.peca || ultima.code}</h2>
+        <p className="br-add-para">{ultima.tipo === 'lancada' ? tr("Já está na invoice de {0}, {1}.", alvo.nome, dia ? rotuloDia(dia.data) : '')
+          : (ultima.motivo || tr("O gerente confere na revisão."))}</p>
+        <button className="btn" onClick={() => desfazerLeitura(ultima.id, ultima.tipo)}>{tr("Desfazer")}</button>
+      </div>}
+      {!alvo && feito && <div className={`br-feito${feito.tipo === 'pendente' ? ' pend' : ''}`} role="status">
         <span>{feito.tipo === 'lancada' ? `✓ ${feito.texto} · ${tr("na OS")}` : `⏳ ${feito.texto} · ${tr("ficou para o gerente")}`}
           {feito.motivo && <small className="br-motivo">{feito.motivo}</small>}</span>
         <button className="btn" onClick={desfazer}>{tr("Desfazer")}</button>
       </div>}
       {resumo && !alvo && <div className="br-resumo" role="status">
         <h2>{tr("Operação encerrada")}</h2>
-        <p><b>{resumo.nome}</b> · {tr("{0} peça(s)", resumo.itens.length)}</p>
-        {resumo.itens.length > 0 && <ul>{resumo.itens.map(x => <li key={x.tipo + x.id}>{x.tipo === 'lancada' ? '✓' : '⏳'} {x.peca || x.code}
-          {x.tipo === 'pendente' && <small className="muted"> · {tr("ficou para o gerente")}</small>}</li>)}</ul>}
+        <p>{tr("{0} peça(s) para {1}", resumo.itens.length, resumo.nome)}</p>
+        {resumo.itens.length > 0 && <ul>{resumo.itens.map(x => <li key={x.tipo + x.id}>{x.tipo === 'lancada' ? '✓' : '⏳'} <b>{x.peca || x.code}</b>
+          <small className="muted"> · {x.tipo === 'lancada' ? tr("na invoice") : tr("ficou para o gerente")}</small></li>)}</ul>}
         <button className="btn primary" onClick={() => setResumo(null)}>{tr("Próximo piloto")}</button>
       </div>}
 
@@ -266,7 +276,7 @@ export function BalcaoRapido() {
       </> : <>
         <div className="br-dica">
           <h2>{alvo ? tr("Leia a próxima peça") : tr("Leia a peça")}</h2>
-          <p className="small muted">{alvo ? tr("Cada peça lida vai direto para a OS de {0}. Acabou? Toque em Encerrar.", alvo.nome)
+          <p className="small muted">{alvo ? tr("Cada peça lida já entra na invoice de {0}. Era só essa? Toque em Encerrar.", alvo.nome)
             : tr("Leia a peça e toque no piloto, ou toque no piloto primeiro.")}</p>
         </div>
         {!alvo && !resumo && dia && <section className="br-antes" aria-labelledby="br-dia-h">
@@ -279,7 +289,14 @@ export function BalcaoRapido() {
           <p className="small muted" style={{ margin: 0 }}>{tr("Toque no piloto e leia as peças dele. O que é marcado no Asana aparece aqui em até 15 minutos.")}</p>
           <OutroCliente desativado={false} onEscolher={c => escolherAntes(c)} />
         </section>}
-        {!!dia?.minhas.length && <ul className="br-minhas" aria-label={tr("Suas últimas leituras")}>
+        {alvo && sessao.length > 0 && <section className="br-op" aria-labelledby="br-op-h">
+          <h2 id="br-op-h" className="h3">{tr("Nesta operação · {0}", sessao.length)}</h2>
+          <ul className="br-op-l">{[...sessao].reverse().map(x => <li key={x.tipo + x.id} className={x.tipo === 'pendente' ? 'pend' : ''}>
+            <span className="br-op-icone" aria-hidden="true">{x.tipo === 'lancada' ? '✓' : '⏳'}</span>
+            <span className="grow"><b>{x.peca || x.code}</b><small>{x.tipo === 'lancada' ? tr("na invoice") : tr("ficou para o gerente")}</small></span>
+            <button className="btn sm ghost" onClick={() => desfazerLeitura(x.id, x.tipo)} aria-label={tr("Desfazer {0}", x.peca || x.code)}>{tr("Desfazer")}</button></li>)}</ul>
+        </section>}
+        {!alvo && !!dia?.minhas.length && <ul className="br-minhas" aria-label={tr("Suas últimas leituras")}>
           {dia.minhas.map(m => <li key={m.tipo + m.id}><span className="truncate">{m.tipo === 'lancada' ? '✓ ' : '⏳ '}{m.peca || m.code}</span>
             <span className="muted">{m.pilot_name || tr("decidir depois")}</span>
             <button className="btn sm ghost" onClick={() => desfazerLeitura(m.id, m.tipo)} aria-label={tr("Desfazer {0}", m.peca || m.code)}>{tr("Desfazer")}</button></li>)}

@@ -1262,8 +1262,14 @@ def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, nav
     assert caixa and caixa["height"] >= 48, "alvo grande para o polegar"
     piloto.click()
     # #206 (dono, 13/10: "Escaneou, selecionou o cliente, já finaliza"): vai direto para a OS do David
-    v.get_by_text("Front bumper (e2e) → David Pera · na OS").wait_for()
-    v.get_by_text("Lançando para").wait_for()
+    v.get_by_text("Peça adicionada").wait_for()
+    v.get_by_text("Já está na invoice de David Pera", exact=False).wait_for()
+    # #215 (dono, 13/10): "o nome do cliente fica como a maior coisa ali, e o nome da peça quase não
+    # dá para ver" — a peça lida é o maior texto do painel, maior que o nome do cliente
+    tam = v.evaluate("""() => [document.querySelector('.br-add-peca'), document.querySelector('.br-sessao-nome')]
+        .map(e => parseFloat(getComputedStyle(e).fontSize))""")
+    assert tam[0] > tam[1] * 1.4, tam
+    assert v.get_by_role("heading", name="Front bumper (e2e)").count() == 1
     v.get_by_role("button", name="Encerrar").click()
     v.get_by_role("heading", name="Operação encerrada").wait_for()
     v.get_by_role("button", name="Próximo piloto").click()
@@ -1301,20 +1307,21 @@ def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(
     v.get_by_role("button", name="Ler", exact=True).click()
     v.get_by_role("heading", name="Front bumper (e2e)").wait_for()
     v.locator(".br-piloto", has_text="David Pera").first.click()
-    v.get_by_text("Front bumper (e2e) → David Pera").first.wait_for()
+    v.get_by_text("Peça adicionada").wait_for()
     # a operação fica aberta: a próxima peça já vai para o mesmo piloto, sem tocar de novo
     v.get_by_role("button", name="Código apagado? Digitar").click()
     v.get_by_label("Código da peça").fill("7890000000017")
     v.get_by_role("button", name="Ler", exact=True).click()
-    v.get_by_text("2 peça(s) nesta operação").wait_for()
+    v.get_by_role("heading", name="Nesta operação · 2").wait_for()
     assert v.evaluate("document.documentElement.scrollWidth") <= 360
-    v.wait_for_timeout(6500)                                    # o aviso com "Desfazer" some
-    lista = v.get_by_role("list", name="Suas últimas leituras")
+    v.wait_for_timeout(6500)                                    # a confirmação da peça NÃO some (#215)
+    v.get_by_text("Peça adicionada").wait_for()
+    lista = v.locator(".br-op-l")
     antes = lista.get_by_role("listitem").count()
     botao = lista.get_by_role("button", name="Desfazer Front bumper (e2e)").first
     assert botao.bounding_box()["height"] >= 40
     botao.click()
-    v.wait_for_function(f"() => document.querySelectorAll('.br-minhas li').length < {antes}")
+    v.wait_for_function(f"() => document.querySelectorAll('.br-op-l li').length < {antes}")
     assert v.evaluate("document.documentElement.scrollWidth") <= 360
     v.get_by_role("button", name="Encerrar").click()
     v.get_by_role("heading", name="Operação encerrada").wait_for()
@@ -1684,7 +1691,7 @@ def test_balcao_mostra_os_pilotos_do_dia_sem_ler_e_peca_sem_cliente_pergunta_de_
     piloto.wait_for()
     assert piloto.bounding_box()["height"] >= 48
     piloto.click()
-    v.get_by_text("Lançando para").wait_for()
+    v.get_by_text("Peças de").wait_for()
     v.get_by_role("button", name="Encerrar").click()
     assert v.evaluate("document.documentElement.scrollWidth") <= 360
     v.close()

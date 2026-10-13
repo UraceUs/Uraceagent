@@ -164,11 +164,17 @@ antes de ler qualquer peça.
    - **sessão** (marcada pelo site),
    - **corrida** (do calendário),
    - **serviço** (do Asana).
-5. Aparece **✓ peça → piloto · na OS**. A operação daquele piloto fica aberta: a faixa
-   **"Lançando para …"** mostra o nome e quantas peças já foram.
-6. Leia a próxima peça: ela **já vai para o mesmo piloto**, sem tocar de novo.
+5. Aparece o cartão verde **"✓ PEÇA ADICIONADA"**, com o **nome da peça em letra grande** e
+   **"Já está na invoice de …"**. A peça já entrou na invoice do piloto naquele dia: com uma
+   peça só, não falta nada. A operação daquele piloto fica aberta: a faixa de cima mostra
+   **"Peças de …"** e o botão **Encerrar**.
+6. Leia a próxima peça: ela **já vai para o mesmo piloto**, sem tocar de novo. O cartão mostra
+   sempre a última peça, e a lista **"Nesta operação"** mostra todas, pelo nome.
 7. Acabou? Toque em **Encerrar**. Aparece **"Operação encerrada"**, com a lista das peças.
 8. Toque em **Próximo piloto** e comece de novo.
+
+Cartão **laranja** ("⏳ Ficou para o gerente") quer dizer que a peça foi lida, mas não entrou
+direto na invoice: o motivo aparece embaixo do nome (veja "Quando a peça fica para o gerente").
 
 Na faixa da operação, escolha de onde a peça sai: **Galpão**, **Trailer** ou **Pista**.
 
@@ -183,7 +189,8 @@ nome que vem depois.
 **Cada leitura vale uma peça.** Duas peças iguais: leia duas vezes. A mesma peça parada na
 frente da câmera não é lida de novo por uns 3 segundos.
 
-Embaixo aparecem as suas últimas leituras do dia: ✓ foi para a OS, ⏳ ficou para o gerente.
+Sem operação aberta, embaixo aparecem as suas últimas leituras do dia: ✓ foi para a OS, ⏳ ficou
+para o gerente. Errou uma peça? Toque em **Desfazer** no cartão ou na linha dela.
 
 ### Quando a peça fica para o gerente (⏳)
 
@@ -223,7 +230,7 @@ revisão.
 | Situação | O que fazer |
 |---|---|
 | Tocou no piloto errado e o **✓** ainda está na tela | Toque em **Desfazer** na faixa do ✓. A peça volta para a prateleira e sai da OS. |
-| O ✓ já sumiu | Embaixo, em **"Suas últimas leituras"**, toque em **Desfazer** ao lado da peça. Vale enquanto a invoice não foi enviada nem paga. Depois, leia de novo no piloto certo. |
+| O ✓ já sumiu | Com a operação aberta, na lista **"Nesta operação"**; sem operação, em **"Suas últimas leituras"**: toque em **Desfazer** ao lado da peça. Vale enquanto a invoice não foi enviada nem paga. Depois, leia de novo no piloto certo. |
 | Leu a peça, mas não quer lançar | Toque em **Ler outra**. Nada é registrado. |
 | A invoice já foi enviada ou paga | Fale com o gerente. Invoice enviada ou paga só se ajusta no QuickBooks, pelo gerente. |
 
