@@ -32,6 +32,12 @@ from sdr import classificador, estilo, executor, funil, regras, roteador, triage
 FALHAS = []
 
 
+# Resposta real que saiu no Instagram em 13/10 com link na primeira mensagem.
+PRINT_IG = ("It's a full day on track in a real race kart. You can see it all here: "
+            "https://urace.us/product/go-kart-driving-experience/ How old is the driver? "
+            "That's what sets the exact price.")
+
+
 def check(rotulo, cond, detalhe=""):
     print(f"  {'PASS' if cond else 'FAIL'}  {rotulo}" + ("" if cond else f"  {detalhe}"))
     if not cond:
@@ -205,6 +211,29 @@ def camada_pacote():
     limpo, v = estilo.aplicar("Great! 🏁 Come by anytime — we are open. The 1-Day is the best start.")
     check("estilo corta emoji, travessão e frase proibida",
           limpo == "Great! The 1-Day is the best start." and "nunca_dizer:come by" in v, f"{limpo!r} {v}")
+
+    # Playbook de 13/10: a resposta real que saiu no Instagram (link na
+    # primeira resposta) é o caso de referência.
+    print_ig = PRINT_IG
+    limpo, v = estilo.um_ativo(print_ig, primeira_resposta=True)
+    check("primeira resposta sai sem link nem a chamada dele, e mantém a pergunta",
+          "http" not in limpo and "here:" not in limpo and "How old is the driver?" in limpo
+          and v == ["link_na_primeira_resposta"], f"{limpo!r} {v}")
+    limpo, v = estilo.um_ativo(print_ig, primeira_resposta=False)
+    check("da segunda resposta em diante, um link passa", limpo == print_ig and v == [], f"{limpo!r} {v}")
+    limpo, v = estilo.um_ativo("Here's the page:\nhttps://urace.us/urace-academy/\n"
+                               "And the video: https://youtu.be/TlLKzFPvI5g\n"
+                               "How old is she? Has she raced before?", primeira_resposta=False)
+    check("um ativo e uma pergunta por mensagem",
+          limpo.count("http") == 1 and "urace-academy" in limpo and limpo.count("?") == 1
+          and "How old is she?" in limpo and set(v) == {"mais_de_um_link", "mais_de_uma_pergunta"},
+          f"{limpo!r} {v}")
+    limpo, v = estilo.aplicar("It's $719 for the day. Best regards, Chase")
+    check("fecho de carta é cortado", limpo == "It's $719 for the day." and "nunca_dizer:best regards" in v,
+          f"{limpo!r} {v}")
+    limpo, v = estilo.aplicar("Good to hear from you. We run Wednesdays, Saturdays and Sundays.")
+    check("\"Good to hear from you\" é cortado", limpo == "We run Wednesdays, Saturdays and Sundays.",
+          f"{limpo!r} {v}")
 
     plano = funil.planejar(FUNIS_DA_EQUIPE)
     check("conta atual: Urace e Comercial têm tudo que as regras usam", plano["ok"] and not plano["etapas_duplicadas"],
@@ -456,6 +485,36 @@ def camada_ponte():
     check("atender: resposta do modelo passa pela guarda de estilo",
           entregues and "🏁" not in entregues[0][1] and "come by" not in entregues[0][1].lower(), str(entregues))
 
+    falso, entregues, _ = preparar(agente=PRINT_IG)
+    falso.lead(407, COMERCIAL, ENTRADA)
+    app.process_inbound(msg(407, "Qual o valor?"))
+    app.process_inbound(msg(407, "8 anos"))
+    check("atender: link só a partir da segunda resposta",
+          len(entregues) == 2 and "http" not in entregues[0][1] and "http" in entregues[1][1],
+          str(entregues))
+
+    # Print do Instagram (13/10): lead já escalado diz "Consideraria se fosse
+    # mais barato" e ouviu, em inglês, "Your question ... is with the team".
+    # Pedido do dono: objeção de preço recebe a oferta de call com o Lucas.
+    falso, entregues, avisos = preparar()
+    falso.lead(408, COMERCIAL, ENTRADA)
+    state.update_conversation(408, last_outbound_at=int(time.time()) - 600,
+                              contact_name="Eduardo")
+    state.transition(408, "WAITING_HUMAN", "teste")
+    app.process_inbound(msg(408, "Consideraria se fosse mais barato"))
+    texto = entregues[0][1] if entregues else ""
+    check("objeção de preço em conversa escalada: oferta de call com o link, em português",
+          "calendar.app.google" in texto and "Lucas" in texto and "Entendo" in texto
+          and "team" not in texto and texto.count("?") == 1, str(entregues))
+    check("objeção de preço em conversa escalada ainda avisa a pessoa", len(avisos) == 1, str(avisos))
+    falso, entregues, _ = preparar()
+    falso.lead(409, COMERCIAL, ENTRADA)
+    state.update_conversation(409, last_outbound_at=int(time.time()) - 600)
+    app.process_inbound(msg(409, "That's too expensive for us"))
+    check("\"too expensive\" com a IA ativa: oferta de call em inglês",
+          entregues and "calendar.app.google" in entregues[0][1] and "Lucas" in entregues[0][1],
+          str(entregues))
+
     # Follow-up do agendador: fora da janela de 24 h da Meta não sai
     # mensagem; vira tarefa para uma pessoa e a trilha para.
     sch = app.scheduler
@@ -535,6 +594,14 @@ def main():
     print("PASSOU - o SDR decide igual nos três níveis, só escreve e só fala quando o nível manda, "
           "e não toca no que é da equipe")
     return 0
+
+
+def test_sdr_em_processo_proprio():
+    """O pytest do CI só coleta funções test_*: roda o script inteiro num processo
+    à parte, para os módulos da ponte (config, app) não herdarem o estado dos outros testes."""
+    import subprocess
+    r = subprocess.run([sys.executable, __file__], capture_output=True, text=True, timeout=600)
+    assert r.returncode == 0, r.stdout[-4000:] + r.stderr[-2000:]
 
 
 if __name__ == "__main__":

@@ -225,6 +225,11 @@ PALAVRAS = {
     "desconto": [
         "desconto", "cupom", "condicao especial", "parcelar", "parcelamento", "mais barato",
         "discount", "coupon", "promo code", "cheaper", "descuento",
+        # Objeção de preço (13/10): vira oferta de call com o Lucas, não espera.
+        "esta caro", "ta caro", "muito caro", "caro demais", "fora do orcamento",
+        "too expensive", "so expensive", "very expensive", "that's expensive",
+        "it's expensive", "out of my budget", "can't afford", "cant afford",
+        "muy caro", "demasiado caro",
     ],
     "corporativo": [
         "empresa", "corporativo", "cnpj", "team building", "confraternizacao",
@@ -353,6 +358,13 @@ NUNCA_DIZER = [
     ("vandalism", "explicar o depósito de forma simples e neutra"),
     ("garanto sua vaga", "não prometer disponibilidade"),
     ("guarantee your spot", "não prometer disponibilidade"),
+    # Playbook de 13/10 (D-2026-10-13): fórmulas que denunciam o bot ou carta.
+    ("best regards", "chat não é carta; sem fecho de e-mail"),
+    ("i hope this message finds you well", "chat não é carta; sem abertura de e-mail"),
+    ("i hope this finds you well", "chat não é carta; sem abertura de e-mail"),
+    ("good to hear from you", "\"Hey! Good to hear from you\" é o bot, e a pessoa reconhece"),
+    ("great question", "elogio vazio; responder a pergunta na primeira linha"),
+    ("% off", "desconto e promoção nunca saem no chat, são do Lucas"),
 ]
 
 # ---------------------------------------------------------------- cadência

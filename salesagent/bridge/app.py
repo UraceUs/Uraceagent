@@ -36,7 +36,8 @@ import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
                     FOLLOWUP_BOT_ID, HUMAN_OPERATORS, HUMAN_REPLY_TOKEN,
                     HUMAN_WHATSAPP, HUMAN_WHATSAPP_LIST, KOMMO_BOT_SECRET,
-                    KOMMO_TOKEN, SALESBOT_DISPLAY, SDR_MODO, URACE_DIR)
+                    KOMMO_TOKEN, PROGRAM_LINKS, SALESBOT_DISPLAY, SDR_MODO,
+                    URACE_DIR)
 
 app = FastAPI(title="urace-sales-bridge")
 state.instalar_mascara_nos_logs()  # 13/10: a chave do webhook não vai para o journal
@@ -377,13 +378,13 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         # alta chama a pessoa agora; média vira tarefa na fila dela.
         escalate(lead_id, f"SDR {rota['motivo']}: {rota['descricao']}", context=text,
                  prioridade=rota["prioridade"])
-        reply = _holding_reply(lead_id, text)
+        reply = _resposta_de_espera(lead_id, text)
     elif triggers and estado_atual == "AI_ACTIVE":
         # B4: assuntos sensíveis (desconto, refund, jurídico...) escalam
         # ANTES do modelo -- ele nunca vê a mensagem, então também não pode
         # ser convencido a responder. Quem acusa o recebimento é a ponte.
         escalate(lead_id, "; ".join(triggers), context=text)
-        reply = _holding_reply(lead_id, text)
+        reply = _resposta_de_espera(lead_id, text)
     elif not state.agent_may_sell(lead_id):
         # G3 REFINADO (27/08, decisão do Italo): conversa escalada não volta
         # a VENDER -- mas pergunta factual que o Brain COBRE é respondida na
@@ -435,7 +436,7 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
                        if conv.get("escalated_at") else "") + "\n"
                     f"Responda esta mensagem com o texto para o lead — eu entrego "
                     f"no chat e devolvo a conversa ao Chase.")
-            reply = _holding_reply(lead_id, text)
+            reply = _resposta_de_espera(lead_id, text)
     else:
         reply = run_agent(lead_id, text)
         if not reply:
@@ -454,6 +455,19 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
     if conv["state"] in ("AI_ACTIVE", "RESUMED") and conv.get("followup_track") != "scheduled":
         track = "link_sent" if _last_turn_price_sent.pop(lead_id, False) else "initial"
         scheduler.start_track(lead_id, track)
+
+
+def _resposta_de_espera(lead_id: int, lead_text: str) -> str:
+    """O que o lead recebe quando a conversa está com uma pessoa. Objeção de
+    preço ou pedido de desconto não ouve "sua pergunta está com a equipe":
+    recebe a oferta de uma call de 15 min com o Lucas, com o link do
+    calendário (pedido do dono, 13/10). O resto, a espera de sempre."""
+    link = PROGRAM_LINKS.get("call_link")
+    if link and sdr_ponte.objecao_de_preco(lead_text):
+        conv = state.get_conversation(lead_id)
+        state.log("gate", lead_id, "objeção de preço: oferta de call com o Lucas")
+        return holding.call_offer(lead_text, link, contact_name=conv.get("contact_name"))
+    return _holding_reply(lead_id, lead_text)
 
 
 def _holding_reply(lead_id: int, lead_text: str) -> str:
@@ -694,7 +708,12 @@ def compose_followup(lead_id: int, track: str, attempt: int) -> str:
         if dirs:
             state.log("directives", lead_id,
                       "compose_followup (não executadas): " + " | ".join(dirs))
-        return textproc.customer_facing(raw)
+        texto = textproc.customer_facing(raw)
+        if SDR_MODO == "atender":
+            # Mesma guarda da resposta (estilo, um link, uma pergunta): o
+            # follow-up sai por bots/run e não passa pelo send_to_lead.
+            texto = sdr_ponte.limpar(lead_id, texto)
+        return texto
     except Exception as exc:
         state.log("error", lead_id, f"compose_followup: {exc}")
         return ""

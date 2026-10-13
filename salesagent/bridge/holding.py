@@ -33,7 +33,8 @@ import textproc
 _PT_MARKERS = re.compile(
     r"\b(não|nao|você|voce|vocês|voces|vcs|obrigad[oa]|quanto|custa|preço|preco|"
     r"posso|meu|minha|olá|ola|oi|bom dia|boa tarde|boa noite|qual|quero|"
-    r"gostaria|criança|crianca|filho|filha|aulas?|corrida)\b", re.IGNORECASE)
+    r"gostaria|criança|crianca|filho|filha|aulas?|corrida|mais|sim|fosse|"
+    r"então|entao|tá|isso)\b", re.IGNORECASE)
 _ES_MARKERS = re.compile(
     r"\b(hola|gracias|cuánto|cuanto|cuesta|puedo|quiero|quisiera|ustedes|"
     r"niñ[oa]|nino|hij[oa]|clases?|carrera|buenos días|buenas tardes|"
@@ -221,6 +222,34 @@ def waiting_message(lead_text: str, sent_before: int = 0,
     if first_contact:
         texto = (_APRESENTACAO[lang].format(nome=_primeiro_nome(contact_name))
                  + " " + texto)
+    return textproc.customer_facing(texto)
+
+
+# ------------------------------------------------- objeção de preço → call
+# Pedido do dono (13/10): "está caro" / "faria se fosse mais barato" não
+# recebe a espera genérica ("sua pergunta está com a equipe"). Recebe a
+# oferta de uma call de 15 min com o Lucas para entender melhor, com o link
+# do calendário. Nunca desconto; a escalação para o Lucas segue igual.
+_OFERTA_CALL = {
+    "pt": ("Entendo{nome}. Que tal uma call rápida de 15 minutos com o Lucas pra "
+           "entender melhor o que você procura e achar o formato certo? "
+           "É só escolher o horário aqui:\n{link}"),
+    "es": ("Entiendo{nome}. ¿Qué tal una llamada rápida de 15 minutos con Lucas "
+           "para entender mejor lo que buscas y encontrar el formato correcto? "
+           "Elige el horario aquí:\n{link}"),
+    "en": ("I hear you{nome}. How about a quick 15-minute call with Lucas to "
+           "understand what you're looking for and find the right fit? "
+           "Pick a time here:\n{link}"),
+}
+
+
+def call_offer(lead_text: str, link: str, contact_name: str | None = None,
+               lang: str | None = None) -> str:
+    """Resposta para objeção de preço ou pedido de desconto: oferece a call
+    com o Lucas e manda o link do calendário (um ativo, uma pergunta)."""
+    lang = lang or detect_language(lead_text)
+    nome = _primeiro_nome(contact_name)
+    texto = _OFERTA_CALL[lang].format(nome=("," + nome) if nome else "", link=link)
     return textproc.customer_facing(texto)
 
 

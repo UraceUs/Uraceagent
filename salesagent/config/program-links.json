@@ -1,11 +1,12 @@
 {
   "_meta": {
-    "status": "COMPLETO (17/08). Regra: qualquer produto sem link especifico cai em program_link_generic (home).",
-    "note": "O agente Chase nunca fala preco em chat para leads Opcao A/B/Academy: ele sempre manda o link do programa. O checkout so existe seguindo o fluxo normal do site (nao ha checkout direto por produto)."
+    "status": "ATUALIZADO (13/10, D-2026-10-13). Regra: qualquer produto sem link especifico cai em program_link_generic (home).",
+    "note": "Desde 13/10 o Chase diz os precos da tabela do AGENTS.md no chat. O link da pagina vai a partir da 2a resposta, um por mensagem. O checkout so existe seguindo o fluxo normal do site."
   },
-  "one_day_program_link": "https://urace.us/product/go-kart-driving-experience/",
+  "one_day_program_link": "https://urace.us/services/arrive-and-drive",
   "academy_link": "https://urace.us/urace-academy/",
   "training_camp_link": null,
   "checkout_link": "https://urace.us/checkout/",
-  "program_link_generic": "https://urace.us/"
+  "program_link_generic": "https://urace.us/",
+  "call_link": "https://calendar.app.google/KBbHhXjoRMS6sbHv8"
 }

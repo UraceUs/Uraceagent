@@ -5,6 +5,12 @@ As instruções pedem o mesmo, mas prompt deriva; a garantia fica aqui:
   - sem travessão (vira vírgula);
   - frase com termo de NUNCA_DIZER é cortada inteira.
 Se nada sobrar, devolve texto vazio e a ponte usa a mensagem de espera.
+
+E a regra de um do playbook de 13/10 (D-2026-10-13), em `um_ativo`:
+  - primeira resposta a um lead sai sem link (preview de link lê como anúncio);
+  - depois, no máximo um link por mensagem;
+  - no máximo uma pergunta por mensagem (fica a primeira: a ordem de
+    qualificação põe a mais importante, a idade, na frente).
 """
 import re
 
@@ -50,5 +56,57 @@ def aplicar(texto):
             continue
         mantidas.append(frase)
     limpo = " ".join(f.strip() for f in mantidas if f.strip())
+    limpo = re.sub(r"[ \t]{2,}", " ", limpo).replace(" ,", ",").strip()
+    return limpo, violacoes
+
+
+_URL = re.compile(r"https?://\S+")
+# O link e a "chamada" que o apresenta ("You can see it all here: <link>"):
+# sem o link a chamada fica pendurada, então sai junto.
+_URL_COM_CHAMADA = re.compile(r"(?:[^.!?\n:]*:[ \t]*)?https?://\S+")
+_FRASE_FIM = re.compile(r"(?<=[.!?])\s+")
+
+
+def _tirar_links(texto, manter):
+    """Remove os links a partir do (manter+1)-ésimo, com a chamada de cada um."""
+    vistos = 0
+
+    def _troca(m):
+        nonlocal vistos
+        vistos += 1
+        return m.group(0) if vistos <= manter else ""
+
+    return _URL_COM_CHAMADA.sub(_troca, texto)
+
+
+def um_ativo(texto, primeira_resposta):
+    """Devolve (texto, violacoes): sem link na primeira resposta, no máximo
+    um link depois, e no máximo uma pergunta."""
+    violacoes = []
+    if not texto:
+        return "", violacoes
+    limpo = texto
+    links = _URL.findall(limpo)
+    manter = 0 if primeira_resposta else 1
+    if len(links) > manter:
+        limpo = _tirar_links(limpo, manter)
+        violacoes.append("link_na_primeira_resposta" if primeira_resposta else "mais_de_um_link")
+
+    linhas = []
+    ja_perguntou = False
+    cortou = False
+    for linha in limpo.split("\n"):
+        frases = []
+        for frase in _FRASE_FIM.split(linha):
+            pergunta = frase.rstrip().endswith("?") and not _URL.fullmatch(frase.strip())
+            if pergunta and ja_perguntou:
+                cortou = True
+                continue
+            ja_perguntou = ja_perguntou or pergunta
+            frases.append(frase)
+        linhas.append(" ".join(f.strip() for f in frases if f.strip()))
+    if cortou:
+        violacoes.append("mais_de_uma_pergunta")
+    limpo = "\n".join(linha for linha in linhas if linha)
     limpo = re.sub(r"[ \t]{2,}", " ", limpo).replace(" ,", ",").strip()
     return limpo, violacoes

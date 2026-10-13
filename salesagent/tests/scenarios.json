@@ -44,7 +44,7 @@
       "category": "roteamento",
       "source": "documento Chase, secao 6",
       "messages": ["A", "It's for me", "I've never driven a kart before", "I just want to try it once"],
-      "expect_manual_review": "Deve recomendar 1-Day, mandar o link real (urace.us/product/go-kart-driving-experience), nunca a Academy."
+      "expect_manual_review": "Deve recomendar 1-Day, mandar o link real (urace.us/services/arrive-and-drive), nunca a Academy."
     },
     {
       "id": "05_option_d_currently_races",
