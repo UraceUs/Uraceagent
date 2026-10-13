@@ -25,7 +25,7 @@ interface Meta { etapas: Etapa[]; medidas: Medida[]; design: Campo[] }
 interface Linha { id: number; title: string; product: string; quantity: number; customer_name: string | null; driver_name: string | null
   status: string; closed: number; order_date: string | null; due_on: string | null; source: string; fornecedor: string | null
   notas: number; ultima_nota: string | null; updated_at: string | null; created_at: string
-  discarded_at?: string | null; discard_reason?: string | null }
+  discarded_at?: string | null; discard_reason?: string | null; ia_ligada?: number }
 interface Nota { id: number; status: string | null; kind: string; text: string | null; tem_imagem: number; command_id: number | null
   created_at: string; autor: string | null; ia?: { status: string; output: string | null; error: string | null } | null }
 type Valor = { v: number; u: string } | { t: string }
@@ -136,6 +136,7 @@ function Pedidos({ meta, resumo }: { meta: Meta | null; resumo: Resumo | null })
             <div className="small muted truncate">{[p.product !== 'Suit' ? p.product : null, p.quantity > 1 ? `${p.quantity} un.` : null,
               p.fornecedor, p.order_date ? `pedido ${dia(p.order_date)}` : null, p.source === 'asana' ? 'do Asana' : p.source === 'ia' ? 'pela IA' : null].filter(Boolean).join(' · ')}</div></div>
           {p.discarded_at ? <Chip tone="neutral">{tr("descartado")}</Chip> : <EtapaChip meta={meta} s={p.status} />}
+          {!p.discarded_at && p.ia_ligada === 0 && <Chip tone="warn">{tr("IA desligada")}</Chip>}
           {p.notas > 0 && <span className="small muted" title={tr("notas")}>{p.notas} ✎</span>}
         </Link></li>)}</ul>}
     {temMais && <button className="btn ghost" disabled={carregando} onClick={mais}>{tr("Carregar mais")}</button>}
@@ -250,10 +251,23 @@ function Descarte({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void })
     <p className="small muted">{tr("Não aparece nas listas e a ponte de e-mail não lê, não responde nem anota nada aqui.")}</p>
     <button className="btn" disabled={indo} onClick={restaurar}>{tr("Restaurar o pedido")}</button>
   </div>
+  const ligada = pedido.ia_ligada !== 0
+  async function chave() {
+    setIndo(true)
+    try { await api.post(`/suits/${pedido.id}/ia`, { ligada: !ligada }); toast(ligada ? tr("IA desligada neste pedido: o que chegar por e-mail fica para a equipe.") : tr("IA ligada neste pedido."), 'ok'); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
   return <>
-    <div className="row gap wrap" style={{ justifyContent: 'flex-end' }}>
+    <div className="suit-acoes">
+      {/* #198 (dono, 13/10): "um switch para poder ligar e desligar IA naquele pedido" */}
+      <button type="button" role="switch" aria-checked={ligada} className="suit-chave" disabled={indo} onClick={chave}
+        title={ligada ? tr("A IA lê os e-mails deste pedido, responde e avança as etapas.") : tr("A IA não age neste pedido: o que chegar fica para a equipe.")}>
+        <span className={`sw${ligada ? '' : ' off'}`} aria-hidden="true" />
+        <span>{tr("IA neste pedido")}: <b>{ligada ? tr("ligada") : tr("desligada")}</b></span>
+      </button>
       <button className="btn ghost sm" onClick={() => setAberto(true)}>{tr("Não é pedido de suit")}</button>
     </div>
+    {!ligada && <p className="small muted" style={{ margin: '4px 0 0' }}>{tr("Com a IA desligada, ela não responde, não manda e-mail e não altera nada neste pedido. E-mail novo aparece na linha do tempo para a equipe.")}</p>}
     {aberto && <Scrim onMouseDown={() => setAberto(false)}><div className="modal" style={{ maxWidth: 480 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="descarte-t">
       <h3 id="descarte-t">{tr("Descartar o pedido #{0}?", pedido.id)}</h3>
       <p className="small muted">{tr("Ele sai de Em andamento e do Histórico, e a ponte para de ler as conversas dele. Nada é apagado: dá para restaurar em Descartados.")}</p>
@@ -283,7 +297,7 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
   async function salvar() {
     if (!texto.trim() && !arquivo && etapa === pedido.status) { toast(tr("Escreva a nota, anexe um print ou mude a etapa."), 'warn'); return }
     const fd = new FormData()
-    fd.set('texto', texto.trim()); fd.set('status', etapa === pedido.status ? '' : etapa); fd.set('pedir_ia', String(ia && !!(texto.trim() || arquivo)))
+    fd.set('texto', texto.trim()); fd.set('status', etapa === pedido.status ? '' : etapa); fd.set('pedir_ia', String(ia && pedido.ia_ligada !== 0 && !!(texto.trim() || arquivo)))
     if (arquivo) fd.set('imagem', arquivo)
     setIndo(true)
     try {
@@ -300,7 +314,7 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setArquivo(e.target.files?.[0] || null)} /></label>
       <label className="fld suit-etapa"><span>{tr("Etapa")}</span><select aria-label={tr("Etapa")} value={etapa} onChange={e => setEtapa(e.target.value)}>
         {meta.etapas.map(e => <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? tr("{0} (atual)", e.nome) : tr("mover para {0}", e.nome)}</option>)}</select></label>
-      <label className="check suit-ia"><input type="checkbox" checked={ia} onChange={e => setIa(e.target.checked)} /> {tr("Pedir à IA para seguir daqui")}</label>
+      {pedido.ia_ligada !== 0 && <label className="check suit-ia"><input type="checkbox" checked={ia} onChange={e => setIa(e.target.checked)} /> {tr("Pedir à IA para seguir daqui")}</label>}
       <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : tr("Salvar nota")}</button>
     </div>
     {previa && <img src={previa} alt={tr("Print anexado")} className="suit-previa" />}

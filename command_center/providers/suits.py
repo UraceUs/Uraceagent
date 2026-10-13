@@ -329,6 +329,28 @@ def descartar(con, pid, motivo=None, user_id=None):
     return True
 
 
+def ia_desligada(con, pid):
+    """#198: a chave "IA neste pedido" está desligada."""
+    p = um(con, "SELECT ia_ligada FROM suit_orders WHERE id=?", (int(pid),)) if pid else None
+    return bool(p) and not p["ia_ligada"]
+
+
+def ligar_ia(con, pid, ligada, user_id=None):
+    """#198 (dono, 13/10: "um switch para poder ligar e desligar IA naquele pedido"). Desligada, a IA não
+    age no pedido: a ponte não a chama, ela não manda e-mail nem altera nada, e o que chegar vai para a
+    equipe. Devolve False se já estava assim."""
+    p = um(con, "SELECT id, status, ia_ligada FROM suit_orders WHERE id=?", (int(pid),))
+    if not p:
+        raise LookupError("Pedido não encontrado.")
+    if bool(p["ia_ligada"]) == bool(ligada):
+        return False
+    con.execute("UPDATE suit_orders SET ia_ligada=?, updated_at=? WHERE id=?", (1 if ligada else 0, agora(), p["id"]))
+    anotar(con, p["id"], "IA ligada neste pedido: a ponte volta a tratar os e-mails dele." if ligada else
+           "IA desligada neste pedido: a IA não responde nem altera nada aqui; o que chegar por e-mail fica para a equipe.",
+           "etapa", p["status"], user_id=user_id)
+    return True
+
+
 def restaurar(con, pid, user_id=None):
     """Desfaz o descarte: o pedido volta para a lista da etapa em que estava."""
     p = um(con, "SELECT id, status, discarded_at FROM suit_orders WHERE id=?", (int(pid),))

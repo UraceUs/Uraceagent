@@ -177,6 +177,14 @@ painel com o pedido e o e-mail (anexos baixados para a pasta do pedido):
 | e-mail do fornecedor | anota; se avisou produção ou envio, move para `in_production` / `in_transit` com o rastreio |
 | reclamação, reembolso, troca, cancelamento, preço, algo estranho | **não responde**: chama a equipe com a nota "Precisa de alguém da equipe: …" na linha do tempo do pedido |
 
+**A chave "IA neste pedido".** Todo pedido tem, no topo, uma chave que liga e desliga a IA só
+naquele pedido (ligada por padrão). Desligada, a IA não responde, não manda e-mail, não altera e
+não anota nada ali, e não dá para simular nem "Pedir à IA" pela nota. O e-mail que chegar fica
+guardado (com os anexos), aparece na linha do tempo como "Precisa de alguém da equipe" e quem
+responde é a equipe. Use quando o cliente pede atendimento humano, quando a negociação está
+delicada, ou quando o pedido é tratado por fora. Ligou de novo, a ponte volta a tratar os e-mails
+novos. Na lista, o pedido aparece com a etiqueta **IA desligada**.
+
 **Simulação ou envio de verdade.** Com o **envio automático desligado** (o padrão), nada sai: o
 e-mail que a IA mandaria aparece na linha do tempo do pedido para a equipe conferir. Só um
 gerente liga o envio automático, em Suits › Ponte de e-mail.
@@ -232,6 +240,7 @@ Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 | rastreio | `PATCH /ops/api/suits/{id}` | `{"status": "in_transit", "tracking": "1Z999..."}` | Op. |
 | **descartar** (não é pedido de macacão) | `POST /ops/api/suits/{id}/descartar` | `{"motivo": "fatura da OpenAI"}` | Op. |
 | restaurar um descartado | `POST /ops/api/suits/{id}/restaurar` | — | Op. |
+| ligar ou desligar a IA neste pedido | `POST /ops/api/suits/{id}/ia` | `{"ligada": false}` | Op. |
 | simular o próximo passo da IA (nada sai) | `POST /ops/api/suits/{id}/ponte/simular` | — | Op. |
 | rascunho do pedido ao fornecedor no Gmail | `POST /ops/api/suits/{id}/email-fornecedor/rascunho` | — (pede confirmação) | Op. |
 | guardar um lead | `POST /ops/api/suits/leads` | `{"name": "...", "email": "...", "notes": "..."}` | Op. |
@@ -274,6 +283,14 @@ Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 
 ### Entregue
 `PATCH` com `{"status": "delivered"}`. O pedido vai para o Histórico.
+
+### Cliente pediu para falar com uma pessoa
+1. Desligue a IA no pedido: `POST /ops/api/suits/{id}/ia` com `{"ligada": false}`.
+2. Anote o motivo (`PATCH` com `{"nota": "cliente pediu atendimento humano"}`).
+3. Daí em diante, a equipe responde. Para devolver à IA, ligue a chave de novo.
+
+**Para o Claude:** se um pedido estiver com `ia_ligada = 0`, não proponha e-mail nem mudança de
+etapa por conta própria. Mostre ao Lucas o que chegou e pergunte o que fazer.
 
 ### Achou um pedido que não é de macacão
 1. Confirme lendo o pedido: remetente, assunto, notas.
