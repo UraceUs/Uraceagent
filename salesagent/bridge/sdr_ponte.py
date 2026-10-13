@@ -283,8 +283,13 @@ def ao_fechar(lead_id: int) -> None:
 
 
 def limpar(lead_id: int, texto: str) -> str:
-    """Guarda de estilo no que sai para o lead (nível atender)."""
-    limpo, violacoes = estilo.aplicar(texto)
+    """Guarda de estilo no que sai para o lead (nível atender), com a regra de
+    um do playbook de 13/10: sem link na primeira resposta, um link e uma
+    pergunta por mensagem."""
+    primeira = not state.get_conversation(lead_id).get("last_outbound_at")
+    limpo, violacoes = estilo.um_ativo(texto, primeira)
+    limpo, mais = estilo.aplicar(limpo)
+    violacoes += mais
     if violacoes:
         state.log("gate", lead_id, "SDR estilo: " + ", ".join(violacoes))
     return limpo

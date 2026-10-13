@@ -23,8 +23,10 @@ _LINK_FIELD = {
 
 
 def get_price(lead_id: int, product: str, category: str) -> dict:
-    """Única porta de saída de "preço" para o chat: devolve o LINK da
-    página, nunca um número. Ainda bloqueia por idade quando aplicável."""
+    """Devolve o LINK da página do programa. Desde 13/10 (D-2026-10-13) os
+    números da tabela do AGENTS.md ("Prices you can say") podem ser ditos no
+    chat; o link é complemento, a partir da 2ª resposta, um por mensagem.
+    Ainda bloqueia por idade quando aplicável."""
     conv = get_conversation(lead_id)
     age = conv["driver_age"]
     if age is not None and not age_eligible(age, category):
@@ -39,7 +41,8 @@ def get_price(lead_id: int, product: str, category: str) -> dict:
                 "message": "Link do programa ainda não configurado — diga que vai confirmar e escale."}
     log("gate", lead_id, f"G1: link liberado ({product}/{category})")
     result = {"status": "ok", "product": product, "category": category, "link": link,
-              "notes": ["Nunca fale um preço em número no chat — use o link.",
+              "notes": ["Preço: só os números da tabela do AGENTS.md, nada fora dela.",
+                        "Link só a partir da 2ª resposta, e um por mensagem.",
                         "Driver pass e pit pass são pagos direto à pista — nunca inclusos.",
                         "Security deposit reembolsável sem dano ao kart."]}
     if product == "one_day":
