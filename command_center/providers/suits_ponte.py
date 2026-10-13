@@ -284,6 +284,8 @@ def enviar(con, pid, papel, assunto, corpo, anexos=None, responder=True, user_id
     pedido = dict(um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,)) or {})
     if not pedido:
         raise Recusado("pedido não encontrado")
+    if pedido.get("discarded_at"):
+        raise Recusado("pedido descartado (não é pedido de macacão): nada sai por ele")
     cfg = config(con)
     para = destinatario(con, pedido, papel, cfg)
     if not para:
@@ -357,6 +359,26 @@ def _marcar(con, msgs, pid, thread, papel):
 
 RX_VENDA = re.compile(r"\bsuits?\b|macac", re.I)
 
+# #195 (dono, 13/10): "Vai estar claro na mensagem, no corpo ou no título do e-mail que vai ser um pedido
+# de suit". O marcador Suits do Gmail sozinho não basta: o assunto ou o texto têm de falar de macacão.
+RX_FALA_DE_SUIT = re.compile(
+    r"\bsuits?\b|macac[ãa]o|macac[õo]es|\b(?:monos?|trajes?|buzos?)\s+de\s+(?:kart\w*|carreras?|piloto|corrida)"
+    r"|\bcombinaisons?\b|\boverol\b|\btuta\s+(?:da\s+)?kart", re.I)
+# Quem escreve por robô (cobrança, aviso, newsletter) nunca é cliente de macacão.
+RX_ROBO = re.compile(r"^(?:no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounces?|notifications?|notify"
+                     r"|newsletters?|news|marketing|billing|invoices?|receipts?|alerts?|updates?)(?:[+._-].*)?$", re.I)
+
+
+def fala_de_suit(msgs):
+    """O assunto ou o corpo de alguma mensagem da conversa fala de macacão."""
+    return any(RX_FALA_DE_SUIT.search((m.get("assunto") or "") + "\n" + (m.get("corpo") or "")) for m in msgs)
+
+
+def robo(email):
+    """Remetente automático: noreply, cobrança, aviso, newsletter."""
+    local = (email or "").split("@")[0]
+    return bool(local) and bool(RX_ROBO.match(local))
+
 
 def novas_vendas(con, gm):
     """O e-mail do WooCommerce de pedido novo, com macacão, que ainda não virou pedido."""
@@ -388,7 +410,7 @@ def respostas(con, gm):
     """Mensagem nova nas conversas de um pedido aberto, de quem não é a URACE."""
     eventos = []
     for p in todos(con, """SELECT id, gmail_thread_cliente, gmail_thread_designer, gmail_thread_fornecedor
-                           FROM suit_orders WHERE closed=0 AND (gmail_thread_cliente IS NOT NULL
+                           FROM suit_orders WHERE closed=0 AND discarded_at IS NULL AND (gmail_thread_cliente IS NOT NULL
                            OR gmail_thread_designer IS NOT NULL OR gmail_thread_fornecedor IS NOT NULL)"""):
         for papel in ("cliente", "designer", "fornecedor"):
             th = p[f"gmail_thread_{papel}"]
@@ -422,24 +444,28 @@ def _nome_de(de):
 def _pedido_do_fornecedor(con, assunto):
     """'SUIT - Bennie Schneider (…)' → o pedido aberto cujo título ou piloto aparece no assunto."""
     a = (assunto or "").lower()
-    for p in todos(con, "SELECT id, title, driver_name FROM suit_orders WHERE closed=0 ORDER BY id DESC"):
+    for p in todos(con, "SELECT id, title, driver_name FROM suit_orders WHERE closed=0 AND discarded_at IS NULL ORDER BY id DESC"):
         for nome in (p["title"], p["driver_name"]):
             if nome and len(nome) >= 4 and nome.lower() in a:
                 return p["id"]
     return None
 
 
-def conversas_novas(con, gm):
+def conversas_novas(con, gm, ignoradas=None):
     """Conversa nova que ainda não é de pedido nenhum: com o marcador Suits, do designer, ou de um
-    cliente com pedido aberto. Quem mandou decide o papel; o pedido é achado antes da IA."""
+    cliente com pedido aberto. Quem mandou decide o papel; o pedido é achado antes da IA.
+    As conversas de pedido descartado (#195) continuam em `ligadas`: são puladas, nunca reabrem nada."""
     eventos = []
+    ignoradas = [] if ignoradas is None else ignoradas
     cfg = config(con)
     ligadas = {r["t"] for r in todos(con, """SELECT gmail_thread_cliente AS t FROM suit_orders WHERE gmail_thread_cliente IS NOT NULL
                                               UNION SELECT gmail_thread_designer FROM suit_orders WHERE gmail_thread_designer IS NOT NULL
                                               UNION SELECT gmail_thread_fornecedor FROM suit_orders WHERE gmail_thread_fornecedor IS NOT NULL""")}
     fornecedores = {r["email"].lower() for r in todos(con, "SELECT email FROM suit_suppliers WHERE email IS NOT NULL")}
     clientes = {r["e"].lower(): r["id"] for r in todos(con, """SELECT lower(customer_email) AS e, MAX(id) AS id FROM suit_orders
-                                                              WHERE closed=0 AND customer_email IS NOT NULL GROUP BY lower(customer_email)""")}
+                                                              WHERE closed=0 AND discarded_at IS NULL AND customer_email IS NOT NULL
+                                                              GROUP BY lower(customer_email)""")
+                if not _nosso(r["e"]) and not robo(_email_de(r["e"]))}   # #195: a URACE e robô nunca são "o cliente"
     consultas = ["label:Suits newer_than:3d"]
     if cfg.get("designer_email"):
         consultas.append(f"from:{cfg['designer_email']} newer_than:3d")
@@ -466,7 +492,8 @@ def conversas_novas(con, gm):
                 eventos.append({"tipo": "fornecedor", "pedido_id": pid, "thread_id": th, "mensagens": novas})
             elif cfg.get("designer_email") and de == cfg["designer_email"].lower():
                 m = re.search(r"#\s?(\d+)", assunto + " " + (novas[-1].get("corpo") or "")[:500])
-                pid = int(m.group(1)) if m and um(con, "SELECT 1 AS x FROM suit_orders WHERE id=?", (int(m.group(1)),)) else None
+                pid = int(m.group(1)) if m and um(con, "SELECT 1 AS x FROM suit_orders WHERE id=? AND discarded_at IS NULL",
+                                                   (int(m.group(1)),)) else None
                 if pid:
                     con.execute("UPDATE suit_orders SET gmail_thread_designer=coalesce(gmail_thread_designer, ?) WHERE id=?", (th, pid))
                 eventos.append({"tipo": "designer", "pedido_id": pid, "thread_id": th, "mensagens": novas})
@@ -474,6 +501,11 @@ def conversas_novas(con, gm):
                 pid = clientes[de]
                 con.execute("UPDATE suit_orders SET gmail_thread_cliente=coalesce(gmail_thread_cliente, ?) WHERE id=?", (th, pid))
                 eventos.append({"tipo": "cliente", "pedido_id": pid, "thread_id": th, "mensagens": novas, "historico": msgs})
+            elif robo(de) or not fala_de_suit(msgs):
+                # #195 (dono, 13/10: "Vai estar claro na mensagem, no corpo ou no título do e-mail que vai ser um
+                # pedido de suit"): sem falar de macacão, ou vindo de robô, nem chega à IA. Lida uma vez e esquecida.
+                _marcar(con, novas, None, th, "nao_suit")
+                ignoradas.append({"thread_id": th, "de": de, "assunto": assunto[:120]})
             else:
                 # #182 (dono, 09/10: "quando for um pedido de suit, ele adiciona lá"): o marcador Suits de quem
                 # não tem pedido NÃO abre pedido. A IA lê primeiro e só cria se for pedido de macacão. Sem
@@ -614,12 +646,13 @@ def rodar(con, gm=None, executar=None):
     if executar is None and ia.motor_da_ia() != "sdk":
         return {"pulada": "a IA não está no motor novo (falta a chave da Anthropic no serviço)"}
     gm = gm or modulo("gmail")
-    eventos, erros = [], []
-    for fonte in (novas_vendas, respostas, conversas_novas):
+    eventos, erros, ignoradas = [], [], []
+    for nome, fonte in (("novas_vendas", lambda: novas_vendas(con, gm)), ("respostas", lambda: respostas(con, gm)),
+                        ("conversas_novas", lambda: conversas_novas(con, gm, ignoradas))):
         try:
-            eventos += fonte(con, gm)
+            eventos += fonte()
         except Exception as e:
-            erros.append(f"{fonte.__name__}: {type(e).__name__}: {str(e)[:160]}")
+            erros.append(f"{nome}: {type(e).__name__}: {str(e)[:160]}")
     feitos = []
     for ev in eventos[:POR_CICLO]:
         _marcar(con, ev["mensagens"], ev.get("pedido_id"), ev.get("thread_id"), ev["tipo"])   # antes: se a IA cair, não repete em laço
@@ -627,9 +660,9 @@ def rodar(con, gm=None, executar=None):
             feitos.append({"tipo": ev["tipo"], "pedido": ev.get("pedido_id"), "comando": tratar(con, ev, gm, executar)})
         except Exception as e:
             erros.append(f"{ev['tipo']} #{ev.get('pedido_id')}: {type(e).__name__}: {str(e)[:160]}")
-    res = {"eventos": len(eventos), "tratados": feitos, "ficaram_para_o_proximo": max(0, len(eventos) - POR_CICLO),
+    res = {"eventos": len(eventos), "tratados": feitos, "nao_sao_de_suit": ignoradas, "ficaram_para_o_proximo": max(0, len(eventos) - POR_CICLO),
            "simulacao": cfg["envio_automatico"] != "1", "erros": erros}
-    if eventos or erros:
+    if eventos or erros or ignoradas:
         auditar(con, "suit.bridge.round", "system", detail=res)
     return res
 
@@ -640,6 +673,8 @@ def simular_pedido(con, pid, gm=None, executar=None):
     p = um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,))
     if not p:
         raise Recusado("pedido não encontrado")
+    if p["discarded_at"]:
+        raise Recusado("pedido descartado: restaure antes de simular")
     gm = gm or modulo("gmail")
     msgs = []
     for papel in ("cliente", "designer", "fornecedor"):
@@ -650,6 +685,38 @@ def simular_pedido(con, pid, gm=None, executar=None):
                  "pedido. Faça o próximo passo com o que está no pedido (por exemplo, as boas-vindas se ainda não houve)."}]
     return tratar(con, {"tipo": "simulacao", "pedido_id": pid, "thread_id": p["gmail_thread_cliente"], "mensagens": msgs}, gm,
                   executar, simular=True)
+
+
+def suspeitos(con, gm=None):
+    """#195, a reanálise: pedidos em andamento que vieram de e-mail ou da IA e não parecem de macacão.
+    Só leitura: quem descarta é uma pessoa (tela ou `manage suits-descartar`)."""
+    if gm is None:
+        try:
+            from command_center.providers import modulo
+            gm = modulo("gmail")
+        except Exception:
+            gm = None
+    out = []
+    for p in todos(con, """SELECT id, title, customer_email, gmail_thread_cliente, source FROM suit_orders
+                           WHERE closed=0 AND discarded_at IS NULL AND source NOT IN ('asana', 'site', 'manual') ORDER BY id"""):
+        motivos, assunto = [], None
+        e = _email_de(p["customer_email"])
+        if e and _nosso(e):
+            motivos.append("o cliente é um e-mail da URACE")
+        if e and robo(e):
+            motivos.append("o cliente é um remetente automático")
+        if p["gmail_thread_cliente"] and gm is not None:
+            try:
+                msgs = gm.mensagens_da_thread(CONTA, p["gmail_thread_cliente"])["mensagens"]
+                assunto = (msgs[0].get("assunto") if msgs else None) or None
+                if not fala_de_suit(msgs):
+                    motivos.append("a conversa não fala de macacão")
+            except Exception as ex:
+                motivos.append(f"não deu para ler a conversa ({type(ex).__name__})")
+        if motivos:
+            out.append({"id": p["id"], "title": p["title"], "customer_email": p["customer_email"], "assunto": assunto,
+                        "motivos": motivos})
+    return out
 
 
 _LOCK = threading.Lock()

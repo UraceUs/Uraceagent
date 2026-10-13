@@ -305,6 +305,43 @@ def mudar_etapa(con, pid, nova, user_id=None, motivo=None):
     return True
 
 
+# ------------------------------------------------------------- descartar (#195)
+# Dono, 13/10: "nenhum desse aí foi e-mail de suit … Não era nem pra estar aí. Então, cessa isso,
+# limpa esses daí". Descartar não apaga nada: o pedido some de Em andamento e do Histórico, a
+# ponte para de ler as conversas dele e o e-mail dele deixa de contar como cliente. Dá para restaurar.
+MOTIVO_PADRAO = "não é pedido de macacão"
+
+
+def descartar(con, pid, motivo=None, user_id=None):
+    """Tira o pedido das listas e da ponte. Devolve False se já estava descartado."""
+    p = um(con, "SELECT id, status, discarded_at FROM suit_orders WHERE id=?", (int(pid),))
+    if not p:
+        raise LookupError("Pedido não encontrado.")
+    if p["discarded_at"]:
+        return False
+    motivo = (motivo or "").strip()[:300] or MOTIVO_PADRAO
+    con.execute("UPDATE suit_orders SET discarded_at=?, discard_reason=?, discarded_by=?, closed=1, updated_at=? WHERE id=?",
+                (agora(), motivo, user_id, agora(), p["id"]))
+    anotar(con, p["id"], f"Descartado: {motivo}. Saiu das listas e a ponte de e-mail não lê mais este pedido.",
+           "etapa", p["status"], user_id=user_id)
+    con.execute("UPDATE ai_events SET status='SKIPPED', handled_at=?, note=? WHERE kind='suit.humano' AND entity_id=? "
+                "AND status='NEW'", (agora(), "pedido descartado", p["id"]))
+    return True
+
+
+def restaurar(con, pid, user_id=None):
+    """Desfaz o descarte: o pedido volta para a lista da etapa em que estava."""
+    p = um(con, "SELECT id, status, discarded_at FROM suit_orders WHERE id=?", (int(pid),))
+    if not p:
+        raise LookupError("Pedido não encontrado.")
+    if not p["discarded_at"]:
+        return False
+    con.execute("UPDATE suit_orders SET discarded_at=NULL, discard_reason=NULL, discarded_by=NULL, closed=?, updated_at=? "
+                "WHERE id=?", (1 if p["status"] in FECHADAS else 0, agora(), p["id"]))
+    anotar(con, p["id"], "Restaurado: o pedido voltou para a lista.", "etapa", p["status"], user_id=user_id)
+    return True
+
+
 # ------------------------------------------------------------ importar do Asana
 SECOES_PEDIDO = {"Order", "Standby", "Seção sem título"}
 

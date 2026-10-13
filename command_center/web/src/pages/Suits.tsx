@@ -24,7 +24,8 @@ interface Campo { chave: string; nome: string }
 interface Meta { etapas: Etapa[]; medidas: Medida[]; design: Campo[] }
 interface Linha { id: number; title: string; product: string; quantity: number; customer_name: string | null; driver_name: string | null
   status: string; closed: number; order_date: string | null; due_on: string | null; source: string; fornecedor: string | null
-  notas: number; ultima_nota: string | null; updated_at: string | null; created_at: string }
+  notas: number; ultima_nota: string | null; updated_at: string | null; created_at: string
+  discarded_at?: string | null; discard_reason?: string | null }
 interface Nota { id: number; status: string | null; kind: string; text: string | null; tem_imagem: number; command_id: number | null
   created_at: string; autor: string | null; ia?: { status: string; output: string | null; error: string | null } | null }
 type Valor = { v: number; u: string } | { t: string }
@@ -45,7 +46,7 @@ function oQuePuxou(d: DadosCliente) {
   return 'Puxado do cadastro: ' + itens.filter(Boolean).join(', ') + '.'
 }
 const cartao = (id: number, nome: string | null, piloto: string | null) => ({ id, name: nome || '', pilot_name: piloto, email: null, phone: null } as unknown as Client)
-interface Resumo { por_etapa: Record<string, number>; abertos: number; fechados: number; leads: number; fornecedores: number }
+interface Resumo { por_etapa: Record<string, number>; abertos: number; fechados: number; descartados?: number; leads: number; fornecedores: number }
 interface Lead { id: number; name: string; email: string | null; phone: string | null; notes: string | null; status: string; order_id: number | null; created_at: string; client_id: number | null }
 interface Fornecedor { id: number; name: string; contact: string | null; email: string | null; phone: string | null; has_fia: number | null
   status: string | null; price: string | null; shipping: string | null; payment: string | null; lead_time: string | null; comments: string | null
@@ -109,14 +110,18 @@ export function Suits() {
 }
 
 function Pedidos({ meta, resumo }: { meta: Meta | null; resumo: Resumo | null }) {
-  const [estado, setEstado] = useState<'abertos' | 'fechados'>('abertos')
+  const [estado, setEstado] = useState<'abertos' | 'fechados' | 'descartados'>('abertos')
   const [etapa, setEtapa] = useState('')
   const [busca, setBusca] = useState('')
   const base = `/suits${qs({ estado, status: etapa || undefined, q: busca.trim() || undefined })}`
   const { itens, total, erro, carregando, mais, temMais, recarregar } = usePaginado<Linha>(base, 50)
-  return <Section title={estado === 'abertos' ? tr("Em andamento") : tr("Histórico")} count={total}
+  const titulo = estado === 'abertos' ? tr("Em andamento") : estado === 'fechados' ? tr("Histórico") : tr("Descartados")
+  return <Section title={titulo} count={total}
     right={<div className="tabs"><button className={estado === 'abertos' ? 'on' : ''} onClick={() => { setEstado('abertos'); setEtapa('') }}>{tr("Em andamento")}</button>
-      <button className={estado === 'fechados' ? 'on' : ''} onClick={() => { setEstado('fechados'); setEtapa('') }}>{tr("Histórico")}</button></div>}>
+      <button className={estado === 'fechados' ? 'on' : ''} onClick={() => { setEstado('fechados'); setEtapa('') }}>{tr("Histórico")}</button>
+      {(resumo?.descartados || estado === 'descartados') ? <button className={estado === 'descartados' ? 'on' : ''} onClick={() => { setEstado('descartados'); setEtapa('') }}
+        title={tr("O que chegou por e-mail e não era pedido de macacão. Nada foi apagado.")}>{tr("Descartados")}</button> : null}</div>}>
+    {estado === 'descartados' && <p className="small muted">{tr("Não eram pedidos de macacão: saíram das listas e a ponte de e-mail não lê mais essas conversas. Abra um para restaurar.")}</p>}
     {estado === 'abertos' && meta && <div className="suit-filtro" role="group" aria-label={tr("Filtrar por etapa")}>
       <button className={`btn sm${etapa ? ' ghost' : ' on'}`} onClick={() => setEtapa('')}>{tr("Todas ·")} {resumo?.abertos ?? '…'}</button>
       {meta.etapas.filter(e => !['delivered', 'canceled'].includes(e.codigo)).map(e =>
@@ -125,12 +130,12 @@ function Pedidos({ meta, resumo }: { meta: Meta | null; resumo: Resumo | null })
     </div>}
     <label className="fld"><span className="sr-only">{tr("Buscar")}</span><input value={busca} onChange={e => setBusca(e.target.value)} placeholder={tr("Buscar por cliente, piloto ou e-mail")} /></label>
     {erro ? <ErrorState error={erro} retry={recarregar} /> : carregando && !itens.length ? <Loading />
-      : !itens.length ? <Empty title={estado === 'abertos' ? tr("Nenhum pedido em andamento") : tr("Nada no histórico")}>{tr("Registre um pedido novo ou importe o que está no Asana.")}</Empty>
+      : !itens.length ? <Empty title={estado === 'abertos' ? tr("Nenhum pedido em andamento") : estado === 'fechados' ? tr("Nada no histórico") : tr("Nada descartado")}>{tr("Registre um pedido novo ou importe o que está no Asana.")}</Empty>
       : <ul className="suit-lista">{itens.map(p => <li key={p.id}><Link to={`/suits/${p.id}`} className="suit-linha">
           <div className="grow" style={{ minWidth: 0 }}><b className="truncate">{p.title}</b>
             <div className="small muted truncate">{[p.product !== 'Suit' ? p.product : null, p.quantity > 1 ? `${p.quantity} un.` : null,
               p.fornecedor, p.order_date ? `pedido ${dia(p.order_date)}` : null, p.source === 'asana' ? 'do Asana' : p.source === 'ia' ? 'pela IA' : null].filter(Boolean).join(' · ')}</div></div>
-          <EtapaChip meta={meta} s={p.status} />
+          {p.discarded_at ? <Chip tone="neutral">{tr("descartado")}</Chip> : <EtapaChip meta={meta} s={p.status} />}
           {p.notas > 0 && <span className="small muted" title={tr("notas")}>{p.notas} ✎</span>}
         </Link></li>)}</ul>}
     {temMais && <button className="btn ghost" disabled={carregando} onClick={mais}>{tr("Carregar mais")}</button>}
@@ -205,8 +210,9 @@ export function SuitPedido() {
   const d = p.data
   return <>
     <PageHeader title={d.title} eyebrow={<><Link to="/suits">{tr("Suits · Alpha Line")}</Link> {tr("· pedido #")}{d.id}{d.product !== 'Suit' ? ` · ${d.product}` : ''}</>}>
-      <EtapaChip meta={meta.data} s={d.status} />
+      {d.discarded_at ? <Chip tone="neutral">{tr("descartado")}</Chip> : <EtapaChip meta={meta.data} s={d.status} />}
     </PageHeader>
+    <Descarte pedido={d} onDone={p.reload} />
     <Etapas meta={meta.data} atual={d.status} />
     <NovaNota meta={meta.data} pedido={d} onDone={p.reload} />
     <Cliente pedido={d} onDone={p.reload} />
@@ -220,6 +226,42 @@ export function SuitPedido() {
       {d.asana_notes && <pre className="suit-pre">{d.asana_notes}</pre>}
       {d.asana_gid && <a href={`https://app.asana.com/0/0/${d.asana_gid}`} target="_blank" rel="noreferrer">{tr("Abrir a tarefa no Asana ↗")}</a>}
     </Section> : null}
+  </>
+}
+
+/** #195 (dono, 13/10): "nenhum desse aí foi e-mail de suit … limpa esses daí". Descartar não apaga: tira das listas e da ponte. */
+function Descarte({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {
+  const toast = useToast()
+  const [aberto, setAberto] = useState(false)
+  const [motivo, setMotivo] = useState('')
+  const [indo, setIndo] = useState(false)
+  async function descartar() {
+    setIndo(true)
+    try { await api.post(`/suits/${pedido.id}/descartar`, { motivo: motivo.trim() || null }); toast(tr("Descartado: saiu das listas e a ponte não lê mais este pedido."), 'ok'); setAberto(false); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  async function restaurar() {
+    setIndo(true)
+    try { await api.post(`/suits/${pedido.id}/restaurar`); toast(tr("Restaurado: o pedido voltou para a lista."), 'ok'); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  if (pedido.discarded_at) return <div className="card" role="status">
+    <p><b>{tr("Descartado em {0}.", new Date(pedido.discarded_at).toLocaleString(LOCALE(), { timeZone: 'America/New_York', dateStyle: 'short', timeStyle: 'short' }))}</b> {pedido.discard_reason || ''}</p>
+    <p className="small muted">{tr("Não aparece nas listas e a ponte de e-mail não lê, não responde nem anota nada aqui.")}</p>
+    <button className="btn" disabled={indo} onClick={restaurar}>{tr("Restaurar o pedido")}</button>
+  </div>
+  return <>
+    <div className="row gap wrap" style={{ justifyContent: 'flex-end' }}>
+      <button className="btn ghost sm" onClick={() => setAberto(true)}>{tr("Não é pedido de suit")}</button>
+    </div>
+    {aberto && <Scrim onMouseDown={() => setAberto(false)}><div className="modal" style={{ maxWidth: 480 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="descarte-t">
+      <h3 id="descarte-t">{tr("Descartar o pedido #{0}?", pedido.id)}</h3>
+      <p className="small muted">{tr("Ele sai de Em andamento e do Histórico, e a ponte para de ler as conversas dele. Nada é apagado: dá para restaurar em Descartados.")}</p>
+      <label className="fld"><span>{tr("Por quê (opcional)")}</span>
+        <input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder={tr("ex.: fatura da OpenAI, não é macacão")} maxLength={300} /></label>
+      <div className="row gap"><button className="btn ghost" onClick={() => setAberto(false)}>{tr("Cancelar")}</button>
+        <button className="btn primary" disabled={indo} onClick={descartar}>{indo ? tr("Descartando…") : tr("Descartar")}</button></div>
+    </div></Scrim>}
   </>
 }
 

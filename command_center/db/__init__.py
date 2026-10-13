@@ -247,6 +247,11 @@ MIGRACOES = [
     # 08/10 — dono (#158): "Todo lugar que a gente for fazer inserção manual, sempre coloque um para
     # vincular com o cliente". O lead de macacão também liga ao card.
     ("suit_leads", "client_id", "INTEGER REFERENCES clients(id)"),
+    # 13/10 — dono (#195): "nenhum desse aí foi e-mail de suit … limpa esses daí". O pedido que não é
+    # de macacão é DESCARTADO (some das listas, a ponte ignora), nunca apagado: dá para restaurar.
+    ("suit_orders", "discarded_at", "TEXT"),
+    ("suit_orders", "discard_reason", "TEXT"),
+    ("suit_orders", "discarded_by", "INTEGER REFERENCES users(id)"),
     # 01/10 — dono (#67): "todo agendamento... vira uma tarefa no asana".
     ("bookings", "asana_gid", "TEXT"),
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana
