@@ -12,3 +12,6 @@ tanto por IA quanto por um humano, para eu poder estar passando isso para o time
 
 Os playbooks descrevem o que o código faz hoje. Mudou tela ou processo, o playbook do assunto
 muda no mesmo PR (regra no `CLAUDE.md`).
+
+No painel: **Administrativo › Como usar** (`/ops/como-usar`) mostra estes guias, baixa cada um em `.md` (e o dos
+mecânicos em PDF) e gera o **MD para a sua IA** (`/ops/api/guia/para-ia.md`), que junta tudo (#223).

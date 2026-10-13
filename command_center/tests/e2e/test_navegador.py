@@ -42,7 +42,8 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
          "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
-         "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo"]
+         "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
+         "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
 
 
 class _StripeFalso:
@@ -1771,4 +1772,27 @@ def test_calendario_gerente_exclui_servico_e_ele_fica_no_historico_do_card(servi
     g.get_by_text("Serviço restaurado.").wait_for()
     assert g.locator("tr.tr-excluido", has_text="Professional Coaching").count() == 0
     assert not g.erros_js, g.erros_js
+    g.close()
+
+
+def test_como_usar_le_os_guias_navega_entre_eles_e_baixa_o_md_para_a_ia(servidor, navegador):
+    """#223 (dono, 13/10): "uma seção chamada como usar … o guia de como usar a plataforma … MD para
+    IA também, uma parte onde a pessoa consegue baixar o MD"."""
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    abrir(g, servidor, "/como-usar")
+    g.get_by_role("heading", name="Como usar", level=1).wait_for()
+    g.get_by_role("heading", name="MD para a sua IA").wait_for()
+    with g.expect_download() as baixa:
+        g.get_by_role("link", name="Baixar o MD para a IA").click()
+    assert baixa.value.suggested_filename == "urace-command-center-para-ia.md"
+    g.get_by_role("link", name="Guia geral").click()
+    g.wait_for_url("**/ops/como-usar/geral")
+    g.locator("article.guia h3", has_text="Mapa das telas").first.wait_for()
+    assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    g.locator("article.guia a[href='/ops/como-usar/vendas']").first.click()
+    g.wait_for_url("**/ops/como-usar/vendas")
+    g.get_by_role("heading", name="Playbook de vendas do Command Center", level=2).wait_for()
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()

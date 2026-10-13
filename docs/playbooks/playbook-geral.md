@@ -19,8 +19,10 @@
 > | Vendas (oportunidades, agenda, Kommo, fechamento) | [playbook-vendas.md](playbook-vendas.md) |
 > | Box (mecânicos e coaches: Meu dia, checklists, balcão, estoque) | [playbook-mecanicos-e-coaches.md](playbook-mecanicos-e-coaches.md) |
 > | Suits · Alpha Line (macacões) | [../suits-guia-do-lucas.md](../suits-guia-do-lucas.md) |
-> | Manual técnico do painel | [../manual-do-command-center.md](../manual-do-command-center.md) |
 > | Conectar o Claude ao painel (MCP) | [../command-center-mcp-operar.md](../command-center-mcp-operar.md) |
+>
+> Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
+> também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
 > Atualizado em 13/10/2026. Tudo aqui foi conferido no código do painel. Se a tela mudar e este
 > texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
@@ -160,6 +162,7 @@ pedem acesso de operador.
 | IA e inserções manuais | **Atividade da IA** | `/ops/activity` | tudo o que a IA fez, em ordem | todos |
 | Equipe | **Equipe** | `/ops/equipe` | o chat interno (direto ou em grupo), "Conectar o Claude" e o aviso no celular | todos |
 | Equipe | **Biblioteca** | `/ops/biblioteca` | os documentos de cada cliente, com o PDF; cópia no Drive | gerente+ |
+| Administrativo | **Como usar** | `/ops/como-usar` | os guias do painel para ler ou baixar (.md e PDF) e o **MD para a sua IA**, que junta tudo para o Claude operar o painel com o seu usuário | todos |
 | Administrativo | **QuickBooks** | `/ops/quickbooks` | invoices e pagamentos. A IA prepara; enviar pede aprovação | todos veem a tela; financeiro é gerente+ |
 | Administrativo | **DocuSign** | `/ops/docusign` | as waivers. Entregue não é assinada; devolvida é e-mail errado | todos |
 | Administrativo | **Gmail** | `/ops/gmail` | o que a triagem da IA não decidiu | todos |

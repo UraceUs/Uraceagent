@@ -148,6 +148,7 @@ export function Shell() {
         <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">{tr("Equipe")}</NL>
         {can('MANAGER') && <NL to="/biblioteca" icon="book">{tr("Biblioteca")}</NL>}
         <div className="grp">{tr("Administrativo")}</div>
+        <NL to="/como-usar" icon="book">{tr("Como usar")}</NL>
         <NL to="/quickbooks" icon="dollar">{tr("QuickBooks")}</NL>
         <NL to="/docusign" icon="doc" n={d?.waivers_bounced || 0}>{tr("DocuSign")}</NL>
         <NL to="/gmail" end icon="mail" n={d?.emails_attention || 0} tone="soft">{tr("Gmail")}</NL>
