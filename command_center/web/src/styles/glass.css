@@ -759,6 +759,9 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .br-erro{margin:0;padding:10px 12px;border-radius:12px;background:var(--crit-wash);color:var(--crit);border:1px solid var(--crit);font-weight:600}
 .br-minhas{list-style:none;margin:0;padding:0;display:grid;gap:4px}
 .br-minhas li{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;background:var(--surface-2,rgba(255,255,255,.04));font-size:14px}
+.br-minhas li{align-items:center}
+.br-minhas li .truncate{flex:1;min-width:0}
+.br-minhas li .btn{min-height:40px;flex:none}
 .br-teclado{margin-top:auto}
 .br-digitar{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:auto}
 .br-digitar input{min-height:48px;font-size:18px;min-width:0}

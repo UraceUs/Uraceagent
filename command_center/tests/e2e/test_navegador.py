@@ -1280,6 +1280,51 @@ def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, nav
     g.close()
 
 
+def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(servidor, navegador):
+    """#206 (dono, 13/10: "finalizar o balcão de peças urgentemente"): a própria leitura pendente se
+    desfaz a qualquer hora; a contagem rápida tira o estoque do zero; o cliente abre pelo nome."""
+    balcao = servidor.replace("127.0.0.1", "localhost")
+    v = navegador.new_page(viewport={"width": 360, "height": 740})
+    v.goto(balcao + "/login")
+    v.fill("#email", "luis@urace.us")
+    v.fill("#pw", SENHA)
+    v.keyboard.press("Enter")
+    v.get_by_role("heading", name="Leia a peça").wait_for()
+    v.get_by_role("button", name="Código apagado? Digitar").click()
+    v.get_by_label("Código da peça").fill("7890000000017")
+    v.get_by_role("button", name="Ler", exact=True).click()
+    v.get_by_role("heading", name="Front bumper (e2e)").wait_for()
+    v.locator(".br-piloto", has_text="David Pera").first.click()
+    v.get_by_text("✓ Front bumper (e2e) → David Pera").wait_for()
+    v.wait_for_timeout(6500)                                    # o aviso com "Desfazer" some
+    lista = v.get_by_role("list", name="Suas últimas leituras")
+    antes = lista.get_by_role("listitem").count()
+    botao = lista.get_by_role("button", name="Desfazer Front bumper (e2e)").first
+    assert botao.bounding_box()["height"] >= 40
+    botao.click()
+    v.wait_for_function(f"() => document.querySelectorAll('.br-minhas li').length < {antes}")
+    assert v.evaluate("document.documentElement.scrollWidth") <= 360
+    v.close()
+
+    g = entrar(navegador, servidor, largura=360, altura=900)
+    abrir(g, servidor, "/balcao")
+    g.get_by_role("heading", name="Contar o estoque").wait_for()
+    g.get_by_role("button", name="Começar a contar").click()
+    g.get_by_label("Leia a peça").fill("7890000000017")
+    g.get_by_label("Leia a peça").press("Enter")
+    g.get_by_text("Front bumper (e2e)", exact=True).first.wait_for()
+    g.get_by_label("Quanto tem aqui agora").fill("4")
+    g.get_by_role("button", name="Gravar contagem").click()
+    g.get_by_text("Front bumper (e2e): 4 contado(s).").wait_for()
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    g.get_by_role("button", name="Terminar").click()
+    g.get_by_role("heading", name="Abrir um cliente").wait_for()
+    assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
 def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(servidor, navegador):
     """O visitante escolhe no site; entra na conta; a agenda da área do cliente abre com o kart,
     o dia e o turno escolhidos, e o pedido vai para a equipe como qualquer outro."""

@@ -397,6 +397,7 @@ class ConfirmarIn(BaseModel):
     client_id: int | None = None
     item_id: int | None = None
     confirmado: bool = False
+    local: str | None = None                      # #206: galpão, trailer ou pista (antes, sempre o galpão)
 
 
 @r.post("/revisao/{pid}/confirmar")
@@ -404,7 +405,7 @@ def revisao_confirmar(pid: int, dados: ConfirmarIn, request: Request, con: sqlit
                       u=Depends(auth.exige("MANAGER"))):
     con.execute("BEGIN IMMEDIATE")
     try:
-        s = br.confirmar(con, pid, dados.modo, u["id"], dados.client_id, dados.item_id, dados.confirmado)
+        s = br.confirmar(con, pid, dados.modo, u["id"], dados.client_id, dados.item_id, dados.confirmado, dados.local)
     except LookupError as e:
         con.execute("ROLLBACK")
         raise HTTPException(404, str(e))

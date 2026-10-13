@@ -139,6 +139,12 @@ export function BalcaoRapido() {
     setLido(null)
   }
 
+  // #206: a própria leitura ainda pendente se desfaz a qualquer hora (antes, só nos 6 s do aviso)
+  async function desfazerLeitura(id: number) {
+    try { await api.post(`/balcao/rapido/${id}/desfazer`); vibrar(40); if (feito?.id === id) setFeito(null); carregar(data) }
+    catch (e) { setErro((e as ApiError).message) }
+  }
+
   async function desfazer() {
     if (!feito) return
     try { await api.post(`/balcao/rapido/${feito.id}/desfazer`); setFeito(null); vibrar(40); carregar(data) }
@@ -208,7 +214,8 @@ export function BalcaoRapido() {
           <p className="small muted">{dia ? tr("{0} piloto(s) em {1}. Depois de ler, um toque no piloto registra.", dia.pilotos.length, rotuloDia(dia.data)) : ''}</p>
         </div>
         {!!dia?.minhas.length && <ul className="br-minhas" aria-label={tr("Suas últimas leituras")}>
-          {dia.minhas.map(m => <li key={m.id}><span className="truncate">{m.peca || m.code}</span><span className="muted">{m.pilot_name || tr("decidir depois")}</span></li>)}
+          {dia.minhas.map(m => <li key={m.id}><span className="truncate">{m.peca || m.code}</span><span className="muted">{m.pilot_name || tr("decidir depois")}</span>
+            <button className="btn sm ghost" onClick={() => desfazerLeitura(m.id)} aria-label={tr("Desfazer {0}", m.peca || m.code)}>{tr("Desfazer")}</button></li>)}
         </ul>}
         {gerente && dia && <button className="btn ghost br-teclado" aria-expanded={auditar} onClick={() => setAuditar(v => !v)}>{auditar ? tr("Fechar a auditoria") : tr("Auditoria do dia: quem lançou o quê")}</button>}
         {gerente && auditar && dia && <AuditoriaDia data={dia.data} />}

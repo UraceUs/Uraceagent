@@ -129,12 +129,14 @@ def revisao(con, limit=50, offset=0):
         if p["item_id"]:
             it = estoque.item(con, p["item_id"])
             x["item"] = {"id": it["id"], "name": it["name"], "price": it["price"], "qbo_item_id": it["qbo_item_id"],
-                         "do_cliente": estoque.saldo(con, it["id"], client_id=p["client_id"]) if p["client_id"] else 0}
+                         "do_cliente": estoque.saldo(con, it["id"], client_id=p["client_id"]) if p["client_id"] else 0,
+                         # #206: o que a URACE tem na prateleira — sem saldo, "Cobrar" é recusado
+                         "nosso": estoque.saldo(con, it["id"], client_id=None)}
         itens.append(x)
     return {"itens": itens, "total": total, "limit": limit, "offset": offset}
 
 
-def confirmar(con, pid, modo, por, client_id=None, item_id=None, confirmado=False):
+def confirmar(con, pid, modo, por, client_id=None, item_id=None, confirmado=False, local=None):
     """Vira uma leitura do balcão de verdade (estoque, cobrança, invoice do dia da leitura).
     Devolve a linha de `counter_scans`; quem chama grava e leva a invoice ao QuickBooks."""
     p = um(con, "SELECT * FROM counter_pending WHERE id=?", (pid,))
@@ -156,8 +158,8 @@ def confirmar(con, pid, modo, por, client_id=None, item_id=None, confirmado=Fals
         iid = achado["id"] if achado else None
     if not iid:
         raise ErroRapido("código novo: diga que peça é antes de confirmar")
-    scan = b.lancar(con, cid, iid, modo, qty=p["qty"], por=por, codigo=p["code"], confirmado=confirmado,
-                    data=p["service_date"])
+    scan = b.lancar(con, cid, iid, modo, qty=p["qty"], local=local or estoque.SEDE, por=por, codigo=p["code"],
+                    confirmado=confirmado, data=p["service_date"])   # #206: o gerente diz de onde a peça saiu
     atualizar(con, "counter_pending", pid, status="confirmada", mode=modo, client_id=cid, item_id=iid, scan_id=scan["id"],
               reviewed_by=por, reviewed_at=agora())
     return scan
