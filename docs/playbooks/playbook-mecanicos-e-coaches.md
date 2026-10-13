@@ -209,12 +209,12 @@ revisão.
 | Situação | O que fazer |
 |---|---|
 | Tocou no piloto errado e o **✓** ainda está na tela | Toque em **Desfazer** na faixa do ✓. Ela some em alguns segundos. |
-| O ✓ já sumiu | Avise o gerente. Ele **descarta** a leitura na revisão. Depois, leia de novo no piloto certo. |
+| O ✓ já sumiu | Embaixo, em **"Suas últimas leituras"**, toque em **Desfazer** ao lado da peça. Vale enquanto o gerente não revisou. Depois, leia de novo no piloto certo. |
 | Leu a peça, mas não quer lançar | Toque em **Ler outra**. Nada é registrado. |
 | O gerente já confirmou a peça | Fale com o gerente. Ele corrige no balcão do painel enquanto a invoice não foi enviada. Invoice já enviada só se ajusta no QuickBooks, pelo gerente. |
 
-Quem descarta leitura pendente é o **gerente**. Pelo celular, você só desfaz a sua própria
-leitura, logo depois de fazer.
+Pelo celular, você desfaz **a sua própria leitura**, enquanto ela ainda espera a revisão. Depois
+que o gerente confirmou, só ele corrige.
 
 ### O balcão completo (no painel)
 
@@ -228,7 +228,7 @@ código de barras (coletor) ou com **"Ler com a câmera"**. Ele funciona diferen
 3. Escolha onde a peça está: **Galpão**, **Trailer** ou **Pista**.
 4. Leia cada peça.
 5. Errou? Em **Leituras**, toque em **Desfazer**. Funciona enquanto a invoice não foi
-   enviada.
+   enviada nem paga.
 
 Aqui **não há revisão**: a peça já cobra. Confira o modo e o cliente antes de ler.
 
@@ -269,6 +269,33 @@ A tela mostra **"Código novo"** e a frase **"O gerente diz que peça é na revi
 No balcão completo (painel), código novo abre a janela **"Código novo"**. Ali você diz que peça
 é: escolhe uma peça do estoque **ou** cria uma peça nova (nome, prateleira e foto). O preço e o
 item do QuickBooks o gerente completa antes de cobrar.
+
+### Contar o estoque (sem saldo, não cobra)
+
+O balcão **não cobra** uma peça que a URACE não tem contada no estoque. Por isso, a prateleira
+precisa estar contada.
+
+1. No painel, abra **Balcão** e desça até **"Contar o estoque"**.
+2. Toque em **Começar a contar** e escolha onde está contando: **Galpão**, **Trailer** ou
+   **Pista**.
+3. Leia a peça ou a etiqueta da prateleira (ou toque em **Ler com a câmera**).
+4. A tela mostra o nome da peça e quanto o sistema acha que tem. Digite **quanto tem aqui agora**.
+5. Toque em **Gravar contagem**. A peça entra na lista, com o número antigo ("era") e o novo.
+6. Leia a próxima. Ao acabar, toque em **Terminar**.
+
+Conte **o que está na sua frente**, no local escolhido. Peça que você não contou fica como
+estava: em branco não é zero.
+
+### Peça sem código: etiqueta URACE
+
+Peça que veio sem código de barras na embalagem ganha um código da URACE.
+
+1. Em **Contar o estoque**, toque em **Peça sem código: etiqueta URACE**.
+2. Busque e escolha a peça.
+3. Toque em **Gerar código** e depois em **Abrir a etiqueta (PDF)**.
+4. Imprima (etiqueta de 62 × 29 mm) e cole na peça ou na prateleira.
+
+Daí em diante, ler essa etiqueta já identifica a peça.
 
 ### Problemas no calendário e no balcão
 
@@ -444,6 +471,8 @@ Quem compra já vê o pedido. Quando a compra chega, a tela da compra tem
 - **Peça do cliente:** peça que é do cliente e fica guardada com a gente.
 - **Código novo:** código que o sistema ainda não conhece.
 - **Etiqueta de prateleira (URQ):** o QR na prateleira, ligado ao produto do QuickBooks.
+- **Etiqueta URACE (URC):** o código de barras que a URACE dá à peça que veio sem código.
+- **Contagem:** dizer ao sistema quanto tem de verdade na prateleira. Sem ela, o balcão não cobra.
 - **QR do cliente:** o código do card do cliente, para o balcão completo.
 - **Meu dia:** a sua tela inicial e o seu calendário.
 - **Checklist:** a lista do que conferir em cada atendimento.
