@@ -113,43 +113,45 @@ export function Shell() {
         <NL to="/clients" icon="people">{tr("Clientes")}</NL>
         <NL to="/equipe" icon="chat">{tr("Equipe")}</NL>
       </nav> : <nav className="nav" aria-label={tr("Principal")}>
+        {/* Menu por áreas (dono, 13/10, #217: "tá tudo muito bagunçado … SDR junto ali com suite …
+            vamos separar por áreas"). Cada tela fica num lugar só; nenhum endereço mudou. */}
         <div className="grp">{tr("Hoje")}</div>
         <NL to="/" end icon="home">{tr("Hoje")}</NL>
         <NL to="/attention" icon="alert" n={attn} tone={crit ? undefined : 'warn'}>{tr("Precisa de atenção")}</NL>
-        {/* Logística (dono, 23/09). "Corridas" saiu de "Hoje" e veio para cá: o mesmo link
-            em dois lugares do menu faz a pessoa se perguntar qual dos dois é o certo. */}
-        <div className="grp">{tr("Logística")}</div>
-        <NL to="/estoque" icon="box" n={repor} tone="warn">{tr("Estoque")}</NL>
-        {can('OPERATOR') && <NL to="/balcao" icon="tag">{tr("Balcão")}</NL>}
-        <NL to="/races" icon="flag">{tr("Corridas")}</NL>
-        <NL to="/pedidos" icon="list">{tr("Pedidos")}</NL>
-        <NL to="/compras" icon="cart">{tr("Compras")}</NL>
-        <NL to="/planejamento" icon="chart">{tr("Planejamento")}</NL>
-        <div className="grp">{tr("Vendas")}</div>
+        <div className="grp">{tr("Comercial")}</div>
         <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">{tr("Oportunidades")}</NL>
         <NL to="/sales/agenda" icon="cal">{tr("Agenda de vendas")}</NL>
         <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>{tr("Chat do Kommo")}</NL>
-        <NL to="/sdr" icon="spark" n={d?.sdr_relatos_abertos || 0} tone="warn">{tr("Robô SDR")}</NL>
-        {can('OPERATOR') && <NL to="/suits" icon="suit">{tr("Suits · Alpha Line")}</NL>}
-        <NL to="/site" icon="globe">{tr("Site público")}</NL>
-        <div className="grp">{tr("Pessoas")}</div>
-        <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">{tr("Equipe")}</NL>
-        <NL to="/clients" icon="people">{tr("Clientes")}</NL>
-        {can('MANAGER') && <NL to="/biblioteca" icon="book">{tr("Biblioteca")}</NL>}
         <NL to="/crm/funil" icon="funnel">{tr("Funil do Kommo")}</NL>
-        <div className="grp">{tr("Sistemas")}</div>
-        <NL to="/asana" icon="list">{tr("Asana")}</NL>
-        <NL to="/docusign" icon="doc" n={d?.waivers_bounced || 0}>{tr("DocuSign")}</NL>
-        <NL to="/gmail" icon="mail" n={d?.emails_attention || 0} tone="soft">{tr("Gmail")}</NL>
-        <NavLink to="/gmail/manual" className="sub">{tr("Manual dos marcadores")}</NavLink>
-        <NL to="/quickbooks" icon="dollar">{tr("QuickBooks")}</NL>
-        <div className="grp">{tr("Inteligência")}</div>
+        <NL to="/sdr" icon="spark" n={d?.sdr_relatos_abertos || 0} tone="warn">{tr("Robô SDR")}</NL>
+        <NL to="/clients" icon="people">{tr("Clientes")}</NL>
+        <div className="grp">{tr("Logística")}</div>
+        <NL to="/meu-dia" icon="cal">{tr("Calendário")}</NL>
+        {can('OPERATOR') && <NL to="/site" icon="globe">{tr("Agendamentos do site")}</NL>}
+        <NL to="/races" icon="flag">{tr("Corridas")}</NL>
+        {can('OPERATOR') && <NL to="/balcao" icon="tag">{tr("Balcão")}</NL>}
+        <NL to="/estoque" icon="box" n={repor} tone="warn">{tr("Estoque")}</NL>
+        {can('OPERATOR') && <NL to="/checklists" icon="check">{tr("Checklists")}</NL>}
+        <div className="grp">{tr("Pedidos e compras")}</div>
+        <NL to="/pedidos" icon="list">{tr("Pedidos")}</NL>
+        {can('OPERATOR') && <NL to="/suits" icon="suit">{tr("Suits · Alpha Line")}</NL>}
+        <NL to="/compras" icon="cart">{tr("Compras")}</NL>
+        <NL to="/planejamento" icon="chart">{tr("Planejamento")}</NL>
+        <div className="grp">{tr("IA e inserções manuais")}</div>
         <NL to="/ai" end icon="spark">{tr("AI Command")}</NL>
         <NL to="/approvals" icon="seal" n={pend} tone="warn">{tr("Aprovações")}</NL>
         <NL to="/automation" icon="gear">{tr("Automação e memória")}</NL>
+        <NL to="/gmail/manual" icon="pencil">{tr("Manual dos marcadores")}</NL>
         <NL to="/ai/capabilities" icon="book">{tr("O que a IA pode fazer")}</NL>
         <NL to="/activity" icon="activity">{tr("Atividade da IA")}</NL>
-        <div className="grp">{tr("Administração")}</div>
+        <div className="grp">{tr("Equipe")}</div>
+        <NL to="/equipe" icon="chat" n={d?.equipe_nao_lidas || 0} tone="warn">{tr("Equipe")}</NL>
+        {can('MANAGER') && <NL to="/biblioteca" icon="book">{tr("Biblioteca")}</NL>}
+        <div className="grp">{tr("Administrativo")}</div>
+        <NL to="/quickbooks" icon="dollar">{tr("QuickBooks")}</NL>
+        <NL to="/docusign" icon="doc" n={d?.waivers_bounced || 0}>{tr("DocuSign")}</NL>
+        <NL to="/gmail" end icon="mail" n={d?.emails_attention || 0} tone="soft">{tr("Gmail")}</NL>
+        <NL to="/asana" icon="list">{tr("Asana")}</NL>
         <NL to="/integrations" icon="plug" n={badInt} tone="warn">{tr("Integrações")}</NL>
         {can('MANAGER') && <NL to="/audit" icon="shield">{tr("Auditoria")}</NL>}
         {can('ADMIN') && <NL to="/policies" icon="key">{tr("Políticas da IA")}</NL>}
