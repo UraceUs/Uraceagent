@@ -493,6 +493,28 @@ def camada_ponte():
           len(entregues) == 2 and "http" not in entregues[0][1] and "http" in entregues[1][1],
           str(entregues))
 
+    # Print do Instagram (13/10): lead já escalado diz "Consideraria se fosse
+    # mais barato" e ouviu, em inglês, "Your question ... is with the team".
+    # Pedido do dono: objeção de preço recebe a oferta de call com o Lucas.
+    falso, entregues, avisos = preparar()
+    falso.lead(408, COMERCIAL, ENTRADA)
+    state.update_conversation(408, last_outbound_at=int(time.time()) - 600,
+                              contact_name="Eduardo")
+    state.transition(408, "WAITING_HUMAN", "teste")
+    app.process_inbound(msg(408, "Consideraria se fosse mais barato"))
+    texto = entregues[0][1] if entregues else ""
+    check("objeção de preço em conversa escalada: oferta de call com o link, em português",
+          "calendar.app.google" in texto and "Lucas" in texto and "Entendo" in texto
+          and "team" not in texto and texto.count("?") == 1, str(entregues))
+    check("objeção de preço em conversa escalada ainda avisa a pessoa", len(avisos) == 1, str(avisos))
+    falso, entregues, _ = preparar()
+    falso.lead(409, COMERCIAL, ENTRADA)
+    state.update_conversation(409, last_outbound_at=int(time.time()) - 600)
+    app.process_inbound(msg(409, "That's too expensive for us"))
+    check("\"too expensive\" com a IA ativa: oferta de call em inglês",
+          entregues and "calendar.app.google" in entregues[0][1] and "Lucas" in entregues[0][1],
+          str(entregues))
+
     # Follow-up do agendador: fora da janela de 24 h da Meta não sai
     # mensagem; vira tarefa para uma pessoa e a trilha para.
     sch = app.scheduler

@@ -241,6 +241,12 @@ def rotear(texto: str) -> dict:
     return sdr.avaliar(texto or "")["roteamento"]
 
 
+def objecao_de_preco(texto: str) -> bool:
+    """"Está caro", "faria se fosse mais barato", pedido de desconto: o lead
+    recebe a oferta de call com o Lucas (pedido do dono, 13/10)."""
+    return bool(sdr.classificador.classificar(texto or "")["desconto"])
+
+
 def confirmacao_opt_out(texto: str) -> str:
     return roteador.MENSAGEM_OPT_OUT[roteador.idioma(sdr.classificador.normalizar(texto))]
 

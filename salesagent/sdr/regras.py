@@ -225,6 +225,11 @@ PALAVRAS = {
     "desconto": [
         "desconto", "cupom", "condicao especial", "parcelar", "parcelamento", "mais barato",
         "discount", "coupon", "promo code", "cheaper", "descuento",
+        # Objeção de preço (13/10): vira oferta de call com o Lucas, não espera.
+        "esta caro", "ta caro", "muito caro", "caro demais", "fora do orcamento",
+        "too expensive", "so expensive", "very expensive", "that's expensive",
+        "it's expensive", "out of my budget", "can't afford", "cant afford",
+        "muy caro", "demasiado caro",
     ],
     "corporativo": [
         "empresa", "corporativo", "cnpj", "team building", "confraternizacao",

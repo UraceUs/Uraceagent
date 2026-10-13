@@ -27,6 +27,25 @@ no Kommo (bridge + agente OpenClaw `urace-sales`).
 - **Passagem para pessoa**: "Let me get Lucas on this. He replies right here,
   Monday to Friday, 8 am to 6 pm Orlando time."
 
+## Objeção e muitas dúvidas viram call com o closer (pedido do dono, 13/10 à tarde)
+
+Depois do teste no Instagram (o lead escalado disse "Consideraria se fosse mais
+barato" e ouviu, em inglês, "Your question ... is with the team"), o dono pediu:
+objeção, ou dúvida demais, vira oferta de call de 15 min com o Lucas, com o link
+do calendário, para encaminhar ao closer seguindo o processo de venda.
+
+- Persona: seção "When the next step is a call with Lucas": objeção de qualquer
+  tipo (preço, tempo, distância, confiança, "vou pensar"), três ou mais
+  perguntas, ou decisão real. Uma pergunta, um link, e `[[escalate]]` com o
+  resumo para o Lucas. Nunca na primeira resposta.
+- Ponte: objeção de preço e pedido de desconto (`regras.PALAVRAS["desconto"]`,
+  que ganhou "está caro", "too expensive", "can't afford" etc.) recebem
+  `holding.call_offer` em vez da espera genérica, inclusive em conversa já
+  escalada. A pessoa continua sendo avisada. Link em `program-links.json`
+  (`call_link`).
+- A detecção de idioma da espera ganhou marcadores ("mais", "sim", "fosse",
+  "isso", "então", "tá"): a frase do print saía em inglês.
+
 ## O que a ponte garante, mesmo se o modelo derivar
 
 - `sdr/estilo.um_ativo`: primeira resposta a um lead sai sem link (o link e a
