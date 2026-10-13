@@ -151,7 +151,8 @@ Esta é a tarefa principal no box. O celular faz quase tudo sozinho: você **lê
 - no painel, em **Balcão** → **"Abrir o balcão do celular"**.
 
 A tela tem duas metades: **em cima, a câmera**, sempre lendo. **Embaixo, a peça e os
-pilotos.**
+pilotos.** Assim que a tela abre, embaixo já aparecem os **"Pilotos de …"** do dia escolhido,
+antes de ler qualquer peça.
 
 ### Passo a passo: as peças de um piloto
 
@@ -171,8 +172,13 @@ pilotos.**
 
 Na faixa da operação, escolha de onde a peça sai: **Galpão**, **Trailer** ou **Pista**.
 
-Prefere começar pelo piloto? Toque em **"Escolher o piloto antes de ler"**, escolha o piloto e
-leia as peças.
+Prefere começar pelo piloto? Toque no piloto na lista **"Pilotos de …"** e leia as peças: cada
+uma já vai para ele. Trocou o dia (Ontem, Amanhã ou outro dia)? A lista muda para os pilotos
+daquele dia.
+
+O que é marcado no **Asana** aparece no balcão **em até 15 minutos** (o painel lê o Asana a
+cada 15 minutos). Escrever "TESTE - " antes do nome no título não atrapalha: o piloto é o
+nome que vem depois.
 
 **Cada leitura vale uma peça.** Duas peças iguais: leia duas vezes. A mesma peça parada na
 frente da câmera não é lida de novo por uns 3 segundos.
@@ -229,7 +235,9 @@ que o gerente confirmou, só ele corrige.
 Em **Balcão**, no painel, existe também o balcão completo. Ele é usado com o leitor de
 código de barras (coletor) ou com **"Ler com a câmera"**. Ele funciona diferente:
 
-1. Primeiro leia o **QR do cliente** (ou toque em **Peças** num serviço do Meu dia).
+1. Primeiro leia o **QR do cliente**, toque num dos **pilotos de hoje** (em "Abrir um
+   cliente") ou toque em **Peças** num serviço do Meu dia. Leu a peça antes do cliente? Abre
+   **"De quem é?"** com os pilotos de hoje: toque no piloto e a peça entra na invoice dele.
 2. Escolha o modo, no topo:
    - **COBRAR**: cada peça lida **entra direto** na invoice de peças de hoje daquele cliente;
    - **GUARDAR**: a peça vai para o estoque do cliente e **não é cobrada**.
@@ -311,12 +319,12 @@ Daí em diante, ler essa etiqueta já identifica a peça.
 |---|---|
 | **"Este navegador não abre a câmera aqui."** | Abra pelo endereço com **https** (ops.urace.us ou parts.urace.us) e permita a câmera. |
 | **"A câmera foi negada."** | Libere a câmera para o site nos ajustes do navegador e abra de novo. |
-| A câmera não lê o código | Chegue mais perto, procure luz e segure parado. Código apagado? Toque em **"Código apagado? Digitar"** e digite o código. |
+| A câmera não lê o código | Ponha o código **dentro da mira**, no meio da tela. Chegue mais perto, procure luz e segure parado. Na folha com 8 etiquetas, mire uma de cada vez. Código apagado? Toque em **"Código apagado? Digitar"** e digite o código (o da etiqueta começa com **URQ**). |
 | **"código inválido: leia de novo"** | O código veio cortado. Leia de novo. |
 | **"Este é o QR de um cliente. Aqui o primeiro passo é a peça."** | No balcão do celular, leia a **peça**, não o cliente. |
 | **"Código novo"** | Veja "Etiquetas QR das prateleiras". Lance no piloto e o gerente diz que peça é, ou toque em **Ler outra**. |
 | A mesma peça não lê de novo | Espere uns 3 segundos ou toque em **Ler outra**. |
-| O piloto não aparece | Confira o dia (Ontem, Hoje, Amanhã). Depois use **Outro cliente**. Se não achar, **Decidir depois** e avise o gerente. |
+| O piloto não aparece | Confira o dia (Ontem, Hoje, Amanhã). Marcou agora no Asana? Espere até 15 minutos. Depois use **Outro cliente**. Se não achar, **Decidir depois** e avise o gerente. |
 | **"Ninguém marcado neste dia no Asana, nas sessões do site ou nas corridas."** | O dia está vazio no calendário. Busque o cliente pelo nome, embaixo. |
 | Chip **"Offline"** ou **"Sem conexão com o servidor."** | O celular está sem internet. **Nada fica guardado para depois.** Quando a internet voltar, confira nas suas últimas leituras e lance de novo o que não entrou. |
 | **"... não tem preço final: chame o gerente para definir"** (balcão completo) | Chame o gerente. Peça sem preço não é cobrada. |

@@ -1666,3 +1666,41 @@ def test_bandeiras_tambem_no_login(servidor, navegador):
     pg.get_by_role("button", name="Entrar").wait_for()
     pg.close()
 
+
+
+def test_balcao_mostra_os_pilotos_do_dia_sem_ler_e_peca_sem_cliente_pergunta_de_quem_e(servidor, navegador):
+    """#212 (dono, 13/10: "não tá aparecendo nenhum cliente nos dias que tiveram clientes" e
+    "quando eu ler, aparecer qual o piloto que tem ali no dia"). No celular, os pilotos do dia
+    aparecem antes de qualquer leitura; no painel, peça lida sem cliente pergunta de quem é."""
+    balcao = servidor.replace("127.0.0.1", "localhost")
+    v = navegador.new_page(viewport={"width": 360, "height": 740})
+    v.goto(balcao + "/login")
+    v.fill("#email", "luis@urace.us")
+    v.fill("#pw", SENHA)
+    v.keyboard.press("Enter")
+    v.get_by_role("heading", name="Leia a peça").wait_for()
+    v.get_by_role("heading", name="Pilotos de", exact=False).wait_for()
+    piloto = v.locator(".br-antes .br-piloto", has_text="David Pera").first
+    piloto.wait_for()
+    assert piloto.bounding_box()["height"] >= 48
+    piloto.click()
+    v.get_by_text("Lançando para").wait_for()
+    v.get_by_role("button", name="Encerrar").click()
+    assert v.evaluate("document.documentElement.scrollWidth") <= 360
+    v.close()
+
+    g = entrar(navegador, servidor, largura=360, altura=900)
+    abrir(g, servidor, "/balcao")
+    g.locator(".br-piloto", has_text="David Pera").first.wait_for()      # pilotos de hoje, sem ler nada
+    campo = g.get_by_label("Leia o QR do cliente")
+    campo.fill("7890000000017"); campo.press("Enter")
+    g.get_by_role("heading", name="De quem é?").wait_for()
+    g.get_by_role("dialog").locator(".br-piloto", has_text="David Pera").first.click()
+    g.get_by_text("Front bumper (e2e) → David Pera: cobrada.").wait_for()
+    g.get_by_role("heading", name="David Pera", level=2).wait_for()
+    g.locator(".tbl .tr", has_text="Front bumper (e2e)").first.wait_for()
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
+    assert not g.erros_js, g.erros_js
+    g.close()
