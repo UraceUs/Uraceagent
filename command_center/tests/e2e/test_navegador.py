@@ -1037,7 +1037,7 @@ def test_mecanico_so_ve_o_que_e_do_box(servidor, navegador):
     menu = pg.get_by_role("navigation", name="Principal")
     for ve in ("Balcão", "Checklists", "Estoque", "Clientes", "Equipe"):
         assert menu.get_by_role("link", name=ve).count() == 1, ve
-    for nao in ("Oportunidades", "Chat do Kommo", "QuickBooks", "Biblioteca", "AI Command", "Site público"):
+    for nao in ("Oportunidades", "Chat do Kommo", "QuickBooks", "Biblioteca", "AI Command", "Agendamentos do site"):
         assert menu.get_by_role("link", name=nao).count() == 0, nao
     for rota in ("/sales", "/quickbooks", "/biblioteca", "/attention"):
         abrir(pg, servidor, rota)
@@ -1709,5 +1709,34 @@ def test_balcao_mostra_os_pilotos_do_dia_sem_ler_e_peca_sem_cliente_pergunta_de_
     r = g.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
+    assert not g.erros_js, g.erros_js
+    g.close()
+
+
+def test_menu_lateral_por_areas_cada_tela_num_lugar_so(servidor, navegador):
+    """#217 (dono, 13/10: "tá tudo muito bagunçado … SDR junto ali com suite … vamos separar por
+    áreas"). As áreas na ordem combinada, cada tela na sua área e nenhum link repetido."""
+    g = entrar(navegador, servidor)
+    abrir(g, servidor, "/")
+    g.locator("nav.nav .grp").first.wait_for()
+    grupos = g.evaluate("[...document.querySelectorAll('nav.nav .grp')].map(e => e.textContent.trim())")
+    assert grupos == ["Hoje", "Comercial", "Logística", "Pedidos e compras", "IA e inserções manuais", "Equipe",
+                      "Administrativo"], grupos
+    area = g.evaluate("""() => { let grp = ''; const m = {}
+        for (const el of document.querySelector('nav.nav').children) {
+          if (el.classList.contains('grp')) grp = el.textContent.trim()
+          else if (el.tagName === 'A') { const l = (el.querySelector('.lbl') || el).textContent.trim(); (m[l] = m[l] || []).push(grp) }
+        }
+        return m }""")
+    esperado = {"Calendário": "Hoje", "Robô SDR": "Comercial", "Clientes": "Comercial", "Agendamentos do site": "Logística",
+                "Balcão": "Logística", "Checklists": "Logística", "Suits · Alpha Line": "Pedidos e compras",
+                "Pedidos": "Pedidos e compras", "Manual dos marcadores": "IA e inserções manuais",
+                "QuickBooks": "Administrativo", "Asana": "Administrativo"}
+    for tela, grp in esperado.items():
+        assert area.get(tela) == [grp], (tela, area.get(tela))
+    hrefs = g.evaluate("[...document.querySelectorAll('nav.nav a')].map(a => a.getAttribute('href'))")
+    assert len(hrefs) == len(set(hrefs)), sorted(h for h in hrefs if hrefs.count(h) > 1)
+    abrir(g, servidor, "/site")
+    g.get_by_role("heading", name="Agendamentos do site", level=1).wait_for()
     assert not g.erros_js, g.erros_js
     g.close()

@@ -118,6 +118,7 @@ export function Shell() {
         <div className="grp">{tr("Hoje")}</div>
         <NL to="/" end icon="home">{tr("Hoje")}</NL>
         <NL to="/attention" icon="alert" n={attn} tone={crit ? undefined : 'warn'}>{tr("Precisa de atenção")}</NL>
+        <NL to="/meu-dia" icon="cal">{tr("Calendário")}</NL>
         <div className="grp">{tr("Comercial")}</div>
         <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">{tr("Oportunidades")}</NL>
         <NL to="/sales/agenda" icon="cal">{tr("Agenda de vendas")}</NL>
@@ -126,7 +127,6 @@ export function Shell() {
         <NL to="/sdr" icon="spark" n={d?.sdr_relatos_abertos || 0} tone="warn">{tr("Robô SDR")}</NL>
         <NL to="/clients" icon="people">{tr("Clientes")}</NL>
         <div className="grp">{tr("Logística")}</div>
-        <NL to="/meu-dia" icon="cal">{tr("Calendário")}</NL>
         {can('OPERATOR') && <NL to="/site" icon="globe">{tr("Agendamentos do site")}</NL>}
         <NL to="/races" icon="flag">{tr("Corridas")}</NL>
         {can('OPERATOR') && <NL to="/balcao" icon="tag">{tr("Balcão")}</NL>}

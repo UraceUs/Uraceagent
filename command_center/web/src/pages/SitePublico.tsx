@@ -487,7 +487,7 @@ export function SitePublico() {
   const { aba } = useParams()
   const { can } = useAuth()
   return <>
-    <PageHeader title={tr("Site público")} help={<>{tr("O que o cliente usa na área do cliente (hoje em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>{tr(", depois no urace.us): os pedidos de sessão e a agenda que você abre e fecha.")}</>}>
+    <PageHeader title={tr("Agendamentos do site")} help={<>{tr("O que o cliente usa na área do cliente (hoje em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>{tr(", depois no urace.us): os pedidos de sessão e a agenda que você abre e fecha.")}</>}>
       <a className="btn ghost" href="/ops/portal" target="_blank" rel="noreferrer">{tr("Abrir a área do cliente ↗")}</a>
     </PageHeader>
     <div className="tabs">

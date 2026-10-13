@@ -12,7 +12,8 @@
 
 ## 1. O que é a aba Suits
 
-A aba **Suits · Alpha Line** do Command Center (`https://ops.urace.us/ops/suits`) é onde vive
+A aba **Suits · Alpha Line** do Command Center (`https://ops.urace.us/ops/suits`; no menu lateral, na área
+**Pedidos e compras**) é onde vive
 todo pedido de **macacão de kart personalizado**, do primeiro contato até a entrega. Ela
 substituiu o quadro SUITS do Asana, que já foi importado para lá.
 

@@ -1,6 +1,6 @@
 /* Agendar sessão (#41, #50, #54): o cliente escolhe o tipo de sessão (com o preço), vê o
  * mês com o que está aberto e marca para um piloto da conta. Quem decide o que abre é a
- * equipe, no site interno (Site público › Disponibilidade e › Serviços e preços).
+ * equipe, no site interno (Agendamentos do site › Disponibilidade e › Serviços e preços).
  * Piloto com medida vencida (60+ dias) ou cadastro incompleto não marca até atualizar. */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
