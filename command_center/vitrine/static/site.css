@@ -118,6 +118,7 @@ p { margin: 0 }
 .clara .lede { color: var(--cinza) }
 
 .numeros { max-width: var(--largura); margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 24px }
+.largura + .numeros { margin-top: 28px }
 .numero { display: grid; gap: 4px }
 .numero strong { font: 800 clamp(2.4rem, 7vw, 3.4rem)/1 var(--titulo); font-stretch: 125% }
 .numero span { color: var(--cinza-claro) }

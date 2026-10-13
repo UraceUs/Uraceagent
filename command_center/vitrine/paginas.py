@@ -192,8 +192,8 @@ def home(host):
   <div class="largura">
     <h2 id="h-numeros">{e(h['escada'][0])}</h2>
     <p class="lede">{e(h['escada'][1])}</p>
-    <div class="numeros">{numeros}</div>
   </div>
+  <div class="numeros">{numeros}</div>
 </section>
 <section class="faixa clara" aria-labelledby="h-servicos">
   <div class="largura">
