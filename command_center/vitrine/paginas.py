@@ -87,6 +87,7 @@ def _cabecalho(atual):
       <nav aria-label="Main (mobile)"><ul>{itens}<li><a href="{PORTAL}">My account</a></li></ul></nav>
     </details>
     <a class="conta" href="{PORTAL}">My account</a>
+    <a class="carrinho-topo" href="/cart/" aria-label="Cart"><svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="19" r="1.6" fill="currentColor"/><circle cx="17" cy="19" r="1.6" fill="currentColor"/></svg><span class="carrinho-n" data-carrinho-n hidden></span></a>
     <a class="btn btn-sm" href="/services/arrive-and-drive/#reservar">Book now</a>
   </div>
 </header>"""
@@ -119,7 +120,8 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
     robots = '<meta name="robots" content="noindex, nofollow">' if preview() or not indexar else ""
     og_img = (f'<meta property="og:image" content="https://{host}{estatico("img/" + foto)}">'
               f'<meta name="twitter:image" content="https://{host}{estatico("img/" + foto)}">') if foto else ""
-    js = "".join(f'<script src="{estatico(s)}" defer></script>' for s in scripts)
+    # #236: carrinho.js em toda página (o contador do topo); vem antes, a agenda e a loja usam o que ele expõe
+    js = "".join(f'<script src="{estatico(s)}" defer></script>' for s in ("carrinho.js", *scripts))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -295,7 +297,7 @@ def arrive_and_drive(host):
         <div><h3>What YOU Need to Bring</h3>{_lista(a['trazer'])}</div>
       </div>
     </div>
-    <div class="agenda" data-api="/ops/api/vitrine/agenda" data-portal="{PORTAL}/reserve">
+    <div class="agenda" data-api="/ops/api/vitrine/agenda" data-portal="{PORTAL}/reserve" data-servicos="/ops/api/vitrine/servicos">
       <h3>2 · Pick a day</h3>
       <div class="agenda-mes" hidden>
         <button type="button" class="agenda-nav" data-ir="-1" aria-label="Previous month">‹</button>
@@ -306,6 +308,8 @@ def arrive_and_drive(host):
       <div class="agenda-turnos" role="group" aria-label="Morning or afternoon" hidden></div>
       <p class="agenda-aviso" role="status">Loading the open days…</p>
       <div class="agenda-total"><span class="agenda-resumo">4-stroke · per driver</span><strong class="agenda-preco">{usd(C.KARTS[1]['preco'])}</strong></div>
+      <button type="button" class="btn btn-cheio agenda-carrinho" hidden>Add to cart</button>
+      <p class="carrinho-ok" role="status" aria-live="polite"></p>
       <a class="btn btn-cheio agenda-ir" href="{PORTAL}/reserve">Continue to booking</a>
       <p class="agenda-nota">Next: sign in or create your account and choose the driver. Then you get the invoice (session + refundable security deposit) to pay online and the waiver to sign. Your spot is confirmed as soon as both are done. Track fees are paid to the Orlando Kart Center.</p>
     </div>

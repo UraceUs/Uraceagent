@@ -207,7 +207,9 @@ def detalhe(oid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = D
                 e["detail"] = json.loads(e["detail"])
             except ValueError:
                 pass
-    return {"oportunidade": o, "eventos": evs, "etapas": [{"codigo": k, "nome": v} for k, v in ETAPA_PT.items()],
+    from command_center.providers import carrinho        # #236: o pedido do site com as linhas
+    return {"oportunidade": o, "eventos": evs, "pedido": carrinho.do_painel(con, oid),
+            "etapas": [{"codigo": k, "nome": v} for k, v in ETAPA_PT.items()],
             "resultados": [{"codigo": k, "nome": v} for k, v in RESULTADOS.items()]}
 
 

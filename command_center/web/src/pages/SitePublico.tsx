@@ -28,7 +28,7 @@ interface Servico { id: number; name: string; description: string | null; price:
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
-  accepted_at?: string | null; invoice_doc?: string | null; invoice_link?: string | null; charge_error?: string | null; waiver_error?: string | null; reminder_error?: string | null
+  accepted_at?: string | null; charge_kind?: string | null; store_order_id?: number | null; invoice_doc?: string | null; invoice_link?: string | null; charge_error?: string | null; waiver_error?: string | null; reminder_error?: string | null
   origin?: string | null; utm?: string | null; card_note?: string | null; paid_at?: string | null
   cobranca?: { aceita: boolean; pagamento: 'contrato' | 'pago' | 'enviada' | 'erro' | 'pendente'; waiver: 'ok' | 'enviada' | 'erro' | 'pendente'; pronta: boolean } | null
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null
@@ -89,7 +89,7 @@ function Agendamentos() {
             {a.notes && <div className="small">“{a.notes}”</div>}
             {a.cobranca && <div className="row wrap small" style={{ gap: 6 }}>
               <Chip tone={a.cobranca.pagamento === 'pago' || a.cobranca.pagamento === 'contrato' ? 'ok' : a.cobranca.pagamento === 'erro' ? 'crit' : 'warn'}>
-                {a.cobranca.pagamento === 'contrato' ? tr("sessão do contrato") : a.cobranca.pagamento === 'pago' ? tr("pago {0}", a.invoice_doc || '') : a.cobranca.pagamento === 'enviada' ? tr("invoice {0} enviada", a.invoice_doc || '') : a.cobranca.pagamento === 'erro' ? tr("invoice não saiu") : tr("invoice: tentando")}</Chip>
+                {a.cobranca.pagamento === 'contrato' ? tr("sessão do contrato") : a.charge_kind === 'stripe' ? tr("pago no site · pedido #{0}", a.store_order_id ?? '') : a.cobranca.pagamento === 'pago' ? tr("pago {0}", a.invoice_doc || '') : a.cobranca.pagamento === 'enviada' ? tr("invoice {0} enviada", a.invoice_doc || '') : a.cobranca.pagamento === 'erro' ? tr("invoice não saiu") : tr("invoice: tentando")}</Chip>
               <Chip tone={a.cobranca.waiver === 'ok' ? 'ok' : a.cobranca.waiver === 'erro' ? 'crit' : 'warn'}>
                 {a.cobranca.waiver === 'ok' ? tr("waiver em dia") : a.cobranca.waiver === 'enviada' ? tr("waiver enviada") : a.cobranca.waiver === 'erro' ? tr("waiver não saiu") : tr("waiver: assina na área do cliente")}</Chip></div>}
             {[a.charge_error, a.waiver_error, a.reminder_error].filter(Boolean).map(e => <div key={e} className="small" style={{ color: 'var(--crit)' }}>{e}</div>)}
