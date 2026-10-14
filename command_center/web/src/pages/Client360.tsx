@@ -137,7 +137,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     <div className="grid g5 c360-k">
       <div className="card kpi"><div className="lbl">{tr("Próximo serviço")}</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : tr("nada agendado")}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Último serviço")}</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot truncate" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : tr("nenhum concluído")}</div></div>
-      <div className="card kpi"><div className="lbl">{tr("Waiver")}</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? tr("dispensada") : wOk ? tr("assinada") : wBad ? tr("devolveu") : wOpen ? WAIVER_LABEL[wOpen.status!] : tr("nenhuma")}</div><div className="foot">{wOk?.expires_at ? <>{tr("vale até")} {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>{tr("expira")} {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one /></div></div>
+      <div className="card kpi"><div className="lbl">{tr("Waiver")}</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? tr("dispensada") : wOk ? tr("assinada") : wBad ? tr("devolveu") : wOpen ? WAIVER_LABEL[wOpen.status!] : tr("nenhuma")}</div><div className="foot">{wOk?.expires_at ? <>{tr("vale até")} {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>{tr("expira")} {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one />
+        {!wOk && !c.vip && can('OPERATOR') && <button className="btn ghost sm" onClick={() => setTab('waivers')} title={tr("Mandar ao e-mail do card o convite para assinar a waiver")}>{tr("✉ Convite por e-mail")}</button>}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Serviços")}</div><div className="val">{abertos}<span className="of">/{vivos.length}</span></div><div className="foot">{abertos === 1 ? tr("1 aberto") : tr("{0} abertos", abertos)} · {vivos.length - abertos} {tr("concluídos")}</div></div>
       {data.invoices !== null
         ? <div className="card kpi"><div className="lbl">{tr("Em aberto (QBO)")}</div><div className={`val ${(data.open_balance || 0) > 0 ? 'warn' : 'ok'}`} style={{ fontSize: 22 }}>{money(data.open_balance || 0)}</div><div className="foot">{data.invoices.length} {tr("invoice(s) ·")} {emailsAbertos ? <span style={{ color: 'var(--warn)' }}>{emailsAbertos} {tr("e-mail(s) sem resposta")}</span> : tr("e-mails em dia")}</div></div>
@@ -200,6 +201,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
           {t.deleted_at && <div className="small muted">{tr("Excluído por {0} em {1}", t.deleted_by_name || '—', fmtDate(t.deleted_at))}{t.deleted_reason ? ` · ${t.deleted_reason}` : ''}</div>}</td><td>{t.section}</td><td>{t.deleted_at ? <Chip tone="crit">{tr("excluído")}</Chip> : <Status s={t.status} />}</td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title={tr("A waiver assinada foi anexada nesta tarefa")}>{tr("📎 waiver")}</a> : <span className="muted">—</span>}</td>
           <td className="nowrap"><SysLink links={t.links} />{t.deleted_at ? (can('MANAGER') && <button className="btn ghost sm" onClick={() => restaurar(t.id)}>{tr("Restaurar")}</button>) : <>{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title={tr("trocar o nome do serviço (no Asana também)")}>{tr("Renomear")}</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title={tr("este serviço é de outro cliente")}>{tr("Mover")}</button>}</>}</td></tr>)}
       </tbody></table></div>}
+      {tab === 'waivers' && can('OPERATOR') && <ConviteWaiver cid={c.id} onMuda={reload} />}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Signatário")}</th><th>{tr("Modelo")}</th><th>{tr("Status")}</th><th>{tr("Enviada")}</th><th>{tr("Assinada")}</th><th>{tr("Expira")}</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum envelope para este e-mail.")}</Empty></td></tr>}
         {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}{w.source === 'urace' && <div className="small muted">{tr("área do cliente")}</div>}</td><td><Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} /></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.source === 'urace' ? tr("PDF assinado na área do cliente (com página de certificado)") : w.pdf_path ? tr("PDF assinado guardado no card") : tr("Baixar PDF assinado do DocuSign")}>{tr("⬇ PDF")}{w.pdf_path ? ' ✓' : ''}</a>} <SysLink links={w.links} /></td></tr>)}
@@ -586,5 +588,67 @@ function QrBalcao({ cid, nome }: { cid: number; nome: string }) {
       <div className="row wrap" style={{ gap: 8 }}><a className="btn sm" href={src} target="_blank" rel="noreferrer">{tr("Imprimir")}</a>
         <Link className="btn sm ghost" to={`/balcao/${cid}`}>{tr("Abrir no balcão")}</Link></div>
     </div>
+  </div>
+}
+
+/* #135 (dono, 14/10): convite da waiver por e-mail, para o e-mail do card. Piloto com 18+ assina a
+ * própria; menor, o responsável. A tela mostra para quem vai e pede confirmação; sem e-mail (ou sem
+ * nascimento, ou com a assinatura nativa desligada) o botão fica desligado e diz por quê. */
+interface DestinoConvite { client_id: number; kind: 'adult' | 'parental' | null; signer_name: string | null; email: string | null
+  driver_name: string; driver_birth_date: string | null; age: number | null; responsible: string; enabled: boolean
+  can_send: boolean; reason: string | null; valid_hours: number; valid_waiver_until: string | null }
+interface ConviteFeito { id: number; kind: 'adult' | 'parental'; signer_name: string; email: string; driver_name: string
+  created_at: string; created_by: string; created_by_name: string | null; expires_at: string; sent_at: string | null
+  opened_at: string | null; used_at: string | null; waiver_id: number | null; revoked_reason: string | null
+  status: 'sent' | 'opened' | 'signed' | 'expired' | 'replaced' | 'failed' }
+const CONVITE_ST: Record<ConviteFeito['status'], [string, 'ok' | 'warn' | 'crit' | 'info' | 'neutral']> = {
+  sent: [tr("enviado"), 'info'], opened: [tr("aberto"), 'warn'], signed: [tr("assinado"), 'ok'], expired: [tr("expirado"), 'crit'],
+  replaced: [tr("substituído"), 'neutral'], failed: [tr("não saiu"), 'crit'] }
+
+function ConviteWaiver({ cid, onMuda }: { cid: number; onMuda?: () => void }) {
+  const d = useGet<{ destino: DestinoConvite; convites: ConviteFeito[] }>(`/clients/${cid}/waiver-invite`)
+  const perguntar = usePerguntar()
+  const toast = useToast()
+  const [indo, setIndo] = useState(false)
+  if (d.error) return <ErrorState error={d.error} retry={d.reload} />
+  if (!d.data) return <Loading rows={2} />
+  const { destino: x, convites } = d.data
+  const aberto = convites.find(c => c.status === 'sent' || c.status === 'opened')
+  async function enviar() {
+    if (!x.can_send || !x.email) return
+    const ok = await perguntar({
+      titulo: aberto ? tr("Reenviar o convite da waiver?") : tr("Enviar o convite da waiver por e-mail?"),
+      ok: aberto ? tr("Reenviar") : tr("Enviar"),
+      texto: <div className="stack" style={{ gap: 6 }}>
+        <div>{tr("Para:")} <b>{x.signer_name}</b> · <b className="mono">{x.email}</b></div>
+        <div className="small">{x.kind === 'adult'
+          ? tr("{0} tem {1} anos: assina a própria waiver (adult).", x.driver_name, x.age ?? '?')
+          : tr("{0} tem {1} anos: o responsável assina por ele (parental, pai ou mãe).", x.driver_name, x.age ?? '?')}</div>
+        <div className="small muted">{tr("O link é pessoal, vale uma vez e vence em {0} h.", x.valid_hours)}{aberto ? ' ' + tr("O link anterior deixa de valer.") : ''}</div>
+        {x.valid_waiver_until && <div className="small" style={{ color: 'var(--warn)' }}>{tr("Este card já tem waiver {0} válida até {1}.", x.kind || '', fmtDate(x.valid_waiver_until))}</div>}
+      </div> })
+    if (!ok) return
+    setIndo(true)
+    try { await api.post(`/clients/${cid}/waiver-invite`, { email: x.email }); toast(tr("Convite enviado para {0}.", x.email), 'ok'); d.reload(); onMuda?.() }
+    catch (e) { toast((e as ApiError).message, 'crit'); d.reload() } finally { setIndo(false) }
+  }
+  return <div className="card card-b stack convite-waiver" style={{ gap: 10, marginBottom: 12 }}>
+    <div className="row wrap" style={{ gap: 10 }}>
+      <h3 className="h3 grow" style={{ margin: 0 }}>{tr("Convite da waiver por e-mail")}</h3>
+      <button className="btn primary" disabled={!x.can_send || indo} onClick={enviar}
+        title={x.reason || undefined} aria-describedby={x.reason ? `cw-motivo-${cid}` : undefined}>
+        {indo ? <span className="spin" /> : '✉'} {aberto ? tr("Reenviar convite da waiver") : tr("Enviar convite da waiver por e-mail")}</button>
+    </div>
+    {x.can_send
+      ? <p className="small muted" style={{ margin: 0 }}>{tr("Vai para")} <b>{x.signer_name}</b> · {x.email} · {x.kind === 'adult' ? tr("adulto: assina a própria") : tr("menor: o responsável assina")}</p>
+      : <p className="small" id={`cw-motivo-${cid}`} style={{ margin: 0, color: 'var(--warn)' }}>{x.reason}</p>}
+    {convites.length > 0 && <ul className="convites">{convites.map(c => <li key={c.id} className="row wrap" style={{ gap: 8 }}>
+      <Chip tone={CONVITE_ST[c.status][1]}>{CONVITE_ST[c.status][0]}</Chip>
+      <span className="small">{c.signer_name} · {c.email}</span>
+      <span className="small muted">{tr("enviado {0}", fmtDateTime(c.sent_at || c.created_at))}{c.created_by === 'ia' ? tr(" pela IA") : c.created_by_name ? tr(" por {0}", c.created_by_name) : ''}
+        {c.opened_at && <> · {tr("aberto {0}", fmtDateTime(c.opened_at))}</>}
+        {c.used_at && <> · {tr("assinado {0}", fmtDateTime(c.used_at))}</>}
+        {!c.used_at && (c.status === 'sent' || c.status === 'opened') && <> · {tr("vence {0}", fmtDateTime(c.expires_at))}</>}</span>
+    </li>)}</ul>}
   </div>
 }

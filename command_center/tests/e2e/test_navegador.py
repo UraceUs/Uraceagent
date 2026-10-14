@@ -98,6 +98,8 @@ class _StripeFalso:
 
 
 STRIPE = None
+GOOGLE = None
+GOOGLE_CRED = None
 
 
 def _porta_livre():
@@ -111,19 +113,24 @@ def servidor(tmp_path_factory):
     if not os.path.exists(DIST):
         pytest.fail("frontend não construído: rode `npm run build` em command_center/web")
     pasta = tmp_path_factory.mktemp("e2e")
-    global EMAILS, STRIPE
+    global EMAILS, STRIPE, GOOGLE, GOOGLE_CRED
     EMAILS = str(pasta / "emails.jsonl")                 # #108: o e-mail do código vai para cá, nada sai da máquina
     STRIPE = _StripeFalso()                              # #174: o Checkout é o falso, local
+    from command_center.tests.google_falso import GoogleFalso
+    GOOGLE = GoogleFalso()                               # #220: o login e o Calendar do Google são os falsos, locais
+    GOOGLE_CRED = str(pasta / "google-web-credentials.json")   # começa SEM o arquivo: botão desligado
+    porta = _porta_livre()
     env = dict(os.environ, CC_DB_PATH=str(pasta / "e2e.sqlite"), URACE_DIR=str(pasta), URACE_ENV="/nao/existe",
                CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
                CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de parts.urace.us
                STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
-               CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM")  # 32 bytes de teste
+               CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM",  # 32 bytes de teste
+               CC_GOOGLE_BASE=GOOGLE.origem, CC_GOOGLE_WEB_CREDENTIALS=GOOGLE_CRED,
+               CC_GOOGLE_REDIRECT_URI=f"http://127.0.0.1:{porta}/ops/api/google/callback")
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
-    porta = _porta_livre()
     log = open(pasta / "uvicorn.log", "w")
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "command_center.api.main:app", "--port", str(porta)],
                             env=env, cwd=RAIZ, stdout=log, stderr=subprocess.STDOUT)
@@ -142,6 +149,7 @@ def servidor(tmp_path_factory):
     proc.wait(timeout=10)
     log.close()
     STRIPE.srv.shutdown()
+    GOOGLE.parar()
 
 
 @pytest.fixture(scope="module")
@@ -781,6 +789,87 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     abrir(a, servidor, "/site/waiver")
     a.get_by_text("Rafa Waiver").wait_for()
     assert "parental · por Rita Waiver" in a.locator(".tr", has_text="Rafa Waiver").inner_text()
+    a.close(); c.close()
+
+
+# ------------------------------------------------------------------ convite da waiver por e-mail (#135)
+def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(servidor, navegador):
+    """Dono, 14/10: "o e-mail que tiver no card vai receber isso". A equipe vê para quem vai, confirma
+    e manda; o piloto adulto abre o link do e-mail (falso: nada sai da máquina), sem conta, e assina."""
+    import json
+    a = entrar(navegador, servidor, "italo@urace.us", largura=390, altura=844)
+    csrf = {"X-CSRF": next(k["value"] for k in a.context.cookies() if k["name"] == "cc_csrf")}
+    estava = a.request.get(servidor + "/api/site/waiver-nativa").json()["ligada"]
+    assert a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": True}, headers=csrf).ok
+    cid = a.request.post(servidor + "/api/clients", data={"name": "Gabi Convite", "pilot_dob": "1995-06-15",
+                                                          "email": "gabi.convite.e2e@example.com"}, headers=csrf).json()["id"]
+    sem = a.request.post(servidor + "/api/clients", data={"name": "Davi Sem Email", "pilot_dob": "1994-01-20"}, headers=csrf).json()["id"]
+    # sem e-mail no card: o botão fica desligado e explica
+    abrir(a, servidor, f"/clients/{sem}")
+    a.get_by_role("button", name=re.compile(r"^Waivers \(")).click()
+    assert a.get_by_role("button", name="Enviar convite da waiver por e-mail").is_disabled()
+    a.get_by_text("O card não tem e-mail").wait_for()
+    # com e-mail: mostra para quem vai, pede confirmação e manda
+    abrir(a, servidor, f"/clients/{cid}")
+    a.get_by_role("button", name="✉ Convite por e-mail").click()
+    a.get_by_text("Vai para").wait_for()
+    a.get_by_role("button", name="Enviar convite da waiver por e-mail").click()
+    dlg = a.get_by_role("dialog")
+    dlg.get_by_text("gabi.convite.e2e@example.com").wait_for()
+    assert "assina a própria waiver (adult)" in dlg.inner_text()
+    dlg.get_by_role("button", name="Enviar", exact=True).click()
+    a.locator(".convite-waiver .chip", has_text="enviado").wait_for()
+    assert len([t for n, t in _cabecalhos(a) if n == 1]) == 1
+    r = a.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    # o e-mail (falso) leva o link pessoal; o cliente abre no celular, sem conta
+    msg = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines() if "gabi.convite.e2e" in x][-1]
+    assert msg["subject"] == "Sign your URACE waiver"
+    link = re.search(r"https://my\.urace\.us/ops(/portal/invite/\S+)", msg["text"]).group(1)
+    c = navegador.new_page(viewport={"width": 360, "height": 800})
+    c.erros_js = []
+    c.on("pageerror", lambda e: c.erros_js.append(str(e)))
+    c.goto(servidor + link)
+    c.get_by_role("heading", name="Sign the waiver", level=1).wait_for()
+    c.get_by_text("You sign for yourself, Gabi Convite").wait_for()
+    c.locator(".pdf-folha canvas").nth(2).wait_for()
+    assert c.get_by_label("I have read this waiver").is_disabled()
+    c.locator(".pdf-caixa").evaluate("""async e => { for (let y = 0; y <= e.scrollHeight; y += 120) {
+        e.scrollTo(0, y); await new Promise(ok => setTimeout(ok, 60)) } }""")
+    c.get_by_text("All 3 pages read.").wait_for()
+    assert len([t for n, t in _cabecalhos(c) if n == 1]) == 1
+    r = c.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    c.get_by_label("I read and understand English").check()
+    c.get_by_label("I have read this waiver").check()
+    c.get_by_label("I agree to sign electronically").check()
+    c.get_by_label("Your full name").fill("Gabi Convite")
+    c.locator("canvas.portal-assinatura").scroll_into_view_if_needed()
+    quadro = c.locator("canvas.portal-assinatura").bounding_box()
+    c.mouse.move(quadro["x"] + 20, quadro["y"] + 110)
+    c.mouse.down()
+    for i in range(1, 13):
+        c.mouse.move(quadro["x"] + 20 + i * 22, quadro["y"] + 110 - (i % 4) * 18, steps=2)
+    c.mouse.up()
+    assert c.get_by_role("button", name="Sign the waiver").is_disabled(), "sem o código do e-mail não assina"
+    c.get_by_role("button", name="Send me the signing code").click()
+    c.get_by_label("Signing code sent to").wait_for()
+    c.get_by_label("Signing code sent to").fill(codigo_do_email("gabi.convite.e2e@example.com"))
+    c.get_by_role("button", name="Sign the waiver").click()
+    c.get_by_text("Signed. The waiver for Gabi Convite is valid until").wait_for()
+    pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
+    assert pdf.ok and pdf.body().startswith(b"%PDF")
+    # o link não vale duas vezes
+    c.goto(servidor + link)
+    c.get_by_text("This link was already used").wait_for()
+    assert not c.erros_js, c.erros_js
+    # no card: o convite assinado e a waiver junto com as outras
+    abrir(a, servidor, f"/clients/{cid}")
+    a.get_by_role("button", name=re.compile(r"^Waivers \(1\)")).click()
+    a.locator(".convite-waiver .chip", has_text="assinado").wait_for()
+    assert "área do cliente" in a.locator("table.tbl tr", has_text="gabi.convite.e2e@example.com").inner_text()
+    if not estava:
+        a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
     a.close(); c.close()
 
 
@@ -1892,4 +1981,47 @@ def test_card_de_irmao_com_vincular_ao_cliente(servidor, navegador):
     assert card["client"]["sibling_of"] == david["id"] and [i["id"] for i in card["irmaos"]] == [david["id"]]
     assert card["tasks"] == [], "o serviço do David não vai para o card da Sofia"
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+
+
+@pytest.mark.parametrize("largura", [1280, 390])
+def test_agenda_de_vendas_conecta_o_google_calendar_e_mostra_os_compromissos(servidor, navegador, largura):
+    """#220: sem o cliente OAuth na VPS, o botão fica desligado e diz por quê. Com ele, a pessoa entra
+    no "Google" (o falso, local), volta conectada, o retorno vira evento lá e o compromisso dela
+    aparece na Agenda de vendas, sem rolar para o lado no celular."""
+    from datetime import datetime, timedelta, timezone
+    from command_center.tests.google_falso import credenciais_json
+    pg = entrar(navegador, servidor, largura=largura, altura=900)
+    abrir(pg, servidor, "/sales/agenda")
+    botao = pg.get_by_role("button", name="Conectar ao Google Calendar")
+    assert botao.is_disabled()
+    assert pg.get_by_text("O gerente ainda não configurou o acesso ao Google", exact=False).count() >= 1
+
+    amanha = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+    GOOGLE.evento_alheio(f"Reunião e2e {largura}", f"{amanha}T13:00:00-04:00", f"{amanha}T14:00:00-04:00")
+    csrf = next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")
+    r = pg.request.post(servidor + "/api/sales", headers={"X-CSRF": csrf},
+                        data={"name": f"Retorno Google e2e {largura}", "next_at": f"{amanha}T15:00:00Z"})
+    assert r.status == 201
+    open(GOOGLE_CRED, "w").write(credenciais_json())
+    try:
+        abrir(pg, servidor, "/sales/agenda")
+        pg.get_by_role("button", name="Conectar ao Google Calendar").click()
+        pg.wait_for_url(lambda u: u.startswith(GOOGLE.origem), timeout=10000)
+        pg.click("#permitir")                                # a "tela de consentimento" do Google
+        pg.wait_for_url(lambda u: "/ops/sales/agenda" in u and "google=" not in u, timeout=10000)
+        pg.wait_for_load_state("networkidle")
+        assert pg.get_by_text("Conectado como vendedor.teste@gmail.com").count() == 1
+        pg.get_by_text(f"Reunião e2e {largura}").wait_for(timeout=10000)
+        assert any(f"Retorno Google e2e {largura}" in e["summary"] for e in GOOGLE.nossos().values())
+        assert not pg.locator("main").get_by_text("URACE · retorno", exact=False).count()   # o nosso evento não volta duplicado
+        r = pg.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not pg.erros_js and not pg.erros_api
+
+        pg.get_by_role("button", name="Desconectar").click()
+        pg.get_by_role("dialog").get_by_role("button", name="Desconectar").click()
+        pg.get_by_role("button", name="Conectar ao Google Calendar").wait_for(timeout=10000)
+        assert pg.get_by_text(f"Reunião e2e {largura}").count() == 0
+    finally:
+        os.remove(GOOGLE_CRED)
     pg.close()
