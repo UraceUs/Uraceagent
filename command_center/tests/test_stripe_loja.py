@@ -103,7 +103,23 @@ def _evento(sessao, tipo="checkout.session.completed", eid="evt_1", **extra):
     return {"id": eid, "type": tipo, "data": {"object": {**sessao, **extra}}}
 
 
-def _comprar(cli, p, **campos):
+def _conta(cli, nome="Ana Lima", email="ana@exemplo.com"):
+    """#248: comprar pede a conta do site. Abre (ou cria) a conta neste cliente de teste."""
+    cli.post("/ops/api/portal/logout")
+    corpo = {"name": nome, "email": email, "password": "pista-molhada-7", "birth_date": "1980-01-01", "accept_terms": True,
+             "phone": "(407) 555-0100", "address_line1": "100 Main St", "city": "Orlando", "state": "FL", "zip": "32809"}
+    r = cli.post("/ops/api/portal/signup", json=corpo)
+    if r.status_code != 201:
+        r = cli.post("/ops/api/portal/login", json={"email": email, "password": "pista-molhada-7"})
+    assert r.status_code in (200, 201), r.text
+    return r.json()["id"]
+
+
+def _comprar(cli, p, conta=None, **campos):
+    if conta:
+        _conta(cli, *conta)
+    elif not cli.cookies.get("cp_session"):
+        _conta(cli)
     dados = {"produto": p["slug"], "quantidade": "1", "entrega": "retirada", **campos}
     return cli.post("/ops/api/vitrine/checkout", data=dados, follow_redirects=False)
 
@@ -303,7 +319,7 @@ def test_card_existente_so_liga_com_email_e_nome(amb):
     assert tuple(opp) == ("GANHO", ana)
 
     inserir(con, "clients", name="Carlos Souza", email="familia@exemplo.com", status="ACTIVE")
-    sid = _comprar(cli, _simples()).headers["location"].rsplit("/", 1)[1]
+    sid = _comprar(cli, _simples(), conta=("Marina Souza", "familia@exemplo.com")).headers["location"].rsplit("/", 1)[1]   # #248: a conta dela
     _pagar(cli, st, sid, eid="evt_2", nome="Marina Souza", email="familia@exemplo.com")
     opp = dict(con.execute("SELECT * FROM opportunities ORDER BY id DESC").fetchone())
     assert opp["client_id"] is None and opp["stage"] == "FECHAMENTO", "e-mail de outro card: nunca no card de outra pessoa"

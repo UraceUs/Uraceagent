@@ -504,7 +504,7 @@ def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
 # --------------------------------------------- quem aponta para o cliente
 # Tabelas com client_id que ACEITA vazio (repontar ou soltar) e as que EXIGEM
 # cliente (bloqueiam a remoção: alguém agiu ali e não se apaga sem decisão humana).
-LIGACOES_SOLTAVEIS = ("tasks", "waivers", "emails", "invoices", "calendar_events", "ai_workflows", "ai_events", "crm_leads",
+LIGACOES_SOLTAVEIS = ("tasks", "waivers", "emails", "invoices", "calendar_events", "ai_workflows", "ai_events", "crm_leads", "client_events",
                       "portal_accounts", "portal_pilots")
 LIGACOES_OBRIGATORIAS = ("race_invites", "contracts", "waiver_invites")   # #135: o convite vai junto e o link morre (o selo é do card antigo)
 

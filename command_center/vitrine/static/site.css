@@ -439,3 +439,14 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .pedido-passos { padding-left: 20px; display: grid; gap: 6px }
 .pedido-total { max-width: 420px; margin-top: 10px }
 .pedido-refazer { margin: 10px 0 }
+.pedido-cliente { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 14px; margin: 0 }
+.pedido-cliente dt { font-weight: 700; font-size: .85rem; color: var(--cinza); margin-top: 6px }
+.pedido-cliente dd { margin: 0; overflow-wrap: anywhere }
+@media (min-width: 640px) { .pedido-cliente { grid-template-columns: 140px minmax(0, 1fr) } .pedido-cliente dt { margin-top: 0 } }
+/* #248: a chave EN/PT das páginas da compra (as bandeiras, como no painel) */
+.idioma { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin: 0 0 12px }
+.idioma-btn { min-height: 40px; padding: 6px 12px; border: 1.5px solid #d9d9e1; border-radius: 999px; background: #fff;
+  color: var(--tinta); font: 600 .88rem/1 var(--texto); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
+.idioma-btn.on { border-color: var(--tinta); background: var(--tinta); color: #fff }
+.idioma-btn:active { transform: scale(.97) }

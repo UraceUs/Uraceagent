@@ -345,7 +345,7 @@ function Servicos() {
  * expirou, no checkout), cada um com o link da página do pedido para mandar ao cliente. */
 interface PedidoLista { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; criado_em: string
   pago_em: string | null; nome: string | null; email: string | null; telefone: string | null; resumo: string; opp_id: number | null
-  atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string }
+  atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string; idioma?: 'en' | 'pt'; conta?: number | null }
 const POR_PAGINA_PEDIDOS = 30
 
 function Pedidos() {
@@ -366,8 +366,8 @@ function Pedidos() {
           <Chip tone={tomDoPedido(p.status)}>{ESTADO_PEDIDO[p.status] || p.status}</Chip>
           <b className="mono">{usd(p.pago ?? p.total)}</b></div>
         <div className="small" style={{ overflowWrap: 'anywhere' }}>{p.resumo}</div>
-        <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{fmtDateTime(p.criado_em)}{p.email ? ` · ${p.email}` : ''}{p.telefone ? ` · ${p.telefone}` : ''}{p.refeito_de ? tr(" · refeito do pedido #{0}", p.refeito_de) : ''}</div>
-        {(p.status === 'falhou' || p.status === 'expirado') && <div className="small">{p.aviso_em ? (p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente."))
+        <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{fmtDateTime(p.criado_em)}{p.email ? ` · ${p.email}` : ''}{p.telefone ? ` · ${p.telefone}` : ''}{p.refeito_de ? tr(" · refeito do pedido #{0}", p.refeito_de) : ''}{p.idioma === 'pt' ? tr(" · comprou em português") : ''}</div>
+        {p.status !== 'aberto' && <div className="small">{p.aviso_em ? (p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente."))
           : p.aviso_erro ? <span style={{ color: 'var(--crit)' }}>{tr("O aviso não saiu: {0}", p.aviso_erro)}</span> : tr("Aviso por e-mail: saindo.")}</div>}
         {p.atencao && <div className="small" style={{ color: 'var(--crit)' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
         <div className="row wrap" style={{ gap: 8 }}>

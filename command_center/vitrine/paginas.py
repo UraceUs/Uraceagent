@@ -115,7 +115,7 @@ def _rodape():
 </footer>"""
 
 
-def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None, indexar=True):
+def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None, indexar=True, lang="en"):
     canon = f"https://{host}{caminho}"
     robots = '<meta name="robots" content="noindex, nofollow">' if preview() or not indexar else ""
     og_img = (f'<meta property="og:image" content="https://{host}{estatico("img/" + foto)}">'
@@ -123,7 +123,7 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
     # #236: carrinho.js em toda página (o contador do topo); vem antes, a agenda e a loja usam o que ele expõe
     js = "".join(f'<script src="{estatico(s)}" defer></script>' for s in ("carrinho.js", *scripts))
     return f"""<!doctype html>
-<html lang="en">
+<html lang="{"pt-BR" if lang == "pt" else "en"}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">

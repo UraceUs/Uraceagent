@@ -128,7 +128,7 @@ export function Ext({ href, children }: { href?: string | null; children: ReactN
 
 
 /** Nome legível de cada sistema, para o link ficar ao lado do SEU item — nunca solto no topo. */
-export const SYS_NAME: Record<string, string> = { asana: tr("Asana"), docusign: tr("DocuSign"), gmail: tr("Gmail"), quickbooks: tr("QuickBooks"), qbo: tr("QuickBooks"), brain: tr("Cérebro"), kommo: tr("Kommo") }
+export const SYS_NAME: Record<string, string> = { site: tr("Página do pedido"), asana: tr("Asana"), docusign: tr("DocuSign"), gmail: tr("Gmail"), quickbooks: tr("QuickBooks"), qbo: tr("QuickBooks"), brain: tr("Cérebro"), kommo: tr("Kommo") }
 export function SysLink({ links, one }: { links?: { system: string; external_id: string; deep_link: string | null }[] | null; one?: boolean }) {
   const ls = (links || []).filter(l => l.deep_link)
   if (ls.length === 0) return null
