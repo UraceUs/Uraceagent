@@ -105,7 +105,8 @@ No mês, 🏁 marca dia com corrida, e o número mostra quantos serviços e sess
 ### O que tem em cada dia
 
 - **Checklists do dia:** os checklists gerais do dia de treino ou serviço.
-- **Serviços:** cada serviço marcado no **Asana** para aquele dia, com o nome do piloto.
+- **Serviços:** cada serviço marcado no **Asana** para aquele dia, com o nome do piloto. Serviço
+  cancelado ou excluído no Asana não aparece: o calendário mostra só o que está ativo.
   - **Card** abre o card do cliente.
   - **Peças** abre o balcão já com esse cliente escolhido (capítulo 4).
   - Embaixo, os checklists daquele kart.

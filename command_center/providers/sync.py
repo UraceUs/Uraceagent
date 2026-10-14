@@ -16,7 +16,7 @@ import os
 import re
 from datetime import datetime
 
-from command_center.db import agora, atualizar, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, inserir, todos, um
 from command_center.providers import NaoConectado, REPO, chamar
 from command_center.providers import agenda_asana, identidade
 
@@ -287,6 +287,37 @@ def sync_asana_completo(con, progresso=None):
         return {"ok": False, "motivo": str(e)[:300], "tarefas": tarefas}
 
 
+MOTIVO_ASANA = "excluída no Asana"
+MAX_CONFERIR = 25            # conferências por rodada: cada uma é uma chamada ao Asana
+
+
+def conferir_sumidas(con, inicio, limite=MAX_CONFERIR):
+    """Dono, 14/10 (#227): "foram excluídas do Asana, mas precisam ser removidas do calendário".
+
+    A varredura só atualiza o que encontra; tarefa apagada no Asana nunca mais era tocada e
+    seguia "aberta" no painel. Aqui, a tarefa aberta que não apareceu nesta varredura é
+    conferida uma a uma: se o Asana responde 404, ela é marcada como excluída lá (a mesma marca
+    do #219: some do calendário, do balcão, dos contadores, do espelho e da IA, e fica no
+    histórico do card). Qualquer outra resposta não decide nada: fica como está."""
+    marcadas = 0
+    for t in todos(con, """SELECT t.id, t.title, t.due_on, t.client_id, l.external_id AS gid FROM tasks t
+                             JOIN entity_links l ON l.entity_type='task' AND l.entity_id=t.id AND l.system='asana'
+                            WHERE t.project='U-RACE' AND t.status='open' AND t.deleted_at IS NULL
+                              AND COALESCE(t.synced_at,'') < ? ORDER BY t.due_on DESC LIMIT ?""", (inicio, limite)):
+        try:
+            chamar("asana", "asana_tarefa", gid=t["gid"])
+            continue                                   # existe (mudou de projeto, por exemplo): não mexe
+        except Exception as e:
+            if "HTTP 404" not in str(e):
+                continue
+        con.execute("UPDATE tasks SET deleted_at=?, deleted_by=NULL, deleted_reason=? WHERE id=? AND deleted_at IS NULL",
+                    (agora(), MOTIVO_ASANA, t["id"]))
+        auditar(con, "task.deleted", "system", entity_type="task", entity_id=t["id"],
+                detail={"titulo": t["title"], "data": t["due_on"], "client_id": t["client_id"], "motivo": MOTIVO_ASANA, "asana": t["gid"]})
+        marcadas += 1
+    return marcadas
+
+
 def sync_asana(con):
     """Espelha o quadro U-RACE inteiro (menos "Matt tasks").
 
@@ -351,6 +382,8 @@ def sync_asana(con):
                                                  subtasks_done=sum(1 for s in subs if s.get("concluida")),
                                                  **_resp_da_descricao(d), **comum))
                 tarefas += 1
+        # tarefa que sumiu do quadro: o Asana diz se foi excluída (404) — dono, 14/10 (#227)
+        sumidas = conferir_sumidas(con, inicio)
         # coluna RACES vira a lista de corridas (para convidar os Pro Racing Drivers)
         sincronizar_corridas(con)
         # tarefa de dia passado ainda aberta: a IA confere e move sozinha (evento, uma vez por tarefa)
@@ -364,8 +397,9 @@ def sync_asana(con):
         identidade.limpar_nomes_de_servico(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
-        _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos, {unidos} unidos, {limpos} não-clientes removidos", inicio)
-        return {"ok": True, "tarefas": tarefas, "clientes_novos": novos, "colunas": len(secoes), "unidos": unidos, "removidos": limpos}
+        _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos, {unidos} unidos, {limpos} não-clientes removidos, {sumidas} excluídas no Asana", inicio)
+        return {"ok": True, "tarefas": tarefas, "clientes_novos": novos, "colunas": len(secoes), "unidos": unidos, "removidos": limpos,
+                "excluidas_no_asana": sumidas}
     except NaoConectado as e:
         _marca(con, "asana", False, 0, f"não conectado: {e}", inicio, desconectado=True)
         return {"ok": False, "motivo": "not connected"}

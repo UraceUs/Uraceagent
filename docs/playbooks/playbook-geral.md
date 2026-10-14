@@ -138,7 +138,7 @@ pedem acesso de operador.
 |---|---|---|---|---|
 | Hoje | **Hoje** | `/ops/` | a abertura do dia: pista de hoje, o que precisa de gente, o que espera aprovação, waivers abertas, próximos 7 dias, sistemas | todos |
 | Hoje | **Precisa de atenção** | `/ops/attention` | a fila do que a IA não resolveu sozinha, do mais grave para o menos | todos |
-| Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists | todos |
+| Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists. Mostra **só o ativo**: serviço cancelado ("CANCELLED - …") ou excluído não aparece | todos |
 | Comercial | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
 | Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação | operador+ |
 | Comercial | **Chat do Kommo** | `/ops/crm/chat` | a conversa do lead dentro do painel | todos |
@@ -166,7 +166,7 @@ pedem acesso de operador.
 | Administrativo | **QuickBooks** | `/ops/quickbooks` | invoices e pagamentos. A IA prepara; enviar pede aprovação | todos veem a tela; financeiro é gerente+ |
 | Administrativo | **DocuSign** | `/ops/docusign` | as waivers. Entregue não é assinada; devolvida é e-mail errado | todos |
 | Administrativo | **Gmail** | `/ops/gmail` | o que a triagem da IA não decidiu | todos |
-| Administrativo | **Asana** | `/ops/asana` | o quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services | todos |
+| Administrativo | **Asana** | `/ops/asana` | o **espelho** do quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services. Tarefa excluída no Asana sai daqui na sincronia seguinte (até 15 min) e fica no card do cliente como "excluída no Asana" | todos |
 | Administrativo | **Integrações** | `/ops/integrations` | o estado de cada sistema; "Verificar agora"; atualizar o sistema | todos (atualizar: administrador) |
 | Administrativo | **Auditoria** | `/ops/audit` | o registro imutável de tudo | gerente+ |
 | Administrativo | **Políticas da IA** | `/ops/policies` | o que a IA faz sozinha, o que pede confirmação, aprovação ou está bloqueado | administrador |
