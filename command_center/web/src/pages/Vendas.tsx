@@ -17,6 +17,7 @@ import { diaLocal, fmtDate, fmtDateTime, fmtTime, hojeLocal, money } from '../co
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
+import { ESTADO_PEDIDO, tomDoPedido } from '../components/pedidoSite'
 import { ConexaoGoogle, useStatusGoogle, type EventoGoogle } from '../components/GoogleAgenda'
 import { Bolha } from './AI'
 import type { AiCommand, Client } from '../api/types'
@@ -49,7 +50,7 @@ interface LinhaPedido { id: number | null; tipo: 'produto' | 'sessao'; nome: str
   data: string | null; turno: string | null; piloto: string | null; status: string | null; agendamento: number | null; card: number | null; nota: string | null; desta_venda: boolean }
 /** #236: o pedido do site (carrinho no Stripe ou loja) com as linhas, no detalhe da venda. */
 interface PedidoSite { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; pago_em: string | null; entrega: string
-  recibo_qbo: string | null; erro_qbo: string | null; atencao: string | null; linhas: LinhaPedido[] }
+  recibo_qbo: string | null; erro_qbo: string | null; atencao: string | null; linhas: LinhaPedido[]; link?: string }
 interface Detalhe { oportunidade: Opp; eventos: Evento[]; pedido?: PedidoSite | null; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[]; tabela?: Tabela | null; pode_liberar?: boolean; card?: CardDoFechamento | null }
 interface Agenda { retornos: (Opp & { atrasado: boolean })[]; ligacoes_hoje: { at: string; title: string; name: string }[] }
 
@@ -308,10 +309,14 @@ export function Oportunidade() {
 const TURNO_PT: Record<string, string> = { manha: tr("manhã"), tarde: tr("tarde"), dia: tr("dia todo") }
 
 function PedidoDoSite({ p }: { p: PedidoSite }) {
+  const toast = useToast()
   return <div className="card card-b stack" style={{ gap: 8 }}>
     <div className="row wrap" style={{ gap: 8 }}><h2 className="h2" style={{ margin: 0 }}>{tr("Pedido do site #{0}", p.id)}</h2>
-      <Chip tone={p.status === 'pago' ? 'ok' : p.status === 'falhou' || p.status === 'expirado' ? 'crit' : 'warn'}>{p.status}</Chip>
+      <Chip tone={tomDoPedido(p.status)}>{ESTADO_PEDIDO[p.status] || p.status}</Chip>
       {p.recibo_qbo && <Chip tone="outline">{tr("recibo {0}", p.recibo_qbo)}</Chip>}</div>
+    {p.link && <div className="row wrap" style={{ gap: 8 }}>
+      <a className="btn sm ghost" href={p.link} target="_blank" rel="noreferrer">{tr("Página do pedido ↗")}</a>
+      <button className="btn sm ghost" onClick={() => navigator.clipboard?.writeText(p.link!).then(() => toast(tr("Link do pedido copiado: mande ao cliente."), 'ok'))}>{tr("Copiar o link")}</button></div>}
     {p.atencao && <Banner tone="crit"><b>{tr("Resolver:")}</b> {p.atencao}</Banner>}
     {p.erro_qbo && <div className="small" style={{ color: 'var(--crit)' }}>{tr("QuickBooks: {0}", p.erro_qbo)}</div>}
     {p.linhas.map((l, i) => <div key={l.id ?? i} className="stack" style={{ gap: 2, paddingTop: 6, borderTop: '1px solid var(--glass-line)', opacity: l.desta_venda ? 1 : .6 }}>

@@ -427,3 +427,15 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .carrinho-recibo { list-style: none; padding: 0; display: grid; gap: 10px }
 .carrinho-recibo li { display: grid; gap: 2px; border-bottom: 1px solid #e3e3ea; padding-bottom: 10px }
 .carrinho-sem-vaga { color: var(--aviso); font-weight: 600 }
+/* #245: a página de cada pedido (pago, processando, falhou, expirou) */
+.aviso-info { background: #eef3fb; border: 1px solid #c7d6ef; color: #1b3a66; border-radius: var(--raio); padding: 14px 16px; margin: 8px 0 }
+.pedido-pagina h2 { font-size: 1.2rem; margin: 22px 0 10px }
+.pedido-pagina .carrinho-recibo { padding-left: 0; margin: 0 }
+.pedido-pagina .carrinho-recibo li { overflow-wrap: anywhere; list-style: none }
+.pedido-pagina .carrinho-total { column-gap: 0 }
+.pedido-pagina .carrinho-total dd { padding-left: 12px }
+.pedido-pagina a:not(.btn) { display: inline-flex; min-height: 40px; align-items: center }
+.pedido-passo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px }
+.pedido-passos { padding-left: 20px; display: grid; gap: 6px }
+.pedido-total { max-width: 420px; margin-top: 10px }
+.pedido-refazer { margin: 10px 0 }

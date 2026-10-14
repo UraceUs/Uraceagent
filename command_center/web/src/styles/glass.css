@@ -844,13 +844,33 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .sdr-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .sdr-lista li{display:flex;gap:10px;justify-content:space-between;border-top:1px solid var(--rule);padding-top:10px;min-width:0;flex-wrap:wrap}
 .sdr-form{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--rule);padding-top:12px}
-/* Testar o robô (14/10): conversa de treino, balões como no Instagram */
-.sdr-teste{display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto;padding:10px;border:1px solid var(--rule);border-radius:14px}
-.sdr-teste-turno{display:flex;flex-direction:column;gap:4px;max-width:85%;min-width:0}
+/* Testar o robô (14/10): conversa de treino com cara de Instagram */
+.sdr-play{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:20px;align-items:start}
+@media(max-width:900px){.sdr-play{grid-template-columns:1fr}}
+.sdr-fone{display:flex;flex-direction:column;border:1px solid var(--glass-line-2);border-radius:22px;background:var(--surface);overflow:hidden;min-width:0}
+.sdr-fone-h{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--glass-line);background:var(--glass-2)}
+.sdr-fone-n{font-weight:700}
+.sdr-av{width:34px;height:34px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;color:#fff;background:var(--brand);flex:0 0 auto}
+.sdr-teste{display:flex;flex-direction:column;gap:12px;height:440px;overflow-y:auto;padding:16px 14px;scroll-behavior:smooth}
+.sdr-vazio{margin:auto;display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ink-2);text-align:center;max-width:260px}
+.sdr-teste-turno{display:flex;flex-direction:column;gap:4px;max-width:80%;min-width:0}
 .sdr-teste-turno.voce{align-self:flex-end;align-items:flex-end}
 .sdr-teste-turno.robo{align-self:flex-start;align-items:flex-start}
-.sdr-balao{padding:8px 12px;border-radius:16px;background:var(--rule);overflow-wrap:anywhere;white-space:pre-wrap}
-.sdr-teste-turno.voce .sdr-balao{background:var(--brand);color:#fff}
+.sdr-balao{padding:9px 14px;border-radius:20px;background:var(--glass-2);border:1px solid var(--glass-line);overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.4}
+.sdr-teste-turno.robo .sdr-balao{border-bottom-left-radius:6px}
+.sdr-teste-turno.voce .sdr-balao{background:var(--brand);border-color:transparent;color:#fff;border-bottom-right-radius:6px}
+.sdr-balao.mudo{font-style:italic;color:var(--ink-2)}
+.sdr-hora{font-size:11px;color:var(--ink-2);padding:0 6px}
+.sdr-info{display:flex;flex-wrap:wrap;gap:6px;max-width:100%}
+.sdr-info .chip{max-width:100%;white-space:normal;text-align:left}
+.sdr-digitando{display:inline-flex;gap:4px;align-items:center;padding:12px 14px}
+.sdr-digitando i{width:7px;height:7px;border-radius:50%;background:var(--ink-2);animation:sdr-pulo 1.2s infinite ease-in-out}
+.sdr-digitando i:nth-child(2){animation-delay:.15s}.sdr-digitando i:nth-child(3){animation-delay:.3s}
+@keyframes sdr-pulo{0%,60%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){.sdr-digitando i{animation:none}}
+.sdr-compor{display:flex;gap:8px;padding:10px;border-top:1px solid var(--glass-line);background:var(--glass-2)}
+.sdr-compor .inp{border-radius:999px;flex:1 1 auto;width:auto;min-width:0}
+.sdr-compor .btn{border-radius:999px;flex:0 0 auto}
 .sdr-form textarea,.sdr-kommo textarea{width:100%;min-width:0;font:inherit}
 .sdr-kommo{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--accent);background:var(--accent-wash)}
 .sdr-kommo textarea{font-family:var(--font-mono,monospace);font-size:12px}

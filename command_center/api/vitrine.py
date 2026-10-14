@@ -14,6 +14,7 @@ menos: só dia, turno, aberto ou não e vagas. Nunca o motivo de um dia fechado,
 Contato e pedido da loja (#164) entram no funil de Vendas do Command Center como oportunidade
 (origem "Site") e avisam a equipe por e-mail — tudo conectado por ali, como o dono pediu.
 """
+import hmac
 import json
 import os
 import re
@@ -432,6 +433,12 @@ async def stripe_webhook(request: Request, background: BackgroundTasks, con: sql
     resultado, pago = stripe_loja.receber_evento(con, evento)
     if pago:
         background.add_task(stripe_loja.avisar_e_registrar, pago)
+    elif resultado in ("falhou", "expirado"):               # #245: o aviso do falhou/expirou, uma vez só
+        from command_center.db import um
+        from command_center.providers import pedido_site
+        ev = um(con, "SELECT order_id FROM stripe_events WHERE id=?", (str(evento["id"]),))
+        if ev and ev["order_id"]:
+            background.add_task(pedido_site.avisar_resultado_bg, ev["order_id"])
     return JSONResponse({"recebido": True, "resultado": resultado}, headers={"Cache-Control": "no-store"})
 
 
@@ -506,47 +513,153 @@ async def carrinho_checkout(request: Request, con: sqlite3.Connection = Depends(
     return _json({"ok": True, "url": url, "order": oid})
 
 
-@r.get("/cart/thanks/", include_in_schema=False)
-def carrinho_obrigado(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
-    """A volta do Stripe: confere a sessão (se o webhook atrasar, nada se perde) e mostra o pedido."""
-    from command_center.db import um
-    from command_center.providers import carrinho, stripe_loja
-    if not e_do_site(request):
-        raise HTTPException(404)
-    sid = (request.query_params.get("session_id") or "")[:200]
-    pedido = None
-    if re.fullmatch(r"cs_[A-Za-z0-9_]+", sid):
-        try:
-            pedido, agora_pago = stripe_loja.conferir_sessao(con, sid)
-            if agora_pago:
-                background.add_task(stripe_loja.avisar_e_registrar, pedido["id"])
-        except stripe_loja.ErroStripe:
-            pedido = um(con, "SELECT * FROM store_orders WHERE stripe_session_id=?", (sid,))
-    return _sem_cache(ps.carrinho_obrigado(host_de(request), pedido, carrinho.itens(con, pedido["id"]) if pedido else []))
-
-
-def _sem_cache(html):
-    resp = _html(html)
+def _sem_cache(html, status=200):
+    resp = _html(html, status=status)
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
 
-@r.get("/store/thanks/", include_in_schema=False)
-def loja_obrigado(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+# ------------------------------------------------------------------ a página de cada pedido (#245)
+def _conferir(con, o, background):
+    """Pedido ainda sem resultado final: pergunta ao Stripe (se o webhook atrasar, nada se perde)."""
     from command_center.providers import stripe_loja
+    if not o or o["status"] not in ("aberto", "aguardando") or not o["stripe_session_id"] or not stripe_loja.ligado():
+        return o
+    try:
+        novo, agora_pago = stripe_loja.conferir_sessao(con, o["stripe_session_id"])
+    except stripe_loja.ErroStripe:
+        return o
+    if agora_pago:
+        background.add_task(stripe_loja.avisar_e_registrar, novo["id"])
+    return novo or o
+
+
+def _pagina_pedido(request, con, o, caminho, limpar=False, erro=None, status=200):
+    """O mesmo desenho em `/order/<token>/` e na volta do Stripe. Sem cache e sem Referer: o link é pessoal."""
+    from command_center.api import portal as api_portal
+    from command_center.providers import pedido_site
+    ref = pedido_site.refeito(con, o)
+    html = ps.pedido_pagina(host_de(request), o, ls=pedido_site.linhas(con, o), caminho=caminho, token=pedido_site.token(o),
+                            limpar=limpar, refeito=(ref["id"], pedido_site.caminho(ref)) if ref else None, erro=erro,
+                            csrf=request.cookies.get(api_portal.COOKIE_CSRF, ""))
+    resp = _sem_cache(html, status)
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    return resp
+
+
+def _volta_do_stripe(request, background, con):
+    from command_center.db import um
+    sid = (request.query_params.get("session_id") or "")[:200]
+    if not re.fullmatch(r"cs_[A-Za-z0-9_]+", sid):
+        return None
+    o = um(con, "SELECT * FROM store_orders WHERE stripe_session_id=?", (sid,))
+    return _conferir(con, o, background)
+
+
+@r.get("/cart/thanks/", include_in_schema=False)
+def carrinho_obrigado(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+    """A volta do Stripe: confere a sessão e mostra a página do pedido (#245), com o estado dele."""
     if not e_do_site(request):
         raise HTTPException(404)
-    sid = (request.query_params.get("session_id") or "")[:200]
-    pedido = None
-    if re.fullmatch(r"cs_[A-Za-z0-9_]+", sid):
-        try:
-            pedido, agora_pago = stripe_loja.conferir_sessao(con, sid)
-            if agora_pago:
-                background.add_task(stripe_loja.avisar_e_registrar, pedido["id"])
-        except stripe_loja.ErroStripe:
-            from command_center.db import um
-            pedido = um(con, "SELECT * FROM store_orders WHERE stripe_session_id=?", (sid,))
-    return _sem_cache(ps.obrigado(host_de(request), pedido))
+    o = _volta_do_stripe(request, background, con)
+    if not o:
+        return _sem_cache(ps.carrinho_obrigado(host_de(request), None))
+    return _pagina_pedido(request, con, o, "/cart/thanks/", limpar=o["status"] in ("pago", "aguardando"))
+
+
+@r.get("/store/thanks/", include_in_schema=False)
+def loja_obrigado(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+    if not e_do_site(request):
+        raise HTTPException(404)
+    o = _volta_do_stripe(request, background, con)
+    if not o:
+        return _sem_cache(ps.obrigado(host_de(request), None))
+    return _pagina_pedido(request, con, o, "/store/thanks/")
+
+
+def _pedido_do_token(request, con, token):
+    from command_center.providers import pedido_site
+    if not e_do_site(request):
+        raise HTTPException(404)
+    return pedido_site.achar(con, token)
+
+
+def _nao_achou(request):
+    resp = _sem_cache(paginas.nao_achou(host_de(request)), status=404)
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    return resp
+
+
+@r.get("/order/{token}/", include_in_schema=False)
+def pedido_pagina(token: str, request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+    """O link pessoal do pedido: pago, confirmando, falhou, expirou ou ainda no checkout."""
+    o = _pedido_do_token(request, con, token)
+    if not o:
+        return _nao_achou(request)
+    o = _conferir(con, o, background)
+    from command_center.providers import pedido_site
+    return _pagina_pedido(request, con, o, pedido_site.caminho(o))
+
+
+@r.get("/order/{token}/cart/", include_in_schema=False)
+def pedido_restaurar(token: str, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """"Restore cart": o carrinho com as escolhas do pedido (o carrinho.js junta ao deste navegador e o
+    servidor recalcula preço e vaga). Pedido pago não restaura: volta para a página dele."""
+    from command_center.providers import pedido_site, stripe_loja
+    o = _pedido_do_token(request, con, token)
+    if not o:
+        return _nao_achou(request)
+    if o["status"] in ("pago", "aguardando"):
+        return RedirectResponse(pedido_site.caminho(o), status_code=303)
+    resp = _sem_cache(ps.carrinho(host_de(request), stripe=stripe_loja.ligado(),
+                                  restaurar=(o["id"], pedido_site.itens_do_carrinho(con, o), o["delivery"])))
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    return resp
+
+
+@r.post("/order/{token}/retry", include_in_schema=False)
+async def pedido_de_novo(token: str, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """"Try again": um checkout novo com as mesmas escolhas, preço e vaga recalculados (`carrinho.cotar`).
+    Sessão pede a conta do pedido aberta neste navegador (e o CSRF dela, no formulário); faltando a conta,
+    ou se algo mudou (vaga, estoque, preço que já não fecha), vai para o carrinho restaurado, que mostra o
+    porquê. O pedido velho fica como está (falhou/expirou): nada foi cobrado nele."""
+    from command_center.api import portal as api_portal
+    from command_center.providers import carrinho, pedido_site, stripe_loja
+    o = _pedido_do_token(request, con, token)
+    if not o:
+        return _nao_achou(request)
+    volta = pedido_site.caminho(o)
+    if o["status"] in ("pago", "aguardando") or pedido_site.refeito(con, o):
+        return RedirectResponse(volta, status_code=303)
+    restaurar = RedirectResponse(volta + "cart/", status_code=303)
+    if not stripe_loja.ligado():
+        return restaurar
+    if _estourou(_ip(request)):
+        return _pagina_pedido(request, con, o, volta, erro="Too many requests in a row. Please try again in a few minutes.",
+                              status=429)
+    c = await _campos(request)
+    conta = api_portal.conta_do_cookie(request, con)
+    csrf = request.cookies.get(api_portal.COOKIE_CSRF, "")
+    if conta and not (csrf and hmac.compare_digest(csrf, c.get("csrf", ""))):
+        conta = None                                    # sem o CSRF da conta, segue como visitante
+    itens = pedido_site.itens_do_carrinho(con, o)
+    if not itens or (pedido_site.tem_sessao(con, o) and (not conta or conta != o["account_id"])):
+        return restaurar
+    try:
+        novo, url = carrinho.criar_checkout(con, itens, o["delivery"], conta, _origem(request), host_de(request))
+    except carrinho.ErroCarrinho:
+        return restaurar
+    except stripe_loja.ErroStripe as e:
+        import logging
+        logging.getLogger("urace.loja").warning("checkout de novo falhou: %s", str(e)[:200])
+        return _pagina_pedido(request, con, o, volta, erro="We couldn’t open the secure checkout just now. Please try again in a minute.",
+                              status=502)
+    from command_center.db import atualizar, auditar
+    atualizar(con, "store_orders", novo, retry_of=o["id"])
+    auditar(con, "store.retry", f"portal:{conta}" if conta else "site", entity_type="store_order", entity_id=novo,
+            detail={"de": o["id"], "estado_antes": o["status"]})
+    con.commit()
+    return RedirectResponse(url, status_code=303)
 
 
 @r.get("/store/cancelled/", include_in_schema=False)

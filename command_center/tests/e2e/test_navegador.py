@@ -41,7 +41,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
-         "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
+         "/site/waiver", "/site/pedidos", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos", "/atendimento", "/atendimento/1"]
 
@@ -105,6 +105,21 @@ class _StripeFalso:
 
 
 STRIPE = None
+WHSEC_E2E = "whsec_e2e_teste_245"                       # #245: o segredo do webhook, só deste teste
+
+
+def webhook_stripe(site, sessao, tipo, eid, **extra):
+    """#245: o evento do Stripe assinado como o de verdade, direto no webhook do servidor do teste."""
+    import hashlib
+    import hmac
+    import json
+    corpo = json.dumps({"id": eid, "type": tipo, "data": {"object": {**sessao, **extra}}}).encode()
+    t = str(int(time.time()))
+    sig = hmac.new(WHSEC_E2E.encode(), t.encode() + b"." + corpo, hashlib.sha256).hexdigest()
+    req = urllib.request.Request(site + "/ops/api/stripe/webhook", data=corpo, method="POST",
+                                 headers={"Stripe-Signature": f"t={t},v1={sig}", "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.load(r)["resultado"]
 GOOGLE = None
 GOOGLE_CRED = None
 
@@ -132,7 +147,7 @@ def servidor(tmp_path_factory):
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
                CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de parts.urace.us
-               STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
+               STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_WEBHOOK_SECRET=WHSEC_E2E, STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM",  # 32 bytes de teste
                CC_GOOGLE_BASE=GOOGLE.origem, CC_GOOGLE_WEB_CREDENTIALS=GOOGLE_CRED,
                CC_GOOGLE_REDIRECT_URI=f"http://127.0.0.1:{porta}/ops/api/google/callback")
@@ -1353,7 +1368,7 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     assert v.title() == "Stripe Checkout (test)"
     assert f"US$ {produto['price']:.2f}" in v.content()
     v.get_by_role("link", name="Pay").click()
-    v.get_by_role("heading", name="Thank you! Your order is confirmed").wait_for()
+    v.get_by_role("heading", name="Payment confirmed", level=1).wait_for()   # #245: a página do pedido
     assert "/store/thanks/?session_id=cs_test_e2e" in v.url
     v.close()
     assert not erros, erros
@@ -2079,7 +2094,7 @@ def test_carrinho_sessao_e_produto_um_checkout_no_stripe_e_o_pedido_no_painel(se
         assert v.locator(".linha", has_text="Refundable security deposit").count() == 1
         assert v.locator(".linha", has_text="Caio Carrinho").count() == 1
         v.get_by_role("link", name="Pay").click()
-        v.get_by_role("heading", name="Thank you! Your order is confirmed").wait_for()
+        v.get_by_role("heading", name="Payment confirmed", level=1).wait_for()   # #245: a página do pedido
         assert "/cart/thanks/?session_id=cs_test_e2e" in v.url
         assert v.get_by_text("Booked.").count() == 1
         assert v.evaluate("JSON.parse(localStorage.getItem('urace.carrinho') || '{}').itens.length") == 0, "o carrinho virou pedido"
@@ -2143,3 +2158,99 @@ def test_agenda_de_vendas_conecta_o_google_calendar_e_mostra_os_compromissos(ser
     finally:
         os.remove(GOOGLE_CRED)
     pg.close()
+
+
+# ------------------------------------------------------------- uma página para cada resultado do Stripe (#245)
+def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, navegador):
+    """#245, dono 14/10: "monte páginas para cada um no site" (os 4 eventos do webhook do Stripe). No celular:
+    processando → não passou (e-mail com o link; "Try again" abre um checkout novo) → expirou ("Restore cart"
+    põe o item de volta no carrinho) → pago. Cada página com um h1, nada rola para o lado em 390 e 360 px e
+    os botões têm 40 px. O painel mostra o pedido com o estado e o link."""
+    import json
+
+    from command_center.vitrine import paginas_site
+    site = servidor.removesuffix("/ops")
+    produto = next(p for p in paginas_site.dados("produtos.json")["produtos"]
+                   if not p["variations"] and p["price"] and p["in_stock"] and p["images"])
+    quem = {"email": "ivo.teste.e2e@example.com", "name": "Ivo Teste", "phone": "+14075550148"}
+    v = navegador.new_page(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-For": "10.2.45.1"})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+
+    def confere(h1):
+        v.get_by_role("heading", name=h1, level=1).wait_for()
+        assert v.locator('meta[name="robots"]').get_attribute("content").startswith("noindex")
+        for largura in (390, 360):
+            v.set_viewport_size({"width": largura, "height": 800})
+            assert len([t for n, t in _cabecalhos(v) if n == 1]) == 1
+            r = v.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (h1, largura, r)
+            menor = v.evaluate("""() => [...document.querySelectorAll('main .btn, main button, .pedido-pagina a')]
+                .filter(e => e.offsetParent !== null).map(e => [e.getBoundingClientRect().height, e.innerText.trim().slice(0, 30)])
+                .filter(([h]) => h < 40)""")
+            assert not menor, (h1, largura, menor)
+        v.set_viewport_size({"width": 390, "height": 844})
+
+    def sessao_do_stripe():
+        v.wait_for_url(STRIPE.origem + "/pay/**")
+        return STRIPE.sessoes[v.url.rstrip("/").rsplit("/", 1)[1]]
+
+    # 1 · Buy now → o Checkout (o falso) → o meio de pagamento confirma depois: "Payment processing"
+    v.goto(site + f"/store/p/{produto['slug']}/")
+    v.get_by_role("button", name="Buy now").click()
+    s1 = sessao_do_stripe()
+    assert webhook_stripe(site, s1, "checkout.session.completed", "evt_e2e_245a", customer_details=quem) == "aguardando"
+    v.goto(site + f"/store/thanks/?session_id={s1['id']}")
+    confere("Payment processing")
+    v.get_by_role("link", name=re.compile(r"^order #\d+$")).click()
+    v.wait_for_url(re.compile(r".*/order/\d+-[A-Za-z0-9_-]{27}/$"))
+    pagina = v.url.removeprefix(site)
+    confere("Payment processing")
+    assert v.title() == "Payment processing | URACE"
+    # 2 · async_payment_failed: "Payment didn't go through", o e-mail com o link e "Try again" → checkout novo
+    assert webhook_stripe(site, s1, "checkout.session.async_payment_failed", "evt_e2e_245b", customer_details=quem) == "falhou"
+    v.reload()
+    confere("Payment didn't go through")
+    assert v.get_by_text("nothing was charged", exact=False).count() >= 1
+    avisos = []
+    for _ in range(50):
+        avisos = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
+        avisos = [x for x in avisos if x["to"] == quem["email"]]
+        if avisos:
+            break
+        time.sleep(0.1)
+    assert len(avisos) == 1 and "didn't go through" in avisos[0]["subject"] and pagina in avisos[0]["text"]
+    v.get_by_role("button", name="Try again").click()
+    s2 = sessao_do_stripe()
+    assert f"US$ {produto['price']:.2f}" in v.content(), "o preço do catálogo, recalculado"
+    # 3 · o checkout novo expira: "Checkout expired" e "Restore cart" põe o item de volta no carrinho
+    assert webhook_stripe(site, s2, "checkout.session.expired", "evt_e2e_245c", customer_details={"email": quem["email"]}) == "expirado"
+    v.goto(site + f"/cart/thanks/?session_id={s2['id']}")
+    confere("Checkout expired")
+    v.get_by_role("link", name="Restore cart").click()
+    v.wait_for_url("**/cart/")
+    v.get_by_role("heading", name="Your cart", level=1).wait_for()
+    pagar = v.get_by_role("button", name=re.compile(r"^Checkout · \$"))
+    pagar.wait_for()
+    assert v.evaluate("JSON.parse(localStorage.getItem('urace.carrinho') || '{}').itens.length") == 1
+    r = v.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    # 4 · paga: "Payment confirmed"
+    pagar.click()
+    sessao_do_stripe()
+    v.get_by_role("link", name="Pay").click()
+    confere("Payment confirmed")
+    # 5 · token mexido: 404
+    assert v.request.get(site + pagina[:-6] + "AAAAA/").status == 404
+    v.close()
+    assert not erros, erros
+    # 6 · o painel: o pedido com o estado e o link da página, no celular também
+    adm = entrar(navegador, servidor, email="italo@urace.us", largura=390, altura=844)
+    abrir(adm, servidor, "/site/pedidos")
+    adm.get_by_role("button", name="Não passou").click()
+    adm.get_by_text("pagamento não passou").first.wait_for()
+    assert adm.locator(f'a[href$="{pagina}"]').count() == 1
+    r = adm.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not adm.erros_js and not adm.erros_api, (adm.erros_js, adm.erros_api)
+    adm.close()
