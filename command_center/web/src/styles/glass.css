@@ -844,6 +844,13 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .sdr-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
 .sdr-lista li{display:flex;gap:10px;justify-content:space-between;border-top:1px solid var(--rule);padding-top:10px;min-width:0;flex-wrap:wrap}
 .sdr-form{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--rule);padding-top:12px}
+/* Testar o robô (14/10): conversa de treino, balões como no Instagram */
+.sdr-teste{display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto;padding:10px;border:1px solid var(--rule);border-radius:14px}
+.sdr-teste-turno{display:flex;flex-direction:column;gap:4px;max-width:85%;min-width:0}
+.sdr-teste-turno.voce{align-self:flex-end;align-items:flex-end}
+.sdr-teste-turno.robo{align-self:flex-start;align-items:flex-start}
+.sdr-balao{padding:8px 12px;border-radius:16px;background:var(--rule);overflow-wrap:anywhere;white-space:pre-wrap}
+.sdr-teste-turno.voce .sdr-balao{background:var(--brand);color:#fff}
 .sdr-form textarea,.sdr-kommo textarea{width:100%;min-width:0;font:inherit}
 .sdr-kommo{display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--accent);background:var(--accent-wash)}
 .sdr-kommo textarea{font-family:var(--font-mono,monospace);font-size:12px}

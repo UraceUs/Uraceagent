@@ -312,6 +312,70 @@ def _tirar_da_rajada(lead_id: int, msg_id) -> None:
             _rajada.pop(lead_id, None)
 
 
+# ------------------------------------------------------------------ teste no painel
+# Playground (14/10): o comercial conversa com o robô pela página Robô SDR do
+# painel, sem Instagram, sem lead e sem zerar nada no VPS. Mesma persona, mesmas
+# regras de rota e a mesma guarda de estilo da resposta real; NADA vai ao Kommo,
+# NADA é enviado a ninguém e as diretivas [[...]] são só mostradas, nunca
+# executadas. Cada conversa de teste é uma sessão própria do OpenClaw.
+_RX_SESSAO = re.compile(r"^[a-z0-9-]{6,40}$")
+_playground: dict[str, dict] = {}
+
+
+def turno_de_teste(sessao: str, texto: str, nome: str = "") -> dict:
+    texto = (texto or "").strip()[:1000]
+    if not _RX_SESSAO.match(sessao or "") or not texto:
+        raise HTTPException(400, "sessao e texto são obrigatórios")
+    conv = _playground.setdefault(sessao, {"enviadas": 0})
+    if len(_playground) > 200:
+        for velha in list(_playground)[:50]:
+            _playground.pop(velha, None)
+    rota = sdr_ponte.rotear(texto)
+    saida = {"rota": rota.get("acao"), "motivo": rota.get("motivo"), "diretivas": [],
+             "cortes": [], "nota": "", "mensagens": []}
+    if rota["acao"] == "silenciar":
+        saida["nota"] = "Não é lead (spam, e-mail automático, código): o robô não responderia."
+        return saida
+    if rota["acao"] == "confirmar_opt_out":
+        resposta = sdr_ponte.confirmacao_opt_out(texto)
+        saida["nota"] = "Pedido de parar: confirma e fecha o card como perdido."
+    elif sdr_ponte.objecao_de_preco(texto) and PROGRAM_LINKS.get("call_link"):
+        resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None)
+        saida["nota"] = "Objeção de preço: a ponte oferece a call e passa a conversa para a equipe."
+    elif rota["acao"] == "escalar":
+        resposta = holding.waiting_message(texto, 0, contact_name=nome or None,
+                                           first_contact=not conv["enviadas"])
+        saida["nota"] = (f"Passaria para a equipe ({rota.get('motivo')}): o lead recebe a mensagem de "
+                         "espera e a pessoa é avisada.")
+    else:
+        instrucoes = _instrucoes_comercial(0)
+        mensagem = ("[SYSTEM] Teste no painel: conversa de treino, sem lead no Kommo. Responda "
+                    "exatamente como responderia a um lead real.\n"
+                    f"{instrucoes}"
+                    f"Memória do lead: nome={nome or '?'} (sem histórico)\n"
+                    "[FIM DO SYSTEM]\n\nMensagem do lead: " + texto)
+        try:
+            raw, diretivas = _call_agent(0, mensagem, session_key=f"playground-{sessao}")
+        except Exception as exc:
+            raise HTTPException(502, f"agente não respondeu: {exc}")
+        saida["diretivas"] = diretivas
+        resposta = textproc.customer_facing(raw)
+    limpo, cortes = sdr_ponte.limpar_texto(resposta, primeira=not conv["enviadas"])
+    saida["cortes"] = cortes
+    saida["mensagens"] = dividir_em_mensagens(limpo) if limpo else []
+    if saida["mensagens"]:
+        conv["enviadas"] += 1
+    return saida
+
+
+@app.post("/tools/playground")
+async def tool_playground(request: Request, x_api_key: str | None = Header(None)):
+    _auth(x_api_key)
+    p = await request.json()
+    return {"ok": True, **await asyncio.to_thread(
+        turno_de_teste, str(p.get("sessao", "")), str(p.get("texto", "")), str(p.get("nome", "")))}
+
+
 @app.post("/tools/sdr")
 async def tool_sdr(request: Request, x_api_key: str | None = Header(None)):
     """Avalia uma mensagem com as regras do SDR, sem tocar em nada.
@@ -534,12 +598,12 @@ _last_turn_price_sent: dict[int, bool] = {}
 
 
 # ------------------------------------------------------------------ agente
-def _call_agent(lead_id: int, message: str) -> tuple[str, list[str]]:
+def _call_agent(lead_id: int, message: str, session_key: str | None = None) -> tuple[str, list[str]]:
     """Uma chamada crua ao agente OpenClaw. Devolve (texto bruto, diretivas
     [[...]] extraídas) -- sem sanitizar nem executar nada ainda."""
     result = subprocess.run(
         ["openclaw", "agent", "--agent", SALES_AGENT,
-         "--session-key", f"kommo-{lead_id}", "-m", message],
+         "--session-key", session_key or f"kommo-{lead_id}", "-m", message],
         capture_output=True, text=True, timeout=120,
     )
     raw = result.stdout.strip()

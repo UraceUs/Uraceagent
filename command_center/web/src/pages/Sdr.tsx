@@ -123,6 +123,56 @@ function PausasCard({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
   </Section>
 }
 
+// ------------------------------------------------------------------ teste no painel (14/10)
+interface Turno { quem: 'voce' | 'robo'; textos: string[]; nota?: string; detalhes?: string[] }
+interface TesteOut { mensagens: string[]; rota: string | null; motivo: string | null; diretivas: string[]; cortes: string[]; nota: string }
+const novaSessao = () => 'cc-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+
+function TesteCard() {
+  const toast = useToast()
+  const [sessao, setSessao] = useState(novaSessao)
+  const [turnos, setTurnos] = useState<Turno[]>([])
+  const [texto, setTexto] = useState('')
+  const [nome, setNome] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function enviar() {
+    const t = texto.trim(); if (!t || busy) return
+    setBusy(true); setTexto('')
+    setTurnos(x => [...x, { quem: 'voce', textos: [t] }])
+    try {
+      const r = await api.post<TesteOut>('/sdr/teste', { sessao, texto: t, nome: nome.trim() || null })
+      const detalhes = [
+        ...(r.diretivas || []).map(d => tr("ação que faria: {0}", d)),
+        ...(r.cortes || []).map(c => tr("a guarda cortou: {0}", c)),
+      ]
+      setTurnos(x => [...x, { quem: 'robo', textos: r.mensagens || [], nota: r.nota || undefined, detalhes }])
+    } catch (e) { toast((e as ApiError).message, 'crit'); setTurnos(x => x.slice(0, -1)); setTexto(t) }
+    finally { setBusy(false) }
+  }
+  function recomecar() { setSessao(novaSessao()); setTurnos([]); setTexto('') }
+  return <Section title={tr("Testar o robô")}>
+    <div className="stack" style={{ gap: 12 }}>
+      <p className="small muted" style={{ margin: 0 }}>{tr("Converse com o robô como se fosse um lead. Mesma persona e mesmas regras da resposta real, mas nada vai para o Kommo nem para ninguém, e as ações (passar para a equipe, tags) só aparecem aqui.")}</p>
+      <label className="fld" style={{ maxWidth: 260 }}><span>{tr("Nome do lead (opcional)")}</span><input value={nome} onChange={e => setNome(e.target.value)} maxLength={60} placeholder="Eduardo" /></label>
+      <div className="sdr-teste">
+        {!turnos.length ? <Empty title={tr("Nenhuma mensagem ainda")}>{tr("Escreva como o lead escreveria, por exemplo \"Oi, quanto custa?\".")}</Empty>
+          : turnos.map((t, i) => <div key={i} className={`sdr-teste-turno ${t.quem}`}>
+            {t.textos.length ? t.textos.map((m, j) => <div key={j} className="sdr-balao">{m}</div>)
+              : <div className="small muted">{tr("(o robô não responderia)")}</div>}
+            {t.nota && <div className="small muted">{t.nota}</div>}
+            {t.detalhes?.map((d, j) => <div key={j} className="small mono muted">{d}</div>)}
+          </div>)}
+        {busy && <div className="sdr-teste-turno robo"><span className="spin" /></div>}
+      </div>
+      <form className="row" style={{ gap: 8 }} onSubmit={e => { e.preventDefault(); enviar() }}>
+        <input className="grow" value={texto} onChange={e => setTexto(e.target.value)} maxLength={1000} placeholder={tr("Mensagem do lead")} aria-label={tr("Mensagem do lead")} />
+        <button className="btn primary" disabled={!texto.trim() || busy}>{busy ? <span className="spin" /> : tr("Enviar")}</button>
+        <button type="button" className="btn" disabled={busy || !turnos.length} onClick={recomecar}>{tr("Nova conversa")}</button>
+      </form>
+    </div>
+  </Section>
+}
+
 // ------------------------------------------------------------------ instruções
 function Instrucoes({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
   const d = useGet<Instrucoes>('/sdr/instrucoes')
@@ -282,6 +332,7 @@ export function Sdr() {
     {p.error ? <ErrorState error={p.error} retry={p.reload} /> : !d ? <Loading rows={4} /> : <div className="stack">
       <p className="small muted" style={{ margin: 0 }}>{tr("Horário de atendimento humano: {0}", d.horario_humano.texto)}</p>
       <LigarDesligar p={d} onMudou={() => setTick(x => x + 1)} />
+      {can('OPERATOR') && <TesteCard />}
       <PausasCard pode={can('OPERATOR')} onMudou={() => setTick(x => x + 1)} />
       <Instrucoes pode={d.pode_instruir || can('MANAGER')} onMudou={() => setTick(x => x + 1)} />
       <RelatosCard podeResolver={can('MANAGER')} onMudou={() => setTick(x => x + 1)} />
