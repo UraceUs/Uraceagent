@@ -85,7 +85,7 @@ Fonte: projeto **U-RACE** → seção **RACES** (gid `1205450093098932`).
   before the event, preferably fully organized 1 month prior") + campo
   "Event link:".
 - Na mesma seção há tasks com NOME DE PILOTO e data de corrida (ex.: "Jude
-  Cook", due 22-23/08) — provável participação de driver por corrida.
+  Cockpit", due 22-23/08) — provável participação de driver por corrida.
 
 **O template operacional JÁ EXISTE como 25 subtarefas-padrão** (exemplo
 real, Round 8 gid `1216270696569279`): Confirm Drivers · **Pre race
@@ -181,8 +181,8 @@ INBOX enxuta (32 threads) = triagem por labels funciona. Estrutura:
 ### QuickBooks — clientes e catálogo (URACE, realm 9341453113046421)
 
 - **Vendas YTD 2026: $478.094,45 · 94 clientes ativos.** Top-5 concentra
-  67,7%: Kenneth Savage ($164,5k, 34%), Donald Marron ($55,2k), Pablo
-  Santiago ($54,1k), James Xikis ($37,7k), G TECH MOTORSPORTS ($12,1k).
+  67,7%: Kenneth Sprage ($164,5k, 34%), Donald Mardon ($55,2k), Pablo
+  Sapata ($54,1k), James Xelix ($37,7k), G TECH MOTORSPORTS ($12,1k).
   3 clientes com saldo negativo -$400 (reembolsos de deposit?—conferir).
 - **Catálogo: 896 itens ativos** — 360 SERVICE / 536 NONINVENTORY (sem
   inventário rastreado no QB). Categorias por prefixo: Parts (361),

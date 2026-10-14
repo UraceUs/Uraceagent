@@ -300,7 +300,7 @@ Ver [[D-2026-09-22 - Lembrete de waiver, arquivar no Gmail e o guarda-chuva do a
       3 dias antes e 1 dia antes, **no máximo 2 por envelope**
 - [x] 🤖 23 testes das três travas (`test_travas_decididas.py`)
 
-## De quem é cada serviço (22/09) — o card do David Pera
+## De quem é cada serviço (22/09) — o card do David Pedalo
 
 Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
 
@@ -314,31 +314,31 @@ Ver [[D-2026-09-22 - O titulo da tarefa diz de quem e o servico]].
       dúvida, card próprio com o nome do título (`Mike`, `Sean`, `G.J`)
 - [x] 👤 Princípio dado: *"para cruzar e confirmar, use o nome do responsável e informações de
       contato"* — virou `mesmo_contato` e `por_contato`
-- [x] 👤 Cards unidos pelo dono: Liam Bourghol (4→1), Charlie Marron (4→1), Alexander Savage
-      (4→1, Kenneth fica como responsável), Alex Alonzo, Hank Lai, Reinaldo Arroyo; #238 é Alex Donnell
+- [x] 👤 Cards unidos pelo dono: Liam Bouldhol (4→1), Charlie Mardon (4→1), Alexander Sprage
+      (4→1, Kenneth fica como responsável), Alex Alvazo, Hank Lume, Reinaldo Arrancada; #238 é Alex Dampell
 - [x] 🤖 "Pode só separar": card que é corrida/tarefa não é apagado — `kind='separado'`, fora
       da lista (filtro "Separados" na tela de clientes)
 - [x] 🤖 Princípio na fonte: a sincronia guarda responsável/e-mail/telefone da descrição na
       tarefa; a atribuição decide por **contato antes do título**; `--ler-descricoes` busca no
       Asana o que ficou em dúvida
-- [x] 🤖 `[Canceled] Erik Mendoza Jr_…` → Erik Mendoza (tag na frente sai; Jr é marca de criança)
+- [x] 🤖 `[Canceled] Erik Mangoza Jr_…` → Erik Mangoza (tag na frente sai; Jr é marca de criança)
 - [x] 🤖 **Fechado em 22/09: a varredura convergiu** (segunda rodada seguida: 0 movidos,
-      0 cards novos, 0 para unir). De 508 para **956 serviços no card certo**; David Pera
+      0 cards novos, 0 para unir). De 508 para **956 serviços no card certo**; David Pedalo
       com os 3 dele; "sem nome no título" de 266 para 228 (corridas e tarefas internas).
 - [x] 🤖 Revisão adversarial (6 lentes, 3 céticos por achado): 12 defeitos confirmados,
       5 críticos, todos corrigidos — ver a decisão
-- [ ] 👤 `Charles Andrew Marron` e `Charlie Marron` parecem a mesma criança — unir?
+- [ ] 👤 `Charles Andrew Mardon` e `Charlie Mardon` parecem a mesma criança — unir?
 - [ ] 👤 Olhar os baldes que sobraram (`Isabel`, `Calix`, `Enzo`, `Mia`, `Baturalp`,
       `Enrico BR`) e unir os que você reconhecer
 - [ ] 🤖 `limpar_nao_clientes` na VPS (separa `Battle for Orlando` e afins) — roda na próxima sincronia completa
 - [x] 🤖 **Soltar uma linha por vez** (`--soltar ID`): a extensão da VPS recusou tirar a
-      corrida `Lucas Oil … | Sebring` do card `#15 Alexander Savage` porque a flag levaria
-      junto `Inventário Hank Lai_ caixa`. Ela estava certa. Recusa id que não está na lista
+      corrida `Lucas Oil … | Sebring` do card `#15 Alexander Sprage` porque a flag levaria
+      junto `Inventário Hank Lume_ caixa`. Ela estava certa. Recusa id que não está na lista
       e respeita o carimbo; sem `--aplicar` não escreve.
-- [x] 👤 **`Inventário Hank Lai_ caixa`: "tarefa interna"** (dono, 22/09). Sai do card junto
+- [x] 👤 **`Inventário Hank Lume_ caixa`: "tarefa interna"** (dono, 22/09). Sai do card junto
       com a corrida, e a regra que lê `Inventário <nome>` como tarefa de galpão fica como
       está — travada em teste, com a resposta dele escrita lá.
-- [x] 👤 **Waiver `#31` Pablo Santiago: "desconsiderar por hora"** (dono, 22/09). Fica no
+- [x] 👤 **Waiver `#31` Pablo Sapata: "desconsiderar por hora"** (dono, 22/09). Fica no
       relatório, não vira tarefa.
 - [x] 🤖 **`urace-waivers` morto às 07:33: encerrado sem causa.** As unidades agora carimbam
       o código de saída; a próxima falha se explica sozinha. Não vale caçar log que não existe.
@@ -451,8 +451,8 @@ A extensão rodou a rodada completa e reportou honestamente, inclusive a própri
       4× com 403 (`Permission to UraceUs/Uraceagent.git denied to UraceUs`). Enquanto não
       houver permissão de escrita, nada que a extensão escrever chega ao Claude por esse
       caminho. O relatório `0ecc3cf` está commitado só na máquina.
-- [x] 👤 **Savage: sim**, os 18 "Savage" e 2 "Savege" do #15 são do Alexander.
-- [x] 👤 **Alex: sim**, o solitário do #238 é do Alex Donnell.
+- [x] 👤 **Sprage: sim**, os 18 "Sprage" e 2 "Sprege" do #15 são do Alexander.
+- [x] 👤 **Alex: sim**, o solitário do #238 é do Alex Dampell.
 - [x] 👤 **Unir: sim**, os cinco pares.
 - [x] 🤖 As duas confirmações viraram **carimbo** (`tasks.client_by='human'`): a varredura
       nunca mais mexe neles. "Está certo hoje" não durava — bastava um homônimo novo no
@@ -468,8 +468,8 @@ A extensão rodou a rodada completa e reportou honestamente, inclusive a própri
       o que também afetava a trava de "waiver válida" antes de enviar uma nova.
 - [ ] 👤 Conferir no painel que a waiver da Nadine virou "assinada" depois da sincronia
 - [ ] 🤖 (contexto original) **Waiver assinada aparecendo como "enviada, não assinada".** Envelope
-      `1ceee462-2383-8726-825b-424ddf410785`, Parental Consent, assinado por Nadine Kozora
-      Garcia (nkozora1@gmail.com) em 17/09/2026 16:21 — no DocuSign está **Completed**; o
+      `1ceee462-2383-8726-825b-424ddf410785`, Parental Consent, assinado por Nadine Kartora
+      Garcia (nadine.kartora@example.com) em 17/09/2026 16:21 — no DocuSign está **Completed**; o
       Command Center ainda mostra como enviada. Dono: *"é um erro, né?"* — é. Suspeitos, na
       ordem: (a) a sincronia de waivers só relê envelopes de uma janela/estado e este ficou
       de fora; (b) o espelho `waivers` guarda o status da primeira leitura e não atualiza
@@ -505,7 +505,7 @@ invoices já enviadas; faltava o painel guardar as **linhas** delas.
 
 ## Card do cliente: mensalidade combinada e serviços (29/09)
 
-Dono, no card do Enzo Kurian: o valor da mensalidade tem de ser editável ("às vezes um
+Dono, no card do Enzo Kartian: o valor da mensalidade tem de ser editável ("às vezes um
 deal diferente"), virar invoice recorrente no QuickBooks, e os serviços têm de poder ir para
 o cliente certo e mudar de nome.
 
@@ -639,7 +639,7 @@ Center; site público = urace.us. Tudo nasce e é testado no site interno, em `/
 | #69 | #70 | a tarefa do agendamento nasce do **modelo oficial** (subtarefas, medidas, experiência, `Piloto_Serviço [n/m]`) |
 | #71 | #72 | deploy: o passo do Caddy só mexe no site principal (o Caddyfile saía inválido no 2º deploy) |
 
-- [x] 🤖 Invoice de outubro do Joseph Kurian (pai do Enzo) criada e enviada: **URACE-0017**,
+- [x] 🤖 Invoice de outubro do Joseph Kartian (pai do Enzo) criada e enviada: **URACE-0017**,
       $2,756.90, vence 09/10. A de 17/09 (paga) é a de setembro (dono)
 - [ ] 👤 **Enzo:** recriar a recorrência no card a partir de 10/2026 (outubro aparece "enviada"
       com a URACE-0017 quando o espelho do QuickBooks sincronizar; senão, começar em 11/2026)

@@ -108,28 +108,28 @@ def test_quantidade_negativa_na_entrada_e_recusada(con):
 # ------------------------------------------------- a peça do cliente que está com a gente
 def test_peca_de_um_cliente_nunca_sai_para_outro(con):
     """A regra dos cards, aplicada ao físico. Vale para quantidade…"""
-    hank, savage = _cliente(con, "Hank Lai"), _cliente(con, "Alexander Savage")
+    hank, sprage = _cliente(con, "Hank Lume"), _cliente(con, "Alexander Sprage")
     p = _pneu(con)
     estoque.entrada(con, p, qty=4, client_id=hank)
     with pytest.raises(ErroEstoque) as e:
-        estoque.saida(con, p, qty=1, client_id=hank, para_cliente_id=savage, reason="venda")
-    assert "Hank Lai" in str(e.value) and "outro cliente" in str(e.value)
+        estoque.saida(con, p, qty=1, client_id=hank, para_cliente_id=sprage, reason="venda")
+    assert "Hank Lume" in str(e.value) and "outro cliente" in str(e.value)
     assert estoque.saldo(con, p, client_id=hank) == 4
 
 
 def test_motor_do_cliente_tambem_nao_sai_para_outro(con):
     """…e para ficha individual, que é onde o prejuízo seria maior."""
-    hank, savage = _cliente(con, "Hank Lai"), _cliente(con, "Alexander Savage")
+    hank, sprage = _cliente(con, "Hank Lume"), _cliente(con, "Alexander Sprage")
     m = _motor(con)
     u = estoque.entrada(con, m, serial="KA-77", client_id=hank)["unit_id"]
     with pytest.raises(ErroEstoque):
-        estoque.saida(con, m, unit_id=u, para_cliente_id=savage, reason="venda")
+        estoque.saida(con, m, unit_id=u, para_cliente_id=sprage, reason="venda")
     assert um(con, "SELECT status FROM stock_units WHERE id=?", (u,))["status"] == "disponivel"
 
 
 def test_peca_do_cliente_nao_e_nossa_para_vender(con):
     """Venda sem dizer para quem, de peça que é de alguém, é venda do que não é nosso."""
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     p = _pneu(con)
     estoque.entrada(con, p, qty=4, client_id=hank)
     with pytest.raises(ErroEstoque) as e:
@@ -139,7 +139,7 @@ def test_peca_do_cliente_nao_e_nossa_para_vender(con):
 
 def test_devolver_para_o_proprio_dono_pode(con):
     """A trava é contra desviar, não contra devolver."""
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     p = _pneu(con)
     estoque.entrada(con, p, qty=4, client_id=hank)
     estoque.saida(con, p, qty=4, client_id=hank, para_cliente_id=hank, reason="devolução")
@@ -148,7 +148,7 @@ def test_devolver_para_o_proprio_dono_pode(con):
 
 def test_o_estoque_do_cliente_nao_se_mistura_com_o_nosso(con):
     """Mesmo item, dois donos, dois saldos. Sem isso o painel venderia o que é dos outros."""
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     p = _pneu(con)
     estoque.entrada(con, p, qty=10)                 # nossos
     estoque.entrada(con, p, qty=4, client_id=hank)  # dele
@@ -158,7 +158,7 @@ def test_o_estoque_do_cliente_nao_se_mistura_com_o_nosso(con):
 
 
 def test_o_que_e_do_cliente_aparece_para_o_card_dele(con):
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     m, p = _motor(con), _pneu(con)
     estoque.entrada(con, m, serial="KA-77", client_id=hank)
     estoque.entrada(con, p, qty=4, client_id=hank)
@@ -206,7 +206,7 @@ def test_local_que_nao_existe_erra_claro(con):
 def test_vendavel_nunca_inclui_a_peca_do_cliente(con):
     """O defeito que este teste tranca: `client_id=None` queria dizer "não filtre" E "o
     que é nosso". O PDV perguntaria quanto pode vender e receberia o que é dos outros."""
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     p = _pneu(con)
     estoque.entrada(con, p, qty=10)
     estoque.entrada(con, p, qty=4, client_id=hank)
@@ -215,7 +215,7 @@ def test_vendavel_nunca_inclui_a_peca_do_cliente(con):
 
 
 def test_vendavel_de_motor_tambem_exclui_o_do_cliente(con):
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     m = _motor(con)
     estoque.entrada(con, m, serial="KA-1")
     estoque.entrada(con, m, serial="KA-2", client_id=hank)
@@ -236,7 +236,7 @@ def test_contagem_vira_o_saldo_e_guarda_a_diferenca(con):
 
 def test_o_saldo_bate_com_o_razao_depois_de_uma_vida_inteira(con):
     """A conferência é o que impede o número de virar opinião."""
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     p = _pneu(con)
     estoque.entrada(con, p, qty=10)
     estoque.entrada(con, p, qty=4, client_id=hank)
@@ -310,7 +310,7 @@ def test_abaixo_do_minimo_traz_o_sku_para_o_modulo_de_compras(con):
 
 def test_a_peca_do_cliente_nao_entra_na_lista_de_compra(con):
     """Peça de cliente não é nossa para repor — o painel não manda comprar dos outros."""
-    hank = _cliente(con, "Hank Lai")
+    hank = _cliente(con, "Hank Lume")
     p = _pneu(con, min_qty=6)
     estoque.entrada(con, p, qty=10, client_id=hank)
     assert [f["id"] for f in estoque.abaixo_do_minimo(con)] == [p], \

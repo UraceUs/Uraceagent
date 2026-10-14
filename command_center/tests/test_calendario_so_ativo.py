@@ -36,7 +36,7 @@ def _servico(con, gid, titulo, nome="Eduardo Resende", visto=None):
 
 def test_tarefa_excluida_no_asana_sai_do_calendario_do_balcao_e_do_espelho(con, monkeypatch):
     sumida, cid = _servico(con, "G404", "Eduardo Resende_teste [1/1]")
-    viva, _ = _servico(con, "G200", "Max Westerberg_Arrive and Drive [1/1]", "Max Westerberg")
+    viva, _ = _servico(con, "G200", "Max Westerpit_Arrive and Drive [1/1]", "Max Westerpit")
 
     def asana(sistema, ferramenta, gid):
         if gid == "G404":
@@ -75,7 +75,7 @@ def test_so_confere_o_que_nao_apareceu_nesta_varredura(con, monkeypatch):
 
 
 @pytest.mark.parametrize("titulo", ["CANCELLED - Eduardo Fillipe Farias Resende_teste - 2026-10-15 09:00",
-                                    "[Canceled] Erik Mendoza Jr_Karting School [4/4]", "Canceled - Max Westerberg"])
+                                    "[Canceled] Erik Mangoza Jr_Karting School [4/4]", "Canceled - Max Westerpit"])
 def test_cancelada_nao_ocupa_o_calendario_nem_o_balcao(con, titulo):
     tid, cid = _servico(con, "GC" + str(abs(hash(titulo)) % 10000), titulo)
     assert tid not in [s["id"] for s in checklists.meu_dia(con, DIA)["servicos"]]

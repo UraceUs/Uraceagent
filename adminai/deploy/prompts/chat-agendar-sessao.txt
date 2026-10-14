@@ -28,8 +28,8 @@ Responsável padrão: Luis Barros (resolva o usuário com search_objects;
 
 === FORMATO ===
 Nome:  {Piloto}_{Serviço}_{Categoria} [n/total]
-  ex.: Jayden Lago_Professional Coaching_4T [1/1]
-  ex.: Elijah Nicholas_Urace Academy_[Cadet 4T] [1/2]
+  ex.: Jayden Largada_Professional Coaching_4T [1/1]
+  ex.: Elijah Nitrolas_Urace Academy_[Cadet 4T] [1/2]
 Descrição (cole exatamente este bloco, preenchendo o que eu passei e
 deixando em branco o que não passei — nunca invente):
 Service Dates for this Month: {datas}

@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: Jayden Lago
+piloto: Jayden Largada
 atualizado_em: 2026-08-28
 ---
 
-# Osvaldo Lago
+# Osvaldo Largada
 
-Responsável por **Jayden Lago** · [[Clientes]]
+Responsável por **Jayden Largada** · [[Clientes]]
 
 [[Professional Coaching]] 4T. A tarefa dele é a **referência de modelo bem preenchido** — inclusive com [[Security deposit]] registrado.
 

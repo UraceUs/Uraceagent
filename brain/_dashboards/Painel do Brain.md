@@ -83,12 +83,12 @@ Nove, em [[Problemas]]. Os de maior risco:
 
 ## ⚠️ Números que a operação precisa olhar
 
-- **US$ 185.887 a receber**, 84% em duas invoices de 2025 (Juan Pacino
-  $101.445 · Stephen Collins $55.070). Ver [[QuickBooks]].
-- **3 waivers paradas desde junho** — Matthew Hubbard, Leticia
-  Bittencourt, Austin. Ver [[DocuSign]] e [[2026-08-31]].
+- **US$ 185.887 a receber**, 84% em duas invoices de 2025 (Juan Pastilha
+  $101.445 · Stephen Corrimao $55.070). Ver [[QuickBooks]].
+- **3 waivers paradas desde junho** — Matthew Hubtrack, Leticia
+  Bitcarter, Austin. Ver [[DocuSign]] e [[2026-08-31]].
 - Invoice em aberto **≠ inadimplência**: existe parcelamento
-  ([[Leandro Cesar]]).
+  ([[Leandro Cesio]]).
 
 ## 🧠 As armadilhas que mais custaram
 

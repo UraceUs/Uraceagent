@@ -46,8 +46,8 @@ O dono respondeu em 06/10/2026 (America/New_York) as decisões em aberto. As que
 - **App nas lojas: adiado.** Quando voltar: nome URACE com support@urace.us, exclusão de conta por pedido que desliga o login, push e Face ID logo depois das contas.
 
 ## Outros
-- Charles Andrew Marron e Charlie Marron são a mesma criança: **unir**.
-- Envelope duplicado da Letícia Bittencourt no DocuSign: anular **só depois de conferir** a duplicação.
+- Charles Andrew Mardon e Charlie Mardon são a mesma criança: **unir**.
+- Envelope duplicado da Letícia Bitcarter no DocuSign: anular **só depois de conferir** a duplicação.
 - Austin: waiver nova só quando marcar serviço. Cards soltos que o dono não reconhece: deixar como estão.
 - WhatsApp da equipe: continua em espera.
 - Google Chat: liberar, e o Command Center usa o perfil do support@ no Google Chat como canal de conversa com a IA.

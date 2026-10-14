@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """De quem é cada serviço — varredura e conserto do quadro inteiro.
 
-Dono, 22/09: ao marcar uma sessão nova para o David Pera ele achou 113 serviços no
+Dono, 22/09: ao marcar uma sessão nova para o David Pedalo ele achou 113 serviços no
 card, e 112 eram de outras pessoas. O título do Asana sempre diz de quem é; o
 painel é que não estava lendo.
 

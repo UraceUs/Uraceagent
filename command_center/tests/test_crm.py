@@ -645,7 +645,7 @@ def test_perfis_e_eventos_do_lead_completo(monkeypatch):
     # sem campo de Instagram, o nome-@usuário de um lead do Instagram vira o link (deduzido)
     p2 = k._perfis([], "kian1414.1", "instagram", None)
     assert p2[0]["rede"] == "Instagram" and p2[0]["inferido"] and p2[0]["url"].endswith("/kian1414.1/")
-    assert k._perfis([], "Nya Amankwa", "instagram", None) == []                       # nome com espaço não é @
+    assert k._perfis([], "Nya Amortka", "instagram", None) == []                       # nome com espaço não é @
     monkeypatch.setattr(k, "_nome_etapa", lambda f, e: ("Sales funnel", {"1": "First Contact", "2": "Qualified"}.get(str(e)), 1))
     monkeypatch.setattr(k, "_nomes_usuarios", lambda: {"7": "Italo"})
     brutos = [{"id": 1, "type": "incoming_chat_message", "created_at": 1758100000, "value_after": [{"message": {"id": "m1", "talk_id": 55, "origin": "com.amocrm.amocrmwa"}}]},

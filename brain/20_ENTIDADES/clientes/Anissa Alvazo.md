@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: Alex Alonso
+piloto: Alex Alvaso
 atualizado_em: 2026-08-28
 ---
 
-# Anissa Alonzo
+# Anissa Alvazo
 
-Responsável por **Alex Alonso** · [[Clientes]]
+Responsável por **Alex Alvaso** · [[Clientes]]
 
 [[Professional Coaching]] Junior 2T X30, 3 dias. Um dos dias usou crédito de sessão não utilizada.
 

@@ -46,8 +46,8 @@ def _liberar(monkeypatch, enviados):
 
 
 # ------------------------------------------------------------------ provider
-@pytest.mark.parametrize("entrada,saida", [("+1 (407) 555-1234", "14075551234"), ("4075551234", "14075551234"),
-                                           ("+55 11 91234-5678", "5511912345678")])
+@pytest.mark.parametrize("entrada,saida", [("+1 (407) 555-0123", "14075550123"), ("4075550123", "14075550123"),
+                                           ("+55 11 99555-0134", "5511995550134")])
 def test_telefone_vira_digitos_com_ddi(entrada, saida):
     assert wa.normaliza_fone(entrada) == saida
 
@@ -67,7 +67,7 @@ def test_sem_segredo_nenhum_webhook_passa(monkeypatch):
 
 
 def test_sem_liberar_e_simulacao():
-    assert wa.enviar_texto("4075551234", "oi")["simulado"]
+    assert wa.enviar_texto("4075550123", "oi")["simulado"]
 
 
 # ------------------------------------------------------------------ API
@@ -121,7 +121,7 @@ def _escreve(cli, cid, texto):
 
 def test_cadastro_e_do_gerente(cli):
     h = entra(cli, "op@urace.us")
-    assert cli.post(f"{W}/contatos", headers=h, json={"name": "X", "phone": "4075550000"}).status_code == 403
+    assert cli.post(f"{W}/contatos", headers=h, json={"name": "X", "phone": "4075550100"}).status_code == 403
     c = _novo(cli, "Eduardo", "+1 407 555 0101")
     canal = um(conectar(), "SELECT * FROM team_channels WHERE id=?", (c["channel_id"],))
     assert canal["bridge"] == "whatsapp" and canal["bridge_id"] == "14075550101"

@@ -9,7 +9,7 @@ status: ativo
 
 # D-2026-09-10 — A proposta da IA não se repete depois de aprovada, e o valor que o dono disse manda
 
-**Dono, 10/09/2026 (David Pera, filho do Nicolas, domingo 13/09):** a IA
+**Dono, 10/09/2026 (David Pedalo, filho do Nicolas, domingo 13/09):** a IA
 escreveu "invoice de $500" mas a prévia veio **$0,00**; depois de ele
 aprovar a tarefa no Asana, a mensagem seguinte **repropôs a mesma tarefa**;
 e a instrução nova ("o mesmo valor da última invoice") **não mudou a
@@ -97,7 +97,7 @@ aprovo, ele não me traz resultado."*
     primeira invoice sair): vencimento **2 dias antes do serviço**
     (diretiva antiga que a IA não aplicou), **nota ao cliente e memo
     interno iguais** com produto, categoria, piloto e data do serviço
-    (`Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026`).
+    (`Urace Daily | Using Own Kart | David Pedalo | Service date: 09/13/2026`).
     O painel calcula e preenche mesmo que o agente esqueça; a regra
     também entrou na memória da IA (aprendizado 10).
 20. **Invoice sempre com número.** A conta do QuickBooks usa numeração

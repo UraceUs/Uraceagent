@@ -75,12 +75,12 @@ def _png():
 
 def test_registrar_avancar_anotar_com_imagem_e_pedir_a_ia(cli, monkeypatch):
     h = entra(cli, "op@urace.us")
-    r = cli.post(B, headers=h, json={"customer_name": "Ryan Casner", "customer_email": "ryan@example.com", "language": "en",
-                                     "driver_name": "Ryan Casner", "design": {"cores": "black / red, Pantone 1355 PC"},
+    r = cli.post(B, headers=h, json={"customer_name": "Ryan Capner", "customer_email": "ryan@example.com", "language": "en",
+                                     "driver_name": "Ryan Capner", "design": {"cores": "black / red, Pantone 1355 PC"},
                                      "medidas": {"valores": {"head": 59}, "unidade": "cm"}})
     assert r.status_code == 201, r.text
     p = r.json()
-    assert p["status"] == "standby" and p["title"] == "Ryan Casner" and p["medidas_texto"]["head"] == "59 cm / 1'11\""
+    assert p["status"] == "standby" and p["title"] == "Ryan Capner" and p["medidas_texto"]["head"] == "59 cm / 1'11\""
     assert p["notas"][0]["kind"] == "etapa"
     pid = p["id"]
     lista = cli.get(B + "?limit=10")
@@ -117,7 +117,7 @@ def test_registrar_avancar_anotar_com_imagem_e_pedir_a_ia(cli, monkeypatch):
 
 def test_medidas_parciais_e_apagar_uma(cli):
     h = entra(cli, "op@urace.us")
-    pid = cli.post(B, headers=h, json={"customer_name": "Tyron Brouta"}).json()["id"]
+    pid = cli.post(B, headers=h, json={"customer_name": "Tyron Breckta"}).json()["id"]
     cli.patch(f"{B}/{pid}", headers=h, json={"medidas": {"valores": {"head": 59, "neck": 36}}})
     cli.patch(f"{B}/{pid}", headers=h, json={"medidas": {"valores": {"chest": 38}, "unidade": "in"}})
     p = cli.patch(f"{B}/{pid}", headers=h, json={"medidas": {"valores": {"neck": ""}}}).json()
@@ -129,10 +129,10 @@ def test_email_do_fornecedor_pelo_modelo(cli):
     h = entra(cli, "admin@urace.us")
     f = cli.post(f"{B}/fornecedores", headers=h, json={"name": "Usman", "contact": "Usman", "email": "speedinds@example.com",
                                                         "is_current": True}).json()
-    pid = cli.post(B, headers=h, json={"customer_name": "Frankie Iadevaia", "quantity": 2,
+    pid = cli.post(B, headers=h, json={"customer_name": "Frankie Ignivela", "quantity": 2,
                                        "design": {"cores": "Pantone 1355 PC"}}).json()["id"]
     e = cli.get(f"{B}/{pid}/email-fornecedor").json()
-    assert e["para"] == "speedinds@example.com" and e["assunto"] == "SUIT - Frankie Iadevaia"
+    assert e["para"] == "speedinds@example.com" and e["assunto"] == "SUIT - Frankie Ignivela"
     assert e["corpo"].startswith("Hi Usman,\n\nWe have a new order:\n\n1 – Head circumference — (missing)")
     assert "Colors: Pantone 1355 PC" in e["corpo"] and "Quantity: 2 suits" in e["corpo"] and "Admin Urace\nUrace" in e["corpo"]
     assert e["faltam"] == ["29 medida(s)"]
@@ -141,7 +141,7 @@ def test_email_do_fornecedor_pelo_modelo(cli):
     assert cli.put(f"{B}/modelo", headers=h, json={"subject": "x", "body": "sem medidas"}).status_code == 400
     m = cli.put(f"{B}/modelo", headers=h, json={"subject": "NEW SUIT - {piloto}", "body": "Hello {fornecedor}\n{medidas}"}).json()
     assert m["subject"] == "NEW SUIT - {piloto}"
-    assert cli.get(f"{B}/{pid}/email-fornecedor").json()["assunto"] == "NEW SUIT - Frankie Iadevaia"
+    assert cli.get(f"{B}/{pid}/email-fornecedor").json()["assunto"] == "NEW SUIT - Frankie Ignivela"
     h2 = entra(cli, "op@urace.us")
     assert cli.put(f"{B}/modelo", headers=h2, json={"subject": "a", "body": "{medidas}"}).status_code == 403
     assert cli.patch(f"{B}/fornecedores/{f['id']}", headers=h2, json={"price": "$1"}).status_code == 403
@@ -165,9 +165,9 @@ def test_rascunho_ao_fornecedor_no_gmail_com_tudo_preenchido(cli, monkeypatch):
 
 def test_lead_vira_pedido(cli):
     h = entra(cli, "op@urace.us")
-    lid = cli.post(f"{B}/leads", headers=h, json={"name": "Nathan", "email": "n@example.com", "notes": "Same suit as Chris Murray"}).json()["id"]
+    lid = cli.post(f"{B}/leads", headers=h, json={"name": "Nathan", "email": "n@example.com", "notes": "Same suit as Chris Murreta"}).json()["id"]
     p = cli.post(f"{B}/leads/{lid}/pedido", headers=h).json()
-    assert p["customer_name"] == "Nathan" and any("Chris Murray" in (n["text"] or "") for n in p["notas"])
+    assert p["customer_name"] == "Nathan" and any("Chris Murreta" in (n["text"] or "") for n in p["notas"])
     lead = [x for x in cli.get(f"{B}/leads?estado=convertido").json() if x["id"] == lid][0]
     assert lead["status"] == "convertido" and lead["order_id"] == p["id"]
     assert cli.post(f"{B}/leads/{lid}/pedido", headers=h).json()["id"] == p["id"]     # não duplica
@@ -188,23 +188,23 @@ def test_quem_so_le_nao_entra(cli):
 
 # ------------------------------------------------------------ importar do Asana
 TAREFAS = [
-    {"gid": "1", "name": "Mikey Colins [não está pago]", "completed": False, "due_on": None, "notes": "",
+    {"gid": "1", "name": "Mikey Corins [não está pago]", "completed": False, "due_on": None, "notes": "",
      "memberships": [{"section": {"name": "Standby"}}],
      "custom_fields": [{"name": "Status", "display_value": "Standby"}, {"name": "Order Date", "display_value": "2026-05-04T00:00:00.000Z"}]},
-    {"gid": "2", "name": "Alex Kalimnios", "completed": False, "due_on": "2026-07-24", "notes": "medidas no e-mail",
+    {"gid": "2", "name": "Alex Kalibrios", "completed": False, "due_on": "2026-07-24", "notes": "medidas no e-mail",
      "memberships": [{"section": {"name": "Order"}}],
      "custom_fields": [{"name": "Status", "display_value": "Awaiting Measurements"}, {"name": "Fornecedor", "display_value": "Usman"}]},
-    {"gid": "3", "name": "Michael Fuller", "completed": True, "due_on": "2026-03-03", "notes": "",
+    {"gid": "3", "name": "Michael Fulcro", "completed": True, "due_on": "2026-03-03", "notes": "",
      "memberships": [{"section": {"name": "Seção sem título"}}],
      "custom_fields": [{"name": "Status", "display_value": "In Transit"}, {"name": "Fornecedor", "display_value": "Usman"}]},
     {"gid": "4", "name": "T-shirt Urace", "completed": False, "due_on": None, "notes": "",
      "memberships": [{"section": {"name": "Order"}}], "custom_fields": [{"name": "Status", "display_value": "In Production"}]},
-    {"gid": "5", "name": "Nathan", "completed": False, "notes": "tnlloyd19@example.com\nSame suit as Chris Murray",
+    {"gid": "5", "name": "Nathan", "completed": False, "notes": "nathan.lead@example.com\nSame suit as Chris Murreta",
      "memberships": [{"section": {"name": "SUIT LEADS"}}], "custom_fields": []},
     {"gid": "6", "name": "Suit Derek", "completed": False, "notes": "",
      "memberships": [{"section": {"name": "SUIT LEADS"}}], "custom_fields": [{"name": "Status", "display_value": "Canceled"}]},
     {"gid": "7", "name": "PALACE RACE WEAR", "completed": False,
-     "notes": "Contato: Shamas Din\nE-mail: info@palace.example\nTelefone: +92 300\nTem FIA: Sim\nStatus: Talking\n"
+     "notes": "Contato: Shamas Dinamo\nE-mail: info@palace.example\nTelefone: +92 300\nTem FIA: Sim\nStatus: Talking\n"
               "Valor por macacão: $210 – $260\nFrete por macacão: —\nComentários: SFI 3.2A/5 Nomex",
      "memberships": [{"section": {"name": "Seleção de fornecedores"}}], "custom_fields": []},
     {"gid": "8", "name": "Links", "notes": "https://docs.google.com/x", "memberships": [{"section": {"name": "Seleção de fornecedores"}}]},
@@ -227,9 +227,9 @@ def test_importar_do_asana_sem_duplicar(tmp_path, monkeypatch):
     usman = um(con, "SELECT id FROM suit_suppliers WHERE name='Usman'")["id"]
     assert p["2"]["supplier_id"] == usman == p["3"]["supplier_id"]
     leads = {x["asana_gid"]: dict(x) for x in con.execute("SELECT * FROM suit_leads").fetchall()}
-    assert leads["5"]["email"] == "tnlloyd19@example.com" and leads["5"]["status"] == "aberto" and leads["6"]["status"] == "perdido"
+    assert leads["5"]["email"] == "nathan.lead@example.com" and leads["5"]["status"] == "aberto" and leads["6"]["status"] == "perdido"
     f = dict(um(con, "SELECT * FROM suit_suppliers WHERE asana_gid='7'"))
-    assert (f["contact"], f["email"], f["has_fia"], f["price"], f["shipping"]) == ("Shamas Din", "info@palace.example", 1, "$210 – $260", None)
+    assert (f["contact"], f["email"], f["has_fia"], f["price"], f["shipping"]) == ("Shamas Dinamo", "info@palace.example", 1, "$210 – $260", None)
     # de novo: nada duplica, e o que a equipe mudou aqui fica
     con.execute("UPDATE suit_orders SET status='design_pending' WHERE asana_gid='1'")
     r2 = suits.importar(con, TAREFAS)

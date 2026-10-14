@@ -19,6 +19,6 @@ Processo completo: [[Pagamento e security deposit]].
 
 ## Regras que evitam erro
 - **Um por pacote**, não por dia. 3 dias = 1 depósito.
-- **Conferir no [[QuickBooks]] antes de cobrar.** O do [[Mathias Brouta]]
+- **Conferir no [[QuickBooks]] antes de cobrar.** O do [[Mathias Breckta]]
   já estava pago e não constava na tarefa — sem conferir, seria cobrado
   duas vezes.

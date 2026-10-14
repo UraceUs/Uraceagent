@@ -36,7 +36,7 @@ def cli():
     auth.criar_usuario(con, "ger@urace.us", "Gerente", "MANAGER", SENHA)
     auth.criar_usuario(con, "ver@urace.us", "Só Vê", "VIEWER", SENHA)
     inserir(con, "oauth_clients", client_id="claude-code", name="Claude Code", redirect_uris='["http://localhost/cb"]')
-    inserir(con, "clients", name="Joseph Kurian", pilot_name="Enzo Kurian", email="joekur001@gmail.com", status="ACTIVE",
+    inserir(con, "clients", name="Joseph Kartian", pilot_name="Enzo Kartian", email="joe.kartian@example.com", status="ACTIVE",
             source="manual", monthly_amount=2756.9, monthly_item_id="7")
     inserir(con, "qbo_items", id="7", name="Academy Monthly", price=2756.9, active=1)
     con.commit(); con.close()
@@ -87,7 +87,7 @@ def test_vendedor_cria_cliente_pelo_mcp_e_fica_auditado_com_o_nome_dele(cli):
 
 
 def test_operador_nao_faz_o_que_e_do_gerente(cli):
-    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kurian'")["id"]
+    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
     res, erro = ferramenta(cli, token("vendas@urace.us"), "urace_api", metodo="PATCH",
                            caminho=f"/ops/api/clients/{cid}/mensal", corpo={"monthly_amount": 1})
     assert erro and "MANAGER" in res
@@ -97,7 +97,7 @@ def test_operador_nao_faz_o_que_e_do_gerente(cli):
 
 
 def test_gerente_faz_o_que_e_dele(cli):
-    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kurian'")["id"]
+    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
     res, erro = ferramenta(cli, token("ger@urace.us"), "urace_api", metodo="PATCH",
                            caminho=f"/ops/api/clients/{cid}/mensal", corpo={"monthly_sessions": 4},
                            confirmar=True)
@@ -107,7 +107,7 @@ def test_gerente_faz_o_que_e_dele(cli):
 
 def test_o_que_vai_para_o_cliente_pede_confirmacao(cli):
     """A primeira chamada só mostra; sem confirmar, nada é criado nem enviado."""
-    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kurian'")["id"]
+    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
     res, erro = ferramenta(cli, token("ger@urace.us"), "urace_api", metodo="POST",
                            caminho=f"/ops/api/clients/{cid}/mensal/recorrencia", corpo={"meses": 6})
     assert not erro and res["precisa_confirmar"] is True and res["vai_fazer"]["corpo"] == {"meses": 6}

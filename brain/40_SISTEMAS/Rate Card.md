@@ -63,7 +63,7 @@ Academy fora do OKC cobra hotel, comida e transporte à parte.
 **O mensal Academy 4T é US$ 2.756,90.** A planilha perdeu os 90 centavos
 na célula. Quatro caminhos independentes chegam no mesmo número:
 
-**1. Invoice paga, valor exato.** Michael Nicholas (id 677), 02/07/2026,
+**1. Invoice paga, valor exato.** Michael Nitrolas (id 677), 02/07/2026,
 item `Service:Urace Academy Training Program` (id 177), memo "Urace
 Academy": **$2.756,90**, saldo zero.
 `https://qbo.intuit.com/app/login?pagereq=invoice%3FtxnId%3D9391&deeplinkcompanyid=9341453113046421`

@@ -73,7 +73,7 @@ def banco(tmp_path, monkeypatch):
     caminho = tmp_path / "command-center.sqlite"
     monkeypatch.setenv("CC_DB_PATH", str(caminho))
     con = conectar(); aplicar_schema(con)
-    inserir(con, "clients", name="Hank Lai", status="ACTIVE", source="manual")
+    inserir(con, "clients", name="Hank Lume", status="ACTIVE", source="manual")
     con.commit(); con.close()
     return str(caminho)
 

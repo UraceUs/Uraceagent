@@ -3,7 +3,7 @@ tipo: cliente
 atualizado_em: 2026-08-31
 ---
 
-# Leandro Cesar
+# Leandro Cesio
 
 [[Clientes]] · [[QuickBooks]]
 

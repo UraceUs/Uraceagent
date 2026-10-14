@@ -39,7 +39,7 @@ estava no cérebro:
 ## Impacto
 
 A varredura diária de waivers (`urace-waivers`, 07h30) **falha todo dia**
-por falta de credencial. E há prazo real: a waiver do Matthew Hubbard
+por falta de credencial. E há prazo real: a waiver do Matthew Hubtrack
 **expira em 29/09** ([[P-07 - Waivers paradas desde junho]]).
 
 ## O caminho

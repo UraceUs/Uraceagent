@@ -39,8 +39,8 @@ qb_customer_id: "44"
 numero_pedido: "111-0438885-4250631"
 ```
 
-**Nunca casar entidade por nome.** "Charlie Marron" e "Charles Andrew
-Marron" são a mesma pessoa; "Fabio Delgado" aparece duas vezes com
+**Nunca casar entidade por nome.** "Charlie Mardon" e "Charles Andrew
+Mardon" são a mesma pessoa; "Fabio Defletor" aparece duas vezes com
 pedidos diferentes. Nome é rótulo, chave externa é identidade.
 
 ## Ligações entre entidades
@@ -49,7 +49,7 @@ Use links do Obsidian, não texto solto:
 `CLIENTE ← SERVIÇO → CORRIDA` · `CLIENTE → PEDIDO` · `CORRIDA → INVOICE`
 
 ```yaml
-cliente: "[[clientes/mathias-brouta]]"
+cliente: "[[clientes/mathias-breckta]]"
 corrida: "[[corridas/amr-2026-round-8]]"
 ```
 
@@ -61,8 +61,8 @@ externo.
 
 ```markdown
 ## 2026-08-28
-- [asana] Tyron Brouta 1/3 (gid 1215343715233730): e-mail do responsável
-  corrigido para mbrouta@hotmail.fr. Fonte: QuickBooks, invoice
+- [asana] Tyron Breckta 1/3 (gid 1215343715233730): e-mail do responsável
+  corrigido para mcubeta@example.com. Fonte: QuickBooks, invoice
   4YZRN1QWN528NQM ($2.369,93, valor exato da tarefa). Autorizado 28/08.
 - [asana] 100 tarefas concluídas movidas das colunas dos dias para
   Finished Services. Conferido por leitura direta.

@@ -36,7 +36,7 @@ VALIDADE_DIAS = 365        # PARAMETROS: waiver assinada vale 1 ano (mesma regra
 def waiver_valida(con, w):
     """Existe OUTRA waiver assinada e ainda dentro do ano, para a mesma pessoa?
 
-    Dono, 22/09, sobre o Enzo (Joseph Kurian, #107): *"a waiver dele já foi assinada
+    Dono, 22/09, sobre o Enzo (Joseph Kartian, #107): *"a waiver dele já foi assinada
     antes e vale por um ano"*. Sem esta checagem o relatório gritava lobo — e relatório
     que grita lobo é relatório que ninguém lê. Uma waiver aberta só é problema quando
     NÃO há uma válida por trás."""

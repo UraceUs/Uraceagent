@@ -5,10 +5,10 @@ Regras do dono (04/09/2026):
 - Ativo = teve serviço nos últimos 6 meses (ou tem serviço marcado);
   senão inativo.
 - Um card por pessoa: mesmo e-mail, mesmo telefone ou nome igual/quase
-  igual (Alonso/Alonzo) é a mesma pessoa. Casos duvidosos ficam para
+  igual (Alvaso/Alvazo) é a mesma pessoa. Casos duvidosos ficam para
   revisão humana (com ajuda da IA), nunca são unidos no escuro.
 
-Regra do dono (22/09/2026), depois do card do David Pera:
+Regra do dono (22/09/2026), depois do card do David Pedalo:
 - "Nunca colocar serviço de outro cliente em card de outro cliente."
   Na dúvida, card próprio com o nome como está no título.
 - "O princípio para cruzar e confirmar é usar o nome do responsável e
@@ -43,8 +43,8 @@ _PALAVRA_DE_SERVICO = {
     "baby", "babykart", "experience", "experiencia", "experiência", "sessions", "sessoes", "sessões",
     "urace", "u-race", "tuesday", "monday", "wednesday", "thursday", "friday", "saturday", "sunday",
 }
-# Categoria/motor colados no nome: "Alex Xikis KA100", "Branson KA100sr".
-# "jr" e "sr" NÃO entram: em "Thiago Belluci Sr" é sufixo de nome, não categoria.
+# Categoria/motor colados no nome: "Alex Xelix KA100", "Branson KA100sr".
+# "jr" e "sr" NÃO entram: em "Thiago Biellaci Sr" é sufixo de nome, não categoria.
 # Quando são categoria vêm colados ("KA100sr") ou depois do serviço ("Rotax jr").
 _RX_CATEGORIA = re.compile(r"^(ka\d+|x\d+|rok|vlr|gp|rotax|\d+t|mini|micro|junior|senior|cadet|"
                            r"shifter|kz\d*|briggs|lo206)\w*$", re.I)
@@ -91,8 +91,8 @@ _NAO_E_GENTE = {"trackhouse", "endurance", "florida", "guardar", "closed", "phot
                 "pista", "galpao", "galpão", "ferramenta", "ferramentas", "bandeiras", "banners",
                 "calendario", "calendário", "chassi", "chassis", "motor", "motores", "pneus",
                 "faturas", "fatura", "invoices", "not", "going", "usf",   # USF Pro 2000: série
-                # recado de quadro (verbo/tarefa na frente): "Inventário Hank Lai_ caixa" moveu
-                # um serviço PARA FORA do Hank Lai em 22/09 à noite. Tarefa não é gente.
+                # recado de quadro (verbo/tarefa na frente): "Inventário Hank Lume_ caixa" moveu
+                # um serviço PARA FORA do Hank Lume em 22/09 à noite. Tarefa não é gente.
                 "inventario", "inventário", "inventory", "organizar", "organize", "arrumar", "preparar",
                 "comprar", "buscar", "levar", "trazer", "pagar", "cobrar", "enviar", "mandar", "ligar",
                 "checar", "conferir", "check", "fix", "consertar", "limpar", "montar", "desmontar",
@@ -149,15 +149,15 @@ def _corta_no_separador(t):
 
     `_`, `|`, `:`, `,` e o hífen COM espaço separam sempre — é o padrão do quadro
     ("Piloto_Serviço_Categoria [n/t]"). A barra separa quando não está entre números
-    ("Jude cook/Harley client" separa; "3/6" e "Junior/Senior" não). O hífen colado
-    ("Elliott Hubbard-Summer Camp") é contextual (dono, 16/09): só separa quando o que
+    ("Jude cockpit/Harley client" separa; "3/6" e "Junior/Senior" não). O hífen colado
+    ("Elliott Hubtrack-Summer Camp") é contextual (dono, 16/09): só separa quando o que
     vem depois tem cara de serviço ou tem número; "Jean-Luc Picard" e "Ana-Maria"
     continuam sendo um nome só."""
     t = t.replace("–", "-").replace("—", "-")            # travessão é hífen para esta leitura
     t = re.split(r"\s*[_|:]\s*|\s+-\s+|\s*,\s*", t)[0].strip()
     # Hífen com espaço de QUALQUER lado separa sempre: nome composto não tem espaço
     # nenhum ao redor do hífen ("Jean-Luc Picard", "Ana-Maria"). Pega tanto
-    # "Alex Savage- Old Chassis" quanto "Cayetano Sanin -BABYKART".
+    # "Alex Sprage- Old Chassis" quanto "Cayetano Sanfo -BABYKART".
     t = re.split(r"-\s+|\s+-", t)[0].strip()
     t = re.split(r"(?<!\d)\s*/\s*(?!\d)", t)[0].strip()
     m = re.match(r"^([^-–]+?)[-–](.+)$", t)
@@ -171,7 +171,7 @@ def _corta_no_separador(t):
 def _corta_na_palavra_de_servico(t):
     """Corta na primeira palavra que abre o serviço, da segunda em diante.
 
-    "David Pera Using his own Kart" → "David Pera".
+    "David Pedalo Using his own Kart" → "David Pedalo".
     "Callan Lead & Follow Vanderlan" → "Callan".
     Nunca corta na primeira palavra: senão "Summer Camp" viraria a pessoa "Summer"."""
     palavras = t.split()
@@ -187,7 +187,7 @@ def _corta_na_palavra_de_servico(t):
 
 
 def _tira_categoria(t):
-    """Tira a categoria/motor colada no fim do nome: "Alex Xikis KA100" → "Alex Xikis"."""
+    """Tira a categoria/motor colada no fim do nome: "Alex Xelix KA100" → "Alex Xelix"."""
     palavras = t.split()
     while len(palavras) > 1 and _RX_CATEGORIA.match(palavras[-1]):
         palavras.pop()
@@ -195,7 +195,7 @@ def _tira_categoria(t):
 
 
 def _separa_grudado(t):
-    """'MauricioPardomo' → 'Mauricio Pardomo'. Só quando é UMA palavra e a maiúscula
+    """'MauricioParafomo' → 'Mauricio Parafomo'. Só quando é UMA palavra e a maiúscula
     aparece depois de minúscula — 'McDonald' e 'DeSouza' continuam inteiros porque
     o pedaço da frente teria menos de 3 letras."""
     if len(t.split()) != 1:
@@ -230,8 +230,8 @@ def _nome_plausivel(t):
         return False
     if len(palavras[0]) < 2:                     # inicial sozinha na frente não é nome
         return False
-    # Inicial abreviada é normal no meio ("Bella M Wagner") e no fim ("Charlie M").
-    # Na frente não: "M Wagner" sozinho não identifica ninguém — e isso já é barrado
+    # Inicial abreviada é normal no meio ("Bella M Wanderbar") e no fim ("Charlie M").
+    # Na frente não: "M Wanderbar" sozinho não identifica ninguém — e isso já é barrado
     # pela regra acima, que exige 2 letras na primeira palavra.
     return True
 
@@ -241,7 +241,7 @@ _SEPARADORES = re.compile(r"\s*[_|:]\s*|\s+-\s+|\s*,\s*")
 
 def _primeiro_pedaco_com_gente(t):
     """Normalmente a pessoa vem primeiro. Quando o primeiro pedaço é SÓ serviço, ela
-    vem depois: "Go Kart Driving Experience - Allan Ramos - 2 STROKE" é o Allan Ramos.
+    vem depois: "Go Kart Driving Experience - Allan Rampos - 2 STROKE" é o Allan Rampos.
 
     Só pula pedaço que é serviço reconhecido — nunca corrida, pista ou série, senão
     "Star Champions Series - King Castle" viraria a pessoa "King Castle"."""
@@ -252,13 +252,13 @@ def _primeiro_pedaco_com_gente(t):
         if not _so_servico(pedaco):
             return _corta_no_separador(pedaco if i else t)
     # Todos os pedaços são serviço: o nome pode estar colado no fim, sem separador
-    # ("Driving Experience Duffy Merrill"). Tira as palavras de serviço da frente e vê
+    # ("Driving Experience Duffy Mercurill"). Tira as palavras de serviço da frente e vê
     # se sobra gente.
     return _sem_o_servico_da_frente(pedacos[0]) if pedacos else t
 
 
 def _sem_o_servico_da_frente(pedaco):
-    """'Driving Experience Duffy Merrill' → 'Duffy Merrill'. Devolve o pedaço inteiro
+    """'Driving Experience Duffy Mercurill' → 'Duffy Mercurill'. Devolve o pedaço inteiro
     quando não sobra nada — quem julga se é gente é `_nome_plausivel`."""
     palavras = pedaco.split()
     i = 0
@@ -288,23 +288,23 @@ def pessoa_do_titulo(titulo, detalhe=False):
 
     O quadro do Asana escreve o cliente ANTES do serviço, em quatro formas — e o dono
     mandou (22/09) a IA reconhecer as quatro, depois de achar 112 serviços de outras
-    pessoas dentro do card do David Pera:
+    pessoas dentro do card do David Pedalo:
 
-      'Aaron Benoit_Trackside Support'          → 'Aaron Benoit'   (underline)
-      'Harley Keeble - Rotax [3/3]'             → 'Harley Keeble'  (hífen com espaço)
-      'Alexander Jacoby | KA100'                → 'Alexander Jacoby' (barra vertical)
-      'David Pera Using his own Kart'           → 'David Pera'     (só espaço)
+      'Aaron Bandoit_Trackside Support'          → 'Aaron Bandoit'   (underline)
+      'Harley Kebrel - Rotax [3/3]'             → 'Harley Kebrel'  (hífen com espaço)
+      'Alexander Jetsby | KA100'                → 'Alexander Jetsby' (barra vertical)
+      'David Pedalo Using his own Kart'           → 'David Pedalo'     (só espaço)
 
     E ainda: primeiro nome sozinho ('Branson_Practice KA100' → 'Branson'), inicial
     abreviada ('Charlie M_Racing Program 3/6' → 'Charlie M'), categoria colada
-    ('Alex Xikis KA100_Professional Coaching' → 'Alex Xikis') e barra entre pessoas
-    ('Jude cook/Harley client - Kart proprio' → 'Jude cook').
+    ('Alex Xelix KA100_Professional Coaching' → 'Alex Xelix') e barra entre pessoas
+    ('Jude cockpit/Harley client - Kart proprio' → 'Jude cockpit').
 
     '2026 SKUSA Winter Series RD1/2 | …' → None: corrida não é gente.
     """
     t = (titulo or "").strip()
     t = re.sub(r"^\s*session setup\s*\|\s*", "", t, flags=re.I)
-    t = re.sub(r"^\s*[\[(][^\])]*[\])]\s*", "", t)      # "[Canceled] Erik Mendoza Jr_…": a tag na frente sai
+    t = re.sub(r"^\s*[\[(][^\])]*[\])]\s*", "", t)      # "[Canceled] Erik Mangoza Jr_…": a tag na frente sai
     # "TESTE - Eduardo …" também é etiqueta: virava o piloto "Teste" (dono, 13/10, #212)
     # Só com separador ou em maiúsculas: "Test Day" é nome de serviço, não etiqueta.
     t = re.sub(r"^\s*(?:(?i:teste|test|testing)\s*[-–:|_]+|(?:TESTE|TEST|TESTING)\s)\s*", "", t)
@@ -318,7 +318,7 @@ def pessoa_do_titulo(titulo, detalhe=False):
     # Só as palavras que NUNCA cabem num nome de gente condenam a parte da pessoa INTEIRA,
     # antes do corte — senão o corte tira justamente a palavra que condenava
     # ("Daytona Speedway Practice" → "Daytona"). `eh_rotulo_ou_servico` NÃO entra aqui:
-    # ela casa frases de serviço que vêm legitimamente depois do nome ("Giovanni Barrera
+    # ela casa frases de serviço que vêm legitimamente depois do nome ("Giovanni Bandarra
     # 2 Stroke Karting School"). Revisão adversarial de 22/09.
     if any(re.sub(r"[^A-Za-zÀ-ÿ0-9-]", "", x).lower() in _NUNCA_NO_NOME for x in t.split()):
         return {"nome": None, "truncado": False} if detalhe else None
@@ -327,7 +327,7 @@ def pessoa_do_titulo(titulo, detalhe=False):
     truncado = cortado != t
     t = _separa_grudado(_tira_categoria(cortado).strip(" &-"))
     # a palavra de corrida/serviço que condena é a que está na PARTE DA PESSOA: "Mike
-    # Fattuta_Professional Coach Rotax" tem gente antes do separador e serviço depois
+    # Flatuta_Professional Coach Rotax" tem gente antes do separador e serviço depois
     if not t or re.search(r"\d", t) or CORRIDA.search(t):
         return {"nome": None, "truncado": False} if detalhe else None
     if eh_rotulo_ou_servico(t):
@@ -339,7 +339,7 @@ def pessoa_do_titulo(titulo, detalhe=False):
         # serviço ("Ana Prado" → "Ana"?). Nome assim não pode ser usado para achar card
         # pelo primeiro nome — quem usa isto é `pessoa_do_titulo_detalhe`.
         pass
-    # "Erik Mendoza Jr" é o Erik Mendoza (dono, 22/09) — no quadro, Jr marca a criança,
+    # "Erik Mangoza Jr" é o Erik Mangoza (dono, 22/09) — no quadro, Jr marca a criança,
     # não faz parte do nome. "Sr" fica: é como o pai se distingue do filho.
     t = re.sub(r"\s+jr\.?$", "", t, flags=re.I)
     nome = " ".join(p if p.isupper() and len(p) > 3 else p for p in t.split()).title() if t.isupper() else t
@@ -368,7 +368,7 @@ def _lev(a, b):
 
 def mesmo_nome(a, b, folga=1):
     """Mesma pessoa pelo nome: primeiro nome igual e sobrenome igual ou a ≤folga
-    letras de distância (Alonso/Alonzo, Pionti/Pionte). 'Renato Frota Pionti' ~ 'Renato Pionti'."""
+    letras de distância (Alvaso/Alvazo, Pistoni/Pistone). 'Renato Faixa Pistoni' ~ 'Renato Pistoni'."""
     pa, pb = normaliza(a), normaliza(b)
     if len(pa) < 2 or len(pb) < 2 or pa[0] != pb[0]:
         return False
@@ -403,7 +403,7 @@ def normaliza_email(texto):
 
 
 def normaliza_telefone(texto):
-    """Só o primeiro telefone, no formato que as pessoas leem: 305-609-7845 / +55 11 9…"""
+    """Só o primeiro telefone, no formato que as pessoas leem: 305-555-0145 / +55 11 9…"""
     t = (texto or "").strip()
     if not t:
         return None
@@ -432,8 +432,8 @@ def limpar_nascimentos(con):
 
 
 def limpar_nomes_de_servico(con):
-    """Nome de cliente que carrega o serviço junto ("Elliott Hubbard_Summer Camp 2026 1/4",
-    "Mike Fattuta_Professional Coach Rotax") fica só com a pessoa. Dono, 16/09: a IA tem
+    """Nome de cliente que carrega o serviço junto ("Elliott Hubtrack_Summer Camp 2026 1/4",
+    "Mike Flatuta_Professional Coach Rotax") fica só com a pessoa. Dono, 16/09: a IA tem
     de saber diferenciar o nome do piloto do nome do serviço. Idempotente; quando o
     título não tem gente reconhecível, não mexe (isso é assunto de limpar_nao_clientes)."""
     n = 0
@@ -485,7 +485,7 @@ def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
             return _do_piloto(cs, piloto), "telefone"
     # Responsável ANTES do piloto (dono, 22/09: "é o nome do responsável e o contato que
     # confirmam"). E piloto de uma palavra só nunca decide sozinho: "Alex" bate no balde
-    # "Alex", no Alex Xikis e no Alex Donnell.
+    # "Alex", no Alex Xelix e no Alex Dampell.
     for alvo, campo in ((nome, "name"), (piloto, "pilot_name")):
         if not alvo:
             continue
@@ -681,7 +681,7 @@ def deduplicar(con, por="sync"):
         else:
             vistos[t] = c["id"]
     # Nome igual só une quando é NOME INTEIRO (2+ palavras). Primeiro nome sozinho não
-    # identifica ninguém — "Alex" é o Alex Xikis, o Alex Donnell e o balde "Alex" ao
+    # identifica ninguém — "Alex" é o Alex Xelix, o Alex Dampell e o balde "Alex" ao
     # mesmo tempo. E balde nunca é unido automaticamente: ele existe justamente porque
     # não se sabe de quem é (dono, 22/09). Revisão adversarial de 22/09.
     vistos = {}
@@ -703,7 +703,7 @@ def deduplicar(con, por="sync"):
 def parecido(a, b):
     """Mais largo que mesmo_nome — SÓ para sugerir duplicados a uma pessoa, nunca
     para unir sozinho: primeiro nome com uma letra de diferença (Brian/Bryan),
-    sobrenome igual; ou um nome contido no outro (Brian Santiago ⊂ Brian S. Santiago Jr)."""
+    sobrenome igual; ou um nome contido no outro (Brian Sapata ⊂ Brian S. Sapata Jr)."""
     if mesmo_nome(a, b):
         return True
     pa, pb = normaliza(a), normaliza(b)
@@ -735,7 +735,7 @@ def mesmo_contato(a, b):
 
 
 def candidatos_duplicados(con, para=None):
-    """Pares que PARECEM a mesma pessoa (Alonso/Alonzo, Brian/Bryan, piloto de um =
+    """Pares que PARECEM a mesma pessoa (Alvaso/Alvazo, Brian/Bryan, piloto de um =
     responsável do outro) — decisão humana, com a IA ajudando. `para` restringe a um cliente."""
     cs = todos(con, "SELECT id, name, pilot_name, email, phone FROM clients WHERE kind<>? ORDER BY name", (SEPARADO,))
     pares, vistos = [], set()

@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: Bryan Santiago
+piloto: Bryan Sapata
 atualizado_em: 2026-08-28
 ---
 
-# Pablo Santiago
+# Pablo Sapata
 
-Responsável por **Bryan Santiago** · [[Clientes]]
+Responsável por **Bryan Sapata** · [[Clientes]]
 
 US$ 54.122 no ano. [[Urace Academy]] 2T e [[Corridas|FLKC]]. ⚠️ E-mail gravado com codificação de URL numa tarefa.
 

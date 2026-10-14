@@ -35,8 +35,8 @@ def cli():
     os.environ["URACE_DIR"] = pasta
     con = conectar(); aplicar_schema(con)
     auth.criar_usuario(con, "admin@urace.us", "Admin", "ADMIN", SENHA)
-    hank = inserir(con, "clients", name="Hank Lai", email="hl@x.com", status="ACTIVE", source="manual")
-    inserir(con, "tasks", client_id=hank, title="Hank Lai_Urace Daily [1/1]", project="U-RACE",
+    hank = inserir(con, "clients", name="Hank Lume", email="hl@x.com", status="ACTIVE", source="manual")
+    inserir(con, "tasks", client_id=hank, title="Hank Lume_Urace Daily [1/1]", project="U-RACE",
             section="Finished Services", status="completed")
     inserir(con, "invoices", client_id=hank, doc_number="2001", amount=500, balance=500,
             status="sent", issued_on="2026-09-01")
@@ -194,7 +194,7 @@ def test_estoque_item_traz_o_razao(cli):
 
 def test_ficha_do_cliente_junta_tudo(cli):
     _, d = chamar(cli, "urace_cliente", {"id": 1})
-    assert d["cliente"]["name"] == "Hank Lai"
+    assert d["cliente"]["name"] == "Hank Lume"
     assert len(d["servicos"]) == 1 and len(d["invoices"]) == 1
     assert "estoque_dele" in d
 

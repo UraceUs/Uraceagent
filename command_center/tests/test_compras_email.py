@@ -96,7 +96,7 @@ def test_fornecedor_pelo_remetente():
 @pytest.mark.parametrize("m", [
     msg("[URACE] Order #1054 placed by John Smith", "Order #1054", de="URace Store <store@urace.us>"),
     msg("You've got a new order: #2231", "Order #2231", de="Wix <no-reply@wix.com>"),
-    msg("Payment received from Enzo Kurian", "Invoice 1043 paid $500.00", de="QuickBooks <quickbooks@notification.intuit.com>"),
+    msg("Payment received from Enzo Kartian", "Invoice 1043 paid $500.00", de="QuickBooks <quickbooks@notification.intuit.com>"),
     msg("30% off everything — order now!", "Order #1 today", de="Kart Store <deals@kartstore.com>"),
     msg("Your order shipped", "Tracking number 1Z999AA10123456784", de="Kart <x@kart.com>", marcadores=["CATEGORY_PROMOTIONS"]),
     msg("Order #77 shipped", "", de="Shop <a@b.com>", marcadores=["URace Store/Shipped Orders"]),
@@ -231,7 +231,7 @@ def test_atencao_mostra_entregue_sem_entrada(con):
 def test_sincronia_so_rele_conversa_que_mudou(con, monkeypatch):
     chamadas = []
     caixa = {"t1": [msg('Ordered: "Kit freio"', "Order #112-1111111-2222222", de="Amazon.com <a@amazon.com>")],
-             "t2": [msg("Lunch on Friday?", "hey", de="Amigo <a@gmail.com>")]}
+             "t2": [msg("Lunch on Friday?", "hey", de="Amigo <a@example.com>")]}
 
     def falso(sistema, ferramenta, **k):
         chamadas.append((ferramenta, k.get("thread_id"), k.get("consulta")))

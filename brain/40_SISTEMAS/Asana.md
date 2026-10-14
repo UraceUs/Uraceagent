@@ -28,8 +28,8 @@ Bushnell `1216267652449325` · KART `1213088541600530` · F4
 
 **Piloto ≠ serviço no título (dono, 16/09).** Antes do primeiro separador (`_`, `|`,
 hífen com espaço) é a pessoa; o resto é serviço. Hífen colado só separa quando o que
-vem depois é serviço ou tem número. "Elliott Hubbard_Summer Camp 2026 1/4" é o piloto
-Elliott Hubbard em Summer Camp 2026, sessão 1 de 4 — nunca um cliente chamado assim.
+vem depois é serviço ou tem número. "Elliott Hubtrack_Summer Camp 2026 1/4" é o piloto
+Elliott Hubtrack em Summer Camp 2026, sessão 1 de 4 — nunca um cliente chamado assim.
 
 ## Colunas do U-RACE
 `RACES` · `Finished Services` · TUESDAY→SUNDAY (dia do serviço) · `Pending Reschedule` · `Luis tasks` · **`Matt tasks` — nenhuma automação**

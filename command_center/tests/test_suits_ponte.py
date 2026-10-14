@@ -17,8 +17,8 @@ from command_center.db import aplicar_schema, conectar, todos, um
 from command_center.providers import suits_ponte as sp
 
 VENDA = {"message_id": "m-venda", "de": "Urace <urace@urace.us>", "data": "Sun, 27 Sep 2026", "assunto": "[Urace]: You've got a new order: #4738",
-         "corpo": "You've received a new order from Ryan Casner: Order #4738 Fully Custom Kart Suit ×1 $420.75 "
-                  "casnerracingdevelopment@example.com (916) 952-6271", "anexos": [], "message_id_header": "<v@x>"}
+         "corpo": "You've received a new order from Ryan Capner: Order #4738 Fully Custom Kart Suit ×1 $420.75 "
+                  "capnerracingdevelopment@example.com (916) 555-0148", "anexos": [], "message_id_header": "<v@x>"}
 VENDA_CAMISETA = dict(VENDA, message_id="m-camiseta", assunto="[Urace]: You've got a new order: #3700",
                       corpo="New order: Urace T-shirts - 3XS ×1 $19.95")
 
@@ -104,10 +104,10 @@ def test_resposta_do_cliente_baixa_os_anexos_e_ignora_o_que_nos_mandamos(con):
 def test_conversas_novas_reconhecem_fornecedor_designer_e_quem_nao_tem_pedido(con):
     sp.salvar_config(con, {"designer_email": "designer@example.com", "designer_nome": "Matheus"})
     con.execute("INSERT INTO suit_suppliers (name, email, is_current) VALUES ('Usman','speedinds@example.com',1)")
-    bennie = con.execute("INSERT INTO suit_orders (title) VALUES ('Bennie Schneider')").lastrowid
+    bennie = con.execute("INSERT INTO suit_orders (title) VALUES ('Bennie Shifter')").lastrowid
     gm, chamadas = Gmail(), []
     gm.threads = {
-        "t-usman": [{"message_id": "u1", "de": "speedinds@example.com", "assunto": "Re: SUIT - Bennie Schneider (Team 6)", "corpo": "measurements are wrong"}],
+        "t-usman": [{"message_id": "u1", "de": "speedinds@example.com", "assunto": "Re: SUIT - Bennie Shifter (Team 6)", "corpo": "measurements are wrong"}],
         "t-design": [{"message_id": "d1", "de": "Matheus <designer@example.com>", "assunto": f"Re: Suits #{bennie} design", "corpo": "Art attached",
                       "anexos": [{"nome": "mockup.png", "mime": "image/png", "attachment_id": "a-png", "bytes": 10}]}],
         "t-novo": [{"message_id": "n1", "de": "Paula Carter <paula@example.com>", "assunto": "Race suit for Matthew", "corpo": "I'd like a suit"}]}
@@ -170,8 +170,8 @@ def test_ponte_desligada_ou_sem_o_motor_novo_nao_roda(con, monkeypatch):
 
 # ------------------------------------------------------------------ o envio
 def _pedido(con, **kw):
-    campos = {"title": "Ryan Casner", "customer_name": "Ryan Casner", "customer_email": "ryan@example.com",
-              "customer_phone": "(916) 952-6271", "ship_address": "1200 Oak Street\nSan Diego CA", **kw}
+    campos = {"title": "Ryan Capner", "customer_name": "Ryan Capner", "customer_email": "ryan@example.com",
+              "customer_phone": "(916) 555-0148", "ship_address": "1200 Oak Street\nSan Diego CA", **kw}
     cols = ", ".join(campos)
     return con.execute(f"INSERT INTO suit_orders ({cols}) VALUES ({', '.join('?' * len(campos))})", tuple(campos.values())).lastrowid
 
@@ -209,7 +209,7 @@ def test_com_envio_automatico_sai_para_o_cliente_com_o_manual_e_guarda_a_convers
 def test_designer_nao_recebe_dado_do_cliente_e_cliente_nao_ve_o_designer(con, tmp_path):
     sp.salvar_config(con, {"envio_automatico": "1", "designer_email": "designer@example.com", "designer_nome": "Matheus"})
     pid = _pedido(con)
-    for corpo in ("Customer email ryan@example.com", "Call him at 916-952-6271", "Ship to 1200 Oak Street", "Client: Ryan Casner"):
+    for corpo in ("Customer email ryan@example.com", "Call him at 916-555-0148", "Ship to 1200 Oak Street", "Client: Ryan Capner"):
         with pytest.raises(sp.Recusado):
             sp.enviar(con, pid, "designer", f"Suits #{pid}", corpo)
     with pytest.raises(sp.Recusado):

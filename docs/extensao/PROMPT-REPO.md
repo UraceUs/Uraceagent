@@ -35,6 +35,13 @@ relatórios da VPS (`relatorios/`) e pelas mensagens de commit.
 - mudar política de ação (`action_policies`) — é decisão do dono
 - `git push --force`, reescrever histórico, mexer em branch que não seja a sua
 - pôr segredo no código ou no repositório
+- pôr dado real de cliente no repositório — teste, comentário, documento, nota do `brain/` ou
+  relatório em `relatorios/` (cliente é citado pelo número do card, `#374`). O
+  repositório é público (dono, 14/10, #244): teste usa fictício marcado (`@example.com`,
+  telefone 555-01xx, nome inventado) e `command_center/tests/test_sem_dado_de_cliente.py`
+  falha se entrar nome, e-mail ou telefone de cliente. Quando o defeito veio de um cliente
+  real, reproduza com um fictício do mesmo formato. NO FAKE DATA continua valendo para o
+  que o sistema mostra
 
 ## Ao terminar
 

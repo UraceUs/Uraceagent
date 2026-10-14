@@ -28,26 +28,26 @@ def cli():
     auth.criar_usuario(con, "admin@urace.us", "Admin", "ADMIN", SENHA)
     auth.criar_usuario(con, "viewer@urace.us", "Viewer", "VIEWER", SENHA)
     # espelhos: o cenário real de 04/09
-    rafael = inserir(con, "clients", name="Rafael Pionti", email="rafael@spmesportes.com.br",
-                     pilot_name="Renato Frota Pionti", pilot_dob="2012-01-03", vip=0, status="ACTIVE", source="asana")
-    joseph = inserir(con, "clients", name="Joseph Kurian", email="joekur001@gmail.com",
-                     pilot_name="Enzo Kurian", vip=0, status="ACTIVE", source="asana")
+    rafael = inserir(con, "clients", name="Rafael Pistoni", email="rafael.pistoni@example.com",
+                     pilot_name="Renato Faixa Pistoni", pilot_dob="2012-01-01", vip=0, status="ACTIVE", source="asana")
+    joseph = inserir(con, "clients", name="Joseph Kartian", email="joe.kartian@example.com",
+                     pilot_name="Enzo Kartian", vip=0, status="ACTIVE", source="asana")
     amanha = (HOJE + timedelta(days=1)).isoformat()
-    t1 = inserir(con, "tasks", client_id=rafael, title="Renato Frota Pionti_Professional Coaching_2T [1/1]",
+    t1 = inserir(con, "tasks", client_id=rafael, title="Renato Faixa Pistoni_Professional Coaching_2T [1/1]",
                  project="U-RACE", section="SATURDAY", status="open", due_on=amanha, subtasks_total=12, subtasks_done=1)
     inserir(con, "entity_links", entity_type="task", entity_id=t1, system="asana", external_id="1218104997373079",
             deep_link="https://app.asana.com/0/1205450093098920/1218104997373079/f")
-    inserir(con, "tasks", client_id=joseph, title="Enzo Kurian [4 strokes]", project="U-RACE", section="SATURDAY",
+    inserir(con, "tasks", client_id=joseph, title="Enzo Kartian [4 strokes]", project="U-RACE", section="SATURDAY",
             status="open", due_on=amanha, subtasks_total=12, subtasks_done=4)
-    inserir(con, "waivers", client_id=joseph, signer_name="Joseph Kurian", signer_email="joekur001@gmail.com",
+    inserir(con, "waivers", client_id=joseph, signer_name="Joseph Kartian", signer_email="joe.kartian@example.com",
             template="parental", status="completed", sent_at="2026-08-29", completed_at="2026-08-31")
-    inserir(con, "waivers", client_id=None, signer_name="Matthew Hubbard", signer_email="misterhubbbard@gmail.com",
+    inserir(con, "waivers", client_id=None, signer_name="Matthew Hubtrack", signer_email="mister.hubtrack@example.com",
             template="parental", status="autoresponded", sent_at="2026-05-27",
             expires_at=(HOJE + timedelta(days=1)).isoformat())   # vence amanhã, relativo ao dia do teste
     # a atenção "cliente escreveu" só olha os últimos 14 dias (atencao.py), então a data
     # aqui é relativa: com 2026-09-04 fixo o teste passava até 17/09 e quebrava no dia 18.
     inserir(con, "emails", client_id=rafael, mailbox="urace", subject="Sobre o treino de sábado",
-            sender="Rafael Pionti <rafael@spmesportes.com.br>",
+            sender="Rafael Pistoni <rafael.pistoni@example.com>",
             last_at=(HOJE - timedelta(days=3)).isoformat(), handled=0)
     inserir(con, "invoices", client_id=rafael, doc_number="1001", amount=400, balance=400, status="sent",
             issued_on="2026-09-02", due_on="2026-09-04")
@@ -74,10 +74,10 @@ def test_dashboard_e_atencao_contextual(cli):
     assert d["active_clients"] == 2 and d["waivers_bounced"] == 1 and d["emails_attention"] == 1
     assert d["open_invoices"]["count"] == 1 and d["open_invoices"]["total"] == 400.0
     niveis = {i["title"]: i["level"] for i in d["needs_attention"]}
-    renato = [t for t in niveis if "Rafael Pionti" in t and "waiver" in t][0]
+    renato = [t for t in niveis if "Rafael Pistoni" in t and "waiver" in t][0]
     assert niveis[renato] == "CRITICAL"                      # serviço amanhã sem waiver
-    assert not any("Joseph Kurian" in t and "waiver" in t for t in niveis)   # Enzo já assinou
-    assert any("devolveu" in t for t in niveis)              # bounce do Hubbard
+    assert not any("Joseph Kartian" in t and "waiver" in t for t in niveis)   # Enzo já assinou
+    assert any("devolveu" in t for t in niveis)              # bounce do Hubtrack
     assert any("escreveu" in t for t in niveis)              # e-mail do cliente
 
 
@@ -86,7 +86,7 @@ def test_viewer_nao_ve_financeiro(cli):
     d = cli.get(B + "/dashboard").json()
     assert d["open_invoices"] is None
     c = cli.get(B + "/clients/1").json()
-    assert c["invoices"] is None and c["client"]["name"] == "Rafael Pionti"
+    assert c["invoices"] is None and c["client"]["name"] == "Rafael Pistoni"
 
 
 def test_client_360_e_deep_link(cli):
@@ -100,9 +100,9 @@ def test_client_360_e_deep_link(cli):
 
 def test_busca_global(cli):
     entra(cli, "admin@urace.us")
-    r = cli.get(B + "/search?q=Pionti").json()
-    assert r["clients"][0]["pilot_name"] == "Renato Frota Pionti" and len(r["tasks"]) == 1
-    r = cli.get(B + "/search?q=hubbb").json()
+    r = cli.get(B + "/search?q=Pistoni").json()
+    assert r["clients"][0]["pilot_name"] == "Renato Faixa Pistoni" and len(r["tasks"]) == 1
+    r = cli.get(B + "/search?q=hubtr").json()
     assert r["waivers"][0]["status"] == "autoresponded"
 
 
@@ -112,7 +112,7 @@ def test_vip_dispensa_alerta_e_so_manager_muda(cli):
     h = entra(cli, "admin@urace.us")
     assert cli.patch(B + "/clients/1", headers=h, json={"vip": True}).status_code == 200
     d = cli.get(B + "/dashboard").json()
-    assert not any("Rafael Pionti" in i["title"] and "waiver" in i["title"] for i in d["needs_attention"])
+    assert not any("Rafael Pistoni" in i["title"] and "waiver" in i["title"] for i in d["needs_attention"])
     cli.patch(B + "/clients/1", headers=h, json={"vip": False})
 
 
@@ -243,7 +243,7 @@ def test_classificar_por_regras():
     assert lab == "Platforms & Subscriptions/Docusign" and por == "rules"
     assert classificar.por_regras({"labels": "[]", "sender": "Urace <urace@urace.us>", "subject": 'New message from "Urace - The Driver Factory"'}, nomes)[0].endswith("Formulario do site")
     assert classificar.por_regras({"labels": "[]", "sender": "financeiro@sxsmkt.com.br", "subject": "FATURAMENTO SETEMBRO/2026"}, nomes)[0].startswith("Finances")
-    assert classificar.por_regras({"labels": "[]", "sender": "joao@gmail.com", "subject": "oi"}, nomes) is None
+    assert classificar.por_regras({"labels": "[]", "sender": "joao@example.com", "subject": "oi"}, nomes) is None
     # resposta da IA validada contra a lista real: marcador inventado vira None
     res = classificar.parse_ia('bla {"itens":[{"id":1,"marcador":"wnews","motivo":"propaganda"},{"id":2,"marcador":"Inventado/Novo","motivo":"x"}]} fim', nomes)
     assert res[1][0] == "wNews" and res[2][0] is None
@@ -297,23 +297,23 @@ def test_waiver_lixeira_restaurar_vinculo(cli):
 
 def test_vinculo_por_nome_do_menor():
     from command_center.providers.sync import _mesmo_nome
-    assert _mesmo_nome("Renato Frota Pionti", "Renato Pionti")
-    assert _mesmo_nome("RENATO PIONTI", "renato pionti")
-    assert not _mesmo_nome("Matthew Hubbard", "Renato Pionti")
-    assert not _mesmo_nome("", "Renato Pionti")
+    assert _mesmo_nome("Renato Faixa Pistoni", "Renato Pistoni")
+    assert _mesmo_nome("RENATO PISTONI", "renato pistoni")
+    assert not _mesmo_nome("Matthew Hubtrack", "Renato Pistoni")
+    assert not _mesmo_nome("", "Renato Pistoni")
 
 
 # ------------------------------------------------ identidade: cliente, ativo, um card por pessoa (04/09)
 def test_identidade_pessoa_e_nome():
     from command_center.providers import identidade as I
-    assert I.pessoa_do_titulo("Session Setup | Aaron Benoit_Kart [Practice_2T]") == "Aaron Benoit"
-    assert I.pessoa_do_titulo("Aaron Benoit_Trackside Support") == "Aaron Benoit"
+    assert I.pessoa_do_titulo("Session Setup | Aaron Bandoit_Kart [Practice_2T]") == "Aaron Bandoit"
+    assert I.pessoa_do_titulo("Aaron Bandoit_Trackside Support") == "Aaron Bandoit"
     assert I.pessoa_do_titulo("2026 SKUSA Winter Series RD1/2 | Musselman Honda Circuit") is None
     assert I.pessoa_do_titulo("2026 ROK Florida Winter Tour Rd1, Orlando Kart Center (Orlando, FL)") is None
     assert I.pessoa_do_titulo("Email:") is None
-    assert I.pessoa_do_titulo("Enzo Kurian [4 strokes 09/05/26]") == "Enzo Kurian"
-    assert I.mesmo_nome("Alex Alonso", "Alex Alonzo") and I.mesmo_nome("Renato Frota Pionti", "Renato Pionti")
-    assert not I.mesmo_nome("Aaron Benoit", "Aaron Smith") and not I.mesmo_nome("Alex Alonso", "Alexandre Alonso")
+    assert I.pessoa_do_titulo("Enzo Kartian [4 strokes 09/05/26]") == "Enzo Kartian"
+    assert I.mesmo_nome("Alex Alvaso", "Alex Alvazo") and I.mesmo_nome("Renato Faixa Pistoni", "Renato Pistoni")
+    assert not I.mesmo_nome("Aaron Bandoit", "Aaron Smith") and not I.mesmo_nome("Alex Alvaso", "Alexandre Alvaso")
     assert I.so_digitos("+1 (407) 555-0199") == "4075550199"
 
 
@@ -321,11 +321,11 @@ def test_deduplicar_e_status(cli):
     from command_center.db import conectar, inserir
     from command_center.providers import identidade as I
     con = conectar()
-    a = inserir(con, "clients", name="Alex Alonso", email="alex@example.com", status="ACTIVE", source="asana")
-    b = inserir(con, "clients", name="ALEX ALONSO", phone="(407) 555-0100", status="ACTIVE", source="asana")   # nome igual normalizado -> une
-    c = inserir(con, "clients", name="Alex Alonzo", status="ACTIVE", source="asana")                           # quase igual -> só candidato
+    a = inserir(con, "clients", name="Alex Alvaso", email="alex@example.com", status="ACTIVE", source="asana")
+    b = inserir(con, "clients", name="ALEX ALVASO", phone="(407) 555-0100", status="ACTIVE", source="asana")   # nome igual normalizado -> une
+    c = inserir(con, "clients", name="Alex Alvazo", status="ACTIVE", source="asana")                           # quase igual -> só candidato
     corrida = inserir(con, "clients", name="2026 SKUSA Winter Series RD1/2", status="ACTIVE", source="asana")
-    inserir(con, "tasks", client_id=b, title="Alex Alonso_Kart", project="U-RACE", section="Finished Services", status="completed", due_on="2025-01-10")
+    inserir(con, "tasks", client_id=b, title="Alex Alvaso_Kart", project="U-RACE", section="Finished Services", status="completed", due_on="2025-01-10")
     inserir(con, "tasks", client_id=corrida, title="2026 SKUSA Winter Series RD1/2", project="U-RACE", section="Finished Services", status="completed", due_on="2026-01-10")
     # 22/09 — dono: "pode só separar". A corrida fica no banco, marcada, fora da lista.
     assert I.limpar_nao_clientes(con) >= 1 and con.execute("SELECT kind FROM clients WHERE id=?", (corrida,)).fetchone()[0] == I.SEPARADO
@@ -335,7 +335,7 @@ def test_deduplicar_e_status(cli):
     keep = con.execute("SELECT * FROM clients WHERE email='alex@example.com'").fetchone()
     a = keep["id"]
     assert keep["phone"] == "(407) 555-0100"                                     # completou o principal
-    assert con.execute("SELECT client_id FROM tasks WHERE title='Alex Alonso_Kart'").fetchone()[0] == a
+    assert con.execute("SELECT client_id FROM tasks WHERE title='Alex Alvaso_Kart'").fetchone()[0] == a
     assert con.execute("SELECT COUNT(*) FROM client_merges").fetchone()[0] >= 1
     pares = I.candidatos_duplicados(con)
     assert any({p["a"]["id"], p["b"]["id"]} == {a, c} for p in pares)
@@ -376,10 +376,10 @@ def test_auto_tratar_notificacoes():
     from command_center.providers import classificar as C
     assert C.auto_tratar({"sender": "Urace <urace@urace.us>", "subject": "We have an exclusive 10% discount just for you!"}, None).startswith("enviado por nós")
     assert "DocuSign" in C.auto_tratar({"sender": "Docusign <dse@docusign.net>", "subject": "Completed: Please Complete the Docusign: Parental"}, None)
-    assert "RD Station" in C.auto_tratar({"sender": "x@rdstation.com", "subject": "Urace 'Nova conversão - Joseph Kurian'"}, None)
+    assert "RD Station" in C.auto_tratar({"sender": "x@rdstation.com", "subject": "Urace 'Nova conversão - Joseph Kartian'"}, None)
     assert "ingresso" in C.auto_tratar({"sender": "tix@okc.com", "subject": "Your tickets for OKC PIT & DRIVER PASS"}, None)
     assert C.auto_tratar({"sender": "a@b.com", "subject": "x"}, "Softwares|Apps/Docusign") is not None
-    assert C.auto_tratar({"sender": "joekur001@gmail.com", "subject": "Plano mensal para o Enzo"}, None) is None      # este sim é humano
+    assert C.auto_tratar({"sender": "joe.kartian@example.com", "subject": "Plano mensal para o Enzo"}, None) is None      # este sim é humano
 
 
 def test_atencao_ignora_historico_e_notificacao(cli):
@@ -499,8 +499,8 @@ def test_contexto_planilha_arquivo_e_prompt(cli, tmp_path, monkeypatch):
 
 def test_nome_da_tarefa_padrao():
     from command_center.api.rotas import nome_tarefa, PRODUTOS
-    assert nome_tarefa("Renato Frota Pionti", "Urace Daily", "2T", 1, 1) == "Renato Frota Pionti_Urace Daily_2T [1/1]"
-    assert nome_tarefa("Enzo Kurian", "Academy", "4T", 3, 4) == "Enzo Kurian_Academy_4T [3/4]"
+    assert nome_tarefa("Renato Faixa Pistoni", "Urace Daily", "2T", 1, 1) == "Renato Faixa Pistoni_Urace Daily_2T [1/1]"
+    assert nome_tarefa("Enzo Kartian", "Academy", "4T", 3, 4) == "Enzo Kartian_Academy_4T [3/4]"
     assert nome_tarefa("Davi", "Corrida", None, 1, 2) == "Davi_Corrida [1/2]"
     assert "Corrida" in PRODUTOS and "Racing team" in PRODUTOS["Corrida"]
 
@@ -546,11 +546,11 @@ def test_mensalidade_por_memo_e_sessoes(cli):
     con = conectar()
     from datetime import date
     hoje = date.today(); mes = hoje.strftime("%Y-%m")
-    cid = inserir(con, "clients", name="Brian Santiago", email="brian@example.com", pilot_name="Brian Santiago", status="ACTIVE", source="asana", plan_type="monthly")
+    cid = inserir(con, "clients", name="Brian Sapata", email="brian@example.com", pilot_name="Brian Sapata", status="ACTIVE", source="asana", plan_type="monthly")
     inserir(con, "invoices", client_id=cid, doc_number="INV-77", amount=2756.90, balance=0, status="paid", issued_on=f"{mes}-01",
             memo=f"Urace Academy Training Program + Tuner [{hoje.strftime('%B')}, {hoje.year}]")
-    inserir(con, "tasks", client_id=cid, title="Brian Santiago_Academy_2 stroke [1/4]", project="U-RACE", section="SATURDAY", status="open", due_on=f"{mes}-06")
-    inserir(con, "tasks", client_id=cid, title="Brian Santiago_Academy_2 stroke [2/4]", project="U-RACE", section="Finished Services", status="completed", due_on=f"{mes}-13")
+    inserir(con, "tasks", client_id=cid, title="Brian Sapata_Academy_2 stroke [1/4]", project="U-RACE", section="SATURDAY", status="open", due_on=f"{mes}-06")
+    inserir(con, "tasks", client_id=cid, title="Brian Sapata_Academy_2 stroke [2/4]", project="U-RACE", section="Finished Services", status="completed", due_on=f"{mes}-13")
     con.close()
     m = cli.get(B + f"/clients/{cid}/monthly").json()
     atual = m["months"][0]
@@ -727,7 +727,7 @@ def test_triagem_move_para_principal_e_guarda_quem_precisa_humano(cli, monkeypat
         ontem = (HOJE - timedelta(days=1)).isoformat()
         e1 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Your Amazon.com order", sender="auto-confirm@amazon.com",
                      last_at=f"{ontem}T10:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Order shipped")
-        e2 = inserir(con, "emails", client_id=cliente, mailbox="urace", subject="Posso trocar o dia do treino?", sender="Rafael Pionti <rafael@spmesportes.com.br>",
+        e2 = inserir(con, "emails", client_id=cliente, mailbox="urace", subject="Posso trocar o dia do treino?", sender="Rafael Pistoni <rafael.pistoni@example.com>",
                      last_at=f"{ontem}T11:00:00", handled=0, is_inbox=1, labels='["INBOX"]', snippet="Consigo ir domingo?")
         e3 = inserir(con, "emails", client_id=None, mailbox="urace", subject="Sei lá", sender="x@y.com", last_at=f"{ontem}T12:00:00", handled=0, is_inbox=1, labels='["INBOX"]')
         for e in (e1, e2, e3):
@@ -878,9 +878,9 @@ def test_historico_completo_do_asana_liga_servicos_a_pessoa_e_sugere_duplicados(
     from command_center.db import conectar, um
     from command_center.providers import identidade, sync
     secoes = [{"gid": "1208640396741022", "nome": "Finished Services"}, {"gid": "s-sat", "nome": "SATURDAY"}, {"gid": "s-matt", "nome": "Matt tasks"}]
-    lista = {"1208640396741022": [{"gid": f"9{i:03d}", "nome": f"Thiago Belluci_Academy [{i}/4]", "concluida": True, "vence_em": f"2026-0{1 + i % 6}-1{i % 9}", "subtarefas": 3} for i in range(1, 8)]
-             + [{"gid": "9500", "nome": "Tiago Belluci_Practice OKC", "concluida": True, "vence_em": "2026-08-30", "subtarefas": 2}],
-             "s-sat": [{"gid": "9600", "nome": "Thiago Belluci_Academy [1/4]", "concluida": False, "vence_em": "2026-09-13", "subtarefas": 3}],
+    lista = {"1208640396741022": [{"gid": f"9{i:03d}", "nome": f"Thiago Biellaci_Academy [{i}/4]", "concluida": True, "vence_em": f"2026-0{1 + i % 6}-1{i % 9}", "subtarefas": 3} for i in range(1, 8)]
+             + [{"gid": "9500", "nome": "Tiago Biellaci_Practice OKC", "concluida": True, "vence_em": "2026-08-30", "subtarefas": 2}],
+             "s-sat": [{"gid": "9600", "nome": "Thiago Biellaci_Academy [1/4]", "concluida": False, "vence_em": "2026-09-13", "subtarefas": 3}],
              "s-matt": [{"gid": "9700", "nome": "Nunca lida", "concluida": False}]}
     chamadas = {"secao": [], "tarefa": []}
 
@@ -892,8 +892,8 @@ def test_historico_completo_do_asana_liga_servicos_a_pessoa_e_sugere_duplicados(
         if ferramenta == "asana_tarefa":
             chamadas["tarefa"].append(a["gid"])
             nome = next(t["nome"] for l in lista.values() for t in l if t["gid"] == a["gid"])
-            resp = "Tiago Belluci Sr" if a["gid"] == "9500" else "Thiago Belluci Sr"
-            return {"gid": a["gid"], "nome": nome, "notas": f"Driver's name: {nome.split('_')[0]}\nResponsible Name: {resp}\nEmail: {'tiago' if a['gid'] == '9500' else 'thiago'}@example.com\nPhone: 407-555-0{a['gid'][-3:]}",
+            resp = "Tiago Biellaci Sr" if a["gid"] == "9500" else "Thiago Biellaci Sr"
+            return {"gid": a["gid"], "nome": nome, "notas": f"Driver's name: {nome.split('_')[0]}\nResponsible Name: {resp}\nEmail: {'tiago' if a['gid'] == '9500' else 'thiago'}@example.com\nPhone: 407-555-01{a['gid'][1]}{a['gid'][3]}",
                     "subtarefas_lista": [{"gid": "x", "nome": "Waiver", "concluida": True}, {"gid": "y", "nome": "Invoice", "concluida": False}]}
         raise AssertionError(ferramenta)
     monkeypatch.setattr(sync, "chamar", chamar_falso)
@@ -902,13 +902,13 @@ def test_historico_completo_do_asana_liga_servicos_a_pessoa_e_sugere_duplicados(
         res = sync.sync_asana_completo(con); con.commit()
         assert res["ok"] and res["tarefas"] == 9 and res["colunas"] == 2 and all(c["incluir_concluidas"] and c["maximo"] >= 20000 for c in chamadas["secao"])
         assert "9700" not in chamadas["tarefa"]                                  # Matt tasks nunca
-        brian = um(con, "SELECT * FROM clients WHERE pilot_name='Thiago Belluci'"); bryan = um(con, "SELECT * FROM clients WHERE pilot_name='Tiago Belluci'")
+        brian = um(con, "SELECT * FROM clients WHERE pilot_name='Thiago Biellaci'"); bryan = um(con, "SELECT * FROM clients WHERE pilot_name='Tiago Biellaci'")
         assert brian and bryan and brian["id"] != bryan["id"]
         assert con.execute("SELECT COUNT(*) FROM tasks WHERE client_id=?", (brian["id"],)).fetchone()[0] == 8   # 7 concluídos + 1 aberto
         assert con.execute("SELECT COUNT(*) FROM tasks WHERE client_id=?", (bryan["id"],)).fetchone()[0] == 1
         # 22/09 — "de agora para frente": o que a descrição diz sobre o cliente fica na tarefa
-        t9500 = um(con, "SELECT resp_name, resp_email, resp_phone FROM tasks WHERE title='Tiago Belluci_Practice OKC'")
-        assert (t9500["resp_name"], t9500["resp_email"], t9500["resp_phone"]) == ("Tiago Belluci Sr", "tiago@example.com", "407-555-0500")
+        t9500 = um(con, "SELECT resp_name, resp_email, resp_phone FROM tasks WHERE title='Tiago Biellaci_Practice OKC'")
+        assert (t9500["resp_name"], t9500["resp_email"], t9500["resp_phone"]) == ("Tiago Biellaci Sr", "tiago@example.com", "407-555-0150")
         assert res["candidatos"] >= 1 and any({p["a"]["id"], p["b"]["id"]} == {brian["id"], bryan["id"]} for p in identidade.candidatos_duplicados(con))
         # segunda rodada: nada relido por inteiro (já estão na pessoa certa)
         n = len(chamadas["tarefa"]); sync.sync_asana_completo(con); con.commit()
@@ -943,20 +943,20 @@ def test_contato_limpo_e_linha_do_tempo_com_link_de_cada_item(cli):
     linha do tempo carrega o próprio link (nada de fila de 'asana ↗' no topo)."""
     from command_center.providers import identidade, sync
     from command_center.db import conectar, inserir, um
-    assert identidade.normaliza_email("email%3apablosantiago@outlook.com , bryanlsantiago@outlook.com") == ("pablosantiago@outlook.com", "bryanlsantiago@outlook.com")
+    assert identidade.normaliza_email("email%3apablosapata@example.com , bryanlsapata@example.com") == ("pablosapata@example.com", "bryanlsapata@example.com")
     assert identidade.normaliza_email("mailto:X@Y.com") == ("x@y.com", None)
     assert identidade.normaliza_email("sem email aqui") == (None, None)
-    assert identidade.normaliza_telefone("305-609-7845") == "305-609-7845" and identidade.normaliza_telefone("(305) 609 7845") == "305-609-7845"
-    assert identidade.normaliza_telefone("+1 305 609 7845") == "305-609-7845" and identidade.normaliza_telefone("N/A") is None
-    d = sync.parse_descricao("Driver's name: Bryan Santiago\nResponsible Name: Pablo Santiago\nEmail: email%3apablosantiago@outlook.com , bryanlsantiago@outlook.com\nPhone: (305) 609-7845")
-    assert d["email"] == "pablosantiago@outlook.com" and d["email_alt"] == "bryanlsantiago@outlook.com" and d["telefone"] == "305-609-7845"
+    assert identidade.normaliza_telefone("305-555-0145") == "305-555-0145" and identidade.normaliza_telefone("(305) 555 0145") == "305-555-0145"
+    assert identidade.normaliza_telefone("+1 305 555 0145") == "305-555-0145" and identidade.normaliza_telefone("N/A") is None
+    d = sync.parse_descricao("Driver's name: Bryan Sapata\nResponsible Name: Pablo Sapata\nEmail: email%3apablosapata@example.com , bryanlsapata@example.com\nPhone: (305) 555-0145")
+    assert d["email"] == "pablosapata@example.com" and d["email_alt"] == "bryanlsapata@example.com" and d["telefone"] == "305-555-0145"
     con = conectar()
     try:
-        cid = inserir(con, "clients", name="Pablo Santiago", email="email%3apablosantiago@outlook.com , bryanlsantiago@outlook.com", phone="(305) 609 7845", pilot_name="Bryan Santiago", vip=0, status="ACTIVE", source="asana")
+        cid = inserir(con, "clients", name="Pablo Sapata", email="email%3apablosapata@example.com , bryanlsapata@example.com", phone="(305) 555 0145", pilot_name="Bryan Sapata", vip=0, status="ACTIVE", source="asana")
         assert identidade.limpar_contatos(con) >= 1 and identidade.limpar_contatos(con) == 0
         c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
-        assert c["email"] == "pablosantiago@outlook.com" and c["email_alt"] == "bryanlsantiago@outlook.com" and c["phone"] == "305-609-7845"
-        t = inserir(con, "tasks", client_id=cid, title="Bryan Santiago_Academy [3/4]", project="U-RACE", section="Finished Services", status="completed", due_on="2026-08-22", subtasks_total=4, subtasks_done=4)
+        assert c["email"] == "pablosapata@example.com" and c["email_alt"] == "bryanlsapata@example.com" and c["phone"] == "305-555-0145"
+        t = inserir(con, "tasks", client_id=cid, title="Bryan Sapata_Academy [3/4]", project="U-RACE", section="Finished Services", status="completed", due_on="2026-08-22", subtasks_total=4, subtasks_done=4)
         inserir(con, "entity_links", entity_type="task", entity_id=t, system="asana", external_id="5550001", deep_link="https://app.asana.com/0/1205450093098920/5550001/f")
         con.commit()
     finally:
@@ -965,7 +965,7 @@ def test_contato_limpo_e_linha_do_tempo_com_link_de_cada_item(cli):
     d = cli.get(B + f"/clients/{cid}").json()
     ev = [e for e in d["timeline"] if e["kind"] == "SERVICE" and e["entity"]["id"] == t][0]
     assert ev["links"][0]["system"] == "asana" and ev["links"][0]["deep_link"].endswith("/5550001/f") and "4/4" in ev["detail"]
-    assert d["last_service"]["id"] == t and d["client"]["email_alt"] == "bryanlsantiago@outlook.com"
+    assert d["last_service"]["id"] == t and d["client"]["email_alt"] == "bryanlsapata@example.com"
 
 
 def test_avisos_descritivos_invoice_e_tarefa(cli):
@@ -1007,7 +1007,7 @@ def test_importacao_nao_fabrica_cliente_falso():
         assert idt.eh_rotulo_ou_servico(lixo), lixo
         assert idt.pessoa_do_titulo(lixo) is None, lixo
         assert sync._nome_valido(lixo) is None, lixo
-    for gente in ("Bryan Santiago", "David Pera", "Renato Frota Pionti", "Nya Amankwa"):
+    for gente in ("Bryan Sapata", "David Pedalo", "Renato Faixa Pistoni", "Nya Amortka"):
         assert not idt.eh_rotulo_ou_servico(gente), gente
         assert sync._nome_valido(gente) == gente
 
@@ -1019,7 +1019,7 @@ def test_limpeza_tira_cliente_falso_e_nascimento_invalido(cli):
     try:
         falso = inserir(con, "clients", name="Date of Birth:", pilot_name="Email:", vip=0, status="ACTIVE", source="asana")
         corrida = inserir(con, "clients", name="Lucas oil Laguna Seca", vip=0, status="ACTIVE", source="asana")
-        bom = inserir(con, "clients", name="Nya Amankwa", email="nduany@gmail.com", pilot_name="Dinai Amankwa",
+        bom = inserir(con, "clients", name="Nya Amortka", email="nya.amortka@example.com", pilot_name="Dinai Amortka",
                       pilot_dob="Age: 13", vip=0, status="ACTIVE", source="asana")
         t = inserir(con, "tasks", client_id=falso, title="serviço solto", project="U-RACE", section="SATURDAY", status="open", due_on="2026-09-12")
         con.commit()
@@ -1064,7 +1064,7 @@ def test_triagem_pagamento_recebido_e_ausencia_automatica():
     assert lab == "Finances" and "recebido" in motivo
     lab, _, _ = cl.por_regras({"sender": "billing@x.com", "subject": "Your invoice is due", "labels": "[]"}, nomes)
     assert lab == "Finances/Pending Invoices ❗"
-    assert cl.auto_tratar({"sender": "nya@gmail.com", "subject": "unavailable Re: karting experience", "snippet": ""}, None)
+    assert cl.auto_tratar({"sender": "nya@example.com", "subject": "unavailable Re: karting experience", "snippet": ""}, None)
     assert cl.auto_tratar({"sender": "x@y.com", "subject": "Automatic reply: out of office", "snippet": ""}, None)
     assert cl.auto_tratar({"sender": "x@y.com", "subject": "Dúvida", "snippet": "Estarei fora até dia 20"}, None)
     assert not cl.auto_tratar({"sender": "cliente@x.com", "subject": "Posso trocar o treino?", "snippet": "domingo"}, None)
@@ -1078,14 +1078,14 @@ def test_aviso_de_aprovacao_diz_o_que_e(cli):
         cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE")
         aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo",
                       policy="REQUIRES_APPROVAL", status="PROPOSED",
-                      payload=_j.dumps({"alvo": "Pablo Santiago", "args": {"cliente_id": "485", "data_servico": "2026-09-12",
+                      payload=_j.dumps({"alvo": "Pablo Sapata", "args": {"cliente_id": "485", "data_servico": "2026-09-12",
                                                                             "linhas": [{"item_id": "9", "quantidade": 1, "unitario": 1600, "descricao": "Urace Academy Training Program"}]}}))
         inserir(con, "approvals", action_id=aid); con.commit()
     finally:
         con.close()
     entra(cli, "admin@urace.us")
     it = [i for i in cli.get(B + "/needs-attention").json() if i["entity"]["type"] == "approvals"][0]
-    assert "Pablo Santiago" in it["title"] and "$1,600.00" in it["title"]
+    assert "Pablo Sapata" in it["title"] and "$1,600.00" in it["title"]
     f = dict(it["facts"])
     assert "Urace Academy Training Program" in f["Invoice"] and "12/09/2026" in f["Invoice"]
 
@@ -1606,7 +1606,7 @@ def test_triagem_dispara_o_fluxo_da_waiver_quando_o_email_e_waiver(cli, monkeypa
         chamadas = []
         monkeypatch.setattr(motor, "waiver_do_email", lambda con, eid, mb, tid, texto: chamadas.append((eid, mb, tid)) or {"ok": True, "signer": "X"})
         monkeypatch.setattr(triagem, "chamar", lambda s, f, **a: [{"nome": "Waivers", "id": "x", "tipo": "user"}] if f == "gmail_marcadores"
-                            else {"mensagens": [{"de": "d", "data": "h", "corpo": "Nya Amankwa assinou"}]})
+                            else {"mensagens": [{"de": "d", "data": "h", "corpo": "Nya Amortka assinou"}]})
         monkeypatch.setattr(triagem, "modulo", lambda s: type("G", (), {"triar_ia": lambda *a, **k: {"aplicado": True}})())
         resposta = '{"itens":[{"id":%d,"principal":"Waivers","marcadores":[],"precisa_humano":false,"motivo":"waiver assinada"}]}' % e
         r = triagem.rodar(con, lambda t, sk: (True, resposta, None), "sk", mailboxes=("support",), por="teste")
@@ -1690,26 +1690,26 @@ def test_criterio_hasTheWord_vira_query_na_api(monkeypatch):
 
 # ================= 16/09: piloto ≠ serviço; `_` e `-` como separador =================
 def test_piloto_separado_do_servico():
-    """As telas do DocuSign mostravam "Elliott Hubbard_Summer Camp 2026 1/4" como nome de
+    """As telas do DocuSign mostravam "Elliott Hubtrack_Summer Camp 2026 1/4" como nome de
     piloto: a validação devolvia a string inteira. Agora sai só a pessoa; o hífen colado
     separa só quando o que vem depois é serviço ou tem número (dono, 16/09)."""
     from command_center.providers import identidade as I, sync
-    assert sync._nome_valido("Elliott Hubbard_Summer Camp 2026 1/4") == "Elliott Hubbard"
-    assert sync._nome_valido("Mike Fattuta_Professional Coach Rotax") == "Mike Fattuta"
-    assert I.pessoa_do_titulo("Mike Fattuta_Professional Coach Rotax") == "Mike Fattuta"      # 'rotax' no serviço não condena a pessoa
-    assert I.pessoa_do_titulo("Elliott Hubbard-Summer Camp 2026") == "Elliott Hubbard"        # hífen colado, contexto de serviço
-    assert I.pessoa_do_titulo("Aaron Benoit - Trackside Support") == "Aaron Benoit"
+    assert sync._nome_valido("Elliott Hubtrack_Summer Camp 2026 1/4") == "Elliott Hubtrack"
+    assert sync._nome_valido("Mike Flatuta_Professional Coach Rotax") == "Mike Flatuta"
+    assert I.pessoa_do_titulo("Mike Flatuta_Professional Coach Rotax") == "Mike Flatuta"      # 'rotax' no serviço não condena a pessoa
+    assert I.pessoa_do_titulo("Elliott Hubtrack-Summer Camp 2026") == "Elliott Hubtrack"        # hífen colado, contexto de serviço
+    assert I.pessoa_do_titulo("Aaron Bandoit - Trackside Support") == "Aaron Bandoit"
     assert I.pessoa_do_titulo("Jean-Luc Picard") == "Jean-Luc Picard"                          # hífen de nome fica
     assert I.pessoa_do_titulo("Ana-Maria Souza") == "Ana-Maria Souza"
     assert sync._nome_valido("Summer Camp") is None and sync._nome_valido("Test Day") is None
-    d = sync.nome_da_tarefa("Elliott Hubbard_Summer Camp 2026 1/4")
-    assert (d["piloto"], d["servico"], d["n"], d["total"]) == ("Elliott Hubbard", "Summer Camp 2026", 1, 4)
-    d = sync.nome_da_tarefa("Renato Frota Pionti_Professional Coaching_2T [1/1]")
-    assert (d["piloto"], d["servico"], d["categoria"], d["n"], d["total"]) == ("Renato Frota Pionti", "Professional Coaching", "2T", 1, 1)
-    d = sync.nome_da_tarefa("Enzo Kurian [4 strokes 09/05/26]")
-    assert (d["piloto"], d["servico"]) == ("Enzo Kurian", "4 strokes 09/05/26")
-    d = sync.nome_da_tarefa("Mike Fattuta_Professional Coach Rotax")
-    assert (d["piloto"], d["servico"]) == ("Mike Fattuta", "Professional Coach Rotax")
+    d = sync.nome_da_tarefa("Elliott Hubtrack_Summer Camp 2026 1/4")
+    assert (d["piloto"], d["servico"], d["n"], d["total"]) == ("Elliott Hubtrack", "Summer Camp 2026", 1, 4)
+    d = sync.nome_da_tarefa("Renato Faixa Pistoni_Professional Coaching_2T [1/1]")
+    assert (d["piloto"], d["servico"], d["categoria"], d["n"], d["total"]) == ("Renato Faixa Pistoni", "Professional Coaching", "2T", 1, 1)
+    d = sync.nome_da_tarefa("Enzo Kartian [4 strokes 09/05/26]")
+    assert (d["piloto"], d["servico"]) == ("Enzo Kartian", "4 strokes 09/05/26")
+    d = sync.nome_da_tarefa("Mike Flatuta_Professional Coach Rotax")
+    assert (d["piloto"], d["servico"]) == ("Mike Flatuta", "Professional Coach Rotax")
 
 
 def test_limpeza_tira_servico_do_nome_do_cliente(cli):
@@ -1717,13 +1717,13 @@ def test_limpeza_tira_servico_do_nome_do_cliente(cli):
     from command_center.providers import identidade as idt
     con = conectar()
     try:
-        a = inserir(con, "clients", name="Matthew Hubbard", pilot_name="Elliott Hubbard_Summer Camp 2026 1/4", vip=0, status="ACTIVE", source="asana")
-        b = inserir(con, "clients", name="Mike Fattuta_Professional Coach Rotax", vip=0, status="ACTIVE", source="asana")
-        c = inserir(con, "clients", name="Jean-Luc Picard", pilot_name="Nya Amankwa", vip=0, status="ACTIVE", source="asana")
+        a = inserir(con, "clients", name="Matthew Hubtrack", pilot_name="Elliott Hubtrack_Summer Camp 2026 1/4", vip=0, status="ACTIVE", source="asana")
+        b = inserir(con, "clients", name="Mike Flatuta_Professional Coach Rotax", vip=0, status="ACTIVE", source="asana")
+        c = inserir(con, "clients", name="Jean-Luc Picard", pilot_name="Nya Amortka", vip=0, status="ACTIVE", source="asana")
         con.commit()
         assert idt.limpar_nomes_de_servico(con) == 2
-        assert um(con, "SELECT pilot_name FROM clients WHERE id=?", (a,))["pilot_name"] == "Elliott Hubbard"
-        assert um(con, "SELECT name FROM clients WHERE id=?", (b,))["name"] == "Mike Fattuta"
+        assert um(con, "SELECT pilot_name FROM clients WHERE id=?", (a,))["pilot_name"] == "Elliott Hubtrack"
+        assert um(con, "SELECT name FROM clients WHERE id=?", (b,))["name"] == "Mike Flatuta"
         assert um(con, "SELECT name, pilot_name FROM clients WHERE id=?", (c,))["name"] == "Jean-Luc Picard"
         assert idt.limpar_nomes_de_servico(con) == 0                                  # idempotente
         con.commit()
@@ -1834,7 +1834,7 @@ def test_lembretes_de_invoice(cli, monkeypatch):
     from command_center.db import conectar, inserir, um
     con = conectar()
     try:
-        cid = inserir(con, "clients", name="Bryan Santiago", email="bryan@example.com", vip=0, status="ACTIVE", source="asana")
+        cid = inserir(con, "clients", name="Bryan Sapata", email="bryan@example.com", vip=0, status="ACTIVE", source="asana")
         i1 = inserir(con, "invoices", client_id=cid, doc_number="URACE-0101", amount=1200, balance=1200, status="overdue", issued_on="2026-08-07", due_on="2026-08-14", customer_email="bryan@example.com", memo="Race Support")
         i2 = inserir(con, "invoices", client_id=cid, doc_number="URACE-0102", amount=350, balance=0, status="paid", issued_on="2026-09-01", due_on="2026-09-03")
         for i, ext in ((i1, "9001"), (i2, "9002")):

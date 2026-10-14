@@ -104,7 +104,7 @@ def ddi(v):
 
 def telefone(v, codigo="+1"):
     """+1: 10 dígitos (407-555-0142, o formato que o painel cruza). Outro país: o número
-    com o código na frente (+55 11 98765 4321), de 6 a 14 dígitos."""
+    com o código na frente (+55 11 99555 0132), de 6 a 14 dígitos."""
     if not (v or "").strip():
         return None
     dig = re.sub(r"\D", "", v)

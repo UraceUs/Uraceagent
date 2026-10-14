@@ -134,7 +134,7 @@ def test_conectar_pelo_google_guarda_o_token_cifrado_e_audita_sem_token(cli, amb
     r = cli.get(u.path + "?" + u.query, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/ops/sales/agenda?google=ok"
     s = cli.get(B + "/google/status").json()
-    assert s["conectado"] and s["email"] == "vendedor.teste@gmail.com"     # conta Google qualquer, não só @urace.us
+    assert s["conectado"] and s["email"] == "vendedor.teste@example.com"     # conta Google qualquer, não só @urace.us
 
     con = conectar()
     c = um(con, "SELECT * FROM google_conexoes WHERE user_id=?", (uid("carla@urace.us"),))
@@ -146,7 +146,7 @@ def test_conectar_pelo_google_guarda_o_token_cifrado_e_audita_sem_token(cli, amb
         cofre.decifrar(c["access_enc"], f"google:{uid('otto@urace.us')}:access")
     aud = todos(con, "SELECT event, detail FROM audit_logs WHERE event LIKE 'google.%'")
     con.close()
-    assert any(a["event"] == "google.connect" and "vendedor.teste@gmail.com" in a["detail"] for a in aud)
+    assert any(a["event"] == "google.connect" and "vendedor.teste@example.com" in a["detail"] for a in aud)
     assert not any(at in (a["detail"] or "") or rt in (a["detail"] or "") for a in aud)
 
 
@@ -222,7 +222,7 @@ def test_retorno_vira_evento_muda_junto_e_sai_ao_concluir_sem_tocar_no_que_nao_e
     oid = cria_opp(cli, h, next_at=quando(1), next_what="ligar de volta", service="Arrive and Drive")
     con = conectar()
     m = um(con, "SELECT * FROM google_cal_events WHERE opp_id=?", (oid,))
-    assert m and m["status"] == "ativo" and m["google_email"] == "vendedor.teste@gmail.com"
+    assert m and m["status"] == "ativo" and m["google_email"] == "vendedor.teste@example.com"
     ev = fake.eventos[m["event_id"]]
     assert ev["extendedProperties"]["private"]["urace_opp"] == str(oid)
     assert "Marcos Teixeira" in ev["summary"] and "ligar de volta" in ev["summary"]
@@ -359,7 +359,7 @@ def test_desconectar_revoga_e_apaga_so_o_token_da_pessoa(cli, ambiente, credenci
     assert um(con, "SELECT 1 AS x FROM google_conexoes WHERE user_id=?", (eu,)) is None
     assert set(fake.nossos()) == nossos_antes                # o calendário dela não é mexido ao sair
     aud = um(con, "SELECT detail FROM audit_logs WHERE event='google.disconnect' ORDER BY id DESC LIMIT 1")
-    assert "vendedor.teste@gmail.com" in aud["detail"] and rt not in aud["detail"]
+    assert "vendedor.teste@example.com" in aud["detail"] and rt not in aud["detail"]
     con.close()
     assert cli.get(B + "/google/status").json()["conectado"] is False
 

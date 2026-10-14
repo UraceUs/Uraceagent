@@ -64,6 +64,14 @@ alguém parecido.
 
 Ao terminar cada rodada, **sempre**, mesmo quando não houve nada a fazer:
 
+> **O repositório é público (dono, 14/10, #244).** O relatório que você grava em `relatorios/`
+> nunca leva dado real de cliente: nem nome, e-mail, telefone, nascimento, endereço, medidas, valor de uma pessoa
+> ou trecho de conversa. Cite pelo **número** (card `#374`, invoice `1044`, gid da tarefa)
+> e, se precisar diferenciar, pelas iniciais (`M. J.`). Saída de comando que lista nomes
+> (varredura, `cards.py`) entra **resumida em números**, não colada. O nome em claro fica no
+> painel e no seu chat com o dono — nunca no git. A trava do CI
+> (`command_center/tests/test_sem_dado_de_cliente.py`) varre `relatorios/` e `brain/` também.
+
 ```bash
 cd /home/ubuntu/Uraceagent
 mkdir -p relatorios

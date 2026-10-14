@@ -1,6 +1,6 @@
 """O DocuSign devolve 100 envelopes por vez — e a sincronia pedia só a primeira página.
 
-Dono, 22/09: abriu o painel e viu a waiver da Nadine Kozora Garcia como "enviada, não
+Dono, 22/09: abriu o painel e viu a waiver da Nadine Kartora Garcia como "enviada, não
 assinada". No DocuSign ela está **Completed** desde 17/09/2026 16:21 (envelope
 1ceee462-2383-8726-825b-424ddf410785). Não era erro de leitura: o envelope simplesmente
 não vinha mais na resposta, e o espelho ficou congelado no status da última vez que ele
@@ -34,7 +34,7 @@ def conta_falsa(monkeypatch):
                 pos = ini + i
                 e = {"envelopeId": f"env-{pos}", "status": "completed", "emailSubject": "Waiver"}
                 if com_email and pos == total - 1:      # o alvo é o ÚLTIMO: só pagina o alcança
-                    e["recipients"] = {"signers": [{"name": "Nadine Kozora Garcia", "email": com_email,
+                    e["recipients"] = {"signers": [{"name": "Nadine Kartora Garcia", "email": com_email,
                                                     "status": "completed"}]}
                 envs.append(e)
             return {"totalSetSize": str(total), "envelopes": envs}
@@ -65,8 +65,8 @@ def test_envelopes_diz_se_veio_completo(conta_falsa):
 
 def test_o_envelope_da_nadine_e_alcancado(conta_falsa):
     """Envelope na posição 236 de 237: com uma página só, ele nunca voltava."""
-    conta_falsa(237, com_email="nkozora1@gmail.com")
-    achados = D._envelopes_de("nkozora1@gmail.com", desde_dias=365)
+    conta_falsa(237, com_email="nadine.kartora@example.com")
+    achados = D._envelopes_de("nadine.kartora@example.com", desde_dias=365)
     assert len(achados) == 1 and achados[0]["envelopeId"] == "env-236"
     assert achados[0]["recipients"]["signers"][0]["status"] == "completed"
 

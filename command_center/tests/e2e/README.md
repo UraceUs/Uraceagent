@@ -26,7 +26,7 @@ Usuários semeados (senha `senha-de-teste-123`): `italo@urace.us` (admin),
 
 O que o cenário cobre: piloto Pro mensal com equipamento e corrida,
 piloto de diária com serviço no domingo, VIP, piloto inativo com invoice
-vencida, duplicado Alonso/Alonzo, waivers assinada/aberta/devolvida,
+vencida, duplicado Alvaso/Alvazo, waivers assinada/aberta/devolvida,
 e-mails na inbox e triados pela IA, invoices paga/aberta/vencida,
 corridas com convite confirmado, e uma conversa da IA com ação feita,
 ação esperando aprovação e proposta incompleta.

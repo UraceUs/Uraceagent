@@ -29,10 +29,10 @@ duplicata quebrada.
 
 **Feito:** 26 tarefas migradas (26/26, zero falhas). Todas são pedidos
 históricos de 2023–24, já com status Delivered.
-- `Mark Bergs` foi pulada de propósito: o `Pedido` dela já dizia
+- `Cliente SUITS 02` foi pulada de propósito: o `Pedido` dela já dizia
   "email/square", que é mais completo que o enum ("email").
-- `Matt Hayden` teve os dois preservados: `#ZJ3YF (email/site)`.
-- `Alexander Jacoby`: o valor era `emial` (erro de digitação); gravei
+- `Cliente SUITS 03` teve os dois preservados: `#ZJ3YF (email/site)`.
+- `Alexander Jetsby`: o valor era `emial` (erro de digitação); gravei
   `email`. Correção declarada aqui, não silenciosa.
 - `Michael`: mantive `KJCBE` exatamente como estava (sem inventar o `#`).
 

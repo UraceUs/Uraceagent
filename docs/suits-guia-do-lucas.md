@@ -159,7 +159,7 @@ Nunca abra pedido, e descarte se aparecer um:
 - dúvida geral sem intenção de comprar. **Na dúvida, não crie.**
 
 Exemplo real de 13/10: os pedidos #153 a #163 (Stripe, OpenAI, Anthropic, Points Insider,
-ConnectMiles, RaceSelect, Max from 3 Second Media, Alexa Lloret, Daneyza Cabrera, Eduardo
+ConnectMiles, RaceSelect, Max from 3 Second Media, Alexa Llanteret, Daneyza Cabrestra, Eduardo
 Resende) foram abertos por engano pela versão antiga da ponte, só por causa do marcador. Foram
 **descartados**.
 
@@ -231,8 +231,8 @@ Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 
 | Para | Método e caminho | Corpo (exemplo) | Papel |
 |---|---|---|---|
-| registrar pedido | `POST /ops/api/suits` | `{"customer_name": "Ryan Casner", "customer_email": "ryan@exemplo.com", "client_id": 584, "driver_name": "Ryan Jr.", "nota": "pediu orçamento pelo WhatsApp"}` | Op. |
-| atualizar dados | `PATCH /ops/api/suits/{id}` | `{"customer_phone": "+1 916 952 6271", "ship_address": "..."}` | Op. |
+| registrar pedido | `POST /ops/api/suits` | `{"customer_name": "Ryan Capner", "customer_email": "ryan@exemplo.com", "client_id": 584, "driver_name": "Ryan Jr.", "nota": "pediu orçamento pelo WhatsApp"}` | Op. |
+| atualizar dados | `PATCH /ops/api/suits/{id}` | `{"customer_phone": "+1 916 555 0148", "ship_address": "..."}` | Op. |
 | gravar medidas | `PATCH /ops/api/suits/{id}` | `{"medidas": {"valores": {"head": 59, "chest": 92, "weight": 54, "foot": "42 EUR"}, "unidade": "cm", "unidade_peso": "kg"}}` | Op. |
 | gravar design | `PATCH /ops/api/suits/{id}` | `{"design": {"cores": "preto e vermelho", "logos": "URACE no peito", "nome": "RYAN"}}` | Op. |
 | mudar a etapa (com o motivo) | `PATCH /ops/api/suits/{id}` | `{"status": "design_pending", "nota": "cliente mandou medidas e logos"}` | Op. |
@@ -301,7 +301,7 @@ etapa por conta própria. Mostre ao Lucas o que chegou e pergunte o que fazer.
 
 ### Frases que o Lucas pode usar com o Claude
 - "Como estão os Suits hoje?"
-- "O que falta no pedido do Ryan Casner?"
+- "O que falta no pedido do Ryan Capner?"
 - "O cliente do pedido 171 mandou estas medidas em polegadas: …. Grave."
 - "Move o 171 para Design Pending com a nota: cliente mandou logos."
 - "Tem algum pedido em Suits que não é de macacão?"

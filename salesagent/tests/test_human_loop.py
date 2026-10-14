@@ -96,7 +96,7 @@ def main() -> int:
     state.transition(lead, "WAITING_HUMAN", "kart próprio (inspeção/gestão)")
 
     # --- número desconhecido não decide nada
-    r = chamar("+5511999999999", "aprovar 970001 pode trazer")
+    r = chamar("+5511995550199", "aprovar 970001 pode trazer")
     check("número não autorizado é recusado", r["ok"] is False, str(r))
     check("estado intacto depois da recusa",
           state.get_conversation(lead)["state"] == "WAITING_HUMAN")

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mostra cards pelo pedaço do nome, e as uniões que já aconteceram com eles. Só lê.
 
-    python3 adminai/cards.py Alon Arroyo
+    python3 adminai/cards.py Alon Arrancada
 """
 import os
 import sys

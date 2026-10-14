@@ -1,6 +1,6 @@
 """Serviços no card do cliente: levar para o cliente certo e trocar o nome.
 
-Dono, 29/09, no card do Enzo Kurian: *"esse Levi Grezik não é desse cliente… consigo
+Dono, 29/09, no card do Enzo Kartian: *"esse Levi Gridzik não é desse cliente… consigo
 vincular ao cliente correto"*, e *"alterar o nome dos serviços que estão lá no Asana…
 por aqui, para deixar tudo mais organizado… e selecionar quais outros eu quero deixar com
 esse mesmo nome"*.

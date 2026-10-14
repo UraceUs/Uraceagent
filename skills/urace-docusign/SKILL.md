@@ -112,7 +112,7 @@ assinou**) → `completed` (assinado) · `declined` · `voided`
 
 **Escopo:** só as colunas TUESDAY…SUNDAY do U-RACE — **RACES fica fora**.
 **VIP dispensa waiver:** lista única em `brain/00_SYSTEM/PARAMETROS.md`
-(hoje: Rafael Pionti / Renato). Não deduzir VIP de nada.
+(hoje: Rafael Pistoni / Renato). Não deduzir VIP de nada.
 
 
 `getEnvelopes` com `status: "sent,delivered"`, depois `listRecipients`
