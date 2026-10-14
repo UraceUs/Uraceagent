@@ -281,13 +281,39 @@ Dentro do card (`/ops/clients/<n>`), as abas:
 | Peças | o QR que o mecânico lê no balcão e as peças do cliente |
 | Conta no site | a conta da área do cliente ligada ao card |
 | Serviços | as tarefas do Asana do cliente: **Renomear** (operador+), **Mover** (gerente+) |
-| Waivers | os envelopes do DocuSign, com o PDF assinado |
+| Waivers | os envelopes do DocuSign e as assinadas no sistema, com o PDF assinado; no topo, o **Convite da waiver por e-mail** (abaixo) |
 | E-mails | os e-mails ligados ao card |
 | Invoices | só gerente e administrador (para os outros, aparece 🔒) |
 | IA | o que a IA propôs para este cliente |
 
 O box vê o card **sem valores**: não aparecem mensalidade, corridas, conta no site, e-mails,
 invoices nem IA.
+
+#### Convite da waiver por e-mail (#135)
+
+Dono, 14/10: *"vai ser por e-mail para o adulto ou para o responsável assinar aquela waiver. Tanto
+para adulto quanto para responsável, o e-mail que tiver no card vai receber isso."*
+
+1. No card, aba **Waivers** (ou o botão **✉ Convite por e-mail** no quadro Waiver do topo).
+2. O quadro diz **para quem vai**: piloto com **18 anos ou mais** (pela data de nascimento do
+   piloto no card) assina a **própria** waiver (adult); **menor**, o **responsável** (o nome do
+   card) assina por ele (parental, pai ou mãe). O e-mail é sempre o **e-mail do card**.
+3. **Enviar convite da waiver por e-mail** → a janela mostra nome e e-mail → **Enviar**.
+4. A pessoa recebe um link **pessoal**, que vale **uma vez** e vence em **72 horas**. Ele abre a
+   assinatura do próprio sistema **sem conta e sem login**, já presa àquele card e piloto. Na hora
+   de assinar chega um **código de 6 dígitos** no mesmo e-mail.
+5. Assinou: a waiver aparece na aba Waivers como as outras ("área do cliente"), com o PDF e o
+   certificado, e o convite fica **assinado**.
+
+Situação de cada convite: **enviado** · **aberto** (a pessoa abriu o link) · **assinado** ·
+**expirado** (passou das 72 h) · **substituído** (você reenviou; o link velho não vale mais) ·
+**não saiu** (o Gmail não mandou: tente de novo). **Reenviar** manda um link novo. Tudo fica na
+Auditoria (`waiver.invite.*`).
+
+O botão fica **desligado, com o motivo escrito**, quando: o card não tem e-mail; o card não tem a
+data de nascimento do piloto; o piloto é menor e o card não tem o responsável; o e-mail é da URACE;
+ou a assinatura no próprio sistema está desligada (Agendamentos do site › Waiver). Se o card mudar
+de e-mail ou de data de nascimento depois do envio, o link para de valer: reenvie.
 
 ### Um card por piloto
 
@@ -334,7 +360,7 @@ abre o card dele).
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
 | **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
-| **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada | tela DocuSign |
+| **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
 
@@ -375,7 +401,8 @@ Mandar comando à IA exige papel de operador ou acima.
 | **Bloqueado pela política** | o que estiver como `BLOCKED` em Políticas da IA | não roda, nem com aprovação |
 
 A **waiver** é a exceção que o dono abriu: enquanto a política dela estiver em "sozinha" (SAFE),
-ela sai na hora. A política de cada ação está em **Políticas da IA** (administrador muda) e em
+ela sai na hora. O **convite da waiver por e-mail** (`painel_waiver_convite`, #135) **não** é
+exceção: pela IA ele espera o aprovar; pelo painel, é o clique de quem manda (com a confirmação). A política de cada ação está em **Políticas da IA** (administrador muda) e em
 **O que a IA pode fazer** (todos veem). **Não decore**: a política pode mudar; confira lá.
 
 O **lembrete de invoice** também sai sozinho (dono, 14/10, #230): quando a IA manda o lembrete e o
@@ -598,6 +625,8 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | mover serviço para o card certo | `POST /tasks/{id}/cliente` (gerente, pelo botão "Mover" do card) |
 | criar serviço (tarefa do Asana pelo modelo oficial) | `POST /tasks` (operador) |
 | enviar waiver avulsa | `POST /waivers/send` (operador) |
+| convite da waiver por e-mail: para quem vai e os já mandados | `GET /clients/{id}/waiver-invite` (operador) |
+| mandar / reenviar o convite | `POST /clients/{id}/waiver-invite` com `{"email": "<o e-mail do card>"}` (operador; o e-mail confere com o card) |
 | dia do box | `GET /meu-dia` (operador; é a tela inicial do mecânico e do coach) |
 | mandar comando à IA do painel | `POST /ai/commands` (operador) |
 | propostas esperando decisão | `GET /ai/actions?status=PROPOSED` (logado) |

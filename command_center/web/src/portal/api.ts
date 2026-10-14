@@ -86,3 +86,6 @@ export interface Waivers { enabled: boolean; drivers: WaiverPiloto[]
 export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string
   /** #105: a declaração do pai ou da mãe, com {minor} no lugar do nome */
   declaration: string | null }
+/** #135: o convite da waiver por e-mail, como o link mostra (sem conta). O card e o piloto vêm do convite. */
+export interface ConviteWaiver { kind: 'adult' | 'parental'; driver: string; signer_name: string; email: string; expires_at: string
+  model: { name: string; pages: number; text: string; declaration: string | null } }

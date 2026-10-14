@@ -19,6 +19,7 @@ import logoSite from '../assets/site/logo.svg'
 const AssinarWaiver = lazy(() => import('./Waiver').then(m => ({ default: m.AssinarWaiver })))   // o quadro de assinatura só nesta rota
 const Reservar = lazy(() => import('./Reservar').then(m => ({ default: m.Reservar })))         // #164: a reserva do site
 const Acompanhar = lazy(() => import('./Reservar').then(m => ({ default: m.Acompanhar })))
+const ConviteWaiverPagina = lazy(() => import('./Convite').then(m => ({ default: m.ConviteWaiverPagina })))   // #135: o link do e-mail
 
 type Estado = Account | null | undefined           // undefined = carregando; null = sem sessão
 
@@ -543,6 +544,14 @@ export function PortalApp() {
   }
   async function sair() { try { await papi('POST', '/logout') } finally { setConta(null); nav('/portal', { replace: true }) } }
 
+  // #135: o convite da waiver abre sem conta e sem login (o link é quem autentica), com ou sem sessão aberta
+  const convite = loc.pathname.match(/^\/portal\/invite\/([^/]+)\/?$/)
+  if (convite) return <div className="portal psite reserva-casca">
+    <TopoSite />
+    <main className="reserva-main"><Suspense fallback={<div className="state"><span className="spin" /></div>}>
+      <ConviteWaiverPagina token={decodeURIComponent(convite[1])} /></Suspense></main>
+    <footer className="portal-rodape small">URACE.US INC · Orlando, FL · <a href={siteUrl('/')}>urace.us</a> · <a href="/legal/privacy.html">Privacy policy</a></footer>
+  </div>
   if (conta === undefined) return <div className="portal"><div className="state" style={{ minHeight: '60vh' }}><span className="spin" /></div></div>
   // #164: a reserva do site é a mesma tela com ou sem conta (entrar ali dentro não desmonta o que já foi escolhido)
   if (loc.pathname === '/portal/reserve') return <div className="portal psite reserva-casca">

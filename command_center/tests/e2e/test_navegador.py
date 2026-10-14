@@ -791,6 +791,87 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a.close(); c.close()
 
 
+# ------------------------------------------------------------------ convite da waiver por e-mail (#135)
+def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(servidor, navegador):
+    """Dono, 14/10: "o e-mail que tiver no card vai receber isso". A equipe vê para quem vai, confirma
+    e manda; o piloto adulto abre o link do e-mail (falso: nada sai da máquina), sem conta, e assina."""
+    import json
+    a = entrar(navegador, servidor, "italo@urace.us", largura=390, altura=844)
+    csrf = {"X-CSRF": next(k["value"] for k in a.context.cookies() if k["name"] == "cc_csrf")}
+    estava = a.request.get(servidor + "/api/site/waiver-nativa").json()["ligada"]
+    assert a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": True}, headers=csrf).ok
+    cid = a.request.post(servidor + "/api/clients", data={"name": "Gabi Convite", "pilot_dob": "1995-06-15",
+                                                          "email": "gabi.convite.e2e@example.com"}, headers=csrf).json()["id"]
+    sem = a.request.post(servidor + "/api/clients", data={"name": "Davi Sem Email", "pilot_dob": "1994-01-20"}, headers=csrf).json()["id"]
+    # sem e-mail no card: o botão fica desligado e explica
+    abrir(a, servidor, f"/clients/{sem}")
+    a.get_by_role("button", name=re.compile(r"^Waivers \(")).click()
+    assert a.get_by_role("button", name="Enviar convite da waiver por e-mail").is_disabled()
+    a.get_by_text("O card não tem e-mail").wait_for()
+    # com e-mail: mostra para quem vai, pede confirmação e manda
+    abrir(a, servidor, f"/clients/{cid}")
+    a.get_by_role("button", name="✉ Convite por e-mail").click()
+    a.get_by_text("Vai para").wait_for()
+    a.get_by_role("button", name="Enviar convite da waiver por e-mail").click()
+    dlg = a.get_by_role("dialog")
+    dlg.get_by_text("gabi.convite.e2e@example.com").wait_for()
+    assert "assina a própria waiver (adult)" in dlg.inner_text()
+    dlg.get_by_role("button", name="Enviar", exact=True).click()
+    a.locator(".convite-waiver .chip", has_text="enviado").wait_for()
+    assert len([t for n, t in _cabecalhos(a) if n == 1]) == 1
+    r = a.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    # o e-mail (falso) leva o link pessoal; o cliente abre no celular, sem conta
+    msg = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines() if "gabi.convite.e2e" in x][-1]
+    assert msg["subject"] == "Sign your URACE waiver"
+    link = re.search(r"https://my\.urace\.us/ops(/portal/invite/\S+)", msg["text"]).group(1)
+    c = navegador.new_page(viewport={"width": 360, "height": 800})
+    c.erros_js = []
+    c.on("pageerror", lambda e: c.erros_js.append(str(e)))
+    c.goto(servidor + link)
+    c.get_by_role("heading", name="Sign the waiver", level=1).wait_for()
+    c.get_by_text("You sign for yourself, Gabi Convite").wait_for()
+    c.locator(".pdf-folha canvas").nth(2).wait_for()
+    assert c.get_by_label("I have read this waiver").is_disabled()
+    c.locator(".pdf-caixa").evaluate("""async e => { for (let y = 0; y <= e.scrollHeight; y += 120) {
+        e.scrollTo(0, y); await new Promise(ok => setTimeout(ok, 60)) } }""")
+    c.get_by_text("All 3 pages read.").wait_for()
+    assert len([t for n, t in _cabecalhos(c) if n == 1]) == 1
+    r = c.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    c.get_by_label("I read and understand English").check()
+    c.get_by_label("I have read this waiver").check()
+    c.get_by_label("I agree to sign electronically").check()
+    c.get_by_label("Your full name").fill("Gabi Convite")
+    c.locator("canvas.portal-assinatura").scroll_into_view_if_needed()
+    quadro = c.locator("canvas.portal-assinatura").bounding_box()
+    c.mouse.move(quadro["x"] + 20, quadro["y"] + 110)
+    c.mouse.down()
+    for i in range(1, 13):
+        c.mouse.move(quadro["x"] + 20 + i * 22, quadro["y"] + 110 - (i % 4) * 18, steps=2)
+    c.mouse.up()
+    assert c.get_by_role("button", name="Sign the waiver").is_disabled(), "sem o código do e-mail não assina"
+    c.get_by_role("button", name="Send me the signing code").click()
+    c.get_by_label("Signing code sent to").wait_for()
+    c.get_by_label("Signing code sent to").fill(codigo_do_email("gabi.convite.e2e@example.com"))
+    c.get_by_role("button", name="Sign the waiver").click()
+    c.get_by_text("Signed. The waiver for Gabi Convite is valid until").wait_for()
+    pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
+    assert pdf.ok and pdf.body().startswith(b"%PDF")
+    # o link não vale duas vezes
+    c.goto(servidor + link)
+    c.get_by_text("This link was already used").wait_for()
+    assert not c.erros_js, c.erros_js
+    # no card: o convite assinado e a waiver junto com as outras
+    abrir(a, servidor, f"/clients/{cid}")
+    a.get_by_role("button", name=re.compile(r"^Waivers \(1\)")).click()
+    a.locator(".convite-waiver .chip", has_text="assinado").wait_for()
+    assert "área do cliente" in a.locator("table.tbl tr", has_text="gabi.convite.e2e@example.com").inner_text()
+    if not estava:
+        a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
+    a.close(); c.close()
+
+
 # ------------------------------------------------------------------ balcão (#87)
 def test_balcao_le_o_cliente_cobra_guarda_e_pergunta_antes_de_cobrar_peca_dele(servidor, navegador):
     pg = entrar(navegador, servidor, largura=360, altura=800)

@@ -1892,3 +1892,46 @@ CREATE TABLE IF NOT EXISTS sdr_relatos (
   resolved_by  INTEGER REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS sdr_relatos_status ON sdr_relatos(status, id);
+
+-- ------------------------------------------- convite da waiver por e-mail (#135)
+-- Dono, 14/10: "vai ser por e-mail para o adulto ou para o responsável assinar aquela waiver.
+-- Tanto para adulto quanto para responsável, o e-mail que tiver no card vai receber isso."
+-- Um link pessoal, de uso único, com validade, assinado (HMAC) e preso a um card. Só o hash do
+-- link fica aqui. O que o convite prometeu (quem, qual e-mail, qual piloto) é guardado na hora
+-- do envio: se o card mudar depois, o link deixa de valer e a equipe reenvia.
+CREATE TABLE IF NOT EXISTS waiver_invites (
+  id             INTEGER PRIMARY KEY,
+  client_id      INTEGER NOT NULL REFERENCES clients(id),
+  kind           TEXT NOT NULL CHECK (kind IN ('adult','parental')),
+  signer_name    TEXT NOT NULL,                 -- adult: o piloto · parental: o responsável
+  email          TEXT NOT NULL COLLATE NOCASE,  -- o e-mail do card no envio
+  driver_name    TEXT NOT NULL,
+  driver_birth_date TEXT NOT NULL,
+  token_hash     TEXT NOT NULL UNIQUE,          -- sha256 do segredo do link
+  created_at     TEXT NOT NULL,
+  created_by     TEXT NOT NULL,                 -- user:<id> | ia
+  user_id        INTEGER REFERENCES users(id),  -- quem clicou (ou aprovou o pedido da IA)
+  expires_at     TEXT NOT NULL,
+  sent_at        TEXT,
+  message_id     TEXT,
+  opened_at      TEXT,
+  used_at        TEXT,
+  waiver_id      INTEGER REFERENCES waivers(id),
+  revoked_at     TEXT,
+  revoked_reason TEXT                           -- reenviado | e-mail não saiu
+);
+CREATE INDEX IF NOT EXISTS waiver_invites_cliente ON waiver_invites(client_id, id);
+
+-- O código de 6 dígitos (#108) que confirma, na hora de assinar, que quem assina tem a caixa.
+CREATE TABLE IF NOT EXISTS waiver_invite_codes (
+  id          INTEGER PRIMARY KEY,
+  invite_id   INTEGER NOT NULL REFERENCES waiver_invites(id),
+  code_hash   TEXT NOT NULL,
+  sent_to     TEXT NOT NULL,
+  message_id  TEXT,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS waiver_invite_codes_convite ON waiver_invite_codes(invite_id, id);

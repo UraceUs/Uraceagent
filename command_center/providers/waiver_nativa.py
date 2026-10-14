@@ -81,12 +81,13 @@ MODOS_LEITURA = {
 }
 
 
-def _leitura(con, conta_id, tipo, dados, agora_utc):
-    """#107: (quando o PDF foi entregue a esta conta, quando a tela viu todas as páginas)."""
-    entregue = um(con, """SELECT MAX(at) AS at FROM audit_logs WHERE event='portal.waiver.document_view'
-                           AND entity_type='portal_account' AND entity_id=? AND json_extract(detail, '$.kind')=?
+def _leitura(con, conta_id, tipo, dados, agora_utc, entidade="portal_account", evento="portal.waiver.document_view"):
+    """#107: (quando o PDF foi entregue a esta conta, quando a tela viu todas as páginas).
+    #135: pelo convite, a entrega é registrada no convite (`waiver_invite`), não numa conta."""
+    entregue = um(con, """SELECT MAX(at) AS at FROM audit_logs WHERE event=?
+                           AND entity_type=? AND entity_id=? AND json_extract(detail, '$.kind')=?
                            AND at >= strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)""",
-                 (str(conta_id), tipo, f"-{LEITURA_HORAS} hours"))["at"]
+                 (evento, entidade, str(conta_id), tipo, f"-{LEITURA_HORAS} hours"))["at"]
     if not entregue:
         raise ErroWaiver("Open and read the whole document before signing.")
     try:
@@ -348,26 +349,46 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         "session_login_at": login["created_at"] if login else None, "session_login_ip": login["ip"] if login else None,
         "signature_png_sha256": _sha(png), "valid_until": ate, "valid_until_reason": ate_motivo,
     }
+    return gravar(con, base, m, trilha, png, client_id=p.get("client_id"), pilot_id=pid,
+                  signer_name=c["name"], signer_email=c["email"],
+                  link_reason="assinada na área do cliente" if p.get("client_id") else None,
+                  link_by="sync" if p.get("client_id") else None,
+                  resumo=f"waiver de {c['name']} assinada na área do cliente ({p['name']})")
+
+
+def pdf_final(base, trilha, png):
+    """Monta e guarda o PDF assinado (o modelo + página de certificado); põe o hash na trilha."""
     final = _pdf_assinado(base, trilha, png)
-    caminho = os.path.join(pasta(), f"urace-{sid}.pdf")
+    caminho = os.path.join(pasta(), f"urace-{trilha['signature_id']}.pdf")
     with open(caminho, "wb") as f:
         f.write(final)
     os.chmod(caminho, 0o600)
     trilha["document_sha256"] = _sha(final)
+    return caminho
+
+
+def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_email, link_reason, link_by, resumo,
+           caminho=None, antes=None):
+    """Grava a waiver assinada na MESMA tabela das do DocuSign (card, anexo e agenda tratam igual).
+    `antes(con)` roda dentro da mesma transação, antes do INSERT (o convite se marca usado ali)."""
+    from command_center.db import transacao
+    tipo = trilha["template"]
+    caminho = caminho or pdf_final(base, trilha, png)
     quando = agora()
-    wid = inserir(con, "waivers", client_id=p.get("client_id"), signer_name=c["name"], signer_email=c["email"],
-                  template=tipo, status="completed", sent_at=quando, completed_at=quando, expires_at=ate,
-                  minor_name=p["name"] if tipo == "parental" else None, pdf_path=caminho,
-                  subject=f"{m['name']} — {p['name']}"[:200], source="urace", pilot_id=pid,
-                  doc_sha256=trilha["document_sha256"], audit=json.dumps(trilha, ensure_ascii=False),
-                  link_reason="assinada na área do cliente" if p.get("client_id") else None,
-                  link_by="sync" if p.get("client_id") else None, synced_at=quando)
-    con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id) VALUES ('waiver', ?, 'urace', ?)",
-                (wid, sid))
-    if p.get("client_id"):
-        from command_center.api import motor
-        motor.registrar_evento(con, "waiver.completed", "waiver", wid, p["client_id"],
-                               f"waiver de {c['name']} assinada na área do cliente ({p['name']})")
+    with transacao(con):
+        if antes:
+            antes(con)
+        wid = inserir(con, "waivers", client_id=client_id, signer_name=signer_name, signer_email=signer_email,
+                      template=tipo, status="completed", sent_at=quando, completed_at=quando, expires_at=trilha["valid_until"],
+                      minor_name=trilha["driver_name"] if tipo == "parental" else None, pdf_path=caminho,
+                      subject=f"{m['name']} — {trilha['driver_name']}"[:200], source="urace", pilot_id=pilot_id,
+                      doc_sha256=trilha["document_sha256"], audit=json.dumps(trilha, ensure_ascii=False),
+                      link_reason=link_reason, link_by=link_by, synced_at=quando)
+        con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id) VALUES ('waiver', ?, 'urace', ?)",
+                    (wid, trilha["signature_id"]))
+        if client_id:
+            from command_center.api import motor
+            motor.registrar_evento(con, "waiver.completed", "waiver", wid, client_id, resumo)
     return um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
 
 
@@ -412,7 +433,7 @@ def _pdf_assinado(base, t, png):
     linha(f"Signature ID: {t['signature_id']}")
     y -= 6
     rotulo = "Parent (natural guardian)" if t["template"] == "parental" else "Participant"
-    linha(f"{rotulo}: {t['signer_name']}   ·   Account: {t['account_email']}", 11, "Helvetica-Bold", 16)
+    linha(f"{rotulo}: {t['signer_name']}   ·   {t.get('email_label') or 'Account'}: {t['account_email']}", 11, "Helvetica-Bold", 16)
     if t["template"] == "parental":
         linha(f"Minor participant: {t['driver_name']}   ·   Date of birth: {t['driver_birth_date']}")
         linha(f"Relationship to the minor: {t.get('signer_relationship') or '—'}")
