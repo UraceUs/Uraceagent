@@ -24,13 +24,13 @@ from command_center.db import aplicar_schema, conectar, todos
 B = "/ops/api/ai"
 SENHA = "senha-forte-123"
 
-SAIDA_SIMULADA = """Varredura feita. Renato Frota Pionti, serviço amanhã, menor (14), sem waiver.
+SAIDA_SIMULADA = """Varredura feita. Renato Faixa Pistoni, serviço amanhã, menor (14), sem waiver.
 Não enviei nada — o ambiente está em simulação. Em produção eu teria enviado a waiver
 parental para o responsável e comentado na tarefa.
 
-{"aplicado": false, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": "rascunho (urace) para rafael@spmesportes.com.br: 'Waiver do Renato'"}
+{"aplicado": false, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": "rascunho (urace) para rafael.pistoni@example.com: 'Waiver do Renato'"}
 
-ACAO: docusign_enviar_waiver | Rafael Pionti <rafael@spmesportes.com.br> | waiver parental, serviço 05/09
+ACAO: docusign_enviar_waiver | Rafael Pistoni <rafael.pistoni@example.com> | waiver parental, serviço 05/09
 ACAO: asana_comentar | 1218104997373079 | [IA ADM] waiver pendente, responsável avisado
 """
 
@@ -305,9 +305,9 @@ def test_openclaw_descoberta_e_mensagem():
 def test_normaliza_invoice_aliases_item_por_nome_e_valor_do_texto():
     from command_center.api import acoes
     buscar = lambda nome: [{"id": "31", "nome": "Arrive and Drive daily"}] if "arrive" in nome.lower() else []
-    args, prob = acoes.normalizar_invoice({"cliente": "77", "itens": [{"item": "Arrive and Drive daily", "valor": "$500", "qty": 1, "desc": "David Pera 13/09"}], "due": "2026-09-13"}, "", buscar)
+    args, prob = acoes.normalizar_invoice({"cliente": "77", "itens": [{"item": "Arrive and Drive daily", "valor": "$500", "qty": 1, "desc": "David Pedalo 13/09"}], "due": "2026-09-13"}, "", buscar)
     assert prob == [] and args["cliente_id"] == "77" and args["data_servico"] == "2026-09-13" and args["vence_em"] == "2026-09-11"   # vence 2 dias antes do serviço
-    assert args["linhas"][0] == {"item_id": "31", "quantidade": 1, "unitario": 500.0, "descricao": "David Pera 13/09"}
+    assert args["linhas"][0] == {"item_id": "31", "quantidade": 1, "unitario": 500.0, "descricao": "David Pedalo 13/09"}
     # valor zerado + UM valor no texto da IA → o texto manda
     args, prob = acoes.normalizar_invoice({"cliente_id": 77, "linhas": [{"item_id": "31", "unitario": 0, "descricao": "x"}]}, "Invoice de $500 no nome do Nicolas.", buscar)
     assert prob == [] and args["linhas"][0]["unitario"] == 500.0 and "_conferir" not in args   # valor dito: o dono manda
@@ -318,17 +318,17 @@ def test_normaliza_invoice_aliases_item_por_nome_e_valor_do_texto():
     args, prob = acoes.normalizar_invoice({"cliente_id": "77", "linhas": [{"item": "Coisa inexistente", "unitario": 0}]}, "Pode ser $500 ou $719.", buscar)
     assert any("Coisa inexistente" in p for p in prob) and any("zerado" in p for p in prob)
     assert acoes.valores_no_texto("Total: $1,250.00 e $500") == [1250.0, 500.0]
-    assert acoes.assinatura("asana_criar_tarefa", {"nome": "David Pera_Urace Daily [1/1]", "vence_em": "2026-09-13"}) == "asana_criar_tarefa|david pera_urace daily [1/1]|2026-09-13"
+    assert acoes.assinatura("asana_criar_tarefa", {"nome": "David Pedalo_Urace Daily [1/1]", "vence_em": "2026-09-13"}) == "asana_criar_tarefa|david pedalo_urace daily [1/1]|2026-09-13"
 
 
-_TAREFA = 'ACAO: asana_atualizar_tarefa | David Pera | serviço domingo | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pera_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}'
-_INVOICE_OK = 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"Using Own Kart - David Pera - 2026-09-13"}],"vence_em":"2026-09-13"}'
+_TAREFA = 'ACAO: asana_atualizar_tarefa | David Pedalo | serviço domingo | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pedalo_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}'
+_INVOICE_OK = 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pedalo | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"Using Own Kart - David Pedalo - 2026-09-13"}],"vence_em":"2026-09-13"}'
 
 
 def test_nao_repete_acao_feita_e_substitui_pendente(cli):
     h = entra(cli, "admin@urace.us")
     ia.RUNNER = lambda texto, sk: (True, "Vou criar a tarefa e a invoice de $500.\n" + _TAREFA + "\n" + _INVOICE_OK, None)
-    c1 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera domingo, mesmo esquema"}).json()["id"])
+    c1 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pedalo domingo, mesmo esquema"}).json()["id"])
     a1 = {a["action"]: a for a in c1["actions"]}
     assert a1["asana_atualizar_tarefa"]["status"] == "PROPOSED" and a1["qbo_criar_e_enviar_invoice"]["status"] == "PROPOSED"
     # o dono muda algo e manda de novo: as pendentes antigas são substituídas, não duplicadas
@@ -355,9 +355,9 @@ def test_invoice_zerada_ganha_uma_correcao_da_ia(cli, monkeypatch):
     def runner(texto, sk):
         chamadas.append(texto)
         if "[Command Center] A ação qbo_criar_e_enviar_invoice" in texto:
-            return True, 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"corrigida"}],"vence_em":"2026-09-20"}', None
+            return True, 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pedalo | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"corrigida"}],"vence_em":"2026-09-20"}', None
         return True, ('Mesmo esquema: pode ser $500 ou $719, depende.\n'
-                      'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice | {"cliente_id":"77","itens":[{"item":"Arrive and Drive daily - David","valor":0}],"vence_em":"2026-09-20"}'), None
+                      'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pedalo | invoice | {"cliente_id":"77","itens":[{"item":"Arrive and Drive daily - David","valor":0}],"vence_em":"2026-09-20"}'), None
     ia.RUNNER = runner
     monkeypatch.setattr(ia, "_buscar_item_qbo", lambda nome: [])
     c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "invoice do David pro dia 20"}).json()["id"], timeout=8)
@@ -378,12 +378,12 @@ def test_nome_com_prefixo_do_mcp_e_tarefa_pelo_modelo(cli):
     assert acoes.nome_canonico("asana__asana_criar_tarefa") == "asana_criar_tarefa"
     assert acoes.nome_canonico("qbo__qbo_criar_e_enviar_invoice") == "qbo_criar_e_enviar_invoice"
     assert acoes.nome_canonico("google__gmail_rascunho") == "gmail_rascunho"
-    n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pera_Urace Daily [1/1]", "notas": "x", "vence_em": "2026-09-13"})
-    assert n == "asana_criar_do_modelo" and a == {"modelo_gid": acoes.MODELO_SESSAO, "nome": "David Pera_Urace Daily [1/1]", "secao_gid": "1205141832260879", "notas": "x", "vence_em": "2026-09-13", "campos": {"Race": "Practice OKC"}}
+    n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pedalo_Urace Daily [1/1]", "notas": "x", "vence_em": "2026-09-13"})
+    assert n == "asana_criar_do_modelo" and a == {"modelo_gid": acoes.MODELO_SESSAO, "nome": "David Pedalo_Urace Daily [1/1]", "secao_gid": "1205141832260879", "notas": "x", "vence_em": "2026-09-13", "campos": {"Race": "Practice OKC"}}
     assert acoes.converter("asana_criar_tarefa", {"secao_gid": "outra", "nome": "x"})[0] == "asana_criar_tarefa"
     h = entra(cli, "admin@urace.us")
-    ia.RUNNER = lambda texto, sk: (True, 'Criando.\nACAO: asana__asana_criar_tarefa | David Pera | tarefa | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pera_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}', None)
-    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera domingo"}).json()["id"])
+    ia.RUNNER = lambda texto, sk: (True, 'Criando.\nACAO: asana__asana_criar_tarefa | David Pedalo | tarefa | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pedalo_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}', None)
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pedalo domingo"}).json()["id"])
     a = c["actions"][0]
     assert a["action"] == "asana_criar_do_modelo" and a["policy"] == "SAFE"
     import json as _j
@@ -393,20 +393,20 @@ def test_nome_com_prefixo_do_mcp_e_tarefa_pelo_modelo(cli):
 
 
 def test_contexto_do_piloto_citado_e_invoice_resolvida_sem_perguntar(cli, monkeypatch):
-    """'Filho do Nicolas Pera - David Pera... mesmo esquema' → o comando leva histórico, id do cliente no QBO,
+    """'Filho do Nicolas Pedalo - David Pedalo... mesmo esquema' → o comando leva histórico, id do cliente no QBO,
     waiver válida e itens; consulta proposta como ação é descartada; invoice com placeholders é resolvida pelo espelho."""
     from command_center.api import acoes, motor
     from command_center.db import conectar, inserir
     con = conectar()
     try:
-        cid = inserir(con, "clients", name="Nicolas Pera", email="peranicolas2106@gmail.com", phone="305-906-2542", pilot_name="David Pera", pilot_dob="2014-05-02", vip=0, status="ACTIVE", source="asana")
-        inserir(con, "tasks", client_id=cid, title="David Pera_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="Finished Services", status="completed", due_on="2026-08-23")
-        inserir(con, "invoices", client_id=cid, doc_number="1031", amount=500, balance=0, status="paid", issued_on="2026-08-20", memo="Using Own Kart - David Pera", customer_email="peranicolas2106@gmail.com", customer_ref="696")
-        inserir(con, "waivers", client_id=cid, signer_name="Nicolas Pera", signer_email="peranicolas2106@gmail.com", template="parental", status="completed", sent_at=_dias(-39), completed_at=_dias(-38), expires_at=_dias(327))
+        cid = inserir(con, "clients", name="Nicolas Pedalo", email="nicolas.pedalo@example.com", phone="305-555-0146", pilot_name="David Pedalo", pilot_dob="2014-04-01", vip=0, status="ACTIVE", source="asana")
+        inserir(con, "tasks", client_id=cid, title="David Pedalo_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="Finished Services", status="completed", due_on="2026-08-23")
+        inserir(con, "invoices", client_id=cid, doc_number="1031", amount=500, balance=0, status="paid", issued_on="2026-08-20", memo="Using Own Kart - David Pedalo", customer_email="nicolas.pedalo@example.com", customer_ref="696")
+        inserir(con, "waivers", client_id=cid, signer_name="Nicolas Pedalo", signer_email="nicolas.pedalo@example.com", template="parental", status="completed", sent_at=_dias(-39), completed_at=_dias(-38), expires_at=_dias(327))
         con.execute("INSERT OR REPLACE INTO qbo_items (id, name, full_name, price, type, active) VALUES ('31','Arrive and Drive daily','Arrive and Drive daily',500,'Service',1), ('32','Race Support','Race Support',1200,'Service',1)")
         con.commit()
-        assert motor.cliente_citado(con, "Filho do Nicolas Pera - David Pera. Coloca na agenda pro Domingo esta semana.") == cid
-        ctx = motor.contexto_do_comando(con, "David Pera domingo, mesmo esquema")
+        assert motor.cliente_citado(con, "Filho do Nicolas Pedalo - David Pedalo. Coloca na agenda pro Domingo esta semana.") == cid
+        ctx = motor.contexto_do_comando(con, "David Pedalo domingo, mesmo esquema")
         # A data vem do MESMO ajudante que semeou a waiver. Em 23/09 eu troquei a fixture
         # para data relativa e deixei aqui a literal "2026-08-16": passou naquele dia e
         # quebrou sozinha no seguinte. Bomba-relógio criada enquanto eu consertava
@@ -415,18 +415,18 @@ def test_contexto_do_piloto_citado_e_invoice_resolvida_sem_perguntar(cli, monkey
         assert "cliente_id=696" in ctx and "31: Arrive and Drive daily" in ctx and '"idade": 12' in ctx and "Using Own Kart" in ctx
         assert motor.contexto_do_comando(con, "quem tem invoice vencida?") == ""
         # invoice com placeholders → cliente pelo espelho (última invoice), item pelo catálogo, valor do texto
-        args, prob = acoes.normalizar_invoice({"cliente_id": "<id de qbo_clientes_buscar>", "linhas": [{"item_id": "<id de qbo_itens_buscar>", "quantidade": 1, "unitario": 0, "descricao": "Arrive and Drive daily - Using Own Kart - David Pera - 2026-09-13"}], "vence_em": "2026-09-13"},
-                                             "Invoice de $500 no nome do Nicolas.", None, None, con, "Nicolas Pera")
-        assert prob == [] and args["cliente_id"] == "696" and args["linhas"][0]["item_id"] == "31" and args["linhas"][0]["unitario"] == 500.0 and args["email"] == "peranicolas2106@gmail.com"
+        args, prob = acoes.normalizar_invoice({"cliente_id": "<id de qbo_clientes_buscar>", "linhas": [{"item_id": "<id de qbo_itens_buscar>", "quantidade": 1, "unitario": 0, "descricao": "Arrive and Drive daily - Using Own Kart - David Pedalo - 2026-09-13"}], "vence_em": "2026-09-13"},
+                                             "Invoice de $500 no nome do Nicolas.", None, None, con, "Nicolas Pedalo")
+        assert prob == [] and args["cliente_id"] == "696" and args["linhas"][0]["item_id"] == "31" and args["linhas"][0]["unitario"] == 500.0 and args["email"] == "nicolas.pedalo@example.com"
     finally:
         con.close()
     assert acoes.eh_consulta("qbo_itens_buscar") and acoes.eh_consulta("asana_tarefa") and not acoes.eh_consulta("qbo_criar_e_enviar_invoice") and not acoes.eh_consulta("asana_criar_do_modelo")
     h = entra(cli, "admin@urace.us")
     ia.RUNNER = lambda texto, sk: (True, ('Vou montar a invoice de $500.\n'
-                                          'ACAO: qbo_clientes_buscar | Nicolas Pera | achar o cliente | {"texto":"peranicolas2106@gmail.com"}\n'
-                                          'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice | {"cliente_id":"<id>","linhas":[{"item_id":"<id>","quantidade":1,"unitario":500,"descricao":"Arrive and Drive daily - David Pera - 2026-09-13"}],"vence_em":"2026-09-13"}'), None)
-    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "Filho do Nicolas Pera - David Pera. Domingo, mesmo esquema."}).json()["id"])
-    assert "CONTEXTO DO PAINEL sobre David Pera" in c["prompt"] and "cliente_id=696" in c["prompt"]
+                                          'ACAO: qbo_clientes_buscar | Nicolas Pedalo | achar o cliente | {"texto":"nicolas.pedalo@example.com"}\n'
+                                          'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pedalo | invoice | {"cliente_id":"<id>","linhas":[{"item_id":"<id>","quantidade":1,"unitario":500,"descricao":"Arrive and Drive daily - David Pedalo - 2026-09-13"}],"vence_em":"2026-09-13"}'), None)
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "Filho do Nicolas Pedalo - David Pedalo. Domingo, mesmo esquema."}).json()["id"])
+    assert "CONTEXTO DO PAINEL sobre David Pedalo" in c["prompt"] and "cliente_id=696" in c["prompt"]
     vivas = [a for a in c["actions"] if a["status"] == "PROPOSED"]
     assert [a["action"] for a in vivas] == ["qbo_criar_e_enviar_invoice"] and all(a["action"] != "qbo_clientes_buscar" for a in c["actions"])
     import json as _j
@@ -441,24 +441,24 @@ def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, mo
     from command_center.db import conectar, inserir, um
     con = conectar()
     try:
-        assert um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")
-        n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pera_Urace Daily_Using Own Kart [1/1]",
-                                                     "notas": "Driver's name: David Pera\nInvoice link:   Price: $500", "vence_em": "2026-09-13"}, con, "David Pera domingo mesmo esquema")
+        assert um(con, "SELECT id FROM clients WHERE pilot_name='David Pedalo'")
+        n, a = acoes.converter("asana_criar_tarefa", {"projeto_gid": "1205450093098920", "secao_gid": "1205141832260879", "nome": "David Pedalo_Urace Daily_Using Own Kart [1/1]",
+                                                     "notas": "Driver's name: David Pedalo\nInvoice link:   Price: $500", "vence_em": "2026-09-13"}, con, "David Pedalo domingo mesmo esquema")
         assert n == "asana_criar_do_modelo" and a["campos"] == {"Race": "Practice OKC"}
         notas = a["notas"]
-        assert "Service Dates for this Month: 09/13/2026" in notas and "Date of Birth: 05/02/2014" in notas and "Age: 12  (menor: waiver parental)" in notas
-        assert "Responsible Name: Nicolas Pera" in notas and "Email: peranicolas2106@gmail.com" in notas and "Product: Urace Daily / Using Own Kart" in notas
+        assert "Service Dates for this Month: 09/13/2026" in notas and "Date of Birth: 04/01/2014" in notas and "Age: 12  (menor: waiver parental)" in notas
+        assert "Responsible Name: Nicolas Pedalo" in notas and "Email: nicolas.pedalo@example.com" in notas and "Product: Urace Daily / Using Own Kart" in notas
         assert "Invoice link: (a IA preenche quando a invoice sair)\nPrice: $500.00\n\nSecurity deposit: —\nPrice: —" in notas and "Height: —\nWeight: —\nWaist: —" in notas
-        n2, a2 = acoes.converter("asana_criar_do_modelo", {"modelo_gid": "x", "nome": "David Pera_Urace Daily_2T [1/1]", "secao_gid": "1205141832260879"}, con, "treino em Bushnell")
+        n2, a2 = acoes.converter("asana_criar_do_modelo", {"modelo_gid": "x", "nome": "David Pedalo_Urace Daily_2T [1/1]", "secao_gid": "1205141832260879"}, con, "treino em Bushnell")
         assert a2["campos"] == {"Race": "Practice Bushnell"}
         assert "campos" not in acoes.converter("asana_criar_do_modelo", {"modelo_gid": "x", "nome": "ROK Cup Round 5 [Orlando]", "secao_gid": "s"}, None, "")[1]
         # invoice executada → link volta para a tarefa criada no mesmo comando
         cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE")
         inserir(con, "ai_actions", command_id=cmd, action="asana_criar_do_modelo", system="asana", policy="SAFE", status="DONE", payload="{}", result='{"aplicado": true, "gid": "999001"}')
         aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL", status="APPROVED",
-                      payload=json.dumps({"args": {"cliente_id": "696", "linhas": [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "x"}], "vence_em": "2026-09-13", "email": "peranicolas2106@gmail.com"}}))
+                      payload=json.dumps({"args": {"cliente_id": "696", "linhas": [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "x"}], "vence_em": "2026-09-13", "email": "nicolas.pedalo@example.com"}}))
         con.commit()
-        assert motor._tarefa_da_invoice(con, {"command_id": cmd}, {"email": "peranicolas2106@gmail.com", "vence_em": "2026-09-13"}) == "999001"
+        assert motor._tarefa_da_invoice(con, {"command_id": cmd}, {"email": "nicolas.pedalo@example.com", "vence_em": "2026-09-13"}) == "999001"
     finally:
         con.close()
     preenchidos = []
@@ -484,7 +484,7 @@ def test_tarefa_com_descricao_padrao_race_okc_e_link_da_invoice_de_volta(cli, mo
     con = conectar()
     try:
         aid2 = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL", status="APPROVED",
-                       payload=json.dumps({"args": {"cliente_id": "696", "linhas": [{"item_id": "40", "quantidade": 1, "unitario": 400, "descricao": "Security deposit - David Pera"}], "vence_em": "2026-09-13"}}))
+                       payload=json.dumps({"args": {"cliente_id": "696", "linhas": [{"item_id": "40", "quantidade": 1, "unitario": 400, "descricao": "Security deposit - David Pedalo"}], "vence_em": "2026-09-13"}}))
         con.commit()
     finally:
         con.close()
@@ -511,11 +511,11 @@ def test_consulta_executada_na_hora_e_item_criado_quando_nao_existe(cli, monkeyp
         if "Executei as consultas" in texto:
             assert "qbo_itens_buscar" in texto and '"found": false' in texto
             return True, ('Item não existe: crio e monto a invoice de $500.\n'
-                          'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pera | invoice | {"cliente_id":"696","linhas":[{"item":"Urace Daily","quantidade":1,"unitario":500,"descricao":"Urace Daily - Using Own Kart - David Pera - 2026-09-20"}],"vence_em":"2026-09-20"}'), None
+                          'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pedalo | invoice | {"cliente_id":"696","linhas":[{"item":"Urace Daily","quantidade":1,"unitario":500,"descricao":"Urace Daily - Using Own Kart - David Pedalo - 2026-09-20"}],"vence_em":"2026-09-20"}'), None
         return True, ('Vou procurar o item.\nACAO: qbo_itens_buscar | Urace Daily | achar o item | {"texto":"Urace Daily"}'), None
     ia.RUNNER = runner
     h = entra(cli, "admin@urace.us")
-    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera dia 20, Urace Daily, invoice de $500"}).json()["id"], timeout=8)
+    c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pedalo dia 20, Urace Daily, invoice de $500"}).json()["id"], timeout=8)
     assert len(chamadas) == 2 and buscas == ["Urace Daily"]
     acs = [a for a in c["actions"] if a["status"] == "PROPOSED"]
     assert [a["action"] for a in acs] == ["qbo_criar_e_enviar_invoice"]
@@ -527,7 +527,7 @@ def test_consulta_executada_na_hora_e_item_criado_quando_nao_existe(cli, monkeyp
         assert um(con, "SELECT name FROM qbo_items WHERE id='77'")["name"] == "Urace Daily"
     finally:
         con.close()
-    assert acoes._nome_de_produto("Arrive and Drive daily - David Pera - 2026-09-13") == "Arrive and Drive daily"
+    assert acoes._nome_de_produto("Arrive and Drive daily - David Pedalo - 2026-09-13") == "Arrive and Drive daily"
     assert acoes._nome_de_produto("Coisa qualquer", None) is None
     ia.RUNNER = runner_falso
 
@@ -571,9 +571,9 @@ def test_continuar_sem_citar_o_piloto_usa_o_ultimo_da_conversa(cli):
     from command_center.db import conectar
     h = entra(cli, "admin@urace.us")
     ia.RUNNER = lambda texto, sk: (True, "Ok.\nACAO: nenhuma", None)
-    espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pera domingo que vem, mesmo esquema"}).json()["id"])
+    espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pedalo domingo que vem, mesmo esquema"}).json()["id"])
     c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "pode continuar com a montagem da invoice"}).json()["id"])
-    assert "CONTEXTO DO PAINEL sobre David Pera" in c["prompt"] and c["text"] == "pode continuar com a montagem da invoice"
+    assert "CONTEXTO DO PAINEL sobre David Pedalo" in c["prompt"] and c["text"] == "pode continuar com a montagem da invoice"
     con = conectar()
     try:
         assert motor.contexto_do_comando(con, "e aí?", user_id=None) == ""
@@ -590,8 +590,8 @@ def test_completar_proposta_incompleta_pelo_painel(cli, monkeypatch):
     try:
         cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE", output="Invoice de $500.")
         aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL", status="PROPOSED",
-                      payload=json.dumps({"alvo": "Nicolas Pera", "args": {"cliente_id": "696", "email": "peranicolas2106@gmail.com", "vence_em": "2026-09-13",
-                                                                             "linhas": [{"item_id": "", "quantidade": 1, "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pera - 2026-09-13"}]},
+                      payload=json.dumps({"alvo": "Nicolas Pedalo", "args": {"cliente_id": "696", "email": "nicolas.pedalo@example.com", "vence_em": "2026-09-13",
+                                                                             "linhas": [{"item_id": "", "quantidade": 1, "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pedalo - 2026-09-13"}]},
                                           "problemas": ["linha sem item do QuickBooks"]}), reason="incompleta: linha sem item do QuickBooks")
         inserir(con, "approvals", action_id=aid); con.commit()
     finally:
@@ -618,18 +618,18 @@ def test_invoice_vence_2_dias_antes_e_memo_com_data_do_servico(cli):
     from command_center.db import conectar, inserir, um
     con = conectar()
     try:
-        cid = um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")["id"]
-        inserir(con, "tasks", client_id=cid, title="David Pera_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="SUNDAY", status="open", due_on="2026-09-13")
+        cid = um(con, "SELECT id FROM clients WHERE pilot_name='David Pedalo'")["id"]
+        inserir(con, "tasks", client_id=cid, title="David Pedalo_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="SUNDAY", status="open", due_on="2026-09-13")
         con.commit()
         # o agente manda o dia do serviço como vencimento: o painel entende (bate com a tarefa) e corrige
-        args, prob = acoes.normalizar_invoice({"cliente_id": "696", "email": "peranicolas2106@gmail.com", "vence_em": "2026-09-13",
-                                               "linhas": [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pera - 2026-09-13"}]},
-                                              "", None, None, con, "Nicolas Pera")
+        args, prob = acoes.normalizar_invoice({"cliente_id": "696", "email": "nicolas.pedalo@example.com", "vence_em": "2026-09-13",
+                                               "linhas": [{"item_id": "31", "quantidade": 1, "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pedalo - 2026-09-13"}]},
+                                              "", None, None, con, "Nicolas Pedalo")
         assert prob == [] and args["data_servico"] == "2026-09-13" and args["vence_em"] == "2026-09-11"
-        assert args["memo"] == "Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026" and args["nota_privada"] == args["memo"]
+        assert args["memo"] == "Urace Daily | Using Own Kart | David Pedalo | Service date: 09/13/2026" and args["nota_privada"] == args["memo"]
         # com data_servico explícita e memo sem data: memo ganha a data; vencimento = -2
         args, _ = acoes.normalizar_invoice({"cliente_id": "696", "data_servico": "09/20/2026", "memo": "Academy daily | Using Own Kart",
-                                            "linhas": [{"item_id": "31", "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pera"}]}, "", None, None, con, "Nicolas Pera")
+                                            "linhas": [{"item_id": "31", "unitario": 500, "descricao": "Urace Daily - Using Own Kart - David Pedalo"}]}, "", None, None, con, "Nicolas Pedalo")
         assert args["vence_em"] == "2026-09-18" and "Service date: 09/20/2026" in args["memo"] and args["nota_privada"] == args["memo"]
         assert acoes.memo_invoice("Urace Daily", "2 stroke", "Théo", "2026-10-03") == "Urace Daily | 2 stroke | Théo | Service date: 10/03/2026"
     finally:
@@ -669,7 +669,7 @@ def test_argumento_que_a_ferramenta_nao_aceita_e_descartado(cli, monkeypatch):
         cmd = inserir(con, "ai_commands", user_id=1, text="x", session_key="s", status="DONE")
         aid = inserir(con, "ai_actions", command_id=cmd, action="asana_criar_do_modelo", system="asana", policy="SAFE",
                       status="APPROVED", payload=json.dumps({"args": {"projeto_gid": "1205450093098920", "modelo_gid": "m",
-                                                                      "nome": "Bryan Santiago_Academy [3/4]", "secao_gid": "s"}}))
+                                                                      "nome": "Bryan Sapata_Academy [3/4]", "secao_gid": "s"}}))
         con.commit()
     finally:
         con.close()
@@ -685,7 +685,7 @@ def test_argumento_que_a_ferramenta_nao_aceita_e_descartado(cli, monkeypatch):
 
 
 def test_pagamento_confirmado_fecha_a_subtarefa_de_pagamento_no_asana(cli, monkeypatch):
-    """10/09, dono: 'chegou email confirmando o pagamento do david pera e a IA ainda não
+    """10/09, dono: 'chegou email confirmando o pagamento do david pedalo e a IA ainda não
     marcou como pago na subtask do asana'. Agora é mecânico: o QuickBooks confirma, o painel
     fecha a subtarefa e comenta. Não acorda o agente e não pede aprovação."""
     from command_center.api import motor
@@ -693,16 +693,16 @@ def test_pagamento_confirmado_fecha_a_subtarefa_de_pagamento_no_asana(cli, monke
     import command_center.providers as prov
     con = conectar()
     try:
-        d = um(con, "SELECT id FROM clients WHERE pilot_name='David Pera'")
-        cid = d["id"] if d else inserir(con, "clients", name="Nicolas Pera", pilot_name="David Pera", status="ACTIVE")
-        tid = inserir(con, "tasks", client_id=cid, title="David Pera_Urace Daily_Using Own Kart [1/1]",
+        d = um(con, "SELECT id FROM clients WHERE pilot_name='David Pedalo'")
+        cid = d["id"] if d else inserir(con, "clients", name="Nicolas Pedalo", pilot_name="David Pedalo", status="ACTIVE")
+        tid = inserir(con, "tasks", client_id=cid, title="David Pedalo_Urace Daily_Using Own Kart [1/1]",
                       project="U-RACE", section="Sunday", status="open", due_on="2026-09-13")
         inserir(con, "entity_links", entity_type="task", entity_id=tid, system="asana", external_id="777001")
-        outra = inserir(con, "tasks", client_id=cid, title="David Pera_Race Support [1/1]", project="U-RACE", status="open", due_on="2026-10-01")
+        outra = inserir(con, "tasks", client_id=cid, title="David Pedalo_Race Support [1/1]", project="U-RACE", status="open", due_on="2026-10-01")
         inserir(con, "entity_links", entity_type="task", entity_id=outra, system="asana", external_id="777002")
         inv = inserir(con, "invoices", client_id=cid, doc_number="URACE-0007", amount=500.0, balance=0, status="paid",
                       issued_on="2026-09-09", due_on="2026-09-11",
-                      memo="Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026")
+                      memo="Urace Daily | Using Own Kart | David Pedalo | Service date: 09/13/2026")
         con.commit()
     finally:
         con.close()
@@ -711,7 +711,7 @@ def test_pagamento_confirmado_fecha_a_subtarefa_de_pagamento_no_asana(cli, monke
     class Asana:
         def concluir_subtarefa_sistema(self, gid, padrao=None):
             feito.append(("sub", gid, os.environ.get("APLICAR")))
-            return {"aplicado": True, "subtarefa": "Payment has been completed (invoice)?", "gid": gid + "-s3", "tarefa": "David Pera_Urace Daily_Using Own Kart [1/1]"}
+            return {"aplicado": True, "subtarefa": "Payment has been completed (invoice)?", "gid": gid + "-s3", "tarefa": "David Pedalo_Urace Daily_Using Own Kart [1/1]"}
 
         def comentar_humano(self, gid, texto):
             feito.append(("comentario", gid, texto)); return {"aplicado": True}
@@ -872,17 +872,17 @@ def test_waiver_do_email_liga_ao_cliente_e_usa_o_anexo_quando_a_api_falha(cli, m
     monkeypatch.setattr(prov, "modulo", lambda s: {"docusign": Docusign(), "gmail": Gmail(), "asana": Asana()}[s])
     con = conectar()
     try:
-        cid = inserir(con, "clients", name="Pai do Nya", pilot_name="Nya Amankwa", status="ACTIVE")
-        wid = inserir(con, "waivers", client_id=cid, signer_name="Pai do Nya", minor_name="Nya Amankwa",
+        cid = inserir(con, "clients", name="Pai do Nya", pilot_name="Nya Amortka", status="ACTIVE")
+        wid = inserir(con, "waivers", client_id=cid, signer_name="Pai do Nya", minor_name="Nya Amortka",
                       template="parental", status="completed",
                       sent_at=_dias(-13), completed_at=_dias(-8), expires_at=_dias(357))
         inserir(con, "entity_links", entity_type="waiver", entity_id=wid, system="docusign", external_id="env-7")
-        tid = inserir(con, "tasks", client_id=cid, title="Nya Amankwa_Urace Daily", status="open", due_on="2026-09-20")
+        tid = inserir(con, "tasks", client_id=cid, title="Nya Amortka_Urace Daily", status="open", due_on="2026-09-20")
         inserir(con, "entity_links", entity_type="task", entity_id=tid, system="asana", external_id="g7")
         eid = inserir(con, "emails", mailbox="support", subject="Completed: Please Complete the Docusign: Parental Consent, Release, and Waiver of Liability",
                       sender="dse_na4@docusign.net", is_inbox=1, labels='["INBOX","Softwares|Apps/Docusign","Waivers"]')
         con.commit()
-        r = motor.waiver_do_email(con, eid, "support", "th-7", "Completed … Nya Amankwa … Waiver of Liability")
+        r = motor.waiver_do_email(con, eid, "support", "th-7", "Completed … Nya Amortka … Waiver of Liability")
         con.commit()
         assert r["ok"] and r["client_id"] == cid and r["signer"] == "Pai do Nya"
         assert r["pdf_origem"] == "anexo do e-mail" and open(r["pdf"], "rb").read().startswith(b"%PDF-1.4 do anexo")
@@ -926,8 +926,8 @@ def test_instruir_dentro_da_tarefa(cli):
     h = entra(cli, "admin@urace.us")
     con = conectar()
     try:
-        cid = inserir(con, "clients", name="Enzo Kurian", vip=0, status="ACTIVE", source="asana")
-        tid = inserir(con, "tasks", client_id=cid, title="Enzo Kurian_Arrive and Drive [1/1]", project="U-RACE", section="WEDNESDAY", status="open", due_on="2026-09-16")
+        cid = inserir(con, "clients", name="Enzo Kartian", vip=0, status="ACTIVE", source="asana")
+        tid = inserir(con, "tasks", client_id=cid, title="Enzo Kartian_Arrive and Drive [1/1]", project="U-RACE", section="WEDNESDAY", status="open", due_on="2026-09-16")
         con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id, deep_link) VALUES ('task', ?, 'asana', '916000777', 'https://app.asana.com/0/1/916000777')", (tid,))
         con.commit()
     finally:
@@ -939,8 +939,8 @@ def test_instruir_dentro_da_tarefa(cli):
     c = espera(cli, r.json()["command_id"])
     assert c["status"] == "DONE"
     p = visto["prompt"]
-    assert "916000777" in p and "Enzo Kurian_Arrive and Drive" in p and "NESTA tarefa" in p and "feche a subtarefa" in p
-    assert '"cliente": "Enzo Kurian"' in p
+    assert "916000777" in p and "Enzo Kartian_Arrive and Drive" in p and "NESTA tarefa" in p and "feche a subtarefa" in p
+    assert '"cliente": "Enzo Kartian"' in p
     assert cli.post(R + f"/tasks/{tid}/instruct", headers=entra(cli, "viewer@urace.us"), json={"text": "x"}).status_code == 403
     h = entra(cli, "admin@urace.us")
     assert cli.post(R + "/tasks/999999/instruct", headers=h, json={"text": "x"}).status_code == 404
@@ -957,7 +957,7 @@ def test_ia_le_cliente_e_invoices_do_quickbooks_em_rodadas(cli, monkeypatch):
 
     class Qbo:
         def qbo_clientes_buscar(self, texto, maximo=20):
-            lidas.append(("clientes", texto)); return [{"id": "501", "nome": "Jill Robins", "email": "jill@example.com"}]
+            lidas.append(("clientes", texto)); return [{"id": "501", "nome": "Jill Rodins", "email": "jill@example.com"}]
 
         def qbo_invoices(self, status="open", cliente_id=None, desde_dias=365, maximo=100):
             lidas.append(("invoices", cliente_id, status)); return {"total": 1, "invoices": [{"id": "9001", "numero": "2290", "total": 576.4}]}
@@ -971,7 +971,7 @@ def test_ia_le_cliente_e_invoices_do_quickbooks_em_rodadas(cli, monkeypatch):
     def runner(texto, sk):
         chamadas.append(texto)
         if len(chamadas) == 1:
-            return True, 'Vou achar o cliente.\nCONSULTA: qbo_clientes_buscar | {"texto":"Jill Robins"}', None
+            return True, 'Vou achar o cliente.\nCONSULTA: qbo_clientes_buscar | {"texto":"Jill Rodins"}', None
         if len(chamadas) == 2:
             assert '"id": "501"' in texto
             return True, 'CONSULTA: qbo_invoices | {"cliente_id":"501","status":"all"}\nCONSULTA: qbo_invoice | {"id":"9001"}', None
@@ -983,7 +983,7 @@ def test_ia_le_cliente_e_invoices_do_quickbooks_em_rodadas(cli, monkeypatch):
         c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "puxe a pré-race do Brody"}).json()["id"], timeout=8)
     finally:
         ia.RUNNER = runner_falso
-    assert lidas == [("clientes", "Jill Robins"), ("invoices", "501", "all"), ("invoice", "9001")]
+    assert lidas == [("clientes", "Jill Rodins"), ("invoices", "501", "all"), ("invoice", "9001")]
     assert len(chamadas) == 3 and "já cobrou 2 sets" in c["output"]
     assert not [a for a in c["actions"] if a["status"] == "PROPOSED"], "leitura nunca vira ação para aprovar"
     for ferramenta in ("CONSULTA:", "qbo_clientes_buscar", "qbo_invoices", "qbo_invoice ", "qbo_historico_precos"):

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Carimba "este serviço é deste cliente, o dono confirmou". A varredura nunca mexe.
 
-    python3 adminai/confirmar_servicos.py 15 --nome Savage --nome Savege
-    python3 adminai/confirmar_servicos.py 15 --nome Savage --nome Savege --aplicar
+    python3 adminai/confirmar_servicos.py 15 --nome Sprage --nome Sprege
+    python3 adminai/confirmar_servicos.py 15 --nome Sprage --nome Sprege --aplicar
     python3 adminai/confirmar_servicos.py 238 --nome Alex --aplicar
 
 `--nome` é o nome como aparece NO TÍTULO da tarefa, e ele é obrigatório: sem filtro,
 carimbar "tudo que está neste card" é carimbar também o que está lá por engano.
 
-A extensão da VPS pegou isso em 22/09: o dono aprovou 20 serviços do #15 (18 "Savage"
-+ 2 "Savege") e a ferramenta ia carimbar **70** — incluindo
+A extensão da VPS pegou isso em 22/09: o dono aprovou 20 serviços do #15 (18 "Sprage"
++ 2 "Sprege") e a ferramenta ia carimbar **70** — incluindo
 `Lucas Oil Winter Series Race | Sebring`, que é uma corrida, não uma pessoa. Carimbar
 é dizer "nunca mais confira isto": carimbar errado é pior do que não carimbar.
 

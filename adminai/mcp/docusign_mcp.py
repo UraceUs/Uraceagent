@@ -184,7 +184,7 @@ def _listar_envelopes(params, maximo=TETO_ENVELOPES):
     """TODOS os envelopes da consulta, paginando. Devolve (lista, total_na_conta).
 
     Sem paginação vinham só os 100 primeiros — e o resto do ano ficava congelado no
-    status da última vez que coube na janela. Foi assim que a waiver da Nadine Kozora
+    status da última vez que coube na janela. Foi assim que a waiver da Nadine Kartora
     Garcia, Completed no DocuSign em 17/09, continuou aparecendo como "enviada" no
     painel (dono, 22/09)."""
     achados, inicio, total = [], 0, None

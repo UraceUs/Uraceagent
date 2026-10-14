@@ -13,6 +13,7 @@ import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
+import { ESTADO_PEDIDO } from '../components/pedidoSite'
 import { tr, LOCALE } from '../i18n'
 
 function idade(dob?: string | null) {
@@ -24,7 +25,7 @@ function idade(dob?: string | null) {
 }
 
 const KIND: Record<string, [string, 'ok' | 'warn' | 'crit' | 'info' | '']> = {
-  SERVICE: [tr("Serviço"), 'info'], WAIVER_SENT: [tr("Waiver enviada"), 'warn'], WAIVER_SIGNED: [tr("Waiver assinada"), 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: [tr("Ação da IA"), 'info'], INVOICE: [tr("Invoice"), 'ok'],
+  SITE_PAYMENT: [tr("Pagamento no site"), 'ok'], SERVICE: [tr("Serviço"), 'info'], WAIVER_SENT: [tr("Waiver enviada"), 'warn'], WAIVER_SIGNED: [tr("Waiver assinada"), 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: [tr("Ação da IA"), 'info'], INVOICE: [tr("Invoice"), 'ok'],
 }
 
 export function Client360() {
@@ -180,7 +181,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         return <div key={i}>
           {mes !== antes && <div className="tl-m">{mes ? new Date(mes + '-02T12:00:00').toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric' }) : tr("sem data")}</div>}
           <div className="ev"><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div className="b">
-            <div className="row wrap" style={{ gap: 8 }}><span className={`kind ${tone}`}>{lbl}</span><span className="t">{e.title}</span><Status s={e.status} label={e.kind.startsWith('WAIVER') ? (WAIVER_LABEL[(e.status || '').toLowerCase()] || e.status) : undefined} /><span className="grow" /><SysLink links={e.links} /></div>
+            <div className="row wrap" style={{ gap: 8 }}><span className={`kind ${tone}`}>{lbl}</span><span className="t">{e.title}</span><Status s={e.status} label={e.kind === 'SITE_PAYMENT' ? (ESTADO_PEDIDO[e.status || ''] || e.status) : e.kind.startsWith('WAIVER') ? (WAIVER_LABEL[(e.status || '').toLowerCase()] || e.status) : undefined} /><span className="grow" /><SysLink links={e.links} /></div>
             {e.detail && <div className="small muted">{e.detail}</div>}
           </div></div>
         </div>

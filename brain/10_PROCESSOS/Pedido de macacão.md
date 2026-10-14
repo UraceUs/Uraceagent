@@ -79,7 +79,7 @@ nunca o modelo.
   - erro do design fornecido pelo cliente: 33% de desconto na troca.
 
   Conflito com os termos ou os direitos do cliente sobe para a equipe.
-- **Ryan Casner, pedido #4738**: as boas-vindas (agradecimento + manual) saíram em 28/09
+- **Ryan Capner, pedido #4738**: as boas-vindas (agradecimento + manual) saíram em 28/09
   às 08h41 ET, pelo Eduardo. Não repetir nem mandar adendo de política; a próxima resposta dele
   é com o George. O que a tabela abaixo diz sobre "continua humano" no vai e vem do design foi
 substituído por esta decisão.

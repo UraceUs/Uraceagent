@@ -35,7 +35,7 @@ def _id_token(email):
 
 
 class GoogleFalso:
-    def __init__(self, email="vendedor.teste@gmail.com"):
+    def __init__(self, email="vendedor.teste@example.com"):
         self.email = email
         self.codigos = {}            # code -> {challenge, redirect_uri, client_id}
         self.access = {}             # access token -> email

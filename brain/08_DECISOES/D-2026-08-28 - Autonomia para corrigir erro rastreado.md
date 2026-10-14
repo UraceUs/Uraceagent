@@ -3,7 +3,7 @@ tipo: decisao
 tipo_info: DECISION
 data: 2026-08-28
 fonte: [[Administrative AI]]
-responsavel: Caso executado: [[Mathias Brouta|Tyron Brouta]] estava com o e-mail de outro cliente em 3 tarefas. O correto foi achado em 3 notificações de pagamento do [[QuickBooks]], uma delas na invoice do valor exato da tarefa. Corrigido. **A trava é a rastreabilidade** — sem origem confirmada, escala.
+responsavel: Caso executado: [[Mathias Breckta|Tyron Breckta]] estava com o e-mail de outro cliente em 3 tarefas. O correto foi achado em 3 notificações de pagamento do [[QuickBooks]], uma delas na invoice do valor exato da tarefa. Corrigido. **A trava é a rastreabilidade** — sem origem confirmada, escala.
 status: ativo
 ---
 
@@ -21,7 +21,7 @@ Quando a IA identifica um dado errado **e descobre de onde veio o certo**, ela c
 Palavras do dono: *"quando for situações assim que você identificar o erro, já sabe onde é que veio aquele email que é de outra pessoa, você pode trocar o email"*.
 
 ## Quem decidiu
-Caso executado: [[Mathias Brouta|Tyron Brouta]] estava com o e-mail de outro cliente em 3 tarefas. O correto foi achado em 3 notificações de pagamento do [[QuickBooks]], uma delas na invoice do valor exato da tarefa. Corrigido. **A trava é a rastreabilidade** — sem origem confirmada, escala.
+Caso executado: [[Mathias Breckta|Tyron Breckta]] estava com o e-mail de outro cliente em 3 tarefas. O correto foi achado em 3 notificações de pagamento do [[QuickBooks]], uma delas na invoice do valor exato da tarefa. Corrigido. **A trava é a rastreabilidade** — sem origem confirmada, escala.
 
 ## Projeto relacionado
 [[Italo Silveira]]

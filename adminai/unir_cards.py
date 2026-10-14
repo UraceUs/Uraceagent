@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """Une cards que o dono disse serem a mesma pessoa.
 
-    python3 adminai/unir_cards.py --unir "332+486+Liam Bourghol+Liam B=Liam Bourghol"
-    python3 adminai/unir_cards.py --unir "162+296+Charlie M=Charlie Marron" --aplicar
+    python3 adminai/unir_cards.py --unir "332+486+Liam Bouldhol+Liam B=Liam Bouldhol"
+    python3 adminai/unir_cards.py --unir "162+296+Charlie M=Charlie Mardon" --aplicar
 
 Cada --unir é "membro+membro[+membro…]=nome final". Membro é o id do card ou o nome
 EXATO dele (o nome tem de ser único no cadastro, senão recusa). Sem --aplicar só
 mostra o plano. Quem fica é o card com mais dados (e-mail, telefone, piloto,
 nascimento); empate, o mais antigo. O nome final corrige a grafia — os dois cards
-da Liam estavam errados ("Burghol" e "Bourgnhol"); o título do Asana escreve
-"Bourghol".
+da Liam estavam errados ("Buldhol" e "Bouldnhol"); o título do Asana escreve
+"Bouldhol".
 
 Usa `identidade.unir`, o mesmo do botão do painel: tudo do duplicado passa para o
 principal, e o duplicado inteiro fica guardado em `client_merges`.
@@ -40,8 +40,8 @@ def _card(con, membro):
         if not c:
             sys.exit(f"card #{m} não existe")
     else:
-        # Procura no RESPONSÁVEL e no PILOTO. O card do Luciano está como "Alonso
-        # Delgado" (o pai) com "Luciano Delgado" no piloto — procurar só pelo nome do
+        # Procura no RESPONSÁVEL e no PILOTO. O card do Luciano está como "Alvaso
+        # Defletor" (o pai) com "Luciano Defletor" no piloto — procurar só pelo nome do
         # responsável não achava, e o script parava antes de planejar as outras uniões.
         # A extensão da VPS pegou isso em 22/09.
         achados = todos(con, "SELECT * FROM clients WHERE lower(name)=lower(?)", (m,))
@@ -73,7 +73,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--unir", action="append", default=[], metavar="A+B[+C]=NOME")
     ap.add_argument("--piloto", action="append", default=[], metavar="ID=NOME",
-                    help="corrige o nome do piloto de um card (dono: '#238 é Alex Donnell')")
+                    help="corrige o nome do piloto de um card (dono: '#238 é Alex Dampell')")
     ap.add_argument("--responsavel", action="append", default=[], metavar="ID=NOME",
                     help="corrige o nome do responsável de um card (rótulo 'Email:' grudado, etc.)")
     ap.add_argument("--aplicar", action="store_true")
@@ -121,7 +121,7 @@ def main():
             total = {t: nk[t] + sum(n[t] for _, n in resto) for t in LIGADOS}
             # O "nome final" é o nome da PESSOA (o piloto). O card guarda o responsável em
             # `name` e o piloto em `pilot_name`; quando são gente diferente (#15: Kenneth
-            # Savage é o pai, Alexander Savage corre), o responsável fica como está —
+            # Sprage é o pai, Alexander Sprage corre), o responsável fica como está —
             # é ele, com o contato, que confirma identidade (princípio do dono, 22/09).
             tem_responsavel = bool(keep["pilot_name"]) and \
                 identidade.chave_exata(keep["pilot_name"]) != identidade.chave_exata(keep["name"])

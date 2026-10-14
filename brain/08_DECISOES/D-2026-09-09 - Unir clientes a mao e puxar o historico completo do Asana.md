@@ -9,7 +9,7 @@ status: ativo
 
 # D-2026-09-09 — Unir clientes à mão e puxar o histórico completo do Asana
 
-**Dono, 09/09/2026:** *"tenho o Brian Santiago duas vezes, escrito de
+**Dono, 09/09/2026:** *"tenho o Brian Sapata duas vezes, escrito de
 maneiras variadas; preciso unir esses dois"*. E *"tem muita tarefa que
 ainda não foi puxada do Asana — puxe todas as tarefas de treino que a
 gente teve, ligue quem é o cliente e o serviço, para que todos os

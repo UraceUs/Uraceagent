@@ -28,14 +28,14 @@ Nenhum. Os dois que existiam foram fechados em 18/09 — ver a tabela abaixo.
 ## ❓ Lacunas — `UNKNOWN`
 
 ### U-02 · Fornecedor do e-mail `whitesoldier205@gmail.com`
-Recebeu um pedido "SUIT - Frankie Iadevaia". Não se sabe se é o Manzoor,
+Recebeu um pedido "SUIT - Frankie Ignivela". Não se sabe se é o Manzoor,
 o WheelDeal ou outro. → [[PARAMETROS]] · [[Fornecedores]]
 
 *(As outras lacunas foram fechadas em 18/09 — tabela abaixo.)*
 
 ## 🔒 Fechado — o que já foi resolvido
 
-- **U-07 · dispensa de waiver** — fechada em 04/09: **cliente VIP dispensa waiver**. Lista em [[PARAMETROS]]; primeiro caso [[Rafael Pionti]]. Também fechado no mesmo dia: **RACES não entra na varredura de waiver**.
+- **U-07 · dispensa de waiver** — fechada em 04/09: **cliente VIP dispensa waiver**. Lista em [[PARAMETROS]]; primeiro caso [[Rafael Pistoni]]. Também fechado no mesmo dia: **RACES não entra na varredura de waiver**.
 
 Fica aqui como memória: **estes assuntos não precisam ser reabertos.**
 

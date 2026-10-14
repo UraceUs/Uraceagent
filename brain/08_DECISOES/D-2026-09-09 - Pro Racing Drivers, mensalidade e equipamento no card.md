@@ -20,6 +20,6 @@ imagem. Estoque fica para depois.
 - Clientes → aba **Pro Racing Drivers**; página **Corridas** (coluna
   RACES do Asana + manuais) com convites e "Prévia de custo" (aba Racing
   team da Rate Card); página **Equipamentos** (catálogo editável, fotos).
-- Exemplos citados: Brian Santiago e Alexander Xikis são mensais.
+- Exemplos citados: Brian Sapata e Alexander Xelix são mensais.
 
 Relacionado: [[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]], [[Rate Card]], [[Corridas]].

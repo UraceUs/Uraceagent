@@ -11,7 +11,7 @@ status: ativo
 
 URACE · realm `9341453113046421`. **A verdade sobre dinheiro está aqui.**
 Foi ele que, em 28/08, resolveu sozinho o valor do pacote do
-[[Michael Nicholas|Elijah]] e explicou por que não cobrar o depósito dele.
+[[Michael Nitrolas|Elijah]] e explicou por que não cobrar o depósito dele.
 
 ## Papel na operação
 - Pagamento de invoice **cria a tarefa** de serviço no [[Asana]]
@@ -71,18 +71,18 @@ com os filhos — é dupla contagem. A **receita real do ano é US$ 478.094**
 
 | Cliente | Em aberto | Situação |
 |---|---|---|
-| **Juan Pacino** | **$101.445** | vencida em **31/10/2025** — 10 meses |
-| **Stephen Collins** | **$55.070** | vencida em **01/12/2025** — 9 meses |
+| **Juan Pastilha** | **$101.445** | vencida em **31/10/2025** — 10 meses |
+| **Stephen Corrimao** | **$55.070** | vencida em **01/12/2025** — 9 meses |
 | Todos os outros 27 | $29.372 | — |
 
 As duas primeiras são **84% de tudo que a URACE tem a receber**.
 
-Outros em aberto: [[Leandro Cesar]] (parcelado 4× $1.000, vencendo
-05/06, 07/07, 07/08 e 07/09 — mais $4.697 e $1.060) · Frankie Iadevaia
-(4 invoices, $2.956) · Gerald White ($3.494) · Silveira Logistics
-($3.696) · Kaluah ($1.582) · Lewis Cook ($1.660).
+Outros em aberto: [[Leandro Cesio]] (parcelado 4× $1.000, vencendo
+05/06, 07/07, 07/08 e 07/09 — mais $4.697 e $1.060) · Frankie Ignivela
+(4 invoices, $2.956) · Gerald Wheelbase ($3.494) · Silveira Logistics
+($3.696) · Kaluah ($1.582) · Lewis Cockpit ($1.660).
 
-**Tony Peterson de Oliveira: $400 vencendo em 23/09** — pelo valor, é um
+**Tony Pedaleira de Oficina: $400 vencendo em 23/09** — pelo valor, é um
 [[Security deposit]] emitido e ainda não pago.
 
 ## Descobertas que respondem perguntas do projeto
@@ -93,7 +93,7 @@ só nasce quando a invoice é paga. Resposta: **pelo A/R aging** — invoice
 emitida com saldo em aberto é exatamente isso. É essa a fonte para a
 regra "enviar o depósito em D-4, pago ou não".
 
-**2. Existe parcelamento.** [[Leandro Cesar]] tem 4 invoices de $1.000
+**2. Existe parcelamento.** [[Leandro Cesio]] tem 4 invoices de $1.000
 com vencimentos mensais. A automação não pode tratar "invoice em aberto"
 como sinônimo de inadimplência — pode ser parcela a vencer.
 

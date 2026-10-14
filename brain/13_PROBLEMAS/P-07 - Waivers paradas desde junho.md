@@ -15,8 +15,8 @@ status: ativo
 >
 > | Quem | O que aconteceu de verdade |
 > |---|---|
-> | **Matthew Hubbard** | o envelope com o e-mail errado (`misterhubbbard@`, três b) foi **anulado em 09/09** pelo Eduardo, no Command Center. O novo, com `misterhubbard@gmail.com` corrigido, foi **reenviado em 17/09 às 14:53** e está aguardando assinatura |
-> | **Leticia Bittencourt** | **ela já assinou em 16/06 às 18:55** (envelope `81b835b4`). Existe um segundo envelope, criado no mesmo dia às 15:16, que ficou aberto e foi **reenviado por engano em 17/09** — é duplicata do que ela já assinou, e o certo é **anular**, não reenviar |
+> | **Matthew Hubtrack** | o envelope com o e-mail errado (`mister.hubtrack@`, três b) foi **anulado em 09/09** pelo Eduardo, no Command Center. O novo, com `mister.hubtrack.certo@example.com` corrigido, foi **reenviado em 17/09 às 14:53** e está aguardando assinatura |
+> | **Leticia Bitcarter** | **ela já assinou em 16/06 às 18:55** (envelope `81b835b4`). Existe um segundo envelope, criado no mesmo dia às 15:16, que ficou aberto e foi **reenviado por engano em 17/09** — é duplicata do que ela já assinou, e o certo é **anular**, não reenviar |
 > | **Austin** | envelope **anulado em 15/09** pelo Eduardo, no Command Center. Não há envelope aberto; se ele ainda vai à pista, precisa de waiver nova |
 >
 > Ou seja: dois foram reenviados **ontem** e um foi anulado de propósito. Reenviar hoje
@@ -24,7 +24,7 @@ status: ativo
 >
 > **Lição, a mesma da semana:** estado de sistema se confere na fonte, não no registro.
 
-> **Direção do dono (18/09):** **reenviar as três**. A do Matthew Hubbard precisa da correção do e-mail antes — o servidor dele recusou a entrega.
+> **Direção do dono (18/09):** **reenviar as três**. A do Matthew Hubtrack precisa da correção do e-mail antes — o servidor dele recusou a entrega.
 
 [[DocuSign]] · [[Waiver]] · [[Problemas]]
 
@@ -33,8 +33,8 @@ Três envelopes do [[DocuSign]] sem assinatura há mais de dois meses:
 
 | Signatário | Enviada | Status |
 |---|---|---|
-| Matthew Hubbard | 01/06 | `sent` — nunca abriu · **expira 29/09** |
-| Leticia Bittencourt | 16/06 | `delivered` — abriu e não assinou |
+| Matthew Hubtrack | 01/06 | `sent` — nunca abriu · **expira 29/09** |
+| Leticia Bitcarter | 16/06 | `delivered` — abriu e não assinou |
 | Austin | 30/06 | `sent` — nunca abriu |
 
 ## Evidência
@@ -44,7 +44,7 @@ Três envelopes do [[DocuSign]] sem assinatura há mais de dois meses:
 Sem waiver assinada o piloto não entra na pista. E envelope que expira **tem que ser reenviado do zero**.
 
 ## O que fazer
-Entram na varredura diária de [[Waiver de responsabilidade]]. O do Matthew Hubbard tem prazo: expira em 29/09.
+Entram na varredura diária de [[Waiver de responsabilidade]]. O do Matthew Hubtrack tem prazo: expira em 29/09.
 
 ## Fonte
 sonda ao vivo no DocuSign, 31/08/2026
@@ -53,11 +53,11 @@ sonda ao vivo no DocuSign, 31/08/2026
 
 Leitura real do DocuSign em produção ([[2026-09-04]]):
 
-- **Matthew Hubbard**: o envelope de 27/05 foi para
-  `misterhub**bb**ard@gmail.com` e **devolveu** (`550 no such user`). O
-  reenvio de 01/06 para `misterhubbard@gmail.com` está certo, mas segue
+- **Matthew Hubtrack**: o envelope de 27/05 foi para
+  `mister.hub**tt**rack@example.com` e **devolveu** (`550 no such user`). O
+  reenvio de 01/06 para `mister.hubtrack.certo@example.com` está certo, mas segue
   `sent` — nunca aberto. Expira **29/09**.
-- **Leticia Bittencourt**: `delivered` desde 16/06 — abriu, não assinou.
+- **Leticia Bitcarter**: `delivered` desde 16/06 — abriu, não assinou.
   Expira 14/10.
 - **Austin**: `sent` desde 30/06, nunca aberto. Expira 28/10.
 - Nenhum dos três tem serviço no quadro. Não são alerta; são limpeza.

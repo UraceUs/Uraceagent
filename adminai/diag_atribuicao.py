@@ -17,8 +17,8 @@ garantir_venv()          # o python3 do sistema não tem as dependências (22/09
 from command_center.db import aplicar_schema, conectar, todos, um  # noqa: E402
 from command_center.providers import atribuicao, identidade  # noqa: E402
 
-PADRAO = ["G.J", "Mike", "Sean", "Savage", "Savege", "Alex", "Liam", "Aaron", "Brian", "Andres",
-          "Lucca", "Mauricio", "Sanghera", "Martin", "Mikey", "Luciano", "Daneyza", "Axel", "Maya",
+PADRAO = ["G.J", "Mike", "Sean", "Sprage", "Sprege", "Alex", "Liam", "Aaron", "Brian", "Andres",
+          "Lucca", "Mauricio", "Sarjera", "Martin", "Mikey", "Luciano", "Daneyza", "Axel", "Maya",
           "Italo", "Nardo", "Usf"]
 
 

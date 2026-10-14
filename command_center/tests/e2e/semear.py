@@ -31,16 +31,16 @@ auth.criar_usuario(con, "leitor@urace.us", "Leitor", "VIEWER", "senha-de-teste-1
 auth.criar_usuario(con, "livre@urace.us", "Dono Livre", "ADMIN", "senha-de-teste-123")   # acesso livre no teste (CC_ACESSO_LIVRE)
 
 # ---------------------------------------------------------------- clientes
-brian = inserir(con, "clients", name="Pablo Santiago", email="pablosantiago@outlook.com", email_alt="bryanlsantiago@outlook.com",
-                phone="305-609-7845", pilot_name="Bryan Santiago", pilot_dob="2011-03-14", vip=0, status="ACTIVE",
+brian = inserir(con, "clients", name="Pablo Sapata", email="pablosapata@example.com", email_alt="bryanlsapata@example.com",
+                phone="305-555-0145", pilot_name="Bryan Sapata", pilot_dob="2011-03-01", vip=0, status="ACTIVE",
                 source="asana", plan_type="monthly", pro_driver=1, monthly_plan="Academy 2 stroke")
-david = inserir(con, "clients", name="Nicolas Pera", email="peranicolas2106@gmail.com", phone="305-906-2542",
-                pilot_name="David Pera", pilot_dob="2014-05-02", vip=0, status="ACTIVE", source="asana", plan_type="daily")
-renato = inserir(con, "clients", name="Rafael Pionti", email="rafael@spmesportes.com.br", phone="+55 11 93005-8900",
-                 pilot_name="Renato Frota Pionti", pilot_dob="2012-01-03", vip=1, status="ACTIVE", source="asana")
-alex = inserir(con, "clients", name="Alex Alonso", email="alonso@example.com", pilot_name="Alex Alonso",
+david = inserir(con, "clients", name="Nicolas Pedalo", email="nicolas.pedalo@example.com", phone="305-555-0146",
+                pilot_name="David Pedalo", pilot_dob="2014-04-01", vip=0, status="ACTIVE", source="asana", plan_type="daily")
+renato = inserir(con, "clients", name="Rafael Pistoni", email="rafael.pistoni@example.com", phone="+55 11 99555-0147",
+                 pilot_name="Renato Faixa Pistoni", pilot_dob="2012-01-01", vip=1, status="ACTIVE", source="asana")
+alex = inserir(con, "clients", name="Alex Alvaso", email="alvaso@example.com", pilot_name="Alex Alvaso",
                vip=0, status="ACTIVE", source="asana")
-alexb = inserir(con, "clients", name="Alex Alonzo", email=None, pilot_name="Alex Alonzo", vip=0, status="INACTIVE", source="asana")
+alexb = inserir(con, "clients", name="Alex Alvazo", email=None, pilot_name="Alex Alvazo", vip=0, status="INACTIVE", source="asana")
 theo = inserir(con, "clients", name="Carla Mendes", email="carla@example.com", phone="407-555-0199",
                pilot_name="Théo Mendes", pilot_dob="2009-08-20", vip=0, status="INACTIVE", source="asana", plan_type="daily")
 
@@ -55,12 +55,12 @@ def tarefa(cid, titulo, secao, status, quando, feitas=None, total=12, gid=None):
                 deep_link=f"https://app.asana.com/0/1205450093098920/{gid}/f")
     return t
 
-t_david = tarefa(david, "David Pera_Urace Daily_Using Own Kart [1/1]", "SUNDAY", "open", d(3), 0, 12, "1218352906747605")
-tarefa(brian, "Bryan Santiago_Academy_2 stroke [3/4]", "SATURDAY", "open", d(2), 4, 12, "8880001")
-tarefa(brian, "Bryan Santiago_Academy_2 stroke [2/4]", "Finished Services", "completed", d(-14), 12, 12, "8880002")
-tarefa(brian, "Bryan Santiago_Academy_2 stroke [1/4]", "Finished Services", "completed", d(-28), 12, 12, "8880003")
+t_david = tarefa(david, "David Pedalo_Urace Daily_Using Own Kart [1/1]", "SUNDAY", "open", d(3), 0, 12, "1218352906747605")
+tarefa(brian, "Bryan Sapata_Academy_2 stroke [3/4]", "SATURDAY", "open", d(2), 4, 12, "8880001")
+tarefa(brian, "Bryan Sapata_Academy_2 stroke [2/4]", "Finished Services", "completed", d(-14), 12, 12, "8880002")
+tarefa(brian, "Bryan Sapata_Academy_2 stroke [1/4]", "Finished Services", "completed", d(-28), 12, 12, "8880003")
 t_vencida = tarefa(theo, "Théo Mendes_Urace Daily_2 stroke [1/1]", "SATURDAY", "open", d(-5), 9, 12, "8880004")
-tarefa(renato, "Renato Frota Pionti_Professional Coaching_2T [1/1]", "SATURDAY", "open", d(1), 2, 12, "8880005")
+tarefa(renato, "Renato Faixa Pistoni_Professional Coaching_2T [1/1]", "SATURDAY", "open", d(1), 2, 12, "8880005")
 corrida_task = tarefa(None, "ROK Cup USA Round 5 [Orlando / OKC]", "RACES", "open", d(9), 0, 8, "8880006")
 tarefa(None, "SKUSA Winter Series RD1 [Homestead]", "RACES", "open", d(24), 0, 8, "8880007")
 
@@ -73,10 +73,10 @@ def waiver(cid, nome, email, status, enviada, assinada=None, expira=None, env=No
                 deep_link=f"https://app.docusign.com/documents/details/{env}")
     return w
 
-waiver(david, "Nicolas Pera", "peranicolas2106@gmail.com", "completed", d(-25), d(-24), d(340), "env-david")
-waiver(brian, "Pablo Santiago", "pablosantiago@outlook.com", "completed", d(-60), d(-59), d(305), "env-brian")
+waiver(david, "Nicolas Pedalo", "nicolas.pedalo@example.com", "completed", d(-25), d(-24), d(340), "env-david")
+waiver(brian, "Pablo Sapata", "pablosapata@example.com", "completed", d(-60), d(-59), d(305), "env-brian")
 waiver(theo, "Carla Mendes", "carla@example.com", "delivered", d(-9), None, d(12), "env-theo")
-waiver(None, "Matthew Hubbard", "misterhubbbard@gmail.com", "autoresponded", d(-106), None, d(14), "env-matt")
+waiver(None, "Matthew Hubtrack", "mister.hubtrack@example.com", "autoresponded", d(-106), None, d(14), "env-matt")
 
 # ---------------------------------------------------------------- e-mails (Gmail)
 def email(cid, caixa, assunto, de, quando, **kw):
@@ -85,12 +85,12 @@ def email(cid, caixa, assunto, de, quando, **kw):
             deep_link=f"https://mail.google.com/mail/u/0/#all/th{e}")
     return e
 
-email(renato, "urace", "Posso trocar o dia do treino?", "Rafael Pionti <rafael@spmesportes.com.br>", d(-1) + "T11:00:00",
+email(renato, "urace", "Posso trocar o dia do treino?", "Rafael Pistoni <rafael.pistoni@example.com>", d(-1) + "T11:00:00",
       handled=0, is_inbox=1, labels='["INBOX","Kart Racing School | Client talks"]', snippet="Consigo levar o Renato no domingo em vez de sábado?")
 email(None, "urace", "Your Amazon.com order #113-55", "auto-confirm@amazon.com", d(-1) + "T09:12:00",
       handled=1, handled_by="ia", handled_reason="triagem: Finances/Receipts + Amazon", is_inbox=0,
       labels='["Finances/Receipts","Amazon"]', snippet="Shipped: Tillotson carburetor kit", triaged_at=d(-1) + "T13:00:00")
-email(brian, "support", "Karting opportunities", "Luke Justice <luke@example.com>", d(-11) + "T15:40:00",
+email(brian, "support", "Karting opportunities", "Luke Jarrete <luke@example.com>", d(-11) + "T15:40:00",
       handled=0, is_inbox=0, needs_human=1, labels='["Kart Racing School | Client talks"]',
       suggested_label="Kart Racing School | Client talks", suggested_by="ia", triage_reason="pergunta de cliente",
       triaged_at=d(-11) + "T21:00:00", snippet="Would love to talk about coaching for my son.")
@@ -105,8 +105,8 @@ def invoice(cid, num, valor, saldo, status, emitida, vence, memo, email_cob, ref
             deep_link=f"https://qbo.intuit.com/app/invoice?txnId={num}")
     return i
 
-invoice(david, "1031", 500, 0, "paid", d(-24), d(-22), "Urace Daily | Using Own Kart | David Pera", "peranicolas2106@gmail.com", "696")
-invoice(brian, "1044", 3156.90, 3156.90, "open", d(-9), d(6), "Urace Academy Training Program [September, 2026]", "pablosantiago@outlook.com", "412")
+invoice(david, "1031", 500, 0, "paid", d(-24), d(-22), "Urace Daily | Using Own Kart | David Pedalo", "nicolas.pedalo@example.com", "696")
+invoice(brian, "1044", 3156.90, 3156.90, "open", d(-9), d(6), "Urace Academy Training Program [September, 2026]", "pablosapata@example.com", "412")
 invoice(theo, "1077", 819, 819, "overdue", d(-71), d(-45), "Urace Daily 2 stroke - Théo Mendes [July, 2026]", "carla@example.com", "530")
 
 # ---------------------------------------------------------------- catálogo do QuickBooks
@@ -140,17 +140,17 @@ for s, ok, msg in (("asana", 1, "412 tarefas em 11 colunas, 6 clientes novos"), 
     inserir(con, "sync_logs", system=s, started_at=d(0) + "T07:00:00Z", finished_at=d(0) + "T07:02:00Z", ok=ok, items=1, message=msg)
 
 # ---------------------------------------------------------------- conversa da IA com ações em todos os estados
-c1 = inserir(con, "ai_commands", user_id=1, text="Filho do Nicolas Pera - David Pera. Coloca na agenda pro domingo. Mesmo esquema da última vez.",
+c1 = inserir(con, "ai_commands", user_id=1, text="Filho do Nicolas Pedalo - David Pedalo. Coloca na agenda pro domingo. Mesmo esquema da última vez.",
              prompt="(contexto do painel)", session_key="agent:urace-admin:web-1", status="DONE",
              created_at=d(0) + "T11:20:00Z", finished_at=d(0) + "T11:23:00Z",
-             output="Achei o histórico: David Pera, Using Own Kart, prática no OKC, invoice de $500 (Nicolas pagando).\n\nCriei a tarefa na coluna SUNDAY e montei a invoice de $500 no nome do Nicolas para você aprovar.")
+             output="Achei o histórico: David Pedalo, Using Own Kart, prática no OKC, invoice de $500 (Nicolas pagando).\n\nCriei a tarefa na coluna SUNDAY e montei a invoice de $500 no nome do Nicolas para você aprovar.")
 inserir(con, "ai_actions", command_id=c1, action="asana_criar_do_modelo", system="asana", policy="SAFE", status="DONE",
-        payload='{"alvo":"David Pera","args":{"nome":"David Pera_Urace Daily_Using Own Kart [1/1]","campos":{"Race":"Practice OKC"}}}',
-        result='{"aplicado": true, "gid": "1218352906747605", "nome": "David Pera_Urace Daily_Using Own Kart [1/1]", "link": "https://app.asana.com/0/1205450093098920/1218352906747605/f"}',
+        payload='{"alvo":"David Pedalo","args":{"nome":"David Pedalo_Urace Daily_Using Own Kart [1/1]","campos":{"Race":"Practice OKC"}}}',
+        result='{"aplicado": true, "gid": "1218352906747605", "nome": "David Pedalo_Urace Daily_Using Own Kart [1/1]", "link": "https://app.asana.com/0/1205450093098920/1218352906747605/f"}',
         reason="proposta pelo agente", finished_at=d(0) + "T11:23:00Z")
 a_inv = inserir(con, "ai_actions", command_id=c1, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL",
                 status="PROPOSED", reason="proposta pelo agente",
-                payload='{"alvo":"Nicolas Pera","args":{"cliente_id":"696","email":"peranicolas2106@gmail.com","data_servico":"%s","vence_em":"%s","memo":"Urace Daily | Using Own Kart | David Pera | Service date: %s","nota_privada":"Urace Daily | Using Own Kart | David Pera","linhas":[{"item_id":"32","quantidade":1,"unitario":500,"descricao":"Urace Daily - Using Own Kart - David Pera"}]}}'
+                payload='{"alvo":"Nicolas Pedalo","args":{"cliente_id":"696","email":"nicolas.pedalo@example.com","data_servico":"%s","vence_em":"%s","memo":"Urace Daily | Using Own Kart | David Pedalo | Service date: %s","nota_privada":"Urace Daily | Using Own Kart | David Pedalo","linhas":[{"item_id":"32","quantidade":1,"unitario":500,"descricao":"Urace Daily - Using Own Kart - David Pedalo"}]}}'
                 % (d(3), d(1), d(3)))
 inserir(con, "approvals", action_id=a_inv)
 a_ruim = inserir(con, "ai_actions", command_id=c1, action="qbo_criar_e_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL",
@@ -234,7 +234,7 @@ from command_center.providers import checklists as _ck  # noqa: E402
 _luis = auth.criar_usuario(con, "luis@urace.us", "Luis Barros", "OPERATOR", "senha-de-teste-123")
 con.execute("UPDATE users SET cargo='MECANICO' WHERE id=?", (_luis,))
 _hoje_fl = _dt.now(ZoneInfo("America/New_York")).date().isoformat()
-tarefa(david, "David Pera_Urace Daily_Arrive and Drive [1/1]", "SUNDAY", "open", _hoje_fl, 0, 12)
+tarefa(david, "David Pedalo_Urace Daily_Arrive and Drive [1/1]", "SUNDAY", "open", _hoje_fl, 0, 12)
 _ck.importar(con, [
     ["", "Practice Day / Kart School", "", "", "Technical Inspection"],
     ["", "Mechanic Checklist", "Coach Checklist", "", "Kart Checklist"],

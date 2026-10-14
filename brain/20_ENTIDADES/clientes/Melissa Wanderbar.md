@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: Bella M Wagner
+piloto: Bella M Wanderbar
 atualizado_em: 2026-08-28
 ---
 
-# Melissa Wagner
+# Melissa Wanderbar
 
-Responsável por **Bella M Wagner** · [[Clientes]]
+Responsável por **Bella M Wanderbar** · [[Clientes]]
 
 Baby Kart. Sessão de 30/07 **cancelada por chuva, valor integralmente reembolsado**.
 

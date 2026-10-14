@@ -30,7 +30,7 @@ def _l(item, item_id, unit, qtd=1, desc=None):
 
 
 INVOICES = [
-    _inv(2101, "2026-09-20", "Pablo Santiago", "pablo@x.com", "485",
+    _inv(2101, "2026-09-20", "Pablo Sapata", "pablo@x.com", "485",
          [_l("Rk Non Oring Chain", "71", 65, desc="Chain 108"), _l("Fuel mix", "72", 40), _l("Engine", "73", 250)]),
     _inv(2080, "2026-08-10", "Carlos Reis", "carlos@x.com", "501",
          [_l("Rk Non Oring Chain", "71", 60, desc="Chain 104"), _l("Tonykart Rear bumper fixing bolt", "74", 12, qtd=2)]),
@@ -131,14 +131,14 @@ def test_o_comando_leva_os_precos_das_pecas_da_conversa(con):
     inserir(con, "ai_commands", user_id=uid, text="monte uma invoice por piloto com todos os dias", session_key="s",
             status="DONE", output=PERGUNTA_DA_IA)
     con.commit()
-    ctx = motor.contexto_de_precos(con, "Frankie enzo.iadevaia@gmail.com; Jill hawaiicampers@gmail.com; Bryan pablo@x.com", uid)
+    ctx = motor.contexto_de_precos(con, "Frankie enzo.ignivela@example.com; Jill jill.rodins@example.com; Bryan pablo@x.com", uid)
     assert "PREÇOS JÁ COBRADOS NO QUICKBOOKS" in ctx
     assert "Rk Non Oring Chain (item_id 71): último $65.00 em 2026-09-20" in ctx
     assert "Fuel mix (item_id 72): último $40.00" in ctx
     assert "Tonykart Rear bumper fixing bolt (item_id 74): último $12.00" in ctx
     assert "MG SH2 Red Tires Jr/Sr (item_id 75)" in ctx
     assert "Cliente no QuickBooks de pablo@x.com: cliente_id=485" in ctx
-    assert "enzo.iadevaia@gmail.com: sem invoice no espelho" in ctx
+    assert "enzo.ignivela@example.com: sem invoice no espelho" in ctx
 
 
 def test_conversa_sem_invoice_nem_preco_nao_leva_tabela(con):

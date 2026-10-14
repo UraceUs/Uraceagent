@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: Alexander Savage
+piloto: Alexander Sprage
 atualizado_em: 2026-08-28
 ---
 
-# Kenneth Savage
+# Kenneth Sprage
 
-Responsável por **Alexander Savage** · [[Clientes]]
+Responsável por **Alexander Sprage** · [[Clientes]]
 
 US$ 164.509 no ano — **34% do faturamento**. Concentração alta: ver [[QuickBooks]]. Corre [[Corridas|kart e F4]].
 

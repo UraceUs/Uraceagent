@@ -73,7 +73,7 @@ def test_invoices_status_e_deeplink(qbo):
     from datetime import date, timedelta
     ontem = (date.today() - timedelta(days=1)).isoformat(); amanha = (date.today() + timedelta(days=1)).isoformat()
     respostas["Invoice"] = {"QueryResponse": {"Invoice": [
-        {"Id": "101", "DocNumber": "6YZRN1QWN647NQ", "CustomerRef": {"value": "7", "name": "Alex Alonzo"}, "TotalAmt": 350.0, "Balance": 350.0, "DueDate": ontem, "TxnDate": "2026-08-01",
+        {"Id": "101", "DocNumber": "6YZRN1QWN647NQ", "CustomerRef": {"value": "7", "name": "Alex Alvazo"}, "TotalAmt": 350.0, "Balance": 350.0, "DueDate": ontem, "TxnDate": "2026-08-01",
          "BillEmail": {"Address": "alex@example.com"}, "Line": [{"DetailType": "SalesItemLineDetail", "Amount": 350.0, "SalesItemLineDetail": {"ItemRef": {"name": "Summer Camp"}, "Qty": 1, "UnitPrice": 350.0}}]},
         {"Id": "102", "DocNumber": "X", "CustomerRef": {"value": "8", "name": "Outro"}, "TotalAmt": 100.0, "Balance": 0, "DueDate": amanha, "TxnDate": "2026-08-02"},
         {"Id": "103", "DocNumber": "Y", "CustomerRef": {"value": "9", "name": "Terceiro"}, "TotalAmt": 100.0, "Balance": 100.0, "DueDate": amanha, "TxnDate": "2026-08-03", "EmailStatus": "EmailSent"}]}}

@@ -106,9 +106,22 @@ def _fl_hoje():
 
 
 # ------------------------------------------------------------------ 1. a sessão do Checkout
-def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_url=None, http=None):
-    """Grava o pedido 'aberto' e cria a sessão do Checkout. Devolve (pedido_id, url do Stripe)."""
+class PrecisaConta(ValueError):
+    """#248 (dono, 14/10): "Para a pessoa conseguir comprar com a gente, ela tem que criar a conta dela lá no
+    site da URACE". Comprar pede a conta do site; o e-mail dela vai para o Stripe e para os avisos."""
+
+
+def locale_stripe(lang):
+    return "pt-BR" if lang == "pt" else "en"
+
+
+def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_url=None, http=None, conta_id=None, lang="en"):
+    """Grava o pedido 'aberto' e cria a sessão do Checkout. Devolve (pedido_id, url do Stripe).
+    #248: só com a conta do site (`conta_id`); o e-mail da conta vai como `customer_email`."""
     http = http or _http
+    conta = um(con, "SELECT * FROM portal_accounts WHERE id=? AND active=1", (conta_id,)) if conta_id else None
+    if not conta:
+        raise PrecisaConta("Please sign in or create your URACE account to buy.")
     v = _variacao(p, variacao_nome) if p.get("variations") else None
     if p.get("variations") and not v:
         raise ValueError("Please choose an option.")
@@ -119,7 +132,9 @@ def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_
     entrega = "envio" if entrega == "envio" else "retirada"
     nome = p["name"] + (f" ({variacao_nome})" if v else "")
     oid = inserir(con, "store_orders", product_slug=p["slug"], product_name=p["name"], variation=variacao_nome if v else None,
-                  quantity=qtd, unit_price=unit, amount=round(unit * qtd, 2), delivery=entrega, origin=host)
+                  quantity=qtd, unit_price=unit, amount=round(unit * qtd, 2), delivery=entrega, origin=host,
+                  account_id=conta["id"], email=(conta["email"] or "").lower() or None, name=conta["name"], phone=conta["phone"],
+                  lang="pt" if lang == "pt" else "en")
     produto = {"name": nome[:250]}
     if foto_url:
         produto["images"] = [foto_url]
@@ -134,6 +149,8 @@ def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_
         "payment_intent_data": {"description": f"URACE Store #{oid}: {nome}"[:250], "metadata": {"pedido": oid}},
         "phone_number_collection": {"enabled": True},
         "billing_address_collection": "auto",
+        "customer_email": conta["email"],
+        "locale": locale_stripe(lang),
     }
     if entrega == "envio":
         campos["shipping_address_collection"] = {"allowed_countries": list(PAISES_ENVIO)}
@@ -178,10 +195,12 @@ def _registrar_sessao(con, o, s, status):
         return o
     det = s.get("customer_details") or {}
     envio = (s.get("shipping_details") or (s.get("collected_information") or {}).get("shipping_details") or None)
+    da_conta = bool(o.get("account_id") and o["email"])      # #248: a conta é a base; o Stripe só completa
     campos = dict(status=status, stripe_session_id=s.get("id") or o["stripe_session_id"],
                   payment_intent=s.get("payment_intent") if isinstance(s.get("payment_intent"), str) else o["payment_intent"],
-                  email=(det.get("email") or o["email"] or "").lower() or None, name=det.get("name") or o["name"],
-                  phone=det.get("phone") or o["phone"], updated_at=agora())
+                  email=(o["email"] if da_conta else (det.get("email") or o["email"] or "")).lower() or None,
+                  name=(o["name"] if da_conta and o["name"] else det.get("name") or o["name"]),
+                  phone=(o["phone"] if da_conta and o["phone"] else det.get("phone") or o["phone"]), updated_at=agora())
     if envio:
         campos["shipping"] = json.dumps(envio, ensure_ascii=False)
     if s.get("amount_total") is not None:
@@ -247,9 +266,9 @@ def _efeito(con, eid, tipo, s):
     if novo == "pago" and era != "pago":
         ligar_e_vender(con, o["id"])
         return "pago", o["id"]
-    if novo in ("falhou", "expirado") and o["status"] == novo:      # #245: a pessoa fica sabendo
+    if novo in ("aguardando", "falhou", "expirado") and o["status"] == novo:      # #245, #248: avisa sempre
         from command_center.providers import pedido_site
-        pedido_site.marcar_resultado(con, o, s, novo)
+        pedido_site.marcar_resultado(con, o, novo)
     return novo, None
 
 
@@ -266,7 +285,11 @@ def conferir_sessao(con, session_id, http=None):
     s = (http or _http)("GET", f"/v1/checkout/sessions/{urllib.parse.quote(session_id)}")
     novo = status_da_sessao(s, conferindo=True)
     if novo != "pago":
-        return _registrar_sessao(con, o, s, novo if o["status"] == "aberto" else o["status"]), False
+        o = _registrar_sessao(con, o, s, novo if o["status"] == "aberto" else o["status"])
+        if o["status"] in ("aguardando", "expirado"):           # #248: o webhook avisa; se ele atrasar, fica na fila
+            from command_center.providers import pedido_site
+            pedido_site.marcar_resultado(con, o, o["status"])
+        return o, False
     con.execute("BEGIN IMMEDIATE")           # o webhook pode chegar no mesmo instante: um só vende
     try:
         atual = um(con, "SELECT status FROM store_orders WHERE id=?", (o["id"],))
@@ -288,6 +311,11 @@ def _cliente(con, o):
     E-mail de um card com outro nome (um pai comprando no e-mail do filho, um e-mail da empresa)
     não liga: a equipe decide. Sem card nenhum com esse e-mail, nasce um card novo."""
     from command_center.providers import identidade
+    if o.get("account_id"):                          # #248: a conta do site, já ligada pela equipe, diz o card
+        c = um(con, """SELECT c.id, c.name FROM portal_accounts a JOIN clients c ON c.id=a.client_id
+                        WHERE a.id=? AND c.kind<>?""", (o["account_id"], identidade.SEPARADO))
+        if c:
+            return c["id"], f"card da conta do site ({c['name']})"
     if not o["email"]:
         return None, "sem e-mail no Checkout: vincular à mão"
     cards = todos(con, "SELECT * FROM clients WHERE email=? AND kind<>?", (o["email"], identidade.SEPARADO))
@@ -362,22 +390,35 @@ def avisar(con, oid, enviar=None):
         return carrinho.avisar(con, oid, enviar)
     from command_center.providers import pedido_site
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
-    primeiro = (o["name"] or "").split()[0] if o["name"] else "there"
-    entrega_cli = ("We'll let you know when it's ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
-                   "Orlando, FL 32824)." if o["delivery"] == "retirada" else
-                   "We'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.")
+    lang = pedido_site.lingua(o)                        # #248: no idioma em que a pessoa comprou
+    pedido_site.registrar_no_card(con, o, "pago")       # #248: o pagamento na linha do tempo do card
+    if lang == "pt":
+        entrega_cli = ("Avisamos quando estiver pronto para retirar no Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
+                       "Orlando, FL 32824)." if o["delivery"] == "retirada" else
+                       "Confirmamos o valor do frete e mandamos o código de rastreio. O frete é cobrado à parte.")
+        assunto = f"Pedido #{o['id']} confirmado — URACE Store"
+        texto = (f"{pedido_site.ola(o, lang)},\n\nObrigado pelo pedido! Recebemos o seu pagamento.\n\n{descricao(o)}\n"
+                 f"Total pago: US$ {valor:,.2f}\nPedido: #{o['id']}\n\n{entrega_cli}\n\nPágina do seu pedido: {pedido_site.link(o)}\n\n"
+                 f"{pedido_site.contato(lang)}\n\nURACE — the Champion's Factory")
+    else:
+        entrega_cli = ("We'll let you know when it's ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
+                       "Orlando, FL 32824)." if o["delivery"] == "retirada" else
+                       "We'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.")
+        assunto = f"Order #{o['id']} confirmed — URACE Store"
+        texto = (f"{pedido_site.ola(o, lang)},\n\nThanks for your order! We received your payment.\n\n{descricao(o)}\nTotal paid: "
+                 f"US$ {valor:,.2f}\nOrder: #{o['id']}\n\n{entrega_cli}\n\nYour order page: {pedido_site.link(o)}\n\n"
+                 f"Questions? Call or WhatsApp +1 (407) 250 2291.\n\nURACE — the Champion's Factory")
     try:
         if o["email"]:
-            _enviar(enviar, o["email"], f"Order #{o['id']} confirmed — URACE Store",
-                    f"Hi {primeiro},\n\nThanks for your order! We received your payment.\n\n{descricao(o)}\nTotal paid: "
-                    f"US$ {valor:,.2f}\nOrder: #{o['id']}\n\n{entrega_cli}\n\nYour order page: {pedido_site.link(o)}\n\n"
-                    f"Questions? Call or WhatsApp +1 (407) 250 2291.\n\nURACE — the Champion's Factory")
+            _enviar(enviar, o["email"], assunto, texto)
         _enviar(enviar, "support@urace.us", f"Loja · PAGO: {descricao(o)} — {o['name'] or o['email']}",
                 f"Pedido #{o['id']} pago no Stripe: US$ {valor:,.2f}\n{descricao(o)}\n{o['name'] or ''} <{o['email'] or ''}> "
                 f"{o['phone'] or ''}\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else 'ENVIO — combinar o frete'}\n"
                 + (f"Endereço:\n{_endereco(o)}\n" if o["shipping"] else "")
-                + f"Card: {o['link_note'] or '—'}\n\nSeparar e entregar. Vendas: https://ops.urace.us/ops/sales/{o['opp_id']}")
+                + f"Card: {o['link_note'] or '—'}\n\nSeparar e entregar. Vendas: https://ops.urace.us/ops/sales/{o['opp_id']}"
+                + f"\nPágina do pedido: {pedido_site.link(o)}")
         atualizar(con, "store_orders", oid, notified_at=agora(), notify_error=None, updated_at=agora())
+        pedido_site.avisado_pago(con, o, o["email"])
         return True
     except Exception as e:                              # noqa: BLE001 — o pedido já está pago e em Vendas
         atualizar(con, "store_orders", oid, notify_error=str(e)[:300], updated_at=agora())

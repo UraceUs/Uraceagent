@@ -25,8 +25,8 @@ que não é waiver.
 
 ## A prova, nas últimas 40 mensagens do remetente (16/09)
 
-**34 waivers e 6 que não são**: um NDA do Caio Imperato, a *Intended Use Letter* da
-URACE_AUTO_LLC, a *Invite Letter 2026* do Bryan Bernal (duas mensagens) e um
+**34 waivers e 6 que não são**: um NDA do Caio Imparcial, a *Intended Use Letter* da
+URACE_AUTO_LLC, a *Invite Letter 2026* do Bryan Bandeirada (duas mensagens) e um
 `UniversalNon-POD`. Todas com `Waivers` colado pelo filtro — 15% de erro, e cada
 uma delas acordaria o fluxo da waiver em documento que não é waiver.
 
@@ -90,7 +90,7 @@ todas com *waiver* ou *consent* no assunto.
 
 ## Efeito da regra ditada que vale saber
 
-O assunto *"Nya Amankwa viewed **Please Complete** the Docusign: Parental
+O assunto *"Nya Amortka viewed **Please Complete** the Docusign: Parental
 Consent…"* casa com a regra dele, então aviso de **visualizou** e de **anulado**
 também recebe `Waivers`. Não quebra: `waiver_do_email` só baixa PDF e mexe em
 tarefa quando o registro no DocuSign está `completed`; "visualizou" no máximo

@@ -9,12 +9,12 @@ status: ativo
 
 # P-04 — 84% do valor a receber está em duas invoices de 2025
 
-> **Direção do dono (18/09):** *"deixe em stand-by para esses por hora"*. Não cobrar Juan Pacino e Stephen Collins por enquanto; os dois saem da fila de cobrança e do que a IA propõe. Os outros 27 continuam valendo.
+> **Direção do dono (18/09):** *"deixe em stand-by para esses por hora"*. Não cobrar Juan Pastilha e Stephen Corrimao por enquanto; os dois saem da fila de cobrança e do que a IA propõe. Os outros 27 continuam valendo.
 
 [[QuickBooks]] · [[Problemas]]
 
 ## O problema
-**US$ 185.887 em aberto**, em 29 invoices. Duas delas são 84% do total: **Juan Pacino $101.445** (vencida em 31/10/2025) e **Stephen Collins $55.070** (vencida em 01/12/2025).
+**US$ 185.887 em aberto**, em 29 invoices. Duas delas são 84% do total: **Juan Pastilha $101.445** (vencida em 31/10/2025) e **Stephen Corrimao $55.070** (vencida em 01/12/2025).
 
 ## Evidência
 Relatório de A/R aging do [[QuickBooks]], lido em 31/08/2026.

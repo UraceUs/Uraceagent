@@ -50,9 +50,9 @@ def test_pendente_vira_tarefa_do_modelo_oficial_com_o_bloco_da_casa(con):
     f, kw = asana.chamadas[0]
     assert f == "asana_criar_do_modelo" and kw["modelo_gid"] == MODELO_SESSAO and kw["campos"] == {"Race": "Practice OKC"}
     assert kw["secao_gid"] == "1205141832260878" and kw["vence_em"] == "2026-10-10"
-    assert kw["nome"] == "Enzo Kurian_Arrive and Drive [1/4]", "o padrão do quadro; Enzo tem contrato de 4 por mês"
+    assert kw["nome"] == "Enzo Kartian_Arrive and Drive [1/4]", "o padrão do quadro; Enzo tem contrato de 4 por mês"
     d = sync.parse_descricao(kw["notas"])
-    assert (d["piloto"], d["responsavel"], d["email"], d["nascimento"]) == ("Enzo Kurian", "Joseph Kurian", "joekur001@gmail.com", "2014-03-02")
+    assert (d["piloto"], d["responsavel"], d["email"], d["nascimento"]) == ("Enzo Kartian", "Joseph Kartian", "joe.kartian@example.com", "2014-03-02")
     for linha in ("Service Dates for this Month: 10/10/2026", "Height: 58 in", "Weight: 92.5 lb", "Waist: 26 in",
                   "Karting Experience: 2 years in rental karts", "Product: Arrive and Drive", "Price: $719.00",
                   f"Client ID: {enzo}", "Status: PENDING CONFIRMATION", "Client note: first time"):
@@ -86,7 +86,7 @@ def test_mudanca_de_situacao_comenta_e_marca_o_titulo(con):
     aa.rodar(con, asana, hoje="2026-10-01")
     (f1, k1), (f2, k2) = asana.chamadas[-2:]
     assert f1 == "asana_comentar" and "CANCELLED by the client" in k1["texto"]
-    assert f2 == "asana_renomear" and k2["nome"] == "CANCELLED - Enzo Kurian_Arrive and Drive [1/4]"
+    assert f2 == "asana_renomear" and k2["nome"] == "CANCELLED - Enzo Kartian_Arrive and Drive [1/4]"
     assert aa.rodar(con, asana, hoje="2026-10-01") == {"criadas": 0, "avisadas": 0, "falhas": 0}, "nada repetido"
 
 
@@ -120,7 +120,7 @@ def test_tarefa_do_irmao_fica_no_card_do_irmao_mesmo_com_o_email_do_responsavel(
         if ferramenta == "asana_secoes":
             return [{"gid": "1205141832260878", "nome": "SATURDAY"}]
         if ferramenta == "asana_tarefas_da_secao":
-            return [{"gid": "9001", "nome": "Lia Kurian_Arrive and Drive - 2026-10-10 09:00", "vence_em": "2026-10-10"}]
+            return [{"gid": "9001", "nome": "Lia Kartian_Arrive and Drive - 2026-10-10 09:00", "vence_em": "2026-10-10"}]
         raise AssertionError(f"releu a descrição: {ferramenta}")
     monkeypatch.setattr(sync, "chamar", asana_sync)
     sync.sync_asana(con)

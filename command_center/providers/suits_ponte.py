@@ -444,7 +444,7 @@ def _nome_de(de):
 
 
 def _pedido_do_fornecedor(con, assunto):
-    """'SUIT - Bennie Schneider (…)' → o pedido aberto cujo título ou piloto aparece no assunto."""
+    """'SUIT - Bennie Shifter (…)' → o pedido aberto cujo título ou piloto aparece no assunto."""
     a = (assunto or "").lower()
     for p in todos(con, "SELECT id, title, driver_name FROM suit_orders WHERE closed=0 AND discarded_at IS NULL ORDER BY id DESC"):
         for nome in (p["title"], p["driver_name"]):

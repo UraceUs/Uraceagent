@@ -73,7 +73,7 @@ Toda tarefa de serviço **tem que ser criada pelo modelo**. Não é
 preferência estética: o modelo é o que alimenta as automações. Tarefa
 fora do modelo é tarefa que a IA não consegue ler direito.
 
-Boa referência: *Jayden Lago_Professional Coaching_4T [1/1]*.
+Boa referência: *Jayden Largada_Professional Coaching_4T [1/1]*.
 
 Campos da descrição (preenchidos à mão hoje):
 
@@ -173,8 +173,8 @@ comentário o que mudou e por quê.
 ## Autonomia concedida (28/08): corrigir erro rastreado
 
 O dono autorizou: **quando a IA identificar um erro e souber de onde veio
-o dado errado, pode corrigir.** Foi o caso do e-mail do Mathias Brouta,
-que estava com o e-mail do Shaun Lareau (responsável de outro cliente).
+o dado errado, pode corrigir.** Foi o caso do e-mail do Mathias Breckta,
+que estava com o e-mail do Shaun Lanterau (responsável de outro cliente).
 
 Condições que a IA se impõe para usar essa autonomia:
 1. **Ter fonte.** Corrigir só com evidência externa — não com dedução.
@@ -183,9 +183,9 @@ Condições que a IA se impõe para usar essa autonomia:
 4. **Comentar na tarefa** dizendo o que mudou, para quê e com que fonte.
 5. Sem fonte, **não corrigir**: comentar pedindo o dado.
 
-### Caso executado — Tyron Brouta (28/08)
+### Caso executado — Tyron Breckta (28/08)
 
-O e-mail correto (`mbrouta@hotmail.fr`) veio de três notificações de
+O e-mail correto (`mcubeta@example.com`) veio de três notificações de
 pagamento do QuickBooks, uma delas a invoice `4YZRN1QWN528NQM` de
 **$2.369,93** — exatamente o valor da tarefa, paga em 02/06/2026.
 Corrigidas as 3 tarefas do pacote, conferidas por leitura direta.

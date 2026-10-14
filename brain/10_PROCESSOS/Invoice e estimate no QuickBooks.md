@@ -59,7 +59,7 @@ página do cliente estão **nome, e-mail e telefone** — o necessário para
 enviar. (Pela API: `qbo_contact_search_customer`.)
 
 > ⚠️ **A conta está no nome do RESPONSÁVEL FINANCEIRO, quase nunca no do
-> piloto.** Procurar "Bryan Santiago" e concluir que o cliente não existe
+> piloto.** Procurar "Bryan Sapata" e concluir que o cliente não existe
 > é como se cria cliente duplicado. Ver a tabela de mapeamento em
 > [[Clientes]]. Buscar por **e-mail** quando o nome não bate. Só criar
 > cliente novo depois de buscar pelos dois.
@@ -161,7 +161,7 @@ consegue cruzar as fontes; pede o identificador antes de qualquer coisa.
 
 ## 🤝 Permuta
 
-**Frankie Iadevaia** e **Brody Robins** operam em permuta, que cobre
+**Frankie Ignivela** e **Brody Rodins** operam em permuta, que cobre
 **apenas serviço ainda não faturado**. Invoice já emitida **segue como
 cobrança normal e não se cancela** por causa do arranjo. Ver [[Clientes]].
 

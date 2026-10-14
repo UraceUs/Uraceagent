@@ -206,8 +206,8 @@ def test_responsavel_tem_os_campos_obrigatorios(cli):
 
 
 def test_cliente_de_outro_pais(cli):
-    d = cadastra(cli, country="BR", phone_country="55", phone="(11) 98765-4321", state="SP", zip="01310-100", city="São Paulo")
-    assert (d["country"], d["phone_country"], d["phone"], d["zip"]) == ("BR", "+55", "+55 11987654321", "01310-100")
+    d = cadastra(cli, country="BR", phone_country="55", phone="(11) 99555-0132", state="SP", zip="01310-100", city="São Paulo")
+    assert (d["country"], d["phone_country"], d["phone"], d["zip"]) == ("BR", "+55", "+55 11995550132", "01310-100")
     assert d["missing"] == []
     cli.cookies.clear()
     d = cadastra(cli, email="uk@example.com", country="GB", phone_country="+44", phone="+44 20 7946 0958", state="", zip="sw1a 1aa")

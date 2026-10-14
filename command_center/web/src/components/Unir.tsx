@@ -1,4 +1,4 @@
-/* Unir dois clientes à mão (Brian Santiago escrito de dois jeitos) e puxar o histórico
+/* Unir dois clientes à mão (Brian Sapata escrito de dois jeitos) e puxar o histórico
    completo do Asana — pedidos do dono em 09/09. */
 import { useEffect, useId, useState } from 'react'
 import { api, ApiError } from '../api/client'

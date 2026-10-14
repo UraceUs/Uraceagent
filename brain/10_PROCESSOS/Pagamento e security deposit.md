@@ -54,7 +54,7 @@ Valores e prazos em `brain/00_SYSTEM/PARAMETROS.md`.
 | Antes de preparar qualquer depósito | **conferir no QuickBooks se já foi cobrado** desse cliente para esse serviço |
 
 A conferência prévia não é burocracia: em 28/08 descobrimos que o
-depósito do Tyron Brouta **tinha sido cobrado e pago** (invoice
+depósito do Tyron Breckta **tinha sido cobrado e pago** (invoice
 `4YZRN1QWN529NQM`, US$ 400, 03/06/2026) e simplesmente não estava
 registrado na tarefa. Sem conferir, a IA cobraria de novo um cliente que
 já pagou.
@@ -94,7 +94,7 @@ valendo.
 
 ### Um depósito por PACOTE, não por dia
 Pacote de 3 dias (`[1/3] [2/3] [3/3]`) = **um** depósito de US$ 400, uma
-invoice de serviço, uma waiver. Confere com o caso real do Tyron Brouta:
+invoice de serviço, uma waiver. Confere com o caso real do Tyron Breckta:
 3 tarefas, invoice de $2.369,93 e um único depósito de $400.
 **Nunca cobrar depósito por tarefa** — seria cobrar o mesmo cliente 3×.
 
@@ -138,7 +138,7 @@ IA verifica no [[QuickBooks]] se o valor foi devolvido àquele cliente:
 - nunca teve → **cobra**
 - não conseguiu determinar → **escala, não cobra**
 
-Evidência que expôs o erro: [[Michael Nicholas]] (Elijah) tem depósito de
+Evidência que expôs o erro: [[Michael Nitrolas]] (Elijah) tem depósito de
 15/06/2026, US$ 400, pago e não devolvido. Nos pacotes seguintes — julho,
 agosto e setembro — não houve cobrança nova. Pela regra antiga, a IA teria
 cobrado quatro vezes o mesmo cliente.

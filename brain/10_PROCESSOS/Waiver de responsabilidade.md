@@ -45,7 +45,7 @@ conta.
 
 ⚠️ **Cuidado com o nome.** O signatário é o **responsável**, não o
 piloto — a mesma armadilha do [[QuickBooks]] (ver [[Clientes]]). A
-waiver do Elijah Nicholas está no nome do responsável, não no dele.
+waiver do Elijah Nitrolas está no nome do responsável, não no dele.
 
 ## Como se manda
 
@@ -190,7 +190,7 @@ ter resposta.
 ## Outros documentos na conta
 
 DocuSign também carrega **NDA** e **Service Agreement** (ex.: Caio
-Imperato, Pablo Santiago). **Não são waiver** — a rotina diária os lista
+Imparcial, Pablo Sapata). **Não são waiver** — a rotina diária os lista
 à parte e não age sobre eles.
 
 ## Dispensa explícita do dono
@@ -200,7 +200,7 @@ dizendo que **a waiver não é necessária nesta sessão**. Nesse caso a
 varredura **não alerta** — lista a tarefa como "dispensada por decisão
 humana em DD/MM" e segue. A subtarefa "Signed waiver?" fica aberta: não
 houve assinatura. Primeiro caso:
-[[D-2026-09-04 - Renato Pionti sem waiver nesta sessao]]. O motivo geral
+[[D-2026-09-04 - Renato Pistoni sem waiver nesta sessao]]. O motivo geral
 ainda é lacuna (U-07 em [[Conflitos e lacunas]]).
 
 ## Escopo da varredura e VIPs (dono, 04/09)

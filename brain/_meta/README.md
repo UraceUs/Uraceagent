@@ -69,7 +69,7 @@ não é conhecimento, é arquivo solto.
 
 - **Chave externa é identidade**, nunca o nome: `asana_gid`, id do
   [[QuickBooks]], `envelopeId` do [[DocuSign]], número do pedido.
-  "Charlie Marron" e "Charles Andrew Marron" são a mesma pessoa; o id não.
+  "Charlie Mardon" e "Charles Andrew Mardon" são a mesma pessoa; o id não.
 - **Nome de arquivo é o nome da nota.** Sem dois arquivos com o mesmo
   nome no vault inteiro — o wikilink fica ambíguo.
 - **Português, direto, sem enfeite.** É documento de trabalho.

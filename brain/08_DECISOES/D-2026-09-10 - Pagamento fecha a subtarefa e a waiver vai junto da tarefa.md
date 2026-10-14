@@ -9,7 +9,7 @@ status: ativo
 
 # D-2026-09-10 — Pagamento confirmado fecha a subtarefa, e toda tarefa criada leva a waiver
 
-**Dono:** *"chegou email confirmando o pagamento do david pera no email e a
+**Dono:** *"chegou email confirmando o pagamento do david pedalo no email e a
 ia ainda nao marcou como pago na subtask do asana"* e *"a cada tarefa criada
 buscar a waiver do cliente e deixar anexado na tarefa e no card do cliente"*.
 

@@ -275,6 +275,14 @@ PALAVRAS = {
         "sair da lista", "descadastrar", "remover meu numero", "unsubscribe", "stop messaging",
         "stop texting", "remove me", "do not contact",
     ],
+    # "Agora não" (14/10, padrão do ai-sdr-agent): o lead adia. Respeita, não insiste, não fecha o card:
+    # vira tarefa para uma pessoa retomar em alguns dias. Só vale em mensagem curta e sem pergunta.
+    "adiar": [
+        "agora nao", "nao agora", "por enquanto nao", "no momento nao", "depois eu falo", "depois eu te falo",
+        "depois a gente conversa", "me chama depois", "me chame depois", "mais tarde eu falo",
+        "not now", "not right now", "maybe later", "talk later", "not at the moment", "later on",
+        "ahora no", "mas tarde",
+    ],
     "saudacao": [
         "oi", "ola", "opa", "eai", "e ai", "bom dia", "boa tarde", "boa noite", "tudo bem",
         "hello", "hi", "hey", "hola", "buenas",
@@ -374,6 +382,7 @@ NUNCA_DIZER = [
 # Cadência do robô (14/10, o dono): ~1h30 sem resposta -> call com o time;
 # 23 h depois -> reativação; e para (janela de 24 h da Meta). Quem executa é o
 # scheduler da ponte (TRACKS); isto aqui é a referência em minutos.
+ADIAR_RETOMADA_DIAS = 7   # a tarefa para a pessoa retomar quem disse "agora não"
 FOLLOW_UP_MINUTOS = [90, 1290]
 FOLLOW_UP_MINUTOS_JANELA_24H = [90, 1290]
 # Margem da ponte: toque de follow-up com a última mensagem do lead mais

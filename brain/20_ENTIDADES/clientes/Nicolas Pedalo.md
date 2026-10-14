@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: David Pera
+piloto: David Pedalo
 atualizado_em: 2026-08-28
 ---
 
-# Nicolas Pera
+# Nicolas Pedalo
 
-Responsável por **David Pera** · [[Clientes]]
+Responsável por **David Pedalo** · [[Clientes]]
 
 Kart próprio, [[Orlando Kart Center]].
 

@@ -24,7 +24,7 @@ def con(tmp_path, monkeypatch):
 
 
 def _cliente(con):
-    cid = inserir(con, "clients", name="Joseph Kurian", pilot_name="Enzo", email="joekur001@gmail.com",
+    cid = inserir(con, "clients", name="Joseph Kartian", pilot_name="Enzo", email="joe.kartian@example.com",
                   status="ACTIVE", source="manual")
     inserir(con, "invoices", client_id=cid, doc_number="URACE-0010", amount=2756.9, balance=0, status="paid",
             issued_on="2026-09-17", customer_ref="485", memo="")
@@ -32,7 +32,7 @@ def _cliente(con):
 
 
 def _agenda(con, cid, inicio=date(2026, 11, 1), meses=3):
-    return ms.agendar(con, None, cid, None, inicio, meses, 2756.9, "7", "Academy Monthly — Enzo", "joekur001@gmail.com")
+    return ms.agendar(con, None, cid, None, inicio, meses, 2756.9, "7", "Academy Monthly — Enzo", "joe.kartian@example.com")
 
 
 def fl(texto):
@@ -55,7 +55,7 @@ def test_so_envia_quando_chega_1h_do_dia_1(con):
     feitas = ms.enviar_devidas(con, fl("2026-11-01T01:00"), enviar)
     assert [f[1] for f in feitas] == ["enviada"] and len(enviados) == 1
     kw = enviados[0]
-    assert kw["cliente_id"] == "485" and kw["email"] == "joekur001@gmail.com" and kw["vence_em"] == "2026-11-01"
+    assert kw["cliente_id"] == "485" and kw["email"] == "joe.kartian@example.com" and kw["vence_em"] == "2026-11-01"
     assert kw["memo"] == "Urace Academy Training Program [November, 2026]"
     assert kw["linhas"] == [{"item_id": "7", "quantidade": 1, "unitario": 2756.9, "descricao": "Academy Monthly — Enzo"}]
     m = um(con, "SELECT * FROM monthly_invoices WHERE month='2026-11'")

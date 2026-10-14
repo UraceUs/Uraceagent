@@ -237,16 +237,16 @@ def test_operador_cobra_so_o_deposito_quando_faltou(cli, qbo):
 def test_card_do_irmao_pelo_novo_cliente(cli):
     con = conectar()
     try:
-        enzo = inserir(con, "clients", name="Joseph Kurian", pilot_name="Enzo Kurian", email="joekur@example.com",
+        enzo = inserir(con, "clients", name="Joseph Kartian", pilot_name="Enzo Kartian", email="joekur@example.com",
                        phone="407-555-0142", status="ACTIVE", source="asana")
         con.commit()
     finally:
         con.close()
     h = entra(cli, "closer@urace.us")
     # sem o vínculo, o mesmo e-mail devolve o card que existe (um card por pessoa)
-    r = cli.post(f"{B}/clients", headers=h, json={"name": "Joseph Kurian", "email": "joekur@example.com", "pilot_name": "Lia Kurian"})
+    r = cli.post(f"{B}/clients", headers=h, json={"name": "Joseph Kartian", "email": "joekur@example.com", "pilot_name": "Lia Kartian"})
     assert r.json() == {"id": enzo, "created": False}
-    r = cli.post(f"{B}/clients", headers=h, json={"name": "Joseph Kurian", "pilot_name": "Lia Kurian",
+    r = cli.post(f"{B}/clients", headers=h, json={"name": "Joseph Kartian", "pilot_name": "Lia Kartian",
                                                   "pilot_dob": "2016-05-09", "irmao_de": enzo})
     assert r.status_code == 201 and r.json()["created"] is True
     lia = r.json()["id"]
@@ -254,11 +254,11 @@ def test_card_do_irmao_pelo_novo_cliente(cli):
     try:
         c = um(con, "SELECT * FROM clients WHERE id=?", (lia,))
         assert (c["name"], c["email"], c["phone"], c["pilot_name"], c["sibling_of"]) == \
-            ("Joseph Kurian", "joekur@example.com", "407-555-0142", "Lia Kurian", enzo)
+            ("Joseph Kartian", "joekur@example.com", "407-555-0142", "Lia Kartian", enzo)
         identidade.deduplicar(con)                           # a sincronia une o mesmo e-mail…
         assert um(con, "SELECT id FROM clients WHERE id=?", (lia,)), "…mas irmão não é duplicado"
         assert identidade.nao_unir(con, enzo, lia)
-        assert identidade.acha_pessoa(con, email="joekur@example.com", piloto="Lia Kurian")[0]["id"] == lia
+        assert identidade.acha_pessoa(con, email="joekur@example.com", piloto="Lia Kartian")[0]["id"] == lia
         con.commit()
     finally:
         con.close()
@@ -267,9 +267,9 @@ def test_card_do_irmao_pelo_novo_cliente(cli):
     h = entra(cli, "closer@urace.us")
     assert [i["id"] for i in cli.get(f"{B}/clients/{lia}", headers=h).json()["irmaos"]] == [enzo]
     # pedir de novo devolve o mesmo card; o mesmo piloto do card de origem é recusado
-    r = cli.post(f"{B}/clients", headers=h, json={"name": "x", "pilot_name": "Lia Kurian", "irmao_de": enzo})
+    r = cli.post(f"{B}/clients", headers=h, json={"name": "x", "pilot_name": "Lia Kartian", "irmao_de": enzo})
     assert r.json() == {"id": lia, "created": False, "irmao_de": enzo}
-    assert cli.post(f"{B}/clients", headers=h, json={"name": "x", "pilot_name": "Enzo Kurian", "irmao_de": enzo}).status_code == 400
+    assert cli.post(f"{B}/clients", headers=h, json={"name": "x", "pilot_name": "Enzo Kartian", "irmao_de": enzo}).status_code == 400
 
 
 def test_fechamento_cria_o_card_do_irmao_e_nunca_poe_no_card_do_outro(cli):

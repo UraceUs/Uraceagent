@@ -122,8 +122,8 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | `ops.urace.us/ops/` | o painel da equipe |
 | `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." |
 | `/ops/portal` | a **área do cliente** (outra porta, outro login). Não é o painel da equipe |
-| `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. Sessão pede a conta do site e o piloto |
-| `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart). A equipe copia o link em Agendamentos do site › Pedidos do site |
+| `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248); sessão pede também o piloto. Chave English/Português no topo |
+| `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart), com os dados do cliente da conta; em inglês ou português (#248). A equipe copia o link em Agendamentos do site › Pedidos do site |
 
 ---
 
@@ -370,7 +370,7 @@ abre o card dele).
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
 | **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
-| **Página do pedido** (#245) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou) e o seu e-mail para o cliente, uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. A equipe vê e copia o link em Agendamentos do site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
+| **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Agendamentos do site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
@@ -545,6 +545,8 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "Esses dois cards não se unem: …" | cards de drivers ou contas diferentes do site | não una; cada driver tem o seu card |
 | Venda do site com **Resolver:** "a vaga sumiu…" ou e-mail "Site · PAGO · SEM VAGA" | o cliente pagou no carrinho, mas a vaga acabou antes do pagamento; o pagamento está guardado e a sessão não entrou na agenda | quem vende liga, remarca (ou combina o reembolso com o gerente) e anota na venda |
 | E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o pagamento que confirma depois (transferência) não passou; nada foi cobrado e nenhuma vaga ficou presa | Agendamentos do site › Pedidos do site › **Copiar o link** e mande ao cliente (botão Try again); sem e-mail do cliente, ligue |
+| E-mail "Site · PROCESSANDO O PAGAMENTO" ou "Site · CHECKOUT EXPIROU" | o cliente pagou com um meio que confirma depois, ou saiu do checkout sem pagar; ele já recebeu o e-mail com o link | nada a fazer no processando; no expirou, um contato ajuda a fechar (link em Pedidos do site) |
+| "Pagamento no site" não aparece no card | a conta do site ou o piloto ainda não está ligado a um card | Agendamentos do site › Contas de clientes: ligue a conta e o driver ao card certo |
 | "Essa recorrência já está vinculada ao card de outro cliente." | tentativa de ligar a mensalidade de um cliente ao card de outro | confira o cliente certo |
 | "Este endereço é só do balcão." | você está em `parts.urace.us` | para o resto do painel, use `ops.urace.us/ops/` |
 | Cápsula **Espelho** em amarelo/vermelho ou "Espelho antigo" | dados não lidos há tempo | Hoje › **↻ Sincronizar** |

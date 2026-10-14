@@ -85,9 +85,9 @@ def nome_da_tarefa(nome):
     o que vem antes do primeiro separador (`_`, `|`, hífen com espaço) é a pessoa, o
     resto é serviço; `[n/t]` no fim, ou "n/t" solto, é a contagem.
 
-    'Renato Frota Pionti_Professional Coaching_2T [1/1]' → piloto, serviço, categoria, 1, 1
-    'Elliott Hubbard_Summer Camp 2026 1/4'               → 'Elliott Hubbard', 'Summer Camp 2026', 1, 4
-    'Enzo Kurian [4 strokes 09/05/26]'                   → 'Enzo Kurian', '4 strokes 09/05/26'"""
+    'Renato Faixa Pistoni_Professional Coaching_2T [1/1]' → piloto, serviço, categoria, 1, 1
+    'Elliott Hubtrack_Summer Camp 2026 1/4'               → 'Elliott Hubtrack', 'Summer Camp 2026', 1, 4
+    'Enzo Kartian [4 strokes 09/05/26]'                   → 'Enzo Kartian', '4 strokes 09/05/26'"""
     from command_center.providers import identidade
     nome = (nome or "").strip()
     servico = categoria = n = total = None
@@ -109,7 +109,7 @@ def nome_da_tarefa(nome):
     partes = [x.strip() for x in re.split(r"\s*[_|]\s*|\s+[-–]\s+", cabeca) if x.strip()]
     piloto = partes[0] if partes else cabeca
     pessoa = identidade.pessoa_do_titulo(piloto)
-    if pessoa and pessoa.lower() != piloto.lower():          # hífen colado: 'Elliott Hubbard-Summer Camp 2026'
+    if pessoa and pessoa.lower() != piloto.lower():          # hífen colado: 'Elliott Hubtrack-Summer Camp 2026'
         sobra = piloto[len(pessoa):].lstrip(" -–_").strip()
         partes = [pessoa] + ([sobra] if sobra else []) + partes[1:]
         piloto = pessoa
@@ -202,7 +202,7 @@ def _nome_valido(n):
     n = (n or "").strip().rstrip(":").strip()
     if not n:
         return None
-    # primeiro separa a pessoa do serviço, depois julga: "Elliott Hubbard_Summer Camp 2026
+    # primeiro separa a pessoa do serviço, depois julga: "Elliott Hubtrack_Summer Camp 2026
     # 1/4" virava nome de cliente inteiro porque aqui só se validava a string e se devolvia
     # ela mesma — e "Summer Camp" sozinho é serviço, não gente (dono, 16/09)
     pessoa = identidade.pessoa_do_titulo(n)
@@ -436,7 +436,7 @@ def _norm(n):
 
 
 def _mesmo_nome(a, b):
-    """Nomes 'iguais' para vínculo: mesmas 2+ palavras (Renato Frota Pionti ~ Renato Pionti)."""
+    """Nomes 'iguais' para vínculo: mesmas 2+ palavras (Renato Faixa Pistoni ~ Renato Pistoni)."""
     pa, pb = set(_norm(a)), set(_norm(b))
     if not pa or not pb:
         return False

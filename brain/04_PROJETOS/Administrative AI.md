@@ -75,7 +75,7 @@ ponta a ponta fica com **outra pessoa** (o Lucas, pelo papel comercial de U-06).
 O que falta agora:
 
 1. **URACE** — criar o usuário do Lucas (papel Operador) e rodar a venda de ponta a ponta.
-2. **URACE** — reenviar as três waivers paradas (P-07); a do Hubbard pede correção do e-mail.
+2. **URACE** — reenviar as três waivers paradas (P-07); a do Hubtrack pede correção do e-mail.
 3. **Comigo** — a lista revisada de preços do catálogo antes de tocar nos 896 itens (P-06).
 4. **Comigo** — o que o agente passa a escrever sozinho com `APLICAR=1`, antes de ligar.
 5. **Comigo** — ler a Rate Card do Drive em vez de guardar cópia (decisão de C-01).

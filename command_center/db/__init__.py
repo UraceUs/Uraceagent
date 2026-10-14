@@ -333,6 +333,9 @@ MIGRACOES = [
     ("store_orders", "outcome_notified_at", "TEXT"),
     ("store_orders", "outcome_notify_error", "TEXT"),
     ("store_orders", "retry_of", "INTEGER REFERENCES store_orders(id)"),
+    # 14/10 — dono (#248): "switch para mudar de português para inglês". O idioma em que a pessoa
+    # comprou (en | pt): os e-mails do pagamento saem nele.
+    ("store_orders", "lang", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

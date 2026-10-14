@@ -31,7 +31,7 @@ def cli():
     auth.criar_usuario(con, "mec@urace.us", "Mecânico", "OPERATOR", SENHA)
     auth.criar_usuario(con, "ger@urace.us", "Gerente", "MANAGER", SENHA)
     auth.criar_usuario(con, "olho@urace.us", "Visitante", "VIEWER", SENHA)
-    inserir(con, "clients", name="Hank Lai", status="ACTIVE", source="manual")
+    inserir(con, "clients", name="Hank Lume", status="ACTIVE", source="manual")
     con.commit(); con.close()
     with TestClient(app, base_url="https://cc.test") as c:
         yield c
@@ -126,7 +126,7 @@ def test_a_lista_separa_o_que_e_nosso_do_que_e_do_cliente(cli):
     iid = cli.post(f"{B}/item", headers=h, data={"name": "Pneu MG do Hank", "kind": "pneu",
                                                  "unit": "jogo", "qty": "4"}).json()["id"]
     con = conectar()
-    hank = um(con, "SELECT id FROM clients WHERE name='Hank Lai'")["id"]
+    hank = um(con, "SELECT id FROM clients WHERE name='Hank Lume'")["id"]
     con.close()
     assert cli.post(f"{B}/entrada", headers=h,
                     json={"item_id": iid, "qty": 2, "client_id": hank}).status_code == 200
@@ -159,7 +159,7 @@ def test_a_peca_do_cliente_nao_sai_para_outro_pela_api(cli):
     """A trava do provider chegando até a tela como frase de gente, em 400."""
     h = entra(cli, "ger@urace.us")
     con = conectar()
-    hank = um(con, "SELECT id FROM clients WHERE name='Hank Lai'")["id"]
+    hank = um(con, "SELECT id FROM clients WHERE name='Hank Lume'")["id"]
     outro = inserir(con, "clients", name="Outro Cliente", status="ACTIVE", source="manual")
     con.commit(); con.close()
     iid = cli.post(f"{B}/item", headers=h, data={"name": "Escapamento do Hank"}).json()["id"]

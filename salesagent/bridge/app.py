@@ -340,6 +340,10 @@ def turno_de_teste(sessao: str, texto: str, nome: str = "") -> dict:
     if rota["acao"] == "confirmar_opt_out":
         resposta = sdr_ponte.confirmacao_opt_out(texto)
         saida["nota"] = "Pedido de parar: confirma e fecha o card como perdido."
+    elif rota["acao"] == "adiar":
+        resposta = sdr_ponte.mensagem_adiar(texto)
+        saida["nota"] = (f"Lead adiou: agradece, não insiste, sem follow-up automático. Tarefa para uma pessoa "
+                         f"retomar em {sdr_ponte.regras.ADIAR_RETOMADA_DIAS} dias e tag sdr:agora-nao.")
     elif sdr_ponte.objecao_de_preco(texto) and PROGRAM_LINKS.get("call_link"):
         resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None)
         saida["nota"] = "Objeção de preço: a ponte oferece a call e passa a conversa para a equipe."
@@ -481,6 +485,18 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         state.transition(lead_id, "CLOSED", "opt-out do lead")
         scheduler.cancel(lead_id, "opt-out")
         kommo_tags_seguras(lead_id, ["opt_out"])
+        return
+    if rota["acao"] == "adiar":
+        # "Agora não": agradece, não insiste, não fecha o card. Sem follow-up automático; uma
+        # pessoa retoma em alguns dias (tarefa) e o card fica marcado para o filtro.
+        send_to_lead(lead_id, sdr_ponte.mensagem_adiar(text))
+        scheduler.cancel(lead_id, "lead pediu para falar depois")
+        kommo_tags_seguras(lead_id, ["sdr:agora-nao"])
+        retomar = int(time.time()) + sdr_ponte.regras.ADIAR_RETOMADA_DIAS * 86400
+        _kommo_seguro(lead_id, "tarefa agora-nao", kommo.add_task, lead_id,
+                      f"Lead disse \"agora não\" ({text[:80]}). Retomar com cuidado, sem pressão.", retomar)
+        state.log("gate", lead_id, "SDR: lead adiou (agora não) — sem follow-up, tarefa em "
+                                   f"{sdr_ponte.regras.ADIAR_RETOMADA_DIAS} dias")
         return
 
     # A PARTIR DAQUI existe UM só caminho de saída, e ele sempre envia algo.
@@ -911,7 +927,12 @@ async def _start_scheduler():
 _SEP_MENSAGENS = "\x1e"
 MENSAGEM_MAX = 160
 MENSAGENS_MAX = 4
-INTERVALO_ENTRE_MENSAGENS_S = 3.0
+# Ritmo humano (14/10, ideia do delivery-queue do b2b-sdr-agent-template): o intervalo até o próximo balão
+# cresce com o tamanho dele (quem escreve leva tempo), com teto, e ganha uma variação pequena.
+INTERVALO_ENTRE_MENSAGENS_S = 1.5
+SEGUNDOS_POR_CARACTERE = 0.03
+INTERVALO_MAX_S = 6.0
+VARIACAO_RITMO = 0.25
 
 
 def dividir_em_mensagens(texto: str) -> list[str]:
@@ -948,9 +969,18 @@ def _proxima_da_fila(pendente: str) -> tuple[str, str | None]:
     return partes[0], (_SEP_MENSAGENS.join(partes[1:]) or None)
 
 
+def intervalo_para(mensagem: str) -> float:
+    """Quanto esperar antes de mostrar `mensagem`: base + tempo de "digitar", com teto e uma pequena
+    variação para a cadência não parecer metrônomo."""
+    import random
+    base = min(INTERVALO_MAX_S, INTERVALO_ENTRE_MENSAGENS_S + SEGUNDOS_POR_CARACTERE * len(mensagem or ""))
+    return max(0.0, base * (1 + random.uniform(-VARIACAO_RITMO, VARIACAO_RITMO)))
+
+
 def _disparar_proxima(lead_id: int) -> None:
     """Dispara o bot de entrega para a próxima mensagem da fila, depois de um
     intervalo (o bot anterior precisa terminar e o balão chegar antes)."""
+    proxima, _ = _proxima_da_fila(state.get_conversation(lead_id).get("pending_followup_text") or "")
     def _rodar():
         try:
             ok = kommo.run_bot(FOLLOWUP_BOT_ID, lead_id)
@@ -963,7 +993,7 @@ def _disparar_proxima(lead_id: int) -> None:
             if resto:
                 kommo.add_note(lead_id, "[agent — resto da resposta não entregue]\n"
                                + resto.replace(_SEP_MENSAGENS, "\n"))
-    threading.Timer(INTERVALO_ENTRE_MENSAGENS_S, _rodar).start()
+    threading.Timer(intervalo_para(proxima), _rodar).start()
 
 
 def send_to_lead(lead_id: int, text: str, origem: str = "ia") -> None:

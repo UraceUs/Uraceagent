@@ -38,7 +38,7 @@ def entra(cli, email):
     return {"X-CSRF": cli.cookies.get("cc_csrf")}
 
 
-def _servico(gid, nome="Max Westerberg"):
+def _servico(gid, nome="Max Westerpit"):
     con = conectar()
     cid = inserir(con, "clients", name=nome, pilot_name=nome, status="ACTIVE", source="manual")
     tid, _ = sync._grava_tarefa(con, gid, dict(client_id=cid, title=f"{nome}_Arrive and Drive [1/1]", project="U-RACE",

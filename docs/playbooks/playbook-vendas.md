@@ -525,14 +525,19 @@ Dono, 14/10: *"o sistema de carrinho e checkout ... usando o Stripe"*; *"quando 
 o serviço, selecionar a data, já vai com aquele serviço e o preço que está lá"*; *"O depósito de
 segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora precisa de conta no site"*.
 
-**O que o cliente faz** (site novo, em inglês):
+**O que o cliente faz** (site novo, em inglês; o carrinho e as páginas do pedido também em português, #248):
 
 1. Na página do Arrive and Drive escolhe o kart, o dia e o turno e toca em **Add to cart** (o preço
    mostrado é o do serviço do painel com o nome do kart). Na reserva da área do cliente
    (`/ops/portal/reserve`) também há **Add to cart**. Na loja, **Add to cart** ao lado do **Buy now**.
+   **Toda compra pede a conta do site** (#248, dono 14/10: *"Para a pessoa conseguir comprar com a gente,
+   ela tem que criar a conta dela lá no site da URACE"*): **Buy now** sem conta leva para entrar (ou criar
+   a conta) e volta para o produto.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
    o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
-   **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho não pede conta.
+   **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho também pede a conta (#248).
+   No topo do carrinho e das páginas do pedido há a chave **English / Português** (as bandeiras, como no
+   painel); a escolha fica guardada no navegador.
 3. **Checkout** abre o Stripe com **todas** as linhas e, para cada sessão com depósito, a linha
    "Refundable security deposit". Paga, volta para `/cart/thanks/` com a **página do pedido** (abaixo).
 
@@ -543,27 +548,39 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
 | preço é do sistema | o servidor recalcula preço (Serviços e preços / catálogo da loja), depósito e vaga; o navegador só manda as escolhas |
 | preço do dia | o pedido guarda o preço e o depósito do dia da compra; mudar o preço depois não muda o pedido |
 | vaga | confere ao montar o carrinho, no checkout (o Checkout do Stripe expira em 31 min) e **de novo no pagamento** |
-| conta e piloto | só pilotos da própria conta, com o cadastro em dia (medidas e dados do responsável) |
+| conta e piloto | **toda compra pede a conta do site**; o e-mail da conta vai para o Stripe e é o dos avisos; só pilotos da própria conta, com o cadastro em dia (medidas e dados do responsável) |
+| card certo | a sessão vai para o card do **piloto**; o produto, para o card ligado à **conta** (Contas de clientes) ou, sem ele, pela regra da loja (e-mail **e** nome) |
+| idioma | o pedido guarda o idioma em que a pessoa comprou (EN/PT): os e-mails dela saem nele e o Stripe abre nele; os avisos da equipe são sempre em português |
 | uma vez só | o webhook do Stripe e a página de obrigado não marcam nem vendem duas vezes |
 | cancelado / expirado / pagamento não passou | nada é marcado nem vendido; a vaga **não fica presa** (a sessão só entra na agenda quando o pagamento entra) |
 
 **Uma página para cada resultado do pagamento** (#245, dono 14/10: *"monte páginas para cada um no
 site"*). Todo pedido do site (carrinho **e** loja de um produto) tem um **link pessoal**,
 `/order/<código>/`, que não dá para adivinhar (link mexido = página não encontrada). A página mostra o
-que o Stripe disse, em inglês, como o resto do site:
+que o Stripe disse (em inglês ou português, na chave do topo) e **os dados do cliente da conta** (#248:
+nome, e-mail, telefone, endereço, pilotos do pedido e a entrega), além dos itens e valores.
+
+**Aviso sempre** (#248, dono 14/10: *"o cliente e a equipe precisam da confirmação de pagamento sempre e
+deixar isso também registrado no card do cliente no Command Center"*): em **todo** resultado, um e-mail
+para o cliente, um aviso para `support@` e um registro na **Linha do tempo do card** ("Pagamento no site",
+com o valor e o botão **Página do pedido ↗**). Um de cada por resultado por pedido, nunca dois:
 
 | O Stripe avisou | A página diz | O cliente recebe por e-mail (com o link da página) | A equipe |
 |---|---|---|---|
-| `checkout.session.completed`, pago | **Payment confirmed**: itens, total, depósito, o que vem a seguir (waiver da sessão, retirada ou envio do produto) | a confirmação (uma vez só) | o aviso "Site · PAGO" (como antes) |
-| `checkout.session.completed`, meio que confirma depois (transferência) | **Payment processing**: não pague de novo, você recebe e-mail quando confirmar | nada ainda | nada ainda (não há venda até pagar) |
-| `checkout.session.async_payment_succeeded` | vira **Payment confirmed** | a confirmação (uma vez só) | o aviso "Site · PAGO"; a venda entra GANHO |
-| `checkout.session.async_payment_failed` | **Payment didn't go through**: nada foi cobrado; botão **Try again** | "Payment didn't go through" (uma vez só) | o aviso **"Site · PAGAMENTO FALHOU"** com o link da página |
-| `checkout.session.expired` | **Checkout expired**: nada foi cobrado; botão **Restore cart** | "Your checkout expired" **só se** a pessoa chegou a informar o e-mail no Checkout (no máximo um por pedido) | nada |
+| `checkout.session.completed`, pago | **Payment confirmed** / *Pagamento confirmado*: itens, total, depósito, dados do cliente, o que vem a seguir | a confirmação | "Site · PAGO" (ou "Loja · PAGO") |
+| `checkout.session.completed`, meio que confirma depois (transferência) | **Payment processing** / *Pagamento em confirmação*: não pague de novo | "We're confirming your payment" / *"Estamos confirmando o seu pagamento"* | **"Site · PROCESSANDO O PAGAMENTO"** (não há venda até pagar) |
+| `checkout.session.async_payment_succeeded` | vira **Payment confirmed** | a confirmação | "Site · PAGO"; a venda entra GANHO |
+| `checkout.session.async_payment_failed` | **Payment didn't go through** / *O pagamento não foi concluído*: nada foi cobrado; botão **Try again** | "Payment didn't go through" / *"O pagamento não foi concluído"* | **"Site · PAGAMENTO FALHOU"** com o link da página |
+| `checkout.session.expired` | **Checkout expired** / *O checkout expirou*: nada foi cobrado; botão **Restore cart** | "Your checkout expired" / *"O seu checkout expirou"* (no e-mail da conta) | **"Site · CHECKOUT EXPIROU"** |
+
+O registro no card vai para o card do **piloto** (sessão) e para o card ligado à **conta** (produto),
+cada um só com as suas linhas. Conta ou piloto ainda **sem card** ligado: não registra (nunca no card de
+outro cliente); ligue em **Agendamentos do site › Contas de clientes**.
 
 - **Try again** abre um checkout novo com as **mesmas escolhas** (produto, opção, quantidade; serviço,
   dia, turno, piloto). O servidor recalcula **preço, depósito e vaga** na hora: se o preço mudou, vale o de
-  hoje; se a vaga acabou ou o cliente não está logado na conta do pedido (sessão pede a conta), ele cai no
-  carrinho com as escolhas de volta e o carrinho mostra o porquê.
+  hoje; se a vaga acabou ou o cliente não está logado na conta do pedido, ele cai no carrinho com as
+  escolhas de volta e o carrinho mostra o porquê (e pede para entrar).
 - **Restore cart** põe as escolhas de volta no carrinho do navegador (junto do que já estiver lá, sem
   duplicar) e o cliente confere e paga pelo **Checkout** de sempre.
 - O pedido novo fica ligado ao antigo ("refeito do pedido #N"); pago o novo, a página do antigo aponta
@@ -572,11 +589,13 @@ que o Stripe disse, em inglês, como o resto do site:
 
 **Onde a equipe vê:** **Agendamentos do site › Pedidos do site** (`/ops/site/pedidos`) lista todos os
 pedidos do carrinho e da loja em **todo** estado (pago, processando o pagamento, pagamento não passou,
-checkout expirou, no checkout), com filtro, quem, o quê, o total, se o aviso por e-mail saiu, e os botões
+checkout expirou, no checkout), com filtro, quem, o quê, o total, se o aviso por e-mail saiu (e se a
+pessoa comprou em português), e os botões
 **Página do pedido ↗** e **Copiar o link**: é esse link que você manda ao cliente que liga perguntando do
 pedido. No detalhe da venda, o cartão **Pedido do site #N** também tem os dois botões. **Quem vende**, no
-e-mail "Site · PAGAMENTO FALHOU": se o cliente **não** tinha e-mail no Stripe (o aviso diz), ligue e mande
-o link; se tinha, ele já recebeu o botão Try again, e um contato ajuda a fechar.
+e-mail "Site · PAGAMENTO FALHOU" ou "Site · CHECKOUT EXPIROU": o cliente já recebeu o botão (Try again /
+Restore cart) no e-mail da conta, e um contato ajuda a fechar; se o aviso disser "sem e-mail do cliente"
+(pedido antigo, de antes da conta obrigatória), ligue e mande o link.
 
 **O que aparece para a equipe quando o pedido é pago:**
 
@@ -955,6 +974,7 @@ instrução à gerência.
 | Venda do site com **Resolver:** "a vaga sumiu entre o checkout e o pagamento" | o cliente já pagou: ligue, remarque a sessão (ou combine o reembolso com o gerente) e anote na venda (seção 5.1) |
 | Venda do site em **Fechamento** com "vincular à mão" | pago no carrinho sem card certo: ache o card (seção 3) e ligue a venda a ele |
 | E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o meio de pagamento que confirma depois não passou; nada foi cobrado e a vaga está livre. Agendamentos do site › Pedidos do site › **Copiar o link** e mande ao cliente (ele toca em **Try again**); sem e-mail no Stripe, ligue (seção 5.1) |
+| Cliente diz "o site não deixa comprar sem conta" | regra do dono (#248): toda compra no site pede a conta. Mande criar em **Create account** (o botão leva e volta para o produto ou o carrinho) |
 | Cliente pergunta "e o meu pedido?" | Agendamentos do site › Pedidos do site: ache pelo nome ou e-mail, veja o estado e mande o link da **Página do pedido** |
 | "QuickBooks: registrar a venda à mão" numa venda do site | o serviço não tem item do QuickBooks ou o item "Security deposit" não está sincronizado: acerte em Serviços e preços / sincronize; a rodada de 15 min tenta de novo |
 | "Ganho é o resultado do Fechar venda…" | use Fechar venda, não o botão de etapa |

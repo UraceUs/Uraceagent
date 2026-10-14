@@ -647,7 +647,7 @@ def test_bloqueio_recorrente_calendario_do_mes_e_criar_cliente_pela_conta(servid
     assert "toda segunda" in g.locator(".tbl").inner_text()
     # conta de quem não está na base: cria o card e já vincula
     c = navegador.new_page(viewport={"width": 390, "height": 844})
-    cliente_pela_api(c, servidor, "Eduardo Fillipe Resende", "eduardo.novo@example.com", piloto="Lucas Fillipe Resende")
+    cliente_pela_api(c, servidor, "Eduardo Fillipe Resende", "eduardo.novo@example.com", piloto="Tomas Fillipe Resende")
     abrir(g, servidor, "/site/contas")
     cartao = g.locator(".card", has_text="eduardo.novo@example.com").first
     cartao.get_by_role("button", name="Criar cliente").click()
@@ -898,7 +898,7 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
 # ------------------------------------------------------------------ balcão (#87)
 def test_balcao_le_o_cliente_cobra_guarda_e_pergunta_antes_de_cobrar_peca_dele(servidor, navegador):
     pg = entrar(navegador, servidor, largura=360, altura=800)
-    david = pg.request.get(servidor + "/api/clients?q=Pera").json()[0]["id"]
+    david = pg.request.get(servidor + "/api/clients?q=Pedalo").json()[0]["id"]
     # o QR do card, como o leitor o "digita"
     qr = pg.request.get(servidor + f"/api/balcao/cliente/{david}").json()["qr"]
     abrir(pg, servidor, "/balcao")
@@ -908,7 +908,7 @@ def test_balcao_le_o_cliente_cobra_guarda_e_pergunta_antes_de_cobrar_peca_dele(s
     campo = pg.get_by_label("Leia o QR do cliente")
     campo.fill(qr); campo.press("Enter")
     pg.wait_for_url(f"**/ops/balcao/{david}")
-    pg.get_by_role("heading", name="David Pera", level=2).wait_for()
+    pg.get_by_role("heading", name="David Pedalo", level=2).wait_for()
     # COBRAR: a peça entra na invoice de peças de hoje. Sem QuickBooks no e2e, a tela diz isso.
     campo = pg.get_by_label("Leia a peça (ou outro cliente)")
     campo.fill("7890000000017"); campo.press("Enter")
@@ -946,7 +946,7 @@ def test_biblioteca_do_gerente_com_os_historicos(servidor, navegador, largura):
     pg = entrar(navegador, servidor, largura=largura, altura=800)
     abrir(pg, servidor, "/biblioteca/historicos")
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
-    pg.get_by_text("Histórico de serviço — David Pera").wait_for()
+    pg.get_by_text("Histórico de serviço — David Pedalo").wait_for()
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     pdf = pg.request.get(servidor + "/" + pg.get_by_role("link", name="PDF").first.get_attribute("href").split("/ops/", 1)[1])
@@ -973,7 +973,7 @@ def _png_pequeno(caminho):
 def test_meu_dia_do_mecanico_cabe_em_390(servidor, navegador):
     pg = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=800)
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
-    pg.get_by_text("David Pera_Urace Daily_Arrive and Drive").wait_for()
+    pg.get_by_text("David Pedalo_Urace Daily_Arrive and Drive").wait_for()
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
@@ -987,9 +987,9 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
-    servico = pg.locator(".card", has_text="David Pera_Urace Daily_Arrive and Drive")
+    servico = pg.locator(".card", has_text="David Pedalo_Urace Daily_Arrive and Drive")
     servico.get_by_role("button", name="Kart Checklist").click()
-    pg.get_by_text("Kart Checklist · David Pera").wait_for()
+    pg.get_by_text("Kart Checklist · David Pedalo").wait_for()
     pg.get_by_role("checkbox", name="Check engine oil (change if needed)").check()
     pg.get_by_role("checkbox", name="Check chain tension (+/- 25mm)").check()
     pg.locator("input[aria-label='Subir foto: Check chain tension (+/- 25mm)']").set_input_files(_png_pequeno(tmp_path / f"f{largura}.png"))
@@ -1000,7 +1000,7 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     assert not r["rola"] and not r["culpados"], r
     pg.get_by_role("button", name="Concluir checklist").click()
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
-    pg.locator(".card", has_text="David Pera_Urace Daily_Arrive and Drive").get_by_text("completo").wait_for()
+    pg.locator(".card", has_text="David Pedalo_Urace Daily_Arrive and Drive").get_by_text("completo").wait_for()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
@@ -1013,7 +1013,7 @@ def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegad
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
     pg.get_by_role("button", name="Semana", exact=True).click()
     hoje = pg.locator(".md-semana-d.hoje")
-    hoje.get_by_text("David Pera").first.wait_for()
+    hoje.get_by_text("David Pedalo").first.wait_for()
     assert pg.locator(".md-semana-d").count() == 7
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
@@ -1029,7 +1029,7 @@ def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegad
     pg.get_by_role("button", name="Próximo mês").click()
     pg.get_by_role("button", name="Mês anterior").click()
     pg.locator(".md-cal-d.hoje").click()                       # tocar no dia abre o dia, com os checklists
-    pg.locator(".card.card-b", has_text="David Pera_Urace Daily_Arrive and Drive").get_by_role("button", name="Kart Checklist").wait_for()
+    pg.locator(".card.card-b", has_text="David Pedalo_Urace Daily_Arrive and Drive").get_by_role("button", name="Kart Checklist").wait_for()
     assert pg.get_by_role("button", name="Dia", exact=True).get_attribute("aria-pressed") == "true"
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
@@ -1041,23 +1041,23 @@ def test_calendario_em_cards_a_corrida_traz_um_card_por_cliente(servidor, navega
     pg = entrar(navegador, servidor, "luis@urace.us", largura=1280, altura=900)
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
     pg.get_by_role("button", name="Mês", exact=True).click()
-    pg.locator(".md-cal-d.hoje .md-card.servico", has_text="David Pera").wait_for()   # o treino: card do cliente
+    pg.locator(".md-cal-d.hoje .md-card.servico", has_text="David Pedalo").wait_for()   # o treino: card do cliente
     corrida = pg.locator(".md-cal-d .md-card.corrida", has_text="ROK")
     if not corrida.count():                                    # a corrida é daqui a 9 dias: pode cair no mês seguinte
         pg.get_by_role("button", name="Próximo mês").click()
     corrida.first.wait_for()
-    assert corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Santiago").count() == 1
+    assert corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Sapata").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     pg.get_by_role("button", name="Semana", exact=True).click()
-    pg.locator(".md-semana-d.hoje .md-card.servico", has_text="David Pera").wait_for()
+    pg.locator(".md-semana-d.hoje .md-card.servico", has_text="David Pedalo").wait_for()
     corrida = pg.locator(".md-semana-d .md-card.corrida", has_text="ROK")
     for _ in range(2):
         if corrida.count():
             break
         pg.get_by_role("button", name="Próximo semana").click()
         pg.wait_for_timeout(400)
-    corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Santiago").wait_for()
+    corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Sapata").wait_for()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
@@ -1143,7 +1143,7 @@ def test_mecanico_le_o_qr_do_cliente_pela_camera_e_abre_o_cliente(servidor, nave
     """Dono, 06/10: "quando colocar ler QR code, abrir a câmera para poder ler esse QR code" e já puxar
     o cliente. O Chromium de Linux não tem BarcodeDetector — é o mesmo caminho do iPhone (ZXing)."""
     adm = entrar(navegador, servidor)
-    david = adm.request.get(servidor + "/api/clients?q=Pera").json()[0]["id"]
+    david = adm.request.get(servidor + "/api/clients?q=Pedalo").json()[0]["id"]
     qr = adm.request.get(servidor + f"/api/balcao/cliente/{david}").json()["qr"]
     adm.close()
     video = _video_do_qr(qr, tmp_path / "qr.y4m")
@@ -1163,7 +1163,7 @@ def test_mecanico_le_o_qr_do_cliente_pela_camera_e_abre_o_cliente(servidor, nave
         except Exception:                      # diga o que a tela mostrava: o CI não guarda print
             raise AssertionError(f"a câmera não leu o QR em 15 s. url={pg.url}\ntela={pg.inner_text('body')[:1500]}\n"
                                  f"console={console[-15:]}\njs={pg.erros_js}\napi={pg.erros_api}")
-        pg.get_by_role("heading", name="David Pera", level=2).wait_for()
+        pg.get_by_role("heading", name="David Pedalo", level=2).wait_for()
         assert pg.get_by_role("heading", name="Apontar para o código").count() == 0   # a câmera fechou sozinha
         assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     finally:
@@ -1359,6 +1359,7 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     v = navegador.new_page(viewport={"width": 360, "height": 780})
     erros = []
     v.on("pageerror", lambda e: erros.append(str(e)))
+    cliente_pela_api(v, servidor, "Lia Loja", "lia.loja.e2e@example.com", ip="10.1.74.1")   # #248: comprar pede a conta
     v.goto(site + f"/store/p/{produto['slug']}/")
     assert v.evaluate("document.documentElement.scrollWidth") <= 360
     v.get_by_label("Ship to me").check()
@@ -1396,13 +1397,13 @@ def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, nav
     v.get_by_label("Código da peça").fill("7890000000017")
     v.get_by_role("button", name="Ler", exact=True).click()
     v.get_by_role("heading", name="Front bumper (e2e)").wait_for()
-    piloto = v.locator(".br-piloto", has_text="David Pera").first
+    piloto = v.locator(".br-piloto", has_text="David Pedalo").first
     caixa = piloto.bounding_box()
     assert caixa and caixa["height"] >= 48, "alvo grande para o polegar"
     piloto.click()
     # #206 (dono, 13/10: "Escaneou, selecionou o cliente, já finaliza"): vai direto para a OS do David
     v.get_by_text("Peça adicionada").wait_for()
-    v.get_by_text("Já está na invoice de David Pera", exact=False).wait_for()
+    v.get_by_text("Já está na invoice de David Pedalo", exact=False).wait_for()
     # #215 (dono, 13/10): "o nome do cliente fica como a maior coisa ali, e o nome da peça quase não
     # dá para ver" — a peça lida é o maior texto do painel, maior que o nome do cliente
     tam = v.evaluate("""() => [document.querySelector('.br-add-peca'), document.querySelector('.br-sessao-nome')]
@@ -1422,9 +1423,9 @@ def test_balcao_do_celular_peca_depois_piloto_e_o_gerente_confirma(servidor, nav
 
     # o gerente não confirma nada: a peça já está nas leituras do David, no balcão do painel
     g = entrar(navegador, servidor)
-    ids = g.evaluate("fetch('/ops/api/clients?q=David%20Pera').then(r => r.json())")
+    ids = g.evaluate("fetch('/ops/api/clients?q=David%20Pedalo').then(r => r.json())")
     lista = ids["itens"] if isinstance(ids, dict) else ids
-    cid = next(c["id"] for c in lista if (c.get("pilot_name") or "") == "David Pera")
+    cid = next(c["id"] for c in lista if (c.get("pilot_name") or "") == "David Pedalo")
     abrir(g, servidor, f"/balcao/{cid}")
     g.locator(".tbl .tr", has_text="Front bumper (e2e)").first.wait_for()
     assert not g.erros_js, g.erros_js
@@ -1445,7 +1446,7 @@ def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(
     v.get_by_label("Código da peça").fill("7890000000017")
     v.get_by_role("button", name="Ler", exact=True).click()
     v.get_by_role("heading", name="Front bumper (e2e)").wait_for()
-    v.locator(".br-piloto", has_text="David Pera").first.click()
+    v.locator(".br-piloto", has_text="David Pedalo").first.click()
     v.get_by_text("Peça adicionada").wait_for()
     # a operação fica aberta: a próxima peça já vai para o mesmo piloto, sem tocar de novo
     v.get_by_role("button", name="Código apagado? Digitar").click()
@@ -1626,10 +1627,10 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     pg.get_by_role("heading", name="Suits · Alpha Line", level=1).wait_for()
     pg.get_by_role("button", name="Registrar novo pedido").click()
     dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
-    dlg.get_by_label("Cliente", exact=True).fill(f"Ryan Casner {largura}")
+    dlg.get_by_label("Cliente", exact=True).fill(f"Ryan Capner {largura}")
     dlg.get_by_label("E-mail", exact=True).fill("ryan@example.com")
     dlg.get_by_role("button", name="Registrar", exact=True).click()
-    pg.get_by_role("heading", name=f"Ryan Casner {largura}", level=1).wait_for()
+    pg.get_by_role("heading", name=f"Ryan Capner {largura}", level=1).wait_for()
     assert re.search(r"/suits/\d+$", pg.url), pg.url
     pg.get_by_label("Nota", exact=True).fill("Cliente mandou as medidas no print")
     pg.locator(".suit-arquivo input[type=file]").set_input_files(_png_pequeno(tmp_path / f"print{largura}.png"))
@@ -1652,7 +1653,7 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     abrir(pg, servidor, "/suits")
-    pg.get_by_role("link", name=re.compile(f"Ryan Casner {largura}")).wait_for()
+    pg.get_by_role("link", name=re.compile(f"Ryan Capner {largura}")).wait_for()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
@@ -1826,7 +1827,7 @@ def test_balcao_mostra_os_pilotos_do_dia_sem_ler_e_peca_sem_cliente_pergunta_de_
     v.keyboard.press("Enter")
     v.get_by_role("heading", name="Leia a peça").wait_for()
     v.get_by_role("heading", name="Pilotos de", exact=False).wait_for()
-    piloto = v.locator(".br-antes .br-piloto", has_text="David Pera").first
+    piloto = v.locator(".br-antes .br-piloto", has_text="David Pedalo").first
     piloto.wait_for()
     assert piloto.bounding_box()["height"] >= 48
     piloto.click()
@@ -1837,13 +1838,13 @@ def test_balcao_mostra_os_pilotos_do_dia_sem_ler_e_peca_sem_cliente_pergunta_de_
 
     g = entrar(navegador, servidor, largura=360, altura=900)
     abrir(g, servidor, "/balcao")
-    g.locator(".br-piloto", has_text="David Pera").first.wait_for()      # pilotos de hoje, sem ler nada
+    g.locator(".br-piloto", has_text="David Pedalo").first.wait_for()      # pilotos de hoje, sem ler nada
     campo = g.get_by_label("Leia o QR do cliente")
     campo.fill("7890000000017"); campo.press("Enter")
     g.get_by_role("heading", name="De quem é?").wait_for()
-    g.get_by_role("dialog").locator(".br-piloto", has_text="David Pera").first.click()
-    g.get_by_text("Front bumper (e2e) → David Pera: cobrada.").wait_for()
-    g.get_by_role("heading", name="David Pera", level=2).wait_for()
+    g.get_by_role("dialog").locator(".br-piloto", has_text="David Pedalo").first.click()
+    g.get_by_text("Front bumper (e2e) → David Pedalo: cobrada.").wait_for()
+    g.get_by_role("heading", name="David Pedalo", level=2).wait_for()
     g.locator(".tbl .tr", has_text="Front bumper (e2e)").first.wait_for()
     r = g.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
@@ -1883,23 +1884,23 @@ def test_calendario_gerente_exclui_servico_e_ele_fica_no_historico_do_card(servi
     m = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=844)
     abrir(m, servidor, "/meu-dia")
     m.get_by_role("button", name="Próximo dia").click()
-    m.get_by_role("heading", name="Renato Frota Pionti", level=3).wait_for()
+    m.get_by_role("heading", name="Renato Faixa Pistoni", level=3).wait_for()
     assert m.get_by_role("button", name="Excluir", exact=False).count() == 0, "o mecânico não exclui"
     m.close()
 
     g = entrar(navegador, servidor, largura=390, altura=844)
     abrir(g, servidor, "/meu-dia")
     g.get_by_role("button", name="Próximo dia").click()
-    g.get_by_role("heading", name="Renato Frota Pionti", level=3).wait_for()
-    g.get_by_role("button", name="Excluir o serviço Renato Frota Pionti_Professional Coaching_2T [1/1]").click()
+    g.get_by_role("heading", name="Renato Faixa Pistoni", level=3).wait_for()
+    g.get_by_role("button", name="Excluir o serviço Renato Faixa Pistoni_Professional Coaching_2T [1/1]").click()
     g.get_by_role("heading", name="Excluir serviço?").wait_for()
     g.get_by_label("Motivo (opcional)").fill("teste e2e")
     g.get_by_role("dialog").get_by_role("button", name="Excluir").click()
     g.get_by_text("Serviço excluído. Ele continua no histórico do card.").wait_for()
-    g.get_by_role("heading", name="Renato Frota Pionti", level=3).wait_for(state="detached")
+    g.get_by_role("heading", name="Renato Faixa Pistoni", level=3).wait_for(state="detached")
     r = g.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
-    cid = g.evaluate("fetch('/ops/api/clients?q=Pionti').then(r => r.json())")
+    cid = g.evaluate("fetch('/ops/api/clients?q=Pistoni').then(r => r.json())")
     cid = (cid["itens"] if isinstance(cid, dict) else cid)[0]["id"]
     abrir(g, servidor, f"/clients/{cid}")
     g.get_by_role("button", name="Serviços", exact=False).first.click()
@@ -2002,17 +2003,17 @@ def test_card_de_irmao_com_vincular_ao_cliente(servidor, navegador):
     pg.get_by_role("button", name=re.compile("É irmão de um cliente")).click()
     pg.get_by_role("heading", name="Card de irmão", level=3).wait_for()
     pg.get_by_label("Irmão de — vincular ao cliente").fill("David")
-    pg.locator(".lpick-menu .opt", has_text="David Pera").first.click()
-    pg.get_by_text(re.compile("vem do card de David Pera")).wait_for()
+    pg.locator(".lpick-menu .opt", has_text="David Pedalo").first.click()
+    pg.get_by_text(re.compile("vem do card de David Pedalo")).wait_for()
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
-    pg.get_by_label("Piloto (o irmão) *").fill("Sofia Pera")
+    pg.get_by_label("Piloto (o irmão) *").fill("Sofia Pedalo")
     pg.get_by_role("button", name="Criar card do irmão").click()
     pg.get_by_text("Card do irmão criado.").wait_for()
-    pg.get_by_role("heading", name="Sofia Pera").first.wait_for()
-    pg.get_by_role("link", name="David Pera").first.wait_for()          # o irmão, marcado no card
-    david = pg.request.get(servidor + "/api/clients?q=David%20Pera").json()[0]
-    sofia = [c for c in pg.request.get(servidor + "/api/clients?q=Sofia").json() if c["pilot_name"] == "Sofia Pera"][0]
+    pg.get_by_role("heading", name="Sofia Pedalo").first.wait_for()
+    pg.get_by_role("link", name="David Pedalo").first.wait_for()          # o irmão, marcado no card
+    david = pg.request.get(servidor + "/api/clients?q=David%20Pedalo").json()[0]
+    sofia = [c for c in pg.request.get(servidor + "/api/clients?q=Sofia").json() if c["pilot_name"] == "Sofia Pedalo"][0]
     assert sofia["id"] != david["id"] and sofia["email"] == david["email"] and sofia["phone"] == david["phone"]
     card = pg.request.get(servidor + f"/api/clients/{sofia['id']}").json()
     assert card["client"]["sibling_of"] == david["id"] and [i["id"] for i in card["irmaos"]] == [david["id"]]
@@ -2143,7 +2144,7 @@ def test_agenda_de_vendas_conecta_o_google_calendar_e_mostra_os_compromissos(ser
         pg.click("#permitir")                                # a "tela de consentimento" do Google
         pg.wait_for_url(lambda u: "/ops/sales/agenda" in u and "google=" not in u, timeout=10000)
         pg.wait_for_load_state("networkidle")
-        assert pg.get_by_text("Conectado como vendedor.teste@gmail.com").count() == 1
+        assert pg.get_by_text("Conectado como vendedor.teste@example.com").count() == 1
         pg.get_by_text(f"Reunião e2e {largura}").wait_for(timeout=10000)
         assert any(f"Retorno Google e2e {largura}" in e["summary"] for e in GOOGLE.nossos().values())
         assert not pg.locator("main").get_by_text("URACE · retorno", exact=False).count()   # o nosso evento não volta duplicado
@@ -2162,10 +2163,11 @@ def test_agenda_de_vendas_conecta_o_google_calendar_e_mostra_os_compromissos(ser
 
 # ------------------------------------------------------------- uma página para cada resultado do Stripe (#245)
 def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, navegador):
-    """#245, dono 14/10: "monte páginas para cada um no site" (os 4 eventos do webhook do Stripe). No celular:
-    processando → não passou (e-mail com o link; "Try again" abre um checkout novo) → expirou ("Restore cart"
-    põe o item de volta no carrinho) → pago. Cada página com um h1, nada rola para o lado em 390 e 360 px e
-    os botões têm 40 px. O painel mostra o pedido com o estado e o link."""
+    """#245, dono 14/10: "monte páginas para cada um no site" (os 4 eventos do webhook do Stripe). #248: comprar
+    pede a conta do site ("Buy now" sem conta → entrar → volta ao produto), a chave EN/PT ("mesmo jeito do command
+    center") e o aviso sempre. No celular: processando → (chave PT) não passou (e-mail com o link; "Tentar de novo"
+    abre um checkout novo) → expirou ("Restaurar o carrinho") → pago. Cada página com um h1, nada rola para o lado
+    em 390 e 360 px e os botões têm 40 px. O painel mostra o pedido com o estado e o link."""
     import json
 
     from command_center.vitrine import paginas_site
@@ -2173,6 +2175,9 @@ def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, naveg
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"]
                    if not p["variations"] and p["price"] and p["in_stock"] and p["images"])
     quem = {"email": "ivo.teste.e2e@example.com", "name": "Ivo Teste", "phone": "+14075550148"}
+    conta = navegador.new_page()                         # a conta já existe; a pessoa só entra
+    cliente_pela_api(conta, servidor, quem["name"], quem["email"], ip="10.2.48.1")
+    conta.close()
     v = navegador.new_page(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-For": "10.2.45.1"})
     erros = []
     v.on("pageerror", lambda e: erros.append(str(e)))
@@ -2195,10 +2200,27 @@ def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, naveg
         v.wait_for_url(STRIPE.origem + "/pay/**")
         return STRIPE.sessoes[v.url.rstrip("/").rsplit("/", 1)[1]]
 
-    # 1 · Buy now → o Checkout (o falso) → o meio de pagamento confirma depois: "Payment processing"
+    def emails_para(trecho):
+        for _ in range(50):
+            achados = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
+            achados = [x for x in achados if x["to"] == quem["email"] and trecho in x["subject"]]
+            if achados:
+                return achados
+            time.sleep(0.1)
+        return []
+
+    # 0 · #248: "Buy now" sem conta → entrar → volta para o produto
     v.goto(site + f"/store/p/{produto['slug']}/")
     v.get_by_role("button", name="Buy now").click()
+    v.wait_for_url(re.compile(r".*/ops/portal\?volta=/store/p/.*"))
+    v.fill("#p-email", quem["email"])
+    v.fill("#p-pw", "pista-molhada-7")
+    v.get_by_role("button", name="Sign in").click()
+    v.wait_for_url(re.compile(rf".*/store/p/{re.escape(produto['slug'])}/$"))
+    # 1 · Buy now → o Checkout (o falso), com o e-mail da conta → confirma depois: "Payment processing"
+    v.get_by_role("button", name="Buy now").click()
     s1 = sessao_do_stripe()
+    assert s1["customer_email"] == quem["email"], "o e-mail da conta vai para o Stripe"
     assert webhook_stripe(site, s1, "checkout.session.completed", "evt_e2e_245a", customer_details=quem) == "aguardando"
     v.goto(site + f"/store/thanks/?session_id={s1['id']}")
     confere("Payment processing")
@@ -2206,39 +2228,42 @@ def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, naveg
     v.wait_for_url(re.compile(r".*/order/\d+-[A-Za-z0-9_-]{27}/$"))
     pagina = v.url.removeprefix(site)
     confere("Payment processing")
-    assert v.title() == "Payment processing | URACE"
-    # 2 · async_payment_failed: "Payment didn't go through", o e-mail com o link e "Try again" → checkout novo
+    assert v.title() == "Payment processing | URACE" and v.get_by_text("Your details").count() == 1
+    assert emails_para("confirming your payment"), "#248: e-mail já no processando"
+    # 1b · a chave EN/PT: a mesma página em português (e a escolha fica)
+    v.get_by_role("button", name="Português").click()
+    confere("Pagamento em confirmação")
+    assert v.evaluate("document.documentElement.lang") == "pt-BR" and v.url.endswith(pagina)
+    # 2 · async_payment_failed: "O pagamento não foi concluído", o e-mail com o link e "Tentar de novo" → checkout novo
     assert webhook_stripe(site, s1, "checkout.session.async_payment_failed", "evt_e2e_245b", customer_details=quem) == "falhou"
     v.reload()
-    confere("Payment didn't go through")
-    assert v.get_by_text("nothing was charged", exact=False).count() >= 1
-    avisos = []
-    for _ in range(50):
-        avisos = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
-        avisos = [x for x in avisos if x["to"] == quem["email"]]
-        if avisos:
-            break
-        time.sleep(0.1)
-    assert len(avisos) == 1 and "didn't go through" in avisos[0]["subject"] and pagina in avisos[0]["text"]
-    v.get_by_role("button", name="Try again").click()
+    confere("O pagamento não foi concluído")
+    assert v.get_by_text("nada foi cobrado", exact=False).count() >= 1
+    avisos = emails_para("didn't go through")              # o pedido foi feito em inglês: o e-mail sai em inglês
+    assert len(avisos) == 1 and pagina in avisos[0]["text"]
+    v.get_by_role("button", name="Tentar de novo").click()
     s2 = sessao_do_stripe()
     assert f"US$ {produto['price']:.2f}" in v.content(), "o preço do catálogo, recalculado"
-    # 3 · o checkout novo expira: "Checkout expired" e "Restore cart" põe o item de volta no carrinho
-    assert webhook_stripe(site, s2, "checkout.session.expired", "evt_e2e_245c", customer_details={"email": quem["email"]}) == "expirado"
+    # 3 · o checkout novo expira: "O checkout expirou" (e o e-mail em português) e "Restaurar o carrinho"
+    assert webhook_stripe(site, s2, "checkout.session.expired", "evt_e2e_245c") == "expirado"
     v.goto(site + f"/cart/thanks/?session_id={s2['id']}")
-    confere("Checkout expired")
-    v.get_by_role("link", name="Restore cart").click()
+    confere("O checkout expirou")
+    assert emails_para("O seu checkout expirou"), "o pedido novo foi feito em português"
+    v.get_by_role("link", name="Restaurar o carrinho").click()
     v.wait_for_url("**/cart/")
-    v.get_by_role("heading", name="Your cart", level=1).wait_for()
-    pagar = v.get_by_role("button", name=re.compile(r"^Checkout · \$"))
+    v.get_by_role("heading", name="Seu carrinho", level=1).wait_for()
+    pagar = v.get_by_role("button", name=re.compile(r"^Pagar · \$"))
     pagar.wait_for()
     assert v.evaluate("JSON.parse(localStorage.getItem('urace.carrinho') || '{}').itens.length") == 1
+    assert v.get_by_text("Conectado como").count() == 1
     r = v.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
-    # 4 · paga: "Payment confirmed"
+    # 4 · paga: "Pagamento confirmado"; de volta ao inglês, "Payment confirmed"
     pagar.click()
     sessao_do_stripe()
     v.get_by_role("link", name="Pay").click()
+    confere("Pagamento confirmado")
+    v.get_by_role("button", name="English").click()
     confere("Payment confirmed")
     # 5 · token mexido: 404
     assert v.request.get(site + pagina[:-6] + "AAAAA/").status == 404

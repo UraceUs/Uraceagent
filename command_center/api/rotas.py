@@ -269,6 +269,12 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     for i in (invoices or []):
         tl.append({"at": i["issued_on"] or (i["due_on"] or ""), "kind": "INVOICE", "title": f"Invoice {i['doc_number'] or ''} · {_usd(i['amount'])}", "status": i["status"] or "?",
                    "entity": {"type": "invoice", "id": i["id"]}, "detail": (f"saldo {_usd(i['balance'])}" if i.get("balance") else "paga") + (f" · vence {_dbr(i['due_on'])}" if i.get("due_on") else "") + (f" · {i['memo']}" if i.get("memo") else ""), "links": _links(con, "invoice", i["id"])})
+    # #248: o resultado de cada pagamento do site (pago, processando, não passou, expirou), com o link do pedido.
+    # Mecânico e coach (box) não veem valores.
+    for ev in ([] if box else todos(con, "SELECT * FROM client_events WHERE client_id=? ORDER BY at DESC LIMIT 100", (cid,))):
+        tl.append({"at": (ev["at"] or "")[:10], "kind": ev["kind"], "title": ev["title"], "status": ev["status"],
+                   "entity": {"type": "store_order", "id": ev["order_id"]}, "detail": ev["detail"],
+                   "links": [{"system": "site", "external_id": str(ev["order_id"]), "deep_link": ev["link"]}] if ev["link"] else []})
     tl.sort(key=lambda x: x["at"] or "", reverse=True)
     ultimo = next((t for t in tarefas if t["status"] == "completed" and t["due_on"]), None)
     return {"client": c, "irmaos": identidade.irmaos(con, cid), "links": _links(con, "client", cid), "tasks": tarefas, "waivers": waivers,
@@ -1104,7 +1110,7 @@ from command_center.providers import atribuicao  # noqa: E402
 def service_attribution(u=Depends(auth.exige("MANAGER")), con: sqlite3.Connection = Depends(get_db)):
     """VARREDURA: de quem é cada serviço, segundo o título do Asana. Não escreve nada.
 
-    Nasceu de 22/09: o dono abriu o card do David Pera para marcar uma sessão e achou
+    Nasceu de 22/09: o dono abriu o card do David Pedalo para marcar uma sessão e achou
     113 serviços, 112 de outras pessoas."""
     rel = atribuicao.redistribuir(con, aplicar=False)
     return {**rel, "resumo": atribuicao.resumo(rel)}
@@ -1114,7 +1120,7 @@ def service_attribution(u=Depends(auth.exige("MANAGER")), con: sqlite3.Connectio
 def service_attribution_apply(request: Request, u=Depends(auth.exige("ADMIN")), con: sqlite3.Connection = Depends(get_db)):
     """APLICA: move cada serviço para o card de quem é.
 
-    Move só o que é certo. Nome ambíguo ("Alexander" com um Savage e um Jacoby no
+    Move só o que é certo. Nome ambíguo ("Alexander" com um Sprage e um Jetsby no
     quadro) e nome de uma palavra só sem card voltam na lista para decisão humana —
     unir no escuro é o que cria o problema do outro lado."""
     rel = atribuicao.redistribuir(con, aplicar=True)
@@ -1680,7 +1686,7 @@ PRODUTOS = {
 
 
 def nome_tarefa(piloto, produto, categoria, n, total):
-    """'Renato Frota Pionti_Urace Daily_2T [1/1]' — o padrão que o quadro e a IA leem."""
+    """'Renato Faixa Pistoni_Urace Daily_2T [1/1]' — o padrão que o quadro e a IA leem."""
     base = f"{piloto.strip()}_{produto.strip()}" + (f"_{categoria.strip()}" if categoria else "")
     return f"{base} [{max(1, int(n or 1))}/{max(1, int(total or 1))}]"
 
@@ -2037,7 +2043,7 @@ def resumo_mensalidade(con, cid, meses=4):
     por_mes = {}
     for i in invs:
         # 01/10 (#63): a invoice de mensalidade também é reconhecida pelo item da linha (a de 17/09 do
-        # Joseph Kurian não tem memo, só o item "Academy Monthly")
+        # Joseph Kartian não tem memo, só o item "Academy Monthly")
         linhas = " ".join(f"{x['item_name'] or ''} {x['description'] or ''}" for x in
                           todos(con, "SELECT item_name, description FROM invoice_lines WHERE invoice_id=?", (i["id"],)))
         i["_linhas"] = linhas

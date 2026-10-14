@@ -17,14 +17,14 @@ Cinco pedidos do dono no mesmo dia, olhando as telas do painel. Cada um virou re
 > *"A IA não identificar o nome do piloto com o nome do serviço; saber diferenciar. E
 > em algumas ocasiões contextuais identificar o `_` ou `-` como um espaçador."*
 
-O que ele viu: na aba do DocuSign, o signatário Matthew Hubbard ligado ao "piloto"
-**`Elliott Hubbard_Summer Camp 2026 1/4`**, e William Fatutta ao
-**`Mike Fattuta_Professional Coach Rotax`**. O card do cliente tinha o título da tarefa
+O que ele viu: na aba do DocuSign, o signatário Matthew Hubtrack ligado ao "piloto"
+**`Elliott Hubtrack_Summer Camp 2026 1/4`**, e William Flatuta ao
+**`Mike Flatuta_Professional Coach Rotax`**. O card do cliente tinha o título da tarefa
 inteiro como nome de gente.
 
 A causa era uma linha: `_nome_valido()` **validava** o texto (achava uma pessoa nele)
 mas **devolvia o texto inteiro**. E `pessoa_do_titulo()` rejeitava "Mike
-Fattuta_Professional Coach Rotax" porque procurava palavra de corrida (*rotax*) no
+Flatuta_Professional Coach Rotax" porque procurava palavra de corrida (*rotax*) no
 título todo, não na parte da pessoa.
 
 A regra, agora em código e na skill do Asana:
@@ -32,7 +32,7 @@ A regra, agora em código e na skill do Asana:
 - o que vem **antes do primeiro separador** é a pessoa; o resto é serviço;
 - separadores: `_`, `|`, hífen **com** espaço;
 - hífen **colado** é contextual: separa só quando o que vem depois é serviço ou tem
-  número (`Elliott Hubbard-Summer Camp 2026` → Elliott Hubbard); `Jean-Luc Picard` e
+  número (`Elliott Hubtrack-Summer Camp 2026` → Elliott Hubtrack); `Jean-Luc Picard` e
   `Ana-Maria Souza` continuam sendo um nome só;
 - `[n/t]` no fim, ou `1/4` solto, é a contagem da sessão.
 

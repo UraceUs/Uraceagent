@@ -31,7 +31,7 @@ def con(tmp_path, monkeypatch):
 
 
 def _base(con, preco=45.0):
-    enzo = inserir(con, "clients", name="Enzo Kurian", status="ACTIVE", source="manual")
+    enzo = inserir(con, "clients", name="Enzo Kartian", status="ACTIVE", source="manual")
     iid = estoque.criar_item(con, "peca", "Rk Non Oring Chain", category="hardware", price=preco)
     estoque.contar(con, iid, 5)
     return enzo, iid
@@ -69,7 +69,7 @@ def test_nome_igual_com_preco_diferente_nao_baixa(con):
 
 def test_invoice_de_outro_cliente_nao_baixa(con):
     enzo, iid = _base(con)
-    outro = inserir(con, "clients", name="Hank Lai", status="ACTIVE", source="manual")
+    outro = inserir(con, "clients", name="Hank Lume", status="ACTIVE", source="manual")
     estoque.registrar_cobranca(con, iid, enzo, 1)
     assert estoque.conciliar_cobrancas(con, _invoice(con, outro, [("Rk Non Oring Chain", None, 1, 45.0)])) == []
 
@@ -79,7 +79,7 @@ def test_sincronia_do_quickbooks_concilia(con, monkeypatch):
     con.execute("UPDATE clients SET email='joe@x.com' WHERE id=?", (enzo,))
     estoque.registrar_cobranca(con, iid, enzo, 2)
     fatura = {"id": "9", "numero": "2301", "total": 90, "saldo": 90, "status": "open", "email": "joe@x.com",
-              "cliente": "Enzo Kurian", "linhas": [{"item_id": "71", "item": "Rk Non Oring Chain", "descricao": "x", "qtd": 2, "unitario": 45.0, "total": 90}]}
+              "cliente": "Enzo Kartian", "linhas": [{"item_id": "71", "item": "Rk Non Oring Chain", "descricao": "x", "qtd": 2, "unitario": 45.0, "total": 90}]}
     monkeypatch.setattr(sync, "chamar", lambda *a, **k: {"invoices": [fatura]} if a[1] == "qbo_invoices" else [])
     assert sync.sync_qbo(con)["ok"]
     assert estoque.cobrancas(con, enzo) == [] and estoque.cobrancas(con, enzo, "invoiced")[0]["doc_number"] == "2301"
@@ -90,7 +90,7 @@ def test_ia_recebe_as_pecas_a_cobrar(con):
     estoque.registrar_cobranca(con, iid, enzo, 1)
     sem = estoque.criar_item(con, "peca", "Spark Plug", category="pecas-motor")
     estoque.registrar_cobranca(con, sem, enzo, 2)
-    ctx = motor.contexto_do_comando(con, "monta a invoice do Enzo Kurian")
+    ctx = motor.contexto_do_comando(con, "monta a invoice do Enzo Kartian")
     assert "PEÇAS DO ESTOQUE USADAS E AINDA NÃO COBRADAS" in ctx
     assert "1× Rk Non Oring Chain a $45.00" in ctx and "2× Spark Plug (SEM PREÇO" in ctx
     assert "PEÇAS DO ESTOQUE" in motor._contexto_cliente(con, enzo), "o dia 1 também vê"
@@ -100,7 +100,7 @@ def test_atencao_lembra_de_cobrar(con):
     enzo, iid = _base(con)
     estoque.registrar_cobranca(con, iid, enzo, 2)
     it = {i["key"]: i for i in atencao.coletar(con)}[f"estoque-cobrar:client:{enzo}"]
-    assert "Enzo Kurian" in it["title"] and it["facts"][0][1] == "$90.00"
+    assert "Enzo Kartian" in it["title"] and it["facts"][0][1] == "$90.00"
 
 
 # ------------------------------------------------------------------ API
@@ -112,7 +112,7 @@ def cli():
     c = conectar(); aplicar_schema(c)
     auth.criar_usuario(c, "mec@urace.us", "Mecânico", "OPERATOR", SENHA)
     auth.criar_usuario(c, "ger@urace.us", "Gerente", "MANAGER", SENHA)
-    inserir(c, "clients", name="Enzo Kurian", status="ACTIVE", source="manual")
+    inserir(c, "clients", name="Enzo Kartian", status="ACTIVE", source="manual")
     c.close()
     with TestClient(app, base_url="https://cc.test") as t:
         yield t
@@ -125,7 +125,7 @@ def entra(cli, email):
 
 
 def _enzo():
-    return um(conectar(), "SELECT id FROM clients WHERE name='Enzo Kurian'")["id"]
+    return um(conectar(), "SELECT id FROM clients WHERE name='Enzo Kartian'")["id"]
 
 
 def test_usei_no_kart_do_cliente_vira_cobranca(cli):

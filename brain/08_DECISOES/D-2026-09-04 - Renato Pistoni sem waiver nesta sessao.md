@@ -7,11 +7,11 @@ responsavel: Italo Silveira
 status: ativo
 ---
 
-# Renato Pionti não precisa de waiver nesta sessão
+# Renato Pistoni não precisa de waiver nesta sessão
 
 ## O que foi decidido
 
-A sessão **Renato Frota Pionti_Professional Coaching_2T [1/1]**, de
+A sessão **Renato Faixa Pistoni_Professional Coaching_2T [1/1]**, de
 05/09/2026, **não exige waiver**. O alerta vermelho da varredura de
 04/09 foi encerrado por decisão humana, não por assinatura.
 
@@ -20,7 +20,7 @@ A sessão **Renato Frota Pionti_Professional Coaching_2T [1/1]**, de
 **Renato é VIP** — informado pelo dono em 04/09, depois do registro
 inicial. Com isso a decisão deixou de ser pontual e virou regra em
 [[PARAMETROS]]: **cliente VIP dispensa waiver**, valendo só para quem
-está na lista de VIPs. Cliente: [[Rafael Pionti]].
+está na lista de VIPs. Cliente: [[Rafael Pistoni]].
 
 ## Impacto
 

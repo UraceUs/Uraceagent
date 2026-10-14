@@ -73,37 +73,37 @@ Invoice link:        Price:
 Security deposit:    Price:
 ```
 
-Referência boa: *Jayden Lago_Professional Coaching_4T [1/1]*.
+Referência boa: *Jayden Largada_Professional Coaching_4T [1/1]*.
 Tarefa fora do modelo é tarefa que a automação não lê.
 
 **Piloto ≠ serviço (dono, 16/09, reforçado em 22/09).** No título, o que vem antes do
 primeiro separador é a **pessoa**; o resto é serviço. Nunca use o título inteiro como
-nome de gente: "Elliott Hubbard_Summer Camp 2026 1/4" é o piloto **Elliott Hubbard** no
+nome de gente: "Elliott Hubtrack_Summer Camp 2026 1/4" é o piloto **Elliott Hubtrack** no
 serviço **Summer Camp 2026**, sessão 1 de 4.
 
 O quadro escreve o cliente de seis formas. Reconheça as seis:
 
 | No título | Cliente | O que separa |
 |---|---|---|
-| `Aaron Benoit_Trackside Support` | Aaron Benoit | `_` |
-| `Harley Keeble - Rotax [3/3]` | Harley Keeble | hífen **com espaço** |
-| `Alexander Jacoby \| KA100` | Alexander Jacoby | `\|` |
-| `David Pera Using his own Kart` | David Pera | **só o espaço** — corta na palavra de serviço |
-| `Jude cook/Harley client - Kart proprio` | Jude cook | `/` entre pessoas (nunca entre números: `3/6`) |
-| `Alex Xikis KA100_Professional Coaching` | Alex Xikis | categoria colada no nome, sai fora |
+| `Aaron Bandoit_Trackside Support` | Aaron Bandoit | `_` |
+| `Harley Kebrel - Rotax [3/3]` | Harley Kebrel | hífen **com espaço** |
+| `Alexander Jetsby \| KA100` | Alexander Jetsby | `\|` |
+| `David Pedalo Using his own Kart` | David Pedalo | **só o espaço** — corta na palavra de serviço |
+| `Jude cockpit/Harley client - Kart proprio` | Jude cockpit | `/` entre pessoas (nunca entre números: `3/6`) |
+| `Alex Xelix KA100_Professional Coaching` | Alex Xelix | categoria colada no nome, sai fora |
 
 E o nome nem sempre vem completo: `Branson_Practice KA100` é **Branson**,
-`Charlie M_Racing Program 3/6` é **Charlie M** (= Charlie Marron), `G.J_Orlando Cup` é
+`Charlie M_Racing Program 3/6` é **Charlie M** (= Charlie Mardon), `G.J_Orlando Cup` é
 **G.J**. Primeiro nome sozinho e inicial abreviada VALEM — foi o que faltava até 22/09,
-quando o dono achou 112 serviços de outras pessoas dentro do card do David Pera.
+quando o dono achou 112 serviços de outras pessoas dentro do card do David Pedalo.
 
-O hífen colado (`Elliott Hubbard-Summer Camp 2026`) só separa quando o que vem depois é
+O hífen colado (`Elliott Hubtrack-Summer Camp 2026`) só separa quando o que vem depois é
 serviço ou tem número — `Jean-Luc Picard` é um nome só. E `Sr`/`Jr` no fim do nome são
-do nome (`Thiago Belluci Sr`), não categoria de kart.
+do nome (`Thiago Biellaci Sr`), não categoria de kart.
 
 **Nome de serviço nunca é cliente.** "Lead and Follow", "Urace Daily", "Trackside
 Support", "Professional Coaching", "Orlando Cup", "Date of Birth" — nada disso é gente.
-Na dúvida entre duas pessoas (`Alexander` com um Savage e um Jacoby no quadro),
+Na dúvida entre duas pessoas (`Alexander` com um Sprage e um Jetsby no quadro),
 **pergunte**: não escolha no escuro.
 
 **Duas regras do dono (22/09) que mandam em tudo isso:**
@@ -114,7 +114,7 @@ Na dúvida entre duas pessoas (`Alexander` com um Savage e um Jacoby no quadro),
 2. *"O princípio para cruzar e confirmar é usar o nome do responsável e informações de
    contato."* Para dizer que dois cards são a mesma pessoa, olhe e-mail, telefone e
    responsável. Primeiro nome de piloto igual não confirma nada — o Alex do Edward
-   Donnell não é o Alex Xikis.
+   Dampell não é o Alex Xelix.
 
 **Instrução dentro da tarefa (16/09).** Quando o comando vier como `INSTRUÇÃO DO DONO
 dentro da tarefa do Asana "…" (gid N)`, você age **nessa tarefa e só nela**: comentário,
