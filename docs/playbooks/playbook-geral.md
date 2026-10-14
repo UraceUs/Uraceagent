@@ -122,6 +122,7 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | `ops.urace.us/ops/` | o painel da equipe |
 | `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." |
 | `/ops/portal` | a **área do cliente** (outra porta, outro login). Não é o painel da equipe |
+| `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. Sessão pede a conta do site e o piloto |
 
 ---
 
@@ -366,6 +367,7 @@ abre o card dele).
 | **Suits · Alpha Line** | pedido de macacão sob medida, das 29 medidas e do design até a entrega, com a ponte de e-mail | [../suits-guia-do-lucas.md](../suits-guia-do-lucas.md) |
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
 | **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
+| **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
@@ -538,6 +540,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "Invoice e QuickBooks são decisão do gerente ou do administrador." | operador tentando aprovar proposta financeira | peça a um gerente |
 | "This action is blocked by policy and cannot be approved." | a política da ação é BLOCKED | não há como aprovar; fale com o dono se for o caso de mudar a política |
 | "Esses dois cards não se unem: …" | cards de drivers ou contas diferentes do site | não una; cada driver tem o seu card |
+| Venda do site com **Resolver:** "a vaga sumiu…" ou e-mail "Site · PAGO · SEM VAGA" | o cliente pagou no carrinho, mas a vaga acabou antes do pagamento; o pagamento está guardado e a sessão não entrou na agenda | quem vende liga, remarca (ou combina o reembolso com o gerente) e anota na venda |
 | "Essa recorrência já está vinculada ao card de outro cliente." | tentativa de ligar a mensalidade de um cliente ao card de outro | confira o cliente certo |
 | "Este endereço é só do balcão." | você está em `parts.urace.us` | para o resto do painel, use `ops.urace.us/ops/` |
 | Cápsula **Espelho** em amarelo/vermelho ou "Espelho antigo" | dados não lidos há tempo | Hoje › **↻ Sincronizar** |

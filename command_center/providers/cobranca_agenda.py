@@ -78,7 +78,8 @@ def invoice_paga(con, b):
 def situacao(con, b):
     """O que falta para a sessão aceita confirmar — para a equipe e para o cliente."""
     b = dict(b)
-    pago = b["charge_kind"] == "contrato" or invoice_paga(con, b)
+    # #236: a sessão paga no carrinho do site (Stripe) já entra paga, com o depósito
+    pago = b["charge_kind"] in ("contrato", "stripe") or invoice_paga(con, b)
     waiver = waiver_em_dia(con, b)
     return {"aceita": bool(b["accepted_at"]), "pagamento": "contrato" if b["charge_kind"] == "contrato" else
             ("pago" if pago else ("enviada" if b["qbo_invoice_id"] else ("erro" if b["charge_error"] else "pendente"))),

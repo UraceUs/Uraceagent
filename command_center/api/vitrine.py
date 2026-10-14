@@ -134,7 +134,7 @@ def _planos():
 
 
 def existe(caminho, host="novo.urace.us"):
-    return caminho in PAGINAS or _dinamica(host, caminho, {}) is not None
+    return caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None
 
 
 def pagina(request: Request, caminho: str):
@@ -147,6 +147,9 @@ def pagina(request: Request, caminho: str):
         return _html(ps.academy(host, planos=_planos()))
     if caminho == "/pro-team/":                         # #207: o preço da Academy e do Boost é o do painel
         return _html(ps.pro_team(host, planos=_planos()))
+    if caminho == "/cart/":                             # #236: o carrinho (noindex, sem cache: é de cada pessoa)
+        from command_center.providers import stripe_loja
+        return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado()))
     if caminho in PAGINAS:
         return _html(PAGINAS[caminho](host))
     html = _dinamica(host, caminho, q)
@@ -189,11 +192,13 @@ def agenda_publica(con: sqlite3.Connection = Depends(get_db)):
 
 
 @r.get("/ops/api/vitrine/servicos")
-def servicos_publicos(con: sqlite3.Connection = Depends(get_db)):
+def servicos_publicos(request: Request, con: sqlite3.Connection = Depends(get_db)):
     """#164: o que o site vende, para a reserva montar o resumo antes do login: nome, preço e o
-    depósito reembolsável. Nada do QuickBooks."""
-    from command_center.providers import servicos_site
-    return {"services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell"))}
+    depósito reembolsável. Nada do QuickBooks. `cart` (#236): neste endereço dá para pôr no carrinho
+    (o carrinho é do site novo e paga no Stripe)."""
+    from command_center.providers import servicos_site, stripe_loja
+    return {"services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell")),
+            "cart": e_do_site(request) and stripe_loja.ligado()}
 
 
 # ------------------------------------------------------------------ contato e pedido (#164)
@@ -428,6 +433,96 @@ async def stripe_webhook(request: Request, background: BackgroundTasks, con: sql
     if pago:
         background.add_task(stripe_loja.avisar_e_registrar, pago)
     return JSONResponse({"recebido": True, "resultado": resultado}, headers={"Cache-Control": "no-store"})
+
+
+# ------------------------------------------------------------------ carrinho (#236)
+def _json(dados, status=200):
+    return JSONResponse(dados, status_code=status, headers={"Cache-Control": "no-store"})
+
+
+async def _corpo_json(request):
+    try:
+        d = json.loads(await request.body() or b"{}")
+    except ValueError:
+        raise HTTPException(400, "JSON inválido")
+    if not isinstance(d, dict):
+        raise HTTPException(400, "JSON inválido")
+    return d
+
+
+def _conta_resumo(con, conta_id):
+    """O que o carrinho precisa da conta: quem está logado e os pilotos (com o que falta em cada um)."""
+    from command_center.providers import portal
+    c = portal.conta(con, conta_id)
+    bloq = {"faltando": "complete the profile first", "vencida": "update the measurements first"}
+    return {"name": c["name"], "email": c["email"], "missing": c["missing"],
+            "drivers": [{"id": p["id"], "name": p["name"], "blocked": bloq.get(p["measures_status"])} for p in c["drivers"]]}
+
+
+@r.post("/ops/api/vitrine/carrinho", include_in_schema=False)
+async def carrinho_cotar(request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """As linhas do carrinho como o servidor as vê: preço do catálogo e do painel, depósito, vaga e piloto.
+    Só lê. Com a conta do site aberta neste navegador, também diz quem é e quais pilotos tem."""
+    from command_center.api import portal as api_portal
+    from command_center.providers import carrinho, stripe_loja
+    if not e_do_site(request):
+        raise HTTPException(404)
+    d = await _corpo_json(request)
+    conta = api_portal.conta_do_cookie(request, con)
+    cot = carrinho.cotar(con, d.get("itens"), conta)
+    return _json({**cot, "account": _conta_resumo(con, conta) if conta else None, "stripe": stripe_loja.ligado()})
+
+
+@r.post("/ops/api/vitrine/carrinho/checkout", include_in_schema=False)
+async def carrinho_checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """Um checkout só no Stripe com o carrinho inteiro. Sessão da agenda pede a conta do site (e o CSRF
+    dela); produto segue sem conta, como na loja."""
+    from command_center.api import portal as api_portal
+    from command_center.providers import carrinho, stripe_loja
+    if not e_do_site(request):
+        raise HTTPException(404)
+    d = await _corpo_json(request)
+    if not stripe_loja.ligado():
+        return _json({"ok": False, "erro": "Online payment isn't available right now. Please call or WhatsApp us."}, 400)
+    conta = api_portal.conta_do_cookie(request, con)
+    if conta and not api_portal.csrf_ok(request):
+        return _json({"ok": False, "erro": "Security check failed. Reload the page and try again."}, 403)
+    if _estourou(_ip(request)):
+        return _json({"ok": False, "erro": "Too many requests in a row. Please try again in a few minutes."}, 429)
+    try:
+        oid, url = carrinho.criar_checkout(con, d.get("itens"), d.get("entrega"), conta, _origem(request), host_de(request))
+    except carrinho.PrecisaConta as e:
+        con.rollback()
+        return _json({"ok": False, "erro": str(e), "sign_in": True}, 401)
+    except carrinho.ErroCarrinho as e:
+        con.rollback()
+        return _json({"ok": False, "erro": str(e)}, 400)
+    except stripe_loja.ErroStripe as e:
+        con.commit()                                    # o pedido fica 'falhou' (a equipe vê a tentativa)
+        import logging
+        logging.getLogger("urace.loja").warning("checkout do carrinho falhou: %s", str(e)[:200])
+        return _json({"ok": False, "erro": "We couldn’t open the secure checkout just now. Please try again in a minute."}, 502)
+    con.commit()
+    return _json({"ok": True, "url": url, "order": oid})
+
+
+@r.get("/cart/thanks/", include_in_schema=False)
+def carrinho_obrigado(request: Request, background: BackgroundTasks, con: sqlite3.Connection = Depends(get_db)):
+    """A volta do Stripe: confere a sessão (se o webhook atrasar, nada se perde) e mostra o pedido."""
+    from command_center.db import um
+    from command_center.providers import carrinho, stripe_loja
+    if not e_do_site(request):
+        raise HTTPException(404)
+    sid = (request.query_params.get("session_id") or "")[:200]
+    pedido = None
+    if re.fullmatch(r"cs_[A-Za-z0-9_]+", sid):
+        try:
+            pedido, agora_pago = stripe_loja.conferir_sessao(con, sid)
+            if agora_pago:
+                background.add_task(stripe_loja.avisar_e_registrar, pedido["id"])
+        except stripe_loja.ErroStripe:
+            pedido = um(con, "SELECT * FROM store_orders WHERE stripe_session_id=?", (sid,))
+    return _sem_cache(ps.carrinho_obrigado(host_de(request), pedido, carrinho.itens(con, pedido["id"]) if pedido else []))
 
 
 def _sem_cache(html):

@@ -380,3 +380,50 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .form-contato[data-enviado] > :not(.form-estado), .form-pedido[data-enviado] > :not(.form-estado) { display: none }
 .contato-lado { display: grid; gap: 10px; align-content: start; background: var(--papel); border-radius: 14px; padding: 22px }
 .contato-lado p { margin: 0 }
+
+/* --------------------------------------------------------------- carrinho (#236) */
+.carrinho-topo { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  margin-left: auto; color: #fff; text-decoration: none; border-radius: 8px }
+.carrinho-topo + .btn-sm { margin-left: 0 }
+.carrinho-n { position: absolute; top: 2px; right: 0; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  background: var(--vermelho); color: #fff; font: 700 .72rem/20px var(--texto); text-align: center }
+@media (min-width: 1000px) { .carrinho-topo { margin-left: 0 } }
+.comprar-acoes { display: flex; flex-wrap: wrap; gap: 10px }
+.carrinho-ok:empty { display: none }
+.carrinho-ok { font-weight: 600; color: var(--ok) }
+.carrinho-ok a { color: var(--tinta); min-height: 40px; display: inline-flex; align-items: center }
+.agenda-carrinho:disabled { opacity: .45; cursor: not-allowed }
+.carrinho-pagina { gap: 18px }
+.carrinho-grade { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 900px) { .carrinho-grade { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start } }
+.carrinho-grade h2 { font-size: 1.2rem; margin-bottom: 10px }
+.carrinho-linhas { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px }
+.carrinho-linha { border: 1.5px solid #e3e3ea; border-radius: var(--raio); padding: 14px; display: grid; gap: 6px; min-width: 0 }
+.carrinho-linha.com-erro { border-color: #f1c2c2; background: #fff8f8 }
+.carrinho-linha-topo { display: flex; justify-content: space-between; gap: 12px; align-items: baseline }
+.carrinho-nome { font-family: var(--texto); font-stretch: normal; font-size: 1rem; overflow-wrap: anywhere; min-width: 0 }
+.carrinho-nome a { text-decoration: none; display: inline-flex; min-height: 40px; align-items: center }
+.carrinho-valor { font-variant-numeric: tabular-nums; white-space: nowrap }
+.carrinho-acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: end }
+.carrinho-qtd, .carrinho-piloto { display: grid; gap: 4px; font-weight: 600; font-size: .9rem; min-width: 0 }
+.carrinho-qtd input { width: 90px }
+.carrinho-piloto { flex: 1 1 200px }
+.carrinho-qtd input, .carrinho-piloto select { min-height: 44px; border: 1.5px solid #d9d9e1; border-radius: 8px; padding: 8px 10px;
+  font: inherit; background: #fff; color: var(--tinta); max-width: 100% }
+.carrinho-linha-erro { color: var(--vermelho); font-weight: 600; font-size: .92rem }
+.carrinho-linha-erro a { color: var(--tinta) }
+.carrinho-resumo { border: 1.5px solid #e3e3ea; border-radius: 14px; padding: 18px; display: grid; gap: 14px; min-width: 0 }
+@media (min-width: 900px) { .carrinho-resumo { position: sticky; top: 76px } }
+.carrinho-conta { display: grid; gap: 8px; background: var(--papel); border-radius: var(--raio); padding: 12px 14px; overflow-wrap: anywhere }
+.carrinho-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; margin: 0; font-variant-numeric: tabular-nums }
+.carrinho-total dd { margin: 0; text-align: right }
+.carrinho-total .soma { font-weight: 800; font-size: 1.15rem; border-top: 1px solid #e3e3ea; padding-top: 8px }
+.carrinho-resumo fieldset.entrega { border: 1.5px solid #d9d9e1; border-radius: 8px; padding: 10px 12px; margin: 0; display: grid; gap: 4px; min-width: 0 }
+.carrinho-resumo fieldset.entrega legend { font-weight: 600; font-size: .92rem; padding: 0 4px }
+.carrinho-resumo label.opcao { display: flex; align-items: center; gap: 10px; font-weight: 600; min-height: 44px; cursor: pointer }
+.carrinho-resumo label.opcao input { width: 20px; height: 20px; flex: none; accent-color: var(--vermelho) }
+.carrinho-pagar:disabled { opacity: .45; cursor: not-allowed }
+.carrinho-erro[hidden] { display: none }
+.carrinho-recibo { list-style: none; padding: 0; display: grid; gap: 10px }
+.carrinho-recibo li { display: grid; gap: 2px; border-bottom: 1px solid #e3e3ea; padding-bottom: 10px }
+.carrinho-sem-vaga { color: var(--aviso); font-weight: 600 }

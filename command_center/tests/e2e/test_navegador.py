@@ -69,10 +69,16 @@ class _StripeFalso:
             def do_POST(self):
                 campos = dict(parse_qsl(self.rfile.read(int(self.headers["Content-Length"])).decode()))
                 sid = f"cs_test_e2e{len(sessoes) + 1:03d}"
+                n = 0                                  # #236: o carrinho manda várias linhas (e a do depósito)
+                while f"line_items[{n}][quantity]" in campos:
+                    n += 1
                 sessoes[sid] = {"id": sid, "url": f"{fake.origem}/pay/{sid}", "payment_status": "unpaid",
                                 "client_reference_id": campos["client_reference_id"],
                                 "nome": campos["line_items[0][price_data][product_data][name]"],
-                                "amount_total": int(campos["line_items[0][price_data][unit_amount]"]) * int(campos["line_items[0][quantity]"]),
+                                "linhas": [campos[f"line_items[{i}][price_data][product_data][name]"] for i in range(n)],
+                                "amount_total": sum(int(campos[f"line_items[{i}][price_data][unit_amount]"]) * int(campos[f"line_items[{i}][quantity]"])
+                                                    for i in range(n)),
+                                "customer_email": campos.get("customer_email"),
                                 "success_url": campos["success_url"], "cancel_url": campos["cancel_url"]}
                 self._json(sessoes[sid])
 
@@ -83,12 +89,13 @@ class _StripeFalso:
                 s = sessoes[partes[1]]
                 if len(partes) == 3:                   # /pay/<sid>/ok: pagou
                     s.update(payment_status="paid", payment_intent="pi_e2e",
-                             customer_details={"email": "lia.loja.e2e@example.com", "name": "Lia Loja", "phone": None})
+                             customer_details={"email": s["customer_email"] or "lia.loja.e2e@example.com", "name": "Lia Loja", "phone": None})
                     self.send_response(303)
                     self.send_header("Location", s["success_url"].replace("{CHECKOUT_SESSION_ID}", s["id"]))
                     return self.end_headers()
                 b = (f"<!doctype html><title>Stripe Checkout (test)</title><h1>{s['nome']}</h1>"
-                     f"<p>Total US$ {s['amount_total'] / 100:.2f}</p><a href='/pay/{s['id']}/ok'>Pay</a>").encode()
+                     + "".join(f"<p class='linha'>{x}</p>" for x in s["linhas"])
+                     + f"<p>Total US$ {s['amount_total'] / 100:.2f}</p><a href='/pay/{s['id']}/ok'>Pay</a>").encode()
                 self.send_response(200); self.send_header("Content-Type", "text/html")
                 self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
 
@@ -1981,6 +1988,102 @@ def test_card_de_irmao_com_vincular_ao_cliente(servidor, navegador):
     assert card["client"]["sibling_of"] == david["id"] and [i["id"] for i in card["irmaos"]] == [david["id"]]
     assert card["tasks"] == [], "o serviço do David não vai para o card da Sofia"
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+
+
+# ------------------------------------------------------------- carrinho e checkout no Stripe (#236)
+def test_carrinho_sessao_e_produto_um_checkout_no_stripe_e_o_pedido_no_painel(servidor, navegador):
+    """#236, dono 14/10: "o sistema de carrinho e checkout ... Tudo testado, tudo funcionando. É, usando o
+    Stripe". Sessão da agenda (com o preço e o depósito do painel) + produto da loja no mesmo carrinho;
+    conta e piloto; um checkout só no Stripe (o falso); volta paga; o pedido e a sessão aparecem no painel.
+    No celular (390 e 360 px), nada rola para o lado e os botões têm 40 px."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from command_center.vitrine import paginas_site
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, email="italo@urace.us")
+    csrf = {"X-CSRF": next(c["value"] for c in adm.context.cookies() if c["name"] == "cc_csrf")}
+    r = adm.request.post(servidor + "/api/site/servicos", data={"name": "Arrive and Drive Baby Kart", "price": 719, "deposit": 400},
+                         headers=csrf)
+    assert r.ok, r.text()
+    # domingo à tarde, 5 vagas, só para este teste (os outros usam o sábado de manhã)
+    assert adm.request.put(servidor + "/api/site/agenda/semana", data=[{"weekday": 6, "period": "tarde", "open": True, "capacity": 5}],
+                           headers=csrf).ok
+    produto = next(p for p in paginas_site.dados("produtos.json")["produtos"]
+                   if not p["variations"] and p["price"] and p["in_stock"] and p["images"])
+    hoje = datetime.now(ZoneInfo("America/New_York")).date()
+    domingo = next(d for d in (hoje + timedelta(days=n) for n in range(3, 12)) if d.weekday() == 6)
+    rotulo = domingo.strftime("%A, %B ") + str(domingo.day) + ", available"
+    try:
+        v = navegador.new_page(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-For": "10.2.36.1"})
+        erros = []
+        v.on("pageerror", lambda e: erros.append(str(e)))
+        cliente_pela_api(v, servidor, "Carla Carrinho", "carla.carrinho.e2e@example.com", piloto="Caio Carrinho", ip="10.2.36.1")
+        # 1 · a sessão: kart, dia, turno → o preço do painel e o botão do carrinho
+        v.goto(site + "/services/arrive-and-drive/")
+        v.locator("label.kart", has_text="Baby Kart").click()
+        v.locator(".agenda-dia.aberto").first.wait_for()
+        for _ in range(3):
+            if v.get_by_role("button", name=rotulo).count():
+                break
+            v.get_by_role("button", name="Next month").click()
+        v.get_by_role("button", name=rotulo).click()
+        v.get_by_role("button", name=re.compile("^Afternoon")).click()
+        assert v.locator(".agenda-preco").inner_text() == "$719"
+        v.get_by_role("button", name=re.compile("^Add to cart")).click()
+        v.get_by_text("Added to your cart.").wait_for()
+        # 2 · o produto da loja
+        v.goto(site + f"/store/p/{produto['slug']}/")
+        v.get_by_role("button", name="Add to cart").click()
+        v.get_by_text("Added to your cart.").wait_for()
+        assert v.locator("[data-carrinho-n]").inner_text() == "2", "o contador do topo"
+        # 3 · o carrinho: o preço vem do servidor, o piloto da conta já vem escolhido
+        v.locator("a.carrinho-topo").click()
+        v.wait_for_url("**/cart/")
+        v.get_by_role("heading", name="Your cart", level=1).wait_for()
+        assert v.title() == "Your cart | URACE" and v.locator('meta[name="robots"]').get_attribute("content").startswith("noindex")
+        total = 719 + 400 + produto["price"]
+        pagar = v.get_by_role("button", name=re.compile(r"^Checkout · \$" + re.escape(f"{total:,.2f}")))
+        pagar.wait_for()
+        assert v.get_by_text("Refundable security deposit: $400.00").count() == 1
+        assert v.get_by_label("Driver").input_value() != ""
+        assert v.get_by_text("Signed in as").count() == 1
+        for largura in (390, 360):
+            v.set_viewport_size({"width": largura, "height": 800})
+            assert len([t for n, t in _cabecalhos(v) if n == 1]) == 1
+            r = v.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (largura, r)
+            menor = v.evaluate("""() => [...document.querySelectorAll('.carrinho button, .carrinho select, .carrinho input:not([type=radio]), .carrinho label.opcao, header a, header summary')]
+                .filter(e => e.offsetParent !== null).map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+                .filter(([h]) => h < 40)""")
+            assert not menor, (largura, menor)
+        # 4 · um checkout só no Stripe (o falso), com a linha do depósito
+        pagar.click()
+        v.wait_for_url(STRIPE.origem + "/pay/**")
+        assert f"US$ {total:.2f}" in v.content()
+        assert v.locator(".linha", has_text="Refundable security deposit").count() == 1
+        assert v.locator(".linha", has_text="Caio Carrinho").count() == 1
+        v.get_by_role("link", name="Pay").click()
+        v.get_by_role("heading", name="Thank you! Your order is confirmed").wait_for()
+        assert "/cart/thanks/?session_id=cs_test_e2e" in v.url
+        assert v.get_by_text("Booked.").count() == 1
+        assert v.evaluate("JSON.parse(localStorage.getItem('urace.carrinho') || '{}').itens.length") == 0, "o carrinho virou pedido"
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v.close()
+        assert not erros, erros
+        # 5 · o painel: a venda GANHO com o pedido e as linhas, e a sessão paga na agenda
+        abrir(adm, servidor, "/sales")
+        adm.get_by_text("Carla Carrinho").first.click()
+        adm.get_by_role("heading", name=re.compile(r"^Pedido do site #\d+")).wait_for()
+        assert adm.get_by_text("Caio Carrinho").count() >= 1 and adm.get_by_text(produto["name"]).count() >= 1
+        abrir(adm, servidor, "/site")
+        adm.get_by_text(re.compile(r"pago no site · pedido #\d+")).first.wait_for()
+        assert not adm.erros_js, adm.erros_js
+    finally:
+        adm.request.put(servidor + "/api/site/agenda/semana", data=[{"weekday": 6, "period": "tarde", "open": False, "capacity": 5}],
+                        headers=csrf)
+        adm.close()
 
 
 @pytest.mark.parametrize("largura", [1280, 390])

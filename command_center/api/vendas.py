@@ -219,7 +219,8 @@ def detalhe(oid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = D
                 e["detail"] = json.loads(e["detail"])
             except ValueError:
                 pass
-    return {"oportunidade": o, "eventos": evs,
+    from command_center.providers import carrinho        # #236: o pedido do site com as linhas
+    return {"oportunidade": o, "eventos": evs, "pedido": carrinho.do_painel(con, oid),
             # #204: o preço da tabela (do catálogo) e o card em que o fechamento cairia — se for de
             # outro piloto, a tela pergunta se é irmão
             "tabela": ref, "pode_liberar": gerente(u),

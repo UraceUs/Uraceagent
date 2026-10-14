@@ -2,7 +2,11 @@
  * (dias abertos e vagas, nada além). Escolheu kart, dia e turno → o botão leva para a
  * reserva (#164: sessão → conta → piloto → pagar) com tudo já marcado, e com a campanha de
  * onde a pessoa veio (utm_*, gclid, fbclid), para o marketing saber o que vendeu. Sem este
- * script, o botão leva para a mesma reserva, só que vazia. */
+ * script, o botão leva para a mesma reserva, só que vazia.
+ *
+ * #236: o kart escolhido é o serviço do painel com esse nome, e o preço mostrado é o do painel (#50:
+ * "já vai com aquele serviço e o preço que está lá"). "Add to cart" põe a sessão no carrinho do site,
+ * que paga tudo junto no Stripe (o piloto é escolhido no carrinho, depois do login). */
 (function () {
   'use strict'
   var raiz = document.querySelector('.agenda')
@@ -17,6 +21,9 @@
   var ir = raiz.querySelector('.agenda-ir')
   var resumo = raiz.querySelector('.agenda-resumo')
   var precoEl = raiz.querySelector('.agenda-preco')
+  var porNoCarrinho = raiz.querySelector('.agenda-carrinho')
+  var carrinhoOk = raiz.querySelector('.carrinho-ok')
+  var servicos = [], comCarrinho = false
   var SEMANA = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   var NOMES = { manha: 'Morning', tarde: 'Afternoon' }
   var dias = {}, meses = [], mes = null, dia = null, periodo = null, cfg = null, carregou = false
@@ -38,14 +45,21 @@
     var k = document.querySelector('input[name="kart"]:checked')
     return k ? { nome: k.value, preco: Number(k.getAttribute('data-preco')) } : null
   }
+  /** O serviço do painel deste kart: o único ativo com o nome do kart no nome. */
+  function servico(k) {
+    if (!k) return null
+    var achados = servicos.filter(function (s) { return s.name.toLowerCase().indexOf(k.nome.toLowerCase()) >= 0 })
+    return achados.length === 1 ? achados[0] : null
+  }
   function dataLonga(iso) {
     return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   }
 
   function atualizar() {
     var k = kart()
+    var s = servico(k)
     resumo.textContent = (dia ? dataLonga(dia) + (periodo ? ' · ' + NOMES[periodo] : '') + ' · ' : '') + (k ? k.nome : '') + ' · per driver'
-    precoEl.textContent = k ? usd(k.preco) : ''
+    precoEl.textContent = s ? usd(s.price) : k ? usd(k.preco) : ''
     var q = []
     if (dia) q.push('date=' + encodeURIComponent(dia))
     if (dia && periodo) q.push('period=' + encodeURIComponent(periodo))
@@ -56,7 +70,24 @@
     var pronto = !carregou || (dia && periodo)
     ir.textContent = !carregou ? 'Book online' : pronto ? 'Continue to booking' : 'Pick a day to continue'
     if (pronto) ir.removeAttribute('aria-disabled'); else ir.setAttribute('aria-disabled', 'true')
+    if (porNoCarrinho) {
+      porNoCarrinho.hidden = !(comCarrinho && s && window.uraceCarrinho)
+      porNoCarrinho.disabled = !(carregou && dia && periodo)
+      porNoCarrinho.textContent = s && s.deposit ? 'Add to cart · ' + usd(s.price) + ' + ' + usd(s.deposit) + ' deposit' : 'Add to cart'
+      ir.classList.toggle('btn-linha-escura', !porNoCarrinho.hidden)
+    }
   }
+  if (porNoCarrinho) porNoCarrinho.addEventListener('click', function () {
+    var s = servico(kart())
+    if (!s || !dia || !periodo || !window.uraceCarrinho) return
+    if (!window.uraceCarrinho.por({ tipo: 'sessao', servico: s.id, data: dia, turno: periodo })) {
+      carrinhoOk.textContent = 'Your cart is full.'
+      return
+    }
+    carrinhoOk.textContent = 'Added to your cart. '
+    var a = document.createElement('a'); a.href = '/cart/'; a.textContent = 'View cart and pay'
+    carrinhoOk.appendChild(a)
+  })
 
   function desenharTurnos() {
     turnos.textContent = ''
@@ -109,6 +140,12 @@
   })
   document.querySelectorAll('input[name="kart"]').forEach(function (r) { r.addEventListener('change', atualizar) })
   atualizar()
+
+  var apiServicos = raiz.getAttribute('data-servicos')
+  if (apiServicos) fetch(apiServicos, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+    .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
+    .then(function (d) { servicos = d.services || []; comCarrinho = !!d.cart; atualizar() })
+    .catch(function () { /* sem a lista do painel: fica o "Continue to booking" */ })
 
   fetch(api, { credentials: 'omit', headers: { Accept: 'application/json' } })
     .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
