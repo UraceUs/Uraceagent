@@ -6,11 +6,11 @@ Dono, 30/09 (issue #14): *"preciso que faça também nos nossos projetos de agor
 - Toda frente de trabalho é uma **issue** no GitHub (`UraceUs/Uraceagent`), com o pedido nas
   palavras do dono e o critério de "feito".
 - Cada issue tem o seu **branch** (`claude/issue-<n>-<assunto>`) saindo do branch do VPS,
-  `claude/configurar-open-claw-ooqo8x`, e o seu **PR** para ele, com `Closes #<n>` e o
+  `claude/commandcenter-vps`, e o seu **PR** para ele, com `Closes #<n>` e o
   template de `.github/pull_request_template.md`.
 - **Quem faz o merge é o Claude** (dono, 30/09: *"vc faz e garante que tudo vá para a vps"*),
-  e só com teste, lint e build verdes. Como o branch do VPS não é o padrão do GitHub, o
-  `Closes` não fecha a issue sozinho: feche à mão depois do merge.
+  e só com teste, lint e build verdes. Desde 14/10 o branch do VPS é o padrão do GitHub
+  (renomeado de `claude/configurar-open-claw-ooqo8x`), então o `Closes` fecha a issue no merge.
 - Depois do merge, o dono recebe **um bloco único** de deploy para o VPS.
 
 ## Qualidade (não entra PR sem isto)

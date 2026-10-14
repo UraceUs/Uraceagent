@@ -199,6 +199,38 @@ def rodar() -> list[str]:
     resposta = "Hi! Chase here from URACE. How old is the driver?"
     app._call_agent = lambda lead_id, msg: (resposta, textproc.extract_directives(resposta))
 
+    print("\n2d. Testar o robô pelo painel: mesma guarda, nada no Kommo (14/10)")
+    sessoes = []
+    resp_teste = ("Oi! Aqui é o Chase, da URACE.\nVeja tudo aqui: https://urace.us/urace-academy/\n"
+                  "É pra você ou pra outra pessoa?\n[[crm op=tags tags=\"x\"]]")
+    app._call_agent = lambda lead_id, msg, session_key=None: (
+        sessoes.append(session_key) or resp_teste, textproc.extract_directives(resp_teste))
+    escritas_antes, bots_antes = (len(k.notas), len(k.bots))
+    t = app.turno_de_teste("cc-teste01", "Oi, quanto custa?", "Eduardo")
+    check("roda numa sessão de teste própria, nunca na de um lead", sessoes == ["playground-cc-teste01"], sessoes)
+    check("primeira resposta do teste também sai sem link (mesma guarda)",
+          all("http" not in m for m in t["mensagens"]) and "link_na_primeira_resposta" in t["cortes"], t)
+    check("a diretiva aparece, mas não é executada nem vai ao lead",
+          t["diretivas"] and not any("[[" in m for m in t["mensagens"]), t)
+    check("balões separados", t["mensagens"] == ["Oi! Aqui é o Chase, da URACE.", "É pra você ou pra outra pessoa?"],
+          t["mensagens"])
+    t2 = app.turno_de_teste("cc-teste01", "8 anos", "Eduardo")
+    check("da segunda em diante o link passa", any("urace-academy" in m for m in t2["mensagens"]), t2)
+    check("nada escrito no Kommo nem disparado", (len(k.notas), len(k.bots)) == (escritas_antes, bots_antes),
+          (k.notas, k.bots))
+    t3 = app.turno_de_teste("cc-teste01", "Faria se fosse mais barato")
+    check("objeção de preço no teste mostra a oferta de call da ponte",
+          any("calendar.app.google" in m for m in t3["mensagens"]) and "Objeção" in t3["nota"], t3)
+    t4 = app.turno_de_teste("cc-teste02", "Faria se fosse mais barato")
+    check("objeção logo na 1ª mensagem: sai sem link e sem a chamada pendurada",
+          t4["mensagens"] and all("http" not in m and not m.rstrip().endswith(":") for m in t4["mensagens"]), t4)
+    try:
+        app.turno_de_teste("../x", "oi")
+        check("sessão inválida é recusada", False)
+    except Exception as exc:
+        check("sessão inválida é recusada", getattr(exc, "status_code", 0) == 400, exc)
+    app._call_agent = lambda lead_id, msg, session_key=None: (resposta, textproc.extract_directives(resposta))
+
     print("\n3. Fora do escopo: só organiza")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
     antes = len(k.bots)

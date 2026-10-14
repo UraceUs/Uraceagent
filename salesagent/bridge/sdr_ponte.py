@@ -293,12 +293,18 @@ def limpar(lead_id: int, texto: str) -> str:
     um do playbook de 13/10: sem link na primeira resposta, um link e uma
     pergunta por mensagem."""
     primeira = not state.get_conversation(lead_id).get("last_outbound_at")
-    limpo, violacoes = estilo.um_ativo(texto, primeira)
-    limpo, mais = estilo.aplicar(limpo)
-    violacoes += mais
+    limpo, violacoes = limpar_texto(texto, primeira)
     if violacoes:
         state.log("gate", lead_id, "SDR estilo: " + ", ".join(violacoes))
     return limpo
+
+
+def limpar_texto(texto: str, primeira: bool) -> tuple[str, list[str]]:
+    """A guarda sem estado: regra de um (link e pergunta) e estilo. Usada pela
+    resposta real e pelo teste do painel, para os dois nunca divergirem."""
+    limpo, violacoes = estilo.um_ativo(texto, primeira)
+    limpo, mais = estilo.aplicar(limpo)
+    return limpo, violacoes + mais
 
 
 def _primeira_vez(chave: str) -> bool:

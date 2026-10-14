@@ -32,6 +32,7 @@ import sqlite3
 import subprocess
 import textwrap
 import time
+import urllib.error
 import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -516,6 +517,57 @@ def pausa_trocar(lead_id: int, dados: PausaIn, request: Request, u=Depends(auth.
             detail={"pausada": dados.pausada, "motivo": motivo}, ip=auth._ip(request))
     con.commit()
     return {"lead_id": lead_id, "pausada": dados.pausada, "total": len(d)}
+
+
+# ------------------------------------------------------------------ teste no painel (14/10)
+RX_SESSAO = re.compile(r"^[a-z0-9-]{6,40}$")
+
+
+def _chave_da_ponte():
+    """A AGENT_API_KEY da ponte, lida do bridge.env na hora (nunca sai daqui, nunca é logada)."""
+    f = _dir() / "bridge.env"
+    if f.exists():
+        for linha in f.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"\s*AGENT_API_KEY\s*=\s*['\"]?([^'\"\s]+)", linha)
+            if m:
+                return m.group(1)
+    return ""
+
+
+class TesteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sessao: str
+    texto: str
+    nome: str | None = None
+
+
+@r.post("/teste")
+def teste(dados: TesteIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+          con: sqlite3.Connection = Depends(get_db)):
+    """Conversa de treino com o robô: mesma persona e mesma guarda da resposta real, sem Kommo e sem
+    enviar nada a ninguém. A ponte devolve os balões e o que ela faria (rota, diretivas, cortes)."""
+    texto = " ".join((dados.texto or "").split())[:MAX_TEXTO]
+    if not RX_SESSAO.match(dados.sessao or "") or not texto:
+        raise HTTPException(400, "Escreva uma mensagem.")
+    chave = _chave_da_ponte()
+    if not chave:
+        raise HTTPException(503, "A ponte do robô não está configurada neste servidor.")
+    corpo = json.dumps({"sessao": dados.sessao, "texto": texto,
+                        "nome": (dados.nome or "").strip()[:60]}).encode()
+    pedido = urllib.request.Request(PONTE + "/tools/playground", data=corpo, method="POST",
+                                    headers={"Content-Type": "application/json", "X-Api-Key": chave})
+    try:
+        with urllib.request.urlopen(pedido, timeout=150) as resp:
+            resposta = json.loads(resp.read() or b"{}")
+    except urllib.error.HTTPError as exc:
+        raise HTTPException(502, f"O robô recusou o teste ({exc.code}).") from None
+    except Exception:                                        # noqa: BLE001 — fora do ar é resposta
+        raise HTTPException(503, "O robô não respondeu. Confira se a ponte está no ar.") from None
+    auditar(con, "sdr.teste", f"user:{u['id']}", user_id=u["id"], entity_type="sdr_teste",
+            entity_id=dados.sessao, detail={"texto": texto[:200], "rota": resposta.get("rota")},
+            ip=auth._ip(request))
+    con.commit()
+    return {k: resposta.get(k) for k in ("mensagens", "rota", "motivo", "diretivas", "cortes", "nota")}
 
 
 # ------------------------------------------------------------------ o painel

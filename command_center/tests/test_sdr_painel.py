@@ -232,3 +232,53 @@ def test_quem_atende_pausa_e_reativa_a_ia_numa_conversa(cli, pasta):
     arq.write_text("{ quebrado", encoding="utf-8")
     assert cli.get(B + "/sdr/pausas").json() == {"itens": []}, "arquivo ilegível não derruba o painel"
     arq.unlink()
+
+
+# ------------------------------------------------------------------ testar o robô (14/10)
+def test_testar_o_robo_pelo_painel_sem_kommo(cli, pasta, monkeypatch):
+    """Conversa de treino: o painel repassa à ponte com a chave do bridge.env, devolve os balões
+    e o que a ponte faria, e registra na auditoria sem a chave."""
+    (pasta / "bridge.env").write_text("SDR_MODO=atender\nAGENT_API_KEY=chave-secreta-xyz\n", encoding="utf-8")
+    pedidos = []
+
+    class _Resp:
+        def __init__(self, corpo):
+            self.corpo = corpo
+
+        def read(self):
+            return json.dumps(self.corpo).encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def _urlopen(req, timeout=0):
+        pedidos.append((req.full_url, req.headers.get("X-api-key"), json.loads(req.data)))
+        return _Resp({"ok": True, "mensagens": ["Oi! Aqui é o Chase, da URACE.", "É pra você ou pra outra pessoa?"],
+                      "rota": "responder", "motivo": None, "diretivas": [], "cortes": [], "nota": ""})
+
+    monkeypatch.setattr(sdr.urllib.request, "urlopen", _urlopen)
+    con = conectar()
+    if not um(con, "SELECT id FROM users WHERE email='ver@urace.us'"):
+        auth.criar_usuario(con, "ver@urace.us", "Só vê", "VIEWER", SENHA)
+        con.commit()
+    con.close()
+    h = entra(cli, "ver@urace.us")
+    assert cli.post(B + "/sdr/teste", json={"sessao": "cc-abc123", "texto": "oi"}, headers=h).status_code == 403
+
+    h = entra(cli, "op@urace.us")
+    r = cli.post(B + "/sdr/teste", json={"sessao": "cc-abc123", "texto": "  Oi,   quanto custa? "}, headers=h)
+    assert r.status_code == 200, r.text
+    assert r.json()["mensagens"] == ["Oi! Aqui é o Chase, da URACE.", "É pra você ou pra outra pessoa?"]
+    url, chave, corpo = pedidos[-1]
+    assert url.endswith("/tools/playground") and chave == "chave-secreta-xyz"
+    assert corpo == {"sessao": "cc-abc123", "texto": "Oi, quanto custa?", "nome": ""}
+    a = um(conectar(), "SELECT detail FROM audit_logs WHERE event='sdr.teste' ORDER BY id DESC LIMIT 1")
+    assert "quanto custa" in a["detail"] and "chave-secreta" not in a["detail"], "a chave nunca vai pra auditoria"
+    assert cli.post(B + "/sdr/teste", json={"sessao": "../x", "texto": "oi"}, headers=h).status_code == 400
+    assert cli.post(B + "/sdr/teste", json={"sessao": "cc-abc123", "texto": "  "}, headers=h).status_code == 400
+
+    (pasta / "bridge.env").write_text("SDR_MODO=atender\n", encoding="utf-8")
+    assert cli.post(B + "/sdr/teste", json={"sessao": "cc-abc123", "texto": "oi"}, headers=h).status_code == 503

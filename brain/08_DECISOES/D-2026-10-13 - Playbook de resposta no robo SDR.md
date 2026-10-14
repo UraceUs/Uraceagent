@@ -149,3 +149,15 @@ mandou duas respostas para "Oi" + "Quanto custa?". O dono pediu:
 - O texto de cada toque é escrito pelo agente com a situação real do lead
   (o que perguntou, o piloto, o que falta), em 2 ou 3 linhas curtas.
 - A margem da janela caiu de 60 para 30 min para o toque de 23 h caber.
+
+## 14/10: "Testar o robô" no Command Center
+
+Para ajustar o tom sem Instagram, sem lead de teste e sem comandos no VPS, a
+página Robô SDR ganhou um chat de treino (OPERATOR+). A mensagem vai do painel
+para a ponte (`POST /tools/playground`, com a chave do `bridge.env`), que roda
+a mesma persona, as mesmas regras de rota (objeção, passar para a equipe, não é
+lead) e a mesma guarda de estilo, e devolve os balões. Nada vai ao Kommo, nada é
+enviado a ninguém, e as diretivas `[[...]]` só aparecem na tela. Cada conversa
+de treino é uma sessão própria do OpenClaw (`playground-<id>`); "Nova conversa"
+começa outra. Ideia tirada do repositório fazer-ai/agents (o playground deles);
+migrar para aquela plataforma não faz sentido, porque ela não fala com o Kommo.
