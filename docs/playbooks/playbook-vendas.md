@@ -7,11 +7,11 @@
 > [`docs/playbooks/playbook-geral.md`](playbook-geral.md). Aqui só entra o que é de venda.
 >
 > **De onde saiu:** tudo foi conferido no código (`command_center/api/vendas.py`, `rotas.py`,
-> `site_publico.py`, `crm.py`, `sdr.py`, `suits.py`, `mcp_operar.py`, `providers/cobranca_agenda.py`,
-> `providers/venda_site.py`) e nos processos do cérebro (`brain/10_PROCESSOS/`). Quando o código e
+> `site_publico.py`, `crm.py`, `sdr.py`, `suits.py`, `mcp_operar.py`, `google.py`, `providers/cobranca_agenda.py`,
+> `providers/venda_site.py`, `providers/google_agenda.py`) e nos processos do cérebro (`brain/10_PROCESSOS/`). Quando o código e
 > um documento antigo discordam, vale o código, e a diferença está dita.
 >
-> Atualizado em 13/10/2026. Painel: https://ops.urace.us/ops/
+> Atualizado em 14/10/2026. Painel: https://ops.urace.us/ops/
 
 ---
 
@@ -20,7 +20,7 @@
 1. Para quem é e como usar
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
-4. Oportunidade e venda: abrir, ligar, fechar, reenviar
+4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
 5. Agendamentos do site
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
@@ -311,6 +311,99 @@ administrador muda em Políticas da IA.
 Atenção: o **fechar pela IA da ficha** liga todos os passos e não confere o preço da tabela.
 Confira serviço, valor, idade e e-mail na ficha antes de aprovar.
 
+### 4.8 O seu Google Calendar (#220)
+
+Dono, 14/10: *"conectar ao Google Calendar e aí coloca um login com o Google, que aí ele consegue
+logar com a conta dele do Google"*. Cada pessoa de vendas liga o **próprio** Google Calendar, com
+**qualquer conta Google** (não precisa ser @urace.us), e funciona nos dois sentidos.
+
+**Conectar (uma vez):**
+
+1. **Agenda de vendas** (`/ops/sales/agenda`) ou **Minha conta** (`/ops/account`) › cartão
+   **Google Calendar** › **Conectar ao Google Calendar**.
+2. Abre a tela do Google: escolha a conta, confira que o acesso à **agenda** está marcado e toque
+   em **Permitir** (ou **Continuar**).
+3. Você volta à Agenda de vendas com o aviso **"Google Calendar conectado."** e o cartão mostra
+   **Conectado como** a conta escolhida.
+
+Botão cinza com o texto *"O gerente ainda não configurou o acesso ao Google…"*: falta o passo da
+gerência (abaixo). Não há nada a fazer do seu lado até lá.
+
+**O que vai para o Google (Painel → Google):**
+
+| No painel | No seu Google Calendar |
+|---|---|
+| retorno marcado numa oportunidade **sua** (ligação, **Retorno**, IA da ficha, editar a ficha) | evento **"URACE · o que fazer: nome"**, 30 minutos, no horário da Flórida, com o link da oportunidade |
+| mudou a data ou o "o que fazer" | o **mesmo** evento muda |
+| perdido, sem interesse, venda fechada ou o retorno foi limpo | o evento que o painel criou **sai** |
+| oportunidade passou para outra pessoa | sai do seu calendário e vai para o da outra pessoa (se ela tiver conectado) |
+
+- Telefone e e-mail do cliente **não** vão para o Google: só o nome, o que fazer, o serviço e o link.
+- Retorno só com a data (sem hora) vira evento de dia inteiro.
+- O painel só mexe no evento que **ele** criou (guarda o id). Compromisso que você marcou no Google
+  nunca é alterado nem apagado. Mude a data **no painel**: mudar o evento do painel direto no
+  Google não volta para a oportunidade, e o painel acerta o evento de novo.
+- Caiu a internet ou o Google: a venda segue normal, o cartão mostra o erro e o painel tenta de novo
+  sozinho a cada 15 minutos. **Sincronizar agora** força na hora.
+
+**O que volta (Google → Painel):** a Agenda de vendas mostra os **seus** compromissos do Google dos
+próximos 7 dias, só leitura, com a etiqueta **Google** (hora, título; **livre** quando o evento não
+deixa você ocupado). Retorno que cai em cima de um compromisso ocupado ganha a etiqueta
+**conflito no Google**. Ninguém mais vê a sua agenda: nem gerente, nem a IA.
+
+**Desconectar:** cartão Google Calendar › **Desconectar**. O painel revoga o acesso no Google e
+apaga o seu token; os eventos que já estão no seu calendário ficam lá (apague à mão se quiser).
+Conectar e desconectar ficam na auditoria (`google.connect`, `google.disconnect`), com a conta
+Google, nunca com o token.
+
+**Só pelo navegador, pela própria pessoa.** A IA, o Claude pelo MCP e a chave de API não conectam
+nem desconectam (resposta 403). Mecânico e coach não têm o cartão.
+
+#### Para a gerência: ligar o Google Calendar na VPS (uma vez)
+
+O painel usa um **cliente OAuth do tipo "Aplicativo da Web"** do Google Cloud (o cliente que a VPS
+já usa para o Gmail é do tipo Desktop e **não** serve aqui). O segredo fica só na VPS: nunca no
+chat, no repositório ou em e-mail.
+
+1. Em https://console.cloud.google.com, no projeto da URACE (ou num novo), **APIs e serviços ›
+   Biblioteca** › ative a **Google Calendar API**.
+2. **APIs e serviços › Tela de consentimento OAuth** (no console novo: **Google Auth Platform ›
+   Branding / Público-alvo / Acesso a dados**):
+   - Tipo de usuário: **Externo** (é o que deixa entrar qualquer conta Google, não só @urace.us).
+   - Nome do app: **URACE Command Center**; e-mail de suporte e do desenvolvedor: o da URACE.
+   - Domínio autorizado: **urace.us**. Página inicial: `https://ops.urace.us/ops/`.
+     Política de privacidade: `https://ops.urace.us/legal/privacy.html`; termos:
+     `https://ops.urace.us/legal/eula.html`.
+   - Escopos: `openid`, `.../auth/userinfo.email` e `https://www.googleapis.com/auth/calendar.events`.
+3. **Credenciais › Criar credenciais › ID do cliente OAuth** › tipo **Aplicativo da Web**:
+   - Nome: `Command Center - Agenda de vendas`.
+   - **URIs de redirecionamento autorizados:** `https://ops.urace.us/ops/api/google/callback`
+     (exatamente assim, sem barra no fim).
+   - Criar › **Fazer download do JSON**. O arquivo começa com `{"web": {...`.
+4. Copie o arquivo para a VPS **pelo terminal** (nunca pelo chat) e proteja:
+   ```
+   scp client_secret_*.json ubuntu@<vps>:~/.urace/google-web-credentials.json
+   ssh ubuntu@<vps> 'chmod 600 ~/.urace/google-web-credentials.json'
+   ```
+   Outro caminho? Ponha `CC_GOOGLE_WEB_CREDENTIALS=/caminho/do/arquivo.json` no
+   `~/.urace/adminai.env`. O painel lê o arquivo a cada pedido: **não precisa reiniciar**.
+5. O cofre precisa estar ligado (`CC_COFRE_CHAVE` no `adminai.env`): os tokens de cada pessoa são
+   cifrados com essa chave. Sem ela, o cartão diz que falta.
+6. Abra a Agenda de vendas: o botão **Conectar ao Google Calendar** fica azul.
+
+**Testing ou publicado?** Na tela de consentimento, o "Status de publicação":
+
+| | **Em teste (Testing)** | **Em produção, sem verificação** |
+|---|---|---|
+| Quem entra | só os e-mails cadastrados em **Usuários de teste** (até 100) | qualquer conta Google |
+| Aviso na tela do Google | "O Google não verificou este app", com **Continuar** | **"O Google não verificou este app"**: a pessoa clica em **Avançado › Acessar URACE Command Center** |
+| Validade da conexão | **7 dias**: depois o Google recusa a renovação e o cartão pede **Conectar de novo** | não expira sozinha (só se a pessoa revogar, trocar a senha ou ficar 6 meses sem usar) |
+| Limite | 100 usuários de teste | 100 contas no total enquanto o app não for verificado |
+
+Para a equipe de vendas (poucas pessoas), **publicar sem verificação** é o caminho prático: cada um
+vê o aviso uma vez. A verificação do Google (para tirar o aviso e o limite) pede vídeo e revisão do
+escopo `calendar.events` e só vale a pena se o número de contas crescer.
+
 ---
 
 ## 5. Agendamentos do site
@@ -544,6 +637,8 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | conversas do Kommo | `GET /ops/api/crm/inbox` | — | todos |
 | waivers | `GET /ops/api/waivers` | — | todos |
 | estado do robô SDR | `GET /ops/api/sdr/painel` | — | todos |
+| o seu Google Calendar conectado? | `GET /ops/api/google/status` | — | Operador |
+| os seus compromissos do Google | `GET /ops/api/google/events` | consulta `{"de": "2026-10-20", "ate": "2026-10-27"}` (dias da Flórida, até 62) | Operador |
 
 ### Fazer
 
@@ -571,6 +666,10 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | ligar lead ao card | `POST /ops/api/crm/leads/{id}/link` | `{"client_id": 123}` | Operador | não |
 | relatar erro do robô | `POST /ops/api/sdr/relatos` | `{"tipo": "respondeu_errado", "texto": "…", "lead_ref": "id do lead"}` | todos | não |
 | IA num pedido de suit | `POST /ops/api/suits/{id}/ia` | `{"ligada": false}` | Operador | não |
+| acertar agora os retornos no Google da pessoa | `POST /ops/api/google/sync` | — | Operador | não |
+
+Conectar e desconectar o Google Calendar (`/ops/api/google/connect`, `/disconnect`) **não** são da
+IA: é a pessoa, no navegador (seção 4.8).
 
 `product` aceita: Urace Daily, Lead and Follow, Academy, Corrida, Arrive and Drive, Summer Camp,
 Test Drive. `category` aceita: Using Own Kart, Baby Kart, 4 stroke, 2 stroke, Adult Shifter, F4.
@@ -736,3 +835,10 @@ instrução à gerência.
 | Unir: "Esses dois cards não se unem: …" | são drivers ou contas diferentes do site: não una |
 | Nova tarefa: "A data cai numa segunda-feira…" | escolha outra data |
 | Nova tarefa: "Piloto menor de idade: o responsável é obrigatório…" | preencha o responsável |
+| Google: botão cinza, "O gerente ainda não configurou o acesso ao Google…" | é da gerência: seção 4.8, "Para a gerência" |
+| Google: "O arquivo na VPS é de um cliente OAuth do tipo Desktop…" | a gerência cria um cliente do tipo **Aplicativo da Web** e troca o arquivo |
+| Google: "A volta do Google não foi aceita…" | o link venceu (10 min), já foi usado ou abriu em outro navegador: toque em Conectar de novo, no mesmo navegador |
+| Google: "O Google não deu a permissão de agenda…" | conecte de novo e deixe marcado o acesso ao Google Calendar |
+| Google: "O Google recusou a renovação: conecte de novo." | o acesso expirou (no modo Testing, a cada 7 dias) ou foi revogado: **Conectar de novo** |
+| Google: "Esta conta não está na lista de testadores" (tela do Google) | o app está em Testing: a gerência põe o seu e-mail em Usuários de teste, ou publica o app |
+| Google: "Error 400: redirect_uri_mismatch" (tela do Google) | o redirecionamento do cliente OAuth não está igual a `https://ops.urace.us/ops/api/google/callback`: é da gerência |

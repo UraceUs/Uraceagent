@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 13/10/2026. Tudo aqui foi conferido no código do painel. Se a tela mudar e este
+> Atualizado em 14/10/2026. Tudo aqui foi conferido no código do painel. Se a tela mudar e este
 > texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
 
 ---
@@ -142,7 +142,7 @@ pedem acesso de operador.
 | Hoje | **Precisa de atenção** | `/ops/attention` | a fila do que a IA não resolveu sozinha, do mais grave para o menos | todos |
 | Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists. Mostra **só o ativo**: serviço cancelado ("CANCELLED - …") ou excluído não aparece. Tudo em **cards**: o treino é o card do cliente; a corrida é um card geral com um card por cliente inscrito | todos |
 | Comercial | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
-| Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação | operador+ |
+| Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação; o cartão **Google Calendar** liga o calendário Google de cada pessoa (os retornos vão para lá e os compromissos dela aparecem aqui). Passo a passo no [playbook de vendas](playbook-vendas.md), 4.8 | operador+ |
 | Comercial | **Chat do Kommo** | `/ops/crm/chat` | a conversa do lead dentro do painel | todos |
 | Comercial | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
 | Comercial | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |
@@ -174,7 +174,7 @@ pedem acesso de operador.
 | Administrativo | **Políticas da IA** | `/ops/policies` | o que a IA faz sozinha, o que pede confirmação, aprovação ou está bloqueado | administrador |
 | Administrativo | **Usuários** | `/ops/users` | criar, desativar, mudar papel e cargo; chaves de API | administrador |
 | Administrativo | **Cofre** | `/ops/cofre` | logins e senhas da URACE, cifrados. A IA não tem acesso | só acesso livre |
-| (menu do nome) | **Minha conta** | `/ops/account` | trocar a própria senha | todos |
+| (menu do nome) | **Minha conta** | `/ops/account` | trocar a própria senha; quem vende também conecta o próprio Google Calendar aqui | todos |
 
 ### Menu do box (mecânico e coach)
 

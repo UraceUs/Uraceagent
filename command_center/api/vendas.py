@@ -19,7 +19,7 @@ import json
 import os
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
@@ -109,6 +109,13 @@ def dia_local(iso):
     if d.tzinfo is None:
         d = d.replace(tzinfo=timezone.utc)
     return d.astimezone(_fuso()).date().isoformat()
+
+
+def _google(tarefas: BackgroundTasks, oid):
+    """#220: o retorno vai para o Google Calendar do closer conectado — depois da resposta, sem
+    atrasar a tela; falhou, o laço automático tenta de novo."""
+    from command_center.providers import google_agenda
+    tarefas.add_task(google_agenda.sincronizar_em_segundo_plano, oid)
 
 
 def _aplicando(sistema, fn, *a, **kw):
@@ -239,7 +246,7 @@ def _campos(d: OppIn):
 
 
 @r.post("", status_code=201)
-def criar(dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def criar(dados: OppIn, request: Request, tarefas: BackgroundTasks, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Nova oportunidade: o closer cria durante a ligação, em segundos."""
     campos = _campos(dados)
     if not campos.get("name"):
@@ -257,11 +264,13 @@ def criar(dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con
     auditar(con, "sales.create", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
             detail={"nome": campos.get("name"), "origem": campos.get("source")}, ip=auth._ip(request))
     con.commit()
+    if campos.get("next_at"):
+        _google(tarefas, oid)
     return {"id": oid, "ja_e_cliente": ja and {"id": ja["id"], "nome": ja["name"]}}
 
 
 @r.patch("/{oid}")
-def editar(oid: int, dados: OppIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def editar(oid: int, dados: OppIn, request: Request, tarefas: BackgroundTasks, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     o = _opp(con, oid, u)
     campos = _campos(dados)
     if campos.get("client_id") and not um(con, "SELECT id FROM clients WHERE id=?", (campos["client_id"],)):
@@ -273,6 +282,8 @@ def editar(oid: int, dados: OppIn, request: Request, u=Depends(auth.exige("OPERA
     auditar(con, "sales.update", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
             detail=mudou, ip=auth._ip(request))
     con.commit()
+    if "next_at" in mudou or "next_what" in mudou or "name" in mudou or "service" in mudou:
+        _google(tarefas, oid)
     return {"ok": True, "mudou": sorted(mudou)}
 
 
@@ -286,7 +297,7 @@ class LigacaoIn(BaseModel):
 
 
 @r.post("/{oid}/call")
-def ligacao(oid: int, dados: LigacaoIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def ligacao(oid: int, dados: LigacaoIn, request: Request, tarefas: BackgroundTasks, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Registrar a ligação (ditada ou digitada): resultado, o que foi dito e o próximo passo."""
     o = _opp(con, oid, u)
     if dados.resultado not in RESULTADOS:
@@ -308,6 +319,7 @@ def ligacao(oid: int, dados: LigacaoIn, request: Request, u=Depends(auth.exige("
     auditar(con, "sales.call", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
             detail={"resultado": dados.resultado, "etapa": campos.get("stage")}, ip=auth._ip(request))
     con.commit()
+    _google(tarefas, oid)
     return {"ok": True, "etapa": campos.get("stage", o["stage"]), "next_at": campos.get("next_at", o["next_at"])}
 
 
@@ -317,11 +329,12 @@ class RetornoIn(BaseModel):
 
 
 @r.post("/{oid}/next")
-def retorno(oid: int, dados: RetornoIn, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def retorno(oid: int, dados: RetornoIn, tarefas: BackgroundTasks, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     _opp(con, oid, u)
     atualizar(con, "opportunities", oid, next_at=dados.quando, next_what=_limpa(dados.o_que) or "retorno", updated_at=agora())
     _ev(con, oid, "next", f"Retorno marcado: {quando_pt(dados.quando)}", _limpa(dados.o_que), f"user:{u['id']}")
     con.commit()
+    _google(tarefas, oid)
     return {"ok": True}
 
 
@@ -347,7 +360,7 @@ class EtapaIn(BaseModel):
 
 
 @r.post("/{oid}/stage")
-def mover(oid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def mover(oid: int, dados: EtapaIn, request: Request, tarefas: BackgroundTasks, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     o = _opp(con, oid, u)
     if dados.etapa not in ETAPAS:
         raise HTTPException(400, f"Etapa inválida. Use: {', '.join(ETAPAS)}")
@@ -363,6 +376,7 @@ def mover(oid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("OPER
     auditar(con, "sales.stage", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
             detail={"de": o["stage"], "para": dados.etapa, "motivo": _limpa(dados.motivo)}, ip=auth._ip(request))
     con.commit()
+    _google(tarefas, oid)
     return {"ok": True}
 
 
@@ -566,7 +580,7 @@ def _extra(con, o, e: ExtraIn, user_id):
 
 
 @r.post("/{oid}/close")
-def fechar(oid: int, dados: FecharIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def fechar(oid: int, dados: FecharIn, request: Request, tarefas: BackgroundTasks, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Fechar venda: uma tela, um botão. Cada passo ligado roda aqui e o resultado fica gravado.
     Falha de um passo não impede os outros; a tela mostra o que faltou, com o botão manual."""
     o = _opp(con, oid, u)
@@ -630,6 +644,7 @@ def fechar(oid: int, dados: FecharIn, request: Request, u=Depends(auth.exige("OP
             detail={"valor": o["amount"], "servico": o["service"], "passos": {p["passo"]: p["ok"] for p in saida}},
             ip=auth._ip(request))
     con.commit()
+    _google(tarefas, oid)
     return {"ok": True, "etapa": etapa, "fechamento": fechado, "client_id": o["client_id"]}
 
 

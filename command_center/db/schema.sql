@@ -1893,6 +1893,48 @@ CREATE TABLE IF NOT EXISTS sdr_relatos (
 );
 CREATE INDEX IF NOT EXISTS sdr_relatos_status ON sdr_relatos(status, id);
 
+-- #220 (dono, 13/10 e 14/10): cada vendedor conecta o PRÓPRIO Google Calendar, nos dois sentidos.
+-- Uma linha por usuário. Os tokens ficam cifrados com a chave do cofre (AES-GCM, "v1:"); nunca em
+-- claro, nunca em log. Desconectar apaga a linha da própria pessoa (é o único "apagar" daqui).
+CREATE TABLE IF NOT EXISTS google_conexoes (
+  user_id       INTEGER PRIMARY KEY REFERENCES users(id),
+  google_email  TEXT,                         -- a conta Google que a pessoa escolheu (qualquer uma)
+  status        TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo','expirado')),
+  scope         TEXT,
+  access_enc    TEXT,
+  refresh_enc   TEXT,
+  expires_at    TEXT,                         -- vencimento do access token (UTC)
+  key_fp        TEXT,                         -- impressão da chave do cofre que cifrou
+  connected_at  TEXT,
+  updated_at    TEXT,
+  last_sync_at  TEXT,
+  last_error    TEXT                          -- a última falha, sem token nem corpo
+);
+-- O state do OAuth: assinado, de uso único, vence em minutos; só o hash. O verificador PKCE, cifrado.
+CREATE TABLE IF NOT EXISTS google_oauth_states (
+  state_hash    TEXT PRIMARY KEY,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  verifier_enc  TEXT NOT NULL,
+  nonce_hash    TEXT NOT NULL,                -- o cookie do navegador que começou a conexão
+  expires_at    TEXT NOT NULL,
+  used_at       TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- O evento que o PAINEL criou para o retorno de cada oportunidade. Só por este id se muda ou remove
+-- evento no Google: evento que a pessoa criou lá nunca é tocado.
+CREATE TABLE IF NOT EXISTS google_cal_events (
+  opp_id        INTEGER PRIMARY KEY REFERENCES opportunities(id),
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  google_email  TEXT,
+  event_id      TEXT NOT NULL,
+  signature     TEXT,                         -- hash do corpo enviado: igual = nada a fazer
+  next_at       TEXT,
+  status        TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo','removido','orfao')),
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS google_cal_events_user ON google_cal_events(user_id, status);
+
 -- ------------------------------------------- convite da waiver por e-mail (#135)
 -- Dono, 14/10: "vai ser por e-mail para o adulto ou para o responsável assinar aquela waiver.
 -- Tanto para adulto quanto para responsável, o e-mail que tiver no card vai receber isso."
