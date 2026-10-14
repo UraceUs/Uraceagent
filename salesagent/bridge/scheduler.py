@@ -45,10 +45,20 @@ from state import db, log, transition, update_conversation
 _TZ = zoneinfo.ZoneInfo(BUSINESS_TZ)
 
 # Ofertas de cadência por trilha, em segundos a partir do envio anterior.
+# Cadência do SDR (dono, 14/10): o lead parou de responder ->
+#   1º toque em ~1h30: sugerir a call de 15 min com o nosso time (link);
+#   2º toque 23 h depois da nossa mensagem: reativar ("seguimos à disposição,
+#   ficou alguma dúvida?"). Os dois cabem na janela de 24 h da Meta.
+# Depois disso a janela fecha: vira tarefa para uma pessoa, sem fechar o card.
+PRIMEIRO_TOQUE_S = 90 * 60
+SEGUNDO_TOQUE_APOS_S = 23 * 3600
 TRACKS = {
-    "initial": [2 * 3600, 24 * 3600, 3 * 86400, 7 * 86400],
-    "link_sent": [10 * 60, 24 * 3600, 3 * 86400, 7 * 86400],
+    "initial": [PRIMEIRO_TOQUE_S, SEGUNDO_TOQUE_APOS_S - PRIMEIRO_TOQUE_S],
+    "link_sent": [PRIMEIRO_TOQUE_S, SEGUNDO_TOQUE_APOS_S - PRIMEIRO_TOQUE_S],
 }
+# Tag do Kommo por toque: a equipe filtra quem recebeu qual follow-up.
+TAGS_DO_TOQUE = ["followup:1-call", "followup:2-reativacao"]
+TAG_SEM_RESPOSTA = "followup:sem-resposta-24h"
 
 # Injetadas pelo app.py no startup (evita import circular): a composição usa
 # o agente com a sessão do lead; a entrega usa o circuito do Salesbot.
@@ -58,6 +68,7 @@ notify_fn = None       # notify_fn(text) -> None  (WhatsApp interno)
 task_fn = None         # task_fn(lead_id, text, due_ts) -> None (tarefa Kommo)
 note_fn = None         # note_fn(lead_id, text) -> None (nota Kommo)
 rescue_fn = None       # rescue_fn(conv) -> bool (entrega a resposta devida ao lead)
+tag_fn = None          # tag_fn(lead_id, [tags]) -> None (tags no card, só somam)
 close_fn = None        # close_fn(lead_id) -> None (SDR: card vai para PERDIDO / NÃO QUALIFICADO)
 handoff_retry_fn = None  # handoff_retry_fn() -> int (14/10: reenvia ao Command Center o que ficou na fila)
 
@@ -256,6 +267,11 @@ def _fire_followup(conv: dict, now: int) -> None:
                 task_fn(lead_id, f"Enviar follow-up ao lead: {text[:120]}", now + 3600)
         log("followup", lead_id,
             f"{track} #{attempt + 1} {'entregue' if delivered else 'fallback nota/tarefa'}")
+        if delivered and tag_fn and track in TRACKS and attempt < len(TAGS_DO_TOQUE):
+            try:
+                tag_fn(lead_id, [TAGS_DO_TOQUE[attempt]])
+            except Exception as exc:  # tag é registro, nunca derruba o toque
+                log("error", lead_id, f"tag do follow-up: {exc}")
 
     # próximo passo da trilha
     if track == "scheduled":
@@ -266,16 +282,18 @@ def _fire_followup(conv: dict, now: int) -> None:
     if nxt < len(delays):
         update_conversation(lead_id, followup_attempts=nxt,
                             next_followup_at=now + delays[nxt])
-    else:  # trilha esgotada
-        if track == "initial":
-            transition(lead_id, "CLOSED", "trilha initial esgotada sem resposta")
-            if close_fn:
-                close_fn(lead_id)
-            if note_fn:
-                note_fn(lead_id, "[follow-up] trilha de classificação esgotada — lead fechado")
-        else:  # link_sent: humano decide manter ou fechar
-            if task_fn:
-                task_fn(lead_id, "Follow-ups de link esgotados — decidir manter ou fechar", now + 86400)
+    else:  # trilha esgotada: a janela de 24 h da Meta está fechando
+        # 14/10: não fecha o card sozinho; a pessoa decide (modelo aprovado,
+        # ligação, ou perdido) e o card fica marcado para o filtro.
+        if tag_fn:
+            try:
+                tag_fn(lead_id, [TAG_SEM_RESPOSTA])
+            except Exception as exc:
+                log("error", lead_id, f"tag do follow-up: {exc}")
+        if task_fn:
+            task_fn(lead_id, "Sem resposta depois dos 2 follow-ups (call e reativação). Janela de 24 h "
+                             "da Meta fechando: retomar com modelo aprovado ou ligação, ou marcar perdido.",
+                    now + 3600)
         cancel(lead_id, f"trilha {track} esgotada")
 
 

@@ -170,6 +170,35 @@ def rodar() -> list[str]:
           and len(k.bots) == bots_antes + 2, (resultados, k.bots))
     app._call_agent = lambda lead_id, msg: (resposta, textproc.extract_directives(resposta))
 
+    print("\n2c. Mensagens curtas: um bloco vira balões separados, entregues em fila (14/10)")
+    bloco = ("Oi, aqui é o Chase da URACE. É um dia inteiro na pista num kart de corrida de verdade, "
+             "com o coach do seu lado o tempo todo: kart, equipamento de segurança, briefing e "
+             "coaching inclusos. Na categoria 4 tempos fica $719 o dia, na 2 tempos $819. A taxa "
+             "da pista é separada, paga direto pro Orlando Kart Center. Quantos anos tem o piloto?")
+    msgs = app.dividir_em_mensagens(bloco)
+    check("o bloco do print vira 2 a 4 mensagens curtas",
+          2 <= len(msgs) <= app.MENSAGENS_MAX and all(len(m) <= app.MENSAGEM_MAX for m in msgs[:-1])
+          and " ".join(msgs) == bloco, msgs)
+    linhas = "Oi! Aqui é o Chase, da URACE.\nUm dia inteiro na pista: $719.\nÉ pra você ou pra outra pessoa?"
+    check("cada linha do modelo é uma mensagem", app.dividir_em_mensagens(linhas) == linhas.split("\n"),
+          app.dividir_em_mensagens(linhas))
+    modo_antes, intervalo_antes = app.SALESBOT_DISPLAY, app.INTERVALO_ENTRE_MENSAGENS_S
+    app.SALESBOT_DISPLAY, app.INTERVALO_ENTRE_MENSAGENS_S = "json_reply", 0.05
+    bots_antes, cont_antes = len(k.bots), len(continuados)
+    resposta = linhas
+    app._call_agent = lambda lead_id, msg: (resposta, textproc.extract_directives(resposta))
+    app.responder_eventos(_evento("q1", 101, "quanto custa?"), espera=0)
+    for _ in range(3):  # o bot de entrega busca uma mensagem por disparo
+        app.process_inbound({"lead_id": 101, "message": "", "return_url": "https://kommo/continue/q"})
+        time.sleep(0.3)
+    entregues_q = [t for _lid, t in continuados[cont_antes:]]
+    check("três balões, na ordem, um por disparo do bot",
+          entregues_q == linhas.split("\n") and len(k.bots) == bots_antes + 3, (entregues_q, k.bots))
+    check("a fila terminou vazia", not state.get_conversation(101).get("pending_followup_text"))
+    app.SALESBOT_DISPLAY, app.INTERVALO_ENTRE_MENSAGENS_S = modo_antes, intervalo_antes
+    resposta = "Hi! Chase here from URACE. How old is the driver?"
+    app._call_agent = lambda lead_id, msg: (resposta, textproc.extract_directives(resposta))
+
     print("\n3. Fora do escopo: só organiza")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
     antes = len(k.bots)

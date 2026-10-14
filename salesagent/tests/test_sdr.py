@@ -545,9 +545,34 @@ def camada_ponte():
         chamadas.clear()
         sch._fire_followup({"lead_id": 502, "followup_track": "initial", "followup_attempts": 0,
                             "state": "AI_ACTIVE", "last_inbound_at": agora - 2 * 3600}, agora)
-        check("follow-up dentro da janela sai normalmente", chamadas == ["compor", "entregar"], str(chamadas))
+        check("follow-up dentro da janela sai normalmente", chamadas[:2] == ["compor", "entregar"], str(chamadas))
+
+        # Cadência de 14/10: ~1h30 -> call com o time; 23 h -> reativação; para.
+        check("1º toque em 1h30, 2º 23 h depois da nossa mensagem",
+              sch.TRACKS["initial"][0] == 90 * 60 and sum(sch.TRACKS["initial"]) == 23 * 3600)
+        limite_meta = (regras.JANELA_MENSAGEM_LIVRE_HORAS * 3600 - regras.JANELA_24H_MARGEM_MINUTOS * 60)
+        check("o 2º toque cabe na janela de 24 h, com folga do relógio do agendador",
+              sum(sch.TRACKS["initial"]) + 5 * 60 < limite_meta)
+        tags = []
+        sch.tag_fn = lambda lead_id, t: tags.append((lead_id, tuple(t)))
+        chamadas.clear()
+        sch._fire_followup({"lead_id": 503, "followup_track": "initial", "followup_attempts": 0,
+                            "state": "AI_ACTIVE", "last_inbound_at": agora - 2 * 3600}, agora)
+        check("1º toque marca o card com followup:1-call", (503, ("followup:1-call",)) in tags, str(tags))
+        sch._fire_followup({"lead_id": 503, "followup_track": "initial", "followup_attempts": 1,
+                            "state": "AI_ACTIVE", "last_inbound_at": agora - 23 * 3600}, agora)
+        check("2º toque marca followup:2-reativacao e a trilha termina com tag e tarefa, sem fechar o card",
+              (503, ("followup:2-reativacao",)) in tags and (503, ("followup:sem-resposta-24h",)) in tags
+              and ("tarefa", 503) in chamadas and state.get_conversation(503)["state"] != "CLOSED",
+              str((tags, chamadas)))
+        prompt_1 = app._objetivo_do_toque(0)
+        check("o 1º toque pede a call com o time e leva o link do calendário",
+              "call" in prompt_1 and "calendar.app.google" in prompt_1, prompt_1)
+        check("o 2º toque é reativação, sem link", "reactivate" in app._objetivo_do_toque(1)
+              and "http" not in app._objetivo_do_toque(1))
     finally:
         sch.compose_fn, sch.deliver_fn, sch.task_fn, sch.note_fn = guardados
+        sch.tag_fn = None
 
     print("\n3. Travas corrigidas")
     nivel("observar")

@@ -207,6 +207,36 @@ def main() -> int:
     check("D: e não sai se a pessoa assumiu antes do Kommo buscar", entregues == [], str(entregues))
     _despausar(lead_b)
 
+    # mensagens curtas (#237): a resposta da IA sai em balões, um por disparo do bot. Uma pessoa
+    # que assume no meio da fila corta os balões que faltam; balões da escalação continuam.
+    disparos = []
+    app._disparar_proxima = lambda lead_id: disparos.append(lead_id)
+    app.SALESBOT_DISPLAY = "json_reply"
+    lead_q = 810011
+    entregues = _fakes()
+    app._pending_returns[lead_q] = ("https://x/continue/5", None)
+    app.send_to_lead(lead_q, "Primeira linha da IA.\nSegunda linha da IA.\nTerceira linha da IA.")
+    check("fila: o primeiro balão sai e o resto fica na fila com origem 'ia'",
+          entregues == [(lead_q, "Primeira linha da IA.")]
+          and state.get_conversation(lead_q)["pending_followup_origem"] == "ia" and disparos == [lead_q],
+          f"{entregues} {disparos}")
+    _pausar(lead_q, 11)
+    app.process_inbound({"lead_id": lead_q, "message": "", "return_url": "https://x/continue/6"})
+    check("fila: pessoa assumiu entre os balões, o resto da IA não sai",
+          entregues == [(lead_q, "Primeira linha da IA.")]
+          and state.get_conversation(lead_q)["pending_followup_text"] is None, str(entregues))
+    lead_e = 810012
+    entregues = _fakes()
+    disparos.clear()
+    app._pending_returns[lead_e] = ("https://x/continue/7", None)
+    app.send_to_lead(lead_e, "Uma pessoa vai responder.\nÉ só aguardar aqui.", origem="escalacao")
+    _pausar(lead_e, 12)
+    app.process_inbound({"lead_id": lead_e, "message": "", "return_url": "https://x/continue/8"})
+    check("fila: os balões da mensagem de escalação saem mesmo com o caso aberto",
+          [t for _, t in entregues] == ["Uma pessoa vai responder.", "É só aguardar aqui."], str(entregues))
+    _despausar(lead_q); _despausar(lead_e)
+    app.SALESBOT_DISPLAY = "balloons"
+
     # agendador: escalado não recebe resgate
     state.update_conversation(810001, last_inbound_at=int(time.time()) - 99999, last_outbound_at=0)
     resgatados = []
