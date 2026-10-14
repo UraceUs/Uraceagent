@@ -1,13 +1,13 @@
 ---
 tipo: cliente
-piloto: Noah el Gouchi
+piloto: Easton Bimotorski
 atualizado_em: 2026-08-28
 ---
 
-# Badr el Gouchi
+# Eric Bimotorski
 
-Responsável por **Noah el Gouchi** · [[Clientes]]
+Responsável por **Easton Bimotorski** · [[Clientes]]
 
-Baby Kart, 5 anos. [[Professional Coaching]].
+[[Professional Coaching]], 7 anos.
 
 Dinheiro: [[QuickBooks]] · Serviços: [[Serviços]] · [[Pagamento e security deposit]]

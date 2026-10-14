@@ -6,11 +6,12 @@ usam dado fictício e marcado: e-mail `@example.com`, telefone na faixa 555-01xx
 
 O que esta trava pega, em todo arquivo do `git ls-files`:
 - e-mail de provedor pessoal (gmail, outlook, hotmail, yahoo, icloud…) — fora `@example.com` e
-  `@urace.us`, só passa o da equipe, que está guardado como hash;
+  `@urace.us`, só passa o da equipe e de fornecedor, que está guardado como hash;
 - telefone dos EUA ou do Brasil escrito como telefone (com separador ou com `+`) fora da faixa
   555-01xx — a URACE e a equipe passam, também por hash;
 - e-mail ou nome de cliente real de uma lista que só existe como sha256 em
-  `sem_dado_de_cliente.json` (o nome em claro nunca entra no repositório).
+  `sem_dado_de_cliente.json` (o nome em claro nunca entra no repositório) — no texto e no
+  caminho do arquivo (as fichas de `brain/20_ENTIDADES/clientes/` têm o nome no arquivo).
 
 Para incluir um nome na lista: `python command_center/tests/test_sem_dado_de_cliente.py "Nome"`
 imprime o hash; ele vai para `nomes_de_cliente` do JSON.
@@ -28,9 +29,8 @@ import pytest
 RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LISTAS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sem_dado_de_cliente.json")
 
-# Notas operacionais que ainda estão no repositório até o dono decidir para onde vão (#244).
-# Quando saírem, apague esta tupla — a trava passa a valer para elas também.
-AINDA_NO_REPOSITORIO_ATE_O_DONO_DECIDIR = ("brain/", "relatorios/")
+# brain/ e relatorios/ entram na trava: o dono decidiu (14/10) que o repositório fica público e
+# não haverá repositório privado — as notas ficam aqui, com o dado de cliente trocado no lugar.
 
 # Conteúdo do site público atual (depoimentos e campeões com nome, já publicados em urace.us).
 # Só a checagem de NOME pula esta pasta; e-mail e telefone continuam valendo nela.
@@ -77,7 +77,7 @@ def _arquivos():
     except (OSError, subprocess.CalledProcessError):
         pytest.skip("sem git: a trava roda no CI e em qualquer clone")
     for nome in saida.decode().split("\0"):
-        if not nome or nome.startswith(AINDA_NO_REPOSITORIO_ATE_O_DONO_DECIDIR + TERCEIROS):
+        if not nome or nome.startswith(TERCEIROS):
             continue
         if nome.lower().endswith(NAO_TEXTO) or nome.endswith("package-lock.json"):
             continue
@@ -101,7 +101,7 @@ def achados(nome, texto, listas):
             if sha(endereco) in listas["emails_de_cliente"]:
                 saida.append((n, "e-mail de cliente real"))
             elif (PROVEDORES_PESSOAIS.match(dominio) and not SISTEMA.match(endereco)
-                  and sha(endereco) not in listas["emails_da_equipe"]):
+                  and sha(endereco) not in listas["emails_da_equipe_e_fornecedores"]):
                 saida.append((n, f"e-mail pessoal @{dominio} (use @example.com)"))
         for m in TELEFONE_EUA.finditer(linha):
             digitos = re.sub(r"\D", "", m.group(0))[-10:]
@@ -122,7 +122,10 @@ def achados(nome, texto, listas):
 
 def test_nenhum_dado_real_de_cliente_no_repositorio():
     listas = _listas()
-    problemas = [f"{nome}:{linha}: {oque}" for nome, texto in _arquivos() for linha, oque in achados(nome, texto, listas)]
+    problemas = []
+    for nome, texto in _arquivos():
+        problemas += [f"{nome}: caminho: {oque}" for _, oque in achados(nome, nome.replace("/", " "), listas)]
+        problemas += [f"{nome}:{linha}: {oque}" for linha, oque in achados(nome, texto, listas)]
     assert not problemas, ("Dado real de cliente no repositório público (#244). Troque por fictício "
                            "marcado (@example.com, 555-01xx, nome inventado):\n" + "\n".join(problemas[:200]))
 

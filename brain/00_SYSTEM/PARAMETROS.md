@@ -46,7 +46,7 @@ QuickBooks e de qualquer valor copiado para o cérebro.
 |---|---|---|
 | **Fornecedor ATUAL** | **Usman** | `Speedinds@gmail.com` |
 | Outros cadastrados no Asana | Manzoor · WheelDeal | — |
-| ⚠️ e-mail não identificado | `whitesoldier205@gmail.com` | recebeu "SUIT - Frankie Iadevaia"; falta saber a qual fornecedor pertence |
+| ⚠️ e-mail não identificado | `whitesoldier205@gmail.com` | recebeu "SUIT - Frankie Ignivela"; falta saber a qual fornecedor pertence |
 
 **Regra:** todo pedido vai para o **fornecedor atual** acima. Trocou de
 fornecedor? Troque a linha "Fornecedor ATUAL" e a IA passa a mandar para
@@ -100,7 +100,7 @@ cliente foi devolvido**:
 | Cobrado e **ainda retido** | **NÃO cobrar** |
 | Não consegue determinar | **não cobrar — escalar** |
 
-Caso real: Elijah Nicholas tem depósito de 15/06/2026 (US$ 400, pago) e
+Caso real: Elijah Nitrolas tem depósito de 15/06/2026 (US$ 400, pago) e
 **não devolvido** — por isso os pacotes de julho, agosto e setembro não
 levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 
@@ -117,7 +117,7 @@ levam cobrança nova. Sem essa verificação, seria cobrado 4 vezes.
 | Confirmação de corrida antes do evento | 15 dias (organizado: 30) |
 | Status `In Production` após e-mail ao fornecedor | **1 dia** |
 | **Validade da waiver** | **1 ano a partir da assinatura** (é o que o e-mail do [[DocuSign]] promete ao cliente) |
-| **Cliente VIP dispensa waiver** | decisão do dono, 04/09. Lista de VIPs: [[Rafael Pionti]] (Renato). **Só quem está nesta lista** — não existe marcador no Asana; a IA não deduz VIP de nada |
+| **Cliente VIP dispensa waiver** | decisão do dono, 04/09. Lista de VIPs: [[Rafael Pistoni]] (Renato). **Só quem está nesta lista** — não existe marcador no Asana; a IA não deduz VIP de nada |
 | **Varredura de waiver: só as colunas dos dias** | TUESDAY…SUNDAY. **RACES não entra** (dono, 04/09) |
 
 ## 🏁 Campo `Race` do Asana (`1213088541600529`)
@@ -200,5 +200,5 @@ Enquanto o "ok" não vem, o lote fica em stand-by — ver
 | 2026-08-31 | Mensal Academy 4T e Baby Kart corrigidos para **$2.756,90** e sessão extra dos dois para **$689,23** (planilha diz $2.756,00 / $689,00 — 4 células a arrumar, ver [[Rate Card]]). Regra fixada: **sessão extra = mensal ÷ 4**, e **pacote sai do mensal, nunca da unitária**. E-mail de invoice: **sai pelo próprio QuickBooks**, não existe template a escrever | Italo |
 | 2026-08-31 | Reminder de cobrança: **aprovação por lote**, sem autorização permanente | Italo |
 | 2026-09-04 | **Invoice pode ser enviada pela IA depois de aprovada no painel** — substitui "humano envia" de 28/08. Política `REQUIRES_APPROVAL`, com quem aprovou no audit. Ver [[D-2026-09-04 - Invoice sai depois de aprovada no painel]] | Italo |
-| 2026-09-04 | **VIP dispensa waiver** (Renato Pionti, primeiro da lista). **RACES fica fora da varredura de waiver.** [[DocuSign]] em produção | Italo |
+| 2026-09-04 | **VIP dispensa waiver** (Renato Pistoni, primeiro da lista). **RACES fica fora da varredura de waiver.** [[DocuSign]] em produção | Italo |
 | 2026-08-31 | [[Rate Card]] passa a ser a fonte de preço **acima do catálogo do QuickBooks**; ordem de precedência registrada. IDs das duas planilhas adicionados | Italo (skill `urace-faturamento-qbo`) |

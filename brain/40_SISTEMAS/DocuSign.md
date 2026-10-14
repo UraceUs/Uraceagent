@@ -105,8 +105,8 @@ rotina diária precisa olhar isso também, não só o prazo do serviço.
 ## O DocuSign não é só waiver
 
 Também passam por aqui **NDAs** e **Service Agreements** (vistos em
-aberto: `Caio_Imperato_AgreementNDAdocx.pdf` e
-`2026.2 Pablo Santiago_Service Agreement.pdf`). São outra classe de
+aberto: `Caio_Imparcial_AgreementNDAdocx.pdf` e
+`2026.2 Pablo Sapata_Service Agreement.pdf`). São outra classe de
 documento, com outra criticidade — a rotina da waiver não deve tratá-los
 como waiver, mas também não deve ignorá-los.
 

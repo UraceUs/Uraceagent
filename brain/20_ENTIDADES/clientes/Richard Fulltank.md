@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: Freddie Fullerton
+piloto: Freddie Fulltank
 atualizado_em: 2026-08-28
 ---
 
-# Richard Fullerton
+# Richard Fulltank
 
-Responsável por **Freddie Fullerton** · [[Clientes]]
+Responsável por **Freddie Fulltank** · [[Clientes]]
 
 Micro, 9 anos, vem do Reino Unido. [[Professional Coaching]].
 

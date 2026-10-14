@@ -49,6 +49,6 @@ e o script que aposenta o Pit Wall tirando a rota do Caddy com backup e prova.
   guardar cópia. Vale virar sincronia, como as outras cinco fontes.
 
 **Não é trabalho de sistema:** reenviar as três waivers (P-07) é um clique cada no painel —
-a do Matthew Hubbard precisa da correção do e-mail antes, porque o servidor dele recusou.
+a do Matthew Hubtrack precisa da correção do e-mail antes, porque o servidor dele recusou.
 
 [[Command Center]] · [[Italo Silveira]] · [[Conflitos e lacunas]] · [[Problemas]] · [[PARAMETROS]]

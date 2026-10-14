@@ -13,7 +13,7 @@ atualizado_em: 2026-09-02
 
 O que se **sabe**, e de onde:
 
-- Marcou a subtarefa **"Signed waiver?"** do serviço Enzo Kurian 05/09
+- Marcou a subtarefa **"Signed waiver?"** do serviço Enzo Kartian 05/09
   como concluída em **31/08/2026**, no [[Asana]] — logo, trabalha nas
   tarefas de serviço do U-RACE e tem acesso de escrita lá.
 - O dono pediu em 01/09 que `lucas@urace.us` receba acesso ao

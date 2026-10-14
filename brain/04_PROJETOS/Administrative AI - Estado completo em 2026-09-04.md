@@ -113,7 +113,7 @@ MCP não expõe.
 
 **01/09** — [[D-2026-09-01 - Manter o par RSA do DocuSign demo]]
 
-**04/09** — [[D-2026-09-04 - Renato Pionti sem waiver nesta sessao]] · [[D-2026-09-04 - Invoice sai depois de aprovada no painel]] · [[D-2026-09-04 - Senha do Command Center com minimo de 5]] · [[D-2026-09-04 - Clique humano move e-mail para o marcador]] · [[D-2026-09-04 - Lixeira e reenvio de waiver pelo painel]] · [[D-2026-09-04 - O que e cliente, ativo, e um card por pessoa]] · [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]]
+**04/09** — [[D-2026-09-04 - Renato Pistoni sem waiver nesta sessao]] · [[D-2026-09-04 - Invoice sai depois de aprovada no painel]] · [[D-2026-09-04 - Senha do Command Center com minimo de 5]] · [[D-2026-09-04 - Clique humano move e-mail para o marcador]] · [[D-2026-09-04 - Lixeira e reenvio de waiver pelo painel]] · [[D-2026-09-04 - O que e cliente, ativo, e um card por pessoa]] · [[D-2026-09-04 - IA age a cada mudanca e aprende pelo balao]]
 
 ## 8. Problemas (todos) e estado
 

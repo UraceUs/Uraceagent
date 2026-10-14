@@ -1,12 +1,12 @@
 ---
 tipo: cliente
-piloto: Elijah Nicholas
+piloto: Elijah Nitrolas
 atualizado_em: 2026-08-28
 ---
 
-# Michael Nicholas
+# Michael Nitrolas
 
-Responsável por **Elijah Nicholas** · [[Clientes]]
+Responsável por **Elijah Nitrolas** · [[Clientes]]
 
 [[Professional Coaching]] Cadet 4 tempos, pacote de 2 dias.
 
