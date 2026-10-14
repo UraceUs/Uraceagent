@@ -225,7 +225,7 @@ PALAVRAS = {
     "desconto": [
         "desconto", "cupom", "condicao especial", "parcelar", "parcelamento", "mais barato",
         "discount", "coupon", "promo code", "cheaper", "descuento",
-        # Objeção de preço (13/10): vira oferta de call com o Lucas, não espera.
+        # Objeção de preço (13/10): vira oferta de call com o time, não espera.
         "esta caro", "ta caro", "muito caro", "caro demais", "fora do orcamento",
         "too expensive", "so expensive", "very expensive", "that's expensive",
         "it's expensive", "out of my budget", "can't afford", "cant afford",
@@ -364,7 +364,10 @@ NUNCA_DIZER = [
     ("i hope this finds you well", "chat não é carta; sem abertura de e-mail"),
     ("good to hear from you", "\"Hey! Good to hear from you\" é o bot, e a pessoa reconhece"),
     ("great question", "elogio vazio; responder a pergunta na primeira linha"),
-    ("% off", "desconto e promoção nunca saem no chat, são do Lucas"),
+    ("% off", "desconto e promoção nunca saem no chat, são do time"),
+    # 14/10: reabrir conversa antiga com intimidade denuncia o bot.
+    ("bom te ver de novo", "não puxar contexto antigo; responder o que perguntou agora"),
+    ("good to see you again", "não puxar contexto antigo; responder o que perguntou agora"),
 ]
 
 # ---------------------------------------------------------------- cadência

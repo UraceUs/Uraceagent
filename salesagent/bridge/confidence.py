@@ -113,7 +113,7 @@ def system_note(verdict: dict) -> str:
     # instrução É base sólida.
     _ESCOPO = ("Isto vale para AFIRMAR fatos sobre a URACE (preço, política, "
                "horário, disponibilidade, o que está incluso, capacidade). "
-               "Não vale para conduzir a conversa: saudar, classificar A/B/C/D, "
+               "Não vale para conduzir a conversa: saudar, fazer a triagem, "
                "perguntar, recomendar programa e seguir o roteiro das suas "
                "instruções continuam normais -- suas instruções são base "
                "sólida. Se o lead não pediu nenhum fato, siga normalmente.")
@@ -195,7 +195,7 @@ def self_test() -> int:
     for nivel in (NONE, LOW):
         nota = system_note({"level": nivel, "reason": "x"})
         check(f"{nivel} nao escala conversa sem pergunta factual",
-              "classificar" in nota and "siga normalmente" in nota)
+              "triagem" in nota and "siga normalmente" in nota)
     check("ok não gera instrução", system_note({"level": OK, "reason": "x"}) == "")
     check("stale orienta sem mandar escalar",
           "[[unknown" not in system_note({"level": STALE, "reason": "x"}))

@@ -228,17 +228,18 @@ def waiting_message(lead_text: str, sent_before: int = 0,
 # ------------------------------------------------- objeção de preço → call
 # Pedido do dono (13/10): "está caro" / "faria se fosse mais barato" não
 # recebe a espera genérica ("sua pergunta está com a equipe"). Recebe a
-# oferta de uma call de 15 min com o Lucas para entender melhor, com o link
-# do calendário. Nunca desconto; a escalação para o Lucas segue igual.
+# oferta de uma call de 15 min com o nosso time para entender melhor, com o
+# link do calendário. Nunca desconto; a escalação para o closer segue igual.
+# Nome de pessoa do time nunca sai para o lead (dono, 14/10): "nosso time".
 _OFERTA_CALL = {
-    "pt": ("Entendo{nome}. Que tal uma call rápida de 15 minutos com o Lucas pra "
-           "entender melhor o que você procura e achar o formato certo? "
+    "pt": ("Entendo{nome}. Que tal uma call rápida de 15 minutos com o nosso time "
+           "pra conversar sobre os objetivos do piloto e o melhor caminho? "
            "É só escolher o horário aqui:\n{link}"),
-    "es": ("Entiendo{nome}. ¿Qué tal una llamada rápida de 15 minutos con Lucas "
-           "para entender mejor lo que buscas y encontrar el formato correcto? "
+    "es": ("Entiendo{nome}. ¿Qué tal una llamada rápida de 15 minutos con nuestro "
+           "equipo para hablar de los objetivos del piloto y el mejor camino? "
            "Elige el horario aquí:\n{link}"),
-    "en": ("I hear you{nome}. How about a quick 15-minute call with Lucas to "
-           "understand what you're looking for and find the right fit? "
+    "en": ("I hear you{nome}. How about a quick 15-minute call with our team to "
+           "talk about the driver's goals and the best path? "
            "Pick a time here:\n{link}"),
 }
 
@@ -246,7 +247,7 @@ _OFERTA_CALL = {
 def call_offer(lead_text: str, link: str, contact_name: str | None = None,
                lang: str | None = None) -> str:
     """Resposta para objeção de preço ou pedido de desconto: oferece a call
-    com o Lucas e manda o link do calendário (um ativo, uma pergunta)."""
+    com o nosso time e manda o link do calendário (um ativo, uma pergunta)."""
     lang = lang or detect_language(lead_text)
     nome = _primeiro_nome(contact_name)
     texto = _OFERTA_CALL[lang].format(nome=("," + nome) if nome else "", link=link)
