@@ -501,9 +501,13 @@ const VOLTA = 'urace.portal.volta'
 /* #236: o carrinho do site (fora desta área: é uma página do site novo, não uma rota daqui). Quem chega
  * do carrinho com `?volta=cart` entra (ou cria a conta, ou põe o piloto) e volta para pagar. */
 const CARRINHO = '/cart/'
+/* #248: comprar na loja também pede a conta. "Buy now" sem conta manda para cá com `?volta=/store/p/<produto>/`
+ * e, depois de entrar (ou criar a conta), a pessoa volta para o produto. */
+const DO_SITE = /^\/store\/p\/[a-z0-9][a-z0-9-]{0,120}\/$/
 function irParaOCarrinho() {
+  const v = lerVolta()
   limparVolta()
-  window.location.assign(CARRINHO)
+  window.location.assign(v && DO_SITE.test(v) ? v : CARRINHO)
 }
 function IrParaOCarrinho() {
   useEffect(() => { irParaOCarrinho() }, [])
@@ -515,7 +519,7 @@ function guardarVolta(caminho: string) {
 function lerVolta(): string | null {
   try {
     const v = sessionStorage.getItem(VOLTA)
-    return v && (v === CARRINHO || v.startsWith('/portal/book?') || /^\/portal\/(sessions|plans)\/\d+$/.test(v)) ? v : null
+    return v && (v === CARRINHO || DO_SITE.test(v) || v.startsWith('/portal/book?') || /^\/portal\/(sessions|plans)\/\d+$/.test(v)) ? v : null
   } catch { return null }
 }
 function limparVolta() {
@@ -531,7 +535,9 @@ export function PortalApp() {
   // (sessionStorage) porque a tela de entrar troca o endereço e a área pode montar de novo.
   if (loc.pathname === '/portal/book' && loc.search) guardarVolta(loc.pathname + loc.search)
   if (/^\/portal\/sessions\/\d+$/.test(loc.pathname)) guardarVolta(loc.pathname)      // #164: o link do e-mail
-  if (new URLSearchParams(loc.search).get('volta') === 'cart') guardarVolta(CARRINHO)    // #236: veio do carrinho
+  const voltaParam = new URLSearchParams(loc.search).get('volta')
+  if (voltaParam === 'cart') guardarVolta(CARRINHO)    // #236: veio do carrinho
+  else if (voltaParam && DO_SITE.test(voltaParam)) guardarVolta(voltaParam)    // #248: veio do "Buy now" da loja
   const carregar = useCallback(() => papi<Account>('GET', '/me').then(setConta).catch(() => setConta(null)), [])
   useEffect(() => { carregar() }, [carregar])
   // chegou na agenda já com a conta aberta: a escolha do site foi usada, não volta de novo
@@ -539,7 +545,7 @@ export function PortalApp() {
   const entrou = (a: Account) => {
     setConta(a)
     const volta = lerVolta()
-    if (volta === CARRINHO) irParaOCarrinho()
+    if (volta === CARRINHO || (volta && DO_SITE.test(volta))) irParaOCarrinho()
     else nav(volta || '/portal/dashboard', { replace: true })
   }
   async function sair() { try { await papi('POST', '/logout') } finally { setConta(null); nav('/portal', { replace: true }) } }
@@ -567,10 +573,10 @@ export function PortalApp() {
     <Route path="reset" element={<NovaSenha onEntrou={entrou} />} />
     <Route path="*" element={<Navigate to="/portal" replace />} />
   </Routes>
-  const voltaCarrinho = lerVolta() === CARRINHO
+  const voltaCarrinho = lerVolta() === CARRINHO || DO_SITE.test(lerVolta() || '')
   return <Casca conta={conta} sair={sair}>
     {voltaCarrinho && loc.pathname !== '/portal' && loc.pathname !== '/portal/signup' && <div className="banner info" role="status"><span className="bi">●</span>
-      <div className="grow">Your cart is waiting. When the driver is ready, <a href={CARRINHO} onClick={() => limparVolta()}>go back to your cart</a> to pay.</div></div>}
+      <div className="grow">Your cart is waiting. When the driver is ready, <a href={lerVolta() || CARRINHO} onClick={() => limparVolta()}>go back to {DO_SITE.test(lerVolta() || "") ? "the store" : "your cart"}</a> to pay.</div></div>}
     <Routes>
       <Route index element={voltaCarrinho ? <IrParaOCarrinho /> : <Navigate to={lerVolta() || '/portal/dashboard'} replace />} />
       <Route path="signup" element={voltaCarrinho ? <IrParaOCarrinho /> : <Navigate to="/portal/dashboard" replace />} />

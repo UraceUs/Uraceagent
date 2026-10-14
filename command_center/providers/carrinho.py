@@ -164,7 +164,7 @@ def cotar(con, itens, conta_id=None, para_pagar=False):
     tem_sessao = any(x["tipo"] == "sessao" for x in linhas)
     return {"linhas": linhas, "subtotal": subtotal, "deposito": deposito, "total": round(subtotal + deposito, 2),
             "tem_sessao": tem_sessao, "tem_produto": any(x["tipo"] == "produto" for x in linhas),
-            "precisa_conta": tem_sessao and not conta_id,
+            "precisa_conta": bool(linhas) and not conta_id,          # #248: toda compra pede a conta do site
             "ok": bool(linhas) and not any(x["erro"] or x.get("falta_piloto") for x in linhas),
             "demais": len(itens) > MAX_ITENS}
 
@@ -176,8 +176,9 @@ def _nome_stripe(x):
     return x["nome"]
 
 
-def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None):
-    """Grava o pedido 'aberto' com as linhas e cria UMA sessão do Checkout. Devolve (pedido_id, url)."""
+def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang="en"):
+    """Grava o pedido 'aberto' com as linhas e cria UMA sessão do Checkout. Devolve (pedido_id, url).
+    #248: só com a conta do site (o e-mail dela vai ao Stripe e aos avisos); `lang` é o idioma da pessoa."""
     from command_center.providers import stripe_loja
     c = cotar(con, itens, conta_id, para_pagar=True)
     if not c["linhas"]:
@@ -185,7 +186,7 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None):
     if c["demais"]:
         raise ErroCarrinho(f"Up to {MAX_ITENS} items per order.")
     if c["precisa_conta"]:
-        raise PrecisaConta("Please sign in or create your URACE account to book a session.")
+        raise PrecisaConta("Please sign in or create your URACE account to buy.")
     erro = next((x["erro"] for x in c["linhas"] if x["erro"]), None)
     if erro:
         raise ErroCarrinho(erro)
@@ -195,8 +196,8 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None):
     resumo = (c["linhas"][0]["nome"] + (f" + {len(c['linhas']) - 1} more" if len(c["linhas"]) > 1 else ""))[:200]
     oid = inserir(con, "store_orders", kind="carrinho", product_slug="carrinho", product_name=resumo, quantity=n,
                   unit_price=c["total"], amount=c["total"], delivery=entrega, origin=host, account_id=conta_id,
-                  email=(conta["email"] if conta else None), name=(conta["name"] if conta else None),
-                  phone=(conta["phone"] if conta else None))
+                  email=((conta["email"] or "").lower() or None if conta else None), name=(conta["name"] if conta else None),
+                  phone=(conta["phone"] if conta else None), lang="pt" if lang == "pt" else "en")
     for x in c["linhas"]:
         inserir(con, "store_order_items", order_id=oid, kind=x["tipo"], name=_nome_stripe(x)[:250], quantity=x["quantidade"],
                 unit_price=x["unitario"], deposit=x["deposito"], amount=round(x["valor"] + x["deposito"], 2),
@@ -228,6 +229,7 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None):
     }
     if conta:
         campos["customer_email"] = conta["email"]
+    campos["locale"] = stripe_loja.locale_stripe(lang)
     if c["tem_sessao"]:
         campos["expires_at"] = int(time.time()) + EXPIRA_S      # a vaga não fica presa por um dia num checkout esquecido
     if entrega == "envio":
@@ -390,40 +392,62 @@ def avisar(con, oid, enviar=None):
         return False
     ls = itens(con, oid)
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
-    primeiro = (o["name"] or "").split()[0] if o["name"] else "there"
+    lang = pedido_site.lingua(o)                        # #248: no idioma em que a pessoa comprou
+    pedido_site.registrar_no_card(con, o, "pago")       # #248: o pagamento na linha do tempo de cada card
+    pt = lang == "pt"
     cli = []
     for x in ls:
-        linha = f"- {x['name']}" + (f" × {x['quantity']}" if x["quantity"] > 1 else "") + f": {_usd(x['unit_price'] * x['quantity'])}"
+        linha = (f"- {pedido_site.nome_linha(x, lang)}" + (f" × {x['quantity']}" if x["quantity"] > 1 else "")
+                 + f": {_usd(x['unit_price'] * x['quantity'])}")
         if x["deposit"]:
-            linha += f"\n  Refundable security deposit: {_usd(x['deposit'])}"
+            linha += f"\n  {'Depósito de segurança reembolsável' if pt else 'Refundable security deposit'}: {_usd(x['deposit'])}"
         if x["kind"] == "sessao" and x["booking_id"]:
-            linha += f"\n  Booked. Sign the waiver in your URACE account to confirm it: {_link_sessao(x['booking_id'])}"
+            linha += (f"\n  Reservada. Assine a waiver na sua conta URACE para confirmar: {_link_sessao(x['booking_id'])}" if pt else
+                      f"\n  Booked. Sign the waiver in your URACE account to confirm it: {_link_sessao(x['booking_id'])}")
         elif x["kind"] == "sessao":
-            linha += "\n  This time was taken just before your payment. Our team will call you to pick another time (or refund it). Your payment is safe."
+            linha += ("\n  Este horário foi ocupado logo antes do seu pagamento. A nossa equipe vai ligar para escolher outro horário "
+                      "(ou devolver o valor). O seu pagamento está seguro." if pt else
+                      "\n  This time was taken just before your payment. Our team will call you to pick another time (or refund it). "
+                      "Your payment is safe.")
         cli.append(linha)
     tem_produto = any(x["kind"] == "produto" for x in ls)
-    entrega = ("" if not tem_produto else
-               "\nStore items: we'll let you know when they're ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
-               "Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
-               "\nStore items: we'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.\n")
-    deposito = ("\nThe security deposit is returned within 5 business days after the session if there is no incident.\n"
-                if any(x["deposit"] for x in ls) else "")
+    if pt:
+        entrega = ("" if not tem_produto else
+                   "\nItens da loja: avisamos quando estiverem prontos para retirar no Orlando Kart Center (10724 Cosmonaut Blvd, "
+                   "Box 3, Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
+                   "\nItens da loja: confirmamos o valor do frete e mandamos o código de rastreio. O frete é cobrado à parte.\n")
+        deposito = ("\nO depósito de segurança é devolvido em até 5 dias úteis depois da sessão, se não houver incidente.\n"
+                    if any(x["deposit"] for x in ls) else "")
+        assunto = f"Pedido #{o['id']} confirmado — URACE"
+        texto = (f"{pedido_site.ola(o, lang)},\n\nObrigado pelo pedido! Recebemos o seu pagamento.\n\n" + "\n".join(cli)
+                 + f"\n\nTotal pago: {_usd(valor)}\nPedido: #{o['id']}\n{entrega}{deposito}\n"
+                 f"Página do seu pedido: {pedido_site.link(o)}\n\n{pedido_site.contato(lang)}\n\nURACE — the Champion's Factory")
+    else:
+        entrega = ("" if not tem_produto else
+                   "\nStore items: we'll let you know when they're ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
+                   "Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
+                   "\nStore items: we'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.\n")
+        deposito = ("\nThe security deposit is returned within 5 business days after the session if there is no incident.\n"
+                    if any(x["deposit"] for x in ls) else "")
+        assunto = f"Order #{o['id']} confirmed — URACE"
+        texto = (f"{pedido_site.ola(o, lang)},\n\nThanks for your order! We received your payment.\n\n" + "\n".join(cli)
+                 + f"\n\nTotal paid: {_usd(valor)}\nOrder: #{o['id']}\n{entrega}{deposito}\n"
+                 f"Your order page: {pedido_site.link(o)}\n\n"
+                 "Questions? Call or WhatsApp +1 (407) 250 2291.\n\nURACE — the Champion's Factory")
     try:
         if o["email"]:
-            stripe_loja._enviar(enviar, o["email"], f"Order #{o['id']} confirmed — URACE",
-                                f"Hi {primeiro},\n\nThanks for your order! We received your payment.\n\n" + "\n".join(cli)
-                                + f"\n\nTotal paid: {_usd(valor)}\nOrder: #{o['id']}\n{entrega}{deposito}\n"
-                                f"Your order page: {pedido_site.link(o)}\n\n"
-                                "Questions? Call or WhatsApp +1 (407) 250 2291.\n\nURACE — the Champion's Factory")
+            stripe_loja._enviar(enviar, o["email"], assunto, texto)
         equipe = (f"Pedido #{o['id']} pago no Stripe: {_usd(valor)}\n{o['name'] or ''} <{o['email'] or ''}> {o['phone'] or ''}\n\n"
                   + "\n".join(_texto_linha(x) for x in ls)
                   + (f"\n\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else 'ENVIO — combinar o frete'}" if tem_produto else "")
                   + (f"\nEndereço:\n{stripe_loja._endereco(o)}" if o["shipping"] else "")
                   + (f"\n\nATENÇÃO: {o['attention']}" if o["attention"] else "")
-                  + "\n\nVendas: " + ", ".join(sorted({f"https://ops.urace.us/ops/sales/{x['opp_id']}" for x in ls if x["opp_id"]})))
+                  + "\n\nVendas: " + ", ".join(sorted({f"https://ops.urace.us/ops/sales/{x['opp_id']}" for x in ls if x["opp_id"]}))
+                  + f"\nPágina do pedido: {pedido_site.link(o)}")
         stripe_loja._enviar(enviar, "support@urace.us",
                             f"Site · PAGO{' · SEM VAGA' if o['attention'] else ''}: pedido #{o['id']} — {o['name'] or o['email']}", equipe)
         atualizar(con, "store_orders", oid, notified_at=agora(), notify_error=None, updated_at=agora())
+        pedido_site.avisado_pago(con, o, o["email"])
         return True
     except Exception as e:                              # noqa: BLE001 — o pedido já está pago e em Vendas
         atualizar(con, "store_orders", oid, notify_error=str(e)[:300], updated_at=agora())

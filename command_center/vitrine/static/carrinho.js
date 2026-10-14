@@ -10,6 +10,9 @@
   'use strict'
   var CHAVE = 'urace.carrinho'
   var MAX = 20
+  // #248: as páginas da compra em inglês ou português (a chave EN/PT grava a escolha; o servidor põe o `lang`)
+  var PT = (document.documentElement.lang || '').indexOf('pt') === 0
+  function t(en, pt) { return PT ? pt : en }
 
   function ler() {
     try {
@@ -30,7 +33,7 @@
       el.textContent = n > 99 ? '99+' : String(n)
       el.hidden = n === 0
       var link = el.closest('a')
-      if (link) link.setAttribute('aria-label', n ? 'Cart, ' + n + (n === 1 ? ' item' : ' items') : 'Cart')
+      if (link) link.setAttribute('aria-label', n ? t('Cart, ', 'Carrinho, ') + n + (n === 1 ? t(' item', ' item') : t(' items', ' itens')) : t('Cart', 'Carrinho'))
     })
   }
   /** Põe no carrinho. Produto igual (mesma opção) soma a quantidade; sessão igual não entra duas vezes. */
@@ -79,9 +82,9 @@
   function avisoAdicionado(el) {
     if (!el) return
     el.textContent = ''
-    el.appendChild(document.createTextNode('Added to your cart. '))
+    el.appendChild(document.createTextNode(t('Added to your cart. ', 'Foi para o carrinho. ')))
     var a = document.createElement('a')
-    a.href = '/cart/'; a.textContent = 'View cart'
+    a.href = '/cart/'; a.textContent = t('View cart', 'Ver o carrinho')
     el.appendChild(a)
   }
 
@@ -96,7 +99,7 @@
         quantidade: form.querySelector('[name="quantidade"]').value })
       var aviso = form.querySelector('.carrinho-ok')
       if (ok) avisoAdicionado(aviso)
-      else if (aviso) aviso.textContent = 'Your cart is full (up to ' + MAX + ' items).'
+      else if (aviso) aviso.textContent = t('Your cart is full (up to ' + MAX + ' items).', 'O carrinho está cheio (até ' + MAX + ' itens).')
     })
   })
 
@@ -145,11 +148,11 @@
     li.appendChild(topo)
     if (x.detalhe) li.appendChild(el('p', 'muted small', x.detalhe))
     if (x.tipo === 'produto' && !x.erro && x.quantidade > 1) li.appendChild(el('p', 'muted small', x.quantidade + ' × ' + usd(x.unitario)))
-    if (x.deposito > 0) li.appendChild(el('p', 'small', 'Refundable security deposit: ' + usd(x.deposito)))
+    if (x.deposito > 0) li.appendChild(el('p', 'small', t('Refundable security deposit: ', 'Depósito de segurança reembolsável: ') + usd(x.deposito)))
     var acoes = el('div', 'carrinho-acoes')
     if (x.tipo === 'produto') {
       var q = el('label', 'carrinho-qtd')
-      q.appendChild(document.createTextNode('Quantity '))
+      q.appendChild(document.createTextNode(t('Quantity ', 'Quantidade ')))
       var inp = el('input'); inp.type = 'number'; inp.min = '1'; inp.max = '20'; inp.inputMode = 'numeric'; inp.value = String(x.quantidade)
       inp.addEventListener('change', function () {
         var itens = ler(); var it = itens[x.idx]
@@ -159,9 +162,9 @@
     }
     if (x.tipo === 'sessao' && conta) {
       var p = el('label', 'carrinho-piloto')
-      p.appendChild(document.createTextNode('Driver '))
+      p.appendChild(document.createTextNode(t('Driver ', 'Piloto ')))
       var sel = el('select')
-      sel.appendChild(new Option('Choose the driver', ''))
+      sel.appendChild(new Option(t('Choose the driver', 'Escolha o piloto'), ''))
       conta.drivers.forEach(function (d) {
         var o = new Option(d.name + (d.blocked ? ' (' + d.blocked + ')' : ''), String(d.id))
         o.disabled = !!d.blocked
@@ -179,9 +182,9 @@
       })
       p.appendChild(sel); acoes.appendChild(p)
     }
-    var tirar = el('button', 'btn btn-sm btn-linha-escura carrinho-tirar', 'Remove')
+    var tirar = el('button', 'btn btn-sm btn-linha-escura carrinho-tirar', t('Remove', 'Tirar'))
     tirar.type = 'button'
-    tirar.setAttribute('aria-label', 'Remove ' + x.nome)
+    tirar.setAttribute('aria-label', t('Remove ', 'Tirar ') + x.nome)
     tirar.addEventListener('click', function () {
       var itens = ler(); itens.splice(x.idx, 1); gravar(itens); cotar()
     })
@@ -189,8 +192,8 @@
     li.appendChild(acoes)
     if (x.erro) {
       var e = el('p', 'carrinho-linha-erro', x.erro)
-      if (/Account|profile|measurements/.test(x.erro)) {
-        var ir = el('a', null, ' Update it in your account'); ir.href = portal + (/Account/.test(x.erro) ? '/account' : '/drivers')
+      if (/Account|profile|measurements|perfil|medidas/.test(x.erro)) {
+        var ir = el('a', null, t(' Update it in your account', ' Atualize na sua conta')); ir.href = portal + (/Account/.test(x.erro) ? '/account' : '/drivers')
         e.appendChild(ir)
       }
       li.appendChild(e)
@@ -200,25 +203,27 @@
 
   function desenharConta(c) {
     contaBox.textContent = ''
-    if (!c.tem_sessao) { contaBox.hidden = true; return }
+    if (!c.linhas.length) { contaBox.hidden = true; return }       // #248: toda compra pede a conta do site
     contaBox.hidden = false
     if (!c.account) {
-      contaBox.appendChild(el('p', null, 'Sessions need your URACE account: it keeps your drivers, waivers and bookings.'))
+      contaBox.appendChild(el('p', null, t('Your URACE account is needed to buy: it keeps your orders, drivers, waivers and bookings.',
+        'Para comprar, é preciso a sua conta URACE: ela guarda os seus pedidos, pilotos, waivers e reservas.')))
       var acoes = el('p', 'hero-acoes')
-      var entrar = el('a', 'btn btn-sm', 'Sign in'); entrar.href = portal + '?volta=cart'
-      var criar = el('a', 'btn btn-sm btn-linha-escura', 'Create account'); criar.href = portal + '/signup?volta=cart'
+      var entrar = el('a', 'btn btn-sm', t('Sign in', 'Entrar')); entrar.href = portal + '?volta=cart'
+      var criar = el('a', 'btn btn-sm btn-linha-escura', t('Create account', 'Criar conta')); criar.href = portal + '/signup?volta=cart'
       acoes.appendChild(entrar); acoes.appendChild(criar)
       contaBox.appendChild(acoes)
       return
     }
-    var p = el('p', null, 'Signed in as ')
+    var p = el('p', null, t('Signed in as ', 'Conectado como '))
     p.appendChild(el('b', null, c.account.name))
     p.appendChild(el('span', 'muted', ' · ' + c.account.email))
     contaBox.appendChild(p)
-    if (!c.account.drivers.length) {
+    if (c.tem_sessao && !c.account.drivers.length) {
       var add = el('p')
-      var a = el('a', 'btn btn-sm', 'Add a driver'); a.href = portal + '/drivers?volta=cart'
-      add.appendChild(document.createTextNode('Add the driver (your child, or you) to your account, then come back. '))
+      var a = el('a', 'btn btn-sm', t('Add a driver', 'Pôr um piloto')); a.href = portal + '/drivers?volta=cart'
+      add.appendChild(document.createTextNode(t('Add the driver (your child, or you) to your account, then come back. ',
+        'Ponha o piloto (o seu filho, ou você) na sua conta e volte aqui. ')))
       add.appendChild(a)
       contaBox.appendChild(add)
     }
@@ -239,13 +244,13 @@
       total.appendChild(dt); total.appendChild(dd)
     }
     par('Subtotal', usd(c.subtotal))
-    if (c.deposito > 0) par('Security deposit (refundable)', usd(c.deposito))
+    if (c.deposito > 0) par(t('Security deposit (refundable)', 'Depósito de segurança (reembolsável)'), usd(c.deposito))
     par('Total', usd(c.total), 'soma')
     var pronto = c.ok && !c.precisa_conta && c.stripe
     pagar.disabled = !pronto || indo
-    pagar.textContent = indo ? 'Opening the secure checkout…' : 'Checkout · ' + usd(c.total)
-    erro(c.precisa_conta ? null : c.linhas.some(function (x) { return x.erro }) ? 'Fix the items marked in red to continue.'
-      : c.linhas.some(function (x) { return x.falta_piloto }) && c.account && c.account.drivers.length ? 'Choose the driver for each session.' : null)
+    pagar.textContent = indo ? t('Opening the secure checkout…', 'Abrindo o pagamento seguro…') : t('Checkout · ', 'Pagar · ') + usd(c.total)
+    erro(c.precisa_conta ? null : c.linhas.some(function (x) { return x.erro }) ? t('Fix the items marked in red to continue.', 'Corrija os itens em vermelho para continuar.')
+      : c.linhas.some(function (x) { return x.falta_piloto }) && c.account && c.account.drivers.length ? t('Choose the driver for each session.', 'Escolha o piloto de cada sessão.') : null)
   }
 
   function cotar() {
@@ -255,7 +260,7 @@
       body: JSON.stringify({ itens: itens }) })
       .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
       .then(desenhar)
-      .catch(function () { estado.hidden = false; estado.textContent = 'We could not load your cart. Please refresh the page.' })
+      .catch(function () { estado.hidden = false; estado.textContent = t('We could not load your cart. Please refresh the page.', 'Não conseguimos carregar o seu carrinho. Recarregue a página.') })
   }
 
   pagar.addEventListener('click', function () {
@@ -269,9 +274,9 @@
       .then(function (x) {
         if (x.ok && x.d.url) { window.location.assign(x.d.url); return }
         indo = false
-        return cotar().then(function () { erro(x.d.erro || 'Something went wrong. Please try again.') })
+        return cotar().then(function () { erro(x.d.erro || t('Something went wrong. Please try again.', 'Algo deu errado. Tente de novo.')) })
       })
-      .catch(function () { indo = false; desenhar(cot); erro('We could not reach the checkout. Please try again.') })
+      .catch(function () { indo = false; desenhar(cot); erro(t('We could not reach the checkout. Please try again.', 'Não conseguimos abrir o pagamento. Tente de novo.')) })
   })
 
   cotar()

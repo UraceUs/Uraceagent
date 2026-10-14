@@ -29,7 +29,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from command_center.db import agora, get_db, inserir
 from command_center.providers import agenda_sessoes as ag
-from command_center.vitrine import paginas
+from command_center.vitrine import idioma, paginas
 from command_center.vitrine import paginas_site as ps
 
 r = APIRouter(tags=["vitrine"])
@@ -150,7 +150,8 @@ def pagina(request: Request, caminho: str):
         return _html(ps.pro_team(host, planos=_planos()))
     if caminho == "/cart/":                             # #236: o carrinho (noindex, sem cache: é de cada pessoa)
         from command_center.providers import stripe_loja
-        return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado()))
+        return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado(),
+                                      lang=idioma.de_request(request)))
     if caminho in PAGINAS:
         return _html(PAGINAS[caminho](host))
     html = _dinamica(host, caminho, q)
@@ -392,6 +393,14 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
         return erro("Online payment isn't available right now. Please send us an order request.")
     if _estourou(_ip(request)):
         return erro("Too many requests in a row. Please try again in a few minutes.")
+    from command_center.api import portal as api_portal
+    conta = api_portal.conta_do_cookie(request, con)
+    if not conta:                                  # #248: comprar pede a conta do site; entra (ou cria) e volta
+        destino = f"{paginas.PORTAL}?volta={volta}"
+        if quer_json:
+            return JSONResponse({"ok": False, "erro": "Please sign in or create your URACE account to buy.", "sign_in": True,
+                                 "url": destino}, status_code=401, headers={"Cache-Control": "no-store"})
+        return RedirectResponse(destino, status_code=303)
     try:
         qtd = int(c.get("quantidade") or 1)
     except ValueError:
@@ -401,7 +410,7 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
         foto = _origem(request) + paginas.estatico("img/" + p["images"][0]["src"])
     try:
         _, url = stripe_loja.criar_sessao(con, p, c.get("variacao") or "", qtd, c.get("entrega"), _origem(request),
-                                          host_de(request), foto_url=foto)
+                                          host_de(request), foto_url=foto, conta_id=conta, lang=idioma.de_request(request))
     except ValueError as e:
         return erro(str(e))
     except stripe_loja.ErroStripe as e:
@@ -433,12 +442,12 @@ async def stripe_webhook(request: Request, background: BackgroundTasks, con: sql
     resultado, pago = stripe_loja.receber_evento(con, evento)
     if pago:
         background.add_task(stripe_loja.avisar_e_registrar, pago)
-    elif resultado in ("falhou", "expirado"):               # #245: o aviso do falhou/expirou, uma vez só
+    elif resultado in ("aguardando", "falhou", "expirado"):     # #245, #248: todo resultado avisa, uma vez só
         from command_center.db import um
         from command_center.providers import pedido_site
         ev = um(con, "SELECT order_id FROM stripe_events WHERE id=?", (str(evento["id"]),))
         if ev and ev["order_id"]:
-            background.add_task(pedido_site.avisar_resultado_bg, ev["order_id"])
+            background.add_task(pedido_site.avisar_resultado_bg, ev["order_id"], resultado)
     return JSONResponse({"recebido": True, "resultado": resultado}, headers={"Cache-Control": "no-store"})
 
 
@@ -476,8 +485,21 @@ async def carrinho_cotar(request: Request, con: sqlite3.Connection = Depends(get
         raise HTTPException(404)
     d = await _corpo_json(request)
     conta = api_portal.conta_do_cookie(request, con)
-    cot = carrinho.cotar(con, d.get("itens"), conta)
+    cot = _no_idioma(carrinho.cotar(con, d.get("itens"), conta), idioma.de_request(request))
     return _json({**cot, "account": _conta_resumo(con, conta) if conta else None, "stripe": stripe_loja.ligado()})
+
+
+def _no_idioma(cot, lang):
+    """#248: as linhas como o servidor vê, no idioma da pessoa (o dia da sessão e as mensagens)."""
+    from command_center.providers import pedido_site
+    if lang != "pt":
+        return cot
+    for x in cot["linhas"]:
+        x["nome"] = idioma.traduzir(x["nome"], lang)
+        x["erro"] = idioma.traduzir(x["erro"], lang)
+        if x["tipo"] == "sessao" and x.get("detalhe"):
+            x["detalhe"] = pedido_site.quando(x["data"], x["turno"], lang)
+    return cot
 
 
 @r.post("/ops/api/vitrine/carrinho/checkout", include_in_schema=False)
@@ -489,26 +511,28 @@ async def carrinho_checkout(request: Request, con: sqlite3.Connection = Depends(
     if not e_do_site(request):
         raise HTTPException(404)
     d = await _corpo_json(request)
+    lang = idioma.de_request(request)
     if not stripe_loja.ligado():
-        return _json({"ok": False, "erro": "Online payment isn't available right now. Please call or WhatsApp us."}, 400)
+        return _json({"ok": False, "erro": idioma.traduzir("Online payment isn't available right now. Please call or WhatsApp us.", lang)}, 400)
     conta = api_portal.conta_do_cookie(request, con)
     if conta and not api_portal.csrf_ok(request):
-        return _json({"ok": False, "erro": "Security check failed. Reload the page and try again."}, 403)
+        return _json({"ok": False, "erro": idioma.traduzir("Security check failed. Reload the page and try again.", lang)}, 403)
     if _estourou(_ip(request)):
-        return _json({"ok": False, "erro": "Too many requests in a row. Please try again in a few minutes."}, 429)
+        return _json({"ok": False, "erro": idioma.traduzir("Too many requests in a row. Please try again in a few minutes.", lang)}, 429)
     try:
-        oid, url = carrinho.criar_checkout(con, d.get("itens"), d.get("entrega"), conta, _origem(request), host_de(request))
+        oid, url = carrinho.criar_checkout(con, d.get("itens"), d.get("entrega"), conta, _origem(request), host_de(request),
+                                           lang=lang)
     except carrinho.PrecisaConta as e:
         con.rollback()
-        return _json({"ok": False, "erro": str(e), "sign_in": True}, 401)
+        return _json({"ok": False, "erro": idioma.traduzir(str(e), lang), "sign_in": True}, 401)
     except carrinho.ErroCarrinho as e:
         con.rollback()
-        return _json({"ok": False, "erro": str(e)}, 400)
+        return _json({"ok": False, "erro": idioma.traduzir(str(e), lang)}, 400)
     except stripe_loja.ErroStripe as e:
         con.commit()                                    # o pedido fica 'falhou' (a equipe vê a tentativa)
         import logging
         logging.getLogger("urace.loja").warning("checkout do carrinho falhou: %s", str(e)[:200])
-        return _json({"ok": False, "erro": "We couldn’t open the secure checkout just now. Please try again in a minute."}, 502)
+        return _json({"ok": False, "erro": idioma.traduzir("We couldn’t open the secure checkout just now. Please try again in a minute.", lang)}, 502)
     con.commit()
     return _json({"ok": True, "url": url, "order": oid})
 
@@ -531,6 +555,9 @@ def _conferir(con, o, background):
         return o
     if agora_pago:
         background.add_task(stripe_loja.avisar_e_registrar, novo["id"])
+    elif novo and novo["status"] in ("aguardando", "expirado"):    # #248: se o webhook atrasar, o aviso sai daqui
+        from command_center.providers import pedido_site
+        background.add_task(pedido_site.avisar_resultado_bg, novo["id"], novo["status"])
     return novo or o
 
 
@@ -539,9 +566,12 @@ def _pagina_pedido(request, con, o, caminho, limpar=False, erro=None, status=200
     from command_center.api import portal as api_portal
     from command_center.providers import pedido_site
     ref = pedido_site.refeito(con, o)
-    html = ps.pedido_pagina(host_de(request), o, ls=pedido_site.linhas(con, o), caminho=caminho, token=pedido_site.token(o),
+    ls = pedido_site.linhas(con, o)
+    volta = caminho + (f"?{request.url.query}" if request.url.query and caminho.endswith("/thanks/") else "")
+    html = ps.pedido_pagina(host_de(request), o, ls=ls, caminho=caminho, token=pedido_site.token(o),
                             limpar=limpar, refeito=(ref["id"], pedido_site.caminho(ref)) if ref else None, erro=erro,
-                            csrf=request.cookies.get(api_portal.COOKIE_CSRF, ""))
+                            csrf=request.cookies.get(api_portal.COOKIE_CSRF, ""), lang=idioma.de_request(request),
+                            volta=volta, cli=pedido_site.cliente(con, o, ls))
     resp = _sem_cache(html, status)
     resp.headers["Referrer-Policy"] = "no-referrer"
     return resp
@@ -563,7 +593,7 @@ def carrinho_obrigado(request: Request, background: BackgroundTasks, con: sqlite
         raise HTTPException(404)
     o = _volta_do_stripe(request, background, con)
     if not o:
-        return _sem_cache(ps.carrinho_obrigado(host_de(request), None))
+        return _sem_cache(ps.carrinho_obrigado(host_de(request), None, lang=idioma.de_request(request), volta=_volta_aqui(request)))
     return _pagina_pedido(request, con, o, "/cart/thanks/", limpar=o["status"] in ("pago", "aguardando"))
 
 
@@ -573,7 +603,7 @@ def loja_obrigado(request: Request, background: BackgroundTasks, con: sqlite3.Co
         raise HTTPException(404)
     o = _volta_do_stripe(request, background, con)
     if not o:
-        return _sem_cache(ps.obrigado(host_de(request), None))
+        return _sem_cache(ps.obrigado(host_de(request), None, lang=idioma.de_request(request), volta=_volta_aqui(request)))
     return _pagina_pedido(request, con, o, "/store/thanks/")
 
 
@@ -611,7 +641,7 @@ def pedido_restaurar(token: str, request: Request, con: sqlite3.Connection = Dep
         return _nao_achou(request)
     if o["status"] in ("pago", "aguardando"):
         return RedirectResponse(pedido_site.caminho(o), status_code=303)
-    resp = _sem_cache(ps.carrinho(host_de(request), stripe=stripe_loja.ligado(),
+    resp = _sem_cache(ps.carrinho(host_de(request), stripe=stripe_loja.ligado(), lang=idioma.de_request(request),
                                   restaurar=(o["id"], pedido_site.itens_do_carrinho(con, o), o["delivery"])))
     resp.headers["Referrer-Policy"] = "no-referrer"
     return resp
@@ -643,10 +673,11 @@ async def pedido_de_novo(token: str, request: Request, con: sqlite3.Connection =
     if conta and not (csrf and hmac.compare_digest(csrf, c.get("csrf", ""))):
         conta = None                                    # sem o CSRF da conta, segue como visitante
     itens = pedido_site.itens_do_carrinho(con, o)
-    if not itens or (pedido_site.tem_sessao(con, o) and (not conta or conta != o["account_id"])):
-        return restaurar
+    if not itens or not conta or (o["account_id"] and conta != o["account_id"]):
+        return restaurar                                # #248: comprar pede a conta (a do pedido); o carrinho pede o login
     try:
-        novo, url = carrinho.criar_checkout(con, itens, o["delivery"], conta, _origem(request), host_de(request))
+        novo, url = carrinho.criar_checkout(con, itens, o["delivery"], conta, _origem(request), host_de(request),
+                                            lang=idioma.de_request(request))
     except carrinho.ErroCarrinho:
         return restaurar
     except stripe_loja.ErroStripe as e:
@@ -666,7 +697,29 @@ async def pedido_de_novo(token: str, request: Request, con: sqlite3.Connection =
 def loja_cancelado(request: Request):
     if not e_do_site(request):
         raise HTTPException(404)
-    return _sem_cache(ps.cancelado(host_de(request), _slug(request.query_params.get("p") or "")))
+    return _sem_cache(ps.cancelado(host_de(request), _slug(request.query_params.get("p") or ""), lang=idioma.de_request(request),
+                                   volta=_volta_aqui(request)))
+
+
+def _volta_aqui(request):
+    return request.url.path + (f"?{request.url.query}" if request.url.query else "")
+
+
+@r.post("/language/", include_in_schema=False)
+async def trocar_idioma(request: Request):
+    """#248: a chave EN/PT das páginas da compra. Grava a escolha (um ano) e volta para a mesma página."""
+    if not e_do_site(request):
+        raise HTTPException(404)
+    c = await _campos(request)
+    volta = c.get("volta") or "/cart/"
+    if not idioma.volta_ok(volta):
+        volta = "/cart/"
+    resp = RedirectResponse(volta, status_code=303)
+    resp.headers["Cache-Control"] = "no-store"
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    resp.set_cookie(idioma.COOKIE, idioma.norma(c.get("lang")), max_age=idioma.UM_ANO, path="/", samesite="lax",
+                    secure=request.url.scheme == "https", httponly=True)
+    return resp
 
 
 def robots(request):

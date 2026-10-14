@@ -1580,6 +1580,7 @@ CREATE TABLE IF NOT EXISTS store_orders (
   outcome_notified_at TEXT,
   outcome_notify_error TEXT,
   retry_of          INTEGER REFERENCES store_orders(id),  -- "Try again" / "Restore cart" de outro pedido
+  lang              TEXT,                                 -- #248: en | pt, o idioma em que a pessoa comprou
   created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
@@ -1614,6 +1615,39 @@ CREATE TABLE IF NOT EXISTS store_order_items (
 );
 CREATE INDEX IF NOT EXISTS store_order_items_pedido ON store_order_items(order_id, id);
 CREATE INDEX IF NOT EXISTS store_order_items_opp ON store_order_items(opp_id);
+
+-- #248 (dono, 14/10): "o cliente e a equipe precisam da confirmação de pagamento sempre e deixar isso
+-- também registrado no card do cliente". Um aviso por resultado do pedido (pago, aguardando, falhou,
+-- expirado): o e-mail do cliente, o da equipe e o registro no card, cada um uma vez só.
+CREATE TABLE IF NOT EXISTS store_order_notices (
+  id          INTEGER PRIMARY KEY,
+  order_id    INTEGER NOT NULL REFERENCES store_orders(id),
+  result      TEXT NOT NULL CHECK (result IN ('pago','aguardando','falhou','expirado')),
+  claimed_at  TEXT,                                     -- tomado para mandar (dois envios nunca correm juntos)
+  sent_at     TEXT,                                     -- e-mails do cliente e da equipe saíram
+  to_email    TEXT,                                     -- para quem foi o do cliente (NULL: sem e-mail)
+  error       TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (order_id, result)
+);
+
+-- O que aconteceu com o cliente fora das outras tabelas, para a linha do tempo do card (Client360).
+-- #248: o resultado de cada pagamento do site, com o valor e o link da página do pedido.
+CREATE TABLE IF NOT EXISTS client_events (
+  id          INTEGER PRIMARY KEY,
+  client_id   INTEGER REFERENCES clients(id),           -- solta (NULL) se o card for apagado
+  at          TEXT NOT NULL,                            -- quando (ISO, UTC)
+  kind        TEXT NOT NULL,                            -- SITE_PAYMENT
+  title       TEXT NOT NULL,
+  status      TEXT,
+  detail      TEXT,
+  link        TEXT,
+  order_id    INTEGER REFERENCES store_orders(id),
+  result      TEXT,
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (client_id, order_id, result)
+);
+CREATE INDEX IF NOT EXISTS client_events_cliente ON client_events(client_id, at);
 
 -- Cada evento do webhook entra uma vez só: o Stripe reenvia e o mesmo evento não vira dois pedidos.
 CREATE TABLE IF NOT EXISTS stripe_events (

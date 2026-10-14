@@ -96,7 +96,7 @@ export interface QboSummary {
 }
 
 export interface TimelineEvent {
-  at: string; kind: 'SERVICE' | 'WAIVER_SENT' | 'WAIVER_SIGNED' | 'EMAIL' | 'AI_ACTION' | 'INVOICE'
+  at: string; kind: 'SERVICE' | 'WAIVER_SENT' | 'WAIVER_SIGNED' | 'EMAIL' | 'AI_ACTION' | 'INVOICE' | 'SITE_PAYMENT'
   title: string; status: string; entity: { type: string; id: number }; detail?: string | null; links?: Link[]
 }
 
