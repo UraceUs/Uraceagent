@@ -121,3 +121,16 @@ mandou duas respostas para "Oi" + "Quanto custa?". O dono pediu:
   A/B/C/D" e "conduzir ao fechamento"; agora segue a triagem e termina na
   oferta de call com o time.
 
+
+## 14/10 (tarde): mensagens curtas, em balões separados (pedido do dono)
+
+"Bloco grande o cliente não lê." Toda resposta sai em 2 a 4 mensagens curtas.
+
+- Persona: cada linha é um balão; uma ou duas frases curtas por linha. Para
+  "quanto custa": o preço, a taxa da pista à parte, e "É pra você ou pra outra
+  pessoa, e qual a idade do piloto?". Depois segue coletando, uma coisa por vez.
+- Ponte: `dividir_em_mensagens` quebra por linha e, se o modelo mandar um
+  bloco, por frase (até 160 caracteres, no máximo 4 mensagens). No modo
+  `json_reply` o bot mostra uma mensagem por disparo, então as seguintes ficam
+  numa fila em `pending_followup_text` e o bot de entrega é disparado de novo,
+  3 s depois, para cada uma. A guarda de estilo agora preserva as linhas.

@@ -341,13 +341,20 @@ def process_inbound(payload: dict) -> None:
         conv = state.get_conversation(lead_id)
         pending = conv.get("pending_followup_text")
         if pending and return_url:
-            state.update_conversation(lead_id, pending_followup_text=None,
+            # Fila de mensagens curtas (14/10): sai uma por disparo do bot; se
+            # sobrar alguma, o bot é disparado de novo para a próxima.
+            agora, resto = _proxima_da_fila(pending)
+            state.update_conversation(lead_id, pending_followup_text=resto,
                                       last_outbound_at=int(time.time()))
-            if _salesbot_continue(lead_id, return_url, token, pending):
-                state.log("followup", lead_id, "texto pendente entregue no chat via bots/run")
-            else:
-                kommo.add_note(lead_id, f"[follow-up — enviar manualmente]\n{pending}")
             _pending_returns.pop(lead_id, None)
+            if _salesbot_continue(lead_id, return_url, token, agora):
+                state.log("followup", lead_id, "texto pendente entregue no chat via bots/run")
+                if resto:
+                    _disparar_proxima(lead_id)
+            else:
+                state.update_conversation(lead_id, pending_followup_text=None)
+                kommo.add_note(lead_id, "[follow-up — enviar manualmente]\n"
+                               + pending.replace(_SEP_MENSAGENS, "\n"))
             return
         state.log("error", lead_id, "payload sem texto de mensagem reconhecível")
         return
@@ -754,7 +761,7 @@ def compose_followup(lead_id: int, track: str, attempt: int) -> str:
         return ""
 
 
-def deliver_followup(lead_id: int, text: str) -> bool:
+def deliver_followup(lead_id: int, text: str, espera: bool = False) -> bool:
     """Entrega espontânea: grava o texto como pendente e dispara o Salesbot
     no lead (bots/run). O bot chama o widget_request → process_inbound vê o
     pendente e o devolve pelo return_url → aparece no chat. Sem bot
@@ -765,7 +772,13 @@ def deliver_followup(lead_id: int, text: str) -> bool:
     if pausas.ia_pausada(lead_id):
         state.log("gate", lead_id, "IA pausada nesta conversa — entrega espontânea cancelada")
         return False
+    if SALESBOT_DISPLAY == "json_reply" and _SEP_MENSAGENS not in text:
+        text = _SEP_MENSAGENS.join(dividir_em_mensagens(text))
     state.update_conversation(lead_id, pending_followup_text=text)
+    if espera:
+        # O bot que acabou de mostrar a mensagem anterior ainda está fechando.
+        _disparar_proxima(lead_id)
+        return True
     try:
         ok = kommo.run_bot(FOLLOWUP_BOT_ID, lead_id)
     except Exception as exc:
@@ -822,6 +835,68 @@ async def _start_scheduler():
     scheduler.start()
 
 
+# Mensagens curtas (dono, 14/10: "bloco grande o cliente não lê"): a resposta
+# sai em 1 a 4 balões curtos. No modo json_reply o bot mostra uma mensagem por
+# disparo, então as seguintes ficam numa fila em pending_followup_text,
+# separadas por este caractere, e o bot é disparado de novo para cada uma.
+_SEP_MENSAGENS = "\x1e"
+MENSAGEM_MAX = 160
+MENSAGENS_MAX = 4
+INTERVALO_ENTRE_MENSAGENS_S = 3.0
+
+
+def dividir_em_mensagens(texto: str) -> list[str]:
+    """Quebra a resposta em mensagens curtas: cada linha do modelo é uma
+    mensagem; linha longa vira várias, por frase, até MENSAGEM_MAX caracteres.
+    Link sozinho na linha é mensagem própria. No máximo MENSAGENS_MAX: o que
+    passar disso vai junto na última."""
+    if _SEP_MENSAGENS in texto:
+        return [m for m in texto.split(_SEP_MENSAGENS) if m.strip()]
+    msgs: list[str] = []
+    for linha in texto.split("\n"):
+        linha = linha.strip()
+        if not linha:
+            continue
+        atual = ""
+        for frase in _SENTENCE_RE.split(linha):
+            junto = f"{atual} {frase}".strip() if atual else frase
+            if atual and len(junto) > MENSAGEM_MAX:
+                msgs.append(atual)
+                atual = frase
+            else:
+                atual = junto
+        if atual:
+            msgs.append(atual)
+    if len(msgs) > MENSAGENS_MAX:
+        msgs = msgs[:MENSAGENS_MAX - 1] + [" ".join(msgs[MENSAGENS_MAX - 1:])]
+    return msgs or [texto.strip()]
+
+
+def _proxima_da_fila(pendente: str) -> tuple[str, str | None]:
+    partes = [m for m in pendente.split(_SEP_MENSAGENS) if m.strip()]
+    if not partes:
+        return pendente, None
+    return partes[0], (_SEP_MENSAGENS.join(partes[1:]) or None)
+
+
+def _disparar_proxima(lead_id: int) -> None:
+    """Dispara o bot de entrega para a próxima mensagem da fila, depois de um
+    intervalo (o bot anterior precisa terminar e o balão chegar antes)."""
+    def _rodar():
+        try:
+            ok = kommo.run_bot(FOLLOWUP_BOT_ID, lead_id)
+        except Exception as exc:
+            state.log("error", lead_id, f"fila de mensagens bots/run: {exc}")
+            ok = False
+        if not ok:
+            resto = state.get_conversation(lead_id).get("pending_followup_text") or ""
+            state.update_conversation(lead_id, pending_followup_text=None)
+            if resto:
+                kommo.add_note(lead_id, "[agent — resto da resposta não entregue]\n"
+                               + resto.replace(_SEP_MENSAGENS, "\n"))
+    threading.Timer(INTERVALO_ENTRE_MENSAGENS_S, _rodar).start()
+
+
 def send_to_lead(lead_id: int, text: str) -> None:
     """Devolve a resposta ao cliente via Kommo.
 
@@ -838,9 +913,19 @@ def send_to_lead(lead_id: int, text: str) -> None:
         text = limpo
     state.update_conversation(lead_id, last_outbound_at=int(time.time()))
     pending = _pending_returns.pop(lead_id, None)
+    mensagens = dividir_em_mensagens(text) if SALESBOT_DISPLAY == "json_reply" else [text]
+    if pending and len(mensagens) > 1 and FOLLOWUP_BOT_ID:
+        # A primeira sai agora pelo bot que está esperando; as outras entram na
+        # fila do bot de entrega, uma por disparo.
+        if _salesbot_continue(lead_id, pending[0], pending[1], mensagens[0]):
+            if deliver_followup(lead_id, _SEP_MENSAGENS.join(mensagens[1:]), espera=True):
+                return
+            kommo.add_note(lead_id, "[agent — resto da resposta não entregue]\n"
+                           + "\n".join(mensagens[1:]))
+            return
     if pending and _salesbot_continue(lead_id, pending[0], pending[1], text):
         return
-    if not pending and SDR_MODO == "atender" and deliver_followup(lead_id, text):
+    if not pending and SDR_MODO == "atender" and deliver_followup(lead_id, _SEP_MENSAGENS.join(mensagens)):
         # Mensagem que veio pelo webhook de conta: não há Salesbot esperando, então a ponte dispara
         # o bot de entrega (bots/run) e ele busca o texto pendente no /kommo/hook.
         state.log("outbound", lead_id, f"via bots/run: {text}")
