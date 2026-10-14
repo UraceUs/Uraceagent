@@ -19,7 +19,7 @@ const PARENTESCO: [string, string][] = [['mother', 'Mother'], ['father', 'Father
   ['other', 'Other (grandparent, step-parent, relative, coach…)']]
 
 /** O quadro da assinatura: dedo, caneta ou mouse. Devolve o PNG (ou '' se vazio). */
-function Quadro({ onMuda }: { onMuda: (png: string) => void }) {
+export function Quadro({ onMuda }: { onMuda: (png: string) => void }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const ultimo = useRef<{ x: number; y: number } | null>(null)
   const tinta = useRef(0)
