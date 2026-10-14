@@ -8,7 +8,7 @@ Guia de uso para a equipe: `docs/playbooks/playbook-vendas.md` › "Atendimento 
 
 | Parte | Implementado | Testado | Em produção | Bloqueio |
 |---|---|---|---|---|
-| Caso, estados e transições (`handoff_casos`, eventos append-only) | sim | sim (44 + 5 testes) | **não** (falta deploy) | — |
+| Caso, estados e transições (`handoff_casos`, eventos append-only) | sim | sim (46 no painel + 5 suítes da ponte + navegador) | **não** (falta deploy) | — |
 | Trava da IA no sistema (pausa + estado da ponte, conferida na saída) | sim | sim, inclusive corrida e reinício | **não** | — |
 | Ferramenta `escalate_to_human` (painel e ponte) | sim | sim | **não** | — |
 | Fila no painel (`/ops/atendimento`): assumir, responder, transferir, encerrar, devolver | sim | sim (unidade + navegador) | **não** | — |
