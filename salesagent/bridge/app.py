@@ -16,6 +16,7 @@ import hmac
 import json
 import re
 import subprocess
+import threading
 import time
 
 import httpx
@@ -239,12 +240,17 @@ async def kommo_eventos(request: Request, background: BackgroundTasks,
 ESPERA_PELO_SALESBOT_S = 8
 
 
+_rajada: dict[int, list[tuple]] = {}
+_rajada_lock = threading.Lock()
+
+
 def responder_eventos(payload: dict, espera: float = ESPERA_PELO_SALESBOT_S) -> list[dict]:
     """Nível atender, 13/10 (dono: "precisa ser em todas as msg"): toda mensagem recebida que chega
     pelo webhook de conta é respondida pela ponte, sem depender de gatilho de Salesbot no Kommo (o
     menor intervalo que o Kommo aceita lá é 5 min). A entrega usa o mesmo canal do follow-up:
     bots/run no Salesbot de entrega. Lead fora do escopo do robô só é organizado."""
     saida = []
+    novas = []
     for msg in sdr_ponte.evento.mensagens_recebidas(payload):
         lead_id, texto = msg["lead_id"], (msg["texto"] or "").strip()
         if not lead_id or not sdr_ponte._primeira_vez(f"atender-{msg['id']}"):
@@ -252,27 +258,58 @@ def responder_eventos(payload: dict, espera: float = ESPERA_PELO_SALESBOT_S) -> 
         if not texto:
             saida.append({"lead_id": lead_id, "resposta": "SEM_TEXTO"})
             continue
+        novas.append((msg["id"], lead_id, texto))
+    # Rajada (14/10: "Oi" + "Quanto custa?" com 6 s de diferença viraram duas
+    # respostas): cada mensagem entra na fila do lead ANTES da espera, inclusive
+    # as do mesmo payload; depois da espera só a ÚLTIMA da fila responde, com o
+    # texto de todas juntas.
+    with _rajada_lock:
+        for msg_id, lead_id, texto in novas:
+            _rajada.setdefault(lead_id, []).append((msg_id, texto))
+    for msg_id, lead_id, texto in novas:
         t0 = int(time.time())
         try:
             pode, motivo = sdr_ponte.pode_responder(lead_id)
         except Exception as exc:
             state.log("error", lead_id, f"atender: leitura do card falhou: {exc}")
+            _tirar_da_rajada(lead_id, msg_id)
             saida.append({"lead_id": lead_id, "resposta": "ERRO_KOMMO"})
             continue
         if not pode:
             state.log("gate", lead_id, f"atender: sem resposta da ponte ({motivo}) — só organiza")
+            _tirar_da_rajada(lead_id, msg_id)
             sdr_ponte.triar_em_segundo_plano(lead_id, texto)
             saida.append({"lead_id": lead_id, "resposta": motivo})
             continue
+        with _rajada_lock:
+            ultima = (_rajada.get(lead_id) or [(None, "")])[-1][0]
+        if ultima != msg_id:
+            saida.append({"lead_id": lead_id, "resposta": "JUNTADA_COM_A_SEGUINTE"})
+            continue
         if espera:
             time.sleep(espera)
+        with _rajada_lock:
+            fila = _rajada.get(lead_id) or []
+            if not fila or fila[-1][0] != msg_id:
+                saida.append({"lead_id": lead_id, "resposta": "JUNTADA_COM_A_SEGUINTE"})
+                continue
+            _rajada.pop(lead_id, None)
         conv = state.get_conversation(lead_id)
         if (conv.get("last_inbound_text") or "") == texto[:500] and (conv.get("last_inbound_at") or 0) >= t0 - 60:
             saida.append({"lead_id": lead_id, "resposta": "JA_TRATADA_PELO_SALESBOT"})
             continue
-        tratar_mensagem(lead_id, texto)
+        tratar_mensagem(lead_id, "\n".join(t for _id, t in fila))
         saida.append({"lead_id": lead_id, "resposta": "RESPONDIDA"})
     return saida
+
+
+def _tirar_da_rajada(lead_id: int, msg_id) -> None:
+    with _rajada_lock:
+        fila = [m for m in _rajada.get(lead_id) or [] if m[0] != msg_id]
+        if fila:
+            _rajada[lead_id] = fila
+        else:
+            _rajada.pop(lead_id, None)
 
 
 @app.post("/tools/sdr")
@@ -460,12 +497,12 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
 def _resposta_de_espera(lead_id: int, lead_text: str) -> str:
     """O que o lead recebe quando a conversa está com uma pessoa. Objeção de
     preço ou pedido de desconto não ouve "sua pergunta está com a equipe":
-    recebe a oferta de uma call de 15 min com o Lucas, com o link do
+    recebe a oferta de uma call de 15 min com o nosso time, com o link do
     calendário (pedido do dono, 13/10). O resto, a espera de sempre."""
     link = PROGRAM_LINKS.get("call_link")
     if link and sdr_ponte.objecao_de_preco(lead_text):
         conv = state.get_conversation(lead_id)
-        state.log("gate", lead_id, "objeção de preço: oferta de call com o Lucas")
+        state.log("gate", lead_id, "objeção de preço: oferta de call com o time")
         return holding.call_offer(lead_text, link, contact_name=conv.get("contact_name"))
     return _holding_reply(lead_id, lead_text)
 
@@ -537,7 +574,7 @@ def _memory_context(lead_id: int, conv: dict) -> str:
         for c in confirmadas:
             q = (c.get("question") or "").strip()
             linhas.append(f"- {('Perguntou: ' + q + ' -> ') if q else ''}"
-                          f"{c['author']} confirmou: {c['answer']}")
+                          f"a equipe confirmou: {c['answer']}")
 
     linhas.append(f"Próxima ação sugerida: {_next_action(conv)}")
     return "\n".join(linhas)
@@ -551,20 +588,18 @@ def _next_action(conv: dict) -> str:
     if conv.get("state") in ("WAITING_HUMAN", "HUMAN_HANDOFF"):
         return ("aguardar decisão humana; responder apenas o que o "
                 "conhecimento acima cobrir")
-    if not conv.get("q_experience"):
-        return ("obter a classificação A/B/C/D — se o lead já respondeu isso "
-                "antes no histórico desta conversa, registre com [[qualify]] "
-                "SEM reenviar o menu")
-    if conv.get("q_experience") == "competes":
-        return "escalar para o Italo (regra G2)"
     if not conv.get("driver_age"):
-        return "confirmar a idade do piloto (elegibilidade)"
+        return ("triagem curta: quem é o piloto e que idade tem (uma pergunta "
+                "só; se ele já disse, registre com [[qualify]] e não pergunte de novo)")
+    if not conv.get("q_experience"):
+        return ("triagem curta: já andou de kart de corrida? (nunca, aluguel, "
+                "competição) -- registre com [[qualify]]")
     if conv.get("followup_track") == "link_sent":
-        return ("o link do programa já foi enviado; avançar para fechamento "
-                "ou tratar objeção — não reenviar o link nem reabrir "
-                "qualificação")
-    return ("recomendar o programa adequado e enviar o link via [[price]]; "
-            "detectada intenção de compra, conduzir ao fechamento")
+        return ("o link já foi enviado; não reenviar. Objeção ou muitas "
+                "dúvidas: oferecer a call de 15 min com o nosso time")
+    return ("descobrir o objetivo (experimentar um dia, treinar sempre, "
+            "competir) e, com decisão real, objeção ou muitas dúvidas, "
+            "oferecer a call de 15 min com o nosso time")
 
 
 def _instrucoes_comercial(lead_id: int) -> str:

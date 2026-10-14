@@ -95,3 +95,29 @@ https://urace.us/product/go-kart-driving-experience/ How old is the driver?").
 Escopo de atuação (só a tag `teste-sdr` enquanto o dono não liberar), pausa por
 conversa no Command Center, nível `atender` ligado pelo painel, regras de
 escalação do B4, janela de 24 h da Meta.
+
+## 14/10: tom URACE, sem nome do time, triagem curta (pedido do dono)
+
+Teste no Instagram do Eduardo: o robô abriu com "Bom te ver de novo por aqui.
+Pra seguir com a inspeção do kart e já marcar o treino com o Lucas..." e
+mandou duas respostas para "Oi" + "Quanto custa?". O dono pediu:
+
+- **Nunca citar o nome de alguém do time ao lead** (nem Lucas, nem Italo). O
+  robô fala "URACE" ou "nosso time"; o treino é com a URACE. A call de 15 min é
+  com o nosso time (o dono ou um dos nossos especialistas) para conversar sobre
+  o desenvolvimento do piloto e os objetivos. Persona, oferta de call
+  (`holding.call_offer`) e a frase de passagem foram reescritas.
+- **Triagem curta**, mensagens curtas, amigável e respeitosa: quem é o piloto e
+  que idade tem, já andou de kart de corrida, o que quer. Sempre tentando
+  coletar o que falta, sem empurrar.
+- **Contexto antigo não abre resposta.** A "inspeção do kart" veio da tabela
+  `confirmations` (respostas do time em agosto), que entra em todo turno com o
+  nome de quem respondeu. Agora entra como "a equipe confirmou", e a persona
+  manda responder o que a pessoa perguntou agora. "Bom te ver de novo" e
+  "good to see you again" entraram no `NUNCA_DIZER`.
+- **Rajada vira uma resposta.** Mensagens do mesmo lead que chegam dentro da
+  espera de 8 s entram numa fila; só a última responde, com o texto de todas.
+- A "próxima ação sugerida" da ponte ainda mandava "obter a classificação
+  A/B/C/D" e "conduzir ao fechamento"; agora segue a triagem e termina na
+  oferta de call com o time.
+
