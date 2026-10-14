@@ -33,7 +33,7 @@ vêm preenchidos** no exemplo — foram lidos das contas em 31/08.
 
 ```bash
 cd ~ && git clone <url-do-repo> Uraceagent
-cd Uraceagent && git checkout claude/configurar-open-claw-ooqo8x
+cd Uraceagent && git checkout claude/commandcenter-vps
 ```
 
 Se já existe: `git pull`.

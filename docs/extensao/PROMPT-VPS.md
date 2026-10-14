@@ -23,7 +23,7 @@ Você recusou a T-001 por isso em 22/09 e estava certa.
 
 ## O que você PODE fazer sozinho
 
-1. `git pull origin claude/configurar-open-claw-ooqo8x`
+1. `git pull origin claude/commandcenter-vps`
 2. Rodar o deploy: `bash adminai/deploy/command_center/servir_command_center.sh`
    Mudou alguma unidade systemd? `bash adminai/deploy/instalar_unidades.sh` — ele varre
    todas e recarrega; não use lista escrita à mão, ela esquece.
@@ -90,8 +90,8 @@ ARQ="relatorios/vps-$(date -u +%Y%m%dT%H%M%SZ).md"
 git add "$ARQ"
 git -c user.email=ops@urace.us -c user.name="URACE VPS" commit -q -m "Relatório da VPS: $(basename "$ARQ")"
 for i in 1 2 3 4; do
-  git pull --rebase origin claude/configurar-open-claw-ooqo8x && \
-  git push origin claude/configurar-open-claw-ooqo8x && break
+  git pull --rebase origin claude/commandcenter-vps && \
+  git push origin claude/commandcenter-vps && break
   sleep $((2**i))
 done
 ```
