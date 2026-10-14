@@ -140,6 +140,36 @@ def rodar() -> list[str]:
     check("o mesmo evento repetido pelo Kommo não responde duas vezes",
           app.responder_eventos(_evento("m2", 101, "quero começar, como faço?"), espera=0) == [])
 
+    print("\n2b. Rajada: \"Oi\" + \"Quanto custa?\" seguidos viram UMA resposta (14/10)")
+    recebidos = []
+    app._call_agent = lambda lead_id, msg: (recebidos.append(msg) or resposta,
+                                            textproc.extract_directives(resposta))
+    bots_antes = len(k.bots)
+    rajada = {"message": {"add": [
+        {"id": "r1", "type": "incoming", "text": "Oi", "element_type": "2",
+         "element_id": "101", "origin": "instagram"},
+        {"id": "r2", "type": "incoming", "text": "Quanto custa?", "element_type": "2",
+         "element_id": "101", "origin": "instagram"}]}}
+    r = app.responder_eventos(rajada, espera=0)
+    check("no mesmo payload: a primeira junta com a seguinte, a última responde",
+          r == [{"lead_id": 101, "resposta": "JUNTADA_COM_A_SEGUINTE"},
+                {"lead_id": 101, "resposta": "RESPONDIDA"}], r)
+    check("uma entrega só", len(k.bots) == bots_antes + 1, k.bots)
+    check("o agente recebeu as duas mensagens juntas",
+          recebidos and "Oi" in recebidos[-1] and "Quanto custa?" in recebidos[-1], recebidos[-1:])
+    import threading
+    resultados = []
+    t1 = threading.Thread(target=lambda: resultados.extend(
+        app.responder_eventos(_evento("r3", 101, "Oi de novo"), espera=0.6)))
+    t1.start()
+    time.sleep(0.2)
+    resultados.extend(app.responder_eventos(_evento("r4", 101, "Qual o valor?"), espera=0.6))
+    t1.join()
+    check("em webhooks separados (6 s de diferença na vida real): também uma resposta só",
+          sorted(x["resposta"] for x in resultados) == ["JUNTADA_COM_A_SEGUINTE", "RESPONDIDA"]
+          and len(k.bots) == bots_antes + 2, (resultados, k.bots))
+    app._call_agent = lambda lead_id, msg: (resposta, textproc.extract_directives(resposta))
+
     print("\n3. Fora do escopo: só organiza")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
     antes = len(k.bots)

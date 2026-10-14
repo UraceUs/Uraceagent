@@ -924,6 +924,33 @@ def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegad
     pg.close()
 
 
+def test_calendario_em_cards_a_corrida_traz_um_card_por_cliente(servidor, navegador):
+    """#233 (dono, 14/10): no mês, "separado ali os cards … corrida é um card de serviço geral com
+    cards de serviços de cada cliente … um treino é um card de serviço daquele cliente"."""
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=1280, altura=900)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    pg.get_by_role("button", name="Mês", exact=True).click()
+    pg.locator(".md-cal-d.hoje .md-card.servico", has_text="David Pera").wait_for()   # o treino: card do cliente
+    corrida = pg.locator(".md-cal-d .md-card.corrida", has_text="ROK")
+    if not corrida.count():                                    # a corrida é daqui a 9 dias: pode cair no mês seguinte
+        pg.get_by_role("button", name="Próximo mês").click()
+    corrida.first.wait_for()
+    assert corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Santiago").count() == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Semana", exact=True).click()
+    pg.locator(".md-semana-d.hoje .md-card.servico", has_text="David Pera").wait_for()
+    corrida = pg.locator(".md-semana-d .md-card.corrida", has_text="ROK")
+    for _ in range(2):
+        if corrida.count():
+            break
+        pg.get_by_role("button", name="Próximo semana").click()
+        pg.wait_for_timeout(400)
+    corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Santiago").wait_for()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_mecanico_cadastra_peca_nova_no_balcao_com_foto_e_ela_aparece_no_estoque(servidor, navegador, tmp_path):
     """Dono, 06/10: ao adicionar a peça, o mecânico tira a foto na hora ou escolhe da galeria,
     e a foto aparece no estoque no lugar da caixinha."""

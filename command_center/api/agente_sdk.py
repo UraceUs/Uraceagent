@@ -104,7 +104,26 @@ def nome_da_ferramenta(nome_cru):
 AUTOMATICAS = {"docusign_enviar_waiver", "docusign_reenviar_waiver", "venda_enviar_waiver"}
 
 
-def classificar(con, nome):
+def lembrete_em_aberto(con, nome, args):
+    """Dono, 14/10: "lembretes de invoices não precisam de aprovação se a invoice estiver em aberto".
+    Vale enquanto a política de `qbo_lembrete_invoice` no painel for SAFE (apertou lá, o clique
+    volta). Em aberto = o QuickBooks, lido agora, diz que ainda há saldo; qualquer dúvida
+    (sem id, QuickBooks fora, paga) volta para o clique."""
+    from command_center.api import ia
+    from command_center.providers import chamar
+    if nome != "qbo_lembrete_invoice" or ia._politica(con, nome) != "SAFE":
+        return False
+    qid = str((args or {}).get("id") or "").strip()
+    if not qid:
+        return False
+    try:
+        inv = chamar("quickbooks", "qbo_invoice", id=qid)
+    except Exception:
+        return False
+    return float(inv.get("saldo") or 0) > 0 and inv.get("status") != "paid"
+
+
+def classificar(con, nome, args=None):
     """ler | fazer | aprovar | bloqueada — o que acontece quando o agente chama `nome`."""
     from command_center.api import acoes, ia
     if nome in LEITURAS or acoes.eh_consulta(nome) or nome.startswith(("urace_", "kommo_")):
@@ -113,6 +132,8 @@ def classificar(con, nome):
     if pol == "BLOCKED":
         return "bloqueada"
     if nome in AUTOMATICAS and pol == "SAFE":
+        return "fazer"
+    if args is not None and lembrete_em_aberto(con, nome, args):
         return "fazer"
     if RX_APROVAR.search(nome):
         return "aprovar"
@@ -157,6 +178,24 @@ def pedir_aprovacao(con, command_id, nome, args):
     return (f"Não executei: '{nome}' sai da empresa ou não volta atrás. Criei o pedido de aprovação #{aid} no painel "
             "(um clique) com exatamente estes argumentos; quem aprovar executa. Não chame de novo nem tente outro "
             "caminho: siga com o resto e diga ao dono que está esperando o aprovar.")
+
+
+def _registrar_lembrete(con, args, resposta):
+    """O lembrete que saiu direto marca o próximo dia e entra na auditoria, como o aprovado."""
+    from command_center.api import lembretes
+    res = resposta
+    if isinstance(res, str):
+        try:
+            res = json.loads(res)
+        except ValueError:
+            res = {}
+    if isinstance(res, list) and res and isinstance(res[0], dict) and "text" in res[0]:   # resposta de MCP em blocos
+        try:
+            res = json.loads(res[0]["text"])
+        except ValueError:
+            res = {}
+    if isinstance(res, dict):
+        lembretes.registrar_envio(con, str((args or {}).get("id")), res, por="ia")
 
 
 def registrar_feita(con, command_id, nome, args, resposta):
@@ -227,7 +266,7 @@ class Portao:
         nome = nome_da_ferramenta(nome_cru)
         con = conectar()
         try:
-            tipo = classificar(con, nome)
+            tipo = classificar(con, nome, args)
             if self.ensaio and tipo in ("fazer", "aprovar"):
                 self.tentou.append({"ferramenta": nome, "tipo": tipo, "args": args})
                 return (f"MODO ENSAIO: '{nome}' não foi gravada (é um teste), mas considere que deu certo e siga o "
@@ -258,7 +297,10 @@ class Portao:
         nome = nome_da_ferramenta(nome_cru)
         con = conectar()
         try:
-            if classificar(con, nome) == "fazer":
+            if nome == "qbo_lembrete_invoice":           # #230: saiu sem clique; o painel faz a conta do lembrete
+                self.feitas.append(registrar_feita(con, self.command_id, nome, args, resposta))
+                _registrar_lembrete(con, args, resposta)
+            elif classificar(con, nome) == "fazer":
                 self.feitas.append(registrar_feita(con, self.command_id, nome, args, resposta))
         finally:
             con.close()
@@ -402,7 +444,7 @@ O CÉREBRO é a memória da empresa (processos, clientes, equipe, fornecedores, 
 COMO TRABALHAR
 - Leia antes de perguntar: QuickBooks (todas as invoices, clientes, itens e o histórico de preços), Asana, Gmail, DocuSign, Kommo, o painel (urace_*), a web e o cérebro. Nunca diga que não tem acesso a uma leitura sem tentar.
 - Faça direto o trabalho interno: tarefa, comentário e seção no Asana; cliente, item, invoice e estimate no QuickBooks SEM enviar; rascunho de e-mail; marcador no Gmail.
-- O que sai da empresa ou não volta atrás (enviar invoice, waiver, lembrete ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência): chame a ferramenta normalmente. O painel não executa: transforma num "aprovar" de um clique e te devolve o número. Não insista nem procure outro caminho. A waiver é a exceção que o dono abriu: com a política dela em SAFE, ela sai na hora.
+- O que sai da empresa ou não volta atrás (enviar invoice, waiver, lembrete ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência): chame a ferramenta normalmente. O painel não executa: transforma num "aprovar" de um clique e te devolve o número. Não insista nem procure outro caminho. A waiver é a exceção que o dono abriu: com a política dela em SAFE, ela sai na hora. O lembrete de invoice EM ABERTO também: `qbo_lembrete_invoice` com a invoice ainda com saldo sai na hora (dono, 14/10); invoice paga volta para o clique.
 
 PEDIDO INCOMPLETO (dono, 12/10: quem escreve aqui nem sempre sabe dar a instrução completa; o processo está em 10_PROCESSOS/Pedido incompleto.md)
 - Nunca trave por falta de informação. Primeiro procure o que falta: o painel (urace_cliente, urace_clientes), o QuickBooks, o Kommo, o Gmail e o cérebro. Muitas vezes só o nome basta para achar o cliente, o e-mail e o telefone.

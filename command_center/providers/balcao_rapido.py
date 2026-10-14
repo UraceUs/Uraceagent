@@ -22,6 +22,7 @@ serviços daquela data. Sem valor e sem contato do cliente — só o nome no bot
 """
 from command_center.db import agora, atualizar, todos, um
 from command_center.providers import balcao as b, estoque
+from command_center.providers.checklists import SERVICO_ATIVO
 
 
 class ErroRapido(ValueError):
@@ -61,8 +62,8 @@ def pilotos_do_dia(con, data):
                             WHERE r.active=1 AND r.date_start<=? AND COALESCE(r.date_end, r.date_start)>=?
                               AND i.status IN ('invited','confirmed') ORDER BY r.date_start, c.name""", (data, data)):
         junta(f"c:{r['client_id']}", r["client_id"], None, _nome(r), "corrida")
-    for t in todos(con, """SELECT t.client_id, c.name, c.pilot_name FROM tasks t JOIN clients c ON c.id=t.client_id
-                            WHERE substr(t.due_on,1,10)=? AND t.deleted_at IS NULL ORDER BY c.name""", (data,)):
+    for t in todos(con, f"""SELECT t.client_id, c.name, c.pilot_name FROM tasks t JOIN clients c ON c.id=t.client_id
+                            WHERE substr(t.due_on,1,10)=? AND {SERVICO_ATIVO} ORDER BY c.name""", (data,)):
         junta(f"c:{t['client_id']}", t["client_id"], None, _nome(t), "serviço")
     pend = {}
     for x in todos(con, """SELECT client_id, pilot_id, COUNT(*) AS n FROM counter_pending

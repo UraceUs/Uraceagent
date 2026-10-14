@@ -93,14 +93,14 @@ def main() -> int:
     italo = app.HUMAN_WHATSAPP_LIST[0]
     lead = 980001
 
-    # --- 1. Lead novo: memória vazia mas estruturada, próxima ação = classificar
+    # --- 1. Lead novo: memória vazia mas estruturada, próxima ação = triagem (14/10)
     agente("Hi Carlos, this is Chase...")
     app.process_inbound({"lead_id": lead, "message": "hi, i want to race",
                          "contact_name": "Carlos Souza"})
     check("todo turno recebe memória estruturada", "Memória do lead" in recebido[-1],
           recebido[-1][:200])
-    check("lead novo => próxima ação é classificar",
-          "classificação A/B/C/D" in recebido[-1], recebido[-1][-200:])
+    check("lead novo => próxima ação é a triagem curta (quem é o piloto e idade)",
+          "triagem curta" in recebido[-1] and "A/B/C/D" not in recebido[-1], recebido[-1][-200:])
     check("nome do lead na memória", "Carlos" in recebido[-1])
 
     # --- 2. Escala (kart próprio) e o humano responde pelo WhatsApp
@@ -130,7 +130,9 @@ def main() -> int:
           "inspecionamos" in recebido[-1], recebido[-1][:400])
     check("o contexto manda AFIRMAR (não re-perguntar)",
           "pode afirmar como fato" in recebido[-1])
-    check("quem confirmou aparece", "Italo" in recebido[-1])
+    # 14/10: nome de pessoa do time não chega ao modelo (ele não pode citar).
+    check("quem confirmou é 'a equipe', sem nome", "a equipe confirmou" in recebido[-1]
+          and "Italo" not in recebido[-1])
 
     # --- 4. Próxima ação evolui com o estado
     state.update_conversation(lead, q_experience="rental_only")
@@ -139,12 +141,14 @@ def main() -> int:
           "idade" in app._next_action(conv), app._next_action(conv))
     state.update_conversation(lead, driver_age=15)
     conv = state.get_conversation(lead)
-    check("qualificado => próxima ação é recomendar/fechar",
-          "[[price]]" in app._next_action(conv), app._next_action(conv))
+    check("qualificado => próxima ação é o objetivo e a call com o time",
+          "objetivo" in app._next_action(conv) and "call" in app._next_action(conv),
+          app._next_action(conv))
     state.update_conversation(lead, followup_track="link_sent")
     conv = state.get_conversation(lead)
-    check("link enviado => próxima ação é fechamento, não reenvio",
-          "fechamento" in app._next_action(conv), app._next_action(conv))
+    check("link enviado => não reenvia, oferece a call",
+          "não reenviar" in app._next_action(conv) and "call" in app._next_action(conv),
+          app._next_action(conv))
 
     # --- 5. Dois leads simultâneos: memórias isoladas
     lead2 = 980002

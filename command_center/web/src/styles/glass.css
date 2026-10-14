@@ -868,3 +868,41 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .guia th{background:var(--surface-2,rgba(127,127,127,.08))}
 .guia hr{border:0;border-top:1px solid var(--rule);margin:1.6em 0}
 .guia a{color:var(--accent);text-decoration:underline}
+
+/* #233: cards do calendário — corrida (card geral com um card por cliente), serviço, sessão */
+.md-sub{list-style:none;margin:2px 0 0 18px;padding:0;display:flex;flex-direction:column;gap:2px;font-weight:400}
+.md-sub li{font-size:12.5px;color:var(--ink-2)}
+.md-sub li::before{content:"↳ ";color:var(--muted)}
+.md-servico-corrida{padding:8px 10px;border-radius:10px;border:1px solid var(--glass-line);border-left:3px solid var(--accent);background:var(--surface-2,rgba(255,255,255,.03))}
+.h4{font-size:15px;font-weight:700;line-height:1.3}
+.md-cards{display:flex;flex-direction:column;gap:4px;min-width:0}
+.md-card{display:flex;flex-direction:column;gap:3px;min-width:0;padding:6px 10px;border-radius:9px;font-size:14px;line-height:1.3;
+  border:1px solid var(--glass-line);border-left:3px solid var(--accent);background:var(--surface-2,rgba(255,255,255,.04))}
+.md-card-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.md-card.corrida{border-left-color:var(--warn);font-weight:600}
+.md-card.servico{border-left-color:var(--accent)}
+.md-card.sessao{border-left-color:var(--ok)}
+.md-card.sessao.esperando{opacity:.75;border-left-style:dashed}
+.md-card.mais{border-left-color:var(--muted);color:var(--muted);text-align:center}
+.md-card-sub{display:flex;flex-direction:column;gap:3px;margin-left:6px;font-weight:400}
+.md-card-sub .md-card{padding:3px 8px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.md-cal-d .md-cards{display:none}
+@media(min-width:900px){
+  .md-cal{gap:6px}
+  .md-cal-d{min-height:118px;align-items:stretch;justify-content:flex-start;padding:6px;gap:4px;text-align:left}
+  .md-cal-d>b{font-size:13px;padding-left:2px}
+  .md-cal-m{display:none}
+  .md-cal-d .md-cards{display:flex;gap:3px}
+  .md-cal-d .md-card{padding:3px 6px;font-size:11.5px;border-radius:7px;gap:2px}
+  .md-cal-d .md-card-sub{margin-left:4px;gap:2px}
+  .md-cal-d .md-card-sub .md-card{padding:1px 5px;font-size:11px}
+}
+.md-leg{display:none}
+@media(min-width:900px){
+  .md-leg-cel{display:none}
+  .md-leg{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  .md-leg-i{display:inline-flex;align-items:center;gap:6px}
+  .md-leg-i::before{content:"";width:12px;height:12px;border-radius:3px;border-left:3px solid var(--accent);background:var(--surface-2,rgba(255,255,255,.06))}
+  .md-leg-i.corrida::before{border-left-color:var(--warn)}
+  .md-leg-i.sessao::before{border-left-color:var(--ok)}
+}

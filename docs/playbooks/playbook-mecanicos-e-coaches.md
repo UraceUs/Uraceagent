@@ -100,19 +100,28 @@ os equipamentos.
 3. Use **Dia**, **Semana** ou **Mês** para mudar a vista. Na semana e no mês, toque num dia
    para abrir esse dia.
 
-No mês, 🏁 marca dia com corrida, e o número mostra quantos serviços e sessões há no dia.
+Cada coisa marcada é um **card**:
+- **Treino ou serviço:** um card só daquele cliente, com o nome do piloto (borda azul).
+- **Corrida:** um card geral da corrida (🏁, borda âmbar) e, dentro dele, **um card para
+  cada cliente inscrito**. Assim dá para ver de cara quem vai correr.
+- **Sessão do site:** card de borda verde. Card apagado é sessão esperando confirmação.
+
+Na **semana**, cada dia mostra todos os cards. No **mês**, no computador, cada dia mostra até
+quatro cards e "+N" quando tem mais; clique no dia para abrir tudo. No celular, o mês fica
+compacto: 🏁 marca dia com corrida, e o número mostra quantos serviços e sessões há no dia.
 
 ### O que tem em cada dia
 
 - **Checklists do dia:** os checklists gerais do dia de treino ou serviço.
-- **Serviços:** cada serviço marcado no **Asana** para aquele dia, com o nome do piloto.
+- **Serviços:** cada serviço marcado no **Asana** para aquele dia, com o nome do piloto. Serviço
+  cancelado ou excluído no Asana não aparece: o calendário mostra só o que está ativo.
   - **Card** abre o card do cliente.
   - **Peças** abre o balcão já com esse cliente escolhido (capítulo 4).
   - Embaixo, os checklists daquele kart.
   - **Excluir** só aparece para o gerente e o acesso livre. Viu um serviço que não devia estar
     ali? Avise o gerente.
-- **Corridas:** as corridas do calendário naquele dia, com os pilotos inscritos e os
-  checklists de cada um.
+- **Corridas:** as corridas do calendário naquele dia. Cada piloto inscrito tem o próprio card,
+  com **Card**, **Peças** e os checklists dele.
 - **Sessões marcadas pelo site:** manhã, tarde ou dia todo, com o piloto. "Esperando" quer
   dizer que a sessão ainda não foi confirmada.
 

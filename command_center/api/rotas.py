@@ -328,7 +328,7 @@ def search(q: str, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depe
 @r.get("/tasks")
 def tasks(status: str = "open", project: str | None = None, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """status=open|completed|all. Espelho do quadro inteiro (menos Matt tasks)."""
-    where, p = [], []
+    where, p = ["COALESCE(t.deleted_reason,'')!=?"], ["excluída no Asana"]   # #227: espelho do que existe lá
     if status != "all":
         where.append("t.status=?"); p.append(status)
     if project:

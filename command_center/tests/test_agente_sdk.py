@@ -274,3 +274,33 @@ def test_waiver_sai_sozinha_enquanto_a_politica_do_dono_for_safe(con):
         assert agente_sdk.classificar(con, nome) == "aprovar", nome          # apertou no painel: o clique volta
     con.execute("INSERT OR REPLACE INTO action_policies (action, policy) VALUES ('qbo_enviar_invoice', 'SAFE')")
     assert agente_sdk.classificar(con, "qbo_enviar_invoice") == "aprovar"   # só a waiver; invoice continua no clique
+
+
+# ------------------------------------------------------------------ #230: lembrete de invoice em aberto
+def test_lembrete_de_invoice_em_aberto_sai_sem_aprovar(con, monkeypatch):
+    """Dono, 14/10: "lembretes de invoices não precisam de aprovação se a invoice estiver em aberto"."""
+    from command_center import providers
+    saldo = {"9065": 450.0, "9066": 0.0}
+    monkeypatch.setattr(providers, "chamar", lambda s, f, id: {"id": id, "saldo": saldo[id], "status": "open" if saldo[id] else "paid"})
+    con.execute("INSERT OR REPLACE INTO action_policies (action, policy) VALUES ('qbo_lembrete_invoice', 'SAFE')")
+    assert agente_sdk.classificar(con, "qbo_lembrete_invoice", {"id": "9065"}) == "fazer", "em aberto: sai sozinho"
+    assert agente_sdk.classificar(con, "qbo_lembrete_invoice", {"id": "9066"}) == "aprovar", "paga: não manda cobrança"
+    assert agente_sdk.classificar(con, "qbo_lembrete_invoice", {}) == "aprovar", "sem id: clique"
+    assert agente_sdk.classificar(con, "qbo_lembrete_invoice") == "aprovar", "sem os argumentos não dá para conferir"
+    _, cid = _comando(con)
+    assert agente_sdk.Portao(cid).decidir("mcp__quickbooks__qbo_lembrete_invoice", {"id": "9065"}) is None
+    assert not um(con, "SELECT 1 AS x FROM ai_actions WHERE command_id=? AND status='PROPOSED'", (cid,)), "nenhum clique criado"
+    con.execute("UPDATE action_policies SET policy='REQUIRES_APPROVAL' WHERE action='qbo_lembrete_invoice'")
+    assert agente_sdk.classificar(con, "qbo_lembrete_invoice", {"id": "9065"}) == "aprovar", "apertou no painel: o clique volta"
+
+
+def test_lembrete_que_saiu_sozinho_marca_o_proximo_dia(con, monkeypatch):
+    from command_center.api import lembretes
+    _, cid = _comando(con)
+    vistos = []
+    monkeypatch.setattr(lembretes, "registrar_envio", lambda con, qid, res, por: vistos.append((qid, res, por)))
+    p = agente_sdk.Portao(cid)
+    p.registrar("mcp__quickbooks__qbo_lembrete_invoice", {"id": "9065"},
+                [{"type": "text", "text": '{"aplicado": true, "enviado_para": "mae@example.com"}'}])
+    assert vistos == [("9065", {"aplicado": True, "enviado_para": "mae@example.com"}, "ia")]
+    assert um(con, "SELECT status FROM ai_actions WHERE command_id=? AND action='qbo_lembrete_invoice'", (cid,))["status"] == "DONE"

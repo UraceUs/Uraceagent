@@ -243,7 +243,7 @@ def rotear(texto: str) -> dict:
 
 def objecao_de_preco(texto: str) -> bool:
     """"Está caro", "faria se fosse mais barato", pedido de desconto: o lead
-    recebe a oferta de call com o Lucas (pedido do dono, 13/10)."""
+    recebe a oferta de call com o nosso time (pedido do dono, 13/10)."""
     return bool(sdr.classificador.classificar(texto or "")["desconto"])
 
 

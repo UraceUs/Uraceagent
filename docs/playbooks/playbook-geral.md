@@ -56,7 +56,8 @@ Três ideias explicam o painel inteiro:
 1. **Nada é inventado.** A tela mostra o que foi lido das fontes. Se uma fonte não respondeu, a
    tela diz isso. Não preenche com palpite.
 2. **A IA faz o trabalho interno e a pessoa decide o que sai da empresa.** Enviar invoice,
-   e-mail, lembrete, apagar ou anular espera um clique de alguém.
+   e-mail, apagar ou anular espera um clique de alguém. Exceções que o dono abriu: a waiver e o
+   **lembrete de invoice em aberto** saem sozinhos.
 3. **Tudo fica registrado.** Login, comando, aprovação e mudança ficam na **Auditoria**, com o
    nome de quem fez. Esse registro não se apaga.
 
@@ -138,7 +139,7 @@ pedem acesso de operador.
 |---|---|---|---|---|
 | Hoje | **Hoje** | `/ops/` | a abertura do dia: pista de hoje, o que precisa de gente, o que espera aprovação, waivers abertas, próximos 7 dias, sistemas | todos |
 | Hoje | **Precisa de atenção** | `/ops/attention` | a fila do que a IA não resolveu sozinha, do mais grave para o menos | todos |
-| Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists | todos |
+| Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists. Mostra **só o ativo**: serviço cancelado ("CANCELLED - …") ou excluído não aparece. Tudo em **cards**: o treino é o card do cliente; a corrida é um card geral com um card por cliente inscrito | todos |
 | Comercial | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
 | Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação | operador+ |
 | Comercial | **Atendimento humano** | `/ops/atendimento` | a fila das conversas em que a IA pediu uma pessoa: assumir, responder, transferir, encerrar, devolver à IA (o caso abre em `/ops/atendimento/<n>`) | todos (agir: operador+) |
@@ -167,7 +168,7 @@ pedem acesso de operador.
 | Administrativo | **QuickBooks** | `/ops/quickbooks` | invoices e pagamentos. A IA prepara; enviar pede aprovação | todos veem a tela; financeiro é gerente+ |
 | Administrativo | **DocuSign** | `/ops/docusign` | as waivers. Entregue não é assinada; devolvida é e-mail errado | todos |
 | Administrativo | **Gmail** | `/ops/gmail` | o que a triagem da IA não decidiu | todos |
-| Administrativo | **Asana** | `/ops/asana` | o quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services | todos |
+| Administrativo | **Asana** | `/ops/asana` | o **espelho** do quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services. Tarefa excluída no Asana sai daqui na sincronia seguinte (até 15 min) e fica no card do cliente como "excluída no Asana" | todos |
 | Administrativo | **Integrações** | `/ops/integrations` | o estado de cada sistema; "Verificar agora"; atualizar o sistema | todos (atualizar: administrador) |
 | Administrativo | **Auditoria** | `/ops/audit` | o registro imutável de tudo | gerente+ |
 | Administrativo | **Políticas da IA** | `/ops/policies` | o que a IA faz sozinha, o que pede confirmação, aprovação ou está bloqueado | administrador |
@@ -369,12 +370,17 @@ Mandar comando à IA exige papel de operador ou acima.
 |---|---|---|
 | **Ler** | QuickBooks, Asana, Gmail, DocuSign, Kommo, o painel, a web, o cérebro da empresa | faz direto |
 | **Trabalho interno** | tarefa, comentário e seção no Asana; cliente, item, invoice e estimate no QuickBooks **sem enviar**; rascunho de e-mail; marcador no Gmail | faz direto e registra como ação feita |
-| **Sai da empresa ou não volta atrás** | enviar invoice, lembrete ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência | **não executa**: vira um "aprovar" de um clique em **Aprovações** |
+| **Sai da empresa ou não volta atrás** | enviar invoice, lembrete de invoice já paga ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência | **não executa**: vira um "aprovar" de um clique em **Aprovações** |
 | **Bloqueado pela política** | o que estiver como `BLOCKED` em Políticas da IA | não roda, nem com aprovação |
 
 A **waiver** é a exceção que o dono abriu: enquanto a política dela estiver em "sozinha" (SAFE),
 ela sai na hora. A política de cada ação está em **Políticas da IA** (administrador muda) e em
 **O que a IA pode fazer** (todos veem). **Não decore**: a política pode mudar; confira lá.
+
+O **lembrete de invoice** também sai sozinho (dono, 14/10, #230): quando a IA manda o lembrete e o
+QuickBooks, lido na hora, mostra a invoice **em aberto** (com saldo), o lembrete vai sem clique, e o
+painel marca o próximo dia. Se a invoice já está paga, se não há como conferir ou se a política do
+lembrete foi apertada em Políticas da IA, volta o clique.
 
 Ação que não tem política própria pede confirmação. Qualquer ação com "apagar", "excluir",
 "remover" no nome tem, no mínimo, a política de "apagar qualquer coisa": o sistema erra para o

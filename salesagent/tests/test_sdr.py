@@ -514,14 +514,15 @@ def camada_ponte():
     app.process_inbound(msg(410, "Consideraria se fosse mais barato"))
     texto = entregues[0][1] if entregues else ""
     check("objeção de preço escala com oferta de call, em português (D-2026-10-13)",
-          "calendar.app.google" in texto and "Lucas" in texto and "Entendo" in texto
+          "calendar.app.google" in texto and "nosso time" in texto and "Lucas" not in texto
+          and "Entendo" in texto
           and "team" not in texto and texto.count("?") == 1, str(entregues))
     falso, entregues, _ = preparar()
     falso.lead(409, COMERCIAL, ENTRADA)
     state.update_conversation(409, last_outbound_at=int(time.time()) - 600)
     app.process_inbound(msg(409, "That's too expensive for us"))
     check("\"too expensive\" com a IA ativa: oferta de call em inglês",
-          entregues and "calendar.app.google" in entregues[0][1] and "Lucas" in entregues[0][1],
+          entregues and "calendar.app.google" in entregues[0][1] and "our team" in entregues[0][1],
           str(entregues))
 
     # Follow-up do agendador: fora da janela de 24 h da Meta não sai
