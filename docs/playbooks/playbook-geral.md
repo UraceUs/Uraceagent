@@ -139,7 +139,7 @@ pedem acesso de operador.
 |---|---|---|---|---|
 | Hoje | **Hoje** | `/ops/` | a abertura do dia: pista de hoje, o que precisa de gente, o que espera aprovação, waivers abertas, próximos 7 dias, sistemas | todos |
 | Hoje | **Precisa de atenção** | `/ops/attention` | a fila do que a IA não resolveu sozinha, do mais grave para o menos | todos |
-| Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists. Mostra **só o ativo**: serviço cancelado ("CANCELLED - …") ou excluído não aparece | todos |
+| Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists. Mostra **só o ativo**: serviço cancelado ("CANCELLED - …") ou excluído não aparece. Tudo em **cards**: o treino é o card do cliente; a corrida é um card geral com um card por cliente inscrito | todos |
 | Comercial | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
 | Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação | operador+ |
 | Comercial | **Chat do Kommo** | `/ops/crm/chat` | a conversa do lead dentro do painel | todos |
