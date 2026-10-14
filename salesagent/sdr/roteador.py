@@ -15,11 +15,18 @@ RESPONDER = "responder"
 SILENCIAR = "silenciar"
 CONFIRMAR_OPT_OUT = "confirmar_opt_out"
 ESCALAR = "escalar"
+ADIAR = "adiar"
 
 MENSAGEM_OPT_OUT = {
     "pt": "Tudo certo, não vamos mais te mandar mensagens por aqui. Se precisar, é só chamar.",
     "en": "Got it, we won't message you here anymore. If you ever need us, just reach out.",
     "es": "Entendido, no te enviaremos más mensajes por aquí. Si nos necesitas, escríbenos.",
+}
+
+MENSAGEM_ADIAR = {
+    "pt": "Sem problema! Quando fizer sentido pra você, é só chamar por aqui.\nSeguimos à disposição.",
+    "en": "No problem! Whenever it makes sense for you, just message us here.\nWe're here when you're ready.",
+    "es": "¡Sin problema! Cuando te venga bien, escríbenos por aquí.\nQuedamos a tu disposición.",
 }
 
 
@@ -56,6 +63,9 @@ def _rotear(analise, triagem):
         return {"acao": SILENCIAR, "motivo": "SPAM_OU_OFERTA"}
     if analise["opt_out"]:
         return {"acao": CONFIRMAR_OPT_OUT, "motivo": "OPT_OUT"}
+    if analise.get("adiar") and not (analise["sensivel"] or analise["pede_humano"] or analise["conversao"]
+                                     or analise["desconto"] or analise["insatisfacao"] or analise["compete"]):
+        return {"acao": ADIAR, "motivo": "AGORA_NAO"}
 
     if analise["sensivel"]:
         return _escalar("TEMA_SENSIVEL")

@@ -120,6 +120,8 @@ def classificar(texto, remetente_email=None):
         "spam": contem(t, regras.PALAVRAS["spam"]),
         # "Unsubscribe" no rodapé de newsletter não é o lead pedindo para sair.
         "opt_out": not automatico and contem(t, regras.PALAVRAS["opt_out"]),
+        "adiar": (not automatico and len(t) <= 80 and "?" not in original
+                  and contem(t, regras.PALAVRAS["adiar"]) and not contem(t, regras.PALAVRAS["opt_out"])),
         "sensivel": contem(t, regras.PALAVRAS["sensivel"]),
         "desconto": contem(t, regras.PALAVRAS["desconto"]),
         "insatisfacao": contem(t, regras.PALAVRAS["insatisfacao"]),

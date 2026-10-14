@@ -184,6 +184,7 @@ def rodar() -> list[str]:
           app.dividir_em_mensagens(linhas))
     modo_antes, intervalo_antes = app.SALESBOT_DISPLAY, app.INTERVALO_ENTRE_MENSAGENS_S
     app.SALESBOT_DISPLAY, app.INTERVALO_ENTRE_MENSAGENS_S = "json_reply", 0.05
+    spc_antes, app.SEGUNDOS_POR_CARACTERE = app.SEGUNDOS_POR_CARACTERE, 0
     bots_antes, cont_antes = len(k.bots), len(continuados)
     resposta = linhas
     app._call_agent = lambda lead_id, msg: (resposta, textproc.extract_directives(resposta))
@@ -196,6 +197,7 @@ def rodar() -> list[str]:
           entregues_q == linhas.split("\n") and len(k.bots) == bots_antes + 3, (entregues_q, k.bots))
     check("a fila terminou vazia", not state.get_conversation(101).get("pending_followup_text"))
     app.SALESBOT_DISPLAY, app.INTERVALO_ENTRE_MENSAGENS_S = modo_antes, intervalo_antes
+    app.SEGUNDOS_POR_CARACTERE = spc_antes
     resposta = "Hi! Chase here from URACE. How old is the driver?"
     app._call_agent = lambda lead_id, msg: (resposta, textproc.extract_directives(resposta))
 
@@ -230,6 +232,29 @@ def rodar() -> list[str]:
     except Exception as exc:
         check("sessão inválida é recusada", getattr(exc, "status_code", 0) == 400, exc)
     app._call_agent = lambda lead_id, msg, session_key=None: (resposta, textproc.extract_directives(resposta))
+
+    print("\n2e. \"Agora não\": respeita, sem follow-up, com tarefa para uma pessoa (14/10)")
+    tarefas, tags_postas = [], []
+    k.add_task = lambda lead_id, texto, ate, responsible_user_id=None: tarefas.append((lead_id, texto, ate))
+    app.kommo_tags_seguras = lambda lead_id, tags: tags_postas.append((lead_id, tuple(tags))) or True
+    cancelados = []
+    app.scheduler.cancel = lambda lead_id, reason="": cancelados.append((lead_id, reason))
+    iniciados = []
+    app.scheduler.start_track = lambda lead_id, track: iniciados.append((lead_id, track))
+    bots_antes = len(k.bots)
+    r = app.responder_eventos(_evento("a1", 101, "Agora não, obrigado"), espera=0)
+    check("responde, agradece e deixa a porta aberta", r == [{"lead_id": 101, "resposta": "RESPONDIDA"}]
+          and len(k.bots) == bots_antes + 1 and "Sem problema" in (state.get_conversation(101).get("pending_followup_text") or ""),
+          (r, state.get_conversation(101).get("pending_followup_text")))
+    check("não começa trilha de follow-up e cancela a que existia", iniciados == [] and (101, "lead pediu para falar depois") in cancelados,
+          (iniciados, cancelados))
+    check("marca o card e cria a tarefa para uma pessoa retomar em 7 dias",
+          (101, ("sdr:agora-nao",)) in tags_postas and len(tarefas) == 1
+          and 6 * 86400 < tarefas[0][2] - int(time.time()) <= 7 * 86400, (tags_postas, tarefas))
+    check("o card não é fechado", state.get_conversation(101)["state"] != "CLOSED")
+    t5 = app.turno_de_teste("cc-teste03", "Not now, thanks")
+    check("no teste do painel aparece a nota e a resposta em inglês",
+          t5["rota"] == "adiar" and any("No problem" in m for m in t5["mensagens"]) and "adiou" in t5["nota"], t5)
 
     print("\n3. Fora do escopo: só organiza")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
