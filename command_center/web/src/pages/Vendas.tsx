@@ -17,6 +17,7 @@ import { diaLocal, fmtDate, fmtDateTime, fmtTime, hojeLocal, money } from '../co
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
+import { ConexaoGoogle, useStatusGoogle, type EventoGoogle } from '../components/GoogleAgenda'
 import { Bolha } from './AI'
 import type { AiCommand, Client } from '../api/types'
 import { tr } from '../i18n'
@@ -472,36 +473,67 @@ function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: 
 }
 
 // ------------------------------------------------------------------ agenda de vendas
+const DIAS_GOOGLE = 7
+function maisDias(dia: string, n: number) {
+  const d = new Date(dia + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10)
+}
+/** Os dias (AAAA-MM-DD, Florida) em que um evento do Google aparece, dentro do período visto. */
+function diasDoEvento(e: EventoGoogle, de: string, ate: string) {
+  if (!e.dia_todo) return [diaLocal(e.inicio)]
+  const out: string[] = []
+  for (let d = e.inicio.slice(0, 10); d < e.fim.slice(0, 10) && out.length < 62; d = maisDias(d, 1)) if (d >= de && d <= ate) out.push(d)
+  return out
+}
+/** O compromisso do Google que bate com o horário do retorno (só os que deixam a pessoa ocupada). */
+function conflito(o: Opp, evs: EventoGoogle[]) {
+  if (!o.next_at || o.next_at.length <= 10) return null
+  const t = new Date(o.next_at).getTime()
+  return evs.find(e => e.ocupado && !e.dia_todo && new Date(e.inicio).getTime() <= t && t < new Date(e.fim).getTime()) || null
+}
+
 export function AgendaVendas() {
   const a = useGet<Agenda>('/sales/agenda', 30000)
+  const g = useStatusGoogle()
   const nav = useNavigate()
   const hoje = hojeLocal()
+  const ate = maisDias(hoje, DIAS_GOOGLE)
+  const ev = useGet<{ conectado: boolean; erro?: string; eventos: EventoGoogle[] }>(g.data?.conectado ? `/google/events?de=${hoje}&ate=${ate}` : null, 120000)
+  const evs = useMemo(() => ev.data?.eventos || [], [ev.data])
   const por = useMemo(() => {
-    const m = new Map<string, (Opp & { atrasado: boolean })[]>()
-    for (const o of a.data?.retornos || []) {
-      const d = diaLocal(o.next_at)
-      m.set(d, [...(m.get(d) || []), o])
-    }
-    return [...m.entries()].sort()
-  }, [a.data])
+    const m = new Map<string, { retornos: (Opp & { atrasado: boolean })[]; google: EventoGoogle[] }>()
+    const dia = (d: string) => { if (!m.has(d)) m.set(d, { retornos: [], google: [] }); return m.get(d)! }
+    for (const o of a.data?.retornos || []) dia(diaLocal(o.next_at)).retornos.push(o)
+    for (const e of evs) for (const d of diasDoEvento(e, hoje, ate)) dia(d).google.push(e)
+    return [...m.entries()].sort((x, y) => x[0].localeCompare(y[0]))
+  }, [a.data, evs, hoje, ate])
   if (a.loading && !a.data) return <Loading rows={5} />
   if (a.error) return <ErrorState error={a.error} retry={a.reload} />
   return <div className="stack">
-    <PageHeader title={tr("Agenda de vendas")} eyebrow={tr("Vendas")} help={<>{tr("Os retornos que você marcou ao registrar cada ligação. Atrasado fica em vermelho e também aparece em Precisa de atenção.")}</>}>
+    <PageHeader title={tr("Agenda de vendas")} eyebrow={tr("Vendas")} help={<>{tr("Os retornos que você marcou ao registrar cada ligação. Atrasado fica em vermelho e também aparece em Precisa de atenção.")} {tr("Conectando o seu Google Calendar, cada retorno seu vira evento lá e os seus compromissos do Google aparecem aqui, para ver conflito.")}</>}>
       <Link className="btn" to="/sales"><Icon name="target" size={16} /> {tr("Oportunidades")}</Link>
     </PageHeader>
+    <ConexaoGoogle status={g.data} onMudou={() => { g.reload(); ev.reload() }} />
+    {ev.data?.erro && <Banner tone="warn">{tr("Não deu para ler o seu Google Calendar agora: {0}", ev.data.erro)}</Banner>}
     {por.length === 0 && <Empty title={tr("Nenhum retorno marcado")}>{tr("Ao registrar uma ligação, escolha o próximo passo e a data: ele aparece aqui.")}</Empty>}
-    {por.map(([dia, lista]) => <div className="card" key={dia}>
+    {por.map(([dia, { retornos: lista, google }]) => <div className="card" key={dia}>
       <div className="card-h"><h2 className="h2">{dia === hoje ? tr("Hoje") : fmtDate(dia)}</h2><span className="count">{lista.length}</span></div>
       <div className="card-b tight">
-        {lista.map(o => <div className="att" key={o.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/sales/${o.id}`)}>
+        {lista.map(o => { const choque = conflito(o, google); return <div className="att" key={o.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/sales/${o.id}`)}>
           <div className={`lv ${o.atrasado ? 'CRITICAL' : 'MEDIUM'}`} />
           <div className="grow">
             <div className="row wrap" style={{ gap: 8 }}><span className="mono small">{fmtTime(o.next_at)}</span><b>{nomeDo(o)}</b>
-              <Chip tone={ETAPA_TOM[o.stage]}>{ETAPA_PT[o.stage]}</Chip>{o.atrasado && <Chip tone="crit">{tr("atrasado")}</Chip>}</div>
+              <Chip tone={ETAPA_TOM[o.stage]}>{ETAPA_PT[o.stage]}</Chip>{o.atrasado && <Chip tone="crit">{tr("atrasado")}</Chip>}
+              {choque && <Chip tone="warn" title={choque.titulo || tr("Ocupado")}>{tr("conflito no Google")}</Chip>}</div>
             <div className="small muted">{o.next_what || tr("retorno")}{o.service ? ` · ${o.service}` : ''}{o.amount ? ` · ${money(o.amount)}` : ''}{o.phone ? ` · ${o.phone}` : ''}</div>
           </div>
           <div className="row" style={{ gap: 6 }}>{o.phone && <a className="btn sm" href={`tel:${o.phone.replace(/[^\d+]/g, '')}`} onClick={e => e.stopPropagation()}><Icon name="phone" size={14} /> {tr("ligar")}</a>}</div>
+        </div> })}
+        {google.map(e => <div className="att google-ev" key={`g${e.id}${dia}`}>
+          <div className="lv LOW" />
+          <div className="grow">
+            <div className="row wrap" style={{ gap: 8 }}><span className="mono small">{e.dia_todo ? tr("dia todo") : `${fmtTime(e.inicio)}–${fmtTime(e.fim)}`}</span>
+              <span>{e.titulo || tr("Ocupado")}</span><Chip>{tr("Google")}</Chip>{!e.ocupado && <Chip>{tr("livre")}</Chip>}</div>
+          </div>
         </div>)}
       </div>
     </div>)}

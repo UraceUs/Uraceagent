@@ -1953,3 +1953,88 @@ CREATE TABLE IF NOT EXISTS handoff_notificacoes (
 CREATE INDEX IF NOT EXISTS handoff_notif_fila ON handoff_notificacoes(status, proxima_em);
 CREATE INDEX IF NOT EXISTS handoff_notif_caso ON handoff_notificacoes(caso_id);
 CREATE INDEX IF NOT EXISTS handoff_notif_ext ON handoff_notificacoes(external_id) WHERE external_id IS NOT NULL;
+
+-- #220 (dono, 13/10 e 14/10): cada vendedor conecta o PRÓPRIO Google Calendar, nos dois sentidos.
+-- Uma linha por usuário. Os tokens ficam cifrados com a chave do cofre (AES-GCM, "v1:"); nunca em
+-- claro, nunca em log. Desconectar apaga a linha da própria pessoa (é o único "apagar" daqui).
+CREATE TABLE IF NOT EXISTS google_conexoes (
+  user_id       INTEGER PRIMARY KEY REFERENCES users(id),
+  google_email  TEXT,                         -- a conta Google que a pessoa escolheu (qualquer uma)
+  status        TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo','expirado')),
+  scope         TEXT,
+  access_enc    TEXT,
+  refresh_enc   TEXT,
+  expires_at    TEXT,                         -- vencimento do access token (UTC)
+  key_fp        TEXT,                         -- impressão da chave do cofre que cifrou
+  connected_at  TEXT,
+  updated_at    TEXT,
+  last_sync_at  TEXT,
+  last_error    TEXT                          -- a última falha, sem token nem corpo
+);
+-- O state do OAuth: assinado, de uso único, vence em minutos; só o hash. O verificador PKCE, cifrado.
+CREATE TABLE IF NOT EXISTS google_oauth_states (
+  state_hash    TEXT PRIMARY KEY,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  verifier_enc  TEXT NOT NULL,
+  nonce_hash    TEXT NOT NULL,                -- o cookie do navegador que começou a conexão
+  expires_at    TEXT NOT NULL,
+  used_at       TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- O evento que o PAINEL criou para o retorno de cada oportunidade. Só por este id se muda ou remove
+-- evento no Google: evento que a pessoa criou lá nunca é tocado.
+CREATE TABLE IF NOT EXISTS google_cal_events (
+  opp_id        INTEGER PRIMARY KEY REFERENCES opportunities(id),
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  google_email  TEXT,
+  event_id      TEXT NOT NULL,
+  signature     TEXT,                         -- hash do corpo enviado: igual = nada a fazer
+  next_at       TEXT,
+  status        TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo','removido','orfao')),
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS google_cal_events_user ON google_cal_events(user_id, status);
+
+-- ------------------------------------------- convite da waiver por e-mail (#135)
+-- Dono, 14/10: "vai ser por e-mail para o adulto ou para o responsável assinar aquela waiver.
+-- Tanto para adulto quanto para responsável, o e-mail que tiver no card vai receber isso."
+-- Um link pessoal, de uso único, com validade, assinado (HMAC) e preso a um card. Só o hash do
+-- link fica aqui. O que o convite prometeu (quem, qual e-mail, qual piloto) é guardado na hora
+-- do envio: se o card mudar depois, o link deixa de valer e a equipe reenvia.
+CREATE TABLE IF NOT EXISTS waiver_invites (
+  id             INTEGER PRIMARY KEY,
+  client_id      INTEGER NOT NULL REFERENCES clients(id),
+  kind           TEXT NOT NULL CHECK (kind IN ('adult','parental')),
+  signer_name    TEXT NOT NULL,                 -- adult: o piloto · parental: o responsável
+  email          TEXT NOT NULL COLLATE NOCASE,  -- o e-mail do card no envio
+  driver_name    TEXT NOT NULL,
+  driver_birth_date TEXT NOT NULL,
+  token_hash     TEXT NOT NULL UNIQUE,          -- sha256 do segredo do link
+  created_at     TEXT NOT NULL,
+  created_by     TEXT NOT NULL,                 -- user:<id> | ia
+  user_id        INTEGER REFERENCES users(id),  -- quem clicou (ou aprovou o pedido da IA)
+  expires_at     TEXT NOT NULL,
+  sent_at        TEXT,
+  message_id     TEXT,
+  opened_at      TEXT,
+  used_at        TEXT,
+  waiver_id      INTEGER REFERENCES waivers(id),
+  revoked_at     TEXT,
+  revoked_reason TEXT                           -- reenviado | e-mail não saiu
+);
+CREATE INDEX IF NOT EXISTS waiver_invites_cliente ON waiver_invites(client_id, id);
+
+-- O código de 6 dígitos (#108) que confirma, na hora de assinar, que quem assina tem a caixa.
+CREATE TABLE IF NOT EXISTS waiver_invite_codes (
+  id          INTEGER PRIMARY KEY,
+  invite_id   INTEGER NOT NULL REFERENCES waiver_invites(id),
+  code_hash   TEXT NOT NULL,
+  sent_to     TEXT NOT NULL,
+  message_id  TEXT,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL,
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+CREATE INDEX IF NOT EXISTS waiver_invite_codes_convite ON waiver_invite_codes(invite_id, id);

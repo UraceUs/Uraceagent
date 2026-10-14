@@ -486,6 +486,10 @@ POS_MIGRACAO = [
        ('pendencias_aviso', 1, '{"schedule":true}', NULL,
         '{"sistema":"conferir as pendências da IA e avisar cada pessoa do que ela ainda precisa completar"}')""",
     """UPDATE automation_rules SET schedule='["09:00","16:00"]' WHERE name='pendencias_aviso' AND schedule IS NULL""",
+    # #135 (dono, 14/10): o convite da waiver por e-mail. Pela pessoa no painel é o clique dela;
+    # pela IA sai para o cliente, então espera o aprovar.
+    """INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES
+       ('painel_waiver_convite','REQUIRES_APPROVAL','convite por e-mail para assinar a waiver nativa; sai para o cliente (#135, dono 14/10)')""",
     # Por último, de propósito: os UPDATE abaixo só encontram a linha depois dos
     # INSERT OR IGNORE acima. Tentei colocá-los no topo e, em banco novo, metade não
     # pegou — a linha ainda não existia.

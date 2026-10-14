@@ -87,6 +87,10 @@ def _autosync():
             r_asana = agenda_asana.rodar(con)
             if r_asana["criadas"] or r_asana["avisadas"]:
                 auditar(con, "booking.asana.round", "system", detail=r_asana)
+            from command_center.providers import google_agenda   # #220: retornos no Google de cada closer
+            r_google = google_agenda.rodar(con)
+            if r_google:
+                auditar(con, "google.calendar.round", "system", detail=r_google)
         except Exception as e:                            # nunca derruba o laço
             try:
                 auditar(con, "sync.auto.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
@@ -263,6 +267,8 @@ app.include_router(sistema.r)
 from command_center.api import sdr as api_sdr  # noqa: E402
 app.include_router(api_sdr.r)
 from command_center.api import vendas  # noqa: E402
+from command_center.api import google as api_google  # noqa: E402
+app.include_router(api_google.r)            # #220: cada vendedor conecta o próprio Google Calendar
 app.include_router(vendas.r)
 app.include_router(dialpad.r)
 from command_center.api import precos  # noqa: E402
