@@ -1,4 +1,4 @@
-import { PuxarHistorico, UnirModal } from '../components/Unir'
+import { CardIrmao, PuxarHistorico, UnirModal } from '../components/Unir'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
@@ -59,14 +59,18 @@ function NovoCliente({ onClose, onCreated }: { onClose: () => void; onCreated: (
   const toast = useToast()
   const [f, setF] = useState({ name: '', pilot_name: '', pilot_dob: '', email: '', phone: '', company: '', notes: '', vip: false })
   const [busy, setBusy] = useState(false)
+  const [irmao, setIrmao] = useState(false)
   async function save() {
     setBusy(true)
     try { const r = await api.post<{ id: number; created: boolean }>('/clients', f); toast(r.created ? tr("Cliente criado.") : tr("Esse cliente já existia: abrindo o card dele."), 'ok'); onCreated(r.id); onClose() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
+  // #204: irmão tem o mesmo responsável, e-mail e telefone — por aqui abriria o card do outro
+  if (irmao) return <CardIrmao onClose={onClose} onDone={onCreated} />
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>{tr("Novo cliente")}</h2><div className="small muted">{tr("O responsável é quem paga e assina. Se já existir alguém com o mesmo e-mail, telefone ou nome, o card existente abre em vez de duplicar.")}</div></div>
+    <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setIrmao(true)}>{tr("É irmão de um cliente? Criar card de irmão")}</button>
     <div className="grid g2">
       <div className="field"><label>{tr("Responsável *")}</label><input className="input" value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
       <div className="field"><label>{tr("Piloto (se for outra pessoa)")}</label><input className="input" value={f.pilot_name} onChange={e => setF({ ...f, pilot_name: e.target.value })} /></div>

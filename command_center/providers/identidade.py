@@ -474,14 +474,15 @@ def limpar_contatos(con):
 def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
     """Cliente existente para esta identidade, na ordem de confiança."""
     if email:
-        c = um(con, "SELECT * FROM clients WHERE email = ? AND kind<>?", (email.lower(), SEPARADO))
-        if c:
-            return c, "e-mail"
+        cs = todos(con, "SELECT * FROM clients WHERE email = ? AND kind<>? ORDER BY id", (email.lower(), SEPARADO))
+        if cs:
+            return _do_piloto(cs, piloto), "e-mail"
     tel = so_digitos(telefone)
     if tel:
-        for c in todos(con, "SELECT * FROM clients WHERE phone IS NOT NULL AND kind<>?", (SEPARADO,)):
-            if so_digitos(c["phone"]) == tel:
-                return c, "telefone"
+        cs = [c for c in todos(con, "SELECT * FROM clients WHERE phone IS NOT NULL AND kind<>? ORDER BY id", (SEPARADO,))
+              if so_digitos(c["phone"]) == tel]
+        if cs:
+            return _do_piloto(cs, piloto), "telefone"
     # Responsável ANTES do piloto (dono, 22/09: "é o nome do responsável e o contato que
     # confirmam"). E piloto de uma palavra só nunca decide sozinho: "Alex" bate no balde
     # "Alex", no Alex Xikis e no Alex Donnell.
@@ -548,11 +549,72 @@ def _soltar(con, cid):
 
 
 # ------------------------------------------------------------- unir
+def _do_piloto(cs, piloto):
+    """Irmãos (#204) dividem e-mail e telefone: entre os cards do mesmo contato, o do piloto."""
+    if len(cs) > 1 and piloto:
+        k = chave_exata(piloto)
+        for c in cs:
+            if k and chave_exata(c["pilot_name"] or c["name"]) == k:
+                return c
+    return cs[0]
+
+
+def familia(con, cid):
+    """Os cards da mesma família de irmãos (#204): o card de onde ela começou e os criados como
+    irmão dele. Card sem irmão devolve só ele mesmo."""
+    c = um(con, "SELECT id, sibling_of FROM clients WHERE id=?", (cid,))
+    if not c:
+        return set()
+    raiz = c["sibling_of"] or c["id"]
+    return {r["id"] for r in todos(con, "SELECT id FROM clients WHERE id=? OR sibling_of=?", (raiz, raiz))}
+
+
+def irmaos(con, cid):
+    """Os outros cards da família (para a tela deixar claro que é irmão)."""
+    ids = familia(con, cid) - {cid}
+    if not ids:
+        return []
+    marcas = ",".join("?" * len(ids))
+    return todos(con, f"SELECT id, name, pilot_name, sibling_of FROM clients WHERE id IN ({marcas}) ORDER BY id", tuple(ids))
+
+
+class ErroIrmao(ValueError):
+    pass
+
+
+def criar_irmao(con, de_id, piloto, nascimento=None, notas=None, status="NEW", source="manual"):
+    """Card do irmão (#204, dono, 14/10: *"sim, é para criar um card de um irmão"*): o mesmo
+    responsável, e-mail e telefone do card `de_id`, com o piloto dele. Cada piloto no seu card:
+    os dois nunca se unem (`nao_unir`) e o serviço de um não vai para o outro. Devolve
+    (id, novo); se a família já tem o card deste piloto, devolve esse em vez de duplicar."""
+    base = um(con, "SELECT * FROM clients WHERE id=?", (de_id,))
+    if not base:
+        raise ErroIrmao("o card do irmão não existe")
+    piloto = (piloto or "").strip()
+    if len(piloto) < 2:
+        raise ErroIrmao("diga o nome do piloto do card novo (o irmão)")
+    k = chave_exata(piloto)
+    for cid in sorted(familia(con, de_id)):
+        c = um(con, "SELECT id, name, pilot_name FROM clients WHERE id=?", (cid,))
+        if k and chave_exata(c["pilot_name"] or c["name"]) == k:
+            if cid == de_id:
+                raise ErroIrmao(f"este card já é do piloto {piloto}: o irmão tem outro nome")
+            return cid, False
+    raiz = base["sibling_of"] or base["id"]
+    cid = inserir(con, "clients", name=base["name"], email=base["email"], phone=base["phone"], company=base["company"],
+                  pilot_name=piloto, pilot_dob=(nascimento or None), notes=(notas or None), status=status,
+                  source=source, sibling_of=raiz)
+    return cid, True
+
+
 def nao_unir(con, a_id, b_id):
     """Por que dois cards NÃO podem virar um, ou None. #65 (dono, 01/10): cada driver tem o
     seu card. Irmãos têm o mesmo responsável, e-mail e telefone — o que antes juntava a
     família num card. Card ligado a um driver do site não se une ao card de OUTRO driver,
-    nem ao de outra conta do site: seria pôr o serviço de um no card do outro."""
+    nem ao de outra conta do site: seria pôr o serviço de um no card do outro. #204: o card de
+    irmão criado à mão também não volta a se unir ao do irmão."""
+    if a_id != b_id and b_id in familia(con, a_id):
+        return "são irmãos: cada piloto tem o seu card"
     pa = {r["id"] for r in todos(con, "SELECT id FROM portal_pilots WHERE client_id=?", (a_id,))}
     pb = {r["id"] for r in todos(con, "SELECT id FROM portal_pilots WHERE client_id=?", (b_id,))}
     if pa and pb and pa != pb:
@@ -582,6 +644,8 @@ def unir(con, keep_id, drop_id, por, motivo):
             campos[c] = d[c]
     if d["vip"] and not k["vip"]:
         campos["vip"] = 1
+    if "sibling_of" in d.keys() and d["sibling_of"] and not k["sibling_of"] and d["sibling_of"] != keep_id:
+        campos["sibling_of"] = d["sibling_of"]                # o duplicado de um irmão continua irmão
     if campos:
         sets = ", ".join(f"{c}=?" for c in campos)
         con.execute(f"UPDATE clients SET {sets}, updated_at=? WHERE id=?", (*campos.values(), agora(), keep_id))
@@ -590,6 +654,8 @@ def unir(con, keep_id, drop_id, por, motivo):
         guardado["_colidiram_e_foram_guardados"] = orfaos
     inserir(con, "client_merges", keep_id=keep_id, drop_id=drop_id, drop_name=d["name"], drop_json=json.dumps(guardado, ensure_ascii=False, default=str),
             merged_by=por, reason=motivo)
+    # a família que começava no card que sai passa a começar no que fica (#204)
+    con.execute("UPDATE clients SET sibling_of=? WHERE sibling_of=?", (campos.get("sibling_of") or k["sibling_of"] or keep_id, drop_id))
     con.execute("DELETE FROM clients WHERE id=?", (drop_id,))
     return True
 

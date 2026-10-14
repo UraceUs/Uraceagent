@@ -37,6 +37,8 @@ def cli():
     auth.criar_usuario(con, "closer@urace.us", "Carla Vendas", "OPERATOR", SENHA)
     auth.criar_usuario(con, "outro@urace.us", "Otto Vendas", "OPERATOR", SENHA)
     auth.criar_usuario(con, "leitura@urace.us", "Lê", "VIEWER", SENHA)
+    # #204: o preço da tabela vem do catálogo do QuickBooks, não do que a tela manda
+    con.execute("INSERT INTO qbo_items (id, name, price, type, active) VALUES ('901','Arrive and Drive 4 Stroke',350,'Service',1)")
     con.commit()
     con.close()
     with TestClient(app, base_url="https://cc.test") as c:
@@ -226,7 +228,7 @@ def test_valor_fora_da_tabela_fecha_a_venda_mas_a_invoice_espera_o_dono(cli):
     h = entra(cli, "closer@urace.us")
     oid = cria(cli, h, name="Fora da Tabela", email="fora@example.com")
     r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={
-        "amount": 250, "preco_tabela": 350,
+        "amount": 250, "preco_tabela": 250,          # #204: a tela não decide o preço da tabela; o catálogo diz 350
         "passos": {"cliente": True, "qbo": True, "waiver": False, "asana": False, "kommo": False}})
     assert r.status_code == 200
     f = r.json()["fechamento"]

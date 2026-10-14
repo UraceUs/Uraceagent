@@ -118,9 +118,10 @@ guardado na memória da IA.
 - **Agenda de vendas** (`/ops/sales/agenda`) — os retornos marcados em cada
   ligação, agrupados por dia; atrasado em vermelho.
 - **Chat do Kommo** (`/ops/crm/chat`) — a conversa do lead dentro do painel, com
-  os dados que o Kommo mostra ao lado, favoritos, e o botão **"Passar para o
-  closer"**, que transforma o lead em oportunidade (a pessoa que vende — não é um
-  papel do sistema).
+  os dados que o Kommo mostra ao lado, favoritos, e o botão **"Passar para
+  vendas"**, que registra o lead como oportunidade no painel de vendas sem sair do
+  chat (cada toque é uma oportunidade nova do mesmo lead; quem vende é operador, não
+  um papel do sistema).
 - **Funil do Kommo** (`/ops/crm/funil`) — as etapas do funil espelhadas.
 
 O fluxo completo da venda está no item 5.
@@ -186,8 +187,8 @@ DocuSign daquele cliente.
 
    | Passo | O que faz |
    |---|---|
-   | Card do cliente | cria ou liga ao card existente (mesmo e-mail ou telefone), com responsável, piloto, contato e anotação |
-   | QuickBooks | acha ou cria o cliente e envia a invoice do valor fechado |
+   | Card do cliente | cria ou liga ao card existente (mesmo e-mail ou telefone), com responsável, piloto, contato e anotação; com "É irmão", cria o card próprio do irmão |
+   | QuickBooks | acha ou cria o cliente e envia a invoice do valor fechado, no item do catálogo, mais o depósito de segurança quando o serviço pede |
    | Waiver | DocuSign no modelo certo: parental se o piloto é menor, adulto se não |
    | Asana | tarefa no quadro U-RACE com a data do serviço |
    | Kommo | o lead do chat vai para "Closed won" |
@@ -197,8 +198,11 @@ DocuSign daquele cliente.
    feito, aguardando ou falhou, com "tentar de novo" ao lado. Falha de um passo
    nunca derruba os outros.
 
-5. **Valor fora da tabela** — a venda fecha, o resto sai, e **a invoice fica
-   esperando a aprovação do dono**. Administrador e gerente passam direto.
+5. **Valor fora da tabela** — o preço da tabela vem do catálogo do QuickBooks (o
+   item escolhido), nunca do valor da venda. Fora dela, ou sem preço de tabela, a
+   venda fecha, o resto sai, e **a invoice espera o gerente ou o dono conferir o
+   valor e clicar Liberar invoice** (#204). Administrador e gerente que fecham passam
+   direto. Venda que saiu sem o depósito tem **Cobrar só o depósito** (operador).
 6. **Falar com a IA na ficha** — a caixa dentro da oportunidade: você dita e ela
    registra a ligação, marca retorno, anota, move etapa, cria tarefa, manda
    waiver ou fecha a venda, sempre naquela oportunidade.
@@ -243,18 +247,25 @@ As quatro políticas:
 
 | Política | O que significa |
 |---|---|
-| `SAFE` | executa sozinha (leitura, registro interno, comentário, tarefa) |
-| `REQUIRES_CONFIRMATION` | alguém precisa clicar; muda o estado de um sistema |
-| `REQUIRES_APPROVAL` | **sai da empresa** ou é dinheiro: waiver, invoice, reenvio |
+| `SAFE` | executa sozinha (leitura, registro interno, comentário, tarefa; e, desde a revisão do dono de 21/09, a waiver e a criação de invoice sem envio) |
+| `REQUIRES_CONFIRMATION` | alguém precisa clicar; muda o estado de um sistema (inclui o envio de invoice desde 21/09) |
+| `REQUIRES_APPROVAL` | **sai da empresa** ou não volta atrás: e-mail livre, apagar, substituir documento |
 | `BLOCKED` | a IA nunca faz. Hoje: `docusign_void`, `qbo_apagar`, `apagar_cliente`. `apagar_qualquer_coisa` saiu daqui em 22/09: virou `REQUIRES_APPROVAL` e voltou a valer como **piso** para qualquer ação com apagar/excluir/deletar/remover no nome |
 
 Ação que não está na tabela cai em `REQUIRES_CONFIRMATION` por padrão
 (`ia._politica`) — o sistema erra para o lado de perguntar.
 
-**Ações de venda** (a IA dentro da oportunidade): `venda_registrar_ligacao`,
-`venda_agendar_retorno`, `venda_anotar`, `venda_mover_etapa`, `venda_tarefa`
-(SAFE) · `venda_enviar_waiver`, `venda_fechar` (confirmação) ·
-`venda_enviar_invoice` (aprovação do dono).
+A tabela acima é o padrão. O dono revisou as políticas em 21/09 (`REVISAO_21_09` em
+`command_center/db/__init__.py`): a política em vigor de cada ação está em **O que a IA
+pode fazer** (`/ops/ai/capabilities`) e só o administrador muda, em Políticas da IA.
+
+**Ações de venda** (a IA dentro da oportunidade), como ficaram em 21/09:
+`venda_registrar_ligacao`, `venda_agendar_retorno`, `venda_anotar`, `venda_tarefa` e
+`venda_enviar_waiver` (SAFE) · `venda_mover_etapa`, `venda_fechar` e
+`venda_enviar_invoice` (confirmação; a invoice só gerente ou administrador decide).
+Desde 14/10 (#204), `venda_fechar` e `venda_enviar_invoice` conferem o preço da
+tabela no catálogo: fora dela, a invoice espera o gerente mesmo que quem confirmou
+seja operador.
 
 **Quem decide** (`ia.pode_decidir`): administrador, gerente e a conta de acesso
 livre decidem tudo; o operador decide nos módulos dele — o que inclui vendas;
@@ -298,9 +309,9 @@ asfalto — nada quebra.
 |---|---|
 | A IA não envia e-mail livre | política `gmail_enviar = BLOCKED`; o Gmail do painel é leitura + rascunho |
 | A IA nunca apaga | políticas `*_apagar = BLOCKED` |
-| Invoice só depois de aprovada | `qbo_*_invoice = REQUIRES_APPROVAL`; a prévia é obrigatória na aprovação |
+| Invoice só sai com alguém | `qbo_enviar_invoice = REQUIRES_CONFIRMATION` (revisão de 21/09); criar sem enviar é SAFE; invoice decide gerente ou administrador (`ia.pode_decidir`) |
 | Waiver tem travas no servidor + aprovação | `adminai/mcp/docusign_mcp.py`: recusa sem `idade_confirmada`, sem `nome_email_conferidos`, com modelo errado ou com e-mail do domínio da URACE |
-| Invoice fora da tabela é do dono | `vendas._confere_preco` + `pode_decidir` |
+| Invoice fora da tabela só com o gerente ou o dono | o preço da tabela vem do catálogo (`vendas.item_da_tabela`); `step/qbo` recusa o que espera; libera `POST /sales/{id}/invoice/liberar` (gerente), auditado (#204) |
 | ADM URACE e Matt tasks: só leitura | regra do dono dentro do `asana_mcp` |
 | Auditoria não se apaga | gatilhos no SQLite contra `UPDATE`/`DELETE` em `audit_logs` |
 | Tudo no fuso da Flórida | `America/New_York` no servidor (`vendas.hoje_local`, `dia_local`, `quando_pt`) e no frontend (`components/fmt.ts`) |

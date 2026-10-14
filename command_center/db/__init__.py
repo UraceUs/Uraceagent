@@ -312,6 +312,11 @@ MIGRACOES = [
     # libera lançar peça, contar estoque…); o cargo RESTRINGE: o mecânico e o coach só alcançam
     # as rotas da lista aprovada (auth.ROTAS_DO_CARGO). NULL = sem restrição de cargo.
     ("users", "cargo", "TEXT"),
+    # 14/10 — dono (#204): o item do catálogo do QuickBooks da venda (o preço da tabela vem dele,
+    # não do valor da venda) e o card de irmão criado à mão (mesmo responsável, e-mail e telefone;
+    # piloto diferente). `sibling_of` aponta o card de onde a família começou: os dois nunca se unem.
+    ("opportunities", "qbo_item_id", "TEXT"),
+    ("clients", "sibling_of", "INTEGER REFERENCES clients(id)"),
     # 14/10 — dono (#236): carrinho do site. Um pedido do Stripe com várias linhas (produtos e sessões
     # da agenda); as linhas ficam em store_order_items. O pedido de um produto só (#174) continua igual.
     ("store_orders", "kind", "TEXT NOT NULL DEFAULT 'produto'"),      # produto (#174) | carrinho (#236)

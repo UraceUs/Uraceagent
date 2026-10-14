@@ -10,7 +10,7 @@ Cada item devolve: level, title, why, entity (tipo/id), link, action.
 import json
 from datetime import date, datetime, timedelta
 
-from command_center.db import todos, um
+from command_center.db import agora, todos, um
 
 NIVEIS = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
 
@@ -442,6 +442,39 @@ def _coletar(con):
                                  ("Quando", (c.get("started_at") or c.get("at") or "—")[:16].replace("T", " ")),
                                  ("Recado", "sim" if c.get("voicemail") else "não"),
                                  ("Oportunidade", c.get("oportunidade") or "—")]))
+
+    # ---- 8b. vendas (#204): retorno vencido — a tela de vendas promete que ele aparece aqui
+    from command_center.api import vendas as _vendas
+    agora_utc = agora()                     # o mesmo relógio do quadro de vendas (`board`)
+    atrasados = todos(con, """SELECT o.id, o.name, o.pilot_name, o.phone, o.next_at, o.next_what, o.service, u.name AS closer
+                                FROM opportunities o LEFT JOIN users u ON u.id=o.closer_user_id
+                               WHERE o.next_at IS NOT NULL AND o.next_at < ? AND o.stage NOT IN ('GANHO','PERDIDO')
+                               ORDER BY o.next_at ASC LIMIT 50""", (agora_utc,))
+    if atrasados:
+        itens.append(dict(key=_chave("venda-retorno", "opportunity", "atrasados"), level="HIGH",
+                          title=f"{len(atrasados)} retorno(s) de venda atrasado(s)",
+                          why="O closer marcou ligar de volta e a hora já passou. Ligue e registre, ou remarque.",
+                          entity={"type": "opportunity", "id": None}, client_id=None,
+                          link="/sales/agenda", action="Abrir a agenda de vendas",
+                          facts=[(_vendas.quando_pt(o["next_at"]),
+                                  f"{o['name']}{(' · piloto ' + o['pilot_name']) if o['pilot_name'] and o['pilot_name'] != o['name'] else ''}"
+                                  f" — {o['next_what'] or 'retorno'}{(' · ' + o['closer'].split(' ')[0]) if o['closer'] else ''}")
+                                 for o in atrasados[:6]]))
+
+    # ---- 8c. vendas (#204): invoice fora da tabela esperando o gerente conferir o valor
+    for o in todos(con, """SELECT id, name, service, amount, closing FROM opportunities
+                            WHERE closing LIKE '%"invoice_pendente": true%' ORDER BY updated_at DESC LIMIT 20"""):
+        f = json.loads(o["closing"] or "{}")
+        if not f.get("invoice_pendente"):
+            continue
+        itens.append(dict(key=_chave("venda-invoice", "opportunity", o["id"]), level="HIGH",
+                          title=f"Invoice da venda de {o['name']} esperando você conferir o valor",
+                          why=("Valor fora da tabela ou serviço sem preço de tabela: a invoice só sai quando o gerente "
+                               "ou o dono confere e libera."),
+                          entity={"type": "opportunity", "id": o["id"]}, client_id=None,
+                          link=f"/sales/{o['id']}", action="Conferir e liberar",
+                          facts=[("Serviço", o["service"] or "—"), ("Valor da venda", _usd(o["amount"])),
+                                 ("Preço da tabela", _usd(f.get("preco_tabela"))), ("Motivo", f.get("motivo_preco") or "—")]))
 
     # ---- 9. o chat do Kommo: mensagem minha que não chegou ao cliente
     for m in todos(con, """SELECT m.*, l.name AS lead, l.id AS lead_id FROM crm_messages m

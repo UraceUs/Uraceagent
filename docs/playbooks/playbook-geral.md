@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 14/10/2026. Tudo aqui foi conferido no código do painel. Se a tela mudar e este
+> Atualizado em 14/10/2026 (#204). Tudo aqui foi conferido no código do painel. Se a tela mudar e este
 > texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
 
 ---
@@ -321,6 +321,14 @@ Dono, 01/10 (#65): **cada driver tem o seu card.** Irmãos costumam ter o mesmo 
 e-mail e telefone; mesmo assim, cada um tem o próprio card. O painel recusa unir cards ligados a
 drivers diferentes do site ("Esses dois cards não se unem: são de drivers diferentes no site").
 
+**Card de irmão** (#204, dono, 14/10: *"sim, é para criar um card de um irmão"*): o **+ Novo
+cliente** com o e-mail do irmão abriria o card dele. Para o irmão, use **Clientes › + Novo cliente ›
+"É irmão de um cliente? Criar card de irmão"** (ou, no card do irmão, **⋯ › + Card de irmão**):
+em **"Irmão de — vincular ao cliente"** escolha o card que já existe, e escreva o piloto. O
+responsável, o e-mail e o telefone vêm de lá. O card mostra **irmão(s)** no topo; os dois nunca se
+unem (nem a sincronia, nem o Unir: "são irmãos: cada piloto tem o seu card"), e o serviço de um não
+vai para o outro.
+
 ### Nunca pôr serviço de um cliente no card de outro
 
 Dono, 22/09: *"Nunca colocar serviço de outro cliente em card de outro cliente."* Na dúvida, card
@@ -487,8 +495,9 @@ Sem a caixa marcada, o Claude **só lê**. Ninguém copia senha, token ou chave 
 
 ### Confirmação antes de mandar para fora
 
-O que vai para o cliente ou cobra (invoice, waiver, e-mail, QuickBooks, DocuSign, Asana, Kommo,
-agendamento do site) **não acontece na primeira chamada**. O painel devolve `precisa_confirmar`
+O que vai para o cliente ou cobra (invoice, waiver, depósito, e-mail, QuickBooks, DocuSign, Asana,
+Kommo — inclusive o chat do Kommo em `/crm/…`: responder, anotar, etapa, tags —, agendamento do
+site) **não acontece na primeira chamada**. O painel devolve `precisa_confirmar`
 com o que vai fazer. O Claude mostra para você e só repete com `confirmar: true` depois do seu
 "pode mandar".
 
@@ -559,8 +568,11 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | **Waiver** | o termo de responsabilidade do DocuSign. Parental se o piloto é menor; adulto se não. Sem ela assinada, o piloto não entra na pista |
 | **Invoice** | a cobrança no QuickBooks |
 | **Estimate** | o orçamento no QuickBooks (ex.: preparação de corrida) |
-| **Security deposit** | o depósito do serviço, cobrado depois que a invoice do serviço é paga |
-| **Rate Card** | a tabela de preços oficial; manda acima do catálogo |
+| **Security deposit** | o depósito de segurança do serviço que pede (ex.: Arrive and Drive, US$ 400, devolvido em até 5 dias úteis sem incidente). Vai na mesma invoice do serviço, na venda manual ou automática (dono, 14/10) |
+| **Rate Card** | a tabela de preços oficial; manda acima do catálogo e atualiza o catálogo do QuickBooks toda segunda |
+| **Preço da tabela** | no Fechar venda, o preço do item do catálogo do QuickBooks, nunca o valor da venda. Fora dele, a invoice espera o gerente |
+| **Liberar invoice** | o gerente ou o dono confere o valor de uma invoice de venda fora da tabela e libera o envio (#204) |
+| **Card de irmão** | o card próprio do irmão, com o mesmo responsável, e-mail e telefone; os dois nunca se unem |
 | **Oportunidade** | uma venda em andamento. Não é cliente até fechar |
 | **Lead** | contato que chegou pelo Kommo |
 | **Closer** | quem fecha a venda. Não é um papel do sistema: é operador |
