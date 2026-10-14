@@ -4,7 +4,7 @@
  * O comercial manda nas instruções: valem acima da persona, com duas exceções fixas — o preço
  * (vem da tabela do sistema) e as travas de segurança. O nível (observar, organizar, atender)
  * continua só do ADMIN; o resto da página é de quem vende. */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
@@ -12,7 +12,8 @@ import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section } from '.
 import { ago, fmtDateTime } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
-import { tr } from '../i18n'
+import { Icon } from '../components/Icon'
+import { LOCALE, tr } from '../i18n'
 
 type Nivel = 'observar' | 'organizar' | 'atender'
 interface Painel {
@@ -124,9 +125,29 @@ function PausasCard({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
 }
 
 // ------------------------------------------------------------------ teste no painel (14/10)
-interface Turno { quem: 'voce' | 'robo'; textos: string[]; nota?: string; detalhes?: string[] }
+interface Turno { quem: 'voce' | 'robo'; textos: string[]; hora: string; nota?: string; acoes?: string[]; cortes?: string[] }
 interface TesteOut { mensagens: string[]; rota: string | null; motivo: string | null; diretivas: string[]; cortes: string[]; nota: string }
 const novaSessao = () => 'cc-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+const horaAgora = () => new Date().toLocaleTimeString(LOCALE(), { hour: '2-digit', minute: '2-digit' })
+// O que a guarda e as diretivas fizeram, em português de gente (o código fica no title).
+const CORTE: Record<string, string> = {
+  link_na_primeira_resposta: "tirou o link (1ª resposta vai sem link)", mais_de_um_link: "deixou só um link",
+  mais_de_uma_pergunta: "deixou só uma pergunta", emoji: "tirou emoji", travessao: "trocou travessão por vírgula",
+}
+const ACAO: Record<string, string> = {
+  escalate: "passaria a conversa para a equipe", crm: "anotaria no card do Kommo", qualify: "registraria a qualificação",
+  followup: "agendaria um follow-up", price: "buscaria o link do programa", kb: "consultaria a base de conhecimento",
+  unknown: "registraria uma dúvida sem resposta",
+}
+function nomeCorte(c: string) {
+  if (c.startsWith('nunca_dizer:')) return tr("tirou a frase com “{0}”", c.slice(12))
+  return CORTE[c] ? tr(CORTE[c]) : c
+}
+function nomeAcao(d: string) {
+  const m = /^\[\[\s*(\w+)/.exec(d)
+  return m && ACAO[m[1]] ? tr(ACAO[m[1]]) : d
+}
+const SUGESTOES = ["Oi, quanto custa?", "É meu filho, 8 anos", "Nunca andou de kart", "Quais dias vocês têm?", "Onde fica?", "Faria se fosse mais barato"]
 
 function TesteCard() {
   const toast = useToast()
@@ -135,40 +156,65 @@ function TesteCard() {
   const [texto, setTexto] = useState('')
   const [nome, setNome] = useState('')
   const [busy, setBusy] = useState(false)
-  async function enviar() {
-    const t = texto.trim(); if (!t || busy) return
+  const fim = useRef<HTMLDivElement>(null)
+  useEffect(() => { const el = fim.current; if (el) el.scrollTop = el.scrollHeight }, [turnos, busy])
+  async function enviar(msg?: string) {
+    const t = (msg ?? texto).trim(); if (!t || busy) return
     setBusy(true); setTexto('')
-    setTurnos(x => [...x, { quem: 'voce', textos: [t] }])
+    setTurnos(x => [...x, { quem: 'voce', textos: [t], hora: horaAgora() }])
     try {
       const r = await api.post<TesteOut>('/sdr/teste', { sessao, texto: t, nome: nome.trim() || null })
-      const detalhes = [
-        ...(r.diretivas || []).map(d => tr("ação que faria: {0}", d)),
-        ...(r.cortes || []).map(c => tr("a guarda cortou: {0}", c)),
-      ]
-      setTurnos(x => [...x, { quem: 'robo', textos: r.mensagens || [], nota: r.nota || undefined, detalhes }])
+      setTurnos(x => [...x, { quem: 'robo', textos: r.mensagens || [], hora: horaAgora(), nota: r.nota || undefined,
+        acoes: r.diretivas || [], cortes: r.cortes || [] }])
     } catch (e) { toast((e as ApiError).message, 'crit'); setTurnos(x => x.slice(0, -1)); setTexto(t) }
     finally { setBusy(false) }
   }
   function recomecar() { setSessao(novaSessao()); setTurnos([]); setTexto('') }
-  return <Section title={tr("Testar o robô")}>
-    <div className="stack" style={{ gap: 12 }}>
-      <p className="small muted" style={{ margin: 0 }}>{tr("Converse com o robô como se fosse um lead. Mesma persona e mesmas regras da resposta real, mas nada vai para o Kommo nem para ninguém, e as ações (passar para a equipe, tags) só aparecem aqui.")}</p>
-      <label className="fld" style={{ maxWidth: 260 }}><span>{tr("Nome do lead (opcional)")}</span><input value={nome} onChange={e => setNome(e.target.value)} maxLength={60} placeholder="Eduardo" /></label>
-      <div className="sdr-teste">
-        {!turnos.length ? <Empty title={tr("Nenhuma mensagem ainda")}>{tr("Escreva como o lead escreveria, por exemplo \"Oi, quanto custa?\".")}</Empty>
-          : turnos.map((t, i) => <div key={i} className={`sdr-teste-turno ${t.quem}`}>
+  return <Section title={tr("Testar o robô")}
+    right={<button className="btn sm" disabled={busy || !turnos.length} onClick={recomecar}><Icon name="refresh" size={14} />{tr("Nova conversa")}</button>}>
+    <div className="sdr-play">
+      <div className="sdr-fone">
+        <div className="sdr-fone-h">
+          <span className="sdr-av">U</span>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="sdr-fone-n">urace.us</div>
+            <div className="small muted">{busy ? tr("digitando…") : tr("Conversa comercial · teste")}</div>
+          </div>
+          <Icon name="instagram" size={18} />
+        </div>
+        <div className="sdr-teste" ref={fim} aria-live="polite">
+          {!turnos.length && !busy && <div className="sdr-vazio">
+            <Icon name="chat" size={28} />
+            <div>{tr("Escreva como o lead escreveria, ou toque numa sugestão.")}</div>
+          </div>}
+          {turnos.map((t, i) => <div key={i} className={`sdr-teste-turno ${t.quem}`}>
             {t.textos.length ? t.textos.map((m, j) => <div key={j} className="sdr-balao">{m}</div>)
-              : <div className="small muted">{tr("(o robô não responderia)")}</div>}
-            {t.nota && <div className="small muted">{t.nota}</div>}
-            {t.detalhes?.map((d, j) => <div key={j} className="small mono muted">{d}</div>)}
+              : <div className="sdr-balao mudo">{tr("o robô não responderia")}</div>}
+            <div className="sdr-hora">{t.hora}</div>
+            {(t.nota || !!t.acoes?.length || !!t.cortes?.length) && <div className="sdr-info">
+              {t.nota && <Chip tone="info">{t.nota}</Chip>}
+              {t.acoes?.map((d, j) => <Chip key={'a' + j} tone="neutral" title={d}>{nomeAcao(d)}</Chip>)}
+              {t.cortes?.map((c, j) => <Chip key={'c' + j} tone="warn" title={c}>{tr("guarda: {0}", nomeCorte(c))}</Chip>)}
+            </div>}
           </div>)}
-        {busy && <div className="sdr-teste-turno robo"><span className="spin" /></div>}
+          {busy && <div className="sdr-teste-turno robo"><div className="sdr-balao sdr-digitando" aria-label={tr("digitando…")}><i /><i /><i /></div></div>}
+        </div>
+        <form className="sdr-compor" onSubmit={e => { e.preventDefault(); enviar() }}>
+          <input className="inp" value={texto} onChange={e => setTexto(e.target.value)} maxLength={1000}
+            placeholder={tr("Mensagem do lead")} aria-label={tr("Mensagem do lead")} disabled={busy} />
+          <button className="btn primary" disabled={!texto.trim() || busy} aria-label={tr("Enviar")}>{busy ? <span className="spin" /> : tr("Enviar")}</button>
+        </form>
       </div>
-      <form className="row" style={{ gap: 8 }} onSubmit={e => { e.preventDefault(); enviar() }}>
-        <input className="grow" value={texto} onChange={e => setTexto(e.target.value)} maxLength={1000} placeholder={tr("Mensagem do lead")} aria-label={tr("Mensagem do lead")} />
-        <button className="btn primary" disabled={!texto.trim() || busy}>{busy ? <span className="spin" /> : tr("Enviar")}</button>
-        <button type="button" className="btn" disabled={busy || !turnos.length} onClick={recomecar}>{tr("Nova conversa")}</button>
-      </form>
+      <div className="sdr-lado stack" style={{ gap: 12 }}>
+        <p className="small muted" style={{ margin: 0 }}>{tr("Converse com o robô como se fosse um lead. Mesma persona e mesmas regras da resposta real, mas nada vai para o Kommo nem para ninguém, e as ações (passar para a equipe, tags) só aparecem aqui.")}</p>
+        <label className="fld"><span>{tr("Nome do lead (opcional)")}</span><input value={nome} onChange={e => setNome(e.target.value)} maxLength={60} placeholder="Eduardo" /></label>
+        <div>
+          <div className="small muted" style={{ marginBottom: 6 }}>{tr("Sugestões")}</div>
+          <div className="sug row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            {SUGESTOES.map(x => <button key={x} type="button" className="btn sm" disabled={busy} onClick={() => enviar(tr(x))}>{tr(x)}</button>)}
+          </div>
+        </div>
+      </div>
     </div>
   </Section>
 }
