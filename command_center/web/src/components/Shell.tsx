@@ -122,6 +122,7 @@ export function Shell() {
         <div className="grp">{tr("Comercial")}</div>
         <NL to="/sales" end icon="target" n={d?.sales_due || 0} tone="warn">{tr("Oportunidades")}</NL>
         <NL to="/sales/agenda" icon="cal">{tr("Agenda de vendas")}</NL>
+        <NL to="/atendimento" icon="alert" n={d?.handoff_pendentes || 0} tone="warn">{tr("Atendimento humano")}</NL>
         <NL to="/crm/chat" icon="chat" n={d?.crm_pending || 0}>{tr("Chat do Kommo")}</NL>
         <NL to="/crm/funil" icon="funnel">{tr("Funil do Kommo")}</NL>
         <NL to="/sdr" icon="spark" n={d?.sdr_relatos_abertos || 0} tone="warn">{tr("Robô SDR")}</NL>

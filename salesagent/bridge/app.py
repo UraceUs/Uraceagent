@@ -25,6 +25,7 @@ from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 import confidence
 import directives as directive_engine
 import gates
+import handoff_cc
 import holding
 import human_intents
 import kommo_client as kommo
@@ -408,11 +409,22 @@ def process_inbound(payload: dict) -> None:
         # (bots/run) abrindo o canal de entrega: devolve o texto pendente.
         conv = state.get_conversation(lead_id)
         pending = conv.get("pending_followup_text")
+        origem = conv.get("pending_followup_origem") or "ia"
+        if pending and return_url and origem == "ia":     # "escalacao" e "humano" não passam pela trava
+            # entre o bots/run e este instante (segundos) uma pessoa pode ter assumido a conversa
+            pode, motivo = pausas.ia_pode_enviar(lead_id)
+            if not pode:
+                state.update_conversation(lead_id, pending_followup_text=None, pending_followup_origem=None)
+                state.log("gate", lead_id, f"texto automático pendente descartado na saída: {motivo}")
+                _pending_returns.pop(lead_id, None)
+                return
         if pending and return_url:
             # Fila de mensagens curtas (14/10): sai uma por disparo do bot; se
-            # sobrar alguma, o bot é disparado de novo para a próxima.
+            # sobrar alguma, o bot é disparado de novo para a próxima. A origem fica
+            # enquanto houver fila: cada balão da IA passa pela trava de novo.
             agora, resto = _proxima_da_fila(pending)
             state.update_conversation(lead_id, pending_followup_text=resto,
+                                      pending_followup_origem=origem if resto else None,
                                       last_outbound_at=int(time.time()))
             _pending_returns.pop(lead_id, None)
             if _salesbot_continue(lead_id, return_url, token, agora):
@@ -420,7 +432,7 @@ def process_inbound(payload: dict) -> None:
                 if resto:
                     _disparar_proxima(lead_id)
             else:
-                state.update_conversation(lead_id, pending_followup_text=None)
+                state.update_conversation(lead_id, pending_followup_text=None, pending_followup_origem=None)
                 kommo.add_note(lead_id, "[follow-up — enviar manualmente]\n"
                                + pending.replace(_SEP_MENSAGENS, "\n"))
             return
@@ -494,6 +506,7 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
     # no gatilho B4, escalou certinho, e o lead nunca recebeu uma linha.
     # Escalar é sobre quem RESPONDE, nunca sobre responder ou não.
     reply = ""
+    origem_envio = "ia"
     triggers = gates.escalation_triggers(text)
     estado_atual = state.get_conversation(lead_id)["state"]
     if rota["acao"] == "escalar" and estado_atual in ("AI_ACTIVE", "RESUMED"):
@@ -503,64 +516,35 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         escalate(lead_id, f"SDR {rota['motivo']}: {rota['descricao']}", context=text,
                  prioridade=rota["prioridade"])
         reply = _resposta_de_espera(lead_id, text)
+        origem_envio = "escalacao"
     elif triggers and estado_atual == "AI_ACTIVE":
         # B4: assuntos sensíveis (desconto, refund, jurídico...) escalam
         # ANTES do modelo -- ele nunca vê a mensagem, então também não pode
         # ser convencido a responder. Quem acusa o recebimento é a ponte.
         escalate(lead_id, "; ".join(triggers), context=text)
         reply = _resposta_de_espera(lead_id, text)
+        origem_envio = "escalacao"
     elif not state.agent_may_sell(lead_id):
-        # G3 REFINADO (27/08, decisão do Italo): conversa escalada não volta
-        # a VENDER -- mas pergunta factual que o Brain COBRE é respondida na
-        # hora, sem humano. O caso real: lead esperando decisão sobre kart
-        # próprio perguntou o horário de funcionamento (que está no vault) e
-        # ouviu "vou confirmar com a equipe". Escalação é para o que o Chase
-        # NÃO sabe; travar o que ele sabe só ensina o lead que perguntar não
-        # adianta. Três condições, todas obrigatórias:
-        #   1. mensagem substantiva (ping/obrigado não reabre nada);
-        #   2. NENHUM gatilho B4 no texto (desconto/refund/jurídico em
-        #      conversa escalada nunca é respondido pelo modelo);
-        #   3. o retrieval devolve base sólida (confidence OK/STALE) -- na
-        #      dúvida, continua com o humano.
-        respondida_pelo_brain = False
-        if (holding.is_substantive(text) and not gates.escalation_triggers(text)
-                and BRAIN_RETRIEVAL == "on"):
-            import brain_kb
-            verdict = confidence.assess(
-                brain_kb.search(lead_id, text, top_docs=BRAIN_TOP_DOCS))
-            if verdict["level"] in (confidence.OK, confidence.STALE):
-                resposta_brain = run_agent(lead_id, text, escalated_guard=True)
-                if resposta_brain:
-                    state.log("gate", lead_id,
-                              "escalado, mas o Brain cobre a pergunta — "
-                              f"respondida sem humano ({verdict['level']})")
-                    reply = resposta_brain
-                    respondida_pelo_brain = True
-        if respondida_pelo_brain:
-            pass  # segue para o envio único no fim da função
-        else:
-            state.log("gate", lead_id, "estado escalado — sem resposta comercial, só reconhecimento")
-            if holding.is_substantive(text):
-            # Pergunta NOVA (ou repetida com conteúdo) de um lead que já
-            # espera: os humanos são reavisados NA HORA, não no próximo
-            # ciclo do alarme -- que pode inclusive já ter estourado o teto
-            # (aconteceu em 26/08: o lead repetiu a pergunta do kart e
-            # nenhum aviso saiu, porque o alarme daquele lead já tinha
-            # silenciado). Mensagem nova é evento novo: zera o ciclo.
-                conv = state.get_conversation(lead_id)
-                nome = conv.get("contact_name") or "sem nome no Kommo"
-                state.update_conversation(lead_id, pending_question=text[:300],
-                                          realert_count=0,
-                                          last_realert_at=int(time.time()))
-                notify_human(
-                    f"🔺 LEAD ESCALADO VOLTOU A FALAR — {nome} (lead {lead_id})\n"
-                    f"Nova mensagem: {text[:300]}\n"
-                    f"Escalado por: {conv.get('escalation_reason') or '?'}"
-                    + (f" (há {(int(time.time()) - conv['escalated_at']) // 60} min)"
-                       if conv.get("escalated_at") else "") + "\n"
-                    f"Responda esta mensagem com o texto para o lead — eu entrego "
-                    f"no chat e devolvo a conversa ao Chase.")
-            reply = _resposta_de_espera(lead_id, text)
+        # 14/10 (atendimento humano, D-2026-10-14): conversa escalada é de uma pessoa até ela
+        # devolver. A IA não responde — nem a pergunta factual que o Brain cobre (o G3 refinado de
+        # 27/08 fica superado), nem a mensagem de espera. A pessoa vê a mensagem no Kommo e no
+        # painel; o painel avisa quem está atendendo que o cliente escreveu de novo.
+        conv = state.get_conversation(lead_id)
+        state.update_conversation(lead_id, pending_question=text[:300])
+        state.log("gate", lead_id, f"conversa em {conv['state']}: sem resposta automática — com uma pessoa")
+        if handoff_cc.configurado():
+            # garante o caso no painel (idempotente: a chave é a da escalação)
+            handoff_cc.abrir_caso(lead_id, reason=conv.get("escalation_reason") or "cliente escreveu em conversa escalada",
+                                  summary=f"Nova mensagem do cliente: {text[:300]}")
+        elif holding.is_substantive(text):
+            nome = conv.get("contact_name") or "sem nome no Kommo"
+            state.update_conversation(lead_id, realert_count=0, last_realert_at=int(time.time()))
+            notify_human(
+                f"🔺 LEAD ESCALADO VOLTOU A FALAR — {nome} (lead {lead_id})\n"
+                f"Nova mensagem: {text[:300]}\n"
+                f"Escalado por: {conv.get('escalation_reason') or '?'}")
+        _pending_returns.pop(lead_id, None)
+        return
     else:
         reply = run_agent(lead_id, text)
         if not reply:
@@ -569,7 +553,7 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
             state.log("error", lead_id, "agente devolveu resposta vazia — enviando reconhecimento")
             reply = _holding_reply(lead_id, text)
 
-    send_to_lead(lead_id, reply)
+    send_to_lead(lead_id, reply, origem=origem_envio)
     # B2: relógio de "sem resposta" reinicia a cada envio nosso — trilha
     # link_sent se o link de preço saiu neste turno, initial caso
     # contrário. A trilha scheduled (diretiva com data pedida pelo lead)
@@ -856,7 +840,7 @@ def compose_followup(lead_id: int, track: str, attempt: int) -> str:
         return ""
 
 
-def deliver_followup(lead_id: int, text: str, espera: bool = False) -> bool:
+def deliver_followup(lead_id: int, text: str, origem: str = "ia", espera: bool = False) -> bool:
     """Entrega espontânea: grava o texto como pendente e dispara o Salesbot
     no lead (bots/run). O bot chama o widget_request → process_inbound vê o
     pendente e o devolve pelo return_url → aparece no chat. Sem bot
@@ -864,12 +848,14 @@ def deliver_followup(lead_id: int, text: str, espera: bool = False) -> bool:
     fallback nota+tarefa."""
     if not FOLLOWUP_BOT_ID:
         return False
-    if pausas.ia_pausada(lead_id):
-        state.log("gate", lead_id, "IA pausada nesta conversa — entrega espontânea cancelada")
-        return False
+    if origem == "ia":
+        pode, motivo = pausas.ia_pode_enviar(lead_id)
+        if not pode:
+            state.log("gate", lead_id, f"entrega automática cancelada na saída: {motivo}")
+            return False
     if SALESBOT_DISPLAY == "json_reply" and _SEP_MENSAGENS not in text:
         text = _SEP_MENSAGENS.join(dividir_em_mensagens(text))
-    state.update_conversation(lead_id, pending_followup_text=text)
+    state.update_conversation(lead_id, pending_followup_text=text, pending_followup_origem=origem)
     if espera:
         # O bot que acabou de mostrar a mensagem anterior ainda está fechando.
         _disparar_proxima(lead_id)
@@ -880,7 +866,7 @@ def deliver_followup(lead_id: int, text: str, espera: bool = False) -> bool:
         state.log("error", lead_id, f"deliver_followup bots/run: {exc}")
         ok = False
     if not ok:
-        state.update_conversation(lead_id, pending_followup_text=None)
+        state.update_conversation(lead_id, pending_followup_text=None, pending_followup_origem=None)
     return ok
 
 
@@ -922,7 +908,10 @@ async def _start_scheduler():
         return
     scheduler.compose_fn = compose_followup
     scheduler.deliver_fn = deliver_followup
-    scheduler.notify_fn = notify_human
+    # 14/10: com o Command Center ligado, o re-alerta da equipe é dele (push/WhatsApp oficial);
+    # o aviso pelo OpenClaw só continua se o legado for mantido de propósito.
+    scheduler.notify_fn = notify_human if (not handoff_cc.configurado() or handoff_cc.LEGADO_OPENCLAW) else None
+    scheduler.handoff_retry_fn = handoff_cc.reenviar_pendentes
     scheduler.rescue_fn = rescue_lead
     scheduler.task_fn = kommo.add_task
     scheduler.tag_fn = kommo_tags_seguras
@@ -1000,21 +989,32 @@ def _disparar_proxima(lead_id: int) -> None:
             ok = False
         if not ok:
             resto = state.get_conversation(lead_id).get("pending_followup_text") or ""
-            state.update_conversation(lead_id, pending_followup_text=None)
+            state.update_conversation(lead_id, pending_followup_text=None, pending_followup_origem=None)
             if resto:
                 kommo.add_note(lead_id, "[agent — resto da resposta não entregue]\n"
                                + resto.replace(_SEP_MENSAGENS, "\n"))
     threading.Timer(intervalo_para(proxima), _rodar).start()
 
 
-def send_to_lead(lead_id: int, text: str) -> None:
+def send_to_lead(lead_id: int, text: str, origem: str = "ia") -> None:
     """Devolve a resposta ao cliente via Kommo.
 
     Caminho real: continuação do Salesbot via return_url do widget_request
     (o bot mostra o texto no chat do lead e volta a esperar a próxima
     mensagem). Fallback: nota no lead — não chega ao cliente, mas nada se
     perde e fica visível pro time no card.
+
+    `origem` (14/10): "ia" passa pela trava do atendimento humano AQUI, na saída — o turno
+    pode levar um minuto no modelo, e uma pessoa pode assumir a conversa nesse meio tempo.
+    "escalacao" é a única mensagem que acompanha a própria escalação (o aviso de que uma pessoa
+    vai responder). "humano" é texto de pessoa.
     """
+    if origem == "ia":
+        pode, motivo = pausas.ia_pode_enviar(lead_id)
+        if not pode:
+            state.log("gate", lead_id, f"resposta automática barrada na saída: {motivo}")
+            _pending_returns.pop(lead_id, None)
+            return
     if SDR_MODO == "atender":
         limpo = sdr_ponte.limpar(lead_id, text)
         if not limpo:
@@ -1028,14 +1028,15 @@ def send_to_lead(lead_id: int, text: str) -> None:
         # A primeira sai agora pelo bot que está esperando; as outras entram na
         # fila do bot de entrega, uma por disparo.
         if _salesbot_continue(lead_id, pending[0], pending[1], mensagens[0]):
-            if deliver_followup(lead_id, _SEP_MENSAGENS.join(mensagens[1:]), espera=True):
+            if deliver_followup(lead_id, _SEP_MENSAGENS.join(mensagens[1:]), origem=origem, espera=True):
                 return
             kommo.add_note(lead_id, "[agent — resto da resposta não entregue]\n"
                            + "\n".join(mensagens[1:]))
             return
     if pending and _salesbot_continue(lead_id, pending[0], pending[1], text):
         return
-    if not pending and SDR_MODO == "atender" and deliver_followup(lead_id, _SEP_MENSAGENS.join(mensagens)):
+    # a origem vai junto: texto da IA que ficar pendente no bots/run é conferido de novo na entrega
+    if not pending and SDR_MODO == "atender" and deliver_followup(lead_id, _SEP_MENSAGENS.join(mensagens), origem=origem):
         # Mensagem que veio pelo webhook de conta: não há Salesbot esperando, então a ponte dispara
         # o bot de entrega (bots/run) e ele busca o texto pendente no /kommo/hook.
         state.log("outbound", lead_id, f"via bots/run: {text}")
@@ -1150,7 +1151,11 @@ def _salesbot_continue(lead_id: int, return_url: str, token: str | None,
 
 
 # ------------------------------------------------------------------ escalação
-def escalate(lead_id: int, reason: str, context: str = "", prioridade: str = "alta") -> None:
+def escalate(lead_id: int, reason: str, context: str = "", prioridade: str = "alta",
+             summary: str = "", customer_name: str | None = None, requested_action: str | None = None,
+             category: str | None = None) -> dict:
+    """Passa a conversa para uma pessoa. Devolve o que aconteceu de verdade (caso aberto, aviso
+    confirmado ou pendente), para a IA nunca dizer ao cliente o que não foi feito."""
     state.transition(lead_id, "WAITING_HUMAN", reason)
     scheduler.cancel(lead_id, "conversa escalada")  # G3: sem follow-up comercial
     kommo_tags_seguras(lead_id, ["escalated"])
@@ -1177,6 +1182,20 @@ def escalate(lead_id: int, reason: str, context: str = "", prioridade: str = "al
                 f"Pergunta do lead: {context[:400] or '(sem texto)'}\n"
                 f"Responda esta mensagem com o texto para o lead — eu entrego "
                 f"no chat e devolvo a conversa ao Chase.")
+    if handoff_cc.configurado():
+        # 14/10: o caso vai para o Command Center (trava, fila, avisos oficiais). O aviso antigo
+        # pelo OpenClaw/WhatsApp Web só sai se o legado estiver ligado de propósito (transição).
+        resumo = summary or "\n".join(x for x in (perfil.strip(), f"Pergunta do lead: {context[:400]}" if context else "") if x)
+        resultado = handoff_cc.abrir_caso(
+            lead_id, reason=reason, prioridade=prioridade, summary=resumo,
+            customer_name=customer_name or conv.get("contact_name"), requested_action=requested_action,
+            category=category, chave=f"ponte:{lead_id}:{conv.get('escalated_at') or int(time.time())}")
+        if resultado.get("caso_id"):
+            state.update_conversation(lead_id, handoff_caso_id=resultado["caso_id"])
+        if handoff_cc.LEGADO_OPENCLAW and prioridade == "alta":
+            notify_human(briefing)
+        state.log("escalation", lead_id, reason)          # só o motivo: é o que o extrator agrupa
+        return resultado
     if SDR_MODO in ("organizar", "atender") and prioridade != "alta":
         # Uma pessoa só no comercial: só prioridade alta interrompe. O resto
         # entra na fila como tarefa no Kommo, com o prazo da prioridade.
@@ -1186,9 +1205,11 @@ def escalate(lead_id: int, reason: str, context: str = "", prioridade: str = "al
         _kommo_seguro(lead_id, "tarefa de handoff", kommo.add_task, lead_id,
                       f"SDR ({prioridade}): {reason}"[:500], prazo, KOMMO_RESPONSAVEL_ID or None)
         state.log("escalation", lead_id, f"{reason} [fila, prioridade {prioridade}]")
-        return
+        return {"ok": True, "resultado": "tarefa_kommo", "humano_notificado": False, "notificacao": "pendente"}
     notify_human(briefing)
     state.log("escalation", lead_id, reason)
+    # o canal antigo não confirma entrega na hora (thread): nada aqui pode dizer "avisado"
+    return {"ok": True, "resultado": "aviso_legado", "humano_notificado": False, "notificacao": "pendente"}
 
 
 def _kommo_seguro(lead_id: int, o_que: str, fn, *args) -> bool:
@@ -1396,7 +1417,7 @@ def _aplicar_decisao_humana(lead_id: int, intent: dict, quem: str) -> str:
     entregue = False
     if mensagem:
         texto = textproc.customer_facing(mensagem)
-        entregue = deliver_followup(lead_id, texto)
+        entregue = deliver_followup(lead_id, texto, origem="humano")
         if entregue:
             state.update_conversation(lead_id, last_outbound_at=int(time.time()))
             state.log("outbound", lead_id, texto)
@@ -1503,11 +1524,80 @@ async def tool_qualify(request: Request, x_api_key: str | None = Header(None)):
 
 @app.post("/tools/escalate")
 async def tool_escalate(request: Request, x_api_key: str | None = Header(None)):
+    """escalate_to_human(conversation_id, reason, priority, summary, customer_name, requested_action).
+
+    Aceita também o formato antigo ({lead_id, reason, briefing}). Devolve o resultado real:
+    caso_criado / caso_existente, humano_notificado, notificacao (enviada|pendente|falhou)."""
     _auth(x_api_key)
     p = await request.json()
-    escalate(int(p["lead_id"]), p.get("reason", "solicitado pelo agente"),
-             p.get("briefing", ""))
-    return {"ok": True}
+    bruto = p.get("conversation_id", p.get("lead_id"))
+    try:
+        lead_id = int(str(bruto).split(":")[-1])
+        if lead_id <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise HTTPException(400, "conversation_id inválido: use o id do lead no Kommo")
+    reason = (p.get("reason") or "").strip() or "solicitado pelo agente"
+    resultado = escalate(lead_id, reason, p.get("briefing", "") or p.get("summary", ""),
+                         prioridade=p.get("priority") or "alta", summary=p.get("summary") or "",
+                         customer_name=p.get("customer_name"), requested_action=p.get("requested_action"),
+                         category=p.get("category"))
+    return {"ok": True, **(resultado or {})}
+
+
+ESTADOS_DO_PAINEL = {"HUMAN_PENDING", "HUMAN_ACTIVE", "RESOLVED", "RETURNED_TO_AI"}
+
+
+@app.post("/handoff/estado")
+async def handoff_estado(request: Request, x_handoff_token: str | None = Header(None)):
+    """O Command Center diz em que estado está o atendimento humano desta conversa.
+
+    Só ele chama (token próprio, X-Handoff-Token — não é a chave que abre o hook do Kommo).
+    RETURNED_TO_AI e RESOLVED são as únicas portas de volta para a IA, e levam a nota da pessoa
+    como fato confirmado: a IA continua sabendo o que foi combinado."""
+    if not handoff_cc.HANDOFF_SYNC_TOKEN or not hmac.compare_digest(
+            handoff_cc.HANDOFF_SYNC_TOKEN, x_handoff_token or ""):
+        raise HTTPException(401, "invalid handoff token")
+    p = await request.json()
+    try:
+        lead_id = int(p.get("lead_id"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "lead_id inválido")
+    alvo = p.get("estado")
+    if lead_id <= 0 or alvo not in ESTADOS_DO_PAINEL:
+        raise HTTPException(400, "lead_id ou estado inválido")
+    nota = textproc.customer_facing(str(p.get("nota") or ""))[:1500]
+    autor = str(p.get("autor") or "equipe")[:80]
+    caso = p.get("caso_id")
+    atual = state.get_conversation(lead_id)["state"]
+    state.log("human_reply", lead_id, f"painel: caso #{caso} → {alvo} ({autor})")
+
+    if alvo in ("HUMAN_PENDING", "HUMAN_ACTIVE"):
+        scheduler.cancel(lead_id, f"atendimento humano #{caso}")
+        if atual in ("AI_ACTIVE", "RESUMED"):
+            state.transition(lead_id, "WAITING_HUMAN", f"atendimento humano #{caso}")
+        if alvo == "HUMAN_ACTIVE":
+            state.transition(lead_id, "HUMAN_HANDOFF", f"{autor} assumiu (caso #{caso})")
+        state.update_conversation(lead_id, handoff_caso_id=caso)
+        return {"ok": True, "estado_ponte": state.get_conversation(lead_id)["state"]}
+
+    # RESOLVED / RETURNED_TO_AI: a conversa volta a ser da IA (na próxima mensagem do cliente,
+    # no caso de RESOLVED: sem follow-up até lá)
+    if atual == "CLOSED":
+        # opt-out ou trilha esgotada: a IA não fala com quem fechou, com caso ou sem
+        return {"ok": True, "estado_ponte": "CLOSED", "nota": "conversa encerrada na ponte; a IA não volta"}
+    if atual in ("WAITING_HUMAN", "HUMAN_HANDOFF"):
+        if not state.transition(lead_id, "RESUMED", f"{autor}: {alvo} (caso #{caso})", by_human=True):
+            return {"ok": False, "erro": f"a ponte recusou {atual}->RESUMED"}
+    if nota:
+        conv = state.get_conversation(lead_id)
+        rotulo = "Atendimento encerrado pela equipe" if alvo == "RESOLVED" else "Contexto da equipe ao devolver"
+        state.add_confirmation(lead_id, autor, conv.get("pending_question") or conv.get("last_inbound_text") or "",
+                               f"{rotulo}: {nota}")
+    scheduler.cancel(lead_id, f"atendimento humano #{caso} {alvo}")
+    state.update_conversation(lead_id, realert_count=0, holding_count=0, pending_question=None,
+                              handoff_caso_id=None)
+    return {"ok": True, "estado_ponte": state.get_conversation(lead_id)["state"]}
 
 
 @app.post("/tools/crm")

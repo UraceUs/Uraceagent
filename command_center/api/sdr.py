@@ -24,6 +24,7 @@ A página (/sdr):
 - **Relatos** (qualquer pessoa logada): o robô errou; MANAGER+ resolve. Aberto acende o menu.
 - **Auditoria**: as decisões do SDR (kind='sdr') lidas de ~/.urace/salesbridge.db só em leitura.
 """
+import fcntl
 import json
 import os
 import re
@@ -33,6 +34,7 @@ import textwrap
 import time
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -446,6 +448,30 @@ def gravar_pausas(d):
     os.replace(tmp, f)
 
 
+@contextmanager
+def _trava_pausas():
+    """14/10: o arquivo passou a ter dois escritores (a pausa manual e o atendimento humano).
+    Ler, mudar e gravar sem trava deixava um apagar a mudança do outro. `flock` num arquivo
+    ao lado vale entre threads e entre processos (mais de um worker do uvicorn)."""
+    f = _dir() / (ARQUIVO_PAUSAS + ".lock")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    with open(f, "a+") as trava:
+        fcntl.flock(trava, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(trava, fcntl.LOCK_UN)
+
+
+def alterar_pausas(fn):
+    """Lê, aplica `fn(dict)` e grava, tudo sob a trava. Devolve o que `fn` devolver."""
+    with _trava_pausas():
+        d = ler_pausas()
+        resultado = fn(d)
+        gravar_pausas(d)
+        return resultado
+
+
 class PausaIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pausada: bool
@@ -465,15 +491,28 @@ def pausa_trocar(lead_id: int, dados: PausaIn, request: Request, u=Depends(auth.
     """lead_id é o id do lead no Kommo (o mesmo da URL /leads/detail/<id>)."""
     if lead_id <= 0:
         raise HTTPException(400, "Informe o id do lead no Kommo.")
-    d = ler_pausas()
     chave = str(lead_id)
     motivo = " ".join((dados.motivo or "").split())[:200] or None
-    if dados.pausada:
-        d[chave] = {"por": u.get("name") or u.get("email") or f"user:{u['id']}", "por_id": u["id"],
-                    "em": datetime.now(FUSO).isoformat(timespec="seconds"), "motivo": motivo}
-    else:
+
+    def _mudar(d):
+        atual = d.get(chave) if isinstance(d.get(chave), dict) else None
+        if dados.pausada:
+            d[chave] = {**(atual or {}), "por": u.get("name") or u.get("email") or f"user:{u['id']}",
+                        "por_id": u["id"], "em": datetime.now(FUSO).isoformat(timespec="seconds"),
+                        "motivo": motivo, "manual": True}
+            return None
+        if atual and atual.get("handoff"):
+            # 14/10: atendimento humano aberto. Tirar a pausa aqui deixaria a IA responder no meio
+            # do atendimento; quem devolve a conversa à IA é o botão do caso, que avisa a ponte.
+            return atual["handoff"]
         d.pop(chave, None)
-    gravar_pausas(d)
+        return None
+
+    caso = alterar_pausas(_mudar)
+    if caso:
+        raise HTTPException(409, f"Esta conversa está com um atendimento humano aberto (caso #{caso}). "
+                                 "Para a IA voltar, use 'Devolver à IA' no Atendimento.")
+    d = ler_pausas()
     auditar(con, "sdr.pausa", f"user:{u['id']}", user_id=u["id"], entity_type="kommo_lead", entity_id=lead_id,
             detail={"pausada": dados.pausada, "motivo": motivo}, ip=auth._ip(request))
     con.commit()

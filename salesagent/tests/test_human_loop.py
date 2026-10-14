@@ -77,7 +77,7 @@ def main() -> int:
             falhas.append(label)
 
     app.kommo = _FakeKommo()
-    app.deliver_followup = lambda lead_id, texto: (
+    app.deliver_followup = lambda lead_id, texto, origem="ia": (
         entregues.append((lead_id, texto)) or True)
     # Autenticação da ponte é testada noutro lugar; aqui o foco é a
     # autoridade do OPERADOR, que é uma trava diferente e mais importante.

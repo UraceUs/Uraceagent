@@ -141,7 +141,27 @@ def _laco_do_chat():
                 pass
         finally:
             con.close()
+        _ciclo_atendimento()
         time.sleep(segundos)
+
+
+def _ciclo_atendimento():
+    """14/10: a trava da IA, os avisos e a confirmação da ponte do atendimento humano andam
+    sozinhos — no mesmo meio minuto do chat, com conexão e erro próprios (um não derruba o outro)."""
+    from command_center.db import auditar, conectar
+    con = conectar()
+    try:
+        from command_center.providers import atendimento
+        r = atendimento.ciclo(con)
+        if r["pausas"]["travadas"] or r["pausas"]["soltas"] or r["ponte"] or r["atrasos"] or r["fila"]["falhas"]:
+            auditar(con, "handoff.ciclo", "system", detail=r)
+    except Exception as e:                                # nunca derruba o laço
+        try:
+            auditar(con, "handoff.ciclo.failed", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+        except Exception:
+            pass
+    finally:
+        con.close()
 
 
 @asynccontextmanager
@@ -280,6 +300,8 @@ from command_center.api import servicos  # noqa: E402
 app.include_router(servicos.r)
 from command_center.api import whatsapp as api_whatsapp  # noqa: E402
 app.include_router(api_whatsapp.r)
+from command_center.api import atendimento as api_atendimento  # noqa: E402
+app.include_router(api_atendimento.r)       # 14/10: escalonamento da IA para uma pessoa
 from command_center.api import compras as api_compras  # noqa: E402
 app.include_router(api_compras.r)
 from command_center.api import suits as api_suits  # noqa: E402

@@ -70,6 +70,7 @@ note_fn = None         # note_fn(lead_id, text) -> None (nota Kommo)
 rescue_fn = None       # rescue_fn(conv) -> bool (entrega a resposta devida ao lead)
 tag_fn = None          # tag_fn(lead_id, [tags]) -> None (tags no card, só somam)
 close_fn = None        # close_fn(lead_id) -> None (SDR: card vai para PERDIDO / NÃO QUALIFICADO)
+handoff_retry_fn = None  # handoff_retry_fn() -> int (14/10: reenvia ao Command Center o que ficou na fila)
 
 
 def in_business_hours(now_ts: int | None = None) -> bool:
@@ -141,6 +142,16 @@ def tick(now: int | None = None) -> dict:
     pausadas = _pausadas()
     due = [c for c in due if str(c["lead_id"]) not in pausadas]
     devendo = [c for c in devendo if str(c["lead_id"]) not in pausadas]
+    # 14/10 (atendimento humano): conversa escalada é de uma pessoa. Nenhuma mensagem automática
+    # sai para ela, nem a de "ainda estamos vendo" — quem é cutucado é a equipe (re-alerta), não o
+    # cliente. Supera a parte "espera longa" do resgate (D-2026-10-14).
+    devendo = [c for c in devendo if c["state"] not in ("WAITING_HUMAN", "HUMAN_HANDOFF")]
+
+    if handoff_retry_fn:
+        try:
+            handoff_retry_fn()
+        except Exception as exc:
+            log("error", None, f"scheduler handoff: {exc}")
 
     for conv in due:
         try:

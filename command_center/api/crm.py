@@ -782,6 +782,7 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
             inserir(con, "crm_messages", lead_id=lid, external_id=ext, direction="entrada",
                     author=e["nome"] or "cliente", text=e["texto"][:8000], at=agora(), source="hook")
         campos.update(last_message_at=agora(), needs_reply=1)
+        _avisar_atendimento(con, e["lead_id"])
     atualizar(con, "crm_leads", lid, **campos)
     auditar(con, "crm.hook", "kommo", entity_type="crm_lead", entity_id=lid,
             detail={"mensagem": bool(e["texto"]), "return_url": bool(e["return_url"]), "novo": novo})
@@ -791,6 +792,16 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
     if e["return_url"]:
         background.add_task(_entregar_fila, lid)
     return {"ok": True}
+
+
+def _avisar_atendimento(con, kommo_lead_id):
+    """14/10: cliente escreveu numa conversa com atendimento humano aberto — quem atende é avisado.
+    Nunca derruba o hook (o Kommo desliga hook que falha)."""
+    try:
+        from command_center.providers import atendimento
+        atendimento.cliente_escreveu(con, kommo_lead_id)
+    except Exception as ex:                               # noqa: BLE001
+        auditar(con, "handoff.cliente_escreveu.failed", "system", detail={"erro": str(ex)[:200]})
 
 
 @r.get("/inbox")
@@ -1030,6 +1041,7 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
         guardadas += 1
         if m["direcao"] == "entrada":
             atualizar(con, "crm_leads", lid, last_message_at=em, needs_reply=1)
+            _avisar_atendimento(con, ext)
         else:
             from command_center.providers.sync import recalcular_conversa
             recalcular_conversa(con, lid)

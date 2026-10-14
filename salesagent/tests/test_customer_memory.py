@@ -76,9 +76,9 @@ def main() -> int:
     app.kommo = _FakeKommo()
     app.BRAIN_RETRIEVAL = "on"
     brain_kb.search = lambda *a, **k: []
-    app.send_to_lead = lambda lead_id, text: entregues.append((lead_id, text))
+    app.send_to_lead = lambda lead_id, text, origem="ia": entregues.append((lead_id, text))
     app.notify_human = lambda text: None
-    app.deliver_followup = lambda lead_id, texto: entregues.append((lead_id, texto)) or True
+    app.deliver_followup = lambda lead_id, texto, origem="ia": entregues.append((lead_id, texto)) or True
     app.scheduler.cancel = lambda *a, **k: None
     app.scheduler.start_track = lambda *a, **k: None
     app._auth = lambda k: None

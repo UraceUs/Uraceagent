@@ -144,6 +144,7 @@ pedem acesso de operador.
 | Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists. Mostra **só o ativo**: serviço cancelado ("CANCELLED - …") ou excluído não aparece. Tudo em **cards**: o treino é o card do cliente; a corrida é um card geral com um card por cliente inscrito | todos |
 | Comercial | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
 | Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação; o cartão **Google Calendar** liga o calendário Google de cada pessoa (os retornos vão para lá e os compromissos dela aparecem aqui). Passo a passo no [playbook de vendas](playbook-vendas.md), 4.8 | operador+ |
+| Comercial | **Atendimento humano** | `/ops/atendimento` | a fila das conversas em que a IA pediu uma pessoa: assumir, responder, transferir, encerrar, devolver à IA (o caso abre em `/ops/atendimento/<n>`) | todos (agir: operador+) |
 | Comercial | **Chat do Kommo** | `/ops/crm/chat` | a conversa do lead dentro do painel | todos |
 | Comercial | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
 | Comercial | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |

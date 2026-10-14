@@ -494,20 +494,29 @@ def camada_ponte():
           str(entregues))
 
     # Print do Instagram (13/10): lead já escalado diz "Consideraria se fosse
-    # mais barato" e ouviu, em inglês, "Your question ... is with the team".
-    # Pedido do dono: objeção de preço recebe a oferta de call com o Lucas.
+    # mais barato". Em 13/10 a ponte respondia com a oferta de call. Desde 14/10
+    # (atendimento humano, D-2026-10-14) conversa escalada é de uma pessoa: a IA
+    # não manda NADA — a oferta de call continua saindo, mas só no turno em que a
+    # objeção ESCALA (teste "objeção de preço escala com oferta de call" abaixo).
     falso, entregues, avisos = preparar()
     falso.lead(408, COMERCIAL, ENTRADA)
     state.update_conversation(408, last_outbound_at=int(time.time()) - 600,
                               contact_name="Eduardo")
     state.transition(408, "WAITING_HUMAN", "teste")
     app.process_inbound(msg(408, "Consideraria se fosse mais barato"))
+    check("objeção de preço em conversa escalada: a IA não responde (está com uma pessoa)",
+          entregues == [], str(entregues))
+    check("objeção de preço em conversa escalada ainda avisa a pessoa", len(avisos) == 1, str(avisos))
+
+    falso, entregues, avisos = preparar()
+    falso.lead(410, COMERCIAL, ENTRADA)
+    state.update_conversation(410, last_outbound_at=int(time.time()) - 600, contact_name="Eduardo")
+    app.process_inbound(msg(410, "Consideraria se fosse mais barato"))
     texto = entregues[0][1] if entregues else ""
-    check("objeção de preço em conversa escalada: oferta de call com o link, em português",
+    check("objeção de preço escala com oferta de call, em português (D-2026-10-13)",
           "calendar.app.google" in texto and "nosso time" in texto and "Lucas" not in texto
           and "Entendo" in texto
           and "team" not in texto and texto.count("?") == 1, str(entregues))
-    check("objeção de preço em conversa escalada ainda avisa a pessoa", len(avisos) == 1, str(avisos))
     falso, entregues, _ = preparar()
     falso.lead(409, COMERCIAL, ENTRADA)
     state.update_conversation(409, last_outbound_at=int(time.time()) - 600)
