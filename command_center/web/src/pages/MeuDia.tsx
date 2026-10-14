@@ -36,7 +36,9 @@ function BotaoCk({ c, data }: { c: Ck; data: string }) {
   return <button className="btn sm meudia-ck" disabled={indo} onClick={abrir}><span className="grow">{c.nome}</span>{indo ? <span className="spin" /> : estado}</button>
 }
 
-interface Resumo { servicos: { id: number; title: string; cliente: string | null }[]; corridas: { id: number; name: string; series: string | null; track: string | null }[]
+interface PilotoCorrida { client_id: number; piloto: string }
+interface Resumo { servicos: { id: number; title: string; client_id?: number | null; cliente: string | null }[]
+  corridas: { id: number; name: string; series: string | null; track: string | null; pilotos?: PilotoCorrida[] }[]
   sessoes: { id: number; period: string; status: string; piloto: string | null; servico: string | null }[] }
 interface Periodo { de: string; ate: string; hoje: string; dias: Record<string, Resumo> }
 type Vista = 'dia' | 'semana' | 'mes'
@@ -52,10 +54,28 @@ const vazio = (r?: Resumo) => !r || (!r.servicos.length && !r.corridas.length &&
 /** O que tem no dia, em linhas curtas: serviço (cliente), corrida e sessão do site. */
 function Itens({ r }: { r: Resumo }) {
   return <ul className="md-itens">
-    {r.corridas.map(c => <li key={`c${c.id}`} className="corrida">🏁 {c.series || c.name}{c.track && <span className="muted"> · {c.track}</span>}</li>)}
+    {r.corridas.map(c => <li key={`c${c.id}`} className="corrida">🏁 {c.series || c.name}{c.track && <span className="muted"> · {c.track}</span>}
+      {!!c.pilotos?.length && <ul className="md-sub">{c.pilotos.map(p => <li key={p.client_id}>{p.piloto}</li>)}</ul>}</li>)}
     {r.servicos.map(s => <li key={`s${s.id}`}>{s.cliente || s.title}</li>)}
     {r.sessoes.map(x => <li key={`x${x.id}`} className="sessao">{PERIODO[x.period] || x.period} · {x.piloto || tr("site")}{x.status !== 'confirmada' && <span className="muted"> {tr("(esperando)")}</span>}</li>)}
   </ul>
+}
+
+/** #233 (dono, 14/10): "corrida é um card de serviço geral com cards de serviços de cada cliente";
+ *  o treino é o card individual do cliente. No mês (computador), os cards ficam dentro do dia. */
+const MAX_CARDS = 4
+
+function CardsDoDia({ r, max = MAX_CARDS }: { r: Resumo; max?: number }) {
+  const cards: ReactNode[] = [
+    ...r.corridas.map(c => <span key={`c${c.id}`} className="md-card corrida">
+      <span className="md-card-t">🏁 {c.series || c.name}</span>
+      {!!c.pilotos?.length && <span className="md-card-sub">{c.pilotos.map(p => <span key={p.client_id} className="md-card servico">{p.piloto}</span>)}</span>}
+    </span>),
+    ...r.servicos.map(s => <span key={`s${s.id}`} className="md-card servico" title={s.title}><span className="md-card-t">{s.cliente || s.title}</span></span>),
+    ...r.sessoes.map(x => <span key={`x${x.id}`} className={`md-card sessao${x.status !== 'confirmada' ? ' esperando' : ''}`}>
+      <span className="md-card-t">{PERIODO[x.period] || x.period} · {x.piloto || tr("site")}</span></span>),
+  ]
+  return <span className="md-cards">{cards.slice(0, max)}{cards.length > max && <span className="md-card mais">{tr("+{0}", cards.length - max)}</span>}</span>
 }
 
 function Semana({ data, abrir, nav }: { data: string; abrir: (iso: string) => void; nav: ReactNode }) {
@@ -69,7 +89,7 @@ function Semana({ data, abrir, nav }: { data: string; abrir: (iso: string) => vo
       const r = p.data!.dias[iso]
       return <button key={iso} className={`card card-b md-semana-d${iso === hoje ? ' hoje' : ''}`} onClick={() => abrir(iso)}>
         <h3 className="h3" style={{ margin: 0, textTransform: 'capitalize' }}>{rotuloData(iso)}{iso === hoje && <Chip tone="accent">{tr("hoje")}</Chip>}</h3>
-        {vazio(r) ? <span className="small muted">{tr("Nada marcado")}</span> : <Itens r={r} />}
+        {vazio(r) ? <span className="small muted">{tr("Nada marcado")}</span> : <CardsDoDia r={r} max={Infinity} />}
       </button>
     })}</div>
   </Section>
@@ -93,10 +113,16 @@ function Mes({ data, abrir, nav }: { data: string; abrir: (iso: string) => void;
           aria-label={tr("{0} de {1}: {2}", Number(iso.slice(8)), MESES[m - 1], vazio(r) ? 'nada marcado' : [r.corridas.length && 'corrida', n && `${n} marcado${n > 1 ? 's' : ''}`].filter(Boolean).join(', '))}>
           <b>{Number(iso.slice(8))}</b>
           <span className="md-cal-m">{r.corridas.length > 0 && <span aria-hidden="true">🏁</span>}{n > 0 && <span className="md-cal-n">{n}</span>}</span>
+          {!vazio(r) && <CardsDoDia r={r} />}
         </button>
       })}
     </div>
-    <p className="small muted" style={{ margin: '6px 0 0' }}>{tr("🏁 corrida · número = serviços e sessões do dia. Toque no dia para abrir.")}</p>
+    <p className="small muted md-leg-cel" style={{ margin: '6px 0 0' }}>{tr("🏁 corrida · número = serviços e sessões do dia. Toque no dia para abrir.")}</p>
+    <p className="small muted md-leg" style={{ margin: '6px 0 0' }}>
+      <span className="md-leg-i corrida">{tr("corrida, com um card por cliente")}</span>
+      <span className="md-leg-i servico">{tr("serviço do cliente")}</span>
+      <span className="md-leg-i sessao">{tr("sessão do site")}</span>
+      <span>{tr("Clique no dia para abrir.")}</span></p>
     <h3 className="h3" style={{ margin: '14px 0 6px' }}>{tr("Próximos")}</h3>
     {!proximos.length ? <span className="small muted">{tr("Nada marcado no resto do mês.")}</span>
       : <div className="stack" style={{ gap: 8 }}>{proximos.map(iso => <button key={iso} className="card card-b md-semana-d" onClick={() => abrir(iso)}>
@@ -175,7 +201,10 @@ export function MeuDia() {
           <h3 className="h3" style={{ margin: 0 }}>{r.name}</h3>
           <div className="small muted">{[r.track, r.city].filter(Boolean).join(' · ')}</div>
           {r.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}
-          {r.pilotos.map(p => <div key={p.client_id} className="stack" style={{ gap: 6 }}><b className="small">{p.piloto}</b>
+          {r.pilotos.map(p => <div key={p.client_id} className="md-servico-corrida stack" style={{ gap: 6 }}>
+            <div className="row wrap" style={{ gap: 8 }}><h4 className="h4 grow" style={{ margin: 0 }}>{p.piloto}</h4>
+              <Link className="btn sm ghost" to={`/clients/${p.client_id}`}>{tr("Card")}</Link>
+              <Link className="btn sm ghost" to={`/balcao/${p.client_id}`}>{tr("Peças")}</Link></div>
             {p.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>)}
         </div>)}</div>
       </Section>}
