@@ -270,7 +270,7 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
                    "entity": {"type": "invoice", "id": i["id"]}, "detail": (f"saldo {_usd(i['balance'])}" if i.get("balance") else "paga") + (f" · vence {_dbr(i['due_on'])}" if i.get("due_on") else "") + (f" · {i['memo']}" if i.get("memo") else ""), "links": _links(con, "invoice", i["id"])})
     tl.sort(key=lambda x: x["at"] or "", reverse=True)
     ultimo = next((t for t in tarefas if t["status"] == "completed" and t["due_on"]), None)
-    return {"client": c, "links": _links(con, "client", cid), "tasks": tarefas, "waivers": waivers,
+    return {"client": c, "irmaos": identidade.irmaos(con, cid), "links": _links(con, "client", cid), "tasks": tarefas, "waivers": waivers,
             "emails": emails, "invoices": invoices, "ai_actions": acoes, "timeline": tl, "last_service": ultimo,
             "open_balance": (sum((i["balance"] or 0) for i in invoices) if invoices else None),
             "stages": todos(con, "SELECT code, label FROM client_stages ORDER BY ord")}
@@ -1598,11 +1598,23 @@ class ClienteNovoIn(BaseModel):
     company: str | None = None
     notes: str | None = None
     vip: bool = False
+    irmao_de: int | None = None          # #204: card de irmão — o card do irmão (Vincular ao cliente)
 
 
 @r.post("/clients", status_code=201)
 def client_create(dados: ClienteNovoIn, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
-    """Cliente criado à mão no painel. Se já existir (e-mail, telefone, nome), devolve o existente em vez de duplicar."""
+    """Cliente criado à mão no painel. Se já existir (e-mail, telefone, nome), devolve o existente em vez de duplicar.
+    Com `irmao_de`, cria o card do irmão: mesmo responsável, e-mail e telefone daquele card, piloto próprio."""
+    if dados.irmao_de:
+        try:
+            cid, novo = identidade.criar_irmao(con, dados.irmao_de, dados.pilot_name, (dados.pilot_dob or "").strip() or None,
+                                               (dados.notes or "").strip() or None)
+        except identidade.ErroIrmao as e:
+            raise HTTPException(400, str(e))
+        auditar(con, "client.sibling" if novo else "client.match", f"user:{u['id']}", user_id=u["id"], entity_type="client",
+                entity_id=cid, detail={"irmao_de": dados.irmao_de, "piloto": (dados.pilot_name or "").strip(), "novo": novo},
+                ip=auth._ip(request))
+        return {"id": cid, "created": novo, "irmao_de": dados.irmao_de}
     nome = (dados.name or "").strip()
     if len(nome) < 2:
         raise HTTPException(400, "Nome do responsável é obrigatório.")

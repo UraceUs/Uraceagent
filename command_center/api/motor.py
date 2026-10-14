@@ -253,6 +253,13 @@ def contexto_da_venda(con, texto):
     linhas += ["  " + (m_ % o["id"]) for m_ in VENDA_PROTOCOLO]
     linhas.append("- venda_fechar dispara de uma vez: card do cliente, cliente e invoice no QuickBooks, waiver, tarefa no Asana e Kommo em Closed won. "
                   "Só use quando a pessoa disser que fechou. Se faltar serviço ou valor na ficha, pergunte antes.")
+    ref, preco, na_tabela, por_que = vendas.situacao_do_preco(con, o)
+    linhas.append("- Preço da tabela (catálogo do QuickBooks, nunca o valor da venda): "
+                  + (f"${preco:g} ({ref['nome']})" if preco is not None else "não achei este serviço no catálogo")
+                  + (f"; depósito de ${ref['deposito']:g} vai na mesma invoice" if ref and ref["deposito"] else "") + ". "
+                  + ("O valor bate com a tabela." if na_tabela is True else
+                     f"Atenção: {por_que} — a invoice NÃO sai até o gerente ou o dono conferir o valor (Liberar invoice). "
+                     "Diga isso à pessoa; não prometa a invoice enviada."))
     if not o["email"]:
         linhas.append("- Esta ficha está SEM e-mail: waiver e invoice não saem. Peça o e-mail antes de prometer envio.")
     return "\n".join(linhas)

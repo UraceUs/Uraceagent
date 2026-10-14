@@ -102,14 +102,23 @@ def linhas_da_invoice(con, b):
     linhas = [{"item_id": s["qbo_item_id"], "quantidade": 1, "unitario": float(b["price"]), "descricao": _sessao(b)}]
     dep = s["deposit"] or 0
     if dep > 0:
-        item = um(con, """SELECT id FROM qbo_items WHERE active=1
-                           AND (LOWER(name) LIKE '%security deposit%' OR LOWER(COALESCE(full_name,'')) LIKE '%security deposit%')
-                         ORDER BY id LIMIT 1""")
-        if not item:
-            raise ErroCobranca("não achei o item \"Security deposit\" no QuickBooks (sincronize o QuickBooks)")
-        linhas.append({"item_id": item["id"], "quantidade": 1, "unitario": float(dep),
-                       "descricao": "Refundable security deposit: returned within 5 business days after the session if there is no incident."})
+        linhas.append(linha_deposito(con, dep))
     return linhas
+
+
+DESCRICAO_DEPOSITO = "Refundable security deposit: returned within 5 business days after the session if there is no incident."
+
+
+def linha_deposito(con, valor):
+    """A linha do depósito na invoice: o item "Security deposit" do QuickBooks. A venda manual
+    (#204, dono, 14/10: *"o depósito de segurança é cobrado em venda manual ou automática"*) usa
+    esta mesma linha."""
+    item = um(con, """SELECT id FROM qbo_items WHERE active=1
+                       AND (LOWER(name) LIKE '%security deposit%' OR LOWER(COALESCE(full_name,'')) LIKE '%security deposit%')
+                     ORDER BY id LIMIT 1""")
+    if not item:
+        raise ErroCobranca("não achei o item \"Security deposit\" no QuickBooks (sincronize o QuickBooks)")
+    return {"item_id": item["id"], "quantidade": 1, "unitario": float(valor), "descricao": DESCRICAO_DEPOSITO}
 
 
 def _enviar_padrao(**kw):

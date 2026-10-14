@@ -1823,3 +1823,73 @@ def test_como_usar_le_os_guias_navega_entre_eles_e_baixa_o_md_para_a_ia(servidor
     g.get_by_role("heading", name="Playbook de vendas do Command Center", level=2).wait_for()
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
+
+
+def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, navegador):
+    """#204 (dono, 14/10: "precisa confirmar o valor da invoice"): a invoice fora da tabela fica
+    esperando; o operador vê o aviso mas não libera, e o gerente libera vendo o valor e o preço
+    da tabela (que vem do catálogo, não do valor da venda)."""
+    op = entrar(navegador, servidor, "op@urace.us")
+    csrf = {"X-CSRF": next(c["value"] for c in op.context.cookies() if c["name"] == "cc_csrf")}
+    r = op.request.post(servidor + "/api/sales", headers=csrf,
+                        data={"name": "Marina Lopes", "email": "marina.e2e@example.com", "service": "Urace Daily", "amount": 420})
+    oid = r.json()["id"]
+    r = op.request.post(servidor + f"/api/sales/{oid}/close", headers=csrf, data={
+        "preco_tabela": 420, "passos": {"cliente": False, "qbo": True, "waiver": False, "asana": False, "kommo": False}})
+    f = r.json()["fechamento"]
+    assert f["invoice_pendente"] is True and f["preco_tabela"] == 500, f
+    # o operador vê por que parou, mas não tem o botão nem a rota
+    abrir(op, servidor, f"/sales/{oid}")
+    op.get_by_text("Invoice esperando o gerente conferir o valor.").wait_for()
+    op.get_by_text("Só o gerente ou o dono libera.").wait_for()
+    assert op.get_by_role("button", name="Liberar invoice").count() == 0
+    assert op.request.post(servidor + f"/api/sales/{oid}/invoice/liberar", headers=csrf, data={"valor": 420}).status == 403
+    assert op.request.post(servidor + f"/api/sales/{oid}/step/qbo", headers=csrf).status == 409
+    op.close()
+
+    g = entrar(navegador, servidor, largura=360, altura=800)          # gerente, no celular
+    abrir(g, servidor, f"/sales/{oid}")
+    g.get_by_role("button", name="Liberar invoice").first.click()
+    modal = g.locator(".modal", has=g.get_by_role("heading", name="Liberar invoice", level=3))
+    modal.wait_for()
+    texto = modal.inner_text()
+    assert "Valor da venda" in texto and "Preço da tabela (catálogo)" in texto, texto
+    assert re.search(r"\$\s?420", texto) and re.search(r"\$\s?500", texto), texto
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    # sem QuickBooks no e2e, a liberação chega ao servidor e volta "não conectado": nada sai, nada muda
+    modal.get_by_role("button", name=re.compile(r"Liberar invoice de")).click()
+    g.get_by_text(re.compile("não conectado")).first.wait_for(timeout=8000)
+    d = g.request.get(servidor + f"/api/sales/{oid}").json()
+    assert d["oportunidade"]["closing"]["invoice_pendente"] is True and d["pode_liberar"] is True
+    assert not g.erros_js, g.erros_js
+    g.close()
+
+
+def test_card_de_irmao_com_vincular_ao_cliente(servidor, navegador):
+    """#204 (dono, 14/10: "sim, é para criar um card de um irmão"): o Novo cliente com o mesmo
+    e-mail abriria o card do irmão; o card de irmão nasce do card escolhido em "Vincular ao
+    cliente", com o mesmo responsável e contato, e cada piloto fica com o seu."""
+    pg = entrar(navegador, servidor, "op@urace.us", largura=390, altura=844)
+    abrir(pg, servidor, "/clients")
+    pg.get_by_role("button", name=re.compile(r"Novo cliente")).first.click()
+    pg.get_by_role("button", name=re.compile("É irmão de um cliente")).click()
+    pg.get_by_role("heading", name="Card de irmão", level=3).wait_for()
+    pg.get_by_label("Irmão de — vincular ao cliente").fill("David")
+    pg.locator(".lpick-menu .opt", has_text="David Pera").first.click()
+    pg.get_by_text(re.compile("vem do card de David Pera")).wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_label("Piloto (o irmão) *").fill("Sofia Pera")
+    pg.get_by_role("button", name="Criar card do irmão").click()
+    pg.get_by_text("Card do irmão criado.").wait_for()
+    pg.get_by_role("heading", name="Sofia Pera").first.wait_for()
+    pg.get_by_role("link", name="David Pera").first.wait_for()          # o irmão, marcado no card
+    david = pg.request.get(servidor + "/api/clients?q=David%20Pera").json()[0]
+    sofia = [c for c in pg.request.get(servidor + "/api/clients?q=Sofia").json() if c["pilot_name"] == "Sofia Pera"][0]
+    assert sofia["id"] != david["id"] and sofia["email"] == david["email"] and sofia["phone"] == david["phone"]
+    card = pg.request.get(servidor + f"/api/clients/{sofia['id']}").json()
+    assert card["client"]["sibling_of"] == david["id"] and [i["id"] for i in card["irmaos"]] == [david["id"]]
+    assert card["tasks"] == [], "o serviço do David não vai para o card da Sofia"
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()

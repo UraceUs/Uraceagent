@@ -5,7 +5,7 @@ import { useGet } from '../api/hooks'
 import { CatalogoEditor } from './Garage'
 import { LembreteChip, LembreteModal } from './Systems'
 import { PecasDoCliente } from './Estoque'
-import { Picker, UnirModal } from '../components/Unir'
+import { CardIrmao, Picker, UnirModal } from '../components/Unir'
 import type { Catalog, Client, Client360 as C360, Monthly, Race } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Scrim, Section, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
@@ -44,6 +44,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const [tab, setTab] = useState<'timeline' | 'monthly' | 'equip' | 'races' | 'pecas' | 'site' | 'tasks' | 'waivers' | 'emails' | 'invoices' | 'ai'>('timeline')
   const [proBusy, setProBusy] = useState(false)
   const [unir, setUnir] = useState(false)
+  const [irmao, setIrmao] = useState(false)
   const monthly = useGet<Monthly>(id && tab === 'monthly' ? `/clients/${id}/monthly` : null)
   const catalog = useGet<Catalog>(id && tab === 'equip' ? '/catalog' : null)
   const corridas = useGet<Race[]>(id && tab === 'races' ? `/races?client_id=${id}&all=true` : null)
@@ -116,6 +117,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
           {c.email ? <span><span className="k">{tr("e-mail")}</span> <a href={`mailto:${c.email}`}>{c.email}</a>{c.email_alt && <> <span className="muted">·</span> <a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></>}</span> : <span className="muted">{tr("sem e-mail")}</span>}
           {c.phone && <span><span className="k">{tr("tel")}</span> <a href={`tel:${c.phone}`}>{c.phone}</a></span>}
           {c.company && <span><span className="k">{tr("empresa")}</span> {c.company}</span>}
+          {!!data.irmaos?.length && <span><span className="k">{tr("irmão(s)")}</span> {data.irmaos.map(i => <Link key={i.id} className="lchip" to={`/clients/${i.id}`} title={tr("Card do irmão: cada piloto tem o seu")}>{i.pilot_name || i.name}</Link>)}</span>}
         </div>
       </div>
       <div className="c360-acts">
@@ -126,6 +128,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         {can('OPERATOR') && <details className="more"><summary className="btn" title={tr("Mais ações")}>⋯</summary><div className="menu">
           <button className="btn ghost sm" disabled={scanning} onClick={async () => { setScanning(true); try { const r = await api.post<{ gmail: number; docusign: number; avisos: string[] }>(`/clients/${c.id}/scan`); toast(r.avisos.length ? tr("Varredura parcial: {0}", r.avisos.join('; ')) : tr("Achou {0} thread(s) de e-mail e ligou {1} waiver(s).", r.gmail, r.docusign), r.avisos.length ? undefined : 'ok'); reload() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setScanning(false) } }}>{scanning ? <span className="spin" /> : '⌕'} {tr("Buscar no Gmail e DocuSign")}</button>
           <button className="btn ghost sm" onClick={() => setUnir(true)}>{tr("⧉ Unir com outro card")}</button>
+          <button className="btn ghost sm" onClick={() => setIrmao(true)}>{tr("+ Card de irmão")}</button>
         </div></details>}
       </div>
     </div>
@@ -185,6 +188,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'equip' && <Equipamento c={c} cat={catalog.data} reload={() => { reload(); catalog.reload() }} />}
       {renomear !== null && <RenomearServico tarefa={data.tasks.find(t => t.id === renomear)!} outras={data.tasks.filter(t => t.id !== renomear)} onClose={() => setRenomear(null)} onDone={reload} />}
       {mover !== null && <MoverServico tarefa={data.tasks.find(t => t.id === mover)!} atual={c} onClose={() => setMover(null)} onDone={reload} />}
+      {irmao && <CardIrmao de={c} onClose={() => setIrmao(false)} onDone={id2 => { if (onClose) onClose(); nav(`/clients/${id2}`) }} />}
       {unir && <UnirModal keep={c} onClose={() => setUnir(false)} onDone={(kid) => { if (kid !== c.id) nav(`/clients/${kid}`); else reload() }} />}
       {qr && <QrModal cid={c.id} nome={c.pilot_name || c.name} onClose={() => setQr(false)} />}
       {tab === 'pecas' && <><QrBalcao cid={c.id} nome={c.pilot_name || c.name} /><PecasDoCliente cid={c.id} nome={c.pilot_name || c.name} /></>}
