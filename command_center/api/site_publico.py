@@ -302,6 +302,16 @@ def do_cliente(client_id: int, con: sqlite3.Connection = Depends(get_db), u=Depe
     return {"conta": vs.conta_do_cliente(con, client_id)}
 
 
+# ------------------------------------------------------------------ pedidos do site (#236, #245)
+@r.get("/pedidos")
+def pedidos(status: str | None = None, limit: int = Query(30, ge=1, le=200), offset: int = Query(0, ge=0),
+            con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Os pedidos do carrinho e da loja em todo estado (pago, processando, falhou, expirou, no checkout),
+    paginados, cada um com o link da página do pedido para a equipe mandar ao cliente."""
+    from command_center.providers import pedido_site
+    return pedido_site.lista(con, status, limit, offset)
+
+
 # ------------------------------------------------------------------ waiver assinada aqui (#85)
 class WaiverNativaIn(BaseModel):
     ligada: bool

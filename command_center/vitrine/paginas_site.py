@@ -663,30 +663,12 @@ def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
                   scripts=("contato.js",), foto=p["images"][0]["src"] if p["images"] else None)
 
 
-def obrigado(host, pedido=None):
-    """#174: a volta do Stripe Checkout. Fora do sitemap e do Google (noindex)."""
-    if pedido and pedido["status"] == "pago":
-        valor = pedido["amount_paid"] if pedido["amount_paid"] is not None else pedido["amount"]
-        item = pedido["product_name"] + (f" ({pedido['variation']})" if pedido["variation"] else "") + \
-            (f" × {pedido['quantity']}" if pedido["quantity"] > 1 else "")
-        entrega = ("We'll email you when it's ready for pickup at the Orlando Kart Center." if pedido["delivery"] == "retirada"
-                   else "We'll confirm the shipping cost and send you the tracking number by email.")
-        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
-  <p class="eyebrow">Order #{pedido['id']}</p>
-  <h1 id="h-ok">Thank you! Your order is confirmed</h1>
-  <p class="aviso-ok" role="status">Payment received: <strong>{usd(valor)}</strong> for {e(item)}.</p>
-  <p>{entrega} A confirmation is on its way to {e(pedido['email'] or 'your email')}.</p>
-  <p><a class="btn" href="/store/">Back to the store</a></p>
-</div></section>"""
-    elif pedido:
-        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
-  <p class="eyebrow">Order #{pedido['id']}</p>
-  <h1 id="h-ok">Thanks! We're confirming your payment</h1>
-  <p role="status">Some payment methods take a moment to clear. You'll get an email as soon as it's confirmed — there's no need to pay again.</p>
-  <p><a class="btn" href="/store/">Back to the store</a></p>
-</div></section>"""
-    else:
-        corpo = """<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
+def obrigado(host, pedido=None, **kw):
+    """#174: a volta do Stripe Checkout da loja. Com o pedido, é a página do pedido (#245) com o estado
+    dele; sem, um obrigado genérico. Fora do sitemap e do Google (noindex)."""
+    if pedido:
+        return pedido_pagina(host, pedido, caminho="/store/thanks/", **kw)
+    corpo = """<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
   <h1 id="h-ok">Thank you</h1>
   <p>If you just paid, the confirmation is on its way to your email. Questions? Call or WhatsApp +1 (407) 250 2291.</p>
   <p><a class="btn" href="/store/">Back to the store</a></p>
@@ -714,17 +696,26 @@ def cancelado(host, slug=None):
 PERIODO_EN = {"manha": "Morning", "tarde": "Afternoon", "dia": "Full day"}
 
 
-def carrinho(host, cancelado=False, stripe=True):
+def carrinho(host, cancelado=False, stripe=True, restaurar=None):
     """A página do carrinho. As linhas vêm do navegador e o servidor recalcula (carrinho.js chama
-    /ops/api/vitrine/carrinho). Fora do Google e do sitemap: é de cada pessoa."""
+    /ops/api/vitrine/carrinho). Fora do Google e do sitemap: é de cada pessoa.
+    `restaurar` (#245): (pedido, itens, entrega) do "Restore cart"/"Try again" de um pedido que não foi
+    pago. Os itens vão num atributo (só as escolhas, nunca preço) e o carrinho.js junta ao carrinho."""
     aviso = ('<p class="aviso-erro" role="alert">Checkout cancelled: nothing was charged. Your cart is still here.</p>'
              if cancelado else "")
+    dados_rest, envio = "", False
+    if restaurar:
+        oid, itens_rest, entrega_rest = restaurar
+        dados_rest = f' data-restaurar="{e(json.dumps(itens_rest, separators=(",", ":")))}"'
+        envio = entrega_rest == "envio"
+        aviso = (f'<p class="aviso-ok" role="status">We put the items of order #{int(oid)} back in your cart. Prices and '
+                 'availability are checked again before you pay.</p>')
     fora = ('' if stripe else '<p class="aviso-erro" role="alert">Online payment isn\'t available right now. '
             'Please call or WhatsApp us at +1 (407) 250 2291.</p>')
     corpo = f"""<section class="faixa clara" aria-labelledby="h-cart"><div class="largura carrinho-pagina">
   <h1 id="h-cart">Your cart</h1>
   {aviso}{fora}
-  <div class="carrinho" data-api="/ops/api/vitrine/carrinho" data-portal="{PORTAL}">
+  <div class="carrinho" data-api="/ops/api/vitrine/carrinho" data-portal="{PORTAL}"{dados_rest}>
     <p class="carrinho-estado" role="status" aria-live="polite">Loading your cart…</p>
     <div class="carrinho-grade" hidden>
       <section class="carrinho-itens" aria-labelledby="h-itens">
@@ -735,8 +726,8 @@ def carrinho(host, cancelado=False, stripe=True):
         <h2 id="h-resumo">Order summary</h2>
         <div class="carrinho-conta" hidden></div>
         <fieldset class="entrega carrinho-entrega" hidden><legend>Delivery for store items</legend>
-          <label class="opcao"><input type="radio" name="entrega" value="retirada" checked> <span>Pick up at the track <span class="opcional">— Orlando Kart Center, free</span></span></label>
-          <label class="opcao"><input type="radio" name="entrega" value="envio"> <span>Ship to me <span class="opcional">— we confirm and bill shipping separately</span></span></label>
+          <label class="opcao"><input type="radio" name="entrega" value="retirada"{'' if envio else ' checked'}> <span>Pick up at the track <span class="opcional">— Orlando Kart Center, free</span></span></label>
+          <label class="opcao"><input type="radio" name="entrega" value="envio"{' checked' if envio else ''}> <span>Ship to me <span class="opcional">— we confirm and bill shipping separately</span></span></label>
         </fieldset>
         <dl class="carrinho-total"></dl>
         <p class="carrinho-erro aviso-erro" role="alert" hidden></p>
@@ -760,48 +751,124 @@ def carrinho(host, cancelado=False, stripe=True):
                   corpo=corpo, indexar=False)
 
 
-def carrinho_obrigado(host, pedido, itens):
-    """A volta do Stripe para o carrinho (noindex). Pago → o pedido e o que vem a seguir em cada sessão."""
-    voltar = '<p class="hero-acoes"><a class="btn" href="/">Back to the home page</a></p>'
-    if pedido and pedido["status"] == "pago":
-        valor = pedido["amount_paid"] if pedido["amount_paid"] is not None else pedido["amount"]
-        linhas = []
-        for x in itens:
-            det = ""
-            if x["kind"] == "sessao" and x["booking_id"]:
-                det = (f'<span class="carrinho-ok-sessao">Booked. <a href="{PORTAL}/sessions/{x["booking_id"]}">Sign the waiver</a> '
-                       'in your account to confirm it.</span>')
-            elif x["kind"] == "sessao":
-                det = ('<span class="carrinho-sem-vaga">This time was taken just before your payment. Our team will call you to '
-                       'pick another time (or refund it). Your payment is safe.</span>')
-            dep = f'<span class="muted">+ refundable security deposit {usd(x["deposit"])}</span>' if x["deposit"] else ""
-            linhas.append(f'<li><b>{e(x["name"])}</b>{" × " + str(x["quantity"]) if x["quantity"] > 1 else ""} — '
-                          f'{usd(x["unit_price"] * x["quantity"])} {dep}{det}</li>')
-        sessoes = any(x["kind"] == "sessao" for x in itens)
-        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto" data-limpar-carrinho>
-  <p class="eyebrow">Order #{pedido['id']}</p>
-  <h1 id="h-ok">Thank you! Your order is confirmed</h1>
-  <p class="aviso-ok" role="status">Payment received: <strong>{usd(valor)}</strong>.</p>
-  <ul class="carrinho-recibo">{''.join(linhas)}</ul>
-  <p>A confirmation is on its way to {e(pedido['email'] or 'your email')}.</p>
-  {f'<p class="hero-acoes"><a class="btn" href="{PORTAL}/sessions">My sessions</a> <a class="btn btn-linha-escura" href="/">Home</a></p>' if sessoes else voltar}
-</div></section>"""
-    elif pedido:
-        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto" data-limpar-carrinho>
-  <p class="eyebrow">Order #{pedido['id']}</p>
-  <h1 id="h-ok">Thanks! We're confirming your payment</h1>
-  <p role="status">Some payment methods take a moment to clear. You'll get an email as soon as it's confirmed — there's no need to pay again.</p>
-  {voltar}
-</div></section>"""
-    else:
-        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
+def carrinho_obrigado(host, pedido, itens=None, **kw):
+    """A volta do Stripe para o carrinho (noindex). Com o pedido, é a página do pedido (#245)."""
+    if pedido:
+        return pedido_pagina(host, pedido, caminho="/cart/thanks/", **kw)
+    corpo = """<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
   <h1 id="h-ok">Thank you</h1>
   <p>If you just paid, the confirmation is on its way to your email. Questions? Call or WhatsApp +1 (407) 250 2291.</p>
-  {voltar}
+  <p class="hero-acoes"><a class="btn" href="/">Back to the home page</a></p>
 </div></section>"""
     return layout(host=host, caminho="/cart/thanks/", titulo="Order confirmation | URACE",
                   descricao="Your URACE order: payment confirmation for your race sessions and store items, and what happens next.",
                   corpo=corpo, indexar=False)
+
+
+# ------------------------------------------------------------------ a página do pedido (#245)
+# Um estado para cada resultado do Stripe: (h1, título da aba, meta description).
+ESTADO_PEDIDO = {
+    "pago": ("Payment confirmed", "Payment confirmed | URACE",
+             "Your URACE order is paid and confirmed: the items, the total, the refundable deposit and what happens next."),
+    "aguardando": ("Payment processing", "Payment processing | URACE",
+                   "Your payment for this URACE order is still being confirmed. No need to pay again: we email you as soon as it clears."),
+    "falhou": ("Payment didn't go through", "Payment didn't go through | URACE",
+               "The payment for this URACE order didn't go through and nothing was charged. Try again with the same items."),
+    "expirado": ("Checkout expired", "Checkout expired | URACE",
+                 "Your URACE checkout expired before the payment was finished and nothing was charged. Restore your cart in one tap."),
+    "aberto": ("Checkout not finished", "Checkout not finished | URACE",
+               "We haven't received a payment for this URACE order yet and nothing was charged. Restore your cart to finish it."),
+}
+
+
+def _pedido_linhas(ls, pago):
+    out = []
+    for x in ls:
+        dep = (f'<span class="muted">+ refundable security deposit {usd(x["deposit"])}</span>' if x["deposit"] else "")
+        det = ""
+        if pago and x["kind"] == "sessao" and x["booking_id"]:
+            det = (f'<span class="pedido-passo">Booked. Sign the waiver in your URACE account to confirm it. '
+                   f'<a class="btn btn-sm" href="{PORTAL}/sessions/{x["booking_id"]}">Sign the waiver</a></span>')
+        elif pago and x["kind"] == "sessao":
+            det = ('<span class="carrinho-sem-vaga">This time was taken just before your payment. Our team will call you to '
+                   'pick another time (or refund it). Your payment is safe.</span>')
+        qtd = f' × {x["quantity"]}' if x["quantity"] > 1 else ""
+        out.append(f'<li><b>{e(x["name"])}{qtd}</b><span>{usd(x["unit_price"] * x["quantity"])}</span>{dep}{det}</li>')
+    return f'<ul class="carrinho-recibo">{"".join(out)}</ul>'
+
+
+def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, erro=None, csrf=""):
+    """A página de situação do pedido: `/order/<token>/` (o link pessoal) e a volta do Stripe
+    (`/cart/thanks/`, `/store/thanks/`), com o mesmo desenho. `ls`: as linhas (`pedido_site.linhas`).
+    `limpar`: a volta do Stripe com o pedido pago ou confirmando esvazia o carrinho deste navegador.
+    Fora do Google (noindex); a rota manda `no-store`."""
+    st = o["status"] if o["status"] in ESTADO_PEDIDO else "aberto"
+    h1, titulo, desc = ESTADO_PEDIDO[st]
+    sessao = any(x["kind"] == "sessao" for x in ls)
+    produto = any(x["kind"] == "produto" for x in ls)
+    deposito = sum(x["deposit"] or 0 for x in ls)
+    valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
+    nada = "nothing was charged" + (" and no session was booked" if sessao else "")
+    para = e(o["email"] or "your email")
+    voltar = (f'<a class="btn btn-linha-escura" href="{PORTAL}/sessions">My sessions</a>' if sessao and st == "pago"
+              else '<a class="btn btn-linha-escura" href="/store/">Back to the store</a>' if not sessao
+              else '<a class="btn btn-linha-escura" href="/">Home</a>')
+    contato = '<a class="btn btn-linha-escura" href="/contact/">Contact us</a>'
+    aviso_erro = (f'<p class="aviso-erro" role="alert">{e(erro)}</p>' if erro else "")
+    novo = (f'<p class="aviso-ok" role="status">You placed this order again in a new checkout: '
+            f'<a href="{e(refeito[1])}">see order #{refeito[0]}</a>.</p>' if refeito else "")
+    total = (f'<dl class="carrinho-total pedido-total"><dt class="soma">{"Total paid" if st == "pago" else "Order total"}</dt>'
+             f'<dd class="soma">{usd(valor)}</dd>'
+             + (f'<dt>Includes the refundable security deposit</dt><dd>{usd(deposito)}</dd>' if deposito else "") + "</dl>")
+    itens = f'<h2 id="h-itens">Your order</h2>{_pedido_linhas(ls, st == "pago")}{total}'
+    if st == "pago":
+        passos = []
+        if produto:
+            passos.append("Store items: we'll email you when they're ready for pickup at the Orlando Kart Center."
+                          if o["delivery"] == "retirada" else
+                          "Store items: we'll confirm the shipping cost and email you the tracking number. Shipping is billed separately.")
+        if sessao:
+            passos.append("Each session is confirmed once the driver's waiver is signed in your URACE account.")
+        if deposito:
+            passos.append("The security deposit is returned within 5 business days after the session if there is no incident.")
+        passos.append(f"A confirmation is on its way to {para}.")
+        corpo_estado = (f'<p class="aviso-ok" role="status">Thank you! Your order is confirmed. Payment received: '
+                        f'<strong>{usd(valor)}</strong>.</p>{itens}'
+                        f'<h2 id="h-passos">What happens next</h2><ul class="pedido-passos">'
+                        + "".join(f"<li>{x}</li>" for x in passos) + f'</ul><p class="hero-acoes">{voltar}</p>')
+    elif st == "aguardando":
+        corpo_estado = (f'<p class="aviso-info" role="status">We\'re confirming your payment. Some payment methods, like a bank '
+                        f'transfer, take a few days to clear. <strong>Please don\'t pay again</strong>: we\'ll email {para} as soon '
+                        f'as it\'s confirmed.</p>'
+                        + ('<p>Session times are booked when the payment clears. If a time fills up before that, our team will '
+                           'call you to pick another one (or refund it).</p>' if sessao else "")
+                        + f'{itens}<p class="hero-acoes">{voltar} {contato}</p>')
+    elif st == "falhou":
+        botao = ("" if refeito else
+                 f'<form class="hero-acoes pedido-refazer" method="post" action="/order/{e(token)}/retry">'
+                 f'<input type="hidden" name="csrf" value="{e(csrf)}">'
+                 f'<button class="btn" type="submit">Try again</button> {contato}</form>')
+        corpo_estado = (f'<p class="aviso-erro" role="alert">The payment wasn\'t completed, so {nada}.</p>'
+                        f'<p>You can try again with the same items, with the same or another payment method. Prices and '
+                        f'availability are checked again.</p>{botao}{itens}')
+    else:                                               # expirado ou aberto: restaurar o carrinho
+        motivo = ("The secure checkout closed before the payment was finished" if st == "expirado"
+                  else "We haven't received a payment for this order yet")
+        botao = ("" if refeito else
+                 f'<p class="hero-acoes"><a class="btn" href="/order/{e(token)}/cart/">Restore cart</a> {contato}</p>')
+        corpo_estado = (f'<p class="aviso-erro" role="status">{motivo}, so {nada}.</p>'
+                        f'<p>Your items are saved. Restore your cart to pick up where you left off: prices and availability '
+                        f'are checked again.</p>{botao}{itens}')
+    meu_link = ("" if caminho.startswith("/order/") else
+                f'<p class="small muted">Your order page, to check it any time: <a href="/order/{e(token)}/">order #{o["id"]}</a></p>')
+    marca = " data-limpar-carrinho" if limpar else ""
+    corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto pedido-pagina pedido-{st}"{marca}>
+  <p class="eyebrow">Order #{o['id']}</p>
+  <h1 id="h-ok">{h1}</h1>
+  {aviso_erro}{novo}{corpo_estado}
+  {meu_link}
+</div></section>"""
+    return layout(host=host, caminho=caminho, titulo=titulo, descricao=desc, corpo=corpo, indexar=False)
 
 
 def _desc(texto, complemento):

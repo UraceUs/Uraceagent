@@ -9,6 +9,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
 import { usePerguntar } from '../components/Perguntar'
 import { Picker } from '../components/Unir'
+import { ESTADO_PEDIDO, tomDoPedido } from '../components/pedidoSite'
 import type { Client } from '../api/types'
 import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
@@ -340,6 +341,47 @@ function Servicos() {
   </div>
 }
 
+/* Pedidos do site (#236, #245): carrinho e loja em todo estado do Stripe (pago, processando, falhou,
+ * expirou, no checkout), cada um com o link da página do pedido para mandar ao cliente. */
+interface PedidoLista { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; criado_em: string
+  pago_em: string | null; nome: string | null; email: string | null; telefone: string | null; resumo: string; opp_id: number | null
+  atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string }
+const POR_PAGINA_PEDIDOS = 30
+
+function Pedidos() {
+  const toast = useToast()
+  const [filtro, setFiltro] = useState('')
+  const [offset, setOffset] = useState(0)
+  const l = useGet<{ pedidos: PedidoLista[]; total: number }>(`/site/pedidos?limit=${POR_PAGINA_PEDIDOS}&offset=${offset}${filtro ? `&status=${filtro}` : ''}`, 30000)
+  const copiar = (p: PedidoLista) => navigator.clipboard?.writeText(p.link).then(() => toast(tr("Link do pedido copiado: mande ao cliente."), 'ok'))
+  return <>
+    <div className="seg" style={{ marginBottom: 12, flexWrap: 'wrap' }}>{([['', tr("Todos")], ['pago', tr("Pagos")], ['aguardando', tr("Processando")], ['falhou', tr("Não passou")], ['expirado', tr("Expirou")], ['aberto', tr("No checkout")]] as const).map(([k, r]) =>
+      <button key={k || 'todos'} className={`btn sm${filtro === k ? '' : ' ghost'}`} onClick={() => { setFiltro(k); setOffset(0) }}>{r}</button>)}</div>
+    {l.error && <ErrorState error={l.error} retry={l.reload} />}
+    {l.loading && !l.data && <Loading />}
+    {l.data && (!l.data.pedidos.length ? <Empty title={tr("Nenhum pedido aqui")}>{tr("Os pedidos do carrinho e da loja do site aparecem aqui, em todo estado do pagamento.")}</Empty>
+      : <div className="stack" style={{ gap: 10 }}>{l.data.pedidos.map(p => <div className="card card-b stack" key={p.id} style={{ gap: 6 }}>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <h2 className="h3 grow" style={{ margin: 0, fontSize: 15, minWidth: 0, overflowWrap: 'anywhere' }}>{tr("Pedido #{0}", p.id)} · {p.nome || p.email || tr("sem nome ainda")}</h2>
+          <Chip tone={tomDoPedido(p.status)}>{ESTADO_PEDIDO[p.status] || p.status}</Chip>
+          <b className="mono">{usd(p.pago ?? p.total)}</b></div>
+        <div className="small" style={{ overflowWrap: 'anywhere' }}>{p.resumo}</div>
+        <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{fmtDateTime(p.criado_em)}{p.email ? ` · ${p.email}` : ''}{p.telefone ? ` · ${p.telefone}` : ''}{p.refeito_de ? tr(" · refeito do pedido #{0}", p.refeito_de) : ''}</div>
+        {(p.status === 'falhou' || p.status === 'expirado') && <div className="small">{p.aviso_em ? (p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente."))
+          : p.aviso_erro ? <span style={{ color: 'var(--crit)' }}>{tr("O aviso não saiu: {0}", p.aviso_erro)}</span> : tr("Aviso por e-mail: saindo.")}</div>}
+        {p.atencao && <div className="small" style={{ color: 'var(--crit)' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
+        <div className="row wrap" style={{ gap: 8 }}>
+          <a className="btn sm ghost" href={p.link} target="_blank" rel="noreferrer">{tr("Página do pedido ↗")}</a>
+          <button className="btn sm ghost" onClick={() => copiar(p)}>{tr("Copiar o link")}</button>
+          {p.opp_id && <Link className="btn sm ghost" to={`/sales/${p.opp_id}`}>{tr("Venda")}</Link>}</div>
+      </div>)}</div>)}
+    {l.data && l.data.total > POR_PAGINA_PEDIDOS && <div className="row" style={{ gap: 8, marginTop: 10 }}>
+      <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA_PEDIDOS))}>{tr("Anteriores")}</button>
+      <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA_PEDIDOS, l.data.total)} {tr("de")} {l.data.total}</span>
+      <button className="btn sm ghost" disabled={offset + POR_PAGINA_PEDIDOS >= l.data.total} onClick={() => setOffset(offset + POR_PAGINA_PEDIDOS)}>{tr("Próximas")}</button></div>}
+  </>
+}
+
 /* Contas de clientes (#42, #52): o sistema sugere o cliente interno; uma pessoa confirma. O
  * vínculo abre para o cliente o histórico daquele card — por isso nunca é automático. Quem
  * não está na base ganha o botão "Criar cliente": o card nasce com os dados da conta. */
@@ -494,10 +536,11 @@ export function SitePublico() {
       <NavLink to="/site" end className={({ isActive }) => isActive ? 'on' : ''}>{tr("Agendamentos")}</NavLink>
       <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Disponibilidade")}</NavLink>
       <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Serviços e preços")}</NavLink>
+      <NavLink to="/site/pedidos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Pedidos do site")}</NavLink>
       <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Contas de clientes")}</NavLink>
       {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Waiver")}</NavLink>}
     </div>
-    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'contas' ? <Contas />
+    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'contas' ? <Contas /> : aba === 'pedidos' ? <Pedidos />
       : aba === 'waiver' && can('MANAGER') ? <WaiverNativa /> : <Agendamentos />}
   </>
 }
