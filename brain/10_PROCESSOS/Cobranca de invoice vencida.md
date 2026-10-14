@@ -44,5 +44,5 @@ cada envio — limitação técnica e regra de negócio coincidem. Ver
 ## Os dois casos que não entram na rotina
 
 [[P-04 - Contas a receber concentradas]] — Juan Pastilha e Stephen
-Collins somam 84% do valor em aberto, vencidos desde 2025. **É conversa
+Corrimao somam 84% do valor em aberto, vencidos desde 2025. **É conversa
 humana**, não reminder automático.

@@ -8,7 +8,7 @@ atualizado_em: 2026-09-04
 
 # Rafael Pistoni
 
-Responsável por **Renato Faixa Pistoni** (nasc. 01/03/2012, 14 anos) · [[Clientes]]
+Responsável por **Renato Faixa Pistoni** (nasc. 01/01/2012, 14 anos) · [[Clientes]]
 
 `rafael.pistoni@example.com` · +55 11 99555-0147
 

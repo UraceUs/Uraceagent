@@ -789,7 +789,7 @@ def test_servico_que_ja_esta_num_card_plausivel_nao_sai_dele(con):
     """A regra do dono é não pôr no card de OUTRO — não é mexer em quem já está em casa.
 
     "AIDEN - KARTING SCHOOL" estava no Aidan Molas (1 letra), "Garret" no Garrett
-    Curtis, "Isabel" no card Isabel. A varredura queria tirar os três para baldes
+    Curvis, "Isabel" no card Isabel. A varredura queria tirar os três para baldes
     novos, estragando o que estava certo."""
     aidan = _cliente(con, "Aidan Molas", email="am@x.com")
     garrett = _cliente(con, "Garrett Curvis", email="gc@x.com")
@@ -1035,7 +1035,7 @@ def test_uniao_do_dono_vence_ate_nome_truncado_e_homonimo(con):
     queria tirar os 26 serviços de lá e recriar o balde. Causa: UMA tarefa
     ("Martin 03/08 próprio motor Rok vlr") marcava o nome como truncado, e esse ramo
     pulava a checagem da união. Sem a checagem, os homônimos (Bruno Martinx, Ethan
-    Martins, Andres Marchin) faziam o nome parecer ambíguo.
+    Martinx, Andres Marchin) faziam o nome parecer ambíguo.
 
     A decisão do dono vem antes de qualquer heurística. Ponto."""
     mj = _cliente(con, "Martin Jantillo", email="mj@x.com")

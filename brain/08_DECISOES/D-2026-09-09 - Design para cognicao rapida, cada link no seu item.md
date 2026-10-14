@@ -11,7 +11,7 @@ status: ativo
 
 **Dono, 09/09/2026:** o card do cliente tinha uma fila de "asana ↗" no
 topo (um por tarefa ligada) e o e-mail aparecia como
-`email%3apablopaddock@example.com , bryanlpaddock@example.com`. Pedido:
+`email%3apablosapata@example.com , bryanlsapata@example.com`. Pedido:
 *"cada link na frente do seu respectivo serviço, na linha do tempo, e
 não lá em cima"*; *"atue como um designer renomado de plataformas; somos
 do automobilismo; tudo muito intuitivo, rápido, para cognição rápida —

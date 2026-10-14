@@ -85,7 +85,7 @@ Fonte: projeto **U-RACE** → seção **RACES** (gid `1205450093098932`).
   before the event, preferably fully organized 1 month prior") + campo
   "Event link:".
 - Na mesma seção há tasks com NOME DE PILOTO e data de corrida (ex.: "Jude
-  Cook", due 22-23/08) — provável participação de driver por corrida.
+  Cockpit", due 22-23/08) — provável participação de driver por corrida.
 
 **O template operacional JÁ EXISTE como 25 subtarefas-padrão** (exemplo
 real, Round 8 gid `1216270696569279`): Confirm Drivers · **Pre race

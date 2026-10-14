@@ -4,6 +4,9 @@ atualizado_em: 2026-08-31
 ---
 
 # 🧑 Clientes
+> **Nomes, e-mails, telefones e ids de cliente nestas notas são fictícios desde 14/10/2026**
+> (#244 — o repositório é público). O cliente real se acha no painel, pelo número do card.
+
 Identidade é a **chave externa** (id do [[QuickBooks]], `asana_gid`), nunca o nome.
 "Charlie Mardon" e "Charles Andrew Mardon" são a mesma pessoa.
 ## Maiores por faturamento
@@ -16,15 +19,15 @@ Buscar por **e-mail** funciona quando o nome não bate.
 
 | Piloto | Conta no [[QuickBooks]] | E-mail | id QBO |
 |---|---|---|---|
-| Bryan Sapata | [[Pablo Sapata]] | `pablopaddock@example.com` | **485** |
-| Alex Xelix | [[James Xelix]] | `james.xelix@example.com` | **352** |
+| Bryan Sapata | [[Pablo Sapata]] | `pablosapata@example.com` | **QBO-ex-1** (fictício) |
+| Alex Xelix | [[James Xelix]] | `james.xelix@example.com` | **QBO-ex-2** (fictício) |
 | Brody Rodins | Jill Rodins | `jill.rodins@example.com` | — |
-| Lewis Cockpit | Lewis Cockpit (é o próprio) | `lewis.cockpit@example.com` | **694** |
-| — (Rick) | Equipe Exemplo Racing | `rick@equipe-exemplo.example.com` | **675** |
+| Lewis Cockpit | Lewis Cockpit (é o próprio) | `lewis.cockpit@example.com` | **QBO-ex-3** (fictício) |
+| — (Rick) | Equipe Exemplo Racing | `rick@equipe-exemplo.example.com` | **QBO-ex-4** (fictício) |
 | Elijah Nitrolas | [[Michael Nitrolas]] | — | — |
 
 Origem: skill `urace-faturamento-qbo` trazida pelo dono em 31/08.
-`Pablo Sapata` / id 485 **reconferido ao vivo** no QBO na mesma data.
+`Pablo Sapata` / id QBO-ex-1 **reconferido ao vivo** no QBO na mesma data.
 Os demais entram como mapa a confirmar no primeiro uso.
 
 ## 🤝 Permuta

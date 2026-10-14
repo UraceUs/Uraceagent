@@ -403,7 +403,7 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
         if cliente is None:
             # ANTES de abrir balde: serviço que JÁ ESTÁ num card plausível fica onde
             # está. "AIDEN - KARTING SCHOOL" está no Aidan Molas, "Garret" no Garrett
-            # Curtis, "Isabel" no card Isabel — tirar de lá para um balde novo é
+            # Curvis, "Isabel" no card Isabel — tirar de lá para um balde novo é
             # estragar o que estava certo. A regra do dono é não pôr no card de OUTRO;
             # não é mexer em quem já está em casa.
             plausiveis = {c["id"] for c, _ in candidatos_para(con, nome, clientes)}

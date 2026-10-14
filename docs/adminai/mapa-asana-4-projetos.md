@@ -101,7 +101,7 @@ confirmação ≥15 dias antes do evento, organizado 1 mês antes.
 SUIT LEADS · Fornecedores · Seleção de fornecedores.
 
 Cada pedido é uma tarefa com o **nome do cliente** (ex.: `Michael
-Fuller`, `Alexander Sprage (2 suits)`).
+Fulcro`, `Alexander Sprage (2 suits)`).
 
 **Campos personalizados:**
 

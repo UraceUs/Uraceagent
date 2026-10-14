@@ -86,7 +86,7 @@ Nove, em [[Problemas]]. Os de maior risco:
 - **US$ 185.887 a receber**, 84% em duas invoices de 2025 (Juan Pastilha
   $101.445 · Stephen Corrimao $55.070). Ver [[QuickBooks]].
 - **3 waivers paradas desde junho** — Matthew Hubtrack, Leticia
-  Bittencourt, Austin. Ver [[DocuSign]] e [[2026-08-31]].
+  Bitcarter, Austin. Ver [[DocuSign]] e [[2026-08-31]].
 - Invoice em aberto **≠ inadimplência**: existe parcelamento
   ([[Leandro Cesio]]).
 
