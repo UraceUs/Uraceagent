@@ -54,18 +54,28 @@ def _abrir(con, request, response, conta_id):
     atualizar(con, "portal_accounts", conta_id, last_login_at=agora())
 
 
-def cliente_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
-    """Dependência: a conta do cliente logado. Escrita exige o CSRF."""
+def conta_do_cookie(request, con):
+    """A conta do cliente logado neste navegador, ou None (#236: o carrinho do site funciona sem conta
+    para produto e pede a conta só para a sessão da agenda)."""
     token = request.cookies.get(COOKIE)
     s = um(con, """SELECT s.account_id, s.expires_at FROM portal_sessions s JOIN portal_accounts a ON a.id=s.account_id
                     WHERE s.id=? AND s.revoked_at IS NULL AND a.active=1""", (_token_hash(token),)) if token else None
-    if not s or s["expires_at"] <= agora():
+    return s["account_id"] if s and s["expires_at"] > agora() else None
+
+
+def csrf_ok(request):
+    c, h = request.cookies.get(COOKIE_CSRF, ""), request.headers.get("x-csrf", "")
+    return bool(c) and hmac.compare_digest(c, h)
+
+
+def cliente_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """Dependência: a conta do cliente logado. Escrita exige o CSRF."""
+    conta = conta_do_cookie(request, con)
+    if not conta:
         raise HTTPException(401, "Please sign in.")
-    if request.method not in ("GET", "HEAD", "OPTIONS"):
-        c, h = request.cookies.get(COOKIE_CSRF, ""), request.headers.get("x-csrf", "")
-        if not c or not hmac.compare_digest(c, h):
-            raise HTTPException(403, "Security check failed. Reload the page and try again.")
-    return s["account_id"]
+    if request.method not in ("GET", "HEAD", "OPTIONS") and not csrf_ok(request):
+        raise HTTPException(403, "Security check failed. Reload the page and try again.")
+    return conta
 
 
 def _aud(con, request, evento, conta_id, detalhe=None):

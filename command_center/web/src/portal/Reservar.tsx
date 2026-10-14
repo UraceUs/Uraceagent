@@ -40,6 +40,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const [planoOk, setPlanoOk] = useState(false)
   const [servicos, setServicos] = useState<Servico[] | null>(null)
   const [autoSell, setAutoSell] = useState(false)
+  const [comCarrinho, setComCarrinho] = useState(false)                        // #236: o carrinho do site (Stripe)
   const [dias, setDias] = useState<DiaPublico[] | null>(null)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [servico, setServico] = useState<number | null>(inicial.servico)
@@ -64,8 +65,8 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
     if (inicial.plano) return
     Promise.all([fetch('/ops/api/vitrine/servicos', { credentials: 'omit' }).then(r => r.json()),
       fetch('/ops/api/vitrine/agenda', { credentials: 'omit' }).then(r => r.json())])
-      .then(([s, a]: [{ services: Servico[]; auto_sell: boolean }, { config: AgendaCfg; dias: DiaPublico[] }]) => {
-        setServicos(s.services); setAutoSell(s.auto_sell); setCfg(a.config); setDias(a.dias)
+      .then(([s, a]: [{ services: Servico[]; auto_sell: boolean; cart?: boolean }, { config: AgendaCfg; dias: DiaPublico[] }]) => {
+        setServicos(s.services); setAutoSell(s.auto_sell); setComCarrinho(!!s.cart); setCfg(a.config); setDias(a.dias)
         // o kart escolhido no site escolhe o serviço com esse nome, quando há um só
         const doKart = inicial.kart ? s.services.filter(x => x.name.toLowerCase().includes(inicial.kart!.toLowerCase())) : []
         setServico(v => s.services.some(x => x.id === v) ? v : doKart.length === 1 ? doKart[0].id : s.services.length === 1 ? s.services[0].id : null)
@@ -112,6 +113,14 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
       try { sessionStorage.removeItem(GUARDA) } catch { /* nada guardado */ }
       nav(`/portal/sessions/${r.id}`, { replace: true })
     } catch (e) { setErro((e as PortalError).message) } finally { setIndo(false) }
+  }
+
+  /** #236: a sessão vai para o carrinho do site (paga junto com a loja, no Stripe; o piloto escolhe lá). */
+  function porNoCarrinho() {
+    if (!s || !dia || !turno) return
+    porNoCarrinhoDoSite({ tipo: 'sessao', servico: s.id, data: dia, turno, piloto: pilotoId })
+    try { sessionStorage.removeItem(GUARDA) } catch { /* nada guardado */ }
+    window.location.assign('/cart/')
   }
 
   const estado = (pronto: boolean, aberto: boolean) => `reserva-passo${pronto ? ' feito' : aberto ? '' : ' fechado'}`
@@ -162,7 +171,9 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
               <div><span>{s.name}</span><span>{usd(s.price)}</span></div>
               {deposito > 0 && <div><span>Security deposit <span className="small muted">(refundable)</span></span><span>{usd(deposito)}</span></div>}
               <div className="soma"><span>Total</span><span>{usd(s.price + deposito)}</span></div></div>}
-            <div><button className="btn primary" disabled={!sessaoPronta} onClick={() => setSessaoOk(true)}>Continue</button></div>
+            <div className="row wrap" style={{ gap: 8 }}><button className="btn primary" disabled={!sessaoPronta} onClick={() => setSessaoOk(true)}>Continue</button>
+              {comCarrinho && <button className="btn" disabled={!sessaoPronta} onClick={porNoCarrinho}>Add to cart</button>}</div>
+            {comCarrinho && <p className="small muted" style={{ margin: 0 }}>Add to cart to pay online now with card, Apple Pay or Google Pay, together with anything from the store.</p>}
           </>}
       </section></li>}
 
@@ -232,6 +243,19 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
       </section></li>
     </ol>
   </div>
+}
+
+/** #236: o mesmo formato do carrinho do site (`vitrine/static/carrinho.js`): só as escolhas, o preço é do servidor. */
+const CARRINHO = 'urace.carrinho'
+type ItemCarrinho = { tipo: 'sessao'; servico: number; data: string; turno: Turno; piloto: number | null }
+function porNoCarrinhoDoSite(item: ItemCarrinho) {
+  try {
+    const d = JSON.parse(localStorage.getItem(CARRINHO) || '{}')
+    const itens: ItemCarrinho[] = Array.isArray(d.itens) ? d.itens : []
+    if (!itens.some(x => x.tipo === 'sessao' && x.servico === item.servico && x.data === item.data && x.turno === item.turno && x.piloto === item.piloto))
+      itens.push(item)
+    localStorage.setItem(CARRINHO, JSON.stringify({ v: 1, itens: itens.slice(0, 20) }))
+  } catch { /* navegador sem armazenamento: o carrinho abre vazio e a reserva continua aqui */ }
 }
 
 /** Entrar ou criar a conta sem sair da reserva. */

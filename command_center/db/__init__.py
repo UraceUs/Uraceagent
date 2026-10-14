@@ -314,11 +314,18 @@ MIGRACOES = [
     ("users", "cargo", "TEXT"),
     # 14/10 — atendimento humano: quem da equipe recebe o aviso de escalonamento no WhatsApp oficial
     ("team_contacts", "recebe_handoff", "INTEGER NOT NULL DEFAULT 0"),
+    # 14/10 — dono (#236): carrinho do site. Um pedido do Stripe com várias linhas (produtos e sessões
+    # da agenda); as linhas ficam em store_order_items. O pedido de um produto só (#174) continua igual.
+    ("store_orders", "kind", "TEXT NOT NULL DEFAULT 'produto'"),      # produto (#174) | carrinho (#236)
+    ("store_orders", "account_id", "INTEGER REFERENCES portal_accounts(id)"),   # a conta do site que comprou
+    ("store_orders", "attention", "TEXT"),        # o que a equipe precisa resolver (ex.: a vaga sumiu antes do pagamento)
+    ("bookings", "store_order_id", "INTEGER REFERENCES store_orders(id)"),      # sessão paga no carrinho do site
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS portal_pilots_client ON portal_pilots(client_id) WHERE client_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS bookings_pedido ON bookings(store_order_id) WHERE store_order_id IS NOT NULL",
 ]
 
 

@@ -318,6 +318,9 @@ def ligar_e_vender(con, oid):
     o = um(con, "SELECT * FROM store_orders WHERE id=?", (oid,))
     if o["opp_id"]:
         return o["opp_id"]
+    if o.get("kind") == "carrinho":                 # #236: várias linhas, sessões da agenda, um card por piloto
+        from command_center.providers import carrinho
+        return carrinho.pago(con, oid)
     cid, nota = _cliente(con, o)
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
     entrega = "retirada na pista (Orlando Kart Center)" if o["delivery"] == "retirada" else "envio — frete a combinar"
@@ -347,6 +350,9 @@ def avisar(con, oid, enviar=None):
     o = um(con, "SELECT * FROM store_orders WHERE id=?", (oid,))
     if not o or o["status"] != "pago" or o["notified_at"]:
         return False
+    if o.get("kind") == "carrinho":
+        from command_center.providers import carrinho
+        return carrinho.avisar(con, oid, enviar)
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
     primeiro = (o["name"] or "").split()[0] if o["name"] else "there"
     entrega_cli = ("We'll let you know when it's ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
@@ -396,25 +402,37 @@ def registrar_qbo(con, oid, qbo=None):
             if not cliente:
                 raise RuntimeError("o QuickBooks não devolveu o cliente")
             atualizar(con, "store_orders", oid, qbo_customer_id=str(cliente))
-        item = q.item_loja_sistema(o["product_name"], o["unit_price"], f"URACE Store: {o['product_name']}")
         valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
         memo = f"URACE Store #{o['id']} — pago no Stripe ({o['payment_intent'] or o['stripe_session_id']})"
-        r = q.recibo_venda_sistema(cliente_id=cliente, linhas=[{"item_id": item["id"], "quantidade": o["quantity"],
-                                                                "unitario": round(valor / o["quantity"], 2),
-                                                                "descricao": descricao(o)}],
-                                   memo=memo, data=(o["paid_at"] or agora())[:10], numero=f"WEB-{o['id']:05d}", email=o["email"])
+        if o.get("kind") == "carrinho":             # #236: uma linha por item, e o depósito no item dele
+            from command_center.providers import carrinho
+            linhas = carrinho.linhas_qbo(con, q, oid)
+            memo = f"URACE order #{o['id']} (site cart) — pago no Stripe ({o['payment_intent'] or o['stripe_session_id']})"
+        else:
+            item = q.item_loja_sistema(o["product_name"], o["unit_price"], f"URACE Store: {o['product_name']}")
+            linhas = [{"item_id": item["id"], "quantidade": o["quantity"], "unitario": round(valor / o["quantity"], 2),
+                       "descricao": descricao(o)}]
+        r = q.recibo_venda_sistema(cliente_id=cliente, linhas=linhas, memo=memo, data=(o["paid_at"] or agora())[:10],
+                                   numero=f"WEB-{o['id']:05d}", email=o["email"])
         atualizar(con, "store_orders", oid, qbo_receipt_id=str(r.get("id") or ""), qbo_receipt_doc=r.get("numero"),
                   qbo_error=None, updated_at=agora())
-        if o["opp_id"]:
-            inserir(con, "opp_events", opp_id=o["opp_id"], kind="invoice", title=f"Sales Receipt {r.get('numero')} no QuickBooks",
+        for opp in _opps(con, o):
+            inserir(con, "opp_events", opp_id=opp, kind="invoice", title=f"Sales Receipt {r.get('numero')} no QuickBooks",
                     detail=r.get("link"), at=agora(), actor="site", ok=1)
         return r
     except Exception as e:                              # noqa: BLE001 — pago está; o financeiro vê o erro
         atualizar(con, "store_orders", oid, qbo_error=str(e)[:300], updated_at=agora())
-        if o["opp_id"]:
-            inserir(con, "opp_events", opp_id=o["opp_id"], kind="invoice", title="QuickBooks: registrar a venda à mão",
+        for opp in _opps(con, o):
+            inserir(con, "opp_events", opp_id=opp, kind="invoice", title="QuickBooks: registrar a venda à mão",
                     detail=str(e)[:300], at=agora(), actor="site", ok=0)
         return None
+
+
+def _opps(con, o):
+    """As oportunidades do pedido: uma (#174), ou uma por card no carrinho (#236)."""
+    ids = [x["opp_id"] for x in todos(con, "SELECT DISTINCT opp_id FROM store_order_items WHERE order_id=? AND opp_id IS NOT NULL",
+                                      (o["id"],))]
+    return ids or ([o["opp_id"]] if o["opp_id"] else [])
 
 
 def avisar_e_registrar(oid, enviar=None, qbo=None):
@@ -422,6 +440,13 @@ def avisar_e_registrar(oid, enviar=None, qbo=None):
     from command_center.db import conectar
     con = conectar()
     try:
+        o = um(con, "SELECT kind FROM store_orders WHERE id=?", (oid,))
+        if o and o["kind"] == "carrinho":           # #236: a waiver de cada sessão, e a sessão no Asana (#67)
+            from command_center.providers import agenda_asana, carrinho
+            for bid in carrinho.seguir_sessoes(con, oid):
+                con.commit()
+                agenda_asana.levar(bid)
+            con.commit()
         avisar(con, oid, enviar)
         registrar_qbo(con, oid, qbo)
     finally:

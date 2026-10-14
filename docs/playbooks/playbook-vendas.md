@@ -106,6 +106,16 @@ ACEITAR         invoice (serviço + depósito, se o serviço pede) e waiver saem
 CONFIRMADA      sozinha, quando a invoice está paga e a waiver em dia
 ```
 
+E o **carrinho do site** (#236, seção 5.1), que já chega pago:
+
+```
+CARRINHO        site novo: sessões da agenda + produtos da loja, com a conta do site e o piloto
+  ▼
+STRIPE          um checkout só (cartão, Apple Pay, Google Pay), com a linha do depósito de cada sessão
+  ▼
+PAGO            a sessão entra aceita e paga (falta só a waiver) e a venda entra GANHO em Vendas
+```
+
 ### O que o sistema grava em cada passo
 
 | Passo | Onde | O que fica gravado |
@@ -456,6 +466,62 @@ marcado "POSSÍVEL DUPLICADO" para a equipe conferir e unir.
 mensalidade sai na hora e as outras ficam agendadas no dia 1. Nada é cobrado sem a venda
 automática ligada.
 
+### 5.1 Carrinho do site e pagamento no Stripe (#236)
+
+Dono, 14/10: *"o sistema de carrinho e checkout ... usando o Stripe"*; *"quando a pessoa selecionar
+o serviço, selecionar a data, já vai com aquele serviço e o preço que está lá"*; *"O depósito de
+segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora precisa de conta no site"*.
+
+**O que o cliente faz** (site novo, em inglês):
+
+1. Na página do Arrive and Drive escolhe o kart, o dia e o turno e toca em **Add to cart** (o preço
+   mostrado é o do serviço do painel com o nome do kart). Na reserva da área do cliente
+   (`/ops/portal/reserve`) também há **Add to cart**. Na loja, **Add to cart** ao lado do **Buy now**.
+2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
+   o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
+   **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho não pede conta.
+3. **Checkout** abre o Stripe com **todas** as linhas e, para cada sessão com depósito, a linha
+   "Refundable security deposit". Paga, volta para `/cart/thanks/` com o pedido confirmado.
+
+**Regras que o sistema garante** (código: `providers/carrinho.py`):
+
+| Regra | Como |
+|---|---|
+| preço é do sistema | o servidor recalcula preço (Serviços e preços / catálogo da loja), depósito e vaga; o navegador só manda as escolhas |
+| preço do dia | o pedido guarda o preço e o depósito do dia da compra; mudar o preço depois não muda o pedido |
+| vaga | confere ao montar o carrinho, no checkout (o Checkout do Stripe expira em 31 min) e **de novo no pagamento** |
+| conta e piloto | só pilotos da própria conta, com o cadastro em dia (medidas e dados do responsável) |
+| uma vez só | o webhook do Stripe e a página de obrigado não marcam nem vendem duas vezes |
+| cancelado / expirado | nada é marcado nem vendido |
+
+**O que aparece para a equipe quando o pedido é pago:**
+
+- **Agendamentos do site:** a sessão entra **aceita e paga** (chip "pago no site · pedido #N"); não sai
+  invoice do QuickBooks. Falta só a **waiver**: a nativa o cliente assina na conta; sem ela, sai pelo
+  DocuSign na hora. Assinada, confirma sozinha.
+- **Vendas:** uma oportunidade **GANHO** (origem Site) **por card**: a sessão vai para o card do
+  **piloto** (o que ele já tem, o comprovadamente dele, ou um card novo marcado "possível duplicado"),
+  nunca para o card de outro cliente. Dois irmãos no mesmo pedido = duas vendas, uma em cada card.
+  Produto da loja segue a regra da loja (e-mail **e** nome batem). Sem card certo, a venda fica em
+  **Fechamento** com "vincular à mão". No detalhe da venda, o cartão **Pedido do site #N** mostra
+  todas as linhas (serviço, dia, turno, piloto, depósito, produto) e o recibo do QuickBooks.
+- **QuickBooks:** um **Sales Receipt** (já pago) `WEB-0000N` com o item do serviço, o item
+  "Security deposit" e o item do produto. Falhou (serviço sem item do QuickBooks, item "Security
+  deposit" não sincronizado)? Aparece na venda "QuickBooks: registrar a venda à mão" e a rodada de
+  15 min tenta de novo.
+- **E-mail:** o cliente recebe a confirmação (com o link para assinar a waiver de cada sessão) e
+  `support@` recebe o aviso com as linhas e os links de Vendas.
+
+**Vaga que sumiu entre o checkout e o pagamento** (alguém pegou a última vaga enquanto a pessoa
+pagava): o pagamento **não se perde**. A sessão **não** entra na agenda (não lota por cima), a linha
+fica **"sem vaga"**, o pedido mostra **Resolver:** no detalhe da venda, o aviso para `support@` chega
+com "SEM VAGA", e o cliente lê que a equipe vai ligar para remarcar ou devolver. **Quem vende:** ligue,
+remarque a sessão pela agenda (ou combine o reembolso no Stripe com o gerente) e anote na venda.
+
+**Depósito de segurança:** cobrado no carrinho (Stripe) e na invoice do Aceitar e da venda automática
+(QuickBooks), sempre que o serviço tem depósito em Serviços e preços. É devolvido em até 5 dias úteis
+depois da sessão se não houver incidente: a devolução continua sendo feita pela equipe.
+
 ### Contas de clientes (Agendamentos do site › Contas de clientes)
 
 Quem cria conta no site precisa estar ligado ao card certo. Cada driver tem o seu card.
@@ -605,7 +671,7 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | ficha do cliente | `GET /ops/api/clients/{id}` | — (invoices só aparecem para gerente e acima) | todos |
 | quadro de vendas | `GET /ops/api/sales/board` | consulta `{"minhas": true}` | todos |
 | agenda de retornos | `GET /ops/api/sales/agenda` | consulta `{"minhas": true}` | todos |
-| uma oportunidade | `GET /ops/api/sales/{id}` | — (olhe `oportunidade.closing`) | todos |
+| uma oportunidade | `GET /ops/api/sales/{id}` | — (olhe `oportunidade.closing`; venda do site: `pedido` traz as linhas, `pedido.atencao` o que resolver) | todos |
 | pedidos do site | `GET /ops/api/site/agendamentos` | consulta `{"status": "pendente"}` | Operador |
 | serviços e preços do site | `GET /ops/api/site/servicos` | — | Operador |
 | conversas do Kommo | `GET /ops/api/crm/inbox` | — | todos |
@@ -783,6 +849,9 @@ instrução à gerência.
 | "… não existe no painel (veja urace_operacoes)" | caminho errado: rode `urace_operacoes` com uma palavra-chave |
 | "caminho inválido: passe a consulta em 'consulta'" | tire o `?…` da URL e mande em `consulta` |
 | "Para fechar, diga o serviço e o valor." | preencha serviço e valor |
+| Venda do site com **Resolver:** "a vaga sumiu entre o checkout e o pagamento" | o cliente já pagou: ligue, remarque a sessão (ou combine o reembolso com o gerente) e anote na venda (seção 5.1) |
+| Venda do site em **Fechamento** com "vincular à mão" | pago no carrinho sem card certo: ache o card (seção 3) e ligue a venda a ele |
+| "QuickBooks: registrar a venda à mão" numa venda do site | o serviço não tem item do QuickBooks ou o item "Security deposit" não está sincronizado: acerte em Serviços e preços / sincronize; a rodada de 15 min tenta de novo |
 | "Ganho é o resultado do Fechar venda…" | use Fechar venda, não o botão de etapa |
 | "Perdido exige motivo." | mande `motivo` |
 | "Cliente não existe." | o `client_id` está errado: busque de novo |
