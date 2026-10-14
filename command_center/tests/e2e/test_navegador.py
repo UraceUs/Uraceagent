@@ -98,6 +98,8 @@ class _StripeFalso:
 
 
 STRIPE = None
+GOOGLE = None
+GOOGLE_CRED = None
 
 
 def _porta_livre():
@@ -111,19 +113,24 @@ def servidor(tmp_path_factory):
     if not os.path.exists(DIST):
         pytest.fail("frontend não construído: rode `npm run build` em command_center/web")
     pasta = tmp_path_factory.mktemp("e2e")
-    global EMAILS, STRIPE
+    global EMAILS, STRIPE, GOOGLE, GOOGLE_CRED
     EMAILS = str(pasta / "emails.jsonl")                 # #108: o e-mail do código vai para cá, nada sai da máquina
     STRIPE = _StripeFalso()                              # #174: o Checkout é o falso, local
+    from command_center.tests.google_falso import GoogleFalso
+    GOOGLE = GoogleFalso()                               # #220: o login e o Calendar do Google são os falsos, locais
+    GOOGLE_CRED = str(pasta / "google-web-credentials.json")   # começa SEM o arquivo: botão desligado
+    porta = _porta_livre()
     env = dict(os.environ, CC_DB_PATH=str(pasta / "e2e.sqlite"), URACE_DIR=str(pasta), URACE_ENV="/nao/existe",
                CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
                CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de parts.urace.us
                STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
-               CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM")  # 32 bytes de teste
+               CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM",  # 32 bytes de teste
+               CC_GOOGLE_BASE=GOOGLE.origem, CC_GOOGLE_WEB_CREDENTIALS=GOOGLE_CRED,
+               CC_GOOGLE_REDIRECT_URI=f"http://127.0.0.1:{porta}/ops/api/google/callback")
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
-    porta = _porta_livre()
     log = open(pasta / "uvicorn.log", "w")
     proc = subprocess.Popen([sys.executable, "-m", "uvicorn", "command_center.api.main:app", "--port", str(porta)],
                             env=env, cwd=RAIZ, stdout=log, stderr=subprocess.STDOUT)
@@ -142,6 +149,7 @@ def servidor(tmp_path_factory):
     proc.wait(timeout=10)
     log.close()
     STRIPE.srv.shutdown()
+    GOOGLE.parar()
 
 
 @pytest.fixture(scope="module")
@@ -1823,3 +1831,47 @@ def test_como_usar_le_os_guias_navega_entre_eles_e_baixa_o_md_para_a_ia(servidor
     g.get_by_role("heading", name="Playbook de vendas do Command Center", level=2).wait_for()
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
+
+
+@pytest.mark.parametrize("largura", [1280, 390])
+def test_agenda_de_vendas_conecta_o_google_calendar_e_mostra_os_compromissos(servidor, navegador, largura):
+    """#220: sem o cliente OAuth na VPS, o botão fica desligado e diz por quê. Com ele, a pessoa entra
+    no "Google" (o falso, local), volta conectada, o retorno vira evento lá e o compromisso dela
+    aparece na Agenda de vendas, sem rolar para o lado no celular."""
+    from datetime import datetime, timedelta, timezone
+    from command_center.tests.google_falso import credenciais_json
+    pg = entrar(navegador, servidor, largura=largura, altura=900)
+    abrir(pg, servidor, "/sales/agenda")
+    botao = pg.get_by_role("button", name="Conectar ao Google Calendar")
+    assert botao.is_disabled()
+    assert pg.get_by_text("O gerente ainda não configurou o acesso ao Google", exact=False).count() >= 1
+
+    amanha = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+    GOOGLE.evento_alheio(f"Reunião e2e {largura}", f"{amanha}T13:00:00-04:00", f"{amanha}T14:00:00-04:00")
+    csrf = next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")
+    r = pg.request.post(servidor + "/api/sales", headers={"X-CSRF": csrf},
+                        data={"name": f"Retorno Google e2e {largura}", "next_at": f"{amanha}T15:00:00Z"})
+    assert r.status == 201
+    open(GOOGLE_CRED, "w").write(credenciais_json())
+    try:
+        abrir(pg, servidor, "/sales/agenda")
+        pg.get_by_role("button", name="Conectar ao Google Calendar").click()
+        pg.wait_for_url(lambda u: u.startswith(GOOGLE.origem), timeout=10000)
+        pg.click("#permitir")                                # a "tela de consentimento" do Google
+        pg.wait_for_url(lambda u: "/ops/sales/agenda" in u and "google=" not in u, timeout=10000)
+        pg.wait_for_load_state("networkidle")
+        assert pg.get_by_text("Conectado como vendedor.teste@gmail.com").count() == 1
+        pg.get_by_text(f"Reunião e2e {largura}").wait_for(timeout=10000)
+        assert any(f"Retorno Google e2e {largura}" in e["summary"] for e in GOOGLE.nossos().values())
+        assert not pg.locator("main").get_by_text("URACE · retorno", exact=False).count()   # o nosso evento não volta duplicado
+        r = pg.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not pg.erros_js and not pg.erros_api
+
+        pg.get_by_role("button", name="Desconectar").click()
+        pg.get_by_role("dialog").get_by_role("button", name="Desconectar").click()
+        pg.get_by_role("button", name="Conectar ao Google Calendar").wait_for(timeout=10000)
+        assert pg.get_by_text(f"Reunião e2e {largura}").count() == 0
+    finally:
+        os.remove(GOOGLE_CRED)
+    pg.close()

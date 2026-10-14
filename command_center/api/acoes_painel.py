@@ -292,7 +292,12 @@ def executar(con, user_id, acao, args):
     faltam = [k for k in params if k not in kw and k not in opcionais]
     if faltam:
         return {"aplicado": False, "motivo": f"faltam argumentos: {faltam}"}
-    return fn(con, user_id, **kw)
+    res = fn(con, user_id, **kw)
+    if acao.startswith("venda_") and isinstance(res, dict) and res.get("aplicado") and res.get("oportunidade"):
+        from command_center.providers import google_agenda      # #220: o retorno segue para o Google do closer
+        if google_agenda.alguem_conectado(con):
+            google_agenda.sincronizar_opp_seguro(con, res["oportunidade"])
+    return res
 
 
 def descrever_todas():
