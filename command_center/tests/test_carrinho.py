@@ -154,11 +154,20 @@ def test_um_checkout_com_todas_as_linhas_e_o_deposito(loja):
     assert not todos(con, "SELECT id FROM bookings"), "a sessão só vira agendamento depois de pago"
 
 
-def test_produto_sozinho_no_carrinho_nao_pede_conta(loja):
+def test_produto_sozinho_no_carrinho_pede_conta_e_vai_com_o_email_dela(loja):
+    """#248 (dono, 14/10): "Para a pessoa conseguir comprar com a gente, ela tem que criar a conta dela lá no site"."""
     cli, con, st, qbo, tmp, sid = loja
     p = _simples()
-    r = cli.post("/ops/api/vitrine/carrinho/checkout", json={"itens": [{"tipo": "produto", "produto": p["slug"]}]})
-    assert r.status_code == 200 and "customer_email" not in st.chamadas[0][2] and "expires_at" not in st.chamadas[0][2]
+    itens = [{"tipo": "produto", "produto": p["slug"]}]
+    d = cli.post("/ops/api/vitrine/carrinho", json={"itens": itens}).json()
+    assert d["precisa_conta"] and not d["tem_sessao"]
+    r = cli.post("/ops/api/vitrine/carrinho/checkout", json={"itens": itens})
+    assert r.status_code == 401 and r.json()["sign_in"] and not st.chamadas, "sem conta, o Stripe nem é chamado"
+    conta, _ = _entrar(cli, con)
+    r = _checkout(cli, itens)
+    assert r.status_code == 200 and st.chamadas[0][2]["customer_email"] == "lia@example.com"
+    assert "expires_at" not in st.chamadas[0][2], "sem sessão, o Checkout não precisa expirar em 31 min"
+    assert um(con, "SELECT account_id FROM store_orders")["account_id"] == conta
 
 
 # ------------------------------------------------------------------ pago

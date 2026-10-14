@@ -125,6 +125,10 @@ def test_volta_do_stripe_usa_a_mesma_pagina(pedido_sessao):
 
 
 # ------------------------------------------------------------------ completed + aguardando → async succeeded
+def _aviso(con, o, resultado):
+    return um(con, "SELECT * FROM store_order_notices WHERE order_id=? AND result=?", (o["id"], resultado))
+
+
 def test_aguardando_depois_async_succeeded_confirma_e_manda_o_email_uma_vez(pedido_sessao):
     cli, con, st, qbo, tmp, sid, conta, pid, dia, p, s = pedido_sessao
     s.update(payment_status="unpaid", customer_details={"email": EMAIL, "name": "Maya Teste"})
@@ -134,15 +138,19 @@ def test_aguardando_depois_async_succeeded_confirma_e_manda_o_email_uma_vez(pedi
     assert _h1(r.text) == "Payment processing" and _titulo(r.text) == "Payment processing | URACE"
     assert "Please don't pay again" in r.text.replace("&#x27;", "'") and EMAIL in r.text
     assert "Try again" not in r.text and "Restore cart" not in r.text
-    assert not _emails(tmp), "processando: nenhum e-mail ainda"
+    # #248 (dono, 14/10): e-mail já no "processando", para o cliente e para a equipe
+    (proc,) = _cliente(tmp, EMAIL)
+    assert "confirming your payment" in proc["subject"] and pedido_site.link(o) in proc["text"]
+    (eq,) = _cliente(tmp, "support@urace.us")
+    assert "PROCESSANDO" in eq["subject"]
     assert not todos(con, "SELECT id FROM bookings"), "a vaga só é marcada quando o pagamento entra"
     for eid in ("evt_a2", "evt_a2", "evt_a3"):            # o mesmo evento duas vezes e outro do mesmo tipo
         _webhook(cli, s, "checkout.session.async_payment_succeeded", eid)
     o = _pedido(con)
     assert o["status"] == "pago"
     assert _h1(_pagina(cli, o).text) == "Payment confirmed"
-    conf = _cliente(tmp, EMAIL)
-    assert len(conf) == 1 and "confirmed" in conf[0]["subject"] and pedido_site.link(o) in conf[0]["text"]
+    conf = [m for m in _cliente(tmp, EMAIL) if "confirmed" in m["subject"]]
+    assert len(conf) == 1 and pedido_site.link(o) in conf[0]["text"] and len(_cliente(tmp, EMAIL)) == 2
     assert len(todos(con, "SELECT id FROM bookings")) == 1 and len(todos(con, "SELECT id FROM opportunities")) == 1
 
 
@@ -154,23 +162,24 @@ def test_async_failed_mostra_a_pagina_avisa_a_pessoa_e_a_equipe_uma_vez_e_nao_pr
     for eid in ("evt_f2", "evt_f2", "evt_f3"):
         assert _webhook(cli, s, "checkout.session.async_payment_failed", eid) in ("falhou", "duplicado")
     o = _pedido(con)
-    assert (o["status"], o["outcome"], o["outcome_email"]) == ("falhou", "falhou", EMAIL) and o["outcome_notified_at"]
+    n = _aviso(con, o, "falhou")
+    assert o["status"] == "falhou" and n["sent_at"] and n["to_email"] == EMAIL
     r = _pagina(cli, o)
     assert _h1(r.text) == "Payment didn't go through" and _titulo(r.text) == "Payment didn't go through | URACE"
     assert "nothing was charged and no session was booked" in r.text
     assert f'action="/order/{pedido_site.token(o)}/retry"' in r.text and ">Try again<" in r.text
-    cliente = _cliente(tmp, EMAIL)
-    assert len(cliente) == 1 and "didn't go through" in cliente[0]["subject"]
-    assert pedido_site.link(o) in cliente[0]["text"] and "nothing was charged" in cliente[0]["text"]
-    equipe = _cliente(tmp, "support@urace.us")
-    assert len(equipe) == 1 and "PAGAMENTO FALHOU" in equipe[0]["subject"] and pedido_site.link(o) in equipe[0]["text"]
+    cliente = [m for m in _cliente(tmp, EMAIL) if "didn't go through" in m["subject"]]
+    assert len(cliente) == 1 and pedido_site.link(o) in cliente[0]["text"] and "nothing was charged" in cliente[0]["text"]
+    equipe = [m for m in _cliente(tmp, "support@urace.us") if "PAGAMENTO FALHOU" in m["subject"]]
+    assert len(equipe) == 1 and pedido_site.link(o) in equipe[0]["text"]
+    assert len(_emails(tmp)) == 4, "processando e falhou: um para o cliente e um para a equipe, cada"
     # a vaga não fica presa: nada marcado, o turno continua com a vaga
     assert not todos(con, "SELECT id FROM bookings") and not todos(con, "SELECT id FROM opportunities")
     assert periodo(con, dia, "manha")["spots"] == 1
     assert carrinho.cotar(con, [_sessao(sid, dia, pid)], conta)["linhas"][0]["erro"] is None
     # a rodada de 15 min não manda de novo
-    con.execute("UPDATE store_orders SET updated_at='2026-01-01T00:00:00.000Z'")
-    assert pedido_site.rodar(con) == {"avisos": 0} and len(_emails(tmp)) == 2
+    con.execute("UPDATE store_order_notices SET created_at='2026-01-01T00:00:00.000Z'")
+    assert pedido_site.rodar(con) == {"avisos": 0} and len(_emails(tmp)) == 4
 
 
 def test_aviso_que_falhou_no_envio_a_rodada_manda_depois_uma_vez(pedido_sessao, monkeypatch):
@@ -186,44 +195,47 @@ def test_aviso_que_falhou_no_envio_a_rodada_manda_depois_uma_vez(pedido_sessao, 
     s.update(customer_details={"email": EMAIL, "name": "Maya Teste"})
     _webhook(cli, s, "checkout.session.async_payment_failed", "evt_r1")
     o = _pedido(con)
-    assert o["outcome_notified_at"] is None and "fora do ar" in o["outcome_notify_error"]
+    n = _aviso(con, o, "falhou")
+    assert n["sent_at"] is None and "fora do ar" in n["error"]
     fora[0] = False
-    con.execute("UPDATE store_orders SET updated_at='2026-01-01T00:00:00.000Z'")
+    con.execute("UPDATE store_order_notices SET created_at='2026-01-01T00:00:00.000Z'")
     assert pedido_site.rodar(con) == {"avisos": 1}
     assert pedido_site.rodar(con) == {"avisos": 0}
     assert len(_cliente(tmp, EMAIL)) == 1 and len(_cliente(tmp, "support@urace.us")) == 1
 
 
 # ------------------------------------------------------------------ expired
-def test_expirado_com_email_do_checkout_avisa_uma_vez_e_sem_email_nao_avisa(amb):  # noqa: F811
+def test_expirado_avisa_a_pessoa_pelo_email_da_conta_e_a_equipe_uma_vez(amb):  # noqa: F811
+    """#248 (dono, 14/10): "o cliente e a equipe precisam da confirmação de pagamento sempre". O e-mail é o da
+    conta do site, mesmo que o Stripe devolva outro (ou nenhum)."""
     cli, con, st, qbo, tmp = amb
     p = _simples()
-    s = st.sessoes[_comprar(cli, p).headers["location"].rsplit("/", 1)[1]]
+    s = st.sessoes[_comprar(cli, p, conta=("Ana Teste", "ana.teste@example.com")).headers["location"].rsplit("/", 1)[1]]
     for eid in ("evt_e1", "evt_e1", "evt_e2"):
-        _webhook(cli, s, "checkout.session.expired", eid, customer_details={"email": "Ana.Teste@example.com"})
+        _webhook(cli, s, "checkout.session.expired", eid, customer_details={"email": "outro.teste@example.com"})
     o = _pedido(con)
-    assert (o["status"], o["outcome"], o["outcome_email"]) == ("expirado", "expirado", "ana.teste@example.com")
+    assert o["status"] == "expirado" and o["email"] == "ana.teste@example.com"
     r = _pagina(cli, o)
     assert _h1(r.text) == "Checkout expired" and _titulo(r.text) == "Checkout expired | URACE"
     assert "nothing was charged" in r.text and f'href="/order/{pedido_site.token(o)}/cart/">Restore cart<' in r.text
     msgs = _emails(tmp)
-    assert [m["to"] for m in msgs] == ["ana.teste@example.com"], "um aviso só, e nada para a equipe"
-    assert "expired" in msgs[0]["subject"] and pedido_site.link(o) in msgs[0]["text"]
-    # sem e-mail informado no Checkout: ninguém recebe nada (nem a equipe)
+    assert sorted(m["to"] for m in msgs) == ["ana.teste@example.com", "support@urace.us"], "um aviso para cada, uma vez"
+    cli_msg = next(m for m in msgs if m["to"] != "support@urace.us")
+    assert "expired" in cli_msg["subject"] and pedido_site.link(o) in cli_msg["text"]
+    assert "CHECKOUT EXPIROU" in next(m for m in msgs if m["to"] == "support@urace.us")["subject"]
+    # sem e-mail no evento do Stripe: o da conta continua valendo
     s2 = st.sessoes[_comprar(cli, p).headers["location"].rsplit("/", 1)[1]]
     _webhook(cli, s2, "checkout.session.expired", "evt_e3")
-    o2 = _pedido(con)
-    assert o2["status"] == "expirado" and o2["outcome_email"] is None
-    assert len(_emails(tmp)) == 1 and _h1(_pagina(cli, o2).text) == "Checkout expired"
+    assert [m["to"] for m in _emails(tmp)].count("ana.teste@example.com") == 2
 
 
-def test_carrinho_com_conta_expirado_sem_email_digitado_nao_avisa(pedido_sessao):
-    """O e-mail da conta vai pré-preenchido no Checkout; o aviso de expirado só sai com o e-mail que o
-    Stripe devolve no evento (a pessoa chegou a informar)."""
+def test_carrinho_expirado_avisa_o_email_da_conta_mesmo_sem_o_stripe_devolver(pedido_sessao):
+    """O e-mail da conta vai pré-preenchido no Checkout e é o dos avisos (#248): o expirado avisa sempre."""
     cli, con, st, qbo, tmp, sid, conta, pid, dia, p, s = pedido_sessao
     _webhook(cli, s, "checkout.session.expired", "evt_x1")
     o = _pedido(con)
-    assert o["status"] == "expirado" and o["email"] == EMAIL and o["outcome_email"] is None and not _emails(tmp)
+    assert o["status"] == "expirado" and o["email"] == EMAIL
+    assert len(_cliente(tmp, EMAIL)) == 1 and len(_cliente(tmp, "support@urace.us")) == 1
 
 
 # ------------------------------------------------------------------ Try again / Restore cart
@@ -283,7 +295,7 @@ def test_try_again_sem_a_conta_ou_sem_a_vaga_vai_para_o_carrinho_restaurado(pedi
     assert cot["linhas"][0]["erro"].startswith("This time is no longer available")
 
 
-def test_restore_cart_da_loja_de_um_produto_e_try_again_sem_conta(amb):  # noqa: F811
+def test_restore_cart_da_loja_de_um_produto_e_try_again_pede_a_conta(amb):  # noqa: F811
     cli, con, st, qbo, tmp = amb
     p = _simples()
     s = st.sessoes[_comprar(cli, p, quantidade="2", entrega="envio").headers["location"].rsplit("/", 1)[1]]
@@ -292,11 +304,18 @@ def test_restore_cart_da_loja_de_um_produto_e_try_again_sem_conta(amb):  # noqa:
     tok = pedido_site.token(o)
     r = cli.get(f"/order/{tok}/cart/")
     assert '"produto":"' + p["slug"] + '"' in r.text.replace("&quot;", '"') and 'value="envio" checked' in r.text
-    r = cli.post(f"/order/{tok}/retry", data={}, follow_redirects=False)      # produto não pede conta
+    # #248: sem a conta aberta, o "Try again" vai para o carrinho restaurado (que pede para entrar)
+    cli.post("/ops/api/portal/logout")
+    n = len(st.chamadas)
+    r = cli.post(f"/order/{tok}/retry", data={}, follow_redirects=False)
+    assert r.headers["location"] == f"/order/{tok}/cart/" and len(st.chamadas) == n
+    from command_center.tests.test_stripe_loja import _conta
+    _conta(cli)                                         # a mesma conta do pedido
+    r = cli.post(f"/order/{tok}/retry", data={"csrf": cli.cookies.get("cp_csrf")}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("https://checkout.stripe.com/")
     campos = st.chamadas[-1][2]
     assert campos["line_items"][0]["quantity"] == 2 and campos["line_items"][0]["price_data"]["unit_amount"] == round(p["price"] * 100)
-    assert "shipping_address_collection" in campos
+    assert "shipping_address_collection" in campos and campos["customer_email"] == "ana@exemplo.com"
     assert _pedido(con)["retry_of"] == o["id"]
 
 

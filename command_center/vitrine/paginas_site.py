@@ -15,6 +15,7 @@ from urllib.parse import quote
 from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
+from command_center.vitrine import idioma
 from command_center.vitrine.paginas import PORTAL, _lista, _negocio, estatico, layout, usd
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
@@ -596,7 +597,7 @@ def _form_comprar(p):
         <button class="btn btn-linha-escura" type="button" data-por-no-carrinho hidden>Add to cart</button>
       </div>
       <p class="carrinho-ok" role="status" aria-live="polite"></p>
-      <p class="small muted">Secure checkout by Stripe: card, Apple Pay or Google Pay. The confirmation arrives by email.</p>
+      <p class="small muted">Secure checkout by Stripe: card, Apple Pay or Google Pay. Buying needs your URACE account: you sign in (or create it) first and come right back. The confirmation arrives by email.</p>
     </form>"""
 
 
@@ -663,212 +664,285 @@ def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
                   scripts=("contato.js",), foto=p["images"][0]["src"] if p["images"] else None)
 
 
-def obrigado(host, pedido=None, **kw):
-    """#174: a volta do Stripe Checkout da loja. Com o pedido, é a página do pedido (#245) com o estado
-    dele; sem, um obrigado genérico. Fora do sitemap e do Google (noindex)."""
-    if pedido:
-        return pedido_pagina(host, pedido, caminho="/store/thanks/", **kw)
-    corpo = """<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
-  <h1 id="h-ok">Thank you</h1>
-  <p>If you just paid, the confirmation is on its way to your email. Questions? Call or WhatsApp +1 (407) 250 2291.</p>
-  <p><a class="btn" href="/store/">Back to the store</a></p>
+def _obrigado_generico(host, caminho, lang, volta_loja):
+    T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
+    botao = (f'<a class="btn" href="/store/">{T("Back to the store", "Voltar para a loja")}</a>' if volta_loja
+             else f'<a class="btn" href="/">{T("Back to the home page", "Voltar para o início")}</a>')
+    corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto pedido-pagina">
+  {idioma.chave(lang, caminho)}
+  <h1 id="h-ok">{T("Thank you", "Obrigado")}</h1>
+  <p>{T("If you just paid, the confirmation is on its way to your email. Questions? Call or WhatsApp +1 (407) 250 2291.",
+        "Se você acabou de pagar, a confirmação está a caminho do seu e-mail. Dúvidas? Ligue ou mande WhatsApp para +1 (407) 250 2291.")}</p>
+  <p class="hero-acoes">{botao}</p>
 </div></section>"""
-    return layout(host=host, caminho="/store/thanks/", titulo="Order confirmation | URACE Store",
-                  descricao="Your URACE Store order: payment confirmation and what happens next — pickup at the Orlando Kart Center or shipping.",
-                  corpo=corpo, indexar=False)
+    if volta_loja:
+        titulo = T("Order confirmation | URACE Store", "Confirmação do pedido | URACE Store")
+        desc = T("Your URACE Store order: payment confirmation and what happens next — pickup at the Orlando Kart Center or shipping.",
+                 "O seu pedido na URACE Store: a confirmação do pagamento e o que vem a seguir — retirada no Orlando Kart Center ou envio.")
+    else:
+        titulo = T("Order confirmation | URACE", "Confirmação do pedido | URACE")
+        desc = T("Your URACE order: payment confirmation for your race sessions and store items, and what happens next.",
+                 "O seu pedido na URACE: a confirmação do pagamento das sessões e dos itens da loja, e o que vem a seguir.")
+    return layout(host=host, caminho=caminho.split("?")[0], titulo=titulo, descricao=desc, corpo=corpo, indexar=False,
+                  lang=lang)
 
 
-def cancelado(host, slug=None):
+def obrigado(host, pedido=None, lang="en", volta="/store/thanks/", **kw):
+    """#174: a volta do Stripe Checkout da loja. Com o pedido, é a página do pedido (#245) com o estado
+    dele; sem, um obrigado genérico. Fora do sitemap e do Google (noindex). #248: em inglês ou português."""
+    if pedido:
+        return pedido_pagina(host, pedido, caminho="/store/thanks/", lang=lang, volta=volta, **kw)
+    return _obrigado_generico(host, volta, lang, volta_loja=True)
+
+
+def cancelado(host, slug=None, lang="en", volta="/store/cancelled/"):
+    T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
     d = dados("produtos.json")
     p = next((x for x in d["produtos"] if x["slug"] == slug), None) if slug else None
-    volta = f'<a class="btn" href="/store/p/{e(p["slug"])}/">Back to {e(p["name"])}</a>' if p else '<a class="btn" href="/store/">Back to the store</a>'
-    corpo = f"""<section class="faixa clara" aria-labelledby="h-cancel"><div class="largura estreita texto">
-  <h1 id="h-cancel">Checkout cancelled</h1>
-  <p>Nothing was charged. You can try again whenever you like, or ask us anything first.</p>
-  <p>{volta} <a class="btn btn-linha-escura" href="/contact/?assunto=store">Ask a question</a></p>
+    volta_btn = (f'<a class="btn" href="/store/p/{e(p["slug"])}/">{T("Back to", "Voltar para")} {e(p["name"])}</a>' if p
+                 else f'<a class="btn" href="/store/">{T("Back to the store", "Voltar para a loja")}</a>')
+    corpo = f"""<section class="faixa clara" aria-labelledby="h-cancel"><div class="largura estreita texto pedido-pagina">
+  {idioma.chave(lang, volta)}
+  <h1 id="h-cancel">{T("Checkout cancelled", "Checkout cancelado")}</h1>
+  <p>{T("Nothing was charged. You can try again whenever you like, or ask us anything first.",
+        "Nada foi cobrado. Você pode tentar de novo quando quiser, ou tirar uma dúvida com a gente antes.")}</p>
+  <p class="hero-acoes">{volta_btn} <a class="btn btn-linha-escura" href="/contact/?assunto=store">{T("Ask a question", "Tirar uma dúvida")}</a></p>
 </div></section>"""
-    return layout(host=host, caminho="/store/cancelled/", titulo="Checkout cancelled | URACE Store",
-                  descricao="Your URACE Store checkout was cancelled and nothing was charged. Go back to the product or ask our team a question.",
-                  corpo=corpo, indexar=False)
+    return layout(host=host, caminho="/store/cancelled/", titulo=T("Checkout cancelled | URACE Store", "Checkout cancelado | URACE Store"),
+                  descricao=T("Your URACE Store checkout was cancelled and nothing was charged. Go back to the product or ask our team a question.",
+                              "O seu checkout na URACE Store foi cancelado e nada foi cobrado. Volte ao produto ou tire uma dúvida com a equipe."),
+                  corpo=corpo, indexar=False, lang=lang)
 
 
 # ------------------------------------------------------------------ carrinho (#236)
 PERIODO_EN = {"manha": "Morning", "tarde": "Afternoon", "dia": "Full day"}
 
 
-def carrinho(host, cancelado=False, stripe=True, restaurar=None):
+def carrinho(host, cancelado=False, stripe=True, restaurar=None, lang="en"):
     """A página do carrinho. As linhas vêm do navegador e o servidor recalcula (carrinho.js chama
     /ops/api/vitrine/carrinho). Fora do Google e do sitemap: é de cada pessoa.
     `restaurar` (#245): (pedido, itens, entrega) do "Restore cart"/"Try again" de um pedido que não foi
-    pago. Os itens vão num atributo (só as escolhas, nunca preço) e o carrinho.js junta ao carrinho."""
-    aviso = ('<p class="aviso-erro" role="alert">Checkout cancelled: nothing was charged. Your cart is still here.</p>'
+    pago. Os itens vão num atributo (só as escolhas, nunca preço) e o carrinho.js junta ao carrinho.
+    #248: em inglês ou português (o carrinho.js lê o `lang` da página)."""
+    T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
+    aviso = (f'<p class="aviso-erro" role="alert">{T("Checkout cancelled: nothing was charged. Your cart is still here.", "Checkout cancelado: nada foi cobrado. O seu carrinho continua aqui.")}</p>'
              if cancelado else "")
     dados_rest, envio = "", False
     if restaurar:
         oid, itens_rest, entrega_rest = restaurar
         dados_rest = f' data-restaurar="{e(json.dumps(itens_rest, separators=(",", ":")))}"'
         envio = entrega_rest == "envio"
-        aviso = (f'<p class="aviso-ok" role="status">We put the items of order #{int(oid)} back in your cart. Prices and '
-                 'availability are checked again before you pay.</p>')
-    fora = ('' if stripe else '<p class="aviso-erro" role="alert">Online payment isn\'t available right now. '
-            'Please call or WhatsApp us at +1 (407) 250 2291.</p>')
+        aviso = ('<p class="aviso-ok" role="status">'
+                 + T(f"We put the items of order #{int(oid)} back in your cart. Prices and availability are checked again before you pay.",
+                     f"Os itens do pedido #{int(oid)} voltaram para o seu carrinho. Preços e disponibilidade são conferidos de novo antes de pagar.")
+                 + "</p>")
+    fora = ('' if stripe else '<p class="aviso-erro" role="alert">'
+            + T("Online payment isn't available right now. Please call or WhatsApp us at +1 (407) 250 2291.",
+                "O pagamento online não está disponível agora. Ligue ou mande WhatsApp para +1 (407) 250 2291.") + '</p>')
     corpo = f"""<section class="faixa clara" aria-labelledby="h-cart"><div class="largura carrinho-pagina">
-  <h1 id="h-cart">Your cart</h1>
+  {idioma.chave(lang, "/cart/")}
+  <h1 id="h-cart">{T("Your cart", "Seu carrinho")}</h1>
   {aviso}{fora}
   <div class="carrinho" data-api="/ops/api/vitrine/carrinho" data-portal="{PORTAL}"{dados_rest}>
-    <p class="carrinho-estado" role="status" aria-live="polite">Loading your cart…</p>
+    <p class="carrinho-estado" role="status" aria-live="polite">{T("Loading your cart…", "Carregando o seu carrinho…")}</p>
     <div class="carrinho-grade" hidden>
       <section class="carrinho-itens" aria-labelledby="h-itens">
-        <h2 id="h-itens">Items</h2>
+        <h2 id="h-itens">{T("Items", "Itens")}</h2>
         <ul class="carrinho-linhas"></ul>
       </section>
       <section class="carrinho-resumo" aria-labelledby="h-resumo">
-        <h2 id="h-resumo">Order summary</h2>
+        <h2 id="h-resumo">{T("Order summary", "Resumo do pedido")}</h2>
         <div class="carrinho-conta" hidden></div>
-        <fieldset class="entrega carrinho-entrega" hidden><legend>Delivery for store items</legend>
-          <label class="opcao"><input type="radio" name="entrega" value="retirada"{'' if envio else ' checked'}> <span>Pick up at the track <span class="opcional">— Orlando Kart Center, free</span></span></label>
-          <label class="opcao"><input type="radio" name="entrega" value="envio"{' checked' if envio else ''}> <span>Ship to me <span class="opcional">— we confirm and bill shipping separately</span></span></label>
+        <fieldset class="entrega carrinho-entrega" hidden><legend>{T("Delivery for store items", "Entrega dos itens da loja")}</legend>
+          <label class="opcao"><input type="radio" name="entrega" value="retirada"{'' if envio else ' checked'}> <span>{T("Pick up at the track", "Retirar na pista")} <span class="opcional">— Orlando Kart Center, {T("free", "grátis")}</span></span></label>
+          <label class="opcao"><input type="radio" name="entrega" value="envio"{' checked' if envio else ''}> <span>{T("Ship to me", "Enviar para mim")} <span class="opcional">— {T("we confirm and bill shipping separately", "confirmamos e cobramos o frete à parte")}</span></span></label>
         </fieldset>
         <dl class="carrinho-total"></dl>
         <p class="carrinho-erro aviso-erro" role="alert" hidden></p>
-        <button class="btn btn-cheio carrinho-pagar" type="button" disabled>Checkout</button>
-        <p class="small muted">Secure checkout by Stripe: card, Apple Pay or Google Pay. Prices and spots are checked again
-          when you pay. The security deposit of a session is refundable: returned within 5 business days after the session
-          if there is no incident.</p>
+        <button class="btn btn-cheio carrinho-pagar" type="button" disabled>{T("Checkout", "Pagar")}</button>
+        <p class="small muted">{T("Secure checkout by Stripe: card, Apple Pay or Google Pay. Your URACE account is needed to buy. Prices and spots are checked again when you pay. The security deposit of a session is refundable: returned within 5 business days after the session if there is no incident.",
+                                  "Pagamento seguro pelo Stripe: cartão, Apple Pay ou Google Pay. Para comprar, é preciso a sua conta URACE. Preços e vagas são conferidos de novo na hora de pagar. O depósito de segurança da sessão é reembolsável: volta em até 5 dias úteis depois da sessão, se não houver incidente.")}</p>
       </section>
     </div>
     <div class="carrinho-vazio" hidden>
-      <p>Your cart is empty.</p>
-      <p class="hero-acoes"><a class="btn" href="/services/arrive-and-drive/#reservar">Book a session</a>
-        <a class="btn btn-linha-escura" href="/store/">Shop the store</a></p>
+      <p>{T("Your cart is empty.", "O seu carrinho está vazio.")}</p>
+      <p class="hero-acoes"><a class="btn" href="/services/arrive-and-drive/#reservar">{T("Book a session", "Reservar uma sessão")}</a>
+        <a class="btn btn-linha-escura" href="/store/">{T("Shop the store", "Ver a loja")}</a></p>
     </div>
   </div>
-  <noscript><p class="aviso-erro">The cart needs JavaScript. You can still <a href="{PORTAL}/reserve">book a session</a>
-    or <a href="/store/">buy from the store</a> one item at a time.</p></noscript>
+  <noscript><p class="aviso-erro">{T("The cart needs JavaScript.", "O carrinho precisa de JavaScript.")} <a href="{PORTAL}/reserve">{T("Book a session", "Reservar uma sessão")}</a>
+    · <a href="/store/">{T("Store", "Loja")}</a></p></noscript>
 </div></section>"""
-    return layout(host=host, caminho="/cart/", titulo="Your cart | URACE",
-                  descricao="Your URACE cart: race sessions and store items in one secure Stripe checkout, with prices checked by our system.",
-                  corpo=corpo, indexar=False)
+    return layout(host=host, caminho="/cart/", titulo=T("Your cart | URACE", "Seu carrinho | URACE"),
+                  descricao=T("Your URACE cart: race sessions and store items in one secure Stripe checkout, with prices checked by our system.",
+                              "O seu carrinho na URACE: sessões e itens da loja num só pagamento seguro pelo Stripe, com os preços conferidos pelo sistema."),
+                  corpo=corpo, indexar=False, lang=lang)
 
 
-def carrinho_obrigado(host, pedido, itens=None, **kw):
+def carrinho_obrigado(host, pedido, itens=None, lang="en", volta="/cart/thanks/", **kw):
     """A volta do Stripe para o carrinho (noindex). Com o pedido, é a página do pedido (#245)."""
     if pedido:
-        return pedido_pagina(host, pedido, caminho="/cart/thanks/", **kw)
-    corpo = """<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
-  <h1 id="h-ok">Thank you</h1>
-  <p>If you just paid, the confirmation is on its way to your email. Questions? Call or WhatsApp +1 (407) 250 2291.</p>
-  <p class="hero-acoes"><a class="btn" href="/">Back to the home page</a></p>
-</div></section>"""
-    return layout(host=host, caminho="/cart/thanks/", titulo="Order confirmation | URACE",
-                  descricao="Your URACE order: payment confirmation for your race sessions and store items, and what happens next.",
-                  corpo=corpo, indexar=False)
+        return pedido_pagina(host, pedido, caminho="/cart/thanks/", lang=lang, volta=volta, **kw)
+    return _obrigado_generico(host, volta, lang, volta_loja=False)
 
 
-# ------------------------------------------------------------------ a página do pedido (#245)
-# Um estado para cada resultado do Stripe: (h1, título da aba, meta description).
+# ------------------------------------------------------------------ a página do pedido (#245, #248)
+# Um estado para cada resultado do Stripe: (h1, título da aba, meta description), em inglês e português.
 ESTADO_PEDIDO = {
-    "pago": ("Payment confirmed", "Payment confirmed | URACE",
-             "Your URACE order is paid and confirmed: the items, the total, the refundable deposit and what happens next."),
-    "aguardando": ("Payment processing", "Payment processing | URACE",
-                   "Your payment for this URACE order is still being confirmed. No need to pay again: we email you as soon as it clears."),
-    "falhou": ("Payment didn't go through", "Payment didn't go through | URACE",
-               "The payment for this URACE order didn't go through and nothing was charged. Try again with the same items."),
-    "expirado": ("Checkout expired", "Checkout expired | URACE",
-                 "Your URACE checkout expired before the payment was finished and nothing was charged. Restore your cart in one tap."),
-    "aberto": ("Checkout not finished", "Checkout not finished | URACE",
-               "We haven't received a payment for this URACE order yet and nothing was charged. Restore your cart to finish it."),
+    "en": {
+        "pago": ("Payment confirmed", "Payment confirmed | URACE",
+                 "Your URACE order is paid and confirmed: the items, the total, the refundable deposit and what happens next."),
+        "aguardando": ("Payment processing", "Payment processing | URACE",
+                       "Your payment for this URACE order is still being confirmed. No need to pay again: we email you as soon as it clears."),
+        "falhou": ("Payment didn't go through", "Payment didn't go through | URACE",
+                   "The payment for this URACE order didn't go through and nothing was charged. Try again with the same items."),
+        "expirado": ("Checkout expired", "Checkout expired | URACE",
+                     "Your URACE checkout expired before the payment was finished and nothing was charged. Restore your cart in one tap."),
+        "aberto": ("Checkout not finished", "Checkout not finished | URACE",
+                   "We haven't received a payment for this URACE order yet and nothing was charged. Restore your cart to finish it."),
+    },
+    "pt": {
+        "pago": ("Pagamento confirmado", "Pagamento confirmado | URACE",
+                 "O seu pedido na URACE está pago e confirmado: os itens, o total, o depósito reembolsável e o que vem a seguir."),
+        "aguardando": ("Pagamento em confirmação", "Pagamento em confirmação | URACE",
+                       "O pagamento deste pedido na URACE ainda está sendo confirmado. Não pague de novo: mandamos e-mail assim que confirmar."),
+        "falhou": ("O pagamento não foi concluído", "O pagamento não foi concluído | URACE",
+                   "O pagamento deste pedido na URACE não foi concluído e nada foi cobrado. Tente de novo com os mesmos itens."),
+        "expirado": ("O checkout expirou", "O checkout expirou | URACE",
+                     "O seu checkout na URACE expirou antes do pagamento e nada foi cobrado. Restaure o carrinho com um toque."),
+        "aberto": ("Checkout não concluído", "Checkout não concluído | URACE",
+                   "Ainda não recebemos o pagamento deste pedido na URACE e nada foi cobrado. Restaure o carrinho para concluir."),
+    },
 }
 
 
-def _pedido_linhas(ls, pago):
+def _pedido_linhas(ls, pago, lang):
+    from command_center.providers import pedido_site
+    T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
     out = []
     for x in ls:
-        dep = (f'<span class="muted">+ refundable security deposit {usd(x["deposit"])}</span>' if x["deposit"] else "")
+        dep = (f'<span class="muted">+ {T("refundable security deposit", "depósito de segurança reembolsável")} {usd(x["deposit"])}</span>'
+               if x["deposit"] else "")
         det = ""
         if pago and x["kind"] == "sessao" and x["booking_id"]:
-            det = (f'<span class="pedido-passo">Booked. Sign the waiver in your URACE account to confirm it. '
-                   f'<a class="btn btn-sm" href="{PORTAL}/sessions/{x["booking_id"]}">Sign the waiver</a></span>')
+            det = (f'<span class="pedido-passo">{T("Booked. Sign the waiver in your URACE account to confirm it.", "Reservada. Assine a waiver na sua conta URACE para confirmar.")} '
+                   f'<a class="btn btn-sm" href="{PORTAL}/sessions/{x["booking_id"]}">{T("Sign the waiver", "Assinar a waiver")}</a></span>')
         elif pago and x["kind"] == "sessao":
-            det = ('<span class="carrinho-sem-vaga">This time was taken just before your payment. Our team will call you to '
-                   'pick another time (or refund it). Your payment is safe.</span>')
+            det = ('<span class="carrinho-sem-vaga">'
+                   + T("This time was taken just before your payment. Our team will call you to pick another time (or refund it). Your payment is safe.",
+                       "Este horário foi ocupado logo antes do seu pagamento. A nossa equipe vai ligar para escolher outro horário (ou devolver o valor). O seu pagamento está seguro.")
+                   + "</span>")
         qtd = f' × {x["quantity"]}' if x["quantity"] > 1 else ""
-        out.append(f'<li><b>{e(x["name"])}{qtd}</b><span>{usd(x["unit_price"] * x["quantity"])}</span>{dep}{det}</li>')
+        out.append(f'<li><b>{e(pedido_site.nome_linha(x, lang))}{qtd}</b><span>{usd(x["unit_price"] * x["quantity"])}</span>{dep}{det}</li>')
     return f'<ul class="carrinho-recibo">{"".join(out)}</ul>'
 
 
-def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, erro=None, csrf=""):
+def _pedido_cliente(cli, lang):
+    """#248 (dono, 14/10): "mostre todas as informações do cliente ali" — os dados da conta do site."""
+    T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
+    linhas = [(T("Name", "Nome"), cli["nome"]), ("E-mail", cli["email"]), (T("Phone", "Telefone"), cli["telefone"]),
+              (T("Address", "Endereço"), cli["endereco"])]
+    if cli["pilotos"]:
+        linhas.append((T("Drivers", "Pilotos") if len(cli["pilotos"]) > 1 else T("Driver", "Piloto"), ", ".join(cli["pilotos"])))
+    if cli["tem_produto"]:
+        entrega = (T("Pick up at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824)",
+                     "Retirada no Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824)") if cli["entrega"] == "retirada"
+                   else T("Ship to", "Enviar para") + ": " + (cli["endereco_entrega"] or T("the address you give in the checkout", "o endereço informado no checkout")))
+        linhas.append((T("Delivery", "Entrega"), entrega))
+    itens = "".join(f"<dt>{e(k)}</dt><dd>{e(v)}</dd>" for k, v in linhas if v)
+    return f'<h2 id="h-cliente">{T("Your details", "Os seus dados")}</h2><dl class="pedido-cliente">{itens}</dl>'
+
+
+def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, erro=None, csrf="", lang="en", volta=None,
+                  cli=None):
     """A página de situação do pedido: `/order/<token>/` (o link pessoal) e a volta do Stripe
     (`/cart/thanks/`, `/store/thanks/`), com o mesmo desenho. `ls`: as linhas (`pedido_site.linhas`).
     `limpar`: a volta do Stripe com o pedido pago ou confirmando esvazia o carrinho deste navegador.
+    `cli` (#248): os dados do cliente (`pedido_site.cliente`). Em inglês ou português (a chave no topo).
     Fora do Google (noindex); a rota manda `no-store`."""
-    st = o["status"] if o["status"] in ESTADO_PEDIDO else "aberto"
-    h1, titulo, desc = ESTADO_PEDIDO[st]
+    T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
+    st = o["status"] if o["status"] in ESTADO_PEDIDO["en"] else "aberto"
+    h1, titulo, desc = ESTADO_PEDIDO["pt" if lang == "pt" else "en"][st]
     sessao = any(x["kind"] == "sessao" for x in ls)
     produto = any(x["kind"] == "produto" for x in ls)
     deposito = sum(x["deposit"] or 0 for x in ls)
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
-    nada = "nothing was charged" + (" and no session was booked" if sessao else "")
-    para = e(o["email"] or "your email")
-    voltar = (f'<a class="btn btn-linha-escura" href="{PORTAL}/sessions">My sessions</a>' if sessao and st == "pago"
-              else '<a class="btn btn-linha-escura" href="/store/">Back to the store</a>' if not sessao
-              else '<a class="btn btn-linha-escura" href="/">Home</a>')
-    contato = '<a class="btn btn-linha-escura" href="/contact/">Contact us</a>'
-    aviso_erro = (f'<p class="aviso-erro" role="alert">{e(erro)}</p>' if erro else "")
-    novo = (f'<p class="aviso-ok" role="status">You placed this order again in a new checkout: '
-            f'<a href="{e(refeito[1])}">see order #{refeito[0]}</a>.</p>' if refeito else "")
-    total = (f'<dl class="carrinho-total pedido-total"><dt class="soma">{"Total paid" if st == "pago" else "Order total"}</dt>'
+    nada = T("nothing was charged" + (" and no session was booked" if sessao else ""),
+             "nada foi cobrado" + (" e nenhuma sessão foi reservada" if sessao else ""))
+    para = e((cli or {}).get("email") or o["email"] or T("your email", "o seu e-mail"))
+    voltar = (f'<a class="btn btn-linha-escura" href="{PORTAL}/sessions">{T("My sessions", "Minhas sessões")}</a>' if sessao and st == "pago"
+              else f'<a class="btn btn-linha-escura" href="/store/">{T("Back to the store", "Voltar para a loja")}</a>' if not sessao
+              else f'<a class="btn btn-linha-escura" href="/">{T("Home", "Início")}</a>')
+    contato = f'<a class="btn btn-linha-escura" href="/contact/">{T("Contact us", "Fale com a gente")}</a>'
+    aviso_erro = (f'<p class="aviso-erro" role="alert">{e(idioma.traduzir(erro, lang))}</p>' if erro else "")
+    novo = ('<p class="aviso-ok" role="status">' + T("You placed this order again in a new checkout:", "Você refez este pedido num checkout novo:")
+            + f' <a href="{e(refeito[1])}">{T("see order", "ver o pedido")} #{refeito[0]}</a>.</p>' if refeito else "")
+    total = (f'<dl class="carrinho-total pedido-total"><dt class="soma">{T("Total paid", "Total pago") if st == "pago" else T("Order total", "Total do pedido")}</dt>'
              f'<dd class="soma">{usd(valor)}</dd>'
-             + (f'<dt>Includes the refundable security deposit</dt><dd>{usd(deposito)}</dd>' if deposito else "") + "</dl>")
-    itens = f'<h2 id="h-itens">Your order</h2>{_pedido_linhas(ls, st == "pago")}{total}'
+             + (f'<dt>{T("Includes the refundable security deposit", "Inclui o depósito de segurança reembolsável")}</dt><dd>{usd(deposito)}</dd>' if deposito else "")
+             + "</dl>")
+    itens = f'<h2 id="h-itens">{T("Your order", "O seu pedido")}</h2>{_pedido_linhas(ls, st == "pago", lang)}{total}'
+    dados = _pedido_cliente(cli, lang) if cli else ""
     if st == "pago":
         passos = []
         if produto:
-            passos.append("Store items: we'll email you when they're ready for pickup at the Orlando Kart Center."
+            passos.append(T("Store items: we'll email you when they're ready for pickup at the Orlando Kart Center.",
+                            "Itens da loja: avisamos por e-mail quando estiverem prontos para retirar no Orlando Kart Center.")
                           if o["delivery"] == "retirada" else
-                          "Store items: we'll confirm the shipping cost and email you the tracking number. Shipping is billed separately.")
+                          T("Store items: we'll confirm the shipping cost and email you the tracking number. Shipping is billed separately.",
+                            "Itens da loja: confirmamos o valor do frete e mandamos o código de rastreio por e-mail. O frete é cobrado à parte."))
         if sessao:
-            passos.append("Each session is confirmed once the driver's waiver is signed in your URACE account.")
+            passos.append(T("Each session is confirmed once the driver's waiver is signed in your URACE account.",
+                            "Cada sessão é confirmada quando a waiver do piloto estiver assinada na sua conta URACE."))
         if deposito:
-            passos.append("The security deposit is returned within 5 business days after the session if there is no incident.")
-        passos.append(f"A confirmation is on its way to {para}.")
-        corpo_estado = (f'<p class="aviso-ok" role="status">Thank you! Your order is confirmed. Payment received: '
-                        f'<strong>{usd(valor)}</strong>.</p>{itens}'
-                        f'<h2 id="h-passos">What happens next</h2><ul class="pedido-passos">'
+            passos.append(T("The security deposit is returned within 5 business days after the session if there is no incident.",
+                            "O depósito de segurança é devolvido em até 5 dias úteis depois da sessão, se não houver incidente."))
+        passos.append(T(f"A confirmation is on its way to {para}.", f"A confirmação está a caminho de {para}."))
+        corpo_estado = (f'<p class="aviso-ok" role="status">{T("Thank you! Your order is confirmed. Payment received:", "Obrigado! O seu pedido está confirmado. Pagamento recebido:")} '
+                        f'<strong>{usd(valor)}</strong>.</p>{itens}{dados}'
+                        f'<h2 id="h-passos">{T("What happens next", "O que vem a seguir")}</h2><ul class="pedido-passos">'
                         + "".join(f"<li>{x}</li>" for x in passos) + f'</ul><p class="hero-acoes">{voltar}</p>')
     elif st == "aguardando":
-        corpo_estado = (f'<p class="aviso-info" role="status">We\'re confirming your payment. Some payment methods, like a bank '
-                        f'transfer, take a few days to clear. <strong>Please don\'t pay again</strong>: we\'ll email {para} as soon '
-                        f'as it\'s confirmed.</p>'
-                        + ('<p>Session times are booked when the payment clears. If a time fills up before that, our team will '
-                           'call you to pick another one (or refund it).</p>' if sessao else "")
-                        + f'{itens}<p class="hero-acoes">{voltar} {contato}</p>')
+        corpo_estado = ('<p class="aviso-info" role="status">'
+                        + T(f"We're confirming your payment. Some payment methods, like a bank transfer, take a few days to clear. "
+                            f"<strong>Please don't pay again</strong>: we'll email {para} as soon as it's confirmed.",
+                            f"Estamos confirmando o seu pagamento. Alguns meios de pagamento, como a transferência bancária, levam alguns "
+                            f"dias para confirmar. <strong>Não pague de novo</strong>: mandamos um e-mail para {para} assim que confirmar.")
+                        + "</p>"
+                        + ("<p>" + T("Session times are booked when the payment clears. If a time fills up before that, our team will call you to pick another one (or refund it).",
+                                     "Os horários das sessões são reservados quando o pagamento confirmar. Se um horário lotar antes disso, a nossa equipe liga para escolher outro (ou devolver o valor).")
+                           + "</p>" if sessao else "")
+                        + f'{itens}{dados}<p class="hero-acoes">{voltar} {contato}</p>')
     elif st == "falhou":
         botao = ("" if refeito else
                  f'<form class="hero-acoes pedido-refazer" method="post" action="/order/{e(token)}/retry">'
                  f'<input type="hidden" name="csrf" value="{e(csrf)}">'
-                 f'<button class="btn" type="submit">Try again</button> {contato}</form>')
-        corpo_estado = (f'<p class="aviso-erro" role="alert">The payment wasn\'t completed, so {nada}.</p>'
-                        f'<p>You can try again with the same items, with the same or another payment method. Prices and '
-                        f'availability are checked again.</p>{botao}{itens}')
+                 f'<button class="btn" type="submit">{T("Try again", "Tentar de novo")}</button> {contato}</form>')
+        falta = T("The payment wasn't completed, so", "O pagamento não foi concluído, então")
+        corpo_estado = (f'<p class="aviso-erro" role="alert">{falta} {nada}.</p>'
+                        f'<p>{T("You can try again with the same items, with the same or another payment method. Prices and availability are checked again.", "Você pode tentar de novo com os mesmos itens, com o mesmo ou outro meio de pagamento. Preços e disponibilidade são conferidos de novo.")}</p>'
+                        f'{botao}{itens}{dados}')
     else:                                               # expirado ou aberto: restaurar o carrinho
-        motivo = ("The secure checkout closed before the payment was finished" if st == "expirado"
-                  else "We haven't received a payment for this order yet")
+        motivo = (T("The secure checkout closed before the payment was finished", "O checkout seguro fechou antes de o pagamento ser concluído")
+                  if st == "expirado" else
+                  T("We haven't received a payment for this order yet", "Ainda não recebemos o pagamento deste pedido"))
         botao = ("" if refeito else
-                 f'<p class="hero-acoes"><a class="btn" href="/order/{e(token)}/cart/">Restore cart</a> {contato}</p>')
-        corpo_estado = (f'<p class="aviso-erro" role="status">{motivo}, so {nada}.</p>'
-                        f'<p>Your items are saved. Restore your cart to pick up where you left off: prices and availability '
-                        f'are checked again.</p>{botao}{itens}')
+                 f'<p class="hero-acoes"><a class="btn" href="/order/{e(token)}/cart/">{T("Restore cart", "Restaurar o carrinho")}</a> {contato}</p>')
+        corpo_estado = (f'<p class="aviso-erro" role="status">{motivo}, {T("so", "então")} {nada}.</p>'
+                        f'<p>{T("Your items are saved. Restore your cart to pick up where you left off: prices and availability are checked again.", "Os seus itens estão guardados. Restaure o carrinho para continuar de onde parou: preços e disponibilidade são conferidos de novo.")}</p>'
+                        f'{botao}{itens}{dados}')
     meu_link = ("" if caminho.startswith("/order/") else
-                f'<p class="small muted">Your order page, to check it any time: <a href="/order/{e(token)}/">order #{o["id"]}</a></p>')
+                f'<p class="small muted">{T("Your order page, to check it any time:", "A página do seu pedido, para conferir quando quiser:")} '
+                f'<a href="/order/{e(token)}/">{T("order", "pedido")} #{o["id"]}</a></p>')
     marca = " data-limpar-carrinho" if limpar else ""
     corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto pedido-pagina pedido-{st}"{marca}>
-  <p class="eyebrow">Order #{o['id']}</p>
+  {idioma.chave(lang, volta or caminho)}
+  <p class="eyebrow">{T("Order", "Pedido")} #{o['id']}</p>
   <h1 id="h-ok">{h1}</h1>
   {aviso_erro}{novo}{corpo_estado}
   {meu_link}
 </div></section>"""
-    return layout(host=host, caminho=caminho, titulo=titulo, descricao=desc, corpo=corpo, indexar=False)
+    return layout(host=host, caminho=caminho, titulo=titulo, descricao=desc, corpo=corpo, indexar=False, lang=lang)
 
 
 def _desc(texto, complemento):

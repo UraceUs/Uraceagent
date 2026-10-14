@@ -1359,6 +1359,7 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     v = navegador.new_page(viewport={"width": 360, "height": 780})
     erros = []
     v.on("pageerror", lambda e: erros.append(str(e)))
+    cliente_pela_api(v, servidor, "Lia Loja", "lia.loja.e2e@example.com", ip="10.1.74.1")   # #248: comprar pede a conta
     v.goto(site + f"/store/p/{produto['slug']}/")
     assert v.evaluate("document.documentElement.scrollWidth") <= 360
     v.get_by_label("Ship to me").check()
@@ -2147,10 +2148,11 @@ def test_agenda_de_vendas_conecta_o_google_calendar_e_mostra_os_compromissos(ser
 
 # ------------------------------------------------------------- uma página para cada resultado do Stripe (#245)
 def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, navegador):
-    """#245, dono 14/10: "monte páginas para cada um no site" (os 4 eventos do webhook do Stripe). No celular:
-    processando → não passou (e-mail com o link; "Try again" abre um checkout novo) → expirou ("Restore cart"
-    põe o item de volta no carrinho) → pago. Cada página com um h1, nada rola para o lado em 390 e 360 px e
-    os botões têm 40 px. O painel mostra o pedido com o estado e o link."""
+    """#245, dono 14/10: "monte páginas para cada um no site" (os 4 eventos do webhook do Stripe). #248: comprar
+    pede a conta do site ("Buy now" sem conta → entrar → volta ao produto), a chave EN/PT ("mesmo jeito do command
+    center") e o aviso sempre. No celular: processando → (chave PT) não passou (e-mail com o link; "Tentar de novo"
+    abre um checkout novo) → expirou ("Restaurar o carrinho") → pago. Cada página com um h1, nada rola para o lado
+    em 390 e 360 px e os botões têm 40 px. O painel mostra o pedido com o estado e o link."""
     import json
 
     from command_center.vitrine import paginas_site
@@ -2158,6 +2160,9 @@ def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, naveg
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"]
                    if not p["variations"] and p["price"] and p["in_stock"] and p["images"])
     quem = {"email": "ivo.teste.e2e@example.com", "name": "Ivo Teste", "phone": "+14075550148"}
+    conta = navegador.new_page()                         # a conta já existe; a pessoa só entra
+    cliente_pela_api(conta, servidor, quem["name"], quem["email"], ip="10.2.48.1")
+    conta.close()
     v = navegador.new_page(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-For": "10.2.45.1"})
     erros = []
     v.on("pageerror", lambda e: erros.append(str(e)))
@@ -2180,10 +2185,27 @@ def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, naveg
         v.wait_for_url(STRIPE.origem + "/pay/**")
         return STRIPE.sessoes[v.url.rstrip("/").rsplit("/", 1)[1]]
 
-    # 1 · Buy now → o Checkout (o falso) → o meio de pagamento confirma depois: "Payment processing"
+    def emails_para(trecho):
+        for _ in range(50):
+            achados = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
+            achados = [x for x in achados if x["to"] == quem["email"] and trecho in x["subject"]]
+            if achados:
+                return achados
+            time.sleep(0.1)
+        return []
+
+    # 0 · #248: "Buy now" sem conta → entrar → volta para o produto
     v.goto(site + f"/store/p/{produto['slug']}/")
     v.get_by_role("button", name="Buy now").click()
+    v.wait_for_url(re.compile(r".*/ops/portal\?volta=/store/p/.*"))
+    v.fill("#p-email", quem["email"])
+    v.fill("#p-pw", "pista-molhada-7")
+    v.get_by_role("button", name="Sign in").click()
+    v.wait_for_url(re.compile(rf".*/store/p/{re.escape(produto['slug'])}/$"))
+    # 1 · Buy now → o Checkout (o falso), com o e-mail da conta → confirma depois: "Payment processing"
+    v.get_by_role("button", name="Buy now").click()
     s1 = sessao_do_stripe()
+    assert s1["customer_email"] == quem["email"], "o e-mail da conta vai para o Stripe"
     assert webhook_stripe(site, s1, "checkout.session.completed", "evt_e2e_245a", customer_details=quem) == "aguardando"
     v.goto(site + f"/store/thanks/?session_id={s1['id']}")
     confere("Payment processing")
@@ -2191,39 +2213,42 @@ def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, naveg
     v.wait_for_url(re.compile(r".*/order/\d+-[A-Za-z0-9_-]{27}/$"))
     pagina = v.url.removeprefix(site)
     confere("Payment processing")
-    assert v.title() == "Payment processing | URACE"
-    # 2 · async_payment_failed: "Payment didn't go through", o e-mail com o link e "Try again" → checkout novo
+    assert v.title() == "Payment processing | URACE" and v.get_by_text("Your details").count() == 1
+    assert emails_para("confirming your payment"), "#248: e-mail já no processando"
+    # 1b · a chave EN/PT: a mesma página em português (e a escolha fica)
+    v.get_by_role("button", name="Português").click()
+    confere("Pagamento em confirmação")
+    assert v.evaluate("document.documentElement.lang") == "pt-BR" and v.url.endswith(pagina)
+    # 2 · async_payment_failed: "O pagamento não foi concluído", o e-mail com o link e "Tentar de novo" → checkout novo
     assert webhook_stripe(site, s1, "checkout.session.async_payment_failed", "evt_e2e_245b", customer_details=quem) == "falhou"
     v.reload()
-    confere("Payment didn't go through")
-    assert v.get_by_text("nothing was charged", exact=False).count() >= 1
-    avisos = []
-    for _ in range(50):
-        avisos = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
-        avisos = [x for x in avisos if x["to"] == quem["email"]]
-        if avisos:
-            break
-        time.sleep(0.1)
-    assert len(avisos) == 1 and "didn't go through" in avisos[0]["subject"] and pagina in avisos[0]["text"]
-    v.get_by_role("button", name="Try again").click()
+    confere("O pagamento não foi concluído")
+    assert v.get_by_text("nada foi cobrado", exact=False).count() >= 1
+    avisos = emails_para("didn't go through")              # o pedido foi feito em inglês: o e-mail sai em inglês
+    assert len(avisos) == 1 and pagina in avisos[0]["text"]
+    v.get_by_role("button", name="Tentar de novo").click()
     s2 = sessao_do_stripe()
     assert f"US$ {produto['price']:.2f}" in v.content(), "o preço do catálogo, recalculado"
-    # 3 · o checkout novo expira: "Checkout expired" e "Restore cart" põe o item de volta no carrinho
-    assert webhook_stripe(site, s2, "checkout.session.expired", "evt_e2e_245c", customer_details={"email": quem["email"]}) == "expirado"
+    # 3 · o checkout novo expira: "O checkout expirou" (e o e-mail em português) e "Restaurar o carrinho"
+    assert webhook_stripe(site, s2, "checkout.session.expired", "evt_e2e_245c") == "expirado"
     v.goto(site + f"/cart/thanks/?session_id={s2['id']}")
-    confere("Checkout expired")
-    v.get_by_role("link", name="Restore cart").click()
+    confere("O checkout expirou")
+    assert emails_para("O seu checkout expirou"), "o pedido novo foi feito em português"
+    v.get_by_role("link", name="Restaurar o carrinho").click()
     v.wait_for_url("**/cart/")
-    v.get_by_role("heading", name="Your cart", level=1).wait_for()
-    pagar = v.get_by_role("button", name=re.compile(r"^Checkout · \$"))
+    v.get_by_role("heading", name="Seu carrinho", level=1).wait_for()
+    pagar = v.get_by_role("button", name=re.compile(r"^Pagar · \$"))
     pagar.wait_for()
     assert v.evaluate("JSON.parse(localStorage.getItem('urace.carrinho') || '{}').itens.length") == 1
+    assert v.get_by_text("Conectado como").count() == 1
     r = v.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
-    # 4 · paga: "Payment confirmed"
+    # 4 · paga: "Pagamento confirmado"; de volta ao inglês, "Payment confirmed"
     pagar.click()
     sessao_do_stripe()
     v.get_by_role("link", name="Pay").click()
+    confere("Pagamento confirmado")
+    v.get_by_role("button", name="English").click()
     confere("Payment confirmed")
     # 5 · token mexido: 404
     assert v.request.get(site + pagina[:-6] + "AAAAA/").status == 404

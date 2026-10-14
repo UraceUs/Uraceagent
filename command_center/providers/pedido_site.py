@@ -18,13 +18,17 @@ criada na primeira vez). Sem o selo certo, 404. A página mostra o estado que o 
 quantidade; serviço, dia, turno e piloto) e o servidor recalcula preço, depósito e vaga, como em
 qualquer carrinho. A vaga nunca fica presa: a sessão só vira agendamento quando o pagamento entra.
 
-Falhou ou expirou, a pessoa fica sabendo por e-mail (expirado só se ela chegou a informar o e-mail
-no Checkout), com o link da página; a equipe recebe o aviso do falhou. Um aviso por pedido, nunca
-dois: `outcome_notified_at` é tomado antes de mandar.
+#248 (dono, 14/10): "o cliente e a equipe precisam da confirmação de pagamento sempre e deixar isso
+também registrado no card do cliente no Command Center". Em TODO resultado (pago, aguardando, falhou,
+expirado): e-mail para o cliente (no idioma em que ele comprou, `store_orders.lang`), aviso para a
+equipe e um registro na linha do tempo do card (`client_events`), um por resultado por pedido
+(`store_order_notices`, tomado antes de mandar). A conta do site é obrigatória para comprar: o e-mail
+dos avisos é o da conta, e a página mostra os dados do cliente da conta.
 """
 import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
@@ -137,36 +141,154 @@ def refeito(con, o):
               (o["id"],))
 
 
-# ------------------------------------------------------------------ o resultado que o webhook trouxe
-def marcar_resultado(con, o, s, novo):
-    """Falhou ou expirou: guarda para quem vai o aviso. Dentro da transação do webhook (o evento repetido
-    nem chega aqui). Falhou: o e-mail do Checkout ou o da conta. Expirou: só o que a pessoa informou no
-    Checkout (`customer_details.email`); sem ele, ninguém recebe nada."""
-    if o["outcome"] or o["outcome_notified_at"]:
-        return
-    det = (s.get("customer_details") or {}).get("email") or ""
-    para = det.strip().lower() or None
-    if novo == "falhou":
-        para = para or (o["email"] or None)
-    atualizar(con, "store_orders", o["id"], outcome=novo, outcome_email=para, updated_at=agora())
+# ------------------------------------------------------------------ em inglês ou português (#248)
+DIAS_PT = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
+MESES_PT = ("jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez")
+TURNO = {"en": {"manha": "morning", "tarde": "afternoon", "dia": "full day"},
+         "pt": {"manha": "manhã", "tarde": "tarde", "dia": "dia todo"}}
 
 
-def _primeiro(o):
-    return (o["name"] or "").split()[0] if o["name"] else "there"
+def lingua(o):
+    return "pt" if (o.get("lang") or "") == "pt" else "en"
+
+
+def quando(d, periodo, lang="en"):
+    """'Sat, Oct 18, 2026 (morning)' ou 'sáb, 18 de out de 2026 (manhã)'."""
+    from datetime import date
+    try:
+        dia = date.fromisoformat(d)
+    except (TypeError, ValueError):
+        return str(d or "")
+    turno = TURNO["pt" if lang == "pt" else "en"].get(periodo, periodo or "")
+    if lang == "pt":
+        return f"{DIAS_PT[dia.weekday()]}, {dia.day} de {MESES_PT[dia.month - 1]} de {dia.year} ({turno})"
+    return dia.strftime("%a, %b %d, %Y").replace(" 0", " ") + f" ({turno})"
+
+
+def nome_linha(x, lang="en"):
+    """O nome da linha no idioma: a sessão é refeita com o dia e o turno (o nome guardado é o do Stripe)."""
+    if x["kind"] == "sessao" and x.get("service_name") and x.get("date"):
+        return f"{x['service_name']} · {quando(x['date'], x['period'], lang)}" + (f" · {x['pilot_name']}" if x.get("pilot_name") else "")
+    return x["name"]
 
 
 def _usd(n):
     return f"US$ {n:,.2f}"
 
 
-def _texto_itens(ls):
+def texto_itens(ls, lang="en"):
+    dep = "Refundable security deposit" if lang != "pt" else "Depósito de segurança reembolsável"
     out = []
     for x in ls:
-        s = f"- {x['name']}" + (f" × {x['quantity']}" if x["quantity"] > 1 else "") + f": {_usd(x['unit_price'] * x['quantity'])}"
+        s = f"- {nome_linha(x, lang)}" + (f" × {x['quantity']}" if x["quantity"] > 1 else "") + f": {_usd(x['unit_price'] * x['quantity'])}"
         if x["deposit"]:
-            s += f"\n  Refundable security deposit: {_usd(x['deposit'])}"
+            s += f"\n  {dep}: {_usd(x['deposit'])}"
         out.append(s)
     return "\n".join(out)
+
+
+def contato(lang):
+    return ("Dúvidas? Ligue ou mande WhatsApp para +1 (407) 250 2291." if lang == "pt" else CONTATO)
+
+
+def primeiro_nome(o, lang="en"):
+    return (o["name"] or "").split()[0] if o["name"] else ("olá" if lang == "pt" else "there")
+
+
+def ola(o, lang):
+    return f"Olá, {primeiro_nome(o, lang)}" if lang == "pt" else f"Hi {primeiro_nome(o, lang)}"
+
+
+# ------------------------------------------------------------------ quem comprou (#248)
+def conta(con, o):
+    return um(con, "SELECT * FROM portal_accounts WHERE id=?", (o["account_id"],)) if o.get("account_id") else None
+
+
+def endereco_entrega(o):
+    try:
+        s = json.loads(o["shipping"] or "null") or {}
+    except ValueError:
+        return ""
+    a = s.get("address") or {}
+    partes = [s.get("name"), a.get("line1"), a.get("line2"),
+              " ".join(x for x in (a.get("city"), a.get("state"), a.get("postal_code")) if x), a.get("country")]
+    return ", ".join(x for x in partes if x)
+
+
+def cliente(con, o, ls=None):
+    """Os dados do cliente para a página do pedido (dono, 14/10: "mostre todas as informações do cliente
+    ali"): os da conta do site; sem conta (pedido antigo), os que o Stripe deu."""
+    c = conta(con, o)
+    ls = ls if ls is not None else linhas(con, o)
+    end = ""
+    if c:
+        end = ", ".join(x for x in (c.get("address_line1"), c.get("address_line2"),
+                                     " ".join(y for y in (c.get("city"), c.get("state"), c.get("zip")) if y)) if x)
+    return {"nome": (c or {}).get("name") or o["name"], "email": (c or {}).get("email") or o["email"],
+            "telefone": (c or {}).get("phone") or o["phone"], "endereco": end,
+            "pilotos": sorted({x["pilot_name"] for x in ls if x.get("pilot_name")}),
+            "entrega": o["delivery"], "endereco_entrega": endereco_entrega(o),
+            "tem_produto": any(x["kind"] == "produto" for x in ls)}
+
+
+# ------------------------------------------------------------------ o resultado que o Stripe deu (#245, #248)
+RESULTADOS = ("pago", "aguardando", "falhou", "expirado")
+NOME_EQUIPE = {"pago": "PAGO", "aguardando": "PROCESSANDO O PAGAMENTO", "falhou": "PAGAMENTO FALHOU",
+               "expirado": "CHECKOUT EXPIROU"}
+NOME_CARD = {"pago": "pago", "aguardando": "processando o pagamento", "falhou": "pagamento não passou",
+             "expirado": "checkout expirou"}
+
+
+def marcar_resultado(con, o, resultado):
+    """Este pedido chegou a este resultado: o aviso fica na fila (um por resultado por pedido). Dentro da
+    transação do webhook; o evento repetido nem chega aqui, e o mesmo resultado de novo não faz nada."""
+    if resultado in RESULTADOS:
+        con.execute("INSERT OR IGNORE INTO store_order_notices (order_id, result) VALUES (?, ?)", (o["id"], resultado))
+
+
+def textos(con, o, resultado):
+    """(assunto, texto) do e-mail para a pessoa, no idioma em que ela comprou. Aguardando, falhou, expirou
+    (o do pago é o de `stripe_loja.avisar` / `carrinho.avisar`)."""
+    lang = lingua(o)
+    ls = linhas(con, o)
+    sessao = any(x["kind"] == "sessao" for x in ls)
+    itens = texto_itens(ls, lang)
+    n = o["id"]
+    if lang == "pt":
+        nada = "nada foi cobrado" + (" e nenhuma sessão foi reservada" if sessao else "")
+        fim = f"Página do seu pedido: {link(o)}\n\n{contato(lang)}\n\n{ASSINATURA}"
+        if resultado == "aguardando":
+            return (f"Estamos confirmando o seu pagamento — pedido #{n} — URACE",
+                    f"{ola(o, lang)},\n\nObrigado pelo pedido #{n}. O seu meio de pagamento leva um pouco mais para confirmar "
+                    f"(por exemplo, uma transferência bancária). Não pague de novo: mandamos um e-mail assim que ele for "
+                    f"confirmado.\n\n{itens}\nTotal: {_usd(o['amount'])}\n\n"
+                    + ("Os horários das sessões são reservados quando o pagamento for confirmado.\n\n" if sessao else "") + fim)
+        if resultado == "falhou":
+            return (f"O pagamento não foi concluído — pedido #{n} — URACE",
+                    f"{ola(o, lang)},\n\nO pagamento do seu pedido #{n} na URACE não foi concluído, então {nada}.\n\n{itens}\n\n"
+                    f"Você pode tentar de novo com os mesmos itens. Preços e disponibilidade são conferidos de novo:\n{link(o)}\n\n"
+                    f"{contato(lang)}\n\n{ASSINATURA}")
+        return (f"O seu checkout expirou — pedido #{n} — URACE",
+                f"{ola(o, lang)},\n\nO checkout seguro do pedido #{n} na URACE fechou antes de o pagamento ser concluído, então "
+                f"{nada}.\n\n{itens}\n\nOs seus itens estão guardados. Restaure o carrinho aqui (preços e disponibilidade são "
+                f"conferidos de novo):\n{link(o)}\n\n{contato(lang)}\n\n{ASSINATURA}")
+    nada = "nothing was charged" + (" and no session was booked" if sessao else "")
+    if resultado == "aguardando":
+        return (f"We're confirming your payment — order #{n} — URACE",
+                f"{ola(o, lang)},\n\nThanks for your order #{n}. Your payment method takes a little longer to confirm (for "
+                f"example, a bank transfer). Please don't pay again: we'll email you as soon as it's confirmed.\n\n{itens}\n"
+                f"Total: {_usd(o['amount'])}\n\n"
+                + ("Session times are booked when the payment clears.\n\n" if sessao else "")
+                + f"Your order page: {link(o)}\n\n{CONTATO}\n\n{ASSINATURA}")
+    if resultado == "falhou":
+        return (f"Payment didn't go through — order #{n} — URACE",
+                f"{ola(o, lang)},\n\nThe payment for your URACE order #{n} didn't go through, so {nada}.\n\n"
+                f"{itens}\n\nYou can try again with the same items. Prices and availability are checked again "
+                f"when you do:\n{link(o)}\n\n{CONTATO}\n\n{ASSINATURA}")
+    return (f"Your checkout expired — order #{n} — URACE",
+            f"{ola(o, lang)},\n\nYour secure checkout for URACE order #{n} closed before the payment was finished, "
+            f"so {nada}.\n\n{itens}\n\nYour items are saved. Restore your cart here (prices and availability are "
+            f"checked again):\n{link(o)}\n\n{CONTATO}\n\n{ASSINATURA}")
 
 
 def _enviar(enviar, para, assunto, texto):
@@ -174,88 +296,134 @@ def _enviar(enviar, para, assunto, texto):
     (enviar or email_envio.enviar)(para, assunto, texto)
 
 
-def textos(con, o):
-    """(assunto, texto) do e-mail para a pessoa, conforme o resultado. Usado no envio e no teste."""
+def texto_equipe(con, o, resultado):
+    """O aviso para support@ (em português, como os outros avisos), com o link da página do pedido."""
     ls = linhas(con, o)
-    sessao = any(x["kind"] == "sessao" for x in ls)
-    nada = "nothing was charged" + (" and no session was booked" if sessao else "")
-    if o["outcome"] == "falhou":
-        return (f"Payment didn't go through — order #{o['id']} — URACE",
-                f"Hi {_primeiro(o)},\n\nThe payment for your URACE order #{o['id']} didn't go through, so {nada}.\n\n"
-                f"{_texto_itens(ls)}\n\nYou can try again with the same items. Prices and availability are checked again "
-                f"when you do:\n{link(o)}\n\n{CONTATO}\n\n{ASSINATURA}")
-    return (f"Your checkout expired — order #{o['id']} — URACE",
-            f"Hi {_primeiro(o)},\n\nYour secure checkout for URACE order #{o['id']} closed before the payment was finished, "
-            f"so {nada}.\n\n{_texto_itens(ls)}\n\nYour items are saved. Restore your cart here (prices and availability are "
-            f"checked again):\n{link(o)}\n\n{CONTATO}\n\n{ASSINATURA}")
+    cli = cliente(con, o, ls)
+    o_que = {"aguardando": "o meio de pagamento confirma depois (ex.: transferência). Nada foi marcado ainda; a vaga "
+                           "não está presa. O cliente recebeu o aviso de que estamos confirmando.",
+             "falhou": "o pagamento que confirmava depois não passou. Nada foi cobrado e nenhuma sessão foi marcada; a "
+                       "vaga continua livre. O cliente recebeu o e-mail com o botão Try again.",
+             "expirado": "o checkout fechou antes do pagamento. Nada foi cobrado. O cliente recebeu o e-mail com o botão "
+                         "Restore cart."}[resultado]
+    if not cli["email"]:
+        o_que += " ATENÇÃO: sem e-mail do cliente, ligue para ele."
+    return (f"Site · {NOME_EQUIPE[resultado]}: pedido #{o['id']} — {cli['nome'] or cli['email'] or 'sem nome'}",
+            f"Pedido #{o['id']}: {o_que}\n{cli['nome'] or ''} <{cli['email'] or ''}> {cli['telefone'] or ''}\n\n"
+            f"{texto_itens(ls, 'pt')}\nTotal: {_usd(o['amount'])}\n\nPágina do pedido (para mandar ao cliente): {link(o)}")
 
 
-def avisar_resultado(con, oid, enviar=None):
-    """O aviso do falhou (pessoa + equipe) ou do expirou (só a pessoa, e só com e-mail). Uma vez só: o pedido
-    é tomado (`outcome_notified_at`) antes de mandar; se o envio falha, ele é solto e a rodada tenta de novo."""
+def avisar_resultado(con, oid, resultado, enviar=None):
+    """O aviso de um resultado que não é o pago: e-mail para o cliente (no idioma dele), aviso para a equipe
+    e o registro no card. Uma vez só: o aviso é tomado antes de mandar; se o envio falha, ele é solto e a
+    rodada de 15 min tenta de novo."""
+    n = um(con, "SELECT * FROM store_order_notices WHERE order_id=? AND result=?", (oid, resultado))
     o = um(con, "SELECT * FROM store_orders WHERE id=?", (oid,))
-    if not o or not o["outcome"] or o["outcome_notified_at"]:
+    if not n or not o or n["sent_at"] or resultado == "pago":
         return False
-    if o["status"] == "pago" or (o["outcome"] == "expirado" and not o["outcome_email"]):
-        atualizar(con, "store_orders", oid, outcome_notified_at=agora(), updated_at=agora())
-        con.commit()
-        return False
-    cur = con.execute("UPDATE store_orders SET outcome_notified_at=? WHERE id=? AND outcome_notified_at IS NULL",
-                      (agora(), oid))
+    cur = con.execute("UPDATE store_order_notices SET claimed_at=? WHERE id=? AND sent_at IS NULL AND "
+                      "(claimed_at IS NULL OR claimed_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-10 minutes'))", (agora(), n["id"]))
     con.commit()
     if cur.rowcount != 1:
         return False                                    # outra tarefa tomou este aviso agora
+    registrar_no_card(con, o, resultado)
+    para = cliente(con, o)["email"]
     try:
-        if o["outcome_email"]:
-            assunto, texto = textos(con, o)
-            _enviar(enviar, o["outcome_email"], assunto, texto)
-        if o["outcome"] == "falhou":
-            ls = linhas(con, o)
-            _enviar(enviar, "support@urace.us",
-                    f"Site · PAGAMENTO FALHOU: pedido #{o['id']} — {o['name'] or o['email'] or 'sem nome'}",
-                    f"O pagamento do pedido #{o['id']} falhou no Stripe (meio de pagamento que confirma depois). Nada foi "
-                    f"cobrado e nenhuma sessão foi marcada; a vaga continua livre.\n{o['name'] or ''} <{o['email'] or ''}> "
-                    f"{o['phone'] or ''}\n\n{_texto_itens(ls)}\nTotal: {_usd(o['amount'])}\n\n"
-                    + ("O cliente recebeu o e-mail com o botão Try again.\n" if o["outcome_email"]
-                       else "O cliente NÃO recebeu e-mail (o Stripe não passou e-mail): ligue para ele.\n")
-                    + f"Página do pedido (para mandar ao cliente): {link(o)}")
-        atualizar(con, "store_orders", oid, outcome_notify_error=None, updated_at=agora())
+        if para:
+            assunto, texto = textos(con, o, resultado)
+            _enviar(enviar, para, assunto, texto)
+        _enviar(enviar, "support@urace.us", *texto_equipe(con, o, resultado))
+        con.execute("UPDATE store_order_notices SET sent_at=?, to_email=?, error=NULL WHERE id=?", (agora(), para, n["id"]))
         con.commit()
         return True
     except Exception as e:                              # noqa: BLE001 — a rodada de 15 min tenta de novo
-        atualizar(con, "store_orders", oid, outcome_notified_at=None, outcome_notify_error=str(e)[:300], updated_at=agora())
+        con.execute("UPDATE store_order_notices SET claimed_at=NULL, error=? WHERE id=?", (str(e)[:300], n["id"]))
         con.commit()
         return False
 
 
-def avisar_resultado_bg(oid, enviar=None):
+def avisado_pago(con, o, para):
+    """O pago avisa por `stripe_loja.avisar`/`carrinho.avisar`; aqui só fica anotado (o painel mostra)."""
+    con.execute("INSERT OR IGNORE INTO store_order_notices (order_id, result) VALUES (?, 'pago')", (o["id"],))
+    con.execute("UPDATE store_order_notices SET sent_at=COALESCE(sent_at, ?), to_email=?, error=NULL WHERE order_id=? AND result='pago'",
+                (agora(), para, o["id"]))
+
+
+def avisar_resultado_bg(oid, resultado, enviar=None):
     """Depois da resposta ao Stripe (tarefa em segundo plano)."""
     con = conectar()
     try:
-        avisar_resultado(con, oid, enviar)
+        avisar_resultado(con, oid, resultado, enviar)
     finally:
         con.close()
 
 
 def rodar(con, enviar=None):
-    """Na rotina de 15 min: aviso de falhou/expirou que não saiu (e-mail fora do ar) tenta de novo. O que
-    chegou há menos de 2 min fica para a tarefa que o webhook já disparou."""
+    """Na rotina de 15 min: aviso que não saiu (e-mail fora do ar) tenta de novo. O que chegou há menos de
+    2 min fica para a tarefa que o webhook já disparou."""
     n = 0
-    for o in todos(con, "SELECT id FROM store_orders WHERE outcome IS NOT NULL AND outcome_notified_at IS NULL "
-                        "AND updated_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 minutes') ORDER BY id LIMIT 20"):
-        n += bool(avisar_resultado(con, o["id"], enviar))
+    for x in todos(con, "SELECT order_id, result FROM store_order_notices WHERE sent_at IS NULL AND result<>'pago' "
+                        "AND created_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-2 minutes') ORDER BY id LIMIT 20"):
+        n += bool(avisar_resultado(con, x["order_id"], x["result"], enviar))
     return {"avisos": n}
 
 
+# ------------------------------------------------------------------ o registro no card (#248)
+def _cards(con, o, ls):
+    """Card → as linhas dele. A sessão vai para o card do PILOTO (o da linha, ou o que o piloto da conta já
+    tem); o produto, para o card da compra (o da linha/pedido, ou o card ligado à conta do site). Sem card
+    certo, a linha fica de fora: nunca no card de outro cliente."""
+    grupos = {}
+    acc = conta(con, o)
+    for x in ls:
+        cid = x.get("client_id")
+        if not cid and x["kind"] == "sessao" and x.get("pilot_id") and o.get("account_id"):
+            p = um(con, "SELECT client_id FROM portal_pilots WHERE id=? AND account_id=?", (x["pilot_id"], o["account_id"]))
+            cid = p and p["client_id"]
+        if not cid and x["kind"] == "produto":
+            cid = o.get("client_id") or (acc or {}).get("client_id")
+        if cid and um(con, "SELECT 1 AS x FROM clients WHERE id=?", (cid,)):
+            grupos.setdefault(cid, []).append(x)
+    return grupos
+
+
+def registrar_no_card(con, o, resultado):
+    """A linha do tempo do card (Client360) ganha o resultado do pagamento: valor, o que é e o link da
+    página do pedido. Um registro por card, pedido e resultado."""
+    o = um(con, "SELECT * FROM store_orders WHERE id=?", (o["id"],))
+    ls = linhas(con, o)
+    feitos = 0
+    for cid, minhas in _cards(con, o, ls).items():
+        valor = round(sum((x["amount"] if x["amount"] is not None else x["unit_price"] * x["quantity"]) for x in minhas), 2)
+        titulo = f"Pagamento no site: {NOME_CARD[resultado]} · pedido #{o['id']}"
+        detalhe = (f"{_usd(valor)} · " + "; ".join(nome_linha(x, 'pt') + (f" × {x['quantity']}" if x["quantity"] > 1 else "")
+                                                   for x in minhas))
+        if len(minhas) < len(ls):
+            detalhe += f" (pedido inteiro: {_usd(o['amount_paid'] if o['amount_paid'] is not None else o['amount'])})"
+        cur = con.execute("INSERT OR IGNORE INTO client_events (client_id, at, kind, title, status, detail, link, order_id, result) "
+                          "VALUES (?, ?, 'SITE_PAYMENT', ?, ?, ?, ?, ?, ?)",
+                          (cid, agora(), titulo, resultado, detalhe[:600], link(o), o["id"], resultado))
+        feitos += cur.rowcount
+    return feitos
+
+
 # ------------------------------------------------------------------ o painel
+def _avisos(con, o):
+    return {x["result"]: {"em": x["sent_at"], "para": x["to_email"], "erro": x["error"]}
+            for x in todos(con, "SELECT * FROM store_order_notices WHERE order_id=?", (o["id"],))}
+
+
 def para_painel(con, o):
     """O que a equipe vê de um pedido: estado, quem, o quê, e o link da página para mandar ao cliente."""
     ls = linhas(con, o)
+    avisos = _avisos(con, o)
+    atual = avisos.get(o["status"]) or {}
     return {"id": o["id"], "tipo": o["kind"], "status": o["status"], "total": o["amount"], "pago": o["amount_paid"],
             "criado_em": o["created_at"], "pago_em": o["paid_at"], "nome": o["name"], "email": o["email"], "telefone": o["phone"],
             "resumo": "; ".join(x["name"] + (f" × {x['quantity']}" if x["quantity"] > 1 else "") for x in ls)[:300],
-            "opp_id": o["opp_id"], "atencao": o["attention"], "aviso_em": o["outcome_notified_at"],
-            "aviso_para": o["outcome_email"], "aviso_erro": o["outcome_notify_error"], "refeito_de": o["retry_of"],
+            "opp_id": o["opp_id"], "atencao": o["attention"], "aviso_em": atual.get("em") or (o["notified_at"] if o["status"] == "pago" else None),
+            "aviso_para": atual.get("para"), "aviso_erro": atual.get("erro") or (o["notify_error"] if o["status"] == "pago" else None),
+            "avisos": avisos, "refeito_de": o["retry_of"], "idioma": lingua(o), "conta": o["account_id"],
             "link": link(o), "caminho": caminho(o)}
 
 
