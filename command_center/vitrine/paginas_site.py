@@ -591,7 +591,11 @@ def _form_comprar(p):
         <label class="opcao"><input type="radio" name="entrega" value="envio"> <span>Ship to me <span class="opcional">— we confirm and bill shipping separately</span></span></label>
       </fieldset>
       <label class="escondido" aria-hidden="true">Leave this empty<input name="site" tabindex="-1" autocomplete="off"></label>
-      <button class="btn" type="submit">Buy now</button>
+      <div class="comprar-acoes">
+        <button class="btn" type="submit">Buy now</button>
+        <button class="btn btn-linha-escura" type="button" data-por-no-carrinho hidden>Add to cart</button>
+      </div>
+      <p class="carrinho-ok" role="status" aria-live="polite"></p>
       <p class="small muted">Secure checkout by Stripe: card, Apple Pay or Google Pay. The confirmation arrives by email.</p>
     </form>"""
 
@@ -706,6 +710,100 @@ def cancelado(host, slug=None):
                   corpo=corpo, indexar=False)
 
 
+# ------------------------------------------------------------------ carrinho (#236)
+PERIODO_EN = {"manha": "Morning", "tarde": "Afternoon", "dia": "Full day"}
+
+
+def carrinho(host, cancelado=False, stripe=True):
+    """A página do carrinho. As linhas vêm do navegador e o servidor recalcula (carrinho.js chama
+    /ops/api/vitrine/carrinho). Fora do Google e do sitemap: é de cada pessoa."""
+    aviso = ('<p class="aviso-erro" role="alert">Checkout cancelled: nothing was charged. Your cart is still here.</p>'
+             if cancelado else "")
+    fora = ('' if stripe else '<p class="aviso-erro" role="alert">Online payment isn\'t available right now. '
+            'Please call or WhatsApp us at +1 (407) 250 2291.</p>')
+    corpo = f"""<section class="faixa clara" aria-labelledby="h-cart"><div class="largura carrinho-pagina">
+  <h1 id="h-cart">Your cart</h1>
+  {aviso}{fora}
+  <div class="carrinho" data-api="/ops/api/vitrine/carrinho" data-portal="{PORTAL}">
+    <p class="carrinho-estado" role="status" aria-live="polite">Loading your cart…</p>
+    <div class="carrinho-grade" hidden>
+      <section class="carrinho-itens" aria-labelledby="h-itens">
+        <h2 id="h-itens">Items</h2>
+        <ul class="carrinho-linhas"></ul>
+      </section>
+      <section class="carrinho-resumo" aria-labelledby="h-resumo">
+        <h2 id="h-resumo">Order summary</h2>
+        <div class="carrinho-conta" hidden></div>
+        <fieldset class="entrega carrinho-entrega" hidden><legend>Delivery for store items</legend>
+          <label class="opcao"><input type="radio" name="entrega" value="retirada" checked> <span>Pick up at the track <span class="opcional">— Orlando Kart Center, free</span></span></label>
+          <label class="opcao"><input type="radio" name="entrega" value="envio"> <span>Ship to me <span class="opcional">— we confirm and bill shipping separately</span></span></label>
+        </fieldset>
+        <dl class="carrinho-total"></dl>
+        <p class="carrinho-erro aviso-erro" role="alert" hidden></p>
+        <button class="btn btn-cheio carrinho-pagar" type="button" disabled>Checkout</button>
+        <p class="small muted">Secure checkout by Stripe: card, Apple Pay or Google Pay. Prices and spots are checked again
+          when you pay. The security deposit of a session is refundable: returned within 5 business days after the session
+          if there is no incident.</p>
+      </section>
+    </div>
+    <div class="carrinho-vazio" hidden>
+      <p>Your cart is empty.</p>
+      <p class="hero-acoes"><a class="btn" href="/services/arrive-and-drive/#reservar">Book a session</a>
+        <a class="btn btn-linha-escura" href="/store/">Shop the store</a></p>
+    </div>
+  </div>
+  <noscript><p class="aviso-erro">The cart needs JavaScript. You can still <a href="{PORTAL}/reserve">book a session</a>
+    or <a href="/store/">buy from the store</a> one item at a time.</p></noscript>
+</div></section>"""
+    return layout(host=host, caminho="/cart/", titulo="Your cart | URACE",
+                  descricao="Your URACE cart: race sessions and store items in one secure Stripe checkout, with prices checked by our system.",
+                  corpo=corpo, indexar=False)
+
+
+def carrinho_obrigado(host, pedido, itens):
+    """A volta do Stripe para o carrinho (noindex). Pago → o pedido e o que vem a seguir em cada sessão."""
+    voltar = '<p class="hero-acoes"><a class="btn" href="/">Back to the home page</a></p>'
+    if pedido and pedido["status"] == "pago":
+        valor = pedido["amount_paid"] if pedido["amount_paid"] is not None else pedido["amount"]
+        linhas = []
+        for x in itens:
+            det = ""
+            if x["kind"] == "sessao" and x["booking_id"]:
+                det = (f'<span class="carrinho-ok-sessao">Booked. <a href="{PORTAL}/sessions/{x["booking_id"]}">Sign the waiver</a> '
+                       'in your account to confirm it.</span>')
+            elif x["kind"] == "sessao":
+                det = ('<span class="carrinho-sem-vaga">This time was taken just before your payment. Our team will call you to '
+                       'pick another time (or refund it). Your payment is safe.</span>')
+            dep = f'<span class="muted">+ refundable security deposit {usd(x["deposit"])}</span>' if x["deposit"] else ""
+            linhas.append(f'<li><b>{e(x["name"])}</b>{" × " + str(x["quantity"]) if x["quantity"] > 1 else ""} — '
+                          f'{usd(x["unit_price"] * x["quantity"])} {dep}{det}</li>')
+        sessoes = any(x["kind"] == "sessao" for x in itens)
+        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto" data-limpar-carrinho>
+  <p class="eyebrow">Order #{pedido['id']}</p>
+  <h1 id="h-ok">Thank you! Your order is confirmed</h1>
+  <p class="aviso-ok" role="status">Payment received: <strong>{usd(valor)}</strong>.</p>
+  <ul class="carrinho-recibo">{''.join(linhas)}</ul>
+  <p>A confirmation is on its way to {e(pedido['email'] or 'your email')}.</p>
+  {f'<p class="hero-acoes"><a class="btn" href="{PORTAL}/sessions">My sessions</a> <a class="btn btn-linha-escura" href="/">Home</a></p>' if sessoes else voltar}
+</div></section>"""
+    elif pedido:
+        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto" data-limpar-carrinho>
+  <p class="eyebrow">Order #{pedido['id']}</p>
+  <h1 id="h-ok">Thanks! We're confirming your payment</h1>
+  <p role="status">Some payment methods take a moment to clear. You'll get an email as soon as it's confirmed — there's no need to pay again.</p>
+  {voltar}
+</div></section>"""
+    else:
+        corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto">
+  <h1 id="h-ok">Thank you</h1>
+  <p>If you just paid, the confirmation is on its way to your email. Questions? Call or WhatsApp +1 (407) 250 2291.</p>
+  {voltar}
+</div></section>"""
+    return layout(host=host, caminho="/cart/thanks/", titulo="Order confirmation | URACE",
+                  descricao="Your URACE order: payment confirmation for your race sessions and store items, and what happens next.",
+                  corpo=corpo, indexar=False)
+
+
 def _desc(texto, complemento):
     """meta description com pelo menos 80 caracteres: um texto curto ganha o complemento."""
     texto = texto.strip().rstrip(".") + "."
@@ -730,7 +828,8 @@ def caminhos():
 
 def redirecionamentos():
     """Endereço antigo do urace.us → endereço novo (301). Nada do site antigo cai no 404."""
-    r = {"/shop/": "/store/", "/book-online/": PORTAL + "/reserve", "/my-account/": PORTAL, "/cart/": "/store/", "/checkout/": "/store/"}
+    # #236: /cart/ é o carrinho do site novo; o /checkout/ do WordPress cai nele
+    r = {"/shop/": "/store/", "/book-online/": PORTAL + "/reserve", "/my-account/": PORTAL, "/checkout/": "/cart/"}
     for d in list(S.SERVICOS) + list(P.PAGINAS):
         for antigo in d.get("antigos", ()):
             r[antigo] = d["caminho"]

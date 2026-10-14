@@ -36,7 +36,12 @@ interface Fechamento { em: string; por: string; na_tabela: boolean | null; aprov
 interface Evento { id: number; kind: string; title: string | null; detail: unknown; at: string; actor: string | null; ok: number | null }
 interface Coluna { etapa: string; nome: string; total: number; valor: number; oportunidades: Opp[] }
 interface Board { colunas: Coluna[]; abertas: number; retornos_hoje: number; atrasados: number; so_minhas: boolean }
-interface Detalhe { oportunidade: Opp; eventos: Evento[]; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[] }
+interface LinhaPedido { id: number | null; tipo: 'produto' | 'sessao'; nome: string; quantidade: number; unitario: number; deposito: number; valor: number
+  data: string | null; turno: string | null; piloto: string | null; status: string | null; agendamento: number | null; card: number | null; nota: string | null; desta_venda: boolean }
+/** #236: o pedido do site (carrinho no Stripe ou loja) com as linhas, no detalhe da venda. */
+interface PedidoSite { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; pago_em: string | null; entrega: string
+  recibo_qbo: string | null; erro_qbo: string | null; atencao: string | null; linhas: LinhaPedido[] }
+interface Detalhe { oportunidade: Opp; eventos: Evento[]; pedido?: PedidoSite | null; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[] }
 interface Agenda { retornos: (Opp & { atrasado: boolean })[]; ligacoes_hoje: { at: string; title: string; name: string }[] }
 
 const ETAPA_TOM: Record<string, Tone> = { NOVO: 'neutral', CONVERSA: 'info', PROPOSTA: 'warn', FECHAMENTO: 'accent', GANHO: 'ok', PERDIDO: 'crit' }
@@ -257,6 +262,7 @@ export function Oportunidade() {
       </div>
 
       <div className="stack">
+        {d.data?.pedido && <PedidoDoSite p={d.data.pedido} />}
         <IAdaVenda o={o} onDone={() => d.reload()} />
         {o.notes && <div className="card card-b"><div className="h2" style={{ marginBottom: 6 }}>{tr("Anotações")}</div><div className="small ink2" style={{ whiteSpace: 'pre-wrap' }}>{o.notes}</div></div>}
         <div className="card card-b stack" style={{ gap: 6 }}>
@@ -277,6 +283,28 @@ export function Oportunidade() {
 }
 
 /** A IA dentro da venda: o closer fala (ou escreve) e ela age na oportunidade dele. */
+const TURNO_PT: Record<string, string> = { manha: tr("manhã"), tarde: tr("tarde"), dia: tr("dia todo") }
+
+function PedidoDoSite({ p }: { p: PedidoSite }) {
+  return <div className="card card-b stack" style={{ gap: 8 }}>
+    <div className="row wrap" style={{ gap: 8 }}><h2 className="h2" style={{ margin: 0 }}>{tr("Pedido do site #{0}", p.id)}</h2>
+      <Chip tone={p.status === 'pago' ? 'ok' : p.status === 'falhou' || p.status === 'expirado' ? 'crit' : 'warn'}>{p.status}</Chip>
+      {p.recibo_qbo && <Chip tone="outline">{tr("recibo {0}", p.recibo_qbo)}</Chip>}</div>
+    {p.atencao && <Banner tone="crit"><b>{tr("Resolver:")}</b> {p.atencao}</Banner>}
+    {p.erro_qbo && <div className="small" style={{ color: 'var(--crit)' }}>{tr("QuickBooks: {0}", p.erro_qbo)}</div>}
+    {p.linhas.map((l, i) => <div key={l.id ?? i} className="stack" style={{ gap: 2, paddingTop: 6, borderTop: '1px solid var(--glass-line)', opacity: l.desta_venda ? 1 : .6 }}>
+      <div className="row" style={{ gap: 8, alignItems: 'baseline' }}><span className="grow small" style={{ fontWeight: 600, minWidth: 0, overflowWrap: 'anywhere' }}>{l.nome}{l.quantidade > 1 ? ` × ${l.quantidade}` : ''}</span>
+        <span className="small mono">{money(l.unitario * l.quantidade)}</span></div>
+      {l.deposito > 0 && <div className="row small muted"><span className="grow">{tr("depósito de segurança (reembolsável)")}</span><span className="mono">{money(l.deposito)}</span></div>}
+      {l.tipo === 'sessao' && <div className="small muted">{l.data ? fmtDate(l.data) : ''}{l.turno ? ` · ${TURNO_PT[l.turno] || l.turno}` : ''}{l.piloto ? tr(" · piloto {0}", l.piloto) : ''}
+        {l.status === 'marcada' && l.agendamento ? <> · <Link to="/site">{tr("agendamento #{0}", l.agendamento)}</Link></> : null}
+        {l.status === 'sem_vaga' ? <b style={{ color: 'var(--crit)' }}> · {tr("sem vaga")}</b> : null}</div>}
+      {!l.desta_venda && <div className="small muted">{tr("em outra venda do mesmo pedido (outro card)")}</div>}
+    </div>)}
+    <div className="row" style={{ gap: 8, borderTop: '1px solid var(--glass-line)', paddingTop: 6 }}><b className="grow">{tr("Total")}</b><b className="mono">{money(p.pago ?? p.total)}</b></div>
+  </div>
+}
+
 function IAdaVenda({ o, onDone }: { o: Opp; onDone: () => void }) {
   const toast = useToast()
   const [texto, setTexto] = useState('')

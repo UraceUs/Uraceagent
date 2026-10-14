@@ -1577,6 +1577,36 @@ CREATE TABLE IF NOT EXISTS store_orders (
 );
 CREATE INDEX IF NOT EXISTS store_orders_status ON store_orders(status, id);
 
+-- #236 (dono, 14/10): "o sistema de carrinho e checkout ... usando o Stripe". O pedido do carrinho
+-- (store_orders.kind='carrinho') tem uma linha por item: produto da loja ou sessão da agenda. Preço e
+-- depósito são os do catálogo e do painel NO DIA DA COMPRA (mudar o preço depois não muda isto).
+CREATE TABLE IF NOT EXISTS store_order_items (
+  id            INTEGER PRIMARY KEY,
+  order_id      INTEGER NOT NULL REFERENCES store_orders(id),
+  kind          TEXT NOT NULL CHECK (kind IN ('produto','sessao')),
+  name          TEXT NOT NULL,                        -- o que aparece no Stripe e no recibo
+  quantity      INTEGER NOT NULL DEFAULT 1,
+  unit_price    REAL NOT NULL,                        -- do catálogo (produto) ou do painel (sessão), no dia
+  deposit       REAL NOT NULL DEFAULT 0,              -- depósito de segurança reembolsável (sessão)
+  amount        REAL NOT NULL,                        -- unitário × quantidade + depósito
+  product_slug  TEXT,
+  variation     TEXT,
+  service_id    INTEGER REFERENCES booking_services(id),
+  service_name  TEXT,
+  date          TEXT,                                 -- AAAA-MM-DD (sessão)
+  period        TEXT CHECK (period IS NULL OR period IN ('dia','manha','tarde')),
+  pilot_id      INTEGER REFERENCES portal_pilots(id),
+  pilot_name    TEXT,
+  status        TEXT,                                 -- sessão: marcada | sem_vaga (a equipe resolve)
+  booking_id    INTEGER REFERENCES bookings(id),
+  client_id     INTEGER REFERENCES clients(id),       -- o card desta linha (o do piloto, na sessão)
+  opp_id        INTEGER REFERENCES opportunities(id),
+  note          TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS store_order_items_pedido ON store_order_items(order_id, id);
+CREATE INDEX IF NOT EXISTS store_order_items_opp ON store_order_items(opp_id);
+
 -- Cada evento do webhook entra uma vez só: o Stripe reenvia e o mesmo evento não vira dois pedidos.
 CREATE TABLE IF NOT EXISTS stripe_events (
   id           TEXT PRIMARY KEY,                          -- evt_…
