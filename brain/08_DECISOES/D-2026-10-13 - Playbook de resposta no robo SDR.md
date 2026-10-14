@@ -161,3 +161,27 @@ enviado a ninguém, e as diretivas `[[...]]` só aparecem na tela. Cada conversa
 de treino é uma sessão própria do OpenClaw (`playground-<id>`); "Nova conversa"
 começa outra. Ideia tirada do repositório fazer-ai/agents (o playground deles);
 migrar para aquela plataforma não faz sentido, porque ela não fala com o Kommo.
+
+## 14/10 (noite): o que aproveitamos da pesquisa em repositórios
+
+Pesquisa pedida pelo dono ("busque no github repos que possam nos ajudar a polir e finalizar"). Nenhum
+projeto pronto serve de substituto (todos são email ou WhatsApp, nenhum fala com o Kommo), então só entram
+as ideias que cabem no que já existe:
+
+- **"Agora não" vira uma rota** (ideia das categorias de resposta do gelevanog/ai-sdr-agent). Lead que
+  adia ("agora não", "not now", "depois eu falo") recebe duas linhas de agradecimento, o follow-up
+  automático é cancelado, o card ganha `sdr:agora-nao` e uma tarefa para uma pessoa retomar em 7 dias.
+  O card não é fechado. Só vale em mensagem curta e sem pergunta; "agora não sei a idade?" segue como
+  pergunta, e desconto, reclamação ou pedido de pessoa continuam passando na frente.
+- **Ritmo humano entre os balões** (ideia do delivery-queue do iPythoning/b2b-sdr-agent-template): o
+  intervalo até o próximo balão era fixo (3 s); agora é 1,5 s mais 0,03 s por caractere, teto de 6 s e
+  variação de 25%.
+- **Bateria de conversas** (`salesagent/tests/test_sdr_bateria.py`, 34 casos, sem rede e sem modelo): o que
+  o roteador decide para cada coisa que um lead escreve (do playbook e dos prints) e o que a guarda faz com
+  as respostas erradas que já saíram. Também trava que a persona só cita Lucas e Italo na linha que
+  proíbe citar.
+
+Ficou de fora, de propósito: o juiz com IA (langwatch/scenario, deepeval) pede chave de API e não está
+provado com Claude; áudio (faster-whisper) falta confirmar se o link do Kommo baixa; Langfuse só depois de
+liberar o robô para todos os leads. O Click to Instagram Direct com janela de 7 dias é de um blog, não está
+no changelog da Meta; não mexemos na cadência por isso.

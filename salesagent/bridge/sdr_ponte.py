@@ -247,6 +247,11 @@ def objecao_de_preco(texto: str) -> bool:
     return bool(sdr.classificador.classificar(texto or "")["desconto"])
 
 
+def mensagem_adiar(texto: str) -> str:
+    import holding  # mesmo detector da mensagem de espera: inglês é o padrão
+    return roteador.MENSAGEM_ADIAR[holding.detect_language(texto)]
+
+
 def confirmacao_opt_out(texto: str) -> str:
     return roteador.MENSAGEM_OPT_OUT[roteador.idioma(sdr.classificador.normalizar(texto))]
 
