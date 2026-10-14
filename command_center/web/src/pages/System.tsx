@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { ConexaoGoogle, useStatusGoogle } from '../components/GoogleAgenda'
 import { tr } from '../i18n'
 
 const DESC: Record<string, string> = {
@@ -539,8 +540,14 @@ export function Audit() {
   </>
 }
 
+/** #220: o vendedor conecta o próprio Google Calendar também por aqui. */
+function GoogleNaConta() {
+  const g = useStatusGoogle()
+  return <div style={{ maxWidth: 520 }}><ConexaoGoogle status={g.data} onMudou={g.reload} /></div>
+}
+
 export function Account() {
-  const { user, logout } = useAuth()
+  const { user, logout, can, box } = useAuth()
   const [f, setF] = useState({ current_password: '', new_password: '', again: '' })
   const [msg, setMsg] = useState<{ tone: 'ok' | 'crit'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -561,5 +568,6 @@ export function Account() {
       <div className="small muted">{tr("Ao trocar, todas as sessões são encerradas e você entra de novo.")}</div>
       <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : tr("Trocar senha")}</button>
     </form></Section></div>
+    {can('OPERATOR') && !box && <GoogleNaConta />}
   </>
 }
