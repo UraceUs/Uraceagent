@@ -131,8 +131,9 @@ def _corta(v, n):
 
 def _rota_do_cliente(rota):
     """Id vira :id — a métrica é por tela, e a URL não guarda dado de cliente."""
-    rota = (rota or "")[:120].split("?")[0]
-    return re.sub(r"/\d+(?=/|$)", "/:id", rota)
+    rota = (rota or "")[:400].split("?")[0]
+    rota = re.sub(r"/[A-Za-z0-9_-]{20,}(?:\.[A-Za-z0-9_-]+)?(?=/|$)", "/:token", rota)   # #135: o link do convite é segredo
+    return re.sub(r"/\d+(?=/|$)", "/:id", rota)[:120]
 
 
 @r.post("/cliente", status_code=204)

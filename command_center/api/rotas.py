@@ -1018,6 +1018,40 @@ def waiver_link(wid: int, dados: VinculoIn, request: Request, u=Depends(auth.exi
     return {"ok": True}
 
 
+# ------------------------------------------------------- convite da waiver por e-mail (#135)
+class ConviteWaiverIn(BaseModel):
+    email: str          # o e-mail que a pessoa viu na confirmação: se o card mudou no meio, não manda
+
+
+@r.get("/clients/{cid}/waiver-invite")
+def convite_waiver_do_card(cid: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """Para quem o convite iria (nome, e-mail, adulto ou menor) ou por que não sai, e os convites já mandados."""
+    from command_center.providers import convite_waiver as cw
+    try:
+        d = cw.destino(con, cid)
+    except LookupError:
+        raise HTTPException(404, "Client not found.")
+    return {"destino": d, "convites": cw.listar(con, cid)}
+
+
+@r.post("/clients/{cid}/waiver-invite", status_code=201)
+def convite_waiver_enviar(cid: int, dados: ConviteWaiverIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+                          con: sqlite3.Connection = Depends(get_db)):
+    """Manda (ou reenvia) o convite para o e-mail do card. O clique da pessoa, depois da confirmação, é a autorização."""
+    from command_center.providers import convite_waiver as cw
+    try:
+        inv = cw.enviar(con, cid, f"user:{u['id']}", user_id=u["id"], email_confirmado=dados.email, ip=auth._ip(request))
+    except LookupError:
+        raise HTTPException(404, "Client not found.")
+    except cw.Cedo as e:
+        raise HTTPException(429, str(e))
+    except cw.EnvioFalhou as e:
+        raise HTTPException(503, str(e))
+    except cw.ErroConvite as e:
+        raise HTTPException(409, str(e))
+    return {"convite": inv, "convites": cw.listar(con, cid)}
+
+
 
 # ============================================================ Clientes: duplicados, união, varredura
 from command_center.providers import identidade  # noqa: E402

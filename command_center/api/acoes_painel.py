@@ -6,6 +6,8 @@ rodam dentro do Command Center, com as travas do dono em código.
 - `painel_varrer_cliente` — Gmail (as duas caixas) e DocuSign do cliente; só leitura + espelho.
 - `painel_waiver_lixeira` — tira a waiver do painel (restaurável); envelope em aberto é anulado
   no DocuSign; assinado só some do painel. Pede confirmação.
+- `painel_waiver_convite` — convite por e-mail para assinar a waiver nativa (#135), para o e-mail do
+  card. Sai para o cliente: pede aprovação.
 
 Cada uma devolve um dict com `aplicado` e o que fez; o executor do motor grava e audita.
 """
@@ -256,10 +258,25 @@ def venda_fechar(con, user_id, opp_id=None, nome=None):
             "feitos": [p["nome"] for p in saida if p["ok"]], "faltou": [f"{p['nome']}: {p['detalhe']}" for p in saida if p["ok"] is False]}
 
 
+def painel_waiver_convite(con, user_id, client_id):
+    """#135: o convite da waiver por e-mail, para o e-mail do card (adulto assina a própria; menor,
+    o responsável). Pela IA é REQUIRES_APPROVAL: chega aqui depois do aprovar de uma pessoa."""
+    from command_center.providers import convite_waiver as cw
+    try:
+        inv = cw.enviar(con, int(client_id), "ia", user_id=user_id)
+    except LookupError:
+        return {"aplicado": False, "motivo": "cliente não encontrado"}
+    except cw.ErroConvite as e:
+        return {"aplicado": False, "motivo": str(e)}
+    return {"aplicado": True, "convite": inv["id"], "para": inv["email"], "quem": inv["signer_name"],
+            "modelo": inv["kind"], "piloto": inv["driver_name"], "vale_ate": inv["expires_at"]}
+
+
 ACOES = {
     "painel_unir_clientes": (painel_unir_clientes, ("keep_id", "drop_id", "motivo")),
     "painel_varrer_cliente": (painel_varrer_cliente, ("client_id",)),
     "painel_waiver_lixeira": (painel_waiver_lixeira, ("waiver_id", "motivo")),
+    "painel_waiver_convite": (painel_waiver_convite, ("client_id",)),
     "venda_registrar_ligacao": (venda_registrar_ligacao, ("opp_id", "nome", "resultado", "texto", "minutos", "proximo_em", "proximo_que")),
     "venda_agendar_retorno": (venda_agendar_retorno, ("opp_id", "nome", "quando", "o_que")),
     "venda_anotar": (venda_anotar, ("opp_id", "nome", "texto")),
@@ -273,6 +290,7 @@ DESCRICOES = {
     "painel_unir_clientes": "Une dois cards de cliente em um. Só quando têm o mesmo e-mail, telefone ou responsável; fora disso é decisão humana.",
     "painel_varrer_cliente": "Varre o Gmail (urace@ e support@) e o DocuSign de um cliente e liga o que achar ao card.",
     "painel_waiver_lixeira": "Tira uma waiver do painel (restaurável). Envelope em aberto é anulado no DocuSign; assinado só some do painel.",
+    "painel_waiver_convite": "Manda por e-mail o convite para assinar a waiver no próprio sistema, para o e-mail do card: piloto adulto assina a própria; menor, o responsável. Precisa de aprovação.",
     "venda_registrar_ligacao": "Registra a ligação numa oportunidade de venda (resultado, o que foi dito, próximo passo) e move a etapa quando for o caso.",
     "venda_agendar_retorno": "Marca o retorno de uma oportunidade na agenda de vendas. Nada sai para o cliente.",
     "venda_anotar": "Guarda uma anotação interna na oportunidade.",

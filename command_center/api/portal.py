@@ -625,6 +625,92 @@ def waiver_assinada_pdf(wid: int, cid=Depends(cliente_atual), con: sqlite3.Conne
                         headers={"Content-Disposition": f'attachment; filename="URACE-waiver-{wid}.pdf"', "Cache-Control": "no-store"})
 
 
+# ------------------------------------------------------------------ convite da waiver por e-mail (#135)
+# Sem conta e sem login: o link (segredo + selo) é quem autentica, e o código no e-mail confirma
+# a caixa na hora de assinar. O card, o piloto e o modelo vêm do convite; nada aqui escolhe card.
+class ConviteAssinarIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")      # um client_id ou driver_id no corpo é recusado (422)
+    typed_name: str
+    signature: str
+    read_and_agree: bool = False
+    consent_esign: bool = False
+    english_understood: bool = False
+    relationship: str | None = None
+    guardian_declaration: bool = False
+    document_read_at: str | None = None
+    document_read_mode: str | None = None
+    sign_code: str | None = None
+
+
+def _convite_recusado(con, request, e):
+    """410 para link usado, trocado, vencido ou de card que mudou; 404 para o que não é link nosso.
+    A tentativa num convite conhecido vai para a auditoria do card (o link em si nunca)."""
+    if e.convite:
+        auditar(con, "waiver.invite.refused", f"invite:{e.convite['id']}", entity_type="client",
+                entity_id=e.convite["client_id"], detail={"invite": e.convite["id"], "estado": e.estado}, ip=auth._ip(request))
+    return HTTPException(404 if e.estado == "invalid" else 410, str(e), headers={"X-Invite-State": e.estado})
+
+
+@r.get("/invite/{token}")
+def convite(token: str, request: Request, response: Response, con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import convite_waiver as cw
+    try:
+        d = cw.ver(con, token, ip=auth._ip(request))
+    except cw.LinkInvalido as e:
+        raise _convite_recusado(con, request, e)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Robots-Tag"] = "noindex"
+    return d
+
+
+@r.get("/invite/{token}/pdf")
+def convite_pdf(token: str, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import convite_waiver as cw
+    try:
+        pdf = cw.pdf_do_modelo(con, token, ip=auth._ip(request))
+    except cw.LinkInvalido as e:
+        raise _convite_recusado(con, request, e)
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": 'inline; filename="URACE-waiver.pdf"', "Cache-Control": "no-store"})
+
+
+@r.post("/invite/{token}/code")
+def convite_codigo(token: str, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import codigos, convite_waiver as cw, email_envio
+    try:
+        return cw.emitir_codigo(con, token, ip=auth._ip(request))
+    except cw.LinkInvalido as e:
+        raise _convite_recusado(con, request, e)
+    except codigos.ErroCodigo as e:
+        raise HTTPException(429, str(e))
+    except email_envio.ErroEnvio:
+        raise HTTPException(503, "We could not send the email right now. Try again in a few minutes.")
+
+
+@r.post("/invite/{token}/sign", status_code=201)
+def convite_assinar(token: str, dados: ConviteAssinarIn, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import convite_waiver as cw, waiver_nativa as wn
+    try:
+        w, _inv = cw.assinar(con, token, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
+    except cw.LinkInvalido as e:
+        raise _convite_recusado(con, request, e)
+    except wn.ErroWaiver as e:
+        raise HTTPException(400, str(e))
+    return {"signed_at": w["completed_at"], "valid_until": w["expires_at"], "driver": w["minor_name"] or _inv["driver_name"]}
+
+
+@r.get("/invite/{token}/signed.pdf")
+def convite_pdf_assinado(token: str, con: sqlite3.Connection = Depends(get_db)):
+    """A cópia de quem assinou, pelo mesmo link, até a validade do convite."""
+    from command_center.providers import convite_waiver as cw
+    w = cw.pdf_assinado(con, token)
+    if not w:
+        raise HTTPException(404, "Signed waiver not available from this link.")
+    with open(w["pdf_path"], "rb") as f:
+        return Response(content=f.read(), media_type="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="URACE-waiver-{w["id"]}.pdf"', "Cache-Control": "no-store"})
+
+
 # ------------------------------------------------------------------ QR do balcão (#87)
 @r.get("/drivers/{pid}/qr.svg")
 def qr_do_piloto(pid: int, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
