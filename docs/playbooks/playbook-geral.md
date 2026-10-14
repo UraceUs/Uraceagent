@@ -141,6 +141,7 @@ pedem acesso de operador.
 | Hoje | **Calendário** | `/ops/meu-dia` | o dia, a semana e o mês do box: serviços do Asana, corridas, sessões do site e checklists | todos |
 | Comercial | **Oportunidades** | `/ops/sales` | o quadro de vendas por etapa | operador+ |
 | Comercial | **Agenda de vendas** | `/ops/sales/agenda` | os retornos marcados em cada ligação | operador+ |
+| Comercial | **Atendimento humano** | `/ops/atendimento` | a fila das conversas em que a IA pediu uma pessoa: assumir, responder, transferir, encerrar, devolver à IA (o caso abre em `/ops/atendimento/<n>`) | todos (agir: operador+) |
 | Comercial | **Chat do Kommo** | `/ops/crm/chat` | a conversa do lead dentro do painel | todos |
 | Comercial | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
 | Comercial | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |

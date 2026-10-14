@@ -77,6 +77,8 @@ _MIGRATIONS = [
     "ALTER TABLE conversations ADD COLUMN contact_name TEXT",            # nome do lead no Kommo (escalação legível)
     "ALTER TABLE conversations ADD COLUMN last_inbound_text TEXT",       # última fala do lead (idioma p/ resgate)
     "ALTER TABLE conversations ADD COLUMN pending_question TEXT",        # a pergunta que espera resposta humana
+    "ALTER TABLE conversations ADD COLUMN pending_followup_origem TEXT", # 14/10: ia | humano (a trava só vale para ia)
+    "ALTER TABLE conversations ADD COLUMN handoff_caso_id INTEGER",      # 14/10: caso no Command Center
 ]
 
 

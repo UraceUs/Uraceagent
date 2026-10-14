@@ -182,6 +182,9 @@ async def receber(request: Request, con: sqlite3.Connection = Depends(get_db)):
                                   f"WHERE origem='painel' AND external_id=? AND ({ordem} < ? OR ?=9)",
                                   (novo, erro, st.get("id"), peso, peso))
                 estados += cur.rowcount or 0
+                # 14/10: o recibo também vale para o aviso de atendimento humano
+                from command_center.providers import atendimento
+                estados += atendimento.registrar_status_whatsapp(con, st.get("id"), novo, erro)
     con.commit()
     return {"ok": True, "mensagens": novas, "status": estados}
 
@@ -205,6 +208,7 @@ class ContatoIn(BaseModel):
     phone: str | None = None
     active: bool | None = None
     notes: str | None = None
+    recebe_handoff: bool | None = None   # 14/10: recebe o aviso de atendimento humano
 
 
 @r.post("/contatos", status_code=201)
@@ -224,7 +228,7 @@ def criar(dados: ContatoIn, request: Request, con: sqlite3.Connection = Depends(
                   bridge="whatsapp", bridge_id=fone, created_by=u["id"])
     con.execute("INSERT OR IGNORE INTO team_members (channel_id, user_id) VALUES (?,?)", (cid, u["id"]))
     ctid = inserir(con, "team_contacts", name=nome[:80], funcao=(dados.funcao or "").strip() or None, phone=fone,
-                   channel_id=cid, notes=dados.notes, created_by=u["id"])
+                   channel_id=cid, notes=dados.notes, created_by=u["id"], recebe_handoff=1 if dados.recebe_handoff else 0)
     auditar(con, "whatsapp.contact.create", f"user:{u['id']}", user_id=u["id"], entity_type="team_contact", entity_id=ctid,
             detail={"nome": nome, "funcao": dados.funcao, "final": fone[-4:]}, ip=auth._ip(request))
     con.commit()
@@ -249,6 +253,8 @@ def editar(ctid: int, dados: ContatoIn, request: Request, con: sqlite3.Connectio
         raise HTTPException(400, "O contato precisa de nome.")
     if "active" in campos:
         campos["active"] = 1 if campos["active"] else 0
+    if "recebe_handoff" in campos:
+        campos["recebe_handoff"] = 1 if campos["recebe_handoff"] else 0
     if not campos:
         return {"ok": True}
     con.execute(f"UPDATE team_contacts SET {', '.join(f'{k}=?' for k in campos)} WHERE id=?", (*campos.values(), ctid))

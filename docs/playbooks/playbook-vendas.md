@@ -403,6 +403,46 @@ antes de o chat ser ligado fica só no Kommo.
 **só responde ao lead com o texto que a pessoa aprovou, palavra por palavra**, e só move etapa ou
 marca tag depois de a pessoa dizer qual.
 
+### Atendimento humano (`/ops/atendimento`) — quando a IA pede uma pessoa (14/10)
+
+Quando a IA (o robô da ponte ou qualquer agente com a chave do painel) precisa de gente — o
+cliente pediu uma pessoa, reclamou, falou de pagamento, reembolso, desconto, segurança, ou a IA
+não tem dado para responder —, ela abre um **caso**. Na hora:
+
+1. **A IA para de responder naquela conversa.** Quem trava é o sistema (o mesmo arquivo da
+   pausa por conversa), não o texto da persona. Nem follow-up, nem resgate, nem "ainda estamos
+   vendo": a conversa é da pessoa até ela devolver.
+2. **A equipe é avisada:** push no celular (Operador, Gerente e Administrador que ativaram o
+   aviso), mensagem no canal **Atendimento humano** do chat da equipe e, quando o WhatsApp
+   oficial da equipe estiver configurado, WhatsApp para quem está marcado para receber.
+3. **O caso aparece na fila** com prioridade, cliente, motivo, resumo e a ação que a IA pede.
+
+| Para | Botão | Rota | Quem |
+|---|---|---|---|
+| ver a fila (pendentes, em atendimento, atrasados, sem responsável, resolvidos) | — | `GET /atendimento/casos?filtro=` | todos |
+| ver o caso, a linha do tempo e os avisos | abrir o caso | `GET /atendimento/casos/{id}` | todos |
+| pegar o caso para você | **Assumir atendimento** | `POST /atendimento/casos/{id}/assumir` | Operador (pessoa) |
+| responder ao cliente no canal dele | **Responder ao cliente** | `POST /atendimento/casos/{id}/responder` | quem atende ou Gerente |
+| passar para outra pessoa | **Transferir** | `POST /atendimento/casos/{id}/transferir` | quem atende ou Gerente |
+| fechar com o resultado | **Encerrar** | `POST /atendimento/casos/{id}/encerrar` | quem atende ou Gerente |
+| deixar a IA continuar, com o contexto | **Devolver à IA** | `POST /atendimento/casos/{id}/devolver` | quem atende ou Gerente |
+| abrir um caso à mão (e já assumir) | — | `POST /atendimento/casos` com `assume: true` | Operador |
+
+- **Responder:** o texto sai pelo mesmo circuito do Chat do Kommo (canal em que o cliente falou,
+  como mensagem do bot, com fila e recibo). Também dá para responder direto no Kommo — o botão
+  **Abrir no Kommo** leva à conversa. Mensagem de pessoa nunca volta para a IA como se fosse do
+  cliente.
+- **Devolver à IA** pede o que a IA precisa saber ("remarcada para sábado 10h"): isso vira memória
+  daquela conversa. Sem a devolução a IA não volta, nem que o caso fique dias aberto.
+- **Encerrar** pede o resultado. Se o cliente escrever de novo depois, começa um ciclo novo com a IA.
+- **Cliente escreveu de novo** num caso que você está atendendo: você recebe um push (um a cada 10 min).
+- **Atrasado:** caso pendente sem ninguém depois do prazo (urgente 5 min, alta 15, normal 60, baixa
+  4 h) — a equipe é avisada de novo a cada 15 min, até 4 vezes. Normal e baixa só no horário humano.
+- **"A ponte ainda não confirmou"** ao encerrar ou devolver: a conversa continua com você e a IA
+  travada; o sistema tenta de novo a cada meio minuto. Nada a fazer.
+- A pausa manual da página do Robô SDR **não** solta uma conversa com caso aberto (o painel recusa):
+  quem devolve é o botão do caso.
+
 ### O Robô SDR (`/ops/sdr`)
 
 O robô de vendas no Kommo. Três níveis:
@@ -662,6 +702,11 @@ instrução à gerência.
 | Site: "Confirmar sem esperar pagamento e waiver é do gerente. Use Aceitar." | use **Aceitar** |
 | Chat: "Na fila: o painel insiste…" | espere; em 15 min, se não sair, vira nota no lead e acende o aviso. Use **Enviar de novo** |
 | Chat: "Kommo não conectado." | avise a gerência (Integrações) |
+| Atendimento: "O caso mudou enquanto você olhava" | outra pessoa assumiu ou fechou antes: recarregue a fila |
+| Atendimento: "Só uma pessoa logada assume…" | a chave de API (a IA) abre caso, mas quem assume é gente: entre no painel |
+| Atendimento: "Este lead ainda não está no espelho do painel" | responda pelo Kommo (botão **Abrir no Kommo**) |
+| Atendimento: aviso "simulado (não saiu)" no WhatsApp | o WhatsApp oficial da equipe ainda não está configurado: o aviso saiu por push e no chat da equipe |
+| Atendimento: "Esta conversa está com um atendimento humano aberto" ao reativar a IA no Robô SDR | use **Devolver à IA** no caso |
 | Novo cliente: "Esse cliente já existia: abrindo o card dele." | confira se o card é **do mesmo piloto**. Se for irmão, pare e chame a gerência |
 | Unir: "Esses dois cards não se unem: …" | são drivers ou contas diferentes do site: não una |
 | Nova tarefa: "A data cai numa segunda-feira…" | escolha outra data |

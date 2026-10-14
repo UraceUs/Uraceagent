@@ -63,7 +63,7 @@ def _install_fakes(agent_reply=""):
     entregues ao lead (o que estamos de fato testando)."""
     delivered = []
     app.kommo = _FakeKommo()
-    app.send_to_lead = lambda lead_id, text: delivered.append((lead_id, text))
+    app.send_to_lead = lambda lead_id, text, origem="ia": delivered.append((lead_id, text))
     app.notify_human = lambda text: None
     # Espelha o _call_agent real: extrai as diretivas do texto bruto com a
     # MESMA função da produção -- um fake que devolvesse [] estaria testando
@@ -96,14 +96,18 @@ def main() -> int:
     check("a resposta não promete resposta comercial",
           bool(delivered) and "$" not in delivered[0][1])
 
-    # 2. Mensagem seguinte, já em estado escalado (G3): antes, silêncio total.
+    # 2. Mensagem seguinte, já em estado escalado. Até 13/10 a ponte mandava uma
+    #    espera citando a pergunta pendente. Desde 14/10 (atendimento humano,
+    #    D-2026-10-14) a conversa escalada é de uma pessoa: NENHUMA mensagem
+    #    automática sai — "nunca sem resposta" vale até a escalação, cuja
+    #    própria resposta está no item 1. Quem é cutucado é a equipe.
     delivered2 = _install_fakes()
     app.process_inbound({"lead_id": lead, "message": "hello? are you there?"})
-    check("mensagem em conversa escalada também é respondida (G3)",
-          len(delivered2) == 1, f"entregues={delivered2}")
-    check("ping do lead cita a pergunta que está pendente (nexo)",
-          bool(delivered2) and "own kart" in delivered2[0][1],
-          delivered2[0][1] if delivered2 else "")
+    check("conversa escalada: a IA não manda nada (está com uma pessoa)",
+          delivered2 == [], f"entregues={delivered2}")
+    check("a mensagem nova fica registrada para a pessoa",
+          state.get_conversation(lead).get("pending_question") == "hello? are you there?",
+          state.get_conversation(lead).get("pending_question"))
 
     # 2b. Pergunta SUBSTANTIVA (repetida ou nova) de lead escalado: os
     #     humanos são reavisados NA HORA -- em 26/08 o lead repetiu a
@@ -119,11 +123,8 @@ def main() -> int:
     check("o reaviso traz nome, id e a pergunta",
           bool(avisos) and "Eduardo" in avisos[0] and str(lead) in avisos[0]
           and "own kart" in avisos[0], avisos[0][:200] if avisos else "")
-    check("o lead também recebeu resposta nesse caso",
-          len(delivered2b) == 1, f"{delivered2b}")
-    check("a resposta ao lead cita a pergunta dele",
-          bool(delivered2b) and "own kart" in delivered2b[0][1],
-          delivered2b[0][1] if delivered2b else "")
+    check("o lead NÃO recebe mensagem automática nesse caso (14/10)",
+          delivered2b == [], f"{delivered2b}")
     check("reaviso zera o ciclo de alarme",
           (state.get_conversation(lead).get("realert_count") or 0) == 0)
     avisos2 = []
@@ -133,10 +134,9 @@ def main() -> int:
     check("ping NÃO reavisa o humano (a pergunta é a mesma)",
           avisos2 == [], f"{avisos2}")
 
-    # 2c. G3 refinado (27/08): pergunta que o BRAIN COBRE é respondida na
-    #     hora mesmo com a conversa escalada -- escalação é para o que o
-    #     Chase não sabe. Caso real: lead esperando decisão do kart
-    #     perguntou o horário (que está no vault) e ouviu "vou confirmar".
+    # 2c. G3 refinado (27/08) SUPERADO em 14/10: a pergunta que o Brain cobre
+    #     também não é respondida pela IA com a conversa escalada — quem
+    #     responde é a pessoa que está com o caso, e ela é avisada.
     import brain_kb  # noqa: E402
     import confidence  # noqa: E402
     avisos3 = []
@@ -153,9 +153,9 @@ def main() -> int:
                                         "last_updated": "2026-08-25",
                                         "text": "horários..."}]
     app.process_inbound({"lead_id": lead, "message": "what time do you open?"})
-    check("Brain cobre => responde na hora, mesmo escalado",
-          len(delivered2d) == 1 and "open" in delivered2d[0][1], f"{delivered2d}")
-    check("Brain cobre => humano NÃO é acionado", avisos3 == [], f"{avisos3}")
+    check("Brain cobre, mas a conversa é da pessoa => a IA não responde",
+          delivered2d == [], f"{delivered2d}")
+    check("Brain cobre => o humano é reavisado (é ele quem responde)", len(avisos3) == 1, f"{avisos3}")
     check("estado escalado segue preservado (a parte do kart continua com o humano)",
           state.get_conversation(lead)["state"] == "WAITING_HUMAN")
 
@@ -165,15 +165,12 @@ def main() -> int:
     delivered2e = _install_fakes(agent_reply="NUNCA DEVERIA SER CHAMADO")
     app.notify_human = lambda texto: avisos4.append(texto)
     app.process_inbound({"lead_id": lead, "message": "can you give me a discount?"})
-    check("gatilho B4 escalado nunca vai pro modelo (mesmo com Brain)",
-          bool(delivered2e) and "NUNCA" not in delivered2e[0][1], f"{delivered2e}")
+    check("gatilho B4 escalado nunca vai pro modelo (e nada sai para o lead)",
+          delivered2e == [], f"{delivered2e}")
     check("gatilho B4 escalado reavisa o humano", len(avisos4) == 1, f"{avisos4}")
     brain_kb.search = brain_kb_search_orig
     confidence.assess = assess_orig
     app.BRAIN_RETRIEVAL = "off"
-    check("segunda espera usa frase diferente da primeira",
-          bool(delivered and delivered2) and delivered[0][1] != delivered2[0][1],
-          f"{delivered!r} vs {delivered2!r}")
     check("estado escalado preservado (G3 intacto)",
           state.get_conversation(lead)["state"] == "WAITING_HUMAN")
 
@@ -224,8 +221,8 @@ def main() -> int:
     if failures:
         print(f"FALHOU - {len(failures)} checagem(ns): {', '.join(failures)}")
         return 1
-    print("PASSOU - nenhum caminho da ponte deixa o lead sem resposta, "
-          "e o agente tem como dizer 'não sei' sem sumir")
+    print("PASSOU - nenhum caminho da ponte deixa o lead sem resposta antes da escalação, "
+          "a conversa escalada fica com a pessoa, e o agente tem como dizer 'não sei' sem sumir")
     return 0
 
 

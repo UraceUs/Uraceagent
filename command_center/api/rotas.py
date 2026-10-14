@@ -125,6 +125,7 @@ def dashboard(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(g
         "emails_attention": n("SELECT COUNT(*) AS n FROM emails WHERE handled=0 AND client_id IS NOT NULL"),
         "crm_pending": n("SELECT COUNT(*) AS n FROM crm_leads WHERE needs_reply=1"),
         "sdr_relatos_abertos": n("SELECT COUNT(*) AS n FROM sdr_relatos WHERE status='aberto'"),   # Robô SDR (12/10)
+        "handoff_pendentes": n("SELECT COUNT(*) AS n FROM handoff_casos WHERE estado='HUMAN_PENDING'"),   # atendimento humano (14/10)
         # chat da equipe: o que ESTA pessoa ainda não leu (o menu mostra o número dela,
         # não o da casa — contador que não é meu eu aprendo a ignorar em dois dias), já
         # sem o que ela silenciou

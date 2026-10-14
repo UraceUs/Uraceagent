@@ -46,6 +46,7 @@ const Account = tela(() => import('./pages/System'), 'Account')
 const Cofre = tela(() => import('./pages/Cofre'), 'Cofre')
 const ComoUsar = tela(() => import('./pages/ComoUsar'), 'ComoUsar')
 const Sdr = tela(() => import('./pages/Sdr'), 'Sdr')
+const Atendimento = lazy(() => import('./pages/Atendimento'))
 const Audit = tela(() => import('./pages/System'), 'Audit')
 const Integrations = tela(() => import('./pages/System'), 'Integrations')
 const Policies = tela(() => import('./pages/System'), 'Policies')
@@ -130,6 +131,8 @@ function Rotas() {
           <Route path="crm/chat/:lead" element={<CRM vista="chat" />} />
           <Route path="crm/funil" element={<CRM vista="funil" />} />
           <Route path="sdr" element={<Sdr />} />
+          <Route path="atendimento" element={<Atendimento />} />
+          <Route path="atendimento/:id" element={<Atendimento />} />
           <Route path="kommo" element={<Navigate to="/crm/chat" replace />} />
           <Route path="equipe" element={<Equipe />} />
           <Route path="equipe/:canal" element={<Equipe />} />

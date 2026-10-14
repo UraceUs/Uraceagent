@@ -1862,3 +1862,94 @@ CREATE TABLE IF NOT EXISTS sdr_relatos (
   resolved_by  INTEGER REFERENCES users(id)
 );
 CREATE INDEX IF NOT EXISTS sdr_relatos_status ON sdr_relatos(status, id);
+
+-- ------------------------------------------- Atendimento humano: escalonamento da IA (14/10)
+-- Missão de 14/10 (conta urace@urace.us): quando a conversa precisa de gente, a IA abre um caso,
+-- a equipe é avisada, uma pessoa assume, responde pelo canal oficial (Kommo → WhatsApp) e só uma
+-- ação explícita devolve a conversa à IA. Ver docs/atendimento-humano.md.
+--
+-- Estados do caso: HUMAN_PENDING → HUMAN_ACTIVE → RESOLVED | RETURNED_TO_AI.
+-- A conversa está em AI_ACTIVE quando não tem caso aberto; a trava que a IA respeita é o arquivo
+-- ~/.urace/sdr_pausas.json (o mesmo da pausa manual), que este módulo escreve e apaga.
+CREATE TABLE IF NOT EXISTS handoff_casos (
+  id               INTEGER PRIMARY KEY,
+  conversa         TEXT NOT NULL,                -- 'kommo:<id do lead>' (o canal é o Kommo)
+  kommo_lead_id    INTEGER NOT NULL,
+  crm_lead_id      INTEGER REFERENCES crm_leads(id),   -- o espelho local, quando existe
+  conversa_conferida INTEGER NOT NULL DEFAULT 0,       -- 1 = o lead existe no espelho do Kommo
+  canal            TEXT,                         -- whatsapp | instagram | ... (o que se souber)
+  cliente_nome     TEXT,
+  estado           TEXT NOT NULL DEFAULT 'HUMAN_PENDING'
+                   CHECK (estado IN ('HUMAN_PENDING','HUMAN_ACTIVE','RESOLVED','RETURNED_TO_AI')),
+  prioridade       TEXT NOT NULL DEFAULT 'normal' CHECK (prioridade IN ('baixa','normal','alta','urgente')),
+  motivo           TEXT NOT NULL,                -- categoria (pedido_explicito, reclamacao, pagamento, ...)
+  motivo_texto     TEXT,                         -- a frase do agente: por que escalou
+  resumo           TEXT,
+  acao_pedida      TEXT,
+  origem           TEXT NOT NULL DEFAULT 'ia' CHECK (origem IN ('ia','regra','humano')),
+  chave            TEXT UNIQUE,                  -- idempotência: o mesmo pedido não abre dois casos
+  aberto_por       TEXT,                         -- user:<id> | key:<id> | ponte
+  responsavel_id   INTEGER REFERENCES users(id),
+  prazo_em         TEXT,                         -- quando vira "atrasado" sem ninguém assumir
+  criado_em        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  assumido_em      TEXT,
+  fechado_em       TEXT,
+  fechado_por      INTEGER REFERENCES users(id),
+  resultado        TEXT,                         -- o que a pessoa registrou ao encerrar
+  nota_devolucao   TEXT,                         -- o contexto que a IA recebe ao voltar
+  ponte_pendente   TEXT,                         -- transição que a ponte ainda não confirmou (RETURNED_TO_AI…)
+  ponte_erro       TEXT,
+  ponte_tentativas INTEGER NOT NULL DEFAULT 0,
+  realertas        INTEGER NOT NULL DEFAULT 0,
+  ultimo_realerta  TEXT,
+  atualizado_em    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- Um caso aberto por conversa, garantido pelo banco: duas escalações simultâneas da mesma
+-- conversa (reprocessamento, duas abas) não criam dois casos nem dois avisos.
+CREATE UNIQUE INDEX IF NOT EXISTS handoff_um_aberto ON handoff_casos(conversa)
+  WHERE estado IN ('HUMAN_PENDING','HUMAN_ACTIVE');
+CREATE INDEX IF NOT EXISTS handoff_casos_estado ON handoff_casos(estado, criado_em);
+CREATE INDEX IF NOT EXISTS handoff_casos_lead ON handoff_casos(kommo_lead_id, id);
+
+-- Linha do tempo do caso. Append-only, como audit_logs: o histórico de quem assumiu, transferiu,
+-- encerrou e devolveu não é editável. Sem texto do cliente aqui — só ids, estados e motivos.
+CREATE TABLE IF NOT EXISTS handoff_eventos (
+  id         INTEGER PRIMARY KEY,
+  caso_id    INTEGER NOT NULL REFERENCES handoff_casos(id),
+  tipo       TEXT NOT NULL,
+  de_estado  TEXT,
+  para_estado TEXT,
+  ator       TEXT NOT NULL,                     -- user:<id> | key:<id> | ponte | sistema
+  ator_nome  TEXT,
+  detalhe    TEXT,                              -- JSON
+  correlacao TEXT,                              -- X-Request-ID de quem pediu
+  em         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS handoff_eventos_caso ON handoff_eventos(caso_id, id);
+CREATE TRIGGER IF NOT EXISTS handoff_eventos_no_update BEFORE UPDATE ON handoff_eventos
+BEGIN SELECT RAISE(ABORT, 'handoff_eventos is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS handoff_eventos_no_delete BEFORE DELETE ON handoff_eventos
+BEGIN SELECT RAISE(ABORT, 'handoff_eventos is append-only'); END;
+
+-- Fila de avisos à equipe (push no celular, chat da equipe, WhatsApp oficial). Cada aviso tem
+-- chave única: reprocessar o mesmo escalonamento não manda o mesmo aviso duas vezes. Falha
+-- passageira volta para a fila com espera crescente; o estado é o que a tela e a IA leem.
+CREATE TABLE IF NOT EXISTS handoff_notificacoes (
+  id            INTEGER PRIMARY KEY,
+  caso_id       INTEGER NOT NULL REFERENCES handoff_casos(id),
+  tipo          TEXT NOT NULL,                  -- abertura | realerta | atrasado
+  canal         TEXT NOT NULL CHECK (canal IN ('push','equipe','whatsapp')),
+  destino       TEXT NOT NULL,                  -- user:<id> | canal:<id> | contato:<id>
+  chave         TEXT NOT NULL UNIQUE,
+  status        TEXT NOT NULL DEFAULT 'pendente'
+                CHECK (status IN ('pendente','enviado','entregue','lido','simulado','bloqueado','falhou','desistiu')),
+  tentativas    INTEGER NOT NULL DEFAULT 0,
+  proxima_em    TEXT,
+  erro          TEXT,
+  external_id   TEXT,                           -- wamid da Meta (o recibo chega pelo webhook)
+  criado_em     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  enviado_em    TEXT
+);
+CREATE INDEX IF NOT EXISTS handoff_notif_fila ON handoff_notificacoes(status, proxima_em);
+CREATE INDEX IF NOT EXISTS handoff_notif_caso ON handoff_notificacoes(caso_id);
+CREATE INDEX IF NOT EXISTS handoff_notif_ext ON handoff_notificacoes(external_id) WHERE external_id IS NOT NULL;

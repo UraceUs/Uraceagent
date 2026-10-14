@@ -43,7 +43,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
          "/site/waiver", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
-         "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
+         "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos", "/atendimento", "/atendimento/1"]
 
 
 class _StripeFalso:
@@ -1796,3 +1796,18 @@ def test_como_usar_le_os_guias_navega_entre_eles_e_baixa_o_md_para_a_ia(servidor
     g.get_by_role("heading", name="Playbook de vendas do Command Center", level=2).wait_for()
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
+
+
+def test_atendimento_humano_assumir_e_devolver_a_ia(servidor, navegador):
+    """14/10: o caso que a IA abriu aparece na fila; o gerente assume e devolve à IA com contexto."""
+    pg = entrar(navegador, servidor)
+    abrir(pg, servidor, "/atendimento")
+    pg.get_by_role("link", name=re.compile("Maria")).first.click()
+    pg.get_by_role("button", name="Assumir atendimento").click()
+    pg.get_by_text("Em atendimento").first.wait_for()
+    pg.get_by_label("O que a IA precisa saber para continuar").fill("Remarcada para sábado 10h.")
+    pg.get_by_role("button", name="Devolver à IA").click()
+    pg.get_by_text("Devolvido à IA").first.wait_for()
+    pg.get_by_text("devolveu a conversa à IA").wait_for()
+    assert not pg.erros_js and not [e for e in pg.erros_api if "/api/atendimento" in e], (pg.erros_js, pg.erros_api)
+    pg.close()

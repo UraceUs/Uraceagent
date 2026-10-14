@@ -312,6 +312,8 @@ MIGRACOES = [
     # libera lançar peça, contar estoque…); o cargo RESTRINGE: o mecânico e o coach só alcançam
     # as rotas da lista aprovada (auth.ROTAS_DO_CARGO). NULL = sem restrição de cargo.
     ("users", "cargo", "TEXT"),
+    # 14/10 — atendimento humano: quem da equipe recebe o aviso de escalonamento no WhatsApp oficial
+    ("team_contacts", "recebe_handoff", "INTEGER NOT NULL DEFAULT 0"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

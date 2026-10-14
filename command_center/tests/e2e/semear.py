@@ -266,6 +266,13 @@ _m = {"message_id": "e2e-fatura", "de": "QuickBooks <quickbooks@notification.int
       "data": "Mon, 05 Oct 2026 16:00:00 -0400", "marcadores": ["INBOX"], "links": []}
 _ce.aplicar(con, _ce.ler(_m), "urace", "e2e-fat", _m["message_id"])
 
+# atendimento humano (14/10): a IA pediu uma pessoa na conversa do lead 5001 (fictício). Pelo
+# mesmo caminho da produção, sem avisar ninguém (nada sai da máquina no teste).
+from command_center.providers import atendimento as _at  # noqa: E402
+_at.abrir_caso(con, conversation_id="kommo:5001", reason="Cliente pediu para falar com uma pessoa", priority="alta",
+               summary="Quer remarcar a aula experimental para sábado.", requested_action="Confirmar novo horário",
+               chave="e2e:5001", avisar_agora=False)
+
 # aprendizado do dono e fonte de contexto já vêm do schema
 con.commit()
 n = lambda t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]                       # noqa: E731
