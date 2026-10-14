@@ -534,7 +534,7 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
    **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho não pede conta.
 3. **Checkout** abre o Stripe com **todas** as linhas e, para cada sessão com depósito, a linha
-   "Refundable security deposit". Paga, volta para `/cart/thanks/` com o pedido confirmado.
+   "Refundable security deposit". Paga, volta para `/cart/thanks/` com a **página do pedido** (abaixo).
 
 **Regras que o sistema garante** (código: `providers/carrinho.py`):
 
@@ -545,7 +545,38 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
 | vaga | confere ao montar o carrinho, no checkout (o Checkout do Stripe expira em 31 min) e **de novo no pagamento** |
 | conta e piloto | só pilotos da própria conta, com o cadastro em dia (medidas e dados do responsável) |
 | uma vez só | o webhook do Stripe e a página de obrigado não marcam nem vendem duas vezes |
-| cancelado / expirado | nada é marcado nem vendido |
+| cancelado / expirado / pagamento não passou | nada é marcado nem vendido; a vaga **não fica presa** (a sessão só entra na agenda quando o pagamento entra) |
+
+**Uma página para cada resultado do pagamento** (#245, dono 14/10: *"monte páginas para cada um no
+site"*). Todo pedido do site (carrinho **e** loja de um produto) tem um **link pessoal**,
+`/order/<código>/`, que não dá para adivinhar (link mexido = página não encontrada). A página mostra o
+que o Stripe disse, em inglês, como o resto do site:
+
+| O Stripe avisou | A página diz | O cliente recebe por e-mail (com o link da página) | A equipe |
+|---|---|---|---|
+| `checkout.session.completed`, pago | **Payment confirmed**: itens, total, depósito, o que vem a seguir (waiver da sessão, retirada ou envio do produto) | a confirmação (uma vez só) | o aviso "Site · PAGO" (como antes) |
+| `checkout.session.completed`, meio que confirma depois (transferência) | **Payment processing**: não pague de novo, você recebe e-mail quando confirmar | nada ainda | nada ainda (não há venda até pagar) |
+| `checkout.session.async_payment_succeeded` | vira **Payment confirmed** | a confirmação (uma vez só) | o aviso "Site · PAGO"; a venda entra GANHO |
+| `checkout.session.async_payment_failed` | **Payment didn't go through**: nada foi cobrado; botão **Try again** | "Payment didn't go through" (uma vez só) | o aviso **"Site · PAGAMENTO FALHOU"** com o link da página |
+| `checkout.session.expired` | **Checkout expired**: nada foi cobrado; botão **Restore cart** | "Your checkout expired" **só se** a pessoa chegou a informar o e-mail no Checkout (no máximo um por pedido) | nada |
+
+- **Try again** abre um checkout novo com as **mesmas escolhas** (produto, opção, quantidade; serviço,
+  dia, turno, piloto). O servidor recalcula **preço, depósito e vaga** na hora: se o preço mudou, vale o de
+  hoje; se a vaga acabou ou o cliente não está logado na conta do pedido (sessão pede a conta), ele cai no
+  carrinho com as escolhas de volta e o carrinho mostra o porquê.
+- **Restore cart** põe as escolhas de volta no carrinho do navegador (junto do que já estiver lá, sem
+  duplicar) e o cliente confere e paga pelo **Checkout** de sempre.
+- O pedido novo fica ligado ao antigo ("refeito do pedido #N"); pago o novo, a página do antigo aponta
+  para ele e não oferece pagar de novo.
+- O e-mail que não saiu (Gmail fora do ar) a rodada de 15 min tenta de novo, sem repetir o que já saiu.
+
+**Onde a equipe vê:** **Agendamentos do site › Pedidos do site** (`/ops/site/pedidos`) lista todos os
+pedidos do carrinho e da loja em **todo** estado (pago, processando o pagamento, pagamento não passou,
+checkout expirou, no checkout), com filtro, quem, o quê, o total, se o aviso por e-mail saiu, e os botões
+**Página do pedido ↗** e **Copiar o link**: é esse link que você manda ao cliente que liga perguntando do
+pedido. No detalhe da venda, o cartão **Pedido do site #N** também tem os dois botões. **Quem vende**, no
+e-mail "Site · PAGAMENTO FALHOU": se o cliente **não** tinha e-mail no Stripe (o aviso diz), ligue e mande
+o link; se tinha, ele já recebeu o botão Try again, e um contato ajuda a fechar.
 
 **O que aparece para a equipe quando o pedido é pago:**
 
@@ -562,8 +593,8 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
   "Security deposit" e o item do produto. Falhou (serviço sem item do QuickBooks, item "Security
   deposit" não sincronizado)? Aparece na venda "QuickBooks: registrar a venda à mão" e a rodada de
   15 min tenta de novo.
-- **E-mail:** o cliente recebe a confirmação (com o link para assinar a waiver de cada sessão) e
-  `support@` recebe o aviso com as linhas e os links de Vendas.
+- **E-mail:** o cliente recebe a confirmação (com o link para assinar a waiver de cada sessão e o link
+  da página do pedido) e `support@` recebe o aviso com as linhas e os links de Vendas.
 
 **Vaga que sumiu entre o checkout e o pagamento** (alguém pegou a última vaga enquanto a pessoa
 pagava): o pagamento **não se perde**. A sessão **não** entra na agenda (não lota por cima), a linha
@@ -883,6 +914,8 @@ instrução à gerência.
 | "Para fechar, diga o serviço e o valor." | preencha serviço e valor |
 | Venda do site com **Resolver:** "a vaga sumiu entre o checkout e o pagamento" | o cliente já pagou: ligue, remarque a sessão (ou combine o reembolso com o gerente) e anote na venda (seção 5.1) |
 | Venda do site em **Fechamento** com "vincular à mão" | pago no carrinho sem card certo: ache o card (seção 3) e ligue a venda a ele |
+| E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o meio de pagamento que confirma depois não passou; nada foi cobrado e a vaga está livre. Agendamentos do site › Pedidos do site › **Copiar o link** e mande ao cliente (ele toca em **Try again**); sem e-mail no Stripe, ligue (seção 5.1) |
+| Cliente pergunta "e o meu pedido?" | Agendamentos do site › Pedidos do site: ache pelo nome ou e-mail, veja o estado e mande o link da **Página do pedido** |
 | "QuickBooks: registrar a venda à mão" numa venda do site | o serviço não tem item do QuickBooks ou o item "Security deposit" não está sincronizado: acerte em Serviços e preços / sincronize; a rodada de 15 min tenta de novo |
 | "Ganho é o resultado do Fechar venda…" | use Fechar venda, não o botão de etapa |
 | "Perdido exige motivo." | mande `motivo` |

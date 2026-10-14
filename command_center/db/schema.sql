@@ -1574,6 +1574,12 @@ CREATE TABLE IF NOT EXISTS store_orders (
   notified_at       TEXT,
   notify_error      TEXT,
   origin            TEXT,                                 -- o endereço do site em que comprou
+  -- #245: o resultado que o webhook trouxe (falhou | expirado), o aviso (um por pedido) e o pedido de origem
+  outcome           TEXT,
+  outcome_email     TEXT,                                 -- para quem vai o aviso (expirado: só o e-mail dado no Checkout)
+  outcome_notified_at TEXT,
+  outcome_notify_error TEXT,
+  retry_of          INTEGER REFERENCES store_orders(id),  -- "Try again" / "Restore cart" de outro pedido
   created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );

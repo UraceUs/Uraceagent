@@ -323,12 +323,21 @@ MIGRACOES = [
     ("store_orders", "account_id", "INTEGER REFERENCES portal_accounts(id)"),   # a conta do site que comprou
     ("store_orders", "attention", "TEXT"),        # o que a equipe precisa resolver (ex.: a vaga sumiu antes do pagamento)
     ("bookings", "store_order_id", "INTEGER REFERENCES store_orders(id)"),      # sessão paga no carrinho do site
+    # 14/10 — dono (#245): "monte páginas para cada um no site" (os 4 eventos do Stripe). O resultado que
+    # o webhook trouxe (falhou | expirado), para quem vai o aviso e quando saiu (um aviso por pedido), e o
+    # pedido de onde este saiu ("Try again" / "Restore cart").
+    ("store_orders", "outcome", "TEXT"),
+    ("store_orders", "outcome_email", "TEXT"),
+    ("store_orders", "outcome_notified_at", "TEXT"),
+    ("store_orders", "outcome_notify_error", "TEXT"),
+    ("store_orders", "retry_of", "INTEGER REFERENCES store_orders(id)"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS portal_pilots_client ON portal_pilots(client_id) WHERE client_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS bookings_pedido ON bookings(store_order_id) WHERE store_order_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS store_orders_refeito ON store_orders(retry_of) WHERE retry_of IS NOT NULL",
 ]
 
 

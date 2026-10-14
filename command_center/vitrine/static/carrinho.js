@@ -51,6 +51,31 @@
   function limpar() { gravar([]) }
   window.uraceCarrinho = { ler: ler, por: por, contar: contar, limpar: limpar }
 
+  /** #245: "Restore cart" / "Try again" de um pedido que não foi pago. As escolhas dele voltam para o carrinho,
+   *  juntas ao que já está aqui e sem duplicar. Preço, depósito e vaga, o servidor confere de novo. */
+  function restaurar(itensR) {
+    var atuais = ler()
+    itensR.forEach(function (x) {
+      if (!x || typeof x !== 'object') return
+      if (x.tipo === 'produto') {
+        var igual = atuais.filter(function (y) { return y.tipo === 'produto' && y.produto === x.produto && (y.variacao || '') === (x.variacao || '') })[0]
+        var q = Math.max(1, Math.min(20, Number(x.quantidade) || 1))
+        if (igual) igual.quantidade = Math.max(Number(igual.quantidade) || 1, q)
+        else atuais.push({ tipo: 'produto', produto: String(x.produto), variacao: x.variacao || '', quantidade: q })
+      } else if (x.tipo === 'sessao') {
+        var ja = atuais.some(function (y) { return y.tipo === 'sessao' && Number(y.servico) === Number(x.servico) && y.data === x.data && y.turno === x.turno })
+        if (!ja) atuais.push({ tipo: 'sessao', servico: Number(x.servico), data: String(x.data), turno: String(x.turno), piloto: Number(x.piloto) || null })
+      }
+    })
+    gravar(atuais.slice(0, MAX))
+  }
+  var deOutroPedido = document.querySelector('[data-restaurar]')
+  if (deOutroPedido) {
+    try { restaurar(JSON.parse(deOutroPedido.getAttribute('data-restaurar') || '[]')) } catch (e) { /* nada a restaurar */ }
+    deOutroPedido.removeAttribute('data-restaurar')
+    try { window.history.replaceState(null, '', '/cart/') } catch (e) { /* fica no endereço do pedido */ }
+  }
+
   function avisoAdicionado(el) {
     if (!el) return
     el.textContent = ''

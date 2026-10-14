@@ -192,9 +192,13 @@ def _registrar_sessao(con, o, s, status):
     return um(con, "SELECT * FROM store_orders WHERE id=?", (o["id"],))
 
 
-def status_da_sessao(s, tipo="checkout.session.completed"):
-    if tipo == "checkout.session.expired":
+def status_da_sessao(s, tipo="checkout.session.completed", conferindo=False):
+    """O estado do pedido para o que o Stripe disse. `conferindo`: a página leu a sessão (sem evento), e a
+    sessão ainda aberta ou já vencida diz isso no `status` dela (#245)."""
+    if tipo == "checkout.session.expired" or (conferindo and s.get("status") == "expired"):
         return "expirado"
+    if conferindo and s.get("status") == "open":
+        return "aberto"
     if tipo == "checkout.session.async_payment_failed":
         return "falhou"
     if tipo == "checkout.session.async_payment_succeeded" or s.get("payment_status") in ("paid", "no_payment_required"):
@@ -243,6 +247,9 @@ def _efeito(con, eid, tipo, s):
     if novo == "pago" and era != "pago":
         ligar_e_vender(con, o["id"])
         return "pago", o["id"]
+    if novo in ("falhou", "expirado") and o["status"] == novo:      # #245: a pessoa fica sabendo
+        from command_center.providers import pedido_site
+        pedido_site.marcar_resultado(con, o, s, novo)
     return novo, None
 
 
@@ -257,7 +264,7 @@ def conferir_sessao(con, session_id, http=None):
     if not o or o["status"] == "pago" or not ligado():
         return o, False
     s = (http or _http)("GET", f"/v1/checkout/sessions/{urllib.parse.quote(session_id)}")
-    novo = status_da_sessao(s)
+    novo = status_da_sessao(s, conferindo=True)
     if novo != "pago":
         return _registrar_sessao(con, o, s, novo if o["status"] == "aberto" else o["status"]), False
     con.execute("BEGIN IMMEDIATE")           # o webhook pode chegar no mesmo instante: um só vende
@@ -353,6 +360,7 @@ def avisar(con, oid, enviar=None):
     if o.get("kind") == "carrinho":
         from command_center.providers import carrinho
         return carrinho.avisar(con, oid, enviar)
+    from command_center.providers import pedido_site
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
     primeiro = (o["name"] or "").split()[0] if o["name"] else "there"
     entrega_cli = ("We'll let you know when it's ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
@@ -362,8 +370,8 @@ def avisar(con, oid, enviar=None):
         if o["email"]:
             _enviar(enviar, o["email"], f"Order #{o['id']} confirmed — URACE Store",
                     f"Hi {primeiro},\n\nThanks for your order! We received your payment.\n\n{descricao(o)}\nTotal paid: "
-                    f"US$ {valor:,.2f}\nOrder: #{o['id']}\n\n{entrega_cli}\n\nQuestions? Call or WhatsApp +1 (407) 250 2291.\n\n"
-                    f"URACE — the Champion's Factory")
+                    f"US$ {valor:,.2f}\nOrder: #{o['id']}\n\n{entrega_cli}\n\nYour order page: {pedido_site.link(o)}\n\n"
+                    f"Questions? Call or WhatsApp +1 (407) 250 2291.\n\nURACE — the Champion's Factory")
         _enviar(enviar, "support@urace.us", f"Loja · PAGO: {descricao(o)} — {o['name'] or o['email']}",
                 f"Pedido #{o['id']} pago no Stripe: US$ {valor:,.2f}\n{descricao(o)}\n{o['name'] or ''} <{o['email'] or ''}> "
                 f"{o['phone'] or ''}\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else 'ENVIO — combinar o frete'}\n"

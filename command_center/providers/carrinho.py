@@ -384,7 +384,7 @@ def _link_sessao(bid):
 
 def avisar(con, oid, enviar=None):
     """A confirmação para quem comprou e o aviso para a equipe. Uma vez só."""
-    from command_center.providers import stripe_loja
+    from command_center.providers import pedido_site, stripe_loja
     o = um(con, "SELECT * FROM store_orders WHERE id=?", (oid,))
     if not o or o["status"] != "pago" or o["notified_at"]:
         return False
@@ -413,6 +413,7 @@ def avisar(con, oid, enviar=None):
             stripe_loja._enviar(enviar, o["email"], f"Order #{o['id']} confirmed — URACE",
                                 f"Hi {primeiro},\n\nThanks for your order! We received your payment.\n\n" + "\n".join(cli)
                                 + f"\n\nTotal paid: {_usd(valor)}\nOrder: #{o['id']}\n{entrega}{deposito}\n"
+                                f"Your order page: {pedido_site.link(o)}\n\n"
                                 "Questions? Call or WhatsApp +1 (407) 250 2291.\n\nURACE — the Champion's Factory")
         equipe = (f"Pedido #{o['id']} pago no Stripe: {_usd(valor)}\n{o['name'] or ''} <{o['email'] or ''}> {o['phone'] or ''}\n\n"
                   + "\n".join(_texto_linha(x) for x in ls)
@@ -462,6 +463,7 @@ def linhas_qbo(con, q, oid):
 def do_painel(con, opp_id):
     """O pedido do site ligado a esta oportunidade, com as linhas (Vendas mostra no detalhe da venda).
     Carrinho (#236): todas as linhas do pedido, marcando as desta venda. Loja (#174): uma linha."""
+    from command_center.providers import pedido_site
     o = um(con, """SELECT * FROM store_orders WHERE opp_id=?
                     OR id IN (SELECT order_id FROM store_order_items WHERE opp_id=?) ORDER BY id DESC LIMIT 1""",
            (opp_id, opp_id))
@@ -479,4 +481,4 @@ def do_painel(con, opp_id):
                "desta_venda": True}]
     return {"id": o["id"], "tipo": o["kind"], "status": o["status"], "total": o["amount"], "pago": o["amount_paid"],
             "pago_em": o["paid_at"], "entrega": o["delivery"], "recibo_qbo": o["qbo_receipt_doc"], "erro_qbo": o["qbo_error"],
-            "atencao": o["attention"], "linhas": ls}
+            "atencao": o["attention"], "linhas": ls, "link": pedido_site.link(o)}       # #245: a página do pedido
