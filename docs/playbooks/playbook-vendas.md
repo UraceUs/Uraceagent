@@ -176,6 +176,7 @@ tela: todo operador vê todas as oportunidades.
 | E-mail `@urace.us` | recusado: não é e-mail de cliente |
 | Já tem waiver válida | a waiver vale **1 ano** da assinatura. O DocuSign recusa se já houver uma válida ou um envelope em aberto para aquele e-mail. Isso não é erro: é a trava contra mandar duas vezes |
 | Cliente VIP | dispensa waiver. A lista está em `brain/00_SYSTEM/PARAMETROS.md` e é a única fonte. A IA não deduz VIP |
+| **Convite da waiver por e-mail** (#135) | do card do cliente, aba **Waivers**: vai para o **e-mail do card**. 18+ pela data de nascimento do piloto → o próprio piloto assina (adult); menor → o responsável (parental). A tela mostra nome e e-mail e pede confirmação. Link pessoal, uso único, 72 h, sem conta; código de 6 dígitos no mesmo e-mail na hora de assinar. Precisa da assinatura no próprio sistema ligada. Pela IA (`painel_waiver_convite`), só com aprovação |
 
 ---
 
