@@ -47,17 +47,22 @@ def aplicar(texto):
         limpo = _TRAVESSAO.sub(", ", limpo)
         violacoes.append("travessao")
 
-    frases = _FRASES.split(limpo)
-    mantidas = []
-    for frase in frases:
-        termo = proibida(frase)
-        if termo:
-            violacoes.append(f"nunca_dizer:{termo}")
-            continue
-        mantidas.append(frase)
-    limpo = " ".join(f.strip() for f in mantidas if f.strip())
-    limpo = re.sub(r"[ \t]{2,}", " ", limpo).replace(" ,", ",").strip()
-    return limpo, violacoes
+    # Linha a linha: cada linha do modelo é uma mensagem curta (14/10), então
+    # a quebra de linha sobrevive à guarda.
+    linhas = []
+    for linha in limpo.split("\n"):
+        mantidas = []
+        for frase in _FRASES.split(linha):
+            termo = proibida(frase)
+            if termo:
+                violacoes.append(f"nunca_dizer:{termo}")
+                continue
+            mantidas.append(frase)
+        linha = " ".join(f.strip() for f in mantidas if f.strip())
+        linha = re.sub(r"[ \t]{2,}", " ", linha).replace(" ,", ",").strip()
+        if linha:
+            linhas.append(linha)
+    return "\n".join(linhas), violacoes
 
 
 _URL = re.compile(r"https?://\S+")

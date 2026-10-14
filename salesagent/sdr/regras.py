@@ -371,14 +371,14 @@ NUNCA_DIZER = [
 ]
 
 # ---------------------------------------------------------------- cadência
-# Trilha 1 (C11 do Chase): +2h, +1 dia, +3 dias, +7 dias, fecha como perdido.
-FOLLOW_UP_MINUTOS = [120, 1440, 4320, 10080]
-# Nos canais da Meta a trilha cabe inteira na janela de 24 h contada da
-# última mensagem do lead: +2 h e mais +20 h (22 h no total), e para.
-FOLLOW_UP_MINUTOS_JANELA_24H = [120, 1200]
+# Cadência do robô (14/10, o dono): ~1h30 sem resposta -> call com o time;
+# 23 h depois -> reativação; e para (janela de 24 h da Meta). Quem executa é o
+# scheduler da ponte (TRACKS); isto aqui é a referência em minutos.
+FOLLOW_UP_MINUTOS = [90, 1290]
+FOLLOW_UP_MINUTOS_JANELA_24H = [90, 1290]
 # Margem da ponte: toque de follow-up com a última mensagem do lead mais
 # velha que isto não sai; vira tarefa para uma pessoa.
-JANELA_24H_MARGEM_MINUTOS = 60
+JANELA_24H_MARGEM_MINUTOS = 30
 MAX_REALERTAS = 4
 SLA_MINUTOS = {"alta": 5, "media": 15}
 
