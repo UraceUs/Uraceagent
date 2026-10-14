@@ -3561,5 +3561,15 @@
 "🏁 corrida · número = serviços e sessões do dia. Toque no dia para abrir.": "🏁 race · number = services and sessions of the day. Tap a day to open.",
 "📎 waiver": "📎 waiver",
 "🔔 avisando": "🔔 alerting",
-"🔕 silenciada": "🔕 muted"
+"🔕 silenciada": "🔕 muted",
+"ação que faria: {0}": "action it would take: {0}",
+"a guarda cortou: {0}": "the guard removed: {0}",
+"Testar o robô": "Test the robot",
+"Converse com o robô como se fosse um lead. Mesma persona e mesmas regras da resposta real, mas nada vai para o Kommo nem para ninguém, e as ações (passar para a equipe, tags) só aparecem aqui.": "Chat with the robot as if you were a lead. Same persona and rules as a real reply, but nothing goes to Kommo or to anyone, and its actions (handing off, tags) only show up here.",
+"Nome do lead (opcional)": "Lead name (optional)",
+"Nenhuma mensagem ainda": "No messages yet",
+"Escreva como o lead escreveria, por exemplo \"Oi, quanto custa?\".": "Write as a lead would, for example \"Hi, how much is it?\".",
+"(o robô não responderia)": "(the robot would not reply)",
+"Mensagem do lead": "Lead message",
+"Nova conversa": "New conversation"
 }

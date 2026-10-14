@@ -68,7 +68,7 @@ def aplicar(texto):
 _URL = re.compile(r"https?://\S+")
 # O link e a "chamada" que o apresenta ("You can see it all here: <link>"):
 # sem o link a chamada fica pendurada, então sai junto.
-_URL_COM_CHAMADA = re.compile(r"(?:[^.!?\n:]*:[ \t]*)?https?://\S+")
+_URL_COM_CHAMADA = re.compile(r"(?:[^.!?\n:]*:\s*)?https?://\S+")
 _FRASE_FIM = re.compile(r"(?<=[.!?])\s+")
 
 
