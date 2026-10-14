@@ -134,3 +134,18 @@ mandou duas respostas para "Oi" + "Quanto custa?". O dono pediu:
   `json_reply` o bot mostra uma mensagem por disparo, então as seguintes ficam
   numa fila em `pending_followup_text` e o bot de entrega é disparado de novo,
   3 s depois, para cada uma. A guarda de estilo agora preserva as linhas.
+
+## 14/10: cadência de follow-up quando o lead para de responder (pedido do dono)
+
+- **~1h30 sem resposta:** sugere a call de 15 min com o nosso time, para
+  conversar melhor e apresentar os programas, com o link do calendário. Tag
+  `followup:1-call`.
+- **23 h depois da nossa mensagem:** reativação curta ("faz um tempinho que a
+  gente não conversa, seguimos à disposição, ficou alguma dúvida?"), sem link.
+  Tag `followup:2-reativacao`.
+- **Sem resposta depois disso:** a janela de 24 h da Meta fecha. O card ganha
+  `followup:sem-resposta-24h` e uma tarefa para a pessoa (modelo aprovado,
+  ligação ou perdido). O robô não fecha mais o card sozinho.
+- O texto de cada toque é escrito pelo agente com a situação real do lead
+  (o que perguntou, o piloto, o que falta), em 2 ou 3 linhas curtas.
+- A margem da janela caiu de 60 para 30 min para o toque de 23 h caber.

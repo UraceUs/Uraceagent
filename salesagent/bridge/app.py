@@ -735,16 +735,31 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     return visible
 
 
+def _objetivo_do_toque(attempt: int) -> str:
+    """O que cada toque da cadência faz (dono, 14/10)."""
+    if attempt == 0:
+        link = PROGRAM_LINKS.get("call_link") or ""
+        return ("Goal: the lead stopped replying about 1h30 ago. Suggest a quick "
+                "15-minute call with our team to talk it through and present our "
+                f"programs properly, and send the calendar link {link} alone on its "
+                "own line.")
+    return ("Goal: reactivate. Almost a day without a reply. Light and short: it's "
+            "been a little while since we talked, we're still here for them, and "
+            "ask if any question came up. No link.")
+
+
 def compose_followup(lead_id: int, track: str, attempt: int) -> str:
     """Compõe o follow-up via agente, com a memória da sessão do lead — o
     texto referencia a situação real da conversa (regra das instruções),
     não um template genérico. Diretivas que vierem junto são logadas mas
     NÃO executadas (um follow-up não pode escalar/mexer em CRM sozinho)."""
     prompt = (f"[SYSTEM] Follow-up due for this lead: track={track}, "
-              f"attempt={attempt + 1}. Compose ONLY the follow-up message to "
-              "send now, per your Follow-up section: short, referencing this "
-              "lead's actual situation, no price, no pressure. Reply with the "
-              "message text only.")
+              f"attempt={attempt + 1}. {_objetivo_do_toque(attempt)} Compose "
+              "ONLY the follow-up to send now, per your Follow-up section: "
+              "2 or 3 short lines (each line is a separate bubble), in the "
+              "lead's language, referencing their actual situation (what they "
+              "asked, the driver, what's missing), no price, no pressure. Never "
+              "name anyone from the team. Reply with the message text only.")
     try:
         raw, dirs = _call_agent(lead_id, prompt)
         if dirs:
@@ -830,6 +845,7 @@ async def _start_scheduler():
     scheduler.notify_fn = notify_human
     scheduler.rescue_fn = rescue_lead
     scheduler.task_fn = kommo.add_task
+    scheduler.tag_fn = kommo_tags_seguras
     scheduler.note_fn = kommo.add_note
     scheduler.close_fn = sdr_ponte.ao_fechar if SDR_MODO in ("organizar", "atender") else None
     scheduler.start()
