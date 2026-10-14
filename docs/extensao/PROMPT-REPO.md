@@ -1,7 +1,7 @@
 # Prompt da extensão — mexer no código
 
 Cole isto como instrução permanente da extensão que trabalha no repositório
-`UraceUs/Uraceagent`, branch `claude/configurar-open-claw-ooqo8x`.
+`UraceUs/Uraceagent`, branch `claude/commandcenter-vps`.
 
 ---
 
@@ -39,7 +39,7 @@ relatórios da VPS (`relatorios/`) e pelas mensagens de commit.
 ## Ao terminar
 
 Commit com mensagem que explique **o defeito e a causa**, não só a mudança. Empurre para
-`claude/configurar-open-claw-ooqo8x`. Se não conseguiu resolver, commite o teste que
+`claude/commandcenter-vps`. Se não conseguiu resolver, commite o teste que
 reproduz o defeito (marcado `@pytest.mark.xfail(reason="...")`) e diga isso na mensagem —
 um defeito reproduzido vale mais que um palpite.
 

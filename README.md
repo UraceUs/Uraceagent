@@ -71,12 +71,12 @@ O CI (`.github/workflows/ci.yml`) roda tudo isso em cada PR: ruff, pytest, tsc, 
 O padrão completo de engenharia está em [`CLAUDE.md`](CLAUDE.md).
 
 1. Uma **issue** com o pedido nas palavras do dono e o que conta como "feito".
-2. Um **branch** `claude/issue-<n>-<assunto>`, saindo de `claude/configurar-open-claw-ooqo8x` (o branch que roda na VPS).
+2. Um **branch** `claude/issue-<n>-<assunto>`, saindo de `claude/commandcenter-vps` (o branch que roda na VPS).
 3. Um **PR** para esse branch, com `Closes #<n>` e o template. O PR inclui teste novo que falha sem a mudança, e o guia do assunto atualizado (Playbook junto).
 4. Com o CI verde, o merge, e então o **deploy** na VPS:
 
 ```bash
-cd ~/Uraceagent && git fetch origin claude/configurar-open-claw-ooqo8x && git checkout claude/configurar-open-claw-ooqo8x && git pull origin claude/configurar-open-claw-ooqo8x && bash adminai/deploy/command_center/servir_command_center.sh
+cd ~/Uraceagent && git fetch origin claude/commandcenter-vps && git checkout claude/commandcenter-vps && git pull origin claude/commandcenter-vps && bash adminai/deploy/command_center/servir_command_center.sh
 ```
 
 O script prepara o ambiente Python, gera o build do painel, roda os testes do backend e reinicia o serviço (`uvicorn` em `127.0.0.1:8790`, atrás do Caddy). As migrações do banco rodam sozinhas quando o serviço sobe.

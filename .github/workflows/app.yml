@@ -13,7 +13,7 @@ name: App (iOS e Android)
 
 on:
   push:
-    branches: [claude/configurar-open-claw-ooqo8x]
+    branches: [claude/commandcenter-vps]
   pull_request:
     paths: ["command_center/app/**", ".github/workflows/app.yml"]
   workflow_dispatch:

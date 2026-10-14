@@ -284,7 +284,7 @@ o serviço no meio não mata o deploy. O log aparece ao vivo no cartão.
 **Pelo terminal (quando precisa ver tudo):**
 
 ```bash
-cd ~/Uraceagent && git fetch origin claude/configurar-open-claw-ooqo8x && git checkout claude/configurar-open-claw-ooqo8x && git pull origin claude/configurar-open-claw-ooqo8x && bash adminai/deploy/command_center/servir_command_center.sh
+cd ~/Uraceagent && git fetch origin claude/commandcenter-vps && git checkout claude/commandcenter-vps && git pull origin claude/commandcenter-vps && bash adminai/deploy/command_center/servir_command_center.sh
 ```
 
 O deploy roda solto do terminal (`setsid nohup`), grava em
@@ -338,7 +338,7 @@ asfalto — nada quebra.
 
 Se você é um modelo operando este sistema, comece por aqui. Os caminhos são
 relativos à raiz do repositório `UraceUs/Uraceagent`, branch
-`claude/configurar-open-claw-ooqo8x`.
+`claude/commandcenter-vps`.
 
 **Onde o código está**
 

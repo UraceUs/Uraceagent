@@ -5,7 +5,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [claude/configurar-open-claw-ooqo8x, main]
+    branches: [claude/commandcenter-vps, main]
 
 concurrency:
   group: ci-${{ github.ref }}

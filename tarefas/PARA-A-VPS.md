@@ -36,7 +36,7 @@ relatório.**
 #### Parte A — é sua (teste offline e leitura do Kommo; não escreve nada)
 
 ```bash
-cd /home/ubuntu/Uraceagent; git pull origin claude/configurar-open-claw-ooqo8x; grep -c 'SDR_MODO' salesagent/bridge/config.py
+cd /home/ubuntu/Uraceagent; git pull origin claude/commandcenter-vps; grep -c 'SDR_MODO' salesagent/bridge/config.py
 ```
 
 ```bash
@@ -66,7 +66,7 @@ em `observar` (decide e só registra; não escreve no Kommo e não fala com
 lead), é decisão dele. **Só rode com o sim dele no seu chat.**
 
 ```bash
-cd /home/ubuntu/Uraceagent; git pull --ff-only origin claude/configurar-open-claw-ooqo8x; grep -c 'agendador parado' salesagent/bridge/app.py; grep '^SDR_MODO=' ~/.urace/bridge.env || echo 'SDR_MODO ausente (o instalador grava observar)'; grep -q '^KOMMO_RESPONSAVEL_ID=' ~/.urace/bridge.env || echo 'KOMMO_RESPONSAVEL_ID=12209643' >> ~/.urace/bridge.env; bash salesagent/deploy/install_bridge_service.sh; grep -E '^(SDR_MODO|KOMMO_RESPONSAVEL_ID)=' ~/.urace/bridge.env; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8800/health
+cd /home/ubuntu/Uraceagent; git pull --ff-only origin claude/commandcenter-vps; grep -c 'agendador parado' salesagent/bridge/app.py; grep '^SDR_MODO=' ~/.urace/bridge.env || echo 'SDR_MODO ausente (o instalador grava observar)'; grep -q '^KOMMO_RESPONSAVEL_ID=' ~/.urace/bridge.env || echo 'KOMMO_RESPONSAVEL_ID=12209643' >> ~/.urace/bridge.env; bash salesagent/deploy/install_bridge_service.sh; grep -E '^(SDR_MODO|KOMMO_RESPONSAVEL_ID)=' ~/.urace/bridge.env; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8800/health
 ```
 
 O `grep -c 'agendador parado'` tem de responder **1**: é a trava que deixa o
@@ -119,7 +119,7 @@ escreve. Precisa de um consentimento novo, com o escopo `drive.file`.
 
 ```bash
 cd /home/ubuntu/Uraceagent
-git pull --rebase origin claude/configurar-open-claw-ooqo8x
+git pull --rebase origin claude/commandcenter-vps
 grep -c 'drive.file' adminai/google_auth.py
 python3 adminai/backup_drive.py --listar
 ```
@@ -184,7 +184,7 @@ ela, os homônimos (Bruno Martins, Ethan Martins, Andres Marin) faziam o nome pa
 ambíguo. Agora a decisão do dono vem **antes de qualquer heurística**.
 
 ```bash
-git pull --rebase origin claude/configurar-open-claw-ooqo8x
+git pull --rebase origin claude/commandcenter-vps
 python3 adminai/atribuir_servicos.py --limite 60
 ```
 
