@@ -89,7 +89,7 @@ def test_descartar_fecha_o_aviso_de_precisa_humano(con):
 
 
 def test_restaurar_volta_para_a_lista(con):
-    pid = _lixo(con, "Alexa Lloret", "alexa@example.com", "t-alexa")
+    pid = _lixo(con, "Alexa Llanteret", "alexa@example.com", "t-alexa")
     suits.descartar(con, pid)
     assert suits.restaurar(con, pid) is True and suits.restaurar(con, pid) is False
     p = um(con, "SELECT closed, discarded_at FROM suit_orders WHERE id=?", (pid,))
@@ -100,7 +100,7 @@ def test_restaurar_volta_para_a_lista(con):
 def test_marcador_sem_falar_de_macacao_nem_chega_a_ia(con):
     gm, chamadas = Gmail(), []
     gm.threads = {
-        "t-carlos": [{"message_id": "c1", "de": "Daneyza Cabrera <daneyza@example.com>", "assunto": "Re: Carlos David Garcia",
+        "t-carlos": [{"message_id": "c1", "de": "Daneyza Cabrestra <daneyza@example.com>", "assunto": "Re: Carlos David Gasolina",
                       "corpo": "Confirmo o horário de sábado, 10/10."}],
         "t-stripe": [{"message_id": "s1", "de": "Stripe <receipts@stripe.example>", "assunto": "Your receipt from URACE suits store",
                       "corpo": "Receipt #1234 for a race suit"}],
@@ -135,7 +135,7 @@ def _ferramentas():
 
 def test_a_ia_nao_ve_nem_mexe_no_descartado_e_nao_cria_com_robo(con):
     f = _ferramentas()
-    bom = _lixo(con, "Frank Rossi", "frank@example.com", "t-frank")
+    bom = _lixo(con, "Frank Rolamento", "frank@example.com", "t-frank")
     ruim = _lixo(con, "Anthropic", "billing@anthropic.example", "t-ant")
     suits.descartar(con, ruim)
     assert [p["id"] for p in f["suits_pedidos"](con, 1, estado="todos")] == [bom]
@@ -154,7 +154,7 @@ def test_api_descartar_some_das_listas_e_restaura(tmp_path, monkeypatch):
     monkeypatch.setenv("URACE_DIR", str(tmp_path / "urace"))
     c = conectar(); aplicar_schema(c)
     auth.criar_usuario(c, "op@urace.us", "Op", "OPERATOR", SENHA)
-    frank = _lixo(c, "Frank Rossi", "frank@example.com", "t-frank")
+    frank = _lixo(c, "Frank Rolamento", "frank@example.com", "t-frank")
     ant = _lixo(c, "Anthropic", "billing@anthropic.example", "t-ant")
     c.close()
     with TestClient(app, base_url="https://cc.test") as cli:

@@ -13,7 +13,7 @@ O QUE PROVAR, na ordem. Para cada item escreva: o que fez, o que viu, PASSOU ou 
 e a evidência (número, nome, data ou print).
 
 1. CARD DO CLIENTE
-   Abra Clientes, procure "Bryan Santiago". No card confira:
+   Abra Clientes, procure "Bryan Sapata". No card confira:
    - e-mail aparece limpo (nada de "email%3a" nem dois e-mails colados);
    - cabeçalho traz piloto, responsável, idade e telefone;
    - NÃO existe fila de "asana ↗" no topo;
@@ -29,7 +29,7 @@ e a evidência (número, nome, data ou print).
    - Confira no Asana se algum treino antigo de um piloto continua fora do painel.
 
 3. TAREFA PELO MODELO
-   No AI Command peça: "[TESTE] cria a tarefa do Bryan Santiago para o próximo sábado,
+   No AI Command peça: "[TESTE] cria a tarefa do Bryan Sapata para o próximo sábado,
    Academy 2 stroke, mesmo esquema da última vez". Depois abra a tarefa no Asana e veja:
    - nasceu na coluna do dia certo, com as 12 subtarefas do modelo;
    - o campo "Race" está preenchido com "Practice OKC";

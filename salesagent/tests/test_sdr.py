@@ -150,7 +150,7 @@ def camada_pacote():
         check(f"relatório 25/09, lixo de e-mail: {texto[:34]}", classificador.classificar(texto)["automatico"])
     for texto in ["Carlos Mendes", "Lead #15712502"]:
         check(f"nome de gente não é lixo: {texto}", not classificador.classificar(texto)["automatico"])
-    a = classificador.classificar("Hi, how much is a training day?", "carloscrestana@gmail.com")
+    a = classificador.classificar("Hi, how much is a training day?", "carloscrestana@example.com")
     check("e-mail de pessoa real não é automático", not a["automatico"])
     a = classificador.classificar("You are receiving this email because you signed up. Unsubscribe.")
     check("unsubscribe de newsletter não é opt-out", a["automatico"] and not a["opt_out"])

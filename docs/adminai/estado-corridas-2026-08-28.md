@@ -45,7 +45,7 @@ earlier" já passaram do próprio prazo que carregam no nome.
    nome). Padrão provável: "completed" = "não vamos" / planejamento
    encerrado — o espelho não pode tratar completed como "corrida feita".
    Perguntar ao dono qual é a semântica oficial.
-2. Duas tasks "Jude Cook" (22 e 23/08, 0 subtarefas, assignee Luis
+2. Duas tasks "Jude Cockpit" (22 e 23/08, 0 subtarefas, assignee Luis
    Barros) na seção RACES — nome de driver como task de corrida; fora
    do padrão do template.
 3. Templates variam: corridas antigas com 19 subtarefas, novas com 25;

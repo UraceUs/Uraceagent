@@ -76,7 +76,7 @@ echo
 echo "================= PROVA REAL ================="
 CODE="$(curl -s -o /tmp/p.html -w '%{http_code}' "https://$DOMINIO/painel/" || echo 000)"
 TEM_LOGIN=$(grep -c 'name=senha' /tmp/p.html 2>/dev/null || echo 0)
-VAZOU=$(grep -ciE 'Renato|Hubbard|waiver|envelope' /tmp/p.html 2>/dev/null || echo 0)
+VAZOU=$(grep -ciE 'pilot_name|signer_email|waiver|envelope' /tmp/p.html 2>/dev/null || echo 0)
 LEGAL="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMINIO/legal/privacy.html" || echo 000)"
 echo "   /painel/ sem sessão      -> HTTP $CODE  (200 com formulário de login)"
 echo "   formulário de senha      -> $TEM_LOGIN  (tem que ser 1)"

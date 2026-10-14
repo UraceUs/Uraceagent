@@ -33,10 +33,10 @@ sem autorização; o que exigia atenção virou comentário na tarefa.
 
 ### 1. Erro de dado de cliente — e-mail trocado (RISCO REAL)
 
-As três tarefas de *Tyron Brouta_Summer Camp 3 Days* (1/3, 2/3, 3/3)
-trazem `Lareau.shaun@gmail.com` como e-mail do responsável. Esse e-mail é
-do **Shaun Lareau**, responsável da **Amelyia Lareau** — outro cliente,
-do Summer Camp anterior. O responsável do Tyron é **Mathias Brouta**.
+As três tarefas de *Tyron Breckta_Summer Camp 3 Days* (1/3, 2/3, 3/3)
+trazem `lanterau.shaun@example.com` como e-mail do responsável. Esse e-mail é
+do **Shaun Lanterau**, responsável da **Amelyia Lanterau** — outro cliente,
+do Summer Camp anterior. O responsável do Tyron é **Mathias Breckta**.
 
 Cópia de tarefa sem trocar o campo. Se ninguém pegar, o waiver, a invoice
 e a devolução do depósito vão para a família errada.
@@ -44,30 +44,30 @@ e a devolução do depósito vão para a família errada.
 
 ### 2. Modelo antigo (8 subtarefas em vez de 12) — 6 tarefas
 
-Amelyia Lareau (4/5 e 5/5) · Andrew Afong · Tyron Brouta (1/3, 2/3, 3/3).
+Amelyia Lanterau (4/5 e 5/5) · Andrew Afinco · Tyron Breckta (1/3, 2/3, 3/3).
 Perdem as subtarefas de checklist e de pós-venda.
 
 ### 3. Sem modelo nenhum — 2 tarefas
 
-As duas *Jude Cook* (22 e 23/08): só o link da invoice, **zero
+As duas *Jude Cockpit* (22 e 23/08): só o link da invoice, **zero
 subtarefas**, e estão na coluna **RACES** apesar de serem serviço
 (mecânico, motor, chassi). Deveriam estar na coluna do dia.
 
 ### 4. Modelo colado, campos em branco — 9 tarefas
 
-Brody Robbin (×2) · Harley Keeble (1/3, 2/3, 3/3) · Jude cook/Harley
-client (1/3, 2/3, 3/3) · Alexander Jacoby. Nome do piloto, idade, peso,
+Brody Rodbin (×2) · Harley Kebrel (1/3, 2/3, 3/3) · Jude cockpit/Harley
+client (1/3, 2/3, 3/3) · Alexander Jetsby. Nome do piloto, idade, peso,
 altura, responsável, e-mail e telefone: tudo vazio. Do jeito que está, a
 IA não tem como decidir waiver de menor ou de adulto — falta a idade.
 
-Casos parciais: *Alex Xikis* (campo "Driver's name" vazio, mesmo com o
-nome no título) e *Bryan Santiago* (e-mail gravado como
-`Email%3APabloSantiago@outlook.com` — sobrou codificação de URL colada).
+Casos parciais: *Alex Xelix* (campo "Driver's name" vazio, mesmo com o
+nome no título) e *Bryan Sapata* (e-mail gravado como
+`Email%3Apablosapata@example.com` — sobrou codificação de URL colada).
 
 ### 5. Security deposit quase não aparece — 1 em 31
 
-Só *Jayden Lago* tem a linha `Security deposit: <link> Price: $400` na
-descrição. *Noah el Gouchi* tem um segundo link de US$ 400 rotulado como
+Só *Jayden Largada* tem a linha `Security deposit: <link> Price: $400` na
+descrição. *Noah el Guidachi* tem um segundo link de US$ 400 rotulado como
 "Invoice link" (provavelmente é o depósito, mal rotulado). Nas outras 29
 não há registro de depósito na descrição.
 

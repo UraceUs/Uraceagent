@@ -57,7 +57,7 @@ T1 = "1ZK102480399990001"
     msg("Receipt from FLORIDA KARTING CHAMPIONSHIP LLC #LrRn", "Total $150.00",
         de="FLORIDA KARTING CHAMPIONSHIP LLC <messenger@messaging.squareup.com>"),
     msg("Zelle® payment of $717.00 to NATALIE ROMANI has been sent", "", de="Bank <x@bankmail.com>"),
-    msg("Payment received: Invoice #URACE-0017-(Joseph Kurian)", "Paid to URACE", de=QB),
+    msg("Payment received: Invoice #URACE-0017-(Joseph Kartian)", "Paid to URACE", de=QB),
     msg("Money on the way!", "Deposit ID 2448562523", de="BusinessServices@intuit.com"),
     msg("Woohoo! You got paid.", "Michael paid you", de=QB),
     msg("New payment request from Orlando Kart Center - invoice 1075", "BALANCE DUE$2700.00", de=QB),

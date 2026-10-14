@@ -117,11 +117,11 @@ def test_mudar_margem_refaz_o_preco_e_nao_mexe_no_tipo(con):
 
 def test_assinalar_para_cliente_e_devolver(con):
     """Os dois sets de pneu do Brian: continuam na prateleira, passam a ser dele."""
-    brian = _cliente(con, "Brian Santiago")
+    brian = _cliente(con, "Brian Sapata")
     iid = estoque.criar_item(con, "pneu", "MG SH2 Red", category="pneus")
     estoque.contar(con, iid, 5)
     r = estoque.trocar_dono(con, iid, para_cliente_id=brian, qty=2)
-    assert r["cliente"] == "Brian Santiago"
+    assert r["cliente"] == "Brian Sapata"
     assert estoque.vendavel(con, iid) == 3 and estoque.saldo(con, iid, client_id=brian) == 2
     assert estoque.saldo(con, iid) == 5, "nada saiu da prateleira"
     assert estoque.conferir(con) == [], "o razão continua refazendo o saldo"
@@ -131,7 +131,7 @@ def test_assinalar_para_cliente_e_devolver(con):
 
 
 def test_nao_assinala_mais_do_que_a_urace_tem(con):
-    brian = _cliente(con, "Brian Santiago")
+    brian = _cliente(con, "Brian Sapata")
     iid = estoque.criar_item(con, "pneu", "Evinco", category="pneus")
     estoque.contar(con, iid, 1)
     with pytest.raises(estoque.ErroEstoque):
@@ -140,7 +140,7 @@ def test_nao_assinala_mais_do_que_a_urace_tem(con):
 
 def test_de_um_cliente_para_outro_nao(con):
     """A trava de sempre: peça de um cliente não vai para outro sem voltar pela URACE."""
-    a, b = _cliente(con, "Brian Santiago"), _cliente(con, "Hank Lai")
+    a, b = _cliente(con, "Brian Sapata"), _cliente(con, "Hank Lume")
     iid = estoque.criar_item(con, "pneu", "LeVanto", category="pneus")
     estoque.contar(con, iid, 2, client_id=a)
     with pytest.raises(estoque.ErroEstoque):
@@ -151,7 +151,7 @@ def test_de_um_cliente_para_outro_nao(con):
 
 
 def test_motor_assinalado_pela_unidade(con):
-    brian, hank = _cliente(con, "Brian Santiago"), _cliente(con, "Hank Lai")
+    brian, hank = _cliente(con, "Brian Sapata"), _cliente(con, "Hank Lume")
     iid = estoque.criar_item(con, "motor", "IAME X30", category="motores")
     u = estoque.entrada(con, iid, serial="X30-1")["unit_id"]
     estoque.trocar_dono(con, iid, para_cliente_id=brian, unit_id=u)
@@ -188,7 +188,7 @@ def cli():
     c = conectar(); aplicar_schema(c)
     auth.criar_usuario(c, "mec@urace.us", "Mecânico", "OPERATOR", SENHA)
     auth.criar_usuario(c, "ger@urace.us", "Gerente", "MANAGER", SENHA)
-    inserir(c, "clients", name="Brian Santiago", status="ACTIVE", source="manual")
+    inserir(c, "clients", name="Brian Sapata", status="ACTIVE", source="manual")
     c.close()
     with TestClient(app, base_url="https://cc.test") as t:
         yield t
@@ -205,7 +205,7 @@ def _db():
 
 
 def _brian():
-    return um(_db(), "SELECT id FROM clients WHERE name='Brian Santiago'")["id"]
+    return um(_db(), "SELECT id FROM clients WHERE name='Brian Sapata'")["id"]
 
 
 def _itens(cli, h):
@@ -230,7 +230,7 @@ def test_mecanico_adiciona_peca_que_e_do_cliente(cli):
     assert r.status_code == 200, r.text
     linha = _itens(cli, h)["Evinco Blue"]
     assert linha["nosso"] == 0 and linha["de_clientes"] == 2
-    assert linha["clientes"] == [{"item_id": r.json()["id"], "client_id": _brian(), "cliente": "Brian Santiago", "qty": 2.0}]
+    assert linha["clientes"] == [{"item_id": r.json()["id"], "client_id": _brian(), "cliente": "Brian Sapata", "qty": 2.0}]
 
 
 def test_mecanico_nao_ve_nem_poe_custo_e_margem(cli):

@@ -1,8 +1,8 @@
 """De quem é cada serviço.
 
-Dono, 22/09: ao marcar uma sessão nova para o David Pera ele abriu o card e viu
-**113 serviços** — e 112 eram de outras pessoas (Jude Cook, Harley Keeble,
-Alexander Jacoby, Brody Robbin, Alex Xikis, Charlie Marron…). O título do Asana
+Dono, 22/09: ao marcar uma sessão nova para o David Pedalo ele abriu o card e viu
+**113 serviços** — e 112 eram de outras pessoas (Jude Cockpit, Harley Kebrel,
+Alexander Jetsby, Brody Rodbin, Alex Xelix, Charlie Mardon…). O título do Asana
 sempre diz de quem é o serviço; o painel é que não estava lendo.
 
 Duas metades no conserto:
@@ -12,7 +12,7 @@ Duas metades no conserto:
      estava o nome em cada formato). Antes acertava 27 de 70; agora, 70.
   2. Este módulo decide a qual CARD aquele nome pertence. Quando não dá para
      decidir sozinho, devolve para humano em vez de chutar — "Alexander" pode ser
-     o Savage ou o Jacoby, e unir no escuro é criar o mesmo problema do outro
+     o Sprage ou o Jetsby, e unir no escuro é criar o mesmo problema do outro
      lado. Regra da casa desde 04/09.
 """
 
@@ -25,9 +25,9 @@ from command_center.providers import identidade
 #
 # Então na dúvida NÃO se escolhe: abre-se um card com o nome exatamente como está
 # no título. "Mike_Prep for Orlando Cup" vira um card "Mike" ao lado do Mike
-# Fattuta e do Mike Davies — ele pediu assim, e a lógica é dele: um card "Mike"
-# com um serviço é ruído que ele une num clique; o serviço do Mike Davies dentro
-# do card do Mike Fattuta é dado errado que ninguém vê.
+# Flatuta e do Mike Dutos — ele pediu assim, e a lógica é dele: um card "Mike"
+# com um serviço é ruído que ele une num clique; o serviço do Mike Dutos dentro
+# do card do Mike Flatuta é dado errado que ninguém vê.
 #
 # O mesmo vale para nome de uma palavra só sem card: "G.J" tem 19 serviços e não
 # tem nome completo — "pode colocar como G.J" (dono).
@@ -55,7 +55,7 @@ def por_contato(con, tarefa, clientes=None):
 
     Dono, 22/09: "o princípio para cruzar e confirmar é usar o nome do responsável e
     informações de contato. Aplique como base de agora para frente." O título diz
-    "Alex"; a descrição diz Edward Donnell, ed@…: é o Alex do Edward, e ponto.
+    "Alex"; a descrição diz Edward Dampell, ed@…: é o Alex do Edward, e ponto.
     Devolve (cliente, motivo) ou (None, None). Só decide quando bate UM card."""
     clientes = clientes if clientes is not None else _vivos(con)
     email = (tarefa["resp_email"] or "").strip().lower() if "resp_email" in tarefa.keys() else ""
@@ -113,7 +113,7 @@ def candidatos_para(con, nome, clientes=None):
     partes = _partes(alvo)
 
     # UMA PALAVRA SÓ nunca passa pelo "nome igual": um card cujo piloto é só "Alex" bate
-    # exato e a checagem de ambiguidade nunca roda — o serviço do Alex Xikis ia para o
+    # exato e a checagem de ambiguidade nunca roda — o serviço do Alex Xelix ia para o
     # Alex do Edward. Nome curto vai direto para a camada de partes, que junta TODOS os
     # candidatos e deixa a dúvida aparecer. Revisão adversarial de 22/09.
     if len(partes) >= 2:
@@ -129,7 +129,7 @@ def candidatos_para(con, nome, clientes=None):
         if quase:
             return quase
 
-        # "Alex Savage" → Alexander Savage: sobrenome igual e primeiro nome ENCURTADO,
+        # "Alex Sprage" → Alexander Sprage: sobrenome igual e primeiro nome ENCURTADO,
         # e só para apelido conhecido. Prefixo solto casava Gabriel×Gabriela e
         # Maria×Mariana — irmãos, o caso mais comum numa escola de kart.
         apelidos = []
@@ -142,7 +142,7 @@ def candidatos_para(con, nome, clientes=None):
         if apelidos:
             return apelidos
 
-    # "Charlie M" → Charlie Marron: primeiro nome igual e sobrenome começando pela inicial
+    # "Charlie M" → Charlie Mardon: primeiro nome igual e sobrenome começando pela inicial
     primeiro, inicial = _inicial_de(alvo)
     if primeiro and inicial:
         por_inicial = []
@@ -169,7 +169,7 @@ def candidatos_para(con, nome, clientes=None):
                     iguais.append((c, f"{'primeiro' if p0 == p[0] else 'último'} nome de {c[campo]}"))
                     break
         # Sem Levenshtein aqui: "Daniel" pegava "Daniela", "Bruno" pegava "Bruna",
-        # "Martin" pegava "Bruno Martins". Uma letra não separa duas pessoas.
+        # "Martin" pegava "Bruno Martinx". Uma letra não separa duas pessoas.
         if iguais:
             return iguais
     return []
@@ -238,8 +238,8 @@ def parecem_a_mesma_pessoa(a, b):
 
     Mais largo que `identidade.parecido` de propósito, porque aqui não se une nada:
     serve só para dizer ao dono "una estes dois quando quiser". Pega o que ele achou
-    no cadastro em 22/09: Charlie Marron × Charlie Marrom, Liam Burghol ×
-    Liam Bourgnhol, Alexander Savage × Alex savage."""
+    no cadastro em 22/09: Charlie Mardon × Charlie Mardom, Liam Buldhol ×
+    Liam Bouldnhol, Alexander Sprage × Alex sprage."""
     for na in identidade._nomes(a):
         for nb in identidade._nomes(b):
             if identidade.parecido(na, nb):
@@ -248,9 +248,9 @@ def parecem_a_mesma_pessoa(a, b):
             if len(pa) < 2 or len(pb) < 2:
                 continue
             if pa[-1] == pb[-1] and _um_encurta_o_outro(pa[0], pb[0]):
-                return True                      # Alexander Savage × Alex savage
+                return True                      # Alexander Sprage × Alex sprage
             if pa[0] == pb[0] and identidade._lev(pa[-1], pb[-1]) <= 2:
-                return True                      # Liam Burghol × Liam Bourgnhol
+                return True                      # Liam Buldhol × Liam Bouldnhol
     return False
 
 
@@ -273,7 +273,7 @@ def _decidido_pelo_dono(con, nome, clientes):
     que ele tinha escolhido — desfazendo a decisão dele a cada rodada. Revisão
     adversarial de 22/09."""
     # SÓ união feita à mão. União automática ("sync") não é decisão de ninguém — e foi
-    # justamente ela que comeu o balde "Alex" dentro do Edward Donnell às 13:46 de
+    # justamente ela que comeu o balde "Alex" dentro do Edward Dampell às 13:46 de
     # 22/09. Cair de volta nela aqui cimentaria o erro em vez de desfazê-lo.
     linhas = todos(con, "SELECT keep_id, merged_by FROM client_merges WHERE LOWER(drop_name)=LOWER(?) "
                         "AND (merged_by LIKE 'user:%' OR merged_by LIKE 'owner:%') ORDER BY id DESC", (nome,))
@@ -297,12 +297,12 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
     `aplicar=True` move o que é certo e deixa o duvidoso para o humano.
 
     Processa os nomes do mais completo para o mais curto de propósito: assim
-    "Charlie Marron" ganha (ou acha) o card antes de "Charlie M" ser procurado, e
+    "Charlie Mardon" ganha (ou acha) o card antes de "Charlie M" ser procurado, e
     a forma curta cai no card certo em vez de abrir um segundo."""
     # Serviço cuja atribuição o DONO confirmou não é mexido por varredura nenhuma.
-    # Ele confirmou em 22/09 que os 18 "Savage" e 2 "Savege" do #15 são do Alexander
+    # Ele confirmou em 22/09 que os 18 "Sprage" e 2 "Sprege" do #15 são do Alexander
     # (o card foi alcançado pelo sobrenome do Kenneth) e que o "Alex" do #238 é do
-    # Alex Donnell. Sem carimbo, um homônimo novo no cadastro tiraria os dois de lá.
+    # Alex Dampell. Sem carimbo, um homônimo novo no cadastro tiraria os dois de lá.
     tarefas = todos(con, "SELECT * FROM tasks WHERE (project=? OR ? IS NULL) "
                          "AND COALESCE(client_by,'') <> 'human'", (projeto, projeto))
     confirmadas = todos(con, "SELECT COUNT(*) AS n FROM tasks WHERE (project=? OR ? IS NULL) "
@@ -362,7 +362,7 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
         else:
             por_chave[chave] = (pessoa, [t])
 
-    # "JOSE MIGUEL Abed" e "Jose Miguel Abed" são a mesma pessoa: grafia não abre card.
+    # "JOSE MIGUEL Asfa" e "Jose Miguel Asfa" são a mesma pessoa: grafia não abre card.
     por_nome = {nome: tarefas_ for nome, tarefas_ in por_chave.values()}
     ordem = sorted(por_nome, key=lambda n: (-len(n.split()), -len(n), n.lower()))
     for nome in ordem:
@@ -402,7 +402,7 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
                 continue
         if cliente is None:
             # ANTES de abrir balde: serviço que JÁ ESTÁ num card plausível fica onde
-            # está. "AIDEN - KARTING SCHOOL" está no Aidan Mills, "Garret" no Garrett
+            # está. "AIDEN - KARTING SCHOOL" está no Aidan Molas, "Garret" no Garrett
             # Curtis, "Isabel" no card Isabel — tirar de lá para um balde novo é
             # estragar o que estava certo. A regra do dono é não pôr no card de OUTRO;
             # não é mexer em quem já está em casa.
@@ -429,7 +429,7 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
                 if atual is not None and any(identidade.parecido(nome, n) for n in identidade._nomes(atual)):
                     return True
                 # UM candidato plausível só: é ele mesmo, escrito de outro jeito
-                # ("AIDEN" no Aidan Mills). Havendo mais de um, o card atual foi
+                # ("AIDEN" no Aidan Molas). Havendo mais de um, o card atual foi
                 # escolhido pela máquina e não por evidência — aí sai.
                 return cid in plausiveis and len(plausiveis) == 1
 
@@ -470,10 +470,10 @@ def redistribuir(con, aplicar=False, criar_cards=True, projeto="U-RACE", ler_des
             _move(t, cliente, motivo)
     # Corrida e tarefa interna não são serviço de ninguém — e não podem ficar no card de
     # alguém. O dono, 22/09: "é uma tarefa paralela, não gera card". `Lucas Oil Winter
-    # Series Race | Sebring` estava no card do Alexander Savage como se fosse dele.
+    # Series Race | Sebring` estava no card do Alexander Sprage como se fosse dele.
     soltos = [x for x in sem_nome if x["client_id"]]
     # `soltar_ids` é a versão cirúrgica: a extensão da VPS pediu, em 22/09, um jeito de
-    # soltar SÓ a corrida sem levar junto "Inventário Hank Lai_ caixa", que pode ser
+    # soltar SÓ a corrida sem levar junto "Inventário Hank Lume_ caixa", que pode ser
     # trabalho para o cliente. Id que não está nesta lista é recusado: isto não é uma
     # porta para desligar serviço de gente do card certo.
     pedidos = set(soltar_ids or ())

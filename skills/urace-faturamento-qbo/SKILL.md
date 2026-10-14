@@ -1,6 +1,6 @@
 ---
 name: urace-faturamento-qbo
-description: Monta invoices e estimates no QuickBooks Online para a URACE.US INC (escola e equipe de kart em Orlando). Use sempre que o pedido envolver faturar cliente ou piloto, cobrar corrida, treino, coaching, aluguel de motor ou chassi, rebuild de motor, peças, combustível, suits ou barracas Canotops, montar orçamento, cobrar invoice vencida, ou quando aparecerem nomes de pilotos (Bryan Santiago, Alex Xikis, Brody Robins, Frankie Iadevaia, Elijah Nicholas), números de invoice no formato 4YZRN1QWN###NQM, ou pedidos como "monte uma invoice", "faz um estimate", "cobra o cliente X". Também aplicável a auditoria de catálogo, correção de preços e conferência de faturas já criadas no QBO.
+description: Monta invoices e estimates no QuickBooks Online para a URACE.US INC (escola e equipe de kart em Orlando). Use sempre que o pedido envolver faturar cliente ou piloto, cobrar corrida, treino, coaching, aluguel de motor ou chassi, rebuild de motor, peças, combustível, suits ou barracas Canotops, montar orçamento, cobrar invoice vencida, ou quando aparecerem nomes de pilotos, números de invoice no formato 4YZRN1QWN###NQM, ou pedidos como "monte uma invoice", "faz um estimate", "cobra o cliente X". Também aplicável a auditoria de catálogo, correção de preços e conferência de faturas já criadas no QBO.
 ---
 
 # Faturamento URACE no QuickBooks Online
@@ -93,14 +93,15 @@ antes de qualquer coisa.
 O registro no QBO está no nome do **responsável financeiro**, não do
 piloto. Confirmar por busca antes de usar qualquer id.
 
+Exemplo **fictício** do formato (#244, repositório público): o mapa real
+piloto → responsável → id fica no QBO (busca por e-mail) e nas notas privadas
+do dono, nunca no repositório.
+
 | Piloto | Conta no QBO | E-mail | id |
 |---|---|---|---|
-| Bryan Santiago | Pablo Santiago | pablosantiago@outlook.com | 485 |
-| Alex Xikis | James Xikis | james@xikis.com | 352 |
-| Brody Robins | Jill Robins | hawaiicampers@gmail.com | — |
-| Lewis Cook | Lewis Cook | Lewis.cook@catapultprint.com | 694 |
-| Velocity Racing (Rick) | Velocity Racing | rick@velocityracing.com | 675 |
-| Elijah Nicholas | Michael Nicholas | — | — |
+| Bryan Sapata | Pablo Sapata (o pai) | pablosapata@example.com | o do QBO |
+| Lewis Cockpit | Lewis Cockpit (é o próprio) | lewis.cockpit@example.com | o do QBO |
+| — (Rick) | Equipe Exemplo Racing (empresa) | rick@equipe-exemplo.example.com | o do QBO |
 
 Buscar pelo e-mail funciona quando o nome não bate. Só criar cliente novo
 depois de tentar os dois.
@@ -270,7 +271,7 @@ valor, não mande e-mail por outro caminho. Invoice paga desliga o lembrete sozi
 
 ## Permuta
 
-Frankie Iadevaia e Brody Robins operam em permuta. A permuta cobre
+Há clientes em permuta (quem são fica nas notas privadas do dono). A permuta cobre
 **apenas serviços não faturados**. Invoice já emitida segue como cobrança
 normal e **não deve ser cancelada** por causa do arranjo.
 

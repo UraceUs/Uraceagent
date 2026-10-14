@@ -128,7 +128,7 @@ def cli():
     auth.criar_usuario(c, "mec@urace.us", "Mecânico", "OPERATOR", SENHA)
     auth.criar_usuario(c, "mec2@urace.us", "Outro Mecânico", "OPERATOR", SENHA)
     auth.criar_usuario(c, "ger@urace.us", "Gerente", "MANAGER", SENHA)
-    inserir(c, "clients", name="Enzo Kurian", status="ACTIVE", source="manual")
+    inserir(c, "clients", name="Enzo Kartian", status="ACTIVE", source="manual")
     c.close()
     with TestClient(app, base_url="https://cc.test") as t:
         yield t
@@ -155,7 +155,7 @@ def test_mecanico_pede_gerente_compra_mecanico_recebe(cli):
     h = entra(cli, "mec@urace.us")
     c = cli.get(f"{C}/{pid}", headers=h).json()
     assert c["linhas"][0]["unit_cost"] is None and c["total"] is None, "custo é do gerente"
-    assert c["linhas"][0]["cliente"] == "Enzo Kurian"
+    assert c["linhas"][0]["cliente"] == "Enzo Kartian"
     r = cli.post(f"{C}/{pid}/receber", headers=h, json={"itens": [{"line_id": c["linhas"][0]["id"], "qty": 2}]})
     assert r.status_code == 200 and r.json()["status"] == "recebida", r.text
     assert estoque.vendavel(conectar(), iid) == 2

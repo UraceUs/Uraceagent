@@ -54,9 +54,9 @@ def rodar() -> list[str]:
     check("método e status continuam", 'POST' in saida and saida.strip().endswith("200"), saida)
 
     lg2, buf2 = _logger_capturado("uvicorn.error")
-    lg2.error("falha em https://urace.kommo.com/api/v4/leads/1?token=eyJhbGciOiJIUzI1NiJ9.eyJsZWFkIjoxfQ.YXNzaW5hdHVyYQ phone=+14075551234")
+    lg2.error("falha em https://urace.kommo.com/api/v4/leads/1?token=eyJhbGciOiJIUzI1NiJ9.eyJsZWFkIjoxfQ.YXNzaW5hdHVyYQ phone=+14075550123")
     s2 = buf2.getvalue()
-    check("JWT e telefone saem do log de erro", "eyJhbGci" not in s2 and "+14075551234" not in s2, s2)
+    check("JWT e telefone saem do log de erro", "eyJhbGci" not in s2 and "+14075550123" not in s2, s2)
 
     lg3, buf3 = _logger_capturado("outro.logger")
     lg3.info("key=aberta-por-design")

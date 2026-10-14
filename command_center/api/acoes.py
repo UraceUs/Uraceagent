@@ -58,7 +58,7 @@ def _menos_dias(iso, n):
 
 
 def memo_invoice(produto=None, categoria=None, piloto=None, data_servico=None, descricao=None):
-    """Nota ao cliente e memo interno, sempre iguais: 'Urace Daily | Using Own Kart | David Pera | Service date: 09/13/2026'."""
+    """Nota ao cliente e memo interno, sempre iguais: 'Urace Daily | Using Own Kart | David Pedalo | Service date: 09/13/2026'."""
     partes = []
     if produto:
         partes.append(produto + (f" | {categoria}" if categoria else ""))
@@ -471,7 +471,7 @@ def notas_servico(piloto, responsavel, email=None, telefone=None, dob=None, data
 
 
 def _partes_do_nome(nome):
-    """'David Pera_Urace Daily_Using Own Kart [1/1]' -> (piloto, produto, categoria)."""
+    """'David Pedalo_Urace Daily_Using Own Kart [1/1]' -> (piloto, produto, categoria)."""
     base = re.sub(r"\s*\[[^\]]*\]\s*$", "", nome or "")
     partes = [x.strip() for x in base.split("_")]
     return (partes[0] if partes else None, partes[1] if len(partes) > 1 else None, partes[2] if len(partes) > 2 else None)

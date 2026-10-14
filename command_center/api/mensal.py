@@ -1,6 +1,6 @@
 """Mensalidade do cliente: o valor combinado e a recorrência no QuickBooks.
 
-Dono, 29/09, no card do Enzo Kurian: *"eu preciso que o valor seja um campo alterável…
+Dono, 29/09, no card do Enzo Kartian: *"eu preciso que o valor seja um campo alterável…
 pode ser às vezes um deal diferente… e conseguir enviar a invoice, a invoice fica ali salva
 para poder enviar todo dia primeiro. E seria interessante se o Command Center já deixasse
 como invoice recorrente no QuickBooks. Padrão seis meses, podendo ser personalizado, 12

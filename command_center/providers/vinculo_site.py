@@ -252,7 +252,7 @@ def desvincular(con, conta_id):
 
 
 def _servico(titulo):
-    """'David Pera_Urace Daily_Using Own Kart [1/1]' → 'Urace Daily · Using Own Kart'. Só o
+    """'David Pedalo_Urace Daily_Using Own Kart [1/1]' → 'Urace Daily · Using Own Kart'. Só o
     serviço: o nome e as marcações internas não vão para o cliente."""
     base = re.sub(r"\s*\[[^\]]*\]\s*$", "", titulo or "")
     partes = [p.strip() for p in base.split("_") if p.strip()]

@@ -31,8 +31,8 @@ def banco(tmp_path, monkeypatch):
     caminho = tmp_path / "command-center.sqlite"
     monkeypatch.setenv("CC_DB_PATH", str(caminho))
     con = conectar(); aplicar_schema(con)
-    inserir(con, "clients", name="Hank Lai", status="ACTIVE", source="manual")
-    inserir(con, "clients", name="Alexander Savage", status="ACTIVE", source="manual")
+    inserir(con, "clients", name="Hank Lume", status="ACTIVE", source="manual")
+    inserir(con, "clients", name="Alexander Sprage", status="ACTIVE", source="manual")
     con.commit(); con.close()
     return str(caminho)
 
@@ -57,7 +57,7 @@ def test_a_copia_abre_e_tem_os_dados(banco):
     con = sqlite3.connect(p["destino"])
     nomes = {r[0] for r in con.execute("SELECT name FROM clients")}
     con.close()
-    assert nomes == {"Hank Lai", "Alexander Savage"}
+    assert nomes == {"Hank Lume", "Alexander Sprage"}
 
 
 def test_a_copia_nao_fica_legivel_para_a_maquina_toda(banco):

@@ -51,6 +51,10 @@ Dono, 30/09 (issue #14): *"preciso que faça também nos nossos projetos de agor
   risco real de perda ou indisponibilidade → pedir autorização antes
 - Secret nunca no código nem no repositório; nunca pedir token/senha/PIN no chat
 - Nunca pôr serviço de um cliente no card de outro · **NO FAKE DATA** · não usar Turo nem Hostaway
+- **Repositório público** (dono, 14/10, #244): nunca dado real de cliente no repositório (nome,
+  e-mail, telefone, nascimento, endereço, medidas, valor ou ID ligado a pessoa, conversa). Teste e
+  documento usam fictício marcado (`@example.com`, 555-01xx, nome inventado); `test_sem_dado_de_cliente.py`
+  trava. NO FAKE DATA continua valendo para o que o sistema mostra
 - Tudo no fuso da Flórida (America/New_York)
 - Commit termina com as linhas de atribuição do Claude; nenhum identificador de modelo
   em commit, PR ou arquivo

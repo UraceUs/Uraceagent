@@ -1,4 +1,4 @@
-"""De quem é cada serviço — o caso real do card do David Pera (dono, 22/09).
+"""De quem é cada serviço — o caso real do card do David Pedalo (dono, 22/09).
 
 Ele foi marcar uma sessão nova e encontrou 113 serviços no card, sendo 112 de
 outras pessoas. O gabarito destes testes é a lista que ele mandou, com o nome do
@@ -40,23 +40,23 @@ def _tarefa(con, titulo, client_id=None):
 
 # --------------------------------------------- o nome, nos quatro formatos do quadro
 @pytest.mark.parametrize("titulo,esperado", [
-    ("David Pera_Urace Daily_Using Own Kart [1/1]", "David Pera"),      # underline
-    ("David Pera Using his own Kart", "David Pera"),                    # só espaço
-    ("Harley Keeble - Rotax [3/3]", "Harley Keeble"),                   # hífen com espaço
-    ("Alexander Jacoby | KA100", "Alexander Jacoby"),                   # barra vertical
-    ("Jude cook/Harley client - Kart proprio [3/3]", "Jude cook"),      # barra entre pessoas
-    ("Brody Robbin_Professional Coach [His own kart] Bushnell", "Brody Robbin"),
-    ("Alex Xikis KA100_Professional Coaching 4/4 {His own kart}", "Alex Xikis"),
+    ("David Pedalo_Urace Daily_Using Own Kart [1/1]", "David Pedalo"),      # underline
+    ("David Pedalo Using his own Kart", "David Pedalo"),                    # só espaço
+    ("Harley Kebrel - Rotax [3/3]", "Harley Kebrel"),                   # hífen com espaço
+    ("Alexander Jetsby | KA100", "Alexander Jetsby"),                   # barra vertical
+    ("Jude cockpit/Harley client - Kart proprio [3/3]", "Jude cockpit"),      # barra entre pessoas
+    ("Brody Rodbin_Professional Coach [His own kart] Bushnell", "Brody Rodbin"),
+    ("Alex Xelix KA100_Professional Coaching 4/4 {His own kart}", "Alex Xelix"),
     ("Branson KA100sr_Lead and Follow {Vanderlan} @OKC", "Branson"),
     ("Charlie M_Racing Program 3/6 [Junior KA100]", "Charlie M"),
     ("Liam B_Professional Coach [Junior_KA100]", "Liam B"),
     ("G.J_Lead and follow [Vanderlan 4|6] his kart", "G.J"),
     ("Callan Lead & Follow Vanderlan _Bushnell [5/8]", "Callan"),
     ("Branson_Motor dele", "Branson"),
-    ("Savage_RWC RD2", "Savage"),
+    ("Sprage_RWC RD2", "Sprage"),
     ("Aaron_Prep[SKUSA RD2] X30", "Aaron"),
-    ("Alexander Savage_Preatice [Urace Academy] x30", "Alexander Savage"),
-    ("Grayson James_Trackside support single day (No coaching)- Lead and follow", "Grayson James"),
+    ("Alexander Sprage_Preatice [Urace Academy] x30", "Alexander Sprage"),
+    ("Grayson Jantes_Trackside support single day (No coaching)- Lead and follow", "Grayson Jantes"),
 ])
 def test_tira_o_nome_do_titulo(titulo, esperado):
     assert identidade.pessoa_do_titulo(titulo) == esperado
@@ -75,16 +75,16 @@ def test_nome_de_servico_e_de_corrida_nunca_e_gente(lixo):
 
 # --------------------------------------------- o que a varredura real de 22/09 achou
 @pytest.mark.parametrize("titulo,esperado", [
-    # inicial NO MEIO é normal: "Bella M Wagner" estava sendo jogada fora inteira
-    ("Bella M Wagner - Professional Coach [Baby Kart] Bushnell", "Bella M Wagner"),
+    # inicial NO MEIO é normal: "Bella M Wanderbar" estava sendo jogada fora inteira
+    ("Bella M Wanderbar - Professional Coach [Baby Kart] Bushnell", "Bella M Wanderbar"),
     # travessão colado com espaço depois separa; nome composto não tem espaço do outro lado
-    ("Alex Savage– Old Chassis | Adjustments", "Alex Savage"),
+    ("Alex Sprage– Old Chassis | Adjustments", "Alex Sprage"),
     # data colada no título não é sobrenome
     ("Branson KA100 01/09", "Branson"),
     ("Branson 11/09_Cancelado", "Branson"),
     ("Martin 03/08 próprio motor Rok vlr", "Martin"),
     # nome grudado sem espaço
-    ("MauricioPardomo_Coach", "Mauricio Pardomo"),
+    ("MauricioParafomo_Coach", "Mauricio Parafomo"),
 ])
 def test_formas_que_a_varredura_de_22_09_pegou(titulo, esperado):
     assert identidade.pessoa_do_titulo(titulo) == esperado
@@ -120,60 +120,60 @@ def test_a_segunda_varredura_real_pegou_cinco_que_nao_sao_gente(lixo):
     ("Maria de Souza", "Maria de Souza"),           # partícula de nome NÃO é ligação
     ("Joao dos Santos", "Joao dos Santos"),
     ("Lucas_Professional Coach 4T Senior", "Lucas"),   # o Lucas continua existindo
-    ("Shawn Scioto VLR 100", "Shawn Scioto"),
-    ("Giovanni Barrera 2 Stroke Karting School", "Giovanni Barrera"),
-    ("Reinaldo Andres Arroyo Son_Driving Experience[Junior_4 stroke]", "Reinaldo Andres Arroyo Son"),
+    ("Shawn Scuderio VLR 100", "Shawn Scuderio"),
+    ("Giovanni Bandarra 2 Stroke Karting School", "Giovanni Bandarra"),
+    ("Reinaldo Andres Arrancada Son_Driving Experience[Junior_4 stroke]", "Reinaldo Andres Arrancada Son"),
 ])
 def test_as_regras_novas_nao_comem_gente_de_verdade(titulo, esperado):
     assert identidade.pessoa_do_titulo(titulo) == esperado
 
 
 def test_erro_de_digitacao_vira_sugestao_de_uniao_nao_atribuicao(con):
-    """"Savege" e "Brason" continuam aparecendo na lista "para você unir" — mas o
+    """"Sprege" e "Brason" continuam aparecendo na lista "para você unir" — mas o
     serviço vai para card próprio, não para o card parecido. Quem une é o dono."""
-    _cliente(con, "Alexander Savage")
+    _cliente(con, "Alexander Sprage")
     _cliente(con, "Tom Branson")
-    _tarefa(con, "Savege_RWC RD2")
+    _tarefa(con, "Sprege_RWC RD2")
     con.commit()
-    assert atribuicao.resolver(con, "Savege")[0] is None
+    assert atribuicao.resolver(con, "Sprege")[0] is None
     rel = atribuicao.redistribuir(con, aplicar=True)
-    dono = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Savege%'")["client_id"]
-    assert um(con, "SELECT name FROM clients WHERE id=?", (dono,))["name"] == "Savege"
-    assert any(u["nome"] == "Savege" for u in rel["unir"]), "sai na lista para unir"
+    dono = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Sprege%'")["client_id"]
+    assert um(con, "SELECT name FROM clients WHERE id=?", (dono,))["name"] == "Sprege"
+    assert any(u["nome"] == "Sprege" for u in rel["unir"]), "sai na lista para unir"
 
 
 def test_nome_de_verdade_com_palavra_de_servico_no_meio_nao_some():
     """A primeira palavra nunca é cortada: senão "Summer Camp" viraria a pessoa "Summer"."""
     assert identidade.pessoa_do_titulo("Jean-Luc Picard") == "Jean-Luc Picard"
-    assert identidade.pessoa_do_titulo("Thiago Belluci Sr") == "Thiago Belluci Sr"   # Sr é do nome
+    assert identidade.pessoa_do_titulo("Thiago Biellaci Sr") == "Thiago Biellaci Sr"   # Sr é do nome
 
 
 # --------------------------------------------- achar o card certo
 def test_apelido_e_inicial_caem_no_card_certo(con):
-    charlie = _cliente(con, "Charlie Marron")
-    liam = _cliente(con, "Liam Bourghol")
+    charlie = _cliente(con, "Charlie Mardon")
+    liam = _cliente(con, "Liam Bouldhol")
     con.commit()
     assert atribuicao.resolver(con, "Charlie M")[0]["id"] == charlie
     assert atribuicao.resolver(con, "Charlie")[0]["id"] == charlie
     assert atribuicao.resolver(con, "Liam B")[0]["id"] == liam
-    assert atribuicao.resolver(con, "Bourghol")[0]["id"] == liam
+    assert atribuicao.resolver(con, "Bouldhol")[0]["id"] == liam
 
 
 def test_sobrenome_sozinho_acha_quem_e_unico_mas_uma_letra_nao(con):
     """Sobrenome sozinho, batendo em UM card só, resolve. Uma letra de diferença NÃO:
     a revisão adversarial de 22/09 mostrou que isso manda o serviço do Daniel para a
-    Daniela e o do Martin para o Bruno Martins. Uma letra não separa duas pessoas."""
-    savage = _cliente(con, "Alexander Savage")
+    Daniela e o do Martin para o Bruno Martinx. Uma letra não separa duas pessoas."""
+    sprage = _cliente(con, "Alexander Sprage")
     _cliente(con, "Branson Lee")
     con.commit()
-    assert atribuicao.resolver(con, "Savage")[0]["id"] == savage
-    assert atribuicao.resolver(con, "Alex Savage")[0]["id"] == savage, "apelido conhecido"
+    assert atribuicao.resolver(con, "Sprage")[0]["id"] == sprage
+    assert atribuicao.resolver(con, "Alex Sprage")[0]["id"] == sprage, "apelido conhecido"
     assert atribuicao.resolver(con, "Brason")[0] is None, "1 letra vira card próprio + sugestão"
 
 
 def test_uma_letra_de_diferenca_nunca_troca_a_pessoa(con):
     """Os pares que a revisão apontou: gênero e sobrenome-virando-primeiro-nome."""
-    _cliente(con, "Daniela Rocha"); _cliente(con, "Bruna Martins"); _cliente(con, "Bruno Martins")
+    _cliente(con, "Daniela Rocha"); _cliente(con, "Bruna Martinx"); _cliente(con, "Bruno Martinx")
     con.commit()
     for nome in ("Daniel", "Brunt", "Martin"):
         assert atribuicao.resolver(con, nome)[0] is None, nome
@@ -191,10 +191,10 @@ def test_apelido_so_pela_tabela_nunca_por_prefixo(con):
 
 
 def test_nome_ambiguo_nao_e_chutado(con):
-    """Dois Alexander no quadro: Savage e Jacoby. "Alexander_Prep Orlando Cup" não
+    """Dois Alexander no quadro: Sprage e Jetsby. "Alexander_Prep Orlando Cup" não
     tem dono óbvio — e a regra da casa é não unir no escuro."""
-    _cliente(con, "Alexander Savage")
-    _cliente(con, "Alexander Jacoby")
+    _cliente(con, "Alexander Sprage")
+    _cliente(con, "Alexander Jetsby")
     con.commit()
     cliente, motivo = atribuicao.resolver(con, "Alexander")
     assert cliente is None and motivo.startswith("ambíguo entre")
@@ -202,28 +202,28 @@ def test_nome_ambiguo_nao_e_chutado(con):
 
 def test_pilot_name_tambem_vale(con):
     """O card é do responsável; quem corre é o piloto. O título traz o piloto."""
-    cid = _cliente(con, "Nicolas Pera", piloto="David Pera")
+    cid = _cliente(con, "Nicolas Pedalo", piloto="David Pedalo")
     con.commit()
-    assert atribuicao.resolver(con, "David Pera")[0]["id"] == cid
+    assert atribuicao.resolver(con, "David Pedalo")[0]["id"] == cid
 
 
 # --------------------------------------------- a varredura que conserta o card
 def _quadro_do_dono(con):
-    """O card do David Pera como ele o encontrou: tudo dentro dele."""
-    david = _cliente(con, "Nicolas Pera", piloto="David Pera", email="peranicolas2106@gmail.com")
-    _cliente(con, "Charlie Marron")
-    _cliente(con, "Alexander Savage")
-    _cliente(con, "Brody Robbin")
+    """O card do David Pedalo como ele o encontrou: tudo dentro dele."""
+    david = _cliente(con, "Nicolas Pedalo", piloto="David Pedalo", email="nicolas.pedalo@example.com")
+    _cliente(con, "Charlie Mardon")
+    _cliente(con, "Alexander Sprage")
+    _cliente(con, "Brody Rodbin")
     titulos = [
-        "David Pera_Urace Daily_Using Own Kart [1/1]",
-        "David Pera Using his own Kart",
-        "Harley Keeble - Rotax [3/3]",
-        "Alexander Jacoby | KA100",
-        "Brody Robbin_Professional Coach [His own kart] Bushnell",
+        "David Pedalo_Urace Daily_Using Own Kart [1/1]",
+        "David Pedalo Using his own Kart",
+        "Harley Kebrel - Rotax [3/3]",
+        "Alexander Jetsby | KA100",
+        "Brody Rodbin_Professional Coach [His own kart] Bushnell",
         "Charlie M_Racing Program 3/6 [Junior KA100]",
-        "Charlie Marron_FWT (GP Junior 7 & VLR Junior)",
-        "Alexander Savage_Preatice [Urace Academy] x30",
-        "Savage_RWC RD2",
+        "Charlie Mardon_FWT (GP Junior 7 & VLR Junior)",
+        "Alexander Sprage_Preatice [Urace Academy] x30",
+        "Sprage_RWC RD2",
         "Mariano_Lead and Follow Van [1/4]",
         "Lead and Follow",                       # não é serviço de ninguém: é rótulo
     ]
@@ -251,21 +251,21 @@ def test_distribui_cada_servico_no_card_de_quem_e(con):
         c = um(con, "SELECT * FROM clients WHERE id=?", (t["client_id"],)) if t["client_id"] else None
         return (c["pilot_name"] or c["name"]) if c else None
 
-    assert dono_de("David Pera Using his own Kart") == "David Pera"
-    assert dono_de("David Pera_Urace Daily_Using Own Kart [1/1]") == "David Pera"
-    assert dono_de("Charlie M_Racing Program 3/6 [Junior KA100]") == "Charlie Marron"
-    assert dono_de("Charlie Marron_FWT (GP Junior 7 & VLR Junior)") == "Charlie Marron"
-    assert dono_de("Brody Robbin_Professional Coach [His own kart] Bushnell") == "Brody Robbin"
-    assert dono_de("Savage_RWC RD2") == "Alexander Savage"
-    assert dono_de("Alexander Savage_Preatice [Urace Academy] x30") == "Alexander Savage"
-    assert dono_de("Harley Keeble - Rotax [3/3]") == "Harley Keeble", "card novo pelo nome completo"
-    assert dono_de("Alexander Jacoby | KA100") == "Alexander Jacoby"
+    assert dono_de("David Pedalo Using his own Kart") == "David Pedalo"
+    assert dono_de("David Pedalo_Urace Daily_Using Own Kart [1/1]") == "David Pedalo"
+    assert dono_de("Charlie M_Racing Program 3/6 [Junior KA100]") == "Charlie Mardon"
+    assert dono_de("Charlie Mardon_FWT (GP Junior 7 & VLR Junior)") == "Charlie Mardon"
+    assert dono_de("Brody Rodbin_Professional Coach [His own kart] Bushnell") == "Brody Rodbin"
+    assert dono_de("Sprage_RWC RD2") == "Alexander Sprage"
+    assert dono_de("Alexander Sprage_Preatice [Urace Academy] x30") == "Alexander Sprage"
+    assert dono_de("Harley Kebrel - Rotax [3/3]") == "Harley Kebrel", "card novo pelo nome completo"
+    assert dono_de("Alexander Jetsby | KA100") == "Alexander Jetsby"
     # só o que é dele sobrou no card do David
     restam = todos(con, "SELECT title FROM tasks WHERE client_id=?", (david,))
     assert dono_de("Mariano_Lead and Follow Van [1/4]") == "Mariano", "card próprio, com o nome do título"
     assert sorted(t["title"] for t in restam) == sorted([
-        "David Pera_Urace Daily_Using Own Kart [1/1]",
-        "David Pera Using his own Kart",
+        "David Pedalo_Urace Daily_Using Own Kart [1/1]",
+        "David Pedalo Using his own Kart",
         "Lead and Follow",                        # rótulo, não é serviço de ninguém
     ])
 
@@ -285,45 +285,45 @@ def test_na_duvida_abre_card_proprio_com_o_nome_do_titulo(con):
 def test_nome_ambiguo_nunca_cai_no_card_de_outro(con):
     """A regra que manda em tudo. Havendo dois Mike, o serviço do "Mike_…" não entra
     em nenhum dos dois — ele ganha o card "Mike". O dono decidiu assim em 22/09:
-    "crie o mike, mike fattuta e o davies separados"."""
-    fattuta = _cliente(con, "Mike Fattuta")
-    davies = _cliente(con, "Mike Davies")
+    "crie o mike, mike flatuta e o davies separados"."""
+    flatuta = _cliente(con, "Mike Flatuta")
+    davies = _cliente(con, "Mike Dutos")
     _tarefa(con, "Mike_Prep for Orlando Cup (3PM)")
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
     t = um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Mike_Prep%'")
-    assert t["client_id"] not in (fattuta, davies), "serviço em dúvida não encosta em card de ninguém"
+    assert t["client_id"] not in (flatuta, davies), "serviço em dúvida não encosta em card de ninguém"
     assert um(con, "SELECT * FROM clients WHERE id=?", (t["client_id"],))["name"] == "Mike"
 
 
 def test_o_card_novo_ambiguo_sai_na_lista_para_unir(con):
     """Card próprio não é o fim: a varredura diz quais parecem a mesma pessoa."""
-    _cliente(con, "Charlie Marron")
-    _cliente(con, "Charlie Marrom")                 # o duplicado que existe no cadastro real
+    _cliente(con, "Charlie Mardon")
+    _cliente(con, "Charlie Mardom")                 # o duplicado que existe no cadastro real
     _tarefa(con, "Charlie_Orlando Cup 8 e 9")
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=True)
     x = next(u for u in rel["unir"] if u["nome"] == "Charlie")
-    assert {p["nome"] for p in x["parecidos"]} == {"Charlie Marron", "Charlie Marrom"}
+    assert {p["nome"] for p in x["parecidos"]} == {"Charlie Mardon", "Charlie Mardom"}
 
 
 def test_parecem_a_mesma_pessoa_pega_os_duplicados_reais(con):
     """Os três pares que a varredura de 22/09 achou no cadastro do dono."""
-    for a, b in (("Charlie Marron", "Charlie Marrom"),
-                 ("Liam Burghol", "Liam Bourgnhol"),
-                 ("Alexander Savage", "Alex savage")):
+    for a, b in (("Charlie Mardon", "Charlie Mardom"),
+                 ("Liam Buldhol", "Liam Bouldnhol"),
+                 ("Alexander Sprage", "Alex sprage")):
         assert atribuicao.parecem_a_mesma_pessoa({"name": a, "pilot_name": None},
                                                  {"name": b, "pilot_name": None}), f"{a} × {b}"
-    assert not atribuicao.parecem_a_mesma_pessoa({"name": "Mike Fattuta", "pilot_name": None},
-                                                 {"name": "Mike Davies", "pilot_name": None})
+    assert not atribuicao.parecem_a_mesma_pessoa({"name": "Mike Flatuta", "pilot_name": None},
+                                                 {"name": "Mike Dutos", "pilot_name": None})
 
 
 def test_parte_exata_do_nome_ganha_de_parecido_por_uma_letra(con):
-    """"Martin" tem 26 serviços e ficava ambíguo entre Martin Jaramillo, Bruno Martins
-    e Ethan Martins. Nome igual ganha de nome parecido."""
-    martin = _cliente(con, "Martin Jaramillo")
-    _cliente(con, "Bruno Martins")
-    _cliente(con, "Ethan Martins")
+    """"Martin" tem 26 serviços e ficava ambíguo entre Martin Jantillo, Bruno Martinx
+    e Ethan Martinx. Nome igual ganha de nome parecido."""
+    martin = _cliente(con, "Martin Jantillo")
+    _cliente(con, "Bruno Martinx")
+    _cliente(con, "Ethan Martinx")
     con.commit()
     assert atribuicao.resolver(con, "Martin")[0]["id"] == martin
 
@@ -344,10 +344,10 @@ def test_rodar_duas_vezes_nao_muda_nada_na_segunda(con):
 
 def test_nome_completo_ganha_o_card_antes_do_apelido(con):
     """Ordem importa: se "Charlie M" resolvesse primeiro e abrisse card, "Charlie
-    Marron" viraria um segundo card da mesma criança."""
-    david = _cliente(con, "David Pera")
+    Mardon" viraria um segundo card da mesma criança."""
+    david = _cliente(con, "David Pedalo")
     _tarefa(con, "Charlie M_Racing Program 3/6 [Junior KA100]", david)
-    _tarefa(con, "Charlie Marron_FWT (GP Junior 7 & VLR Junior)", david)
+    _tarefa(con, "Charlie Mardon_FWT (GP Junior 7 & VLR Junior)", david)
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
     charlies = todos(con, "SELECT id FROM clients WHERE name LIKE 'Charlie%'")
@@ -362,7 +362,7 @@ SENHA = "senha-forte-123"
 @pytest.fixture()
 def cli():
     """Banco e cliente HTTP só deste teste. O quadro é compartilhado entre os testes
-    de rotas, e quem afirma "Charlie M cai no Charlie Marron" não pode depender de
+    de rotas, e quem afirma "Charlie M cai no Charlie Mardon" não pode depender de
     quais clientes outro teste deixou no banco."""
     import tempfile as _t
 
@@ -375,11 +375,11 @@ def cli():
     c = conectar(); aplicar_schema(c)
     auth.criar_usuario(c, "admin@urace.us", "Admin", "ADMIN", SENHA)
     auth.criar_usuario(c, "viewer@urace.us", "Viewer", "VIEWER", SENHA)
-    david = _cliente(c, "Nicolas Pera", piloto="David Pera")
-    _cliente(c, "Charlie Marron")
-    for t in ("David Pera Using his own Kart",
+    david = _cliente(c, "Nicolas Pedalo", piloto="David Pedalo")
+    _cliente(c, "Charlie Mardon")
+    for t in ("David Pedalo Using his own Kart",
               "Charlie M_Racing Program 3/6 [Junior KA100]",
-              "Brody Robbin_Professional Coach [His own kart] Bushnell"):
+              "Brody Rodbin_Professional Coach [His own kart] Bushnell"):
         _tarefa(c, t, client_id=david)
     c.commit(); c.close()
     with TestClient(app) as tc:
@@ -403,9 +403,9 @@ def test_varredura_pela_api_nao_escreve_nada(cli):
     rel = cli.get("/ops/api/service-attribution").json()
     assert rel["aplicado"] is False
     alvos = {m["title"]: m["para_nome"] for m in rel["movidos"]}
-    assert alvos["Charlie M_Racing Program 3/6 [Junior KA100]"] == "Charlie Marron"
-    assert alvos["Brody Robbin_Professional Coach [His own kart] Bushnell"] == "Brody Robbin (card novo)"
-    assert "David Pera Using his own Kart" not in alvos, "o que já é dele não se move"
+    assert alvos["Charlie M_Racing Program 3/6 [Junior KA100]"] == "Charlie Mardon"
+    assert alvos["Brody Rodbin_Professional Coach [His own kart] Bushnell"] == "Brody Rodbin (card novo)"
+    assert "David Pedalo Using his own Kart" not in alvos, "o que já é dele não se move"
     con = conectar()
     try:
         donos = {t["client_id"] for t in todos(con, "SELECT client_id FROM tasks")}
@@ -425,9 +425,9 @@ def test_aplicar_pela_api_move_e_fica_auditado(cli):
             t = um(con, "SELECT client_id FROM tasks WHERE title=?", (titulo,))
             c = um(con, "SELECT * FROM clients WHERE id=?", (t["client_id"],))
             return c["pilot_name"] or c["name"]
-        assert dono("Charlie M_Racing Program 3/6 [Junior KA100]") == "Charlie Marron"
-        assert dono("Brody Robbin_Professional Coach [His own kart] Bushnell") == "Brody Robbin"
-        assert dono("David Pera Using his own Kart") == "David Pera"
+        assert dono("Charlie M_Racing Program 3/6 [Junior KA100]") == "Charlie Mardon"
+        assert dono("Brody Rodbin_Professional Coach [His own kart] Bushnell") == "Brody Rodbin"
+        assert dono("David Pedalo Using his own Kart") == "David Pedalo"
         assert um(con, "SELECT 1 FROM audit_logs WHERE event='clients.service_attribution'"), \
             "movimento em massa é auditado"
     finally:
@@ -448,16 +448,16 @@ def test_operator_nao_aplica(cli):
 # --------------------------------------------- o princípio do dono: contato confirma
 def test_mesmo_contato_confirma_e_nome_parecido_so_sugere(con):
     """"O princípio para cruzar e confirmar é usar o nome do responsável e informações
-    de contato" (dono, 22/09). O Alex do Edward Donnell não é o Alex Xikis."""
-    a = {"name": "Edward Donnell", "pilot_name": "Alex", "email": "ed@x.com", "phone": None}
-    b = {"name": "Maria Xikis", "pilot_name": "Alex Xikis", "email": "mx@x.com", "phone": None}
+    de contato" (dono, 22/09). O Alex do Edward Dampell não é o Alex Xelix."""
+    a = {"name": "Edward Dampell", "pilot_name": "Alex", "email": "ed@x.com", "phone": None}
+    b = {"name": "Maria Xelix", "pilot_name": "Alex Xelix", "email": "mx@x.com", "phone": None}
     assert identidade.mesmo_contato(a, b) is None
     assert atribuicao.grau_de_igualdade(a, b) is None, "primeiro nome igual não é nada"
-    c = {"name": "Edward Donnell", "pilot_name": "Alex Donnell", "email": "ed@x.com", "phone": None}
+    c = {"name": "Edward Dampell", "pilot_name": "Alex Dampell", "email": "ed@x.com", "phone": None}
     assert identidade.mesmo_contato(a, c).startswith("mesmo e-mail")
     assert atribuicao.grau_de_igualdade(a, c) == "confirmado"
-    d = {"name": "Charlie Marrom", "pilot_name": "Charlie Marrom", "email": None, "phone": None}
-    e = {"name": "Charlie Marron", "pilot_name": "Charlie Marron", "email": None, "phone": None}
+    d = {"name": "Charlie Mardom", "pilot_name": "Charlie Mardom", "email": None, "phone": None}
+    e = {"name": "Charlie Mardon", "pilot_name": "Charlie Mardon", "email": None, "phone": None}
     assert atribuicao.grau_de_igualdade(d, e) == "parece", "sem contato, é só suspeita"
 
 
@@ -480,21 +480,21 @@ def test_candidatos_duplicados_acha_mesmo_email_e_telefone_antes_do_nome(con):
 
 # --------------------------------------------- 22/09, à noite: as três instruções finais
 def test_tag_na_frente_e_jr_no_fim():
-    """"[Canceled] Erik Mendoza Jr_Karting School" — dono: "nesse caso o nome é Erik Mendoza"."""
-    assert identidade.pessoa_do_titulo("[Canceled] Erik Mendoza Jr_Karting School [4/4 Mini] Lead and follow") == "Erik Mendoza"
-    assert identidade.pessoa_do_titulo("Erik Mendoza Jr._Prep") == "Erik Mendoza"
-    assert identidade.pessoa_do_titulo("Thiago Belluci Sr") == "Thiago Belluci Sr", "Sr é o pai; fica"
+    """"[Canceled] Erik Mangoza Jr_Karting School" — dono: "nesse caso o nome é Erik Mangoza"."""
+    assert identidade.pessoa_do_titulo("[Canceled] Erik Mangoza Jr_Karting School [4/4 Mini] Lead and follow") == "Erik Mangoza"
+    assert identidade.pessoa_do_titulo("Erik Mangoza Jr._Prep") == "Erik Mangoza"
+    assert identidade.pessoa_do_titulo("Thiago Biellaci Sr") == "Thiago Biellaci Sr", "Sr é o pai; fica"
 
 
 def test_contato_da_descricao_decide_antes_do_titulo(con):
-    """O título diz "Alex"; a descrição diz Edward Donnell, ed@… — é o Alex do Edward, e
-    não vai para balde nenhum nem para o Alex Xikis. Princípio do dono na fonte."""
-    edward = _cliente(con, "Edward Donnell", piloto="Alex Donnell", email="ed@x.com")
-    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    """O título diz "Alex"; a descrição diz Edward Dampell, ed@… — é o Alex do Edward, e
+    não vai para balde nenhum nem para o Alex Xelix. Princípio do dono na fonte."""
+    edward = _cliente(con, "Edward Dampell", piloto="Alex Dampell", email="ed@x.com")
+    _cliente(con, "Maria Xelix", piloto="Alex Xelix", email="mx@x.com")
     t1 = _tarefa(con, "Alex_Prep Orlando Cup {KA100}")
     con.execute("UPDATE tasks SET resp_email='ED@x.com' WHERE id=?", (t1,))
     t2 = _tarefa(con, "Alex_Practice")
-    con.execute("UPDATE tasks SET resp_name='Edward Donnell' WHERE id=?", (t2,))
+    con.execute("UPDATE tasks SET resp_name='Edward Dampell' WHERE id=?", (t2,))
     t3 = _tarefa(con, "Alex_Trackside")                       # sem descrição: título ambíguo → balde
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=True)
@@ -532,11 +532,11 @@ def test_ler_descricoes_busca_no_asana_so_o_que_ficou_em_duvida(con, monkeypatch
     no Asana — uma vez: fica guardado na tarefa."""
     from command_center.db import inserir
     from command_center.providers import atribuicao as A
-    edward = _cliente(con, "Edward Donnell", piloto="Alex Donnell", email="ed@x.com")
-    _cliente(con, "Maria Xikis", piloto="Alex Xikis")
-    certo = _cliente(con, "Brody Robbin")
+    edward = _cliente(con, "Edward Dampell", piloto="Alex Dampell", email="ed@x.com")
+    _cliente(con, "Maria Xelix", piloto="Alex Xelix")
+    certo = _cliente(con, "Brody Rodbin")
     t_duvida = _tarefa(con, "Alex_Prep Orlando Cup {KA100}")
-    t_certo = _tarefa(con, "Brody Robbin_Professional Coach")
+    t_certo = _tarefa(con, "Brody Rodbin_Professional Coach")
     inserir(con, "entity_links", entity_type="task", entity_id=t_duvida, system="asana", external_id="g-alex")
     inserir(con, "entity_links", entity_type="task", entity_id=t_certo, system="asana", external_id="g-brody")
     con.commit()
@@ -544,7 +544,7 @@ def test_ler_descricoes_busca_no_asana_so_o_que_ficou_em_duvida(con, monkeypatch
 
     def chamar_falso(sistema, ferramenta, **a):
         pedidos.append(a["gid"])
-        return {"gid": a["gid"], "nome": "x", "notas": "Driver's name: Alex\nResponsible Name: Edward Donnell\nEmail: ed@x.com\nPhone: 407-555-0100"}
+        return {"gid": a["gid"], "nome": "x", "notas": "Driver's name: Alex\nResponsible Name: Edward Dampell\nEmail: ed@x.com\nPhone: 407-555-0100"}
     import command_center.providers as P
     monkeypatch.setattr(P, "chamar", chamar_falso)
     rel = A.redistribuir(con, aplicar=True, ler_descricoes=True)
@@ -578,7 +578,7 @@ def test_falha_ao_ler_descricao_aparece_no_relatorio(con, monkeypatch):
     rede era engolido. Agora conta e mostra."""
     from command_center.db import inserir
     import command_center.providers as P
-    _cliente(con, "Mike Fattuta"); _cliente(con, "Mike Davies")
+    _cliente(con, "Mike Flatuta"); _cliente(con, "Mike Dutos")
     t = _tarefa(con, "Mike_Prep for Orlando Cup")
     inserir(con, "entity_links", entity_type="task", entity_id=t, system="asana", external_id="g-mike")
     con.commit()
@@ -593,7 +593,7 @@ def test_falha_ao_ler_descricao_aparece_no_relatorio(con, monkeypatch):
 
 
 def test_recado_de_quadro_nao_tira_servico_do_card_certo():
-    """"Inventário Hank Lai_ caixa" moveu um serviço PARA FORA do Hank Lai (22/09 à noite):
+    """"Inventário Hank Lume_ caixa" moveu um serviço PARA FORA do Hank Lume (22/09 à noite):
     "Inventário" passava por nome. Tarefa com verbo/recado na frente não é gente.
 
     A extensão da VPS levantou a dúvida certa: e se "Inventário <cliente>" for trabalho
@@ -601,11 +601,11 @@ def test_recado_de_quadro_nao_tira_servico_do_card_certo():
     como está — `Inventário <nome>` é tarefa de galpão, não serviço de ninguém, e sai
     do card. Se um dia virar serviço cobrado, é decisão do dono, e este teste é o lugar
     de mudar."""
-    for t in ("Inventário Hank Lai_ caixa", "Organizar caixa de ferramenta preta do galpao",
+    for t in ("Inventário Hank Lume_ caixa", "Organizar caixa de ferramenta preta do galpao",
               "Comprar pneus para o Branson", "Preparar a area de trabalhar nos motores",
-              "Check tire pressure_Mike", "Order parts | Alex Xikis"):
+              "Check tire pressure_Mike", "Order parts | Alex Xelix"):
         assert identidade.pessoa_do_titulo(t) is None, t
-    assert identidade.pessoa_do_titulo("Hank Lai ORGANIZE") == "Hank Lai ORGANIZE" or \
+    assert identidade.pessoa_do_titulo("Hank Lume ORGANIZE") == "Hank Lume ORGANIZE" or \
         atribuicao is not None                        # esse resolve por "nome quase igual", não precisa cortar
 
 
@@ -614,20 +614,20 @@ def test_servico_em_balde_vai_buscar_a_descricao_e_sai_do_balde(con, monkeypatch
     no balde "Mike" contava como "já certo" e nunca ia — 5 descrições lidas em 1184."""
     from command_center.db import inserir
     import command_center.providers as P
-    fattuta = _cliente(con, "Mike Fattuta", email="fattuta@x.com")
-    _cliente(con, "Mike Davies", email="davies@x.com")
+    flatuta = _cliente(con, "Mike Flatuta", email="flatuta@x.com")
+    _cliente(con, "Mike Dutos", email="davies@x.com")
     balde = _cliente(con, "Mike")                         # o balde, sem contato
     t = _tarefa(con, "Mike_Prep for Orlando Cup", client_id=balde)
     t2 = _tarefa(con, "Mike_Practice", client_id=balde)
     inserir(con, "entity_links", entity_type="task", entity_id=t, system="asana", external_id="g-1")
     inserir(con, "entity_links", entity_type="task", entity_id=t2, system="asana", external_id="g-2")
     con.commit()
-    notas = {"g-1": "Driver's name: Mike\nResponsible Name: Paul Fattuta\nEmail: fattuta@x.com",
+    notas = {"g-1": "Driver's name: Mike\nResponsible Name: Paul Flatuta\nEmail: flatuta@x.com",
              "g-2": "Driver's name: Mike"}                 # sem contato: fica no balde
     monkeypatch.setattr(P, "chamar", lambda s, f, **a: {"gid": a["gid"], "nome": "x", "notas": notas[a["gid"]]})
     rel = atribuicao.redistribuir(con, aplicar=True, ler_descricoes=True)
     assert rel["descricoes_lidas"] == 2
-    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == fattuta
+    assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t,))["client_id"] == flatuta
     assert any("saiu do balde" in m["motivo"] for m in rel["movidos"])
     assert um(con, "SELECT client_id FROM tasks WHERE id=?", (t2,))["client_id"] == balde, "sem contato, espera"
     # segunda rodada: não pergunta de novo (ficou guardado na tarefa)
@@ -641,8 +641,8 @@ def test_sync_nao_engole_o_balde_no_card_de_outra_familia(con):
     """O CRÍTICO nº1: `deduplicar` roda a cada 15 min e unia o balde "Alex" no primeiro
     card com piloto "Alex" — o serviço acabava na família errada sozinho, desfazendo a
     regra do dono. Balde nunca é unido automaticamente."""
-    edward = _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
-    maria = _cliente(con, "Maria Xikis", piloto="Alex", email="mx@x.com")
+    edward = _cliente(con, "Edward Dampell", piloto="Alex", email="ed@x.com")
+    maria = _cliente(con, "Maria Xelix", piloto="Alex", email="mx@x.com")
     _tarefa(con, "Alex_Trackside Support")
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
@@ -678,10 +678,10 @@ def test_deduplicar_nao_mexe_em_separado(con):
 
 
 def test_uniao_do_dono_nao_e_desfeita_na_varredura_seguinte(con):
-    """O CRÍTICO nº2: o dono unia o balde "Mike" ao Mike Davies e a varredura seguinte
+    """O CRÍTICO nº2: o dono unia o balde "Mike" ao Mike Dutos e a varredura seguinte
     recriava o balde e tirava o serviço de volta."""
-    _cliente(con, "Mike Fattuta", email="f@x.com")
-    davies = _cliente(con, "Mike Davies", email="d@x.com")
+    _cliente(con, "Mike Flatuta", email="f@x.com")
+    davies = _cliente(con, "Mike Dutos", email="d@x.com")
     _tarefa(con, "Mike_Prep for Orlando Cup")
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
@@ -694,8 +694,8 @@ def test_uniao_do_dono_nao_e_desfeita_na_varredura_seguinte(con):
 
 def test_varredura_reaproveita_o_balde_em_vez_de_criar_outro(con):
     """O balde tem de ser estável: antes, cada rodada criava mais um "Alex"."""
-    _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
-    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    _cliente(con, "Edward Dampell", piloto="Alex", email="ed@x.com")
+    _cliente(con, "Maria Xelix", piloto="Alex Xelix", email="mx@x.com")
     _tarefa(con, "Alex_Trackside Support")
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
@@ -707,9 +707,9 @@ def test_varredura_reaproveita_o_balde_em_vez_de_criar_outro(con):
 
 def test_piloto_de_uma_palavra_nao_captura_o_servico_de_outro(con):
     """O CRÍTICO nº3: card com piloto "Alex" batia exato e a checagem de ambiguidade
-    nunca rodava — o serviço do Alex Xikis ia para o Alex do Edward."""
-    _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
-    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    nunca rodava — o serviço do Alex Xelix ia para o Alex do Edward."""
+    _cliente(con, "Edward Dampell", piloto="Alex", email="ed@x.com")
+    _cliente(con, "Maria Xelix", piloto="Alex Xelix", email="mx@x.com")
     con.commit()
     cliente, motivo = atribuicao.resolver(con, "Alex")
     assert cliente is None and "ambíguo" in motivo
@@ -718,7 +718,7 @@ def test_piloto_de_uma_palavra_nao_captura_o_servico_de_outro(con):
 def test_nome_cortado_de_uma_palavra_vai_para_card_proprio(con):
     """Sobrenome que caiu no vocabulário de serviço deixa um primeiro nome solto. Pista
     fraca demais para ligar a um card pelo primeiro nome."""
-    _cliente(con, "Callan Barfield", email="cb@x.com")
+    _cliente(con, "Callan Barfolha", email="cb@x.com")
     _tarefa(con, "Callan Lead & Follow Vanderlan _Bushnell [5/8]")
     con.commit()
     d = identidade.pessoa_do_titulo_detalhe("Callan Lead & Follow Vanderlan _Bushnell [5/8]")
@@ -733,11 +733,11 @@ def test_pista_serie_e_marca_nunca_viram_gente(con):
     for lixo in ("Daytona Speedway Practice", "FLKC Round 5&6 | Daytona Speedway",
                  "Endurance | OKC Florida, FL", "Lucas Oil | Sebring, FL",
                  "Star Champions Series - King Castle | New Castle Motorsports",
-                 "The North Florida Kart Club #10", "Inventário Hank Lai_ caixa"):
+                 "The North Florida Kart Club #10", "Inventário Hank Lume_ caixa"):
         assert identidade.pessoa_do_titulo(lixo) is None, lixo
-    for titulo, esperado in (("Giovanni Barrera 2 Stroke Karting School", "Giovanni Barrera"),
-                             ("Joe Li - Karting School - Rotax Sr Urace", "Joe Li"),
-                             ("Heavenly Fuster - KARTING SCHOOL - Rok GP Urace", "Heavenly Fuster")):
+    for titulo, esperado in (("Giovanni Bandarra 2 Stroke Karting School", "Giovanni Bandarra"),
+                             ("Joe Lue - Karting School - Rotax Sr Urace", "Joe Lue"),
+                             ("Heavenly Fusivel - KARTING SCHOOL - Rok GP Urace", "Heavenly Fusivel")):
         assert identidade.pessoa_do_titulo(titulo) == esperado, titulo
 
 
@@ -745,9 +745,9 @@ def test_acha_pessoa_poe_o_responsavel_na_frente_do_piloto(con):
     """O princípio do dono também na sincronia: responsável decide antes do piloto, e
     piloto de uma palavra só não decide sozinho."""
     balde = _cliente(con, "Alex")
-    edward = _cliente(con, "Edward Donnell", piloto="Alex Donnell", email="ed@x.com")
+    edward = _cliente(con, "Edward Dampell", piloto="Alex Dampell", email="ed@x.com")
     con.commit()
-    achado, _ = identidade.acha_pessoa(con, nome="Edward Donnell", piloto="Alex")
+    achado, _ = identidade.acha_pessoa(con, nome="Edward Dampell", piloto="Alex")
     assert achado["id"] == edward, "o responsável manda"
     achado2, _ = identidade.acha_pessoa(con, piloto="Alex")
     assert achado2 is None or achado2["id"] == balde
@@ -769,11 +769,11 @@ def test_uniao_guarda_o_convite_de_corrida_que_colide(con):
 
 
 def test_uniao_automatica_nao_conta_como_decisao_do_dono(con):
-    """A sincronia comeu o balde "Alex" dentro do Edward Donnell (22/09, 13:46). Se a
+    """A sincronia comeu o balde "Alex" dentro do Edward Dampell (22/09, 13:46). Se a
     varredura tratasse essa união como decisão, cimentaria o erro em vez de desfazê-lo:
     só união feita à mão manda."""
-    edward = _cliente(con, "Edward Donnell", piloto="Alex", email="ed@x.com")
-    _cliente(con, "Maria Xikis", piloto="Alex Xikis", email="mx@x.com")
+    edward = _cliente(con, "Edward Dampell", piloto="Alex", email="ed@x.com")
+    _cliente(con, "Maria Xelix", piloto="Alex Xelix", email="mx@x.com")
     _tarefa(con, "Alex_Trackside Support", client_id=edward)
     balde = _cliente(con, "Alex")
     con.commit()
@@ -788,13 +788,13 @@ def test_uniao_automatica_nao_conta_como_decisao_do_dono(con):
 def test_servico_que_ja_esta_num_card_plausivel_nao_sai_dele(con):
     """A regra do dono é não pôr no card de OUTRO — não é mexer em quem já está em casa.
 
-    "AIDEN - KARTING SCHOOL" estava no Aidan Mills (1 letra), "Garret" no Garrett
+    "AIDEN - KARTING SCHOOL" estava no Aidan Molas (1 letra), "Garret" no Garrett
     Curtis, "Isabel" no card Isabel. A varredura queria tirar os três para baldes
     novos, estragando o que estava certo."""
-    aidan = _cliente(con, "Aidan Mills", email="am@x.com")
-    garrett = _cliente(con, "Garrett Curtis", email="gc@x.com")
+    aidan = _cliente(con, "Aidan Molas", email="am@x.com")
+    garrett = _cliente(con, "Garrett Curvis", email="gc@x.com")
     isabel = _cliente(con, "Isabel")
-    _cliente(con, "Isabel Meijá", email="im@x.com")
+    _cliente(con, "Isabel Mejorá", email="im@x.com")
     _tarefa(con, "AIDEN - KARTING SCHOOL TILLOTSON", client_id=aidan)
     _tarefa(con, "Garret  [Kart Experience - 4 SESSIONS]", client_id=garrett)
     _tarefa(con, "Isabel_Driving Experience  2T Junior", client_id=isabel)
@@ -809,22 +809,22 @@ def test_servico_que_ja_esta_num_card_plausivel_nao_sai_dele(con):
 
 def test_servico_no_card_de_outra_pessoa_ainda_sai(con):
     """A regra de ficar em casa não pode virar desculpa para deixar errado onde está."""
-    tyron = _cliente(con, "Tyron Brouta", email="tb@x.com")
-    matias = _cliente(con, "Matías Lopez", email="ml@x.com")
-    _tarefa(con, "Matías Lopez_ Driving Experience[6 sessions Baby Kart]", client_id=tyron)
+    tyron = _cliente(con, "Tyron Breckta", email="tb@x.com")
+    matias = _cliente(con, "Matías Lombez", email="ml@x.com")
+    _tarefa(con, "Matías Lombez_ Driving Experience[6 sessions Baby Kart]", client_id=tyron)
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
     assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Matías%'")["client_id"] == matias
 
 
 @pytest.mark.parametrize("titulo,esperado", [
-    ("Go Kart Driving Experience - Allan Ramos- 2 STROKE Urace", "Allan Ramos"),
+    ("Go Kart Driving Experience - Allan Rampos- 2 STROKE Urace", "Allan Rampos"),
     ("Driving Experience - Bruno Reis", "Bruno Reis"),
     ("Karting School - Marcos Vinicius - Cadet", "Marcos Vinicius"),
 ])
 def test_nome_no_meio_do_titulo_quando_o_servico_vem_na_frente(titulo, esperado):
     """A pessoa quase sempre vem primeiro; quando o primeiro pedaço é SÓ serviço, ela
-    vem depois. "Go Kart Driving Experience - Allan Ramos" virava a pessoa "Go"."""
+    vem depois. "Go Kart Driving Experience - Allan Rampos" virava a pessoa "Go"."""
     assert identidade.pessoa_do_titulo(titulo) == esperado
 
 
@@ -841,11 +841,11 @@ def test_pular_pedaco_nunca_atravessa_uma_corrida(titulo):
 
 # ============ a varredura com o nome no meio: quatro defeitos que ela expôs ============
 @pytest.mark.parametrize("titulo,esperado", [
-    ("Karting School -  Cayetano Sanin -BABYKART", "Cayetano Sanin"),   # hífen colado no FIM
-    ("Karting School - Landon Silvers BABY - NO CHASSIS", "Landon Silvers"),
-    ("Karting School PRO -  Guillermo Jimenez - Micro PRO URACE", "Guillermo Jimenez"),
-    ("DRIVING EXPERIENCE - ALI ALHANOOTI (vlr engine)", "Ali Alhanooti"),
-    ("Karting School - Sean Portnov - NO CHASSIS", "Sean Portnov"),
+    ("Karting School -  Cayetano Sanfo -BABYKART", "Cayetano Sanfo"),   # hífen colado no FIM
+    ("Karting School - Landon Silvatto BABY - NO CHASSIS", "Landon Silvatto"),
+    ("Karting School PRO -  Guillermo Jantez - Micro PRO URACE", "Guillermo Jantez"),
+    ("DRIVING EXPERIENCE - ALI ALHAVANCA (vlr engine)", "Ali Alhavanca"),
+    ("Karting School - Sean Portalov - NO CHASSIS", "Sean Portalov"),
 ])
 def test_nome_no_meio_sem_categoria_grudada(titulo, esperado):
     assert (identidade.pessoa_do_titulo(titulo) or "").lower() == esperado.lower()
@@ -859,12 +859,12 @@ def test_recado_de_quadro_nao_vira_pessoa_pulando_pedaco(con):
 
 
 def test_grafia_diferente_nao_abre_dois_cards(con):
-    """"JOSE MIGUEL Abed" e "Jose Miguel Abed" são a mesma criança."""
-    _tarefa(con, "KART SCHOOL - JOSE MIGUEL Abed (Mexico)")
-    _tarefa(con, "KART SCHOOL - Jose Miguel Abed (Mexico)")
+    """"JOSE MIGUEL Asfa" e "Jose Miguel Asfa" são a mesma criança."""
+    _tarefa(con, "KART SCHOOL - JOSE MIGUEL Asfa (Mexico)")
+    _tarefa(con, "KART SCHOOL - Jose Miguel Asfa (Mexico)")
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
-    cards = todos(con, "SELECT id FROM clients WHERE LOWER(name) LIKE '%abed%'")
+    cards = todos(con, "SELECT id FROM clients WHERE LOWER(name) LIKE '%asfa%'")
     assert len(cards) == 1, "um card só"
     assert um(con, "SELECT COUNT(*) n FROM tasks WHERE client_id=?", (cards[0]["id"],))["n"] == 2
 
@@ -883,19 +883,19 @@ def test_erro_de_digitacao_no_card_atual_segura_o_servico(con):
 
 
 def test_nome_colado_no_servico_sem_separador(con):
-    """"Driving Experience Duffy Merrill" é um card real do quadro: serviço colado no
+    """"Driving Experience Duffy Mercurill" é um card real do quadro: serviço colado no
     nome, sem separador nenhum. Tira o serviço da frente e vê se sobra gente."""
-    assert identidade.pessoa_do_titulo("Driving Experience Duffy Merrill") == "Duffy Merrill"
+    assert identidade.pessoa_do_titulo("Driving Experience Duffy Mercurill") == "Duffy Mercurill"
     assert identidade.pessoa_do_titulo("Go Kart Driving Experience") is None
     assert identidade.pessoa_do_titulo("Karting School") is None
-    assert identidade.pessoa_do_titulo("Gonzalo Peres_Practice") == "Gonzalo Peres"
+    assert identidade.pessoa_do_titulo("Gonzalo Pedres_Practice") == "Gonzalo Pedres"
 
 
 def test_servico_fica_no_card_que_tem_exatamente_aquele_nome(con):
     """"Isabel" saía do card "Isabel" para um card novo "Isabel" porque havia uma
-    "Isabel Meijá" no cadastro. Card com o nome exato é casa, ponto."""
-    isabel = _cliente(con, "Isabel", piloto="Isabel Ramos")
-    _cliente(con, "Isabel Meijá", email="im@x.com")
+    "Isabel Mejorá" no cadastro. Card com o nome exato é casa, ponto."""
+    isabel = _cliente(con, "Isabel", piloto="Isabel Rampos")
+    _cliente(con, "Isabel Mejorá", email="im@x.com")
     _tarefa(con, "Isabel_Driving Experience 2T Junior", client_id=isabel)
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=True)
@@ -905,20 +905,20 @@ def test_servico_fica_no_card_que_tem_exatamente_aquele_nome(con):
 
 # ============ o dono confirmou: a varredura não mexe mais ============
 def test_servico_confirmado_pelo_dono_nao_e_movido_nunca(con):
-    """Dono, 22/09: os 18 "Savage" e 2 "Savege" do #15 são do Alexander — mesmo o card
-    tendo sido alcançado pelo sobrenome do KENNETH Savage.
+    """Dono, 22/09: os 18 "Sprage" e 2 "Sprege" do #15 são do Alexander — mesmo o card
+    tendo sido alcançado pelo sobrenome do KENNETH Sprage.
 
     "Está certo hoje" não dura: basta um homônimo novo entrar no cadastro para o nome
     virar ambíguo e a varredura tirar o serviço de lá. O carimbo é o que faz a decisão
     dele valer mais que qualquer regra automática."""
-    c15 = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
-    t1 = _tarefa(con, "Savage_RWC RD2", client_id=c15)
-    t2 = _tarefa(con, "Savege_RWC RD2", client_id=c15)
+    c15 = _cliente(con, "Kenneth Sprage", piloto="Alexander Sprage")
+    t1 = _tarefa(con, "Sprage_RWC RD2", client_id=c15)
+    t2 = _tarefa(con, "Sprege_RWC RD2", client_id=c15)
     con.execute("UPDATE tasks SET client_by='human', client_at=? WHERE id IN (?,?)",
                 ("2026-09-22T18:00:00Z", t1, t2))
     con.commit()
-    # chega outro Savage: sem carimbo, "Savage" viraria ambíguo e o serviço sairia
-    _cliente(con, "Bruno Savage", piloto="Tito Savage", email="bs@x.com")
+    # chega outro Sprage: sem carimbo, "Sprage" viraria ambíguo e o serviço sairia
+    _cliente(con, "Bruno Sprage", piloto="Tito Sprage", email="bs@x.com")
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=True)
     assert rel["movidos"] == [] and rel["confirmados"] == 2
@@ -927,18 +927,18 @@ def test_servico_confirmado_pelo_dono_nao_e_movido_nunca(con):
 
 def test_sem_carimbo_o_homonimo_novo_tira_o_servico_de_la(con):
     """O contraste que justifica o carimbo: exatamente o mesmo cenário, sem confirmar."""
-    c15 = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
-    _tarefa(con, "Savage_RWC RD2", client_id=c15)
-    _cliente(con, "Bruno Savage", piloto="Tito Savage", email="bs@x.com")
+    c15 = _cliente(con, "Kenneth Sprage", piloto="Alexander Sprage")
+    _tarefa(con, "Sprage_RWC RD2", client_id=c15)
+    _cliente(con, "Bruno Sprage", piloto="Tito Sprage", email="bs@x.com")
     con.commit()
     atribuicao.redistribuir(con, aplicar=True)
-    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Savage%'")["client_id"] != c15
+    assert um(con, "SELECT client_id FROM tasks WHERE title LIKE 'Sprage%'")["client_id"] != c15
 
 
 def test_confirmar_nao_esconde_o_servico_do_relatorio(con):
     """Confirmado não é invisível: o RESUMO diz quantos são intocáveis."""
-    c = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
-    t = _tarefa(con, "Savage_RWC", client_id=c)
+    c = _cliente(con, "Kenneth Sprage", piloto="Alexander Sprage")
+    t = _tarefa(con, "Sprage_RWC", client_id=c)
     con.execute("UPDATE tasks SET client_by='human' WHERE id=?", (t,))
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=False)
@@ -947,10 +947,10 @@ def test_confirmar_nao_esconde_o_servico_do_relatorio(con):
 
 def test_corrida_no_card_de_cliente_e_apontada_e_pode_sair(con):
     """Dono, 22/09: "é uma tarefa paralela, não gera card". Não gerar card não basta —
-    `Lucas Oil Winter Series Race | Sebring` estava DENTRO do card do Alexander Savage."""
-    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    `Lucas Oil Winter Series Race | Sebring` estava DENTRO do card do Alexander Sprage."""
+    alex = _cliente(con, "Kenneth Sprage", piloto="Alexander Sprage")
     corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=alex)
-    servico = _tarefa(con, "Savage_RWC RD2", client_id=alex)
+    servico = _tarefa(con, "Sprage_RWC RD2", client_id=alex)
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=True)
     assert [x["task_id"] for x in rel["nao_servicos_em_card"]] == [corrida]
@@ -963,7 +963,7 @@ def test_corrida_no_card_de_cliente_e_apontada_e_pode_sair(con):
 
 def test_soltar_nao_tira_o_que_o_dono_carimbou(con):
     """Se ele carimbou, ele decidiu. Nem a limpeza passa por cima."""
-    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    alex = _cliente(con, "Kenneth Sprage", piloto="Alexander Sprage")
     t = _tarefa(con, "Endurance Race - OKC", client_id=alex)
     con.execute("UPDATE tasks SET client_by='human' WHERE id=?", (t,))
     con.commit()
@@ -973,13 +973,13 @@ def test_soltar_nao_tira_o_que_o_dono_carimbou(con):
 
 def test_soltar_um_id_nao_leva_junto_o_que_pode_ser_do_cliente(con):
     """A extensão da VPS recusou a T-006 e estava certa: `--soltar-nao-servicos` era
-    tudo-ou-nada. No card do Hank Lai havia duas linhas sem nome de pessoa no título —
+    tudo-ou-nada. No card do Hank Lume havia duas linhas sem nome de pessoa no título —
     uma corrida (`Lucas Oil...`), que não é serviço de ninguém, e
-    `Inventário Hank Lai_ caixa`, que PODE ser trabalho feito para ele. Soltar as duas
+    `Inventário Hank Lume_ caixa`, que PODE ser trabalho feito para ele. Soltar as duas
     para resolver uma era perder a segunda. Agora se solta só a que o dono mandou."""
-    hank = _cliente(con, "Hank Lai", email="hl@x.com")
+    hank = _cliente(con, "Hank Lume", email="hl@x.com")
     corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=hank)
-    inventario = _tarefa(con, "Inventário Hank Lai_ caixa", client_id=hank)
+    inventario = _tarefa(con, "Inventário Hank Lume_ caixa", client_id=hank)
     con.commit()
     apontados = atribuicao.redistribuir(con, aplicar=False)["nao_servicos_em_card"]
     assert {x["task_id"] for x in apontados} == {corrida, inventario}, "as duas são apontadas"
@@ -993,9 +993,9 @@ def test_soltar_um_id_nao_leva_junto_o_que_pode_ser_do_cliente(con):
 def test_soltar_recusa_id_que_nao_esta_na_lista_e_nao_escreve_nada(con):
     """`--soltar` não é uma porta para tirar serviço de gente do card certo. Só aceita
     id que a própria varredura já classificou como "não é serviço de ninguém"."""
-    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    alex = _cliente(con, "Kenneth Sprage", piloto="Alexander Sprage")
     corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=alex)
-    servico = _tarefa(con, "Savage_RWC RD2", client_id=alex)
+    servico = _tarefa(con, "Sprage_RWC RD2", client_id=alex)
     con.commit()
     with pytest.raises(ValueError) as erro:
         atribuicao.redistribuir(con, aplicar=True, soltar_ids=[servico])
@@ -1008,7 +1008,7 @@ def test_soltar_recusa_id_que_nao_esta_na_lista_e_nao_escreve_nada(con):
 def test_soltar_um_id_tambem_respeita_o_carimbo_do_dono(con):
     """O carimbo é a palavra final em qualquer caminho, inclusive no cirúrgico — e a
     recusa diz QUAL das duas razões é, senão quem lê acha que errou o id."""
-    alex = _cliente(con, "Kenneth Savage", piloto="Alexander Savage")
+    alex = _cliente(con, "Kenneth Sprage", piloto="Alexander Sprage")
     t = _tarefa(con, "Endurance Race - OKC", client_id=alex)
     con.execute("UPDATE tasks SET client_by='human' WHERE id=?", (t,))
     con.commit()
@@ -1020,7 +1020,7 @@ def test_soltar_um_id_tambem_respeita_o_carimbo_do_dono(con):
 
 def test_varredura_sem_aplicar_nunca_solta_nada(con):
     """Pedir `--soltar` sem `--aplicar` é ver o que aconteceria, não fazer acontecer."""
-    hank = _cliente(con, "Hank Lai", email="hl@x.com")
+    hank = _cliente(con, "Hank Lume", email="hl@x.com")
     corrida = _tarefa(con, "Lucas Oil  Winter Series Race | Sebring International Raceway", client_id=hank)
     con.commit()
     rel = atribuicao.redistribuir(con, aplicar=False, soltar_ids=[corrida])
@@ -1031,15 +1031,15 @@ def test_varredura_sem_aplicar_nunca_solta_nada(con):
 def test_uniao_do_dono_vence_ate_nome_truncado_e_homonimo(con):
     """O pior defeito do dia, pego pela extensão da VPS no plano — antes de aplicar.
 
-    Depois de o dono unir o balde "Martin" ao card "Martin Jaramillo", a varredura
+    Depois de o dono unir o balde "Martin" ao card "Martin Jantillo", a varredura
     queria tirar os 26 serviços de lá e recriar o balde. Causa: UMA tarefa
     ("Martin 03/08 próprio motor Rok vlr") marcava o nome como truncado, e esse ramo
-    pulava a checagem da união. Sem a checagem, os homônimos (Bruno Martins, Ethan
-    Martins, Andres Marin) faziam o nome parecer ambíguo.
+    pulava a checagem da união. Sem a checagem, os homônimos (Bruno Martinx, Ethan
+    Martins, Andres Marchin) faziam o nome parecer ambíguo.
 
     A decisão do dono vem antes de qualquer heurística. Ponto."""
-    mj = _cliente(con, "Martin Jaramillo", email="mj@x.com")
-    for n, e in (("Bruno Martins", "bm@x.com"), ("Ethan Martins", "em@x.com"), ("Andres Marin", "am@x.com")):
+    mj = _cliente(con, "Martin Jantillo", email="mj@x.com")
+    for n, e in (("Bruno Martinx", "bm@x.com"), ("Ethan Martinx", "em@x.com"), ("Andres Marchin", "am@x.com")):
         _cliente(con, n, email=e)
     balde = _cliente(con, "Martin")
     for i in range(26):
@@ -1058,7 +1058,7 @@ def test_uniao_do_dono_vence_ate_nome_truncado_e_homonimo(con):
 def test_uniao_do_dono_nao_vence_contato_que_diz_outra_coisa(con):
     """O limite da regra acima: a descrição com contato ainda manda, porque é evidência
     sobre AQUELE serviço, não sobre o nome em geral."""
-    mj = _cliente(con, "Martin Jaramillo", email="mj@x.com")
+    mj = _cliente(con, "Martin Jantillo", email="mj@x.com")
     outro = _cliente(con, "Paulo Souza", email="ps@x.com")
     balde = _cliente(con, "Martin")
     t = _tarefa(con, "Martin_Practice", client_id=balde)
@@ -1072,10 +1072,10 @@ def test_uniao_do_dono_nao_vence_contato_que_diz_outra_coisa(con):
 # --------------------------------------------- 13/10: o teste do dono no Asana (#212)
 @pytest.mark.parametrize("titulo,esperado", [
     ("TESTE - Eduardo Fillipe Farias Resende", "Eduardo Fillipe Farias Resende"),
-    ("TEST: Max Westerberg", "Max Westerberg"),
-    ("Teste | Max Westerberg_Arrive and Drive", "Max Westerberg"),
-    ("TESTE Max Westerberg_Academy", "Max Westerberg"),
-    ("testing - Harley Keeble - Rotax [3/3]", "Harley Keeble"),
+    ("TEST: Max Westerpit", "Max Westerpit"),
+    ("Teste | Max Westerpit_Arrive and Drive", "Max Westerpit"),
+    ("TESTE Max Westerpit_Academy", "Max Westerpit"),
+    ("testing - Harley Kebrel - Rotax [3/3]", "Harley Kebrel"),
     ("Testa Rossi - Rotax", "Testa Rossi"),           # nome que só começa parecido fica
 ])
 def test_teste_na_frente_e_etiqueta_nao_e_o_piloto(titulo, esperado):

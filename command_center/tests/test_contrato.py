@@ -31,11 +31,11 @@ def _mes(n=0):
 
 
 def cenario(con, sessoes=4):
-    cid = inserir(con, "clients", name="Paulo Kurian", pilot_name="Enzo Kurian", email="paulo@kurian.com",
+    cid = inserir(con, "clients", name="Paulo Kartian", pilot_name="Enzo Kartian", email="paulo@kartian.example.com",
                   monthly_amount=3000, monthly_sessions=sessoes, monthly_plan="Academy 4 stroke", plan_type="monthly")
-    conta = inserir(con, "portal_accounts", email="paulo@kurian.com", pw_salt="x", pw_hash="x", name="Paulo Kurian",
+    conta = inserir(con, "portal_accounts", email="paulo@kartian.example.com", pw_salt="x", pw_hash="x", name="Paulo Kartian",
                     birth_date="1980-01-01", terms_accepted_at="2026-09-30T00:00:00Z", client_id=cid)
-    pil = inserir(con, "portal_pilots", account_id=conta, name="Enzo Kurian", client_id=cid)   # o card é do driver (#65)
+    pil = inserir(con, "portal_pilots", account_id=conta, name="Enzo Kartian", client_id=cid)   # o card é do driver (#65)
     return cid, conta, pil
 
 
@@ -50,7 +50,7 @@ def test_conta_site_e_asana_no_mes(con):
     sessao(con, conta, pil, f"{m}-10", status="pendente")
     sessao(con, conta, pil, f"{m}-12", status="cancelada")                 # cancelada não conta
     sessao(con, conta, pil, f"{_mes(-1)}-20")                               # mês passado, conta no mês dele
-    inserir(con, "tasks", client_id=cid, title="Enzo Kurian_Academy 4 Stroke - DOM 11", project="U-RACE", section="SUNDAY",
+    inserir(con, "tasks", client_id=cid, title="Enzo Kartian_Academy 4 Stroke - DOM 11", project="U-RACE", section="SUNDAY",
             status="open", due_on=f"{m}-11")
     u = contrato.usadas(con, cid, m)
     assert (len(u["site"]), len(u["asana"]), u["total"]) == (2, 1, 3)
@@ -116,7 +116,7 @@ def test_card_mostra_o_contrato_do_cliente_e_a_lista_da_equipe_tambem(cli, con):
 
 
 def test_card_reconhece_a_mensalidade_pelo_item_da_linha(con):
-    """#63: a invoice do Joseph Kurian de 17/09 não tem memo, só o item "Academy Monthly"."""
+    """#63: a invoice do Joseph Kartian de 17/09 não tem memo, só o item "Academy Monthly"."""
     from command_center.api import rotas
     cid, _, _ = cenario(con)
     m = _mes()

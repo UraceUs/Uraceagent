@@ -77,7 +77,7 @@ def avaliar(cenario, res, tentou, lido):
 def cenarios(con):
     """Pedidos como a equipe escreve. O cliente real é só lido (para ver se a IA acha o que já existe)."""
     lista = [{"nome": "piloto desconhecido, sem contato nem horário",
-              "pedido": "agenda uma aula de kart pro Rafael Quintanilha Borges semana que vem"}]
+              "pedido": "agenda uma aula de kart pro Rafael Quilhanha Bordas semana que vem"}]
     c = todos(con, """SELECT id, name, pilot_name, email FROM clients
                        WHERE status='ACTIVE' AND email IS NOT NULL AND email<>'' ORDER BY updated_at DESC LIMIT 1""")
     if c:

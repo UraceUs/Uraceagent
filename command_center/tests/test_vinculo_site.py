@@ -25,11 +25,11 @@ def cli(tmp_path, monkeypatch):
     c = conectar(); aplicar_schema(c)
     auth.criar_usuario(c, "op@urace.us", "Operador", "OPERATOR", SENHA)
     auth.criar_usuario(c, "ger@urace.us", "Gerente", "MANAGER", SENHA)
-    enzo = inserir(c, "clients", name="Paulo Kurian", pilot_name="Enzo Kurian", email="paulo@kurian.com", phone="407-555-0142", status="ACTIVE", source="asana")
+    enzo = inserir(c, "clients", name="Paulo Kartian", pilot_name="Enzo Kartian", email="paulo@kartian.example.com", phone="407-555-0142", status="ACTIVE", source="asana")
     outro = inserir(c, "clients", name="Rita Gomes", pilot_name="Leo Gomes", email="rita@gomes.com", phone="321-555-0100", status="ACTIVE", source="asana")
-    inserir(c, "tasks", client_id=enzo, title="Enzo Kurian_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="SATURDAY",
+    inserir(c, "tasks", client_id=enzo, title="Enzo Kartian_Urace Daily_Using Own Kart [1/1]", project="U-RACE", section="SATURDAY",
             status="completed", due_on="2026-09-12", fields='{"nota": "nota interna: pagar com desconto"}')
-    inserir(c, "tasks", client_id=enzo, title="Enzo Kurian_Urace Academy_2 stroke [2/4]", project="U-RACE", section="SUNDAY", status="open", due_on="2026-10-04")
+    inserir(c, "tasks", client_id=enzo, title="Enzo Kartian_Urace Academy_2 stroke [2/4]", project="U-RACE", section="SUNDAY", status="open", due_on="2026-10-04")
     inserir(c, "tasks", client_id=outro, title="Leo Gomes_Urace Daily_Rental Kart [1/1]", project="U-RACE", section="FRIDAY", status="completed", due_on="2026-09-10")
     c.commit(); c.close()
     with TestClient(app, base_url="https://cc.test") as t:
@@ -37,7 +37,7 @@ def cli(tmp_path, monkeypatch):
         yield t
 
 
-def cliente(cli, email, nome="Paulo Kurian", tel=None, piloto=None):
+def cliente(cli, email, nome="Paulo Kartian", tel=None, piloto=None):
     cli.cookies.clear()
     r = cli.post("/ops/api/portal/signup", json={"name": nome, "email": email, "password": "corrida-segura-9", "birth_date": "1980-01-01",
                                                  **ENDERECO, "phone": tel or f"(689) 555-{zlib.crc32(email.encode()) % 10000:04d}",
@@ -56,10 +56,10 @@ def equipe(cli, email="op@urace.us"):
 
 
 def test_sugere_por_email_telefone_e_nome_do_piloto(cli):
-    _, a1 = cliente(cli, "paulo@kurian.com", nome="P. Kurian")
-    _, a2 = cliente(cli, "outro@mail.com", nome="Alguém Silva", tel="(321) 555-0100")
-    _, a3 = cliente(cli, "terceiro@mail.com", nome="Pai Qualquer", piloto="Enzo Kurian")
-    _, a4 = cliente(cli, "ninguem@mail.com", nome="Zé Ninguém")
+    _, a1 = cliente(cli, "paulo@kartian.example.com", nome="P. Kartian")
+    _, a2 = cliente(cli, "outro@example.com", nome="Alguém Silva", tel="(321) 555-0100")
+    _, a3 = cliente(cli, "terceiro@example.com", nome="Pai Qualquer", piloto="Enzo Kartian")
+    _, a4 = cliente(cli, "ninguem@example.com", nome="Zé Ninguém")
     equipe(cli)
     contas = {c["id"]: c for c in cli.get("/ops/api/site/contas").json()["contas"]}
     assert contas[a1]["sugestao"]["client_id"] == cli.ids["enzo"] and contas[a1]["sugestao"]["motivo"] == "mesmo e-mail"
@@ -71,7 +71,7 @@ def test_sugere_por_email_telefone_e_nome_do_piloto(cli):
 
 
 def test_cliente_novo_no_painel_vira_sugestao_sozinho(cli):
-    _, a = cliente(cli, "nova@mail.com", nome="Carla Nova", piloto="Nina Nova")
+    _, a = cliente(cli, "nova@example.com", nome="Carla Nova", piloto="Nina Nova")
     equipe(cli)
     assert cli.get("/ops/api/site/contas").json()["contas"][0]["sugestao"] is None
     c = conectar(); novo = inserir(c, "clients", name="Carla Nova", pilot_name="Nina Nova", status="NEW", source="asana"); c.commit(); c.close()
@@ -79,27 +79,27 @@ def test_cliente_novo_no_painel_vira_sugestao_sozinho(cli):
 
 
 def test_historico_so_depois_do_vinculo_e_sem_nota_interna(cli):
-    hc, a = cliente(cli, "paulo@kurian.com")
+    hc, a = cliente(cli, "paulo@kartian.example.com")
     assert cli.get("/ops/api/portal/history").json() == {"linked": False, "services": []}
     h = equipe(cli)
     assert cli.post(f"/ops/api/site/contas/{a}/vincular", headers=h, json={"client_id": cli.ids["enzo"]}).status_code == 200
     cli.cookies.clear()
-    cli.post("/ops/api/portal/login", json={"email": "paulo@kurian.com", "password": "corrida-segura-9"})
+    cli.post("/ops/api/portal/login", json={"email": "paulo@kartian.example.com", "password": "corrida-segura-9"})
     hist = cli.get("/ops/api/portal/history").json()
     assert hist["linked"] and hist["services"] == [
-        {"date": "2026-10-04", "service": "Urace Academy · 2 stroke", "status": "scheduled", "driver": "Enzo Kurian"},
-        {"date": "2026-09-12", "service": "Urace Daily · Using Own Kart", "status": "done", "driver": "Enzo Kurian"}]
+        {"date": "2026-10-04", "service": "Urace Academy · 2 stroke", "status": "scheduled", "driver": "Enzo Kartian"},
+        {"date": "2026-09-12", "service": "Urace Daily · Using Own Kart", "status": "done", "driver": "Enzo Kartian"}]
     assert "nota interna" not in str(hist) and "Rental" not in str(hist), "nada de nota, nada de outro cliente"
     assert cli.get("/ops/api/portal/me").json()["linked"] is True
 
 
 def test_um_cliente_so_uma_conta_e_card_separado_nao(cli):
-    _, a1 = cliente(cli, "a@mail.com")
-    _, a2 = cliente(cli, "b@mail.com")
+    _, a1 = cliente(cli, "a@example.com")
+    _, a2 = cliente(cli, "b@example.com")
     h = equipe(cli)
     assert cli.post(f"/ops/api/site/contas/{a1}/vincular", headers=h, json={"client_id": cli.ids["enzo"]}).status_code == 200
     r = cli.post(f"/ops/api/site/contas/{a2}/vincular", headers=h, json={"client_id": cli.ids["enzo"]})
-    assert r.status_code == 400 and "a@mail.com" in r.json()["detail"]
+    assert r.status_code == 400 and "a@example.com" in r.json()["detail"]
     c = conectar(); sep = inserir(c, "clients", name="Corrida X", kind="separado", status="ACTIVE", source="asana"); c.commit(); c.close()
     assert cli.post(f"/ops/api/site/contas/{a2}/vincular", headers=h, json={"client_id": sep}).status_code == 400
     contas = {x["id"]: x for x in cli.get("/ops/api/site/contas?filtro=todas").json()["contas"]}
@@ -107,7 +107,7 @@ def test_um_cliente_so_uma_conta_e_card_separado_nao(cli):
 
 
 def test_cliente_nao_se_vincula_e_desvincular_e_do_gerente(cli):
-    hc, a = cliente(cli, "paulo@kurian.com")
+    hc, a = cliente(cli, "paulo@kartian.example.com")
     assert cli.post(f"/ops/api/site/contas/{a}/vincular", headers=hc, json={"client_id": cli.ids["enzo"]}).status_code == 401
     h = equipe(cli)
     cli.post(f"/ops/api/site/contas/{a}/vincular", headers=h, json={"client_id": cli.ids["enzo"]})
@@ -119,31 +119,31 @@ def test_cliente_nao_se_vincula_e_desvincular_e_do_gerente(cli):
 
 
 def test_card_do_cliente_mostra_conta_pilotos_e_medidas(cli):
-    hc, a = cliente(cli, "paulo@kurian.com")
-    cli.post("/ops/api/portal/drivers", headers=hc, json=dados_piloto("Enzo Kurian", measures={**MEDIDAS, "height_in": 55, "suit_size": "140"}))
+    hc, a = cliente(cli, "paulo@kartian.example.com")
+    cli.post("/ops/api/portal/drivers", headers=hc, json=dados_piloto("Enzo Kartian", measures={**MEDIDAS, "height_in": 55, "suit_size": "140"}))
     h = equipe(cli)
     assert cli.get(f"/ops/api/site/contas/do-cliente/{cli.ids['enzo']}").json()["conta"] is None
     cli.post(f"/ops/api/site/contas/{a}/vincular", headers=h, json={"client_id": cli.ids["enzo"]})
     conta = cli.get(f"/ops/api/site/contas/do-cliente/{cli.ids['enzo']}").json()["conta"]
-    assert conta["email"] == "paulo@kurian.com" and conta["drivers"][0]["measures"]["height_in"] == 55.0 and conta["drivers"][0]["measures"]["suit_size"] == "140"
+    assert conta["email"] == "paulo@kartian.example.com" and conta["drivers"][0]["measures"]["height_in"] == 55.0 and conta["drivers"][0]["measures"]["suit_size"] == "140"
     assert "pw_hash" not in conta
 
 
 def test_atencao_conta_sem_vinculo(cli):
-    cliente(cli, "solta@mail.com", nome="Conta Solta")
+    cliente(cli, "solta@example.com", nome="Conta Solta")
     chaves = {i["key"]: i for i in atencao.coletar(conectar())}
     assert "conta-site:portal_account:sem_vinculo" in chaves
 
 
 def test_servico_do_titulo():
-    assert vs._servico("David Pera_Urace Daily_Using Own Kart [1/1]") == "Urace Daily · Using Own Kart"
+    assert vs._servico("David Pedalo_Urace Daily_Using Own Kart [1/1]") == "Urace Daily · Using Own Kart"
     assert vs._servico("Só um nome") == "Session"
 
 
 # ------------------------------------------------------------------ #52: criar o cliente pela conta
 def test_criar_cliente_pela_conta_e_ja_vincular(cli):
     """Dono, 01/10: conta de quem não está na base ganha o botão de criar o cliente."""
-    h, a = cliente(cli, "eduardo@example.com", nome="Eduardo Fillipe Farias Resende", piloto="Lucas Farias Resende")
+    h, a = cliente(cli, "eduardo@example.com", nome="Eduardo Fillipe Farias Resende", piloto="Tomas Farias Resende")
     equipe(cli)
     contas = {c["id"]: c for c in cli.get("/ops/api/site/contas").json()["contas"]}
     assert contas[a]["sugestao"] is None, "não existe na base"
@@ -151,14 +151,14 @@ def test_criar_cliente_pela_conta_e_ja_vincular(cli):
     assert r.status_code == 201, r.text
     c = um(conectar(), "SELECT * FROM clients WHERE id=?", (r.json()["client_id"],))
     assert (c["name"], c["email"], c["pilot_name"], c["pilot_dob"], c["source"], c["status"]) == \
-        ("Eduardo Fillipe Farias Resende", "eduardo@example.com", "Lucas Farias Resende", "2014-05-01", "site", "NEW")
+        ("Eduardo Fillipe Farias Resende", "eduardo@example.com", "Tomas Farias Resende", "2014-05-01", "site", "NEW")
     assert um(conectar(), "SELECT client_id FROM portal_accounts WHERE id=?", (a,))["client_id"] == c["id"], "já vinculada"
     assert cli.post(f"/ops/api/site/contas/{a}/criar-cliente", headers=equipe(cli)).status_code == 400, "não cria dois"
     assert "portal.client.create" in {x["event"] for x in todos(conectar(), "SELECT event FROM audit_logs")}
 
 
 def test_criar_cliente_recusa_quando_ja_existe_pelo_email(cli):
-    _, a = cliente(cli, "paulo@kurian.com", nome="Paulo Kurian")
+    _, a = cliente(cli, "paulo@kartian.example.com", nome="Paulo Kartian")
     r = cli.post(f"/ops/api/site/contas/{a}/criar-cliente", headers=equipe(cli))
     assert r.status_code == 400 and "vincule a ele" in r.json()["detail"]
-    assert um(conectar(), "SELECT COUNT(*) AS n FROM clients WHERE email='paulo@kurian.com'")["n"] == 1
+    assert um(conectar(), "SELECT COUNT(*) AS n FROM clients WHERE email='paulo@kartian.example.com'")["n"] == 1

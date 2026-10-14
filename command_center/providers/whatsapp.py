@@ -77,7 +77,7 @@ def normaliza_fone(fone):
     if len(d) == 10:
         d = "1" + d
     if not 10 <= len(d) <= 15:
-        raise ValueError("telefone inválido: use o número com DDI (ex.: +1 407 555 1234)")
+        raise ValueError("telefone inválido: use o número com DDI (ex.: +1 407 555 0123)")
     return d
 
 

@@ -284,7 +284,7 @@ sudo systemctl reload caddy
 echo; echo "================= PROVA REAL ================="
 SPA="$(curl -s -o /tmp/ops.html -w '%{http_code}' "https://$DOMINIO/ops/" || echo 000)"
 TEM_APP=$(grep -c 'id="root"' /tmp/ops.html 2>/dev/null || echo 0)
-VAZOU=$(grep -ciE 'Renato|Hubbard|Pionti|envelope' /tmp/ops.html 2>/dev/null || true); VAZOU=${VAZOU:-0}
+VAZOU=$(grep -ciE 'pilot_name|signer_email|envelope' /tmp/ops.html 2>/dev/null || true); VAZOU=${VAZOU:-0}
 API="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMINIO/ops/api/dashboard" || echo 000)"
 LEGAL="$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMINIO/legal/privacy.html" || echo 000)"
 ROBOTS="$(curl -s "https://$DOMINIO/robots.txt" | grep -c 'Disallow: /ops/' || true)"

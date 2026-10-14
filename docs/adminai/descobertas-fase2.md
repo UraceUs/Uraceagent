@@ -181,8 +181,8 @@ INBOX enxuta (32 threads) = triagem por labels funciona. Estrutura:
 ### QuickBooks — clientes e catálogo (URACE, realm 9341453113046421)
 
 - **Vendas YTD 2026: $478.094,45 · 94 clientes ativos.** Top-5 concentra
-  67,7%: Kenneth Savage ($164,5k, 34%), Donald Marron ($55,2k), Pablo
-  Santiago ($54,1k), James Xikis ($37,7k), G TECH MOTORSPORTS ($12,1k).
+  67,7%: Kenneth Sprage ($164,5k, 34%), Donald Mardon ($55,2k), Pablo
+  Sapata ($54,1k), James Xelix ($37,7k), G TECH MOTORSPORTS ($12,1k).
   3 clientes com saldo negativo -$400 (reembolsos de deposit?—conferir).
 - **Catálogo: 896 itens ativos** — 360 SERVICE / 536 NONINVENTORY (sem
   inventário rastreado no QB). Categorias por prefixo: Parts (361),

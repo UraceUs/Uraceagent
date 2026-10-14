@@ -39,8 +39,8 @@ def cli(monkeypatch):
     auth.criar_usuario(con, "admin@urace.us", "Admin", "ADMIN", SENHA)
     auth.criar_usuario(con, "leitor@urace.us", "Leitor", "VIEWER", SENHA)
     auth.criar_usuario(con, "operador@urace.us", "Operador", "OPERATOR", SENHA)
-    inserir(con, "clients", name="Rafael Pionti", email="rafael@spmesportes.com.br",
-            phone="+1 305-609-7845", status="ACTIVE", source="asana")
+    inserir(con, "clients", name="Rafael Pistoni", email="rafael.pistoni@example.com",
+            phone="+1 305-555-0145", status="ACTIVE", source="asana")
     inserir(con, "opportunities", name="Carla Mendes", phone="(305) 555-0142",
             stage="CONVERSA", source="Ligação", closer_user_id=1)
     con.commit(); con.close()
@@ -134,8 +134,8 @@ def test_mesma_ligacao_atualiza_e_nao_duplica_na_venda(cli):
 
 
 def test_casa_com_cliente_pelo_telefone_mesmo_formatado_diferente(cli):
-    """O cliente está com '+1 305-609-7845'; o Dialpad manda E.164 cru."""
-    r = cli.post(f"{B}/dialpad/webhook?key={CHAVE}", json=evento(call_id="c-cli", externo="+13056097845"))
+    """O cliente está com '+1 305-555-0145'; o Dialpad manda E.164 cru."""
+    r = cli.post(f"{B}/dialpad/webhook?key={CHAVE}", json=evento(call_id="c-cli", externo="+13055550145"))
     assert r.json()["ligado_a"]["client_id"] == 1
     con = conectar(); assert um(con, "SELECT client_id FROM calls WHERE external_id='c-cli'")["client_id"] == 1; con.close()
 

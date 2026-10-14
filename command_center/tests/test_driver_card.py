@@ -25,13 +25,13 @@ def con(tmp_path, monkeypatch):
 
 
 def familia(con, ligar=True):
-    """Joseph Kurian, responsável, com dois drivers: Enzo (já tem card) e Lia (não tem)."""
-    enzo = inserir(con, "clients", name="Joseph Kurian", pilot_name="Enzo Kurian", email="joekur001@gmail.com",
+    """Joseph Kartian, responsável, com dois drivers: Enzo (já tem card) e Lia (não tem)."""
+    enzo = inserir(con, "clients", name="Joseph Kartian", pilot_name="Enzo Kartian", email="joe.kartian@example.com",
                    phone="407-555-0142", status="ACTIVE", source="asana", monthly_sessions=4, plan_type="monthly")
-    conta = inserir(con, "portal_accounts", email="joekur001@gmail.com", pw_salt="x", pw_hash="x", name="Joseph Kurian",
+    conta = inserir(con, "portal_accounts", email="joe.kartian@example.com", pw_salt="x", pw_hash="x", name="Joseph Kartian",
                     birth_date="1980-01-01", phone="407-555-0142", terms_accepted_at="2026-09-30T00:00:00Z")
-    p_enzo = inserir(con, "portal_pilots", account_id=conta, name="Enzo Kurian", birth_date="2014-03-02")
-    p_lia = inserir(con, "portal_pilots", account_id=conta, name="Lia Kurian", birth_date="2016-05-09")
+    p_enzo = inserir(con, "portal_pilots", account_id=conta, name="Enzo Kartian", birth_date="2014-03-02")
+    p_lia = inserir(con, "portal_pilots", account_id=conta, name="Lia Kartian", birth_date="2016-05-09")
     if ligar:
         vs.vincular(con, conta, enzo, None)
     return enzo, conta, p_enzo, p_lia
@@ -58,12 +58,12 @@ def test_criar_card_do_irmao_e_cada_um_com_o_seu_client_id(con):
     lia = vs.criar_cliente_driver(con, p_lia, None)
     c = um(con, "SELECT * FROM clients WHERE id=?", (lia,))
     assert lia != enzo and (c["name"], c["pilot_name"], c["pilot_dob"], c["email"]) == \
-        ("Joseph Kurian", "Lia Kurian", "2016-05-09", "joekur001@gmail.com"), "responsável paga, a Lia é a piloto"
+        ("Joseph Kartian", "Lia Kartian", "2016-05-09", "joe.kartian@example.com"), "responsável paga, a Lia é a piloto"
     with pytest.raises(vs.ErroVinculo, match="já tem card"):
         vs.criar_cliente_driver(con, p_lia, None)
     with pytest.raises(vs.ErroVinculo, match="cada driver tem o seu"):
         vs.vincular_driver(con, p_lia, enzo, None)
-    assert {d["name"]: d["client_id"] for d in vs.drivers_da_conta(con, conta)} == {"Enzo Kurian": enzo, "Lia Kurian": lia}
+    assert {d["name"]: d["client_id"] for d in vs.drivers_da_conta(con, conta)} == {"Enzo Kartian": enzo, "Lia Kartian": lia}
 
 
 def test_sync_nao_junta_os_irmaos_mesmo_com_o_mesmo_email(con):
@@ -79,7 +79,7 @@ def test_sync_nao_junta_os_irmaos_mesmo_com_o_mesmo_email(con):
 
 def test_duplicado_de_verdade_continua_unindo_e_leva_o_vinculo(con):
     enzo, conta, p_enzo, _ = familia(con)
-    dup = inserir(con, "clients", name="Joseph Kurian", pilot_name="Enzo Kurian", email="JOEKUR001@gmail.com", status="ACTIVE", source="asana")
+    dup = inserir(con, "clients", name="Joseph Kartian", pilot_name="Enzo Kartian", email="JOE.KARTIAN@example.com", status="ACTIVE", source="asana")
     assert identidade.unir(con, dup, enzo, "teste", "mesmo e-mail") is True
     assert um(con, "SELECT client_id FROM portal_pilots WHERE id=?", (p_enzo,))["client_id"] == dup, "o driver vai junto para o card que fica"
     assert um(con, "SELECT client_id FROM portal_accounts WHERE id=?", (conta,))["client_id"] == dup
@@ -94,7 +94,7 @@ def test_sessao_do_site_conta_no_card_do_driver(con):
     assert contrato.usadas(con, enzo, "2026-10")["total"] == 1, "a sessão da Lia não gasta o contrato do Enzo"
     assert contrato.usadas(con, lia, "2026-10")["total"] == 2
     from command_center.providers import agenda_sessoes as ag
-    assert {b["driver"]: b["client_id"] for b in ag.lista(con)} == {"Enzo Kurian": enzo, "Lia Kurian": lia}
+    assert {b["driver"]: b["client_id"] for b in ag.lista(con)} == {"Enzo Kartian": enzo, "Lia Kartian": lia}
 
 
 def test_driver_sem_card_nao_cai_no_card_do_irmao(con):
@@ -106,10 +106,10 @@ def test_driver_sem_card_nao_cai_no_card_do_irmao(con):
 def test_historico_do_portal_separado_por_driver(con):
     enzo, conta, p_enzo, p_lia = familia(con)
     lia = vs.criar_cliente_driver(con, p_lia, None)
-    inserir(con, "tasks", client_id=enzo, title="Enzo Kurian_Urace Academy_4 stroke [1/4]", project="U-RACE", status="completed", due_on="2026-09-20")
-    inserir(con, "tasks", client_id=lia, title="Lia Kurian_Urace Daily_Rental Kart [1/1]", project="U-RACE", status="open", due_on="2026-10-08")
+    inserir(con, "tasks", client_id=enzo, title="Enzo Kartian_Urace Academy_4 stroke [1/4]", project="U-RACE", status="completed", due_on="2026-09-20")
+    inserir(con, "tasks", client_id=lia, title="Lia Kartian_Urace Daily_Rental Kart [1/1]", project="U-RACE", status="open", due_on="2026-10-08")
     h = vs.historico(con, conta)
-    assert [(x["date"], x["driver"]) for x in h["services"]] == [("2026-10-08", "Lia Kurian"), ("2026-09-20", "Enzo Kurian")]
+    assert [(x["date"], x["driver"]) for x in h["services"]] == [("2026-10-08", "Lia Kartian"), ("2026-09-20", "Enzo Kartian")]
 
 
 def test_desvincular_o_driver_principal_passa_o_principal_ao_irmao(con):
@@ -146,7 +146,7 @@ def test_api_por_driver_com_auditoria(cli, con):
     enzo, conta, p_enzo, p_lia = familia(con); con.commit()
     h = entra(cli, "op@urace.us")
     d = {x["id"]: x for x in cli.get("/ops/api/site/contas?filtro=todas").json()["contas"]}[conta]
-    assert [(x["name"], x["client_id"]) for x in d["drivers_list"]] == [("Enzo Kurian", enzo), ("Lia Kurian", None)]
+    assert [(x["name"], x["client_id"]) for x in d["drivers_list"]] == [("Enzo Kartian", enzo), ("Lia Kartian", None)]
     r = cli.post(f"/ops/api/site/drivers/{p_lia}/criar-cliente", headers=h)
     assert r.status_code == 201, r.text
     lia = r.json()["client_id"]

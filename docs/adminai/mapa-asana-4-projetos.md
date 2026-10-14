@@ -52,7 +52,7 @@ KART · F4 · Practice OKC · Practice Bushnell · TRACK CLOSED
 ### Modelo de tarefa: SERVIÇO (12 subtarefas)
 
 Nome no padrão `{Piloto}_{Serviço}_{Categoria} [n/total]`
-(ex.: `Jayden Lago_Professional Coaching_4T [1/1]`).
+(ex.: `Jayden Largada_Professional Coaching_4T [1/1]`).
 
 Descrição (bloco semi-estruturado que precisa ser preenchido):
 ```
@@ -101,7 +101,7 @@ confirmação ≥15 dias antes do evento, organizado 1 mês antes.
 SUIT LEADS · Fornecedores · Seleção de fornecedores.
 
 Cada pedido é uma tarefa com o **nome do cliente** (ex.: `Michael
-Fuller`, `Alexander Savage (2 suits)`).
+Fuller`, `Alexander Sprage (2 suits)`).
 
 **Campos personalizados:**
 
@@ -191,7 +191,7 @@ operação manual escorrega).
    `wpp Italo`, `KJCBE` (sem `#`). Todos os pedidos recentes estão com
    esse campo vazio. Deveria ser campo de texto.
 2. **SUITS: tarefa marcada como concluída com status "In Production" ou
-   "In Transit"** (Ferrier_Tim Hannen, Alex_Racing Suit, Mike Speed,
+   "In Transit"** (Cliente_Tim Hanexo, Alex_Racing Suit, Mike Spoiler,
    Mariano). O check de conclusão não significa pedido entregue.
 3. **SUITS `Responsável` é campo de TEXTO e está sempre vazio** — não dá
    para saber quem toca cada pedido pelo campo.

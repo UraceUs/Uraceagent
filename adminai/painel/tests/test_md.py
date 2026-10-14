@@ -21,8 +21,8 @@ CASOS = [
      "- **Nenhum envelope** → a waiver **nunca\n  foi enviada**.",
      "<b>nunca foi enviada</b>"),
     ("negrito dentro de célula de tabela",
-     "| Quem | E-mail |\n| --- | --- |\n| Hubbard | misterhub**bb**ard@x.com |",
-     "misterhub<b>bb</b>ard"),
+     "| Quem | E-mail |\n| --- | --- |\n| Hubtrack | misterpit**ll**ane@x.com |",
+     "misterpit<b>ll</b>ane"),
     ("linha separadora da tabela não vira dado",
      "| a | b |\n| --- | --- |\n| 1 | 2 |",
      None),  # verificado por ausência, abaixo

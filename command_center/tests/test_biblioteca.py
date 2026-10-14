@@ -93,7 +93,7 @@ def amb(tmp_path, monkeypatch):
     con = conectar(); aplicar_schema(con)
     auth.criar_usuario(con, "ger@urace.us", "Gerente", "MANAGER", SENHA)
     auth.criar_usuario(con, "op@urace.us", "Operador", "OPERATOR", SENHA)
-    a = inserir(con, "clients", name="Nicolas Pera", pilot_name="David Pera", status="ACTIVE", source="manual")
+    a = inserir(con, "clients", name="Nicolas Pedalo", pilot_name="David Pedalo", status="ACTIVE", source="manual")
     b = inserir(con, "clients", name="Carla Mendes", pilot_name="Théo Mendes", status="ACTIVE", source="manual")
     c = inserir(con, "clients", name="Carla Mendes", pilot_name="Lia Mendes", status="ACTIVE", source="manual")
     i = inserir(con, "invoices", client_id=a, doc_number="1031", amount=500, balance=0, status="paid", issued_on="2026-09-01", customer_ref="c1")
@@ -102,10 +102,10 @@ def amb(tmp_path, monkeypatch):
     inserir(con, "invoices", client_id=b, doc_number="1050", amount=1, balance=0, status="paid", issued_on="2026-08-01", customer_ref="c9")
     inserir(con, "invoices", client_id=c, doc_number="1051", amount=1, balance=0, status="paid", issued_on="2026-08-02", customer_ref="c9")
     w = tmp_path / "waiver.pdf"; w.write_bytes(b"%PDF waiver")
-    inserir(con, "waivers", client_id=a, signer_name="Nicolas Pera", status="completed", completed_at="2026-08-30T12:00:00Z", pdf_path=str(w))
+    inserir(con, "waivers", client_id=a, signer_name="Nicolas Pedalo", status="completed", completed_at="2026-08-30T12:00:00Z", pdf_path=str(w))
     k = tmp_path / "contrato.pdf"; k.write_bytes(b"%PDF contrato")
     inserir(con, "contracts", client_id=a, source="upload", status="completed", file_path=str(k), title="Academy 12 meses", signed_at="2026-08-01")
-    inserir(con, "tasks", client_id=a, title="David Pera_Urace Daily_Using Own Kart [1/1]", status="completed", due_on="2026-09-01")
+    inserir(con, "tasks", client_id=a, title="David Pedalo_Urace Daily_Using Own Kart [1/1]", status="completed", due_on="2026-09-01")
     con.commit()
     yield con, {"a": a, "b": b, "c": c}
     con.close()
@@ -155,7 +155,7 @@ def test_drive_por_cliente_e_compartilhado_com_o_eduardo(amb):
     drive = DriveFalso()
     bib.rodada(con, qbo=QboFalso(), drive=drive, log=lambda *_: None)
     caminhos = {drive.caminho(a["pai"]) + "/" + a["nome"] for a in drive.arquivos.values()}
-    assert f"Command Center/Clientes/David Pera #{ids['a']}/Invoices/2026-09-01 Invoice 1031.pdf" in caminhos
+    assert f"Command Center/Clientes/David Pedalo #{ids['a']}/Invoices/2026-09-01 Invoice 1031.pdf" in caminhos
     assert any(c.startswith("Command Center/Clientes/Sem cliente/Invoices/") for c in caminhos)
     assert any("/Waivers/" in c for c in caminhos) and any("/Recibos/" in c for c in caminhos)
     assert any("/Histórico de serviço/" in c for c in caminhos) and any("/Contratos/" in c for c in caminhos)

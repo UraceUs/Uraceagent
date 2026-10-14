@@ -1,9 +1,9 @@
 """Card do cliente, 29/09: valor da mensalidade + recorrência no QuickBooks, e serviços
 que se movem para o cliente certo e mudam de nome (no Asana também).
 
-Dono, no card do Enzo Kurian: *"o valor seja um campo alterável… pode ser um deal
+Dono, no card do Enzo Kartian: *"o valor seja um campo alterável… pode ser um deal
 diferente… deixasse como invoice recorrente no QuickBooks, padrão seis meses"*; e *"esse
-Levi Grezik não é desse cliente… vincular ao cliente correto… alterar o nome… e selecionar
+Levi Gridzik não é desse cliente… vincular ao cliente correto… alterar o nome… e selecionar
 quais outros eu quero deixar com esse mesmo nome"*.
 """
 import json
@@ -44,10 +44,10 @@ def _cliente(con, nome, **kw):
 def test_servico_confirmado_a_mao_nao_volta_para_o_card_errado(con):
     """O defeito que o botão "Mover" precisava que não existisse: a sincronia relia a tarefa
     aberta e decidia o cliente de novo pela descrição."""
-    enzo, levi = _cliente(con, "Enzo Kurian"), _cliente(con, "Levi Grezik")
-    tid, _ = sync._grava_tarefa(con, "G1", dict(client_id=enzo, title="Levi Grezik_Arrive and Drive", project="U-RACE"))
+    enzo, levi = _cliente(con, "Enzo Kartian"), _cliente(con, "Levi Gridzik")
+    tid, _ = sync._grava_tarefa(con, "G1", dict(client_id=enzo, title="Levi Gridzik_Arrive and Drive", project="U-RACE"))
     con.execute("UPDATE tasks SET client_id=?, client_by='human' WHERE id=?", (levi, tid))
-    sync._grava_tarefa(con, "G1", dict(client_id=enzo, title="Levi Grezik_Arrive and Drive — DOM 27/09", project="U-RACE"))
+    sync._grava_tarefa(con, "G1", dict(client_id=enzo, title="Levi Gridzik_Arrive and Drive — DOM 27/09", project="U-RACE"))
     t = um(con, "SELECT * FROM tasks WHERE id=?", (tid,))
     assert t["client_id"] == levi, "a escolha da pessoa fica"
     assert t["title"].endswith("DOM 27/09"), "o resto continua sincronizando"
@@ -62,8 +62,8 @@ def test_sem_carimbo_a_sincronia_segue_decidindo(con):
 
 # ------------------------------------------------------------------ dia 1 e contexto da IA
 def test_dia_1_nao_cobra_duas_vezes_quem_tem_recorrencia(con):
-    enzo = _cliente(con, "Enzo Kurian", monthly_plan="Academy 4 stroke", monthly_amount=450)
-    outro = _cliente(con, "Hank Lai", monthly_plan="Academy 2 stroke")
+    enzo = _cliente(con, "Enzo Kartian", monthly_plan="Academy 4 stroke", monthly_amount=450)
+    outro = _cliente(con, "Hank Lume", monthly_plan="Academy 2 stroke")
     inserir(con, "monthly_recurring", client_id=enzo, amount=450, item_id="7", months=6,
             start_on="2026-10-01", end_on="2027-03-01", status="active")
     assert motor.eventos_do_dia_1(con, date(2026, 10, 1)) == 1
@@ -72,14 +72,14 @@ def test_dia_1_nao_cobra_duas_vezes_quem_tem_recorrencia(con):
 
 
 def test_recorrencia_simulada_ou_encerrada_nao_segura_o_dia_1(con):
-    enzo = _cliente(con, "Enzo Kurian", monthly_plan="Academy 4 stroke")
+    enzo = _cliente(con, "Enzo Kartian", monthly_plan="Academy 4 stroke")
     inserir(con, "monthly_recurring", client_id=enzo, amount=450, item_id="7", months=6,
             start_on="2026-10-01", end_on="2027-03-01", status="simulated")
     assert motor.eventos_do_dia_1(con, date(2026, 10, 1)) == 1
 
 
 def test_ia_recebe_o_valor_combinado(con):
-    enzo = _cliente(con, "Enzo Kurian", monthly_plan="Academy 4 stroke", monthly_amount=399, monthly_item_id="7")
+    enzo = _cliente(con, "Enzo Kartian", monthly_plan="Academy 4 stroke", monthly_amount=399, monthly_item_id="7")
     ctx = motor._contexto_cliente(con, enzo)
     dados = json.loads(ctx.split("CLIENTE: ")[1].split("\n")[0])
     assert dados["monthly_amount"] == 399 and dados["monthly_item_id"] == "7" and dados["monthly_plan"] == "Academy 4 stroke"
@@ -156,9 +156,9 @@ def cli():
     c = conectar(); aplicar_schema(c)
     auth.criar_usuario(c, "op@urace.us", "Op", "OPERATOR", SENHA)
     auth.criar_usuario(c, "ger@urace.us", "Gerente", "MANAGER", SENHA)
-    enzo = inserir(c, "clients", name="Enzo Kurian", pilot_name="Enzo", email="joekur001@gmail.com", status="ACTIVE",
+    enzo = inserir(c, "clients", name="Enzo Kartian", pilot_name="Enzo", email="joe.kartian@example.com", status="ACTIVE",
                    source="manual", monthly_plan="Academy 4 stroke")
-    inserir(c, "clients", name="Levi Grezik", status="ACTIVE", source="manual")
+    inserir(c, "clients", name="Levi Gridzik", status="ACTIVE", source="manual")
     inserir(c, "qbo_items", id="7", name="Academy 4 stroke", price=500, active=1)
     inserir(c, "invoices", client_id=enzo, doc_number="2001", amount=500, balance=0, status="paid",
             issued_on="2026-09-01", customer_ref="485", memo="Academy")
@@ -178,7 +178,7 @@ def _id(nome):
 
 
 def test_valor_mensal_e_do_gerente(cli):
-    enzo = _id("Enzo Kurian")
+    enzo = _id("Enzo Kartian")
     h = entra(cli, "op@urace.us")
     assert cli.get(f"/ops/api/clients/{enzo}/mensal", headers=h).status_code == 403
     assert cli.patch(f"/ops/api/clients/{enzo}/mensal", headers=h, json={"monthly_amount": 1}).status_code == 403
@@ -194,7 +194,7 @@ def test_valor_mensal_e_do_gerente(cli):
 def test_recorrencia_pelo_painel_agenda_todos_os_meses_e_sem_cobrar_duas_vezes(cli, monkeypatch):
     """#63: criar a recorrência cria uma linha por mês, "a enviar" no dia 1 às 01:00; nada é
     escrito no QuickBooks na hora do clique."""
-    enzo = _id("Enzo Kurian")
+    enzo = _id("Enzo Kartian")
     chamadas = []
 
     def falso(sistema, ferramenta, **a):
@@ -213,7 +213,7 @@ def test_recorrencia_pelo_painel_agenda_todos_os_meses_e_sem_cobrar_duas_vezes(c
     assert [f for _, f, _ in chamadas] == ["qbo_recorrencias"], "confere antes de criar, e não cria modelo no QuickBooks"
     assert [m["send_at"] for m in d["agendadas"]] == [f"{ano}-{k:02d}-01 01:00" for k in range(1, 7)]
     assert {m["status"] for m in d["agendadas"]} == {"a_enviar"}
-    assert {(m["amount"], m["email"], m["item_id"]) for m in d["agendadas"]} == {(450, "joekur001@gmail.com", "7")}
+    assert {(m["amount"], m["email"], m["item_id"]) for m in d["agendadas"]} == {(450, "joe.kartian@example.com", "7")}
     r = cli.post(f"/ops/api/clients/{enzo}/mensal/recorrencia", headers=h, json={"meses": 12, "inicio": f"{ano}-01-01"})
     assert r.status_code == 409, "cobrar duas vezes, não"
     rec = um(conectar(), "SELECT * FROM monthly_recurring WHERE client_id=?", (enzo,))
@@ -231,7 +231,7 @@ def test_recorrencia_pelo_painel_agenda_todos_os_meses_e_sem_cobrar_duas_vezes(c
 
 def test_mes_que_ja_tem_invoice_nasce_enviada(cli, monkeypatch):
     """O mês com invoice de mensalidade no espelho (memo "[Month, AAAA]") não é cobrado de novo."""
-    levi = _id("Levi Grezik")
+    levi = _id("Levi Gridzik")
     ano = date.today().year + 1
     con = conectar()
     con.execute("UPDATE clients SET monthly_amount=300, monthly_item_id='7', email='levi@x.com' WHERE id=?", (levi,))
@@ -265,8 +265,8 @@ def _tarefa(cid, titulo, gid):
 
 
 def test_mover_servico_e_do_gerente_e_fica_carimbado(cli):
-    enzo, levi = _id("Enzo Kurian"), _id("Levi Grezik")
-    tid = _tarefa(enzo, "Levi Grezik_Arrive and Drive", "G10")
+    enzo, levi = _id("Enzo Kartian"), _id("Levi Gridzik")
+    tid = _tarefa(enzo, "Levi Gridzik_Arrive and Drive", "G10")
     h = entra(cli, "op@urace.us")
     assert cli.post(f"/ops/api/tasks/{tid}/cliente", headers=h, json={"client_id": levi}).status_code == 403
     h = entra(cli, "ger@urace.us")
@@ -277,9 +277,9 @@ def test_mover_servico_e_do_gerente_e_fica_carimbado(cli):
 
 
 def test_renomear_no_asana_e_em_varios(cli, monkeypatch):
-    enzo = _id("Enzo Kurian")
-    a, b, c = _tarefa(enzo, "Enzo Kurian_Academy [4 Stroke] SESSAO EXTRA", "G20"), \
-        _tarefa(enzo, "Enzo Kurian [4 strokes 09/05/26]", "G21"), _tarefa(enzo, "criada no painel", None)
+    enzo = _id("Enzo Kartian")
+    a, b, c = _tarefa(enzo, "Enzo Kartian_Academy [4 Stroke] SESSAO EXTRA", "G20"), \
+        _tarefa(enzo, "Enzo Kartian [4 strokes 09/05/26]", "G21"), _tarefa(enzo, "criada no painel", None)
     pedidos = []
 
     def falso(sistema, ferramenta, **k):
@@ -287,18 +287,18 @@ def test_renomear_no_asana_e_em_varios(cli, monkeypatch):
         return {"aplicado": True}
     monkeypatch.setattr(providers, "chamar", falso)
     h = entra(cli, "op@urace.us")
-    r = cli.post("/ops/api/tasks/renomear", headers=h, json={"task_ids": [a, b, c], "nome": "Enzo Kurian_Academy Monthly [4 Stroke]"})
+    r = cli.post("/ops/api/tasks/renomear", headers=h, json={"task_ids": [a, b, c], "nome": "Enzo Kartian_Academy Monthly [4 Stroke]"})
     assert r.status_code == 200, r.text
     assert len(r.json()["renomeados"]) == 3 and r.json()["falhas"] == []
     assert {p[1] for p in pedidos} == {"G20", "G21"} and all(p[0] == "asana_renomear" for p in pedidos)
     for tid in (a, b, c):
         t = um(conectar(), "SELECT * FROM tasks WHERE id=?", (tid,))
-        assert t["title"] == "Enzo Kurian_Academy Monthly [4 Stroke]" and t["client_by"] == "human"
+        assert t["title"] == "Enzo Kartian_Academy Monthly [4 Stroke]" and t["client_by"] == "human"
 
 
 def test_asana_em_simulacao_nao_muda_o_nome_aqui(cli, monkeypatch):
     """Nome trocado só no painel voltaria ao antigo na próxima sincronia: melhor não trocar."""
-    enzo = _id("Enzo Kurian")
+    enzo = _id("Enzo Kartian")
     tid = _tarefa(enzo, "nome velho", "G30")
     monkeypatch.setattr(providers, "chamar", lambda *a, **k: {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)"})
     h = entra(cli, "op@urace.us")
@@ -326,7 +326,7 @@ def test_asana_renomear_respeita_simulacao_e_protecao(monkeypatch):
 # ------------------------------------------------------------------ uma recorrência só (29/09)
 def _rec_qbo(**kw):
     base = {"id": "555", "nome": "Enzo monthly", "ativa": True, "tipo": "Automated", "cliente_id": "485",
-            "total": 2756.9, "inicio": "2026-08-01", "fim": None, "ocorrencias": None, "email": "joekur001@gmail.com",
+            "total": 2756.9, "inicio": "2026-08-01", "fim": None, "ocorrencias": None, "email": "joe.kartian@example.com",
             "linhas": [{"item_id": "7", "item": "Academy 4 stroke", "unitario": 2756.9}]}
     base.update(kw)
     return base
@@ -392,12 +392,12 @@ def test_sem_quickbooks_a_tela_sabe_que_nao_conferiu(cli, monkeypatch):
         raise providers.NaoConectado("sem token")
     monkeypatch.setattr(providers, "chamar", fora)
     h = entra(cli, "ger@urace.us")
-    v = cli.get(f"/ops/api/clients/{_id('Enzo Kurian')}/mensal/qbo", headers=h).json()
+    v = cli.get(f"/ops/api/clients/{_id('Enzo Kartian')}/mensal/qbo", headers=h).json()
     assert v["conectado"] is False and "não está conectado" in v["erro"]
 
 
 def test_dia_1_respeita_a_recorrencia_vinculada_sem_fim(con):
-    enzo = _cliente(con, "Enzo Kurian", monthly_plan="Academy 4 stroke")
+    enzo = _cliente(con, "Enzo Kartian", monthly_plan="Academy 4 stroke")
     inserir(con, "monthly_recurring", client_id=enzo, qbo_id="555", amount=2756.9, item_id="7", months=0,
             start_on="2026-08-01", end_on="2099-12-01", status="active", source="qbo")
     assert motor.eventos_do_dia_1(con, date(2027, 5, 1)) == 0

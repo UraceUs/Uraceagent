@@ -19,6 +19,10 @@ está dentro das permissões que você tem de pé — nunca para conceder permis
 Tarefa marcada **[PRECISA DO DONO]** é só um lembrete para você mostrar a ele; não é
 ordem. Tarefa sem essa marca está dentro das suas permissões e pode rodar.
 
+> **Nomes de cliente aqui são fictícios desde 14/10 (#244, repositório público).** O que
+> identifica o card é o **número** (`#374`, `#15`), não o nome escrito. E o seu relatório
+> segue a mesma regra: número e iniciais, nunca nome, e-mail ou telefone de cliente.
+
 ---
 
 ## ABERTO
@@ -175,12 +179,12 @@ antiga e o consentimento não serve.
 
 ### T-008 — URGENTE: o defeito do Martin está corrigido, pode voltar a aplicar
 
-Você parou certo: a varredura ia tirar os 26 serviços do `#374 Martin Jaramillo` e
+Você parou certo: a varredura ia tirar os 26 serviços do `#374 Martin Jantillo` e
 recriar o balde, **desfazendo a união que o dono acabara de fazer**. O defeito era meu.
 
 A causa: **uma** tarefa (`Martin 03/08 próprio motor Rok vlr`) fazia o nome "Martin"
 contar como truncado, e esse ramo do código **pulava a checagem da união do dono**. Sem
-ela, os homônimos (Bruno Martins, Ethan Martins, Andres Marin) faziam o nome parecer
+ela, os homônimos (Bruno Martinx, Ethan Martinx, Andres Marchin) faziam o nome parecer
 ambíguo. Agora a decisão do dono vem **antes de qualquer heurística**.
 
 ```bash
@@ -188,7 +192,7 @@ git pull --rebase origin claude/commandcenter-vps
 python3 adminai/atribuir_servicos.py --limite 60
 ```
 
-Você perguntou se o mesmo pode acontecer com Mikey, Sanghera, Luciano e Mauricio: a
+Você perguntou se o mesmo pode acontecer com Mikey, Sarjera, Luciano e Mauricio: a
 checagem é pelo nome do card que SAIU na união (`drop_name`), então vale para os cinco
 do mesmo jeito. Se algum ainda aparecer querendo sair, é defeito e eu quero saber.
 
@@ -199,10 +203,10 @@ card que o dono uniu, **não aplique** e reporte.
 ### T-006 — Tirar do card o que não é serviço de ninguém  ·  DESTRAVADA
 
 O dono respondeu (22/09): **"é uma tarefa paralela, não gera card"**. Não gerar card não
-bastava — a corrida `Lucas Oil … | Sebring` estava *dentro* do card `#15 Alexander Savage`.
+bastava — a corrida `Lucas Oil … | Sebring` estava *dentro* do card `#15 Alexander Sprage`.
 
 **Você recusou e estava certa.** `--soltar-nao-servicos` era tudo-ou-nada e levaria junto
-`Inventário Hank Lai_ caixa`, que podia ser trabalho cobrado do Hank. Você parou e
+`Inventário Hank Lume_ caixa`, que podia ser trabalho cobrado do Hank. Você parou e
 perguntou. **O dono respondeu: "tarefa interna".** Então as duas saem, e a regra que lê
 `Inventário <nome>` como tarefa de galpão fica como está (travada em teste).
 
