@@ -30,10 +30,18 @@ export interface Opp {
   client_id: number | null; crm_lead_id: number | null
   next_at: string | null; next_what: string | null; lost_reason: string | null; notes: string | null
   closing: Fechamento | null; calls?: number; updated_at: string; created_at: string
-  client_name?: string | null; client_pilot?: string | null
+  client_name?: string | null; client_pilot?: string | null; qbo_item_id?: string | null
 }
-interface Passo { passo: string; nome: string; ok: boolean | null; detalhe: string; client_id?: number; invoice?: string; envelope?: string; tarefa?: string }
-interface Fechamento { em: string; por: string; na_tabela: boolean | null; aprovado?: boolean; motivo_preco?: string; passos: Passo[] }
+interface Passo { passo: string; nome: string; ok: boolean | null; detalhe: string; client_id?: number; invoice?: string; envelope?: string; tarefa?: string; pendente?: boolean }
+interface Fechamento {
+  em: string; por: string; na_tabela: boolean | null; aprovado?: boolean; motivo_preco?: string; passos: Passo[]
+  // #204: a cobrança — o preço da tabela vem do catálogo; fora dela, a invoice espera o gerente
+  valor?: number | null; preco_tabela?: number | null; invoice_pendente?: boolean; deposito?: number
+  deposito_cobrado?: string | boolean | null; liberada?: { por: string; em: string; valor: number; preco_tabela: number | null } | null
+}
+interface Tabela { item_id: string | null; nome: string; preco: number | null; deposito: number; fonte: string }
+interface ItemCatalogo { id: string; name: string; price: number | null; deposito: number }
+interface CardDoFechamento { id: number; name: string; pilot_name: string | null; outro_piloto: boolean }
 interface Evento { id: number; kind: string; title: string | null; detail: unknown; at: string; actor: string | null; ok: number | null }
 interface Coluna { etapa: string; nome: string; total: number; valor: number; oportunidades: Opp[] }
 interface Board { colunas: Coluna[]; abertas: number; retornos_hoje: number; atrasados: number; so_minhas: boolean }
@@ -42,7 +50,7 @@ interface LinhaPedido { id: number | null; tipo: 'produto' | 'sessao'; nome: str
 /** #236: o pedido do site (carrinho no Stripe ou loja) com as linhas, no detalhe da venda. */
 interface PedidoSite { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; pago_em: string | null; entrega: string
   recibo_qbo: string | null; erro_qbo: string | null; atencao: string | null; linhas: LinhaPedido[] }
-interface Detalhe { oportunidade: Opp; eventos: Evento[]; pedido?: PedidoSite | null; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[] }
+interface Detalhe { oportunidade: Opp; eventos: Evento[]; pedido?: PedidoSite | null; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[]; tabela?: Tabela | null; pode_liberar?: boolean; card?: CardDoFechamento | null }
 interface Agenda { retornos: (Opp & { atrasado: boolean })[]; ligacoes_hoje: { at: string; title: string; name: string }[] }
 
 const ETAPA_TOM: Record<string, Tone> = { NOVO: 'neutral', CONVERSA: 'info', PROPOSTA: 'warn', FECHAMENTO: 'accent', GANHO: 'ok', PERDIDO: 'crit' }
@@ -168,6 +176,7 @@ export function Oportunidade() {
   const d = useGet<Detalhe>(`/sales/${oid}`, 20000)
   const [aba, setAba] = useState<'tudo' | 'call' | 'note'>('tudo')
   const [fechar, setFechar] = useState(false)
+  const [liberar, setLiberar] = useState(false)
   const [ligar, setLigar] = useState(false)
   const [nota, setNota] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -201,6 +210,13 @@ export function Oportunidade() {
   const atrasado = !!o.next_at && o.next_at < new Date().toISOString()
   const evs = (d.data?.eventos || []).filter(e => aba === 'tudo' || e.kind === aba)
   const passos = o.closing?.passos || []
+  const tabela = d.data?.tabela || null
+  // #204: o depósito faltou (venda fechada sem a invoice dele) e o serviço pede: o operador cobra só ele
+  const faltaDeposito = !!o.closing && !o.closing.invoice_pendente && !o.closing.deposito_cobrado && (tabela?.deposito || 0) > 0
+  async function cobrarDeposito() {
+    if (!await perguntar({ titulo: tr("Cobrar só o depósito?"), texto: tr("Uma invoice com a linha Security deposit de {0}, para {1}. É o mesmo depósito da venda automática.", money(tabela?.deposito || 0), o?.email || tr("sem e-mail")), ok: tr("Cobrar o depósito") })) return
+    await acao('dep', () => api.post(`/sales/${oid}/deposit`), tr("Depósito cobrado."))
+  }
   return <div className="stack">
     <div className="row wrap" style={{ gap: 8 }}>
       <Link className="small" to="/sales">{tr("← Oportunidades")}</Link>
@@ -235,6 +251,10 @@ export function Oportunidade() {
 
     {atrasado && <Banner tone="crit"><b>{tr("Retorno atrasado:")}</b> {fmtDateTime(o.next_at)}{o.next_what ? ` — ${o.next_what}` : ''}{tr(". Ligue e registre, ou remarque.")}</Banner>}
     {!atrasado && o.next_at && <Banner tone="info"><b>{tr("Próximo passo:")}</b> {fmtDateTime(o.next_at)}{o.next_what ? ` — ${o.next_what}` : ''}</Banner>}
+    {o.closing?.invoice_pendente && <Banner tone="warn"><b>{tr("Invoice esperando o gerente conferir o valor.")}</b> {tr("Valor da venda {0} · preço da tabela {1}.", money(o.amount || 0), o.closing.preco_tabela != null ? money(o.closing.preco_tabela) : tr("sem preço de tabela"))}{' '}
+      {d.data?.pode_liberar ? <button className="btn sm primary" onClick={() => setLiberar(true)}>{tr("Liberar invoice")}</button> : <span className="muted">{tr("Só o gerente ou o dono libera.")}</span>}</Banner>}
+    {faltaDeposito && can('OPERATOR') && <Banner tone="info"><b>{tr("Depósito ainda não cobrado.")}</b> {tr("O serviço pede depósito de {0}.", money(tabela?.deposito || 0))}{' '}
+      <button className="btn sm" disabled={busy === 'dep'} onClick={cobrarDeposito}>{busy === 'dep' ? <Spinner /> : tr("Cobrar só o depósito")}</button></Banner>}
     {o.stage === 'GANHO' && <Banner tone="ok"><b>{tr("Venda fechada.")}</b> {passos.filter(p => p.ok).length} {tr("de")} {passos.length} {tr("passos concluídos")}{passos.some(p => p.ok === false) ? tr(" · falta: {0}", passos.filter(p => p.ok === false).map(p => p.nome).join(', ')) : ''}. <button className="btn ghost sm" onClick={() => setFechar(true)}>{tr("ver acompanhamento")}</button></Banner>}
 
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 14 }}>
@@ -279,7 +299,8 @@ export function Oportunidade() {
     </div>
 
     {ligar && <RegistrarLigacao o={o} resultados={d.data!.resultados} onClose={() => setLigar(false)} onOk={() => { setLigar(false); d.reload() }} onFechar={() => { setLigar(false); setFechar(true) }} />}
-    {fechar && <FecharVenda o={o} onClose={() => setFechar(false)} onOk={() => { d.reload() }} />}
+    {fechar && <FecharVenda o={o} tabela={tabela} card={d.data?.card || null} podeLiberar={!!d.data?.pode_liberar} onClose={() => setFechar(false)} onOk={() => { d.reload() }} />}
+    {liberar && <LiberarInvoice o={o} tabela={tabela} onClose={() => setLiberar(false)} onOk={() => { setLiberar(false); d.reload() }} />}
   </div>
 }
 
@@ -375,20 +396,77 @@ function RegistrarLigacao({ o, resultados, onClose, onOk, onFechar }: { o: Opp; 
 // ------------------------------------------------------------------ fechar venda (a tela única)
 interface Extra { titulo: string; onde: 'painel' | 'asana'; quando: string; notas: string }
 
-function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: () => void }) {
+/** O item do catálogo do QuickBooks que a venda cobra: o preço da tabela vem dele (#204). */
+function EscolherItem({ valor, onEscolher, id }: { valor: string; onEscolher: (i: ItemCatalogo | null) => void; id?: string }) {
+  const c = useGet<{ itens: ItemCatalogo[] }>('/sales/catalogo')
+  const itens = c.data?.itens || []
+  useEffect(() => { if (valor) onEscolher(itens.find(i => i.id === valor) || null) }, [c.data]) // eslint-disable-line react-hooks/exhaustive-deps
+  return <select id={id} className="input" value={valor} onChange={e => onEscolher(itens.find(i => i.id === e.target.value) || null)}>
+    <option value="">{c.loading && !c.data ? tr("carregando o catálogo…") : tr("— escolha o item do catálogo —")}</option>
+    {itens.map(i => <option key={i.id} value={i.id}>{i.name}{i.price != null ? ` · ${money(i.price)}` : ''}</option>)}
+  </select>
+}
+
+/** Liberar invoice (#204, dono, 14/10: "precisa confirmar o valor da invoice"): só gerente e dono,
+ *  vendo o valor da venda contra o preço da tabela. Fica auditado. */
+function LiberarInvoice({ o, tabela, onClose, onOk }: { o: Opp; tabela: Tabela | null; onClose: () => void; onOk: (f: Fechamento) => void }) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [item, setItem] = useState<ItemCatalogo | null>(null)
+  const semItem = !tabela?.item_id
+  const preco = item ? item.price : (o.closing?.preco_tabela ?? tabela?.preco ?? null)
+  const deposito = o.closing?.deposito_cobrado ? 0 : (item ? item.deposito : (tabela?.deposito || 0))
+  const valor = o.amount || 0
+  async function liberar() {
+    setBusy(true)
+    try {
+      const r = await api.post<{ fechamento: Fechamento }>(`/sales/${o.id}/invoice/liberar`, { valor, item_id: item?.id || undefined })
+      toast(tr("Invoice liberada e enviada."), 'ok'); onOk(r.fechamento)
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  const linha = (rotulo: string, v: string) => <div className="inset"><div className="it" style={{ padding: '10px 14px' }}><div style={{ minWidth: 0 }}><div className="s">{rotulo}</div><div className="t mono">{v}</div></div></div></div>
+  return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
+    <button className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}><Icon name="x" size={16} /></button>
+    <div><div className="small muted cond">{tr("Venda ·")} {o.name}</div><h3 className="h1" style={{ fontSize: 22 }}>{tr("Liberar invoice")}</h3>
+      <div className="small muted">{tr("Confira o valor contra o preço da tabela. Ao liberar, a invoice sai para o cliente pelo QuickBooks e fica na auditoria com o seu nome.")}</div></div>
+    <div className="card" style={{ padding: 0 }}>
+      {linha(tr("Serviço"), o.service || '—')}
+      {linha(tr("Valor da venda"), money(valor))}
+      {linha(tr("Preço da tabela (catálogo)"), preco != null ? money(preco) : tr("sem preço de tabela"))}
+      {preco != null && linha(tr("Diferença"), money(valor - preco))}
+      {deposito > 0 && linha(tr("Depósito de segurança (na mesma invoice)"), money(deposito))}
+    </div>
+    {semItem && <div className="field"><label htmlFor="liberar-item">{tr("Item do catálogo (o serviço ainda não tem)")}</label><EscolherItem id="liberar-item" valor={item?.id || ''} onEscolher={setItem} /></div>}
+    <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>{tr("Cancelar")}</button>
+      <button className="btn primary" disabled={busy || (semItem && !item)} onClick={liberar}>{busy ? <Spinner /> : tr("Liberar invoice de {0}", money(valor))}</button></div>
+  </div></Scrim>
+}
+
+function FecharVenda({ o, tabela, card, podeLiberar, onClose, onOk }: { o: Opp; tabela: Tabela | null; card: CardDoFechamento | null; podeLiberar: boolean; onClose: () => void; onOk: () => void }) {
   const toast = useToast()
   const [f, setF] = useState({
     service: o.service || '', service_date: (o.service_date || '').slice(0, 10), service_time: o.service_time || '',
-    amount: o.amount !== null ? String(o.amount) : '', preco_tabela: o.amount !== null ? String(o.amount) : '',
+    amount: o.amount !== null ? String(o.amount) : '',
     pilot_name: o.pilot_name || '', pilot_age: o.pilot_age !== null ? String(o.pilot_age) : '',
     email: o.email || '', phone: o.phone || '', nota_cliente: '',
   })
+  // #204: o preço da tabela vem do catálogo (o item do QuickBooks), nunca do valor da venda
+  const [item, setItem] = useState<ItemCatalogo | null>(null)
+  const [itemId, setItemId] = useState(o.qbo_item_id || tabela?.item_id || '')
+  const [irmao, setIrmao] = useState(!!card?.outro_piloto)
+  const [liberar, setLiberar] = useState(false)
   const [passos, setPassos] = useState<Record<string, boolean>>({ cliente: true, qbo: true, waiver: true, asana: true, kommo: !!o.crm_lead_id })
   const [extras, setExtras] = useState<Extra[]>([])
   const [busy, setBusy] = useState(false)
   const [feito, setFeito] = useState<Fechamento | null>(o.closing || null)
   const set = (k: keyof typeof f) => (v: string) => setF(x => ({ ...x, [k]: v }))
-  const fora = f.amount && f.preco_tabela && Math.abs(Number(f.amount) - Number(f.preco_tabela)) > 0.009
+  const precoTabela = item ? item.price : (itemId ? null : tabela?.preco ?? null)
+  const deposito = item ? item.deposito : (itemId ? 0 : tabela?.deposito || 0)
+  const fora = !!f.amount && (precoTabela == null || Math.abs(Number(f.amount) - precoTabela) > 0.009)
+  function escolher(i: ItemCatalogo | null) {
+    setItem(i); setItemId(i?.id || '')
+    if (i && !f.service.trim()) set('service')(i.name)
+  }
 
   async function confirmar() {
     if (!f.service.trim() || !f.amount) { toast(tr("Diga o serviço e o valor fechado."), 'crit'); return }
@@ -396,7 +474,7 @@ function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: 
     try {
       const r = await api.post<{ etapa: string; fechamento: Fechamento }>(`/sales/${o.id}/close`, {
         service: f.service, service_date: f.service_date || undefined, service_time: f.service_time || undefined,
-        amount: Number(f.amount), preco_tabela: f.preco_tabela ? Number(f.preco_tabela) : undefined,
+        amount: Number(f.amount), item_id: itemId || undefined, irmao: card ? irmao : undefined,
         pilot_name: f.pilot_name || undefined, pilot_age: f.pilot_age ? Number(f.pilot_age) : undefined,
         email: f.email || undefined, phone: f.phone || undefined, nota_cliente: f.nota_cliente || undefined,
         passos, extras: extras.filter(e => e.titulo.trim()).map(e => ({ titulo: e.titulo, onde: e.onde, quando: e.quando || undefined, notas: e.notas || undefined })),
@@ -414,11 +492,11 @@ function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: 
   }
 
   const LINHAS: { k: string; nome: string; o_que: string; icone: string }[] = [
-    { k: tr("cliente"), nome: tr("Cria o card do cliente"), o_que: tr("Clientes · responsável, piloto, contato e a anotação"), icone: tr("people") },
-    { k: tr("qbo"), nome: tr("Cliente no QuickBooks e invoice enviada"), o_que: fora ? tr("valor fora da tabela: a invoice fica esperando o dono") : tr("cria o cliente se faltar e manda a invoice do valor fechado"), icone: tr("dollar") },
-    { k: tr("waiver"), nome: tr("Envia a waiver"), o_que: tr("DocuSign · modelo {0} · para {1}", f.pilot_age && Number(f.pilot_age) < 18 ? 'parental (piloto menor)' : 'adulto', f.email || 'sem e-mail'), icone: tr("doc") },
-    { k: tr("asana"), nome: tr("Cria a tarefa no Asana"), o_que: tr("quadro U-RACE, com a data do serviço"), icone: tr("list") },
-    { k: tr("kommo"), nome: tr("Fecha no Kommo"), o_que: o.crm_lead_id ? tr("lead do chat → Closed won") : tr("esta oportunidade não veio do chat"), icone: tr("chat") },
+    { k: 'cliente', nome: tr("Cria o card do cliente"), o_que: irmao ? tr("card próprio do irmão · mesmo responsável, e-mail e telefone") : tr("Clientes · responsável, piloto, contato e a anotação"), icone: 'people' },
+    { k: 'qbo', nome: tr("Cliente no QuickBooks e invoice enviada"), o_que: fora && !podeLiberar ? tr("fora da tabela (ou sem preço de tabela): a invoice espera o gerente conferir o valor") : deposito > 0 ? tr("manda a invoice do valor fechado + o depósito de {0}", money(deposito)) : tr("cria o cliente se faltar e manda a invoice do valor fechado"), icone: 'dollar' },
+    { k: 'waiver', nome: tr("Envia a waiver"), o_que: tr("DocuSign · modelo {0} · para {1}", f.pilot_age && Number(f.pilot_age) < 18 ? 'parental (piloto menor)' : 'adulto', f.email || 'sem e-mail'), icone: 'doc' },
+    { k: 'asana', nome: tr("Cria a tarefa no Asana"), o_que: tr("quadro U-RACE, com a data do serviço"), icone: 'list' },
+    { k: 'kommo', nome: tr("Fecha no Kommo"), o_que: o.crm_lead_id ? tr("lead do chat → Closed won") : tr("esta oportunidade não veio do chat"), icone: 'chat' },
   ]
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 1080 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}><Icon name="x" size={16} /></button>
@@ -437,9 +515,12 @@ function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: 
         </div>
         <div className="grid g2">
           <div className="field"><label>{tr("Valor fechado")}</label><input className="input" type="number" step="0.01" value={f.amount} onChange={e => set('amount')(e.target.value)} /></div>
-          <div className="field"><label>{tr("Preço da tabela")}</label><input className="input" type="number" step="0.01" value={f.preco_tabela} onChange={e => set('preco_tabela')(e.target.value)} /></div>
+          <div className="field"><span className="small muted">{tr("Preço da tabela (catálogo)")}</span><div className="mono" style={{ padding: '10px 0', fontWeight: 600 }}>{precoTabela != null ? money(precoTabela) : tr("sem preço de tabela")}</div></div>
         </div>
-        {fora ? <Banner tone="warn">{tr("Valor fora da tabela: a venda fecha, o resto sai, e a")} <b>{tr("invoice fica esperando sua aprovação")}</b> {tr("(política do dono).")}</Banner> : null}
+        <div className="field"><label htmlFor="fechar-item">{tr("Item do catálogo (QuickBooks)")}</label><EscolherItem id="fechar-item" valor={itemId} onEscolher={escolher} /></div>
+        {fora ? <Banner tone="warn">{podeLiberar ? tr("Valor fora da tabela (ou sem preço de tabela). Você é gerente: ao confirmar, a invoice sai com este valor.")
+          : <>{tr("Valor fora da tabela (ou sem preço de tabela): a venda fecha, o resto sai, e a")} <b>{tr("invoice espera o gerente conferir o valor")}</b> {tr("(decisão do dono, 14/10).")}</>}</Banner> : null}
+        {deposito > 0 && <Banner tone="info">{tr("Depósito de segurança de {0} vai na mesma invoice, como na venda automática.", money(deposito))}</Banner>}
         <div className="grid g2">
           <div className="field"><label>{tr("Piloto")}</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.pilot_name} onChange={e => set('pilot_name')(e.target.value)} /><Mic valor={f.pilot_name} onTexto={set('pilot_name')} /></div></div>
           <div className="field"><label>{tr("Idade do piloto")}</label><input className="input" type="number" value={f.pilot_age} onChange={e => set('pilot_age')(e.target.value)} placeholder={tr("decide a waiver")} /></div>
@@ -448,6 +529,11 @@ function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: 
           <div className="field"><label>{tr("E-mail (invoice e waiver)")}</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.email} onChange={e => set('email')(e.target.value)} /><Mic valor={f.email} onTexto={t => set('email')(t.replace(/\s+/g, '').replace(/arroba/gi, '@'))} /></div></div>
           <div className="field"><label>{tr("Telefone")}</label><input className="input" value={f.phone} onChange={e => set('phone')(e.target.value)} /></div>
         </div>
+        {card && !feito && <div className="card card-b stack" style={{ gap: 6 }}>
+          <div className="small">{card.outro_piloto ? <><b>{tr("O card com este contato é de {0}.", card.pilot_name || card.name)}</b> {tr("Esta venda é de {0}: se for irmão, ele ganha um card próprio, com o mesmo responsável, e-mail e telefone.", f.pilot_name || '—')}</>
+            : tr("Liga no card que já existe: {0}.", card.pilot_name || card.name)}</div>
+          <label className="check"><input type="checkbox" checked={irmao} onChange={e => setIrmao(e.target.checked)} /> {tr("É irmão: criar o card de {0}", f.pilot_name || tr("este piloto"))}</label>
+        </div>}
         <div className="field"><label>{tr("Anotação para o card do cliente")}</label><TextoComVoz valor={f.nota_cliente} onChange={set('nota_cliente')} linhas={2} placeholder={tr("Primeira vez no kart, mãe vai junto…")} /></div>
       </div>
 
@@ -461,7 +547,9 @@ function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: 
               <div style={{ minWidth: 0 }}><div className="t">{l.nome}</div><div className="s">{p ? p.detalhe : l.o_que}</div></div>
               <div className="r">
                 {!feito && <button className={`sw${passos[l.k] ? '' : ' off'}`} aria-label={passos[l.k] ? tr("Ligado") : tr("Desligado")} onClick={() => setPassos(x => ({ ...x, [l.k]: !x[l.k] }))} />}
-                {feito && (p?.ok ? <Chip tone="ok">{tr("feito")}</Chip> : p?.ok === false ? <button className="btn sm" disabled={busy} onClick={() => refazer(l.k)}>{tr("tentar de novo")}</button> : <Chip tone="neutral">—</Chip>)}
+                {feito && (p?.ok ? <Chip tone="ok">{tr("feito")}</Chip> : p?.ok === false ? <button className="btn sm" disabled={busy} onClick={() => refazer(l.k)}>{tr("tentar de novo")}</button>
+                  : l.k === 'qbo' && feito.invoice_pendente ? (podeLiberar ? <button className="btn sm primary" onClick={() => setLiberar(true)}>{tr("Liberar invoice")}</button> : <Chip tone="warn">{tr("espera o gerente")}</Chip>)
+                  : <Chip tone="neutral">—</Chip>)}
               </div>
             </div></div>
           })}
@@ -497,6 +585,7 @@ function FecharVenda({ o, onClose, onOk }: { o: Opp; onClose: () => void; onOk: 
         </div>}
       </div>
     </div>
+    {liberar && <LiberarInvoice o={o} tabela={tabela} onClose={() => setLiberar(false)} onOk={fe => { setLiberar(false); setFeito(fe); onOk() }} />}
   </div></Scrim>
 }
 

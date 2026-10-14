@@ -11,7 +11,9 @@
 > `providers/venda_site.py`, `providers/google_agenda.py`) e nos processos do cérebro (`brain/10_PROCESSOS/`). Quando o código e
 > um documento antigo discordam, vale o código, e a diferença está dita.
 >
-> Atualizado em 14/10/2026. Painel: https://ops.urace.us/ops/
+> Atualizado em 14/10/2026 (#204: invoice fora da tabela só com o gerente, depósito na venda manual,
+> card de irmão, retorno vencido em Precisa de atenção, confirmação do chat pelo Claude).
+> Painel: https://ops.urace.us/ops/
 
 ---
 
@@ -164,11 +166,21 @@ tela: todo operador vê todas as oportunidades.
 - O card é do **piloto**. O **responsável** é quem paga e assina (pai, mãe ou o próprio piloto
   adulto). No QuickBooks o cliente é sempre o responsável, nunca o piloto.
 - Irmãos têm o mesmo responsável, e-mail e telefone, mas **cada piloto tem o seu card** (#65).
-- **Cuidado:** o painel reconhece "pessoa que já existe" por e-mail ou telefone. Ao criar o card
-  de um irmão com o mesmo e-mail, ele pode devolver o card do outro irmão. **Sempre confira o
-  piloto do card que voltou.** Se for de outro piloto, pare e chame a gerência: não ponha o serviço
-  ali. Se a família tem conta no site, o card do irmão nasce em **Agendamentos do site › Contas de
-  clientes**, pelo driver (seção 5): ali o e-mail repetido dos irmãos não bloqueia.
+- O **+ Novo cliente** reconhece "pessoa que já existe" por e-mail ou telefone: com o e-mail do
+  irmão, ele devolve o card do irmão. Para o irmão, use o **card de irmão** (#204, dono, 14/10:
+  *"sim, é para criar um card de um irmão"*):
+  - **Clientes › + Novo cliente › "É irmão de um cliente? Criar card de irmão"**, ou no card do
+    irmão: **⋯ › + Card de irmão**;
+  - em **"Irmão de — vincular ao cliente"**, escolha o card do irmão que já existe. O responsável,
+    o e-mail e o telefone vêm dele; você escreve o **piloto** (e o nascimento);
+  - pela API: `POST /ops/api/clients` com `{"pilot_name": "…", "irmao_de": <id do card do irmão>}`.
+  O card novo mostra **irmão(s)** no topo, com o link para o outro. Os dois **nunca se unem** (nem
+  pela sincronia, nem pelo Unir) e o serviço de um não vai para o outro. Pedir de novo para o mesmo
+  piloto devolve o card que já existe.
+- Se a família tem conta no site, o card do irmão também pode nascer em **Agendamentos do site ›
+  Contas de clientes**, pelo driver (seção 5). A conta no site para cada irmão fica para depois
+  (dono, 14/10).
+- **Sempre confira o piloto do card** antes de pôr um serviço nele.
 - Mover um serviço de um card para outro é do **gerente** (`POST /tasks/{id}/cliente`).
 - Unir dois cards (`POST /client-merge`, Operador) só quando são a mesma pessoa. O painel recusa
   unir cards de drivers diferentes do site ou de contas diferentes.
@@ -235,6 +247,8 @@ Junto: minutos, "o que ele falou" (ditado) e o retorno (data, hora e o que fazer
 | Marcar perdido | **Perdido** | `POST /sales/{id}/stage` com `etapa: PERDIDO` e `motivo` |
 
 Os retornos vencidos ou de hoje somam no contador de vendas do menu e aparecem na Agenda de vendas.
+Os **vencidos** também aparecem em **Precisa de atenção** ("retorno(s) de venda atrasado(s)", com o
+link para a Agenda de vendas).
 
 ### 4.4 Preço: de onde vem
 
@@ -248,6 +262,11 @@ Preço nunca é de memória. A ordem (`brain/00_SYSTEM/PARAMETROS.md`):
 Para sessão do site, o preço está em **Agendamentos do site › Serviços e preços** (`GET /ops/api/site/servicos`).
 Mudar preço é da gerência.
 
+**No Fechar venda, o "Preço da tabela" vem do catálogo, não do valor da venda** (#204). É o preço
+do **item do QuickBooks** escolhido em **Item do catálogo (QuickBooks)** (a Rate Card atualiza esse
+catálogo toda segunda). Sem item escolhido, o painel procura o item com o mesmo nome do serviço, e
+depois o serviço do site com esse nome. A lista vem de `GET /ops/api/sales/catalogo`.
+
 ### 4.5 Fechar a venda
 
 Botão **Fechar venda** (`POST /sales/{id}/close`). Uma tela: à esquerda o que foi vendido, à direita
@@ -258,8 +277,8 @@ e o valor."
 
 | Passo | O que faz (código) | Quando falha |
 |---|---|---|
-| **Card do cliente** (`cliente`) | usa o card vinculado; se não houver, procura pelo mesmo e-mail ou telefone; se não achar, cria. Nunca duplica | raro |
-| **QuickBooks** (`qbo`) | acha o cliente no QuickBooks (pelo e-mail, ou pelo nome se não houver e-mail), cria se faltar, e **cria e envia** a invoice do valor fechado. A invoice vence na data do serviço | QuickBooks fora do ar |
+| **Card do cliente** (`cliente`) | usa o card vinculado; se não houver, procura pelo mesmo e-mail ou telefone (entre irmãos, o do piloto da venda); se não achar, cria. Nunca duplica. Com **"É irmão"** marcado, cria o card de irmão ao lado do que existe | o card do contato é de **outro piloto** e "É irmão" não está marcado: o passo para (o serviço não cai no card do irmão) |
+| **QuickBooks** (`qbo`) | acha o cliente no QuickBooks (pelo e-mail, ou pelo nome se não houver e-mail), cria se faltar, e **cria e envia** a invoice: o valor fechado na linha do **item do catálogo** + o **depósito de segurança**, quando o serviço pede. A invoice vence na data do serviço. Fora da tabela, **não sai**: espera o gerente | QuickBooks fora do ar; serviço sem item no catálogo |
 | **Waiver** (`waiver`) | DocuSign: parental se a idade é menor que 18, adulto se não (ou se a idade está vazia), para o nome e e-mail da ficha | sem e-mail; e-mail da URACE; já tem válida ou envelope aberto |
 | **Asana** (`asana`) | tarefa no quadro U-RACE com o nome `Piloto_Serviço - data hora` e a data do serviço | Asana fora do ar |
 | **Kommo** (`kommo`) | se a oportunidade veio do chat, move o lead para a etapa "Closed won" do funil dele | sem lead: só anota que não havia nada a mover |
@@ -267,17 +286,22 @@ e o valor."
 
 Regras do fechamento:
 
-- **Valor fora da tabela:** a venda fecha, os outros passos saem, e a **invoice fica esperando a
-  aprovação do dono**. Gerente e administrador passam direto.
-- O campo **Preço da tabela** vem preenchido com o próprio valor. **Troque pelo preço da tabela de
-  verdade.** Sem preço de tabela, a invoice sai como "sem referência" e você responde pelo valor.
+- **Valor fora da tabela, ou serviço sem preço de tabela no catálogo:** a venda fecha, os outros
+  passos saem, e a **invoice fica esperando o gerente ou o dono conferir o valor** (dono, 14/10:
+  *"precisa confirmar o valor da invoice"*). Nada vai ao QuickBooks até lá. Gerente, administrador e
+  a conta de acesso livre fecham e a invoice sai direto.
+- O **Preço da tabela** não é digitado: vem do catálogo (seção 4.4). O `preco_tabela` mandado pela
+  API não decide nada.
+- **Depósito de segurança** (dono, 14/10: *"é cobrado em venda manual ou automática"*): quando o
+  serviço pede depósito (o mesmo de **Serviços e preços** do site, ex.: Arrive and Drive US$ 400), ele
+  entra **na mesma invoice**, na linha "Security deposit", igual à venda automática. A tela mostra o
+  valor antes de confirmar.
+- **Irmão:** se o card com o mesmo contato é de outro piloto, a tela avisa e traz marcado **"É irmão:
+  criar o card de …"**. Desmarque só se o card for mesmo deste piloto.
 - Falha de um passo não derruba os outros. A tela vira **acompanhamento**: cada linha diz feito,
   aguardando ou falhou, com **tentar de novo** ao lado do que falhou.
 - **Ganho** só quando há card de cliente. Se o passo Card do cliente estiver desligado e não houver
   card vinculado, a oportunidade fica em Fechamento.
-- O fechamento **não cobra depósito**. Depósito de venda feita à mão segue
-  `brain/10_PROCESSOS/Pagamento e security deposit.md` (conferir no QuickBooks antes de cobrar) e é
-  com a gerência.
 - Se você já criou a tarefa de serviço pelo modelo oficial (`POST /tasks`, com subtarefas),
   **desligue o passo Asana** no fechamento. Os dois juntos fazem duas tarefas.
 
@@ -288,10 +312,37 @@ Regras do fechamento:
 
 - **Não cobre duas vezes.** `step/qbo` **cria e envia outra invoice**. Só use quando a linha do
   QuickBooks estiver como **falhou**. Se estiver "feito", a invoice já saiu.
-- **Invoice esperando aprovação do dono** não se libera com `step/qbo`. Avise a gerência.
+- **Invoice esperando o gerente** não sai por `step/qbo`: a resposta é 409 ("A invoice espera o
+  gerente conferir o valor…"). Avise a gerência (seção 4.6.1).
 - `step/waiver` reenvia pelo DocuSign; as travas de waiver válida e envelope aberto continuam.
 - Para corrigir o e-mail de uma waiver que já saiu, use o reenvio da waiver
   (`POST /waivers/{id}/resend` com o e-mail novo), não um envio novo.
+- `step/cliente?irmao=true` cria o card de irmão quando o passo parou porque o card do contato era
+  de outro piloto.
+
+#### 4.6.1 Liberar invoice (gerente e dono)
+
+A ficha da oportunidade mostra **"Invoice esperando o gerente conferir o valor"**, com o valor da
+venda e o preço da tabela. O item também aparece em **Precisa de atenção** ("Invoice da venda de …
+esperando você conferir o valor").
+
+- Quem vende vê o aviso e "Só o gerente ou o dono libera."
+- O gerente (ou o dono) clica **Liberar invoice**: a janela mostra serviço, **valor da venda**,
+  **preço da tabela (catálogo)**, a diferença e o depósito. **Liberar invoice de $…** cria e envia a
+  invoice pelo QuickBooks. Se o serviço ainda não tem item no catálogo, escolha o item ali.
+- API: `POST /ops/api/sales/{id}/invoice/liberar` com `{"valor": <o valor da venda>}` (papel
+  **Gerente**). Se o valor da venda mudou, a resposta é 409 e nada sai. Fica na auditoria
+  (`sales.invoice.release`) com o valor, o preço da tabela e quem liberou.
+
+#### 4.6.2 Cobrar só o depósito
+
+Venda fechada sem o depósito (fechada antes de 14/10, ou com a invoice desligada) e o serviço pede
+depósito: a ficha mostra **"Depósito ainda não cobrado"** com o botão **Cobrar só o depósito**
+(Operador). Sai uma invoice só com a linha "Security deposit", no valor do catálogo.
+
+- API: `POST /ops/api/sales/{id}/deposit` (Operador).
+- Não cobra duas vezes; com a invoice principal esperando o gerente, o depósito vai junto quando ela
+  for liberada; serviço sem depósito responde "não pede depósito no catálogo".
 
 ### 4.7 A IA dentro da oportunidade
 
@@ -303,13 +354,15 @@ invoice, fechar"). Ditar funciona. O que ela pode fazer e quem aprova:
 | registrar ligação, marcar retorno, anotar, criar tarefa | executa sozinha |
 | enviar waiver | executa sozinha (as travas do DocuSign continuam) |
 | mover etapa, fechar a venda | espera alguém confirmar (o Operador pode) |
-| enviar invoice | espera confirmação, e **só gerente ou administrador** decide |
+| enviar invoice | espera confirmação, e **só gerente ou administrador** decide; fora da tabela, recusa se quem decide não é gerente |
 
 A política em vigor de cada ação está em **O que a IA pode fazer** (`/ops/ai/capabilities`); o
 administrador muda em Políticas da IA.
 
-Atenção: o **fechar pela IA da ficha** liga todos os passos e não confere o preço da tabela.
-Confira serviço, valor, idade e e-mail na ficha antes de aprovar.
+O **fechar pela IA da ficha** liga todos os passos e **confere o preço da tabela** no catálogo,
+como a tela (#204). Fora da tabela (ou sem preço de tabela), a invoice fica esperando o gerente,
+mesmo que quem confirmou a ação seja Operador; com o gerente confirmando, sai. O depósito entra
+igual. Confira serviço, valor, idade e e-mail na ficha antes de confirmar.
 
 ### 4.8 O seu Google Calendar (#220)
 
@@ -559,9 +612,10 @@ Como a resposta sai: pelo bot da conta no canal do lead, **como mensagem do bot*
 meio minuto. Se em 15 minutos não sair, vira nota no lead e acende o aviso. O que o lead escreveu
 antes de o chat ser ligado fica só no Kommo.
 
-**Regra para o Claude:** o painel não pede `confirmar` nas rotas `/crm/…`. Mesmo assim, o Claude
-**só responde ao lead com o texto que a pessoa aprovou, palavra por palavra**, e só move etapa ou
-marca tag depois de a pessoa dizer qual.
+**Regra para o Claude:** pelo MCP, toda escrita em `/crm/…` (responder, anotar, etapa, tags,
+ligar ao card) pede `confirmar` (#204), como o resto do que vai para o Kommo. O Claude **só responde
+ao lead com o texto que a pessoa aprovou, palavra por palavra**, e só move etapa ou marca tag depois
+de a pessoa dizer qual.
 
 ### Atendimento humano (`/ops/atendimento`) — quando a IA pede uma pessoa (14/10)
 
@@ -692,8 +746,12 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | marcar retorno | `POST /ops/api/sales/{id}/next` | `{"quando": "2026-10-20T14:00:00Z", "o_que": "retorno"}` | Operador | não |
 | anotar | `POST /ops/api/sales/{id}/note` | `{"texto": "prefere manhã de sábado"}` | Operador | não |
 | mover etapa | `POST /ops/api/sales/{id}/stage` | `{"etapa": "PROPOSTA"}` ou `{"etapa": "PERDIDO", "motivo": "distância"}` | Operador | não |
-| **fechar a venda** | `POST /ops/api/sales/{id}/close` | `{"service": "Test Drive", "service_date": "2026-10-24", "service_time": "09:00", "amount": 0, "preco_tabela": 0, "pilot_name": "Piloto Exemplo", "pilot_age": 12, "email": "cliente@exemplo.com", "passos": {"cliente": true, "qbo": true, "waiver": true, "asana": true, "kommo": false}, "extras": [{"titulo": "avisar o instrutor", "onde": "painel", "quando": "2026-10-23"}]}` (valores `0` = troque pelo valor real da tabela) | Operador | **sim** |
-| refazer um passo | `POST /ops/api/sales/{id}/step/{passo}` | — (`passo`: cliente, qbo, waiver, asana, kommo) | Operador | **sim** |
+| itens do catálogo (preço da tabela) | `GET /ops/api/sales/catalogo` | consulta `{"q": "daily"}` | todos | não |
+| **fechar a venda** | `POST /ops/api/sales/{id}/close` | `{"service": "Test Drive", "service_date": "2026-10-24", "service_time": "09:00", "amount": 0, "item_id": "id do item do catálogo", "pilot_name": "Piloto Exemplo", "pilot_age": 12, "email": "cliente@exemplo.com", "irmao": false, "passos": {"cliente": true, "qbo": true, "waiver": true, "asana": true, "kommo": false}, "extras": [{"titulo": "avisar o instrutor", "onde": "painel", "quando": "2026-10-23"}]}` (`0` = troque pelo valor real; o preço da tabela vem do item) | Operador | **sim** |
+| refazer um passo | `POST /ops/api/sales/{id}/step/{passo}` | — (`passo`: cliente, qbo, waiver, asana, kommo; `cliente` aceita a consulta `{"irmao": true}`) | Operador | **sim** |
+| cobrar só o depósito | `POST /ops/api/sales/{id}/deposit` | — | Operador | **sim** |
+| liberar invoice fora da tabela | `POST /ops/api/sales/{id}/invoice/liberar` | `{"valor": 0}` (o valor da venda, conferido) | **Gerente** | **sim** |
+| card de irmão | `POST /ops/api/clients` | `{"name": "Responsável Exemplo", "pilot_name": "Irmão Exemplo", "pilot_dob": "2016-05-09", "irmao_de": 123}` | Operador | não |
 | tarefa de serviço no Asana (modelo oficial) | `POST /ops/api/tasks` | `{"client_id": 123, "pilot_name": "Piloto Exemplo", "responsible": "Responsável Exemplo", "email": "cliente@exemplo.com", "phone": "+1 407 555 0100", "dob": "2014-05-10", "product": "Test Drive", "category": "4 stroke", "due_on": "2026-10-24"}` | Operador | **sim** |
 | enviar waiver avulsa | `POST /ops/api/waivers/send` | `{"template": "parental", "signer_name": "Responsável Exemplo", "signer_email": "cliente@exemplo.com", "service": "Test Drive", "client_id": 123}` | Operador | **sim** |
 | reenviar waiver (corrigir e-mail) | `POST /ops/api/waivers/{id}/resend` | `{"email": "novo@exemplo.com"}` | Operador | **sim** |
@@ -701,9 +759,11 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | recusar pedido do site | `POST /ops/api/site/agendamentos/{id}/recusar` | `{"nota": "texto que o cliente vai ler"}` | Operador | **sim** |
 | cancelar sessão | `POST /ops/api/site/agendamentos/{id}/cancelar` | `{"nota": "…"}` | Operador | **sim** |
 | confirmar sem pagamento e waiver | `POST /ops/api/site/agendamentos/{id}/confirmar` | `{}` | **Gerente** | **sim** |
-| responder lead no Kommo | `POST /ops/api/crm/leads/{id}/reply` | `{"text": "texto aprovado pela pessoa"}` | Operador | não (o playbook pede o "pode mandar") |
-| anotar no lead | `POST /ops/api/crm/leads/{id}/note` | `{"text": "…"}` | Operador | não |
-| ligar lead ao card | `POST /ops/api/crm/leads/{id}/link` | `{"client_id": 123}` | Operador | não |
+| responder lead no Kommo | `POST /ops/api/crm/leads/{id}/reply` | `{"text": "texto aprovado pela pessoa"}` | Operador | **sim** |
+| mover etapa no Kommo | `POST /ops/api/crm/leads/{id}/stage` | `{"stage_id": "…"}` | Operador | **sim** |
+| marcar tag no Kommo | `POST /ops/api/crm/leads/{id}/tags` | `{"tags": ["…"]}` | Operador | **sim** |
+| anotar no lead | `POST /ops/api/crm/leads/{id}/note` | `{"text": "…"}` | Operador | **sim** |
+| ligar lead ao card | `POST /ops/api/crm/leads/{id}/link` | `{"client_id": 123}` | Operador | **sim** |
 | relatar erro do robô | `POST /ops/api/sdr/relatos` | `{"tipo": "respondeu_errado", "texto": "…", "lead_ref": "id do lead"}` | todos | não |
 | IA num pedido de suit | `POST /ops/api/suits/{id}/ia` | `{"ligada": false}` | Operador | não |
 | acertar agora os retornos no Google da pessoa | `POST /ops/api/google/sync` | — | Operador | não |
@@ -723,7 +783,7 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 | mudar preço, depósito ou item do QuickBooks de um serviço do site | Gerente |
 | abrir e fechar a agenda, bloquear datas, "Confirmar sozinho" | Gerente |
 | ver invoices e QuickBooks | Gerente |
-| aprovar invoice proposta pela IA ou fora da tabela | Gerente / dono |
+| aprovar invoice proposta pela IA; **Liberar invoice** fora da tabela ou sem preço de tabela | Gerente / dono |
 | mover serviço de um card para outro | Gerente |
 | instruções do robô SDR, resolver relato | Gerente |
 | ligar a venda automática, mudar o nível do robô SDR | Administrador |
@@ -740,7 +800,7 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 4. Pergunte o que falta: piloto, **idade**, e-mail, serviço, data.
 5. Confira o preço na tabela.
 6. Registre a ligação ou a conversa (`call` com `fechou` quando fechar).
-7. **Fechar venda**, com `preco_tabela` e o passo Kommo ligado. Confirme com a pessoa.
+7. **Fechar venda**, com o **item do catálogo** e o passo Kommo ligado. Confirme com a pessoa.
 8. Veja o acompanhamento: tudo "feito"? Responda ao lead (texto aprovado) dizendo que a invoice e a
    waiver estão no e-mail.
 
@@ -756,7 +816,15 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 1. Ache o card (seção 3).
 2. **Nova oportunidade › Vincular ao cliente**: os dados vêm do cadastro e o fechamento cai nesse card.
 3. Confira se a waiver do piloto ainda vale (1 ano da assinatura). Se vale, desligue o passo Waiver.
-4. Feche com o preço da tabela.
+4. Feche com o item do catálogo. Fora da tabela, a invoice espera o gerente.
+
+### R3b. Irmão de quem já é cliente
+
+1. Ache o card do irmão (seção 3).
+2. **Clientes › + Novo cliente › "É irmão de um cliente?"** (ou no card do irmão, **⋯ › + Card de
+   irmão**). Em "Irmão de — vincular ao cliente", escolha o card do irmão; escreva o piloto.
+3. Abra a oportunidade com **Vincular ao cliente** no card novo. Ou, no Fechar venda, deixe marcado
+   **"É irmão: criar o card de …"** quando a tela avisar que o card do contato é de outro piloto.
 
 ### R4. Piloto menor de idade, ou adulto que não é quem paga
 
@@ -781,8 +849,10 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 1. `GET /sales/{id}` e leia `oportunidade.closing.passos`.
 2. Para cada passo com `ok: false`, corrija a causa (e-mail, integração) e use **tentar de novo**
    (`step/{passo}`).
-3. Passo com `ok: null` e "invoice esperando aprovação do dono": não refaça. Avise a gerência.
-4. Nunca chame `close` de novo numa venda que já tem `closing`.
+3. Passo com `ok: null` e "invoice esperando o gerente conferir o valor": não refaça. Avise a
+   gerência; ela usa **Liberar invoice** (seção 4.6.1).
+4. Faltou o depósito? **Cobrar só o depósito** (seção 4.6.2).
+5. Nunca chame `close` de novo numa venda que já tem `closing`.
 
 ### R7. Waiver voltou ou foi para o e-mail errado
 
@@ -804,7 +874,8 @@ instrução à gerência.
 1. Agenda de vendas: retornos de hoje e atrasados.
 2. Chat do Kommo: conversas com ●.
 3. Agendamentos do site › Agendamentos › Esperando confirmação.
-4. Precisa de atenção: ligação perdida, waiver parada, pedido do site.
+4. Precisa de atenção: retorno de venda atrasado, ligação perdida, waiver parada, pedido do site,
+   invoice de venda esperando o gerente.
 
 ### Frases para dizer ao seu Claude
 
@@ -827,8 +898,9 @@ instrução à gerência.
 
 | Regra | Na prática |
 |---|---|
-| **Não cobrar duas vezes** | antes de fechar, olhe `closing`; `step/qbo` só para passo que falhou; agendamento com invoice não gera outra; depósito à mão só depois de conferir no QuickBooks |
-| **Nunca serviço de um cliente no card de outro** | confira o piloto do card antes de vincular; irmão tem card próprio; mover serviço é da gerência |
+| **Não cobrar duas vezes** | antes de fechar, olhe `closing`; `step/qbo` só para passo que falhou; agendamento com invoice não gera outra; o depósito sai uma vez por venda (`closing.deposito_cobrado`) |
+| **Invoice fora da tabela só com o gerente** | o preço da tabela vem do catálogo; fora dela (ou sem preço), quem libera é o gerente ou o dono, vendo o valor |
+| **Nunca serviço de um cliente no card de outro** | confira o piloto do card antes de vincular; irmão tem card próprio (card de irmão); mover serviço é da gerência |
 | **NO FAKE DATA** | não invente nome, e-mail, idade, data, preço. Faltou, pergunte. Ausência é informação |
 | **Preço e prazo só do sistema** | Rate Card, Serviços e preços, ou o dono. Não prometa data, vaga, desconto ou condição que o painel não mostre. O robô SDR não diz "reserva confirmada" nem "garanto sua vaga" |
 | **Nunca pedir senha no chat** | nem senha, token, PIN ou chave. O login é pelo navegador |
@@ -860,7 +932,11 @@ instrução à gerência.
 | Waiver: "RECUSADO (trava 1)… waiver válida" | o signatário já tem waiver de menos de 1 ano: não precisa outra |
 | Waiver: "RECUSADO (trava 2)… envelope em aberto" | já existe uma enviada e não assinada: use o reenvio (`/waivers/{id}/resend`) |
 | Passo "não conectado: …" (QuickBooks, DocuSign, Asana, Kommo) | integração fora do ar: veja Integrações; quando voltar, **tentar de novo** só nesse passo |
-| "invoice esperando aprovação do dono" | valor fora da tabela: avise a gerência; não refaça o passo |
+| "invoice esperando o gerente conferir o valor: …" | fora da tabela ou sem preço de tabela: avise a gerência (Liberar invoice); não refaça o passo |
+| `step/qbo`: "A invoice espera o gerente conferir o valor…" (409) | mesma coisa: é da gerência |
+| QuickBooks: "o serviço não tem item no catálogo do QuickBooks: escolha o item na tela de fechar" | escolha o **Item do catálogo** e use **tentar de novo**; se o item não existe, é da gerência |
+| Card: "o card com este contato é do piloto …: marque "É irmão"…" | é irmão: `step/cliente?irmao=true` (ou feche de novo marcando "É irmão"); se não for, vincule ao card certo |
+| Depósito: "não pede depósito no catálogo" | o serviço não tem depósito em Serviços e preços: é da gerência mudar |
 | Passo Kommo "feito", mas com a nota "não achei a etapa 'Closed won' neste funil do Kommo" | o lead não se mexeu: mova a etapa à mão no chat ou avise a gerência |
 | Site: "a conta do site ainda não está ligada a um card (Client ID)" | Agendamentos do site › Contas de clientes: ligue o driver ao card certo; o painel tenta a invoice de novo |
 | Site: "o serviço não tem item do QuickBooks…" | é da gerência: escolher o item em Serviços e preços |
@@ -876,8 +952,9 @@ instrução à gerência.
 | Atendimento: "Este lead ainda não está no espelho do painel" | responda pelo Kommo (botão **Abrir no Kommo**) |
 | Atendimento: aviso "simulado (não saiu)" no WhatsApp | o WhatsApp oficial da equipe ainda não está configurado: o aviso saiu por push e no chat da equipe |
 | Atendimento: "Esta conversa está com um atendimento humano aberto" ao reativar a IA no Robô SDR | use **Devolver à IA** no caso |
-| Novo cliente: "Esse cliente já existia: abrindo o card dele." | confira se o card é **do mesmo piloto**. Se for irmão, pare e chame a gerência |
-| Unir: "Esses dois cards não se unem: …" | são drivers ou contas diferentes do site: não una |
+| Novo cliente: "Esse cliente já existia: abrindo o card dele." | confira se o card é **do mesmo piloto**. Se for irmão, use **Criar card de irmão** (seção 3) |
+| Card de irmão: "este card já é do piloto …: o irmão tem outro nome" | o piloto escrito é o do card de origem: confira o nome do irmão |
+| Unir: "Esses dois cards não se unem: …" | são drivers ou contas diferentes do site, ou irmãos: não una |
 | Nova tarefa: "A data cai numa segunda-feira…" | escolha outra data |
 | Nova tarefa: "Piloto menor de idade: o responsável é obrigatório…" | preencha o responsável |
 | Google: botão cinza, "O gerente ainda não configurou o acesso ao Google…" | é da gerência: seção 4.8, "Para a gerência" |

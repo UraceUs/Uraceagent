@@ -58,16 +58,21 @@ Tudo o que o seu papel faz no painel. O Claude descobre com a ferramenta **`urac
 | achar o cliente | `GET /ops/api/clients?q=…` · `GET /ops/api/clients/{id}` |
 | criar o cliente | `POST /ops/api/clients` |
 | agendar (tarefa no Asana pelo modelo oficial) | `POST /ops/api/tasks` |
-| confirmar ou recusar pedido do site | `POST /ops/api/site/agendamentos/{id}/confirmar` |
+| aceitar ou recusar pedido do site | `POST /ops/api/site/agendamentos/{id}/aceitar` · `…/{id}/recusar` (confirmar sem pagamento e waiver, `…/{id}/confirmar`, é do gerente) |
 | abrir a oportunidade | `POST /ops/api/sales` |
 | registrar a ligação | `POST /ops/api/sales/{id}/call` |
 | fechar a venda (cliente, invoice, waiver, Asana, Kommo) | `POST /ops/api/sales/{id}/close` |
-| reenviar só a invoice ou só a waiver | `POST /ops/api/sales/{id}/step/{passo}` |
+| reenviar só a invoice ou só a waiver | `POST /ops/api/sales/{id}/step/{passo}` (a invoice que espera o gerente não sai por aqui) |
+| cobrar só o depósito que faltou | `POST /ops/api/sales/{id}/deposit` |
+| liberar invoice fora da tabela (gerente) | `POST /ops/api/sales/{id}/invoice/liberar` |
+| card de irmão | `POST /ops/api/clients` com `irmao_de` |
+| responder no chat do Kommo | `POST /ops/api/crm/leads/{id}/reply` |
 | enviar waiver avulsa | `POST /ops/api/waivers/send` |
 
 ### Confirmação antes de mandar para fora
 
-O que vai para o cliente ou cobra (invoice, waiver, e-mail, QuickBooks, DocuSign, Asana, Kommo)
+O que vai para o cliente ou cobra (invoice, depósito, waiver, e-mail, QuickBooks, DocuSign, Asana,
+Kommo — inclusive o chat do Kommo, `/ops/api/crm/…`: responder, anotar, etapa, tags)
 **não acontece na primeira chamada**. O Claude recebe o que vai ser feito, mostra para você, e só
 repete com `confirmar: true` depois do seu "pode mandar".
 

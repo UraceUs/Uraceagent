@@ -33,10 +33,12 @@ PREFIXO = "/ops/api/"
 # fora do MCP: credenciais e sessões (login, senha, chaves) e a área do cliente (outra porta)
 FORA = re.compile(r"^/ops/api/(auth|portal)(/|$)")
 METODOS = ("GET", "POST", "PATCH", "PUT", "DELETE")
-# o que manda algo para fora (cliente, QuickBooks, DocuSign, e-mail, Kommo, Asana) ou cobra
+# o que manda algo para fora (cliente, QuickBooks, DocuSign, e-mail, Kommo, Asana) ou cobra.
+# #204: o chat do Kommo mora em /crm/* (responder, etapa, tags, nota): o documento já dizia que
+# Kommo pede confirmação, mas a regra procurava "kommo" no caminho e deixava o /crm/ passar.
 PEDE_CONFIRMACAO = re.compile(
-    r"invoice|waiver|docusign|qbo|quickbooks|gmail|email|enviar|send|lembrete|reminder|kommo|whatsapp|"
-    r"recorrencia|mensal|fechar|close|step/|cobr|pagamento|payment|asana|tasks|agendamentos/", re.I)
+    r"invoice|waiver|docusign|qbo|quickbooks|gmail|email|enviar|send|lembrete|reminder|kommo|/crm/|whatsapp|"
+    r"recorrencia|mensal|fechar|close|step/|cobr|deposit|pagamento|payment|asana|tasks|agendamentos/", re.I)
 
 
 def _papel_da_rota(dep):
@@ -160,7 +162,7 @@ def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=Fals
         return {"precisa_confirmar": True, "vai_fazer": {"metodo": metodo, "caminho": caminho, "corpo": corpo,
                                                           "consulta": consulta},
                 "descricao": op["descricao"],
-                "aviso": "isto vai para fora (cliente, QuickBooks, DocuSign, e-mail ou Asana) ou cobra. "
+                "aviso": "isto vai para fora (cliente, QuickBooks, DocuSign, e-mail, Kommo ou Asana) ou cobra. "
                          "Mostre à pessoa o que vai acontecer e chame de novo com confirmar=true."}
     status, resposta = _requisicao(ctx, metodo, caminho, corpo, consulta)
     if metodo != "GET":

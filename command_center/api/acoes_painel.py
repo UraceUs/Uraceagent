@@ -207,6 +207,14 @@ def venda_enviar_waiver(con, user_id, opp_id=None, nome=None):
     return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], **res}
 
 
+def _quem_confere(con, user_id):
+    """Quem aprovou/confirmou a ação da IA pode conferir o valor da invoice? (gerente, admin ou
+    acesso livre — o operador não, #204)."""
+    from command_center.api import auth, vendas
+    p = um(con, "SELECT email, role FROM users WHERE id=?", (user_id,)) if user_id else None
+    return bool(p) and vendas.gerente({"role": p["role"], "free": auth.livre(p["email"])})
+
+
 def venda_enviar_invoice(con, user_id, opp_id=None, nome=None):
     from command_center.api import vendas
     o, erro = _opp_por(con, opp_id, nome, user_id)
@@ -214,8 +222,14 @@ def venda_enviar_invoice(con, user_id, opp_id=None, nome=None):
         return {"aplicado": False, "motivo": erro}
     if not o["service"] or o["amount"] is None:
         return {"aplicado": False, "motivo": "esta oportunidade não tem serviço e valor: complete a ficha antes"}
+    o = dict(o, closing=json.loads(o["closing"] or "null"))
+    ref, _preco, na_tabela, por_que = vendas.situacao_do_preco(con, o)
+    if na_tabela is not True and not vendas._valor_liberado(o) and not _quem_confere(con, user_id):
+        return {"aplicado": False, "motivo": f"RECUSADO: {por_que}. Invoice fora da tabela (ou sem preço de tabela) "
+                                              "só sai quando o gerente ou o dono confere o valor (Liberar invoice)"}
+    deposito = 0.0 if (o["closing"] or {}).get("deposito_cobrado") else (ref["deposito"] if ref else 0.0)
     try:
-        res = vendas._qbo(con, o, True)
+        res = vendas._qbo(con, o, True, ref, deposito)
     except Exception as e:                                        # noqa: BLE001
         return {"aplicado": False, "motivo": str(e)[:240]}
     vendas._ev(con, o["id"], "invoice", "Invoice criada e enviada pela IA", res, "ia", 1)
@@ -224,28 +238,43 @@ def venda_enviar_invoice(con, user_id, opp_id=None, nome=None):
 
 
 def venda_fechar(con, user_id, opp_id=None, nome=None):
-    """Fecha a venda e dispara a lista inteira (cliente, QuickBooks, waiver, Asana, Kommo)."""
+    """Fecha a venda e dispara a lista inteira (cliente, QuickBooks, waiver, Asana, Kommo).
+
+    #204: a IA confere o preço da tabela no catálogo, como a tela. Fora da tabela (ou sem preço
+    de tabela), a invoice fica esperando — quem confirmou a ação sendo operador não basta: só o
+    gerente ou o dono confere o valor."""
     from command_center.api import vendas
     o, erro = _opp_por(con, opp_id, nome, user_id)
     if erro:
         return {"aplicado": False, "motivo": erro}
     if not o["service"] or o["amount"] is None:
         return {"aplicado": False, "motivo": "para fechar preciso do serviço e do valor na ficha"}
+    o = dict(o)
+    ref, _preco, na_tabela, por_que = vendas.situacao_do_preco(con, o)
+    if ref and ref["item_id"] and ref["item_id"] != o.get("qbo_item_id"):
+        atualizar(con, "opportunities", o["id"], qbo_item_id=ref["item_id"])
+        o["qbo_item_id"] = ref["item_id"]
+    aprovado = na_tabela is True or _quem_confere(con, user_id)
+    deposito = ref["deposito"] if ref else 0.0
     saida = []
     try:
         cid, det = vendas._cliente_do_fechamento(con, o, None)
         atualizar(con, "opportunities", o["id"], client_id=cid)
-        o = dict(o, client_id=cid)
+        o["client_id"] = cid
         vendas._passo(saida, "cliente", True, det, {"client_id": cid})
     except Exception as e:                                        # noqa: BLE001
         vendas._passo(saida, "cliente", False, str(e)[:200])
-    for passo, fn in (("qbo", lambda: vendas._qbo(con, o, True)), ("waiver", lambda: vendas._waiver(con, o)),
+    for passo, fn in (("qbo", lambda: vendas._qbo(con, o, aprovado, ref, deposito)), ("waiver", lambda: vendas._waiver(con, o)),
                       ("asana", lambda: vendas._asana(con, o)), ("kommo", lambda: vendas._kommo_ganho(con, o))):
         try:
-            vendas._passo(saida, passo, True, "feito", fn())
+            res = fn()
+            if passo == "qbo" and res.get("pendente"):
+                vendas._passo(saida, passo, None, f"invoice esperando o gerente conferir o valor: {por_que}", res)
+            else:
+                vendas._passo(saida, passo, True, "feito", res)
         except Exception as e:                                    # noqa: BLE001
             vendas._passo(saida, passo, False, str(e)[:200])
-    fechado = {"em": agora(), "por": "ia", "passos": saida}
+    fechado = vendas.resumo_do_fechamento("ia", o, ref, na_tabela, por_que, aprovado, deposito, saida)
     etapa = "GANHO" if o["client_id"] else "FECHAMENTO"
     atualizar(con, "opportunities", o["id"], stage=etapa, closing=json.dumps(fechado, ensure_ascii=False),
               next_at=None, updated_at=agora())
@@ -253,8 +282,10 @@ def venda_fechar(con, user_id, opp_id=None, nome=None):
         vendas._ev(con, o["id"], vendas.PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}", None, "ia",
                    1 if p["ok"] else (0 if p["ok"] is False else None))
     auditar(con, "sales.close", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"],
-            detail={"passos": {p["passo"]: p["ok"] for p in saida}, "valor": o["amount"]})
+            detail={"passos": {p["passo"]: p["ok"] for p in saida}, "valor": o["amount"], "preco_tabela": fechado["preco_tabela"],
+                    "na_tabela": na_tabela, "aprovado": aprovado, "deposito": deposito})
     return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], "etapa": etapa,
+            "invoice_esperando_gerente": fechado["invoice_pendente"], "motivo_preco": por_que,
             "feitos": [p["nome"] for p in saida if p["ok"]], "faltou": [f"{p['nome']}: {p['detalhe']}" for p in saida if p["ok"] is False]}
 
 

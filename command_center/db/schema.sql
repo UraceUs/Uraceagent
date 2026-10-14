@@ -164,6 +164,7 @@ CREATE TABLE IF NOT EXISTS clients (
   owner_user_id INTEGER REFERENCES users(id),
   source        TEXT,                     -- de onde veio o registro (asana, brain, qbo, manual)
   notes         TEXT,
+  sibling_of    INTEGER REFERENCES clients(id),   -- #204: card de irmão (mesmo responsável, outro piloto)
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
@@ -402,6 +403,7 @@ CREATE TABLE IF NOT EXISTS opportunities (
   notes          TEXT,
   closing        TEXT,                      -- json: passos do fechamento e resultado de cada um
   starred        INTEGER,
+  qbo_item_id    TEXT,                      -- #204: item do catálogo do QuickBooks (preço da tabela)
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
