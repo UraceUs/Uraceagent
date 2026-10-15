@@ -75,10 +75,20 @@ SHA="$(cd "$REPO" && git rev-parse HEAD)"
 REPO_GH="${URACE_GITHUB_REPO:-UraceUs/Uracecommandcenter}"
 CI="nao perguntei"
 if [ -z "${URACE_DEPLOY_TESTES:-}" ]; then
-    CI="$(curl -fsSL --max-time 15 -H 'Accept: application/vnd.github+json' \
-            "https://api.github.com/repos/$REPO_GH/commits/$SHA/check-runs?per_page=100" 2>/dev/null \
-          | "$VENV/bin/python" "$REPO/adminai/deploy/command_center/ci_verde.py" 2>/dev/null || true)"
-    [ -n "$CI" ] || CI="o GitHub não respondeu"
+    # #286: 1) a tag que o CI grava quando os três jobs passam num push ao branch da VPS. Lida pelo git,
+    # com a chave SSH do `git pull`: funciona com o repositório privado, sem token nenhum aqui.
+    if timeout 30 git -C "$REPO" ls-remote --exit-code origin "refs/tags/ci-verde/$SHA" >/dev/null 2>&1; then
+        CI="ok"
+    else
+        # 2) a API pública do GitHub — só responde se o repositório for público (privado: 404)
+        API="$(curl -fsSL --max-time 15 -H 'Accept: application/vnd.github+json' \
+                "https://api.github.com/repos/$REPO_GH/commits/$SHA/check-runs?per_page=100" 2>/dev/null \
+              | "$VENV/bin/python" "$REPO/adminai/deploy/command_center/ci_verde.py" 2>/dev/null || true)"
+        [ -n "$API" ] || API="o GitHub não respondeu"
+        if [ "$API" = "ok" ]; then CI="ok"
+        else CI="sem a tag ci-verde deste commit (o CI ainda roda ou não passou) e a API diz: $API"
+        fi
+    fi
 fi
 if [ "$CI" = "ok" ]; then
     echo "-- 3/7 testes: o CI do GitHub já passou neste commit (${SHA:0:7}) — Python, frontend e end-to-end"

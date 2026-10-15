@@ -83,3 +83,27 @@ jobs:
           path: provas/
           retention-days: 14
           if-no-files-found: ignore
+
+  # #286: o repositório é privado e a VPS não lê a API do GitHub sem login (404). Com os três jobs verdes
+  # num push ao branch da VPS, fica no repositório a tag `ci-verde/<sha>`; o deploy a procura pelo git, com
+  # a mesma chave SSH do `git pull` — nenhum token novo na VPS. Sem a tag, a bateria roda lá como antes.
+  verde:
+    name: Marca o verde para o deploy (tag ci-verde)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/claude/commandcenter-vps'
+    needs: [python, web, e2e]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Tag ci-verde/<sha>
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api -X POST "repos/${{ github.repository }}/git/refs" \
+               -f ref="refs/tags/ci-verde/${{ github.sha }}" -f sha="${{ github.sha }}" > resposta.txt 2>&1; then
+            echo "tag ci-verde/${{ github.sha }} criada"
+          elif grep -q "Reference already exists" resposta.txt; then
+            echo "a tag já existia (re-run)"
+          else
+            cat resposta.txt; exit 1
+          fi
