@@ -10,7 +10,7 @@ import os
 import re
 from functools import lru_cache
 from html import escape as e
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
@@ -516,9 +516,24 @@ def _categoria(p):
     return {"slug": "parts", "name": nomes["parts"]}
 
 
+# #252: a descrição de um produto do WooCommerce pode trazer CSS e JavaScript do tema soltos no
+# meio do texto (o urace.us põe isso dentro de <style>/<script>; na cópia, as tags ficaram de fora).
+# Como texto, isso aparece como lixo na página e estoura a largura no celular: aqui some.
+CODIGO = re.compile(r"[\w.#\[\]:*-]+\s*\{[^{}]*:[^{}]*\}|@media\s*\(|@keyframes\b|\bfunction\s*\(|"
+                    r"\bdocument\.(querySelector|getElementBy|addEventListener)|\.(addEventListener|innerHTML)\s*[=(]")
+
+
+def _sem_codigo(html):
+    """Tira os pedaços de CSS/JS que vieram como texto, parágrafo por parágrafo."""
+    def um(m):
+        return "" if CODIGO.search(_texto(m.group(0))) else m.group(0)
+    html = re.sub(r"<p\b[^>]*>.*?</p>", um, html, flags=re.S | re.I)
+    return re.sub(r"(?m)^(?!<)[^<\n]*$", lambda m: "" if CODIGO.search(m.group(0)) else m.group(0), html)
+
+
 def _niveis(html, topo):
     """Títulos do texto copiado (h2–h6) viram um nível só, abaixo do título da seção."""
-    return re.sub(r"<(/?)h[2-6]>", lambda m: f"<{m.group(1)}{topo}>", html)
+    return re.sub(r"<(/?)h[2-6]>", lambda m: f"<{m.group(1)}{topo}>", _sem_codigo(html))
 
 
 def _preco(p):
@@ -539,26 +554,217 @@ def _produto_card(p):
 LAZY = ' loading="lazy"'
 LOJA_SUB = "From kart suits to full chassis, shop URACE's official store and get race-ready gear delivered to you."
 
+# #261 (dono, 15/10: *"Busca e filtro na loja… Eu faço — confirma?"* → *"sim"*): a loja do urace.us
+# de hoje acha produto por texto (`?s=`), filtra por preço (`min_price`/`max_price`), ordena
+# (`?orderby=`) e pagina (`page/N`). A loja do site novo faz o mesmo e faz tudo no servidor: a
+# página sai pronta, o navegador não baixa o catálogo nem filtra nada, e sem JavaScript continua
+# funcionando (o formulário é um `form method="get"` de verdade).
+LOJA_POR_PAGINA = 24
 
-def store(host, categoria=None):
-    d = dados("produtos.json")
-    produtos = d["produtos"]
+# A ordenação do WooCommerce, com os nomes que o urace.us publica hoje. `popularity` e `rating`
+# precisariam de venda e de nota, que a cópia do catálogo não traz: em vez de inventar número,
+# o endereço abre na ordem do catálogo (e eles não entram no menu de ordenar).
+ORDENS_WOO = {"menu_order": "menu_order", "relevance": "relevance", "price": "price",
+              "price-desc": "price-desc", "date": "date", "popularity": "menu_order", "rating": "menu_order"}
+ORDENAR = (("menu_order", "Default"), ("price", "Price: low to high"),
+           ("price-desc", "Price: high to low"), ("date", "Newest"))
+
+
+def _faixa(p):
+    """O preço do produto como faixa: o variável tem mínimo e máximo, o simples tem um só."""
+    lo, hi = p["price_min"] or p["price"], p["price_max"] or p["price"]
+    return (lo, hi) if hi >= lo else (hi, lo)
+
+
+def _numero(v):
+    """Um preço que veio do endereço (`min_price=120`), ou None quando não é número."""
+    try:
+        n = float(str(v).replace(",", "").replace("$", "").strip())
+    except (TypeError, ValueError):
+        return None
+    return n if 0 <= n <= 1_000_000 else None
+
+
+def _pontos(p, termos):
+    """Quanto o produto casa com a busca: o nome vale mais que o código, que a categoria, que o
+    texto. Toda palavra tem de aparecer em algum lugar — 0 é não achou."""
+    onde = ((p["name"].lower(), 8), ((p.get("sku") or "").lower(), 5),
+            (" ".join(c["name"] for c in p["categories"]).lower(), 3),
+            (_texto(f'{p["short"]} {p["description"]}').lower(), 1))
+    total = 0
+    for t in termos:
+        peso = max((w for texto, w in onde if t in texto), default=0)
+        if not peso:
+            return 0
+        total += peso
+    return total
+
+
+def catalogo(categoria=None, termo="", min_price=None, max_price=None, orderby="menu_order",
+             limit=LOJA_POR_PAGINA, offset=0):
+    """Os produtos da loja resolvidos no servidor: categoria, busca por texto, faixa de preço e
+    ordenação, com `limit`/`offset` e o `total` (o padrão de lista do CLAUDE.md)."""
+    produtos = dados("produtos.json")["produtos"]
+    if categoria:
+        produtos = [p for p in produtos if _categoria(p)["slug"] == categoria]
+    termos = [t for t in re.split(r"[\s,]+", (termo or "").lower().strip()) if t][:8]
+    if termos:                                          # mais pontos primeiro, empate pela ordem do catálogo
+        casados = [(_pontos(p, termos), -i, p) for i, p in enumerate(produtos)]
+        produtos = [p for pontos, _, p in sorted((c for c in casados if c[0]), reverse=True)]
+    if min_price is not None:
+        produtos = [p for p in produtos if _faixa(p)[1] >= min_price]
+    if max_price is not None:
+        produtos = [p for p in produtos if _faixa(p)[0] <= max_price]
+    if orderby == "price":
+        produtos = sorted(produtos, key=lambda p: _faixa(p)[0])
+    elif orderby == "price-desc":
+        produtos = sorted(produtos, key=lambda p: _faixa(p)[1], reverse=True)
+    elif orderby == "date":                             # a cópia não traz data; no WooCommerce o id cresce com o tempo
+        produtos = sorted(produtos, key=lambda p: p["id"], reverse=True)
+    total = len(produtos)
+    return {"produtos": produtos[offset:offset + limit], "total": total, "limit": limit, "offset": offset,
+            "paginas": max(1, -(-total // limit))}
+
+
+def filtro_loja(q):
+    """O que a pessoa pediu no endereço, com os nomes que o WooCommerce do urace.us publica hoje
+    (`s`, `min_price`, `max_price`, `orderby`): assim o endereço de hoje continua abrindo."""
+    q = q or {}
+    termo = re.sub(r"\s+", " ", (q.get("s") or "").strip())[:80]
+    ordem = ORDENS_WOO.get((q.get("orderby") or "").strip().lower())
+    if ordem == "relevance" and not termo:
+        ordem = None
+    return {"termo": termo, "min_price": _numero(q.get("min_price")), "max_price": _numero(q.get("max_price")),
+            "orderby": ordem or ("relevance" if termo else "menu_order")}
+
+
+def _ordem_padrao(f):
+    return "relevance" if f["termo"] else "menu_order"
+
+
+def _filtrando(f):
+    """Alguém pediu busca, faixa de preço ou outra ordem? (Aí a página fica fora do Google.)"""
+    return (bool(f["termo"]) or f["min_price"] is not None or f["max_price"] is not None
+            or f["orderby"] != _ordem_padrao(f))
+
+
+def _num(v):
+    return f"{v:g}" if isinstance(v, float) else v
+
+
+def _query_loja(f):
+    """A busca, o filtro e a ordem como query, para os links de página e de categoria."""
+    itens = [(k, _num(v)) for k, v in (("s", f["termo"]), ("min_price", f["min_price"]),
+                                       ("max_price", f["max_price"]),
+                                       ("orderby", f["orderby"] if f["orderby"] != _ordem_padrao(f) else ""))
+             if v not in (None, "")]
+    return urlencode(itens)
+
+
+def _link_loja(caminho, f):
+    qs = _query_loja(f)
+    return f"{caminho}?{qs}" if qs else caminho
+
+
+def _loja_busca(base, f):
+    """O formulário de busca e filtro: um `form method="get"`, que funciona sem JavaScript."""
+    opcoes = ((("relevance", "Best match"),) + ORDENAR) if f["termo"] else ORDENAR
+    ordens = "".join(f'<option value="{s}"{" selected" if f["orderby"] == s else ""}>{e(n)}</option>'
+                     for s, n in opcoes)
+    limpar = f'<a class="chip-link" href="{e(base)}">Clear search and filters</a>' if _filtrando(f) else ""
+    return f"""<form class="loja-busca" method="get" action="{e(base)}" role="search">
+    <label class="loja-q" for="loja-s">What are you looking for?
+      <input id="loja-s" type="search" name="s" value="{e(f['termo'])}" maxlength="80" autocomplete="off"
+             placeholder="Product, part number or brand"></label>
+    <label for="loja-min">Min price (USD)
+      <input id="loja-min" type="number" name="min_price" value="{e(_num(f['min_price']) or '')}" min="0" max="1000000" step="1" inputmode="decimal"></label>
+    <label for="loja-max">Max price (USD)
+      <input id="loja-max" type="number" name="max_price" value="{e(_num(f['max_price']) or '')}" min="0" max="1000000" step="1" inputmode="decimal"></label>
+    <label for="loja-ordem">Sort by<select id="loja-ordem" name="orderby">{ordens}</select></label>
+    <button class="btn" type="submit">Search the store</button>
+    {limpar}
+  </form>"""
+
+
+def _paginacao(base, f, pagina, paginas):
+    """As páginas da loja no caminho (`/store/page/2/`), não num parâmetro."""
+    if paginas <= 1:
+        return ""
+    href = lambda n: _link_loja(base if n == 1 else f"{base}page/{n}/", f)  # noqa: E731
+    partes = []
+    if pagina > 1:
+        partes.append(f'<a class="chip-link" rel="prev" href="{e(href(pagina - 1))}">Previous</a>')
+    anterior = 0
+    for n in sorted({1, paginas, *range(max(1, pagina - 2), min(paginas, pagina + 2) + 1)}):
+        if n > anterior + 1:
+            partes.append('<span class="chip-vazio" aria-hidden="true">…</span>')
+        atual = ' aria-current="page"' if n == pagina else ""
+        partes.append(f'<a class="chip-link{" on" if n == pagina else ""}" href="{e(href(n))}"'
+                      f' aria-label="Page {n}"{atual}>{n}</a>')
+        anterior = n
+    if pagina < paginas:
+        partes.append(f'<a class="chip-link" rel="next" href="{e(href(pagina + 1))}">Next</a>')
+    return f'<nav class="chips paginacao" aria-label="Store pages">{"".join(partes)}</nav>'
+
+
+def _conta_loja(c, f):
+    """"Showing 1–24 of 70 products": o `total` do servidor, dito na página."""
+    if not c["total"]:
+        return ""
+    faixa = (f"{c['offset'] + 1}–{c['offset'] + len(c['produtos'])} of {c['total']}"
+             if c["paginas"] > 1 else f"all {c['total']}")
+    if f["termo"]:
+        return f'<p class="muted loja-conta">Showing {faixa} {"match" if c["total"] == 1 else "matches"} for “{e(f["termo"])}”.</p>'
+    return f'<p class="muted loja-conta">Showing {faixa} {"product" if c["total"] == 1 else "products"}.</p>'
+
+
+NADA_NA_LOJA = ("Nothing matched that. Try fewer words or a wider price range — or ask the team, and we find "
+                "the part for you and send you the link.")
+
+
+def store(host, categoria=None, q=None, pagina=1):
+    """A loja e as categorias, com busca, filtro de preço, ordenação e paginação do servidor (#261).
+    `pagina` vem do caminho (`/store/page/2/`); fora da faixa devolve None (a rota manda o 301)."""
     nomes = dict(CATEGORIAS_LOJA)
     if categoria and categoria not in nomes:
         return None
-    if categoria:
-        produtos = [p for p in produtos if _categoria(p)["slug"] == categoria]
-    caminho = f"/store/{categoria}/" if categoria else "/store/"
-    titulo = f"{nomes[categoria]} - URACE Store" if categoria else "Kart Parts Store - Chassis, Engines & Tires | URACE"
-    descricao = (f"{nomes[categoria]} from the URACE race shop at the Orlando Kart Center, chosen and fitted by racers." if categoria else
-                 "Racing kart parts in Orlando: chassis, engines, tires, apparel and accessories. Everything you need to race faster, from the URACE race shop.")
-    chips = "".join(f'<a class="chip-link{" on" if s == categoria else ""}" href="/store/{s}/">{e(n)}</a>' for s, n in CATEGORIAS_LOJA)
+    base = f"/store/{categoria}/" if categoria else "/store/"
+    f = filtro_loja(q)
+    c = catalogo(categoria, f["termo"], f["min_price"], f["max_price"], f["orderby"],
+                 limit=LOJA_POR_PAGINA, offset=(pagina - 1) * LOJA_POR_PAGINA)
+    if pagina < 1 or (pagina > 1 and pagina > c["paginas"]):
+        return None
+    filtrando = _filtrando(f)
+    caminho = base if filtrando or pagina == 1 else f"{base}page/{pagina}/"
+    nome_cat = nomes[categoria] if categoria else None
+    sub = (f"{nome_cat} from the URACE race shop at the Orlando Kart Center, chosen and fitted by racers."
+           if nome_cat else LOJA_SUB)
+    if f["termo"]:
+        titulo = f"Search: {f['termo']} | URACE Store"
+        descricao = (f"{c['total']} {'product' if c['total'] == 1 else 'products'} matching “{f['termo']}” in the "
+                     "URACE race shop at the Orlando Kart Center: chassis, engines, tires, suits and parts.")
+    elif nome_cat:
+        titulo = f"{nome_cat} - URACE Store" if pagina == 1 else f"{nome_cat} - Page {pagina} | URACE Store"
+        descricao = sub
+    else:
+        titulo = ("Kart Parts Store - Chassis, Engines & Tires | URACE" if pagina == 1 else
+                  f"Kart Parts Store - Page {pagina} | URACE")
+        descricao = ("Racing kart parts in Orlando: chassis, engines, tires, apparel and accessories. Everything you "
+                     "need to race faster, from the URACE race shop.")
+    if pagina > 1 and not f["termo"]:
+        descricao = f"{descricao} Page {pagina} of {c['paginas']}."
+    chips = "".join(f'<a class="chip-link{" on" if s == categoria else ""}"'
+                    f' href="{e(_link_loja(f"/store/{s}/", f))}">{e(n)}</a>' for s, n in CATEGORIAS_LOJA)
+    grade = ("".join(_produto_card(p) for p in c["produtos"]) if c["produtos"]
+             else f'<p class="loja-vazia">{e(NADA_NA_LOJA)}</p>')
     corpo = f"""<section class="faixa clara" aria-labelledby="h-loja"><div class="largura">
-  <p class="eyebrow">Store</p><h1 id="h-loja">{e(nomes[categoria]) if categoria else 'Everything you need to race faster'}</h1>
-  <p class="hero-sub-escura">{e(LOJA_SUB) if not categoria else e(descricao)}</p>
-  {'' if categoria else '<p class="muted"><strong>What are you looking for?</strong> Browse by category and find exactly what your racing needs.</p>'}
-  <nav class="chips" aria-label="Categories"><a class="chip-link{'' if categoria else ' on'}" href="/store/">All</a>{chips}</nav>
-  <div class="produtos-grade">{"".join(_produto_card(p) for p in produtos)}</div>
+  <p class="eyebrow">Store</p><h1 id="h-loja">{e(nome_cat) if nome_cat else 'Everything you need to race faster'}</h1>
+  <p class="hero-sub-escura">{e(sub)}</p>
+  {_loja_busca(base, f)}
+  <nav class="chips" aria-label="Categories"><a class="chip-link{'' if categoria else ' on'}" href="{e(_link_loja('/store/', f))}">All</a>{chips}</nav>
+  {_conta_loja(c, f)}
+  <div class="produtos-grade">{grade}</div>
+  {_paginacao(base, f, pagina, c["paginas"])}
 </div></section>
 <section class="faixa escura" aria-labelledby="h-garantia"><div class="largura">
   <h2 id="h-garantia">Backed by racers, built for racers</h2>
@@ -571,9 +777,23 @@ def store(host, categoria=None):
 </div></section>
 {_fecho('Not sure what you need?', 'Our team can help you choose the right parts, suit, or chassis for your level and category.', ('Ask the team', '/contact/?assunto=store'))}"""
     lista = {"@context": "https://schema.org", "@type": "ItemList", "itemListElement": [
-        {"@type": "ListItem", "position": i, "url": f"https://{host}/store/p/{p['slug']}/", "name": p["name"]} for i, p in enumerate(produtos[:50], 1)]}
+        {"@type": "ListItem", "position": c["offset"] + i, "url": f"https://{host}/store/p/{p['slug']}/", "name": p["name"]}
+        for i, p in enumerate(c["produtos"], 1)]}
     return layout(host=host, caminho=caminho, titulo=titulo, descricao=descricao, corpo=corpo,
+                  indexar=not filtrando,
                   schemas=(_negocio(host), lista, _trilha(host, ("Store", "/store/"))))
+
+
+@lru_cache(maxsize=1)
+def paginas_da_loja():
+    """As páginas 2 em diante da loja e de cada categoria, para o sitemap: sem elas o Google não
+    chega nos produtos que ficam depois da primeira página. (Guardado: o catálogo é um arquivo, e
+    `_familia` pergunta isto em todo endereço antigo que chega.)"""
+    out = []
+    for cat in (None, *[s for s, _ in CATEGORIAS_LOJA]):
+        base = f"/store/{cat}/" if cat else "/store/"
+        out += [f"{base}page/{i}/" for i in range(2, catalogo(cat)["paginas"] + 1)]
+    return out
 
 
 def _form_comprar(p):
@@ -663,7 +883,7 @@ def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
                      "priceCurrency": "USD", "url": f"https://{host}/store/p/{p['slug']}/",
                      "availability": "https://schema.org/InStock" if p["in_stock"] else "https://schema.org/OutOfStock",
                      **({"lowPrice": f"{p['price_min']:.2f}", "highPrice": f"{p['price_max']:.2f}"} if (p["price_min"] and p["price_max"] and p["price_max"] != p["price_min"]) else {"price": f"{p['price']:.2f}"})}}
-    desc = _desc((p["short"] and _texto(p["short"])[:120]) or p["name"], "From the URACE race shop at the Orlando Kart Center: parts, suits and gear chosen by racers.")
+    desc = _desc(_resumo_produto(p), "From the URACE race shop at the Orlando Kart Center: parts, suits and gear chosen by racers.")
     return layout(host=host, caminho=f"/store/p/{p['slug']}/", titulo=f"{p['name']} | URACE Store", descricao=desc, corpo=corpo,
                   schemas=(_negocio(host), ld, _trilha(host, ("Store", "/store/"), (cat["name"], f"/store/{cat['slug']}/"), (p["name"], f"/store/p/{p['slug']}/"))),
                   scripts=("contato.js",), foto=p["images"][0]["src"] if p["images"] else None)
@@ -952,8 +1172,34 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
 
 def _desc(texto, complemento):
     """meta description com pelo menos 80 caracteres: um texto curto ganha o complemento."""
-    texto = texto.strip().rstrip(".") + "."
+    texto = texto.strip()
+    if not texto.endswith(("…", "!", "?")):
+        texto = texto.rstrip(".") + "."
     return texto if len(texto) >= 80 else f"{texto} {complemento}"
+
+
+def _corte(texto, limite=155):
+    """#252: corta sem partir palavra. Prefere o fim de uma frase; senão, a última palavra inteira
+    e reticências. Antes o corte era seco em 120 e saía "add it w." no Google."""
+    texto = texto.strip()
+    if len(texto) <= limite:
+        return texto
+    pedaco = texto[:limite + 1]
+    frase = max(pedaco.rfind(". "), pedaco.rfind("! "), pedaco.rfind("? "))
+    if frase >= 80:
+        return pedaco[:frase + 1].strip()
+    return pedaco[:pedaco.rfind(" ")].rstrip(" ,;:·—-") + "…"
+
+
+def _resumo_produto(p):
+    """O texto da meta description de um produto: o resumo da loja, mas não quando ele é só a nota
+    de rodapé de preço (começa com *) — aí vale o primeiro parágrafo da descrição, e por fim o nome."""
+    for bruto in (p["short"], p["description"]):
+        for pedaco in re.split(r"(?i)</p>|<br\s*/?>|\n", bruto or ""):
+            t = re.sub(r"\s+([.,;:!?])", r"\1", _texto(pedaco))
+            if len(t) >= 40 and not t.startswith("*") and not CODIGO.search(t):
+                return _corte(t)
+    return p["name"]
 
 
 def _texto(h):
@@ -969,13 +1215,17 @@ def caminhos():
     out += ["/blog/"] + [f"/blog/category/{c['slug']}/" for c in d["categorias"] if c["slug"] != "uncategorized" and c.get("count", 1)]
     out += [f"/blog/{p['slug']}/" for p in d["posts"]]
     out += ["/store/"] + [f"/store/{s}/" for s, _ in CATEGORIAS_LOJA] + [f"/store/p/{p['slug']}/" for p in pr["produtos"]]
+    out += paginas_da_loja()                            # #261: /store/page/2/ e a página 2 de cada categoria
     return out
 
 
+@lru_cache(maxsize=1)
 def redirecionamentos():
     """Endereço antigo do urace.us → endereço novo (301). Nada do site antigo cai no 404."""
     # #236: /cart/ é o carrinho do site novo; o /checkout/ do WordPress cai nele
-    r = {"/shop/": "/store/", "/book-online/": PORTAL + "/reserve", "/my-account/": PORTAL, "/checkout/": "/cart/"}
+    # #252: /book-online/ é página indexada do urace.us (o Yoast publica no sitemap), então vai para
+    # a página pública que faz o mesmo (agenda, preços e o botão de reservar) e não para dentro do portal
+    r = {"/shop/": "/store/", "/book-online/": C.ARRIVE["caminho"], "/my-account/": PORTAL, "/checkout/": "/cart/"}
     for d in list(S.SERVICOS) + list(P.PAGINAS):
         for antigo in d.get("antigos", ()):
             r[antigo] = d["caminho"]
@@ -999,4 +1249,38 @@ def redirecionamentos():
         r[f"/{p['slug']}/"] = f"/blog/{p['slug']}/"
     for c in dados("posts.json")["categorias"]:
         r[f"/category/{c['slug']}/"] = f"/blog/category/{c['slug']}/"
+    for s in ("sitemap_index", "post-sitemap", "page-sitemap", "product-sitemap",
+              "category-sitemap", "product_cat-sitemap", "product_tag-sitemap"):
+        r[f"/{s}.xml"] = "/sitemap.xml"                 # o Google volta a achar o mapa do site
     return r
+
+
+# As famílias de endereço do WooCommerce que não têm par no site novo: subcategoria de produto,
+# etiqueta, página 2 em diante, produto que saiu do catálogo e as telas da conta do WordPress.
+# Sem isto, 110 endereços do urace.us de hoje cairiam no 404 no dia da troca (#252).
+def _familia(caminho):
+    m = re.fullmatch(r"(/.*?/)page/(\d+)/", caminho)     # /shop/page/2/, /blog/page/2/, /product-category/x/page/2/
+    if m:
+        base = destino(m.group(1)) or (m.group(1) if m.group(1) in caminhos() else None)
+        # #261: a loja do site novo pagina de verdade, então a página N do WooCommerce vai para a
+        # página N da loja quando ela existe; o blog (e a loja sem aquela página) vai para a primeira
+        return (f"{base}page/{m.group(2)}/" if base and f"{base}page/{m.group(2)}/" in caminhos() else base)
+    m = re.fullmatch(r"/product-category/(.+)/", caminho)
+    if m:                                               # a subcategoria cai na categoria da loja, ou na loja
+        fim = m.group(1).rstrip("/").split("/")[-1]
+        cat = ALIAS_LOJA.get(fim, fim)
+        return f"/store/{cat}/" if cat in dict(CATEGORIAS_LOJA) else "/store/"
+    if re.fullmatch(r"/product-tag/[^/]+/", caminho):    # etiqueta de produto: a loja não tem página de etiqueta
+        return "/store/"
+    if re.fullmatch(r"/product/[^/]+/", caminho):        # produto que já não está no catálogo
+        return "/store/"
+    if re.fullmatch(r"/my-account/.+", caminho):         # lost-password, orders, downloads, edit-address…
+        return PORTAL
+    return None
+
+
+def destino(caminho):
+    """O endereço novo de um endereço do urace.us de hoje (301), ou None. Primeiro o mapa exato,
+    depois as famílias do WooCommerce."""
+    r = redirecionamentos()
+    return r.get(caminho) or r.get(caminho + "/") or _familia(caminho) or _familia(caminho + "/")

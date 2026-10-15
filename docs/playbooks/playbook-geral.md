@@ -126,6 +126,13 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | `novo.urace.us/services/` | a **página de programas** do site. Desde 15/10 (#254) são sete: Arrive and Drive, URACE Academy, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events. **Kart School** virou a **URACE Academy** e **Professional Coaching** virou o **Arrive and Drive**; os dois endereços antigos redirecionam para quem herdou. O que a equipe vende por cada nome está no [playbook de vendas](playbook-vendas.md) |
 | `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart), com os dados do cliente da conta; em inglês ou português (#248). A equipe copia o link em Agendamentos do site › Pedidos do site |
 
+**Endereço do urace.us de hoje** (#252): todo endereço que o site antigo publica abre no site novo —
+a mesma página ou um 301. Quem manda um link antigo para um cliente (`/urace-academy/`,
+`/book-online/`, `/product/<slug>/`, `/product-category/...`, `/shop/`, `/my-account/`, um artigo do
+blog) pode mandar: ninguém cai em "Page not found". A lista e as regras estão em
+`docs/site-publico/comparacao-urace-us.md`, e a comparação
+completa dos dois sites (passo a passo da compra, o que falta no novo, peso e velocidade) também.
+
 ---
 
 ## 3. Mapa das telas
@@ -370,6 +377,7 @@ abre o card dele).
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
 | **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
+| **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
 | **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Agendamentos do site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
@@ -559,6 +567,43 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | **Pelo Claude:** "… não existe no painel (veja urace_operacoes)" | caminho errado | procure a operação certa com `urace_operacoes` |
 | **Pelo Claude:** "login, chaves e área do cliente não são operados pelo MCP" | rota fora do MCP | faça pelo painel |
 | Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |
+| No site/reserva: "… is not open for online booking right now" | o serviço com o nome daquele kart não está ativo em Serviços e preços | Agendamentos do site › Serviços e preços: ative (ou crie) o serviço com o **nome do kart** no nome, ex.: "Arrive and Drive 2-stroke" (#253) |
+| No site/reserva: "Online booking is closed right now" | **nenhum** serviço ativo em Serviços e preços: não há o que vender online | ative um serviço; enquanto isso o site manda a pessoa falar com a gente, e nenhuma vaga é prometida |
+| No calendário do site: "Pick a time to continue" | o dia está escolhido e falta o turno (Morning/Afternoon) | escolha o turno; é o próprio site pedindo o que falta (#253) |
+
+---
+
+### Provar o site e a venda de ponta a ponta (pacote de fotos)
+
+Dono, 15/10 (#253): *"me de um bloco para a extensão testar todo o site e processo de vendas criando
+uma conta fictícia para testar de ponta a ponta"* e *"de o comando para a extensão capturar tela a
+cada passo"*. No servidor, **uma linha**:
+
+```bash
+bash adminai/deploy/command_center/testar_tudo.sh
+```
+
+Na primeira vez ele pede o **venv do teste** — e isso é de propósito: dependência de teste nunca
+entra no venv da produção, que é o do serviço no ar (#264). O próprio script imprime as três
+linhas para criar `~/.urace/teste-venv`.
+
+Ele roda num **banco descartável** e numa porta própria (a operação não é tocada, o banco de
+produção não é aberto) e **para na hora** se achar chave real no ambiente. No fim imprime, em
+destaque, o caminho de **um pacote** (`~/.urace/teste-<data>.tar.gz`) com:
+
+- **`RESUMO.md`** em português: uma linha por passo (o que foi feito, o que o sistema respondeu, qual
+  foto, PASSOU/FALHOU), o total e a lista de telas com rolagem lateral ou alvo de toque pequeno;
+- as **fotos numeradas** de cada passo da venda e de **cada tela do painel**, em `390/` (celular) e
+  `1280/` (computador);
+- o log inteiro do teste.
+
+**O que o pacote prova:** o site abre; kart, dia e turno viram sessão com o preço do painel; a conta
+fictícia é criada no próprio site; o carrinho soma sessão + depósito + produto; o checkout fecha num
+pagamento só; a volta mostra o pedido pago; e o painel registra a venda GANHO, a sessão em
+Agendamentos do site e o card do piloto. **O que ele não prova:** cobrança de verdade no Stripe
+(chave real), e-mail de verdade saindo, e Asana, QuickBooks, DocuSign ou Google de verdade — tudo
+isso é falso ali, de propósito. Deu FALHOU em algum passo: mande o pacote para o Claude; a foto do
+estado do erro está dentro.
 
 ---
 

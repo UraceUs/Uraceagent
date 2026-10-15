@@ -86,6 +86,10 @@ class _StripeFalso:
                 partes = self.path.strip("/").split("/")
                 if partes[:3] == ["v1", "checkout", "sessions"]:
                     return self._json(sessoes[partes[3]])
+                # o navegador pede /favicon.ico e afins: 404 em vez de estourar no log do teste
+                if len(partes) < 2 or partes[1] not in sessoes:
+                    self.send_response(404); self.send_header("Content-Length", "0")
+                    return self.end_headers()
                 s = sessoes[partes[1]]
                 if len(partes) == 3:                   # /pay/<sid>/ok: pagou
                     s.update(payment_status="paid", payment_intent="pi_e2e",
@@ -1214,7 +1218,13 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     post = paginas_site.dados("posts.json")["posts"][0]["slug"]
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"])["slug"]
     for rota in ("/", "/services/arrive-and-drive/", "/services/", "/services/birthday-party/", "/academy/", "/pro-team/",
-                 "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/"):
+                 "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/",
+                 # #261: a loja com busca, filtro de preço e paginação — o formulário não pode estourar a largura
+                 "/store/?s=magnesium+wheel&min_price=300&max_price=900&orderby=price", "/store/page/2/",
+                 "/store/?s=zzzznaoexistenada", "/store/parts/",
+                 # #252: o Arrive and Drive é o mais vendido e a descrição dele vem do WooCommerce com
+                 # CSS do tema no meio do texto, que estourava a largura; o carrinho fecha o caminho
+                 "/store/p/arrive-and-drive/", "/cart/"):
         pg.goto(site + rota); pg.wait_for_load_state("networkidle")
         h1 = [t for n, t in _cabecalhos(pg) if n == 1]
         if len(h1) != 1:
@@ -1271,6 +1281,24 @@ def test_site_programas_fundidos_no_celular_e_no_computador(servidor, navegador,
     pg.close()
     assert not problemas, "\n".join(problemas)
     assert not erros, erros
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_site_novo_404_com_saida_no_celular(servidor, navegador, largura):
+    """#252: quem cai num endereço que não existe vê quatro portas de saída, com alvo de toque de
+    verdade, e a página não rola para o lado em 360 nem em 390 px."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 800})
+    pg.goto(site + "/este-endereco-nao-existe/")
+    pg.wait_for_load_state("networkidle")
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    alvos = pg.evaluate("""() => [...document.querySelectorAll('main .hero-acoes a')]
+        .map(a => [a.getAttribute('href'), Math.round(a.getBoundingClientRect().height)])""")
+    assert [h for h, _ in alvos] == ["/services/arrive-and-drive/", "/store/", "/services/", "/contact/"]
+    assert all(altura >= 40 for _, altura in alvos), alvos
+    assert len(pg.query_selector_all("h1")) == 1
+    pg.close()
 
 
 def test_esqueci_a_senha_no_celular_do_link_do_email_ate_entrar(servidor, navegador):
@@ -2304,3 +2332,203 @@ def test_cada_resultado_do_pagamento_tem_a_sua_pagina_no_celular(servidor, naveg
     assert not r["rola"] and not r["culpados"], r
     assert not adm.erros_js and not adm.erros_api, (adm.erros_js, adm.erros_api)
     adm.close()
+
+
+# ------------------------------------------------- o kart escolhido no site e o que falta escolher (#253)
+def _csrf(pg):
+    return {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+
+
+def _servicos_do_painel(adm, servidor):
+    return adm.request.get(servidor + "/api/site/servicos").json()["servicos"]
+
+
+def _ativar(adm, servidor, sid, ativo):
+    r = adm.request.patch(servidor + f"/api/site/servicos/{sid}", data={"active": ativo}, headers=_csrf(adm))
+    assert r.ok, r.text()
+
+
+def _criar_servico(adm, servidor, nome, preco):
+    r = adm.request.post(servidor + "/api/site/servicos", data={"name": nome, "price": preco}, headers=_csrf(adm))
+    assert r.ok, r.text()
+    return r.json()["id"]
+
+
+def _desligar_os_servicos(adm, servidor):
+    """Desliga todos os serviços de sessão ativos e devolve os ids, para religar no fim."""
+    antes = [s["id"] for s in _servicos_do_painel(adm, servidor)
+             if s["active"] and (s["kind"] or "session") == "session"]
+    for sid in antes:
+        _ativar(adm, servidor, sid, False)
+    return antes
+
+
+def _proximo(dia_semana):
+    """O próximo dia dessa semana (terça=1, quarta=2) com folga, no fuso da Flórida."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    hoje = datetime.now(ZoneInfo("America/New_York")).date()
+    return next(d for d in (hoje + timedelta(days=n) for n in range(3, 12)) if d.weekday() == dia_semana)
+
+
+def _clicar_dia(v, data):
+    """Clica nesse dia no calendário público, virando o mês quantas vezes precisar."""
+    rotulo = data.strftime("%A, %B ") + str(data.day) + ", available"
+    v.locator(".agenda-dia.aberto").first.wait_for()
+    for _ in range(4):
+        if v.get_by_role("button", name=rotulo).count():
+            break
+        v.get_by_role("button", name="Next month").click()
+    v.get_by_role("button", name=rotulo).click()
+
+
+@pytest.mark.parametrize("largura", [390, 1280])
+def test_agenda_do_site_diz_o_que_falta_e_avisa_quando_nao_da_para_reservar(servidor, navegador, largura):
+    """#253, dono 15/10 (serviço "teste" desativado no painel e a reserva travada no ar): o botão diz o
+    que falta de verdade — dia escolhido e turno faltando é "Pick a time to continue", não "Pick a day";
+    um turno só aberto já vem escolhido; o turno do dia anterior não fica marcado onde não abre; e sem
+    serviço do painel a página avisa com o contato em vez de oferecer um botão que não leva a nada."""
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, email="italo@urace.us")
+    csrf = _csrf(adm)
+    terca, quarta = _proximo(1), _proximo(2)
+    antes = _desligar_os_servicos(adm, servidor)
+    meus = [_criar_servico(adm, servidor, f"Adult Shifter Arrive and Drive {largura}", 899)]
+    # terça: manhã e tarde; quarta: só manhã (o turno único)
+    assert adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                           data=[{"weekday": 1, "period": "manha", "open": True, "capacity": 5},
+                                 {"weekday": 1, "period": "tarde", "open": True, "capacity": 5},
+                                 {"weekday": 2, "period": "manha", "open": True, "capacity": 5},
+                                 {"weekday": 2, "period": "tarde", "open": False, "capacity": 5}]).ok
+    try:
+        v = navegador.new_page(viewport={"width": largura, "height": 844})
+        erros = []
+        v.on("pageerror", lambda e: erros.append(str(e)))
+        v.goto(site + "/services/arrive-and-drive/")
+        v.locator("label.kart", has_text="Adult Shifter").click()
+        ir = v.locator(".agenda-ir")
+        # 1 · dia escolhido, turno faltando: o botão fala do turno (antes dizia "Pick a day")
+        _clicar_dia(v, terca)
+        assert ir.inner_text().strip() == "Pick a time to continue", ir.inner_text()
+        assert ir.get_attribute("aria-disabled") == "true"
+        assert v.locator(".agenda-turnos.falta").count() == 1, "os turnos ficam em destaque"
+        assert "Morning or Afternoon" in v.locator(".agenda-aviso").inner_text()
+        # 2 · com o turno, o botão leva para a reserva com kart, dia e turno
+        v.get_by_role("button", name=re.compile("^Afternoon")).click()
+        assert ir.inner_text().strip() == "Continue to booking"
+        assert ir.get_attribute("aria-disabled") is None
+        assert f"date={terca.isoformat()}" in ir.get_attribute("href") and "period=tarde" in ir.get_attribute("href")
+        assert not v.locator(".agenda-turnos.falta").count()
+        # 3 · dia com um turno só: já vem escolhido, e a tarde do dia anterior não fica marcada
+        _clicar_dia(v, quarta)
+        manha = v.get_by_role("button", name=re.compile("^Morning"))
+        tarde = v.get_by_role("button", name=re.compile("^Afternoon"))
+        assert manha.get_attribute("aria-pressed") == "true", "um turno só aberto: escolhido sozinho"
+        assert tarde.get_attribute("aria-pressed") == "false" and tarde.is_disabled()
+        assert ir.inner_text().strip() == "Continue to booking"
+        assert "period=manha" in ir.get_attribute("href")
+        # 4 · o painel tem serviço, mas nenhum deste kart: avisa, e o botão continua levando à reserva
+        _ativar(adm, servidor, meus[0], False)
+        meus.append(_criar_servico(adm, servidor, f"URACE test product 253 {largura}", 500))
+        v.reload()
+        v.locator("label.kart", has_text="Adult Shifter").click()
+        aviso = v.locator(".agenda-indisponivel")
+        aviso.wait_for()
+        assert "Adult Shifter" in aviso.inner_text() and "not open for online booking" in aviso.inner_text()
+        assert aviso.get_by_role("link", name=re.compile("support@urace.us")).count() == 1
+        assert not ir.is_hidden(), "há outras sessões para reservar: o botão continua valendo"
+        assert v.locator(".agenda-carrinho").is_hidden(), "sem serviço deste kart, não entra no carrinho"
+        # 5 · painel sem serviço nenhum: nada de botão morto, e a reserva do site diz a verdade
+        _ativar(adm, servidor, meus[1], False)
+        v.reload()
+        aviso.wait_for()
+        assert "Online booking is closed right now" in aviso.inner_text()
+        assert ir.is_hidden() and v.locator(".agenda-carrinho").is_hidden()
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v.goto(f"{servidor}/portal/reserve?kart=2-stroke&date={terca.isoformat()}&period=manha")
+        v.get_by_role("heading", name="Book your session", level=1).wait_for()
+        v.get_by_text("Online booking is closed right now").wait_for()
+        assert not v.get_by_role("radio").count(), "nenhum serviço, nenhum escolhido"
+        assert len([t for n, t in _cabecalhos(v) if n == 1]) == 1
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not erros, erros
+        v.close()
+    finally:
+        for sid in meus:
+            _ativar(adm, servidor, sid, False)
+        for sid in antes:
+            _ativar(adm, servidor, sid, True)
+        adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                        data=[{"weekday": 1, "period": "manha", "open": False, "capacity": 5},
+                              {"weekday": 1, "period": "tarde", "open": False, "capacity": 5},
+                              {"weekday": 2, "period": "manha", "open": False, "capacity": 5}])
+        adm.close()
+
+
+def test_reserva_do_site_so_pre_seleciona_o_servico_do_kart_escolhido(servidor, navegador):
+    """#253, dono 15/10 (print com "teste · teste de produto $500.00" já escolhido): com um serviço só
+    no painel, a reserva escolhia esse serviço mesmo sem relação com o kart clicado no site. Agora: o
+    kart sem serviço no painel não escolhe nada e a tela avisa, com o contato; o kart com serviço
+    continua vindo escolhido. No celular (390 px), nada rola para o lado."""
+    adm = entrar(navegador, servidor, email="italo@urace.us")
+    csrf = _csrf(adm)
+    terca = _proximo(1)
+    antes = _desligar_os_servicos(adm, servidor)
+    # um serviço só, que não é de nenhum kart do site: era ele que vinha escolhido (o defeito de #253)
+    meus = [_criar_servico(adm, servidor, "URACE test product 253 reserva", 500)]
+    assert adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                           data=[{"weekday": 1, "period": "manha", "open": True, "capacity": 5}]).ok
+    try:
+        v = navegador.new_page(viewport={"width": 390, "height": 844})
+        erros = []
+        v.on("pageerror", lambda e: erros.append(str(e)))
+        v.goto(f"{servidor}/portal/reserve?kart=2-stroke&date={terca.isoformat()}&period=manha")
+        v.get_by_role("heading", name="Book your session", level=1).wait_for()
+        radio = v.get_by_role("radio", name=re.compile("URACE test product 253 reserva"))
+        radio.wait_for()
+        assert not radio.is_checked(), "o serviço que não é do kart nunca vem escolhido"
+        v.get_by_text("From the site:").wait_for()                     # a tela mostra o kart que veio do site
+        assert v.get_by_text(re.compile("is not open for online booking right now")).count() == 1
+        assert v.get_by_role("link", name="support@urace.us").count() >= 1
+        assert v.get_by_role("button", name="Continue", exact=True).is_disabled()
+        assert len([t for n, t in _cabecalhos(v) if n == 1]) == 1
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        # o serviço do kart: aí sim já vem escolhido, e sem aviso
+        meus.append(_criar_servico(adm, servidor, "Arrive and Drive 2-stroke 253", 819))
+        v.goto(f"{servidor}/portal/reserve?kart=2-stroke&date={terca.isoformat()}&period=manha")
+        do_kart = v.get_by_role("radio", name=re.compile("Arrive and Drive 2-stroke 253"))
+        do_kart.wait_for()
+        assert do_kart.is_checked(), "o kart do site escolhe o serviço com esse nome"
+        assert not v.get_by_role("radio", name=re.compile("URACE test product 253 reserva")).is_checked()
+        assert not v.get_by_text(re.compile("is not open for online booking right now")).count()
+        assert v.get_by_role("button", name="Continue", exact=True).is_enabled()
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not erros, erros
+        v.close()
+    finally:
+        for sid in meus:
+            _ativar(adm, servidor, sid, False)
+        for sid in antes:
+            _ativar(adm, servidor, sid, True)
+        adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                        data=[{"weekday": 1, "period": "manha", "open": False, "capacity": 5}])
+        adm.close()
+
+
+def test_stripe_falso_responde_404_em_caminho_desconhecido():
+    """O navegador pede /favicon.ico ao Stripe falso. Antes isso estourava IndexError dentro do
+    servidor de teste e sujava o log da prova (visto no pacote da VPS em 15/10, #268)."""
+    import urllib.error
+
+    fake = _StripeFalso()
+    try:
+        for caminho in ("/favicon.ico", "/", "/pay/nao-existe"):
+            with pytest.raises(urllib.error.HTTPError) as erro:
+                urllib.request.urlopen(fake.origem + caminho, timeout=5)
+            assert erro.value.code == 404, caminho
+    finally:
+        fake.srv.shutdown()

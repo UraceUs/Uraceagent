@@ -6,7 +6,7 @@ Em ops.urace.us e my.urace.us, `/` continua do jeito que era (o Caddy manda para
 para a área do cliente) e um caminho do site devolve 404 — o painel não vira vitrine.
 
 Os endereços do urace.us de hoje (WordPress) viram 301 para o endereço novo
-(`paginas_site.redirecionamentos()`): nada que o Google indexou cai no 404.
+(`paginas_site.destino()`): nada que o Google indexou cai no 404.
 
 A agenda pública (`/ops/api/vitrine/agenda`) é a mesma da área do cliente, sem login e com
 menos: só dia, turno, aberto ou não e vagas. Nunca o motivo de um dia fechado, nem quem marcou.
@@ -21,8 +21,7 @@ import re
 import sqlite3
 import threading
 import time
-from functools import lru_cache
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -82,11 +81,6 @@ def _html(conteudo, status=200):
     })
 
 
-@lru_cache(maxsize=1)
-def redirecionamentos():
-    return ps.redirecionamentos()
-
-
 def _slug(s):
     return s if re.fullmatch(r"[a-z0-9][a-z0-9-]{0,120}", s or "") else None
 
@@ -104,9 +98,16 @@ def _dinamica(host, caminho, q):
         from command_center.providers import stripe_loja
         return ps.product(host, _slug(m.group(1)), enviado=q.get("sent") == "1", stripe=stripe_loja.ligado(),
                           erro_checkout=q.get("checkout") == "erro")
+    m = re.fullmatch(r"/store/(?:([^/]+)/)?page/(\d+)/", caminho)
+    if m:                                               # #261: a página da loja é caminho, não parâmetro
+        cat = _slug(m.group(1)) if m.group(1) else None
+        if m.group(1) and not cat:
+            return None
+        n = int(m.group(2)) if len(m.group(2)) <= 4 else 0
+        return ps.store(host, cat, q, pagina=n) if n > 1 else None   # page/1/ é a própria /store/ (301)
     m = re.fullmatch(r"/store/([^/]+)/", caminho)
     if m:
-        return ps.store(host, _slug(m.group(1)))
+        return ps.store(host, _slug(m.group(1)), q)
     if caminho == "/contact/":
         assunto = q.get("assunto") if q.get("assunto") in dict(ps.P.CONTACT["assuntos"]) else None
         return ps.contact(host, assunto, (q.get("produto") or "")[:120] or None, enviado=q.get("sent") == "1")
@@ -152,14 +153,21 @@ def pagina(request: Request, caminho: str):
         from command_center.providers import stripe_loja
         return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado(),
                                       lang=idioma.de_request(request)))
+    if caminho == "/" and (q.get("s") or "").strip():   # #261: a busca do WordPress (`/?s=`) é a da loja
+        return RedirectResponse(f"/store/?{urlencode({'s': q['s'].strip()[:80]})}", status_code=301)
+    if caminho == "/store/":                            # #261: busca, filtro de preço e ordem vêm do endereço
+        return _html(ps.store(host, None, q))
     if caminho in PAGINAS:
         return _html(PAGINAS[caminho](host))
     html = _dinamica(host, caminho, q)
     if html:
         return _html(html)
     # endereço do urace.us de hoje → o novo (301, sem perder o que o Google indexou)
-    novo = redirecionamentos().get(caminho) or redirecionamentos().get(caminho + "/")
-    if novo:
+    novo = ps.destino(caminho)
+    if novo and novo != caminho:
+        # #261: o endereço antigo leva a busca, o filtro e a ordem com ele (`?s=`, `min_price`…)
+        if request.url.query and "?" not in novo:
+            novo = f"{novo}?{request.url.query}"
         return RedirectResponse(novo, status_code=301)
     # o mesmo endereço sem a barra final (como o WordPress fazia): 301 para o certo
     if not caminho.endswith("/") and existe(caminho + "/", host):

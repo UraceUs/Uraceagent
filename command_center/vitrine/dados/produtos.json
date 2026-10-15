@@ -3245,6 +3245,36 @@
    ],
    "in_stock": true,
    "sku": "8SH2F"
+  },
+  {
+   "id": 3182,
+   "slug": "otk-magnesium-wheels-set-mxc-130mm-210mm",
+   "name": "OTK Magnesium Wheels Set MXC - 130mm, 210mm",
+   "type": "simple",
+   "price": 838.95,
+   "regular": 838.95,
+   "on_sale": false,
+   "price_min": null,
+   "price_max": null,
+   "short": "",
+   "description": "<p>Metric 3/58mm Pattern</p>\n<p>MXC Wheel Set (2) 130mm and (2) 210mm Sold as a Set Only</p>\n<p>Includes Beadlocks and Valve Stems</p>\n<p>Includes &#8211;<br>2 &#8211; 0071.G0 MXC 130mm Width Wheel x 5&#8243;<br>2 &#8211; 0070.C0 MXC 210mm Width Wheel x 5&#8243;</p>",
+   "images": [
+    {
+     "src": "otk-magnesium-wheels-set-mxc-130mm-210mm.webp",
+     "alt": "OTK Magnesium Wheels Set MXC - 130mm, 210mm"
+    }
+   ],
+   "categories": [
+    {
+     "slug": "sem-categoria",
+     "name": "Sem categoria"
+    }
+   ],
+   "tags": [],
+   "attributes": [],
+   "variations": [],
+   "in_stock": true,
+   "sku": "MXCKIT"
   }
  ]
 }

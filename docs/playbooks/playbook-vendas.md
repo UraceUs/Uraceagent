@@ -23,7 +23,7 @@
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
 4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
-5. Agendamentos do site
+5. Agendamentos do site: carrinho, pagamento no Stripe e a loja do site
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
 8. Tabela de operações para a IA
@@ -557,6 +557,17 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    **Toda compra pede a conta do site** (#248, dono 14/10: *"Para a pessoa conseguir comprar com a gente,
    ela tem que criar a conta dela lá no site da URACE"*): **Buy now** sem conta leva para entrar (ou criar
    a conta) e volta para o produto.
+   > **O nome do serviço tem de ter o nome do kart** (#253, dono 15/10, com o print da tela de reserva
+   > mostrando um serviço de teste já escolhido: *"remova esse produto d teste quando for para essa
+   > pagina ja vai com o produto pré selecionado"*). Quem chega do site com um kart só vê
+   > pré-selecionado o serviço de **Agendamentos do site › Serviços e preços** cujo **nome contém o nome
+   > do kart** (Baby Kart, 4-stroke, 2-stroke, Adult Shifter) — por exemplo "Arrive and Drive 2-stroke".
+   > Nenhum serviço com o nome do kart: a reserva **não escolhe nada** (nunca um serviço que não é do
+   > kart) e a tela avisa que esse kart não está aberto para reserva online agora, com o contato.
+   > Nenhum serviço **ativo**: o site e a reserva dizem que a reserva online está fechada e mandam falar
+   > com a gente, em vez de mostrar um botão que não leva a nada. No calendário do site o botão diz o
+   > que falta: "Pick a day to continue" sem dia, "Pick a time to continue" com o dia e sem turno; dia
+   > com um turno só aberto já vem com o turno escolhido.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
    o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
    **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho também pede a conta (#248).
@@ -564,6 +575,15 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    painel); a escolha fica guardada no navegador.
 3. **Checkout** abre o Stripe com **todas** as linhas e, para cada sessão com depósito, a linha
    "Refundable security deposit". Paga, volta para `/cart/thanks/` com a **página do pedido** (abaixo).
+
+**Atenção ao atender (#252):** na página do Arrive and Drive existem **dois botões** e eles levam a
+**dois pagamentos diferentes** — **Add to cart** leva ao carrinho e a pessoa paga no **Stripe** na
+hora; **Continue to booking** leva à área do cliente e a pessoa paga a **invoice do QuickBooks** mais
+a waiver. O texto embaixo dos botões só explica o caminho da invoice. Se o cliente ligar dizendo que
+"já pagou" ou que "recebeu uma invoice", confira primeiro por qual dos dois ele entrou:
+Agendamentos do site › **Pedidos do site** mostra o que veio pelo Stripe; a invoice aparece no card.
+A comparação completa dos dois sites está em
+`docs/site-publico/comparacao-urace-us.md`.
 
 **Regras que o sistema garante** (código: `providers/carrinho.py`):
 
@@ -648,6 +668,52 @@ remarque a sessão pela agenda (ou combine o reembolso no Stripe com o gerente) 
 **Depósito de segurança:** cobrado no carrinho (Stripe) e na invoice do Aceitar e da venda automática
 (QuickBooks), sempre que o serviço tem depósito em Serviços e preços. É devolvido em até 5 dias úteis
 depois da sessão se não houver incidente: a devolução continua sendo feita pela equipe.
+
+### 5.2 Achar um produto na loja do site e mandar o link ao cliente (#261)
+
+Dono, 15/10: *"Busca e filtro na loja… Eu faço — confirma?"* → **"sim"**.
+
+A loja do site novo (`/store/`) agora **acha produto**, do mesmo jeito que a loja de hoje:
+busca por texto, filtro de preço, ordenação e páginas. Quem filtra é o **servidor** — a página já
+chega pronta, então abre rápido até com internet ruim e **funciona sem JavaScript**.
+
+**O caminho mais curto para mandar o link:**
+
+1. Abra `/store/` e escreva no campo **What are you looking for?** o que o cliente pediu: o nome
+   ("magnesium wheel set"), a marca ("OTK"), a peça ("axle") ou o **código do produto** (o SKU, por
+   exemplo `MXCKIT`) — o código acha um só.
+2. Precisa apertar o preço? **Min price** e **Max price** (em dólar). Quer ver do mais barato ao mais
+   caro? **Sort by › Price: low to high**.
+3. Achou: abra o produto e **copie o endereço da barra** (`…/store/p/<produto>/`). É esse o link que
+   vai para o cliente, no WhatsApp ou no e-mail — ele abre direto na página de comprar.
+4. Não achou nada? A loja diz isso e você continua: tire palavra ("magnesium wheel" em vez de
+   "magnesium wheel set 130"), abra a faixa de preço, ou veja a **categoria** pelos botões
+   (Chassis, Competition karts, Engines, Parts, Tires, Custom kart suits, Official URACE products,
+   Programs). A busca também funciona **dentro** de uma categoria.
+
+**O endereço serve de atalho** (dá para montar à mão e mandar):
+
+| O que você quer | Endereço |
+|---|---|
+| buscar na loja | `/store/?s=magnesium+wheel+set` |
+| buscar numa categoria | `/store/parts/?s=axle` |
+| faixa de preço | `/store/?min_price=300&max_price=900` |
+| do mais barato ao mais caro | `/store/?orderby=price` (ou `price-desc`, `date`) |
+| a segunda página | `/store/page/2/` (a categoria também: `/store/parts/page/2/`) |
+
+A página mostra quantos produtos existem ("Showing 1–24 of 70 products"): é o total que veio do
+servidor, não um chute. São **24 por página**.
+
+> **Cuidado ao mandar o link:** mande sempre o link **do produto** (`/store/p/…/`), não o link da
+> sua busca. O link da busca é só seu (ele fica fora do Google de propósito) e amanhã pode trazer
+> outro resultado. E o preço que vale é o que a página do produto mostra — ele vem do catálogo, nunca
+> de uma tabela escrita à mão.
+
+**O catálogo mudou?** O catálogo da loja do site é um arquivo do sistema
+(`command_center/vitrine/dados/produtos.json`). Produto que falta, preço errado ou foto trocada **não
+se arruma pela tela**: abra uma issue para o Claude, com o endereço do produto no `urace.us`.
+Em 15/10 entrou assim o **OTK Magnesium Wheels Set MXC - 130mm, 210mm** ($838.95), que estava no
+site de hoje e faltava no catálogo novo.
 
 ### Contas de clientes (Agendamentos do site › Contas de clientes)
 
@@ -977,6 +1043,8 @@ instrução à gerência.
 | Passo Kommo "feito", mas com a nota "não achei a etapa 'Closed won' neste funil do Kommo" | o lead não se mexeu: mova a etapa à mão no chat ou avise a gerência |
 | Site: "a conta do site ainda não está ligada a um card (Client ID)" | Agendamentos do site › Contas de clientes: ligue o driver ao card certo; o painel tenta a invoice de novo |
 | Site: "o serviço não tem item do QuickBooks…" | é da gerência: escolher o item em Serviços e preços |
+| Site: "… is not open for online booking right now" (reserva do kart) | o serviço com o nome daquele kart não está ativo: ative ou crie em Serviços e preços com o nome do kart (#253) |
+| Site: "Online booking is closed right now" | nenhum serviço ativo em Serviços e preços: sem isso não há venda online (e o site manda a pessoa falar com a gente) |
 | Site: "o cliente não está no QuickBooks…" | avise a gerência |
 | Site: "não achei o item "Security deposit" no QuickBooks…" | avise a gerência (sincronizar o QuickBooks) |
 | Site: "o piloto não tem data de nascimento" | o cliente completa o driver na área do cliente, ou peça ao cliente |

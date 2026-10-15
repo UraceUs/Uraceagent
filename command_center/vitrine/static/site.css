@@ -30,6 +30,9 @@
 }
 
 * { box-sizing: border-box }
+/* #253: `hidden` tem de esconder de verdade — o `display` das classes (.btn, .agenda-mes, .agenda-turnos)
+   ganhava do `display:none` do navegador, e o botão escondido continuava na tela. */
+[hidden] { display: none !important }
 html { -webkit-text-size-adjust: 100% }
 body { margin: 0; background: var(--branco); color: var(--tinta); font: 16px/1.6 var(--texto) }
 img { max-width: 100%; height: auto; display: block }
@@ -113,7 +116,7 @@ p { margin: 0 }
 .centro { text-align: center; justify-items: center }
 .duas { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 28px }
 @media (min-width: 860px) { .duas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px } }
-.texto { display: grid; gap: 14px; min-width: 0 }
+.texto { display: grid; gap: 14px; min-width: 0; overflow-wrap: anywhere }
 .lede { color: var(--cinza-claro); margin-top: -10px }
 .clara .lede { color: var(--cinza) }
 
@@ -191,7 +194,16 @@ address { font-style: normal }
 .agenda-turno small { display: block; color: var(--cinza); font-size: .78rem }
 .agenda-turno[aria-pressed="true"] { border-color: var(--vermelho); box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
 .agenda-turno:disabled { opacity: .45; cursor: not-allowed }
+/* #253: dia escolhido e turno faltando: os turnos ficam em destaque até a pessoa escolher */
+.agenda-turnos.falta .agenda-turno:not(:disabled) { border-color: var(--aviso) }
+.agenda-turnos.falta { box-shadow: 0 0 0 3px rgba(183,121,31,.12); border-radius: var(--raio) }
 .agenda-aviso { color: var(--cinza); font-size: .9rem }
+/* #253: reserva online indisponível (nenhum serviço do painel para esse kart): o aviso com o contato */
+.agenda-indisponivel { margin: 0; padding: 10px 12px; border: 1px solid var(--aviso); border-radius: var(--raio);
+  background: #fff8ec; color: var(--tinta); font-size: .88rem; display: grid; gap: 2px }
+.agenda-indisponivel a { color: var(--tinta); font-weight: 600; min-height: 40px; display: inline-flex; align-items: center }
+.escura .agenda-indisponivel { background: var(--preto-2); color: #fff }
+.escura .agenda-indisponivel a { color: #fff }
 .agenda-total { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; border-top: 1px solid #e3e3ea; padding-top: 12px; font-variant-numeric: tabular-nums }
 .agenda-preco { font-size: 1.3rem }
 .agenda-nota { color: var(--cinza); font-size: .82rem }
@@ -351,8 +363,26 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .produto-preco { font-size: 1.1rem }
 .produto-preco strong { font: 800 1.7rem/1.1 var(--titulo); font-stretch: 125% }
 .produto-preco s { color: var(--cinza); margin-right: 6px }
-.produto-short { color: #3c3d50; display: grid; gap: 8px }
+.produto-short { color: #3c3d50; display: grid; gap: 8px; overflow-wrap: anywhere }
 .produto-short ul { padding-left: 20px }
+
+/* #261: busca, filtro de preço, ordenação e paginação da loja — tudo resolvido no servidor, e o
+   formulário é um `form method="get"` de verdade (sem JavaScript continua funcionando) */
+.loja-busca { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin: 18px 0 2px; align-items: end }
+.loja-busca label { display: grid; gap: 4px; min-width: 0; font-weight: 600; font-size: .92rem }
+.loja-busca .loja-q, .loja-busca .btn, .loja-busca .chip-link { grid-column: 1 / -1 }
+.loja-busca input, .loja-busca select { width: 100%; min-height: 46px; padding: 10px 12px; border: 1.5px solid #d9d9e1;
+  border-radius: 8px; font: 400 1rem/1.4 var(--texto); color: var(--tinta); background: #fff }
+.loja-busca input:focus, .loja-busca select:focus { border-color: var(--vermelho); outline: none; box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
+.loja-busca .btn { justify-self: start }
+@media (min-width: 780px) {
+  .loja-busca { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto }
+  .loja-busca .loja-q, .loja-busca .btn { grid-column: auto }
+}
+.loja-conta { margin: 12px 0 2px; font-size: .92rem }
+.loja-vazia { grid-column: 1 / -1; margin: 0; color: #3c3d50 }
+.paginacao { margin-top: 20px; justify-content: center }
+.chip-vazio { display: inline-flex; align-items: center; min-height: 40px; padding: 0 2px; color: var(--cinza) }
 
 /* formulários (contato e pedido) */
 .form-contato, .form-pedido { display: grid; gap: 12px; margin-top: 8px }

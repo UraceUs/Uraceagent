@@ -140,6 +140,67 @@ mais honesto: se ele lista as tarefas, o token funciona.
 
 ---
 
+## Provar o site e o processo de vendas (pacote de fotos)
+
+Dono, 15/10 (#253): *"me de um bloco para a extensão testar todo o site e processo de vendas criando
+uma conta fictícia para testar de ponta a ponta"* e *"de o comando para a extensão capturar tela a
+cada passo para poder te passar e testar todas as funcionalidades"*.
+
+**Uma linha, no VPS:**
+
+```bash
+bash adminai/deploy/command_center/testar_tudo.sh
+```
+
+O que ele faz: confere o ambiente (**para na hora** se achar chave real, ou `CC_DB_PATH` apontado
+para o banco de produção), acha o Python do Command Center e o Chromium do Playwright, constrói o
+frontend se faltar, e roda a **suíte end-to-end inteira** num **banco descartável** e numa porta
+livre própria (`CC_DB_PATH` temporário, `CC_AUTOSYNC=0`, `URACE_ENV=/nao/existe`, Stripe e Google
+falsos locais). Depois percorre a **venda de ponta a ponta com conta fictícia** — site → kart, dia e
+turno → carrinho → checkout no Stripe falso → pago → pedido, sessão em Agendamentos do site, venda
+GANHO e card do piloto — fotografando **cada passo** em **390 px** e **1280 px**, e passa por
+**todas as telas do painel**, com uma foto de cada.
+
+No fim imprime, em destaque na última linha, o caminho e o tamanho de **um pacote só**:
+
+```
+>> MANDE ESTE ARQUIVO PARA O CLAUDE: /root/.urace/teste-20261015-093000.tar.gz  (31M)
+```
+
+Dentro dele: `RESUMO.md` em português (uma linha por passo: o que foi feito, o que o sistema
+respondeu, qual foto, PASSOU/FALHOU; o total; e as telas com rolagem lateral ou alvo de toque
+pequeno), as pastas `390/` e `1280/` com as fotos numeradas, o log inteiro e o `COMO-FOI-GERADO.md`.
+Sai com código ≠ 0 se algo falhar — e **mesmo falhando entrega o pacote**, com a foto do estado do
+erro, para dar para ver o que aconteceu. O banco temporário e o servidor do teste saem no fim,
+inclusive se der erro (`trap`).
+
+- **O que o pacote prova**: o site no ar, a reserva com o serviço e o preço do painel, a conta criada
+  no próprio site, o carrinho (sessão + depósito + produto) num pagamento só, a volta do pagamento, e
+  o registro no painel (venda, agenda e card). Mais: toda tela do painel abrindo sem erro de
+  JavaScript nem de API, em celular e em computador.
+- **O que ele NÃO prova**: cobrança de verdade no Stripe (chave real), e-mail de verdade saindo, e
+  Asana, QuickBooks, DocuSign ou Google de verdade — tudo isso é **falso** ali, de propósito. Para o
+  teste da IA com dado de verdade (em ensaio), é o `testar_ia.sh`.
+- **Na primeira vez, o venv do teste** (#264): o teste **nunca** instala nada no venv da produção
+  (`~/.urace/cc-venv`, o do serviço no ar — instalar ali resolveria as versões de novo e pode
+  derrubar o Command Center). Ele usa um venv só dele:
+
+  ```bash
+  python3 -m venv ~/.urace/teste-venv
+  ~/.urace/teste-venv/bin/python -m pip install -q -r ~/Uraceagent/command_center/requirements.txt pytest httpx playwright
+  ~/.urace/teste-venv/bin/python -m playwright install chromium
+  # se o Chromium reclamar de biblioteca do sistema:
+  # sudo ~/.urace/teste-venv/bin/python -m playwright install-deps chromium
+  ```
+
+  Depois é sempre a linha única de cima. Para usar outro Python: `CC_TEST_PY=/caminho/do/python`
+  (ou `CC_TEST_VENV=/caminho/do/venv`).
+- Chromium fora do lugar padrão: `PW_CHROMIUM=/caminho/do/chrome bash adminai/deploy/command_center/testar_tudo.sh`.
+- Ambiente com credencial carregada (`. ~/.urace/adminai.env`): o script diz exatamente o comando
+  `env -u …` para rodar limpo. Isso é de propósito: teste nunca roda com chave real.
+
+---
+
 ## Se der errado
 
 | Sintoma | Causa provável |

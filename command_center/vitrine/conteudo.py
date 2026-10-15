@@ -29,6 +29,20 @@ SITE = {
     },
     "whatsapp": "https://wa.me/14072502291?text=Hi!%20I%27d%20like%20to%20know%20more%20about%20karting%20at%20URACE.",
     "horario": "Open every day, 8 AM – 8 PM",
+    # #252: o resto do LocalBusiness que o urace.us de hoje já publica (Yoast). Tudo isto vem de lá,
+    # e sem isto a troca de domínio perderia o SEO local: mapa, cidade atendida, Yelp e TripAdvisor.
+    "outro_nome": "URACE Kart School",
+    "descricao_negocio": ("Kart racing school in Orlando, Florida. Arrive and drive days in real race karts, "
+                          "professional coaching and a monthly kart academy, based at the Orlando Kart Center."),
+    "faixa_preco": "$$$",
+    "moeda": "USD",
+    "geo": (28.4108348, -81.377619),
+    "mapa": "https://www.google.com/maps/place/Urace+-+Kart+team+and+school/@28.4108348,-81.377619,17z",
+    "atende": (("City", "Orlando"), ("City", "Kissimmee"), ("City", "Winter Garden"), ("State", "Florida")),
+    "perfis": ("https://www.yelp.com/biz/urace-kart-school-orlando",
+               "https://www.tripadvisor.com/Attraction_Review-g34515-d32848914-Reviews-Urace_Us_Kart_And_School-"
+               "Orlando_Florida.html",
+               "https://www.google.com/maps/place/Urace+-+Kart+team+and+school/@28.4108348,-81.377619,17z"),
 }
 
 # O site inteiro mora aqui (#164): nenhum link do menu volta ao WordPress.
@@ -297,10 +311,12 @@ ARRIVE = {
              "Drivers who already race and want to find real lap time",
              "Drivers aiming for confidence, speed and race results"),
     # os 3 primeiros passos são os da reserva do site (agenda e área do cliente); o resto é o texto do site atual
-    "passos": ("Pick your kart, your day and morning or afternoon",
+    # #262 (dono, 15/10): um caminho só — carrinho → conta → Stripe → waiver. Nada de invoice no site.
+    "passos": ("Pick your kart, your day and morning or afternoon, and add it to your cart",
                "Sign in or create your account and add your drivers",
                "Tell us if you want Lead and Follow — a coach on track with you — and we add it to your session",
-               "We confirm your spot and send the invoice and the waiver",
+               "Pay with Stripe (card, Apple Pay or Google Pay) and sign the driver’s waiver in your account — "
+               "your spot is confirmed",
                "Arrive 10 minutes early. Check in, get settled, feel the excitement building.",
                "Gear up + Safety Briefing",
                "Hit the track. Time to feel the speed, the grip, the thrill — like a real racer.",

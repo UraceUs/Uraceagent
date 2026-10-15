@@ -1,5 +1,11 @@
 # Ambiente de teste da operação
 
+> **Para provar tudo de uma vez, no VPS, numa linha** (#253): `bash adminai/deploy/command_center/testar_tudo.sh`.
+> Ele usa este mesmo ambiente (banco descartável, porta própria, Stripe e Google falsos), roda a
+> suíte end-to-end inteira, percorre a venda de ponta a ponta com conta fictícia **fotografando cada
+> passo** em 390 px e 1280 px (`CC_FOTOS=<pasta>` + `test_pacote_de_provas.py`), escreve o `RESUMO.md`
+> em português e entrega tudo num pacote só em `~/.urace/teste-<data>.tar.gz`.
+
 Um Command Center com dados que imitam a operação real, sem tocar em
 Asana, DocuSign, Gmail ou QuickBooks. Serve para provar a interface
 inteira antes de subir para a VPS.
