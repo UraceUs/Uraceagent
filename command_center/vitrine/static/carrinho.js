@@ -88,6 +88,10 @@
     el.appendChild(a)
   }
 
+  /** #260: o `add_to_cart` da campanha. Só catálogo, valor e moeda — nada da pessoa. Sem medição
+   *  configurada, `window.uraceMedicao` não existe e isto não faz nada. */
+  function medir(ev) { if (window.uraceMedicao) window.uraceMedicao.push(ev) }
+
   // ------------------------------------------------ a loja: "Add to cart" ao lado do "Buy now"
   document.querySelectorAll('form.form-comprar').forEach(function (form) {
     var b = form.querySelector('[data-por-no-carrinho]')
@@ -95,11 +99,19 @@
     b.hidden = false
     b.addEventListener('click', function () {
       var v = form.querySelector('[name="variacao"]')
-      var ok = por({ tipo: 'produto', produto: form.querySelector('[name="produto"]').value, variacao: v ? v.value : '',
+      var slug = form.querySelector('[name="produto"]').value
+      var qtd = Math.max(1, Math.min(20, Number(form.querySelector('[name="quantidade"]').value) || 1))
+      var ok = por({ tipo: 'produto', produto: slug, variacao: v ? v.value : '',
         quantidade: form.querySelector('[name="quantidade"]').value })
       var aviso = form.querySelector('.carrinho-ok')
       if (ok) avisoAdicionado(aviso)
       else if (aviso) aviso.textContent = t('Your cart is full (up to ' + MAX + ' items).', 'O carrinho está cheio (até ' + MAX + ' itens).')
+      if (!ok) return
+      var op = v && v.selectedOptions && v.selectedOptions[0]
+      var preco = Number((op && op.getAttribute('data-preco')) || form.getAttribute('data-preco')) || 0
+      medir({ event: 'add_to_cart', ecommerce: { currency: 'USD', value: Math.round(preco * qtd * 100) / 100,
+        items: [{ item_id: slug, item_name: form.getAttribute('data-nome') || slug, item_category: 'produto',
+          item_variant: v ? v.value : undefined, price: preco, quantity: qtd }] } })
     })
   })
 

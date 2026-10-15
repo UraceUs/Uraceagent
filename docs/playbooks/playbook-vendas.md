@@ -130,6 +130,7 @@ PAGO            a sessão entra aceita e paga (falta só a waiver) e a venda ent
 | Fechar venda | **Fechar venda** | cada passo com "feito", "aguardando" ou "falhou"; auditoria `sales.close` |
 | Pagamento | QuickBooks → espelho do painel | o espelho sincroniza a cada 15 min |
 | Waiver | DocuSign ou área do cliente | `sent` → `completed`. **`delivered` não é assinada** |
+| Contato ou pedido pelo site | `/contact/` e a loja | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260) |
 
 ### As etapas e o que move cada uma
 
@@ -249,6 +250,27 @@ Junto: minutos, "o que ele falou" (ditado) e o retorno (data, hora e o que fazer
 Os retornos vencidos ou de hoje somam no contador de vendas do menu e aparecem na Agenda de vendas.
 Os **vencidos** também aparecem em **Precisa de atenção** ("retorno(s) de venda atrasado(s)", com o
 link para a Agenda de vendas).
+
+### 4.3.1 "De onde veio" — a campanha do contato (#260)
+
+Dono, 15/10: *"sim pfvr"* para medir campanha no site novo. O contato que chega pelo `/contact/` do
+site (e o pedido da loja) traz **de onde a pessoa veio** — e isso aparece no card da oportunidade,
+na coluna da direita, no quadro **"De onde veio"**:
+
+| O que você lê | O que é |
+|---|---|
+| origem / mídia / campanha | `utm_source`, `utm_medium`, `utm_campaign`: de onde o clique veio (ex.: `google / cpc / arrive-and-drive`) |
+| termo / anúncio | `utm_term`, `utm_content`: a palavra buscada e qual anúncio |
+| clique do Google / clique do Meta | `gclid` / `fbclid`: o clique pago em si. Tem um desses, o contato **veio de anúncio pago** |
+| id da campanha / id do conjunto | `campaign_id`, `adset_id`: para achar a campanha no gerenciador |
+| navegador (Meta) / clique (Meta) | `fbp`, `fbc`: o que o pixel deixou neste navegador |
+
+**Como usar:** veio com `gclid` ou `fbclid`, é dinheiro de anúncio — vale ligar primeiro. O quadro
+**não aparece** quando a pessoa chegou direto, pelo Instagram orgânico ou por indicação (aí a
+campanha não existe e o sistema **não inventa** nada).
+
+Nada da pessoa entra nesse quadro: é só campanha. Quem explica a medição inteira é o
+[playbook geral](playbook-geral.md), seção 6, "Medição de campanha no site".
 
 ### 4.4 Preço: de onde vem
 

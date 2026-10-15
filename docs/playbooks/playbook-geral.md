@@ -382,6 +382,32 @@ abre o card dele).
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
+| **Medição de campanha no site** (#260) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta); o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |
+
+### Medição de campanha no site (#260)
+
+Dono, 15/10, para *"o site novo não tem GTM, Analytics nem pixel do Meta — campanha paga fica cega;
+ponho os mesmos ids do site antigo?"*: **"sim pfvr"**. É o que mede quanto cada anúncio vendeu.
+
+- **O que entra:** o **Google Tag Manager** `GTM-59CCNDC` (o Analytics entra por dentro dele) e o
+  **pixel do Meta** `380948601336488` — os mesmos ids que o `urace.us` de hoje publica.
+- **Os ids não estão no código.** Eles ficam em `~/.urace/adminai.env` na VPS, em `SITE_GTM_ID` e
+  `SITE_META_PIXEL_ID`. **Sem a variável, nada carrega**: nenhum script, nenhuma requisição ao
+  Google ou ao Meta, e o site funciona igual. Id com formato errado também não carrega.
+- **Onde a medição entra:** só nas **páginas públicas** — início, serviços, Academy, Pro Team,
+  iniciantes, carreira, sobre, acessibilidade, blog, loja, página de produto, contato, 404 — e na
+  página de obrigado do pagamento (é o único lugar que sabe que o pagamento deu certo).
+- **Onde NÃO entra:** no **painel** (`/ops`) e na **área do cliente** (`/ops/portal`), em `/cart/`
+  (mostra o nome e o e-mail de quem está conectado) e no link pessoal do pedido (`/order/<token>/`).
+- **O que é medido:** página vista, `add_to_cart` (loja e agenda) e `purchase` no pedido pago, com
+  **valor, moeda, número do pedido e o item do catálogo**. **Nunca** nome, e-mail, telefone,
+  endereço, medida ou piloto — nem no `dataLayer`, nem em endereço. Isso tem teste travando
+  (`command_center/tests/test_medicao.py`).
+- **De onde veio o contato:** o formulário de contato e o de pedido da loja gravam a campanha
+  (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `gclid`, `fbclid`, `fbp`,
+  `fbc`, `campaign_id`, `adset_id`) junto com a mensagem. Quem vende vê isso em **Vendas › a
+  oportunidade › "De onde veio"**.
+- **Não existe banner de consentimento** (LGPD/GDPR) nesta frente. Se o dono quiser, é outra frente.
 
 ### Suits: duas novidades
 

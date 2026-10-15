@@ -528,8 +528,9 @@ def test_busca_da_loja_e_do_servidor_e_funciona_sem_javascript(cli):
     assert '<form class="loja-busca" method="get" action="/store/" role="search">' in r.text
     for campo in ('name="s"', 'name="min_price"', 'name="max_price"', 'name="orderby"'):
         assert campo in r.text, campo
-    # nenhum script da loja: a página é montada no servidor (o carrinho.js é o de todo o site)
-    assert re.findall(r'<script src="/_s/([a-z]+\.js)', r.text) == ["carrinho.js"]
+    # nenhum script da loja: a página é montada no servidor (campanha.js e carrinho.js são os de
+    # todo o site — #260 e #236; sem SITE_GTM_ID não há medição, então medicao.js não entra)
+    assert re.findall(r'<script src="/_s/([a-z]+\.js)', r.text) == ["campanha.js", "carrinho.js"]
     # o código do produto (SKU) acha um só, e o nome acha o produto certo em primeiro lugar
     assert _nomes_na_grade(cli.get("/store/?s=MXCKIT").text) == ["OTK Magnesium Wheels Set MXC - 130mm, 210mm"]
     assert _nomes_na_grade(cli.get("/store/?s=mxc").text)[0] == "OTK Magnesium Wheels Set MXC - 130mm, 210mm"

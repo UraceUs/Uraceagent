@@ -56,6 +56,7 @@ def _opp(con, oid, u=None):
     if not o:
         raise HTTPException(404, "Oportunidade não encontrada.")
     o["closing"] = json.loads(o["closing"] or "null")
+    o["campaign"] = json.loads(o["campaign"] or "null")       # #260: de onde o contato do site veio
     return o
 
 

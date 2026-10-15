@@ -147,6 +147,12 @@
       carrinhoOk.appendChild(ver)
       return
     }
+    // #260: o `add_to_cart` da campanha (só catálogo, valor e moeda), ANTES de sair da página.
+    // Sem medição, não faz nada.
+    if (window.uraceMedicao) {
+      window.uraceMedicao.push({ event: 'add_to_cart', ecommerce: { currency: 'USD', value: Number(s.price) || 0,
+        items: [{ item_id: 'sessao-' + s.id, item_name: s.name, item_category: 'sessao', price: Number(s.price) || 0, quantity: 1 }] } })
+    }
     carrinhoOk.textContent = 'Added to your cart. Taking you there…'
     // a campanha de onde a pessoa veio segue para o carrinho (utm_*, gclid, fbclid)
     var q = []

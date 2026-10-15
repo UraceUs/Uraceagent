@@ -14,6 +14,7 @@ import os
 from html import escape
 
 from command_center.vitrine import conteudo as C
+from command_center.vitrine import medicao
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 PORTAL = "/ops/portal"
@@ -133,13 +134,20 @@ def _rodape():
 </footer>"""
 
 
-def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None, indexar=True, lang="en"):
+def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None, indexar=True, lang="en",
+           medicao_eventos=()):
+    """`medicao_eventos` (#260): o que esta página já sabe para o `dataLayer` (hoje, o `purchase`
+    do pedido pago). Sem `SITE_GTM_ID`/`SITE_META_PIXEL_ID` no ambiente, nada de medição sai."""
     canon = f"https://{host}{caminho}"
     robots = '<meta name="robots" content="noindex, nofollow">' if preview() or not indexar else ""
     og_img = (f'<meta property="og:image" content="https://{host}{estatico("img/" + foto)}">'
               f'<meta name="twitter:image" content="https://{host}{estatico("img/" + foto)}">') if foto else ""
     # #236: carrinho.js em toda página (o contador do topo); vem antes, a agenda e a loja usam o que ele expõe
-    js = "".join(f'<script src="{estatico(s)}" defer></script>' for s in ("carrinho.js", *scripts))
+    # #260: medicao.js primeiro (o dataLayer existe antes de todo mundo) e só quando há id no ambiente;
+    # campanha.js em toda página, sempre: ele é nosso e não fala com ninguém de fora
+    med = medicao.cabeca(caminho, medicao_eventos)
+    js = "".join(f'<script src="{estatico(s)}" defer></script>'
+                 for s in ((medicao.SCRIPT,) if med else ()) + ("campanha.js", "carrinho.js", *scripts))
     return f"""<!doctype html>
 <html lang="{"pt-BR" if lang == "pt" else "en"}">
 <head>
@@ -159,9 +167,11 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
 <link rel="preload" href="/_s/fonts/archivo-expanded.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{estatico('site.css')}">
 {''.join(_ld(s) for s in schemas)}
+{med}
 {js}
 </head>
 <body>
+{medicao.noscript(caminho)}
 {_cabecalho(caminho)}
 <main id="conteudo">
 {corpo}

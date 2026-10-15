@@ -21,6 +21,7 @@ que já existe só acontece com duas provas juntas: o **e-mail confirmado** da c
 duplicado" para a equipe conferir e unir (nada do histórico de outra pessoa aparece para o cliente).
 """
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, um
@@ -241,10 +242,25 @@ def avisar_confirmada(con, bid, enviar_email=None):
         return False
 
 
+# De onde a pessoa veio. #260 (15/10) acrescentou o que o site antigo mandava e o novo não: os
+# cookies do pixel do Meta (`fbp`, `fbc`) e os ids de campanha e de conjunto de anúncios.
+CAMPANHA = ("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
+            "gclid", "fbclid", "fbp", "fbc", "campaign_id", "adset_id", "ref")
+CAMPANHA_MAX = 200
+
+
 def utm_limpo(utm):
-    """Só as chaves de campanha, curtas: de onde veio a venda, para o marketing."""
+    """Só as chaves de campanha, curtas e sem HTML: de onde veio a venda, para o marketing.
+
+    Nada da pessoa entra aqui — nem nome, nem e-mail, nem telefone."""
     if not isinstance(utm, dict):
         return None
-    ok = {k: str(v)[:120] for k, v in utm.items()
-          if k in ("utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid", "ref") and v}
+    ok = {}
+    for k in CAMPANHA:
+        v = utm.get(k)
+        if v is None or isinstance(v, (dict, list, tuple, bool)):
+            continue
+        v = re.sub(r"\s+", " ", str(v).replace("<", " ").replace(">", " ")).strip()[:CAMPANHA_MAX]
+        if v:
+            ok[k] = v
     return json.dumps(ok, ensure_ascii=False) if ok else None

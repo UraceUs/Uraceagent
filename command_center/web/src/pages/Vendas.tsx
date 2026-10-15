@@ -32,6 +32,30 @@ export interface Opp {
   next_at: string | null; next_what: string | null; lost_reason: string | null; notes: string | null
   closing: Fechamento | null; calls?: number; updated_at: string; created_at: string
   client_name?: string | null; client_pilot?: string | null; qbo_item_id?: string | null
+  // #260: de onde o contato do site veio (utm_*, gclid, fbclid…). Nada da pessoa entra aqui.
+  campaign?: Record<string, string> | null
+}
+
+/* #260: o nome de cada chave de campanha em linguagem de vendas. */
+const CAMPANHA_ROTULO: Record<string, string> = {
+  utm_source: 'origem', utm_medium: 'mídia', utm_campaign: 'campanha', utm_term: 'termo',
+  utm_content: 'anúncio', campaign_id: 'id da campanha', adset_id: 'id do conjunto',
+  gclid: 'clique do Google', fbclid: 'clique do Meta', fbp: 'navegador (Meta)', fbc: 'clique (Meta)',
+  ref: 'indicação',
+}
+
+/** De onde veio o contato: o que o site gravou junto com a mensagem (#260). */
+function CampanhaDoContato({ c }: { c: Record<string, string> }) {
+  const linhas = Object.entries(c).filter(([, v]) => v)
+  if (!linhas.length) return null
+  return <div className="card card-b stack" style={{ gap: 6 }}>
+    <div className="h2">{tr("De onde veio")}</div>
+    <div className="small muted">{tr("O que o site gravou com a mensagem. Sem dado da pessoa.")}</div>
+    {linhas.map(([k, v]) => <div key={k} className="row" style={{ gap: 8 }}>
+      <span className="small muted" style={{ minWidth: 118 }}>{tr(CAMPANHA_ROTULO[k] || k)}</span>
+      <span className="small truncate" style={{ minWidth: 0 }} title={v}>{v}</span>
+    </div>)}
+  </div>
 }
 interface Passo { passo: string; nome: string; ok: boolean | null; detalhe: string; client_id?: number; invoice?: string; envelope?: string; tarefa?: string; pendente?: boolean }
 interface Fechamento {
@@ -287,6 +311,7 @@ export function Oportunidade() {
         {d.data?.pedido && <PedidoDoSite p={d.data.pedido} />}
         <IAdaVenda o={o} onDone={() => d.reload()} />
         {o.notes && <div className="card card-b"><div className="h2" style={{ marginBottom: 6 }}>{tr("Anotações")}</div><div className="small ink2" style={{ whiteSpace: 'pre-wrap' }}>{o.notes}</div></div>}
+        {o.campaign && <CampanhaDoContato c={o.campaign} />}
         <div className="card card-b stack" style={{ gap: 6 }}>
           <div className="h2">{tr("O que já saiu")}</div>
           {passos.length === 0 && <div className="small muted">{tr("Nada enviado ainda. No fechamento, o painel faz tudo de uma vez.")}</div>}
