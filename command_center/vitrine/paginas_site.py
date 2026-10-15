@@ -239,6 +239,18 @@ def _planos(planos, assunto="academy"):
     return f'<div class="planos">{"".join(cards)}</div>'
 
 
+def _planos_da_planilha(grupos):
+    """#273: os planos da Academy como estão na planilha de preços do dono, um bloco por motor (4 stroke e
+    Baby Kart, 2 stroke) e o de kart próprio. O botão abre o contato com o plano e o motor já escritos."""
+    html = ""
+    for titulo, cards in grupos:
+        motor = titulo.split(" · ")[0]
+        com_link = [(n, sub, t, pr, por, f"/contact/?assunto=academy&produto={quote(motor + ' — ' + n)}")
+                    for n, sub, t, pr, por in cards]
+        html += f'<h3 class="mt">{e(titulo)}</h3>' + _planos(com_link)
+    return html
+
+
 def _planos_do_painel(planos):
     """#169: os planos cadastrados em Site › Serviços (tipo plano), com o botão que vende. Boost é o
     de um mês com "boost" no nome; os outros são o compromisso (1, 3, 6 meses…)."""
@@ -266,7 +278,7 @@ def academy(host, planos=None):
   <img src="{estatico('img/' + d['foto'])}" alt="URACE Academy coaching" width="800" height="600" loading="lazy" class="foto-redonda">
 </div></section>
 <section class="faixa escura" aria-labelledby="h-planos"><div class="largura">
-  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else _planos(d['planos']) + '<h3 class="mt">URACE Boost</h3>' + _planos((d['boost'],))}
+  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else _planos_da_planilha(d['planos_grupos'])}
 </div></section>
 <section class="faixa clara" aria-labelledby="h-quem"><div class="largura duas">
   <div><h2 id="h-quem">{e(d['para_quem_titulo'])}</h2>{_lista(d['para_quem'])}</div>
@@ -293,8 +305,13 @@ def academy(host, planos=None):
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'], 'escura')}"""
     oferta = {"@context": "https://schema.org", "@type": "Service", "name": "URACE Academy", "serviceType": "Monthly kart driver training",
               "description": d["descricao"], "provider": {"@id": f"https://{host}/#business"}, "areaServed": "Orlando, FL",
-              "offers": [{"@type": "Offer", "name": f"Academy — {n}", "price": pr.replace("$", "").replace(",", ""), "priceCurrency": "USD",
-                          "url": f"https://{host}{d['caminho']}"} for n, _, _, pr, _ in d["planos"]]}
+              # #273: as ofertas do Google são as mesmas da tela — do painel, quando há plano cadastrado
+              "offers": ([{"@type": "Offer", "name": f"Academy — {p['name']}", "price": f"{p['price']:.2f}",
+                           "priceCurrency": "USD", "url": f"https://{host}{d['caminho']}"} for p in planos] if planos else
+                         [{"@type": "Offer", "name": f"Academy — {grupo.split(' · ')[0]} — {n}",
+                           "price": pr.replace("$", "").replace(",", ""), "priceCurrency": "USD",
+                           "url": f"https://{host}{d['caminho']}"}
+                          for grupo, cards in d["planos_grupos"] for n, _, _, pr, _ in cards])}
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
                   schemas=(_negocio(host), oferta, _faq_ld(d["faq"]), _trilha(host, ("Academy", d["caminho"]))), foto=d["foto"])
 

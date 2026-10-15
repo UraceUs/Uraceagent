@@ -47,12 +47,40 @@ ACADEMY = {
     "planos_sub": "The longer you commit, the less each session costs.",
     # Só aparecem sem plano cadastrado no painel; aí o botão abre o contato. O texto é o do site atual,
     # sem os valores por sessão (o preço do plano é o do painel).
-    "planos": (
-        ("1 Month", "Four sessions in 30 days.", "No contract and no minimum term. Kart, full safety equipment, maintenance and a professional coach included. Cancel any time with thirty days written notice.", "$2,756.90", "per month"),
-        ("3 Months", "Twelve sessions, up to four a month.", "Everything in the monthly plan, with 2.5% off every session.", "$2,688.43", "per month"),
-        ("6 Months", "Twenty-four sessions, up to four a month.", "Our best per-session rate: 5% off. For drivers building toward a race season.", "$2,619.06", "per month"),
+    # #273 (dono, 15/10): a planilha de preços é a fonte, e a Academy tem preço próprio para 4 stroke (e Baby
+    # Kart) e para 2 stroke — "veja que tem academy para 4t e 2t". As contas batem com 4 × sessão,
+    # 27 × sessão × 0,96 e 54 × sessão × 0,92, com entrada de 33% / 20% (test_vitrine trava). Saíram
+    # 3 Months, 6 Months a 5% e o URACE Boost: não estão na planilha.
+    # grupo: (título, [(nome, sub, texto, preço, por)])
+    "planos_grupos": (
+        ("4-stroke and Baby Kart · $689 per session", (
+            ("No contract", "4 sessions a month",
+             "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
+             "time with thirty days written notice. Additional sessions $689 each.", "$2,756", "per month"),
+            ("6-month contract", "27 sessions · 4% off",
+             "Regular value $18,603.00. $5,893.43 at signing (33%), then 5 monthly installments of $2,393.09. "
+             "Recurring billing.", "$17,858.88", "contract total"),
+            ("12-month contract", "54 sessions · 8% off",
+             "Regular value $37,206.00. $6,845.90 at signing (20%), then 11 monthly installments of $2,489.42. "
+             "Recurring billing.", "$34,229.52", "contract total"))),
+        ("2-stroke · $789 per session", (
+            ("No contract", "4 sessions a month",
+             "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
+             "time with thirty days written notice. Additional sessions $789 each.", "$3,156", "per month"),
+            ("6-month contract", "27 sessions · 4% off",
+             "Regular value $21,303.00. $6,748.79 at signing (33%), then 5 monthly installments of $2,740.42. "
+             "Recurring billing.", "$20,450.88", "contract total"),
+            ("12-month contract", "54 sessions · 8% off",
+             "Regular value $42,606.00. $7,839.50 at signing (20%), then 11 monthly installments of $2,850.73. "
+             "Recurring billing.", "$39,197.52", "contract total"))),
+        ("Your own kart · no contract", (
+            ("Your kart", "4 sessions a month",
+             "You bring the kart; we bring the coaching, the track day and the support. Additional sessions $450 each.",
+             "$1,800", "per month"),
+            ("Your kart and your mechanic", "4 sessions a month",
+             "You bring the kart and your mechanic; we bring the coaching and the track day. Additional sessions $300 each.",
+             "$1,200", "per month"))),
     ),
-    "boost": ("URACE Boost", "Eight sessions in 30 days.", "A standalone intensive month for drivers preparing for a race or a season: eight track sessions in 30 days — our lowest per-session rate. No contract.", "$5,000", "per month"),
     "para_quem_titulo": "Who is this for?",
     # os dois últimos vêm do "Who is this for?" da Kart School (#254)
     "para_quem": ("Drivers already competing or preparing to compete", "Individuals seeking structured, high-performance training",
@@ -109,7 +137,12 @@ ACADEMY = {
                ("Develop", "Build technique, discipline, consistency and a competitive mindset through structured training.", "icon-develop.webp"),
                ("Compete", "Gain race experience and learn to perform in competitive environments.", "icon-compete.webp"),
                ("Pursue the next level", "Continue developing with professional coaching, racing experience and long-term guidance.", "icon-pursue.webp")),
-    "faq": (("A complete racing education", (
+    "faq": (("Add-ons, travel and track fees", (
+                # #273: da planilha de preços do dono (15/10)
+                "Lead and Follow is an add-on for any training day: a partner trainer on track with the driver, for $769 per training day.",
+                "Academy services provided outside of the Orlando Kart Center are charged an extra $250 for hotel, food and transport.",
+                "Track fees are not included in the price and must be paid directly to the track.")),
+            ("A complete racing education", (
                 # da Kart School (#254): "URACE Kart School" virou "URACE Academy" e "novice drivers" saiu,
                 # porque a Academy é para quem já teve o primeiro dia de kart
                 "Embark on a comprehensive racing education with the URACE Academy, designed for drivers eager to excel. "
@@ -188,10 +221,9 @@ PRO_TEAM = {
     "mais_titulo": MAIS_TITULO,
     "mais": MAIS,
     "opcoes_titulo": "How we work with competitive drivers",
-    "opcoes_sub": "Three ways in, depending on where the driver is today.",
+    "opcoes_sub": "Two ways in, depending on where the driver is today.",
     # (nome, sub, texto, preço, por, link): o preço "academy"/"boost" é o do plano no painel; sem plano, sem preço
     "opcoes": (("URACE Academy", "Not racing yet? Start here.", "Four coached sessions a month with kart, full equipment, maintenance and a professional coach included. Month to month, no minimum term.", "academy", "Per month", "/academy/"),
-               ("URACE Boost", "Eight sessions in 30 days.", "A standalone intensive month for drivers preparing for a race or a season: eight track sessions in 30 days — our lowest per-session rate. No contract.", "boost", "Per month", RESERVAR + "?service=boost"),
                ("Race Weekend Support", "We run the kart. You drive.", "Kart preparation and trackside support at the rounds we are entered in. Race entries, tyres, fuel and consumables are quoted per event and are not part of the fee.", "Let’s talk", "Per event", CONTATO)),
     "calendario_titulo": "Where we are racing",
     "calendario_sub": "The rounds URACE is entered in. If your driver comes with us, this is the season. Dates and venues as published by the series.",

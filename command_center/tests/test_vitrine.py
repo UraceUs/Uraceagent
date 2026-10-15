@@ -342,7 +342,9 @@ def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     servicos_site.criar(con, None, {"name": "URACE Boost", "price": 5000, "kind": "plan", "months": 1, "sessions_month": 8})
     con.commit()
     html = cli.get("/pro-team/").text
-    assert "<strong>$2,756.90</strong>" in html and "<strong>$5,000</strong>" in html
+    assert "<strong>$2,756.90</strong>" in html
+    # #273: o URACE Boost não está na planilha de preços do dono, então o Pro Team não o oferece mais
+    assert "URACE Boost" not in html and "<strong>$5,000</strong>" not in html
 
 
 # ------------------------------------------------------------------ #254: os dois programas que se fundiram
@@ -389,13 +391,41 @@ def test_precos_do_site_batem_com_a_rate_card(cli):
     assert [(k["nome"], k["preco"]) for k in conteudo.KARTS] == [
         ("Baby Kart", 719), ("4-stroke", 719), ("2-stroke", 819), ("Adult Shifter", 899)], "diária tudo incluso"
     arrive = cli.get("/services/arrive-and-drive/").text
-    for valor in ("$719", "$819", "$899", "$769", "$3,460.50"):
+    for valor in ("$719", "$819", "$899", "$769"):
         assert valor in arrive, valor
+    # #273 (dono, 15/10): o Lead and Follow é add-on do dia de treino e no site vale só o de $769
+    assert "$3,460.50" not in arrive and "package of five" not in arrive
     # o last-minute do Lead and Follow só o operador fecha na pista: não vai para o site
     assert "$395" not in arrive and "$245" not in arrive
+    academy = cli.get("/academy/").text
+    # #273: a planilha do dono — 4 stroke/Baby Kart e 2 stroke com preço próprio, contratos de 6 e 12 meses
+    for valor in ("$2,756", "$3,156", "$17,858.88", "$34,229.52", "$20,450.88", "$39,197.52", "$1,800", "$1,200",
+                  "$769 per training day", "extra $250"):
+        assert valor in academy, valor
+    for velho in ("$2,756.90", "$2,688.43", "$2,619.06", "$5,000", "URACE Boost", "3 Months"):
+        assert velho not in academy, velho
+
+
+def test_planos_da_academy_batem_com_a_conta_da_planilha():
+    """#273: os números da planilha do dono são conta, não chute: mensal = 4 × sessão; contrato de 6 meses =
+    27 sessões com 4% e 33% de entrada em 5 parcelas; de 12 meses = 54 sessões com 8% e 20% de entrada em 11.
+    Se alguém mexer num número sem mexer na conta, este teste acusa."""
     from command_center.vitrine import conteudo_paginas
-    assert conteudo_paginas.ACADEMY["planos"][0][3] == "$2,756.90", "mensal sem contrato (4 stroke / Baby Kart)"
-    assert "$2,756.90" in cli.get("/academy/").text
+
+    def usd(v):
+        return f"${v:,.2f}"
+
+    grupos = dict(conteudo_paginas.ACADEMY["planos_grupos"])
+    for titulo, sessao in (("4-stroke and Baby Kart · $689 per session", 689), ("2-stroke · $789 per session", 789)):
+        cards = {n: (t, pr) for n, _, t, pr, _ in grupos[titulo]}
+        assert cards["No contract"][1] == f"${4 * sessao:,}"
+        for nome, n, desc, entrada, parcelas in (("6-month contract", 27, 0.04, 0.33, 5), ("12-month contract", 54, 0.08, 0.20, 11)):
+            total = round(n * sessao * (1 - desc), 2)
+            sinal = round(total * entrada, 2)
+            parcela = round((total - sinal) / parcelas, 2)
+            texto, preco = cards[nome]
+            assert preco == usd(total), (titulo, nome)
+            assert usd(n * sessao) in texto and usd(sinal) in texto and usd(parcela) in texto, (titulo, nome, texto)
 
 
 def _enderecos_do_urace_us():
