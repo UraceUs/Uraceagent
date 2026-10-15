@@ -270,7 +270,11 @@ def academy(host, planos=None):
 </div></section>
 <section class="faixa clara" aria-labelledby="h-quem"><div class="largura duas">
   <div><h2 id="h-quem">{e(d['para_quem_titulo'])}</h2>{_lista(d['para_quem'])}</div>
-  <div><h2>{e(d['inclui_titulo'])}</h2>{_lista(d['inclui'])}</div>
+  <div><h2>{e(d['inclui_titulo'])}</h2>{_lista(d['inclui'])}
+    <h3>{e(d['trazer_titulo'])}</h3>{_lista(d['trazer'])}</div>
+</div></section>
+<section class="faixa vermelha" aria-labelledby="h-porque"><div class="largura">
+  <p class="eyebrow">Why URACE</p><h2 id="h-porque">{e(d['porque_titulo'])}</h2>{_lista(d['porque'], 'checks claras')}
 </div></section>
 <section class="faixa escura" aria-labelledby="h-curr"><div class="largura duas">
   <div><h2 id="h-curr">Curriculum Highlights</h2><dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
@@ -284,6 +288,7 @@ def academy(host, planos=None):
   <h2 id="h-caminho">{e(d['caminho_titulo'])}</h2>{_ps(d['caminho_texto'])}
   <div class="etapas-grade">{etapas}</div>
 </div></section>
+{_passos(d['passos_titulo'], d['passos'])}
 <section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita"><h2 id="h-faq">Good to know</h2>{_faq(d['faq'])}</div></section>
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'], 'escura')}"""
     oferta = {"@context": "https://schema.org", "@type": "Service", "name": "URACE Academy", "serviceType": "Monthly kart driver training",
@@ -1242,6 +1247,9 @@ def redirecionamentos():
               "/affiliate-login/", "/affiliate-area/", "/affiliates/"):
         r[c] = "/contact/"
     r["/product/go-kart-driving-experience/"] = C.ARRIVE["caminho"]
+    # #254 (dono, 15/10): "o professional coaching se tornou o arrive and drive" (o /services/kart-school/
+    # está nos "antigos" da Academy). O endereço antigo não cai no 404 nem fica no sitemap.
+    r["/services/professional-coaching/"] = C.ARRIVE["caminho"]
     for p in dados("posts.json")["posts"]:
         r[f"/{p['slug']}/"] = f"/blog/{p['slug']}/"
     for c in dados("posts.json")["categorias"]:

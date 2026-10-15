@@ -31,7 +31,9 @@ SITE = {
     "horario": "Open every day, 8 AM – 8 PM",
     # #252: o resto do LocalBusiness que o urace.us de hoje já publica (Yoast). Tudo isto vem de lá,
     # e sem isto a troca de domínio perderia o SEO local: mapa, cidade atendida, Yelp e TripAdvisor.
-    "outro_nome": "URACE Kart School",
+    # #254 (dono, 15/10): "o kart school se tornou Urace academy" — o nome alternativo que o Yoast
+    # publicava passa a ser o nome novo, para o Google não ensinar o nome que acabou
+    "outro_nome": "URACE Academy",
     "descricao_negocio": ("Kart racing school in Orlando, Florida. Arrive and drive days in real race karts, "
                           "professional coaching and a monthly kart academy, based at the Orlando Kart Center."),
     "faixa_preco": "$$$",
@@ -261,6 +263,8 @@ HOME = {
 }
 
 # ------------------------------------- Arrive and Drive (urace.us/services/arrive-and-drive/ e o produto 4787)
+# #254 (dono, 15/10): *"o professional coaching se tornou o arrive and drive"* — o texto que fazia sentido da
+# página /services/professional-coaching/ entrou aqui; a página antiga virou 301 para esta.
 # Preços e idades: as variações do produto 4787 que o site público mostra (Store API pública).
 # A "Your Own Kart" ($500) existe no WooCommerce mas não aparece no site, então também não aparece aqui.
 #
@@ -284,28 +288,44 @@ ARRIVE = {
                   "nothing. No licence needed. Book your session."),
     "eyebrow": "Kart Arrive and Drive in Orlando",
     "h1": "Live the real Kart Racing Experience in Orlando",
-    "sub": ("Feel the speed, control the kart, and enjoy a full track day with professional equipment and coaching. "
-            "No license required."),
+    "sub": ("Feel the speed, control the kart, and enjoy a full track day with professional equipment and coaching — "
+            "with video and data analysis to sharpen your technique. No license required."),
     "foto": "arrive-and-drive-hero.webp",
     "foto_equipe": "arrive-and-drive-equipe.webp",
+    # #254: os quatro últimos vêm do "What to expect from your Coaching Session" da página de
+    # Professional Coaching, que se fundiu aqui (dono, 15/10).
     "esperar": ("Feel the rush of real speed. Up to 70 MPH on a pro racing track",
                 "Get race-ready with a safety + driving technique briefing from expert coaches",
                 "Suit up and strap in: this isn’t a theme park ride, it’s the real thing",
                 "Create unforgettable memories for families, friends, and adrenaline junkies alike",
-                "Walk away buzzing with adrenaline, confidence, and maybe a new obsession"),
-    "fornece": ("The high performance go-kart", "Safety instructions", "Safety equipment."),
+                "Walk away buzzing with adrenaline, confidence, and maybe a new obsession",
+                "A training program tailored to the driver’s level",
+                "Professional coaching, data and video analysis",
+                "Technique and mindset training",
+                "Performance tracking, session after session"),
+    "fornece": ("The high performance go-kart", "Safety instructions", "Safety equipment.",
+                "Expert coaching from professional instructors"),
     "trazer": ("MUST wear long pants, closed toe shoes and a jacket.", "Make a reservation",
                "Come prepared for fun and leave with lasting smiles"),
     "porque": ("Real Racing Karts – Not slow rental karts.", "Feel Like a Racer - This is the real deal.",
                "Just Arrive & Drive – No prep, no hassle.", "Pro-Level Track",
-               "Gear up, get briefed, go fast – We handle everything."),
+               "Gear up, get briefed, go fast – We handle everything.",
+               # #254: do "Real coaching from a championship-level kart team" da página de coaching
+               "Theory and mechanics simplified", "Mentorship by winning drivers",
+               "Confidence, reflexes and racing mindset"),
     "porque_fecho": "Ready to feel what real racing is like? Spots are limited.",
     "quem": ("Adults and kids looking for real speed", "Racing fans visiting Orlando", "Families seeking next-level fun",
-             "First-timers curious about karting"),
+             "First-timers curious about karting",
+             # #254: a página de coaching era para quem já corre
+             "Drivers who already race and want to find real lap time",
+             "Drivers aiming for confidence, speed and race results"),
     # os 3 primeiros passos são os da reserva do site (agenda e área do cliente); o resto é o texto do site atual
-    "passos": ("Pick your kart, your day and morning or afternoon",
+    # #262 (dono, 15/10): um caminho só — carrinho → conta → Stripe → waiver. Nada de invoice no site.
+    "passos": ("Pick your kart, your day and morning or afternoon, and add it to your cart",
                "Sign in or create your account and add your drivers",
-               "We confirm your spot and send the invoice and the waiver",
+               "Tell us if you want Lead and Follow — a coach on track with you — and we add it to your session",
+               "Pay with Stripe (card, Apple Pay or Google Pay) and sign the driver’s waiver in your account — "
+               "your spot is confirmed",
                "Arrive 10 minutes early. Check in, get settled, feel the excitement building.",
                "Gear up + Safety Briefing",
                "Hit the track. Time to feel the speed, the grip, the thrill — like a real racer.",
@@ -323,6 +343,19 @@ ARRIVE = {
           "3 sessions and 4-5 h for 6 sessions from arrival until the end.",
           "Available Experience Days: Experiences are available every day, 8 AM – 8 PM. Please confirm availability when "
           "booking.")),
+        # #254: o que a página de Professional Coaching dizia; o preço do Lead and Follow é o da Rate Card
+        # (fechado com antecedência, $769 por piloto; pacote de 5 sessões, $3,460.50).
+        ("Coaching, data and Lead and Follow",
+         ("Our teaching method includes data analysis, on-board video study and explanation of the theories involved in "
+          "all the driving aspects we discuss: the driver leaves knowing what to change, not only how fast they went.",
+          "Lead and Follow is an additional fee for a partner trainer to make your driving or training experience more "
+          "exciting, if you don’t wanna do it alone. Booked in advance it is $769 per driver, and a package of five "
+          "sessions is $3,460.50.",
+          "All weekday training sessions must be confirmed by Sunday. All weekend sessions must be confirmed 24h in "
+          "advance. Please call if you have any questions.")),
+        ("Track fees (paid to the Orlando Kart Center)",
+         ("Driver pass Wednesday to Friday $100–230.", "Driver pass Saturday and Sunday $100–125.",
+          "Spectator pass any day $22.")),
         *FAQ_COMUM,
     ),
     "depoimentos": DEPOIMENTOS_EVENTOS,

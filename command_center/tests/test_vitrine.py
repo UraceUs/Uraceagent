@@ -116,6 +116,8 @@ def test_nenhum_link_volta_ao_wordpress_e_nenhum_link_interno_quebra(cli):
 
 @pytest.mark.parametrize("antigo, novo", [
     ("/kart-training-packages/", "/academy/"),
+    ("/services/kart-school/", "/academy/"),                       # #254: virou a URACE Academy
+    ("/services/professional-coaching/", "/services/arrive-and-drive/"),   # #254: virou o Arrive and Drive
     ("/professional-kart-team-racing-team/", "/pro-team/"),
     ("/the-driver-factory/", "/career/"),
     ("/shop/", "/store/"),
@@ -341,6 +343,59 @@ def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     con.commit()
     html = cli.get("/pro-team/").text
     assert "<strong>$2,756.90</strong>" in html and "<strong>$5,000</strong>" in html
+
+
+# ------------------------------------------------------------------ #254: os dois programas que se fundiram
+ANTIGOS_254 = (("/services/kart-school/", "/academy/"), ("/services/professional-coaching/", "/services/arrive-and-drive/"))
+
+
+def test_programas_fundidos_em_arrive_and_drive_e_urace_academy(cli):
+    """Dono, 15/10 (#254): "o kart school se tornou Urace academy, e o professional coaching se tornou o
+    arrive and drive". Os dois cartões e as duas páginas somem, o texto que fazia sentido fica em quem
+    herdou, o endereço antigo redireciona e nada no site aponta para ele."""
+    hub = cli.get("/services/").text
+    nomes = re.findall(r'<span class="servico-txt"><strong>([^<]+)</strong>', hub)
+    assert nomes[:2] == ["Arrive and Drive", "URACE Academy"]
+    assert "Kart School" not in nomes and "Professional Coaching" not in nomes
+    assert "video breakdown and benchmark comparison" in hub, "o cartão do coaching entrou no Arrive and Drive"
+    assert "Become a racing driver" in hub, "o cartão da Kart School entrou na URACE Academy"
+    # as páginas antigas não existem mais: fora do site, fora do sitemap, e 301 para quem herdou
+    locs = {u.text for u in ET.fromstring(cli.get("/sitemap.xml").content).iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")}
+    for antigo, novo in ANTIGOS_254:
+        assert antigo not in PAGINAS and SITE + antigo not in locs
+        r = cli.get(antigo, follow_redirects=False)
+        assert r.status_code == 301 and r.headers["location"] == novo
+    # o texto aproveitado está na página que herdou
+    academy = cli.get("/academy/").text
+    for trecho in ("Mentorship by winning drivers", "closed toe shoes", "How to join the URACE Academy",
+                   "comprehensive racing education", "practical training, theory, real karts"):
+        assert trecho in academy, trecho
+    arrive = cli.get("/services/arrive-and-drive/").text
+    for trecho in ("Professional coaching, data and video analysis", "Lead and Follow", "Technique and mindset training",
+                   "Theory and mechanics simplified", "Drivers who already race"):
+        assert trecho in arrive, trecho
+    # nenhuma página do site (nem o nome do programa, nem o link) fica falando dos dois
+    for c in PAGINAS:
+        html = cli.get(c).text
+        assert not re.search(r"\bKart School\b|\bProfessional Coaching\b", html), c
+        for antigo, _ in ANTIGOS_254:
+            assert f'href="{antigo}"' not in html and f'"https://novo.urace.us{antigo}"' not in html, (c, antigo)
+
+
+def test_precos_do_site_batem_com_a_rate_card(cli):
+    """#254, dono 15/10: "os preços são os da tabela de all rates and cards" — `brain/40_SISTEMAS/Rate Card.md`,
+    seção "Tabelas ditadas pelo dono em 09/09": diária por kart, Lead and Follow fechado com antecedência e
+    mensal sem contrato. Preço que não está na tabela não aparece inventado na página."""
+    assert [(k["nome"], k["preco"]) for k in conteudo.KARTS] == [
+        ("Baby Kart", 719), ("4-stroke", 719), ("2-stroke", 819), ("Adult Shifter", 899)], "diária tudo incluso"
+    arrive = cli.get("/services/arrive-and-drive/").text
+    for valor in ("$719", "$819", "$899", "$769", "$3,460.50"):
+        assert valor in arrive, valor
+    # o last-minute do Lead and Follow só o operador fecha na pista: não vai para o site
+    assert "$395" not in arrive and "$245" not in arrive
+    from command_center.vitrine import conteudo_paginas
+    assert conteudo_paginas.ACADEMY["planos"][0][3] == "$2,756.90", "mensal sem contrato (4 stroke / Baby Kart)"
+    assert "$2,756.90" in cli.get("/academy/").text
 
 
 def _enderecos_do_urace_us():

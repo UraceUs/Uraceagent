@@ -519,6 +519,30 @@ marcado "POSSÍVEL DUPLICADO" para a equipe conferir e unir.
 mensalidade sai na hora e as outras ficam agendadas no dia 1. Nada é cobrado sem a venda
 automática ligada.
 
+### O que o site vende, pelo nome (#254)
+
+Dono, 15/10: *"o kart school se tornou Urace academy, e o professional coaching se tornou o arrive and
+drive"*. Na página de programas (`novo.urace.us/services/`) ficam sete: **Arrive and Drive**, **URACE
+Academy**, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events (mais
+o Sim 2 Grid, que abre em 1/11/2026). **Kart School** e **Professional Coaching** não existem mais como
+programa.
+
+| O cliente pede | Venda | Página |
+|---|---|---|
+| Kart School, aula mensal, kart school | **URACE Academy** (mensal, 4 sessões) | `/academy/` |
+| Professional Coaching, coaching, treino avulso | **Arrive and Drive** (diária) e, se quiser coach na pista, **Lead and Follow** | `/services/arrive-and-drive/` |
+
+Os endereços antigos (`/services/kart-school/` e `/services/professional-coaching/`) redirecionam
+sozinhos para a página que herdou: link velho de cliente ou de anúncio continua abrindo. No painel, o
+**produto da tarefa** não mudou de nome (*Urace Daily*, *Academy*, *Lead and Follow*, *Arrive and
+Drive*… — seção 8): mudou o nome do programa no site, não o do quadro.
+
+Preço, sempre da **Rate Card** (aba Academy): diária tudo incluso — kart próprio $500 · Baby Kart $719 ·
+4 stroke $719 · 2 stroke $819 · Adult Shifter $899. **Lead and Follow** fechado com antecedência **$769
+por piloto** (pacote de 5 sessões $3.460,50); o last-minute só o operador fecha na pista. Mensal sem
+contrato — kart próprio + mecânico $1.200 · kart próprio $1.800 · Baby Kart e 4 stroke $2.756,90 ·
+2 stroke $3.156,90. Fora do OKC, +$250 por sessão.
+
 ### 5.1 Carrinho do site e pagamento no Stripe (#236)
 
 Dono, 14/10: *"o sistema de carrinho e checkout ... usando o Stripe"*; *"quando a pessoa selecionar
