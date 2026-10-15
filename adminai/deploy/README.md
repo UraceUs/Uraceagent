@@ -146,6 +146,10 @@ Dono, 15/10 (#253): *"me de um bloco para a extensão testar todo o site e proce
 uma conta fictícia para testar de ponta a ponta"* e *"de o comando para a extensão capturar tela a
 cada passo para poder te passar e testar todas as funcionalidades"*.
 
+> **Desde 15/10 (#277) esta prova roda no CI do GitHub e no ambiente do Claude**, e o pacote de fotos fica
+> para baixar em *Actions › a execução › Artifacts › prova-com-fotos*. Na VPS ela é opcional. E o deploy
+> (`servir_command_center.sh`) não roda mais a bateria quando o GitHub confirma o CI verde do commit.
+
 **Uma linha, no VPS:**
 
 ```bash
