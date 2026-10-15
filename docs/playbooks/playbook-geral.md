@@ -581,6 +581,10 @@ cada passo"*. No servidor, **uma linha**:
 bash adminai/deploy/command_center/testar_tudo.sh
 ```
 
+Na primeira vez ele pede o **venv do teste** — e isso é de propósito: dependência de teste nunca
+entra no venv da produção, que é o do serviço no ar (#264). O próprio script imprime as três
+linhas para criar `~/.urace/teste-venv`.
+
 Ele roda num **banco descartável** e numa porta própria (a operação não é tocada, o banco de
 produção não é aberto) e **para na hora** se achar chave real no ambiente. No fim imprime, em
 destaque, o caminho de **um pacote** (`~/.urace/teste-<data>.tar.gz`) com:

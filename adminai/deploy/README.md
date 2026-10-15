@@ -181,6 +181,20 @@ inclusive se der erro (`trap`).
 - **O que ele NÃO prova**: cobrança de verdade no Stripe (chave real), e-mail de verdade saindo, e
   Asana, QuickBooks, DocuSign ou Google de verdade — tudo isso é **falso** ali, de propósito. Para o
   teste da IA com dado de verdade (em ensaio), é o `testar_ia.sh`.
+- **Na primeira vez, o venv do teste** (#264): o teste **nunca** instala nada no venv da produção
+  (`~/.urace/cc-venv`, o do serviço no ar — instalar ali resolveria as versões de novo e pode
+  derrubar o Command Center). Ele usa um venv só dele:
+
+  ```bash
+  python3 -m venv ~/.urace/teste-venv
+  ~/.urace/teste-venv/bin/python -m pip install -q -r ~/Uraceagent/command_center/requirements.txt pytest httpx playwright
+  ~/.urace/teste-venv/bin/python -m playwright install chromium
+  # se o Chromium reclamar de biblioteca do sistema:
+  # sudo ~/.urace/teste-venv/bin/python -m playwright install-deps chromium
+  ```
+
+  Depois é sempre a linha única de cima. Para usar outro Python: `CC_TEST_PY=/caminho/do/python`
+  (ou `CC_TEST_VENV=/caminho/do/venv`).
 - Chromium fora do lugar padrão: `PW_CHROMIUM=/caminho/do/chrome bash adminai/deploy/command_center/testar_tudo.sh`.
 - Ambiente com credencial carregada (`. ~/.urace/adminai.env`): o script diz exatamente o comando
   `env -u …` para rodar limpo. Isso é de propósito: teste nunca roda com chave real.
