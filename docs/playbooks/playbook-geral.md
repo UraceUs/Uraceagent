@@ -125,6 +125,13 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248); sessão pede também o piloto. Chave English/Português no topo |
 | `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart), com os dados do cliente da conta; em inglês ou português (#248). A equipe copia o link em Agendamentos do site › Pedidos do site |
 
+**Endereço do urace.us de hoje** (#252): todo endereço que o site antigo publica abre no site novo —
+a mesma página ou um 301. Quem manda um link antigo para um cliente (`/urace-academy/`,
+`/book-online/`, `/product/<slug>/`, `/product-category/...`, `/shop/`, `/my-account/`, um artigo do
+blog) pode mandar: ninguém cai em "Page not found". A lista e as regras estão em
+`docs/site-publico/comparacao-urace-us.md`, e a comparação
+completa dos dois sites (passo a passo da compra, o que falta no novo, peso e velocidade) também.
+
 ---
 
 ## 3. Mapa das telas

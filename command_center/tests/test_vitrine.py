@@ -120,7 +120,7 @@ def test_nenhum_link_volta_ao_wordpress_e_nenhum_link_interno_quebra(cli):
     ("/the-driver-factory/", "/career/"),
     ("/shop/", "/store/"),
     ("/product-category/engines/", "/store/engines/"),
-    ("/book-online/", "/ops/portal/reserve"),
+    ("/book-online/", "/services/arrive-and-drive/"),      # #252: página indexada vai para página pública
     ("/corporate-events", "/services/corporate-events/"),
 ])
 def test_endereco_do_urace_us_de_hoje_redireciona_para_o_novo(cli, antigo, novo):
@@ -333,3 +333,116 @@ def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     con.commit()
     html = cli.get("/pro-team/").text
     assert "<strong>$2,756.90</strong>" in html and "<strong>$5,000</strong>" in html
+
+
+def _enderecos_do_urace_us():
+    arq = os.path.join(os.path.dirname(__file__), "enderecos_urace_us.txt")
+    with open(arq, encoding="utf-8") as f:
+        return [l.strip() for l in f if l.strip() and not l.startswith("#")]
+
+
+def test_nenhum_endereco_do_urace_us_cai_no_404(cli):
+    """#252: no dia da troca, todo endereço que o urace.us de hoje publica (sitemaps do Yoast e
+    links internos) tem de abrir no site novo — página ou 301 que leva a uma página que abre.
+    As famílias do WooCommerce (subcategoria, etiqueta, página 2, produto que saiu do catálogo e
+    as telas da conta do WordPress) não têm par no novo e caem na loja ou no portal."""
+    quebrados = []
+    for antigo in _enderecos_do_urace_us():
+        r = cli.get(antigo, follow_redirects=False)
+        if r.status_code in (301, 302, 303):
+            destino = r.headers["location"]
+            if destino.startswith("/ops/"):             # a área do cliente é o SPA, servido fora do teste
+                continue
+            r = cli.get(destino, follow_redirects=False)
+            if r.status_code in (301, 302, 303):        # no máximo um salto a mais
+                r = cli.get(r.headers["location"], follow_redirects=False)
+            if r.status_code != 200:
+                quebrados.append((antigo, destino, r.status_code))
+        elif r.status_code != 200:
+            quebrados.append((antigo, "-", r.status_code))
+    assert not quebrados, quebrados
+
+
+@pytest.mark.parametrize("antigo, novo", [
+    ("/birthday-party/", "/services/birthday-party/"),                      # menu do urace.us de hoje
+    ("/group-events-social-gatherings/", "/services/group-events/"),
+    ("/product-category/karts-parts/chassis/", "/store/chassis/"),          # subcategoria do WooCommerce
+    ("/product-category/karts-parts/chassis/tony-kart-otk/brakes/", "/store/"),
+    ("/product-category/apparel-gear/apparel/suits/", "/store/custom-kart-suits/"),
+    ("/product-category/used/", "/store/"),
+    ("/product-tag/jecko/", "/store/"),
+    ("/product/otk-magnesium-wheels-set-mxc-130mm-210mm/", "/store/"),      # produto fora do catálogo
+    ("/store/page/2/", "/store/"),
+    ("/blog/page/2/", "/blog/"),
+    ("/product-category/karts-parts/page/2/", "/store/parts/"),
+    ("/my-account/lost-password/", "/ops/portal"),
+    ("/sitemap_index.xml", "/sitemap.xml"),
+    ("/product-sitemap.xml", "/sitemap.xml"),
+])
+def test_familia_de_endereco_do_wordpress_redireciona(cli, antigo, novo):
+    r = cli.get(antigo, follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == novo
+
+
+def test_pagina_do_produto_sem_codigo_do_tema_no_texto(cli):
+    """#252: a descrição vinda do WooCommerce traz CSS e JavaScript do tema soltos (no urace.us eles
+    ficam dentro de <style>/<script>). Como texto, viravam lixo na página do produto e estouravam a
+    largura no celular. Nenhuma página do site mostra código."""
+    sujas = []
+    for p in paginas_site.dados("produtos.json")["produtos"]:
+        texto = _texto_visivel(cli.get(f"/store/p/{p['slug']}/").text)
+        if paginas_site.CODIGO.search(texto):
+            sujas.append(p["slug"])
+    assert not sujas, sujas
+
+
+def _texto_visivel(html):
+    corpo = html.split("<main", 1)[1]
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", corpo))
+
+
+def test_meta_description_do_produto_nao_corta_palavra(cli):
+    """#252: antes o resumo era cortado seco em 120 caracteres e o Google mostrava "add it w.".
+    Agora o corte é no fim de frase ou de palavra, e a nota de rodapé de preço não vira o resumo."""
+    for p in paginas_site.dados("produtos.json")["produtos"]:
+        html = cli.get(f"/store/p/{p['slug']}/").text
+        desc = re.search(r'<meta name="description" content="(.*?)">', html).group(1)
+        assert 80 <= len(desc) <= 175, (p["slug"], len(desc), desc)
+        assert not desc.startswith("*"), (p["slug"], desc)
+        assert desc.endswith((".", "!", "?", "…")), (p["slug"], desc)
+        if desc.endswith("…"):                          # cortou: a última palavra está inteira
+            assert len(desc.rstrip("…").split()[-1]) > 2, (p["slug"], desc)
+    desc = re.search(r'<meta name="description" content="(.*?)">',
+                     cli.get("/store/p/arrive-and-drive/").text).group(1)
+    assert desc.startswith("Arrive and Drive is designed for all ages")
+
+
+def test_pagina_do_404_fica_fora_do_google_e_tem_saida(cli, monkeypatch):
+    """#252: a página do 404 não é para o Google, e não termina em beco sem saída."""
+    monkeypatch.setenv("CC_SITE_PREVIEW", "0")
+    r = cli.get("/nao-existe-mesmo/")
+    assert r.status_code == 404
+    assert 'name="robots" content="noindex, nofollow"' in r.text
+    for destino in ("/services/arrive-and-drive/", "/store/", "/services/", "/contact/"):
+        assert f'href="{destino}"' in r.text
+    assert "new site" not in r.text, "depois da troca não existe mais um 'site novo'"
+
+
+def test_schema_do_negocio_nao_perde_o_seo_local_do_urace_us(cli):
+    """#252: o LocalBusiness do urace.us de hoje (Yoast) tem mapa, coordenadas, faixa de preço,
+    cidades atendidas e os perfis de Yelp, TripAdvisor e Google Maps. A troca de domínio não pode
+    perder nada disso, e a home ainda diz quem é a URACE (Organization) e qual é o site (WebSite)."""
+    p = _le(cli.get("/").text)
+    negocio = next(x for x in p.ld if "LocalBusiness" in str(x.get("@type")))
+    assert negocio["geo"]["latitude"] and negocio["geo"]["longitude"]
+    assert negocio["hasMap"].startswith("https://www.google.com/maps/")
+    assert negocio["priceRange"] and negocio["currenciesAccepted"] == "USD"
+    assert [c["name"] for c in negocio["areaServed"]] == ["Orlando", "Kissimmee", "Winter Garden", "Florida"]
+    assert any("yelp.com" in u for u in negocio["sameAs"]) and any("tripadvisor." in u for u in negocio["sameAs"])
+    assert negocio["address"]["streetAddress"].endswith("Box 3")
+    tipos = {str(x.get("@type")) for x in p.ld}
+    assert "Organization" in tipos and "WebSite" in tipos
+    # e em toda página o negócio continua completo (é o schema que o Google lê em qualquer entrada)
+    for c in ("/services/arrive-and-drive/", "/store/", "/contact/"):
+        n = next(x for x in _le(cli.get(c).text).ld if "LocalBusiness" in str(x.get("@type")))
+        assert n["geo"] and n["hasMap"] and n["areaServed"], c

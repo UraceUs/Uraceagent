@@ -116,7 +116,7 @@ p { margin: 0 }
 .centro { text-align: center; justify-items: center }
 .duas { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 28px }
 @media (min-width: 860px) { .duas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px } }
-.texto { display: grid; gap: 14px; min-width: 0 }
+.texto { display: grid; gap: 14px; min-width: 0; overflow-wrap: anywhere }
 .lede { color: var(--cinza-claro); margin-top: -10px }
 .clara .lede { color: var(--cinza) }
 
@@ -363,7 +363,7 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .produto-preco { font-size: 1.1rem }
 .produto-preco strong { font: 800 1.7rem/1.1 var(--titulo); font-stretch: 125% }
 .produto-preco s { color: var(--cinza); margin-right: 6px }
-.produto-short { color: #3c3d50; display: grid; gap: 8px }
+.produto-short { color: #3c3d50; display: grid; gap: 8px; overflow-wrap: anywhere }
 .produto-short ul { padding-left: 20px }
 
 /* formulários (contato e pedido) */

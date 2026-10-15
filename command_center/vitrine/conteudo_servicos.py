@@ -209,6 +209,7 @@ INVESTIMENTO_EVENTO = "Starting at {preco} per racing participant +$50 per guest
 
 BIRTHDAY = {
     "caminho": "/services/birthday-party/",
+    "antigos": ("/birthday-party/",),                   # o menu do urace.us de hoje aponta para cá
     "titulo": "Kart Racing Birthday Parties in Orlando | URACE",
     "descricao": ("Throw a birthday party on a real racing track in Orlando. Racing karts, safety gear and coaches included, "
                   "organised end to end by the URACE team."),
@@ -295,7 +296,7 @@ CORPORATE = {
 
 GROUPS = {
     "caminho": "/services/group-events/",
-    "antigos": ("/services/group-events-social-gatherings/",),
+    "antigos": ("/services/group-events-social-gatherings/", "/group-events-social-gatherings/"),
     "titulo": "Group Kart Racing Events in Orlando | URACE",
     "descricao": ("Group karting in Orlando for friends, clubs and social gatherings. Real race karts, gear and coaching "
                   "included, built around your group size and pace."),

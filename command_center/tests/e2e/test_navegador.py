@@ -1214,7 +1214,10 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     post = paginas_site.dados("posts.json")["posts"][0]["slug"]
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"])["slug"]
     for rota in ("/", "/services/arrive-and-drive/", "/services/", "/services/birthday-party/", "/academy/", "/pro-team/",
-                 "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/"):
+                 "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/",
+                 # #252: o Arrive and Drive é o mais vendido e a descrição dele vem do WooCommerce com
+                 # CSS do tema no meio do texto, que estourava a largura; o carrinho fecha o caminho
+                 "/store/p/arrive-and-drive/", "/cart/"):
         pg.goto(site + rota); pg.wait_for_load_state("networkidle")
         h1 = [t for n, t in _cabecalhos(pg) if n == 1]
         if len(h1) != 1:
@@ -1231,6 +1234,24 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     pg.close()
     assert not problemas, "\n".join(problemas)
     assert not erros, erros
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_site_novo_404_com_saida_no_celular(servidor, navegador, largura):
+    """#252: quem cai num endereço que não existe vê quatro portas de saída, com alvo de toque de
+    verdade, e a página não rola para o lado em 360 nem em 390 px."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 800})
+    pg.goto(site + "/este-endereco-nao-existe/")
+    pg.wait_for_load_state("networkidle")
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    alvos = pg.evaluate("""() => [...document.querySelectorAll('main .hero-acoes a')]
+        .map(a => [a.getAttribute('href'), Math.round(a.getBoundingClientRect().height)])""")
+    assert [h for h, _ in alvos] == ["/services/arrive-and-drive/", "/store/", "/services/", "/contact/"]
+    assert all(altura >= 40 for _, altura in alvos), alvos
+    assert len(pg.query_selector_all("h1")) == 1
+    pg.close()
 
 
 def test_esqueci_a_senha_no_celular_do_link_do_email_ate_entrar(servidor, navegador):

@@ -59,8 +59,26 @@ def _negocio(host):
         "openingHoursSpecification": [{"@type": "OpeningHoursSpecification",
                                        "dayOfWeek": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
                                                      "Saturday", "Sunday"], "opens": "08:00", "closes": "20:00"}],
-        "sameAs": list(C.SITE["redes"].values()),
+        # #252: o mesmo que o urace.us de hoje publica — o SEO local não pode cair na troca
+        "alternateName": C.SITE["outro_nome"], "description": C.SITE["descricao_negocio"],
+        "priceRange": C.SITE["faixa_preco"], "currenciesAccepted": C.SITE["moeda"],
+        "geo": {"@type": "GeoCoordinates", "latitude": C.SITE["geo"][0], "longitude": C.SITE["geo"][1]},
+        "hasMap": C.SITE["mapa"],
+        "areaServed": [{"@type": t, "name": n} for t, n in C.SITE["atende"]],
+        "sameAs": [*C.SITE["redes"].values(), *C.SITE["perfis"]],
     }
+
+
+def _marca(host):
+    """#252: quem é a URACE e qual é o site. O urace.us de hoje publica os dois (Yoast); sem eles, o
+    Google perde o logo, as redes e o nome do site na troca de domínio."""
+    return ({"@context": "https://schema.org", "@type": "Organization", "@id": f"https://{host}/#organization",
+             "name": C.SITE["nome"], "url": f"https://{host}/",
+             "logo": {"@type": "ImageObject", "url": f"https://{host}{estatico('img/favicon.png')}"},
+             "sameAs": [*C.SITE["redes"].values(), *C.SITE["perfis"]]},
+            {"@context": "https://schema.org", "@type": "WebSite", "@id": f"https://{host}/#website",
+             "url": f"https://{host}/", "name": C.SITE["nome"], "inLanguage": "en-US",
+             "publisher": {"@id": f"https://{host}/#organization"}})
 
 
 def _ld(dados):
@@ -245,7 +263,7 @@ def home(host):
   </div>
 </section>"""
     return layout(host=host, caminho="/", titulo=h["titulo"], descricao=h["descricao"], corpo=corpo,
-                  schemas=(_negocio(host),), foto=h["foto"])
+                  schemas=(_negocio(host), *_marca(host)), foto=h["foto"])
 
 
 def arrive_and_drive(host):
@@ -378,11 +396,15 @@ def arrive_and_drive(host):
 
 
 def nao_achou(host):
+    """#252: a página do 404 fica fora do Google (`indexar=False`) e sempre com saída: o que a
+    pessoa veio buscar está em uma destas quatro portas, não só na home."""
     corpo = """
 <section class="faixa clara"><div class="largura estreita centro">
   <h1>Page not found</h1>
-  <p>This page doesn't exist on the new site yet.</p>
-  <div class="hero-acoes centro"><a class="btn" href="/">Go to the home page</a></div>
+  <p>This address doesn't exist. Here is where to go next:</p>
+  <div class="hero-acoes centro"><a class="btn" href="/services/arrive-and-drive/">Book a session</a><a class="btn btn-linha" href="/store/">Store</a><a class="btn btn-linha" href="/services/">Our services</a><a class="btn btn-linha" href="/contact/">Contact us</a></div>
+  <p class="small muted">Looking for something you saw before? Call or WhatsApp +1 (407) 250 2291, or <a href="/contact/">send us a message</a>.</p>
 </div></section>"""
-    return layout(host=host, caminho="/404", titulo="Page not found | URACE", descricao="This page was not found.",
-                  corpo=corpo)
+    return layout(host=host, caminho="/404", titulo="Page not found | URACE",
+                  descricao="This address doesn't exist on the URACE site. Find your way to booking a kart session, the store, our services or the team.",
+                  corpo=corpo, indexar=False)
