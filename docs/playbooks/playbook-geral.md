@@ -565,7 +565,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | **Pelo Claude:** "… não existe no painel (veja urace_operacoes)" | caminho errado | procure a operação certa com `urace_operacoes` |
 | **Pelo Claude:** "login, chaves e área do cliente não são operados pelo MCP" | rota fora do MCP | faça pelo painel |
 | Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |
-| No site/reserva: "… is not open for online booking right now" | o serviço com o nome daquele kart não está ativo em Serviços e preços | Agendamentos do site › Serviços e preços: ative (ou crie) o serviço com o **nome do kart** no nome, ex.: "Arrive and Drive 2-stroke" (#253) |
+| No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Agendamentos do site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263) |
 | No site/reserva: "Online booking is closed right now" | **nenhum** serviço ativo em Serviços e preços: não há o que vender online | ative um serviço; enquanto isso o site manda a pessoa falar com a gente, e nenhuma vaga é prometida |
 | No calendário do site: "Pick a time to continue" | o dia está escolhido e falta o turno (Morning/Afternoon) | escolha o turno; é o próprio site pedindo o que falta (#253) |
 

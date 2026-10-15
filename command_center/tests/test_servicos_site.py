@@ -36,6 +36,9 @@ def test_preco_aceita_o_jeito_que_a_equipe_digita():
 
 
 def test_sem_servico_cadastrado_ninguem_marca(con):
+    """#263: a migração semeia os quatro karts do site. Desativados (ou num banco sem eles), nada é
+    inventado: o cliente não consegue marcar e a lista pública sai vazia."""
+    con.execute("UPDATE booking_services SET active=0")
     abre(con)
     c, p = conta(con)
     with pytest.raises(ag.ErroAgenda, match="type of session"):
@@ -56,11 +59,13 @@ def test_mudar_o_preco_nao_muda_quem_ja_marcou(con):
 
 
 def test_desativar_tira_da_area_do_cliente_sem_apagar(con):
+    nascidos = len(sv.lista(con))                      # #263: os quatro karts do site vêm da migração
+    con.execute("UPDATE booking_services SET active=0")
     abre(con)
     c, p = conta(con)
     sid = sv.criar(con, None, {"name": "Kart School", "price": 1856.9})
     sv.mudar(con, None, sid, {"active": False})
-    assert sv.para_cliente(con) == [] and len(sv.lista(con)) == 1
+    assert sv.para_cliente(con) == [] and len(sv.lista(con)) == nascidos + 1
     with pytest.raises(ag.ErroAgenda, match="type of session"):
         ag.agendar(con, c, proximo(2).isoformat(), "manha", p, servico_id=sid)
 
@@ -103,7 +108,8 @@ def test_so_o_gerente_muda_o_preco_e_fica_auditado(cli):
     sid = cli.post("/ops/api/site/servicos", headers=h, json={"name": "Arrive and Drive", "price": "719.00",
                                                               "description": "One session with our kart"}).json()["id"]
     r = cli.patch(f"/ops/api/site/servicos/{sid}", headers=h, json={"price": "749"})
-    assert r.status_code == 200 and r.json()["servicos"][0]["price"] == 749.0
+    assert r.status_code == 200
+    assert next(x["price"] for x in r.json()["servicos"] if x["id"] == sid) == 749.0
     assert cli.patch(f"/ops/api/site/servicos/{sid}", headers=h, json={"price": "-1"}).status_code == 400
     aud = todos(conectar(), "SELECT detail FROM audit_logs WHERE event='booking.service.update'")
     assert '"antes": 719.0' in aud[0]["detail"] and '"depois": 749.0' in aud[0]["detail"]
@@ -112,5 +118,8 @@ def test_so_o_gerente_muda_o_preco_e_fica_auditado(cli):
                                                  "birth_date": "1985-04-12", "accept_terms": True, "i_am_driver": True, **ENDERECO})
     assert r.status_code == 201, r.text
     disp = cli.get("/ops/api/portal/availability").json()
-    assert disp["services"] == [{"id": sid, "name": "Arrive and Drive", "description": "One session with our kart", "price": 749.0, "deposit": 0}]
-    assert "qbo_item_id" not in disp["services"][0], "o cliente não vê o item do QuickBooks"
+    meu = next(x for x in disp["services"] if x["id"] == sid)
+    # #263: `site_kart` vazio = serviço que não é de kart do site
+    assert meu == {"id": sid, "name": "Arrive and Drive", "description": "One session with our kart",
+                   "price": 749.0, "deposit": 0, "site_kart": None}
+    assert "qbo_item_id" not in meu, "o cliente não vê o item do QuickBooks"

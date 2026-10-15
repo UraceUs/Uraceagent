@@ -82,10 +82,15 @@ def passo(cad, pg, apelido, titulo, feito, inteira=True):
 
 
 def _preparar(adm, base):
-    """O painel do teste: um serviço de sessão para o kart "4-stroke" e a semana toda aberta."""
+    """O painel do teste: o serviço do kart "4-stroke" e a semana toda aberta.
+
+    #263: os quatro serviços do site vêm da migração, ligados ao kart pela chave "Kart do site" —
+    aqui só se garante o preço e o depósito que o pacote fotografa."""
     csrf = {"X-CSRF": next(c["value"] for c in adm.context.cookies() if c["name"] == "cc_csrf")}
-    r = adm.request.post(base + "/api/site/servicos", headers=csrf,
-                         data={"name": "Arrive and Drive 4-stroke", "price": 719, "deposit": 400})
+    do_painel = adm.request.get(base + "/api/site/servicos").json()["servicos"]
+    do_4t = next(x for x in do_painel if x["site_kart"] == "4-stroke")
+    r = adm.request.patch(base + f"/api/site/servicos/{do_4t['id']}", headers=csrf,
+                          data={"price": 719, "deposit": 400, "active": True})
     assert r.ok, r.text()
     semana = [{"weekday": d, "period": p, "open": True, "capacity": 5}
               for d in range(7) for p in ("manha", "tarde")]
@@ -111,17 +116,18 @@ def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
         st["resposta"] = f"o resumo mostra {v.locator('.agenda-resumo').inner_text()!r} e o preço do painel {v.locator('.agenda-preco').inner_text()}"
     with passo(cad, v, "dia-escolhido", "Escolher o dia", f"cliquei em {dia.strftime('%d/%m')} no calendário") as st:
         tn._clicar_dia(v, dia)
-        botao = v.locator(".agenda-ir").inner_text().strip()
+        botao = v.locator(".agenda-carrinho").inner_text().strip()
         assert botao == "Pick a time to continue", f"o botão diz {botao!r} (#253: tem de pedir o turno)"
         st["resposta"] = f"o botão pede o que falta: {botao!r}"
     with passo(cad, v, "turno-escolhido", "Escolher o turno", "cliquei em Morning") as st:
         v.get_by_role("button", name=re.compile("^Morning")).click()
-        st["resposta"] = (f"o botão virou {v.locator('.agenda-ir').inner_text().strip()!r} e apareceu "
-                          f"{v.locator('.agenda-carrinho').inner_text().strip()!r}")
+        # #262: um botão só, o do carrinho — ele é o caminho da compra
+        st["resposta"] = f"o botão virou {v.locator('.agenda-carrinho').inner_text().strip()!r}"
     with passo(cad, v, "sessao-no-carrinho", "Pôr a sessão no carrinho", 'cliquei em "Add to cart"') as st:
         v.get_by_role("button", name=re.compile("^Add to cart")).click()
-        v.get_by_text("Added to your cart.").wait_for()
-        st["resposta"] = "a sessão entrou no carrinho (com o preço e o depósito do painel)"
+        v.wait_for_url(re.compile(r"/cart/"))                  # #262: um caminho só, e ele leva ao carrinho
+        v.get_by_role("heading", name="Your cart", level=1).wait_for()
+        st["resposta"] = "a sessão entrou no carrinho (com o preço e o depósito do painel) e o site levou para lá"
     with passo(cad, v, "produto-da-loja", "Pôr um produto da loja no carrinho", f"abri {produto['name']!r} e pus no carrinho") as st:
         v.goto(site + f"/store/p/{produto['slug']}/")
         v.get_by_role("button", name="Add to cart").click()

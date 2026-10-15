@@ -298,6 +298,9 @@ MIGRACOES = [
     ("booking_services", "kind", "TEXT NOT NULL DEFAULT 'session'"),
     ("booking_services", "months", "INTEGER"),
     ("booking_services", "sessions_month", "INTEGER"),
+    # #263 (dono, 15/10): a chave do kart do site que este serviço vende (`vitrine.conteudo.KARTS`).
+    # O site casa serviço e kart por ela, igual e exata — nunca mais por "o nome contém o do kart".
+    ("booking_services", "site_kart", "TEXT"),
     # 05/10 — dono (#87): balcão com leitor. Cada card tem um QR próprio (código opaco, não
     # o id); cada peça pode ter o item dela no QuickBooks, criado quando o código é cadastrado.
     ("clients", "scan_code", "TEXT"),
@@ -438,6 +441,57 @@ REVISAO_21_09 = [
     ("docusign_send_reminder", "BLOCKED", "SAFE"),
 ]
 
+# ------------------------------------------------------------ os quatro karts do site (#263)
+# Dono, 15/10: *"esses serviços já estão sendo mostrados no site… o mais lógico é ir com o produto
+# que foi selecionado na mesma página que selecionou a data e daí clicar no add to cart"*.
+#
+# A página do Arrive and Drive mostra os quatro karts com preço (`vitrine.conteudo.KARTS`, os preços
+# da Rate Card ditada pelo dono em 09/09), mas só dava para comprar quando a equipe tinha cadastrado
+# à mão um serviço com o nome do kart. Agora os quatro nascem da migração, ligados ao kart pela
+# chave (`site_kart`), e o painel continua dono do preço (#50).
+#
+# NADA É DESTRUÍDO: primeiro liga o que a equipe já criou para aquele kart, e só cria linha nova
+# quando nenhuma linha é daquele kart. Preço, nome, descrição, depósito, item do QuickBooks e o
+# estado (ativo/inativo) de linha que já existe não são tocados em nenhum dos dois caminhos.
+#
+# O depósito nasce 400 porque é o que o próprio site publica nos termos desta página
+# ("a $400 deposit will be charged in advance", `vitrine.conteudo.TERMOS`); o gerente muda no painel
+# (0 = sem depósito) e a subida seguinte não desfaz. O item do QuickBooks nasce vazio de propósito:
+# o site cobra pelo Stripe (#262), e a invoice da equipe segue existindo à parte.
+def _servicos_dos_karts():
+    """Os SQL de cada kart do site, na ordem da página: ligar pelo nome do padrão, ligar o que a
+    equipe criou para aquele kart, e só então criar a linha que falta."""
+    from command_center.vitrine.conteudo import KARTS          # só dados, sem import de volta
+    for i, k in enumerate(KARTS, start=1):
+        chave = k["nome"].replace("'", "''")
+        nome = f"Arrive and Drive {k['nome']}".replace("'", "''")
+        ja_e_do_kart = (f"EXISTS (SELECT 1 FROM booking_services b "
+                        f"WHERE LOWER(COALESCE(b.site_kart,''))=LOWER('{chave}'))")
+        # 1 · já existe a linha com o nome do padrão (a equipe criou, ou é de uma subida antiga, de
+        # antes da coluna): liga essa, sem mexer em mais nada. Uma linha só, sempre a mesma.
+        yield f"""UPDATE booking_services SET site_kart='{chave}'
+                   WHERE id = (SELECT id FROM booking_services
+                                WHERE site_kart IS NULL AND LOWER(name)=LOWER('{nome}')
+                                ORDER BY active DESC, id LIMIT 1)
+                     AND NOT {ja_e_do_kart}"""
+        # 2 · a equipe criou com outro nome, mas claramente para este kart (o nome do kart está no
+        # nome) e é um só: liga esse. Dois candidatos é ambíguo — a migração não escolhe por ninguém.
+        yield f"""UPDATE booking_services SET site_kart='{chave}'
+                   WHERE site_kart IS NULL AND COALESCE(kind,'session')='session'
+                     AND INSTR(LOWER(name), LOWER('{chave}')) > 0
+                     AND NOT {ja_e_do_kart}
+                     AND (SELECT COUNT(*) FROM booking_services c
+                            WHERE c.site_kart IS NULL AND COALESCE(c.kind,'session')='session'
+                              AND INSTR(LOWER(c.name), LOWER('{chave}')) > 0) = 1"""
+        # 3 · nenhuma linha é deste kart: nasce a do site, com o preço da Rate Card
+        yield f"""INSERT INTO booking_services
+                    (name, price, deposit, kind, site_kart, sort, active, created_at)
+                  SELECT '{nome}', {float(k["preco"])}, 400, 'session', '{chave}', {i}, 1,
+                         strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                   WHERE NOT {ja_e_do_kart}
+                     AND NOT EXISTS (SELECT 1 FROM booking_services d WHERE LOWER(d.name)=LOWER('{nome}'))"""
+
+
 POS_MIGRACAO = [
     # 06/10 (#50): o contrato da Academy (§2.3) pede depósito de US$ 400 no Arrive and Drive. Só preenche
     # quem ainda não tem valor: o gerente pode mudar (0 = sem depósito) e a próxima subida não desfaz.
@@ -519,6 +573,8 @@ POS_MIGRACAO = [
              note=COALESCE(note,'') || ' · revisto pelo dono em 21/09 ({antes} -> {depois})'
            WHERE action='{acao}' AND policy='{antes}'"""
       for acao, antes, depois in REVISAO_21_09],
+    # #263: os quatro karts do site, por último — depois de tudo o que mexe em booking_services
+    *_servicos_dos_karts(),
 ]
 
 

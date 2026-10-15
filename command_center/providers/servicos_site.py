@@ -48,9 +48,20 @@ def lista(con, ativos=False):
 
 
 def para_cliente(con):
-    """O que a área do cliente mostra para marcar sessão: nome, descrição e preço. Nada do QuickBooks."""
+    """O que a área do cliente mostra para marcar sessão: nome, descrição e preço. Nada do QuickBooks.
+
+    `site_kart` (#263) é a chave do kart do site que este serviço vende: é por ela que a página do
+    Arrive and Drive e a reserva acham o serviço do kart escolhido — nunca pelo nome."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
-             "deposit": s["deposit"] or 0} for s in lista(con, True) if (s["kind"] or "session") == "session"]
+             "deposit": s["deposit"] or 0, "site_kart": s["site_kart"]}
+            for s in lista(con, True) if (s["kind"] or "session") == "session"]
+
+
+def do_kart(con, chave):
+    """O serviço ativo deste kart do site, quando é um só. #263: dois serviços com a mesma chave (ou
+    nenhum) não viram escolha automática — o site trata como kart sem serviço."""
+    achados = [s for s in para_cliente(con) if (s["site_kart"] or "").strip().lower() == (chave or "").strip().lower()]
+    return achados[0] if len(achados) == 1 else None
 
 
 def planos_para_cliente(con):
@@ -103,6 +114,18 @@ def _dados(con, d, parcial):
         if item and not um(con, "SELECT 1 AS x FROM qbo_items WHERE id=?", (item,)):
             raise ErroServico("item do QuickBooks não encontrado (sincronize o QuickBooks e tente de novo)")
         s["qbo_item_id"] = item
+    if "site_kart" in d:
+        # #263: a chave do kart do site que este serviço vende. Ou é um kart de `conteudo.KARTS`,
+        # ou é vazio (serviço que não é do site). Nome parecido não vale: a chave é exata.
+        from command_center.vitrine.conteudo import kart_da_chave
+        t = " ".join(str(d["site_kart"] or "").split())
+        if not t:
+            s["site_kart"] = None
+        else:
+            k = kart_da_chave(t)
+            if not k:
+                raise ErroServico("kart do site inválido: use um dos karts da página do Arrive and Drive")
+            s["site_kart"] = k["nome"]
     if "deposit" in d:
         # #50: depósito por sessão (Arrive and Drive: US$ 400); vazio ou 0 = sem depósito
         s["deposit"] = preco(d["deposit"]) if d["deposit"] not in (None, "", 0, "0") else 0.0

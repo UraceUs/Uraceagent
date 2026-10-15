@@ -189,13 +189,18 @@ def test_pedido_da_loja_vira_oportunidade_com_o_valor(cli, tmp_path, monkeypatch
     assert cli.post("/ops/api/vitrine/pedido", json={"produto": "nao-existe", "nome": "Dan", "email": "d@d.com"}).status_code == 400
 
 
-def test_arrive_and_drive_mostra_os_precos_de_hoje_e_leva_para_a_agenda(cli):
+def test_arrive_and_drive_mostra_os_precos_de_hoje_e_leva_para_o_carrinho(cli):
+    """#263: cada kart da página carrega a chave (`data-kart`) com que o site acha o serviço do painel,
+    e o preço é o do painel — que a migração semeou com os preços da Rate Card. #262: um botão só, o do
+    carrinho; o "Continue to booking" (invoice do QuickBooks) saiu do site público."""
     r = cli.get("/services/arrive-and-drive/")
     for k in conteudo.KARTS:
-        assert f'value="{k["nome"]}" data-preco="{k["preco"]}"' in r.text
+        assert f'value="{k["nome"]}" data-kart="{k["nome"]}" data-preco="{k["preco"]:g}"' in r.text
     assert {k["preco"] for k in conteudo.KARTS} == {719, 819, 899}, "os preços do urace.us em 07/10"
     assert "Your Own Kart" not in r.text, "não aparece no site público de hoje"
-    assert 'href="/ops/portal/reserve"' in r.text, "sem JavaScript, o botão leva para a reserva (#164)"
+    assert 'href="/ops/portal/reserve"' not in r.text, "#262: o site público não oferece mais esse caminho"
+    assert "Continue to booking" not in r.text, "#262: um caminho só, o do carrinho"
+    assert 'class="btn btn-cheio agenda-carrinho"' in r.text and 'data-carrinho="/cart/"' in r.text
     assert 'data-api="/ops/api/vitrine/agenda"' in r.text
     ofertas = [x for x in _le(r.text).ld if x.get("@type") == "Service"][0]["offers"]
     assert sorted(float(o["price"]) for o in ofertas) == [719.0, 719.0, 819.0, 899.0]

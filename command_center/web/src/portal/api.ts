@@ -47,7 +47,9 @@ export interface Periodo { open: boolean; spots: number }
 export interface Dia { date: string; weekday: number; any_open: boolean; periods: { manha: Periodo; tarde: Periodo; dia: Periodo } }
 export interface AgendaCfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string
   horizon_days: number; min_notice_hours: number; auto_confirm: number }
-export interface Servico { id: number; name: string; description: string | null; price: number; deposit?: number }
+// #263: `site_kart` é a chave do kart do site que este serviço vende (vazio = não é do site)
+export interface Servico { id: number; name: string; description: string | null; price: number; deposit?: number
+  site_kart?: string | null }
 /** #164: as etapas de um pedido, como o servidor resume para o cliente. */
 export interface Checkout { id: number; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'; date: string; period: 'manha' | 'tarde' | 'dia'
   service: string | null; price: number | null; driver: string | null; aceita: boolean; confirmada: boolean
