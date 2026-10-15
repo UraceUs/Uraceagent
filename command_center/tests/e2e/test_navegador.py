@@ -1218,6 +1218,9 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"])["slug"]
     for rota in ("/", "/services/arrive-and-drive/", "/services/", "/services/birthday-party/", "/academy/", "/pro-team/",
                  "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/",
+                 # #261: a loja com busca, filtro de preço e paginação — o formulário não pode estourar a largura
+                 "/store/?s=magnesium+wheel&min_price=300&max_price=900&orderby=price", "/store/page/2/",
+                 "/store/?s=zzzznaoexistenada", "/store/parts/",
                  # #252: o Arrive and Drive é o mais vendido e a descrição dele vem do WooCommerce com
                  # CSS do tema no meio do texto, que estourava a largura; o carrinho fecha o caminho
                  "/store/p/arrive-and-drive/", "/cart/"):

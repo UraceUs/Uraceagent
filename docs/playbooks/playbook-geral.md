@@ -376,6 +376,7 @@ abre o card dele).
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
 | **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
+| **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
 | **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Agendamentos do site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
@@ -580,6 +581,10 @@ cada passo"*. No servidor, **uma linha**:
 ```bash
 bash adminai/deploy/command_center/testar_tudo.sh
 ```
+
+Na primeira vez ele pede o **venv do teste** — e isso é de propósito: dependência de teste nunca
+entra no venv da produção, que é o do serviço no ar (#264). O próprio script imprime as três
+linhas para criar `~/.urace/teste-venv`.
 
 Ele roda num **banco descartável** e numa porta própria (a operação não é tocada, o banco de
 produção não é aberto) e **para na hora** se achar chave real no ambiente. No fim imprime, em
