@@ -1233,6 +1233,46 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     assert not erros, erros
 
 
+@pytest.mark.parametrize("largura", [390, 1280])
+def test_site_programas_fundidos_no_celular_e_no_computador(servidor, navegador, largura):
+    """#254 (dono, 15/10): na página de programas ficam o Arrive and Drive e a URACE Academy — o Kart
+    School e o Professional Coaching somem dos cartões, o texto deles está em quem herdou, e o
+    endereço antigo abre a página nova. No celular (390) e no computador (1280)."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 900})
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    problemas = []
+
+    pg.goto(site + "/services/"); pg.wait_for_load_state("networkidle")
+    cartoes = pg.locator(".servicos-grade .servico-card")
+    nomes = [cartoes.nth(i).locator("strong").inner_text() for i in range(cartoes.count())]
+    if nomes[:2] != ["Arrive and Drive", "URACE Academy"] or "Kart School" in nomes or "Professional Coaching" in nomes:
+        problemas.append(f"cartões: {nomes}")
+
+    # o endereço antigo leva à página que herdou, com o texto aproveitado
+    for antigo, fim, trecho in (("/services/kart-school/", "/academy/", "Mentorship by winning drivers"),
+                                ("/services/professional-coaching/", "/services/arrive-and-drive/", "Lead and Follow")):
+        pg.goto(site + antigo); pg.wait_for_load_state("networkidle")
+        if not pg.url.endswith(fim):
+            problemas.append(f"{antigo}: foi para {pg.url}")
+        if pg.get_by_text(trecho).count() < 1:
+            problemas.append(f"{fim}: falta “{trecho}”")
+
+    for rota in ("/services/", "/academy/", "/services/arrive-and-drive/"):
+        pg.goto(site + rota); pg.wait_for_load_state("networkidle")
+        h1 = [t for n, t in _cabecalhos(pg) if n == 1]
+        if len(h1) != 1:
+            problemas.append(f"{rota}: {len(h1)} h1")
+        r = pg.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            problemas.append(f"{rota}: rola {r['culpados']}")
+    pg.close()
+    assert not problemas, "\n".join(problemas)
+    assert not erros, erros
+
+
 def test_esqueci_a_senha_no_celular_do_link_do_email_ate_entrar(servidor, navegador):
     """#168: quem esqueceu a senha pede o link na tela de entrar, abre o link do e-mail, escolhe a
     senha nova e já entra na conta — tudo no celular."""

@@ -10,6 +10,11 @@ reserva é o do site (o atual fala do carrinho do WooCommerce).
 Preço de serviço não é texto fixo aqui: o do Arrive and Drive vem de `conteudo.KARTS` (o mesmo da
 reserva); o resto fica sem preço até existir no painel.
 
+#254 (dono, 15/10): *"nessa parte o kart school se tornou Urace academy, e o professional coaching se tornou
+o arrive and drive"*. Os dois cartões e as duas páginas próprias saíram daqui; o texto que fazia sentido foi
+para quem herdou (Kart School → `conteudo_paginas.ACADEMY`; Professional Coaching → `conteudo.ARRIVE`) e os
+endereços antigos viram 301 (`paginas_site.redirecionamentos()`).
+
 Cada página é um dicionário; `paginas_site.servico()` desenha todas com o mesmo esqueleto.
 """
 from command_center.vitrine.conteudo import DEPOIMENTOS_EVENTOS, FAQ_COMUM, GRUPOS, HORARIO, SITE  # noqa: F401
@@ -27,106 +32,8 @@ KARTS_FAQ = (
 
 ENDERECO = f"{SITE['endereco']['rua']}, {SITE['endereco']['cidade']}, {SITE['endereco']['estado']} {SITE['endereco']['cep']} — {SITE['endereco']['onde']}."
 
-# O passo a passo da reserva do site (agenda + área do cliente), no lugar do "Click add to cart" do WooCommerce.
-COMO_RESERVAR = (
-    "Pick the kart, the day and the time on this page.",
-    "Sign in or create your URACE account and tell us who the driver is (height and weight, so the kart is prepared).",
-    "Pay the invoice online (session + refundable security deposit) and sign the waiver.",
-    "Your spot confirms by itself. Show up ready to have a blast!",
-)
-
-FECHO_SERIO = "If you're serious about racing, this is where it starts. Shall we begin?"
-FECHO_PRECO = "With an affordable price aimed at the democratization of Karting."
-
 TRAZER = ("MUST wear long pants, closed toe shoes and a jacket.", "Make a reservation",
           "Come prepared for fun and leave with lasting smiles.")
-
-# ------------------------------------------------------------------ Kart School (urace.us/services/kart-school/)
-KART_SCHOOL = {
-    "caminho": "/services/kart-school/",
-    "titulo": "Kart Racing Lessons in Orlando - Learn to Race | URACE",
-    "descricao": ("Kart and racing lessons in Orlando for every level. Practical training and theory in real race karts, "
-                  "with a professional coach on track with you."),
-    "eyebrow": "Kart School · Orlando, FL",
-    "h1": "Kart School in Orlando",
-    "sub": ("Become a racing driver. Start at URACE Kart School. Practical training, theory, real karts, and a professional "
-            "environment. For kids and adults."),
-    "foto": "group-482140-1.webp",
-    "cta": ("Be part of the team", RESERVAR),
-    "fornece_titulo": "What to expect from your Kart School",
-    "fornece": ("Kart: High-performance kart provided for each session.", "Coach: Expert coaching from professional instructors.",
-                "In-depth safety instructions.", "Driver Pass: Access to the track for the driver.",
-                "1 Guest Pass: Bring one guest (family or friend) to accompany and support you (Additional guests subject to track pass price)."),
-    "trazer": TRAZER,
-    "porque_titulo": "Kart School with real training, theory, and pro coaching",
-    "porque": ("Professional Track - where real races happen.", "Theory and mechanics simplified", "Mentorship by winning drivers",
-               "Confidence, reflexes and racing mindset", "Monthly Program = Continuous Evolution"),
-    "para_quem_titulo": "Who is this for?",
-    "para_quem": ("Kids aged 6–14", "Beginners or early-stage racers", "Families serious about long-term development",
-                  "Parents looking for real coaching, not just seat time", "Drivers aiming for confidence, speed, and race results"),
-    "curriculo": (("Driving Fundamentals", "Master acceleration, braking, cornering, and racing techniques"),
-                  ("Theoretical Foundations", "Understand racing principles, track dynamics, and safety protocols"),
-                  ("Kart Mechanics", "Learn about chassis, engine, and component maintenance"),
-                  ("Practical Sessions", "Guided track time with expert instructors")),
-    "objetivos": ("Develop essential racing skills and muscle memory", "Understand kart handling and karting mechanisms",
-                  "Build confidence and mental strength", "Prepare for competitive racing or advanced training"),
-    "passos_titulo": "How to book your Kart School session",
-    "passos": COMO_RESERVAR,
-    "faq": (("How will this work?", COMO_RESERVAR),
-            ("The Kart School", ("Embark on a comprehensive racing education with URACE Kart School, designed specifically for "
-                                 "novice drivers eager to excel. Our structured program combines theoretical knowledge with hands-on "
-                                 "training, equipping students with the skills and confidence to succeed.",)),
-            *FAQ_COMUM),
-    "fecho": FECHO_SERIO,
-    "fecho_sub": FECHO_PRECO,
-    "fecho_cta": ("Start driving today", RESERVAR),
-    "depoimentos": DEPOIMENTOS_EVENTOS,
-}
-
-# ------------------------------------------------------------------ Professional Coaching
-COACHING = {
-    "caminho": "/services/professional-coaching/",
-    "titulo": "Professional Kart Coaching in Orlando | URACE",
-    "descricao": ("Kart coaching in Orlando for drivers who already race. Video, telemetry and data analysis with a "
-                  "professional coach to find real lap time."),
-    "eyebrow": "Professional Coaching · Orlando, FL",
-    "h1": "Professional Kart Racing Coaching in Orlando",
-    "sub": ("Get faster with expert-level kart training and data-driven analysis. A custom training session designed to sharpen your racing technique. Full coaching, video breakdown, benchmark "
-            "comparison and hands-on learning — all in 4 hours."),
-    "foto": "group-482140-1-1.webp",
-    "cta": ("Be part of the team", RESERVAR),
-    "fornece_titulo": "What to expect from your Coaching Session",
-    "espera": ("Tailored Training Program", "Professional Coaching, Data & Video Analysis", "Technique & Mindset Training",
-               "Advanced Safety Briefing", "Performance Tracking", "\"Lead and Follow\" option (additional fee applies)."),
-    "fornece": ("1-Day Practice (4 hours)", "High-Performance Kart Provided", "Expert Coaching from Professional Instructors",
-                "In-Depth Safety Instructions"),
-    "trazer": ("Your kart (or you can rent ours!)", "Your personal safety equipment (We may have equipment to lend at no cost, inquire beforehand)"),
-    "porque_titulo": "Real coaching from a championship-level kart team",
-    "porque": ("Professional Track - Where real races happen.", "Theory and mechanics simplified", "Mentorship by winning drivers",
-               "Confidence, reflexes and racing mindset", "Immersive 4-hour practice session"),
-    "para_quem_titulo": "Who can join Professional Kart Coaching in Orlando?",
-    "para_quem": ("Kids aged 6–14", "Beginners or early-stage racers", "Families serious about long-term development",
-                  "Parents looking for real coaching, not just seat time", "Drivers aiming for confidence, speed, and race results"),
-    "passos_titulo": "How the Professional Coaching Works",
-    "passos_intro": "Your step-by-step path to becoming a driver:",
-    "passos": ("Choose your kart type or use your own", "Decide if you want “Lead & Follow” training",
-               "Complete checkout and receive confirmation", "Our team contacts you to schedule and collect data",
-               "Show up ready — and leave as a faster driver"),
-    "faq": (("Professional Coaching", ("Lead and Follow is an additional fee for a partner trainer to make your driving or "
-                                       "training experience more exciting, if you don’t wanna do it alone.",
-                                       "Available training days: Experiences are available every day, 8 AM – 8 PM. Add your "
-                                       "classes to the cart and contact us to inquire about the date you would like to attend.",
-                                       "All weekday training sessions must be confirmed by Sunday. All weekend sessions must be "
-                                       "confirmed 24h in advance. Please call if you have any questions.")),
-            ("Which kart?", KARTS_FAQ),
-            ("Track fees (paid to the Orlando Kart Center)", ("Driver pass Wednesday to Friday $100~230", "Driver pass Saturday and Sunday $100~125",
-                                                               "Spectator pass any day $22")),
-            *FAQ_COMUM),
-    "fecho": FECHO_SERIO,
-    "fecho_sub": FECHO_PRECO,
-    "fecho_cta": ("Let’s start training", RESERVAR),
-    "depoimentos": DEPOIMENTOS_EVENTOS,
-}
 
 # ------------------------------------------------------------------ Intensive Training Camp
 CAMP = {
@@ -336,7 +243,7 @@ GROUPS = {
     "depoimentos": DEPOIMENTOS_EVENTOS,
 }
 
-SERVICOS = (KART_SCHOOL, COACHING, CAMP, BIRTHDAY, CORPORATE, GROUPS)
+SERVICOS = (CAMP, BIRTHDAY, CORPORATE, GROUPS)
 
 # ------------------------------------------------------------------ o hub (urace.us/services/)
 # Os cartões levam o texto de cada página do site atual (o hub de hoje só tem 4 blocos); o preço só
@@ -344,24 +251,23 @@ SERVICOS = (KART_SCHOOL, COACHING, CAMP, BIRTHDAY, CORPORATE, GROUPS)
 HUB = {
     "caminho": "/services/",
     "titulo": "Kart Lessons, Coaching & Racing Programs in Orlando | URACE",
-    "descricao": ("Every URACE program in Orlando, from a first arrive and drive to the kart academy, professional coaching "
+    "descricao": ("Every URACE program in Orlando, from a first arrive and drive to the kart academy, the intensive camp "
                   "and race team support. Real karts, real coaches."),
     "eyebrow": "Driver Development · Orlando, FL",
     "h1": "Kart racing in Orlando — from the simulator to the grid",
     "sub": ("URACE Racing Team develops its own drivers. Everyone on our grid started on one of the four steps below — find "
             "the one you are on today, and we will tell you straight which it is."),
+    # #254 (dono, 15/10): o Kart School virou a URACE Academy e o Professional Coaching virou o
+    # Arrive and Drive. Ficam dois cartões, com o texto dos dois que se fundiram em cada um.
     "cartoes": (
-        ("Arrive and Drive", ("Drive one of our 70 MPH racing karts at Orlando Kart Center. This experience is for kids and "
-                              "adults, all ages are welcome!"),
+        ("Arrive and Drive", ("Drive one of our 70 MPH racing karts at Orlando Kart Center, with full coaching, video "
+                              "breakdown and benchmark comparison. This experience is for kids and adults, all ages are "
+                              "welcome!"),
          "kart", "/services/arrive-and-drive/", "arrive-and-drive-hero.webp"),
-        ("Kart School", "Become a racing driver. Practical training, theory, real karts, and a professional environment. For kids and adults.",
-         "", "/services/kart-school/", "group-482140-1.webp"),
-        ("URACE Academy", ("Structured driver development program with professional coaching, track experience, evaluation and "
-                           "mentorship. Month-to-month, no long-term contract required."),
+        ("URACE Academy", ("Become a racing driver: practical training, theory, real karts and a professional environment, "
+                           "with professional coaching, track experience, evaluation and mentorship. For kids and adults, "
+                           "month to month, no long-term contract required."),
          "", "/academy/", "imagem-segunda-dobra.webp"),
-        ("Professional Coaching", ("A custom training session designed to sharpen your racing technique. Full coaching, video "
-                                   "breakdown, benchmark comparison and hands-on learning — all in 4 hours."),
-         "", "/services/professional-coaching/", "group-482140-1-1.webp"),
         ("Intensive Training Camp", "5 Days of Racing, a Lifetime of Memories! Wednesday to Sunday, with 4 hours of daily training.",
          "", "/services/intensive-training-camp/", "group-482140-3.webp"),
         ("Racing Team", ("URACE prepares the kart, runs the race weekend and puts a professional coach alongside the driver — "

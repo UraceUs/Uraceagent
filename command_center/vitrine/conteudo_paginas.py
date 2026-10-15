@@ -26,16 +26,19 @@ FECHO_PROXIMO = ("Every driver has a next step. Let's find yours.",
                  "higher levels of competition, URACE is ready to help you move forward.")
 
 # ------------------------------------------------------------------ Academy (urace.us/urace-academy/ + /kart-training-packages/ + /services/)
+# #254 (dono, 15/10): *"o kart school se tornou Urace academy"* — o texto que fazia sentido da página
+# /services/kart-school/ entrou aqui, e aquele endereço virou 301 para esta página.
 ACADEMY = {
     "caminho": "/academy/",
-    "antigos": ("/urace-academy/", "/kart-training-packages/", "/kart-driving-school/"),
+    "antigos": ("/urace-academy/", "/kart-training-packages/", "/kart-driving-school/", "/services/kart-school/"),
     "titulo": "Kart Academy in Orlando - Monthly Driver Training | URACE",
     "descricao": ("The URACE Kart Academy in Orlando: monthly kart training with professional coaching, race equipment and "
                   "a clear path from first laps into competition."),
     "eyebrow": "Driver Development · Orlando, FL",
     "h1": "Four coached sessions a month. One driver getting faster.",
-    "sub": ("The URACE Academy is a monthly program for drivers who are past their first day in a kart. You bring the "
-            "driver — we bring the kart, the full equipment, the maintenance and a professional coach."),
+    "sub": ("The URACE Academy is a monthly program for drivers who are past their first day in a kart: practical "
+            "training, theory, real karts and a professional environment, for kids and adults. You bring the driver — we "
+            "bring the kart, the full equipment, the maintenance and a professional coach."),
     "foto": "imagem-segunda-dobra.webp",
     "cta": ("Join URACE Academy", RESERVAR + "?service=academy"),
     "mais_titulo": MAIS_TITULO,
@@ -51,12 +54,14 @@ ACADEMY = {
     ),
     "boost": ("URACE Boost", "Eight sessions in 30 days.", "A standalone intensive month for drivers preparing for a race or a season: eight track sessions in 30 days — our lowest per-session rate. No contract.", "$5,000", "per month"),
     "para_quem_titulo": "Who is this for?",
+    # os dois últimos vêm do "Who is this for?" da Kart School (#254)
     "para_quem": ("Drivers already competing or preparing to compete", "Individuals seeking structured, high-performance training",
                   "Drivers committed to long-term development", "Those looking for real coaching, not just seat time",
-                  "Drivers focused on consistency, speed, and race performance"),
+                  "Drivers focused on consistency, speed, and race performance",
+                  "Kids aged 6–14 and adults", "Early-stage racers who already had their first day in a kart"),
     "curriculo": (("Driving Fundamentals", "Master acceleration, braking, cornering, and racing techniques"),
                   ("Theoretical Foundations", "Understand racing principles, track dynamics, and safety protocols"),
-                  ("Kart Mechanics", "Develop technical knowledge of kart setup, adjustments, and performance optimization"),
+                  ("Kart Mechanics", "Learn about chassis, engine and component maintenance, and develop technical knowledge of kart setup, adjustments and performance optimization"),
                   ("Practical Sessions", "Structured on-track sessions with real-time coaching and feedback")),
     "objetivos": ("Develop advanced driving skills and race consistency", "Build a deep understanding of kart dynamics and performance",
                   "Strengthen mental focus and competitive mindset", "Prepare drivers for competitive racing and elite-level performance"),
@@ -75,6 +80,19 @@ ACADEMY = {
                "Mechanic: On-site mechanical support to keep the kart race-ready.", "Career planning: Ongoing guidance from your career specialist.",
                "In-depth safety instructions.", "Driver Pass: Access to the track for the driver.",
                "1 Guest Pass: Bring one guest (family or friend) to accompany and support you (Additional guests subject to track pass price)."),
+    # #254: da Kart School — o que levar, o "Why URACE" e o passo a passo de entrar (os passos são os
+    # da compra do plano no site e o que os termos da Academy já dizem: 4 dias por mês, chegada às 8 am)
+    "trazer_titulo": "What you need to bring",
+    "trazer": ("MUST wear long pants, closed toe shoes and a jacket.",),
+    "porque_titulo": "Real training, theory and pro coaching, month after month",
+    "porque": ("Professional Track - where real races happen.", "Theory and mechanics simplified",
+               "Mentorship by winning drivers", "Confidence, reflexes and racing mindset",
+               "Monthly Program = Continuous Evolution"),
+    "passos_titulo": "How to join the URACE Academy",
+    "passos": ("Choose your commitment above — the longer you commit, the less each session costs.",
+               "Sign in or create your URACE account and tell us who the driver is (height and weight, so the kart is prepared).",
+               "Pay the first month online and sign the waiver.",
+               "Your four sessions a month are scheduled once a week, with your coach. Arrival at the track is 8 am."),
     "caminho_titulo": "Your path: Arrive and Drive → Academy → Racing Team",
     "caminho_texto": ("URACE Academy isn't a standalone class — it's the middle rung of a ladder. Drivers usually start at Arrive "
                       "and Drive, where they get their first real laps and we get our first read on their potential. Academy is "
@@ -91,7 +109,13 @@ ACADEMY = {
                ("Develop", "Build technique, discipline, consistency and a competitive mindset through structured training.", "icon-develop.webp"),
                ("Compete", "Gain race experience and learn to perform in competitive environments.", "icon-compete.webp"),
                ("Pursue the next level", "Continue developing with professional coaching, racing experience and long-term guidance.", "icon-pursue.webp")),
-    "faq": (("Why motorsport builds champions", (
+    "faq": (("A complete racing education", (
+                # da Kart School (#254): "URACE Kart School" virou "URACE Academy" e "novice drivers" saiu,
+                # porque a Academy é para quem já teve o primeiro dia de kart
+                "Embark on a comprehensive racing education with the URACE Academy, designed for drivers eager to excel. "
+                "Our structured program combines theoretical knowledge with hands-on training, equipping students with the "
+                "skills and confidence to succeed.",)),
+            ("Why motorsport builds champions", (
                 "Karting looks like a hobby from the outside, but the skills it demands behind the wheel are the ones researchers "
                 "tie to healthy child development. A young driver is constantly reading the track, adjusting their line, and "
                 "making split-second calls under pressure — fast, consequence-driven decision-making that's hard to practice "
@@ -287,8 +311,8 @@ CAREER = {
 # ------------------------------------------------------------------ About (urace.us/about/)
 ABOUT = {
     "caminho": "/about/",
-    "titulo": "About URACE - Kart School & Racing Team in Orlando",
-    "descricao": ("URACE is a professional kart school and racing team in Orlando, taking drivers from their first lap to "
+    "titulo": "About URACE - Kart Academy & Racing Team in Orlando",
+    "descricao": ("URACE is a professional kart academy and racing team in Orlando, taking drivers from their first lap to "
                   "national competition."),
     "eyebrow": "About URACE",
     "h1": "Since 2016, Building champions on and off the race track",
@@ -299,7 +323,9 @@ ABOUT = {
                  "A successful professional car racing career followed in the internationally recognized Brazilian stock car "
                  "series. In 2016, Italo moved to Florida and launched URACE, a karting team, to pass along his extensive "
                  "knowledge and passion to young drivers. URACE is divided in 3 racing operations:",),
-    "historia_itens": ("Kart School, for beginners learning about the sport;", "URACE Academy, for local drivers racing in Orlando FL;",
+    # #254: o primeiro item dizia "Kart School"; a porta de entrada de quem está conhecendo o esporte
+    # é o Arrive and Drive (o Kart School virou a URACE Academy)
+    "historia_itens": ("Arrive and Drive, for beginners learning about the sport;", "URACE Academy, for local drivers racing in Orlando FL;",
                        "URACE Pro Team, for drivers ready to challenge for the podium Nationwide."),
     "historia_fecho": "URACE builds winners on and off the tracks due to experience, professionalism, and the passion we have for the sport.",
     "metodo_titulo": "Structure & Methodology",
@@ -365,7 +391,8 @@ CONTACT = {
     "eyebrow": "Contact",
     "h1": "Talk to URACE",
     "sub": "New lead, question, or planning a group / corporate event? Fill out the form below and our team will get back to you.",
-    "assuntos": (("arrive-and-drive", "Arrive and Drive"), ("academy", "URACE Academy"), ("coaching", "Professional Coaching"),
+    # #254: não existe mais o programa "Professional Coaching"; o coaching na pista é o Lead and Follow
+    "assuntos": (("arrive-and-drive", "Arrive and Drive"), ("academy", "URACE Academy"), ("coaching", "Lead and Follow coaching"),
                  ("camp", "Intensive Training Camp"), ("team", "Racing Team"), ("event", "Birthday, corporate or group event"),
                  ("store", "Store: parts, suits and apparel"), ("other", "Something else")),
     "local_titulo": "Location",
