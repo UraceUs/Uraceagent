@@ -154,10 +154,11 @@ TAM="$(du -h "$PACOTE" 2>/dev/null | cut -f1)"
 echo
 echo "================= RESUMO ================="
 if [ -f "$PROVAS/fotos/RESUMO.md" ]; then
-    sed -n '/^## Resumo/,/^## Telas/p' "$PROVAS/fotos/RESUMO.md" | grep -v '^## Telas' | sed '/^$/d'
+    # cada bloco do RESUMO.md até o próximo título (nada de linha de outra seção se misturar)
+    awk '/^## Resumo/{f=1;next} /^## /{f=0} f && NF' "$PROVAS/fotos/RESUMO.md"
     echo
     echo "Telas com rolagem lateral ou alvo de toque pequeno:"
-    sed -n '/^## Telas com rolagem/,$p' "$PROVAS/fotos/RESUMO.md" | sed -n '3,9p' | sed 's/^/  /'
+    awk '/^## Telas com rolagem/{f=1;next} /^## /{f=0} f && NF' "$PROVAS/fotos/RESUMO.md" | head -8 | sed 's/^/  /'
 else
     echo "As fotos não foram geradas: veja o fim do log dentro do pacote (provas/teste.log)."
 fi
@@ -169,6 +170,10 @@ else
     grep -E '^(FAILED|ERROR)' "$LOG" | head -20 | sed 's/^/  /'
     echo "  (o log inteiro e as fotos do estado do erro estão no pacote)"
 fi
+echo
+echo "Dentro do pacote: provas/fotos/RESUMO.md (passo a passo, em português), provas/fotos/390/ e"
+echo "provas/fotos/1280/ (as fotos numeradas de cada passo e de cada tela), provas/teste.log (o log"
+echo "inteiro) e provas/COMO-FOI-GERADO.md (comando, data e versão do repositório)."
 echo
 echo "O que este teste prova: site, reserva (kart/dia/turno), conta fictícia criada no site, carrinho,"
 echo "checkout no Stripe FALSO, pedido pago, sessão em Agendamentos do site, venda GANHO e card do piloto,"

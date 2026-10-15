@@ -95,7 +95,7 @@ def _preparar(adm, base):
 def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
     """O caminho de venda inteiro, com conta fictícia, fotografando passo a passo."""
     v = br.new_page(viewport={"width": largura, "height": altura},
-                           extra_http_headers={"X-Forwarded-For": quem["ip"]})
+                    extra_http_headers={"X-Forwarded-For": quem["ip"]})
     erros = []
     v.on("pageerror", lambda e: erros.append(str(e)))
     with passo(cad, v, "home-do-site", "A home do site abre", "abri a página inicial do site") as st:
@@ -214,7 +214,8 @@ def _painel_da_venda(cad, br, base, largura, altura, quem, produto):
 def _telas_do_painel(cad, br, base, largura, altura):
     """Uma foto de cada tela do painel, com o erro de JavaScript/API e o celular de cada uma."""
     pg = tn.entrar(br, base, email="italo@urace.us", largura=largura, altura=altura)
-    for rota in tn.ROTAS:
+    # as rotas do end-to-end mais a venda que o caminho de venda acabou de criar (a de celular.mjs)
+    for rota in [*tn.ROTAS, "/sales/1"]:
         antes_js, antes_api = len(pg.erros_js), len(pg.erros_api)
         apelido = "tela" + (rota.rstrip("/").replace("/", "-") or "-inicio")
         with passo(cad, pg, apelido, f"A tela {rota} abre", f"abri {rota}", inteira=False) as st:
@@ -266,7 +267,11 @@ def _resumo(raiz, cadernos, erros_js):
                  + (" · alvo de toque < 40 px: " + "; ".join(x["toque"]) if x["toque"] else ""))
     if erros_js:
         L += ["", "## Erros de JavaScript vistos no caminho de venda", ""] + [f"- {x[:300]}" for x in erros_js]
-    L += ["", f"Fotos: {sum(len(c.passos) for c in cadernos)} em {len(cadernos)} larguras.", ""]
+    L += ["", "## Onde está cada coisa", "",
+          f"- as **fotos**: {sum(len(c.passos) for c in cadernos)} no total, em "
+          + ", ".join(f"`{c.nome}/` ({len(c.passos)} fotos, {c.nome} px)" for c in cadernos),
+          "- o **log** do teste inteiro: `teste.log`, uma pasta acima desta",
+          "- como o pacote foi gerado (comando, data, versão): `COMO-FOI-GERADO.md`", ""]
     with open(os.path.join(raiz, "RESUMO.md"), "w", encoding="utf-8") as f:
         f.write("\n".join(L))
 
