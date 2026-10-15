@@ -131,6 +131,7 @@ PAGO            a sessão entra aceita e paga (falta só a waiver) e a venda ent
 | Pagamento | QuickBooks → espelho do painel | o espelho sincroniza a cada 15 min |
 | Waiver | DocuSign ou área do cliente | `sent` → `completed`. **`delivered` não é assinada** |
 | Contato ou pedido pelo site | `/contact/` e a loja | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260) |
+| Chat do site | balão do Kommo nas páginas públicas (#170) | a conversa vira lead no Kommo, como no site antigo, e aparece no Chat do Kommo; responda por lá |
 
 ### As etapas e o que move cada uma
 

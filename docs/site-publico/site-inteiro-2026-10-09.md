@@ -66,6 +66,8 @@ URLs e também com … identidade visual mesclada de Command Center com o site n
 
 ## Trocar o urace.us (quando o dono disser)
 
+Checklist do dia da troca, com o que conferir antes e depois: `troca-do-dominio.md`.
+
 1. DNS do `urace.us` e `www.urace.us` → IP do VPS (registro A), como foi feito com `novo.urace.us`.
 2. No VPS, em `~/.urace/adminai.env`: `CC_SITE_HOSTS=novo.urace.us,urace.us,www.urace.us` e
    `CC_SITE_PREVIEW=0`; `CC_DOMINIOS_EXTRAS="ops.urace.us my.urace.us novo.urace.us urace.us www.urace.us"`.
