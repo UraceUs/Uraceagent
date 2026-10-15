@@ -24,7 +24,7 @@ interface Bloqueio { id: number; date_from: string; date_to: string; period: str
 interface Cfg { morning_start: string; morning_end: string; afternoon_start: string; afternoon_end: string; auto_confirm: number; horizon_days: number; min_notice_hours: number; auto_sell?: number }
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
-  invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null
+  invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null; site_kart?: string | null
   kind?: 'session' | 'plan' | null; months?: number | null; sessions_month?: number | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
@@ -253,6 +253,11 @@ interface ContaSite { id: number; email: string; name: string; phone: string | n
 interface DriverConta { id: number; name: string; birth_date: string | null; client_id: number | null; client_name: string | null; client_pilot: string | null
   sugestao: { client_id: number; name: string; pilot_name: string | null; motivo: string } | null }
 
+/* #263: os karts que a página do Arrive and Drive vende. A chave é o nome do kart, o mesmo de
+ * `command_center/vitrine/conteudo.py` (`KARTS`) e o mesmo que vai em `booking_services.site_kart`.
+ * `test_servico_do_kart.py` tranca os dois lados juntos. */
+const KARTS_DO_SITE = ['Baby Kart', '4-stroke', '2-stroke', 'Adult Shifter']
+
 /* Serviços e preços (#50): o gerente muda o preço aqui, sem código. Quem já marcou fica
  * com o valor do dia; desativar tira da área do cliente sem apagar. */
 function Servicos() {
@@ -260,7 +265,7 @@ function Servicos() {
   const gerente = can('MANAGER')
   const toast = useToast()
   const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
-  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '' })
+  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '' })
   type Edicao = Partial<Servico> & { price_txt?: string; qbo_item?: string; deposit_txt?: string; months_txt?: string; sessions_txt?: string }
   const [edit, setEdit] = useState<Record<number, Edicao>>({})
   const itens = l.data?.itens_qbo || []
@@ -268,7 +273,7 @@ function Servicos() {
     try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item: novo.qbo_item || null,
       months: novo.kind === 'plan' ? (novo.months || '1') : null, sessions_month: novo.kind === 'plan' ? (novo.sessions_month || null) : null })
       toast(novo.kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : tr("Serviço criado: o cliente já vê."), 'ok')
-      setNovo({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '' }); l.reload() }
+      setNovo({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '' }); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function salvar(sv: Servico, extra?: Partial<Servico>) {
@@ -279,6 +284,7 @@ function Servicos() {
     if (e.price_txt !== undefined) corpo.price = e.price_txt
     if (e.qbo_item !== undefined) corpo.qbo_item = e.qbo_item || null
     if (e.deposit_txt !== undefined) corpo.deposit = e.deposit_txt || null
+    if (e.site_kart !== undefined) corpo.site_kart = e.site_kart || null       // #263: o kart do site que este serviço vende
     if (e.kind !== undefined) corpo.kind = e.kind
     if (e.months_txt !== undefined) corpo.months = e.months_txt || null
     if (e.sessions_txt !== undefined) corpo.sessions_month = e.sessions_txt || null
@@ -312,13 +318,19 @@ function Servicos() {
                 onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder={tr("escolha ou escreva")} /></label>
               <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{tr("0 = sem")}</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
                 onChange={x => muda(sv.id, { deposit_txt: x.target.value })} /></label>
+              {(e.kind ?? sv.kind ?? 'session') === 'session' &&
+                <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
+                  <select value={e.site_kart ?? sv.site_kart ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { site_kart: x.target.value })}>
+                    <option value="">{tr("não é do site")}</option>
+                    {KARTS_DO_SITE.map(k => <option key={k} value={k}>{k}</option>)}</select></label>}
               {gerente && <div className="row" style={{ gap: 6 }}>
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
                 <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></div>}
             </div>
             <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{sv.kind === 'plan' ? tr("na página da Academy") : tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
               {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}
-              {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: escolha um ou escreva o texto da invoice")}</span></>}</div>
+              {sv.site_kart && <> · <Chip tone="ok">{tr("vende o {0} no site", sv.site_kart)}</Chip></>}
+              {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: o site cobra pelo Stripe; a invoice da equipe pede a linha")}</span></>}</div>
           </div>
         })}</div>}
     </Section>
@@ -334,9 +346,14 @@ function Servicos() {
           <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={novo.sessions_month} onChange={x => setNovo({ ...novo, sessions_month: x.target.value })} placeholder="4" /></label></>}
         <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder={tr("escolha ou escreva")}
           onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
+        {novo.kind === 'session' &&
+          <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
+            <select value={novo.site_kart} onChange={x => setNovo({ ...novo, site_kart: x.target.value })}>
+              <option value="">{tr("não é do site")}</option>
+              {KARTS_DO_SITE.map(k => <option key={k} value={k}>{k}</option>)}</select></label>}
         <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>{tr("Criar")}</button>
       </div></div>
-      <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice.")}</p>
+      <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice. O \"Kart do site\" é o que liga o serviço ao kart da página do Arrive and Drive: sem ele, aquele kart não aparece no site; desativar o serviço tira aquele kart da página.")}</p>
     </Section>}
   </div>
 }

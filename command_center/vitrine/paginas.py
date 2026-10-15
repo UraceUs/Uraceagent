@@ -276,13 +276,55 @@ def home(host):
                   schemas=(_negocio(host), *_marca(host)), foto=h["foto"])
 
 
-def arrive_and_drive(host):
+def _karts_do_painel(servicos):
+    """#263: o kart do site e o serviço do painel que o vende, casados pela chave (`site_kart`).
+
+    `servicos=None` é "o painel não respondeu" (banco fora): a página sai com os quatro karts e os
+    preços de `KARTS`, e o `agenda.js` corrige quando a lista chegar. Com a lista na mão, fica na
+    página só o kart que tem **um** serviço ativo — o kart que não dá para comprar sai, em vez de
+    ficar na tela oferecendo o que não existe (dono, 15/10, #263). Dois serviços com a mesma chave
+    são ambíguos: ninguém escolhe no lugar da pessoa, então esse kart também sai.
+    """
+    if servicos is None:
+        return [(k, None) for k in C.KARTS]
+    por_chave = {}
+    for sv in servicos:
+        chave = " ".join(str(sv.get("site_kart") or "").split()).lower()
+        if chave:
+            por_chave.setdefault(chave, []).append(sv)
+    return [(k, por_chave[k["nome"].lower()][0]) for k in C.KARTS
+            if len(por_chave.get(k["nome"].lower(), ())) == 1]
+
+
+# #262 (dono, 15/10): *"sim um caminho somente levando para o carrinho; de lá do carrinho para seguir
+# com a compra requer criar a conta e seguir, lembre-se que o único método de pagamento do site será o
+# Stripe"*. O texto antigo prometia a invoice do QuickBooks — caminho que o site público não oferece
+# mais (a equipe continua faturando por lá). Este conta o caminho que existe: carrinho → conta →
+# Stripe → waiver.
+NOTA_RESERVA = ("Next: the session goes to your cart. Sign in or create your URACE account, then pay with Stripe — "
+                "card, Apple Pay or Google Pay. Your spot is confirmed once the payment goes through and the driver's "
+                "waiver is signed in your account. The security deposit is refundable. Track fees are paid to the "
+                "Orlando Kart Center.")
+
+
+def arrive_and_drive(host, servicos=None):
     a = C.ARRIVE
+    # #50/#263: o preço que a página mostra é o do painel; `KARTS` só vale enquanto o painel não falou
+    pares = _karts_do_painel(servicos)
+    precos = [(sv["price"] if sv else k["preco"]) for k, sv in pares]
+    # o 4-stroke já vem marcado quando está na página (é o que os termos recomendam para quem começa);
+    # saiu da página, marca o primeiro que sobrou — a página nunca fica sem kart escolhido
+    nomes = [k["nome"] for k, _sv in pares]
+    marcado = "4-stroke" if "4-stroke" in nomes else (nomes[0] if nomes else None)
     karts = "".join(
-        f'<label class="kart"><input type="radio" name="kart" value="{e(k["nome"])}" data-preco="{k["preco"]}"'
-        f'{" checked" if i == 1 else ""}><span class="kart-nome">{e(k["nome"])}</span>'
-        f'<span class="kart-idade">{e(k["idade"])}</span><span class="kart-preco">{usd(k["preco"])}</span></label>'
-        for i, k in enumerate(C.KARTS))
+        f'<label class="kart"><input type="radio" name="kart" value="{e(k["nome"])}" data-kart="{e(k["nome"])}"'
+        f' data-preco="{preco:g}"{" checked" if k["nome"] == marcado else ""}><span class="kart-nome">{e(k["nome"])}</span>'
+        f'<span class="kart-idade">{e(k["idade"])}</span><span class="kart-preco">{usd(preco)}</span></label>'
+        for (k, _sv), preco in zip(pares, precos, strict=True))
+    if not pares:
+        karts = ('<p class="agenda-indisponivel"><span>Online booking is closed right now. Talk to us and we book '
+                 f'your session for you:</span> <a href="{e(C.SITE["whatsapp"])}" rel="noopener">WhatsApp '
+                 f'{e(C.SITE["telefone"])}</a> <a href="mailto:{e(C.SITE["emails"][0])}">{e(C.SITE["emails"][0])}</a></p>')
     faq = "".join(f'<details><summary>{e(t)}</summary>{"".join(f"<p>{e(p)}</p>" for p in ps)}</details>'
                   for t, ps in a["faq"])
     depo = "".join(f'<blockquote><p>{e(t)}</p><footer>{e(n)}</footer></blockquote>' for n, t in a["depoimentos"])
@@ -291,19 +333,29 @@ def arrive_and_drive(host):
         "@context": "https://schema.org", "@type": "Service", "name": "Kart Arrive and Drive in Orlando",
         "serviceType": "Kart racing experience", "description": a["descricao"],
         "provider": {"@id": f"https://{host}/#business"}, "areaServed": "Orlando, FL",
-        "offers": [{"@type": "Offer", "name": k["nome"], "price": f"{k['preco']:.2f}", "priceCurrency": "USD",
-                    "availability": "https://schema.org/InStock", "url": f"https://{host}{a['caminho']}"} for k in C.KARTS],
-        # #164: o botão de reservar, para o Google entender que dá para reservar online
+        # #263: oferta só do kart que o site vende de verdade, com o preço do painel (#50)
+        "offers": [{"@type": "Offer", "name": k["nome"], "price": f"{preco:.2f}", "priceCurrency": "USD",
+                    "availability": "https://schema.org/InStock", "url": f"https://{host}{a['caminho']}"}
+                   for (k, _sv), preco in zip(pares, precos, strict=True)],
+        # #164/#262: reservar começa nesta página (kart, dia e turno) e termina no carrinho
         "potentialAction": {"@type": "ReserveAction", "target": {"@type": "EntryPoint",
-                            "urlTemplate": f"https://{host}{PORTAL}/reserve", "actionPlatform": ["http://schema.org/DesktopWebPlatform",
-                                                                                                    "http://schema.org/MobileWebPlatform"]},
+                            "urlTemplate": f"https://{host}{a['caminho']}#reservar", "actionPlatform": ["http://schema.org/DesktopWebPlatform",
+                                                                                                           "http://schema.org/MobileWebPlatform"]},
                             "result": {"@type": "Reservation", "name": "Kart Arrive and Drive session"}},
     }
+    if not pares:                            # nada à venda agora: o Google não recebe oferta nem ação
+        oferta.pop("offers")
+        oferta.pop("potentialAction")
     perguntas = {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
         {"@type": "Question", "name": t, "acceptedAnswer": {"@type": "Answer", "text": " ".join(ps)}} for t, ps in a["faq"]]}
     trilha = {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": [
         {"@type": "ListItem", "position": 1, "name": "Home", "item": f"https://{host}/"},
         {"@type": "ListItem", "position": 2, "name": "Arrive and Drive", "item": f"https://{host}{a['caminho']}"}]}
+    # "From $X per driver" só existe quando há kart à venda; o preço é o do painel (#50)
+    desde = f'<span class="hero-preco">From {usd(min(precos))} per driver</span>' if precos else ""
+    resumo = marcado or ""
+    preco_marcado = next((p for (k, _sv), p in zip(pares, precos, strict=True) if k["nome"] == marcado), None)
+    sem_venda = "" if pares else " hidden"      # nada à venda: o total e o botão não ficam na tela vazios
     corpo = f"""
 <section class="hero hero-servico hero-arrive">
   <div class="hero-in">
@@ -311,7 +363,7 @@ def arrive_and_drive(host):
     <h1>{e(a['h1'])}</h1>
     <p class="hero-sub">{e(a['sub'])}</p>
     <div class="hero-acoes"><a class="btn" href="#reservar">Book my experience</a>
-      <span class="hero-preco">From {usd(C.preco_minimo())} per driver</span></div>
+      {desde}</div>
   </div>
 </section>
 
@@ -325,7 +377,7 @@ def arrive_and_drive(host):
         <div><h3>What YOU Need to Bring</h3>{_lista(a['trazer'])}</div>
       </div>
     </div>
-    <div class="agenda" data-api="/ops/api/vitrine/agenda" data-portal="{PORTAL}/reserve" data-servicos="/ops/api/vitrine/servicos">
+    <div class="agenda" data-api="/ops/api/vitrine/agenda" data-carrinho="/cart/" data-servicos="/ops/api/vitrine/servicos">
       <h3>2 · Pick a day</h3>
       <div class="agenda-mes" hidden>
         <button type="button" class="agenda-nav" data-ir="-1" aria-label="Previous month">‹</button>
@@ -339,11 +391,15 @@ def arrive_and_drive(host):
       <p class="agenda-indisponivel" role="status" hidden><span class="agenda-indisponivel-txt"></span>
         <a href="{e(C.SITE['whatsapp'])}" rel="noopener">WhatsApp {e(C.SITE['telefone'])}</a>
         <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
-      <div class="agenda-total"><span class="agenda-resumo">4-stroke · per driver</span><strong class="agenda-preco">{usd(C.KARTS[1]['preco'])}</strong></div>
-      <button type="button" class="btn btn-cheio agenda-carrinho" hidden>Add to cart</button>
+      <div class="agenda-total"{sem_venda}><span class="agenda-resumo">{e(resumo)} · per driver</span><strong class="agenda-preco">{usd(preco_marcado) if preco_marcado is not None else ''}</strong></div>
+      <!-- #262 (dono, 15/10): "um caminho somente levando para o carrinho". Um botão só: ele diz o que
+           falta escolher e, com tudo escolhido, põe a sessão no carrinho e leva para lá. -->
+      <button type="button" class="btn btn-cheio agenda-carrinho" aria-disabled="true" disabled{sem_venda}>Pick a day to continue</button>
       <p class="carrinho-ok" role="status" aria-live="polite"></p>
-      <a class="btn btn-cheio agenda-ir" href="{PORTAL}/reserve">Continue to booking</a>
-      <p class="agenda-nota">Next: sign in or create your account and choose the driver. Then you get the invoice (session + refundable security deposit) to pay online and the waiver to sign. Your spot is confirmed as soon as both are done. Track fees are paid to the Orlando Kart Center.</p>
+      <noscript><p class="agenda-indisponivel"><span>Booking online needs JavaScript. Turn it on, or talk to us and
+        we book your session for you:</span> <a href="{e(C.SITE['whatsapp'])}" rel="noopener">WhatsApp {e(C.SITE['telefone'])}</a>
+        <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p></noscript>
+      <p class="agenda-nota">{e(NOTA_RESERVA)}</p>
     </div>
   </div>
 </section>

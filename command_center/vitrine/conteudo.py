@@ -263,6 +263,13 @@ HOME = {
 # ------------------------------------- Arrive and Drive (urace.us/services/arrive-and-drive/ e o produto 4787)
 # Preços e idades: as variações do produto 4787 que o site público mostra (Store API pública).
 # A "Your Own Kart" ($500) existe no WooCommerce mas não aparece no site, então também não aparece aqui.
+#
+# #263 (dono, 15/10): `nome` é a **chave do kart**. É ela que viaja no `?kart=` da reserva e é ela
+# que o painel guarda em `booking_services.site_kart` para dizer "este serviço é deste kart". O site
+# casa serviço e kart por essa chave, igual e exata — nunca por "o nome do serviço contém o nome do
+# kart", que foi o que fez um serviço chamado "teste" aparecer como se fosse o produto.
+# Trocar o nome de um kart aqui é trocar a chave: o `site_kart` dos serviços muda no mesmo passo
+# (`test_servico_do_kart.py` tranca).
 KARTS = (
     {"nome": "Baby Kart", "idade": "Ages 4–7", "min": 4, "max": 7, "preco": 719},
     {"nome": "4-stroke", "idade": "Ages 7+", "min": 7, "max": None, "preco": 719},
@@ -326,3 +333,14 @@ ARRIVE = {
 
 def preco_minimo():
     return min(k["preco"] for k in KARTS)
+
+
+def chaves_dos_karts():
+    """As chaves dos karts do site, na ordem da página (`booking_services.site_kart`)."""
+    return tuple(k["nome"] for k in KARTS)
+
+
+def kart_da_chave(chave):
+    """O kart do site com essa chave, sem distinguir maiúscula nem espaço à toa. None se não é kart."""
+    c = " ".join(str(chave or "").split()).lower()
+    return next((k for k in KARTS if k["nome"].lower() == c), None)

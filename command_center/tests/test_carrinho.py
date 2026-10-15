@@ -29,8 +29,10 @@ def loja(amb):  # noqa: F811
     cli, con, st, qbo, tmp = amb
     inserir(con, "qbo_items", id="11", name="Arrive and Drive 4T", price=719)
     inserir(con, "qbo_items", id="35", name="Security deposit", price=400)
-    sid = servicos_site.criar(con, None, {"name": "Arrive and Drive 4-stroke", "price": 719, "qbo_item": "Arrive and Drive 4T",
-                                          "deposit": 400})
+    # #263: o serviço do 4-stroke já nasce da migração, ligado ao kart pela chave; aqui só se põe o
+    # item do QuickBooks que este teste usa (o site cobra pelo Stripe, a invoice da equipe é à parte)
+    sid = um(con, "SELECT id FROM booking_services WHERE site_kart='4-stroke'")["id"]
+    servicos_site.mudar(con, None, sid, {"qbo_item": "Arrive and Drive 4T", "deposit": 400})
     abre(con, cap=1)
     con.commit()
     return cli, con, st, qbo, tmp, sid

@@ -1240,8 +1240,13 @@ def redirecionamentos():
     r["/product-category/apparel/suits/"] = "/store/custom-kart-suits/"
     for c in ("/lp1-cancelada/", "/lp2-cancelada/", "/lp3-cancelada/", "/lp4-cancelada/", "/typ/", "/the-driver-factory-thank-you-page/"):
         r[c] = "/career/"
-    for c in ("/affiliate-account/", "/affiliate-registration/", "/affiliate-reset-password/"):
-        r[c] = PORTAL
+    # #262 (dono, 15/10): o programa de afiliados "encerra". Os endereços do SliceWP que o urace.us
+    # publica não podem cair no 404 nem levar a uma tela que promete afiliação: vão para o /contact/,
+    # que é a porta pública de quem quer falar com a gente. Antes iam para a área do cliente, que
+    # nunca teve afiliado. (Desligar o plugin no WordPress é passo do dono.)
+    for c in ("/affiliate-account/", "/affiliate-registration/", "/affiliate-reset-password/",
+              "/affiliate-login/", "/affiliate-area/", "/affiliates/"):
+        r[c] = "/contact/"
     r["/product/go-kart-driving-experience/"] = C.ARRIVE["caminho"]
     for p in dados("posts.json")["posts"]:
         r[f"/{p['slug']}/"] = f"/blog/{p['slug']}/"

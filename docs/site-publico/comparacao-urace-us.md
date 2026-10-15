@@ -117,8 +117,9 @@ foi respeitado (o `Disallow: /` do novo.urace.us é o nosso, da prévia).
 
 1. `/services/arrive-and-drive/` — escolhe o kart (preço vem de `KARTS`, não do texto) e **o dia na
    agenda pública** (vagas de verdade, do painel).
-2. Dois botões: **"Add to cart"** (vai para `/cart/`) ou **"Continue to booking"** (vai para o
-   portal, `/ops/portal/reserve`, onde o pagamento é a invoice do QuickBooks + waiver).
+2. **Um botão só** (dono, 15/10, #262): ele diz o que falta escolher (dia, turno) e, com tudo
+   escolhido, põe a sessão no carrinho e leva para `/cart/`. O "Continue to booking" saiu: o site
+   público não oferece mais o caminho da invoice do QuickBooks (a equipe continua faturando por lá).
 3. `/cart/` — itens, entrega dos itens de loja, e o aviso de que a conta é necessária.
 4. "Checkout" → pede a conta do site se não tiver (`/ops/portal?volta=/cart/`) e abre o **Stripe
    Checkout** (cartão, Apple Pay, Google Pay).
@@ -127,10 +128,13 @@ foi respeitado (o `Disallow: /` do novo.urace.us é o nosso, da prévia).
 6. Em segundo plano: oportunidade em **Vendas** (ligada ao card quando e-mail **e** nome batem),
    e-mail para quem comprou, aviso em `support@urace.us`, **Sales Receipt no QuickBooks**.
 
-**4 passos até pagar.** Problema: os **dois botões do passo 2 levam a dois pagamentos diferentes**
-(Stripe no carrinho, invoice do QuickBooks no portal) e o texto embaixo só explica o do portal
-("Next: sign in or create your account … Then you get the invoice … to pay online"). É o ponto mais
-confuso do caminho hoje — veja §9.
+**4 passos até pagar, por um caminho só** (dono, 15/10, #262: *"sim um caminho somente levando para
+o carrinho; de lá do carrinho para seguir com a compra requer criar a conta e seguir, lembre-se que o
+único método de pagamento do site será o Stripe"*). O texto embaixo do botão conta esse caminho:
+*"Next: the session goes to your cart. Sign in or create your URACE account, then pay with Stripe —
+card, Apple Pay or Google Pay. Your spot is confirmed once the payment goes through and the driver's
+waiver is signed in your account. The security deposit is refundable. Track fees are paid to the
+Orlando Kart Center."*
 
 ### 3.3 Peça da loja — hoje
 
@@ -161,9 +165,9 @@ A lista que importa para trocar o urace.us. Cada linha diz onde a coisa está ho
 | 2 | **Paginação** do blog | `/blog/page/2/` | baixo (a loja pagina desde #261: 24 por página, `/store/page/N/`; o blog ainda mostra tudo numa página) |
 | 3 | **Árvore de ~120 subcategorias de peça** | `/product-category/karts-parts/chassis/tony-kart-otk/brakes/` e companhia | médio: quem busca "IAME X30" cai numa página que o novo não tem (agora redireciona para a categoria mãe ou para a loja) |
 | 4 | **Páginas de etiqueta** de produto | `/product-tag/jecko/`, `/product-tag/parolin/` | baixo |
-| 5 | **Cupom de desconto** | campo no `/cart/` e no `/checkout/` do WooCommerce | médio: é o que a equipe usa em campanha |
-| 6 | **Assinatura/cobrança recorrente do WooCommerce** | plugin `subscriptions-for-woocommerce` (aparece em 11 páginas) | o novo cobra mensalidade pelo QuickBooks (#169): confirmar se cobre o mesmo |
-| 7 | **Programa de afiliados** | SliceWP: `/affiliate-account/`, `/affiliate-registration/` | precisa de decisão do dono (§10) |
+| 5 | ~~**Cupom de desconto**~~ | campo no `/cart/` e no `/checkout/` do WooCommerce | **nada a migrar**: o dono confirmou em 15/10 (#262) que a equipe **não usa cupom** |
+| 6 | ~~**Assinatura/cobrança recorrente do WooCommerce**~~ | plugin `subscriptions-for-woocommerce` (aparece em 11 páginas) | **nada a migrar**: o dono confirmou em 15/10 (#262) que **não existe assinatura viva** no WooCommerce; a mensalidade do novo é a do QuickBooks (#169) |
+| 7 | ~~**Programa de afiliados**~~ | SliceWP: `/affiliate-account/`, `/affiliate-registration/` | **encerrado** (dono, 15/10, #262): nada a migrar; os endereços viram 301 para `/contact/` e nenhum texto do site novo oferece afiliação. Desligar o plugin no WordPress é passo do dono |
 | 8 | **Google Tag Manager / Google Analytics / Meta pixel / Facebook for WooCommerce** | `GTM-59CCNDC` e `fbq(` em todas as páginas | **alto**: o novo não tem nenhuma medição; sem isso, campanha paga fica cega |
 | 9 | **Catálogo do Facebook/Instagram** alimentado pelo WooCommerce | `facebook-for-woocommerce` | médio (loja no Instagram) |
 | 10 | **Formulário com `utm_*`, `gclid`, `fbclid`, `fbp`, `fbc`** nas landing pages | CF7 nas 4 LPs e nas páginas de serviço | **alto**: hoje a origem do lead chega ao e-mail; o `/contact/` do novo grava origem "Site" e nada da campanha |
@@ -313,7 +317,7 @@ interno das páginas). Antes deste PR, **110 deles cairiam no 404** no site novo
 | `/book-online/` | `/services/arrive-and-drive/` *(era `/ops/portal/reserve`; mudou neste PR porque é página indexada e tem de ir para página pública — §10)* |
 | `/checkout/` | `/cart/` |
 | `/my-account/` e tudo abaixo (`/lost-password/`, `/orders/`, …) | `/ops/portal` |
-| `/affiliate-account/`, `/affiliate-registration/`, `/affiliate-reset-password/` | `/ops/portal` |
+| `/affiliate-account/`, `/affiliate-registration/`, `/affiliate-reset-password/` (e `/affiliate-login/`, `/affiliate-area/`, `/affiliates/`) | `/contact/` *(era `/ops/portal`; o programa encerrou — dono, 15/10, #262 — e a área do cliente nunca teve afiliado)* |
 | `/<slug-do-artigo>/` (7) | `/blog/<slug>/` |
 | `/category/<c>/` (4) | `/blog/category/<c>/` |
 | `/product/<slug>/` (69 conhecidos) | `/store/p/<slug>/` |
@@ -369,11 +373,10 @@ não perder o indexado, no dia da troca é preciso:
 
 Cada item é uma coisa pequena e verificável. O que entrou neste PR está em §4 ("já resolvido").
 
-1. **Dois botões, dois pagamentos, um texto** em `/services/arrive-and-drive/`: "Add to cart"
-   (Stripe) e "Continue to booking" (invoice do QuickBooks), e o texto embaixo só explica a
-   invoice. É o passo mais confuso do caminho de compra. *Não mexi: `static/agenda.js` está sendo
-   alterado por outra frente agora.* Precisa de decisão do dono: **um** caminho de pagamento para a
-   sessão, ou os dois com o texto explicando cada um.
+1. ~~**Dois botões, dois pagamentos, um texto** em `/services/arrive-and-drive/`~~
+   **RESOLVIDO em #262** (dono, 15/10: *"um caminho somente levando para o carrinho"*): ficou um
+   botão só, que leva ao carrinho, e o texto embaixo conta o caminho que existe — carrinho → conta →
+   Stripe → waiver. A invoice do QuickBooks continua para a venda feita pela equipe.
 2. **"URACE SHORTS" órfão** em `/store/p/arrive-and-drive/`: depois de tirar o código do tema,
    sobrou o título "URACE SHORTS" seguido dos títulos de 6 vídeos **sem os vídeos** (o carrossel
    do YouTube não veio na cópia). Ou volta o carrossel, ou o bloco sai de `dados/produtos.json`.
@@ -401,19 +404,27 @@ Cada item é uma coisa pequena e verificável. O que entrou neste PR está em §
    segurança do site hoje é `script-src 'self'`: aceitar script de fora muda essa política.)
 2. **Campos de campanha no formulário** (`utm_*`, `gclid`, `fbclid`, `fbp`, `fbc`): o CF7 de hoje
    manda; o `/contact/` do novo não. Precisa?
-3. **Programa de afiliados** (SliceWP): mantém, migra ou encerra? Hoje
-   `/affiliate-account/` redireciona para o portal, que não tem afiliado.
-4. **As 4 landing pages de anúncio**: tem campanha ativa apontando para
+3. ~~**Programa de afiliados** (SliceWP): mantém, migra ou encerra?~~
+   **RESPONDIDO — dono, 15/10 (#262): "encerra".** Não existe mais programa de afiliados. No site
+   novo, `/affiliate-account/`, `/affiliate-registration/`, `/affiliate-reset-password/`,
+   `/affiliate-login/`, `/affiliate-area/` e `/affiliates/` são 301 para `/contact/`, e nenhum texto
+   do site oferece afiliação. **Falta o dono desligar o plugin SliceWP no WordPress** (o 301 só vale
+   depois da troca de DNS; enquanto o urace.us estiver no ar, o plugin ainda serve essas páginas).
+4. ~~**As 4 landing pages de anúncio**: tem campanha ativa apontando para
    `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/` ou
-   `/professional-kart-team-racing-team/`? Hoje elas redirecionam para `/for-beginners/`,
-   `/academy/` e `/pro-team/`. Se tiver anúncio, o layout de campanha precisa existir no novo.
+   `/professional-kart-team-racing-team/`?~~
+   **RESPONDIDO — dono, 15/10 (#262): sem campanha ativa no momento.** O 301 de hoje
+   (`/for-beginners/`, `/academy/`, `/pro-team/`) fica como está e **não** se faz layout de campanha
+   agora. Quando voltar a existir anúncio, isto se reabre com a página de destino na mão.
 5. **As duas lojas**: a recomendação é desligar o checkout do WooCommerce no mesmo dia da troca de
    DNS (§6). Confirma? Enquanto as duas estiverem no ar, estoque, preço e pedido ficam em dois
    lugares.
-6. **Cupom de desconto** no carrinho novo: a equipe usa cupom hoje?
-7. **Mensalidade**: o `subscriptions-for-woocommerce` cobra alguma assinatura hoje? O novo cobra
-   mensalidade pelo QuickBooks (#169); se houver assinatura viva no WooCommerce, precisa migrar
-   uma por uma.
+6. ~~**Cupom de desconto** no carrinho novo: a equipe usa cupom hoje?~~
+   **RESPONDIDO — dono, 15/10 (#262): não existe cupom.** O carrinho novo não precisa de campo de
+   cupom, e não há nada a migrar.
+7. ~~**Mensalidade**: o `subscriptions-for-woocommerce` cobra alguma assinatura hoje?~~
+   **RESPONDIDO — dono, 15/10 (#262): não existe assinatura no WooCommerce.** Nada a migrar; a
+   mensalidade do site novo é a do QuickBooks (#169).
 8. **Busca na loja** (item 3 do §9): faço?
 9. **Produto que falta**: `otk-magnesium-wheels-set-mxc-130mm-210mm` entra no catálogo do novo?
 10. **`/book-online/`**: neste PR passou a redirecionar para `/services/arrive-and-drive/` (página
