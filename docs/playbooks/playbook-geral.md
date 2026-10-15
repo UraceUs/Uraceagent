@@ -423,6 +423,9 @@ ponho os mesmos ids do site antigo?"*: **"sim pfvr"**. É o que mede quanto cada
   `SITE_KOMMO_HASH`. **Sem as variáveis, o balão não aparece** e o site funciona igual.
 - O chat aparece nas páginas públicas; **não** aparece no painel, na área do cliente, em `/cart/`
   nem no link pessoal do pedido.
+- Enquanto o banner de cookies está aberto, o balão do chat fica **acima** dele; fechado o banner, ele
+  volta ao canto (#284). Para o balão ter forma, o site libera **estilo** inline quando o chat está
+  ligado — script inline continua proibido.
 
 ### Suits: duas novidades
 
