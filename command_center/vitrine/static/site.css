@@ -366,6 +366,24 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .produto-short { color: #3c3d50; display: grid; gap: 8px; overflow-wrap: anywhere }
 .produto-short ul { padding-left: 20px }
 
+/* #261: busca, filtro de preço, ordenação e paginação da loja — tudo resolvido no servidor, e o
+   formulário é um `form method="get"` de verdade (sem JavaScript continua funcionando) */
+.loja-busca { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin: 18px 0 2px; align-items: end }
+.loja-busca label { display: grid; gap: 4px; min-width: 0; font-weight: 600; font-size: .92rem }
+.loja-busca .loja-q, .loja-busca .btn, .loja-busca .chip-link { grid-column: 1 / -1 }
+.loja-busca input, .loja-busca select { width: 100%; min-height: 46px; padding: 10px 12px; border: 1.5px solid #d9d9e1;
+  border-radius: 8px; font: 400 1rem/1.4 var(--texto); color: var(--tinta); background: #fff }
+.loja-busca input:focus, .loja-busca select:focus { border-color: var(--vermelho); outline: none; box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
+.loja-busca .btn { justify-self: start }
+@media (min-width: 780px) {
+  .loja-busca { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr) auto }
+  .loja-busca .loja-q, .loja-busca .btn { grid-column: auto }
+}
+.loja-conta { margin: 12px 0 2px; font-size: .92rem }
+.loja-vazia { grid-column: 1 / -1; margin: 0; color: #3c3d50 }
+.paginacao { margin-top: 20px; justify-content: center }
+.chip-vazio { display: inline-flex; align-items: center; min-height: 40px; padding: 0 2px; color: var(--cinza) }
+
 /* formulários (contato e pedido) */
 .form-contato, .form-pedido { display: grid; gap: 12px; margin-top: 8px }
 .form-contato label, .form-pedido label { display: grid; gap: 4px; font-weight: 600; font-size: .92rem }

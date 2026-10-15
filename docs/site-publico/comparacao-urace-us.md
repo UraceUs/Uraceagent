@@ -32,7 +32,7 @@ foi respeitado (o `Disallow: /` do novo.urace.us é o nosso, da prévia).
 | Onde a peça é vendida | `/product/<slug>/` → `/cart/` → `/checkout/` → Stripe | `/store/p/<slug>/` → carrinho → Stripe Checkout |
 | Conta para comprar | opcional (checkout de visitante) | **obrigatória** (#248) |
 | O pedido chega ao Command Center? | **não** (só o pedido com macacão, pelo e-mail — §6) | sim: Vendas + QuickBooks + e-mail |
-| Busca e filtro na loja | sim (`?s=`, `min_price`, `max_price`, ordenação, paginação) | **não** |
+| Busca e filtro na loja | sim (`?s=`, `min_price`, `max_price`, ordenação, paginação) | sim, com os mesmos endereços (#261) |
 | Idiomas | GTranslate (widget) | EN/PT nas páginas da compra (`/language/`) |
 
 ---
@@ -139,7 +139,8 @@ confuso do caminho hoje — veja §9.
 
 ### 3.4 Peça da loja — no novo
 
-`/store/` ou `/store/<categoria>/` → `/store/p/<slug>/`:
+`/store/` ou `/store/<categoria>/` (busca por texto ou SKU, filtro de preço, ordenação e páginas de 24,
+tudo resolvido no servidor, #261) → `/store/p/<slug>/`:
 
 - produto com preço e em estoque: **"Buy now"** (opção, quantidade, retirada na pista ou envio) →
   conta obrigatória → Stripe Checkout → `/store/thanks/` → página do pedido;
@@ -156,8 +157,8 @@ A lista que importa para trocar o urace.us. Cada linha diz onde a coisa está ho
 
 | # | O que falta no novo | Onde está hoje | Peso |
 |---|---|---|---|
-| 1 | **Busca na loja** (`?s=`), **filtro de preço** (`min_price`/`max_price`) e **ordenação** | formulário em `https://urace.us/store/#products` e a loja crua em `/shop/` | alto: 69 produtos sem busca |
-| 2 | **Paginação** da loja e do blog | `/store/page/2/`, `/blog/page/2/` | médio (hoje o novo mostra tudo numa página: a loja carrega 60 imagens) |
+| 1 | ~~**Busca na loja** (`?s=`), **filtro de preço** (`min_price`/`max_price`) e **ordenação**~~ | **feito em #261**: resolvido no servidor, e `?s=`, `min_price`, `max_price` e `orderby` continuam abrindo |
+| 2 | **Paginação** do blog | `/blog/page/2/` | baixo (a loja pagina desde #261: 24 por página, `/store/page/N/`; o blog ainda mostra tudo numa página) |
 | 3 | **Árvore de ~120 subcategorias de peça** | `/product-category/karts-parts/chassis/tony-kart-otk/brakes/` e companhia | médio: quem busca "IAME X30" cai numa página que o novo não tem (agora redireciona para a categoria mãe ou para a loja) |
 | 4 | **Páginas de etiqueta** de produto | `/product-tag/jecko/`, `/product-tag/parolin/` | baixo |
 | 5 | **Cupom de desconto** | campo no `/cart/` e no `/checkout/` do WooCommerce | médio: é o que a equipe usa em campanha |
@@ -172,7 +173,7 @@ A lista que importa para trocar o urace.us. Cada linha diz onde a coisa está ho
 | 14 | **4 landing pages de anúncio** com o layout de campanha | `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/`, `/professional-kart-team-racing-team/` | médio: hoje redirecionam para `/for-beginners/`, `/academy/`, `/pro-team/`; se tiver anúncio ativo, confirmar |
 | 15 | **Páginas de obrigado das campanhas** (`/typ/`, `/lp*-cancelada/`) | plugin da agência | baixo: redirecionam para `/career/` |
 | 16 | **Carrinho sem JavaScript** | o `/cart/` do WooCommerce é HTML do servidor | baixo: o `/cart/` novo precisa de JS (tem aviso e links de saída) |
-| 17 | **1 produto** | `/product/otk-magnesium-wheels-set-mxc-130mm-210mm/` (OTK MXC, jogo de rodas de magnésio) está no sitemap de hoje e **não está** em `dados/produtos.json` | baixo, mas é um produto a menos para vender |
+| 17 | ~~**1 produto**~~ | **feito em #261**: `/product/otk-magnesium-wheels-set-mxc-130mm-210mm/` (OTK MXC, jogo de rodas de magnésio, $838.95) entrou em `dados/produtos.json` |
 | 18 | **Área do cliente com histórico de pedidos da loja** | `/my-account/` (orders, downloads, addresses) | o portal tem sessões e planos; o pedido da loja só pelo link pessoal `/order/<token>/` |
 
 ### Já resolvido neste PR
@@ -326,7 +327,8 @@ interno das páginas). Antes deste PR, **110 deles cairiam no 404** no site novo
 | `/product-category/<pai>/<filho>/…` (o resto das ~120) | `/store/<categoria do último pedaço>/` quando existe, senão `/store/` |
 | `/product-category/used/`, `/teste/`, `/sem-categoria/`, `/accessories/` e as subcategorias delas | `/store/` |
 | `/product-tag/jecko/`, `/product-tag/parolin/` | `/store/` |
-| `/store/page/N/`, `/blog/page/N/`, `/product-category/<c>/page/N/` | a primeira página da lista |
+| `/store/page/N/`, `/product-category/<c>/page/N/` | **a mesma página N da loja** quando ela existe (#261), senão a primeira |
+| `/blog/page/N/` | a primeira página da lista (o blog não pagina) |
 | `/sitemap_index.xml`, `/post-sitemap.xml`, `/page-sitemap.xml`, `/product-sitemap.xml`, `/category-sitemap.xml`, `/product_cat-sitemap.xml`, `/product_tag-sitemap.xml` | `/sitemap.xml` |
 | qualquer endereço **sem** a barra final | o mesmo com a barra (301), como o WordPress fazia |
 
@@ -375,8 +377,8 @@ Cada item é uma coisa pequena e verificável. O que entrou neste PR está em §
 2. **"URACE SHORTS" órfão** em `/store/p/arrive-and-drive/`: depois de tirar o código do tema,
    sobrou o título "URACE SHORTS" seguido dos títulos de 6 vídeos **sem os vídeos** (o carrossel
    do YouTube não veio na cópia). Ou volta o carrossel, ou o bloco sai de `dados/produtos.json`.
-3. **Busca na loja** (item 1 do §4): 69 produtos sem busca. Dá para fazer no servidor
-   (`/store/?s=`), sem JavaScript novo.
+3. ~~**Busca na loja**~~: **feito em #261** — busca por texto, por SKU, filtro de preço,
+   ordenação e paginação, tudo no servidor e sem JavaScript novo.
 4. **`og:locale` fixo em `en_US`** mesmo quando a página renderiza em português.
 5. **`/legal/privacy.html`**: endereço com `.html` (a regra da casa é endereço limpo) e fora do
    `sitemap.xml`. Deveria ser `/privacy/`, com o `.html` redirecionando.
@@ -384,11 +386,11 @@ Cada item é uma coisa pequena e verificável. O que entrou neste PR está em §
    também não havia).
 7. **Links do rodapé com 20 px de altura** ("Birthdays", "Corporate Events" na home): abaixo dos
    40 px da regra da casa. Mexe no CSS do rodapé, que é compartilhado — fica para um PR só disso.
-8. **Loja sem paginação**: `/store/` lista os 69 produtos numa página só — 60 `<img>` (59 com
-   `loading="lazy"`, então o custo real é menor) e 40 kB de HTML.
+8. ~~**Loja sem paginação**~~: **feito em #261** — 24 produtos por página, em `/store/page/N/`,
+   com a página 2 em diante no `sitemap.xml` para o Google chegar em todo produto.
 9. **Carrinho precisa de JavaScript**: tem aviso e dois links de saída, mas o do WooCommerce
    funciona sem.
-10. **Produto que falta** (item 17 do §4): `otk-magnesium-wheels-set-mxc-130mm-210mm`.
+10. ~~**Produto que falta**~~: **feito em #261** — `otk-magnesium-wheels-set-mxc-130mm-210mm` entrou.
 
 ---
 

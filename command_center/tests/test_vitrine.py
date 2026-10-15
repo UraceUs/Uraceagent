@@ -132,7 +132,10 @@ def test_loja_e_blog_vieram_inteiros(cli):
     d = paginas_site.dados("produtos.json")
     assert len(d["produtos"]) >= 60 and sum(1 for p in d["produtos"] if p["images"]) >= 0.8 * len(d["produtos"])
     r = cli.get("/store/")
-    assert r.status_code == 200 and r.text.count("produto-card") == len(d["produtos"])
+    assert r.status_code == 200 and r.text.count("produto-card") == paginas_site.LOJA_POR_PAGINA
+    inteiro = sum(cli.get(c).text.count("produto-card") for c in ["/store/"] + paginas_site.paginas_da_loja()
+                  if c.startswith("/store/page/") or c == "/store/")
+    assert inteiro == len(d["produtos"]), "as páginas da loja juntas mostram o catálogo inteiro"
     um = d["produtos"][0]
     r = cli.get(f"/store/p/{um['slug']}/")
     assert um["name"] in r.text and 'action="/ops/api/vitrine/pedido"' in r.text
@@ -371,10 +374,13 @@ def test_nenhum_endereco_do_urace_us_cai_no_404(cli):
     ("/product-category/apparel-gear/apparel/suits/", "/store/custom-kart-suits/"),
     ("/product-category/used/", "/store/"),
     ("/product-tag/jecko/", "/store/"),
-    ("/product/otk-magnesium-wheels-set-mxc-130mm-210mm/", "/store/"),      # produto fora do catálogo
-    ("/store/page/2/", "/store/"),
-    ("/blog/page/2/", "/blog/"),
-    ("/product-category/karts-parts/page/2/", "/store/parts/"),
+    ("/product/kart-que-saiu-do-catalogo/", "/store/"),                     # produto fora do catálogo
+    ("/store/page/9/", "/store/"),                                          # #261: página que não existe
+    ("/store/page/1/", "/store/"),                                          # #261: a página 1 é a própria loja
+    ("/blog/page/2/", "/blog/"),                                            # o blog não pagina: vai para a primeira
+    # #261: a loja pagina de verdade, então a página 2 do WooCommerce leva à página 2 da loja
+    ("/shop/page/2/", "/store/page/2/"),
+    ("/product-category/karts-parts/page/2/", "/store/parts/page/2/"),
     ("/my-account/lost-password/", "/ops/portal"),
     ("/sitemap_index.xml", "/sitemap.xml"),
     ("/product-sitemap.xml", "/sitemap.xml"),
@@ -446,3 +452,141 @@ def test_schema_do_negocio_nao_perde_o_seo_local_do_urace_us(cli):
     for c in ("/services/arrive-and-drive/", "/store/", "/contact/"):
         n = next(x for x in _le(cli.get(c).text).ld if "LocalBusiness" in str(x.get("@type")))
         assert n["geo"] and n["hasMap"] and n["areaServed"], c
+
+
+# ------------------------------------------------- loja: busca, filtro, ordem e página (#261)
+def _nomes_na_grade(html):
+    """Os produtos que a página da loja mostra, na ordem em que aparecem."""
+    return [re.sub(r"<[^>]+>", "", n) for n in re.findall(r'<span class="produto-txt"><strong>(.*?)</strong>', html)]
+
+
+def test_busca_da_loja_e_do_servidor_e_funciona_sem_javascript(cli):
+    """#261 (dono, 15/10: *"Busca e filtro na loja… Eu faço — confirma?"* → *"sim"*): a loja acha
+    produto por texto, e quem acha é o servidor — a página já chega com o resultado. O formulário é
+    um `form method="get"` de verdade, então sem JavaScript continua funcionando."""
+    r = cli.get("/store/")
+    assert '<form class="loja-busca" method="get" action="/store/" role="search">' in r.text
+    for campo in ('name="s"', 'name="min_price"', 'name="max_price"', 'name="orderby"'):
+        assert campo in r.text, campo
+    # nenhum script da loja: a página é montada no servidor (o carrinho.js é o de todo o site)
+    assert re.findall(r'<script src="/_s/([a-z]+\.js)', r.text) == ["carrinho.js"]
+    # o código do produto (SKU) acha um só, e o nome acha o produto certo em primeiro lugar
+    assert _nomes_na_grade(cli.get("/store/?s=MXCKIT").text) == ["OTK Magnesium Wheels Set MXC - 130mm, 210mm"]
+    assert _nomes_na_grade(cli.get("/store/?s=mxc").text)[0] == "OTK Magnesium Wheels Set MXC - 130mm, 210mm"
+    # busca dentro da categoria também
+    assert all("wheel" in n.lower() or "magnesium" in n.lower()
+               for n in _nomes_na_grade(cli.get("/store/parts/?s=magnesium+wheel+set").text))
+    # nada encontrado: a página não é um beco sem saída
+    vazio = cli.get("/store/?s=zzzznaoexistenada")
+    assert vazio.status_code == 200 and not _nomes_na_grade(vazio.text)
+    assert "Nothing matched that" in vazio.text and 'href="/store/"' in vazio.text
+    # página de resultado fica fora do Google e aponta o canônico para a loja
+    assert 'name="robots" content="noindex, nofollow"' in vazio.text
+    assert f'<link rel="canonical" href="{SITE}/store/">' in vazio.text
+
+
+def test_filtro_de_preco_e_ordenacao_da_loja(cli):
+    """#261: o filtro de preço (`min_price`/`max_price`) e a ordenação são resolvidos no servidor,
+    com os mesmos nomes que o urace.us publica hoje."""
+    faixa = paginas_site.catalogo(min_price=800, max_price=900, limit=50)
+    assert faixa["total"] and all(paginas_site._faixa(p)[1] >= 800 and paginas_site._faixa(p)[0] <= 900
+                                  for p in faixa["produtos"])
+    assert faixa["total"] < paginas_site.catalogo(limit=1)["total"], "o filtro tira produto"
+    nomes = _nomes_na_grade(cli.get("/store/?min_price=800&max_price=900").text)
+    assert nomes and len(nomes) == faixa["total"]
+    assert "OTK Magnesium Wheels Set MXC - 130mm, 210mm" in nomes, "$838.95 está entre 800 e 900"
+    baratos = [paginas_site._faixa(p)[0] for p in paginas_site.catalogo(orderby="price", limit=50)["produtos"]]
+    assert baratos == sorted(baratos)
+    caros = [paginas_site._faixa(p)[1] for p in paginas_site.catalogo(orderby="price-desc", limit=50)["produtos"]]
+    assert caros == sorted(caros, reverse=True)
+    # o formulário volta marcado com o que a pessoa pediu (sem JavaScript, é o HTML que lembra)
+    html = cli.get("/store/?min_price=800&max_price=900&orderby=price-desc").text
+    assert 'name="min_price" value="800"' in html and 'name="max_price" value="900"' in html
+    assert '<option value="price-desc" selected>' in html
+
+
+def test_loja_paginada_no_backend(cli, monkeypatch):
+    """#261: lista que cresce é paginada no backend (`limit`/`offset` + `total`, como manda o
+    CLAUDE.md), e a página vem no caminho (`/store/page/2/`), não num parâmetro."""
+    tudo = paginas_site.dados("produtos.json")["produtos"]
+    c = paginas_site.catalogo(limit=24, offset=24)
+    assert c["total"] == len(tudo) and c["limit"] == 24 and c["offset"] == 24 and len(c["produtos"]) <= 24
+    assert c["paginas"] == -(-len(tudo) // 24)
+    r = cli.get("/store/")
+    assert f"of {len(tudo)} products" in r.text, "a página diz o total que veio do servidor"
+    assert '<a class="chip-link" rel="next" href="/store/page/2/">Next</a>' in r.text
+    vistos = []
+    for caminho in ["/store/"] + [f"/store/page/{n}/" for n in range(2, c["paginas"] + 1)]:
+        pg = cli.get(caminho)
+        assert pg.status_code == 200, caminho
+        vistos += _nomes_na_grade(pg.text)
+    assert len(vistos) == len(tudo) and len(set(vistos)) == len(set(p["name"] for p in tudo))
+    # a página 2 é indexável, com canônico próprio e título diferente da primeira
+    monkeypatch.setenv("CC_SITE_PREVIEW", "0")
+    p2 = cli.get("/store/page/2/")
+    assert f'<link rel="canonical" href="{SITE}/store/page/2/">' in p2.text
+    assert 'name="robots"' not in p2.text, "a página 2 entra no Google (é por ela que ele acha o resto)"
+    assert "Page 2" in p2.text.split("</title>")[0]
+    assert 'name="robots" content="noindex, nofollow"' in cli.get("/store/?s=wheels").text
+    # e entra no sitemap, senão o Google não chega nos produtos depois da primeira página
+    assert "/store/page/2/" in paginas_site.caminhos()
+    # página que não existe não é 404: volta para a loja
+    assert cli.get("/store/page/7/", follow_redirects=False).headers["location"] == "/store/"
+
+
+@pytest.mark.parametrize("antigo, esperado", [
+    ("/store/?s=wheels", 200),
+    ("/store/?min_price=100&max_price=900", 200),
+    ("/store/?orderby=price", 200),
+    ("/store/?orderby=popularity", 200),           # o Woo ordena por venda; a cópia não traz venda
+    ("/store/?orderby=rating", 200),
+    ("/store/page/2/", 200),
+    ("/store/parts/?s=wheel&orderby=price-desc", 200),
+    ("/shop/?s=wheels", 301),
+    ("/shop/page/2/", 301),
+    ("/?s=mxc", 301),                              # a busca do WordPress (`/?s=`) é a busca da loja
+    ("/product-category/engines/?orderby=price", 301),
+])
+def test_endereco_da_loja_do_urace_us_de_hoje_continua_abrindo(cli, antigo, esperado):
+    """#261: `?s=`, `min_price`, `max_price`, a ordenação do Woo e `page/N` são endereços que o
+    urace.us publica hoje. Todos continuam abrindo, e o 301 leva a busca e o filtro com ele."""
+    r = cli.get(antigo, follow_redirects=False)
+    assert r.status_code == esperado, (antigo, r.status_code)
+    if esperado == 301:
+        destino = r.headers["location"]
+        if "?" in antigo:
+            assert antigo.split("?", 1)[1] in destino or "s=mxc" in destino, destino
+        r = cli.get(destino, follow_redirects=False)
+        assert r.status_code == 200, (destino, r.status_code)
+
+
+MXC = "otk-magnesium-wheels-set-mxc-130mm-210mm"
+
+
+def test_jogo_de_rodas_otk_mxc_entrou_no_catalogo(cli):
+    """#261 (dono, 15/10: *"o jogo de rodas OTK MXC está no sitemap de hoje e não está no catálogo
+    novo. Entra?"* → *"sim"*): o produto abre, aparece na busca, cai na categoria certa, entra no
+    sitemap e o endereço do urace.us de hoje leva até ele. Nome, preço, descrição e foto vieram da
+    página que o urace.us publica (lida em 15/10): $838.95, SKU MXCKIT."""
+    p = next(x for x in paginas_site.dados("produtos.json")["produtos"] if x["slug"] == MXC)
+    assert (p["name"], p["price"], p["sku"], p["in_stock"]) == (
+        "OTK Magnesium Wheels Set MXC - 130mm, 210mm", 838.95, "MXCKIT", True)
+    r = cli.get(f"/store/p/{MXC}/")
+    assert r.status_code == 200 and "$838.95" in r.text
+    oferta = [x for x in _le(r.text).ld if x.get("@type") == "Product"][0]["offers"]
+    assert oferta["price"] == "838.95" and oferta["availability"].endswith("InStock")
+    # a foto é nossa, em WebP comprimido
+    assert p["images"][0]["src"].endswith(".webp")
+    assert os.path.exists(os.path.join(os.path.dirname(conteudo.__file__), "static", "img", p["images"][0]["src"]))
+    # a descrição não traz CSS/JS do tema e não corta no meio da palavra
+    texto = _texto_visivel(r.text)
+    assert not paginas_site.CODIGO.search(texto)
+    assert "Includes Beadlocks and Valve Stems" in texto
+    desc = re.search(r'<meta name="description" content="(.*?)">', r.text).group(1)
+    assert 80 <= len(desc) <= 175 and desc.endswith((".", "!", "?", "…"))
+    # busca, categoria e sitemap
+    assert MXC in cli.get("/store/?s=MXCKIT").text
+    assert paginas_site._categoria(p)["slug"] == "parts", "a página do urace.us não dá categoria: cai em Parts"
+    assert MXC in cli.get("/store/parts/?s=mxc").text
+    assert f"/store/p/{MXC}/" in paginas_site.caminhos()
+    assert cli.get(f"/product/{MXC}/", follow_redirects=False).headers["location"] == f"/store/p/{MXC}/"
