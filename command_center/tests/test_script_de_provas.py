@@ -29,10 +29,14 @@ def test_sem_dependencia_ele_manda_criar_o_venv_do_teste_e_nunca_tocar_no_da_pro
     falso.write_text("#!/bin/sh\nexit 1\n")          # sem pytest/playwright: a checagem falha
     falso.chmod(0o755)
 
-    ambiente = {k: v for k, v in os.environ.items() if not k.startswith(("STRIPE_", "QBO_", "GOOGLE_"))}
-    ambiente.update(HOME=str(casa), PATH=os.environ.get("PATH", ""))
-    for k in ("CC_TEST_PY", "CC_TEST_VENV", "CC_DB_PATH", "URACE_DIR"):
+    # o passo 1 para na hora se achar credencial no ambiente (e o CI tem CC_COFRE_CHAVE):
+    # tiramos exatamente as que o próprio script lista, para o teste chegar ao passo 2
+    texto = SCRIPT.read_text(encoding="utf-8")
+    reais = texto.split("REAIS=(", 1)[1].split(")", 1)[0].split()
+    ambiente = dict(os.environ)
+    for k in [*reais, "STRIPE_SECRET_KEY", "CC_TEST_PY", "CC_TEST_VENV", "CC_DB_PATH", "URACE_DIR"]:
         ambiente.pop(k, None)
+    ambiente.update(HOME=str(casa), PATH=os.environ.get("PATH", ""))
 
     r = subprocess.run(["bash", str(SCRIPT)], capture_output=True, text=True, env=ambiente, timeout=120)
     saida = r.stdout + r.stderr
