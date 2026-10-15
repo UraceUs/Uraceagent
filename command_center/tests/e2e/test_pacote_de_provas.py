@@ -147,8 +147,16 @@ def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
         v.get_by_label("I accept the").check()
         st["resposta"] = "o cadastro foi preenchido com dado fictício (nada de cliente de verdade)"
     with passo(cad, v, "conta-criada", "A conta criada volta para o carrinho", 'cliquei em "Create account"') as st:
-        v.get_by_role("button", name="Create account").click()
-        v.wait_for_url("**/cart/", timeout=20000)
+        # O cadastro leva de volta ao carrinho sozinho. Em máquina mais lenta (a VPS, 15/10) essa
+        # navegação cruza com a do clique e o Playwright devolve net::ERR_ABORTED — a conta foi
+        # criada do mesmo jeito. Toleramos SÓ esse erro do clique: o que o passo prova continua
+        # sendo chegar em /cart/ e já conectado, e isso é exigido logo abaixo.
+        try:
+            v.get_by_role("button", name="Create account").click()
+        except Exception as e:                                  # noqa: BLE001
+            if "ERR_ABORTED" not in str(e):
+                raise
+        v.wait_for_url("**/cart/", timeout=30000)
         v.get_by_text("Signed in as").wait_for()
         st["resposta"] = f"a conta de {quem['email']} foi criada e o carrinho já diz quem está conectado"
     with passo(cad, v, "piloto-na-conta", "Pôr o piloto na conta", f"cadastrei o piloto {quem['piloto']}") as st:

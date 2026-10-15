@@ -86,6 +86,10 @@ class _StripeFalso:
                 partes = self.path.strip("/").split("/")
                 if partes[:3] == ["v1", "checkout", "sessions"]:
                     return self._json(sessoes[partes[3]])
+                # o navegador pede /favicon.ico e afins: 404 em vez de estourar no log do teste
+                if len(partes) < 2 or partes[1] not in sessoes:
+                    self.send_response(404); self.send_header("Content-Length", "0")
+                    return self.end_headers()
                 s = sessoes[partes[1]]
                 if len(partes) == 3:                   # /pay/<sid>/ok: pagou
                     s.update(payment_status="paid", payment_intent="pi_e2e",
@@ -2473,3 +2477,18 @@ def test_reserva_do_site_so_pre_seleciona_o_servico_do_kart_escolhido(servidor, 
         adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
                         data=[{"weekday": 1, "period": "manha", "open": False, "capacity": 5}])
         adm.close()
+
+
+def test_stripe_falso_responde_404_em_caminho_desconhecido():
+    """O navegador pede /favicon.ico ao Stripe falso. Antes isso estourava IndexError dentro do
+    servidor de teste e sujava o log da prova (visto no pacote da VPS em 15/10, #268)."""
+    import urllib.error
+
+    fake = _StripeFalso()
+    try:
+        for caminho in ("/favicon.ico", "/", "/pay/nao-existe"):
+            with pytest.raises(urllib.error.HTTPError) as erro:
+                urllib.request.urlopen(fake.origem + caminho, timeout=5)
+            assert erro.value.code == 404, caminho
+    finally:
+        fake.srv.shutdown()
