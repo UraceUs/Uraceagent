@@ -154,7 +154,7 @@ bash adminai/deploy/command_center/testar_tudo.sh
 
 O que ele faz: confere o ambiente (**para na hora** se achar chave real, ou `CC_DB_PATH` apontado
 para o banco de produção), acha o Python do Command Center e o Chromium do Playwright, constrói o
-frontend se faltar, e roda a **suíte end-to-end inteira** num **banco descartável** e numa porta
+frontend se faltar **ou se o código for mais novo que ele** (#275: senão a prova testaria o código novo com a tela velha), e roda a **suíte end-to-end inteira** num **banco descartável** e numa porta
 livre própria (`CC_DB_PATH` temporário, `CC_AUTOSYNC=0`, `URACE_ENV=/nao/existe`, Stripe e Google
 falsos locais). Depois percorre a **venda de ponta a ponta com conta fictícia** — site → kart, dia e
 turno → carrinho → checkout no Stripe falso → pago → pedido, sessão em Agendamentos do site, venda

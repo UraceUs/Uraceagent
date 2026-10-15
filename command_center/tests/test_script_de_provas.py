@@ -68,3 +68,17 @@ def test_o_caminho_do_chromium_e_sempre_resolvido_e_repassado_ao_pytest():
     assert '[ -n "$CHROMIUM" ] && LIMPO+=' not in texto, "PW_CHROMIUM não pode ser opcional no pytest"
     assert 'LIMPO+=("PW_CHROMIUM=$CHROMIUM")' in texto
     assert "chrome-linux*/chrome" in texto, "o Chromium novo vem em chrome-linux64/"
+
+
+def test_a_prova_reconstroi_a_tela_quando_o_codigo_e_mais_novo():
+    """#275: na VPS (15/10) a prova disse "frontend já construído" e testou o código novo com o dist/ de
+    antes — a pré-seleção do kart "falhou" sem defeito nenhum. O script tem de comparar o dist/ com os
+    fontes e reconstruir quando algum fonte é mais novo. Conferência no texto do script, como as outras:
+    rodar o build de verdade aqui custaria minutos e o npm."""
+    texto = SCRIPT.read_text(encoding="utf-8")
+    bloco = texto.split("# ------------------------------------------------------------- 4. frontend")[1].split(
+        "# ------------------------------------------------------------- 5.")[0]
+    assert '-newer "$WEB/dist/index.html"' in bloco, "compara os fontes com o dist/"
+    for fonte in ('"$WEB/src"', '"$WEB/package-lock.json"', '"$WEB/index.html"'):
+        assert fonte in bloco, fonte
+    assert '[ -n "$MAIS_NOVO" ]' in bloco and "npm run build" in bloco, "fonte mais novo → reconstrói"

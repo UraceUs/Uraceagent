@@ -131,13 +131,26 @@ limpar() {
 trap limpar EXIT INT TERM
 
 # ------------------------------------------------------------- 4. frontend
-if [ ! -f "$REPO/command_center/web/dist/index.html" ]; then
-    command -v npm >/dev/null || { echo "!! frontend não construído e sem npm. Instale Node 20+ e rode de novo"; exit 1; }
-    echo "-- 3/6 frontend ainda não construído: npm ci + vite (1-3 min)"
-    ( cd "$REPO/command_center/web" && npm ci --no-audit --no-fund --silent && npm run build --silent ) \
+# #275: a prova tem de testar a tela do código que está aqui. Se algum fonte do frontend é mais novo que o
+# dist/ (git pull sem deploy, por exemplo), reconstrói — senão o teste roda o código novo com a tela velha e
+# acusa defeito que não existe (VPS, 15/10: a pré-seleção do kart "falhou" com o dist/ de antes do #270).
+WEB="$REPO/command_center/web"
+MAIS_NOVO=""
+if [ -f "$WEB/dist/index.html" ]; then
+    MAIS_NOVO="$(find "$WEB/src" "$WEB/index.html" "$WEB/package.json" "$WEB/package-lock.json" \
+                 -newer "$WEB/dist/index.html" -type f 2>/dev/null | head -1)"
+fi
+if [ ! -f "$WEB/dist/index.html" ] || [ -n "$MAIS_NOVO" ]; then
+    command -v npm >/dev/null || { echo "!! frontend desatualizado ou não construído, e sem npm. Instale Node 20+ e rode de novo"; exit 1; }
+    if [ -n "$MAIS_NOVO" ]; then
+        echo "-- 3/6 frontend desatualizado (${MAIS_NOVO#"$REPO"/} é mais novo que o dist/): npm ci + vite (1-3 min)"
+    else
+        echo "-- 3/6 frontend ainda não construído: npm ci + vite (1-3 min)"
+    fi
+    ( cd "$WEB" && npm ci --no-audit --no-fund --silent && npm run build --silent ) \
         || { echo "!! o build do frontend falhou"; exit 1; }
 else
-    echo "-- 3/6 frontend já construído ($(du -sh "$REPO/command_center/web/dist" | cut -f1))"
+    echo "-- 3/6 frontend em dia com o código ($(du -sh "$WEB/dist" | cut -f1))"
 fi
 
 # ------------------------------------------------------------- 5. a suíte e as fotos
