@@ -548,7 +548,7 @@ a waiver. O texto embaixo dos botões só explica o caminho da invoice. Se o cli
 "já pagou" ou que "recebeu uma invoice", confira primeiro por qual dos dois ele entrou:
 Agendamentos do site › **Pedidos do site** mostra o que veio pelo Stripe; a invoice aparece no card.
 A comparação completa dos dois sites está em
-[docs/site-publico/comparacao-urace-us.md](../site-publico/comparacao-urace-us.md).
+`docs/site-publico/comparacao-urace-us.md`.
 
 **Regras que o sistema garante** (código: `providers/carrinho.py`):
 

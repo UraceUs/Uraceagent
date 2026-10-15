@@ -129,7 +129,7 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 a mesma página ou um 301. Quem manda um link antigo para um cliente (`/urace-academy/`,
 `/book-online/`, `/product/<slug>/`, `/product-category/...`, `/shop/`, `/my-account/`, um artigo do
 blog) pode mandar: ninguém cai em "Page not found". A lista e as regras estão em
-[docs/site-publico/comparacao-urace-us.md](../site-publico/comparacao-urace-us.md), e a comparação
+`docs/site-publico/comparacao-urace-us.md`, e a comparação
 completa dos dois sites (passo a passo da compra, o que falta no novo, peso e velocidade) também.
 
 ---
