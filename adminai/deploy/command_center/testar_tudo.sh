@@ -24,7 +24,8 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/../../.." && pwd)"
 URACE_DIR="${URACE_DIR:-$HOME/.urace}"
-VENV="$URACE_DIR/cc-venv"
+VENV="$URACE_DIR/cc-venv"            # o venv da PRODUÇÃO: só de leitura para este script
+TESTE_VENV="${CC_TEST_VENV:-$URACE_DIR/teste-venv}"   # o venv do teste, onde as dependências entram
 BANCO_PROD="$URACE_DIR/command-center.sqlite"
 AGORA="$(date +%Y%m%d-%H%M%S)"
 PACOTE="$URACE_DIR/teste-$AGORA.tar.gz"
@@ -63,12 +64,24 @@ fi
 echo "-- 1/6 ambiente limpo: nenhuma chave real, e o banco de produção ($BANCO_PROD) fica intocado"
 
 # ------------------------------------------------------------- 2. Python e Chromium
-if [ -x "$VENV/bin/python" ]; then PY="$VENV/bin/python"; else PY="$(command -v python3 || true)"; fi
+# O venv da PRODUÇÃO ($VENV) é o do serviço que está no ar: instalar dependência de teste nele
+# resolveria as versões de novo e pode subir ou descer pacote embaixo do Command Center rodando.
+# Por isso o teste prefere um Python só dele (CC_TEST_PY ou $TESTE_VENV) e, quando falta
+# dependência, manda criar esse venv isolado — nunca mexer no da produção.
+if [ -n "${CC_TEST_PY:-}" ]; then PY="$CC_TEST_PY"
+elif [ -x "$TESTE_VENV/bin/python" ]; then PY="$TESTE_VENV/bin/python"
+elif [ -x "$VENV/bin/python" ]; then PY="$VENV/bin/python"
+else PY="$(command -v python3 || true)"; fi
 [ -n "$PY" ] || { echo "!! sem python3 nesta máquina"; exit 1; }
 if ! "$PY" -c "import pytest, playwright, fastapi, uvicorn" 2>/dev/null; then
-    echo "!! falta dependência de teste. Rode:"
-    echo "   $PY -m pip install -r $REPO/command_center/requirements.txt pytest httpx playwright"
-    echo "   $PY -m playwright install --with-deps chromium"
+    echo "!! falta dependência de teste, e ela NÃO entra no venv da produção ($VENV)."
+    echo "   Crie o venv só do teste e rode de novo:"
+    echo "   python3 -m venv $TESTE_VENV"
+    echo "   $TESTE_VENV/bin/python -m pip install -q -r $REPO/command_center/requirements.txt pytest httpx playwright"
+    echo "   $TESTE_VENV/bin/python -m playwright install chromium"
+    echo "   bash $0"
+    echo "   (se o Chromium reclamar de biblioteca do sistema:"
+    echo "    sudo $TESTE_VENV/bin/python -m playwright install-deps chromium)"
     exit 1
 fi
 CHROMIUM="${PW_CHROMIUM:-}"
@@ -88,8 +101,9 @@ with sync_playwright() as p:
 EOF
     then echo "-- 2/6 $("$PY" -V) · Chromium: o do Playwright instalado"
     else
-        echo "!! PAREI: não achei o Chromium do Playwright. Instale com:"
-        echo "   $PY -m playwright install --with-deps chromium"
+        echo "!! PAREI: não achei o Chromium do Playwright. Instale no venv do teste:"
+        echo "   $PY -m playwright install chromium"
+        echo "   (se reclamar de biblioteca do sistema: sudo $PY -m playwright install-deps chromium)"
         echo "   (ou aponte o seu: PW_CHROMIUM=/caminho/do/chrome bash $0)"
         exit 1
     fi
