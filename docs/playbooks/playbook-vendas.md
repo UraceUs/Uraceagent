@@ -651,7 +651,7 @@ Dono, 15/10: *"Busca e filtro na loja… Eu faço — confirma?"* → **"sim"**.
 
 A loja do site novo (`/store/`) agora **acha produto**, do mesmo jeito que a loja de hoje:
 busca por texto, filtro de preço, ordenação e páginas. Quem filtra é o **servidor** — a página já
-chega pronta, então funciona no celular ruim do cliente e **funciona sem JavaScript**.
+chega pronta, então abre rápido até com internet ruim e **funciona sem JavaScript**.
 
 **O caminho mais curto para mandar o link:**
 

@@ -779,9 +779,11 @@ def store(host, categoria=None, q=None, pagina=1):
                   schemas=(_negocio(host), lista, _trilha(host, ("Store", "/store/"))))
 
 
+@lru_cache(maxsize=1)
 def paginas_da_loja():
     """As páginas 2 em diante da loja e de cada categoria, para o sitemap: sem elas o Google não
-    chega nos produtos que ficam depois da primeira página."""
+    chega nos produtos que ficam depois da primeira página. (Guardado: o catálogo é um arquivo, e
+    `_familia` pergunta isto em todo endereço antigo que chega.)"""
     out = []
     for cat in (None, *[s for s, _ in CATEGORIAS_LOJA]):
         base = f"/store/{cat}/" if cat else "/store/"
