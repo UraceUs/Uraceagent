@@ -99,6 +99,10 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
                 "erro": "This session is no longer offered. Remove it and pick another one."}
     linha = {**base, "nome": s["name"], "detalhe": quando(d, per), "unitario": float(s["price"]),
              "deposito": float(s["deposit"] or 0), "erro": None}
+    from command_center.vitrine.conteudo import kart_da_chave
+    k = kart_da_chave(s["site_kart"]) if s["site_kart"] else None
+    if k and k.get("aviso"):
+        linha["aviso"] = k["aviso"]                       # #279: o kart próprio chega à pista 2 dias antes
     try:
         dia = date.fromisoformat(d)
     except ValueError:
@@ -137,6 +141,22 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
     return linha
 
 
+def _linha_lead_follow(con, sessao):
+    """#279 (dono, 15/10): o Lead and Follow é um add-on do dia de treino, $769 (preço do painel, #50). Vira uma
+    linha própria — o cliente vê o que paga, o Stripe também — presa à sessão: mesmo dia, turno e piloto, e o
+    mesmo `idx` (tirar a linha só desliga o add-on). Sessão com problema: o problema é dela, não do add-on."""
+    from command_center.providers import servicos_site
+    a = servicos_site.addon_do_site(con)
+    base = {"tipo": "addon", "idx": sessao["idx"], "quantidade": 1, "deposito": 0, "data": sessao.get("data"),
+            "turno": sessao.get("turno"), "piloto": sessao.get("piloto"), "piloto_nome": sessao.get("piloto_nome"),
+            "detalhe": sessao.get("detalhe"), "link": "/services/arrive-and-drive/#reservar"}
+    if not a:
+        return {**base, "servico": None, "nome": "Lead and Follow", "unitario": 0, "valor": 0,
+                "erro": "Lead and Follow is not open for online booking right now. Remove it to continue, or talk to us."}
+    return {**base, "servico": a["id"], "nome": a["name"], "unitario": float(a["price"]), "valor": round(float(a["price"]), 2),
+            "erro": None}
+
+
 def cotar(con, itens, conta_id=None, para_pagar=False):
     """As linhas do carrinho como o servidor as vê. `itens` vem do navegador: só escolhas, nunca valor."""
     if not isinstance(itens, list):
@@ -158,6 +178,8 @@ def cotar(con, itens, conta_id=None, para_pagar=False):
         linha["idx"] = i
         linha["valor"] = round(linha["unitario"] * linha["quantidade"], 2)
         linhas.append(linha)
+        if tipo == "sessao" and it.get("lead_follow") is True:
+            linhas.append(_linha_lead_follow(con, linha))
     validas = [x for x in linhas if not x["erro"]]
     subtotal = round(sum(x["valor"] for x in validas), 2)
     deposito = round(sum(x["deposito"] for x in validas), 2)
@@ -171,7 +193,7 @@ def cotar(con, itens, conta_id=None, para_pagar=False):
 
 # ------------------------------------------------------------------ 2. o checkout
 def _nome_stripe(x):
-    if x["tipo"] == "sessao":
+    if x["tipo"] in ("sessao", "addon"):
         return f"{x['nome']} · {x['detalhe']}" + (f" · {x['piloto_nome']}" if x.get("piloto_nome") else "")
     return x["nome"]
 
@@ -198,12 +220,24 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
                   unit_price=c["total"], amount=c["total"], delivery=entrega, origin=host, account_id=conta_id,
                   email=((conta["email"] or "").lower() or None if conta else None), name=(conta["name"] if conta else None),
                   phone=(conta["phone"] if conta else None), lang="pt" if lang == "pt" else "en")
+    # #279: o Lead and Follow vai NA linha da sessão que ele acompanha — `variation` com o nome do add-on,
+    # `product_slug` "addon:<id do serviço>" e o valor somado no `amount`. A tabela só aceita produto ou sessão,
+    # e mudar isso seria reconstruir uma tabela de produção (regra do dono: não sem autorização). No Stripe e no
+    # recibo do QuickBooks ele continua sendo uma linha própria.
+    addons = {x["idx"]: x for x in c["linhas"] if x["tipo"] == "addon"}
     for x in c["linhas"]:
-        inserir(con, "store_order_items", order_id=oid, kind=x["tipo"], name=_nome_stripe(x)[:250], quantity=x["quantidade"],
-                unit_price=x["unitario"], deposit=x["deposito"], amount=round(x["valor"] + x["deposito"], 2),
-                product_slug=x.get("produto"), variation=x.get("variacao"), service_id=x.get("servico"),
-                service_name=x["nome"] if x["tipo"] == "sessao" else None, date=x.get("data") if x["tipo"] == "sessao" else None,
-                period=x.get("turno") if x["tipo"] == "sessao" else None, pilot_id=x.get("piloto"), pilot_name=x.get("piloto_nome"))
+        if x["tipo"] == "addon":
+            continue
+        a = addons.get(x["idx"]) if x["tipo"] == "sessao" else None
+        inserir(con, "store_order_items", order_id=oid, kind=x["tipo"],
+                name=(_nome_stripe(x) + (f" + {a['nome']}" if a else ""))[:250], quantity=x["quantidade"],
+                unit_price=x["unitario"], deposit=x["deposito"],
+                amount=round(x["valor"] + x["deposito"] + (a["valor"] if a else 0), 2),
+                product_slug=(f"addon:{a['servico']}" if a else x.get("produto")),
+                variation=(a["nome"] if a else x.get("variacao")), service_id=x.get("servico"),
+                service_name=x["nome"] if x["tipo"] in ("sessao", "addon") else None,
+                date=x.get("data") if x["tipo"] in ("sessao", "addon") else None,
+                period=x.get("turno") if x["tipo"] in ("sessao", "addon") else None, pilot_id=x.get("piloto"), pilot_name=x.get("piloto_nome"))
     linhas_stripe = []
     for x in c["linhas"]:
         produto = {"name": _nome_stripe(x)[:250]}
@@ -277,7 +311,9 @@ def _marcar(con, o, x):
         return None
     bid = inserir(con, "bookings", account_id=o["account_id"], pilot_id=x["pilot_id"], date=x["date"], period=x["period"],
                   status="pendente", service_id=x["service_id"], service_name=x["service_name"], price=x["unit_price"],
-                  notes=f"Paid online: URACE order #{o['id']}", origin="site", accepted_at=agora(), charge_kind="stripe",
+                  notes=f"Paid online: URACE order #{o['id']}" + (f" · + {x['variation']} (add-on, {_usd(_valor_addon(x))}, paid)"
+                                                                    if _tem_addon(x) else ""),
+                  origin="site", accepted_at=agora(), charge_kind="stripe",
                   paid_at=agora(), invoice_total=x["amount"], store_order_id=o["id"])
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
     try:
@@ -292,8 +328,17 @@ def _marcar(con, o, x):
     return card
 
 
+def _tem_addon(x):
+    """#279: a linha da sessão leva um add-on (Lead and Follow) pago junto."""
+    return x["kind"] == "sessao" and str(x["product_slug"] or "").startswith("addon:")
+
+
+def _valor_addon(x):
+    return round(float(x["amount"]) - float(x["unit_price"]) * x["quantity"] - float(x["deposit"] or 0), 2)
+
+
 def _texto_linha(x):
-    v = _usd(x["unit_price"] * x["quantity"])
+    v = _usd(x["unit_price"] * x["quantity"]) + (f" + {x['variation']} {_usd(_valor_addon(x))}" if _tem_addon(x) else "")
     s = f"- {x['name']}" + (f" × {x['quantity']}" if x["quantity"] > 1 else "") + f": {v}"
     if x["deposit"]:
         s += f" + depósito {_usd(x['deposit'])}"
@@ -478,6 +523,12 @@ def linhas_qbo(con, q, oid):
                 raise RuntimeError(f"o serviço {x['service_name']} não tem item do QuickBooks (Agendamentos do site › Serviços)")
             item = s["qbo_item_id"]
         saida.append({"item_id": item, "quantidade": x["quantity"], "unitario": x["unit_price"], "descricao": x["name"]})
+        if _tem_addon(x):                                    # #279: o Lead and Follow pago junto com a sessão
+            sid_addon = int(str(x["product_slug"]).split(":", 1)[1])
+            a = um(con, "SELECT name, qbo_item_id FROM booking_services WHERE id=?", (sid_addon,))
+            if not a or not a["qbo_item_id"]:
+                raise RuntimeError(f"o add-on {x['variation']} não tem item do QuickBooks (Agendamentos do site › Serviços)")
+            saida.append({"item_id": a["qbo_item_id"], "quantidade": 1, "unitario": _valor_addon(x), "descricao": a["name"]})
         if x["deposit"]:
             saida.append({"item_id": _item_deposito(con), "quantidade": 1, "unitario": x["deposit"], "descricao": DEPOSITO_TXT})
     return saida

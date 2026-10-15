@@ -64,6 +64,19 @@ def do_kart(con, chave):
     return achados[0] if len(achados) == 1 else None
 
 
+def addon_do_site(con, chave=None):
+    """#279: o add-on do dia de treino que o site vende (hoje, o Lead and Follow): o serviço ativo de tipo
+    'addon' com essa chave. Preço do painel (#50). Nenhum ou dois com a mesma chave: None (ninguém escolhe
+    no lugar da pessoa)."""
+    from command_center.vitrine.conteudo import LEAD_AND_FOLLOW
+    chave = (chave or LEAD_AND_FOLLOW["chave"]).strip().lower()
+    achados = [s for s in lista(con, True) if s["kind"] == "addon" and (s["site_kart"] or "").strip().lower() == chave]
+    if len(achados) != 1:
+        return None
+    s = achados[0]
+    return {"id": s["id"], "name": s["name"], "price": s["price"], "key": s["site_kart"]}
+
+
 def planos_para_cliente(con):
     """#169: os planos mensais que o site vende (Academy, Boost): preço por mês, meses, sessões por mês."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
@@ -117,10 +130,12 @@ def _dados(con, d, parcial):
     if "site_kart" in d:
         # #263: a chave do kart do site que este serviço vende. Ou é um kart de `conteudo.KARTS`,
         # ou é vazio (serviço que não é do site). Nome parecido não vale: a chave é exata.
-        from command_center.vitrine.conteudo import kart_da_chave
+        from command_center.vitrine.conteudo import LEAD_AND_FOLLOW, kart_da_chave
         t = " ".join(str(d["site_kart"] or "").split())
         if not t:
             s["site_kart"] = None
+        elif t.lower() == LEAD_AND_FOLLOW["chave"].lower():      # #279: o add-on do dia de treino
+            s["site_kart"] = LEAD_AND_FOLLOW["chave"]
         else:
             k = kart_da_chave(t)
             if not k:
@@ -130,8 +145,8 @@ def _dados(con, d, parcial):
         # #50: depósito por sessão (Arrive and Drive: US$ 400); vazio ou 0 = sem depósito
         s["deposit"] = preco(d["deposit"]) if d["deposit"] not in (None, "", 0, "0") else 0.0
     if "kind" in d and d["kind"] is not None:
-        if d["kind"] not in ("session", "plan"):
-            raise ErroServico("tipo inválido: session (sessão avulsa) ou plan (plano mensal)")
+        if d["kind"] not in ("session", "plan", "addon"):
+            raise ErroServico("tipo inválido: session (sessão avulsa), plan (plano mensal) ou addon (add-on do dia)")
         s["kind"] = d["kind"]
     if "months" in d:
         m = int(d["months"]) if d["months"] not in (None, "") else None

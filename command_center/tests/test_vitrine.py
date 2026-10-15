@@ -201,14 +201,16 @@ def test_arrive_and_drive_mostra_os_precos_de_hoje_e_leva_para_o_carrinho(cli):
     r = cli.get("/services/arrive-and-drive/")
     for k in conteudo.KARTS:
         assert f'value="{k["nome"]}" data-kart="{k["nome"]}" data-preco="{k["preco"]:g}"' in r.text
-    assert {k["preco"] for k in conteudo.KARTS} == {719, 819, 899}, "os preços do urace.us em 07/10"
-    assert "Your Own Kart" not in r.text, "não aparece no site público de hoje"
+    assert {k["preco"] for k in conteudo.KARTS if not k.get("proprio")} == {719, 819, 899}, "os preços do urace.us em 07/10"
+    # #279 (dono, 15/10): o kart próprio é a 5ª opção, $500, com o aviso dos 2 dias no próprio cartão
+    assert 'data-kart="Own kart" data-preco="500" data-proprio="1"' in r.text
+    assert "at least 2 days before your session" in r.text
     assert 'href="/ops/portal/reserve"' not in r.text, "#262: o site público não oferece mais esse caminho"
     assert "Continue to booking" not in r.text, "#262: um caminho só, o do carrinho"
     assert 'class="btn btn-cheio agenda-carrinho"' in r.text and 'data-carrinho="/cart/"' in r.text
     assert 'data-api="/ops/api/vitrine/agenda"' in r.text
     ofertas = [x for x in _le(r.text).ld if x.get("@type") == "Service"][0]["offers"]
-    assert sorted(float(o["price"]) for o in ofertas) == [719.0, 719.0, 819.0, 899.0]
+    assert sorted(float(o["price"]) for o in ofertas) == [500.0, 719.0, 719.0, 819.0, 899.0], "#279: com o kart próprio"
     assert "Box 3" in r.text and "Box 5" not in r.text, "endereço da decisão de 01/10"
 
 
@@ -328,7 +330,7 @@ def test_decisoes_do_dono_continuam_valendo_em_todo_o_site(cli):
 def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     """Regra 2 da #207: o preço do Arrive and Drive sai de KARTS; os planos, do painel. O que o sistema
     não tem não vira número escrito na página."""
-    minimo = f"${min(k['preco'] for k in conteudo.KARTS):,}"
+    minimo = f"${conteudo.preco_minimo():,}"          # #279: o "a partir de" é o aluguel do kart da URACE
     for c in ("/", "/services/", "/for-beginners/", "/services/birthday-party/"):
         assert minimo in cli.get(c).text, c
     for c in ("/services/", "/for-beginners/", "/career/", "/pro-team/"):
@@ -389,7 +391,8 @@ def test_precos_do_site_batem_com_a_rate_card(cli):
     seção "Tabelas ditadas pelo dono em 09/09": diária por kart, Lead and Follow fechado com antecedência e
     mensal sem contrato. Preço que não está na tabela não aparece inventado na página."""
     assert [(k["nome"], k["preco"]) for k in conteudo.KARTS] == [
-        ("Baby Kart", 719), ("4-stroke", 719), ("2-stroke", 819), ("Adult Shifter", 899)], "diária tudo incluso"
+        ("Baby Kart", 719), ("4-stroke", 719), ("2-stroke", 819), ("Adult Shifter", 899),
+        ("Own kart", 500)], "diária tudo incluso; kart próprio (#279) $500"
     arrive = cli.get("/services/arrive-and-drive/").text
     for valor in ("$719", "$819", "$899", "$769"):
         assert valor in arrive, valor

@@ -44,8 +44,11 @@
       if (igual) igual.quantidade = Math.min(20, (Number(igual.quantidade) || 1) + (Number(item.quantidade) || 1))
       else itens.push({ tipo: 'produto', produto: item.produto, variacao: item.variacao || '', quantidade: Math.max(1, Math.min(20, Number(item.quantidade) || 1)) })
     } else if (item.tipo === 'sessao') {
-      var ja = itens.some(function (x) { return x.tipo === 'sessao' && x.servico === item.servico && x.data === item.data && x.turno === item.turno && !x.piloto })
-      if (!ja) itens.push({ tipo: 'sessao', servico: Number(item.servico), data: item.data, turno: item.turno, piloto: item.piloto || null })
+      var ja = itens.filter(function (x) { return x.tipo === 'sessao' && x.servico === item.servico && x.data === item.data && x.turno === item.turno && !x.piloto })[0]
+      // #279: o Lead and Follow vai junto da sessão; pedir de novo a mesma sessão com ele só liga o add-on
+      if (ja) { if (item.lead_follow) ja.lead_follow = true }
+      else itens.push({ tipo: 'sessao', servico: Number(item.servico), data: item.data, turno: item.turno, piloto: item.piloto || null,
+        lead_follow: !!item.lead_follow })
     }
     if (itens.length > MAX) return false
     gravar(itens)
@@ -67,7 +70,8 @@
         else atuais.push({ tipo: 'produto', produto: String(x.produto), variacao: x.variacao || '', quantidade: q })
       } else if (x.tipo === 'sessao') {
         var ja = atuais.some(function (y) { return y.tipo === 'sessao' && Number(y.servico) === Number(x.servico) && y.data === x.data && y.turno === x.turno })
-        if (!ja) atuais.push({ tipo: 'sessao', servico: Number(x.servico), data: String(x.data), turno: String(x.turno), piloto: Number(x.piloto) || null })
+        if (!ja) atuais.push({ tipo: 'sessao', servico: Number(x.servico), data: String(x.data), turno: String(x.turno), piloto: Number(x.piloto) || null,
+          lead_follow: !!x.lead_follow })
       }
     })
     gravar(atuais.slice(0, MAX))
@@ -161,6 +165,7 @@
     if (x.detalhe) li.appendChild(el('p', 'muted small', x.detalhe))
     if (x.tipo === 'produto' && !x.erro && x.quantidade > 1) li.appendChild(el('p', 'muted small', x.quantidade + ' × ' + usd(x.unitario)))
     if (x.deposito > 0) li.appendChild(el('p', 'small', t('Refundable security deposit: ', 'Depósito de segurança reembolsável: ') + usd(x.deposito)))
+    if (x.aviso) li.appendChild(el('p', 'carrinho-aviso small', x.aviso))           // #279: o kart próprio chega 2 dias antes
     var acoes = el('div', 'carrinho-acoes')
     if (x.tipo === 'produto') {
       var q = el('label', 'carrinho-qtd')
@@ -198,7 +203,11 @@
     tirar.type = 'button'
     tirar.setAttribute('aria-label', t('Remove ', 'Tirar ') + x.nome)
     tirar.addEventListener('click', function () {
-      var itens = ler(); itens.splice(x.idx, 1); gravar(itens); cotar()
+      var itens = ler()
+      // #279: tirar o Lead and Follow só desliga o add-on; a sessão fica no carrinho
+      if (x.tipo === 'addon') { if (itens[x.idx]) itens[x.idx].lead_follow = false }
+      else itens.splice(x.idx, 1)
+      gravar(itens); cotar()
     })
     acoes.appendChild(tirar)
     li.appendChild(acoes)

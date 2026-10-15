@@ -25,7 +25,7 @@ interface Cfg { morning_start: string; morning_end: string; afternoon_start: str
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
   invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null; site_kart?: string | null
-  kind?: 'session' | 'plan' | null; months?: number | null; sessions_month?: number | null }
+  kind?: 'session' | 'plan' | 'addon' | null; months?: number | null; sessions_month?: number | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
@@ -256,7 +256,8 @@ interface DriverConta { id: number; name: string; birth_date: string | null; cli
 /* #263: os karts que a página do Arrive and Drive vende. A chave é o nome do kart, o mesmo de
  * `command_center/vitrine/conteudo.py` (`KARTS`) e o mesmo que vai em `booking_services.site_kart`.
  * `test_servico_do_kart.py` tranca os dois lados juntos. */
-const KARTS_DO_SITE = ['Baby Kart', '4-stroke', '2-stroke', 'Adult Shifter']
+// #279: o kart próprio é a 5ª opção (dono, 15/10)
+const KARTS_DO_SITE = ['Baby Kart', '4-stroke', '2-stroke', 'Adult Shifter', 'Own kart']
 
 /* Serviços e preços (#50): o gerente muda o preço aqui, sem código. Quem já marcou fica
  * com o valor do dia; desativar tira da área do cliente sem apagar. */
@@ -308,8 +309,9 @@ function Servicos() {
             <div className="site-servico">
               <label className="fld"><span>{tr("Nome (o cliente lê, em inglês)")}</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
               <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
-              <label className="fld"><span>{tr("Tipo")}</span><select value={e.kind ?? sv.kind ?? 'session'} disabled={!gerente} onChange={x => muda(sv.id, { kind: x.target.value as 'session' | 'plan' })}>
-                <option value="session">{tr("Sessão avulsa")}</option><option value="plan">{tr("Plano mensal (Academy, Boost)")}</option></select></label>
+              <label className="fld"><span>{tr("Tipo")}</span><select value={e.kind ?? sv.kind ?? 'session'} disabled={!gerente} onChange={x => muda(sv.id, { kind: x.target.value as 'session' | 'plan' | 'addon' })}>
+                <option value="session">{tr("Sessão avulsa")}</option><option value="plan">{tr("Plano mensal (Academy, Boost)")}</option>
+                <option value="addon">{tr("Add-on do dia de treino (Lead and Follow)")}</option></select></label>
               <label className="fld"><span>{(e.kind ?? sv.kind) === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
               {(e.kind ?? sv.kind) === 'plan' && <>
                 <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={e.months_txt ?? String(sv.months ?? 1)} disabled={!gerente} onChange={x => muda(sv.id, { months_txt: x.target.value })} /></label>
@@ -327,7 +329,7 @@ function Servicos() {
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
                 <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></div>}
             </div>
-            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{sv.kind === 'plan' ? tr("na página da Academy") : tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
+            <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{sv.kind === 'plan' ? tr("na página da Academy") : sv.kind === 'addon' ? tr("add-on na reserva do site") : tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
               {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}
               {sv.site_kart && <> · <Chip tone="ok">{tr("vende o {0} no site", sv.site_kart)}</Chip></>}
               {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: o site cobra pelo Stripe; a invoice da equipe pede a linha")}</span></>}</div>

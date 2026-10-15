@@ -490,10 +490,29 @@ def _servicos_dos_karts():
         # 3 · nenhuma linha é deste kart: nasce a do site, com o preço da Rate Card
         yield f"""INSERT INTO booking_services
                     (name, price, deposit, kind, site_kart, sort, active, created_at)
-                  SELECT '{nome}', {float(k["preco"])}, 400, 'session', '{chave}', {i}, 1,
+                  SELECT '{nome}', {float(k["preco"])}, {float(k.get("deposito", 400))}, 'session', '{chave}', {i}, 1,
                          strftime('%Y-%m-%dT%H:%M:%fZ','now')
                    WHERE NOT {ja_e_do_kart}
                      AND NOT EXISTS (SELECT 1 FROM booking_services d WHERE LOWER(d.name)=LOWER('{nome}'))"""
+
+
+# ------------------------------------------------------------ o Lead and Follow do site (#279)
+# Dono, 15/10: "o lead and follow é um add on que pode ser adicionado no dia de treino seja arrive and drive ou
+# no academy … somente o de 769 por dia de treino". Nasce como serviço do painel de tipo 'addon', ligado pela
+# chave, com o mesmo cuidado dos karts: liga a linha de mesmo nome que a equipe já tenha; só cria se não houver
+# nenhuma; e nunca mexe em preço, nome ou estado de linha que já existe.
+def _servico_do_lead_and_follow():
+    from command_center.vitrine.conteudo import LEAD_AND_FOLLOW as LF
+    chave, nome = LF["chave"].replace("'", "''"), LF["nome"].replace("'", "''")
+    ja = f"EXISTS (SELECT 1 FROM booking_services b WHERE LOWER(COALESCE(b.site_kart,''))=LOWER('{chave}'))"
+    yield f"""UPDATE booking_services SET site_kart='{chave}'
+               WHERE id = (SELECT id FROM booking_services WHERE site_kart IS NULL AND kind='addon'
+                            AND LOWER(name)=LOWER('{nome}') ORDER BY active DESC, id LIMIT 1)
+                 AND NOT {ja}"""
+    yield f"""INSERT INTO booking_services (name, price, deposit, kind, site_kart, sort, active, created_at)
+              SELECT '{nome}', {float(LF["preco"])}, 0, 'addon', '{chave}', 50, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now')
+               WHERE NOT {ja}
+                 AND NOT EXISTS (SELECT 1 FROM booking_services d WHERE LOWER(d.name)=LOWER('{nome}') AND d.kind='addon')"""
 
 
 POS_MIGRACAO = [
@@ -579,6 +598,7 @@ POS_MIGRACAO = [
       for acao, antes, depois in REVISAO_21_09],
     # #263: os quatro karts do site, por último — depois de tudo o que mexe em booking_services
     *_servicos_dos_karts(),
+    *_servico_do_lead_and_follow(),
 ]
 
 
