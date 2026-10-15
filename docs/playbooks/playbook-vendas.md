@@ -23,7 +23,7 @@
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
 4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
-5. Agendamentos do site
+5. Agendamentos do site: carrinho, pagamento no Stripe e a loja do site
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
 8. Tabela de operações para a IA
@@ -644,6 +644,52 @@ remarque a sessão pela agenda (ou combine o reembolso no Stripe com o gerente) 
 **Depósito de segurança:** cobrado no carrinho (Stripe) e na invoice do Aceitar e da venda automática
 (QuickBooks), sempre que o serviço tem depósito em Serviços e preços. É devolvido em até 5 dias úteis
 depois da sessão se não houver incidente: a devolução continua sendo feita pela equipe.
+
+### 5.2 Achar um produto na loja do site e mandar o link ao cliente (#261)
+
+Dono, 15/10: *"Busca e filtro na loja… Eu faço — confirma?"* → **"sim"**.
+
+A loja do site novo (`/store/`) agora **acha produto**, do mesmo jeito que a loja de hoje:
+busca por texto, filtro de preço, ordenação e páginas. Quem filtra é o **servidor** — a página já
+chega pronta, então funciona no celular ruim do cliente e **funciona sem JavaScript**.
+
+**O caminho mais curto para mandar o link:**
+
+1. Abra `/store/` e escreva no campo **What are you looking for?** o que o cliente pediu: o nome
+   ("magnesium wheel set"), a marca ("OTK"), a peça ("axle") ou o **código do produto** (o SKU, por
+   exemplo `MXCKIT`) — o código acha um só.
+2. Precisa apertar o preço? **Min price** e **Max price** (em dólar). Quer ver do mais barato ao mais
+   caro? **Sort by › Price: low to high**.
+3. Achou: abra o produto e **copie o endereço da barra** (`…/store/p/<produto>/`). É esse o link que
+   vai para o cliente, no WhatsApp ou no e-mail — ele abre direto na página de comprar.
+4. Não achou nada? A loja diz isso e você continua: tire palavra ("magnesium wheel" em vez de
+   "magnesium wheel set 130"), abra a faixa de preço, ou veja a **categoria** pelos botões
+   (Chassis, Competition karts, Engines, Parts, Tires, Custom kart suits, Official URACE products,
+   Programs). A busca também funciona **dentro** de uma categoria.
+
+**O endereço serve de atalho** (dá para montar à mão e mandar):
+
+| O que você quer | Endereço |
+|---|---|
+| buscar na loja | `/store/?s=magnesium+wheel+set` |
+| buscar numa categoria | `/store/parts/?s=axle` |
+| faixa de preço | `/store/?min_price=300&max_price=900` |
+| do mais barato ao mais caro | `/store/?orderby=price` (ou `price-desc`, `date`) |
+| a segunda página | `/store/page/2/` (a categoria também: `/store/parts/page/2/`) |
+
+A página mostra quantos produtos existem ("Showing 1–24 of 70 products"): é o total que veio do
+servidor, não um chute. São **24 por página**.
+
+> **Cuidado ao mandar o link:** mande sempre o link **do produto** (`/store/p/…/`), não o link da
+> sua busca. O link da busca é só seu (ele fica fora do Google de propósito) e amanhã pode trazer
+> outro resultado. E o preço que vale é o que a página do produto mostra — ele vem do catálogo, nunca
+> de uma tabela escrita à mão.
+
+**O catálogo mudou?** O catálogo da loja do site é um arquivo do sistema
+(`command_center/vitrine/dados/produtos.json`). Produto que falta, preço errado ou foto trocada **não
+se arruma pela tela**: abra uma issue para o Claude, com o endereço do produto no `urace.us`.
+Em 15/10 entrou assim o **OTK Magnesium Wheels Set MXC - 130mm, 210mm** ($838.95), que estava no
+site de hoje e faltava no catálogo novo.
 
 ### Contas de clientes (Agendamentos do site › Contas de clientes)
 

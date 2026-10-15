@@ -228,3 +228,18 @@
 /the-driver-factory/
 /upgrading-your-kart-chassis-when-and-why/
 /urace-academy/
+# #261: os endereços de busca, filtro e ordenação que a loja do urace.us publica hoje — a busca do
+# WordPress (o SearchAction do Yoast publica /?s=), o `?s=` da loja, o filtro de preço do widget do
+# WooCommerce e a ordenação do Woo. Todos têm de continuar abrindo no site novo.
+/?s=wheels
+/shop/?s=wheels
+/store/?s=magnesium+wheel+set
+/store/?min_price=100&max_price=900
+/store/?orderby=price
+/store/?orderby=price-desc
+/store/?orderby=popularity
+/store/?orderby=rating
+/store/?orderby=date
+/store/?orderby=menu_order
+/product-category/engines/?orderby=price
+/store/parts/page/2/
