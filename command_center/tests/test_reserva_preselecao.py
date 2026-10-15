@@ -42,9 +42,10 @@ CASOS = [
 
 def _no_node(codigo):
     """Roda o módulo da regra no Node (o Node 22+ lê TypeScript direto) e devolve o JSON impresso."""
-    if not subprocess.run(["node", "--version"], capture_output=True).returncode == 0:
-        pytest.skip("sem node nesta máquina")
-    r = subprocess.run(["node", "--input-type=module", "-e", codigo], capture_output=True, text=True, cwd=PORTAL)
+    try:
+        r = subprocess.run(["node", "--input-type=module", "-e", codigo], capture_output=True, text=True, cwd=PORTAL)
+    except (FileNotFoundError, PermissionError):
+        pytest.skip("sem node nesta máquina (o teste de ponta a ponta cobre a mesma regra na tela)")
     if r.returncode != 0:
         if "ERR_UNKNOWN_FILE_EXTENSION" in r.stderr or "Unknown file extension" in r.stderr:
             pytest.skip("este Node não lê TypeScript direto (precisa do 22.18+)")
