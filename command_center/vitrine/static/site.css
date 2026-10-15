@@ -508,7 +508,9 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .link-cookies { background: none; border: 0; padding: 0 0 0 4px; color: inherit; text-decoration: underline; font: inherit;
   cursor: pointer; min-height: 40px }
 
-/* #282: o ⓘ do security deposit. Toque abre (.aberta, pelo carrinho.js); mouse e teclado abrem aqui. */
+/* #282: o ⓘ do security deposit. Toque abre (.aberta, pelo carrinho.js); mouse e teclado abrem aqui.
+   Fechado, o texto cresce para a ESQUERDA do ícone (right: 0): nunca empurra a página para o lado. Aberto,
+   o carrinho.js põe o `left` que deixa a caixa inteira na tela. */
 .dica { position: relative; display: inline-flex; vertical-align: middle }
 .dica-botao { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
   margin: -11px -8px -11px -10px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--cinza);
@@ -516,7 +518,7 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .dica-botao:hover, .dica.aberta .dica-botao { color: var(--vermelho) }
 .dica-botao:focus-visible { outline: 2px solid var(--vermelho); outline-offset: -6px }
 .dica.embaixo .dica-texto { bottom: auto; top: calc(100% + 6px) }
-.dica-texto { position: absolute; z-index: 30; bottom: calc(100% + 6px); left: 0; width: min(270px, calc(100vw - 32px));
+.dica-texto { position: absolute; z-index: 30; bottom: calc(100% + 6px); right: 0; width: min(270px, calc(100vw - 32px));
   padding: 10px 12px; border-radius: var(--raio); background: var(--tinta); color: var(--branco);
   font-size: .85rem; line-height: 1.45; font-weight: 400; text-align: left; box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
   opacity: 0; transform: translateY(4px); pointer-events: none; visibility: hidden;

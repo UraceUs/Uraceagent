@@ -2612,6 +2612,8 @@ def test_o_i_do_deposito_abre_no_toque_e_no_mouse(servidor, navegador, largura):
         v.get_by_role("button", name=re.compile("^Morning")).click()
         dep = v.locator(".agenda-deposito")
         dep.wait_for()
+        r = v.evaluate(_VAZA)                       # fechado, o texto escondido não empurra a página
+        assert not r["rola"] and not r["culpados"], r
         assert "$400" in dep.inner_text() and "refundable security deposit" in dep.inner_text()
 
         def confere(caixa, foto):
@@ -2648,6 +2650,8 @@ def test_o_i_do_deposito_abre_no_toque_e_no_mouse(servidor, navegador, largura):
         v.locator(".agenda-carrinho").click()
         v.wait_for_url(re.compile(r"/cart/"))
         v.locator(".carrinho-linha .dica").first.wait_for()
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
         confere(v.locator(".carrinho-linha .dica").first, "carrinho-linha")
         confere(v.locator(".carrinho-total .dica").first, "carrinho-resumo")
         r = v.evaluate(_VAZA)

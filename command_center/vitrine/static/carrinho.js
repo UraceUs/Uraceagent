@@ -129,6 +129,7 @@
     for (var i = 0; i < abertas.length; i++) {
       if (abertas[i] === menos) continue
       abertas[i].classList.remove('aberta')
+      var tx = abertas[i].querySelector('.dica-texto'); tx.style.left = ''; tx.style.right = ''
       abertas[i].querySelector('.dica-botao').setAttribute('aria-expanded', 'false')
     }
   }
@@ -139,7 +140,7 @@
     var w = Math.min(270, tela - 32)
     txt.style.width = w + 'px'
     var esq = Math.max(16, Math.min(r.left + r.width / 2 - w / 2, tela - 16 - w))
-    txt.style.left = Math.round(esq - r.left) + 'px'
+    txt.style.left = Math.round(esq - r.left) + 'px'; txt.style.right = 'auto'
     caixa.classList.toggle('embaixo', r.top < txt.offsetHeight + 24)
   }
   function aoChegar(ev) {
