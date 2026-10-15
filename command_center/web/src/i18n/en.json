@@ -3664,5 +3664,19 @@
 "buscaria o link do programa": "would fetch the program link",
 "consultaria a base de conhecimento": "would check the knowledge base",
 "registraria uma dúvida sem resposta": "would log an unanswered question",
-"guarda: {0}": "guard: {0}"
+"guarda: {0}": "guard: {0}",
+"De onde veio": "Where it came from",
+"O que o site gravou com a mensagem. Sem dado da pessoa.": "What the site saved with the message. No personal data.",
+"origem": "source",
+"mídia": "medium",
+"campanha": "campaign",
+"termo": "term",
+"anúncio": "ad",
+"id da campanha": "campaign id",
+"id do conjunto": "ad set id",
+"clique do Google": "Google click",
+"clique do Meta": "Meta click",
+"navegador (Meta)": "browser (Meta)",
+"clique (Meta)": "click (Meta)",
+"indicação": "referral"
 }

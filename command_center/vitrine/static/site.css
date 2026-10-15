@@ -480,3 +480,6 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
   transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
 .idioma-btn.on { border-color: var(--tinta); background: var(--tinta); color: #fff }
 .idioma-btn:active { transform: scale(.97) }
+/* #260: o `noscript` da medição (GTM e pixel) não desenha nada — a política do site não deixa
+   estilo inline, então quem esconde é esta classe */
+.medicao-ns { display: none }

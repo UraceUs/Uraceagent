@@ -334,6 +334,10 @@ MIGRACOES = [
     # 14/10 — dono (#248): "switch para mudar de português para inglês". O idioma em que a pessoa
     # comprou (en | pt): os e-mails do pagamento saem nele.
     ("store_orders", "lang", "TEXT"),
+    # 15/10 — dono (#260): medição de campanha no site. De onde o contato veio (json com utm_source,
+    # utm_medium, utm_campaign, utm_term, utm_content, gclid, fbclid, fbp, fbc, campaign_id, adset_id).
+    # Só campanha: nenhum dado da pessoa entra aqui.
+    ("opportunities", "campaign", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

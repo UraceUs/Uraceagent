@@ -122,6 +122,11 @@
     carrinhoOk.textContent = 'Added to your cart. '
     var a = document.createElement('a'); a.href = '/cart/'; a.textContent = 'View cart and pay'
     carrinhoOk.appendChild(a)
+    // #260: o `add_to_cart` da campanha (só catálogo, valor e moeda). Sem medição, não faz nada.
+    if (window.uraceMedicao) {
+      window.uraceMedicao.push({ event: 'add_to_cart', ecommerce: { currency: 'USD', value: Number(s.price) || 0,
+        items: [{ item_id: 'sessao-' + s.id, item_name: s.name, item_category: 'sessao', price: Number(s.price) || 0, quantity: 1 }] } })
+    }
   })
 
   function desenharTurnos() {

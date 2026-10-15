@@ -15,7 +15,7 @@ from urllib.parse import quote, urlencode
 from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
-from command_center.vitrine import idioma
+from command_center.vitrine import idioma, medicao
 from command_center.vitrine.paginas import PORTAL, _lista, _negocio, estatico, layout, usd
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
@@ -799,11 +799,13 @@ def _form_comprar(p):
         for v in p["variations"]:
             nome = " / ".join(v["attrs"])
             ok = v.get("in_stock", True) and (v.get("price") or p["price"])
-            rows.append(f"<option value=\"{e(nome)}\"{'' if ok else ' disabled'}>{e(nome)}"
+            rows.append(f"<option value=\"{e(nome)}\" data-preco=\"{v.get('price') or p['price']}\""
+                        f"{'' if ok else ' disabled'}>{e(nome)}"
                         f"{' — ' + usd(v.get('price') or p['price']) if ok else ' (out of stock)'}</option>")
         rotulo = p["attributes"][0]["name"] if p["attributes"] else "Option"
         opcoes = f'<label>{e(rotulo)}<select name="variacao">{"".join(rows)}</select></label>'
-    return f"""<form class="form-pedido form-comprar" method="post" action="/ops/api/vitrine/checkout">
+    return f"""<form class="form-pedido form-comprar" method="post" action="/ops/api/vitrine/checkout"
+      data-preco="{p['price']}" data-nome="{e(p['name'])}">
       <input type="hidden" name="produto" value="{e(p['slug'])}">
       {opcoes}
       <label>Quantity<input name="quantidade" type="number" min="1" max="20" value="1" inputmode="numeric"></label>
@@ -1155,6 +1157,9 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
                 f'<p class="small muted">{T("Your order page, to check it any time:", "A página do seu pedido, para conferir quando quiser:")} '
                 f'<a href="/order/{e(token)}/">{T("order", "pedido")} #{o["id"]}</a></p>')
     marca = " data-limpar-carrinho" if limpar else ""
+    # #260: o `purchase` da campanha, só no pedido pago. Valor, moeda, número do pedido e item do
+    # catálogo — nunca nome, e-mail, telefone, endereço ou piloto (medicao.item_do_pedido).
+    eventos = (medicao.compra(o, ls),) if st == "pago" else ()
     corpo = f"""<section class="faixa clara" aria-labelledby="h-ok"><div class="largura estreita texto pedido-pagina pedido-{st}"{marca}>
   {idioma.chave(lang, volta or caminho)}
   <p class="eyebrow">{T("Order", "Pedido")} #{o['id']}</p>
@@ -1162,7 +1167,8 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
   {aviso_erro}{novo}{corpo_estado}
   {meu_link}
 </div></section>"""
-    return layout(host=host, caminho=caminho, titulo=titulo, descricao=desc, corpo=corpo, indexar=False, lang=lang)
+    return layout(host=host, caminho=caminho, titulo=titulo, descricao=desc, corpo=corpo, indexar=False, lang=lang,
+                  medicao_eventos=eventos)
 
 
 def _desc(texto, complemento):

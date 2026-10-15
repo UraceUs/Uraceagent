@@ -404,6 +404,7 @@ CREATE TABLE IF NOT EXISTS opportunities (
   closing        TEXT,                      -- json: passos do fechamento e resultado de cada um
   starred        INTEGER,
   qbo_item_id    TEXT,                      -- #204: item do catálogo do QuickBooks (preço da tabela)
+  campaign       TEXT,                      -- #260: de onde o contato veio (json: utm_*, gclid, fbclid, fbp, fbc…)
   created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
   updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );

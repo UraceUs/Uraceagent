@@ -28,7 +28,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from command_center.db import agora, get_db, inserir
 from command_center.providers import agenda_sessoes as ag
-from command_center.vitrine import idioma, paginas
+from command_center.vitrine import idioma, medicao, paginas
 from command_center.vitrine import paginas_site as ps
 
 r = APIRouter(tags=["vitrine"])
@@ -37,10 +37,17 @@ r = APIRouter(tags=["vitrine"])
 # #174: o formulário de comprar termina num 303 para o checkout.stripe.com, e o Chrome confere o
 # form-action também no redirecionamento — só esse endereço de fora entra, e só aí. (O e2e troca
 # pelo Stripe falso dele em STRIPE_CHECKOUT_ORIGEM.)
-def csp():
+# #260: a medição abre o mínimo — os hosts do Google Tag Manager e do Meta — e só na resposta que
+# levou a medição no HTML (`medindo`). Sem id no ambiente, a política é exatamente a de antes.
+def csp(medindo=False):
     checkout = os.environ.get("STRIPE_CHECKOUT_ORIGEM", "https://checkout.stripe.com")
-    return ("default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; "
-            f"connect-src 'self'; base-uri 'none'; form-action 'self' {checkout}; frame-ancestors 'none'")
+    d = {"default-src": ["'self'"], "img-src": ["'self'", "data:"], "style-src": ["'self'"],
+         "font-src": ["'self'"], "script-src": ["'self'"], "connect-src": ["'self'"],
+         "base-uri": ["'none'"], "form-action": ["'self'", checkout], "frame-ancestors": ["'none'"]}
+    if medindo:
+        for diretiva, hosts in medicao.csp_hosts().items():
+            d.setdefault(diretiva, []).extend(h for h in hosts if h not in d.get(diretiva, ()))
+    return "; ".join(f"{k} {' '.join(v)}" for k, v in d.items())
 
 # Páginas fixas: caminho → função(host). As dinâmicas (blog, loja, contato) estão em `_dinamica`.
 PAGINAS = {
@@ -73,8 +80,10 @@ def e_do_site(request):
 
 
 def _html(conteudo, status=200):
+    # #260: a política abre os hosts da medição só quando a página realmente levou o bloco dela —
+    # assim a permissão nunca é maior do que o HTML usa, sem passar o caminho por oito chamadas
     return HTMLResponse(conteudo, status_code=status, headers={
-        "Content-Security-Policy": csp(),
+        "Content-Security-Policy": csp(medindo=medicao.MARCA in conteudo),
         "X-Frame-Options": "DENY",
         # página pública, igual para todo mundo: pode ficar 5 min no navegador
         "Cache-Control": "public, max-age=300",
@@ -290,9 +299,19 @@ def _confirmar_pessoa(para, assunto, texto):
         pass
 
 
+def _campanha(c):
+    """#260: de onde o contato veio (utm_*, gclid, fbclid, fbp, fbc, campaign_id, adset_id).
+
+    O `campanha.js` põe os campos escondidos no formulário — com JavaScript e sem ele. Vendas vê
+    isso no card da oportunidade. Só campanha: nada da pessoa entra aqui."""
+    from command_center.providers import venda_site
+    return venda_site.utm_limpo({k: c.get(k) for k in venda_site.CAMPANHA})
+
+
 def _oportunidade(con, c, servico, valor, notas, origem="Site"):
     oid = inserir(con, "opportunities", name=c["nome"], email=c["email"].lower(), phone=c.get("telefone") or None,
-                  service=servico, amount=valor, stage="NOVO", source=origem, notes=notas)
+                  service=servico, amount=valor, stage="NOVO", source=origem, notes=notas,
+                  campaign=_campanha(c))
     inserir(con, "opp_events", opp_id=oid, kind="note", title="Chegou pelo site", detail=notas[:2000], at=agora(), actor="site")
     con.commit()
     return oid
