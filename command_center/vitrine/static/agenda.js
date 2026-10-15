@@ -6,7 +6,13 @@
  *
  * #236: o kart escolhido é o serviço do painel com esse nome, e o preço mostrado é o do painel (#50:
  * "já vai com aquele serviço e o preço que está lá"). "Add to cart" põe a sessão no carrinho do site,
- * que paga tudo junto no Stripe (o piloto é escolhido no carrinho, depois do login). */
+ * que paga tudo junto no Stripe (o piloto é escolhido no carrinho, depois do login).
+ *
+ * #253 (dono, 15/10, com o serviço "teste" desativado no painel e a reserva travada no ar):
+ * - o botão diz o que falta de verdade: sem dia, "Pick a day"; com dia e sem turno, "Pick a time";
+ * - escolher o dia já escolhe o turno quando só um está aberto, e o turno de outro dia nunca fica
+ *   marcado se não existe no dia novo; faltando o turno, os turnos ficam em destaque;
+ * - painel sem serviço para esse kart: um aviso honesto com o contato, em vez de um botão morto. */
 (function () {
   'use strict'
   var raiz = document.querySelector('.agenda')
@@ -23,7 +29,10 @@
   var precoEl = raiz.querySelector('.agenda-preco')
   var porNoCarrinho = raiz.querySelector('.agenda-carrinho')
   var carrinhoOk = raiz.querySelector('.carrinho-ok')
-  var servicos = [], comCarrinho = false
+  var indisponivel = raiz.querySelector('.agenda-indisponivel')
+  var indisponivelTxt = raiz.querySelector('.agenda-indisponivel-txt')
+  var servicos = [], comCarrinho = false, servicosOk = false
+  var AVISO_PADRAO = 'Days in grey are closed or full. Times are Orlando time.'
   var SEMANA = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   var NOMES = { manha: 'Morning', tarde: 'Afternoon' }
   var dias = {}, meses = [], mes = null, dia = null, periodo = null, cfg = null, carregou = false
@@ -54,10 +63,31 @@
   function dataLonga(iso) {
     return new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   }
+  /** Os turnos abertos no dia. */
+  function turnosAbertos(iso) {
+    var d = dias[iso]
+    return ['manha', 'tarde'].filter(function (p) { return !!(d && d[p] && d[p].open) })
+  }
+  /** O turno que fica ao escolher o dia: o que já estava, se abre nesse dia; o único aberto; senão, nenhum. */
+  function turnoDoDia(iso) {
+    var abertos = turnosAbertos(iso)
+    if (periodo && abertos.indexOf(periodo) >= 0) return periodo
+    return abertos.length === 1 ? abertos[0] : null
+  }
 
   function atualizar() {
     var k = kart()
     var s = servico(k)
+    // #253: sem serviço nenhum ativo no painel, não há reserva online; com serviços, mas nenhum deste
+    // kart, dá para reservar outra sessão na área do cliente — o aviso diz qual dos dois é o caso
+    var semReservaOnline = servicosOk && !servicos.length
+    var semEsseKart = servicosOk && !!servicos.length && !s
+    if (indisponivel && indisponivelTxt) {
+      indisponivelTxt.textContent = semReservaOnline
+        ? 'Online booking is closed right now. Talk to us and we book your session for you:'
+        : semEsseKart ? 'The ' + (k ? k.nome : 'kart') + ' is not open for online booking right now. Pick another kart above, or talk to us:' : ''
+      indisponivel.hidden = !(semReservaOnline || semEsseKart)
+    }
     resumo.textContent = (dia ? dataLonga(dia) + (periodo ? ' · ' + NOMES[periodo] : '') + ' · ' : '') + (k ? k.nome : '') + ' · per driver'
     precoEl.textContent = s ? usd(s.price) : k ? usd(k.preco) : ''
     var q = []
@@ -67,9 +97,14 @@
     CAMPANHA.forEach(function (c) { var v = daUrl.get(c); if (v) q.push(c + '=' + encodeURIComponent(v.slice(0, 120))) })
     ir.setAttribute('href', portal + (q.length ? '?' + q.join('&') : ''))
     // sem a agenda carregada (erro ou nada aberto), o botão continua levando à área do cliente
-    var pronto = !carregou || (dia && periodo)
-    ir.textContent = !carregou ? 'Book online' : pronto ? 'Continue to booking' : 'Pick a day to continue'
+    var falta = !carregou ? null : !dia ? 'dia' : !periodo ? 'turno' : null
+    var pronto = !falta
+    ir.textContent = !carregou ? 'Book online' : pronto ? 'Continue to booking'
+      : falta === 'dia' ? 'Pick a day to continue' : 'Pick a time to continue'
     if (pronto) ir.removeAttribute('aria-disabled'); else ir.setAttribute('aria-disabled', 'true')
+    ir.hidden = semReservaOnline                      // nada ativo no painel: o botão não levaria a nada
+    if (carregou) aviso.textContent = falta === 'turno' ? 'Now pick Morning or Afternoon.' : AVISO_PADRAO
+    turnos.classList.toggle('falta', falta === 'turno')
     if (porNoCarrinho) {
       porNoCarrinho.hidden = !(comCarrinho && s && window.uraceCarrinho)
       porNoCarrinho.disabled = !(carregou && dia && periodo)
@@ -122,7 +157,8 @@
       b.setAttribute('aria-pressed', String(dia === iso))
       b.setAttribute('aria-label', dataLonga(iso) + (aberto ? ', available' : ', not available'))
       if (aberto) b.addEventListener('click', (function (x) {
-        return function () { dia = x; periodo = null; desenharMes(); desenharTurnos(); atualizar() }
+        // #253: o turno de outro dia não fica marcado se não abre neste; um só turno aberto já vem escolhido
+        return function () { dia = x; periodo = turnoDoDia(x); desenharMes(); desenharTurnos(); atualizar() }
       })(iso))
       grade.appendChild(b)
     }
@@ -144,8 +180,8 @@
   var apiServicos = raiz.getAttribute('data-servicos')
   if (apiServicos) fetch(apiServicos, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
-    .then(function (d) { servicos = d.services || []; comCarrinho = !!d.cart; atualizar() })
-    .catch(function () { /* sem a lista do painel: fica o "Continue to booking" */ })
+    .then(function (d) { servicos = d.services || []; comCarrinho = !!d.cart; servicosOk = true; atualizar() })
+    .catch(function () { /* sem a lista do painel (rede): fica o "Continue to booking", sem aviso falso */ })
 
   fetch(api, { credentials: 'omit', headers: { Accept: 'application/json' } })
     .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
@@ -158,7 +194,7 @@
       mes = primeiro.date.slice(0, 7)
       carregou = true
       mesBox.hidden = false
-      aviso.textContent = 'Days in grey are closed or full. Times are Orlando time.'
+      aviso.textContent = AVISO_PADRAO
       desenharMes()
       atualizar()
     })

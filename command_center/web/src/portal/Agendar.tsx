@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { papi, PortalError, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type Servico } from './api'
+import { kartSemServico, servicoPreSelecionado } from './preselecao'
 
 const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
 const STATUS: Record<string, [string, string]> = { pendente: ['Waiting for confirmation', 'warn'], confirmada: ['Confirmed', 'ok'],
@@ -121,9 +122,9 @@ export function Agendar({ conta }: { conta: Account }) {
     try {
       const d = await papi<{ config: AgendaCfg; dias: Dia[]; services: Servico[] }>('GET', '/availability')
       setDias(d.dias); setCfg(d.config); setServicos(d.services)
-      // o kart escolhido no site novo escolhe o serviço com esse nome, se houver um só
-      const doKart = doSite.kart ? d.services.filter(x => x.name.toLowerCase().includes(doSite.kart!.toLowerCase())) : []
-      setServico(s => d.services.some(x => x.id === s) ? s : doKart.length === 1 ? doKart[0].id : d.services.length === 1 ? d.services[0].id : null)
+      // #253: o kart escolhido no site novo escolhe só o serviço com esse nome; sem serviço do kart,
+      // nada vem escolhido (a tela avisa) — nunca um serviço que não é do kart
+      setServico(s => servicoPreSelecionado(d.services, doSite.kart, s))
       // o dia que veio do site já fechou ou lotou: some a escolha, o cliente escolhe outro
       setDia(x => x && !d.dias.some(y => y.date === x && y.any_open) ? null : x)
       // abre no primeiro mês que tem dia aberto: no dia 30, o mês corrente pode não ter mais nada
@@ -164,8 +165,15 @@ export function Agendar({ conta }: { conta: Account }) {
     {!conta.drivers.length ? <div className="card card-b stack"><p className="muted" style={{ margin: 0 }}>Add a driver first, then pick a date.</p><div><Link className="btn primary" to="/portal/drivers">Add a driver</Link></div></div>
       : !livres.length ? <div className="banner warn"><span className="bi">▲</span><div className="grow">Your drivers need up-to-date measurements before booking. <Link to="/portal/drivers">Update drivers</Link></div></div>
       : dias === null ? <div className="state"><span className="spin" /></div>
+      /* #253: sem serviço ativo no painel não é "sem data": a tela diz a verdade e dá o contato */
+      : !servicos.length ? <p className="muted">Online booking is closed right now. Please talk to us at <a href="mailto:support@urace.us">support@urace.us</a> and we book your session for you.</p>
       : !temAlgo ? <p className="muted">No dates open for booking right now. Please check back soon or contact us.</p>
       : <div className="card card-b stack">
+        {/* #253: a tela diz qual kart veio do site, e só pré-seleciona o serviço desse kart */}
+        {doSite.kart && <p className="small muted" style={{ margin: 0 }}>From the site: <b>{doSite.kart}</b></p>}
+        {kartSemServico(servicos, doSite.kart) && <div className="banner warn"><span className="bi" aria-hidden="true">▲</span><div className="grow">
+          <b>{doSite.kart}</b> is not open for online booking right now. Pick one of the sessions below, or talk to us:{' '}
+          <a href="mailto:support@urace.us">support@urace.us</a> · <a href="tel:+14072502291">+1 (407) 250 2291</a>.</div></div>}
         <fieldset className="portal-servicos"><legend className="small">Session type</legend>
           {servicos.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
             <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />

@@ -10,6 +10,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { bloqueioDoPiloto, dataLonga, escolhaDoSite, faixa, PERIODOS } from './Agendar'
 import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Servico, type CheckoutPlano, type Plano } from './api'
 import { Aviso, Campo, Endereco, FormPiloto } from './Portal'
+import { kartSemServico, servicoPreSelecionado } from './preselecao'
 
 interface DiaPublico { date: string; manha: { open: boolean; spots: number }; tarde: { open: boolean; spots: number } }
 type Turno = 'manha' | 'tarde'
@@ -67,9 +68,9 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
       fetch('/ops/api/vitrine/agenda', { credentials: 'omit' }).then(r => r.json())])
       .then(([s, a]: [{ services: Servico[]; auto_sell: boolean; cart?: boolean }, { config: AgendaCfg; dias: DiaPublico[] }]) => {
         setServicos(s.services); setAutoSell(s.auto_sell); setComCarrinho(!!s.cart); setCfg(a.config); setDias(a.dias)
-        // o kart escolhido no site escolhe o serviço com esse nome, quando há um só
-        const doKart = inicial.kart ? s.services.filter(x => x.name.toLowerCase().includes(inicial.kart!.toLowerCase())) : []
-        setServico(v => s.services.some(x => x.id === v) ? v : doKart.length === 1 ? doKart[0].id : s.services.length === 1 ? s.services[0].id : null)
+        // #253: o kart escolhido no site escolhe só o serviço com esse nome; sem serviço do kart,
+        // nada vem escolhido (a tela avisa) — nunca um serviço que não é do kart
+        setServico(v => servicoPreSelecionado(s.services, inicial.kart, v))
         setDia(d => d && a.dias.some(x => x.date === d && (x.manha.open || x.tarde.open)) ? d : null)
       })
       .catch(() => setErro('We could not load the calendar. Please refresh the page.'))
@@ -84,6 +85,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const abertos = useMemo(() => (dias || []).filter(d => d.manha.open || d.tarde.open), [dias])
   const escolhidoDia = abertos.find(d => d.date === dia) || null
   const s = servicos?.find(x => x.id === servico) || null
+  const semServicoDoKart = kartSemServico(servicos, inicial.kart)          // #253: kart sem serviço no painel
   const deposito = s?.deposit || 0
   const plano = inicial.plano ? planos?.find(x => x.id === inicial.plano) || null : null
   const sessaoPronta = plano ? true : !!(s && escolhidoDia && turno && escolhidoDia[turno].open)
@@ -150,9 +152,17 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
       : <li className={estado(passo1, true)}><section className="card" aria-labelledby="r1">
         <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">{passo1 ? '✓' : '1'}</span><h2 className="h2" id="r1">Your session</h2>
           {passo1 && <button className="btn ghost sm" onClick={() => setSessaoOk(false)}>Change</button>}</div>
+        {/* #253: a tela diz qual kart veio do site, e só pré-seleciona o serviço desse kart */}
+        {!passo1 && inicial.kart && <p className="small muted" style={{ margin: 0 }}>From the site: <b>{inicial.kart}</b></p>}
+        {!passo1 && semServicoDoKart && <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
+          <b>{inicial.kart}</b> is not open for online booking right now. Pick one of the sessions below, or talk to us:{' '}
+          <a href="mailto:support@urace.us">support@urace.us</a> · <a href="tel:+14072502291">+1 (407) 250 2291</a>.</div></div>}
         {passo1 && s && dia && turno && cfg ? <p className="reserva-resumo" style={{ margin: 0 }}>{s.name} · {dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)}) · <b>{usd(s.price)}</b></p>
           : servicos === null || dias === null ? <div className="state"><span className="spin" /></div>
-          : !servicos.length || !abertos.length ? <p className="muted" style={{ margin: 0 }}>No dates open for booking right now. Please check back soon or contact us at support@urace.us.</p>
+          /* #253: sem serviço ativo no painel não é "sem data": a tela diz a verdade e dá o contato */
+          : !servicos.length ? <p className="muted" style={{ margin: 0 }}>Online booking is closed right now. Please talk to us at{' '}
+            <a href="mailto:support@urace.us">support@urace.us</a> or <a href="tel:+14072502291">+1 (407) 250 2291</a> and we book your session for you.</p>
+          : !abertos.length ? <p className="muted" style={{ margin: 0 }}>No dates open for booking right now. Please check back soon or contact us at support@urace.us.</p>
           : <>
             <fieldset className="reserva-opcoes" style={{ border: 0, padding: 0, margin: 0 }}><legend className="small muted" style={{ marginBottom: 6 }}>Kart and session</legend>
               {servicos.map(x => <label key={x.id} className={`reserva-opcao${servico === x.id ? ' on' : ''}`}>

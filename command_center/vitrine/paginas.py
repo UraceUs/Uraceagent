@@ -307,6 +307,10 @@ def arrive_and_drive(host):
       <div class="agenda-grade" role="group" aria-label="Available days"></div>
       <div class="agenda-turnos" role="group" aria-label="Morning or afternoon" hidden></div>
       <p class="agenda-aviso" role="status">Loading the open days…</p>
+      <!-- #253: o kart (ou o site inteiro) sem serviço no painel: um aviso honesto com o contato, no lugar de um botão morto -->
+      <p class="agenda-indisponivel" role="status" hidden><span class="agenda-indisponivel-txt"></span>
+        <a href="{e(C.SITE['whatsapp'])}" rel="noopener">WhatsApp {e(C.SITE['telefone'])}</a>
+        <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
       <div class="agenda-total"><span class="agenda-resumo">4-stroke · per driver</span><strong class="agenda-preco">{usd(C.KARTS[1]['preco'])}</strong></div>
       <button type="button" class="btn btn-cheio agenda-carrinho" hidden>Add to cart</button>
       <p class="carrinho-ok" role="status" aria-live="polite"></p>

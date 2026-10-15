@@ -533,6 +533,17 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    **Toda compra pede a conta do site** (#248, dono 14/10: *"Para a pessoa conseguir comprar com a gente,
    ela tem que criar a conta dela lá no site da URACE"*): **Buy now** sem conta leva para entrar (ou criar
    a conta) e volta para o produto.
+   > **O nome do serviço tem de ter o nome do kart** (#253, dono 15/10, com o print da tela de reserva
+   > mostrando um serviço de teste já escolhido: *"remova esse produto d teste quando for para essa
+   > pagina ja vai com o produto pré selecionado"*). Quem chega do site com um kart só vê
+   > pré-selecionado o serviço de **Agendamentos do site › Serviços e preços** cujo **nome contém o nome
+   > do kart** (Baby Kart, 4-stroke, 2-stroke, Adult Shifter) — por exemplo "Arrive and Drive 2-stroke".
+   > Nenhum serviço com o nome do kart: a reserva **não escolhe nada** (nunca um serviço que não é do
+   > kart) e a tela avisa que esse kart não está aberto para reserva online agora, com o contato.
+   > Nenhum serviço **ativo**: o site e a reserva dizem que a reserva online está fechada e mandam falar
+   > com a gente, em vez de mostrar um botão que não leva a nada. No calendário do site o botão diz o
+   > que falta: "Pick a day to continue" sem dia, "Pick a time to continue" com o dia e sem turno; dia
+   > com um turno só aberto já vem com o turno escolhido.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
    o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
    **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho também pede a conta (#248).
@@ -953,6 +964,8 @@ instrução à gerência.
 | Passo Kommo "feito", mas com a nota "não achei a etapa 'Closed won' neste funil do Kommo" | o lead não se mexeu: mova a etapa à mão no chat ou avise a gerência |
 | Site: "a conta do site ainda não está ligada a um card (Client ID)" | Agendamentos do site › Contas de clientes: ligue o driver ao card certo; o painel tenta a invoice de novo |
 | Site: "o serviço não tem item do QuickBooks…" | é da gerência: escolher o item em Serviços e preços |
+| Site: "… is not open for online booking right now" (reserva do kart) | o serviço com o nome daquele kart não está ativo: ative ou crie em Serviços e preços com o nome do kart (#253) |
+| Site: "Online booking is closed right now" | nenhum serviço ativo em Serviços e preços: sem isso não há venda online (e o site manda a pessoa falar com a gente) |
 | Site: "o cliente não está no QuickBooks…" | avise a gerência |
 | Site: "não achei o item "Security deposit" no QuickBooks…" | avise a gerência (sincronizar o QuickBooks) |
 | Site: "o piloto não tem data de nascimento" | o cliente completa o driver na área do cliente, ou peça ao cliente |
