@@ -537,7 +537,7 @@ Na venda automática, o card só é ligado sozinho a um card que existe com **du
 confirmado da conta é o do card **e** o nome do piloto é o do card. Fora disso nasce card novo
 marcado "POSSÍVEL DUPLICADO" para a equipe conferir e unir.
 
-**Plano mensal pelo site** (#169, Academy e Boost): o cliente compra o plano, a primeira
+**Plano mensal pelo site** (#169, Academy): o cliente compra o plano, a primeira
 mensalidade sai na hora e as outras ficam agendadas no dia 1. Nada é cobrado sem a venda
 automática ligada.
 
@@ -559,11 +559,22 @@ sozinhos para a página que herdou: link velho de cliente ou de anúncio continu
 **produto da tarefa** não mudou de nome (*Urace Daily*, *Academy*, *Lead and Follow*, *Arrive and
 Drive*… — seção 8): mudou o nome do programa no site, não o do quadro.
 
-Preço, sempre da **Rate Card** (aba Academy): diária tudo incluso — kart próprio $500 · Baby Kart $719 ·
-4 stroke $719 · 2 stroke $819 · Adult Shifter $899. **Lead and Follow** fechado com antecedência **$769
-por piloto** (pacote de 5 sessões $3.460,50); o last-minute só o operador fecha na pista. Mensal sem
-contrato — kart próprio + mecânico $1.200 · kart próprio $1.800 · Baby Kart e 4 stroke $2.756,90 ·
-2 stroke $3.156,90. Fora do OKC, +$250 por sessão.
+Preço, sempre da **planilha de preços** do dono (15/10, #273). A taxa de pista **não** está incluída:
+é paga direto à pista.
+
+- **Diária** (Arrive and Drive / dia de Academy): kart próprio $500 · Baby Kart $719 · 4 stroke $719 ·
+  2 stroke $819 · Adult Shifter $899.
+- **Lead and Follow** é um **add-on do dia de treino** — Arrive and Drive ou Academy — e no site vale só
+  **$769 por dia de treino** (dono, 15/10). O pacote de 5 e o last-minute não são oferecidos no site.
+- **Academy, mensal sem contrato (4 sessões)**: Baby Kart e 4 stroke **$2.756** ($689 a sessão) · 2 stroke
+  **$3.156** ($789) · kart próprio $1.800 ($450 a sessão extra) · kart próprio + mecânico $1.200 ($300).
+- **Contrato de 6 meses** (27 sessões, 4%, entrada de 33% e 5 parcelas): 4 stroke **$17.858,88**
+  (entrada $5.893,43, parcelas de $2.393,09) · 2 stroke **$20.450,88** ($6.748,79 e 5 × $2.740,42).
+- **Contrato de 12 meses** (54 sessões, 8%, entrada de 20% e 11 parcelas): 4 stroke **$34.229,52**
+  (entrada $6.845,90, parcelas de $2.489,42) · 2 stroke **$39.197,52** ($7.839,50 e 11 × $2.850,73).
+- **Fora do OKC**: Academy +$250 (hotel, comida e transporte).
+
+Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: não estão na planilha.
 
 ### 5.1 Carrinho do site e pagamento no Stripe (#236)
 

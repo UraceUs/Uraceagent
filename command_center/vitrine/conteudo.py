@@ -323,7 +323,7 @@ ARRIVE = {
     # #262 (dono, 15/10): um caminho só — carrinho → conta → Stripe → waiver. Nada de invoice no site.
     "passos": ("Pick your kart, your day and morning or afternoon, and add it to your cart",
                "Sign in or create your account and add your drivers",
-               "Tell us if you want Lead and Follow — a coach on track with you — and we add it to your session",
+               "Tell us if you want Lead and Follow ($769) — a coach on track with you — and we add it to your session",
                "Pay with Stripe (card, Apple Pay or Google Pay) and sign the driver’s waiver in your account — "
                "your spot is confirmed",
                "Arrive 10 minutes early. Check in, get settled, feel the excitement building.",
@@ -343,14 +343,13 @@ ARRIVE = {
           "3 sessions and 4-5 h for 6 sessions from arrival until the end.",
           "Available Experience Days: Experiences are available every day, 8 AM – 8 PM. Please confirm availability when "
           "booking.")),
-        # #254: o que a página de Professional Coaching dizia; o preço do Lead and Follow é o da Rate Card
-        # (fechado com antecedência, $769 por piloto; pacote de 5 sessões, $3,460.50).
+        # #254: o que a página de Professional Coaching dizia. #273 (dono, 15/10): o Lead and Follow é um add-on
+        # do dia de treino — Arrive and Drive ou Academy — e no site vale só o de $769 por dia de treino.
         ("Coaching, data and Lead and Follow",
          ("Our teaching method includes data analysis, on-board video study and explanation of the theories involved in "
           "all the driving aspects we discuss: the driver leaves knowing what to change, not only how fast they went.",
-          "Lead and Follow is an additional fee for a partner trainer to make your driving or training experience more "
-          "exciting, if you don’t wanna do it alone. Booked in advance it is $769 per driver, and a package of five "
-          "sessions is $3,460.50.",
+          "Lead and Follow is an add-on for any training day — Arrive and Drive or URACE Academy: a partner trainer on "
+          "track with you, if you don’t wanna do it alone. It is $769 per training day.",
           "All weekday training sessions must be confirmed by Sunday. All weekend sessions must be confirmed 24h in "
           "advance. Please call if you have any questions.")),
         ("Track fees (paid to the Orlando Kart Center)",
