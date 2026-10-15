@@ -108,8 +108,9 @@ def test_com_a_variavel_a_pagina_leva_a_medicao_e_a_politica_abre_o_minimo(cli, 
     assert d and d["gtm"] == GTM and d["pixel"] == PIXEL and d["eventos"] == []
     # o nosso script, servido do próprio site: nenhum script inline e nenhum `src` de fora no HTML
     assert re.search(r'<script src="/_s/medicao\.js\?v=[0-9a-f]+" defer></script>', r.text)
-    assert not re.search(r'<script(?![^>]*\bsrc=)[^>]*>(?!\s*\{)', r.text.replace(
-        '<script type="application/ld+json">', "").replace('<script type="application/json" id="urace-medicao">', ""))
+    inline = [a for a in re.findall(r"<script([^>]*)>", r.text)
+              if "src=" not in a and "application/ld+json" not in a and "application/json" not in a]
+    assert not inline, f"script inline na página: {inline}"
     # o `noscript` do GTM e o do pixel, sem `style=` (a política do site não deixa estilo inline)
     assert f'<iframe class="medicao-ns" src="https://www.googletagmanager.com/ns.html?id={GTM}"' in r.text
     assert f'src="https://www.facebook.com/tr?id={PIXEL}&amp;ev=PageView&amp;noscript=1"' in r.text
