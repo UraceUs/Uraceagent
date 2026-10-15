@@ -123,11 +123,19 @@ def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
         v.get_by_role("button", name=re.compile("^Morning")).click()
         # #262: um botão só, o do carrinho — ele é o caminho da compra
         st["resposta"] = f"o botão virou {v.locator('.agenda-carrinho').inner_text().strip()!r}"
+    with passo(cad, v, "lead-and-follow", "Pôr o Lead and Follow no dia (#279)", 'marquei "Add Lead and Follow"') as st:
+        v.get_by_role("checkbox", name=re.compile("Add Lead and Follow")).check()
+        botao = v.locator(".agenda-carrinho")
+        # o add-on soma no botão: sessão + Lead and Follow (preço do painel) + o depósito
+        v.wait_for_function("() => /1,488/.test(document.querySelector('.agenda-carrinho').innerText)")
+        st["resposta"] = f"o botão somou o add-on: {botao.inner_text().strip()!r}"
     with passo(cad, v, "sessao-no-carrinho", "Pôr a sessão no carrinho", 'cliquei em "Add to cart"') as st:
         v.get_by_role("button", name=re.compile("^Add to cart")).click()
         v.wait_for_url(re.compile(r"/cart/"))                  # #262: um caminho só, e ele leva ao carrinho
         v.get_by_role("heading", name="Your cart", level=1).wait_for()
-        st["resposta"] = "a sessão entrou no carrinho (com o preço e o depósito do painel) e o site levou para lá"
+        v.get_by_role("heading", name=re.compile("^Lead and Follow"), level=3).wait_for()
+        st["resposta"] = ("a sessão e o Lead and Follow entraram no carrinho, cada um na sua linha (preço e depósito do "
+                          "painel), e o site levou para lá")
     with passo(cad, v, "produto-da-loja", "Pôr um produto da loja no carrinho", f"abri {produto['name']!r} e pus no carrinho") as st:
         v.goto(site + f"/store/p/{produto['slug']}/")
         v.get_by_role("button", name="Add to cart").click()

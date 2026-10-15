@@ -36,7 +36,7 @@ from command_center.vitrine import conteudo as C, paginas, paginas_site as ps  #
 
 RAIZ = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 HOST = "novo.urace.us"
-CHAVES = ("Baby Kart", "4-stroke", "2-stroke", "Adult Shifter")
+CHAVES = ("Baby Kart", "4-stroke", "2-stroke", "Adult Shifter", "Own kart")   # #279: o kart próprio é a 5ª
 
 
 @pytest.fixture()
@@ -58,7 +58,8 @@ def cli(tmp_path, monkeypatch):
 
 
 def _de_sessao(con):
-    return {s["site_kart"]: s for s in todos(con, "SELECT * FROM booking_services WHERE site_kart IS NOT NULL")}
+    return {s["site_kart"]: s for s in todos(con, "SELECT * FROM booking_services WHERE site_kart IS NOT NULL "
+                                                  "AND COALESCE(kind,'session')='session'")}
 
 
 # --------------------------------------------------------------- a migração (#263)
@@ -72,8 +73,9 @@ def test_a_migracao_cria_os_quatro_servicos_do_site(con):
         assert s["name"] == f"Arrive and Drive {k['nome']}"
         assert s["price"] == float(k["preco"]), k["nome"]
         assert s["active"] == 1 and (s["kind"] or "session") == "session"
-        # o depósito é o que o próprio site publica nos termos desta página
-        assert s["deposit"] == 400
+        # o depósito é o que o próprio site publica nos termos desta página; o kart próprio (#279) não tem:
+        # o depósito reembolsável cobre o kart da URACE
+        assert s["deposit"] == float(k.get("deposito", 400)), k["nome"]
         # o site cobra pelo Stripe: item do QuickBooks nasce vazio (#263)
         assert s["qbo_item_id"] is None and s["invoice_text"] is None
 
@@ -88,7 +90,7 @@ def test_subir_de_novo_nao_duplica_nem_sobrescreve_o_que_a_equipe_mudou(con):
     s = um(con, "SELECT * FROM booking_services WHERE id=?", (sid,))
     assert (s["price"], s["name"], s["active"], s["deposit"]) == (1234.0, "2-stroke da equipe", 0, 0)
     assert len(todos(con, "SELECT id FROM booking_services WHERE site_kart='2-stroke'")) == 1
-    assert len(todos(con, "SELECT id FROM booking_services")) == len(C.KARTS)
+    assert len(todos(con, "SELECT id FROM booking_services")) == len(C.KARTS) + 1, "os karts e o Lead and Follow (#279)"
 
 
 def test_a_migracao_liga_o_servico_que_a_equipe_criou_em_vez_de_criar_outro(con):

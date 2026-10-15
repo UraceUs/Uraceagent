@@ -577,6 +577,17 @@ Preço, sempre da **planilha de preços** do dono (15/10, #273). A taxa de pista
 
 Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: não estão na planilha.
 
+**Na reserva do site** (#279, dono 15/10):
+- **Lead and Follow** é uma caixinha ao lado do kart: *Add Lead and Follow (+$769)*. Vai para o carrinho
+  como linha própria, é pago no Stripe junto com a sessão, e a sessão agendada mostra nas notas
+  "+ Lead and Follow (add-on, US$ 769.00, paid)" — é por aí que a equipe sabe que aquele dia tem coach na
+  pista. O preço é o do painel (*Agendamentos do site › Serviços e preços*, serviço de tipo add-on); desativar
+  o serviço tira a caixa do site.
+- **Own kart — $500** é a 5ª opção (4 anos ou mais, qualquer categoria), **sem depósito**. O cartão e o
+  carrinho avisam: *o kart tem de chegar à pista com no mínimo 2 dias de antecedência para checagem e
+  manutenção*. Quem compra kart próprio pelo site: confirme a data de entrega do kart com o cliente.
+- **Convidado**: o passe varia de **$15 a $22** e é cobrado direto pela pista — não é da URACE.
+
 ### 5.1 Carrinho do site e pagamento no Stripe (#236)
 
 Dono, 14/10: *"o sistema de carrinho e checkout ... usando o Stripe"*; *"quando a pessoa selecionar

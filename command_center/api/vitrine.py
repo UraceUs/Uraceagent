@@ -160,6 +160,20 @@ def _servicos_do_site():
         return None
 
 
+def _lead_follow_do_site():
+    """#279: o add-on do dia de treino que o painel vende (None: banco fora, ou não vende)."""
+    from command_center.db import conectar
+    from command_center.providers import servicos_site
+    try:
+        con = conectar()
+        try:
+            return servicos_site.addon_do_site(con)
+        finally:
+            con.close()
+    except Exception:                                   # noqa: BLE001 — banco fora: a caixa só não aparece
+        return None
+
+
 def existe(caminho, host="novo.urace.us"):
     return caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None
 
@@ -171,7 +185,7 @@ def pagina(request: Request, caminho: str):
     host = host_de(request)
     q = dict(request.query_params)
     if caminho == C.ARRIVE["caminho"]:                  # #263: o kart que está na página é o que o painel vende
-        return _html(paginas.arrive_and_drive(host, servicos=_servicos_do_site()))
+        return _html(paginas.arrive_and_drive(host, servicos=_servicos_do_site(), lead_follow=_lead_follow_do_site()))
     if caminho == "/academy/":
         return _html(ps.academy(host, planos=_planos()))
     if caminho == "/pro-team/":                         # #207: o preço da Academy e do Boost é o do painel
@@ -235,6 +249,7 @@ def servicos_publicos(request: Request, con: sqlite3.Connection = Depends(get_db
     (o carrinho é do site novo e paga no Stripe)."""
     from command_center.providers import servicos_site, stripe_loja
     return {"services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell")),
+            "lead_follow": servicos_site.addon_do_site(con),           # #279: o add-on do dia de treino
             "cart": e_do_site(request) and stripe_loja.ligado()}
 
 

@@ -82,8 +82,8 @@ TRACK = ("Orlando Kart Center’s 8/10 mile professional kart racing track is yo
 
 TERMOS = (
     "The program price is URACE’s fee for coaching and trackside support only. Track fees are not included: driver and "
-    "guest passes are paid directly to the Orlando Kart Center, and the amount changes with the day. Extra guests must "
-    "pay $15 each.",
+    "guest passes are paid directly to the Orlando Kart Center, and the amount changes with the day. Guest passes "
+    "range from $15 to $22 and are charged directly by the track.",
     # idades: decisão do dono de 08/10 (o site atual ainda lista Micro/Mini 6–13 e Junior/Senior 11+)
     "There are different categories of kart available: Baby Kart (ages 4–7), 4-stroke (7+), 2-stroke (7+) and Adult "
     "Shifter (14+, experience required). The difference between 2t and 4t kart options is the performance. We recommend "
@@ -274,11 +274,25 @@ HOME = {
 # kart", que foi o que fez um serviço chamado "teste" aparecer como se fosse o produto.
 # Trocar o nome de um kart aqui é trocar a chave: o `site_kart` dos serviços muda no mesmo passo
 # (`test_servico_do_kart.py` tranca).
+AVISO_KART_PROPRIO = ("Your kart must arrive at the track at least 2 days before your session, so our mechanics can "
+                      "check it and do the necessary maintenance.")
+
+# #279 (dono, 15/10): "o lead and follow é um add on que pode ser adicionado no dia de treino … somente o de 769
+# por dia de treino". É um serviço do painel (preço do painel, #50) ligado por esta chave, como os karts.
+LEAD_AND_FOLLOW = {"chave": "Lead and Follow", "nome": "Lead and Follow", "preco": 769,
+                   "texto": "A partner coach on track with you, for this training day."}
+
 KARTS = (
     {"nome": "Baby Kart", "idade": "Ages 4–7", "min": 4, "max": 7, "preco": 719},
     {"nome": "4-stroke", "idade": "Ages 7+", "min": 7, "max": None, "preco": 719},
     {"nome": "2-stroke", "idade": "Ages 7+", "min": 7, "max": None, "preco": 819},
     {"nome": "Adult Shifter", "idade": "Ages 14+, experience required", "min": 14, "max": None, "preco": 899},
+    # #279 (dono, 15/10): "sim como a 5 opção e coloque um warning que o kart precisa ser enviado com no mínimo
+    # 2 dias de antecedência para ser checado e feito a manutenção necessária". Preço e idade da planilha
+    # ("Using Own Kart (all categories) · 4 years and up · $500"). Sem depósito: o depósito reembolsável cobre
+    # o kart da URACE, e aqui o kart é do cliente (o gerente muda no painel, se quiser).
+    {"nome": "Own kart", "idade": "Ages 4+ · all categories · you bring your kart", "min": 4, "max": None,
+     "preco": 500, "deposito": 0, "proprio": True, "aviso": AVISO_KART_PROPRIO},
 )
 
 ARRIVE = {
@@ -354,7 +368,7 @@ ARRIVE = {
           "advance. Please call if you have any questions.")),
         ("Track fees (paid to the Orlando Kart Center)",
          ("Driver pass Wednesday to Friday $100–230.", "Driver pass Saturday and Sunday $100–125.",
-          "Spectator pass any day $22.")),
+          "Guest (spectator) pass $15–22, charged directly by the track.")),
         *FAQ_COMUM,
     ),
     "depoimentos": DEPOIMENTOS_EVENTOS,
@@ -364,7 +378,9 @@ ARRIVE = {
 
 
 def preco_minimo():
-    return min(k["preco"] for k in KARTS)
+    """O "a partir de" do site é o aluguel do kart da URACE: o kart próprio (#279) não entra, senão o
+    site anunciaria $500 para quem não tem kart."""
+    return min(k["preco"] for k in KARTS if not k.get("proprio"))
 
 
 def chaves_dos_karts():

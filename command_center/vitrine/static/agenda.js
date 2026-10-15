@@ -15,7 +15,11 @@
  *
  * #253: escolher o dia já escolhe o turno quando só um está aberto; o turno de outro dia nunca fica
  * marcado se não existe no dia novo; e painel sem serviço é um aviso honesto com o contato, nunca um
- * botão morto. */
+ * botão morto.
+ *
+ * #279 (dono, 15/10): o Lead and Follow é um add-on do dia de treino ($769, preço do painel) e vai junto
+ * da sessão para o carrinho; o kart próprio é a 5ª opção, com o aviso de entregar o kart com 2 dias de
+ * antecedência sempre à vista quando ele está escolhido. */
 (function () {
   'use strict'
   var raiz = document.querySelector('.agenda')
@@ -33,7 +37,9 @@
   var carrinhoOk = raiz.querySelector('.carrinho-ok')
   var indisponivel = raiz.querySelector('.agenda-indisponivel')
   var indisponivelTxt = raiz.querySelector('.agenda-indisponivel-txt')
-  var servicos = [], comCarrinho = false, servicosOk = false
+  var lfBox = raiz.querySelector('.agenda-lf'), lfInput = raiz.querySelector('.agenda-lf input')
+  var avisoKart = raiz.querySelector('.agenda-aviso-kart')
+  var servicos = [], comCarrinho = false, servicosOk = false, lf = null
   var AVISO_PADRAO = 'Days in grey are closed or full. Times are Orlando time.'
   var SEMANA = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   var NOMES = { manha: 'Morning', tarde: 'Afternoon' }
@@ -55,7 +61,8 @@
   function opcoes() { return [].slice.call(document.querySelectorAll('input[name="kart"]')) }
   function kart() {
     var k = document.querySelector('input[name="kart"]:checked')
-    return k ? { nome: k.value, chave: k.getAttribute('data-kart') || k.value, preco: Number(k.getAttribute('data-preco')) } : null
+    return k ? { nome: k.value, chave: k.getAttribute('data-kart') || k.value, preco: Number(k.getAttribute('data-preco')),
+      proprio: k.getAttribute('data-proprio') === '1' } : null
   }
   /** A chave do kart, do jeito que ela é comparada: sem maiúscula e sem espaço à toa. */
   function chave(v) { return String(v == null ? '' : v).trim().replace(/\s+/g, ' ').toLowerCase() }
@@ -103,9 +110,20 @@
     if (!escolhido && sobrou) sobrou.checked = true          // o kart que saiu não deixa a página sem escolha
   }
 
+  /** #279: o Lead and Follow marcado, e só quando o painel vende (preço do painel). */
+  function comLf() { return !!(lf && lfInput && lfInput.checked) }
+
   function atualizar() {
     var k = kart()
     var s = servico(k)
+    if (lfBox) {
+      // a caixa só fica na tela quando o painel vende o add-on; o preço é o dele (#50)
+      if (servicosOk) lfBox.hidden = !lf
+      var cel = lfBox.querySelector('.addon-preco')
+      if (lf && cel) cel.textContent = '+' + usd(lf.price)
+    }
+    if (avisoKart) avisoKart.hidden = !(k && k.proprio)
+    var extra = comLf() ? Number(lf.price) || 0 : 0
     // #253: sem serviço nenhum ativo no painel, não há reserva online; com serviços, mas nenhum deste
     // kart, dá para reservar outra sessão na área do cliente — o aviso diz qual dos dois é o caso
     var semReservaOnline = servicosOk && !servicos.length
@@ -121,8 +139,9 @@
           : semCheckout ? 'Online checkout is closed right now. Talk to us and we book your session for you:' : ''
       indisponivel.hidden = !(semReservaOnline || semEsseKart || semCheckout)
     }
-    resumo.textContent = (dia ? dataLonga(dia) + (periodo ? ' · ' + NOMES[periodo] : '') + ' · ' : '') + (k ? k.nome : '') + ' · per driver'
-    precoEl.textContent = s ? usd(s.price) : k ? usd(k.preco) : ''
+    resumo.textContent = (dia ? dataLonga(dia) + (periodo ? ' · ' + NOMES[periodo] : '') + ' · ' : '') + (k ? k.nome : '')
+      + (comLf() ? ' + Lead and Follow' : '') + ' · per driver'
+    precoEl.textContent = s ? usd(Number(s.price) + extra) : k ? usd(k.preco + extra) : ''
     // sem a agenda carregada (erro, ou nada aberto), o botão continua pedindo o dia
     var falta = !carregou || !dia ? 'dia' : !periodo ? 'turno' : null
     if (carregou) aviso.textContent = falta === 'turno' ? 'Now pick Morning or Afternoon.' : AVISO_PADRAO
@@ -136,12 +155,13 @@
     porNoCarrinho.textContent = falta === 'dia' ? 'Pick a day to continue'
       : falta === 'turno' ? 'Pick a time to continue'
         : !s ? 'Add to cart'
-          : 'Add to cart · ' + usd(s.price) + (s.deposit ? ' + ' + usd(s.deposit) + ' deposit' : '')
+          : 'Add to cart · ' + usd(Number(s.price) + extra) + (s.deposit ? ' + ' + usd(s.deposit) + ' deposit' : '')
   }
   porNoCarrinho.addEventListener('click', function () {
     var s = servico(kart())
     if (!s || !dia || !periodo || !window.uraceCarrinho) return
-    if (!window.uraceCarrinho.por({ tipo: 'sessao', servico: s.id, data: dia, turno: periodo })) {
+    var querLf = comLf()
+    if (!window.uraceCarrinho.por({ tipo: 'sessao', servico: s.id, data: dia, turno: periodo, lead_follow: querLf })) {
       carrinhoOk.textContent = 'Your cart is full. '
       var ver = document.createElement('a'); ver.href = paraCarrinho; ver.textContent = 'View cart and pay'
       carrinhoOk.appendChild(ver)
@@ -150,8 +170,10 @@
     // #260: o `add_to_cart` da campanha (só catálogo, valor e moeda), ANTES de sair da página.
     // Sem medição, não faz nada.
     if (window.uraceMedicao) {
-      window.uraceMedicao.push({ event: 'add_to_cart', ecommerce: { currency: 'USD', value: Number(s.price) || 0,
-        items: [{ item_id: 'sessao-' + s.id, item_name: s.name, item_category: 'sessao', price: Number(s.price) || 0, quantity: 1 }] } })
+      var itensMed = [{ item_id: 'sessao-' + s.id, item_name: s.name, item_category: 'sessao', price: Number(s.price) || 0, quantity: 1 }]
+      if (querLf) itensMed.push({ item_id: 'addon-' + lf.id, item_name: lf.name, item_category: 'addon', price: Number(lf.price) || 0, quantity: 1 })
+      window.uraceMedicao.push({ event: 'add_to_cart', ecommerce: { currency: 'USD',
+        value: (Number(s.price) || 0) + (querLf ? Number(lf.price) || 0 : 0), items: itensMed } })
     }
     carrinhoOk.textContent = 'Added to your cart. Taking you there…'
     // a campanha de onde a pessoa veio segue para o carrinho (utm_*, gclid, fbclid)
@@ -211,12 +233,13 @@
     desenharMes()
   })
   opcoes().forEach(function (r) { r.addEventListener('change', atualizar) })
+  if (lfInput) lfInput.addEventListener('change', atualizar)
   atualizar()
 
   var apiServicos = raiz.getAttribute('data-servicos')
   if (apiServicos) fetch(apiServicos, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
-    .then(function (d) { servicos = d.services || []; comCarrinho = !!d.cart; servicosOk = true; karts(); atualizar() })
+    .then(function (d) { servicos = d.services || []; lf = d.lead_follow || null; comCarrinho = !!d.cart; servicosOk = true; karts(); atualizar() })
     .catch(function () { /* sem a lista do painel (rede): a página fica como o servidor a mandou */ })
 
   fetch(api, { credentials: 'omit', headers: { Accept: 'application/json' } })

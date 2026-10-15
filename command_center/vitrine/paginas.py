@@ -308,7 +308,10 @@ NOTA_RESERVA = ("Next: the session goes to your cart. Sign in or create your URA
                 "Orlando Kart Center.")
 
 
-def arrive_and_drive(host, servicos=None):
+PROPRIO = ' data-proprio="1"'
+
+
+def arrive_and_drive(host, servicos=None, lead_follow=None):
     a = C.ARRIVE
     # #50/#263: o preço que a página mostra é o do painel; `KARTS` só vale enquanto o painel não falou
     pares = _karts_do_painel(servicos)
@@ -317,11 +320,22 @@ def arrive_and_drive(host, servicos=None):
     # saiu da página, marca o primeiro que sobrou — a página nunca fica sem kart escolhido
     nomes = [k["nome"] for k, _sv in pares]
     marcado = "4-stroke" if "4-stroke" in nomes else (nomes[0] if nomes else None)
+    # #279: o kart próprio traz o aviso no próprio cartão (sempre à vista) e repete perto do botão quando escolhido
     karts = "".join(
-        f'<label class="kart"><input type="radio" name="kart" value="{e(k["nome"])}" data-kart="{e(k["nome"])}"'
-        f' data-preco="{preco:g}"{" checked" if k["nome"] == marcado else ""}><span class="kart-nome">{e(k["nome"])}</span>'
-        f'<span class="kart-idade">{e(k["idade"])}</span><span class="kart-preco">{usd(preco)}</span></label>'
+        f'<label class="kart{" kart-proprio" if k.get("proprio") else ""}"><input type="radio" name="kart" value="{e(k["nome"])}"'
+        f' data-kart="{e(k["nome"])}" data-preco="{preco:g}"{PROPRIO if k.get("proprio") else ""}'
+        f'{" checked" if k["nome"] == marcado else ""}><span class="kart-nome">{e(k["nome"])}</span>'
+        f'<span class="kart-idade">{e(k["idade"])}</span><span class="kart-preco">{usd(preco)}</span>'
+        + (f'<span class="kart-aviso">{e(k["aviso"])}</span>' if k.get("aviso") else "") + '</label>'
         for (k, _sv), preco in zip(pares, precos, strict=True))
+    # #279: o Lead and Follow só aparece quando o painel vende (preço do painel, #50)
+    lf = lead_follow
+    caixa_lf = (f'<label class="agenda-lf addon"><input type="checkbox" name="lead_follow" value="1">'
+                f'<span class="addon-txt"><strong>Add Lead and Follow</strong> · {e(C.LEAD_AND_FOLLOW["texto"])}</span>'
+                f'<span class="addon-preco">+{usd(lf["price"])}</span></label>') if lf and pares else \
+        '<label class="agenda-lf addon" hidden><input type="checkbox" name="lead_follow" value="1"><span class="addon-txt">' \
+        f'<strong>Add Lead and Follow</strong> · {e(C.LEAD_AND_FOLLOW["texto"])}</span><span class="addon-preco"></span></label>'
+    aviso_proprio = next((k["aviso"] for k, _sv in pares if k.get("aviso")), C.AVISO_KART_PROPRIO)
     if not pares:
         karts = ('<p class="agenda-indisponivel"><span>Online booking is closed right now. Talk to us and we book '
                  f'your session for you:</span> <a href="{e(C.SITE["whatsapp"])}" rel="noopener">WhatsApp '
@@ -392,6 +406,8 @@ def arrive_and_drive(host, servicos=None):
       <p class="agenda-indisponivel" role="status" hidden><span class="agenda-indisponivel-txt"></span>
         <a href="{e(C.SITE['whatsapp'])}" rel="noopener">WhatsApp {e(C.SITE['telefone'])}</a>
         <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
+      {caixa_lf}
+      <p class="agenda-aviso-kart" role="note"{"" if marcado and C.kart_da_chave(marcado).get("proprio") else " hidden"}>{e(aviso_proprio)}</p>
       <div class="agenda-total"{sem_venda}><span class="agenda-resumo">{e(resumo)} · per driver</span><strong class="agenda-preco">{usd(preco_marcado) if preco_marcado is not None else ''}</strong></div>
       <!-- #262 (dono, 15/10): "um caminho somente levando para o carrinho". Um botão só: ele diz o que
            falta escolher e, com tudo escolhido, põe a sessão no carrinho e leva para lá. -->
