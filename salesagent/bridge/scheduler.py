@@ -33,14 +33,14 @@ import sys
 import threading
 import time
 import zoneinfo
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import (BUSINESS_DAYS, BUSINESS_HOURS, BUSINESS_TZ, ESCALATION_MAX_REALERTS,
                     ESCALATION_REALERT_MIN, LEAD_REASSURE_MIN,
                     LEAD_RESCUE_AFTER_SEC,
                     FOLLOWUP_BOT_ID, REPO_DIR)
-from state import db, log, transition, update_conversation
+from state import db, get_conversation, log, update_conversation
 
 _TZ = zoneinfo.ZoneInfo(BUSINESS_TZ)
 
@@ -86,9 +86,10 @@ def start_track(lead_id: int, track: str, now: int | None = None) -> None:
     delays = TRACKS.get(track)
     if not delays:
         return
-    update_conversation(lead_id, followup_track=track, followup_attempts=0,
-                        next_followup_at=now + delays[0])
-    log("followup", lead_id, f"trilha {track} iniciada, 1º toque em +{delays[0]}s")
+    ultimo = get_conversation(lead_id).get("last_inbound_at")
+    quando = horario_de_envio(now + delays[0], ultimo, now) if track != "scheduled" else now + delays[0]
+    update_conversation(lead_id, followup_track=track, followup_attempts=0, next_followup_at=quando)
+    log("followup", lead_id, f"trilha {track} iniciada, 1º toque em +{quando - now}s")
 
 
 def schedule_at(lead_id: int, due_ts: int, note: str = "") -> None:
@@ -222,6 +223,42 @@ def _fora_da_janela_24h(conv: dict, now: int) -> bool:
     return bool(ultimo_lead) and now - ultimo_lead >= limite
 
 
+# Horário de silêncio (revisão final, 14/10): ninguém recebe follow-up de madrugada. Lead que escreve à 1h
+# não ganha a sugestão de call às 2h30. O toque vai para as 9h de Orlando; se as 9h já caem fora da janela
+# de 24 h da Meta, ele vai para o último horário da noite (20h30), antes do silêncio, e nunca é descartado.
+SILENCIO_LIGADO = True        # os testes que dependem do relógio desligam (o CI roda a qualquer hora)
+SILENCIO_COMECA, SILENCIO_TERMINA = 21, 8
+HORA_DE_RETOMAR, HORA_LIMITE_NOITE = 9, (20, 30)
+
+
+def _limite_da_janela(ultimo_lead: int) -> int | None:
+    if not ultimo_lead:
+        return None
+    salesagent = str(Path(__file__).resolve().parent.parent)
+    if salesagent not in sys.path:
+        sys.path.insert(0, salesagent)
+    from sdr import regras as sdr_regras
+    return ultimo_lead + sdr_regras.JANELA_MENSAGEM_LIVRE_HORAS * 3600 - sdr_regras.JANELA_24H_MARGEM_MINUTOS * 60
+
+
+def horario_de_envio(due_ts: int, ultimo_lead: int | None, agora: int) -> int:
+    """Quando o toque que venceria em `due_ts` deve sair, respeitando o silêncio da noite."""
+    dt = datetime.fromtimestamp(due_ts, tz=_TZ)
+    if not SILENCIO_LIGADO or SILENCIO_TERMINA <= dt.hour < SILENCIO_COMECA:
+        return due_ts
+    manha = dt.replace(hour=HORA_DE_RETOMAR, minute=0, second=0, microsecond=0)
+    if dt.hour >= SILENCIO_COMECA:
+        manha += timedelta(days=1)
+    limite = _limite_da_janela(ultimo_lead or 0)
+    if limite is None or int(manha.timestamp()) < limite - 300:
+        return int(manha.timestamp())
+    noite = dt.replace(hour=HORA_LIMITE_NOITE[0], minute=HORA_LIMITE_NOITE[1], second=0, microsecond=0)
+    if dt.hour < SILENCIO_TERMINA:
+        noite -= timedelta(days=1)
+    noite_ts = int(noite.timestamp())
+    return noite_ts if noite_ts >= agora else due_ts
+
+
 def _fire_followup(conv: dict, now: int) -> None:
     lead_id = conv["lead_id"]
     track = conv["followup_track"]
@@ -247,6 +284,13 @@ def _fire_followup(conv: dict, now: int) -> None:
         cancel(lead_id, "janela de 24 h da Meta fechada")
         return
 
+    if track != "scheduled":
+        destino = horario_de_envio(now, conv.get("last_inbound_at"), now)
+        if destino > now + 60:
+            update_conversation(lead_id, next_followup_at=destino)
+            log("followup", lead_id, f"{track} #{attempt + 1} adiado para fora do horário de silêncio ({destino})")
+            return
+
     text = compose_fn(lead_id, track, attempt) if compose_fn else ""
     if text:
         delivered = deliver_fn(lead_id, text) if deliver_fn else False
@@ -270,7 +314,7 @@ def _fire_followup(conv: dict, now: int) -> None:
     nxt = attempt + 1
     if nxt < len(delays):
         update_conversation(lead_id, followup_attempts=nxt,
-                            next_followup_at=now + delays[nxt])
+                            next_followup_at=horario_de_envio(now + delays[nxt], conv.get("last_inbound_at"), now))
     else:  # trilha esgotada: a janela de 24 h da Meta está fechando
         # 14/10: não fecha o card sozinho; a pessoa decide (modelo aprovado,
         # ligação, ou perdido) e o card fica marcado para o filtro.

@@ -60,3 +60,27 @@ def leads_criados(payload):
             continue
         saida.append({"id": int(lead["id"]), "nome": lead.get("name") or ""})
     return saida
+
+
+def mensagens_enviadas(payload):
+    """Mensagens que SAÍRAM (type diferente de incoming) pelo webhook de conta. Só para observar: o
+    Kommo manda aqui o que o robô, o Salesbot, uma automação e uma pessoa da equipe escrevem, e ainda
+    não sabemos separar quem é quem pelo payload. A ponte registra o formato (sem o texto inteiro) até
+    existir um sinal confiável de "uma pessoa escreveu"; por enquanto a pausa é do botão Pausar IA e
+    da etapa ATENDIMENTO."""
+    msg = (payload or {}).get("message") or {}
+    saida = []
+    for m in _itens(msg.get("add")):
+        if not isinstance(m, dict) or not m.get("type") or m.get("type") == "incoming":
+            continue
+        autor = m.get("author") if isinstance(m.get("author"), dict) else {}
+        lead_id = m.get("element_id") or m.get("entity_id")
+        saida.append({
+            "lead_id": int(lead_id) if lead_id and str(lead_id).isdigit() else None,
+            "tipo": str(m.get("type")),
+            "autor_tipo": str(autor.get("type") or m.get("author_type") or ""),
+            "autor_id": str(autor.get("id") or m.get("created_by") or ""),
+            "origem": str(m.get("origin") or ""),
+            "inicio": (m.get("text") or "")[:40],
+        })
+    return saida

@@ -519,6 +519,7 @@ def camada_ponte():
     # Follow-up do agendador: fora da janela de 24 h da Meta não sai
     # mensagem; vira tarefa para uma pessoa e a trilha para.
     sch = app.scheduler
+    silencio_antes, sch.SILENCIO_LIGADO = sch.SILENCIO_LIGADO, False   # estes testes usam o relógio real
     guardados = (sch.compose_fn, sch.deliver_fn, sch.task_fn, sch.note_fn)
     chamadas = []
     sch.compose_fn = lambda *a: chamadas.append("compor") or "Oi, conseguiu ver?"
@@ -564,6 +565,7 @@ def camada_ponte():
     finally:
         sch.compose_fn, sch.deliver_fn, sch.task_fn, sch.note_fn = guardados
         sch.tag_fn = None
+        sch.SILENCIO_LIGADO = silencio_antes
 
     print("\n3. Travas corrigidas")
     nivel("observar")

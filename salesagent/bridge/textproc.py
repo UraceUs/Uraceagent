@@ -58,3 +58,13 @@ def customer_facing(text: str) -> str:
     do modelo. Usado pela ponte (antes de enviar ao Kommo) e pelos testes
     (antes de checar as regras) -- para os dois lados nunca divergirem."""
     return sanitize_dashes(strip_directives(text))
+
+
+_NOMES_DO_TIME = re.compile(r"\b(L[úu]cas|[ÍI]talo)\b")
+
+
+def sem_nomes_do_time(texto: str) -> str:
+    """O contexto que o modelo lê (base de conhecimento, instruções do comercial) cita gente do time.
+    A persona manda não citar nome ao lead; aqui o nome nem chega ao modelo. Não é filtro de saída: um
+    lead que se chama Lucas continua sendo chamado de Lucas."""
+    return _NOMES_DO_TIME.sub("a equipe", texto or "")

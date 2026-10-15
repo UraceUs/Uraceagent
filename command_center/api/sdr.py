@@ -482,6 +482,19 @@ def pausa_trocar(lead_id: int, dados: PausaIn, request: Request, u=Depends(auth.
 
 # ------------------------------------------------------------------ teste no painel (14/10)
 RX_SESSAO = re.compile(r"^[a-z0-9-]{6,40}$")
+TESTE_POR_MINUTO = 12                  # cada teste é uma chamada ao modelo: quem digita rápido demais espera
+_teste_recente: dict[int, list[float]] = {}
+
+
+def _teste_liberado(user_id: int, agora: float | None = None) -> bool:
+    agora = agora or time.time()
+    janela = [t for t in _teste_recente.get(user_id, []) if agora - t < 60]
+    if len(janela) >= TESTE_POR_MINUTO:
+        _teste_recente[user_id] = janela
+        return False
+    janela.append(agora)
+    _teste_recente[user_id] = janela
+    return True
 
 
 def _chave_da_ponte():
@@ -510,6 +523,8 @@ def teste(dados: TesteIn, request: Request, u=Depends(auth.exige("OPERATOR")),
     texto = " ".join((dados.texto or "").split())[:MAX_TEXTO]
     if not RX_SESSAO.match(dados.sessao or "") or not texto:
         raise HTTPException(400, "Escreva uma mensagem.")
+    if not _teste_liberado(u["id"]):
+        raise HTTPException(429, "Muitos testes seguidos. Espere um minuto.")
     chave = _chave_da_ponte()
     if not chave:
         raise HTTPException(503, "A ponte do robô não está configurada neste servidor.")

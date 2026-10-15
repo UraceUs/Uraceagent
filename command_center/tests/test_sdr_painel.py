@@ -282,3 +282,30 @@ def test_testar_o_robo_pelo_painel_sem_kommo(cli, pasta, monkeypatch):
 
     (pasta / "bridge.env").write_text("SDR_MODO=atender\n", encoding="utf-8")
     assert cli.post(B + "/sdr/teste", json={"sessao": "cc-abc123", "texto": "oi"}, headers=h).status_code == 503
+
+
+def test_testar_o_robo_tem_limite_por_minuto(cli, pasta, monkeypatch):
+    """Cada teste é uma chamada ao modelo: 12 por minuto por pessoa, depois espera."""
+    (pasta / "bridge.env").write_text("SDR_MODO=atender\nAGENT_API_KEY=chave-secreta-xyz\n", encoding="utf-8")
+
+    class _Resp:
+        def read(self):
+            return b'{"ok": true, "mensagens": ["Oi!"], "rota": "responder", "diretivas": [], "cortes": [], "nota": ""}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(sdr.urllib.request, "urlopen", lambda req, timeout=0: _Resp())
+    sdr._teste_recente.clear()
+    h = entra(cli, "op@urace.us")
+    codigos = [cli.post(B + "/sdr/teste", json={"sessao": "cc-limite01", "texto": f"oi {i}"}, headers=h).status_code
+               for i in range(sdr.TESTE_POR_MINUTO + 2)]
+    assert codigos[:sdr.TESTE_POR_MINUTO] == [200] * sdr.TESTE_POR_MINUTO
+    assert codigos[sdr.TESTE_POR_MINUTO:] == [429, 429]
+    # passado um minuto, libera de novo
+    agora = time.time()
+    assert sdr._teste_liberado(1, agora + 120) is True
+    sdr._teste_recente.clear()

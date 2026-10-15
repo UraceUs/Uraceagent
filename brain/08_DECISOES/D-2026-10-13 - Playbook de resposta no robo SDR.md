@@ -185,3 +185,40 @@ Ficou de fora, de propósito: o juiz com IA (langwatch/scenario, deepeval) pede 
 provado com Claude; áudio (faster-whisper) falta confirmar se o link do Kommo baixa; Langfuse só depois de
 liberar o robô para todos os leads. O Click to Instagram Direct com janela de 7 dias é de um blog, não está
 no changelog da Meta; não mexemos na cadência por isso.
+
+## 15/10: revisão final (olhar de vendas e de engenharia)
+
+Revisão pedida pelo dono para fechar o robô. O que mudou, na ordem de impacto:
+
+**Vendas**
+- **Quem está pronto, quem já corre e quem acha caro recebe a call, não a espera.** `SINAL_CONVERSAO` ("quero
+  fechar", "como pago") e `PILOTO_COMPETIDOR` escalavam antes do modelo e o lead ouvia "sua pergunta está com a
+  equipe", a mesma resposta que o dono recusou em 13/10. Agora cada motivo tem a sua oferta de call (`decisao`,
+  `competidor`, `objecao`), em 3 a 4 balões curtos com o link sozinho no fim. A escalação e o aviso à equipe
+  seguem iguais. Pedir uma pessoa e tema sensível continuam na frase de passagem.
+- **A conversa tem linha de chegada.** Com idade, experiência e objetivo (ou um dia escolhido), o robô para de
+  perguntar, manda a call e escala com o resumo. Persona e "próxima ação" da ponte dizem a mesma coisa.
+- **Nada de follow-up de madrugada.** Entre 21h e 8h de Orlando o toque espera as 9h. Se as 9h já passam da janela
+  de 24 h da Meta, sai às 20h30 da noite anterior; se nem isso dá, sai quando venceu. O toque nunca é perdido.
+- **Nome do lead só se parecer nome de gente:** "055⚡ · Eduardo" vira "Eduardo"; @handle e número não entram.
+
+**Persona (contradições que o modelo via a cada turno)**: a exceção do link no follow-up de 1h30 estava em dois
+lugares e faltava em outros dois; o 2º toque "com link ou vídeo" contradizia o check-in sem link; `crm op=stage`
+é bloqueado com o SDR ligado; `[[followup]]` de +3d/+7d cai fora da janela da Meta (só vale com data pedida pelo
+lead); pedido de desconto agora aponta para a oferta de call.
+
+**Engenharia**
+- Nomes do time (Lucas, Italo) saem do contexto que o modelo lê (base de conhecimento, instruções do comercial,
+  resultados de ferramenta). Não é filtro de saída: lead que se chama Lucas continua sendo chamado de Lucas.
+- A ponte passa a registrar, sem o texto inteiro, as mensagens que SAÍRAM pelo webhook de conta
+  (`saida_vista`: tipo, autor, origem). **Ainda não sabemos separar o robô, o Salesbot, uma automação e uma
+  pessoa da equipe por esse payload**, então não há pausa automática: ela está no botão Pausar IA e na etapa
+  ATENDIMENTO. Depois de um dia de logs dá para decidir se existe um sinal confiável.
+- Teste do painel com limite de 12 por minuto por pessoa (cada teste é uma chamada ao modelo).
+- `salesagent/tools/sdr_preflight.py` (confere nível, escopo de teste, bot de entrega, persona sincronizada,
+  tamanho, links e Kommo, sem imprimir segredo) e `salesagent/docs/liberar-robo-sdr.md` (liberar, primeira hora,
+  voltar atrás e a regra de ouro: antes de responder um lead à mão, mover para ATENDIMENTO ou Pausar IA).
+
+**Fica como está, de propósito:** preços, números da cadência, tabela de links e a regra "sem link na 1ª resposta".
+**Risco aberto antes de tirar `SDR_ATENDER_SO_TAG`:** cada balão é um disparo do bot de entrega; conferir 429 do
+Kommo na primeira hora (roteiro) e a pessoa e o robô respondendo juntos (regra de ouro).
