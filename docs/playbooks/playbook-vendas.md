@@ -118,6 +118,13 @@ STRIPE          um checkout só (cartão, Apple Pay, Google Pay), com a linha do
 PAGO            a sessão entra aceita e paga (falta só a waiver) e a venda entra GANHO em Vendas
 ```
 
+**O ⓘ do depósito (#282, dono 15/10).** Na reserva, no carrinho e na página do pedido, ao lado do
+security deposit, há um ⓘ: no celular abre com o toque, no computador com o mouse em cima. Ele diz:
+*"Refundable within 5 days after your session, as long as there is no damage to the kart. Damage above
+the deposit amount may be charged additionally."* O mesmo texto vai no e-mail do pedido e na linha do
+depósito no Stripe. Se o cliente perguntar, é isso que vale: devolução em até 5 dias depois da sessão,
+sem dano ao kart; dano acima do depósito é cobrado à parte.
+
 ### O que o sistema grava em cada passo
 
 | Passo | Onde | O que fica gravado |

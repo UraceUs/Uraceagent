@@ -122,6 +122,44 @@
   // ------------------------------------------------ a página do carrinho
   var raiz = document.querySelector('.carrinho[data-api]')
   if (document.querySelector('[data-limpar-carrinho]')) limpar()      // voltou do Stripe com o pedido: o carrinho virou pedido
+  // #282: o ⓘ abre no toque (celular) e fecha no segundo toque, num toque fora ou no Esc. O mouse e o
+  // teclado abrem pelo CSS (:hover e :focus-within). Roda em toda página pública: a reserva, o carrinho e o pedido.
+  function fecharDicas(menos) {
+    var abertas = document.querySelectorAll('.dica.aberta')
+    for (var i = 0; i < abertas.length; i++) {
+      if (abertas[i] === menos) continue
+      abertas[i].classList.remove('aberta')
+      abertas[i].querySelector('.dica-botao').setAttribute('aria-expanded', 'false')
+    }
+  }
+  // a caixa do texto fica sempre inteira na tela (16 px de margem), acima do ⓘ ou abaixo, se não couber
+  function posicionar(caixa) {
+    var txt = caixa.querySelector('.dica-texto'), r = caixa.getBoundingClientRect()
+    var tela = document.documentElement.clientWidth || window.innerWidth   // a largura do layout, não a do zoom
+    var w = Math.min(270, tela - 32)
+    txt.style.width = w + 'px'
+    var esq = Math.max(16, Math.min(r.left + r.width / 2 - w / 2, tela - 16 - w))
+    txt.style.left = Math.round(esq - r.left) + 'px'
+    caixa.classList.toggle('embaixo', r.top < txt.offsetHeight + 24)
+  }
+  function aoChegar(ev) {
+    var caixa = ev.target.closest && ev.target.closest('.dica')
+    if (caixa) posicionar(caixa)
+  }
+  document.addEventListener('mouseover', aoChegar)
+  document.addEventListener('focusin', aoChegar)
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('.dica-botao')
+    if (!b) { if (!(ev.target.closest && ev.target.closest('.dica-texto'))) fecharDicas(null); return }
+    var caixa = b.parentNode
+    posicionar(caixa)
+    fecharDicas(caixa)
+    var abrir = !caixa.classList.contains('aberta')
+    caixa.classList.toggle('aberta', abrir)
+    b.setAttribute('aria-expanded', abrir ? 'true' : 'false')
+  })
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') fecharDicas(null) })
+
   contador()
   if (!raiz) return
 
@@ -145,6 +183,29 @@
     if (texto != null) x.textContent = texto
     return x
   }
+  // #282 (dono, 15/10): o ⓘ do security deposit. O mesmo texto de `vitrine/dica.py` (o teste confere).
+  var DEPOSITO_INFO = 'Refundable within 5 days after your session, as long as there is no damage to the kart. Damage above the deposit amount may be charged additionally.'
+  var DEPOSITO_INFO_PT = 'Reembolsável em até 5 dias após a sessão, desde que não haja nenhum dano ao kart. Danos acima do valor do depósito podem ser cobrados adicionalmente.'
+  function dicaDeposito() {
+    var caixa = el('span', 'dica')
+    var b = el('button', 'dica-botao'); b.type = 'button'
+    b.setAttribute('aria-expanded', 'false')
+    b.setAttribute('aria-label', t('About the security deposit', 'Sobre o depósito de segurança'))
+    var NS = 'http://www.w3.org/2000/svg'
+    var svg = document.createElementNS(NS, 'svg')
+    svg.setAttribute('viewBox', '0 0 24 24'); svg.setAttribute('width', '18'); svg.setAttribute('height', '18')
+    svg.setAttribute('aria-hidden', 'true'); svg.setAttribute('focusable', 'false')
+    var c1 = document.createElementNS(NS, 'circle')
+    c1.setAttribute('cx', '12'); c1.setAttribute('cy', '12'); c1.setAttribute('r', '9.5')
+    c1.setAttribute('fill', 'none'); c1.setAttribute('stroke', 'currentColor'); c1.setAttribute('stroke-width', '2')
+    var p1 = document.createElementNS(NS, 'path')
+    p1.setAttribute('d', 'M12 11v6M12 7.6v.2'); p1.setAttribute('stroke', 'currentColor')
+    p1.setAttribute('stroke-width', '2.4'); p1.setAttribute('stroke-linecap', 'round')
+    svg.appendChild(c1); svg.appendChild(p1); b.appendChild(svg)
+    var txt = el('span', 'dica-texto', t(DEPOSITO_INFO, DEPOSITO_INFO_PT)); txt.setAttribute('role', 'tooltip')
+    caixa.appendChild(b); caixa.appendChild(txt)
+    return caixa
+  }
   function csrf() {
     var m = document.cookie.match(/(?:^|;\s*)cp_csrf=([^;]+)/)
     return m ? decodeURIComponent(m[1]) : ''
@@ -164,7 +225,11 @@
     li.appendChild(topo)
     if (x.detalhe) li.appendChild(el('p', 'muted small', x.detalhe))
     if (x.tipo === 'produto' && !x.erro && x.quantidade > 1) li.appendChild(el('p', 'muted small', x.quantidade + ' × ' + usd(x.unitario)))
-    if (x.deposito > 0) li.appendChild(el('p', 'small', t('Refundable security deposit: ', 'Depósito de segurança reembolsável: ') + usd(x.deposito)))
+    if (x.deposito > 0) {
+      var pd = el('p', 'small', t('Refundable security deposit: ', 'Depósito de segurança reembolsável: ') + usd(x.deposito) + ' ')
+      pd.appendChild(dicaDeposito())
+      li.appendChild(pd)
+    }
     if (x.aviso) li.appendChild(el('p', 'carrinho-aviso small', x.aviso))           // #279: o kart próprio chega 2 dias antes
     var acoes = el('div', 'carrinho-acoes')
     if (x.tipo === 'produto') {
@@ -260,12 +325,13 @@
     desenharConta(c)
     entrega.hidden = !c.tem_produto
     total.textContent = ''
-    function par(k, v, classe) {
+    function par(k, v, classe, extra) {
       var dt = el('dt', classe, k), dd = el('dd', classe, v)
+      if (extra) { dt.appendChild(document.createTextNode(' ')); dt.appendChild(extra) }
       total.appendChild(dt); total.appendChild(dd)
     }
     par('Subtotal', usd(c.subtotal))
-    if (c.deposito > 0) par(t('Security deposit (refundable)', 'Depósito de segurança (reembolsável)'), usd(c.deposito))
+    if (c.deposito > 0) par(t('Security deposit (refundable)', 'Depósito de segurança (reembolsável)'), usd(c.deposito), null, dicaDeposito())
     par('Total', usd(c.total), 'soma')
     var pronto = c.ok && !c.precisa_conta && c.stripe
     pagar.disabled = !pronto || indo

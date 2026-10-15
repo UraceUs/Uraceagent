@@ -2582,3 +2582,83 @@ def test_stripe_falso_responde_404_em_caminho_desconhecido():
             assert erro.value.code == 404, caminho
     finally:
         fake.srv.shutdown()
+
+
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_o_i_do_deposito_abre_no_toque_e_no_mouse(servidor, navegador, largura):
+    """#282 (dono, 15/10): "ali no security deposit coloque um ícone de info que ao clicar com o dedo no
+    celular ou passar o mouse em cima diga que o valor é reembolsável 5 dias após desde que não tenha
+    nenhum dano ao kart; danos acima do valor do depósito podem ser cobrados adicionalmente".
+
+    Na reserva e no carrinho (linha e resumo): o toque abre e o segundo toque fecha; no computador, o
+    mouse em cima mostra. O texto fica inteiro na tela e nada rola para o lado."""
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, email="italo@urace.us")
+    csrf = _csrf(adm)
+    terca = _proximo(1)
+    antes = _desligar_os_servicos(adm, servidor)
+    sid = _criar_servico(adm, servidor, f"4-stroke Arrive and Drive 282 {largura}", 719, kart="4-stroke")
+    assert adm.request.patch(servidor + f"/api/site/servicos/{sid}", headers=csrf, data={"deposit": 400}).ok
+    assert adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                           data=[{"weekday": 1, "period": "manha", "open": True, "capacity": 5}]).ok
+    toque = largura < 600
+    try:
+        ctx = navegador.new_context(viewport={"width": largura, "height": 844}, has_touch=toque, is_mobile=toque)
+        v = ctx.new_page()
+        erros = []
+        v.on("pageerror", lambda e: erros.append(str(e)))
+        v.goto(site + "/services/arrive-and-drive/")
+        _clicar_dia(v, terca)
+        v.get_by_role("button", name=re.compile("^Morning")).click()
+        dep = v.locator(".agenda-deposito")
+        dep.wait_for()
+        assert "$400" in dep.inner_text() and "refundable security deposit" in dep.inner_text()
+
+        def confere(caixa, foto):
+            botao, texto = caixa.locator(".dica-botao"), caixa.locator(".dica-texto")
+            assert botao.get_attribute("aria-label") == "About the security deposit"
+            b = botao.bounding_box()
+            assert b["width"] >= 40 and b["height"] >= 40, "alvo de toque ≥ 40 px"
+            assert not texto.is_visible()
+            if toque:
+                botao.tap()
+            else:
+                botao.hover()
+            texto.wait_for(state="visible")
+            assert "5 days after your session" in texto.inner_text()
+            assert "Damage above the deposit amount may be charged additionally" in texto.inner_text()
+            t = texto.bounding_box()
+            assert t["x"] >= 0 and t["x"] + t["width"] <= largura, f"o texto sai da tela: {t}"
+            if os.environ.get("CC_FOTOS"):                         # a prova com fotos (#253)
+                v.wait_for_timeout(300)                                # o fim da animação
+                v.screenshot(path=os.path.join(os.environ["CC_FOTOS"], f"282-{foto}-{largura}.png"))
+            if toque:
+                assert botao.get_attribute("aria-expanded") == "true"
+                botao.tap()                                          # o segundo toque fecha
+                texto.wait_for(state="hidden")
+                assert botao.get_attribute("aria-expanded") == "false"
+            else:
+                v.mouse.move(0, 0)
+                texto.wait_for(state="hidden")
+
+        confere(dep.locator(".dica"), "reserva")
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        # no carrinho: a linha da sessão e o resumo
+        v.locator(".agenda-carrinho").click()
+        v.wait_for_url(re.compile(r"/cart/"))
+        v.locator(".carrinho-linha .dica").first.wait_for()
+        confere(v.locator(".carrinho-linha .dica").first, "carrinho-linha")
+        confere(v.locator(".carrinho-total .dica").first, "carrinho-resumo")
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not erros, erros
+        v.evaluate("localStorage.removeItem('urace.carrinho')")
+        ctx.close()
+    finally:
+        _ativar(adm, servidor, sid, False)
+        for s in antes:
+            _ativar(adm, servidor, s, True)
+        adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                        data=[{"weekday": 1, "period": "manha", "open": False, "capacity": 5}])
+        adm.close()

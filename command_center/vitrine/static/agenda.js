@@ -33,6 +33,8 @@
   var aviso = raiz.querySelector('.agenda-aviso')
   var resumo = raiz.querySelector('.agenda-resumo')
   var precoEl = raiz.querySelector('.agenda-preco')
+  var depositoEl = raiz.querySelector('.agenda-deposito')             // #282: o depósito com o ⓘ
+  var depositoValor = raiz.querySelector('.agenda-deposito-valor')
   var porNoCarrinho = raiz.querySelector('.agenda-carrinho')
   var carrinhoOk = raiz.querySelector('.carrinho-ok')
   var indisponivel = raiz.querySelector('.agenda-indisponivel')
@@ -142,6 +144,11 @@
     resumo.textContent = (dia ? dataLonga(dia) + (periodo ? ' · ' + NOMES[periodo] : '') + ' · ' : '') + (k ? k.nome : '')
       + (comLf() ? ' + Lead and Follow' : '') + ' · per driver'
     precoEl.textContent = s ? usd(Number(s.price) + extra) : k ? usd(k.preco + extra) : ''
+    if (depositoEl) {
+      var dep = s ? Number(s.deposit) || 0 : 0
+      depositoEl.hidden = !dep
+      depositoValor.textContent = dep ? usd(dep) : ''
+    }
     // sem a agenda carregada (erro, ou nada aberto), o botão continua pedindo o dia
     var falta = !carregou || !dia ? 'dia' : !periodo ? 'turno' : null
     if (carregou) aviso.textContent = falta === 'turno' ? 'Now pick Morning or Afternoon.' : AVISO_PADRAO

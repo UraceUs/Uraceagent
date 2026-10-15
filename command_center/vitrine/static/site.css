@@ -507,3 +507,22 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 @media (min-width: 720px) { .consentimento { grid-template-columns: minmax(0, 1fr) auto; align-items: center } }
 .link-cookies { background: none; border: 0; padding: 0 0 0 4px; color: inherit; text-decoration: underline; font: inherit;
   cursor: pointer; min-height: 40px }
+
+/* #282: o ⓘ do security deposit. Toque abre (.aberta, pelo carrinho.js); mouse e teclado abrem aqui. */
+.dica { position: relative; display: inline-flex; vertical-align: middle }
+.dica-botao { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+  margin: -11px -8px -11px -10px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--cinza);
+  cursor: pointer; -webkit-tap-highlight-color: transparent }
+.dica-botao:hover, .dica.aberta .dica-botao { color: var(--vermelho) }
+.dica-botao:focus-visible { outline: 2px solid var(--vermelho); outline-offset: -6px }
+.dica.embaixo .dica-texto { bottom: auto; top: calc(100% + 6px) }
+.dica-texto { position: absolute; z-index: 30; bottom: calc(100% + 6px); left: 0; width: min(270px, calc(100vw - 32px));
+  padding: 10px 12px; border-radius: var(--raio); background: var(--tinta); color: var(--branco);
+  font-size: .85rem; line-height: 1.45; font-weight: 400; text-align: left; box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+  opacity: 0; transform: translateY(4px); pointer-events: none; visibility: hidden;
+  transition: opacity var(--dur) var(--curva), transform var(--dur) var(--curva), visibility 0s linear var(--dur) }
+.dica.aberta .dica-texto, .dica:has(.dica-botao:focus-visible) .dica-texto {
+  opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s }
+@media (hover: hover) {
+  .dica:hover .dica-texto { opacity: 1; transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s }
+}
