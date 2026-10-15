@@ -541,6 +541,15 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
 3. **Checkout** abre o Stripe com **todas** as linhas e, para cada sessão com depósito, a linha
    "Refundable security deposit". Paga, volta para `/cart/thanks/` com a **página do pedido** (abaixo).
 
+**Atenção ao atender (#252):** na página do Arrive and Drive existem **dois botões** e eles levam a
+**dois pagamentos diferentes** — **Add to cart** leva ao carrinho e a pessoa paga no **Stripe** na
+hora; **Continue to booking** leva à área do cliente e a pessoa paga a **invoice do QuickBooks** mais
+a waiver. O texto embaixo dos botões só explica o caminho da invoice. Se o cliente ligar dizendo que
+"já pagou" ou que "recebeu uma invoice", confira primeiro por qual dos dois ele entrou:
+Agendamentos do site › **Pedidos do site** mostra o que veio pelo Stripe; a invoice aparece no card.
+A comparação completa dos dois sites está em
+[docs/site-publico/comparacao-urace-us.md](../site-publico/comparacao-urace-us.md).
+
 **Regras que o sistema garante** (código: `providers/carrinho.py`):
 
 | Regra | Como |

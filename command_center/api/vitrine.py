@@ -6,7 +6,7 @@ Em ops.urace.us e my.urace.us, `/` continua do jeito que era (o Caddy manda para
 para a área do cliente) e um caminho do site devolve 404 — o painel não vira vitrine.
 
 Os endereços do urace.us de hoje (WordPress) viram 301 para o endereço novo
-(`paginas_site.redirecionamentos()`): nada que o Google indexou cai no 404.
+(`paginas_site.destino()`): nada que o Google indexou cai no 404.
 
 A agenda pública (`/ops/api/vitrine/agenda`) é a mesma da área do cliente, sem login e com
 menos: só dia, turno, aberto ou não e vagas. Nunca o motivo de um dia fechado, nem quem marcou.
@@ -21,7 +21,6 @@ import re
 import sqlite3
 import threading
 import time
-from functools import lru_cache
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -80,11 +79,6 @@ def _html(conteudo, status=200):
         # página pública, igual para todo mundo: pode ficar 5 min no navegador
         "Cache-Control": "public, max-age=300",
     })
-
-
-@lru_cache(maxsize=1)
-def redirecionamentos():
-    return ps.redirecionamentos()
 
 
 def _slug(s):
@@ -158,8 +152,8 @@ def pagina(request: Request, caminho: str):
     if html:
         return _html(html)
     # endereço do urace.us de hoje → o novo (301, sem perder o que o Google indexou)
-    novo = redirecionamentos().get(caminho) or redirecionamentos().get(caminho + "/")
-    if novo:
+    novo = ps.destino(caminho)
+    if novo and novo != caminho:
         return RedirectResponse(novo, status_code=301)
     # o mesmo endereço sem a barra final (como o WordPress fazia): 301 para o certo
     if not caminho.endswith("/") and existe(caminho + "/", host):

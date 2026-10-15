@@ -511,9 +511,24 @@ def _categoria(p):
     return {"slug": "parts", "name": nomes["parts"]}
 
 
+# #252: a descrição de um produto do WooCommerce pode trazer CSS e JavaScript do tema soltos no
+# meio do texto (o urace.us põe isso dentro de <style>/<script>; na cópia, as tags ficaram de fora).
+# Como texto, isso aparece como lixo na página e estoura a largura no celular: aqui some.
+CODIGO = re.compile(r"[\w.#\[\]:*-]+\s*\{[^{}]*:[^{}]*\}|@media\s*\(|@keyframes\b|\bfunction\s*\(|"
+                    r"\bdocument\.(querySelector|getElementBy|addEventListener)|\.(addEventListener|innerHTML)\s*[=(]")
+
+
+def _sem_codigo(html):
+    """Tira os pedaços de CSS/JS que vieram como texto, parágrafo por parágrafo."""
+    def um(m):
+        return "" if CODIGO.search(_texto(m.group(0))) else m.group(0)
+    html = re.sub(r"<p\b[^>]*>.*?</p>", um, html, flags=re.S | re.I)
+    return re.sub(r"(?m)^(?!<)[^<\n]*$", lambda m: "" if CODIGO.search(m.group(0)) else m.group(0), html)
+
+
 def _niveis(html, topo):
     """Títulos do texto copiado (h2–h6) viram um nível só, abaixo do título da seção."""
-    return re.sub(r"<(/?)h[2-6]>", lambda m: f"<{m.group(1)}{topo}>", html)
+    return re.sub(r"<(/?)h[2-6]>", lambda m: f"<{m.group(1)}{topo}>", _sem_codigo(html))
 
 
 def _preco(p):
@@ -658,7 +673,7 @@ def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
                      "priceCurrency": "USD", "url": f"https://{host}/store/p/{p['slug']}/",
                      "availability": "https://schema.org/InStock" if p["in_stock"] else "https://schema.org/OutOfStock",
                      **({"lowPrice": f"{p['price_min']:.2f}", "highPrice": f"{p['price_max']:.2f}"} if (p["price_min"] and p["price_max"] and p["price_max"] != p["price_min"]) else {"price": f"{p['price']:.2f}"})}}
-    desc = _desc((p["short"] and _texto(p["short"])[:120]) or p["name"], "From the URACE race shop at the Orlando Kart Center: parts, suits and gear chosen by racers.")
+    desc = _desc(_resumo_produto(p), "From the URACE race shop at the Orlando Kart Center: parts, suits and gear chosen by racers.")
     return layout(host=host, caminho=f"/store/p/{p['slug']}/", titulo=f"{p['name']} | URACE Store", descricao=desc, corpo=corpo,
                   schemas=(_negocio(host), ld, _trilha(host, ("Store", "/store/"), (cat["name"], f"/store/{cat['slug']}/"), (p["name"], f"/store/p/{p['slug']}/"))),
                   scripts=("contato.js",), foto=p["images"][0]["src"] if p["images"] else None)
@@ -947,8 +962,34 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
 
 def _desc(texto, complemento):
     """meta description com pelo menos 80 caracteres: um texto curto ganha o complemento."""
-    texto = texto.strip().rstrip(".") + "."
+    texto = texto.strip()
+    if not texto.endswith(("…", "!", "?")):
+        texto = texto.rstrip(".") + "."
     return texto if len(texto) >= 80 else f"{texto} {complemento}"
+
+
+def _corte(texto, limite=155):
+    """#252: corta sem partir palavra. Prefere o fim de uma frase; senão, a última palavra inteira
+    e reticências. Antes o corte era seco em 120 e saía "add it w." no Google."""
+    texto = texto.strip()
+    if len(texto) <= limite:
+        return texto
+    pedaco = texto[:limite + 1]
+    frase = max(pedaco.rfind(". "), pedaco.rfind("! "), pedaco.rfind("? "))
+    if frase >= 80:
+        return pedaco[:frase + 1].strip()
+    return pedaco[:pedaco.rfind(" ")].rstrip(" ,;:·—-") + "…"
+
+
+def _resumo_produto(p):
+    """O texto da meta description de um produto: o resumo da loja, mas não quando ele é só a nota
+    de rodapé de preço (começa com *) — aí vale o primeiro parágrafo da descrição, e por fim o nome."""
+    for bruto in (p["short"], p["description"]):
+        for pedaco in re.split(r"(?i)</p>|<br\s*/?>|\n", bruto or ""):
+            t = re.sub(r"\s+([.,;:!?])", r"\1", _texto(pedaco))
+            if len(t) >= 40 and not t.startswith("*") and not CODIGO.search(t):
+                return _corte(t)
+    return p["name"]
 
 
 def _texto(h):
@@ -967,10 +1008,13 @@ def caminhos():
     return out
 
 
+@lru_cache(maxsize=1)
 def redirecionamentos():
     """Endereço antigo do urace.us → endereço novo (301). Nada do site antigo cai no 404."""
     # #236: /cart/ é o carrinho do site novo; o /checkout/ do WordPress cai nele
-    r = {"/shop/": "/store/", "/book-online/": PORTAL + "/reserve", "/my-account/": PORTAL, "/checkout/": "/cart/"}
+    # #252: /book-online/ é página indexada do urace.us (o Yoast publica no sitemap), então vai para
+    # a página pública que faz o mesmo (agenda, preços e o botão de reservar) e não para dentro do portal
+    r = {"/shop/": "/store/", "/book-online/": C.ARRIVE["caminho"], "/my-account/": PORTAL, "/checkout/": "/cart/"}
     for d in list(S.SERVICOS) + list(P.PAGINAS):
         for antigo in d.get("antigos", ()):
             r[antigo] = d["caminho"]
@@ -991,4 +1035,35 @@ def redirecionamentos():
         r[f"/{p['slug']}/"] = f"/blog/{p['slug']}/"
     for c in dados("posts.json")["categorias"]:
         r[f"/category/{c['slug']}/"] = f"/blog/category/{c['slug']}/"
+    for s in ("sitemap_index", "post-sitemap", "page-sitemap", "product-sitemap",
+              "category-sitemap", "product_cat-sitemap", "product_tag-sitemap"):
+        r[f"/{s}.xml"] = "/sitemap.xml"                 # o Google volta a achar o mapa do site
     return r
+
+
+# As famílias de endereço do WooCommerce que não têm par no site novo: subcategoria de produto,
+# etiqueta, página 2 em diante, produto que saiu do catálogo e as telas da conta do WordPress.
+# Sem isto, 110 endereços do urace.us de hoje cairiam no 404 no dia da troca (#252).
+def _familia(caminho):
+    m = re.fullmatch(r"(/.*?/)page/\d+/", caminho)       # /store/page/2/, /blog/page/2/, /product-category/x/page/2/
+    if m:
+        return destino(m.group(1)) or (m.group(1) if m.group(1) in caminhos() else None)
+    m = re.fullmatch(r"/product-category/(.+)/", caminho)
+    if m:                                               # a subcategoria cai na categoria da loja, ou na loja
+        fim = m.group(1).rstrip("/").split("/")[-1]
+        cat = ALIAS_LOJA.get(fim, fim)
+        return f"/store/{cat}/" if cat in dict(CATEGORIAS_LOJA) else "/store/"
+    if re.fullmatch(r"/product-tag/[^/]+/", caminho):    # etiqueta de produto: a loja não tem página de etiqueta
+        return "/store/"
+    if re.fullmatch(r"/product/[^/]+/", caminho):        # produto que já não está no catálogo
+        return "/store/"
+    if re.fullmatch(r"/my-account/.+", caminho):         # lost-password, orders, downloads, edit-address…
+        return PORTAL
+    return None
+
+
+def destino(caminho):
+    """O endereço novo de um endereço do urace.us de hoje (301), ou None. Primeiro o mapa exato,
+    depois as famílias do WooCommerce."""
+    r = redirecionamentos()
+    return r.get(caminho) or r.get(caminho + "/") or _familia(caminho) or _familia(caminho + "/")
