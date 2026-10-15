@@ -115,3 +115,29 @@ def um_ativo(texto, primeira_resposta):
     limpo = "\n".join(linha for linha in linhas if linha)
     limpo = re.sub(r"[ \t]{2,}", " ", limpo).replace(" ,", ",").strip()
     return limpo, violacoes
+
+
+# Reapresentação (14/10, teste no painel): "Oi! Aqui é o Chase, da URACE." na 2ª resposta. O nome sai
+# uma vez, na primeira resposta; depois disso a frase de apresentação é cortada.
+_APRESENTACAO = re.compile(r"\b(chase here|this is chase|i'm chase|i am chase|aqui [eé] o chase|"
+                           r"sou o chase|soy chase|aqu[ií] es chase)\b", re.IGNORECASE)
+
+
+def sem_reapresentacao(texto, primeira_resposta):
+    """Devolve (texto, violacoes). Fora da primeira resposta, tira a frase em que o robô se apresenta
+    outra vez. Se a apresentação vem junto de "Oi!" sozinho, o "Oi!" também sai."""
+    if primeira_resposta or not texto or not _APRESENTACAO.search(texto):
+        return texto, []
+    saudacao = re.compile(r"(oi|ol[aá]|hi|hello|hola)[!,.\\s]*", re.IGNORECASE)
+    linhas = []
+    for linha in texto.split("\n"):
+        mantidas = []
+        for frase in (f.strip() for f in _FRASE_FIM.split(linha) if f.strip()):
+            if _APRESENTACAO.search(frase):
+                if mantidas and saudacao.fullmatch(mantidas[-1]):
+                    mantidas.pop()      # o "Oi!" que vinha só para a apresentação
+                continue
+            mantidas.append(frase)
+        if mantidas:
+            linhas.append(" ".join(mantidas))
+    return "\n".join(linhas), ["reapresentacao"]

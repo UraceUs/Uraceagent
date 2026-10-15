@@ -308,8 +308,9 @@ def limpar_texto(texto: str, primeira: bool) -> tuple[str, list[str]]:
     """A guarda sem estado: regra de um (link e pergunta) e estilo. Usada pela
     resposta real e pelo teste do painel, para os dois nunca divergirem."""
     limpo, violacoes = estilo.um_ativo(texto, primeira)
+    limpo, reapresentou = estilo.sem_reapresentacao(limpo, primeira)
     limpo, mais = estilo.aplicar(limpo)
-    return limpo, violacoes + mais
+    return limpo, violacoes + reapresentou + mais
 
 
 def _primeira_vez(chave: str) -> bool:

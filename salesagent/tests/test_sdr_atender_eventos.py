@@ -179,7 +179,7 @@ def rodar() -> list[str]:
     check("o bloco do print vira 2 a 4 mensagens curtas",
           2 <= len(msgs) <= app.MENSAGENS_MAX and all(len(m) <= app.MENSAGEM_MAX for m in msgs[:-1])
           and " ".join(msgs) == bloco, msgs)
-    linhas = "Oi! Aqui é o Chase, da URACE.\nUm dia inteiro na pista: $719.\nÉ pra você ou pra outra pessoa?"
+    linhas = "Um dia inteiro na pista: $719.\nA taxa da pista é à parte.\nÉ pra você ou pra outra pessoa?"
     check("cada linha do modelo é uma mensagem", app.dividir_em_mensagens(linhas) == linhas.split("\n"),
           app.dividir_em_mensagens(linhas))
     modo_antes, intervalo_antes = app.SALESBOT_DISPLAY, app.INTERVALO_ENTRE_MENSAGENS_S
