@@ -69,3 +69,17 @@ jobs:
       - run: pip install -r command_center/requirements.txt pytest httpx playwright
       - run: python -m playwright install --with-deps chromium
       - run: CC_E2E=1 python -m pytest -q command_center/tests/e2e
+      # #277 (dono, 15/10): a prova com fotos sai da VPS. Ela roda aqui, em todo PR e em todo push no branch
+      # da VPS, e o pacote (RESUMO.md em português + fotos de cada passo em 390 e 1280 px) fica para baixar
+      # em "Artifacts" da execução — mesmo quando falha, com a foto do estado do erro.
+      - name: Prova do site e da venda, com fotos (390 e 1280 px)
+        run: |
+          mkdir -p provas/fotos
+          CC_E2E=1 CC_FOTOS="$GITHUB_WORKSPACE/provas/fotos" python -m pytest -q command_center/tests/e2e/test_pacote_de_provas.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prova-com-fotos
+          path: provas/
+          retention-days: 14
+          if-no-files-found: ignore

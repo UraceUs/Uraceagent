@@ -5,7 +5,8 @@
 # O que faz, nesta ordem, e para se qualquer passo falhar:
 #   1. venv em ~/.urace/cc-venv com fastapi/uvicorn (sem tocar no Python do sistema)
 #   2. build do frontend (npm ci && npm run build) -> command_center/web/dist
-#   3. testes do backend (pytest) contra um banco temporário
+#   3. testes do backend (pytest) contra um banco temporário — só se o CI do GitHub não confirmar
+#      o verde deste commit (#277)
 #   4. primeiro ADMIN, se ainda não existe nenhum usuário (interativo)
 #   5. unit systemd urace-command-center em 127.0.0.1:8790
 #   6. handle /ops* no bloco existente do Caddyfile (mesma técnica do /painel)
@@ -65,10 +66,29 @@ echo "-- 2/7 build do frontend: npm ci + vite (silencioso, 1-3 min)"
 echo "-- frontend construído: $(du -sh "$REPO/command_center/web/dist" | cut -f1)"
 
 # --------------------------------------------------------------- 3. testes
-echo "-- 3/7 testes do backend"
-# cinto e suspensório: além do conftest, nenhum caminho de credencial real chega ao pytest
-( cd "$REPO" && env -u ASANA_TOKEN -u DOCUSIGN_INTEGRATION_KEY -u GOOGLE_TOKEN_JSON URACE_ENV=/nao/existe GOOGLE_TOKEN_JSON_SUPPORT=/nao/existe CC_DB_PATH=/tmp/cc-test-$$.sqlite "$VENV/bin/python" -m pytest -q command_center/tests 2>&1 | tail -3 )
-rm -f /tmp/cc-test-$$.sqlite*
+# #277 (dono, 15/10): a bateria inteira levava ~9 min aqui a cada deploy. O commit que sobe já passou
+# pelo CI do GitHub (Python, frontend e end-to-end) antes de chegar ao branch da VPS: se o GitHub
+# confirma o verde DESTE commit, a bateria não roda de novo aqui. Na dúvida — GitHub fora do ar, algum
+# job vermelho ou ainda rodando — roda como sempre. URACE_DEPLOY_TESTES=1 força a bateria.
+SHA="$(cd "$REPO" && git rev-parse HEAD)"
+# o nome de hoje do repositório (renomeado de Uraceagent; o remote antigo da VPS segue funcionando no git)
+REPO_GH="${URACE_GITHUB_REPO:-UraceUs/Uracecommandcenter}"
+CI="nao perguntei"
+if [ -z "${URACE_DEPLOY_TESTES:-}" ]; then
+    CI="$(curl -fsSL --max-time 15 -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$REPO_GH/commits/$SHA/check-runs?per_page=100" 2>/dev/null \
+          | "$VENV/bin/python" "$REPO/adminai/deploy/command_center/ci_verde.py" 2>/dev/null || true)"
+    [ -n "$CI" ] || CI="o GitHub não respondeu"
+fi
+if [ "$CI" = "ok" ]; then
+    echo "-- 3/7 testes: o CI do GitHub já passou neste commit (${SHA:0:7}) — Python, frontend e end-to-end"
+    echo "      verdes. A bateria não roda de novo aqui (economiza ~9 min). Forçar: URACE_DEPLOY_TESTES=1"
+else
+    echo "-- 3/7 testes do backend aqui ($CI)"
+    # cinto e suspensório: além do conftest, nenhum caminho de credencial real chega ao pytest
+    ( cd "$REPO" && env -u ASANA_TOKEN -u DOCUSIGN_INTEGRATION_KEY -u GOOGLE_TOKEN_JSON URACE_ENV=/nao/existe GOOGLE_TOKEN_JSON_SUPPORT=/nao/existe CC_DB_PATH=/tmp/cc-test-$$.sqlite "$VENV/bin/python" -m pytest -q command_center/tests 2>&1 | tail -3 )
+    rm -f /tmp/cc-test-$$.sqlite*
+fi
 
 # ------------------------------------------------------ 4. primeiro ADMIN
 echo "-- 4/7 usuários"

@@ -13,6 +13,21 @@ Dono, 30/09 (issue #14): *"preciso que faça também nos nossos projetos de agor
   (renomeado de `claude/configurar-open-claw-ooqo8x`), então o `Closes` fecha a issue no merge.
 - Depois do merge, o dono recebe **um bloco único** de deploy para o VPS.
 
+## Entrega por blocos — teste fora da VPS (dono, 15/10, #277)
+Dono: *"a partir de agora você rode os testes ... no seu ambiente virtual, porque os testes estão
+demorando de 15 a 20 minutos ... comita, empurra para o GitHub e testa por lá, antes da gente jogar ali
+na VPS ... separa por blocos, de acordo com as issues, para jogar mais coisas de uma vez"*.
+- **Bloco** = um conjunto de issues que vai junto para a VPS. O Claude propõe o bloco ao dono com a
+  lista de issues e o que muda no ar; as perguntas que só o dono responde vão **todas juntas**, no começo.
+- Cada issue continua com o seu branch e o seu PR. Tudo é testado **no ambiente do Claude** (pytest,
+  lint, build, end-to-end e a **prova com fotos**, `CC_E2E=1 CC_FOTOS=… pytest
+  command_center/tests/e2e/test_pacote_de_provas.py`) e no **CI do GitHub**, que também gera o pacote de
+  fotos como artefato.
+- O dono recebe **um deploy por bloco**, e só depois que o CI do **commit do branch da VPS** estiver
+  verde. O `servir_command_center.sh` confere isso no GitHub e, com verde, **não roda a bateria na VPS**;
+  na dúvida, roda. A prova com fotos na VPS (`testar_tudo.sh`) vira opcional.
+- Junto do bloco de deploy vai o resumo do que mudou e as fotos da prova, para o dono ver antes de subir.
+
 ## Qualidade (não entra PR sem isto)
 - `ruff check .` limpo (`ruff.toml`) · `python -m pytest -q` verde
 - Frontend: `npm run build` (tsc + vite) e `npx oxlint src` sem erro
