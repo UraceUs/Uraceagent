@@ -49,3 +49,18 @@ def test_o_python_do_teste_vem_antes_do_da_producao():
     escolha = texto.split("# ------------------------------------------------------------- 2.")[1]
     i_teste = min(escolha.index("CC_TEST_PY"), escolha.index("TESTE_VENV"))
     assert i_teste < escolha.index('"$VENV/bin/python"'), "o venv da produção não pode ser a primeira escolha"
+
+
+def test_o_caminho_do_chromium_e_sempre_resolvido_e_repassado_ao_pytest():
+    """A suíte roda com um HOME descartável, e o Playwright procura o navegador em
+    `$HOME/.cache/ms-playwright`. Então o caminho tem de ser resolvido fora do pytest e
+    repassado em `PW_CHROMIUM` SEMPRE — senão todo teste de tela vira erro
+    ("Executable doesn't exist at /tmp/.../cc-home-.../"), como aconteceu na VPS em 15/10.
+
+    Conferência no texto do script, de propósito: rodar o passo 2 de verdade exigiria um
+    navegador instalado nesta máquina de teste."""
+    texto = SCRIPT.read_text(encoding="utf-8")
+    assert "p.chromium.executable_path" in texto, "pergunte ao Playwright onde está o navegador"
+    assert '[ -n "$CHROMIUM" ] && LIMPO+=' not in texto, "PW_CHROMIUM não pode ser opcional no pytest"
+    assert 'LIMPO+=("PW_CHROMIUM=$CHROMIUM")' in texto
+    assert "chrome-linux*/chrome" in texto, "o Chromium novo vem em chrome-linux64/"
