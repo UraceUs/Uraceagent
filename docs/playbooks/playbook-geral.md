@@ -382,7 +382,8 @@ abre o card dele).
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
-| **Medição de campanha no site** (#260) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta); o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |
+| **Medição de campanha no site** (#260, #171) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta) **só depois do Accept no banner de cookies**; o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |
+| **Chat do site** (#170) | o balão do Kommo no site público; a conversa cai no Chat do Kommo | esta seção, abaixo |
 
 ### Medição de campanha no site (#260)
 
@@ -407,7 +408,21 @@ ponho os mesmos ids do site antigo?"*: **"sim pfvr"**. É o que mede quanto cada
   (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`, `gclid`, `fbclid`, `fbp`,
   `fbc`, `campaign_id`, `adset_id`) junto com a mensagem. Quem vende vê isso em **Vendas › a
   oportunidade › "De onde veio"**.
-- **Não existe banner de consentimento** (LGPD/GDPR) nesta frente. Se o dono quiser, é outra frente.
+- **Banner de cookies** (#171, dono 15/10: *"Sim, banner simples"*): na primeira visita o site
+  mostra, embaixo, *"We use cookies to measure our ads…"* com **Decline** e **Accept**. **Antes do
+  Accept nada do Google nem do Meta carrega** (nem o Tag Manager, nem o pixel). Accept liga a
+  medição; Decline deixa desligada. A escolha vale 180 dias (cookie `urace_consent`). O link
+  **Cookie settings**, no rodapé, abre o banner de novo para mudar de ideia.
+
+### Chat do site (Kommo, #170)
+
+- O balão de chat do site é o **mesmo widget do Kommo** do `urace.us` de hoje: a conversa cai no
+  Kommo como lead, como sempre, e aparece no **Chat do Kommo** do painel (`/ops/crm/chat`).
+- O chat **não depende** do banner de cookies: é atendimento, não medição de anúncio.
+- O id e o hash do widget ficam em `~/.urace/adminai.env` na VPS, em `SITE_KOMMO_ID` e
+  `SITE_KOMMO_HASH`. **Sem as variáveis, o balão não aparece** e o site funciona igual.
+- O chat aparece nas páginas públicas; **não** aparece no painel, na área do cliente, em `/cart/`
+  nem no link pessoal do pedido.
 
 ### Suits: duas novidades
 

@@ -7,14 +7,46 @@
  *
  * O que vai para o `dataLayer`: `page_view` com o TIPO da página, o `purchase` que o servidor
  * mandou na página do pedido pago, e o `add_to_cart` que o carrinho e a agenda empurram.
- * NUNCA nome, e-mail, telefone, endereço, medida ou piloto. */
+ * NUNCA nome, e-mail, telefone, endereço, medida ou piloto.
+ *
+ * #171 (dono, 15/10: "Sim, banner simples"): o Google e o Meta só carregam depois do "Accept". Sem
+ * resposta, um banner pergunta; "Decline" guarda a recusa e nada de fora carrega. A escolha fica no
+ * navegador da pessoa (localStorage, com cookie de reserva) e "Cookie settings", no rodapé, pergunta de
+ * novo. O `dataLayer` continua recebendo os eventos — sem o GTM, eles não saem da página.
+ *
+ * #170: o chat do Kommo é o atendimento do site (como no urace.us de hoje), não medição: carrega com a
+ * configuração do servidor, independente do banner. */
 (function () {
   'use strict'
   var bloco = document.getElementById('urace-medicao')
   if (!bloco) return
   var cfg = {}
   try { cfg = JSON.parse(bloco.textContent || '{}') } catch (err) { return }
+  if (!cfg.gtm && !cfg.pixel && !cfg.kommo) return
+
+  // ---------------------------------------------------------------- chat do Kommo (#170)
+  // O carregador oficial do widget, sem script inline: o mesmo `crm_plugin` + fila `crmPlugin` do snippet.
+  if (cfg.kommo && cfg.kommo.id && cfg.kommo.hash && !window.crm_plugin) {
+    window.crm_plugin = { id: String(cfg.kommo.id), hash: String(cfg.kommo.hash), locale: 'en',
+      setMeta: function (p) { this.params = (this.params || []).concat([p]) } }
+    window.crmPlugin = window.crmPlugin || function () { (window.crmPlugin.q = window.crmPlugin.q || []).push(arguments) }
+    var k = document.createElement('script')
+    k.async = true; k.id = 'crm_plugin_script'; k.src = 'https://gso.kommo.com/js/button.js'
+    document.head.appendChild(k)
+  }
   if (!cfg.gtm && !cfg.pixel) return
+
+  // ---------------------------------------------------------------- consentimento (#171)
+  var CHAVE = 'urace-consent'
+  function lerEscolha() {
+    try { var v = window.localStorage.getItem(CHAVE); if (v) return v } catch (err) { /* sem storage */ }
+    var m = document.cookie.match(/(?:^|;\s*)urace_consent=(sim|nao)/)
+    return m ? m[1] : ''
+  }
+  function gravarEscolha(v) {
+    try { window.localStorage.setItem(CHAVE, v) } catch (err) { /* sem storage: fica o cookie */ }
+    document.cookie = 'urace_consent=' + v + '; Max-Age=' + (60 * 60 * 24 * 180) + '; Path=/; SameSite=Lax; Secure'
+  }
 
   // a volta do Stripe traz `?session_id=…`: esse endereço abre o pedido de uma pessoa, então sai
   // do endereço ANTES de qualquer script de fora (o Analytics manda o endereço inteiro)
@@ -56,7 +88,7 @@
     n('init', String(id))
     n('track', 'PageView')
   }
-  if (cfg.pixel) pixelBase(cfg.pixel)
+  var carregado = false
 
   /** O mesmo evento no pixel, quando ele está direto aqui (no GTM, a tag do container cuida). */
   function noPixel(ev) {
@@ -70,18 +102,62 @@
   // ---------------------------------------------------------------- o que a página já sabe
   empurrar({ event: 'page_view', page_type: tipo(window.location.pathname) })
   var doServidor = cfg.eventos || []
-  doServidor.forEach(function (ev) { empurrar(ev); noPixel(ev) })
+  doServidor.forEach(function (ev) { empurrar(ev) })
 
   /** O que o carrinho e a agenda usam: `window.uraceMedicao.push({event:'add_to_cart', …})`. */
   window.uraceMedicao = { push: function (ev) { empurrar(ev); noPixel(ev) } }
 
-  // ---------------------------------------------------------------- Google Tag Manager
-  // Entra por último: os eventos acima já estão no dataLayer quando o container sobe.
-  if (cfg.gtm) {
-    dl.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' })
-    var g = document.createElement('script')
-    g.async = true
-    g.src = 'https://www.googletagmanager.com/gtm.js?id=' + encodeURIComponent(cfg.gtm)
-    document.head.appendChild(g)
+  /** O Google e o Meta, só depois do "Accept". O GTM entra por último: os eventos já estão no dataLayer. */
+  function carregarDeFora() {
+    if (carregado) return
+    carregado = true
+    if (cfg.pixel) {
+      pixelBase(cfg.pixel)
+      doServidor.forEach(noPixel)
+    }
+    if (cfg.gtm) {
+      dl.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' })
+      var g = document.createElement('script')
+      g.async = true
+      g.src = 'https://www.googletagmanager.com/gtm.js?id=' + encodeURIComponent(cfg.gtm)
+      document.head.appendChild(g)
+    }
   }
+
+  // ---------------------------------------------------------------- o banner
+  function banner() {
+    if (document.querySelector('.consentimento')) return
+    var b = document.createElement('div')
+    b.className = 'consentimento'
+    b.setAttribute('role', 'region')
+    b.setAttribute('aria-label', 'Cookies')
+    var p = document.createElement('p')
+    p.appendChild(document.createTextNode('We use cookies to measure our ads and improve the site. '))
+    var a = document.createElement('a'); a.href = '/legal/privacy.html'; a.textContent = 'Privacy policy'
+    p.appendChild(a)
+    var acoes = document.createElement('div'); acoes.className = 'consentimento-acoes'
+    var nao = document.createElement('button'); nao.type = 'button'; nao.className = 'btn btn-sm btn-linha-escura'; nao.textContent = 'Decline'
+    var sim = document.createElement('button'); sim.type = 'button'; sim.className = 'btn btn-sm'; sim.textContent = 'Accept'
+    nao.addEventListener('click', function () { gravarEscolha('nao'); b.remove() })
+    sim.addEventListener('click', function () { gravarEscolha('sim'); b.remove(); carregarDeFora() })
+    acoes.appendChild(nao); acoes.appendChild(sim)
+    b.appendChild(p); b.appendChild(acoes)
+    document.body.appendChild(b)
+  }
+
+  var escolha = lerEscolha()
+  if (escolha === 'sim') carregarDeFora()
+  else if (escolha !== 'nao') {
+    if (document.body) banner()
+    else document.addEventListener('DOMContentLoaded', banner)
+  }
+  // "Cookie settings" no rodapé: pergunta de novo
+  function ligarRodape() {
+    document.querySelectorAll('[data-cookies]').forEach(function (bt) {
+      bt.hidden = false
+      bt.addEventListener('click', banner)
+    })
+  }
+  if (document.body) ligarRodape()
+  else document.addEventListener('DOMContentLoaded', ligarRodape)
 })()

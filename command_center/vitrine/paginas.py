@@ -130,7 +130,8 @@ def _rodape():
     <nav aria-label="Footer"><h2 class="rodape-h">Navigation</h2><ul>{nav}</ul></nav>
     <div><h2 class="rodape-h">Socials</h2><ul>{redes}</ul></div>
   </div>
-  <p class="rodape-fim">© 2026 URACE | All rights reserved · <a href="/legal/privacy.html">Privacy policy</a></p>
+  <p class="rodape-fim">© 2026 URACE | All rights reserved · <a href="/legal/privacy.html">Privacy policy</a>
+    <button type="button" class="link-cookies" data-cookies hidden>Cookie settings</button></p>
 </footer>"""
 
 

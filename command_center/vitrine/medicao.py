@@ -41,16 +41,27 @@ import re
 from html import escape as e
 
 ENV_PADRAO = "~/.urace/adminai.env"
-VARIAVEIS = ("SITE_GTM_ID", "SITE_META_PIXEL_ID")
+VARIAVEIS = ("SITE_GTM_ID", "SITE_META_PIXEL_ID", "SITE_KOMMO_ID", "SITE_KOMMO_HASH")
 
 GTM = re.compile(r"GTM-[A-Z0-9]{4,12}")
 PIXEL = re.compile(r"[0-9]{8,20}")
+KOMMO_ID = re.compile(r"[0-9]{4,12}")
+KOMMO_HASH = re.compile(r"[0-9a-f]{32,128}")
 
 HOST_GTM = "https://www.googletagmanager.com"
 HOSTS_GA = ("https://www.google-analytics.com", "https://*.google-analytics.com",
             "https://analytics.google.com", "https://*.analytics.google.com")
 HOST_FB_JS = "https://connect.facebook.net"
 HOST_FB = "https://www.facebook.com"
+# #170: o chat do Kommo. Medido de verdade (15/10, Chromium carregando o widget do urace.us de hoje): o botão
+# vem do gso.kommo.com, o formulário do forms.kommo.com, o mensageiro do piper.amocrm.com e a conversa por
+# WebSocket no lc-en.kommo.com. Só isso abre, e só quando o chat está configurado.
+KOMMO = {"script-src": ["https://gso.kommo.com", "https://forms.kommo.com", "https://piper.amocrm.com"],
+         "style-src": ["https://gso.kommo.com", "https://forms.kommo.com"],
+         "font-src": ["https://gso.kommo.com"],
+         "img-src": ["https://gso.kommo.com", "https://forms.kommo.com"],
+         "connect-src": ["https://gso.kommo.com", "https://piper.amocrm.com", "wss://lc-en.kommo.com"],
+         "frame-src": ["https://gso.kommo.com", "https://forms.kommo.com", "https://piper.amocrm.com"]}
 
 # a marca do bloco de dados: a rota olha por ela para abrir a política só quando a página
 # realmente levou a medição (a política nunca abre mais do que o HTML usa)
@@ -100,9 +111,21 @@ def pixel_id():
     return _id("SITE_META_PIXEL_ID", PIXEL)
 
 
-def ligada():
-    """Alguma medição configurada? Sem id nenhum, nada carrega e nada abre na política."""
+def kommo():
+    """#170: o chat do Kommo ({'id', 'hash'}), ou None. O id e o hash são os do widget que o site antigo
+    publica; ficam no ambiente, como os da medição (o repositório é público)."""
+    i, h = _id("SITE_KOMMO_ID", KOMMO_ID), _id("SITE_KOMMO_HASH", KOMMO_HASH)
+    return {"id": i, "hash": h} if i and h else None
+
+
+def medindo():
+    """Analytics ou pixel configurado (os que pedem consentimento, #171)."""
     return bool(gtm_id() or pixel_id())
+
+
+def ligada():
+    """Alguma coisa de fora configurada (medição ou chat)? Sem nada, nada carrega e nada abre na política."""
+    return bool(medindo() or kommo())
 
 
 def permitida(caminho):
@@ -122,7 +145,7 @@ def cabeca(caminho, eventos=()):
     carregar o GTM (hoje, só o `purchase` da página do pedido pago)."""
     if not ativa(caminho):
         return ""
-    dados = {"gtm": gtm_id(), "pixel": pixel_id(), "eventos": [x for x in eventos if x],
+    dados = {"gtm": gtm_id(), "pixel": pixel_id(), "kommo": kommo(), "eventos": [x for x in eventos if x],
              # a volta do Stripe traz `?session_id=…` no endereço: sai antes de o GTM carregar
              "limpar_endereco": bool(caminho and caminho.endswith("/thanks/"))}
     # `</` dentro do JSON fecharia a tag <script> (o mesmo cuidado do JSON-LD)
@@ -131,7 +154,13 @@ def cabeca(caminho, eventos=()):
 
 
 def noscript(caminho):
-    """O começo do `<body>`: o `noscript` do GTM e o do pixel, para quem está sem JavaScript."""
+    """#171: nada. O `noscript` do GTM e o do pixel carregavam o Google e o Meta para quem está sem
+    JavaScript — e quem está sem JavaScript não tem como dizer sim ou não ao banner de consentimento.
+    Sem consentimento não há medição, então o `noscript` saiu. (A função fica para o layout não mudar.)"""
+    return ""
+
+
+def _noscript_antigo(caminho):                       # o de #260, guardado só como referência
     if not ativa(caminho):
         return ""
     partes = []
@@ -160,6 +189,9 @@ def csp_hosts():
         partes.setdefault("script-src", []).append(HOST_FB_JS)
         partes.setdefault("img-src", []).append(HOST_FB)
         partes.setdefault("connect-src", []).append(HOST_FB)
+    if kommo():
+        for diretiva, hosts in KOMMO.items():
+            partes.setdefault(diretiva, []).extend(hosts)
     return partes
 
 

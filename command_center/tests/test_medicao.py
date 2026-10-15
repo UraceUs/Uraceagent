@@ -58,6 +58,8 @@ def cli(tmp_path, monkeypatch):
     monkeypatch.delenv("CC_SITE_PREVIEW", raising=False)
     monkeypatch.delenv("SITE_GTM_ID", raising=False)
     monkeypatch.delenv("SITE_META_PIXEL_ID", raising=False)
+    monkeypatch.delenv("SITE_KOMMO_ID", raising=False)
+    monkeypatch.delenv("SITE_KOMMO_HASH", raising=False)
     with TestClient(app, base_url=SITE) as t:
         yield t
 
@@ -111,10 +113,11 @@ def test_com_a_variavel_a_pagina_leva_a_medicao_e_a_politica_abre_o_minimo(cli, 
     inline = [a for a in re.findall(r"<script([^>]*)>", r.text)
               if "src=" not in a and "application/ld+json" not in a and "application/json" not in a]
     assert not inline, f"script inline na página: {inline}"
-    # o `noscript` do GTM e o do pixel, sem `style=` (a política do site não deixa estilo inline)
-    assert f'<iframe class="medicao-ns" src="https://www.googletagmanager.com/ns.html?id={GTM}"' in r.text
-    assert f'src="https://www.facebook.com/tr?id={PIXEL}&amp;ev=PageView&amp;noscript=1"' in r.text
+    # #171: sem `noscript` do GTM e do pixel — quem está sem JavaScript não tem como aceitar o banner,
+    # então não há medição para essa pessoa
+    assert "googletagmanager.com/ns.html" not in r.text and "facebook.com/tr?id=" not in r.text
     assert "style=" not in r.text
+    assert 'data-cookies hidden>Cookie settings</button>' in r.text, "o rodapé deixa mudar a escolha"
     pol = r.headers["content-security-policy"]
     assert "script-src 'self' https://www.googletagmanager.com https://connect.facebook.net;" in pol
     assert "frame-src https://www.googletagmanager.com" in pol
