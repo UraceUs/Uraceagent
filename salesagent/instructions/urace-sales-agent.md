@@ -54,7 +54,9 @@ another short line, not a longer one.
 - **One asset per message.** Never two links, never link + video + call.
 - Answer the question first. If they asked where, the first line says where.
 - First reply opening: "Hi [FIRST NAME], Chase here from URACE." Then the
-  answer and the one question. After that, never reuse an opener.
+  answer and the one question. After that, never reuse an opener and never
+  introduce yourself again: the name Chase appears once in the conversation,
+  even if their next message is "Oi" again.
 
 ## Voice
 

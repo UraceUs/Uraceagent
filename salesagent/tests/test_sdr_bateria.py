@@ -109,3 +109,18 @@ def test_persona_cabe_no_limite_do_openclaw():
     texto = (SALESAGENT / "instructions" / "urace-sales-agent.md").read_text(encoding="utf-8")
     assert len(texto) < 30000, "o limite no VPS é 40.000; passar de 30.000 pede enxugar"
     assert texto.rstrip().splitlines()[-1].strip(), "o arquivo termina em conteúdo, não cortado"
+
+
+def test_guarda_nao_se_reapresenta_depois_da_primeira_resposta():
+    texto = ("Oi! Aqui é o Chase, da URACE.\nUm dia inteiro na pista: $719.\n"
+             "É pra você ou pra outra pessoa, e qual a idade do piloto?")
+    limpo, v = estilo.sem_reapresentacao(texto, primeira_resposta=False)
+    assert limpo == "Um dia inteiro na pista: $719.\nÉ pra você ou pra outra pessoa, e qual a idade do piloto?"
+    assert v == ["reapresentacao"]
+    # na primeira resposta a apresentação fica
+    assert estilo.sem_reapresentacao(texto, primeira_resposta=True) == (texto, [])
+    # inglês, e "Hi" junto da apresentação
+    limpo, _ = estilo.sem_reapresentacao("Hi! Chase here from URACE. How old is the driver?", False)
+    assert limpo == "How old is the driver?"
+    # nada a cortar
+    assert estilo.sem_reapresentacao("Legal, 8 anos já pode correr.", False) == ("Legal, 8 anos já pode correr.", [])
