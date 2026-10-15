@@ -31,6 +31,9 @@ URLs e também com … identidade visual mesclada de Command Center com o site n
 ## Tudo conectado ao Command Center
 
 - **Reserva** (`Continue to booking`) → `/ops/portal/reserve`: sessão → entrar ou criar conta →
+  <!-- 15/10 (#262): este botão saiu do site público. O caminho do site é um só, o do carrinho
+       (carrinho → conta → Stripe → waiver); a reserva do portal continua existindo para a área
+       do cliente. Este documento é o retrato de 09/10 e fica como está, com esta nota. -->
   piloto → pagar (invoice do QuickBooks com link) + waiver → acompanhamento em
   `/ops/portal/sessions/<id>`. Mesmo visual do site (`.psite`).
 - **Contato** (`/contact/`, com `?assunto=` e `?produto=`) → `POST /ops/api/vitrine/contato`:

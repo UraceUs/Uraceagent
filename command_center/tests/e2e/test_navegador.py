@@ -562,13 +562,13 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     g.get_by_label("Sáb Manhã aberto").check()
     g.get_by_role("button", name="Salvar a semana").click()
     g.get_by_text("Semana salva").wait_for()
-    # 1b. gerente cadastra o serviço e o preço pela tela (#50): sem serviço, ninguém marca
+    # 1b. #263: os quatro serviços do site nascem da migração, com os preços da Rate Card — ninguém
+    # cadastra nada à mão. A tela de Serviços e preços é onde o gerente muda o preço (#50).
     abrir(g, servidor, "/site/servicos")
-    g.get_by_text("o cliente não consegue marcar", exact=False).wait_for()
-    g.get_by_label("Nome", exact=True).fill("Arrive and Drive")
-    g.get_by_label("Preço (US$)").fill("719")
-    g.get_by_role("button", name="Criar").click()
-    g.get_by_text("Serviço criado").wait_for()
+    g.get_by_role("heading", name="Serviços", exact=False).first.wait_for()
+    do_painel = g.request.get(servidor + "/api/site/servicos").json()["servicos"]
+    do_4t = [x for x in do_painel if x["site_kart"] == "4-stroke" and x["active"]]
+    assert len(do_4t) == 1 and do_4t[0]["price"] == 719, do_painel
     # 2. cliente cria a conta pela API e marca pela tela
     c = navegador.new_page(viewport={"width": 390, "height": 844})
     cliente_pela_api(c, servidor, "Cleo Agenda", "cleo.e2e@example.com", piloto="Caio Agenda")
@@ -584,7 +584,10 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
         c.get_by_role("button", name="Next month").click()
     c.get_by_role("gridcell", name=f"{rotulo}, available").click()
     c.get_by_role("button", name="Morning").click()
-    c.get_by_text("per driver").wait_for()                        # o preço aparece antes de marcar
+    # #253/#263: com vários serviços no painel e sem kart vindo do site, a pessoa escolhe — e só aí
+    # o preço do escolhido aparece, antes de marcar
+    c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
+    c.get_by_text("per driver").wait_for()
     assert "$719.00" in c.locator(".portal-servicos").inner_text()
     c.get_by_role("button", name="Request session").click()
     c.get_by_text("Request sent!").wait_for()
@@ -1516,7 +1519,12 @@ def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(
 
 def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(servidor, navegador):
     """O visitante escolhe no site; entra na conta; a agenda da área do cliente abre com o kart,
-    o dia e o turno escolhidos, e o pedido vai para a equipe como qualquer outro."""
+    o dia e o turno escolhidos, e o pedido vai para a equipe como qualquer outro.
+
+    #262: o site público já não oferece o "Continue to booking" — o caminho dele é o carrinho. A
+    reserva da área do cliente (#164) continua existindo e é a daqui para frente, aberta pelo mesmo
+    endereço com kart, dia e turno. #263: o serviço do 2-stroke vem da migração, com o preço do
+    painel; ninguém cadastra nada à mão."""
     from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
     site = servidor.removesuffix("/ops")
@@ -1527,11 +1535,10 @@ def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(
         sabado.check()
         g.get_by_role("button", name="Salvar a semana").click()
         g.get_by_text("Semana salva").wait_for()
-    abrir(g, servidor, "/site/servicos")
-    g.get_by_label("Nome", exact=True).fill("Arrive and Drive 2-stroke")
-    g.get_by_placeholder("719.00").fill("819")          # o campo do serviço novo (o de outro teste já existe)
-    g.get_by_role("button", name="Criar").click()
-    g.get_by_text("Serviço criado").wait_for()
+    # #263: os quatro serviços do site vêm da migração, ligados ao kart pela chave "Kart do site"
+    do_painel = g.request.get(servidor + "/api/site/servicos").json()["servicos"]
+    do_2t = [x for x in do_painel if x["site_kart"] == "2-stroke" and x["active"]]
+    assert len(do_2t) == 1 and do_2t[0]["price"] == 819, do_painel
     g.close()
     aux = navegador.new_page()
     cliente_pela_api(aux, servidor, "Sara Site", "sara.site.e2e@example.com", piloto="Sami Site", ip="10.1.48.1")
@@ -1550,10 +1557,11 @@ def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(
     sab = next(d for d in (hoje + timedelta(days=n) for n in range(120)) if d.strftime("%A, %B ") + str(d.day) == rotulo)
     dia.click()
     v.get_by_role("button", name=re.compile("^Morning")).click()
-    assert v.locator(".agenda-preco").inner_text() == "$819"
-    v.get_by_role("link", name="Continue to booking").click()
-    # #164: a reserva abre na mesma identidade do site, com a escolha; sem conta, entra ali mesmo
-    v.wait_for_url(re.compile(r"/ops/portal/reserve\?date=" + sab.isoformat()))
+    assert v.locator(".agenda-preco").inner_text() == "$819", "o preço é o do painel (#50)"
+    assert v.locator(".agenda-carrinho").inner_text().strip().startswith("Add to cart"), "#262: um botão só"
+    assert not v.locator(".agenda-ir").count(), '#262: o "Continue to booking" saiu do site público'
+    # #164: a reserva da área do cliente abre na mesma identidade do site, com a escolha do site
+    v.goto(f"{servidor}/portal/reserve?kart=2-stroke&date={sab.isoformat()}&period=manha")
     v.get_by_role("heading", name="Book your session", level=1).wait_for()
     assert v.get_by_role("radio", name=re.compile("Arrive and Drive 2-stroke")).is_checked(), "o kart escolheu o serviço"
     assert v.get_by_role("button", name=re.compile("^Morning")).get_attribute("aria-pressed") == "true"
@@ -1580,8 +1588,9 @@ def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pag
     adm = entrar(navegador, servidor, email="italo@urace.us")
     csrf = {"X-CSRF": next(c["value"] for c in adm.context.cookies() if c["name"] == "cc_csrf")}
     assert adm.request.patch(servidor + "/api/site/agenda/config", data={"auto_sell": True}, headers=csrf).ok
-    if not adm.request.get(servidor + "/api/vitrine/servicos").json()["services"]:
-        assert adm.request.post(servidor + "/api/site/servicos", data={"name": "Arrive and Drive 4-stroke", "price": 719}, headers=csrf).ok
+    # #263: os serviços do site vêm da migração; aqui só se garante que há algum ativo (outro teste
+    # pode ter desligado e religado) — nada é cadastrado à mão
+    assert adm.request.get(servidor + "/api/vitrine/servicos").json()["services"], "a migração semeia os 4 karts (#263)"
     abrir(adm, servidor, "/site/disponibilidade")
     sabado = adm.get_by_label("Sáb Manhã aberto")
     if not sabado.is_checked():
@@ -1594,14 +1603,25 @@ def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pag
         erros = []
         v.on("pageerror", lambda e: erros.append(str(e)))
         v.goto(site + "/services/arrive-and-drive/?utm_source=instagram&utm_campaign=outubro")
-        v.locator(".agenda-dia.aberto").first.click()
+        dia = v.locator(".agenda-dia.aberto").first
+        dia.wait_for()
+        rotulo = dia.get_attribute("aria-label").removesuffix(", available")
+        dia.click()
         v.get_by_role("button", name=re.compile("^Morning")).click()
-        ir = v.get_by_role("link", name="Continue to booking")
-        assert "utm_source=instagram" in ir.get_attribute("href"), "a campanha atravessa para a reserva"
-        ir.click()
+        # #262: um botão só, e ele leva ao carrinho levando a campanha de onde a pessoa veio
+        assert not v.locator(".agenda-ir").count(), 'o "Continue to booking" saiu'
+        assert v.locator(".agenda-carrinho").inner_text().strip().startswith("Add to cart")
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+        hoje = datetime.now(ZoneInfo("America/New_York")).date()
+        sab = next(d for d in (hoje + timedelta(days=n) for n in range(120))
+                   if d.strftime("%A, %B ") + str(d.day) == rotulo)
+        # a reserva da área do cliente (#164) continua sendo o caminho desta prova
+        v.goto(f"{servidor}/portal/reserve?kart=4-stroke&date={sab.isoformat()}&period=manha"
+               "&utm_source=instagram&utm_campaign=outubro")
         v.get_by_role("heading", name="Book your session", level=1).wait_for()
-        if not v.get_by_role("radio").first.is_checked():
-            v.get_by_role("radio").first.check()
+        # #263: o kart do site escolhe o serviço pela chave, sem a pessoa marcar nada
+        assert v.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).is_checked()
         v.get_by_role("button", name="Continue", exact=True).click()
         # 2 · conta nova sem sair da reserva
         v.get_by_label("Full name").fill("Nina Nova")
@@ -1937,6 +1957,9 @@ def test_calendario_gerente_exclui_servico_e_ele_fica_no_historico_do_card(servi
     assert "teste e2e" in linha.inner_text() and "excluído" in linha.inner_text()
     linha.get_by_role("button", name="Restaurar").click()
     g.get_by_text("Serviço restaurado.").wait_for()
+    # o aviso aparece antes de a tabela ser redesenhada: esperar a linha sair, em vez de contar na hora
+    # (contar na hora deixava este teste falhar de vez em quando)
+    linha.first.wait_for(state="detached")
     assert g.locator("tr.tr-excluido", has_text="Professional Coaching").count() == 0
     assert not g.erros_js, g.erros_js
     g.close()
@@ -2047,8 +2070,12 @@ def test_carrinho_sessao_e_produto_um_checkout_no_stripe_e_o_pedido_no_painel(se
     site = servidor.removesuffix("/ops")
     adm = entrar(navegador, servidor, email="italo@urace.us")
     csrf = {"X-CSRF": next(c["value"] for c in adm.context.cookies() if c["name"] == "cc_csrf")}
-    r = adm.request.post(servidor + "/api/site/servicos", data={"name": "Arrive and Drive Baby Kart", "price": 719, "deposit": 400},
-                         headers=csrf)
+    # #263: o serviço do Baby Kart vem da migração (nome, preço e depósito); aqui só se garante que
+    # está ativo e com o depósito que este teste confere
+    do_painel = adm.request.get(servidor + "/api/site/servicos").json()["servicos"]
+    baby = next(x for x in do_painel if x["site_kart"] == "Baby Kart")
+    r = adm.request.patch(servidor + f"/api/site/servicos/{baby['id']}",
+                          data={"price": 719, "deposit": 400, "active": True}, headers=csrf)
     assert r.ok, r.text()
     # domingo à tarde, 5 vagas, só para este teste (os outros usam o sábado de manhã)
     assert adm.request.put(servidor + "/api/site/agenda/semana", data=[{"weekday": 6, "period": "tarde", "open": True, "capacity": 5}],
@@ -2074,8 +2101,9 @@ def test_carrinho_sessao_e_produto_um_checkout_no_stripe_e_o_pedido_no_painel(se
         v.get_by_role("button", name=rotulo).click()
         v.get_by_role("button", name=re.compile("^Afternoon")).click()
         assert v.locator(".agenda-preco").inner_text() == "$719"
+        assert not v.locator(".agenda-ir").count(), '#262: um botão só, sem o "Continue to booking"'
         v.get_by_role("button", name=re.compile("^Add to cart")).click()
-        v.get_by_text("Added to your cart.").wait_for()
+        v.wait_for_url(re.compile(r"/cart/"))          # #262: o único caminho leva ao carrinho
         # 2 · o produto da loja
         v.goto(site + f"/store/p/{produto['slug']}/")
         v.get_by_role("button", name="Add to cart").click()
@@ -2308,8 +2336,13 @@ def _ativar(adm, servidor, sid, ativo):
     assert r.ok, r.text()
 
 
-def _criar_servico(adm, servidor, nome, preco):
-    r = adm.request.post(servidor + "/api/site/servicos", data={"name": nome, "price": preco}, headers=_csrf(adm))
+def _criar_servico(adm, servidor, nome, preco, kart=None):
+    """#263: `kart` é a chave do kart do site (o campo "Kart do site" do painel); sem ela, o serviço
+    não é de kart nenhum e o site não o oferece."""
+    corpo = {"name": nome, "price": preco}
+    if kart:
+        corpo["site_kart"] = kart
+    r = adm.request.post(servidor + "/api/site/servicos", data=corpo, headers=_csrf(adm))
     assert r.ok, r.text()
     return r.json()["id"]
 
@@ -2347,13 +2380,16 @@ def test_agenda_do_site_diz_o_que_falta_e_avisa_quando_nao_da_para_reservar(serv
     """#253, dono 15/10 (serviço "teste" desativado no painel e a reserva travada no ar): o botão diz o
     que falta de verdade — dia escolhido e turno faltando é "Pick a time to continue", não "Pick a day";
     um turno só aberto já vem escolhido; o turno do dia anterior não fica marcado onde não abre; e sem
-    serviço do painel a página avisa com o contato em vez de oferecer um botão que não leva a nada."""
+    serviço do painel a página avisa com o contato em vez de oferecer um botão que não leva a nada.
+
+    #262: é um botão só, o do carrinho. #263: o serviço é do kart pela chave "Kart do site", e o kart
+    sem serviço ativo **sai da página** em vez de ficar oferecendo o que não dá para comprar."""
     site = servidor.removesuffix("/ops")
     adm = entrar(navegador, servidor, email="italo@urace.us")
     csrf = _csrf(adm)
     terca, quarta = _proximo(1), _proximo(2)
     antes = _desligar_os_servicos(adm, servidor)
-    meus = [_criar_servico(adm, servidor, f"Adult Shifter Arrive and Drive {largura}", 899)]
+    meus = [_criar_servico(adm, servidor, f"Adult Shifter Arrive and Drive {largura}", 899, kart="Adult Shifter")]
     # terça: manhã e tarde; quarta: só manhã (o turno único)
     assert adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
                            data=[{"weekday": 1, "period": "manha", "open": True, "capacity": 5},
@@ -2365,19 +2401,23 @@ def test_agenda_do_site_diz_o_que_falta_e_avisa_quando_nao_da_para_reservar(serv
         erros = []
         v.on("pageerror", lambda e: erros.append(str(e)))
         v.goto(site + "/services/arrive-and-drive/")
-        v.locator("label.kart", has_text="Adult Shifter").click()
-        ir = v.locator(".agenda-ir")
+        # #263: só o Adult Shifter tem serviço ativo, então é o único kart na página
+        v.locator("label.kart").first.wait_for()
+        assert v.locator("label.kart:not([hidden])").count() == 1, "um serviço ativo, um kart na página"
+        assert "Adult Shifter" in v.locator("label.kart").first.inner_text()
+        botao = v.locator(".agenda-carrinho")
+        assert not v.locator(".agenda-ir").count(), '#262: o "Continue to booking" saiu'
         # 1 · dia escolhido, turno faltando: o botão fala do turno (antes dizia "Pick a day")
         _clicar_dia(v, terca)
-        assert ir.inner_text().strip() == "Pick a time to continue", ir.inner_text()
-        assert ir.get_attribute("aria-disabled") == "true"
+        assert botao.inner_text().strip() == "Pick a time to continue", botao.inner_text()
+        assert botao.get_attribute("aria-disabled") == "true" and botao.is_disabled()
         assert v.locator(".agenda-turnos.falta").count() == 1, "os turnos ficam em destaque"
         assert "Morning or Afternoon" in v.locator(".agenda-aviso").inner_text()
-        # 2 · com o turno, o botão leva para a reserva com kart, dia e turno
+        # 2 · com o turno, o botão é o do carrinho, com o preço e o depósito do painel
         v.get_by_role("button", name=re.compile("^Afternoon")).click()
-        assert ir.inner_text().strip() == "Continue to booking"
-        assert ir.get_attribute("aria-disabled") is None
-        assert f"date={terca.isoformat()}" in ir.get_attribute("href") and "period=tarde" in ir.get_attribute("href")
+        assert botao.inner_text().strip().startswith("Add to cart"), botao.inner_text()
+        assert botao.get_attribute("aria-disabled") is None and not botao.is_disabled()
+        assert "$899" in botao.inner_text(), "o preço é o do painel (#50)"
         assert not v.locator(".agenda-turnos.falta").count()
         # 3 · dia com um turno só: já vem escolhido, e a tarde do dia anterior não fica marcada
         _clicar_dia(v, quarta)
@@ -2385,25 +2425,22 @@ def test_agenda_do_site_diz_o_que_falta_e_avisa_quando_nao_da_para_reservar(serv
         tarde = v.get_by_role("button", name=re.compile("^Afternoon"))
         assert manha.get_attribute("aria-pressed") == "true", "um turno só aberto: escolhido sozinho"
         assert tarde.get_attribute("aria-pressed") == "false" and tarde.is_disabled()
-        assert ir.inner_text().strip() == "Continue to booking"
-        assert "period=manha" in ir.get_attribute("href")
-        # 4 · o painel tem serviço, mas nenhum deste kart: avisa, e o botão continua levando à reserva
+        assert botao.inner_text().strip().startswith("Add to cart")
+        # 4 · o painel tem serviço, mas nenhum é de kart do site: nenhum kart na página, e o aviso
         _ativar(adm, servidor, meus[0], False)
         meus.append(_criar_servico(adm, servidor, f"URACE test product 253 {largura}", 500))
         v.reload()
-        v.locator("label.kart", has_text="Adult Shifter").click()
         aviso = v.locator(".agenda-indisponivel")
-        aviso.wait_for()
-        assert "Adult Shifter" in aviso.inner_text() and "not open for online booking" in aviso.inner_text()
-        assert aviso.get_by_role("link", name=re.compile("support@urace.us")).count() == 1
-        assert not ir.is_hidden(), "há outras sessões para reservar: o botão continua valendo"
-        assert v.locator(".agenda-carrinho").is_hidden(), "sem serviço deste kart, não entra no carrinho"
+        aviso.first.wait_for()
+        assert not v.locator('input[name="kart"]').count(), "#263: kart sem serviço não fica na página"
+        assert "Online booking is closed right now" in aviso.first.inner_text()
+        assert aviso.first.get_by_role("link", name=re.compile("support@urace.us")).count() == 1
+        assert v.locator(".agenda-carrinho").is_hidden() or v.locator(".agenda-carrinho").is_disabled()
         # 5 · painel sem serviço nenhum: nada de botão morto, e a reserva do site diz a verdade
         _ativar(adm, servidor, meus[1], False)
         v.reload()
-        aviso.wait_for()
-        assert "Online booking is closed right now" in aviso.inner_text()
-        assert ir.is_hidden() and v.locator(".agenda-carrinho").is_hidden()
+        aviso.first.wait_for()
+        assert "Online booking is closed right now" in aviso.first.inner_text()
         r = v.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         v.goto(f"{servidor}/portal/reserve?kart=2-stroke&date={terca.isoformat()}&period=manha")
@@ -2431,7 +2468,11 @@ def test_reserva_do_site_so_pre_seleciona_o_servico_do_kart_escolhido(servidor, 
     """#253, dono 15/10 (print com "teste · teste de produto $500.00" já escolhido): com um serviço só
     no painel, a reserva escolhia esse serviço mesmo sem relação com o kart clicado no site. Agora: o
     kart sem serviço no painel não escolhe nada e a tela avisa, com o contato; o kart com serviço
-    continua vindo escolhido. No celular (390 px), nada rola para o lado."""
+    continua vindo escolhido. No celular (390 px), nada rola para o lado.
+
+    #263: o que faz o serviço ser "do kart" é a chave "Kart do site", não o nome — um serviço chamado
+    "Arrive and Drive 2-stroke" **sem** a chave não é escolhido, e um com a chave é, qualquer que seja
+    o nome dele."""
     adm = entrar(navegador, servidor, email="italo@urace.us")
     csrf = _csrf(adm)
     terca = _proximo(1)
@@ -2449,6 +2490,13 @@ def test_reserva_do_site_so_pre_seleciona_o_servico_do_kart_escolhido(servidor, 
         radio = v.get_by_role("radio", name=re.compile("URACE test product 253 reserva"))
         radio.wait_for()
         assert not radio.is_checked(), "o serviço que não é do kart nunca vem escolhido"
+        # #263: nem o que tem o nome do kart no nome, se não tem a chave
+        sem_chave = _criar_servico(adm, servidor, "Arrive and Drive 2-stroke sem chave", 819)
+        meus.append(sem_chave)
+        v.reload()
+        pelo_nome = v.get_by_role("radio", name=re.compile("Arrive and Drive 2-stroke sem chave"))
+        pelo_nome.wait_for()
+        assert not pelo_nome.is_checked(), "o nome do kart no nome do serviço não escolhe nada (#263)"
         v.get_by_text("From the site:").wait_for()                     # a tela mostra o kart que veio do site
         assert v.get_by_text(re.compile("is not open for online booking right now")).count() == 1
         assert v.get_by_role("link", name="support@urace.us").count() >= 1
@@ -2456,13 +2504,15 @@ def test_reserva_do_site_so_pre_seleciona_o_servico_do_kart_escolhido(servidor, 
         assert len([t for n, t in _cabecalhos(v) if n == 1]) == 1
         r = v.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
-        # o serviço do kart: aí sim já vem escolhido, e sem aviso
-        meus.append(_criar_servico(adm, servidor, "Arrive and Drive 2-stroke 253", 819))
+        # o serviço com a chave do kart: aí sim já vem escolhido, e sem aviso — mesmo com um nome
+        # que não fala de kart nenhum
+        meus.append(_criar_servico(adm, servidor, "Sessão do 2T 253", 819, kart="2-stroke"))
         v.goto(f"{servidor}/portal/reserve?kart=2-stroke&date={terca.isoformat()}&period=manha")
-        do_kart = v.get_by_role("radio", name=re.compile("Arrive and Drive 2-stroke 253"))
+        do_kart = v.get_by_role("radio", name=re.compile("Sessão do 2T 253"))
         do_kart.wait_for()
-        assert do_kart.is_checked(), "o kart do site escolhe o serviço com esse nome"
+        assert do_kart.is_checked(), "o kart do site escolhe o serviço com a chave dele (#263)"
         assert not v.get_by_role("radio", name=re.compile("URACE test product 253 reserva")).is_checked()
+        assert not v.get_by_role("radio", name=re.compile("Arrive and Drive 2-stroke sem chave")).is_checked()
         assert not v.get_by_text(re.compile("is not open for online booking right now")).count()
         assert v.get_by_role("button", name="Continue", exact=True).is_enabled()
         r = v.evaluate(_VAZA)

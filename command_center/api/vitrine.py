@@ -28,7 +28,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from command_center.db import agora, get_db, inserir
 from command_center.providers import agenda_sessoes as ag
-from command_center.vitrine import idioma, paginas
+from command_center.vitrine import conteudo as C, idioma, paginas
 from command_center.vitrine import paginas_site as ps
 
 r = APIRouter(tags=["vitrine"])
@@ -135,6 +135,22 @@ def _planos():
         return []
 
 
+def _servicos_do_site():
+    """#263: os serviços de sessão ativos do painel, para a página do Arrive and Drive sair com o
+    kart que o site vende de verdade e o preço do painel (#50). `None` = o painel não respondeu: a
+    página sai com os quatro karts de `KARTS` e o `agenda.js` corrige quando a lista chegar."""
+    from command_center.db import conectar
+    from command_center.providers import servicos_site
+    try:
+        con = conectar()
+        try:
+            return servicos_site.para_cliente(con)
+        finally:
+            con.close()
+    except Exception:                                   # noqa: BLE001 — banco fora: a página não mente, só não filtra
+        return None
+
+
 def existe(caminho, host="novo.urace.us"):
     return caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None
 
@@ -145,6 +161,8 @@ def pagina(request: Request, caminho: str):
         raise HTTPException(404)
     host = host_de(request)
     q = dict(request.query_params)
+    if caminho == C.ARRIVE["caminho"]:                  # #263: o kart que está na página é o que o painel vende
+        return _html(paginas.arrive_and_drive(host, servicos=_servicos_do_site()))
     if caminho == "/academy/":
         return _html(ps.academy(host, planos=_planos()))
     if caminho == "/pro-team/":                         # #207: o preço da Academy e do Boost é o do painel
