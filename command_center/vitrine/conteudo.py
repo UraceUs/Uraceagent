@@ -31,7 +31,9 @@ SITE = {
     "horario": "Open every day, 8 AM – 8 PM",
     # #252: o resto do LocalBusiness que o urace.us de hoje já publica (Yoast). Tudo isto vem de lá,
     # e sem isto a troca de domínio perderia o SEO local: mapa, cidade atendida, Yelp e TripAdvisor.
-    "outro_nome": "URACE Kart School",
+    # #254 (dono, 15/10): "o kart school se tornou Urace academy" — o nome alternativo que o Yoast
+    # publicava passa a ser o nome novo, para o Google não ensinar o nome que acabou
+    "outro_nome": "URACE Academy",
     "descricao_negocio": ("Kart racing school in Orlando, Florida. Arrive and drive days in real race karts, "
                           "professional coaching and a monthly kart academy, based at the Orlando Kart Center."),
     "faixa_preco": "$$$",
