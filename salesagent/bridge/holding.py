@@ -185,13 +185,22 @@ _APRESENTACAO = {
 }
 
 
+_NOME_REAL = re.compile(r"^[^\W\d_]{2,20}$", re.UNICODE)
+
+
 def _primeiro_nome(contact_name: str | None) -> str:
     """', Eduardo' ou '' -- nunca deixa um nome faltando travar a mensagem
-    (regra das instruções: nome ausente não bloqueia nada)."""
+    (regra das instruções: nome ausente não bloqueia nada). Só passa o que parece nome de gente:
+    @handle do Instagram, número, "055" do score ou sigla ficam de fora ("Oi urace_fan23" soa robô)."""
     if not contact_name:
         return ""
-    primeiro = contact_name.strip().split()
-    return f" {primeiro[0]}" if primeiro else ""
+    for token in contact_name.replace("·", " ").split():
+        if _NOME_REAL.match(token):
+            return f" {token}"
+        if token.isdigit() or token.startswith("@") or "⚡" in token:
+            continue
+        break
+    return ""
 
 
 def waiting_message(lead_text: str, sent_before: int = 0,
@@ -225,32 +234,59 @@ def waiting_message(lead_text: str, sent_before: int = 0,
     return textproc.customer_facing(texto)
 
 
-# ------------------------------------------------- objeção de preço → call
-# Pedido do dono (13/10): "está caro" / "faria se fosse mais barato" não
-# recebe a espera genérica ("sua pergunta está com a equipe"). Recebe a
-# oferta de uma call de 15 min com o nosso time para entender melhor, com o
-# link do calendário. Nunca desconto; a escalação para o closer segue igual.
-# Nome de pessoa do time nunca sai para o lead (dono, 14/10): "nosso time".
+# ------------------------------------------------- objeção, decisão e competidor -> call
+# Pedido do dono (13 e 14/10): objeção ou muita dúvida não recebe a espera genérica ("sua pergunta está
+# com a equipe"), recebe a oferta de uma call de 15 min com o nosso time, com o link do calendário. A
+# revisão final estendeu a regra a quem já decidiu ("quero fechar", "como pago") e a quem já corre: quem
+# está pronto para comprar não pode ouvir "vou confirmar com a equipe". Nunca desconto, nunca nome de
+# pessoa do time (dono, 14/10): "nosso time". Cada linha vira um balão; o link fica sozinho na última.
 _OFERTA_CALL = {
-    "pt": ("Entendo{nome}. Que tal uma call rápida de 15 minutos com o nosso time "
-           "pra conversar sobre os objetivos do piloto e o melhor caminho? "
-           "É só escolher o horário aqui:\n{link}"),
-    "es": ("Entiendo{nome}. ¿Qué tal una llamada rápida de 15 minutos con nuestro "
-           "equipo para hablar de los objetivos del piloto y el mejor camino? "
-           "Elige el horario aquí:\n{link}"),
-    "en": ("I hear you{nome}. How about a quick 15-minute call with our team to "
-           "talk about the driver's goals and the best path? "
-           "Pick a time here:\n{link}"),
+    "objecao": {
+        "pt": ["Entendo{nome}. Que tal uma call rápida de 15 minutos com o nosso time?",
+               "A gente conversa sobre os objetivos do piloto e o melhor caminho.",
+               "Escolhe um horário aqui:", "{link}"],
+        "es": ["Entiendo{nome}. ¿Qué tal una llamada rápida de 15 minutos con nuestro equipo?",
+               "Hablamos de los objetivos del piloto y del mejor camino.",
+               "Elige un horario aquí:", "{link}"],
+        "en": ["I hear you{nome}. How about a quick 15-minute call with our team?",
+               "We talk through the driver's goals and the best path.",
+               "Pick a time here:", "{link}"],
+    },
+    "decisao": {
+        "pt": ["Ótimo{nome}!",
+               "O próximo passo é uma call rápida de 15 minutos com o nosso time, pra alinhar os detalhes.",
+               "Escolhe um horário aqui:", "{link}"],
+        "es": ["¡Genial{nome}!",
+               "El siguiente paso es una llamada rápida de 15 minutos con nuestro equipo, para alinear los detalles.",
+               "Elige un horario aquí:", "{link}"],
+        "en": ["Great{nome}!",
+               "The next step is a quick 15-minute call with our team to line up the details.",
+               "Pick a time here:", "{link}"],
+    },
+    "competidor": {
+        "pt": ["Legal{nome}! Pra quem já corre, o melhor é falar direto com o nosso time.",
+               "Uma call rápida de 15 minutos pra falar de calendário e objetivos.",
+               "Escolhe um horário aqui:", "{link}"],
+        "es": ["¡Genial{nome}! Para quien ya compite, lo mejor es hablar directo con nuestro equipo.",
+               "Una llamada rápida de 15 minutos para hablar de calendario y objetivos.",
+               "Elige un horario aquí:", "{link}"],
+        "en": ["Nice{nome}! For someone who already races, the best step is talking straight to our team.",
+               "A quick 15-minute call to go over the calendar and goals.",
+               "Pick a time here:", "{link}"],
+    },
 }
+MOTIVO_DA_CALL = {"NEGOCIACAO": "objecao", "SINAL_CONVERSAO": "decisao", "PILOTO_COMPETIDOR": "competidor"}
 
 
 def call_offer(lead_text: str, link: str, contact_name: str | None = None,
-               lang: str | None = None) -> str:
-    """Resposta para objeção de preço ou pedido de desconto: oferece a call
-    com o nosso time e manda o link do calendário (um ativo, uma pergunta)."""
+               lang: str | None = None, motivo: str = "objecao") -> str:
+    """A oferta de call com o nosso time e o link do calendário, na medida do motivo
+    ("objecao", "decisao" ou "competidor"). Um ativo, uma pergunta no máximo."""
     lang = lang or detect_language(lead_text)
     nome = _primeiro_nome(contact_name)
-    texto = _OFERTA_CALL[lang].format(nome=("," + nome) if nome else "", link=link)
+    nome = "," + nome if nome else ""        # "Entendo, Eduardo." / "Entendo."
+    linhas = _OFERTA_CALL.get(motivo, _OFERTA_CALL["objecao"])[lang]
+    texto = "\n".join(l.format(nome=nome, link=link) for l in linhas)
     return textproc.customer_facing(texto)
 
 

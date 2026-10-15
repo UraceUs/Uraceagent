@@ -228,6 +228,9 @@ async def kommo_eventos(request: Request, background: BackgroundTasks,
     _auth(x_api_key or key)
     raw_body = await request.body()
     payload = _parse_hook_body(raw_body)
+    for saiu in sdr_ponte.evento.mensagens_enviadas(payload)[:5]:
+        # Só observação (ver evento.mensagens_enviadas): o que o Kommo diz sobre quem escreveu.
+        state.log("saida_vista", saiu["lead_id"], json.dumps(saiu, ensure_ascii=False))
     if SDR_MODO == "atender":
         background.add_task(responder_eventos, payload)
         return {"ok": True, "modo": "atender"}
@@ -343,16 +346,20 @@ def turno_de_teste(sessao: str, texto: str, nome: str = "") -> dict:
         resposta = sdr_ponte.mensagem_adiar(texto)
         saida["nota"] = (f"Lead adiou: agradece, não insiste, sem follow-up automático. Tarefa para uma pessoa "
                          f"retomar em {sdr_ponte.regras.ADIAR_RETOMADA_DIAS} dias e tag sdr:agora-nao.")
-    elif sdr_ponte.objecao_de_preco(texto) and PROGRAM_LINKS.get("call_link"):
-        resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None)
-        saida["nota"] = "Objeção de preço: a ponte oferece a call e passa a conversa para a equipe."
+    elif PROGRAM_LINKS.get("call_link") and (holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "")
+                                           or sdr_ponte.objecao_de_preco(texto)):
+        tipo = holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "") or "objecao"
+        resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None, motivo=tipo)
+        saida["nota"] = {"objecao": "Objeção de preço: a ponte oferece a call e passa a conversa para a equipe.",
+                         "decisao": "Lead pronto para decidir: a ponte oferece a call e avisa a equipe na hora.",
+                         "competidor": "Piloto que já compete: a ponte oferece a call e avisa a equipe."}[tipo]
     elif rota["acao"] == "escalar":
         resposta = holding.waiting_message(texto, 0, contact_name=nome or None,
                                            first_contact=not conv["enviadas"])
         saida["nota"] = (f"Passaria para a equipe ({rota.get('motivo')}): o lead recebe a mensagem de "
                          "espera e a pessoa é avisada.")
     else:
-        instrucoes = _instrucoes_comercial(0)
+        instrucoes = _sem_nomes_do_time(_instrucoes_comercial(0))
         mensagem = ("[SYSTEM] Teste no painel: conversa de treino, sem lead no Kommo. Responda "
                     "exatamente como responderia a um lead real.\n"
                     f"{instrucoes}"
@@ -502,7 +509,7 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         # alta chama a pessoa agora; média vira tarefa na fila dela.
         escalate(lead_id, f"SDR {rota['motivo']}: {rota['descricao']}", context=text,
                  prioridade=rota["prioridade"])
-        reply = _resposta_de_espera(lead_id, text)
+        reply = _resposta_de_espera(lead_id, text, rota["motivo"])
     elif triggers and estado_atual == "AI_ACTIVE":
         # B4: assuntos sensíveis (desconto, refund, jurídico...) escalam
         # ANTES do modelo -- ele nunca vê a mensagem, então também não pode
@@ -581,16 +588,19 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         scheduler.start_track(lead_id, track)
 
 
-def _resposta_de_espera(lead_id: int, lead_text: str) -> str:
-    """O que o lead recebe quando a conversa está com uma pessoa. Objeção de
-    preço ou pedido de desconto não ouve "sua pergunta está com a equipe":
-    recebe a oferta de uma call de 15 min com o nosso time, com o link do
-    calendário (pedido do dono, 13/10). O resto, a espera de sempre."""
+def _resposta_de_espera(lead_id: int, lead_text: str, motivo: str | None = None) -> str:
+    """O que o lead recebe quando a conversa está com uma pessoa. Quem está pronto, quem já corre ou
+    quem achou caro não ouve "sua pergunta está com a equipe": recebe a oferta de uma call de 15 min
+    com o nosso time, com o link do calendário (pedido do dono, 13/10; estendida na revisão final de
+    14/10). O resto, a espera de sempre. A escalação e o aviso à equipe seguem iguais."""
     link = PROGRAM_LINKS.get("call_link")
-    if link and sdr_ponte.objecao_de_preco(lead_text):
+    tipo = holding.MOTIVO_DA_CALL.get(motivo or "")
+    if link and not tipo and sdr_ponte.objecao_de_preco(lead_text):
+        tipo = "objecao"
+    if link and tipo:
         conv = state.get_conversation(lead_id)
-        state.log("gate", lead_id, "objeção de preço: oferta de call com o time")
-        return holding.call_offer(lead_text, link, contact_name=conv.get("contact_name"))
+        state.log("gate", lead_id, f"{tipo}: oferta de call com o time")
+        return holding.call_offer(lead_text, link, contact_name=conv.get("contact_name"), motivo=tipo)
     return _holding_reply(lead_id, lead_text)
 
 
@@ -684,9 +694,13 @@ def _next_action(conv: dict) -> str:
     if conv.get("followup_track") == "link_sent":
         return ("o link já foi enviado; não reenviar. Objeção ou muitas "
                 "dúvidas: oferecer a call de 15 min com o nosso time")
-    return ("descobrir o objetivo (experimentar um dia, treinar sempre, "
-            "competir) e, com decisão real, objeção ou muitas dúvidas, "
-            "oferecer a call de 15 min com o nosso time")
+    return ("linha de chegada: idade e experiência já estão registradas. Descubra o objetivo "
+            "(experimentar um dia, treinar sempre, competir) e, assim que souber, ou com decisão real, "
+            "objeção ou muitas dúvidas, mande a oferta de call de 15 min com o nosso time e "
+            "[[escalate]] com o resumo. Pare de perguntar")
+
+
+_sem_nomes_do_time = textproc.sem_nomes_do_time
 
 
 def _instrucoes_comercial(lead_id: int) -> str:
@@ -727,7 +741,7 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     # [SYSTEM]. Ordem das camadas conforme brain/00_SYSTEM/Regras de
     # Retrieval.md; orçamento imposto pelo indexador (top 3, ~3.5k chars).
     text_for_agent = text
-    instrucoes = _instrucoes_comercial(lead_id)
+    instrucoes = _sem_nomes_do_time(_instrucoes_comercial(lead_id))
     if BRAIN_RETRIEVAL == "on":
         import brain_kb
         conv = state.get_conversation(lead_id)
@@ -735,7 +749,7 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
         hits = brain_kb.search(lead_id, text, top_docs=BRAIN_TOP_DOCS)
         verdict = confidence.assess(hits)
         state.log("confidence", lead_id, f"{verdict['level']}: {verdict['reason']}")
-        kb_block = brain_kb.format_for_context(hits)
+        kb_block = _sem_nomes_do_time(brain_kb.format_for_context(hits))
         nota = confidence.system_note(verdict)
         # O bloco [SYSTEM] é injetado SEMPRE -- inclusive, e principalmente,
         # quando o Brain não achou nada. Até 25/08 o `if kb_block:` fazia o
@@ -798,7 +812,7 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
             if kb_results:
                 payload["knowledge"] = kb_results
             system_msg = ("[SYSTEM] tool result(s) — use the real data now: "
-                          + json.dumps(payload, ensure_ascii=False))
+                          + _sem_nomes_do_time(json.dumps(payload, ensure_ascii=False)))
             try:
                 raw2, directives2 = _call_agent(lead_id, system_msg)
                 if directives2:

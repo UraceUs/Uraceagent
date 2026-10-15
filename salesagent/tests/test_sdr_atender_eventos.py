@@ -256,6 +256,22 @@ def rodar() -> list[str]:
     check("no teste do painel aparece a nota e a resposta em inglês",
           t5["rota"] == "adiar" and any("No problem" in m for m in t5["mensagens"]) and "adiou" in t5["nota"], t5)
 
+    print("\n2f. Pronto para fechar, piloto que já corre e objeção recebem a call, não a espera (14/10)")
+    app.turno_de_teste("cc-teste06", "Oi")
+    for texto, trecho, nota in (("Quero fechar", "Ótimo", "decidir"), ("I compete in Rotax series", "Nice", "compete"),
+                                ("Tem desconto?", "Entendo", "Objeção")):
+        t6 = app.turno_de_teste("cc-teste06", texto)
+        check(f"'{texto}' vira oferta de call com link e o time é avisado",
+              any("calendar.app.google" in m for m in t6["mensagens"]) and t6["rota"] == "escalar"
+              and nota in t6["nota"] and not any("com a equipe" in m or "with the team" in m for m in t6["mensagens"]), t6)
+    check("pedir uma pessoa continua na frase de passagem (sem link de call)",
+          not any("calendar.app.google" in m for m in app.turno_de_teste("cc-teste06", "Quero falar com uma pessoa")["mensagens"]))
+    espera = app._resposta_de_espera(101, "Quero fechar", "SINAL_CONVERSAO")
+    check("o caminho real usa a mesma oferta (motivo vindo da rota)",
+          "calendar.app.google" in espera and "Lucas" not in espera, espera)
+    check("sem motivo de call, a espera de sempre", "calendar.app.google" not in app._resposta_de_espera(
+        101, "Quero falar com uma pessoa", "PEDIDO_HUMANO"))
+
     print("\n3. Fora do escopo: só organiza")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
     antes = len(k.bots)
@@ -287,7 +303,9 @@ def rodar() -> list[str]:
     state.update_conversation(101, last_inbound_at=agora - 3600, last_outbound_at=agora - 7200, state="AI_ACTIVE")
     resgatados = []
     scheduler.rescue_fn = lambda conv: resgatados.append(conv["lead_id"]) or True
+    silencio_antes, scheduler.SILENCIO_LIGADO = scheduler.SILENCIO_LIGADO, False   # relógio real: CI roda a qualquer hora
     scheduler.tick(agora)
+    scheduler.SILENCIO_LIGADO = silencio_antes
     check("o agendador não resgata a conversa pausada", 101 not in resgatados, resgatados)
     arquivo.write_text("{ quebrado", encoding="utf-8")
     check("arquivo ilegível = nenhuma pausa (a ponte segue respondendo)", pausas.ia_pausada(101) is False)
