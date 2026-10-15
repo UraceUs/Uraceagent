@@ -1,30 +1,32 @@
 /* Agenda do site novo (#148): a mesma disponibilidade da área do cliente, só que pública
- * (dias abertos e vagas, nada além). Escolheu kart, dia e turno → o botão leva para a
- * reserva (#164: sessão → conta → piloto → pagar) com tudo já marcado, e com a campanha de
- * onde a pessoa veio (utm_*, gclid, fbclid), para o marketing saber o que vendeu. Sem este
- * script, o botão leva para a mesma reserva, só que vazia.
+ * (dias abertos e vagas, nada além).
  *
- * #236: o kart escolhido é o serviço do painel com esse nome, e o preço mostrado é o do painel (#50:
- * "já vai com aquele serviço e o preço que está lá"). "Add to cart" põe a sessão no carrinho do site,
- * que paga tudo junto no Stripe (o piloto é escolhido no carrinho, depois do login).
+ * #236/#50: o preço que aparece é o do painel ("já vai com aquele serviço e o preço que está lá").
  *
- * #253 (dono, 15/10, com o serviço "teste" desativado no painel e a reserva travada no ar):
- * - o botão diz o que falta de verdade: sem dia, "Pick a day"; com dia e sem turno, "Pick a time";
- * - escolher o dia já escolhe o turno quando só um está aberto, e o turno de outro dia nunca fica
- *   marcado se não existe no dia novo; faltando o turno, os turnos ficam em destaque;
- * - painel sem serviço para esse kart: um aviso honesto com o contato, em vez de um botão morto. */
+ * #263 (dono, 15/10: "o mais lógico é ir com o produto que foi selecionado na mesma página que
+ * selecionou a data e daí clicar no add to cart"): o serviço do kart é achado pela **chave**
+ * (`site_kart`, igual e exata), nunca mais por "o nome do serviço contém o nome do kart" — foi o
+ * casamento por nome que fez um serviço chamado "teste" passar por produto. O kart que o painel não
+ * vende sai da página (o servidor já o deixa de fora; aqui sai na hora, se o painel mudou depois).
+ *
+ * #262 (dono, 15/10: "um caminho somente levando para o carrinho"): um botão só. Ele diz o que falta
+ * escolher (dia, turno) e, com tudo escolhido, põe a sessão no carrinho e leva para o carrinho — onde
+ * entrar ou criar a conta é obrigatório e o pagamento é só Stripe.
+ *
+ * #253: escolher o dia já escolhe o turno quando só um está aberto; o turno de outro dia nunca fica
+ * marcado se não existe no dia novo; e painel sem serviço é um aviso honesto com o contato, nunca um
+ * botão morto. */
 (function () {
   'use strict'
   var raiz = document.querySelector('.agenda')
   if (!raiz) return
   var api = raiz.getAttribute('data-api')
-  var portal = raiz.getAttribute('data-portal')
+  var paraCarrinho = raiz.getAttribute('data-carrinho') || '/cart/'
   var grade = raiz.querySelector('.agenda-grade')
   var mesBox = raiz.querySelector('.agenda-mes')
   var titulo = raiz.querySelector('.agenda-titulo')
   var turnos = raiz.querySelector('.agenda-turnos')
   var aviso = raiz.querySelector('.agenda-aviso')
-  var ir = raiz.querySelector('.agenda-ir')
   var resumo = raiz.querySelector('.agenda-resumo')
   var precoEl = raiz.querySelector('.agenda-preco')
   var porNoCarrinho = raiz.querySelector('.agenda-carrinho')
@@ -50,14 +52,20 @@
     return p === 'manha' ? hora(cfg.morning_start) + ' – ' + hora(cfg.morning_end)
       : hora(cfg.afternoon_start) + ' – ' + hora(cfg.afternoon_end)
   }
+  function opcoes() { return [].slice.call(document.querySelectorAll('input[name="kart"]')) }
   function kart() {
     var k = document.querySelector('input[name="kart"]:checked')
-    return k ? { nome: k.value, preco: Number(k.getAttribute('data-preco')) } : null
+    return k ? { nome: k.value, chave: k.getAttribute('data-kart') || k.value, preco: Number(k.getAttribute('data-preco')) } : null
   }
-  /** O serviço do painel deste kart: o único ativo com o nome do kart no nome. */
+  /** A chave do kart, do jeito que ela é comparada: sem maiúscula e sem espaço à toa. */
+  function chave(v) { return String(v == null ? '' : v).trim().replace(/\s+/g, ' ').toLowerCase() }
+  /** O serviço do painel deste kart: o que tem esta chave em `site_kart`, e só quando é um só.
+   *  Dois serviços com a mesma chave é ambíguo: ninguém escolhe no lugar da pessoa. */
   function servico(k) {
     if (!k) return null
-    var achados = servicos.filter(function (s) { return s.name.toLowerCase().indexOf(k.nome.toLowerCase()) >= 0 })
+    var c = chave(k.chave)
+    if (!c) return null
+    var achados = servicos.filter(function (s) { return chave(s.site_kart) === c })
     return achados.length === 1 ? achados[0] : null
   }
   function dataLonga(iso) {
@@ -75,6 +83,26 @@
     return abertos.length === 1 ? abertos[0] : null
   }
 
+  /** #263: o kart que o painel não vende sai da página, e o preço de cada um é o do painel (#50).
+   *  Só mexe depois de a lista do painel chegar: sem ela, a página fica como o servidor a mandou. */
+  function karts() {
+    if (!servicosOk) return
+    var sobrou = null, escolhido = null
+    opcoes().forEach(function (r) {
+      var s = servico({ chave: r.getAttribute('data-kart') || r.value })
+      var rotulo = r.closest('.kart')
+      if (!s) { if (rotulo) rotulo.hidden = true; r.disabled = true; return }
+      if (rotulo) rotulo.hidden = false
+      r.disabled = false
+      r.setAttribute('data-preco', String(s.price))
+      var cel = rotulo && rotulo.querySelector('.kart-preco')
+      if (cel) cel.textContent = usd(s.price)
+      if (!sobrou) sobrou = r
+      if (r.checked) escolhido = r
+    })
+    if (!escolhido && sobrou) sobrou.checked = true          // o kart que saiu não deixa a página sem escolha
+  }
+
   function atualizar() {
     var k = kart()
     var s = servico(k)
@@ -82,46 +110,48 @@
     // kart, dá para reservar outra sessão na área do cliente — o aviso diz qual dos dois é o caso
     var semReservaOnline = servicosOk && !servicos.length
     var semEsseKart = servicosOk && !!servicos.length && !s
-    if (indisponivel && indisponivelTxt) {
+    // #262: o pagamento do site é só Stripe. Stripe desligado é o mesmo que loja fechada: avisa com
+    // o contato, em vez de deixar um botão que não levaria a nada.
+    var semCheckout = servicosOk && !!s && !(comCarrinho && window.uraceCarrinho)
+    // o servidor já mandou a página sem kart nenhum e com o aviso no lugar da lista: não repetir
+    if (indisponivel && indisponivelTxt && opcoes().length) {
       indisponivelTxt.textContent = semReservaOnline
         ? 'Online booking is closed right now. Talk to us and we book your session for you:'
-        : semEsseKart ? 'The ' + (k ? k.nome : 'kart') + ' is not open for online booking right now. Pick another kart above, or talk to us:' : ''
-      indisponivel.hidden = !(semReservaOnline || semEsseKart)
+        : semEsseKart ? 'The ' + (k ? k.nome : 'kart') + ' is not open for online booking right now. Pick another kart above, or talk to us:'
+          : semCheckout ? 'Online checkout is closed right now. Talk to us and we book your session for you:' : ''
+      indisponivel.hidden = !(semReservaOnline || semEsseKart || semCheckout)
     }
     resumo.textContent = (dia ? dataLonga(dia) + (periodo ? ' · ' + NOMES[periodo] : '') + ' · ' : '') + (k ? k.nome : '') + ' · per driver'
     precoEl.textContent = s ? usd(s.price) : k ? usd(k.preco) : ''
-    var q = []
-    if (dia) q.push('date=' + encodeURIComponent(dia))
-    if (dia && periodo) q.push('period=' + encodeURIComponent(periodo))
-    if (k) q.push('kart=' + encodeURIComponent(k.nome))
-    CAMPANHA.forEach(function (c) { var v = daUrl.get(c); if (v) q.push(c + '=' + encodeURIComponent(v.slice(0, 120))) })
-    ir.setAttribute('href', portal + (q.length ? '?' + q.join('&') : ''))
-    // sem a agenda carregada (erro ou nada aberto), o botão continua levando à área do cliente
-    var falta = !carregou ? null : !dia ? 'dia' : !periodo ? 'turno' : null
-    var pronto = !falta
-    ir.textContent = !carregou ? 'Book online' : pronto ? 'Continue to booking'
-      : falta === 'dia' ? 'Pick a day to continue' : 'Pick a time to continue'
-    if (pronto) ir.removeAttribute('aria-disabled'); else ir.setAttribute('aria-disabled', 'true')
-    ir.hidden = semReservaOnline                      // nada ativo no painel: o botão não levaria a nada
+    // sem a agenda carregada (erro, ou nada aberto), o botão continua pedindo o dia
+    var falta = !carregou || !dia ? 'dia' : !periodo ? 'turno' : null
     if (carregou) aviso.textContent = falta === 'turno' ? 'Now pick Morning or Afternoon.' : AVISO_PADRAO
     turnos.classList.toggle('falta', falta === 'turno')
-    if (porNoCarrinho) {
-      porNoCarrinho.hidden = !(comCarrinho && s && window.uraceCarrinho)
-      porNoCarrinho.disabled = !(carregou && dia && periodo)
-      porNoCarrinho.textContent = s && s.deposit ? 'Add to cart · ' + usd(s.price) + ' + ' + usd(s.deposit) + ' deposit' : 'Add to cart'
-      ir.classList.toggle('btn-linha-escura', !porNoCarrinho.hidden)
-    }
+    // #262: um botão só. Ele conta o que falta e, pronto, leva ao carrinho.
+    var pode = !!(s && comCarrinho && window.uraceCarrinho)
+    porNoCarrinho.hidden = !opcoes().length || (servicosOk && !pode)
+    porNoCarrinho.disabled = !(pode && !falta)
+    if (porNoCarrinho.disabled) porNoCarrinho.setAttribute('aria-disabled', 'true')
+    else porNoCarrinho.removeAttribute('aria-disabled')
+    porNoCarrinho.textContent = falta === 'dia' ? 'Pick a day to continue'
+      : falta === 'turno' ? 'Pick a time to continue'
+        : !s ? 'Add to cart'
+          : 'Add to cart · ' + usd(s.price) + (s.deposit ? ' + ' + usd(s.deposit) + ' deposit' : '')
   }
-  if (porNoCarrinho) porNoCarrinho.addEventListener('click', function () {
+  porNoCarrinho.addEventListener('click', function () {
     var s = servico(kart())
     if (!s || !dia || !periodo || !window.uraceCarrinho) return
     if (!window.uraceCarrinho.por({ tipo: 'sessao', servico: s.id, data: dia, turno: periodo })) {
-      carrinhoOk.textContent = 'Your cart is full.'
+      carrinhoOk.textContent = 'Your cart is full. '
+      var ver = document.createElement('a'); ver.href = paraCarrinho; ver.textContent = 'View cart and pay'
+      carrinhoOk.appendChild(ver)
       return
     }
-    carrinhoOk.textContent = 'Added to your cart. '
-    var a = document.createElement('a'); a.href = '/cart/'; a.textContent = 'View cart and pay'
-    carrinhoOk.appendChild(a)
+    carrinhoOk.textContent = 'Added to your cart. Taking you there…'
+    // a campanha de onde a pessoa veio segue para o carrinho (utm_*, gclid, fbclid)
+    var q = []
+    CAMPANHA.forEach(function (c) { var v = daUrl.get(c); if (v) q.push(c + '=' + encodeURIComponent(v.slice(0, 120))) })
+    window.location.assign(paraCarrinho + (q.length ? '?' + q.join('&') : ''))
   })
 
   function desenharTurnos() {
@@ -174,14 +204,14 @@
     mes = meses[meses.indexOf(mes) + Number(b.getAttribute('data-ir'))]
     desenharMes()
   })
-  document.querySelectorAll('input[name="kart"]').forEach(function (r) { r.addEventListener('change', atualizar) })
+  opcoes().forEach(function (r) { r.addEventListener('change', atualizar) })
   atualizar()
 
   var apiServicos = raiz.getAttribute('data-servicos')
   if (apiServicos) fetch(apiServicos, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
-    .then(function (d) { servicos = d.services || []; comCarrinho = !!d.cart; servicosOk = true; atualizar() })
-    .catch(function () { /* sem a lista do painel (rede): fica o "Continue to booking", sem aviso falso */ })
+    .then(function (d) { servicos = d.services || []; comCarrinho = !!d.cart; servicosOk = true; karts(); atualizar() })
+    .catch(function () { /* sem a lista do painel (rede): a página fica como o servidor a mandou */ })
 
   fetch(api, { credentials: 'omit', headers: { Accept: 'application/json' } })
     .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })

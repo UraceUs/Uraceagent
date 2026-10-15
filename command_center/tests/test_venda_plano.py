@@ -58,7 +58,10 @@ def test_plano_do_painel_aparece_na_academy_e_na_api_publica(cenario, tmp_path, 
         html = t.get("/academy/").text
         assert f'href="/ops/portal/reserve?plan={cenario["sid"]}"' in html and "Academy 3 months" in html
         assert "$2,756.90" not in html, "com plano cadastrado, os cartões fixos do site antigo saem"
-        assert t.get("/ops/api/vitrine/servicos").json()["services"] == [], "plano não é sessão avulsa"
+        # #263: as sessões do site (os 4 karts) vêm da migração; plano nenhum entra nessa lista
+        sessoes = t.get("/ops/api/vitrine/servicos").json()["services"]
+        assert all(x["name"].startswith("Arrive and Drive ") for x in sessoes), "plano não é sessão avulsa"
+        assert cenario["sid"] not in [x["id"] for x in sessoes]
 
 
 def test_sem_plano_cadastrado_a_academy_pede_contato(con, monkeypatch):

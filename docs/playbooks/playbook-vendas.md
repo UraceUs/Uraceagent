@@ -551,23 +551,29 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
 
 **O que o cliente faz** (site novo, em inglês; o carrinho e as páginas do pedido também em português, #248):
 
-1. Na página do Arrive and Drive escolhe o kart, o dia e o turno e toca em **Add to cart** (o preço
-   mostrado é o do serviço do painel com o nome do kart). Na reserva da área do cliente
+1. Na página do Arrive and Drive escolhe o kart, o dia e o turno e toca no **único botão** da agenda
+   (#262, dono 15/10: *"sim um caminho somente levando para o carrinho"*): ele diz o que falta
+   ("Pick a day to continue" sem dia, "Pick a time to continue" com o dia e sem turno) e, com tudo
+   escolhido, vira **Add to cart · $<preço> + $<depósito> deposit**, põe a sessão no carrinho e leva
+   para `/cart/`. O preço mostrado é o do serviço do painel. Na reserva da área do cliente
    (`/ops/portal/reserve`) também há **Add to cart**. Na loja, **Add to cart** ao lado do **Buy now**.
    **Toda compra pede a conta do site** (#248, dono 14/10: *"Para a pessoa conseguir comprar com a gente,
    ela tem que criar a conta dela lá no site da URACE"*): **Buy now** sem conta leva para entrar (ou criar
    a conta) e volta para o produto.
-   > **O nome do serviço tem de ter o nome do kart** (#253, dono 15/10, com o print da tela de reserva
-   > mostrando um serviço de teste já escolhido: *"remova esse produto d teste quando for para essa
-   > pagina ja vai com o produto pré selecionado"*). Quem chega do site com um kart só vê
-   > pré-selecionado o serviço de **Agendamentos do site › Serviços e preços** cujo **nome contém o nome
-   > do kart** (Baby Kart, 4-stroke, 2-stroke, Adult Shifter) — por exemplo "Arrive and Drive 2-stroke".
-   > Nenhum serviço com o nome do kart: a reserva **não escolhe nada** (nunca um serviço que não é do
-   > kart) e a tela avisa que esse kart não está aberto para reserva online agora, com o contato.
-   > Nenhum serviço **ativo**: o site e a reserva dizem que a reserva online está fechada e mandam falar
-   > com a gente, em vez de mostrar um botão que não leva a nada. No calendário do site o botão diz o
-   > que falta: "Pick a day to continue" sem dia, "Pick a time to continue" com o dia e sem turno; dia
-   > com um turno só aberto já vem com o turno escolhido.
+   > **O serviço aponta o kart pelo campo "Kart do site"** (#263, dono 15/10: *"o mais lógico é ir com o
+   > produto que foi selecionado na mesma página que selecionou a data e daí clicar no add to cart"*).
+   > Em **Agendamentos do site › Serviços e preços**, cada serviço de sessão tem o seletor **Kart do
+   > site** (Baby Kart · 4-stroke · 2-stroke · Adult Shifter, ou "não é do site"). É esse campo — e não
+   > mais o nome — que liga o serviço ao kart da página: foi o casamento por nome que fez um serviço
+   > chamado "teste" aparecer pré-selecionado como se fosse o produto. Os quatro serviços
+   > ("Arrive and Drive Baby Kart", "… 4-stroke", "… 2-stroke", "… Adult Shifter") já vêm cadastrados,
+   > com os preços da Rate Card (719 · 719 · 819 · 899) e o depósito de US$ 400; **o painel manda** no
+   > preço (mudar ali muda o site).
+   > **Desativar o serviço tira aquele kart da página**: em vez de deixar na tela um produto que não dá
+   > para comprar, o kart sai da lista. Nenhum serviço ativo: o site e a reserva dizem que a reserva
+   > online está fechada e mandam falar com a gente. Dois serviços ativos com o mesmo "Kart do site"
+   > é ambíguo — o site não escolhe por ninguém e o kart também sai; deixe **um** serviço por kart.
+   > No dia em que o dono mudar o nome de um kart na página, o "Kart do site" dos serviços muda com ele.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
    o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
    **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho também pede a conta (#248).
@@ -576,14 +582,19 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
 3. **Checkout** abre o Stripe com **todas** as linhas e, para cada sessão com depósito, a linha
    "Refundable security deposit". Paga, volta para `/cart/thanks/` com a **página do pedido** (abaixo).
 
-**Atenção ao atender (#252):** na página do Arrive and Drive existem **dois botões** e eles levam a
-**dois pagamentos diferentes** — **Add to cart** leva ao carrinho e a pessoa paga no **Stripe** na
-hora; **Continue to booking** leva à área do cliente e a pessoa paga a **invoice do QuickBooks** mais
-a waiver. O texto embaixo dos botões só explica o caminho da invoice. Se o cliente ligar dizendo que
-"já pagou" ou que "recebeu uma invoice", confira primeiro por qual dos dois ele entrou:
-Agendamentos do site › **Pedidos do site** mostra o que veio pelo Stripe; a invoice aparece no card.
-A comparação completa dos dois sites está em
+**Um caminho só, e o Stripe é o único pagamento do site (#262, dono 15/10).** A página do Arrive and
+Drive tem **um** botão, ele leva ao carrinho, e o texto embaixo conta esse caminho: *carrinho → conta
+→ Stripe → waiver*. O "Continue to booking" saiu do site público, e com ele a promessa da invoice do
+QuickBooks. **A invoice do QuickBooks continua existindo para a venda feita pela equipe** — o que
+mudou é só o que o site público oferece. Se o cliente ligar dizendo que "recebeu uma invoice", é
+venda da equipe (a invoice aparece no card); o que veio pelo site está em Agendamentos do site ›
+**Pedidos do site** (Stripe). A comparação completa dos dois sites está em
 `docs/site-publico/comparacao-urace-us.md`.
+
+**Afiliados: encerrado (#262, dono 15/10: "encerra").** Não existe programa de afiliados. Quem chegar
+por `/affiliate-account/` (ou pelos outros endereços do SliceWP que o urace.us publicava) cai em
+`/contact/`. Se alguém perguntar por comissão de indicação, não existe programa hoje — anote o
+contato e passe para o dono.
 
 **Regras que o sistema garante** (código: `providers/carrinho.py`):
 
