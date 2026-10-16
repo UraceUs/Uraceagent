@@ -185,8 +185,8 @@
     return x
   }
   // #282 (dono, 15/10): o ⓘ do security deposit. O mesmo texto de `vitrine/dica.py` (o teste confere).
-  var DEPOSITO_INFO = 'Refundable within 5 days after your session, as long as there is no damage to the kart. Damage above the deposit amount may be charged additionally.'
-  var DEPOSITO_INFO_PT = 'Reembolsável em até 5 dias após a sessão, desde que não haja nenhum dano ao kart. Danos acima do valor do depósito podem ser cobrados adicionalmente.'
+  var DEPOSITO_INFO = 'Refundable within 5 business days after your session, as long as there is no damage to the kart. Damage above the deposit amount may be charged additionally.'
+  var DEPOSITO_INFO_PT = 'Reembolsável em até 5 dias úteis após a sessão, desde que não haja nenhum dano ao kart. Danos acima do valor do depósito podem ser cobrados adicionalmente.'
   function dicaDeposito() {
     var caixa = el('span', 'dica')
     var b = el('button', 'dica-botao'); b.type = 'button'

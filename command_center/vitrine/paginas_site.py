@@ -1004,8 +1004,8 @@ def carrinho(host, cancelado=False, stripe=True, restaurar=None, lang="en"):
         <dl class="carrinho-total"></dl>
         <p class="carrinho-erro aviso-erro" role="alert" hidden></p>
         <button class="btn btn-cheio carrinho-pagar" type="button" disabled>{T("Checkout", "Pagar")}</button>
-        <p class="small muted">{T("Secure checkout by Stripe: card, Apple Pay or Google Pay. Your URACE account is needed to buy. Prices and spots are checked again when you pay. The security deposit of a session is refundable within 5 days after the session, as long as there is no damage to the kart. Damage above the deposit amount may be charged additionally.",
-                                  "Pagamento seguro pelo Stripe: cartão, Apple Pay ou Google Pay. Para comprar, é preciso a sua conta URACE. Preços e vagas são conferidos de novo na hora de pagar. O depósito de segurança da sessão é reembolsável em até 5 dias após a sessão, desde que não haja nenhum dano ao kart. Danos acima do valor do depósito podem ser cobrados adicionalmente.")}</p>
+        <p class="small muted">{T("Secure checkout by Stripe: card, Apple Pay or Google Pay. Your URACE account is needed to buy. Prices and spots are checked again when you pay. The security deposit of a session is refundable within 5 business days after the session, as long as there is no damage to the kart. Damage above the deposit amount may be charged additionally.",
+                                  "Pagamento seguro pelo Stripe: cartão, Apple Pay ou Google Pay. Para comprar, é preciso a sua conta URACE. Preços e vagas são conferidos de novo na hora de pagar. O depósito de segurança da sessão é reembolsável em até 5 dias úteis após a sessão, desde que não haja nenhum dano ao kart. Danos acima do valor do depósito podem ser cobrados adicionalmente.")}</p>
       </section>
     </div>
     <div class="carrinho-vazio" hidden>
