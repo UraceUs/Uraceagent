@@ -304,10 +304,6 @@ def _contas_e_leads(con, ini, fim):
             {"novos": leads["n"] or 0, "ganhos": leads["ganhos"] or 0, "perdidos": leads["perdidos"] or 0})
 
 
-def _tem(con, tabela, coluna):
-    return any(r["name"] == coluna for r in con.execute(f"PRAGMA table_info({tabela})"))
-
-
 def _campanhas(con, ini, fim):
     """De onde vieram as vendas e os contatos (o `utm` que cada um guardou), uma vez por venda: o agendamento e a
     oportunidade que um pedido do site gera não contam de novo."""
@@ -317,8 +313,7 @@ def _campanhas(con, ini, fim):
               + todos(con, """SELECT campaign AS utm FROM opportunities op WHERE source='Site' AND created_at>=? AND created_at<?
                                AND NOT EXISTS (SELECT 1 FROM store_orders o WHERE o.opp_id=op.id)
                                AND NOT EXISTS (SELECT 1 FROM store_order_items i WHERE i.opp_id=op.id)""", (ini, fim)))
-    if _tem(con, "store_orders", "utm"):
-        linhas += todos(con, "SELECT utm FROM store_orders WHERE status='pago' AND paid_at>=? AND paid_at<?", (ini, fim))
+    linhas += todos(con, "SELECT utm FROM store_orders WHERE status='pago' AND paid_at>=? AND paid_at<?", (ini, fim))
     cont, sem = Counter(), 0
     for x in linhas:
         f = _fonte_utm(x["utm"])

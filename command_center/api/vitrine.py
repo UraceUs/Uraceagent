@@ -564,7 +564,8 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
         foto = _origem(request) + paginas.foto_url(p["images"][0]["src"])
     try:
         _, url = stripe_loja.criar_sessao(con, p, c.get("variacao") or "", qtd, c.get("entrega"), _origem(request),
-                                          host_de(request), foto_url=foto, conta_id=conta, lang=idioma.de_request(request))
+                                          host_de(request), foto_url=foto, conta_id=conta, lang=idioma.de_request(request),
+                                          utm=_campanha(c))
     except ValueError as e:
         return erro(str(e))
     except stripe_loja.ErroStripe as e:
@@ -807,7 +808,7 @@ async def carrinho_checkout(request: Request, background: BackgroundTasks, con: 
             return _json({"ok": False, "erro": idioma.traduzir(str(e), lang), "sign_in": e.entrar}, e.status)
     try:
         oid, url = carrinho.criar_checkout(con, itens, d.get("entrega"), conta, _origem(request), host_de(request),
-                                           lang=lang)
+                                           lang=lang, utm=_campanha(d["utm"]) if isinstance(d.get("utm"), dict) else None)
         resp = _json({"ok": True, "url": url, "order": oid})
     except carrinho.PrecisaConta as e:
         con.rollback()

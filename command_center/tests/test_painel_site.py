@@ -238,8 +238,9 @@ def test_o_painel_soma_o_que_o_sistema_tem(site, equipe):
     assert (s["marcadas"], s["canceladas"], s["pelo_site"], s["pela_area"], s["proximas"]) == (2, 1, 2, 1, 2)
     assert d["contas"]["novas"] == 1 and d["contas"]["sem_vinculo"] == 1
     assert (d["leads"]["novos"], d["leads"]["ganhos"]) == (2, 2), "só o que veio do site"
-    assert d["campanhas"] == {"com_campanha": [{"fonte": "instagram", "n": 2}, {"fonte": "google", "n": 1}], "sem_campanha": 2}, \
-        "uma vez por venda: o agendamento e a oportunidade do pedido não contam de novo"
+    # os 2 pedidos pagos sem campanha, o agendamento cancelado e o plano sem utm; o agendamento e a oportunidade do
+    # pedido não contam de novo (uma vez por venda)
+    assert d["campanhas"] == {"com_campanha": [{"fonte": "instagram", "n": 2}, {"fonte": "google", "n": 1}], "sem_campanha": 4}
     assert (d["visitas"]["total"], d["visitas"]["carrinho"], d["visitas"]["entradas"]) == (2, 1, 1)
     assert len(d["dias"]) == 30 and round(sum(x["receita"] for x in d["dias"]), 2) == 5783.9
     assert sum(x["pedidos"] for x in d["dias"]) == 2 and sum(x["visitas"] for x in d["dias"]) == 2
@@ -332,3 +333,40 @@ def test_o_menu_tem_a_secao_site_com_uma_subsecao_por_painel():
     assert "Agendamentos do site" not in shell, "o item antigo saiu da Logística"
     sub = (REPO / "command_center/web/src/pages/SitePublico.tsx").read_text(encoding="utf-8")
     assert re.findall(r"to: '(/site[^']*)'", sub) == rotas, "as abas da página são as mesmas subseções do menu"
+
+
+# ------------------------------------------------------------------ 4. a campanha da venda do site
+def test_a_venda_do_carrinho_e_do_buy_now_guarda_a_campanha_e_conta_uma_vez(site, equipe):
+    """O carrinho manda o que o campanha.js guardou; o Buy now leva os campos escondidos. O pedido, o agendamento e a
+    venda que ele gera ficam com a campanha, e o painel conta a venda uma vez."""
+    cli, con, st, *_ = site
+    from command_center.providers import servicos_site
+    from command_center.tests.test_agenda_sessoes import abre, proximo
+    from command_center.tests.test_carrinho import _entrar, _pagar, _sessao
+    from command_center.tests.test_stripe_loja import _simples
+    inserir(con, "qbo_items", id="11", name="Arrive and Drive 4T", price=719)
+    sid = um(con, "SELECT id FROM booking_services WHERE site_kart='4-stroke'")["id"]
+    servicos_site.mudar(con, None, sid, {"qbo_item": "Arrive and Drive 4T"})
+    abre(con, cap=1)
+    con.commit()
+    conta, pid = _entrar(cli, con)
+    r = cli.post("/ops/api/vitrine/carrinho/checkout", headers={"X-CSRF": cli.cookies.get("cp_csrf")},
+                 json={"itens": [_sessao(sid, proximo(5), pid)], "entrega": "retirada",
+                       "utm": {"utm_source": "instagram", "utm_campaign": "outubro", "email": "nao-entra@example.com"}})
+    assert r.status_code == 200, r.text
+    o = um(con, "SELECT * FROM store_orders")
+    assert json.loads(o["utm"]) == {"utm_source": "instagram", "utm_campaign": "outubro"}, "só campanha, nada da pessoa"
+    assert _pagar(cli, st, next(iter(st.sessoes))).json()["resultado"] == "pago"
+    assert json.loads(um(con, "SELECT utm FROM bookings")["utm"])["utm_source"] == "instagram"
+    assert json.loads(um(con, "SELECT campaign FROM opportunities")["campaign"])["utm_campaign"] == "outubro"
+    # o Buy now: os campos escondidos do formulário
+    p = _simples()
+    r = cli.post("/ops/api/vitrine/checkout", data={"produto": p["slug"], "quantidade": "1", "entrega": "retirada",
+                                                    "utm_source": "google", "gclid": "abc"}, follow_redirects=False)
+    assert r.status_code == 303, r.text
+    buy = um(con, "SELECT utm FROM store_orders WHERE kind='produto'")
+    assert json.loads(buy["utm"]) == {"utm_source": "google", "gclid": "abc"}
+    _entra(equipe, "op.painel@example.com")
+    d = equipe.get("/ops/api/site/painel").json()
+    assert d["campanhas"]["com_campanha"] == [{"fonte": "instagram", "n": 1}], \
+        "a venda do carrinho conta uma vez (o agendamento e a oportunidade dela não contam de novo); o Buy now não pagou"

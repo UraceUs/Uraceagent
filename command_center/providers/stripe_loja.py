@@ -115,7 +115,8 @@ def locale_stripe(lang):
     return "pt-BR" if lang == "pt" else "en"
 
 
-def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_url=None, http=None, conta_id=None, lang="en"):
+def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_url=None, http=None, conta_id=None, lang="en",
+                 utm=None):
     """Grava o pedido 'aberto' e cria a sessão do Checkout. Devolve (pedido_id, url do Stripe).
     #248: só com a conta do site (`conta_id`); o e-mail da conta vai como `customer_email`."""
     http = http or _http
@@ -139,7 +140,7 @@ def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_
                   quantity=qtd, unit_price=unit, amount=round(unit * qtd + (frete or 0) + deposito, 2), delivery=entrega,
                   origin=host, account_id=conta["id"], email=(conta["email"] or "").lower() or None, name=conta["name"],
                   phone=conta["phone"], lang="pt" if lang == "pt" else "en",
-                  shipping_fee=frete if entrega == "envio" else None, deposit=deposito)
+                  shipping_fee=frete if entrega == "envio" else None, deposit=deposito, utm=utm)
     produto = {"name": nome[:250]}
     if foto_url:
         produto["images"] = [foto_url]
@@ -378,7 +379,7 @@ def ligar_e_vender(con, oid):
              + f"\nCard: {nota}")
     opp = inserir(con, "opportunities", name=o["name"] or o["email"] or "Cliente da loja", email=o["email"], phone=o["phone"],
                   service=f"Store: {descricao(o)}", amount=valor, stage="GANHO" if cid else "FECHAMENTO", source="Site",
-                  client_id=cid, notes=notas,
+                  client_id=cid, notes=notas, campaign=o["utm"],
                   closing=json.dumps({"em": agora(), "por": "stripe", "pedido": o["id"]}, ensure_ascii=False))
     inserir(con, "opp_events", opp_id=opp, kind="note", title="Pago na loja do site (Stripe)", detail=notas[:2000],
             at=agora(), actor="site")

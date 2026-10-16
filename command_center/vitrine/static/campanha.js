@@ -56,7 +56,7 @@
 
   // Campo escondido em cada formulário do site: vale com JavaScript (fetch) e sem ele (POST normal)
   var campos = ler()
-  document.querySelectorAll('form[data-contato], form[data-pedido]').forEach(function (form) {
+  document.querySelectorAll('form[data-contato], form[data-pedido], form.form-comprar').forEach(function (form) {
     Object.keys(campos).forEach(function (k) {
       if (form.elements[k]) return
       var i = document.createElement('input')
