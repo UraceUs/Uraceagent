@@ -13,7 +13,8 @@ from zoneinfo import ZoneInfo
 SC = os.path.dirname(os.path.abspath(__file__))
 os.environ["URACE_ENV"] = "/nao/existe"
 os.environ.setdefault("CC_DB_PATH", os.path.join(SC, "e2e_full.sqlite"))   # o README manda o caminho por CC_DB_PATH
-sys.path.insert(0, "/home/user/Uraceagent")
+# o código deste repositório (o que o teste está testando), não o de outra cópia na máquina
+sys.path.insert(0, os.path.abspath(os.path.join(SC, "..", "..", "..")))
 
 from command_center.api import auth                                    # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir        # noqa: E402
@@ -268,6 +269,10 @@ _m = {"message_id": "e2e-fatura", "de": "QuickBooks <quickbooks@notification.int
       "assunto": "New payment request from Courtney Concepts Karting - invoice 9999", "corpo": "BALANCE DUE$427.22",
       "data": "Mon, 05 Oct 2026 16:00:00 -0400", "marcadores": ["INBOX"], "links": []}
 _ce.aplicar(con, _ce.ler(_m), "urace", "e2e-fat", _m["message_id"])
+
+# #315: uma página no editor do site (a tela do editor como o Canva entra na volta por todas as telas)
+from command_center.providers import editor_site as _es  # noqa: E402
+_es.criar_nova(con, None, "Kart Camp seed e2e", "/kart-camp-semente-e2e/", lambda c: False)
 
 # aprendizado do dono e fonte de contexto já vêm do schema
 con.commit()

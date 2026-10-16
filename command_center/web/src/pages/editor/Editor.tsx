@@ -634,7 +634,8 @@ export function EditorDePagina({ id }: { id: number }) {
         {porTocar && <div className="ed-tocar" role="status"><span className="grow">{tr("Toque na página onde quer pôr: {0}", nomeDaPeca(porTocar))}</span>
           <button type="button" className="btn sm" onClick={() => setPorTocar(null)}>{tr("Cancelar")}</button></div>}
         <Lona ref={lona} src={atual.previa} tela={tela} estreito={estreito} editar={gerente} ganchos={pegarGanchos} dica={dica} tampa={tampa}
-          aoLigar={pt => { pt.sincronizar(docRef.current?.c || c); pt.marcar(selRef.current); pt.marcarErros(Object.keys(errosRef.current))
+          aoLigar={pt => { editRef.current = null; setEditando(null)        // prévia nova: nada em edição
+            pt.sincronizar(docRef.current?.c || c); pt.marcar(selRef.current); pt.marcarErros(Object.keys(errosRef.current))
             if (versaoLocal.current !== versaoSalva.current) agendar(true, 0)
             reposicionar() }} />
         {!estreito && barra}
