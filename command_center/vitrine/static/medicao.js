@@ -138,11 +138,22 @@
     var acoes = document.createElement('div'); acoes.className = 'consentimento-acoes'
     var nao = document.createElement('button'); nao.type = 'button'; nao.className = 'btn btn-sm btn-linha-escura'; nao.textContent = 'Decline'
     var sim = document.createElement('button'); sim.type = 'button'; sim.className = 'btn btn-sm'; sim.textContent = 'Accept'
-    nao.addEventListener('click', function () { gravarEscolha('nao'); b.remove() })
-    sim.addEventListener('click', function () { gravarEscolha('sim'); b.remove(); carregarDeFora() })
+    nao.addEventListener('click', function () { gravarEscolha('nao'); fechar() })
+    sim.addEventListener('click', function () { gravarEscolha('sim'); fechar(); carregarDeFora() })
     acoes.appendChild(nao); acoes.appendChild(sim)
     b.appendChild(p); b.appendChild(acoes)
     document.body.appendChild(b)
+    // #284: o balão do chat (fixo, embaixo à direita) sobe a altura do banner enquanto ele está aberto
+    var raiz = document.documentElement
+    function medir() { raiz.style.setProperty('--consentimento-altura', (b.offsetHeight + 12) + 'px') }
+    medir()
+    raiz.classList.add('com-consentimento')
+    window.addEventListener('resize', medir)
+    function fechar() {
+      b.remove()
+      raiz.classList.remove('com-consentimento')
+      window.removeEventListener('resize', medir)
+    }
   }
 
   var escolha = lerEscolha()
