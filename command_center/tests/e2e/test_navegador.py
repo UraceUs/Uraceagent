@@ -2582,3 +2582,44 @@ def test_stripe_falso_responde_404_em_caminho_desconhecido():
             assert erro.value.code == 404, caminho
     finally:
         fake.srv.shutdown()
+
+
+def test_criar_a_conta_vindo_do_carrinho_vai_ao_carrinho_uma_vez_so(servidor, navegador):
+    """#288 (CI do #283, 15/10: "A conta criada volta para o carrinho: FALHOU — net::ERR_ABORTED"). Depois
+    do cadastro, a área mandava o navegador ao /cart/ e, no mesmo instante, se redesenhava conectada; com o
+    `?volta=cart` ainda no endereço, ela guardava a volta de novo e mandava ao /cart/ uma SEGUNDA vez — a
+    segunda ida abortava a primeira. Agora a área só navega: uma ida ao carrinho, já conectado."""
+    # um visitante com o próprio IP (o Caddy repassa no X-Forwarded-For): a suíte inteira já criou contas
+    # do 127.0.0.1 e o limite de cadastros por hora (MAX_CADASTROS_POR_HORA) é por IP
+    ctx = navegador.new_context(viewport={"width": 1280, "height": 900},
+                                extra_http_headers={"X-Forwarded-For": "203.0.113.88"})
+    v = ctx.new_page()
+    erros, idas = [], []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.on("request", lambda r: idas.append(r.url) if r.resource_type == "document" and r.url.endswith("/cart/") else None)
+
+    def carrinho_lento(route):        # como numa máquina lenta: uma 2ª ida chega antes de a 1ª abrir
+        time.sleep(0.8)
+        route.continue_()
+    v.route("**/cart/", carrinho_lento)
+    v.goto(servidor + "/portal/signup?volta=cart")              # o "Create account" do carrinho leva aqui
+    v.get_by_role("heading", name="Create your account", level=1).wait_for()
+    v.get_by_label("Full name").fill("Teste Volta Carrinho")
+    v.get_by_label("Date of birth").fill("1990-05-05")
+    v.get_by_label("Email").fill("teste.volta.288@example.com")
+    v.get_by_label("Password").fill("pista-molhada-7")
+    v.get_by_label("Phone").fill("4075550142")
+    v.get_by_label("Street address").fill("10724 Cosmonaut Blvd")
+    v.get_by_label("City").fill("Orlando")
+    v.get_by_role("textbox", name="State").fill("FL")
+    v.get_by_label("ZIP").fill("32824")
+    v.get_by_label("I accept the").check()
+    v.get_by_role("button", name="Create account").click()
+    v.wait_for_url("**/cart/", timeout=30000)
+    v.get_by_role("heading", name="Your cart", level=1).wait_for()
+    v.wait_for_timeout(500)                                      # uma segunda ida chegaria aqui
+    me = v.request.get(servidor + "/api/portal/me")                   # a conta abriu a sessão
+    assert me.ok and me.json()["email"] == "teste.volta.288@example.com", me.text()
+    assert len(idas) == 1, f"o cadastro mandou ao carrinho {len(idas)} vezes: {idas}"
+    assert not erros, erros
+    ctx.close()

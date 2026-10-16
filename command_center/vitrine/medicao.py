@@ -56,8 +56,10 @@ HOST_FB = "https://www.facebook.com"
 # #170: o chat do Kommo. Medido de verdade (15/10, Chromium carregando o widget do urace.us de hoje): o botão
 # vem do gso.kommo.com, o formulário do forms.kommo.com, o mensageiro do piper.amocrm.com e a conversa por
 # WebSocket no lc-en.kommo.com. Só isso abre, e só quando o chat está configurado.
+# #284: o widget põe estilo inline nos próprios elementos (posição, cor do balão) — sem 'unsafe-inline' no
+# style-src o navegador recusa e o balão aparece sem forma. Só o estilo: script inline continua fechado.
 KOMMO = {"script-src": ["https://gso.kommo.com", "https://forms.kommo.com", "https://piper.amocrm.com"],
-         "style-src": ["https://gso.kommo.com", "https://forms.kommo.com"],
+         "style-src": ["'unsafe-inline'", "https://gso.kommo.com", "https://forms.kommo.com"],
          "font-src": ["https://gso.kommo.com"],
          "img-src": ["https://gso.kommo.com", "https://forms.kommo.com"],
          "connect-src": ["https://gso.kommo.com", "https://piper.amocrm.com", "wss://lc-en.kommo.com"],

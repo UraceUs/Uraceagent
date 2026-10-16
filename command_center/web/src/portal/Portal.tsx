@@ -543,10 +543,13 @@ export function PortalApp() {
   // chegou na agenda já com a conta aberta: a escolha do site foi usada, não volta de novo
   useEffect(() => { if (conta && (loc.pathname === '/portal/book' || loc.pathname.startsWith('/portal/sessions/'))) limparVolta() }, [conta, loc.pathname])
   const entrou = (a: Account) => {
-    setConta(a)
     const volta = lerVolta()
-    if (volta === CARRINHO || (volta && DO_SITE.test(volta))) irParaOCarrinho()
-    else nav(volta || '/portal/dashboard', { replace: true })
+    // #288: indo para o carrinho (ou para o produto da loja) a área só navega. O `setConta` redesenhava a
+    // área já conectada; com o `?volta=cart` ainda no endereço, ela guardava a volta de novo e o
+    // <IrParaOCarrinho> mandava ao /cart/ uma segunda vez — a segunda ida abortava a primeira.
+    if (volta === CARRINHO || (volta && DO_SITE.test(volta))) { irParaOCarrinho(); return }
+    setConta(a)
+    nav(volta || '/portal/dashboard', { replace: true })
   }
   async function sair() { try { await papi('POST', '/logout') } finally { setConta(null); nav('/portal', { replace: true }) } }
 

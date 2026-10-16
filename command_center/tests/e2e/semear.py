@@ -7,7 +7,8 @@ equipamento, itens do QBO, conversa da IA com ações em todos os estados.
 """
 import os
 import sys
-from datetime import date, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 SC = os.path.dirname(os.path.abspath(__file__))
 os.environ["URACE_ENV"] = "/nao/existe"
@@ -17,7 +18,9 @@ sys.path.insert(0, "/home/user/Uraceagent")
 from command_center.api import auth                                    # noqa: E402
 from command_center.db import aplicar_schema, conectar, inserir        # noqa: E402
 
-HOJE = date.today()
+# #290: o dia da Flórida, como o painel ("tudo no fuso da Flórida"). Com date.today() — o dia do
+# sistema, UTC no CI — das 20h à meia-noite na Flórida o "amanhã" da semente caía dois dias à frente.
+HOJE = datetime.now(ZoneInfo("America/New_York")).date()
 d = lambda n: (HOJE + timedelta(days=n)).isoformat()                    # noqa: E731
 
 con = conectar()
