@@ -238,3 +238,133 @@ def test_operador_ve_e_so_o_gerente_muda_e_publica(amb):
     assert _salvar(painel, h, pid, title="Changed by operator").status_code == 403
     assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 403
     assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='site.page.create'")["n"] == 1
+
+
+# ------------------------------------------------------------------ #315: o editor como o Canva
+# Dono, 16/10: *"ele abre uma mini visualização de como é o site público. E dali a pessoa consegue, por ali, clicar no
+# que ela precisa editar. Ela edita, ela puxa, ela arrasta, ela solta … É como se fosse um Canva."*
+def _previa(painel, h, pid, editar=True):
+    return painel.get(f"/ops/api/site/editor/paginas/{pid}/previa" + ("?editar=1" if editar else ""), headers=h)
+
+
+def test_a_previa_de_edicao_marca_cada_peca_e_o_site_continua_igual(amb, monkeypatch):
+    """A prévia de edição tem os `data-ed-*` (seção, coluna, elemento, faixa original) e o CSS do editor, sem medição;
+    o site e a prévia de sempre não levam nada disso."""
+    painel, site, con = amb
+    monkeypatch.setenv("SITE_GTM_ID", "GTM-59CCNDC")          # com a medição ligada no site
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    sec = _secao(H1, {"id": "bt1", "tipo": "botao", "texto": "Book the camp", "link": "/contact/"},
+                 {"id": "li1", "tipo": "lista", "itens": []}, colunas=2)
+    _salvar(painel, h, pid, description=DESC, conteudo={"itens": [sec]})
+    ed_html = _previa(painel, h, pid).text
+    assert f'data-ed-s="{sec["id"]}"' in ed_html and f'data-ed-col="{sec["id"]}:0"' in ed_html
+    assert f'data-ed-col="{sec["id"]}:1"' in ed_html, "a coluna vazia também é um lugar para soltar"
+    assert '<h1 data-ed-w="h1a" data-ed-tipo="titulo" class="ed-t' in ed_html
+    assert 'data-ed-w="bt1" data-ed-tipo="botao"' in ed_html
+    assert 'class="lista ed-lista ed-vazio"' in ed_html, "a lista vazia continua clicável para escrever"
+    assert "/_s/editor-previa.css?v=" in ed_html
+    assert "medicao.js" not in ed_html and "GTM-59CCNDC" not in ed_html, "quem edita não é visita"
+    assert 'name="robots" content="noindex' in ed_html
+    assert painel.get("/_s/editor-previa.css").status_code == 200
+    # a prévia de sempre e o site: nada do editor
+    assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
+    for html in (_previa(painel, h, pid, editar=False).text, site.get("/summer-camp/").text):
+        assert "data-ed-" not in html and "editor-previa.css" not in html and "ed-vazio" not in html
+    assert "GTM-59CCNDC" in site.get("/summer-camp/").text, "o site continua medindo"
+
+
+def test_a_previa_de_edicao_de_pagina_que_existe_marca_as_faixas_e_mostra_a_escondida_apagada(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    p = painel.post("/ops/api/site/editor/paginas", headers=h, json={"base": "/about/"}).json()
+    itens = [dict(x) for x in p["pagina"]["draft"]["itens"]]
+    itens[1]["oculto"] = True
+    _salvar(painel, h, p["pagina"]["id"], conteudo={"itens": itens})
+    html = _previa(painel, h, p["pagina"]["id"]).text
+    assert '<section data-ed-s="o0" data-ed-o="0"' in html
+    assert '<section data-ed-s="o1" data-ed-o="1" data-ed-oculto=""' in html, "a escondida aparece apagada na prévia"
+    publica = re.search(r'<main id="conteudo">(.*)</main>', _previa(painel, h, p["pagina"]["id"], editar=False).text, re.S).group(1)
+    assert publica.count("<section") == html.count("<section") - 1, "fora da edição, a escondida some"
+
+
+def test_a_previa_continua_sem_script_nem_estilo_inline(amb):
+    """A prévia roda na origem do painel, com a sessão do gerente: a política dela é a do site (nada inline)."""
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    pol = _previa(painel, h, pid).headers["content-security-policy"]
+    diretivas = dict(x.strip().split(" ", 1) for x in pol.split(";"))
+    assert diretivas["script-src"] == "'self'" and diretivas["style-src"] == "'self'"
+    assert "unsafe" not in pol and diretivas["frame-ancestors"] == "'self'"
+
+
+def test_salvar_com_a_revisao_velha_recusa_em_vez_de_apagar_o_que_o_outro_fez(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    p = _nova(painel, h)["pagina"]
+    rev = p["rev"]
+    r = _salvar(painel, h, p["id"], rev=rev, conteudo={"itens": [_secao({**H1, "texto": "Gerente A"})]})
+    assert r.status_code == 200 and r.json()["pagina"]["rev"] == rev + 1
+    r = _salvar(painel, h, p["id"], rev=rev, conteudo={"itens": [_secao({**H1, "texto": "Gerente B"})]})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "rev"
+    assert "Gerente A" in json.dumps(painel.get(f"/ops/api/site/editor/paginas/{p['id']}", headers=h).json()["pagina"]["draft"])
+    # publicar também confere: só vai para o ar o rascunho que a tela mostra
+    _salvar(painel, h, p["id"], description=DESC)
+    r = painel.post(f"/ops/api/site/editor/paginas/{p['id']}/publicar", headers=h, json={"rev": rev + 1})
+    assert r.status_code == 409 and site.get("/summer-camp/").status_code == 404
+    r = painel.post(f"/ops/api/site/editor/paginas/{p['id']}/publicar", headers=h, json={"rev": rev + 2})
+    assert r.status_code == 200, r.text
+
+
+def test_titulo_vazio_salva_no_rascunho_e_trava_a_publicacao(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    r = _salvar(painel, h, pid, description=DESC, conteudo={"itens": [_secao(H1, {"id": "t2", "tipo": "titulo", "texto": "", "nivel": 2},
+                                                                                {"id": "b2", "tipo": "botao", "texto": "Go", "link": ""})]})
+    assert r.status_code == 200, r.text
+    assert any("título(s) vazio(s)" in x for x in r.json()["problemas"])
+    assert any("sem texto ou sem link" in x for x in r.json()["problemas"])
+    r = painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h)
+    assert r.status_code == 400 and "vazio" in r.json()["detail"]
+
+
+def test_link_que_nao_passa_fica_o_de_antes_e_volta_o_motivo(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    bt = {"id": "bt9", "tipo": "botao", "texto": "Book", "link": "/contact/"}
+    _salvar(painel, h, pid, conteudo={"itens": [_secao(H1, bt)]})
+    for ruim in ("javascript:alert(1)", "/con tato"):
+        r = _salvar(painel, h, pid, conteudo={"itens": [_secao({**H1, "texto": "Other text kept"}, {**bt, "link": ruim})]})
+        assert r.status_code == 200, "o resto da página salva"
+        assert "link" in r.json()["erros"]["bt9"]
+        d = json.dumps(r.json()["pagina"]["draft"])
+        assert '"link": "/contact/"' in d and "javascript" not in d and "Other text kept" in d
+
+
+def test_desenhar_devolve_so_as_secoes_novas_marcadas(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    p = painel.post("/ops/api/site/editor/paginas", headers=h, json={"base": "/about/"}).json()
+    nova = _secao({"id": "tt1", "tipo": "titulo", "texto": "Meet the team", "nivel": 2})
+    itens = [*p["pagina"]["draft"]["itens"], nova]
+    r = _salvar(painel, h, p["pagina"]["id"], conteudo={"itens": itens}, desenhar=True).json()
+    assert [s["id"] for s in r["secoes"]] == [nova["id"]], "as faixas originais não vão de novo"
+    assert 'data-ed-w="tt1"' in r["secoes"][0]["html"] and r["secoes"][0]["html"].startswith("<section")
+    assert "secoes" not in _salvar(painel, h, p["pagina"]["id"], conteudo={"itens": itens}).json()
+
+
+def test_texto_vindo_da_previa_sai_limpo():
+    """O texto editado na prévia chega como HTML do contenteditable: script e evento somem, <div> vira parágrafo,
+    e o título é sempre texto."""
+    c = ed.limpar({"itens": [_secao(
+        {"id": "x1", "tipo": "texto", "html": '<div>One <b>bold</b></div><div><img src=x onerror="alert(1)">Two</div><script>alert(2)</script>'},
+        {"id": "x2", "tipo": "titulo", "texto": "Hello<br>World<div>x</div>", "nivel": 2},
+        {"id": "x3", "tipo": "lista", "itens": ["<b>Karts</b>", ""]})]}, rascunho=True)
+    html = ed.corpo(c)
+    assert "<p>One <b>bold</b></p><p>Two</p>" in html, html
+    assert "onerror" not in html and "alert" not in html and "<script" not in html
+    assert "Hello&lt;br&gt;World&lt;div&gt;x&lt;/div&gt;" in html and "<br>" not in html
+    assert "<li>&lt;b&gt;Karts&lt;/b&gt;</li>" in html

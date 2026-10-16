@@ -6,6 +6,9 @@
 - Página **nova** ganha o endereço dela (ex.: `/summer-camp/`). Página que **já existe** no site começa com as faixas
   dela como seções originais; publicada, o editor serve aquele endereço. **Voltar ao original** tira a publicação:
   o site volta à página do código, e o rascunho e as versões ficam.
+- **Revisão** (#315): cada rascunho salvo soma 1 em `rev`. O painel manda o `rev` que tem; se outra pessoa salvou
+  antes, o salvar e o publicar recusam (`Conflito`, 409) em vez de um apagar o que o outro fez, e o Publicar só põe no
+  ar o rascunho que a tela está mostrando.
 """
 import hashlib
 import json
@@ -15,6 +18,18 @@ from command_center.db import agora, atualizar, inserir, todos, um
 from command_center.vitrine import editor as ed
 
 ErroEditor = ed.ErroEditor
+
+
+class Conflito(ErroEditor):
+    """#315: o rascunho mudou desde que esta tela o leu (outra pessoa salvou, ou outra aba)."""
+
+
+CONFLITO = "outra pessoa (ou outra aba) salvou esta página agora há pouco: recarregue para ver o que ela fez"
+
+
+def _conferir_rev(p, rev):
+    if rev is not None and int(rev) != int(p.get("rev") or 0):
+        raise Conflito(CONFLITO)
 
 
 def _json(v):
@@ -81,13 +96,17 @@ def criar_de_existente(con, por, caminho, extraido):
                    updated_by=por, updated_at=agora())
 
 
-def salvar(con, por, pid, d, n_originais=0, existe=None):
-    """O rascunho: o modelo validado, o título e a descrição. O endereço de página nova muda só antes de publicar."""
+def salvar(con, por, pid, d, n_originais=0, existe=None, rev=None, erros=None):
+    """O rascunho: o modelo validado, o título e a descrição. O endereço de página nova muda só antes de publicar.
+
+    #315: o rascunho é tolerante (`ed.limpar(..., rascunho=True)`): o que não passa fica como estava e o motivo vai para
+    `erros` ({id do elemento: motivo}). `rev` é a revisão que o painel tem (None: não confere)."""
     p = uma(con, pid)
+    _conferir_rev(p, rev)
     c = {}
     if "conteudo" in d:
-        c["draft"] = json.dumps(ed.limpar(d["conteudo"], com_originais=bool(p["base"]), n_originais=n_originais),
-                                ensure_ascii=False)
+        c["draft"] = json.dumps(ed.limpar(d["conteudo"], com_originais=bool(p["base"]), n_originais=n_originais,
+                                          rascunho=True, anterior=p["draft"], erros=erros), ensure_ascii=False)
     if "title" in d:
         c["title"] = ed._txt(d["title"], 90, "título da aba")
     if "description" in d:
@@ -99,14 +118,20 @@ def salvar(con, por, pid, d, n_originais=0, existe=None):
         if (existe and existe(novo)) or um(con, "SELECT 1 AS x FROM site_pages WHERE path=? AND id<>?", (novo, pid)):
             raise ErroEditor(f"o endereço {novo} já tem uma página: escolha outro")
         c["path"] = novo
-    if c:
-        atualizar(con, "site_pages", pid, **c, updated_by=por, updated_at=agora())
+    if c:      # troca e confere numa operação só: duas gravações com a mesma revisão não passam as duas
+        sets = ", ".join(f"{k} = ?" for k in c)
+        cur = con.execute(f"UPDATE site_pages SET {sets}, rev = rev + 1, updated_by = ?, updated_at = ? WHERE id = ? AND rev = ?",
+                          (*c.values(), por, agora(), pid, int(p.get("rev") or 0)))
+        if cur.rowcount == 0:
+            raise Conflito(CONFLITO)
     return uma(con, pid)
 
 
-def publicar(con, por, pid, conferir):
-    """`conferir(pagina)` devolve os problemas do rascunho (as regras do site). Sem problema: no ar e uma versão nova."""
+def publicar(con, por, pid, conferir, rev=None):
+    """`conferir(pagina)` devolve os problemas do rascunho (as regras do site). Sem problema: no ar e uma versão nova.
+    `rev` (#315): a revisão que a tela mostra; se o rascunho mudou depois, recusa (`Conflito`)."""
     p = uma(con, pid)
+    _conferir_rev(p, rev)
     probs = conferir(p)
     if probs:
         return probs
@@ -136,7 +161,7 @@ def voltar(con, por, pid, vid):
     if not v:
         raise ErroEditor("versão não existe")
     atualizar(con, "site_pages", pid, draft=v["content"], title=v["title"], description=v["description"],
-              updated_by=por, updated_at=agora())
+              rev=int(uma(con, pid).get("rev") or 0) + 1, updated_by=por, updated_at=agora())
     return uma(con, pid)
 
 

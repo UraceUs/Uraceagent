@@ -5,8 +5,17 @@ editar por lá como se fosse realmente um WordPress"*. Decisão: **livre, tipo E
 
 Ver e pré-visualizar é do operador; criar, mudar, publicar e voltar versão é do gerente, tudo auditado. A
 pré-visualização é a página do site de verdade, desenhada do rascunho, num iframe do próprio painel (fora do Google).
+
+#315 (dono, 16/10: *"ele abre uma mini visualização de como é o site público. E dali a pessoa consegue, por ali, clicar
+no que ela precisa editar … É como se fosse um Canva"*): a prévia é a área de trabalho.
+- `previa?editar=1` desenha com os `data-ed-*` e o `editor-previa.css`, sem medição; a política continua a do site
+  (sem script nem estilo inline), só deixando o próprio painel pôr a prévia num iframe.
+- O `PATCH` manda o `rev` que a tela tem (409 se outra pessoa salvou antes) e, com `desenhar`, recebe o HTML das seções
+  novas para trocar só o que mudou, sem recarregar a prévia. O rascunho é tolerante e devolve os `erros` por elemento.
 """
+import re
 import sqlite3
+from html import unescape
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
@@ -41,16 +50,24 @@ def _original(caminho, host):
     return ed.extrair(html) if html else {"secoes": [], "titulo": "", "descricao": "", "ld": [], "scripts": []}
 
 
-def desenhar(pagina, host, conteudo=None, titulo=None, descricao=None, indexar=True):
-    """A página inteira (o `layout` do site): as seções do editor, as originais da página e o JSON-LD."""
+def _orig(p, host):
+    """A página do código que esta reescreve (desenhada uma vez por requisição), ou None numa página nova."""
+    return _original(p["base"], host) if p.get("base") else None
+
+
+def desenhar(pagina, host, conteudo=None, titulo=None, descricao=None, indexar=True, marcar=False, orig=False):
+    """A página inteira (o `layout` do site): as seções do editor, as originais da página e o JSON-LD.
+    `marcar` (#315): a prévia de edição do painel."""
     from command_center.vitrine.paginas import _negocio, layout
     conteudo = conteudo or pagina["conteudo"]
-    orig = _original(pagina["base"], host) if pagina.get("base") else None
-    corpo = ed.corpo(conteudo, _dados(), orig["secoes"] if orig else ())
+    if orig is False:
+        orig = _orig(pagina, host)
+    corpo = ed.corpo(conteudo, _dados(), orig["secoes"] if orig else (), marcar=marcar)
     schemas = list(orig["ld"]) if orig else [_negocio(host)]
     schemas += ed.ld_extra(conteudo)
     return layout(host=host, caminho=pagina["path"], titulo=titulo or pagina["title"], descricao=descricao or pagina["description"],
-                  corpo=corpo, schemas=schemas, scripts=tuple(orig["scripts"]) if orig else (), indexar=indexar)
+                  corpo=corpo, schemas=schemas, scripts=tuple(orig["scripts"]) if orig else (), indexar=indexar,
+                  editando=marcar)
 
 
 def _host(request):
@@ -58,26 +75,16 @@ def _host(request):
     return sorted(vitrine.hosts())[0] if vitrine.hosts() else "novo.urace.us"
 
 
-def _n_originais(p, host):
-    return len(_original(p["base"], host)["secoes"]) if p["base"] else 0
-
-
-def _problemas(p, host):
-    orig = _original(p["base"], host) if p["base"] else None
-    html = ed.corpo(p["draft"], _dados(), orig["secoes"] if orig else ())
-    return ed.problemas(p["draft"], html, p["title"], p["description"])
-
-
-def _saida(p, host):
+def _saida(p, host, orig=False, dados=None):
     """O que o painel recebe: a página, os problemas que impedem publicar e o resumo das seções originais."""
-    orig = _original(p["base"], host) if p["base"] else None
+    if orig is False:
+        orig = _orig(p, host)
     resumo = []
     for s in (orig["secoes"] if orig else []):
-        import re
-        from html import unescape
         t = re.search(r"<h[1-3][^>]*>(.*?)</h[1-3]>", s, re.S)
         resumo.append(unescape(re.sub(r"<[^>]+>", "", t.group(1))).strip()[:80] if t else "")
-    html = ed.corpo(p["draft"], _dados(), orig["secoes"] if orig else ())
+    dados = _dados() if dados is None else dados
+    html = ed.corpo(p["draft"], dados, orig["secoes"] if orig else ())
     return {"pagina": p, "problemas": ed.problemas(p["draft"], html, p["title"], p["description"]), "originais": resumo,
             "previa": f"/ops/api/site/editor/paginas/{p['id']}/previa"}
 
@@ -141,6 +148,12 @@ class SalvarIn(BaseModel):
     title: str | None = None
     description: str | None = None
     path: str | None = None
+    rev: int | None = None           # #315: a revisão que a tela tem (409 se outra pessoa salvou antes)
+    desenhar: bool = False           # #315: devolve o HTML das seções novas para a prévia trocar só o que mudou
+
+
+def _conflito(e):
+    return HTTPException(409, {"motivo": "rev", "mensagem": str(e)})
 
 
 @r.patch("/paginas/{pid}")
@@ -149,21 +162,38 @@ def salvar(pid: int, dados: SalvarIn, request: Request, con: sqlite3.Connection 
     """O rascunho (o painel salva sozinho a cada mudança). Ninguém de fora vê até publicar."""
     from command_center.api import vitrine
     host = _host(request)
+    erros = {}
     try:
         p = es.uma(con, pid)
-        p = es.salvar(con, u["id"], pid, dados.model_dump(exclude_unset=True), _n_originais(p, host),
-                      existe=lambda c: vitrine.existe(c, host))
+        orig = _orig(p, host)
+        p = es.salvar(con, u["id"], pid, dados.model_dump(exclude_unset=True, exclude={"rev", "desenhar"}),
+                      len(orig["secoes"]) if orig else 0, existe=lambda c: vitrine.existe(c, host), rev=dados.rev, erros=erros)
+    except es.Conflito as e:
+        raise _conflito(e)
     except ed.ErroEditor as e:
         raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
     con.commit()
-    return _saida(p, host)
+    d = _dados()
+    out = _saida(p, host, orig, d)
+    out["erros"] = erros
+    if dados.desenhar:      # só as seções novas: as originais não mudam por dentro (movem e escondem na própria prévia)
+        out["secoes"] = [{"id": i, "html": h} for i, h in vitrine._com_o_painel(
+            lambda: ed.partes(p["draft"], d, orig["secoes"] if orig else (), marcar=True)) if not i.startswith("o")]
+    return out
+
+
+class PublicarIn(BaseModel):
+    rev: int | None = None           # #315: publica só se o rascunho for o que a tela mostra
 
 
 @r.post("/paginas/{pid}/publicar")
-def publicar(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+def publicar(pid: int, request: Request, dados: PublicarIn | None = None, con: sqlite3.Connection = Depends(get_db),
+             u=Depends(auth.exige("MANAGER"))):
     host = _host(request)
     try:
-        probs = es.publicar(con, u["id"], pid, lambda p: _problemas(p, host))
+        probs = es.publicar(con, u["id"], pid, lambda p: _saida(p, host)["problemas"], rev=dados.rev if dados else None)
+    except es.Conflito as e:
+        raise _conflito(e)
     except ed.ErroEditor as e:
         raise HTTPException(404, str(e))
     if probs:
@@ -203,15 +233,17 @@ def voltar(pid: int, vid: int, request: Request, con: sqlite3.Connection = Depen
 
 
 @r.get("/paginas/{pid}/previa", include_in_schema=False)
-def previa(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    """O rascunho desenhado como o site mostra, para o iframe do editor. Fora do Google e sem cache."""
+def previa(pid: int, request: Request, editar: int = 0, con: sqlite3.Connection = Depends(get_db),
+           u=Depends(auth.exige("OPERATOR"))):
+    """O rascunho desenhado como o site mostra, para o iframe do editor. Fora do Google e sem cache.
+    `editar=1` (#315): com os marcadores de edição e o CSS do editor, sem medição."""
     from command_center.api import vitrine
     try:
         p = es.uma(con, pid)
     except ed.ErroEditor as e:
         raise HTTPException(404, str(e))
     host = _host(request)
-    html = vitrine._com_o_painel(lambda: desenhar({**p, "conteudo": p["draft"]}, host, indexar=False))
+    html = vitrine._com_o_painel(lambda: desenhar({**p, "conteudo": p["draft"]}, host, indexar=False, marcar=bool(editar)))
     return HTMLResponse(html, headers={
         "Content-Security-Policy": vitrine.csp().replace("frame-ancestors 'none'", "frame-ancestors 'self'"),
         "X-Frame-Options": "SAMEORIGIN", "Cache-Control": "no-store"})

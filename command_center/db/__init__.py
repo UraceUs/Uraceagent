@@ -371,6 +371,9 @@ MIGRACOES = [
     # e o serviço cujo depósito é obrigatório ("o serviço que eu coloquei no checkout ia permitir … sem o security deposit")
     ("store_orders", "stripe_refunded", "REAL"),
     ("booking_services", "deposit_required", "INTEGER"),   # NULL = de antes da caixa: a pós-migração decide uma vez
+    # 16/10 — dono (#315): o editor do site "como um Canva". Cada rascunho salvo soma 1: dois gerentes na mesma página
+    # não apagam o que o outro fez, e o Publicar só põe no ar o que a tela mostra
+    ("site_pages", "rev", "INTEGER NOT NULL DEFAULT 0"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

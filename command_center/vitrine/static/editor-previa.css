@@ -1,0 +1,45 @@
+/* Editor do site (#315), só na prévia de edição do painel (`previa?editar=1`); o site nunca carrega este arquivo.
+ * Dono, 16/10: "ele abre uma mini visualização de como é o site público. E dali a pessoa consegue, por ali, clicar no
+ * que ela precisa editar ... É como se fosse um Canva."
+ * O painel mexe nesta página só com classes e atributos (a política do site não deixa estilo inline):
+ * ed-hover e ed-sel (o contorno), ed-solta-* (onde vai cair), ed-vazio e data-ed-dica (o marcador de vazio),
+ * data-ed-oculto (a faixa escondida), contenteditable (o texto em edição). Motion só em opacity, curto, e desligado
+ * com prefers-reduced-motion. */
+:root { --ed-azul: #0a6cff; --ed-azul-fundo: rgba(10, 108, 255, .10); --ed-erro: #d4351c }
+
+/* tocar e segurar não abre o menu do celular nem seleciona texto; o texto em edição seleciona normalmente */
+html.ed-modo body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none }
+html.ed-modo [contenteditable] { -webkit-user-select: text; user-select: text; cursor: text }
+html.ed-modo [data-ed-w], html.ed-modo [data-ed-s] { cursor: pointer }
+
+.ed-hover { outline: 1px dashed var(--ed-azul); outline-offset: 3px }
+.ed-sel { outline: 2px solid var(--ed-azul); outline-offset: 3px }
+[data-ed-s].ed-hover, [data-ed-s].ed-sel { outline-offset: -3px }
+.ed-erro { outline: 2px solid var(--ed-erro); outline-offset: 3px }
+[contenteditable] { outline: 2px solid var(--ed-azul); outline-offset: 4px; caret-color: var(--ed-azul) }
+[contenteditable]:focus { outline-style: solid }
+
+/* a coluna vazia e o elemento que ainda não tem o que mostrar continuam clicáveis */
+.ed-col:empty { min-height: 72px; border: 1px dashed rgba(127, 127, 140, .55); border-radius: 8px }
+.ed-vazio { min-height: 56px; border: 1px dashed rgba(127, 127, 140, .7); border-radius: 8px; padding: 12px;
+  display: grid; place-items: center; text-align: center; font-size: .92rem; color: inherit }
+figure.ed-vazio { min-height: 140px }
+ul.ed-vazio { display: block; text-align: left; place-items: initial }
+.ed-vazio:empty::before, [data-ed-dica]:empty::before { content: attr(data-ed-dica); opacity: .6 }
+.ed-caixa { display: grid; gap: 16px; min-width: 0 }
+
+/* a faixa escondida: no site some; aqui fica apagada, para dar para mostrar de novo */
+[data-ed-oculto] { opacity: .32 }
+
+/* arrastar e soltar */
+.ed-arrastando { opacity: .4 }
+html.ed-arrasto, html.ed-arrasto * { cursor: grabbing }
+.ed-solta-antes { box-shadow: 0 -4px 0 0 var(--ed-azul) }
+.ed-solta-depois { box-shadow: 0 4px 0 0 var(--ed-azul) }
+[data-ed-s].ed-solta-antes { box-shadow: inset 0 6px 0 0 var(--ed-azul) }
+[data-ed-s].ed-solta-depois { box-shadow: inset 0 -6px 0 0 var(--ed-azul) }
+.ed-solta-dentro { outline: 2px dashed var(--ed-azul); outline-offset: 2px; background-color: var(--ed-azul-fundo) }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ed-arrastando, [data-ed-oculto] { transition: opacity 120ms cubic-bezier(.2, .7, .2, 1) }
+}
