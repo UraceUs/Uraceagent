@@ -2207,12 +2207,13 @@ def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, na
     # #310: a desligada pelo closer — o aviso e o botão na ficha, e o Liberar na linha do acompanhamento
     abrir(g, servidor, f"/sales/{oid2}")
     g.get_by_text("Invoice desligada no fechamento, com valor fora da tabela.").wait_for()
-    assert g.get_by_role("button", name="Liberar invoice", exact=True).first.bounding_box()["height"] >= 40, "alvo de toque"
+    # alvo de toque: a altura do layout (a janela abre com uma escala curta, que a caixa medida pegaria)
+    assert g.get_by_role("button", name="Liberar invoice", exact=True).first.evaluate("b => b.offsetHeight") >= 40
     g.get_by_role("button", name="Fechar venda", exact=True).click()
     acomp = g.locator(".modal", has=g.get_by_role("heading", name="Acompanhamento do fechamento"))
     acomp.wait_for()
     linha = acomp.get_by_role("button", name="Liberar invoice", exact=True)
-    assert linha.bounding_box()["height"] >= 40, "alvo de toque"
+    assert linha.evaluate("b => b.offsetHeight") >= 40, "alvo de toque"
     linha.click()
     modal = g.locator(".modal", has=g.get_by_role("heading", name="Liberar invoice", level=3))
     modal.wait_for()
