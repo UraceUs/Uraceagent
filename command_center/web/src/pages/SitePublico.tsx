@@ -399,6 +399,80 @@ function Servicos() {
   </div>
 }
 
+/* Cartões das páginas (#297, parte 2). Dono, 16/10: "os serviços que estão lá em cada página, a gente consiga
+ * alterar o valor, alterar o nome, alterar as coisas ali pelo Command Center". Os cartões de preço da Academy, do
+ * Pro Team e do For Beginners: editar, criar, esconder (não apaga) e mudar a ordem. */
+interface Cartao { id: number; page: string; grp: string | null; title: string; subtitle: string | null; body: string | null
+  price: string | null; per: string | null; link: string | null; button: string | null; active: number; sort: number }
+const CAMPOS_CARTAO: [keyof Cartao, string, string][] = [['grp', 'Grupo', 'opcional'], ['title', 'Título', ''], ['subtitle', 'Subtítulo', 'opcional'],
+  ['price', 'Preço', 'texto do cartão'], ['per', 'Embaixo do preço', 'ex.: per month'], ['link', 'Link do botão', 'ex.: /contact/'], ['button', 'Texto do botão', 'ex.: Choose']]
+function Cartoes() {
+  const { can } = useAuth()
+  const gerente = can('MANAGER')
+  const toast = useToast()
+  const l = useGet<{ cartoes: Cartao[]; paginas: Record<string, string>; preco_kart: number }>('/site/cartoes')
+  const [edit, setEdit] = useState<Record<number, Partial<Cartao>>>({})
+  const [novo, setNovo] = useState<Partial<Cartao>>({ page: 'academy', title: '', price: '' })
+  if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
+  if (!l.data) return <Loading />
+  const { cartoes, paginas } = l.data
+  const muda = (id: number, x: Partial<Cartao>) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  async function salvar(c: Cartao, extra?: Partial<Cartao>) {
+    const corpo = { ...edit[c.id], ...extra }
+    try { await api.patch(`/site/cartoes/${c.id}`, corpo); toast(tr("Salvo: a página do site já mostra."), 'ok')
+      setEdit(x => { const y = { ...x }; delete y[c.id]; return y }); l.reload() }
+    catch (er) { toast((er as ApiError).message, 'crit') }
+  }
+  async function mover(c: Cartao, lista: Cartao[], passo: number) {
+    const i = lista.indexOf(c), o = lista[i + passo]
+    if (!o) return
+    try { await api.patch(`/site/cartoes/${c.id}`, { sort: o.sort }); await api.patch(`/site/cartoes/${o.id}`, { sort: c.sort === o.sort ? c.sort + passo : c.sort }); l.reload() }
+    catch (er) { toast((er as ApiError).message, 'crit') }
+  }
+  async function criar() {
+    try { await api.post('/site/cartoes', novo); toast(tr("Cartão criado: já aparece na página."), 'ok'); setNovo({ page: novo.page, title: '', price: '' }); l.reload() }
+    catch (er) { toast((er as ApiError).message, 'crit') }
+  }
+  const NOMES: Record<string, string> = { academy: 'Academy', 'pro-team': 'Pro Team', 'for-beginners': 'For Beginners' }
+  return <div className="stack" style={{ gap: 18 }}>
+    <p className="small muted" style={{ margin: 0 }}>{tr("No preço, {kart} vira o menor preço de kart do painel (hoje {0}); {academy} e {boost}, o plano do painel. Esconder tira da página sem apagar. Página sem cartão ativo volta ao texto de sempre.", `$${l.data.preco_kart}`)}</p>
+    {Object.keys(paginas).map(pg => {
+      const lista = cartoes.filter(c => c.page === pg)
+      return <Section key={pg} title={NOMES[pg] || pg} count={lista.filter(c => c.active).length}
+        right={<a className="btn sm ghost" href={paginas[pg]} target="_blank" rel="noreferrer">{tr("Ver no site ↗")}</a>}>
+        <div className="stack" style={{ gap: 10 }}>{lista.map(c => {
+          const e = edit[c.id] || {}
+          return <div key={c.id} className="card card-b" data-cartao={c.id}>
+            <div className="site-servico">
+              {CAMPOS_CARTAO.map(([k, rot, dica]) => <label key={k} className="fld"><span>{tr(rot)} {dica && <i>{tr(dica)}</i>}</span>
+                <input value={String(e[k] ?? c[k] ?? '')} disabled={!gerente} onChange={x => muda(c.id, { [k]: x.target.value })} /></label>)}
+              <label className="fld" style={{ gridColumn: '1 / -1' }}><span>{tr("Texto")}</span>
+                <textarea rows={3} value={e.body ?? c.body ?? ''} disabled={!gerente} onChange={x => muda(c.id, { body: x.target.value })} /></label>
+              {gerente && <div className="row wrap" style={{ gap: 6 }}>
+                <button className="btn sm primary" disabled={!edit[c.id]} onClick={() => salvar(c)}>{tr("Salvar")}</button>
+                <button className="btn sm ghost" onClick={() => salvar(c, { active: c.active ? 0 : 1 })}>{c.active ? tr("Esconder") : tr("Mostrar")}</button>
+                <button className="btn sm ghost" aria-label={tr("Subir")} disabled={lista.indexOf(c) === 0} onClick={() => mover(c, lista, -1)}>↑</button>
+                <button className="btn sm ghost" aria-label={tr("Descer")} disabled={lista.indexOf(c) === lista.length - 1} onClick={() => mover(c, lista, 1)}>↓</button></div>}
+            </div>
+            {!c.active && <div className="small muted" style={{ marginTop: 6 }}><Chip tone="neutral">{tr("escondido")}</Chip></div>}
+          </div>
+        })}</div>
+      </Section>
+    })}
+    {gerente && <Section title={tr("Novo cartão")}>
+      <div className="card card-b"><div className="site-servico">
+        <label className="fld"><span>{tr("Página")}</span><select value={novo.page} onChange={x => setNovo({ ...novo, page: x.target.value })}>
+          {Object.keys(paginas).map(pg => <option key={pg} value={pg}>{NOMES[pg] || pg}</option>)}</select></label>
+        {CAMPOS_CARTAO.map(([k, rot, dica]) => <label key={k} className="fld"><span>{tr(rot)} {dica && <i>{tr(dica)}</i>}</span>
+          <input value={String(novo[k] ?? '')} onChange={x => setNovo({ ...novo, [k]: x.target.value })} /></label>)}
+        <label className="fld" style={{ gridColumn: '1 / -1' }}><span>{tr("Texto")}</span>
+          <textarea rows={3} value={novo.body ?? ''} onChange={x => setNovo({ ...novo, body: x.target.value })} /></label>
+        <button className="btn sm primary" disabled={!novo.title} onClick={criar}>{tr("Criar")}</button>
+      </div></div>
+    </Section>}
+  </div>
+}
+
 /* Pedidos do site (#236, #245): carrinho e loja em todo estado do Stripe (pago, processando, falhou,
  * expirou, no checkout), cada um com o link da página do pedido para mandar ao cliente. */
 interface PedidoLista { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; criado_em: string
@@ -594,11 +668,12 @@ export function SitePublico() {
       <NavLink to="/site" end className={({ isActive }) => isActive ? 'on' : ''}>{tr("Agendamentos")}</NavLink>
       <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Disponibilidade")}</NavLink>
       <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Serviços e preços")}</NavLink>
+      <NavLink to="/site/cartoes" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Cartões das páginas")}</NavLink>
       <NavLink to="/site/pedidos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Pedidos do site")}</NavLink>
       <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Contas de clientes")}</NavLink>
       {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Waiver")}</NavLink>}
     </div>
-    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'contas' ? <Contas /> : aba === 'pedidos' ? <Pedidos />
+    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'cartoes' ? <Cartoes /> : aba === 'contas' ? <Contas /> : aba === 'pedidos' ? <Pedidos />
       : aba === 'waiver' && can('MANAGER') ? <WaiverNativa /> : <Agendamentos />}
   </>
 }

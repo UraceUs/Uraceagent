@@ -61,14 +61,15 @@ def cartao_do_site(s):
             "proprio": bool(k.get("proprio")) if proprio is None else bool(proprio)}
 
 
-def para_cliente(con):
+def para_cliente(con, cartao=False):
     """O que a área do cliente mostra para marcar sessão: nome, descrição e preço. Nada do QuickBooks.
 
     `site_kart` (#263) é a chave do kart do site que este serviço vende: é por ela que a página do
-    Arrive and Drive e a reserva acham o serviço do kart escolhido — nunca pelo nome. #297: com o cartão
-    que o site mostra (nome no site, linha de baixo, aviso, kart próprio), tudo do painel."""
+    Arrive and Drive e a reserva acham o serviço do kart escolhido — nunca pelo nome. #297: `cartao=True`
+    (a página do site) traz também o cartão que o site mostra — nome no site, linha de baixo, aviso, kart próprio."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
-             "deposit": s["deposit"] or 0, "site_kart": s["site_kart"], "sort": s["sort"], **cartao_do_site(s)}
+             "deposit": s["deposit"] or 0, "site_kart": s["site_kart"],
+             **({"sort": s["sort"], **cartao_do_site(s)} if cartao else {})}
             for s in lista(con, True) if (s["kind"] or "session") == "session"]
 
 

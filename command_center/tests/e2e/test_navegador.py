@@ -40,7 +40,7 @@ def codigo_do_email(para):
 ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
-         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos",
+         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
          "/site/waiver", "/site/pedidos", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -2739,4 +2739,34 @@ def test_o_gerente_muda_o_nome_do_kart_no_painel_e_o_site_mostra(servidor, naveg
     finally:
         g.request.patch(servidor + f"/api/site/servicos/{do_4t['id']}", headers=csrf,
                         data={"site_title": do_4t["site_title"], "site_subtitle": do_4t["site_subtitle"]})
+        g.close()
+
+
+def test_o_gerente_muda_um_cartao_da_pagina_e_o_site_mostra(servidor, navegador):
+    """#297, parte 2: Site público › Cartões das páginas, no celular. O cartão do For Beginners muda de título e de
+    botão, e a página mostra; o preço {kart} é o do painel."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    csrf = _csrf(g)
+    d = g.request.get(servidor + "/api/site/cartoes").json()
+    alvo = next(c for c in d["cartoes"] if c["page"] == "for-beginners" and c["title"] == "Racing Team")
+    try:
+        abrir(g, servidor, "/site/cartoes")
+        g.get_by_role("heading", name="For Beginners", exact=False).first.wait_for()
+        cartao = g.locator(f'[data-cartao="{alvo["id"]}"]')
+        cartao.get_by_label("Título", exact=True).fill("Racing Team e2e")
+        cartao.get_by_label("Texto do botão").fill("Join the team")
+        cartao.get_by_role("button", name="Salvar").click()
+        g.get_by_text("Salvo: a página do site já mostra.").wait_for()
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v = navegador.new_page(viewport={"width": 390, "height": 844})
+        v.goto(site + "/for-beginners/")
+        v.get_by_role("heading", name="Racing Team e2e", level=3).wait_for()
+        assert v.get_by_role("link", name="Join the team").count() == 1
+        assert f"${d['preco_kart']:g}" in v.locator(".planos").inner_text().replace(",", ""), "o {kart} é o preço do painel"
+        v.close()
+    finally:
+        g.request.patch(servidor + f"/api/site/cartoes/{alvo['id']}", headers=csrf,
+                        data={"title": alvo["title"], "button": alvo["button"]})
         g.close()

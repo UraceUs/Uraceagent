@@ -16,7 +16,7 @@ from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
 from command_center.vitrine import dica, idioma, medicao
-from command_center.vitrine.paginas import PORTAL, _lista, _negocio, estatico, layout, usd
+from command_center.vitrine.paginas import PORTAL, PRECO_KART, _lista, _negocio, estatico, layout, preco_kart, usd  # noqa: F401
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
 
@@ -187,7 +187,7 @@ def servico(host, d):
         partes.append(_passos(d["passos_titulo"], d["passos"], d.get("passos_intro")))
     if d.get("investimento"):          # o preço por piloto é o do Arrive and Drive (KARTS), não texto fixo
         partes.append(f"""<section class="faixa vermelha" aria-labelledby="h-inv"><div class="largura centro">
-  <h2 id="h-inv">Investment</h2><p class="preco-grande">{e(d['investimento'].format(preco=usd(C.preco_minimo())))}</p></div></section>""")
+  <h2 id="h-inv">Investment</h2><p class="preco-grande">{e(d['investimento'].format(preco=usd(preco_kart())))}</p></div></section>""")
     partes.append(f"""<section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita">
   <h2 id="h-faq">Frequently Asked Questions</h2>{_faq(d['faq'])}</div></section>""")
     partes.append(_local())
@@ -205,7 +205,7 @@ def hub(host):
     d = S.HUB
     # preço só onde o sistema tem o valor: "kart" é o menor preço do Arrive and Drive (KARTS)
     def preco(pr):
-        return f"<em>Starting at {usd(C.preco_minimo())}</em>" if pr == "kart" else ""
+        return f"<em>Starting at {usd(preco_kart())}</em>" if pr == "kart" else ""
     cards = "".join(f"""<a class="servico-card" href="{e(h)}"><img src="{estatico('img/' + f)}" alt="" width="640" height="400" loading="lazy">
   <span class="servico-txt"><strong>{e(t)}</strong><span>{e(p)}</span>{preco(pr)}</span></a>""" for t, p, pr, h, f in d["cartoes"])
     corpo = f"""<section class="hero hero-servico hero-hub"><div class="hero-in">
@@ -232,11 +232,40 @@ def _planos(planos, assunto="academy"):
     recorrente do QuickBooks): o botão abre o contato com o plano já escrito."""
     cards = []
     for nome, sub, texto, preco, por, *resto in planos:
-        href = resto[0] if resto else f"/contact/?assunto={assunto}&produto={quote(nome)}"
-        valor = f'<p class="plano-preco"><strong>{e(preco)}</strong><span>{e(por)}</span></p>' if preco else ""
-        cards.append(f"""<article class="plano"><h3>{e(nome)}</h3><p class="plano-sub">{e(sub)}</p><p>{e(texto)}</p>
-  {valor}<a class="btn btn-sm" href="{e(href)}">Choose</a></article>""")
+        href = (resto[0] if resto else None) or f"/contact/?assunto={assunto}&produto={quote(nome)}"
+        botao = (resto[1] if len(resto) > 1 else None) or "Choose"
+        valor = f'<p class="plano-preco"><strong>{e(preco)}</strong><span>{e(por or "")}</span></p>' if preco else ""
+        cards.append(f"""<article class="plano"><h3>{e(nome)}</h3><p class="plano-sub">{e(sub or "")}</p><p>{e(texto or "")}</p>
+  {valor}<a class="btn btn-sm" href="{e(href)}">{e(botao)}</a></article>""")
     return f'<div class="planos">{"".join(cards)}</div>'
+
+
+def _marcas(planos=None):
+    """Os valores do painel que as marcas do preço de um cartão viram: {kart}, {academy}, {boost}."""
+    return {"kart": usd(preco_kart()), "academy": _preco_plano(planos, "academy"), "boost": _preco_plano(planos, "boost")}
+
+
+def _dos_cartoes(cartoes, planos=None):
+    """Os cartões do painel (`site_offers`) como os planos que `_planos` desenha, já com as marcas trocadas."""
+    from command_center.providers.cartoes_site import com_marcas
+    v = _marcas(planos)
+    return [(c["title"], c["subtitle"], c["body"], com_marcas(c["price"], v), c["per"], c["link"], c["button"], c["grp"])
+            for c in cartoes]
+
+
+def _grupos_dos_cartoes(cartoes, planos=None, assunto="academy"):
+    """Os cartões em grupos, na ordem do painel (o grupo aparece quando o primeiro cartão dele aparece)."""
+    grupos = []
+    for c in _dos_cartoes(cartoes, planos):
+        if not grupos or grupos[-1][0] != c[7]:
+            grupos.append((c[7], []))
+        grupos[-1][1].append(c[:7])
+    return "".join((f'<h3 class="mt">{e(g)}</h3>' if g else "") + _planos(cs, assunto) for g, cs in grupos)
+
+
+def _preco_numero(t):
+    m = re.fullmatch(r"\$?\s*([\d,]+(?:\.\d{1,2})?)", (t or "").strip())
+    return f"{float(m.group(1).replace(',', '')):.2f}" if m else None
 
 
 def _planos_da_planilha(grupos):
@@ -269,7 +298,9 @@ def _planos_do_painel(planos):
     return html
 
 
-def academy(host, planos=None):
+def academy(host, planos=None, cartoes=None):
+    """#297: sem plano do painel que se vende pelo site, os cartões são os do painel (`site_offers`), e só sem
+    eles a planilha de sempre."""
     d = P.ACADEMY
     etapas = "".join(f"""<article class="etapa-card"><img src="{estatico('img/' + f)}" alt="" width="64" height="64" loading="lazy"><h3>{e(t)}</h3><p>{e(p)}</p></article>""" for t, p, f in d["etapas"])
     corpo = f"""{_hero(d)}
@@ -278,7 +309,7 @@ def academy(host, planos=None):
   <img src="{estatico('img/' + d['foto'])}" alt="URACE Academy coaching" width="800" height="600" loading="lazy" class="foto-redonda">
 </div></section>
 <section class="faixa escura" aria-labelledby="h-planos"><div class="largura">
-  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else _planos_da_planilha(d['planos_grupos'])}
+  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else (_grupos_dos_cartoes(cartoes, planos) if cartoes else _planos_da_planilha(d['planos_grupos']))}
 </div></section>
 <section class="faixa clara" aria-labelledby="h-quem"><div class="largura duas">
   <div><h2 id="h-quem">{e(d['para_quem_titulo'])}</h2>{_lista(d['para_quem'])}</div>
@@ -308,6 +339,10 @@ def academy(host, planos=None):
               # #273: as ofertas do Google são as mesmas da tela — do painel, quando há plano cadastrado
               "offers": ([{"@type": "Offer", "name": f"Academy — {p['name']}", "price": f"{p['price']:.2f}",
                            "priceCurrency": "USD", "url": f"https://{host}{d['caminho']}"} for p in planos] if planos else
+                         # #297: os cartões do painel, os que têm preço em número
+                         [{"@type": "Offer", "name": f"Academy — {(c[7] or '').split(' · ')[0]} — {c[0]}".replace("—  —", "—"),
+                           "price": _preco_numero(c[3]), "priceCurrency": "USD", "url": f"https://{host}{d['caminho']}"}
+                          for c in _dos_cartoes(cartoes) if _preco_numero(c[3])] if cartoes else
                          [{"@type": "Offer", "name": f"Academy — {grupo.split(' · ')[0]} — {n}",
                            "price": pr.replace("$", "").replace(",", ""), "priceCurrency": "USD",
                            "url": f"https://{host}{d['caminho']}"}
@@ -326,10 +361,12 @@ def _preco_plano(planos, qual):
     return usd(outros[0]["price"]) if outros else ""
 
 
-def pro_team(host, planos=None):
+def pro_team(host, planos=None, cartoes=None):
     d = P.PRO_TEAM
-    opcoes = [(n, s, t, _preco_plano(planos, pr) if pr in ("academy", "boost") else pr, por, h)
-              for n, s, t, pr, por, h in d["opcoes"]]
+    # #297: as opções são os cartões do painel, quando há; {academy}/{boost} no preço viram o plano do painel
+    opcoes = ([c[:7] for c in _dos_cartoes(cartoes, planos)] if cartoes else
+              [(n, s, t, _preco_plano(planos, pr) if pr in ("academy", "boost") else pr, por, h)
+               for n, s, t, pr, por, h in d["opcoes"]])
     suporte = "".join(f"<article class='cartao'><h3>{e(t)}</h3>{f'<p>{e(p)}</p>' if p else ''}</article>" for t, p in d['suporte'])
     corpo = f"""{_hero(d)}
 <section class="faixa clara" aria-labelledby="h-metodo"><div class="largura estreita"><h2 id="h-metodo">{e(d['suporte_titulo'])}</h2><p>{e(d['metodo'])}</p>
@@ -347,12 +384,18 @@ def pro_team(host, planos=None):
                   schemas=(_negocio(host), equipe, _trilha(host, ("Racing Team", d["caminho"]))), foto=d["foto"])
 
 
-def beginners(host):
+def beginners(host, cartoes=None):
     d = P.BEGINNERS
-    def preco(pr):            # "kart": o menor preço do Arrive and Drive (KARTS); os outros não têm preço no sistema
-        return f'<p class="plano-preco"><span>Starting at</span><strong>{usd(C.preco_minimo())}</strong></p>' if pr == "kart" else ""
-    cards = "".join(f"""<article class="plano"><h3>{e(n)}</h3><p class="plano-sub">{e(s)}</p><p>{e(t)}</p>{preco(pr)}<a class="btn btn-sm" href="{e(h)}">{e(b)}</a></article>"""
-                    for n, s, t, pr, h, b in d["proximo"])
+    def preco(pr):            # "kart": o menor preço do Arrive and Drive (do painel); os outros não têm preço no sistema
+        return f'<p class="plano-preco"><span>Starting at</span><strong>{usd(preco_kart())}</strong></p>' if pr == "kart" else ""
+    if cartoes:               # #297: os cartões do painel; o "por" vem antes do preço (ex.: "Starting at $719")
+        cards = "".join(f"""<article class="plano"><h3>{e(n)}</h3><p class="plano-sub">{e(s or '')}</p><p>{e(t or '')}</p>"""
+                        + (f'<p class="plano-preco"><span>{e(por or "")}</span><strong>{e(pr)}</strong></p>' if pr else "")
+                        + f'<a class="btn btn-sm" href="{e(h or "/contact/")}">{e(b or "Learn more")}</a></article>'
+                        for n, s, t, pr, por, h, b in (c[:7] for c in _dos_cartoes(cartoes)))
+    else:
+        cards = "".join(f"""<article class="plano"><h3>{e(n)}</h3><p class="plano-sub">{e(s)}</p><p>{e(t)}</p>{preco(pr)}<a class="btn btn-sm" href="{e(h)}">{e(b)}</a></article>"""
+                        for n, s, t, pr, h, b in d["proximo"])
     corpo = f"""{_hero(d)}
 <section class="faixa clara" aria-labelledby="h-primeira"><div class="largura estreita"><h2 id="h-primeira">{e(d['primeira_titulo'])}</h2>{_ps(d['primeira'])}</div></section>
 <section class="faixa escura" aria-labelledby="h-contato"><div class="largura estreita"><h2 id="h-contato">{e(d['contato_titulo'])}</h2>{_ps(d['contato'])}

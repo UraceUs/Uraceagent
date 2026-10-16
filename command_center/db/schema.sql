@@ -1735,6 +1735,28 @@ CREATE TABLE IF NOT EXISTS booking_services (
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- #297 (dono, 16/10): os cartões de preço das páginas do site (Academy, Pro Team, For Beginners), editados no
+-- painel. `seed_key` marca os cartões que vieram do texto de hoje (entram uma vez); os criados no painel têm NULL.
+-- O preço é o texto que o cartão mostra; {kart}, {academy} e {boost} viram o valor do painel, ao vivo.
+CREATE TABLE IF NOT EXISTS site_offers (
+  id           INTEGER PRIMARY KEY,
+  seed_key     TEXT UNIQUE,
+  page         TEXT NOT NULL,                       -- academy | pro-team | for-beginners
+  grp          TEXT,                                -- o grupo (Academy: "4-stroke and Baby Kart · $689 per session")
+  title        TEXT NOT NULL,
+  subtitle     TEXT,
+  body         TEXT,
+  price        TEXT,
+  per          TEXT,
+  link         TEXT,
+  button       TEXT,
+  active       INTEGER NOT NULL DEFAULT 1,
+  sort         INTEGER NOT NULL DEFAULT 0,
+  updated_by   INTEGER REFERENCES users(id),
+  updated_at   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
 -- #85: os modelos de waiver que a assinatura nativa usa. O PDF vem do DocuSign como está
 -- (o texto legal não é redigitado); o hash prova qual versão cada cliente assinou.
 CREATE TABLE IF NOT EXISTS waiver_templates (

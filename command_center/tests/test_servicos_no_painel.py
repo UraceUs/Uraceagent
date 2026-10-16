@@ -131,3 +131,70 @@ def test_o_teste_de_um_dolar_fecha_o_checkout_do_stripe_em_um_dolar(loja):  # no
 
 def _ld(html):
     return [json.loads(m) for m in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)]
+
+
+# ------------------------------------------------------------------ parte 2: os cartões das outras páginas
+from command_center.providers import cartoes_site as cs  # noqa: E402
+
+
+def _cartao_de(con, pagina, titulo):
+    return um(con, "SELECT * FROM site_offers WHERE page=? AND title=?", (pagina, titulo))
+
+
+def test_os_cartoes_de_hoje_entram_uma_vez_e_nao_sao_sobrescritos(loja):  # noqa: F811
+    cli, con, st, qbo, tmp, sid = loja
+    contagem = {r["page"]: r["n"] for r in con.execute("SELECT page, COUNT(*) AS n FROM site_offers GROUP BY page")}
+    assert contagem == {"academy": 8, "pro-team": 2, "for-beginners": 3}, contagem
+    c = _cartao_de(con, "academy", "6-month contract")
+    cs.mudar(con, None, c["id"], {"price": "$9,999.00", "active": False})
+    con.commit()
+    aplicar_schema(con)
+    aplicar_schema(con)
+    assert con.execute("SELECT COUNT(*) FROM site_offers").fetchone()[0] == 13, "nada é recriado"
+    c = um(con, "SELECT * FROM site_offers WHERE id=?", (c["id"],))
+    assert (c["price"], c["active"]) == ("$9,999.00", 0), "o que a equipe mudou fica"
+
+
+def test_a_academy_mostra_os_cartoes_do_painel(loja):  # noqa: F811
+    cli, con, st, qbo, tmp, sid = loja
+    html = cli.get("/academy/").text
+    assert "$2,756" in html and "No contract" in html, "o texto de hoje, agora do painel"
+    c = _cartao_de(con, "academy", "No contract")
+    cs.mudar(con, None, c["id"], {"title": "Monthly, no contract", "price": "$2,500", "body": "Cancel any time."})
+    outro = _cartao_de(con, "academy", "12-month contract")
+    cs.mudar(con, None, outro["id"], {"active": False})
+    con.commit()
+    html = cli.get("/academy/").text
+    assert "Monthly, no contract" in html and "$2,500" in html and "Cancel any time." in html
+    assert html.count("<h3>12-month contract</h3>") == 1, "escondido: sai de um grupo, o outro grupo continua com o seu"
+    ofertas = [o for x in _ld(html) if x.get("@type") == "Service" for o in x.get("offers", [])]
+    assert any(o["price"] == "2500.00" for o in ofertas), "o Google vê o preço do painel"
+
+
+def test_cartao_novo_aparece_e_o_preco_do_kart_e_o_do_painel_ao_vivo(loja):  # noqa: F811
+    cli, con, st, qbo, tmp, sid = loja
+    cs.criar(con, None, {"page": "for-beginners", "title": "Sim 2 Grid", "subtitle": "Start in the simulator.",
+                         "price": "{kart}", "per": "Starting at", "link": "/services/", "button": "See the sim"})
+    sv.mudar(con, None, sid, {"price": "650"})              # o 4-stroke fica o kart mais barato
+    con.commit()
+    html = cli.get("/for-beginners/").text
+    assert "Sim 2 Grid" in html and "See the sim" in html
+    assert html.count("<span>Starting at</span><strong>$650</strong>") == 2, "o Arrive & Drive e o novo, com o preço do painel"
+    assert "Starting at $650" in cli.get("/services/").text, "o hub também"
+    assert "$650 per racing participant" in cli.get("/services/birthday-party/").text, "e o Investment dos eventos"
+    assert "$719" not in cli.get("/services/birthday-party/").text
+
+
+@pytest.mark.parametrize("link", ["javascript:alert(1)", "data:text/html,x", "http://site.com", "/x\"><script>"])
+def test_link_do_cartao_so_do_site_ou_https(loja, link):  # noqa: F811
+    cli, con, st, qbo, tmp, sid = loja
+    with pytest.raises(cs.ErroCartao):
+        cs.criar(con, None, {"page": "academy", "title": "Plano", "link": link})
+
+
+def test_pagina_sem_cartao_ativo_volta_ao_texto_de_sempre(loja):  # noqa: F811
+    cli, con, st, qbo, tmp, sid = loja
+    con.execute("UPDATE site_offers SET active=0 WHERE page='pro-team'")
+    con.commit()
+    html = cli.get("/pro-team/").text
+    assert "Race Weekend Support" in html, "a página não fica vazia: cai no texto de conteudo_paginas"

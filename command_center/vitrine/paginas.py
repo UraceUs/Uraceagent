@@ -11,10 +11,21 @@ fora do topo; enquanto o site é prévia (`CC_SITE_PREVIEW`), `noindex`.
 import hashlib
 import json
 import os
+from contextvars import ContextVar
 from html import escape
 
 from command_center.vitrine import conteudo as C, dica
 from command_center.vitrine import medicao
+
+# #297, parte 2 (dono, 16/10: "alterar o valor, alterar o nome … pelo Command Center"): o "a partir de" do site é o
+# menor preço de kart do PAINEL, posto a cada página pela rota (`api/vitrine.pagina`); fora dela (banco fora,
+# página solta nos testes), o de `conteudo.KARTS`.
+PRECO_KART = ContextVar("preco_kart", default=None)
+
+
+def preco_kart():
+    v = PRECO_KART.get()
+    return C.preco_minimo() if v is None else v
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
 PORTAL = "/ops/portal"
@@ -197,7 +208,7 @@ def home(host):
     # o preço do Arrive and Drive é o de KARTS, o mesmo que a página e a reserva mostram
     servicos = "".join(
         f'<article class="card-servico"><h3>{e(s["nome"])}</h3><p>{e(s["texto"])}</p>'
-        + (f'<p class="preco">Starting at {usd(C.preco_minimo())}</p>' if s.get("preco_kart") else "")
+        + (f'<p class="preco">Starting at {usd(preco_kart())}</p>' if s.get("preco_kart") else "")
         + f'<a class="seta" href="{e(s["link"])}">See {e(s["nome"])}</a></article>'
         for s in h["servicos"])
     depo = "".join(f'<blockquote><p>{e(t)}</p><footer>{e(n)}{(" · " + e(c)) if c else ""}</footer></blockquote>'
