@@ -368,3 +368,15 @@ def test_texto_vindo_da_previa_sai_limpo():
     assert "onerror" not in html and "alert" not in html and "<script" not in html
     assert "Hello&lt;br&gt;World&lt;div&gt;x&lt;/div&gt;" in html and "<br>" not in html
     assert "<li>&lt;b&gt;Karts&lt;/b&gt;</li>" in html
+
+
+def test_endereco_que_nao_passa_nao_trava_o_resto_do_rascunho(amb):
+    """#315: o painel salva sozinho enquanto se escreve o endereço; o endereço pela metade fica o de antes, volta o
+    motivo, e o que mudou na página salva do mesmo jeito."""
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    r = _salvar(painel, h, pid, path="/summer camp/", conteudo={"itens": [_secao({**H1, "texto": "Saved anyway"})]})
+    assert r.status_code == 200, r.text
+    assert "endereço" in r.json()["erros"]["pagina"] and r.json()["pagina"]["path"] == "/summer-camp/"
+    assert "Saved anyway" in json.dumps(r.json()["pagina"]["draft"])

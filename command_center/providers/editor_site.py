@@ -107,17 +107,33 @@ def salvar(con, por, pid, d, n_originais=0, existe=None, rev=None, erros=None):
     if "conteudo" in d:
         c["draft"] = json.dumps(ed.limpar(d["conteudo"], com_originais=bool(p["base"]), n_originais=n_originais,
                                           rascunho=True, anterior=p["draft"], erros=erros), ensure_ascii=False)
-    if "title" in d:
-        c["title"] = ed._txt(d["title"], 90, "título da aba")
-    if "description" in d:
-        c["description"] = ed._txt(d["description"], 200, "descrição")
-    if "path" in d and d["path"] != p["path"]:
+    def pagina(nome, fazer):     # #315: no painel (com `erros`), o dado da página que não passa fica como estava
+        try:
+            v = fazer()
+        except ErroEditor as e:
+            if erros is None:
+                raise
+            erros["pagina"] = str(e)
+            return
+        if v is not None:
+            c[nome] = v
+
+    def endereco():
+        if d["path"] == p["path"]:
+            return None
         if p["base"] or p["published"] is not None:
             raise ErroEditor("o endereço não muda depois de publicada (o Google e quem salvou o link perderiam a página)")
         novo = ed.caminho_novo(d["path"])
         if (existe and existe(novo)) or um(con, "SELECT 1 AS x FROM site_pages WHERE path=? AND id<>?", (novo, pid)):
             raise ErroEditor(f"o endereço {novo} já tem uma página: escolha outro")
-        c["path"] = novo
+        return novo
+
+    if "title" in d:
+        pagina("title", lambda: ed._txt(d["title"], 90, "título da aba"))
+    if "description" in d:
+        pagina("description", lambda: ed._txt(d["description"], 200, "descrição"))
+    if "path" in d:
+        pagina("path", endereco)
     if c:      # troca e confere numa operação só: duas gravações com a mesma revisão não passam as duas
         sets = ", ".join(f"{k} = ?" for k in c)
         cur = con.execute(f"UPDATE site_pages SET {sets}, rev = rev + 1, updated_by = ?, updated_at = ? WHERE id = ? AND rev = ?",
