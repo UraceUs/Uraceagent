@@ -3,7 +3,8 @@ type: learning
 category: pattern
 topic: preco-antes-da-classificacao
 priority: medium
-status: approved
+status: archived
+substituido_por: salesagent/instructions/urace-sales-agent.md (playbook 13/10)
 source: conversa_real
 last_updated: 2026-08-25
 tags: [aprendizado, preco, classificacao]

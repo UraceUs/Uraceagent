@@ -3,7 +3,8 @@ type: sales_knowledge
 category: objection
 topic: objecoes-e-respostas
 priority: high
-status: approved
+status: archived
+substituido_por: salesagent/instructions/urace-sales-agent.md (playbook 13/10)
 source: internal
 last_updated: 2026-08-25
 tags: [vendas, objecoes, preco, seguranca]
