@@ -114,9 +114,12 @@ def test_o_lead_and_follow_mostra_o_nome_e_o_texto_do_painel(loja):  # noqa: F81
 
 
 def test_o_teste_de_um_dolar_fecha_o_checkout_do_stripe_em_um_dolar(loja):  # noqa: F811
-    """Dono, 16/10: *"vou fazer uma compra com o valor de um dólar"*: preço 1 e depósito 0 no painel."""
+    """Dono, 16/10: *"vou fazer uma compra com o valor de um dólar"*: preço 1 e depósito 0 no painel.
+    #317: o kart do site nasce com o depósito obrigatório, então zerar pede desmarcar "obrigatório" antes."""
     cli, con, st, qbo, tmp, sid = loja
-    sv.mudar(con, None, sid, {"price": "1", "deposit": "0"})
+    with pytest.raises(sv.ErroServico, match="obrigatório"):
+        sv.mudar(con, None, sid, {"price": "1", "deposit": "0"})
+    sv.mudar(con, None, sid, {"price": "1", "deposit": "0", "deposit_required": False})
     con.commit()
     assert "$1" in _cartao(_pagina(cli), "4-stroke")
     conta, pid = _entrar(cli, con)

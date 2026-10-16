@@ -26,7 +26,8 @@ interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_c
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
   invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null; site_kart?: string | null
   kind?: 'session' | 'plan' | 'addon' | null; months?: number | null; sessions_month?: number | null
-  site_title?: string | null; site_subtitle?: string | null; site_note?: string | null; own_kart?: number | null }
+  site_title?: string | null; site_subtitle?: string | null; site_note?: string | null; own_kart?: number | null
+  deposit_required?: number | boolean | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
@@ -273,7 +274,10 @@ function Servicos() {
   const gerente = can('MANAGER')
   const toast = useToast()
   const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
-  const vazio = { name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '', kart_novo: '', site_title: '', site_subtitle: '' }
+  // #317 (dono, 16/10): "o serviço que eu coloquei no checkout ia permitir que eu fizesse o checkout … sem o security
+  // deposit". A sessão nova já nasce com o depósito obrigatório marcado: sem valor, não salva.
+  const vazio = { name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '', kart_novo: '', site_title: '', site_subtitle: '',
+    deposit: '', deposit_required: true }
   const [novo, setNovo] = useState(vazio)
   type Edicao = Partial<Omit<Servico, 'own_kart'>> & { price_txt?: string; qbo_item?: string; deposit_txt?: string; months_txt?: string; sessions_txt?: string
     kart_novo?: string; own_kart?: boolean }
@@ -284,7 +288,8 @@ function Servicos() {
     try { await api.post('/site/servicos', { ...resto, description: novo.description || null, qbo_item: novo.qbo_item || null,
       site_kart: novo.site_kart === NOVO_KART ? kart_novo : (novo.site_kart || null),
       site_title: novo.site_title || null, site_subtitle: novo.site_subtitle || null,
-      months: novo.kind === 'plan' ? (novo.months || '1') : null, sessions_month: novo.kind === 'plan' ? (novo.sessions_month || null) : null })
+      months: novo.kind === 'plan' ? (novo.months || '1') : null, sessions_month: novo.kind === 'plan' ? (novo.sessions_month || null) : null,
+      deposit: novo.kind === 'session' ? (novo.deposit || null) : null, deposit_required: novo.kind === 'session' && novo.deposit_required })
       toast(novo.kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : tr("Serviço criado: o cliente já vê."), 'ok')
       setNovo(vazio); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
@@ -297,6 +302,7 @@ function Servicos() {
     if (e.price_txt !== undefined) corpo.price = e.price_txt
     if (e.qbo_item !== undefined) corpo.qbo_item = e.qbo_item || null
     if (e.deposit_txt !== undefined) corpo.deposit = e.deposit_txt || null
+    if (e.deposit_required !== undefined) corpo.deposit_required = !!e.deposit_required     // #317
     if (e.site_kart !== undefined) corpo.site_kart = (e.site_kart === NOVO_KART ? e.kart_novo : e.site_kart) || null   // #263; #297: ou um kart novo
     if (e.site_title !== undefined) corpo.site_title = e.site_title || null       // #297: o cartão no site
     if (e.site_subtitle !== undefined) corpo.site_subtitle = e.site_subtitle || null
@@ -337,6 +343,9 @@ function Servicos() {
               <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{tr("0 = sem")}</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
                 onChange={x => muda(sv.id, { deposit_txt: x.target.value })} /></label>
               {(e.kind ?? sv.kind ?? 'session') === 'session' &&
+                <label className="check" style={{ minHeight: 40 }}><input type="checkbox" checked={!!(e.deposit_required ?? sv.deposit_required)} disabled={!gerente}
+                  onChange={x => muda(sv.id, { deposit_required: x.target.checked })} /> {tr("Security deposit obrigatório")}</label>}
+              {(e.kind ?? sv.kind ?? 'session') === 'session' &&
                 <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
                   <select value={e.site_kart ?? sv.site_kart ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { site_kart: x.target.value })}>
                     <option value="">{tr("não é do site")}</option>
@@ -363,6 +372,8 @@ function Servicos() {
             <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{sv.kind === 'plan' ? tr("na página da Academy") : sv.kind === 'addon' ? tr("add-on na reserva do site") : tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
               {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}
               {sv.site_kart && <> · <Chip tone="ok">{tr("vende o {0} no site", sv.site_kart)}</Chip></>}
+              {(sv.kind ?? 'session') === 'session' && (sv.deposit_required ? <> · <Chip tone="ok">{tr("depósito obrigatório")}</Chip></>
+                : !(sv.deposit ?? 0) ? <> · <Chip tone="warn">{tr("sem security deposit")}</Chip></> : null)}
               {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: o site cobra pelo Stripe; a invoice da equipe pede a linha")}</span></>}</div>
           </div>
         })}</div>}
@@ -379,6 +390,11 @@ function Servicos() {
           <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={novo.sessions_month} onChange={x => setNovo({ ...novo, sessions_month: x.target.value })} placeholder="4" /></label></>}
         <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder={tr("escolha ou escreva")}
           onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
+        {novo.kind === 'session' && <>
+          <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{novo.deposit_required ? tr("obrigatório") : tr("0 = sem")}</i></span>
+            <input inputMode="decimal" value={novo.deposit} placeholder="400.00" onChange={x => setNovo({ ...novo, deposit: x.target.value })} /></label>
+          <label className="check" style={{ minHeight: 40 }}><input type="checkbox" checked={novo.deposit_required}
+            onChange={x => setNovo({ ...novo, deposit_required: x.target.checked })} /> {tr("Security deposit obrigatório")}</label></>}
         {novo.kind === 'session' &&
           <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
             <select value={novo.site_kart} onChange={x => setNovo({ ...novo, site_kart: x.target.value })}>
@@ -392,7 +408,7 @@ function Servicos() {
           <label className="fld"><span>{tr("Nome no site")}</span><input value={novo.site_title} onChange={x => setNovo({ ...novo, site_title: x.target.value })} /></label>
           <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={novo.site_subtitle}
             onChange={x => setNovo({ ...novo, site_subtitle: x.target.value })} /></label></>}
-        <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>{tr("Criar")}</button>
+        <button className="btn sm primary" disabled={!novo.name || !novo.price || (novo.kind === 'session' && novo.deposit_required && !(Number(novo.deposit.replace(/[$,\s]/g, '')) > 0))} onClick={criar}>{tr("Criar")}</button>
       </div></div>
       <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice. O \"Kart do site\" é o que liga o serviço ao kart da página do Arrive and Drive: sem ele, aquele kart não aparece no site; desativar o serviço tira aquele kart da página.")} {tr("O nome no site, a linha de baixo e o aviso são o que o cartão do kart mostra; vazio volta ao texto de sempre. \"Novo kart…\" cria um kart a mais na página, com o preço e o depósito deste serviço.")}</p>
     </Section>}
@@ -664,6 +680,8 @@ const EditarProduto = lazy(() => import('./LojaProdutos').then(m => ({ default: 
 /* #300: o editor visual do site, também em arquivo próprio. */
 /* #306: o painel do site (as métricas), a página de entrada da seção Site. */
 const SitePainel = lazy(() => import('./SitePainel').then(m => ({ default: m.SitePainel })))
+/* #317: o security deposit (devolver pelo Stripe e o valor cobrado), em arquivo próprio. */
+const SiteDepositos = lazy(() => import('./SiteDepositos').then(m => ({ default: m.SiteDepositos })))
 const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
 const EditorDePagina = lazy(() => import('./EditorSite').then(m => ({ default: m.EditorDePagina })))
 
@@ -680,6 +698,7 @@ const SUBSECOES: { aba: string; to: string; rotulo: string; min?: 'MANAGER' }[] 
   { aba: 'editor', to: '/site/editor', rotulo: tr("Editor do site") },
   { aba: 'contas', to: '/site/contas', rotulo: tr("Contas de clientes") },
   { aba: 'waiver', to: '/site/waiver', rotulo: tr("Waiver"), min: 'MANAGER' },
+  { aba: 'deposito', to: '/site/deposito', rotulo: tr("Security deposit") },      // #317
 ]
 
 export function SitePublico() {
@@ -695,6 +714,7 @@ export function SitePublico() {
       {subs.map(s => <NavLink key={s.to} to={s.to} end={!s.aba} className={({ isActive }) => isActive ? 'on' : ''}>{s.rotulo}</NavLink>)}
     </nav>
     {atual.aba === '' ? <Suspense fallback={<Loading />}><SitePainel /></Suspense>
+      : atual.aba === 'deposito' ? <Suspense fallback={<Loading />}><SiteDepositos /></Suspense>
       : atual.aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
       : atual.aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
       : atual.aba === 'disponibilidade' ? <Disponibilidade /> : atual.aba === 'servicos' ? <Servicos /> : atual.aba === 'cartoes' ? <Cartoes />
