@@ -1464,6 +1464,16 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     g.close()
 
 
+def _espera_no_banco(con, sql, args, valor, tempo=10):
+    """O botão desliga enquanto salva: ler o banco logo depois do clique corre com o PATCH (o CI pegou)."""
+    fim = time.time() + tempo
+    while time.time() < fim:
+        if con.execute(sql, args).fetchone()[0] == valor:
+            return True
+        time.sleep(0.1)
+    return False
+
+
 def test_security_deposit_devolve_parte_pelo_stripe_e_muda_o_valor_cobrado(servidor, navegador):
     """#317 (dono, 16/10): "fazer o reembolso de cada security deposit e alterar o valor do security deposit para ser
     cobrado no site … só clicar no botão e fazer o refund … Sempre conseguindo alterar o valor que vai ser
@@ -1513,25 +1523,23 @@ def test_security_deposit_devolve_parte_pelo_stripe_e_muda_o_valor_cobrado(servi
     linha = pg.locator("li.dep-valor", has=campo)
     linha.get_by_role("button", name="Salvar").click()
     pg.get_by_text("Salvo. Vale para as próximas compras.").first.wait_for()
-    assert con.execute("SELECT deposit FROM booking_services WHERE id=?", (sid,)).fetchone()[0] == 1
+    assert _espera_no_banco(con, "SELECT deposit FROM booking_services WHERE id=?", (sid,), 1)
     assert linha.get_by_role("checkbox", name="Obrigatório").is_checked()
     campo.fill("400")
     linha.get_by_role("button", name="Salvar").click()
-    linha.get_by_role("button", name="Salvar").and_(pg.locator("[disabled]")).wait_for()
-    assert con.execute("SELECT deposit FROM booking_services WHERE id=?", (sid,)).fetchone()[0] == 400
+    assert _espera_no_banco(con, "SELECT deposit FROM booking_services WHERE id=?", (sid,), 400)
     # a caixa "Obrigatório" leva junto o valor digitado e ainda não salvo (revisão do #317)
     obr = linha.get_by_role("checkbox", name="Obrigatório")
     obr.click()                                   # a caixa salva na hora; o estado volta do servidor
     linha.locator("input[type=checkbox]:not(:checked):not([disabled])").wait_for()
-    assert con.execute("SELECT deposit_required FROM booking_services WHERE id=?", (sid,)).fetchone()[0] == 0
+    assert _espera_no_banco(con, "SELECT deposit_required FROM booking_services WHERE id=?", (sid,), 0)
     campo.fill("2")
     obr.click()
     linha.locator("input[type=checkbox]:checked:not([disabled])").wait_for()
-    assert con.execute("SELECT deposit, deposit_required FROM booking_services WHERE id=?", (sid,)).fetchone() == (2, 1)
+    assert _espera_no_banco(con, "SELECT deposit * 10 + deposit_required FROM booking_services WHERE id=?", (sid,), 21)
     campo.fill("400")
     linha.get_by_role("button", name="Salvar").click()
-    linha.get_by_role("button", name="Salvar").and_(pg.locator("[disabled]")).wait_for()
-    assert con.execute("SELECT deposit FROM booking_services WHERE id=?", (sid,)).fetchone()[0] == 400
+    assert _espera_no_banco(con, "SELECT deposit FROM booking_services WHERE id=?", (sid,), 400)
     pg.set_viewport_size({"width": 360, "height": 740})
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
