@@ -103,7 +103,8 @@ class CadastroIn(BaseModel):
 
 
 @r.post("/signup", status_code=201)
-def cadastro(dados: CadastroIn, request: Request, response: Response, con: sqlite3.Connection = Depends(get_db)):
+def cadastro(dados: CadastroIn, request: Request, response: Response, background: BackgroundTasks,
+             con: sqlite3.Connection = Depends(get_db)):
     ip = auth._ip(request)
     desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
     if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?", (f"portal-signup:{ip}", desde))["n"] >= MAX_CADASTROS_POR_HORA:
@@ -120,6 +121,11 @@ def cadastro(dados: CadastroIn, request: Request, response: Response, con: sqlit
     _abrir(con, request, response, cid)
     _aud(con, request, "portal.signup", cid, {"piloto_proprio": dados.i_am_driver})
     con.commit()
+    # #305 (dono, 16/10): toda conta nova recebe o e-mail de boas-vindas com a identidade da URACE (a senha vai nele:
+    # decisão do dono). A senha só existe nesta requisição: vai para o e-mail e some, nunca é guardada nem logada.
+    from command_center.providers import conta_site
+    from command_center.vitrine import idioma
+    background.add_task(conta_site.boas_vindas_bg, cid, dados.password, idioma.de_request(request))
     return portal.conta(con, cid)
 
 
@@ -275,8 +281,15 @@ def esqueci_senha(dados: EsqueciIn, request: Request, con: sqlite3.Connection = 
                  f"If it was you, open this link and choose a new password:\n\n{link}\n\n"
                  f"The link works once and expires in {RESET_MIN} minutes. If you did not ask for it, ignore this email: "
                  "your password stays the same.\n\nURACE.US · Orlando, FL")
+        # #305: com a identidade da URACE, como o das boas-vindas
+        from command_center.providers import email_marca
+        html = email_marca.html(f"Hi {c['name'].split()[0]}!", [
+            "Someone asked to reset the password of your URACE account. If it was you, choose a new password:"],
+            botao=("Choose a new password", link),
+            depois=[f"The link works once and expires in {RESET_MIN} minutes.",
+                    "If you did not ask for it, ignore this email: your password stays the same."])
         try:
-            email_envio.enviar(email, "Reset your URACE password", texto)
+            email_envio.enviar(email, "Reset your URACE password", texto, html=html)
         except email_envio.ErroEnvio:
             con.rollback()
             raise HTTPException(503, "We could not send the email right now. Try again in a few minutes.")

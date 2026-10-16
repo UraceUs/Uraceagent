@@ -56,6 +56,27 @@ def chave(lang, volta):
 
 # ------------------------------------------------------------------ as mensagens do servidor (carrinho e checkout)
 MENSAGENS_PT = {
+    # #305: o cadastro no carrinho (as mensagens do `portal.criar_conta` e da senha)
+    "Fill in your details to continue.": "Preencha os seus dados para continuar.",
+    "Use a password with at least 8 characters.": "Use uma senha com pelo menos 8 caracteres.",
+    "The passwords don't match.": "As senhas não são iguais.",
+    "Too many sign-ups from this connection. Try again later.": "Muitos cadastros desta conexão. Tente mais tarde.",
+    "You need to accept the terms to create an account.": "Para continuar, aceite os termos e a política de privacidade.",
+    "Enter a valid email address.": "Digite um e-mail válido.",
+    "Enter your full name (first and last).": "Digite o seu nome completo (nome e sobrenome).",
+    "Enter the driver's full name (first and last).": "Digite o nome completo do piloto (nome e sobrenome).",
+    "The account holder must be 18 or older. A parent or guardian can create the account and add the young driver to it.":
+        "O titular da conta precisa ter 18 anos ou mais. O pai, a mãe ou o responsável cria a conta e põe o piloto jovem nela.",
+    "An account with this email already exists. Sign in instead.": "Já existe uma conta com este e-mail. Entre com ela.",
+    "Enter a valid phone number, with area code.": "Digite um telefone válido, com DDD.",
+    "Enter a valid phone number for your country.": "Digite um telefone válido para o seu país.",
+    "Country code: use + and up to 4 digits, like +1 or +55.": "Código do país: use + e até 4 dígitos, como +1 ou +55.",
+    "Choose your country.": "Escolha o seu país.",
+    "State: use the 2-letter code, like FL.": "Estado: use a sigla de 2 letras, como FL.",
+    "ZIP code: use 5 digits (or 5+4).": "ZIP: use 5 dígitos (ou 5+4).",
+    "Postal code: use letters, numbers, spaces or hyphens.": "Código postal: use letras, números, espaço ou hífen.",
+    "Date of birth: use a valid date.": "Data de nascimento: use uma data válida.",
+    "Date of birth can't be in the future.": "A data de nascimento não pode estar no futuro.",
     "Product not found": "Produto não encontrado",
     "Product not found.": "Produto não encontrado.",
     "Session": "Sessão",
@@ -81,6 +102,7 @@ MENSAGENS_PT = {
         "Não conseguimos abrir o checkout seguro agora. Tente de novo em um minuto.",
 }
 PADROES_PT = (
+    (re.compile(r"^Please fill in: (.+)\.$"), "Preencha: {0}."),                      # #305: o cadastro no carrinho
     (re.compile(r"^(.+) already has a session at this time\.$"), "{0} já tem uma sessão neste horário."),
     (re.compile(r"^(.+) is already in this cart at this time\.$"), "{0} já está neste carrinho neste horário."),
     (re.compile(r"^Up to (\d+) items per order\.$"), "Até {0} itens por pedido."),

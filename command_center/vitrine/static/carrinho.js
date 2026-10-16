@@ -171,6 +171,7 @@
   var vazio = raiz.querySelector('.carrinho-vazio')
   var lista = raiz.querySelector('.carrinho-linhas')
   var contaBox = raiz.querySelector('.carrinho-conta')
+  var cadastro = raiz.querySelector('.carrinho-cadastro')         // #305: os dados do comprador, no próprio carrinho
   var entrega = raiz.querySelector('.carrinho-entrega')
   var total = raiz.querySelector('.carrinho-total')
   var erroEl = raiz.querySelector('.carrinho-erro')
@@ -211,8 +212,12 @@
     var m = document.cookie.match(/(?:^|;\s*)cp_csrf=([^;]+)/)
     return m ? decodeURIComponent(m[1]) : ''
   }
-  function erro(msg) {
+  function erro(msg, entrar) {
     erroEl.textContent = msg || ''
+    if (msg && entrar) {                                            // #305: o e-mail já tem conta: entrar e voltar
+      var a = el('a', null, ' ' + t('Sign in', 'Entrar')); a.href = portal + '?volta=cart'
+      erroEl.appendChild(a)
+    }
     erroEl.hidden = !msg
   }
 
@@ -232,6 +237,7 @@
       li.appendChild(pd)
     }
     if (x.aviso) li.appendChild(el('p', 'carrinho-aviso small', x.aviso))           // #279: o kart próprio chega 2 dias antes
+    if (x.aviso_piloto) li.appendChild(el('p', 'carrinho-aviso-piloto small', x.aviso_piloto))   // #305: completar depois
     var acoes = el('div', 'carrinho-acoes')
     if (x.tipo === 'produto') {
       var q = el('label', 'carrinho-qtd')
@@ -249,7 +255,8 @@
       var sel = el('select')
       sel.appendChild(new Option(t('Choose the driver', 'Escolha o piloto'), ''))
       conta.drivers.forEach(function (d) {
-        var o = new Option(d.name + (d.blocked ? ' (' + d.blocked + ')' : ''), String(d.id))
+        // #305: o piloto incompleto também vale (completa depois do pagamento, com lembrete por e-mail)
+        var o = new Option(d.name + (d.blocked ? ' (' + d.blocked + ')' : d.pending ? ' (' + t('complete after payment', 'completar depois do pagamento') + ')' : ''), String(d.id))
         o.disabled = !!d.blocked
         sel.appendChild(o)
       })
@@ -290,18 +297,16 @@
 
   function desenharConta(c) {
     contaBox.textContent = ''
+    if (cadastro) cadastro.hidden = true
     if (!c.linhas.length) { contaBox.hidden = true; return }       // #248: toda compra pede a conta do site
-    contaBox.hidden = false
-    if (!c.account) {
-      contaBox.appendChild(el('p', null, t('Your URACE account is needed to buy: it keeps your orders, drivers, waivers and bookings.',
-        'Para comprar, é preciso a sua conta URACE: ela guarda os seus pedidos, pilotos, waivers e reservas.')))
-      var acoes = el('p', 'hero-acoes')
-      var entrar = el('a', 'btn btn-sm', t('Sign in', 'Entrar')); entrar.href = portal + '?volta=cart'
-      var criar = el('a', 'btn btn-sm btn-linha-escura', t('Create account', 'Criar conta')); criar.href = portal + '/signup?volta=cart'
-      acoes.appendChild(entrar); acoes.appendChild(criar)
-      contaBox.appendChild(acoes)
+    if (!c.account && cadastro) {
+      // #305 (dono, 16/10): em vez de "Sign in / Create account", os dados dela aqui; no checkout, viram a conta
+      contaBox.hidden = true
+      cadastro.hidden = false
+      cadastro.querySelector('.cad-piloto').hidden = !c.tem_sessao
       return
     }
+    contaBox.hidden = false
     var p = el('p', null, t('Signed in as ', 'Conectado como '))
     p.appendChild(el('b', null, c.account.name))
     p.appendChild(el('span', 'muted', ' · ' + c.account.email))
@@ -345,7 +350,7 @@
       par(t('Shipping', 'Frete'), c.frete > 0 ? usd(c.frete) : (c.frete_a_combinar ? t('to confirm', 'a confirmar') : t('Free', 'Grátis')))
     }
     par('Total', usd(c.total), 'soma')
-    var pronto = c.ok && !c.precisa_conta && c.stripe
+    var pronto = c.ok && c.stripe                                   // #305: sem conta, os dados vão no checkout
     pagar.disabled = !pronto || indo
     pagar.textContent = indo ? t('Opening the secure checkout…', 'Abrindo o pagamento seguro…') : t('Checkout · ', 'Pagar · ') + usd(c.total)
     erro(c.precisa_conta ? null : c.linhas.some(function (x) { return x.erro }) ? t('Fix the items marked in red to continue.', 'Corrija os itens em vermelho para continuar.')
@@ -365,18 +370,62 @@
 
   entrega.addEventListener('change', function () { if (!indo) cotar() })    // #298: o frete entra (ou sai) do total
 
+  // ------------------------------------------------ #305: os dados do comprador (sem conta ainda)
+  if (cadastro) {
+    var pais = cadastro.querySelector('[name="country"]'), ddi = cadastro.querySelector('[name="phone_country"]')
+    pais.addEventListener('change', function () {
+      var op = pais.selectedOptions[0]
+      if (op && op.getAttribute('data-ddi')) ddi.value = op.getAttribute('data-ddi')
+    })
+    cadastro.addEventListener('change', function (ev) {
+      if (ev.target.name === 'piloto_eu') cadastro.querySelector('.cad-piloto-nome').hidden = ev.target.value !== '0'
+      if (ev.target.getAttribute('aria-invalid')) ev.target.removeAttribute('aria-invalid')
+    })
+    cadastro.addEventListener('submit', function (ev) { ev.preventDefault(); pagar.click() })
+  }
+  function campo(n) { var x = cadastro.querySelector('[name="' + n + '"]'); return x ? x.value.trim() : '' }
+  /** Os dados que viram a conta, conferidos aqui antes (o servidor confere tudo de novo). Null: falta algo. */
+  function dadosDaConta() {
+    var faltam = [], obrig = ['name', 'birth_date', 'email', 'phone', 'address_line1', 'city', 'password', 'password2']
+    cadastro.querySelectorAll('[aria-invalid]').forEach(function (x) { x.removeAttribute('aria-invalid') })
+    function marca(n) { var x = cadastro.querySelector('[name="' + n + '"]'); if (x) { x.setAttribute('aria-invalid', 'true'); faltam.push(x) } }
+    obrig.forEach(function (n) { if (!campo(n)) marca(n) })
+    if (campo('email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(campo('email'))) marca('email')
+    var eu = (cadastro.querySelector('[name="piloto_eu"]:checked') || {}).value !== '0'
+    if (cot.tem_sessao && !eu && !campo('piloto_nome')) marca('piloto_nome')
+    var senha = cadastro.querySelector('[name="password"]').value, senha2 = cadastro.querySelector('[name="password2"]').value
+    if (faltam.length) { faltam[0].focus(); erro(t('Fill in the fields marked in red.', 'Preencha os campos em vermelho.')); return null }
+    if (senha.length < 8) { marca('password'); faltam[0].focus(); erro(t('Use a password with at least 8 characters.', 'Use uma senha com pelo menos 8 caracteres.')); return null }
+    if (senha !== senha2) { marca('password2'); faltam[0].focus(); erro(t("The passwords don't match.", 'As senhas não são iguais.')); return null }
+    if (!cadastro.querySelector('[name="accept_terms"]').checked) {
+      cadastro.querySelector('[name="accept_terms"]').focus()
+      erro(t('Accept the terms and the privacy policy to continue.', 'Para continuar, aceite os termos e a política de privacidade.')); return null
+    }
+    var d = { accept_terms: true, password: senha, password2: senha2, piloto: { eu: eu, nome: campo('piloto_nome') } }
+    ;['name', 'birth_date', 'email', 'phone_country', 'phone', 'address_line1', 'address_line2', 'city', 'state', 'zip', 'country']
+      .forEach(function (n) { d[n] = campo(n) })
+    return d
+  }
+
   pagar.addEventListener('click', function () {
     if (!cot || indo) return
+    var conta = null
+    if (cot.precisa_conta && cadastro) {
+      conta = dadosDaConta()
+      if (!conta) return
+    }
     indo = true; erro(null); desenhar(cot)
     var r = entrega.querySelector('input:checked')
+    var corpo = { itens: ler(), entrega: r ? r.value : 'retirada' }
+    if (conta) corpo.conta = conta
     fetch(api + '/checkout', { method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF': csrf() },
-      body: JSON.stringify({ itens: ler(), entrega: r ? r.value : 'retirada' }) })
+      body: JSON.stringify(corpo) })
       .then(function (resp) { return resp.json().then(function (d) { return { ok: resp.ok, d: d } }) })
       .then(function (x) {
         if (x.ok && x.d.url) { window.location.assign(x.d.url); return }
         indo = false
-        return cotar().then(function () { erro(x.d.erro || t('Something went wrong. Please try again.', 'Algo deu errado. Tente de novo.')) })
+        return cotar().then(function () { erro(x.d.erro || t('Something went wrong. Please try again.', 'Algo deu errado. Tente de novo.'), x.d.sign_in) })
       })
       .catch(function () { indo = false; desenhar(cot); erro(t('We could not reach the checkout. Please try again.', 'Não conseguimos abrir o pagamento. Tente de novo.')) })
   })

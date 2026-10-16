@@ -85,6 +85,11 @@ def _autosync():
             r_pedido = pedido_site.rodar(con)
             if r_pedido["avisos"]:
                 auditar(con, "store.outcome.round", "system", detail=r_pedido)
+            from command_center.providers import conta_site   # #305: número de cliente e lembrete de completar o piloto
+            r_conta = conta_site.rodar(con)
+            con.commit()
+            if any(r_conta.values()):
+                auditar(con, "portal.notices.round", "system", detail=r_conta)
             from command_center.providers import suits_ponte   # #153: a ponte de e-mail dos macacões, em segundo plano
             suits_ponte.rodar_em_segundo_plano()
             from command_center.providers import agenda_asana   # dono, 01/10 (#67): todo agendamento vira tarefa

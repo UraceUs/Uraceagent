@@ -21,6 +21,7 @@ from command_center.api.main import app
 from command_center.db import agora, aplicar_schema, conectar, inserir, todos, um
 from command_center.providers import agenda_sessoes as ag
 from command_center.providers import cobranca_agenda as cob
+from command_center.tests.test_portal import boas_vindas
 from command_center.providers import mensalidades, servicos_site, venda_site
 from command_center.tests.dados_portal import piloto
 from command_center.tests.test_agenda_sessoes import abre, conta, proximo
@@ -279,7 +280,8 @@ def test_pelo_site_o_pedido_vira_invoice_e_o_cliente_acompanha_as_etapas(cli):
     finally:
         con.close()
     emails = [json.loads(x) for x in open(os.environ["CC_EMAIL_FAKE"], encoding="utf-8")]
-    assert [e["subject"] for e in emails if e["to"] == "maria@example.com"] == ["Your URACE booking: what's next"]
+    assert [e["subject"] for e in emails if e["to"] == "maria@example.com" and not boas_vindas(e)] == [
+        "Your URACE booking: what's next"]
     # outra conta não vê o pedido
     h2, _ = _cliente(cli, "outra@example.com")
     assert cli.get(f"{P}/bookings/{bid}").status_code == 404

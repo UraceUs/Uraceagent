@@ -298,7 +298,13 @@ def test_painel_do_cliente(cli):
 def _emails(tmp_path):
     import json
     f = tmp_path / "emails.jsonl"
-    return [json.loads(x) for x in f.read_text(encoding="utf-8").splitlines()] if f.exists() else []
+    todos = [json.loads(x) for x in f.read_text(encoding="utf-8").splitlines()] if f.exists() else []
+    return [m for m in todos if not boas_vindas(m)]
+
+
+def boas_vindas(m):
+    """O e-mail de boas-vindas da conta nova (#305) sai em todo cadastro; os testes de senha não contam com ele."""
+    return m["subject"].startswith(("Welcome to URACE", "Bem-vindo à URACE"))
 
 
 def _token(email):
