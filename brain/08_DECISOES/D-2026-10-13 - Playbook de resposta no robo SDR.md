@@ -231,3 +231,19 @@ depois da classificação" (Qualificacao, aprendizado de 24/08), follow-up +2h/+
 Ficam Politicas Comerciais, Pista e Check-in, Programas e Visao Geral. O aviso de "pouca informação" agora diz que
 o que está nas instruções (preços, dias, endereço, idade, links) é base sólida, para o robô não responder
 "vou confirmar" ao que já sabe. Pendente: um doc ativo de FAQ do SDR, escrito pelo dono, se quiser o RAG com conteúdo.
+
+## 16/10 — Teste do comercial no "Testar o robô"
+- **Academy**: o dono decidiu (16/10) que o robô tira os valores **da planilha de preços** que ele mandou em 15/10,
+  a mesma do site (#273): sem contrato $2,756 (4T/Baby) e $3,156 (2T) por mês, contrato de 6 meses $17,858.88 /
+  $20,450.88, de 12 meses $34,229.52 / $39,197.52, kart próprio $1,800 e $1,200, Lead and Follow $769, fora do OKC
+  +$250. Um teste confere persona contra o site. Os $2.756,90 e $1.378,45 (contrato e invoice antigos) não saem
+  ao lead. Mais adiante o robô lê os valores direto do site.
+- **12 idiomas** (dono, 16/10): en, pt, es, fr, it, de, ru, zh, ja, ko, ar, hi. `sdr/idiomas.py` detecta o idioma
+  (escrita e palavras, com abreviações de chat: vc, qto, xq, svp, thx...) e guarda as frases fixas (call, "agora
+  não", opt-out, espera, apresentação); o classificador reconhece objeção, pedido de parar, "agora não", pedido de
+  pessoa e fechamento nesses idiomas.
+- **Idioma**: "É caro, faz por 2000 que fecho hoje?" saiu em inglês. O detector ganhou marcadores de objeção
+  (desconto, muito, hoje, fecho, faz, agora, tem...) e a ponte passa a dizer ao modelo o idioma do turno. A
+  contraproposta ("faz por X", "fecho hoje") passou a ser negociação: vai para a call.
+- **Vídeo**: linha nova para quem compara escolas (vídeo "Who we are") e regra "se vídeo e página servem, manda
+  o vídeo".

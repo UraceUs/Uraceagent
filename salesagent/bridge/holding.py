@@ -21,37 +21,39 @@ do ar, timeout). Uma mensagem de espera que depende do mesmo componente
 que falhou não é garantia nenhuma.
 """
 import re
+import sys
+from pathlib import Path
 
 import textproc
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from sdr import idiomas  # noqa: E402  (12 idiomas: detecção e frases fixas)
 
 # ------------------------------------------------------------------ idioma
 # Heurística deliberadamente simples: o lead escreve poucas palavras e só
 # precisamos escolher entre três conjuntos de frases. Marcadores exclusivos
 # de cada idioma (palavras que praticamente não aparecem no outro) valem
-# mais que palavras compartilhadas -- "para"/"tem" existem em PT e ES e por
-# isso ficam de fora.
+# mais que palavras compartilhadas -- "para", "caro", "barato" e "esta" existem em PT e ES e
+# por isso ficam de fora. Objeção curta ("É caro, faz por 2000 que fecho hoje?") tem de
+# cair em PT: antes saía a oferta de call em inglês (teste do comercial, 16/10).
 _PT_MARKERS = re.compile(
     r"\b(não|nao|você|voce|vocês|voces|vcs|obrigad[oa]|quanto|custa|preço|preco|"
     r"posso|meu|minha|olá|ola|oi|bom dia|boa tarde|boa noite|qual|quero|"
     r"gostaria|criança|crianca|filho|filha|aulas?|corrida|mais|sim|fosse|"
-    r"então|entao|tá|isso)\b", re.IGNORECASE)
+    r"então|entao|tá|isso|desconto|muito|muita|hoje|amanhã|amanha|fecho|fechar|fecha|faz|fazer|faço|"
+    r"agora|tem|pra|pro|também|tambem|ainda|valor|está|estou|gente|vou)\b", re.IGNORECASE)
 _ES_MARKERS = re.compile(
     r"\b(hola|gracias|cuánto|cuanto|cuesta|puedo|quiero|quisiera|ustedes|"
     r"niñ[oa]|nino|hij[oa]|clases?|carrera|buenos días|buenas tardes|"
-    r"precio|dónde|donde|cómo|como está)\b", re.IGNORECASE)
+    r"precio|dónde|donde|cómo|como está|descuento|muy|mucho|hoy|ahora|tiene|también)\b", re.IGNORECASE)
 _PT_ONLY_CHARS = re.compile(r"[ãõçâê]")
 _ES_ONLY_CHARS = re.compile(r"[ñ¿¡]")
 
 
 def detect_language(text: str) -> str:
-    """'pt' | 'es' | 'en'. Inglês é o default -- a maioria dos leads da
-    URACE escreve em inglês, e uma frase de espera em inglês para um lead
-    lusófono é muito menos ruim que o contrário."""
-    pt = len(_PT_MARKERS.findall(text)) + 2 * len(_PT_ONLY_CHARS.findall(text))
-    es = len(_ES_MARKERS.findall(text)) + 2 * len(_ES_ONLY_CHARS.findall(text))
-    if pt == 0 and es == 0:
-        return "en"
-    return "pt" if pt >= es else "es"
+    """Código do idioma do lead (ver sdr/idiomas.py: en, pt, es, fr, it, de, ru, zh, ja, ko, ar, hi).
+    Inglês é o default -- a maioria dos leads da URACE escreve em inglês."""
+    return idiomas.detectar(text)
 
 
 # ------------------------------------------------------- frases de espera
@@ -97,6 +99,9 @@ _ACK = {
     "es": "Perfecto. Te aviso apenas tenga la confirmación.",
     "en": "Sounds good. I'll get back to you as soon as I have it.",
 }
+
+idiomas.completar(_ACK, "ack")
+idiomas.completar(_WAITING, "espera")
 
 
 def is_acknowledgement(text: str) -> bool:
@@ -163,6 +168,8 @@ _WAITING_REF = {
     ],
 }
 
+idiomas.completar(_WAITING_REF, "espera_citando")
+
 
 def _citavel(pergunta: str | None, limite: int = 70) -> str:
     """Encurta a pergunta para caber numa citação sem virar um parágrafo."""
@@ -184,6 +191,7 @@ _APRESENTACAO = {
     "en": "Hi{nome}, this is Chase, URACE's assistant.",
 }
 
+idiomas.completar(_APRESENTACAO, "apresentacao")
 
 _NOME_REAL = re.compile(r"^[^\W\d_]{2,20}$", re.UNICODE)
 
@@ -275,6 +283,9 @@ _OFERTA_CALL = {
                "Pick a time here:", "{link}"],
     },
 }
+for _motivo, _tabela in _OFERTA_CALL.items():
+    for _idioma, _linhas in idiomas.TEXTOS["oferta_call"][_motivo].items():
+        _tabela.setdefault(_idioma, _linhas)
 MOTIVO_DA_CALL = {"NEGOCIACAO": "objecao", "SINAL_CONVERSAO": "decisao", "PILOTO_COMPETIDOR": "competidor"}
 
 

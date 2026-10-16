@@ -223,3 +223,99 @@ def test_aviso_de_pouca_informacao_nao_manda_confirmar_o_que_a_persona_ja_sabe()
     for nivel in (confidence.NONE, confidence.LOW):
         nota = confidence.system_note({"level": nivel, "reason": "x"})
         assert "tabela de preços, dias e horários, endereço" in nota and "nas suas instruções" in nota, nivel
+
+
+# ------------------------------------------------------------------ teste do comercial, 16/10
+@pytest.mark.parametrize("texto,idioma", [
+    ("E caro, faz por 2000 que fecho hoje?", "pt"), ("É caro, faz por 2000 que fecho hoje?", "pt"),
+    ("Tem desconto?", "pt"), ("Esta muito caro", "pt"), ("es muy caro, hay descuento?", "es"),
+    ("is it expensive?", "en"), ("can i bring my own kart?", "en"),
+])
+def test_idioma_da_objecao_curta(texto, idioma):
+    assert holding.detect_language(texto) == idioma
+
+
+def test_contraproposta_vira_call_no_idioma_do_lead():
+    import sdr
+    texto = "E caro, faz por 2000 que fecho hoje?"
+    assert sdr.avaliar(texto)["roteamento"]["motivo"] == "NEGOCIACAO"
+    msg = holding.call_offer(texto, LINK, motivo="objecao")
+    assert "nosso time" in msg and "our team" not in msg
+
+
+def test_academy_com_os_valores_da_planilha_os_mesmos_do_site():
+    """Dono, 16/10: o robô tira os valores da planilha de preços (a mesma do site, #273). Se um mudar sem o
+    outro, este teste acusa: cada valor dos planos da Academy no site precisa estar na persona."""
+    texto = (SALESAGENT / "instructions" / "urace-sales-agent.md").read_text(encoding="utf-8")
+    sys.path.insert(0, str(SALESAGENT.parent))
+    from command_center.vitrine import conteudo_paginas
+    valores = [plano[3] for _grupo, planos in conteudo_paginas.ACADEMY["planos_grupos"] for plano in planos]
+    assert len(valores) == 8
+    for valor in valores:
+        assert valor in texto, valor
+    for velho in ("2,756.90", "3,156.90", "689.23", "3-month contract", "no contract, no minimum"):
+        assert velho not in texto, velho
+    from sdr import estilo
+    limpo, v = estilo.aplicar("O Academy sai $2.756,90 por mês. Qual a idade dele?")
+    assert limpo == "Qual a idade dele?" and v
+
+
+def test_video_para_quem_compara():
+    texto = (SALESAGENT / "instructions" / "urace-sales-agent.md").read_text(encoding="utf-8")
+    assert "Comparing us with indoor karting" in texto and "**send the video**" in texto
+
+
+@pytest.mark.parametrize("texto,negocia", [
+    ("E caro, faz por 2000 que fecho hoje?", True), ("Would you do it for 600?", True),
+    ("fecha por $1500?", True), ("lo haces por 500?", True), ("É caro", True),
+    ("O que o coach faz por ele?", False), ("Can you do Saturdays?", False),
+    ("I want to do it for my son birthday", False),
+])
+def test_contraproposta_so_com_numero(texto, negocia):
+    import sdr
+    assert (sdr.avaliar(texto)["roteamento"].get("motivo") == "NEGOCIACAO") is negocia
+
+
+# ------------------------------------------------------------------ 12 idiomas (dono, 16/10)
+@pytest.mark.parametrize("texto,idioma", [
+    ("qto custa pro meu filho?", "pt"), ("vc tem desconto?", "pt"), ("u guys open tmrw?", "en"),
+    ("Oi, how much is it?", "en"), ("cuanto sale? xq tan caro", "es"), ("combien ça coûte svp", "fr"),
+    ("quanto costa per mio figlio?", "it"), ("troppo caro, c è uno sconto?", "it"), ("zu teuer, gibt es rabatt?", "de"),
+    ("сколько стоит?", "ru"), ("太贵了，有折扣吗？", "zh"), ("いくらですか？", "ja"), ("얼마예요?", "ko"),
+    ("كم السعر؟", "ar"), ("कितना खर्च है?", "hi"),
+])
+def test_doze_idiomas_com_abreviacoes(texto, idioma):
+    assert holding.detect_language(texto) == idioma
+
+
+@pytest.mark.parametrize("texto,acao,motivo", [
+    ("vc tem desconto?", "escalar", "NEGOCIACAO"), ("c est trop cher", "escalar", "NEGOCIACAO"),
+    ("troppo caro", "escalar", "NEGOCIACAO"), ("zu teuer", "escalar", "NEGOCIACAO"),
+    ("слишком дорого", "escalar", "NEGOCIACAO"), ("太贵了", "escalar", "NEGOCIACAO"),
+    ("高すぎる", "escalar", "NEGOCIACAO"), ("너무 비싸요", "escalar", "NEGOCIACAO"),
+    ("غالي جدا", "escalar", "NEGOCIACAO"), ("बहुत महंगा है", "escalar", "NEGOCIACAO"),
+    ("pas maintenant merci", "adiar", "AGORA_NAO"), ("nicht jetzt", "adiar", "AGORA_NAO"),
+    ("agr nao", "adiar", "AGORA_NAO"), ("not rn", "adiar", "AGORA_NAO"),
+    ("不要再发了", "confirmar_opt_out", "OPT_OUT"), ("Je veux reserver", "escalar", "SINAL_CONVERSAO"),
+    ("quero falar c alguem", "escalar", "PEDIDO_HUMANO"),
+    ("Deal!", "responder", None), ("недорого?", "responder", None), ("Oi, quanto custa?", "responder", None),
+])
+def test_objecoes_e_pedidos_em_varios_idiomas(texto, acao, motivo):
+    import sdr
+    r = sdr.avaliar(texto)["roteamento"]
+    assert (r["acao"], r.get("motivo")) == (acao, motivo), r
+
+
+def test_frases_fixas_em_todos_os_idiomas():
+    from sdr import idiomas, roteador
+    for codigo in idiomas.IDIOMAS:
+        for motivo in ("objecao", "decisao", "competidor"):
+            msg = holding.call_offer("x", LINK, lang=codigo, motivo=motivo)
+            assert msg.split("\n")[-1] == LINK and len(msg.split("\n")) == 4, (codigo, motivo)
+            assert "Lucas" not in msg and "Italo" not in msg
+        assert roteador.MENSAGEM_ADIAR[codigo] and roteador.MENSAGEM_OPT_OUT[codigo]
+        assert holding._ACK[codigo] and holding._WAITING[codigo] and holding._APRESENTACAO[codigo]
+        assert "{q}" in holding._WAITING_REF[codigo][0]
+    # a mensagem de espera sai no idioma do lead
+    assert "チーム" in holding.waiting_message("いくらですか？")
+    assert holding.waiting_message("いくらですか？", first_contact=True).startswith("こんにちは")

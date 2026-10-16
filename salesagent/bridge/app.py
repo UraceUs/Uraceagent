@@ -721,6 +721,19 @@ def _instrucoes_comercial(lead_id: int) -> str:
             f"da tabela, e as travas de segurança):\n{conteudo}\n")
 
 
+_NOME_DO_IDIOMA = holding.idiomas.NOMES
+
+
+def _idioma_do_turno(text: str) -> str:
+    """Diz ao modelo, em código, o idioma da mensagem quando não é inglês. No teste do comercial de
+    16/10 um "É caro, faz por 2000 que fecho hoje?" foi respondido em inglês: sem acento e sem
+    palavra marcante, o modelo caiu no padrão. Inglês segue sendo o padrão e não ganha linha."""
+    lang = holding.detect_language(text or "")
+    if lang not in _NOME_DO_IDIOMA:
+        return ""
+    return f"IDIOMA: o lead escreveu em {_NOME_DO_IDIOMA[lang]}. Responda inteiro nesse idioma.\n"
+
+
 def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     """Um turno do agente OpenClaw, com sessão isolada por lead.
 
@@ -767,12 +780,13 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
             "genuinamente não responder o que você precisa; chamar "
             "[[kb]] de novo aqui dobra o tempo de resposta ao lead.\n"
             f"{instrucoes}"
+            f"{_idioma_do_turno(text)}"
             f"Memória do lead: {memory}\n"
             f"{conhecimento}"
             + (f"{nota}\n" if nota else "")
             + f"[FIM DO SYSTEM]\n\nMensagem do lead: {text}")
-    elif instrucoes:
-        text_for_agent = f"[SYSTEM] {instrucoes}[FIM DO SYSTEM]\n\nMensagem do lead: {text}"
+    elif instrucoes or _idioma_do_turno(text):
+        text_for_agent = f"[SYSTEM] {instrucoes}{_idioma_do_turno(text)}[FIM DO SYSTEM]\n\nMensagem do lead: {text}"
 
     if escalated_guard:
         # Conversa escalada respondendo pergunta coberta pelo Brain: o
