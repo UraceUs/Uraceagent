@@ -41,7 +41,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
-         "/site/produtos", "/site/produtos/235", "/site/editor",
+         "/site/produtos", "/site/produtos/235", "/site/estoque", "/site/editor",
          "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -2084,6 +2084,7 @@ def test_menu_lateral_por_areas_cada_tela_num_lugar_so(servidor, navegador):
     # #306: o site ganhou a seção dele, com uma subseção por painel
     esperado = {"Calendário": "Hoje", "Robô SDR": "Comercial", "Clientes": "Comercial", "Painel do site": "Site",
                 "Pedidos do site": "Site", "Agendamentos": "Site", "Editor do site": "Site", "Contas de clientes": "Site",
+                "Estoque do site": "Site",                                                    # #309
                 "Balcão": "Logística", "Checklists": "Logística", "Suits · Alpha Line": "Pedidos e compras",
                 "Pedidos": "Pedidos e compras", "Manual dos marcadores": "IA e inserções manuais",
                 "QuickBooks": "Administrativo", "Asana": "Administrativo"}
@@ -3134,4 +3135,73 @@ def test_o_gerente_monta_uma_pagina_no_editor_e_publica(servidor, navegador):
     finally:
         if pid:
             g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
+        g.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_o_gerente_marca_em_estoque_liga_conta_e_a_venda_deixa_out_of_stock(servidor, navegador, largura):
+    """#309 (dono, 16/10): "a gente seleciona o que que é dropshipping e o que que a gente tem em estoque … e o que tiver
+    em estoque a gente coloca quanto que tem". No celular, em Site › Estoque do site, o gerente passa um produto a "em
+    estoque", cria o item a partir do produto e conta 1; o cliente compra pelo Buy now (o Stripe falso) e o produto vira
+    "Out of stock" no site, sem o cliente ver o marcador. O painel mostra o saldo 0, sem rolar para o lado."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=largura, altura=844)
+    csrf = _csrf(g)
+    lista = g.request.get(servidor + "/api/site/produtos?limit=200&estado=ativos").json()["produtos"]
+    candidatos = [p for p in lista if not p["variations"] and p["price"] and p["in_stock"] and p["fulfillment"] == "dropshipping"]
+    alvo = candidatos[5 if largura == 360 else 6]          # longe dos que os outros testes usam
+    try:
+        abrir(g, servidor, "/site/estoque")
+        g.get_by_role("heading", name="Estoque do site", level=1).wait_for()
+        assert g.title().startswith("Estoque do site")
+        g.get_by_label("Buscar produto").fill(alvo["name"][:24])
+        g.get_by_role("button", name="Buscar", exact=True).click()
+        cartao = g.locator("article.cd", has=g.get_by_role("heading", name=alvo["name"], level=3))
+        cartao.wait_for()
+        assert cartao.locator(".cd-pill").inner_text().strip().lower() == "dropshipping"
+        cartao.get_by_role("button", name="Passar a em estoque").click()
+        g.get_by_text("Marcado como em estoque.", exact=False).wait_for()
+        cartao.get_by_text("falta ligar ao estoque").wait_for()
+        cartao.get_by_role("button", name=re.compile("^Ligar ")).click()
+        painel = g.get_by_role("dialog")
+        painel.get_by_role("heading", name=re.compile("^Ligar ao estoque"), level=3).wait_for()
+        painel.get_by_role("button", name="Criar item", exact=True).click()
+        painel.get_by_label("Quanto tem agora").fill("1")
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], ("painel", r)
+        painel.get_by_role("button", name="Ligar e contar").click()
+        g.get_by_text("Ligado: o site já vende pelo estoque.").wait_for()
+        cartao.locator(".cd-grande", has_text="1").wait_for()
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
+        assert g.evaluate("[...document.querySelectorAll('.cd .btn')].every(b => b.offsetHeight >= 40)"), "toque de 40 px"
+        # o cliente compra a única unidade
+        ctx = navegador.new_context(viewport={"width": largura, "height": 780})
+        v = ctx.new_page()
+        cliente_pela_api(v, servidor, "Rui Estoque", f"rui.estoque.{largura}.e2e@example.com", ip=f"10.3.9.{largura % 250}")
+        v.goto(site + f"/store/p/{alvo['slug']}/")
+        html = v.content()
+        assert "dropshipping" not in html.lower() and "Out of stock" not in html, "o cliente não vê o marcador"
+        v.get_by_role("button", name="Buy now").click()
+        v.wait_for_url(STRIPE.origem + "/pay/**")
+        v.get_by_role("link", name="Pay").click()
+        v.get_by_role("heading", name="Payment confirmed", level=1).wait_for()
+        ctx.close()
+        ctx = navegador.new_context(viewport={"width": largura, "height": 780})          # sem o cache da página de antes
+        v = ctx.new_page()
+        v.goto(site + f"/store/p/{alvo['slug']}/")
+        v.get_by_text("Out of stock").first.wait_for()
+        assert v.get_by_role("button", name="Buy now").count() == 0
+        ctx.close()
+        abrir(g, servidor, "/site/estoque")
+        g.get_by_role("button", name=re.compile("^Sem saldo")).click()
+        cartao = g.locator("article.cd", has=g.get_by_role("heading", name=alvo["name"], level=3))
+        cartao.locator(".cd-grande", has_text="0").wait_for()
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    finally:
+        g.request.delete(servidor + f"/api/site/estoque/{alvo['id']}/ligar", headers=csrf)
+        g.request.patch(servidor + f"/api/site/produtos/{alvo['id']}", headers=csrf, data={"fulfillment": "dropshipping"})
         g.close()

@@ -23,7 +23,7 @@
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
 4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
-5. Site › Agendamentos: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel); Security deposit (5.4)
+5. Site › Agendamentos: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel; estoque do site, 5.3); Security deposit (5.4)
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
 8. Tabela de operações para a IA
@@ -819,7 +819,7 @@ servidor, não um chute. São **24 por página**.
 **O catálogo mudou?** Desde o #298 os produtos da loja ficam **no banco** e se mudam pelo painel (veja a
 5.3). Os 70 produtos que vieram do WooCommerce entraram uma vez, como estavam.
 
-### 5.3 Produtos da loja no painel: preço, fotos, texto, opções, frete e depósito (#298)
+### 5.3 Produtos da loja no painel: preço, fotos, texto, opções, frete, depósito e estoque (#298, #309)
 
 Dono, 16/10: *"nos produtos da loja, colocar o valor de envio, o shipping … o valor do Security Deposit …
 que eu consiga alterar … essas funções serão necessárias que sejam ativas permanentemente"*. Decisões:
@@ -836,7 +836,8 @@ toda mudança fica na auditoria.
 | **Preço** e **Preço promocional** | o promocional (opcional) é o que se cobra; a loja mostra o cheio riscado. Preço 0 = "Ask for price" |
 | **Frete por unidade (US$)** | cobrado no Stripe, numa linha **Shipping**, quando o cliente escolhe **Ship to me**: frete × quantidade. **Vazio** = como antes, a equipe combina e cobra à parte; **0** = frete grátis. Retirar na pista é sempre grátis |
 | **Depósito de segurança por unidade (US$)** | vira a linha "Refundable security deposit" no Stripe; 0 = sem depósito |
-| **Em estoque** | sem estoque, a página diz "Out of stock" e o carrinho não vende |
+| **Como vendemos** (#309) | **interno, o cliente nunca vê**: *Dropshipping (o fornecedor envia)*, o padrão de todos, ou *Em estoque (o box envia)*. Veja "Estoque do site", abaixo |
+| **Em estoque** | sem estoque, a página diz "Out of stock" e o carrinho não vende. No produto **em estoque com item ligado**, a caixa fica só de leitura e mostra **quanto tem**: quem diz se tem é o estoque |
 | **Categorias** | em que página da loja o produto aparece |
 | **Fotos** | **Subir foto** (do celular ou do computador): sobe em WebP de até 1600 px, **sem a localização do celular**. A primeira é a da loja; ← → mudam a ordem; **Tirar** tira do produto |
 | **Resumo** e **Descrição** | o texto da página, com negrito, itálico, lista e subtítulo. O que não for seguro (script, link estranho) o sistema tira ao salvar |
@@ -855,6 +856,54 @@ foi pago e o que a equipe ainda combina.
 > **Teste de checkout de US$ 1 na loja:** **Novo produto** com preço **1**, frete **0** e depósito **0**;
 > ponha à venda, compre com "Ship to me" (o Stripe cobra US$ 1,00 de verdade) e **esconda o produto logo
 > depois**; o estorno sai pelo Stripe.
+
+#### Estoque do site: dropshipping ou em estoque, e quanto tem (#309)
+
+Dono, 16/10: *"a gente seleciona o que que é dropshipping e o que que a gente tem em estoque para poder enviar. Um
+marcador para isso lá, e o que tiver em estoque a gente coloca quanto que tem em estoque"*; *"não precisa ficar
+aparente essa parte … para os clientes"*.
+
+**Onde:** Site › **Estoque do site** (`/ops/site/estoque`). Um cartão por produto, com o marcador em cima, quanto tem
+agora e cada opção (tamanho, cor…) com o item do Estoque ligado. Filtros: **Em estoque**, **Dropshipping**, **Em
+estoque sem item ligado** (falta ligar) e **Sem saldo** (ligado, mas acabou: o site já mostra "Out of stock"). Busca
+por nome, SKU ou endereço; a lista é paginada no servidor.
+
+| Marcador | Quem envia | O que o site mostra |
+|---|---|---|
+| **Dropshipping** (o padrão dos 70 produtos) | o fornecedor | segue a caixa **Em estoque** do produto, como antes |
+| **Em estoque** | o box | com item ligado, **o estoque diz**: tem pelo menos 1 no Galpão + Pista, vende; zero, "Out of stock" (a opção sem saldo fica desativada). Sem item ligado ainda, segue a caixa |
+
+**Um saldo só.** O produto em estoque (ou cada tamanho dele) liga a **um item do Estoque** do box: o mesmo número do
+Balcão, da contagem e de Compras (receber a compra dá entrada). Conta o que é **da URACE** no **Galpão** e na **Pista**;
+o trailer de corrida fica fora, e peça de cliente guardada nunca vai para o site. Um item vende no site por um produto
+só.
+
+**Passo a passo (gerente):**
+1. No cartão, **Passar a em estoque** (ou, no produto, *Como vendemos* → *Em estoque*).
+2. Em cada opção, **Ligar**: escolha o **item do estoque** (a lista sugere pelo nome do produto; o item que já vende
+   por outro produto aparece desligado) ou **Criar item** a partir do produto (nome, prateleira, tamanho e o preço do
+   Balcão, opcional: o preço do site continua no produto).
+3. **Quanto tem agora** é obrigatório (a contagem; escolha Galpão ou Pista). O estoque do box nasceu sem contagem, e
+   ligar sem contar mostraria "Out of stock". Kart usado e motor (número de série) contam as unidades, uma a uma, pelo
+   Estoque.
+4. Depois, **Contar** (operador também) acerta o saldo quando a mão contar de novo; **Desligar do produto** (gerente)
+   tira a ligação sem mexer no item, no saldo nem no histórico.
+
+**A venda paga sai do estoque sozinha.** No pagamento (o aviso do Stripe ou a página de obrigado, o que chegar
+primeiro), o produto em estoque sai do item ligado, uma vez só (*venda · site*, com o número do pedido no histórico):
+**Ship to me** sai primeiro do Galpão; **retirada** sai primeiro da Pista. O razão do estoque continua batendo.
+
+**Sem saldo na hora de pagar** (duas pessoas pagaram a última unidade, o Balcão vendeu antes, a contagem estava
+errada): o pagamento **não cai**. Sai o que tinha e o pedido fica com **"Resolver: sem estoque: … pediu 2, tinha 1"** em
+Site › Pedidos do site, no e-mail da equipe (*· SEM ESTOQUE* no assunto) e no Painel do site (*Pagos sem estoque*).
+Separe o que tem, confira a prateleira, conte e combine com o cliente (prazo ou devolução pelo Stripe).
+
+**O cliente nunca vê** o marcador nem a quantidade: só "Out of stock" quando acaba. Se ele pedir mais do que o box tem,
+o carrinho e o Buy now dizem *"We don't have that many in stock right now…"*, sem o número. Com produto em estoque, o
+checkout do Stripe vale 31 minutos (a última unidade não fica presa num checkout esquecido).
+
+**Não faz:** pedido sozinho em Compras quando o dropshipping vende (a equipe pede ao fornecedor como antes); devolver ao
+estoque quando há estorno no Stripe (dê **entrada** com o motivo "devolução" no Estoque).
 
 ### Contas de clientes (Site › Contas de clientes)
 
@@ -1016,6 +1065,7 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | uma oportunidade | `GET /ops/api/sales/{id}` | — (olhe `oportunidade.closing`; venda do site: `pedido` traz as linhas, `pedido.atencao` o que resolver) | todos |
 | pedidos do site | `GET /ops/api/site/agendamentos` | consulta `{"status": "pendente"}` | Operador |
 | serviços e preços do site | `GET /ops/api/site/servicos` | — | Operador |
+| estoque do site (marcador, item ligado, quanto tem) | `GET /ops/api/site/estoque` | `q`, `modo` (todos · estoque · dropshipping · sem_item · sem_saldo), `limit`/`offset` | Operador |
 | produtos da loja (preço, frete, depósito, estoque) | `GET /ops/api/site/produtos` · `GET /ops/api/site/produtos/{id}` | `q`, `categoria`, `estado` (ativos · escondidos), `limit`/`offset` | Operador (mudar: Gerente, `PATCH /ops/api/site/produtos/{id}`) |
 | conversas do Kommo | `GET /ops/api/crm/inbox` | — | todos |
 | waivers | `GET /ops/api/waivers` | — | todos |
@@ -1048,6 +1098,8 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | recusar pedido do site | `POST /ops/api/site/agendamentos/{id}/recusar` | `{"nota": "texto que o cliente vai ler"}` | Operador | **sim** |
 | cancelar sessão | `POST /ops/api/site/agendamentos/{id}/cancelar` | `{"nota": "…"}` | Operador | **sim** |
 | confirmar sem pagamento e waiver | `POST /ops/api/site/agendamentos/{id}/confirmar` | `{}` | **Gerente** | **sim** |
+| contar o item ligado a um produto do site | `POST /ops/api/site/estoque/{produto}/contar` | `{"variacao": "M", "qty": 3, "local": "sede"}` | Operador | **sim** |
+| ligar produto (ou opção) ao estoque | `POST /ops/api/site/estoque/{produto}/ligar` | `{"variacao": "", "item_id": 12, "contagem": 2, "local": "pista"}` | **Gerente** | **sim** |
 | responder lead no Kommo | `POST /ops/api/crm/leads/{id}/reply` | `{"text": "texto aprovado pela pessoa"}` | Operador | **sim** |
 | mover etapa no Kommo | `POST /ops/api/crm/leads/{id}/stage` | `{"stage_id": "…"}` | Operador | **sim** |
 | marcar tag no Kommo | `POST /ops/api/crm/leads/{id}/tags` | `{"tags": ["…"]}` | Operador | **sim** |
@@ -1070,6 +1122,7 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 |---|---|
 | confirmar pedido do site sem pagamento e waiver | Gerente |
 | mudar preço, depósito ou item do QuickBooks de um serviço do site | Gerente |
+| mudar o marcador da loja (dropshipping · em estoque), ligar e desligar produto ao estoque | Gerente |
 | abrir e fechar a agenda, bloquear datas, "Confirmar sozinho" | Gerente |
 | ver invoices e QuickBooks | Gerente |
 | aprovar invoice proposta pela IA; **Liberar invoice** fora da tabela ou sem preço de tabela | Gerente / dono |

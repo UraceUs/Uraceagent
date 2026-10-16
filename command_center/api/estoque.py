@@ -98,6 +98,18 @@ def _donos(con):
     return out
 
 
+def _na_loja(con, item_id=None):
+    """#309: {item_id: [{product_id, slug, name, variation, fulfillment, active}]}: o produto da loja do site que vende
+    por esta peça (um saldo só: o Balcão, a contagem e a venda do site mexem no mesmo número)."""
+    out = {}
+    for x in todos(con, """SELECT s.item_id, p.id AS product_id, p.slug, p.name, s.variation, p.fulfillment, p.active
+                             FROM store_product_stock s JOIN store_products p ON p.id=s.product_id"""
+                   + (" WHERE s.item_id=?" if item_id else ""), (item_id,) if item_id else ()):
+        out.setdefault(x["item_id"], []).append({k: x[k] for k in ("product_id", "slug", "name", "variation", "fulfillment")}
+                                                | {"active": bool(x["active"])})
+    return out
+
+
 @r.get("")
 def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_db),
                u=Depends(auth.exige("OPERATOR"))):
@@ -105,6 +117,7 @@ def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_d
     loc = estoque.local(con, local)["id"] if local else None
     mov = estoque.ultimos_movimentos(con)
     donos = _donos(con)
+    loja_site = _na_loja(con)
     itens = []
     for i in todos(con, "SELECT * FROM stock_items WHERE active=1 ORDER BY kind, name"):
         total = estoque.saldo(con, i["id"], loc)
@@ -116,7 +129,7 @@ def rota_lista(local: str | None = None, con: sqlite3.Connection = Depends(get_d
             total=total, nosso=nosso, de_clientes=round(total - nosso, 4),
             abaixo=bool(i["min_qty"] and nosso < float(i["min_qty"])),
             contado=i["id"] in mov, ultima_contagem=(mov.get(i["id"]) or {}).get("contagem"),
-            clientes=donos.get(i["id"], []), **_vitrine(i, u)))
+            clientes=donos.get(i["id"], []), na_loja=loja_site.get(i["id"], []), **_vitrine(i, u)))
     return {"itens": itens,
             "prateleiras": prateleiras.PRATELEIRAS,
             "gerente": _gerente(u),
@@ -166,6 +179,7 @@ def rota_item(item_id: int, con: sqlite3.Connection = Depends(get_db),
         if not _gerente(u):
             ficha.pop(k, None)
     ficha.update(_vitrine(it, u))
+    ficha["na_loja"] = _na_loja(con, item_id).get(item_id, [])          # #309
     return {"item": ficha, "saldos": [dict(x) for x in saldos],
             "unidades": [dict(x) for x in unidades],
             "movimentos": [dict(x) for x in movimentos],

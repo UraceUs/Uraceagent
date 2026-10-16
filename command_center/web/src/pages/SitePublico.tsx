@@ -682,6 +682,8 @@ const EditarProduto = lazy(() => import('./LojaProdutos').then(m => ({ default: 
 const SitePainel = lazy(() => import('./SitePainel').then(m => ({ default: m.SitePainel })))
 /* #317: o security deposit (devolver pelo Stripe e o valor cobrado), em arquivo próprio. */
 const SiteDepositos = lazy(() => import('./SiteDepositos').then(m => ({ default: m.SiteDepositos })))
+/* #309: o estoque do site (dropshipping ou em estoque, ligado ao estoque do box), em arquivo próprio. */
+const EstoqueDoSite = lazy(() => import('./EstoqueDoSite').then(m => ({ default: m.EstoqueDoSite })))
 const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
 const EditorDePagina = lazy(() => import('./EditorSite').then(m => ({ default: m.EditorDePagina })))
 
@@ -695,6 +697,7 @@ const SUBSECOES: { aba: string; to: string; rotulo: string; min?: 'MANAGER' }[] 
   { aba: 'servicos', to: '/site/servicos', rotulo: tr("Serviços e preços") },
   { aba: 'cartoes', to: '/site/cartoes', rotulo: tr("Cartões das páginas") },
   { aba: 'produtos', to: '/site/produtos', rotulo: tr("Produtos da loja") },
+  { aba: 'estoque', to: '/site/estoque', rotulo: tr("Estoque do site") },        // #309
   { aba: 'editor', to: '/site/editor', rotulo: tr("Editor do site") },
   { aba: 'contas', to: '/site/contas', rotulo: tr("Contas de clientes") },
   { aba: 'waiver', to: '/site/waiver', rotulo: tr("Waiver"), min: 'MANAGER' },
@@ -707,7 +710,7 @@ export function SitePublico() {
   const subs = SUBSECOES.filter(s => !s.min || can(s.min))
   const atual = subs.find(s => s.aba === (aba || '')) || subs[0]
   return <>
-    <PageHeader eyebrow={tr("Site")} title={atual.rotulo} help={<>{tr("Tudo o que é do site público: os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja, o editor, as contas e a waiver. O cliente usa a área do cliente em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>.</>}>
+    <PageHeader eyebrow={tr("Site")} title={atual.rotulo} help={<>{tr("Tudo o que é do site público: os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja e o estoque dela, o editor, as contas e a waiver. O cliente usa a área do cliente em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>.</>}>
       <a className="btn ghost" href="/ops/portal" target="_blank" rel="noreferrer">{tr("Abrir a área do cliente ↗")}</a>
     </PageHeader>
     <nav className="tabs" aria-label={tr("Subseções do site")}>
@@ -715,6 +718,7 @@ export function SitePublico() {
     </nav>
     {atual.aba === '' ? <Suspense fallback={<Loading />}><SitePainel /></Suspense>
       : atual.aba === 'deposito' ? <Suspense fallback={<Loading />}><SiteDepositos /></Suspense>
+      : atual.aba === 'estoque' ? <Suspense fallback={<Loading />}><EstoqueDoSite /></Suspense>
       : atual.aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
       : atual.aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
       : atual.aba === 'disponibilidade' ? <Disponibilidade /> : atual.aba === 'servicos' ? <Servicos /> : atual.aba === 'cartoes' ? <Cartoes />

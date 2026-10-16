@@ -71,9 +71,11 @@ def _int(v, padrao=None):
 
 
 # ------------------------------------------------------------------ 1. o que o carrinho custa
-def _linha_produto(produtos, it, entrega=None):
+def _linha_produto(produtos, it, entrega=None, limites=None, uso=None):
     """#298: o frete fixo do produto (× quantidade) só com "Ship to me"; `frete_envio` é quanto seria (o carrinho
-    mostra na opção de entrega) e None quando a equipe combina à parte. O depósito do produto vale por unidade."""
+    mostra na opção de entrega) e None quando a equipe combina à parte. O depósito do produto vale por unidade.
+    #309: o produto em estoque não passa do que o box tem (somando as linhas do mesmo produto e opção); a mensagem
+    não diz o número."""
     from command_center.providers import loja
     from command_center.providers.stripe_loja import _variacao, compravel
     p = produtos.get(str(it.get("produto") or ""))
@@ -93,6 +95,13 @@ def _linha_produto(produtos, it, entrega=None):
         return {**linha, "unitario": 0, "erro": "Please choose an option on the product page."}
     if not compravel(p, v):
         return {**linha, "unitario": 0, "erro": "This item can't be bought online right now. Send us an order request instead."}
+    chave = (p["slug"], nome_var if v else "")
+    limite = (limites or {}).get(chave)
+    if limite is not None and uso is not None:
+        if uso.get(chave, 0) + qtd > limite:
+            from command_center.providers.stripe_loja import SEM_TANTO
+            return {**linha, "unitario": float((v or {}).get("price") or p["price"]), "erro": SEM_TANTO}
+        uso[chave] = uso.get(chave, 0) + qtd
     return {**linha, "unitario": float((v or {}).get("price") or p["price"]), "erro": None}
 
 
@@ -178,6 +187,12 @@ def _linha_lead_follow(con, sessao):
             "erro": None}
 
 
+def _limites(con):
+    """#309: o que o box tem de cada produto em estoque (só o servidor usa; nunca vai para o navegador)."""
+    from command_center.providers import loja
+    return loja.limites(con)
+
+
 def cotar(con, itens, conta_id=None, para_pagar=False, entrega=None):
     """As linhas do carrinho como o servidor as vê. `itens` vem do navegador: só escolhas, nunca valor.
     #298: `entrega` ("envio" | "retirada") põe o frete dos produtos no total."""
@@ -186,13 +201,14 @@ def cotar(con, itens, conta_id=None, para_pagar=False, entrega=None):
     produtos = _produtos(con)
     pilotos = {p["id"]: p for p in todos(con, "SELECT id, name FROM portal_pilots WHERE account_id=? AND active=1",
                                          (conta_id,))} if conta_id else {}
-    uso, linhas = {}, []
+    uso, linhas, no_estoque = {}, [], {}
+    limites = _limites(con) if any(isinstance(x, dict) and x.get("tipo") == "produto" for x in itens[:MAX_ITENS]) else {}
     for i, it in enumerate(itens[:MAX_ITENS]):
         if not isinstance(it, dict):
             continue
         tipo = it.get("tipo")
         if tipo == "produto":
-            linha = _linha_produto(produtos, it, entrega)
+            linha = _linha_produto(produtos, it, entrega, limites, no_estoque)
         elif tipo == "sessao":
             linha = _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar)
         else:
@@ -302,8 +318,11 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
     if conta:
         campos["customer_email"] = conta["email"]
     campos["locale"] = stripe_loja.locale_stripe(lang)
-    if c["tem_sessao"]:
-        campos["expires_at"] = int(time.time()) + EXPIRA_S      # a vaga não fica presa por um dia num checkout esquecido
+    limites = _limites(con)
+    estoque_limitado = any(x["tipo"] == "produto" and (x.get("produto"), x.get("variacao") or "") in limites for x in c["linhas"])
+    if c["tem_sessao"] or estoque_limitado:
+        # a vaga (e, #309, a última unidade do estoque) não fica presa por um dia num checkout esquecido
+        campos["expires_at"] = int(time.time()) + EXPIRA_S
     if entrega == "envio":
         campos["shipping_address_collection"] = {"allowed_countries": list(stripe_loja.PAISES_ENVIO)}
     try:
@@ -391,6 +410,8 @@ def _texto_linha(x):
         s += f" + frete {_usd(x['shipping'])}"           # #298
     if x["status"] == "sem_vaga":
         s += f"\n  ⚠ SEM VAGA: {x['note']}"
+    elif (x.get("stock_note") or "").startswith("sem estoque"):      # #309: a equipe resolve (o pagamento ficou)
+        s += f"\n  ⚠ SEM ESTOQUE: {x['stock_note']}"
     elif x["booking_id"]:
         s += f" (agendamento #{x['booking_id']})"
     return s
@@ -408,6 +429,8 @@ def pago(con, oid):
         if x["kind"] == "sessao":
             card = _marcar(con, o, x)
             grupos.setdefault(card, []).append(x["id"])
+    from command_center.providers import estoque_site
+    sem_estoque = estoque_site.baixar_do_pedido(con, oid)    # #309: o produto em estoque sai do estoque, uma vez só
     produtos = [x["id"] for x in itens(con, oid) if x["kind"] == "produto"]
     nota_produto = None
     if produtos:
@@ -445,13 +468,14 @@ def pago(con, oid):
             con.execute(f"UPDATE store_order_items SET client_id=? WHERE client_id IS NULL AND id IN ({','.join('?' * len(ids))})",
                         (card, *ids))
         primeira = primeira or (opp, card)
-    atencao = ("; ".join(f"{x['name']}: {x['note']}" for x in sem_vaga))[:500] or None
+    atencao = ("; ".join([f"{x['name']}: {x['note']}" for x in sem_vaga] + sem_estoque))[:500] or None
     nota = "; ".join(filter(None, [f"{len([g for g in grupos if g])} card(s) ligado(s)" if any(grupos) else None,
                                    "vincular à mão" if None in grupos else None, nota_produto]))
     atualizar(con, "store_orders", oid, client_id=primeira[1], opp_id=primeira[0], link_note=nota[:300] or None,
               attention=atencao, updated_at=agora())
     auditar(con, "store.paid", "stripe", entity_type="store_order", entity_id=oid,
-            detail={"carrinho": True, "opps": len(grupos), "sem_vaga": len(sem_vaga), "valor": o["amount_paid"] or o["amount"]})
+            detail={"carrinho": True, "opps": len(grupos), "sem_vaga": len(sem_vaga), "valor": o["amount_paid"] or o["amount"],
+                    **({"sem_estoque": len(sem_estoque)} if sem_estoque else {})})
     return primeira[0]
 
 
@@ -540,8 +564,11 @@ def avisar(con, oid, enviar=None):
                   + (f"\n\nATENÇÃO: {o['attention']}" if o["attention"] else "")
                   + "\n\nVendas: " + ", ".join(sorted({f"https://ops.urace.us/ops/sales/{x['opp_id']}" for x in ls if x["opp_id"]}))
                   + f"\nPágina do pedido: {pedido_site.link(o)}")
+        aviso = ("".join([" · SEM VAGA" if any(x["status"] == "sem_vaga" for x in ls) else "",       # #309: e sem estoque
+                          " · SEM ESTOQUE" if any((x.get("stock_note") or "").startswith("sem estoque") for x in ls) else ""])
+                 if o["attention"] else "")
         stripe_loja._enviar(enviar, "support@urace.us",
-                            f"Site · PAGO{' · SEM VAGA' if o['attention'] else ''}: pedido #{o['id']} — {o['name'] or o['email']}", equipe)
+                            f"Site · PAGO{aviso}: pedido #{o['id']} — {o['name'] or o['email']}", equipe)
         atualizar(con, "store_orders", oid, notified_at=agora(), notify_error=None, updated_at=agora())
         pedido_site.avisado_pago(con, o, o["email"])
         return True

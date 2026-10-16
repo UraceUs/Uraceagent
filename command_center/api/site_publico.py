@@ -303,6 +303,7 @@ class ProdutoIn(BaseModel):
     sku: str | None = None
     shipping_fee: float | str | None = None  # frete fixo por unidade com "Ship to me"; vazio = combinar à parte
     deposit: float | str | None = None       # depósito de segurança por unidade; vazio ou 0 = sem
+    fulfillment: str | None = None           # #309: dropshipping | estoque (interno: o cliente nunca vê)
     active: bool | None = None
     sort: int | None = None
 
@@ -360,6 +361,100 @@ async def subir_foto(pid: int, request: Request, arquivo: UploadFile = File(...)
             detail={"fotos": len(fotos)}, ip=auth._ip(request))
     con.commit()
     return {"produto": loja.do_painel(con, pid)}
+
+
+# ------------------------------------------------------------------ estoque do site (#309)
+@r.get("/estoque")
+def estoque_do_site(q: str = Query("", max_length=80), modo: str = "todos", limit: int = Query(20, ge=1, le=100),
+                    offset: int = Query(0, ge=0), con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Cada produto da loja com o marcador (dropshipping ou em estoque), o item do estoque ligado a ele (ou a cada
+    opção) e quanto tem no Galpão + Pista. Paginado no servidor; os filtros contam cada grupo."""
+    from command_center.providers import estoque_site
+    try:
+        return estoque_site.lista(con, q, modo, limit, offset)
+    except loja.ErroProduto as e:
+        raise HTTPException(400, str(e))
+
+
+@r.get("/estoque/itens")
+def estoque_itens(q: str = Query("", max_length=80), produto: int | None = Query(None, ge=1, le=2**63 - 1),
+                  limit: int = Query(20, ge=1, le=50), offset: int = Query(0, ge=0),
+                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Os itens do estoque interno para ligar: a busca pelo nome; sem busca, os parecidos com o nome do produto."""
+    from command_center.providers import estoque_site
+    return estoque_site.itens(con, q, produto, limit, offset)
+
+
+class NovoItemIn(BaseModel):
+    name: str | None = Field(None, max_length=120)
+    kind: str | None = None                 # peca | pneu (quantidade; vazio: pela prateleira); kart e motor entram pelo Estoque
+    category: str | None = Field(None, max_length=40)
+    size: str | None = Field(None, max_length=60)
+    price: float | str | None = None        # o preço final do Balcão (o da loja fica no produto)
+
+
+class LigarIn(BaseModel):
+    variacao: str = Field("", max_length=200)
+    item_id: int | None = Field(None, ge=1, le=2**63 - 1)
+    criar: NovoItemIn | None = None
+    contagem: float | str | None = None     # quanto tem agora (obrigatório no item de quantidade)
+    local: str | None = None                # sede (Galpão) | pista
+
+
+def _aud_estoque(con, request, u, evento, pid, detalhe):
+    auditar(con, evento, f"user:{u['id']}", user_id=u["id"], entity_type="store_product", entity_id=pid, detail=detalhe,
+            ip=auth._ip(request))
+
+
+@r.post("/estoque/{pid}/ligar", status_code=201)
+def ligar_estoque(dados: LigarIn, request: Request, pid: int = Path(..., ge=1, le=2**63 - 1),
+                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    """Liga o produto (ou a opção) a um item do estoque, que já existe ou nasce do produto, com a contagem de agora.
+    O produto passa a "em estoque": o site vende pelo saldo, e a venda paga sai do estoque."""
+    from command_center.providers import estoque_site
+    try:
+        with transacao(con):
+            res = estoque_site.ligar(con, u["id"], pid, dados.variacao, dados.item_id,
+                                     dados.criar.model_dump() if dados.criar else None, dados.contagem, dados.local)
+            _aud_estoque(con, request, u, "store.stock.link", pid, res)
+    except loja.ErroProduto as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    return {"ok": True, **res}
+
+
+@r.delete("/estoque/{pid}/ligar")
+def desligar_estoque(request: Request, pid: int = Path(..., ge=1, le=2**63 - 1), variacao: str = Query("", max_length=200),
+                     con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    """Tira a ligação. O item continua no estoque com o saldo e o histórico; a venda deixa de baixar dele."""
+    from command_center.providers import estoque_site
+    try:
+        with transacao(con):
+            res = estoque_site.desligar(con, u["id"], pid, variacao)
+            _aud_estoque(con, request, u, "store.stock.unlink", pid, res)
+    except loja.ErroProduto as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    return {"ok": True, **res}
+
+
+class ContarSiteIn(BaseModel):
+    variacao: str = Field("", max_length=200)
+    qty: float | str
+    local: str | None = None
+    nota: str | None = Field(None, max_length=300)
+
+
+@r.post("/estoque/{pid}/contar")
+def contar_estoque(dados: ContarSiteIn, request: Request, pid: int = Path(..., ge=1, le=2**63 - 1),
+                   con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """A contagem do item ligado (a mesma regra do Estoque: contar é do operador, e a diferença fica no razão)."""
+    from command_center.providers import estoque_site
+    try:
+        with transacao(con):
+            res = estoque_site.contar(con, u["id"], pid, dados.variacao, dados.qty, dados.local, dados.nota)
+            _aud_estoque(con, request, u, "store.stock.count", pid, res)
+    except loja.ErroProduto as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    return {"ok": True, **res}
 
 
 # ------------------------------------------------------------------ contas do site (#42)
