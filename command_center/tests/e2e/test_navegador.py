@@ -1461,6 +1461,15 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     g = entrar(navegador, servidor)
     abrir(g, servidor, "/sales")
     g.get_by_text("Lia Loja").first.wait_for()
+    # #310 (R1): a venda paga no site não mostra o Liberar (que cobrava de novo quem já pagou)
+    vendas = [o for c in g.request.get(servidor + "/api/sales/board").json()["colunas"] for o in c["oportunidades"]]
+    oid = next(o["id"] for o in vendas if o["name"] == "Lia Loja")
+    abrir(g, servidor, f"/sales/{oid}")
+    g.get_by_text("Pago no site (Stripe).").wait_for()
+    assert g.get_by_role("button", name="Liberar invoice").count() == 0
+    assert g.get_by_role("button", name="Cobrar só o depósito").count() == 0
+    assert g.request.get(servidor + f"/api/sales/{oid}").json()["invoice"] == "enviada"
+    assert not g.erros_js, g.erros_js
     g.close()
 
 
@@ -2186,6 +2195,13 @@ def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, na
         "passos": {"cliente": False, "qbo": False, "waiver": False, "asana": False, "kommo": False}})
     assert r.json()["fechamento"]["invoice_pendente"] is False, r.json()
     assert op.request.post(servidor + f"/api/sales/{oid2}/step/qbo", headers=csrf).status == 409
+    # #310 (R5): na tabela, com a invoice desligada no fechamento (estado "livre"): o passo manda
+    r = op.request.post(servidor + "/api/sales", headers=csrf,
+                        data={"name": "Paulo Tabela", "email": "paulo.e2e@example.com", "service": "Urace Daily", "amount": 500})
+    oid3 = r.json()["id"]
+    r = op.request.post(servidor + f"/api/sales/{oid3}/close", headers=csrf, data={
+        "passos": {"cliente": False, "qbo": False, "waiver": False, "asana": False, "kommo": False}})
+    assert op.request.get(servidor + f"/api/sales/{oid3}").json()["invoice"] == "livre"
     op.close()
 
     g = entrar(navegador, servidor, largura=360, altura=800)          # gerente, no celular
@@ -2223,7 +2239,21 @@ def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, na
     modal.get_by_role("button", name=re.compile(r"Liberar invoice de")).click()
     g.get_by_text(re.compile("não conectado")).first.wait_for(timeout=8000)
     d = g.request.get(servidor + f"/api/sales/{oid2}").json()
-    assert d["invoice"] == "esperando" and "liberando" not in d["oportunidade"]["closing"], "nada saiu: a marca do clique sai"
+    assert d["invoice"] == "esperando" and "cobrando" not in d["oportunidade"]["closing"], "nada saiu: a marca do clique sai"
+
+    # #310 (R5): a desligada na tabela tinha só um "—" na linha da invoice; agora tem o botão do passo
+    abrir(g, servidor, f"/sales/{oid3}")
+    g.get_by_role("button", name="Fechar venda", exact=True).click()
+    acomp = g.locator(".modal", has=g.get_by_role("heading", name="Acompanhamento do fechamento"))
+    acomp.wait_for()
+    mandar = acomp.get_by_role("button", name="mandar a invoice", exact=True)
+    assert mandar.evaluate("b => b.offsetHeight") >= 40, "alvo de toque"
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    mandar.click()
+    g.get_by_text(re.compile("não conectado")).first.wait_for(timeout=8000)
+    d = g.request.get(servidor + f"/api/sales/{oid3}").json()
+    assert d["invoice"] == "livre" and "cobrando" not in d["oportunidade"]["closing"], "nada saiu: a marca sai"
     assert not g.erros_js, g.erros_js
     g.close()
 

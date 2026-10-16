@@ -3992,5 +3992,17 @@
 "sem security deposit": "no security deposit",
 "Security deposit": "Security deposit",
 "Devolução pendente": "Refund pending",
-"Invoice desligada no fechamento, com valor fora da tabela.": "Invoice turned off at closing, with an amount off the price list."
+"Invoice desligada no fechamento, com valor fora da tabela.": "Invoice turned off at closing, with an amount off the price list.",
+"A tentativa anterior não terminou": "The previous attempt did not finish",
+"Conferi: mandar": "Checked: send",
+"Confirme só depois de conferir no QuickBooks que a invoice não saiu.": "Confirm only after checking in QuickBooks that the invoice did not go out.",
+"Pago no site (Stripe).": "Paid on the website (Stripe).",
+"O cliente já pagou: nada a cobrar pelo painel (nem invoice, nem depósito).": "The client already paid: nothing to charge from the panel (no invoice, no deposit).",
+"Pago no site (Stripe): nada a cobrar pelo painel.": "Paid on the website (Stripe): nothing to charge from the panel.",
+"pago no site (Stripe)": "paid on the website (Stripe)",
+"Mandar a invoice": "Send the invoice",
+"mandar a invoice": "send the invoice",
+"O serviço não tem item no catálogo do QuickBooks: escolha o item. No preço da tabela, a invoice sai agora; fora dele, só o gerente ou o dono libera.": "The service has no item in the QuickBooks catalog: choose the item. At the list price, the invoice goes out now; off it, only a manager or the owner can release it.",
+"Fora da tabela com este item: só o gerente ou o dono libera.": "Off the price list with this item: only a manager or the owner can release it.",
+"Mandar invoice de {0}": "Send {0} invoice"
 }

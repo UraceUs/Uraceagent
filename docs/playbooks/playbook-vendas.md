@@ -341,18 +341,46 @@ Regras do fechamento:
 É o botão **tentar de novo**.
 
 - **Não cobre duas vezes.** `step/qbo` **cria e envia uma invoice**. Use quando a linha do
-  QuickBooks estiver como **falhou** (ou desligada, com o valor da tabela). Se a invoice já saiu, o
-  **sistema recusa** (#310): 409 "A invoice #… desta venda já saiu: não cobramos duas vezes". Vale
-  para o botão, a API, o MCP e a IA. Para corrigir uma invoice que já saiu, fale com a gerência.
-- Venda que **ainda não fechou** não manda a invoice pelo passo (409 "Feche a venda antes"): a
-  invoice sai no fechamento, e mandada antes o fechamento cobraria de novo.
+  QuickBooks estiver como **falhou** (botão **tentar de novo**) ou desligada no fechamento com o valor
+  da tabela (botão **mandar a invoice** na linha da invoice do acompanhamento). Se a invoice já saiu,
+  o **sistema recusa** (#310): 409 "A invoice #… desta venda já saiu: não cobramos duas vezes". A
+  venda **paga no site** (loja ou carrinho, no Stripe) também: 409 "O pedido #… desta venda foi pago
+  no site (Stripe): não cobramos duas vezes". Para corrigir uma invoice que já saiu, fale com a
+  gerência.
+- **A trava vale de verdade para o botão, a API, o MCP e a IA, ao mesmo tempo** (#310). Quem cobra
+  (fechar, Liberar, o passo, a IA, o depósito) marca a venda antes de falar com o QuickBooks; o
+  segundo que chega no meio (outra aba, outro gerente, a IA, o MCP) recebe 409 "… está mandando a
+  invoice agora" (ou "liberando a invoice", "fechando a venda", "cobrando o depósito", "mandando a
+  invoice pela IA"). Espere um instante e recarregue: nada saiu duas vezes.
+- **Nenhum passo antes de fechar** (#310): `step/{qualquer passo}` numa venda que ainda não fechou
+  responde 409 "Feche a venda antes: os passos saem no fechamento". Feito antes, o fechamento faria
+  de novo (e a invoice mandada antes deixava a venda presa).
+- **Serviço sem item no catálogo do QuickBooks** (ex.: um serviço do site sem item): o passo falha
+  com "o serviço não tem item no catálogo". O **tentar de novo** abre a janela **Mandar a invoice**,
+  onde você escolhe o item: no preço da tabela do item, a invoice sai; fora dele, só o gerente ou o
+  dono libera (o botão vira **Liberar invoice de $…** para ele). API:
+  `POST /sales/{id}/step/qbo?item_id=<id do item>`; o item escolhido fica na venda.
 - **Invoice esperando o gerente** não sai por `step/qbo`: a resposta é 409 ("A invoice espera o
   gerente conferir o valor…"). Avise a gerência (seção 4.6.1).
 - **Fechar de novo não cobra de novo** (#310): numa venda em que a invoice ou o depósito já saiu (ou
   que o gerente está liberando agora), `POST /close` responde 409 "Venda já fechada…". O que faltou
   sai pelos botões de cada passo.
 - Cada invoice mandada por `step/qbo` fica na auditoria (`sales.invoice.resend`), com quem mandou,
-  o valor e o número da invoice.
+  o valor e o número da invoice. Antes de chamar o QuickBooks, cada saída que cobra grava
+  `sales.invoice.sending` ("enviando"); o desfecho (a invoice que saiu ou `sales.invoice.failed`) leva
+  o mesmo número de tentativa.
+- **A tentativa que não terminou** (#310). Se o QuickBooks respondeu e a gravação caiu (ou o pedido
+  caiu no meio), a venda fica marcada. Nos 10 minutos seguintes a resposta é "… está mandando a
+  invoice agora"; depois, 409 "A tentativa de *nome* às *hora* de *dia* (…) não terminou: confira no
+  QuickBooks se a invoice saiu". Ninguém manda outra por cima:
+  - quem vende avisa a gerência;
+  - o gerente (ou o dono) **confere no QuickBooks**. Se a invoice saiu, **não confirme**: ela já
+    está com o cliente (anote o número na venda). Se não saiu, a tela pergunta "A tentativa anterior
+    não terminou" e **Conferi: mandar** repete com a confirmação;
+  - pela API (gerente): `"confirmar": true` no corpo do Liberar e do `close`, ou
+    `?confirmar=true` em `step/qbo` e `deposit`. É outro `confirmar`, não o do MCP: o MCP pede o dele
+    antes, e este vai no `corpo` ou na `consulta`. Quem vende recebe 403; a IA não confirma. Fica na
+    auditoria (`confirmou`, com a tentativa que não terminou).
 - `step/waiver` reenvia pelo DocuSign; as travas de waiver válida e envelope aberto continuam.
 - Para corrigir o e-mail de uma waiver que já saiu, use o reenvio da waiver
   (`POST /waivers/{id}/resend` com o e-mail novo), não um envio novo.
@@ -378,11 +406,20 @@ O Liberar também vale para dois casos que antes ficavam sem saída (#310):
   **preço da tabela (catálogo)**, a diferença e o depósito. **Liberar invoice de $…** cria e envia a
   invoice pelo QuickBooks. Se o serviço ainda não tem item no catálogo, escolha o item ali.
 - API: `POST /ops/api/sales/{id}/invoice/liberar` com `{"valor": <o valor da venda>}` (papel
-  **Gerente**). Se o valor da venda mudou, a resposta é 409 e nada sai. Fica na auditoria
+  **Gerente**; opcionais `"item_id"` e, só para a tentativa que não terminou, `"confirmar": true`).
+  Se o valor da venda mudou, a resposta é 409 e nada sai. Fica na auditoria
   (`sales.invoice.release`) com o valor, o preço da tabela e quem liberou.
 - **Uma invoice só.** A que já saiu não sai de novo (409 "já saiu"). Dois cliques ao mesmo tempo
-  (duas abas, dois gerentes) mandam uma invoice: o segundo recebe 409 "… está liberando esta invoice
-  agora". Se o QuickBooks falhar, nada sai e o botão volta a funcionar.
+  (duas abas, dois gerentes), ou o Liberar junto com a IA, o passo, o fechamento ou o "Cobrar só o
+  depósito", mandam uma invoice: o segundo recebe 409 "… está liberando a invoice agora" (ou o que o
+  primeiro está fazendo). Se o QuickBooks falhar, nada sai e o botão volta a funcionar. Se ele
+  respondeu e a gravação caiu, veja **A tentativa que não terminou** (seção 4.6).
+- Nada que outro pedido grava no meio se perde (#310): um reenvio de waiver durante o Liberar não
+  apaga o "liberada", e o depósito cobrado no meio não sai de novo na invoice.
+- **Venda paga no site (Stripe)** não tem Liberar: a ficha mostra "Pago no site (Stripe)." e a
+  linha da invoice, "pago no site (Stripe)". O cliente já pagou.
+- **Serviço sem item no catálogo**: com o item escolhido na janela, o Liberar também vale para a
+  venda que não esperava o gerente (API: `"item_id"` no corpo).
 - No acompanhamento do fechamento, a linha da invoice mostra **Liberar invoice** para o gerente e
   "espera o gerente" para quem vende.
 
@@ -394,7 +431,8 @@ depósito: a ficha mostra **"Depósito ainda não cobrado"** com o botão **Cobr
 
 - API: `POST /ops/api/sales/{id}/deposit` (Operador).
 - Não cobra duas vezes; com a invoice principal esperando o gerente, o depósito vai junto quando ela
-  for liberada; serviço sem depósito responde "não pede depósito no catálogo".
+  for liberada; serviço sem depósito responde "não pede depósito no catálogo". Venda paga no site
+  (Stripe) responde 409; com o Liberar, o passo ou a IA cobrando no mesmo instante, também (#310).
 
 ### 4.7 A IA dentro da oportunidade
 
@@ -406,8 +444,8 @@ invoice, fechar"). Ditar funciona. O que ela pode fazer e quem aprova:
 | registrar ligação, marcar retorno, anotar, criar tarefa | executa sozinha |
 | enviar waiver | executa sozinha (as travas do DocuSign continuam) |
 | mover etapa, fechar a venda | espera alguém confirmar (o Operador pode) |
-| enviar invoice | espera confirmação, e **só gerente ou administrador** decide; fora da tabela, recusa se quem decide não é gerente. Só depois de fechar a venda e uma vez (#310): antes do fechamento, ou com a invoice já enviada, recusa; a que ela manda fica no fechamento |
-| fechar a venda de novo | recusa se a invoice ou o depósito já saiu (#310) |
+| enviar invoice | espera confirmação, e **só gerente ou administrador** decide; fora da tabela, recusa se quem decide não é gerente. Só depois de fechar a venda e uma vez (#310): antes do fechamento, com a invoice já enviada ou com a venda paga no site (Stripe), recusa; a que ela manda fica no fechamento. Ela marca a venda como o botão: com alguém cobrando no mesmo instante, recusa; com a tentativa que não terminou, recusa (quem confirma é o gerente, pela tela) |
+| fechar a venda de novo | recusa se a invoice ou o depósito já saiu, se a venda foi paga no site (Stripe) ou se alguém está fechando ou cobrando agora (#310) |
 
 A política em vigor de cada ação está em **O que a IA pode fazer** (`/ops/ai/capabilities`); o
 administrador muda em Políticas da IA.
@@ -1060,9 +1098,9 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | mover etapa | `POST /ops/api/sales/{id}/stage` | `{"etapa": "PROPOSTA"}` ou `{"etapa": "PERDIDO", "motivo": "distância"}` | Operador | não |
 | itens do catálogo (preço da tabela) | `GET /ops/api/sales/catalogo` | consulta `{"q": "daily"}` | todos | não |
 | **fechar a venda** | `POST /ops/api/sales/{id}/close` | `{"service": "Test Drive", "service_date": "2026-10-24", "service_time": "09:00", "amount": 0, "item_id": "id do item do catálogo", "pilot_name": "Piloto Exemplo", "pilot_age": 12, "email": "cliente@exemplo.com", "irmao": false, "passos": {"cliente": true, "qbo": true, "waiver": true, "asana": true, "kommo": false}, "extras": [{"titulo": "avisar o instrutor", "onde": "painel", "quando": "2026-10-23"}]}` (`0` = troque pelo valor real; o preço da tabela vem do item) | Operador | **sim** |
-| refazer um passo | `POST /ops/api/sales/{id}/step/{passo}` | — (`passo`: cliente, qbo, waiver, asana, kommo; `cliente` aceita a consulta `{"irmao": true}`) | Operador | **sim** |
-| cobrar só o depósito | `POST /ops/api/sales/{id}/deposit` | — | Operador | **sim** |
-| liberar invoice fora da tabela | `POST /ops/api/sales/{id}/invoice/liberar` | `{"valor": 0}` (o valor da venda, conferido) | **Gerente** | **sim** |
+| refazer um passo | `POST /ops/api/sales/{id}/step/{passo}` | — (`passo`: cliente, qbo, waiver, asana, kommo; só depois de fechar; `cliente` aceita a consulta `{"irmao": true}`; `qbo` aceita `{"item_id": "id do item"}` e, só o gerente, `{"confirmar": true}` para a tentativa que não terminou) | Operador | **sim** |
+| cobrar só o depósito | `POST /ops/api/sales/{id}/deposit` | — (consulta `{"confirmar": true}` só para a tentativa que não terminou, gerente) | Operador | **sim** |
+| liberar invoice fora da tabela | `POST /ops/api/sales/{id}/invoice/liberar` | `{"valor": 0}` (o valor da venda, conferido; opcionais `"item_id"` e `"confirmar": true`) | **Gerente** | **sim** |
 | card de irmão | `POST /ops/api/clients` | `{"name": "Responsável Exemplo", "pilot_name": "Irmão Exemplo", "pilot_dob": "2016-05-09", "irmao_de": 123}` | Operador | não |
 | tarefa de serviço no Asana (modelo oficial) | `POST /ops/api/tasks` | `{"client_id": 123, "pilot_name": "Piloto Exemplo", "responsible": "Responsável Exemplo", "email": "cliente@exemplo.com", "phone": "+1 407 555 0100", "dob": "2014-05-10", "product": "Test Drive", "category": "4 stroke", "due_on": "2026-10-24"}` | Operador | **sim** |
 | enviar waiver avulsa | `POST /ops/api/waivers/send` | `{"template": "parental", "signer_name": "Responsável Exemplo", "signer_email": "cliente@exemplo.com", "service": "Test Drive", "client_id": 123}` | Operador | **sim** |
@@ -1160,12 +1198,16 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 
 1. `GET /sales/{id}` e leia `oportunidade.closing.passos`.
 2. Para cada passo com `ok: false`, corrija a causa (e-mail, integração) e use **tentar de novo**
-   (`step/{passo}`).
+   (`step/{passo}`). Invoice que falhou por "o serviço não tem item no catálogo": o **tentar de novo**
+   pede o item (`step/qbo?item_id=…`). Invoice desligada no fechamento com o valor da tabela:
+   **mandar a invoice**.
 3. Passo com `ok: null` e "invoice esperando o gerente conferir o valor": não refaça. Avise a
    gerência; ela usa **Liberar invoice** (seção 4.6.1).
 4. Faltou o depósito? **Cobrar só o depósito** (seção 4.6.2).
 5. Nunca chame `close` de novo numa venda que já tem `closing`. Se a invoice ou o depósito já saiu, o
    sistema recusa (409 "Venda já fechada…").
+6. 409 "A tentativa de … não terminou: confira no QuickBooks se a invoice saiu": é da gerência
+   (seção 4.6, **A tentativa que não terminou**).
 
 ### R7. Waiver voltou ou foi para o e-mail errado
 
@@ -1211,7 +1253,7 @@ instrução à gerência.
 
 | Regra | Na prática |
 |---|---|
-| **Não cobrar duas vezes** | antes de fechar, olhe `closing`; `step/qbo` só para passo que falhou; agendamento com invoice não gera outra; o depósito sai uma vez por venda (`closing.deposito_cobrado`). O sistema trava (#310): invoice que já saiu não sai de novo pelo passo, pelo Liberar nem pela IA, e fechar de novo é recusado |
+| **Não cobrar duas vezes** | antes de fechar, olhe `closing`; `step/qbo` só para passo que falhou; agendamento com invoice não gera outra; o depósito sai uma vez por venda (`closing.deposito_cobrado`). O sistema trava (#310): invoice que já saiu (ou venda paga no site, no Stripe) não sai de novo pelo passo, pelo Liberar nem pela IA; fechar de novo é recusado; duas saídas ao mesmo tempo (botão, API, MCP, IA) mandam uma só; a tentativa que não terminou só passa com o gerente conferindo no QuickBooks |
 | **Invoice fora da tabela só com o gerente** | o preço da tabela vem do catálogo; fora dela (ou sem preço), quem libera é o gerente ou o dono, vendo o valor |
 | **Nunca serviço de um cliente no card de outro** | confira o piloto do card antes de vincular; irmão tem card próprio (card de irmão); mover serviço é da gerência |
 | **NO FAKE DATA** | não invente nome, e-mail, idade, data, preço. Faltou, pergunte. Ausência é informação |
@@ -1255,8 +1297,13 @@ instrução à gerência.
 | `step/qbo`: "A invoice espera o gerente conferir o valor…" (409) | mesma coisa: é da gerência |
 | `step/qbo` ou Liberar: "A invoice #… desta venda já saiu: não cobramos duas vezes" (409) | a invoice já está com o cliente: não mande outra; correção é da gerência |
 | `close`: "Venda já fechada e …: fechar de novo cobraria outra vez" (409) | use os botões de cada passo no acompanhamento |
-| Liberar: "… está liberando esta invoice agora" (409) | outra aba ou outro gerente está liberando: espere e recarregue |
-| QuickBooks: "o serviço não tem item no catálogo do QuickBooks: escolha o item na tela de fechar" | escolha o **Item do catálogo** e use **tentar de novo**; se o item não existe, é da gerência |
+| "… está liberando a invoice agora" (ou "mandando a invoice", "fechando a venda", "cobrando o depósito", "mandando a invoice pela IA") (409) | outra aba, outro gerente, a IA ou o MCP está cobrando esta venda neste instante: espere e recarregue |
+| "Esta venda mudou agora mesmo (outro clique, outra aba ou a IA?): recarregue e confira." (409) | recarregue a ficha e veja o que saiu antes de tentar de novo |
+| "A tentativa de … às … não terminou: confira no QuickBooks se a invoice saiu…" (409) | é da gerência: confere no QuickBooks; se não saiu, **Conferi: mandar** (ou `confirmar: true`); se saiu, não mande outra |
+| "Só o gerente ou o dono confirma que a tentativa anterior não mandou a invoice." (403) | quem vende não confirma: avise a gerência |
+| "O pedido #… desta venda foi pago no site (Stripe): não cobramos duas vezes" (409) | o cliente pagou no site: não há invoice nem depósito a mandar pelo painel |
+| `step/…`: "Feche a venda antes: os passos saem no fechamento…" (409) | feche a venda (**Fechar venda**): os passos saem juntos |
+| QuickBooks: "o serviço não tem item no catálogo do QuickBooks: escolha o item na tela de fechar" | use **tentar de novo** e escolha o item na janela (ou `step/qbo?item_id=…`); se o item não existe, é da gerência |
 | Card: "o card com este contato é do piloto …: marque "É irmão"…" | é irmão: `step/cliente?irmao=true` (ou feche de novo marcando "É irmão"); se não for, vincule ao card certo |
 | Depósito: "não pede depósito no catálogo" | o serviço não tem depósito em Serviços e preços: é da gerência mudar |
 | Passo Kommo "feito", mas com a nota "não achei a etapa 'Closed won' neste funil do Kommo" | o lead não se mexeu: mova a etapa à mão no chat ou avise a gerência |

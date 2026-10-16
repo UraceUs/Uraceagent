@@ -59,10 +59,12 @@ function CampanhaDoContato({ c }: { c: Record<string, string> }) {
 }
 interface Passo { passo: string; nome: string; ok: boolean | null; detalhe: string; client_id?: number; invoice?: string; envelope?: string; tarefa?: string; pendente?: boolean }
 interface Fechamento {
-  em: string; por: string; na_tabela: boolean | null; aprovado?: boolean; motivo_preco?: string; passos: Passo[]
+  em: string; por: string; na_tabela: boolean | null; aprovado?: boolean; motivo_preco?: string; passos?: Passo[]
   // #204: a cobrança — o preço da tabela vem do catálogo; fora dela, a invoice espera o gerente
   valor?: number | null; preco_tabela?: number | null; invoice_pendente?: boolean; deposito?: number
   deposito_cobrado?: string | boolean | null; liberada?: { por: string; em: string; valor: number; preco_tabela: number | null } | null
+  // #310: o pedido pago no site (por: 'stripe', sem passos) e a marca de quem está cobrando agora
+  pedido?: number; cobrando?: { por: string; em: string; acao: string } | null
 }
 interface Tabela { item_id: string | null; nome: string; preco: number | null; deposito: number; fonte: string }
 interface ItemCatalogo { id: string; name: string; price: number | null; deposito: number }
@@ -78,6 +80,23 @@ interface PedidoSite { id: number; tipo: 'produto' | 'carrinho'; status: string;
 /** #310: a invoice do serviço depois de fechar — enviada (não sai de novo), esperando (só o gerente ou o
  *  dono libera: fora da tabela, desligada pelo closer ou de antes de 14/10) ou livre (sai pelo passo). */
 type EstadoInvoice = 'enviada' | 'esperando' | 'livre'
+/** #310: a venda fechou? O fechamento de verdade tem a data ou os passos (o pedido pago no site também); só
+ *  a marca de quem está fechando agora não é fechamento. */
+const ehFechada = (f: Fechamento | null | undefined): f is Fechamento => !!f && !!(f.em || f.passos || f.por === 'stripe')
+type Perguntar = ReturnType<typeof usePerguntar>
+/** #310 (R4): a tentativa anterior de cobrar esta venda não terminou (a invoice pode ter saído). O servidor
+ *  recusa até alguém conferir no QuickBooks: o gerente (ou o dono) confirma aqui e a chamada se repete com
+ *  `confirmar`; quem vende vê o aviso do servidor. */
+async function comConfirmacao<T>(fn: (confirmar: boolean) => Promise<T>, gerente: boolean, perguntar: Perguntar): Promise<T> {
+  try { return await fn(false) } catch (e) {
+    const er = e as ApiError
+    if (er?.motivo !== 'tentativa_sem_desfecho' || !gerente) throw e
+    const ok = await perguntar({ titulo: tr("A tentativa anterior não terminou"), perigo: true, ok: tr("Conferi: mandar"),
+      texto: <>{er.message} <b>{tr("Confirme só depois de conferir no QuickBooks que a invoice não saiu.")}</b></> })
+    if (ok !== true) throw e
+    return await fn(true)
+  }
+}
 interface Detalhe { oportunidade: Opp; eventos: Evento[]; pedido?: PedidoSite | null; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[]; tabela?: Tabela | null; pode_liberar?: boolean; card?: CardDoFechamento | null; invoice?: EstadoInvoice | null }
 interface Agenda { retornos: (Opp & { atrasado: boolean })[]; ligacoes_hoje: { at: string; title: string; name: string }[] }
 
@@ -237,7 +256,9 @@ export function Oportunidade() {
   if (!o) return null
   const atrasado = !!o.next_at && o.next_at < new Date().toISOString()
   const evs = (d.data?.eventos || []).filter(e => aba === 'tudo' || e.kind === aba)
-  const passos = o.closing?.passos || []
+  const fechada = ehFechada(o.closing)
+  const passos = (fechada && o.closing?.passos) || []
+  const pagoNoSite = o.closing?.por === 'stripe'           // #310: o cliente já pagou no site
   const tabela = d.data?.tabela || null
   const invoice = d.data?.invoice ?? null
   // #310: esperando quem confere o valor — o fechamento de agora (`invoice_pendente`) ou o de antes de
@@ -246,10 +267,10 @@ export function Oportunidade() {
   const esperaAprovacao = !!o.closing?.invoice_pendente || (!!qboPasso?.pendente && qboPasso.ok !== true)
   const precoFechado = o.closing?.preco_tabela ?? tabela?.preco ?? null
   // #204: o depósito faltou (venda fechada sem a invoice dele) e o serviço pede: o operador cobra só ele
-  const faltaDeposito = !!o.closing && !esperaAprovacao && !o.closing.deposito_cobrado && (tabela?.deposito || 0) > 0
+  const faltaDeposito = fechada && !pagoNoSite && !esperaAprovacao && !o.closing?.deposito_cobrado && (tabela?.deposito || 0) > 0
   async function cobrarDeposito() {
     if (!await perguntar({ titulo: tr("Cobrar só o depósito?"), texto: tr("Uma invoice com a linha Security deposit de {0}, para {1}. É o mesmo depósito da venda automática.", money(tabela?.deposito || 0), o?.email || tr("sem e-mail")), ok: tr("Cobrar o depósito") })) return
-    await acao('dep', () => api.post(`/sales/${oid}/deposit`), tr("Depósito cobrado."))
+    await acao('dep', () => comConfirmacao(c => api.post(`/sales/${oid}/deposit${c ? '?confirmar=true' : ''}`), !!d.data?.pode_liberar, perguntar), tr("Depósito cobrado."))
   }
   return <div className="stack">
     <div className="row wrap" style={{ gap: 8 }}>
@@ -289,7 +310,8 @@ export function Oportunidade() {
       {d.data?.pode_liberar ? <button className="btn sm primary" onClick={() => setLiberar(true)}>{tr("Liberar invoice")}</button> : <span className="muted">{tr("Só o gerente ou o dono libera.")}</span>}</Banner>}
     {faltaDeposito && can('OPERATOR') && <Banner tone="info"><b>{tr("Depósito ainda não cobrado.")}</b> {tr("O serviço pede depósito de {0}.", money(tabela?.deposito || 0))}{' '}
       <button className="btn sm" disabled={busy === 'dep'} onClick={cobrarDeposito}>{busy === 'dep' ? <Spinner /> : tr("Cobrar só o depósito")}</button></Banner>}
-    {o.stage === 'GANHO' && <Banner tone="ok"><b>{tr("Venda fechada.")}</b> {passos.filter(p => p.ok).length} {tr("de")} {passos.length} {tr("passos concluídos")}{passos.some(p => p.ok === false) ? tr(" · falta: {0}", passos.filter(p => p.ok === false).map(p => p.nome).join(', ')) : ''}. <button className="btn ghost sm" onClick={() => setFechar(true)}>{tr("ver acompanhamento")}</button></Banner>}
+    {pagoNoSite && <Banner tone="ok"><b>{tr("Pago no site (Stripe).")}</b> {tr("O cliente já pagou: nada a cobrar pelo painel (nem invoice, nem depósito).")}</Banner>}
+    {o.stage === 'GANHO' && !pagoNoSite && <Banner tone="ok"><b>{tr("Venda fechada.")}</b> {passos.filter(p => p.ok).length} {tr("de")} {passos.length} {tr("passos concluídos")}{passos.some(p => p.ok === false) ? tr(" · falta: {0}", passos.filter(p => p.ok === false).map(p => p.nome).join(', ')) : ''}. <button className="btn ghost sm" onClick={() => setFechar(true)}>{tr("ver acompanhamento")}</button></Banner>}
 
     <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1.4fr) minmax(0,1fr)', gap: 14 }}>
       <div className="stack">
@@ -323,7 +345,7 @@ export function Oportunidade() {
         {o.campaign && <CampanhaDoContato c={o.campaign} />}
         <div className="card card-b stack" style={{ gap: 6 }}>
           <div className="h2">{tr("O que já saiu")}</div>
-          {passos.length === 0 && <div className="small muted">{tr("Nada enviado ainda. No fechamento, o painel faz tudo de uma vez.")}</div>}
+          {passos.length === 0 && <div className="small muted">{pagoNoSite ? tr("Pago no site (Stripe): nada a cobrar pelo painel.") : tr("Nada enviado ainda. No fechamento, o painel faz tudo de uma vez.")}</div>}
           {passos.map(p => <div key={p.passo} className="row" style={{ gap: 8 }}>
             <Icon name={p.ok ? 'check' : p.ok === false ? 'x' : 'clock'} size={15} className={p.ok ? undefined : 'muted'} />
             <span className="small" style={{ color: p.ok === false ? 'var(--crit)' : undefined }}>{p.nome}</span>
@@ -335,7 +357,7 @@ export function Oportunidade() {
 
     {ligar && <RegistrarLigacao o={o} resultados={d.data!.resultados} onClose={() => setLigar(false)} onOk={() => { setLigar(false); d.reload() }} onFechar={() => { setLigar(false); setFechar(true) }} />}
     {fechar && <FecharVenda o={o} tabela={tabela} card={d.data?.card || null} podeLiberar={!!d.data?.pode_liberar} invoice={invoice} onClose={() => setFechar(false)} onOk={() => { d.reload() }} />}
-    {liberar && <LiberarInvoice o={o} tabela={tabela} onClose={() => setLiberar(false)} onOk={() => { setLiberar(false); d.reload() }} />}
+    {liberar && <LiberarInvoice o={o} tabela={tabela} podeLiberar={!!d.data?.pode_liberar} onClose={() => setLiberar(false)} onOk={() => { setLiberar(false); d.reload() }} />}
   </div>
 }
 
@@ -447,27 +469,36 @@ function EscolherItem({ valor, onEscolher, id }: { valor: string; onEscolher: (i
 }
 
 /** Liberar invoice (#204, dono, 14/10: "precisa confirmar o valor da invoice"): só gerente e dono,
- *  vendo o valor da venda contra o preço da tabela. Fica auditado. */
-function LiberarInvoice({ o, tabela, onClose, onOk }: { o: Opp; tabela: Tabela | null; onClose: () => void; onOk: (f: Fechamento) => void }) {
+ *  vendo o valor da venda contra o preço da tabela. Fica auditado.
+ *  #310 (R6): `modo="mandar"` é a mesma janela para a invoice cujo serviço não tem item no catálogo: escolhido
+ *  o item, no preço da tabela ela sai pelo passo (quem vende também manda); fora dele, só o gerente libera. */
+function LiberarInvoice({ o, tabela, modo = 'liberar', podeLiberar = true, onClose, onOk }: { o: Opp; tabela: Tabela | null; modo?: 'liberar' | 'mandar'; podeLiberar?: boolean; onClose: () => void; onOk: (f?: Fechamento) => void }) {
   const toast = useToast()
+  const perguntar = usePerguntar()
   const [busy, setBusy] = useState(false)
   const [item, setItem] = useState<ItemCatalogo | null>(null)
   const semItem = !tabela?.item_id
   const preco = item ? item.price : (o.closing?.preco_tabela ?? tabela?.preco ?? null)
   const deposito = o.closing?.deposito_cobrado ? 0 : (item ? item.deposito : (tabela?.deposito || 0))
   const valor = o.amount || 0
+  const fora = preco == null || Math.abs(valor - preco) > 0.009
+  const pelaLiberacao = modo === 'liberar' || fora          // fora da tabela, só pelo Liberar (gerente ou dono)
+  const bloqueado = pelaLiberacao && !podeLiberar
   async function liberar() {
     setBusy(true)
     try {
-      const r = await api.post<{ fechamento: Fechamento }>(`/sales/${o.id}/invoice/liberar`, { valor, item_id: item?.id || undefined })
-      toast(tr("Invoice liberada e enviada."), 'ok'); onOk(r.fechamento)
+      const r = await comConfirmacao(c => pelaLiberacao
+        ? api.post<{ fechamento?: Fechamento }>(`/sales/${o.id}/invoice/liberar`, { valor, item_id: item?.id || undefined, confirmar: c || undefined })
+        : api.post<{ fechamento?: Fechamento }>(`/sales/${o.id}/step/qbo?item_id=${encodeURIComponent(item?.id || '')}${c ? '&confirmar=true' : ''}`), podeLiberar, perguntar)
+      toast(pelaLiberacao ? tr("Invoice liberada e enviada.") : tr("Invoice enviada pelo QuickBooks."), 'ok'); onOk(r.fechamento)
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   const linha = (rotulo: string, v: string) => <div className="inset"><div className="it" style={{ padding: '10px 14px' }}><div style={{ minWidth: 0 }}><div className="s">{rotulo}</div><div className="t mono">{v}</div></div></div></div>
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
     <button className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}><Icon name="x" size={16} /></button>
-    <div><div className="small muted cond">{tr("Venda ·")} {o.name}</div><h3 className="h1" style={{ fontSize: 22 }}>{tr("Liberar invoice")}</h3>
-      <div className="small muted">{tr("Confira o valor contra o preço da tabela. Ao liberar, a invoice sai para o cliente pelo QuickBooks e fica na auditoria com o seu nome.")}</div></div>
+    <div><div className="small muted cond">{tr("Venda ·")} {o.name}</div><h3 className="h1" style={{ fontSize: 22 }}>{modo === 'mandar' ? tr("Mandar a invoice") : tr("Liberar invoice")}</h3>
+      <div className="small muted">{modo === 'mandar' ? tr("O serviço não tem item no catálogo do QuickBooks: escolha o item. No preço da tabela, a invoice sai agora; fora dele, só o gerente ou o dono libera.")
+        : tr("Confira o valor contra o preço da tabela. Ao liberar, a invoice sai para o cliente pelo QuickBooks e fica na auditoria com o seu nome.")}</div></div>
     <div className="card" style={{ padding: 0 }}>
       {linha(tr("Serviço"), o.service || '—')}
       {linha(tr("Valor da venda"), money(valor))}
@@ -476,13 +507,15 @@ function LiberarInvoice({ o, tabela, onClose, onOk }: { o: Opp; tabela: Tabela |
       {deposito > 0 && linha(tr("Depósito de segurança (na mesma invoice)"), money(deposito))}
     </div>
     {semItem && <div className="field"><label htmlFor="liberar-item">{tr("Item do catálogo (o serviço ainda não tem)")}</label><EscolherItem id="liberar-item" valor={item?.id || ''} onEscolher={setItem} /></div>}
+    {modo === 'mandar' && item && bloqueado && <Banner tone="warn">{tr("Fora da tabela com este item: só o gerente ou o dono libera.")}</Banner>}
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onClose}>{tr("Cancelar")}</button>
-      <button className="btn primary" disabled={busy || (semItem && !item)} onClick={liberar}>{busy ? <Spinner /> : tr("Liberar invoice de {0}", money(valor))}</button></div>
+      <button className="btn primary" disabled={busy || (semItem && !item) || bloqueado} onClick={liberar}>{busy ? <Spinner /> : pelaLiberacao ? tr("Liberar invoice de {0}", money(valor)) : tr("Mandar invoice de {0}", money(valor))}</button></div>
   </div></Scrim>
 }
 
 function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: { o: Opp; tabela: Tabela | null; card: CardDoFechamento | null; podeLiberar: boolean; invoice: EstadoInvoice | null; onClose: () => void; onOk: () => void }) {
   const toast = useToast()
+  const perguntar = usePerguntar()
   const [f, setF] = useState({
     service: o.service || '', service_date: (o.service_date || '').slice(0, 10), service_time: o.service_time || '',
     amount: o.amount !== null ? String(o.amount) : '',
@@ -494,10 +527,17 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
   const [itemId, setItemId] = useState(o.qbo_item_id || tabela?.item_id || '')
   const [irmao, setIrmao] = useState(!!card?.outro_piloto)
   const [liberar, setLiberar] = useState(false)
+  const [mandar, setMandar] = useState(false)               // #310 (R6): a invoice do serviço sem item no catálogo
   const [passos, setPassos] = useState<Record<string, boolean>>({ cliente: true, qbo: true, waiver: true, asana: true, kommo: !!o.crm_lead_id })
   const [extras, setExtras] = useState<Extra[]>([])
   const [busy, setBusy] = useState(false)
-  const [feito, setFeito] = useState<Fechamento | null>(o.closing || null)
+  // o acompanhamento segue o servidor: a resposta que acabou de chegar vale até a ficha recarregar; depois de um
+  // passo, do Liberar ou de outra aba, a linha mostra o que saiu (#310)
+  const [local, setLocal] = useState<{ f: Fechamento; de: Fechamento | null } | null>(null)
+  const feito = local && local.de === o.closing ? local.f : ehFechada(o.closing) ? o.closing : local?.f ?? null
+  const setFeito = (fe: Fechamento) => setLocal({ f: fe, de: o.closing })
+  const pagoNoSite = feito?.por === 'stripe'
+  const semItem = !tabela?.item_id
   const set = (k: keyof typeof f) => (v: string) => setF(x => ({ ...x, [k]: v }))
   // #310: a linha da invoice mostra Liberar também na desligada pelo closer fora da tabela e na de antes
   // de 14/10 (o servidor diz o estado; logo depois de confirmar, antes de recarregar, vale o fechamento)
@@ -514,22 +554,23 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
     if (!f.service.trim() || !f.amount) { toast(tr("Diga o serviço e o valor fechado."), 'crit'); return }
     setBusy(true)
     try {
-      const r = await api.post<{ etapa: string; fechamento: Fechamento }>(`/sales/${o.id}/close`, {
+      const r = await comConfirmacao(c => api.post<{ etapa: string; fechamento: Fechamento }>(`/sales/${o.id}/close`, {
         service: f.service, service_date: f.service_date || undefined, service_time: f.service_time || undefined,
         amount: Number(f.amount), item_id: itemId || undefined, irmao: card ? irmao : undefined,
         pilot_name: f.pilot_name || undefined, pilot_age: f.pilot_age ? Number(f.pilot_age) : undefined,
         email: f.email || undefined, phone: f.phone || undefined, nota_cliente: f.nota_cliente || undefined,
         passos, extras: extras.filter(e => e.titulo.trim()).map(e => ({ titulo: e.titulo, onde: e.onde, quando: e.quando || undefined, notas: e.notas || undefined })),
-      })
+        confirmar: c || undefined,
+      }), podeLiberar, perguntar)
       setFeito(r.fechamento)
-      const falhou = r.fechamento.passos.filter(p => p.ok === false)
+      const falhou = (r.fechamento.passos || []).filter(p => p.ok === false)
       toast(falhou.length ? tr("Fechada, mas faltou: {0}", falhou.map(p => p.nome).join(', ')) : tr("Venda fechada e tudo disparado."), falhou.length ? undefined : 'ok')
       onOk()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   async function refazer(passo: string) {
     setBusy(true)
-    try { await api.post(`/sales/${o.id}/step/${passo}`); toast(tr("Feito."), 'ok'); onOk() }
+    try { await comConfirmacao(c => api.post(`/sales/${o.id}/step/${passo}${c ? '?confirmar=true' : ''}`), podeLiberar, perguntar); toast(tr("Feito."), 'ok'); onOk() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
 
@@ -583,15 +624,19 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
         <div className="h2">{feito ? tr("Como foi cada passo") : tr("O que acontece ao confirmar")}</div>
         <div className="card" style={{ padding: 0 }}>
           {LINHAS.map(l => {
-            const p = feito?.passos.find(x => x.passo === l.k)
+            const p = feito?.passos?.find(x => x.passo === l.k)
             return <div className="inset" key={l.k}><div className="it" style={{ padding: '10px 14px' }}>
               <span className={`icbox${p?.ok ? ' ok' : p?.ok === false ? ' crit' : ''}`}><Icon name={l.icone} /></span>
               <div style={{ minWidth: 0 }}><div className="t">{l.nome}</div><div className="s">{p ? p.detalhe : l.o_que}</div></div>
               <div className="r">
                 {!feito && <button className={`sw${passos[l.k] ? '' : ' off'}`} aria-label={passos[l.k] ? tr("Ligado") : tr("Desligado")} onClick={() => setPassos(x => ({ ...x, [l.k]: !x[l.k] }))} />}
                 {feito && (p?.ok ? <Chip tone="ok">{tr("feito")}</Chip>
+                  : l.k === 'qbo' && pagoNoSite ? <Chip tone="ok">{tr("pago no site (Stripe)")}</Chip>
                   : l.k === 'qbo' && esperando ? (podeLiberar ? <button className="btn sm primary" onClick={() => setLiberar(true)}>{tr("Liberar invoice")}</button> : <Chip tone="warn">{tr("espera o gerente")}</Chip>)
+                  // #310: o serviço sem item no catálogo escolhe o item na janela (R6); a invoice desligada na tabela sai daqui (R5)
+                  : l.k === 'qbo' && semItem && (p?.ok === false || invoice === 'livre') ? <button className="btn sm" disabled={busy} onClick={() => setMandar(true)}>{p?.ok === false ? tr("tentar de novo") : tr("mandar a invoice")}</button>
                   : p?.ok === false ? <button className="btn sm" disabled={busy} onClick={() => refazer(l.k)}>{tr("tentar de novo")}</button>
+                  : l.k === 'qbo' && invoice === 'livre' ? <button className="btn sm" disabled={busy} onClick={() => refazer('qbo')}>{tr("mandar a invoice")}</button>
                   : <Chip tone="neutral">—</Chip>)}
               </div>
             </div></div>
@@ -616,7 +661,7 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
           </div>)}
         </div>}
 
-        {feito && feito.passos.filter(p => p.passo.startsWith('extra:')).map(p => <div className="row small" key={p.passo} style={{ gap: 8 }}>
+        {feito && (feito.passos || []).filter(p => p.passo.startsWith('extra:')).map(p => <div className="row small" key={p.passo} style={{ gap: 8 }}>
           <Icon name={p.ok ? 'check' : 'x'} size={14} /><span>{p.passo.replace('extra:', '')}</span><span className="muted">{p.detalhe}</span></div>)}
 
         {!feito ? <div className="row fecha-acao" style={{ gap: 8 }}>
@@ -628,7 +673,8 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
         </div>}
       </div>
     </div>
-    {liberar && <LiberarInvoice o={o} tabela={tabela} onClose={() => setLiberar(false)} onOk={fe => { setLiberar(false); setFeito(fe); onOk() }} />}
+    {liberar && <LiberarInvoice o={o} tabela={tabela} podeLiberar={podeLiberar} onClose={() => setLiberar(false)} onOk={fe => { setLiberar(false); if (fe) setFeito(fe); onOk() }} />}
+    {mandar && <LiberarInvoice o={o} tabela={tabela} modo="mandar" podeLiberar={podeLiberar} onClose={() => setMandar(false)} onOk={fe => { setMandar(false); if (fe) setFeito(fe); onOk() }} />}
   </div></Scrim>
 }
 

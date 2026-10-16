@@ -210,6 +210,10 @@ DocuSign daquele cliente.
 Travas que o servidor impõe (`command_center/api/vendas.py`):
 "Ganho" não sai pela mão (é resultado do fechamento); "Perdido" exige motivo;
 sem e-mail, waiver e invoice recusam com texto claro em vez de fingir envio.
+A cobrança (fechar, Liberar, o passo da invoice, a IA e o depósito) sai uma vez:
+quem chega no meio recebe 409, a venda paga no site (Stripe) não ganha invoice, e a
+tentativa que caiu depois do QuickBooks só se repete com o gerente conferindo e
+confirmando (#310).
 
 ---
 
@@ -312,7 +316,9 @@ asfalto — nada quebra.
 | Invoice só sai com alguém | `qbo_enviar_invoice = REQUIRES_CONFIRMATION` (revisão de 21/09); criar sem enviar é SAFE; invoice decide gerente ou administrador (`ia.pode_decidir`) |
 | Waiver tem travas no servidor + aprovação | `adminai/mcp/docusign_mcp.py`: recusa sem `idade_confirmada`, sem `nome_email_conferidos`, com modelo errado ou com e-mail do domínio da URACE |
 | Invoice fora da tabela só com o gerente ou o dono | o preço da tabela vem do catálogo (`vendas.item_da_tabela`); `step/qbo` recusa o que espera; libera `POST /sales/{id}/invoice/liberar` (gerente), auditado (#204); também a desligada pelo closer e a de antes de 14/10 (`vendas.estado_da_invoice`, #310) |
-| Nunca cobrar duas vezes | invoice que já saiu não sai de novo por `step/qbo`, Liberar ou IA; `close` recusa venda já cobrada; dois cliques no Liberar mandam uma (compare-and-set em `closing.liberando`); reenvio auditado em `sales.invoice.resend` (#310) |
+| Nunca cobrar duas vezes | invoice que já saiu (ou venda paga no site, `closing.por = "stripe"`) não sai de novo por `step/qbo`, Liberar, depósito ou IA; `close` recusa venda já cobrada; nenhum passo antes de fechar; reenvio auditado em `sales.invoice.resend` (#310) |
+| Uma cobrança por vez, em todas as saídas | fechar, Liberar, `step/qbo`, depósito e a IA (`venda_fechar`, `venda_enviar_invoice`) marcam `closing.cobrando` com compare-and-set antes do QuickBooks (`vendas.travar`): o segundo, pelo botão, pela API, pelo MCP ou pela IA, recebe 409; a escrita final relê o fechamento dentro de `BEGIN IMMEDIATE` e grava só a sua mudança (`vendas.gravar_fechamento`) (#310) |
+| A tentativa que não terminou não cobra de novo | antes do QuickBooks, `sales.invoice.sending` na auditoria (autocommit); o desfecho leva a mesma `tentativa`. Marca vencida (10 min) ou "enviando" sem desfecho: 409 "a tentativa de … não terminou: confira no QuickBooks"; passa só com `confirmar` de gerente ou dono, que a tela pede, e fica na auditoria (`confirmou`) (#310) |
 | ADM URACE e Matt tasks: só leitura | regra do dono dentro do `asana_mcp` |
 | Auditoria não se apaga | gatilhos no SQLite contra `UPDATE`/`DELETE` em `audit_logs` |
 | Tudo no fuso da Flórida | `America/New_York` no servidor (`vendas.hoje_local`, `dia_local`, `quando_pt`) e no frontend (`components/fmt.ts`) |

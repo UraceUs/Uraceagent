@@ -76,6 +76,16 @@ Kommo — inclusive o chat do Kommo, `/ops/api/crm/…`: responder, anotar, etap
 **não acontece na primeira chamada**. O Claude recebe o que vai ser feito, mostra para você, e só
 repete com `confirmar: true` depois do seu "pode mandar".
 
+### Uma cobrança por vez (#310)
+
+As travas da venda valem igual pelo MCP, pelo botão e pela IA, ao mesmo tempo: a invoice que já saiu
+(ou a venda paga no site, no Stripe) não sai de novo; nenhum passo roda antes de fechar; e quem chega
+enquanto outra saída cobra a mesma venda recebe 409 ("… está mandando a invoice agora"). Se uma
+tentativa caiu depois do QuickBooks responder, a resposta é 409 "A tentativa de … não terminou:
+confira no QuickBooks se a invoice saiu". Só o gerente (ou o dono), depois de conferir, repete com a
+confirmação da rota: `"confirmar": true` no `corpo` do `close` e do `invoice/liberar`, ou
+`{"confirmar": true}` na `consulta` de `step/qbo` e `deposit`. É outro `confirmar`, além do do MCP.
+
 ## Para a TI
 
 - O servidor de login é o próprio painel (OAuth 2.1 com PKCE). O escopo `mcp:write` só sai quando
