@@ -130,11 +130,13 @@ def test_no_navegador_o_banner_segura_o_google_ate_o_accept_e_o_decline_vale(cli
 # sem forma; e, com forma, ele cobria o banner de cookies.
 WIDGET = """(function () {
   var st = document.createElement('style')
-  st.textContent = '.amo-button-holder{position:fixed;right:16px;bottom:16px;z-index:61}' +
+  st.textContent = '.amo-button-holder{padding:7px}' +
     '.amo-button{width:60px;height:60px;border-radius:50%;background:rgb(26, 92, 255)}'
   document.head.appendChild(st)
   var d = document.createElement('div')
   d.className = 'amo-button-holder amo-horisontal'
+  // #293: como o widget real no ar (16/10) — a posição vem inline, solta a 90 px das bordas
+  d.setAttribute('style', 'position: fixed; z-index: 61; right: 90px; bottom: 90px;')
   d.innerHTML = '<div id="amobutton" class="amo-button" style="box-shadow:0 2px 8px #0003"></div>'
   document.body.appendChild(d)
 })()"""
@@ -176,9 +178,12 @@ def test_no_navegador_o_balao_do_chat_tem_estilo_e_nao_cobre_o_banner(cli, monke
         bb, bn = balao.bounding_box(), banner.bounding_box()
         assert bb["y"] + bb["height"] <= bn["y"] + 1, f"o balão cobre o banner: {bb} × {bn}"
         assert pg.evaluate("window.__csp.filter(v => v.startsWith('script-src') && v.endsWith('inline'))") == []
-        # fechado o banner, o balão volta para o canto
+        # fechado o banner, o balão volta para o canto — #293 (dono, 16/10): "bem no canto inferior direito",
+        # não onde o Kommo põe (90 px das bordas)
         pg.get_by_role("button", name="Accept").click()
         pg.wait_for_timeout(400)
         bb = balao.bounding_box()
-        assert bb["y"] + bb["height"] >= 800 - 16 - 2, bb
+        assert largura - (bb["x"] + bb["width"]) <= 24, f"longe da borda direita: {bb}"
+        assert 800 - (bb["y"] + bb["height"]) <= 24, f"longe da borda de baixo: {bb}"
+        assert bb["x"] + bb["width"] <= largura and bb["y"] + bb["height"] <= 800, "o balão inteiro na tela"
         b.close()

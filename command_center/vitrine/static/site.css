@@ -530,5 +530,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 }
 
 /* #284: enquanto o banner de cookies está aberto, o balão do chat do Kommo sobe acima dele */
-.amo-button-holder { transition: translate var(--dur) var(--curva) }
+/* #293 (dono, 16/10): "bem no canto inferior direito". O Kommo põe right/bottom: 90px inline no holder; aqui ele
+   vai para o canto (o holder tem 7 px de respiro: o botão fica a ~19 px das bordas), fora da área do gesto do iPhone */
+.amo-button-holder { right: max(12px, env(safe-area-inset-right)) !important;
+  bottom: max(12px, env(safe-area-inset-bottom)) !important; transition: translate var(--dur) var(--curva) }
 .com-consentimento .amo-button-holder { translate: 0 calc(-1 * var(--consentimento-altura, 0px)) }
