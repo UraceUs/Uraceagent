@@ -32,7 +32,10 @@ def test_o_chat_do_kommo_vem_do_ambiente_e_abre_so_os_hosts_dele(cli, monkeypatc
     for h in ("script-src 'self' https://gso.kommo.com https://forms.kommo.com https://piper.amocrm.com",
               "wss://lc-en.kommo.com", "frame-src https://gso.kommo.com https://forms.kommo.com https://piper.amocrm.com"):
         assert h in pol, h
-    assert "'unsafe-inline'" not in pol
+    # #284: o widget põe estilo inline (sem isso o balão aparece sem forma no ar); script inline, nunca
+    diretivas = {d.split()[0]: d.split()[1:] for d in pol.split("; ")}
+    assert "'unsafe-inline'" in diretivas["style-src"]
+    assert "'unsafe-inline'" not in diretivas["script-src"] and "'unsafe-eval'" not in pol
     # o painel e o carrinho nunca levam script de fora
     assert "kommo" not in cli.get("/ops/").headers.get("content-security-policy", "")
     carrinho = cli.get("/cart/")
@@ -119,4 +122,63 @@ def test_no_navegador_o_banner_segura_o_google_ate_o_accept_e_o_decline_vale(cli
         pg.locator(".consentimento").wait_for()
         # nada rola para o lado com o banner aberto
         assert pg.evaluate("document.documentElement.scrollWidth") <= 390
+        b.close()
+
+
+# #284: um widget fictício que faz o que o do Kommo faz no ar — põe um <style> e um style="" no HTML
+# dele e um balão fixo embaixo à direita. Antes, o navegador recusava o estilo (CSP) e o balão ficava
+# sem forma; e, com forma, ele cobria o banner de cookies.
+WIDGET = """(function () {
+  var st = document.createElement('style')
+  st.textContent = '.amo-button-holder{position:fixed;right:16px;bottom:16px;z-index:61}' +
+    '.amo-button{width:60px;height:60px;border-radius:50%;background:rgb(26, 92, 255)}'
+  document.head.appendChild(st)
+  var d = document.createElement('div')
+  d.className = 'amo-button-holder amo-horisontal'
+  d.innerHTML = '<div id="amobutton" class="amo-button" style="box-shadow:0 2px 8px #0003"></div>'
+  document.body.appendChild(d)
+})()"""
+
+
+@NAVEGADOR
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_no_navegador_o_balao_do_chat_tem_estilo_e_nao_cobre_o_banner(cli, monkeypatch, largura):  # noqa: F811
+    from playwright.sync_api import sync_playwright
+    monkeypatch.setenv("SITE_GTM_ID", GTM)
+    _com_chat(monkeypatch)
+    with sync_playwright() as p:
+        b = p.chromium.launch(executable_path=os.environ.get("PW_CHROMIUM") or None)
+        ctx = b.new_context(viewport={"width": largura, "height": 800})
+
+        def rota(route):
+            u = route.request.url
+            if u.startswith(SITE):
+                r = cli.get(u[len(SITE):] or "/")
+                route.fulfill(status=r.status_code, body=r.content,
+                              headers={k: v for k, v in r.headers.items() if k.lower() not in ("content-length", "content-encoding")})
+            elif u.startswith("https://gso.kommo.com/js/button.js"):
+                route.fulfill(status=200, body=WIDGET, headers={"content-type": "application/javascript"})
+            else:
+                route.abort()
+        ctx.route("**/*", rota)
+        pg = ctx.new_page()
+        pg.add_init_script("window.__csp = []; document.addEventListener('securitypolicyviolation',"
+                           " e => window.__csp.push(e.violatedDirective + ' ' + (e.blockedURI || 'inline')))")
+        pg.goto(SITE + "/")
+        banner = pg.locator(".consentimento")
+        banner.wait_for()
+        balao = pg.locator(".amo-button")
+        balao.wait_for()
+        pg.wait_for_timeout(400)                                    # a transição do balão
+        assert [v for v in pg.evaluate("window.__csp") if v.startswith("style-src")] == [], "estilo do widget recusado"
+        assert pg.evaluate("getComputedStyle(document.querySelector('.amo-button')).boxShadow") != "none", "style=\"\" recusado"
+        assert balao.bounding_box()["width"] == 60, "o <style> do widget não valeu"
+        bb, bn = balao.bounding_box(), banner.bounding_box()
+        assert bb["y"] + bb["height"] <= bn["y"] + 1, f"o balão cobre o banner: {bb} × {bn}"
+        assert pg.evaluate("window.__csp.filter(v => v.startsWith('script-src') && v.endsWith('inline'))") == []
+        # fechado o banner, o balão volta para o canto
+        pg.get_by_role("button", name="Accept").click()
+        pg.wait_for_timeout(400)
+        bb = balao.bounding_box()
+        assert bb["y"] + bb["height"] >= 800 - 16 - 2, bb
         b.close()
