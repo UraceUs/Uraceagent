@@ -141,53 +141,27 @@ def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
         v.get_by_role("button", name="Add to cart").click()
         v.get_by_text("Added to your cart.").wait_for()
         st["resposta"] = f"o contador do topo mostra {v.locator('[data-carrinho-n]').inner_text()} itens"
-    with passo(cad, v, "carrinho-pede-a-conta", "O carrinho pede a conta", "abri /cart/") as st:
+    with passo(cad, v, "carrinho-pede-os-dados", "O carrinho pede os dados de quem compra (#305)", "abri /cart/") as st:
         v.goto(site + "/cart/")
         v.get_by_role("heading", name="Your cart", level=1).wait_for()
-        v.get_by_role("link", name="Create account").wait_for()
-        st["resposta"] = "o carrinho mostra os itens e pede a conta URACE para comprar"
-    with passo(cad, v, "criar-a-conta-ficticia", "Criar a conta fictícia no site", f"preenchi o cadastro de {quem['nome']}") as st:
-        v.get_by_role("link", name="Create account").click()
-        v.get_by_role("heading", name="Create your account", level=1).wait_for()
-        v.get_by_label("Full name").fill(quem["nome"])
-        v.get_by_label("Date of birth").fill("1990-05-05")
-        v.get_by_label("Email").fill(quem["email"])
-        v.get_by_label("Password").fill(SENHA_SITE)
-        v.get_by_label("Phone").fill(quem["telefone"])
-        v.get_by_label("Street address").fill("10724 Cosmonaut Blvd")
-        v.get_by_label("City").fill("Orlando")
-        v.get_by_role("textbox", name="State").fill("FL")
-        v.get_by_label("ZIP").fill("32824")
-        v.get_by_label("I accept the").check()
-        st["resposta"] = "o cadastro foi preenchido com dado fictício (nada de cliente de verdade)"
-    with passo(cad, v, "conta-criada", "A conta criada volta para o carrinho", 'cliquei em "Create account"') as st:
-        # O cadastro leva de volta ao carrinho sozinho. Em máquina mais lenta (a VPS, 15/10) essa
-        # navegação cruza com a do clique e o Playwright devolve net::ERR_ABORTED — a conta foi
-        # criada do mesmo jeito. Toleramos SÓ esse erro do clique: o que o passo prova continua
-        # sendo chegar em /cart/ e já conectado, e isso é exigido logo abaixo.
-        try:
-            v.get_by_role("button", name="Create account").click()
-        except Exception as e:                                  # noqa: BLE001
-            if "ERR_ABORTED" not in str(e):
-                raise
-        v.wait_for_url("**/cart/", timeout=30000)
-        v.get_by_text("Signed in as").wait_for()
-        st["resposta"] = f"a conta de {quem['email']} foi criada e o carrinho já diz quem está conectado"
-    with passo(cad, v, "piloto-na-conta", "Pôr o piloto na conta", f"cadastrei o piloto {quem['piloto']}") as st:
-        v.get_by_role("link", name="Add a driver").click()
-        v.get_by_label("Driver's full name").fill(quem["piloto"])
-        v.get_by_label("Date of birth").fill("2013-07-01")
-        for rot, val in (("Height (in)", "56"), ("Weight (lb)", "85"), ("Chest (in)", "28"), ("Waist (in)", "25")):
-            v.get_by_label(rot).fill(val)
-        v.get_by_label("Karting experience").fill("First time")
-        v.get_by_role("button", name="Save driver").click()
-        v.get_by_text(quem["piloto"]).first.wait_for()
-        st["resposta"] = "o piloto entrou na conta com as medidas"
-    with passo(cad, v, "carrinho-pronto", "O carrinho pronto para pagar", "voltei para /cart/") as st:
-        v.goto(site + "/cart/")
+        v.get_by_role("heading", name="Your details", level=3).wait_for()
+        assert not v.get_by_role("link", name="Create account").count(), 'o "Create account" saiu do carrinho'
+        st["resposta"] = "o carrinho mostra os itens e, sem conta, pede os dados ali mesmo (nada de ir criar conta em outra tela)"
+    with passo(cad, v, "dados-no-carrinho", "Preencher os dados, o piloto e a senha no carrinho",
+               f"preenchi os dados de {quem['nome']} e o piloto {quem['piloto']}") as st:
+        form = v.locator(".carrinho-cadastro")
+        for nome, valor in (("name", quem["nome"]), ("birth_date", "1990-05-05"), ("email", quem["email"]),
+                            ("phone", quem["telefone"]), ("address_line1", "10724 Cosmonaut Blvd"), ("city", "Orlando"),
+                            ("state", "FL"), ("zip", "32824"), ("password", SENHA_SITE), ("password2", SENHA_SITE)):
+            form.locator(f'[name="{nome}"]').fill(valor)
+        form.get_by_text("Someone else (my child, a friend)").click()
+        form.get_by_label("Driver's full name").fill(quem["piloto"])
+        form.get_by_label("I accept the").check()
+        st["resposta"] = "os dados (fictícios, nada de cliente de verdade), o nome do piloto, a senha confirmada e os termos"
+    with passo(cad, v, "carrinho-pronto", "O carrinho pronto para pagar", "conferi o botão do pagamento") as st:
         pagar = v.get_by_role("button", name=re.compile(r"^Checkout · \$"))
         pagar.wait_for()
-        st["resposta"] = f"o carrinho fecha em {pagar.inner_text().strip()!r}, com o piloto da conta escolhido"
+        st["resposta"] = f"o carrinho fecha em {pagar.inner_text().strip()!r}; a conta nasce no Checkout"
     total = None
     with passo(cad, v, "checkout-no-stripe", "O checkout no Stripe (o falso do teste)", 'cliquei em "Checkout"') as st:
         v.get_by_role("button", name=re.compile(r"^Checkout · \$")).click()
@@ -200,6 +174,15 @@ def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
         v.get_by_role("heading", name="Payment confirmed", level=1).wait_for()
         assert v.evaluate("JSON.parse(localStorage.getItem('urace.carrinho') || '{}').itens.length") == 0
         st["resposta"] = "a página do pedido pago abriu, com a sessão reservada, e o carrinho esvaziou"
+    with passo(cad, v, "conta-nova", "A conta nasceu no checkout e as boas-vindas saíram (#305)",
+               "perguntei à área do cliente quem está conectado e olhei o e-mail") as st:
+        me = v.request.get(base + "/api/portal/me")
+        assert me.ok and me.json()["email"] == quem["email"], me.text()
+        assert [d["name"] for d in me.json()["drivers"]] == [quem["piloto"]]
+        boas = [json.loads(x) for x in open(tn.EMAILS, encoding="utf-8").read().splitlines() if quem["email"] in x]
+        assert any(m["subject"] == "Welcome to URACE: your account is ready" for m in boas), [m["subject"] for m in boas]
+        st["resposta"] = (f"voltou do Stripe já conectado como {quem['email']}, com o piloto {quem['piloto']}, e o e-mail "
+                          "de boas-vindas (login, senha, link da área) saiu")
     with passo(cad, v, "pedido-do-cliente", "O pedido na área do cliente", "abri a página do pedido") as st:
         r = v.evaluate(tn._VAZA)
         assert not r["rola"] and not r["culpados"], r

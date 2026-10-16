@@ -122,7 +122,7 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | `ops.urace.us/ops/` | o painel da equipe |
 | `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." |
 | `/ops/portal` | a **área do cliente** (outra porta, outro login). Não é o painel da equipe |
-| `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248); sessão pede também o piloto. Chave English/Português no topo |
+| `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248): sem conta, o carrinho pede os dados, o piloto (só o nome) e a senha, e a conta nasce no Checkout com o e-mail de boas-vindas (#305). Chave English/Português no topo |
 | `novo.urace.us/services/` | a **página de programas** do site. Desde 15/10 (#254) são sete: Arrive and Drive, URACE Academy, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events. **Kart School** virou a **URACE Academy** e **Professional Coaching** virou o **Arrive and Drive**; os dois endereços antigos redirecionam para quem herdou. O que a equipe vende por cada nome está no [playbook de vendas](playbook-vendas.md) |
 | `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart), com os dados do cliente da conta; em inglês ou português (#248). A equipe copia o link em Agendamentos do site › Pedidos do site |
 

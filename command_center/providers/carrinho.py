@@ -135,9 +135,19 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
         return {**linha, "piloto": None, "erro": "Choose the driver for this session.", "falta_piloto": True}
     linha["piloto_nome"] = p["name"]
     from command_center.providers import portal
-    falta = portal.pode_marcar(con, conta_id, pid)
-    if falta:
-        return {**linha, "erro": falta}
+    # #305 (dono, 16/10): paga antes e completa o piloto depois, "com lembretes pelo email ate completar as
+    # informações". O responsável completo continua exigido (o carrinho pede os dados dele); o piloto sem medidas
+    # (ou com as medidas vencidas) não trava mais a compra: a linha avisa e o e-mail lembra até completar.
+    conta = um(con, "SELECT * FROM portal_accounts WHERE id=?", (conta_id,))
+    if conta and portal.faltando_conta(conta):
+        return {**linha, "erro": "Please complete the account holder details (Account) before booking."}
+    st = next((x["measures_status"] for x in portal.pilotos(con, conta_id) if x["id"] == pid), None)
+    if st == "vencida":
+        linha["aviso_piloto"] = (f"{p['name']}'s measurements are over 60 days old. After payment, we'll email you a link to "
+                                 "review them.")
+    elif st == "faltando":
+        linha["aviso_piloto"] = (f"After payment, we'll email you a link to add {p['name']}'s measurements and karting "
+                                 "experience. We'll remind you until it's done.")
     if um(con, """SELECT 1 AS x FROM bookings WHERE account_id=? AND date=? AND status IN ('pendente','confirmada')
                    AND COALESCE(pilot_id,0)=? AND (period=? OR period='dia' OR ?='dia')""", (conta_id, d, pid, per, per)):
         return {**linha, "erro": f"{p['name']} already has a session at this time."}
@@ -339,7 +349,8 @@ def _marcar(con, o, x):
                   notes=f"Paid online: URACE order #{o['id']}" + (f" · + {x['variation']} (add-on, {_usd(_valor_addon(x))}, paid)"
                                                                     if _tem_addon(x) else ""),
                   origin="site", accepted_at=agora(), charge_kind="stripe",
-                  paid_at=agora(), invoice_total=x["amount"], store_order_id=o["id"])
+                  paid_at=agora(), invoice_total=x["amount"], store_order_id=o["id"],
+                  pilot_pending=1 if _piloto_pendente(con, x["pilot_id"]) else 0)   # #305: lembrar até completar
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
     try:
         card, nota = venda_site.garantir_card(con, b)
@@ -351,6 +362,11 @@ def _marcar(con, o, x):
     auditar(con, "booking.paid.cart", "stripe", entity_type="booking", entity_id=bid,
             detail={"pedido": o["id"], "card": card, "valor": x["amount"]})
     return card
+
+
+def _piloto_pendente(con, pid):
+    from command_center.providers import conta_site
+    return conta_site.piloto_pendente(con, pid)
 
 
 def _tem_addon(x):

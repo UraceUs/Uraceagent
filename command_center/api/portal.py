@@ -32,6 +32,35 @@ COOKIE = "cp_session"
 COOKIE_CSRF = "cp_csrf"
 DIAS = 30
 MAX_CADASTROS_POR_HORA = 10
+# #305: toda conta nova manda um e-mail com a marca da URACE; um teto geral por hora para ele não virar canal de spam
+# espalhado por muitas conexões (um dia normal tem poucas contas novas)
+MAX_CADASTROS_GLOBAL_HORA = 100
+
+
+def _chave_cadastro(ip):
+    """A chave do limite por conexão. IPv6: o bloco /64 (uma casa recebe um /64 inteiro)."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+        if a.version == 6:
+            ip = f"{ipaddress.ip_network(f'{ip}/64', strict=False).network_address}/64"
+    except ValueError:
+        pass
+    return f"portal-signup:{ip}"
+
+
+def limite_de_cadastro(con, ip):
+    """A mensagem quando passou do limite (por conexão ou o geral), ou None."""
+    desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?", (_chave_cadastro(ip), desde))["n"] >= MAX_CADASTROS_POR_HORA:
+        return "Too many sign-ups from this connection. Try again later."
+    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key LIKE 'portal-signup:%' AND at>?", (desde,))["n"] >= MAX_CADASTROS_GLOBAL_HORA:
+        return "Too many sign-ups right now. Please try again in a few minutes."
+    return None
+
+
+def contar_cadastro(con, ip):
+    inserir(con, "login_attempts", key=_chave_cadastro(ip), ok=1)
 MSG_LOGIN = "Invalid email or password."
 
 
@@ -103,14 +132,15 @@ class CadastroIn(BaseModel):
 
 
 @r.post("/signup", status_code=201)
-def cadastro(dados: CadastroIn, request: Request, response: Response, con: sqlite3.Connection = Depends(get_db)):
+def cadastro(dados: CadastroIn, request: Request, response: Response, background: BackgroundTasks,
+             con: sqlite3.Connection = Depends(get_db)):
     ip = auth._ip(request)
-    desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
-    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?", (f"portal-signup:{ip}", desde))["n"] >= MAX_CADASTROS_POR_HORA:
-        raise HTTPException(429, "Too many sign-ups from this connection. Try again later.")
+    passou = limite_de_cadastro(con, ip)
+    if passou:
+        raise HTTPException(429, passou)
     if not auth.senha_aceitavel(dados.password) or len(dados.password) < 8:
         raise HTTPException(400, "Use a password with at least 8 characters.")
-    inserir(con, "login_attempts", key=f"portal-signup:{ip}", ok=1)
+    contar_cadastro(con, ip)
     sal, h = auth.hash_senha(dados.password)
     try:
         cid = portal.criar_conta(con, dados.model_dump(exclude={"password"}), sal, h)
@@ -120,6 +150,11 @@ def cadastro(dados: CadastroIn, request: Request, response: Response, con: sqlit
     _abrir(con, request, response, cid)
     _aud(con, request, "portal.signup", cid, {"piloto_proprio": dados.i_am_driver})
     con.commit()
+    # #305 (dono, 16/10): toda conta nova recebe o e-mail de boas-vindas com a identidade da URACE (a senha vai nele:
+    # decisão do dono). A senha só existe nesta requisição: vai para o e-mail e some, nunca é guardada nem logada.
+    from command_center.providers import conta_site
+    from command_center.vitrine import idioma
+    background.add_task(conta_site.boas_vindas_bg, cid, dados.password, idioma.de_request(request))
     return portal.conta(con, cid)
 
 
@@ -275,8 +310,15 @@ def esqueci_senha(dados: EsqueciIn, request: Request, con: sqlite3.Connection = 
                  f"If it was you, open this link and choose a new password:\n\n{link}\n\n"
                  f"The link works once and expires in {RESET_MIN} minutes. If you did not ask for it, ignore this email: "
                  "your password stays the same.\n\nURACE.US · Orlando, FL")
+        # #305: com a identidade da URACE, como o das boas-vindas
+        from command_center.providers import email_marca
+        html = email_marca.html(f"Hi {c['name'].split()[0]}!", [
+            "Someone asked to reset the password of your URACE account. If it was you, choose a new password:"],
+            botao=("Choose a new password", link),
+            depois=[f"The link works once and expires in {RESET_MIN} minutes.",
+                    "If you did not ask for it, ignore this email: your password stays the same."])
         try:
-            email_envio.enviar(email, "Reset your URACE password", texto)
+            email_envio.enviar(email, "Reset your URACE password", texto, html=html)
         except email_envio.ErroEnvio:
             con.rollback()
             raise HTTPException(503, "We could not send the email right now. Try again in a few minutes.")

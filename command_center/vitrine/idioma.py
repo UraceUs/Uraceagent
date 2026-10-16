@@ -56,6 +56,34 @@ def chave(lang, volta):
 
 # ------------------------------------------------------------------ as mensagens do servidor (carrinho e checkout)
 MENSAGENS_PT = {
+    # #305: o cadastro no carrinho (as mensagens do `portal.criar_conta` e da senha)
+    "Fill in your details to continue.": "Preencha os seus dados para continuar.",
+    "Two sessions in this cart are at the same time, and a new account books one driver. Remove one, check out, then book the other driver from your URACE area.":
+        "Duas sessões deste carrinho são no mesmo horário, e a conta nova marca um piloto. Tire uma, pague e marque o outro piloto na sua área URACE.",
+    "Something went wrong. Please try again.": "Algo deu errado. Tente de novo.",
+    "Write the driver's full name for each session.": "Escreva o nome completo do piloto de cada sessão.",
+    "The same driver has two sessions at the same time in this cart. Change the time or the driver.":
+        "O mesmo piloto tem duas sessões no mesmo horário neste carrinho. Mude o horário ou o piloto.",
+    "Too many sign-ups right now. Please try again in a few minutes.": "Muitos cadastros agora. Tente de novo em alguns minutos.",
+    "Use a password with at least 8 characters.": "Use uma senha com pelo menos 8 caracteres.",
+    "The passwords don't match.": "As senhas não são iguais.",
+    "Too many sign-ups from this connection. Try again later.": "Muitos cadastros desta conexão. Tente mais tarde.",
+    "You need to accept the terms to create an account.": "Para continuar, aceite os termos e a política de privacidade.",
+    "Enter a valid email address.": "Digite um e-mail válido.",
+    "Enter your full name (first and last).": "Digite o seu nome completo (nome e sobrenome).",
+    "Enter the driver's full name (first and last).": "Digite o nome completo do piloto (nome e sobrenome).",
+    "The account holder must be 18 or older. A parent or guardian can create the account and add the young driver to it.":
+        "O titular da conta precisa ter 18 anos ou mais. O pai, a mãe ou o responsável cria a conta e põe o piloto jovem nela.",
+    "An account with this email already exists. Sign in instead.": "Já existe uma conta com este e-mail. Entre com ela.",
+    "Enter a valid phone number, with area code.": "Digite um telefone válido, com DDD.",
+    "Enter a valid phone number for your country.": "Digite um telefone válido para o seu país.",
+    "Country code: use + and up to 4 digits, like +1 or +55.": "Código do país: use + e até 4 dígitos, como +1 ou +55.",
+    "Choose your country.": "Escolha o seu país.",
+    "State: use the 2-letter code, like FL.": "Estado: use a sigla de 2 letras, como FL.",
+    "ZIP code: use 5 digits (or 5+4).": "ZIP: use 5 dígitos (ou 5+4).",
+    "Postal code: use letters, numbers, spaces or hyphens.": "Código postal: use letras, números, espaço ou hífen.",
+    "Date of birth: use a valid date.": "Data de nascimento: use uma data válida.",
+    "Date of birth can't be in the future.": "A data de nascimento não pode estar no futuro.",
     "Product not found": "Produto não encontrado",
     "Product not found.": "Produto não encontrado.",
     "Session": "Sessão",
@@ -80,7 +108,16 @@ MENSAGENS_PT = {
     "We couldn’t open the secure checkout just now. Please try again in a minute.":
         "Não conseguimos abrir o checkout seguro agora. Tente de novo em um minuto.",
 }
+ROTULOS_PT = {"full name": "nome completo", "date of birth": "data de nascimento", "phone": "telefone",
+              "street address": "endereço", "city": "cidade", "state": "estado", "ZIP code": "CEP"}
+
 PADROES_PT = (
+    (re.compile(r"^Please fill in: (.+)\.$"), "Preencha: {0}."),                      # #305: o cadastro no carrinho
+    (re.compile(r"^(.+)'s measurements are over 60 days old\. After payment, we'll email you a link to review them\.$"),
+     "As medidas de {0} têm mais de 60 dias. Depois do pagamento, mandamos por e-mail o link para revisar."),
+    (re.compile(r"^After payment, we'll email you a link to add (.+)'s measurements and karting experience\. "
+                r"We'll remind you until it's done\.$"),
+     "Depois do pagamento, mandamos por e-mail o link para pôr as medidas e a experiência de {0}. Lembramos até ficar pronto."),
     (re.compile(r"^(.+) already has a session at this time\.$"), "{0} já tem uma sessão neste horário."),
     (re.compile(r"^(.+) is already in this cart at this time\.$"), "{0} já está neste carrinho neste horário."),
     (re.compile(r"^Up to (\d+) items per order\.$"), "Até {0} itens por pedido."),
@@ -97,6 +134,9 @@ def traduzir(msg, lang):
         return msg
     if msg in MENSAGENS_PT:
         return MENSAGENS_PT[msg]
+    if msg.startswith("Please fill in: ") and msg.endswith("."):     # #305: os campos que faltam, cada um em português
+        itens = msg[len("Please fill in: "):-1].split(", ")
+        return "Preencha: " + ", ".join(ROTULOS_PT.get(x, x) for x in itens) + "."
     for rx, modelo in PADROES_PT:
         m = rx.match(msg)
         if m:

@@ -573,3 +573,16 @@ h3.ed-t.ed-tam-g { font-size: clamp(1.4rem, 3vw, 1.9rem) }
 .ed-espaco-p { height: 8px }
 .ed-espaco-m { height: 24px }
 .ed-espaco-g { height: 56px }
+
+/* --------------------------------------------------------------- #305: os dados do comprador no carrinho */
+.carrinho-cadastro { margin-top: 0; gap: 10px }
+.carrinho-cadastro h3 { font-size: 1.05rem }
+.carrinho-cadastro .cad-tel { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 8px }
+.carrinho-cadastro .cad-3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px }
+.carrinho-cadastro .cad-3 label:first-child { grid-column: 1 / -1 }
+.carrinho-cadastro label.opcao input { min-height: 0 }
+.carrinho-cadastro .cad-termos { align-items: flex-start }
+.carrinho-cadastro .cad-termos span { font-weight: 500; padding-top: 10px }
+.carrinho-cadastro input[aria-invalid="true"], .carrinho-cadastro select[aria-invalid="true"] { border-color: var(--vermelho) }
+.carrinho-aviso-piloto { color: var(--tinta); border-left: 3px solid var(--aviso); padding-left: 8px }
+.carrinho-cadastro .cad-entrar, .carrinho-erro a { display: inline-flex; align-items: center; min-height: 40px }

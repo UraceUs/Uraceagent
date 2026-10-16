@@ -27,18 +27,22 @@ class ErroEnvio(RuntimeError):
     """O e-mail não saiu (sem token, sem rede, Gmail recusou). A mensagem não carrega segredo."""
 
 
-def enviar(para, assunto, texto):
-    """Manda um e-mail de texto. Devolve o id da mensagem no Gmail (ou do arquivo, no teste)."""
+def enviar(para, assunto, texto, html=None):
+    """Manda um e-mail de texto. Devolve o id da mensagem no Gmail (ou do arquivo, no teste). #305: com `html`, vai
+    também a versão com a identidade da URACE (`email_marca`); quem lê só texto recebe o texto."""
     conta = remetente()
     msg = EmailMessage()
     msg["From"] = f"URACE.US <{CAIXAS[conta]}>"
     msg["To"] = para
     msg["Subject"] = assunto
     msg.set_content(texto)
+    if html:
+        msg.add_alternative(html, subtype="html")
     falso = os.environ.get("CC_EMAIL_FAKE")
     if falso:
         with open(falso, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"from": CAIXAS[conta], "to": para, "subject": assunto, "text": texto}) + "\n")
+            f.write(json.dumps({"from": CAIXAS[conta], "to": para, "subject": assunto, "text": texto,
+                                **({"html": html} if html else {})}) + "\n")
         return f"fake-{os.path.getsize(falso)}"
     try:
         from adminai import google_auth

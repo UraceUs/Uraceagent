@@ -635,8 +635,22 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    > **Teste de checkout de US$ 1:** preço **1** e depósito **0** no serviço do kart; reserve, pague (o Stripe
    > cobra US$ 1,00 de verdade) e **volte o preço e o depósito logo depois**; o estorno sai pelo Stripe.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
-   o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
-   **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho também pede a conta (#248).
+   o total. Toda compra pede a conta do site (#248), e **o próprio carrinho cria a conta** (#305, dono
+   16/10: *"ao invés de ter o botão de seguir e create account … ela vai ter que preencher as informações
+   dela … Quando for para o checkout, já cria a conta dela"*):
+   - **Logado:** o carrinho mostra o nome e o e-mail da conta e o **piloto** de cada sessão (um piloto só
+     já vem escolhido), como antes.
+   - **Sem conta:** em vez de "Sign in / Create account", o carrinho pede **os dados dele** ali mesmo:
+     nome completo, data de nascimento, e-mail, país e telefone, endereço (nos EUA, com estado e ZIP), **quem vai
+     pilotar** (com uma sessão: *eu* ou *outra pessoa*, só o nome; com duas ou mais: **o nome do piloto de cada
+     sessão**, para o serviço de um filho nunca cair no card do outro), **senha e confirmação** (8+ caracteres, as
+     duas iguais) e o aceite dos **termos e da privacidade** (os links abrem em outra aba). No **Checkout**, a conta nasce sozinha, ele já fica logado e vai ao
+     Stripe. Quem já tem conta toca em *Already have an account? Sign in*; se o e-mail já tiver conta, o
+     carrinho avisa e mostra o *Sign in*.
+   - **Piloto incompleto não trava mais** (decisão do dono, 16/10: *"com lembretes pelo email ate
+     completar as informações"*): a linha avisa *"After payment, we'll email you a link to add … "*, ele
+     paga e completa as medidas e a experiência depois, na área do cliente. O **responsável** continua
+     precisando dos dados completos.
    No topo do carrinho e das páginas do pedido há a chave **English / Português** (as bandeiras, como no
    painel); a escolha fica guardada no navegador.
 3. **Checkout** abre o Stripe com **todas** as linhas e, para cada sessão com depósito, a linha
@@ -663,11 +677,32 @@ contato e passe para o dono.
 | preço é do sistema | o servidor recalcula preço (Serviços e preços / catálogo da loja), depósito e vaga; o navegador só manda as escolhas |
 | preço do dia | o pedido guarda o preço e o depósito do dia da compra; mudar o preço depois não muda o pedido |
 | vaga | confere ao montar o carrinho, no checkout (o Checkout do Stripe expira em 31 min) e **de novo no pagamento** |
-| conta e piloto | **toda compra pede a conta do site**; o e-mail da conta vai para o Stripe e é o dos avisos; só pilotos da própria conta, com o cadastro em dia (medidas e dados do responsável) |
+| conta e piloto | **toda compra pede a conta do site** (logado, ou criada no próprio carrinho, #305); o e-mail da conta vai para o Stripe e é o dos avisos; só pilotos da própria conta; o responsável com os dados completos; o piloto pode estar incompleto (completa depois, com lembrete) |
+| conta criada no carrinho | o carrinho é conferido **antes** (vaga, serviço, produto e o mesmo piloto em duas sessões no mesmo horário): carrinho que não fecha não cria conta; a conta e os pilotos entram juntos ou nada entra; o mesmo nome em duas sessões é o mesmo piloto, e o nome do titular é ele mesmo; limite de 10 tentativas por hora por conexão (no IPv6, por bloco /64) e 100 contas novas por hora no total; só JSON do próprio site (outro site não cria conta); se o Stripe falhar depois, a conta fica e ele tenta de novo já logado |
 | card certo | a sessão vai para o card do **piloto**; o produto, para o card ligado à **conta** (Contas de clientes) ou, sem ele, pela regra da loja (e-mail **e** nome) |
 | idioma | o pedido guarda o idioma em que a pessoa comprou (EN/PT): os e-mails dela saem nele e o Stripe abre nele; os avisos da equipe são sempre em português |
 | uma vez só | o webhook do Stripe e a página de obrigado não marcam nem vendem duas vezes |
 | cancelado / expirado / pagamento não passou | nada é marcado nem vendido; a vaga **não fica presa** (a sessão só entra na agenda quando o pagamento entra) |
+
+**Os e-mails da conta (#305).** Todos com a identidade da URACE (faixa preta com a marca, botão vermelho,
+endereço e telefone no rodapé), em inglês ou português, conforme o idioma da pessoa:
+
+| E-mail | Quando | O que tem |
+|---|---|---|
+| **Welcome to URACE: your account is ready** | na hora em que a conta nasce, no carrinho **ou** na tela de cadastro da área do cliente | login (o e-mail), **a senha que ela criou** (decisão do dono, 16/10: *"Mandar a senha no e-mail"*), o número de cliente (ou "chega por e-mail assim que o card estiver pronto"), o botão para a área do cliente e o link do *esqueci a senha* |
+| **Your URACE customer ID: N** | quando o **card** do piloto nasce (a sessão paga cria ou liga), ou quando a equipe liga a conta de quem comprou só produto: o número é o **card interno** (dono, 16/10) | o piloto, o número de cliente e o login; uma vez por piloto. Se a equipe unir um card duplicado ou religar o piloto, sai de novo com o número certo (*"changed: this is the right one"*). Contas de antes do #305 não recebem de surpresa |
+| **Almost there: complete …'s profile** | sessão **paga** com o piloto incompleto | o que falta (altura, peso, peito, cintura, experiência…) ou, com as medidas vencidas, *revise e salve as medidas*, e o botão para *Drivers*; **um a cada 24 h**, até completar, no máximo 7 (o 7º diz que é o último), e só enquanto a sessão não passou nem foi cancelada. Completou, a contagem zera para a próxima vez |
+| **Reset your URACE password** | *Forgot password?* na área do cliente | o link de uso único que vale 30 min |
+
+A senha só passa pela memória do servidor na hora do cadastro: vai no e-mail e o banco guarda só o hash (a cópia
+do e-mail fica, como todo e-mail mandado, na pasta Enviados da conta que envia). Se o Gmail falhar, o servidor tenta
+de novo na hora; continuando fora, a conta fica (a pessoa entra normalmente), o erro fica na conta e as boas-vindas
+saem depois **sem a senha** (com o link do *Forgot password?*), no máximo uma vez por hora, até 7 dias. Em
+**Agendamentos do site › Contas de clientes** a conta mostra *"O e-mail de boas-vindas não saiu"* com o motivo, e a auditoria
+registra. Toda
+boas-vindas tem a linha *"Didn't create this account? Choose a new password at … (that signs out every other device)
+and reply to this email or call…"*: se alguém criou a conta com o e-mail de outra pessoa, a dona do e-mail troca a senha
+(isso derruba a sessão de quem criou) e avisa; a equipe fecha a conta.
 
 **Uma página para cada resultado do pagamento** (#245, dono 14/10: *"monte páginas para cada um no
 site"*). Todo pedido do site (carrinho **e** loja de um produto) tem um **link pessoal**,
@@ -1130,7 +1165,10 @@ instrução à gerência.
 | Venda do site com **Resolver:** "a vaga sumiu entre o checkout e o pagamento" | o cliente já pagou: ligue, remarque a sessão (ou combine o reembolso com o gerente) e anote na venda (seção 5.1) |
 | Venda do site em **Fechamento** com "vincular à mão" | pago no carrinho sem card certo: ache o card (seção 3) e ligue a venda a ele |
 | E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o meio de pagamento que confirma depois não passou; nada foi cobrado e a vaga está livre. Agendamentos do site › Pedidos do site › **Copiar o link** e mande ao cliente (ele toca em **Try again**); sem e-mail no Stripe, ligue (seção 5.1) |
-| Cliente diz "o site não deixa comprar sem conta" | regra do dono (#248): toda compra no site pede a conta. Mande criar em **Create account** (o botão leva e volta para o produto ou o carrinho) |
+| Cliente diz "o site não deixa comprar sem conta" | regra do dono (#248): toda compra no site pede a conta. No **carrinho**, ele preenche os dados e a senha ali mesmo e a conta nasce no Checkout (#305); no **Buy now** da loja, o botão **Create account** leva e volta para o produto |
+| Carrinho diz "An account with this email already exists" | o e-mail já tem conta: ele toca em **Sign in** (no próprio aviso) e volta ao carrinho logado; esqueceu a senha, *Forgot password?* |
+| Cliente diz "não recebi a senha" / "não recebi o número de cliente" | a senha vai no e-mail de boas-vindas (procure no spam: *Welcome to URACE*); o número de cliente chega num **segundo** e-mail quando o card do piloto nasce (no pagamento). Sem e-mail nenhum: *Forgot password?* na área do cliente manda o link para criar outra |
+| Cliente diz "recebo e-mail todo dia para completar o piloto" | é o lembrete do #305 (sessão paga com o piloto incompleto): para assim que ele completa as medidas e a experiência em *Drivers*, ou depois de 7 lembretes |
 | Cliente pergunta "e o meu pedido?" | Agendamentos do site › Pedidos do site: ache pelo nome ou e-mail, veja o estado e mande o link da **Página do pedido** |
 | "QuickBooks: registrar a venda à mão" numa venda do site | o serviço não tem item do QuickBooks ou o item "Security deposit" não está sincronizado: acerte em Serviços e preços / sincronize; a rodada de 15 min tenta de novo |
 | "Ganho é o resultado do Fechar venda…" | use Fechar venda, não o botão de etapa |

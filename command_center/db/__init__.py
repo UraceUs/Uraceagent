@@ -353,6 +353,18 @@ MIGRACOES = [
     ("store_orders", "shipping_fee", "REAL"),
     ("store_orders", "deposit", "REAL"),
     ("store_order_items", "shipping", "REAL"),
+    # 16/10 — dono (#305): "toda vez que criar a conta, a pessoa recebe o um e-mail com a nossa identidade";
+    # o piloto da sessão paga pode completar o cadastro depois, "com lembretes pelo email ate completar".
+    ("portal_accounts", "welcome_sent_at", "TEXT"),      # o e-mail de boas-vindas saiu (só essas contas recebem os avisos)
+    ("portal_accounts", "welcome_error", "TEXT"),
+    ("portal_accounts", "welcome_lang", "TEXT"),         # en | pt: o idioma dos avisos seguintes
+    ("portal_accounts", "client_id_sent_at", "TEXT"),    # o número do card ligado à CONTA (compra só de produto) saiu
+    ("portal_accounts", "client_id_sent", "INTEGER"),    # qual número foi (a equipe uniu ou religou: manda o certo)
+    ("portal_pilots", "client_id_sent", "INTEGER"),
+    ("portal_pilots", "client_id_sent_at", "TEXT"),      # o e-mail com o número de cliente (o card) saiu
+    ("portal_pilots", "remind_at", "TEXT"),              # o último lembrete de completar o piloto
+    ("portal_pilots", "remind_n", "INTEGER"),
+    ("bookings", "pilot_pending", "INTEGER NOT NULL DEFAULT 0"),   # paga com o piloto incompleto: lembrar até completar
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

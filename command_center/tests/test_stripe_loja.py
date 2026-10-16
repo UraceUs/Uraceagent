@@ -133,8 +133,10 @@ def _pagar(cli, st, sid, eid="evt_1", nome="Ana Lima", email="ana@exemplo.com", 
 
 
 def _emails(tmp_path):
+    from command_center.tests.test_portal import boas_vindas
     f = tmp_path / "emails.jsonl"
-    return [json.loads(x) for x in f.read_text().splitlines()] if f.exists() else []
+    todos = [json.loads(x) for x in f.read_text().splitlines()] if f.exists() else []
+    return [m for m in todos if not boas_vindas(m)]
 
 
 # ------------------------------------------------------------------ assinatura
