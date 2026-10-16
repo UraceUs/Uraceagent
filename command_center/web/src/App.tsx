@@ -135,6 +135,7 @@ function Rotas() {
           <Route path="equipe/:canal" element={<Equipe />} />
           <Route path="site" element={<Guard min="OPERATOR"><SitePublico /></Guard>} />
           <Route path="site/:aba" element={<Guard min="OPERATOR"><SitePublico /></Guard>} />
+          <Route path="site/:aba/:id" element={<Guard min="OPERATOR"><SitePublico /></Guard>} />
           {/* Suits · Alpha Line (#153): as abas são caminho; o pedido é /suits/12 */}
           <Route path="suits" element={<Guard min="OPERATOR"><Suits /></Guard>} />
           <Route path="suits/:aba" element={<Guard min="OPERATOR"><SuitsOuPedido /></Guard>} />

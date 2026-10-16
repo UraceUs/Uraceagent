@@ -127,25 +127,36 @@ def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_
         raise ValueError("Please choose an option.")
     if not compravel(p, v):
         raise ValueError("This item can't be bought online right now. Send us an order request instead.")
+    from command_center.providers import loja
     unit = float((v or {}).get("price") or p["price"])
     qtd = max(1, min(20, int(quantidade)))
     entrega = "envio" if entrega == "envio" else "retirada"
     nome = p["name"] + (f" ({variacao_nome})" if v else "")
+    # #298: o frete fixo do produto (× quantidade) com "Ship to me" (None: a equipe combina à parte) e o depósito
+    frete = loja.frete(p, qtd, entrega)
+    deposito = round(float(p.get("deposit") or 0) * qtd, 2)
     oid = inserir(con, "store_orders", product_slug=p["slug"], product_name=p["name"], variation=variacao_nome if v else None,
-                  quantity=qtd, unit_price=unit, amount=round(unit * qtd, 2), delivery=entrega, origin=host,
-                  account_id=conta["id"], email=(conta["email"] or "").lower() or None, name=conta["name"], phone=conta["phone"],
-                  lang="pt" if lang == "pt" else "en")
+                  quantity=qtd, unit_price=unit, amount=round(unit * qtd + (frete or 0) + deposito, 2), delivery=entrega,
+                  origin=host, account_id=conta["id"], email=(conta["email"] or "").lower() or None, name=conta["name"],
+                  phone=conta["phone"], lang="pt" if lang == "pt" else "en",
+                  shipping_fee=frete if entrega == "envio" else None, deposit=deposito)
     produto = {"name": nome[:250]}
     if foto_url:
         produto["images"] = [foto_url]
+    linhas = [{"quantity": qtd, "price_data": {"currency": "usd", "unit_amount": round(unit * 100), "product_data": produto}}]
+    if deposito > 0:
+        linhas.append({"quantity": 1, "price_data": {"currency": "usd", "unit_amount": round(deposito * 100),
+                                                     "product_data": {"name": f"Refundable security deposit · {nome}"[:250]}}})
+    if frete:
+        linhas.append({"quantity": 1, "price_data": {"currency": "usd", "unit_amount": round(frete * 100),
+                                                     "product_data": {"name": "Shipping"}}})
     campos = {
         "mode": "payment",
-        "line_items": [{"quantity": qtd, "price_data": {"currency": "usd", "unit_amount": round(unit * 100),
-                                                         "product_data": produto}}],
+        "line_items": linhas,
         "success_url": f"{origem}/store/thanks/?session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{origem}/store/cancelled/?p={p['slug']}",
         "client_reference_id": str(oid),
-        "metadata": {"pedido": oid, "produto": p["slug"], "entrega": entrega},
+        "metadata": {"pedido": oid, "produto": p["slug"], "entrega": entrega, "frete": f"{frete or 0:.2f}"},
         "payment_intent_data": {"description": f"URACE Store #{oid}: {nome}"[:250], "metadata": {"pedido": oid}},
         "phone_number_collection": {"enabled": True},
         "billing_address_collection": "auto",
@@ -161,7 +172,8 @@ def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_
         raise
     atualizar(con, "store_orders", oid, stripe_session_id=s["id"], stripe_url=s.get("url"), updated_at=agora())
     auditar(con, "store.checkout", "site", entity_type="store_order", entity_id=oid,
-            detail={"produto": p["slug"], "variacao": variacao_nome if v else None, "qtd": qtd, "valor": round(unit * qtd, 2)})
+            detail={"produto": p["slug"], "variacao": variacao_nome if v else None, "qtd": qtd, "valor": round(unit * qtd, 2),
+                    "frete": frete, "deposito": deposito})
     return oid, s.get("url")
 
 
@@ -358,7 +370,9 @@ def ligar_e_vender(con, oid):
         return carrinho.pago(con, oid)
     cid, nota = _cliente(con, o)
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
-    entrega = "retirada na pista (Orlando Kart Center)" if o["delivery"] == "retirada" else "envio — frete a combinar"
+    from command_center.providers import pedido_site
+    entrega = ("retirada na pista (Orlando Kart Center)" if o["delivery"] == "retirada"
+               else pedido_site.texto_envio_equipe(o, pedido_site.linhas(con, o)).replace("ENVIO — ", "envio — "))
     notas = (f"[Loja · pago no Stripe] {descricao(o)} — US$ {valor:,.2f}\nPedido #{o['id']} · {entrega}"
              + (f"\nEndereço:\n{_endereco(o)}" if o["delivery"] == "envio" and o["shipping"] else "")
              + f"\nCard: {nota}")
@@ -395,7 +409,7 @@ def avisar(con, oid, enviar=None):
     if lang == "pt":
         entrega_cli = ("Avisamos quando estiver pronto para retirar no Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
                        "Orlando, FL 32824)." if o["delivery"] == "retirada" else
-                       "Confirmamos o valor do frete e mandamos o código de rastreio. O frete é cobrado à parte.")
+                       pedido_site.texto_envio(o, pedido_site.linhas(con, o), lang))
         assunto = f"Pedido #{o['id']} confirmado — URACE Store"
         texto = (f"{pedido_site.ola(o, lang)},\n\nObrigado pelo pedido! Recebemos o seu pagamento.\n\n{descricao(o)}\n"
                  f"Total pago: US$ {valor:,.2f}\nPedido: #{o['id']}\n\n{entrega_cli}\n\nPágina do seu pedido: {pedido_site.link(o)}\n\n"
@@ -403,7 +417,7 @@ def avisar(con, oid, enviar=None):
     else:
         entrega_cli = ("We'll let you know when it's ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
                        "Orlando, FL 32824)." if o["delivery"] == "retirada" else
-                       "We'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.")
+                       pedido_site.texto_envio(o, pedido_site.linhas(con, o), lang))
         assunto = f"Order #{o['id']} confirmed — URACE Store"
         texto = (f"{pedido_site.ola(o, lang)},\n\nThanks for your order! We received your payment.\n\n{descricao(o)}\nTotal paid: "
                  f"US$ {valor:,.2f}\nOrder: #{o['id']}\n\n{entrega_cli}\n\nYour order page: {pedido_site.link(o)}\n\n"
@@ -413,7 +427,7 @@ def avisar(con, oid, enviar=None):
             _enviar(enviar, o["email"], assunto, texto)
         _enviar(enviar, "support@urace.us", f"Loja · PAGO: {descricao(o)} — {o['name'] or o['email']}",
                 f"Pedido #{o['id']} pago no Stripe: US$ {valor:,.2f}\n{descricao(o)}\n{o['name'] or ''} <{o['email'] or ''}> "
-                f"{o['phone'] or ''}\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else 'ENVIO — combinar o frete'}\n"
+                f"{o['phone'] or ''}\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else pedido_site.texto_envio_equipe(o, pedido_site.linhas(con, o))}\n"
                 + (f"Endereço:\n{_endereco(o)}\n" if o["shipping"] else "")
                 + f"Card: {o['link_note'] or '—'}\n\nSeparar e entregar. Vendas: https://ops.urace.us/ops/sales/{o['opp_id']}"
                 + f"\nPágina do pedido: {pedido_site.link(o)}")
@@ -459,8 +473,14 @@ def registrar_qbo(con, oid, qbo=None):
             memo = f"URACE order #{o['id']} (site cart) — pago no Stripe ({o['payment_intent'] or o['stripe_session_id']})"
         else:
             item = q.item_loja_sistema(o["product_name"], o["unit_price"], f"URACE Store: {o['product_name']}")
-            linhas = [{"item_id": item["id"], "quantidade": o["quantity"], "unitario": round(valor / o["quantity"], 2),
-                       "descricao": descricao(o)}]
+            extra = [(carrinho_item_deposito(con), o["deposit"], "Refundable security deposit")] if o.get("deposit") else []
+            if o.get("shipping_fee"):                       # #298: o frete fixo do produto, no item "Shipping"
+                from command_center.providers import carrinho
+                extra.append((carrinho.item_frete(q), o["shipping_fee"], f"Shipping: {descricao(o)}"))
+            resto = round(valor - sum(v for _, v, _ in extra), 2)
+            linhas = [{"item_id": item["id"], "quantidade": o["quantity"], "unitario": round(resto / o["quantity"], 2),
+                       "descricao": descricao(o)}] + [{"item_id": i, "quantidade": 1, "unitario": v, "descricao": d}
+                                                      for i, v, d in extra]
         r = q.recibo_venda_sistema(cliente_id=cliente, linhas=linhas, memo=memo, data=(o["paid_at"] or agora())[:10],
                                    numero=f"WEB-{o['id']:05d}", email=o["email"])
         atualizar(con, "store_orders", oid, qbo_receipt_id=str(r.get("id") or ""), qbo_receipt_doc=r.get("numero"),
@@ -475,6 +495,11 @@ def registrar_qbo(con, oid, qbo=None):
             inserir(con, "opp_events", opp_id=opp, kind="invoice", title="QuickBooks: registrar a venda à mão",
                     detail=str(e)[:300], at=agora(), actor="site", ok=0)
         return None
+
+
+def carrinho_item_deposito(con):
+    from command_center.providers import carrinho
+    return carrinho._item_deposito(con)
 
 
 def _opps(con, o):

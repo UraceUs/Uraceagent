@@ -41,6 +41,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
+         "/site/produtos", "/site/produtos/235",
          "/site/waiver", "/site/pedidos", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -2769,4 +2770,42 @@ def test_o_gerente_muda_um_cartao_da_pagina_e_o_site_mostra(servidor, navegador)
     finally:
         g.request.patch(servidor + f"/api/site/cartoes/{alvo['id']}", headers=csrf,
                         data={"title": alvo["title"], "button": alvo["button"]})
+        g.close()
+
+
+def test_o_gerente_poe_o_frete_do_produto_e_o_carrinho_cobra(servidor, navegador):
+    """#298: Site público › Produtos da loja, no celular. O gerente abre um produto pelo endereço dele, põe o frete
+    fixo e salva; a página do produto diz o frete, e o carrinho com "Ship to me" soma o frete × quantidade."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    csrf = _csrf(g)
+    lista = g.request.get(servidor + "/api/site/produtos?limit=200&estado=ativos").json()["produtos"]
+    alvo = next(p for p in lista if not p["variations"] and p["price"] and p["in_stock"])
+    try:
+        abrir(g, servidor, "/site/produtos")
+        g.get_by_label("Buscar").fill(alvo["name"][:20])
+        g.get_by_role("link", name=alvo["name"], exact=True).first.click()
+        g.wait_for_url(f"**/site/produtos/{alvo['id']}")
+        g.get_by_role("heading", name=alvo["name"], level=2).wait_for()
+        g.get_by_label("Frete por unidade (US$)").fill("18")
+        g.get_by_role("button", name="Salvar", exact=True).click()
+        g.get_by_text("Salvo: a loja do site já mostra.").wait_for()
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v = navegador.new_page(viewport={"width": 390, "height": 844})
+        v.goto(site + f"/store/p/{alvo['slug']}/")
+        v.get_by_text("shipping $18 per item").first.wait_for()
+        v.locator('form.form-comprar input[name="quantidade"]').fill("2")
+        v.get_by_role("button", name="Add to cart").click()
+        v.goto(site + "/cart/")
+        v.locator(".carrinho-linha").first.wait_for()
+        v.get_by_text("Ship to me").click()
+        v.locator(".carrinho-total dt", has_text="Shipping").wait_for()
+        assert "$36.00" in v.locator(".carrinho-total").inner_text(), "frete × quantidade"
+        assert "shipping $36.00" in v.locator(".carrinho-frete-txt").inner_text()
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v.close()
+    finally:
+        g.request.patch(servidor + f"/api/site/produtos/{alvo['id']}", headers=csrf, data={"shipping_fee": ""})
         g.close()

@@ -49,6 +49,13 @@ def estatico(nome):
     return f"/_s/{nome}?v={_versao(nome)}"
 
 
+def foto_url(src):
+    """O endereço de uma foto: as do site ficam em static/img (com versão); #298: as que a equipe sobe no painel
+    já vêm com o caminho (/store/img/<arquivo>.webp)."""
+    src = str(src or "")
+    return src if src.startswith("/") else estatico("img/" + src)
+
+
 def preview():
     return os.environ.get("CC_SITE_PREVIEW", "1") != "0"
 
@@ -152,8 +159,8 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
     do pedido pago). Sem `SITE_GTM_ID`/`SITE_META_PIXEL_ID` no ambiente, nada de medição sai."""
     canon = f"https://{host}{caminho}"
     robots = '<meta name="robots" content="noindex, nofollow">' if preview() or not indexar else ""
-    og_img = (f'<meta property="og:image" content="https://{host}{estatico("img/" + foto)}">'
-              f'<meta name="twitter:image" content="https://{host}{estatico("img/" + foto)}">') if foto else ""
+    og_img = (f'<meta property="og:image" content="https://{host}{foto_url(foto)}">'
+              f'<meta name="twitter:image" content="https://{host}{foto_url(foto)}">') if foto else ""
     # #236: carrinho.js em toda página (o contador do topo); vem antes, a agenda e a loja usam o que ele expõe
     # #260: medicao.js primeiro (o dataLayer existe antes de todo mundo) e só quando há id no ambiente;
     # campanha.js em toda página, sempre: ele é nosso e não fala com ninguém de fora

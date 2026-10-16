@@ -1,7 +1,7 @@
 /* Site público, visto de dentro (#41): a agenda que o cliente usa na área do cliente.
  * Agendamentos: o que o cliente pediu (confirmar, recusar). Disponibilidade: a semana,
  * os horários, os bloqueios — quem mexe é o gerente; a operação vê. */
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { NavLink, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
@@ -657,8 +657,12 @@ function WaiverNativa() {
   </div>
 }
 
+/* #298: os produtos da loja ficam em arquivo próprio (só carrega quem abre a aba). */
+const ProdutosDaLoja = lazy(() => import('./LojaProdutos').then(m => ({ default: m.ProdutosDaLoja })))
+const EditarProduto = lazy(() => import('./LojaProdutos').then(m => ({ default: m.EditarProduto })))
+
 export function SitePublico() {
-  const { aba } = useParams()
+  const { aba, id } = useParams()
   const { can } = useAuth()
   return <>
     <PageHeader title={tr("Agendamentos do site")} help={<>{tr("O que o cliente usa na área do cliente (hoje em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>{tr(", depois no urace.us): os pedidos de sessão e a agenda que você abre e fecha.")}</>}>
@@ -669,11 +673,13 @@ export function SitePublico() {
       <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Disponibilidade")}</NavLink>
       <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Serviços e preços")}</NavLink>
       <NavLink to="/site/cartoes" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Cartões das páginas")}</NavLink>
+      <NavLink to="/site/produtos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Produtos da loja")}</NavLink>
       <NavLink to="/site/pedidos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Pedidos do site")}</NavLink>
       <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Contas de clientes")}</NavLink>
       {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Waiver")}</NavLink>}
     </div>
-    {aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'cartoes' ? <Cartoes /> : aba === 'contas' ? <Contas /> : aba === 'pedidos' ? <Pedidos />
+    {aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
+      : aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'cartoes' ? <Cartoes /> : aba === 'contas' ? <Contas /> : aba === 'pedidos' ? <Pedidos />
       : aba === 'waiver' && can('MANAGER') ? <WaiverNativa /> : <Agendamentos />}
   </>
 }

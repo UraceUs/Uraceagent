@@ -196,19 +196,37 @@ def existe(caminho, host="novo.urace.us"):
     return caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None
 
 
+class _UmaVez:
+    """#298: lê do banco só se a página pedir, e uma vez por requisição (a home não abre o catálogo da loja)."""
+    def __init__(self, ler):
+        self.ler, self.lido, self.valor = ler, False, None
+
+    def __call__(self):
+        if not self.lido:
+            self.valor, self.lido = _do_banco(self.ler), True
+        return self.valor
+
+
+def _com_o_painel(fazer):
+    """O que o painel decide na página: #297, o "a partir de" (o menor preço de kart do painel, ao vivo); #298, os
+    produtos da loja (do banco; sem banco, o arquivo de antes)."""
+    from command_center.providers import cartoes_site, loja
+    marca = paginas.PRECO_KART.set(_do_banco(cartoes_site.preco_kart))
+    marca_loja = ps.PRODUTOS.set(_UmaVez(loja.catalogo))
+    try:
+        return fazer()
+    finally:
+        ps.PRODUTOS.reset(marca_loja)
+        paginas.PRECO_KART.reset(marca)
+
+
 def pagina(request: Request, caminho: str):
     """O que o site responde em `caminho` (sempre começando com /)."""
     if not e_do_site(request):
         raise HTTPException(404)
     host = host_de(request)
     q = dict(request.query_params)
-    # #297: o "a partir de" de todas as páginas é o menor preço de kart do painel, ao vivo
-    from command_center.providers import cartoes_site
-    marca = paginas.PRECO_KART.set(_do_banco(cartoes_site.preco_kart))
-    try:
-        return _pagina(request, caminho, host, q)
-    finally:
-        paginas.PRECO_KART.reset(marca)
+    return _com_o_painel(lambda: _pagina(request, caminho, host, q))
 
 
 def _pagina(request, caminho, host, q):
@@ -416,8 +434,8 @@ async def pedido(request: Request, con: sqlite3.Connection = Depends(get_db)):
     if not e_do_site(request):
         raise HTTPException(404)
     c = await _campos(request)
-    produtos = {p["slug"]: p for p in ps.dados("produtos.json")["produtos"]}
-    p = produtos.get(c.get("produto") or "")
+    from command_center.providers import loja
+    p = loja.do_site(con).get(c.get("produto") or "")          # #298: o catálogo do painel
     volta = f"/store/p/{p['slug']}/" if p else "/store/"
     erro = _validar(c)
     if erro == "robo":
@@ -465,8 +483,8 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
     if not e_do_site(request):
         raise HTTPException(404)
     c = await _campos(request)
-    produtos = {p["slug"]: p for p in ps.dados("produtos.json")["produtos"]}
-    p = produtos.get(c.get("produto") or "")
+    from command_center.providers import loja
+    p = loja.do_site(con).get(c.get("produto") or "")          # #298: o catálogo do painel
     volta = f"/store/p/{p['slug']}/" if p else "/store/"
     quer_json = "application/json" in (request.headers.get("accept") or "")
 
@@ -497,7 +515,7 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
         qtd = 1
     foto = None
     if p["images"] and not _origem(request).startswith("http://"):
-        foto = _origem(request) + paginas.estatico("img/" + p["images"][0]["src"])
+        foto = _origem(request) + paginas.foto_url(p["images"][0]["src"])
     try:
         _, url = stripe_loja.criar_sessao(con, p, c.get("variacao") or "", qtd, c.get("entrega"), _origem(request),
                                           host_de(request), foto_url=foto, conta_id=conta, lang=idioma.de_request(request))
@@ -575,7 +593,8 @@ async def carrinho_cotar(request: Request, con: sqlite3.Connection = Depends(get
         raise HTTPException(404)
     d = await _corpo_json(request)
     conta = api_portal.conta_do_cookie(request, con)
-    cot = _no_idioma(carrinho.cotar(con, d.get("itens"), conta), idioma.de_request(request))
+    entrega = "envio" if d.get("entrega") == "envio" else "retirada"       # #298: o frete entra com "Ship to me"
+    cot = _no_idioma(carrinho.cotar(con, d.get("itens"), conta, entrega=entrega), idioma.de_request(request))
     return _json({**cot, "account": _conta_resumo(con, conta) if conta else None, "stripe": stripe_loja.ligado()})
 
 
@@ -783,6 +802,19 @@ async def pedido_de_novo(token: str, request: Request, con: sqlite3.Connection =
     return RedirectResponse(url, status_code=303)
 
 
+@r.get("/store/img/{nome}", include_in_schema=False)
+def foto_da_loja(nome: str, request: Request):
+    """#298: a foto que a equipe subiu no painel (WebP sem EXIF). Pública como as do site (e o painel mostra a
+    mesma); o nome leva o hash do arquivo, então o navegador guarda por um ano."""
+    from fastapi.responses import FileResponse
+
+    from command_center.providers import loja
+    caminho = loja.arquivo_da_foto(nome)
+    if not caminho:
+        raise HTTPException(404)
+    return FileResponse(caminho, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @r.get("/store/cancelled/", include_in_schema=False)
 def loja_cancelado(request: Request):
     if not e_do_site(request):
@@ -821,6 +853,6 @@ def robots(request):
 
 def sitemap(request):
     host = host_de(request)
-    urls = "".join(f"  <url><loc>https://{host}{c}</loc></url>\n" for c in ps.caminhos())
+    urls = "".join(f"  <url><loc>https://{host}{c}</loc></url>\n" for c in _com_o_painel(ps.caminhos))
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls + "</urlset>\n")
