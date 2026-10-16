@@ -369,10 +369,13 @@ def _atencao(con, hoje, sessoes, contas):
     desde = _limites(JANELA_PENDENCIAS, hoje)[2]
     sem_vaga = um(con, """SELECT COUNT(DISTINCT i.order_id) AS n FROM store_order_items i JOIN store_orders o ON o.id=i.order_id
                            WHERE i.status='sem_vaga' AND i.booking_id IS NULL AND o.status='pago' AND o.created_at>=?""", (desde,))["n"]
-    # #309: pago sem estoque (ou com o produto em estoque sem item ligado): a equipe separa à mão ou fala com o cliente
+    # #309: pago sem estoque (ou com o produto em estoque sem item ligado): a equipe separa à mão ou fala com o cliente.
+    # O que ela marcou como Resolvido (Pedidos do site) sai da conta
     sem_estoque = um(con, """SELECT COUNT(*) AS n FROM store_orders o WHERE o.status='pago' AND o.created_at>=?
-                              AND (o.stock_note LIKE 'sem estoque%' OR EXISTS (SELECT 1 FROM store_order_items i
-                                   WHERE i.order_id=o.id AND i.stock_note LIKE 'sem estoque%'))""", (desde,))["n"]
+                              AND ((o.stock_note LIKE 'sem estoque%' AND o.stock_resolved_at IS NULL)
+                                   OR EXISTS (SELECT 1 FROM store_order_items i WHERE i.order_id=o.id
+                                              AND i.stock_note LIKE 'sem estoque%' AND i.stock_resolved_at IS NULL))""",
+                     (desde,))["n"]
     avisos = (um(con, "SELECT COUNT(*) AS n FROM store_orders WHERE notify_error IS NOT NULL AND created_at>=?", (desde,))["n"]
               + um(con, "SELECT COUNT(*) AS n FROM store_order_notices WHERE sent_at IS NULL AND error IS NOT NULL AND created_at>=?",
                    (desde,))["n"]

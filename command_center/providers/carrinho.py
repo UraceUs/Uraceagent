@@ -71,11 +71,10 @@ def _int(v, padrao=None):
 
 
 # ------------------------------------------------------------------ 1. o que o carrinho custa
-def _linha_produto(produtos, it, entrega=None, limites=None, uso=None):
+def _linha_produto(produtos, it, entrega=None):
     """#298: o frete fixo do produto (× quantidade) só com "Ship to me"; `frete_envio` é quanto seria (o carrinho
     mostra na opção de entrega) e None quando a equipe combina à parte. O depósito do produto vale por unidade.
-    #309: o produto em estoque não passa do que o box tem (somando as linhas do mesmo produto e opção); a mensagem
-    não diz o número."""
+    #309: o limite do que o box tem é conferido no carrinho inteiro (`_limitar`), não aqui, linha a linha."""
     from command_center.providers import loja
     from command_center.providers.stripe_loja import _variacao, compravel
     p = produtos.get(str(it.get("produto") or ""))
@@ -95,14 +94,27 @@ def _linha_produto(produtos, it, entrega=None, limites=None, uso=None):
         return {**linha, "unitario": 0, "erro": "Please choose an option on the product page."}
     if not compravel(p, v):
         return {**linha, "unitario": 0, "erro": "This item can't be bought online right now. Send us an order request instead."}
-    chave = (p["slug"], nome_var if v else "")
-    limite = (limites or {}).get(chave)
-    if limite is not None and uso is not None:
-        if uso.get(chave, 0) + qtd > limite:
-            from command_center.providers.stripe_loja import SEM_TANTO
-            return {**linha, "unitario": float((v or {}).get("price") or p["price"]), "erro": SEM_TANTO}
-        uso[chave] = uso.get(chave, 0) + qtd
     return {**linha, "unitario": float((v or {}).get("price") or p["price"]), "erro": None}
+
+
+def _limitar(linhas, limites):
+    """#309: o produto em estoque não passa do que o box tem. Soma primeiro o pedido de cada produto e opção no
+    carrinho inteiro; se passa, a MESMA frase em TODAS as linhas dele. Conferir linha a linha deixava o carrinho
+    anônimo achar o saldo exato numa requisição só (20 linhas de 1 mostravam onde acabava): assim cada cotação
+    responde só "cabe" ou "não cabe", e a frase nunca diz o número."""
+    if not limites:
+        return
+    from command_center.providers.stripe_loja import SEM_TANTO
+    pedido = {}
+    for x in linhas:
+        if x["tipo"] == "produto" and not x["erro"]:
+            chave = (x["produto"], x["variacao"] or "")
+            if chave in limites:
+                pedido[chave] = pedido.get(chave, 0) + x["quantidade"]
+    demais = {k for k, n in pedido.items() if n > limites[k]}
+    for x in linhas:
+        if x["tipo"] == "produto" and not x["erro"] and (x["produto"], x["variacao"] or "") in demais:
+            x["erro"] = SEM_TANTO
 
 
 def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
@@ -201,14 +213,14 @@ def cotar(con, itens, conta_id=None, para_pagar=False, entrega=None):
     produtos = _produtos(con)
     pilotos = {p["id"]: p for p in todos(con, "SELECT id, name FROM portal_pilots WHERE account_id=? AND active=1",
                                          (conta_id,))} if conta_id else {}
-    uso, linhas, no_estoque = {}, [], {}
+    uso, linhas = {}, []
     limites = _limites(con) if any(isinstance(x, dict) and x.get("tipo") == "produto" for x in itens[:MAX_ITENS]) else {}
     for i, it in enumerate(itens[:MAX_ITENS]):
         if not isinstance(it, dict):
             continue
         tipo = it.get("tipo")
         if tipo == "produto":
-            linha = _linha_produto(produtos, it, entrega, limites, no_estoque)
+            linha = _linha_produto(produtos, it, entrega)
         elif tipo == "sessao":
             linha = _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar)
         else:
@@ -218,6 +230,7 @@ def cotar(con, itens, conta_id=None, para_pagar=False, entrega=None):
         linhas.append(linha)
         if tipo == "sessao" and it.get("lead_follow") is True:
             linhas.append(_linha_lead_follow(con, linha))
+    _limitar(linhas, limites)
     validas = [x for x in linhas if not x["erro"]]
     subtotal = round(sum(x["valor"] for x in validas), 2)
     deposito = round(sum(x["deposito"] for x in validas), 2)
@@ -417,6 +430,18 @@ def _texto_linha(x):
     return s
 
 
+def _juntar_atencao(sem_vaga, sem_estoque):
+    return ("; ".join([f"{x['name']}: {x['note']}" for x in sem_vaga] + list(sem_estoque)))[:500] or None
+
+
+def atencao(con, o):
+    """O "Resolver" do pedido de novo, a partir do banco: as sessões pagas sem vaga e o que ainda está sem estoque.
+    #309 (revisão): o que a equipe marcou como **Resolvido** sai daqui (e do Painel do site)."""
+    from command_center.providers import estoque_site
+    sem_vaga = [x for x in itens(con, o["id"]) if x["status"] == "sem_vaga"] if o.get("kind") == "carrinho" else []
+    return _juntar_atencao(sem_vaga, estoque_site.pendentes(con, o))
+
+
 def pago(con, oid):
     """Pedido do carrinho pago: marca as sessões, liga os cards e abre uma oportunidade GANHO por card.
     Só banco local (rápido, dentro da resposta ao webhook). Rodar de novo não refaz nada."""
@@ -468,7 +493,7 @@ def pago(con, oid):
             con.execute(f"UPDATE store_order_items SET client_id=? WHERE client_id IS NULL AND id IN ({','.join('?' * len(ids))})",
                         (card, *ids))
         primeira = primeira or (opp, card)
-    atencao = ("; ".join([f"{x['name']}: {x['note']}" for x in sem_vaga] + sem_estoque))[:500] or None
+    atencao = _juntar_atencao(sem_vaga, sem_estoque)
     nota = "; ".join(filter(None, [f"{len([g for g in grupos if g])} card(s) ligado(s)" if any(grupos) else None,
                                    "vincular à mão" if None in grupos else None, nota_produto]))
     atualizar(con, "store_orders", oid, client_id=primeira[1], opp_id=primeira[0], link_note=nota[:300] or None,

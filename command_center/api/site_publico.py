@@ -281,6 +281,9 @@ class VariacaoIn(BaseModel):
     regular: float | str | None = None      # o preço cheio da opção
     promo: float | str | None = None        # o promocional (vazio: sem promoção)
     in_stock: bool = True
+    # #309 (revisão): o nome que a opção tinha quando a tela abriu (null na opção nova). Renomear a opção ligada ao
+    # estoque leva a ligação junto; sem isto, a opção renomeada venderia sem limite.
+    antes: str | None = Field(None, max_length=400)
 
 
 class FotoIn(BaseModel):
@@ -333,13 +336,13 @@ def mudar_produto(pid: int, dados: ProdutoIn, request: Request, con: sqlite3.Con
     d = _produto_in(dados)
     d.pop("slug", None)
     try:
-        mud = loja.mudar(con, u["id"], pid, d)
+        with transacao(con):        # #309: o produto e a ligação da opção renomeada com o estoque, juntos ou nenhum
+            mud = loja.mudar(con, u["id"], pid, d)
+            if mud:
+                auditar(con, "store.product.update", f"user:{u['id']}", user_id=u["id"], entity_type="store_product",
+                        entity_id=pid, detail={k: {"antes": a, "depois": v} for k, (a, v) in mud.items()}, ip=auth._ip(request))
     except loja.ErroProduto as e:
         raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
-    if mud:
-        auditar(con, "store.product.update", f"user:{u['id']}", user_id=u["id"], entity_type="store_product", entity_id=pid,
-                detail={k: {"antes": a, "depois": v} for k, (a, v) in mud.items()}, ip=auth._ip(request))
-    con.commit()
     return {"produto": loja.do_painel(con, pid)}
 
 
@@ -564,6 +567,23 @@ def pedidos(status: str | None = None, limit: int = Query(30, ge=1, le=200), off
     paginados, cada um com o link da página do pedido para a equipe mandar ao cliente."""
     from command_center.providers import pedido_site
     return pedido_site.lista(con, status, limit, offset)
+
+
+@r.post("/pedidos/{oid}/estoque-resolvido")
+def estoque_resolvido(request: Request, oid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                      u=Depends(auth.exige("OPERATOR"))):
+    """#309 (revisão): o "Resolver: sem estoque" do pedido pago foi resolvido (a equipe separou o que tinha, combinou
+    com o cliente ou devolveu pelo Stripe). Sai do "Resolver" do pedido e do "Pagos sem estoque" do Painel do site; a
+    frase fica na linha e na auditoria."""
+    from command_center.providers import estoque_site
+    try:
+        with transacao(con):
+            res = estoque_site.resolver(con, oid)
+            auditar(con, "store.stock.resolved", f"user:{u['id']}", user_id=u["id"], entity_type="store_order", entity_id=oid,
+                    detail=res, ip=auth._ip(request))
+    except loja.ErroProduto as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    return {"ok": True, **res}
 
 
 # ------------------------------------------------------------------ security deposit (#317)

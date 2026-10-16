@@ -458,10 +458,11 @@ def _avisos(con, o):
 
 def para_painel(con, o):
     """O que a equipe vê de um pedido: estado, quem, o quê, e o link da página para mandar ao cliente."""
+    from command_center.providers import estoque_site
     ls = linhas(con, o)
     avisos = _avisos(con, o)
     atual = avisos.get(o["status"]) or {}
-    return {"id": o["id"], "tipo": o["kind"], "status": o["status"], "total": o["amount"], "pago": o["amount_paid"],
+    return {"sem_estoque": bool(estoque_site.pendentes(con, o)), "id": o["id"], "tipo": o["kind"], "status": o["status"], "total": o["amount"], "pago": o["amount_paid"],
             "criado_em": o["created_at"], "pago_em": o["paid_at"], "nome": o["name"], "email": o["email"], "telefone": o["phone"],
             "resumo": "; ".join(x["name"] + (f" × {x['quantity']}" if x["quantity"] > 1 else "") for x in ls)[:300],
             "opp_id": o["opp_id"], "atencao": o["attention"], "aviso_em": atual.get("em") or (o["notified_at"] if o["status"] == "pago" else None),

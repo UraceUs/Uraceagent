@@ -864,9 +864,11 @@ marcador para isso lá, e o que tiver em estoque a gente coloca quanto que tem e
 aparente essa parte … para os clientes"*.
 
 **Onde:** Site › **Estoque do site** (`/ops/site/estoque`). Um cartão por produto, com o marcador em cima, quanto tem
-agora e cada opção (tamanho, cor…) com o item do Estoque ligado. Filtros: **Em estoque**, **Dropshipping**, **Em
-estoque sem item ligado** (falta ligar) e **Sem saldo** (ligado, mas acabou: o site já mostra "Out of stock"). Busca
-por nome, SKU ou endereço; a lista é paginada no servidor.
+agora (a soma) e cada opção (tamanho, cor…) com o item do Estoque ligado e **quanto tem em cada local**: *Galpão 5 ·
+Pista 3*. Filtros: **Em estoque**, **Dropshipping**, **Em estoque sem item ligado** (falta ligar) e **Sem saldo**
+(ligado, mas acabou: o site já mostra "Out of stock"). Busca por nome, SKU ou endereço; a lista é paginada no servidor.
+Os links **Estoque do site** e **Ligar em Estoque do site** do produto (Site › Produtos da loja) abrem a lista já
+filtrada nele (`/ops/site/estoque/<endereço do produto>`).
 
 | Marcador | Quem envia | O que o site mostra |
 |---|---|---|
@@ -883,11 +885,22 @@ só.
 2. Em cada opção, **Ligar**: escolha o **item do estoque** (a lista sugere pelo nome do produto; o item que já vende
    por outro produto aparece desligado) ou **Criar item** a partir do produto (nome, prateleira, tamanho e o preço do
    Balcão, opcional: o preço do site continua no produto).
-3. **Quanto tem agora** é obrigatório (a contagem; escolha Galpão ou Pista). O estoque do box nasceu sem contagem, e
-   ligar sem contar mostraria "Out of stock". Kart usado e motor (número de série) contam as unidades, uma a uma, pelo
-   Estoque.
-4. Depois, **Contar** (operador também) acerta o saldo quando a mão contar de novo; **Desligar do produto** (gerente)
-   tira a ligação sem mexer no item, no saldo nem no histórico.
+3. **A contagem é de um local só.** Escolha **Onde** (Galpão ou Pista) e preencha **Quanto tem no Galpão agora** (ou
+   *na Pista*) com o que tem **naquele local**, nunca a soma dos dois: a lista mostra cada local (*Galpão 5 · Pista
+   3*). Item **novo** (Criar item) ou que **nunca foi contado**: a contagem é obrigatória (ligar sem contar mostraria
+   "Out of stock"). Item que **já tem saldo**: o campo já vem com o saldo do local escolhido e é **opcional**; deixe
+   como está e toque em **Ligar** (o saldo não muda), ou mude só se acabou de contar aquele local. Kart usado e motor
+   (número de série) contam as unidades, uma a uma, pelo Estoque.
+4. Depois, **Contar** (operador também) acerta o saldo de **um local** quando a mão contar de novo: o campo vem com o
+   saldo do local escolhido. **Desligar do produto** (gerente) tira a ligação sem mexer no item, no saldo nem no
+   histórico.
+5. **Mudar o nome de uma opção** ligada (em Site › Produtos da loja, *M* vira *Medium*) leva a ligação junto: a opção
+   continua vendendo só o que o box tem. Se o sistema não souber qual opção virou qual (o nome de várias mudou de uma
+   vez por outro caminho que não a tela), ele recusa e diz o que fazer: mude uma por vez, ou desligue antes. **Tirar**
+   uma opção ligada, ou dar opções a um produto ligado inteiro, também pede **desligar antes** (a ligação ficaria
+   solta e prenderia o item, que vende por um produto só).
+6. **Passar a dropshipping** um produto que ainda tem ligação: o cartão continua mostrando o item ligado, com
+   **Desligar**. Até desligar, o item não liga a outro produto (no Ligar ele aparece *ligado a X (dropshipping)*).
 
 **A venda paga sai do estoque sozinha.** No pagamento (o aviso do Stripe ou a página de obrigado, o que chegar
 primeiro), o produto em estoque sai do item ligado, uma vez só (*venda · site*, com o número do pedido no histórico):
@@ -896,11 +909,15 @@ primeiro), o produto em estoque sai do item ligado, uma vez só (*venda · site*
 **Sem saldo na hora de pagar** (duas pessoas pagaram a última unidade, o Balcão vendeu antes, a contagem estava
 errada): o pagamento **não cai**. Sai o que tinha e o pedido fica com **"Resolver: sem estoque: … pediu 2, tinha 1"** em
 Site › Pedidos do site, no e-mail da equipe (*· SEM ESTOQUE* no assunto) e no Painel do site (*Pagos sem estoque*).
-Separe o que tem, confira a prateleira, conte e combine com o cliente (prazo ou devolução pelo Stripe).
+Separe o que tem, confira a prateleira, conte e combine com o cliente (prazo ou devolução pelo Stripe). Resolvido, toque
+em **Resolvido** no pedido (operador também): o "sem estoque" sai do *Resolver* do pedido e do *Pagos sem estoque* do
+Painel do site; a frase continua na linha do pedido e na auditoria (`store.stock.resolved`). Saldo com fração (0,5 no
+Galpão + 0,5 na Pista) vende 1 no site e a baixa tira 0,5 de cada local.
 
 **O cliente nunca vê** o marcador nem a quantidade: só "Out of stock" quando acaba. Se ele pedir mais do que o box tem,
-o carrinho e o Buy now dizem *"We don't have that many in stock right now…"*, sem o número. Com produto em estoque, o
-checkout do Stripe vale 31 minutos (a última unidade não fica presa num checkout esquecido).
+o carrinho e o Buy now dizem *"We don't have that many in stock right now…"*, sem o número; no carrinho, a frase sai
+em **todas** as linhas daquele produto e opção (somadas), para o carrinho não mostrar onde o saldo acaba. Com produto
+em estoque, o checkout do Stripe vale 31 minutos (a última unidade não fica presa num checkout esquecido).
 
 **Não faz:** pedido sozinho em Compras quando o dropshipping vende (a equipe pede ao fornecedor como antes); devolver ao
 estoque quando há estorno no Stripe (dê **entrada** com o motivo "devolução" no Estoque).
@@ -1099,7 +1116,8 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | cancelar sessão | `POST /ops/api/site/agendamentos/{id}/cancelar` | `{"nota": "…"}` | Operador | **sim** |
 | confirmar sem pagamento e waiver | `POST /ops/api/site/agendamentos/{id}/confirmar` | `{}` | **Gerente** | **sim** |
 | contar o item ligado a um produto do site | `POST /ops/api/site/estoque/{produto}/contar` | `{"variacao": "M", "qty": 3, "local": "sede"}` | Operador | **sim** |
-| ligar produto (ou opção) ao estoque | `POST /ops/api/site/estoque/{produto}/ligar` | `{"variacao": "", "item_id": 12, "contagem": 2, "local": "pista"}` | **Gerente** | **sim** |
+| ligar produto (ou opção) ao estoque | `POST /ops/api/site/estoque/{produto}/ligar` | `{"variacao": "", "item_id": 12, "contagem": 2, "local": "pista"}` (`contagem` é o que tem **naquele local**; opcional se o item já tem saldo) | **Gerente** | **sim** |
+| marcar "sem estoque" do pedido como resolvido | `POST /ops/api/site/pedidos/{id}/estoque-resolvido` | `{}` | Operador | **sim** |
 | responder lead no Kommo | `POST /ops/api/crm/leads/{id}/reply` | `{"text": "texto aprovado pela pessoa"}` | Operador | **sim** |
 | mover etapa no Kommo | `POST /ops/api/crm/leads/{id}/stage` | `{"stage_id": "…"}` | Operador | **sim** |
 | marcar tag no Kommo | `POST /ops/api/crm/leads/{id}/tags` | `{"tags": ["…"]}` | Operador | **sim** |

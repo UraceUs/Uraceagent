@@ -117,9 +117,10 @@ def test_o_cliente_nunca_ve_o_marcador_nem_a_quantidade(loja):  # noqa: F811
     erro = r.json()["linhas"][0]["erro"]
     assert erro == SEM_TANTO and "7" not in erro, "a mensagem não diz quanto tem"
     assert not cli.post("/ops/api/vitrine/carrinho", json={"itens": [_item(p["slug"], 7)]}).json()["linhas"][0]["erro"]
-    # duas linhas do mesmo produto somam: 4 + 4 passa de 7
+    # duas linhas do mesmo produto somam: 4 + 4 passa de 7, e as DUAS dizem a mesma frase (revisão: nenhuma linha
+    # passa sozinha, para o carrinho não revelar onde o saldo acaba)
     d = cli.post("/ops/api/vitrine/carrinho", json={"itens": [_item(p["slug"], 4), _item(p["slug"], 4)]}).json()
-    assert [x["erro"] for x in d["linhas"]] == [None, SEM_TANTO] and not d["ok"]
+    assert [x["erro"] for x in d["linhas"]] == [SEM_TANTO, SEM_TANTO] and not d["ok"]
 
 
 # ------------------------------------------------------------------ 2. ligar e contar

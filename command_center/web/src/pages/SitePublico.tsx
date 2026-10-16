@@ -493,15 +493,25 @@ function Cartoes() {
  * expirou, no checkout), cada um com o link da página do pedido para mandar ao cliente. */
 interface PedidoLista { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; criado_em: string
   pago_em: string | null; nome: string | null; email: string | null; telefone: string | null; resumo: string; opp_id: number | null
-  atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string; idioma?: 'en' | 'pt'; conta?: number | null }
+  atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string; idioma?: 'en' | 'pt'; conta?: number | null
+  sem_estoque?: boolean }
 const POR_PAGINA_PEDIDOS = 30
 
 function Pedidos() {
   const toast = useToast()
+  const perguntar = usePerguntar()
+  const [resolvendo, setResolvendo] = useState(0)
   const [filtro, setFiltro] = useState('')
   const [offset, setOffset] = useState(0)
   const l = useGet<{ pedidos: PedidoLista[]; total: number }>(`/site/pedidos?limit=${POR_PAGINA_PEDIDOS}&offset=${offset}${filtro ? `&status=${filtro}` : ''}`, 30000)
   const copiar = (p: PedidoLista) => navigator.clipboard?.writeText(p.link).then(() => toast(tr("Link do pedido copiado: mande ao cliente."), 'ok'))
+  // #309 (revisão): o "sem estoque" resolvido sai do pedido e do "Pagos sem estoque" do Painel do site
+  async function resolvido(p: PedidoLista) {
+    if (!await perguntar({ titulo: tr("O sem estoque do pedido #{0} está resolvido?", p.id), texto: tr("Use quando a peça foi separada, o cliente combinou outro prazo ou o valor foi devolvido pelo Stripe. A frase continua no pedido e na auditoria."), ok: tr("Resolvido") })) return
+    setResolvendo(p.id)
+    try { await api.post(`/site/pedidos/${p.id}/estoque-resolvido`); toast(tr("Resolvido: saiu do Painel do site."), 'ok'); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setResolvendo(0) }
+  }
   return <>
     <div className="seg" style={{ marginBottom: 12, flexWrap: 'wrap' }}>{([['', tr("Todos")], ['pago', tr("Pagos")], ['aguardando', tr("Processando")], ['falhou', tr("Não passou")], ['expirado', tr("Expirou")], ['aberto', tr("No checkout")]] as const).map(([k, r]) =>
       <button key={k || 'todos'} className={`btn sm${filtro === k ? '' : ' ghost'}`} onClick={() => { setFiltro(k); setOffset(0) }}>{r}</button>)}</div>
@@ -517,8 +527,10 @@ function Pedidos() {
         <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{fmtDateTime(p.criado_em)}{p.email ? ` · ${p.email}` : ''}{p.telefone ? ` · ${p.telefone}` : ''}{p.refeito_de ? tr(" · refeito do pedido #{0}", p.refeito_de) : ''}{p.idioma === 'pt' ? tr(" · comprou em português") : ''}</div>
         {p.status !== 'aberto' && <div className="small">{p.aviso_em ? (p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente."))
           : p.aviso_erro ? <span style={{ color: 'var(--crit)' }}>{tr("O aviso não saiu: {0}", p.aviso_erro)}</span> : tr("Aviso por e-mail: saindo.")}</div>}
-        {p.atencao && <div className="small" style={{ color: 'var(--crit)' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
+        {p.atencao && <div className="small" style={{ color: 'var(--crit)', overflowWrap: 'anywhere' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
         <div className="row wrap" style={{ gap: 8 }}>
+          {p.sem_estoque && <button className="btn sm" disabled={resolvendo === p.id} onClick={() => resolvido(p)}
+            aria-label={tr("Resolvido: sem estoque do pedido #{0}", p.id)}>{tr("Resolvido")}</button>}
           <a className="btn sm ghost" href={p.link} target="_blank" rel="noreferrer">{tr("Página do pedido ↗")}</a>
           <button className="btn sm ghost" onClick={() => copiar(p)}>{tr("Copiar o link")}</button>
           {p.opp_id && <Link className="btn sm ghost" to={`/sales/${p.opp_id}`}>{tr("Venda")}</Link>}</div>
@@ -718,7 +730,7 @@ export function SitePublico() {
     </nav>
     {atual.aba === '' ? <Suspense fallback={<Loading />}><SitePainel /></Suspense>
       : atual.aba === 'deposito' ? <Suspense fallback={<Loading />}><SiteDepositos /></Suspense>
-      : atual.aba === 'estoque' ? <Suspense fallback={<Loading />}><EstoqueDoSite /></Suspense>
+      : atual.aba === 'estoque' ? <Suspense fallback={<Loading />}><EstoqueDoSite key={id || ''} produto={id} /></Suspense>
       : atual.aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
       : atual.aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
       : atual.aba === 'disponibilidade' ? <Disponibilidade /> : atual.aba === 'servicos' ? <Servicos /> : atual.aba === 'cartoes' ? <Cartoes />

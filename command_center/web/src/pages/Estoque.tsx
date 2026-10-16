@@ -494,7 +494,7 @@ function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: 
         {tr("Na loja do site:")} {(it.na_loja || []).map((x, i) => <span key={x.product_id + x.variation}>{i ? ', ' : ''}
           <Link to={`/site/produtos/${x.product_id}`}>{x.name}{x.variation ? ` (${x.variation})` : ''}</Link>
           {!x.active ? tr(" · escondido") : x.fulfillment !== 'estoque' ? tr(" · dropshipping") : ''}</span>)}
-        {' · '}<Link to="/site/estoque">{tr("Estoque do site")}</Link></p>}
+        {' · '}<Link to={(it.na_loja || []).length === 1 ? `/site/estoque/${it.na_loja![0].slug}` : '/site/estoque'}>{tr("Estoque do site")}</Link></p>}
       <div className="seg" style={{ margin: '12px 0' }}>
         {(Object.keys(ABAS) as (keyof typeof ABAS)[]).filter(k => k !== 'sku' || d.gerente).map(k =>
           <button key={k} className={`btn sm${aba === k ? '' : ' ghost'}`} onClick={() => setAba(k)}>{ABAS[k]}</button>)}
