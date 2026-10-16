@@ -168,6 +168,7 @@ class ServicoIn(BaseModel):
     qbo_item_id: str | None = None
     qbo_item: str | None = None             # texto livre: o nome de um item, ou o texto da linha (#61)
     deposit: float | str | None = None      # #50: depósito por sessão; vazio ou 0 = sem depósito
+    deposit_required: bool | None = None    # #317: marcado, a sessão nunca sai sem o depósito
     site_kart: str | None = None            # #263: o kart do site que este serviço vende (chave de conteudo.KARTS); #297: ou um kart novo
     site_title: str | None = None           # #297: o cartão do kart no site — nome, linha de baixo, aviso, kart próprio
     site_subtitle: str | None = None
@@ -468,6 +469,84 @@ def pedidos(status: str | None = None, limit: int = Query(30, ge=1, le=200), off
     paginados, cada um com o link da página do pedido para a equipe mandar ao cliente."""
     from command_center.providers import pedido_site
     return pedido_site.lista(con, status, limit, offset)
+
+
+# ------------------------------------------------------------------ security deposit (#317)
+@r.get("/depositos")
+def depositos(estado: str = "retidos", q: str = "", limit: int = Query(30, ge=1, le=200), offset: int = Query(0, ge=0),
+              con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Cada depósito de segurança cobrado no site (pedido pago), com o que já foi devolvido e o que segue retido."""
+    from command_center.providers import deposito_site as dep
+    try:
+        return {**dep.lista(con, estado, q, limit, offset), "modo_teste": dep.modo_teste()}
+    except dep.ErroDeposito as e:
+        raise HTTPException(400, str(e))
+
+
+@r.get("/depositos/valores")
+def depositos_valores(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    from command_center.providers import deposito_site as dep
+    return dep.valores(con)
+
+
+class ReembolsoIn(BaseModel):
+    item_id: int | None = None              # a linha do carrinho; vazio = o depósito do pedido ("Buy now")
+    valor: float | str
+    nota: str | None = None
+
+
+@r.post("/depositos/{oid}/reembolsar")
+def reembolsar_deposito(oid: int, dados: ReembolsoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                        u=Depends(auth.exige("MANAGER"))):
+    """Devolve o valor escolhido do depósito pelo Stripe. Parcial vale; nunca mais que o que segue retido."""
+    from command_center.providers import deposito_site as dep
+    try:
+        res = dep.reembolsar(con, u["id"], oid, dados.item_id, dados.valor, dados.nota, ip=auth._ip(request))
+    except dep.ErroDeposito as e:
+        raise HTTPException(400, str(e))
+    if res["estado"] == "falhou":
+        raise HTTPException(502, f"O Stripe não devolveu: {res['erro']}")
+    if res["estado"] == "pendente":
+        raise HTTPException(504, f"Não deu para confirmar: {res['erro']}")
+    return res
+
+
+@r.post("/depositos/{oid}/conferir")
+def conferir_deposito(oid: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                      u=Depends(auth.exige("MANAGER"))):
+    """Lê no Stripe as devoluções deste pagamento (as do painel e as feitas direto no Stripe)."""
+    from command_center.providers import deposito_site as dep, stripe_loja
+    try:
+        return dep.conferir(con, u["id"], oid, ip=auth._ip(request))
+    except dep.ErroDeposito as e:
+        raise HTTPException(400, str(e))
+    except stripe_loja.ErroStripe as e:
+        raise HTTPException(502, str(e))
+
+
+class ValorDepositoIn(BaseModel):
+    tipo: str                               # servico | produto
+    id: int
+    valor: float | str | None = None
+    obrigatorio: bool | None = None         # só serviço
+
+
+@r.patch("/depositos/valor")
+def mudar_valor_deposito(dados: ValorDepositoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                         u=Depends(auth.exige("MANAGER"))):
+    """O depósito que o site cobra nas próximas compras (por serviço e por produto) e a caixa "obrigatório"."""
+    from command_center.providers import deposito_site as dep
+    try:
+        evento, mud = dep.mudar_valor(con, u["id"], dados.tipo, dados.id, dados.valor, dados.obrigatorio)
+    except dep.ErroDeposito as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    if mud:
+        auditar(con, evento, f"user:{u['id']}", user_id=u["id"],
+                entity_type="booking_service" if dados.tipo == "servico" else "store_product", entity_id=dados.id,
+                detail={**{k: {"antes": a, "depois": v} for k, (a, v) in mud.items()}, "via": "security deposit"},
+                ip=auth._ip(request))
+    con.commit()
+    return dep.valores(con)
 
 
 # ------------------------------------------------------------------ o painel do site (#306)

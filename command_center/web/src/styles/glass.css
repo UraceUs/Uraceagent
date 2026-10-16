@@ -1007,3 +1007,46 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .sp-rank-barra i{display:block;height:100%;background:var(--accent);transform-origin:left;transition:transform var(--dur-media) var(--ease)}
 @media(max-width:420px){.sp-rank li,.sp-funil li{grid-template-columns:minmax(0,1fr) auto auto}.sp-rank-barra{grid-column:1/-1;grid-row:2}}
 @media(prefers-reduced-motion:reduce){.sp-rank-barra i{transition:none}}
+
+/* #313 · cartão do padrão D (dono, 16/10: "perfeito siga com a opção D"): centrado, com a situação em cima, quem é,
+   o número grande num bloco e a lista do que já aconteceu; as ações embaixo, lado a lado. Primeiro uso: #317. */
+.cd-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:16px;align-items:start}
+.cd{background:var(--surface);border:1px solid var(--glass-line);border-radius:var(--r-xl);box-shadow:var(--shadow);padding:26px 22px 22px;display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;min-width:0}
+.cd-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;background:var(--glass-2);color:var(--ink-2)}
+.cd-pill.warn{background:var(--warn-wash);color:var(--warn)}.cd-pill.ok{background:var(--ok-wash);color:var(--ok)}
+.cd-pill.info{background:var(--info-wash);color:var(--info)}.cd-pill.crit{background:var(--crit-wash);color:var(--crit)}
+.cd-av{width:60px;height:60px;border-radius:999px;background:var(--brand-wash);color:var(--brand);display:flex;align-items:center;justify-content:center;font-family:var(--font-cond);font-weight:700;font-size:22px;letter-spacing:.04em;flex:none}
+.cd-quem{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;max-width:100%}
+.cd-nome{margin:0;font-size:19px;font-weight:600;letter-spacing:-.01em;overflow-wrap:anywhere}
+.cd-sub{font-size:14px;color:var(--ink-2);overflow-wrap:anywhere}
+.cd-sub b{color:var(--ink);font-weight:500}
+.cd-bloco{width:100%;border-radius:var(--r-l);background:var(--surface-2);padding:14px 16px;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cd-grande{font-family:var(--font-cond);font-weight:700;font-size:30px;letter-spacing:.03em;line-height:1.1;font-variant-numeric:tabular-nums}
+.cd-mono{font-family:var(--mono);font-size:13px;color:var(--ink-2);overflow-wrap:anywhere}
+.cd-lista{width:100%;list-style:none;margin:0;padding:0;display:flex;flex-direction:column;text-align:left}
+.cd-lista li{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 4px;border-bottom:1px solid var(--rule);font-size:14.5px;min-width:0}
+.cd-lista li:last-child{border-bottom:0}
+.cd-lista li>.muted{font-size:13px;text-align:right}
+.cd-lista li>.grow{overflow-wrap:anywhere}
+.cd-ic{width:24px;height:24px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none;font-style:normal;font-weight:700;font-size:12.5px;background:var(--glass-2);color:var(--ink-2)}
+.cd-ic.ok{background:var(--ok-wash);color:var(--ok)}.cd-ic.warn{background:var(--warn-wash);color:var(--warn)}
+.cd-ic.crit{background:var(--crit-wash);color:var(--crit)}.cd-ic.info{background:var(--info-wash);color:var(--info)}
+.cd-erro{color:var(--crit)}
+.cd-form{width:100%;display:flex;flex-direction:column;gap:10px;text-align:left}
+.cd-campos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 10px}
+.cd-campos .fld{margin:0 0 8px}
+.cd-campos>.small{grid-column:1/-1}
+.cd-acoes{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.cd-acoes.um{grid-template-columns:1fr}
+.cd-acoes .btn{min-height:46px;width:100%;justify-content:center}
+@media(max-width:520px){.cd{padding:22px 16px 18px}.cd-campos{grid-template-columns:1fr}}
+
+/* #317 · o valor do depósito que o site cobra */
+.dep-valor-tit{margin:14px 0 6px;font-size:14px}
+.dep-valores{list-style:none;margin:0;padding:0}
+.dep-valor{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-height:52px;padding:6px 0;border-bottom:1px solid var(--rule)}
+.dep-valor:last-child{border-bottom:0}
+.dep-valor-nome{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
+.dep-valor-campo{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.dep-valor-campo input{width:112px;min-height:40px}
+.dep-valor-obr{min-height:40px;margin:0}

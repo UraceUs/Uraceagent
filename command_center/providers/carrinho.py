@@ -107,6 +107,9 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
                 "erro": "This session is no longer offered. Remove it and pick another one."}
     linha = {**base, "nome": s["name"], "detalhe": quando(d, per), "unitario": float(s["price"]),
              "deposito": float(s["deposit"] or 0), "erro": None}
+    if s["deposit_required"] and not linha["deposito"] > 0:
+        # #317: o depósito é obrigatório neste serviço e o valor sumiu (banco mexido à mão): não cobra sem ele
+        return {**linha, "erro": "This session can't be paid online right now. Please contact us to book it."}
     from command_center.providers.servicos_site import cartao_do_site
     cartao = cartao_do_site(dict(s)) if s["site_kart"] else {}
     if cartao.get("aviso"):

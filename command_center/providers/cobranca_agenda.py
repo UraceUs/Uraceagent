@@ -104,6 +104,8 @@ def linhas_da_invoice(con, b):
     dep = s["deposit"] or 0
     if dep > 0:
         linhas.append(linha_deposito(con, dep))
+    elif s["deposit_required"]:
+        raise ErroCobranca("o security deposit é obrigatório neste serviço e está sem valor: ponha o valor em Site › Serviços e preços")
     return linhas
 
 

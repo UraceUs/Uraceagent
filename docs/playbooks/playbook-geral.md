@@ -160,9 +160,10 @@ pedem acesso de operador.
 | Site | **Pedidos do site** | `/ops/site/pedidos` | carrinho e loja em todo estado do pagamento, com o link da página do pedido | operador+ |
 | Site | **Agendamentos** | `/ops/site/agendamentos` | os pedidos de sessão do site e da área do cliente: aceitar, confirmar, recusar, cancelar (era `/ops/site` até o #306) | operador+ |
 | Site | **Disponibilidade** | `/ops/site/disponibilidade` | a agenda que abre e fecha: semana, horários, regras e bloqueios | operador+ (mudar: gerente+) |
-| Site | **Serviços e preços** | `/ops/site/servicos` | o preço, o depósito e o item do QuickBooks de cada serviço, com o **cartão do kart no site** e o **kart novo** (#297) | operador+ (mudar: gerente+) |
+| Site | **Serviços e preços** | `/ops/site/servicos` | o preço, o depósito (com **Security deposit obrigatório**, #317) e o item do QuickBooks de cada serviço, com o **cartão do kart no site** e o **kart novo** (#297) | operador+ (mudar: gerente+) |
 | Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team e do For Beginners (#297) | operador+ (mudar: gerente+) |
 | Site | **Produtos da loja** | `/ops/site/produtos` | preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298) | operador+ (mudar: gerente+) |
+| Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
 | Site | **Editor do site** | `/ops/site/editor` | monta e muda as páginas do site arrastando seções e elementos (#300; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos e assinadas | gerente+ |
@@ -690,6 +691,8 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | E-mail "Site · PROCESSANDO O PAGAMENTO" ou "Site · CHECKOUT EXPIROU" | o cliente pagou com um meio que confirma depois, ou saiu do checkout sem pagar; ele já recebeu o e-mail com o link | nada a fazer no processando; no expirou, um contato ajuda a fechar (link em Pedidos do site) |
 | "Pagamento no site" não aparece no card | a conta do site ou o piloto ainda não está ligado a um card | Site › Contas de clientes: ligue a conta e o driver ao card certo |
 | "Essa recorrência já está vinculada ao card de outro cliente." | tentativa de ligar a mensalidade de um cliente ao card de outro | confira o cliente certo |
+| "Security deposit obrigatório: informe o valor do depósito…" | o serviço está marcado como depósito obrigatório e o valor ficou vazio ou 0 | ponha o valor (ex.: 400) ou desmarque "obrigatório" em Site › Serviços e preços ou Site › Security deposit |
+| Cartão "Devolução pendente" em Site › Security deposit | a resposta do Stripe não chegou na hora da devolução; o valor fica reservado | toque em **Conferir no Stripe** depois de alguns minutos |
 | "Este endereço é só do balcão." | você está em `parts.urace.us` | para o resto do painel, use `ops.urace.us/ops/` |
 | Cápsula **Espelho** em amarelo/vermelho ou "Espelho antigo" | dados não lidos há tempo | Hoje › **↻ Sincronizar** |
 | Cápsula **Sistemas** com problema | uma integração não respondeu | Integrações › **Verificar agora**; se persistir, avise o administrador |
