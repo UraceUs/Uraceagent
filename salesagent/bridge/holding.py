@@ -21,8 +21,13 @@ do ar, timeout). Uma mensagem de espera que depende do mesmo componente
 que falhou não é garantia nenhuma.
 """
 import re
+import sys
+from pathlib import Path
 
 import textproc
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from sdr import idiomas  # noqa: E402  (12 idiomas: detecção e frases fixas)
 
 # ------------------------------------------------------------------ idioma
 # Heurística deliberadamente simples: o lead escreve poucas palavras e só
@@ -46,14 +51,9 @@ _ES_ONLY_CHARS = re.compile(r"[ñ¿¡]")
 
 
 def detect_language(text: str) -> str:
-    """'pt' | 'es' | 'en'. Inglês é o default -- a maioria dos leads da
-    URACE escreve em inglês, e uma frase de espera em inglês para um lead
-    lusófono é muito menos ruim que o contrário."""
-    pt = len(_PT_MARKERS.findall(text)) + 2 * len(_PT_ONLY_CHARS.findall(text))
-    es = len(_ES_MARKERS.findall(text)) + 2 * len(_ES_ONLY_CHARS.findall(text))
-    if pt == 0 and es == 0:
-        return "en"
-    return "pt" if pt >= es else "es"
+    """Código do idioma do lead (ver sdr/idiomas.py: en, pt, es, fr, it, de, ru, zh, ja, ko, ar, hi).
+    Inglês é o default -- a maioria dos leads da URACE escreve em inglês."""
+    return idiomas.detectar(text)
 
 
 # ------------------------------------------------------- frases de espera
@@ -99,6 +99,9 @@ _ACK = {
     "es": "Perfecto. Te aviso apenas tenga la confirmación.",
     "en": "Sounds good. I'll get back to you as soon as I have it.",
 }
+
+idiomas.completar(_ACK, "ack")
+idiomas.completar(_WAITING, "espera")
 
 
 def is_acknowledgement(text: str) -> bool:
@@ -165,6 +168,8 @@ _WAITING_REF = {
     ],
 }
 
+idiomas.completar(_WAITING_REF, "espera_citando")
+
 
 def _citavel(pergunta: str | None, limite: int = 70) -> str:
     """Encurta a pergunta para caber numa citação sem virar um parágrafo."""
@@ -186,6 +191,7 @@ _APRESENTACAO = {
     "en": "Hi{nome}, this is Chase, URACE's assistant.",
 }
 
+idiomas.completar(_APRESENTACAO, "apresentacao")
 
 _NOME_REAL = re.compile(r"^[^\W\d_]{2,20}$", re.UNICODE)
 
@@ -277,6 +283,9 @@ _OFERTA_CALL = {
                "Pick a time here:", "{link}"],
     },
 }
+for _motivo, _tabela in _OFERTA_CALL.items():
+    for _idioma, _linhas in idiomas.TEXTOS["oferta_call"][_motivo].items():
+        _tabela.setdefault(_idioma, _linhas)
 MOTIVO_DA_CALL = {"NEGOCIACAO": "objecao", "SINAL_CONVERSAO": "decisao", "PILOTO_COMPETIDOR": "competidor"}
 
 

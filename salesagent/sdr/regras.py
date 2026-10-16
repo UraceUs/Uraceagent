@@ -318,6 +318,98 @@ PALAVRAS = {
     ],
 }
 
+# Os principais idiomas do mundo e as abreviações de chat (dono, 16/10: "prepare para os principais idiomas
+# mundiais para lidar com objeções, vocabulário, abreviações"). O classificador compara sem acento e sem
+# maiúscula, nos dois lados, então "réduction", "günstiger" e "割引" podem ser escritos como se lê.
+# Saudação e encerramento ficam só no alfabeto latino (a checagem de "mensagem curta" ignora outras escritas).
+PALAVRAS_MULTILINGUE = {
+    "preco": [
+        "qto custa", "qnto custa", "qt custa", "qto e", "qto fica", "qnto fica", "qual o vlr", "vlr",
+        "how much is", "hm is it", "price pls", "cuanto sale", "cuanto vale", "cuanto es", "precio",
+        "combien", "quel prix", "tarif", "ca coute", "quanto costa", "prezzo", "wie viel", "wieviel", "kostet",
+        "preis", "сколько стоит", "цена", "стоимость", "多少钱", "价格", "费用", "いくら", "料金", "値段",
+        "얼마", "가격", "비용", "كم السعر", "كم سعر", "بكم", "التكلفة", "कितना", "कीमत", "दाम",
+    ],
+    "desconto": [
+        "dsct", "promo", "tem como baixar", "faz um precinho", "precinho",
+        "too pricey", "pricey", "any deals", "rebaja", "oferta", "muy caro",
+        "reduction", "remise", "trop cher", "c'est cher", "c est cher", "moins cher", "code promo",
+        "sconto", "troppo caro", "costa troppo", "piu economico", "codice sconto",
+        "rabatt", "zu teuer", "sehr teuer", "gunstiger", "gutschein",
+        "скидк", "слишком дорого", "очень дорого", "дороговато", "это дорого", "дешевле", "промокод",
+        "折扣", "优惠", "太贵", "便宜点", "便宜一点", "打折",
+        "割引", "高すぎ", "安くなり", "クーポン",
+        "할인", "비싸", "싸게", "쿠폰",
+        "خصم", "غالي", "غالية", "ارخص", "كوبون",
+        "डिस्काउंट", "छूट", "महंगा", "सस्ता",
+    ],
+    "opt_out": [
+        "para de mandar msg", "nao manda mais", "n quero mais", "stop texting me", "stop msging me",
+        "dejen de escribirme", "no me escriban", "no quiero mas mensajes",
+        "arretez de m'envoyer", "arretez de m'ecrire", "arretez de m ecrire", "ne m'ecrivez plus", "desabonner", "desinscrire",
+        "smettete di scrivermi", "non scrivetemi piu", "disiscrivi", "cancellami",
+        "hort auf mir zu schreiben", "abmelden", "keine nachrichten mehr", "schreibt mir nicht mehr",
+        "не пишите мне", "отпишите", "хватит писать",
+        "别再发", "不要再发", "退订",
+        "送らないで", "配信停止",
+        "보내지 마", "수신거부", "수신 거부",
+        "توقفوا عن مراسلتي", "لا ترسلوا", "الغاء الاشتراك",
+        "मैसेज मत भेजो", "मत भेजिए", "अनसब्सक्राइब",
+    ],
+    "adiar": [
+        "agr nao", "agr n", "agora n", "dps eu vejo", "dps vejo", "dps falo", "dps te falo",
+        "not rn", "not right now", "maybe l8r", "ttyl", "luego te escribo", "luego hablamos", "dsps",
+        "pas maintenant", "plus tard", "une autre fois",
+        "non ora", "non adesso", "piu tardi", "un'altra volta", "un altra volta",
+        "nicht jetzt", "spater", "ein andermal",
+        "не сейчас", "позже", "потом напишу",
+        "现在不", "以后再说", "晚点再说",
+        "今はいい", "また今度", "後で",
+        "지금은 괜찮", "나중에",
+        "ليس الآن", "لاحقا",
+        "अभी नहीं", "बाद में",
+    ],
+    "humano": [
+        "falar c alguem", "falar com atendente", "quiero hablar con una persona", "un asesor",
+        "parler a quelqu'un", "parler a un humain", "un conseiller",
+        "parlare con qualcuno", "un operatore",
+        "mit jemandem sprechen", "einen menschen", "mitarbeiter",
+        "живой человек", "оператор", "менеджер",
+        "人工", "真人", "客服",
+        "担当者", "人と話",
+        "상담원", "사람과",
+        "موظف", "شخص حقيقي",
+        "किसी इंसान", "किसी व्यक्ति",
+    ],
+    "conversao": [
+        "bora fechar", "fechou", "quiero reservar", "como pago", "vamos a hacerlo",
+        "je veux reserver", "comment payer", "je reserve",
+        "voglio prenotare", "come pago", "prenoto",
+        "ich will buchen", "wie bezahle ich", "buchen wir",
+        "хочу записаться", "как оплатить",
+        "我要报名", "怎么付款", "我要预订",
+        "予約したい", "申し込みたい", "支払い方法",
+        "예약하고 싶", "결제는 어떻게", "신청할게",
+        "أريد الحجز", "كيف أدفع",
+        "बुक करना है", "पेमेंट कैसे",
+    ],
+    "compete": [
+        "je fais de la competition", "je cours en championnat", "faccio gare", "corro in campionato",
+        "ich fahre rennen", "участвую в гонках", "参加比赛", "レースに出て", "대회에 나가", "أشارك في سباقات",
+        "रेस करता हूँ",
+    ],
+    "sensivel": [
+        "accident", "avocat", "blessure", "remboursement", "avvocato", "incidente", "rimborso", "infortunio",
+        "anwalt", "unfall", "verletzung", "ruckerstattung", "адвокат", "травма", "возврат денег",
+        "律师", "受伤", "退款", "弁護士", "怪我", "返金", "변호사", "부상", "환불",
+        "محامي", "إصابة", "استرداد", "वकील", "चोट", "रिफंड",
+    ],
+    "saudacao": ["bonjour", "salut", "ciao", "buongiorno", "hallo", "guten tag", "servus", "yo", "hii", "oii", "olaa"],
+    "encerramento": ["merci", "grazie", "danke", "thx", "ty", "vlw", "obg", "blz", "grax", "tks", "tmj"],
+}
+for _chave, _termos in PALAVRAS_MULTILINGUE.items():
+    PALAVRAS[_chave].extend(t for t in _termos if t not in PALAVRAS[_chave])
+
 # Classificação de experiência (C1 do Chase): vem antes de qualquer valor.
 CLASSIFICACAO_EXPERIENCIA = {
     "A": "nunca andou de kart",
@@ -380,14 +472,12 @@ NUNCA_DIZER = [
     # 14/10: reabrir conversa antiga com intimidade denuncia o bot.
     ("bom te ver de novo", "não puxar contexto antigo; responder o que perguntou agora"),
     ("good to see you again", "não puxar contexto antigo; responder o que perguntou agora"),
-    # 16/10 (teste do comercial): Academy é contrato de 6 meses no mínimo, com plano que muda ao longo
-    # dos meses; o mensal de tabela solto no chat vira "faço um mês e vejo". Preço do Academy é da call.
-    ("2,756", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
-    ("2.756", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
-    ("3,156", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
-    ("3.156", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
-    ("no contract", "o Academy tem contrato de 6 meses no mínimo"),
-    ("sem contrato", "o Academy tem contrato de 6 meses no mínimo"),
+    # 16/10: o Academy só sai com os valores da planilha do dono ($2,756 / $3,156 sem contrato). O $2,756.90 e o
+    # $1,378.45 vêm de contrato antigo e de invoice, não da tabela: não vão ao lead.
+    ("2,756.90", "Academy: o valor da planilha é $2,756 (sem contrato)"),
+    ("2.756,90", "Academy: o valor da planilha é $2,756 (sem contrato)"),
+    ("3,156.90", "Academy: o valor da planilha é $3,156 (sem contrato)"),
+    ("3.156,90", "Academy: o valor da planilha é $3,156 (sem contrato)"),
 ]
 
 # ---------------------------------------------------------------- cadência

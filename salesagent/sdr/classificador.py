@@ -38,7 +38,8 @@ def normalizar(texto):
 
 def _padrao(termo):
     if termo not in _PADROES:
-        _PADROES[termo] = re.compile(r"(?<![a-z0-9])" + re.escape(termo) + r"(?![a-z0-9])")
+        # o termo passa pela mesma normalização do texto (sem acento, minúsculo): vale para "réduction" e "割引"
+        _PADROES[termo] = re.compile(r"(?<![a-z0-9])" + re.escape(normalizar(termo)) + r"(?![a-z0-9])")
     return _PADROES[termo]
 
 

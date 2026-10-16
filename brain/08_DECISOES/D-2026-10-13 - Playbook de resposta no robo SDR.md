@@ -233,11 +233,15 @@ o que está nas instruções (preços, dias, endereço, idade, links) é base s�
 "vou confirmar" ao que já sabe. Pendente: um doc ativo de FAQ do SDR, escrito pelo dono, se quiser o RAG com conteúdo.
 
 ## 16/10 — Teste do comercial no "Testar o robô"
-- **Academy**: a persona dizia "monthly, 4 sessions a month, no contract" com $2,756.90/$3,156.90. O Service
-  Agreement (2026.2) tem **mínimo de 6 meses** (cláusula 2.1) e plano escalonado (1º mês 4 sessões, depois 2),
-  e o preço do Academy está em conferência (contrato $9.649,15/6m contra a base). Até o time fechar a tabela, o
-  robô **não diz preço do Academy**: fala do programa de 6 meses e oferece a call. A guarda corta $2,756/$3,156
-  e "no contract"/"sem contrato" se o modelo escorregar. O $3.156,90 do 2 tempos vem da D-2026-08-31.
+- **Academy**: o dono decidiu (16/10) que o robô tira os valores **da planilha de preços** que ele mandou em 15/10,
+  a mesma do site (#273): sem contrato $2,756 (4T/Baby) e $3,156 (2T) por mês, contrato de 6 meses $17,858.88 /
+  $20,450.88, de 12 meses $34,229.52 / $39,197.52, kart próprio $1,800 e $1,200, Lead and Follow $769, fora do OKC
+  +$250. Um teste confere persona contra o site. Os $2.756,90 e $1.378,45 (contrato e invoice antigos) não saem
+  ao lead. Mais adiante o robô lê os valores direto do site.
+- **12 idiomas** (dono, 16/10): en, pt, es, fr, it, de, ru, zh, ja, ko, ar, hi. `sdr/idiomas.py` detecta o idioma
+  (escrita e palavras, com abreviações de chat: vc, qto, xq, svp, thx...) e guarda as frases fixas (call, "agora
+  não", opt-out, espera, apresentação); o classificador reconhece objeção, pedido de parar, "agora não", pedido de
+  pessoa e fechamento nesses idiomas.
 - **Idioma**: "É caro, faz por 2000 que fecho hoje?" saiu em inglês. O detector ganhou marcadores de objeção
   (desconto, muito, hoje, fecho, faz, agora, tem...) e a ponte passa a dizer ao modelo o idioma do turno. A
   contraproposta ("faz por X", "fecho hoje") passou a ser negociação: vai para a call.

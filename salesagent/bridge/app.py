@@ -721,7 +721,7 @@ def _instrucoes_comercial(lead_id: int) -> str:
             f"da tabela, e as travas de segurança):\n{conteudo}\n")
 
 
-_NOME_DO_IDIOMA = {"pt": "português do Brasil (com você)", "es": "espanhol"}
+_NOME_DO_IDIOMA = holding.idiomas.NOMES
 
 
 def _idioma_do_turno(text: str) -> str:
