@@ -3,8 +3,8 @@ clientes. Quem abre e fecha a agenda é o gerente; confirmar e recusar pedido é
 import sqlite3
 from datetime import date
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
+from pydantic import BaseModel, Field
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, todos, transacao
@@ -473,7 +473,7 @@ def pedidos(status: str | None = None, limit: int = Query(30, ge=1, le=200), off
 
 # ------------------------------------------------------------------ security deposit (#317)
 @r.get("/depositos")
-def depositos(estado: str = "retidos", q: str = "", limit: int = Query(30, ge=1, le=200), offset: int = Query(0, ge=0),
+def depositos(estado: str = "retidos", q: str = Query("", max_length=120), limit: int = Query(30, ge=1, le=200), offset: int = Query(0, ge=0),
               con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     """Cada depósito de segurança cobrado no site (pedido pago), com o que já foi devolvido e o que segue retido."""
     from command_center.providers import deposito_site as dep
@@ -490,14 +490,14 @@ def depositos_valores(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.
 
 
 class ReembolsoIn(BaseModel):
-    item_id: int | None = None              # a linha do carrinho; vazio = o depósito do pedido ("Buy now")
+    item_id: int | None = Field(None, ge=1, le=2**63 - 1)   # a linha do carrinho; vazio = o depósito do pedido ("Buy now")
     valor: float | str
-    nota: str | None = None
+    nota: str | None = Field(None, max_length=1000)
 
 
 @r.post("/depositos/{oid}/reembolsar")
-def reembolsar_deposito(oid: int, dados: ReembolsoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
-                        u=Depends(auth.exige("MANAGER"))):
+def reembolsar_deposito(dados: ReembolsoIn, request: Request, oid: int = Path(..., ge=1, le=2**63 - 1),
+                        con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
     """Devolve o valor escolhido do depósito pelo Stripe. Parcial vale; nunca mais que o que segue retido."""
     from command_center.providers import deposito_site as dep
     try:
@@ -512,7 +512,7 @@ def reembolsar_deposito(oid: int, dados: ReembolsoIn, request: Request, con: sql
 
 
 @r.post("/depositos/{oid}/conferir")
-def conferir_deposito(oid: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+def conferir_deposito(request: Request, oid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
                       u=Depends(auth.exige("MANAGER"))):
     """Lê no Stripe as devoluções deste pagamento (as do painel e as feitas direto no Stripe)."""
     from command_center.providers import deposito_site as dep, stripe_loja
@@ -526,7 +526,7 @@ def conferir_deposito(oid: int, request: Request, con: sqlite3.Connection = Depe
 
 class ValorDepositoIn(BaseModel):
     tipo: str                               # servico | produto
-    id: int
+    id: int = Field(..., ge=1, le=2**63 - 1)
     valor: float | str | None = None
     obrigatorio: bool | None = None         # só serviço
 

@@ -68,7 +68,7 @@ def para_cliente(con, cartao=False):
     Arrive and Drive e a reserva acham o serviço do kart escolhido — nunca pelo nome. #297: `cartao=True`
     (a página do site) traz também o cartão que o site mostra — nome no site, linha de baixo, aviso, kart próprio."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
-             "deposit": s["deposit"] or 0, "deposit_required": bool(s["deposit_required"]), "site_kart": s["site_kart"],
+             "deposit": s["deposit"] or 0, "site_kart": s["site_kart"],
              **({"sort": s["sort"], **cartao_do_site(s)} if cartao else {})}
             for s in lista(con, True) if (s["kind"] or "session") == "session"]
 

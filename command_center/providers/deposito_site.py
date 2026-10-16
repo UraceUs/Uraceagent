@@ -78,7 +78,7 @@ def _filtro(estado, q):
         onde.append("(retido <= 0 AND reservado <= 0)")
     q = (q or "").strip().lstrip("#")
     if q:
-        if q.isdigit():
+        if q.isascii() and q.isdigit() and len(q) <= 18:
             onde.append("order_id = ?")
             p.append(int(q))
         else:
@@ -156,16 +156,17 @@ def reembolsar(con, por, oid, item_id, valor, nota=None, ip=None, http=None):
               "metadata": {"urace_reembolso": rid, "pedido": oid, "linha": item_id or "", "tipo": "security_deposit"}}
     try:
         r = (http or stripe_loja._http)("POST", "/v1/refunds", campos, idem=f"urace-deposito-{rid}")
-    except stripe_loja.ErroStripe as e:
-        atualizar(con, "store_deposit_refunds", rid, status="falhou", error=str(e)[:300], done_at=agora())
-        auditar(con, "store.deposit.refund_fail", f"user:{por}", user_id=por, entity_type="store_order", entity_id=oid,
-                detail={"linha": item_id, "valor": v, "erro": str(e)[:200]}, ip=ip)
-        return {"id": rid, "estado": "falhou", "erro": str(e)[:300]}
     except Exception as e:                                  # noqa: BLE001
-        # a resposta se perdeu (tempo esgotado no meio): o Stripe pode ter devolvido. O valor segue reservado e o
-        # "Conferir no Stripe" acerta pela marca; repetir com a mesma chave de idempotência nunca devolve duas vezes
+        if isinstance(e, stripe_loja.ErroStripe) and not (getattr(e, "codigo", None) or 0) >= 500:
+            # o Stripe disse não (4xx) ou nem chegou lá (sem conexão): nada foi devolvido, o valor volta a ficar retido
+            atualizar(con, "store_deposit_refunds", rid, status="falhou", error=str(e)[:300], done_at=agora())
+            auditar(con, "store.deposit.refund_fail", f"user:{por}", user_id=por, entity_type="store_order", entity_id=oid,
+                    detail={"linha": item_id, "valor": v, "nota": nota, "erro": str(e)[:200]}, ip=ip)
+            return {"id": rid, "estado": "falhou", "erro": str(e)[:300]}
+        # a resposta se perdeu (tempo esgotado no meio) ou o Stripe deu 5xx (resultado indeterminado): ele pode ter
+        # devolvido. O valor segue reservado e o "Conferir no Stripe" acerta pela marca; um clique novo não devolve de novo
         auditar(con, "store.deposit.refund_unknown", f"user:{por}", user_id=por, entity_type="store_order", entity_id=oid,
-                detail={"linha": item_id, "valor": v, "erro": type(e).__name__}, ip=ip)
+                detail={"linha": item_id, "valor": v, "nota": nota, "erro": str(e)[:200] or type(e).__name__}, ip=ip)
         return {"id": rid, "estado": "pendente",
                 "erro": "a resposta do Stripe não chegou. Toque em \"Conferir no Stripe\" daqui a pouco."}
     estado = "falhou" if r.get("status") in ("failed", "canceled") else "feito"
@@ -173,7 +174,7 @@ def reembolsar(con, por, oid, item_id, valor, nota=None, ip=None, http=None):
               stripe_status=r.get("status"), done_at=agora(),
               error=(r.get("failure_reason") or "o Stripe recusou") if estado == "falhou" else None)
     auditar(con, "store.deposit.refund", f"user:{por}", user_id=por, entity_type="store_order", entity_id=oid,
-            detail={"linha": item_id, "valor": v, "stripe": r.get("id"), "estado": r.get("status")}, ip=ip)
+            detail={"linha": item_id, "valor": v, "nota": nota, "stripe": r.get("id"), "estado": r.get("status")}, ip=ip)
     return {"id": rid, "estado": estado, "stripe": r.get("id"), "stripe_estado": r.get("status")}
 
 

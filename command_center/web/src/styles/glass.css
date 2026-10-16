@@ -1038,8 +1038,9 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .cd-campos>.small{grid-column:1/-1}
 .cd-acoes{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .cd-acoes.um{grid-template-columns:1fr}
-.cd-acoes .btn{min-height:46px;width:100%;justify-content:center}
+.cd-acoes .btn{min-height:46px;width:100%;justify-content:center;white-space:normal;line-height:1.2;text-align:center;padding-inline:10px}
 @media(max-width:520px){.cd{padding:22px 16px 18px}.cd-campos{grid-template-columns:1fr}}
+@media(max-width:440px){.cd-acoes{grid-template-columns:1fr}}
 
 /* #317 · o valor do depósito que o site cobra */
 .dep-valor-tit{margin:14px 0 6px;font-size:14px}
@@ -1047,6 +1048,7 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .dep-valor{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-height:52px;padding:6px 0;border-bottom:1px solid var(--rule)}
 .dep-valor:last-child{border-bottom:0}
 .dep-valor-nome{flex:1 1 200px;min-width:0;overflow-wrap:anywhere}
-.dep-valor-campo{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
+.dep-valor-campo{display:inline-flex;align-items:center;gap:6px}
+.dep-valor-campo>span{color:var(--muted);font-size:13px}
 .dep-valor-campo input{width:112px;min-height:40px}
 .dep-valor-obr{min-height:40px;margin:0}

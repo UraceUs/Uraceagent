@@ -6,7 +6,7 @@
  * Em cima, o valor que o site cobra (por serviço, com a caixa "obrigatório", e por produto). Embaixo, cada depósito
  * cobrado, no cartão do padrão D do painel (centrado, com a lista do que já aconteceu): devolver pelo Stripe com o
  * valor escolhido e conferir no Stripe. */
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
@@ -45,6 +45,9 @@ export function SiteDepositos() {
   const [busca, setBusca] = useState('')
   const [offset, setOffset] = useState(0)
   const l = useGet<Lista>(`/site/depositos?estado=${estado}&limit=${POR_PAGINA}&offset=${offset}${busca ? `&q=${encodeURIComponent(busca)}` : ''}`, 60000)
+  // devolveu o último cartão da última página: volta uma página (senão fica "nenhum depósito" sem saída)
+  const vazia = !!l.data && !l.data.depositos.length && offset > 0
+  useEffect(() => { if (vazia) setOffset(o => Math.max(0, o - POR_PAGINA)) }, [vazia])
   return <div className="stack" style={{ gap: 18 }}>
     {l.data?.modo_teste && <Banner tone="info">{tr("O Stripe está em modo teste: as devoluções daqui não devolvem dinheiro de verdade.")}</Banner>}
     {l.data && !l.data.stripe && <Banner tone="warn">{tr("O Stripe não está ligado neste servidor: dá para ver os depósitos, mas não para devolver por aqui.")}</Banner>}
@@ -171,9 +174,10 @@ function ValoresCobrados({ gerente }: { gerente: boolean }) {
       <span className="dep-valor-nome">{nome}{!ativo && <span className="muted"> · {tr("fora do site")}</span>}</span>
       <label className="dep-valor-campo"><span className="sr-only">{tr("Depósito de {0} (US$)", nome)}</span>
         <span aria-hidden="true">US$</span>
-        <input inputMode="decimal" value={t} disabled={!gerente || indo === k} onChange={e => setEd(x => ({ ...x, [k]: e.target.value }))} /></label>
+        <input className="inp" inputMode="decimal" value={t} disabled={!gerente || indo === k} onChange={e => setEd(x => ({ ...x, [k]: e.target.value }))} /></label>
       {obrigatorio !== undefined && <label className="check dep-valor-obr">
-        <input type="checkbox" checked={obrigatorio} disabled={!gerente || indo === k} onChange={e => salvar(tipo, id, { obrigatorio: e.target.checked })} />
+        <input type="checkbox" checked={obrigatorio} disabled={!gerente || indo === k}
+          onChange={e => salvar(tipo, id, { obrigatorio: e.target.checked, ...(mudou ? { valor: numero(t) } : {}) })} />
         {tr("Obrigatório")}</label>}
       {gerente && <button type="button" className="btn sm" disabled={!mudou || indo === k} onClick={() => salvar(tipo, id, { valor: numero(t) })}>{tr("Salvar")}</button>}
     </li>

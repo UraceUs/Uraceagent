@@ -313,3 +313,64 @@ def test_os_valores_e_a_lista_nao_tem_dado_de_cartao(dep):
     assert "pi_c1" not in txt and "sk_test" not in txt
     assert todos(con, "SELECT * FROM store_deposit_refunds")[0]["stripe_refund_id"] == "re_test_001"
     assert deposito_site.modo_teste()
+
+
+# ------------------------------------------------------------------ revisão (#317): 5xx, entradas absurdas, a nota
+def test_stripe_5xx_e_indeterminado_o_valor_fica_reservado_ate_conferir(dep):
+    """Um 500 do Stripe pode ter devolvido: tratar como recusa liberaria o valor e o próximo clique devolveria de novo."""
+    painel, con, sd, oid, item, sid = dep
+    from command_center.providers import stripe_loja
+
+    def cria_e_responde_500(metodo, caminho, campos=None, idem=None):
+        if caminho == "/v1/refunds":
+            sd.falhar = None
+            sd(metodo, caminho, campos, idem)          # o Stripe criou a devolução …
+            raise stripe_loja.ErroStripe("Stripe HTTP 500: An unknown error occurred", codigo=500)   # … e respondeu 500
+        return sd(metodo, caminho, campos, idem)
+    import command_center.providers.stripe_loja as sl
+    original = sl._http
+    sl._http = cria_e_responde_500
+    try:
+        h = entra(painel)
+        r = devolver(painel, h, oid, item, 400, "pista ok")
+        assert r.status_code == 504
+        assert devolver(painel, h, oid, item, 400).status_code == 400, "o segundo clique não devolve de novo"
+    finally:
+        sl._http = original
+    assert len(sd.devolucoes) == 1
+    assert painel.post(f"{D}/{oid}/conferir", headers=h).json() == {"acertos": 1, "stripe_devolvido": 400}
+    x = painel.get(D, params={"estado": "todos"}, headers=h).json()["depositos"][0]
+    assert (x["retido"], x["devolvido"]) == (0, 400)
+    ev = um(con, "SELECT detail FROM audit_logs WHERE event='store.deposit.refund_unknown'")
+    assert ev and '"nota": "pista ok"' in ev["detail"]
+
+
+def test_stripe_4xx_continua_sendo_recusa(dep):
+    painel, con, sd, oid, item, sid = dep
+    from command_center.providers import stripe_loja
+    sd.falhar = stripe_loja.ErroStripe("Stripe HTTP 400: Charge has already been refunded.", codigo=400)
+    h = entra(painel)
+    assert devolver(painel, h, oid, item, 400).status_code == 502
+    assert painel.get(D, headers=h).json()["depositos"][0]["retido"] == 400
+
+
+def test_a_nota_vai_para_a_auditoria(dep):
+    painel, con, sd, oid, item, sid = dep
+    h = entra(painel)
+    assert devolver(painel, h, oid, item, 300, "segura 100 do dano no bico").status_code == 200
+    ev = um(con, "SELECT detail FROM audit_logs WHERE event='store.deposit.refund'")
+    assert '"nota": "segura 100 do dano no bico"' in ev["detail"]
+
+
+def test_entrada_absurda_nao_derruba_o_servidor(dep):
+    painel, con, sd, oid, item, sid = dep
+    h = entra(painel)
+    for q in ("99999999999999999999", "²", "x" * 120):
+        assert painel.get(D, params={"q": q}, headers=h).status_code == 200, q
+    assert painel.get(D, params={"q": "x" * 121}, headers=h).status_code == 422
+    grande = 99999999999999999999
+    assert painel.post(f"{D}/{grande}/reembolsar", json={"item_id": None, "valor": 1}, headers=h).status_code == 422
+    assert devolver(painel, h, oid, grande, 1).status_code == 422
+    assert painel.post(f"{D}/{grande}/conferir", headers=h).status_code == 422
+    assert painel.patch(f"{D}/valor", json={"tipo": "servico", "id": grande, "valor": 1}, headers=h).status_code == 422
+    assert not [c for c in sd.chamadas if c[1] == "/v1/refunds"]

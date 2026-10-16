@@ -632,8 +632,9 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    > desliga nada. **Kart novo:** no seletor "Kart do site", escolha **Novo kart…** e dê um nome curto
    > (ex.: *Rental 2-stroke Pro*); salvo, ele entra na página do Arrive and Drive com o preço e o depósito
    > daquele serviço. No Lead and Follow, o **Nome no site** e a **Descrição** são o que a caixa da reserva mostra.
-   > **Teste de checkout de US$ 1:** preço **1** e depósito **0** no serviço do kart; reserve, pague (o Stripe
-   > cobra US$ 1,00 de verdade) e **volte o preço e o depósito logo depois**; o estorno sai pelo Stripe.
+   > **Teste de checkout de US$ 1:** no serviço do kart, desmarque **Security deposit obrigatório**, ponha preço
+   > **1** e depósito **0**; reserve, pague (o Stripe cobra US$ 1,00 de verdade) e **volte o preço, o depósito e
+   > marque Obrigatório de novo** logo depois (veja 5.4); o estorno sai pelo Stripe.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
    o total. Toda compra pede a conta do site (#248), e **o próprio carrinho cria a conta** (#305, dono
    16/10: *"ao invés de ter o botão de seguir e create account … ela vai ter que preencher as informações
@@ -901,7 +902,8 @@ Regras:
 
 - Cada sessão (serviço) e cada produto com depósito têm o seu valor. Mude e toque em **Salvar**. Vale para as
   **próximas** compras; o pedido já pago fica com o valor do dia.
-- Para testar o checkout com valor baixo: ponha **1**, teste, e **volte ao valor normal** (ex.: 400).
+- Para testar o checkout com valor baixo: ponha **1**, teste, e **volte ao valor normal** (ex.: 400). Para testar
+  **sem** depósito (o teste de US$ 1 do dia 16/10), desmarque **Obrigatório** antes de zerar, e marque de novo depois.
 - **Obrigatório** (também em Serviços e preços, como **Security deposit obrigatório**): marcado, a sessão nunca sai sem
   o depósito. O serviço não salva com o depósito zerado, o carrinho recusa a sessão ("This session can't be paid
   online right now") e a invoice da equipe não sai. Serviço novo já nasce com a caixa marcada e pede o valor.

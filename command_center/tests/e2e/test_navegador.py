@@ -1519,9 +1519,24 @@ def test_security_deposit_devolve_parte_pelo_stripe_e_muda_o_valor_cobrado(servi
     linha.get_by_role("button", name="Salvar").click()
     linha.get_by_role("button", name="Salvar").and_(pg.locator("[disabled]")).wait_for()
     assert con.execute("SELECT deposit FROM booking_services WHERE id=?", (sid,)).fetchone()[0] == 400
+    # a caixa "Obrigatório" leva junto o valor digitado e ainda não salvo (revisão do #317)
+    obr = linha.get_by_role("checkbox", name="Obrigatório")
+    obr.click()                                   # a caixa salva na hora; o estado volta do servidor
+    linha.locator("input[type=checkbox]:not(:checked):not([disabled])").wait_for()
+    assert con.execute("SELECT deposit_required FROM booking_services WHERE id=?", (sid,)).fetchone()[0] == 0
+    campo.fill("2")
+    obr.click()
+    linha.locator("input[type=checkbox]:checked:not([disabled])").wait_for()
+    assert con.execute("SELECT deposit, deposit_required FROM booking_services WHERE id=?", (sid,)).fetchone() == (2, 1)
+    campo.fill("400")
+    linha.get_by_role("button", name="Salvar").click()
+    linha.get_by_role("button", name="Salvar").and_(pg.locator("[disabled]")).wait_for()
+    assert con.execute("SELECT deposit FROM booking_services WHERE id=?", (sid,)).fetchone()[0] == 400
     pg.set_viewport_size({"width": 360, "height": 740})
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
+    # o texto dos botões do cartão cabe neles (revisão: "Devolver pelo Stripe" passava da pílula a 360 px)
+    assert pg.evaluate("""() => [...document.querySelectorAll('.cd-acoes .btn')].every(b => b.scrollWidth <= b.clientWidth + 1)""")
     con.close()
     pg.close()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)

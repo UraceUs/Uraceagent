@@ -88,7 +88,7 @@ def test_cotacao_usa_o_preco_do_painel_e_do_catalogo_e_ignora_o_do_navegador(loj
     assert d["total"] == round(d["subtotal"] + 400, 2)
     assert d["precisa_conta"] and d["account"] is None, "sessão pede a conta do site"
     # o gerente muda o preço: o carrinho mostra o novo na hora (o preço mora no painel, #50)
-    servicos_site.mudar(con, None, sid, {"price": 799, "deposit": 0})
+    servicos_site.mudar(con, None, sid, {"price": 799, "deposit": 0, "deposit_required": False})   # #317: zerar pede desmarcar
     con.commit()
     d = cli.post("/ops/api/vitrine/carrinho", json={"itens": [_sessao(sid, dia)]}).json()
     assert d["linhas"][0]["unitario"] == 799 and d["deposito"] == 0
