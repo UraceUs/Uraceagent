@@ -683,7 +683,8 @@ const SitePainel = lazy(() => import('./SitePainel').then(m => ({ default: m.Sit
 /* #317: o security deposit (devolver pelo Stripe e o valor cobrado), em arquivo próprio. */
 const SiteDepositos = lazy(() => import('./SiteDepositos').then(m => ({ default: m.SiteDepositos })))
 const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
-const EditorDePagina = lazy(() => import('./EditorSite').then(m => ({ default: m.EditorDePagina })))
+/* #315: a página em si abre no editor como o Canva, num arquivo só dele (a lista não carrega o editor). */
+const EditorDePagina = lazy(() => import('./editor/Editor').then(m => ({ default: m.EditorDePagina })))
 
 /* #306 (dono, 16/10): "uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada painel de lá".
  * Cada painel do site é uma subseção (no menu, em "Site", e aqui nas abas); o h1 é o nome da subseção (o título da aba). */
