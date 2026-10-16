@@ -2589,7 +2589,10 @@ def test_criar_a_conta_vindo_do_carrinho_vai_ao_carrinho_uma_vez_so(servidor, na
     do cadastro, a área mandava o navegador ao /cart/ e, no mesmo instante, se redesenhava conectada; com o
     `?volta=cart` ainda no endereço, ela guardava a volta de novo e mandava ao /cart/ uma SEGUNDA vez — a
     segunda ida abortava a primeira. Agora a área só navega: uma ida ao carrinho, já conectado."""
-    ctx = navegador.new_context(viewport={"width": 1280, "height": 900})
+    # um visitante com o próprio IP (o Caddy repassa no X-Forwarded-For): a suíte inteira já criou contas
+    # do 127.0.0.1 e o limite de cadastros por hora (MAX_CADASTROS_POR_HORA) é por IP
+    ctx = navegador.new_context(viewport={"width": 1280, "height": 900},
+                                extra_http_headers={"X-Forwarded-For": "203.0.113.88"})
     v = ctx.new_page()
     erros, idas = [], []
     v.on("pageerror", lambda e: erros.append(str(e)))
