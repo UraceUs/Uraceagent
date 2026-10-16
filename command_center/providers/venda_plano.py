@@ -122,7 +122,7 @@ def vender(con, oid, por=None, enviar_invoice=None, enviar_waiver=None, criar_qb
             o = um(con, "SELECT * FROM plan_orders WHERE id=?", (oid,))
             auditar(con, "plan.card", "system", entity_type="plan_order", entity_id=oid, detail={"client_id": card, "nota": nota})
         if not s["qbo_item_id"]:
-            raise cob.ErroCobranca("o plano não tem item do QuickBooks: escolha o item em Agendamentos do site › Serviços")
+            raise cob.ErroCobranca("o plano não tem item do QuickBooks: escolha o item em Site › Serviços e preços")
         try:
             qbo = mensalidades._cliente_qbo(con, o["client_id"])
         except Exception as e:                                     # noqa: BLE001 — QuickBooks fora do ar

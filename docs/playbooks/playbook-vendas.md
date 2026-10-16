@@ -23,7 +23,7 @@
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
 4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
-5. Agendamentos do site: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel)
+5. Site › Agendamentos: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel)
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
 8. Tabela de operações para a IA
@@ -69,7 +69,7 @@ Você opera o Command Center da URACE como a pessoa que vende (papel Operador).
    confirmar=true depois de ela dizer "pode mandar".
 4. Antes de fechar uma venda, leia GET /ops/api/sales/{id}: se "closing" não for null,
    ela já foi fechada. Não feche de novo: refaça só o passo que falhou.
-5. Preço só da tabela (Rate Card ou Agendamentos do site › Serviços e preços). Não sabe? Pergunte.
+5. Preço só da tabela (Rate Card ou Site › Serviços e preços). Não sabe? Pergunte.
 6. Idade do piloto antes de qualquer waiver: menor de 18 = parental para o responsável.
 7. Datas e horas no fuso da Flórida. Na API, mande em UTC com "Z".
 8. Resposta ao lead no Kommo: só o texto que a pessoa aprovou, palavra por palavra.
@@ -101,7 +101,7 @@ PRONTO          invoice paga + waiver assinada → o serviço acontece
 O cliente também pode marcar sozinho pelo site. Esse caminho é outro (seção 5):
 
 ```
-PEDIDO NO SITE  área do cliente → Agendamentos do site › Agendamentos (/ops/site), "pendente"
+PEDIDO NO SITE  área do cliente → Site › Agendamentos (/ops/site/agendamentos), "pendente"
   ▼
 ACEITAR         invoice (serviço + depósito, se o serviço pede) e waiver saem sozinhas
   ▼
@@ -186,7 +186,7 @@ tela: todo operador vê todas as oportunidades.
   O card novo mostra **irmão(s)** no topo, com o link para o outro. Os dois **nunca se unem** (nem
   pela sincronia, nem pelo Unir) e o serviço de um não vai para o outro. Pedir de novo para o mesmo
   piloto devolve o card que já existe.
-- Se a família tem conta no site, o card do irmão também pode nascer em **Agendamentos do site ›
+- Se a família tem conta no site, o card do irmão também pode nascer em **Site ›
   Contas de clientes**, pelo driver (seção 5). A conta no site para cada irmão fica para depois
   (dono, 14/10).
 - **Sempre confira o piloto do card** antes de pôr um serviço nele.
@@ -289,7 +289,7 @@ Preço nunca é de memória. A ordem (`brain/00_SYSTEM/PARAMETROS.md`):
 3. invoice anterior do mesmo serviço e cliente (dizendo que reaproveitou);
 4. catálogo do QuickBooks (defasado, só referência).
 
-Para sessão do site, o preço está em **Agendamentos do site › Serviços e preços** (`GET /ops/api/site/servicos`).
+Para sessão do site, o preço está em **Site › Serviços e preços** (`GET /ops/api/site/servicos`).
 Mudar preço é da gerência.
 
 **No Fechar venda, o "Preço da tabela" vem do catálogo, não do valor da venda** (#204). É o preço
@@ -489,9 +489,9 @@ escopo `calendar.events` e só vale a pena se o número de contas crescer.
 
 ---
 
-## 5. Agendamentos do site
+## 5. Site › Agendamentos
 
-Tela: **Agendamentos do site › Agendamentos** (`/ops/site`). Rotas em `/ops/api/site/…`.
+Tela: **Site › Agendamentos** (`/ops/site/agendamentos`; o resumo do site com as métricas fica em **Site › Painel do site**, `/ops/site`). Rotas em `/ops/api/site/…`.
 
 ### Os estados de um pedido
 
@@ -588,7 +588,7 @@ Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: nã
 - **Lead and Follow** é uma caixinha ao lado do kart: *Add Lead and Follow (+$769)*. Vai para o carrinho
   como linha própria, é pago no Stripe junto com a sessão, e a sessão agendada mostra nas notas
   "+ Lead and Follow (add-on, US$ 769.00, paid)" — é por aí que a equipe sabe que aquele dia tem coach na
-  pista. O preço é o do painel (*Agendamentos do site › Serviços e preços*, serviço de tipo add-on); desativar
+  pista. O preço é o do painel (*Site › Serviços e preços*, serviço de tipo add-on); desativar
   o serviço tira a caixa do site.
 - **Own kart — $500** é a 5ª opção (4 anos ou mais, qualquer categoria), **sem depósito**. O cartão e o
   carrinho avisam: *o kart tem de chegar à pista com no mínimo 2 dias de antecedência para checagem e
@@ -614,7 +614,7 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    a conta) e volta para o produto.
    > **O serviço aponta o kart pelo campo "Kart do site"** (#263, dono 15/10: *"o mais lógico é ir com o
    > produto que foi selecionado na mesma página que selecionou a data e daí clicar no add to cart"*).
-   > Em **Agendamentos do site › Serviços e preços**, cada serviço de sessão tem o seletor **Kart do
+   > Em **Site › Serviços e preços**, cada serviço de sessão tem o seletor **Kart do
    > site** (Baby Kart · 4-stroke · 2-stroke · Adult Shifter, ou "não é do site"). É esse campo — e não
    > mais o nome — que liga o serviço ao kart da página: foi o casamento por nome que fez um serviço
    > chamado "teste" aparecer pré-selecionado como se fosse o produto. Os quatro serviços
@@ -661,7 +661,7 @@ Drive tem **um** botão, ele leva ao carrinho, e o texto embaixo conta esse cami
 → Stripe → waiver*. O "Continue to booking" saiu do site público, e com ele a promessa da invoice do
 QuickBooks. **A invoice do QuickBooks continua existindo para a venda feita pela equipe** — o que
 mudou é só o que o site público oferece. Se o cliente ligar dizendo que "recebeu uma invoice", é
-venda da equipe (a invoice aparece no card); o que veio pelo site está em Agendamentos do site ›
+venda da equipe (a invoice aparece no card); o que veio pelo site está em Site ›
 **Pedidos do site** (Stripe). A comparação completa dos dois sites está em
 `docs/site-publico/comparacao-urace-us.md`.
 
@@ -698,7 +698,7 @@ A senha só passa pela memória do servidor na hora do cadastro: vai no e-mail e
 do e-mail fica, como todo e-mail mandado, na pasta Enviados da conta que envia). Se o Gmail falhar, o servidor tenta
 de novo na hora; continuando fora, a conta fica (a pessoa entra normalmente), o erro fica na conta e as boas-vindas
 saem depois **sem a senha** (com o link do *Forgot password?*), no máximo uma vez por hora, até 7 dias. Em
-**Agendamentos do site › Contas de clientes** a conta mostra *"O e-mail de boas-vindas não saiu"* com o motivo, e a auditoria
+**Site › Contas de clientes** a conta mostra *"O e-mail de boas-vindas não saiu"* com o motivo, e a auditoria
 registra. Toda
 boas-vindas tem a linha *"Didn't create this account? Choose a new password at … (that signs out every other device)
 and reply to this email or call…"*: se alguém criou a conta com o e-mail de outra pessoa, a dona do e-mail troca a senha
@@ -725,7 +725,7 @@ com o valor e o botão **Página do pedido ↗**). Um de cada por resultado por 
 
 O registro no card vai para o card do **piloto** (sessão) e para o card ligado à **conta** (produto),
 cada um só com as suas linhas. Conta ou piloto ainda **sem card** ligado: não registra (nunca no card de
-outro cliente); ligue em **Agendamentos do site › Contas de clientes**.
+outro cliente); ligue em **Site › Contas de clientes**.
 
 - **Try again** abre um checkout novo com as **mesmas escolhas** (produto, opção, quantidade; serviço,
   dia, turno, piloto). O servidor recalcula **preço, depósito e vaga** na hora: se o preço mudou, vale o de
@@ -737,7 +737,7 @@ outro cliente); ligue em **Agendamentos do site › Contas de clientes**.
   para ele e não oferece pagar de novo.
 - O e-mail que não saiu (Gmail fora do ar) a rodada de 15 min tenta de novo, sem repetir o que já saiu.
 
-**Onde a equipe vê:** **Agendamentos do site › Pedidos do site** (`/ops/site/pedidos`) lista todos os
+**Onde a equipe vê:** **Site › Pedidos do site** (`/ops/site/pedidos`) lista todos os
 pedidos do carrinho e da loja em **todo** estado (pago, processando o pagamento, pagamento não passou,
 checkout expirou, no checkout), com filtro, quem, o quê, o total, se o aviso por e-mail saiu (e se a
 pessoa comprou em português), e os botões
@@ -749,7 +749,7 @@ Restore cart) no e-mail da conta, e um contato ajuda a fechar; se o aviso disser
 
 **O que aparece para a equipe quando o pedido é pago:**
 
-- **Agendamentos do site:** a sessão entra **aceita e paga** (chip "pago no site · pedido #N"); não sai
+- **Site › Agendamentos:** a sessão entra **aceita e paga** (chip "pago no site · pedido #N"); não sai
   invoice do QuickBooks. Falta só a **waiver**: a nativa o cliente assina na conta; sem ela, sai pelo
   DocuSign na hora. Assinada, confirma sozinha.
 - **Vendas:** uma oportunidade **GANHO** (origem Site) **por card**: a sessão vai para o card do
@@ -824,7 +824,7 @@ Dono, 16/10: *"nos produtos da loja, colocar o valor de envio, o shipping … o 
 que eu consiga alterar … essas funções serão necessárias que sejam ativas permanentemente"*. Decisões:
 frete = **valor fixo por produto**; no painel = **tudo do produto**.
 
-**Onde:** Agendamentos do site › **Produtos da loja** (`/ops/site/produtos`). A lista é paginada (30 por
+**Onde:** Site › **Produtos da loja** (`/ops/site/produtos`). A lista é paginada (30 por
 vez), com busca por nome, SKU ou endereço, filtro por categoria e "À venda / Escondidos". Cada produto
 abre no próprio endereço (`/ops/site/produtos/<número>`). Ver é do operador; **mudar é do gerente**, e
 toda mudança fica na auditoria.
@@ -855,7 +855,7 @@ foi pago e o que a equipe ainda combina.
 > ponha à venda, compre com "Ship to me" (o Stripe cobra US$ 1,00 de verdade) e **esconda o produto logo
 > depois**; o estorno sai pelo Stripe.
 
-### Contas de clientes (Agendamentos do site › Contas de clientes)
+### Contas de clientes (Site › Contas de clientes)
 
 Quem cria conta no site precisa estar ligado ao card certo. Cada driver tem o seu card.
 
@@ -1114,7 +1114,7 @@ instrução à gerência.
 
 1. Agenda de vendas: retornos de hoje e atrasados.
 2. Chat do Kommo: conversas com ●.
-3. Agendamentos do site › Agendamentos › Esperando confirmação.
+3. Site › Agendamentos › Esperando confirmação.
 4. Precisa de atenção: retorno de venda atrasado, ligação perdida, waiver parada, pedido do site,
    invoice de venda esperando o gerente.
 
@@ -1164,12 +1164,12 @@ instrução à gerência.
 | "Para fechar, diga o serviço e o valor." | preencha serviço e valor |
 | Venda do site com **Resolver:** "a vaga sumiu entre o checkout e o pagamento" | o cliente já pagou: ligue, remarque a sessão (ou combine o reembolso com o gerente) e anote na venda (seção 5.1) |
 | Venda do site em **Fechamento** com "vincular à mão" | pago no carrinho sem card certo: ache o card (seção 3) e ligue a venda a ele |
-| E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o meio de pagamento que confirma depois não passou; nada foi cobrado e a vaga está livre. Agendamentos do site › Pedidos do site › **Copiar o link** e mande ao cliente (ele toca em **Try again**); sem e-mail no Stripe, ligue (seção 5.1) |
+| E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o meio de pagamento que confirma depois não passou; nada foi cobrado e a vaga está livre. Site › Pedidos do site › **Copiar o link** e mande ao cliente (ele toca em **Try again**); sem e-mail no Stripe, ligue (seção 5.1) |
 | Cliente diz "o site não deixa comprar sem conta" | regra do dono (#248): toda compra no site pede a conta. No **carrinho**, ele preenche os dados e a senha ali mesmo e a conta nasce no Checkout (#305); no **Buy now** da loja, o botão **Create account** leva e volta para o produto |
 | Carrinho diz "An account with this email already exists" | o e-mail já tem conta: ele toca em **Sign in** (no próprio aviso) e volta ao carrinho logado; esqueceu a senha, *Forgot password?* |
 | Cliente diz "não recebi a senha" / "não recebi o número de cliente" | a senha vai no e-mail de boas-vindas (procure no spam: *Welcome to URACE*); o número de cliente chega num **segundo** e-mail quando o card do piloto nasce (no pagamento). Sem e-mail nenhum: *Forgot password?* na área do cliente manda o link para criar outra |
 | Cliente diz "recebo e-mail todo dia para completar o piloto" | é o lembrete do #305 (sessão paga com o piloto incompleto): para assim que ele completa as medidas e a experiência em *Drivers*, ou depois de 7 lembretes |
-| Cliente pergunta "e o meu pedido?" | Agendamentos do site › Pedidos do site: ache pelo nome ou e-mail, veja o estado e mande o link da **Página do pedido** |
+| Cliente pergunta "e o meu pedido?" | Site › Pedidos do site: ache pelo nome ou e-mail, veja o estado e mande o link da **Página do pedido** |
 | "QuickBooks: registrar a venda à mão" numa venda do site | o serviço não tem item do QuickBooks ou o item "Security deposit" não está sincronizado: acerte em Serviços e preços / sincronize; a rodada de 15 min tenta de novo |
 | "Ganho é o resultado do Fechar venda…" | use Fechar venda, não o botão de etapa |
 | "Perdido exige motivo." | mande `motivo` |
@@ -1185,7 +1185,7 @@ instrução à gerência.
 | Card: "o card com este contato é do piloto …: marque "É irmão"…" | é irmão: `step/cliente?irmao=true` (ou feche de novo marcando "É irmão"); se não for, vincule ao card certo |
 | Depósito: "não pede depósito no catálogo" | o serviço não tem depósito em Serviços e preços: é da gerência mudar |
 | Passo Kommo "feito", mas com a nota "não achei a etapa 'Closed won' neste funil do Kommo" | o lead não se mexeu: mova a etapa à mão no chat ou avise a gerência |
-| Site: "a conta do site ainda não está ligada a um card (Client ID)" | Agendamentos do site › Contas de clientes: ligue o driver ao card certo; o painel tenta a invoice de novo |
+| Site: "a conta do site ainda não está ligada a um card (Client ID)" | Site › Contas de clientes: ligue o driver ao card certo; o painel tenta a invoice de novo |
 | Site: "o serviço não tem item do QuickBooks…" | é da gerência: escolher o item em Serviços e preços |
 | Site: "… is not open for online booking right now" (reserva do kart) | o serviço com o nome daquele kart não está ativo: ative ou crie em Serviços e preços com o nome do kart (#253) |
 | Site: "Online booking is closed right now" | nenhum serviço ativo em Serviços e preços: sem isso não há venda online (e o site manda a pessoa falar com a gente) |

@@ -229,7 +229,25 @@ def pagina(request: Request, caminho: str):
         raise HTTPException(404)
     host = host_de(request)
     q = dict(request.query_params)
-    return _com_o_painel(lambda: _pagina(request, caminho, host, q))
+    resp = _com_o_painel(lambda: _pagina(request, caminho, host, q))
+    _contar_visita(request, caminho, q, resp)
+    return resp
+
+
+def _contar_visita(request, caminho, q, resp):
+    """#306: +1 nas visitas da página (e na entrada, quando a pessoa chegou de fora). A conta fica na memória; de 30 em
+    30 s vai para o banco, depois da resposta (ninguém espera o banco para ver a página)."""
+    from starlette.background import BackgroundTask
+
+    from command_center.providers import painel_site
+    if not painel_site.conta(request, request.method, resp.status_code):
+        return
+    if caminho == "/cart/" and q.get("cancelled"):     # a volta do Stripe não é abrir o carrinho de novo
+        return
+    fonte = painel_site.fonte_da_entrada(request.headers.get("referer"), q.get("utm_source"), hosts(),
+                                         request.headers.get("sec-fetch-site"))
+    if painel_site.anotar(caminho, fonte, ip=_ip(request)) and resp.background is None:
+        resp.background = BackgroundTask(painel_site.descarregar)
 
 
 # #300: as páginas do site que o editor abre (as fixas; a loja e o blog são listas que mudam com a busca)
@@ -546,7 +564,8 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
         foto = _origem(request) + paginas.foto_url(p["images"][0]["src"])
     try:
         _, url = stripe_loja.criar_sessao(con, p, c.get("variacao") or "", qtd, c.get("entrega"), _origem(request),
-                                          host_de(request), foto_url=foto, conta_id=conta, lang=idioma.de_request(request))
+                                          host_de(request), foto_url=foto, conta_id=conta, lang=idioma.de_request(request),
+                                          utm=_campanha(c))
     except ValueError as e:
         return erro(str(e))
     except stripe_loja.ErroStripe as e:
@@ -789,7 +808,7 @@ async def carrinho_checkout(request: Request, background: BackgroundTasks, con: 
             return _json({"ok": False, "erro": idioma.traduzir(str(e), lang), "sign_in": e.entrar}, e.status)
     try:
         oid, url = carrinho.criar_checkout(con, itens, d.get("entrega"), conta, _origem(request), host_de(request),
-                                           lang=lang)
+                                           lang=lang, utm=_campanha(d["utm"]) if isinstance(d.get("utm"), dict) else None)
         resp = _json({"ok": True, "url": url, "order": oid})
     except carrinho.PrecisaConta as e:
         con.rollback()
@@ -959,7 +978,7 @@ async def pedido_de_novo(token: str, request: Request, con: sqlite3.Connection =
         return restaurar                                # #248: comprar pede a conta (a do pedido); o carrinho pede o login
     try:
         novo, url = carrinho.criar_checkout(con, itens, o["delivery"], conta, _origem(request), host_de(request),
-                                            lang=idioma.de_request(request))
+                                            lang=idioma.de_request(request), utm=o["utm"])   # #306: a campanha continua
     except carrinho.ErroCarrinho:
         return restaurar
     except stripe_loja.ErroStripe as e:

@@ -470,6 +470,14 @@ def pedidos(status: str | None = None, limit: int = Query(30, ge=1, le=200), off
     return pedido_site.lista(con, status, limit, offset)
 
 
+# ------------------------------------------------------------------ o painel do site (#306)
+@r.get("/painel")
+def painel(dias: int = Query(30), con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """As métricas do site no período (7, 30 ou 90 dias, no fuso da Flórida), com o período anterior para comparar."""
+    from command_center.providers import painel_site
+    return painel_site.painel(con, dias)
+
+
 # ------------------------------------------------------------------ waiver assinada aqui (#85)
 class WaiverNativaIn(BaseModel):
     ligada: bool

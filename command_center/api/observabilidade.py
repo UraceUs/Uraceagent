@@ -105,7 +105,8 @@ async def middleware(request: Request, call_next):
     return resp
 
 
-def metricas():
+def metricas(limite=60):
+    """`limite`: quantas rotas (as piores primeiro); None, todas (o painel do site, #306, separa as do site)."""
     with _TRAVA:
         rotas = [{"rota": k, "n": v["n"], "erros_4xx": v["e4"], "erros_5xx": v["e5"], "lentas": v["lentas"],
                   "p50_ms": _pct(v["ms"], 0.5), "p95_ms": _pct(v["ms"], 0.95)} for k, v in _ROTAS.items()]
@@ -114,7 +115,7 @@ def metricas():
     rotas.sort(key=lambda x: (-x["erros_5xx"], -(x["p95_ms"] or 0)))
     return {"desde": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(INICIO)), "uptime_s": int(time.time() - INICIO),
             "requisicoes": sum(x["n"] for x in rotas), "erros_5xx": sum(x["erros_5xx"] for x in rotas),
-            "rotas": rotas[:60], "vitais": sorted(vitais, key=lambda x: (x["metrica"], -x["n"])), "erros_js": erros}
+            "rotas": rotas if limite is None else rotas[:limite], "vitais": sorted(vitais, key=lambda x: (x["metrica"], -x["n"])), "erros_js": erros}
 
 
 @r.get("/metricas")

@@ -464,6 +464,7 @@
     var r = entrega.querySelector('input:checked')
     var corpo = { itens: ler(), entrega: r ? r.value : 'retirada' }
     if (conta) corpo.conta = conta
+    if (window.uraceCampanha) corpo.utm = window.uraceCampanha.ler()      // #306: de onde a venda veio
     fetch(api + '/checkout', { method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF': csrf() },
       body: JSON.stringify(corpo) })

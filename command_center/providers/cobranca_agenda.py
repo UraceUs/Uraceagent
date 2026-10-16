@@ -97,7 +97,7 @@ def linhas_da_invoice(con, b):
     """O preço do serviço gravado no agendamento + o depósito, quando o serviço pede."""
     s = um(con, "SELECT * FROM booking_services WHERE id=?", (b["service_id"],)) if b["service_id"] else None
     if not s or not s["qbo_item_id"]:
-        raise ErroCobranca("o serviço não tem item do QuickBooks: escolha o item em Agendamentos do site › Serviços")
+        raise ErroCobranca("o serviço não tem item do QuickBooks: escolha o item em Site › Serviços e preços")
     if b["price"] is None:
         raise ErroCobranca("o agendamento não tem preço")
     linhas = [{"item_id": s["qbo_item_id"], "quantidade": 1, "unitario": float(b["price"]), "descricao": _sessao(b)}]

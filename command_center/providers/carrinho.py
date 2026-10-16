@@ -225,7 +225,7 @@ def _nome_stripe(x):
     return x["nome"]
 
 
-def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang="en"):
+def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang="en", utm=None):
     """Grava o pedido 'aberto' com as linhas e cria UMA sessão do Checkout. Devolve (pedido_id, url).
     #248: só com a conta do site (o e-mail dela vai ao Stripe e aos avisos); `lang` é o idioma da pessoa."""
     from command_center.providers import stripe_loja
@@ -247,7 +247,7 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
                   unit_price=c["total"], amount=c["total"], delivery=entrega, origin=host, account_id=conta_id,
                   shipping_fee=c["frete"] if entrega == "envio" else None, deposit=c["deposito"],
                   email=((conta["email"] or "").lower() or None if conta else None), name=(conta["name"] if conta else None),
-                  phone=(conta["phone"] if conta else None), lang="pt" if lang == "pt" else "en")
+                  phone=(conta["phone"] if conta else None), lang="pt" if lang == "pt" else "en", utm=utm)
     # #279: o Lead and Follow vai NA linha da sessão que ele acompanha — `variation` com o nome do add-on,
     # `product_slug` "addon:<id do serviço>" e o valor somado no `amount`. A tabela só aceita produto ou sessão,
     # e mudar isso seria reconstruir uma tabela de produção (regra do dono: não sem autorização). No Stripe e no
@@ -349,7 +349,7 @@ def _marcar(con, o, x):
                   notes=f"Paid online: URACE order #{o['id']}" + (f" · + {x['variation']} (add-on, {_usd(_valor_addon(x))}, paid)"
                                                                     if _tem_addon(x) else ""),
                   origin="site", accepted_at=agora(), charge_kind="stripe",
-                  paid_at=agora(), invoice_total=x["amount"], store_order_id=o["id"],
+                  paid_at=agora(), invoice_total=x["amount"], store_order_id=o["id"], utm=o["utm"],
                   pilot_pending=1 if _piloto_pendente(con, x["pilot_id"]) else 0)   # #305: lembrar até completar
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
     try:
@@ -433,7 +433,7 @@ def pago(con, oid):
                       phone=(conta or {}).get("phone") or o["phone"],
                       pilot_name=", ".join(pilotos) or None, service=servico[:300],
                       service_date=sessoes[0]["date"] if sessoes else None, amount=valor,
-                      stage="GANHO" if card else "FECHAMENTO", source="Site", client_id=card, notes=notas,
+                      stage="GANHO" if card else "FECHAMENTO", source="Site", client_id=card, notes=notas, campaign=o["utm"],
                       closing=json.dumps({"em": agora(), "por": "stripe", "pedido": oid}, ensure_ascii=False))
         inserir(con, "opp_events", opp_id=opp, kind="note", title="Pago no carrinho do site (Stripe)", detail=notas[:2000],
                 at=agora(), actor="site")
@@ -568,14 +568,14 @@ def linhas_qbo(con, q, oid):
         else:
             s = um(con, "SELECT qbo_item_id FROM booking_services WHERE id=?", (x["service_id"],))
             if not s or not s["qbo_item_id"]:
-                raise RuntimeError(f"o serviço {x['service_name']} não tem item do QuickBooks (Agendamentos do site › Serviços)")
+                raise RuntimeError(f"o serviço {x['service_name']} não tem item do QuickBooks (Site › Serviços e preços)")
             item = s["qbo_item_id"]
         saida.append({"item_id": item, "quantidade": x["quantity"], "unitario": x["unit_price"], "descricao": x["name"]})
         if _tem_addon(x):                                    # #279: o Lead and Follow pago junto com a sessão
             sid_addon = int(str(x["product_slug"]).split(":", 1)[1])
             a = um(con, "SELECT name, qbo_item_id FROM booking_services WHERE id=?", (sid_addon,))
             if not a or not a["qbo_item_id"]:
-                raise RuntimeError(f"o add-on {x['variation']} não tem item do QuickBooks (Agendamentos do site › Serviços)")
+                raise RuntimeError(f"o add-on {x['variation']} não tem item do QuickBooks (Site › Serviços e preços)")
             saida.append({"item_id": a["qbo_item_id"], "quantidade": 1, "unitario": _valor_addon(x), "descricao": a["name"]})
         if x["deposit"]:
             saida.append({"item_id": _item_deposito(con), "quantidade": 1, "unitario": x["deposit"],

@@ -40,7 +40,7 @@ def codigo_do_email(para):
 ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmail", "/gmail/manual", "/asana", "/docusign",
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
-         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
+         "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
          "/site/produtos", "/site/produtos/235", "/site/editor",
          "/site/waiver", "/site/pedidos", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
@@ -597,7 +597,7 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     # 3. equipe vê em "Precisa de atenção" e confirma na agenda
     abrir(g, servidor, "/attention")
     g.get_by_text("sessão(ões) pedida(s) pelo site").first.wait_for()
-    abrir(g, servidor, "/site")
+    abrir(g, servidor, "/site/agendamentos")
     g.get_by_text("Cleo Agenda").first.wait_for()
     # #50 (dono, 06/10): a equipe ACEITA — cobra e pede a waiver; aqui não há QuickBooks nem card,
     # então fica escrito o que falta, e o gerente pode confirmar mesmo assim
@@ -1184,7 +1184,7 @@ def test_mecanico_so_ve_o_que_e_do_box(servidor, navegador):
     menu = pg.get_by_role("navigation", name="Principal")
     for ve in ("Balcão", "Checklists", "Estoque", "Clientes", "Equipe"):
         assert menu.get_by_role("link", name=ve).count() == 1, ve
-    for nao in ("Oportunidades", "Chat do Kommo", "QuickBooks", "Biblioteca", "AI Command", "Agendamentos do site"):
+    for nao in ("Oportunidades", "Chat do Kommo", "QuickBooks", "Biblioteca", "AI Command", "Painel do site", "Pedidos do site"):
         assert menu.get_by_role("link", name=nao).count() == 0, nao
     for rota in ("/sales", "/quickbooks", "/biblioteca", "/attention"):
         abrir(pg, servidor, rota)
@@ -1949,7 +1949,7 @@ def test_menu_lateral_por_areas_cada_tela_num_lugar_so(servidor, navegador):
     abrir(g, servidor, "/")
     g.locator("nav.nav .grp").first.wait_for()
     grupos = g.evaluate("[...document.querySelectorAll('nav.nav .grp')].map(e => e.textContent.trim())")
-    assert grupos == ["Hoje", "Comercial", "Logística", "Pedidos e compras", "IA e inserções manuais", "Equipe",
+    assert grupos == ["Hoje", "Comercial", "Site", "Logística", "Pedidos e compras", "IA e inserções manuais", "Equipe",
                       "Administrativo"], grupos
     area = g.evaluate("""() => { let grp = ''; const m = {}
         for (const el of document.querySelector('nav.nav').children) {
@@ -1957,7 +1957,9 @@ def test_menu_lateral_por_areas_cada_tela_num_lugar_so(servidor, navegador):
           else if (el.tagName === 'A') { const l = (el.querySelector('.lbl') || el).textContent.trim(); (m[l] = m[l] || []).push(grp) }
         }
         return m }""")
-    esperado = {"Calendário": "Hoje", "Robô SDR": "Comercial", "Clientes": "Comercial", "Agendamentos do site": "Logística",
+    # #306: o site ganhou a seção dele, com uma subseção por painel
+    esperado = {"Calendário": "Hoje", "Robô SDR": "Comercial", "Clientes": "Comercial", "Painel do site": "Site",
+                "Pedidos do site": "Site", "Agendamentos": "Site", "Editor do site": "Site", "Contas de clientes": "Site",
                 "Balcão": "Logística", "Checklists": "Logística", "Suits · Alpha Line": "Pedidos e compras",
                 "Pedidos": "Pedidos e compras", "Manual dos marcadores": "IA e inserções manuais",
                 "QuickBooks": "Administrativo", "Asana": "Administrativo"}
@@ -1966,7 +1968,9 @@ def test_menu_lateral_por_areas_cada_tela_num_lugar_so(servidor, navegador):
     hrefs = g.evaluate("[...document.querySelectorAll('nav.nav a')].map(a => a.getAttribute('href'))")
     assert len(hrefs) == len(set(hrefs)), sorted(h for h in hrefs if hrefs.count(h) > 1)
     abrir(g, servidor, "/site")
-    g.get_by_role("heading", name="Agendamentos do site", level=1).wait_for()
+    g.get_by_role("heading", name="Painel do site", level=1).wait_for()
+    abrir(g, servidor, "/site/agendamentos")
+    g.get_by_role("heading", name="Agendamentos", level=1).wait_for()
 def test_calendario_gerente_exclui_servico_e_ele_fica_no_historico_do_card(servidor, navegador):
     """#219 (dono, 13/10): "somente o acesso livre e o gerente tenham a possibilidade de excluir uma
     tarefa … ela exclui, deixa de ser mostrada, mas lá no histórico de serviço ela continua"."""
@@ -2190,7 +2194,7 @@ def test_carrinho_sessao_e_produto_um_checkout_no_stripe_e_o_pedido_no_painel(se
         adm.get_by_text("Carla Carrinho").first.click()
         adm.get_by_role("heading", name=re.compile(r"^Pedido do site #\d+")).wait_for()
         assert adm.get_by_text("Caio Carrinho").count() >= 1 and adm.get_by_text(produto["name"]).count() >= 1
-        abrir(adm, servidor, "/site")
+        abrir(adm, servidor, "/site/agendamentos")
         adm.get_by_text(re.compile(r"pago no site · pedido #\d+")).first.wait_for()
         assert not adm.erros_js, adm.erros_js
     finally:
@@ -2825,6 +2829,41 @@ def test_sem_conta_duas_sessoes_cada_uma_com_o_seu_piloto(servidor, navegador):
                               {"weekday": 3, "period": "tarde", "open": False, "capacity": 5}])
         _ativar(adm, servidor, sid, False)
         adm.close()
+def test_o_painel_do_site_mostra_as_visitas_e_as_subsecoes(servidor, navegador):
+    """#306 (dono, 16/10): *"uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada
+    painel de lá … E aí também do site um dashboard com as métricas dele"*. Uma pessoa (navegador de verdade, não robô)
+    abre duas páginas do site; no celular, o menu tem a seção Site e o Painel do site mostra as visitas e as páginas,
+    sem rolar para o lado, com cada subseção a um toque."""
+    site = servidor.removesuffix("/ops")
+    ctx = navegador.new_context(viewport={"width": 390, "height": 844}, user_agent=(
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"))
+    v = ctx.new_page()
+    v.goto(site + "/for-beginners/?utm_source=e2e306")
+    v.goto(site + "/about/")
+    ctx.close()
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    try:
+        abrir(g, servidor, "/site")
+        g.get_by_role("heading", name="Painel do site", level=1).wait_for()
+        assert g.title().startswith("Painel do site")
+        g.get_by_text("Recebido pelo site").wait_for()
+        assert g.get_by_role("heading", name="Páginas mais vistas", level=2).count() == 1
+        assert g.get_by_text("/for-beginners/").count() >= 1 and g.get_by_text("/about/").count() >= 1
+        assert g.get_by_text("e2e306").count() >= 1, "a entrada pela campanha"
+        g.get_by_role("button", name="Últimos 7 dias").click()
+        assert g.get_by_role("button", name="Últimos 7 dias").get_attribute("aria-pressed") == "true"
+        for largura in (390, 360):
+            g.set_viewport_size({"width": largura, "height": 800})
+            r = g.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (largura, r)
+            assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
+        abas = g.get_by_role("navigation", name="Subseções do site")
+        assert abas.get_by_role("link").count() >= 9
+        abas.get_by_role("link", name="Pedidos do site").click()
+        g.get_by_role("heading", name="Pedidos do site", level=1).wait_for()
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    finally:
+        g.close()
 
 
 def test_o_gerente_muda_o_nome_do_kart_no_painel_e_o_site_mostra(servidor, navegador):

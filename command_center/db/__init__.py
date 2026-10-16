@@ -365,6 +365,8 @@ MIGRACOES = [
     ("portal_pilots", "remind_at", "TEXT"),              # o último lembrete de completar o piloto
     ("portal_pilots", "remind_n", "INTEGER"),
     ("bookings", "pilot_pending", "INTEGER NOT NULL DEFAULT 0"),   # paga com o piloto incompleto: lembrar até completar
+    # 16/10 — dono (#306): o painel do site diz de onde veio cada venda; o pedido do carrinho e do Buy now guarda a campanha
+    ("store_orders", "utm", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

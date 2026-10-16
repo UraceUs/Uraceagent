@@ -77,7 +77,7 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
         {a.entity.type === 'email' && !a.client_id && <Link className="btn sm" to="/gmail">{tr("Abrir na inbox")}</Link>}
         {a.entity.type === 'stock' && <Link className="btn sm" to="/estoque">{a.action || tr("Ver estoque")}</Link>}
         {a.entity.type === 'purchase' && <Link className="btn sm" to={a.entity.id ? `/compras/${a.entity.id}` : '/pedidos'}>{a.action || tr("Ver compras")}</Link>}
-        {a.entity.type === 'booking' && <Link className="btn sm" to="/site">{a.action || tr("Ver agenda")}</Link>}
+        {a.entity.type === 'booking' && <Link className="btn sm" to="/site/agendamentos">{a.action || tr("Ver agenda")}</Link>}
         {a.entity.type === 'portal_account' && <Link className="btn sm" to="/site/contas">{a.action || tr("Ver contas")}</Link>}
         {a.entity.type === 'parts_invoice' && <Link className="btn sm" to="/balcao">{a.action || tr("Abrir o balcão")}</Link>}
         {a.entity.type === 'checklist_run' && <Link className="btn sm" to="/checklists">{a.action || tr("Ver checklists")}</Link>}

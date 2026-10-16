@@ -2113,3 +2113,19 @@ CREATE TABLE IF NOT EXISTS waiver_invite_codes (
   used_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS waiver_invite_codes_convite ON waiver_invite_codes(invite_id, id);
+
+-- #306 (dono, 16/10: "do site um dashboard com as métricas dele"): as visitas do site, contadas no servidor.
+-- Só o endereço, o dia (Flórida) e quantas vezes: nada de IP, cookie, navegador ou quem é. Robô de busca não conta.
+CREATE TABLE IF NOT EXISTS site_views (
+  day   TEXT NOT NULL,                 -- AAAA-MM-DD no fuso da Flórida
+  path  TEXT NOT NULL,
+  n     INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, path)
+);
+-- De onde as pessoas ENTRARAM (a campanha, o site que mandou ou "direto"); navegar dentro do site não conta.
+CREATE TABLE IF NOT EXISTS site_sources (
+  day     TEXT NOT NULL,
+  source  TEXT NOT NULL,
+  n       INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, source)
+);

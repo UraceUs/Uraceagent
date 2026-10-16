@@ -124,7 +124,7 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | `/ops/portal` | a **área do cliente** (outra porta, outro login). Não é o painel da equipe |
 | `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248): sem conta, o carrinho pede os dados, o piloto (só o nome) e a senha, e a conta nasce no Checkout com o e-mail de boas-vindas (#305). Chave English/Português no topo |
 | `novo.urace.us/services/` | a **página de programas** do site. Desde 15/10 (#254) são sete: Arrive and Drive, URACE Academy, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events. **Kart School** virou a **URACE Academy** e **Professional Coaching** virou o **Arrive and Drive**; os dois endereços antigos redirecionam para quem herdou. O que a equipe vende por cada nome está no [playbook de vendas](playbook-vendas.md) |
-| `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart), com os dados do cliente da conta; em inglês ou português (#248). A equipe copia o link em Agendamentos do site › Pedidos do site |
+| `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart), com os dados do cliente da conta; em inglês ou português (#248). A equipe copia o link em Site › Pedidos do site |
 
 **Endereço do urace.us de hoje** (#252): todo endereço que o site antigo publica abre no site novo —
 a mesma página ou um 301. Quem manda um link antigo para um cliente (`/urace-academy/`,
@@ -156,7 +156,16 @@ pedem acesso de operador.
 | Comercial | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
 | Comercial | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |
 | Comercial | **Clientes** | `/ops/clients` | um card por pessoa; o card abre em `/ops/clients/<n>` | todos |
-| Logística | **Agendamentos do site** | `/ops/site` | os pedidos de sessão da área do cliente, a agenda que abre e fecha, serviços e preços (com o **cartão do kart no site** e o **kart novo**, #297), **cartões das páginas** (`/ops/site/cartoes`: os planos e preços da Academy, do Pro Team e do For Beginners, #297), **produtos da loja** (`/ops/site/produtos`: preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto, #298), **editor do site** (`/ops/site/editor`: monta e muda as páginas do site arrastando seções e elementos, #300; seção 6, "Editor do site"), **pedidos do site** (`/ops/site/pedidos`: carrinho e loja em todo estado do pagamento, com o link da página do pedido), contas | operador+ |
+| Site | **Painel do site** | `/ops/site` | as métricas do site público (#306, dono 16/10: *"do site um dashboard com as métricas dele"*): recebido pelo site (loja, carrinho, planos e as sessões da área do cliente pagas pela invoice), pedidos pagos, conversão do pagamento, visitas, o caminho do site ao pagamento, os mais vendidos, as páginas mais vistas, de onde as pessoas entraram, as campanhas, as contas novas e a saúde do site. Período de 7, 30 ou 90 dias, comparado com o anterior. Detalhes na seção 6, "Painel do site" | operador+ |
+| Site | **Pedidos do site** | `/ops/site/pedidos` | carrinho e loja em todo estado do pagamento, com o link da página do pedido | operador+ |
+| Site | **Agendamentos** | `/ops/site/agendamentos` | os pedidos de sessão do site e da área do cliente: aceitar, confirmar, recusar, cancelar (era `/ops/site` até o #306) | operador+ |
+| Site | **Disponibilidade** | `/ops/site/disponibilidade` | a agenda que abre e fecha: semana, horários, regras e bloqueios | operador+ (mudar: gerente+) |
+| Site | **Serviços e preços** | `/ops/site/servicos` | o preço, o depósito e o item do QuickBooks de cada serviço, com o **cartão do kart no site** e o **kart novo** (#297) | operador+ (mudar: gerente+) |
+| Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team e do For Beginners (#297) | operador+ (mudar: gerente+) |
+| Site | **Produtos da loja** | `/ops/site/produtos` | preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298) | operador+ (mudar: gerente+) |
+| Site | **Editor do site** | `/ops/site/editor` | monta e muda as páginas do site arrastando seções e elementos (#300; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
+| Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
+| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos e assinadas | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente | todos |
@@ -258,7 +267,8 @@ marcadas pelo site no dia, com o checklist de cada um. Detalhe no
 | falta peça | **Pedidos** (o pedido); quem compra junta em **Compras** |
 | lead conversando | **Chat do Kommo** |
 | pedido de macacão | **Suits · Alpha Line** |
-| pedido de sessão pelo site | **Agendamentos do site** |
+| pedido de sessão pelo site | **Site › Agendamentos** |
+| como o site está indo (vendas, visitas, conversão) | **Site › Painel do site** |
 | preciso que a IA faça algo | **AI Command**, ou **✦ Instruir a IA** no item de atenção |
 | conversa com colega | **Equipe** (o que é de cliente fica no Chat do Kommo) |
 
@@ -323,7 +333,7 @@ Auditoria (`waiver.invite.*`).
 
 O botão fica **desligado, com o motivo escrito**, quando: o card não tem e-mail; o card não tem a
 data de nascimento do piloto; o piloto é menor e o card não tem o responsável; o e-mail é da URACE;
-ou a assinatura no próprio sistema está desligada (Agendamentos do site › Waiver). Se o card mudar
+ou a assinatura no próprio sistema está desligada (Site › Waiver). Se o card mudar
 de e-mail ou de data de nascimento depois do envio, o link para de valer: reenvie.
 
 ### Um card por piloto
@@ -377,26 +387,55 @@ abre o card dele).
 | **Box** | Meu dia, checklists com foto, balcão (cobrar ou guardar peça), estoque, pedidos e compras | [playbook-mecanicos-e-coaches.md](playbook-mecanicos-e-coaches.md) |
 | **Suits · Alpha Line** | pedido de macacão sob medida, das 29 medidas e do design até a entrega, com a ponte de e-mail | [../suits-guia-do-lucas.md](../suits-guia-do-lucas.md) |
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
-| **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
-| **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Agendamentos do site › Serviços e preços · Cartões das páginas |
-| **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Agendamentos do site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
-| **Editor do site** (#300) | monta e muda as páginas do site arrastando seções (1 a 3 colunas) e elementos: título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); rascunho, pré-visualização em celular e computador, publicar conferindo as regras do site, versões para voltar | Agendamentos do site › Editor do site · seção 6, "Editor do site" |
+| **Site** (#306) | uma seção só do site público no menu, com uma subseção por painel: o **Painel do site** (as métricas), os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja, o editor, as contas e a waiver | menu Site · esta seção, "Painel do site" |
+| **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Site › Serviços e preços · Cartões das páginas |
+| **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
+| **Editor do site** (#300) | monta e muda as páginas do site arrastando seções (1 a 3 colunas) e elementos: título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); rascunho, pré-visualização em celular e computador, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
 | **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
-| **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
+| **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Site › Agendamentos e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
-| **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Agendamentos do site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
+| **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
 | **Medição de campanha no site** (#260, #171) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta) **só depois do Accept no banner de cookies**; o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |
 | **Chat do site** (#170) | o balão do Kommo no site público; a conversa cai no Chat do Kommo | esta seção, abaixo |
 
+### Painel do site (#306)
+
+Dono, 16/10: *"uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada painel de lá …
+E aí também do site um dashboard com as métricas dele"*.
+
+**Onde:** no menu, a seção **Site**. A primeira subseção é o **Painel do site** (`/ops/site`); as outras são os painéis
+que já existiam (pedidos, agendamentos, disponibilidade, serviços e preços, cartões, loja, editor, contas e waiver), cada
+um com o seu endereço (`/ops/site/pedidos`, `/ops/site/agendamentos`…). Os agendamentos, que eram `/ops/site`, agora
+ficam em `/ops/site/agendamentos`.
+
+**O que o painel mostra** (período de 7, 30 ou 90 dias, no horário da Flórida, comparado com o período anterior):
+
+| Bloco | De onde vem |
+|---|---|
+| **Recebido pelo site** | os pedidos pagos no Stripe (loja e carrinho, com o depósito dentro), a mensalidade paga dos planos (nunca o contrato inteiro) e as sessões da área do cliente pagas pela invoice do QuickBooks |
+| **Pedidos pagos** e **ticket médio** | os pedidos do site com o pagamento confirmado no período |
+| **Conversão do pagamento** | de todos que foram ao Stripe no período (carrinho e Buy now), quantos pagaram |
+| **Visitas** e **Visitas por dia** | contadas pelo próprio servidor, a cada página do site aberta por um navegador (robôs e bibliotecas não contam). **Sem IP, sem cookie, sem saber quem é**: só o endereço, o dia e de onde a pessoa entrou. A conta fica na memória e vai ao banco a cada 30 s. Quem volta a uma página em menos de 5 minutos vê a cópia do navegador, e essa não conta. Começa no dia do deploy do #306: enquanto o período anterior não foi medido inteiro, o painel diz "sem base" em vez de comparar |
+| **Do carrinho ao pagamento** | abriram o carrinho → foram ao Stripe pelo carrinho → pagaram; o Buy now da loja (direto do produto ao Stripe) aparece à parte |
+| **Produtos mais vendidos** e **Sessões vendidas no carrinho** | os itens dos pedidos pagos, pelo valor do item (sem o depósito que volta, o frete e o add-on); e os agendamentos do site e da área do cliente (marcados, cancelados, por vir) |
+| **Páginas mais vistas** e **De onde as pessoas entraram** | as visitas; a entrada é a campanha (`utm_source`), o site ou o app que mandou (Google, Instagram, Gmail…) ou "direto". Navegar dentro do site e voltar do Stripe não é entrada nova. Passou de 40 fontes num dia, o resto entra como "outras fontes" |
+| **Campanhas das vendas e dos contatos** | o `utm` que cada venda ou contato guardou, uma vez por venda (o agendamento e a oportunidade que um pedido gera não contam de novo) |
+| **Contas e contatos** | as contas novas da área do cliente e as oportunidades com origem Site (ganhas e perdidas) |
+| **Saúde do site** | as páginas servidas, os erros do servidor e a página mais lenta desde o último reinício |
+| a faixa de **atenção** | qualquer que seja o período: dos últimos 30 dias, os pagos sem vaga ainda sem agendamento e os avisos por e-mail que não saíram (pago, processando, não passou, expirou e planos); e o que está aberto agora: agendamentos esperando e contas sem card ligado (a mesma conta de Contas de clientes) |
+
+Número zerado é zero de verdade; o que ainda não tem dado diz "sem dado" (NO FAKE DATA). As vendas feitas pela equipe
+(invoice do QuickBooks fora do site) estão em Vendas, não aqui.
+
 ### Editor do site (#300)
 
 Dono, 16/10: *"no site público a gente tenha é, como alterar o design, layout, puxando e arrastando e soltando de uma
 forma bem simples e conseguir editar por lá como se fosse realmente um WordPress"*. Decisão: **livre, tipo Elementor**.
 
-**Onde:** Agendamentos do site › **Editor do site** (`/ops/site/editor`). Ver e pré-visualizar é do operador; criar,
+**Onde:** Site › **Editor do site** (`/ops/site/editor`). Ver e pré-visualizar é do operador; criar,
 mudar, publicar e voltar versão é do gerente (tudo na auditoria).
 
 **Como a página é montada**
@@ -647,9 +686,9 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "This action is blocked by policy and cannot be approved." | a política da ação é BLOCKED | não há como aprovar; fale com o dono se for o caso de mudar a política |
 | "Esses dois cards não se unem: …" | cards de drivers ou contas diferentes do site | não una; cada driver tem o seu card |
 | Venda do site com **Resolver:** "a vaga sumiu…" ou e-mail "Site · PAGO · SEM VAGA" | o cliente pagou no carrinho, mas a vaga acabou antes do pagamento; o pagamento está guardado e a sessão não entrou na agenda | quem vende liga, remarca (ou combina o reembolso com o gerente) e anota na venda |
-| E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o pagamento que confirma depois (transferência) não passou; nada foi cobrado e nenhuma vaga ficou presa | Agendamentos do site › Pedidos do site › **Copiar o link** e mande ao cliente (botão Try again); sem e-mail do cliente, ligue |
+| E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o pagamento que confirma depois (transferência) não passou; nada foi cobrado e nenhuma vaga ficou presa | Site › Pedidos do site › **Copiar o link** e mande ao cliente (botão Try again); sem e-mail do cliente, ligue |
 | E-mail "Site · PROCESSANDO O PAGAMENTO" ou "Site · CHECKOUT EXPIROU" | o cliente pagou com um meio que confirma depois, ou saiu do checkout sem pagar; ele já recebeu o e-mail com o link | nada a fazer no processando; no expirou, um contato ajuda a fechar (link em Pedidos do site) |
-| "Pagamento no site" não aparece no card | a conta do site ou o piloto ainda não está ligado a um card | Agendamentos do site › Contas de clientes: ligue a conta e o driver ao card certo |
+| "Pagamento no site" não aparece no card | a conta do site ou o piloto ainda não está ligado a um card | Site › Contas de clientes: ligue a conta e o driver ao card certo |
 | "Essa recorrência já está vinculada ao card de outro cliente." | tentativa de ligar a mensalidade de um cliente ao card de outro | confira o cliente certo |
 | "Este endereço é só do balcão." | você está em `parts.urace.us` | para o resto do painel, use `ops.urace.us/ops/` |
 | Cápsula **Espelho** em amarelo/vermelho ou "Espelho antigo" | dados não lidos há tempo | Hoje › **↻ Sincronizar** |
@@ -663,7 +702,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | **Pelo Claude:** "… não existe no painel (veja urace_operacoes)" | caminho errado | procure a operação certa com `urace_operacoes` |
 | **Pelo Claude:** "login, chaves e área do cliente não são operados pelo MCP" | rota fora do MCP | faça pelo painel |
 | Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |
-| No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Agendamentos do site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263) |
+| No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263) |
 | No site/reserva: "Online booking is closed right now" | **nenhum** serviço ativo em Serviços e preços: não há o que vender online | ative um serviço; enquanto isso o site manda a pessoa falar com a gente, e nenhuma vaga é prometida |
 | No calendário do site: "Pick a time to continue" | o dia está escolhido e falta o turno (Morning/Afternoon) | escolha o turno; é o próprio site pedindo o que falta (#253) |
 
@@ -728,7 +767,7 @@ destaque, o caminho de **um pacote** (`~/.urace/teste-<data>.tar.gz`) com:
 **O que o pacote prova:** o site abre; kart, dia e turno viram sessão com o preço do painel; a conta
 fictícia é criada no próprio site; o carrinho soma sessão + depósito + produto; o checkout fecha num
 pagamento só; a volta mostra o pedido pago; e o painel registra a venda GANHO, a sessão em
-Agendamentos do site e o card do piloto. **O que ele não prova:** cobrança de verdade no Stripe
+Site › Agendamentos e o card do piloto. **O que ele não prova:** cobrança de verdade no Stripe
 (chave real), e-mail de verdade saindo, e Asana, QuickBooks, DocuSign ou Google de verdade — tudo
 isso é falso ali, de propósito. Deu FALHOU em algum passo: mande o pacote para o Claude; a foto do
 estado do erro está dentro.
