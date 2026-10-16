@@ -2059,7 +2059,9 @@ def resumo_mensalidade(con, cid, meses=4):
         usadas = u["asana"] + [{**x, "site": True} for x in u["site"]]
         inv = por_mes.get(mes)
         saida.append({"month": mes, "invoice": ({"id": inv["id"], "doc_number": inv["doc_number"], "amount": inv["amount"], "balance": inv["balance"], "status": inv["status"], "memo": inv["memo"]} if inv else None),
-                      "sessions_used": len(usadas), "sessions_left": max(0, por_mes_n - len(usadas)), "sessions": usadas,
+                      # #314: a vaga livre é a do pacote (a sessão extra e a paga no Stripe não ocupam vaga)
+                      "sessions_used": len(usadas), "sessions_left": max(0, por_mes_n - contrato.usadas_do_pacote(con, cid, mes)),
+                      "sessions": usadas,
                       "sessions_over": max(0, len(usadas) - por_mes_n), "closed": k > 0,
                       "needs_invoice": inv is None and (k == 0 or len(usadas) > 0)})
     ultimo = next((i for i in invs if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + i.get("_linhas", ""), re.I)), None)

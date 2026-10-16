@@ -371,6 +371,17 @@ MIGRACOES = [
     # e o serviço cujo depósito é obrigatório ("o serviço que eu coloquei no checkout ia permitir … sem o security deposit")
     ("store_orders", "stripe_refunded", "REAL"),
     ("booking_services", "deposit_required", "INTEGER"),   # NULL = de antes da caixa: a pós-migração decide uma vez
+    # 16/10 — dono (#314): "se ele já tiver usado as sessões daquele pacote dele mensal, aí ele paga uma sessão
+    # adicional … o valor do mensal dele dividido para duas ou quatro sessões … ou então usa aqueles valores".
+    # O valor e o item do QuickBooks da sessão extra: no card (o combinado com o cliente, vence) e no plano do site.
+    ("clients", "extra_session_price", "REAL"),
+    ("clients", "extra_item_id", "TEXT"),
+    ("booking_services", "extra_price", "REAL"),
+    ("booking_services", "extra_item_id", "TEXT"),
+    # A sessão do aluno recorrente: `plano` (dentro do pacote do mês, sem custo) ou `extra` (cobrada pela invoice);
+    # NULL = avulsa ou de antes. `price` passa a ser o que é cobrado (0 no plano); `list_price` guarda o da tabela.
+    ("bookings", "coverage", "TEXT"),
+    ("bookings", "list_price", "REAL"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

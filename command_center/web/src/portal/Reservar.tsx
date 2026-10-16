@@ -340,7 +340,7 @@ function resumoSessao(c: Checkout, cfg: AgendaCfg | null): Resumo {
   return { titulo: c.confirmada ? "You're confirmed!" : encerrada ? 'Your booking' : 'Almost there',
     sub: `${c.service} · ${dataLonga(c.date)} · ${PERIODOS[c.period]}${cfg ? ` (${faixa(cfg, c.period)})` : ''}${c.driver ? ` · ${c.driver}` : ''}`,
     confirmada: c.confirmada, encerrada, aceita: c.aceita, status: c.status, reservado: 'Spot reserved', reservadoSub: 'We are holding it for you.',
-    pagar: 'Pay the invoice', pagarSub: 'Session + refundable security deposit. It updates here by itself after you pay.',
+    pagar: 'Pay the invoice', pagarSub: `${c.coverage === 'extra' ? 'Extra session (beyond your monthly plan)' : 'Session + refundable security deposit'}. It updates here by itself after you pay.`,
     fim: 'Confirmed by itself', fimOk: 'Confirmed', fimSub: 'As soon as the invoice is paid and the waiver is signed. We email you.',
     volta: '/portal/sessions', voltaRotulo: 'My sessions' }
 }
@@ -389,7 +389,7 @@ export function Acompanhar({ plano = false }: { plano?: boolean }) {
       : <ol className="etapas" aria-label="Steps to confirm">
         <li className="etapa ok"><span className="marca" aria-hidden="true">✓</span><div className="corpo"><b>{r.reservado}</b><span className="small muted">{r.reservadoSub}</span></div></li>
         <li className={`etapa${pagoOk ? ' ok' : ' agora'}`}><span className="marca" aria-hidden="true">{pagoOk ? '✓' : '2'}</span><div className="corpo">
-          <b>{pg.estado === 'contrato' ? 'Part of your plan' : pagoOk ? 'Paid' : r.pagar}</b>
+          <b>{pg.estado === 'contrato' ? 'Included in your plan' : pagoOk ? 'Paid' : r.pagar}</b>
           {pg.estado === 'pagar' && <>{pg.link ? <div><a className="btn primary" href={pg.link} target="_blank" rel="noopener noreferrer">Pay now{pg.total != null ? ` ${usd(pg.total)}` : ''}</a></div> : null}
             <span className="small muted">Invoice {pg.invoice}{pg.para ? `, also sent to ${pg.para}` : ''}. {r.pagarSub}</span></>}
           {pg.estado === 'preparando' && <span className="small muted"><span className="spin" /> Preparing your invoice… it also goes to your email.</span>}

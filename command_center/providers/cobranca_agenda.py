@@ -14,6 +14,11 @@ Decisões de 06/10 (painel de decisões):
 - **Lembrete 3 dias e 1 dia antes**, por e-mail, dizendo o que falta. **Nada cancela sozinho**: sem
   pagamento ou waiver, a equipe decide (pode confirmar mesmo assim, recusar ou cancelar).
 
+**Aluno recorrente** (#314, dono, 16/10): a sessão nasce alocada (`coverage`): `plano` não cobra nada;
+`extra` (acima do pacote do mês) vai numa invoice do QuickBooks com o item e o valor da sessão extra
+(`contrato.preco_extra`), **sem depósito**. As extras de um mesmo pedido de vários dias saem numa invoice só
+(`group_id`). "Confirmar sozinho" não confirma extra sem cobrança.
+
 O agendamento aceito continua `pendente` (segura a vaga) com `accepted_at` preenchido, e vira
 `confirmada` sozinho quando a invoice está paga (o espelho do QuickBooks sincroniza a cada 15 min)
 e a waiver está assinada. Toda falha (sem card, sem cliente no QuickBooks, serviço sem item) fica
@@ -109,6 +114,26 @@ def linhas_da_invoice(con, b):
     return linhas
 
 
+def _per(b):
+    return {"manha": "morning", "tarde": "afternoon", "dia": "full day"}.get(b["period"], b["period"])
+
+
+def linha_da_extra(con, b, card):
+    """#314: a sessão acima do pacote do mês. Item e valor da sessão extra do card (ou do plano, ou o mensal ÷
+    sessões), sem depósito (dono, 16/10: "é só o valor da extra")."""
+    item = contrato.item_extra(con, card)
+    if not item:
+        raise ErroCobranca("não achei o item da sessão extra no QuickBooks: escolha o \"Item da sessão extra\" na "
+                           "Mensalidade do card (ou no plano, em Site › Serviços e preços) ou sincronize o QuickBooks")
+    if b["price"] is None:
+        raise ErroCobranca("sem valor da sessão extra: ponha o valor mensal ou o \"Valor da sessão extra\" na Mensalidade do card")
+    c = um(con, "SELECT monthly_plan FROM clients WHERE id=?", (card,))
+    plano = (c or {}).get("monthly_plan")
+    return {"item_id": item, "quantidade": 1, "unitario": float(b["price"]),
+            "descricao": f"Extra session{f' ({plano})' if plano else ''} · "
+                         f"{date.fromisoformat(b['date']).strftime('%m/%d/%Y')} ({_per(b)})"}
+
+
 DESCRICAO_DEPOSITO = "Refundable security deposit: returned within 5 business days after the session if there is no incident."
 
 
@@ -130,18 +155,44 @@ def _enviar_padrao(**kw):
     return _aplicando(providers.modulo("quickbooks").qbo_criar_e_enviar_invoice, **kw)
 
 
+def alocar_agendamento(con, bid):
+    """#314: grava no agendamento se é do pacote (`plano`, sem custo) ou `extra` (preço da extra), quando o card
+    do piloto é de aluno recorrente. `price` vira o que é cobrado; `list_price` guarda o preço do serviço."""
+    b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
+    if not b or b["coverage"]:
+        return b and b["coverage"]
+    tabela = b["list_price"] if b["list_price"] is not None else b["price"]
+    card = card_do_agendamento(con, b)
+    a = contrato.alocar(con, card, [b["date"]], sem=(bid,))[0] if card and contrato.tem_contrato(con, card) else None
+    if not a or not a["coverage"]:
+        if b["list_price"] is None and b["price"] is not None:
+            atualizar(con, "bookings", bid, list_price=b["price"])
+        return None
+    atualizar(con, "bookings", bid, coverage=a["coverage"], list_price=tabela,
+              price=float(a["price"]) if a["price"] is not None else None, updated_at=agora())
+    return a["coverage"]
+
+
 def cobrar(con, b, enviar=None, criar_cliente=None):
     """Cria e envia a invoice da sessão. Não cobra duas vezes; contrato não cobra. `criar_cliente`
-    (venda automática, #164) cria o cliente no QuickBooks quando o card ainda não tem."""
+    (venda automática, #164) cria o cliente no QuickBooks quando o card ainda não tem. #314: a sessão do
+    pacote não cobra; a extra vai com o item e o preço da extra, sem depósito."""
     b = dict(b)
     if b["charge_kind"] or b["qbo_invoice_id"]:
         return b["charge_kind"]
+    if not b.get("coverage"):
+        alocar_agendamento(con, b["id"])
+        b = dict(um(con, "SELECT * FROM bookings WHERE id=?", (b["id"],)))
+    if b.get("coverage") == "plano":
+        atualizar(con, "bookings", b["id"], charge_kind="contrato", charge_error=None, updated_at=agora())
+        return "contrato"
+    return _invoice(con, [b], enviar, criar_cliente)
+
+
+def _invoice(con, juntos, enviar, criar_cliente):
+    """Uma invoice para `juntos` (uma sessão, ou as extras de um pedido): cria, envia e grava em cada uma."""
+    b = juntos[0]
     card = card_do_agendamento(con, b)
-    if card and contrato.tem_contrato(con, card):
-        sit = contrato.situacao_do_agendamento(con, card, b["date"])
-        if not (sit and sit.get("acima")):
-            atualizar(con, "bookings", b["id"], charge_kind="contrato", charge_error=None, updated_at=agora())
-            return "contrato"
     try:
         if not card:
             raise ErroCobranca("a conta do site ainda não está ligada a um card (Client ID)")
@@ -154,23 +205,33 @@ def cobrar(con, b, enviar=None, criar_cliente=None):
             qbo = criar_cliente(card)
         if not qbo:
             raise ErroCobranca("o cliente não está no QuickBooks (crie o cliente lá ou ligue o card)")
+        if b.get("coverage") == "extra":
+            linhas = [linha_da_extra(con, x, card) for x in juntos]
+            memo = "URACE extra session" + ("s" if len(juntos) > 1 else "") + ": " + \
+                "; ".join(f"{date.fromisoformat(x['date']).strftime('%m/%d/%Y')} ({_per(x)})" for x in juntos) + "."
+        else:
+            linhas = linhas_da_invoice(con, b)
+            memo = f"URACE session: {_sessao(b)}."
         conta = um(con, "SELECT email FROM portal_accounts WHERE id=?", (b["account_id"],))
-        res = (enviar or _enviar_padrao)(cliente_id=qbo, linhas=linhas_da_invoice(con, b), vence_em=b["date"],
-                                         memo=f"URACE session: {_sessao(b)}.", email=conta["email"] if conta else None)
+        res = (enviar or _enviar_padrao)(cliente_id=qbo, linhas=linhas, vence_em=min(x["date"] for x in juntos),
+                                         memo=memo, email=conta["email"] if conta else None)
         if not res or res.get("aplicado") is False:
             raise ErroCobranca("o QuickBooks não criou a invoice (simulação)")
-        atualizar(con, "bookings", b["id"], charge_kind="invoice", qbo_invoice_id=str(res.get("id") or ""),
-                  invoice_doc=res.get("numero"), invoice_total=res.get("total"), invoice_link=res.get("link"),
-                  pay_link=res.get("link_pagamento"),
-                  invoice_sent_to=res.get("enviado_para"), charge_error=None if res.get("enviado", True) else
-                  (res.get("aviso") or "criada, mas não enviada"), charge_attempts=(b["charge_attempts"] or 0) + 1,
-                  updated_at=agora())
-        auditar(con, "booking.invoice", "system", entity_type="booking", entity_id=b["id"],
-                detail={"invoice": res.get("numero"), "total": res.get("total"), "client_id": card})
+        for x in juntos:
+            atualizar(con, "bookings", x["id"], charge_kind="invoice", qbo_invoice_id=str(res.get("id") or ""),
+                      invoice_doc=res.get("numero"), invoice_total=res.get("total"), invoice_link=res.get("link"),
+                      pay_link=res.get("link_pagamento"),
+                      invoice_sent_to=res.get("enviado_para"), charge_error=None if res.get("enviado", True) else
+                      (res.get("aviso") or "criada, mas não enviada"), charge_attempts=(x["charge_attempts"] or 0) + 1,
+                      updated_at=agora())
+            auditar(con, "booking.invoice", "system", entity_type="booking", entity_id=x["id"],
+                    detail={"invoice": res.get("numero"), "total": res.get("total"), "client_id": card,
+                            **({"extra": True, "sessoes": [y["id"] for y in juntos]} if b.get("coverage") == "extra" else {})})
         return "invoice"
     except Exception as e:                                         # noqa: BLE001 — fica escrito, tenta de novo
-        atualizar(con, "bookings", b["id"], charge_error=str(e)[:300], charge_attempts=(b["charge_attempts"] or 0) + 1,
-                  updated_at=agora())
+        for x in juntos:
+            atualizar(con, "bookings", x["id"], charge_error=str(e)[:300], charge_attempts=(x["charge_attempts"] or 0) + 1,
+                      updated_at=agora())
         return None
 
 
@@ -235,7 +296,7 @@ def verificar(con, bid):
     if not situacao(con, b)["pronta"]:
         return False
     atualizar(con, "bookings", bid, status="confirmada", decided_at=agora(), updated_at=agora(),
-              decision_note=b["decision_note"] or ("Session of your plan: confirmed." if b["charge_kind"] == "contrato"
+              decision_note=b["decision_note"] or ("Included in your plan: confirmed." if b["charge_kind"] == "contrato"
                                                    else "Paid and waiver signed: confirmed."))
     auditar(con, "booking.confirmed.auto", "system", entity_type="booking", entity_id=bid,
             detail={"pagamento": b["charge_kind"], "invoice": b["invoice_doc"]})
@@ -261,16 +322,24 @@ def aceitar(con, por, bid, enviar_invoice=None, enviar_waiver=None, criar_client
 
 
 def ao_marcar(con, bid):
-    """Contrato + waiver em dia (dono, 06/10): a sessão confirma sozinha assim que é marcada,
-    desde que esteja dentro do limite do mês."""
+    """Na hora em que o cliente marca. #314: a sessão do aluno recorrente é alocada (do pacote ou extra) já na
+    criação, para o cliente e a equipe verem. Do pacote + waiver em dia (dono, 06/10): confirma sozinha. A extra
+    nunca confirma sem cobrança, nem com "Confirmar sozinho" ligado: volta a esperar a invoice e a waiver."""
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
-    if not b or b["status"] != "pendente":
+    if not b or b["status"] not in ag.ATIVAS:
         return False
-    card = card_do_agendamento(con, b)
-    if not card or not contrato.tem_contrato(con, card):
+    cobertura = alocar_agendamento(con, bid)
+    b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
+    if cobertura == "extra":
+        if b["status"] == "confirmada" and not b["decided_by"]:        # nasceu confirmada pelo "Confirmar sozinho"
+            atualizar(con, "bookings", bid, status="pendente", decided_at=None, updated_at=agora())
         return False
-    sit = contrato.situacao_do_agendamento(con, card, b["date"])
-    if (sit and sit.get("acima")) or not waiver_em_dia(con, b, card):
+    if cobertura != "plano":
+        return False
+    if b["status"] == "confirmada":                                     # "Confirmar sozinho": a do pacote não cobra
+        atualizar(con, "bookings", bid, accepted_at=b["accepted_at"] or agora(), charge_kind="contrato", updated_at=agora())
+        return True
+    if not waiver_em_dia(con, b):
         return False
     atualizar(con, "bookings", bid, accepted_at=agora(), charge_kind="contrato", updated_at=agora())
     return verificar(con, bid)

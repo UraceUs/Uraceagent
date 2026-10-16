@@ -523,8 +523,11 @@ gerente. Use Aceitar."
 1. **Invoice:** o preço gravado no agendamento + o **depósito**, quando o serviço tem depósito
    (configurado em Serviços e preços). A linha do depósito diz que é devolvido em até 5 dias úteis
    se não houver incidente. **Não cobra duas vezes**: se o agendamento já tem invoice, não cria outra.
-2. **Contrato (Academy):** cliente com contrato não paga de novo; a sessão conta no contrato. Acima
-   do limite do mês, cobra.
+2. **Aluno recorrente (Academy / Kart School, #314):** a sessão já nasce marcada como **do plano** ou
+   **extra** (chip na lista: "do plano" ou "extra $689.23 · invoice …", com o pacote do mês ao lado, que
+   só a equipe vê). A do plano não cobra nada. A **extra** (acima do pacote do mês) vai numa invoice do
+   QuickBooks com o **item da sessão extra** (no QuickBooks: "Academy | Extra session (beyond monthly 4)")
+   e o **valor da extra, sem depósito**. Veja "Aluno recorrente" logo abaixo.
 3. **Waiver:** se o piloto não tem waiver válida no dia da sessão, sai pelo DocuSign. Com a waiver
    nativa ligada, o cliente assina na área do cliente.
 4. **Confirma sozinha** quando a invoice aparece paga e a waiver está em dia.
@@ -532,13 +535,39 @@ gerente. Use Aceitar."
 6. Falhou algo (sem card, sem cliente no QuickBooks, serviço sem item)? O motivo fica escrito no
    agendamento e o painel tenta de novo (a invoice, até 3 vezes).
 
-Cliente com contrato e waiver em dia: o pedido **confirma sozinho** assim que é marcado.
+Cliente com contrato e waiver em dia: o pedido **confirma sozinho** assim que é marcado (a sessão do plano).
+
+### Aluno recorrente: pacote do mês e sessão extra (#314)
+
+Dono, 16/10: *"Quando for cliente do Kart School … pagam pelo QuickBooks. O invoice deles é recorrente …
+ele não precisa efetuar o pagamento, a não ser que as sessões daquele pacote dele … Se ele já tiver usado
+as sessões daquele pacote dele mensal, aí ele paga uma sessão adicional."* Academy e Kart School são a
+mesma coisa.
+
+- **Quem é recorrente:** o card do **piloto** tem contrato (plano mensal, valor mensal ou sessões por mês).
+  Plano comprado no site só vale **depois da 1ª mensalidade paga**. Plano cuja recorrência acabou não vale
+  mais. Pro Racing Driver sem mensal no card **não** é recorrente. Piloto do site sem card ligado ainda não
+  é recorrente: ligue o card (Contas do site) antes de ele marcar.
+- **Pacote do mês:** as sessões por mês do card (sem número, 4). Zera no dia 1, também nos contratos de 6
+  e 12 meses. A sessão extra e a paga no Stripe **não** ocupam vaga. Cancelar uma do pacote (pelas regras
+  de cancelamento de sempre) devolve a vaga do mês.
+- **Preço da extra**, nesta ordem: o **Valor da sessão extra** da Mensalidade do card → o do **plano**
+  (Site › Serviços e preços) → o **mensal do card ÷ sessões do mês**, em centavos com arredondamento
+  comercial (2.756,90 ÷ 4 = 689,23; 1.378,45 ÷ 2 = 689,23).
+- **Item da extra**, nesta ordem: o do card → o do plano → o item "Extra session" do QuickBooks.
+- **O cliente vê** só "Included in your plan" ou "Extra session · $689.23" em cada dia. O contador
+  ("2 de 4 no mês") fica com a equipe (dono, 01/10).
+- **"Confirmar sozinho"** confirma a do plano, mas **não** confirma a extra: ela espera a invoice e a waiver.
+- **Extra cancelada** com a invoice aberta vira aviso em **Precisa de atenção**: anule a invoice (ou tire a
+  linha dela) no QuickBooks.
+- **Onde se combina:** card do cliente › Mensalidade (gerente): "Valor da sessão extra" (vazio mostra a
+  conta que vale) e "Item da sessão extra".
 
 ### Duas chaves da agenda (só leitura para quem vende)
 
 | Chave | Onde | Quem muda | Efeito |
 |---|---|---|---|
-| **Confirmar sozinho** (`auto_confirm`) | Disponibilidade | Gerente | o pedido já nasce **confirmado**, sem passar pelo Aceitar. Nesse caso o painel **não** gera invoice nem waiver para ele: confira pagamento e waiver por fora |
+| **Confirmar sozinho** (`auto_confirm`) | Disponibilidade | Gerente | o pedido já nasce **confirmado**, sem passar pelo Aceitar. Nesse caso o painel **não** gera invoice nem waiver para ele: confira pagamento e waiver por fora. A **sessão extra** do aluno recorrente nunca nasce confirmada: espera a invoice e a waiver (#314) |
 | **Venda automática** (`auto_sell`, #164) | Disponibilidade | **só Administrador** | o pedido não espera o Aceitar: na hora, o card do piloto é garantido, o cliente no QuickBooks é achado ou criado, invoice + depósito + waiver saem, e o cliente recebe e-mail com o que falta e outro quando confirma |
 
 Na venda automática, o card só é ligado sozinho a um card que existe com **duas provas**: o e-mail

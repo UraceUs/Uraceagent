@@ -54,7 +54,8 @@ export interface Servico { id: number; name: string; description: string | null;
 export interface Checkout { id: number; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'; date: string; period: 'manha' | 'tarde' | 'dia'
   service: string | null; price: number | null; driver: string | null; aceita: boolean; confirmada: boolean
   pagamento: { estado: 'pagar' | 'pago' | 'contrato' | 'preparando' | 'equipe'; link: string | null; invoice: string | null; total: number | null; para: string | null }
-  waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando' | 'equipe'; link: string | null; para?: string | null } }
+  waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando' | 'equipe'; link: string | null; para?: string | null }
+  coverage?: Cobertura }
 /** #169: um plano mensal que o site vende (Academy, Boost). */
 export interface Plano { id: number; name: string; description: string | null; price: number; months: number; sessions_month: number; total: number }
 /** #169: as etapas do plano, como o servidor resume para o cliente. */
@@ -65,7 +66,13 @@ export interface Booking { id: number; date: string; period: 'manha' | 'tarde' |
   notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null
   /** #50: aceita pela equipe — falta pagar a invoice e/ou assinar a waiver */
   accepted?: string | null; charge_kind?: 'contrato' | 'invoice' | null; invoice_doc?: string | null; invoice_link?: string | null
-  invoice_sent?: number; waiver_sent?: number }
+  invoice_sent?: number; waiver_sent?: number
+  /** #314: aluno recorrente — "plano" (incluída no plano) ou "extra" (sessão extra, pela invoice) */
+  coverage?: Cobertura }
+/** #314: a sessão do aluno recorrente. O cliente vê só "Included in your plan" ou "Extra session · $X". */
+export type Cobertura = 'plano' | 'extra' | null
+export const rotuloCobertura = (c: Cobertura | undefined, preco: number | null | undefined) =>
+  c === 'plano' ? 'Included in your plan' : c === 'extra' ? `Extra session${preco != null ? ` · ${usd(preco)}` : ''}` : null
 
 export const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 

@@ -173,7 +173,7 @@ def checkout(con, bid):
                  "total": b["invoice_total"], "para": b["invoice_sent_to"]}
     return {"id": b["id"], "status": b["status"], "date": b["date"], "period": b["period"], "service": b["service_name"],
             "price": b["price"], "driver": b["driver"], "aceita": s["aceita"], "pagamento": pagamento, "waiver": waiver,
-            "confirmada": b["status"] == "confirmada"}
+            "confirmada": b["status"] == "confirmada", "coverage": b["coverage"]}
 
 
 # ------------------------------------------------------------------ e-mails ao cliente
@@ -201,8 +201,9 @@ def avisar_recebida(con, bid, enviar_email=None):
     a = um(con, "SELECT name, email FROM portal_accounts WHERE id=?", (b["account_id"],))
     passos = []
     if c["pagamento"]["estado"] == "pagar":
+        o_que = "extra session" if c.get("coverage") == "extra" else "session + refundable security deposit"
         passos.append(f"1. Pay the invoice{' ' + c['pagamento']['invoice'] if c['pagamento']['invoice'] else ''} "
-                      f"(session + refundable security deposit): {c['pagamento']['link'] or 'it is in your email from QuickBooks'}")
+                      f"({o_que}): {c['pagamento']['link'] or 'it is in your email from QuickBooks'}")
     elif c["pagamento"]["estado"] == "preparando":
         passos.append("1. Pay the invoice: it is on its way to your email from QuickBooks.")
     if c["waiver"]["estado"] == "assinar_aqui":
