@@ -148,7 +148,9 @@ cada passo para poder te passar e testar todas as funcionalidades"*.
 
 > **Desde 15/10 (#277) esta prova roda no CI do GitHub e no ambiente do Claude**, e o pacote de fotos fica
 > para baixar em *Actions › a execução › Artifacts › prova-com-fotos*. Na VPS ela é opcional. E o deploy
-> (`servir_command_center.sh`) não roda mais a bateria quando o GitHub confirma o CI verde do commit.
+> (`servir_command_center.sh`) não roda mais a bateria quando o CI verde do commit está confirmado: a
+> prova é a tag `ci-verde/<sha>`, que o CI grava no repositório e a VPS lê pelo git (#286 — o repositório é
+> privado, a API do GitHub responde 404 sem login).
 
 **Uma linha, no VPS:**
 

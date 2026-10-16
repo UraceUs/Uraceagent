@@ -67,3 +67,66 @@ def test_o_deploy_so_pula_com_ok_e_cai_na_bateria_no_resto():
     assert "URACE_DEPLOY_TESTES" in texto, "dá para forçar a bateria"
     senao = texto.split('if [ "$CI" = "ok" ]; then', 1)[1].split("\nfi", 1)[0].split("else", 1)[1]
     assert "-m pytest -q command_center/tests" in senao, "sem confirmação, a bateria roda na VPS"
+
+
+# ------------------------------------------------------------------ #286: a tag ci-verde, lida pelo git
+# Deploy de 15/10: a API do GitHub respondeu 404 na VPS (o repositório é privado, a VPS não tem login) e a
+# bateria rodou lá de novo. O CI agora grava `ci-verde/<sha>`; o deploy a lê com a chave do `git pull`.
+WORKFLOW = RAIZ / ".github" / "workflows" / "ci.yml"
+
+
+def _comando_da_tag():
+    texto = DEPLOY.read_text(encoding="utf-8")
+    linha = next(x for x in texto.splitlines() if "ls-remote" in x)
+    return linha.strip().removeprefix("if ").split(" >/dev/null")[0]
+
+
+def _git(*args, cwd):
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True,
+                   env={"GIT_AUTHOR_NAME": "Teste", "GIT_AUTHOR_EMAIL": "teste@example.com", "HOME": str(cwd),
+                        "GIT_COMMITTER_NAME": "Teste", "GIT_COMMITTER_EMAIL": "teste@example.com",
+                        "PATH": "/usr/bin:/bin:/usr/local/bin"})
+
+
+def test_o_deploy_acha_a_tag_do_ci_pelo_git_e_so_ela_pula(tmp_path):
+    remoto, repo = tmp_path / "remoto.git", tmp_path / "repo"
+    _git("init", "-q", "--bare", str(remoto), cwd=tmp_path)
+    _git("init", "-q", str(repo), cwd=tmp_path)
+    (repo / "a.txt").write_text("x")
+    _git("add", "a.txt", cwd=repo)
+    _git("commit", "-q", "-m", "um", cwd=repo)
+    _git("remote", "add", "origin", str(remoto), cwd=repo)
+    _git("push", "-q", "origin", "HEAD:refs/heads/claude/commandcenter-vps", cwd=repo)
+    sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True).stdout.strip()
+    cmd = _comando_da_tag()
+    assert "ls-remote --exit-code origin" in cmd and '"refs/tags/ci-verde/$SHA"' in cmd
+
+    def acha():
+        return subprocess.run(["bash", "-c", cmd], env={"REPO": str(repo), "SHA": sha, "PATH": "/usr/bin:/bin:/usr/local/bin"},
+                              capture_output=True).returncode == 0
+    assert not acha(), "sem a tag do CI, o deploy roda a bateria"
+    _git("push", "-q", "origin", f"HEAD:refs/tags/ci-verde/{'0' * 40}", cwd=repo)
+    assert not acha(), "a tag de OUTRO commit não vale"
+    _git("push", "-q", "origin", f"HEAD:refs/tags/ci-verde/{sha}", cwd=repo)
+    assert acha(), "com a tag deste commit, pula"
+
+
+def test_a_tag_vem_antes_da_api_e_a_api_so_vale_com_ok():
+    texto = DEPLOY.read_text(encoding="utf-8")
+    passo3 = texto.split("# --------------------------------------------------------------- 3. testes", 1)[1].split("# ----", 1)[0]
+    assert passo3.index("ls-remote") < passo3.index("api.github.com"), "a tag primeiro (repositório privado)"
+    assert 'if [ "$API" = "ok" ]; then CI="ok"' in passo3
+    for credencial in ("Authorization", "GH_TOKEN", "GITHUB_TOKEN", "$TOKEN"):
+        assert credencial not in passo3, "nenhum token na VPS"
+
+
+def test_o_ci_grava_a_tag_so_com_os_tres_jobs_verdes_no_branch_da_vps():
+    import yaml
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    verde = jobs["verde"]
+    assert set(verde["needs"]) == {"python", "web", "e2e"}, "só depois dos três jobs"
+    assert "github.event_name == 'push'" in verde["if"] and "refs/heads/claude/commandcenter-vps" in verde["if"]
+    assert verde["permissions"] == {"contents": "write"}, "a permissão mínima, só neste job"
+    corpo = verde["steps"][0]["run"]
+    assert "refs/tags/ci-verde/${{ github.sha }}" in corpo and 'sha="${{ github.sha }}"' in corpo
+    assert all("permissions" not in j for k, j in jobs.items() if k != "verde"), "os outros jobs seguem só leitura"
