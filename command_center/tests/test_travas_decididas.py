@@ -13,6 +13,7 @@ import datetime as dt
 import os
 import sys
 import tempfile
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -111,7 +112,11 @@ def test_wnews_continua_arquivando_sem_banco(con, monkeypatch):
 def _cliente_com_servico(con, email, daqui_a_dias, nome="Cliente"):
     cur = con.execute("INSERT INTO clients (name, email) VALUES (?,?)", (nome, email))
     cid = cur.lastrowid
-    quando = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=daqui_a_dias)).replace(hour=15)
+    # #290: o serviço daqui a N dias do CALENDÁRIO DA FLÓRIDA, às 11h de lá — como o painel conta. Com
+    # "agora em UTC + N dias", das 20h à meia-noite na Flórida o dia UTC já virou e o "3 dias" virava 4.
+    fl = ZoneInfo("America/New_York")
+    dia = dt.datetime.now(fl).date() + dt.timedelta(days=daqui_a_dias)
+    quando = dt.datetime.combine(dia, dt.time(11, 0), tzinfo=fl)
     con.execute("INSERT INTO calendar_events (client_id, title, starts_at) VALUES (?,?,?)",
                 (cid, "Track day", quando.isoformat()))
     con.commit()
