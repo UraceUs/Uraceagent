@@ -170,7 +170,7 @@ pedem acesso de operador.
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos e assinadas | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
-| Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente | todos |
+| Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
 | Logística | **Checklists** | `/ops/checklists` | os checklists do dia, do kart e os trimestrais | operador+ |
 | Pedidos e compras | **Pedidos** | `/ops/pedidos` | a lista do que a equipe **precisa** que se compre | todos |
 | Pedidos e compras | **Suits · Alpha Line** | `/ops/suits` | os pedidos de macacão sob medida, em dez etapas | operador+ |
