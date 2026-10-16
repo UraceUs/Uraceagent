@@ -179,13 +179,19 @@ def _hash_token(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def abrir_sessao(con, user_id, lembrar, ip, user_agent):
+def abrir_sessao(con, user_id, lembrar, ip, user_agent, expira=None, pai=None):
+    """`expira` e `pai` (#311): a sessão do balcão nasce de uma do painel, vence junto com ela e
+    cai quando ela cai. Devolve (token, segundos de vida do cookie)."""
     token = secrets.token_urlsafe(32)
-    horas = LEMBRAR_DIAS * 24 if lembrar else SESSAO_HORAS
-    expira = (datetime.now(timezone.utc) + timedelta(hours=horas)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    con.execute("INSERT INTO sessions (id, user_id, expires_at, ip, user_agent) VALUES (?,?,?,?,?)",
-                (_hash_token(token), user_id, expira, ip, (user_agent or "")[:200]))
-    return token, horas * 3600
+    if expira:
+        fim = datetime.strptime(expira[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+        segundos = max(0, int((fim - datetime.now(timezone.utc)).total_seconds()))
+    else:
+        segundos = (LEMBRAR_DIAS * 24 if lembrar else SESSAO_HORAS) * 3600
+        expira = (datetime.now(timezone.utc) + timedelta(seconds=segundos)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    con.execute("INSERT INTO sessions (id, user_id, expires_at, ip, user_agent, parent_id) VALUES (?,?,?,?,?,?)",
+                (_hash_token(token), user_id, expira, ip, (user_agent or "")[:200], pai))
+    return token, segundos
 
 
 def sessao_valida(con, token):
@@ -202,8 +208,10 @@ def sessao_valida(con, token):
 
 
 def revogar_sessao(con, token):
-    con.execute("UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
-                (agora(), _hash_token(token)))
+    """Derruba a sessão e as que nasceram dela (#311: sair do painel tira o balcão do celular também)."""
+    h = _hash_token(token)
+    con.execute("UPDATE sessions SET revoked_at = ? WHERE (id = ? OR parent_id = ?) AND revoked_at IS NULL",
+                (agora(), h, h))
 
 
 def revogar_todas(con, user_id):
@@ -220,6 +228,15 @@ def _seguro(request):
     """Cookie Secure só quando de fato há TLS na frente (Caddy) — em
     desenvolvimento local, http://127.0.0.1 não entregaria o cookie."""
     return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+
+
+def _gravar_cookies(response, request, token, max_age):
+    """O cookie da sessão e o do CSRF, presos ao host que respondeu (sem `Domain`)."""
+    seguro = _seguro(request)
+    response.set_cookie(COOKIE_SESSAO, token, max_age=max_age, httponly=True,
+                        secure=seguro, samesite="strict", path="/")
+    response.set_cookie(COOKIE_CSRF, secrets.token_urlsafe(24), max_age=max_age, httponly=False,
+                        secure=seguro, samesite="strict", path="/")
 
 
 def login(con, request, response, email, senha, lembrar=False):
@@ -244,15 +261,10 @@ def login(con, request, response, email, senha, lembrar=False):
         raise HTTPException(401, MSG_CREDENCIAL)
 
     token, max_age = abrir_sessao(con, u["id"], lembrar, ip, request.headers.get("user-agent"))
-    csrf = secrets.token_urlsafe(24)
     atualizar(con, "users", u["id"], last_login_at=agora())
     auditar(con, "auth.login", f"user:{u['id']}", user_id=u["id"], ip=ip,
             detail={"remember": bool(lembrar)})
-    seguro = _seguro(request)
-    response.set_cookie(COOKIE_SESSAO, token, max_age=max_age, httponly=True,
-                        secure=seguro, samesite="strict", path="/")
-    response.set_cookie(COOKIE_CSRF, csrf, max_age=max_age, httponly=False,
-                        secure=seguro, samesite="strict", path="/")
+    _gravar_cookies(response, request, token, max_age)
     return {"id": u["id"], "email": u["email"], "name": u["name"],
             "role": u["role"], "free": livre(u["email"]),
             "cargo": None if livre(u["email"]) else (u["cargo"] if "cargo" in u.keys() else None)}
@@ -267,6 +279,108 @@ def logout(con, request, response):
         auditar(con, "auth.logout", f"user:{s['user_id']}", user_id=s["user_id"], ip=_ip(request))
     for c in (COOKIE_SESSAO, COOKIE_CSRF):
         response.delete_cookie(c, path="/")
+
+
+# ------------------------------------------------------- passe do balcão (#311)
+# Dono, 16/10: o botão vermelho do balcão "tem que direcionar a pessoa para o … parts.urace.us, já
+# logada com o mesmo login que ela estava logada no … Command Center". O cookie da sessão é preso ao
+# host (sem `Domain`) e continua assim: abrir para `.urace.us` mandaria a sessão da equipe também para
+# a área do cliente e para o site, que roda script de terceiros. Em vez disso o painel dá um PASSE:
+#   * de uso único, vale 30 s, só o hash no banco;
+#   * vai ao parts num POST de formulário (nunca na URL, no histórico ou numa prévia de link);
+#   * o parts confere o host de destino e o `Origin` (o passe só entra vindo do painel que o deu —
+#     sem isso, um colega mandaria outro entrar na conta dele);
+#   * só a pessoa no navegador pede: chave de API e token OAuth não viram sessão de navegador;
+#   * a sessão nova vence junto com a do painel e cai quando ela cai (sair do painel tira o balcão).
+PASSE_SEGUNDOS = 30
+
+
+def _host(request):
+    return (request.headers.get("host") or "").strip().lower()
+
+
+def _origem(request):
+    """O host (com porta) do `Origin` do pedido, ou "" (ausente, `null` ou torto)."""
+    from urllib.parse import urlsplit
+    bruto = (request.headers.get("origin") or "").strip()
+    if not bruto or bruto == "null":
+        return ""
+    try:
+        return (urlsplit(bruto).netloc or "").lower()
+    except ValueError:
+        return ""
+
+
+def criar_passe(con, request, u, para_host):
+    """Devolve (passe, vence_em). `u` é quem `usuario_atual` devolveu para este pedido."""
+    if u.get("via"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "O balcão do celular abre só pelo navegador, com o seu login.")
+    s = sessao_valida(con, request.cookies.get(COOKIE_SESSAO))
+    if not s:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has expired.")
+    passe = secrets.token_urlsafe(32)
+    vence = (datetime.now(timezone.utc) + timedelta(seconds=PASSE_SEGUNDOS)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    con.execute("""INSERT INTO auth_passes (token_hash, user_id, de_sessao, de_host, para_host,
+                                            criado_ip, criado_ua, expires_at) VALUES (?,?,?,?,?,?,?,?)""",
+                (_hash_token(passe), s["user_id"], s["id"], _host(request), para_host, _ip(request),
+                 (request.headers.get("user-agent") or "")[:200], vence))
+    auditar(con, "auth.passe.create", f"user:{s['user_id']}", user_id=s["user_id"], ip=_ip(request),
+            detail={"para": para_host})
+    return passe, vence
+
+
+def usar_passe(con, request, response, passe):
+    """Troca o passe por uma sessão NESTE host. Devolve None (entrou) ou o motivo da recusa.
+
+    O passe queima na primeira tentativa, dê certo ou não: quem tem um passe tem uma chance só."""
+    ip, ua = _ip(request), (request.headers.get("user-agent") or "")[:200]
+    chave = f"passe:ip:{ip}"
+    if _falhas_recentes(con, chave) >= MAX_FALHAS:
+        auditar(con, "auth.passe.fail", "system", detail={"motivo": "limite"}, ip=ip)
+        return "limite"
+    h = _hash_token(passe) if isinstance(passe, str) and 20 <= len(passe) <= 200 else None
+    p = um(con, "SELECT * FROM auth_passes WHERE token_hash = ?", (h,)) if h else None
+    motivo, origem = None, None
+    if not p:
+        motivo = "desconhecido"
+    else:
+        cur = con.execute("""UPDATE auth_passes SET used_at = ?, usado_ip = ?, usado_ua = ?
+                             WHERE token_hash = ? AND used_at IS NULL""", (agora(), ip, ua, h))
+        if cur.rowcount != 1:
+            # o mesmo passe duas vezes: alguém copiou. A sessão que saiu dele cai (como o código do OAuth)
+            if p["sessao_filha"]:
+                con.execute("UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+                            (agora(), p["sessao_filha"]))
+            auditar(con, "auth.passe.reuse", "system", user_id=p["user_id"], ip=ip,
+                    detail={"para": p["para_host"]})
+            motivo = "reuso"
+        elif p["expires_at"] <= agora():
+            motivo = "vencido"
+        elif _host(request) != p["para_host"]:
+            motivo = "host"
+        elif _origem(request) != p["de_host"]:
+            motivo = "origem"
+        else:
+            origem = um(con, """SELECT s.id, s.expires_at, s.revoked_at, u.active
+                               FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?""",
+                        (p["de_sessao"],))
+            if not origem or origem["revoked_at"] or not origem["active"] or origem["expires_at"] <= agora():
+                motivo = "sessao_caiu"
+    if motivo:
+        _registra_tentativa(con, chave, False)
+        if motivo != "reuso":
+            auditar(con, "auth.passe.fail", "system", user_id=p["user_id"] if p else None, ip=ip,
+                    detail={"motivo": motivo})
+        return motivo
+    velho = request.cookies.get(COOKIE_SESSAO)
+    if velho:
+        revogar_sessao(con, velho)            # outra pessoa estava logada neste celular: sai ela
+    token, max_age = abrir_sessao(con, p["user_id"], False, ip, ua, expira=origem["expires_at"], pai=p["de_sessao"])
+    con.execute("UPDATE auth_passes SET sessao_filha = ? WHERE token_hash = ?", (_hash_token(token), h))
+    _gravar_cookies(response, request, token, max_age)
+    auditar(con, "auth.passe.use", f"user:{p['user_id']}", user_id=p["user_id"], ip=ip,
+            detail={"de": p["de_host"], "para": p["para_host"], "mesmo_navegador": ua == (p["criado_ua"] or "")})
+    return None
 
 
 # ------------------------------------------------------------ chave de API

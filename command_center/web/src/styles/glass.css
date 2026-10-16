@@ -799,6 +799,7 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .br-dias{display:flex;gap:6px}
 .br-dias button,.br-sair{min-height:40px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.45);color:#fff;font:inherit;font-weight:600;display:inline-flex;align-items:center;text-decoration:none}
 .br-dias button[aria-checked="true"]{background:#fff;color:#000;border-color:#fff}
+.br-quem{margin-left:6px;padding-left:6px;border-left:1px solid rgba(255,255,255,.35);font-weight:500;opacity:.85;max-width:9ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .br-mira{position:absolute;left:12%;right:12%;top:30%;bottom:22%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.18);transition:opacity var(--dur-media) var(--ease-saida),transform var(--dur-media) var(--ease-saida)}
 .br-mira.pausa{opacity:.35;transform:scale(.96)}
 .br-status{position:absolute;left:0;right:0;bottom:0;margin:0;padding:10px 14px;color:#fff;font-weight:600;text-align:center;background:linear-gradient(transparent,rgba(0,0,0,.6))}

@@ -165,6 +165,7 @@ def servidor(tmp_path_factory):
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
                CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de parts.urace.us
+               CC_BALCAO_URL=f"http://localhost:{porta}",   # #311: o botão do balcão leva para lá, já logado
                STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_WEBHOOK_SECRET=WHSEC_E2E, STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM",  # 32 bytes de teste
                CC_GOOGLE_BASE=GOOGLE.origem, CC_GOOGLE_WEB_CREDENTIALS=GOOGLE_CRED,
@@ -1462,6 +1463,33 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     abrir(g, servidor, "/sales")
     g.get_by_text("Lia Loja").first.wait_for()
     g.close()
+
+
+def test_o_botao_do_balcao_abre_o_parts_ja_logado(servidor, navegador):
+    """#311 (dono, 16/10): o botão vermelho "tem que direcionar a pessoa para o … parts.urace.us, já
+    logada com o mesmo login". O mecânico entra no painel (127.0.0.1), toca no botão e cai no balcão
+    do celular (localhost faz o papel do parts) sem passar pelo login, com o nome dele à vista."""
+    balcao = servidor.replace("127.0.0.1", "localhost")
+    pg = entrar(navegador, servidor, email="luis@urace.us", largura=360, altura=740)
+    abrir(pg, servidor, "/balcao")
+    botao = pg.get_by_role("button", name="Abrir o balcão do celular")
+    caixa = botao.bounding_box()
+    assert caixa and caixa["height"] >= 40
+    paginas = []
+    pg.on("framenavigated", lambda f: paginas.append(f.url) if f == pg.main_frame else None)
+    botao.click()
+    pg.wait_for_url(balcao + "/**")
+    pg.get_by_role("heading", name="Leia a peça").wait_for()
+    assert not any("/login" in u for u in paginas), paginas
+    assert "passe" not in pg.url, "o passe nunca aparece no endereço"
+    assert pg.get_by_role("button", name="Sair da conta de Luis Barros").is_visible()
+    assert pg.evaluate("document.documentElement.scrollWidth") <= 360
+    assert pg.evaluate("fetch('/ops/api/clients').then(r => r.status)") == 403
+    eu = pg.evaluate("fetch('/ops/api/auth/me').then(r => r.json())")
+    assert (eu["email"], eu["so_balcao"]) == ("luis@urace.us", True)
+    # voltar com o mesmo passe não entra de novo: o formulário reenviado cai no login, com o aviso
+    pg.close()
+    assert not pg.erros_js, pg.erros_js
 
 
 def _espera_no_banco(con, sql, args, valor, tempo=10):
