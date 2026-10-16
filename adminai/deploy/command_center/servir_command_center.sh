@@ -135,6 +135,16 @@ else
     echo "-- cofre: chave já existe (mantida)"
 fi
 
+# ---------------------------------------------------------- 4c. chave do backup de fora (#299)
+# A cópia diária que vai para o Google Drive sai cifrada com esta chave. Mesma regra da do cofre: só CRIA
+# quando não existe (trocar deixaria as cópias antigas sem abrir) e nunca aparece no terminal nem no log.
+if ! grep -q '^CC_BACKUP_CHAVE=.\+' "$_ENVF"; then
+    echo "CC_BACKUP_CHAVE=$("$VENV/bin/python" -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode().rstrip("="))')" >> "$_ENVF"
+    echo "-- backup: chave criada em $_ENVF (guarde uma cópia desse arquivo fora do VPS: sem ela a cópia do Drive não abre)"
+else
+    echo "-- backup: chave já existe (mantida)"
+fi
+
 # --------------------------------------------------------------- 5. systemd
 echo "-- 5/7 serviço systemd"
 sudo cp "$REPO/adminai/deploy/command_center/$UNIT.service" "/etc/systemd/system/$UNIT.service"
@@ -148,7 +158,14 @@ for _u in urace-deploy.service urace-deploy.path urace-sdr.service urace-sdr.pat
     sudo cp "$REPO/adminai/deploy/command_center/$_u" "/etc/systemd/system/$_u"
     sudo sed -i "s|/home/ubuntu/Uraceagent|$REPO|g; s|/home/ubuntu/.urace|$URACE_DIR|g; s|/home/ubuntu|$HOME|g; s|^User=ubuntu|User=$(id -un)|; s|BRANCH|$_BRANCH|g" "/etc/systemd/system/$_u"
 done
+# #299: o backup do banco todo dia, na VPS (03:15) e cifrado no Drive (04:00). Os timers já existiam; o deploy
+# passa a instalar e ligar os dois, para nenhuma VPS ficar sem backup por esquecimento.
+for _u in urace-backup.service urace-backup.timer urace-backup-drive.service urace-backup-drive.timer; do
+    sudo cp "$REPO/adminai/deploy/$_u" "/etc/systemd/system/$_u"
+    sudo sed -i "s|/home/ubuntu/Uraceagent|$REPO|g; s|/home/ubuntu/.urace|$URACE_DIR|g; s|/home/ubuntu|$HOME|g; s|^User=ubuntu|User=$(id -un)|" "/etc/systemd/system/$_u"
+done
 sudo systemctl daemon-reload
+sudo systemctl enable --now urace-backup.timer urace-backup-drive.timer >/dev/null 2>&1 || true
 sudo systemctl enable "$UNIT.service" >/dev/null
 sudo systemctl enable --now urace-deploy.path >/dev/null 2>&1 || true
 sudo systemctl enable --now urace-sdr.path >/dev/null 2>&1 || true

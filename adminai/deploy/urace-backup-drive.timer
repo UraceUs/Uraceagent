@@ -1,9 +1,9 @@
 [Unit]
-Description=URACE — envia o backup para o Drive toda segunda de madrugada
+Description=URACE — envia o backup cifrado para o Drive todo dia de madrugada (#299), depois do local das 03:15
 
 [Timer]
 # Segunda, 04:00 local — depois do backup diário das 03:15, para mandar a cópia do dia.
-OnCalendar=Mon *-*-* 04:00:00
+OnCalendar=*-*-* 04:00:00
 Persistent=true
 RandomizedDelaySec=900
 Unit=urace-backup-drive.service

@@ -228,6 +228,8 @@ cada rotina em **Automação e memória**.
 | 08:10 | confere a conversa de cada lead no Kommo contra a do painel |
 | 09:00 | lembrete das invoices em aberto que têm lembrete ligado e dia chegado |
 | 09:00, 16:00 | aviso no celular de cada pessoa com o que ela ainda precisa completar ("Falta completar") |
+| 03:15 | **backup do banco** na VPS: cópia conferida, 30 dias + a primeira de cada mês por 12 meses (#299) |
+| 04:00 | **cópia cifrada do backup no Google Drive** (`Command Center/Backup do banco`), com o mesmo histórico (#299) |
 
 ### Abertura (equipe)
 
@@ -378,6 +380,7 @@ abre o card dele).
 | **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
 | **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Agendamentos do site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Agendamentos do site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
+| **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
 | **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Agendamentos do site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
@@ -606,6 +609,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "Este endereço é só do balcão." | você está em `parts.urace.us` | para o resto do painel, use `ops.urace.us/ops/` |
 | Cápsula **Espelho** em amarelo/vermelho ou "Espelho antigo" | dados não lidos há tempo | Hoje › **↻ Sincronizar** |
 | Cápsula **Sistemas** com problema | uma integração não respondeu | Integrações › **Verificar agora**; se persistir, avise o administrador |
+| **Backup do banco** em vermelho ou amarelo (Integrações) | vermelho: a cópia do dia na VPS falhou ou faltou; amarelo: só a cópia cifrada do Drive falhou ou faltou (o motivo aparece na linha) | o administrador vê a seção 10.1; "sem permissão de ESCRITA no Drive" pede `python3 adminai/google_auth.py --conta urace` na VPS |
 | **Offline** / **Servidor fora** | sem internet / painel não respondeu | confira a internet; se for o servidor, avise o administrador |
 | Notificação não chega no celular | permissão negada ou iPhone sem o painel na tela inicial | Equipe › ligar notificação; siga o aviso da tela |
 | **Pelo Claude:** "este acesso é só de leitura" | conectou sem marcar a caixa | conecte de novo e marque "Também operar o painel como você" |
@@ -617,6 +621,38 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Agendamentos do site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263) |
 | No site/reserva: "Online booking is closed right now" | **nenhum** serviço ativo em Serviços e preços: não há o que vender online | ative um serviço; enquanto isso o site manda a pessoa falar com a gente, e nenhuma vaga é prometida |
 | No calendário do site: "Pick a time to continue" | o dia está escolhido e falta o turno (Morning/Afternoon) | escolha o turno; é o próprio site pedindo o que falta (#253) |
+
+### 10.1 Backup e restauração do banco (#299)
+
+Dono, 16/10: *"eu preciso que dados de clientes como e-mails, nomes, informações de contatos, sejam armazenados em
+um banco de dados … conectado à VPS"*. Decisão: **SQLite + backup diário**. O banco é o arquivo
+`~/.urace/command-center.sqlite` da VPS. Ele fica fora do repositório (o repositório é público).
+
+**O que roda sozinho, todo dia**
+- **03:15, na VPS:** cópia consistente (`VACUUM INTO`, sem parar o painel), aberta e conferida antes de contar,
+  comprimida, em `~/.urace/backups/`. Ficam 30 dias de cópias e, antes disso, a primeira de cada mês por 12 meses.
+- **04:00, fora da VPS:** a cópia mais nova vai **cifrada** (AES-256-GCM) para o Google Drive, em
+  `Command Center/Backup do banco`, com o mesmo histórico. A pasta é privada: não compartilhe.
+- **Em Integrações (Sistemas)**, a linha **Backup do banco** fica vermelha quando a cópia do dia falhou ou faltou e
+  amarela quando só a do Drive falhou. O motivo aparece na linha.
+
+**A chave da cópia do Drive** é a `CC_BACKUP_CHAVE` do `~/.urace/adminai.env` (o deploy cria uma vez e nunca mostra).
+**Guarde uma cópia desse arquivo fora da VPS** (no gerenciador de senhas do dono): sem a chave, a cópia do Drive não
+abre, e perder a VPS é justamente o dia em que ela faz falta. O mesmo arquivo guarda a chave do cofre (#162).
+
+**Restaurar** (só o administrador, na VPS, e só com autorização do dono: põe outro banco no lugar do atual)
+
+1. Ver as cópias: `python3 adminai/backup_banco.py --listar` (na VPS) ou `python3 adminai/backup_drive.py --listar` (no Drive).
+2. Da VPS: escolha o arquivo e confira sem mexer em nada:
+   `python3 adminai/backup_banco.py --restaurar ~/.urace/backups/<arquivo> ` (sem `--aplicar` ele só confere).
+3. Do Drive (a VPS nova, ou a cópia local estragada): `python3 adminai/backup_drive.py --baixar <nome do arquivo>`.
+   Ele baixa, decifra com a chave do `adminai.env`, confere e diz o comando do passo 4.
+4. Pôr no lugar: `python3 adminai/backup_banco.py --restaurar <arquivo> --aplicar`. **O banco atual é guardado antes**
+   (`command-center.sqlite.antes-de-restaurar-<data>`): restaurar por engano tem volta.
+5. `sudo systemctl restart urace-command-center` e confira em Clientes.
+
+Este caminho inteiro (baixar do Drive, decifrar, conferir, restaurar e os clientes voltarem) é testado em cada
+mudança (`test_backup_fora_da_vps.py`).
 
 ---
 

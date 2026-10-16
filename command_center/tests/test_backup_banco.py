@@ -81,7 +81,7 @@ def test_copia_velha_e_apagada_so_depois_de_a_nova_existir(banco):
     pasta = backup_banco.pasta_backups(banco)
     velha = os.path.join(pasta, "command-center-20200101-000000.sqlite")
     open(velha, "wb").write(b"SQLite format 3\x00" + b"\x00" * 100)
-    os.utime(velha, (time.time() - 40 * 86400,) * 2)
+    os.utime(velha, (time.time() - 400 * 86400,) * 2)      # #299: passou dos 12 meses do histórico mensal
     p = backup_banco.fazer(banco, aplicar=True, guardar=14)
     assert velha in p["apagadas"] and not os.path.exists(velha)
     assert os.path.exists(p["destino"]), "a nova ficou"

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Backup semanal para o Google Drive — a cópia que sobrevive a perder a VPS.
+"""Backup diário para o Google Drive, cifrado — a cópia que sobrevive a perder a VPS.
 
 Dono, 23/09: *"pode criar uma pasta no drive com o nome Backup urace command center com
-o backup semanal"*.
+o backup semanal"*. 16/10 (#299): *"dados de clientes … armazenados em um banco de dados"*, decisão
+**SQLite + backup diário**: a cópia de fora passa a ser **todo dia** (04:00, depois da local das 03:15),
+**cifrada** (AES-256-GCM, `adminai/cifra_backup.py`), com o mesmo histórico da local: 30 dias + a primeira
+de cada mês por 12 meses. Cada rodada grava `backups/estado-drive.json`, que o painel lê em Sistemas.
 
     python3 adminai/backup_drive.py                  # diz o que faria
     python3 adminai/backup_drive.py --aplicar        # cria a pasta e envia
     python3 adminai/backup_drive.py --listar         # o que já está lá
+    python3 adminai/backup_drive.py --baixar NOME    # traz do Drive, decifra e confere (para restaurar)
 
 **Por que isto existe separado do backup local:** o backup em `~/.urace/backups` protege
 de `rm` errado, de banco corrompido e de migração ruim. Ele **não** protege de perder a
@@ -18,9 +22,10 @@ pasta e escreve dentro dela, e não consegue ler o resto do seu Drive. Por isso 
 criada por esta ferramenta, e não à mão: com `drive.file`, pasta criada por outro app
 seria invisível para ela.
 
-**O que vai dentro é o banco inteiro** — cliente, telefone, e-mail, valor de invoice.
-A pasta nasce privada (só o dono da conta). Não compartilhe: um link "qualquer pessoa
-com o link" ali dentro é o vazamento da base inteira.
+**O que vai dentro é o banco inteiro** — cliente, telefone, e-mail, valor de invoice — **cifrado**.
+A pasta nasce privada (só o dono da conta). Não compartilhe mesmo assim. **A chave fica no
+`~/.urace/adminai.env` da VPS: guarde uma cópia desse arquivo fora dela**, senão a cópia do Drive
+não abre no dia em que a VPS some.
 
 **Nunca apaga o que não conseguiu substituir.** A limpeza das cópias antigas do Drive só
 roda depois de a nova estar lá e ter o tamanho conferido.
@@ -51,7 +56,8 @@ RAIZ = os.environ.get("BACKUP_DRIVE_RAIZ", "Command Center")
 PASTA = os.environ.get("BACKUP_DRIVE_PASTA", "Backup do banco")
 API = "https://www.googleapis.com/drive/v3"
 UPLOAD = "https://www.googleapis.com/upload/drive/v3/files"
-GUARDAR = 8            # semanas no Drive (~2 meses)
+GUARDAR = backup_banco.GUARDAR    # dias de cópias diárias no Drive
+MESES = backup_banco.MESES        # e a primeira de cada mês, por este tanto de meses
 
 
 def _token():
@@ -144,9 +150,27 @@ def apagar(token, file_id):
     _pedir(f"{API}/files/{file_id}", token, "DELETE")
 
 
-def semanal(aplicar=False, guardar=GUARDAR, token=None, caminho=None):
-    """Envia a cópia local mais recente. Se não houver nenhuma, faz uma antes: backup
-    semanal que depende de o diário ter rodado é backup que falha em silêncio."""
+def baixar_bytes(token, file_id):
+    req = urllib.request.Request(f"{API}/files/{file_id}?alt=media")
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=300) as r:
+            return r.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Drive: HTTP {e.code} ao baixar")
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Drive: sem conexão — {e.reason}")
+
+
+def _epoch(iso):
+    from datetime import datetime
+    return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+
+
+def diario(aplicar=False, guardar=GUARDAR, meses=MESES, token=None, caminho=None):
+    """Envia a cópia local mais recente, cifrada. Se não houver nenhuma, faz uma antes: backup
+    de fora que depende de o local ter rodado é backup que falha em silêncio."""
+    from adminai import cifra_backup
     local = caminho
     if not local:
         p = backup_banco.pasta_backups()
@@ -164,23 +188,60 @@ def semanal(aplicar=False, guardar=GUARDAR, token=None, caminho=None):
     if not aplicar:
         return plano
 
+    cifra_backup.chave()                    # sem chave, nada sobe (e o erro diz o que fazer)
     tok = token or _token()
     pid = pasta(tok)
     plano["pasta_id"] = pid
     # Confere a cópia ANTES de subir: não adianta guardar longe um arquivo quebrado.
-    backup_banco.verificar(local if not local.endswith(".gz") else _descompactar(local))
-    plano["enviado"] = enviar(tok, local, pid)
+    plano["conferido"] = backup_banco.verificar(local if not local.endswith(".gz") else _descompactar(local))
+    cifrado = cifra_backup.cifrar(local)
+    try:
+        plano["enviado"] = enviar(tok, cifrado, pid)
+    finally:
+        os.remove(cifrado)                  # no disco fica só a cópia local de sempre
+    plano["chave"] = cifra_backup.impressao()
 
     existentes = listar(tok, pid)
-    sobrando = existentes[guardar:]
+    nossos = [f for f in existentes if f["name"].startswith("command-center-")]
+    sai = set(backup_banco.apagar_do_historico([(f["id"], _epoch(f["createdTime"])) for f in nossos],
+                                               guardar=guardar, meses=meses))
+    sai.discard(plano["enviado"].get("id"))
     apagados = []
-    for f in sobrando:                      # só agora: a nova já está lá e conferida
-        apagar(tok, f["id"])
-        apagados.append(f["name"])
+    for f in nossos:                        # só agora: a nova já está lá e conferida
+        if f["id"] in sai:
+            apagar(tok, f["id"])
+            apagados.append(f["name"])
     plano["apagados"] = apagados
     plano["no_drive"] = len(existentes) - len(apagados)
     plano["aplicado"] = True
     return plano
+
+
+semanal = diario                            # o nome de antes (o timer agora roda todo dia)
+
+
+def baixar(nome, token=None):
+    """Traz uma cópia do Drive, decifra e confere: devolve o arquivo local pronto para
+    `backup_banco.py --restaurar`. Nada no banco muda aqui."""
+    from adminai import cifra_backup
+    tok = token or _token()
+    pid = pasta(tok, criar=False)
+    achado = next((f for f in (listar(tok, pid) if pid else []) if f["name"] == nome), None)
+    if not achado:
+        raise RuntimeError(f"não achei {nome} na pasta do Drive (veja --listar)")
+    destino_pasta = backup_banco.pasta_backups()
+    cifrado = os.path.join(destino_pasta, "baixado-" + os.path.basename(nome))
+    with open(cifrado, "wb") as f:
+        f.write(baixar_bytes(tok, achado["id"]))
+    os.chmod(cifrado, 0o600)
+    claro = os.path.join(destino_pasta, "do-drive-" + os.path.basename(nome).removesuffix(cifra_backup.SUFIXO))
+    try:
+        cifra_backup.decifrar(cifrado, claro) if nome.endswith(cifra_backup.SUFIXO) else os.replace(cifrado, claro)
+    finally:
+        if os.path.exists(cifrado):
+            os.remove(cifrado)
+    conferido = backup_banco.verificar(claro if not claro.endswith(".gz") else _descompactar(claro))
+    return {"arquivo": claro, "conferido": conferido}
 
 
 def _descompactar(caminho):
@@ -195,12 +256,25 @@ def _descompactar(caminho):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Backup semanal do banco para o Google Drive")
+    ap = argparse.ArgumentParser(description="Backup diário do banco para o Google Drive, cifrado")
     ap.add_argument("--aplicar", action="store_true")
-    ap.add_argument("--guardar", type=int, default=GUARDAR, help="semanas no Drive (padrão 8)")
+    ap.add_argument("--guardar", type=int, default=GUARDAR, help="dias de cópias diárias no Drive (padrão 30; antes, 1 por mês por 12 meses)")
     ap.add_argument("--listar", action="store_true")
     ap.add_argument("--arquivo", help="enviar esta cópia em vez da mais recente")
+    ap.add_argument("--baixar", metavar="NOME", help="traz esta cópia do Drive, decifra e confere")
     a = ap.parse_args()
+
+    if a.baixar:
+        try:
+            r = baixar(a.baixar)
+        except RuntimeError as e:
+            print(f"!! {e}")
+            return 1
+        print(f"baixada, decifrada e CONFERIDA: {r['conferido']['tabelas']} tabelas, {r['conferido']['clientes']} clientes")
+        print(f"arquivo: {r['arquivo']}")
+        print("Para pôr no lugar do banco (o atual é guardado antes):")
+        print(f"  python3 adminai/backup_banco.py --restaurar {r['arquivo']} --aplicar")
+        return 0
 
     if a.listar:
         tok = _token()
@@ -216,16 +290,22 @@ def main():
         return 0
 
     try:
-        p = semanal(aplicar=a.aplicar, guardar=a.guardar, caminho=a.arquivo)
-    except RuntimeError as e:
+        p = diario(aplicar=a.aplicar, guardar=a.guardar, caminho=a.arquivo)
+    except Exception as e:                          # noqa: BLE001 — o painel precisa saber que falhou
+        if a.aplicar:
+            backup_banco.gravar_estado("drive", False, erro=f"{str(e)[:300]}")
         print(f"!! {e}")
         return 1
+    if p["aplicado"]:
+        backup_banco.gravar_estado("drive", True, arquivo=p["enviado"]["name"], tamanho=int(p["enviado"].get("size") or 0),
+                                   clientes=p["conferido"]["clientes"], chave=p["chave"], no_drive=p["no_drive"])
     print(f'pasta no Drive: "{p["pasta"]}"')
     print(f"arquivo: {p['arquivo']}  ({p['tamanho']/1024/1024:.1f} MB)")
     if p["aplicado"]:
         print(f"ENVIADO e conferido: {p['enviado']['name']}")
         print(f"{p['no_drive']} cópia(s) na pasta"
               + (f"; {len(p['apagados'])} antiga(s) removida(s)" if p["apagados"] else ""))
+        print(f"cifrado com a chave {p['chave']} (CC_BACKUP_CHAVE do adminai.env: guarde uma cópia fora da VPS)")
         print("\nA pasta é privada. Não compartilhe: dentro dela está a base inteira.")
     else:
         if p.get("erro"):
