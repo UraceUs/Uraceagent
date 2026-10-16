@@ -461,11 +461,14 @@ def _coletar(con):
                                   f" — {o['next_what'] or 'retorno'}{(' · ' + o['closer'].split(' ')[0]) if o['closer'] else ''}")
                                  for o in atrasados[:6]]))
 
-    # ---- 8c. vendas (#204): invoice fora da tabela esperando o gerente conferir o valor
+    # ---- 8c. vendas (#204): invoice fora da tabela esperando o gerente conferir o valor. #310: também
+    # o fechamento de antes de 14/10, que só tinha `"pendente": true` no passo do QuickBooks. A invoice
+    # desligada pelo closer não entra: foi escolha dele (o gerente ainda libera, na ficha da venda).
     for o in todos(con, """SELECT id, name, service, amount, closing FROM opportunities
-                            WHERE closing LIKE '%"invoice_pendente": true%' ORDER BY updated_at DESC LIMIT 20"""):
+                            WHERE closing LIKE '%"invoice_pendente": true%' OR closing LIKE '%"pendente": true%'
+                            ORDER BY updated_at DESC LIMIT 20"""):
         f = json.loads(o["closing"] or "{}")
-        if not f.get("invoice_pendente"):
+        if not _vendas._espera_aprovacao(f):
             continue
         itens.append(dict(key=_chave("venda-invoice", "opportunity", o["id"]), level="HIGH",
                           title=f"Invoice da venda de {o['name']} esperando você conferir o valor",

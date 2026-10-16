@@ -10,12 +10,16 @@
      próprio; os dois cards nunca se unem e o serviço de um não cai no do outro.
 7.   Retorno de venda vencido aparece em Precisa de atenção.
 8.   A confirmação do MCP cobre o chat do Kommo (/crm/*).
+#310 (Liberar invoice): nenhuma invoice fica sem saída (a desligada pelo closer fora da tabela e a
+     do fechamento de antes de 14/10 o gerente libera) e nenhuma sai duas vezes (passo, fechar de
+     novo, IA, clique duplo no Liberar). O reenvio pelo passo fica na auditoria.
 
 Nada fala com o QuickBooks de verdade: `chamar` é um falso que anota cada invoice.
 """
 import json
 import os
 import tempfile
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -348,3 +352,197 @@ def test_irmaos_sem_vinculo_continuam_fora_do_card_um_do_outro(cli):
         assert todos(con, "SELECT id FROM clients WHERE sibling_of=?", (a,)) == []
     finally:
         con.close()
+
+
+# ------------------------------------------------------------------ #310: Liberar invoice, sem saída e sem cobrar duas vezes
+def _na_atencao(oid):
+    con = conectar()
+    try:
+        return any(i["key"] == f"venda-invoice:opportunity:{oid}" for i in atencao.coletar(con))
+    finally:
+        con.close()
+
+
+def test_invoice_desligada_no_fechamento_fora_da_tabela_o_gerente_libera(cli, qbo):
+    """O closer fechou fora da tabela com a invoice desligada: o passo respondia "use Liberar
+    invoice", o Liberar respondia "não tem invoice esperando" e a tela não mostrava botão — nem
+    para o gerente."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Sem Saída", email="semsaida@example.com", amount=300)
+    f = fecha(cli, h, oid, passos={**SO_QBO, "qbo": False})
+    assert f["invoice_pendente"] is False and not qbo.invoices
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    assert r.status_code == 409 and "Liberar invoice" in r.json()["detail"], "fora da tabela: o closer não manda"
+    assert not _na_atencao(oid), "desligar a invoice foi escolha do closer: não vira alarme"
+    hg = entra(cli, "ger@urace.us")
+    d = cli.get(f"{B}/sales/{oid}", headers=hg).json()
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
+    assert r.status_code == 200, r.text
+    assert [(l["item_id"], l["unitario"]) for l in qbo.invoices[0]["linhas"]] == [("32", 300.0)]
+    assert d.get("invoice") == "esperando" and d["pode_liberar"], "a tela mostra o Liberar ao gerente"
+    assert cli.get(f"{B}/sales/{oid}", headers=hg).json()["invoice"] == "enviada"
+
+
+def test_fechamento_antigo_esperando_o_dono_tambem_libera_e_aparece_em_atencao(cli, qbo):
+    """Os fechamentos de antes de 14/10 só tinham `pendente` no passo do QuickBooks (sem
+    `invoice_pendente` nem `valor_aprovado`): não apareciam em Precisa de atenção, e nem o
+    Liberar nem o passo os mandavam."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Fechamento Antigo", email="antigo@example.com", amount=300)
+    em = (datetime.now(timezone.utc) - timedelta(days=20)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    antigo = {"em": em, "por": "Carla Vendas", "na_tabela": False, "aprovado": False,
+              "motivo_preco": "valor $300 difere da tabela ($500)",
+              "passos": [{"passo": "qbo", "nome": vendas.PASSO_PT["qbo"], "ok": None,
+                          "detalhe": "invoice esperando aprovação do dono: valor $300 difere da tabela ($500)",
+                          "cliente_qbo": None, "invoice": None, "pendente": True}]}
+    con = conectar()
+    try:
+        con.execute("UPDATE opportunities SET closing=?, stage='GANHO' WHERE id=?", (json.dumps(antigo, ensure_ascii=False), oid))
+        auth.criar_usuario(con, "dona.teste@urace.us", "Dora Dona", "ADMIN", SENHA)
+    finally:
+        con.close()
+    assert _na_atencao(oid), "o gerente fica sabendo da invoice antiga que espera"
+    assert cli.get(f"{B}/sales/{oid}", headers=h).json()["invoice"] == "esperando"
+    assert cli.post(f"{B}/sales/{oid}/step/qbo", headers=h).status_code == 409
+    assert cli.post(f"{B}/sales/{oid}/deposit", headers=h).status_code in (400, 409) and not qbo.invoices
+    hd = entra(cli, "dona.teste@urace.us")
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hd, json={"valor": 300})
+    assert r.status_code == 200, r.text
+    assert r.json()["fechamento"]["liberada"]["por"] == "Dora Dona" and len(qbo.invoices) == 1
+    assert not _na_atencao(oid), "liberada, sai de Precisa de atenção"
+
+
+def test_step_qbo_nao_manda_segunda_invoice_quando_ja_saiu(cli, qbo):
+    """`step/qbo` não conferia se a invoice já tinha saído: a venda na tabela, já faturada, ganhava
+    a segunda invoice. Só a tela protegia (o botão aparece só em falha); a API e o MCP, não."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Duas Vezes Não", email="duasvezes@example.com", amount=500)
+    fecha(cli, h, oid)
+    assert len(qbo.invoices) == 1
+    for quem in ("closer@urace.us", "ger@urace.us"):
+        r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=entra(cli, quem))
+        assert r.status_code == 409 and "já saiu" in r.json()["detail"] and "#1001" in r.json()["detail"], r.text
+    assert len(qbo.invoices) == 1
+    h = entra(cli, "closer@urace.us")
+    assert cli.get(f"{B}/sales/{oid}", headers=h).json()["invoice"] == "enviada"
+    # a venda que ainda não fechou também não manda a invoice pelo passo: o fechamento cobraria de novo
+    oid2 = cria(cli, h, name="Ainda Aberta", email="aberta@example.com", amount=500)
+    assert cli.post(f"{B}/sales/{oid2}/step/qbo", headers=h).status_code == 409 and len(qbo.invoices) == 1
+
+
+def test_fechar_de_novo_nao_duplica_a_invoice(cli, qbo):
+    """`POST /close` não conferia se a venda já tinha fechado: depois de liberada, fechar de novo
+    voltava a invoice a esperar e o gerente liberava outra (e refazia card, waiver, Asana, Kommo)."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Fecha De Novo", email="denovo@example.com", amount=450)
+    fecha(cli, h, oid)
+    hg = entra(cli, "ger@urace.us")
+    assert cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 450}).status_code == 200
+    h = entra(cli, "closer@urace.us")
+    r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": SO_QBO})
+    assert r.status_code == 409 and "já fechada" in r.json()["detail"], r.text
+    hg = entra(cli, "ger@urace.us")
+    assert cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 450}).status_code == 409
+    assert len(qbo.invoices) == 1
+    # na tabela, a invoice sai no fechamento: fechar de novo também não manda a segunda
+    h = entra(cli, "closer@urace.us")
+    oid2 = cria(cli, h, name="Na Tabela De Novo", email="tabeladenovo@example.com", amount=500)
+    fecha(cli, h, oid2)
+    assert cli.post(f"{B}/sales/{oid2}/close", headers=h, json={"passos": SO_QBO}).status_code == 409
+    assert len(qbo.invoices) == 2
+    # o depósito cobrado sozinho também conta: fechar de novo cobraria outro
+    oid3 = cria(cli, h, name="Depósito De Novo", email="depdenovo@example.com", service="Arrive and Drive", amount=500)
+    fecha(cli, h, oid3, passos={**SO_QBO, "qbo": False})
+    assert cli.post(f"{B}/sales/{oid3}/deposit", headers=h).status_code == 200
+    assert cli.post(f"{B}/sales/{oid3}/close", headers=h, json={"passos": SO_QBO}).status_code == 409
+    assert len(qbo.invoices) == 3
+
+
+def test_reenvio_pelo_step_fica_na_auditoria(cli, qbo, monkeypatch):
+    """Só o Liberar ia para a auditoria; a invoice mandada pelo botão do passo ficava só na linha
+    do tempo da venda."""
+    def fora_do_ar(sistema, ferramenta, **kw):
+        if ferramenta == "qbo_criar_e_enviar_invoice":
+            raise RuntimeError("QuickBooks fora do ar")
+        return qbo(sistema, ferramenta, **kw)
+    monkeypatch.setattr(vendas, "chamar", fora_do_ar)
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Reenvio Auditado", email="reenvio@example.com", amount=500)
+    f = fecha(cli, h, oid)
+    assert [p["ok"] for p in f["passos"] if p["passo"] == "qbo"] == [False] and not qbo.invoices
+    monkeypatch.setattr(vendas, "chamar", qbo)
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    assert r.status_code == 200, r.text
+    con = conectar()
+    try:
+        carla = um(con, "SELECT id FROM users WHERE email='closer@urace.us'")["id"]
+        a = um(con, "SELECT user_id, detail FROM audit_logs WHERE event='sales.invoice.resend' AND entity_id=?", (str(oid),))
+        assert a and a["user_id"] == carla, "quem mandou fica registrado"
+        assert json.loads(a["detail"])["invoice"] == r.json()["resultado"]["invoice"] and json.loads(a["detail"])["valor"] == 500
+    finally:
+        con.close()
+    assert cli.post(f"{B}/sales/{oid}/step/qbo", headers=h).status_code == 409, "e não sai de novo"
+    assert len(qbo.invoices) == 1
+
+
+def test_ia_nao_manda_segunda_invoice(cli, qbo):
+    """`venda_enviar_invoice` não conferia se a invoice já tinha saído, e a que ela mandava não
+    ficava no fechamento: o passo e a própria IA mandavam outra."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="IA Duas Vezes", email="iaduas@example.com", amount=500)
+    oid2 = cria(cli, h, name="IA Desligada", email="iadesligada@example.com", amount=500)
+    oid3 = cria(cli, h, name="IA Antes de Fechar", email="iaantes@example.com", amount=500)
+    con = conectar()
+    try:
+        carla = um(con, "SELECT id FROM users WHERE email='closer@urace.us'")["id"]
+        gina = um(con, "SELECT id FROM users WHERE email='ger@urace.us'")["id"]
+        assert acoes_painel.executar(con, carla, "venda_fechar", {"opp_id": oid})["aplicado"] and len(qbo.invoices) == 1
+        for quem in (carla, gina):
+            r = acoes_painel.executar(con, quem, "venda_enviar_invoice", {"opp_id": oid})
+            assert not r["aplicado"] and "já saiu" in r["motivo"], r
+            r = acoes_painel.executar(con, quem, "venda_fechar", {"opp_id": oid})
+            assert not r["aplicado"] and "já fechada" in r["motivo"], r
+        assert len(qbo.invoices) == 1
+    finally:
+        con.close()
+    # a invoice que a IA manda fica no fechamento: depois dela, nem a IA nem o passo mandam outra
+    fecha(cli, h, oid2, passos={**SO_QBO, "qbo": False})
+    con = conectar()
+    try:
+        assert acoes_painel.executar(con, carla, "venda_enviar_invoice", {"opp_id": oid2})["aplicado"] and len(qbo.invoices) == 2
+        assert not acoes_painel.executar(con, carla, "venda_enviar_invoice", {"opp_id": oid2})["aplicado"]
+    finally:
+        con.close()
+    assert cli.post(f"{B}/sales/{oid2}/step/qbo", headers=h).status_code == 409
+    assert len(qbo.invoices) == 2
+    # antes de fechar, a invoice avulsa faria o fechamento cobrar de novo
+    con = conectar()
+    try:
+        r = acoes_painel.executar(con, carla, "venda_enviar_invoice", {"opp_id": oid3})
+        assert not r["aplicado"] and "não foi fechada" in r["motivo"] and len(qbo.invoices) == 2
+    finally:
+        con.close()
+
+
+def test_dois_cliques_em_liberar_mandam_uma_invoice_so(cli, qbo, monkeypatch):
+    """Dois "Liberar" ao mesmo tempo (duas abas, dois gerentes) chamavam o QuickBooks duas vezes: a
+    tela só desabilita o botão na própria aba. O primeiro marca `liberando` antes de chamar."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Clique Duplo", email="cliqueduplo@example.com", amount=420)
+    fecha(cli, h, oid)
+    hg = entra(cli, "ger@urace.us")
+    segundo = []
+
+    def no_meio(sistema, ferramenta, **kw):
+        if ferramenta == "qbo_criar_e_enviar_invoice" and not segundo:
+            # o segundo clique chega enquanto o QuickBooks ainda responde o primeiro (uma vez só)
+            segundo.append(None)
+            segundo[0] = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 420})
+        return qbo(sistema, ferramenta, **kw)
+    monkeypatch.setattr(vendas, "chamar", no_meio)
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 420})
+    assert r.status_code == 200, r.text
+    assert segundo[0].status_code == 409 and "liberando" in segundo[0].json()["detail"], segundo[0].text
+    assert len(qbo.invoices) == 1
+    f = r.json()["fechamento"]
+    assert "liberando" not in f and f["liberada"]["por"] == "Gina Gerente"
