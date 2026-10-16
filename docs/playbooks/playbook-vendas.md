@@ -601,7 +601,7 @@ e "Included in your plan" ou "Extra session · $689.23"; o resumo diz "3 include
 | Chave | Onde | Quem muda | Efeito |
 |---|---|---|---|
 | **Confirmar sozinho** (`auto_confirm`) | Disponibilidade | Gerente | o pedido já nasce **confirmado**, sem passar pelo Aceitar. Nesse caso o painel **não** gera invoice nem waiver para ele: confira pagamento e waiver por fora. A **sessão extra** do aluno recorrente nunca nasce confirmada: espera a invoice e a waiver (#314) |
-| **Venda automática** (`auto_sell`, #164) | Disponibilidade | **só Administrador** | o pedido não espera o Aceitar: na hora, o card do piloto é garantido, o cliente no QuickBooks é achado ou criado, invoice + depósito + waiver saem, e o cliente recebe e-mail com o que falta e outro quando confirma |
+| **Venda automática** (`auto_sell`, #164) | Disponibilidade | **só Administrador** | o pedido não espera o Aceitar: na hora, o card do piloto é garantido, o cliente no QuickBooks é achado ou criado, invoice + depósito + waiver saem, e o cliente recebe e-mail com o que falta e outro quando confirma. #314: o **cliente novo** paga no Stripe pelo carrinho do site (sem o Stripe, invoice + depósito); o **aluno recorrente** tem a sessão do plano sem custo e a extra numa invoice do QuickBooks, sem depósito |
 
 Na venda automática, o card só é ligado sozinho a um card que existe com **duas provas**: o e-mail
 confirmado da conta é o do card **e** o nome do piloto é o do card. Fora disso nasce card novo
@@ -662,6 +662,20 @@ Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: nã
 Dono, 14/10: *"o sistema de carrinho e checkout ... usando o Stripe"*; *"quando a pessoa selecionar
 o serviço, selecionar a data, já vai com aquele serviço e o preço que está lá"*; *"O depósito de
 segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora precisa de conta no site"*.
+
+**Quem paga no Stripe e quem paga no QuickBooks** (#314, dono 16/10: *"Quando for agendamento direto pelo site
+de cliente novo, que não for do Kart School, ele vai pagar pelo Stripe. Quando for cliente do Kart School … esses
+clientes pagam pelo QuickBooks"*):
+
+| Cliente | Onde marca | Como paga |
+|---|---|---|
+| **Novo** (sem plano), Stripe ligado | site, Reserva (`/portal/reserve`) ou Book a session | **carrinho do site (Stripe)**: o último botão é **Add to cart**, com o piloto já escolhido |
+| **Novo**, Stripe desligado | os mesmos | invoice do QuickBooks (serviço + depósito), como antes |
+| **Aluno recorrente** (Academy / Kart School) | área do cliente (Book sessions; um ou vários dias) | sessão do plano: nada; **extra: invoice do QuickBooks**, sem depósito |
+
+O carrinho **recusa** a sessão de piloto com plano mensal vigente: a linha fica vermelha com "has a monthly
+plan: book this session in your account" e o link **Book it in your account**; o checkout não abre no
+Stripe. A sessão extra nunca vai para o Stripe.
 
 **O que o cliente faz** (site novo, em inglês; o carrinho e as páginas do pedido também em português, #248):
 

@@ -603,9 +603,17 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
     c.get_by_text("per driver").wait_for()
     assert "$719.00" in c.locator(".portal-servicos").inner_text()
-    c.get_by_role("button", name="Request session").click()
-    c.get_by_text("Request sent!").wait_for()
-    c.get_by_role("link", name="My sessions").first.click()
+    # #314 (dono, 16/10): cliente novo no site com o Stripe ligado paga no carrinho — o botão é "Add to cart"
+    assert c.get_by_role("button", name="Request session").count() == 0
+    c.get_by_role("button", name="Add to cart").click()
+    c.wait_for_url(re.compile(r"/cart/"))
+    c.locator(".carrinho-linha").first.wait_for()
+    # o Aceitar da equipe é o caminho da invoice (Stripe desligado, ou pedido que a equipe recebe): entra pela API
+    csrf_c = {"X-CSRF": next(x["value"] for x in c.context.cookies() if x["name"] == "cp_csrf")}
+    pid = c.request.get(servidor + "/api/portal/me").json()["drivers"][0]["id"]
+    assert c.request.post(servidor + "/api/portal/bookings", headers=csrf_c,
+                          data={"date": sab.isoformat(), "period": "manha", "service_id": do_4t[0]["id"], "driver_id": pid}).ok
+    c.goto(servidor + "/portal/sessions")
     c.get_by_text("Waiting for confirmation").wait_for()
     # 3. equipe vê em "Precisa de atenção" e confirma na agenda
     abrir(g, servidor, "/attention")
@@ -700,6 +708,12 @@ def test_aluno_recorrente_marca_toda_quarta_num_pedido_so_no_celular(servidor, n
             abrir(g, servidor, "/site/agendamentos")
             g.get_by_text(re.compile("pedido de vários dias #")).first.wait_for()
             g.get_by_text(re.compile(r"extra \$689\.23")).first.wait_for()
+        else:
+            # #314: o aluno recorrente não vê o carrinho (Stripe) na reserva do site: ele marca pelo plano
+            c.goto(servidor + "/portal/reserve")
+            c.get_by_role("heading", name="Book your session", level=1).wait_for()
+            c.get_by_text("Academy student: sessions in your monthly plan are included").wait_for()
+            assert c.get_by_role("button", name="Add to cart").count() == 0
         assert not c.erros_js, c.erros_js
         c.close()
     finally:
@@ -1759,7 +1773,7 @@ def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(
 
 def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(servidor, navegador):
     """O visitante escolhe no site; entra na conta; a agenda da área do cliente abre com o kart,
-    o dia e o turno escolhidos, e o pedido vai para a equipe como qualquer outro.
+    o dia e o turno escolhidos, e o cliente novo paga no carrinho do site (#314: Stripe ligado).
 
     #262: o site público já não oferece o "Continue to booking" — o caminho dele é o carrinho. A
     reserva da área do cliente (#164) continua existindo e é a daqui para frente, aberta pelo mesmo
@@ -1814,9 +1828,12 @@ def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(
     assert v.get_by_role("radio", name=re.compile("Sami Site")).is_checked(), "um piloto só: já vem escolhido"
     assert v.locator("textarea").input_value() == "Kart: 2-stroke"
     v.get_by_label("I agree to the").check()
-    v.get_by_role("button", name="Request this session").click()
-    v.wait_for_url(re.compile(r"/ops/portal/sessions/\d+$"))
-    v.get_by_text("Request received").wait_for()            # venda automática desligada: a equipe aceita
+    # #314 (dono, 16/10): cliente novo, Stripe ligado — paga no carrinho do site, com o piloto já escolhido
+    assert v.get_by_role("button", name="Request this session").count() == 0
+    v.get_by_role("button", name=re.compile(r"^Add to cart · \$")).click()
+    v.wait_for_url(re.compile(r"/cart/"))
+    v.locator(".carrinho-linha").first.wait_for()
+    assert "2-stroke" in v.locator(".carrinho-linhas").inner_text()
     v.close()
     assert not erros, erros
 
@@ -1890,12 +1907,13 @@ def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pag
         r = v.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         v.get_by_label("I agree to the").check()
-        v.get_by_role("button", name=re.compile("^Book and pay")).click()
-        v.wait_for_url(re.compile(r"/ops/portal/sessions/\d+$"))
-        v.get_by_role("heading", name="Almost there", level=1).wait_for()
-        v.get_by_text("Spot reserved").wait_for()
-        assert v.get_by_text(re.compile("Pay the invoice|Paid")).count() >= 1
-        assert v.get_by_text("Sign the waiver").count() == 1
+        # #314 (dono, 16/10): "cliente novo, que não for do Kart School, ele vai pagar pelo Stripe" — com o Stripe
+        # ligado, o pagamento é o do carrinho (sem ele, a invoice do QuickBooks continua: test_venda_site)
+        assert v.get_by_role("button", name=re.compile("^Book and pay")).count() == 0
+        v.get_by_role("button", name=re.compile(r"^Add to cart · \$")).click()
+        v.wait_for_url(re.compile(r"/cart/"))
+        v.locator(".carrinho-linha").first.wait_for()
+        assert "4-stroke" in v.locator(".carrinho-linhas").inner_text()
         r = v.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         assert not erros, erros

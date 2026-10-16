@@ -388,7 +388,7 @@ def editar_piloto(pid: int, dados: PilotoIn, request: Request, cid=Depends(clien
 
 # ------------------------------------------------------------------ agenda (#41)
 @r.get("/availability")
-def disponibilidade(start: str | None = None, end: str | None = None, cid=Depends(cliente_atual),
+def disponibilidade(request: Request, start: str | None = None, end: str | None = None, cid=Depends(cliente_atual),
                     con: sqlite3.Connection = Depends(get_db)):
     """O que o cliente pode marcar: só aberto/fechado e vagas, sem o motivo interno."""
     try:
@@ -398,7 +398,8 @@ def disponibilidade(start: str | None = None, end: str | None = None, cid=Depend
     for dia in d["dias"]:
         for p in ("manha", "tarde"):
             dia["periods"][p] = {"open": dia["periods"][p]["open"], "spots": dia["periods"][p]["spots"]}
-    return {**d, "services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell"))}
+    return {**d, "services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell")),
+            "cart": carrinho_ligado(request)}
 
 
 @r.get("/bookings")
@@ -457,16 +458,29 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
 
 
 # ------------------------------------------------------------------ vários dias num pedido (#314)
+def carrinho_ligado(request):
+    """#236/#314: neste endereço a sessão pode ir para o carrinho do site (Stripe): é o site novo e o Stripe está ligado."""
+    from command_center.api.vitrine import e_do_site
+    from command_center.providers import stripe_loja
+    return e_do_site(request) and stripe_loja.ligado()
+
+
 @r.get("/plan")
-def meu_plano(response: Response, driver_id: int | None = None, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
-    """Por piloto: é aluno recorrente (plano mensal vigente)? O nome do plano e o preço da extra. O contador do
-    pacote não sai daqui (dono, 01/10: o cliente não vê)."""
+def meu_plano(request: Request, response: Response, driver_id: int | None = None, cid=Depends(cliente_atual),
+              con: sqlite3.Connection = Depends(get_db)):
+    """Por piloto: é aluno recorrente (plano mensal vigente)? O nome do plano, o preço da extra e como paga: o
+    recorrente pelo plano (QuickBooks); o cliente novo no carrinho do site (Stripe) quando ele está ligado, senão
+    pela invoice (dono, 16/10). O contador do pacote não sai daqui (dono, 01/10: o cliente não vê)."""
     from command_center.providers import agenda_lote
     ids = [p["id"] for p in portal.pilotos(con, cid) if driver_id is None or p["id"] == driver_id]
     if driver_id is not None and not ids:
         raise HTTPException(404, "Driver not found.")
+    carrinho = carrinho_ligado(request)
+    pilotos = [agenda_lote.plano_do_piloto(con, cid, i) for i in ids]
+    for p in pilotos:
+        p["payment"] = "plano" if p["recurring"] else ("stripe" if carrinho else "invoice")
     response.headers["Cache-Control"] = "private, no-store"
-    return {"drivers": [agenda_lote.plano_do_piloto(con, cid, i) for i in ids]}
+    return {"drivers": pilotos, "cart": carrinho}
 
 
 class DiaIn(BaseModel):

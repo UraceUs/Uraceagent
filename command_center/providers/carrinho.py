@@ -137,6 +137,14 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
     if not p:
         return {**linha, "piloto": None, "erro": "Choose the driver for this session.", "falta_piloto": True}
     linha["piloto_nome"] = p["name"]
+    # #314 (dono, 16/10): o aluno recorrente da Academy paga pelo QuickBooks — a sessão do plano é incluída e a extra
+    # vai por invoice. O Stripe nunca cobra a sessão dele: ele marca na área do cliente.
+    from command_center.providers import contrato
+    card = um(con, "SELECT client_id FROM portal_pilots WHERE id=?", (pid,))
+    if card and card["client_id"] and contrato.vigente(con, card["client_id"], d[:7]):
+        return {**linha, "recorrente": True,
+                "erro": f"{p['name']} has a monthly plan: book this session in your account (sessions in your plan are "
+                        "included; extra sessions are billed by invoice). Remove it from the cart."}
     from command_center.providers import portal
     # #305 (dono, 16/10): paga antes e completa o piloto depois, "com lembretes pelo email ate completar as
     # informações". O responsável completo continua exigido (o carrinho pede os dados dele); o piloto sem medidas

@@ -227,8 +227,8 @@ function Disponibilidade() {
       <label className="check" style={{ marginTop: 6 }}><input type="checkbox" disabled={!admin || salvandoVenda} checked={!!c.auto_sell} onChange={async e => {
         const ligar = e.target.checked
         setSalvandoVenda(true)
-        try { await api.patch('/site/agenda/config', { auto_sell: ligar }); toast(ligar ? tr("Venda automática ligada: o pedido do site vira invoice + depósito + waiver na hora.") : tr("Venda automática desligada: a equipe aceita cada pedido."), 'ok'); setCfg(null); a.reload() }
-        catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setSalvandoVenda(false) } }} /> {tr("Venda automática")} <span className="small muted">{tr("(ligada: o pedido do site vira invoice do QuickBooks com o depósito e a waiver na hora, sem esperar \"Aceitar\";")} {admin ? tr("só o administrador liga ou desliga") : tr("só o administrador muda")})</span></label>
+        try { await api.patch('/site/agenda/config', { auto_sell: ligar }); toast(ligar ? tr("Venda automática ligada: o pedido do site é cobrado e a waiver sai na hora (cliente novo no Stripe; aluno recorrente: do plano ou extra por invoice).") : tr("Venda automática desligada: a equipe aceita cada pedido."), 'ok'); setCfg(null); a.reload() }
+        catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setSalvandoVenda(false) } }} /> {tr("Venda automática")} <span className="small muted">{tr("(ligada: cobra e manda a waiver na hora, sem esperar \"Aceitar\". Cliente novo paga no Stripe pelo carrinho do site (sem o Stripe, invoice do QuickBooks com o depósito); aluno recorrente da Academy: a sessão do plano sai sem custo e a extra vira invoice do QuickBooks, sem depósito;")} {admin ? tr("só o administrador liga ou desliga") : tr("só o administrador muda")})</span></label>
       {gerente && (regras || cfg) && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvar}>{regras ? tr("Salvar a semana") : tr("Salvar regras")}</button></div>}
     </Section>
 

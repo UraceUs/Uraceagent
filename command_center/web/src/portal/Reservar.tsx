@@ -8,7 +8,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { bloqueioDoPiloto, dataLonga, escolhaDoSite, faixa, PERIODOS } from './Agendar'
-import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Servico, type CheckoutPlano, type Plano } from './api'
+import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Cotacao, type Servico, type CheckoutPlano, type Plano,
+  type PlanoPiloto } from './api'
+import { porNoCarrinhoDoSite } from './carrinhoSite'
 import { Aviso, Campo, Endereco, FormPiloto } from './Portal'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
 
@@ -55,6 +57,14 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const [maisDias, setMaisDias] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
+  // #314 (dono, 16/10): o aluno recorrente (Academy) paga pelo plano/QuickBooks; o cliente novo, no carrinho (Stripe)
+  const [planosDaConta, setPlanosDaConta] = useState<PlanoPiloto[] | null>(null)
+  const [cot, setCot] = useState<{ chave: string; r: Cotacao } | null>(null)
+  useEffect(() => {
+    if (!conta) return
+    papi<{ drivers: PlanoPiloto[] }>('GET', '/plan').then(r => setPlanosDaConta(r.drivers)).catch(() => setPlanosDaConta([]))
+  }, [conta])
+  const planosConta = conta ? planosDaConta : null
 
   useEffect(() => {
     if (!inicial.plano) return
@@ -95,6 +105,19 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const pilotoId = piloto ?? (livres.length === 1 ? livres[0].id : null)     // um piloto só: já vem escolhido
   const p = conta?.drivers.find(x => x.id === pilotoId) || null
   const passo3 = passo2 && !!p && !bloqueioDoPiloto(p) && !(conta?.missing.length)
+  const recorrenteNaConta = !!planosConta?.some(x => x.recurring)
+  const viaPlano = !plano && !!planosConta?.find(x => x.driver_id === pilotoId)?.recurring     // incluída no plano ou extra por invoice
+  const viaCarrinho = !plano && !viaPlano && comCarrinho                                         // cliente novo: Stripe
+  const chaveCot = passo3 && viaPlano && s && dia && turno ? `${s.id}|${dia}|${turno}|${pilotoId}` : null
+  useEffect(() => {
+    if (!chaveCot || !s || !dia || !turno) return
+    let vale = true
+    papi<Cotacao>('POST', '/bookings/quote', { service_id: s.id, driver_id: pilotoId, slots: [{ date: dia, period: turno }] })
+      .then(r => { if (vale) setCot({ chave: chaveCot, r }) }).catch(e => { if (vale) setErro((e as PortalError).message) })
+    return () => { vale = false }
+  }, [chaveCot, s, dia, turno, pilotoId])
+  const cotAtual = cot && cot.chave === chaveCot ? cot.r : null
+  const cotDia = cotAtual?.slots[0] || null
 
   async function reservar() {
     if (!passo3) return
@@ -182,8 +205,10 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
               {deposito > 0 && <div><span>Security deposit <span className="small muted">(refundable)</span></span><span>{usd(deposito)}</span></div>}
               <div className="soma"><span>Total</span><span>{usd(s.price + deposito)}</span></div></div>}
             <div className="row wrap" style={{ gap: 8 }}><button className="btn primary" disabled={!sessaoPronta} onClick={() => setSessaoOk(true)}>Continue</button>
-              {comCarrinho && <button className="btn" disabled={!sessaoPronta} onClick={porNoCarrinho}>Add to cart</button>}</div>
-            {comCarrinho && <p className="small muted" style={{ margin: 0 }}>Add to cart to pay online now with card, Apple Pay or Google Pay, together with anything from the store.</p>}
+              {comCarrinho && !recorrenteNaConta && <button className="btn" disabled={!sessaoPronta} onClick={porNoCarrinho}>Add to cart</button>}</div>
+            {comCarrinho && !recorrenteNaConta && <p className="small muted" style={{ margin: 0 }}>Add to cart to pay online now with card, Apple Pay or Google Pay, together with anything from the store.
+              Academy students: sign in and book in your account (sessions in your plan are included).</p>}
+            {recorrenteNaConta && <p className="small muted" style={{ margin: 0 }}>Academy student: sessions in your monthly plan are included. An extra session is billed by invoice.</p>}
           </>}
       </section></li>}
 
@@ -218,7 +243,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
 
       {/* 4 · revisar e pagar */}
       <li className={estado(false, passo3)}><section className="card" aria-labelledby="r4">
-        <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">4</span><h2 className="h2" id="r4">{autoSell ? 'Review and pay' : 'Review and request'}</h2></div>
+        <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">4</span><h2 className="h2" id="r4">{viaPlano ? 'Review and book' : autoSell || viaCarrinho ? 'Review and pay' : 'Review and request'}</h2></div>
         {plano ? (!passo3 ? <p className="small muted" style={{ margin: 0 }}>{autoSell
           ? 'You get the first month\'s invoice to pay online, and the waiver to sign. The next months are invoiced on the 1st.'
           : 'We confirm your plan and send the invoice and the waiver.'}</p> : <>
@@ -233,9 +258,25 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
           </ul>
           <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the plan policy above</label>
           <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Sending…' : autoSell ? `Join and pay ${usd(plano.price)}` : 'Request this plan'}</button></div>
-        </>) : !passo3 || !s || !dia || !turno || !cfg ? <p className="small muted" style={{ margin: 0 }}>{autoSell
-          ? 'You get the invoice (session + refundable security deposit) to pay online, and the waiver to sign.'
-          : 'We confirm your spot and send the invoice and the waiver.'}</p> : <>
+        </>) : !passo3 || !s || !dia || !turno || !cfg ? <p className="small muted" style={{ margin: 0 }}>{comCarrinho
+          ? 'You pay online in the cart (card, Apple Pay or Google Pay) and sign the waiver. Academy students book in their plan.'
+          : autoSell ? 'You get the invoice (session + refundable security deposit) to pay online, and the waiver to sign.'
+          : 'We confirm your spot and send the invoice and the waiver.'}</p> : viaPlano ? <>
+          {/* #314: aluno recorrente — do plano (incluída) ou extra por invoice, sem depósito; nunca pelo Stripe */}
+          <div className="reserva-total" aria-live="polite">
+            <div><span>{s.name} · {p?.name}</span><span>{cotDia?.ok ? <span className={`chip ${cotDia.coverage === 'extra' ? 'warn' : 'ok'}`}>{cotDia.label}</span>
+              : cotAtual ? '' : <span className="small muted">checking…</span>}</span></div>
+            <div className="small muted"><span>{dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)})</span></div></div>
+          {cotDia && !cotDia.ok && <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">{cotDia.message}</div></div>}
+          <ul className="reserva-politica">
+            <li>Sessions in your monthly plan are included. An extra session (beyond the sessions of the month) is billed by invoice, with no deposit.</li>
+            <li>Your spot is confirmed when the waiver is signed (and the invoice paid, for an extra session).</li>
+            <li>Want several days at once? <Link to="/portal/book">Book them in your account</Link>.</li>
+          </ul>
+          <Campo rotulo="Anything we should know?" dica="optional"><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></Campo>
+          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
+          <div><button className="btn primary" disabled={!aceite || indo || !cotDia?.ok} onClick={reservar}>{indo ? 'Booking…' : 'Book this session'}</button></div>
+        </> : <>
           <div className="reserva-total">
             <div><span>{s.name} · {p?.name}</span><span>{usd(s.price)}</span></div>
             <div className="small muted"><span>{dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)})</span></div>
@@ -248,25 +289,16 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
           </ul>
           <Campo rotulo="Anything we should know?" dica="optional"><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></Campo>
           <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
-          <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Booking…' : autoSell ? `Book and pay ${usd(s.price + deposito)}` : 'Request this session'}</button></div>
+          {viaCarrinho
+            ? <div><button className="btn primary" disabled={!aceite} onClick={porNoCarrinho}>Add to cart · {usd(s.price + deposito)}</button>
+              <p className="small muted" style={{ margin: '6px 0 0' }}>You pay in the cart with card, Apple Pay or Google Pay.</p></div>
+            : <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Booking…' : autoSell ? `Book and pay ${usd(s.price + deposito)}` : 'Request this session'}</button></div>}
         </>}
       </section></li>
     </ol>
   </div>
 }
 
-/** #236: o mesmo formato do carrinho do site (`vitrine/static/carrinho.js`): só as escolhas, o preço é do servidor. */
-const CARRINHO = 'urace.carrinho'
-type ItemCarrinho = { tipo: 'sessao'; servico: number; data: string; turno: Turno; piloto: number | null }
-function porNoCarrinhoDoSite(item: ItemCarrinho) {
-  try {
-    const d = JSON.parse(localStorage.getItem(CARRINHO) || '{}')
-    const itens: ItemCarrinho[] = Array.isArray(d.itens) ? d.itens : []
-    if (!itens.some(x => x.tipo === 'sessao' && x.servico === item.servico && x.data === item.data && x.turno === item.turno && x.piloto === item.piloto))
-      itens.push(item)
-    localStorage.setItem(CARRINHO, JSON.stringify({ v: 1, itens: itens.slice(0, 20) }))
-  } catch { /* navegador sem armazenamento: o carrinho abre vazio e a reserva continua aqui */ }
-}
 
 /** Entrar ou criar a conta sem sair da reserva. */
 function ContaNaReserva({ onConta }: { onConta: (a: Account) => void }) {

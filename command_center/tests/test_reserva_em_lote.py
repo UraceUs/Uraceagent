@@ -84,7 +84,7 @@ def test_cotacao_traz_rotulo_e_preco_do_servidor_e_nao_grava_nada(amb):
     assert "usadas" not in texto and "sessoes_por_mes" not in texto and "used" not in texto, "o contador não vai para o cliente"
     assert not um(amb["con"], "SELECT COUNT(*) AS n FROM bookings")["n"], "cotar não grava"
     r = amb["cli"].get(f"{P}/plan").json()["drivers"][0]
-    assert r == {"driver_id": amb["pid"], "recurring": True, "plan": "Academy 4 stroke", "extra_price": 689.23}
+    assert r == {"driver_id": amb["pid"], "recurring": True, "plan": "Academy 4 stroke", "extra_price": 689.23, "payment": "plano"}
 
 
 def test_pedido_de_varios_dias_entra_inteiro_com_uma_invoice_e_uma_waiver(amb, monkeypatch):

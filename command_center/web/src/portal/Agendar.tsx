@@ -5,6 +5,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { papi, PortalError, rotuloCobertura, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type PlanoPiloto, type Servico } from './api'
+import { porNoCarrinhoDoSite } from './carrinhoSite'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
 
 const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
@@ -171,6 +172,12 @@ export function Agendar({ conta }: { conta: Account }) {
         return <option key={p.id} value={p.id} disabled={!!b}>{p.name}{b ? ` (${b})` : ''}</option> })}</select></label>
     : conta.drivers.length === 1 ? <p className="small muted" style={{ margin: 0 }}>Driver: <b>{conta.drivers[0].name}</b></p> : null
 
+  function paraOCarrinho() {
+    if (!dia || !periodo || !servico || !piloto) return
+    porNoCarrinhoDoSite({ tipo: 'sessao', servico, data: dia, turno: periodo, piloto })
+    window.location.assign('/cart/')
+  }
+
   async function marcar() {
     if (!dia || !periodo || !servico || !piloto) return
     setIndo(true); setErro(null); setOk(null)
@@ -230,8 +237,13 @@ export function Agendar({ conta }: { conta: Account }) {
           {pilotoEscolhido?.measures_status === 'aviso' && <div className="banner warn"><span className="bi">▲</span><div className="grow">
             {pilotoEscolhido.name}'s measurements are {pilotoEscolhido.measures_days} days old. Please <Link to="/portal/drivers">review them</Link> soon.</div></div>}
           <label className="fld"><span>Anything we should know? <i>optional</i></span><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></label>
-          {escolhidoServico && <p className="small" style={{ margin: 0 }}>{escolhidoServico.name} · <b>{usd(escolhidoServico.price)}</b> per driver</p>}
-          <div><button className="btn primary" disabled={!periodo || !servico || !piloto || indo} onClick={marcar}>{indo ? 'Booking…' : 'Request session'}</button></div>
+          {escolhidoServico && <p className="small" style={{ margin: 0 }}>{escolhidoServico.name} · <b>{usd(escolhidoServico.price)}</b> per driver
+            {plano?.payment === 'stripe' && (escolhidoServico.deposit || 0) > 0 ? ` + ${usd(escolhidoServico.deposit || 0)} refundable security deposit` : ''}</p>}
+          {/* #314 (dono, 16/10): o cliente novo paga no Stripe (carrinho do site) quando ele está ligado; sem Stripe, a invoice */}
+          {plano?.payment === 'stripe'
+            ? <div className="stack" style={{ gap: 6 }}><div><button className="btn primary" disabled={!periodo || !servico || !piloto} onClick={paraOCarrinho}>Add to cart</button></div>
+              <p className="small muted" style={{ margin: 0 }}>You pay online in the cart with card, Apple Pay or Google Pay.</p></div>
+            : <div><button className="btn primary" disabled={!periodo || !servico || !piloto || indo} onClick={marcar}>{indo ? 'Booking…' : 'Request session'}</button></div>}
         </div>}
       </div>}
   </div>

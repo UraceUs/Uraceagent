@@ -4013,5 +4013,7 @@
 "vazio = o \"Extra session\" do QuickBooks": "empty = QuickBooks \"Extra session\"",
 "vazio: {0}": "empty: {0}",
 "pedido de vários dias #{0}": "multi-day booking #{0}",
-"Aceita o pedido inteiro: uma invoice com as sessões extras e uma waiver": "Accepts the whole booking: one invoice with the extra sessions and one waiver"
+"Aceita o pedido inteiro: uma invoice com as sessões extras e uma waiver": "Accepts the whole booking: one invoice with the extra sessions and one waiver",
+"Venda automática ligada: o pedido do site é cobrado e a waiver sai na hora (cliente novo no Stripe; aluno recorrente: do plano ou extra por invoice).": "Automatic sale on: the site order is charged and the waiver goes out right away (new client on Stripe; recurring student: in the plan or extra by invoice).",
+"(ligada: cobra e manda a waiver na hora, sem esperar \"Aceitar\". Cliente novo paga no Stripe pelo carrinho do site (sem o Stripe, invoice do QuickBooks com o depósito); aluno recorrente da Academy: a sessão do plano sai sem custo e a extra vira invoice do QuickBooks, sem depósito;": "(on: charges and sends the waiver right away, without waiting for \"Accept\". A new client pays on Stripe through the site cart (without Stripe, a QuickBooks invoice with the deposit); an Academy recurring student: the plan session costs nothing and the extra becomes a QuickBooks invoice, with no deposit;"
 }
