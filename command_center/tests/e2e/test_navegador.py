@@ -2627,7 +2627,7 @@ def test_o_i_do_deposito_abre_no_toque_e_no_mouse(servidor, navegador, largura):
             else:
                 botao.hover()
             texto.wait_for(state="visible")
-            assert "5 days after your session" in texto.inner_text()
+            assert "5 business days after your session" in texto.inner_text()
             assert "Damage above the deposit amount may be charged additionally" in texto.inner_text()
             t = texto.bounding_box()
             assert t["x"] >= 0 and t["x"] + t["width"] <= largura, f"o texto sai da tela: {t}"

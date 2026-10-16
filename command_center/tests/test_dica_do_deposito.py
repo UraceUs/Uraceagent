@@ -16,9 +16,9 @@ STATIC = Path(__file__).resolve().parents[1] / "vitrine" / "static"
 
 def test_o_texto_diz_o_que_o_dono_pediu():
     t = dica.DEPOSITO_INFO
-    assert "5 days after your session" in t and "no damage to the kart" in t
+    assert "5 business days after your session" in t and "no damage to the kart" in t     # #295: dias úteis
     assert "Damage above the deposit amount may be charged additionally" in t
-    assert "5 dias após a sessão" in dica.DEPOSITO_INFO_PT and "cobrados adicionalmente" in dica.DEPOSITO_INFO_PT
+    assert "5 dias úteis após a sessão" in dica.DEPOSITO_INFO_PT and "cobrados adicionalmente" in dica.DEPOSITO_INFO_PT
 
 
 def test_o_carrinho_js_usa_o_mesmo_texto_e_liga_o_toque():
@@ -55,4 +55,8 @@ def test_o_pedido_mostra_o_i_e_o_stripe_e_o_email_dizem_o_mesmo():
     assert paginas_site._pedido_linhas([{**linha, "deposit": 0}], False, "en").count("dica-botao") == 0
     assert dica.DEPOSITO_INFO in carrinho.DEPOSITO_TXT                      # a descrição da linha no Stripe
     for fonte in (Path(carrinho.__file__).read_text(), Path(paginas_site.__file__).read_text()):
-        assert "5 business days" not in fonte and "5 dias úteis" not in fonte, "um prazo só: o do dono"
+        # #295 (dono, 16/10): "business days" — um prazo só, o do contrato, em todo lugar
+        assert not re.search(r"5 days after|5 dias após", fonte), "o prazo do depósito é em dias úteis"
+    from command_center.providers import cobranca_agenda
+    assert "5 business days" in cobranca_agenda.DESCRICAO_DEPOSITO, "a invoice do painel diz o mesmo prazo"
+    assert "5 business days" in carrinho.DEPOSITO_TXT and "5 dias úteis" in dica.DEPOSITO_INFO_PT
