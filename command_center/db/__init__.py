@@ -301,6 +301,12 @@ MIGRACOES = [
     # #263 (dono, 15/10): a chave do kart do site que este serviço vende (`vitrine.conteudo.KARTS`).
     # O site casa serviço e kart por ela, igual e exata — nunca mais por "o nome contém o do kart".
     ("booking_services", "site_kart", "TEXT"),
+    # #297 (dono, 16/10): o cartão do kart no site sai do painel — nome no site, linha de baixo, aviso no
+    # cartão e "o cliente traz o kart" (vazio/NULL = o texto de sempre de `vitrine.conteudo.KARTS`)
+    ("booking_services", "site_title", "TEXT"),
+    ("booking_services", "site_subtitle", "TEXT"),
+    ("booking_services", "site_note", "TEXT"),
+    ("booking_services", "own_kart", "INTEGER"),
     # 05/10 — dono (#87): balcão com leitor. Cada card tem um QR próprio (código opaco, não
     # o id); cada peça pode ter o item dela no QuickBooks, criado quando o código é cadastrado.
     ("clients", "scan_code", "TEXT"),
@@ -496,6 +502,23 @@ def _servicos_dos_karts():
                      AND NOT EXISTS (SELECT 1 FROM booking_services d WHERE LOWER(d.name)=LOWER('{nome}'))"""
 
 
+def _cartoes_dos_karts():
+    """#297: o texto que o cartão de cada kart já mostra no site entra no serviço do painel, para a equipe ver e
+    mudar ali. Só preenche o campo VAZIO (NULL): o que alguém escreveu no painel nunca é sobrescrito."""
+    from command_center.vitrine.conteudo import KARTS, LEAD_AND_FOLLOW as LF
+
+    def q(t):
+        return "NULL" if t is None else "'" + str(t).replace("'", "''") + "'"
+    for k in KARTS:
+        yield f"""UPDATE booking_services SET site_title=COALESCE(site_title, {q(k["nome"])}),
+                         site_subtitle=COALESCE(site_subtitle, {q(k["idade"])}),
+                         site_note=COALESCE(site_note, {q(k.get("aviso"))}),
+                         own_kart=COALESCE(own_kart, {1 if k.get("proprio") else 0})
+                   WHERE LOWER(COALESCE(site_kart,''))=LOWER({q(k["nome"])}) AND COALESCE(kind,'session')='session'"""
+    yield f"""UPDATE booking_services SET description=COALESCE(description, {q(LF["texto"])})
+               WHERE kind='addon' AND LOWER(COALESCE(site_kart,''))=LOWER({q(LF["chave"])})"""
+
+
 # ------------------------------------------------------------ o Lead and Follow do site (#279)
 # Dono, 15/10: "o lead and follow é um add on que pode ser adicionado no dia de treino seja arrive and drive ou
 # no academy … somente o de 769 por dia de treino". Nasce como serviço do painel de tipo 'addon', ligado pela
@@ -599,6 +622,7 @@ POS_MIGRACAO = [
     # #263: os quatro karts do site, por último — depois de tudo o que mexe em booking_services
     *_servicos_dos_karts(),
     *_servico_do_lead_and_follow(),
+    *_cartoes_dos_karts(),
 ]
 
 

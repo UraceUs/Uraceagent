@@ -1724,6 +1724,10 @@ CREATE TABLE IF NOT EXISTS booking_services (
   price        REAL NOT NULL CHECK (price >= 0),
   qbo_item_id  TEXT,                                -- item do QuickBooks que vai na invoice
   site_kart    TEXT,                                -- #263: chave do kart do site (conteudo.KARTS) que este serviço vende
+  site_title   TEXT,                                -- #297: o nome no cartão do site (vazio: o de conteudo.KARTS)
+  site_subtitle TEXT,                               -- #297: a linha de baixo do cartão (ex.: "Ages 7+")
+  site_note    TEXT,                                -- #297: o aviso no cartão (ex.: o do kart próprio)
+  own_kart     INTEGER,                             -- #297: 1 = o cliente traz o kart (NULL: o de conteudo.KARTS)
   active       INTEGER NOT NULL DEFAULT 1,
   sort         INTEGER NOT NULL DEFAULT 0,
   updated_by   INTEGER REFERENCES users(id),

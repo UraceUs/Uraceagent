@@ -287,14 +287,24 @@ def _karts_do_painel(servicos):
     são ambíguos: ninguém escolhe no lugar da pessoa, então esse kart também sai.
     """
     if servicos is None:
-        return [(k, None) for k in C.KARTS]
+        return [(dict(k, titulo=k["nome"], linha=k["idade"]), None) for k in C.KARTS]
     por_chave = {}
     for sv in servicos:
         chave = " ".join(str(sv.get("site_kart") or "").split()).lower()
         if chave:
             por_chave.setdefault(chave, []).append(sv)
-    return [(k, por_chave[k["nome"].lower()][0]) for k in C.KARTS
-            if len(por_chave.get(k["nome"].lower(), ())) == 1]
+    # #297 (dono, 16/10): o cartão é o do painel — nome no site, linha de baixo, aviso, kart próprio — e um
+    # kart novo criado no painel (chave que não está em `KARTS`) também entra, na ordem do painel.
+    ordem = {k["nome"].lower(): i for i, k in enumerate(C.KARTS)}
+    unicos = sorted((lista[0] for lista in por_chave.values() if len(lista) == 1),
+                    key=lambda sv: (ordem.get(sv["site_kart"].strip().lower(), len(ordem)), sv.get("sort") or 0, sv["name"]))
+    pares = []
+    for sv in unicos:
+        base = C.kart_da_chave(sv["site_kart"]) or {"nome": sv["site_kart"], "idade": "", "preco": sv["price"]}
+        pares.append((dict(base, nome=base["nome"], titulo=sv.get("titulo") or base["nome"],
+                           linha=sv.get("linha", base.get("idade", "")), proprio=sv.get("proprio", base.get("proprio")),
+                           aviso=sv.get("aviso") or base.get("aviso")), sv))
+    return pares
 
 
 # #262 (dono, 15/10): *"sim um caminho somente levando para o carrinho; de lá do carrinho para seguir
@@ -324,14 +334,15 @@ def arrive_and_drive(host, servicos=None, lead_follow=None):
     karts = "".join(
         f'<label class="kart{" kart-proprio" if k.get("proprio") else ""}"><input type="radio" name="kart" value="{e(k["nome"])}"'
         f' data-kart="{e(k["nome"])}" data-preco="{preco:g}"{PROPRIO if k.get("proprio") else ""}'
-        f'{" checked" if k["nome"] == marcado else ""}><span class="kart-nome">{e(k["nome"])}</span>'
-        f'<span class="kart-idade">{e(k["idade"])}</span><span class="kart-preco">{usd(preco)}</span>'
+        f' data-titulo="{e(k["titulo"])}"{" checked" if k["nome"] == marcado else ""}><span class="kart-nome">{e(k["titulo"])}</span>'
+        f'<span class="kart-idade">{e(k["linha"])}</span><span class="kart-preco">{usd(preco)}</span>'
         + (f'<span class="kart-aviso">{e(k["aviso"])}</span>' if k.get("aviso") else "") + '</label>'
         for (k, _sv), preco in zip(pares, precos, strict=True))
     # #279: o Lead and Follow só aparece quando o painel vende (preço do painel, #50)
     lf = lead_follow
     caixa_lf = (f'<label class="agenda-lf addon"><input type="checkbox" name="lead_follow" value="1">'
-                f'<span class="addon-txt"><strong>Add Lead and Follow</strong> · {e(C.LEAD_AND_FOLLOW["texto"])}</span>'
+                f'<span class="addon-txt"><strong>Add {e(lf.get("titulo") or "Lead and Follow")}</strong> · '
+                f'{e(lf.get("texto") or C.LEAD_AND_FOLLOW["texto"])}</span>'
                 f'<span class="addon-preco">+{usd(lf["price"])}</span></label>') if lf and pares else \
         '<label class="agenda-lf addon" hidden><input type="checkbox" name="lead_follow" value="1"><span class="addon-txt">' \
         f'<strong>Add Lead and Follow</strong> · {e(C.LEAD_AND_FOLLOW["texto"])}</span><span class="addon-preco"></span></label>'
@@ -349,7 +360,7 @@ def arrive_and_drive(host, servicos=None, lead_follow=None):
         "serviceType": "Kart racing experience", "description": a["descricao"],
         "provider": {"@id": f"https://{host}/#business"}, "areaServed": "Orlando, FL",
         # #263: oferta só do kart que o site vende de verdade, com o preço do painel (#50)
-        "offers": [{"@type": "Offer", "name": k["nome"], "price": f"{preco:.2f}", "priceCurrency": "USD",
+        "offers": [{"@type": "Offer", "name": k["titulo"], "price": f"{preco:.2f}", "priceCurrency": "USD",
                     "availability": "https://schema.org/InStock", "url": f"https://{host}{a['caminho']}"}
                    for (k, _sv), preco in zip(pares, precos, strict=True)],
         # #164/#262: reservar começa nesta página (kart, dia e turno) e termina no carrinho
@@ -368,7 +379,8 @@ def arrive_and_drive(host, servicos=None, lead_follow=None):
         {"@type": "ListItem", "position": 2, "name": "Arrive and Drive", "item": f"https://{host}{a['caminho']}"}]}
     # "From $X per driver" só existe quando há kart à venda; o preço é o do painel (#50)
     desde = f'<span class="hero-preco">From {usd(min(precos))} per driver</span>' if precos else ""
-    resumo = marcado or ""
+    resumo = next((k["titulo"] for k, _sv in pares if k["nome"] == marcado), marcado or "")
+    proprio_marcado = next((bool(k.get("proprio")) for k, _sv in pares if k["nome"] == marcado), False)
     preco_marcado = next((p for (k, _sv), p in zip(pares, precos, strict=True) if k["nome"] == marcado), None)
     sem_venda = "" if pares else " hidden"      # nada à venda: o total e o botão não ficam na tela vazios
     corpo = f"""
@@ -407,7 +419,7 @@ def arrive_and_drive(host, servicos=None, lead_follow=None):
         <a href="{e(C.SITE['whatsapp'])}" rel="noopener">WhatsApp {e(C.SITE['telefone'])}</a>
         <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
       {caixa_lf}
-      <p class="agenda-aviso-kart" role="note"{"" if marcado and C.kart_da_chave(marcado).get("proprio") else " hidden"}>{e(aviso_proprio)}</p>
+      <p class="agenda-aviso-kart" role="note"{"" if proprio_marcado else " hidden"}>{e(aviso_proprio)}</p>
       <div class="agenda-total"{sem_venda}><span class="agenda-resumo">{e(resumo)} · per driver</span><strong class="agenda-preco">{usd(preco_marcado) if preco_marcado is not None else ''}</strong></div>
       <!-- #282: o depósito com o ⓘ (reembolso em 5 dias, sem dano ao kart) -->
       <p class="agenda-deposito small" hidden>+ <span class="agenda-deposito-valor"></span> refundable security deposit {dica.deposito()}</p>

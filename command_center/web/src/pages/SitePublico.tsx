@@ -25,7 +25,8 @@ interface Cfg { morning_start: string; morning_end: string; afternoon_start: str
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
   invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null; site_kart?: string | null
-  kind?: 'session' | 'plan' | 'addon' | null; months?: number | null; sessions_month?: number | null }
+  kind?: 'session' | 'plan' | 'addon' | null; months?: number | null; sessions_month?: number | null
+  site_title?: string | null; site_subtitle?: string | null; site_note?: string | null; own_kart?: number | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
@@ -258,6 +259,12 @@ interface DriverConta { id: number; name: string; birth_date: string | null; cli
  * `test_servico_do_kart.py` tranca os dois lados juntos. */
 // #279: o kart próprio é a 5ª opção (dono, 15/10)
 const KARTS_DO_SITE = ['Baby Kart', '4-stroke', '2-stroke', 'Adult Shifter', 'Own kart']
+// #297 (dono, 16/10): "se a gente quiser adicionar algum outro" — um kart novo é uma chave nova, escrita aqui
+const NOVO_KART = '__novo__'
+function opcoesDeKart(atual: string | null | undefined) {
+  const extra = atual && !KARTS_DO_SITE.includes(atual) && atual !== NOVO_KART ? [atual] : []
+  return [...KARTS_DO_SITE, ...extra]
+}
 
 /* Serviços e preços (#50): o gerente muda o preço aqui, sem código. Quem já marcou fica
  * com o valor do dia; desativar tira da área do cliente sem apagar. */
@@ -266,15 +273,20 @@ function Servicos() {
   const gerente = can('MANAGER')
   const toast = useToast()
   const l = useGet<{ servicos: Servico[]; itens_qbo: ItemQbo[] }>('/site/servicos')
-  const [novo, setNovo] = useState({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '' })
-  type Edicao = Partial<Servico> & { price_txt?: string; qbo_item?: string; deposit_txt?: string; months_txt?: string; sessions_txt?: string }
+  const vazio = { name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '', kart_novo: '', site_title: '', site_subtitle: '' }
+  const [novo, setNovo] = useState(vazio)
+  type Edicao = Partial<Omit<Servico, 'own_kart'>> & { price_txt?: string; qbo_item?: string; deposit_txt?: string; months_txt?: string; sessions_txt?: string
+    kart_novo?: string; own_kart?: boolean }
   const [edit, setEdit] = useState<Record<number, Edicao>>({})
   const itens = l.data?.itens_qbo || []
   async function criar() {
-    try { await api.post('/site/servicos', { ...novo, description: novo.description || null, qbo_item: novo.qbo_item || null,
+    const { kart_novo, ...resto } = novo
+    try { await api.post('/site/servicos', { ...resto, description: novo.description || null, qbo_item: novo.qbo_item || null,
+      site_kart: novo.site_kart === NOVO_KART ? kart_novo : (novo.site_kart || null),
+      site_title: novo.site_title || null, site_subtitle: novo.site_subtitle || null,
       months: novo.kind === 'plan' ? (novo.months || '1') : null, sessions_month: novo.kind === 'plan' ? (novo.sessions_month || null) : null })
       toast(novo.kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : tr("Serviço criado: o cliente já vê."), 'ok')
-      setNovo({ name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '' }); l.reload() }
+      setNovo(vazio); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function salvar(sv: Servico, extra?: Partial<Servico>) {
@@ -285,7 +297,11 @@ function Servicos() {
     if (e.price_txt !== undefined) corpo.price = e.price_txt
     if (e.qbo_item !== undefined) corpo.qbo_item = e.qbo_item || null
     if (e.deposit_txt !== undefined) corpo.deposit = e.deposit_txt || null
-    if (e.site_kart !== undefined) corpo.site_kart = e.site_kart || null       // #263: o kart do site que este serviço vende
+    if (e.site_kart !== undefined) corpo.site_kart = (e.site_kart === NOVO_KART ? e.kart_novo : e.site_kart) || null   // #263; #297: ou um kart novo
+    if (e.site_title !== undefined) corpo.site_title = e.site_title || null       // #297: o cartão no site
+    if (e.site_subtitle !== undefined) corpo.site_subtitle = e.site_subtitle || null
+    if (e.site_note !== undefined) corpo.site_note = e.site_note || null
+    if (e.own_kart !== undefined) corpo.own_kart = e.own_kart
     if (e.kind !== undefined) corpo.kind = e.kind
     if (e.months_txt !== undefined) corpo.months = e.months_txt || null
     if (e.sessions_txt !== undefined) corpo.sessions_month = e.sessions_txt || null
@@ -324,7 +340,22 @@ function Servicos() {
                 <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
                   <select value={e.site_kart ?? sv.site_kart ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { site_kart: x.target.value })}>
                     <option value="">{tr("não é do site")}</option>
-                    {KARTS_DO_SITE.map(k => <option key={k} value={k}>{k}</option>)}</select></label>}
+                    {opcoesDeKart(sv.site_kart).map(k => <option key={k} value={k}>{k}</option>)}
+                    <option value={NOVO_KART}>{tr("Novo kart…")}</option></select></label>}
+              {(e.site_kart ?? sv.site_kart) === NOVO_KART &&
+                <label className="fld"><span>{tr("Nome do kart novo")}</span><input value={e.kart_novo ?? ''} disabled={!gerente} placeholder="Rental 2-stroke Pro"
+                  onChange={x => muda(sv.id, { kart_novo: x.target.value })} /></label>}
+              {/* #297: o cartão que o site mostra — vazio volta ao texto de sempre */}
+              {(e.site_kart ?? sv.site_kart) && <>
+                <label className="fld"><span>{tr("Nome no site")}</span><input value={e.site_title ?? sv.site_title ?? ''} disabled={!gerente}
+                  placeholder={sv.name} onChange={x => muda(sv.id, { site_title: x.target.value })} /></label>
+                {(e.kind ?? sv.kind ?? 'session') === 'session' && <>
+                  <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={e.site_subtitle ?? sv.site_subtitle ?? ''} disabled={!gerente}
+                    onChange={x => muda(sv.id, { site_subtitle: x.target.value })} /></label>
+                  <label className="fld"><span>{tr("Aviso no cartão")} <i>{tr("opcional")}</i></span><input value={e.site_note ?? sv.site_note ?? ''} disabled={!gerente}
+                    onChange={x => muda(sv.id, { site_note: x.target.value })} /></label>
+                  <label className="check" style={{ minHeight: 40 }}><input type="checkbox" checked={e.own_kart ?? !!sv.own_kart} disabled={!gerente}
+                    onChange={x => muda(sv.id, { own_kart: x.target.checked })} /> {tr("O cliente traz o próprio kart")}</label></>}</>}
               {gerente && <div className="row" style={{ gap: 6 }}>
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
                 <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></div>}
@@ -352,10 +383,18 @@ function Servicos() {
           <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
             <select value={novo.site_kart} onChange={x => setNovo({ ...novo, site_kart: x.target.value })}>
               <option value="">{tr("não é do site")}</option>
-              {KARTS_DO_SITE.map(k => <option key={k} value={k}>{k}</option>)}</select></label>}
+              {KARTS_DO_SITE.map(k => <option key={k} value={k}>{k}</option>)}
+              <option value={NOVO_KART}>{tr("Novo kart…")}</option></select></label>}
+        {novo.kind === 'session' && novo.site_kart === NOVO_KART &&
+          <label className="fld"><span>{tr("Nome do kart novo")}</span><input value={novo.kart_novo} placeholder="Rental 2-stroke Pro"
+            onChange={x => setNovo({ ...novo, kart_novo: x.target.value })} /></label>}
+        {novo.kind === 'session' && novo.site_kart && <>
+          <label className="fld"><span>{tr("Nome no site")}</span><input value={novo.site_title} onChange={x => setNovo({ ...novo, site_title: x.target.value })} /></label>
+          <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={novo.site_subtitle}
+            onChange={x => setNovo({ ...novo, site_subtitle: x.target.value })} /></label></>}
         <button className="btn sm primary" disabled={!novo.name || !novo.price} onClick={criar}>{tr("Criar")}</button>
       </div></div>
-      <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice. O \"Kart do site\" é o que liga o serviço ao kart da página do Arrive and Drive: sem ele, aquele kart não aparece no site; desativar o serviço tira aquele kart da página.")}</p>
+      <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Mudar o preço vale para os próximos agendamentos: quem já marcou fica com o valor do dia em que marcou. A lista mostra só os itens Academy e o Daily Using Own Kart do QuickBooks; o que não for item vira o texto da linha da invoice. O \"Kart do site\" é o que liga o serviço ao kart da página do Arrive and Drive: sem ele, aquele kart não aparece no site; desativar o serviço tira aquele kart da página.")} {tr("O nome no site, a linha de baixo e o aviso são o que o cartão do kart mostra; vazio volta ao texto de sempre. \"Novo kart…\" cria um kart a mais na página, com o preço e o depósito deste serviço.")}</p>
     </Section>}
   </div>
 }

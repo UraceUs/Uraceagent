@@ -625,7 +625,15 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    > para comprar, o kart sai da lista. Nenhum serviço ativo: o site e a reserva dizem que a reserva
    > online está fechada e mandam falar com a gente. Dois serviços ativos com o mesmo "Kart do site"
    > é ambíguo — o site não escolhe por ninguém e o kart também sai; deixe **um** serviço por kart.
-   > No dia em que o dono mudar o nome de um kart na página, o "Kart do site" dos serviços muda com ele.
+   > **O cartão do kart no site também é do painel** (#297, dono 16/10: *"alterar o valor, alterar o nome,
+   > alterar as coisas ali pelo Command Center"*). No mesmo serviço: **Nome no site** (o que o cartão mostra),
+   > **Linha de baixo no site** (ex.: *Ages 7+*), **Aviso no cartão** e **O cliente traz o próprio kart**.
+   > Vazio volta ao texto de sempre. O "Kart do site" continua sendo a chave: mudar o nome no site não
+   > desliga nada. **Kart novo:** no seletor "Kart do site", escolha **Novo kart…** e dê um nome curto
+   > (ex.: *Rental 2-stroke Pro*); salvo, ele entra na página do Arrive and Drive com o preço e o depósito
+   > daquele serviço. No Lead and Follow, o **Nome no site** e a **Descrição** são o que a caixa da reserva mostra.
+   > **Teste de checkout de US$ 1:** preço **1** e depósito **0** no serviço do kart; reserve, pague (o Stripe
+   > cobra US$ 1,00 de verdade) e **volte o preço e o depósito logo depois**; o estorno sai pelo Stripe.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
    o total. **Sessão pede a conta do site** (Sign in / Create account, e volta para o carrinho) e o
    **piloto** de cada sessão (um piloto só já vem escolhido). Produto sozinho também pede a conta (#248).

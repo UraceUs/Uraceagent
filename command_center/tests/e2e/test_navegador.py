@@ -2706,3 +2706,37 @@ def test_criar_a_conta_vindo_do_carrinho_vai_ao_carrinho_uma_vez_so(servidor, na
     assert len(idas) == 1, f"o cadastro mandou ao carrinho {len(idas)} vezes: {idas}"
     assert not erros, erros
     ctx.close()
+
+
+def test_o_gerente_muda_o_nome_do_kart_no_painel_e_o_site_mostra(servidor, navegador):
+    """#297 (dono, 16/10): *"os serviços que estão lá em cada página, a gente consiga alterar o valor, alterar o
+    nome, alterar as coisas ali pelo Command Center"*. No celular: Site público › Serviços e preços, o cartão do
+    4-stroke ganha outro nome e outra linha de baixo, e a página do Arrive and Drive mostra na hora."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    csrf = _csrf(g)
+    do_4t = next(x for x in g.request.get(servidor + "/api/site/servicos").json()["servicos"]
+                 if x["site_kart"] == "4-stroke" and x["active"])
+    try:
+        abrir(g, servidor, "/site/servicos")
+        nomes = g.get_by_label("Nome no site")
+        nomes.first.wait_for()
+        i = next(i for i in range(nomes.count()) if nomes.nth(i).input_value() == "4-stroke")
+        cartao = nomes.nth(i).locator("xpath=ancestor::div[contains(@class, 'card-b')][1]")
+        nomes.nth(i).fill("Rental 4T e2e")
+        cartao.get_by_label("Linha de baixo no site").fill("Ages 8+ · e2e")
+        assert cartao.get_by_label("O cliente traz o próprio kart").bounding_box()["height"] >= 16
+        cartao.get_by_role("button", name="Salvar").click()
+        g.get_by_text("Salvo. Vale para os próximos agendamentos.").wait_for()
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v = navegador.new_page(viewport={"width": 390, "height": 844})
+        v.goto(site + "/services/arrive-and-drive/")
+        kart = v.locator('label.kart:has(input[value="4-stroke"])')
+        kart.wait_for()
+        assert "Rental 4T e2e" in kart.inner_text() and "Ages 8+ · e2e" in kart.inner_text()
+        v.close()
+    finally:
+        g.request.patch(servidor + f"/api/site/servicos/{do_4t['id']}", headers=csrf,
+                        data={"site_title": do_4t["site_title"], "site_subtitle": do_4t["site_subtitle"]})
+        g.close()

@@ -47,13 +47,28 @@ def lista(con, ativos=False):
     return [dict(s) for s in todos(con, sql)]
 
 
+def cartao_do_site(s):
+    """#297 (dono, 16/10): *"os serviços que estão lá em cada página, a gente consiga alterar o valor, alterar o
+    nome, alterar as coisas ali pelo Command Center"*. O que o cartão do kart mostra no site sai do serviço do
+    painel; o campo vazio cai no texto de sempre do kart (`conteudo.KARTS`), e um kart novo, que não está lá,
+    cai no nome do serviço."""
+    from command_center.vitrine.conteudo import kart_da_chave
+    k = kart_da_chave(s.get("site_kart")) or {}
+    proprio = s.get("own_kart")
+    return {"titulo": s.get("site_title") or k.get("nome") or s.get("site_kart") or s.get("name"),
+            "linha": s.get("site_subtitle") or k.get("idade") or "",
+            "aviso": s.get("site_note") or k.get("aviso") or "",
+            "proprio": bool(k.get("proprio")) if proprio is None else bool(proprio)}
+
+
 def para_cliente(con):
     """O que a área do cliente mostra para marcar sessão: nome, descrição e preço. Nada do QuickBooks.
 
     `site_kart` (#263) é a chave do kart do site que este serviço vende: é por ela que a página do
-    Arrive and Drive e a reserva acham o serviço do kart escolhido — nunca pelo nome."""
+    Arrive and Drive e a reserva acham o serviço do kart escolhido — nunca pelo nome. #297: com o cartão
+    que o site mostra (nome no site, linha de baixo, aviso, kart próprio), tudo do painel."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
-             "deposit": s["deposit"] or 0, "site_kart": s["site_kart"]}
+             "deposit": s["deposit"] or 0, "site_kart": s["site_kart"], "sort": s["sort"], **cartao_do_site(s)}
             for s in lista(con, True) if (s["kind"] or "session") == "session"]
 
 
@@ -74,7 +89,9 @@ def addon_do_site(con, chave=None):
     if len(achados) != 1:
         return None
     s = achados[0]
-    return {"id": s["id"], "name": s["name"], "price": s["price"], "key": s["site_kart"]}
+    # #297: o nome e o texto da caixa no site também são do painel (vazio: o texto de sempre)
+    return {"id": s["id"], "name": s["name"], "price": s["price"], "key": s["site_kart"],
+            "titulo": s["site_title"] or s["name"], "texto": s["description"] or LEAD_AND_FOLLOW["texto"]}
 
 
 def planos_para_cliente(con):
@@ -128,19 +145,30 @@ def _dados(con, d, parcial):
             raise ErroServico("item do QuickBooks não encontrado (sincronize o QuickBooks e tente de novo)")
         s["qbo_item_id"] = item
     if "site_kart" in d:
-        # #263: a chave do kart do site que este serviço vende. Ou é um kart de `conteudo.KARTS`,
-        # ou é vazio (serviço que não é do site). Nome parecido não vale: a chave é exata.
+        # #263: a chave do kart do site que este serviço vende; vazio = serviço que não é do site. Nome
+        # parecido não vale: a chave é exata. #297 (dono, 16/10: "se a gente quiser adicionar algum outro"):
+        # além dos karts de `conteudo.KARTS`, uma chave nova é um kart novo na página do Arrive and Drive.
         from command_center.vitrine.conteudo import LEAD_AND_FOLLOW, kart_da_chave
         t = " ".join(str(d["site_kart"] or "").split())
         if not t:
             s["site_kart"] = None
         elif t.lower() == LEAD_AND_FOLLOW["chave"].lower():      # #279: o add-on do dia de treino
             s["site_kart"] = LEAD_AND_FOLLOW["chave"]
+        elif kart_da_chave(t):
+            s["site_kart"] = kart_da_chave(t)["nome"]
         else:
-            k = kart_da_chave(t)
-            if not k:
-                raise ErroServico("kart do site inválido: use um dos karts da página do Arrive and Drive")
-            s["site_kart"] = k["nome"]
+            if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 .+\-/]{1,39}", t):
+                raise ErroServico("kart novo: dê um nome curto (2 a 40 letras ou números), como 'Rental 2-stroke Pro'")
+            s["site_kart"] = t
+    # #297: o cartão do kart no site — nome, linha de baixo, aviso e "o cliente traz o kart". Vazio volta ao de sempre.
+    if "site_title" in d:
+        s["site_title"] = _texto(d.get("site_title"), 60)
+    if "site_subtitle" in d:
+        s["site_subtitle"] = _texto(d.get("site_subtitle"), 90)
+    if "site_note" in d:
+        s["site_note"] = _texto(d.get("site_note"), 240)
+    if "own_kart" in d:
+        s["own_kart"] = None if d["own_kart"] is None else (1 if d["own_kart"] else 0)
     if "deposit" in d:
         # #50: depósito por sessão (Arrive and Drive: US$ 400); vazio ou 0 = sem depósito
         s["deposit"] = preco(d["deposit"]) if d["deposit"] not in (None, "", 0, "0") else 0.0

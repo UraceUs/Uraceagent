@@ -168,7 +168,11 @@ class ServicoIn(BaseModel):
     qbo_item_id: str | None = None
     qbo_item: str | None = None             # texto livre: o nome de um item, ou o texto da linha (#61)
     deposit: float | str | None = None      # #50: depósito por sessão; vazio ou 0 = sem depósito
-    site_kart: str | None = None            # #263: o kart do site que este serviço vende (chave de conteudo.KARTS)
+    site_kart: str | None = None            # #263: o kart do site que este serviço vende (chave de conteudo.KARTS); #297: ou um kart novo
+    site_title: str | None = None           # #297: o cartão do kart no site — nome, linha de baixo, aviso, kart próprio
+    site_subtitle: str | None = None
+    site_note: str | None = None
+    own_kart: bool | None = None
     kind: str | None = None                 # #169: session (avulsa) | plan (mensal: price é por mês)
     months: int | str | None = None         # #169: meses do compromisso do plano
     sessions_month: int | str | None = None # #169: sessões por mês que o plano dá (vira o contrato do card)

@@ -100,10 +100,10 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
                 "erro": "This session is no longer offered. Remove it and pick another one."}
     linha = {**base, "nome": s["name"], "detalhe": quando(d, per), "unitario": float(s["price"]),
              "deposito": float(s["deposit"] or 0), "erro": None}
-    from command_center.vitrine.conteudo import kart_da_chave
-    k = kart_da_chave(s["site_kart"]) if s["site_kart"] else None
-    if k and k.get("aviso"):
-        linha["aviso"] = k["aviso"]                       # #279: o kart próprio chega à pista 2 dias antes
+    from command_center.providers.servicos_site import cartao_do_site
+    cartao = cartao_do_site(dict(s)) if s["site_kart"] else {}
+    if cartao.get("aviso"):
+        linha["aviso"] = cartao["aviso"]                  # #279: o kart próprio chega à pista 2 dias antes; #297: do painel
     try:
         dia = date.fromisoformat(d)
     except ValueError:
