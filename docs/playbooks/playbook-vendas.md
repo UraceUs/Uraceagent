@@ -101,7 +101,7 @@ PRONTO          invoice paga + waiver assinada → o serviço acontece
 O cliente também pode marcar sozinho pelo site. Esse caminho é outro (seção 5):
 
 ```
-PEDIDO NO SITE  área do cliente → Site › Agendamentos (/ops/site), "pendente"
+PEDIDO NO SITE  área do cliente → Site › Agendamentos (/ops/site/agendamentos), "pendente"
   ▼
 ACEITAR         invoice (serviço + depósito, se o serviço pede) e waiver saem sozinhas
   ▼

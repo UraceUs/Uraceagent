@@ -28,6 +28,8 @@ from fastapi.testclient import TestClient
 from command_center.api import auth
 from command_center.api.main import app
 from command_center.db import inserir, todos, um
+from command_center.tests.test_carrinho import loja  # noqa: F401
+from command_center.tests.test_pedido_site import EMAIL, _pedido, _webhook, pedido_sessao  # noqa: F401
 from command_center.tests.test_stripe_loja import amb  # noqa: F401
 
 SENHA = "pista-molhada-7"
@@ -134,6 +136,11 @@ def test_ninguem_enche_a_tabela_de_fontes_e_uma_conexao_tem_limite(site, monkeyp
     ps.descarregar()
     fontes = _fontes(con)
     assert len(fontes) == ps.MAX_FONTES_DIA + 1 and fontes["outros"] == 5
+    # com o teto cheio de lixo, as fontes que o painel conhece continuam na linha delas
+    for f in ("google", "direto", "instagram"):
+        ps.anotar("/", f)
+    fontes = _fontes(con)
+    assert fontes["google"] == fontes["direto"] == fontes["instagram"] == 1 and fontes["outros"] == 5
     monkeypatch.setattr(ps, "MAX_POR_IP_HORA", 3)
     for _ in range(6):
         ps.anotar("/about/", None, ip="203.0.113.9")
@@ -159,6 +166,30 @@ def test_a_conta_fica_na_memoria_e_vai_ao_banco_de_uma_vez(site, monkeypatch):
         m.setattr(db, "conectar", ocupado)
         assert ps.descarregar() == 0
     assert _visitas(con)["/academy/"] == 1
+
+
+def test_de_onde_veio_a_venda():
+    f = _ps()._fonte_utm
+    assert f(json.dumps({"utm_source": "Instagram"})) == "instagram"
+    assert f(json.dumps({"gclid": "x"})) == "google ads"
+    assert f(json.dumps({"fbclid": "x"})) == "facebook/instagram", "um clique no Facebook não é por si um anúncio"
+    assert f(json.dumps({"fbclid": "x", "campaign_id": "123"})) == "meta ads"
+    assert f(None) is None and f("lixo") is None
+
+
+def test_try_again_guarda_a_campanha(pedido_sessao):  # noqa: F811
+    """O pagamento não passou e a pessoa toca em "Try again": o pedido novo continua com a campanha do primeiro."""
+    cli, con, st, qbo, tmp, sid, conta, pid, dia, p, s = pedido_sessao
+    con.execute("UPDATE store_orders SET utm=?", (json.dumps({"utm_source": "instagram", "utm_campaign": "outubro"}),))
+    con.commit()
+    s.update(customer_details={"email": EMAIL, "name": "Maya Teste"})
+    _webhook(cli, s, "checkout.session.async_payment_failed", "evt_u1")
+    velho = _pedido(con)
+    from command_center.providers import pedido_site
+    r = cli.post(f"/order/{pedido_site.token(velho)}/retry", data={"csrf": cli.cookies.get("cp_csrf")}, follow_redirects=False)
+    assert r.status_code == 303
+    novo = _pedido(con)
+    assert novo["id"] != velho["id"] and json.loads(novo["utm"]) == {"utm_source": "instagram", "utm_campaign": "outubro"}
 
 
 def test_contar_visita_nunca_derruba_a_pagina(site):
@@ -235,7 +266,8 @@ def test_o_painel_soma_o_que_o_sistema_tem(site, equipe):
     assert d["produtos"] == [{"nome": "Luva Teste", "qtd": 2, "receita": 90.0}], "sem o frete"
     assert d["servicos"] == [{"nome": "Arrive and Drive 4-stroke", "qtd": 1, "receita": 719.0}], "sem o depósito que volta"
     s = d["sessoes"]
-    assert (s["marcadas"], s["canceladas"], s["pelo_site"], s["pela_area"], s["proximas"]) == (2, 1, 2, 1, 2)
+    assert (s["marcadas"], s["canceladas"], s["pelo_site"], s["pela_area"], s["proximas"]) == (2, 1, 2, 0, 2)
+    assert s["pelo_site"] + s["pela_area"] == s["marcadas"], "a divisão soma o total (o cancelado fica só em cancelados)"
     assert d["contas"]["novas"] == 1 and d["contas"]["sem_vinculo"] == 1
     assert (d["leads"]["novos"], d["leads"]["ganhos"]) == (2, 2), "só o que veio do site"
     # os 2 pedidos pagos sem campanha, o agendamento cancelado e o plano sem utm; o agendamento e a oportunidade do

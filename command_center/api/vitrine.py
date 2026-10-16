@@ -978,7 +978,7 @@ async def pedido_de_novo(token: str, request: Request, con: sqlite3.Connection =
         return restaurar                                # #248: comprar pede a conta (a do pedido); o carrinho pede o login
     try:
         novo, url = carrinho.criar_checkout(con, itens, o["delivery"], conta, _origem(request), host_de(request),
-                                            lang=idioma.de_request(request))
+                                            lang=idioma.de_request(request), utm=o["utm"])   # #306: a campanha continua
     except carrinho.ErroCarrinho:
         return restaurar
     except stripe_loja.ErroStripe as e:

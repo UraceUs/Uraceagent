@@ -87,7 +87,7 @@ export function SitePainel() {
     {l.loading && !p && <Loading />}
     {p && <>
       <p className="small muted" style={{ margin: 0 }}>{tr("De {0} a {1}, no horário da Flórida.", fmtDate(p.periodo.de), fmtDate(p.periodo.ate))}</p>
-      <div className="grid g4k">
+      <div className="grid g4k sp-kpis">
         <Kpi lead label={tr("Recebido pelo site")} value={money(p.vendas.receita)} foot={comparado(p.vendas.receita, p.vendas.receita_ant, p.periodo.dias)} />
         <Kpi label={tr("Pedidos pagos")} value={p.vendas.pedidos_pagos} foot={comparado(p.vendas.pedidos_pagos, p.vendas.pedidos_pagos_ant, p.periodo.dias)} />
         <Kpi label={tr("Conversão do pagamento")} value={foram ? `${(Math.round(1000 * pagaram / foram) / 10).toLocaleString(LOCALE())}%` : tr("sem dado")}
@@ -129,10 +129,11 @@ export function SitePainel() {
           return <li key={f.etapa}>
             <span className="sp-funil-nome">{ETAPA[f.etapa]}</span>
             <span className="sp-rank-barra" aria-hidden="true"><i style={{ transform: `scaleX(${Math.min(1, f.n / base)})` }} /></span>
-            <b className="mono">{n(f.n)}</b>
-            <span className="small muted mono">{i && ant && f.n <= ant ? `${Math.round(100 * f.n / ant)}%` : ''}</span>
+            <b className="mono">{f.etapa === 'carrinho' && !p.visitas.desde ? tr("sem dado") : n(f.n)}</b>
+            <span className="small muted mono">{i && ant && f.n <= ant && p.visitas.desde && !p.visitas.parcial ? `${Math.round(100 * f.n / ant)}%` : ''}</span>
           </li>
         })}</ol>
+        {p.visitas.parcial && <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("As aberturas do carrinho contam desde {0}; antes disso, só os pedidos.", fmtDate(p.visitas.desde))}</p>}
         <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Do carrinho, no período: {0} esperando o banco, {1} não passaram, {2} expiraram sem pagar e {3} ainda no Stripe. \"Abriram o carrinho\" conta cada vez que a página abre.",
           p.pagamento.carrinho.aguardando, p.pagamento.carrinho.falhou, p.pagamento.carrinho.expirado, p.pagamento.carrinho.aberto)}</p>
         <p className="small muted" style={{ margin: '4px 0 0' }}>{tr("Buy now da loja (direto do produto ao Stripe): {0} foram ao pagamento e {1} pagaram.",
@@ -163,7 +164,7 @@ export function SitePainel() {
       <div className="grid g2">
         <Section title={tr("Campanhas das vendas e dos contatos")}>
           <Ranking vazio={tr("Nenhuma venda ou contato com campanha (utm) no período.")} itens={p.campanhas.com_campanha.map(x => ({ rotulo: x.fonte, n: x.n }))} />
-          <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("{0} sem campanha marcada. Vem do utm que o agendamento, o plano ou o contato do site guardou.", p.campanhas.sem_campanha)}</p>
+          <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("{0} sem campanha marcada. Vem do utm que o pedido (carrinho ou Buy now), o agendamento, o plano ou o contato do site guardou; os pedidos de antes desta versão não guardavam a campanha.", p.campanhas.sem_campanha)}</p>
         </Section>
         <Section title={tr("Contas e contatos")}>
           <Strip items={[

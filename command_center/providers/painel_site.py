@@ -44,6 +44,7 @@ CONHECIDAS = (("google", "google."), ("instagram", "instagram.com"), ("facebook"
 APPS = {"com.google.android.gm": "gmail", "com.instagram.android": "instagram", "com.facebook.katana": "facebook",
         "com.google.android.googlequicksearchbox": "google", "com.whatsapp": "whatsapp"}
 DA_JORNADA = ("stripe.com",)    # a volta do pagamento não é uma entrada nova
+FIXAS = {n for n, _ in CONHECIDAS} | set(APPS.values()) | {"direto", "outro site", "app", "outros"}
 
 _TRAVA = threading.Lock()
 _VISTAS, _FONTES = Counter(), Counter()                     # (dia, caminho) | (dia, fonte) → n, ainda não gravados
@@ -140,7 +141,9 @@ def descarregar():
                            ON CONFLICT(day, path) DO UPDATE SET n = n + excluded.n""", (dia, caminho, n))
         for (dia, fonte), n in fontes.items():
             ja = um(con, "SELECT 1 AS x FROM site_sources WHERE day=? AND source=?", (dia, fonte))
-            if not ja and um(con, "SELECT COUNT(*) AS n FROM site_sources WHERE day=?", (dia,))["n"] >= MAX_FONTES_DIA:
+            if not ja and fonte not in FIXAS and um(con, f"""SELECT COUNT(*) AS n FROM site_sources WHERE day=?
+                                                            AND source NOT IN ({",".join("?" * len(FIXAS))})""",
+                                                         (dia, *sorted(FIXAS)))["n"] >= MAX_FONTES_DIA:
                 fonte = "outros"
             con.execute("""INSERT INTO site_sources(day, source, n) VALUES(?, ?, ?)
                            ON CONFLICT(day, source) DO UPDATE SET n = n + excluded.n""", (dia, fonte, n))
@@ -207,9 +210,11 @@ def _fonte_utm(utm):
     if d.get("utm_source"):
         return str(d["utm_source"]).strip().lower()[:60]
     if d.get("gclid"):
-        return "google ads"
+        return "google ads"                             # o gclid só vem de anúncio do Google
+    if d.get("campaign_id") or d.get("adset_id"):
+        return "meta ads"                               # o id de campanha e de conjunto vêm do anúncio do Meta
     if d.get("fbclid") or d.get("fbc"):
-        return "meta ads"
+        return "facebook/instagram"                     # um clique no Facebook ou no Instagram (pode ser post orgânico)
     return None
 
 
@@ -283,8 +288,8 @@ def _itens_vendidos(con, ini, fim):
 def _sessoes(con, ini, fim, hoje):
     r = um(con, """SELECT COUNT(*) AS n,
                           SUM(CASE WHEN status IN ('recusada','cancelada') THEN 1 ELSE 0 END) AS canceladas,
-                          SUM(CASE WHEN origin='site' THEN 1 ELSE 0 END) AS pelo_site,
-                          SUM(CASE WHEN origin='portal' THEN 1 ELSE 0 END) AS pela_area
+                          SUM(CASE WHEN origin='site' AND status NOT IN ('recusada','cancelada') THEN 1 ELSE 0 END) AS pelo_site,
+                          SUM(CASE WHEN origin='portal' AND status NOT IN ('recusada','cancelada') THEN 1 ELSE 0 END) AS pela_area
                      FROM bookings WHERE origin IN ('site','portal') AND created_at>=? AND created_at<?""", (ini, fim))
     prox = um(con, """SELECT COUNT(*) AS n FROM bookings WHERE origin IN ('site','portal') AND status IN ('pendente','confirmada')
                        AND date>=?""", (hoje.isoformat(),))
@@ -337,7 +342,9 @@ def _visitas(con, de, ate):
     return {"total": total, "entradas": entradas, "carrinho": carrinho, "paginas": paginas, "fontes": fontes}
 
 
-ESTATICO = re.compile(r"^/(_s|_f|store/img|static|assets)/|\.(css|js|png|jpe?g|webp|svg|ico|txt|xml|webmanifest|map)$")
+ESTATICO = re.compile(r"^/(_s|_f|store/img|static|assets|\.well-known)/|\.(css|js|png|jpe?g|webp|svg|ico|txt|xml|webmanifest|map)$")
+COMPRA = ("/ops/api/vitrine/checkout", "/ops/api/vitrine/carrinho", "/ops/api/stripe/", "/cart/thanks/", "/store/thanks/",
+          "/order/")
 
 
 def _saude():
@@ -349,7 +356,7 @@ def _saude():
     def caminho(x):
         return x["rota"].split(" ", 1)[-1]
     site = [x for x in m["rotas"] if not caminho(x).startswith("/ops") and caminho(x) != "(fora)" and not ESTATICO.search(caminho(x))]
-    compra = [x for x in m["rotas"] if caminho(x).startswith(("/ops/api/vitrine/", "/ops/api/stripe/"))]
+    compra = [x for x in m["rotas"] if caminho(x).startswith(COMPRA)]
 
     def soma(xs):
         return {"n": sum(x["n"] for x in xs), "erros_5xx": sum(x["erros_5xx"] for x in xs),

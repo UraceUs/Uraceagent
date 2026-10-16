@@ -156,7 +156,7 @@ pedem acesso de operador.
 | Comercial | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
 | Comercial | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |
 | Comercial | **Clientes** | `/ops/clients` | um card por pessoa; o card abre em `/ops/clients/<n>` | todos |
-| Site | **Painel do site** | `/ops/site` | as métricas do site público (#306, dono 16/10: *"do site um dashboard com as métricas dele"*): recebido pelo site (loja, carrinho e planos), pedidos pagos, conversão do pagamento, visitas, o caminho do site ao pagamento, os mais vendidos, as páginas mais vistas, de onde as pessoas entraram, as campanhas, as contas novas e a saúde do site. Período de 7, 30 ou 90 dias, comparado com o anterior. Detalhes na seção 6, "Painel do site" | operador+ |
+| Site | **Painel do site** | `/ops/site` | as métricas do site público (#306, dono 16/10: *"do site um dashboard com as métricas dele"*): recebido pelo site (loja, carrinho, planos e as sessões da área do cliente pagas pela invoice), pedidos pagos, conversão do pagamento, visitas, o caminho do site ao pagamento, os mais vendidos, as páginas mais vistas, de onde as pessoas entraram, as campanhas, as contas novas e a saúde do site. Período de 7, 30 ou 90 dias, comparado com o anterior. Detalhes na seção 6, "Painel do site" | operador+ |
 | Site | **Pedidos do site** | `/ops/site/pedidos` | carrinho e loja em todo estado do pagamento, com o link da página do pedido | operador+ |
 | Site | **Agendamentos** | `/ops/site/agendamentos` | os pedidos de sessão do site e da área do cliente: aceitar, confirmar, recusar, cancelar (era `/ops/site` até o #306) | operador+ |
 | Site | **Disponibilidade** | `/ops/site/disponibilidade` | a agenda que abre e fecha: semana, horários, regras e bloqueios | operador+ (mudar: gerente+) |
@@ -425,7 +425,7 @@ ficam em `/ops/site/agendamentos`.
 | **Campanhas das vendas e dos contatos** | o `utm` que cada venda ou contato guardou, uma vez por venda (o agendamento e a oportunidade que um pedido gera não contam de novo) |
 | **Contas e contatos** | as contas novas da área do cliente e as oportunidades com origem Site (ganhas e perdidas) |
 | **Saúde do site** | as páginas servidas, os erros do servidor e a página mais lenta desde o último reinício |
-| a faixa de **atenção** | dos últimos 30 dias, qualquer que seja o período: pagos sem vaga ainda sem agendamento, avisos por e-mail que não saíram (pago, processando, não passou, expirou e planos), agendamentos esperando e contas sem card ligado (a mesma conta de Contas de clientes) |
+| a faixa de **atenção** | qualquer que seja o período: dos últimos 30 dias, os pagos sem vaga ainda sem agendamento e os avisos por e-mail que não saíram (pago, processando, não passou, expirou e planos); e o que está aberto agora: agendamentos esperando e contas sem card ligado (a mesma conta de Contas de clientes) |
 
 Número zerado é zero de verdade; o que ainda não tem dado diz "sem dado" (NO FAKE DATA). As vendas feitas pela equipe
 (invoice do QuickBooks fora do site) estão em Vendas, não aqui.
