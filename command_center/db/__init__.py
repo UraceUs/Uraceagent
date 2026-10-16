@@ -367,6 +367,8 @@ MIGRACOES = [
     ("bookings", "pilot_pending", "INTEGER NOT NULL DEFAULT 0"),   # paga com o piloto incompleto: lembrar até completar
     # 16/10 — dono (#306): o painel do site diz de onde veio cada venda; o pedido do carrinho e do Buy now guarda a campanha
     ("store_orders", "utm", "TEXT"),
+    # 16/10 — dono (#311): a sessão do parts.urace.us nasce de uma sessão do painel; sair do painel derruba as duas
+    ("sessions", "parent_id", "TEXT"),
     # 16/10 — dono (#317): Site › Security deposit. Quanto o pagamento já teve devolvido no Stripe (lido no "Conferir"),
     # e o serviço cujo depósito é obrigatório ("o serviço que eu coloquei no checkout ia permitir … sem o security deposit")
     ("store_orders", "stripe_refunded", "REAL"),
@@ -378,6 +380,7 @@ INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS bookings_pedido ON bookings(store_order_id) WHERE store_order_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS store_orders_refeito ON store_orders(retry_of) WHERE retry_of IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS sessions_pai ON sessions(parent_id) WHERE parent_id IS NOT NULL",
 ]
 
 

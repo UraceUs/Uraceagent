@@ -21,6 +21,8 @@ export function Login() {
   const nav = useNavigate()
   const loc = useLocation() as { state?: { from?: string }; search: string }
   const oauth = destinoOAuth(loc.search)
+  // #311: o passe do botão do balcão não entrou (venceu, já foi usado ou o painel saiu antes)
+  const passeVencido = new URLSearchParams(loc.search).get('passe') === 'vencido'
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [remember, setRemember] = useState(false)
@@ -63,6 +65,7 @@ export function Login() {
           <div className="h1">{tr("Entrar")}</div>
         </div>
         {err && <Banner tone="crit">{err}</Banner>}
+        {!err && passeVencido && <Banner tone="warn">{tr("O acesso automático venceu. Entre com a senha.")}</Banner>}
         <div className="field"><label htmlFor="email">{tr("E-mail")}</label>
           <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={e => setEmail(e.target.value)} required autoFocus aria-invalid={!!err} /></div>
         <div className="field"><label htmlFor="pw">{tr("Senha")}</label>

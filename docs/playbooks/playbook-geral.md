@@ -120,7 +120,7 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | Endereço | Para quê |
 |---|---|
 | `ops.urace.us/ops/` | o painel da equipe |
-| `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." |
+| `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." No painel, **Balcão › "Abrir o balcão do celular"** abre esse endereço já com o seu login (#311): um acesso de uso único, que vale 30 segundos e nunca aparece no endereço. Sair do painel tira você do balcão também |
 | `/ops/portal` | a **área do cliente** (outra porta, outro login). Não é o painel da equipe |
 | `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248): sem conta, o carrinho pede os dados, o piloto (só o nome) e a senha, e a conta nasce no Checkout com o e-mail de boas-vindas (#305). Chave English/Português no topo |
 | `novo.urace.us/services/` | a **página de programas** do site. Desde 15/10 (#254) são sete: Arrive and Drive, URACE Academy, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events. **Kart School** virou a **URACE Academy** e **Professional Coaching** virou o **Arrive and Drive**; os dois endereços antigos redirecionam para quem herdou. O que a equipe vende por cada nome está no [playbook de vendas](playbook-vendas.md) |
@@ -694,6 +694,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "Security deposit obrigatório: informe o valor do depósito…" | o serviço está marcado como depósito obrigatório e o valor ficou vazio ou 0 | ponha o valor (ex.: 400) ou desmarque "obrigatório" em Site › Serviços e preços ou Site › Security deposit |
 | Cartão "Devolução pendente" em Site › Security deposit | a resposta do Stripe não chegou na hora da devolução; o valor fica reservado | toque em **Conferir no Stripe** depois de alguns minutos |
 | "Este endereço é só do balcão." | você está em `parts.urace.us` | para o resto do painel, use `ops.urace.us/ops/` |
+| "O acesso automático venceu. Entre com a senha." | o botão do balcão abriu o `parts.urace.us` mas não entrou: passou de 30 s, o painel saiu antes, a conta foi desativada ou o mesmo acesso foi usado duas vezes (aí a sessão que nasceu dele cai, por segurança) | entre com a senha ali, ou volte ao painel e toque no botão de novo. A auditoria guarda `auth.passe.*` |
 | Cápsula **Espelho** em amarelo/vermelho ou "Espelho antigo" | dados não lidos há tempo | Hoje › **↻ Sincronizar** |
 | Cápsula **Sistemas** com problema | uma integração não respondeu | Integrações › **Verificar agora**; se persistir, avise o administrador |
 | **Backup do banco** em vermelho ou amarelo (Integrações) | vermelho: a cópia do dia na VPS falhou ou faltou; amarelo: só a cópia cifrada do Drive falhou ou faltou (o motivo aparece na linha) | o administrador vê a seção 10.1; "sem permissão de ESCRITA no Drive" pede `python3 adminai/google_auth.py --conta urace` na VPS |
