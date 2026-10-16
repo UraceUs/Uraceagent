@@ -153,7 +153,7 @@ def _servicos_do_site():
     try:
         con = conectar()
         try:
-            return servicos_site.para_cliente(con)
+            return servicos_site.para_cliente(con, cartao=True)      # #297: com o cartão do kart do painel
         finally:
             con.close()
     except Exception:                                   # noqa: BLE001 — banco fora: a página não mente, só não filtra
@@ -174,6 +174,24 @@ def _lead_follow_do_site():
         return None
 
 
+def _do_banco(ler):
+    """#297: lê do banco o que a página mostra; banco fora devolve None e a página cai no texto de sempre."""
+    from command_center.db import conectar
+    try:
+        con = conectar()
+        try:
+            return ler(con)
+        finally:
+            con.close()
+    except Exception:                                   # noqa: BLE001 — banco fora: a página não quebra
+        return None
+
+
+def _cartoes(pagina):
+    from command_center.providers import cartoes_site
+    return _do_banco(lambda con: cartoes_site.da_pagina(con, pagina))
+
+
 def existe(caminho, host="novo.urace.us"):
     return caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None
 
@@ -184,12 +202,24 @@ def pagina(request: Request, caminho: str):
         raise HTTPException(404)
     host = host_de(request)
     q = dict(request.query_params)
+    # #297: o "a partir de" de todas as páginas é o menor preço de kart do painel, ao vivo
+    from command_center.providers import cartoes_site
+    marca = paginas.PRECO_KART.set(_do_banco(cartoes_site.preco_kart))
+    try:
+        return _pagina(request, caminho, host, q)
+    finally:
+        paginas.PRECO_KART.reset(marca)
+
+
+def _pagina(request, caminho, host, q):
     if caminho == C.ARRIVE["caminho"]:                  # #263: o kart que está na página é o que o painel vende
         return _html(paginas.arrive_and_drive(host, servicos=_servicos_do_site(), lead_follow=_lead_follow_do_site()))
-    if caminho == "/academy/":
-        return _html(ps.academy(host, planos=_planos()))
+    if caminho == "/academy/":                          # #297: os cartões do painel (sem plano à venda pelo site)
+        return _html(ps.academy(host, planos=_planos(), cartoes=_cartoes("academy")))
     if caminho == "/pro-team/":                         # #207: o preço da Academy e do Boost é o do painel
-        return _html(ps.pro_team(host, planos=_planos()))
+        return _html(ps.pro_team(host, planos=_planos(), cartoes=_cartoes("pro-team")))
+    if caminho == "/for-beginners/":
+        return _html(ps.beginners(host, cartoes=_cartoes("for-beginners")))
     if caminho == "/cart/":                             # #236: o carrinho (noindex, sem cache: é de cada pessoa)
         from command_center.providers import stripe_loja
         return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado(),

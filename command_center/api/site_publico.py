@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, todos, transacao
-from command_center.providers import agenda_asana, agenda_sessoes as ag, contrato, servicos_site as sv, vinculo_site as vs
+from command_center.providers import agenda_asana, agenda_sessoes as ag, cartoes_site as cs, contrato, servicos_site as sv, vinculo_site as vs
 
 r = APIRouter(prefix="/ops/api/site", tags=["site"])
 
@@ -168,7 +168,11 @@ class ServicoIn(BaseModel):
     qbo_item_id: str | None = None
     qbo_item: str | None = None             # texto livre: o nome de um item, ou o texto da linha (#61)
     deposit: float | str | None = None      # #50: depósito por sessão; vazio ou 0 = sem depósito
-    site_kart: str | None = None            # #263: o kart do site que este serviço vende (chave de conteudo.KARTS)
+    site_kart: str | None = None            # #263: o kart do site que este serviço vende (chave de conteudo.KARTS); #297: ou um kart novo
+    site_title: str | None = None           # #297: o cartão do kart no site — nome, linha de baixo, aviso, kart próprio
+    site_subtitle: str | None = None
+    site_note: str | None = None
+    own_kart: bool | None = None
     kind: str | None = None                 # #169: session (avulsa) | plan (mensal: price é por mês)
     months: int | str | None = None         # #169: meses do compromisso do plano
     sessions_month: int | str | None = None # #169: sessões por mês que o plano dá (vira o contrato do card)
@@ -202,6 +206,55 @@ def mudar_servico(sid: int, dados: ServicoIn, request: Request, con: sqlite3.Con
                 entity_id=sid, detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))
     con.commit()
     return {"servicos": sv.lista(con)}
+
+
+# ------------------------------------------------------------------ cartões das páginas (#297, parte 2)
+@r.get("/cartoes")
+def cartoes(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Os cartões de preço das páginas do site (Academy, Pro Team, For Beginners), na ordem de cada página."""
+    return {"cartoes": cs.lista(con), "paginas": cs.PAGINAS, "preco_kart": cs.preco_kart(con)}
+
+
+class CartaoIn(BaseModel):
+    page: str | None = None
+    grp: str | None = None
+    title: str | None = None
+    subtitle: str | None = None
+    body: str | None = None
+    price: str | None = None                # texto do cartão; {kart}, {academy}, {boost} viram o valor do painel
+    per: str | None = None
+    link: str | None = None
+    button: str | None = None
+    active: bool | None = None
+    sort: int | None = None
+
+
+@r.post("/cartoes", status_code=201)
+def criar_cartao(dados: CartaoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                 u=Depends(auth.exige("MANAGER"))):
+    try:
+        cid = cs.criar(con, u["id"], dados.model_dump(exclude_unset=True))
+    except cs.ErroCartao as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "site.card.create", f"user:{u['id']}", user_id=u["id"], entity_type="site_offer", entity_id=cid,
+            detail=dados.model_dump(exclude_unset=True), ip=auth._ip(request))
+    con.commit()
+    return {"id": cid, "cartoes": cs.lista(con)}
+
+
+@r.patch("/cartoes/{cid}")
+def mudar_cartao(cid: int, dados: CartaoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                 u=Depends(auth.exige("MANAGER"))):
+    """Esconder não apaga: o cartão sai da página e continua no painel para voltar."""
+    try:
+        mud = cs.mudar(con, u["id"], cid, dados.model_dump(exclude_unset=True))
+    except cs.ErroCartao as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    if mud:
+        auditar(con, "site.card.update", f"user:{u['id']}", user_id=u["id"], entity_type="site_offer", entity_id=cid,
+                detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))
+    con.commit()
+    return {"cartoes": cs.lista(con)}
 
 
 # ------------------------------------------------------------------ contas do site (#42)

@@ -1724,6 +1724,32 @@ CREATE TABLE IF NOT EXISTS booking_services (
   price        REAL NOT NULL CHECK (price >= 0),
   qbo_item_id  TEXT,                                -- item do QuickBooks que vai na invoice
   site_kart    TEXT,                                -- #263: chave do kart do site (conteudo.KARTS) que este serviço vende
+  site_title   TEXT,                                -- #297: o nome no cartão do site (vazio: o de conteudo.KARTS)
+  site_subtitle TEXT,                               -- #297: a linha de baixo do cartão (ex.: "Ages 7+")
+  site_note    TEXT,                                -- #297: o aviso no cartão (ex.: o do kart próprio)
+  own_kart     INTEGER,                             -- #297: 1 = o cliente traz o kart (NULL: o de conteudo.KARTS)
+  active       INTEGER NOT NULL DEFAULT 1,
+  sort         INTEGER NOT NULL DEFAULT 0,
+  updated_by   INTEGER REFERENCES users(id),
+  updated_at   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- #297 (dono, 16/10): os cartões de preço das páginas do site (Academy, Pro Team, For Beginners), editados no
+-- painel. `seed_key` marca os cartões que vieram do texto de hoje (entram uma vez); os criados no painel têm NULL.
+-- O preço é o texto que o cartão mostra; {kart}, {academy} e {boost} viram o valor do painel, ao vivo.
+CREATE TABLE IF NOT EXISTS site_offers (
+  id           INTEGER PRIMARY KEY,
+  seed_key     TEXT UNIQUE,
+  page         TEXT NOT NULL,                       -- academy | pro-team | for-beginners
+  grp          TEXT,                                -- o grupo (Academy: "4-stroke and Baby Kart · $689 per session")
+  title        TEXT NOT NULL,
+  subtitle     TEXT,
+  body         TEXT,
+  price        TEXT,
+  per          TEXT,
+  link         TEXT,
+  button       TEXT,
   active       INTEGER NOT NULL DEFAULT 1,
   sort         INTEGER NOT NULL DEFAULT 0,
   updated_by   INTEGER REFERENCES users(id),

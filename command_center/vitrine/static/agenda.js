@@ -63,7 +63,8 @@
   function opcoes() { return [].slice.call(document.querySelectorAll('input[name="kart"]')) }
   function kart() {
     var k = document.querySelector('input[name="kart"]:checked')
-    return k ? { nome: k.value, chave: k.getAttribute('data-kart') || k.value, preco: Number(k.getAttribute('data-preco')),
+    // #297: `nome` é o que o cartão mostra (o "nome no site" do painel); a chave continua a do kart
+    return k ? { nome: k.getAttribute('data-titulo') || k.value, chave: k.getAttribute('data-kart') || k.value, preco: Number(k.getAttribute('data-preco')),
       proprio: k.getAttribute('data-proprio') === '1' } : null
   }
   /** A chave do kart, do jeito que ela é comparada: sem maiúscula e sem espaço à toa. */
