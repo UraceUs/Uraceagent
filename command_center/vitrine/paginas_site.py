@@ -15,7 +15,7 @@ from urllib.parse import quote, urlencode
 from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
-from command_center.vitrine import idioma, medicao
+from command_center.vitrine import dica, idioma, medicao
 from command_center.vitrine.paginas import PORTAL, _lista, _negocio, estatico, layout, usd
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
@@ -1004,8 +1004,8 @@ def carrinho(host, cancelado=False, stripe=True, restaurar=None, lang="en"):
         <dl class="carrinho-total"></dl>
         <p class="carrinho-erro aviso-erro" role="alert" hidden></p>
         <button class="btn btn-cheio carrinho-pagar" type="button" disabled>{T("Checkout", "Pagar")}</button>
-        <p class="small muted">{T("Secure checkout by Stripe: card, Apple Pay or Google Pay. Your URACE account is needed to buy. Prices and spots are checked again when you pay. The security deposit of a session is refundable: returned within 5 business days after the session if there is no incident.",
-                                  "Pagamento seguro pelo Stripe: cartão, Apple Pay ou Google Pay. Para comprar, é preciso a sua conta URACE. Preços e vagas são conferidos de novo na hora de pagar. O depósito de segurança da sessão é reembolsável: volta em até 5 dias úteis depois da sessão, se não houver incidente.")}</p>
+        <p class="small muted">{T("Secure checkout by Stripe: card, Apple Pay or Google Pay. Your URACE account is needed to buy. Prices and spots are checked again when you pay. The security deposit of a session is refundable within 5 days after the session, as long as there is no damage to the kart. Damage above the deposit amount may be charged additionally.",
+                                  "Pagamento seguro pelo Stripe: cartão, Apple Pay ou Google Pay. Para comprar, é preciso a sua conta URACE. Preços e vagas são conferidos de novo na hora de pagar. O depósito de segurança da sessão é reembolsável em até 5 dias após a sessão, desde que não haja nenhum dano ao kart. Danos acima do valor do depósito podem ser cobrados adicionalmente.")}</p>
       </section>
     </div>
     <div class="carrinho-vazio" hidden>
@@ -1065,8 +1065,8 @@ def _pedido_linhas(ls, pago, lang):
     T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
     out = []
     for x in ls:
-        dep = (f'<span class="muted">+ {T("refundable security deposit", "depósito de segurança reembolsável")} {usd(x["deposit"])}</span>'
-               if x["deposit"] else "")
+        dep = (f'<span class="muted">+ {T("refundable security deposit", "depósito de segurança reembolsável")} {usd(x["deposit"])}</span> '
+               f'{dica.deposito(lang)}' if x["deposit"] else "")
         det = ""
         if pago and x["kind"] == "sessao" and x["booking_id"]:
             det = (f'<span class="pedido-passo">{T("Booked. Sign the waiver in your URACE account to confirm it.", "Reservada. Assine a waiver na sua conta URACE para confirmar.")} '
@@ -1139,8 +1139,8 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
             passos.append(T("Each session is confirmed once the driver's waiver is signed in your URACE account.",
                             "Cada sessão é confirmada quando a waiver do piloto estiver assinada na sua conta URACE."))
         if deposito:
-            passos.append(T("The security deposit is returned within 5 business days after the session if there is no incident.",
-                            "O depósito de segurança é devolvido em até 5 dias úteis depois da sessão, se não houver incidente."))
+            passos.append(T("The security deposit: " + dica.DEPOSITO_INFO[0].lower() + dica.DEPOSITO_INFO[1:],
+                            "O depósito de segurança: " + dica.DEPOSITO_INFO_PT[0].lower() + dica.DEPOSITO_INFO_PT[1:]))
         passos.append(T(f"A confirmation is on its way to {para}.", f"A confirmação está a caminho de {para}."))
         corpo_estado = (f'<p class="aviso-ok" role="status">{T("Thank you! Your order is confirmed. Payment received:", "Obrigado! O seu pedido está confirmado. Pagamento recebido:")} '
                         f'<strong>{usd(valor)}</strong>.</p>{itens}{dados}'

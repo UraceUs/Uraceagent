@@ -28,12 +28,13 @@ from datetime import date
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, um
 from command_center.providers import agenda_sessoes as ag
+from command_center.vitrine import dica
 
 MAX_ITENS = 20
 MAX_QTD = 20
 PERIODOS = {"manha": "morning", "tarde": "afternoon", "dia": "full day"}
 EXPIRA_S = 31 * 60          # com sessão no carrinho, o Checkout vale 31 min (o mínimo do Stripe é 30)
-DEPOSITO_TXT = "Refundable security deposit: returned within 5 business days after the session if there is no incident."
+DEPOSITO_TXT = "Refundable security deposit. " + dica.DEPOSITO_INFO   # #282: o mesmo texto do ⓘ do site
 
 
 class ErroCarrinho(ValueError):
@@ -461,7 +462,7 @@ def avisar(con, oid, enviar=None):
                    "\nItens da loja: avisamos quando estiverem prontos para retirar no Orlando Kart Center (10724 Cosmonaut Blvd, "
                    "Box 3, Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
                    "\nItens da loja: confirmamos o valor do frete e mandamos o código de rastreio. O frete é cobrado à parte.\n")
-        deposito = ("\nO depósito de segurança é devolvido em até 5 dias úteis depois da sessão, se não houver incidente.\n"
+        deposito = ("\nDepósito de segurança: " + dica.DEPOSITO_INFO_PT + "\n"
                     if any(x["deposit"] for x in ls) else "")
         assunto = f"Pedido #{o['id']} confirmado — URACE"
         texto = (f"{pedido_site.ola(o, lang)},\n\nObrigado pelo pedido! Recebemos o seu pagamento.\n\n" + "\n".join(cli)
@@ -472,7 +473,7 @@ def avisar(con, oid, enviar=None):
                    "\nStore items: we'll let you know when they're ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
                    "Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
                    "\nStore items: we'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.\n")
-        deposito = ("\nThe security deposit is returned within 5 business days after the session if there is no incident.\n"
+        deposito = ("\nSecurity deposit: " + dica.DEPOSITO_INFO + "\n"
                     if any(x["deposit"] for x in ls) else "")
         assunto = f"Order #{o['id']} confirmed — URACE"
         texto = (f"{pedido_site.ola(o, lang)},\n\nThanks for your order! We received your payment.\n\n" + "\n".join(cli)

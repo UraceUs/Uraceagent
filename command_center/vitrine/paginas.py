@@ -13,7 +13,7 @@ import json
 import os
 from html import escape
 
-from command_center.vitrine import conteudo as C
+from command_center.vitrine import conteudo as C, dica
 from command_center.vitrine import medicao
 
 STATIC = os.path.join(os.path.dirname(__file__), "static")
@@ -409,6 +409,8 @@ def arrive_and_drive(host, servicos=None, lead_follow=None):
       {caixa_lf}
       <p class="agenda-aviso-kart" role="note"{"" if marcado and C.kart_da_chave(marcado).get("proprio") else " hidden"}>{e(aviso_proprio)}</p>
       <div class="agenda-total"{sem_venda}><span class="agenda-resumo">{e(resumo)} · per driver</span><strong class="agenda-preco">{usd(preco_marcado) if preco_marcado is not None else ''}</strong></div>
+      <!-- #282: o depósito com o ⓘ (reembolso em 5 dias, sem dano ao kart) -->
+      <p class="agenda-deposito small" hidden>+ <span class="agenda-deposito-valor"></span> refundable security deposit {dica.deposito()}</p>
       <!-- #262 (dono, 15/10): "um caminho somente levando para o carrinho". Um botão só: ele diz o que
            falta escolher e, com tudo escolhido, põe a sessão no carrinho e leva para lá. -->
       <button type="button" class="btn btn-cheio agenda-carrinho" aria-disabled="true" disabled{sem_venda}>Pick a day to continue</button>
