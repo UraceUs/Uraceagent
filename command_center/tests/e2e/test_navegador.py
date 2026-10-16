@@ -2160,7 +2160,8 @@ def test_como_usar_le_os_guias_navega_entre_eles_e_baixa_o_md_para_a_ia(servidor
 def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, navegador):
     """#204 (dono, 14/10: "precisa confirmar o valor da invoice"): a invoice fora da tabela fica
     esperando; o operador vê o aviso mas não libera, e o gerente libera vendo o valor e o preço
-    da tabela (que vem do catálogo, não do valor da venda)."""
+    da tabela (que vem do catálogo, não do valor da venda). #310: a invoice que o closer desligou
+    no fechamento fora da tabela também tem o Liberar, no aviso e no acompanhamento, no celular."""
     op = entrar(navegador, servidor, "op@urace.us")
     csrf = {"X-CSRF": next(c["value"] for c in op.context.cookies() if c["name"] == "cc_csrf")}
     r = op.request.post(servidor + "/api/sales", headers=csrf,
@@ -2177,6 +2178,14 @@ def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, na
     assert op.get_by_role("button", name="Liberar invoice").count() == 0
     assert op.request.post(servidor + f"/api/sales/{oid}/invoice/liberar", headers=csrf, data={"valor": 420}).status == 403
     assert op.request.post(servidor + f"/api/sales/{oid}/step/qbo", headers=csrf).status == 409
+    # #310: fechada fora da tabela com a invoice desligada pelo closer (antes, ninguém conseguia mandar)
+    r = op.request.post(servidor + "/api/sales", headers=csrf,
+                        data={"name": "Otávio Desligado", "email": "otavio.e2e@example.com", "service": "Urace Daily", "amount": 430})
+    oid2 = r.json()["id"]
+    r = op.request.post(servidor + f"/api/sales/{oid2}/close", headers=csrf, data={
+        "passos": {"cliente": False, "qbo": False, "waiver": False, "asana": False, "kommo": False}})
+    assert r.json()["fechamento"]["invoice_pendente"] is False, r.json()
+    assert op.request.post(servidor + f"/api/sales/{oid2}/step/qbo", headers=csrf).status == 409
     op.close()
 
     g = entrar(navegador, servidor, largura=360, altura=800)          # gerente, no celular
@@ -2194,6 +2203,26 @@ def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, na
     g.get_by_text(re.compile("não conectado")).first.wait_for(timeout=8000)
     d = g.request.get(servidor + f"/api/sales/{oid}").json()
     assert d["oportunidade"]["closing"]["invoice_pendente"] is True and d["pode_liberar"] is True
+
+    # #310: a desligada pelo closer — o aviso e o botão na ficha, e o Liberar na linha do acompanhamento
+    abrir(g, servidor, f"/sales/{oid2}")
+    g.get_by_text("Invoice desligada no fechamento, com valor fora da tabela.").wait_for()
+    assert g.get_by_role("button", name="Liberar invoice", exact=True).first.bounding_box()["height"] >= 40, "alvo de toque"
+    g.get_by_role("button", name="Fechar venda", exact=True).click()
+    acomp = g.locator(".modal", has=g.get_by_role("heading", name="Acompanhamento do fechamento"))
+    acomp.wait_for()
+    linha = acomp.get_by_role("button", name="Liberar invoice", exact=True)
+    assert linha.bounding_box()["height"] >= 40, "alvo de toque"
+    linha.click()
+    modal = g.locator(".modal", has=g.get_by_role("heading", name="Liberar invoice", level=3))
+    modal.wait_for()
+    assert re.search(r"\$\s?430", modal.inner_text()) and re.search(r"\$\s?500", modal.inner_text()), modal.inner_text()
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    modal.get_by_role("button", name=re.compile(r"Liberar invoice de")).click()
+    g.get_by_text(re.compile("não conectado")).first.wait_for(timeout=8000)
+    d = g.request.get(servidor + f"/api/sales/{oid2}").json()
+    assert d["invoice"] == "esperando" and "liberando" not in d["oportunidade"]["closing"], "nada saiu: a marca do clique sai"
     assert not g.erros_js, g.erros_js
     g.close()
 

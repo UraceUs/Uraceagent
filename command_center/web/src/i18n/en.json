@@ -3991,5 +3991,6 @@
 "depósito obrigatório": "deposit required",
 "sem security deposit": "no security deposit",
 "Security deposit": "Security deposit",
-"Devolução pendente": "Refund pending"
+"Devolução pendente": "Refund pending",
+"Invoice desligada no fechamento, com valor fora da tabela.": "Invoice turned off at closing, with an amount off the price list."
 }

@@ -340,10 +340,19 @@ Regras do fechamento:
 `POST /sales/{id}/step/{passo}`, com `passo` = `cliente`, `qbo`, `waiver`, `asana` ou `kommo`.
 É o botão **tentar de novo**.
 
-- **Não cobre duas vezes.** `step/qbo` **cria e envia outra invoice**. Só use quando a linha do
-  QuickBooks estiver como **falhou**. Se estiver "feito", a invoice já saiu.
+- **Não cobre duas vezes.** `step/qbo` **cria e envia uma invoice**. Use quando a linha do
+  QuickBooks estiver como **falhou** (ou desligada, com o valor da tabela). Se a invoice já saiu, o
+  **sistema recusa** (#310): 409 "A invoice #… desta venda já saiu: não cobramos duas vezes". Vale
+  para o botão, a API, o MCP e a IA. Para corrigir uma invoice que já saiu, fale com a gerência.
+- Venda que **ainda não fechou** não manda a invoice pelo passo (409 "Feche a venda antes"): a
+  invoice sai no fechamento, e mandada antes o fechamento cobraria de novo.
 - **Invoice esperando o gerente** não sai por `step/qbo`: a resposta é 409 ("A invoice espera o
   gerente conferir o valor…"). Avise a gerência (seção 4.6.1).
+- **Fechar de novo não cobra de novo** (#310): numa venda em que a invoice ou o depósito já saiu (ou
+  que o gerente está liberando agora), `POST /close` responde 409 "Venda já fechada…". O que faltou
+  sai pelos botões de cada passo.
+- Cada invoice mandada por `step/qbo` fica na auditoria (`sales.invoice.resend`), com quem mandou,
+  o valor e o número da invoice.
 - `step/waiver` reenvia pelo DocuSign; as travas de waiver válida e envelope aberto continuam.
 - Para corrigir o e-mail de uma waiver que já saiu, use o reenvio da waiver
   (`POST /waivers/{id}/resend` com o e-mail novo), não um envio novo.
@@ -356,6 +365,14 @@ A ficha da oportunidade mostra **"Invoice esperando o gerente conferir o valor"*
 venda e o preço da tabela. O item também aparece em **Precisa de atenção** ("Invoice da venda de …
 esperando você conferir o valor").
 
+O Liberar também vale para dois casos que antes ficavam sem saída (#310):
+
+- **Invoice desligada pelo closer**, com o valor fora da tabela (ou sem preço de tabela): a ficha
+  mostra "Invoice desligada no fechamento, com valor fora da tabela". Não entra em Precisa de
+  atenção, porque desligar foi escolha do closer. Se a invoice deve sair, o gerente libera.
+- **Fechamento de antes de 14/10** que esperava aprovação: aparece em Precisa de atenção e se libera
+  igual.
+
 - Quem vende vê o aviso e "Só o gerente ou o dono libera."
 - O gerente (ou o dono) clica **Liberar invoice**: a janela mostra serviço, **valor da venda**,
   **preço da tabela (catálogo)**, a diferença e o depósito. **Liberar invoice de $…** cria e envia a
@@ -363,6 +380,11 @@ esperando você conferir o valor").
 - API: `POST /ops/api/sales/{id}/invoice/liberar` com `{"valor": <o valor da venda>}` (papel
   **Gerente**). Se o valor da venda mudou, a resposta é 409 e nada sai. Fica na auditoria
   (`sales.invoice.release`) com o valor, o preço da tabela e quem liberou.
+- **Uma invoice só.** A que já saiu não sai de novo (409 "já saiu"). Dois cliques ao mesmo tempo
+  (duas abas, dois gerentes) mandam uma invoice: o segundo recebe 409 "… está liberando esta invoice
+  agora". Se o QuickBooks falhar, nada sai e o botão volta a funcionar.
+- No acompanhamento do fechamento, a linha da invoice mostra **Liberar invoice** para o gerente e
+  "espera o gerente" para quem vende.
 
 #### 4.6.2 Cobrar só o depósito
 
@@ -384,7 +406,8 @@ invoice, fechar"). Ditar funciona. O que ela pode fazer e quem aprova:
 | registrar ligação, marcar retorno, anotar, criar tarefa | executa sozinha |
 | enviar waiver | executa sozinha (as travas do DocuSign continuam) |
 | mover etapa, fechar a venda | espera alguém confirmar (o Operador pode) |
-| enviar invoice | espera confirmação, e **só gerente ou administrador** decide; fora da tabela, recusa se quem decide não é gerente |
+| enviar invoice | espera confirmação, e **só gerente ou administrador** decide; fora da tabela, recusa se quem decide não é gerente. Só depois de fechar a venda e uma vez (#310): antes do fechamento, ou com a invoice já enviada, recusa; a que ela manda fica no fechamento |
+| fechar a venda de novo | recusa se a invoice ou o depósito já saiu (#310) |
 
 A política em vigor de cada ação está em **O que a IA pode fazer** (`/ops/ai/capabilities`); o
 administrador muda em Políticas da IA.
@@ -1141,7 +1164,8 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 3. Passo com `ok: null` e "invoice esperando o gerente conferir o valor": não refaça. Avise a
    gerência; ela usa **Liberar invoice** (seção 4.6.1).
 4. Faltou o depósito? **Cobrar só o depósito** (seção 4.6.2).
-5. Nunca chame `close` de novo numa venda que já tem `closing`.
+5. Nunca chame `close` de novo numa venda que já tem `closing`. Se a invoice ou o depósito já saiu, o
+   sistema recusa (409 "Venda já fechada…").
 
 ### R7. Waiver voltou ou foi para o e-mail errado
 
@@ -1187,7 +1211,7 @@ instrução à gerência.
 
 | Regra | Na prática |
 |---|---|
-| **Não cobrar duas vezes** | antes de fechar, olhe `closing`; `step/qbo` só para passo que falhou; agendamento com invoice não gera outra; o depósito sai uma vez por venda (`closing.deposito_cobrado`) |
+| **Não cobrar duas vezes** | antes de fechar, olhe `closing`; `step/qbo` só para passo que falhou; agendamento com invoice não gera outra; o depósito sai uma vez por venda (`closing.deposito_cobrado`). O sistema trava (#310): invoice que já saiu não sai de novo pelo passo, pelo Liberar nem pela IA, e fechar de novo é recusado |
 | **Invoice fora da tabela só com o gerente** | o preço da tabela vem do catálogo; fora dela (ou sem preço), quem libera é o gerente ou o dono, vendo o valor |
 | **Nunca serviço de um cliente no card de outro** | confira o piloto do card antes de vincular; irmão tem card próprio (card de irmão); mover serviço é da gerência |
 | **NO FAKE DATA** | não invente nome, e-mail, idade, data, preço. Faltou, pergunte. Ausência é informação |
@@ -1229,6 +1253,9 @@ instrução à gerência.
 | Passo "não conectado: …" (QuickBooks, DocuSign, Asana, Kommo) | integração fora do ar: veja Integrações; quando voltar, **tentar de novo** só nesse passo |
 | "invoice esperando o gerente conferir o valor: …" | fora da tabela ou sem preço de tabela: avise a gerência (Liberar invoice); não refaça o passo |
 | `step/qbo`: "A invoice espera o gerente conferir o valor…" (409) | mesma coisa: é da gerência |
+| `step/qbo` ou Liberar: "A invoice #… desta venda já saiu: não cobramos duas vezes" (409) | a invoice já está com o cliente: não mande outra; correção é da gerência |
+| `close`: "Venda já fechada e …: fechar de novo cobraria outra vez" (409) | use os botões de cada passo no acompanhamento |
+| Liberar: "… está liberando esta invoice agora" (409) | outra aba ou outro gerente está liberando: espere e recarregue |
 | QuickBooks: "o serviço não tem item no catálogo do QuickBooks: escolha o item na tela de fechar" | escolha o **Item do catálogo** e use **tentar de novo**; se o item não existe, é da gerência |
 | Card: "o card com este contato é do piloto …: marque "É irmão"…" | é irmão: `step/cliente?irmao=true` (ou feche de novo marcando "É irmão"); se não for, vincule ao card certo |
 | Depósito: "não pede depósito no catálogo" | o serviço não tem depósito em Serviços e preços: é da gerência mudar |
