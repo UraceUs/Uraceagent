@@ -193,7 +193,10 @@ def _cartoes(pagina):
 
 
 def existe(caminho, host="novo.urace.us"):
-    return caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None
+    if caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None:
+        return True
+    from command_center.providers import editor_site                 # #300: as páginas novas do editor
+    return caminho in (_do_banco(editor_site.caminhos_novos) or [])
 
 
 class _UmaVez:
@@ -229,15 +232,40 @@ def pagina(request: Request, caminho: str):
     return _com_o_painel(lambda: _pagina(request, caminho, host, q))
 
 
-def _pagina(request, caminho, host, q):
+# #300: as páginas do site que o editor abre (as fixas; a loja e o blog são listas que mudam com a busca)
+EDITAVEIS = tuple(c for c in PAGINAS if c not in ("/store/", "/blog/"))
+
+
+def html_da_pagina(caminho, host):
+    """O HTML da página do código (o que o site mostra sem o editor), ou None quando não é página fixa."""
     if caminho == C.ARRIVE["caminho"]:                  # #263: o kart que está na página é o que o painel vende
-        return _html(paginas.arrive_and_drive(host, servicos=_servicos_do_site(), lead_follow=_lead_follow_do_site()))
+        return paginas.arrive_and_drive(host, servicos=_servicos_do_site(), lead_follow=_lead_follow_do_site())
     if caminho == "/academy/":                          # #297: os cartões do painel (sem plano à venda pelo site)
-        return _html(ps.academy(host, planos=_planos(), cartoes=_cartoes("academy")))
+        return ps.academy(host, planos=_planos(), cartoes=_cartoes("academy"))
     if caminho == "/pro-team/":                         # #207: o preço da Academy e do Boost é o do painel
-        return _html(ps.pro_team(host, planos=_planos(), cartoes=_cartoes("pro-team")))
+        return ps.pro_team(host, planos=_planos(), cartoes=_cartoes("pro-team"))
     if caminho == "/for-beginners/":
-        return _html(ps.beginners(host, cartoes=_cartoes("for-beginners")))
+        return ps.beginners(host, cartoes=_cartoes("for-beginners"))
+    if caminho in PAGINAS and caminho != "/store/":
+        return PAGINAS[caminho](host)
+    return None
+
+
+def _do_editor(caminho, host):
+    """#300: a página que o editor publicou neste endereço (nova, ou a reescrita de uma que já existe)."""
+    from command_center.api import editor_site as api_editor
+    from command_center.providers import editor_site
+    pub = _do_banco(lambda con: editor_site.publicada(con, caminho))
+    return api_editor.desenhar(pub, host) if pub else None
+
+
+def _pagina(request, caminho, host, q):
+    if not (caminho == "/" and (q.get("s") or "").strip()):
+        feita = _do_editor(caminho, host)
+        if feita:
+            return _html(feita)
+    if caminho in (C.ARRIVE["caminho"], "/academy/", "/pro-team/", "/for-beginners/"):
+        return _html(html_da_pagina(caminho, host))
     if caminho == "/cart/":                             # #236: o carrinho (noindex, sem cache: é de cada pessoa)
         from command_center.providers import stripe_loja
         return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado(),
@@ -802,6 +830,18 @@ async def pedido_de_novo(token: str, request: Request, con: sqlite3.Connection =
     return RedirectResponse(url, status_code=303)
 
 
+@r.get("/_f/{nome}", include_in_schema=False)
+def foto_do_editor(nome: str):
+    """#300: a foto que a equipe subiu no editor do site (WebP sem EXIF). Pública; o nome é o hash do arquivo."""
+    from fastapi.responses import FileResponse
+
+    from command_center.providers import editor_site
+    caminho = editor_site.arquivo_da_foto(nome)
+    if not caminho:
+        raise HTTPException(404)
+    return FileResponse(caminho, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 @r.get("/store/img/{nome}", include_in_schema=False)
 def foto_da_loja(nome: str, request: Request):
     """#298: a foto que a equipe subiu no painel (WebP sem EXIF). Pública como as do site (e o painel mostra a
@@ -853,6 +893,8 @@ def robots(request):
 
 def sitemap(request):
     host = host_de(request)
-    urls = "".join(f"  <url><loc>https://{host}{c}</loc></url>\n" for c in _com_o_painel(ps.caminhos))
+    from command_center.providers import editor_site
+    novas = [c for c in (_do_banco(editor_site.caminhos_novos) or []) if c not in PAGINAS]   # #300: as do editor
+    urls = "".join(f"  <url><loc>https://{host}{c}</loc></url>\n" for c in [*_com_o_painel(ps.caminhos), *novas])
     return ('<?xml version="1.0" encoding="UTF-8"?>\n'
             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls + "</urlset>\n")

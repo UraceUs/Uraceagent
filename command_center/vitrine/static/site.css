@@ -535,3 +535,41 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .amo-button-holder { right: max(12px, env(safe-area-inset-right)) !important;
   bottom: max(12px, env(safe-area-inset-bottom)) !important; transition: translate var(--dur) var(--curva) }
 .com-consentimento .amo-button-holder { translate: 0 calc(-1 * var(--consentimento-altura, 0px)) }
+
+/* --------------------------------------------------------------- editor visual (#300)
+ * O que o editor do painel monta: seções de 1 a 3 colunas, título, texto, imagem, botão, lista e espaço.
+ * Só a paleta do site (sem estilo solto na página: a política não deixa, e o contraste fica garantido).
+ * Mobile primeiro: as colunas viram uma só abaixo de 760 px; nada passa da largura da tela. */
+.ed-cinza { background: var(--papel) }
+.ed-secao.faixa { padding-top: 48px; padding-bottom: 48px }
+.ed-secao.ed-esp-p { padding-top: 24px; padding-bottom: 24px }
+.ed-secao.ed-esp-g { padding-top: 80px; padding-bottom: 80px }
+.clara + .ed-secao.clara, .ed-secao.clara + .clara { padding-top: 0 }
+.ed-grade { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start }
+@media (min-width: 760px) {
+  .ed-c2 { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+  .ed-c3 { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+}
+.ed-col { display: grid; gap: 16px; min-width: 0; align-content: start; overflow-wrap: anywhere }
+.ed-al-centro { text-align: center; justify-content: center; justify-items: center }
+.ed-al-centro.hero-acoes { justify-content: center }
+.ed-t.ed-tam-p { font-size: 1.2rem }
+.ed-t.ed-tam-g { font-size: clamp(2.1rem, 7vw, 4rem) }
+h3.ed-t.ed-tam-g { font-size: clamp(1.4rem, 3vw, 1.9rem) }
+.ed-tx.ed-tam-p { font-size: .92rem }
+.ed-tx.ed-tam-g { font-size: 1.18rem }
+.ed-cor-marca { color: var(--vermelho) }
+.escura .ed-cor-marca { color: var(--vermelho-2) }
+.vermelha .ed-cor-marca { color: #fff }
+.ed-cor-suave { color: var(--cinza) }
+.escura .ed-cor-suave, .vermelha .ed-cor-suave { color: var(--cinza-claro) }
+.ed-img { margin: 0; display: grid; gap: 6px }
+.ed-img img { width: 100%; border-radius: var(--raio); object-fit: cover }
+.ed-img-media { max-width: 520px; width: 100% }
+.ed-img-quadrada img { aspect-ratio: 1; }
+.ed-img figcaption { font-size: .88rem; color: var(--cinza) }
+.escura .ed-img figcaption { color: var(--cinza-claro) }
+.ed-lista { padding-left: 20px; display: grid; gap: 6px; margin: 0 }
+.ed-espaco-p { height: 8px }
+.ed-espaco-m { height: 24px }
+.ed-espaco-g { height: 56px }

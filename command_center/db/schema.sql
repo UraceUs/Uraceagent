@@ -1791,6 +1791,38 @@ CREATE TABLE IF NOT EXISTS store_products (
 );
 CREATE INDEX IF NOT EXISTS store_products_vitrine ON store_products(active, sort, id);
 
+-- #300 (dono, 16/10): o editor visual do site, livre tipo Elementor. Cada página do editor tem o rascunho e o que
+-- está publicado (JSON do modelo de `vitrine/editor.py`: seções, colunas e elementos; nunca HTML solto). Página nova
+-- (`base` NULL) ganha o endereço dela; página que já existe no site (`base` = o caminho dela) é servida pelo editor
+-- só depois de publicada, e "Voltar ao original" tira a publicação (o código da página continua igual).
+CREATE TABLE IF NOT EXISTS site_pages (
+  id            INTEGER PRIMARY KEY,
+  path          TEXT NOT NULL UNIQUE,                 -- /summer-camp/ (nova) ou o caminho da página que já existe
+  base          TEXT,                                 -- o caminho da página do site que esta reescreve (NULL: nova)
+  title         TEXT NOT NULL,                        -- o título da aba (SEO)
+  description   TEXT NOT NULL DEFAULT '',             -- a descrição (SEO)
+  draft         TEXT NOT NULL,                        -- o rascunho (json)
+  published     TEXT,                                 -- o publicado (json); NULL = não está no ar
+  pub_title     TEXT,
+  pub_description TEXT,
+  published_at  TEXT,
+  published_by  INTEGER REFERENCES users(id),
+  updated_by    INTEGER REFERENCES users(id),
+  updated_at    TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- Cada publicação vira uma versão: "Voltar a esta versão" traz ela para o rascunho (não apaga nada).
+CREATE TABLE IF NOT EXISTS site_page_versions (
+  id            INTEGER PRIMARY KEY,
+  page_id       INTEGER NOT NULL REFERENCES site_pages(id),
+  content       TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  description   TEXT NOT NULL DEFAULT '',
+  published_by  INTEGER REFERENCES users(id),
+  published_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS site_page_versions_pagina ON site_page_versions(page_id, id);
+
 -- #85: os modelos de waiver que a assinatura nativa usa. O PDF vem do DocuSign como está
 -- (o texto legal não é redigitado); o hash prova qual versão cada cliente assinou.
 CREATE TABLE IF NOT EXISTS waiver_templates (

@@ -41,7 +41,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
-         "/site/produtos", "/site/produtos/235",
+         "/site/produtos", "/site/produtos/235", "/site/editor",
          "/site/waiver", "/site/pedidos", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -2808,4 +2808,49 @@ def test_o_gerente_poe_o_frete_do_produto_e_o_carrinho_cobra(servidor, navegador
         v.close()
     finally:
         g.request.patch(servidor + f"/api/site/produtos/{alvo['id']}", headers=csrf, data={"shipping_fee": ""})
+        g.close()
+
+
+def test_o_gerente_monta_uma_pagina_no_editor_e_publica(servidor, navegador):
+    """#300: Site público › Editor do site, no celular. O gerente cria uma página nova, põe a descrição e uma lista,
+    publica, e o site mostra no endereço dela, sem rolar para o lado. No computador, arrasta um elemento da paleta."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    csrf = _csrf(g)
+    pid = None
+    try:
+        abrir(g, servidor, "/site/editor")
+        g.get_by_label("Título da aba").fill("Summer Kart Camp e2e")
+        g.get_by_label("Endereço").fill("/summer-camp-e2e/")
+        g.get_by_role("button", name="Criar e abrir").click()
+        g.wait_for_url("**/site/editor/*")
+        pid = int(g.url.rstrip("/").rsplit("/", 1)[1])
+        g.get_by_label("Descrição").fill("Five days of kart racing camp in Orlando for drivers 7 and up, with coaches and karts.")
+        g.locator(".ed-mais > summary").first.click()
+        g.locator(".ed-mais[open]").get_by_role("button", name="Lista", exact=True).click()
+        g.get_by_label("Itens (um por linha)").fill("Karts and gear\nPro coaching")
+        g.get_by_text("salvando…").wait_for(state="detached")
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        g.get_by_role("button", name="Publicar", exact=True).click()
+        g.get_by_text("Publicado: o site já mostra.").wait_for()
+        v = navegador.new_page(viewport={"width": 390, "height": 844})
+        v.goto(site + "/summer-camp-e2e/")
+        v.get_by_role("heading", name="Summer Kart Camp e2e", level=1).wait_for()
+        assert v.get_by_text("Pro coaching").count() == 1
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v.close()
+        # no computador: arrastar o Título da paleta para a coluna
+        d = entrar(navegador, servidor, largura=1280, altura=900)
+        abrir(d, servidor, f"/site/editor/{pid}")
+        antes = d.locator(".ed-widget").count()
+        d.locator(".ed-coluna").first.scroll_into_view_if_needed()     # a paleta fica presa no topo enquanto rola
+        d.locator(".ed-paleta", has_text="Título").drag_to(d.locator(".ed-coluna").first)
+        assert d.locator(".ed-widget").count() == antes + 1
+        d.locator('iframe[title="Pré-visualização da página"]').wait_for()
+        d.close()
+    finally:
+        if pid:
+            g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
         g.close()
