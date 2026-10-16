@@ -507,3 +507,7 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 @media (min-width: 720px) { .consentimento { grid-template-columns: minmax(0, 1fr) auto; align-items: center } }
 .link-cookies { background: none; border: 0; padding: 0 0 0 4px; color: inherit; text-decoration: underline; font: inherit;
   cursor: pointer; min-height: 40px }
+
+/* #284: enquanto o banner de cookies está aberto, o balão do chat do Kommo sobe acima dele */
+.amo-button-holder { transition: translate var(--dur) var(--curva) }
+.com-consentimento .amo-button-holder { translate: 0 calc(-1 * var(--consentimento-altura, 0px)) }
