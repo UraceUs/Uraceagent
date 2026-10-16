@@ -42,6 +42,13 @@ def _padrao(termo):
     return _PADROES[termo]
 
 
+# Contraproposta com número: "faz por 2000", "fecha por 1500", "would you do it for 600", "lo haces por 500".
+# Só com o número: "o que o coach faz por ele?" não é negociação.
+_CONTRAPROPOSTA = re.compile(
+    r"(?<![a-z])(faz|faria|fazer|fazem|fecha|fecho|fechar|do it|do that|lo haces|lo hacen|hacen)"
+    r"\s+(por|for)\s+(us\s*)?\$?\s*\d")
+
+
 def contem(texto, termos):
     return any(_padrao(t).search(texto) for t in termos)
 
@@ -123,7 +130,7 @@ def classificar(texto, remetente_email=None):
         "adiar": (not automatico and len(t) <= 80 and "?" not in original
                   and contem(t, regras.PALAVRAS["adiar"]) and not contem(t, regras.PALAVRAS["opt_out"])),
         "sensivel": contem(t, regras.PALAVRAS["sensivel"]),
-        "desconto": contem(t, regras.PALAVRAS["desconto"]),
+        "desconto": contem(t, regras.PALAVRAS["desconto"]) or bool(_CONTRAPROPOSTA.search(t)),
         "insatisfacao": contem(t, regras.PALAVRAS["insatisfacao"]),
         "grupo_grande": bool(pilotos and pilotos > regras.GRUPO_LIMITE_PILOTOS),
         "saudacao_isolada": saudacao,

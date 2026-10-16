@@ -28,17 +28,19 @@ import textproc
 # Heurística deliberadamente simples: o lead escreve poucas palavras e só
 # precisamos escolher entre três conjuntos de frases. Marcadores exclusivos
 # de cada idioma (palavras que praticamente não aparecem no outro) valem
-# mais que palavras compartilhadas -- "para"/"tem" existem em PT e ES e por
-# isso ficam de fora.
+# mais que palavras compartilhadas -- "para", "caro", "barato" e "esta" existem em PT e ES e
+# por isso ficam de fora. Objeção curta ("É caro, faz por 2000 que fecho hoje?") tem de
+# cair em PT: antes saía a oferta de call em inglês (teste do comercial, 16/10).
 _PT_MARKERS = re.compile(
     r"\b(não|nao|você|voce|vocês|voces|vcs|obrigad[oa]|quanto|custa|preço|preco|"
     r"posso|meu|minha|olá|ola|oi|bom dia|boa tarde|boa noite|qual|quero|"
     r"gostaria|criança|crianca|filho|filha|aulas?|corrida|mais|sim|fosse|"
-    r"então|entao|tá|isso)\b", re.IGNORECASE)
+    r"então|entao|tá|isso|desconto|muito|muita|hoje|amanhã|amanha|fecho|fechar|fecha|faz|fazer|faço|"
+    r"agora|tem|pra|pro|também|tambem|ainda|valor|está|estou|gente|vou)\b", re.IGNORECASE)
 _ES_MARKERS = re.compile(
     r"\b(hola|gracias|cuánto|cuanto|cuesta|puedo|quiero|quisiera|ustedes|"
     r"niñ[oa]|nino|hij[oa]|clases?|carrera|buenos días|buenas tardes|"
-    r"precio|dónde|donde|cómo|como está)\b", re.IGNORECASE)
+    r"precio|dónde|donde|cómo|como está|descuento|muy|mucho|hoy|ahora|tiene|también)\b", re.IGNORECASE)
 _PT_ONLY_CHARS = re.compile(r"[ãõçâê]")
 _ES_ONLY_CHARS = re.compile(r"[ñ¿¡]")
 

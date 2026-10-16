@@ -230,6 +230,10 @@ PALAVRAS = {
         "too expensive", "so expensive", "very expensive", "that's expensive",
         "it's expensive", "out of my budget", "can't afford", "cant afford",
         "muy caro", "demasiado caro",
+        # Contraproposta (16/10, teste do comercial: "É caro, faz por 2000 que fecho hoje?"):
+        # é negociação, vai para a call; o robô nunca aceita nem recusa número.
+        # O número da contraproposta ("faz por 2000", "do it for 600") é pego por regex no classificador.
+        "e caro", "eh caro",
     ],
     "corporativo": [
         "empresa", "corporativo", "cnpj", "team building", "confraternizacao",
@@ -376,6 +380,14 @@ NUNCA_DIZER = [
     # 14/10: reabrir conversa antiga com intimidade denuncia o bot.
     ("bom te ver de novo", "não puxar contexto antigo; responder o que perguntou agora"),
     ("good to see you again", "não puxar contexto antigo; responder o que perguntou agora"),
+    # 16/10 (teste do comercial): Academy é contrato de 6 meses no mínimo, com plano que muda ao longo
+    # dos meses; o mensal de tabela solto no chat vira "faço um mês e vejo". Preço do Academy é da call.
+    ("2,756", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
+    ("2.756", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
+    ("3,156", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
+    ("3.156", "preço do Academy não sai no chat; mínimo de 6 meses, a call com o time monta o plano"),
+    ("no contract", "o Academy tem contrato de 6 meses no mínimo"),
+    ("sem contrato", "o Academy tem contrato de 6 meses no mínimo"),
 ]
 
 # ---------------------------------------------------------------- cadência

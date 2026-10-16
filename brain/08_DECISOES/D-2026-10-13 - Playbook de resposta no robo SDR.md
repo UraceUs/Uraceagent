@@ -231,3 +231,15 @@ depois da classificação" (Qualificacao, aprendizado de 24/08), follow-up +2h/+
 Ficam Politicas Comerciais, Pista e Check-in, Programas e Visao Geral. O aviso de "pouca informação" agora diz que
 o que está nas instruções (preços, dias, endereço, idade, links) é base sólida, para o robô não responder
 "vou confirmar" ao que já sabe. Pendente: um doc ativo de FAQ do SDR, escrito pelo dono, se quiser o RAG com conteúdo.
+
+## 16/10 — Teste do comercial no "Testar o robô"
+- **Academy**: a persona dizia "monthly, 4 sessions a month, no contract" com $2,756.90/$3,156.90. O Service
+  Agreement (2026.2) tem **mínimo de 6 meses** (cláusula 2.1) e plano escalonado (1º mês 4 sessões, depois 2),
+  e o preço do Academy está em conferência (contrato $9.649,15/6m contra a base). Até o time fechar a tabela, o
+  robô **não diz preço do Academy**: fala do programa de 6 meses e oferece a call. A guarda corta $2,756/$3,156
+  e "no contract"/"sem contrato" se o modelo escorregar. O $3.156,90 do 2 tempos vem da D-2026-08-31.
+- **Idioma**: "É caro, faz por 2000 que fecho hoje?" saiu em inglês. O detector ganhou marcadores de objeção
+  (desconto, muito, hoje, fecho, faz, agora, tem...) e a ponte passa a dizer ao modelo o idioma do turno. A
+  contraproposta ("faz por X", "fecho hoje") passou a ser negociação: vai para a call.
+- **Vídeo**: linha nova para quem compara escolas (vídeo "Who we are") e regra "se vídeo e página servem, manda
+  o vídeo".

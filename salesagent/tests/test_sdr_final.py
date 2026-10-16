@@ -223,3 +223,49 @@ def test_aviso_de_pouca_informacao_nao_manda_confirmar_o_que_a_persona_ja_sabe()
     for nivel in (confidence.NONE, confidence.LOW):
         nota = confidence.system_note({"level": nivel, "reason": "x"})
         assert "tabela de preços, dias e horários, endereço" in nota and "nas suas instruções" in nota, nivel
+
+
+# ------------------------------------------------------------------ teste do comercial, 16/10
+@pytest.mark.parametrize("texto,idioma", [
+    ("E caro, faz por 2000 que fecho hoje?", "pt"), ("É caro, faz por 2000 que fecho hoje?", "pt"),
+    ("Tem desconto?", "pt"), ("Esta muito caro", "pt"), ("es muy caro, hay descuento?", "es"),
+    ("is it expensive?", "en"), ("can i bring my own kart?", "en"),
+])
+def test_idioma_da_objecao_curta(texto, idioma):
+    assert holding.detect_language(texto) == idioma
+
+
+def test_contraproposta_vira_call_no_idioma_do_lead():
+    import sdr
+    texto = "E caro, faz por 2000 que fecho hoje?"
+    assert sdr.avaliar(texto)["roteamento"]["motivo"] == "NEGOCIACAO"
+    msg = holding.call_offer(texto, LINK, motivo="objecao")
+    assert "nosso time" in msg and "our team" not in msg
+
+
+def test_academy_sem_preco_solto_e_com_minimo_de_6_meses():
+    texto = (SALESAGENT / "instructions" / "urace-sales-agent.md").read_text(encoding="utf-8")
+    for numero in ("2,756", "3,156", "$1,800", "$1,200"):
+        assert numero not in texto, numero
+    assert "6-month minimum" in texto and "never quote an Academy" in texto
+    assert "4 sessions a month, no contract" not in texto
+    from sdr import estilo
+    limpo, v = estilo.aplicar("O Academy é mensal, 4 sessões por mês: $2.756,90 (4 tempos) ou $3.156,90 "
+                              "(2 tempos). Qual a idade dele?")
+    assert limpo == "Qual a idade dele?" and any("2.756" in x for x in v)
+
+
+def test_video_para_quem_compara():
+    texto = (SALESAGENT / "instructions" / "urace-sales-agent.md").read_text(encoding="utf-8")
+    assert "Comparing us with indoor karting" in texto and "**send the video**" in texto
+
+
+@pytest.mark.parametrize("texto,negocia", [
+    ("E caro, faz por 2000 que fecho hoje?", True), ("Would you do it for 600?", True),
+    ("fecha por $1500?", True), ("lo haces por 500?", True), ("É caro", True),
+    ("O que o coach faz por ele?", False), ("Can you do Saturdays?", False),
+    ("I want to do it for my son birthday", False),
+])
+def test_contraproposta_so_com_numero(texto, negocia):
+    import sdr
+    assert (sdr.avaliar(texto)["roteamento"].get("motivo") == "NEGOCIACAO") is negocia
