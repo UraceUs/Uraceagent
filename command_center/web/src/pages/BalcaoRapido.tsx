@@ -31,6 +31,10 @@ type Lido = { codigo: string; carregando: true } | { codigo: string; carregando:
 const ESPERA_MESMO_CODIGO = 3500        // ms: a mesma peça ainda na frente da câmera não abre de novo
 const ORIGEM: Record<string, string> = { 'sessão': tr("sessão"), corrida: tr("corrida"), 'serviço': tr("serviço") }
 
+function primeiroNome(nome: string) {
+  return nome.trim().split(/\s+/)[0] || nome
+}
+
 function somaDias(iso: string, n: number) {
   const d = new Date(iso + 'T12:00:00')
   d.setDate(d.getDate() + n)
@@ -213,7 +217,9 @@ export function BalcaoRapido() {
             <input type="date" value={data || ''} onChange={e => e.target.value && setData(e.target.value)} aria-label={tr("Escolher o dia")} />
           </label>}
         </div>
-        {soBalcao ? <button className="br-sair" onClick={() => logout()}>{tr("Sair")}</button>
+        {/* #311: no parts, quem está logado aparece (entrou pelo botão do painel, sem digitar a senha) */}
+        {soBalcao ? <button className="br-sair" onClick={() => logout()} aria-label={tr("Sair da conta de {0}", user?.name || '')}>
+          {tr("Sair")}{user?.name ? <span className="br-quem">{primeiroNome(user.name)}</span> : null}</button>
           : <Link className="br-sair" to="/balcao">{tr("Painel")}</Link>}
       </div>
       {!erroCamera && <div className={`br-mira${lido ? ' pausa' : ''}`} aria-hidden="true" />}

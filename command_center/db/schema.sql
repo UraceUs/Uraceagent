@@ -2129,3 +2129,23 @@ CREATE TABLE IF NOT EXISTS site_sources (
   n       INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, source)
 );
+
+-- #311 (dono, 16/10: o botão do balcão "tem que direcionar a pessoa para o … parts.urace.us, já logada com o
+-- mesmo login que ela estava logada no … Command Center"). O cookie do painel é preso ao host, então o ops
+-- passa a vez com um passe de uso único (30 s) que o parts troca por uma sessão própria. Só o hash fica aqui.
+CREATE TABLE IF NOT EXISTS auth_passes (
+  token_hash    TEXT PRIMARY KEY,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  de_sessao     TEXT NOT NULL,             -- hash da sessão do painel que pediu
+  de_host       TEXT NOT NULL,             -- host que pediu: o Origin da troca tem de ser este
+  para_host     TEXT NOT NULL,             -- host do balcão que pode trocar
+  criado_ip     TEXT,
+  criado_ua     TEXT,
+  expires_at    TEXT NOT NULL,
+  used_at       TEXT,                      -- usado duas vezes = alguém copiou: a sessão que saiu dele cai
+  usado_ip      TEXT,
+  usado_ua      TEXT,
+  sessao_filha  TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS auth_passes_exp ON auth_passes(expires_at);

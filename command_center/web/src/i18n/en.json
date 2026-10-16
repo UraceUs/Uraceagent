@@ -3941,5 +3941,8 @@
 "Buy now da loja (direto do produto ao Stripe): {0} foram ao pagamento e {1} pagaram.": "Store Buy now (straight from the product to Stripe): {0} went to payment and {1} paid.",
 "valor do item, sem depósito e frete": "item value, without deposit and shipping",
 "{0} sem campanha marcada. Vem do utm que o pedido (carrinho ou Buy now), o agendamento, o plano ou o contato do site guardou; os pedidos de antes desta versão não guardavam a campanha.": "{0} without a campaign. It comes from the utm saved by the order (cart or Buy now), the booking, the plan or the website contact; orders from before this version didn't save the campaign.",
-"As aberturas do carrinho contam desde {0}; antes disso, só os pedidos.": "Cart opens are counted since {0}; before that, only the orders."
+"As aberturas do carrinho contam desde {0}; antes disso, só os pedidos.": "Cart opens are counted since {0}; before that, only the orders.",
+"Abrindo o balcão…": "Opening the counter…",
+"O acesso automático venceu. Entre com a senha.": "The automatic sign-in expired. Sign in with your password.",
+"Sair da conta de {0}": "Sign out of {0}'s account"
 }
