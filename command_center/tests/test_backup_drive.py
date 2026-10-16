@@ -83,6 +83,13 @@ def drive(monkeypatch):
     return DriveFalso().instalar(monkeypatch)
 
 
+@pytest.fixture(autouse=True)
+def chave(monkeypatch):
+    """#299: a cópia de fora sai cifrada; a chave vem do adminai.env (aqui, uma de teste)."""
+    from adminai import cifra_backup
+    monkeypatch.setenv("CC_BACKUP_CHAVE", cifra_backup.nova_chave())
+
+
 def test_sem_aplicar_nao_envia_nada(banco, drive):
     backup_banco.fazer(banco, aplicar=True)
     p = backup_drive.semanal(aplicar=False)
@@ -156,7 +163,7 @@ def test_a_copia_comprimida_e_conferida_antes_de_subir(banco, drive):
     p = backup_banco.fazer(banco, aplicar=True, comprimida=True)
     assert p["destino"].endswith(".gz")
     r = backup_drive.semanal(aplicar=True, caminho=p["destino"])
-    assert r["aplicado"] and list(drive.arquivos.values())[0]["name"].endswith(".gz")
+    assert r["aplicado"] and list(drive.arquivos.values())[0]["name"].endswith(".gz.enc"), "comprimida e cifrada (#299)"
 
 
 def test_o_escopo_pedido_e_o_minimo_que_serve():

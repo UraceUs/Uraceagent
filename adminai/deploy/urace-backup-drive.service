@@ -1,5 +1,5 @@
 [Unit]
-Description=URACE — backup semanal do banco para o Google Drive (a cópia fora da VPS)
+Description=URACE — backup diário do banco, cifrado, para o Google Drive (a cópia fora da VPS, #299)
 Documentation=file:///home/ubuntu/Uraceagent/adminai/backup_drive.py
 After=network-online.target
 Wants=network-online.target

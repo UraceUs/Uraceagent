@@ -3764,5 +3764,7 @@
 "À venda": "On sale",
 "à venda": "on sale",
 "• Lista": "• List",
-"← Produtos": "← Products"
+"← Produtos": "← Products",
+"Backup do banco": "Database backup",
+"Cópia do banco todo dia: na VPS às 03:15 (30 dias + 1 por mês por 12 meses) e, cifrada, no Google Drive às 04:00. Vermelho: a cópia do dia falhou ou faltou. Restaurar: playbook geral, Backup e restauração.": "A database copy every day: on the VPS at 03:15 (30 days + 1 per month for 12 months) and, encrypted, on Google Drive at 04:00. Red: today's copy failed or is missing. Restore: general playbook, Backup and restore."
 }

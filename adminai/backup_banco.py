@@ -19,9 +19,15 @@ dia em que ele é a única coisa que resta.
 
 **Não apaga o que não conseguiu substituir.** A limpeza das cópias velhas só roda depois
 de a nova existir e estar íntegra.
+
+**O histórico (#299):** 30 dias de cópias diárias e, antes disso, a primeira cópia de cada mês dos
+últimos 12 meses. Cada rodada grava o resultado em `backups/estado-local.json` (quando, o arquivo, se
+passou na conferência ou o erro): é o que o painel lê em Sistemas para avisar quando o backup do dia
+falhou ou faltou.
 """
 import argparse
 import gzip
+import json
 import os
 import shutil
 import sqlite3
@@ -38,7 +44,8 @@ garantir_venv()
 
 from command_center.db import db_path  # noqa: E402
 
-GUARDAR = 14          # dias de cópias diárias
+GUARDAR = 30          # dias de cópias diárias
+MESES = 12            # e a primeira cópia de cada mês, por este tanto de meses
 
 
 def pasta_backups(caminho_banco=None):
@@ -84,17 +91,58 @@ def comprimir(caminho):
     return alvo
 
 
-def antigas(pasta, guardar=GUARDAR):
+def apagar_do_historico(itens, agora_ts=None, guardar=GUARDAR, meses=MESES):
+    """`itens`: [(chave, epoch)]. Fica tudo dos últimos `guardar` dias e, antes disso, a cópia mais antiga de cada
+    mês dos últimos `meses` meses. Devolve as chaves que saem. (O mesmo histórico no disco e no Drive.)"""
+    agora_ts = agora_ts or time.time()
+    limite = agora_ts - guardar * 86400
+    hoje = datetime.fromtimestamp(agora_ts, timezone.utc)
+    mes_limite = (hoje.year * 12 + hoje.month - 1) - meses        # meses inteiros para trás
+    primeiras = {}
+    for chave, ts in sorted(itens, key=lambda x: x[1]):
+        d = datetime.fromtimestamp(ts, timezone.utc)
+        primeiras.setdefault((d.year, d.month), chave)
+    saem = []
+    for chave, ts in itens:
+        if ts >= limite:
+            continue
+        d = datetime.fromtimestamp(ts, timezone.utc)
+        if (d.year * 12 + d.month - 1) > mes_limite and primeiras[(d.year, d.month)] == chave:
+            continue
+        saem.append(chave)
+    return saem
+
+
+def antigas(pasta, guardar=GUARDAR, meses=MESES):
     """As que passaram do prazo. Devolve a lista; quem apaga é quem chamou."""
-    limite = time.time() - guardar * 86400
-    saida = []
+    itens = []
     for nome in os.listdir(pasta):
         if not nome.startswith("command-center-") or not nome.endswith((".sqlite", ".sqlite.gz")):
             continue
         caminho = os.path.join(pasta, nome)
-        if os.path.getmtime(caminho) < limite:
-            saida.append(caminho)
-    return sorted(saida)
+        itens.append((caminho, os.path.getmtime(caminho)))
+    return sorted(apagar_do_historico(itens, guardar=guardar, meses=meses))
+
+
+def gravar_estado(tipo, ok, pasta=None, **detalhe):
+    """O resultado da rodada (`local` ou `drive`) para o painel. Sem dado de cliente além do número de clientes,
+    sem chave, sem caminho de fora da pasta."""
+    estado = {"em": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "ok": bool(ok), **detalhe}
+    caminho = os.path.join(pasta or pasta_backups(), f"estado-{tipo}.json")
+    temp = caminho + ".tmp"
+    with open(temp, "w", encoding="utf-8") as f:
+        json.dump(estado, f, ensure_ascii=False)
+    os.chmod(temp, 0o600)
+    os.replace(temp, caminho)
+    return estado
+
+
+def ler_estado(tipo, pasta=None):
+    try:
+        with open(os.path.join(pasta or pasta_backups(), f"estado-{tipo}.json"), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
 
 
 def fazer(caminho_banco=None, aplicar=False, guardar=GUARDAR, comprimida=True):
@@ -159,7 +207,7 @@ def restaurar(arquivo, caminho_banco=None, aplicar=False):
 def main():
     ap = argparse.ArgumentParser(description="Backup do banco do Command Center")
     ap.add_argument("--aplicar", action="store_true", help="faz de verdade")
-    ap.add_argument("--guardar", type=int, default=GUARDAR, help="dias de cópias (padrão 14)")
+    ap.add_argument("--guardar", type=int, default=GUARDAR, help="dias de cópias diárias (padrão 30; antes disso, uma por mês por 12 meses)")
     ap.add_argument("--sem-compressao", action="store_true")
     ap.add_argument("--restaurar", metavar="ARQUIVO", help="põe esta cópia no lugar do banco")
     ap.add_argument("--listar", action="store_true", help="mostra as cópias existentes")
@@ -167,7 +215,7 @@ def main():
 
     if a.listar:
         pasta = pasta_backups()
-        copias = sorted(os.listdir(pasta), reverse=True)
+        copias = sorted((c for c in os.listdir(pasta) if c.startswith("command-center-")), reverse=True)
         print(f"{pasta}\n" + "-" * 60)
         for c in copias:
             p = os.path.join(pasta, c)
@@ -190,7 +238,15 @@ def main():
             print("Para restaurar de verdade, repita com --aplicar")
         return 0
 
-    p = fazer(aplicar=a.aplicar, guardar=a.guardar, comprimida=not a.sem_compressao)
+    try:
+        p = fazer(aplicar=a.aplicar, guardar=a.guardar, comprimida=not a.sem_compressao)
+    except Exception as e:                          # noqa: BLE001 — o painel precisa saber que falhou
+        if a.aplicar:
+            gravar_estado("local", False, erro=f"{type(e).__name__}: {str(e)[:300]}")
+        raise
+    if p["aplicado"]:
+        gravar_estado("local", True, arquivo=os.path.basename(p["destino"]), tamanho=p["tamanho_copia"],
+                      clientes=p["conferido"]["clientes"], tabelas=p["conferido"]["tabelas"])
     print(f"banco:  {p['origem']}  ({p['tamanho_origem']/1024/1024:.1f} MB)")
     print(f"cópia:  {p['destino']}")
     if p["aplicado"]:
@@ -198,10 +254,10 @@ def main():
         print(f"CONFERIDA: {c['tabelas']} tabelas, {c['clientes']} clientes, "
               f"{p['tamanho_copia']/1024/1024:.1f} MB no disco")
         if p["apagadas"]:
-            print(f"{len(p['apagadas'])} cópia(s) com mais de {a.guardar} dias removida(s)")
+            print(f"{len(p['apagadas'])} cópia(s) fora do histórico removida(s) ({a.guardar} dias + 1 por mês por {MESES} meses)")
     else:
         if p["apagaria"]:
-            print(f"apagaria {len(p['apagaria'])} cópia(s) com mais de {a.guardar} dias")
+            print(f"apagaria {len(p['apagaria'])} cópia(s) fora do histórico ({a.guardar} dias + 1 por mês por {MESES} meses)")
         print("\nNada foi feito. Para fazer o backup: --aplicar")
     return 0
 

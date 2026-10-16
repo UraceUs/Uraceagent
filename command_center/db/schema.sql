@@ -602,7 +602,8 @@ INSERT OR IGNORE INTO client_stages (code, label, ord) VALUES
 
 INSERT OR IGNORE INTO integrations (system, status) VALUES
   ('asana','DISCONNECTED'), ('docusign','DISCONNECTED'),
-  ('gmail','DISCONNECTED'), ('quickbooks','DISCONNECTED'), ('kommo','DISCONNECTED');
+  ('gmail','DISCONNECTED'), ('quickbooks','DISCONNECTED'), ('kommo','DISCONNECTED'),
+  ('backup','DISCONNECTED');                                  -- #299: o backup do banco (local e Drive)
 
 -- A política inicial vem do cérebro (PARAMETROS + decisões de 04/09).
 INSERT OR IGNORE INTO action_policies (action, policy, note) VALUES

@@ -17,6 +17,7 @@ const DESC: Record<string, string> = {
   docusign: tr("Waivers (produção, conta na4). Delivered ≠ assinada."),
   gmail: tr("Caixas urace@ e support@. Sem envio a partir daqui."),
   quickbooks: tr("Em stand-by por decisão do dono. Invoices só depois de aprovação humana."),
+  backup: tr("Cópia do banco todo dia: na VPS às 03:15 (30 dias + 1 por mês por 12 meses) e, cifrada, no Google Drive às 04:00. Vermelho: a cópia do dia falhou ou faltou. Restaurar: playbook geral, Backup e restauração."),
   kommo: tr("Funil comercial (Instagram, Facebook, WhatsApp). Token da integração privada em ~/.urace/kommo.env. Resposta pelo painel sai como mensagem do bot da conta."),
 }
 

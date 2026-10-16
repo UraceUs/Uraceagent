@@ -17,7 +17,7 @@ MCP_DIR = os.path.join(REPO, "adminai", "mcp")
 if MCP_DIR not in sys.path:
     sys.path.insert(0, MCP_DIR)
 
-SISTEMAS = ("asana", "docusign", "gmail", "quickbooks", "kommo")
+SISTEMAS = ("asana", "docusign", "gmail", "quickbooks", "kommo", "backup")      # #299: o backup do banco
 
 
 class NaoConectado(Exception):
@@ -95,6 +95,9 @@ def saude(sistema):
         if sistema == "quickbooks":
             r = chamar("quickbooks", "qbo_empresa")
             return "CONNECTED", {"empresa": r.get("empresa"), "realm_id": r.get("realm_id"), "envio_permitido": r.get("envio_permitido")}
+        if sistema == "backup":                      # #299: não chama nada de fora; lê o resultado do backup do dia
+            from command_center.providers import backup_saude
+            return backup_saude.estado()
         if sistema == "kommo":
             r = chamar("kommo", "kommo_conta")
             return "CONNECTED", {"conta": r.get("nome"), "subdominio": r.get("subdominio"),
