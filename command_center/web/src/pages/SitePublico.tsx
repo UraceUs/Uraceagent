@@ -662,30 +662,42 @@ function WaiverNativa() {
 const ProdutosDaLoja = lazy(() => import('./LojaProdutos').then(m => ({ default: m.ProdutosDaLoja })))
 const EditarProduto = lazy(() => import('./LojaProdutos').then(m => ({ default: m.EditarProduto })))
 /* #300: o editor visual do site, também em arquivo próprio. */
+/* #306: o painel do site (as métricas), a página de entrada da seção Site. */
+const SitePainel = lazy(() => import('./SitePainel').then(m => ({ default: m.SitePainel })))
 const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
 const EditorDePagina = lazy(() => import('./EditorSite').then(m => ({ default: m.EditorDePagina })))
+
+/* #306 (dono, 16/10): "uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada painel de lá".
+ * Cada painel do site é uma subseção (no menu, em "Site", e aqui nas abas); o h1 é o nome da subseção (o título da aba). */
+const SUBSECOES: { aba: string; to: string; rotulo: string; min?: 'MANAGER' }[] = [
+  { aba: '', to: '/site', rotulo: tr("Painel do site") },
+  { aba: 'pedidos', to: '/site/pedidos', rotulo: tr("Pedidos do site") },
+  { aba: 'agendamentos', to: '/site/agendamentos', rotulo: tr("Agendamentos") },
+  { aba: 'disponibilidade', to: '/site/disponibilidade', rotulo: tr("Disponibilidade") },
+  { aba: 'servicos', to: '/site/servicos', rotulo: tr("Serviços e preços") },
+  { aba: 'cartoes', to: '/site/cartoes', rotulo: tr("Cartões das páginas") },
+  { aba: 'produtos', to: '/site/produtos', rotulo: tr("Produtos da loja") },
+  { aba: 'editor', to: '/site/editor', rotulo: tr("Editor do site") },
+  { aba: 'contas', to: '/site/contas', rotulo: tr("Contas de clientes") },
+  { aba: 'waiver', to: '/site/waiver', rotulo: tr("Waiver"), min: 'MANAGER' },
+]
 
 export function SitePublico() {
   const { aba, id } = useParams()
   const { can } = useAuth()
+  const subs = SUBSECOES.filter(s => !s.min || can(s.min))
+  const atual = subs.find(s => s.aba === (aba || '')) || subs[0]
   return <>
-    <PageHeader title={tr("Agendamentos do site")} help={<>{tr("O que o cliente usa na área do cliente (hoje em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>{tr(", depois no urace.us): os pedidos de sessão e a agenda que você abre e fecha.")}</>}>
+    <PageHeader eyebrow={tr("Site")} title={atual.rotulo} help={<>{tr("Tudo o que é do site público: os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja, o editor, as contas e a waiver. O cliente usa a área do cliente em")} <a href="/ops/portal" target="_blank" rel="noreferrer">{tr("/ops/portal")}</a>.</>}>
       <a className="btn ghost" href="/ops/portal" target="_blank" rel="noreferrer">{tr("Abrir a área do cliente ↗")}</a>
     </PageHeader>
-    <div className="tabs">
-      <NavLink to="/site" end className={({ isActive }) => isActive ? 'on' : ''}>{tr("Agendamentos")}</NavLink>
-      <NavLink to="/site/disponibilidade" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Disponibilidade")}</NavLink>
-      <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Serviços e preços")}</NavLink>
-      <NavLink to="/site/cartoes" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Cartões das páginas")}</NavLink>
-      <NavLink to="/site/produtos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Produtos da loja")}</NavLink>
-      <NavLink to="/site/editor" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Editor do site")}</NavLink>
-      <NavLink to="/site/pedidos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Pedidos do site")}</NavLink>
-      <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Contas de clientes")}</NavLink>
-      {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Waiver")}</NavLink>}
-    </div>
-    {aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
-      : aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
-      : aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'cartoes' ? <Cartoes /> : aba === 'contas' ? <Contas /> : aba === 'pedidos' ? <Pedidos />
-      : aba === 'waiver' && can('MANAGER') ? <WaiverNativa /> : <Agendamentos />}
+    <nav className="tabs" aria-label={tr("Subseções do site")}>
+      {subs.map(s => <NavLink key={s.to} to={s.to} end={!s.aba} className={({ isActive }) => isActive ? 'on' : ''}>{s.rotulo}</NavLink>)}
+    </nav>
+    {atual.aba === '' ? <Suspense fallback={<Loading />}><SitePainel /></Suspense>
+      : atual.aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
+      : atual.aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
+      : atual.aba === 'disponibilidade' ? <Disponibilidade /> : atual.aba === 'servicos' ? <Servicos /> : atual.aba === 'cartoes' ? <Cartoes />
+      : atual.aba === 'contas' ? <Contas /> : atual.aba === 'pedidos' ? <Pedidos /> : atual.aba === 'waiver' ? <WaiverNativa /> : <Agendamentos />}
   </>
 }

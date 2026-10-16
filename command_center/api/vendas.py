@@ -924,7 +924,7 @@ def cobrar_deposito(oid: int, request: Request, u=Depends(auth.exige("OPERATOR")
     ref = item_da_tabela(con, o["service"], o.get("qbo_item_id"))
     deposito = ref["deposito"] if ref else 0.0
     if not deposito:
-        raise HTTPException(400, "O serviço desta venda não pede depósito no catálogo (Agendamentos do site › Serviços).")
+        raise HTTPException(400, "O serviço desta venda não pede depósito no catálogo (Site › Serviços e preços).")
     try:
         res = _qbo(con, o, True, ref, deposito, so_deposito=True)
     except NaoConectado as e:

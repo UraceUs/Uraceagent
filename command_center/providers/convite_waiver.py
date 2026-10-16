@@ -144,7 +144,7 @@ def destino(con, client_id):
     c = d.pop("card")
     motivo = None
     if not wn.ligada(con):
-        motivo = ("A assinatura da waiver no próprio sistema está desligada (Agendamentos do site › Waiver). "
+        motivo = ("A assinatura da waiver no próprio sistema está desligada (Site › Waiver). "
                   "O convite abre essa assinatura: ligue-a antes.")
     elif not d["email"]:
         motivo = "O card não tem e-mail. Ponha no card o e-mail do piloto adulto ou do responsável para mandar o convite."

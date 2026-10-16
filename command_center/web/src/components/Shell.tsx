@@ -126,8 +126,22 @@ export function Shell() {
         <NL to="/crm/funil" icon="funnel">{tr("Funil do Kommo")}</NL>
         <NL to="/sdr" icon="spark" n={d?.sdr_relatos_abertos || 0} tone="warn">{tr("Robô SDR")}</NL>
         <NL to="/clients" icon="people">{tr("Clientes")}</NL>
+        {/* #306 (dono, 16/10): "uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada
+            painel de lá … E aí também do site um dashboard com as métricas dele" */}
+        {can('OPERATOR') && <>
+          <div className="grp">{tr("Site")}</div>
+          <NL to="/site" end icon="chart">{tr("Painel do site")}</NL>
+          <NL to="/site/pedidos" icon="cart">{tr("Pedidos do site")}</NL>
+          <NL to="/site/agendamentos" icon="cal">{tr("Agendamentos")}</NL>
+          <NL to="/site/disponibilidade" icon="clock">{tr("Disponibilidade")}</NL>
+          <NL to="/site/servicos" icon="dollar">{tr("Serviços e preços")}</NL>
+          <NL to="/site/cartoes" icon="doc">{tr("Cartões das páginas")}</NL>
+          <NL to="/site/produtos" icon="box">{tr("Produtos da loja")}</NL>
+          <NL to="/site/editor" icon="pencil">{tr("Editor do site")}</NL>
+          <NL to="/site/contas" icon="people">{tr("Contas de clientes")}</NL>
+          {can('MANAGER') && <NL to="/site/waiver" icon="seal">{tr("Waiver")}</NL>}
+        </>}
         <div className="grp">{tr("Logística")}</div>
-        {can('OPERATOR') && <NL to="/site" icon="globe">{tr("Agendamentos do site")}</NL>}
         <NL to="/races" icon="flag">{tr("Corridas")}</NL>
         {can('OPERATOR') && <NL to="/balcao" icon="tag">{tr("Balcão")}</NL>}
         <NL to="/estoque" icon="box" n={repor} tone="warn">{tr("Estoque")}</NL>

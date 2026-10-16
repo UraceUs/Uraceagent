@@ -349,7 +349,7 @@ function PedidoDoSite({ p }: { p: PedidoSite }) {
         <span className="small mono">{money(l.unitario * l.quantidade)}</span></div>
       {l.deposito > 0 && <div className="row small muted"><span className="grow">{tr("depósito de segurança (reembolsável)")}</span><span className="mono">{money(l.deposito)}</span></div>}
       {l.tipo === 'sessao' && <div className="small muted">{l.data ? fmtDate(l.data) : ''}{l.turno ? ` · ${TURNO_PT[l.turno] || l.turno}` : ''}{l.piloto ? tr(" · piloto {0}", l.piloto) : ''}
-        {l.status === 'marcada' && l.agendamento ? <> · <Link to="/site">{tr("agendamento #{0}", l.agendamento)}</Link></> : null}
+        {l.status === 'marcada' && l.agendamento ? <> · <Link to="/site/agendamentos">{tr("agendamento #{0}", l.agendamento)}</Link></> : null}
         {l.status === 'sem_vaga' ? <b style={{ color: 'var(--crit)' }}> · {tr("sem vaga")}</b> : null}</div>}
       {!l.desta_venda && <div className="small muted">{tr("em outra venda do mesmo pedido (outro card)")}</div>}
     </div>)}

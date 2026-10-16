@@ -568,14 +568,14 @@ def linhas_qbo(con, q, oid):
         else:
             s = um(con, "SELECT qbo_item_id FROM booking_services WHERE id=?", (x["service_id"],))
             if not s or not s["qbo_item_id"]:
-                raise RuntimeError(f"o serviço {x['service_name']} não tem item do QuickBooks (Agendamentos do site › Serviços)")
+                raise RuntimeError(f"o serviço {x['service_name']} não tem item do QuickBooks (Site › Serviços e preços)")
             item = s["qbo_item_id"]
         saida.append({"item_id": item, "quantidade": x["quantity"], "unitario": x["unit_price"], "descricao": x["name"]})
         if _tem_addon(x):                                    # #279: o Lead and Follow pago junto com a sessão
             sid_addon = int(str(x["product_slug"]).split(":", 1)[1])
             a = um(con, "SELECT name, qbo_item_id FROM booking_services WHERE id=?", (sid_addon,))
             if not a or not a["qbo_item_id"]:
-                raise RuntimeError(f"o add-on {x['variation']} não tem item do QuickBooks (Agendamentos do site › Serviços)")
+                raise RuntimeError(f"o add-on {x['variation']} não tem item do QuickBooks (Site › Serviços e preços)")
             saida.append({"item_id": a["qbo_item_id"], "quantidade": 1, "unitario": _valor_addon(x), "descricao": a["name"]})
         if x["deposit"]:
             saida.append({"item_id": _item_deposito(con), "quantidade": 1, "unitario": x["deposit"],

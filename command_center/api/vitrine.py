@@ -229,7 +229,25 @@ def pagina(request: Request, caminho: str):
         raise HTTPException(404)
     host = host_de(request)
     q = dict(request.query_params)
-    return _com_o_painel(lambda: _pagina(request, caminho, host, q))
+    resp = _com_o_painel(lambda: _pagina(request, caminho, host, q))
+    _contar_visita(request, caminho, q, resp)
+    return resp
+
+
+def _contar_visita(request, caminho, q, resp):
+    """#306: +1 nas visitas da página (e na entrada, quando a pessoa chegou de fora). A conta fica na memória; de 30 em
+    30 s vai para o banco, depois da resposta (ninguém espera o banco para ver a página)."""
+    from starlette.background import BackgroundTask
+
+    from command_center.providers import painel_site
+    if not painel_site.conta(request, request.method, resp.status_code):
+        return
+    if caminho == "/cart/" and q.get("cancelled"):     # a volta do Stripe não é abrir o carrinho de novo
+        return
+    fonte = painel_site.fonte_da_entrada(request.headers.get("referer"), q.get("utm_source"), hosts(),
+                                         request.headers.get("sec-fetch-site"))
+    if painel_site.anotar(caminho, fonte, ip=_ip(request)) and resp.background is None:
+        resp.background = BackgroundTask(painel_site.descarregar)
 
 
 # #300: as páginas do site que o editor abre (as fixas; a loja e o blog são listas que mudam com a busca)

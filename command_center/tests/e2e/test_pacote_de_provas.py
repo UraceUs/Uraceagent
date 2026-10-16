@@ -201,7 +201,7 @@ def _painel_da_venda(cad, br, base, largura, altura, quem, produto):
         assert adm.get_by_text(quem["piloto"]).count() >= 1 and adm.get_by_text(produto["name"]).count() >= 1
         st["resposta"] = "o pedido do site está na venda, com o piloto e o item da loja"
     with passo(cad, adm, "painel-agendamentos-do-site", "A sessão em Agendamentos do site", "abri Agendamentos do site") as st:
-        tn.abrir(adm, base, "/site")
+        tn.abrir(adm, base, "/site/agendamentos")
         adm.get_by_text(re.compile(r"pago no site · pedido #\d+")).first.wait_for()
         st["resposta"] = "a sessão aparece paga pelo site, com o número do pedido"
     with passo(cad, adm, "painel-card-do-piloto", "O registro no card", "procurei o piloto em Clientes e abri o card") as st:
