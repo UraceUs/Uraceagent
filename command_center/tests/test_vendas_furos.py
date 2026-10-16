@@ -546,3 +546,334 @@ def test_dois_cliques_em_liberar_mandam_uma_invoice_so(cli, qbo, monkeypatch):
     assert len(qbo.invoices) == 1
     f = r.json()["fechamento"]
     assert "liberando" not in f and f["liberada"]["por"] == "Gina Gerente"
+
+
+# ------------------------------------------------------------------ #310, revisão: a trava vale para todas as saídas
+def _closing(oid):
+    con = conectar()
+    try:
+        return json.loads(um(con, "SELECT closing FROM opportunities WHERE id=?", (oid,))["closing"] or "null")
+    finally:
+        con.close()
+
+
+def _uid(con, email):
+    return um(con, "SELECT id FROM users WHERE email=?", (email,))["id"]
+
+
+def _qbo_fora_do_ar(qbo):
+    def fora(sistema, ferramenta, **kw):
+        if ferramenta == "qbo_criar_e_enviar_invoice":
+            raise RuntimeError("QuickBooks fora do ar")
+        return qbo(sistema, ferramenta, **kw)
+    return fora
+
+
+def _no_meio(qbo, pedido):
+    """O QuickBooks ainda responde o primeiro pedido quando o segundo chega (uma vez só)."""
+    segundo = []
+
+    def chamar(sistema, ferramenta, **kw):
+        if ferramenta == "qbo_criar_e_enviar_invoice" and not segundo:
+            segundo.append(None)
+            segundo[0] = pedido()
+        return qbo(sistema, ferramenta, **kw)
+    return chamar, segundo
+
+
+def _vence_a_marca(oid, minutos=11):
+    f = _closing(oid)
+    f["cobrando"]["em"] = (datetime.now(timezone.utc) - timedelta(minutes=minutos)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    con = conectar()
+    try:
+        con.execute("UPDATE opportunities SET closing=? WHERE id=?", (json.dumps(f, ensure_ascii=False), oid))
+    finally:
+        con.close()
+
+
+def test_venda_paga_no_stripe_nao_mostra_liberar_nem_cobra_de_novo(cli, qbo):
+    """R1: a venda paga no site (Buy now da loja e carrinho) nasce com `closing` {"por": "stripe"} e
+    sem passos: aparecia como "esperando", com o Liberar, e o Liberar (e a IA) cobravam no QuickBooks
+    quem já tinha pago."""
+    from command_center.providers import carrinho, stripe_loja
+    con = conectar()
+    try:
+        so = inserir(con, "store_orders", product_slug="camiseta", product_name="Camiseta Teste", quantity=1, unit_price=45,
+                     amount=45, delivery="retirada", status="pago", amount_paid=45, email="loja.stripe@example.com",
+                     name="Fulano Loja", phone="+1 407 555 0101", paid_at="2026-10-16T15:00:00.000Z")
+        buy_now = stripe_loja.ligar_e_vender(con, so)
+        so2 = inserir(con, "store_orders", kind="carrinho", product_slug="carrinho", product_name="Carrinho", quantity=1,
+                      unit_price=60, amount=60, delivery="retirada", status="pago", amount_paid=60,
+                      email="carrinho.stripe@example.com", name="Beltrano Carrinho", phone="+1 407 555 0102",
+                      paid_at="2026-10-16T15:00:00.000Z")
+        inserir(con, "store_order_items", order_id=so2, kind="produto", name="Luva Teste", quantity=1, unit_price=60, amount=60,
+                product_slug="luva")
+        do_carrinho = carrinho.pago(con, so2)
+        for oid in (buy_now, do_carrinho):              # o pior caso: o serviço com item e preço no catálogo
+            con.execute("UPDATE opportunities SET qbo_item_id='32' WHERE id=?", (oid,))
+    finally:
+        con.close()
+    hg = entra(cli, "ger@urace.us")
+    for oid, valor in ((buy_now, 45), (do_carrinho, 60)):
+        assert _closing(oid)["por"] == "stripe"
+        d = cli.get(f"{B}/sales/{oid}", headers=hg).json()
+        assert d["invoice"] == "enviada", "pago no site: nem o aviso nem o Liberar aparecem"
+        for r in (cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": valor, "item_id": "32"}),
+                  cli.post(f"{B}/sales/{oid}/step/qbo", headers=hg),
+                  cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO}),
+                  cli.post(f"{B}/sales/{oid}/deposit", headers=hg)):
+            assert r.status_code == 409 and "pago no site (Stripe)" in r.json()["detail"], r.text
+        con = conectar()
+        try:
+            for acao in ("venda_enviar_invoice", "venda_fechar"):
+                r = acoes_painel.executar(con, _uid(con, "ger@urace.us"), acao, {"opp_id": oid})
+                assert not r["aplicado"] and "pago no site (Stripe)" in r["motivo"], r
+        finally:
+            con.close()
+    assert not qbo.invoices, "quem pagou no site não recebe invoice"
+
+
+def test_dois_step_qbo_ao_mesmo_tempo_mandam_uma_invoice_so(cli, qbo, monkeypatch):
+    """R2: só o Liberar marcava antes de chamar o QuickBooks; dois "tentar de novo" ao mesmo tempo
+    (duas abas, o botão e o MCP) mandavam duas invoices."""
+    monkeypatch.setattr(vendas, "chamar", _qbo_fora_do_ar(qbo))
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Duas Abas", email="duasabas@example.com", amount=500)
+    assert [p["ok"] for p in fecha(cli, h, oid)["passos"] if p["passo"] == "qbo"] == [False]
+    chamar, segundo = _no_meio(qbo, lambda: cli.post(f"{B}/sales/{oid}/step/qbo", headers=h))
+    monkeypatch.setattr(vendas, "chamar", chamar)
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    assert r.status_code == 200, r.text
+    assert segundo[0].status_code == 409 and "mandando a invoice" in segundo[0].json()["detail"], segundo[0].text
+    assert len(qbo.invoices) == 1 and "cobrando" not in _closing(oid)
+    assert cli.post(f"{B}/sales/{oid}/step/qbo", headers=h).status_code == 409 and len(qbo.invoices) == 1
+
+
+def test_ia_e_liberar_ao_mesmo_tempo_mandam_uma_invoice_so(cli, qbo, monkeypatch):
+    """R2: a IA conferia a marca do Liberar mas não punha a sua: o Liberar que chegava no meio dela
+    (e a IA no meio do Liberar) mandava outra invoice."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="IA Primeiro", email="iaprimeiro@example.com", amount=300)
+    oid2 = cria(cli, h, name="Gerente Primeiro", email="gerprimeiro@example.com", amount=300)
+    fecha(cli, h, oid)
+    fecha(cli, h, oid2)                                    # fora da tabela: as duas esperam o gerente
+    hg = entra(cli, "ger@urace.us")
+    chamar, segundo = _no_meio(qbo, lambda: cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300}))
+    monkeypatch.setattr(vendas, "chamar", chamar)
+    con = conectar()
+    try:
+        r = acoes_painel.executar(con, _uid(con, "ger@urace.us"), "venda_enviar_invoice", {"opp_id": oid})
+    finally:
+        con.close()
+    assert r["aplicado"], r
+    assert segundo[0].status_code == 409 and "pela IA" in segundo[0].json()["detail"], segundo[0].text
+    assert len(qbo.invoices) == 1
+
+    def ia():
+        c = conectar()
+        try:
+            return acoes_painel.executar(c, _uid(c, "ger@urace.us"), "venda_enviar_invoice", {"opp_id": oid2})
+        finally:
+            c.close()
+    chamar, segundo = _no_meio(qbo, ia)
+    monkeypatch.setattr(vendas, "chamar", chamar)
+    r = cli.post(f"{B}/sales/{oid2}/invoice/liberar", headers=hg, json={"valor": 300})
+    assert r.status_code == 200, r.text
+    assert not segundo[0]["aplicado"] and "liberando a invoice" in segundo[0]["motivo"], segundo[0]
+    assert len(qbo.invoices) == 2
+
+
+def test_dois_close_ao_mesmo_tempo_mandam_uma_invoice_so(cli, qbo, monkeypatch):
+    """R2: dois "Confirmar e fechar" ao mesmo tempo (duas abas, a tela e a IA) passavam os dois pela
+    conferência de "já fechada" antes de algum gravar, e cada um mandava a sua invoice."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Dois Close", email="doisclose@example.com", amount=500)
+    chamar, segundo = _no_meio(qbo, lambda: cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": SO_QBO}))
+    monkeypatch.setattr(vendas, "chamar", chamar)
+    r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": SO_QBO})
+    assert r.status_code == 200, r.text
+    assert segundo[0].status_code == 409 and "fechando a venda" in segundo[0].json()["detail"], segundo[0].text
+    assert len(qbo.invoices) == 1 and "cobrando" not in _closing(oid)
+    # a IA fechando enquanto a tela fecha também para
+    oid2 = cria(cli, h, name="Tela E IA", email="telaeia@example.com", amount=500)
+
+    def ia():
+        c = conectar()
+        try:
+            return acoes_painel.executar(c, _uid(c, "closer@urace.us"), "venda_fechar", {"opp_id": oid2})
+        finally:
+            c.close()
+    chamar, segundo = _no_meio(qbo, ia)
+    monkeypatch.setattr(vendas, "chamar", chamar)
+    assert cli.post(f"{B}/sales/{oid2}/close", headers=h, json={"passos": SO_QBO}).status_code == 200
+    assert not segundo[0]["aplicado"] and "fechando a venda" in segundo[0]["motivo"], segundo[0]
+    assert len(qbo.invoices) == 2
+
+
+def test_reenvio_da_waiver_no_meio_do_liberar_nao_apaga_a_invoice_liberada(cli, qbo, monkeypatch):
+    """R3: o passo regravava o `closing` inteiro que leu no começo. A waiver reenviada enquanto o
+    gerente liberava apagava o "liberada": a invoice voltava a esperar, e o Liberar mandava outra."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Escrita Perdida", email="perdida@example.com", amount=300)
+    fecha(cli, h, oid)                                     # fora da tabela: a invoice espera o gerente
+    hg = entra(cli, "ger@urace.us")
+    no_meio = []
+
+    def waiver_lenta(con, o):                              # o DocuSign responde enquanto o gerente libera
+        if not no_meio:
+            no_meio.append(cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300}))
+        return {"envelope": "E-1", "waiver_id": None, "modelo": "parental"}
+    monkeypatch.setattr(vendas, "_waiver", waiver_lenta)
+    assert cli.post(f"{B}/sales/{oid}/step/waiver", headers=hg).status_code == 200
+    assert no_meio[0].status_code == 200, no_meio[0].text
+    f = _closing(oid)
+    passos = {p["passo"]: p["ok"] for p in f["passos"]}
+    assert f["liberada"]["por"] == "Gina Gerente" and f["invoice_pendente"] is False and passos == {
+        "qbo": True, "waiver": True, "asana": None, "kommo": None}, f
+    assert cli.get(f"{B}/sales/{oid}", headers=hg).json()["invoice"] == "enviada"
+    assert cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300}).status_code == 409
+    assert len(qbo.invoices) == 1
+
+
+def test_deposito_no_meio_do_liberar_sai_uma_vez_so(cli, qbo, monkeypatch):
+    """R3: "Cobrar só o depósito" no meio do Liberar: o Liberar mandava o depósito na invoice dele, e o
+    depósito sozinho saía também."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Deposito Duplo", email="depduplo@example.com", service="Arrive and Drive", amount=450)
+    fecha(cli, h, oid, passos={**SO_QBO, "qbo": False})   # fora da tabela, invoice desligada: os dois botões aparecem
+    hg = entra(cli, "ger@urace.us")
+    chamar, segundo = _no_meio(qbo, lambda: cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 450}))
+    monkeypatch.setattr(vendas, "chamar", chamar)
+    assert cli.post(f"{B}/sales/{oid}/deposit", headers=hg).status_code == 200
+    assert segundo[0].status_code == 409 and "cobrando o depósito" in segundo[0].json()["detail"], segundo[0].text
+    assert _closing(oid)["deposito_cobrado"] and "cobrando" not in _closing(oid)
+    assert cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 450}).status_code == 200
+    linhas = [(l["item_id"], l["unitario"]) for i in qbo.invoices for l in i["linhas"]]
+    assert linhas == [("35", 400.0), ("31", 450.0)], "o depósito uma vez, e a invoice do serviço sem ele"
+
+
+def test_liberar_que_caiu_depois_do_quickbooks_nao_manda_outra_sem_o_gerente_conferir(cli, qbo, monkeypatch):
+    """R4: o QuickBooks mandou a invoice e a gravação final falhou. Não sobrava rastro, e o Liberar com
+    a marca vencida (10 min) mandava outra. Agora o "enviando" fica na auditoria antes da chamada, e a
+    tentativa sem desfecho só passa com o gerente confirmando que conferiu no QuickBooks."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Marca Vencida", email="marcavencida@example.com", amount=300)
+    fecha(cli, h, oid)
+    hg = entra(cli, "ger@urace.us")
+    orig = vendas._ev
+
+    def ev_cai(con, opp_id, kind, title, *a, **kw):
+        if title.startswith("Invoice liberada"):
+            raise RuntimeError("database is locked")      # o banco falha DEPOIS do QuickBooks responder
+        return orig(con, opp_id, kind, title, *a, **kw)
+    monkeypatch.setattr(vendas, "_ev", ev_cai)
+    with pytest.raises(RuntimeError):
+        cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
+    monkeypatch.setattr(vendas, "_ev", orig)
+    assert len(qbo.invoices) == 1
+    con = conectar()
+    try:
+        a = um(con, "SELECT detail FROM audit_logs WHERE event='sales.invoice.sending' AND entity_id=?", (str(oid),))
+        assert a and json.loads(a["detail"])["por"] == "Gina Gerente", "o rastro de antes da chamada"
+    finally:
+        con.close()
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
+    assert r.status_code == 409 and "liberando a invoice" in r.json()["detail"], r.text
+    _vence_a_marca(oid)                                    # 11 minutos depois
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
+    assert r.status_code == 409, r.text
+    d = r.json()["detail"]
+    assert d["motivo"] == "tentativa_sem_desfecho" and "Gina Gerente" in d["mensagem"] \
+        and "não terminou: confira no QuickBooks se a invoice saiu" in d["mensagem"], d
+    assert len(qbo.invoices) == 1
+    # sem a marca (perdida), o "enviando" da auditoria sem desfecho para igual
+    f = _closing(oid)
+    marca = f.pop("cobrando")
+    con = conectar()
+    try:
+        con.execute("UPDATE opportunities SET closing=? WHERE id=?", (json.dumps(f, ensure_ascii=False), oid))
+    finally:
+        con.close()
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tentativa_sem_desfecho", r.text
+    # o gerente conferiu no QuickBooks que não saiu e confirma: sai, e fica na auditoria
+    r = cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300, "confirmar": True})
+    assert r.status_code == 200, r.text
+    assert len(qbo.invoices) == 2
+    con = conectar()
+    try:
+        a = um(con, "SELECT detail FROM audit_logs WHERE event='sales.invoice.release' AND entity_id=?", (str(oid),))
+        assert json.loads(a["detail"])["confirmou"] == marca["tentativa"]
+    finally:
+        con.close()
+
+
+def test_reenvio_que_caiu_depois_do_quickbooks_nao_reenvia(cli, qbo, monkeypatch):
+    """R4: o mesmo no "tentar de novo": a invoice saiu, a gravação caiu, e o próximo clique mandava a
+    segunda. Quem vende não confirma por cima; o gerente confirma depois de conferir."""
+    monkeypatch.setattr(vendas, "chamar", _qbo_fora_do_ar(qbo))
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Queda No Passo", email="quedanopasso@example.com", amount=500)
+    fecha(cli, h, oid)
+    monkeypatch.setattr(vendas, "chamar", qbo)
+    orig = vendas._ev
+
+    def ev_cai(con, opp_id, kind, title, *a, **kw):
+        if "refeito à mão" in title:
+            raise RuntimeError("database is locked")
+        return orig(con, opp_id, kind, title, *a, **kw)
+    monkeypatch.setattr(vendas, "_ev", ev_cai)
+    with pytest.raises(RuntimeError):
+        cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    monkeypatch.setattr(vendas, "_ev", orig)
+    assert len(qbo.invoices) == 1
+    assert cli.post(f"{B}/sales/{oid}/step/qbo", headers=h).status_code == 409 and len(qbo.invoices) == 1
+    _vence_a_marca(oid)
+    r = cli.post(f"{B}/sales/{oid}/step/qbo", headers=h)
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "tentativa_sem_desfecho", r.text
+    r = cli.post(f"{B}/sales/{oid}/step/qbo?confirmar=true", headers=h)
+    assert r.status_code == 403 and len(qbo.invoices) == 1, "quem vende não confirma por cima"
+    hg = entra(cli, "ger@urace.us")
+    assert cli.post(f"{B}/sales/{oid}/step/qbo?confirmar=true", headers=hg).status_code == 200
+    assert len(qbo.invoices) == 2 and "cobrando" not in _closing(oid)
+
+
+def test_servico_do_site_sem_item_sai_com_o_item_escolhido(cli, qbo):
+    """R6: o serviço do site sem item no QuickBooks ficava sem saída: o "tentar de novo" dava 502 de
+    novo (sem como escolher o item), e o Liberar dava 409 (na tabela, não espera ninguém)."""
+    con = conectar()
+    try:
+        inserir(con, "booking_services", name="Sessao Sem Item", price=200, qbo_item_id=None, deposit=0, active=1)
+        con.execute("INSERT INTO qbo_items (id, name, price, type, active) VALUES ('36','Sessao Avulsa',200,'Service',1)")
+    finally:
+        con.close()
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Sem Item", email="semitem@example.com", service="Sessao Sem Item", amount=200)
+    q = [p for p in fecha(cli, h, oid)["passos"] if p["passo"] == "qbo"][0]
+    assert q["ok"] is False and "não tem item" in q["detalhe"]
+    assert cli.post(f"{B}/sales/{oid}/step/qbo", headers=h).status_code == 502
+    r = cli.post(f"{B}/sales/{oid}/step/qbo?item_id=36", headers=h)       # o item escolhido na tela
+    assert r.status_code == 200, r.text
+    assert [(l["item_id"], l["unitario"]) for l in qbo.invoices[-1]["linhas"]] == [("36", 200.0)]
+    # o item escolhido está fora da tabela: quem vende não manda, o gerente libera com ele
+    oid2 = cria(cli, h, name="Sem Item 2", email="semitem2@example.com", service="Sessao Sem Item", amount=200)
+    fecha(cli, h, oid2)
+    r = cli.post(f"{B}/sales/{oid2}/step/qbo?item_id=32", headers=h)
+    assert r.status_code == 409 and "Liberar invoice" in r.json()["detail"], r.text
+    hg = entra(cli, "ger@urace.us")
+    r = cli.post(f"{B}/sales/{oid2}/invoice/liberar", headers=hg, json={"valor": 200, "item_id": "32"})
+    assert r.status_code == 200, r.text
+    assert [(l["item_id"], l["unitario"]) for l in qbo.invoices[-1]["linhas"]] == [("32", 200.0)]
+    assert len(qbo.invoices) == 2
+
+
+def test_nenhum_passo_antes_de_fechar(cli, qbo):
+    """R7: `step/<qualquer>` antes de fechar criava o `closing` e contornava o "Feche a venda antes":
+    depois dele, o passo da invoice mandava, o fechamento dava 409 e a venda ficava presa."""
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Passo Antes", email="passoantes@example.com", amount=500)
+    for passo in vendas.PASSOS:
+        r = cli.post(f"{B}/sales/{oid}/step/{passo}", headers=h)
+        assert r.status_code == 409 and "Feche a venda antes" in r.json()["detail"], (passo, r.text)
+    assert _closing(oid) is None and not qbo.invoices
+    assert fecha(cli, h, oid)["passos"][0]["ok"] is True and len(qbo.invoices) == 1

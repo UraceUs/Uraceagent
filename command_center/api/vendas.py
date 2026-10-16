@@ -227,7 +227,7 @@ def detalhe(oid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = D
             # outro piloto, a tela pergunta se é irmão
             "tabela": ref, "pode_liberar": gerente(u),
             # #310: enviada | esperando | livre — só depois de fechar (antes, não há invoice a liberar)
-            "invoice": estado_da_invoice(o, na_tabela) if o["closing"] else None,
+            "invoice": estado_da_invoice(o, na_tabela) if _fechada(o["closing"]) else None,
             "card": card and {"id": card["id"], "name": card["name"], "pilot_name": card["pilot_name"],
                               "outro_piloto": _outro_piloto(card, o)},
             "etapas": [{"codigo": k, "nome": v} for k, v in ETAPA_PT.items()],
@@ -458,6 +458,7 @@ class FecharIn(BaseModel):
     irmao: bool = False                   # #204: o card que já existe é do irmão: criar o card deste piloto
     passos: dict[str, bool] = {}
     extras: list[ExtraIn] = []
+    confirmar: bool = False               # #310 (R4): o gerente conferiu no QuickBooks que a tentativa anterior não mandou
 
 
 def gerente(u):
@@ -546,6 +547,12 @@ def _valor_liberado(o):
     return v is not None and o["amount"] is not None and abs(float(v) - float(o["amount"])) < 0.01
 
 
+def _aprovado_pelo_gerente(f):
+    """O valor desta venda foi aprovado por quem confere (o gerente ou o dono fechou fora da tabela, ou
+    liberou), e não só por estar na tabela do item de então."""
+    return bool(f) and bool(f.get("liberada") or (f.get("aprovado") and f.get("na_tabela") is not True))
+
+
 def _passo_qbo(f):
     """A linha "Cliente e invoice no QuickBooks" do fechamento (ou None)."""
     return next((p for p in (f or {}).get("passos") or [] if p.get("passo") == "qbo"), None)
@@ -558,35 +565,32 @@ def _espera_aprovacao(f):
     return bool(f) and bool(f.get("invoice_pendente") or (q and q.get("pendente") and q.get("ok") is not True))
 
 
-# O QuickBooks responde em segundos (o tempo máximo de uma chamada é 90 s): um "liberando" mais velho
-# que isto é de um clique que caiu no meio, e não pode deixar a invoice presa para sempre.
-LIBERANDO_MAX_S = 600
+def _fechada(f):
+    """A venda já fechou? O fechamento de verdade tem a data (`em`) ou os passos; o pedido pago no site
+    também conta. Só a marca de quem está fechando agora (`cobrando`) não é fechamento (#310)."""
+    return bool(f) and bool(f.get("em") or f.get("passos") or f.get("por") == "stripe")
 
 
-def _liberando_agora(f):
-    """Quem está liberando esta invoice neste instante ({por, em}), ou None (#310: o clique duplo)."""
-    from datetime import datetime, timezone
-    m = (f or {}).get("liberando")
-    if not m:
-        return None
-    try:
-        desde = datetime.fromisoformat(str(m.get("em")).replace("Z", "+00:00"))
-    except ValueError:
-        return m
-    return m if (datetime.now(timezone.utc) - desde).total_seconds() < LIBERANDO_MAX_S else None
+def pago_no_site(f):
+    """A venda nasceu do pedido pago no site, pelo Stripe (`stripe_loja`, `carrinho`): o cliente já pagou,
+    e nada sai pelo QuickBooks para ela (#310, R1)."""
+    return bool(f) and f.get("por") == "stripe"
 
 
 def estado_da_invoice(o, na_tabela):
     """A invoice do serviço desta venda (#310, dono, 14/10: invoice fora da tabela só sai com o gerente
     ou o dono; nunca cobrar duas vezes):
 
-    - "enviada": o passo do QuickBooks saiu (no fechamento, no botão do passo, no Liberar ou pela IA);
+    - "enviada": o passo do QuickBooks saiu (no fechamento, no botão do passo, no Liberar ou pela IA),
+      ou o pedido foi pago no site (Stripe) — o cliente já pagou;
     - "esperando": fora da tabela (ou sem preço de tabela) e ninguém conferiu o valor — inclusive a
       invoice desligada pelo closer e o fechamento de antes de 14/10. Só o gerente ou o dono libera;
     - "livre": pode sair pelo botão do passo.
 
     A invoice só do depósito fica em `deposito_cobrado`, não aqui."""
     f = o.get("closing") or {}
+    if pago_no_site(f):
+        return "enviada"
     q = _passo_qbo(f)
     if q and q.get("ok") is True:
         return "enviada"
@@ -600,17 +604,172 @@ def _numero(f):
     return f" #{n}" if n else ""
 
 
+def ja_saiu(f):
+    """A frase do 409 quando a cobrança desta venda já saiu: não cobramos duas vezes."""
+    if pago_no_site(f):
+        pedido = f" #{f['pedido']}" if f.get("pedido") else ""
+        return f"O pedido{pedido} desta venda foi pago no site (Stripe): não cobramos duas vezes."
+    return f"A invoice{_numero(f)} desta venda já saiu: não cobramos duas vezes."
+
+
+# --------------------------------------------------------------- a trava da cobrança (#310)
+# Toda saída que cobra (fechar, Liberar, o passo, a IA, o depósito) marca `closing.cobrando` com
+# compare-and-set antes de falar com o QuickBooks; quem chega com a marca viva para. O QuickBooks
+# responde em segundos (o tempo máximo de uma chamada é 90 s): a marca mais velha que isto é de um
+# pedido que caiu no meio. Ela não some sozinha (R4): a invoice pode ter saído, e só o gerente ou o
+# dono, depois de conferir no QuickBooks, confirma e manda de novo.
+COBRANDO_MAX_S = 600
+O_QUE_PT = {"liberar": "liberando a invoice", "reenvio": "mandando a invoice", "ia": "mandando a invoice pela IA",
+            "deposito": "cobrando o depósito", "fechar": "fechando a venda"}
+# o desfecho de cada tentativa na auditoria: todos levam o `tentativa` do "enviando"
+DESFECHOS = ("sales.invoice.release", "sales.invoice.resend", "sales.invoice", "sales.deposit", "sales.close",
+             "sales.invoice.failed")
+SEM_DESFECHO = "tentativa_sem_desfecho"
+
+
+class Travado(Exception):
+    """A cobrança desta venda não pode começar agora. `motivo` diz à tela que decisão pedir."""
+
+    def __init__(self, mensagem, motivo=None, status=409):
+        super().__init__(mensagem)
+        self.motivo, self.status = motivo, status
+
+    def http(self):
+        return HTTPException(self.status, {"motivo": self.motivo, "mensagem": str(self)} if self.motivo else str(self))
+
+
+def _marca(f):
+    m = (f or {}).get("cobrando")
+    return m if isinstance(m, dict) else None
+
+
+def _idade_s(iso):
+    from datetime import datetime, timezone
+    try:
+        desde = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if desde.tzinfo is None:
+        desde = desde.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - desde).total_seconds()
+
+
+def cobrando_agora(f):
+    """Quem está cobrando esta venda neste instante ({por, em, acao, tentativa}), ou None."""
+    m = _marca(f)
+    idade = _idade_s(m.get("em")) if m else None
+    return m if m and idade is not None and idade < COBRANDO_MAX_S else None
+
+
+def ocupado(m):
+    return (f"{m.get('por') or 'Alguém'} está {O_QUE_PT.get(m.get('acao'), 'cobrando esta venda')} agora "
+            f"({quando_pt(m.get('em'))}): espere um instante e recarregue.")
+
+
+def _sem_desfecho(con, oid, f):
+    """A tentativa de cobrar que não terminou (R4): a marca vencida no fechamento, ou o último
+    "enviando" da auditoria sem desfecho. Devolve {por, em, acao, tentativa} ou None."""
+    m = _marca(f)
+    if m and not cobrando_agora(f):
+        return m
+    a = um(con, """SELECT detail, at FROM audit_logs WHERE event='sales.invoice.sending' AND entity_type='opportunity'
+                    AND entity_id=? ORDER BY id DESC LIMIT 1""", (str(oid),))
+    d = json.loads((a or {}).get("detail") or "{}")
+    tok = d.get("tentativa")
+    if not tok or (m and m.get("tentativa") == tok):
+        return None
+    marcas = ",".join("?" * len(DESFECHOS))
+    if um(con, f"""SELECT 1 AS x FROM audit_logs WHERE entity_type='opportunity' AND entity_id=? AND event IN ({marcas})
+                    AND detail LIKE ? LIMIT 1""", (str(oid), *DESFECHOS, f'%"tentativa": "{tok}"%')):
+        return None
+    return {"por": d.get("por"), "em": d.get("em") or a["at"], "acao": d.get("acao"), "tentativa": tok}
+
+
+def texto_sem_desfecho(m):
+    quando = quando_pt(m.get("em"))
+    dia, _, hora = quando.partition(" ")
+    return (f"A tentativa de {m.get('por') or 'alguém'} às {hora or dia}{(' de ' + dia) if hora else ''} "
+            f"({O_QUE_PT.get(m.get('acao'), 'cobrando esta venda')}) não terminou: confira no QuickBooks se a invoice "
+            "saiu. Se não saiu, o gerente ou o dono confirma e manda de novo.")
+
+
+def travar(con, oid, cru, quem, acao, confirmar=False, pode_confirmar=False):
+    """Põe a marca `cobrando` no fechamento com compare-and-set: só troca o `closing` que este pedido
+    leu (`cru`). Quem chega com a marca viva, ou com o fechamento mudado no meio, para (o clique duplo,
+    duas abas, a IA no meio do botão). A tentativa anterior sem desfecho (R4) só passa com
+    `confirmar`, e só o gerente ou o dono confirma. Devolve a marca."""
+    import uuid
+    f = json.loads(cru or "null") or {}
+    if (m := cobrando_agora(f)):
+        raise Travado(ocupado(m))
+    pend = _sem_desfecho(con, oid, f)
+    if pend and not confirmar:
+        raise Travado(texto_sem_desfecho(pend), SEM_DESFECHO)
+    if pend and not pode_confirmar:
+        raise Travado("Só o gerente ou o dono confirma que a tentativa anterior não mandou a invoice.", SEM_DESFECHO, 403)
+    marca = {"por": quem, "em": agora(), "acao": acao, "tentativa": uuid.uuid4().hex[:16]}
+    if pend:
+        marca["confirmou"] = pend.get("tentativa") or True
+    novo = json.dumps(dict(f, cobrando=marca), ensure_ascii=False)
+    if con.execute("UPDATE opportunities SET closing=? WHERE id=? AND closing IS ?", (novo, oid, cru)).rowcount != 1:
+        raise Travado("Esta venda mudou agora mesmo (outro clique, outra aba ou a IA?): recarregue e confira.")
+    return marca
+
+
+def ler_closing(con, oid):
+    """O `closing` cru (o texto do banco, que o compare-and-set compara) e o lido."""
+    cru = (um(con, "SELECT closing FROM opportunities WHERE id=?", (oid,)) or {}).get("closing")
+    return cru, json.loads(cru or "null")
+
+
+def gravar_fechamento(con, oid, muda, **campos):
+    """R3: a escrita final do fechamento relê o `closing` (dentro de `transacao(con, imediata=True)`),
+    aplica só a mudança deste pedido e grava. Regravar o que se leu no começo apagava o que outro
+    pedido gravou no meio (o "liberada" de um Liberar, o depósito cobrado)."""
+    f = ler_closing(con, oid)[1] or {}
+    muda(f)
+    atualizar(con, "opportunities", oid, closing=json.dumps(f, ensure_ascii=False) if f else None,
+              updated_at=agora(), **campos)
+    return f
+
+
+def _tira_marca(f, marca):
+    """Tira a marca deste pedido (e só a dele: a de quem confirmou por cima fica)."""
+    if (_marca(f) or {}).get("tentativa") == marca["tentativa"]:
+        f.pop("cobrando", None)
+
+
+def destravar(con, oid, marca, erro=None, actor="system", user_id=None):
+    """Nada saiu: tira a marca e, se o pedido chegou a falar com o QuickBooks, grava o desfecho da
+    tentativa (`sales.invoice.failed`). O botão volta a funcionar."""
+    with transacao(con, imediata=True):
+        gravar_fechamento(con, oid, lambda f: _tira_marca(f, marca))
+        if erro is not None:
+            auditar(con, "sales.invoice.failed", actor, user_id=user_id, entity_type="opportunity", entity_id=oid,
+                    detail={"tentativa": marca["tentativa"], "acao": marca["acao"], "erro": str(erro)[:300]})
+
+
+def enviando(con, oid, marca, actor, user_id=None, **detalhe):
+    """R4: antes de chamar o QuickBooks, o "enviando" vai para a auditoria em autocommit. Se a gravação
+    do desfecho cair depois de a invoice sair, sobra o rastro: o próximo pedido para e pergunta."""
+    auditar(con, "sales.invoice.sending", actor, user_id=user_id, entity_type="opportunity", entity_id=oid,
+            detail={"tentativa": marca["tentativa"], "acao": marca["acao"], "por": marca["por"], "em": marca["em"],
+                    **detalhe})
+
+
 def ja_cobrado(f):
     """O que este fechamento já cobrou (ou está cobrando agora). Fechar de novo cobraria outra vez
     (#310): a lista refaria a invoice, o depósito, o card, a waiver, o Asana e o Kommo."""
     if not f:
         return None
+    if pago_no_site(f):
+        return "o pedido já foi pago no site (Stripe)"
     if (_passo_qbo(f) or {}).get("ok") is True:
         return f"a invoice{_numero(f)} já saiu"
     if f.get("liberada"):
         return "a invoice já foi liberada"
-    if _liberando_agora(f):
-        return "a invoice está sendo liberada agora"
+    if (m := cobrando_agora(f)):
+        return f"{m.get('por') or 'alguém'} está {O_QUE_PT.get(m.get('acao'), 'cobrando esta venda')} agora"
     if f.get("deposito_cobrado"):
         return "o depósito já foi cobrado"
     return None
@@ -805,12 +964,33 @@ def fechar(oid: int, dados: FecharIn, request: Request, tarefas: BackgroundTasks
 
     #204 (dono, 14/10): o preço da tabela vem do catálogo (o que a tela manda em `preco_tabela`
     não decide nada); fora da tabela, ou sem preço de tabela, a invoice só sai com o gerente ou o
-    dono. O depósito entra na mesma invoice quando o serviço pede, como na venda automática."""
+    dono. O depósito entra na mesma invoice quando o serviço pede, como na venda automática.
+
+    #310: fechar de novo não cobra de novo, e dois fechamentos ao mesmo tempo (duas abas, a IA)
+    não mandam duas invoices: este marca "fechando a venda" (`closing.cobrando`) antes dos passos."""
     o = _opp(con, oid, u)
-    if (cobrado := ja_cobrado(o["closing"])):                  # #310: fechar de novo cobraria outra vez
+    cru, f0 = ler_closing(con, oid)
+    if (m := cobrando_agora(f0)):
+        raise HTTPException(409, ocupado(m))
+    if (cobrado := ja_cobrado(f0)):                            # #310: fechar de novo cobraria outra vez
         raise HTTPException(409, f"Venda já fechada e {cobrado}: fechar de novo cobraria outra vez. "
                                  "Use os botões de cada passo no acompanhamento.")
-    campos = {k: v for k, v in dados.model_dump(exclude={"passos", "extras", "nota_cliente", "preco_tabela", "item_id", "irmao"}).items()
+    try:
+        marca = travar(con, oid, cru, u["name"], "fechar", dados.confirmar, gerente(u))
+    except Travado as e:
+        raise e.http()
+    falou = {"qbo": False}            # o QuickBooks pode ter mandado a invoice: a marca só sai com o desfecho
+    try:
+        return _fechar(oid, dados, request, tarefas, u, con, o, marca, falou)
+    except BaseException:
+        if not falou["qbo"]:
+            destravar(con, oid, marca)
+        raise
+
+
+def _fechar(oid, dados, request, tarefas, u, con, o, marca, falou):
+    campos = {k: v for k, v in dados.model_dump(exclude={"passos", "extras", "nota_cliente", "preco_tabela", "item_id",
+                                                         "irmao", "confirmar"}).items()
               if v is not None}
     if campos:
         for k in ("service", "email", "phone", "pilot_name"):
@@ -830,6 +1010,13 @@ def fechar(oid: int, dados: FecharIn, request: Request, tarefas: BackgroundTasks
     deposito = ref["deposito"] if ref else 0.0
     quer = {p: bool(dados.passos.get(p, True)) for p in PASSOS}
     saida = []
+    ator = f"user:{u['id']}"
+
+    def passo_qbo():
+        if not aprovado:
+            return _qbo(con, o, False)
+        return com_rastro(con, oid, marca, ator, u["id"], falou, lambda: _qbo(con, o, True, ref, deposito),
+                          valor=o["amount"], deposito=deposito)
 
     if quer["cliente"]:
         try:
@@ -840,7 +1027,7 @@ def fechar(oid: int, dados: FecharIn, request: Request, tarefas: BackgroundTasks
         except Exception as e:                                   # noqa: BLE001
             _passo(saida, "cliente", False, str(e)[:240])
 
-    for nome, fn in (("qbo", lambda: _qbo(con, o, aprovado, ref, deposito)), ("waiver", lambda: _waiver(con, o)),
+    for nome, fn in (("qbo", passo_qbo), ("waiver", lambda: _waiver(con, o)),
                      ("asana", lambda: _asana(con, o)), ("kommo", lambda: _kommo_ganho(con, o))):
         if not quer[nome]:
             _passo(saida, nome, None, "desligado pelo closer")
@@ -865,92 +1052,156 @@ def fechar(oid: int, dados: FecharIn, request: Request, tarefas: BackgroundTasks
 
     fechado = resumo_do_fechamento(u["name"], o, ref, na_tabela, por_que, aprovado, deposito, saida)
     etapa = "GANHO" if o["client_id"] else "FECHAMENTO"
-    atualizar(con, "opportunities", oid, stage=etapa, closing=json.dumps(fechado, ensure_ascii=False),
-              next_at=None if etapa == "GANHO" else o["next_at"], updated_at=agora())
-    for p in saida:
-        _ev(con, oid, PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}",
-            p.get("client_id") and {"client_id": p["client_id"]} or None,
-            f"user:{u['id']}", 1 if p["ok"] else (0 if p["ok"] is False else None))
-    _ev(con, oid, "stage", f"Venda fechada · {ETAPA_PT[etapa]}", {"valor": o["amount"], "servico": o["service"]}, f"user:{u['id']}", 1)
-    auditar(con, "sales.close", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
-            detail={"valor": o["amount"], "servico": o["service"], "preco_tabela": fechado["preco_tabela"],
-                    "na_tabela": na_tabela, "aprovado": aprovado, "deposito": deposito,
-                    "passos": {p["passo"]: p["ok"] for p in saida}},
-            ip=auth._ip(request))
-    con.commit()
+    with transacao(con, imediata=True):     # R3: o fechamento entra inteiro, com a linha do tempo e a auditoria
+        gravar_fechamento(con, oid, lambda f: _troca_tudo(f, fechado, marca), stage=etapa,
+                          next_at=None if etapa == "GANHO" else o["next_at"])
+        for p in saida:
+            _ev(con, oid, PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}",
+                p.get("client_id") and {"client_id": p["client_id"]} or None,
+                ator, 1 if p["ok"] else (0 if p["ok"] is False else None))
+        _ev(con, oid, "stage", f"Venda fechada · {ETAPA_PT[etapa]}", {"valor": o["amount"], "servico": o["service"]}, ator, 1)
+        auditar(con, "sales.close", ator, user_id=u["id"], entity_type="opportunity", entity_id=oid,
+                detail={"valor": o["amount"], "servico": o["service"], "preco_tabela": fechado["preco_tabela"],
+                        "na_tabela": na_tabela, "aprovado": aprovado, "deposito": deposito,
+                        "passos": {p["passo"]: p["ok"] for p in saida}, "tentativa": marca["tentativa"]},
+                ip=auth._ip(request))
     _google(tarefas, oid)
     return {"ok": True, "etapa": etapa, "fechamento": fechado, "client_id": o["client_id"]}
+
+
+def com_rastro(con, oid, marca, ator, user_id, falou, chamada, **detalhe):
+    """A chamada que cobra, com o rastro do R4: o "enviando" na auditoria antes e, se ela falha (nada
+    saiu), o desfecho `sales.invoice.failed`. `falou["qbo"]` fica ligado só se o QuickBooks respondeu."""
+    enviando(con, oid, marca, ator, user_id, **detalhe)
+    falou["qbo"] = True
+    try:
+        return chamada()
+    except Exception as e:
+        falou["qbo"] = False
+        auditar(con, "sales.invoice.failed", ator, user_id=user_id, entity_type="opportunity", entity_id=oid,
+                detail={"tentativa": marca["tentativa"], "acao": marca["acao"], "erro": str(e)[:300]})
+        raise
+
+
+def _troca_tudo(f, fechado, marca):
+    """O fechamento novo no lugar do que estava, sem a marca deste pedido (a de quem confirmou por cima fica)."""
+    outra = _marca(f) if (_marca(f) or {}).get("tentativa") != marca["tentativa"] else None
+    f.clear()
+    f.update(fechado)
+    if outra:
+        f["cobrando"] = outra
 
 
 def _troca_passo(fechado, passo, item):
     fechado["passos"] = [p for p in fechado.get("passos", []) if p.get("passo") != passo] + [item]
 
 
+def _http_da_chamada(e):
+    """O erro de uma chamada que cobra, para a tela (nada saiu)."""
+    if isinstance(e, HTTPException):
+        return e
+    if isinstance(e, NaoConectado):
+        return HTTPException(503, f"não conectado: {e}")
+    return HTTPException(502, str(e)[:300])
+
+
 @r.post("/{oid}/step/{passo}")
-def refazer(oid: int, passo: str, request: Request, irmao: bool = False, u=Depends(auth.exige("OPERATOR")),
-            con: sqlite3.Connection = Depends(get_db)):
+def refazer(oid: int, passo: str, request: Request, irmao: bool = False, item_id: str | None = None,
+            confirmar: bool = False, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """Botão manual de um passo (reenviar waiver, mandar a invoice, criar a tarefa…).
 
     #204: a invoice que espera o gerente NÃO sai por aqui — antes, este botão mandava com
     `aprovado=True` e passava por cima da aprovação. Só sai o valor da tabela ou o já liberado.
-    #310: a invoice que já saiu também não sai de novo (era só regra escrita: a API e o MCP
-    mandavam a segunda), e o envio por aqui fica na auditoria."""
+    #310: a invoice que já saiu (ou que o cliente pagou no site) também não sai de novo, e o envio
+    por aqui fica na auditoria. Nenhum passo roda antes de fechar (R7: criava um fechamento e a venda
+    não fechava mais). A invoice marca `cobrando` antes de falar com o QuickBooks (R2: dois cliques,
+    a IA ou o Liberar no meio), e a gravação final relê o fechamento (R3). `item_id` é o item do
+    catálogo escolhido na tela quando o serviço não tem (R6); `confirmar` é o do R4 (só o gerente)."""
     o = _opp(con, oid, u)
     if passo not in PASSOS:
         raise HTTPException(400, f"Passo inválido. Use: {', '.join(PASSOS)}")
-    fechado = o["closing"] or {"passos": []}
+    cru, fechado = ler_closing(con, oid)
+    if (m := cobrando_agora(fechado)) and m.get("acao") == "fechar":
+        raise HTTPException(409, ocupado(m))
+    if not _fechada(fechado):
+        raise HTTPException(409, "Feche a venda antes: os passos saem no fechamento (feitos antes, o fechamento faria de novo).")
+    o["closing"] = fechado
+    ator, marca, deposito = f"user:{u['id']}", None, 0.0
     if passo == "qbo":
-        if not o["closing"]:              # #310: mandada antes, o fechamento cobraria de novo
-            raise HTTPException(409, "Feche a venda antes: a invoice sai no fechamento.")
         if not o["service"] or o["amount"] is None:
             raise HTTPException(400, "Para a invoice, a ficha precisa do serviço e do valor.")
-        ref, _preco, na_tabela, por_que = situacao_do_preco(con, o)
+        ref, _preco, na_tabela, por_que = situacao_do_preco(con, o, item_id)
+        if item_id and not ref:
+            raise HTTPException(400, "Este item não está no catálogo do QuickBooks (ou está inativo).")
         estado = estado_da_invoice(o, na_tabela)
+        if estado == "livre" and item_id and na_tabela is not True and not _aprovado_pelo_gerente(fechado):
+            estado = "esperando"          # R6: o item escolhido agora tem outro preço: o valor aprovado no fechamento era o de outra tabela
         if estado == "enviada":
-            raise HTTPException(409, f"A invoice{_numero(fechado)} desta venda já saiu: não cobramos duas vezes. "
-                                     "Para corrigir a invoice, fale com a gerência.")
+            raise HTTPException(409, f"{ja_saiu(fechado)} Para corrigir a invoice, fale com a gerência.")
         if estado == "esperando":
             motivo = por_que if na_tabela is not True else (fechado.get("motivo_preco") or por_que)
             raise HTTPException(409, f"A invoice espera o gerente conferir o valor ({motivo}). "
                                      "O gerente ou o dono usa Liberar invoice.")
         deposito = 0.0 if fechado.get("deposito_cobrado") else (ref["deposito"] if ref else 0.0)
-    try:
-        if passo == "cliente":
-            cid, det = _cliente_do_fechamento(con, o, None, irmao)
-            atualizar(con, "opportunities", oid, client_id=cid)
-            res, ok = {"client_id": cid, "detalhe": det}, True
-        elif passo == "qbo":
-            res, ok = _qbo(con, o, True, ref, deposito), True
-            fechado.update(invoice_pendente=False, deposito=deposito or fechado.get("deposito"))
+        try:
+            marca = travar(con, oid, cru, u["name"], "reenvio", confirmar, gerente(u))
+        except Travado as e:
+            raise e.http()
+        falou = {"qbo": False}
+        try:
+            if ref and ref["item_id"] and ref["item_id"] != o.get("qbo_item_id"):     # R6: o item escolhido fica na venda
+                atualizar(con, "opportunities", oid, qbo_item_id=ref["item_id"])
+                o["qbo_item_id"] = ref["item_id"]
+            res = com_rastro(con, oid, marca, ator, u["id"], falou, lambda: _qbo(con, o, True, ref, deposito),
+                             valor=o["amount"], deposito=deposito, item=ref and ref["item_id"])
+        except BaseException as e:
+            if not falou["qbo"]:
+                destravar(con, oid, marca)
+            if not isinstance(e, Exception):
+                raise
+            raise _http_da_chamada(e)
+    else:
+        try:
+            if passo == "cliente":
+                cid, det = _cliente_do_fechamento(con, o, None, irmao)
+                atualizar(con, "opportunities", oid, client_id=cid)
+                res = {"client_id": cid, "detalhe": det}
+            elif passo == "waiver":
+                res = _waiver(con, o)
+            elif passo == "asana":
+                res = _asana(con, o)
+            else:
+                res = _kommo_ganho(con, o)
+        except ValueError as e:                                  # trava de dado (irmão, card de outro piloto)
+            raise HTTPException(409, str(e)[:300])
+        except Exception as e:                                   # noqa: BLE001
+            raise _http_da_chamada(e)
+    item = {"passo": passo, "nome": PASSO_PT[passo], "ok": True, "detalhe": "refeito à mão",
+            **(res if isinstance(res, dict) else {})}
+
+    def muda(f):                          # R3: só a mudança deste passo, no fechamento relido
+        _troca_passo(f, passo, item)
+        if passo == "qbo":
+            f.update(invoice_pendente=False, deposito=deposito or f.get("deposito"))
             if deposito:
-                fechado["deposito_cobrado"] = res.get("invoice") or True
-        elif passo == "waiver":
-            res, ok = _waiver(con, o), True
-        elif passo == "asana":
-            res, ok = _asana(con, o), True
-        else:
-            res, ok = _kommo_ganho(con, o), True
-    except NaoConectado as e:
-        raise HTTPException(503, f"não conectado: {e}")
-    except ValueError as e:                                      # trava de dado (irmão, card de outro piloto)
-        raise HTTPException(409, str(e)[:300])
-    except Exception as e:                                       # noqa: BLE001
-        raise HTTPException(502, str(e)[:300])
-    _troca_passo(fechado, passo, {"passo": passo, "nome": PASSO_PT[passo], "ok": True, "detalhe": "refeito à mão",
-                                  **(res if isinstance(res, dict) else {})})
-    with transacao(con):                  # o que saiu, a linha do tempo e a auditoria entram juntos
-        atualizar(con, "opportunities", oid, closing=json.dumps(fechado, ensure_ascii=False), updated_at=agora())
-        _ev(con, oid, PASSO_KIND[passo], f"{PASSO_PT[passo]}: refeito à mão", res, f"user:{u['id']}", 1 if ok else 0)
+                f["deposito_cobrado"] = res.get("invoice") or True
+            _tira_marca(f, marca)
+    with transacao(con, imediata=True):   # o que saiu, a linha do tempo e a auditoria entram juntos
+        gravar_fechamento(con, oid, muda)
+        _ev(con, oid, PASSO_KIND[passo], f"{PASSO_PT[passo]}: refeito à mão", res, ator, 1)
         if passo == "qbo":                # #310: o reenvio fica na auditoria, como o Liberar
-            auditar(con, "sales.invoice.resend", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity",
+            auditar(con, "sales.invoice.resend", ator, user_id=u["id"], entity_type="opportunity",
                     entity_id=oid, detail={"valor": o["amount"], "na_tabela": na_tabela, "item": ref and ref["item_id"],
-                                           "deposito": deposito, "invoice": res.get("invoice")}, ip=auth._ip(request))
+                                           "deposito": deposito, "invoice": res.get("invoice"),
+                                           "tentativa": marca["tentativa"], "confirmou": marca.get("confirmou")},
+                    ip=auth._ip(request))
     return {"ok": True, "passo": passo, "resultado": res}
 
 
 class LiberarIn(BaseModel):
     valor: float                          # o valor que o gerente conferiu na tela (tem que ser o da venda)
     item_id: str | None = None            # o item do catálogo, quando a venda ainda não tem
+    confirmar: bool = False               # #310 (R4): conferiu no QuickBooks que a tentativa anterior não mandou
 
 
 @r.post("/{oid}/invoice/liberar")
@@ -961,91 +1212,111 @@ def liberar_invoice(oid: int, dados: LiberarIn, request: Request, u=Depends(auth
     preço da tabela. Manda o valor conferido: se a venda mudou de valor no meio, não libera.
 
     #310: libera também a invoice desligada pelo closer fora da tabela e a do fechamento de antes
-    de 14/10 (que só tinha `pendente` no passo); a que já saiu não sai de novo; e dois cliques ao
-    mesmo tempo mandam uma invoice só (o primeiro marca `liberando` antes de falar com o QuickBooks)."""
+    de 14/10 (que só tinha `pendente` no passo); a que já saiu (ou foi paga no site) não sai de novo;
+    e nada cobra junto (dois cliques, a IA, o passo, o depósito): o primeiro marca `cobrando` antes de
+    falar com o QuickBooks. Com o item escolhido na janela, libera também a venda cujo serviço não
+    tinha item (R6)."""
     o = _opp(con, oid, u)
-    cru = um(con, "SELECT closing FROM opportunities WHERE id=?", (oid,))["closing"]
-    f = o["closing"] = json.loads(cru or "null")          # o que a marca de baixo compara
-    if not f:
+    cru, f = ler_closing(con, oid)
+    o["closing"] = f
+    if not _fechada(f):
         raise HTTPException(409, "Esta venda não tem invoice esperando aprovação.")
     _r, _p, na_tabela_da_venda, _pq = situacao_do_preco(con, o)
     estado = estado_da_invoice(o, na_tabela_da_venda)
-    de_onde = ((_passo_qbo(f) or {}).get("detalhe") or "")[:120] or None    # pendente, antigo ou desligada
+    de_onde = ((_passo_qbo(f) or {}).get("detalhe") or "")[:120] or None    # pendente, antigo, desligada ou falhou
     if estado == "enviada":
-        raise HTTPException(409, f"A invoice{_numero(f)} desta venda já saiu: não cobramos duas vezes.")
-    if estado != "esperando":
+        raise HTTPException(409, ja_saiu(f))
+    if estado != "esperando" and not dados.item_id:
         raise HTTPException(409, "Esta venda não tem invoice esperando aprovação.")
-    if (m := _liberando_agora(f)):
-        raise HTTPException(409, f"{m.get('por') or 'Alguém'} está liberando esta invoice agora "
-                                 f"({quando_pt(m.get('em'))}): espere um instante e recarregue.")
     if o["amount"] is None or abs(float(dados.valor) - float(o["amount"])) >= 0.01:
         raise HTTPException(409, f"O valor da venda agora é ${float(o['amount'] or 0):g}: confira de novo antes de liberar.")
     ref, preco, na_tabela, por_que = situacao_do_preco(con, o, dados.item_id)
     if dados.item_id and not ref:
         raise HTTPException(400, "Este item não está no catálogo do QuickBooks (ou está inativo).")
-    # o clique duplo: só um pedido troca o `closing` que leu pelo marcado; o outro acha o marcado e para
-    marcado = json.dumps(dict(f, liberando={"por": u["name"], "em": agora()}), ensure_ascii=False)
-    if con.execute("UPDATE opportunities SET closing=? WHERE id=? AND closing IS ?", (marcado, oid, cru)).rowcount != 1:
-        raise HTTPException(409, "Esta venda mudou agora mesmo (outro clique em Liberar?): recarregue e confira.")
-    if ref and ref["item_id"] and ref["item_id"] != o.get("qbo_item_id"):
-        atualizar(con, "opportunities", oid, qbo_item_id=ref["item_id"])
-        o["qbo_item_id"] = ref["item_id"]
+    try:                                  # o clique duplo, a IA, o passo: só um troca o `closing` que leu
+        marca = travar(con, oid, cru, u["name"], "liberar", dados.confirmar, True)
+    except Travado as e:
+        raise e.http()
+    ator, falou = f"user:{u['id']}", {"qbo": False}
     deposito = 0.0 if f.get("deposito_cobrado") else (ref["deposito"] if ref else 0.0)
     try:
-        res = _qbo(con, o, True, ref, deposito)
-    except Exception as e:                                       # noqa: BLE001
-        # nada saiu: tira a marca, para o gerente poder tentar de novo
-        con.execute("UPDATE opportunities SET closing=? WHERE id=? AND closing=?", (cru, oid, marcado))
-        if isinstance(e, NaoConectado):
-            raise HTTPException(503, f"não conectado: {e}")
-        raise HTTPException(502, str(e)[:300])
+        if ref and ref["item_id"] and ref["item_id"] != o.get("qbo_item_id"):
+            atualizar(con, "opportunities", oid, qbo_item_id=ref["item_id"])
+            o["qbo_item_id"] = ref["item_id"]
+        res = com_rastro(con, oid, marca, ator, u["id"], falou, lambda: _qbo(con, o, True, ref, deposito),
+                         valor=o["amount"], deposito=deposito, item=ref and ref["item_id"])
+    except BaseException as e:
+        if not falou["qbo"]:              # nada saiu: tira a marca, para o gerente poder tentar de novo
+            destravar(con, oid, marca)
+        if not isinstance(e, Exception):
+            raise
+        raise _http_da_chamada(e)
     liberada = {"por": u["name"], "em": agora(), "valor": o["amount"], "preco_tabela": preco, "motivo_preco": por_que}
-    f.update(aprovado=True, valor_aprovado=o["amount"], invoice_pendente=False, liberada=liberada,
-             preco_tabela=preco, deposito=deposito or f.get("deposito"))
-    f.pop("liberando", None)
-    if deposito:
-        f["deposito_cobrado"] = res.get("invoice") or True
-    _troca_passo(f, "qbo", {"passo": "qbo", "nome": PASSO_PT["qbo"], "ok": True,
-                            "detalhe": f"liberada por {u['name']} (valor ${float(o['amount']):g}; {por_que})", **res})
+    passo = {"passo": "qbo", "nome": PASSO_PT["qbo"], "ok": True,
+             "detalhe": f"liberada por {u['name']} (valor ${float(o['amount']):g}; {por_que})", **res}
+
+    def muda(g):                          # R3: só o que o Liberar muda, no fechamento relido
+        g.update(aprovado=True, valor_aprovado=o["amount"], invoice_pendente=False, liberada=liberada,
+                 preco_tabela=preco, deposito=deposito or g.get("deposito"))
+        if deposito:
+            g["deposito_cobrado"] = res.get("invoice") or True
+        _troca_passo(g, "qbo", passo)
+        _tira_marca(g, marca)
     tabela = f"${preco:g}" if preco is not None else "sem preço de tabela"
-    with transacao(con):                  # a invoice que saiu, a linha do tempo e a auditoria entram juntas
-        atualizar(con, "opportunities", oid, closing=json.dumps(f, ensure_ascii=False), updated_at=agora())
-        _ev(con, oid, "invoice", f"Invoice liberada por {u['name']}: ${float(o['amount']):g} (tabela: {tabela})", res,
-            f"user:{u['id']}", 1)
-        auditar(con, "sales.invoice.release", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
+    with transacao(con, imediata=True):   # a invoice que saiu, a linha do tempo e a auditoria entram juntas
+        f = gravar_fechamento(con, oid, muda)
+        _ev(con, oid, "invoice", f"Invoice liberada por {u['name']}: ${float(o['amount']):g} (tabela: {tabela})", res, ator, 1)
+        auditar(con, "sales.invoice.release", ator, user_id=u["id"], entity_type="opportunity", entity_id=oid,
                 detail={"valor": o["amount"], "preco_tabela": preco, "na_tabela": na_tabela, "item": ref and ref["item_id"],
-                        "deposito": deposito, "invoice": res.get("invoice"), "de": de_onde}, ip=auth._ip(request))
+                        "deposito": deposito, "invoice": res.get("invoice"), "de": de_onde,
+                        "tentativa": marca["tentativa"], "confirmou": marca.get("confirmou")}, ip=auth._ip(request))
     return {"ok": True, "resultado": res, "fechamento": f}
 
 
 @r.post("/{oid}/deposit")
-def cobrar_deposito(oid: int, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def cobrar_deposito(oid: int, request: Request, confirmar: bool = False, u=Depends(auth.exige("OPERATOR")),
+                    con: sqlite3.Connection = Depends(get_db)):
     """Cobrar só o depósito (#204, dono, 14/10: *"o depósito de segurança é cobrado em venda manual
     ou automática"*). Para quando ele faltou: venda fechada antes, ou com a invoice desligada. Uma
     invoice só com a linha "Security deposit", no valor que o catálogo pede para o serviço — o
-    mesmo da venda automática. Não cobra duas vezes."""
+    mesmo da venda automática. Não cobra duas vezes: nem o que já saiu, nem junto com o Liberar, o
+    passo ou a IA (#310: marca `cobrando` antes do QuickBooks e relê o fechamento no fim)."""
     o = _opp(con, oid, u)
-    f = o["closing"]
-    if not f:
+    cru, f = ler_closing(con, oid)
+    if not _fechada(f):
         raise HTTPException(409, "Feche a venda antes: o depósito vai junto com a invoice do fechamento.")
+    if pago_no_site(f):
+        raise HTTPException(409, ja_saiu(f))
     if f.get("deposito_cobrado"):
         raise HTTPException(409, "O depósito desta venda já foi cobrado.")
-    if _espera_aprovacao(f) or _liberando_agora(f):          # #310: também o fechamento de antes de 14/10
+    if _espera_aprovacao(f):                                 # #310: também o fechamento de antes de 14/10
         raise HTTPException(409, "A invoice desta venda espera o gerente conferir o valor; o depósito vai junto quando ela for liberada.")
     ref = item_da_tabela(con, o["service"], o.get("qbo_item_id"))
     deposito = ref["deposito"] if ref else 0.0
     if not deposito:
         raise HTTPException(400, "O serviço desta venda não pede depósito no catálogo (Site › Serviços e preços).")
     try:
-        res = _qbo(con, o, True, ref, deposito, so_deposito=True)
-    except NaoConectado as e:
-        raise HTTPException(503, f"não conectado: {e}")
-    except Exception as e:                                       # noqa: BLE001
-        raise HTTPException(502, str(e)[:300])
-    f.update(deposito=deposito, deposito_cobrado=res.get("invoice") or True)
-    atualizar(con, "opportunities", oid, closing=json.dumps(f, ensure_ascii=False), updated_at=agora())
-    _ev(con, oid, "invoice", f"Depósito cobrado: ${deposito:g}", res, f"user:{u['id']}", 1)
-    auditar(con, "sales.deposit", f"user:{u['id']}", user_id=u["id"], entity_type="opportunity", entity_id=oid,
-            detail={"deposito": deposito, "invoice": res.get("invoice")}, ip=auth._ip(request))
-    con.commit()
+        marca = travar(con, oid, cru, u["name"], "deposito", confirmar, gerente(u))
+    except Travado as e:
+        raise e.http()
+    ator, falou = f"user:{u['id']}", {"qbo": False}
+    try:
+        res = com_rastro(con, oid, marca, ator, u["id"], falou, lambda: _qbo(con, o, True, ref, deposito, so_deposito=True),
+                         deposito=deposito)
+    except BaseException as e:
+        if not falou["qbo"]:
+            destravar(con, oid, marca)
+        if not isinstance(e, Exception):
+            raise
+        raise _http_da_chamada(e)
+
+    def muda(g):
+        g.update(deposito=deposito, deposito_cobrado=res.get("invoice") or True)
+        _tira_marca(g, marca)
+    with transacao(con, imediata=True):
+        gravar_fechamento(con, oid, muda)
+        _ev(con, oid, "invoice", f"Depósito cobrado: ${deposito:g}", res, ator, 1)
+        auditar(con, "sales.deposit", ator, user_id=u["id"], entity_type="opportunity", entity_id=oid,
+                detail={"deposito": deposito, "invoice": res.get("invoice"), "tentativa": marca["tentativa"],
+                        "confirmou": marca.get("confirmou")}, ip=auth._ip(request))
     return {"ok": True, "deposito": deposito, "resultado": res}

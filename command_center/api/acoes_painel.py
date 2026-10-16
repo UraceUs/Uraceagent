@@ -11,7 +11,6 @@ rodam dentro do Command Center, com as travas do dono em código.
 
 Cada uma devolve um dict com `aplicado` e o que fez; o executor do motor grava e audita.
 """
-import json
 
 from command_center.db import agora, atualizar, auditar, todos, transacao, um
 from command_center.providers import identidade
@@ -215,6 +214,17 @@ def _quem_confere(con, user_id):
     return bool(p) and vendas.gerente({"role": p["role"], "free": auth.livre(p["email"])})
 
 
+def _nome(con, user_id):
+    return (um(con, "SELECT name FROM users WHERE id=?", (user_id,)) or {}).get("name") if user_id else None
+
+
+def _travado(e):
+    """A recusa da trava da cobrança (#310), no idioma da IA. Pela IA não se confirma a tentativa sem
+    desfecho (R4): quem confirma é o gerente ou o dono, pela tela, depois de conferir no QuickBooks."""
+    extra = " Pela IA não se confirma: o gerente ou o dono confere no QuickBooks e confirma pela tela." if e.motivo else ""
+    return {"aplicado": False, "motivo": f"RECUSADO: {e}{extra}"}
+
+
 def venda_enviar_invoice(con, user_id, opp_id=None, nome=None):
     from command_center.api import vendas
     o, erro = _opp_por(con, opp_id, nome, user_id)
@@ -222,44 +232,55 @@ def venda_enviar_invoice(con, user_id, opp_id=None, nome=None):
         return {"aplicado": False, "motivo": erro}
     if not o["service"] or o["amount"] is None:
         return {"aplicado": False, "motivo": "esta oportunidade não tem serviço e valor: complete a ficha antes"}
-    o = dict(o, closing=json.loads(o["closing"] or "null"))
-    f = o["closing"]
+    cru, f = vendas.ler_closing(con, o["id"])
+    o = dict(o, closing=f)
     # #310: a invoice mora no fechamento. Mandada antes dele, o fechamento cobraria de novo; mandada
     # duas vezes, o cliente recebe duas cobranças. Por isso: só depois de fechar, e uma vez.
-    if not f:
+    if not vendas._fechada(f):
         return {"aplicado": False, "motivo": "RECUSADO: esta venda ainda não foi fechada. A invoice sai no fechamento "
                                               "(venda_fechar); mandada antes, o fechamento cobraria de novo"}
     ref, preco, na_tabela, por_que = vendas.situacao_do_preco(con, o)
     estado = vendas.estado_da_invoice(o, na_tabela)
     if estado == "enviada":
-        return {"aplicado": False, "motivo": f"RECUSADO: a invoice{vendas._numero(f)} desta venda já saiu. "
-                                              "Não cobramos duas vezes"}
-    if vendas._liberando_agora(f):
-        return {"aplicado": False, "motivo": "RECUSADO: o gerente está liberando esta invoice agora"}
+        return {"aplicado": False, "motivo": f"RECUSADO: {vendas.ja_saiu(f)}"}
+    if (m := vendas.cobrando_agora(f)):
+        return {"aplicado": False, "motivo": f"RECUSADO: {vendas.ocupado(m)}"}
     if estado == "esperando" and not _quem_confere(con, user_id):
         return {"aplicado": False, "motivo": f"RECUSADO: {por_que}. Invoice fora da tabela (ou sem preço de tabela) "
                                               "só sai quando o gerente ou o dono confere o valor (Liberar invoice)"}
     deposito = 0.0 if f.get("deposito_cobrado") else (ref["deposito"] if ref else 0.0)
+    quem = _nome(con, user_id)
+    try:                                   # R2: a IA marca antes, como o botão; o Liberar no meio para
+        marca = vendas.travar(con, o["id"], cru, quem or "a IA", "ia")
+    except vendas.Travado as e:
+        return _travado(e)
+    falou = {"qbo": False}
     try:
-        res = vendas._qbo(con, o, True, ref, deposito)
+        res = vendas.com_rastro(con, o["id"], marca, "ia", user_id, falou, lambda: vendas._qbo(con, o, True, ref, deposito),
+                                valor=o["amount"], deposito=deposito)
     except Exception as e:                                        # noqa: BLE001
+        if not falou["qbo"]:
+            vendas.destravar(con, o["id"], marca)
         return {"aplicado": False, "motivo": str(e)[:240]}
     # a invoice que a IA mandou fica no fechamento, como a do botão: o passo e a IA não mandam outra
-    f.update(invoice_pendente=False, deposito=deposito or f.get("deposito"))
-    if estado == "esperando":                                     # o gerente (ou o dono) confirmou o valor
-        quem = um(con, "SELECT name FROM users WHERE id=?", (user_id,)) or {}
-        f.update(aprovado=True, valor_aprovado=o["amount"], preco_tabela=preco,
-                 liberada={"por": quem.get("name") or "gerente", "em": agora(), "valor": o["amount"],
-                           "preco_tabela": preco, "motivo_preco": por_que, "pela": "ia"})
-    if deposito:
-        f["deposito_cobrado"] = res.get("invoice") or True
-    vendas._troca_passo(f, "qbo", {"passo": "qbo", "nome": vendas.PASSO_PT["qbo"], "ok": True,
-                                   "detalhe": "enviada pela IA", **res})
-    with transacao(con):
-        atualizar(con, "opportunities", o["id"], closing=json.dumps(f, ensure_ascii=False), updated_at=agora())
+
+    def muda(g):                           # R3: só o que a IA mudou, no fechamento relido
+        g.update(invoice_pendente=False, deposito=deposito or g.get("deposito"))
+        if estado == "esperando":                                 # o gerente (ou o dono) confirmou o valor
+            g.update(aprovado=True, valor_aprovado=o["amount"], preco_tabela=preco,
+                     liberada={"por": quem or "gerente", "em": agora(), "valor": o["amount"],
+                               "preco_tabela": preco, "motivo_preco": por_que, "pela": "ia"})
+        if deposito:
+            g["deposito_cobrado"] = res.get("invoice") or True
+        vendas._troca_passo(g, "qbo", {"passo": "qbo", "nome": vendas.PASSO_PT["qbo"], "ok": True,
+                                       "detalhe": "enviada pela IA", **res})
+        vendas._tira_marca(g, marca)
+    with transacao(con, imediata=True):
+        vendas.gravar_fechamento(con, o["id"], muda)
         vendas._ev(con, o["id"], "invoice", "Invoice criada e enviada pela IA", res, "ia", 1)
         auditar(con, "sales.invoice", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"],
-                detail={**res, "valor": o["amount"], "na_tabela": na_tabela, "liberada": estado == "esperando"})
+                detail={**res, "valor": o["amount"], "na_tabela": na_tabela, "liberada": estado == "esperando",
+                        "tentativa": marca["tentativa"]})
     return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], **res}
 
 
@@ -268,17 +289,35 @@ def venda_fechar(con, user_id, opp_id=None, nome=None):
 
     #204: a IA confere o preço da tabela no catálogo, como a tela. Fora da tabela (ou sem preço
     de tabela), a invoice fica esperando — quem confirmou a ação sendo operador não basta: só o
-    gerente ou o dono confere o valor."""
+    gerente ou o dono confere o valor. #310: não fecha de novo o que já cobrou, e marca "fechando a
+    venda" antes dos passos, como a tela (a tela e a IA ao mesmo tempo não mandam duas invoices)."""
     from command_center.api import vendas
     o, erro = _opp_por(con, opp_id, nome, user_id)
     if erro:
         return {"aplicado": False, "motivo": erro}
     if not o["service"] or o["amount"] is None:
         return {"aplicado": False, "motivo": "para fechar preciso do serviço e do valor na ficha"}
-    if (cobrado := vendas.ja_cobrado(json.loads(o["closing"] or "null"))):    # #310: fechar de novo cobraria outra vez
+    cru, f0 = vendas.ler_closing(con, o["id"])
+    if (m := vendas.cobrando_agora(f0)):
+        return {"aplicado": False, "motivo": f"RECUSADO: {vendas.ocupado(m)}"}
+    if (cobrado := vendas.ja_cobrado(f0)):    # #310: fechar de novo cobraria outra vez
         return {"aplicado": False, "motivo": f"RECUSADO: venda já fechada e {cobrado}. Fechar de novo cobraria outra vez; "
                                               "o que faltou sai pelos botões de cada passo"}
-    o = dict(o)
+    try:
+        marca = vendas.travar(con, o["id"], cru, _nome(con, user_id) or "a IA", "fechar")
+    except vendas.Travado as e:
+        return _travado(e)
+    falou = {"qbo": False}
+    try:
+        return _venda_fechar(con, user_id, dict(o), marca, falou)
+    except BaseException:
+        if not falou["qbo"]:
+            vendas.destravar(con, o["id"], marca)
+        raise
+
+
+def _venda_fechar(con, user_id, o, marca, falou):
+    from command_center.api import vendas
     ref, _preco, na_tabela, por_que = vendas.situacao_do_preco(con, o)
     if ref and ref["item_id"] and ref["item_id"] != o.get("qbo_item_id"):
         atualizar(con, "opportunities", o["id"], qbo_item_id=ref["item_id"])
@@ -286,6 +325,12 @@ def venda_fechar(con, user_id, opp_id=None, nome=None):
     aprovado = na_tabela is True or _quem_confere(con, user_id)
     deposito = ref["deposito"] if ref else 0.0
     saida = []
+
+    def passo_qbo():
+        if not aprovado:
+            return vendas._qbo(con, o, False)
+        return vendas.com_rastro(con, o["id"], marca, "ia", user_id, falou, lambda: vendas._qbo(con, o, True, ref, deposito),
+                                 valor=o["amount"], deposito=deposito)
     try:
         cid, det = vendas._cliente_do_fechamento(con, o, None)
         atualizar(con, "opportunities", o["id"], client_id=cid)
@@ -293,7 +338,7 @@ def venda_fechar(con, user_id, opp_id=None, nome=None):
         vendas._passo(saida, "cliente", True, det, {"client_id": cid})
     except Exception as e:                                        # noqa: BLE001
         vendas._passo(saida, "cliente", False, str(e)[:200])
-    for passo, fn in (("qbo", lambda: vendas._qbo(con, o, aprovado, ref, deposito)), ("waiver", lambda: vendas._waiver(con, o)),
+    for passo, fn in (("qbo", passo_qbo), ("waiver", lambda: vendas._waiver(con, o)),
                       ("asana", lambda: vendas._asana(con, o)), ("kommo", lambda: vendas._kommo_ganho(con, o))):
         try:
             res = fn()
@@ -305,14 +350,14 @@ def venda_fechar(con, user_id, opp_id=None, nome=None):
             vendas._passo(saida, passo, False, str(e)[:200])
     fechado = vendas.resumo_do_fechamento("ia", o, ref, na_tabela, por_que, aprovado, deposito, saida)
     etapa = "GANHO" if o["client_id"] else "FECHAMENTO"
-    atualizar(con, "opportunities", o["id"], stage=etapa, closing=json.dumps(fechado, ensure_ascii=False),
-              next_at=None, updated_at=agora())
-    for p in saida:
-        vendas._ev(con, o["id"], vendas.PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}", None, "ia",
-                   1 if p["ok"] else (0 if p["ok"] is False else None))
-    auditar(con, "sales.close", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"],
-            detail={"passos": {p["passo"]: p["ok"] for p in saida}, "valor": o["amount"], "preco_tabela": fechado["preco_tabela"],
-                    "na_tabela": na_tabela, "aprovado": aprovado, "deposito": deposito})
+    with transacao(con, imediata=True):     # R3: o fechamento entra inteiro, com a linha do tempo e a auditoria
+        vendas.gravar_fechamento(con, o["id"], lambda f: vendas._troca_tudo(f, fechado, marca), stage=etapa, next_at=None)
+        for p in saida:
+            vendas._ev(con, o["id"], vendas.PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}", None, "ia",
+                       1 if p["ok"] else (0 if p["ok"] is False else None))
+        auditar(con, "sales.close", "ia", user_id=user_id, entity_type="opportunity", entity_id=o["id"],
+                detail={"passos": {p["passo"]: p["ok"] for p in saida}, "valor": o["amount"], "preco_tabela": fechado["preco_tabela"],
+                        "na_tabela": na_tabela, "aprovado": aprovado, "deposito": deposito, "tentativa": marca["tentativa"]})
     return {"aplicado": True, "oportunidade": o["id"], "quem": o["name"], "etapa": etapa,
             "invoice_esperando_gerente": fechado["invoice_pendente"], "motivo_preco": por_que,
             "feitos": [p["nome"] for p in saida if p["ok"]], "faltou": [f"{p['nome']}: {p['detalhe']}" for p in saida if p["ok"] is False]}
