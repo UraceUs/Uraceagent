@@ -222,3 +222,12 @@ lead); pedido de desconto agora aponta para a oferta de call.
 **Fica como está, de propósito:** preços, números da cadência, tabela de links e a regra "sem link na 1ª resposta".
 **Risco aberto antes de tirar `SDR_ATENDER_SO_TAG`:** cada balão é um disparo do bot de entrega; conferir 429 do
 Kommo na primeira hora (roteiro) e a pessoa e o robô respondendo juntos (regra de ouro).
+
+## 16/10 — Conferência do RAG
+A busca no cofre indexava só `90_ARQUIVO/vendas-chase` (8 docs). Quatro deles traziam regra do Chase antigo que
+contradiz o playbook de 13/10 e, entrando no bloco [SYSTEM] do turno, ganhavam da persona: menu A/B/C/D e "preço só
+depois da classificação" (Qualificacao, aprendizado de 24/08), follow-up +2h/+24h/+3d/+7d (Follow-ups) e o script
+"Italo handles program terms" (Objecoes). Passaram a `status: archived` e saem do índice na próxima indexação.
+Ficam Politicas Comerciais, Pista e Check-in, Programas e Visao Geral. O aviso de "pouca informação" agora diz que
+o que está nas instruções (preços, dias, endereço, idade, links) é base sólida, para o robô não responder
+"vou confirmar" ao que já sabe. Pendente: um doc ativo de FAQ do SDR, escrito pelo dono, se quiser o RAG com conteúdo.

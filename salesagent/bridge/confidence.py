@@ -116,7 +116,12 @@ def system_note(verdict: dict) -> str:
                "Não vale para conduzir a conversa: saudar, fazer a triagem, "
                "perguntar, recomendar programa e seguir o roteiro das suas "
                "instruções continuam normais -- suas instruções são base "
-               "sólida. Se o lead não pediu nenhum fato, siga normalmente.")
+               "sólida. Também são base sólida os fatos que já estão nas suas "
+               "instruções (tabela de preços, dias e horários, endereço, "
+               "idade mínima, programas e links): responda esses direto, sem "
+               "dizer que vai confirmar e sem [[unknown]]. Só confirme o que "
+               "nem o bloco acima nem as suas instruções trazem. Se o lead "
+               "não pediu nenhum fato, siga normalmente.")
     if nivel == NONE:
         return ("ATENÇÃO: a busca no knowledge base não encontrou NADA sobre "
                 "esta mensagem. Você não tem base para afirmar fatos aqui. "

@@ -3,7 +3,8 @@ type: sales_knowledge
 category: followup
 topic: cadencia-de-followup
 priority: medium
-status: approved
+status: archived
+substituido_por: salesagent/instructions/urace-sales-agent.md (playbook 13/10)
 source: internal
 last_updated: 2026-08-25
 tags: [vendas, followup, cadencia]

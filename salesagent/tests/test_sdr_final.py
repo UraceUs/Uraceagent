@@ -194,3 +194,32 @@ def test_preflight_roda_sem_rede_e_sem_vazar_segredo():
     assert "chave-secreta-xyz" not in saida and "token-secreto-abc" not in saida
     assert "Resultado:" in r.stdout, saida[-1500:]
     assert r.returncode in (0, 1)
+
+
+# ------------------------------------------------------------------ RAG (busca no cofre `brain/`)
+BRAIN = SALESAGENT.parent / "brain"
+
+
+def test_indice_nao_traz_regra_velha_do_chase():
+    """O cofre do tempo do Chase tinha o menu A/B/C/D, "preço só depois da classificação", follow-up
+    +2h/+24h/+3d e o script "Italo handles program terms". Isso contradiz o playbook de 13/10 e, vindo no
+    bloco [SYSTEM] do turno, ganharia da persona. Esses documentos ficam fora do índice."""
+    sys.path.insert(0, str(BRAIN))
+    import indexer
+    db = Path(tempfile.mkdtemp(prefix="urace-rag-")) / "i.db"
+    indexer.index_vault(BRAIN, db)
+    import sqlite3
+    caminhos = [r[0] for r in sqlite3.connect(db).execute("SELECT path FROM docs")]
+    for velho in ("Objecoes", "Follow-ups", "Qualificacao", "Leads pedem preco"):
+        assert not any(velho in c for c in caminhos), (velho, caminhos)
+    assert any("Politicas Comerciais" in c for c in caminhos), "o que ainda vale continua"
+    texto = " ".join(Path(BRAIN, c).read_text(encoding="utf-8") for c in caminhos)
+    assert "Italo handles program terms" not in texto
+    assert "menu fixo A/B/C/D" not in texto
+
+
+def test_aviso_de_pouca_informacao_nao_manda_confirmar_o_que_a_persona_ja_sabe():
+    import confidence
+    for nivel in (confidence.NONE, confidence.LOW):
+        nota = confidence.system_note({"level": nivel, "reason": "x"})
+        assert "tabela de preços, dias e horários, endereço" in nota and "nas suas instruções" in nota, nivel
