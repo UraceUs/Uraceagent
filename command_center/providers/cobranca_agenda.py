@@ -26,7 +26,7 @@ escrita no agendamento para a equipe ver e resolver — a rodada seguinte tenta 
 """
 from datetime import date, timedelta
 
-from command_center.db import agora, atualizar, auditar, inserir, um
+from command_center.db import agora, atualizar, auditar, inserir, todos, um
 from command_center.providers import agenda_sessoes as ag
 from command_center.providers import contrato
 
@@ -176,8 +176,9 @@ def alocar_agendamento(con, bid):
 def cobrar(con, b, enviar=None, criar_cliente=None):
     """Cria e envia a invoice da sessão. Não cobra duas vezes; contrato não cobra. `criar_cliente`
     (venda automática, #164) cria o cliente no QuickBooks quando o card ainda não tem. #314: a sessão do
-    pacote não cobra; a extra vai com o item e o preço da extra, sem depósito."""
-    b = dict(b)
+    pacote não cobra; a extra vai com o item e o preço da extra, sem depósito, e as extras do mesmo pedido saem
+    numa invoice só."""
+    b = dict(um(con, "SELECT * FROM bookings WHERE id=?", (b["id"],)) or b)    # o laço passa a linha de antes
     if b["charge_kind"] or b["qbo_invoice_id"]:
         return b["charge_kind"]
     if not b.get("coverage"):
@@ -186,7 +187,14 @@ def cobrar(con, b, enviar=None, criar_cliente=None):
     if b.get("coverage") == "plano":
         atualizar(con, "bookings", b["id"], charge_kind="contrato", charge_error=None, updated_at=agora())
         return "contrato"
-    return _invoice(con, [b], enviar, criar_cliente)
+    juntos = [b]
+    if b.get("coverage") == "extra" and b.get("group_id"):
+        # #314: as extras do mesmo pedido de vários dias (já aceitas, sem invoice) vão numa invoice só
+        juntos = [dict(x) for x in todos(con, """SELECT * FROM bookings WHERE group_id=? AND coverage='extra'
+                                                  AND status IN ('pendente','confirmada') AND charge_kind IS NULL
+                                                  AND qbo_invoice_id IS NULL AND (accepted_at IS NOT NULL OR id=?)
+                                                ORDER BY date, id""", (b["group_id"], b["id"]))] or [b]
+    return _invoice(con, juntos, enviar, criar_cliente)
 
 
 def _invoice(con, juntos, enviar, criar_cliente):
@@ -251,6 +259,12 @@ def pedir_waiver(con, b, enviar=None, tabela="bookings", card=None, motivo=None)
     b = dict(b)
     if b["waiver_ref"] or waiver_em_dia(con, b, card):
         return "ok"
+    if tabela == "bookings" and b.get("group_id"):
+        # #314: o pedido de vários dias pede uma waiver só — a que já saiu para outra sessão do mesmo pedido vale
+        w = um(con, "SELECT waiver_ref FROM bookings WHERE group_id=? AND waiver_ref IS NOT NULL LIMIT 1", (b["group_id"],))
+        if w:
+            atualizar(con, "bookings", b["id"], waiver_ref=w["waiver_ref"], waiver_error=None, updated_at=agora())
+            return "ok"
     from command_center.providers import waiver_nativa
     if waiver_nativa.ligada(con):
         return "nativa"
@@ -310,15 +324,46 @@ def aceitar(con, por, bid, enviar_invoice=None, enviar_waiver=None, criar_client
         raise ag.ErroAgenda("agendamento não existe")
     if b["status"] != "pendente":
         raise ag.ErroAgenda(f"o agendamento está {b['status']}")
-    if not b["accepted_at"]:
-        atualizar(con, "bookings", bid, accepted_at=agora(), accepted_by=por, updated_at=agora())
-    b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
-    cobrar(con, b, enviar_invoice, criar_cliente)
-    b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
-    pedir_waiver(con, b, enviar_waiver)
-    verificar(con, bid)
+    # #314: o pedido de vários dias é aceito inteiro — uma invoice para as extras e uma waiver para o pedido
+    ids = [x["id"] for x in todos(con, "SELECT id FROM bookings WHERE group_id=? AND status='pendente' ORDER BY date, id",
+                                  (b["group_id"],))] if b["group_id"] else [bid]
+    for i in ids:
+        if not um(con, "SELECT accepted_at FROM bookings WHERE id=?", (i,))["accepted_at"]:
+            atualizar(con, "bookings", i, accepted_at=agora(), accepted_by=por, updated_at=agora())
+    extras_tentadas = False                  # a invoice das extras do pedido sai (ou falha) uma vez só
+    for i in ids:
+        x = um(con, "SELECT * FROM bookings WHERE id=?", (i,))
+        if x["group_id"] and x["coverage"] == "extra":
+            if extras_tentadas:
+                continue
+            extras_tentadas = True
+        cobrar(con, x, enviar_invoice, criar_cliente)
+    for i in ids:
+        pedir_waiver(con, um(con, "SELECT * FROM bookings WHERE id=?", (i,)), enviar_waiver)
+        verificar(con, i)
     b = um(con, "SELECT * FROM bookings WHERE id=?", (bid,))
     return {"status": b["status"], **situacao(con, b), "charge_error": b["charge_error"], "waiver_error": b["waiver_error"]}
+
+
+def alocar_grupo(con, ids):
+    """#314: os dias de um pedido são alocados juntos, em ordem de data — senão cada um contaria os outros
+    (ainda sem alocação) como vaga ocupada."""
+    ids = list(ids)
+    if not ids:
+        return {}
+    bs = [dict(x) for x in todos(con, f"SELECT * FROM bookings WHERE id IN ({','.join('?' * len(ids))})", ids)]
+    card = card_do_agendamento(con, bs[0])
+    if not card or not contrato.tem_contrato(con, card):
+        return {}
+    res = contrato.alocar(con, card, [x["date"] for x in bs], sem=tuple(ids))
+    for x, a in zip(bs, res):
+        tabela = x["list_price"] if x["list_price"] is not None else x["price"]
+        if a["coverage"]:
+            atualizar(con, "bookings", x["id"], coverage=a["coverage"], list_price=tabela,
+                      price=float(a["price"]) if a["price"] is not None else None, updated_at=agora())
+        elif x["list_price"] is None:
+            atualizar(con, "bookings", x["id"], list_price=tabela)
+    return {x["id"]: a["coverage"] for x, a in zip(bs, res)}
 
 
 def ao_marcar(con, bid):
@@ -366,11 +411,16 @@ def rodar(con, hoje=None, enviar_invoice=None, enviar_waiver=None, enviar_email=
     auto = venda_site.ligada(con)
     hoje = hoje or ag._agora_fl().date()
     feito = {"confirmadas": 0, "cobradas": 0, "waivers": 0, "lembretes": 0}
+    grupos = set()                    # #314: a invoice das extras de um pedido é tentada uma vez por rodada, não uma por dia
     for b in con.execute("""SELECT * FROM bookings WHERE status='pendente' AND accepted_at IS NOT NULL
                               AND date >= ? ORDER BY date, id""", (hoje.isoformat(),)).fetchall():
         criar = venda_site.criador_de_cliente_qbo(con, b, criar_qbo) if auto else None
-        if not b["charge_kind"] and (b["charge_attempts"] or 0) < TENTATIVAS and cobrar(con, b, enviar_invoice, criar):
-            feito["cobradas"] += 1
+        grupo = b["group_id"] if b["coverage"] == "extra" else None
+        if not b["charge_kind"] and (b["charge_attempts"] or 0) < TENTATIVAS and grupo not in grupos:
+            if grupo:
+                grupos.add(grupo)
+            if cobrar(con, b, enviar_invoice, criar):
+                feito["cobradas"] += 1
         b = um(con, "SELECT * FROM bookings WHERE id=?", (b["id"],))
         if not b["waiver_ref"] and pedir_waiver(con, b, enviar_waiver) == "enviada":
             feito["waivers"] += 1

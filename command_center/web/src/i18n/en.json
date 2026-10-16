@@ -4011,5 +4011,7 @@
 "sessão extra": "extra session",
 "vazio = mensal ÷ sessões": "empty = monthly ÷ sessions",
 "vazio = o \"Extra session\" do QuickBooks": "empty = QuickBooks \"Extra session\"",
-"vazio: {0}": "empty: {0}"
+"vazio: {0}": "empty: {0}",
+"pedido de vários dias #{0}": "multi-day booking #{0}",
+"Aceita o pedido inteiro: uma invoice com as sessões extras e uma waiver": "Accepts the whole booking: one invoice with the extra sessions and one waiver"
 }

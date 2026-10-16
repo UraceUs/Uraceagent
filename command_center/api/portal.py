@@ -402,8 +402,13 @@ def disponibilidade(start: str | None = None, end: str | None = None, cid=Depend
 
 
 @r.get("/bookings")
-def meus_agendamentos(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
-    return {"bookings": ag.do_cliente(con, cid)}
+def meus_agendamentos(limit: int | None = None, offset: int = 0, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """As sessões da conta, das mais novas para as mais velhas. #314: o aluno recorrente marca muitas — com `limit`,
+    uma página e o `total` (sem `limit`, as 100 de sempre)."""
+    if limit is None:
+        return {"bookings": ag.do_cliente(con, cid)}
+    limit, offset = max(1, min(int(limit), 100)), max(0, int(offset))
+    return {"bookings": ag.do_cliente(con, cid, limit, offset), "total": ag.total_do_cliente(con, cid), "limit": limit, "offset": offset}
 
 
 class AgendarIn(BaseModel):
@@ -449,6 +454,93 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
     if venda_site.ligada(con):
         tarefas.add_task(_vender, bid)
     return {"id": bid, "bookings": ag.do_cliente(con, cid), "auto_sell": venda_site.ligada(con)}
+
+
+# ------------------------------------------------------------------ vários dias num pedido (#314)
+@r.get("/plan")
+def meu_plano(response: Response, driver_id: int | None = None, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Por piloto: é aluno recorrente (plano mensal vigente)? O nome do plano e o preço da extra. O contador do
+    pacote não sai daqui (dono, 01/10: o cliente não vê)."""
+    from command_center.providers import agenda_lote
+    ids = [p["id"] for p in portal.pilotos(con, cid) if driver_id is None or p["id"] == driver_id]
+    if driver_id is not None and not ids:
+        raise HTTPException(404, "Driver not found.")
+    response.headers["Cache-Control"] = "private, no-store"
+    return {"drivers": [agenda_lote.plano_do_piloto(con, cid, i) for i in ids]}
+
+
+class DiaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    date: str
+    period: str
+
+
+class LoteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    service_id: int
+    driver_id: int
+    slots: list[DiaIn]
+    quote: str | None = None                 # o hash da cotação que o cliente viu
+    notes: str | None = None
+    origin: str | None = None
+    utm: dict | None = None
+
+
+@r.post("/bookings/quote")
+def cotar_lote(dados: LoteIn, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Cada dia: aberto ou não, e "Included in your plan" ou "Extra session · $X". Nada é gravado."""
+    from command_center.providers import agenda_lote
+    try:
+        q = agenda_lote.cotar(con, cid, dados.driver_id, dados.service_id, [x.model_dump() for x in dados.slots])
+    except agenda_lote.ErroLote as e:
+        raise HTTPException(400, str(e))
+    response.headers["Cache-Control"] = "private, no-store"
+    return q
+
+
+def _vender_grupo(gid):
+    from command_center.db import conectar
+    from command_center.providers import venda_site
+    con = conectar()
+    try:
+        venda_site.vender_grupo(con, gid)
+        con.commit()
+    finally:
+        con.close()
+
+
+@r.post("/bookings/batch", status_code=201)
+def marcar_lote(dados: LoteIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
+                con: sqlite3.Connection = Depends(get_db)):
+    """O pedido de vários dias: ou entram todos, ou nenhum. A cotação mudou desde que o cliente viu: 409."""
+    from command_center.providers import agenda_lote, venda_site
+    try:
+        with transacao(con):
+            gid, ids = agenda_lote.marcar(con, cid, dados.driver_id, dados.service_id, [x.model_dump() for x in dados.slots],
+                                          dados.quote, dados.notes, dados.origin, venda_site.utm_limpo(dados.utm))
+            _aud(con, request, "portal.booking.batch", cid, {"grupo": gid, "agendamentos": ids, "servico": dados.service_id,
+                                                              "datas": sorted(f"{x.date} {x.period}" for x in dados.slots)})
+    except agenda_lote.CotacaoMudou as e:
+        raise HTTPException(409, str(e))
+    except (agenda_lote.ErroLote, ag.ErroAgenda) as e:
+        raise HTTPException(400, str(e))
+    for bid in ids:
+        tarefas.add_task(agenda_asana.levar, bid)            # #67: cada sessão vira tarefa no Asana
+    if venda_site.ligada(con):
+        tarefas.add_task(_vender_grupo, gid)
+    return {"group_id": gid, "ids": ids, "auto_sell": venda_site.ligada(con)}
+
+
+@r.get("/bookings/group/{gid}")
+def acompanhar_lote(gid: int, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """As etapas do pedido de vários dias: os dias, a invoice das extras (uma só), a waiver, confirmado."""
+    from command_center.providers import venda_site
+    if not um(con, "SELECT 1 AS x FROM booking_groups WHERE id=? AND account_id=?", (gid, cid)):
+        raise HTTPException(404, "Booking not found.")
+    venda_site.conferir_pagamento_grupo(con, gid)
+    con.commit()
+    response.headers["Cache-Control"] = "private, no-store"
+    return venda_site.checkout_grupo(con, gid)
 
 
 # ------------------------------------------------------------------ plano mensal (#169)

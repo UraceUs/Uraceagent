@@ -144,8 +144,16 @@ def conferir_pagamento(con, bid, ler=None, enviar_email=None, agora_dt=None):
     atualizar(con, "bookings", bid, **mud)
     if pago:
         auditar(con, "booking.paid", "system", entity_type="booking", entity_id=bid, detail={"invoice": b["invoice_doc"]})
-        if cob.verificar(con, bid):
-            avisar_confirmada(con, bid, enviar_email)
+        mesmas = [bid]
+        if b["group_id"]:
+            # #314: a invoice das extras do pedido é uma só — paga, vale para todas as sessões dela
+            mesmas += [x["id"] for x in todos(con, """SELECT id FROM bookings WHERE group_id=? AND qbo_invoice_id=? AND id<>?
+                                                       AND paid_at IS NULL""", (b["group_id"], b["qbo_invoice_id"], bid))]
+            for x in mesmas[1:]:
+                atualizar(con, "bookings", x, paid_at=mud["paid_at"], pay_checked_at=mud["pay_checked_at"])
+        for x in mesmas:
+            if cob.verificar(con, x):
+                avisar_confirmada(con, x, enviar_email)
     return pago
 
 
@@ -184,6 +192,11 @@ def _per(b):
 def _link_conta(bid):
     from command_center import enderecos
     return f"https://{enderecos.CLIENTE}/ops/portal/sessions/{bid}"
+
+
+def _link_grupo(gid):
+    from command_center import enderecos
+    return f"https://{enderecos.CLIENTE}/ops/portal/sessions/group/{gid}"
 
 
 def _enviar(enviar_email, para, assunto, texto):
@@ -230,16 +243,125 @@ def avisar_confirmada(con, bid, enviar_email=None):
     if not b or b["status"] != "confirmada" or b["notified_confirmed_at"] or not ligada(con):
         return False
     a = um(con, "SELECT name, email FROM portal_accounts WHERE id=?", (b["account_id"],))
-    texto = (f"Hi {a['name'].split(' ')[0]},\n\nYou're confirmed! See you at the track:\n\n"
-             f"{b['service_name'] or 'Session'} · {b['date'][5:7]}/{b['date'][8:10]}/{b['date'][:4]} ({_per(b)})\n\n"
+    juntas, link = [b], _link_conta(bid)
+    if b["group_id"]:
+        # #314: o pedido de vários dias recebe UM e-mail, quando todas as sessões dele confirmaram
+        juntas = todos(con, "SELECT * FROM bookings WHERE group_id=? AND status IN ('pendente','confirmada') ORDER BY date, id",
+                       (b["group_id"],))
+        if any(x["status"] != "confirmada" for x in juntas) or any(x["notified_confirmed_at"] for x in juntas):
+            return False
+        link = _link_grupo(b["group_id"])
+    linhas = "\n".join(f"{x['service_name'] or 'Session'} · {x['date'][5:7]}/{x['date'][8:10]}/{x['date'][:4]} ({_per(x)})"
+                       for x in juntas)
+    texto = (f"Hi {a['name'].split(' ')[0]},\n\nYou're confirmed! See you at the track:\n\n{linhas}\n\n"
              "Your URACE QR is in your account: show it at the shop.\n"
-             f"Your booking: {_link_conta(bid)}\n\nURACE.US · Orlando, FL")
+             f"Your booking: {link}\n\nURACE.US · Orlando, FL")
     try:
-        _enviar(enviar_email, a["email"], "You're confirmed: your URACE session", texto)
-        atualizar(con, "bookings", bid, notified_confirmed_at=agora())
+        _enviar(enviar_email, a["email"], "You're confirmed: your URACE session" + ("s" if len(juntas) > 1 else ""), texto)
+        for x in juntas:
+            atualizar(con, "bookings", x["id"], notified_confirmed_at=agora())
         return True
     except Exception as e:                                         # noqa: BLE001
         atualizar(con, "bookings", bid, reminder_error=f"e-mail de confirmação: {e}"[:300])
+        return False
+
+
+# ------------------------------------------------------------------ pedido de vários dias (#314)
+def _do_grupo(con, gid):
+    return todos(con, """SELECT b.*, p.name AS driver FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                          WHERE b.group_id=? ORDER BY b.date, b.id""", (gid,))
+
+
+def vender_grupo(con, gid, por=None, enviar_invoice=None, enviar_waiver=None, criar_qbo=None, enviar_email=None):
+    """O pedido de vários dias vira cobrança na hora (venda automática ligada): o card uma vez, as extras numa
+    invoice só, uma waiver, um e-mail. Devolve as etapas."""
+    bs = [b for b in _do_grupo(con, gid) if b["status"] == "pendente" and not b["accepted_at"]]
+    if not bs or not ligada(con):
+        return None
+    b = bs[0]
+    try:
+        card, nota = garantir_card(con, b, por)
+        if nota:
+            for x in bs:
+                atualizar(con, "bookings", x["id"], card_note=nota[:300], updated_at=agora())
+            auditar(con, "booking.card", "system", entity_type="booking", entity_id=b["id"], detail={"client_id": card, "nota": nota})
+    except (vs.ErroVinculo, cob.ErroCobranca) as e:
+        for x in bs:
+            atualizar(con, "bookings", x["id"], card_note=f"erro: {e}"[:300], updated_at=agora())
+    cob.aceitar(con, por, b["id"], enviar_invoice, enviar_waiver, criar_cliente=criador_de_cliente_qbo(con, b, criar_qbo))
+    for x in bs:
+        auditar(con, "booking.auto_sell", "system", entity_type="booking", entity_id=x["id"], detail={"grupo": gid})
+    avisar_recebido_grupo(con, gid, enviar_email)
+    return checkout_grupo(con, gid)
+
+
+def conferir_pagamento_grupo(con, gid, ler=None, enviar_email=None, agora_dt=None):
+    """Uma leitura no QuickBooks por invoice do pedido (a das extras), no máximo uma vez por minuto."""
+    pago = False
+    vistas = set()
+    for b in _do_grupo(con, gid):
+        if b["qbo_invoice_id"] and b["qbo_invoice_id"] not in vistas and not b["paid_at"] and b["status"] == "pendente":
+            vistas.add(b["qbo_invoice_id"])
+            pago = conferir_pagamento(con, b["id"], ler, enviar_email, agora_dt) or pago
+    return pago
+
+
+def checkout_grupo(con, gid):
+    """As etapas do pedido de vários dias, na linguagem do cliente: cada dia com "Included in your plan" ou
+    "Extra session · $X", a invoice das extras (uma só) e a waiver. Nada do contador do pacote."""
+    from command_center.providers.agenda_lote import rotulo
+    bs = _do_grupo(con, gid)
+    ativas = [b for b in bs if b["status"] in ag.ATIVAS]
+    extras = [b for b in ativas if b["coverage"] == "extra"]
+    base = checkout(con, (ativas or bs)[0]["id"])
+    if extras:
+        pagamento = checkout(con, next((b for b in extras if b["qbo_invoice_id"]), extras[0])["id"])["pagamento"]
+    else:
+        pagamento = {"estado": "contrato", "link": None, "invoice": None, "total": None, "para": None}
+    return {"id": gid, "service": bs[0]["service_name"], "driver": bs[0]["driver"],
+            "status": "cancelada" if not ativas else ("confirmada" if all(b["status"] == "confirmada" for b in ativas) else "pendente"),
+            "sessions": [{"id": b["id"], "date": b["date"], "period": b["period"], "status": b["status"], "coverage": b["coverage"],
+                          "price": b["price"], "label": rotulo(b["coverage"], b["price"]) if b["coverage"] else None} for b in bs],
+            "included": sum(1 for b in ativas if b["coverage"] == "plano"), "extras": len(extras),
+            "extras_total": round(sum(b["price"] or 0 for b in extras), 2),
+            "aceita": any(b["accepted_at"] for b in ativas), "confirmada": bool(ativas) and all(b["status"] == "confirmada" for b in ativas),
+            "pagamento": pagamento, "waiver": base["waiver"]}
+
+
+def avisar_recebido_grupo(con, gid, enviar_email=None):
+    """Um e-mail para o pedido inteiro: os dias, o que é do plano e o que é extra, e o que falta."""
+    g = um(con, "SELECT * FROM booking_groups WHERE id=?", (gid,))
+    if not g or g["notified_received_at"] or not ligada(con):
+        return False
+    c = checkout_grupo(con, gid)
+    a = um(con, "SELECT name, email FROM portal_accounts WHERE id=?", (g["account_id"],))
+    dias = "\n".join(f"- {x['date'][5:7]}/{x['date'][8:10]}/{x['date'][:4]} ({_per(x)}) · {x['label'] or ''}"
+                     for x in c["sessions"] if x["status"] in ag.ATIVAS)
+    passos = []
+    if c["pagamento"]["estado"] == "pagar":
+        passos.append(f"1. Pay the invoice{' ' + c['pagamento']['invoice'] if c['pagamento']['invoice'] else ''} "
+                      f"(extra sessions): {c['pagamento']['link'] or 'it is in your email from QuickBooks'}")
+    elif c["pagamento"]["estado"] == "preparando":
+        passos.append("1. Pay the invoice of the extra sessions: it is on its way to your email from QuickBooks.")
+    if c["waiver"]["estado"] == "assinar_aqui":
+        passos.append(f"{len(passos) + 1}. Sign the waiver in your URACE account: {_link_grupo(gid)}")
+    elif c["waiver"]["estado"] in ("email", "preparando"):
+        passos.append(f"{len(passos) + 1}. Sign the waiver: it is in your email from DocuSign"
+                      f"{' (sent to ' + c['waiver']['para'] + ')' if c['waiver'].get('para') else ''}.")
+    texto = (f"Hi {a['name'].split(' ')[0]},\n\nThanks for booking with URACE! We are holding your sessions:\n\n"
+             f"{c['service'] or 'Session'}{' · ' + c['driver'] if c['driver'] else ''}\n{dias}\n\n"
+             + ("To confirm them:\n" + "\n".join(passos) + "\n\nThey confirm by themselves as soon as it is done.\n\n" if passos else "")
+             + f"Follow your booking any time in your URACE account: {_link_grupo(gid)}\n\n"
+             "Questions? Reply to this email or write to support@urace.us.\n\nURACE.US · Orlando, FL")
+    try:
+        _enviar(enviar_email, a["email"], "Your URACE booking: what's next", texto)
+        atualizar(con, "booking_groups", gid, notified_received_at=agora())
+        for x in c["sessions"]:
+            atualizar(con, "bookings", x["id"], notified_received_at=agora())
+        return True
+    except Exception as e:                                         # noqa: BLE001 — fica escrito para a equipe
+        for x in c["sessions"]:
+            atualizar(con, "bookings", x["id"], reminder_error=f"e-mail de recebimento: {e}"[:300])
         return False
 
 

@@ -563,6 +563,39 @@ mesma coisa.
 - **Onde se combina:** card do cliente › Mensalidade (gerente): "Valor da sessão extra" (vazio mostra a
   conta que vale) e "Item da sessão extra".
 
+**Vários dias num pedido** (dono, 16/10: *"se ele quiser marcar para quartas, toda quarta … ele consegue
+marcar isso tudo em um book"*). Na área do cliente (`/portal/book`), o aluno recorrente vê **Book sessions**:
+- toca nos dias do calendário (marca e desmarca) ou usa os atalhos: **Every Wed** (e os outros dias que a
+  agenda abre) até **o fim do mês**, **as próximas 4 semanas** ou **uma data**, sempre dentro do que a agenda
+  mostra; **This weekend** e **Next weekend**;
+- cada dia tem o turno (manhã, tarde, dia todo) e o rótulo do servidor: **Included in your plan** ou **Extra
+  session · $689.23**; o resumo diz "3 included · 2 extras = $1,378.46";
+- **no máximo 12 dias** por pedido; **ou entram todos, ou nenhum** (se um dia lotou no meio do caminho, o
+  pedido volta com o dia que falhou; se o preço ou a vaga mudou desde que ele viu, volta para revisar);
+- depois de marcar, a página do pedido é `/portal/sessions/group/<n>`: os dias, a invoice das extras e a waiver.
+
+Na lista da equipe, cada sessão do pedido tem o chip **"pedido de vários dias #n"**. **Aceitar** uma delas
+aceita o **pedido inteiro**: as extras saem numa **invoice só** do QuickBooks (uma linha por sessão extra,
+item e valor da extra, sem depósito), a waiver sai uma vez, e o cliente recebe um e-mail só com todos os dias.
+Com a venda automática ligada, isso acontece sozinho na hora. A invoice paga confirma todas as extras dela.
+
+**Vários dias num pedido** (dono, 16/10: *"se ele quiser marcar para quartas, toda quarta. Ou quartas e sábado
+dessa semana, ou então sábado e domingo da outra, ele consegue marcar isso tudo em um book"*). Na área do
+cliente (**Book sessions**, `/portal/book`), o aluno recorrente toca nos dias do calendário ou usa os atalhos
+**Every Wed** (e os outros dias abertos), com **Repeat until**: o fim deste mês, as próximas 4 semanas ou até
+uma data (sempre dentro do que a agenda mostra), **This weekend** e **Next weekend**. Cada dia mostra o turno
+e "Included in your plan" ou "Extra session · $689.23"; o resumo diz "3 included · 2 extras = $1,378.46".
+- No máximo **12 dias** por pedido. **Ou entra tudo, ou nada**: um dia que lotou no meio do caminho volta para
+  o cliente escolher outro, sem marcar os demais. Se a vaga ou o preço mudou entre ver e marcar, a tela pede
+  para revisar.
+- Na lista da equipe cada dia aparece como um agendamento, com o chip **"pedido de vários dias #N"**.
+  **Aceitar** um deles aceita o pedido inteiro: **uma invoice** com as sessões extras (uma linha por dia) e
+  **uma waiver** para o pedido. Com a venda automática ligada, isso acontece sozinho e o cliente recebe **um**
+  e-mail com os dias, o que é do plano e o que é extra.
+- O cliente acompanha em `/portal/sessions/group/<n>`: os dias, a invoice das extras, a waiver e a confirmação.
+  Paga a invoice, todas as extras do pedido ficam pagas.
+- A lista de sessões do cliente (My sessions) vem em páginas de 50 ("Show more sessions").
+
 ### Duas chaves da agenda (só leitura para quem vende)
 
 | Chave | Onde | Quem muda | Efeito |

@@ -34,7 +34,7 @@ interface ItemQbo { id: string; name: string; full_name: string | null; price: n
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
   /** #314: do pacote do mês (sem custo) ou extra (cobrada pela invoice); null = avulsa */
-  coverage?: 'plano' | 'extra' | null; list_price?: number | null
+  coverage?: 'plano' | 'extra' | null; list_price?: number | null; group_id?: number | null
   accepted_at?: string | null; charge_kind?: string | null; store_order_id?: number | null; invoice_doc?: string | null; invoice_link?: string | null; charge_error?: string | null; waiver_error?: string | null; reminder_error?: string | null
   origin?: string | null; utm?: string | null; card_note?: string | null; paid_at?: string | null
   cobranca?: { aceita: boolean; pagamento: 'contrato' | 'pago' | 'enviada' | 'erro' | 'pendente'; waiver: 'ok' | 'enviada' | 'erro' | 'pendente'; pronta: boolean } | null
@@ -93,7 +93,7 @@ function Agendamentos() {
             {/* #314: a sessão do aluno recorrente — do plano (sem custo) ou extra (invoice); o contador é só da equipe */}
             {a.coverage ? <div className="small"><Chip tone={a.coverage === 'extra' ? 'warn' : 'info'}>{a.coverage === 'extra'
               ? tr("extra {0}", a.price != null ? usd(a.price) : tr("sem valor")) + (a.invoice_doc ? tr(" · invoice {0}", a.invoice_doc) : '')
-              : tr("do plano")}</Chip>{a.contrato && <span className="muted"> · {tr("pacote: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</span>}</div>
+              : tr("do plano")}</Chip>{a.group_id ? <> <Chip tone="neutral">{tr("pedido de vários dias #{0}", a.group_id)}</Chip></> : null}{a.contrato && <span className="muted"> · {tr("pacote: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</span>}</div>
               : a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
               ? tr("acima do contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)
               : tr("contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</Chip></div>}
@@ -110,7 +110,7 @@ function Agendamentos() {
           </div>
           <Chip tone={tom}>{rot}</Chip>
           {a.status === 'pendente' && <>{!a.accepted_at && <button className="btn sm primary" onClick={() => decidir(a, 'aceitar')}
-            title={tr("Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar")}>{tr("Aceitar")}</button>}
+            title={a.group_id ? tr("Aceita o pedido inteiro: uma invoice com as sessões extras e uma waiver") : tr("Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar")}>{tr("Aceitar")}</button>}
             {can('MANAGER') && <button className="btn sm ghost" onClick={() => decidir(a, 'confirmar')} title={tr("Confirmar sem esperar pagamento e waiver")}>{tr("Confirmar mesmo assim")}</button>}
             <button className="btn sm ghost" onClick={() => decidir(a, 'recusar')}>{tr("Recusar")}</button></>}
           {a.status === 'confirmada' && a.date >= hojeFL() && <button className="btn sm ghost" onClick={() => decidir(a, 'cancelar')}>{tr("Cancelar")}</button>}

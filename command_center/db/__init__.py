@@ -382,12 +382,15 @@ MIGRACOES = [
     # NULL = avulsa ou de antes. `price` passa a ser o que é cobrado (0 no plano); `list_price` guarda o da tabela.
     ("bookings", "coverage", "TEXT"),
     ("bookings", "list_price", "REAL"),
+    # #314: o pedido de vários dias de onde a sessão saiu (as extras do pedido saem numa invoice só)
+    ("bookings", "group_id", "INTEGER REFERENCES booking_groups(id)"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS portal_pilots_client ON portal_pilots(client_id) WHERE client_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS bookings_pedido ON bookings(store_order_id) WHERE store_order_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS bookings_grupo ON bookings(group_id) WHERE group_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS store_orders_refeito ON store_orders(retry_of) WHERE retry_of IS NOT NULL",
 ]
 

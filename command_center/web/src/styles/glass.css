@@ -575,6 +575,18 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
   transition:border-color var(--dur-rapida) var(--ease-saida)}
 .portal-servico.on{border-color:var(--accent)}
 .portal-servico input{width:18px;height:18px;flex:0 0 auto}
+/* #314: vários dias num pedido do aluno recorrente — atalhos, a lista dos dias e o rótulo de cada um */
+.portal-varios-atalhos{display:flex;flex-wrap:wrap;gap:6px}
+.portal-varios-lista{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.portal-varios-dia{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;padding:10px 12px;
+  border:1px solid var(--glass-line-2);border-radius:var(--r-s);min-width:0;animation:rise var(--dur-media) var(--ease-saida) both}
+.portal-varios-dia.ruim{border-color:var(--crit)}
+.portal-varios-cab{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;min-width:0}
+.portal-varios-cab .chip{white-space:normal}
+.portal-varios-turnos{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.portal-varios-turnos .btn{flex:1 1 auto;white-space:normal}
+.portal-varios-tirar{min-width:40px}
+.portal-varios-motivo{grid-column:1/-1;margin:0;color:var(--crit)}
 /* #300: o editor visual do site */
 .ed-lista-paginas{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .ed-lista-paginas>li{display:flex;gap:10px;align-items:center;flex-wrap:wrap}

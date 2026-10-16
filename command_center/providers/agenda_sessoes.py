@@ -284,14 +284,19 @@ def cancelar_pelo_cliente(con, conta_id, bid):
     atualizar(con, "bookings", bid, status="cancelada", cancelled_by="cliente", updated_at=agora())
 
 
-def do_cliente(con, conta_id):
-    return [dict(b) for b in todos(con, """SELECT b.id, b.date, b.period, b.status, b.notes, b.decision_note, b.created_at,
+def total_do_cliente(con, conta_id):
+    return um(con, "SELECT COUNT(*) AS n FROM bookings WHERE account_id=?", (conta_id,))["n"]
+
+
+def do_cliente(con, conta_id, limit=100, offset=0):
+    return [dict(b) for b in todos(con, """SELECT b.id, b.date, b.period, b.status, b.notes, b.decision_note, b.created_at, b.group_id,
                                                  b.service_name AS service, b.price, p.name AS driver,
                                                  b.accepted_at AS accepted, b.charge_kind, b.coverage, b.invoice_doc,
                                                  b.pay_link AS invoice_link,
                                                  b.qbo_invoice_id IS NOT NULL AS invoice_sent, b.waiver_ref IS NOT NULL AS waiver_sent
                                             FROM bookings b LEFT JOIN portal_pilots p ON p.id=b.pilot_id
-                                            WHERE b.account_id=? ORDER BY b.date DESC, b.id DESC LIMIT 100""", (conta_id,))]
+                                            WHERE b.account_id=? ORDER BY b.date DESC, b.id DESC LIMIT ? OFFSET ?""",
+                                   (conta_id, int(limit), int(offset)))]
 
 
 def lista(con, status=None, de=None, ate=None):
