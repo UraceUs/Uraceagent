@@ -156,7 +156,7 @@ pedem acesso de operador.
 | Comercial | **Funil do Kommo** | `/ops/crm/funil` | as etapas do funil do Kommo, espelhadas | todos |
 | Comercial | **Robô SDR** | `/ops/sdr` | o robô de vendas no Kommo: ligar, instruir, relatar erro | todos |
 | Comercial | **Clientes** | `/ops/clients` | um card por pessoa; o card abre em `/ops/clients/<n>` | todos |
-| Logística | **Agendamentos do site** | `/ops/site` | os pedidos de sessão da área do cliente, a agenda que abre e fecha, serviços e preços (com o **cartão do kart no site** e o **kart novo**, #297), **cartões das páginas** (`/ops/site/cartoes`: os planos e preços da Academy, do Pro Team e do For Beginners, #297), **produtos da loja** (`/ops/site/produtos`: preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto, #298), **pedidos do site** (`/ops/site/pedidos`: carrinho e loja em todo estado do pagamento, com o link da página do pedido), contas | operador+ |
+| Logística | **Agendamentos do site** | `/ops/site` | os pedidos de sessão da área do cliente, a agenda que abre e fecha, serviços e preços (com o **cartão do kart no site** e o **kart novo**, #297), **cartões das páginas** (`/ops/site/cartoes`: os planos e preços da Academy, do Pro Team e do For Beginners, #297), **produtos da loja** (`/ops/site/produtos`: preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto, #298), **editor do site** (`/ops/site/editor`: monta e muda as páginas do site arrastando seções e elementos, #300; seção 6, "Editor do site"), **pedidos do site** (`/ops/site/pedidos`: carrinho e loja em todo estado do pagamento, com o link da página do pedido), contas | operador+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente | todos |
@@ -380,6 +380,7 @@ abre o card dele).
 | **Agendamentos do site** | os pedidos de sessão que chegam pela área do cliente, e a agenda que abre e fecha | tela Agendamentos do site |
 | **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Agendamentos do site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Agendamentos do site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
+| **Editor do site** (#300) | monta e muda as páginas do site arrastando seções (1 a 3 colunas) e elementos: título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); rascunho, pré-visualização em celular e computador, publicar conferindo as regras do site, versões para voltar | Agendamentos do site › Editor do site · seção 6, "Editor do site" |
 | **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Agendamentos do site e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
@@ -389,6 +390,50 @@ abre o card dele).
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
 | **Medição de campanha no site** (#260, #171) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta) **só depois do Accept no banner de cookies**; o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |
 | **Chat do site** (#170) | o balão do Kommo no site público; a conversa cai no Chat do Kommo | esta seção, abaixo |
+
+### Editor do site (#300)
+
+Dono, 16/10: *"no site público a gente tenha é, como alterar o design, layout, puxando e arrastando e soltando de uma
+forma bem simples e conseguir editar por lá como se fosse realmente um WordPress"*. Decisão: **livre, tipo Elementor**.
+
+**Onde:** Agendamentos do site › **Editor do site** (`/ops/site/editor`). Ver e pré-visualizar é do operador; criar,
+mudar, publicar e voltar versão é do gerente (tudo na auditoria).
+
+**Como a página é montada**
+- A página é uma lista de **seções**, de cima para baixo. Cada seção tem **fundo** (claro, escuro, vermelho, cinza),
+  **espaçamento** (pequeno, médio, grande) e **1 a 3 colunas** (no celular viram uma só).
+- Cada coluna tem os seus **elementos**:
+  - Título (nível 1, 2 ou 3), Texto (negrito, itálico, lista, subtítulo), Imagem (sobe em WebP sem a localização do
+    celular, e precisa de descrição), Botão (link do site ou https), Lista, Espaço e Perguntas frequentes (viram FAQ no Google).
+  - **Karts e preços**, **Produtos da loja** e **Cartões de uma página** vêm do painel: mudou em Serviços e preços,
+    Produtos da loja ou Cartões das páginas, muda no editor também.
+- Tamanho, cor e alinhamento são escolhas da paleta do site, não cores soltas: o contraste fica sempre legível.
+- **Arrastar e soltar** no computador: arraste um elemento da paleta (fica presa no topo) para uma coluna, um elemento
+  para outro lugar, uma seção para cima ou para baixo. No celular e no teclado: os botões **↑ ↓**, **← Coluna / Coluna →**,
+  **Duplicar** e **Apagar**; **+ Elemento** em cada coluna e **+ Seção aqui** entre as seções.
+
+**Página nova:** em **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). O endereço
+não muda depois de publicada. Endereços do sistema (`/ops/`, `/store/`, `/blog/`, `/cart/`, `/legal/`…) e de páginas que
+já existem não podem.
+
+**Página que já existe** (home, Arrive and Drive, Academy, Pro Team, For Beginners, Career, About, os serviços…): em
+**Abrir uma página do site**, as faixas dela viram **Faixa original 1, 2, 3…**. Elas continuam vivas (preço do painel,
+agenda, cartões). Mova, **esconda** ou ponha seções novas entre elas. Sem mexer, a página sai igual à de antes.
+
+**Rascunho, pré-visualização e publicar**
+- Tudo salva sozinho no **rascunho** ("salvando…" some quando terminou). Ninguém de fora vê o rascunho.
+- **Ver como fica** mostra a página de verdade, em **Celular** ou **Computador** (no celular, alterne entre **Montar** e
+  **Ver como fica**).
+- **Publicar** confere as regras do site antes. Enquanto houver problema, o botão fica parado e a lista **Antes de
+  publicar** diz o que falta:
+  - um título nível 1 só;
+  - título sem pular nível (depois do nível 1 vem o 2; os cartões de karts e planos já têm o nível 3 dentro);
+  - descrição em toda foto;
+  - título da aba de 10 a 70 letras e descrição de 50 a 170.
+- Cada publicação vira uma **versão**: em **Versões**, **Voltar a esta versão** traz uma antiga para o rascunho. Confira e
+  publique de novo.
+- **Voltar ao original** (página que já existia) tira o editor do ar e o site volta à página de sempre. **Tirar do ar**
+  (página nova) tira a página. O rascunho e as versões ficam.
 
 ### Medição de campanha no site (#260)
 

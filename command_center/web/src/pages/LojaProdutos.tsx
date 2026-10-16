@@ -2,12 +2,13 @@
  * Security Deposit … que eu consiga alterar … essas funções serão necessárias que sejam ativas permanentemente".
  * Decisões: frete = valor fixo por produto; no painel = tudo do produto. A lista é paginada no servidor; o produto
  * abre no próprio endereço (/site/produtos/12). Esconder não apaga: o produto sai da loja e continua aqui. */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, Section } from '../components/ui'
+import { EditorTexto } from '../components/EditorTexto'
 import { useToast } from '../components/Toast'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
@@ -88,29 +89,6 @@ export function ProdutosDaLoja() {
         <div><button className="btn primary" disabled={novo.name.trim().length < 2} onClick={criar}>{tr("Criar e abrir")}</button></div>
       </div>
     </Section>}
-  </div>
-}
-
-/** Um editor de texto simples (negrito, itálico, lista, subtítulo). O servidor guarda só as tags seguras. */
-function EditorTexto({ id, rotulo, valor, onChange, disabled }: { id: string; rotulo: string; valor: string; onChange: (h: string) => void; disabled?: boolean }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => { if (ref.current && ref.current.innerHTML !== valor) ref.current.innerHTML = valor }, [valor])
-  const fazer = (cmd: string, arg?: string) => {
-    ref.current?.focus()
-    document.execCommand(cmd, false, arg)
-    if (ref.current) onChange(ref.current.innerHTML)
-  }
-  return <div className="fld" style={{ gridColumn: '1 / -1' }}>
-    <span id={`${id}-r`}>{rotulo}</span>
-    {!disabled && <div className="editor-barra" role="toolbar" aria-label={tr("Formatar {0}", rotulo)}>
-      <button type="button" className="btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={() => fazer('bold')}><b>B</b> <span className="sr-only">{tr("Negrito")}</span></button>
-      <button type="button" className="btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={() => fazer('italic')}><i>I</i> <span className="sr-only">{tr("Itálico")}</span></button>
-      <button type="button" className="btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={() => fazer('insertUnorderedList')}>{tr("• Lista")}</button>
-      <button type="button" className="btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={() => fazer('formatBlock', 'h3')}>{tr("Subtítulo")}</button>
-      <button type="button" className="btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={() => fazer('formatBlock', 'p')}>{tr("Parágrafo")}</button>
-    </div>}
-    <div ref={ref} id={id} className="editor-texto" role="textbox" aria-multiline="true" aria-labelledby={`${id}-r`}
-      contentEditable={!disabled} suppressContentEditableWarning onInput={e => onChange((e.target as HTMLDivElement).innerHTML)} />
   </div>
 }
 

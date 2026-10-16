@@ -660,6 +660,9 @@ function WaiverNativa() {
 /* #298: os produtos da loja ficam em arquivo próprio (só carrega quem abre a aba). */
 const ProdutosDaLoja = lazy(() => import('./LojaProdutos').then(m => ({ default: m.ProdutosDaLoja })))
 const EditarProduto = lazy(() => import('./LojaProdutos').then(m => ({ default: m.EditarProduto })))
+/* #300: o editor visual do site, também em arquivo próprio. */
+const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
+const EditorDePagina = lazy(() => import('./EditorSite').then(m => ({ default: m.EditorDePagina })))
 
 export function SitePublico() {
   const { aba, id } = useParams()
@@ -674,11 +677,13 @@ export function SitePublico() {
       <NavLink to="/site/servicos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Serviços e preços")}</NavLink>
       <NavLink to="/site/cartoes" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Cartões das páginas")}</NavLink>
       <NavLink to="/site/produtos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Produtos da loja")}</NavLink>
+      <NavLink to="/site/editor" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Editor do site")}</NavLink>
       <NavLink to="/site/pedidos" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Pedidos do site")}</NavLink>
       <NavLink to="/site/contas" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Contas de clientes")}</NavLink>
       {can('MANAGER') && <NavLink to="/site/waiver" className={({ isActive }) => isActive ? 'on' : ''}>{tr("Waiver")}</NavLink>}
     </div>
-    {aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
+    {aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
+      : aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
       : aba === 'disponibilidade' ? <Disponibilidade /> : aba === 'servicos' ? <Servicos /> : aba === 'cartoes' ? <Cartoes /> : aba === 'contas' ? <Contas /> : aba === 'pedidos' ? <Pedidos />
       : aba === 'waiver' && can('MANAGER') ? <WaiverNativa /> : <Agendamentos />}
   </>
