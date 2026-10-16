@@ -49,9 +49,10 @@ def _usd(n):
     return f"US$ {n:,.2f}"
 
 
-def _produtos():
-    from command_center.vitrine import paginas_site
-    return {p["slug"]: p for p in paginas_site.dados("produtos.json")["produtos"]}
+def _produtos(con):
+    """#298: os produtos à venda vêm do banco (o painel edita); banco sem produto nenhum cai no arquivo de antes."""
+    from command_center.providers import loja
+    return loja.do_site(con)
 
 
 def quando(d, periodo):
@@ -70,17 +71,23 @@ def _int(v, padrao=None):
 
 
 # ------------------------------------------------------------------ 1. o que o carrinho custa
-def _linha_produto(produtos, it):
+def _linha_produto(produtos, it, entrega=None):
+    """#298: o frete fixo do produto (× quantidade) só com "Ship to me"; `frete_envio` é quanto seria (o carrinho
+    mostra na opção de entrega) e None quando a equipe combina à parte. O depósito do produto vale por unidade."""
+    from command_center.providers import loja
     from command_center.providers.stripe_loja import _variacao, compravel
     p = produtos.get(str(it.get("produto") or ""))
     qtd = max(1, min(MAX_QTD, _int(it.get("quantidade"), 1)))
     if not p:
         return {"tipo": "produto", "nome": "Product not found", "quantidade": qtd, "unitario": 0, "deposito": 0,
-                "erro": "This product is no longer in the store. Remove it from the cart."}
+                "frete": 0, "frete_envio": 0, "erro": "This product is no longer in the store. Remove it from the cart."}
     nome_var = str(it.get("variacao") or "")
     v = _variacao(p, nome_var) if p.get("variations") else None
+    envio = loja.frete(p, qtd, "envio")
     linha = {"tipo": "produto", "produto": p["slug"], "variacao": nome_var if v else None, "quantidade": qtd,
-             "nome": p["name"] + (f" ({nome_var})" if v else ""), "detalhe": None, "deposito": 0,
+             "nome": p["name"] + (f" ({nome_var})" if v else ""), "detalhe": None,
+             "deposito": round(float(p.get("deposit") or 0) * qtd, 2), "frete_envio": envio,
+             "frete": (envio or 0) if entrega == "envio" else 0,
              "link": f"/store/p/{p['slug']}/", "foto": p["images"][0]["src"] if p.get("images") else None}
     if p.get("variations") and not v:
         return {**linha, "unitario": 0, "erro": "Please choose an option on the product page."}
@@ -158,11 +165,12 @@ def _linha_lead_follow(con, sessao):
             "erro": None}
 
 
-def cotar(con, itens, conta_id=None, para_pagar=False):
-    """As linhas do carrinho como o servidor as vê. `itens` vem do navegador: só escolhas, nunca valor."""
+def cotar(con, itens, conta_id=None, para_pagar=False, entrega=None):
+    """As linhas do carrinho como o servidor as vê. `itens` vem do navegador: só escolhas, nunca valor.
+    #298: `entrega` ("envio" | "retirada") põe o frete dos produtos no total."""
     if not isinstance(itens, list):
         itens = []
-    produtos = _produtos()
+    produtos = _produtos(con)
     pilotos = {p["id"]: p for p in todos(con, "SELECT id, name FROM portal_pilots WHERE account_id=? AND active=1",
                                          (conta_id,))} if conta_id else {}
     uso, linhas = {}, []
@@ -171,7 +179,7 @@ def cotar(con, itens, conta_id=None, para_pagar=False):
             continue
         tipo = it.get("tipo")
         if tipo == "produto":
-            linha = _linha_produto(produtos, it)
+            linha = _linha_produto(produtos, it, entrega)
         elif tipo == "sessao":
             linha = _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar)
         else:
@@ -185,8 +193,16 @@ def cotar(con, itens, conta_id=None, para_pagar=False):
     subtotal = round(sum(x["valor"] for x in validas), 2)
     deposito = round(sum(x["deposito"] for x in validas), 2)
     tem_sessao = any(x["tipo"] == "sessao" for x in linhas)
-    return {"linhas": linhas, "subtotal": subtotal, "deposito": deposito, "total": round(subtotal + deposito, 2),
-            "tem_sessao": tem_sessao, "tem_produto": any(x["tipo"] == "produto" for x in linhas),
+    tem_produto = any(x["tipo"] == "produto" for x in linhas)
+    prods = [x for x in validas if x["tipo"] == "produto"]
+    envio = entrega == "envio" and tem_produto
+    frete = round(sum(x["frete"] for x in prods), 2) if envio else 0.0
+    return {"linhas": linhas, "subtotal": subtotal, "deposito": deposito, "frete": frete,
+            "total": round(subtotal + deposito + frete, 2), "entrega": "envio" if envio else "retirada",
+            # o que o "Ship to me" custaria, e se algum produto tem o frete combinado à parte
+            "frete_envio": round(sum(x["frete_envio"] or 0 for x in prods), 2),
+            "frete_a_combinar": any(x["frete_envio"] is None for x in prods),
+            "tem_sessao": tem_sessao, "tem_produto": tem_produto,
             "precisa_conta": bool(linhas) and not conta_id,          # #248: toda compra pede a conta do site
             "ok": bool(linhas) and not any(x["erro"] or x.get("falta_piloto") for x in linhas),
             "demais": len(itens) > MAX_ITENS}
@@ -203,7 +219,7 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
     """Grava o pedido 'aberto' com as linhas e cria UMA sessão do Checkout. Devolve (pedido_id, url).
     #248: só com a conta do site (o e-mail dela vai ao Stripe e aos avisos); `lang` é o idioma da pessoa."""
     from command_center.providers import stripe_loja
-    c = cotar(con, itens, conta_id, para_pagar=True)
+    c = cotar(con, itens, conta_id, para_pagar=True, entrega=entrega)
     if not c["linhas"]:
         raise ErroCarrinho("Your cart is empty.")
     if c["demais"]:
@@ -214,11 +230,12 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
     if erro:
         raise ErroCarrinho(erro)
     conta = um(con, "SELECT * FROM portal_accounts WHERE id=?", (conta_id,)) if conta_id else None
-    entrega = "envio" if (entrega == "envio" and c["tem_produto"]) else "retirada"
+    entrega = c["entrega"]
     n = sum(x["quantidade"] for x in c["linhas"])
     resumo = (c["linhas"][0]["nome"] + (f" + {len(c['linhas']) - 1} more" if len(c["linhas"]) > 1 else ""))[:200]
     oid = inserir(con, "store_orders", kind="carrinho", product_slug="carrinho", product_name=resumo, quantity=n,
                   unit_price=c["total"], amount=c["total"], delivery=entrega, origin=host, account_id=conta_id,
+                  shipping_fee=c["frete"] if entrega == "envio" else None, deposit=c["deposito"],
                   email=((conta["email"] or "").lower() or None if conta else None), name=(conta["name"] if conta else None),
                   phone=(conta["phone"] if conta else None), lang="pt" if lang == "pt" else "en")
     # #279: o Lead and Follow vai NA linha da sessão que ele acompanha — `variation` com o nome do add-on,
@@ -233,7 +250,8 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
         inserir(con, "store_order_items", order_id=oid, kind=x["tipo"],
                 name=(_nome_stripe(x) + (f" + {a['nome']}" if a else ""))[:250], quantity=x["quantidade"],
                 unit_price=x["unitario"], deposit=x["deposito"],
-                amount=round(x["valor"] + x["deposito"] + (a["valor"] if a else 0), 2),
+                shipping=(x["frete_envio"] if entrega == "envio" else None) if x["tipo"] == "produto" else None,
+                amount=round(x["valor"] + x["deposito"] + (x.get("frete") or 0) + (a["valor"] if a else 0), 2),
                 product_slug=(f"addon:{a['servico']}" if a else x.get("produto")),
                 variation=(a["nome"] if a else x.get("variacao")), service_id=x.get("servico"),
                 service_name=x["nome"] if x["tipo"] in ("sessao", "addon") else None,
@@ -244,20 +262,26 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
         produto = {"name": _nome_stripe(x)[:250]}
         if x.get("foto") and not origem.startswith("http://"):
             from command_center.vitrine import paginas
-            produto["images"] = [origem + paginas.estatico("img/" + x["foto"])]
+            produto["images"] = [origem + paginas.foto_url(x["foto"])]
         linhas_stripe.append({"quantity": x["quantidade"], "price_data": {"currency": "usd", "unit_amount": round(x["unitario"] * 100),
                                                                           "product_data": produto}})
         if x["deposito"] > 0:
+            if x["tipo"] == "produto":                       # #298: o depósito do produto, por unidade
+                dep = {"name": f"Refundable security deposit · {x['nome']}"[:250]}
+            else:
+                dep = {"name": f"Refundable security deposit · {x['nome']} · {x['detalhe']}"[:250], "description": DEPOSITO_TXT}
             linhas_stripe.append({"quantity": 1, "price_data": {"currency": "usd", "unit_amount": round(x["deposito"] * 100),
-                                                                "product_data": {"name": f"Refundable security deposit · {x['nome']} · {x['detalhe']}"[:250],
-                                                                                 "description": DEPOSITO_TXT}}})
+                                                                "product_data": dep}})
+    if c["frete"] > 0:                                       # #298: o frete fixo dos produtos, numa linha própria
+        linhas_stripe.append({"quantity": 1, "price_data": {"currency": "usd", "unit_amount": round(c["frete"] * 100),
+                                                            "product_data": {"name": "Shipping"}}})
     campos = {
         "mode": "payment",
         "line_items": linhas_stripe,
         "success_url": f"{origem}/cart/thanks/?session_id={{CHECKOUT_SESSION_ID}}",
         "cancel_url": f"{origem}/cart/?cancelled=1",
         "client_reference_id": str(oid),
-        "metadata": {"pedido": oid, "tipo": "carrinho", "entrega": entrega, "conta": conta_id or ""},
+        "metadata": {"pedido": oid, "tipo": "carrinho", "entrega": entrega, "conta": conta_id or "", "frete": f"{c['frete']:.2f}"},
         "payment_intent_data": {"description": f"URACE order #{oid}: {resumo}"[:250], "metadata": {"pedido": oid}},
         "phone_number_collection": {"enabled": True},
         "billing_address_collection": "auto",
@@ -277,7 +301,7 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
     atualizar(con, "store_orders", oid, stripe_session_id=s["id"], stripe_url=s.get("url"), updated_at=agora())
     auditar(con, "store.cart.checkout", f"portal:{conta_id}" if conta_id else "site", entity_type="store_order", entity_id=oid,
             detail={"linhas": len(c["linhas"]), "sessoes": sum(1 for x in c["linhas"] if x["tipo"] == "sessao"),
-                    "valor": c["subtotal"], "deposito": c["deposito"]})
+                    "valor": c["subtotal"], "deposito": c["deposito"], "frete": c["frete"]})
     return oid, s.get("url")
 
 
@@ -335,7 +359,8 @@ def _tem_addon(x):
 
 
 def _valor_addon(x):
-    return round(float(x["amount"]) - float(x["unit_price"]) * x["quantity"] - float(x["deposit"] or 0), 2)
+    return round(float(x["amount"]) - float(x["unit_price"]) * x["quantity"] - float(x["deposit"] or 0)
+                 - float(x.get("shipping") or 0), 2)
 
 
 def _texto_linha(x):
@@ -343,6 +368,8 @@ def _texto_linha(x):
     s = f"- {x['name']}" + (f" × {x['quantity']}" if x["quantity"] > 1 else "") + f": {v}"
     if x["deposit"]:
         s += f" + depósito {_usd(x['deposit'])}"
+    if x.get("shipping"):
+        s += f" + frete {_usd(x['shipping'])}"           # #298
     if x["status"] == "sem_vaga":
         s += f"\n  ⚠ SEM VAGA: {x['note']}"
     elif x["booking_id"]:
@@ -369,7 +396,9 @@ def pago(con, oid):
         grupos.setdefault(cid, []).extend(produtos)
     linhas = {x["id"]: x for x in itens(con, oid)}
     sem_vaga = [x for x in linhas.values() if x["status"] == "sem_vaga"]
-    entrega = "retirada na pista (Orlando Kart Center)" if o["delivery"] == "retirada" else "envio: frete a combinar"
+    from command_center.providers import pedido_site
+    entrega = ("retirada na pista (Orlando Kart Center)" if o["delivery"] == "retirada"
+               else pedido_site.texto_envio_equipe(o, list(linhas.values())).replace("ENVIO — ", "envio: "))
     conta = um(con, "SELECT name, email, phone FROM portal_accounts WHERE id=?", (o["account_id"],)) if o["account_id"] else None
     quem = (conta or {}).get("name") or o["name"] or o["email"] or "Cliente do site"     # o responsável da conta, não o nome do cartão
     primeira = None
@@ -447,6 +476,8 @@ def avisar(con, oid, enviar=None):
                  + f": {_usd(x['unit_price'] * x['quantity'])}")
         if x["deposit"]:
             linha += f"\n  {'Depósito de segurança reembolsável' if pt else 'Refundable security deposit'}: {_usd(x['deposit'])}"
+        if x.get("shipping"):                              # #298: o frete fixo do produto
+            linha += f"\n  {'Frete' if pt else 'Shipping'}: {_usd(x['shipping'])}"
         if x["kind"] == "sessao" and x["booking_id"]:
             linha += (f"\n  Reservada. Assine a waiver na sua conta URACE para confirmar: {_link_sessao(x['booking_id'])}" if pt else
                       f"\n  Booked. Sign the waiver in your URACE account to confirm it: {_link_sessao(x['booking_id'])}")
@@ -461,7 +492,7 @@ def avisar(con, oid, enviar=None):
         entrega = ("" if not tem_produto else
                    "\nItens da loja: avisamos quando estiverem prontos para retirar no Orlando Kart Center (10724 Cosmonaut Blvd, "
                    "Box 3, Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
-                   "\nItens da loja: confirmamos o valor do frete e mandamos o código de rastreio. O frete é cobrado à parte.\n")
+                   f"\nItens da loja: {pedido_site.texto_envio(o, ls, lang)}\n")
         deposito = ("\nDepósito de segurança: " + dica.DEPOSITO_INFO_PT + "\n"
                     if any(x["deposit"] for x in ls) else "")
         assunto = f"Pedido #{o['id']} confirmado — URACE"
@@ -472,7 +503,7 @@ def avisar(con, oid, enviar=None):
         entrega = ("" if not tem_produto else
                    "\nStore items: we'll let you know when they're ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
                    "Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
-                   "\nStore items: we'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.\n")
+                   f"\nStore items: {pedido_site.texto_envio(o, ls, lang)}\n")
         deposito = ("\nSecurity deposit: " + dica.DEPOSITO_INFO + "\n"
                     if any(x["deposit"] for x in ls) else "")
         assunto = f"Order #{o['id']} confirmed — URACE"
@@ -485,7 +516,7 @@ def avisar(con, oid, enviar=None):
             stripe_loja._enviar(enviar, o["email"], assunto, texto)
         equipe = (f"Pedido #{o['id']} pago no Stripe: {_usd(valor)}\n{o['name'] or ''} <{o['email'] or ''}> {o['phone'] or ''}\n\n"
                   + "\n".join(_texto_linha(x) for x in ls)
-                  + (f"\n\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else 'ENVIO — combinar o frete'}" if tem_produto else "")
+                  + (f"\n\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else pedido_site.texto_envio_equipe(o, ls)}" if tem_produto else "")
                   + (f"\nEndereço:\n{stripe_loja._endereco(o)}" if o["shipping"] else "")
                   + (f"\n\nATENÇÃO: {o['attention']}" if o["attention"] else "")
                   + "\n\nVendas: " + ", ".join(sorted({f"https://ops.urace.us/ops/sales/{x['opp_id']}" for x in ls if x["opp_id"]}))
@@ -531,8 +562,15 @@ def linhas_qbo(con, q, oid):
                 raise RuntimeError(f"o add-on {x['variation']} não tem item do QuickBooks (Agendamentos do site › Serviços)")
             saida.append({"item_id": a["qbo_item_id"], "quantidade": 1, "unitario": _valor_addon(x), "descricao": a["name"]})
         if x["deposit"]:
-            saida.append({"item_id": _item_deposito(con), "quantidade": 1, "unitario": x["deposit"], "descricao": DEPOSITO_TXT})
+            saida.append({"item_id": _item_deposito(con), "quantidade": 1, "unitario": x["deposit"],
+                          "descricao": DEPOSITO_TXT if x["kind"] == "sessao" else "Refundable security deposit"})
+        if x.get("shipping"):                                # #298: o frete fixo do produto, no item "Shipping"
+            saida.append({"item_id": item_frete(q), "quantidade": 1, "unitario": x["shipping"], "descricao": f"Shipping: {x['name']}"})
     return saida
+
+
+def item_frete(q):
+    return q.item_loja_sistema("Shipping", 0, "URACE Store: shipping")["id"]
 
 
 # ------------------------------------------------------------------ 5. o painel

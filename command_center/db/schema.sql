@@ -1757,6 +1757,39 @@ CREATE TABLE IF NOT EXISTS site_offers (
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- #298 (dono, 16/10): os produtos da loja no banco, editados no painel. Os 70 do WooCommerce entram uma vez
+-- (de `vitrine/dados/produtos.json`, com o id de lá); o que a equipe mudar nunca é sobrescrito, e esconder não
+-- apaga. Fotos, categorias, opções e variações vão em JSON, no formato que o site já desenha.
+CREATE TABLE IF NOT EXISTS store_products (
+  id           INTEGER PRIMARY KEY,                 -- o id do WooCommerce nos importados ("Newest" e o SKU de reserva)
+  slug         TEXT NOT NULL UNIQUE,                -- o endereço: /store/p/<slug>/ (não muda depois de criado)
+  name         TEXT NOT NULL,
+  kind         TEXT NOT NULL DEFAULT 'simple' CHECK (kind IN ('simple','variable')),
+  price        REAL NOT NULL DEFAULT 0,             -- o que se cobra (o promocional, quando há); 0 = "Ask for price"
+  regular      REAL NOT NULL DEFAULT 0,             -- o preço cheio
+  on_sale      INTEGER NOT NULL DEFAULT 0,
+  price_min    REAL,                                -- a faixa das variações
+  price_max    REAL,
+  short        TEXT NOT NULL DEFAULT '',            -- HTML (só as tags seguras)
+  description  TEXT NOT NULL DEFAULT '',
+  images       TEXT NOT NULL DEFAULT '[]',          -- [{src, alt}]: src relativo a static/img ou /store/img/<arquivo>
+  categories   TEXT NOT NULL DEFAULT '[]',          -- [{slug, name}]
+  tags         TEXT NOT NULL DEFAULT '[]',
+  attributes   TEXT NOT NULL DEFAULT '[]',          -- [{name, terms}]
+  variations   TEXT NOT NULL DEFAULT '[]',          -- [{id, attrs, price, regular, in_stock}]
+  in_stock     INTEGER NOT NULL DEFAULT 1,
+  sku          TEXT,
+  shipping_fee REAL,                                -- frete fixo por unidade com "Ship to me"; NULL = combinar à parte
+  deposit      REAL NOT NULL DEFAULT 0,             -- depósito de segurança reembolsável por unidade
+  active       INTEGER NOT NULL DEFAULT 1,
+  sort         INTEGER NOT NULL DEFAULT 0,
+  origin       TEXT,                                -- woocommerce (importado) | painel
+  updated_by   INTEGER REFERENCES users(id),
+  updated_at   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS store_products_vitrine ON store_products(active, sort, id);
+
 -- #85: os modelos de waiver que a assinatura nativa usa. O PDF vem do DocuSign como está
 -- (o texto legal não é redigitado); o hash prova qual versão cada cliente assinou.
 CREATE TABLE IF NOT EXISTS waiver_templates (

@@ -347,6 +347,12 @@ MIGRACOES = [
     # utm_medium, utm_campaign, utm_term, utm_content, gclid, fbclid, fbp, fbc, campaign_id, adset_id).
     # Só campanha: nenhum dado da pessoa entra aqui.
     ("opportunities", "campaign", "TEXT"),
+    # 16/10 — dono (#298): "nos produtos da loja, colocar o valor de envio, o shipping … o valor do Security
+    # Deposit". O frete cobrado com "Ship to me" (o do pedido e o de cada linha) e o depósito do pedido de um
+    # produto só ("Buy now"). NULL nos pedidos de antes: o frete era combinado à parte.
+    ("store_orders", "shipping_fee", "REAL"),
+    ("store_orders", "deposit", "REAL"),
+    ("store_order_items", "shipping", "REAL"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
@@ -371,6 +377,33 @@ def aplicar_schema(con):
     _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`
     for sql in POS_MIGRACAO:
         con.execute(sql)
+    _importar_produtos(con)          # #298: os produtos do WooCommerce entram no banco uma vez
+
+
+PRODUTOS_WOO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "vitrine", "dados", "produtos.json")
+
+
+def _importar_produtos(con):
+    """#298 (dono, 16/10: *"nos produtos da loja … que eu consiga alterar"*): os 70 produtos copiados do WooCommerce
+    passam para `store_products` **uma vez**, como estão (id, ordem, fotos, variações): a loja não muda nada no
+    dia da troca. Só roda com a tabela vazia, então o que a equipe mudar ou esconder depois nunca volta."""
+    if con.execute("SELECT 1 FROM store_products LIMIT 1").fetchone():
+        return
+    try:
+        with open(PRODUTOS_WOO, encoding="utf-8") as f:
+            produtos = json.load(f)["produtos"]
+    except (OSError, ValueError, KeyError):
+        return
+    j = lambda v: json.dumps(v or [], ensure_ascii=False)  # noqa: E731
+    con.executemany(
+        """INSERT OR IGNORE INTO store_products (id, slug, name, kind, price, regular, on_sale, price_min, price_max, short,
+                  description, images, categories, tags, attributes, variations, in_stock, sku, sort, origin)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'woocommerce')""",
+        [(p["id"], p["slug"], p["name"], "variable" if p.get("type") == "variable" else "simple", p.get("price") or 0,
+          p.get("regular") or 0, 1 if p.get("on_sale") else 0, p.get("price_min"), p.get("price_max"), p.get("short") or "",
+          p.get("description") or "", j(p.get("images")), j(p.get("categories")), j(p.get("tags")), j(p.get("attributes")),
+          j(p.get("variations")), 1 if p.get("in_stock", True) else 0, p.get("sku") or None, (i + 1) * 10)
+         for i, p in enumerate(produtos)])
 
 
 def _herdar_card_do_piloto(con):

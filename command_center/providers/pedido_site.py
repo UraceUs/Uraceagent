@@ -113,9 +113,50 @@ def linhas(con, o):
         return todos(con, "SELECT * FROM store_order_items WHERE order_id=? ORDER BY id", (o["id"],))
     nome = o["product_name"] + (f" ({o['variation']})" if o["variation"] else "")
     return [{"id": None, "kind": "produto", "name": nome, "quantity": o["quantity"], "unit_price": o["unit_price"],
-             "deposit": 0, "amount": o["amount"], "product_slug": o["product_slug"], "variation": o["variation"],
+             "deposit": o.get("deposit") or 0, "amount": o["amount"], "product_slug": o["product_slug"], "variation": o["variation"],
+             "shipping": o.get("shipping_fee"),          # #298: o frete do "Buy now" (None: combinado à parte)
              "service_id": None, "service_name": None, "date": None, "period": None, "pilot_id": None,
              "pilot_name": None, "status": None, "booking_id": None, "client_id": o["client_id"], "note": None}]
+
+
+# ------------------------------------------------------------------ o frete (#298)
+def frete(o, ls):
+    """(cobrado, a combinar): o frete que entrou no pagamento e os produtos com o frete combinado à parte (o
+    produto sem frete no painel, ou o pedido de antes do #298). Retirada na pista: (0, [])."""
+    if o["delivery"] != "envio":
+        return 0.0, []
+    falta = [x["name"] for x in ls if x["kind"] == "produto" and x.get("shipping") is None]
+    return float(o.get("shipping_fee") or 0), falta
+
+
+def texto_envio(o, ls, lang="en"):
+    """A frase do envio para o cliente (e-mail e página do pedido)."""
+    cobrado, falta = frete(o, ls)
+    pt = lang == "pt"
+    if falta and not cobrado:
+        return ("Confirmamos o valor do frete e mandamos o código de rastreio. O frete é cobrado à parte." if pt else
+                "We'll confirm the shipping cost and send you the tracking number. Shipping is billed separately.")
+    if falta:
+        nomes = ", ".join(falta)
+        return (f"O frete de {_usd(cobrado)} já entrou no pagamento. O de {nomes} confirmamos e cobramos à parte. "
+                "Mandamos o código de rastreio por e-mail." if pt else
+                f"Shipping of {_usd(cobrado)} is included in your payment. We'll confirm the shipping of {nomes} and bill it "
+                "separately. We'll email you the tracking number.")
+    if cobrado:
+        return (f"O frete ({_usd(cobrado)}) já entrou no pagamento. Mandamos o código de rastreio por e-mail." if pt else
+                f"Shipping ({_usd(cobrado)}) is included in your payment. We'll email you the tracking number.")
+    return ("Frete grátis. Mandamos o código de rastreio por e-mail." if pt else
+            "Free shipping. We'll email you the tracking number.")
+
+
+def texto_envio_equipe(o, ls):
+    """O que a equipe lê sobre o envio (aviso, nota da venda)."""
+    cobrado, falta = frete(o, ls)
+    partes = [f"frete {_usd(cobrado)} cobrado no pedido"] if cobrado else []
+    if falta:
+        todos_sem = not cobrado and len(falta) == sum(1 for x in ls if x["kind"] == "produto")
+        partes.append("combinar o frete" if todos_sem else "combinar o frete de: " + ", ".join(falta))
+    return "ENVIO — " + ("; ".join(partes) or "frete grátis")
 
 
 def itens_do_carrinho(con, o):
@@ -183,6 +224,8 @@ def texto_itens(ls, lang="en"):
         s = f"- {nome_linha(x, lang)}" + (f" × {x['quantity']}" if x["quantity"] > 1 else "") + f": {_usd(x['unit_price'] * x['quantity'])}"
         if x["deposit"]:
             s += f"\n  {dep}: {_usd(x['deposit'])}"
+        if x.get("shipping"):                                # #298: o frete fixo da linha
+            s += f"\n  {'Frete' if lang == 'pt' else 'Shipping'}: {_usd(x['shipping'])}"
         out.append(s)
     return "\n".join(out)
 

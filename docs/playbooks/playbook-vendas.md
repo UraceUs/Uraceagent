@@ -23,7 +23,7 @@
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
 4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
-5. Agendamentos do site: carrinho, pagamento no Stripe e a loja do site
+5. Agendamentos do site: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel)
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
 8. Tabela de operações para a IA
@@ -780,11 +780,45 @@ servidor, não um chute. São **24 por página**.
 > outro resultado. E o preço que vale é o que a página do produto mostra — ele vem do catálogo, nunca
 > de uma tabela escrita à mão.
 
-**O catálogo mudou?** O catálogo da loja do site é um arquivo do sistema
-(`command_center/vitrine/dados/produtos.json`). Produto que falta, preço errado ou foto trocada **não
-se arruma pela tela**: abra uma issue para o Claude, com o endereço do produto no `urace.us`.
-Em 15/10 entrou assim o **OTK Magnesium Wheels Set MXC - 130mm, 210mm** ($838.95), que estava no
-site de hoje e faltava no catálogo novo.
+**O catálogo mudou?** Desde o #298 os produtos da loja ficam **no banco** e se mudam pelo painel (veja a
+5.3). Os 70 produtos que vieram do WooCommerce entraram uma vez, como estavam.
+
+### 5.3 Produtos da loja no painel: preço, fotos, texto, opções, frete e depósito (#298)
+
+Dono, 16/10: *"nos produtos da loja, colocar o valor de envio, o shipping … o valor do Security Deposit …
+que eu consiga alterar … essas funções serão necessárias que sejam ativas permanentemente"*. Decisões:
+frete = **valor fixo por produto**; no painel = **tudo do produto**.
+
+**Onde:** Agendamentos do site › **Produtos da loja** (`/ops/site/produtos`). A lista é paginada (30 por
+vez), com busca por nome, SKU ou endereço, filtro por categoria e "À venda / Escondidos". Cada produto
+abre no próprio endereço (`/ops/site/produtos/<número>`). Ver é do operador; **mudar é do gerente**, e
+toda mudança fica na auditoria.
+
+| Campo | O que faz no site |
+|---|---|
+| **Nome** | o título do produto (em inglês: o cliente lê) |
+| **Preço** e **Preço promocional** | o promocional (opcional) é o que se cobra; a loja mostra o cheio riscado. Preço 0 = "Ask for price" |
+| **Frete por unidade (US$)** | cobrado no Stripe, numa linha **Shipping**, quando o cliente escolhe **Ship to me**: frete × quantidade. **Vazio** = como antes, a equipe combina e cobra à parte; **0** = frete grátis. Retirar na pista é sempre grátis |
+| **Depósito de segurança por unidade (US$)** | vira a linha "Refundable security deposit" no Stripe; 0 = sem depósito |
+| **Em estoque** | sem estoque, a página diz "Out of stock" e o carrinho não vende |
+| **Categorias** | em que página da loja o produto aparece |
+| **Fotos** | **Subir foto** (do celular ou do computador): sobe em WebP de até 1600 px, **sem a localização do celular**. A primeira é a da loja; ← → mudam a ordem; **Tirar** tira do produto |
+| **Resumo** e **Descrição** | o texto da página, com negrito, itálico, lista e subtítulo. O que não for seguro (script, link estranho) o sistema tira ao salvar |
+| **Opções (tamanho, cor…)** | cada opção com o seu preço, promocional e estoque; com duas escolhas, separe com " / " (ex.: *Blue / 2*). A loja mostra a faixa de preço |
+| **Esconder da loja / Pôr à venda** | esconder **não apaga**: o produto sai da loja, do sitemap e do carrinho, e continua aqui para voltar |
+
+**Produto novo:** no fim da lista, **Novo produto** (nome, preço e categoria) cria o produto **escondido**
+e abre a página dele: complete fotos, texto e frete e toque em **Pôr à venda**. O endereço
+(`/store/p/<nome-do-produto>/`) sai do nome e não muda depois.
+
+**Mudar o preço ou o frete** vale para as próximas compras; o pedido já feito fica com o valor do dia.
+O pedido, o e-mail de confirmação, a página do pedido, a nota da venda e o recibo do QuickBooks (item
+**Shipping**) mostram o frete cobrado. Quando parte do pedido tem frete e parte não, o e-mail diz o que já
+foi pago e o que a equipe ainda combina.
+
+> **Teste de checkout de US$ 1 na loja:** **Novo produto** com preço **1**, frete **0** e depósito **0**;
+> ponha à venda, compre com "Ship to me" (o Stripe cobra US$ 1,00 de verdade) e **esconda o produto logo
+> depois**; o estorno sai pelo Stripe.
 
 ### Contas de clientes (Agendamentos do site › Contas de clientes)
 
@@ -899,6 +933,7 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | uma oportunidade | `GET /ops/api/sales/{id}` | — (olhe `oportunidade.closing`; venda do site: `pedido` traz as linhas, `pedido.atencao` o que resolver) | todos |
 | pedidos do site | `GET /ops/api/site/agendamentos` | consulta `{"status": "pendente"}` | Operador |
 | serviços e preços do site | `GET /ops/api/site/servicos` | — | Operador |
+| produtos da loja (preço, frete, depósito, estoque) | `GET /ops/api/site/produtos` · `GET /ops/api/site/produtos/{id}` | `q`, `categoria`, `estado` (ativos · escondidos), `limit`/`offset` | Operador (mudar: Gerente, `PATCH /ops/api/site/produtos/{id}`) |
 | conversas do Kommo | `GET /ops/api/crm/inbox` | — | todos |
 | waivers | `GET /ops/api/waivers` | — | todos |
 | estado do robô SDR | `GET /ops/api/sdr/painel` | — | todos |

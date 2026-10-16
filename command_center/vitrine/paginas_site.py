@@ -8,6 +8,7 @@ copiados do urace.us). Aqui só se desenha.
 import json
 import os
 import re
+from contextvars import ContextVar
 from functools import lru_cache
 from html import escape as e
 from urllib.parse import quote, urlencode
@@ -16,7 +17,7 @@ from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
 from command_center.vitrine import dica, idioma, medicao
-from command_center.vitrine.paginas import PORTAL, PRECO_KART, _lista, _negocio, estatico, layout, preco_kart, usd  # noqa: F401
+from command_center.vitrine.paginas import PORTAL, PRECO_KART, _lista, _negocio, estatico, foto_url, layout, preco_kart, usd  # noqa: F401
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
 
@@ -25,6 +26,17 @@ DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
 def dados(nome):
     with open(os.path.join(DADOS, nome), encoding="utf-8") as f:
         return json.load(f)
+
+
+# #298: os produtos da loja vêm do banco (o painel edita). A rota da página põe aqui quem lê (uma vez por
+# requisição, só se a página pedir); sem banco, ou fora de uma requisição, vale o arquivo de antes.
+PRODUTOS = ContextVar("produtos", default=None)
+
+
+def produtos():
+    ler = PRODUTOS.get()
+    lidos = ler() if ler else None
+    return lidos if lidos is not None else dados("produtos.json")["produtos"]
 
 
 # ------------------------------------------------------------------ pedaços
@@ -606,7 +618,7 @@ def _preco(p):
 
 def _produto_card(p):
     img = p["images"][0] if p["images"] else None
-    foto = f'<img src="{estatico("img/" + img["src"])}" alt="{e(img["alt"])}" width="400" height="400" loading="lazy">' if img else '<span class="sem-foto" aria-hidden="true">URACE</span>'
+    foto = f'<img src="{foto_url(img["src"])}" alt="{e(img["alt"])}" width="400" height="400" loading="lazy">' if img else '<span class="sem-foto" aria-hidden="true">URACE</span>'
     promo = f'<s>{usd(p["regular"])}</s> ' if p["on_sale"] and p["regular"] > p["price"] else ""
     return f"""<article class="produto-card"><a href="/store/p/{e(p['slug'])}/">{foto}<span class="produto-txt"><strong>{e(p['name'])}</strong><em>{promo}{e(_preco(p))}</em>{'' if p['in_stock'] else '<small>Out of stock</small>'}</span></a></article>"""
 
@@ -664,25 +676,25 @@ def catalogo(categoria=None, termo="", min_price=None, max_price=None, orderby="
              limit=LOJA_POR_PAGINA, offset=0):
     """Os produtos da loja resolvidos no servidor: categoria, busca por texto, faixa de preço e
     ordenação, com `limit`/`offset` e o `total` (o padrão de lista do CLAUDE.md)."""
-    produtos = dados("produtos.json")["produtos"]
+    itens = produtos()
     if categoria:
-        produtos = [p for p in produtos if _categoria(p)["slug"] == categoria]
+        itens = [p for p in itens if _categoria(p)["slug"] == categoria]
     termos = [t for t in re.split(r"[\s,]+", (termo or "").lower().strip()) if t][:8]
     if termos:                                          # mais pontos primeiro, empate pela ordem do catálogo
-        casados = [(_pontos(p, termos), -i, p) for i, p in enumerate(produtos)]
-        produtos = [p for pontos, _, p in sorted((c for c in casados if c[0]), reverse=True)]
+        casados = [(_pontos(p, termos), -i, p) for i, p in enumerate(itens)]
+        itens = [p for pontos, _, p in sorted((c for c in casados if c[0]), reverse=True)]
     if min_price is not None:
-        produtos = [p for p in produtos if _faixa(p)[1] >= min_price]
+        itens = [p for p in itens if _faixa(p)[1] >= min_price]
     if max_price is not None:
-        produtos = [p for p in produtos if _faixa(p)[0] <= max_price]
+        itens = [p for p in itens if _faixa(p)[0] <= max_price]
     if orderby == "price":
-        produtos = sorted(produtos, key=lambda p: _faixa(p)[0])
+        itens = sorted(itens, key=lambda p: _faixa(p)[0])
     elif orderby == "price-desc":
-        produtos = sorted(produtos, key=lambda p: _faixa(p)[1], reverse=True)
+        itens = sorted(itens, key=lambda p: _faixa(p)[1], reverse=True)
     elif orderby == "date":                             # a cópia não traz data; no WooCommerce o id cresce com o tempo
-        produtos = sorted(produtos, key=lambda p: p["id"], reverse=True)
-    total = len(produtos)
-    return {"produtos": produtos[offset:offset + limit], "total": total, "limit": limit, "offset": offset,
+        itens = sorted(itens, key=lambda p: p["id"], reverse=True)
+    total = len(itens)
+    return {"produtos": itens[offset:offset + limit], "total": total, "limit": limit, "offset": offset,
             "paginas": max(1, -(-total // limit))}
 
 
@@ -844,11 +856,10 @@ def store(host, categoria=None, q=None, pagina=1):
                   schemas=(_negocio(host), lista, _trilha(host, ("Store", "/store/"))))
 
 
-@lru_cache(maxsize=1)
 def paginas_da_loja():
     """As páginas 2 em diante da loja e de cada categoria, para o sitemap: sem elas o Google não
-    chega nos produtos que ficam depois da primeira página. (Guardado: o catálogo é um arquivo, e
-    `_familia` pergunta isto em todo endereço antigo que chega.)"""
+    chega nos produtos que ficam depois da primeira página. #298: o catálogo é do banco (o painel muda),
+    então nada fica guardado: são 9 filtros sobre a lista que a requisição já leu."""
     out = []
     for cat in (None, *[s for s, _ in CATEGORIAS_LOJA]):
         base = f"/store/{cat}/" if cat else "/store/"
@@ -856,8 +867,20 @@ def paginas_da_loja():
     return out
 
 
+def frete_txt(p, lang="en"):
+    """#298: o que o "Ship to me" diz do frete deste produto: o valor fixo do painel, grátis, ou combinado à parte."""
+    T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
+    fee = p.get("shipping_fee")
+    if fee is None:
+        return T("we confirm and bill shipping separately", "confirmamos e cobramos o frete à parte")
+    if not fee:
+        return T("free shipping", "frete grátis")
+    return T(f"shipping {usd(fee)} per item", f"frete de {usd(fee)} por item")
+
+
 def _form_comprar(p):
-    """#174: preço fechado e em estoque → paga na hora no Stripe Checkout (sem JavaScript: POST e 303)."""
+    """#174: preço fechado e em estoque → paga na hora no Stripe Checkout (sem JavaScript: POST e 303).
+    #298: o frete e o depósito do produto são os do painel."""
     opcoes = ""
     if p["variations"]:
         rows = []
@@ -876,8 +899,9 @@ def _form_comprar(p):
       <label>Quantity<input name="quantidade" type="number" min="1" max="20" value="1" inputmode="numeric"></label>
       <fieldset class="entrega"><legend>Delivery</legend>
         <label class="opcao"><input type="radio" name="entrega" value="retirada" checked> <span>Pick up at the track <span class="opcional">— Orlando Kart Center, free</span></span></label>
-        <label class="opcao"><input type="radio" name="entrega" value="envio"> <span>Ship to me <span class="opcional">— we confirm and bill shipping separately</span></span></label>
+        <label class="opcao"><input type="radio" name="entrega" value="envio"> <span>Ship to me <span class="opcional">— {e(frete_txt(p))}</span></span></label>
       </fieldset>
+      {f'<p class="small">Refundable security deposit: {usd(p["deposit"])} per item, charged with the order.</p>' if p.get("deposit") else ''}
       <label class="escondido" aria-hidden="true">Leave this empty<input name="site" tabindex="-1" autocomplete="off"></label>
       <div class="comprar-acoes">
         <button class="btn" type="submit">Buy now</button>
@@ -893,11 +917,10 @@ ERRO_CHECKOUT = ('<p class="aviso-erro" role="alert">We couldn’t open the secu
 
 
 def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
-    d = dados("produtos.json")
-    p = next((x for x in d["produtos"] if x["slug"] == slug), None)
+    p = next((x for x in produtos() if x["slug"] == slug), None)
     if not p:
         return None
-    fotos = "".join(f'<img src="{estatico("img/" + i["src"])}" alt="{e(i["alt"])}" width="800" height="800"{LAZY if n else ""}>' for n, i in enumerate(p["images"][:4]))
+    fotos = "".join(f'<img src="{foto_url(i["src"])}" alt="{e(i["alt"])}" width="800" height="800"{LAZY if n else ""}>' for n, i in enumerate(p["images"][:4]))
     opcoes = ""
     for a in p["attributes"]:
         rows = []
@@ -940,7 +963,7 @@ def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
 {f'<section class="faixa escura" aria-labelledby="h-desc"><div class="largura estreita texto"><h2 id="h-desc">About this product</h2>{_niveis(p["description"], "h3")}</div></section>' if p['description'] else ''}"""
     ld = {"@context": "https://schema.org", "@type": "Product", "name": p["name"], "sku": p.get("sku") or str(p["id"]),
           "url": f"https://{host}/store/p/{p['slug']}/", "brand": {"@type": "Brand", "name": "URACE"},
-          **({"image": [f"https://{host}{estatico('img/' + i['src'])}" for i in p["images"][:4]]} if p["images"] else {}),
+          **({"image": [f"https://{host}{foto_url(i['src'])}" for i in p["images"][:4]]} if p["images"] else {}),
           "offers": {"@type": "Offer" if not (p["price_min"] and p["price_max"] and p["price_max"] != p["price_min"]) else "AggregateOffer",
                      "priceCurrency": "USD", "url": f"https://{host}/store/p/{p['slug']}/",
                      "availability": "https://schema.org/InStock" if p["in_stock"] else "https://schema.org/OutOfStock",
@@ -984,8 +1007,7 @@ def obrigado(host, pedido=None, lang="en", volta="/store/thanks/", **kw):
 
 def cancelado(host, slug=None, lang="en", volta="/store/cancelled/"):
     T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
-    d = dados("produtos.json")
-    p = next((x for x in d["produtos"] if x["slug"] == slug), None) if slug else None
+    p = next((x for x in produtos() if x["slug"] == slug), None) if slug else None
     volta_btn = (f'<a class="btn" href="/store/p/{e(p["slug"])}/">{T("Back to", "Voltar para")} {e(p["name"])}</a>' if p
                  else f'<a class="btn" href="/store/">{T("Back to the store", "Voltar para a loja")}</a>')
     corpo = f"""<section class="faixa clara" aria-labelledby="h-cancel"><div class="largura estreita texto pedido-pagina">
@@ -1042,7 +1064,7 @@ def carrinho(host, cancelado=False, stripe=True, restaurar=None, lang="en"):
         <div class="carrinho-conta" hidden></div>
         <fieldset class="entrega carrinho-entrega" hidden><legend>{T("Delivery for store items", "Entrega dos itens da loja")}</legend>
           <label class="opcao"><input type="radio" name="entrega" value="retirada"{'' if envio else ' checked'}> <span>{T("Pick up at the track", "Retirar na pista")} <span class="opcional">— Orlando Kart Center, {T("free", "grátis")}</span></span></label>
-          <label class="opcao"><input type="radio" name="entrega" value="envio"{' checked' if envio else ''}> <span>{T("Ship to me", "Enviar para mim")} <span class="opcional">— {T("we confirm and bill shipping separately", "confirmamos e cobramos o frete à parte")}</span></span></label>
+          <label class="opcao"><input type="radio" name="entrega" value="envio"{' checked' if envio else ''}> <span>{T("Ship to me", "Enviar para mim")} <span class="opcional">— <span class="carrinho-frete-txt">{T("we confirm and bill shipping separately", "confirmamos e cobramos o frete à parte")}</span></span></span></label>
         </fieldset>
         <dl class="carrinho-total"></dl>
         <p class="carrinho-erro aviso-erro" role="alert" hidden></p>
@@ -1108,8 +1130,10 @@ def _pedido_linhas(ls, pago, lang):
     T = lambda en, pt: idioma.t(lang, en, pt)  # noqa: E731
     out = []
     for x in ls:
-        dep = (f'<span class="muted">+ {T("refundable security deposit", "depósito de segurança reembolsável")} {usd(x["deposit"])}</span> '
-               f'{dica.deposito(lang)}' if x["deposit"] else "")
+        dep = ((f'<span class="muted">+ {T("refundable security deposit", "depósito de segurança reembolsável")} {usd(x["deposit"])}</span> '
+                + (dica.deposito(lang) if x["kind"] == "sessao" else "")) if x["deposit"] else "")
+        if x.get("shipping"):                            # #298: o frete fixo do produto
+            dep += f'<span class="muted">+ {T("shipping", "frete")} {usd(x["shipping"])}</span>'
         det = ""
         if pago and x["kind"] == "sessao" and x["booking_id"]:
             det = (f'<span class="pedido-passo">{T("Booked. Sign the waiver in your URACE account to confirm it.", "Reservada. Assine a waiver na sua conta URACE para confirmar.")} '
@@ -1153,6 +1177,8 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
     sessao = any(x["kind"] == "sessao" for x in ls)
     produto = any(x["kind"] == "produto" for x in ls)
     deposito = sum(x["deposit"] or 0 for x in ls)
+    from command_center.providers import pedido_site
+    frete_cobrado, _ = pedido_site.frete(o, ls)          # #298
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
     nada = T("nothing was charged" + (" and no session was booked" if sessao else ""),
              "nada foi cobrado" + (" e nenhuma sessão foi reservada" if sessao else ""))
@@ -1167,6 +1193,7 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
     total = (f'<dl class="carrinho-total pedido-total"><dt class="soma">{T("Total paid", "Total pago") if st == "pago" else T("Order total", "Total do pedido")}</dt>'
              f'<dd class="soma">{usd(valor)}</dd>'
              + (f'<dt>{T("Includes the refundable security deposit", "Inclui o depósito de segurança reembolsável")}</dt><dd>{usd(deposito)}</dd>' if deposito else "")
+             + (f'<dt>{T("Includes shipping", "Inclui o frete")}</dt><dd>{usd(frete_cobrado)}</dd>' if frete_cobrado else "")
              + "</dl>")
     itens = f'<h2 id="h-itens">{T("Your order", "O seu pedido")}</h2>{_pedido_linhas(ls, st == "pago", lang)}{total}'
     dados = _pedido_cliente(cli, lang) if cli else ""
@@ -1176,8 +1203,7 @@ def pedido_pagina(host, o, *, ls, caminho, token, limpar=False, refeito=None, er
             passos.append(T("Store items: we'll email you when they're ready for pickup at the Orlando Kart Center.",
                             "Itens da loja: avisamos por e-mail quando estiverem prontos para retirar no Orlando Kart Center.")
                           if o["delivery"] == "retirada" else
-                          T("Store items: we'll confirm the shipping cost and email you the tracking number. Shipping is billed separately.",
-                            "Itens da loja: confirmamos o valor do frete e mandamos o código de rastreio por e-mail. O frete é cobrado à parte."))
+                          T("Store items: ", "Itens da loja: ") + pedido_site.texto_envio(o, ls, lang))
         if sessao:
             passos.append(T("Each session is confirmed once the driver's waiver is signed in your URACE account.",
                             "Cada sessão é confirmada quando a waiver do piloto estiver assinada na sua conta URACE."))
@@ -1276,11 +1302,11 @@ def _texto(h):
 # ------------------------------------------------------------------ o mapa do site
 def caminhos():
     """Todas as páginas do site, para o sitemap e o teste de "um h1 por página"."""
-    d = dados("posts.json"); pr = dados("produtos.json")
+    d = dados("posts.json")
     out = ["/", "/services/", C.ARRIVE["caminho"]] + [s["caminho"] for s in S.SERVICOS] + [p["caminho"] for p in P.PAGINAS]
     out += ["/blog/"] + [f"/blog/category/{c['slug']}/" for c in d["categorias"] if c["slug"] != "uncategorized" and c.get("count", 1)]
     out += [f"/blog/{p['slug']}/" for p in d["posts"]]
-    out += ["/store/"] + [f"/store/{s}/" for s, _ in CATEGORIAS_LOJA] + [f"/store/p/{p['slug']}/" for p in pr["produtos"]]
+    out += ["/store/"] + [f"/store/{s}/" for s, _ in CATEGORIAS_LOJA] + [f"/store/p/{p['slug']}/" for p in produtos()]
     out += paginas_da_loja()                            # #261: /store/page/2/ e a página 2 de cada categoria
     return out
 

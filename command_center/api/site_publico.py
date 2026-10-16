@@ -3,12 +3,12 @@ clientes. Quem abre e fecha a agenda é o gerente; confirmar e recusar pedido é
 import sqlite3
 from datetime import date
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, todos, transacao
-from command_center.providers import agenda_asana, agenda_sessoes as ag, cartoes_site as cs, contrato, servicos_site as sv, vinculo_site as vs
+from command_center.providers import agenda_asana, agenda_sessoes as ag, cartoes_site as cs, contrato, loja, servicos_site as sv, vinculo_site as vs
 
 r = APIRouter(prefix="/ops/api/site", tags=["site"])
 
@@ -255,6 +255,110 @@ def mudar_cartao(cid: int, dados: CartaoIn, request: Request, con: sqlite3.Conne
                 detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))
     con.commit()
     return {"cartoes": cs.lista(con)}
+
+
+# ------------------------------------------------------------------ produtos da loja (#298)
+@r.get("/produtos")
+def produtos(q: str = "", categoria: str | None = None, estado: str | None = None,
+             limit: int = Query(30, ge=1, le=200), offset: int = Query(0, ge=0),
+             con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Os produtos da loja (do banco), paginados no servidor: busca, categoria, ativos ou escondidos."""
+    ativos = {"ativos": True, "escondidos": False}.get(estado or "")
+    return {**loja.lista(con, q, categoria, ativos, limit, offset), "categorias": loja.categorias()}
+
+
+@r.get("/produtos/{pid}")
+def produto(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    p = loja.do_painel(con, pid)
+    if not p:
+        raise HTTPException(404, "produto não existe")
+    return {"produto": {**p, "categorias_loja": loja.categorias_da_loja(p)}, "categorias": loja.categorias()}
+
+
+class VariacaoIn(BaseModel):
+    attrs: list[str] = []
+    regular: float | str | None = None      # o preço cheio da opção
+    promo: float | str | None = None        # o promocional (vazio: sem promoção)
+    in_stock: bool = True
+
+
+class FotoIn(BaseModel):
+    src: str
+    alt: str | None = None
+
+
+class ProdutoIn(BaseModel):
+    name: str | None = None
+    slug: str | None = None                 # só na criação: o endereço /store/p/<slug>/ não muda depois
+    regular: float | str | None = None      # "Preço"
+    promo: float | str | None = None        # "Preço promocional" (vazio: sem promoção)
+    short: str | None = None
+    description: str | None = None
+    images: list[FotoIn] | None = None      # a ordem: a primeira é a da loja
+    categories: list[str] | None = None
+    attribute_names: list[str] | None = None
+    variations: list[VariacaoIn] | None = None
+    in_stock: bool | None = None
+    sku: str | None = None
+    shipping_fee: float | str | None = None  # frete fixo por unidade com "Ship to me"; vazio = combinar à parte
+    deposit: float | str | None = None       # depósito de segurança por unidade; vazio ou 0 = sem
+    active: bool | None = None
+    sort: int | None = None
+
+
+def _produto_in(dados):
+    return dados.model_dump(exclude_unset=True)
+
+
+@r.post("/produtos", status_code=201)
+def criar_produto(dados: ProdutoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                  u=Depends(auth.exige("MANAGER"))):
+    try:
+        pid = loja.criar(con, u["id"], _produto_in(dados))
+    except loja.ErroProduto as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "store.product.create", f"user:{u['id']}", user_id=u["id"], entity_type="store_product", entity_id=pid,
+            detail={k: v for k, v in _produto_in(dados).items() if k not in ("short", "description")}, ip=auth._ip(request))
+    con.commit()
+    return {"id": pid, "produto": loja.do_painel(con, pid)}
+
+
+@r.patch("/produtos/{pid}")
+def mudar_produto(pid: int, dados: ProdutoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                  u=Depends(auth.exige("MANAGER"))):
+    """Mudar o preço ou o frete vale para as próximas compras; o pedido já feito fica com o valor do dia.
+    Esconder não apaga: o produto sai da loja e continua aqui para voltar."""
+    d = _produto_in(dados)
+    d.pop("slug", None)
+    try:
+        mud = loja.mudar(con, u["id"], pid, d)
+    except loja.ErroProduto as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    if mud:
+        auditar(con, "store.product.update", f"user:{u['id']}", user_id=u["id"], entity_type="store_product", entity_id=pid,
+                detail={k: {"antes": a, "depois": v} for k, (a, v) in mud.items()}, ip=auth._ip(request))
+    con.commit()
+    return {"produto": loja.do_painel(con, pid)}
+
+
+FOTO_MAX = 12 * 1024 * 1024
+
+
+@r.post("/produtos/{pid}/fotos", status_code=201)
+async def subir_foto(pid: int, request: Request, arquivo: UploadFile = File(...), alt: str = Form(""),
+                     con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    """Foto do celular ou do computador: vira WebP de até 1600 px, sem EXIF (sem a posição GPS), e entra no fim."""
+    dados = await arquivo.read(FOTO_MAX + 1)
+    if not dados or len(dados) > FOTO_MAX:
+        raise HTTPException(400, "foto vazia ou maior que 12 MB")
+    try:
+        fotos = loja.guardar_foto(con, u["id"], pid, dados, alt)
+    except loja.ErroProduto as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    auditar(con, "store.product.photo", f"user:{u['id']}", user_id=u["id"], entity_type="store_product", entity_id=pid,
+            detail={"fotos": len(fotos)}, ip=auth._ip(request))
+    con.commit()
+    return {"produto": loja.do_painel(con, pid)}
 
 
 # ------------------------------------------------------------------ contas do site (#42)

@@ -575,6 +575,25 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
   transition:border-color var(--dur-rapida) var(--ease-saida)}
 .portal-servico.on{border-color:var(--accent)}
 .portal-servico input{width:18px;height:18px;flex:0 0 auto}
+/* #298: produtos da loja no painel */
+.loja-filtros{display:grid;gap:8px;grid-template-columns:minmax(0,3fr) minmax(0,2fr) minmax(0,2fr)}
+.loja-lista{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.loja-item{display:flex;gap:12px;align-items:center}
+.loja-item img,.loja-sem-foto{width:64px;height:64px;border-radius:var(--r);object-fit:cover;flex:none;background:var(--surface)}
+.loja-sem-foto{display:grid;place-items:center;font-size:10px;color:var(--ink-3, var(--muted))}
+.loja-nome{font-weight:600;overflow-wrap:anywhere}
+.loja-grade{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:end}
+.loja-check{display:flex;gap:8px;align-items:center;min-height:44px}
+.loja-check input{width:20px;height:20px}
+.loja-fotos{list-style:none;margin:0;padding:0;display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.loja-fotos img{width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:var(--r)}
+.loja-var{display:grid;gap:8px;grid-template-columns:minmax(0,3fr) minmax(0,2fr) minmax(0,2fr) auto auto;align-items:end}
+.loja-salvar{position:sticky;bottom:8px;z-index:2}
+.editor-barra{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.editor-texto{min-height:120px;padding:10px 12px;border:1px solid var(--glass-line-2);border-radius:var(--r);background:var(--surface);color:var(--ink);overflow-wrap:anywhere}
+.editor-texto:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-wash)}
+.editor-texto ul{padding-left:20px}
+@media (max-width:760px){.loja-salvar{bottom:92px}.loja-filtros,.loja-grade{grid-template-columns:1fr}.loja-var{grid-template-columns:1fr 1fr}.loja-var .fld:first-child{grid-column:1/-1}}
 .site-servico{display:grid;gap:8px;grid-template-columns:minmax(0,2fr) minmax(0,3fr) 120px minmax(0,2fr) auto;align-items:end}
 @media (max-width:760px){.site-servico{grid-template-columns:1fr 1fr}.site-servico .fld:nth-child(2){grid-column:1/-1}}
 /* site público › próximos dias (#41) */

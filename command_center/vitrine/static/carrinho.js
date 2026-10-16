@@ -325,6 +325,14 @@
     c.linhas.forEach(function (x) { lista.appendChild(linha(x, c.account)) })
     desenharConta(c)
     entrega.hidden = !c.tem_produto
+    // #298: o frete fixo de cada produto (do painel); o que não tem valor a equipe combina à parte
+    var freteTxt = entrega.querySelector('.carrinho-frete-txt')
+    if (freteTxt) {
+      freteTxt.textContent = c.frete_a_combinar
+        ? (c.frete_envio > 0 ? t('shipping ' + usd(c.frete_envio) + ', and we confirm the rest separately', 'frete de ' + usd(c.frete_envio) + ', e o resto confirmamos à parte')
+          : t('we confirm and bill shipping separately', 'confirmamos e cobramos o frete à parte'))
+        : (c.frete_envio > 0 ? t('shipping ' + usd(c.frete_envio), 'frete de ' + usd(c.frete_envio)) : t('free shipping', 'frete grátis'))
+    }
     total.textContent = ''
     function par(k, v, classe, extra) {
       var dt = el('dt', classe, k), dd = el('dd', classe, v)
@@ -332,7 +340,10 @@
       total.appendChild(dt); total.appendChild(dd)
     }
     par('Subtotal', usd(c.subtotal))
-    if (c.deposito > 0) par(t('Security deposit (refundable)', 'Depósito de segurança (reembolsável)'), usd(c.deposito), null, dicaDeposito())
+    if (c.deposito > 0) par(t('Security deposit (refundable)', 'Depósito de segurança (reembolsável)'), usd(c.deposito), null, c.tem_sessao ? dicaDeposito() : null)
+    if (c.tem_produto && c.entrega === 'envio') {
+      par(t('Shipping', 'Frete'), c.frete > 0 ? usd(c.frete) : (c.frete_a_combinar ? t('to confirm', 'a confirmar') : t('Free', 'Grátis')))
+    }
     par('Total', usd(c.total), 'soma')
     var pronto = c.ok && !c.precisa_conta && c.stripe
     pagar.disabled = !pronto || indo
@@ -344,12 +355,15 @@
   function cotar() {
     var itens = ler()
     if (!itens.length) { desenhar({ linhas: [], account: null }); return Promise.resolve() }
+    var r = entrega.querySelector('input:checked')
     return fetch(api, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ itens: itens }) })
+      body: JSON.stringify({ itens: itens, entrega: r ? r.value : 'retirada' }) })
       .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json() })
       .then(desenhar)
       .catch(function () { estado.hidden = false; estado.textContent = t('We could not load your cart. Please refresh the page.', 'Não conseguimos carregar o seu carrinho. Recarregue a página.') })
   }
+
+  entrega.addEventListener('change', function () { if (!indo) cotar() })    // #298: o frete entra (ou sai) do total
 
   pagar.addEventListener('click', function () {
     if (!cot || indo) return
