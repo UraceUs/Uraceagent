@@ -399,9 +399,19 @@ def aplicar_schema(con):
     for sql in POS_MIGRACAO:
         con.execute(sql)
     _importar_produtos(con)          # #298: os produtos do WooCommerce entram no banco uma vez
+    _importar_posts(con)             # #172: os 7 artigos do WordPress, uma vez, com o HTML como está
 
 
 PRODUTOS_WOO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "vitrine", "dados", "produtos.json")
+POSTS_WP = os.path.join(os.path.dirname(PRODUTOS_WOO), "posts.json")
+
+
+def _importar_posts(con):
+    """#172 (dono, 16/10: *"editor do blog, pode seguir"*): os 7 artigos de `posts.json` passam para `blog_posts`
+    **uma vez**, como estão (id do WordPress, data, capa e o HTML cru). Só roda com a tabela vazia: o que a equipe
+    escrever, mudar ou tirar do ar depois nunca volta."""
+    from command_center.providers import blog
+    blog.importar(con, POSTS_WP)
 
 
 def _importar_produtos(con):

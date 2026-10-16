@@ -4,12 +4,17 @@ A descrição e o resumo dos produtos são HTML (vieram do WooCommerce assim). N
 num editor simples (negrito, itálico, lista, subtítulo). Antes de gravar, só as tags que os 70 produtos de hoje
 usam passam: p, br, strong/b, em/i, u, ul/ol/li, h2–h4, a (http(s), caminho do site, mailto, tel) e img
 (https ou caminho do site). Atributo de evento, style, script, iframe e companhia não passam: o resto vira texto.
+
+#172: o blog pede mais (`limpar(html, extra=BLOG)`): tabela, figura e citação, sem atributo nenhum. O post 451 do
+WordPress tem `<figure><table>…`; sem isto, a tabela vira texto solto no primeiro salvar. Só o blog passa `extra`:
+a loja e o editor do site continuam com as tags de sempre.
 """
 import re
 from html import escape
 from html.parser import HTMLParser
 
 TAGS = {"p", "br", "strong", "b", "em", "i", "u", "ul", "ol", "li", "h2", "h3", "h4", "a", "img"}
+BLOG = frozenset({"table", "thead", "tbody", "tr", "th", "td", "figure", "figcaption", "blockquote"})
 VAZIAS = {"br", "img"}
 SOMEM_COM_CONTEUDO = {"script", "style", "iframe", "object", "embed", "template", "svg", "math", "noscript", "head", "title"}
 MAX = 20_000
@@ -23,16 +28,16 @@ def _url_ok(v, img=False):
 
 
 class _Limpa(HTMLParser):
-    def __init__(self):
+    def __init__(self, tags=TAGS):
         super().__init__(convert_charrefs=True)
-        self.out, self.abertas, self.fora = [], [], 0
+        self.out, self.abertas, self.fora, self.tags = [], [], 0, tags
 
     def handle_starttag(self, tag, attrs):
         tag = tag.lower()
         if tag in SOMEM_COM_CONTEUDO:
             self.fora += 1
             return
-        if self.fora or tag not in TAGS:
+        if self.fora or tag not in self.tags:
             return
         a = dict((k.lower(), v) for k, v in attrs)
         if tag == "a":
@@ -59,7 +64,7 @@ class _Limpa(HTMLParser):
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
-        if tag.lower() not in VAZIAS and tag.lower() in TAGS and not self.fora and self.abertas and self.abertas[-1] == tag.lower():
+        if tag.lower() not in VAZIAS and tag.lower() in self.tags and not self.fora and self.abertas and self.abertas[-1] == tag.lower():
             self.handle_endtag(tag)
 
     def handle_endtag(self, tag):
@@ -67,7 +72,7 @@ class _Limpa(HTMLParser):
         if tag in SOMEM_COM_CONTEUDO:
             self.fora = max(0, self.fora - 1)
             return
-        if self.fora or tag not in TAGS or tag in VAZIAS or tag not in self.abertas:
+        if self.fora or tag not in self.tags or tag in VAZIAS or tag not in self.abertas:
             return
         while self.abertas:                      # fecha o que ficou aberto dentro dela
             t = self.abertas.pop()
@@ -80,10 +85,10 @@ class _Limpa(HTMLParser):
             self.out.append(escape(data, quote=False))
 
 
-def limpar(html):
+def limpar(html, extra=()):
     """HTML qualquer → só as tags seguras, tudo fechado. Vazio (ou só espaço e <br>) → ''. Quem grava confere o
-    tamanho (`MAX`): cortar aqui partiria uma tag ao meio."""
-    p = _Limpa()
+    tamanho (`MAX`): cortar aqui partiria uma tag ao meio. `extra` (#172, só o blog): mais tags, sem atributo."""
+    p = _Limpa(TAGS | set(extra) - SOMEM_COM_CONTEUDO)
     p.feed(str(html or ""))
     p.close()
     while p.abertas:

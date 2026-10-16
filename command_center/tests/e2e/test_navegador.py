@@ -41,7 +41,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
-         "/site/produtos", "/site/produtos/235", "/site/editor",
+         "/site/produtos", "/site/produtos/235", "/site/editor", "/site/blog", "/site/blog/451",
          "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -3163,3 +3163,80 @@ def test_o_gerente_monta_uma_pagina_no_editor_e_publica(servidor, navegador):
         if pid:
             g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
         g.close()
+
+
+# ------------------------------------------------------------------ blog do site (#172)
+_ALVOS_DO_SITE = """() => [...document.querySelectorAll('main a, main button, main label.kart, header a, header summary')]
+    .filter(e => e.offsetParent !== null && !e.closest('p, li, dd, address, .post-corpo'))   // link no meio do texto não é botão
+    .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+    .filter(([h]) => h < 40)"""
+
+
+def test_blog_o_operador_escreve_o_admin_publica_e_o_artigo_cabe_no_celular(servidor, navegador, tmp_path):
+    """#172 (dono, 16/10: "editor do blog, pode seguir"): Site › Blog no celular. O operador cria o artigo pelo "Novo
+    artigo" (em cima), escreve, sobe a capa e salva o rascunho, mas não publica; o administrador publica, e o artigo sai
+    em /blog/<slug>/ com um h1, sem rolar para o lado e com alvo de toque de 40 px em 360 e 390 px."""
+    from PIL import Image
+    site = servidor.removesuffix("/ops")
+    url = "/blog/kart-racing-line-for-beginners-e2e/"
+    op = entrar(navegador, servidor, "op@urace.us", largura=390, altura=844)
+    adm, pid = None, None
+    try:
+        abrir(op, servidor, "/site/blog")
+        op.get_by_role("heading", name="Blog", level=1).wait_for()
+        titulos = [t for n, t in _cabecalhos(op) if n == 2]
+        assert titulos.index("Novo artigo") < next(i for i, t in enumerate(titulos) if t.startswith("Artigos")), \
+            "a inserção fica em cima (dono)"
+        novo = op.locator("section.card", has=op.get_by_role("heading", name="Novo artigo"))
+        novo.get_by_label("Título do artigo").fill("Kart Racing Line for Beginners e2e")
+        novo.get_by_label("Categoria do artigo").select_option("training-racing")
+        novo.get_by_role("button", name="Criar e abrir").click()
+        op.wait_for_url(re.compile(r".*/site/blog/\d+$"))
+        pid = int(op.url.rstrip("/").rsplit("/", 1)[1])
+        op.get_by_label("Resumo").fill("Braking point, apex and exit: the racing line for your first day on track.")
+        op.get_by_label("Descrição para o Google").fill("How to drive the racing line in a kart in Orlando: braking point, apex and exit, "
+                                                     "explained by a URACE coach.")
+        op.get_by_role("textbox", name="Texto do artigo").fill("Brake in a straight line, turn in late and look at the exit.")
+        foto = tmp_path / "capa.png"
+        Image.new("RGB", (2000, 1000), (200, 30, 30)).save(foto)
+        op.get_by_label("Subir a capa").set_input_files(str(foto))
+        op.get_by_text("Capa salva no rascunho").wait_for()
+        op.get_by_label("Descrição da capa").fill("A red kart at the apex")
+        op.get_by_role("button", name="Salvar rascunho").click()
+        op.get_by_text("Rascunho salvo.").wait_for()
+        assert op.get_by_role("button", name="Publicar", exact=True).count() == 0, "o operador não publica"
+        assert op.get_by_text("Só o administrador publica").count() == 1
+        assert op.request.post(servidor + f"/api/site/blog/{pid}/publicar", headers=_csrf(op)).status == 403
+        assert op.request.get(site + url).status == 404, "rascunho fora do site"
+        op.locator('iframe[title="Prévia do artigo"]').wait_for()
+        for largura in (390, 360):
+            op.set_viewport_size({"width": largura, "height": 800})
+            r = op.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not op.erros_js and not op.erros_api, (op.erros_js, op.erros_api)
+
+        adm = entrar(navegador, servidor, "italo@urace.us", largura=390, altura=844)
+        abrir(adm, servidor, f"/site/blog/{pid}")
+        adm.get_by_role("button", name="Publicar", exact=True).click()
+        adm.get_by_text("Publicado: o blog e o mapa do site já mostram.").wait_for()
+        assert f"<loc>https://127.0.0.1{url}</loc>" in adm.request.get(site + "/sitemap.xml").text(), "no mapa do site na hora"
+        for largura in (360, 390):
+            v = navegador.new_page(viewport={"width": largura, "height": 800})
+            erros = []
+            v.on("pageerror", lambda e: erros.append(str(e)))
+            v.goto(site + url)
+            v.wait_for_load_state("networkidle")
+            assert [t for n, t in _cabecalhos(v) if n == 1] == ["Kart Racing Line for Beginners e2e"], largura
+            r = v.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (largura, r)
+            assert not v.evaluate(_ALVOS_DO_SITE), (largura, v.evaluate(_ALVOS_DO_SITE))
+            assert v.locator("img.post-capa").get_attribute("alt") == "A red kart at the apex"
+            assert not erros, erros
+            v.close()
+        assert not adm.erros_js and not adm.erros_api, (adm.erros_js, adm.erros_api)
+    finally:
+        if pid and adm:
+            adm.request.post(servidor + f"/api/site/blog/{pid}/despublicar", headers=_csrf(adm), data={"confirmar": True})
+        op.close()
+        if adm:
+            adm.close()

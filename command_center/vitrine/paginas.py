@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from contextvars import ContextVar
+from functools import lru_cache
 from html import escape
 
 from command_center.vitrine import conteudo as C, dica
@@ -54,6 +55,18 @@ def foto_url(src):
     já vêm com o caminho (/store/img/<arquivo>.webp)."""
     src = str(src or "")
     return src if src.startswith("/") else estatico("img/" + src)
+
+
+@lru_cache(maxsize=256)
+def tamanho_estatico(nome):
+    """#172: largura e altura de verdade de uma foto de static/img (só o cabeçalho do arquivo é lido), para o
+    `width`/`height` da capa do blog. Foto que não está lá: (None, None)."""
+    from PIL import Image
+    try:
+        with Image.open(os.path.join(STATIC, "img", os.path.basename(str(nome or "")))) as im:
+            return im.size
+    except (OSError, ValueError):
+        return None, None
 
 
 def preview():
@@ -101,8 +114,10 @@ def _marca(host):
 
 
 def _ld(dados):
-    # `</` dentro do JSON fecharia a tag <script>: escapa a barra
-    return '<script type="application/ld+json">' + json.dumps(dados, ensure_ascii=False).replace("</", "<\\/") + "</script>"
+    # `</` dentro do JSON fecharia a tag <script>: escapa a barra. #172: `<!--` (texto que a equipe escreve no painel)
+    # faria o navegador engolir o resto da página dentro do <script>: o "!" vira \u0021, que o JSON lê igual
+    return ('<script type="application/ld+json">' + json.dumps(dados, ensure_ascii=False).replace("</", "<\\/").replace("<!--", "<\\u0021--")
+            + "</script>")
 
 
 def _link(rot, href, atual):
@@ -206,7 +221,7 @@ def _lista(itens, classe="checks"):
 
 # ------------------------------------------------------------------ páginas
 def home(host):
-    from command_center.vitrine.paginas_site import _post_card, dados     # paginas_site importa este módulo
+    from command_center.vitrine.paginas_site import _post_card, posts as artigos     # paginas_site importa este módulo
     h = C.HOME
     numeros = "".join(f'<div class="numero"><strong>{e(n)}</strong><span>{e(t)}</span></div>' for n, t in h["numeros"])
     campeoes = "".join(f'<figure><img src="{estatico("img/" + f)}" alt="" width="480" height="631" loading="lazy">'
@@ -221,7 +236,7 @@ def home(host):
     depo = "".join(f'<blockquote><p>{e(t)}</p><footer>{e(n)}{(" · " + e(c)) if c else ""}</footer></blockquote>'
                    for n, c, t in h["depoimentos"])
     eventos = " · ".join(f'<a href="{e(href)}">{e(r)}</a>' for r, href in h["eventos_links"])
-    posts = "".join(_post_card(p) for p in dados("posts.json")["posts"][:3])
+    posts = "".join(_post_card(p) for p in artigos()[:3])     # #172: do banco (sem banco, o arquivo)
     corpo = f"""
 <section class="hero hero-home">
   <div class="hero-in">
