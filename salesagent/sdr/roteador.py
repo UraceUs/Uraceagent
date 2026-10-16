@@ -9,7 +9,7 @@ que NÃO é lead (automático, spam, interno, grupo), que não recebe resposta.
 "Toda mensagem de lead recebe resposta" continua valendo: o que se cala
 aqui não é lead. Opt-out recebe UMA confirmação e silêncio depois.
 """
-from . import regras
+from . import idiomas, regras
 
 RESPONDER = "responder"
 SILENCIAR = "silenciar"
@@ -28,6 +28,8 @@ MENSAGEM_ADIAR = {
     "en": "No problem! Whenever it makes sense for you, just message us here.\nWe're here when you're ready.",
     "es": "¡Sin problema! Cuando te venga bien, escríbenos por aquí.\nQuedamos a tu disposición.",
 }
+idiomas.completar(MENSAGEM_OPT_OUT, "opt_out")
+idiomas.completar(MENSAGEM_ADIAR, "adiar")
 
 
 def _escalar(motivo):
@@ -92,4 +94,6 @@ def idioma(texto_normalizado):
         return "en"
     if any(p in t for p in (" no quiero ", " por favor ", " gracias ", " mensajes ")):
         return "es"
-    return "pt"
+    # os outros idiomas (fr, it, de, ru, zh, ja, ko, ar, hi) pelo detector; sem sinal, português, como antes
+    outro = idiomas.detectar(texto_normalizado)
+    return outro if outro != "en" else "pt"

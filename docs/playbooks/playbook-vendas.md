@@ -23,7 +23,7 @@
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
 4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
-5. Site › Agendamentos: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel)
+5. Site › Agendamentos: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel); Security deposit (5.4)
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
 8. Tabela de operações para a IA
@@ -632,8 +632,9 @@ segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora p
    > desliga nada. **Kart novo:** no seletor "Kart do site", escolha **Novo kart…** e dê um nome curto
    > (ex.: *Rental 2-stroke Pro*); salvo, ele entra na página do Arrive and Drive com o preço e o depósito
    > daquele serviço. No Lead and Follow, o **Nome no site** e a **Descrição** são o que a caixa da reserva mostra.
-   > **Teste de checkout de US$ 1:** preço **1** e depósito **0** no serviço do kart; reserve, pague (o Stripe
-   > cobra US$ 1,00 de verdade) e **volte o preço e o depósito logo depois**; o estorno sai pelo Stripe.
+   > **Teste de checkout de US$ 1:** no serviço do kart, desmarque **Security deposit obrigatório**, ponha preço
+   > **1** e depósito **0**; reserve, pague (o Stripe cobra US$ 1,00 de verdade) e **volte o preço, o depósito e
+   > marque Obrigatório de novo** logo depois (veja 5.4); o estorno sai pelo Stripe.
 2. O ícone do carrinho no topo mostra quantos itens há. Em **`/cart/`** ele vê as linhas, o depósito e
    o total. Toda compra pede a conta do site (#248), e **o próprio carrinho cria a conta** (#305, dono
    16/10: *"ao invés de ter o botão de seguir e create account … ela vai ter que preencher as informações
@@ -866,6 +867,53 @@ Quem cria conta no site precisa estar ligado ao card certo. Cada driver tem o se
 | criar card para a conta | `POST /site/contas/{conta}/criar-cliente` | Operador (recusa se já existe cliente com o mesmo e-mail ou telefone) |
 | criar card para um driver | `POST /site/drivers/{driver}/criar-cliente` | Operador (recusa se já existe card com o nome do driver: vincule a ele. O e-mail repetido dos irmãos não bloqueia) |
 | desligar | `…/desvincular` | Gerente |
+
+### 5.4 Security deposit: devolver pelo Stripe e mudar o valor cobrado (#317)
+
+Dono, 16/10: *"fazer o reembolso de cada security deposit e alterar o valor do security deposit para ser cobrado no
+site … só clicar no botão e fazer o refund … Sempre conseguindo alterar o valor que vai ser reembolsado."*
+
+**Onde:** Site › **Security deposit** (`/ops/site/deposito`). Ver é do Operador; devolver, conferir e mudar o valor
+são do Gerente.
+
+**Devolver um depósito (passo a passo):**
+
+1. Filtro **Retidos** (o padrão). Ache o cliente pelo nome, e-mail, piloto ou nº do pedido.
+2. No cartão, confira a sessão, o piloto e o que **segue retido**.
+3. Em **Valor a devolver**, deixe o total ou escreva só uma parte. Por exemplo, devolve 300 e segura 100 de um dano
+   pequeno. Escreva o **motivo** (opcional; fica na auditoria e no cartão).
+4. **Devolver pelo Stripe** → confirme. O Stripe devolve no cartão que pagou. Não dá para desfazer.
+5. O cartão passa a **Devolvido em parte** ou **Devolvido**, com quem devolveu e quando.
+
+Regras:
+
+- Parcial vale, e mais de uma vez no mesmo depósito. Nunca passa do que segue retido.
+- Dois cliques, ou duas pessoas ao mesmo tempo, **não** devolvem duas vezes.
+- **"Devolução pendente":** a resposta do Stripe não chegou. O valor fica reservado. Toque em **Conferir no
+  Stripe** depois de alguns minutos: ele acerta sozinho, ou devolve o valor ao "retido" se nada chegou ao Stripe.
+- **Conferir no Stripe** mostra também quanto o pagamento já teve devolvido no total, inclusive o que alguém devolveu
+  direto no painel do Stripe. Isso **não** é descontado do depósito: confira antes de devolver de novo.
+- Só o que foi pago no site (carrinho ou Buy now) aparece aqui. Depósito cobrado em invoice do QuickBooks é
+  devolvido no QuickBooks, como sempre.
+- O QuickBooks não muda sozinho com a devolução do Stripe.
+- Stripe em **modo teste** (chave de teste): a tela avisa e nada de dinheiro de verdade sai.
+
+**Mudar o valor cobrado no site** (em cima, em **Valor cobrado no site**):
+
+- Cada sessão (serviço) e cada produto com depósito têm o seu valor. Mude e toque em **Salvar**. Vale para as
+  **próximas** compras; o pedido já pago fica com o valor do dia.
+- Para testar o checkout com valor baixo: ponha **1**, teste, e **volte ao valor normal** (ex.: 400). Para testar
+  **sem** depósito (o teste de US$ 1 do dia 16/10), desmarque **Obrigatório** antes de zerar, e marque de novo depois.
+- **Obrigatório** (também em Serviços e preços, como **Security deposit obrigatório**): marcado, a sessão nunca sai sem
+  o depósito. O serviço não salva com o depósito zerado, o carrinho recusa a sessão ("This session can't be paid
+  online right now") e a invoice da equipe não sai. Serviço novo já nasce com a caixa marcada e pede o valor.
+
+| Ação | Rota | Papel |
+|---|---|---|
+| ver os depósitos (paginado) | `GET /site/depositos?estado=retidos\|devolvidos\|todos&q=` | Operador |
+| devolver | `POST /site/depositos/{pedido}/reembolsar` (`item_id`, `valor`, `nota`) | Gerente |
+| conferir no Stripe | `POST /site/depositos/{pedido}/conferir` | Gerente |
+| valor cobrado | `GET /site/depositos/valores` · `PATCH /site/depositos/valor` (`tipo`, `id`, `valor`, `obrigatorio`) | Gerente para mudar |
 
 ---
 

@@ -369,6 +369,10 @@ MIGRACOES = [
     ("store_orders", "utm", "TEXT"),
     # 16/10 — dono (#311): a sessão do parts.urace.us nasce de uma sessão do painel; sair do painel derruba as duas
     ("sessions", "parent_id", "TEXT"),
+    # 16/10 — dono (#317): Site › Security deposit. Quanto o pagamento já teve devolvido no Stripe (lido no "Conferir"),
+    # e o serviço cujo depósito é obrigatório ("o serviço que eu coloquei no checkout ia permitir … sem o security deposit")
+    ("store_orders", "stripe_refunded", "REAL"),
+    ("booking_services", "deposit_required", "INTEGER"),   # NULL = de antes da caixa: a pós-migração decide uma vez
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
@@ -703,6 +707,11 @@ POS_MIGRACAO = [
     *_servico_do_lead_and_follow(),
     *_cartoes_dos_karts(),
     *_cartoes_das_paginas(),
+    # #317: a caixa "Security deposit obrigatório" nasce marcada em toda sessão que já cobra depósito (os karts do
+    # site, com US$ 400). Só toca quem ainda não decidiu (NULL): o que o gerente desmarcar continua desmarcado.
+    """UPDATE booking_services SET deposit_required =
+         CASE WHEN COALESCE(deposit, 0) > 0 AND COALESCE(kind, 'session') = 'session' THEN 1 ELSE 0 END
+       WHERE deposit_required IS NULL""",
 ]
 
 

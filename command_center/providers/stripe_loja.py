@@ -39,7 +39,9 @@ FL = ZoneInfo("America/New_York")
 
 
 class ErroStripe(Exception):
-    pass
+    def __init__(self, msg="", codigo=None):
+        super().__init__(msg)
+        self.codigo = codigo           # #317: o HTTP do Stripe (5xx = resultado indeterminado: pode ter feito)
 
 
 def ligado():
@@ -81,7 +83,7 @@ def _http(metodo, caminho, campos=None, idem=None):
             msg = (json.load(e).get("error") or {}).get("message") or ""
         except Exception:                                   # noqa: BLE001
             msg = ""
-        raise ErroStripe(f"Stripe HTTP {e.code}: {msg[:200]}")
+        raise ErroStripe(f"Stripe HTTP {e.code}: {msg[:200]}", codigo=e.code)
     except urllib.error.URLError as e:
         raise ErroStripe(f"sem conexão com o Stripe: {e.reason}")
 

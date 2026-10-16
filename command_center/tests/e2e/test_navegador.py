@@ -42,7 +42,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
          "/site/produtos", "/site/produtos/235", "/site/editor",
-         "/site/waiver", "/site/pedidos", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
+         "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
 
@@ -56,6 +56,7 @@ class _StripeFalso:
         from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
         from urllib.parse import parse_qsl
         sessoes = self.sessoes = {}
+        devolucoes = self.devolucoes = []                  # #317: as devoluções do security deposit
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -69,6 +70,12 @@ class _StripeFalso:
 
             def do_POST(self):
                 campos = dict(parse_qsl(self.rfile.read(int(self.headers["Content-Length"])).decode()))
+                if self.path == "/v1/refunds":
+                    r = {"id": f"re_e2e{len(devolucoes) + 1:03d}", "object": "refund", "amount": int(campos["amount"]),
+                         "payment_intent": campos["payment_intent"], "status": "succeeded",
+                         "metadata": {k[9:-1]: v for k, v in campos.items() if k.startswith("metadata[")}}
+                    devolucoes.append(r)
+                    return self._json(r)
                 sid = f"cs_test_e2e{len(sessoes) + 1:03d}"
                 n = 0                                  # #236: o carrinho manda várias linhas (e a do depósito)
                 while f"line_items[{n}][quantity]" in campos:
@@ -84,6 +91,10 @@ class _StripeFalso:
                 self._json(sessoes[sid])
 
             def do_GET(self):
+                if self.path.startswith("/v1/refunds?"):
+                    pi = parse_qsl(self.path.split("?", 1)[1]).__iter__()
+                    pi = dict(pi).get("payment_intent")
+                    return self._json({"object": "list", "data": [r for r in devolucoes if r["payment_intent"] == pi]})
                 partes = self.path.strip("/").split("/")
                 if partes[:3] == ["v1", "checkout", "sessions"]:
                     return self._json(sessoes[partes[3]])
@@ -127,6 +138,7 @@ def webhook_stripe(site, sessao, tipo, eid, **extra):
         return json.load(r)["resultado"]
 GOOGLE = None
 GOOGLE_CRED = None
+BANCO = None
 
 
 def _porta_livre():
@@ -140,8 +152,9 @@ def servidor(tmp_path_factory):
     if not os.path.exists(DIST):
         pytest.fail("frontend não construído: rode `npm run build` em command_center/web")
     pasta = tmp_path_factory.mktemp("e2e")
-    global EMAILS, STRIPE, GOOGLE, GOOGLE_CRED
+    global EMAILS, STRIPE, GOOGLE, GOOGLE_CRED, BANCO
     EMAILS = str(pasta / "emails.jsonl")                 # #108: o e-mail do código vai para cá, nada sai da máquina
+    BANCO = str(pasta / "e2e.sqlite")                    # #317: o teste do depósito põe um pedido pago direto no banco
     STRIPE = _StripeFalso()                              # #174: o Checkout é o falso, local
     from command_center.tests.google_falso import GoogleFalso
     GOOGLE = GoogleFalso()                               # #220: o login e o Calendar do Google são os falsos, locais
@@ -1475,6 +1488,117 @@ def test_o_botao_do_balcao_abre_o_parts_ja_logado(servidor, navegador):
     eu = pg.evaluate("fetch('/ops/api/auth/me').then(r => r.json())")
     assert (eu["email"], eu["so_balcao"]) == ("luis@urace.us", True)
     # voltar com o mesmo passe não entra de novo: o formulário reenviado cai no login, com o aviso
+    pg.close()
+    assert not pg.erros_js, pg.erros_js
+
+
+def _espera_no_banco(con, sql, args, valor, tempo=10):
+    """O botão desliga enquanto salva: ler o banco logo depois do clique corre com o PATCH (o CI pegou)."""
+    fim = time.time() + tempo
+    while time.time() < fim:
+        if con.execute(sql, args).fetchone()[0] == valor:
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def test_security_deposit_devolve_parte_pelo_stripe_e_muda_o_valor_cobrado(servidor, navegador):
+    """#317 (dono, 16/10): "fazer o reembolso de cada security deposit e alterar o valor do security deposit para ser
+    cobrado no site … só clicar no botão e fazer o refund … Sempre conseguindo alterar o valor que vai ser
+    reembolsado." Um pedido pago no site com o depósito de US$ 400; o gerente, no celular, devolve US$ 150 pelo Stripe
+    (o falso) e muda o depósito que o site cobra."""
+    import sqlite3
+    con = sqlite3.connect(BANCO)
+    sid, preco = con.execute("SELECT id, price FROM booking_services WHERE site_kart='4-stroke'").fetchone()
+    oid = con.execute("""INSERT INTO store_orders (kind, product_slug, product_name, quantity, unit_price, amount, delivery,
+                           status, payment_intent, deposit, email, name, paid_at)
+                         VALUES ('carrinho','carrinho','Arrive and Drive 4-stroke',1,?,?, 'retirada','pago','pi_e2e_dep',400,
+                                 'dora.deposito.e2e@example.com','Dora Deposito','2026-10-15T15:00:00.000Z')""",
+                      (preco + 400, preco + 400)).lastrowid
+    con.execute("""INSERT INTO store_order_items (order_id, kind, name, quantity, unit_price, deposit, amount, service_id,
+                     service_name, date, period, pilot_name)
+                   VALUES (?, 'sessao', 'Arrive and Drive 4-stroke · Theo', 1, ?, 400, ?, ?, 'Arrive and Drive 4-stroke',
+                           '2026-10-18', 'manha', 'Theo Deposito')""", (oid, preco, preco + 400, sid))
+    con.commit()
+    pg = entrar(navegador, servidor, largura=390, altura=844)
+    abrir(pg, servidor, "/site/deposito")
+    pg.get_by_role("heading", name="Security deposit", level=1).wait_for()
+    cartao = pg.locator("article.cd", has_text="Dora Deposito")
+    cartao.wait_for()
+    assert "$400.00" in cartao.inner_text() and "Theo Deposito" in cartao.inner_text()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    botao = cartao.get_by_role("button", name="Devolver pelo Stripe")
+    assert botao.bounding_box()["height"] >= 40
+    cartao.get_by_label("Valor a devolver (US$)").fill("150")
+    cartao.get_by_label("Motivo (opcional)").fill("sem dano, menos a taxa da pista")
+    botao.click()
+    pg.get_by_role("dialog").get_by_role("button", name="Devolver").click()
+    pg.get_by_text("Devolvido $150.00 pelo Stripe.").wait_for()
+    cartao.get_by_text("Devolvido em parte").wait_for()
+    assert "$250.00" in cartao.inner_text()
+    assert [(d["amount"], d["payment_intent"]) for d in STRIPE.devolucoes] == [(15000, "pi_e2e_dep")]
+    # mais do que o que segue retido não sai, nem chega ao Stripe
+    cartao.get_by_label("Valor a devolver (US$)").fill("300")
+    cartao.get_by_role("button", name="Devolver pelo Stripe").click()
+    pg.get_by_text("O máximo que ainda dá para devolver é $250.00.").wait_for()
+    assert len(STRIPE.devolucoes) == 1
+    cartao.get_by_role("button", name="Conferir no Stripe").click()
+    pg.get_by_text("Conferido: tudo igual ao Stripe.").wait_for()
+    # o valor que o site cobra: US$ 1 para testar o checkout, e volta aos 400
+    campo = pg.get_by_label("Depósito de Arrive and Drive 4-stroke (US$)")
+    campo.fill("1")
+    linha = pg.locator("li.dep-valor", has=campo)
+    linha.get_by_role("button", name="Salvar").click()
+    pg.get_by_text("Salvo. Vale para as próximas compras.").first.wait_for()
+    assert _espera_no_banco(con, "SELECT deposit FROM booking_services WHERE id=?", (sid,), 1)
+    assert linha.get_by_role("checkbox", name="Obrigatório").is_checked()
+    campo.fill("400")
+    linha.get_by_role("button", name="Salvar").click()
+    assert _espera_no_banco(con, "SELECT deposit FROM booking_services WHERE id=?", (sid,), 400)
+    # a caixa "Obrigatório" leva junto o valor digitado e ainda não salvo (revisão do #317)
+    obr = linha.get_by_role("checkbox", name="Obrigatório")
+    obr.click()                                   # a caixa salva na hora; o estado volta do servidor
+    linha.locator("input[type=checkbox]:not(:checked):not([disabled])").wait_for()
+    assert _espera_no_banco(con, "SELECT deposit_required FROM booking_services WHERE id=?", (sid,), 0)
+    campo.fill("2")
+    obr.click()
+    linha.locator("input[type=checkbox]:checked:not([disabled])").wait_for()
+    assert _espera_no_banco(con, "SELECT deposit * 10 + deposit_required FROM booking_services WHERE id=?", (sid,), 21)
+    campo.fill("400")
+    linha.get_by_role("button", name="Salvar").click()
+    assert _espera_no_banco(con, "SELECT deposit FROM booking_services WHERE id=?", (sid,), 400)
+    pg.set_viewport_size({"width": 360, "height": 740})
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    # o texto dos botões do cartão cabe neles (revisão: "Devolver pelo Stripe" passava da pílula a 360 px)
+    assert pg.evaluate("""() => [...document.querySelectorAll('.cd-acoes .btn')].every(b => b.scrollWidth <= b.clientWidth + 1)""")
+    con.close()
+    pg.close()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+
+
+def test_servico_novo_ja_nasce_com_o_security_deposit_obrigatorio(servidor, navegador):
+    """#317 (dono, 16/10): "eu coloquei um serviço, fui testar lá no checkout, e o serviço … ia permitir que eu fizesse
+    o checkout … sem o security deposit … coloca em cada serviço … um checkbox para marcar que ele é obrigatório"."""
+    pg = entrar(navegador, servidor, largura=390, altura=844)
+    abrir(pg, servidor, "/site/servicos")
+    novo = pg.locator("section", has=pg.get_by_role("heading", name="Novo serviço"))
+    novo.wait_for()
+    obr = novo.get_by_role("checkbox", name="Security deposit obrigatório")
+    assert obr.is_checked(), "a sessão nova nasce com o depósito obrigatório"
+    novo.get_by_label("Nome").fill("Teste de checkout e2e")
+    novo.get_by_label("Preço (US$)").fill("10")
+    criar = novo.get_by_role("button", name="Criar")
+    assert criar.is_disabled(), "sem o valor do depósito, não cria"
+    novo.get_by_label("Depósito por sessão (US$)").fill("1")
+    criar.click()
+    pg.get_by_text("Serviço criado: o cliente já vê.").wait_for()
+    s = next(x for x in pg.request.get(servidor + "/api/site/servicos").json()["servicos"] if x["name"] == "Teste de checkout e2e")
+    assert (s["deposit"], s["deposit_required"]) == (1, 1)
+    r = pg.request.patch(servidor + f"/api/site/servicos/{s['id']}", data={"active": False},
+                         headers={"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")})
+    assert r.ok, "desativa para não aparecer nos outros testes"
     pg.close()
     assert not pg.erros_js, pg.erros_js
 

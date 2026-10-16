@@ -173,6 +173,8 @@ def _dados(con, d, parcial):
     if "deposit" in d:
         # #50: depósito por sessão (Arrive and Drive: US$ 400); vazio ou 0 = sem depósito
         s["deposit"] = preco(d["deposit"]) if d["deposit"] not in (None, "", 0, "0") else 0.0
+    if "deposit_required" in d and d["deposit_required"] is not None:
+        s["deposit_required"] = 1 if d["deposit_required"] else 0     # #317: o checkout não passa sem o depósito
     if "kind" in d and d["kind"] is not None:
         if d["kind"] not in ("session", "plan", "addon"):
             raise ErroServico("tipo inválido: session (sessão avulsa), plan (plano mensal) ou addon (add-on do dia)")
@@ -194,10 +196,23 @@ def _dados(con, d, parcial):
     return s
 
 
+MSG_DEPOSITO_OBRIGATORIO = ("Security deposit obrigatório: informe o valor do depósito (maior que zero) "
+                            "ou desmarque \"obrigatório\".")
+
+
+def _confere_deposito(s):
+    """#317 (dono, 16/10): "coloca em cada serviço … um checkbox para marcar que ele é obrigatório". Marcado, a
+    sessão nunca fica sem depósito: nem ao salvar, nem no checkout."""
+    if (s.get("kind") or "session") == "session" and s.get("deposit_required") and not float(s.get("deposit") or 0) > 0:
+        raise ErroServico(MSG_DEPOSITO_OBRIGATORIO)
+
+
 def criar(con, por, d):
     s = _dados(con, d, parcial=False)
     if s.get("kind") == "plan" and not s.get("months"):
         s["months"] = 1
+    s.setdefault("deposit_required", 0)
+    _confere_deposito(s)
     if um(con, "SELECT 1 AS x FROM booking_services WHERE lower(name)=lower(?) AND active=1", (s["name"],)):
         raise ErroServico("já existe um serviço ativo com esse nome")
     return inserir(con, "booking_services", **s, updated_by=por, updated_at=agora())
@@ -209,6 +224,7 @@ def mudar(con, por, sid, d):
     if not atual:
         raise ErroServico("serviço não existe")
     s = _dados(con, d, parcial=True)
+    _confere_deposito({**dict(atual), **s})
     mud = {k: (atual[k], v) for k, v in s.items() if atual[k] != v}
     if mud:
         atualizar(con, "booking_services", sid, **{k: v for k, (_, v) in mud.items()}, updated_by=por, updated_at=agora())

@@ -2149,3 +2149,23 @@ CREATE TABLE IF NOT EXISTS auth_passes (
   created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS auth_passes_exp ON auth_passes(expires_at);
+
+-- #317 (dono, 16/10: "uma sessão de security deposit, onde a gente consiga ter o controle para fazer o reembolso de
+-- cada security deposit … pelo Command Center. Sempre conseguindo alterar o valor que vai ser reembolsado"). Cada
+-- devolução de um depósito cobrado no site, feita pelo Stripe. Nasce `pendente` ANTES de chamar o Stripe (o valor
+-- fica reservado: dois cliques não devolvem duas vezes) e vira `feito` ou `falhou`. Nada se apaga.
+CREATE TABLE IF NOT EXISTS store_deposit_refunds (
+  id               INTEGER PRIMARY KEY,
+  order_id         INTEGER NOT NULL REFERENCES store_orders(id),
+  item_id          INTEGER REFERENCES store_order_items(id),   -- NULL: "Buy now" (o depósito é do pedido)
+  amount           REAL NOT NULL CHECK (amount > 0),
+  status           TEXT NOT NULL CHECK (status IN ('pendente','feito','falhou')),
+  stripe_refund_id TEXT UNIQUE,
+  stripe_status    TEXT,                                      -- succeeded | pending | failed | canceled
+  note             TEXT,
+  error            TEXT,
+  by_user_id       INTEGER REFERENCES users(id),
+  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  done_at          TEXT
+);
+CREATE INDEX IF NOT EXISTS store_deposit_refunds_linha ON store_deposit_refunds(order_id, item_id);
