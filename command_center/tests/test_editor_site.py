@@ -248,8 +248,8 @@ def _previa(painel, h, pid, editar=True):
 
 
 def test_a_previa_de_edicao_marca_cada_peca_e_o_site_continua_igual(amb, monkeypatch):
-    """A prévia de edição tem os `data-ed-*` (seção, coluna, elemento, faixa original) e o CSS do editor, sem medição;
-    o site e a prévia de sempre não levam nada disso."""
+    """A prévia de edição tem os `data-ed-*` (seção, coluna, elemento, faixa original) e o CSS do editor, sem medição
+    e com a política do site (sem script nem estilo inline); o site e a prévia de sempre não levam nada disso."""
     painel, site, con = amb
     monkeypatch.setenv("SITE_GTM_ID", "GTM-59CCNDC")          # com a medição ligada no site
     h = _entra(painel)
@@ -257,7 +257,13 @@ def test_a_previa_de_edicao_marca_cada_peca_e_o_site_continua_igual(amb, monkeyp
     sec = _secao(H1, {"id": "bt1", "tipo": "botao", "texto": "Book the camp", "link": "/contact/"},
                  {"id": "li1", "tipo": "lista", "itens": []}, colunas=2)
     _salvar(painel, h, pid, description=DESC, conteudo={"itens": [sec]})
-    ed_html = _previa(painel, h, pid).text
+    r = _previa(painel, h, pid)
+    ed_html = r.text
+    # a prévia roda na origem do painel, com a sessão do gerente: a política dela é a do site (nada inline)
+    pol = r.headers["content-security-policy"]
+    diretivas = dict(x.strip().split(" ", 1) for x in pol.split(";"))
+    assert diretivas["script-src"] == "'self'" and diretivas["style-src"] == "'self'"
+    assert "unsafe" not in pol and diretivas["frame-ancestors"] == "'self'"
     assert f'data-ed-s="{sec["id"]}"' in ed_html and f'data-ed-col="{sec["id"]}:0"' in ed_html
     assert f'data-ed-col="{sec["id"]}:1"' in ed_html, "a coluna vazia também é um lugar para soltar"
     assert '<h1 data-ed-w="h1a" data-ed-tipo="titulo" class="ed-t' in ed_html
@@ -286,17 +292,6 @@ def test_a_previa_de_edicao_de_pagina_que_existe_marca_as_faixas_e_mostra_a_esco
     assert '<section data-ed-s="o1" data-ed-o="1" data-ed-oculto=""' in html, "a escondida aparece apagada na prévia"
     publica = re.search(r'<main id="conteudo">(.*)</main>', _previa(painel, h, p["pagina"]["id"], editar=False).text, re.S).group(1)
     assert publica.count("<section") == html.count("<section") - 1, "fora da edição, a escondida some"
-
-
-def test_a_previa_continua_sem_script_nem_estilo_inline(amb):
-    """A prévia roda na origem do painel, com a sessão do gerente: a política dela é a do site (nada inline)."""
-    painel, site, con = amb
-    h = _entra(painel)
-    pid = _nova(painel, h)["pagina"]["id"]
-    pol = _previa(painel, h, pid).headers["content-security-policy"]
-    diretivas = dict(x.strip().split(" ", 1) for x in pol.split(";"))
-    assert diretivas["script-src"] == "'self'" and diretivas["style-src"] == "'self'"
-    assert "unsafe" not in pol and diretivas["frame-ancestors"] == "'self'"
 
 
 def test_salvar_com_a_revisao_velha_recusa_em_vez_de_apagar_o_que_o_outro_fez(amb):
