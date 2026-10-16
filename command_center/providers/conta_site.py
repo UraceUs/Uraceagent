@@ -16,13 +16,14 @@ piloto da sessão entra só com o nome e a pessoa **completa depois**, com **lem
   2. **completar o piloto**: sessão marcada com o piloto incompleto (`bookings.pilot_pending`) → um lembrete a cada
      24 h, até completar, no máximo 7, e só enquanto a sessão não passou.
 """
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from command_center.db import agora, atualizar, todos, um
 from command_center.providers import email_marca
 
 INTERVALO_H = 24
 MAX_LEMBRETES = 7
+ESPERAS = (2, 6)              # segundos entre as tentativas das boas-vindas (a senha só existe nesta hora)
 
 
 def _area(caminho=""):
@@ -50,14 +51,22 @@ def _dia(iso, lang="en"):
 
 
 def _primeiro(nome):
-    return (nome or "").split()[0] if (nome or "").strip() else ""
+    """O primeiro nome para o "Hi …!". O que parece endereço (barra, dois-pontos, arroba, domínio) não vira título do
+    e-mail com a marca da URACE: aí fica só "Hi!"."""
+    p = (nome or "").split()[0] if (nome or "").strip() else ""
+    import re
+    return "" if re.search(r"[/:@\\<>]|\.[A-Za-z]{2,}", p) else p
 
 
 def _numeros(con, conta_id):
-    """[(piloto, número do card)] de quem já tem card nesta conta."""
-    return [(p["name"], p["client_id"]) for p in todos(con, """SELECT name, client_id FROM portal_pilots
-                                                                WHERE account_id=? AND active=1 AND client_id IS NOT NULL
-                                                                ORDER BY is_self DESC, id""", (conta_id,))]
+    """[(piloto, número do card)] de quem já tem card nesta conta; sem piloto com card, o card ligado à própria conta."""
+    ps = [(p["name"], p["client_id"]) for p in todos(con, """SELECT name, client_id FROM portal_pilots
+                                                              WHERE account_id=? AND active=1 AND client_id IS NOT NULL
+                                                              ORDER BY is_self DESC, id""", (conta_id,))]
+    if ps:
+        return ps
+    a = um(con, "SELECT name, client_id FROM portal_accounts WHERE id=? AND client_id IS NOT NULL", (conta_id,))
+    return [(a["name"], a["client_id"])] if a else []
 
 
 # ------------------------------------------------------------------ 1. boas-vindas
@@ -71,21 +80,25 @@ def texto_boas_vindas(conta, senha, numeros, lang="en"):
     else:
         cid_txt = ("chega por e-mail assim que o seu card estiver pronto" if pt else
                    "arrives by email as soon as your card is ready")
-    linhas = ([("Login", conta["email"]), ("Senha" if pt else "Password", senha),
+    # sem a senha (a tentativa da hora do cadastro falhou e o servidor não guarda a senha): diz qual é, sem mostrar
+    senha_txt = senha or ("a que você criou no cadastro" if pt else "the one you chose when you signed up")
+    linhas = ([("Login", conta["email"]), ("Senha" if pt else "Password", senha_txt),
                ("Número de cliente" if pt else "Customer ID", cid_txt)])
     if pt:
         assunto = "Bem-vindo à URACE: a sua conta está pronta"
         corpo = ["A sua conta na URACE está pronta. Com ela você vê os seus pedidos, os seus pilotos, as waivers e as reservas."]
         botao = ("Abrir a minha área URACE", _area())
-        depois = ["Guarde este e-mail com cuidado: ele tem a sua senha. Você pode trocar a senha quando quiser, em Conta.",
+        depois = (["Guarde este e-mail com cuidado: ele tem a sua senha. Você pode trocar a senha quando quiser, em Conta."] if senha else []) + [
                   f"Esqueceu a senha? Peça uma nova em {_area('/forgot')}",
+                  f"Não foi você que criou esta conta? Crie uma senha nova em {_area('/forgot')} (isso desconecta todos os outros aparelhos) e responda este e-mail ou ligue para {_telefone()}.",
                   f"Dúvidas? Ligue ou mande WhatsApp para {_telefone()}."]
     else:
         assunto = "Welcome to URACE: your account is ready"
         corpo = ["Your URACE account is ready. It keeps your orders, your drivers, waivers and bookings in one place."]
         botao = ("Open my URACE area", _area())
-        depois = ["Keep this email private: it has your password. You can change the password any time in Account.",
+        depois = (["Keep this email private: it has your password. You can change the password any time in Account."] if senha else []) + [
                   f"Forgot your password? Ask for a new one at {_area('/forgot')}",
+                  f"Didn't create this account? Choose a new password at {_area('/forgot')} (that signs out every other device) and reply to this email or call {_telefone()}.",
                   f"Questions? Call or WhatsApp {_telefone()}."]
     texto = (f"{ola},\n\n{corpo[0]}\n\n" + "\n".join(f"{r}: {v}" for r, v in linhas)
              + f"\n\n{botao[0]}: {botao[1]}\n\n" + "\n".join(depois) + "\n\nURACE — the Champion's Factory")
@@ -94,20 +107,42 @@ def texto_boas_vindas(conta, senha, numeros, lang="en"):
 
 
 def boas_vindas(con, conta_id, senha, lang="en", enviar=None):
-    """Manda o e-mail de boas-vindas e marca a conta (os avisos seguintes só vão para quem recebeu este)."""
+    """Manda o e-mail de boas-vindas e marca a conta (os avisos seguintes só vão para quem recebeu este). A senha só
+    existe nesta hora: tenta de novo algumas vezes; se o Gmail continuar fora, o `rodar` manda depois as boas-vindas
+    sem a senha (com o link do esqueci a senha), e o erro fica na conta."""
+    import logging
+    import time
     c = um(con, "SELECT * FROM portal_accounts WHERE id=?", (conta_id,))
     if not c or c["welcome_sent_at"]:
         return False
     assunto, texto, html = texto_boas_vindas(c, senha, _numeros(con, conta_id), lang)
-    try:
-        _enviar(enviar, c["email"], assunto, texto, html)
-    except Exception as e:                              # noqa: BLE001 — a conta existe; a equipe vê o erro
-        atualizar(con, "portal_accounts", conta_id, welcome_error=str(e)[:300], updated_at=agora())
+    erro = None
+    for espera in (0, *ESPERAS):
+        time.sleep(espera)
+        try:
+            _enviar(enviar, c["email"], assunto, texto, html)
+            erro = None
+            break
+        except Exception as e:                          # noqa: BLE001 — a conta existe; tenta de novo
+            erro = e
+    if erro is not None:
+        logging.getLogger("urace.portal").warning("boas-vindas da conta %s não saíram: %s", conta_id, str(erro)[:200])
+        atualizar(con, "portal_accounts", conta_id, welcome_error=str(erro)[:300], welcome_lang=lang, updated_at=agora())
+        from command_center.db import auditar
+        auditar(con, "portal.welcome.failed", "system", entity_type="portal_account", entity_id=conta_id,
+                detail={"erro": str(erro)[:200]})
         return False
+    _boas_vindas_ok(con, conta_id, lang)
+    return True
+
+
+def _boas_vindas_ok(con, conta_id, lang):
     atualizar(con, "portal_accounts", conta_id, welcome_sent_at=agora(), welcome_error=None, welcome_lang=lang,
               updated_at=agora())
-    con.execute("UPDATE portal_pilots SET client_id_sent_at=? WHERE account_id=? AND client_id IS NOT NULL", (agora(), conta_id))
-    return True
+    con.execute("""UPDATE portal_pilots SET client_id_sent_at=?, client_id_sent=client_id
+                   WHERE account_id=? AND client_id IS NOT NULL""", (agora(), conta_id))
+    con.execute("UPDATE portal_accounts SET client_id_sent_at=?, client_id_sent=client_id WHERE id=? AND client_id IS NOT NULL",
+                (agora(), conta_id))
 
 
 def boas_vindas_bg(conta_id, senha, lang="en"):
@@ -122,17 +157,20 @@ def boas_vindas_bg(conta_id, senha, lang="en"):
 
 
 # ------------------------------------------------------------------ 2. o número de cliente
-def texto_numero(conta, piloto, numero, lang="en"):
+def texto_numero(conta, piloto, numero, lang="en", trocou=False):
+    """`trocou`: a equipe uniu um card duplicado ou religou o piloto, e o número que foi antes não vale mais."""
     pt = lang == "pt"
-    ola = f"Olá, {_primeiro(conta['name'])}" if pt else f"Hi {_primeiro(conta['name'])}"
+    ola = (f"Olá, {_primeiro(conta['name'])}" if pt else f"Hi {_primeiro(conta['name'])}").strip()
     if pt:
         assunto = f"O seu número de cliente URACE: {numero}"
-        corpo = [f"O card de {piloto} na URACE está pronto. Este é o número de cliente: use quando falar com a equipe."]
+        corpo = [(f"O número de cliente de {piloto} na URACE mudou: este é o certo. Use quando falar com a equipe." if trocou else
+                  f"O card de {piloto} na URACE está pronto. Este é o número de cliente: use quando falar com a equipe.")]
         linhas = [("Piloto", piloto), ("Número de cliente", str(numero)), ("Login", conta["email"])]
         botao = ("Abrir a minha área URACE", _area("/drivers"))
     else:
         assunto = f"Your URACE customer ID: {numero}"
-        corpo = [f"{piloto}'s card at URACE is ready. This is the customer ID: use it when you talk to our team."]
+        corpo = [(f"{piloto}'s customer ID at URACE changed: this is the right one. Use it when you talk to our team." if trocou else
+                  f"{piloto}'s card at URACE is ready. This is the customer ID: use it when you talk to our team.")]
         linhas = [("Driver", piloto), ("Customer ID", str(numero)), ("Login", conta["email"])]
         botao = ("Open my URACE area", _area("/drivers"))
     texto = f"{ola},\n\n{corpo[0]}\n\n" + "\n".join(f"{r}: {v}" for r, v in linhas) + f"\n\n{botao[0]}: {botao[1]}\n\nURACE — the Champion's Factory"
@@ -146,24 +184,32 @@ ROTULO = {"en": {"name": "full name", "birth_date": "date of birth", "height_in"
                  "chest_in": "peito", "waist_in": "cintura", "experience": "experiência no kart"}}
 
 
-def texto_lembrete(conta, piloto, falta, data_sessao, lang="en"):
+def texto_lembrete(conta, piloto, falta, data_sessao, lang="en", n=1):
+    """`n`: qual lembrete é este (o último, o MAX_LEMBRETES, diz que é o último). Medidas vencidas pedem para revisar."""
     pt = lang == "pt"
     data_sessao = _dia(data_sessao, lang)
     rot = ROTULO["pt" if pt else "en"]
+    vencida = piloto.get("measures_status") == "vencida"
     itens = ", ".join(dict.fromkeys(rot.get(k, k) for k in falta)) or ("as medidas" if pt else "the measurements")
-    ola = f"Olá, {_primeiro(conta['name'])}" if pt else f"Hi {_primeiro(conta['name'])}"
+    ola = (f"Olá, {_primeiro(conta['name'])}" if pt else f"Hi {_primeiro(conta['name'])}").strip()
+    ultimo = n >= MAX_LEMBRETES
     if pt:
         assunto = f"Falta pouco: complete o cadastro de {piloto['name']} para a sessão de {data_sessao}"
+        pedido = (f"revise e salve as medidas de {piloto['name']} (têm mais de 60 dias)" if vencida else f"complete: {itens}")
         corpo = [f"A sessão de {piloto['name']} em {data_sessao} está paga e reservada. Para a equipe preparar o kart e o "
-                 f"equipamento certos, complete: {itens}. Leva dois minutos."]
+                 f"equipamento certos, {pedido}. Leva dois minutos."]
         botao = ("Completar agora", _area("/drivers"))
-        depois = ["Mandamos este lembrete até o cadastro ficar completo."]
+        depois = ["Este é o último lembrete por e-mail." if ultimo else
+                  f"Mandamos um lembrete por dia até ficar pronto (no máximo {MAX_LEMBRETES})."]
     else:
         assunto = f"Almost there: complete {piloto['name']}'s profile for the {data_sessao} session"
+        pedido = (f"please review and save {piloto['name']}'s measurements (they're over 60 days old)" if vencida
+                  else f"please add: {itens}")
         corpo = [f"{piloto['name']}'s session on {data_sessao} is paid and booked. So our team can prepare the right kart and "
-                 f"gear, please add: {itens}. It takes two minutes."]
+                 f"gear, {pedido}. It takes two minutes."]
         botao = ("Complete it now", _area("/drivers"))
-        depois = ["We'll send this reminder until the profile is complete."]
+        depois = ["This is the last email reminder." if ultimo else
+                  f"We'll send one reminder a day until it's done (up to {MAX_LEMBRETES})."]
     texto = f"{ola},\n\n{corpo[0]}\n\n{botao[0]}: {botao[1]}\n\n{depois[0]}\n\nURACE — the Champion's Factory"
     return assunto, texto, email_marca.html(f"{ola}!", corpo, (), botao, depois, lang=lang)
 
@@ -178,29 +224,61 @@ def _horas_desde(iso):
 def rodar(con, enviar=None):
     """Os avisos devidos agora: número de cliente e lembrete de completar o piloto. Devolve as contagens."""
     from command_center.providers import portal
-    numeros = lembretes = 0
+    numeros = lembretes = boas = 0
+    # 0. as boas-vindas que não saíram na hora do cadastro: de novo, agora sem a senha, no máximo uma vez por hora
+    agora_utc = datetime.now(timezone.utc)
+    semana = (agora_utc - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+    hora = (agora_utc - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    for c in todos(con, """SELECT * FROM portal_accounts WHERE welcome_sent_at IS NULL AND welcome_error IS NOT NULL AND active=1
+                             AND created_at>=? AND updated_at<? ORDER BY id LIMIT 20""", (semana, hora)):
+        lang = c["welcome_lang"] or "en"
+        try:
+            _enviar(enviar, c["email"], *texto_boas_vindas(c, None, _numeros(con, c["id"]), lang))
+        except Exception as e:                          # noqa: BLE001 — de novo daqui a uma hora
+            atualizar(con, "portal_accounts", c["id"], welcome_error=str(e)[:300], updated_at=agora())
+            continue
+        _boas_vindas_ok(con, c["id"], lang)
+        boas += 1
     # 1. o número de cliente (o card ficou pronto depois das boas-vindas)
-    for p in todos(con, """SELECT p.id, p.name, p.client_id, a.id AS conta, a.email, a.name AS conta_nome, a.welcome_lang
+    for p in todos(con, """SELECT p.id, p.name, p.client_id, p.client_id_sent_at, a.id AS conta, a.email, a.name AS conta_nome,
+                                  a.welcome_lang
                              FROM portal_pilots p JOIN portal_accounts a ON a.id=p.account_id
-                            WHERE p.client_id IS NOT NULL AND p.client_id_sent_at IS NULL AND p.active=1
-                              AND a.welcome_sent_at IS NOT NULL AND a.active=1 LIMIT 50"""):
+                            WHERE p.client_id IS NOT NULL AND p.active=1 AND a.welcome_sent_at IS NOT NULL AND a.active=1
+                              AND (p.client_id_sent_at IS NULL OR COALESCE(p.client_id_sent, p.client_id) <> p.client_id)
+                            LIMIT 50"""):
         conta = {"name": p["conta_nome"], "email": p["email"]}
         try:
-            _enviar(enviar, p["email"], *texto_numero(conta, p["name"], p["client_id"], p["welcome_lang"] or "en"))
+            _enviar(enviar, p["email"], *texto_numero(conta, p["name"], p["client_id"], p["welcome_lang"] or "en",
+                                                      trocou=bool(p["client_id_sent_at"])))
         except Exception:                               # noqa: BLE001 — tenta de novo no próximo ciclo
             continue
-        atualizar(con, "portal_pilots", p["id"], client_id_sent_at=agora())
+        atualizar(con, "portal_pilots", p["id"], client_id_sent_at=agora(), client_id_sent=p["client_id"])
+        numeros += 1
+    # 1b. o card ligado à CONTA, quando nenhum piloto tem card (quem comprou só produto e a equipe ligou a conta)
+    for a in todos(con, """SELECT a.id, a.name, a.email, a.client_id, a.client_id_sent_at, a.welcome_lang FROM portal_accounts a
+                            WHERE a.client_id IS NOT NULL AND a.welcome_sent_at IS NOT NULL AND a.active=1
+                              AND (a.client_id_sent_at IS NULL OR COALESCE(a.client_id_sent, a.client_id) <> a.client_id)
+                              AND NOT EXISTS (SELECT 1 FROM portal_pilots p WHERE p.account_id=a.id AND p.client_id IS NOT NULL)
+                            LIMIT 50"""):
+        try:
+            _enviar(enviar, a["email"], *texto_numero(a, a["name"], a["client_id"], a["welcome_lang"] or "en",
+                                                      trocou=bool(a["client_id_sent_at"])))
+        except Exception:                               # noqa: BLE001 — tenta de novo no próximo ciclo
+            continue
+        atualizar(con, "portal_accounts", a["id"], client_id_sent_at=agora(), client_id_sent=a["client_id"])
         numeros += 1
     # 2. completar o piloto: a sessão está paga e o cadastro do piloto não
     hoje = portal.hoje().isoformat()
     for b in todos(con, """SELECT b.pilot_id, MIN(b.date) AS data, b.account_id FROM bookings b
                             WHERE b.pilot_pending=1 AND b.status IN ('pendente','confirmada') AND b.date>=?
-                            GROUP BY b.pilot_id, b.account_id LIMIT 100""", (hoje,)):
+                            GROUP BY b.pilot_id, b.account_id ORDER BY MIN(b.date), b.pilot_id LIMIT 500""", (hoje,)):
         p = next((x for x in portal.pilotos(con, b["account_id"]) if x["id"] == b["pilot_id"]), None)
         if not p:
             continue
         if p["measures_status"] not in ("faltando", "vencida"):
+            # completou: a sessão sai da lista e a contagem volta a zero (a próxima vez começa do primeiro lembrete)
             con.execute("UPDATE bookings SET pilot_pending=0 WHERE pilot_id=? AND pilot_pending=1", (p["id"],))
+            con.execute("UPDATE portal_pilots SET remind_n=0, remind_at=NULL WHERE id=?", (p["id"],))
             continue
         r = um(con, "SELECT remind_at, COALESCE(remind_n, 0) AS n FROM portal_pilots WHERE id=?", (p["id"],))
         horas = _horas_desde(r["remind_at"])
@@ -211,12 +289,12 @@ def rodar(con, enviar=None):
             continue
         falta = p["missing"] or ["height_in", "weight_lb", "chest_in", "waist_in"]
         try:
-            _enviar(enviar, a["email"], *texto_lembrete(a, p, falta, b["data"], a["welcome_lang"] or "en"))
+            _enviar(enviar, a["email"], *texto_lembrete(a, p, falta, b["data"], a["welcome_lang"] or "en", n=r["n"] + 1))
         except Exception:                               # noqa: BLE001
             continue
         atualizar(con, "portal_pilots", p["id"], remind_at=agora(), remind_n=r["n"] + 1)
         lembretes += 1
-    return {"numeros": numeros, "lembretes": lembretes}
+    return {"boas_vindas": boas, "numeros": numeros, "lembretes": lembretes}
 
 
 def piloto_pendente(con, pid):

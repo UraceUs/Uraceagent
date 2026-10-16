@@ -2740,7 +2740,7 @@ def test_sem_conta_os_dados_no_carrinho_viram_a_conta_e_o_checkout_abre(servidor
                             ("phone", "407 555 0177"), ("address_line1", "200 Lake St"), ("city", "Orlando"),
                             ("state", "FL"), ("zip", "32824"), ("password", "pista-molhada-7"), ("password2", "pista-molhada-8")):
             form.locator(f'[name="{nome}"]').fill(valor)
-        form.get_by_text("Someone else").click()
+        form.get_by_text("Someone else (my child, a friend)").click()
         form.get_by_label("Driver's full name").fill("Rui Rapido")
         pagar = v.get_by_role("button", name=re.compile(r"^Checkout · \$"))
         pagar.click()
@@ -2777,6 +2777,52 @@ def test_sem_conta_os_dados_no_carrinho_viram_a_conta_e_o_checkout_abre(servidor
         ctx.close()
         adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
                         data=[{"weekday": 3, "period": "manha", "open": False, "capacity": 5}])
+        _ativar(adm, servidor, sid, False)
+        adm.close()
+
+
+def test_sem_conta_duas_sessoes_cada_uma_com_o_seu_piloto(servidor, navegador):
+    """#305, revisão (regra do dono: nunca pôr serviço de um cliente no card de outro). Duas sessões no carrinho sem
+    conta: o carrinho pede o piloto de cada uma, e cada nome vai para a sua linha no Stripe."""
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, email="italo@urace.us")
+    csrf = _csrf(adm)
+    sid = _criar_servico(adm, servidor, "4-stroke Arrive and Drive 305b", 719, kart="4-stroke")
+    assert adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                           data=[{"weekday": 3, "period": "manha", "open": True, "capacity": 5},
+                                 {"weekday": 3, "period": "tarde", "open": True, "capacity": 5}]).ok
+    quinta = _proximo(3)
+    ctx = navegador.new_context(viewport={"width": 390, "height": 844}, extra_http_headers={"X-Forwarded-For": "203.0.113.106"})
+    try:
+        v = ctx.new_page()
+        v.goto(site + "/cart/")
+        v.evaluate("(i) => localStorage.setItem('urace.carrinho', JSON.stringify({v: 1, itens: i}))",
+                   [{"tipo": "sessao", "servico": sid, "data": quinta.isoformat(), "turno": t} for t in ("manha", "tarde")])
+        v.reload()
+        form = v.locator(".carrinho-cadastro")
+        campos = form.locator(".cad-varios-campos input")
+        campos.nth(1).wait_for()
+        assert campos.count() == 2 and not form.locator(".cad-um").is_visible(), "duas sessões: um nome por sessão"
+        for nome, valor in (("name", "Rosa Dupla"), ("birth_date", "1983-04-04"), ("email", "rosa.dupla.305@example.com"),
+                            ("phone", "407 555 0178"), ("address_line1", "300 Lake St"), ("city", "Orlando"), ("state", "FL"),
+                            ("zip", "32824"), ("password", "pista-molhada-7"), ("password2", "pista-molhada-7")):
+            form.locator(f'[name="{nome}"]').fill(valor)
+        form.get_by_label("I accept the").check()
+        campos.nth(0).fill("Caio Duplo")
+        pagar = v.get_by_role("button", name=re.compile(r"^Checkout · \$"))
+        pagar.click()
+        v.get_by_text(re.compile("^Fill in: Driver for")).wait_for()
+        campos.nth(1).fill("Clara Dupla")
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        pagar.click()
+        v.wait_for_url(STRIPE.origem + "/pay/**")
+        assert v.locator(".linha", has_text="Caio Duplo").count() == 1 and v.locator(".linha", has_text="Clara Dupla").count() == 1
+    finally:
+        ctx.close()
+        adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                        data=[{"weekday": 3, "period": "manha", "open": False, "capacity": 5},
+                              {"weekday": 3, "period": "tarde", "open": False, "capacity": 5}])
         _ativar(adm, servidor, sid, False)
         adm.close()
 

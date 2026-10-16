@@ -1044,12 +1044,13 @@ def _cadastro_no_carrinho(T):
     informações dela … dois campos é, validados para poder conseguir criar a senha … ela dá o ok nos
     consentimentos". Os campos do cadastro da área do cliente, aqui mesmo; no checkout, viram a conta."""
     opcoes = "".join(f'<option value="{c}"{" selected" if c == "US" else ""} data-ddi="{d}">{e(n)}</option>' for c, n, d in paises())
-    obrig = '<span class="sr"> (required)</span>'
+    obrig = f'<span class="sr"> {T("(required)", "(obrigatório)")}</span>'
+    obrig_us = f'<span class="sr cad-us"> {T("(required)", "(obrigatório)")}</span>'     # nos EUA, estado e ZIP também
     return f"""<form class="form-pedido carrinho-cadastro" method="post" hidden novalidate aria-labelledby="h-cadastro">
           <h3 id="h-cadastro">{T("Your details", "Os seus dados")}</h3>
           <p class="small muted">{T("We save your details in your URACE account when you check out: it keeps your orders, drivers, waivers and bookings.",
                                    "Guardamos os seus dados na sua conta URACE quando você for pagar: ela guarda os seus pedidos, pilotos, waivers e reservas.")}
-            <a href="{PORTAL}?volta=cart">{T("Already have an account? Sign in", "Já tem conta? Entrar")}</a></p>
+            <a class="cad-entrar" href="{PORTAL}?volta=cart">{T("Already have an account? Sign in", "Já tem conta? Entrar")}</a></p>
           <label>{T("Full name", "Nome completo")}{obrig}<input name="name" autocomplete="name" required maxlength="120"></label>
           <label>{T("Date of birth", "Data de nascimento")}{obrig}<input name="birth_date" type="date" autocomplete="bday" required></label>
           <label>E-mail{obrig}<input name="email" type="email" autocomplete="email" inputmode="email" required maxlength="160"></label>
@@ -1062,20 +1063,27 @@ def _cadastro_no_carrinho(T):
           <label>{T("Apt, suite", "Apto, sala")} <span class="opcional">{T("(optional)", "(opcional)")}</span><input name="address_line2" autocomplete="address-line2" maxlength="80"></label>
           <div class="cad-3">
             <label>{T("City", "Cidade")}{obrig}<input name="city" autocomplete="address-level2" required maxlength="80"></label>
-            <label>{T("State", "Estado")}<input name="state" autocomplete="address-level1" maxlength="30" placeholder="FL"></label>
-            <label>{T("ZIP", "CEP")}<input name="zip" autocomplete="postal-code" maxlength="12" inputmode="numeric"></label>
+            <label>{T("State", "Estado")}{obrig_us}<input name="state" autocomplete="address-level1" maxlength="30" placeholder="FL" required></label>
+            <label>{T("ZIP", "CEP")}{obrig_us}<input name="zip" autocomplete="postal-code" maxlength="12" inputmode="numeric" required></label>
           </div>
           <fieldset class="entrega cad-piloto" hidden><legend>{T("Who's driving?", "Quem vai pilotar?")}</legend>
-            <label class="opcao"><input type="radio" name="piloto_eu" value="1" checked> <span>{T("I am the driver", "Eu sou o piloto")}</span></label>
-            <label class="opcao"><input type="radio" name="piloto_eu" value="0"> <span>{T("Someone else (my child, a friend)", "Outra pessoa (meu filho, um amigo)")}</span></label>
-            <label class="cad-piloto-nome" hidden>{T("Driver's full name", "Nome completo do piloto")}<input name="piloto_nome" maxlength="120" autocomplete="off"></label>
+            <div class="cad-um">
+              <label class="opcao"><input type="radio" name="piloto_eu" value="1" checked> <span>{T("I am the driver", "Eu sou o piloto")}</span></label>
+              <label class="opcao"><input type="radio" name="piloto_eu" value="0"> <span>{T("Someone else (my child, a friend)", "Outra pessoa (meu filho, um amigo)")}</span></label>
+              <label class="cad-piloto-nome" hidden>{T("Driver's full name", "Nome completo do piloto")}<input name="piloto_nome" maxlength="120" autocomplete="off"></label>
+            </div>
+            <div class="cad-varios" hidden data-rotulo="{e(T("Driver for", "Piloto de"))}">
+              <p class="small muted">{T("One driver per session: write each driver's full name (your own, if you are the one driving).",
+                                       "Um piloto por sessão: escreva o nome completo de cada piloto (o seu, se for você que vai pilotar).")}</p>
+              <div class="cad-varios-campos"></div>
+            </div>
             <p class="small muted">{T("The driver's measurements and karting experience come after payment: we email you a link and remind you until it's done.",
                                      "As medidas e a experiência do piloto ficam para depois do pagamento: mandamos um link por e-mail e lembramos até completar.")}</p>
           </fieldset>
           <label>{T("Create a password", "Crie uma senha")}{obrig}<input name="password" type="password" autocomplete="new-password" minlength="8" required maxlength="200"></label>
           <label>{T("Confirm the password", "Confirme a senha")}{obrig}<input name="password2" type="password" autocomplete="new-password" minlength="8" required maxlength="200"></label>
           <p class="small muted">{T("At least 8 characters.", "Pelo menos 8 caracteres.")}</p>
-          <label class="opcao cad-termos"><input type="checkbox" name="accept_terms"> <span>{T("I accept the", "Aceito os")} <a href="/legal/eula.html">{T("terms", "termos")}</a> {T("and the", "e a")} <a href="/legal/privacy.html">{T("privacy policy", "política de privacidade")}</a></span></label>
+          <label class="opcao cad-termos"><input type="checkbox" name="accept_terms"> <span>{T("I accept the", "Aceito os")} <a href="/legal/eula.html" target="_blank" rel="noopener">{T("terms", "termos")}</a> {T("and the", "e a")} <a href="/legal/privacy.html" target="_blank" rel="noopener">{T("privacy policy", "política de privacidade")}</a></span></label>
         </form>"""
 
 

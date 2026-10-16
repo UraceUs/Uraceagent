@@ -358,6 +358,9 @@ MIGRACOES = [
     ("portal_accounts", "welcome_sent_at", "TEXT"),      # o e-mail de boas-vindas saiu (só essas contas recebem os avisos)
     ("portal_accounts", "welcome_error", "TEXT"),
     ("portal_accounts", "welcome_lang", "TEXT"),         # en | pt: o idioma dos avisos seguintes
+    ("portal_accounts", "client_id_sent_at", "TEXT"),    # o número do card ligado à CONTA (compra só de produto) saiu
+    ("portal_accounts", "client_id_sent", "INTEGER"),    # qual número foi (a equipe uniu ou religou: manda o certo)
+    ("portal_pilots", "client_id_sent", "INTEGER"),
     ("portal_pilots", "client_id_sent_at", "TEXT"),      # o e-mail com o número de cliente (o card) saiu
     ("portal_pilots", "remind_at", "TEXT"),              # o último lembrete de completar o piloto
     ("portal_pilots", "remind_n", "INTEGER"),

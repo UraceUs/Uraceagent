@@ -180,6 +180,70 @@ def test_criar_conta_pede_json_de_verdade(lj):
     assert r.status_code == 415 and not todos(con, "SELECT id FROM portal_accounts")
 
 
+def test_criar_conta_de_outro_site_nao_passa(lj):
+    """Revisão do #305: `text/plain;x=application/json` não faz o navegador perguntar antes (CORS) e passava pela
+    conferência por pedaço do texto; e o navegador que diz que veio de outro site não cria conta."""
+    cli, con, st, qbo, tmp, sid = lj
+    corpo = json.dumps({"itens": [_sessao(sid, proximo(5))], "conta": _dados()})
+    r = cli.post(URL, content=corpo, headers={"Content-Type": "text/plain;a=application/json"})
+    assert r.status_code == 415
+    r = cli.post(URL, content=corpo, headers={"Content-Type": "application/json", "Origin": "https://outro-site.example.com"})
+    assert r.status_code == 403
+    assert not todos(con, "SELECT id FROM portal_accounts") and not _todos_emails(tmp) and not st.chamadas
+    r = cli.post(URL, content=corpo, headers={"Content-Type": "application/json; charset=utf-8", "Origin": "https://novo.urace.us"})
+    assert r.status_code == 200, r.text
+
+
+def test_duas_sessoes_cada_uma_com_o_seu_piloto(lj):
+    """Revisão do #305 (regra do dono: nunca pôr serviço de um cliente no card de outro): com duas sessões ou mais, o
+    carrinho pede o nome do piloto de cada uma; o mesmo nome é o mesmo piloto, o nome do titular é ele mesmo."""
+    cli, con, st, qbo, tmp, sid = lj
+    from command_center.tests.test_agenda_sessoes import abre
+    abre(con, cap=3)
+    con.commit()
+    dia, outro = proximo(5), proximo(6)
+    itens = [_sessao(sid, dia), _sessao(sid, dia), _sessao(sid, outro), _sessao(sid, outro, turno="tarde")]
+    por = [{"idx": 0, "nome": "Theo Souza"}, {"idx": 1, "nome": "Bia  Souza"}, {"idx": 2, "nome": "theo souza"},
+           {"idx": 3, "nome": "Lia Souza"}]
+    r = _novo(cli, itens, _dados(piloto={"por_sessao": por}))
+    assert r.status_code == 200, r.text
+    conta = um(con, "SELECT id FROM portal_accounts")["id"]
+    pilotos = {p["name"]: p for p in todos(con, "SELECT * FROM portal_pilots WHERE account_id=?", (conta,))}
+    assert set(pilotos) == {"Theo Souza", "Bia Souza", "Lia Souza"} and pilotos["Lia Souza"]["is_self"] == 1
+    linhas = [x["pilot_id"] for x in todos(con, "SELECT pilot_id FROM store_order_items WHERE kind='sessao' ORDER BY id")]
+    assert linhas == [pilotos["Theo Souza"]["id"], pilotos["Bia Souza"]["id"], pilotos["Theo Souza"]["id"], pilotos["Lia Souza"]["id"]]
+
+
+def test_piloto_por_sessao_pede_todos_os_nomes_e_o_mesmo_piloto_nao_fica_em_dois_lugares(lj):
+    cli, con, st, qbo, tmp, sid = lj
+    from command_center.tests.test_agenda_sessoes import abre
+    abre(con, cap=3)
+    con.commit()
+    dia = proximo(5)
+    itens = [_sessao(sid, dia), _sessao(sid, dia)]
+    r = _novo(cli, itens, _dados(piloto={"por_sessao": [{"idx": 0, "nome": "Theo Souza"}]}))
+    assert r.status_code == 400 and "each session" in r.json()["erro"]
+    r = _novo(cli, itens, _dados(piloto={"por_sessao": [{"idx": 0, "nome": "Theo Souza"}, {"idx": 1, "nome": "THEO SOUZA"}]}))
+    assert r.status_code == 400 and "same driver" in r.json()["erro"]
+    assert not todos(con, "SELECT id FROM portal_accounts")
+
+
+def test_duas_sessoes_no_mesmo_horario_nao_criam_conta(lj):
+    """Revisão do #305: a conta nova leva um piloto; duas sessões no mesmo turno (ou o dia inteiro e um turno) não
+    fechariam depois, então a conta nem nasce."""
+    cli, con, st, qbo, tmp, sid = lj
+    from command_center.tests.test_agenda_sessoes import abre
+    abre(con, cap=3)
+    con.commit()
+    dia = proximo(5)
+    for itens in ([_sessao(sid, dia), _sessao(sid, dia)], [_sessao(sid, dia, turno="dia"), _sessao(sid, dia, turno="tarde")]):
+        r = _novo(cli, itens)
+        assert r.status_code == 400 and "same time" in r.json()["erro"], r.text
+    assert not todos(con, "SELECT id FROM portal_accounts") and not _todos_emails(tmp) and not cli.cookies.get("cp_session")
+    r = _novo(cli, [_sessao(sid, dia), _sessao(sid, dia, turno="tarde")])
+    assert r.status_code == 200, "manhã e tarde do mesmo dia, um piloto: fecha"
+
+
 def test_carrinho_com_problema_volta_a_conta_atras(lj):
     """A vaga sumiu antes do checkout: a pessoa vê o erro e o formulário continua preenchido; nada de conta pela metade."""
     cli, con, st, qbo, tmp, sid = lj
@@ -270,7 +334,7 @@ def test_pago_o_card_nasce_o_numero_vai_por_email_e_o_lembrete_repete_ate_comple
     card = um(con, "SELECT client_id FROM portal_pilots WHERE id=?", (pid,))["client_id"]
     assert card
     # 1º ciclo: o número de cliente (uma vez) e o primeiro lembrete
-    assert _rodar(con) == {"numeros": 1, "lembretes": 1}
+    assert _rodar(con) == {"boas_vindas": 0, "numeros": 1, "lembretes": 1}
     con.commit()
     num = [m for m in _todos_emails(tmp) if m["subject"] == f"Your URACE customer ID: {card}"]
     assert len(num) == 1 and f"Customer ID: {card}" in num[0]["text"] and "Theo Souza" in num[0]["text"]
@@ -279,7 +343,7 @@ def test_pago_o_card_nasce_o_numero_vai_por_email_e_o_lembrete_repete_ate_comple
     assert "https://my.urace.us/ops/portal/drivers" in lemb[0]["text"]
     assert dia.strftime("%b") in lemb[0]["subject"], "a data como a pessoa lê, não 2026-10-20"
     # antes de 24 h, nada de novo
-    assert _rodar(con) == {"numeros": 0, "lembretes": 0}
+    assert _rodar(con) == {"boas_vindas": 0, "numeros": 0, "lembretes": 0}
     # 24 h depois, outro lembrete
     ontem = (datetime.now(timezone.utc) - timedelta(hours=25)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     con.execute("UPDATE portal_pilots SET remind_at=? WHERE id=?", (ontem, pid))
@@ -294,6 +358,8 @@ def test_pago_o_card_nasce_o_numero_vai_por_email_e_o_lembrete_repete_ate_comple
     completa(con, conta, pid)
     assert _rodar(con)["lembretes"] == 0
     assert um(con, "SELECT pilot_pending FROM bookings")["pilot_pending"] == 0
+    r = um(con, "SELECT remind_n, remind_at FROM portal_pilots WHERE id=?", (pid,))
+    assert (r["remind_n"], r["remind_at"]) == (0, None), "completou: a contagem volta a zero para a próxima vez"
 
 
 def test_sessao_que_passou_ou_cancelada_nao_lembra(lj):
@@ -311,12 +377,45 @@ def test_sessao_que_passou_ou_cancelada_nao_lembra(lj):
 def test_conta_antiga_nao_recebe_numero_de_surpresa(lj):
     """Só quem recebeu as boas-vindas (contas do #305 em diante) recebe o e-mail do número de cliente."""
     cli, con, st, qbo, tmp, sid = lj
+    from command_center.db import inserir
     conta, pid = _entrar(cli, con)
+    card = inserir(con, "clients", name="Theo Souza")
     con.execute("UPDATE portal_accounts SET welcome_sent_at=NULL WHERE id=?", (conta,))
-    con.execute("UPDATE portal_pilots SET client_id=(SELECT MIN(id) FROM clients) WHERE id=?", (pid,))
+    con.execute("UPDATE portal_pilots SET client_id=? WHERE id=?", (card, pid))
     con.commit()
     antes = len(_todos_emails(tmp))
     assert _rodar(con)["numeros"] == 0 and len(_todos_emails(tmp)) == antes
+
+
+def test_card_trocado_depois_do_email_manda_o_numero_certo(lj):
+    """Revisão do #305: a equipe une o card duplicado (ou religa o piloto): o número que foi antes não vale mais."""
+    cli, con, st, qbo, tmp, sid = lj
+    from command_center.db import inserir
+    assert _novo(cli, [_sessao(sid, proximo(5))]).status_code == 200
+    assert _pagar(cli, st, next(iter(st.sessoes))).json()["resultado"] == "pago"
+    _rodar(con)
+    pid = um(con, "SELECT id FROM portal_pilots")["id"]
+    certo = inserir(con, "clients", name="Theo Souza")
+    con.execute("UPDATE portal_pilots SET client_id=? WHERE id=?", (certo, pid))
+    assert _rodar(con)["numeros"] == 1
+    (m,) = [x for x in _todos_emails(tmp) if x["subject"] == f"Your URACE customer ID: {certo}"]
+    assert "changed: this is the right one" in m["text"]
+    assert _rodar(con)["numeros"] == 0
+
+
+def test_quem_comprou_so_produto_recebe_o_numero_quando_a_conta_ganha_o_card(lj):
+    """Revisão do #305: sem piloto, o card é o da própria conta (a equipe liga em Contas de clientes)."""
+    cli, con, st, qbo, tmp, sid = lj
+    from command_center.db import inserir
+    p = _simples()
+    assert _novo(cli, [{"tipo": "produto", "produto": p["slug"]}], _dados(piloto={"eu": True})).status_code == 200
+    assert _rodar(con)["numeros"] == 0, "ainda sem card"
+    card = inserir(con, "clients", name="Lia Souza")
+    con.execute("UPDATE portal_accounts SET client_id=?", (card,))
+    assert _rodar(con)["numeros"] == 1
+    (m,) = [x for x in _todos_emails(tmp) if x["subject"] == f"Your URACE customer ID: {card}"]
+    assert f"Customer ID: {card}" in m["text"] and m["to"] == "lia@example.com"
+    assert _rodar(con)["numeros"] == 0, "uma vez só"
 
 
 # ------------------------------------------------------------------ cadastro pela área do cliente e senha
@@ -328,16 +427,84 @@ def test_cadastro_pela_area_do_cliente_tambem_recebe_as_boas_vindas(lj):
     assert um(con, "SELECT welcome_sent_at FROM portal_accounts")["welcome_sent_at"]
 
 
-def test_gmail_fora_do_ar_a_conta_fica_e_a_equipe_ve_o_erro(lj, monkeypatch):
+def test_gmail_fora_do_ar_a_conta_fica_e_as_boas_vindas_saem_depois_sem_a_senha(lj, monkeypatch):
     cli, con, st, qbo, tmp, sid = lj
-    from command_center.providers import email_envio
+    from command_center.providers import conta_site, email_envio
+    enviar, tentativas = email_envio.enviar, []
 
     def falha(*a, **k):
+        tentativas.append(1)
         raise email_envio.ErroEnvio("Gmail fora do ar")
+    monkeypatch.setattr(conta_site, "ESPERAS", (0, 0))
     monkeypatch.setattr(email_envio, "enviar", falha)
     assert _novo(cli, [_sessao(sid, proximo(5))]).status_code == 200
     c = um(con, "SELECT * FROM portal_accounts")
-    assert c and c["welcome_sent_at"] is None and "Gmail fora do ar" in c["welcome_error"]
+    assert c and c["welcome_sent_at"] is None and "Gmail fora do ar" in c["welcome_error"] and c["welcome_lang"] == "en"
+    assert len(tentativas) == 3, "a senha só existe na hora: tenta de novo antes de desistir"
+    # o Gmail voltou: no laço, as boas-vindas saem sem a senha (uma vez por hora, no máximo)
+    monkeypatch.setattr(email_envio, "enviar", enviar)
+    assert _rodar(con)["boas_vindas"] == 0, "acabou de falhar: espera uma hora"
+    con.execute("UPDATE portal_accounts SET updated_at='2020-01-01T00:00:00.000Z'")
+    assert _rodar(con)["boas_vindas"] == 1
+    (m,) = _boas_vindas(tmp)
+    assert "Password: the one you chose when you signed up" in m["text"] and SENHA not in m["text"]
+    assert "/ops/portal/forgot" in m["text"] and not _banco_tem(tmp, SENHA)
+    c = um(con, "SELECT * FROM portal_accounts")
+    assert c["welcome_sent_at"] and c["welcome_error"] is None
+    assert _rodar(con)["boas_vindas"] == 0, "uma vez só"
+
+
+def test_quem_nao_criou_a_conta_sabe_o_que_fazer(lj):
+    cli, con, st, qbo, tmp, sid = lj
+    assert _novo(cli, [_sessao(sid, proximo(5))]).status_code == 200
+    (m,) = _boas_vindas(tmp)
+    assert ("Didn't create this account? Choose a new password at https://my.urace.us/ops/portal/forgot (that signs out every "
+            "other device) and reply to this email or call +1 (407) 250 2291.") in m["text"]
+
+
+def test_titulo_do_email_nao_vira_link():
+    """Revisão do #305: o primeiro nome que parece endereço não vira o "Hi …!" do e-mail com a marca da URACE."""
+    from command_center.providers import conta_site
+    for nome in ("evil.example/login Souza", "www.golpe.example Souza", "lia@example.com Souza", "http://x Souza"):
+        assunto, texto, h = conta_site.texto_boas_vindas({"name": nome, "email": "lia@example.com"}, "pista-molhada-7", [], "en")
+        assert texto.startswith("Hi,\n") and "<title>Hi!</title>" in h, nome
+    assert conta_site.texto_boas_vindas({"name": "Ana Lee", "email": "a@example.com"}, "x" * 8, [], "en")[1].startswith("Hi Ana,")
+
+
+def test_limite_geral_de_cadastros_e_o_bloco_ipv6(lj):
+    cli, con, st, qbo, tmp, sid = lj
+    from command_center.api import portal as api_portal
+    from command_center.db import inserir
+    assert api_portal._chave_cadastro("2001:db8:1:2:aaaa::1") == api_portal._chave_cadastro("2001:db8:1:2:bbbb::9") == "portal-signup:2001:db8:1:2::/64"
+    assert api_portal._chave_cadastro("203.0.113.5") == "portal-signup:203.0.113.5"
+    for i in range(api_portal.MAX_CADASTROS_GLOBAL_HORA):
+        inserir(con, "login_attempts", key=f"portal-signup:198.51.100.{i % 250}", ok=1)
+    con.commit()
+    r = _novo(cli, [_sessao(sid, proximo(5))])
+    assert r.status_code == 429 and "right now" in r.json()["erro"] and not todos(con, "SELECT id FROM portal_accounts")
+
+
+def test_dados_que_nao_sao_texto_nao_derrubam_nem_valem_como_aceite(lj):
+    cli, con, st, qbo, tmp, sid = lj
+    itens = [_sessao(sid, proximo(5))]
+    r = _novo(cli, itens, _dados(accept_terms="false"))
+    assert r.status_code == 400 and "accept the terms" in r.json()["erro"]
+    for ruim in ({"name": ["Lia", "Souza"]}, {"email": {"x": 1}}, {"password": ["x" * 9], "password2": ["x" * 9]},
+                 {"piloto": {"eu": False, "nome": ["x"]}}):
+        r = _novo(cli, itens, _dados(**ruim))
+        assert r.status_code == 400, (ruim, r.text)
+    assert not todos(con, "SELECT id FROM portal_accounts")
+
+
+def test_aviso_do_piloto_em_portugues(lj):
+    cli, con, st, qbo, tmp, sid = lj
+    conta, pid = _entrar(cli, con)
+    from command_center.db import inserir
+    novo = inserir(con, "portal_pilots", account_id=conta, name="Bia Souza")
+    con.commit()
+    cli.cookies.set("urace_lang", "pt")
+    d = cli.post("/ops/api/vitrine/carrinho", json={"itens": [_sessao(sid, proximo(5), novo)]}).json()
+    assert d["linhas"][0]["aviso_piloto"].startswith("Depois do pagamento, mandamos por e-mail o link para pôr as medidas e a experiência de Bia Souza")
 
 
 def test_nome_com_html_sai_escapado_no_email():
@@ -367,3 +534,10 @@ def test_o_carrinho_tem_o_formulario_dos_dados_com_senha_confirmada_e_os_termos(
     assert h.count('autocomplete="new-password"') == 2 and 'href="/legal/privacy.html"' in h
     assert h.count("<h1") == 1 and 'data-ddi="+55"' in h
     assert "Create account" not in h
+    # revisão do #305: os termos abrem em outra aba (o formulário não se perde); nos EUA, estado e ZIP obrigatórios
+    assert 'href="/legal/eula.html" target="_blank" rel="noopener"' in h
+    assert 'name="state" autocomplete="address-level1" maxlength="30" placeholder="FL" required' in h
+    assert h.count('class="sr cad-us"') == 2 and 'class="cad-varios" hidden' in h and "cad-varios-campos" in h
+    cli.cookies.set("urace_lang", "pt")
+    pt = cli.get("/cart/").text
+    assert "(obrigatório)" in pt and "(required)" not in pt and "Os seus dados" in pt

@@ -60,7 +60,7 @@ def sugestao(con, conta):
 
 
 def contas(con, filtro="sem_vinculo"):
-    sql = """SELECT a.id, a.email, a.name, a.phone, a.city, a.state, a.created_at, a.client_id, a.linked_at,
+    sql = """SELECT a.id, a.email, a.name, a.phone, a.city, a.state, a.created_at, a.client_id, a.linked_at, a.welcome_error,
                     c.name AS client_name, c.pilot_name AS client_pilot, u.name AS linked_by_name,
                     (SELECT COUNT(*) FROM portal_pilots p WHERE p.account_id=a.id AND p.active=1) AS drivers
                FROM portal_accounts a LEFT JOIN clients c ON c.id=a.client_id LEFT JOIN users u ON u.id=a.linked_by

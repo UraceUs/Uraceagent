@@ -32,6 +32,35 @@ COOKIE = "cp_session"
 COOKIE_CSRF = "cp_csrf"
 DIAS = 30
 MAX_CADASTROS_POR_HORA = 10
+# #305: toda conta nova manda um e-mail com a marca da URACE; um teto geral por hora para ele não virar canal de spam
+# espalhado por muitas conexões (um dia normal tem poucas contas novas)
+MAX_CADASTROS_GLOBAL_HORA = 100
+
+
+def _chave_cadastro(ip):
+    """A chave do limite por conexão. IPv6: o bloco /64 (uma casa recebe um /64 inteiro)."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+        if a.version == 6:
+            ip = f"{ipaddress.ip_network(f'{ip}/64', strict=False).network_address}/64"
+    except ValueError:
+        pass
+    return f"portal-signup:{ip}"
+
+
+def limite_de_cadastro(con, ip):
+    """A mensagem quando passou do limite (por conexão ou o geral), ou None."""
+    desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?", (_chave_cadastro(ip), desde))["n"] >= MAX_CADASTROS_POR_HORA:
+        return "Too many sign-ups from this connection. Try again later."
+    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key LIKE 'portal-signup:%' AND at>?", (desde,))["n"] >= MAX_CADASTROS_GLOBAL_HORA:
+        return "Too many sign-ups right now. Please try again in a few minutes."
+    return None
+
+
+def contar_cadastro(con, ip):
+    inserir(con, "login_attempts", key=_chave_cadastro(ip), ok=1)
 MSG_LOGIN = "Invalid email or password."
 
 
@@ -106,12 +135,12 @@ class CadastroIn(BaseModel):
 def cadastro(dados: CadastroIn, request: Request, response: Response, background: BackgroundTasks,
              con: sqlite3.Connection = Depends(get_db)):
     ip = auth._ip(request)
-    desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
-    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?", (f"portal-signup:{ip}", desde))["n"] >= MAX_CADASTROS_POR_HORA:
-        raise HTTPException(429, "Too many sign-ups from this connection. Try again later.")
+    passou = limite_de_cadastro(con, ip)
+    if passou:
+        raise HTTPException(429, passou)
     if not auth.senha_aceitavel(dados.password) or len(dados.password) < 8:
         raise HTTPException(400, "Use a password with at least 8 characters.")
-    inserir(con, "login_attempts", key=f"portal-signup:{ip}", ok=1)
+    contar_cadastro(con, ip)
     sal, h = auth.hash_senha(dados.password)
     try:
         cid = portal.criar_conta(con, dados.model_dump(exclude={"password"}), sal, h)

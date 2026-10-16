@@ -142,7 +142,10 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
     if conta and portal.faltando_conta(conta):
         return {**linha, "erro": "Please complete the account holder details (Account) before booking."}
     st = next((x["measures_status"] for x in portal.pilotos(con, conta_id) if x["id"] == pid), None)
-    if st in ("faltando", "vencida"):
+    if st == "vencida":
+        linha["aviso_piloto"] = (f"{p['name']}'s measurements are over 60 days old. After payment, we'll email you a link to "
+                                 "review them.")
+    elif st == "faltando":
         linha["aviso_piloto"] = (f"After payment, we'll email you a link to add {p['name']}'s measurements and karting "
                                  "experience. We'll remind you until it's done.")
     if um(con, """SELECT 1 AS x FROM bookings WHERE account_id=? AND date=? AND status IN ('pendente','confirmada')

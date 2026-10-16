@@ -3866,5 +3866,6 @@
 "Tamanho da pré-visualização": "Preview size",
 "Celular": "Phone",
 "Computador": "Desktop",
-"Pré-visualização da página": "Page preview"
+"Pré-visualização da página": "Page preview",
+"O e-mail de boas-vindas não saiu ({0}). O sistema manda de novo, sem a senha; se a pessoa não achar, ela pede uma nova em Forgot password.": "The welcome email didn't go out ({0}). The system sends it again, without the password; if they can't find it, they ask for a new one in Forgot password."
 }

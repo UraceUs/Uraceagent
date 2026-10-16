@@ -249,7 +249,7 @@ function Disponibilidade() {
 interface Sugestao { client_id: number; name: string; pilot_name: string | null; email: string | null; phone: string | null; motivo: string }
 interface ContaSite { id: number; email: string; name: string; phone: string | null; city: string | null; state: string | null; created_at: string
   client_id: number | null; client_name: string | null; client_pilot: string | null; linked_at: string | null; linked_by_name: string | null
-  drivers: number; pilotos: string[]; sugestao: Sugestao | null; drivers_list: DriverConta[] }
+  drivers: number; pilotos: string[]; sugestao: Sugestao | null; drivers_list: DriverConta[]; welcome_error?: string | null }
 /** Driver da conta e o card dele (#65): cada driver tem o seu Client ID. */
 interface DriverConta { id: number; name: string; birth_date: string | null; client_id: number | null; client_name: string | null; client_pilot: string | null
   sugestao: { client_id: number; name: string; pilot_name: string | null; motivo: string } | null }
@@ -559,7 +559,8 @@ function Contas() {
       : <div className="stack" style={{ gap: 10 }}>{l.data.contas.map(c => <div className="card card-b stack" key={c.id} style={{ gap: 8 }}>
         <div className="row wrap"><div className="grow" style={{ minWidth: 0 }}><b>{c.name}</b>
           <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{c.email}{c.phone ? ` · ${c.phone}` : ''}{c.city ? ` · ${c.city}${c.state ? `/${c.state}` : ''}` : ''}</div>
-          <div className="small">{c.pilotos.length ? tr("Pilotos: {0}", c.pilotos.join(', ')) : tr("Nenhum piloto ainda")}</div></div>
+          <div className="small">{c.pilotos.length ? tr("Pilotos: {0}", c.pilotos.join(', ')) : tr("Nenhum piloto ainda")}</div>
+          {c.welcome_error && <div className="small" style={{ color: 'var(--crit)', overflowWrap: 'anywhere' }}>{tr("O e-mail de boas-vindas não saiu ({0}). O sistema manda de novo, sem a senha; se a pessoa não achar, ela pede uma nova em Forgot password.", c.welcome_error)}</div>}</div>
           {c.client_id ? <Chip tone="ok">{tr("vinculada")}</Chip> : <Chip tone="warn">{tr("sem vínculo")}</Chip>}</div>
         {c.client_id ? <div className="row wrap"><span className="small grow">{tr("Cliente:")} <Link to={`/clients/${c.client_id}`}>{c.client_pilot || c.client_name}</Link>{c.linked_by_name ? tr(" · por {0}", c.linked_by_name) : ''}</span>
           {can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincular(c)}>{tr("Desvincular")}</button>}</div>

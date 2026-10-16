@@ -21,8 +21,7 @@ import re
 import sqlite3
 import threading
 import time
-from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qs, urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -621,6 +620,13 @@ CAMPOS_CONTA = ("name", "email", "birth_date", "phone_country", "phone", "addres
                 "zip", "country", "accept_terms")
 
 
+def _texto_ou_nada(v):
+    """O que veio do navegador como texto (número vira texto; lista, objeto e booleano não valem)."""
+    if isinstance(v, str):
+        return v
+    return str(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
 class ErroConta(ValueError):
     def __init__(self, msg, status=400, entrar=False):
         super().__init__(msg)
@@ -638,6 +644,7 @@ def _conta_do_carrinho(con, request, nova, itens, entrega=None):
     from command_center.providers import carrinho, portal
     if not isinstance(nova, dict):
         raise ErroConta("Fill in your details to continue.")
+    nova = {**nova, **{k: _texto_ou_nada(nova.get(k)) for k in (*CAMPOS_CONTA, "password", "password2") if k != "accept_terms"}}
     c = carrinho.cotar(con, itens, None, para_pagar=True, entrega=entrega)
     if not c["linhas"]:
         raise ErroConta("Your cart is empty.")
@@ -646,39 +653,77 @@ def _conta_do_carrinho(con, request, nova, itens, entrega=None):
     erro = next((x["erro"] for x in c["linhas"] if x["erro"]), None)
     if erro:
         raise ErroConta(erro)
+    # quem pilota: com uma sessão, "eu" ou o nome de outra pessoa; com duas ou mais, um nome por sessão (o serviço de um
+    # filho nunca vai para o card do outro, regra do dono). Mesmo piloto em duas sessões no mesmo horário não fecha depois.
+    itens = itens if isinstance(itens, list) else []
+    sessoes = [(i, it) for i, it in enumerate(itens) if isinstance(it, dict) and it.get("tipo") == "sessao"]
+    piloto = nova.get("piloto") if isinstance(nova.get("piloto"), dict) else {}
+    titular = _chave_nome(nova.get("name"))
+    nomes = None
+    if len(sessoes) > 1 and isinstance(piloto.get("por_sessao"), list):
+        nomes = {x["idx"]: " ".join((_texto_ou_nada(x.get("nome")) or "").split()) for x in piloto["por_sessao"]
+                 if isinstance(x, dict) and isinstance(x.get("idx"), int) and not isinstance(x.get("idx"), bool)}
+        if any(not nomes.get(i) for i, _ in sessoes):
+            raise ErroConta("Write the driver's full name for each session.")
+    quem = {i: _chave_nome(nomes[i]) if nomes else "um" for i, _ in sessoes}
+    ocupado = set()
+    for x in c["linhas"]:
+        if x["tipo"] != "sessao":
+            continue
+        turnos = ag.PERIODOS if x["turno"] == "dia" else (x["turno"],)
+        k = quem.get(x["idx"], "um")
+        if any((k, x["data"], t) in ocupado for t in turnos):
+            raise ErroConta("The same driver has two sessions at the same time in this cart. Change the time or the driver."
+                            if nomes else
+                            "Two sessions in this cart are at the same time, and a new account books one driver. Remove one, "
+                            "check out, then book the other driver from your URACE area.")
+        ocupado.update((k, x["data"], t) for t in turnos)
     senha, senha2 = str(nova.get("password") or ""), str(nova.get("password2") or "")
     if len(senha) < 8 or not auth.senha_aceitavel(senha):
         raise ErroConta("Use a password with at least 8 characters.")
     if senha != senha2:
         raise ErroConta("The passwords don't match.")
     ip = auth._ip(request)
-    desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
-    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?",
-          (f"portal-signup:{ip}", desde))["n"] >= api_portal.MAX_CADASTROS_POR_HORA:
-        raise ErroConta("Too many sign-ups from this connection. Try again later.", 429)
-    inserir(con, "login_attempts", key=f"portal-signup:{ip}", ok=1)
+    passou = api_portal.limite_de_cadastro(con, ip)
+    if passou:
+        raise ErroConta(passou, 429)
+    api_portal.contar_cadastro(con, ip)
     con.commit()                                       # a tentativa conta para o limite, mesmo se o resto voltar atrás
-    sessoes = [it for it in (itens or []) if isinstance(it, dict) and it.get("tipo") == "sessao"]
-    piloto = nova.get("piloto") if isinstance(nova.get("piloto"), dict) else {}
     dados = {k: nova.get(k) for k in CAMPOS_CONTA}
-    dados["i_am_driver"] = bool(sessoes) and bool(piloto.get("eu"))
+    dados["accept_terms"] = nova.get("accept_terms") is True          # "false" (texto) não é aceite
+    dados["i_am_driver"] = bool(sessoes) and (any(k == titular for k in quem.values()) if nomes else bool(piloto.get("eu")))
     sal, h = auth.hash_senha(senha)
     try:
         with transacao(con):                           # conta sem piloto (ou piloto sem conta) não fica pela metade
             cid = portal.criar_conta(con, dados, sal, h)
-            if sessoes:
-                if piloto.get("eu"):
-                    pid = um(con, "SELECT id FROM portal_pilots WHERE account_id=? AND is_self=1", (cid,))["id"]
+            eu = um(con, "SELECT id FROM portal_pilots WHERE account_id=? AND is_self=1", (cid,)) if dados["i_am_driver"] else None
+            criados = {}
+            for i, it in sessoes:
+                if nomes:
+                    k = quem[i]
+                    if k == titular:
+                        pid = eu["id"]
+                    elif k in criados:
+                        pid = criados[k]
+                    else:
+                        # o dono, 16/10: o carrinho pede só o nome do piloto; as medidas vêm depois, com lembrete por e-mail
+                        pid = criados[k] = portal.criar_piloto(con, cid, {"name": nomes[i]}, completo=False)
+                elif piloto.get("eu"):
+                    pid = eu["id"]
                 else:
-                    # o dono, 16/10: o carrinho pede só o nome do piloto; as medidas vêm depois, com lembrete por e-mail
-                    pid = portal.criar_piloto(con, cid, {"name": piloto.get("nome")}, completo=False)
-                for it in sessoes:
-                    it["piloto"] = pid
+                    pid = criados.get("um") or portal.criar_piloto(con, cid, {"name": _texto_ou_nada(piloto.get("nome"))}, completo=False)
+                    criados["um"] = pid
+                it["piloto"] = pid
     except portal.ErroPortal as e:
         raise ErroConta(str(e), entrar="already exists" in str(e))
     auditar(con, "portal.signup", f"portal:{cid}", entity_type="portal_account", entity_id=cid,
             detail={"origem": "carrinho", "piloto": bool(sessoes)}, ip=ip)
     return cid, senha
+
+
+def _chave_nome(v):
+    """O nome para comparar (o mesmo piloto escrito com outra caixa ou com espaço a mais é o mesmo)."""
+    return " ".join(str(v or "").split()).casefold()
 
 
 @r.post("/ops/api/vitrine/carrinho", include_in_schema=False)
@@ -704,6 +749,8 @@ def _no_idioma(cot, lang):
     for x in cot["linhas"]:
         x["nome"] = idioma.traduzir(x["nome"], lang)
         x["erro"] = idioma.traduzir(x["erro"], lang)
+        if x.get("aviso_piloto"):                       # #305: completar o piloto depois do pagamento
+            x["aviso_piloto"] = idioma.traduzir(x["aviso_piloto"], lang)
         if x["tipo"] == "sessao" and x.get("detalhe"):
             x["detalhe"] = pedido_site.quando(x["data"], x["turno"], lang)
     return cot
@@ -728,9 +775,13 @@ async def carrinho_checkout(request: Request, background: BackgroundTasks, con: 
         return _json({"ok": False, "erro": idioma.traduzir("Too many requests in a row. Please try again in a few minutes.", lang)}, 429)
     itens, senha, nova = d.get("itens"), None, False
     if not conta and d.get("conta") is not None:
-        # criar conta pede JSON de verdade: um formulário de outro site não consegue mandar (o navegador pergunta antes)
-        if "application/json" not in (request.headers.get("content-type") or ""):
+        # criar conta pede JSON de verdade (o tipo exato: `text/plain;x=application/json` passaria sem o navegador
+        # perguntar antes) e, quando o navegador diz de onde veio, o próprio site
+        if (request.headers.get("content-type") or "").split(";")[0].strip().lower() != "application/json":
             return _json({"ok": False, "erro": "JSON only"}, 415)
+        origem = request.headers.get("origin")
+        if origem is not None and (urlsplit(origem).hostname or "").lower() not in hosts():
+            return _json({"ok": False, "erro": idioma.traduzir("Security check failed. Reload the page and try again.", lang)}, 403)
         try:
             conta, senha = _conta_do_carrinho(con, request, d["conta"], itens, d.get("entrega"))
             nova = True
@@ -751,6 +802,13 @@ async def carrinho_checkout(request: Request, background: BackgroundTasks, con: 
         logging.getLogger("urace.loja").warning("checkout do carrinho falhou: %s", str(e)[:200])
         # o pedido fica 'falhou' (a equipe vê a tentativa)
         resp = _json({"ok": False, "erro": idioma.traduzir("We couldn’t open the secure checkout just now. Please try again in a minute.", lang)}, 502)
+    except Exception:
+        if not nova:
+            raise
+        # o inesperado depois de a conta nascer: ela fica, abre a sessão e recebe as boas-vindas (a senha só existe agora)
+        import logging
+        logging.getLogger("urace.loja").exception("checkout do carrinho com conta nova falhou")
+        resp = _json({"ok": False, "erro": idioma.traduzir("Something went wrong. Please try again.", lang)}, 500)
     if nova:
         # #305: a conta nova já sai logada neste navegador (volta do Stripe para a página do pedido e para a área
         # dela) e recebe as boas-vindas com a identidade da URACE: login, senha, número de cliente e o link. Se o
