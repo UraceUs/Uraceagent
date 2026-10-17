@@ -24,8 +24,8 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 16/10/2026 (#172, Blog do site). Tudo aqui foi conferido no código do painel. Se a tela mudar e este
-> texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
+> Atualizado em 17/10/2026 (#172, Blog do site, com a revisão do PR #322). Tudo aqui foi conferido no código do
+> painel. Se a tela mudar e este texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
 
 ---
 
@@ -505,11 +505,14 @@ mudados; o texto do artigo não vai para o log).
    no blog, até 400 letras), **Descrição para o Google** (50 a 155 letras, o texto embaixo do título no Google) e, se quiser,
    **Título para o Google** (até 70; vazio, vale o título do artigo).
 3. **Capa:** **Subir a capa** (sai WebP de até 1600 px, sem a localização do celular, com o tamanho de verdade) e a
-   **Descrição da capa** (o que a foto mostra; é obrigatória para publicar uma capa subida aqui).
+   **Descrição da capa** (o que a foto mostra; é obrigatória para publicar uma capa subida aqui). Foto de até
+   **60 megapixels** (a de 48–50 MP de um celular passa); acima disso a tela diz "foto com pixels demais": diminua e
+   suba de novo.
 4. **Texto:** negrito, itálico, lista, subtítulo, parágrafo, **Link** (`https://…`, uma página do site como `/academy/`,
-   `mailto:` ou `tel:`) e **Imagem** (sobe a foto e põe onde o cursor está, pedindo a descrição). Tabelas e citações que
+   a home `/`, `mailto:` ou `tel:`) e **Imagem** (sobe a foto e põe onde o cursor está, pedindo a descrição). **Enter**
+   abre um parágrafo novo, e o texto **colado** de uma página chega com os parágrafos separados. Tabelas e citações que
    já estão no texto ficam como estão (a tabela de preços do artigo "Getting Started in Kart Racing" é uma delas).
-   Script, `onerror`, `javascript:` e companhia somem ao salvar.
+   Script, `onerror`, `javascript:` e companhia somem ao salvar. O texto vai até 60.000 caracteres, contando a formatação.
 5. **Salvar rascunho.** A **Prévia** mostra o rascunho salvo no visual do site, em **Celular** (390 px) ou **Computador**,
    fora do Google. Ninguém de fora vê o rascunho.
 
@@ -517,15 +520,20 @@ mudados; o texto do artigo não vai para o log).
 - **Publicar** confere antes: título, descrição para o Google de 50 a 155 letras, texto, categoria e a descrição da capa
   subida. Enquanto faltar algo, a lista **Antes de publicar, falta** diz o quê e o botão fica parado. Salve o rascunho
   antes (o botão espera).
+- **Só vai ao ar o que você viu.** Se alguém salvou outro texto depois que você abriu o artigo, **Publicar** não publica:
+  a tela avisa "O rascunho mudou depois que você abriu o artigo", recarrega o texto e a prévia, e você confere e clica
+  **Publicar** de novo.
 - Publicado, o artigo entra **na hora**, no servidor, no blog, na categoria, na home (os 3 mais novos), no **mapa do site**
-  (`/sitemap.xml`) e no **JSON-LD** (com a data de publicação e a da última mudança, `dateModified`).
+  (`/sitemap.xml`) e no **JSON-LD** (com a data de publicação e a da última mudança, `dateModified`). Sem nenhum artigo no
+  ar, a faixa do blog ("Our Contents") some da home.
 - **"Na hora" vale para o servidor.** Quem já abriu a página guarda a cópia no navegador **até 5 minutos**; o mapa do site
   fica **até 24 horas** no cache (do navegador e de quem o lê, como o Google). Publicou e não viu? Espere ou recarregue.
 - **O endereço trava na primeira publicação** e não destrava ao tirar do ar: o Google e quem salvou o link já têm ele.
 - Mudou um artigo que está no ar? O cartão mostra **mudado depois de publicar**: o site continua com o que está no ar até
   **Publicar as mudanças**.
 - Cada publicação guarda uma **versão**. Em **Versões publicadas**, **Voltar a esta versão** traz uma antiga para o
-  rascunho (o site não muda até publicar de novo).
+  rascunho (o site não muda até publicar de novo). Os 7 do site antigo já têm a versão **original** ("site antigo", com
+  a data de lá): o texto do WordPress sempre pode voltar.
 
 **Tirar do ar (ADMIN)**
 - **Tirar do ar** faz o endereço dar **404** e tira o artigo do blog, da categoria e do mapa do site. O rascunho, o
@@ -939,7 +947,7 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | o que a IA pode fazer e a política | `GET /ai/capabilities` (logado) |
 | blog do site: listar / abrir um artigo | `GET /site/blog?q=&estado=&categoria=&limit=&offset=` · `GET /site/blog/{id}` (operador) |
 | blog: criar / mudar o rascunho | `POST /site/blog` com `{"title", "category"}` · `PATCH /site/blog/{id}` (operador) |
-| blog: publicar / tirar do ar | `POST /site/blog/{id}/publicar` · `POST /site/blog/{id}/despublicar` com `{"confirmar": true}` (só ADMIN ou acesso livre; os 7 do site antigo pedem `confirmar`) |
+| blog: publicar / tirar do ar | `POST /site/blog/{id}/publicar` com `{"visto": "<updated_at do artigo que você leu>"}` (null nos 7 que nunca mudaram; mudou depois → 409: leia de novo) · `POST /site/blog/{id}/despublicar` com `{"confirmar": true}` (só ADMIN ou acesso livre; os 7 do site antigo pedem `confirmar`) |
 | Suits: descartar / restaurar | `POST /suits/{id}/descartar` com `{"motivo": "…"}` · `POST /suits/{id}/restaurar` (operador) |
 | Suits: ligar/desligar a IA no pedido (#198) | `POST /suits/{id}/ia` com `{"ligada": false}` (operador) |
 

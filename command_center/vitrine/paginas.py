@@ -237,6 +237,15 @@ def home(host):
                    for n, c, t in h["depoimentos"])
     eventos = " · ".join(f'<a href="{e(href)}">{e(r)}</a>' for r, href in h["eventos_links"])
     posts = "".join(_post_card(p) for p in artigos()[:3])     # #172: do banco (sem banco, o arquivo)
+    # sem artigo no ar, a faixa do blog não aparece (antes ficava o título "Check out the blog:" e nada embaixo)
+    blog = f"""
+<section class="faixa escura" aria-labelledby="h-blog">
+  <div class="largura">
+    <h2 id="h-blog">{e(h['blog_titulo'])}</h2>
+    <p class="lede">{e(h['blog_sub'])}</p>
+    <div class="posts-grade">{posts}</div>
+  </div>
+</section>""" if posts else ""
     corpo = f"""
 <section class="hero hero-home">
   <div class="hero-in">
@@ -291,14 +300,7 @@ def home(host):
     <img src="{estatico('img/sobre.webp')}" alt="Italo Silveira at the track" width="573" height="490" loading="lazy">
     <div class="texto"><h2 id="h-sobre">About</h2><p>{e(h['sobre'])}</p></div>
   </div>
-</section>
-<section class="faixa escura" aria-labelledby="h-blog">
-  <div class="largura">
-    <h2 id="h-blog">{e(h['blog_titulo'])}</h2>
-    <p class="lede">{e(h['blog_sub'])}</p>
-    <div class="posts-grade">{posts}</div>
-  </div>
-</section>
+</section>{blog}
 <section class="faixa vermelha" aria-labelledby="h-duvidas">
   <div class="largura centro">
     <h2 id="h-duvidas">{e(h['fecho'][0])}</h2>

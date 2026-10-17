@@ -2,7 +2,9 @@
  * O OPERATOR escreve o rascunho; só o ADMIN (ou a conta de acesso livre) publica e tira do ar. "Novo artigo" fica em
  * cima (o dono pediu toda inserção no topo); embaixo, os artigos no cartão do padrão D do painel, paginados no servidor.
  * O artigo abre no próprio endereço (/site/blog/12): título, categoria, endereço, resumo, o que o Google mostra, capa,
- * texto com links e fotos, a prévia no visual do site, publicar e as versões. */
+ * texto com links e fotos, a prévia no visual do site, publicar e as versões.
+ * Revisão do #172: Publicar manda `visto` (o `updated_at` do rascunho que a tela abriu). Se o operador salvou outro
+ * texto depois, o servidor responde 409 e nada vai ao ar: a tela recarrega o artigo e a prévia e avisa. */
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
@@ -24,7 +26,7 @@ interface Post { id: number; slug: string; category: string; origin: string | nu
 interface Categoria { slug: string; name: string }
 interface Lista { posts: Post[]; total: number; limit: number; offset: number; categorias: Categoria[] }
 interface Saida { post: Post; problemas: string[]; previa: string; categorias: Categoria[] }
-interface Versao { id: number; published_at: string; por: string | null; title: string }
+interface Versao { id: number; published_at: string; por: string | null; original: boolean; title: string }
 
 const POR_PAGINA = 20
 const ESTADO: Record<Estado, [string, 'ok' | 'info' | 'warn']> = {
@@ -152,8 +154,16 @@ export function EditarArtigo({ id }: { id: number }) {
   }
   const salvar = () => correr('salvar', async () => { const r = await api.patch<Saida>(`/site/blog/${id}`, e); setE({}); return r },
     p.estado === 'rascunho' ? tr("Rascunho salvo.") : tr("Rascunho salvo: o site continua com o que está no ar até publicar."))
-  const publicar = () => correr('publicar', async () => { const r = await api.post<Saida>(`/site/blog/${id}/publicar`); vs.reload(); return r },
-    tr("Publicado: o blog e o mapa do site já mostram."))
+  // só o que esta tela mostrou vai ao ar: mudou depois que abriu (409), recarrega o artigo e a prévia e avisa
+  const publicar = () => correr('publicar', async () => {
+    try { const r = await api.post<Saida>(`/site/blog/${id}/publicar`, { visto: p.updated_at }); vs.reload(); return r }
+    catch (er) {
+      if (!(er instanceof ApiError) || er.status !== 409) throw er
+      novo(await api.get<Saida>(`/site/blog/${id}`)); vs.reload()
+      toast(tr("O rascunho mudou depois que você abriu o artigo. A tela já mostra o texto novo: confira a prévia e publique de novo."), 'warn')
+      return null
+    }
+  }, tr("Publicado: o blog e o mapa do site já mostram."))
   const despublicar = () => correr('despublicar', async () => {
     const sim = await perguntar(p.no_google
       ? { titulo: tr("Tirar do ar um artigo que já está no Google?"), perigo: true, ok: tr("Tirar do ar"),
@@ -238,7 +248,7 @@ export function EditarArtigo({ id }: { id: number }) {
 
     <Section title={tr("Versões publicadas")} count={versoes.length}>
       {!versoes.length ? <p className="small muted" style={{ margin: 0 }}>{p.origin === 'wordpress' ? tr("Veio do site antigo; cada publicação daqui guarda uma versão.") : tr("Ainda não foi publicado.")}</p>
-        : <ul className="cd-lista">{versoes.map(x => <li key={x.id}><span className="grow">{x.title}<span className="muted"> · {x.por || '—'} · {fmtDateTime(x.published_at)}</span></span>
+        : <ul className="cd-lista">{versoes.map(x => <li key={x.id}><span className="grow">{x.title}<span className="muted"> · {x.original ? tr("site antigo") : x.por || '—'} · {x.published_at.length <= 10 ? fmtDate(x.published_at) : fmtDateTime(x.published_at)}</span></span>
           <button className="btn sm ghost" disabled={!!indo} onClick={() => voltarVersao(x.id)}>{tr("Voltar a esta versão")}</button></li>)}</ul>}
     </Section>
 

@@ -4059,5 +4059,9 @@
 "Pôr a foto": "Add the photo",
 "Tirar link": "Remove link",
 "Blog": "Blog",
-"Blog do site": "Site blog"
+"Blog do site": "Site blog",
+"O rascunho mudou depois que você abriu o artigo. A tela já mostra o texto novo: confira a prévia e publique de novo.": "The draft changed after you opened the article. The screen now shows the new text: check the preview and publish again.",
+"o rascunho mudou depois que você abriu o artigo: confira o texto e a prévia de novo antes de publicar": "the draft changed after you opened the article: check the text and the preview again before publishing",
+"site antigo": "old site",
+"foto com pixels demais (até 60 megapixels): diminua a foto e tente de novo": "photo with too many pixels (up to 60 megapixels): make the photo smaller and try again"
 }

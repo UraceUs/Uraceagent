@@ -1,13 +1,16 @@
 /* O editor de texto simples do painel (#298, #300): negrito, itálico, lista, subtítulo e parágrafo. O servidor
  * guarda só as tags seguras (vitrine/html_seguro.py).
  * #172 (o blog): duas opções a mais, desligadas por padrão para os produtos e o editor do site não mudarem:
- * `link` (pôr e tirar link) e `imagem` (sobe a foto e põe no lugar do cursor, com a descrição). */
+ * `link` (pôr e tirar link) e `imagem` (sobe a foto e põe no lugar do cursor, com a descrição).
+ * Revisão do #172: o Enter do Chrome criava <div>, que o servidor não guarda (os parágrafos grudavam ao salvar); agora
+ * o parágrafo é <p>, e o editor vazio já começa dentro de um <p> (a primeira linha também é parágrafo). O link aceita
+ * "/" (a home) e recusa "//" e a barra invertida, como o servidor. */
 import { useEffect, useRef } from 'react'
 import { usePerguntar } from './Perguntar'
 import { useToast } from './Toast'
 import { tr } from '../i18n'
 
-const LINK_OK = /^(https?:\/\/|\/|mailto:|tel:)\S+$/
+const LINK_OK = /^(?:(?:https?:\/\/|mailto:|tel:)[^\s"'<>\\]+|\/(?!\/)[^\s"'<>\\]*)$/
 const attr = (s: string) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /** Um editor de texto simples (negrito, itálico, lista, subtítulo). O servidor guarda só as tags seguras. */
@@ -24,6 +27,17 @@ export function EditorTexto({ id, rotulo, valor, onChange, disabled, link, image
   const perguntar = usePerguntar()
   const toast = useToast()
   useEffect(() => { if (ref.current && ref.current.innerHTML !== valor) ref.current.innerHTML = valor }, [valor])
+  // o parágrafo é <p> (o padrão do Chrome é <div>); vazio, o cursor já fica dentro de um <p>
+  const comecar = () => {
+    const el = ref.current
+    if (!el || disabled) return
+    document.execCommand('defaultParagraphSeparator', false, 'p')
+    if (el.innerHTML.trim() === '' || el.innerHTML === '<br>') {
+      el.innerHTML = '<p><br></p>'
+      const r = document.createRange(); r.setStart(el.firstChild as Node, 0); r.collapse(true)
+      const s = window.getSelection(); s?.removeAllRanges(); s?.addRange(r)
+    }
+  }
   const fazer = (cmd: string, arg?: string) => {
     ref.current?.focus()
     document.execCommand(cmd, false, arg)
@@ -78,6 +92,6 @@ export function EditorTexto({ id, rotulo, valor, onChange, disabled, link, image
           onChange={e => { porImagem(e.target.files?.[0]); e.target.value = '' }} /></>}
     </div>}
     <div ref={ref} id={id} className="editor-texto" role="textbox" aria-multiline="true" aria-labelledby={`${id}-r`}
-      contentEditable={!disabled} suppressContentEditableWarning onInput={e => onChange((e.target as HTMLDivElement).innerHTML)} />
+      contentEditable={!disabled} suppressContentEditableWarning onFocus={comecar} onInput={e => onChange((e.target as HTMLDivElement).innerHTML)} />
   </div>
 }

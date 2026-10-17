@@ -3240,3 +3240,88 @@ def test_blog_o_operador_escreve_o_admin_publica_e_o_artigo_cabe_no_celular(serv
         op.close()
         if adm:
             adm.close()
+
+
+def _artigo_novo(op, servidor, titulo):
+    """Um rascunho criado pela tela "Novo artigo"; devolve o id (a tela já abre nele)."""
+    abrir(op, servidor, "/site/blog")
+    novo = op.locator("section.card", has=op.get_by_role("heading", name="Novo artigo"))
+    novo.get_by_label("Título do artigo").fill(titulo)
+    novo.get_by_role("button", name="Criar e abrir").click()
+    op.wait_for_url(re.compile(r".*/site/blog/\d+$"))
+    return int(op.url.rstrip("/").rsplit("/", 1)[1])
+
+
+def test_blog_enter_texto_colado_e_link_para_a_home_ficam_no_editor(servidor, navegador):
+    """Revisão do #172: o Enter do Chrome criava <div> e o texto colado de uma página vem em <div>; o servidor jogava a
+    div fora e os parágrafos grudavam ao salvar. E o link para a home ("/") era recusado na tela e no servidor."""
+    op = entrar(navegador, servidor, "op@urace.us", largura=390, altura=844)
+    op.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    try:
+        pid = _artigo_novo(op, servidor, "Enter and Paste Test e2e")
+        caixa = op.get_by_role("textbox", name="Texto do artigo")
+        caixa.click()
+        op.keyboard.type("First paragraph of the article.")
+        op.keyboard.press("Enter")
+        op.keyboard.type("Second paragraph of the article.")
+        op.keyboard.press("Enter")
+        op.keyboard.type("Third one.")
+        op.keyboard.press("Enter")
+        colado = ('<div>Paragraph one from a web page.</div><div>Paragraph two from a web page.</div>'
+                  '<img src="x" onerror="window.__xss=1"><a href="javascript:window.__xss=2">bad</a>')
+        op.evaluate("""async (h) => { await navigator.clipboard.write([new ClipboardItem({
+            'text/html': new Blob([h], {type: 'text/html'}), 'text/plain': new Blob(['x'], {type: 'text/plain'})})]) }""", colado)
+        op.keyboard.press("Control+V")
+        op.get_by_role("button", name="Link", exact=True).click()
+        pergunta = op.get_by_role("dialog", name="Link")
+        pergunta.locator("input").fill("/")
+        pergunta.get_by_role("button", name="Pôr o link").click()
+        assert op.get_by_text("Use um endereço que comece com").count() == 0, "a tela aceita / (a home)"
+        op.get_by_role("button", name="Salvar rascunho").click()
+        op.get_by_text("Rascunho salvo.").wait_for()
+        salvo = op.request.get(servidor + f"/api/site/blog/{pid}").json()["post"]["draft"]["html"]
+        for par in ("First paragraph of the article.", "Second paragraph of the article.", "Third one.",
+                    "Paragraph one from a web page.", "Paragraph two from a web page."):
+            assert f"<p>{par}</p>" in salvo, (par, salvo)
+        assert 'href="/"' in salvo, salvo
+        assert "javascript" not in salvo and "onerror" not in salvo and op.evaluate("window.__xss") is None
+        assert not op.erros_js and not op.erros_api, (op.erros_js, op.erros_api)
+    finally:
+        op.close()
+
+
+def test_blog_o_admin_so_publica_o_que_viu(servidor, navegador):
+    """Revisão do #172: o admin abre o artigo e a prévia, o operador salva outro texto, o admin clica Publicar. Antes ia
+    ao ar o que ele nunca viu; agora a tela recebe 409, recarrega o artigo e avisa, e só o segundo clique publica."""
+    site = servidor.removesuffix("/ops")
+    url = "/blog/review-before-publishing-e2e/"
+    op = entrar(navegador, servidor, "op@urace.us", largura=390, altura=844)
+    adm, pid = None, None
+    try:
+        pid = _artigo_novo(op, servidor, "Review Before Publishing e2e")
+        r = op.request.patch(servidor + f"/api/site/blog/{pid}", headers=_csrf(op), data={
+            "description": "What the admin reviews before a kart article goes live on the URACE site, step by step.",
+            "html": "<p>The text the admin reviewed.</p>"})
+        assert r.ok, r.text()
+        adm = entrar(navegador, servidor, "italo@urace.us", largura=390, altura=844)
+        abrir(adm, servidor, f"/site/blog/{pid}")
+        adm.get_by_role("textbox", name="Texto do artigo").get_by_text("The text the admin reviewed.").wait_for()
+        r = op.request.patch(servidor + f"/api/site/blog/{pid}", headers=_csrf(op), data={
+            "title": "Changed After the Admin Opened e2e", "html": "<p>A text the admin never saw.</p>"})
+        assert r.ok, r.text()
+        adm.get_by_role("button", name="Publicar", exact=True).click()
+        adm.get_by_text("O rascunho mudou depois que você abriu o artigo.").wait_for()
+        assert adm.request.get(site + url).status == 404, "nada foi ao ar"
+        adm.get_by_role("heading", name="Changed After the Admin Opened e2e", level=2).wait_for()
+        adm.get_by_role("textbox", name="Texto do artigo").get_by_text("A text the admin never saw.").wait_for()
+        adm.get_by_role("button", name="Publicar", exact=True).click()
+        adm.get_by_text("Publicado: o blog e o mapa do site já mostram.").wait_for()
+        pg = adm.request.get(site + url)
+        assert pg.status == 200 and "A text the admin never saw." in pg.text()
+        assert not adm.erros_js and not adm.erros_api, (adm.erros_js, adm.erros_api)
+    finally:
+        if pid and adm:
+            adm.request.post(servidor + f"/api/site/blog/{pid}/despublicar", headers=_csrf(adm), data={"confirmar": True})
+        op.close()
+        if adm:
+            adm.close()

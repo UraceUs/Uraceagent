@@ -7,10 +7,14 @@ Dono, 16/10: *"editor do blog, pode seguir"*.
 
 Despublicar um dos 7 artigos do WordPress derruba um endereço que o Google já indexou (404): a rota só tira do ar
 com `confirmar` (a tela pergunta antes, com esse aviso).
+
+Revisão do #172: publicar leva `visto` (o `updated_at` do rascunho que o administrador abriu); se o operador salvou
+outro texto depois, 409 e nada vai ao ar. Id e offset absurdos (maiores que o inteiro do SQLite) dão 422, não 500.
 """
 import sqlite3
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -20,6 +24,8 @@ from command_center.providers import blog
 
 r = APIRouter(prefix="/ops/api/site/blog", tags=["site"])
 FOTO_MAX = 12 * 1024 * 1024
+INT_MAX = 2**63 - 1                     # o maior inteiro do SQLite: acima disso o id estourava (OverflowError, 500)
+Id = Annotated[int, Path(ge=1, le=INT_MAX)]
 
 
 def _aud(con, request, u, evento, pid, detalhe=None):
@@ -28,6 +34,8 @@ def _aud(con, request, u, evento, pid, detalhe=None):
 
 
 def _erro(e):
+    if isinstance(e, blog.RascunhoMudou):
+        return HTTPException(409, str(e))
     return HTTPException(404 if "não existe" in str(e) else 400, str(e))
 
 
@@ -46,7 +54,7 @@ def _host():
 # ------------------------------------------------------------------ ler
 @r.get("")
 def lista(q: str = "", estado: str | None = None, categoria: str | None = None,
-          limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0),
+          limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0, le=INT_MAX),
           con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     """Os artigos (rascunho, no ar, mudado depois de publicar), paginados no servidor, com o total."""
     if estado and estado not in blog.ESTADOS:
@@ -55,7 +63,7 @@ def lista(q: str = "", estado: str | None = None, categoria: str | None = None,
 
 
 @r.get("/{pid}")
-def um(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+def um(pid: Id, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     try:
         return _saida(con, pid)
     except blog.ErroBlog as e:
@@ -76,8 +84,9 @@ def criar(dados: NovoIn, request: Request, con: sqlite3.Connection = Depends(get
         pid = blog.criar(con, u["id"], dados.title, dados.category, dados.slug)
     except blog.ErroBlog as e:
         raise _erro(e)
-    _aud(con, request, u, "blog.post.create", pid, {"title": dados.title, "category": dados.category})
-    return {"id": pid, **_saida(con, pid)}
+    out = _saida(con, pid)                            # na auditoria, o título como ficou gravado (já limpo)
+    _aud(con, request, u, "blog.post.create", pid, {"title": out["post"]["draft"]["title"], "category": out["post"]["category"]})
+    return {"id": pid, **out}
 
 
 class RascunhoIn(BaseModel):
@@ -93,7 +102,7 @@ class RascunhoIn(BaseModel):
 
 
 @r.patch("/{pid}")
-def salvar(pid: int, dados: RascunhoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+def salvar(pid: Id, dados: RascunhoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
            u=Depends(auth.exige("OPERATOR"))):
     """Muda o rascunho. O site só vê depois que o administrador publicar."""
     d = dados.model_dump(exclude_unset=True)
@@ -117,7 +126,7 @@ async def _foto(arquivo):
 
 
 @r.post("/{pid}/capa")
-async def capa(pid: int, request: Request, arquivo: UploadFile = File(...), alt: str = Form(""),
+async def capa(pid: Id, request: Request, arquivo: UploadFile = File(...), alt: str = Form(""),
                con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     """A capa do artigo: WebP de até 1600 px, sem EXIF (sem a posição GPS), com o tamanho de verdade."""
     try:
@@ -131,7 +140,7 @@ async def capa(pid: int, request: Request, arquivo: UploadFile = File(...), alt:
 
 
 @r.post("/{pid}/imagens", status_code=201)
-async def imagem(pid: int, request: Request, arquivo: UploadFile = File(...),
+async def imagem(pid: Id, request: Request, arquivo: UploadFile = File(...),
                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     """Uma foto para o meio do texto: devolve o endereço (o editor põe no lugar do cursor)."""
     try:
@@ -144,7 +153,7 @@ async def imagem(pid: int, request: Request, arquivo: UploadFile = File(...),
 
 
 @r.get("/{pid}/versoes")
-def versoes(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+def versoes(pid: Id, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     try:
         return {"versoes": blog.versoes(con, pid)}
     except blog.ErroBlog as e:
@@ -152,7 +161,7 @@ def versoes(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.
 
 
 @r.post("/{pid}/versoes/{vid}/voltar")
-def voltar(pid: int, vid: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+def voltar(pid: Id, vid: Id, request: Request, con: sqlite3.Connection = Depends(get_db),
            u=Depends(auth.exige("OPERATOR"))):
     """A versão antiga volta para o rascunho (o site não muda até publicar de novo)."""
     try:
@@ -164,12 +173,17 @@ def voltar(pid: int, vid: int, request: Request, con: sqlite3.Connection = Depen
 
 
 # ------------------------------------------------------------------ publicar (ADMIN ou acesso livre)
+class PublicarIn(BaseModel):
+    visto: str | None                    # obrigatório: o `updated_at` do artigo que a tela abriu (null nos 7 importados)
+
+
 @r.post("/{pid}/publicar")
-def publicar(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("ADMIN"))):
+def publicar(pid: Id, dados: PublicarIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+             u=Depends(auth.exige("ADMIN"))):
     """Põe o rascunho no ar: o blog, a categoria, o sitemap e o JSON-LD mudam na hora (o navegador de quem já abriu
-    guarda a página até 5 min, e o sitemap até 24 h)."""
+    guarda a página até 5 min, e o sitemap até 24 h). Só o rascunho que o administrador viu: mudou depois → 409."""
     try:
-        probs = blog.publicar(con, u["id"], pid)
+        probs = blog.publicar(con, u["id"], pid, dados.visto)
     except blog.ErroBlog as e:
         raise _erro(e)
     if probs:
@@ -184,7 +198,7 @@ class DespublicarIn(BaseModel):
 
 
 @r.post("/{pid}/despublicar")
-def despublicar(pid: int, request: Request, dados: DespublicarIn | None = None, con: sqlite3.Connection = Depends(get_db),
+def despublicar(pid: Id, request: Request, dados: DespublicarIn | None = None, con: sqlite3.Connection = Depends(get_db),
                 u=Depends(auth.exige("ADMIN"))):
     """Tira do ar (o endereço vira 404). Um dos 7 do WordPress só sai com `confirmar`: o Google já tem o endereço."""
     try:
@@ -201,7 +215,7 @@ def despublicar(pid: int, request: Request, dados: DespublicarIn | None = None, 
 
 # ------------------------------------------------------------------ a prévia
 @r.get("/{pid}/previa", include_in_schema=False)
-def previa(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+def previa(pid: Id, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     """O rascunho desenhado como o site mostra, para o iframe do painel. Fora do Google (noindex) e sem cache."""
     from command_center.api import vitrine
     from command_center.vitrine import paginas_site as ps

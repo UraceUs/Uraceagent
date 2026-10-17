@@ -11,6 +11,9 @@ despublicar mudam na hora o blog, o sitemap e o JSON-LD; os artigos passam para 
   para o ar e guarda uma **versão**; "Voltar a esta versão" traz uma antiga para o rascunho (nada se apaga).
 - O **endereço** (slug) trava na primeira publicação e não destrava ao despublicar: o Google já guardou.
 - `publicados` devolve os artigos no **mesmo formato** do `posts.json` (o site continua desenhando igual).
+- Revisão do #172: **publicar** só vai se o rascunho for o que o administrador viu (`visto` = o `updated_at` que a
+  tela abriu; mudou no meio → `RascunhoMudou`, 409); a importação guarda a **versão original** de cada um dos 7; letra
+  solta de UTF-16 (`\ud800`) sai do texto, e um texto muito acima do limite nem passa pela limpeza.
 """
 import json
 import re
@@ -38,6 +41,10 @@ ESTADOS = ("rascunho", "no_ar", "mudou")
 
 class ErroBlog(ValueError):
     pass
+
+
+class RascunhoMudou(ErroBlog):
+    """O rascunho mudou depois que o administrador abriu o artigo: publicar poria no ar o que ele não viu."""
 
 
 # ------------------------------------------------------------------ categorias e datas
@@ -171,8 +178,16 @@ def lista(con, termo="", estado_=None, categoria=None, limit=20, offset=0):
 
 
 # ------------------------------------------------------------------ validação
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
+
+
+def _sem_surrogate(v):
+    """O JSON aceita "\\ud800" (meia letra de UTF-16, sozinha); o banco não grava isso (UnicodeEncodeError, 500)."""
+    return _SURROGATE.sub("", str(v or ""))
+
+
 def _linha_de_texto(v):
-    return re.sub(r"\s+", " ", str(v or "")).strip()
+    return re.sub(r"\s+", " ", _sem_surrogate(v)).strip()
 
 
 def _texto(v, campo, minimo=0, maximo=None):
@@ -217,6 +232,9 @@ def _livre(con, s, pid=None):
 
 
 def limpar_html(v):
+    v = _sem_surrogate(v)
+    if len(v) > 2 * HTML_MAX:                 # nem limpa: muito acima do limite, e limpar texto enorme custa tempo
+        raise ErroBlog(f"texto: longo demais (até {HTML_MAX:,} caracteres)")
     h = html_seguro.limpar(v, extra=html_seguro.BLOG)
     if len(h) > HTML_MAX:
         raise ErroBlog(f"texto: longo demais (até {HTML_MAX:,} caracteres)")
@@ -311,9 +329,18 @@ def por_capa(con, por, pid, foto, alt=""):
     atualizar(con, "blog_posts", pid, draft=_js(c), updated_by=por, updated_at=agora())
 
 
-def publicar(con, por, pid):
-    """Põe o rascunho no ar e guarda uma versão. Devolve o que falta (lista vazia: publicou)."""
+MUDOU = "o rascunho mudou depois que você abriu o artigo: confira o texto e a prévia de novo antes de publicar"
+
+
+def publicar(con, por, pid, visto):
+    """Põe o rascunho no ar e guarda uma versão. Devolve o que falta (lista vazia: publicou).
+
+    `visto` é o `updated_at` do rascunho que o administrador abriu (None nos 7 importados, que nunca mudaram). Se o
+    operador salvou outro texto depois, `RascunhoMudou`: nada vai ao ar sem ser visto. A conferência é a própria
+    escrita (UPDATE … WHERE o rascunho é o mesmo): duas abas ao mesmo tempo também não passam."""
     r = linha(con, pid)
+    if (r["updated_at"] or "") != (visto or ""):
+        raise RascunhoMudou(MUDOU)
     c = _de(r["draft"]) or {}
     probs = problemas(c)
     if probs:
@@ -321,8 +348,12 @@ def publicar(con, por, pid):
     quando = agora()
     conteudo = _js(c)
     with transacao(con):
-        atualizar(con, "blog_posts", pid, published=conteudo, published_at=quando, published_by=por,
-                  first_published_at=r["first_published_at"] or quando, updated_at=quando)
+        cur = con.execute("""UPDATE blog_posts SET published=?, published_at=?, published_by=?, first_published_at=?,
+                                    updated_at=? WHERE id=? AND draft=? AND COALESCE(updated_at, '')=?""",
+                          (conteudo, quando, por, r["first_published_at"] or quando, quando, pid, r["draft"],
+                           r["updated_at"] or ""))
+        if cur.rowcount != 1:
+            raise RascunhoMudou(MUDOU)
         inserir(con, "blog_post_versions", post_id=pid, content=conteudo, published_by=por, published_at=quando)
     return []
 
@@ -335,11 +366,14 @@ def despublicar(con, por, pid):
 
 
 def versoes(con, pid):
+    """As versões publicadas, da mais nova para a mais velha. A original de um dos 7 (`original`) tem a data do
+    WordPress (AAAA-MM-DD) e ninguém do painel como autor."""
     linha(con, pid)
-    rs = todos(con, """SELECT v.id, v.content, v.published_at, u.name AS por FROM blog_post_versions v
-                        LEFT JOIN users u ON u.id = v.published_by WHERE v.post_id=? ORDER BY v.id DESC""", (pid,))
-    return [{"id": v["id"], "published_at": v["published_at"], "por": v["por"], "title": (_de(v["content"]) or {}).get("title") or ""}
-            for v in rs]
+    rs = todos(con, """SELECT v.id, v.content, v.published_at, v.published_by, u.name AS por FROM blog_post_versions v
+                        LEFT JOIN users u ON u.id = v.published_by WHERE v.post_id=?
+                        ORDER BY v.published_at DESC, v.id DESC""", (pid,))
+    return [{"id": v["id"], "published_at": v["published_at"], "por": v["por"], "original": v["published_by"] is None,
+             "title": (_de(v["content"]) or {}).get("title") or ""} for v in rs]
 
 
 def voltar(con, por, pid, vid):
@@ -365,26 +399,51 @@ def guardar_imagem(dados):
 
 
 # ------------------------------------------------------------------ a importação dos 7 do WordPress
-def importar(con, caminho):
-    """Os artigos de `posts.json` entram **uma vez**, como estão: o id do WordPress, a data como `datePublished`, o
-    HTML cru (sem limpar) e a capa de static/img com o tamanho de verdade. Rascunho = publicado: nada muda no site."""
-    if um(con, "SELECT 1 AS x FROM blog_posts LIMIT 1"):
-        return 0
+def _ler_arquivo(caminho):
+    """Os artigos de `posts.json` no formato do banco: (id, slug, categoria, conteúdo json, data do WordPress)."""
     try:
         with open(caminho, encoding="utf-8") as f:
             artigos = json.load(f)["posts"]
     except (OSError, ValueError, KeyError):
-        return 0
+        return []
     from command_center.vitrine.paginas import tamanho_estatico
-    linhas = []
+    out = []
     for p in artigos:
         cat = (p.get("categories") or [{"slug": "uncategorized"}])[0]["slug"]
         w, h = tamanho_estatico(p["image"]) if p.get("image") else (None, None)
         c = _js({"title": p["title"], "seo_title": p.get("seo_title") or "", "excerpt": p.get("excerpt") or "",
                  "description": p.get("description") or "", "category": cat, "image": p.get("image") or "",
                  "image_alt": "", "image_w": w, "image_h": h, "html": p.get("html") or ""})
-        linhas.append((p["id"], p["slug"], cat, c, c, p["date"]))
+        out.append((p["id"], p["slug"], cat, c, p["date"]))
+    return out
+
+
+_SEM_ORIGINAL = """SELECT b.id FROM blog_posts b WHERE b.origin='wordpress' AND NOT EXISTS
+                   (SELECT 1 FROM blog_post_versions v WHERE v.post_id=b.id AND v.published_by IS NULL)"""
+
+
+def importar(con, caminho):
+    """Os artigos de `posts.json` entram **uma vez**, como estão: o id do WordPress, a data como `datePublished`, o
+    HTML cru (sem limpar) e a capa de static/img com o tamanho de verdade. Rascunho = publicado: nada muda no site.
+
+    Cada um ganha também a **versão original** (a data do WordPress, sem autor do painel): a primeira publicação
+    daqui troca o rascunho e o publicado, e sem ela o texto do site antigo não voltava mais. Num banco que já
+    importou sem essa versão, ela entra na subida seguinte, uma vez só (o que a equipe mudou não é tocado)."""
+    if um(con, "SELECT 1 AS x FROM blog_posts LIMIT 1"):
+        faltam = {r["id"] for r in todos(con, _SEM_ORIGINAL)}
+        if not faltam:
+            return 0
+        artigos = [a for a in _ler_arquivo(caminho) if a[0] in faltam]
+        with transacao(con):
+            con.executemany("INSERT INTO blog_post_versions (post_id, content, published_by, published_at) VALUES (?,?,NULL,?)",
+                            [(pid, c, data) for pid, _s, _cat, c, data in artigos])
+        return 0
+    artigos = _ler_arquivo(caminho)
+    if not artigos:
+        return 0
     with transacao(con):
         con.executemany("""INSERT OR IGNORE INTO blog_posts (id, slug, category, draft, published, first_published_at, origin)
-                           VALUES (?,?,?,?,?,?, 'wordpress')""", linhas)
-    return len(linhas)
+                           VALUES (?,?,?,?,?,?, 'wordpress')""", [(pid, s, cat, c, c, data) for pid, s, cat, c, data in artigos])
+        con.executemany("INSERT INTO blog_post_versions (post_id, content, published_by, published_at) VALUES (?,?,NULL,?)",
+                        [(pid, c, data) for pid, _s, _cat, c, data in artigos])
+    return len(artigos)

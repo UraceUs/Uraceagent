@@ -14,12 +14,23 @@ O que estes testes trancam:
 - `<script>`, `onerror` e `javascript:` somem; o endereço trava na primeira publicação; endereços reservados;
 - a capa sai WebP sem EXIF, com o tamanho de verdade; versões e voltar; a lista é paginada com o total;
 - sem banco, o site volta ao arquivo.
+
+Revisão do PR #322 (cada teste falha sem a correção):
+- publicar só põe no ar o rascunho que o administrador viu (`visto`); mudou depois → 409, nada vai ao ar;
+- o Enter do Chrome e o texto colado (`<div>`) viram parágrafos, não texto grudado;
+- os 7 do WordPress guardam a versão original (e o banco que importou sem ela ganha uma, uma vez só);
+- texto patológico limpa em tempo linear, e muito acima do limite dá 400; `href="/"` fica; `/\\` não passa;
+- id, offset e meia letra de UTF-16 absurdos dão 4xx, nunca 500; a home sem artigo no ar não desenha a faixa do blog;
+- foto com pixels demais (100 MP de cor lisa, poucos KB) dá 400 antes de decodificar.
 """
 import io
 import json
 import re
 import sqlite3
+import struct
+import time
 import xml.etree.ElementTree as ET
+import zlib
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,8 +39,8 @@ from PIL import Image
 from command_center.api import auth
 from command_center.api.main import app
 from command_center.db import aplicar_schema, conectar, todos, um
-from command_center.providers import blog
-from command_center.vitrine import html_seguro, paginas_site
+from command_center.providers import blog, imagem
+from command_center.vitrine import conteudo, html_seguro, paginas_site
 
 SENHA = "pista-molhada-7"
 B = "/ops/api/site/blog"
@@ -76,8 +87,14 @@ def _pronto(painel, h, pid, **kw):
     return r.json()
 
 
+def _visto(painel, h, pid):
+    """O que a tela do artigo tem na mão ao clicar Publicar: o `updated_at` do rascunho que ela abriu."""
+    return painel.get(f"{B}/{pid}", headers=h).json()["post"]["updated_at"]
+
+
 def _publica(painel, pid, email=ADM):
-    return painel.post(f"{B}/{pid}/publicar", headers=_entra(painel, email))
+    h = _entra(painel, email)
+    return painel.post(f"{B}/{pid}/publicar", headers=h, json={"visto": _visto(painel, h, pid)})
 
 
 def _ld(html, tipo):
@@ -396,3 +413,191 @@ def test_sem_banco_o_site_volta_ao_arquivo(amb, monkeypatch):
     assert site.get(f"/blog/{P451['slug']}/").status_code == 200, "o arquivo de antes"
     assert site.get("/blog/how-to-read-a-kart-track/").status_code == 404
     assert site.get("/blog/").text.count('class="post-card"') == len(ARQUIVO)
+
+
+# ------------------------------------------------------------------ revisão do PR #322
+def test_publicar_poe_no_ar_so_o_rascunho_que_o_admin_viu(amb, monkeypatch):
+    """O admin abre o artigo e a prévia; o operador salva outro texto; o admin clica Publicar: 409, nada vai ao ar."""
+    painel, site, con = amb
+    h = _entra(painel, OP)
+    pid = _novo(painel, h)["id"]
+    _pronto(painel, h, pid)
+    adm = _entra(painel, ADM)
+    visto = _visto(painel, adm, pid)
+    assert painel.post(f"{B}/{pid}/publicar", headers=adm).status_code == 422, "sem `visto` ninguém publica às cegas"
+    assert painel.post(f"{B}/{pid}/publicar", headers=adm, json={}).status_code == 422
+    h = _entra(painel, OP)
+    assert painel.patch(f"{B}/{pid}", headers=h, json={"title": "Totally Different Title",
+                                                       "html": "<p>Text the admin never saw.</p>"}).status_code == 200
+    adm = _entra(painel, ADM)
+    r = painel.post(f"{B}/{pid}/publicar", headers=adm, json={"visto": visto})
+    assert r.status_code == 409 and "mudou depois que você abriu" in r.json()["detail"], r.text
+    assert um(con, "SELECT published FROM blog_posts WHERE id=?", (pid,))["published"] is None
+    assert site.get("/blog/how-to-read-a-kart-track/").status_code == 404
+    assert painel.get(f"{B}/{pid}/versoes", headers=adm).json()["versoes"] == []
+    # a tela recarrega (visto novo) e o admin publica o que agora viu
+    r = painel.post(f"{B}/{pid}/publicar", headers=adm, json={"visto": _visto(painel, adm, pid)})
+    assert r.status_code == 200, r.text
+    assert "Text the admin never saw." in site.get("/blog/how-to-read-a-kart-track/").text
+    # um dos 7 (nunca mudou: `updated_at` nulo) também: o operador mexe depois que o admin abriu → 409
+    assert _visto(painel, adm, 451) is None
+    assert painel.patch(f"{B}/451", headers=_entra(painel, OP), json={"title": "Getting Started, Changed Later"}).status_code == 200
+    assert painel.post(f"{B}/451/publicar", headers=_entra(painel, ADM), json={"visto": None}).status_code == 409
+    assert "Changed Later" not in site.get(f"/blog/{P451['slug']}/").text
+    # a conferência é a própria escrita: o rascunho que muda entre a leitura e o UPDATE também não vai ao ar
+    adm = _entra(painel, ADM)
+    pid2 = _novo(painel, _entra(painel, OP), titulo="Second Kart Article")["id"]
+    _pronto(painel, _entra(painel, OP), pid2)
+    visto = _visto(painel, adm, pid2)
+    real = blog.problemas
+
+    def no_meio(c):
+        con.execute("UPDATE blog_posts SET draft=? WHERE id=?", (blog._js({**c, "html": "<p>Sneaked in.</p>"}), pid2))
+        return real(c)
+    monkeypatch.setattr(blog, "problemas", no_meio)
+    with pytest.raises(blog.RascunhoMudou):
+        blog.publicar(con, 1, pid2, visto)
+    assert um(con, "SELECT published FROM blog_posts WHERE id=?", (pid2,))["published"] is None
+
+
+def test_enter_e_texto_colado_em_div_viram_paragrafos(amb):
+    """O Enter do Chrome cria <div>; o texto colado de uma página vem em <div>. Antes a div sumia e grudava tudo."""
+    painel, site, con = amb
+    h = _entra(painel, OP)
+    pid = _novo(painel, h)["id"]
+    enter = "<p>First paragraph.</p><div>Second paragraph.</div><div>Third one.</div>"
+    r = painel.patch(f"{B}/{pid}", headers=h, json={"html": enter})
+    assert r.json()["post"]["draft"]["html"] == "<p>First paragraph.</p><p>Second paragraph.</p><p>Third one.</p>"
+    colado = ('<div class="x" style="color:red" onclick="alert(1)">Paragraph one.</div>'
+              '<div><div>Nested one.</div><div>Nested two.</div></div><div>Intro<ul><li>item</li></ul></div>')
+    salvo = painel.patch(f"{B}/{pid}", headers=h, json={"html": colado}).json()["post"]["draft"]["html"]
+    assert salvo == "<p>Paragraph one.</p><p>Nested one.</p><p>Nested two.</p><p>Intro</p><ul><li>item</li></ul>", salvo
+    # a loja e o editor do site usam o mesmo editor: o Enter lá também vira parágrafo
+    assert html_seguro.limpar("Uma<div>Duas</div>") == "Uma<p>Duas</p>"
+
+
+def test_a_versao_original_dos_7_fica_guardada_e_volta(amb):
+    painel, site, con = amb
+    original = P451["html"]
+    for p in ARQUIVO:
+        vs = todos(con, "SELECT * FROM blog_post_versions WHERE post_id=?", (p["id"],))
+        assert len(vs) == 1 and vs[0]["published_by"] is None and vs[0]["published_at"] == p["date"], p["id"]
+        assert json.loads(vs[0]["content"])["html"] == p["html"]
+    h = _entra(painel, OP)
+    assert painel.patch(f"{B}/451", headers=h, json={"html": "<p>New text that replaces the old one.</p>"}).status_code == 200
+    assert _publica(painel, 451).status_code == 200
+    vs = painel.get(f"{B}/451/versoes", headers=_entra(painel, OP)).json()["versoes"]
+    assert len(vs) == 2 and not vs[0]["original"] and vs[0]["por"] == "Admin", "a mais nova em cima"
+    assert vs[1]["original"] and vs[1]["por"] is None and vs[1]["published_at"] == P451["date"]
+    r = painel.post(f"{B}/451/versoes/{vs[1]['id']}/voltar", headers=_entra(painel, OP))
+    assert r.status_code == 200 and r.json()["post"]["draft"]["html"] == original, "o texto do WordPress volta"
+    # a subida seguinte não duplica
+    aplicar_schema(con)
+    assert um(con, "SELECT COUNT(*) AS n FROM blog_post_versions WHERE published_by IS NULL")["n"] == 7
+    # o banco que importou antes desta correção (sem a versão original) ganha a que falta, uma vez só
+    con.execute("DELETE FROM blog_post_versions WHERE published_by IS NULL")
+    aplicar_schema(con)
+    aplicar_schema(con)
+    assert um(con, "SELECT COUNT(*) AS n FROM blog_post_versions WHERE published_by IS NULL")["n"] == 7
+    assert um(con, "SELECT COUNT(*) AS n FROM blog_post_versions WHERE post_id=451")["n"] == 2, "a do painel fica"
+    assert json.loads(um(con, "SELECT content FROM blog_post_versions WHERE post_id=451 AND published_by IS NULL")["content"])["html"] == original
+
+
+def test_texto_patologico_limpa_rapido_e_acima_do_limite_da_400(amb):
+    painel, site, con = amb
+    n = 40_000                                         # 280 KB: antes, ~20 s (a lista de tags abertas era varrida)
+    t = time.monotonic()
+    html_seguro.limpar("<b>" * n + "</u>" * n, extra=html_seguro.BLOG)
+    assert time.monotonic() - t < 2
+    h = _entra(painel, OP)
+    pid = _novo(painel, h)["id"]
+    n = (2 * blog.HTML_MAX) // 7                       # dentro do que ainda passa pela limpeza
+    t = time.monotonic()
+    r = painel.patch(f"{B}/{pid}", headers=h, json={"html": "<b>" * n + "</u>" * n})
+    assert r.status_code == 400 and "longo demais" in r.json()["detail"] and time.monotonic() - t < 2
+    t = time.monotonic()
+    r = painel.patch(f"{B}/{pid}", headers=h, json={"html": "<p>" + "x" * (2 * blog.HTML_MAX) + "</p>"})
+    assert r.status_code == 400 and "longo demais" in r.json()["detail"] and time.monotonic() - t < 2
+
+
+def test_link_para_a_home_fica_e_barra_invertida_nao_passa(amb):
+    painel, site, con = amb
+    h = _entra(painel, OP)
+    pid = _novo(painel, h)["id"]
+    salvo = painel.patch(f"{B}/{pid}", headers=h, json={"html": '<p>Back to the <a href="/">home page</a>.</p>'}).json()["post"]["draft"]["html"]
+    assert salvo == '<p>Back to the <a href="/">home page</a>.</p>'
+    # o post 447 do WordPress tem um link para a home: o primeiro salvar no editor não pode tirar
+    p447 = next(p for p in ARQUIVO if p["id"] == 447)
+    assert 'href="/"' in p447["html"]
+    assert 'href="/"' in painel.patch(f"{B}/447", headers=h, json={"html": p447["html"]}).json()["post"]["draft"]["html"]
+    # /\evil.example: o Chromium lê como //evil.example (outro site, sem o rel="noopener")
+    for sujo in ('<a href="/\\evil.example/x">bad</a>', '<img src="/\\evil.example/x.png" alt="x">',
+                 '<a href="//evil.example/x">bad</a>', '<img src="//evil.example/x.png" alt="x">'):
+        salvo = painel.patch(f"{B}/{pid}", headers=h, json={"html": sujo + "<p>ok</p>"}).json()["post"]["draft"]["html"]
+        assert "evil.example" not in salvo, (sujo, salvo)
+
+
+def test_entrada_absurda_da_4xx_nunca_500(amb):
+    painel, site, con = amb
+    h = _entra(painel, OP)
+    grande = "99999999999999999999"                    # maior que o inteiro do SQLite (2**63-1)
+    for metodo, url, kw in (("get", f"{B}/{grande}", {}), ("get", f"{B}/{grande}/versoes", {}), ("get", f"{B}/{grande}/previa", {}),
+                            ("patch", f"{B}/{grande}", {"json": {"title": "Abc def"}}),
+                            ("post", f"{B}/451/versoes/{grande}/voltar", {}), ("post", f"{B}/{grande}/versoes/1/voltar", {}),
+                            ("post", f"{B}/{grande}/capa", {"files": {"arquivo": ("a.jpg", b"x", "image/jpeg")}}),
+                            ("post", f"{B}/{grande}/imagens", {"files": {"arquivo": ("a.jpg", b"x", "image/jpeg")}}),
+                            ("get", f"{B}?offset={grande}", {}), ("get", f"{B}?offset=-1", {}), ("get", f"{B}/0", {})):
+        r = getattr(painel, metodo)(url, headers=h, **kw)
+        assert r.status_code == 422, (metodo, url, r.status_code)
+    adm = _entra(painel, ADM)
+    for url, corpo in ((f"{B}/{grande}/publicar", {"visto": None}), (f"{B}/{grande}/despublicar", {"confirmar": True})):
+        assert painel.post(url, headers=adm, json=corpo).status_code == 422, url
+    assert painel.get(f"{B}/{2**63 - 1}", headers=adm).status_code == 404, "o maior id que cabe: não existe"
+    # meia letra de UTF-16 sozinha (o JSON aceita "\\ud800"; o banco não grava): sai do texto
+    h = _entra(painel, OP)
+    hj = {**h, "content-type": "application/json"}
+    r = painel.post(B, headers=hj, content=b'{"title": "Kart \\udfff tips", "category": "training-racing"}')
+    assert r.status_code == 201 and r.json()["post"]["draft"]["title"] == "Kart tips", r.text
+    pid = r.json()["id"]
+    r = painel.patch(f"{B}/{pid}", headers=hj, content=b'{"title": "Kart \\ud800 line", "excerpt": "a\\ud800b", "html": "<p>x \\ud800y</p>"}')
+    assert r.status_code == 200, r.text
+    d = r.json()["post"]["draft"]
+    assert (d["title"], d["excerpt"], d["html"]) == ("Kart line", "ab", "<p>x y</p>")
+    assert um(con, "SELECT detail FROM audit_logs WHERE event='blog.post.create' AND entity_id=?", (str(pid),))["detail"]
+
+
+def test_home_sem_artigo_no_ar_nao_mostra_a_faixa_do_blog(amb):
+    painel, site, con = amb
+    titulo, sub = conteudo.HOME["blog_titulo"], conteudo.HOME["blog_sub"]
+    home = site.get("/").text
+    assert 'id="h-blog"' in home and titulo in home and home.count('class="post-card"') == 3
+    adm = _entra(painel, ADM)
+    for p in ARQUIVO:
+        assert painel.post(f"{B}/{p['id']}/despublicar", headers=adm, json={"confirmar": True}).status_code == 200
+    home = site.get("/").text
+    assert 'id="h-blog"' not in home and sub not in home and 'class="posts-grade"' not in home
+    assert home.count("<h1") == 1 and 'id="h-duvidas"' in home, "o resto da home fica"
+
+
+def _png_liso(largura, altura):
+    """Um PNG válido de cor lisa (1 bit por pixel): 100 MP cabem em ~15 KB, e decodificar pede centenas de MB."""
+    def bloco(tipo, dados):
+        return struct.pack(">I", len(dados)) + tipo + dados + struct.pack(">I", zlib.crc32(tipo + dados) & 0xFFFFFFFF)
+    linha, z = b"\x00" * (1 + (largura + 7) // 8), zlib.compressobj(9)
+    idat = b"".join(z.compress(linha) for _ in range(altura)) + z.flush()
+    return (b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", struct.pack(">IIBBBBB", largura, altura, 1, 0, 0, 0, 0))
+            + bloco(b"IDAT", idat) + bloco(b"IEND", b""))
+
+
+def test_foto_com_pixels_demais_da_400_antes_de_decodificar(amb):
+    painel, site, con = amb
+    h = _entra(painel, OP)
+    pid = _novo(painel, h)["id"]
+    bomba = _png_liso(10_000, 10_000)                  # 100 MP: o Pillow só avisava (recusa acima de 120 MP)
+    assert len(bomba) < 100_000
+    for rota in ("capa", "imagens"):
+        r = painel.post(f"{B}/{pid}/{rota}", headers=h, files={"arquivo": ("liso.png", bomba, "image/png")})
+        assert r.status_code == 400 and r.json()["detail"] == imagem.GRANDE_DEMAIS, (rota, r.status_code, r.text[:200])
+    # a foto de 48–50 MP de um celular continua passando na conferência (o cabeçalho; nada decodificado aqui)
+    assert imagem.abrir(_png_liso(8_000, 6_250)).size == (8_000, 6_250)
+
