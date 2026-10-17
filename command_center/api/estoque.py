@@ -189,7 +189,7 @@ def rota_item(item_id: int, con: sqlite3.Connection = Depends(get_db),
 def _auditar(con, request, u, evento, item_id, detalhe):
     auditar(con, evento, f"user:{u['id']}", user_id=u["id"], entity_type="stock_item",
             entity_id=item_id, detail=detalhe,
-            ip=(request.client.host if request and request.client else None))
+            ip=(auth._ip(request) if request else None))
 
 
 @r.post("/contar")
@@ -628,6 +628,6 @@ def rota_resolver_cobranca(cid: int, dados: CobrancaIn, request: Request, con: s
     auditar(con, "stock.charge", f"user:{u['id']}", user_id=u["id"], entity_type="stock_charge", entity_id=cid,
             detail={"acao": dados.acao, "antes": {"status": ch["status"], "unit_price": ch["unit_price"]},
                     "unit_price": dados.unit_price, "nota": dados.nota},
-            ip=(request.client.host if request and request.client else None))
+            ip=(auth._ip(request) if request else None))
     con.commit()
     return {"ok": True, **dict(um(con, "SELECT * FROM stock_charges WHERE id=?", (cid,)))}
