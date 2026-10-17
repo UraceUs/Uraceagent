@@ -250,7 +250,7 @@ Junto: minutos, "o que ele falou" (ditado) e o retorno (data, hora e o que fazer
 | Ação | Botão | Rota |
 |---|---|---|
 | Marcar retorno | **Retorno** | `POST /sales/{id}/next` |
-| Anotação interna | **Guardar anotação** | `POST /sales/{id}/note` |
+| Anotação interna | **Guardar anotação** (o campo fica em cima do Histórico, #312) | `POST /sales/{id}/note` |
 | Editar a ficha | — (pela IA ou API) | `PATCH /sales/{id}`: o corpo **precisa** levar `name` |
 | Mover etapa | — | `POST /sales/{id}/stage` |
 | Marcar perdido | **Perdido** | `POST /sales/{id}/stage` com `etapa: PERDIDO` e `motivo` |
@@ -811,7 +811,8 @@ Stripe. A sessão extra nunca vai para o Stripe.
    > **Desativar o serviço tira aquele kart da página**: em vez de deixar na tela um produto que não dá
    > para comprar, o kart sai da lista. Nenhum serviço ativo: o site e a reserva dizem que a reserva
    > online está fechada e mandam falar com a gente. Dois serviços ativos com o mesmo "Kart do site"
-   > é ambíguo — o site não escolhe por ninguém e o kart também sai; deixe **um** serviço por kart.
+   > é ambíguo — o site não escolhe por ninguém e o kart também sai; deixe **um** serviço por kart (o painel,
+   > desde o #312, não deixa criar, trocar para o kart ocupado nem reativar o segundo).
    > **O cartão do kart no site também é do painel** (#297, dono 16/10: *"alterar o valor, alterar o nome,
    > alterar as coisas ali pelo Command Center"*). No mesmo serviço: **Nome no site** (o que o cartão mostra),
    > **Linha de baixo no site** (ex.: *Ages 7+*), **Aviso no cartão** e **O cliente traz o próprio kart**.
@@ -819,6 +820,16 @@ Stripe. A sessão extra nunca vai para o Stripe.
    > desliga nada. **Kart novo:** no seletor "Kart do site", escolha **Novo kart…** e dê um nome curto
    > (ex.: *Rental 2-stroke Pro*); salvo, ele entra na página do Arrive and Drive com o preço e o depósito
    > daquele serviço. No Lead and Follow, o **Nome no site** e a **Descrição** são o que a caixa da reserva mostra.
+   > **Serviço novo** (#312, dono 16/10: *"um botão de adicionar novo serviço e a gente escolhe em qual página que
+   > esse serviço vai estar"*): **Adicionar serviço**, em cima da lista, pergunta **"Em qual página do site?"** e,
+   > no Arrive and Drive, **Kart (reserva online)** ou **Add-on do dia (Lead and Follow)**; na Academy, **Plano
+   > mensal** ou **Cartão de preço**; no Pro Team e no For Beginners, o cartão de preço; ou **Só na área do
+   > cliente** (sessão sem kart). A tela mostra o que já está na página hoje. No kart, o seletor só deixa escolher
+   > kart sem serviço ativo (os outros aparecem com o serviço de hoje) ou **Novo kart…**; com o add-on já ativo, o
+   > segundo não se cria. Cada serviço da lista diz onde aparece no site hoje (**no site: Arrive and Drive · kart
+   > 4-stroke**) ou, em vermelho, por que está **fora do site**. A trava vale também no card de edição, no
+   > **Reativar** e no servidor (API e Claude): *"O kart … já é vendido por "…": … Desative aquele antes ou escolha
+   > outro kart."* — desative o serviço de hoje daquele kart primeiro.
    > **Teste de checkout de US$ 1:** no serviço do kart, desmarque **Security deposit obrigatório**, ponha preço
    > **1** e depósito **0**; reserve, pague (o Stripe cobra US$ 1,00 de verdade) e **volte o preço, o depósito e
    > marque Obrigatório de novo** logo depois (veja 5.4); o estorno sai pelo Stripe.
@@ -1031,7 +1042,7 @@ toda mudança fica na auditoria.
 | **Opções (tamanho, cor…)** | cada opção com o seu preço, promocional e estoque; com duas escolhas, separe com " / " (ex.: *Blue / 2*). A loja mostra a faixa de preço |
 | **Esconder da loja / Pôr à venda** | esconder **não apaga**: o produto sai da loja, do sitemap e do carrinho, e continua aqui para voltar |
 
-**Produto novo:** no fim da lista, **Novo produto** (nome, preço e categoria) cria o produto **escondido**
+**Produto novo:** em cima da lista (#312), **Novo produto** (nome, preço e categoria) cria o produto **escondido**
 e abre a página dele: complete fotos, texto e frete e toque em **Pôr à venda**. O endereço
 (`/store/p/<nome-do-produto>/`) sai do nome e não muda depois.
 

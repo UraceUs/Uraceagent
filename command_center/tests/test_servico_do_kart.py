@@ -151,6 +151,7 @@ def test_o_site_acha_o_servico_pela_chave_e_nunca_pelo_nome(con):
 def test_a_chave_vem_na_lista_publica_e_so_aceita_kart_de_verdade(con):
     assert {s["site_kart"] for s in sv.para_cliente(con)} == set(CHAVES)
     sid = _de_sessao(con)["4-stroke"]["id"]
+    sv.mudar(con, None, _de_sessao(con)["2-stroke"]["id"], {"active": False})   # #312: um serviço ativo por kart
     assert sv.mudar(con, None, sid, {"site_kart": " 2-STROKE "})["site_kart"][1] == "2-stroke", "aparado, sem maiúscula"
     with pytest.raises(sv.ErroServico):
         sv.mudar(con, None, sid, {"site_kart": "Kart que não existe"})

@@ -11,6 +11,7 @@ import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section, S
 import { fmtDate, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
+import { InserirNoTopo } from '../components/Inserir'
 import { Md } from '../components/Md'
 import { TextoComVoz } from '../components/Voz'
 import { tr } from '../i18n'
@@ -51,13 +52,16 @@ function CorridaModal({ r, pros, onClose, reload }: { r: Race; pros: Client[]; o
     <div className="row wrap">{link && <a className="btn sm" href={link} target="_blank" rel="noopener noreferrer">{tr("Abrir no Asana ↗")}</a>}{can('OPERATOR') && !r.task_id && <button className="btn ghost sm" onClick={tirar}>{tr("tirar do calendário")}</button>}</div>
     <div className="grid g2">
       <Section title={tr("Pilotos nesta corrida")} count={r.invited.length} tight>
-        {r.invited.length === 0 ? <Empty>{tr("Ninguém ainda. Convide abaixo.")}</Empty> : <div>{r.invited.map(i => <div className="att" key={i.id}>
+        {/* #312: convidar fica em cima da lista dos pilotos da corrida; o convite é o próprio card do piloto ★ Pro */}
+        {can('OPERATOR') && <div className="ins-tight"><InserirNoTopo rotulo={tr("Convidar piloto")} titulo={false} sempre dentro>
+          <div className="row wrap"><span className="small muted">{tr("Convidar:")}</span>{pros.filter(p => !r.invited.some(i => i.client_id === p.id)).map(p => <button key={p.id} className="btn sm" disabled={busy === `c${p.id}`} onClick={() => convidar(p.id)}>{busy === `c${p.id}` ? <Spinner /> : `★ ${p.pilot_name || p.name}`}</button>)}{pros.length === 0 && <span className="small muted">{tr("Nenhum ★ Pro Racing Driver ainda (card do cliente → “Tornar Pro”).")}</span>}</div>
+        </InserirNoTopo></div>}
+        {r.invited.length === 0 ? <Empty>{tr("Ninguém ainda. Convide acima.")}</Empty> : <div>{r.invited.map(i => <div className="att" key={i.id}>
           <div className={`lv ${i.status === 'confirmed' || i.status === 'done' ? 'LOW' : i.status === 'declined' ? 'HIGH' : 'MEDIUM'}`} />
           <div className="grow"><div className="row wrap"><Link to={`/clients/${i.client_id}`}><b>★ {i.pilot_name || i.name}</b></Link><Chip tone={statusTone(i.status === 'confirmed' || i.status === 'done' ? 'COMPLETED' : i.status === 'declined' ? 'REJECTED' : 'PENDING')}>{STATUS_LABEL[i.status] || i.status}</Chip>{i.estimate_status && !i.estimate_text && <Chip tone="warn">{tr("prévia:")} {i.estimate_status}</Chip>}</div>
             {i.estimate_text && <details style={{ marginTop: 4 }}><summary className="small">{tr("prévia de custo (IA, não é invoice)")}</summary><div className="previa"><Md text={i.estimate_text} /></div>{i.estimate_cmd && <Link className="small" to={`/ai/${i.estimate_cmd}`}>{tr("ver a conversa")}</Link>}</details>}
             {can('OPERATOR') && <div className="row wrap" style={{ marginTop: 6 }}><select className="input" style={{ width: 200, padding: '4px 8px' }} value={i.status} onChange={e => status(i.id, e.target.value)}>{Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select><button className="btn sm" disabled={busy === `e${i.id}`} onClick={() => estimar(i.id)}>{busy === `e${i.id}` ? <Spinner /> : tr("✦ Prévia de custo")}</button></div>}
           </div></div>)}</div>}
-        {can('OPERATOR') && <div className="row wrap" style={{ padding: '8px 0 0' }}><span className="small muted">{tr("Convidar:")}</span>{pros.filter(p => !r.invited.some(i => i.client_id === p.id)).map(p => <button key={p.id} className="btn sm" disabled={busy === `c${p.id}`} onClick={() => convidar(p.id)}>{busy === `c${p.id}` ? <Spinner /> : `★ ${p.pilot_name || p.name}`}</button>)}{pros.length === 0 && <span className="small muted">{tr("Nenhum ★ Pro Racing Driver ainda (card do cliente → “Tornar Pro”).")}</span>}</div>}
       </Section>
       <Section title={tr("Subtarefas da corrida (modelo do Asana)")} count={subs.length} tight>
         {!r.task_id ? <Empty>{tr("Corrida só no painel: sem tarefa no Asana.")}</Empty> : det.loading && !det.data ? <Loading rows={4} /> : det.error ? <ErrorState error={det.error} retry={det.reload} /> : det.data && !det.data.connected ? <Banner tone="warn">{tr("Sem Asana ao vivo:")} {det.data.reason}</Banner> :
