@@ -17,6 +17,7 @@ import { diaLocal, fmtDate, fmtDateTime, fmtTime, hojeLocal, money } from '../co
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { InserirNoTopo } from '../components/Inserir'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { Picker } from '../components/Unir'
 import { ESTADO_PEDIDO, tomDoPedido } from '../components/pedidoSite'
 import { ConexaoGoogle, useStatusGoogle, type EventoGoogle } from '../components/GoogleAgenda'
@@ -169,18 +170,22 @@ export function Oportunidades() {
         <div className="ch"><span className="truncate">{c.nome}</span><span className="count">{c.total}{c.valor ? ` · ${money(c.valor)}` : ''}</span></div>
         <div className="cards">
           {c.oportunidades.filter(filtra).length === 0 && <div className="small muted" style={{ padding: 8 }}>{tr("vazia")}</div>}
-          {c.oportunidades.filter(filtra).map(o => <button className={`tcard lead${o.next_at && o.next_at < new Date().toISOString() ? ' esperando' : ''}`} key={o.id} onClick={() => nav(`/sales/${o.id}`)}>
-            <div className="row wrap" style={{ gap: 6 }}><b className="truncate">{o.name}</b>{!!o.amount && <span className="mono small">{money(o.amount)}</span>}</div>
-            <div className="row wrap small muted" style={{ gap: 6 }}>
-              <Icon name={CANAL_ICONE(o.source)} size={13} />{o.source || tr("sem origem")}
-              {!!o.calls && <span>· {o.calls} {tr("ligação(ões)")}</span>}
-            </div>
-            {o.service && <div className="small truncate">{o.service}{o.service_date ? ` · ${fmtDate(o.service_date)}` : ''}</div>}
-            {o.next_at && <div className="small" style={{ color: o.next_at < new Date().toISOString() ? 'var(--crit)' : 'var(--warn)' }}>
-              <Icon name="clock" size={12} /> {fmtDateTime(o.next_at)}{o.next_what ? ` · ${o.next_what}` : ''}</div>}
-            {o.stage === 'GANHO' && o.client_id && <div className="small" style={{ color: 'var(--ok)' }}>{tr("virou cliente")}</div>}
-            {o.stage === 'PERDIDO' && o.lost_reason && <div className="small muted truncate">{tr("motivo:")} {o.lost_reason}</div>}
-          </button>)}
+          {/* #313: cada oportunidade no cartão D compacto; o cartão inteiro abre a venda */}
+          {c.oportunidades.filter(filtra).map(o => {
+            const atrasado = !!o.next_at && o.next_at < new Date().toISOString()
+            const [rot, tom]: [string, TomD] = o.stage === 'GANHO' ? [o.client_id ? tr("virou cliente") : ETAPA_PT.GANHO, 'ok'] : o.stage === 'PERDIDO' ? [ETAPA_PT.PERDIDO, 'crit']
+              : o.next_at ? [atrasado ? tr("retorno atrasado") : tr("retorno marcado"), atrasado ? 'crit' : 'warn'] : [ETAPA_PT[o.stage] || o.stage, 'neutral']
+            return <Cartao key={o.id} id={`opp-${o.id}`} nivel={2} mini abrir={`/sales/${o.id}`} estado={rot} tom={tom} avatar={o.name} nome={o.name}
+              sub={[<span key="origem" className="row" style={{ gap: 6, justifyContent: 'center' }}><Icon name={CANAL_ICONE(o.source)} size={13} />{o.source || tr("sem origem")}
+                {!!o.calls && <span>· {o.calls} {tr("ligação(ões)")}</span>}</span>,
+                o.service ? `${o.service}${o.service_date ? ` · ${fmtDate(o.service_date)}` : ''}` : null]}
+              grande={o.amount ? money(o.amount) : null}>
+              {(o.next_at || (o.stage === 'PERDIDO' && o.lost_reason)) && <CdLista>
+                {o.next_at && <CdItem tom={atrasado ? 'crit' : 'warn'} glifo="◷">{fmtDateTime(o.next_at)}{o.next_what ? ` · ${o.next_what}` : ''}</CdItem>}
+                {o.stage === 'PERDIDO' && o.lost_reason && <CdItem tom="neutral">{tr("motivo:")} {o.lost_reason}</CdItem>}
+              </CdLista>}
+            </Cartao>
+          })}
         </div>
       </div>)}
     </div>

@@ -10,6 +10,7 @@ import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section } from '.
 import { usePerguntar } from '../components/Perguntar'
 import { Picker } from '../components/Unir'
 import { InserirNoTopo } from '../components/Inserir'
+import { Cartao as CartaoD, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { ESTADO_PEDIDO, tomDoPedido } from '../components/pedidoSite'
 import type { Client } from '../api/types'
 import { Link } from 'react-router-dom'
@@ -48,6 +49,9 @@ interface Ag { id: number; date: string; period: string; status: string; notes: 
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null
   asana_gid: string | null; asana_error: string | null }
 
+const TIPO_SERVICO: Record<string, string> = { session: tr("Sessão avulsa"), plan: tr("Plano mensal (Academy, Boost)"), addon: tr("Add-on do dia de treino (Lead and Follow)") }
+/** #313: o tom da pílula do cartão D (o accent dos chips vira o azul da informação) */
+const tomD = (t: Tom): TomD => t === 'accent' ? 'info' : t
 const PER: Record<string, string> = { manha: tr("Manhã"), tarde: tr("Tarde"), dia: tr("Dia todo") }
 const ST: Record<string, [string, Tom]> = { pendente: [tr("esperando confirmação"), 'warn'], confirmada: ['confirmada', 'ok'], recusada: ['recusada', 'crit'], cancelada: ['cancelada', 'neutral'] }
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -85,44 +89,50 @@ function Agendamentos() {
     {l.error && <ErrorState error={l.error} retry={l.reload} />}
     {l.loading && !l.data && <Loading />}
     {l.data && (!l.data.agendamentos.length ? <Empty title={filtro === 'pendente' ? tr("Nenhum pedido esperando") : tr("Nada aqui")}>{tr("Os pedidos feitos na área do cliente aparecem aqui.")}</Empty>
-      : <div className="card"><div className="tbl">{l.data.agendamentos.map(a => {
+      : <div className="cd-grade">{l.data.agendamentos.map(a => {
         const [rot, tom]: [string, Tom] = a.status === 'pendente' && a.accepted_at ? ['aceita · esperando pagamento e waiver', 'info'] : ST[a.status] || [a.status, 'neutral']
         const anos = idade(a.driver_birth)
-        return <div className="tr" key={a.id}>
-          <div className="grow" style={{ minWidth: 0 }}>
-            <b>{semanaDe(a.date)} {dbr(a.date)} · {PER[a.period]}</b>
-            <div className="small">{a.driver || a.account_name}{anos != null ? tr(" ({0} anos)", anos) : ''}{a.driver && a.driver !== a.account_name ? tr(" · responsável {0}", a.account_name) : ''}</div>
-            <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{a.account_email}{a.account_phone ? ` · ${a.account_phone}` : ''}{a.client_id ? '' : tr(" · driver ainda sem card")}</div>
-            <div className="small">{a.client_id && <><Link to={`/clients/${a.client_id}`}>{tr("Client ID")} {a.client_id}</Link> · </>}
-              {a.asana_gid ? <a href={`https://app.asana.com/0/1205450093098920/${a.asana_gid}/f`} target="_blank" rel="noreferrer">{tr("tarefa no Asana ↗")}</a>
-                : a.asana_error ? <span title={a.asana_error}>{tr("Asana: tenta de novo em até 15 min")}</span> : <span className="muted">{tr("indo para o Asana…")}</span>}</div>
-            {a.service_name && <div className="small">{a.service_name}{a.coverage ? '' : a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
+        const quem = a.driver || a.account_name
+        const pg = a.cobranca?.pagamento, wv = a.cobranca?.waiver
+        const campanha = a.utm ? (() => { try { const u = JSON.parse(a.utm) as Record<string, string>; return [u.utm_source, u.utm_campaign].filter(Boolean).join(' / ') || Object.keys(u).join(', ') } catch { return '' } })() : ''
+        return <CartaoD key={a.id} id={`ag-${a.id}`} nivel={2} estado={rot} tom={tomD(tom)} avatar={quem} nome={quem}
+          sub={[anos != null ? tr("{0} anos", anos) : null,
+            a.driver && a.driver !== a.account_name ? <>{tr("Responsável")}: <b>{a.account_name}</b></> : null,
+            a.service_name ? `${a.service_name}${a.coverage ? '' : a.price != null ? ` · ${usd(a.price)}` : ''}` : null]}
+          grande={`${semanaDe(a.date)} ${dbr(a.date)}`} detalhe={PER[a.period]}
+          progresso={a.status === 'pendente' && a.cobranca ? { rotulo: tr("Pronto para confirmar"), total: 3,
+            feito: [a.cobranca.aceita, pg === 'pago' || pg === 'contrato', wv === 'ok'].filter(Boolean).length } : null}
+          acoes={a.status === 'pendente' ? <>
+            <button className="btn danger" onClick={() => decidir(a, 'recusar')}>{tr("Recusar")}</button>
+            {!a.accepted_at && <button className="btn primary" onClick={() => decidir(a, 'aceitar')}
+              title={a.group_id ? tr("Aceita o pedido inteiro: uma invoice com as sessões extras e uma waiver") : tr("Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar")}>{tr("Aceitar")}</button>}
+            {can('MANAGER') && <button className="btn" onClick={() => decidir(a, 'confirmar')} title={tr("Confirmar sem esperar pagamento e waiver")}>{tr("Confirmar mesmo assim")}</button>}
+          </> : a.status === 'confirmada' && a.date >= hojeFL() ? <button className="btn danger" onClick={() => decidir(a, 'cancelar')}>{tr("Cancelar")}</button> : null}>
+          <CdLista>
+            {a.cobranca && <CdItem tom={pg === 'pago' || pg === 'contrato' ? 'ok' : pg === 'erro' ? 'crit' : 'warn'}>
+              {pg === 'contrato' ? tr("sessão do contrato") : a.charge_kind === 'stripe' ? tr("pago no site · pedido #{0}", a.store_order_id ?? '') : pg === 'pago' ? tr("pago {0}", a.invoice_doc || '') : pg === 'enviada' ? tr("invoice {0} enviada", a.invoice_doc || '') : pg === 'erro' ? tr("invoice não saiu") : tr("invoice: tentando")}</CdItem>}
+            {a.cobranca && <CdItem tom={wv === 'ok' ? 'ok' : wv === 'erro' ? 'crit' : 'warn'}>
+              {wv === 'ok' ? tr("waiver em dia") : wv === 'enviada' ? tr("waiver enviada") : wv === 'erro' ? tr("waiver não saiu") : tr("waiver: assina na área do cliente")}</CdItem>}
             {/* #314: a sessão do aluno recorrente — do plano (sem custo) ou extra (invoice); o contador é só da equipe */}
-            {a.coverage ? <div className="small"><Chip tone={a.coverage === 'extra' ? 'warn' : 'info'}>{a.coverage === 'extra'
-              ? tr("extra {0}", a.price != null ? usd(a.price) : tr("sem valor")) + (a.invoice_doc ? tr(" · invoice {0}", a.invoice_doc) : '')
-              : tr("do plano")}</Chip>{a.group_id ? <> <Chip tone="neutral">{tr("pedido de vários dias #{0}", a.group_id)}</Chip></> : null}{a.contrato && <span className="muted"> · {tr("pacote: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</span>}</div>
-              : a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
-              ? tr("acima do contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)
-              : tr("contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</Chip></div>}
-            {a.notes && <div className="small">“{a.notes}”</div>}
-            {a.cobranca && <div className="row wrap small" style={{ gap: 6 }}>
-              <Chip tone={a.cobranca.pagamento === 'pago' || a.cobranca.pagamento === 'contrato' ? 'ok' : a.cobranca.pagamento === 'erro' ? 'crit' : 'warn'}>
-                {a.cobranca.pagamento === 'contrato' ? tr("sessão do contrato") : a.charge_kind === 'stripe' ? tr("pago no site · pedido #{0}", a.store_order_id ?? '') : a.cobranca.pagamento === 'pago' ? tr("pago {0}", a.invoice_doc || '') : a.cobranca.pagamento === 'enviada' ? tr("invoice {0} enviada", a.invoice_doc || '') : a.cobranca.pagamento === 'erro' ? tr("invoice não saiu") : tr("invoice: tentando")}</Chip>
-              <Chip tone={a.cobranca.waiver === 'ok' ? 'ok' : a.cobranca.waiver === 'erro' ? 'crit' : 'warn'}>
-                {a.cobranca.waiver === 'ok' ? tr("waiver em dia") : a.cobranca.waiver === 'enviada' ? tr("waiver enviada") : a.cobranca.waiver === 'erro' ? tr("waiver não saiu") : tr("waiver: assina na área do cliente")}</Chip></div>}
-            {[a.charge_error, a.waiver_error, a.reminder_error].filter(Boolean).map(e => <div key={e} className="small" style={{ color: 'var(--crit)' }}>{e}</div>)}
-            {(a.origin === 'site' || a.card_note || a.utm) && <div className="small muted">{a.origin === 'site' ? tr("pelo site") : tr("pela área do cliente")}
-              {a.utm && (() => { try { const u = JSON.parse(a.utm) as Record<string, string>; return ` · campanha: ${[u.utm_source, u.utm_campaign].filter(Boolean).join(' / ') || Object.keys(u).join(', ')}` } catch { return '' } })()}
-              {a.card_note && <> · {a.card_note}</>}</div>}
-          </div>
-          <Chip tone={tom}>{rot}</Chip>
-          {a.status === 'pendente' && <>{!a.accepted_at && <button className="btn sm primary" onClick={() => decidir(a, 'aceitar')}
-            title={a.group_id ? tr("Aceita o pedido inteiro: uma invoice com as sessões extras e uma waiver") : tr("Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar")}>{tr("Aceitar")}</button>}
-            {can('MANAGER') && <button className="btn sm ghost" onClick={() => decidir(a, 'confirmar')} title={tr("Confirmar sem esperar pagamento e waiver")}>{tr("Confirmar mesmo assim")}</button>}
-            <button className="btn sm ghost" onClick={() => decidir(a, 'recusar')}>{tr("Recusar")}</button></>}
-          {a.status === 'confirmada' && a.date >= hojeFL() && <button className="btn sm ghost" onClick={() => decidir(a, 'cancelar')}>{tr("Cancelar")}</button>}
-        </div>
-      })}</div></div>)}
+            {a.coverage ? <CdItem tom={a.coverage === 'extra' ? 'warn' : 'info'} valor={a.contrato ? tr("pacote: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes) : null}>
+              {a.coverage === 'extra' ? tr("extra {0}", a.price != null ? usd(a.price) : tr("sem valor")) + (a.invoice_doc ? tr(" · invoice {0}", a.invoice_doc) : '') : tr("do plano")}
+              {a.group_id ? <> · {tr("pedido de vários dias #{0}", a.group_id)}</> : null}</CdItem>
+              : a.contrato && <CdItem tom={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
+                ? tr("acima do contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)
+                : tr("contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</CdItem>}
+            <CdItem tom={a.client_id ? 'ok' : 'warn'} valor={a.client_id ? <Link to={`/clients/${a.client_id}`}>{tr("Client ID")} {a.client_id}</Link> : null}>
+              {a.client_id ? tr("Card do cliente") : tr("driver ainda sem card")}</CdItem>
+            <CdItem tom={a.asana_gid ? 'ok' : a.asana_error ? 'warn' : 'neutral'}
+              valor={a.asana_gid ? <a href={`https://app.asana.com/0/1205450093098920/${a.asana_gid}/f`} target="_blank" rel="noreferrer">{tr("tarefa no Asana ↗")}</a> : null}>
+              {a.asana_gid ? tr("Asana") : a.asana_error ? <span title={a.asana_error}>{tr("Asana: tenta de novo em até 15 min")}</span> : tr("indo para o Asana…")}</CdItem>
+            <CdItem tom="info" glifo="@" valor={a.account_phone}><span className="cd-mono">{a.account_email}</span></CdItem>
+            {a.notes && <CdItem tom="info" glifo="“">“{a.notes}”</CdItem>}
+            {[a.charge_error, a.waiver_error, a.reminder_error].filter(Boolean).map(e => <CdItem key={e} tom="crit"><span className="cd-erro">{e}</span></CdItem>)}
+            {(a.origin === 'site' || a.card_note || a.utm) && <CdItem tom="neutral" glifo="↗" valor={campanha ? tr("campanha: {0}", campanha) : null}>
+              {a.origin === 'site' ? tr("pelo site") : tr("pela área do cliente")}{a.card_note && <> · {a.card_note}</>}</CdItem>}
+          </CdLista>
+        </CartaoD>
+      })}</div>)}
   </>
 }
 
@@ -479,12 +489,19 @@ function Servicos() {
     {sugestoes}
     <Section title={tr("Serviços")} count={l.data.servicos.length}>
       {!l.data.servicos.length ? <Empty title={tr("Nenhum serviço ainda")}>{tr("Use \"Adicionar serviço\", em cima, para cadastrar o que o cliente pode marcar e o preço de cada um.")}</Empty>
-        : <div className="stack" style={{ gap: 10 }}>{l.data.servicos.map(sv => {
+        : <div className="cd-grade">{l.data.servicos.map(sv => {
           const e = edit[sv.id] || {}
           // #312 (revisão): reativar não pode deixar dois ativos com a mesma chave (o kart ou a caixa do add-on sairia do site)
           const conflito = sv.active ? [] : outrosComChave(sv, sv.site_kart, sv.kind ?? 'session')
-          return <div key={sv.id} className="card card-b">
-            <div className="site-servico">
+          const n = sv.no_site?.onde
+          const [rot, tom]: [string, TomD] = !sv.active || n === 'desativado' ? [tr("desativado"), 'neutral'] : n === 'kart' || n === 'addon' || n === 'plano' ? [tr("no site"), 'ok']
+            : n === 'area' ? [tr("só na área do cliente"), 'info'] : n === 'repetido' ? [tr("fora do site"), 'crit'] : n === 'nenhum' ? [tr("fora do site"), 'warn'] : [tr("ativo"), 'ok']
+          return <CartaoD key={sv.id} id={`servico-${sv.id}`} estado={rot} tom={tom} nome={sv.name}
+            sub={[TIPO_SERVICO[sv.kind ?? 'session']]} grande={usd(sv.price)} detalhe={sv.kind === 'plan' ? tr("por mês") : null}
+            acoes={gerente ? <>
+              <button className="btn primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
+              <button className="btn" disabled={!!conflito.length} onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></> : null}>
+            <div className="cd-form"><div className="site-servico">
               <label className="fld"><span>{tr("Nome (o cliente lê, em inglês)")}</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
               <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
               <label className="fld"><span>{tr("Tipo")}</span><select value={e.kind ?? sv.kind ?? 'session'} disabled={!gerente} onChange={x => muda(sv.id, { kind: x.target.value as 'session' | 'plan' | 'addon' })}>
@@ -527,18 +544,15 @@ function Servicos() {
                     onChange={x => muda(sv.id, { site_note: x.target.value })} /></label>
                   <label className="check" style={{ minHeight: 40 }}><input type="checkbox" checked={e.own_kart ?? !!sv.own_kart} disabled={!gerente}
                     onChange={x => muda(sv.id, { own_kart: x.target.checked })} /> {tr("O cliente traz o próprio kart")}</label></>}</>}
-              {gerente && <div className="row" style={{ gap: 6 }}>
-                <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
-                <button className="btn sm ghost" disabled={!!conflito.length} onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button>
-                {conflito.length > 0 && <span className="small" style={{ color: 'var(--warn)' }}>{tr("Para reativar, desative antes \"{0}\": ele já usa a chave {1}.", conflito.map(o => o.name).join(', '), sv.site_kart || '')}</span>}</div>}
-            </div>
-            <div className="small muted" style={{ marginTop: 6 }}><OndeNoSite n={sv.no_site} paginas={l.data!.paginas} />
+            </div></div>
+            {gerente && conflito.length > 0 && <p className="cd-aviso warn">{tr("Para reativar, desative antes \"{0}\": ele já usa a chave {1}.", conflito.map(o => o.name).join(', '), sv.site_kart || '')}</p>}
+            <div className="cd-aviso small muted"><OndeNoSite n={sv.no_site} paginas={l.data!.paginas} />
               {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}
               {sv.kind === 'plan' && <> · <span>{tr("sessão extra")} {sv.extra_price != null ? usd(sv.extra_price) : tr("= mensal ÷ sessões")}</span></>}
               {(sv.kind ?? 'session') === 'session' && (sv.deposit_required ? <> · <Chip tone="ok">{tr("depósito obrigatório")}</Chip></>
                 : !(sv.deposit ?? 0) ? <> · <Chip tone="warn">{tr("sem security deposit")}</Chip></> : null)}
               {sv.qbo_item_id ? <> · <span>{tr("item do QuickBooks")}</span></> : sv.invoice_text ? <> · <span>{tr("texto personalizado na invoice")}</span></> : <> · <span>{tr("sem item: o site cobra pelo Stripe; a invoice da equipe pede a linha")}</span></>}</div>
-          </div>
+          </CartaoD>
         })}</div>}
     </Section>
   </div>
@@ -582,22 +596,22 @@ function Cartoes() {
       const lista = cartoes.filter(c => c.page === pg)
       return <Section key={pg} title={NOMES_CARTAO[pg] || pg} count={lista.filter(c => c.active).length}
         right={<a className="btn sm ghost" href={paginas[pg]} target="_blank" rel="noreferrer">{tr("Ver no site ↗")}</a>}>
-        <div className="stack" style={{ gap: 10 }}>{lista.map(c => {
+        <div className="cd-grade">{lista.map(c => {
           const e = edit[c.id] || {}
-          return <div key={c.id} className="card card-b" data-cartao={c.id}>
-            <div className="site-servico">
+          return <CartaoD key={c.id} id={`cartao-${c.id}`} dados={{ 'data-cartao': c.id }} estado={c.active ? tr("na página") : tr("escondido")} tom={c.active ? 'ok' : 'neutral'}
+            nome={c.title} sub={[c.grp, c.subtitle]} grande={c.price || null} detalhe={c.per}
+            acoes={gerente ? <>
+              <button className="btn primary" disabled={!edit[c.id]} onClick={() => salvar(c)}>{tr("Salvar")}</button>
+              <button className="btn" onClick={() => salvar(c, { active: c.active ? 0 : 1 })}>{c.active ? tr("Esconder") : tr("Mostrar")}</button>
+              <button className="btn" aria-label={tr("Subir")} disabled={lista.indexOf(c) === 0} onClick={() => mover(c, lista, -1)}>↑</button>
+              <button className="btn" aria-label={tr("Descer")} disabled={lista.indexOf(c) === lista.length - 1} onClick={() => mover(c, lista, 1)}>↓</button></> : null}>
+            <div className="cd-form"><div className="site-servico">
               {CAMPOS_CARTAO.map(([k, rot, dica]) => <label key={k} className="fld"><span>{tr(rot)} {dica && <i>{tr(dica)}</i>}</span>
                 <input value={String(e[k] ?? c[k] ?? '')} disabled={!gerente} onChange={x => muda(c.id, { [k]: x.target.value })} /></label>)}
               <label className="fld" style={{ gridColumn: '1 / -1' }}><span>{tr("Texto")}</span>
                 <textarea rows={3} value={e.body ?? c.body ?? ''} disabled={!gerente} onChange={x => muda(c.id, { body: x.target.value })} /></label>
-              {gerente && <div className="row wrap" style={{ gap: 6 }}>
-                <button className="btn sm primary" disabled={!edit[c.id]} onClick={() => salvar(c)}>{tr("Salvar")}</button>
-                <button className="btn sm ghost" onClick={() => salvar(c, { active: c.active ? 0 : 1 })}>{c.active ? tr("Esconder") : tr("Mostrar")}</button>
-                <button className="btn sm ghost" aria-label={tr("Subir")} disabled={lista.indexOf(c) === 0} onClick={() => mover(c, lista, -1)}>↑</button>
-                <button className="btn sm ghost" aria-label={tr("Descer")} disabled={lista.indexOf(c) === lista.length - 1} onClick={() => mover(c, lista, 1)}>↓</button></div>}
-            </div>
-            {!c.active && <div className="small muted" style={{ marginTop: 6 }}><Chip tone="neutral">{tr("escondido")}</Chip></div>}
-          </div>
+            </div></div>
+          </CartaoD>
         })}</div>
       </Section>
     })}
@@ -659,25 +673,25 @@ function Pedidos() {
     {l.error && <ErrorState error={l.error} retry={l.reload} />}
     {l.loading && !l.data && <Loading />}
     {l.data && (!l.data.pedidos.length ? <Empty title={tr("Nenhum pedido aqui")}>{tr("Os pedidos do carrinho e da loja do site aparecem aqui, em todo estado do pagamento.")}</Empty>
-      : <div className="stack" style={{ gap: 10 }}>{l.data.pedidos.map(p => <div className="card card-b stack" key={p.id} style={{ gap: 6 }}>
-        <div className="row wrap" style={{ gap: 8 }}>
-          <h2 className="h3 grow" style={{ margin: 0, fontSize: 15, minWidth: 0, overflowWrap: 'anywhere' }}>{tr("Pedido #{0}", p.id)} · {p.nome || p.email || tr("sem nome ainda")}</h2>
-          <Chip tone={tomDoPedido(p.status)}>{ESTADO_PEDIDO[p.status] || p.status}</Chip>
-          <b className="mono">{usd(p.pago ?? p.total)}</b></div>
-        <div className="small" style={{ overflowWrap: 'anywhere' }}>{p.resumo}</div>
-        <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{fmtDateTime(p.criado_em)}{p.email ? ` · ${p.email}` : ''}{p.telefone ? ` · ${p.telefone}` : ''}{p.refeito_de ? tr(" · refeito do pedido #{0}", p.refeito_de) : ''}{p.idioma === 'pt' ? tr(" · comprou em português") : ''}</div>
-        {p.status !== 'aberto' && <div className="small">{p.aviso_em ? (p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente."))
-          : p.aviso_erro ? <span style={{ color: 'var(--crit)' }}>{tr("O aviso não saiu: {0}", p.aviso_erro)}</span> : tr("Aviso por e-mail: saindo.")}</div>}
-        {p.atencao && <div className="small" style={{ color: 'var(--crit)', overflowWrap: 'anywhere' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
-        {/* #309: o que a venda tirou do estoque, para separar exatamente aquilo (no kart usado e no motor, o serial) */}
-        {(p.estoque || []).map((x, i) => <div key={i} className="small" style={{ overflowWrap: 'anywhere' }}><b>{tr("Estoque:")}</b> {x.linha ? `${x.linha}: ` : ''}{x.nota}</div>)}
-        <div className="row wrap" style={{ gap: 8 }}>
-          {p.sem_estoque && <button className="btn sm" disabled={resolvendo === p.id} onClick={() => resolvido(p)}
+      : <div className="cd-grade">{l.data.pedidos.map(p => <CartaoD key={p.id} id={`pedido-${p.id}`} nivel={2}
+        estado={ESTADO_PEDIDO[p.status] || p.status} tom={tomDoPedido(p.status) as TomD} avatar={p.nome || p.email || '#'} nome={p.nome || p.email || tr("sem nome ainda")}
+        sub={[p.resumo, <span key="contato" className="cd-mono">{[p.email, p.telefone].filter(Boolean).join(' · ')}</span>,
+          p.refeito_de ? tr("refeito do pedido #{0}", p.refeito_de) : null, p.idioma === 'pt' ? tr("comprou em português") : null]}
+        grande={usd(p.pago ?? p.total)} detalhe={`${tr("Pedido #{0}", p.id)} · ${fmtDateTime(p.criado_em)}`}
+        acoes={<>
+          {p.sem_estoque && <button className="btn primary" disabled={resolvendo === p.id} onClick={() => resolvido(p)}
             aria-label={tr("Resolvido: sem estoque do pedido #{0}", p.id)}>{tr("Resolvido")}</button>}
-          <a className="btn sm ghost" href={p.link} target="_blank" rel="noreferrer">{tr("Página do pedido ↗")}</a>
-          <button className="btn sm ghost" onClick={() => copiar(p)}>{tr("Copiar o link")}</button>
-          {p.opp_id && <Link className="btn sm ghost" to={`/sales/${p.opp_id}`}>{tr("Venda")}</Link>}</div>
-      </div>)}</div>)}
+          <a className="btn" href={p.link} target="_blank" rel="noreferrer">{tr("Página do pedido ↗")}</a>
+          <button className="btn" onClick={() => copiar(p)}>{tr("Copiar o link")}</button>
+          {p.opp_id && <Link className="btn" to={`/sales/${p.opp_id}`}>{tr("Venda")}</Link>}</>}>
+        {(p.status !== 'aberto' || p.atencao || (p.estoque || []).length > 0) && <CdLista>
+          {p.status !== 'aberto' && (p.aviso_em ? <CdItem tom={p.aviso_para ? 'ok' : 'warn'}>{p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente.")}</CdItem>
+            : p.aviso_erro ? <CdItem tom="crit"><span className="cd-erro">{tr("O aviso não saiu: {0}", p.aviso_erro)}</span></CdItem> : <CdItem tom="neutral" glifo="…">{tr("Aviso por e-mail: saindo.")}</CdItem>)}
+          {p.atencao && <CdItem tom="crit"><span className="cd-erro"><b>{tr("Resolver:")}</b> {p.atencao}</span></CdItem>}
+          {/* #309: o que a venda tirou do estoque, para separar exatamente aquilo (no kart usado e no motor, o serial) */}
+          {(p.estoque || []).map((x, i) => <CdItem key={i} tom="info"><b>{tr("Estoque:")}</b> {x.linha ? `${x.linha}: ` : ''}{x.nota}</CdItem>)}
+        </CdLista>}
+      </CartaoD>)}</div>)}
     {l.data && l.data.total > POR_PAGINA_PEDIDOS && <div className="row" style={{ gap: 8, marginTop: 10 }}>
       <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA_PEDIDOS))}>{tr("Anteriores")}</button>
       <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA_PEDIDOS, l.data.total)} {tr("de")} {l.data.total}</span>
@@ -727,39 +741,38 @@ function Contas() {
     {l.error && <ErrorState error={l.error} retry={l.reload} />}
     {l.loading && !l.data && <Loading />}
     {l.data && (!l.data.contas.length ? <Empty title={filtro === 'sem_vinculo' ? tr("Nenhuma conta esperando vínculo") : tr("Nada aqui")}>{tr("As contas criadas na área do cliente aparecem aqui.")}</Empty>
-      : <div className="stack" style={{ gap: 10 }}>{l.data.contas.map(c => <div className="card card-b stack" key={c.id} style={{ gap: 8 }}>
-        <div className="row wrap"><div className="grow" style={{ minWidth: 0 }}><b>{c.name}</b>
-          <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{c.email}{c.phone ? ` · ${c.phone}` : ''}{c.city ? ` · ${c.city}${c.state ? `/${c.state}` : ''}` : ''}</div>
-          <div className="small">{c.pilotos.length ? tr("Pilotos: {0}", c.pilotos.join(', ')) : tr("Nenhum piloto ainda")}</div>
-          {c.welcome_error && <div className="small" style={{ color: 'var(--crit)', overflowWrap: 'anywhere' }}>{tr("O e-mail de boas-vindas não saiu ({0}). O sistema manda de novo, sem a senha; se a pessoa não achar, ela pede uma nova em Forgot password.", c.welcome_error)}</div>}</div>
-          {c.client_id ? <Chip tone="ok">{tr("vinculada")}</Chip> : <Chip tone="warn">{tr("sem vínculo")}</Chip>}</div>
-        {c.client_id ? <div className="row wrap"><span className="small grow">{tr("Cliente:")} <Link to={`/clients/${c.client_id}`}>{c.client_pilot || c.client_name}</Link>{c.linked_by_name ? tr(" · por {0}", c.linked_by_name) : ''}</span>
-          {can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincular(c)}>{tr("Desvincular")}</button>}</div>
-          : <>
-            {c.sugestao ? <div className="row wrap" style={{ gap: 8 }}><span className="small grow">{tr("✦ Sugestão:")} <Link to={`/clients/${c.sugestao.client_id}`}><b>{c.sugestao.pilot_name || c.sugestao.name}</b></Link>
-              {c.sugestao.pilot_name && c.sugestao.pilot_name !== c.sugestao.name ? tr(" (resp. {0})", c.sugestao.name) : ''} · {c.sugestao.motivo}</span>
-              <button className="btn sm primary" onClick={() => vincular(c, c.sugestao!.client_id, c.sugestao!.pilot_name || c.sugestao!.name)}>{tr("Vincular a este")}</button></div>
-              : <div className="row wrap" style={{ gap: 8 }}><span className="small muted grow">{tr("Nenhum cliente parecido no site interno (pelo e-mail, telefone, nome do responsável ou do piloto). Se é cliente novo, crie o card; se já existe, escolha abaixo.")}</span>
-                <button className="btn sm primary" onClick={() => criar(c)}>{tr("Criar cliente")}</button></div>}
-            <div className="row wrap" style={{ alignItems: 'flex-end', gap: 8 }}><div className="grow" style={{ minWidth: 220 }}>
-              <Picker label={tr("Outro cliente")} value={outro[c.id] || null} onPick={x => setOutro(o => ({ ...o, [c.id]: x }))} /></div>
-              {outro[c.id] && <button className="btn sm" onClick={() => vincular(c, outro[c.id]!.id, outro[c.id]!.pilot_name || outro[c.id]!.name)}>{tr("Vincular")}</button>}</div>
-          </>}
-        {c.client_id && c.drivers_list.length > 0 && <div className="stack" style={{ gap: 6 }}>
-          <h3 className="h3" style={{ fontSize: 14 }}>{tr("Drivers · cada um com o seu card")}</h3>
-          {c.drivers_list.map(p => <div key={p.id} className="row wrap" style={{ gap: 8, padding: '6px 0', borderTop: '1px solid var(--glass-line)' }}>
-            <span className="grow small" style={{ minWidth: 0 }}><b>{p.name}</b>{p.birth_date ? tr(" · {0} anos", idade(p.birth_date)) : ''}
+      : <div className="cd-grade">{l.data.contas.map(c => <CartaoD key={c.id} id={`conta-${c.id}`} nivel={2}
+        estado={c.client_id ? tr("vinculada") : tr("sem vínculo")} tom={c.client_id ? 'ok' : 'warn'} avatar={c.name} avatarTom="azul" nome={c.name}
+        sub={[<span key="email" className="cd-mono">{c.email}</span>, [c.phone, c.city ? `${c.city}${c.state ? `/${c.state}` : ''}` : null].filter(Boolean).join(' · ')]}
+        acoes={c.client_id ? (can('MANAGER') ? <button className="btn" onClick={() => desvincular(c)}>{tr("Desvincular")}</button> : null) : <>
+          {c.sugestao ? <button className="btn primary" onClick={() => vincular(c, c.sugestao!.client_id, c.sugestao!.pilot_name || c.sugestao!.name)}>{tr("Vincular a este")}</button>
+            : <button className="btn primary" onClick={() => criar(c)}>{tr("Criar cliente")}</button>}
+          {outro[c.id] && <button className="btn" onClick={() => vincular(c, outro[c.id]!.id, outro[c.id]!.pilot_name || outro[c.id]!.name)}>{tr("Vincular")}</button>}</>}>
+        <CdLista>
+          <CdItem tom={c.pilotos.length ? 'ok' : 'warn'} valor={c.pilotos.length ? c.pilotos.join(', ') : null}>{c.pilotos.length ? tr("Pilotos") : tr("Nenhum piloto ainda")}</CdItem>
+          {c.welcome_error && <CdItem tom="crit"><span className="cd-erro">{tr("O e-mail de boas-vindas não saiu ({0}). O sistema manda de novo, sem a senha; se a pessoa não achar, ela pede uma nova em Forgot password.", c.welcome_error)}</span></CdItem>}
+          {c.client_id ? <CdItem tom="ok" valor={c.linked_by_name ? tr("por {0}", c.linked_by_name) : null}>{tr("Cliente:")} <Link to={`/clients/${c.client_id}`}>{c.client_pilot || c.client_name}</Link></CdItem>
+            : c.sugestao ? <CdItem tom="warn" glifo="✦">{tr("✦ Sugestão:")} <Link to={`/clients/${c.sugestao.client_id}`}><b>{c.sugestao.pilot_name || c.sugestao.name}</b></Link>
+              {c.sugestao.pilot_name && c.sugestao.pilot_name !== c.sugestao.name ? tr(" (resp. {0})", c.sugestao.name) : ''} · {c.sugestao.motivo}</CdItem>
+            : <CdItem tom="info">{tr("Nenhum cliente parecido no site interno (pelo e-mail, telefone, nome do responsável ou do piloto). Se é cliente novo, crie o card; se já existe, escolha abaixo.")}</CdItem>}
+        </CdLista>
+        {!c.client_id && <div className="cd-form"><Picker label={tr("Outro cliente")} value={outro[c.id] || null} onPick={x => setOutro(o => ({ ...o, [c.id]: x }))} /></div>}
+        {c.client_id && c.drivers_list.length > 0 && <div className="cd-form">
+          <h3 className="h3 cd-sec">{tr("Drivers · cada um com o seu card")}</h3>
+          <ul className="cd-lista">{c.drivers_list.map(p => <li key={p.id} className="cd-li-forma">
+            <i className={`cd-ic ${p.client_id ? 'ok' : p.sugestao ? 'warn' : 'neutral'}`} aria-hidden="true">{p.client_id ? '✓' : p.sugestao ? '✦' : '·'}</i>
+            <span className="grow"><b>{p.name}</b>{p.birth_date ? tr(" · {0} anos", idade(p.birth_date)) : ''}
               {p.client_id ? <> · <Link to={`/clients/${p.client_id}`}>{tr("Client ID")} {p.client_id}</Link></>
                 : p.sugestao ? <> {tr("· ✦ sugestão:")} <Link to={`/clients/${p.sugestao.client_id}`}>{p.sugestao.pilot_name || p.sugestao.name} {tr("(Client ID")} {p.sugestao.client_id})</Link> · {p.sugestao.motivo}</>
                 : <span className="muted"> {tr("· sem card")}</span>}</span>
             {p.client_id ? can('MANAGER') && <button className="btn sm ghost" onClick={() => desvincularDriver(p)}>{tr("Desvincular")}</button>
               : <>{p.sugestao && <button className="btn sm primary" onClick={() => vincularDriver(p, p.sugestao!.client_id, p.sugestao!.pilot_name || p.sugestao!.name)}>{tr("Vincular a este")}</button>}
                 {!p.sugestao && <button className="btn sm primary" onClick={() => criarDriver(c, p)}>{tr("Criar card")}</button>}
-                <div style={{ minWidth: 200 }}><Picker label={tr("Outro card para {0}", p.name)} value={outro[-p.id] || null} onPick={x => setOutro(o => ({ ...o, [-p.id]: x }))} /></div>
+                <div className="cd-li-picker"><Picker label={tr("Outro card para {0}", p.name)} value={outro[-p.id] || null} onPick={x => setOutro(o => ({ ...o, [-p.id]: x }))} /></div>
                 {outro[-p.id] && <button className="btn sm" onClick={() => vincularDriver(p, outro[-p.id]!.id, outro[-p.id]!.pilot_name || outro[-p.id]!.name)}>{tr("Vincular")}</button>}</>}
-          </div>)}
+          </li>)}</ul>
         </div>}
-      </div>)}</div>)}
+      </CartaoD>)}</div>)}
   </>
 }
 
@@ -841,13 +854,13 @@ function VersoesDoModelo() {
   const v = l.data
   return <Section title={tr("Versões dos modelos")} count={v.total}>
     {!v.itens.length ? <Empty title={tr("Nenhuma versão ainda")}>{tr("Cada importação do DocuSign com um texto novo vira uma versão. A anterior continua aqui.")}</Empty>
-      : <div className="card"><div className="tbl">{v.itens.map(x => <div className="tr" key={x.id}>
+      : <div className="tbl">{v.itens.map(x => <div className="tr" key={x.id}>
         <span className="grow"><b>{x.kind === 'adult' ? tr("Adult") : tr("Parental (menor)")} · {tr("versão {0}", x.number)}</b> {x.current && <Chip tone="ok">{tr("atual")}</Chip>}
           <div className="small muted">{x.name} · {x.pages} {tr("pág. ·")} <span className="mono" title={x.sha256}>{x.sha256.slice(0, 12)}</span></div>
           <div className="small muted">{tr("importada em {0}", fmtDateTime(x.imported_at))}{x.imported_by_name ? tr(" por {0}", x.imported_by_name) : ''} · {tr("{0} assinatura(s)", x.signatures)}</div>
           {x.kind === 'parental' && <div className="small"><ChipDoAviso c={x.notice_744} /> <span className="muted">{tr("(na importação)")}</span></div>}</span>
         <a className="btn sm" href={`/ops/api/site/waiver-nativa/versoes/${x.id}/pdf`} target="_blank" rel="noreferrer">{tr("PDF")}</a>
-      </div>)}</div></div>}
+      </div>)}</div>}
     {v.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
       <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>
       <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, v.total)} {tr("de")} {v.total}</span>
@@ -891,7 +904,7 @@ function WaiverNativa() {
   const prontos = d.modelos.every(m => m.sha256)
   return <div className="stack" style={{ gap: 18 }}>
     <Section title={tr("Assinatura na área do cliente")} right={d.ligada ? <Chip tone="ok">{tr("ligada")}</Chip> : <Chip tone="neutral">{tr("desligada")}</Chip>}>
-      <div className="card card-b stack" style={{ gap: 10 }}>
+      <div className="stack" style={{ gap: 10 }}>
         <p className="small" style={{ margin: 0 }}>{tr("O responsável assina pela área do cliente: lê o documento, marca as duas caixas, digita o nome e desenha a assinatura. Menor de 18 assina a parental; maior, a adult. Vale 1 ano. O PDF final é o original do DocuSign mais uma página de assinatura e certificado (data e hora da Flórida, IP, aparelho, hashes).")}</p>
         {!d.ligada && <p className="small muted" style={{ margin: 0 }}>{tr("Antes de ligar: o advogado confirma que a assinatura eletrônica com essa página de certificado vale para a waiver de menor na Flórida.")}</p>}
         {admin ? <div className="row wrap" style={{ gap: 8 }}>
@@ -901,25 +914,34 @@ function WaiverNativa() {
       </div>
     </Section>
     <Section title={tr("Modelos (do DocuSign)")} count={d.modelos.length} right={admin ? <button className="btn sm" disabled={indo} onClick={importar}>{indo ? <span className="spin" /> : tr("Importar do DocuSign")}</button> : undefined}>
-      <div className="card"><div className="tbl">{d.modelos.map(m => <div className="tr" key={m.kind}>
+      <div className="tbl">{d.modelos.map(m => <div className="tr" key={m.kind}>
         <span className="grow"><b>{m.kind === 'adult' ? tr("Adult") : tr("Parental (menor)")}</b><div className="small muted">{m.name || tr("ainda não importado")}</div></span>
+        <Chip tone={m.sha256 ? 'ok' : 'warn'}>{m.sha256 ? tr("importado") : tr("falta importar")}</Chip>
         <span className="small muted">{m.sha256 ? <>{m.version ? tr("versão {0}", m.version) + ' · ' : ''}{m.pages} {tr("pág. ·")} <span className="mono" title={m.sha256}>{m.sha256.slice(0, 12)}</span> · {fmtDateTime(m.imported_at)}</> : '—'}</span>
-      </div>)}</div></div>
+      </div>)}</div>
       <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Importar só LÊ os modelos no DocuSign. Se o texto mudar lá, importe de novo: as próximas assinaturas usam o novo, as já feitas ficam com o delas.")}</p>
     </Section>
     <AvisoDoParental a={d.aviso_744} />
     <VersoesDoModelo key={d.modelos.map(m => m.sha256 || '').join()} />
     <Section title={tr("Assinadas aqui")} count={a.total}>
       {!a.itens.length ? <Empty title={tr("Nenhuma ainda")}>{tr("Quando um cliente assinar pela área do cliente, ela aparece aqui e no card do cliente.")}</Empty>
-        : <div className="card"><div className="tbl">{a.itens.map(w => <div key={w.id}><div className="tr">
-          <span className="mono small" style={{ width: 92 }}>{fmtDate(w.completed_at)}</span>
-          <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")} {tr("· vale até")} {fmtDate(w.expires_at)}</div>
-            {w.voided_at && <div className="small"><Chip tone="crit">{tr("anulada")}</Chip> {tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div>}</span>
-          {w.client_id ? <Link className="btn sm ghost" to={`/clients/${w.client_id}`}>{tr("Card")}</Link> : <span className="small muted">{tr("sem card")}</span>}
-          <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
-          <button className="btn sm ghost" aria-expanded={trilha === w.id} onClick={() => setTrilha(trilha === w.id ? null : w.id)}>{tr("Trilha")}</button>
-          {!w.voided_at && can('MANAGER') && <button className="btn sm danger" onClick={() => anular(w)}>{tr("Anular")}</button>}
-        </div>{trilha === w.id && <TrilhaDaWaiver wid={w.id} />}</div>)}</div></div>}
+        : <div className="cd-grade">{a.itens.map(w => <CartaoD key={w.id} id={`waiver-${w.id}`} className={trilha === w.id ? 'cd-largo' : undefined}
+          estado={w.voided_at ? tr("anulada") : tr("assinada")} tom={w.voided_at ? 'crit' : 'ok'}
+          avatar={w.minor_name || w.signer_name} nome={w.minor_name || w.signer_name}
+          sub={[w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")]}
+          grande={fmtDate(w.completed_at)} detalhe={`${tr("assinada")} ${tr("· vale até")} ${fmtDate(w.expires_at)}`}
+          acoes={<>
+            {w.client_id && <Link className="btn" to={`/clients/${w.client_id}`}>{tr("Card")}</Link>}
+            <a className="btn" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
+            {/* #111: a trilha de eventos abre dentro do cartão, que ocupa a linha inteira */}
+            <button className="btn" aria-expanded={trilha === w.id} onClick={() => setTrilha(trilha === w.id ? null : w.id)}>{tr("Trilha")}</button>
+            {!w.voided_at && can('MANAGER') && <button className="btn danger" onClick={() => anular(w)}>{tr("Anular")}</button>}</>}>
+          {(w.voided_at || !w.client_id) && <CdLista>
+            {w.voided_at && <CdItem tom="crit">{tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</CdItem>}
+            {!w.client_id && <CdItem tom="warn">{tr("sem card")}</CdItem>}
+          </CdLista>}
+          {trilha === w.id && <div className="cd-form"><TrilhaDaWaiver wid={w.id} /></div>}
+        </CartaoD>)}</div>}
       {a.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
         <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>
         <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, a.total)} {tr("de")} {a.total}</span>

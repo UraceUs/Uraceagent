@@ -12,6 +12,7 @@ import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Empty, ErrorState, Loading, Section } from '../components/ui'
 import { usePerguntar } from '../components/Perguntar'
+import { Cartao, type TomD } from '../components/Cartao'
 import { useToast } from '../components/Toast'
 import { fmtDate, fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
@@ -31,11 +32,6 @@ type ProdutoDep = { id: number; name: string; slug: string; deposit: number; act
 type Valores = { servicos: ServicoDep[]; produtos: ProdutoDep[] }
 
 const TURNO: Record<string, string> = { manha: tr("manhã"), tarde: tr("tarde"), dia: tr("dia inteiro") }
-
-function iniciais(nome: string) {
-  const p = nome.trim().split(/\s+/).filter(Boolean)
-  return ((p[0]?.[0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() || '#'
-}
 
 export function SiteDepositos() {
   const { can } = useAuth()
@@ -86,7 +82,7 @@ function CartaoDeposito({ d, gerente, stripe, recarregar }: { d: Deposito; geren
   const [nota, setNota] = useState('')
   const [indo, setIndo] = useState<'' | 'devolver' | 'conferir'>('')
   const nome = d.nome || d.email || tr("Pedido #{0}", d.order_id)
-  const situacao = d.reservado > 0 ? { t: tr("Devolução pendente"), c: 'warn' } : d.retido <= 0 ? { t: tr("Devolvido"), c: 'ok' }
+  const situacao: { t: string; c: TomD } = d.reservado > 0 ? { t: tr("Devolução pendente"), c: 'warn' } : d.retido <= 0 ? { t: tr("Devolvido"), c: 'ok' }
     : d.devolvido > 0 ? { t: tr("Devolvido em parte"), c: 'info' } : { t: tr("Retido"), c: 'warn' }
   const quando = d.data ? `${fmtDate(d.data)}${d.turno ? ` · ${TURNO[d.turno] || d.turno}` : ''}` : null
 
@@ -111,18 +107,9 @@ function CartaoDeposito({ d, gerente, stripe, recarregar }: { d: Deposito; geren
     } catch (x) { toast((x as ApiError).message, 'crit') } finally { setIndo('') }
   }
 
-  return <article className="cd" aria-labelledby={`dep-${d.order_id}-${d.item_id ?? 'p'}`}>
-    <span className={`cd-pill ${situacao.c}`}>{situacao.t}</span>
-    <div className="cd-av" aria-hidden="true">{iniciais(d.nome || d.email || '#')}</div>
-    <div className="cd-quem">
-      <h3 id={`dep-${d.order_id}-${d.item_id ?? 'p'}`} className="cd-nome">{nome}</h3>
-      <span className="cd-sub">{d.descricao}</span>
-      {d.piloto && <span className="cd-sub">{tr("Piloto")}: <b>{d.piloto}</b></span>}
-    </div>
-    <div className="cd-bloco">
-      <span className="cd-grande">{usd(Math.max(0, d.retido))}</span>
-      <span className="cd-mono">{tr("retido de {0} · pedido #{1}", usd(d.deposito), d.order_id)}{quando ? ` · ${quando}` : ''}</span>
-    </div>
+  return <Cartao id={`dep-${d.order_id}-${d.item_id ?? 'p'}`} estado={situacao.t} tom={situacao.c} avatar={d.nome || d.email || '#'} nome={nome}
+    sub={[d.descricao, d.piloto ? <>{tr("Piloto")}: <b>{d.piloto}</b></> : null]}
+    grande={usd(Math.max(0, d.retido))} detalhe={`${tr("retido de {0} · pedido #{1}", usd(d.deposito), d.order_id)}${quando ? ` · ${quando}` : ''}`}>
     <ul className="cd-lista">
       <li><i className="cd-ic ok" aria-hidden="true">✓</i><span className="grow">{tr("Cobrado no Stripe")}</span><span className="muted">{d.pago_em ? fmtDateTime(d.pago_em) : '—'}</span></li>
       {d.devolucoes.map(x => <li key={x.id}>
@@ -147,7 +134,7 @@ function CartaoDeposito({ d, gerente, stripe, recarregar }: { d: Deposito; geren
         {d.pode_devolver && <button className="btn primary" disabled={!!indo}>{indo === 'devolver' ? tr("Devolvendo…") : tr("Devolver pelo Stripe")}</button>}
       </div>
     </form>}
-  </article>
+  </Cartao>
 }
 
 function ValoresCobrados({ gerente }: { gerente: boolean }) {

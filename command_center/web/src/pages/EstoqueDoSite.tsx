@@ -17,6 +17,7 @@ import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Empty, ErrorState, Loading, Scrim, Section } from '../components/ui'
 import { usePerguntar } from '../components/Perguntar'
+import { Cartao } from '../components/Cartao'
 import { useToast } from '../components/Toast'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
@@ -151,21 +152,14 @@ function CartaoProduto({ p, locais, gerente, trocando, onTrocar, onPainel, onMud
     setDesligando(l.variation || '-')
     try { if (await desligar(p, l)) onMudou() } finally { setDesligando('') }
   }
-  return <article className="cd" aria-labelledby={`es-${p.id}`}>
-    <span className={`cd-pill ${em ? 'ok' : 'info'}`}>{em ? tr("Em estoque") : tr("Dropshipping")}</span>
-    <div className="cd-av es-foto" aria-hidden="true">{p.foto ? <img src={fotoUrl(p.foto)} alt="" width={60} height={60} loading="lazy" /> : 'URACE'}</div>
-    <div className="cd-quem">
-      <h3 id={`es-${p.id}`} className="cd-nome"><Link to={`/site/produtos/${p.id}`}>{p.name}</Link></h3>
-      <span className="cd-sub">{preco(p)} · {site}</span>
-    </div>
-    <div className="cd-bloco">
-      {em ? <>
-        <span className="cd-grande">{p.tem === null ? '—' : qtd(p.tem)}</span>
-        <span className="cd-mono">{p.tem === null ? tr("falta ligar ao estoque") : tr("tem agora · Galpão + Pista")}</span></>
-        : <>
-          <span className="cd-grande es-texto">{tr("Fornecedor")}</span>
-          <span className="cd-mono">{tr("o fornecedor envia; o site segue a caixa Em estoque")}</span></>}
-    </div>
+  return <Cartao id={`es-${p.id}`} estado={em ? tr("Em estoque") : tr("Dropshipping")} tom={em ? 'ok' : 'info'}
+    avatar={p.foto ? <img src={fotoUrl(p.foto)} alt="" width={60} height={60} loading="lazy" /> : <span>URACE</span>}
+    nome={<Link to={`/site/produtos/${p.id}`}>{p.name}</Link>} sub={[`${preco(p)} · ${site}`]}
+    grande={em ? (p.tem === null ? '—' : qtd(p.tem)) : <span className="es-texto">{tr("Fornecedor")}</span>}
+    detalhe={em ? (p.tem === null ? tr("falta ligar ao estoque") : tr("tem agora · Galpão + Pista")) : tr("o fornecedor envia; o site segue a caixa Em estoque")}
+    acoes={gerente ? <>
+      <button type="button" className="btn" disabled={trocando} onClick={onTrocar}>{em ? tr("Passar a dropshipping") : tr("Passar a em estoque")}</button>
+      <Link className="btn" to={`/site/produtos/${p.id}`}>{tr("Abrir o produto")}</Link></> : null}>
     {!em && (linhas.length > 0 || p.orfas.length > 0) && <p className="small es-aviso">{tr("Ainda ligado ao estoque, mas a venda não baixa daqui (dropshipping). Desligue para ligar o item a outro produto.")}</p>}
     {(linhas.length > 0 || p.orfas.length > 0) && <ul className="cd-lista">
       {linhas.map(o => {
@@ -190,11 +184,7 @@ function CartaoProduto({ p, locais, gerente, trocando, onTrocar, onPainel, onMud
         {gerente && <button type="button" className="btn sm ghost" onClick={() => onPainel('contar', x)}>{tr("Ver")}</button>}
       </li>)}
     </ul>}
-    {gerente && <div className="cd-acoes">
-      <button type="button" className="btn" disabled={trocando} onClick={onTrocar}>{em ? tr("Passar a dropshipping") : tr("Passar a em estoque")}</button>
-      <Link className="btn" to={`/site/produtos/${p.id}`}>{tr("Abrir o produto")}</Link>
-    </div>}
-  </article>
+  </Cartao>
 }
 
 function PainelLigar({ p, o, locais, prateleiras, onFechar, onFeito }: { p: ProdutoEstoque; o: Opcao; locais: Local[]; prateleiras: Prateleira[]

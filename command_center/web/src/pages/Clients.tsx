@@ -11,6 +11,7 @@ import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { ClientCard } from './Client360'
 import { TextoComVoz } from '../components/Voz'
+import { iniciais } from '../components/Cartao'
 import { tr } from '../i18n'
 
 type Par = { a: Client; b: Client; why: string }
@@ -159,10 +160,10 @@ export function Clients() {
             const w = (c.waiver_status || '').toLowerCase()
             const semWaiver = dias !== null && dias <= 2 && w !== 'completed' && !c.vip
             return <tr key={c.id} className="click" onClick={() => open(c.id)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') open(c.id) }}>
-              <td className="first"><div className="row">{!!c.pro_driver && <span title={tr("Pro Racing Driver")} style={{ color: 'var(--warn)' }}>★</span>}<b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">{tr("VIP")}</Chip>}{c.plan_type === 'monthly' && <Chip tone="accent">{tr("mensal")}</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">{tr("diária")}</Chip>}</div>{!c.pilot_name && <div className="small muted">{tr("piloto é o próprio")}</div>}</td>
-              <td data-l={tr("Responsável")}>{c.pilot_name ? c.name : <span className="muted">{tr("o próprio")}</span>}<div className="small muted truncate" style={{ maxWidth: 260 }}>{c.email || tr("sem e-mail")}{c.phone ? ` · ${c.phone}` : ''}</div></td>
-              <td data-l={tr("Status")}><Status s={c.status} />{!!c.status_locked && <span className="small muted" title={tr("mudado à mão")}> 🔒</span>}</td>
-              <td data-l={tr("Próximo")} className="mono nowrap">{c.next_service ? <><b style={{ color: dias !== null && dias <= 1 ? 'var(--brand)' : undefined }}>{dias === 0 ? tr("HOJE") : dias === 1 ? tr("AMANHÃ") : tr("em {0} d", dias)}</b> <span className="muted small">{fmtDate(c.next_service)}</span></> : <span className="muted">—</span>}</td>
+              <td className="first"><span className="cd-av rsp-av" aria-hidden="true">{iniciais(c.pilot_name || c.name)}</span><div className="row">{!!c.pro_driver && <span title={tr("Pro Racing Driver")} style={{ color: 'var(--warn)' }}>★</span>}<b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">{tr("VIP")}</Chip>}{c.plan_type === 'monthly' && <Chip tone="accent">{tr("mensal")}</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">{tr("diária")}</Chip>}</div>{!c.pilot_name && <div className="small muted">{tr("piloto é o próprio")}</div>}</td>
+              <td className="rsp-sub" data-l={tr("Responsável")}>{c.pilot_name ? c.name : <span className="muted">{tr("o próprio")}</span>}<div className="small muted truncate" style={{ maxWidth: 260 }}>{c.email || tr("sem e-mail")}{c.phone ? ` · ${c.phone}` : ''}</div></td>
+              <td className="rsp-pill" data-l={tr("Status")}><Status s={c.status} />{!!c.status_locked && <span className="small muted" title={tr("mudado à mão")}> 🔒</span>}</td>
+              <td data-l={tr("Próximo")} className={`mono nowrap${c.next_service ? ' rsp-bloco' : ''}`}>{c.next_service ? <><b style={{ color: dias !== null && dias <= 1 ? 'var(--brand)' : undefined }}>{dias === 0 ? tr("HOJE") : dias === 1 ? tr("AMANHÃ") : tr("em {0} d", dias)}</b> <span className="muted small">{fmtDate(c.next_service)}</span></> : <span className="muted">—</span>}</td>
               <td data-l={tr("Último")} className="mono hide-md">{c.last_service ? fmtDate(c.last_service) : <span className="muted">—</span>}</td>
               <td data-l={tr("Waiver")}>{c.vip ? <Chip tone="neutral" glyph="—">{tr("dispensada (VIP)")}</Chip> : w ? <Status s={w} kind={semWaiver ? 'crit' : statusKind(w)} label={WAIVER_LABEL[w] || w} /> : <Status kind={semWaiver ? 'crit' : 'wait'} label={tr("nenhuma")} />}</td>
               <td data-l={tr("Serviços")} className="mono nowrap"><b>{c.open_tasks ?? 0}</b><span className="muted">/{(c.open_tasks ?? 0) + (c.done_tasks ?? 0)}</span> <span className="small muted">{tr("abertos")}</span></td>
