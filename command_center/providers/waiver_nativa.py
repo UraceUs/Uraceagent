@@ -309,13 +309,15 @@ def versao_por_hash(con, kind, sha):
 def aviso_do_atual(con):
     """A conferência do aviso §744.301(3) no modelo parental atual, contra o texto aprovado de agora."""
     from command_center.providers import aviso_744
+    cfg = aviso_744.aprovado()
+    if cfg and cfg.get("error"):                   # o arquivo que não abre ou está vazio vem antes de tudo (revisão #328)
+        return {"configured": True, "ok": False, "reason": cfg["error"]}
     m = modelo(con, "parental")
     if not m:
-        cfg = aviso_744.aprovado()
         return {"configured": bool(cfg), "ok": None if not cfg else False,
                 "reason": "O modelo parental ainda não foi importado."}
     with open(m["pdf_path"], "rb") as f:
-        return aviso_744.conferir(f.read())
+        return aviso_744.conferir(f.read(), cfg)
 
 
 def aviso(con):

@@ -1049,6 +1049,39 @@ def test_site_waiver_mostra_as_versoes_e_o_aviso_esperando_o_advogado_no_celular
     pg.close()
 
 
+@pytest.mark.parametrize("largura", [360, 390])
+def test_quadro_do_aviso_com_o_texto_aprovado_e_com_o_arquivo_vazio_no_celular(servidor, navegador, largura):
+    """Revisão do #328: com o texto aprovado no servidor, o "Texto aprovado" abre com toque de 40 px e nada rola de
+    lado; com o arquivo vazio, o quadro diz que está vazio. O arquivo sai no fim (os outros testes não o veem)."""
+    arq = os.path.join(os.path.dirname(BANCO), "waivers", "aviso-744.txt")
+    os.makedirs(os.path.dirname(arq), exist_ok=True)
+    aviso = ("EXAMPLE NOTICE FOR AUTOMATED TESTS ONLY. THIS IS NOT THE TEXT OF THE FLORIDA STATUTE. "
+             "THE REAL NOTICE IS THE TEXT THAT THE LAWYER APPROVES FOR THE PARENTAL WAIVER.")
+    try:
+        with open(arq, "w", encoding="utf-8") as f:
+            f.write(aviso)
+        pg = entrar(navegador, servidor, largura=largura, altura=800)
+        abrir(pg, servidor, "/site/waiver")
+        sec = pg.locator("section", has=pg.get_by_role("heading", name="Aviso do §744.301(3) (parental)", level=2))
+        sec.wait_for()
+        assert "aviso não confere" in sec.inner_text() and "O aviso aprovado não está inteiro no modelo" in sec.inner_text()
+        resumo = sec.locator("summary", has_text="Texto aprovado")
+        assert resumo.bounding_box()["height"] >= 40, resumo.bounding_box()
+        resumo.click()
+        sec.locator("details p", has_text="EXAMPLE NOTICE FOR AUTOMATED TESTS ONLY").wait_for()
+        r = pg.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        with open(arq, "w", encoding="utf-8") as f:
+            f.write("")
+        abrir(pg, servidor, "/site/waiver")
+        sec.wait_for()
+        assert "está vazio" in sec.inner_text(), sec.inner_text()
+        assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+        pg.close()
+    finally:
+        os.remove(arq)
+
+
 # ------------------------------------------------------------------ convite da waiver por e-mail (#135)
 def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(servidor, navegador):
     """Dono, 14/10: "o e-mail que tiver no card vai receber isso". A equipe vê para quem vai, confirma
