@@ -6,8 +6,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
-import { Chip, Empty, ErrorState, Loading, Section } from '../components/ui'
+import { Empty, ErrorState, Loading, Section } from '../components/ui'
 import { InserirNoTopo } from '../components/Inserir'
+import { Cartao } from '../components/Cartao'
 import { useToast } from '../components/Toast'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
@@ -52,11 +53,10 @@ export function PaginasDoEditor() {
     <p className="small muted" style={{ margin: 0 }}>{tr("Abra uma página e mexa nela como no Canva: clique no que quer mudar, escreva no lugar, arraste e solte. Numa página que já existe, as faixas dela se movem e se escondem. Nada muda no site até você publicar; cada publicação guarda uma versão para voltar.")}</p>
     <Section title={tr("Páginas no editor")} count={l.data.paginas.length}>
       {!l.data.paginas.length ? <Empty title={tr("Nenhuma página ainda")}>{tr("Use \"Adicionar página\", em cima: abra uma página do site ou crie uma nova.")}</Empty>
-        : <ul className="ed-lista-paginas">{l.data.paginas.map(p => <li key={p.id} className="card card-b">
-          <div className="grow" style={{ minWidth: 0 }}><Link className="loja-nome" to={`/site/editor/${p.id}`}>{p.title}</Link>
-            <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{p.path}{p.base ? ` · ${tr("página do site")}` : ` · ${tr("página nova")}`}{p.updated_at ? ` · ${fmtDateTime(p.updated_at)}` : ''}</div></div>
-          <Chip tone={ESTADO[p.estado][1]}>{ESTADO[p.estado][0]}</Chip>
-          <Link className="btn sm ghost" to={`/site/editor/${p.id}`}>{tr("Editar")}</Link></li>)}</ul>}
+        : <div className="cd-grade">{l.data.paginas.map(p => <Cartao key={p.id} id={`pagina-${p.id}`} estado={ESTADO[p.estado][0]} tom={ESTADO[p.estado][1]}
+          avatar={p.title} avatarTom="azul" nome={<Link to={`/site/editor/${p.id}`}>{p.title}</Link>}
+          sub={[p.base ? tr("página do site") : tr("página nova")]} detalhe={`${p.path}${p.updated_at ? ` · ${fmtDateTime(p.updated_at)}` : ''}`}
+          acoes={<Link className="btn" to={`/site/editor/${p.id}`}>{tr("Editar")}</Link>} />)}</div>}
     </Section>
   </div>
 }

@@ -699,6 +699,8 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 @media (max-width:760px){.loja-salvar{bottom:92px}.loja-filtros,.loja-grade{grid-template-columns:1fr}.loja-var{grid-template-columns:1fr 1fr}.loja-var .fld:first-child{grid-column:1/-1}}
 .site-servico{display:grid;gap:8px;grid-template-columns:minmax(0,2fr) minmax(0,3fr) 120px minmax(0,2fr) auto;align-items:end}
 @media (max-width:760px){.site-servico{grid-template-columns:1fr 1fr}.site-servico .fld:nth-child(2){grid-column:1/-1}}
+/* #313: dentro do cartão D, o formulário do serviço e do cartão da página fica em duas colunas */
+.cd-form .site-servico{grid-template-columns:repeat(2,minmax(0,1fr))}.cd-form .site-servico>.fld:first-child,.cd-form .site-servico>.check{grid-column:1/-1}
 /* site público › próximos dias (#41) */
 .site-mes{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:6px}
 .site-dia{display:flex;flex-direction:column;gap:3px;padding:8px;border:1px solid var(--glass-line);border-radius:var(--r);background:var(--glass-2)}
@@ -1105,6 +1107,50 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .cd-acoes .btn{min-height:46px;width:100%;justify-content:center;white-space:normal;line-height:1.2;text-align:center;padding-inline:10px}
 @media(max-width:520px){.cd{padding:22px 16px 18px}.cd-campos{grid-template-columns:1fr}}
 @media(max-width:440px){.cd-acoes{grid-template-columns:1fr}}
+/* #313 · em todo cartão do padrão D (o do componente e o painel de inserir): entra com o rise dos tokens, e o primário é o
+   azul (o vermelho fica para a ação da tela). O resto do cartão está em components/Cartao.css, que só carrega com ele. */
+.cd{position:relative;animation:rise var(--dur-media) var(--ease-saida) both}
+.cd .btn.primary{background:var(--accent);border-color:transparent;color:#fff;box-shadow:none}
+.cd .btn.primary:hover:not(:disabled){background:var(--accent);filter:brightness(1.12);box-shadow:none}
+@media(prefers-reduced-motion:reduce){.cd{animation:none}}
+
+/* #313 · as listas em tabela ganham o acabamento do D sem virar cartão: a linha `.tbl > .tr` (que não tinha regra
+   nenhuma) vira uma linha de verdade, com espaçamento, a borda de vidro e a pílula de status alinhada. */
+.tbl>.tr{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-height:52px;padding:10px 16px;border-bottom:1px solid var(--glass-line);
+  min-width:0;overflow-wrap:anywhere;color:inherit;font:inherit;text-align:left}
+.tbl>.tr:last-child{border-bottom:0}
+.tbl>.tr>.grow{flex:1 1 200px;min-width:0}
+.tbl>button.tr{width:100%;background:none;border-width:0 0 1px;border-style:solid;border-color:var(--glass-line);cursor:pointer}
+.tbl>label.tr,.tbl>.tr[role=button]{cursor:pointer}
+.tbl>button.tr:hover,.tbl>label.tr:hover,.tbl>.tr[role=button]:hover{background:var(--glass-2)}
+.tbl>.tr .chip,.tbl td .chip{padding:3px 10px}
+@media(max-width:520px){.tbl>.tr{padding:10px 12px}}
+/* no celular, a tabela que já vira cartão (.tbl.rsp) segue o D: cartão com a pílula em cima, o nome centrado, a linha de
+   baixo, o bloco grande e o resto em linhas de lista (rótulo à esquerda, valor à direita) */
+.rsp-av{display:none}
+@media(max-width:700px){
+  .tbl-wrap:has(>.tbl.rsp){overflow:visible}
+  .tbl.rsp tbody{display:flex;flex-direction:column;gap:12px;padding:12px}
+  .card-b.tight .tbl.rsp tbody{padding:12px}
+  .tbl.rsp tr{display:flex;flex-direction:column;align-items:stretch;gap:0;background:var(--surface);border:1px solid var(--glass-line);border-radius:var(--r-xl);
+    box-shadow:var(--shadow);padding:20px 16px 12px;min-width:0}
+  .tbl.rsp tbody tr.click:hover td{background:transparent}
+  .tbl.rsp tbody tr.click:hover{border-color:var(--glass-line-2)}
+  .tbl.rsp td{min-height:40px;padding:8px 2px;border-bottom:1px solid var(--rule);align-items:center;justify-content:flex-end;gap:4px;text-align:right;min-width:0;overflow-wrap:anywhere}
+  .tbl.rsp td:last-child{border-bottom:0}
+  .tbl.rsp td:empty{display:none}
+  .tbl.rsp td[data-l]::before{text-align:left;margin-right:auto}
+  .tbl.rsp td.rsp-pill{order:-3;justify-content:center;border:0;min-height:0;padding:0 0 10px}
+  .tbl.rsp td.rsp-pill::before,.tbl.rsp td.rsp-sub::before,.tbl.rsp td.rsp-bloco::before{display:none}
+  .tbl.rsp td.first{order:-2;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:0;font-size:19px;font-weight:600;padding:0 0 2px;min-height:0}
+  .tbl.rsp td.first .row{justify-content:center;flex-wrap:wrap}
+  .tbl.rsp td.rsp-sub{order:-1;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:0;color:var(--ink-2);min-height:0;padding:0 0 4px}
+  .tbl.rsp td.rsp-sub .truncate{max-width:100%!important;white-space:normal}
+  .tbl.rsp td.rsp-bloco{order:-1;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:0;margin:10px 0 6px;padding:12px 14px;
+    border-radius:var(--r-l);background:var(--surface-2);font-family:var(--font-cond);font-size:22px;font-weight:700;letter-spacing:.03em}
+  .tbl.rsp td.rsp-bloco .small{font-family:var(--mono);font-size:13px;font-weight:400;letter-spacing:0}
+  .rsp-av{display:flex;margin:0 auto 10px}
+}
 
 /* #317 · o valor do depósito que o site cobra */
 .dep-valor-tit{margin:14px 0 6px;font-size:14px}

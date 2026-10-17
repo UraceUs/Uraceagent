@@ -13,6 +13,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, Section } from '../components/ui'
 import { EditorTexto } from '../components/EditorTexto'
 import { usePerguntar } from '../components/Perguntar'
+import { Cartao } from '../components/Cartao'
 import { useToast } from '../components/Toast'
 import { fmtDate, fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
@@ -97,15 +98,14 @@ export function ArtigosDoBlog() {
 function CartaoArtigo({ p, cats }: { p: Post; cats: Categoria[] }) {
   const [rot, tom] = ESTADO[p.estado]
   const d = p.draft
-  return <article className="cd" aria-labelledby={`artigo-${p.id}`}>
-    <span className={`cd-pill ${tom}`}>{rot}</span>
-    {d.image ? <img className="cd-capa" src={fotoUrl(d.image)} alt="" width={64} height={64} loading="lazy" />
-      : <div className="cd-av" aria-hidden="true">{(d.title.trim()[0] || '#').toUpperCase()}</div>}
-    <div className="cd-quem">
-      <h3 id={`artigo-${p.id}`} className="cd-nome">{d.title}</h3>
-      <span className="cd-sub">{nomeDa(cats, p.category)}{p.first_published_at ? ` · ${fmtDate(p.first_published_at.slice(0, 10))}` : ''}</span>
-    </div>
-    <div className="cd-bloco"><span className="cd-mono">{p.endereco}</span></div>
+  return <Cartao id={`artigo-${p.id}`} estado={rot} tom={tom}
+    capa={d.image ? <img className="cd-capa" src={fotoUrl(d.image)} alt="" width={64} height={64} loading="lazy" /> : null}
+    avatar={(d.title.trim()[0] || '#').toUpperCase()} nome={d.title}
+    sub={[`${nomeDa(cats, p.category)}${p.first_published_at ? ` · ${fmtDate(p.first_published_at.slice(0, 10))}` : ''}`]}
+    detalhe={p.endereco}
+    acoes={<>
+      <Link className="btn primary" to={`/site/blog/${p.id}`}>{tr("Abrir")}</Link>
+      {p.estado !== 'rascunho' && <a className="btn ghost" href={p.endereco} target="_blank" rel="noreferrer">{tr("Ver no site ↗")}</a>}</>}>
     <ul className="cd-lista">
       {p.published_at && <li><i className={`cd-ic ${p.estado === 'rascunho' ? 'warn' : 'ok'}`} aria-hidden="true">{p.estado === 'rascunho' ? '–' : '✓'}</i>
         <span className="grow">{p.estado === 'rascunho' ? tr("Fora do ar (já foi publicado)") : tr("Publicado")}</span>
@@ -114,11 +114,7 @@ function CartaoArtigo({ p, cats }: { p: Post; cats: Categoria[] }) {
       {p.updated_at && <li><i className="cd-ic info" aria-hidden="true">i</i><span className="grow">{tr("Rascunho mudado")}</span>
         <span className="muted">{p.mudado_por ? `${p.mudado_por} · ` : ''}{fmtDateTime(p.updated_at)}</span></li>}
     </ul>
-    <div className={`cd-acoes${p.estado === 'rascunho' ? ' um' : ''}`}>
-      <Link className="btn primary" to={`/site/blog/${p.id}`}>{tr("Abrir")}</Link>
-      {p.estado !== 'rascunho' && <a className="btn ghost" href={p.endereco} target="_blank" rel="noreferrer">{tr("Ver no site ↗")}</a>}
-    </div>
-  </article>
+  </Cartao>
 }
 
 type Edicao = Partial<Pick<Conteudo, 'title' | 'seo_title' | 'excerpt' | 'description' | 'category' | 'image_alt' | 'html' | 'image'>> & { slug?: string }

@@ -809,7 +809,7 @@ def test_equipe_vincula_pela_sugestao_e_o_cliente_ve_o_historico(servidor, naveg
     c.get_by_text("once our team connects your account").wait_for()
     g = entrar(navegador, servidor)
     abrir(g, servidor, "/site/contas")
-    cartao = g.locator(".card", has_text="carla@example.com").first
+    cartao = g.locator("article.cd", has_text="carla@example.com").first
     cartao.get_by_text("mesmo e-mail").wait_for()
     cartao.get_by_role("button", name="Vincular a este").click()
     g.get_by_role("button", name="Vincular", exact=True).click()
@@ -839,7 +839,7 @@ def test_bloqueio_recorrente_calendario_do_mes_e_criar_cliente_pela_conta(servid
     c = navegador.new_page(viewport={"width": 390, "height": 844})
     cliente_pela_api(c, servidor, "Eduardo Fillipe Resende", "eduardo.novo@example.com", piloto="Tomas Fillipe Resende")
     abrir(g, servidor, "/site/contas")
-    cartao = g.locator(".card", has_text="eduardo.novo@example.com").first
+    cartao = g.locator("article.cd", has_text="eduardo.novo@example.com").first
     cartao.get_by_role("button", name="Criar cliente").click()
     g.get_by_role("button", name="Criar cliente", exact=True).last.click()
     g.get_by_text("Cliente criado e vinculado.").wait_for()
@@ -1000,7 +1000,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     # 3. a equipe vê a assinada na aba Waiver
     abrir(a, servidor, "/site/waiver")
     a.get_by_text("Rafa Waiver").wait_for()
-    assert "parental · por Rita Waiver" in a.locator(".tr", has_text="Rafa Waiver").inner_text()
+    assert "parental · por Rita Waiver" in a.locator("article.cd", has_text="Rafa Waiver").inner_text()
     a.close(); c.close()
 
 
@@ -1097,8 +1097,8 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     r = a.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     abrir(a, servidor, "/site/waiver")
-    a.locator(".tr", has_text="Gabi Convite").get_by_text("anulada").wait_for()
-    assert a.locator(".tr", has_text="Gabi Convite").get_by_role("button", name="Anular").count() == 0
+    a.locator("article.cd", has_text="Gabi Convite").get_by_text("anulada").wait_for()
+    assert a.locator("article.cd", has_text="Gabi Convite").get_by_role("button", name="Anular").count() == 0
     if not estava:
         a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
     a.close(); c.close()
@@ -3395,7 +3395,7 @@ def test_o_gerente_muda_o_nome_do_kart_no_painel_e_o_site_mostra(servidor, naveg
         nomes = g.get_by_label("Nome no site")
         nomes.first.wait_for()
         i = next(i for i in range(nomes.count()) if nomes.nth(i).input_value() == "4-stroke")
-        cartao = nomes.nth(i).locator("xpath=ancestor::div[contains(@class, 'card-b')][1]")
+        cartao = nomes.nth(i).locator("xpath=ancestor::article[contains(@class, 'cd')][1]")
         nomes.nth(i).fill("Rental 4T e2e")
         cartao.get_by_label("Linha de baixo no site").fill("Ages 8+ · e2e")
         assert cartao.get_by_label("O cliente traz o próprio kart").bounding_box()["height"] >= 16
@@ -4143,7 +4143,7 @@ def test_o_gerente_marca_em_estoque_liga_conta_e_a_venda_deixa_out_of_stock(serv
         assert not r["rola"] and not r["culpados"], r
         # Pedidos do site diz o que saiu do estoque, para a equipe separar (revisão do PR #320)
         abrir(g, servidor, "/site/pedidos")
-        pedido = g.locator(".card", has_text=f"rui.estoque.{largura}.e2e@example.com").first
+        pedido = g.locator("article.cd", has_text=f"rui.estoque.{largura}.e2e@example.com").first
         pedido.get_by_text("baixou 1 do estoque", exact=False).wait_for()
         r = g.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
@@ -4333,15 +4333,15 @@ def test_pago_sem_estoque_o_operador_marca_resolvido_e_o_painel_zera(servidor, n
         assert g.request.get(servidor + "/api/site/painel").json()["atencao"]["pedidos_sem_estoque"] == 1
         abrir(g, servidor, "/site/pedidos")
         conta = "rita.resolve.e2e@example.com"
-        pedido = g.locator(".card", has_text=conta).filter(has_text="Resolver:").first
+        pedido = g.locator("article.cd", has_text=conta).filter(has_text="Resolver:").first
         pedido.get_by_text("sem estoque", exact=False).first.wait_for()
         r = g.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         pedido.get_by_role("button", name=re.compile("^Resolvido")).click()
         g.get_by_role("dialog", name=re.compile("^O sem estoque")).get_by_role("button", name="Resolvido", exact=True).click()
         g.get_by_text("Resolvido: saiu do Painel do site.").wait_for()
-        g.locator(".card", has_text=conta).first.get_by_role("button", name=re.compile("^Resolvido")).wait_for(state="detached")
-        assert g.locator(".card", has_text=conta).filter(has_text="Resolver:").count() == 0
+        g.locator("article.cd", has_text=conta).first.get_by_role("button", name=re.compile("^Resolvido")).wait_for(state="detached")
+        assert g.locator("article.cd", has_text=conta).filter(has_text="Resolver:").count() == 0
         assert g.request.get(servidor + "/api/site/painel").json()["atencao"]["pedidos_sem_estoque"] == 0
         assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     finally:
@@ -4633,7 +4633,7 @@ def test_adicionar_servico_no_topo_escolhe_a_pagina_e_o_site_mostra(servidor, na
         assert g.evaluate(_PRIMEIRO_CONTROLE_DEPOIS_DAS_ABAS).endswith("Adicionar serviço"), "o primeiro controle da tela"
         caixa = botao.bounding_box()
         assert caixa["y"] + caixa["height"] <= 800, "à vista assim que a tela abre, sem rolar"
-        assert caixa["y"] < g.locator("section.card .card.card-b").first.bounding_box()["y"], "em cima da lista dos serviços"
+        assert caixa["y"] < g.locator("section.card article.cd").first.bounding_box()["y"], "em cima da lista dos serviços"
         botao.click()
         painel = g.locator("section.ins-painel", has=g.get_by_role("heading", name="Novo serviço", level=2))
         painel.wait_for()
@@ -4663,7 +4663,7 @@ def test_adicionar_servico_no_topo_escolhe_a_pagina_e_o_site_mostra(servidor, na
         assert s["no_site"]["onde"] == "kart" and s["deposit"] == 400
         g.get_by_text(f"kart {kart}", exact=False).first.wait_for()
         # revisão: o "Ver no site" do "Hoje em" e o de cada serviço da lista têm alvo de 40 px
-        links = g.evaluate("""() => [...document.querySelectorAll('.ins-onde a[href], section.card .card.card-b a[href]')]
+        links = g.evaluate("""() => [...document.querySelectorAll('.ins-onde a[href], section.card article.cd a[href]')]
             .filter(a => a.offsetParent !== null).map(a => Math.round(a.getBoundingClientRect().height))""")
         assert links and min(links) >= 40, links
         # Academy: com plano ativo, o cartão novo não apareceria — o painel avisa
@@ -4709,9 +4709,9 @@ def test_varredura_toda_insercao_fica_no_topo(servidor, navegador, largura):
     probs = []
     try:
         for rota, nome, lista in [
-            ("/site/servicos", "Adicionar serviço", "section.card .card.card-b"),
+            ("/site/servicos", "Adicionar serviço", "section.card article.cd"),
             ("/site/cartoes", "Adicionar cartão", "[data-cartao]"),
-            ("/site/produtos", "Novo produto", ".loja-item"),
+            ("/site/produtos", "Novo produto", ".cd-grade article.cd"),
             ("/site/editor", "Adicionar página", 'section.card:has(h2:has-text("Páginas no editor"))'),
             ("/site/disponibilidade", "Bloquear datas", ".site-cal"),
             ("/users", "Novo usuário", "section.card table.tbl"),
@@ -4832,10 +4832,10 @@ def test_revisao_kart_repetido_travado_na_api_no_reativar_e_na_edicao(servidor, 
             "desativado, pode apontar para o kart (o site não muda)"
         assert g.request.patch(servidor + f"/api/site/servicos/{sid}", headers=csrf, data={"active": True}).status == 409
         abrir(g, servidor, "/site/servicos")
-        card = g.locator(".card.card-b", has=g.locator('input[value="Reserva do 2T revisão"]'))
+        card = g.locator("article.cd", has=g.locator('input[value="Reserva do 2T revisão"]'))
         assert card.get_by_role("button", name="Reativar").is_disabled()
         card.get_by_text('Para reativar, desative antes "Arrive and Drive 2-stroke"', exact=False).wait_for()
-        baby = g.locator(".card.card-b", has=g.locator('input[value="Arrive and Drive Baby Kart"]'))
+        baby = g.locator("article.cd", has=g.locator('input[value="Arrive and Drive Baby Kart"]'))
         quatro = baby.get_by_label("Kart do site").locator("option", has_text="4-stroke")
         assert quatro.evaluate("o => o.disabled") and "hoje: Arrive and Drive 4-stroke" in quatro.inner_text()
         v = navegador.new_page(viewport={"width": 390, "height": 800})
@@ -4924,4 +4924,176 @@ def test_revisao_peca_nova_sem_preco_e_criada(servidor, navegador):
     assert resp.value.status == 201, resp.value.text()
     assert any(x["name"] == "Vela revisão 312" and x["price"] is None for x in g.request.get(servidor + "/api/catalog").json()["parts"])
     assert not g.erros_js, g.erros_js
+    g.close()
+
+
+# ------------------------------------------------------------------ #313 · o cartão do padrão D em todo o painel
+# Dono, 16/10: "Todo tipo de card que tiver precisa ser um design bom, centralizadinho, bem intuitivo" e, das opções,
+# "perfeito siga com a opção D". Cada tela convertida mostra o cartão D (a pílula, o nome, o bloco grande e as ações),
+# sem rolar para o lado em 360 e 390 px, com alvo de 40 px e um h1, nos temas claro e escuro.
+
+def _dados_dos_cartoes_d():
+    """Fictícios (@example.com, 555-01xx), direto no banco e uma vez só: uma conta do site sem vínculo e outra ligada a
+    um card com piloto e medidas, um agendamento esperando, um pedido pago com depósito, uma waiver assinada aqui e uma
+    oportunidade com valor e retorno. Devolve o id do card com a conta."""
+    import sqlite3
+    con = sqlite3.connect(BANCO)
+    try:
+        ja = con.execute("SELECT client_id FROM portal_accounts WHERE email = 'nina.cartao.d.e2e@example.com'").fetchone()
+        if ja:
+            return ja[0]
+        conta = con.execute("""INSERT INTO portal_accounts (email, pw_salt, pw_hash, name, birth_date, phone, city, state, terms_accepted_at)
+                               VALUES ('marina.cartao.d.e2e@example.com', 'x', 'x', 'Marina Cartao D', '1984-02-02', '(407) 555-0187',
+                                       'Orlando', 'FL', '2026-10-10T12:00:00Z')""").lastrowid
+        piloto = con.execute("INSERT INTO portal_pilots (account_id, name, birth_date) VALUES (?, 'Theo Cartao D', '2014-03-03')",
+                             (conta,)).lastrowid
+        con.execute("""INSERT INTO bookings (account_id, pilot_id, date, period, status, notes)
+                       VALUES (?, ?, '2026-12-19', 'manha', 'pendente', 'Primeira vez na pista')""", (conta, piloto))
+        sid, preco = con.execute("SELECT id, price FROM booking_services WHERE site_kart='4-stroke'").fetchone()
+        pedido = con.execute("""INSERT INTO store_orders (kind, product_slug, product_name, quantity, unit_price, amount, delivery, status,
+                                  payment_intent, deposit, email, name, paid_at)
+                                VALUES ('carrinho', 'carrinho', 'Arrive and Drive 4-stroke', 1, ?, ?, 'retirada', 'pago', 'pi_e2e_cartao_d', 400,
+                                        'marina.cartao.d.e2e@example.com', 'Marina Cartao D', '2026-10-15T15:00:00.000Z')""",
+                             (preco + 400, preco + 400)).lastrowid
+        con.execute("""INSERT INTO store_order_items (order_id, kind, name, quantity, unit_price, deposit, amount, service_id, service_name,
+                         date, period, pilot_name)
+                       VALUES (?, 'sessao', 'Arrive and Drive 4-stroke · Theo', 1, ?, 400, ?, ?, 'Arrive and Drive 4-stroke', '2026-12-19',
+                               'manha', 'Theo Cartao D')""", (pedido, preco, preco + 400, sid))
+        con.execute("""INSERT INTO waivers (signer_name, signer_email, template, status, completed_at, expires_at, source, minor_name, doc_sha256)
+                       VALUES ('Marina Cartao D', 'marina.cartao.d.e2e@example.com', 'parental', 'completed', '2026-10-16T14:00:00Z',
+                               '2027-10-16T14:00:00Z', 'urace', 'Bia Cartao D', 'e2e313')""")
+        con.execute("""INSERT INTO opportunities (name, email, phone, service, service_date, amount, stage, source, next_at, next_what)
+                       VALUES ('Lia Cartao D', 'lia.cartao.d.e2e@example.com', '(407) 555-0142', 'Kart School', '2026-12-20', 719,
+                               'PROPOSTA', 'Instagram', '2026-12-18T14:00:00Z', 'ligar de volta')""")
+        card = con.execute("INSERT INTO clients (name, pilot_name, email) VALUES ('Nina Cartao D', 'Nico Cartao D', 'nina.cartao.d.e2e@example.com')").lastrowid
+        ligada = con.execute("""INSERT INTO portal_accounts (email, pw_salt, pw_hash, name, birth_date, terms_accepted_at, client_id, linked_at)
+                                VALUES ('nina.cartao.d.e2e@example.com', 'x', 'x', 'Nina Cartao D', '1985-05-05', '2026-10-10T12:00:00Z', ?,
+                                        '2026-10-11T12:00:00Z')""", (card,)).lastrowid
+        con.execute("""INSERT INTO portal_pilots (account_id, name, birth_date, measures, measures_updated_at)
+                       VALUES (?, 'Nico Cartao D', '2013-04-04', '{"height_in": 58, "weight_lb": 95}', '2026-10-12T12:00:00Z')""", (ligada,))
+        con.commit()
+        return card
+    finally:
+        con.close()
+
+
+# rota: (as partes que algum cartão da tela tem, o texto de um cartão que tem de estar lá)
+_TELAS_D = {
+    "/site/agendamentos": ({"pilula", "nome", "bloco", "acoes"}, "Theo Cartao D"),
+    "/site/contas": ({"pilula", "nome", "acoes"}, "Marina Cartao D"),
+    "/site/pedidos": ({"pilula", "nome", "bloco", "acoes"}, "Marina Cartao D"),
+    "/site/deposito": ({"pilula", "nome", "bloco", "acoes"}, "Theo Cartao D"),
+    "/site/waiver": ({"pilula", "nome", "bloco", "acoes"}, "Bia Cartao D"),
+    "/site/servicos": ({"pilula", "nome", "bloco", "acoes"}, "Arrive and Drive 4-stroke"),
+    "/site/cartoes": ({"pilula", "nome", "bloco", "acoes"}, None),
+    "/site/produtos": ({"pilula", "nome", "bloco", "acoes"}, None),
+    "/site/estoque": ({"pilula", "nome", "bloco", "acoes"}, None),
+    "/site/editor": ({"pilula", "nome", "bloco", "acoes"}, None),
+    "/site/blog": ({"pilula", "nome", "bloco", "acoes"}, None),
+    "/sales": ({"pilula", "nome", "bloco"}, "Lia Cartao D"),        # o quadro: o cartão inteiro abre a venda
+    "/clients/{card}#site": ({"pilula", "nome"}, "Nico Cartao D"),
+}
+_FUNDO_D = {"dark": "rgb(28, 26, 24)", "light": "rgb(255, 255, 255)"}   # --surface de cada tema
+
+_CARTOES_D = """() => [...document.querySelectorAll('article.cd')].filter(c => c.getClientRects().length).map(c => {
+  // as ações: a grade de botões no pé do cartão (direto nele ou no pé do formulário dele)
+  const cs = getComputedStyle(c), ac = [...c.querySelectorAll('.cd-acoes')].pop(), pe = c.getBoundingClientRect().bottom
+  return { pilula: !!c.querySelector(':scope > .cd-pill'), nome: !!c.querySelector(':scope > .cd-quem > .cd-nome'),
+    bloco: !!c.querySelector(':scope > .cd-bloco'), acoes: !!(ac && ac.querySelector('.btn') && ac.getBoundingClientRect().bottom > pe - 40),
+    centrado: cs.alignItems === 'center' && cs.textAlign === 'center', raio: parseFloat(cs.borderTopLeftRadius),
+    fundo: cs.backgroundColor, grade: ac ? getComputedStyle(ac).display : 'grid', texto: c.textContent }
+})"""
+
+
+def _confere_cartoes_d(pg, servidor, rota, tema):
+    """Os problemas da tela (vazio = certo): o cartão D completo, um h1, sem rolar para o lado e alvo de 40 px."""
+    partes, texto = _TELAS_D[rota]
+    if rota.endswith("#site"):
+        abrir(pg, servidor, rota.removesuffix("#site").format(card=_dados_dos_cartoes_d()))
+        pg.get_by_role("button", name="Conta no site").click()
+    else:
+        abrir(pg, servidor, rota)
+    try:
+        pg.locator("article.cd").first.wait_for(timeout=5000)
+    except Exception:
+        pass                                       # sem cartão: o problema sai abaixo, com as outras telas
+    cartoes = pg.evaluate(_CARTOES_D)
+    probs = []
+    if not cartoes:
+        return [f"{rota}: nenhum cartão D"]
+    for k in ("pilula", "nome", "centrado"):
+        if not all(c[k] for c in cartoes):
+            probs.append(f"{rota}: cartão sem {k}")
+    faltam = {k for k in partes if not any(c[k] for c in cartoes)}
+    if faltam:
+        probs.append(f"{rota}: nenhum cartão com {sorted(faltam)}")
+    if texto and not any(texto in c["texto"] for c in cartoes):
+        probs.append(f"{rota}: o cartão de {texto!r} não está lá")
+    if any(c["raio"] < 16 or c["grade"] != "grid" for c in cartoes):
+        probs.append(f"{rota}: cartão sem o raio do D ou ações fora da grade")
+    if {c["fundo"] for c in cartoes} != {_FUNDO_D[tema]}:
+        probs.append(f"{rota}: fundo {sorted({c['fundo'] for c in cartoes})} fora do tema {tema}")
+    h1 = pg.evaluate("() => [...document.querySelectorAll('h1')].filter(h => h.getClientRects().length).length")
+    if h1 != 1:
+        probs.append(f"{rota}: {h1} h1")
+    r = pg.evaluate(_VAZA)
+    if r["rola"] or r["culpados"]:
+        probs.append(f"{rota}: rola para o lado {r['culpados']}")
+    pequenos = pg.evaluate(_PEQUENOS)
+    if pequenos:
+        probs.append(f"{rota}: alvo pequeno {pequenos}")
+    return probs
+
+
+@pytest.mark.parametrize("largura,tema", [(360, "dark"), (390, "dark"), (360, "light"), (390, "light")])
+def test_cartao_d_em_cada_tela_no_celular_nos_dois_temas(servidor, navegador, largura, tema):
+    _dados_dos_cartoes_d()
+    g = entrar(navegador, servidor, largura=largura, altura=800)
+    g.evaluate(f"localStorage.setItem('cc.theme', '{tema}')")
+    probs = []
+    for rota in _TELAS_D:
+        probs += _confere_cartoes_d(g, servidor, rota, tema)
+    # a lista de clientes continua tabela no computador; no celular, cada linha vira o cartão D: a pílula em cima,
+    # as iniciais, o nome centrado e o resto em linhas de lista
+    abrir(g, servidor, "/clients")
+    linha = g.evaluate("""() => { const tr = document.querySelector('table.tbl.rsp tbody tr'); const pos = s => tr.querySelector(s)?.getBoundingClientRect() || { top: 1e9, height: 0 }
+      return { raio: parseFloat(getComputedStyle(tr).borderTopLeftRadius), fundo: getComputedStyle(tr).backgroundColor,
+               pilula: pos('.rsp-pill').top, av: pos('.rsp-av').height, nome: pos('td.first').top,
+               centro: getComputedStyle(tr.querySelector('td.first')).textAlign } }""")
+    if not (linha["raio"] >= 20 and linha["fundo"] == _FUNDO_D[tema] and linha["pilula"] < linha["nome"] and linha["av"] >= 40
+            and linha["centro"] == "center"):
+        probs.append(f"/clients: a linha não vira o cartão D no celular {linha}")
+    r = g.evaluate(_VAZA)
+    if r["rola"] or r["culpados"]:
+        probs.append(f"/clients: rola para o lado {r['culpados']}")
+    assert not probs, "\n".join(probs)
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_cartao_d_no_computador_a_tabela_continua_tabela_e_o_cartao_da_venda_abre_inteiro(servidor, navegador):
+    """No computador: os cartões em grade, a tabela de muitas colunas continua tabela (sem virar cartão), a linha da lista
+    (`.tbl > .tr`) com o acabamento do D, e o cartão do quadro de vendas abre a venda clicando em qualquer lugar dele."""
+    _dados_dos_cartoes_d()
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    abrir(g, servidor, "/site/agendamentos")
+    g.locator("article.cd").first.wait_for()
+    assert g.evaluate("() => getComputedStyle(document.querySelector('.cd-grade')).gridTemplateColumns.split(' ').length") >= 2
+    cartao = g.locator("article.cd", has_text="Theo Cartao D")
+    assert "SÁB 19/12" in cartao.locator(".cd-grande").inner_text().upper() and "Manhã" in cartao.locator(".cd-bloco").inner_text()
+    assert cartao.get_by_role("button", name="Aceitar").bounding_box()["height"] >= 40
+    abrir(g, servidor, "/clients")
+    assert g.evaluate("() => getComputedStyle(document.querySelector('table.tbl.rsp tbody tr')).display") == "table-row"
+    assert g.evaluate("() => getComputedStyle(document.querySelector('.rsp-av')).display") == "none"
+    abrir(g, servidor, "/site/waiver")
+    linha = g.evaluate("""() => { const tr = document.querySelector('.tbl > .tr'), cs = getComputedStyle(tr)
+      return { display: cs.display, altura: tr.offsetHeight, padding: parseFloat(cs.paddingLeft), borda: cs.borderBottomStyle } }""")
+    assert linha["display"] == "flex" and linha["altura"] >= 52 and linha["padding"] >= 12 and linha["borda"] == "solid", linha
+    abrir(g, servidor, "/sales")
+    venda = g.locator("article.cd", has_text="Lia Cartao D")
+    caixa = venda.locator(".cd-bloco").bounding_box()          # longe do nome: o cartão inteiro é o link
+    g.mouse.click(caixa["x"] + 8, caixa["y"] + caixa["height"] - 4)
+    g.wait_for_url(re.compile(r"/sales/\d+$"))
+    g.get_by_role("heading", name="Lia Cartao D", level=1).wait_for()
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
