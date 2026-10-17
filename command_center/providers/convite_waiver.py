@@ -405,9 +405,9 @@ def _conferir_codigo(con, inv, codigo):
     return {**c, "used_at": agora_iso}
 
 
-def assinar(con, token, dados, ip=None, aparelho=None):
-    """Assina pelo convite. O card, o piloto, o modelo e o e-mail vêm do convite, nunca da tela.
-    Devolve (waiver, convite)."""
+def _preparar(con, token, dados):
+    """O que a revisão e o clique final conferem igual (#112: tudo, menos o código do e-mail)."""
+    from command_center.providers import revisao_waiver as rv
     inv = conferir(con, token)
     if not dados.get("read_and_agree") or not dados.get("consent_esign"):
         raise wn.ErroWaiver("Check both boxes to sign: that you read and agree, and that you agree to sign electronically.")
@@ -427,32 +427,58 @@ def assinar(con, token, dados, ip=None, aparelho=None):
     if wn._sha(base) != m["sha256"]:
         raise wn.ErroWaiver("The waiver document could not be verified. Please contact us.")
     wn._exigir_aviso(tipo, base)                           # #116: antes de gastar o código do e-mail
-    agora_utc = _agora()
-    entregue, lido, modo = wn._leitura(con, inv["id"], tipo, dados, agora_utc, entidade="waiver_invite",
+    entregue, lido, modo = wn._leitura(con, inv["id"], tipo, dados, _agora(), entidade="waiver_invite",
                                        evento="waiver.invite.document_view")
-    cod = _conferir_codigo(con, inv, dados.get("sign_code"))
     d = _do_card(con, inv["client_id"])
-    ids = _ids(inv, d["pilot_id"] if d else None, m)
+    pid = d["pilot_id"] if d else None
+    return {"inv": inv, "tipo": tipo, "parentesco": parentesco, "declaracao": declaracao, "m": m, "nome": nome, "png": png,
+            "base": base, "entregue": entregue, "lido": lido, "modo": modo, "pilot_id": pid, "ids": _ids(inv, pid, m),
+            "conteudo": rv.conteudo(dados, nome, wn._sha(png), pid, tipo, m["sha256"])}
+
+
+def revisar(con, token, dados, ip=None, aparelho=None):
+    """#112, passo 1 pelo convite: confere tudo menos o código e devolve o resumo; a revisão vai para a trilha."""
+    from command_center.providers import revisao_waiver as rv
+    x = _preparar(con, token, dados)
+    inv = x["inv"]
+    r = rv.criar(con, "invite", x["ids"], x["m"]["sha256"], x["conteudo"], x["nome"], inv["signer_name"], x["parentesco"],
+                 ip=ip, user_agent=aparelho, detail={"read_and_agree": True, "consent_esign": True, "language_ack": True,
+                                                     "guardian_declaration": bool(x["declaracao"]),
+                                                     "signature_png_sha256": wn._sha(x["png"])})
+    return wn.resumo(r, x["m"], x["tipo"], inv["driver_name"], inv["driver_birth_date"], inv["signer_name"], x["parentesco"],
+                     x["declaracao"], x["png"])
+
+
+def assinar(con, token, dados, ip=None, aparelho=None):
+    """Assina pelo convite. O card, o piloto, o modelo e o e-mail vêm do convite, nunca da tela.
+    #112: só com a revisão (`review_id`) deste convite, válida, nunca usada e com o mesmo conteúdo.
+    Devolve (waiver, convite)."""
+    from command_center.providers import revisao_waiver as rv
+    x = _preparar(con, token, dados)
+    inv, tipo, m, nome, png, ids = x["inv"], x["tipo"], x["m"], x["nome"], x["png"], x["ids"]
+    rev = rv.exigir(con, dados.get("review_id"), "invite", ids, m["sha256"], x["conteudo"], dados.get("name_mismatch_confirmed"))
+    cod = _conferir_codigo(con, inv, dados.get("sign_code"))
     tw.registrar(con, "code_verified", "invite", ip=ip, user_agent=aparelho,
                  detail={"sent_to": codigos.mascarar(cod["sent_to"]), "sent_at": cod["created_at"]}, **ids)
-    wn.revisou(con, "invite", nome, parentesco, declaracao, ip, aparelho, ids)
     agora_utc = _agora()                                  # a hora da assinatura vem depois do último passo da trilha
     ny = agora_utc.astimezone(portal.FUSO)
     nasc = date.fromisoformat(inv["driver_birth_date"])
     ate_d = wn.validade(tipo, nasc, ny.date())
     ate_motivo = ("the day before the minor turns 18" if tipo == "parental" and ate_d < ny.date() + timedelta(days=wn.VALIDADE_DIAS)
                   else "one year")
+    revisao = rv.na_trilha(rev, agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), dados.get("name_mismatch_confirmed"))
     trilha = {
         "signature_id": str(uuid.uuid4()), "template": tipo, "template_name": m["name"], "template_sha256": m["sha256"],
         "template_pages": m["pages"], "account_id": None, "account_email": inv["email"], "email_label": "Email",
         "signer_name": inv["signer_name"], "typed_name": nome, "client_id": inv["client_id"],
-        "driver_id": d["pilot_id"] if d else None, "driver_name": inv["driver_name"],
-        "driver_birth_date": inv["driver_birth_date"], "signer_relationship": parentesco, "guardian_declaration": declaracao,
+        "driver_id": x["pilot_id"], "driver_name": inv["driver_name"],
+        "driver_birth_date": inv["driver_birth_date"], "signer_relationship": x["parentesco"],
+        "guardian_declaration": x["declaracao"],
         "signed_at_utc": agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "signed_at_local": ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "ip": ip, "user_agent": (aparelho or "")[:300], "read_and_agree": True, "consent_esign": True,
         "language_ack": wn.IDIOMA, "governing_law": "Florida law; courts in Orange County, Florida",
-        "document_delivered_at": entregue, "document_all_pages_viewed_at": lido,
-        "reading_mode": modo, "reading_requirement": wn.MODOS_LEITURA[modo],
+        "document_delivered_at": x["entregue"], "document_all_pages_viewed_at": x["lido"],
+        "reading_mode": x["modo"], "reading_requirement": wn.MODOS_LEITURA[x["modo"]],
         "authentication": (f"Personal one-time invitation link emailed by URACE to {inv['email']} at {inv['sent_at']} "
                            f"(valid until {inv['expires_at']}); one-time code sent to {cod['sent_to']} at {cod['created_at']}, "
                            f"confirmed {cod['used_at']}"),
@@ -461,6 +487,7 @@ def assinar(con, token, dados, ip=None, aparelho=None):
         "otp_sent_to": cod["sent_to"], "otp_sent_at": cod["created_at"], "otp_verified_at": cod["used_at"],
         "otp_message_id": cod["message_id"],
         "signature_png_sha256": wn._sha(png), "valid_until": ate_d.isoformat(), "valid_until_reason": ate_motivo,
+        "review": revisao, "reviewed_at_utc": revisao["reviewed_at"], "confirmed_at_utc": revisao["confirmed_at"],
     }
 
     def marcar_usado(c2):
@@ -468,13 +495,14 @@ def assinar(con, token, dados, ip=None, aparelho=None):
                          (agora(), inv["id"]))
         if cur.rowcount != 1:
             raise LinkInvalido("This link was already used: the waiver is signed.", "used", inv)
+        rv.marcar_usada(c2, rev["id"])
 
-    w = wn.gravar(con, base, m, trilha, png, client_id=inv["client_id"], pilot_id=d["pilot_id"] if d else None,
+    w = wn.gravar(con, x["base"], m, trilha, png, client_id=inv["client_id"], pilot_id=x["pilot_id"],
                   signer_name=inv["signer_name"], signer_email=inv["email"],
                   link_reason=f"assinada pelo convite #{inv['id']}, enviado ao e-mail do card", link_by="human",
                   resumo=f"waiver de {inv['signer_name']} assinada pelo convite por e-mail ({inv['driver_name']})",
                   antes=marcar_usado, eventos={"fluxo": "invite", "cobrir": dict(invite_id=inv["id"]), "ids": ids,
-                                               "ip": ip, "user_agent": aparelho})
+                                               "ip": ip, "user_agent": aparelho, "detalhe": wn._no_signed(revisao)})
     con.execute("UPDATE waiver_invites SET waiver_id=? WHERE id=?", (w["id"], inv["id"]))
     auditar(con, "waiver.invite.signed", f"invite:{inv['id']}", entity_type="client", entity_id=inv["client_id"],
             detail={"invite": inv["id"], "waiver": w["id"], "kind": tipo, "sha256": w["doc_sha256"]}, ip=ip)

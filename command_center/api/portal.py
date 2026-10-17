@@ -677,6 +677,8 @@ class WaiverIn(BaseModel):
     document_read_at: str | None = None       # #107: quando a tela viu todas as páginas do PDF (ISO, UTC)
     document_read_mode: str | None = None     # pdf_viewer | pdf_opened_and_text (o navegador não desenhou o PDF)
     sign_code: str | None = None              # #108: o código que chegou no e-mail da conta
+    review_id: int | None = Field(None, ge=1, le=2**63 - 1)   # #112: a revisão que este clique final confirma
+    name_mismatch_confirmed: bool = False     # #112: o nome digitado é outro e quem assina confirmou
 
 
 class CodigoIn(BaseModel):
@@ -774,6 +776,21 @@ def waiver_modelo_pdf(kind: str, request: Request, driver: int | None = Query(No
                     headers={"Content-Disposition": f'inline; filename="URACE-waiver-{kind}.pdf"', "Cache-Control": "no-store"})
 
 
+@r.post("/drivers/{pid}/waiver/review", status_code=201)
+def revisar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(cliente_atual),
+                   con: sqlite3.Connection = Depends(get_db)):
+    """#112, passo 1: confere tudo menos o código e devolve o resumo que a tela mostra antes do clique final."""
+    from command_center.providers import revisao_waiver as rv, waiver_nativa as wn
+    try:
+        return wn.revisar(con, cid, pid, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
+    except LookupError:
+        raise HTTPException(404, "Driver not found.")
+    except wn.ErroWaiver as e:
+        raise HTTPException(400, str(e))
+    except rv.Demais as e:
+        raise HTTPException(429, str(e))
+
+
 @r.post("/drivers/{pid}/waiver", status_code=201)
 def assinar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(cliente_atual),
                    con: sqlite3.Connection = Depends(get_db)):
@@ -859,6 +876,8 @@ class ConviteAssinarIn(BaseModel):
     document_read_at: str | None = None
     document_read_mode: str | None = None
     sign_code: str | None = None
+    review_id: int | None = Field(None, ge=1, le=2**63 - 1)   # #112
+    name_mismatch_confirmed: bool = False
 
 
 def _convite_recusado(con, request, e):
@@ -920,6 +939,20 @@ def convite_evento(token: str, dados: EventoTelaIn, request: Request, con: sqlit
     except ValueError:
         raise HTTPException(400, "Unknown event.")
     return {"ok": True, "id": e["id"]}
+
+
+@r.post("/invite/{token}/review", status_code=201)
+def convite_revisar(token: str, dados: ConviteAssinarIn, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """#112, passo 1 pelo convite: confere tudo menos o código e devolve o resumo."""
+    from command_center.providers import convite_waiver as cw, revisao_waiver as rv, waiver_nativa as wn
+    try:
+        return cw.revisar(con, token, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
+    except cw.LinkInvalido as e:
+        raise _convite_recusado(con, request, e)
+    except wn.ErroWaiver as e:
+        raise HTTPException(400, str(e))
+    except rv.Demais as e:
+        raise HTTPException(429, str(e))
 
 
 @r.post("/invite/{token}/sign", status_code=201)

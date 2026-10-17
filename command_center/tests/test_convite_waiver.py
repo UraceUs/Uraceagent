@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 from command_center.db import conectar, inserir, todos, um
 from command_center.providers import convite_waiver as cw
-from command_center.tests.test_waiver_nativa import P, _assinatura, cli, equipe, liga  # noqa: F401 (fixture)
+from command_center.tests.test_waiver_nativa import P, _assinatura, cli, equipe, liga, revisa_e_assina  # noqa: F401 (fixture)
 
 API = "/ops/api"
 
@@ -61,7 +61,7 @@ def assina(cli, token, codigo=True, **mais):  # noqa: F811
     corpo = {"typed_name": "Leo Santos Junior", "signature": _assinatura(), "read_and_agree": True, "consent_esign": True,
              "english_understood": True, "document_read_at": datetime.now(timezone.utc).isoformat(),
              "document_read_mode": "pdf_viewer", **mais}
-    return cli.post(f"{P}/invite/{token}/sign", json=corpo)
+    return revisa_e_assina(cli, f"{P}/invite/{token}/sign", f"{P}/invite/{token}/review", corpo)
 
 
 def eventos(cid):

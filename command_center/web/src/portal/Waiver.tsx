@@ -6,10 +6,13 @@
  * Para assinar: ler, marcar as duas caixas (concordo / assino eletronicamente), digitar o nome completo e
  * desenhar a assinatura. Quem assina é o responsável logado; o servidor decide o modelo pela
  * idade do piloto e guarda a prova (hora, IP, aparelho, hashes). A adult só o próprio piloto
- * assina (#104): para um adulto que não é o titular, a tela explica em vez de assinar. */
+ * assina (#104): para um adulto que não é o titular, a tela explica em vez de assinar.
+ * #112: dois passos. "Review before signing" manda tudo ao servidor, que confere e devolve o resumo
+ * (RevisaoWaiver.tsx); o código do e-mail e o "I agree — sign the waiver" ficam nesse resumo. */
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { papi, PortalError, type Account, type WaiverModelo, type Waivers } from './api'
+import { papi, PortalError, type Account, type RevisaoWaiver, type WaiverModelo, type Waivers } from './api'
+import { Revisao } from './RevisaoWaiver'
 import { VisorPdf } from './VisorPdf'
 
 const BASE = '/ops/api/portal'
@@ -74,6 +77,10 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   const [enviado, setEnviado] = useState<{ email?: string; assinar?: string }>({})
   const [ocupado, setOcupado] = useState(false)
   const [abriuPdf, setAbriuPdf] = useState(false)
+  // #112: o resumo do passo 1 (revisão) e a confirmação do nome, quando o digitado é outro
+  const [rev, setRev] = useState<RevisaoWaiver | null>(null)
+  const [nomeOk, setNomeOk] = useState(false)
+  const [revisando, setRevisando] = useState(false)
   const meu = sit?.drivers.find(d => d.driver_id === pid)
 
   useEffect(() => { papi<Waivers>('GET', '/waivers').then(setSit).catch(e => setErro((e as PortalError).message)) }, [])
@@ -93,11 +100,19 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     if (!lido) papi('POST', `/drivers/${pid}/waiver/events`, { event: 'all_pages_viewed', mode: modo }).catch(() => {})
   }
 
-  async function assinar(e: FormEvent) {
-    e.preventDefault(); setErro(null); setIndo(true)
-    try { setFeita(await papi('POST', `/drivers/${pid}/waiver`, { ...f, document_read_at: lido?.em ?? null, document_read_mode: lido?.modo ?? null, sign_code: cod.assinar })) }
+  const corpo = () => ({ ...f, document_read_at: lido?.em ?? null, document_read_mode: lido?.modo ?? null })
+  async function revisar(e: FormEvent) {
+    e.preventDefault(); setErro(null); setRevisando(true)
+    try { setRev(await papi<RevisaoWaiver>('POST', `/drivers/${pid}/waiver/review`, corpo())); setNomeOk(false) }
+    catch (ex) { setErro((ex as PortalError).message) } finally { setRevisando(false) }
+  }
+  async function assinar() {
+    if (!rev) return
+    setErro(null); setIndo(true)
+    try { setFeita(await papi('POST', `/drivers/${pid}/waiver`, { ...corpo(), sign_code: cod.assinar, review_id: rev.review_id, name_mismatch_confirmed: nomeOk })) }
     catch (ex) { setErro((ex as PortalError).message) } finally { setIndo(false) }
   }
+  function voltar() { setRev(null); setErro(null); window.scrollTo(0, 0) }
 
   async function mandarCodigo(qual: 'email' | 'assinar') {
     setErro(null); setOcupado(true)
@@ -138,8 +153,18 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
 
   const menor = meu.kind === 'parental'
   const naoOnline = menor && (f.relationship === 'legal_guardian' || f.relationship === 'other')
-  return <form className="stack" style={{ gap: 18 }} onSubmit={assinar} noValidate>
+  const codigoDeAssinar = <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
+    <p className="small muted" style={{ margin: 0 }}>To sign, enter the code we send to <b>{sit.email}</b> now. It shows that it is really you.</p>
+    {!enviado.assinar ? <button type="button" className="btn" disabled={ocupado} onClick={() => mandarCodigo('assinar')}>Send me the signing code</button>
+      : <>
+        <label className="fld"><span>Signing code sent to {enviado.assinar}</span>
+          <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={cod.assinar} onChange={e => setCod({ ...cod, assinar: e.target.value.replace(/\D/g, '') })} /></label>
+        <button type="button" className="btn ghost sm" disabled={ocupado} onClick={() => mandarCodigo('assinar')}>Send a new code</button>
+      </>}
+  </div>
+  return <div className="stack" style={{ gap: 18 }}>
     {topo}
+    <div hidden={!!rev}><form className="stack" style={{ gap: 18 }} onSubmit={revisar} noValidate>
     <p className="muted" style={{ margin: 0 }}>{TIPO[meu.kind]}. {menor
       ? <>You sign as the <b>parent</b> of {piloto.name}.</>
       : 'You sign for yourself.'} {menor ? <>Valid for one year, or until the day before {piloto.name} turns 18, whichever comes first.</> : 'Valid for one year.'}</p>
@@ -157,7 +182,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
       {!naoOnline && modelo?.declaration && <label className="check"><input type="checkbox" checked={f.guardian_declaration}
         onChange={e => setF({ ...f, guardian_declaration: e.target.checked })} /> {modelo.declaration.replace('{minor}', piloto.name)}</label>}
     </section>}
-    {erro && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
+    {erro && !rev && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
     <section className="stack" aria-labelledby="w-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="w-doc">Read the document</h2>
         <a className="btn sm" href={`${BASE}/waivers/model/${meu.kind}/pdf?driver=${pid}`} target="_blank" rel="noreferrer" onClick={() => setAbriuPdf(true)}>Open the PDF</a></div>
@@ -184,7 +209,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
       <label className="fld"><span>Your full name<b className="portal-obr" aria-hidden="true"> *</b><i> · typed, as your signature</i></span>
         <input autoComplete="name" value={f.typed_name} onChange={e => setF({ ...f, typed_name: e.target.value })} required /></label>
       <Quadro onMuda={png => setF(x => ({ ...x, signature: png }))} />
-      {!sit.email_verified ? <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
+      {!sit.email_verified && <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
         <h3 className="h3" style={{ margin: 0 }}>Confirm your email</h3>
         <p className="small muted" style={{ margin: 0 }}>Before you sign, we confirm that <b>{sit.email}</b> is yours with a 6-digit code. You do this once.</p>
         {!enviado.email ? <button type="button" className="btn" disabled={ocupado} onClick={() => mandarCodigo('email')}>Send the code to my email</button>
@@ -195,17 +220,13 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
               <button type="button" className="btn" disabled={ocupado || cod.email.length !== 6} onClick={confirmarEmail}>Confirm email</button>
               <button type="button" className="btn ghost sm" disabled={ocupado} onClick={() => mandarCodigo('email')}>Send a new code</button></div>
           </>}
-      </div> : <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
-        <p className="small muted" style={{ margin: 0 }}>To sign, enter the code we send to <b>{sit.email}</b> now. It shows that it is really you.</p>
-        {!enviado.assinar ? <button type="button" className="btn" disabled={ocupado || !lido} onClick={() => mandarCodigo('assinar')}>Send me the signing code</button>
-          : <>
-            <label className="fld"><span>Signing code sent to {enviado.assinar}</span>
-              <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={cod.assinar} onChange={e => setCod({ ...cod, assinar: e.target.value.replace(/\D/g, '') })} /></label>
-            <button type="button" className="btn ghost sm" disabled={ocupado} onClick={() => mandarCodigo('assinar')}>Send a new code</button>
-          </>}
       </div>}
-      <button className="btn primary block" disabled={indo || !modelo || naoOnline || !lido || !sit.email_verified || cod.assinar.length !== 6}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
-      <p className="small muted" style={{ margin: 0 }}>We record the date and time, your IP address, device and the email code with your signature. You get the signed PDF right after.</p>
+      <button className="btn primary block" disabled={revisando || !modelo || naoOnline || !lido || !sit.email_verified}>{revisando ? 'Checking…' : 'Review before signing'}</button>
+      <p className="small muted" style={{ margin: 0 }}>Next you see a summary to check. Nothing is signed until you confirm it. We record the date and time,
+        your IP address, device and the email code with your signature, and you get the signed PDF right after.</p>
     </section>
-  </form>
+    </form></div>
+    {rev && <Revisao r={rev} assinatura={f.signature} nomeConfirmado={nomeOk} onNomeConfirmado={setNomeOk} codigo={codigoDeAssinar}
+      podeAssinar={cod.assinar.length === 6} indo={indo} erro={erro} onVoltar={voltar} onAssinar={assinar} />}
+  </div>
 }

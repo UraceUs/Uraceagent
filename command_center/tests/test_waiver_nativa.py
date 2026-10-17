@@ -149,7 +149,20 @@ def assina(cli, h, pid, ler=True, codigo=True, **mais):
              "english_understood": True,
              "relationship": "mother", "guardian_declaration": True,
              "document_read_at": datetime.now(timezone.utc).isoformat(), "document_read_mode": "pdf_viewer", **mais}
-    return cli.post(f"{P}/drivers/{pid}/waiver", json=corpo, headers=h)
+    return revisa_e_assina(cli, f"{P}/drivers/{pid}/waiver", f"{P}/drivers/{pid}/waiver/review", corpo, h)
+
+
+def revisa_e_assina(cli, url, url_revisao, corpo, h=None):
+    """#112, como a tela: o passo 1 (a revisão, que devolve o resumo) e o clique final com o `review_id`. Se o nome
+    digitado é outro, confirma, como a pessoa faria (quem testa a confirmação manda `name_mismatch_confirmed`)."""
+    r = cli.post(url_revisao, json={k: v for k, v in corpo.items() if k not in ("review_id", "name_mismatch_confirmed")},
+                 headers=h or {})
+    if r.status_code != 201:
+        return r
+    extra = {"review_id": r.json()["review_id"]}
+    if not r.json()["name_matches"] and "name_mismatch_confirmed" not in corpo:
+        extra["name_mismatch_confirmed"] = True
+    return cli.post(url, json={**corpo, **extra}, headers=h or {})
 
 
 # ------------------------------------------------------------------ ligar

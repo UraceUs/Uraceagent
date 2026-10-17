@@ -7,7 +7,8 @@ hash da anterior: `hash = sha256(prev_hash | json canônico da linha)`. `verific
 primeira linha mexida.
 
 - **Antes de assinar** (vão para o certificado dentro do PDF selado): convite enviado, abriu a tela, recebeu o
-  PDF, leu todas as páginas, código enviado, código confirmado, revisou e assinou. "Abriu a tela" e "leu todas
+  PDF, leu todas as páginas, revisou o resumo (#112: o passo 1, antes do clique final), código enviado, código
+  confirmado e assinou. "Abriu a tela" e "leu todas
   as páginas" só a tela sabe: chegam por `POST /drivers/{pid}/waiver/events` e `POST /invite/{token}/events`,
   com lista fechada (`DA_TELA`) e limite de chamadas; ficam marcados `source='client'`.
 - Os eventos de antes se ligam à waiver pelo **escopo** (conta + piloto + modelo desde a última assinatura da
@@ -31,7 +32,7 @@ EVENTOS = {
     "all_pages_viewed": "Every page of the document shown on screen",
     "code_sent": "One-time code emailed to the signer",
     "code_verified": "One-time code confirmed",
-    "reviewed": "Signer confirmed the boxes, the relationship and the typed name",
+    "reviewed": "Signer reviewed the summary (driver, signer, relationship, typed name, signature) before the final click",
     "signed": "Signed",
     "copy_emailed": "Signed copy emailed to the signer",
     "id_checked": "Photo ID checked at the track",
