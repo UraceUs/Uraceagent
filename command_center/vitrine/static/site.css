@@ -352,6 +352,11 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .post-corpo a { color: var(--vermelho) }
 .post-corpo table { border-collapse: collapse; width: 100%; display: block; overflow-x: auto; font-size: .92rem }
 .post-corpo td, .post-corpo th { border: 1px solid #e3e3ea; padding: 6px 10px; text-align: left }
+/* #172: o que o editor do blog escreve além disso — figura, legenda e citação, no fundo claro do artigo */
+.post-corpo figure { margin: 0; display: grid; gap: 6px; min-width: 0 }
+.post-corpo figcaption { color: var(--cinza); font-size: .9rem }
+.post-corpo blockquote { background: var(--papel); border: 0; border-left: 4px solid var(--vermelho); border-radius: 0 var(--raio) var(--raio) 0;
+  padding: 12px 16px; color: var(--tinta) }
 
 /* loja */
 .produtos-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
