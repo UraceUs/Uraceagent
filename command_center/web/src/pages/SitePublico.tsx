@@ -720,7 +720,8 @@ const SiteDepositos = lazy(() => import('./SiteDepositos').then(m => ({ default:
 /* #309: o estoque do site (dropshipping ou em estoque, ligado ao estoque do box), em arquivo próprio. */
 const EstoqueDoSite = lazy(() => import('./EstoqueDoSite').then(m => ({ default: m.EstoqueDoSite })))
 const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
-const EditorDePagina = lazy(() => import('./EditorSite').then(m => ({ default: m.EditorDePagina })))
+/* #315: a página em si abre no editor como o Canva, num arquivo só dele (a lista não carrega o editor). */
+const EditorDePagina = lazy(() => import('./editor/Editor').then(m => ({ default: m.EditorDePagina })))
 /* #172: o blog do site (o OPERATOR escreve, o ADMIN publica), em arquivo próprio. */
 const ArtigosDoBlog = lazy(() => import('./BlogDoSite').then(m => ({ default: m.ArtigosDoBlog })))
 const EditarArtigo = lazy(() => import('./BlogDoSite').then(m => ({ default: m.EditarArtigo })))

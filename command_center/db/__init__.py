@@ -400,6 +400,9 @@ MIGRACOES = [
     ("bookings", "list_price", "REAL"),
     # #314: o pedido de vários dias de onde a sessão saiu (as extras do pedido saem numa invoice só)
     ("bookings", "group_id", "INTEGER REFERENCES booking_groups(id)"),
+    # 16/10 — dono (#315): o editor do site "como um Canva". Cada rascunho salvo soma 1: dois gerentes na mesma página
+    # não apagam o que o outro fez, e o Publicar só põe no ar o que a tela mostra
+    ("site_pages", "rev", "INTEGER NOT NULL DEFAULT 0"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

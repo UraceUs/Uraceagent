@@ -16,6 +16,14 @@ cartões vêm do banco (#297, #298), nunca de texto colado.
 Cor, tamanho e espaçamento são escolhas da paleta do site (classes, sem estilo solto: a política do site não deixa
 estilo inline, e a paleta garante o contraste). Na publicação, `problemas()` confere o que o editor gerou: um h1,
 título sem pular nível, foto com descrição, título e descrição da página.
+
+#315 (dono, 16/10: *"ele abre uma mini visualização de como é o site público. E dali a pessoa consegue, por ali, clicar
+no que ela precisa editar … É como se fosse um Canva"*): a prévia virou a área de trabalho. Para isso:
+- `corpo(..., marcar=True)` põe `data-ed-*` em cada seção, coluna e elemento (e um marcador no elemento vazio), só na
+  prévia de edição; o HTML do site fica igual byte a byte;
+- o **rascunho é tolerante** (`limpar(..., rascunho=True)`): título ou botão vazio passam e viram problema na publicação;
+  link, foto ou texto que não passam ficam com o valor anterior do mesmo elemento e voltam em `erros`. Link inseguro
+  nunca é gravado, nem no rascunho.
 """
 import json
 import re
@@ -57,6 +65,30 @@ def _txt(v, n, campo, obrigatorio=False):
     return t
 
 
+class _Rascunho:
+    """#315: o que o rascunho deixa passar. Fora do rascunho (`ligado=False`) o erro sobe como sempre; no rascunho, o
+    campo fica com o valor anterior do mesmo elemento e o motivo vai para `erros`."""
+    def __init__(self, ligado, anterior):
+        self.ligado, self.ant, self.erros = ligado, anterior or {}, []
+
+    def campo(self, nome, fazer, padrao):
+        try:
+            return fazer()
+        except ErroEditor as x:
+            if not self.ligado:
+                raise
+            self.erros.append(str(x))
+            return self.ant.get(nome, padrao)
+
+    def texto(self, v, n, campo, obrigatorio=False):
+        if self.ligado:     # no meio da edição: vazio passa (vira problema na publicação), comprido é cortado e avisado
+            t = re.sub(r"\s+", " ", str(v or "")).strip()
+            if len(t) > n:
+                self.erros.append(f"{campo}: até {n} caracteres")
+            return t[:n]
+        return _txt(v, n, campo, obrigatorio)
+
+
 def _escolha(v, opcoes, padrao):
     return v if v in opcoes else padrao
 
@@ -81,37 +113,45 @@ def foto_ok(src):
 
 
 # ------------------------------------------------------------------ validação
-def _widget(w):
+def _widget(w, rascunho=False, anterior=None):
+    """Um elemento → o modelo. `rascunho` (#315): o estado do meio da edição passa (ver `_Rascunho`); `anterior` é o
+    mesmo elemento como estava salvo. Devolve o elemento e a lista de erros (vazia fora do rascunho)."""
     if not isinstance(w, dict) or w.get("tipo") not in WIDGETS:
         raise ErroEditor("elemento desconhecido")
     t = w["tipo"]
     out = {"id": re.sub(r"[^a-z0-9]", "", str(w.get("id") or ""))[:12] or novo_id(), "tipo": t}
+    r = _Rascunho(rascunho, anterior if isinstance(anterior, dict) and anterior.get("tipo") == t else None)
     if t in ("titulo", "texto", "botao"):
         out["alinhar"] = _escolha(w.get("alinhar"), ALINHAR, "esq")
     if t in ("titulo", "texto"):
         out["tamanho"] = _escolha(w.get("tamanho"), TAMANHOS, "m")
         out["cor"] = _escolha(w.get("cor"), CORES, "padrao")
     if t == "titulo":
-        out["texto"] = _txt(w.get("texto"), 160, "título", True)
+        out["texto"] = r.texto(w.get("texto"), 160, "título", True)
         out["nivel"] = w.get("nivel") if w.get("nivel") in (1, 2, 3) else 2
     elif t == "texto":
-        h = html_seguro.limpar(w.get("html"))
-        if len(h) > html_seguro.MAX:
-            raise ErroEditor("texto longo demais")
-        out["html"] = h
+        def html():
+            # #315: o texto editado na prévia (contenteditable) separa as linhas com <div>: vira parágrafo
+            h = html_seguro.limpar(re.sub(r"<(/?)div\b[^>]*>", r"<\1p>", str(w.get("html") or "")))
+            if len(h) > html_seguro.MAX:
+                raise ErroEditor("texto longo demais")
+            return h
+        out["html"] = r.campo("html", html, "")
     elif t == "imagem":
-        out["src"] = foto_ok(w.get("src"))
-        out["alt"] = _txt(w.get("alt"), 200, "descrição da foto")
+        src = w.get("src")
+        out["src"] = "" if rascunho and not src else r.campo("src", lambda: foto_ok(src), "")
+        out["alt"] = r.texto(w.get("alt"), 200, "descrição da foto")
         out["forma"] = _escolha(w.get("forma"), FORMAS, "larga")
         out["largura"] = max(1, min(4000, int(w.get("largura") or 1600)))
         out["altura"] = max(1, min(4000, int(w.get("altura") or 900)))
-        out["legenda"] = _txt(w.get("legenda"), 200, "legenda")
+        out["legenda"] = r.texto(w.get("legenda"), 200, "legenda")
     elif t == "botao":
-        out["texto"] = _txt(w.get("texto"), 60, "botão", True)
-        out["link"] = link_ok(w.get("link"))
+        out["texto"] = r.texto(w.get("texto"), 60, "botão", True)
+        link = w.get("link")
+        out["link"] = "" if rascunho and not str(link or "").strip() else r.campo("link", lambda: link_ok(link), "")
         out["estilo"] = _escolha(w.get("estilo"), ("cheio", "linha"), "cheio")
     elif t == "lista":
-        itens = [_txt(x, 200, "item da lista") for x in (w.get("itens") or [])][:30]
+        itens = [r.texto(x, 200, "item da lista") for x in (w.get("itens") or [])][:30]
         out["itens"] = [x for x in itens if x]
     elif t == "espaco":
         out["tamanho"] = _escolha(w.get("tamanho"), TAMANHOS, "m")
@@ -123,20 +163,33 @@ def _widget(w):
     elif t == "faq":
         itens = []
         for x in (w.get("itens") or [])[:20]:
-            q, a = _txt((x or {}).get("pergunta"), 200, "pergunta"), _txt((x or {}).get("resposta"), 1200, "resposta")
-            if q and a:
+            q = r.texto((x or {}).get("pergunta"), 200, "pergunta")
+            a = r.texto((x or {}).get("resposta"), 1200, "resposta")
+            if q and a or rascunho and (q or a):      # no rascunho, a pergunta ainda sem resposta fica
                 itens.append({"pergunta": q, "resposta": a})
         out["itens"] = itens
-    return out
+    return out, r.erros
 
 
-def limpar(conteudo, com_originais=False, n_originais=0):
-    """O que veio do painel → o modelo guardado. Recusa o que não é do modelo; nunca guarda HTML solto."""
+def _elementos(conteudo):
+    """{id: elemento} de um conteúdo já guardado (o "anterior" do rascunho)."""
+    if not isinstance(conteudo, dict):
+        return {}
+    return {w.get("id"): w for it in conteudo.get("itens") or [] if isinstance(it, dict) and it.get("tipo") == "secao"
+            for c in it.get("itens") or [] if isinstance(c, list) for w in c if isinstance(w, dict)}
+
+
+def limpar(conteudo, com_originais=False, n_originais=0, rascunho=False, anterior=None, erros=None):
+    """O que veio do painel → o modelo guardado. Recusa o que não é do modelo; nunca guarda HTML solto.
+
+    `rascunho` (#315): o meio da edição passa (ver `_widget`); `anterior` é o conteúdo salvo antes (o valor que fica
+    quando um campo não passa) e `erros` (um dict) recebe `{id do elemento: motivo}`."""
     itens = (conteudo or {}).get("itens") if isinstance(conteudo, dict) else None
     if not isinstance(itens, list):
         raise ErroEditor("página sem itens")
     if len(itens) > MAX_ITENS:
         raise ErroEditor(f"até {MAX_ITENS} seções por página")
+    antes = _elementos(anterior) if rascunho else {}
     out, vistos = [], set()
     for it in itens:
         if not isinstance(it, dict):
@@ -159,7 +212,13 @@ def limpar(conteudo, com_originais=False, n_originais=0):
         for c in cols:
             if not isinstance(c, list) or len(c) > MAX_POR_COLUNA:
                 raise ErroEditor(f"até {MAX_POR_COLUNA} elementos por coluna")
-            colunas.append([_widget(w) for w in c])
+            col = []
+            for w in c:
+                feito, problemas_w = _widget(w, rascunho, antes.get(str((w or {}).get("id") or "")) if isinstance(w, dict) else None)
+                if problemas_w and erros is not None:
+                    erros[feito["id"]] = "; ".join(dict.fromkeys(problemas_w))
+                col.append(feito)
+            colunas.append(col)
         out.append({"id": re.sub(r"[^a-z0-9]", "", str(it.get("id") or ""))[:12] or novo_id(), "tipo": "secao",
                     "fundo": _escolha(it.get("fundo"), FUNDOS, "clara"), "espaco": _escolha(it.get("espaco"), ESPACOS, "m"),
                     "colunas": n, "itens": colunas})
@@ -250,7 +309,7 @@ def _classes(w):
                                 f"ed-al-{w.get('alinhar', 'esq')}") if x)
 
 
-def _w(w, dados, primeira_foto):
+def _w(w, dados, primeira_foto, marcar=False):
     from command_center.vitrine import paginas_site as ps
     from command_center.vitrine.paginas import foto_url, usd
     t = w["tipo"]
@@ -258,8 +317,12 @@ def _w(w, dados, primeira_foto):
         n = w["nivel"]
         return f'<h{n} class="ed-t {_classes(w)}">{e(w["texto"])}</h{n}>'
     if t == "texto":
+        if not w["html"] and marcar:          # #315: o texto vazio continua clicável na prévia, para escrever nele
+            return f'<div class="texto ed-tx {_classes(w)} ed-vazio"></div>'
         return f'<div class="texto ed-tx {_classes(w)}">{w["html"]}</div>' if w["html"] else ""
     if t == "imagem":
+        if not w.get("src"):                  # #315: a imagem posta no rascunho que ainda espera a foto
+            return '<figure class="ed-img ed-vazio"></figure>' if marcar else ""
         lazy = "" if primeira_foto[0] else ' loading="lazy"'
         primeira_foto[0] = False
         leg = f"<figcaption>{e(w['legenda'])}</figcaption>" if w.get("legenda") else ""
@@ -267,8 +330,11 @@ def _w(w, dados, primeira_foto):
                 f'width="{w["largura"]}" height="{w["altura"]}" decoding="async"{lazy}>{leg}</figure>')
     if t == "botao":
         cl = "btn" + (" btn-linha-escura" if w["estilo"] == "linha" else "")
-        return f'<p class="hero-acoes ed-al-{w["alinhar"]}"><a class="{cl}" href="{e(w["link"])}">{e(w["texto"])}</a></p>'
+        href = f' href="{e(w["link"])}"' if w.get("link") else ""
+        return f'<p class="hero-acoes ed-al-{w["alinhar"]}"><a class="{cl}"{href}>{e(w["texto"])}</a></p>'
     if t == "lista":
+        if not w["itens"] and marcar:
+            return '<ul class="lista ed-lista ed-vazio"><li></li></ul>'
         return f'<ul class="lista ed-lista">{"".join(f"<li>{e(x)}</li>" for x in w["itens"])}</ul>' if w["itens"] else ""
     if t == "espaco":
         return f'<div class="ed-espaco ed-espaco-{w["tamanho"]}" aria-hidden="true"></div>'
@@ -287,25 +353,57 @@ def _w(w, dados, primeira_foto):
         return f'<div class="produtos-grade">{"".join(ps._produto_card(p) for p in ps_)}</div>' if ps_ else ""
     if t == "cartoes":
         cs = (dados.get("cartoes") or {}).get(w["pagina"]) or []
-        return ps._grupos_dos_cartoes(cs, dados.get("planos")) if cs else ""
+        html = ps._grupos_dos_cartoes(cs, dados.get("planos")) if cs else ""
+        return f'<div class="ed-caixa">{html}</div>' if html and marcar else html     # #315: um nó só para clicar
     if t == "faq":
         return ps._faq([(x["pergunta"], (x["resposta"],)) for x in w["itens"]], ident=f"faq-{w['id']}") if w["itens"] else ""
     return ""
 
 
-def corpo(conteudo, dados=None, originais=()):
-    """O HTML do `<main>`: as seções novas e as originais (as que não estão escondidas), na ordem do editor."""
+def _marca(html, w):
+    """#315: o elemento na prévia de edição ganha `data-ed-w` (o id) e `data-ed-tipo` no primeiro nó; o que não tem
+    nada para mostrar vira um marcador clicável (o painel escreve a dica dele)."""
+    attrs = f'data-ed-w="{e(w["id"])}" data-ed-tipo="{w["tipo"]}"'
+    if not html:
+        return f'<div class="ed-vazio" {attrs}></div>'
+    return re.sub(r"^<([a-z0-9]+)", lambda m: f"<{m.group(1)} {attrs}", html, count=1)
+
+
+def _marca_original(html, i, oculto):
+    """#315: a faixa original na prévia de edição: `data-ed-s`/`data-ed-o` na `<section>` de fora. A escondida aparece
+    apagada (`data-ed-oculto`) para dar para mostrar de novo clicando nela; no site ela some."""
+    extra = f' data-ed-s="o{i}" data-ed-o="{i}"' + (' data-ed-oculto=""' if oculto else "")
+    return re.sub(r"^<section\b", lambda m: "<section" + extra, html, count=1)
+
+
+def partes(conteudo, dados=None, originais=(), marcar=False):
+    """[(id do item, HTML)] na ordem do editor. `marcar` (#315): a prévia de edição, com os `data-ed-*`."""
     dados = dados or {}
-    partes, primeira = [], [True]
+    out, primeira = [], [True]
     for it in conteudo["itens"]:
         if it["tipo"] == "original":
-            if not it.get("oculto") and it["indice"] < len(originais):
-                partes.append(originais[it["indice"]])
+            if it["indice"] < len(originais) and (marcar or not it.get("oculto")):
+                html = originais[it["indice"]]
+                out.append((it["id"], _marca_original(html, it["indice"], it.get("oculto")) if marcar else html))
+            continue
+        if marcar:
+            sid = e(it["id"])
+            cols = "".join(f'<div class="ed-col" data-ed-col="{sid}:{ci}">'
+                           f'{"".join(_marca(_w(w, dados, primeira, True), w) for w in c)}</div>'
+                           for ci, c in enumerate(it["itens"]))
+            out.append((it["id"], f'<section class="faixa {FUNDOS[it["fundo"]]} ed-secao ed-esp-{it["espaco"]}" id="s-{sid}" '
+                                  f'data-ed-s="{sid}"><div class="largura"><div class="ed-grade ed-c{it["colunas"]}">{cols}'
+                                  f'</div></div></section>'))
             continue
         cols = "".join(f'<div class="ed-col">{"".join(_w(w, dados, primeira) for w in c)}</div>' for c in it["itens"])
-        partes.append(f'<section class="faixa {FUNDOS[it["fundo"]]} ed-secao ed-esp-{it["espaco"]}" id="s-{e(it["id"])}">'
-                      f'<div class="largura"><div class="ed-grade ed-c{it["colunas"]}">{cols}</div></div></section>')
-    return "\n".join(partes)
+        out.append((it["id"], f'<section class="faixa {FUNDOS[it["fundo"]]} ed-secao ed-esp-{it["espaco"]}" id="s-{e(it["id"])}">'
+                              f'<div class="largura"><div class="ed-grade ed-c{it["colunas"]}">{cols}</div></div></section>'))
+    return out
+
+
+def corpo(conteudo, dados=None, originais=(), marcar=False):
+    """O HTML do `<main>`: as seções novas e as originais (as que não estão escondidas), na ordem do editor."""
+    return "\n".join(h for _, h in partes(conteudo, dados, originais, marcar))
 
 
 def ld_extra(conteudo):
@@ -334,8 +432,21 @@ def problemas(conteudo, html_corpo, titulo, descricao):
             out.append(f"um título pula de nível (de h{anterior} para h{n}): use o nível {anterior + 1} antes")
             break
         anterior = n
-    sem = sum(1 for it in conteudo["itens"] if it["tipo"] == "secao" for c in it["itens"] for w in c
-              if w["tipo"] == "imagem" and not w.get("alt"))
+    ws = [w for it in conteudo["itens"] if it["tipo"] == "secao" for c in it["itens"] for w in c]
+    # #315: o rascunho aceita o meio do caminho; publicar, não
+    sem_texto = sum(1 for w in ws if w["tipo"] == "titulo" and not w.get("texto"))
+    if sem_texto:
+        out.append(f"{sem_texto} título(s) vazio(s): escreva o texto ou apague")
+    botoes = sum(1 for w in ws if w["tipo"] == "botao" and not (w.get("texto") and w.get("link")))
+    if botoes:
+        out.append(f"{botoes} botão(ões) sem texto ou sem link")
+    faq = sum(1 for w in ws if w["tipo"] == "faq" for x in w["itens"] if not (x.get("pergunta") and x.get("resposta")))
+    if faq:
+        out.append(f"{faq} pergunta(s) frequente(s) sem a pergunta ou sem a resposta")
+    sem_foto = sum(1 for w in ws if w["tipo"] == "imagem" and not w.get("src"))
+    if sem_foto:
+        out.append(f"{sem_foto} imagem(ns) esperando a foto")
+    sem = sum(1 for w in ws if w["tipo"] == "imagem" and w.get("src") and not w.get("alt"))
     if sem:
         out.append(f"{sem} foto(s) sem descrição: quem não vê a foto (e o Google) lê a descrição")
     if not re.sub(r"<[^>]+>|\s", "", html_corpo):

@@ -13,6 +13,7 @@ O que estes testes trancam:
 """
 import io
 import json
+import os
 import re
 
 import pytest
@@ -22,8 +23,10 @@ from PIL import Image
 from command_center.api import auth
 from command_center.api.main import app
 from command_center.db import aplicar_schema, conectar, um
+from command_center.providers import editor_site as es
 from command_center.providers import servicos_site
 from command_center.vitrine import editor as ed
+from command_center.vitrine import html_seguro
 
 SENHA = "pista-molhada-7"
 
@@ -238,3 +241,263 @@ def test_operador_ve_e_so_o_gerente_muda_e_publica(amb):
     assert _salvar(painel, h, pid, title="Changed by operator").status_code == 403
     assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 403
     assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='site.page.create'")["n"] == 1
+
+
+# ------------------------------------------------------------------ #315: o editor como o Canva
+# Dono, 16/10: *"ele abre uma mini visualização de como é o site público. E dali a pessoa consegue, por ali, clicar no
+# que ela precisa editar. Ela edita, ela puxa, ela arrasta, ela solta … É como se fosse um Canva."*
+def _previa(painel, h, pid, editar=True):
+    return painel.get(f"/ops/api/site/editor/paginas/{pid}/previa" + ("?editar=1" if editar else ""), headers=h)
+
+
+def test_a_previa_de_edicao_marca_cada_peca_e_o_site_continua_igual(amb, monkeypatch):
+    """A prévia de edição tem os `data-ed-*` (seção, coluna, elemento, faixa original) e o CSS do editor, sem medição
+    e com a política do site (sem script nem estilo inline); o site e a prévia de sempre não levam nada disso."""
+    painel, site, con = amb
+    monkeypatch.setenv("SITE_GTM_ID", "GTM-59CCNDC")          # com a medição ligada no site
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    sec = _secao(H1, {"id": "bt1", "tipo": "botao", "texto": "Book the camp", "link": "/contact/"},
+                 {"id": "li1", "tipo": "lista", "itens": []}, colunas=2)
+    _salvar(painel, h, pid, description=DESC, conteudo={"itens": [sec]})
+    r = _previa(painel, h, pid)
+    ed_html = r.text
+    # a prévia roda na origem do painel, com a sessão do gerente: a política dela é a do site (nada inline)
+    pol = r.headers["content-security-policy"]
+    diretivas = dict(x.strip().split(" ", 1) for x in pol.split(";"))
+    assert diretivas["script-src"] == "'self'" and diretivas["style-src"] == "'self'"
+    assert "unsafe" not in pol and diretivas["frame-ancestors"] == "'self'"
+    assert f'data-ed-s="{sec["id"]}"' in ed_html and f'data-ed-col="{sec["id"]}:0"' in ed_html
+    assert f'data-ed-col="{sec["id"]}:1"' in ed_html, "a coluna vazia também é um lugar para soltar"
+    assert '<h1 data-ed-w="h1a" data-ed-tipo="titulo" class="ed-t' in ed_html
+    assert 'data-ed-w="bt1" data-ed-tipo="botao"' in ed_html
+    assert 'class="lista ed-lista ed-vazio"' in ed_html, "a lista vazia continua clicável para escrever"
+    assert "/_s/editor-previa.css?v=" in ed_html
+    assert "medicao.js" not in ed_html and "GTM-59CCNDC" not in ed_html, "quem edita não é visita"
+    assert 'name="robots" content="noindex' in ed_html
+    assert painel.get("/_s/editor-previa.css").status_code == 200
+    # a prévia de sempre e o site: nada do editor
+    assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
+    for html in (_previa(painel, h, pid, editar=False).text, site.get("/summer-camp/").text):
+        assert "data-ed-" not in html and "editor-previa.css" not in html and "ed-vazio" not in html
+    assert "GTM-59CCNDC" in site.get("/summer-camp/").text, "o site continua medindo"
+
+
+def test_a_previa_de_edicao_de_pagina_que_existe_marca_as_faixas_e_mostra_a_escondida_apagada(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    p = painel.post("/ops/api/site/editor/paginas", headers=h, json={"base": "/about/"}).json()
+    itens = [dict(x) for x in p["pagina"]["draft"]["itens"]]
+    itens[1]["oculto"] = True
+    _salvar(painel, h, p["pagina"]["id"], conteudo={"itens": itens})
+    html = _previa(painel, h, p["pagina"]["id"]).text
+    assert '<section data-ed-s="o0" data-ed-o="0"' in html
+    assert '<section data-ed-s="o1" data-ed-o="1" data-ed-oculto=""' in html, "a escondida aparece apagada na prévia"
+    publica = re.search(r'<main id="conteudo">(.*)</main>', _previa(painel, h, p["pagina"]["id"], editar=False).text, re.S).group(1)
+    assert publica.count("<section") == html.count("<section") - 1, "fora da edição, a escondida some"
+
+
+def test_salvar_com_a_revisao_velha_recusa_em_vez_de_apagar_o_que_o_outro_fez(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    p = _nova(painel, h)["pagina"]
+    rev = p["rev"]
+    r = _salvar(painel, h, p["id"], rev=rev, conteudo={"itens": [_secao({**H1, "texto": "Gerente A"})]})
+    assert r.status_code == 200 and r.json()["pagina"]["rev"] == rev + 1
+    r = _salvar(painel, h, p["id"], rev=rev, conteudo={"itens": [_secao({**H1, "texto": "Gerente B"})]})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "rev"
+    assert "Gerente A" in json.dumps(painel.get(f"/ops/api/site/editor/paginas/{p['id']}", headers=h).json()["pagina"]["draft"])
+    # publicar também confere: só vai para o ar o rascunho que a tela mostra
+    _salvar(painel, h, p["id"], description=DESC)
+    r = painel.post(f"/ops/api/site/editor/paginas/{p['id']}/publicar", headers=h, json={"rev": rev + 1})
+    assert r.status_code == 409 and site.get("/summer-camp/").status_code == 404
+    r = painel.post(f"/ops/api/site/editor/paginas/{p['id']}/publicar", headers=h, json={"rev": rev + 2})
+    assert r.status_code == 200, r.text
+
+
+def test_titulo_vazio_salva_no_rascunho_e_trava_a_publicacao(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    r = _salvar(painel, h, pid, description=DESC, conteudo={"itens": [_secao(H1, {"id": "t2", "tipo": "titulo", "texto": "", "nivel": 2},
+                                                                                {"id": "b2", "tipo": "botao", "texto": "Go", "link": ""})]})
+    assert r.status_code == 200, r.text
+    assert any("título(s) vazio(s)" in x for x in r.json()["problemas"])
+    assert any("sem texto ou sem link" in x for x in r.json()["problemas"])
+    r = painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h)
+    assert r.status_code == 400 and "vazio" in r.json()["detail"]
+
+
+def test_link_que_nao_passa_fica_o_de_antes_e_volta_o_motivo(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    bt = {"id": "bt9", "tipo": "botao", "texto": "Book", "link": "/contact/"}
+    _salvar(painel, h, pid, conteudo={"itens": [_secao(H1, bt)]})
+    for ruim in ("javascript:alert(1)", "/con tato"):
+        r = _salvar(painel, h, pid, conteudo={"itens": [_secao({**H1, "texto": "Other text kept"}, {**bt, "link": ruim})]})
+        assert r.status_code == 200, "o resto da página salva"
+        assert "link" in r.json()["erros"]["bt9"]
+        d = json.dumps(r.json()["pagina"]["draft"])
+        assert '"link": "/contact/"' in d and "javascript" not in d and "Other text kept" in d
+
+
+def test_desenhar_devolve_so_as_secoes_novas_marcadas(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    p = painel.post("/ops/api/site/editor/paginas", headers=h, json={"base": "/about/"}).json()
+    nova = _secao({"id": "tt1", "tipo": "titulo", "texto": "Meet the team", "nivel": 2})
+    itens = [*p["pagina"]["draft"]["itens"], nova]
+    r = _salvar(painel, h, p["pagina"]["id"], conteudo={"itens": itens}, desenhar=True).json()
+    assert [s["id"] for s in r["secoes"]] == [nova["id"]], "as faixas originais não vão de novo"
+    assert 'data-ed-w="tt1"' in r["secoes"][0]["html"] and r["secoes"][0]["html"].startswith("<section")
+    assert "secoes" not in _salvar(painel, h, p["pagina"]["id"], conteudo={"itens": itens}).json()
+
+
+def test_texto_vindo_da_previa_sai_limpo():
+    """O texto editado na prévia chega como HTML do contenteditable: script e evento somem, <div> vira parágrafo,
+    e o título é sempre texto."""
+    c = ed.limpar({"itens": [_secao(
+        {"id": "x1", "tipo": "texto", "html": '<div>One <b>bold</b></div><div><img src=x onerror="alert(1)">Two</div><script>alert(2)</script>'},
+        {"id": "x2", "tipo": "titulo", "texto": "Hello<br>World<div>x</div>", "nivel": 2},
+        {"id": "x3", "tipo": "lista", "itens": ["<b>Karts</b>", ""]})]}, rascunho=True)
+    html = ed.corpo(c)
+    assert "<p>One <b>bold</b></p><p>Two</p>" in html, html
+    assert "onerror" not in html and "alert" not in html and "<script" not in html
+    assert "Hello&lt;br&gt;World&lt;div&gt;x&lt;/div&gt;" in html and "<br>" not in html
+    assert "<li>&lt;b&gt;Karts&lt;/b&gt;</li>" in html
+
+
+def test_endereco_que_nao_passa_nao_trava_o_resto_do_rascunho(amb):
+    """#315: o painel salva sozinho enquanto se escreve o endereço; o endereço pela metade fica o de antes, volta o
+    motivo, e o que mudou na página salva do mesmo jeito."""
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    r = _salvar(painel, h, pid, path="/summer camp/", conteudo={"itens": [_secao({**H1, "texto": "Saved anyway"})]})
+    assert r.status_code == 200, r.text
+    assert "endereço" in r.json()["erros"]["pagina"] and r.json()["pagina"]["path"] == "/summer-camp/"
+    assert "Saved anyway" in json.dumps(r.json()["pagina"]["draft"])
+
+
+# ------------------------------------------------------------------ #315: a revisão no Voltar versão e no salvar
+def _gerente_id(con):
+    return um(con, "SELECT id FROM users WHERE email=?", ("ger@example.com",))["id"]
+
+
+def _publicada(painel, h, texto="Published Camp"):
+    pid = _nova(painel, h)["pagina"]["id"]
+    _salvar(painel, h, pid, description=DESC, conteudo={"itens": [_secao({**H1, "texto": texto})]})
+    assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
+    vid = painel.get(f"/ops/api/site/editor/paginas/{pid}/versoes", headers=h).json()["versoes"][0]["id"]
+    return pid, vid
+
+
+def test_voltar_versao_com_a_revisao_velha_recusa_e_nao_apaga_o_rascunho_do_outro(amb):
+    """A tela que ficou para trás (outra pessoa salvou depois) não troca o rascunho dela pela versão antiga: 409. Com a
+    revisão em dia, volta e soma 1; a tela que tinha a revisão de antes do voltar também recusa."""
+    painel, site, con = amb
+    h = _entra(painel)
+    pid, vid = _publicada(painel, h)
+    rev_n = painel.get(f"/ops/api/site/editor/paginas/{pid}", headers=h).json()["pagina"]["rev"]
+    r = _salvar(painel, h, pid, rev=rev_n, conteudo={"itens": [_secao({**H1, "texto": "B work never published"})]})
+    assert r.status_code == 200 and r.json()["pagina"]["rev"] == rev_n + 1
+    voltar = f"/ops/api/site/editor/paginas/{pid}/versoes/{vid}/voltar"
+    r = painel.post(voltar, headers=h, json={"rev": rev_n})
+    assert r.status_code == 409 and r.json()["detail"]["motivo"] == "rev", r.text
+    assert "B work never published" in json.dumps(painel.get(f"/ops/api/site/editor/paginas/{pid}", headers=h).json()["pagina"]["draft"])
+    r = painel.post(voltar, headers=h, json={"rev": rev_n + 1})
+    assert r.status_code == 200, r.text
+    assert r.json()["pagina"]["rev"] == rev_n + 2 and r.json()["erros"] == {}
+    assert "Published Camp" in json.dumps(r.json()["pagina"]["draft"])
+    r = _salvar(painel, h, pid, rev=rev_n + 1, conteudo={"itens": [_secao({**H1, "texto": "Stale tab"})]})
+    assert r.status_code == 409, "o voltar soma a revisão: a tela de antes dele não passa por cima"
+    assert painel.post(f"/ops/api/site/editor/paginas/{pid}/versoes/999999/voltar", headers=h, json={"rev": rev_n + 2}).status_code == 404
+
+
+def test_voltar_versao_com_um_salvar_no_meio_recusa_em_vez_de_repetir_a_revisao(amb, monkeypatch):
+    """A outra aba salva entre a leitura da revisão e a gravação do voltar: o voltar recusa (a troca confere a revisão
+    na mesma gravação) e o que a outra aba salvou fica."""
+    painel, site, con = amb
+    h = _entra(painel)
+    pid, vid = _publicada(painel, h)
+    p = es.uma(con, pid)
+    agora, feito = es.agora, []
+
+    def no_meio():
+        if not feito:
+            feito.append(1)
+            con.execute("UPDATE site_pages SET draft = ?, rev = rev + 1 WHERE id = ?",
+                        (json.dumps({"itens": [_secao({**H1, "texto": "Tab B in the middle"})]}), pid))
+        return agora()
+    monkeypatch.setattr(es, "agora", no_meio)
+    with pytest.raises(es.Conflito):
+        es.voltar(con, _gerente_id(con), pid, vid, rev=p["rev"])
+    depois = es.uma(con, pid)
+    assert feito and depois["rev"] == p["rev"] + 1
+    assert "Tab B in the middle" in json.dumps(depois["draft"])
+
+
+def test_salvar_confere_a_revisao_na_mesma_gravacao(amb, monkeypatch):
+    """Outra gravação entre a leitura do rascunho e o UPDATE: o salvar recusa (o `WHERE rev = ?`), sem gravar."""
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    p = es.uma(con, pid)
+    limpar = ed.limpar
+
+    def e_no_meio(*a, **kw):
+        out = limpar(*a, **kw)
+        con.execute("UPDATE site_pages SET rev = rev + 1 WHERE id = ?", (pid,))
+        return out
+    monkeypatch.setattr(ed, "limpar", e_no_meio)
+    with pytest.raises(es.Conflito):
+        es.salvar(con, _gerente_id(con), pid, {"conteudo": {"itens": [_secao({**H1, "texto": "Lost in the race"})]}}, rev=p["rev"], erros={})
+    assert "Lost in the race" not in json.dumps(es.uma(con, pid)["draft"])
+
+
+# ------------------------------------------------------------------ #315: o rascunho tolerante segura o que não passa
+def test_rascunho_guarda_a_foto_de_antes_quando_a_nova_e_de_fora(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    im = {"id": "im1", "tipo": "imagem", "src": "/_f/0123456789abcdef.webp", "alt": "Kart on the track"}
+    assert _salvar(painel, h, pid, conteudo={"itens": [_secao(H1, im)]}).status_code == 200
+    r = _salvar(painel, h, pid, conteudo={"itens": [_secao(H1, {**im, "src": "//outro.example.com/x.png"})]})
+    assert r.status_code == 200, r.text
+    assert "imagem" in r.json()["erros"]["im1"]
+    d = json.dumps(r.json()["pagina"]["draft"])
+    assert "/_f/0123456789abcdef.webp" in d and "outro.example.com" not in d
+
+
+def test_rascunho_guarda_o_texto_de_antes_quando_o_novo_e_longo_demais(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    tx = {"id": "tx1", "tipo": "texto", "html": "<p>Short and kept.</p>"}
+    assert _salvar(painel, h, pid, conteudo={"itens": [_secao(H1, tx)]}).status_code == 200
+    r = _salvar(painel, h, pid, conteudo={"itens": [_secao(H1, {**tx, "html": "<p>" + "a" * (html_seguro.MAX + 10) + "</p>"})]})
+    assert r.status_code == 200, r.text
+    assert "longo" in r.json()["erros"]["tx1"]
+    d = json.dumps(r.json()["pagina"]["draft"])
+    assert "Short and kept." in d and "a" * 100 not in d
+
+
+def test_pergunta_sem_resposta_salva_no_rascunho_e_trava_a_publicacao(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    faq = {"id": "fq1", "tipo": "faq", "itens": [{"pergunta": "How old?", "resposta": ""}]}
+    r = _salvar(painel, h, pid, description=DESC, conteudo={"itens": [_secao(H1, faq)]})
+    assert r.status_code == 200, r.text
+    assert any("pergunta(s) frequente(s)" in x for x in r.json()["problemas"]), r.json()["problemas"]
+    r = painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h)
+    assert r.status_code == 400 and "pergunta" in r.json()["detail"]
+    assert site.get("/summer-camp/").status_code == 404
+
+
+def test_o_css_da_previa_usa_os_tokens_de_motion_do_site():
+    """CLAUDE.md: durações e curvas dos tokens do CSS. A prévia carrega o site.css antes, com `--dur` e `--curva`."""
+    css = open(os.path.join(os.path.dirname(ed.__file__), "static", "editor-previa.css"), encoding="utf-8").read()
+    assert "var(--dur) var(--curva)" in css
+    assert not re.search(r"\d+ms|cubic-bezier", css), "duração ou curva fixa no CSS da prévia"

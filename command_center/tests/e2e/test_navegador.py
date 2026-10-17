@@ -42,7 +42,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
-         "/site/produtos", "/site/produtos/235", "/site/estoque", "/site/editor", "/site/blog", "/site/blog/451",
+         "/site/produtos", "/site/produtos/235", "/site/estoque", "/site/editor", "/site/editor/1", "/site/blog", "/site/blog/451",
          "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -3458,11 +3458,48 @@ def test_o_gerente_poe_o_frete_do_produto_e_o_carrinho_cobra(servidor, navegador
         g.close()
 
 
-def test_o_gerente_monta_uma_pagina_no_editor_e_publica(servidor, navegador):
-    """#300: Site público › Editor do site, no celular. O gerente cria uma página nova, põe a descrição e uma lista,
-    publica, e o site mostra no endereço dela, sem rolar para o lado. No computador, arrasta um elemento da paleta."""
+# ------------------------------------------------------------------ #315: o editor do site como o Canva
+# Dono, 16/10: *"o editor do site ele abre uma mini visualização de como é o site público. E dali a pessoa consegue, por
+# ali, clicar no que ela precisa editar. Ela edita, ela puxa, ela arrasta, ela solta, ela insere alguma coisa com o
+# mouse … sem precisar de preencher cards para aquilo ali. … É como se fosse um Canva."*
+_DESC_E2E = "Five days of kart racing camp in Orlando for drivers 7 and up, with coaches and karts."
+
+
+def _lona(pg):
+    """A prévia onde se trabalha (o iframe do editor)."""
+    return pg.frame_locator("iframe.ed-iframe")
+
+
+def _pagina_do_editor(pg, servidor, csrf, titulo, caminho, itens=None, **kw):
+    r = pg.request.post(servidor + "/api/site/editor/paginas", headers=csrf, data={"title": titulo, "path": caminho})
+    assert r.ok, r.text()
+    p = r.json()["pagina"]
+    if itens is not None or kw:
+        r = pg.request.patch(servidor + f"/api/site/editor/paginas/{p['id']}", headers=csrf,
+                             data={**({"conteudo": {"itens": itens}} if itens is not None else {}), **kw})
+        assert r.ok, r.text()
+    return p["id"]
+
+
+def _rascunho(pg, servidor, pid):
+    return pg.request.get(servidor + f"/api/site/editor/paginas/{pid}").json()["pagina"]["draft"]
+
+
+def _ids(lona, col):
+    return lona.locator(f'[data-ed-col="{col}"] > [data-ed-w]').evaluate_all("ns => ns.map(n => n.getAttribute('data-ed-w'))")
+
+
+def _salvo(pg):
+    pg.locator(".ed-salvo", has_text="salvo").wait_for()
+    pg.wait_for_function("() => document.querySelector('.ed-salvo')?.textContent.trim() === 'salvo'")
+
+
+def test_editor_canva_clica_no_titulo_escreve_no_lugar_desfaz_refaz_e_publica(servidor, navegador):
+    """#315, computador: a página nova abre na prévia; clicar no título seleciona (a barra aparece em cima dele),
+    clicar de novo escreve no lugar; Ctrl+Z volta, Ctrl+Shift+Z refaz; a descrição vai na aba Página; publica e o
+    site mostra. Sem nenhum formulário de elemento."""
     site = servidor.removesuffix("/ops")
-    g = entrar(navegador, servidor, largura=390, altura=844)
+    g = entrar(navegador, servidor, largura=1280, altura=900)
     csrf = _csrf(g)
     pid = None
     try:
@@ -3472,35 +3509,542 @@ def test_o_gerente_monta_uma_pagina_no_editor_e_publica(servidor, navegador):
         g.get_by_role("button", name="Criar e abrir").click()
         g.wait_for_url("**/site/editor/*")
         pid = int(g.url.rstrip("/").rsplit("/", 1)[1])
-        g.get_by_label("Descrição").fill("Five days of kart racing camp in Orlando for drivers 7 and up, with coaches and karts.")
-        g.locator(".ed-mais > summary").first.click()
-        g.locator(".ed-mais[open]").get_by_role("button", name="Lista", exact=True).click()
-        g.get_by_label("Itens (um por linha)").fill("Karts and gear\nPro coaching")
-        g.get_by_text("salvando…").wait_for(state="detached")
-        r = g.evaluate(_VAZA)
-        assert not r["rola"] and not r["culpados"], r
-        g.get_by_role("button", name="Publicar", exact=True).click()
+        lona = _lona(g)
+        titulo = lona.locator('[data-ed-tipo="titulo"]').first
+        titulo.wait_for()
+        sem_formulario = "nenhum formulário de elemento na tela (só a aba Página tem campos)"
+        assert g.locator(".ed .fld, .ed-fora .fld").count() == 0, sem_formulario
+        titulo.click()
+        barra = g.locator(".ed-barra")
+        barra.get_by_text("Título", exact=True).wait_for()
+        assert "ed-sel" in titulo.get_attribute("class")
+        assert g.locator(".ed .fld, .ed-fora .fld").count() == 0, sem_formulario + ": selecionado"
+        # o nome do botão começa pelo que ele mostra (quem fala com o computador diz "H1")
+        assert barra.get_by_role("button", name="H1: o título da página (um só)").get_attribute("aria-pressed") == "true"
+        titulo.click()                                           # de novo: escreve no lugar
+        g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[contenteditable]')")
+        assert g.locator(".ed .fld, .ed-fora .fld").count() == 0, sem_formulario + ": em edição"
+        g.keyboard.press("Control+a")
+        g.keyboard.type("Summer Kart Camp Canva")
+        _salvo(g)
+        assert "Summer Kart Camp Canva" in str(_rascunho(g, servidor, pid))
+        g.keyboard.press("Control+z")
+        g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('h1').textContent.trim() === 'Summer Kart Camp e2e'")
+        g.keyboard.press("Control+Shift+z")
+        g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('h1').textContent.trim() === 'Summer Kart Camp Canva'")
+        _salvo(g)
+        assert "Summer Kart Camp Canva" in str(_rascunho(g, servidor, pid))
+        g.locator(".ed-lado").get_by_role("button", name="Camadas", exact=True).click()
+        g.locator(".ed-camadas").wait_for()
+        assert g.locator(".ed .fld, .ed-fora .fld").count() == 0, sem_formulario + ": nas Camadas"
+        # a descrição da página (o que o Google mostra) fica na aba Página; enquanto falta, Publicar fica parado
+        publicar = g.get_by_role("button", name="Publicar", exact=True)
+        assert publicar.is_disabled()
+        g.locator(".ed-lado").get_by_role("button", name=re.compile("^Página")).click()
+        g.get_by_label("Descrição").fill(_DESC_E2E)
+        _salvo(g)
+        publicar.wait_for(state="visible")
+        g.wait_for_function("() => ![...document.querySelectorAll('.ed-topo .btn.primary')].some(b => b.disabled)")
+        publicar.click()
         g.get_by_text("Publicado: o site já mostra.").wait_for()
+        assert [n for n, _ in _cabecalhos(g)].count(1) == 1, "um h1 na tela do editor"
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
         v = navegador.new_page(viewport={"width": 390, "height": 844})
         v.goto(site + "/summer-camp-e2e/")
-        v.get_by_role("heading", name="Summer Kart Camp e2e", level=1).wait_for()
-        assert v.get_by_text("Pro coaching").count() == 1
-        r = v.evaluate(_VAZA)
-        assert not r["rola"] and not r["culpados"], r
+        v.get_by_role("heading", name="Summer Kart Camp Canva", level=1).wait_for()
+        assert v.locator("[data-ed-w], [contenteditable]").count() == 0, "o site não leva nada do editor"
+        for largura in (390, 360):                               # a página que o editor fez não rola para o lado
+            v.set_viewport_size({"width": largura, "height": 800})
+            r = v.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (largura, r)
         v.close()
-        # no computador: arrastar o Título da paleta para a coluna
-        d = entrar(navegador, servidor, largura=1280, altura=900)
-        abrir(d, servidor, f"/site/editor/{pid}")
-        antes = d.locator(".ed-widget").count()
-        d.locator(".ed-coluna").first.scroll_into_view_if_needed()     # a paleta fica presa no topo enquanto rola
-        d.locator(".ed-paleta", has_text="Título").drag_to(d.locator(".ed-coluna").first)
-        assert d.locator(".ed-widget").count() == antes + 1
-        d.locator('iframe[title="Pré-visualização da página"]').wait_for()
-        d.close()
     finally:
         if pid:
             g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
         g.close()
+
+
+def test_editor_canva_nao_publica_o_rascunho_velho_quando_o_salvar_falha(servidor, navegador):
+    """#315: o bug do Publicar. Se o salvar falha (aqui, outra pessoa salvou antes), a tela avisa, para de salvar e o
+    Publicar fica parado: nunca põe no ar um rascunho diferente do que a tela mostra."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Conflict Kart Camp e2e", "/conflict-camp-e2e/", description=_DESC_E2E)
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    titulo = lona.locator('[data-ed-tipo="titulo"]').first
+    titulo.wait_for()
+    g.wait_for_function("() => ![...document.querySelectorAll('.ed-topo .btn.primary')].some(b => b.disabled)")
+    # outra pessoa salva a página agora
+    p = g.request.get(servidor + f"/api/site/editor/paginas/{pid}").json()["pagina"]
+    assert g.request.patch(servidor + f"/api/site/editor/paginas/{pid}", headers=csrf, data={"title": "Other manager title", "rev": p["rev"]}).ok
+    titulo.dblclick()
+    g.keyboard.press("Control+a")
+    g.keyboard.type("Mine, not saved")
+    g.get_by_text("Outra pessoa (ou outra aba) salvou esta página").wait_for()
+    assert g.get_by_role("button", name="Publicar", exact=True).is_disabled()
+    assert "Mine, not saved" not in str(_rascunho(g, servidor, pid))
+    g.close()
+
+
+def test_editor_canva_arrasta_da_coluna_1_para_a_2_e_da_paleta_para_a_previa(servidor, navegador):
+    """#315, computador: o mouse atravessa a prévia. Arrastar um texto da coluna 1 para a 2, e uma peça da paleta
+    (Botão) para logo depois do título. A linha azul mostra onde cai; o rascunho guarda."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    sec = {"id": "c1e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 2, "itens": [
+        [{"id": "h1e2e", "tipo": "titulo", "texto": "Drag Kart Camp", "nivel": 1}, {"id": "tx1e2e", "tipo": "texto", "html": "<p>Left column text.</p>"}],
+        [{"id": "tx2e2e", "tipo": "texto", "html": "<p>Right column text.</p>"}]]}
+    pid = _pagina_do_editor(g, servidor, csrf, "Drag Kart Camp e2e", "/drag-camp-e2e/", [sec])
+    abrir(g, servidor, f"/site/editor/{pid}")
+    g.get_by_role("button", name="Computador").click()
+    lona = _lona(g)
+    lona.locator('[data-ed-w="tx2e2e"]').wait_for()
+    g.wait_for_timeout(300)                                   # a prévia terminou de se ajustar à largura
+    a = lona.locator('[data-ed-w="tx1e2e"]').bounding_box()
+    b = lona.locator('[data-ed-w="tx2e2e"]').bounding_box()
+    g.mouse.move(a["x"] + 10, a["y"] + a["height"] / 2)
+    g.mouse.down()
+    g.mouse.move(a["x"] + 30, a["y"] + a["height"] / 2, steps=4)
+    g.mouse.move(b["x"] + 20, b["y"] + b["height"] - 1, steps=12)
+    assert lona.locator(".ed-solta-depois").count() == 1, "a linha mostra onde cai"
+    g.mouse.up()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-col=\"c1e2e:1\"] [data-ed-w=\"tx1e2e\"]')")
+    _salvo(g)
+    d = _rascunho(g, servidor, pid)["itens"][0]["itens"]
+    assert [w["id"] for w in d[0]] == ["h1e2e"] and [w["id"] for w in d[1]] == ["tx2e2e", "tx1e2e"], d
+    # da paleta para logo depois do título
+    pal = g.locator(".ed-peca", has_text="Botão").bounding_box()
+    h1 = lona.locator('[data-ed-w="h1e2e"]').bounding_box()
+    g.mouse.move(pal["x"] + 20, pal["y"] + pal["height"] / 2)
+    g.mouse.down()
+    g.mouse.move(pal["x"] + 60, pal["y"] + 30, steps=4)
+    g.mouse.move(h1["x"] + 40, h1["y"] + h1["height"] - 3, steps=15)
+    g.locator(".ed-fantasma", has_text="Botão").wait_for()
+    g.mouse.up()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-col=\"c1e2e:0\"] > [data-ed-w]').length === 2")
+    assert lona.locator('[data-ed-col="c1e2e:0"] > [data-ed-w]').evaluate_all("ns => ns.map(n => n.getAttribute('data-ed-tipo'))") == ["titulo", "botao"]
+    _salvo(g)
+    assert [w["tipo"] for w in _rascunho(g, servidor, pid)["itens"][0]["itens"][0]] == ["titulo", "botao"]
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_no_celular_toca_para_selecionar_e_insere_tocando_no_lugar(servidor, navegador):
+    """#315, celular (390, toque de verdade): tocar seleciona e a barra fica embaixo; + Inserir abre a folha, tocar na
+    peça e depois tocar na página põe ali; tocar e segurar arrasta. Nada rola para o lado e todo botão tem 40 px."""
+    ctx = navegador.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    g = ctx.new_page()
+    g.goto(servidor + "/login")
+    g.fill("#email", "eduardo@urace.us")
+    g.fill("#pw", SENHA)
+    g.keyboard.press("Enter")
+    g.wait_for_url(lambda u: "/login" not in u, timeout=10000)
+    csrf = _csrf(g)
+    sec = {"id": "m1e2e", "tipo": "secao", "fundo": "escura", "espaco": "g", "colunas": 1, "itens": [[
+        {"id": "mh1e2e", "tipo": "titulo", "texto": "Phone Kart Camp", "nivel": 1},
+        {"id": "mtxe2e", "tipo": "texto", "html": "<p>Short words.</p>"}]]}
+    pid = _pagina_do_editor(g, servidor, csrf, "Phone Kart Camp e2e", "/phone-camp-e2e/", [sec])
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator('[data-ed-w="mh1e2e"]').tap()
+    doca = g.locator(".ed-doca .ed-barra")
+    doca.get_by_text("Título", exact=True).wait_for()
+    caixa = doca.bounding_box()
+    assert caixa["y"] + caixa["height"] <= 844 and caixa["y"] > 844 / 2, f"a barra fica embaixo: {caixa}"
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not g.evaluate(_PEQUENOS), g.evaluate(_PEQUENOS)
+    pequenas = g.locator(".ed-doca .ed-amostra").evaluate_all("ns => ns.filter(n => n.offsetHeight < 40).length")
+    assert pequenas == 0, "as amostras de cor também têm 40 px no celular"
+    assert not _estreitos(g, ".ed-doca .btn, .ed-topo .btn"), "o botão de um símbolo (P M G, ↑ ↓, ↶ ↷) também tem 40 px de largura"
+    doca.get_by_role("button", name="Fechar a seleção").tap()
+    g.locator(".ed-doca").get_by_role("button", name="Inserir").tap()
+    g.locator(".ed-folha").get_by_role("button", name="Lista", exact=True).tap()
+    g.locator(".ed-tocar", has_text="Lista").wait_for()
+    t = lona.locator('[data-ed-w="mh1e2e"]').bounding_box()
+    g.touchscreen.tap(t["x"] + 30, t["y"] + t["height"] - 4)           # na metade de baixo do título: logo depois dele
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-col=\"m1e2e:0\"] > [data-ed-w]').length === 3")
+    assert lona.locator('[data-ed-col="m1e2e:0"] > [data-ed-w]').evaluate_all("ns => ns.map(n => n.getAttribute('data-ed-tipo'))") == ["titulo", "lista", "texto"]
+    _salvo(g)
+    assert [w["tipo"] for w in _rascunho(g, servidor, pid)["itens"][0]["itens"][0]] == ["titulo", "lista", "texto"]
+    # tocar e segurar: o dedo arrasta a peça (o texto vai para antes da lista), sem rolar a página
+    g.evaluate("document.querySelector('.ed-lona').scrollIntoView({ block: 'start' })")   # a prévia inteira à vista, longe da barra de baixo
+    a = lona.locator('[data-ed-w="mtxe2e"]').bounding_box()
+    b = lona.locator('[data-ed-tipo="lista"]').bounding_box()
+    cdp = ctx.new_cdp_session(g)
+    x0, y0 = a["x"] + 20, a["y"] + a["height"] / 2
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x0, "y": y0}]})
+    g.wait_for_timeout(500)                                              # o toque longo (350 ms)
+    for k in range(1, 11):
+        cdp.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x0, "y": y0 + (b["y"] + 2 - y0) * k / 10}]})
+        g.wait_for_timeout(30)
+    assert lona.locator(".ed-arrastando").count() == 1
+    cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    g.wait_for_function("() => [...document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-col=\"m1e2e:0\"] > [data-ed-w]')].map(n => n.getAttribute('data-ed-tipo')).join() === 'titulo,texto,lista'")
+    _salvo(g)
+    assert [w["tipo"] for w in _rascunho(g, servidor, pid)["itens"][0]["itens"][0]] == ["titulo", "texto", "lista"]
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    # a folha Camadas: leva o foco, todo botão com 40 px (também em 360), Esc fecha e o foco volta para quem abriu
+    g.locator(".ed-doca").get_by_role("button", name="Fechar a seleção").tap()
+    g.locator(".ed-doca").get_by_role("button", name="Camadas").tap()
+    g.locator(".ed-folha .ed-camadas").wait_for()
+    assert g.evaluate("() => !!document.activeElement?.closest('.ed-folha')"), "a folha leva o foco"
+    for largura in (390, 360):
+        g.set_viewport_size({"width": largura, "height": 800})
+        assert not _estreitos(g, ".ed-folha .btn"), (largura, _estreitos(g, ".ed-folha .btn"))
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+    g.keyboard.press("Escape")
+    g.locator(".ed-folha").wait_for(state="detached")
+    assert g.evaluate("() => document.activeElement?.textContent.trim()") == "Camadas", "o foco volta para quem abriu"
+    ctx.close()
+
+
+def test_editor_canva_so_com_o_teclado(servidor, navegador):
+    """#315: tudo sem mouse. Nas Camadas, Enter escolhe; Alt+↑ sobe o elemento (e o leitor de tela ouve onde foi);
+    Ctrl+Z volta; Delete apaga; ↓ vai para o próximo e Enter escreve nele."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    sec = {"id": "k1e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [[
+        {"id": "kh1e2e", "tipo": "titulo", "texto": "Keyboard Kart Camp", "nivel": 1},
+        {"id": "ktxe2e", "tipo": "texto", "html": "<p>Some words.</p>"},
+        {"id": "kbte2e", "tipo": "botao", "texto": "Book", "link": "/contact/"}]]}
+    pid = _pagina_do_editor(g, servidor, csrf, "Keyboard Kart Camp e2e", "/keyboard-camp-e2e/", [sec])
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator('[data-ed-w="kbte2e"]').wait_for()
+    aba = g.locator(".ed-lado").get_by_role("button", name="Camadas", exact=True)
+    aba.focus()
+    g.keyboard.press("Enter")
+    item = g.locator(".ed-camadas .ed-camada-nome", has_text="Texto")
+    item.focus()
+    g.keyboard.press("Enter")
+    assert "ed-sel" in lona.locator('[data-ed-w="ktxe2e"]').get_attribute("class")
+    g.keyboard.press("Alt+ArrowUp")
+    g.wait_for_function("() => [...document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-col=\"k1e2e:0\"] > [data-ed-w]')].map(n => n.getAttribute('data-ed-w')).join() === 'ktxe2e,kh1e2e,kbte2e'")
+    assert "movido para seção 1, posição 1" in g.locator(".ed [aria-live]").inner_text()
+    g.keyboard.press("Control+z")
+    g.wait_for_function("() => [...document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-col=\"k1e2e:0\"] > [data-ed-w]')].map(n => n.getAttribute('data-ed-w')).join() === 'kh1e2e,ktxe2e,kbte2e'")
+    g.keyboard.press("Delete")
+    g.wait_for_function("() => !document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-w=\"ktxe2e\"]')")
+    g.keyboard.press("Control+z")
+    lona.locator('[data-ed-w="ktxe2e"]').wait_for()
+    g.locator(".ed-camadas .ed-camada-nome", has_text="Texto").focus()
+    g.keyboard.press("Enter")
+    g.keyboard.press("ArrowDown")
+    assert "ed-sel" in lona.locator('[data-ed-w="kbte2e"]').get_attribute("class")
+    # o foco anda para a linha da peça nova no quadro seguinte: o Enter antes disso cairia na linha do Texto
+    g.wait_for_function("() => document.activeElement?.getAttribute('data-camada') === 'kbte2e'")
+    g.keyboard.press("Enter")
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-w=\"kbte2e\"] a[contenteditable]')")
+    g.keyboard.type(" now")
+    g.keyboard.press("Escape")
+    _salvo(g)
+    ws = _rascunho(g, servidor, pid)["itens"][0]["itens"][0]
+    assert [w["id"] for w in ws] == ["kh1e2e", "ktxe2e", "kbte2e"] and ws[2]["texto"] == "Book now", ws
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def _n_ws(col):
+    """JS: quantos elementos a coluna `col` da prévia tem agora."""
+    return f"() => document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-col=\"{col}\"] > [data-ed-w]').length"
+
+
+def _estreitos(pg, sel):
+    """Os botões de `sel` com menos de 40 px de largura (o alvo de toque do CLAUDE.md)."""
+    return pg.locator(sel).evaluate_all("ns => ns.filter(n => n.offsetWidth > 1 && n.offsetWidth < 40)"
+                                        ".map(n => (n.getAttribute('aria-label') || n.textContent.trim()) + '=' + n.offsetWidth)")
+
+
+def test_editor_canva_voltar_versao_limpa_os_erros_e_recusa_com_a_revisao_velha(servidor, navegador):
+    """#315 (revisão): "Voltar a esta versão" tira os erros do rascunho de antes (o Publicar não fica preso num erro
+    velho) e vai com a revisão da tela: se outra pessoa salvou depois, recusa e para, sem apagar o que ela fez."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Restore Kart Camp e2e", "/restore-camp-e2e/", description=_DESC_E2E)
+    assert g.request.post(servidor + f"/api/site/editor/paginas/{pid}/publicar", headers=csrf).ok
+    try:
+        abrir(g, servidor, f"/site/editor/{pid}")
+        _lona(g).locator('[data-ed-tipo="titulo"]').first.wait_for()
+        g.locator(".ed-lado").get_by_role("button", name=re.compile("^Página")).click()
+        g.get_by_label("Título da aba").fill("Restore Kart Camp " + "x" * 80)      # mais de 90 letras: o rascunho recusa
+        _salvo(g)
+        problemas = g.locator(".ed-problemas")
+        problemas.get_by_text("título da aba: até 90 caracteres").wait_for()
+        publicar = g.get_by_role("button", name="Publicar", exact=True)
+        assert publicar.is_disabled()
+        g.get_by_role("button", name="Ver as versões").click()
+        g.get_by_role("button", name="Voltar a esta versão").first.click()
+        g.get_by_text("A versão voltou para o rascunho").wait_for()
+        assert g.get_by_label("Título da aba").input_value() == "Restore Kart Camp e2e"
+        problemas.wait_for(state="detached")
+        g.wait_for_function("() => ![...document.querySelectorAll('.ed-topo .btn.primary')].some(b => b.disabled)")
+        # outra pessoa salva agora: a volta desta tela (que ficou para trás) recusa
+        p = g.request.get(servidor + f"/api/site/editor/paginas/{pid}").json()["pagina"]
+        assert g.request.patch(servidor + f"/api/site/editor/paginas/{pid}", headers=csrf,
+                               data={"title": "Other manager restore title", "rev": p["rev"]}).ok
+        g.get_by_role("button", name="Voltar a esta versão").first.click()
+        g.locator(".ed-aviso").get_by_text("Outra pessoa (ou outra aba) salvou esta página").wait_for()
+        assert g.request.get(servidor + f"/api/site/editor/paginas/{pid}").json()["pagina"]["title"] == "Other manager restore title"
+        assert publicar.is_disabled()
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    finally:
+        g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
+        g.close()
+
+
+def test_editor_canva_endereco_recusado_trava_o_publicar(servidor, navegador):
+    """#315 (revisão): o bug do Publicar pelo caminho de verdade. O endereço que não passa fica o de antes no rascunho e
+    volta como erro; enquanto houver erro, o Publicar fica parado (senão poria no ar o endereço velho)."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Address Kart Camp e2e", "/address-camp-e2e/")
+    try:
+        abrir(g, servidor, f"/site/editor/{pid}")
+        _lona(g).locator('[data-ed-tipo="titulo"]').first.wait_for()
+        g.locator(".ed-lado").get_by_role("button", name=re.compile("^Página")).click()
+        g.get_by_label("Descrição").fill(_DESC_E2E)
+        g.get_by_label("Endereço").fill("/summer camp/")
+        _salvo(g)
+        g.locator(".ed-problemas").get_by_text("endereço: use letras").wait_for()
+        publicar = g.get_by_role("button", name="Publicar", exact=True)
+        assert publicar.is_disabled(), "com o endereço recusado, o Publicar poria no ar o endereço de antes"
+        g.get_by_label("Endereço").fill("/address-camp-x-e2e/")
+        _salvo(g)
+        g.wait_for_function("() => ![...document.querySelectorAll('.ed-topo .btn.primary')].some(b => b.disabled)")
+        publicar.click()
+        g.get_by_text("Publicado: o site já mostra.").wait_for()
+        assert g.request.get(site + "/address-camp-x-e2e/").status == 200
+        assert g.request.get(site + "/address-camp-e2e/").status == 404
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    finally:
+        g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
+        g.close()
+
+
+def test_editor_canva_teclado_na_barra_nas_camadas_e_nos_avisos(servidor, navegador):
+    """#315, só com o teclado (revisão): as abas são botões e as setas nelas não mexem na página; ↑/↓ das Camadas
+    desligados quando não fazem nada; mudar de coluna nas Camadas deixa o foco na peça; a barra vem antes da prévia no
+    Tab e as setas nela não andam pela página; Duplicar na barra devolve o foco à barra nova; o leitor de tela ouve o
+    segundo aviso igual, e ↓ diz o que é cada peça."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    itens = [{"id": "q1e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 2, "itens": [
+        [{"id": "qh1e2e", "tipo": "titulo", "texto": "Keys Kart Camp", "nivel": 1}, {"id": "qf1e2e", "tipo": "texto", "html": "<p>First words.</p>"}],
+        [{"id": "qr1e2e", "tipo": "texto", "html": "<p>Right words.</p>"}]]},
+        {"id": "q2e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [
+            [{"id": "qs2e2e", "tipo": "texto", "html": "<p>Second words.</p>"}]]}]
+    pid = _pagina_do_editor(g, servidor, csrf, "Keys Kart Camp e2e", "/keys-camp-e2e/", itens)
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator('[data-ed-w="qs2e2e"]').wait_for()
+    foco = lambda: g.evaluate("() => { const a = document.activeElement; return { label: a?.getAttribute('aria-label') || '', "
+                              "camada: a?.getAttribute('data-camada') || '', barra: !!a?.closest('.ed-barra'), body: a === document.body } }")
+    aviso = lambda: g.locator(".ed > [aria-live]").evaluate("n => n.textContent")
+    # as abas: botões com aria-pressed (sem role=tab pela metade); ↓ nelas não seleciona nada na página
+    assert g.locator('.ed-abas [role="tab"], .ed-abas[role="tablist"]').count() == 0
+    aba = g.locator(".ed-lado").get_by_role("button", name="Camadas", exact=True)
+    aba.focus()
+    g.keyboard.press("Enter")
+    assert aba.get_attribute("aria-pressed") == "true"
+    g.keyboard.press("ArrowDown")
+    assert lona.locator(".ed-sel").count() == 0, "↓ na aba não mexe na seleção da página"
+    # ↑/↓ das Camadas desligados quando não fazem nada (a mesma regra da barra)
+    linha = lambda wid: g.locator(f'.ed-camada:has([data-camada="{wid}"])')
+    assert linha("qr1e2e").get_by_role("button", name="Subir Texto").is_disabled(), "o 1º da coluna 2 da 1ª seção não sobe"
+    assert linha("qs2e2e").get_by_role("button", name="Descer Texto").is_disabled(), "o último da página não desce"
+    assert not linha("qf1e2e").get_by_role("button", name="Subir Texto").is_disabled()
+    # mudar de coluna pelas Camadas (a linha é outra agora): o foco fica na peça
+    g.locator('.ed-camadas [data-camada="qf1e2e"]').focus()
+    g.keyboard.press("Enter")
+    assert "ed-sel" in lona.locator('[data-ed-w="qf1e2e"]').get_attribute("class")
+    g.keyboard.press("Alt+ArrowRight")
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-col=\"q1e2e:1\"] [data-ed-w=\"qf1e2e\"]')")
+    g.wait_for_function("() => document.activeElement?.getAttribute('data-camada') === 'qf1e2e'", timeout=5000)
+    linha("qf1e2e").get_by_role("button", name="Texto para a coluna da esquerda").focus()
+    g.keyboard.press("Enter")
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-col=\"q1e2e:0\"] [data-ed-w=\"qf1e2e\"]')")
+    g.wait_for_function("() => document.activeElement?.getAttribute('data-camada') === 'qf1e2e'", timeout=5000)
+    # a barra vem antes da prévia: o Tab chega nela sem passar pelos links da página
+    barra = g.locator(".ed-barra")
+    barra.get_by_text("Texto", exact=True).wait_for()
+    assert barra.evaluate("b => !!(b.compareDocumentPosition(document.querySelector('iframe.ed-iframe')) & Node.DOCUMENT_POSITION_FOLLOWING)")
+    for _ in range(30):
+        g.keyboard.press("Tab")
+        if foco()["barra"]:
+            break
+    assert foco()["barra"], "o Tab chega na barra antes de entrar na prévia"
+    # as setas na barra não andam pela página (a barra remontaria e o foco cairia no body)
+    barra.get_by_role("button", name="Tamanho: Grande").focus()
+    g.keyboard.press("ArrowDown")
+    assert "ed-sel" in lona.locator('[data-ed-w="qf1e2e"]').get_attribute("class") and foco()["label"] == "Tamanho: Grande", foco()
+    # Duplicar na barra: a peça nova fica escolhida e o foco vai para o mesmo botão na barra dela
+    barra.get_by_role("button", name="Duplicar").focus()
+    g.keyboard.press("Enter")
+    g.wait_for_function(_n_ws("q1e2e:0") + " === 3")
+    g.wait_for_function("() => document.activeElement?.closest('.ed-barra') && document.activeElement.getAttribute('aria-label') === 'Duplicar'", timeout=5000)
+    # o mesmo aviso duas vezes seguidas muda o texto da região (senão o leitor de tela fica mudo)
+    primeiro = aviso()
+    g.keyboard.press("Control+d")
+    g.wait_for_function(_n_ws("q1e2e:0") + " === 4")
+    segundo = aviso()
+    assert "Duplicado" in primeiro and "Duplicado" in segundo and primeiro != segundo, (primeiro, segundo)
+    g.keyboard.press("Control+z")
+    g.wait_for_function(_n_ws("q1e2e:0") + " === 3")
+    um = aviso()
+    g.keyboard.press("Control+z")
+    g.wait_for_function(_n_ws("q1e2e:0") + " === 2")
+    dois = aviso()
+    assert "Desfeito" in um and "Desfeito" in dois and um != dois, (um, dois)
+    # ↓ diz o que é e onde está: dois Textos seguidos não soam iguais
+    g.locator('.ed-camadas [data-camada="qh1e2e"]').focus()
+    g.keyboard.press("Enter")
+    g.keyboard.press("ArrowDown")
+    g.wait_for_function("() => document.querySelector('.ed > [aria-live]').textContent.includes('First words')", timeout=5000)
+    a1 = aviso()
+    g.keyboard.press("ArrowDown")
+    g.wait_for_function("() => document.querySelector('.ed > [aria-live]').textContent.includes('Right words')", timeout=5000)
+    a2 = aviso()
+    assert "coluna 1" in a1 and "coluna 2" in a2, (a1, a2)
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_tela_estreita_so_com_o_teclado(servidor, navegador):
+    """#315, até 900 px sem ponteiro (revisão): a folha leva o foco, prende o Tab, fecha com Esc e devolve o foco a quem
+    abriu; a peça escolhida na folha Inserir entra pelo botão "Pôr no fim da página" (Enter), sem tocar na prévia."""
+    g = entrar(navegador, servidor, largura=800, altura=900)
+    csrf = _csrf(g)
+    sec = {"id": "n1e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [[
+        {"id": "nh1e2e", "tipo": "titulo", "texto": "Narrow Kart Camp", "nivel": 1},
+        {"id": "ntxe2e", "tipo": "texto", "html": "<p>Narrow words.</p>"}]]}
+    pid = _pagina_do_editor(g, servidor, csrf, "Narrow Kart Camp e2e", "/narrow-camp-e2e/", [sec])
+    abrir(g, servidor, f"/site/editor/{pid}")
+    _lona(g).locator('[data-ed-w="ntxe2e"]').wait_for()
+    na_folha = "() => !!document.activeElement?.closest('.ed-folha')"
+    texto_do_foco = "() => document.activeElement?.textContent.trim()"
+    inserir = g.locator(".ed-doca").get_by_role("button", name="Inserir")
+    inserir.focus()
+    g.keyboard.press("Enter")
+    g.locator(".ed-folha").wait_for()
+    assert g.evaluate(na_folha), "a folha leva o foco"
+    g.keyboard.press("Shift+Tab")
+    assert g.evaluate(na_folha), "o Tab fica dentro da folha"
+    g.keyboard.press("Tab")
+    assert g.evaluate(na_folha)
+    g.keyboard.press("Escape")
+    g.locator(".ed-folha").wait_for(state="detached")
+    assert g.evaluate(texto_do_foco) == "Inserir", "o foco volta para quem abriu a folha"
+    g.keyboard.press("Enter")
+    g.locator(".ed-folha").get_by_role("button", name="Título", exact=True).focus()
+    g.keyboard.press("Enter")
+    g.locator(".ed-tocar").wait_for()
+    assert g.evaluate(texto_do_foco) == "Pôr no fim da página", "o foco vai para o botão que põe sem tocar"
+    g.keyboard.press("Enter")
+    g.wait_for_function(_n_ws("n1e2e:0") + " === 3")
+    assert g.locator(".ed-tocar").count() == 0
+    assert not g.evaluate("() => document.activeElement === document.body"), "o foco não cai no body"
+    _salvo(g)
+    assert [w["tipo"] for w in _rascunho(g, servidor, pid)["itens"][0]["itens"][0]] == ["titulo", "texto", "titulo"]
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_mais_pergunta_com_o_texto_em_edicao_fica(servidor, navegador):
+    """#315 (revisão): "+ Pergunta" na barra com a pergunta em edição. A pergunta nova aparece na prévia e fica no
+    rascunho; escrever de novo não volta a lista ao que era."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    sec = {"id": "f1e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [[
+        {"id": "fh1e2e", "tipo": "titulo", "texto": "FAQ Kart Camp", "nivel": 1},
+        {"id": "fqe2e", "tipo": "faq", "itens": [{"pergunta": "How old?", "resposta": "Seven and up."}]}]]}
+    pid = _pagina_do_editor(g, servidor, csrf, "FAQ Kart Camp e2e", "/faq-camp-e2e/", [sec])
+    abrir(g, servidor, f"/site/editor/{pid}")
+    faq = _lona(g).locator('[data-ed-w="fqe2e"]')
+    em_edicao = "() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-w=\"fqe2e\"] summary[contenteditable]')"
+    faq.locator("summary").first.dblclick()
+    g.wait_for_function(em_edicao)
+    g.locator(".ed-barra").get_by_role("button", name="+ Pergunta").click()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-w=\"fqe2e\"] details').length === 2",
+                        timeout=8000)
+    _salvo(g)
+    faq.locator("summary").first.dblclick()
+    g.wait_for_function(em_edicao)
+    g.keyboard.press("End")
+    g.keyboard.type("!")
+    _salvo(g)
+    w = next(x for x in _rascunho(g, servidor, pid)["itens"][0]["itens"][0] if x["tipo"] == "faq")
+    assert len(w["itens"]) == 2 and w["itens"][0]["pergunta"] == "How old?!", w
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_escrever_num_texto_antigo_guarda_a_foto_e_os_links(servidor, navegador):
+    """#315 (revisão): o texto que já existia (do editor antigo) tem foto e links que o servidor aceita (http, caminho
+    com +). Escrever nele na prévia não apaga nenhum deles."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    html = ('<p>See <a href="http://example.com/map">the map</a> and <a href="/blog/a+b/">the post</a>.</p>'
+            '<p><img src="https://example.com/track.webp" alt="Track"></p>')
+    sec = {"id": "l1e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [[
+        {"id": "lh1e2e", "tipo": "titulo", "texto": "Links Kart Camp", "nivel": 1}, {"id": "ltxe2e", "tipo": "texto", "html": html}]]}
+    pid = _pagina_do_editor(g, servidor, csrf, "Links Kart Camp e2e", "/links-camp-e2e/", [sec])
+    abrir(g, servidor, f"/site/editor/{pid}")
+    tx = _lona(g).locator('[data-ed-w="ltxe2e"]')
+    tx.locator("p").first.dblclick()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-w=\"ltxe2e\"][contenteditable]')")
+    g.keyboard.press("Control+End")
+    g.keyboard.type(" Go.")
+    _salvo(g)
+    h = next(x for x in _rascunho(g, servidor, pid)["itens"][0]["itens"][0] if x["id"] == "ltxe2e")["html"]
+    assert "Go." in h, h
+    assert 'href="http://example.com/map"' in h and 'href="/blog/a+b/"' in h, h
+    assert 'src="https://example.com/track.webp"' in h and 'alt="Track"' in h, h
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_foto_solta_na_previa_abre_a_descricao(servidor, navegador):
+    """#315 (revisão): uma foto do computador solta na prévia entra como imagem nova e a barra dela já abre o balão da
+    descrição (o aviso pede para escrever a descrição)."""
+    import base64
+    import io
+
+    from PIL import Image
+    b = io.BytesIO()
+    Image.new("RGB", (64, 48), (200, 30, 30)).save(b, "PNG")
+    png = base64.b64encode(b.getvalue()).decode()
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    sec = {"id": "p1e2e", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [[
+        {"id": "ph1e2e", "tipo": "titulo", "texto": "Photo Kart Camp", "nivel": 1},
+        {"id": "ptxe2e", "tipo": "texto", "html": "<p>Photo words.</p>"}]]}
+    pid = _pagina_do_editor(g, servidor, csrf, "Photo Kart Camp e2e", "/photo-camp-e2e/", [sec])
+    abrir(g, servidor, f"/site/editor/{pid}")
+    _lona(g).locator('[data-ed-w="ptxe2e"]').wait_for()
+    previa = next(f for f in g.frames if "/previa" in f.url)
+    previa.evaluate("""png => {
+      const r = document.querySelector('[data-ed-w="ptxe2e"]').getBoundingClientRect()
+      const x = r.left + 20, y = r.bottom - 3
+      const dt = new DataTransfer()
+      dt.items.add(new File([Uint8Array.from(atob(png), c => c.charCodeAt(0))], 'kart.png', { type: 'image/png' }))
+      const alvo = document.elementFromPoint(x, y)
+      for (const tipo of ['dragenter', 'dragover', 'drop'])
+        alvo.dispatchEvent(new DragEvent(tipo, { dataTransfer: dt, clientX: x, clientY: y, bubbles: true, cancelable: true }))
+    }""", png)
+    pop = g.locator(".ed-barra .ed-pop")
+    pop.wait_for(timeout=8000)
+    pop.locator("input").fill("A red kart on a test photo")
+    _salvo(g)
+    ws = _rascunho(g, servidor, pid)["itens"][0]["itens"][0]
+    assert [w["tipo"] for w in ws] == ["titulo", "texto", "imagem"], ws
+    assert ws[2]["src"].startswith("/_f/") and ws[2]["alt"] == "A red kart on a test photo", ws[2]
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
 
 
 def _confirmar_marcador(g, rotulo):
