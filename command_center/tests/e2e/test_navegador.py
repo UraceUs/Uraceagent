@@ -10,6 +10,7 @@ Chromium fora do lugar padrão: PW_CHROMIUM=/opt/pw-browsers/chromium.
 Nada aqui fala com Asana, Gmail, QuickBooks ou Kommo: o banco é descartável e o
 servidor sobe sem sincronia (CC_AUTOSYNC=0) e sem credencial (URACE_ENV inexistente).
 """
+import json
 import os
 import re
 import socket
@@ -2251,11 +2252,117 @@ def test_liberar_invoice_so_o_gerente_conferindo_o_valor_e_a_tabela(servidor, na
     r = g.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     mandar.click()
+    # a invoice foi desligada pelo closer: mandar pergunta antes (2ª revisão), como "Cobrar só o depósito"
+    pergunta = g.locator(".modal.ask", has=g.get_by_role("heading", name="Mandar a invoice?"))
+    pergunta.wait_for()
+    assert re.search(r"\$\s?500", pergunta.inner_text()), pergunta.inner_text()
+    pergunta.get_by_role("button", name="Mandar a invoice", exact=True).click()
     g.get_by_text(re.compile("não conectado")).first.wait_for(timeout=8000)
     d = g.request.get(servidor + f"/api/sales/{oid3}").json()
     assert d["invoice"] == "livre" and "cobrando" not in d["oportunidade"]["closing"], "nada saiu: a marca sai"
     assert not g.erros_js, g.erros_js
     g.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_venda_tentativa_sem_desfecho_mandar_ou_registrar_no_celular(servidor, navegador, largura):
+    """#310, 2ª revisão (A2): a tentativa que não terminou oferece ao gerente "Não saiu: mandar" e "Saiu:
+    registrar o número"; o registro confere no QuickBooks (sem ele ligado, nada é registrado). Quem vende
+    só vê o aviso. A invoice criada cujo envio falhou tem o Reenviar (A1). E a venda paga no site. Tudo
+    em 360 e 390 px, sem rolar para o lado e com o toque de 40 px."""
+    import sqlite3
+    g = entrar(navegador, servidor, largura=largura, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in g.context.cookies() if c["name"] == "cc_csrf")}
+    r = g.request.post(servidor + "/api/sales", headers=csrf,
+                       data={"name": f"Rita Revisao {largura}", "email": f"rita{largura}.e2e@example.com",
+                             "service": "Urace Daily", "amount": 500})
+    oid = r.json()["id"]
+    r = g.request.post(servidor + f"/api/sales/{oid}/close", headers=csrf, data={
+        "passos": {"cliente": False, "qbo": False, "waiver": False, "asana": False, "kommo": False}})
+    assert r.status == 200, r.text()
+    con = sqlite3.connect(BANCO, timeout=10, isolation_level=None)
+    # a tentativa de antes ficou sem desfecho: o "enviando" na auditoria, nada depois
+    con.execute("INSERT INTO audit_logs (event, actor, entity_type, entity_id, detail) VALUES (?,?,?,?,?)",
+                ("sales.invoice.sending", "user:1", "opportunity", str(oid), json.dumps(
+                    {"tentativa": f"t{largura}x", "acao": "reenvio", "por": "Gina Exemplo", "em": "2026-10-16T14:05:00.000Z",
+                     "valor": 500, "deposito": 0, "item": "32"})))
+    stripe = con.execute("""INSERT INTO opportunities (name, email, service, amount, stage, source, closing)
+                            VALUES (?,?,?,?,?,?,?)""", (f"Sara Stripe {largura}", f"sara{largura}.e2e@example.com",
+                                                        "Store: Camiseta Exemplo", 45, "FECHAMENTO", "Site",
+                                                        json.dumps({"em": "2026-10-16T15:00:00.000Z", "por": "stripe", "pedido": 9}))).lastrowid
+    passo = {"passo": "qbo", "nome": "Cliente e invoice no QuickBooks", "ok": True, "enviado": False, "invoice": "7001",
+             "numero": f"N{largura}", "detalhe": f"invoice nº N{largura} criada; o envio falhou (HTTP 500): reenviar"}
+    criada = con.execute("""INSERT INTO opportunities (name, email, service, amount, stage, source, closing)
+                            VALUES (?,?,?,?,?,?,?)""", (f"Nina Envio {largura}", f"nina{largura}.e2e@example.com", "Urace Daily",
+                                                        500, "FECHAMENTO", "Ligação",
+                                                        json.dumps({"em": "2026-10-16T15:00:00.000Z", "por": "Carla Exemplo",
+                                                                    "passos": [passo]}))).lastrowid
+    con.close()
+
+    abrir(g, servidor, f"/sales/{oid}")
+    g.get_by_role("button", name="Fechar venda", exact=True).click()
+    acomp = g.locator(".modal", has=g.get_by_role("heading", name="Acompanhamento do fechamento"))
+    acomp.wait_for()
+    acomp.get_by_role("button", name="mandar a invoice", exact=True).click()
+    g.locator(".modal.ask").get_by_role("button", name="Mandar a invoice", exact=True).click()
+    dlg = g.locator(".modal.ask", has=g.get_by_role("heading", name="A tentativa anterior não terminou"))
+    dlg.wait_for(timeout=8000)
+    assert re.search("não terminou: confira no QuickBooks", dlg.inner_text()), dlg.inner_text()
+    dlg.get_by_role("button", name="Não saiu: mandar").wait_for()
+    g.wait_for_timeout(400)
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not g.evaluate(_PEQUENOS), g.evaluate(_PEQUENOS)
+    dlg.get_by_role("button", name="Saiu: registrar o número").click()
+    reg = g.locator(".modal.ask", has=g.get_by_role("heading", name="Registrar a invoice que saiu"))
+    reg.wait_for()
+    reg.get_by_label("Número da invoice no QuickBooks (Invoice no.)").fill("1001")
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not g.evaluate(_PEQUENOS), g.evaluate(_PEQUENOS)
+    reg.get_by_role("button", name="Registrar a invoice").click()
+    # sem o QuickBooks no e2e, o servidor não confere: nada é registrado
+    g.get_by_text(re.compile("Ligue o QuickBooks para conferir")).first.wait_for(timeout=8000)
+    d = g.request.get(servidor + f"/api/sales/{oid}").json()
+    assert d["invoice"] == "livre" and not [p for p in d["oportunidade"]["closing"]["passos"] if p.get("registrada")]
+    g.keyboard.press("Escape")
+
+    # A1: a invoice criada cujo envio falhou: o aviso e o Reenviar (a mesma invoice)
+    abrir(g, servidor, f"/sales/{criada}")
+    g.get_by_text(f"Invoice nº N{largura} criada, o envio falhou.").wait_for()
+    reenviar = g.get_by_role("button", name="Reenviar", exact=True)
+    assert reenviar.evaluate("b => b.offsetHeight") >= 40
+    assert g.get_by_role("button", name="Liberar invoice").count() == 0
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    reenviar.click()
+    g.get_by_text(re.compile("não conectado")).first.wait_for(timeout=8000)
+    assert g.request.get(servidor + f"/api/sales/{criada}").json()["nao_enviadas"][0]["invoice"] == "7001"
+
+    # a venda paga no site
+    abrir(g, servidor, f"/sales/{stripe}")
+    g.get_by_text("Pago no site (Stripe).").wait_for()
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not g.evaluate(_PEQUENOS), g.evaluate(_PEQUENOS)
+    assert not g.erros_js, g.erros_js
+    g.close()
+
+    # quem vende: o aviso do servidor, sem a escolha do gerente
+    op = entrar(navegador, servidor, "op@urace.us", largura=largura, altura=800)
+    abrir(op, servidor, f"/sales/{oid}")
+    op.get_by_role("button", name="Fechar venda", exact=True).click()
+    acomp = op.locator(".modal", has=op.get_by_role("heading", name="Acompanhamento do fechamento"))
+    acomp.wait_for()
+    acomp.get_by_role("button", name="mandar a invoice", exact=True).click()
+    op.locator(".modal.ask").get_by_role("button", name="Mandar a invoice", exact=True).click()
+    op.get_by_text(re.compile("não terminou: confira no QuickBooks")).first.wait_for(timeout=8000)
+    assert op.get_by_role("button", name="Não saiu: mandar").count() == 0
+    assert op.get_by_role("button", name="Saiu: registrar o número").count() == 0
+    r = op.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not op.erros_js, op.erros_js
+    op.close()
 
 
 def test_card_de_irmao_com_vincular_ao_cliente(servidor, navegador):

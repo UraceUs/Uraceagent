@@ -57,7 +57,9 @@ function CampanhaDoContato({ c }: { c: Record<string, string> }) {
     </div>)}
   </div>
 }
-interface Passo { passo: string; nome: string; ok: boolean | null; detalhe: string; client_id?: number; invoice?: string; envelope?: string; tarefa?: string; pendente?: boolean }
+interface Passo { passo: string; nome: string; ok: boolean | null; detalhe: string; client_id?: number; invoice?: string; envelope?: string; tarefa?: string; pendente?: boolean
+  // #310 (A1): a invoice criada cujo envio falhou (enviado: false) sai de novo só pelo Reenviar, a mesma
+  numero?: string; enviado?: boolean }
 interface Fechamento {
   em: string; por: string; na_tabela: boolean | null; aprovado?: boolean; motivo_preco?: string; passos?: Passo[]
   // #204: a cobrança — o preço da tabela vem do catálogo; fora dela, a invoice espera o gerente
@@ -84,20 +86,38 @@ type EstadoInvoice = 'enviada' | 'esperando' | 'livre'
  *  a marca de quem está fechando agora não é fechamento. */
 const ehFechada = (f: Fechamento | null | undefined): f is Fechamento => !!f && !!(f.em || f.passos || f.por === 'stripe')
 type Perguntar = ReturnType<typeof usePerguntar>
-/** #310 (R4): a tentativa anterior de cobrar esta venda não terminou (a invoice pode ter saído). O servidor
- *  recusa até alguém conferir no QuickBooks: o gerente (ou o dono) confirma aqui e a chamada se repete com
- *  `confirmar`; quem vende vê o aviso do servidor. */
-async function comConfirmacao<T>(fn: (confirmar: boolean) => Promise<T>, gerente: boolean, perguntar: Perguntar): Promise<T> {
+/** #310 (R4, A2): a tentativa anterior de cobrar esta venda não terminou (a invoice pode ter saído). O servidor
+ *  recusa até alguém conferir no QuickBooks. O gerente (ou o dono) escolhe aqui: "Não saiu: mandar" repete a
+ *  chamada com `confirmar`; "Saiu: registrar o número" grava a invoice que saiu, e nada é cobrado de novo
+ *  (devolve 'registrada'). Quem vende vê o aviso do servidor. */
+async function comConfirmacao<T>(oid: number, fn: (confirmar: boolean) => Promise<T>, gerente: boolean, perguntar: Perguntar): Promise<T | 'registrada'> {
   try { return await fn(false) } catch (e) {
     const er = e as ApiError
     if (er?.motivo !== 'tentativa_sem_desfecho' || !gerente) throw e
-    const ok = await perguntar({ titulo: tr("A tentativa anterior não terminou"), perigo: true, ok: tr("Conferi: mandar"),
-      texto: <>{er.message} <b>{tr("Confirme só depois de conferir no QuickBooks que a invoice não saiu.")}</b></> })
-    if (ok !== true) throw e
-    return await fn(true)
+    const r = await perguntar({ titulo: tr("A tentativa anterior não terminou"), perigo: true, ok: tr("Não saiu: mandar"),
+      alt: tr("Saiu: registrar o número"), texto: <>{er.message} <b>{tr("Confira no QuickBooks antes de escolher.")}</b></> })
+    if (r === true) return await fn(true)
+    if (r !== 'alt' || !await registrarQueSaiu(oid, perguntar)) throw e
+    return 'registrada'
   }
 }
-interface Detalhe { oportunidade: Opp; eventos: Evento[]; pedido?: PedidoSite | null; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[]; tabela?: Tabela | null; pode_liberar?: boolean; card?: CardDoFechamento | null; invoice?: EstadoInvoice | null }
+/** #310 (A2): "A invoice saiu" — o gerente informa o número; o servidor confere no QuickBooks (só leitura) que ela
+ *  existe e é deste cliente, e grava. Se o valor não bate, pergunta de novo. false: cancelou. */
+async function registrarQueSaiu(oid: number, perguntar: Perguntar): Promise<boolean> {
+  const numero = await perguntar({ titulo: tr("Registrar a invoice que saiu"), campo: tr("Número da invoice no QuickBooks (Invoice no.)"), ok: tr("Registrar a invoice"),
+    texto: tr("O painel confere no QuickBooks que a invoice existe e é deste cliente. Nada é cobrado de novo.") })
+  if (typeof numero !== 'string' || !numero.trim()) return false
+  try { await api.post(`/sales/${oid}/invoice/registrar`, { numero: numero.trim() }) } catch (e) {
+    const er = e as ApiError
+    if (er?.motivo !== 'valor_diferente') throw e
+    if (await perguntar({ titulo: tr("O valor não bate"), texto: er.message, ok: tr("Registrar mesmo assim"), perigo: true }) !== true) return false
+    await api.post(`/sales/${oid}/invoice/registrar`, { numero: numero.trim(), aceitar_diferenca: true })
+  }
+  return true
+}
+const REGISTRADA = () => tr("Invoice registrada: a venda fica com a que saiu, e nada é cobrado de novo.")
+interface NaoEnviada { invoice: string; numero: string; o_que: 'invoice' | 'deposito' }
+interface Detalhe { oportunidade: Opp; eventos: Evento[]; pedido?: PedidoSite | null; etapas: { codigo: string; nome: string }[]; resultados: { codigo: string; nome: string }[]; tabela?: Tabela | null; pode_liberar?: boolean; card?: CardDoFechamento | null; invoice?: EstadoInvoice | null; nao_enviadas?: NaoEnviada[] }
 interface Agenda { retornos: (Opp & { atrasado: boolean })[]; ligacoes_hoje: { at: string; title: string; name: string }[] }
 
 const ETAPA_TOM: Record<string, Tone> = { NOVO: 'neutral', CONVERSA: 'info', PROPOSTA: 'warn', FECHAMENTO: 'accent', GANHO: 'ok', PERDIDO: 'crit' }
@@ -270,7 +290,15 @@ export function Oportunidade() {
   const faltaDeposito = fechada && !pagoNoSite && !esperaAprovacao && !o.closing?.deposito_cobrado && (tabela?.deposito || 0) > 0
   async function cobrarDeposito() {
     if (!await perguntar({ titulo: tr("Cobrar só o depósito?"), texto: tr("Uma invoice com a linha Security deposit de {0}, para {1}. É o mesmo depósito da venda automática.", money(tabela?.deposito || 0), o?.email || tr("sem e-mail")), ok: tr("Cobrar o depósito") })) return
-    await acao('dep', () => comConfirmacao(c => api.post(`/sales/${oid}/deposit${c ? '?confirmar=true' : ''}`), !!d.data?.pode_liberar, perguntar), tr("Depósito cobrado."))
+    setBusy('dep')
+    try {
+      const r = await comConfirmacao(oid, c => api.post(`/sales/${oid}/deposit${c ? '?confirmar=true' : ''}`), !!d.data?.pode_liberar, perguntar)
+      toast(r === 'registrada' ? REGISTRADA() : tr("Depósito cobrado."), 'ok'); d.reload()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  const naoEnviadas = d.data?.nao_enviadas || []
+  async function reenviar(n: NaoEnviada) {
+    await acao('reenv', () => api.post(`/sales/${oid}/invoice/reenviar`, { invoice: n.invoice }), tr("Invoice nº {0} reenviada (a mesma).", n.numero))
   }
   return <div className="stack">
     <div className="row wrap" style={{ gap: 8 }}>
@@ -310,6 +338,8 @@ export function Oportunidade() {
       {d.data?.pode_liberar ? <button className="btn sm primary" onClick={() => setLiberar(true)}>{tr("Liberar invoice")}</button> : <span className="muted">{tr("Só o gerente ou o dono libera.")}</span>}</Banner>}
     {faltaDeposito && can('OPERATOR') && <Banner tone="info"><b>{tr("Depósito ainda não cobrado.")}</b> {tr("O serviço pede depósito de {0}.", money(tabela?.deposito || 0))}{' '}
       <button className="btn sm" disabled={busy === 'dep'} onClick={cobrarDeposito}>{busy === 'dep' ? <Spinner /> : tr("Cobrar só o depósito")}</button></Banner>}
+    {naoEnviadas.map(n => <Banner key={n.invoice} tone="warn"><b>{n.o_que === 'deposito' ? tr("Invoice do depósito nº {0} criada, o envio falhou.", n.numero) : tr("Invoice nº {0} criada, o envio falhou.", n.numero)}</b> {tr("Reenviar manda a mesma invoice: não cria outra.")}{' '}
+      {can('OPERATOR') && <button className="btn sm" disabled={busy === 'reenv'} onClick={() => reenviar(n)}>{busy === 'reenv' ? <Spinner /> : tr("Reenviar")}</button>}</Banner>)}
     {pagoNoSite && <Banner tone="ok"><b>{tr("Pago no site (Stripe).")}</b> {tr("O cliente já pagou: nada a cobrar pelo painel (nem invoice, nem depósito).")}</Banner>}
     {o.stage === 'GANHO' && !pagoNoSite && <Banner tone="ok"><b>{tr("Venda fechada.")}</b> {passos.filter(p => p.ok).length} {tr("de")} {passos.length} {tr("passos concluídos")}{passos.some(p => p.ok === false) ? tr(" · falta: {0}", passos.filter(p => p.ok === false).map(p => p.nome).join(', ')) : ''}. <button className="btn ghost sm" onClick={() => setFechar(true)}>{tr("ver acompanhamento")}</button></Banner>}
 
@@ -487,9 +517,10 @@ function LiberarInvoice({ o, tabela, modo = 'liberar', podeLiberar = true, onClo
   async function liberar() {
     setBusy(true)
     try {
-      const r = await comConfirmacao(c => pelaLiberacao
+      const r = await comConfirmacao(o.id, c => pelaLiberacao
         ? api.post<{ fechamento?: Fechamento }>(`/sales/${o.id}/invoice/liberar`, { valor, item_id: item?.id || undefined, confirmar: c || undefined })
         : api.post<{ fechamento?: Fechamento }>(`/sales/${o.id}/step/qbo?item_id=${encodeURIComponent(item?.id || '')}${c ? '&confirmar=true' : ''}`), podeLiberar, perguntar)
+      if (r === 'registrada') { toast(REGISTRADA(), 'ok'); onOk(); return }
       toast(pelaLiberacao ? tr("Invoice liberada e enviada.") : tr("Invoice enviada pelo QuickBooks."), 'ok'); onOk(r.fechamento)
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
@@ -554,7 +585,7 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
     if (!f.service.trim() || !f.amount) { toast(tr("Diga o serviço e o valor fechado."), 'crit'); return }
     setBusy(true)
     try {
-      const r = await comConfirmacao(c => api.post<{ etapa: string; fechamento: Fechamento }>(`/sales/${o.id}/close`, {
+      const r = await comConfirmacao(o.id, c => api.post<{ etapa: string; fechamento: Fechamento }>(`/sales/${o.id}/close`, {
         service: f.service, service_date: f.service_date || undefined, service_time: f.service_time || undefined,
         amount: Number(f.amount), item_id: itemId || undefined, irmao: card ? irmao : undefined,
         pilot_name: f.pilot_name || undefined, pilot_age: f.pilot_age ? Number(f.pilot_age) : undefined,
@@ -562,6 +593,7 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
         passos, extras: extras.filter(e => e.titulo.trim()).map(e => ({ titulo: e.titulo, onde: e.onde, quando: e.quando || undefined, notas: e.notas || undefined })),
         confirmar: c || undefined,
       }), podeLiberar, perguntar)
+      if (r === 'registrada') { toast(REGISTRADA(), 'ok'); onOk(); return }
       setFeito(r.fechamento)
       const falhou = (r.fechamento.passos || []).filter(p => p.ok === false)
       toast(falhou.length ? tr("Fechada, mas faltou: {0}", falhou.map(p => p.nome).join(', ')) : tr("Venda fechada e tudo disparado."), falhou.length ? undefined : 'ok')
@@ -570,7 +602,20 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
   }
   async function refazer(passo: string) {
     setBusy(true)
-    try { await comConfirmacao(c => api.post(`/sales/${o.id}/step/${passo}${c ? '?confirmar=true' : ''}`), podeLiberar, perguntar); toast(tr("Feito."), 'ok'); onOk() }
+    try {
+      const r = await comConfirmacao(o.id, c => api.post(`/sales/${o.id}/step/${passo}${c ? '?confirmar=true' : ''}`), podeLiberar, perguntar)
+      toast(r === 'registrada' ? REGISTRADA() : tr("Feito."), 'ok'); onOk()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
+  }
+  // a invoice desligada no fechamento foi escolha do closer: mandar pergunta antes, como "Cobrar só o depósito"
+  async function mandarDesligada() {
+    if (!await perguntar({ titulo: tr("Mandar a invoice?"), ok: tr("Mandar a invoice"),
+      texto: tr("A invoice foi desligada no fechamento. Ao mandar, sai uma invoice de {0} para {1} pelo QuickBooks.", money(o.amount || 0), o.email || tr("sem e-mail")) })) return
+    await refazer('qbo')
+  }
+  async function reenviarDaLinha(p: Passo) {
+    setBusy(true)
+    try { await api.post(`/sales/${o.id}/invoice/reenviar`, { invoice: p.invoice }); toast(tr("Invoice nº {0} reenviada (a mesma).", p.numero || p.invoice || ''), 'ok'); onOk() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
 
@@ -630,13 +675,14 @@ function FecharVenda({ o, tabela, card, podeLiberar, invoice, onClose, onOk }: {
               <div style={{ minWidth: 0 }}><div className="t">{l.nome}</div><div className="s">{p ? p.detalhe : l.o_que}</div></div>
               <div className="r">
                 {!feito && <button className={`sw${passos[l.k] ? '' : ' off'}`} aria-label={passos[l.k] ? tr("Ligado") : tr("Desligado")} onClick={() => setPassos(x => ({ ...x, [l.k]: !x[l.k] }))} />}
-                {feito && (p?.ok ? <Chip tone="ok">{tr("feito")}</Chip>
+                {feito && (p?.ok && l.k === 'qbo' && p.enviado === false ? <button className="btn sm" disabled={busy} onClick={() => reenviarDaLinha(p)}>{tr("reenviar")}</button>
+                  : p?.ok ? <Chip tone="ok">{tr("feito")}</Chip>
                   : l.k === 'qbo' && pagoNoSite ? <Chip tone="ok">{tr("pago no site (Stripe)")}</Chip>
                   : l.k === 'qbo' && esperando ? (podeLiberar ? <button className="btn sm primary" onClick={() => setLiberar(true)}>{tr("Liberar invoice")}</button> : <Chip tone="warn">{tr("espera o gerente")}</Chip>)
                   // #310: o serviço sem item no catálogo escolhe o item na janela (R6); a invoice desligada na tabela sai daqui (R5)
                   : l.k === 'qbo' && semItem && (p?.ok === false || invoice === 'livre') ? <button className="btn sm" disabled={busy} onClick={() => setMandar(true)}>{p?.ok === false ? tr("tentar de novo") : tr("mandar a invoice")}</button>
                   : p?.ok === false ? <button className="btn sm" disabled={busy} onClick={() => refazer(l.k)}>{tr("tentar de novo")}</button>
-                  : l.k === 'qbo' && invoice === 'livre' ? <button className="btn sm" disabled={busy} onClick={() => refazer('qbo')}>{tr("mandar a invoice")}</button>
+                  : l.k === 'qbo' && invoice === 'livre' ? <button className="btn sm" disabled={busy} onClick={mandarDesligada}>{tr("mandar a invoice")}</button>
                   : <Chip tone="neutral">—</Chip>)}
               </div>
             </div></div>

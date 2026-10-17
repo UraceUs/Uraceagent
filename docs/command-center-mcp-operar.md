@@ -82,9 +82,12 @@ As travas da venda valem igual pelo MCP, pelo botão e pela IA, ao mesmo tempo: 
 (ou a venda paga no site, no Stripe) não sai de novo; nenhum passo roda antes de fechar; e quem chega
 enquanto outra saída cobra a mesma venda recebe 409 ("… está mandando a invoice agora"). Se uma
 tentativa caiu depois do QuickBooks responder, a resposta é 409 "A tentativa de … não terminou:
-confira no QuickBooks se a invoice saiu". Só o gerente (ou o dono), depois de conferir, repete com a
-confirmação da rota: `"confirmar": true` no `corpo` do `close` e do `invoice/liberar`, ou
-`{"confirmar": true}` na `consulta` de `step/qbo` e `deposit`. É outro `confirmar`, além do do MCP.
+confira no QuickBooks se a invoice saiu". Só o gerente (ou o dono), depois de conferir, resolve. Não
+saiu: repete com a confirmação da rota, `"confirmar": true` no `corpo` do `close` e do
+`invoice/liberar`, ou `{"confirmar": true}` na `consulta` de `step/qbo` e `deposit` (é outro
+`confirmar`, além do do MCP). Saiu: `POST /ops/api/sales/{id}/invoice/registrar` com `{"numero": "…"}`,
+que confere no QuickBooks antes de gravar. A invoice criada cujo envio falhou sai de novo só por
+`POST /ops/api/sales/{id}/invoice/reenviar` (a mesma invoice).
 
 ## Para a TI
 

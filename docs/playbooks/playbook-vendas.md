@@ -369,18 +369,14 @@ Regras do fechamento:
   o valor e o número da invoice. Antes de chamar o QuickBooks, cada saída que cobra grava
   `sales.invoice.sending` ("enviando"); o desfecho (a invoice que saiu ou `sales.invoice.failed`) leva
   o mesmo número de tentativa.
-- **A tentativa que não terminou** (#310). Se o QuickBooks respondeu e a gravação caiu (ou o pedido
-  caiu no meio), a venda fica marcada. Nos 10 minutos seguintes a resposta é "… está mandando a
-  invoice agora"; depois, 409 "A tentativa de *nome* às *hora* de *dia* (…) não terminou: confira no
-  QuickBooks se a invoice saiu". Ninguém manda outra por cima:
-  - quem vende avisa a gerência;
-  - o gerente (ou o dono) **confere no QuickBooks**. Se a invoice saiu, **não confirme**: ela já
-    está com o cliente (anote o número na venda). Se não saiu, a tela pergunta "A tentativa anterior
-    não terminou" e **Conferi: mandar** repete com a confirmação;
-  - pela API (gerente): `"confirmar": true` no corpo do Liberar e do `close`, ou
-    `?confirmar=true` em `step/qbo` e `deposit`. É outro `confirmar`, não o do MCP: o MCP pede o dele
-    antes, e este vai no `corpo` ou na `consulta`. Quem vende recebe 403; a IA não confirma. Fica na
-    auditoria (`confirmou`, com a tentativa que não terminou).
+- **O QuickBooks não respondeu** (#310, 2ª revisão). Só conta como "nada saiu" o erro que prova isso:
+  não conectado, o erro de antes da chamada (cliente, item, número da invoice) e a recusa do
+  QuickBooks (HTTP 4xx, menos 408 e 429). Nesses, o botão volta a funcionar. Tempo esgotado, conexão
+  caída, 5xx, 408 e 429 não provam: a resposta é 502 "O QuickBooks não respondeu (…): a invoice pode
+  ter saído…", a venda fica marcada e o próximo pedido cai na **tentativa que não terminou** (seção
+  4.6.3). Ninguém manda outra por cima.
+- **Invoice criada, envio falhou**: o QuickBooks criou a invoice e o e-mail não saiu. A venda grava a
+  invoice (número e id) e nada cria outra; ela sai de novo só pelo **Reenviar** (seção 4.6.4).
 - `step/waiver` reenvia pelo DocuSign; as travas de waiver válida e envelope aberto continuam.
 - Para corrigir o e-mail de uma waiver que já saiu, use o reenvio da waiver
   (`POST /waivers/{id}/resend` com o e-mail novo), não um envio novo.
@@ -413,7 +409,7 @@ O Liberar também vale para dois casos que antes ficavam sem saída (#310):
   (duas abas, dois gerentes), ou o Liberar junto com a IA, o passo, o fechamento ou o "Cobrar só o
   depósito", mandam uma invoice: o segundo recebe 409 "… está liberando a invoice agora" (ou o que o
   primeiro está fazendo). Se o QuickBooks falhar, nada sai e o botão volta a funcionar. Se ele
-  respondeu e a gravação caiu, veja **A tentativa que não terminou** (seção 4.6).
+  respondeu e a gravação caiu, veja **A tentativa que não terminou** (seção 4.6.3).
 - Nada que outro pedido grava no meio se perde (#310): um reenvio de waiver durante o Liberar não
   apaga o "liberada", e o depósito cobrado no meio não sai de novo na invoice.
 - **Venda paga no site (Stripe)** não tem Liberar: a ficha mostra "Pago no site (Stripe)." e a
@@ -433,6 +429,53 @@ depósito: a ficha mostra **"Depósito ainda não cobrado"** com o botão **Cobr
 - Não cobra duas vezes; com a invoice principal esperando o gerente, o depósito vai junto quando ela
   for liberada; serviço sem depósito responde "não pede depósito no catálogo". Venda paga no site
   (Stripe) responde 409; com o Liberar, o passo ou a IA cobrando no mesmo instante, também (#310).
+- A invoice do depósito criada cujo envio falhou aparece como "Invoice do depósito nº … criada, o
+  envio falhou", com o **Reenviar** (seção 4.6.4). O depósito já conta como cobrado.
+
+#### 4.6.3 A tentativa que não terminou: "Não saiu: mandar" ou "Saiu: registrar o número"
+
+Quando uma cobrança fala com o QuickBooks e não termina — o QuickBooks não respondeu, ou respondeu e a
+gravação caiu —, a venda fica marcada. Nos 10 minutos seguintes a uma queda a resposta é "… está
+mandando a invoice agora"; sem resposta do QuickBooks, ou depois desses 10 minutos, é 409 "A tentativa
+de *nome* às *hora* de *dia* (…) não terminou: confira no QuickBooks se a invoice saiu". Vale para o
+fechar, o Liberar, o passo, o depósito e a IA.
+
+- **Quem vende** vê o aviso e chama a gerência. Não há botão para passar por cima.
+- **O gerente (ou o dono)** abre o QuickBooks, procura a invoice do cliente (pelo nome, o valor e a
+  hora da tentativa) e volta ao painel. Repete o que estava fazendo (Liberar, tentar de novo, fechar,
+  cobrar o depósito); a tela pergunta "A tentativa anterior não terminou" com duas escolhas:
+  1. **Não saiu: mandar** — a invoice NÃO está no QuickBooks. O painel manda e grava na auditoria que a
+     tentativa antiga foi encerrada por você (`sales.invoice.confirmed`). A chamada leva a mesma
+     identificação (`requestid`) da tentativa antiga quando é a mesma cobrança: se ela tinha criado a
+     invoice, o QuickBooks devolve a mesma, sem criar a segunda.
+  2. **Saiu: registrar o número** — a invoice ESTÁ no QuickBooks. Digite o **Invoice no.** dela e
+     **Registrar a invoice**. O painel confere no QuickBooks (só leitura) que ela existe e é do cliente
+     desta venda; se o total não bate com o que a tentativa cobrava, ele mostra os dois valores e
+     pergunta **Registrar mesmo assim**. Registrada, a linha do QuickBooks fica como feita, com o
+     número; a venda sai de Precisa de atenção; nada é cobrado de novo; e fica na auditoria
+     (`sales.invoice.registered`).
+- Se o fechamento inteiro caiu antes de gravar, o registro grava o fechamento com a invoice; os outros
+  passos aparecem como "o fechamento caiu antes de gravar: confira se este passo saiu antes de tentar
+  de novo".
+- Sem o QuickBooks ligado, o registro é recusado ("Ligue o QuickBooks para conferir"): sem conferir,
+  nada é registrado. Número que não existe, ou de outro cliente, também.
+- API (gerente): "Não saiu" é `"confirmar": true` no corpo do Liberar e do `close`, ou
+  `?confirmar=true` em `step/qbo` e `deposit`. "Saiu" é `POST /ops/api/sales/{id}/invoice/registrar`
+  com `{"numero": "…"}` (e `"aceitar_diferenca": true` depois do aviso de valor). É outro `confirmar`,
+  não o do MCP: o MCP pede o dele antes, e este vai no `corpo` ou na `consulta`. Quem vende recebe
+  403; a IA não confirma nem registra.
+
+#### 4.6.4 Invoice criada, envio falhou: Reenviar
+
+O QuickBooks criou a invoice e o envio por e-mail falhou. A ficha mostra "Invoice nº … criada, o envio
+falhou." e a linha do QuickBooks no acompanhamento tem **reenviar**.
+
+- **Reenviar** manda a MESMA invoice pelo QuickBooks (como o lembrete). Nunca cria outra: o passo, o
+  Liberar, o fechamento e a IA recusam com 409 "A invoice #… desta venda já foi criada no QuickBooks e
+  o envio falhou: reenvie a mesma".
+- Se o reenvio também falhar, a invoice continua criada e não enviada: tente de novo mais tarde.
+- API: `POST /ops/api/sales/{id}/invoice/reenviar` com `{"invoice": "<id no QuickBooks>"}` (Operador).
+  Fica na auditoria (`sales.invoice.send`).
 
 ### 4.7 A IA dentro da oportunidade
 
@@ -444,7 +487,7 @@ invoice, fechar"). Ditar funciona. O que ela pode fazer e quem aprova:
 | registrar ligação, marcar retorno, anotar, criar tarefa | executa sozinha |
 | enviar waiver | executa sozinha (as travas do DocuSign continuam) |
 | mover etapa, fechar a venda | espera alguém confirmar (o Operador pode) |
-| enviar invoice | espera confirmação, e **só gerente ou administrador** decide; fora da tabela, recusa se quem decide não é gerente. Só depois de fechar a venda e uma vez (#310): antes do fechamento, com a invoice já enviada ou com a venda paga no site (Stripe), recusa; a que ela manda fica no fechamento. Ela marca a venda como o botão: com alguém cobrando no mesmo instante, recusa; com a tentativa que não terminou, recusa (quem confirma é o gerente, pela tela) |
+| enviar invoice | espera confirmação, e **só gerente ou administrador** decide; fora da tabela, recusa se quem decide não é gerente. Só depois de fechar a venda e uma vez (#310): antes do fechamento, com a invoice já enviada ou com a venda paga no site (Stripe), recusa; a que ela manda fica no fechamento. Ela marca a venda como o botão: com alguém cobrando no mesmo instante, recusa; com a tentativa que não terminou, recusa (quem resolve é o gerente, pela tela: "Não saiu: mandar" ou "Saiu: registrar o número"; a IA não registra) |
 | fechar a venda de novo | recusa se a invoice ou o depósito já saiu, se a venda foi paga no site (Stripe) ou se alguém está fechando ou cobrando agora (#310) |
 
 A política em vigor de cada ação está em **O que a IA pode fazer** (`/ops/ai/capabilities`); o
@@ -1101,6 +1144,8 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | refazer um passo | `POST /ops/api/sales/{id}/step/{passo}` | — (`passo`: cliente, qbo, waiver, asana, kommo; só depois de fechar; `cliente` aceita a consulta `{"irmao": true}`; `qbo` aceita `{"item_id": "id do item"}` e, só o gerente, `{"confirmar": true}` para a tentativa que não terminou) | Operador | **sim** |
 | cobrar só o depósito | `POST /ops/api/sales/{id}/deposit` | — (consulta `{"confirmar": true}` só para a tentativa que não terminou, gerente) | Operador | **sim** |
 | liberar invoice fora da tabela | `POST /ops/api/sales/{id}/invoice/liberar` | `{"valor": 0}` (o valor da venda, conferido; opcionais `"item_id"` e `"confirmar": true`) | **Gerente** | **sim** |
+| reenviar a invoice criada cujo envio falhou (a mesma) | `POST /ops/api/sales/{id}/invoice/reenviar` | `{"invoice": "id no QuickBooks"}` | Operador | **sim** |
+| a invoice saiu: registrar o número (tentativa que não terminou) | `POST /ops/api/sales/{id}/invoice/registrar` | `{"numero": "Invoice no."}` (depois do aviso de valor, `"aceitar_diferenca": true`) | **Gerente** | **sim** |
 | card de irmão | `POST /ops/api/clients` | `{"name": "Responsável Exemplo", "pilot_name": "Irmão Exemplo", "pilot_dob": "2016-05-09", "irmao_de": 123}` | Operador | não |
 | tarefa de serviço no Asana (modelo oficial) | `POST /ops/api/tasks` | `{"client_id": 123, "pilot_name": "Piloto Exemplo", "responsible": "Responsável Exemplo", "email": "cliente@exemplo.com", "phone": "+1 407 555 0100", "dob": "2014-05-10", "product": "Test Drive", "category": "4 stroke", "due_on": "2026-10-24"}` | Operador | **sim** |
 | enviar waiver avulsa | `POST /ops/api/waivers/send` | `{"template": "parental", "signer_name": "Responsável Exemplo", "signer_email": "cliente@exemplo.com", "service": "Test Drive", "client_id": 123}` | Operador | **sim** |
@@ -1207,7 +1252,8 @@ A data não pode cair numa segunda-feira (o quadro não tem coluna).
 5. Nunca chame `close` de novo numa venda que já tem `closing`. Se a invoice ou o depósito já saiu, o
    sistema recusa (409 "Venda já fechada…").
 6. 409 "A tentativa de … não terminou: confira no QuickBooks se a invoice saiu": é da gerência
-   (seção 4.6, **A tentativa que não terminou**).
+   (seção 4.6.3: "Não saiu: mandar" ou "Saiu: registrar o número").
+7. "Invoice nº … criada, o envio falhou": **Reenviar** (seção 4.6.4), nunca o passo.
 
 ### R7. Waiver voltou ou foi para o e-mail errado
 
@@ -1299,7 +1345,12 @@ instrução à gerência.
 | `close`: "Venda já fechada e …: fechar de novo cobraria outra vez" (409) | use os botões de cada passo no acompanhamento |
 | "… está liberando a invoice agora" (ou "mandando a invoice", "fechando a venda", "cobrando o depósito", "mandando a invoice pela IA") (409) | outra aba, outro gerente, a IA ou o MCP está cobrando esta venda neste instante: espere e recarregue |
 | "Esta venda mudou agora mesmo (outro clique, outra aba ou a IA?): recarregue e confira." (409) | recarregue a ficha e veja o que saiu antes de tentar de novo |
-| "A tentativa de … às … não terminou: confira no QuickBooks se a invoice saiu…" (409) | é da gerência: confere no QuickBooks; se não saiu, **Conferi: mandar** (ou `confirmar: true`); se saiu, não mande outra |
+| "A tentativa de … às … não terminou: confira no QuickBooks se a invoice saiu…" (409) | é da gerência (seção 4.6.3): confere no QuickBooks; não saiu, **Não saiu: mandar** (ou `confirmar: true`); saiu, **Saiu: registrar o número** (ou `invoice/registrar`) |
+| "O QuickBooks não respondeu (…): a invoice pode ter saído…" (502) | não clique de novo: o próximo pedido cai na tentativa que não terminou; é da gerência conferir |
+| "A invoice #… desta venda já foi criada no QuickBooks e o envio falhou: reenvie a mesma" (409) | use **Reenviar** (seção 4.6.4): o passo não cria outra |
+| Registrar: "Ligue o QuickBooks para conferir…" (503) | o QuickBooks está desligado em Integrações: sem conferir, nada é registrado |
+| Registrar: "A invoice nº … não existe no QuickBooks" ou "… é de outro cliente" (409) | confira o **Invoice no.** no QuickBooks e digite de novo |
+| Registrar: "A invoice nº … é de $…, e a tentativa cobrava $…" (409) | confira no QuickBooks; se a invoice é mesmo esta, **Registrar mesmo assim** |
 | "Só o gerente ou o dono confirma que a tentativa anterior não mandou a invoice." (403) | quem vende não confirma: avise a gerência |
 | "O pedido #… desta venda foi pago no site (Stripe): não cobramos duas vezes" (409) | o cliente pagou no site: não há invoice nem depósito a mandar pelo painel |
 | `step/…`: "Feche a venda antes: os passos saem no fechamento…" (409) | feche a venda (**Fechar venda**): os passos saem juntos |

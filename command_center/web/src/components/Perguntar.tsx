@@ -10,6 +10,8 @@ import { Scrim } from './ui'
      if (!await perguntar({ titulo: 'Unir os dois cards?', texto: '…', ok: 'Unir' })) return
      const motivo = await perguntar({ titulo: 'Ocultar o aviso?', campo: 'Motivo (opcional)' })
      // com `campo`, devolve o texto (string, pode ser vazia) ou null se cancelar
+     const r = await perguntar({ titulo: '…', ok: 'Não saiu: mandar', alt: 'Saiu: registrar' })
+     // com `alt` (a terceira escolha), devolve true, 'alt' ou false; Enter não escolhe por você
 */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Mic } from './Voz'
@@ -25,6 +27,8 @@ export interface Pergunta {
   valor?: string
   /** campo de senha: não aparece na tela, não é ditado e o navegador não guarda */
   segredo?: boolean
+  /** a terceira escolha (devolve 'alt'). Com ela, Enter não confirma e o foco começa no Cancelar */
+  alt?: string
 }
 type Responder = (p: Pergunta) => Promise<boolean | string | null>
 
@@ -35,6 +39,7 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
   const [texto, setTexto] = useState('')
   const resolver = useRef<((v: boolean | string | null) => void) | null>(null)
   const inicial = useRef<HTMLButtonElement | null>(null)
+  const cancela = useRef<HTMLButtonElement | null>(null)
   const entrada = useRef<HTMLInputElement | null>(null)
 
   const perguntar = useCallback<Responder>(q => new Promise(res => {
@@ -47,10 +52,10 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!p) return
-    setTimeout(() => (p.campo ? entrada.current?.focus() : inicial.current?.focus()), 30)
+    setTimeout(() => (p.campo ? entrada.current?.focus() : p.alt ? cancela.current?.focus() : inicial.current?.focus()), 30)
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); fechar(p.campo ? null : false) }
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); fechar(p.campo ? texto : true) }
+      if (e.key === 'Enter' && !e.shiftKey && !p.alt) { e.preventDefault(); fechar(p.campo ? texto : true) }
     }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
@@ -62,14 +67,15 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
       <div className="modal ask" onMouseDown={e => e.stopPropagation()}>
         <h2 className="h1" style={{ fontSize: 20 }}>{p.titulo}</h2>
         {p.texto && <div className="small ink2" style={{ whiteSpace: 'pre-wrap' }}>{p.texto}</div>}
-        {p.campo && <div className="field"><label>{p.campo}</label>
+        {p.campo && <div className="field"><label htmlFor="perguntar-campo">{p.campo}</label>
           <div className="row" style={{ gap: 6 }}>
-            <input ref={entrada} className="input" value={texto} onChange={e => setTexto(e.target.value)}
+            <input id="perguntar-campo" ref={entrada} className="input" value={texto} onChange={e => setTexto(e.target.value)}
               type={p.segredo ? 'password' : 'text'} autoComplete={p.segredo ? 'new-password' : undefined} />
             {!p.segredo && <Mic valor={texto} onTexto={setTexto} />}
           </div></div>}
-        <div className="row" style={{ justifyContent: 'flex-end' }}>
-          <button className="btn" onClick={() => fechar(p.campo ? null : false)}>{p.cancelar || tr("Cancelar")}</button>
+        <div className="row wrap" style={{ justifyContent: 'flex-end' }}>
+          <button ref={cancela} className="btn" onClick={() => fechar(p.campo ? null : false)}>{p.cancelar || tr("Cancelar")}</button>
+          {p.alt && <button className="btn" onClick={() => fechar('alt')}>{p.alt}</button>}
           <button ref={inicial} className={`btn ${p.perigo ? 'danger' : 'primary'}`} onClick={() => fechar(p.campo ? texto : true)}>{p.ok || tr("Confirmar")}</button>
         </div>
       </div>
