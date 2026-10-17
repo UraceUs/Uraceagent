@@ -212,7 +212,10 @@ def sincronizar_contratos_e_waivers(con, log=print):
                 auditar(con, "biblioteca.waiver.hash_divergente", "system", entity_type="waiver", entity_id=w["id"],
                         detail={"esperado": w["doc_sha256"], "no_arquivo": sha})
                 raise ValueError("o PDF no servidor não bate com o hash gravado na assinatura: não subi; a cópia do Drive ficou")
-            _upsert(con, "waiver", w["id"], file_path=caminho, sha256=sha, source_version=sha, error=None, **campos)
+            # #109: o nome mudou (a anulada ganha "(anulada)") com o arquivo igual: sobe de novo para o Drive trocar o nome
+            antes = um(con, "SELECT title FROM library_docs WHERE kind='waiver' AND ref=?", (str(w["id"]),))
+            renomeia = {"drive_sha256": None} if antes and antes["title"] != campos["title"] else {}
+            _upsert(con, "waiver", w["id"], file_path=caminho, sha256=sha, source_version=sha, error=None, **renomeia, **campos)
             feitos["waiver"] += 1
         except Exception as e:                                       # noqa: BLE001
             _upsert(con, "waiver", w["id"], error=str(e)[:300], **campos)

@@ -277,3 +277,67 @@ def test_o_backup_nao_sobe_o_pdf_da_nativa_que_mudou_no_disco(cli):  # noqa: F81
     biblioteca.espelhar_no_drive(con, drive=drive, log=lambda *_: None)
     assert drive.enviados == [], "o arquivo adulterado não sobrescreve a cópia do Drive"
     assert "mudou depois de conferido" in um(con, "SELECT drive_error FROM library_docs WHERE id=?", (d["id"],))["drive_error"]
+
+
+# ------------------------------------------------------------------ revisão do PR #326
+class _DriveFalso:
+    def __init__(self):
+        self.enviados = []
+
+    def token(self): return "t"
+    def pasta(self, tok, nome, pai=None): return f"p-{nome}"
+    def compartilhar(self, *a): pass
+
+    def enviar(self, tok, nome, dados, pasta, file_id=None):
+        self.enviados.append((nome, file_id)); return "f1"
+
+
+def test_anulada_depois_do_backup_troca_o_nome_no_drive(cli):  # noqa: F811
+    """O caso normal: o backup diário já subiu a waiver e o gerente anula dias depois. O arquivo é o mesmo,
+    mas o Drive tem de ficar com "(anulada)" no nome, no mesmo arquivo (file_id), sem criar outro."""
+    from command_center.providers import biblioteca
+    wid, *_ = assinada(cli)
+    con = conectar()
+    drive = _DriveFalso()
+    biblioteca.sincronizar_contratos_e_waivers(con, log=lambda *_: None)
+    biblioteca.espelhar_no_drive(con, drive=drive, log=lambda *_: None)
+    assert len(drive.enviados) == 1 and "(anulada)" not in drive.enviados[0][0]
+    h = equipe(cli, "ger@urace.us")
+    assert cli.post(f"{API}/waivers/{wid}/void", json={"reason": "assinada por engano no teste"}, headers=h).status_code == 200
+    biblioteca.sincronizar_contratos_e_waivers(con, log=lambda *_: None)
+    biblioteca.espelhar_no_drive(con, drive=drive, log=lambda *_: None)
+    assert len(drive.enviados) == 2, drive.enviados
+    nome, fid = drive.enviados[-1]
+    assert nome.endswith("(anulada).pdf") and fid == "f1"
+    biblioteca.sincronizar_contratos_e_waivers(con, log=lambda *_: None)   # nada mudou: não sobe de novo
+    biblioteca.espelhar_no_drive(con, drive=drive, log=lambda *_: None)
+    assert len(drive.enviados) == 2
+
+
+def test_o_relatorio_de_waivers_em_aberto_nao_conta_a_anulada(cli):  # noqa: F811
+    import importlib.util
+    import adminai._venv as venv
+    wid, cid, _pid, _hc = assinada(cli)
+    h = equipe(cli, "ger@urace.us")
+    assert cli.post(f"{API}/waivers/{wid}/void", json={"reason": "assinada por engano no teste"}, headers=h).status_code == 200
+    con = conectar()
+    aberta = inserir(con, "waivers", client_id=cid, signer_name="Maria Santos", signer_email="maria@example.com",
+                     template="adult", status="sent", sent_at=date.today().isoformat())
+    con.commit()
+    caminho = os.path.join(os.path.dirname(__file__), "..", "..", "adminai", "waivers_em_aberto.py")
+    spec = importlib.util.spec_from_file_location("waivers_em_aberto_teste", caminho)
+    orig = venv.garantir_venv
+    venv.garantir_venv = lambda: None
+    try:
+        m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    finally:
+        venv.garantir_venv = orig
+    assert m.waiver_valida(con, um(con, "SELECT * FROM waivers WHERE id=?", (aberta,))) is None
+
+
+def test_motivo_da_anulacao_conta_letras_e_nao_pontos(cli):  # noqa: F811
+    wid, *_ = assinada(cli)
+    h = equipe(cli, "ger@urace.us")
+    r = cli.post(f"{API}/waivers/{wid}/void", json={"reason": ". . . . . . . . . . . ."}, headers=h)
+    assert r.status_code == 400, r.text
+    assert cli.post(f"{API}/waivers/{wid}/void", json={"reason": "assinou errado"}, headers=h).status_code == 200

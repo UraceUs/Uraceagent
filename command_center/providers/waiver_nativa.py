@@ -439,7 +439,7 @@ def anular(con, wid, usuario, motivo, ip=None):
     marcada como anulada; `vigente` deixa de vê-la e o cliente pode assinar outra. Não se desfaz."""
     from command_center.db import auditar, transacao
     motivo = re.sub(r"\s+", " ", (motivo or "").strip())[:500]
-    if len(motivo) < MIN_MOTIVO:
+    if len(re.sub(r"[\W_]+", "", motivo)) < MIN_MOTIVO:      # letras e números: "........." não é motivo
         raise ErroWaiver(f"Escreva o motivo da anulação (pelo menos {MIN_MOTIVO} letras).")
     w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
     if not w:

@@ -27,7 +27,7 @@ from adminai._venv import garantir_venv  # noqa: E402
 
 garantir_venv()
 
-from command_center.db import aplicar_schema, conectar, todos, um  # noqa: E402
+from command_center.db import aplicar_schema, conectar, todos, um, waiver_anulada  # noqa: E402
 
 ABERTAS = ("sent", "delivered")
 VALIDADE_DIAS = 365        # PARAMETROS: waiver assinada vale 1 ano (mesma regra do docusign_mcp)
@@ -49,7 +49,7 @@ def waiver_valida(con, w):
     if not onde:
         return None
     return um(con, f"SELECT id, signer_name, completed_at FROM waivers "
-                   f"WHERE ({' OR '.join(onde)}) AND status='completed' AND id <> ? "
+                   f"WHERE ({' OR '.join(onde)}) AND status='completed' AND id <> ? AND NOT {waiver_anulada()} "
                    f"AND COALESCE(completed_at,'') >= ? ORDER BY completed_at DESC",
               (*p, w["id"], limite))
 
