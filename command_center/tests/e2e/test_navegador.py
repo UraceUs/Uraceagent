@@ -1405,7 +1405,9 @@ def test_gerente_edita_o_modelo_do_checklist(servidor, navegador):
     card.get_by_label("Foto obrigatória no checklist").check()
     card.get_by_label("Novo item").fill("Check fire extinguisher")
     card.get_by_role("button", name="Adicionar").click()
-    card.get_by_text("3 itens").wait_for()
+    # #313: o número de itens é o bloco grande do cartão D ("3" e, embaixo, "itens")
+    card.locator(".cd-grande").filter(has_text=re.compile(r"^\s*3\s*$")).wait_for()
+    assert card.locator(".cd-bloco").inner_text().split() == ["3", "itens"]
     assert card.get_by_label("Foto obrigatória no checklist").is_checked()
     pg.close()
 
