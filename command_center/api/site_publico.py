@@ -692,6 +692,18 @@ def waiver_nativa(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, g
             "aviso_744": wn.aviso(con)}
 
 
+@r.get("/waiver-nativa/{wid}/eventos")
+def waiver_nativa_eventos(wid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                          u=Depends(auth.exige("MANAGER"))):
+    """#111: a trilha de eventos de uma waiver assinada aqui (antes de assinar, a assinatura e o que veio depois) e
+    se a cadeia de hashes da trilha inteira está íntegra."""
+    from command_center.db import um
+    from command_center.providers import trilha_waiver as tw
+    if not um(con, "SELECT 1 AS x FROM waivers WHERE id=? AND source='urace'", (wid,)):
+        raise HTTPException(404, "waiver não encontrada")
+    return {"eventos": tw.da_waiver(con, wid), "cadeia": tw.verificar(con)}
+
+
 @r.get("/waiver-nativa/versoes")
 def waiver_nativa_versoes(kind: str | None = Query(None, pattern="^(adult|parental)$"), limit: int = Query(25, ge=1, le=200),
                           offset: int = Query(0, ge=0), con: sqlite3.Connection = Depends(get_db),

@@ -801,6 +801,37 @@ function AvisoDoParental({ a }: { a: Aviso744 }) {
   </Section>
 }
 
+/* #111: a trilha de eventos de uma waiver assinada aqui (append-only e encadeada por hash). O que veio antes
+ * de assinar está também no certificado do PDF; o que veio depois (anulada, PDF baixado) fica só aqui. */
+interface EventoW { id: number; at: string; event: string; phase: 'before' | 'signed' | 'after'; source: 'server' | 'client'
+  ip: string | null; user_agent: string | null }
+interface TrilhaW { eventos: EventoW[]; cadeia: { ok: boolean; total: number | null; first_bad_id: number | null } }
+
+function rotuloDoEvento(ev: string) {
+  const r: Record<string, string> = {
+    invite_sent: tr("convite enviado por e-mail"), screen_opened: tr("abriu a tela de assinar"), pdf_delivered: tr("recebeu o PDF"),
+    all_pages_viewed: tr("leu todas as páginas"), code_sent: tr("código enviado"), code_verified: tr("código confirmado"),
+    reviewed: tr("revisou e confirmou"), signed: tr("assinou"), copy_emailed: tr("cópia por e-mail"), id_checked: tr("documento conferido no balcão"),
+    voided: tr("anulada"), downloaded: tr("PDF baixado"), evidence_exported: tr("pacote de prova exportado") }
+  return r[ev] || ev
+}
+
+function TrilhaDaWaiver({ wid }: { wid: number }) {
+  const l = useGet<TrilhaW>(`/site/waiver-nativa/${wid}/eventos`)
+  if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
+  if (!l.data) return <Loading />
+  const { eventos, cadeia } = l.data
+  return <div className="stack" style={{ gap: 6, padding: '4px 0 10px' }}>
+    <div className="small">{cadeia.ok ? <Chip tone="ok" glyph="✓">{tr("trilha íntegra · {0} eventos no total", cadeia.total ?? 0)}</Chip>
+      : <Chip tone="crit" glyph="✕">{tr("trilha com linha mexida no evento #{0}", cadeia.first_bad_id ?? '?')}</Chip>}</div>
+    {!eventos.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Sem eventos: assinada antes da trilha.")}</p>
+      : <ol className="small stack" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>{eventos.map(e => <li key={e.id} style={{ overflowWrap: 'anywhere' }}>
+        <b>{rotuloDoEvento(e.event)}</b> · {fmtDateTime(e.at)} · {e.source === 'client' ? tr("relatado pela tela") : tr("registrado pelo servidor")}
+        {e.phase === 'after' && <> · <Chip tone="neutral">{tr("depois de assinar")}</Chip></>}
+        <div className="muted">IP {e.ip || '—'} · {e.user_agent || '—'}</div></li>)}</ol>}
+  </div>
+}
+
 /* #116: toda versão que já valeu fica guardada (append-only), com o PDF: reimportar não apaga a anterior. */
 function VersoesDoModelo() {
   const [offset, setOffset] = useState(0)
@@ -833,6 +864,7 @@ function WaiverNativa() {
   const [offset, setOffset] = useState(0)
   const l = useGet<WN>(`/site/waiver-nativa?limit=${POR_PAGINA}&offset=${offset}`)
   const [indo, setIndo] = useState(false)
+  const [trilha, setTrilha] = useState<number | null>(null)
   async function importar() {
     setIndo(true)
     try { await api.post('/site/waiver-nativa/importar', {}); toast(tr("Modelos importados do DocuSign (só leitura lá)."), 'ok'); l.reload() }
@@ -879,14 +911,15 @@ function WaiverNativa() {
     <VersoesDoModelo key={d.modelos.map(m => m.sha256 || '').join()} />
     <Section title={tr("Assinadas aqui")} count={a.total}>
       {!a.itens.length ? <Empty title={tr("Nenhuma ainda")}>{tr("Quando um cliente assinar pela área do cliente, ela aparece aqui e no card do cliente.")}</Empty>
-        : <div className="card"><div className="tbl">{a.itens.map(w => <div className="tr" key={w.id}>
+        : <div className="card"><div className="tbl">{a.itens.map(w => <div key={w.id}><div className="tr">
           <span className="mono small" style={{ width: 92 }}>{fmtDate(w.completed_at)}</span>
           <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")} {tr("· vale até")} {fmtDate(w.expires_at)}</div>
             {w.voided_at && <div className="small"><Chip tone="crit">{tr("anulada")}</Chip> {tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div>}</span>
           {w.client_id ? <Link className="btn sm ghost" to={`/clients/${w.client_id}`}>{tr("Card")}</Link> : <span className="small muted">{tr("sem card")}</span>}
           <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
+          <button className="btn sm ghost" aria-expanded={trilha === w.id} onClick={() => setTrilha(trilha === w.id ? null : w.id)}>{tr("Trilha")}</button>
           {!w.voided_at && can('MANAGER') && <button className="btn sm danger" onClick={() => anular(w)}>{tr("Anular")}</button>}
-        </div>)}</div></div>}
+        </div>{trilha === w.id && <TrilhaDaWaiver wid={w.id} />}</div>)}</div></div>}
       {a.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
         <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>
         <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, a.total)} {tr("de")} {a.total}</span>

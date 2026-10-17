@@ -234,6 +234,37 @@ BEGIN SELECT RAISE(ABORT, 'waiver_voids is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS waiver_voids_no_delete BEFORE DELETE ON waiver_voids
 BEGIN SELECT RAISE(ABORT, 'waiver_voids is append-only'); END;
 
+-- #111 (lacuna C-3): a trilha de eventos da waiver nativa, um passo por linha (convite enviado, abriu a tela,
+-- recebeu o PDF, leu todas as páginas, código enviado e confirmado, revisou, assinou; e o que vem depois:
+-- anulada, PDF baixado…), com hora, IP e aparelho. Append-only (trigger em db/__init__.py, criado a cada
+-- subida) e encadeada: `hash` = sha256(prev_hash | json canônico da linha), então uma linha mexida aparece.
+-- Os eventos de antes de assinar se ligam à waiver pelo escopo (conta + piloto + modelo, ou o convite): o
+-- `signed` lista em `detail.covers` os ids que cobre, e nada precisa de UPDATE. Sem FK de propósito: é o
+-- retrato de quem era quem naquela hora, e unir ou apagar card não mexe aqui.
+CREATE TABLE IF NOT EXISTS waiver_events (
+  id                  INTEGER PRIMARY KEY,
+  at                  TEXT NOT NULL,                 -- UTC, hora do servidor
+  flow                TEXT NOT NULL CHECK (flow IN ('account','invite','staff')),
+  account_id          INTEGER,                       -- conta da área do cliente
+  invite_id           INTEGER,                       -- convite por e-mail (#135)
+  pilot_id            INTEGER,
+  client_id           INTEGER,                       -- o card naquela hora
+  kind                TEXT,                          -- adult | parental
+  template_version_id INTEGER,                       -- #116
+  waiver_id           INTEGER,                       -- do `signed` em diante
+  signature_id        TEXT,
+  event               TEXT NOT NULL,                 -- lista fechada em providers/trilha_waiver.py
+  source              TEXT NOT NULL CHECK (source IN ('server','client')),   -- client: o que só a tela sabe
+  ip                  TEXT,
+  user_agent          TEXT,
+  detail              TEXT,                          -- json, sem código nem segredo
+  prev_hash           TEXT,
+  hash                TEXT NOT NULL UNIQUE
+);
+CREATE INDEX IF NOT EXISTS waiver_events_conta ON waiver_events(account_id, id) WHERE account_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS waiver_events_convite ON waiver_events(invite_id, id) WHERE invite_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS waiver_events_waiver ON waiver_events(waiver_id, id) WHERE waiver_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS invoices (
   id            INTEGER PRIMARY KEY,
   client_id     INTEGER REFERENCES clients(id),

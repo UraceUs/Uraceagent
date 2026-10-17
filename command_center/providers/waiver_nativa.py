@@ -423,7 +423,8 @@ def _png(dataurl):
 
 
 def _nome(v):
-    v = re.sub(r"\s+", " ", (v or "").strip())
+    from command_center.providers.trilha_waiver import sem_surrogate     # revisão #329: `\ud800` solto dava 500
+    v = re.sub(r"\s+", " ", sem_surrogate(v or "").strip())
     if len(v) < 3 or " " not in v:
         raise ErroWaiver("Type your full name, as your signature.")
     return v[:120]
@@ -467,6 +468,12 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         cod = codigos.conferir(con, conta_id, "waiver_sign", dados.get("sign_code"))
     except codigos.ErroCodigo as e:
         raise ErroWaiver(str(e))
+    from command_center.providers import trilha_waiver as tw         # #111
+    ids = dict(account_id=conta_id, pilot_id=pid, client_id=p.get("client_id"), kind=tipo, template_version_id=m.get("version_id"))
+    tw.registrar(con, "code_verified", "account", ip=ip, user_agent=aparelho,
+                 detail={"sent_to": codigos.mascarar(cod["sent_to"]), "sent_at": cod["created_at"]}, **ids)
+    revisou(con, "account", nome, parentesco, declaracao, ip, aparelho, ids)
+    agora_utc = datetime.now(timezone.utc)                # a hora da assinatura vem depois do último passo da trilha
     login = um(con, """SELECT created_at, ip FROM portal_sessions WHERE account_id=? AND revoked_at IS NULL
                         ORDER BY created_at DESC LIMIT 1""", (conta_id,))
     ny = agora_utc.astimezone(portal.FUSO)
@@ -497,7 +504,17 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
                   signer_name=c["name"], signer_email=c["email"],
                   link_reason="assinada na área do cliente" if p.get("client_id") else None,
                   link_by="sync" if p.get("client_id") else None,
-                  resumo=f"waiver de {c['name']} assinada na área do cliente ({p['name']})")
+                  resumo=f"waiver de {c['name']} assinada na área do cliente ({p['name']})",
+                  eventos={"fluxo": "account", "cobrir": dict(account_id=conta_id, pilot_id=pid, kind=tipo), "ids": ids,
+                           "ip": ip, "user_agent": aparelho})
+
+
+def revisou(con, fluxo, nome, parentesco, declaracao, ip, aparelho, ids):
+    """#111: o que quem assina conferiu e confirmou no clique final (as caixas, o parentesco e o nome digitado)."""
+    from command_center.providers import trilha_waiver as tw
+    tw.registrar(con, "reviewed", fluxo, ip=ip, user_agent=aparelho, detail={
+        "read_and_agree": True, "consent_esign": True, "language_ack": True, "typed_name": nome,
+        "signer_relationship": parentesco, "guardian_declaration": bool(declaracao)}, **ids)
 
 
 def pdf_final(base, trilha, png):
@@ -512,13 +529,20 @@ def pdf_final(base, trilha, png):
 
 
 def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_email, link_reason, link_by, resumo,
-           caminho=None, antes=None):
+           caminho=None, antes=None, eventos=None):
     """Grava a waiver assinada na MESMA tabela das do DocuSign (card, anexo e agenda tratam igual).
     `antes(con)` roda dentro da mesma transação, antes do INSERT (o convite se marca usado ali).
     #109: a trilha inteira vai também para o `audit_logs` (append-only), na mesma transação: a linha da
-    waiver é imutável por trigger e o audit_logs guarda uma segunda cópia que ninguém reescreve."""
+    waiver é imutável por trigger e o audit_logs guarda uma segunda cópia que ninguém reescreve.
+    #111: `eventos` = {fluxo, cobrir, ids, ip, user_agent}. Os eventos de antes (pelo escopo `cobrir`) vão
+    para a trilha e para o certificado; o `signed` entra em `waiver_events`, na mesma transação, com os ids."""
     from command_center.db import auditar, transacao
+    from command_center.providers import trilha_waiver as tw
     tipo = trilha["template"]
+    cob = tw.cobertos(con, **eventos["cobrir"]) if eventos else []
+    if eventos:
+        trilha["events"] = tw.para_o_certificado(cob, portal.FUSO)
+        trilha["events_chain_hash"] = cob[-1]["hash"] if cob else None
     trilha.setdefault("template_version_id", m.get("version_id"))      # #116: a versão do modelo que valia
     if tipo == "parental":                                               # e como ela se saiu na conferência do aviso
         from command_center.providers import aviso_744
@@ -539,6 +563,11 @@ def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_e
                     (wid, trilha["signature_id"]))
         quem = f"portal:{trilha['account_id']}" if trilha.get("account_id") else f"invite:{trilha.get('invitation_id')}"
         auditar(con, "waiver.signed.trail", quem, entity_type="waiver", entity_id=wid, detail=trilha, ip=trilha.get("ip"))
+        if eventos:
+            tw.registrar(con, "signed", eventos["fluxo"], ip=eventos.get("ip"), user_agent=eventos.get("user_agent"),
+                         detail={"covers": [e["id"] for e in cob], "document_sha256": trilha["document_sha256"],
+                                 "template_sha256": trilha["template_sha256"]},
+                         waiver_id=wid, signature_id=trilha["signature_id"], **eventos["ids"])
         if client_id:
             from command_center.api import motor
             motor.registrar_evento(con, "waiver.completed", "waiver", wid, client_id, resumo)
@@ -581,7 +610,8 @@ def anular(con, wid, usuario, motivo, ip=None):
     quando e por quê, e para a auditoria (`waiver.void`). A waiver continua no card, na lista e no backup,
     marcada como anulada; `vigente` deixa de vê-la e o cliente pode assinar outra. Não se desfaz."""
     from command_center.db import auditar, transacao
-    motivo = re.sub(r"\s+", " ", (motivo or "").strip())[:500]
+    from command_center.providers.trilha_waiver import sem_surrogate
+    motivo = re.sub(r"\s+", " ", sem_surrogate(motivo or "").strip())[:500]
     if len(re.sub(r"[\W_]+", "", motivo)) < MIN_MOTIVO:      # letras e números: "........." não é motivo
         raise ErroWaiver(f"Escreva o motivo da anulação (pelo menos {MIN_MOTIVO} letras).")
     w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
@@ -594,6 +624,9 @@ def anular(con, wid, usuario, motivo, ip=None):
             if anulacao(con, wid):
                 raise NaoAnula("Esta waiver já foi anulada.")
             inserir(con, "waiver_voids", waiver_id=wid, user_id=usuario.get("id"), by_name=usuario.get("name") or "?", reason=motivo)
+            from command_center.providers import trilha_waiver as tw       # #111: depois de assinar, na trilha
+            tw.registrar(con, "voided", "staff", ip=ip, detail={"reason": motivo, "by": usuario.get("name"), "user_id": usuario.get("id")},
+                         waiver_id=wid, client_id=w["client_id"], pilot_id=w["pilot_id"], kind=w["template"])
             auditar(con, "waiver.void", f"user:{usuario.get('id')}", user_id=usuario.get("id"), entity_type="waiver", entity_id=wid,
                     detail={"reason": motivo, "client_id": w["client_id"], "template": w["template"],
                             "signed_at": w["completed_at"], "sha256": w["doc_sha256"]}, ip=ip)
@@ -603,8 +636,12 @@ def anular(con, wid, usuario, motivo, ip=None):
 
 
 # ------------------------------------------------------------------ o PDF
+MARGEM_PE = 54                     # pontos: abaixo disto o certificado muda de página (#111)
+
+
 def _pdf_assinado(base, t, png):
-    """O PDF do modelo, intacto, + uma página de assinatura e certificado no fim."""
+    """O PDF do modelo, intacto, + a página de assinatura e certificado no fim (#111: quantas páginas
+    precisar; o texto nunca passa do pé, muda de página)."""
     from pypdf import PdfReader, PdfWriter
     from reportlab.lib.pagesizes import letter
     from reportlab.lib.utils import ImageReader
@@ -616,10 +653,22 @@ def _pdf_assinado(base, t, png):
     larg, alt = letter
     x, y = 54, alt - 64
 
+    def nova_pagina():
+        nonlocal y
+        cv.showPage()
+        y = alt - 64
+        cv.setFont("Helvetica-Oblique", 8)
+        cv.drawString(x, y + 22, f"Electronic signature and certificate of completion (continued) · Signature ID {t['signature_id']}")
+
+    def cabe(altura):
+        if y - altura < MARGEM_PE:
+            nova_pagina()
+
     def linha(txt, tam=10, fonte="Helvetica", passo=14):
         nonlocal y
-        cv.setFont(fonte, tam)
         for pedaco in _quebra(txt, 95 if tam <= 10 else 70):
+            cabe(passo)
+            cv.setFont(fonte, tam)
             cv.drawString(x, y, pedaco)
             y -= passo
 
@@ -638,6 +687,7 @@ def _pdf_assinado(base, t, png):
     linha("By signing below I confirm that I have read the document above, that I agree to its terms, and that I "
           "agree to sign it electronically. My electronic signature has the same effect as a handwritten signature.")
     y -= 8
+    cabe(140)                                         # a assinatura, a linha e o nome ficam juntos
     img = ImageReader(io.BytesIO(png))
     iw, ih = img.getSize()
     w = min(260.0, iw * 80.0 / max(ih, 1))
@@ -661,6 +711,25 @@ def _pdf_assinado(base, t, png):
                  ("Template version ID", t.get("template_version_id") or "—"),
                  ("Signature image hash (SHA-256)", t["signature_png_sha256"])):
         linha(f"{k}: {v}", 9, "Helvetica", 12)
+    if t.get("events") is not None:                   # #111: os passos até a assinatura, um por um
+        y -= 8
+        cabe(16 + 36)
+        linha("Event history (Florida time, America/New_York, and UTC)", 11, "Helvetica-Bold", 16)
+        for e in [*t["events"], {"label": "Signed", "source": "server", "at_local": t["signed_at_local"],
+                                 "at_utc": t["signed_at_utc"], "ip": t.get("ip"), "user_agent": t.get("user_agent")}]:
+            quem = "reported by the signer's browser" if e["source"] == "client" else "recorded by URACE's server"
+            if e.get("count", 1) > 1:                 # o mesmo passo repetido em seguida: uma linha, do primeiro ao último
+                topo = (f"{e['at_local']} ({e['at_utc']} UTC) to {e['last_at_local']} ({e['last_at_utc']} UTC) · "
+                        f"{e['label']} ×{e['count']} · {quem}")
+            else:
+                topo = f"{e['at_local']} ({e['at_utc']} UTC) · {e['label']} · {quem}"
+            aparelho = f"IP {e.get('ip') or '—'} · Device: {(e.get('user_agent') or '—')[:160]}"
+            cabe(12 * len(_quebra(topo, 95)) + 11 * len(_quebra(aparelho, 95)))     # o evento não se parte entre páginas
+            linha(topo, 9, "Helvetica-Bold", 12)
+            linha(aparelho, 8, "Helvetica", 11)
+        if t.get("events_chain_hash"):
+            linha(f"Event chain: each event above is kept in URACE's append-only, hash-chained record; hash of the last one: "
+                  f"{t['events_chain_hash']}", 8, "Helvetica-Oblique", 11)
     y -= 6
     linha("URACE.US INC · Orlando, FL · The SHA-256 of this complete file is kept in URACE's records to show it "
           "has not been altered.", 8, "Helvetica-Oblique", 11)
