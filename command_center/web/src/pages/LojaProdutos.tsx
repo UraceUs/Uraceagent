@@ -86,7 +86,7 @@ export function ProdutosDaLoja() {
     {l.data && (!l.data.produtos.length ? <Empty title={tr("Nenhum produto aqui")}>{tr("Mude a busca ou os filtros.")}</Empty>
       : <div className="cd-grade">{l.data.produtos.map(p => {
         const sem = !(p.estoque?.no_site ?? p.in_stock)
-        return <Cartao key={p.id} id={`produto-${p.id}`} estado={!p.active ? tr("escondido") : sem ? tr("sem estoque") : tr("à venda")} tom={!p.active ? 'neutral' : sem ? 'warn' : 'ok'}
+        return <Cartao key={p.id} id={`produto-${p.id}`} nivel={2} estado={!p.active ? tr("escondido") : sem ? tr("sem estoque") : tr("à venda")} tom={!p.active ? 'neutral' : sem ? 'warn' : 'ok'}
           avatar={p.images[0] ? <img src={fotoUrl(p.images[0].src)} alt="" width={60} height={60} loading="lazy" /> : <span>URACE</span>}
           nome={<Link to={`/site/produtos/${p.id}`}>{p.name}</Link>}
           sub={[`${frete(p.shipping_fee)}${p.deposit ? ` · ${tr("depósito {0}", usd(p.deposit))}` : ''}`]}

@@ -85,7 +85,8 @@ export function CdProgresso({ feito, total, rotulo, tom = 'ok' }: { feito: numbe
   const k = Math.max(0, Math.min(1, total ? feito / total : 0))
   return <div className="cd-prog">
     <div className="cd-prog-t"><span>{rotulo}</span><b>{feito}/{total}</b></div>
-    <div className={`cd-prog-b ${tom}`} role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={feito}>
+    <div className={`cd-prog-b ${tom}`} role="progressbar" aria-label={typeof rotulo === 'string' ? rotulo : undefined}
+      aria-valuemin={0} aria-valuemax={total} aria-valuenow={feito}>
       <i style={{ transform: `scaleX(${k})` }} /></div>
   </div>
 }
