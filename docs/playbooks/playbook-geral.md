@@ -75,6 +75,7 @@ Três ideias explicam o painel inteiro:
 | Situação | O que acontece |
 |---|---|
 | Errou a senha 5 vezes em 15 minutos | o acesso trava por alguns minutos ("Too many attempts") |
+| De que IP o sistema diz que veio (#120) | o IP que o Caddy viu chegar, o mesmo no bloqueio de senha, na Auditoria e na trilha da waiver assinada no próprio site. Um cabeçalho `X-Forwarded-For` inventado pelo navegador não muda esse IP |
 | Esqueceu a senha | não há autoatendimento: um administrador redefine em **Usuários** |
 | Quer trocar a senha | menu do seu nome (canto de cima) › **Minha conta e senha**. Trocar a senha encerra todas as suas sessões |
 | Celular | o mesmo endereço. Embaixo aparece a barra de abas |

@@ -356,7 +356,8 @@ _tranca = threading.Lock()
 
 
 def _ip(request):
-    return (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "") or "?").split(",")[0].strip()
+    from command_center.api import auth            # #120: o mesmo IP real do resto do painel
+    return auth._ip(request)
 
 
 def _estourou(ip):

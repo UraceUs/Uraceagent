@@ -745,7 +745,7 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
     chave = _chave_hook()
     if not chave or not hmac.compare_digest(chave, key or ""):
         auditar(con, "crm.hook.recusado", "kommo", detail={"motivo": "sem chave configurada" if not chave else "chave não bate",
-                                                         "ip": request.headers.get("x-forwarded-for") or (request.client.host if request.client else None)})
+                                                         "ip": auth._ip(request)})
         con.commit()
         raise HTTPException(403, "Forbidden.")
     bruto = await request.body()

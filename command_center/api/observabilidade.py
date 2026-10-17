@@ -142,7 +142,7 @@ async def do_navegador(request: Request):
     corpo = await request.body()
     if len(corpo) > 4096:
         raise HTTPException(413, "grande demais")
-    ip = request.client.host if request.client else "?"
+    ip = auth._ip(request)
     agora_ = time.time()
     with _TRAVA:
         fila = _POR_IP[ip]

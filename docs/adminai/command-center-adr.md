@@ -49,6 +49,15 @@ assinado **e** tabela `sessions` (revogação de verdade, não só
 expiração), CSRF por header em toda mutação, rate limit por IP e por
 conta, mensagem única *"Invalid email or password."*.
 
+**IP do cliente (#120):** o uvicorn escuta só em `127.0.0.1` e o Caddy é o
+único que fala com ele. O IP que vai para o limite de tentativas, a
+auditoria e a trilha da waiver sai de `auth._ip`: quem conecta direto é a
+resposta e o `X-Forwarded-For` é ignorado; se quem conecta é proxy nosso
+(`127.0.0.1`, `::1` ou `CC_PROXIES_CONFIAVEIS`), vale o **último** salto que
+não é proxy nosso, isto é, o que o Caddy escreveu. O primeiro valor da
+lista é o que o cliente mandou e nunca conta. Nenhuma outra rota lê o
+cabeçalho (`test_ip_real.py` trava).
+
 **RBAC:** `ADMIN · MANAGER · OPERATOR · VIEWER`, checado no backend em
 cada rota. O frontend só esconde; o backend recusa.
 
