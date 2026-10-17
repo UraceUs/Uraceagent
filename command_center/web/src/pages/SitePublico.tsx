@@ -292,10 +292,11 @@ const chaveDe = (k: string | null | undefined) => (k || '').split(/\s+/).filter(
 function OndeNoSite({ n, paginas }: { n?: NoSite; paginas: PaginaSite[] }) {
   if (!n) return null
   const pg = paginas.find(p => p.id === n.pagina)
-  const pagina = pg ? <a href={pg.caminho} target="_blank" rel="noreferrer">{pg.nome} ↗</a> : null
-  if (n.onde === 'kart') return <Chip tone="ok">{tr("no site:")} {pagina} · {tr("kart {0}", n.chave || '')}</Chip>
-  if (n.onde === 'addon') return <Chip tone="ok">{tr("no site:")} {pagina} · {tr("add-on na reserva")}</Chip>
-  if (n.onde === 'plano') return <Chip tone="ok">{tr("no site:")} {pagina} · {tr("plano mensal")}</Chip>
+  // #312 (revisão): o link da página é um botão ao lado do chip (alvo de 40 px no celular), não um link de 17 px dentro dele
+  const ver = pg ? <> <a className="btn sm ghost" href={pg.caminho} target="_blank" rel="noreferrer" aria-label={tr("Abrir {0} no site", pg.nome)}>{tr("Ver no site ↗")}</a></> : null
+  if (n.onde === 'kart') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("kart {0}", n.chave || '')}</Chip>{ver}</>
+  if (n.onde === 'addon') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("add-on na reserva")}</Chip>{ver}</>
+  if (n.onde === 'plano') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("plano mensal")}</Chip>{ver}</>
   if (n.onde === 'area') return <Chip tone="info">{tr("só na área do cliente")}</Chip>
   if (n.onde === 'repetido') return <Chip tone="crit">{tr("fora do site: a chave {0} também está em {1} (um serviço ativo por chave)", n.chave || '', n.com.join(', '))}</Chip>
   if (n.onde === 'nenhum') return <Chip tone="warn">{tr("fora do site: só o add-on Lead and Follow entra na reserva")}</Chip>
@@ -338,12 +339,16 @@ function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: 
   const karts = [...KARTS_DO_SITE, ...[...new Set(servicos.filter(s => (s.kind ?? 'session') === 'session' && s.site_kart && !KARTS_DO_SITE.includes(s.site_kart)).map(s => s.site_kart!))]]
   const addonHoje = ativos.filter(s => s.kind === 'addon' && chaveDe(s.site_kart) === chaveDe(chave_addon))
   const temPlano = ativos.some(s => s.kind === 'plan')
+  // #312 (revisão, NO FAKE DATA): com plano ativo a Academy mostra os planos, não os cartões — eles não estão na página
+  const cartoesDaPagina = (c.data?.cartoes || []).filter(x => x.page === pagina && x.active)
+  const escondePlano = pagina === 'academy' && temPlano
+  const rotuloCartao = (x: Cartao) => x.grp ? tr("cartão {0} · {1}", x.grp, x.title) : tr("cartão {0}", x.title)
   const hoje = pagina === 'arrive-and-drive'
     ? [...servicos.filter(s => s.no_site?.onde === 'kart').map(s => tr("kart {0} ({1})", s.no_site!.chave || '', s.name)),
       ...servicos.filter(s => s.no_site?.onde === 'addon').map(s => tr("add-on {0}", s.name))]
     : pagina === 'area' ? servicos.filter(s => s.no_site?.onde === 'area').map(s => s.name)
     : [...(pagina === 'academy' ? servicos.filter(s => s.no_site?.onde === 'plano').map(s => tr("plano {0}", s.name)) : []),
-      ...(c.data?.cartoes || []).filter(x => x.page === pagina && x.active).map(x => tr("cartão {0}", x.title))]
+      ...(escondePlano ? [] : cartoesDaPagina.map(rotuloCartao))]
   const kartEscolhido = novo.site_kart === NOVO_KART ? novo.kart_novo.trim() : novo.site_kart
   const deposito = Number(novo.deposit.replace(/[$,\s]/g, ''))
   const pode = !!novo.name && !!novo.price && (!sessao || !novo.deposit_required || deposito > 0)
@@ -369,9 +374,12 @@ function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: 
     {pagina && COMO_DA_PAGINA[pagina].length > 1 && <div className="ins-passo"><span id={`${id}-como`} className="ins-passo-rot">{tr("Como ele entra na página?")}</span>
       <div className="seg" role="radiogroup" aria-labelledby={`${id}-como`}>{COMO_DA_PAGINA[pagina].map(k =>
         <button key={k} type="button" role="radio" aria-checked={como === k} className={`btn sm${como === k ? '' : ' ghost'}`} onClick={() => setComo(k)}>{NOME_COMO[k]}</button>)}</div></div>}
-    {pagina && <p className="ins-onde" style={{ margin: 0 }}>
-      {pg ? <>{tr("Hoje em")} <a href={pg.caminho} target="_blank" rel="noreferrer">{pg.nome} ↗</a>: </> : <>{tr("Hoje só na área do cliente:")} </>}
-      {hoje.length ? hoje.join(' · ') : (pg?.cartoes && c.loading ? '…' : tr("nada ainda"))}</p>}
+    {pagina && <div className="ins-onde">
+      <p>{pg ? <>{tr("Hoje em")} <b>{pg.nome}</b>: </> : <>{tr("Hoje só na área do cliente:")} </>}
+        {hoje.length ? hoje.join(' · ') : (pg?.cartoes && c.loading ? '…' : tr("nada ainda"))}
+        {escondePlano && cartoesDaPagina.length > 0 && <span className="ins-escondido"> · {tr("escondidos pelo plano ativo: {0}", cartoesDaPagina.map(rotuloCartao).join(', '))}</span>}</p>
+      {pg && <a className="btn sm ghost" href={pg.caminho} target="_blank" rel="noreferrer" aria-label={tr("Abrir {0} no site", pg.nome)}>{tr("Ver no site ↗")}</a>}
+    </div>}
     {como === 'cartao' && <>
       {pagina === 'academy' && temPlano && <Banner tone="warn">{tr("Com plano ativo, a Academy mostra os planos no lugar dos cartões: este cartão só aparece quando nenhum plano estiver ativo.")}</Banner>}
       {c.data ? <FormCartao paginas={c.data.paginas} pagina={pagina} precoKart={c.data.preco_kart} onCriado={c.reload} />
@@ -456,6 +464,9 @@ function Servicos() {
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
   if (!l.data) return <Loading />
   const muda = (id: number, x: Edicao) => setEdit(e => ({ ...e, [id]: { ...e[id], ...x } }))
+  /** #312 (revisão): os outros serviços ATIVOS do mesmo tipo com esta chave (a mesma regra do servidor e da página) */
+  const outrosComChave = (sv: Servico, chave: string | null | undefined, kind: string) => chaveDe(chave) && (kind === 'session' || kind === 'addon')
+    ? l.data!.servicos.filter(o => o.id !== sv.id && o.active && (o.kind ?? 'session') === kind && chaveDe(o.site_kart) === chaveDe(chave)) : []
   // dono, 01/10: o item é um texto — escolhe da lista ou escreve; sem o preço no rótulo
   const sugestoes = <datalist id="itens-qbo">{itens.map(i => <option key={i.id} value={i.name} />)}</datalist>
   return <div className="stack" style={{ gap: 18 }}>
@@ -470,6 +481,8 @@ function Servicos() {
       {!l.data.servicos.length ? <Empty title={tr("Nenhum serviço ainda")}>{tr("Use \"Adicionar serviço\", em cima, para cadastrar o que o cliente pode marcar e o preço de cada um.")}</Empty>
         : <div className="stack" style={{ gap: 10 }}>{l.data.servicos.map(sv => {
           const e = edit[sv.id] || {}
+          // #312 (revisão): reativar não pode deixar dois ativos com a mesma chave (o kart ou a caixa do add-on sairia do site)
+          const conflito = sv.active ? [] : outrosComChave(sv, sv.site_kart, sv.kind ?? 'session')
           return <div key={sv.id} className="card card-b">
             <div className="site-servico">
               <label className="fld"><span>{tr("Nome (o cliente lê, em inglês)")}</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
@@ -497,7 +510,8 @@ function Servicos() {
                 <label className="fld"><span>{tr("Kart do site")} <i>{tr("Arrive and Drive")}</i></span>
                   <select value={e.site_kart ?? sv.site_kart ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { site_kart: x.target.value })}>
                     <option value="">{tr("não é do site")}</option>
-                    {opcoesDeKart(sv.site_kart).map(k => <option key={k} value={k}>{k}</option>)}
+                    {opcoesDeKart(sv.site_kart).map(k => { const d = sv.active ? outrosComChave(sv, k, 'session') : []
+                      return <option key={k} value={k} disabled={!!d.length}>{d.length ? tr("{0} · hoje: {1}", k, d.map(o => o.name).join(', ')) : k}</option> })}
                     <option value={NOVO_KART}>{tr("Novo kart…")}</option></select></label>}
               {(e.site_kart ?? sv.site_kart) === NOVO_KART &&
                 <label className="fld"><span>{tr("Nome do kart novo")}</span><input value={e.kart_novo ?? ''} disabled={!gerente} placeholder="Rental 2-stroke Pro"
@@ -515,7 +529,8 @@ function Servicos() {
                     onChange={x => muda(sv.id, { own_kart: x.target.checked })} /> {tr("O cliente traz o próprio kart")}</label></>}</>}
               {gerente && <div className="row" style={{ gap: 6 }}>
                 <button className="btn sm primary" disabled={!edit[sv.id]} onClick={() => salvar(sv)}>{tr("Salvar")}</button>
-                <button className="btn sm ghost" onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button></div>}
+                <button className="btn sm ghost" disabled={!!conflito.length} onClick={() => salvar(sv, { active: sv.active ? 0 : 1 })}>{sv.active ? tr("Desativar") : tr("Reativar")}</button>
+                {conflito.length > 0 && <span className="small" style={{ color: 'var(--warn)' }}>{tr("Para reativar, desative antes \"{0}\": ele já usa a chave {1}.", conflito.map(o => o.name).join(', '), sv.site_kart || '')}</span>}</div>}
             </div>
             <div className="small muted" style={{ marginTop: 6 }}><OndeNoSite n={sv.no_site} paginas={l.data!.paginas} />
               {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}

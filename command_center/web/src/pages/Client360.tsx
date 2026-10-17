@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
@@ -484,11 +484,13 @@ function MoverServico({ tarefa, atual, onClose, onDone }: { tarefa: TarefaCard; 
   </div></Scrim>
 }
 
-function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Monthly | null; loading: boolean; reload: () => void; plan?: string | null; fin: boolean }) {
-  const { can } = useAuth()
+/* #312 (revisão): o arquivo escolhido mora aqui dentro do painel. Fechar o painel desmonta este formulário, e o PDF
+ * escolhido antes não sobe "escondido" quando o painel abre de novo com o campo vazio. */
+function SubirContrato({ id, reload }: { id: number; reload: () => void }) {
   const toast = useToast()
   const [file, setFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
+  const campo = useRef<HTMLInputElement>(null)
   async function upload() {
     if (!file) return
     setBusy(true)
@@ -497,9 +499,16 @@ function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Mon
       const csrf = document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || ''
       const res = await fetch(`/ops/api/clients/${id}/contract`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': decodeURIComponent(csrf) } })
       if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || `HTTP ${res.status}`) }
-      toast(tr("Contrato guardado."), 'ok'); setFile(null); reload()
+      toast(tr("Contrato guardado."), 'ok'); setFile(null)
+      if (campo.current) { campo.current.value = ''; campo.current.focus() }      // o campo fica vazio, como o estado
+      reload()
     } catch (e) { toast((e as Error).message, 'crit') } finally { setBusy(false) }
   }
+  return <div className="row wrap"><input ref={campo} className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} aria-label={tr("PDF do contrato")} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : tr("Subir contrato")}</button></div>
+}
+
+function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Monthly | null; loading: boolean; reload: () => void; plan?: string | null; fin: boolean }) {
+  const { can } = useAuth()
   if (loading && !m) return <Loading />
   if (!m) return null
   const mesNome = (k: string) => new Date(k + '-15T12:00:00Z').toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -522,7 +531,7 @@ function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Mon
     <Section title={tr("Contrato da Academy")} count={m.contracts.length}>
       {/* #312: subir o contrato fica no topo da seção, antes da lista. O contrato já nasce no card deste cliente. */}
       {can('OPERATOR') && <InserirNoTopo rotulo={tr("Adicionar contrato")} titulo={tr("Subir o PDF do contrato")} nivel={3} dentro>
-        <div className="row wrap"><input className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} aria-label={tr("PDF do contrato")} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : tr("Subir contrato")}</button></div>
+        <SubirContrato id={id} reload={reload} />
       </InserirNoTopo>}
       {m.contracts.length === 0 ? <div className="small muted">{tr("Nenhum contrato. Use \"Buscar nas plataformas\" para achar no DocuSign (assunto com Academy/contract) ou \"Adicionar contrato\", em cima.")}</div> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Contrato")}</th><th>{tr("Origem")}</th><th>{tr("Status")}</th><th>{tr("Assinado")}</th><th></th></tr></thead><tbody>

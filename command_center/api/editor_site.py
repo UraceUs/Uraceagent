@@ -35,9 +35,11 @@ def _dados():
     """O que os elementos do banco mostram: os karts do Arrive and Drive, os cartões das páginas e os planos."""
     from command_center.api import vitrine
     from command_center.providers import cartoes_site, servicos_site
+    from command_center.vitrine import paginas
 
     def ler(con):
-        ks = [k for k in servicos_site.para_cliente(con, cartao=True) if k.get("site_kart")]
+        # #312 (revisão): os mesmos karts que a página do Arrive and Drive mostra — o kart com dois serviços ativos sai
+        ks = [sv for _k, sv in paginas._karts_do_painel(servicos_site.para_cliente(con, cartao=True)) if sv]
         return {"karts": sorted(ks, key=lambda k: (k.get("sort") or 0, k["price"])),
                 "cartoes": {pg: cartoes_site.da_pagina(con, pg) or [] for pg in ed.PAGINAS_CARTOES},
                 "planos": servicos_site.planos_para_cliente(con)}

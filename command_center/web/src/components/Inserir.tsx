@@ -6,10 +6,13 @@
  * fecham e devolvem o foco ao botão. `sempre`: sem botão, o painel fica aberto no topo (inserção de uma linha só,
  * como a anotação da venda). O painel é um cartão do padrão D (`.cd`); `dentro` é a versão sem borda, para quando
  * ele já está dentro de um cartão. O formulário em si é o de sempre: ele vem como `children`. */
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { tr } from '../i18n'
 
 const CAMPO = 'input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+/** #312 (revisão): o último painel em que a pessoa mexeu. Depois de salvar, o botão "Criar" fica desabilitado e o foco
+ *  cai no body; o Esc ainda fecha este painel (e não os outros abertos na mesma tela). */
+let ultimoPainel: string | null = null
 
 export function InserirNoTopo({ rotulo, titulo, nivel = 2, sempre, dentro, primario, inicial, children }: {
   /** o texto do botão (e o nome do painel) */
@@ -31,7 +34,21 @@ export function InserirNoTopo({ rotulo, titulo, nivel = 2, sempre, dentro, prima
   const painel = useRef<HTMLElement>(null)
   const [aberturas, setAberturas] = useState(0)        // cada vez que o botão abre: o foco e a rolagem vão junto
   const visivel = sempre || aberto
-  const fechar = () => { setAberto(false); requestAnimationFrame(() => botao.current?.focus()) }
+  const fechar = useCallback(() => { setAberto(false); requestAnimationFrame(() => botao.current?.focus()) }, [])
+
+  // Esc fecha com o foco dentro do painel ou, quando o foco se perdeu (no body), o último painel em que se mexeu
+  useEffect(() => {
+    if (!aberto || sempre) return
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      const a = document.activeElement
+      const dentro = !!(a && painel.current?.contains(a))
+      const perdido = (!a || a === document.body) && ultimoPainel === id
+      if (dentro || perdido) { e.preventDefault(); fechar() }
+    }
+    document.addEventListener('keydown', tecla)
+    return () => document.removeEventListener('keydown', tecla)
+  }, [aberto, sempre, id, fechar])
 
   useEffect(() => {
     const p = painel.current
@@ -47,12 +64,12 @@ export function InserirNoTopo({ rotulo, titulo, nivel = 2, sempre, dentro, prima
   return <div className={`ins${sempre ? ' sempre' : ''}`}>
     {!sempre && <div className="ins-barra">
       <button ref={botao} type="button" className={`btn${primario ? ' primary' : ''}`} aria-expanded={aberto} aria-controls={id}
-        onClick={() => { if (aberto) fechar(); else { setAberto(true); setAberturas(n => n + 1) } }}>
+        onClick={() => { if (aberto) fechar(); else { ultimoPainel = id; setAberto(true); setAberturas(n => n + 1) } }}>
         <span aria-hidden="true">{aberto ? '−' : '+'}</span> {rotulo}</button>
     </div>}
     {visivel && <section ref={painel} id={id} className={`cd ins-painel${dentro ? ' dentro' : ''}`} aria-label={nome ? undefined : rotulo}
       aria-labelledby={nome ? `${id}-t` : undefined}
-      onKeyDown={e => { if (!sempre && e.key === 'Escape') { e.stopPropagation(); fechar() } }}>
+      onFocus={() => { ultimoPainel = id }} onPointerDown={() => { ultimoPainel = id }}>
       {nome && <div className="cd-quem"><H id={`${id}-t`} className="cd-nome">{nome}</H></div>}
       <div className="cd-form">{children}</div>
       {!sempre && <div className="cd-acoes um"><button type="button" className="btn ghost" onClick={fechar}>{tr("Fechar")}</button></div>}

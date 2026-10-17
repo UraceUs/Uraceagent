@@ -4386,5 +4386,9 @@
 "só na área do cliente": "only in the client area",
 "{0} · hoje: {1}": "{0} · today: {1}",
 "Nova chave": "New key",
-"Adicionar item": "Add item"
+"Adicionar item": "Add item",
+"Abrir {0} no site": "Open {0} on the site",
+"cartão {0} · {1}": "card {0} · {1}",
+"escondidos pelo plano ativo: {0}": "hidden by the active plan: {0}",
+"Para reativar, desative antes \"{0}\": ele já usa a chave {1}.": "To reactivate, first deactivate \"{0}\": it already uses the key {1}."
 }

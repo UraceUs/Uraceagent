@@ -30,7 +30,8 @@ export function Novo({ kind, campos, onSaved, extra }: { kind: string; campos: [
   const toast = useToast()
   const [f, setF] = useState<Record<string, string>>(Object.fromEntries(campos.map(([k]) => [k, ''])))
   const [busy, setBusy] = useState(false)
-  async function add() { setBusy(true); try { await api.post(`/catalog/${kind}`, { ...f, ...(extra || {}) }); toast(tr("Adicionado."), 'ok'); setF(Object.fromEntries(campos.map(([k]) => [k, '']))); onSaved() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) } }
+  // #312 (revisão): campo vazio vai como null — o "Preço ref." vazio ia como "" e o servidor recusava (422)
+  async function add() { setBusy(true); try { await api.post(`/catalog/${kind}`, { ...Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.trim() ? v : null])), ...(extra || {}) }); toast(tr("Adicionado."), 'ok'); setF(Object.fromEntries(campos.map(([k]) => [k, '']))); onSaved() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) } }
   return <div className="row wrap" style={{ padding: 10 }}>{campos.map(([k, l]) => <input key={k} className="input" style={{ width: 160, padding: '4px 8px' }} placeholder={l} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} />)}<button className="btn sm primary" disabled={busy} onClick={add}>{busy ? <Spinner /> : tr("+ Adicionar")}</button></div>
 }
 

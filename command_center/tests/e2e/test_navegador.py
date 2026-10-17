@@ -3215,7 +3215,8 @@ def test_sem_conta_os_dados_no_carrinho_viram_a_conta_e_o_checkout_abre(servidor
     site = servidor.removesuffix("/ops")
     adm = entrar(navegador, servidor, email="italo@urace.us")
     csrf = _csrf(adm)
-    sid = _criar_servico(adm, servidor, "4-stroke Arrive and Drive 305", 719, kart="4-stroke")
+    # #312: um serviço ativo por kart — a sessão do carrinho não precisa da chave do kart (o 4-stroke do site fica como está)
+    sid = _criar_servico(adm, servidor, "4-stroke Arrive and Drive 305", 719)
     # quinta de manhã, só para este teste
     assert adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
                            data=[{"weekday": 3, "period": "manha", "open": True, "capacity": 5}]).ok
@@ -3285,7 +3286,8 @@ def test_sem_conta_duas_sessoes_cada_uma_com_o_seu_piloto(servidor, navegador):
     site = servidor.removesuffix("/ops")
     adm = entrar(navegador, servidor, email="italo@urace.us")
     csrf = _csrf(adm)
-    sid = _criar_servico(adm, servidor, "4-stroke Arrive and Drive 305b", 719, kart="4-stroke")
+    # #312: um serviço ativo por kart — a sessão do carrinho não precisa da chave do kart (o 4-stroke do site fica como está)
+    sid = _criar_servico(adm, servidor, "4-stroke Arrive and Drive 305b", 719)
     assert adm.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
                            data=[{"weekday": 3, "period": "manha", "open": True, "capacity": 5},
                                  {"weekday": 3, "period": "tarde", "open": True, "capacity": 5}]).ok
@@ -4540,7 +4542,7 @@ def test_blog_o_admin_so_publica_o_que_viu(servidor, navegador):
 
 
 # ------------------------------------------------------------------ #312: a inserção fica no topo
-_PEQUENOS_NO_PAINEL = """(id) => [...document.getElementById(id).querySelectorAll('.btn')]
+_PEQUENOS_NO_PAINEL = """(id) => [...document.getElementById(id).querySelectorAll('.btn, a[href]')]
   .filter(b => b.offsetParent !== null && b.offsetHeight < 40).map(b => `${(b.textContent || '').trim().slice(0, 20)}=${b.offsetHeight}px`)"""
 
 _PRIMEIRO_CONTROLE_DEPOIS_DAS_ABAS = """() => { const nav = document.querySelector('main nav.tabs')
@@ -4641,6 +4643,10 @@ def test_adicionar_servico_no_topo_escolhe_a_pagina_e_o_site_mostra(servidor, na
         s = next(x for x in _servicos_do_painel(g, servidor) if x["site_kart"] == kart)
         assert s["no_site"]["onde"] == "kart" and s["deposit"] == 400
         g.get_by_text(f"kart {kart}", exact=False).first.wait_for()
+        # revisão: o "Ver no site" do "Hoje em" e o de cada serviço da lista têm alvo de 40 px
+        links = g.evaluate("""() => [...document.querySelectorAll('.ins-onde a[href], section.card .card.card-b a[href]')]
+            .filter(a => a.offsetParent !== null).map(a => Math.round(a.getBoundingClientRect().height))""")
+        assert links and min(links) >= 40, links
         # Academy: com plano ativo, o cartão novo não apareceria — o painel avisa
         painel.get_by_role("radio", name="Academy").click()
         painel.get_by_role("radio", name="Cartão de preço").click()
@@ -4725,3 +4731,178 @@ def test_varredura_toda_insercao_fica_no_topo(servidor, navegador, largura):
     finally:
         g.close()
     assert not probs, "\n".join(probs)
+
+
+# ------------------------------------------------------------------ #312, revisão do PR #327
+def _abre_painel(g, nome):
+    b = g.get_by_role("button", name=nome, exact=True)
+    b.wait_for()
+    if b.get_attribute("aria-expanded") != "true":
+        b.click()
+    p = g.locator(f'[id="{b.get_attribute("aria-controls")}"]')
+    p.wait_for()
+    return b, p
+
+
+def test_revisao_contrato_fechado_nao_sobe_o_arquivo_de_antes_e_o_esc_fecha_depois_de_subir(servidor, navegador, tmp_path):
+    """Achados 1 e 5: escolher o PDF, Fechar e abrir de novo deixava "Subir contrato" ligado com o campo vazio, e ele
+    subia o arquivo de antes. E depois de subir, o foco caía no body e o Esc não fechava mais o painel."""
+    pdf = tmp_path / "contrato-revisao.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n")
+    g = entrar(navegador, servidor, largura=390, altura=800)
+    abrir(g, servidor, "/clients/1")
+    g.get_by_role("button", name="Mensalidade e contrato").click()
+    b, p = _abre_painel(g, "Adicionar contrato")
+    p.get_by_label("PDF do contrato").set_input_files(str(pdf))
+    p.get_by_role("button", name="Fechar").click()
+    p.wait_for(state="detached")
+    b, p = _abre_painel(g, "Adicionar contrato")
+    assert p.get_by_label("PDF do contrato").evaluate("i => i.files.length") == 0
+    assert p.get_by_role("button", name="Subir contrato").is_disabled(), "o campo está vazio: nada para subir"
+    p.get_by_label("PDF do contrato").set_input_files(str(pdf))
+    p.get_by_role("button", name="Subir contrato").click()
+    g.get_by_text("Contrato guardado.").wait_for()
+    g.get_by_role("cell", name="contrato-revisao.pdf").wait_for()
+    assert p.get_by_label("PDF do contrato").evaluate("i => i.files.length") == 0, "o campo limpa junto com o estado"
+    g.keyboard.press("Escape")
+    p.wait_for(state="detached")
+    assert b.get_attribute("aria-expanded") == "false"
+    g.close()
+
+
+def test_revisao_esc_fecha_o_painel_em_que_se_salvou_e_nao_os_outros(servidor, navegador):
+    """Achado 5: depois de gravar, o botão fica desabilitado e o foco vai para o body; o Esc fecha o painel em que a
+    pessoa estava, e o outro painel aberto na mesma tela continua aberto."""
+    g = entrar(navegador, servidor, email="italo@urace.us", largura=390, altura=800)
+    abrir(g, servidor, "/sdr")
+    b1, p1 = _abre_painel(g, "Pausar a IA numa conversa")
+    b2, p2 = _abre_painel(g, "Nova instrução")
+    p2.get_by_label("Instrução").fill("Responda em inglês quando o lead escrever em inglês (revisão 312).")
+    p2.get_by_role("button", name="Gravar instrução").click()
+    g.get_by_text("Instrução gravada.", exact=False).wait_for()
+    g.keyboard.press("Escape")
+    p2.wait_for(state="detached")
+    assert b2.get_attribute("aria-expanded") == "false" and b1.get_attribute("aria-expanded") == "true"
+    p1.get_by_label("Lead no Kommo (id)").fill("5550312")
+    p1.get_by_role("button", name="Pausar IA").click()
+    g.get_by_text("IA pausada nesta conversa.", exact=False).wait_for()
+    g.keyboard.press("Escape")
+    p1.wait_for(state="detached")
+    r = g.request.put(servidor + "/api/sdr/pausas/5550312", headers=_csrf(g), data={"pausada": False})
+    assert r.ok, r.text()
+    g.close()
+
+
+def test_revisao_kart_repetido_travado_na_api_no_reativar_e_na_edicao(servidor, navegador):
+    """Achado 2: a trava do kart repetido valia só no "Adicionar serviço". Agora a API (o caminho do MCP de operar)
+    responde 409 com o que fazer; o "Reativar" de quem criaria o repetido fica travado, com o motivo; e o seletor
+    "Kart do site" do card de edição mostra o kart ocupado com o serviço de hoje, sem deixar escolher."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=390, altura=800)
+    csrf = _csrf(g)
+    r = g.request.post(servidor + "/api/site/servicos", headers=csrf, data={"name": "2-stroke via API revisão", "price": 300,
+                                                                          "site_kart": "2-stroke", "deposit": 400, "deposit_required": True})
+    assert r.status == 409 and "Desative aquele antes" in r.json()["detail"], r.text()
+    r = g.request.post(servidor + "/api/site/servicos", headers=csrf, data={"name": "Reserva do 2T revisão", "price": 300,
+                                                                          "site_kart": "Rental revisao 312", "deposit": 400, "deposit_required": True})
+    assert r.ok, r.text()
+    sid = r.json()["id"]
+    try:
+        assert g.request.patch(servidor + f"/api/site/servicos/{sid}", headers=csrf, data={"active": False}).ok
+        assert g.request.patch(servidor + f"/api/site/servicos/{sid}", headers=csrf, data={"site_kart": "2-stroke"}).ok, \
+            "desativado, pode apontar para o kart (o site não muda)"
+        assert g.request.patch(servidor + f"/api/site/servicos/{sid}", headers=csrf, data={"active": True}).status == 409
+        abrir(g, servidor, "/site/servicos")
+        card = g.locator(".card.card-b", has=g.locator('input[value="Reserva do 2T revisão"]'))
+        assert card.get_by_role("button", name="Reativar").is_disabled()
+        card.get_by_text('Para reativar, desative antes "Arrive and Drive 2-stroke"', exact=False).wait_for()
+        baby = g.locator(".card.card-b", has=g.locator('input[value="Arrive and Drive Baby Kart"]'))
+        quatro = baby.get_by_label("Kart do site").locator("option", has_text="4-stroke")
+        assert quatro.evaluate("o => o.disabled") and "hoje: Arrive and Drive 4-stroke" in quatro.inner_text()
+        v = navegador.new_page(viewport={"width": 390, "height": 800})
+        v.goto(site + "/services/arrive-and-drive/")
+        assert v.locator('label.kart:has(input[value="2-stroke"])').count() == 1, "o 2-stroke continua no site"
+        v.close()
+        assert not g.erros_js, g.erros_js
+    finally:
+        g.request.patch(servidor + f"/api/site/servicos/{sid}", headers=csrf, data={"active": False})
+        g.close()
+
+
+def test_revisao_academy_com_plano_nao_lista_os_cartoes_como_se_estivessem_na_pagina(servidor, navegador):
+    """Achado 3 (NO FAKE DATA): com um plano ativo, a Academy mostra os planos e não os cartões; o "Hoje em Academy"
+    não pode dizer que eles estão lá. Eles aparecem como "escondidos pelo plano ativo", com o grupo no nome."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=390, altura=800)
+    csrf = _csrf(g)
+    cs = [c for c in g.request.get(servidor + "/api/site/cartoes").json()["cartoes"] if c["page"] == "academy" and c["active"]]
+    assert cs and any(c["grp"] for c in cs), "a migração semeia os cartões da Academy, em grupos"
+    r = g.request.post(servidor + "/api/site/servicos", headers=csrf, data={"name": "Plano revisão 312", "price": 700, "kind": "plan", "months": 3})
+    assert r.ok, r.text()
+    pid = r.json()["id"]
+    try:
+        v = navegador.new_page(viewport={"width": 390, "height": 800})
+        v.goto(site + "/academy/")
+        na_pagina = v.evaluate("() => document.body.innerText")
+        v.close()
+        assert "Plano revisão 312" in na_pagina
+        abrir(g, servidor, "/site/servicos")
+        b, p = _abre_painel(g, "Adicionar serviço")
+        p.get_by_role("radio", name="Academy", exact=True).click()
+        p.get_by_role("radio", name="Cartão de preço", exact=True).click()
+        hoje = p.locator(".ins-onde p")
+        hoje.get_by_text("escondidos pelo plano ativo:", exact=False).wait_for()
+        texto = hoje.inner_text()
+        presente, escondidos = texto.split("escondidos pelo plano ativo:")
+        assert "plano Plano revisão 312" in presente and "cartão" not in presente, texto
+        c = next(c for c in cs if c["grp"])
+        assert f"cartão {c['grp']} · {c['title']}" in escondidos, texto
+        assert not any(f"cartão {x['grp']} · {x['title']}" in presente for x in cs if x["grp"])
+    finally:
+        g.request.patch(servidor + f"/api/site/servicos/{pid}", headers=csrf, data={"active": False})
+        g.close()
+
+
+def test_revisao_rotulos_ligados_no_novo_usuario_e_na_nova_chave(servidor, navegador):
+    """Junto da revisão: os rótulos de Novo usuário e Nova chave ligados ao campo (o leitor de tela e o toque no rótulo
+    acham o campo)."""
+    g = entrar(navegador, servidor, email="italo@urace.us", largura=390, altura=800)
+    abrir(g, servidor, "/users")
+    b, p = _abre_painel(g, "Novo usuário")
+    p.get_by_label("Nome", exact=True).fill("Rita Revisão")
+    p.get_by_label("E-mail").fill("rita.revisao.312@example.com")
+    p.get_by_label("Papel").select_option("VIEWER")
+    p.get_by_label("Senha inicial").fill("senha-rev-312")
+    p.get_by_role("button", name="Criar", exact=True).click()
+    g.get_by_text("Usuário criado.").wait_for()
+    assert any(u["email"] == "rita.revisao.312@example.com" for u in g.request.get(servidor + "/api/users").json())
+    b, p = _abre_painel(g, "Nova chave")
+    p.get_by_label("Para que serve").fill("Chave revisão 312")
+    p.get_by_label("Validade (dias)").fill("1")
+    p.get_by_role("button", name="Criar chave").click()
+    g.get_by_text("Guarde agora: esta é a única vez que a chave aparece.").wait_for()
+    chave = next(k for k in g.request.get(servidor + "/api/keys").json() if k["name"] == "Chave revisão 312")
+    assert chave["read_only"] and chave["expires_at"]
+    g.request.post(servidor + f"/api/keys/{chave['id']}/revoke", headers=_csrf(g))
+    assert not g.erros_js, g.erros_js
+    g.close()
+
+
+def test_revisao_peca_nova_sem_preco_e_criada(servidor, navegador):
+    """Junto da revisão: "Nova peça" sem "Preço ref." — o campo vazio ia como "" e o servidor recusava (422); vai como null."""
+    g = entrar(navegador, servidor, largura=390, altura=800)
+    abrir(g, servidor, "/clients/1")
+    g.get_by_role("button", name="★ Equipamento").click()
+    g.get_by_text("Cadastrar ou editar chassis, motores e peças").click()
+    g.get_by_role("button", name=re.compile(r"^Peças \(")).click()
+    sec = g.locator('section.card:has(h2:has-text("Peças por motor"))')
+    sel = sec.locator("select").first
+    sel.select_option(sel.locator("option").nth(1).get_attribute("value"))
+    b, p = _abre_painel(g, "Nova peça")
+    p.get_by_placeholder("Peça *").fill("Vela revisão 312")
+    with g.expect_response(lambda r: "/api/catalog/parts" in r.url and r.request.method == "POST") as resp:
+        p.get_by_role("button", name="+ Adicionar").click()
+    assert resp.value.status == 201, resp.value.text()
+    assert any(x["name"] == "Vela revisão 312" and x["price"] is None for x in g.request.get(servidor + "/api/catalog").json()["parts"])
+    assert not g.erros_js, g.erros_js
+    g.close()

@@ -192,7 +192,7 @@ def criar_servico(dados: ServicoIn, request: Request, con: sqlite3.Connection = 
     try:
         sid = sv.criar(con, u["id"], dados.model_dump(exclude_unset=True))
     except sv.ErroServico as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(409 if isinstance(e, sv.ChaveRepetida) else 400, str(e))     # #312: kart/add-on repetido
     auditar(con, "booking.service.create", f"user:{u['id']}", user_id=u["id"], entity_type="booking_service", entity_id=sid,
             detail=dados.model_dump(exclude_unset=True), ip=auth._ip(request))
     con.commit()
@@ -206,7 +206,7 @@ def mudar_servico(sid: int, dados: ServicoIn, request: Request, con: sqlite3.Con
     try:
         mud = sv.mudar(con, u["id"], sid, dados.model_dump(exclude_unset=True))
     except sv.ErroServico as e:
-        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+        raise HTTPException(404 if "não existe" in str(e) else 409 if isinstance(e, sv.ChaveRepetida) else 400, str(e))
     if mud:
         auditar(con, "booking.service.update", f"user:{u['id']}", user_id=u["id"], entity_type="booking_service",
                 entity_id=sid, detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))

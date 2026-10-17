@@ -282,6 +282,28 @@ def _confere_deposito(s):
         raise ErroServico(MSG_DEPOSITO_OBRIGATORIO)
 
 
+class ChaveRepetida(ErroServico):
+    """#312 (revisão): o serviço ficaria ativo com a chave de outro ativo do mesmo tipo (409)."""
+
+
+def _confere_chave(con, s, sid=None):
+    """#312 (revisão): dois serviços ativos do mesmo tipo com a mesma chave tiram o kart (ou a caixa do add-on) do site
+    — é a regra de `onde_no_site` e da página. Quem cria esse conflito (criar, trocar a chave, o tipo, ou reativar) é
+    recusado com o que fazer; a tela, a API e o MCP passam por aqui."""
+    kind, k = s.get("kind") or "session", _chave(s)
+    if not s.get("active", 1) or not k or kind not in ("session", "addon"):
+        return
+    outros = [o for o in todos(con, "SELECT id, name, kind, site_kart FROM booking_services WHERE active=1 AND id IS NOT ?", (sid,))
+              if (o["kind"] or "session") == kind and _chave(o) == k]
+    if not outros:
+        return
+    if kind == "addon":
+        raise ChaveRepetida(f'O add-on {s["site_kart"]} já é vendido por "{outros[0]["name"]}": dois add-ons ativos com a mesma '
+                            "chave tiram a caixa da reserva do site. Desative aquele antes.")
+    raise ChaveRepetida(f'O kart {s["site_kart"]} já é vendido por "{outros[0]["name"]}": dois serviços ativos com o mesmo kart '
+                        "tiram o kart do site. Desative aquele antes ou escolha outro kart.")
+
+
 def criar(con, por, d):
     s = _dados(con, d, parcial=False)
     if s.get("kind") == "plan" and not s.get("months"):
@@ -290,6 +312,7 @@ def criar(con, por, d):
     _confere_deposito(s)
     if um(con, "SELECT 1 AS x FROM booking_services WHERE lower(name)=lower(?) AND active=1", (s["name"],)):
         raise ErroServico("já existe um serviço ativo com esse nome")
+    _confere_chave(con, s)
     return inserir(con, "booking_services", **s, updated_by=por, updated_at=agora())
 
 
@@ -301,6 +324,10 @@ def mudar(con, por, sid, d):
     s = _dados(con, d, parcial=True)
     _confere_deposito({**dict(atual), **s})
     mud = {k: (atual[k], v) for k, v in s.items() if atual[k] != v}
+    # #312 (revisão): só barra a mudança que CRIA o conflito (trocar a chave ou o tipo, ou reativar). Dois repetidos que
+    # já existem continuam editáveis (preço, nome…), senão ninguém consegue arrumar.
+    if {"site_kart", "kind"} & set(mud) or ("active" in mud and mud["active"][1]):
+        _confere_chave(con, {**dict(atual), **s}, sid)
     if mud:
         atualizar(con, "booking_services", sid, **{k: v for k, (_, v) in mud.items()}, updated_by=por, updated_at=agora())
     return mud

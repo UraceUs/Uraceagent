@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet, usePaginado } from '../api/hooks'
@@ -312,6 +312,7 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
   const perguntar = usePerguntar()
   const { data, error, loading, reload } = useGet<K[]>('/keys')
   const [f, setF] = useState({ name: '', role: 'VIEWER', user_id: '', days: '', note: '', read_only: true })
+  const uid = useId()                                   // #312 (revisão): cada rótulo ligado ao seu campo
   const [nova, setNova] = useState<{ id: string; chave: string; read_only: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -372,27 +373,27 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
     <InserirNoTopo rotulo={tr("Nova chave")} nivel={3} dentro>
       <form className="stack" onSubmit={criar}>
         {err && <Banner tone="crit">{err}</Banner>}
-        <div className="field"><label>{tr("Para que serve")}</label>
-          <input className="input" required placeholder={tr("n8n — leitura do painel")} value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
-        <div className="field"><label>{tr("Papel")}</label>
-          <select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>
+        <div className="field"><label htmlFor={`${uid}-nome`}>{tr("Para que serve")}</label>
+          <input id={`${uid}-nome`} className="input" required placeholder={tr("n8n — leitura do painel")} value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+        <div className="field"><label htmlFor={`${uid}-papel`}>{tr("Papel")}</label>
+          <select id={`${uid}-papel`} className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>
             {['VIEWER', 'OPERATOR', 'MANAGER', 'ADMIN'].map(r => <option key={r} value={r}>{ROLE_PT[r]}</option>)}</select>
           <span className="small muted">{ROLE_O_QUE[f.role]}</span></div>
-        <div className="field"><label>{tr("Age como")}</label>
-          <select className="input" value={f.user_id} onChange={e => setF({ ...f, user_id: e.target.value })}>
+        <div className="field"><label htmlFor={`${uid}-como`}>{tr("Age como")}</label>
+          <select id={`${uid}-como`} className="input" value={f.user_id} onChange={e => setF({ ...f, user_id: e.target.value })}>
             <option value="">{eu ? tr("{0} (você)", eu.name) : tr("você")}</option>
             {usuarios.filter(x => x.id !== user?.id && x.active).map(x => <option key={x.id} value={x.id}>{x.name} — {ROLE_PT[x.role] || x.role}</option>)}</select>
           <span className="small muted">{tr("A chave nunca alcança mais do que esta pessoa alcança")}{f.user_id && tetoDe(f.user_id) ? ` (${ROLE_PT[tetoDe(f.user_id)!]})` : ''}{tr(". Rebaixou a pessoa, a chave desce junto.")}</span></div>
-        <div className="field"><label>{tr("O que ela pode fazer")}</label>
+        <div className="field"><label htmlFor={`${uid}-ro`}>{tr("O que ela pode fazer")}</label>
           <label className="row" style={{ gap: 8, cursor: 'pointer' }}>
-            <input type="checkbox" checked={f.read_only} onChange={e => setF({ ...f, read_only: e.target.checked })} />
+            <input id={`${uid}-ro`} type="checkbox" checked={f.read_only} onChange={e => setF({ ...f, read_only: e.target.checked })} />
             <span className="small">{tr("Só leitura — consulta e não muda nada")}</span></label>
           {!f.read_only && <span className="small" style={{ color: 'var(--warn)' }}>
             {tr("Esta chave vai ESCREVER: mensagem sai para o cliente, preço muda no QuickBooks, tudo sem passar por aprovação. Papel e escrita são coisas separadas de propósito — dê escrita só se for mesmo necessário.")}</span>}</div>
-        <div className="field"><label>{tr("Validade (dias)")}</label>
-          <input className="input" type="number" min={1} placeholder={tr("em branco = não expira")} value={f.days} onChange={e => setF({ ...f, days: e.target.value })} /></div>
-        <div className="field"><label>{tr("Anotação")}</label>
-          <input className="input" placeholder={tr("opcional: quem pediu, onde está usada")} value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></div>
+        <div className="field"><label htmlFor={`${uid}-dias`}>{tr("Validade (dias)")}</label>
+          <input id={`${uid}-dias`} className="input" type="number" min={1} placeholder={tr("em branco = não expira")} value={f.days} onChange={e => setF({ ...f, days: e.target.value })} /></div>
+        <div className="field"><label htmlFor={`${uid}-nota`}>{tr("Anotação")}</label>
+          <input id={`${uid}-nota`} className="input" placeholder={tr("opcional: quem pediu, onde está usada")} value={f.note} onChange={e => setF({ ...f, note: e.target.value })} /></div>
         <button className="btn primary" disabled={busy || !f.name.trim()}>{busy ? <Spinner /> : tr("Criar chave")}</button>
         <div className="small muted">{tr("Use em")} <code className="mono">{tr("Authorization: Bearer urk_…")}</code> {tr("ou")} <code className="mono">{tr("X-API-Key: urk_…")}</code>{tr(". Chave não precisa de CSRF e não abre sessão.")}</div>
       </form>
@@ -471,6 +472,7 @@ export function Users() {
   const toast = useToast()
   const { data, error, loading, reload } = useGet<U[]>('/users')
   const [f, setF] = useState({ email: '', name: '', role: 'OPERATOR', password: '' })
+  const uid = useId()                                   // #312 (revisão): cada rótulo ligado ao seu campo
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   async function create(e: FormEvent) {
@@ -499,11 +501,11 @@ export function Users() {
     <InserirNoTopo rotulo={tr("Novo usuário")} primario>
       <form className="stack" onSubmit={create}>
         {err && <Banner tone="crit">{err}</Banner>}
-        <div className="field"><label>{tr("Nome")}</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
-        <div className="field"><label>{tr("E-mail")}</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
-        <div className="field"><label>{tr("Papel")}</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>
+        <div className="field"><label htmlFor={`${uid}-nome`}>{tr("Nome")}</label><input id={`${uid}-nome`} className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+        <div className="field"><label htmlFor={`${uid}-email`}>{tr("E-mail")}</label><input id={`${uid}-email`} className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
+        <div className="field"><label htmlFor={`${uid}-papel`}>{tr("Papel")}</label><select id={`${uid}-papel`} className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>
           <span className="small muted">{ROLE_O_QUE[f.role] || tr("só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe")}</span></div>
-        <div className="field"><label>{tr("Senha inicial")}</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">{tr("Mínimo 5 caracteres. Peça para trocar no primeiro acesso.")}</span></div>
+        <div className="field"><label htmlFor={`${uid}-senha`}>{tr("Senha inicial")}</label><input id={`${uid}-senha`} className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">{tr("Mínimo 5 caracteres. Peça para trocar no primeiro acesso.")}</span></div>
         <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : tr("Criar")}</button>
       </form>
     </InserirNoTopo>

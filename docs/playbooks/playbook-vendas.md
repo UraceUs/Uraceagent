@@ -811,7 +811,8 @@ Stripe. A sessão extra nunca vai para o Stripe.
    > **Desativar o serviço tira aquele kart da página**: em vez de deixar na tela um produto que não dá
    > para comprar, o kart sai da lista. Nenhum serviço ativo: o site e a reserva dizem que a reserva
    > online está fechada e mandam falar com a gente. Dois serviços ativos com o mesmo "Kart do site"
-   > é ambíguo — o site não escolhe por ninguém e o kart também sai; deixe **um** serviço por kart.
+   > é ambíguo — o site não escolhe por ninguém e o kart também sai; deixe **um** serviço por kart (o painel,
+   > desde o #312, não deixa criar, trocar para o kart ocupado nem reativar o segundo).
    > **O cartão do kart no site também é do painel** (#297, dono 16/10: *"alterar o valor, alterar o nome,
    > alterar as coisas ali pelo Command Center"*). No mesmo serviço: **Nome no site** (o que o cartão mostra),
    > **Linha de baixo no site** (ex.: *Ages 7+*), **Aviso no cartão** e **O cliente traz o próprio kart**.
@@ -826,7 +827,9 @@ Stripe. A sessão extra nunca vai para o Stripe.
    > cliente** (sessão sem kart). A tela mostra o que já está na página hoje. No kart, o seletor só deixa escolher
    > kart sem serviço ativo (os outros aparecem com o serviço de hoje) ou **Novo kart…**; com o add-on já ativo, o
    > segundo não se cria. Cada serviço da lista diz onde aparece no site hoje (**no site: Arrive and Drive · kart
-   > 4-stroke**) ou, em vermelho, por que está **fora do site**.
+   > 4-stroke**) ou, em vermelho, por que está **fora do site**. A trava vale também no card de edição, no
+   > **Reativar** e no servidor (API e Claude): *"O kart … já é vendido por "…": … Desative aquele antes ou escolha
+   > outro kart."* — desative o serviço de hoje daquele kart primeiro.
    > **Teste de checkout de US$ 1:** no serviço do kart, desmarque **Security deposit obrigatório**, ponha preço
    > **1** e depósito **0**; reserve, pague (o Stripe cobra US$ 1,00 de verdade) e **volte o preço, o depósito e
    > marque Obrigatório de novo** logo depois (veja 5.4); o estorno sai pelo Stripe.
