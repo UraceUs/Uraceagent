@@ -17,7 +17,7 @@ import pytest
 import command_center.providers as prov
 from command_center import db
 from command_center.db import aplicar_schema, conectar, inserir, todos, um
-from command_center.providers import aviso_744, waiver_nativa as wn
+from command_center.providers import waiver_nativa as wn
 from command_center.tests.test_waiver_nativa import (ADULT, CONTA, PARENTAL, S, _pdf, assina, cli, cliente,  # noqa: F401
                                                      equipe, liga)
 
@@ -67,6 +67,7 @@ CFG = {"text": AVISO_EXEMPLO, "sha256": hashlib.sha256(AVISO_EXEMPLO.encode()).h
 
 # ------------------------------------------------------------------ a conferência do aviso (modelo de exemplo, no CI)
 def test_o_aviso_grande_e_em_maiusculas_passa():
+    from command_center.providers import aviso_744
     r = aviso_744.conferir(_parental(), CFG)
     assert r["configured"] and r["ok"] is True, r
     assert r["found"] and r["uppercase"] and r["notice_pt"] == 15 and r["body_pt"] == 10 and r["difference_pt"] == 5
@@ -82,23 +83,27 @@ def test_o_aviso_grande_e_em_maiusculas_passa():
     (lambda: _pdf("PARENTAL CONSENT - test document"), "não está inteiro no modelo"),
 ])
 def test_sem_o_aviso_do_tamanho_certo_e_em_maiusculas_falha(pdf, trecho):
+    from command_center.providers import aviso_744
     r = aviso_744.conferir(pdf(), CFG)
     assert r["configured"] and r["ok"] is False and trecho in r["reason"], r
 
 
 def test_espaco_pontuacao_e_quebra_de_linha_do_texto_aprovado_nao_contam():
     """O advogado manda o texto com outra quebra de linha e aspas curvas: o que conta são as letras, na ordem."""
+    from command_center.providers import aviso_744
     outro = AVISO_EXEMPLO.replace(". ", ".\n\n").replace("NOT THE TEXT", "NOT  THE “TEXT”")
     r = aviso_744.conferir(_parental(), {**CFG, "text": outro, "sha256": "x" * 64})
     assert r["ok"] is True, r
 
 
 def test_o_aviso_em_outra_pagina_e_o_corpo_maior_que_o_titulo_ainda_sao_medidos():
+    from command_center.providers import aviso_744
     r = aviso_744.conferir(_parental(paginas=3, pt_aviso=17, pt_corpo=12), CFG)
     assert r["ok"] is True and r["body_pt"] == 12 and r["notice_pt"] == 17, r
 
 
 def test_sem_texto_aprovado_so_informa(tmp_path, monkeypatch):
+    from command_center.providers import aviso_744
     monkeypatch.setenv("CC_WAIVERS_DIR", str(tmp_path / "w"))
     monkeypatch.delenv("CC_WAIVER_AVISO_744", raising=False)
     assert aviso_744.aprovado() is None
@@ -107,6 +112,7 @@ def test_sem_texto_aprovado_so_informa(tmp_path, monkeypatch):
 
 
 def test_o_texto_aprovado_vem_do_arquivo_e_o_arquivo_que_nao_abre_barra(tmp_path, monkeypatch):
+    from command_center.providers import aviso_744
     monkeypatch.setenv("CC_WAIVERS_DIR", str(tmp_path / "w"))
     monkeypatch.delenv("CC_WAIVER_AVISO_744", raising=False)
     os.makedirs(tmp_path / "w" / "modelos", exist_ok=True)
