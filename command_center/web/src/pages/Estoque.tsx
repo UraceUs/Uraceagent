@@ -13,6 +13,7 @@
  * já existe é tocar no card: a primeira coisa da ficha é "Quanto tem agora".
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
@@ -35,7 +36,11 @@ interface ItemEstoque {
   category: string; prateleira_sugerida: boolean; subcategory: string | null; size: string | null
   price: number | null; cost?: number | null; markup?: string | null
   clientes: Dono[]
+  na_loja?: NaLoja[]
 }
+/** #309: o produto da loja do site que vende por esta peça (um saldo só). */
+interface NaLoja { product_id: number; slug: string; name: string; variation: string; fulfillment: 'dropshipping' | 'estoque'; active: boolean }
+const noSite = (n?: NaLoja[]) => (n || []).filter(x => x.active && x.fulfillment === 'estoque')
 interface Prateleira { code: string; nome: string; kind: string; unit: string; subcategorias: string[]; medidas: string[]; dica: string }
 interface Repor { id: number; name: string; unit: string; falta: number; sku: string | null; supplier_url: string | null }
 interface Local { id: number; code: string; name: string }
@@ -483,7 +488,13 @@ function FichaPeca({ id, d, onClose, reload }: { id: number; d: Lista; onClose: 
         {f.data.total !== f.data.nosso && <Chip tone="info">{tr("de clientes:")} {f.data.total - f.data.nosso}</Chip>}
         {it.price !== null && <Chip tone="accent">{tr("preço final")} {usd(it.price)}</Chip>}
         {d.gerente && it.cost !== null && it.cost !== undefined && <Chip tone="outline">{tr("compra")} {usd(it.cost)}{it.markup ? tr(" · margem {0}", it.markup) : ''}</Chip>}
+        {noSite(it.na_loja).length > 0 && <Chip tone="ok" title={tr("a venda paga no site sai deste saldo")}>{tr("à venda no site")}</Chip>}
       </div>
+      {(it.na_loja || []).length > 0 && <p className="small muted" style={{ margin: '8px 0 0' }}>
+        {tr("Na loja do site:")} {(it.na_loja || []).map((x, i) => <span key={x.product_id + x.variation}>{i ? ', ' : ''}
+          <Link to={`/site/produtos/${x.product_id}`}>{x.name}{x.variation ? ` (${x.variation})` : ''}</Link>
+          {!x.active ? tr(" · escondido") : x.fulfillment !== 'estoque' ? tr(" · dropshipping") : ''}</span>)}
+        {' · '}<Link to={(it.na_loja || []).length === 1 ? `/site/estoque/${it.na_loja![0].slug}` : '/site/estoque'}>{tr("Estoque do site")}</Link></p>}
       <div className="seg" style={{ margin: '12px 0' }}>
         {(Object.keys(ABAS) as (keyof typeof ABAS)[]).filter(k => k !== 'sku' || d.gerente).map(k =>
           <button key={k} className={`btn sm${aba === k ? '' : ' ghost'}`} onClick={() => setAba(k)}>{ABAS[k]}</button>)}
@@ -522,6 +533,7 @@ function CardPeca({ i, gerente, onOpen, onExcluir }: { i: ItemEstoque; gerente: 
         {i.clientes.length > 2 && <Chip tone="info">+{i.clientes.length - 2}</Chip>}
         {i.abaixo && !semQtd && <Chip tone="warn">{tr("repor")}</Chip>}
         {i.price !== null ? <Chip tone="accent">{usd(i.price)}</Chip> : gerente && <Chip tone="outline">{tr("sem preço")}</Chip>}
+        {noSite(i.na_loja).length > 0 && <Chip tone="ok" title={tr("a venda paga no site sai deste saldo")}>{tr("à venda no site")}</Chip>}
       </div>
     </div>
   </button>

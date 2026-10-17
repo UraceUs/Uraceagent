@@ -230,7 +230,10 @@ interface Recorrencia { id: number; qbo_id: string | null; name: string | null; 
 interface RecQbo { id: string; nome: string | null; ativa: boolean; total: number | null; inicio: string | null; fim: string | null; proxima: string | null
   ocorrencias: number | null; email: string | null; linhas: { item: string | null; unitario: number | null }[]; vinculada_id: number | null; de_outro_cliente: boolean }
 interface NoQbo { conectado: boolean; erro?: string; recorrencias: RecQbo[]; soltas: number }
+/** #314: a sessão extra do aluno recorrente — o valor que vale hoje e de onde vem (card, plano ou mensal ÷ sessões). */
+interface ExtraMensal { price: number | null; origin: 'card' | 'plano' | 'mensal' | null; math: string | null; item_id: string | null; item_name: string | null }
 interface Mensal { monthly_plan: string | null; monthly_amount: number | null; monthly_item_id: string | null; monthly_sessions: number | null; item: { id: string; name: string; price: number | null } | null
+  extra_session_price: number | null; extra_item_id: string | null; extra: ExtraMensal
   itens: { id: string; name: string; full_name: string | null; price: number | null }[]; email: string | null; opcoes_meses: number[]; padrao_meses: number; proximo_inicio: string; recorrencias: Recorrencia[]; agendadas: MesAgendado[] }
 /** Um mês da mensalidade agendada (#63): criado e enviado pelo QuickBooks no dia 1 às 01:00 (Flórida). */
 interface MesAgendado { id: number; month: string; amount: number; email: string | null; send_at: string; status: 'a_enviar' | 'enviada' | 'falhou' | 'cancelada'
@@ -271,6 +274,8 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   const [valor, setValor] = useState<string | null>(null)
   const [item, setItem] = useState<string | null>(null)
   const [sessoes, setSessoes] = useState<string | null>(null)
+  const [extra, setExtra] = useState<string | null>(null)
+  const [itemExtra, setItemExtra] = useState<string | null>(null)
   const [meses, setMeses] = useState<number | 'outro'>(6)
   const [outro, setOutro] = useState('3')
   const [inicio, setInicio] = useState<string | null>(null)
@@ -285,7 +290,14 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
   const nMeses = meses === 'outro' ? Number(outro) : meses
   const ses = sessoes ?? (m.monthly_sessions != null ? String(m.monthly_sessions) : '')
   const sesNum = ses.trim() ? Number(ses) : null
+  const ex = extra ?? (m.extra_session_price != null ? fmtDolar(m.extra_session_price) : '')
+  const exNum = lerDolar(ex)
+  const itEx = itemExtra ?? (m.extra_item_id || '')
   const mudou = (vNum ?? null) !== (m.monthly_amount ?? null) || it !== (m.monthly_item_id || '') || sesNum !== (m.monthly_sessions ?? null)
+    || (exNum ?? null) !== (m.extra_session_price ?? null) || itEx !== (m.extra_item_id || '')
+  // #314: o que a extra custa sem valor no card — o do plano, ou a conta do mensal ÷ sessões (ex.: 2,756.90 ÷ 4 = 689.23)
+  const extraAuto = m.extra.origin === 'card' ? null : m.extra.price == null ? tr("sem mensal: ponha o valor")
+    : m.extra.math ? `${m.extra.math} = ${fmtDolar(m.extra.price)}` : tr("do plano: {0}", fmtDolar(m.extra.price))
   const todosItens = [...(m.item && !m.itens.some(x => x.id === m.item!.id) ? [m.item] : []), ...m.itens]
   function escolherItem(id: string) {
     setItem(id)
@@ -300,8 +312,10 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
     if (n !== null && (Number.isNaN(n) || n <= 0)) { toast(tr("Valor mensal inválido. Ex.: 2,756.90"), 'warn'); return }
     setSalvando(true)
     if (sesNum !== null && (!Number.isInteger(sesNum) || sesNum < 1 || sesNum > 31)) { toast(tr("Sessões por mês: de 1 a 31."), 'warn'); setSalvando(false); return }
-    try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: n, monthly_item_id: it || null, ...(sesNum !== null ? { monthly_sessions: sesNum } : {}) })
-      toast(tr("Mensalidade salva. É ela que vai na invoice do dia 1."), 'ok'); setValor(null); setItem(null); setSessoes(null); d.reload() }
+    if (exNum !== null && (Number.isNaN(exNum) || exNum <= 0)) { toast(tr("Valor da sessão extra inválido. Ex.: 689.23"), 'warn'); setSalvando(false); return }
+    try { await api.patch(`/clients/${id}/mensal`, { monthly_amount: n, monthly_item_id: it || null, ...(sesNum !== null ? { monthly_sessions: sesNum } : {}),
+      extra_session_price: exNum, extra_item_id: itEx || null })
+      toast(tr("Mensalidade salva. É ela que vai na invoice do dia 1."), 'ok'); setValor(null); setItem(null); setSessoes(null); setExtra(null); setItemExtra(null); d.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setSalvando(false) }
   }
   const soltas = (q.data?.recorrencias || []).filter(x => x.ativa && !x.vinculada_id && !x.de_outro_cliente)
@@ -363,9 +377,22 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
         </select></div>
       <div className="field"><label>{tr("Sessões por mês do contrato")}</label>
         <input className="input" inputMode="numeric" value={ses} onChange={e => setSessoes(e.target.value)} placeholder="4" aria-label={tr("sessões por mês do contrato")} /></div>
+      {/* #314 (dono, 16/10): a sessão além do pacote do mês — "o valor do mensal dele dividido … ou então usa aqueles valores" */}
+      <div className="field"><label htmlFor={`extra-${id}`}>{tr("Valor da sessão extra")}</label>
+        <div className="dolar"><span aria-hidden="true">$</span>
+          <input id={`extra-${id}`} className="input" inputMode="decimal" value={ex} onChange={e => setExtra(e.target.value)}
+                 onBlur={() => { if (exNum !== null && !Number.isNaN(exNum)) setExtra(fmtDolar(exNum)) }}
+                 placeholder={extraAuto || '0.00'} /></div>
+        <span className="small muted">{ex.trim() ? tr("combinado com este cliente") : extraAuto ? tr("vazio: {0}", extraAuto) : ''}</span></div>
+      <div className="field"><label htmlFor={`item-extra-${id}`}>{tr("Item da sessão extra")}</label>
+        <select id={`item-extra-${id}`} className="input" value={itEx} onChange={e => setItemExtra(e.target.value)}>
+          <option value="">{m.extra.item_name && !m.extra_item_id ? tr("automático: {0}", m.extra.item_name) : tr("automático (sincronize o QuickBooks)")}</option>
+          {todosItens.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+        </select></div>
       <div className="field"><label>{tr("&nbsp;")}</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>{tr("Salvar mensalidade")}</button></div>
     </div>
     <p className="small muted" style={{ marginTop: 6 }}>{tr("Ao escolher o item, o preço de tabela entra no valor; mude se o combinado com o cliente for outro. O que estiver salvo aqui é o valor da invoice de todo dia 1.")}</p>
+    <p className="small muted" style={{ marginTop: 4 }}>{tr("Sessão extra (aluno recorrente): acima das sessões do mês, a sessão marcada na área do cliente sai numa invoice do QuickBooks com este valor, sem depósito. Vazio, vale o valor do plano do site ou o mensal ÷ sessões do mês. O cliente vê só \"Included in your plan\" ou \"Extra session\": o contador fica para a equipe.")}</p>
     <div className="row wrap" style={{ gap: 12, marginTop: 14, alignItems: 'flex-end' }}>
       <div className="field"><label>{tr("Recorrência")}</label>
         <div className="row wrap" style={{ gap: 6 }}>

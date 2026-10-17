@@ -226,10 +226,13 @@ def _recebido(con, ini, fim):
     # o plano: a mensalidade paga (invoice_total; sem ela, o preço de um mês — nunca o contrato inteiro)
     planos = todos(con, """SELECT COALESCE(NULLIF(invoice_total, 0), price, 0) AS valor, paid_at FROM plan_orders
                             WHERE paid_at IS NOT NULL AND paid_at>=? AND paid_at<?""", (ini, fim))
-    # a sessão da área do cliente paga pela invoice do QuickBooks (a do carrinho já está no pedido)
-    sessoes = todos(con, """SELECT COALESCE(NULLIF(invoice_total, 0), price, 0) AS valor, paid_at FROM bookings
+    # a sessão da área do cliente paga pela invoice do QuickBooks (a do carrinho já está no pedido). #314: as extras
+    # de um pedido de vários dias saem numa invoice só, gravada em cada sessão — cada invoice conta uma vez.
+    sessoes = todos(con, """SELECT COALESCE(NULLIF(MAX(invoice_total), 0), SUM(price), 0) AS valor, MIN(paid_at) AS paid_at
+                              FROM bookings
                              WHERE origin IN ('site','portal') AND store_order_id IS NULL AND paid_at IS NOT NULL
-                               AND paid_at>=? AND paid_at<? AND status<>'recusada'""", (ini, fim))
+                               AND paid_at>=? AND paid_at<? AND status<>'recusada'
+                             GROUP BY COALESCE(NULLIF(qbo_invoice_id, ''), 'b' || id)""", (ini, fim))
     loja = round(sum(_valor(o) for o in pagos), 2)
     rec_planos = round(sum(float(p["valor"]) for p in planos), 2)
     rec_sessoes = round(sum(float(s["valor"]) for s in sessoes), 2)
@@ -369,11 +372,18 @@ def _atencao(con, hoje, sessoes, contas):
     desde = _limites(JANELA_PENDENCIAS, hoje)[2]
     sem_vaga = um(con, """SELECT COUNT(DISTINCT i.order_id) AS n FROM store_order_items i JOIN store_orders o ON o.id=i.order_id
                            WHERE i.status='sem_vaga' AND i.booking_id IS NULL AND o.status='pago' AND o.created_at>=?""", (desde,))["n"]
+    # #309: pago sem estoque (ou com o produto em estoque sem item ligado): a equipe separa à mão ou fala com o cliente.
+    # O que ela marcou como Resolvido (Pedidos do site) sai da conta
+    sem_estoque = um(con, """SELECT COUNT(*) AS n FROM store_orders o WHERE o.status='pago' AND o.created_at>=?
+                              AND ((o.stock_note LIKE 'sem estoque%' AND o.stock_resolved_at IS NULL)
+                                   OR EXISTS (SELECT 1 FROM store_order_items i WHERE i.order_id=o.id
+                                              AND i.stock_note LIKE 'sem estoque%' AND i.stock_resolved_at IS NULL))""",
+                     (desde,))["n"]
     avisos = (um(con, "SELECT COUNT(*) AS n FROM store_orders WHERE notify_error IS NOT NULL AND created_at>=?", (desde,))["n"]
               + um(con, "SELECT COUNT(*) AS n FROM store_order_notices WHERE sent_at IS NULL AND error IS NOT NULL AND created_at>=?",
                    (desde,))["n"]
               + um(con, "SELECT COUNT(*) AS n FROM plan_orders WHERE notify_error IS NOT NULL AND created_at>=?", (desde,))["n"])
-    return {"pedidos_sem_vaga": sem_vaga, "avisos_falharam": avisos, "agendamentos_pendentes": sessoes["pendentes"],
+    return {"pedidos_sem_vaga": sem_vaga, "pedidos_sem_estoque": sem_estoque, "avisos_falharam": avisos, "agendamentos_pendentes": sessoes["pendentes"],
             "contas_sem_vinculo": contas["sem_vinculo"], "janela_dias": JANELA_PENDENCIAS}
 
 

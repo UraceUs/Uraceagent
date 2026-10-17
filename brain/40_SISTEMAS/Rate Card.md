@@ -220,3 +220,5 @@ Não trocar um pelo outro.
 **Fora do OKC** (Jacksonville, Homestead…): **+$250 por sessão** de hotel, comida e transporte.
 
 Envio de qualquer invoice desses produtos: **aprovação no painel, com prévia; aprovar = enviar** ([[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]]).
+
+Na área do cliente (#314): a sessão extra do aluno recorrente é cobrada pelo sistema com esta regra (mensal do card ÷ sessões do mês, ou o valor combinado no card), sem depósito ([[D-2026-10-16 - Academy recorrente, pacote e sessao extra]]).

@@ -2,9 +2,10 @@
  * mês com o que está aberto e marca para um piloto da conta. Quem decide o que abre é a
  * equipe, no site interno (Agendamentos do site › Disponibilidade e › Serviços e preços).
  * Piloto com medida vencida (60+ dias) ou cadastro incompleto não marca até atualizar. */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { papi, PortalError, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type Servico } from './api'
+import { papi, PortalError, rotuloCobertura, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type PlanoPiloto, type Servico } from './api'
+import { porNoCarrinhoDoSite } from './carrinhoSite'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
 
 const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
@@ -22,6 +23,8 @@ export const dataLonga = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDa
 export const PERIODOS = PERIODO
 export const STATUS_SESSAO = STATUS
 const mesDe = (iso: string) => iso.slice(0, 7)
+// #314: vários dias num pedido, só para o aluno recorrente — o código vem só quando ele abre a tela
+const AgendarVarios = lazy(() => import('./AgendarVarios').then(m => ({ default: m.AgendarVarios })))
 
 /** #148: o site novo manda o cliente para cá com o que ele já escolheu lá
  * (`?date=2026-10-16&period=manha&kart=4-stroke`). Só vale o que tem formato certo. */
@@ -53,32 +56,42 @@ export function CartaoSessao({ s, cfg, onCancelar, solta }: { s: Booking; cfg: A
   return <div className={solta ? 'row wrap portal-sessao portal-sessao-solta' : 'card card-b row wrap portal-sessao'}>
     <div className="grow"><b>{dataLonga(s.date)}</b>
       <div className="small muted">{PERIODO[s.period]}{cfg ? ` · ${faixa(cfg, s.period)}` : ''}{s.driver ? ` · ${s.driver}` : ''}</div>
-      {s.service && <div className="small">{s.service}{s.price != null ? ` · ${usd(s.price)}` : ''}</div>}
+      {s.service && <div className="small">{s.service}{s.coverage ? ` · ${rotuloCobertura(s.coverage, s.price)}` : s.price != null ? ` · ${usd(s.price)}` : ''}</div>}
       {s.decision_note && <div className="small">{s.decision_note}</div>}
-      {aceita && <div className="small">To confirm it: {s.charge_kind === 'contrato' ? 'it is part of your plan, ' : s.invoice_link
+      {aceita && <div className="small">To confirm it: {s.charge_kind === 'contrato' ? 'it is included in your plan, ' : s.invoice_link
         ? <><a href={s.invoice_link} target="_blank" rel="noreferrer">pay invoice {s.invoice_doc}</a> and </> : s.invoice_sent ? <>pay invoice {s.invoice_doc} (in your email) and </> : 'we are sending the invoice; '}
         sign the waiver{s.waiver_sent ? ' (in your email from DocuSign)' : ''}. It confirms by itself.</div>}</div>
     <span className={`chip ${tom}`}>{rot}</span>
-    {ativa && !solta && <Link className="btn sm" to={`/portal/sessions/${s.id}`}>Details</Link>}
+    {ativa && !solta && <Link className="btn sm" to={s.group_id ? `/portal/sessions/group/${s.group_id}` : `/portal/sessions/${s.id}`}>Details</Link>}
     {ativa && onCancelar && <button className="btn sm" onClick={() => onCancelar(s.id)}>Cancel</button>}
   </div>
 }
 
 /* ------------------------------------------------------------ My sessions */
+const POR_PAGINA = 50          // #314: o aluno recorrente marca muitas sessões; a lista vem do servidor em páginas
+
 export function Sessoes() {
   const [sessoes, setSessoes] = useState<Booking[] | null>(null)
+  const [total, setTotal] = useState(0)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const carregar = useCallback(async () => {
     try {
-      const [b, d] = await Promise.all([papi<{ bookings: Booking[] }>('GET', '/bookings'), papi<{ config: AgendaCfg }>('GET', '/availability')])
-      setSessoes(b.bookings); setCfg(d.config)
+      const [b, d] = await Promise.all([papi<{ bookings: Booking[]; total: number }>('GET', `/bookings?limit=${POR_PAGINA}`),
+        papi<{ config: AgendaCfg }>('GET', '/availability')])
+      setSessoes(b.bookings); setTotal(b.total); setCfg(d.config)
     } catch (e) { setErro((e as PortalError).message) }
   }, [])
   useEffect(() => { carregar() }, [carregar])
+  async function maisSessoes() {
+    try {
+      const b = await papi<{ bookings: Booking[]; total: number }>('GET', `/bookings?limit=${POR_PAGINA}&offset=${sessoes?.length || 0}`)
+      setSessoes(x => [...(x || []), ...b.bookings.filter(y => !(x || []).some(z => z.id === y.id))]); setTotal(b.total)
+    } catch (e) { setErro((e as PortalError).message) }
+  }
   async function cancelar(id: number) {
     if (!window.confirm('Cancel this session?')) return
-    try { setSessoes((await papi<{ bookings: Booking[] }>('POST', `/bookings/${id}/cancel`)).bookings) }
+    try { await papi('POST', `/bookings/${id}/cancel`); await carregar() }
     catch (e) { setErro((e as PortalError).message) }
   }
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
@@ -94,6 +107,7 @@ export function Sessoes() {
           {proximas.length ? proximas.map(s => <CartaoSessao key={s.id} s={s} cfg={cfg} onCancelar={cancelar} />) : <p className="muted small" style={{ margin: 0 }}>Nothing coming up.</p>}</section>
         {outras.length > 0 && <section className="stack" style={{ gap: 8 }} aria-labelledby="s-ant"><h2 className="h2" id="s-ant">Past and cancelled</h2>
           {outras.map(s => <CartaoSessao key={s.id} s={s} cfg={cfg} />)}</section>}
+        {sessoes.length < total && <div><button className="btn" onClick={maisSessoes}>Show more sessions</button></div>}
       </>}
   </div>
 }
@@ -116,7 +130,16 @@ export function Agendar({ conta }: { conta: Account }) {
   const [erro, setErro] = useState<string | null>(null)
   const [ok, setOk] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
+  const [planos, setPlanos] = useState<PlanoPiloto[] | null>(null)
+  const [carrinho, setCarrinho] = useState(false)
+  // #314: o dia que o plano não cobre (o plano acaba antes daquele mês) o aluno marca como sessão avulsa, um dia por vez
+  const [avulsa, setAvulsa] = useState(false)
   const nav = useNavigate()
+  // #314: quem tem plano mensal marca vários dias; a sessão do plano é incluída e a extra vai por invoice
+  useEffect(() => {
+    papi<{ drivers: PlanoPiloto[]; cart: boolean }>('GET', '/plan').then(r => { setPlanos(r.drivers); setCarrinho(!!r.cart) })
+      .catch(() => setPlanos([]))
+  }, [conta])
 
   const carregar = useCallback(async () => {
     try {
@@ -146,6 +169,21 @@ export function Agendar({ conta }: { conta: Account }) {
   const escolhidoServico = servicos.find(x => x.id === servico)
   const pilotoEscolhido = conta.drivers.find(p => p.id === piloto)
 
+  const plano = planos?.find(x => x.driver_id === piloto) || null
+  // a sessão avulsa do aluno recorrente paga como a de qualquer cliente: no carrinho (Stripe) se ligado, senão invoice
+  const noCarrinho = plano?.payment === 'stripe' || (avulsa && !!plano?.recurring && carrinho)
+  const seletorPiloto = conta.drivers.length > 1 ? <label className="fld"><span>Driver</span>
+    <select value={piloto} onChange={e => setPiloto(e.target.value ? Number(e.target.value) : '')}>
+      {conta.drivers.map(p => { const b = bloqueioDoPiloto(p)
+        return <option key={p.id} value={p.id} disabled={!!b}>{p.name}{b ? ` (${b})` : ''}</option> })}</select></label>
+    : conta.drivers.length === 1 ? <p className="small muted" style={{ margin: 0 }}>Driver: <b>{conta.drivers[0].name}</b></p> : null
+
+  function paraOCarrinho() {
+    if (!dia || !periodo || !servico || !piloto) return
+    porNoCarrinhoDoSite({ tipo: 'sessao', servico, data: dia, turno: periodo, piloto })
+    window.location.assign('/cart/')
+  }
+
   async function marcar() {
     if (!dia || !periodo || !servico || !piloto) return
     setIndo(true); setErro(null); setOk(null)
@@ -157,14 +195,23 @@ export function Agendar({ conta }: { conta: Account }) {
     } catch (e) { setErro((e as PortalError).message); carregar() } finally { setIndo(false) }
   }
 
+  if (plano?.recurring && !avulsa && piloto && dias && cfg && servicos.length && !conta.missing.length)
+    return <Suspense fallback={<div className="state"><span className="spin" /></div>}>
+      <AgendarVarios piloto={piloto} plano={plano} dias={dias} cfg={cfg} servicos={servicos} servico={servico}
+        setServico={setServico} seletorPiloto={seletorPiloto} onMarcou={carregar}
+        onAvulso={(d, p) => { setAvulsa(true); setDia(d); setPeriodo(p); setMes(mesDe(d)); setOk(null); setErro(null) }} /></Suspense>
+
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Book a session</h1><p className="muted" style={{ margin: '4px 0 0' }}>Pick the session type, the day and the driver.</p></div>
     {erro && <div className="banner crit" role="alert"><span className="bi">✕</span><div className="grow">{erro}</div></div>}
     {ok && <div className="banner ok" role="status"><span className="bi">✓</span><div className="grow">{ok} <Link to="/portal/sessions">See my sessions</Link></div></div>}
     {conta.missing.length > 0 && <div className="banner warn"><span className="bi">▲</span><div className="grow">Please complete the account holder details before booking. <Link to="/portal/account">Go to Account</Link></div></div>}
+    {avulsa && plano?.recurring && <div className="banner info" role="status"><span className="bi" aria-hidden="true">●</span><div className="grow">
+      Regular session: your monthly plan does not cover this date, so it is paid like any session.{' '}
+      <button type="button" className="btn ghost" onClick={() => setAvulsa(false)}>Back to my plan days</button></div></div>}
     {!conta.drivers.length ? <div className="card card-b stack"><p className="muted" style={{ margin: 0 }}>Add a driver first, then pick a date.</p><div><Link className="btn primary" to="/portal/drivers">Add a driver</Link></div></div>
       : !livres.length ? <div className="banner warn"><span className="bi">▲</span><div className="grow">Your drivers need up-to-date measurements before booking. <Link to="/portal/drivers">Update drivers</Link></div></div>
-      : dias === null ? <div className="state"><span className="spin" /></div>
+      : dias === null || planos === null ? <div className="state"><span className="spin" /></div>
       /* #253: sem serviço ativo no painel não é "sem data": a tela diz a verdade e dá o contato */
       : !servicos.length ? <p className="muted">Online booking is closed right now. Please talk to us at <a href="mailto:support@urace.us">support@urace.us</a> and we book your session for you.</p>
       : !temAlgo ? <p className="muted">No dates open for booking right now. Please check back soon or contact us.</p>
@@ -196,15 +243,17 @@ export function Agendar({ conta }: { conta: Account }) {
           <div className="portal-periodos">{(['manha', 'tarde', 'dia'] as const).filter(p => escolhido.periods[p].open).map(p =>
             <button key={p} className={`btn${periodo === p ? ' primary' : ''}`} onClick={() => setPeriodo(p)} aria-pressed={periodo === p}>
               <span>{PERIODO[p]}</span><span className="small">{faixa(cfg, p)}</span></button>)}</div>
-          <label className="fld"><span>Driver</span>
-            <select value={piloto} onChange={e => setPiloto(e.target.value ? Number(e.target.value) : '')}>
-              {conta.drivers.map(p => { const b = bloqueioDoPiloto(p)
-                return <option key={p.id} value={p.id} disabled={!!b}>{p.name}{b ? ` (${b})` : ''}</option> })}</select></label>
+          {seletorPiloto}
           {pilotoEscolhido?.measures_status === 'aviso' && <div className="banner warn"><span className="bi">▲</span><div className="grow">
             {pilotoEscolhido.name}'s measurements are {pilotoEscolhido.measures_days} days old. Please <Link to="/portal/drivers">review them</Link> soon.</div></div>}
           <label className="fld"><span>Anything we should know? <i>optional</i></span><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></label>
-          {escolhidoServico && <p className="small" style={{ margin: 0 }}>{escolhidoServico.name} · <b>{usd(escolhidoServico.price)}</b> per driver</p>}
-          <div><button className="btn primary" disabled={!periodo || !servico || !piloto || indo} onClick={marcar}>{indo ? 'Booking…' : 'Request session'}</button></div>
+          {escolhidoServico && <p className="small" style={{ margin: 0 }}>{escolhidoServico.name} · <b>{usd(escolhidoServico.price)}</b> per driver
+            {noCarrinho && (escolhidoServico.deposit || 0) > 0 ? ` + ${usd(escolhidoServico.deposit || 0)} refundable security deposit` : ''}</p>}
+          {/* #314 (dono, 16/10): o cliente novo paga no Stripe (carrinho do site) quando ele está ligado; sem Stripe, a invoice */}
+          {noCarrinho
+            ? <div className="stack" style={{ gap: 6 }}><div><button className="btn primary" disabled={!periodo || !servico || !piloto} onClick={paraOCarrinho}>Add to cart</button></div>
+              <p className="small muted" style={{ margin: 0 }}>You pay online in the cart with card, Apple Pay or Google Pay.</p></div>
+            : <div><button className="btn primary" disabled={!periodo || !servico || !piloto || indo} onClick={marcar}>{indo ? 'Booking…' : 'Request session'}</button></div>}
         </div>}
       </div>}
   </div>

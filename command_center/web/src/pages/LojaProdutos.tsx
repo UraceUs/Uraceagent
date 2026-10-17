@@ -1,7 +1,11 @@
 /* Produtos da loja (#298). Dono, 16/10: "nos produtos da loja, colocar o valor de envio, o shipping … o valor do
  * Security Deposit … que eu consiga alterar … essas funções serão necessárias que sejam ativas permanentemente".
  * Decisões: frete = valor fixo por produto; no painel = tudo do produto. A lista é paginada no servidor; o produto
- * abre no próprio endereço (/site/produtos/12). Esconder não apaga: o produto sai da loja e continua aqui. */
+ * abre no próprio endereço (/site/produtos/12). Esconder não apaga: o produto sai da loja e continua aqui.
+ * #309: "Como vendemos" (dropshipping ou em estoque) é interno; em estoque com item ligado, quem diz se tem é o
+ * estoque do box (a caixa "Em estoque" vira só leitura e mostra quanto tem), e a ligação mora em Estoque do site.
+ * Revisão: cada opção vai com o nome de antes (`antes`), para a ligação com o estoque seguir a opção renomeada; os
+ * links para o Estoque do site abrem já filtrados no produto (`/site/estoque/<endereço>`). */
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
@@ -16,11 +20,14 @@ import { tr } from '../i18n'
 interface Foto { src: string; alt: string }
 interface Variacao { id?: number | null; attrs: string[]; price: number; regular: number; in_stock: boolean }
 interface Categoria { slug: string; name: string }
+type Fulfillment = 'dropshipping' | 'estoque'
+interface Ligacao { variation: string; item_id: number; item: string; tracking: 'quantidade' | 'serie'; unit: string; tem: number }
 interface Produto { id: number; slug: string; name: string; type: 'simple' | 'variable'; price: number; regular: number; on_sale: boolean
   price_min: number | null; price_max: number | null; short: string; description: string; images: Foto[]; categories: Categoria[]
   attributes: { name: string; terms: string[] }[]; variations: Variacao[]; in_stock: boolean; sku: string
   shipping_fee: number | null; deposit: number; active: boolean; sort: number; origin: string | null; updated_at: string | null
-  categorias_loja?: string[] }
+  categorias_loja?: string[]; fulfillment: Fulfillment
+  estoque?: { ligados: Record<string, Ligacao>; no_site: boolean; tem: number | null } }
 interface Lista { produtos: Produto[]; total: number; limit: number; offset: number; categorias: Categoria[] }
 
 const POR_PAGINA = 30
@@ -30,6 +37,7 @@ const fotoUrl = (src: string) => src.startsWith('/') ? src : `/_s/img/${src}`
 const preco = (p: Produto) => p.price_min && p.price_max && p.price_max !== p.price_min ? `${usd(p.price_min)} – ${usd(p.price_max)}`
   : p.price ? usd(p.price) : tr("Sob consulta")
 const frete = (v: number | null) => v === null ? tr("frete a combinar") : v === 0 ? tr("frete grátis") : tr("frete {0}", usd(v))
+const qtd = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 
 export function ProdutosDaLoja() {
   const { can } = useAuth()
@@ -71,7 +79,9 @@ export function ProdutosDaLoja() {
           <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{preco(p)} · {frete(p.shipping_fee)}{p.deposit ? ` · ${tr("depósito {0}", usd(p.deposit))}` : ''}</div>
           <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
             {!p.active && <Chip tone="neutral">{tr("escondido")}</Chip>}
-            {!p.in_stock && <Chip tone="warn">{tr("sem estoque")}</Chip>}
+            {!(p.estoque?.no_site ?? p.in_stock) && <Chip tone="warn">{tr("sem estoque")}</Chip>}
+            {p.fulfillment === 'estoque' && <Chip tone="info" title={tr("interno: o cliente não vê")}>{p.estoque?.tem != null
+              ? tr("em estoque · {0}", qtd(p.estoque.tem)) : tr("em estoque · falta ligar")}</Chip>}
             {p.on_sale && <Chip tone="accent">{tr("promoção")}</Chip>}</div>
         </div>
         <Link className="btn sm ghost" to={`/site/produtos/${p.id}`}>{tr("Editar")}</Link>
@@ -92,9 +102,9 @@ export function ProdutosDaLoja() {
   </div>
 }
 
-type Edicao = Partial<{ name: string; regular: string; promo: string; sku: string; in_stock: boolean; active: boolean
+type Edicao = Partial<{ name: string; regular: string; promo: string; sku: string; in_stock: boolean; active: boolean; fulfillment: Fulfillment
   shipping_fee: string; deposit: string; categories: string[]; short: string; description: string; images: Foto[]
-  attribute_names: string[]; variations: { attrs: string[]; regular: string; promo: string; in_stock: boolean }[] }>
+  attribute_names: string[]; variations: { attrs: string[]; regular: string; promo: string; in_stock: boolean; antes: string | null }[] }>
 
 const txt = (n: number | null | undefined) => n === null || n === undefined ? '' : String(n)
 
@@ -114,8 +124,13 @@ export function EditarProduto({ id }: { id: number }) {
   const fotos = e.images ?? p.images
   const cats = e.categories ?? p.categorias_loja ?? p.categories.map(c => c.slug)
   const nomes = e.attribute_names ?? p.attributes.map(a => a.name)
-  const vars = e.variations ?? p.variations.map(v => ({ attrs: v.attrs, regular: txt(v.regular), promo: promoDe(v.price, v.regular), in_stock: v.in_stock }))
+  // `antes`: o nome da opção quando a tela abriu (null na opção nova): renomear a opção ligada leva a ligação junto
+  const vars = e.variations ?? p.variations.map(v => ({ attrs: v.attrs, regular: txt(v.regular), promo: promoDe(v.price, v.regular), in_stock: v.in_stock, antes: v.attrs.join(' / ') }))
   const mudou = Object.keys(e).length > 0
+  // #309: em estoque com item ligado, o "Em estoque" é do estoque (só leitura); sem item ligado, vale a caixa
+  const emEstoque = (e.fulfillment ?? p.fulfillment) === 'estoque'
+  const ligados = p.estoque?.ligados || {}
+  const ligado = (nome: string) => emEstoque ? ligados[nome] : undefined
   async function salvar(extra?: Edicao) {
     setSalvando(true)
     try {
@@ -161,8 +176,17 @@ export function EditarProduto({ id }: { id: number }) {
             <input inputMode="decimal" value={e.deposit ?? txt(p.deposit)} disabled={!gerente} onChange={x => muda({ deposit: x.target.value })} /></label>
           <label className="fld"><span>{tr("SKU")} <i>{tr("opcional")}</i></span>
             <input value={e.sku ?? p.sku} disabled={!gerente} onChange={x => muda({ sku: x.target.value })} /></label>
-          <label className="check loja-check"><input type="checkbox" checked={e.in_stock ?? p.in_stock} disabled={!gerente} onChange={x => muda({ in_stock: x.target.checked })} /> {tr("Em estoque")}</label>
+          <label className="fld"><span>{tr("Como vendemos")} <i>{tr("interno: o cliente não vê")}</i></span>
+            <select value={e.fulfillment ?? p.fulfillment} disabled={!gerente} onChange={x => muda({ fulfillment: x.target.value as Fulfillment })}>
+              <option value="dropshipping">{tr("Dropshipping (o fornecedor envia)")}</option>
+              <option value="estoque">{tr("Em estoque (o box envia)")}</option></select></label>
+          {!vars.length && ligado('') ? <div className="check loja-check loja-estoque">
+            <input type="checkbox" checked={ligado('')!.tem >= 1} disabled aria-label={tr("Em estoque (pelo estoque)")} />
+            <span>{tr("Em estoque: tem {0} {1} (Galpão + Pista)", qtd(ligado('')!.tem), ligado('')!.unit)} · <Link to={`/site/estoque/${p.slug}`}>{tr("Estoque do site")}</Link></span></div>
+            : <label className="check loja-check"><input type="checkbox" checked={e.in_stock ?? p.in_stock} disabled={!gerente} onChange={x => muda({ in_stock: x.target.checked })} /> {tr("Em estoque")}</label>}
         </div>
+        {emEstoque && vars.length > 0 && <p className="small muted" style={{ margin: 0 }}>{tr("Com opções, a caixa \"Em estoque\" do produto vale para as opções sem item ligado (desmarcada, nenhuma delas vende); as ligadas seguem o estoque.")}</p>}
+        {emEstoque && !Object.keys(ligados).length && <p className="small muted" style={{ margin: 0 }}>{tr("Em estoque, mas ainda sem item ligado: até ligar, o site segue a caixa \"Em estoque\".")} <Link to={`/site/estoque/${p.slug}`}>{tr("Ligar em Estoque do site")}</Link></p>}
       </div>
     </section>
 
@@ -203,10 +227,13 @@ export function EditarProduto({ id }: { id: number }) {
         <label className="fld"><span>{tr("Opção")}</span><input value={v.attrs.join(' / ')} disabled={!gerente} onChange={x => mudaVar(i, { attrs: x.target.value.split('/').map(s => s.trim()) })} /></label>
         <label className="fld"><span>{tr("Preço (US$)")}</span><input inputMode="decimal" value={v.regular} disabled={!gerente} onChange={x => mudaVar(i, { regular: x.target.value })} /></label>
         <label className="fld"><span>{tr("Promocional")}</span><input inputMode="decimal" value={v.promo} disabled={!gerente} onChange={x => mudaVar(i, { promo: x.target.value })} /></label>
-        <label className="check loja-check"><input type="checkbox" checked={v.in_stock} disabled={!gerente} onChange={x => mudaVar(i, { in_stock: x.target.checked })} /> {tr("Em estoque")}</label>
+        {ligado(v.attrs.join(' / ')) ? <div className="check loja-check loja-estoque">
+          <input type="checkbox" checked={ligado(v.attrs.join(' / '))!.tem >= 1} disabled aria-label={tr("Em estoque (pelo estoque)")} />
+          <span>{tr("tem {0}", qtd(ligado(v.attrs.join(' / '))!.tem))}</span></div>
+          : <label className="check loja-check"><input type="checkbox" checked={v.in_stock} disabled={!gerente} onChange={x => mudaVar(i, { in_stock: x.target.checked })} /> {tr("Em estoque")}</label>}
         {gerente && <button className="btn sm ghost" onClick={() => muda({ variations: vars.filter((_, j) => j !== i) })}>{tr("Tirar")}</button>}
       </div>)}</div>
-      {gerente && <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={() => muda({ variations: [...vars, { attrs: [''], regular: txt(p.regular), promo: '', in_stock: true }] })}>{tr("+ Opção")}</button>}
+      {gerente && <button className="btn sm ghost" style={{ marginTop: 8 }} onClick={() => muda({ variations: [...vars, { attrs: [''], regular: txt(p.regular), promo: '', in_stock: true, antes: null }] })}>{tr("+ Opção")}</button>}
     </Section>
 
     {gerente && <div className="loja-salvar card card-b row wrap" style={{ gap: 8 }}>

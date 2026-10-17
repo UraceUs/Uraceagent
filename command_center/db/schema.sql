@@ -1714,6 +1714,21 @@ CREATE TABLE IF NOT EXISTS bookings (
 );
 CREATE INDEX IF NOT EXISTS bookings_data ON bookings(date, status);
 CREATE INDEX IF NOT EXISTS bookings_conta ON bookings(account_id);
+-- #314 (dono, 16/10): "para esses clientes, é interessante eles terem a oportunidade de marcar mais de um dia,
+-- multi-seleção de dias … ele consegue marcar isso tudo em um book". Um pedido de vários dias do aluno recorrente:
+-- as sessões ficam em `bookings` (group_id) e as extras do pedido saem numa invoice só (o id dela vai para cada
+-- sessão extra, como numa invoice de uma sessão só). Ou entra o pedido inteiro, ou nada.
+CREATE TABLE IF NOT EXISTS booking_groups (
+  id                   INTEGER PRIMARY KEY,
+  account_id           INTEGER NOT NULL REFERENCES portal_accounts(id),
+  pilot_id             INTEGER REFERENCES portal_pilots(id),
+  service_id           INTEGER REFERENCES booking_services(id),
+  origin               TEXT,                              -- site | portal
+  utm                  TEXT,
+  notified_received_at TEXT,                              -- o e-mail único do pedido saiu
+  created_at           TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS booking_groups_conta ON booking_groups(account_id, id);
 -- ------------------------------------------------------------ serviços e preços (#50)
 -- Dono, 01/10: "deixe o campo dos preços para ter a possibilidade de ser facilmente
 -- alterados". O preço mora aqui, editado pela equipe; o agendamento guarda o valor do dia
@@ -1790,6 +1805,21 @@ CREATE TABLE IF NOT EXISTS store_products (
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS store_products_vitrine ON store_products(active, sort, id);
+
+-- #309 (dono, 16/10): "a gente seleciona o que que é dropshipping e o que que a gente tem em estoque para poder enviar …
+-- o que tiver em estoque a gente coloca quanto que tem". O marcador fica em `store_products.fulfillment` (migração) e
+-- o cliente nunca vê. O produto "em estoque" (ou cada opção dele: '' = produto sem opção) liga a UM item do estoque
+-- interno: um saldo só, o mesmo do Balcão, da contagem e de Compras. Um item vende no site por um produto só.
+CREATE TABLE IF NOT EXISTS store_product_stock (
+  id          INTEGER PRIMARY KEY,
+  product_id  INTEGER NOT NULL REFERENCES store_products(id),
+  variation   TEXT NOT NULL DEFAULT '',             -- o nome da opção (" / ".join(attrs)); '' = produto sem opção
+  item_id     INTEGER NOT NULL REFERENCES stock_items(id),
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  UNIQUE (product_id, variation),
+  UNIQUE (item_id)
+);
 
 -- #300 (dono, 16/10): o editor visual do site, livre tipo Elementor. Cada página do editor tem o rascunho e o que
 -- está publicado (JSON do modelo de `vitrine/editor.py`: seções, colunas e elementos; nunca HTML solto). Página nova

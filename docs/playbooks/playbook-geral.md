@@ -162,7 +162,8 @@ pedem acesso de operador.
 | Site | **Disponibilidade** | `/ops/site/disponibilidade` | a agenda que abre e fecha: semana, horários, regras e bloqueios | operador+ (mudar: gerente+) |
 | Site | **Serviços e preços** | `/ops/site/servicos` | o preço, o depósito (com **Security deposit obrigatório**, #317) e o item do QuickBooks de cada serviço, com o **cartão do kart no site** e o **kart novo** (#297) | operador+ (mudar: gerente+) |
 | Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team e do For Beginners (#297) | operador+ (mudar: gerente+) |
-| Site | **Produtos da loja** | `/ops/site/produtos` | preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298) | operador+ (mudar: gerente+) |
+| Site | **Produtos da loja** | `/ops/site/produtos` | título, preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298), e **Como vendemos** (dropshipping ou em estoque, #309) | operador+ (mudar: gerente+) |
+| Site | **Estoque do site** | `/ops/site/estoque` (um produto: `/ops/site/estoque/<endereço>`) | o que é **dropshipping** e o que é **em estoque** (interno: o cliente nunca vê), o item do Estoque ligado a cada produto ou opção e **quanto tem** em cada local (*Galpão 5 · Pista 3*); ligar, criar o item a partir do produto e contar um local por vez (#309) | operador+ (contar); ligar, desligar e mudar o marcador: gerente+ |
 | Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
 | Site | **Editor do site** | `/ops/site/editor` | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
@@ -170,7 +171,7 @@ pedem acesso de operador.
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos e assinadas | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
-| Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente | todos |
+| Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
 | Logística | **Checklists** | `/ops/checklists` | os checklists do dia, do kart e os trimestrais | operador+ |
 | Pedidos e compras | **Pedidos** | `/ops/pedidos` | a lista do que a equipe **precisa** que se compre | todos |
 | Pedidos e compras | **Suits · Alpha Line** | `/ops/suits` | os pedidos de macacão sob medida, em dez etapas | operador+ |
@@ -299,7 +300,7 @@ Dentro do card (`/ops/clients/<n>`), as abas:
 | Aba | O que tem |
 |---|---|
 | Linha do tempo | serviço, waiver enviada/assinada, ação da IA, invoice |
-| Mensalidade e contrato | plano mensal e contrato da Academy (valor: gerente+) |
+| Mensalidade e contrato | plano mensal e contrato da Academy (valor: gerente+). #314: também o **valor** e o **item do QuickBooks** da sessão extra (acima do pacote do mês); vazio, vale o do plano ou o mensal ÷ sessões |
 | ★ Equipamento e ★ Corridas | só para Pro Racing Driver |
 | Peças | o QR que o mecânico lê no balcão e as peças do cliente |
 | Conta no site | a conta da área do cliente ligada ao card |
@@ -389,12 +390,14 @@ abre o card dele).
 | **Box** | Meu dia, checklists com foto, balcão (cobrar ou guardar peça), estoque, pedidos e compras | [playbook-mecanicos-e-coaches.md](playbook-mecanicos-e-coaches.md) |
 | **Suits · Alpha Line** | pedido de macacão sob medida, das 29 medidas e do design até a entrega, com a ponte de e-mail | [../suits-guia-do-lucas.md](../suits-guia-do-lucas.md) |
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
-| **Site** (#306) | uma seção só do site público no menu, com uma subseção por painel: o **Painel do site** (as métricas), os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja, o editor, o blog, as contas e a waiver | menu Site · esta seção, "Painel do site" |
+| **Site** (#306) | uma seção só do site público no menu, com uma subseção por painel: o **Painel do site** (as métricas), os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja e o **estoque do site**, o editor, o blog, as contas, a waiver e o security deposit | menu Site · esta seção, "Painel do site" |
 | **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
+| **Estoque do site** (#309) | cada produto da loja é **dropshipping** (o padrão: o fornecedor envia e o site segue a caixa "Em estoque") ou **em estoque** (o box envia). Em estoque, o produto (ou cada tamanho) liga a **um item do Estoque**: um saldo só, o mesmo do Balcão, da contagem e de Compras, contado no Galpão e na Pista (o trailer fica fora). Sem saldo, o site mostra "Out of stock" sozinho; a venda paga no site **sai do estoque sozinha**; sem saldo na hora de pagar, o pagamento entra e o pedido vira **"Resolver: sem estoque"**. O cliente nunca vê o marcador nem a quantidade | Site › Estoque do site · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
 | **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); desfazer e refazer, Camadas para quem usa teclado, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
 | **Blog do site** (#172) | os artigos do `/blog/` ficam no banco e se escrevem no painel: título, categoria, endereço, resumo, o que o Google mostra, capa (WebP sem a localização do celular) e texto com títulos, listas, links e fotos, com prévia no visual do site. O operador escreve o rascunho; **só o ADMIN** (ou o acesso livre) publica e tira do ar. Cada publicação guarda uma versão | Site › Blog · seção 6, "Blog do site" |
 | **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
+| **Aluno recorrente** (#314) | Academy (Kart School) com plano: marca na área do cliente sem pagar a sessão do pacote do mês; acima do pacote, a **sessão extra** sai numa invoice do QuickBooks (mensal ÷ sessões ou o valor combinado, sem depósito). O cliente vê só "Included in your plan" ou "Extra session"; o contador é da equipe. Marca **vários dias num pedido** (até 12: "Every Wed", "This weekend"…), e as extras do pedido saem numa invoice só. **Cliente novo** paga no Stripe (carrinho) com o Stripe ligado; o carrinho recusa a sessão do aluno recorrente | [playbook-vendas.md](playbook-vendas.md), seção 5, "Aluno recorrente" |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Site › Agendamentos e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
 | **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
@@ -410,7 +413,8 @@ Dono, 16/10: *"uma sessão dedicada exclusiva somente para o site … uma seçã
 E aí também do site um dashboard com as métricas dele"*.
 
 **Onde:** no menu, a seção **Site**. A primeira subseção é o **Painel do site** (`/ops/site`); as outras são os painéis
-que já existiam (pedidos, agendamentos, disponibilidade, serviços e preços, cartões, loja, editor, blog, contas e waiver), cada
+que já existiam (pedidos, agendamentos, disponibilidade, serviços e preços, cartões, loja, estoque do site, editor, blog,
+contas, waiver e security deposit), cada
 um com o seu endereço (`/ops/site/pedidos`, `/ops/site/agendamentos`…). Os agendamentos, que eram `/ops/site`, agora
 ficam em `/ops/site/agendamentos`.
 
@@ -428,7 +432,7 @@ ficam em `/ops/site/agendamentos`.
 | **Campanhas das vendas e dos contatos** | o `utm` que cada venda ou contato guardou, uma vez por venda (o agendamento e a oportunidade que um pedido gera não contam de novo) |
 | **Contas e contatos** | as contas novas da área do cliente e as oportunidades com origem Site (ganhas e perdidas) |
 | **Saúde do site** | as páginas servidas, os erros do servidor e a página mais lenta desde o último reinício |
-| a faixa de **atenção** | qualquer que seja o período: dos últimos 30 dias, os pagos sem vaga ainda sem agendamento e os avisos por e-mail que não saíram (pago, processando, não passou, expirou e planos); e o que está aberto agora: agendamentos esperando e contas sem card ligado (a mesma conta de Contas de clientes) |
+| a faixa de **atenção** | qualquer que seja o período: dos últimos 30 dias, os pagos sem vaga ainda sem agendamento, os **pagos sem estoque** ainda não marcados **Resolvido** (#309) e os avisos por e-mail que não saíram (pago, processando, não passou, expirou e planos); e o que está aberto agora: agendamentos esperando e contas sem card ligado (a mesma conta de Contas de clientes) |
 
 Número zerado é zero de verdade; o que ainda não tem dado diz "sem dado" (NO FAKE DATA). As vendas feitas pela equipe
 (invoice do QuickBooks fora do site) estão em Vendas, não aqui.
@@ -819,6 +823,12 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "Pagamento no site" não aparece no card | a conta do site ou o piloto ainda não está ligado a um card | Site › Contas de clientes: ligue a conta e o driver ao card certo |
 | "Essa recorrência já está vinculada ao card de outro cliente." | tentativa de ligar a mensalidade de um cliente ao card de outro | confira o cliente certo |
 | "Security deposit obrigatório: informe o valor do depósito…" | o serviço está marcado como depósito obrigatório e o valor ficou vazio ou 0 | ponha o valor (ex.: 400) ou desmarque "obrigatório" em Site › Serviços e preços ou Site › Security deposit |
+| "Resolver: sem estoque: … pediu 2, tinha 1" em Site › Pedidos do site (#309) | o produto em estoque foi pago, mas o box não tinha tudo no Galpão + Pista (outra venda, Balcão, contagem errada). O pagamento entrou e saiu o que tinha | separe o que tem, confira a prateleira e conte em Site › Estoque do site; falta peça: combine com o cliente (prazo ou devolução pelo Stripe). Resolvido, toque em **Resolvido** no pedido: sai do *Pagos sem estoque* do Painel do site |
+| "a opção … está ligada ao estoque … e não dá para saber qual é o nome novo dela" | várias opções ligadas mudaram de nome de uma vez, fora da tela do produto | mude o nome de uma opção por vez, ou desligue em Site › Estoque do site antes |
+| "a opção … está ligada ao item …: desligue … antes de tirá-la do produto" · "o produto inteiro está ligado ao item …" | tirar uma opção ligada, ou criar opções num produto ligado inteiro, soltaria a ligação | desligue em Site › Estoque do site, salve o produto e ligue de novo cada opção |
+| "… ainda está ligado a … (dropshipping): desligue lá" | o item ligado a um produto que passou a dropshipping | no cartão do produto, em Site › Estoque do site, toque em **Desligar** |
+| "Resolver: sem estoque ligado: … baixe à mão no Estoque" | o produto está marcado "em estoque", mas a opção vendida não tem item ligado | baixe a saída em Estoque › Quantidade e ligue a opção em Site › Estoque do site |
+| "We don't have that many in stock right now" (o cliente conta) | ele pediu mais do que o box tem de um produto em estoque; o site não diz o número | conte de novo em Site › Estoque do site, ou ofereça a quantidade que tem |
 | Cartão "Devolução pendente" em Site › Security deposit | a resposta do Stripe não chegou na hora da devolução; o valor fica reservado | toque em **Conferir no Stripe** depois de alguns minutos |
 | Publiquei o artigo do blog e o site (ou o sitemap) ainda mostra o de antes | a página fica até 5 min no navegador de quem já abriu, e o sitemap até 24 h | recarregue a página; o Google relê o sitemap sozinho |
 | "Antes de publicar, falta: …" (Site › Blog) | o rascunho não tem tudo o que o Google e quem lê precisam | complete o que a lista diz, **Salvar rascunho** e publique |

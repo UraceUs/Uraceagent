@@ -373,6 +373,33 @@ MIGRACOES = [
     # e o serviço cujo depósito é obrigatório ("o serviço que eu coloquei no checkout ia permitir … sem o security deposit")
     ("store_orders", "stripe_refunded", "REAL"),
     ("booking_services", "deposit_required", "INTEGER"),   # NULL = de antes da caixa: a pós-migração decide uma vez
+    # 16/10 — dono (#309): "a gente seleciona o que que é dropshipping e o que que a gente tem em estoque … não precisa
+    # ficar aparente … para os clientes". O marcador interno de cada produto (dropshipping: nada muda no site no dia do
+    # deploy) e a baixa do estoque na venda paga: o movimento (idempotência) e o que a equipe precisa resolver.
+    ("store_products", "fulfillment", "TEXT NOT NULL DEFAULT 'dropshipping' CHECK (fulfillment IN ('dropshipping','estoque'))"),
+    ("store_orders", "stock_move_id", "INTEGER REFERENCES stock_moves(id)"),
+    ("store_orders", "stock_note", "TEXT"),
+    ("store_order_items", "stock_move_id", "INTEGER REFERENCES stock_moves(id)"),
+    ("store_order_items", "stock_note", "TEXT"),
+    # revisão do #309: o "Resolver: sem estoque" que a equipe já resolveu (botão Resolvido em Pedidos do site) sai do
+    # "Resolver" do pedido e do "Pagos sem estoque" do Painel do site; a frase fica na linha e no histórico
+    ("store_orders", "stock_resolved_at", "TEXT"),
+    ("store_orders", "stock_resolved_by", "INTEGER REFERENCES users(id)"),
+    ("store_order_items", "stock_resolved_at", "TEXT"),
+    ("store_order_items", "stock_resolved_by", "INTEGER REFERENCES users(id)"),
+    # 16/10 — dono (#314): "se ele já tiver usado as sessões daquele pacote dele mensal, aí ele paga uma sessão
+    # adicional … o valor do mensal dele dividido para duas ou quatro sessões … ou então usa aqueles valores".
+    # O valor e o item do QuickBooks da sessão extra: no card (o combinado com o cliente, vence) e no plano do site.
+    ("clients", "extra_session_price", "REAL"),
+    ("clients", "extra_item_id", "TEXT"),
+    ("booking_services", "extra_price", "REAL"),
+    ("booking_services", "extra_item_id", "TEXT"),
+    # A sessão do aluno recorrente: `plano` (dentro do pacote do mês, sem custo) ou `extra` (cobrada pela invoice);
+    # NULL = avulsa ou de antes. `price` passa a ser o que é cobrado (0 no plano); `list_price` guarda o da tabela.
+    ("bookings", "coverage", "TEXT"),
+    ("bookings", "list_price", "REAL"),
+    # #314: o pedido de vários dias de onde a sessão saiu (as extras do pedido saem numa invoice só)
+    ("bookings", "group_id", "INTEGER REFERENCES booking_groups(id)"),
     # 16/10 — dono (#315): o editor do site "como um Canva". Cada rascunho salvo soma 1: dois gerentes na mesma página
     # não apagam o que o outro fez, e o Publicar só põe no ar o que a tela mostra
     ("site_pages", "rev", "INTEGER NOT NULL DEFAULT 0"),
@@ -382,6 +409,7 @@ INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS portal_pilots_client ON portal_pilots(client_id) WHERE client_id IS NOT NULL",
     "CREATE UNIQUE INDEX IF NOT EXISTS team_channels_dm ON team_channels(dm_key) WHERE dm_key IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS bookings_pedido ON bookings(store_order_id) WHERE store_order_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS bookings_grupo ON bookings(group_id) WHERE group_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS store_orders_refeito ON store_orders(retry_of) WHERE retry_of IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS sessions_pai ON sessions(parent_id) WHERE parent_id IS NOT NULL",
 ]

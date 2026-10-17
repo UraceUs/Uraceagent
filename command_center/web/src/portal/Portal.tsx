@@ -19,6 +19,7 @@ import logoSite from '../assets/site/logo.svg'
 const AssinarWaiver = lazy(() => import('./Waiver').then(m => ({ default: m.AssinarWaiver })))   // o quadro de assinatura só nesta rota
 const Reservar = lazy(() => import('./Reservar').then(m => ({ default: m.Reservar })))         // #164: a reserva do site
 const Acompanhar = lazy(() => import('./Reservar').then(m => ({ default: m.Acompanhar })))
+const AcompanharGrupo = lazy(() => import('./AgendarVarios').then(m => ({ default: m.AcompanharGrupo })))   // #314: o pedido de vários dias
 const ConviteWaiverPagina = lazy(() => import('./Convite').then(m => ({ default: m.ConviteWaiverPagina })))   // #135: o link do e-mail
 
 type Estado = Account | null | undefined           // undefined = carregando; null = sem sessão
@@ -588,6 +589,7 @@ export function PortalApp() {
       <Route path="dashboard" element={<Dashboard conta={conta} />} />
       <Route path="book" element={<Agendar conta={conta} />} />
       <Route path="sessions" element={<Sessoes />} />
+      <Route path="sessions/group/:gid" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><AcompanharGrupo /></Suspense>} />
       <Route path="sessions/:id" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><Acompanhar /></Suspense>} />
       <Route path="plans/:id" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><Acompanhar plano /></Suspense>} />
       <Route path="drivers" element={<Pilotos conta={conta} onSalvo={setConta} />} />

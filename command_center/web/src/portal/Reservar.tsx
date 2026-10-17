@@ -8,7 +8,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { bloqueioDoPiloto, dataLonga, escolhaDoSite, faixa, PERIODOS } from './Agendar'
-import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Servico, type CheckoutPlano, type Plano } from './api'
+import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Cotacao, type Servico, type CheckoutPlano, type Plano,
+  type PlanoPiloto } from './api'
+import { porNoCarrinhoDoSite } from './carrinhoSite'
 import { Aviso, Campo, Endereco, FormPiloto } from './Portal'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
 
@@ -55,6 +57,16 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const [maisDias, setMaisDias] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
+  // #314 (dono, 16/10): o aluno recorrente (Academy) paga pelo plano/QuickBooks; o cliente novo, no carrinho (Stripe)
+  const [planosDaConta, setPlanosDaConta] = useState<PlanoPiloto[] | null>(null)
+  const [cot, setCot] = useState<{ chave: string; r: Cotacao } | null>(null)
+  const [recota, setRecota] = useState(0)                  // 409: a vaga ou o preço mudou — cota de novo antes de marcar
+  const [mudou, setMudou] = useState<string | null>(null)
+  useEffect(() => {
+    if (!conta) return
+    papi<{ drivers: PlanoPiloto[] }>('GET', '/plan').then(r => setPlanosDaConta(r.drivers)).catch(() => setPlanosDaConta([]))
+  }, [conta])
+  const planosConta = conta ? planosDaConta : null
 
   useEffect(() => {
     if (!inicial.plano) return
@@ -95,6 +107,25 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   const pilotoId = piloto ?? (livres.length === 1 ? livres[0].id : null)     // um piloto só: já vem escolhido
   const p = conta?.drivers.find(x => x.id === pilotoId) || null
   const passo3 = passo2 && !!p && !bloqueioDoPiloto(p) && !(conta?.missing.length)
+  const recorrenteNaConta = !!planosConta?.some(x => x.recurring)
+  const recorrentePiloto = !plano && !!planosConta?.find(x => x.driver_id === pilotoId)?.recurring
+  // a cotação vale para a escolha (serviço, dia, turno, piloto); só é buscada quando a etapa 4 abre
+  const chaveDia = recorrentePiloto && s && dia && turno ? `${s.id}|${dia}|${turno}|${pilotoId}|${recota}` : null
+  const chaveCot = passo3 ? chaveDia : null
+  useEffect(() => {
+    if (!chaveCot || !s || !dia || !turno) return
+    let vale = true
+    papi<Cotacao>('POST', '/bookings/quote', { service_id: s.id, driver_id: pilotoId, slots: [{ date: dia, period: turno }] })
+      .then(r => { if (vale) setCot({ chave: chaveCot, r }) }).catch(e => { if (vale) setErro((e as PortalError).message) })
+    return () => { vale = false }
+  }, [chaveCot, s, dia, turno, pilotoId])
+  const cotAtual = cot && cot.chave === chaveDia ? cot.r : null
+  const cotDia = cotAtual?.slots[0] || null
+  // #314: o dia que o plano não cobre (o plano acaba antes daquele mês) é sessão avulsa: carrinho ou invoice, como o
+  // cliente novo. Os outros dias do aluno recorrente vão pelo plano (incluída, ou extra por invoice, nunca Stripe).
+  const foraDoPlano = cotDia?.reason === 'fora_do_plano'
+  const viaPlano = recorrentePiloto && !foraDoPlano
+  const viaCarrinho = !plano && !viaPlano && comCarrinho                                         // cliente novo: Stripe
 
   async function reservar() {
     if (!passo3) return
@@ -108,13 +139,21 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
       } catch (e) { setErro((e as PortalError).message) } finally { setIndo(false) }
       return
     }
-    if (!s || !dia || !turno) { setIndo(false); return }
+    if (!s || !dia || !turno || (viaPlano && !cotAtual)) { setIndo(false); return }
+    setMudou(null)
     try {
+      // #314: o aluno recorrente marca com a cotação que viu ("Included in your plan" ou "Extra session · $X"): se a
+      // última vaga do mês foi ocupada (ou o preço mudou) desde então, o servidor devolve 409 e a tela cota de novo
       const r = await papi<{ id: number; auto_sell: boolean }>('POST', '/bookings', { date: dia, period: turno, service_id: s.id,
-        driver_id: pilotoId, notes: nota || null, origin: 'site', utm: Object.keys(inicial.utm).length ? inicial.utm : null })
+        driver_id: pilotoId, notes: nota || null, origin: 'site', utm: Object.keys(inicial.utm).length ? inicial.utm : null,
+        ...(viaPlano && cotAtual ? { quote: cotAtual.hash } : {}) })
       try { sessionStorage.removeItem(GUARDA) } catch { /* nada guardado */ }
       nav(`/portal/sessions/${r.id}`, { replace: true })
-    } catch (e) { setErro((e as PortalError).message) } finally { setIndo(false) }
+    } catch (e) {
+      const pe = e as PortalError
+      if (pe.status === 409) { setMudou(pe.message); setRecota(n => n + 1) }
+      else setErro(pe.message)
+    } finally { setIndo(false) }
   }
 
   /** #236: a sessão vai para o carrinho do site (paga junto com a loja, no Stripe; o piloto escolhe lá). */
@@ -130,6 +169,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
     <div><h1 className="h1">{inicial.plano ? 'Join the plan' : 'Book your session'}</h1>
       <p className="muted" style={{ margin: '6px 0 0' }}>{inicial.plano
         ? 'Four quick steps. Your plan is active as soon as the first month is paid and the waiver is signed.'
+        : recorrenteNaConta ? 'Four quick steps. Sessions in your plan are included; your spot is confirmed when the waiver is signed.'
         : 'Four quick steps. Your spot is confirmed as soon as the invoice is paid and the waiver is signed.'}</p></div>
     <Aviso erro={erro} />
     <ol className="reserva-passos">
@@ -157,7 +197,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
         {!passo1 && semServicoDoKart && <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
           <b>{inicial.kart}</b> is not open for online booking right now. Pick one of the sessions below, or talk to us:{' '}
           <a href="mailto:support@urace.us">support@urace.us</a> · <a href="tel:+14072502291">+1 (407) 250 2291</a>.</div></div>}
-        {passo1 && s && dia && turno && cfg ? <p className="reserva-resumo" style={{ margin: 0 }}>{s.name} · {dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)}) · <b>{usd(s.price)}</b></p>
+        {passo1 && s && dia && turno && cfg ? <p className="reserva-resumo" style={{ margin: 0 }}>{s.name} · {dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)}){recorrenteNaConta ? '' : <> · <b>{usd(s.price)}</b></>}</p>
           : servicos === null || dias === null ? <div className="state"><span className="spin" /></div>
           /* #253: sem serviço ativo no painel não é "sem data": a tela diz a verdade e dá o contato */
           : !servicos.length ? <p className="muted" style={{ margin: 0 }}>Online booking is closed right now. Please talk to us at{' '}
@@ -167,7 +207,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
             <fieldset className="reserva-opcoes" style={{ border: 0, padding: 0, margin: 0 }}><legend className="small muted" style={{ marginBottom: 6 }}>Kart and session</legend>
               {servicos.map(x => <label key={x.id} className={`reserva-opcao${servico === x.id ? ' on' : ''}`}>
                 <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />
-                <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span><b>{usd(x.price)}</b></label>)}</fieldset>
+                <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span>{!recorrenteNaConta && <b>{usd(x.price)}</b>}</label>)}</fieldset>
             <div><div className="small muted" style={{ marginBottom: 6 }} id="r1-dia">Day</div>
               <div className="reserva-dias" role="group" aria-labelledby="r1-dia">{abertos.filter((d, i) => maisDias || i < 8 || d.date === dia).map(d =>
                 <button key={d.date} type="button" className="reserva-dia" aria-pressed={dia === d.date} onClick={() => { setDia(d.date); setTurno(t => t && d[t].open ? t : null) }}>
@@ -177,13 +217,17 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
               <div className="reserva-turnos" role="group" aria-labelledby="r1-turno">{(['manha', 'tarde'] as const).map(t =>
                 <button key={t} type="button" className="reserva-turno" aria-pressed={turno === t} disabled={!escolhidoDia[t].open} onClick={() => setTurno(t)}>
                   <b>{PERIODOS[t]}</b><span className="small muted">{faixa(cfg, t)}{escolhidoDia[t].open ? ` · ${escolhidoDia[t].spots} spot${escolhidoDia[t].spots === 1 ? '' : 's'} left` : ' · full'}</span></button>)}</div></div>}
-            {s && <div className="reserva-total" aria-live="polite">
+            {/* #314 (decisões 1 e 2): o aluno recorrente não vê preço cheio, depósito nem total: cada dia é "Included in
+                your plan" ou "Extra session · $X" (sem depósito), e ele vê qual antes de marcar */}
+            {s && !recorrenteNaConta && <div className="reserva-total" aria-live="polite">
               <div><span>{s.name}</span><span>{usd(s.price)}</span></div>
               {deposito > 0 && <div><span>Security deposit <span className="small muted">(refundable)</span></span><span>{usd(deposito)}</span></div>}
               <div className="soma"><span>Total</span><span>{usd(s.price + deposito)}</span></div></div>}
             <div className="row wrap" style={{ gap: 8 }}><button className="btn primary" disabled={!sessaoPronta} onClick={() => setSessaoOk(true)}>Continue</button>
-              {comCarrinho && <button className="btn" disabled={!sessaoPronta} onClick={porNoCarrinho}>Add to cart</button>}</div>
-            {comCarrinho && <p className="small muted" style={{ margin: 0 }}>Add to cart to pay online now with card, Apple Pay or Google Pay, together with anything from the store.</p>}
+              {comCarrinho && (!recorrenteNaConta || foraDoPlano) && <button className="btn" disabled={!sessaoPronta} onClick={porNoCarrinho}>Add to cart</button>}</div>
+            {comCarrinho && !recorrenteNaConta && <p className="small muted" style={{ margin: 0 }}>Add to cart to pay online now with card, Apple Pay or Google Pay, together with anything from the store.
+              Academy students: sign in and book in your account (sessions in your plan are included).</p>}
+            {recorrenteNaConta && <p className="small muted" style={{ margin: 0 }}>Academy student: sessions in your monthly plan are included. An extra session is billed by invoice, with no deposit: you see which one it is before booking.</p>}
           </>}
       </section></li>}
 
@@ -218,7 +262,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
 
       {/* 4 · revisar e pagar */}
       <li className={estado(false, passo3)}><section className="card" aria-labelledby="r4">
-        <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">4</span><h2 className="h2" id="r4">{autoSell ? 'Review and pay' : 'Review and request'}</h2></div>
+        <div className="reserva-cab"><span className="reserva-num" aria-hidden="true">4</span><h2 className="h2" id="r4">{viaPlano ? 'Review and book' : autoSell || viaCarrinho ? 'Review and pay' : 'Review and request'}</h2></div>
         {plano ? (!passo3 ? <p className="small muted" style={{ margin: 0 }}>{autoSell
           ? 'You get the first month\'s invoice to pay online, and the waiver to sign. The next months are invoiced on the 1st.'
           : 'We confirm your plan and send the invoice and the waiver.'}</p> : <>
@@ -233,9 +277,28 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
           </ul>
           <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the plan policy above</label>
           <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Sending…' : autoSell ? `Join and pay ${usd(plano.price)}` : 'Request this plan'}</button></div>
-        </>) : !passo3 || !s || !dia || !turno || !cfg ? <p className="small muted" style={{ margin: 0 }}>{autoSell
-          ? 'You get the invoice (session + refundable security deposit) to pay online, and the waiver to sign.'
-          : 'We confirm your spot and send the invoice and the waiver.'}</p> : <>
+        </>) : !passo3 || !s || !dia || !turno || !cfg ? <p className="small muted" style={{ margin: 0 }}>{comCarrinho
+          ? 'You pay online in the cart (card, Apple Pay or Google Pay) and sign the waiver. Academy students book in their plan.'
+          : autoSell ? 'You get the invoice (session + refundable security deposit) to pay online, and the waiver to sign.'
+          : 'We confirm your spot and send the invoice and the waiver.'}</p> : viaPlano ? <>
+          {/* #314: aluno recorrente — do plano (incluída) ou extra por invoice, sem depósito; nunca pelo Stripe */}
+          <div className="reserva-total" aria-live="polite">
+            <div><span>{s.name} · {p?.name}</span><span>{cotDia?.ok ? <span className={`chip ${cotDia.coverage === 'extra' ? 'warn' : 'ok'}`}>{cotDia.label}</span>
+              : cotAtual ? '' : <span className="small muted">checking…</span>}</span></div>
+            <div className="small muted"><span>{dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)})</span></div></div>
+          {mudou && <div className="banner warn" role="alert"><span className="bi" aria-hidden="true">▲</span><div className="grow">{mudou}</div></div>}
+          {cotDia && !cotDia.ok && <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">{cotDia.message}</div></div>}
+          <ul className="reserva-politica">
+            <li>Sessions in your monthly plan are included. An extra session (beyond the sessions of the month) is billed by invoice, with no deposit.</li>
+            <li>Your spot is confirmed when the waiver is signed (and the invoice paid, for an extra session).</li>
+            <li>Want several days at once? <Link to="/portal/book">Book them in your account</Link>.</li>
+          </ul>
+          <Campo rotulo="Anything we should know?" dica="optional"><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></Campo>
+          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
+          <div><button className="btn primary" disabled={!aceite || indo || !cotDia?.ok} onClick={reservar}>{indo ? 'Booking…' : 'Book this session'}</button></div>
+        </> : <>
+          {foraDoPlano && <div className="banner info" role="status"><span className="bi" aria-hidden="true">●</span><div className="grow">
+            Your monthly plan does not cover this date, so this is a regular session.</div></div>}
           <div className="reserva-total">
             <div><span>{s.name} · {p?.name}</span><span>{usd(s.price)}</span></div>
             <div className="small muted"><span>{dataLonga(dia)} · {PERIODOS[turno]} ({faixa(cfg, turno)})</span></div>
@@ -248,25 +311,16 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
           </ul>
           <Campo rotulo="Anything we should know?" dica="optional"><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></Campo>
           <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
-          <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Booking…' : autoSell ? `Book and pay ${usd(s.price + deposito)}` : 'Request this session'}</button></div>
+          {viaCarrinho
+            ? <div><button className="btn primary" disabled={!aceite} onClick={porNoCarrinho}>Add to cart · {usd(s.price + deposito)}</button>
+              <p className="small muted" style={{ margin: '6px 0 0' }}>You pay in the cart with card, Apple Pay or Google Pay.</p></div>
+            : <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Booking…' : autoSell ? `Book and pay ${usd(s.price + deposito)}` : 'Request this session'}</button></div>}
         </>}
       </section></li>
     </ol>
   </div>
 }
 
-/** #236: o mesmo formato do carrinho do site (`vitrine/static/carrinho.js`): só as escolhas, o preço é do servidor. */
-const CARRINHO = 'urace.carrinho'
-type ItemCarrinho = { tipo: 'sessao'; servico: number; data: string; turno: Turno; piloto: number | null }
-function porNoCarrinhoDoSite(item: ItemCarrinho) {
-  try {
-    const d = JSON.parse(localStorage.getItem(CARRINHO) || '{}')
-    const itens: ItemCarrinho[] = Array.isArray(d.itens) ? d.itens : []
-    if (!itens.some(x => x.tipo === 'sessao' && x.servico === item.servico && x.data === item.data && x.turno === item.turno && x.piloto === item.piloto))
-      itens.push(item)
-    localStorage.setItem(CARRINHO, JSON.stringify({ v: 1, itens: itens.slice(0, 20) }))
-  } catch { /* navegador sem armazenamento: o carrinho abre vazio e a reserva continua aqui */ }
-}
 
 /** Entrar ou criar a conta sem sair da reserva. */
 function ContaNaReserva({ onConta }: { onConta: (a: Account) => void }) {
@@ -340,7 +394,7 @@ function resumoSessao(c: Checkout, cfg: AgendaCfg | null): Resumo {
   return { titulo: c.confirmada ? "You're confirmed!" : encerrada ? 'Your booking' : 'Almost there',
     sub: `${c.service} · ${dataLonga(c.date)} · ${PERIODOS[c.period]}${cfg ? ` (${faixa(cfg, c.period)})` : ''}${c.driver ? ` · ${c.driver}` : ''}`,
     confirmada: c.confirmada, encerrada, aceita: c.aceita, status: c.status, reservado: 'Spot reserved', reservadoSub: 'We are holding it for you.',
-    pagar: 'Pay the invoice', pagarSub: 'Session + refundable security deposit. It updates here by itself after you pay.',
+    pagar: 'Pay the invoice', pagarSub: `${c.coverage === 'extra' ? 'Extra session (beyond your monthly plan)' : 'Session + refundable security deposit'}. It updates here by itself after you pay.`,
     fim: 'Confirmed by itself', fimOk: 'Confirmed', fimSub: 'As soon as the invoice is paid and the waiver is signed. We email you.',
     volta: '/portal/sessions', voltaRotulo: 'My sessions' }
 }
@@ -389,7 +443,7 @@ export function Acompanhar({ plano = false }: { plano?: boolean }) {
       : <ol className="etapas" aria-label="Steps to confirm">
         <li className="etapa ok"><span className="marca" aria-hidden="true">✓</span><div className="corpo"><b>{r.reservado}</b><span className="small muted">{r.reservadoSub}</span></div></li>
         <li className={`etapa${pagoOk ? ' ok' : ' agora'}`}><span className="marca" aria-hidden="true">{pagoOk ? '✓' : '2'}</span><div className="corpo">
-          <b>{pg.estado === 'contrato' ? 'Part of your plan' : pagoOk ? 'Paid' : r.pagar}</b>
+          <b>{pg.estado === 'contrato' ? 'Included in your plan' : pagoOk ? 'Paid' : r.pagar}</b>
           {pg.estado === 'pagar' && <>{pg.link ? <div><a className="btn primary" href={pg.link} target="_blank" rel="noopener noreferrer">Pay now{pg.total != null ? ` ${usd(pg.total)}` : ''}</a></div> : null}
             <span className="small muted">Invoice {pg.invoice}{pg.para ? `, also sent to ${pg.para}` : ''}. {r.pagarSub}</span></>}
           {pg.estado === 'preparando' && <span className="small muted"><span className="spin" /> Preparing your invoice… it also goes to your email.</span>}
