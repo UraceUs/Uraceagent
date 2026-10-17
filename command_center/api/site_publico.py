@@ -3,7 +3,7 @@ clientes. Quem abre e fecha a agenda é o gerente; confirmar e recusar pedido é
 import sqlite3
 from datetime import date
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Path, Query, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Path, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 
 from command_center.api import auth
@@ -685,9 +685,54 @@ class WaiverNativaIn(BaseModel):
 @r.get("/waiver-nativa")
 def waiver_nativa(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
                   con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
-    """Ligada ou não, os dois modelos importados (nome, hash, quando) e as assinadas aqui (paginadas)."""
+    """Ligada ou não, os dois modelos importados (nome, hash, quando, versão), as assinadas aqui (paginadas) e
+    a conferência do aviso §744.301(3) no parental atual (#116)."""
     from command_center.providers import waiver_nativa as wn
-    return {"ligada": wn.ligada(con), "modelos": wn.modelos(con), "assinadas": wn.listar(con, limit, offset)}
+    return {"ligada": wn.ligada(con), "modelos": wn.modelos(con), "assinadas": wn.listar(con, limit, offset),
+            "aviso_744": wn.aviso(con)}
+
+
+@r.get("/waiver-nativa/{wid}/eventos")
+def waiver_nativa_eventos(wid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                          u=Depends(auth.exige("MANAGER"))):
+    """#111: a trilha de eventos de uma waiver assinada aqui (antes de assinar, a assinatura e o que veio depois) e
+    se a cadeia de hashes da trilha inteira está íntegra."""
+    from command_center.db import um
+    from command_center.providers import trilha_waiver as tw
+    if not um(con, "SELECT 1 AS x FROM waivers WHERE id=? AND source='urace'", (wid,)):
+        raise HTTPException(404, "waiver não encontrada")
+    return {"eventos": tw.da_waiver(con, wid), "cadeia": tw.verificar(con)}
+
+
+@r.get("/waiver-nativa/versoes")
+def waiver_nativa_versoes(kind: str | None = Query(None, pattern="^(adult|parental)$"), limit: int = Query(25, ge=1, le=200),
+                          offset: int = Query(0, ge=0), con: sqlite3.Connection = Depends(get_db),
+                          u=Depends(auth.exige("MANAGER"))):
+    """#116: toda versão de modelo que já valeu (nunca se apaga), das mais novas para as mais velhas, paginadas,
+    com quantas assinaturas cada uma tem e a conferência do aviso feita na importação."""
+    from command_center.providers import waiver_nativa as wn
+    return wn.versoes(con, kind, limit, offset)
+
+
+@r.get("/waiver-nativa/versoes/{vid}/pdf")
+def waiver_nativa_versao_pdf(vid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                             u=Depends(auth.exige("MANAGER"))):
+    """O PDF de uma versão, como foi importado. Se o arquivo no disco não bate mais com o hash da versão, 409."""
+    import hashlib
+    from command_center.providers import waiver_nativa as wn
+    v = wn.versao(con, vid)
+    if not v:
+        raise HTTPException(404, "versão não encontrada")
+    try:
+        with open(v["pdf_path"], "rb") as f:
+            pdf = f.read()
+    except OSError:
+        raise HTTPException(404, "o PDF desta versão não está no servidor")
+    if hashlib.sha256(pdf).hexdigest() != v["sha256"]:
+        raise HTTPException(409, "o PDF desta versão no servidor não bate com o hash gravado: importe o modelo de novo")
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="URACE-waiver-{v["kind"]}-v{v["number"]}.pdf"',
+                             "Cache-Control": "private, no-store", "X-Content-SHA256": v["sha256"]})
 
 
 @r.post("/waiver-nativa/importar")

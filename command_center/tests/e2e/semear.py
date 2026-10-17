@@ -227,6 +227,9 @@ def _pdf_teste(titulo):
 
 from command_center.providers import waiver_nativa as wn  # noqa: E402
 wn.guardar_modelo(con, "adult", "Adult Waiver of Liability (e2e)", _pdf_teste("ADULT RELEASE AND WAIVER OF LIABILITY"), origem="e2e")
+# #116: o parental foi "importado" duas vezes (o texto mudou no DocuSign): a versão 1 continua guardada
+wn.guardar_modelo(con, "parental", "Parental consent Waiver liability (e2e)", _pdf_teste("PARENTAL CONSENT AND WAIVER (older text)"),
+                  origem="e2e")
 wn.guardar_modelo(con, "parental", "Parental consent Waiver liability (e2e)", _pdf_teste("PARENTAL CONSENT AND WAIVER"), origem="e2e")
 
 # mecânico e checklists (#92): o Luis é mecânico (OPERATOR com cargo); um serviço de HOJE na
