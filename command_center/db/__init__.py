@@ -373,6 +373,20 @@ MIGRACOES = [
     # e o serviço cujo depósito é obrigatório ("o serviço que eu coloquei no checkout ia permitir … sem o security deposit")
     ("store_orders", "stripe_refunded", "REAL"),
     ("booking_services", "deposit_required", "INTEGER"),   # NULL = de antes da caixa: a pós-migração decide uma vez
+    # 16/10 — dono (#309): "a gente seleciona o que que é dropshipping e o que que a gente tem em estoque … não precisa
+    # ficar aparente … para os clientes". O marcador interno de cada produto (dropshipping: nada muda no site no dia do
+    # deploy) e a baixa do estoque na venda paga: o movimento (idempotência) e o que a equipe precisa resolver.
+    ("store_products", "fulfillment", "TEXT NOT NULL DEFAULT 'dropshipping' CHECK (fulfillment IN ('dropshipping','estoque'))"),
+    ("store_orders", "stock_move_id", "INTEGER REFERENCES stock_moves(id)"),
+    ("store_orders", "stock_note", "TEXT"),
+    ("store_order_items", "stock_move_id", "INTEGER REFERENCES stock_moves(id)"),
+    ("store_order_items", "stock_note", "TEXT"),
+    # revisão do #309: o "Resolver: sem estoque" que a equipe já resolveu (botão Resolvido em Pedidos do site) sai do
+    # "Resolver" do pedido e do "Pagos sem estoque" do Painel do site; a frase fica na linha e no histórico
+    ("store_orders", "stock_resolved_at", "TEXT"),
+    ("store_orders", "stock_resolved_by", "INTEGER REFERENCES users(id)"),
+    ("store_order_items", "stock_resolved_at", "TEXT"),
+    ("store_order_items", "stock_resolved_by", "INTEGER REFERENCES users(id)"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

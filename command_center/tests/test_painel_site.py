@@ -361,7 +361,7 @@ def test_o_menu_tem_a_secao_site_com_uma_subsecao_por_painel():
     bloco = shell[i:shell.index('<div className="grp">', i + 10)]
     rotas = re.findall(r'<NL to="([^"]+)"', bloco)
     assert rotas == ["/site", "/site/pedidos", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
-                     "/site/produtos", "/site/editor", "/site/blog", "/site/contas", "/site/waiver",   # #172: o blog
+                     "/site/produtos", "/site/estoque", "/site/editor", "/site/blog", "/site/contas", "/site/waiver",   # #309, #172
                      "/site/deposito"]   # #317
     assert "Agendamentos do site" not in shell, "o item antigo saiu da Logística"
     sub = (REPO / "command_center/web/src/pages/SitePublico.tsx").read_text(encoding="utf-8")
