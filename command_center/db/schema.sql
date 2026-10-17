@@ -1823,6 +1823,35 @@ CREATE TABLE IF NOT EXISTS site_page_versions (
 );
 CREATE INDEX IF NOT EXISTS site_page_versions_pagina ON site_page_versions(page_id, id);
 
+-- #172 (dono, 16/10: "editor do blog, pode seguir"): os artigos do blog no banco, escritos no painel. Os 7 do WordPress
+-- entram uma vez (de `vitrine/dados/posts.json`, com o id de lá e o HTML como está: a tabela do post 451 fica inteira).
+-- O rascunho e o publicado são JSON {title, seo_title, excerpt, description, category, image, image_alt, image_w,
+-- image_h, html}; o site lê só o publicado. OPERATOR escreve; só o ADMIN (ou o acesso livre) publica e despublica.
+CREATE TABLE IF NOT EXISTS blog_posts (
+  id                 INTEGER PRIMARY KEY,             -- o id do WordPress nos 7 importados
+  slug               TEXT NOT NULL UNIQUE,            -- /blog/<slug>/; trava na 1ª publicação (o Google guarda)
+  category           TEXT NOT NULL,                   -- a categoria do rascunho (filtro do painel); o site lê a do publicado
+  draft              TEXT NOT NULL,                   -- o rascunho (json)
+  published          TEXT,                            -- o que está no ar (json); NULL = rascunho ou despublicado
+  first_published_at TEXT,                            -- datePublished (a "date" do WordPress nos importados)
+  published_at       TEXT,                            -- dateModified: a última publicação (NULL nos importados: vale a data de lá)
+  published_by       INTEGER REFERENCES users(id),
+  origin             TEXT,                            -- wordpress (importado) | painel
+  updated_by         INTEGER REFERENCES users(id),
+  updated_at         TEXT,
+  created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS blog_posts_no_ar ON blog_posts(first_published_at DESC, id DESC) WHERE published IS NOT NULL;
+-- Cada publicação vira uma versão: "Voltar a esta versão" traz ela para o rascunho (não apaga nada).
+CREATE TABLE IF NOT EXISTS blog_post_versions (
+  id            INTEGER PRIMARY KEY,
+  post_id       INTEGER NOT NULL REFERENCES blog_posts(id),
+  content       TEXT NOT NULL,
+  published_by  INTEGER REFERENCES users(id),
+  published_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS blog_post_versions_post ON blog_post_versions(post_id, id);
+
 -- #85: os modelos de waiver que a assinatura nativa usa. O PDF vem do DocuSign como está
 -- (o texto legal não é redigitado); o hash prova qual versão cada cliente assinou.
 CREATE TABLE IF NOT EXISTS waiver_templates (
@@ -2129,6 +2158,26 @@ CREATE TABLE IF NOT EXISTS site_sources (
   n       INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (day, source)
 );
+
+-- #311 (dono, 16/10: o botão do balcão "tem que direcionar a pessoa para o … parts.urace.us, já logada com o
+-- mesmo login que ela estava logada no … Command Center"). O cookie do painel é preso ao host, então o ops
+-- passa a vez com um passe de uso único (30 s) que o parts troca por uma sessão própria. Só o hash fica aqui.
+CREATE TABLE IF NOT EXISTS auth_passes (
+  token_hash    TEXT PRIMARY KEY,
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  de_sessao     TEXT NOT NULL,             -- hash da sessão do painel que pediu
+  de_host       TEXT NOT NULL,             -- host que pediu: o Origin da troca tem de ser este
+  para_host     TEXT NOT NULL,             -- host do balcão que pode trocar
+  criado_ip     TEXT,
+  criado_ua     TEXT,
+  expires_at    TEXT NOT NULL,
+  used_at       TEXT,                      -- usado duas vezes = alguém copiou: a sessão que saiu dele cai
+  usado_ip      TEXT,
+  usado_ua      TEXT,
+  sessao_filha  TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS auth_passes_exp ON auth_passes(expires_at);
 
 -- #317 (dono, 16/10: "uma sessão de security deposit, onde a gente consiga ter o controle para fazer o reembolso de
 -- cada security deposit … pelo Command Center. Sempre conseguindo alterar o valor que vai ser reembolsado"). Cada

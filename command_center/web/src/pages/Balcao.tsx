@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { irComPasse, pedirPasse, restaurarReferrer } from '../auth/passe'
 import { Banner, Chip, Empty, PageHeader, Scrim, Section } from '../components/ui'
 import { FotoPeca } from '../components/FotoPeca'
 import { useToast } from '../components/Toast'
@@ -537,6 +538,22 @@ export function Balcao() {
   const [est, setEst] = useState<Estado | null>(null)
   const [novo, setNovo] = useState<string | null>(null)
   const [semQbo, setSemQbo] = useState<Item | null>(null)
+  const [abrindo, setAbrindo] = useState(false)
+  // voltou do parts pelo "voltar" (página guardada pelo navegador): o botão volta a funcionar
+  useEffect(() => {
+    const f = (e: PageTransitionEvent) => { if (e.persisted) { setAbrindo(false); restaurarReferrer() } }
+    window.addEventListener('pageshow', f)
+    return () => window.removeEventListener('pageshow', f)
+  }, [])
+  async function abrirCelular() {
+    if (abrindo) return
+    setAbrindo(true)
+    try {
+      const r = await pedirPasse()
+      if (r.acao && r.passe) { irComPasse(r.acao, r.passe); return }
+      setAbrindo(false); nav('/balcao/rapido')
+    } catch (e) { setAbrindo(false); toast((e as ApiError).message, 'crit') }
+  }
   const [doCliente, setDoCliente] = useState<{ item: Item; codigo: string; msg: string } | null>(null)
   const [semCliente, setSemCliente] = useState<{ item: Item; codigo: string } | null>(null)
   const [indo, setIndo] = useState(false)
@@ -600,7 +617,8 @@ export function Balcao() {
   const guardar = modo === 'guardar'
   return <div className={`stack balcao ${guardar ? 'modo-guardar' : 'modo-cobrar'}`} style={{ gap: 14 }}>
     <PageHeader title={tr("Balcão")} help={tr("Leia o QR do cliente e depois cada peça. Cobrar: a peça entra na invoice de peças do dia (não é enviada sozinha). Guardar: vai para o estoque do cliente, sem cobrar.")}>
-      <Link className="btn primary" to="/balcao/rapido">{tr("Abrir o balcão do celular")}</Link></PageHeader>
+      <button type="button" className="btn primary" onClick={abrirCelular} disabled={abrindo} aria-busy={abrindo}>
+        {abrindo ? tr("Abrindo o balcão…") : tr("Abrir o balcão do celular")}</button></PageHeader>
     <div className="balcao-modos" role="radiogroup" aria-label={tr("O que fazer com a peça lida")}>
       <button role="radio" aria-checked={!guardar} className="balcao-modo cobrar" onClick={() => setModo('cobrar')}>{tr("COBRAR")}<small>{tr("entra na invoice")}</small></button>
       <button role="radio" aria-checked={guardar} className="balcao-modo guardar" onClick={() => setModo('guardar')}>{tr("GUARDAR")}<small>{tr("estoque do cliente")}</small></button>

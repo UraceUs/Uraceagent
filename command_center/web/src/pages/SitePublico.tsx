@@ -685,6 +685,9 @@ const SiteDepositos = lazy(() => import('./SiteDepositos').then(m => ({ default:
 const PaginasDoEditor = lazy(() => import('./EditorSite').then(m => ({ default: m.PaginasDoEditor })))
 /* #315: a página em si abre no editor como o Canva, num arquivo só dele (a lista não carrega o editor). */
 const EditorDePagina = lazy(() => import('./editor/Editor').then(m => ({ default: m.EditorDePagina })))
+/* #172: o blog do site (o OPERATOR escreve, o ADMIN publica), em arquivo próprio. */
+const ArtigosDoBlog = lazy(() => import('./BlogDoSite').then(m => ({ default: m.ArtigosDoBlog })))
+const EditarArtigo = lazy(() => import('./BlogDoSite').then(m => ({ default: m.EditarArtigo })))
 
 /* #306 (dono, 16/10): "uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada painel de lá".
  * Cada painel do site é uma subseção (no menu, em "Site", e aqui nas abas); o h1 é o nome da subseção (o título da aba). */
@@ -697,6 +700,7 @@ const SUBSECOES: { aba: string; to: string; rotulo: string; min?: 'MANAGER' }[] 
   { aba: 'cartoes', to: '/site/cartoes', rotulo: tr("Cartões das páginas") },
   { aba: 'produtos', to: '/site/produtos', rotulo: tr("Produtos da loja") },
   { aba: 'editor', to: '/site/editor', rotulo: tr("Editor do site") },
+  { aba: 'blog', to: '/site/blog', rotulo: tr("Blog") },                         // #172
   { aba: 'contas', to: '/site/contas', rotulo: tr("Contas de clientes") },
   { aba: 'waiver', to: '/site/waiver', rotulo: tr("Waiver"), min: 'MANAGER' },
   { aba: 'deposito', to: '/site/deposito', rotulo: tr("Security deposit") },      // #317
@@ -717,6 +721,7 @@ export function SitePublico() {
     {atual.aba === '' ? <Suspense fallback={<Loading />}><SitePainel /></Suspense>
       : atual.aba === 'deposito' ? <Suspense fallback={<Loading />}><SiteDepositos /></Suspense>
       : atual.aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
+      : atual.aba === 'blog' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarArtigo key={id} id={Number(id)} /> : <ArtigosDoBlog />}</Suspense>
       : atual.aba === 'produtos' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarProduto key={id} id={Number(id)} /> : <ProdutosDaLoja />}</Suspense>
       : atual.aba === 'disponibilidade' ? <Disponibilidade /> : atual.aba === 'servicos' ? <Servicos /> : atual.aba === 'cartoes' ? <Cartoes />
       : atual.aba === 'contas' ? <Contas /> : atual.aba === 'pedidos' ? <Pedidos /> : atual.aba === 'waiver' ? <WaiverNativa /> : <Agendamentos />}

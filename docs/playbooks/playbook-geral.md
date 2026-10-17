@@ -24,8 +24,8 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 14/10/2026 (#204). Tudo aqui foi conferido no código do painel. Se a tela mudar e este
-> texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
+> Atualizado em 17/10/2026 (#172, Blog do site, com a revisão do PR #322). Tudo aqui foi conferido no código do
+> painel. Se a tela mudar e este texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
 
 ---
 
@@ -120,7 +120,7 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | Endereço | Para quê |
 |---|---|
 | `ops.urace.us/ops/` | o painel da equipe |
-| `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." |
+| `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." No painel, **Balcão › "Abrir o balcão do celular"** abre esse endereço já com o seu login (#311): um acesso de uso único, que vale 30 segundos e nunca aparece no endereço. Sair do painel tira você do balcão também |
 | `/ops/portal` | a **área do cliente** (outra porta, outro login). Não é o painel da equipe |
 | `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248): sem conta, o carrinho pede os dados, o piloto (só o nome) e a senha, e a conta nasce no Checkout com o e-mail de boas-vindas (#305). Chave English/Português no topo |
 | `novo.urace.us/services/` | a **página de programas** do site. Desde 15/10 (#254) são sete: Arrive and Drive, URACE Academy, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events. **Kart School** virou a **URACE Academy** e **Professional Coaching** virou o **Arrive and Drive**; os dois endereços antigos redirecionam para quem herdou. O que a equipe vende por cada nome está no [playbook de vendas](playbook-vendas.md) |
@@ -165,6 +165,7 @@ pedem acesso de operador.
 | Site | **Produtos da loja** | `/ops/site/produtos` | preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298) | operador+ (mudar: gerente+) |
 | Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
 | Site | **Editor do site** | `/ops/site/editor` | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
+| Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos e assinadas | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
@@ -388,10 +389,11 @@ abre o card dele).
 | **Box** | Meu dia, checklists com foto, balcão (cobrar ou guardar peça), estoque, pedidos e compras | [playbook-mecanicos-e-coaches.md](playbook-mecanicos-e-coaches.md) |
 | **Suits · Alpha Line** | pedido de macacão sob medida, das 29 medidas e do design até a entrega, com a ponte de e-mail | [../suits-guia-do-lucas.md](../suits-guia-do-lucas.md) |
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
-| **Site** (#306) | uma seção só do site público no menu, com uma subseção por painel: o **Painel do site** (as métricas), os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja, o editor, as contas e a waiver | menu Site · esta seção, "Painel do site" |
+| **Site** (#306) | uma seção só do site público no menu, com uma subseção por painel: o **Painel do site** (as métricas), os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja, o editor, o blog, as contas e a waiver | menu Site · esta seção, "Painel do site" |
 | **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
 | **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); desfazer e refazer, Camadas para quem usa teclado, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
+| **Blog do site** (#172) | os artigos do `/blog/` ficam no banco e se escrevem no painel: título, categoria, endereço, resumo, o que o Google mostra, capa (WebP sem a localização do celular) e texto com títulos, listas, links e fotos, com prévia no visual do site. O operador escreve o rascunho; **só o ADMIN** (ou o acesso livre) publica e tira do ar. Cada publicação guarda uma versão | Site › Blog · seção 6, "Blog do site" |
 | **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Site › Agendamentos e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
@@ -408,7 +410,7 @@ Dono, 16/10: *"uma sessão dedicada exclusiva somente para o site … uma seçã
 E aí também do site um dashboard com as métricas dele"*.
 
 **Onde:** no menu, a seção **Site**. A primeira subseção é o **Painel do site** (`/ops/site`); as outras são os painéis
-que já existiam (pedidos, agendamentos, disponibilidade, serviços e preços, cartões, loja, editor, contas e waiver), cada
+que já existiam (pedidos, agendamentos, disponibilidade, serviços e preços, cartões, loja, editor, blog, contas e waiver), cada
 um com o seu endereço (`/ops/site/pedidos`, `/ops/site/agendamentos`…). Os agendamentos, que eram `/ops/site`, agora
 ficam em `/ops/site/agendamentos`.
 
@@ -499,7 +501,9 @@ e ↑ ↓ deixam o foco na barra. ↓ nas peças diz o nome, o que ela mostra e 
 
 **Página nova:** em **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). Ela já
 nasce com um título nível 1 e um botão. O endereço não muda depois de publicada. Endereços do sistema (`/ops/`,
-`/store/`, `/blog/`, `/cart/`, `/legal/`…) e de páginas que já existem não podem.
+`/store/`, `/blog/`, `/cart/`, `/legal/`…) e de páginas que já existem não podem. Os artigos do blog não nascem aqui: são da tela **Site › Blog** (seção 6, "Blog do site"), sempre em
+`/blog/<endereço>/`, e lá `category`, `page` e `img` são reservados (`/blog/category/…`, `/blog/page/…` e `/blog/img/…`
+são caminhos do próprio blog).
 
 **Página que já existe** (home, Arrive and Drive, Academy, Pro Team, For Beginners, Career, About, os serviços…): em
 **Abrir uma página do site**, as faixas dela viram **Faixa original 1, 2, 3…**. Elas continuam vivas (preço do painel,
@@ -527,6 +531,76 @@ de dentro delas ainda não se escreve na prévia (vem numa próxima etapa). Sem 
 - **Voltar ao original** (página que já existia) tira o editor do ar e o site volta à página de sempre. **Tirar do ar**
   (página nova) tira a página. O rascunho e as versões ficam. **Recarregar a prévia** (em Página) desenha a prévia de novo.
 - A prévia fica fora do Google e sem medição (quem edita não conta como visita do site).
+
+### Blog do site (#172)
+
+Pedido na issue #172, e dono, 16/10: *"editor do blog, pode seguir"*. Os artigos do blog do site (`/blog/`) passaram do
+arquivo para o banco **sem mudar o endereço**: os 7 que vieram do WordPress continuam em `/blog/<o mesmo endereço>/`,
+iguais, e os endereços antigos do urace.us (`/<artigo>/`, `/category/<categoria>/`) continuam levando a eles.
+
+**Onde:** Site › **Blog** (`/ops/site/blog`). Cada artigo abre no próprio endereço (`/ops/site/blog/<n>`).
+
+**Quem faz o quê**
+
+| | Operador e gerente | ADMIN ou acesso livre |
+|---|---|---|
+| ver, criar, escrever, subir capa e fotos, salvar o rascunho, voltar uma versão para o rascunho | sim | sim |
+| **publicar** e **tirar do ar** | não (salve o rascunho e avise o administrador) | sim |
+
+Tudo vai para a auditoria: `blog.post.create`, `update`, `photo`, `publish`, `unpublish` e `restore` (só o nome dos campos
+mudados; o texto do artigo não vai para o log).
+
+**Escrever**
+1. Em cima, **Novo artigo**: o título (em inglês, o leitor lê) e a categoria → **Criar e abrir**. Nasce como **rascunho**,
+   fora do ar.
+2. No artigo: **Título do artigo** (o título grande da página), **Categoria** (Getting Started, Kart Setup, Racing Gear ou
+   Training & Racing), **Endereço** (sai do título; dá para mudar até a primeira publicação), **Resumo** (o texto do cartão
+   no blog, até 400 letras), **Descrição para o Google** (50 a 155 letras, o texto embaixo do título no Google) e, se quiser,
+   **Título para o Google** (até 70; vazio, vale o título do artigo).
+3. **Capa:** **Subir a capa** (sai WebP de até 1600 px, sem a localização do celular, com o tamanho de verdade) e a
+   **Descrição da capa** (o que a foto mostra; é obrigatória para publicar uma capa subida aqui). Foto de até
+   **60 megapixels** (a de 48–50 MP de um celular passa); acima disso a tela diz "foto com pixels demais": diminua e
+   suba de novo.
+4. **Texto:** negrito, itálico, lista, subtítulo, parágrafo, **Link** (`https://…`, uma página do site como `/academy/`,
+   a home `/`, `mailto:` ou `tel:`) e **Imagem** (sobe a foto e põe onde o cursor está, pedindo a descrição). **Enter**
+   abre um parágrafo novo, e o texto **colado** de uma página chega com os parágrafos separados. Tabelas e citações que
+   já estão no texto ficam como estão (a tabela de preços do artigo "Getting Started in Kart Racing" é uma delas).
+   Script, `onerror`, `javascript:` e companhia somem ao salvar. O texto vai até 60.000 caracteres, contando a formatação.
+5. **Salvar rascunho.** A **Prévia** mostra o rascunho salvo no visual do site, em **Celular** (390 px) ou **Computador**,
+   fora do Google. Ninguém de fora vê o rascunho.
+
+**Publicar (ADMIN)**
+- **Publicar** confere antes: título, descrição para o Google de 50 a 155 letras, texto, categoria e a descrição da capa
+  subida. Enquanto faltar algo, a lista **Antes de publicar, falta** diz o quê e o botão fica parado. Salve o rascunho
+  antes (o botão espera).
+- **Só vai ao ar o que você viu.** Se alguém salvou outro texto depois que você abriu o artigo, **Publicar** não publica:
+  a tela avisa "O rascunho mudou depois que você abriu o artigo", recarrega o texto e a prévia, e você confere e clica
+  **Publicar** de novo.
+- Publicado, o artigo entra **na hora**, no servidor, no blog, na categoria, na home (os 3 mais novos), no **mapa do site**
+  (`/sitemap.xml`) e no **JSON-LD** (com a data de publicação e a da última mudança, `dateModified`). Sem nenhum artigo no
+  ar, a faixa do blog ("Our Contents") some da home.
+- **"Na hora" vale para o servidor.** Quem já abriu a página guarda a cópia no navegador **até 5 minutos**; o mapa do site
+  fica **até 24 horas** no cache (do navegador e de quem o lê, como o Google). Publicou e não viu? Espere ou recarregue.
+- **O endereço trava na primeira publicação** e não destrava ao tirar do ar: o Google e quem salvou o link já têm ele.
+- Mudou um artigo que está no ar? O cartão mostra **mudado depois de publicar**: o site continua com o que está no ar até
+  **Publicar as mudanças**.
+- Cada publicação guarda uma **versão**. Em **Versões publicadas**, **Voltar a esta versão** traz uma antiga para o
+  rascunho (o site não muda até publicar de novo). Os 7 do site antigo já têm a versão **original** ("site antigo", com
+  a data de lá): o texto do WordPress sempre pode voltar.
+
+**Tirar do ar (ADMIN)**
+- **Tirar do ar** faz o endereço dar **404** e tira o artigo do blog, da categoria e do mapa do site. O rascunho, o
+  endereço e as versões ficam.
+- Os **7 artigos que vieram do site antigo** já estão no Google: a tela pergunta antes, com esse aviso. Prefira corrigir e
+  publicar de novo a tirar do ar.
+- Categoria sem nenhum artigo no ar sai do mapa do site e do menu de categorias; o endereço dela continua abrindo, com
+  "No articles here yet".
+
+**Bom saber**
+- O artigo "Getting Started in Kart Racing" tem os preços **escritos à mão** na tabela ($719, $819, $899, $500). Mudou o
+  preço em Site › Serviços e preços? Mude a tabela do artigo também.
+- As capas e fotos do blog ficam na mesma pasta das fotos do editor do site (`~/.urace/site-fotos`), que o backup do banco
+  não copia (seção 10.1).
 
 ### Medição de campanha no site (#260)
 
@@ -746,7 +820,11 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "Essa recorrência já está vinculada ao card de outro cliente." | tentativa de ligar a mensalidade de um cliente ao card de outro | confira o cliente certo |
 | "Security deposit obrigatório: informe o valor do depósito…" | o serviço está marcado como depósito obrigatório e o valor ficou vazio ou 0 | ponha o valor (ex.: 400) ou desmarque "obrigatório" em Site › Serviços e preços ou Site › Security deposit |
 | Cartão "Devolução pendente" em Site › Security deposit | a resposta do Stripe não chegou na hora da devolução; o valor fica reservado | toque em **Conferir no Stripe** depois de alguns minutos |
+| Publiquei o artigo do blog e o site (ou o sitemap) ainda mostra o de antes | a página fica até 5 min no navegador de quem já abriu, e o sitemap até 24 h | recarregue a página; o Google relê o sitemap sozinho |
+| "Antes de publicar, falta: …" (Site › Blog) | o rascunho não tem tudo o que o Google e quem lê precisam | complete o que a lista diz, **Salvar rascunho** e publique |
+| "o endereço não muda depois de publicado" (Site › Blog) | o artigo já foi ao ar uma vez: o Google tem o endereço | deixe o endereço; mude o título se precisar |
 | "Este endereço é só do balcão." | você está em `parts.urace.us` | para o resto do painel, use `ops.urace.us/ops/` |
+| "O acesso automático venceu. Entre com a senha." | o botão do balcão abriu o `parts.urace.us` mas não entrou: passou de 30 s, o painel saiu antes, a conta foi desativada ou o mesmo acesso foi usado duas vezes (aí a sessão que nasceu dele cai, por segurança) | entre com a senha ali, ou volte ao painel e toque no botão de novo. A auditoria guarda `auth.passe.*` |
 | Cápsula **Espelho** em amarelo/vermelho ou "Espelho antigo" | dados não lidos há tempo | Hoje › **↻ Sincronizar** |
 | Cápsula **Sistemas** com problema | uma integração não respondeu | Integrações › **Verificar agora**; se persistir, avise o administrador |
 | **Backup do banco** em vermelho ou amarelo (Integrações) | vermelho: a cópia do dia na VPS falhou ou faltou; amarelo: só a cópia cifrada do Drive falhou ou faltou (o motivo aparece na linha) | o administrador vê a seção 10.1; "sem permissão de ESCRITA no Drive" pede `python3 adminai/google_auth.py --conta urace` na VPS |
@@ -920,6 +998,9 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | pendências "Falta completar" | `GET /ai/pendencias` (logado; `todas=true` para gerente) |
 | marcar pendência como completa | `POST /ai/pendencias/{id}/resolver` (operador; quem pediu ou gerente) |
 | o que a IA pode fazer e a política | `GET /ai/capabilities` (logado) |
+| blog do site: listar / abrir um artigo | `GET /site/blog?q=&estado=&categoria=&limit=&offset=` · `GET /site/blog/{id}` (operador) |
+| blog: criar / mudar o rascunho | `POST /site/blog` com `{"title", "category"}` · `PATCH /site/blog/{id}` (operador) |
+| blog: publicar / tirar do ar | `POST /site/blog/{id}/publicar` com `{"visto": "<updated_at do artigo que você leu>"}` (null nos 7 que nunca mudaram; mudou depois → 409: leia de novo) · `POST /site/blog/{id}/despublicar` com `{"confirmar": true}` (só ADMIN ou acesso livre; os 7 do site antigo pedem `confirmar`) |
 | Suits: descartar / restaurar | `POST /suits/{id}/descartar` com `{"motivo": "…"}` · `POST /suits/{id}/restaurar` (operador) |
 | Suits: ligar/desligar a IA no pedido (#198) | `POST /suits/{id}/ia` com `{"ligada": false}` (operador) |
 

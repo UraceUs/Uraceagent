@@ -17,7 +17,7 @@ from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
 from command_center.vitrine import dica, idioma, medicao
-from command_center.vitrine.paginas import PORTAL, PRECO_KART, _lista, _negocio, estatico, foto_url, layout, preco_kart, usd  # noqa: F401
+from command_center.vitrine.paginas import PORTAL, PRECO_KART, _lista, _negocio, estatico, foto_url, layout, preco_kart, tamanho_estatico, usd  # noqa: F401
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
 
@@ -37,6 +37,20 @@ def produtos():
     ler = PRODUTOS.get()
     lidos = ler() if ler else None
     return lidos if lidos is not None else dados("produtos.json")["produtos"]
+
+
+# #172: os artigos do blog também vêm do banco (o painel escreve; só o que está no ar). Mesmo jeito dos produtos:
+# a rota põe aqui quem lê; sem banco, ou fora de uma requisição, valem os 7 de `posts.json`. Os endereços do
+# WordPress (`/<slug>/` → `/blog/<slug>/`) continuam vindo do arquivo: só os 7 de lá existiram no urace.us.
+POSTS = ContextVar("posts", default=None)
+
+
+def posts():
+    """Os artigos no ar, do mais novo para o mais velho, no formato do `posts.json` (mais `modified`, `image_alt`,
+    `image_w` e `image_h`, que o arquivo não tem)."""
+    ler = POSTS.get()
+    lidos = ler() if ler else None
+    return lidos if lidos is not None else dados("posts.json")["posts"]
 
 
 # ------------------------------------------------------------------ pedaços
@@ -500,8 +514,24 @@ def accessibility(host):
 
 
 # ------------------------------------------------------------------ blog
+CAPA_PADRAO = (1200, 675)
+
+
+def _capa(p):
+    """(endereço, largura, altura) da capa: #172, a foto de static/img ou a que a equipe subiu (/_f/…), com o
+    tamanho de verdade (o painel grava; a do arquivo é lida do próprio WebP)."""
+    if not p.get("image"):
+        return None
+    w, h = p.get("image_w"), p.get("image_h")
+    if not (w and h):
+        w, h = tamanho_estatico(p["image"])
+    w, h = (w, h) if w and h else CAPA_PADRAO
+    return foto_url(p["image"]), int(w), int(h)
+
+
 def _post_card(p):
-    foto = f'<img src="{estatico("img/" + p["image"])}" alt="" width="640" height="400" loading="lazy">' if p.get("image") else ""
+    capa = _capa(p)
+    foto = f'<img src="{e(capa[0])}" alt="" width="{capa[1]}" height="{capa[2]}" loading="lazy">' if capa else ""
     cats = ", ".join(c["name"] for c in p["categories"])
     return f"""<article class="post-card"><a href="/blog/{e(p['slug'])}/">{foto}<span class="post-txt"><small>{e(cats)} · {e(_data(p['date']))}</small><strong>{e(p['title'])}</strong><span>{e(_corta(p['excerpt'], 180))}</span></span></a></article>"""
 
@@ -519,53 +549,76 @@ def _data(iso):
 BLOG_SUB = "Top tier nationally recognized kart team providing race-wide support, driver training."     # urace.us/blog/
 
 
+def _da_categoria(p, cat):
+    return any(c["slug"] == cat for c in p["categories"])
+
+
+def _ld_post(host, p, completo=False):
+    """O BlogPosting do JSON-LD. #172: com `dateModified` (a última publicação; nos 7 do WordPress, a data de lá)."""
+    capa = _capa(p)
+    d = {"@type": "BlogPosting", "headline": p["title"], "datePublished": p["date"], "dateModified": p.get("modified") or p["date"],
+         "url": f"https://{host}/blog/{p['slug']}/", **({"image": f"https://{host}{capa[0]}"} if capa else {})}
+    if completo:
+        d = {"@context": "https://schema.org", **d, "description": p["description"], "author": {"@type": "Organization", "name": "URACE"},
+             "publisher": {"@id": f"https://{host}/#business"}, "mainEntityOfPage": f"https://{host}/blog/{p['slug']}/"}
+    return d
+
+
 def blog(host, categoria=None):
     d = dados("posts.json")
-    posts = d["posts"]
+    no_ar = posts()
     cat = next((c for c in d["categorias"] if c["slug"] == categoria), None) if categoria else None
     if categoria and not cat:
         return None
-    if cat:
-        posts = [p for p in posts if any(c["slug"] == cat["slug"] for c in p["categories"])]
+    lista_posts = [p for p in no_ar if _da_categoria(p, cat["slug"])] if cat else no_ar
     caminho = f"/blog/category/{cat['slug']}/" if cat else "/blog/"
     titulo = f"{cat['name']} - URACE Blog" if cat else "Kart Racing Blog - How to Race Karts | URACE"
     descricao = _desc(cat["description"] if cat and cat["description"] else "How to get into karting, go faster, overtake and become a racing driver.",
                       "Practical guides from the URACE coaching team in Orlando.")
+    # #172: só as categorias com artigo no ar (e a aberta); categoria vazia continua no endereço, sem link para ela
     cats = "".join(f'<a class="chip-link{" on" if cat and c["slug"] == cat["slug"] else ""}" href="/blog/category/{e(c["slug"])}/">{e(c["name"])}</a>'
-                   for c in d["categorias"] if c["slug"] != "uncategorized")
+                   for c in d["categorias"] if c["slug"] != "uncategorized"
+                   and ((cat and c["slug"] == cat["slug"]) or any(_da_categoria(p, c["slug"]) for p in no_ar)))
+    grade = (f'<div class="posts-grade">{"".join(_post_card(p) for p in lista_posts)}</div>' if lista_posts
+             else '<p class="muted">No articles here yet. <a href="/blog/">See all articles</a>.</p>')
     corpo = f"""<section class="faixa clara" aria-labelledby="h-blog"><div class="largura">
   <p class="eyebrow">Blog</p><h1 id="h-blog">{e(cat['name']) if cat else 'Take advantage of our materials'}</h1>
   <p class="hero-sub-escura">{e(descricao if cat else BLOG_SUB)}</p>
   <nav class="chips" aria-label="Categories"><a class="chip-link{'' if cat else ' on'}" href="/blog/">All</a>{cats}</nav>
-  <div class="posts-grade">{"".join(_post_card(p) for p in posts)}</div>
+  {grade}
 </div></section>"""
     lista = {"@context": "https://schema.org", "@type": "Blog", "name": "URACE Blog", "url": f"https://{host}/blog/",
-             "blogPost": [{"@type": "BlogPosting", "headline": p["title"], "datePublished": p["date"], "url": f"https://{host}/blog/{p['slug']}/"} for p in posts]}
+             "blogPost": [_ld_post(host, p) for p in lista_posts]}
     return layout(host=host, caminho=caminho, titulo=titulo, descricao=descricao, corpo=corpo,
-                  schemas=(_negocio(host), lista, _trilha(host, ("Blog", "/blog/"))), foto=posts[0]["image"] if posts and posts[0].get("image") else None)
+                  schemas=(_negocio(host), lista, _trilha(host, ("Blog", "/blog/"))),
+                  foto=lista_posts[0]["image"] if lista_posts and lista_posts[0].get("image") else None)
 
 
 def post(host, slug):
-    d = dados("posts.json")
-    p = next((x for x in d["posts"] if x["slug"] == slug), None)
-    if not p:
-        return None
-    html = _niveis(p["html"].replace("{IMG:", "/_s/img/").replace("}", ""), "h2")      # as imagens já são as nossas (WebP)
-    foto = f'<img class="post-capa" src="{estatico("img/" + p["image"])}" alt="" width="1200" height="675">' if p.get("image") else ""
-    outros = [x for x in d["posts"] if x["slug"] != slug][:3]
+    p = next((x for x in posts() if x["slug"] == slug), None) if slug else None
+    return artigo(host, p) if p else None
+
+
+def artigo(host, p, indexar=True):
+    """A página de um artigo. #172: a mesma para o site e para a prévia do painel (`indexar=False`: fora do Google)."""
+    # as imagens já são as nossas (WebP); a marca {IMG:arquivo} é a do WordPress (nenhum artigo usa hoje)
+    html = _niveis(re.sub(r"\{IMG:([^{}]*)\}", r"/_s/img/\1", p["html"]), "h2")
+    capa = _capa(p)
+    foto = (f'<img class="post-capa" src="{e(capa[0])}" alt="{e(p.get("image_alt") or "")}" width="{capa[1]}" height="{capa[2]}">'
+            if capa else "")
+    outros = [x for x in posts() if x["slug"] != p["slug"]][:3]
+    mais = (f"""
+<section class="faixa escura" aria-labelledby="h-mais"><div class="largura"><h2 id="h-mais">Keep reading</h2><div class="posts-grade">{"".join(_post_card(x) for x in outros)}</div></div></section>"""
+            if outros else "")
     corpo = f"""<article class="faixa clara"><div class="largura estreita texto">
   <p class="eyebrow">{e(', '.join(c['name'] for c in p['categories']))} · {e(_data(p['date']))}</p>
   <h1>{e(p['title'])}</h1>{foto}
   <div class="post-corpo">{html}</div>
   <p class="mt"><a class="btn" href="{PORTAL}/reserve">Book a session</a> <a class="btn btn-linha-escura" href="/blog/">All articles</a></p>
-</div></article>
-<section class="faixa escura" aria-labelledby="h-mais"><div class="largura"><h2 id="h-mais">Keep reading</h2><div class="posts-grade">{"".join(_post_card(x) for x in outros)}</div></div></section>"""
-    artigo = {"@context": "https://schema.org", "@type": "BlogPosting", "headline": p["title"], "description": p["description"],
-              "datePublished": p["date"], "author": {"@type": "Organization", "name": "URACE"},
-              "publisher": {"@id": f"https://{host}/#business"}, "mainEntityOfPage": f"https://{host}/blog/{p['slug']}/",
-              **({"image": f"https://{host}{estatico('img/' + p['image'])}"} if p.get("image") else {})}
+</div></article>{mais}"""
     return layout(host=host, caminho=f"/blog/{p['slug']}/", titulo=p.get("seo_title") or f"{p['title']} | URACE", descricao=_desc(p["description"], "From the URACE blog, Orlando."), corpo=corpo,
-                  schemas=(_negocio(host), artigo, _trilha(host, ("Blog", "/blog/"), (p["title"], f"/blog/{p['slug']}/"))), foto=p.get("image"))
+                  schemas=(_negocio(host), _ld_post(host, p, completo=True), _trilha(host, ("Blog", "/blog/"), (p["title"], f"/blog/{p['slug']}/"))),
+                  foto=p.get("image"), indexar=indexar)
 
 
 # ------------------------------------------------------------------ loja
@@ -1363,10 +1416,11 @@ def _texto(h):
 # ------------------------------------------------------------------ o mapa do site
 def caminhos():
     """Todas as páginas do site, para o sitemap e o teste de "um h1 por página"."""
-    d = dados("posts.json")
+    d, no_ar = dados("posts.json"), posts()            # #172: só o que está no ar (o banco; sem banco, o arquivo)
     out = ["/", "/services/", C.ARRIVE["caminho"]] + [s["caminho"] for s in S.SERVICOS] + [p["caminho"] for p in P.PAGINAS]
-    out += ["/blog/"] + [f"/blog/category/{c['slug']}/" for c in d["categorias"] if c["slug"] != "uncategorized" and c.get("count", 1)]
-    out += [f"/blog/{p['slug']}/" for p in d["posts"]]
+    out += ["/blog/"] + [f"/blog/category/{c['slug']}/" for c in d["categorias"]
+                         if c["slug"] != "uncategorized" and any(_da_categoria(p, c["slug"]) for p in no_ar)]
+    out += [f"/blog/{p['slug']}/" for p in no_ar]
     out += ["/store/"] + [f"/store/{s}/" for s, _ in CATEGORIAS_LOJA] + [f"/store/p/{p['slug']}/" for p in produtos()]
     out += paginas_da_loja()                            # #261: /store/page/2/ e a página 2 de cada categoria
     return out

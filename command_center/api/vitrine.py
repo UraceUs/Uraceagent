@@ -212,13 +212,15 @@ class _UmaVez:
 
 def _com_o_painel(fazer):
     """O que o painel decide na página: #297, o "a partir de" (o menor preço de kart do painel, ao vivo); #298, os
-    produtos da loja (do banco; sem banco, o arquivo de antes)."""
-    from command_center.providers import cartoes_site, loja
+    produtos da loja; #172, os artigos do blog que estão no ar (do banco; sem banco, o arquivo de antes)."""
+    from command_center.providers import blog, cartoes_site, loja
     marca = paginas.PRECO_KART.set(_do_banco(cartoes_site.preco_kart))
     marca_loja = ps.PRODUTOS.set(_UmaVez(loja.catalogo))
+    marca_blog = ps.POSTS.set(_UmaVez(blog.publicados))
     try:
         return fazer()
     finally:
+        ps.POSTS.reset(marca_blog)
         ps.PRODUTOS.reset(marca_loja)
         paginas.PRECO_KART.reset(marca)
 
