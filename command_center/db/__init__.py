@@ -41,6 +41,11 @@ def conectar(caminho=None):
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA busy_timeout = 10000")
+    # Revisão do #328: sem isto, o INSERT OR REPLACE apaga a linha em conflito SEM disparar o trigger de DELETE, e
+    # passa por cima das tabelas append-only (audit_logs, waiver_voids, waiver_template_versions…). Ligado, o REPLACE
+    # nelas é recusado. Todo trigger do schema só faz RAISE (não há recursão), nenhuma FK tem CASCADE/SET NULL, e
+    # as tabelas onde o código usa REPLACE (vault_unlocks, qbo_items, action_policies) não têm trigger de DELETE.
+    con.execute("PRAGMA recursive_triggers = ON")
     # Em TESTE, o banco é descartável: gravar com segurança de queda de energia não
     # protege nada e custa caro. Medido na VPS em 21/09: cada fixture levava ~2 s só
     # criando a schema (o disco é volume de rede, e cada CREATE TABLE sincroniza), o que

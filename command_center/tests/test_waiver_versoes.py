@@ -349,3 +349,65 @@ def test_pelo_convite_a_parental_sem_aviso_tambem_nao_se_assina(cli, ds):  # noq
     r = tc.assina(cli, tc.token_do_email("maria@example.com"), relationship="mother", guardian_declaration=True)
     assert r.status_code == 400 and "not available right now" in r.json()["detail"], r.text
     assert not um(conectar(), "SELECT 1 AS x FROM waivers WHERE source='urace'")
+
+
+# ------------------------------------------------------------------ revisão do PR #328
+@pytest.mark.parametrize("importado", [False, True])
+def test_arquivo_vazio_o_quadro_diz_que_esta_vazio_com_ou_sem_o_parental_importado(cli, ds, importado):  # noqa: F811
+    """Produção hoje: 0 modelos. Se alguém criar o arquivo do aviso vazio, o quadro diz isso (e não só que falta o
+    modelo), e importar e ligar continuam barrados."""
+    if importado:
+        _importa(cli)
+    _aprova("")
+    equipe(cli, "ger@urace.us")
+    a = cli.get(f"{S}/waiver-nativa").json()["aviso_744"]
+    assert a["configured"] is True and a["ok"] is False and "está vazio" in a["reason"], a
+    assert "está vazio" in _importa(cli, 409).json()["detail"]
+    r = cli.post(f"{S}/waiver-nativa/ligar", json={"ligada": True}, headers=equipe(cli))
+    assert r.status_code == 409
+
+
+@pytest.mark.parametrize("tabela,linha", [
+    ("waiver_template_versions", dict(kind="parental", sha256="a" * 64, name="Parental (teste)", pdf_path="/nao/existe.pdf",
+                                      imported_at="2026-01-01T00:00:00Z")),
+    ("waiver_voids", dict(waiver_id=None, by_name="Gerente", reason="assinada por engano no teste")),
+    ("audit_logs", dict(actor="system", event="teste")),
+])
+def test_insert_or_replace_nao_passa_pela_trava_append_only(con, tabela, linha):
+    """Com `recursive_triggers` desligado, o REPLACE apagava a linha em conflito sem disparar o trigger de DELETE e
+    trocava o registro. Agora o banco recusa; o INSERT OR IGNORE continua só não fazendo nada."""
+    if tabela == "waiver_voids":
+        from command_center.tests.test_waiver_imutavel import nativa
+        linha = {**linha, "waiver_id": nativa(con)}
+    lid = inserir(con, tabela, **linha)
+    antes = um(con, f"SELECT * FROM {tabela} WHERE id=?", (lid,))
+    campos = {**linha, "id": lid}
+    sql = f"({', '.join(campos)}) VALUES ({', '.join('?' * len(campos))})"
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        con.execute(f"INSERT OR REPLACE INTO {tabela} {sql}", tuple(campos.values()))
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        con.execute(f"REPLACE INTO {tabela} {sql}", tuple(campos.values()))
+    con.execute(f"INSERT OR IGNORE INTO {tabela} {sql}", tuple(campos.values()))
+    assert um(con, f"SELECT * FROM {tabela} WHERE id=?", (lid,)) == antes
+    assert con.execute("PRAGMA recursive_triggers").fetchone()[0] == 1
+
+
+def test_o_replace_das_tabelas_sem_trava_continua_igual(con):
+    """As tabelas onde o código usa INSERT OR REPLACE não têm trigger de DELETE: nada muda para elas."""
+    gatilhos = {r[0] for r in con.execute("SELECT tbl_name FROM sqlite_master WHERE type='trigger' AND sql LIKE '%BEFORE DELETE%'")}
+    assert not gatilhos & {"vault_unlocks", "qbo_items", "action_policies"}
+    for _ in range(2):
+        con.execute("INSERT OR REPLACE INTO qbo_items (id, name, full_name, price, type, active) VALUES ('t1','X','X',1,'Service',1)")
+    assert um(con, "SELECT COUNT(*) AS n FROM qbo_items WHERE id='t1'")["n"] == 1
+
+
+def test_com_recursive_triggers_ligado_todo_trigger_so_recusa(con):
+    """`recursive_triggers` é global: todo trigger do schema só faz RAISE (nenhum escreve, então não há recursão) e
+    nenhuma FK tem ação (CASCADE/SET NULL). Trigger novo que escreva, ou FK com ação, tem de ser pensado de novo."""
+    import re
+    for nome, sql in con.execute("SELECT name, sql FROM sqlite_master WHERE type='trigger'"):
+        corpo = sql.split("BEGIN", 1)[1]
+        assert re.fullmatch(r"\s*SELECT RAISE\(ABORT, '[^']*'\);\s*END\s*", corpo), (nome, sql)
+    for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+        for fk in con.execute(f"PRAGMA foreign_key_list({t})").fetchall():
+            assert (fk[5], fk[6]) == ("NO ACTION", "NO ACTION"), (t, tuple(fk))

@@ -675,7 +675,7 @@ function AvisoDoParental({ a }: { a: Aviso744 }) {
       {a.configured
         ? <p className="small muted" style={{ margin: 0 }}>{tr("Com o texto aprovado no servidor ({0}), o parental que não confere não é importado, a assinatura não liga e a parental não se assina online.", a.path)}</p>
         : <p className="small muted" style={{ margin: 0 }}>{tr("O texto do aviso não está no sistema: quando o advogado aprovar, ele vai para o arquivo {0} no servidor. Até lá a conferência só informa e nada é barrado.", a.path)}</p>}
-      {a.approved_text && <details><summary className="small">{tr("Texto aprovado")} <span className="mono muted">{a.approved_sha256?.slice(0, 12)}</span></summary>
+      {a.approved_text && <details><summary className="small" style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center', gap: 6 }}>{tr("Texto aprovado")} <span className="mono muted">{a.approved_sha256?.slice(0, 12)}</span></summary>
         <p className="small" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: '8px 0 0' }}>{a.approved_text}</p></details>}
     </div>
   </Section>
