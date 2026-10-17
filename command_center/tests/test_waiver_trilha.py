@@ -1,8 +1,8 @@
 """Trilha de eventos da waiver nativa, append-only e encadeada (#111, lacuna C-3).
 
 O que estes testes trancam: uma assinatura completa, pela conta e pelo convite, gera a sequência inteira, na
-ordem (convite enviado, abriu a tela, recebeu o PDF, leu todas as páginas, código enviado, código confirmado,
-revisou, assinou), cada passo com hora, IP e aparelho; o certificado do PDF lista esses passos com a hora na
+ordem (convite enviado, abriu a tela, recebeu o PDF, leu todas as páginas, revisou o resumo (#112), código enviado,
+código confirmado, assinou), cada passo com hora, IP e aparelho; o certificado do PDF lista esses passos com a hora na
 Flórida e em UTC e muda de página em vez de cortar; UPDATE e DELETE nos eventos levantam erro; refazer a cadeia
 de hashes acha a linha mexida; a tela só registra o que está na lista fechada, com limite; e o que vem depois
 de assinar (PDF baixado, anulada) fica na trilha, fora do PDF selado."""
@@ -21,7 +21,8 @@ from command_center.tests.test_waiver_nativa import (CONTA, P, PARENTAL, S, _ass
                                                      equipe, liga, ultimo_codigo)
 
 API = "/ops/api"
-ANTES = ["screen_opened", "pdf_delivered", "all_pages_viewed", "code_sent", "code_verified", "reviewed"]
+ANTES = ["screen_opened", "pdf_delivered", "all_pages_viewed", "reviewed", "code_sent", "code_verified"]
+REVISOU = "Signer reviewed the summary (driver, signer, relationship, typed name, signature) before the final click"
 
 
 def _corpo(**mais):
@@ -30,15 +31,25 @@ def _corpo(**mais):
             "document_read_at": datetime.now(timezone.utc).isoformat(), "document_read_mode": "pdf_viewer", **mais}
 
 
+def revisa(cli, url, corpo, h=None):  # noqa: F811
+    """#112: o passo 1 (a revisão); devolve o `review_id`."""
+    r = cli.post(url, json=corpo, headers=h or {})
+    assert r.status_code == 201, r.text
+    return r.json()["review_id"]
+
+
 def assina_como_a_tela(cli, hc, pid, kind="parental", email="maria@example.com"):  # noqa: F811
-    """A ordem da tela de verdade: abre a tela, recebe o PDF, lê tudo, confirma o e-mail, pede o código, assina."""
+    """A ordem da tela de verdade: abre a tela, recebe o PDF, lê tudo, confirma o e-mail, revisa o resumo (#112), pede o
+    código e assina."""
     assert cli.post(f"{P}/drivers/{pid}/waiver/events", json={"event": "screen_opened"}, headers=hc).status_code == 201
     assert cli.get(f"{P}/waivers/model/{kind}/pdf?driver={pid}").status_code == 200
     r = cli.post(f"{P}/drivers/{pid}/waiver/events", json={"event": "all_pages_viewed", "mode": "pdf_viewer", "pages": 1}, headers=hc)
     assert r.status_code == 201, r.text
     confirma_email(cli, hc)
+    corpo = _corpo()
+    rid = revisa(cli, f"{P}/drivers/{pid}/waiver/review", corpo, hc)
     cli.post(f"{P}/waivers/code", headers=hc)
-    r = cli.post(f"{P}/drivers/{pid}/waiver", json=_corpo(sign_code=ultimo_codigo(email)), headers=hc)
+    r = cli.post(f"{P}/drivers/{pid}/waiver", json={**corpo, "sign_code": ultimo_codigo(email), "review_id": rid}, headers=hc)
     assert r.status_code == 201, r.text
     return r.json()["waiver_id"]
 
@@ -70,8 +81,7 @@ def test_assinatura_pela_conta_gera_a_sequencia_inteira_na_ordem(cli):  # noqa: 
     cert = _texto_do_certificado(w["pdf_path"])
     assert "Event history (Florida time, America/New_York, and UTC)" in cert
     for rotulo in ("Signing page opened", "Document (PDF) delivered to the signer", "Every page of the document shown on screen",
-                   "One-time code emailed to the signer", "One-time code confirmed",
-                   "Signer confirmed the boxes, the relationship and the typed name"):
+                   "One-time code emailed to the signer", "One-time code confirmed", REVISOU):
         assert rotulo in cert, rotulo
     assert "reported by the signer's browser" in cert and "recorded by URACE's server" in cert
     historia = cert.split("Event history", 1)[1]
@@ -93,15 +103,16 @@ def test_assinatura_pelo_convite_gera_a_sequencia_inteira_na_ordem(cli):  # noqa
     assert cli.get(f"{P}/invite/{token}/pdf").status_code == 200
     r = cli.post(f"{P}/invite/{token}/events", json={"event": "all_pages_viewed", "mode": "pdf_viewer"})
     assert r.status_code == 201, r.text
+    corpo = _corpo(typed_name="Bruno Adulto", relationship=None, guardian_declaration=False)
+    rid = revisa(cli, f"{P}/invite/{token}/review", corpo)
     assert cli.post(f"{P}/invite/{token}/code").status_code == 200
-    r = cli.post(f"{P}/invite/{token}/sign", json=_corpo(typed_name="Bruno Adulto", relationship=None, guardian_declaration=False,
-                                                       sign_code=tc.codigo_do_email("bruno@example.com")))
+    r = cli.post(f"{P}/invite/{token}/sign", json={**corpo, "sign_code": tc.codigo_do_email("bruno@example.com"), "review_id": rid})
     assert r.status_code == 201, r.text
     con = conectar()
     w = um(con, "SELECT * FROM waivers WHERE client_id=? AND source='urace'", (cid,))
     evs = [e for e in tw.da_waiver(con, w["id"])]
-    assert [e["event"] for e in evs] == ["invite_sent", "screen_opened", "pdf_delivered", "all_pages_viewed", "code_sent",
-                                         "code_verified", "reviewed", "signed"], [e["event"] for e in evs]
+    assert [e["event"] for e in evs] == ["invite_sent", "screen_opened", "pdf_delivered", "all_pages_viewed", "reviewed",
+                                         "code_sent", "code_verified", "signed"], [e["event"] for e in evs]
     assert all(e["invite_id"] and e["flow"] == "invite" and e["client_id"] == cid for e in evs)
     assert all(e["ip"] for e in evs) and all(e["user_agent"] for e in evs if e["event"] != "invite_sent")
     assert evs[0]["detail"]["to"] == "b••••@example.com", "o e-mail vai mascarado na trilha"
@@ -289,9 +300,11 @@ def test_com_30_eventos_o_certificado_muda_de_pagina_em_vez_de_cortar(tmp_path):
 
 # ------------------------------------------------------------------ revisão do PR #329
 def _sign(cli, hc, pid, email="maria@example.com", **mais):  # noqa: F811
+    corpo = _corpo(**mais)
+    rid = revisa(cli, f"{P}/drivers/{pid}/waiver/review", corpo, hc)
     c = conectar(); c.execute("UPDATE portal_codes SET created_at='2000-01-01T00:00:00Z'"); c.commit(); c.close()
     cli.post(f"{P}/waivers/code", headers=hc)
-    return cli.post(f"{P}/drivers/{pid}/waiver", json=_corpo(sign_code=ultimo_codigo(email), **mais), headers=hc)
+    return cli.post(f"{P}/drivers/{pid}/waiver", json={**corpo, "sign_code": ultimo_codigo(email), "review_id": rid}, headers=hc)
 
 
 def test_recarregar_o_convite_em_loop_nao_enche_a_trilha_nem_o_certificado(cli):  # noqa: F811
@@ -311,14 +324,15 @@ def test_recarregar_o_convite_em_loop_nao_enche_a_trilha_nem_o_certificado(cli):
     assert n["screen_opened"] == 30 and n["pdf_delivered"] == 30, n
     assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='waiver.invite.document_view'")["n"] == 200, \
         "a entrega do #107 continua toda no audit_logs"
+    corpo = _corpo(typed_name="Bruno Adulto", relationship=None, guardian_declaration=False)
+    rid = revisa(cli, f"{P}/invite/{token}/review", corpo)
     assert cli.post(f"{P}/invite/{token}/code").status_code == 200
-    r = cli.post(f"{P}/invite/{token}/sign", json=_corpo(typed_name="Bruno Adulto", relationship=None, guardian_declaration=False,
-                                                       sign_code=tc.codigo_do_email("bruno@example.com")))
+    r = cli.post(f"{P}/invite/{token}/sign", json={**corpo, "sign_code": tc.codigo_do_email("bruno@example.com"), "review_id": rid})
     assert r.status_code == 201, r.text
     w = um(con, "SELECT * FROM waivers WHERE client_id=? AND source='urace'", (cid,))
     t = json.loads(w["audit"])
     assert [(e["event"], e["count"]) for e in t["events"]] == [("invite_sent", 1), ("screen_opened", 30), ("pdf_delivered", 30),
-                                                            ("code_sent", 1), ("code_verified", 1), ("reviewed", 1)], t["events"]
+                                                            ("reviewed", 1), ("code_sent", 1), ("code_verified", 1)], t["events"]
     assert len(PdfReader(w["pdf_path"]).pages) <= 3, "o modelo e o certificado em no máximo duas páginas"
     cert = " ".join(" ".join((p.extract_text() or "").split()) for p in PdfReader(w["pdf_path"]).pages[1:])
     assert re.search(r"\(\S+ UTC\) to \d{4}-\d\d-\d\d \d\d:\d\d:\d\d E[DS]T \(\S+ UTC\) · Signing page opened ×30", cert), cert
@@ -396,23 +410,27 @@ def test_nome_digitado_com_surrogate_solto_nao_vira_500(cli, pelo):  # noqa: F81
         hc, (pid,) = cliente(cli)
         assert cli.get(f"{P}/waivers/model/parental/pdf?driver={pid}").status_code == 200
         confirma_email(cli, hc)
-        cli.post(f"{P}/waivers/code", headers=hc)
-        corpo, url, h = _corpo(sign_code=ultimo_codigo("maria@example.com")), f"{P}/drivers/{pid}/waiver", hc
+        corpo, url, h, nome = _corpo(), f"{P}/drivers/{pid}/waiver", hc, "Maria Santos"
+        codigo = lambda: (cli.post(f"{P}/waivers/code", headers=hc), ultimo_codigo("maria@example.com"))[1]  # noqa: E731
     else:
         cid = tc.card(name="Bruno Adulto", email="bruno@example.com", pilot_name=None, pilot_dob="1990-02-02")
         assert tc.manda(cli, equipe(cli), cid, "bruno@example.com").status_code == 201
         token = tc.token_do_email("bruno@example.com")
         cli.cookies.clear()
         assert cli.get(f"{P}/invite/{token}/pdf").status_code == 200
-        assert cli.post(f"{P}/invite/{token}/code").status_code == 200
-        corpo = _corpo(typed_name="Maria Santos", relationship=None, guardian_declaration=False,
-                       sign_code=tc.codigo_do_email("bruno@example.com"))
-        url, h = f"{P}/invite/{token}/sign", {}
-    bruto = json.dumps(corpo).replace('"Maria Santos"', '"Maria \\ud800 Santos"')
-    r = cli.post(url, content=bruto, headers={**h, "Content-Type": "application/json"})
+        corpo = _corpo(typed_name="Bruno Adulto", relationship=None, guardian_declaration=False)
+        url, h, nome = f"{P}/invite/{token}/sign", {}, "Bruno Adulto"
+        codigo = lambda: (cli.post(f"{P}/invite/{token}/code"), tc.codigo_do_email("bruno@example.com"))[1]  # noqa: E731
+    sujo = f'"{nome.split()[0]} \\ud800 {nome.split()[1]}"'
+    revisao = url.replace("/sign", "/review") if url.endswith("/sign") else url + "/review"
+    r = cli.post(revisao, content=json.dumps(corpo).replace(f'"{nome}"', sujo), headers={**h, "Content-Type": "application/json"})
+    assert r.status_code == 201, r.text                    # #112: a revisão também não vira 500
+    assert r.json()["name_matches"] is True, "o surrogate sai do nome antes de comparar"
+    corpo = {**corpo, "review_id": r.json()["review_id"], "sign_code": codigo()}
+    r = cli.post(url, content=json.dumps(corpo).replace(f'"{nome}"', sujo), headers={**h, "Content-Type": "application/json"})
     assert r.status_code == 201, r.text
     t = json.loads(um(conectar(), "SELECT audit FROM waivers WHERE source='urace' ORDER BY id DESC LIMIT 1")["audit"])
-    assert t["typed_name"] == "Maria Santos"
+    assert t["typed_name"] == nome
     from command_center.providers import trilha_waiver as tw
     assert tw.verificar(conectar())["ok"]
 

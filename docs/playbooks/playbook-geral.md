@@ -374,6 +374,35 @@ data de nascimento do piloto; o piloto é menor e o card não tem o responsável
 ou a assinatura no próprio sistema está desligada (Site › Waiver). Se o card mudar
 de e-mail ou de data de nascimento depois do envio, o link para de valer: reenvie.
 
+#### Como o cliente assina: revisar antes do clique final (#112)
+
+Vale para a área do cliente (**Drivers › Sign now**) e para o link do convite. A Flórida (§668.50(10))
+deixa a pessoa desfazer uma assinatura feita por erro quando o sistema não deu chance de evitá-lo
+(assinou pelo piloto errado, digitou outro nome). Por isso são **dois passos**, e o servidor exige os dois:
+
+1. **Formulário.** O cliente lê o PDF inteiro (as caixas só se liberam depois), marca as caixas, diz o
+   parentesco (pelo menor: pai ou mãe), digita o nome completo e desenha a assinatura. Na área do
+   cliente, o e-mail da conta é confirmado por código uma vez. Toca **Review before signing**.
+2. **Resumo ("Review and sign").** O servidor confere tudo, menos o código, e mostra: documento, piloto,
+   quem assina, parentesco e declaração, o nome digitado e o nome do cadastro, a assinatura desenhada e
+   até quando vale. Aqui ele pede o **código de 6 dígitos** do e-mail. O botão final é **I agree — sign
+   the waiver**, com a frase de efeito legal logo acima ("…the same legal effect as a handwritten
+   signature"). **Go back** volta ao formulário sem perder nada.
+
+- **Nome diferente do cadastro** (acento, maiúscula e espaço repetido não contam): o resumo avisa *"The
+  name you typed (…) is different from the name on file (…)"* e só assina depois da caixa **Yes, sign with
+  the name I typed**. O nome do cadastro é o da conta (área do cliente) ou o do convite (adulto: o piloto;
+  menor: o responsável do card). Os dois nomes ficam na trilha e no certificado.
+- **O resumo vale uma vez, por 30 minutos, e só com o mesmo conteúdo.** Mudou o nome, a assinatura, o
+  parentesco ou a leitura depois do resumo: *"Something changed after the review. Review the summary
+  again before signing."* Passou de 30 min: *"The review expired."* Nos dois casos, **Go back** e
+  **Review before signing** de novo. Sem resumo não há assinatura, nem pela tela nem pela API.
+- **Na trilha e no certificado:** o passo **revisou o resumo**, com a hora, antes do código; e a hora da
+  confirmação, que é a da assinatura. No PDF: *"Reviewed the summary: … · Confirmed and signed: …"* e a
+  frase que estava ao lado do botão.
+- **Se o cliente disser "assinei e não foi":** ele parou no resumo. Falta pedir o código, digitar e tocar
+  **I agree — sign the waiver**.
+
 #### Waiver assinada no próprio sistema: nunca se apaga, se anula (#109)
 
 Dono, 06/10: *"nunca apagar"*. A waiver assinada na área do cliente ou pelo convite é o registro
@@ -428,9 +457,9 @@ com **hora, IP e aparelho**, e nenhum se muda nem se apaga (o próprio banco rec
 | abriu a tela de assinar | a tela (área do cliente) ou o servidor (convite) |
 | recebeu o PDF | o servidor |
 | leu todas as páginas | a tela |
+| revisou o resumo (#112: o passo 1, com o nome digitado e o do cadastro; acima) | o servidor |
 | código enviado · código confirmado | o servidor |
-| revisou e confirmou (as caixas, o parentesco e o nome digitado, no clique final) | o servidor |
-| assinou | o servidor |
+| assinou (o clique final, com a hora da revisão e a da confirmação) | o servidor |
 
 - **No PDF assinado**, o certificado lista esses passos em **Event history**, com a hora da Flórida e
   em UTC, IP e aparelho, e o hash do último passo. Com muitos passos ele **continua na página seguinte**

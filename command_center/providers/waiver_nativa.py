@@ -16,6 +16,10 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
   nomeado por juiz assina no balcão, com a ordem judicial.
 - **Intenção e consentimento**: duas caixas obrigatórias ("li e concordo" e "concordo em
   assinar eletronicamente"), nome digitado e assinatura desenhada.
+- **Revisar antes do clique final** (#112, Fla. Stat. §668.50(10)): o passo 1 confere tudo e mostra o
+  resumo (documento, piloto, quem assina, parentesco, nome digitado, assinatura, validade); o passo 2,
+  "I agree — sign the waiver", com a frase de efeito legal ao lado, só assina com essa revisão, sem nada
+  mudado. Nome digitado diferente do da conta pede confirmação; a trilha guarda as duas horas e os dois nomes.
 - **Quem assina é quem tem a caixa de e-mail** (#108): a conta precisa do e-mail confirmado por
   código, e na hora de assinar chega um código novo nessa caixa. Diante de um "não fui eu", é o
   que mostra que só aquela pessoa podia ter assinado (*Ruiz v. Moss Bros.*; Fla. Stat. §668.50(9)).
@@ -430,8 +434,9 @@ def _nome(v):
     return v[:120]
 
 
-def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
-    """Assina a waiver do piloto `pid` pela conta `conta_id`. Devolve a linha de `waivers`."""
+def _preparar(con, conta_id, pid, dados):
+    """O que a revisão e o clique final conferem igual (#112: tudo, menos o código do e-mail)."""
+    from command_center.providers import revisao_waiver as rv
     if not ligada(con):
         raise ErroWaiver("Online waiver signing is not available yet. Our team will send you the waiver.")
     if not dados.get("read_and_agree") or not dados.get("consent_esign"):
@@ -458,21 +463,62 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
     if _sha(base) != m["sha256"]:                          # o modelo guardado mudou por fora: não assina
         raise ErroWaiver("The waiver document could not be verified. Please contact us.")
     _exigir_aviso(tipo, base)                              # #116: antes de gastar o código do e-mail
-    agora_utc = datetime.now(timezone.utc)
-    entregue, lido, modo = _leitura(con, conta_id, tipo, dados, agora_utc)
+    entregue, lido, modo = _leitura(con, conta_id, tipo, dados, datetime.now(timezone.utc))
     verificado = um(con, "SELECT email_verified_at FROM portal_accounts WHERE id=?", (conta_id,))["email_verified_at"]
     if not verificado:
         raise ErroWaiver("Confirm your email before signing: we send a code to it.")
-    from command_center.providers import codigos
+    ids = dict(account_id=conta_id, pilot_id=pid, client_id=p.get("client_id"), kind=tipo, template_version_id=m.get("version_id"))
+    return {"c": c, "p": p, "tipo": tipo, "parentesco": parentesco, "declaracao": declaracao, "m": m, "nome": nome, "png": png,
+            "base": base, "entregue": entregue, "lido": lido, "modo": modo, "verificado": verificado, "ids": ids,
+            "conteudo": rv.conteudo(dados, nome, _sha(png), pid, tipo, m["sha256"])}
+
+
+def _validade_hoje(tipo, nascimento):
+    """(até, motivo) para uma assinatura feita agora, no dia da Flórida."""
+    hoje = datetime.now(timezone.utc).astimezone(portal.FUSO).date()
+    ate = validade(tipo, date.fromisoformat(nascimento), hoje)
+    motivo = ("the day before the minor turns 18" if tipo == "parental" and ate < hoje + timedelta(days=VALIDADE_DIAS)
+              else "one year")
+    return ate.isoformat(), motivo
+
+
+def resumo(r, m, tipo, piloto, nascimento, nome_cadastro, parentesco, declaracao, png):
+    """#112: o que a tela de revisão mostra antes do clique final (e o servidor vai assinar exatamente isto)."""
+    from command_center.providers import revisao_waiver as rv
+    ate, motivo = _validade_hoje(tipo, nascimento)
+    return {"review_id": r["id"], "review_expires_at": r["expires_at"], "document": m["name"], "pages": m["pages"],
+            "kind": tipo, "driver": piloto, "driver_birth_date": nascimento,
+            "signing_as": "Parent (natural guardian)" if tipo == "parental" else "Participant (signing for yourself)",
+            "relationship": parentesco, "guardian_declaration": declaracao, "typed_name": r["typed_name"],
+            "name_on_file": nome_cadastro, "name_matches": bool(r["name_matches"]), "signature_sha256": _sha(png),
+            "valid_until": ate, "valid_until_reason": motivo, "legal_effect": rv.EFEITO_LEGAL, "button": rv.BOTAO}
+
+
+def revisar(con, conta_id, pid, dados, ip=None, aparelho=None):
+    """#112, passo 1: confere tudo menos o código e devolve o resumo. A revisão vai para a trilha (`reviewed`)."""
+    from command_center.providers import revisao_waiver as rv
+    x = _preparar(con, conta_id, pid, dados)
+    r = rv.criar(con, "account", x["ids"], x["m"]["sha256"], x["conteudo"], x["nome"], x["c"]["name"], x["parentesco"],
+                 ip=ip, user_agent=aparelho, detail={"read_and_agree": True, "consent_esign": True, "language_ack": True,
+                                                     "guardian_declaration": bool(x["declaracao"]),
+                                                     "signature_png_sha256": _sha(x["png"])})
+    return resumo(r, x["m"], x["tipo"], x["p"]["name"], x["p"]["birth_date"], x["c"]["name"], x["parentesco"],
+                  x["declaracao"], x["png"])
+
+
+def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
+    """Assina a waiver do piloto `pid` pela conta `conta_id`. Devolve a linha de `waivers`.
+    #112: só com a revisão (`review_id`) desta conta e piloto, válida, nunca usada e com o mesmo conteúdo."""
+    from command_center.providers import codigos, revisao_waiver as rv, trilha_waiver as tw
+    x = _preparar(con, conta_id, pid, dados)
+    c, p, tipo, m, nome, png, ids = x["c"], x["p"], x["tipo"], x["m"], x["nome"], x["png"], x["ids"]
+    rev = rv.exigir(con, dados.get("review_id"), "account", ids, m["sha256"], x["conteudo"], dados.get("name_mismatch_confirmed"))
     try:
         cod = codigos.conferir(con, conta_id, "waiver_sign", dados.get("sign_code"))
     except codigos.ErroCodigo as e:
         raise ErroWaiver(str(e))
-    from command_center.providers import trilha_waiver as tw         # #111
-    ids = dict(account_id=conta_id, pilot_id=pid, client_id=p.get("client_id"), kind=tipo, template_version_id=m.get("version_id"))
-    tw.registrar(con, "code_verified", "account", ip=ip, user_agent=aparelho,
+    tw.registrar(con, "code_verified", "account", ip=ip, user_agent=aparelho,                       # #111
                  detail={"sent_to": codigos.mascarar(cod["sent_to"]), "sent_at": cod["created_at"]}, **ids)
-    revisou(con, "account", nome, parentesco, declaracao, ip, aparelho, ids)
     agora_utc = datetime.now(timezone.utc)                # a hora da assinatura vem depois do último passo da trilha
     login = um(con, """SELECT created_at, ip FROM portal_sessions WHERE account_id=? AND revoked_at IS NULL
                         ORDER BY created_at DESC LIMIT 1""", (conta_id,))
@@ -483,38 +529,40 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
     ate_motivo = ("the day before the minor turns 18" if tipo == "parental" and ate_d < ny.date() + timedelta(days=VALIDADE_DIAS)
                   else "one year")
     sid = str(uuid.uuid4())
+    verificado = x["verificado"]
+    revisao = rv.na_trilha(rev, agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), dados.get("name_mismatch_confirmed"))
     trilha = {
         "signature_id": sid, "template": tipo, "template_name": m["name"], "template_sha256": m["sha256"],
         "template_pages": m["pages"], "account_id": conta_id, "account_email": c["email"], "signer_name": c["name"],
         "typed_name": nome, "driver_id": pid, "driver_name": p["name"], "driver_birth_date": p["birth_date"],
-        "signer_relationship": parentesco, "guardian_declaration": declaracao,
+        "signer_relationship": x["parentesco"], "guardian_declaration": x["declaracao"],
         "signed_at_utc": agora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "signed_at_local": ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
         "ip": ip, "user_agent": (aparelho or "")[:300], "read_and_agree": True, "consent_esign": True,
         "language_ack": IDIOMA, "governing_law": "Florida law; courts in Orange County, Florida",
-        "document_delivered_at": entregue, "document_all_pages_viewed_at": lido,
-        "reading_mode": modo, "reading_requirement": MODOS_LEITURA[modo],
+        "document_delivered_at": x["entregue"], "document_all_pages_viewed_at": x["lido"],
+        "reading_mode": x["modo"], "reading_requirement": MODOS_LEITURA[x["modo"]],
         "authentication": (f"URACE client account (email + password); email verified {verificado}; "
                            f"one-time code sent to {cod['sent_to']} at {cod['created_at']}, confirmed {cod['used_at']}"),
         "email_verified_at": verificado, "otp_sent_to": cod["sent_to"], "otp_sent_at": cod["created_at"],
         "otp_verified_at": cod["used_at"], "otp_message_id": cod["message_id"],
         "session_login_at": login["created_at"] if login else None, "session_login_ip": login["ip"] if login else None,
         "signature_png_sha256": _sha(png), "valid_until": ate, "valid_until_reason": ate_motivo,
+        "review": revisao, "reviewed_at_utc": revisao["reviewed_at"], "confirmed_at_utc": revisao["confirmed_at"],
     }
-    return gravar(con, base, m, trilha, png, client_id=p.get("client_id"), pilot_id=pid,
+    return gravar(con, x["base"], m, trilha, png, client_id=p.get("client_id"), pilot_id=pid,
                   signer_name=c["name"], signer_email=c["email"],
                   link_reason="assinada na área do cliente" if p.get("client_id") else None,
                   link_by="sync" if p.get("client_id") else None,
                   resumo=f"waiver de {c['name']} assinada na área do cliente ({p['name']})",
+                  antes=lambda c2: rv.marcar_usada(c2, rev["id"]),
                   eventos={"fluxo": "account", "cobrir": dict(account_id=conta_id, pilot_id=pid, kind=tipo), "ids": ids,
-                           "ip": ip, "user_agent": aparelho})
+                           "ip": ip, "user_agent": aparelho, "detalhe": _no_signed(revisao)})
 
 
-def revisou(con, fluxo, nome, parentesco, declaracao, ip, aparelho, ids):
-    """#111: o que quem assina conferiu e confirmou no clique final (as caixas, o parentesco e o nome digitado)."""
-    from command_center.providers import trilha_waiver as tw
-    tw.registrar(con, "reviewed", fluxo, ip=ip, user_agent=aparelho, detail={
-        "read_and_agree": True, "consent_esign": True, "language_ack": True, "typed_name": nome,
-        "signer_relationship": parentesco, "guardian_declaration": bool(declaracao)}, **ids)
+def _no_signed(revisao):
+    """#112: o que o `signed` da trilha guarda da revisão: as duas horas e os dois nomes."""
+    return {k: revisao[k] for k in ("review_id", "reviewed_at", "confirmed_at", "typed_name", "name_on_file", "name_matches",
+                                    "name_mismatch_confirmed")}
 
 
 def pdf_final(base, trilha, png):
@@ -566,7 +614,7 @@ def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_e
         if eventos:
             tw.registrar(con, "signed", eventos["fluxo"], ip=eventos.get("ip"), user_agent=eventos.get("user_agent"),
                          detail={"covers": [e["id"] for e in cob], "document_sha256": trilha["document_sha256"],
-                                 "template_sha256": trilha["template_sha256"]},
+                                 "template_sha256": trilha["template_sha256"], **(eventos.get("detalhe") or {})},
                          waiver_id=wid, signature_id=trilha["signature_id"], **eventos["ids"])
         if client_id:
             from command_center.api import motor
@@ -698,6 +746,13 @@ def _pdf_assinado(base, t, png):
     linha(f"Signature of {t['signer_name']}   ·   Typed name: {t['typed_name']}")
     linha(f"Signed: {t['signed_at_local']}  ({t['signed_at_utc']} UTC)   ·   Valid until: {t['valid_until']}"
           f" ({t.get('valid_until_reason') or 'one year'})")
+    rev = t.get("review")
+    if rev:                                           # #112: as duas etapas, com as duas horas, e os dois nomes
+        linha(f"Reviewed the summary: {_hora_local(rev['reviewed_at'])} ({_hora_utc(rev['reviewed_at'])} UTC)   ·   "
+              f"Confirmed and signed: {t['signed_at_local']} ({t['signed_at_utc']} UTC)")
+        if not rev.get("name_matches"):
+            linha(f"Name on file: {rev.get('name_on_file') or '—'}   ·   Typed name: {rev.get('typed_name')}   ·   "
+                  "The signer was told the names differ and confirmed signing with the typed name.")
     y -= 10
     linha("Audit trail", 11, "Helvetica-Bold", 16)
     for k, v in (("Authentication", t["authentication"]),
@@ -709,7 +764,8 @@ def _pdf_assinado(base, t, png):
                  ("Language", t.get("language_ack") or "—"),
                  ("Document hash (SHA-256)", t["template_sha256"]),
                  ("Template version ID", t.get("template_version_id") or "—"),
-                 ("Signature image hash (SHA-256)", t["signature_png_sha256"])):
+                 ("Signature image hash (SHA-256)", t["signature_png_sha256"]),
+                 *((("Shown next to the final button", t["review"]["legal_effect_statement"]),) if t.get("review") else ())):
         linha(f"{k}: {v}", 9, "Helvetica", 12)
     if t.get("events") is not None:                   # #111: os passos até a assinatura, um por um
         y -= 8
@@ -745,6 +801,14 @@ def _pdf_assinado(base, t, png):
     final = io.BytesIO()
     out.write(final)
     return final.getvalue()
+
+
+def _hora_utc(iso):
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _hora_local(iso):
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(portal.FUSO).strftime("%Y-%m-%d %H:%M:%S %Z")
 
 
 def _quebra(txt, n):

@@ -543,6 +543,10 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
    (a assinatura sai em tinta escura) e não deixa o dedo rolar a página enquanto desenha */
 .portal-waiver-texto{max-height:min(52vh,460px);overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.5}
 .portal-assinatura{display:block;width:100%;height:160px;background:#fff;border:1px dashed var(--muted);border-radius:12px;touch-action:none;cursor:crosshair}
+/* #112: o resumo antes do clique final — a assinatura desenhada aparece no mesmo papel branco do quadro */
+.portal-revisao-assinatura{display:block;max-width:100%;height:auto;max-height:120px;background:#fff;border:1px solid var(--glass-line-2);border-radius:10px}
+.portal-revisao-nome{min-height:40px}
+.portal-revisao-acoes .btn{min-height:44px}
 .portal-visual{background:none;border:0;padding:0;color:var(--accent-ink);font:inherit;cursor:pointer;text-decoration:underline;min-height:40px}
 .login .art .lema{position:relative;margin:0;font-family:var(--font-cond);font-weight:900;font-size:clamp(30px,3.4vw,50px);line-height:.95;text-transform:uppercase;
   letter-spacing:-.008em;color:var(--ink);text-shadow:0 8px 34px rgba(0,0,0,.7);max-width:12ch}

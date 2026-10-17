@@ -811,7 +811,7 @@ function rotuloDoEvento(ev: string) {
   const r: Record<string, string> = {
     invite_sent: tr("convite enviado por e-mail"), screen_opened: tr("abriu a tela de assinar"), pdf_delivered: tr("recebeu o PDF"),
     all_pages_viewed: tr("leu todas as páginas"), code_sent: tr("código enviado"), code_verified: tr("código confirmado"),
-    reviewed: tr("revisou e confirmou"), signed: tr("assinou"), copy_emailed: tr("cópia por e-mail"), id_checked: tr("documento conferido no balcão"),
+    reviewed: tr("revisou o resumo"), signed: tr("assinou"), copy_emailed: tr("cópia por e-mail"), id_checked: tr("documento conferido no balcão"),
     voided: tr("anulada"), downloaded: tr("PDF baixado"), evidence_exported: tr("pacote de prova exportado") }
   return r[ev] || ev
 }

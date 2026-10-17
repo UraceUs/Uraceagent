@@ -95,6 +95,12 @@ export interface Waivers { enabled: boolean; drivers: WaiverPiloto[]
 export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string
   /** #105: a declaração do pai ou da mãe, com {minor} no lugar do nome */
   declaration: string | null }
+/** #112: o resumo que o servidor devolve no passo 1 (revisão) — é exatamente o que o clique final assina. */
+export interface RevisaoWaiver { review_id: number; review_expires_at: string; document: string; pages: number; kind: 'adult' | 'parental'
+  driver: string; driver_birth_date: string | null; signing_as: string; relationship: string | null; guardian_declaration: string | null
+  typed_name: string; name_on_file: string; name_matches: boolean; signature_sha256: string; valid_until: string; valid_until_reason: string
+  /** C-4: a frase de efeito legal, mostrada ao lado do botão final, e o texto do botão */
+  legal_effect: string; button: string }
 /** #135: o convite da waiver por e-mail, como o link mostra (sem conta). O card e o piloto vêm do convite. */
 export interface ConviteWaiver { kind: 'adult' | 'parental'; driver: string; signer_name: string; email: string; expires_at: string
   model: { name: string; pages: number; text: string; declaration: string | null } }

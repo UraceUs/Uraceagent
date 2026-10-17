@@ -4,9 +4,11 @@
  * O link é pessoal, vale uma vez e vence; o card, o piloto e o modelo vêm do convite (nada aqui
  * escolhe card). O resto é a mesma assinatura da área do cliente (#85): o PDF de verdade, lido
  * página por página (#107), as caixas, o nome, a assinatura desenhada e o código de 6 dígitos que
- * chega no mesmo e-mail (#108). Pelo menor, só pai ou mãe, com a declaração (#105). */
+ * chega no mesmo e-mail (#108). Pelo menor, só pai ou mãe, com a declaração (#105).
+ * #112: dois passos, como na conta: "Review before signing" e o resumo, com o código e o "I agree — sign the waiver". */
 import { useEffect, useState, type FormEvent } from 'react'
-import { papi, PortalError, type ConviteWaiver } from './api'
+import { papi, PortalError, type ConviteWaiver, type RevisaoWaiver } from './api'
+import { Revisao } from './RevisaoWaiver'
 import { VisorPdf } from './VisorPdf'
 import { Quadro } from './Waiver'
 
@@ -31,6 +33,9 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
   const [ocupado, setOcupado] = useState(false)
   const [indo, setIndo] = useState(false)
   const [feita, setFeita] = useState<{ valid_until: string } | null>(null)
+  const [rev, setRev] = useState<RevisaoWaiver | null>(null)          // #112: o resumo do passo 1
+  const [nomeOk, setNomeOk] = useState(false)
+  const [revisando, setRevisando] = useState(false)
 
   useEffect(() => {
     papi<ConviteWaiver>('GET', caminho).then(setC).catch(e => setFora((e as PortalError).message))
@@ -46,12 +51,20 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
     try { setEnviado((await papi<{ sent_to: string }>('POST', `${caminho}/code`)).sent_to) }
     catch (ex) { setErro((ex as PortalError).message) } finally { setOcupado(false) }
   }
-  async function assinar(e: FormEvent) {
-    e.preventDefault(); setErro(null); setIndo(true)
-    try { setFeita(await papi('POST', `${caminho}/sign`, { ...f, document_read_at: lido?.em ?? null, document_read_mode: lido?.modo ?? null, sign_code: codigo })) }
-    catch (ex) { const p = ex as PortalError; if (p.status === 410 || p.status === 404) setFora(p.message); else setErro(p.message) }
-    finally { setIndo(false) }
+  const corpo = () => ({ ...f, document_read_at: lido?.em ?? null, document_read_mode: lido?.modo ?? null })
+  const recusado = (ex: unknown) => { const p = ex as PortalError; if (p.status === 410 || p.status === 404) setFora(p.message); else setErro(p.message) }
+  async function revisar(e: FormEvent) {
+    e.preventDefault(); setErro(null); setRevisando(true)
+    try { setRev(await papi<RevisaoWaiver>('POST', `${caminho}/review`, corpo())); setNomeOk(false) }
+    catch (ex) { recusado(ex) } finally { setRevisando(false) }
   }
+  async function assinar() {
+    if (!rev) return
+    setErro(null); setIndo(true)
+    try { setFeita(await papi('POST', `${caminho}/sign`, { ...corpo(), sign_code: codigo, review_id: rev.review_id, name_mismatch_confirmed: nomeOk })) }
+    catch (ex) { recusado(ex) } finally { setIndo(false) }
+  }
+  function voltar() { setRev(null); setErro(null); window.scrollTo(0, 0) }
 
   const topo = <div><h1 className="h1">Sign the waiver</h1>
     {c && <p className="muted" style={{ margin: '4px 0 0' }}>Driver: <b>{c.driver}</b></p>}</div>
@@ -71,8 +84,18 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
   const menor = c.kind === 'parental'
   const naoOnline = menor && (f.relationship === 'legal_guardian' || f.relationship === 'other')
   const pdf = `${BASE}${caminho}/pdf`
-  return <form className="stack" style={{ gap: 18 }} onSubmit={assinar} noValidate>
+  const codigoDeAssinar = <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
+    <p className="small muted" style={{ margin: 0 }}>To sign, enter the code we send to <b>{c.email}</b> now. It shows that it is really you.</p>
+    {!enviado ? <button type="button" className="btn" disabled={ocupado} onClick={mandarCodigo}>Send me the signing code</button>
+      : <>
+        <label className="fld"><span>Signing code sent to {enviado}</span>
+          <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ''))} /></label>
+        <button type="button" className="btn ghost sm" disabled={ocupado} onClick={mandarCodigo}>Send a new code</button>
+      </>}
+  </div>
+  return <div className="stack" style={{ gap: 18 }}>
     {topo}
+    <div hidden={!!rev}><form className="stack" style={{ gap: 18 }} onSubmit={revisar} noValidate>
     <p className="muted" style={{ margin: 0 }}>{TIPO[c.kind]}. {menor
       ? <>You sign as the <b>parent</b> of {c.driver}. Valid for one year, or until the day before {c.driver} turns 18, whichever comes first.</>
       : <>You sign for yourself, {c.signer_name}. Valid for one year.</>} This personal link works once, until {dataUS(c.expires_at)}.</p>
@@ -90,7 +113,7 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
       {!naoOnline && c.model.declaration && <label className="check"><input type="checkbox" checked={f.guardian_declaration}
         onChange={e => setF({ ...f, guardian_declaration: e.target.checked })} /> {c.model.declaration.replace('{minor}', c.driver)}</label>}
     </section>}
-    {erro && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
+    {erro && !rev && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
     <section className="stack" aria-labelledby="c-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="c-doc">Read the document</h2>
         <a className="btn sm" href={pdf} target="_blank" rel="noreferrer" onClick={() => setAbriuPdf(true)}>Open the PDF</a></div>
@@ -117,17 +140,12 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
       <label className="fld"><span>Your full name<b className="portal-obr" aria-hidden="true"> *</b><i> · typed, as your signature</i></span>
         <input autoComplete="name" value={f.typed_name} onChange={e => setF({ ...f, typed_name: e.target.value })} required /></label>
       <Quadro onMuda={png => setF(x => ({ ...x, signature: png }))} />
-      <div className="card card-b stack portal-codigo" style={{ gap: 8 }}>
-        <p className="small muted" style={{ margin: 0 }}>To sign, enter the code we send to <b>{c.email}</b> now. It shows that it is really you.</p>
-        {!enviado ? <button type="button" className="btn" disabled={ocupado || !lido} onClick={mandarCodigo}>Send me the signing code</button>
-          : <>
-            <label className="fld"><span>Signing code sent to {enviado}</span>
-              <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={codigo} onChange={e => setCodigo(e.target.value.replace(/\D/g, ''))} /></label>
-            <button type="button" className="btn ghost sm" disabled={ocupado} onClick={mandarCodigo}>Send a new code</button>
-          </>}
-      </div>
-      <button className="btn primary block" disabled={indo || naoOnline || !lido || codigo.length !== 6}>{indo ? 'Signing…' : 'Sign the waiver'}</button>
-      <p className="small muted" style={{ margin: 0 }}>We record the date and time, your IP address, device and the email code with your signature. You get the signed PDF right after.</p>
+      <button className="btn primary block" disabled={revisando || naoOnline || !lido}>{revisando ? 'Checking…' : 'Review before signing'}</button>
+      <p className="small muted" style={{ margin: 0 }}>Next you see a summary to check. Nothing is signed until you confirm it. We record the date and time,
+        your IP address, device and the email code with your signature, and you get the signed PDF right after.</p>
     </section>
-  </form>
+    </form></div>
+    {rev && <Revisao r={rev} assinatura={f.signature} nomeConfirmado={nomeOk} onNomeConfirmado={setNomeOk} codigo={codigoDeAssinar}
+      podeAssinar={codigo.length === 6} indo={indo} erro={erro} onVoltar={voltar} onAssinar={assinar} />}
+  </div>
 }

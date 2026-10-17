@@ -447,6 +447,11 @@ def status_da_waiver(alias="waivers"):
 # #116: as versões dos modelos; #111: a trilha de eventos. A trava é criada (ou trocada, se o texto mudou) a cada
 # subida, com as da waiver.
 WAIVER_SO_INSERT = ("waiver_template_versions", "waiver_events")
+# #112: a revisão antes do clique final só aceita marcar `used_at`, uma vez (na transação da assinatura); o resto é
+# prova e não muda, e nada sai. Coluna nova em `waiver_reviews` tem de entrar aqui (test_waiver_revisao.py trava).
+REVISAO_TRAVADAS = ("id", "created_at", "expires_at", "flow", "account_id", "invite_id", "pilot_id", "client_id", "kind",
+                    "template_version_id", "template_sha256", "content_sha256", "typed_name", "name_on_file", "name_matches",
+                    "signer_relationship", "ip", "user_agent")
 
 
 def _so_insert(tabela):
@@ -467,6 +472,14 @@ def _travas_da_waiver():
             "CREATE TRIGGER waivers_nativa_sem_apagar BEFORE DELETE ON waivers\n"
             "WHEN OLD.source IS 'urace'\n"
             "BEGIN SELECT RAISE(ABORT, 'signed native waiver is never deleted (#109)'); END"),
+        "waiver_reviews_so_usar": (
+            "CREATE TRIGGER waiver_reviews_so_usar BEFORE UPDATE ON waiver_reviews\n"
+            "WHEN OLD.used_at IS NOT NULL OR NEW.used_at IS NULL OR "
+            + " OR ".join(f"NEW.{c} IS NOT OLD.{c}" for c in REVISAO_TRAVADAS) + "\n"
+            "BEGIN SELECT RAISE(ABORT, 'waiver_reviews: only used_at, once (#112)'); END"),
+        "waiver_reviews_no_delete": (
+            "CREATE TRIGGER waiver_reviews_no_delete BEFORE DELETE ON waiver_reviews\n"
+            "BEGIN SELECT RAISE(ABORT, 'waiver_reviews is append-only (#112)'); END"),
     }
 
 

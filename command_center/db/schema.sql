@@ -265,6 +265,35 @@ CREATE INDEX IF NOT EXISTS waiver_events_conta ON waiver_events(account_id, id) 
 CREATE INDEX IF NOT EXISTS waiver_events_convite ON waiver_events(invite_id, id) WHERE invite_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS waiver_events_waiver ON waiver_events(waiver_id, id) WHERE waiver_id IS NOT NULL;
 
+-- #112 (lacunas C-2 e A-5; Fla. Stat. §668.50(10)): a revisão antes do clique final. Quem assina vê o resumo
+-- (documento, piloto, quem assina, parentesco, nome digitado, assinatura, validade) e só depois confirma. O
+-- assinar exige uma revisão desta conta e piloto (ou deste convite), de até 30 min, nunca usada e com o mesmo
+-- conteúdo (`content_sha256`). Nada daqui se apaga; a única mudança aceita é marcar `used_at`, uma vez, na
+-- mesma transação do INSERT da waiver (trigger em db/__init__.py, com as da waiver).
+CREATE TABLE IF NOT EXISTS waiver_reviews (
+  id                  INTEGER PRIMARY KEY,
+  created_at          TEXT NOT NULL,                 -- UTC, hora do servidor (a hora da revisão)
+  expires_at          TEXT NOT NULL,
+  flow                TEXT NOT NULL CHECK (flow IN ('account','invite')),
+  account_id          INTEGER,
+  invite_id           INTEGER,
+  pilot_id            INTEGER,
+  client_id           INTEGER,
+  kind                TEXT NOT NULL,
+  template_version_id INTEGER,
+  template_sha256     TEXT NOT NULL,
+  content_sha256      TEXT NOT NULL,                 -- nome, assinatura, parentesco, caixas e leitura
+  typed_name          TEXT NOT NULL,
+  name_on_file        TEXT,                          -- o nome da conta (ou o do convite)
+  name_matches        INTEGER NOT NULL,              -- sem acento, sem maiúsculas, sem espaço repetido
+  signer_relationship TEXT,
+  ip                  TEXT,
+  user_agent          TEXT,
+  used_at             TEXT
+);
+CREATE INDEX IF NOT EXISTS waiver_reviews_conta ON waiver_reviews(account_id, id) WHERE account_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS waiver_reviews_convite ON waiver_reviews(invite_id, id) WHERE invite_id IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS invoices (
   id            INTEGER PRIMARY KEY,
   client_id     INTEGER REFERENCES clients(id),
