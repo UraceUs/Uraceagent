@@ -3568,6 +3568,8 @@ def test_editor_canva_so_com_o_teclado(servidor, navegador):
     g.keyboard.press("Enter")
     g.keyboard.press("ArrowDown")
     assert "ed-sel" in lona.locator('[data-ed-w="kbte2e"]').get_attribute("class")
+    # o foco anda para a linha da peça nova no quadro seguinte: o Enter antes disso cairia na linha do Texto
+    g.wait_for_function("() => document.activeElement?.getAttribute('data-camada') === 'kbte2e'")
     g.keyboard.press("Enter")
     g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-w=\"kbte2e\"] a[contenteditable]')")
     g.keyboard.type(" now")
