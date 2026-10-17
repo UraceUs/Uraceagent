@@ -19,7 +19,7 @@ import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from command_center.api import auth
@@ -753,7 +753,8 @@ def waiver_modelo(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection
 
 
 @r.get("/waivers/model/{kind}/pdf")
-def waiver_modelo_pdf(kind: str, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def waiver_modelo_pdf(kind: str, request: Request, driver: int | None = Query(None, ge=1, le=2**63 - 1),
+                      cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import waiver_nativa as wn
     m = wn.modelo(con, kind) if wn.ligada(con) else None
     if not m:
@@ -763,8 +764,11 @@ def waiver_modelo_pdf(kind: str, request: Request, cid=Depends(cliente_atual), c
     # #107: a prova de que o documento chegou a quem assina — o assinar exige este registro
     _aud(con, request, "portal.waiver.document_view", cid, {"kind": kind, "sha256": m["sha256"]})
     from command_center.providers import trilha_waiver as tw          # #111: e o passo na trilha
-    tw.registrar(con, "pdf_delivered", "account", ip=auth._ip(request), user_agent=request.headers.get("user-agent"),
-                 detail={"sha256": m["sha256"]}, account_id=cid, kind=kind, template_version_id=m.get("version_id"))
+    # revisão #329: a tela diz de qual piloto é a aba (`?driver=`); só vale piloto desta conta
+    piloto = driver if driver and any(x["id"] == driver for x in portal.pilotos(con, cid)) else None
+    tw.entregou_o_pdf(con, "account", ip=auth._ip(request), user_agent=request.headers.get("user-agent"),
+                      detail={"sha256": m["sha256"]}, account_id=cid, pilot_id=piloto, kind=kind,
+                      template_version_id=m.get("version_id"))
     con.commit()
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="URACE-waiver-{kind}.pdf"', "Cache-Control": "no-store"})

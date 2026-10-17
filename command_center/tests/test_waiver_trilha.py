@@ -33,7 +33,7 @@ def _corpo(**mais):
 def assina_como_a_tela(cli, hc, pid, kind="parental", email="maria@example.com"):  # noqa: F811
     """A ordem da tela de verdade: abre a tela, recebe o PDF, lê tudo, confirma o e-mail, pede o código, assina."""
     assert cli.post(f"{P}/drivers/{pid}/waiver/events", json={"event": "screen_opened"}, headers=hc).status_code == 201
-    assert cli.get(f"{P}/waivers/model/{kind}/pdf").status_code == 200
+    assert cli.get(f"{P}/waivers/model/{kind}/pdf?driver={pid}").status_code == 200
     r = cli.post(f"{P}/drivers/{pid}/waiver/events", json={"event": "all_pages_viewed", "mode": "pdf_viewer", "pages": 1}, headers=hc)
     assert r.status_code == 201, r.text
     confirma_email(cli, hc)
@@ -284,3 +284,156 @@ def test_com_30_eventos_o_certificado_muda_de_pagina_em_vez_de_cortar(tmp_path):
         ys = []
         p.extract_text(visitor_text=lambda txt, cm, tm, f, s: ys.append(tm[5] * cm[3] + cm[5]) if txt.strip() else None)
         assert ys and min(ys) >= wn.MARGEM_PE - 1, min(ys)
+
+
+
+# ------------------------------------------------------------------ revisão do PR #329
+def _sign(cli, hc, pid, email="maria@example.com", **mais):  # noqa: F811
+    c = conectar(); c.execute("UPDATE portal_codes SET created_at='2000-01-01T00:00:00Z'"); c.commit(); c.close()
+    cli.post(f"{P}/waivers/code", headers=hc)
+    return cli.post(f"{P}/drivers/{pid}/waiver", json=_corpo(sign_code=ultimo_codigo(email), **mais), headers=hc)
+
+
+def test_recarregar_o_convite_em_loop_nao_enche_a_trilha_nem_o_certificado(cli):  # noqa: F811
+    """200 recargas da tela do convite (o link e o PDF do visor) geravam 234 eventos e 15 páginas de certificado."""
+    from pypdf import PdfReader
+    from command_center.tests import test_convite_waiver as tc
+    liga(cli)
+    cid = tc.card(name="Bruno Adulto", email="bruno@example.com", pilot_name=None, pilot_dob="1990-02-02")
+    assert tc.manda(cli, equipe(cli), cid, "bruno@example.com").status_code == 201
+    token = tc.token_do_email("bruno@example.com")
+    cli.cookies.clear()
+    for _ in range(200):
+        assert cli.get(f"{P}/invite/{token}").status_code == 200
+        assert cli.get(f"{P}/invite/{token}/pdf").status_code == 200, "o PDF continua saindo"
+    con = conectar()
+    n = {r["event"]: r["n"] for r in todos(con, "SELECT event, COUNT(*) AS n FROM waiver_events GROUP BY event")}
+    assert n["screen_opened"] == 30 and n["pdf_delivered"] == 30, n
+    assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='waiver.invite.document_view'")["n"] == 200, \
+        "a entrega do #107 continua toda no audit_logs"
+    assert cli.post(f"{P}/invite/{token}/code").status_code == 200
+    r = cli.post(f"{P}/invite/{token}/sign", json=_corpo(typed_name="Bruno Adulto", relationship=None, guardian_declaration=False,
+                                                       sign_code=tc.codigo_do_email("bruno@example.com")))
+    assert r.status_code == 201, r.text
+    w = um(con, "SELECT * FROM waivers WHERE client_id=? AND source='urace'", (cid,))
+    t = json.loads(w["audit"])
+    assert [(e["event"], e["count"]) for e in t["events"]] == [("invite_sent", 1), ("screen_opened", 30), ("pdf_delivered", 30),
+                                                            ("code_sent", 1), ("code_verified", 1), ("reviewed", 1)], t["events"]
+    assert len(PdfReader(w["pdf_path"]).pages) <= 3, "o modelo e o certificado em no máximo duas páginas"
+    cert = " ".join(" ".join((p.extract_text() or "").split()) for p in PdfReader(w["pdf_path"]).pages[1:])
+    assert re.search(r"\(\S+ UTC\) to \d{4}-\d\d-\d\d \d\d:\d\d:\d\d E[DS]T \(\S+ UTC\) · Signing page opened ×30", cert), cert
+
+
+def test_o_pdf_da_conta_em_loop_tem_teto_por_conta_e_modelo(cli):  # noqa: F811
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    for _ in range(100):
+        assert cli.get(f"{P}/waivers/model/parental/pdf?driver={pid}").status_code == 200
+    assert cli.get(f"{P}/waivers/model/adult/pdf").status_code == 200, "o outro modelo tem o seu teto"
+    con = conectar()
+    assert um(con, "SELECT COUNT(*) AS n FROM waiver_events WHERE event='pdf_delivered' AND kind='parental'")["n"] == 30
+    assert um(con, "SELECT COUNT(*) AS n FROM waiver_events WHERE event='pdf_delivered' AND kind='adult'")["n"] == 1
+    wid = assina_como_a_tela(cli, hc, pid)
+    t = json.loads(um(con, "SELECT audit FROM waivers WHERE id=?", (wid,))["audit"])
+    assert [e["count"] for e in t["events"] if e["event"] == "pdf_delivered"] == [30]
+
+
+def test_abrir_a_tela_muitas_vezes_nao_tira_o_leu_todas_as_paginas(cli):  # noqa: F811
+    """O teto era um só para os dois eventos da tela, por conta: 30 aberturas tiravam a leitura do certificado."""
+    liga(cli)
+    hc, (pid, irmao) = cliente(cli, pilotos=(("Leo Santos", "2014-05-01"), ("Ana Santos", "2016-03-03")))
+    ev = f"{P}/drivers/{pid}/waiver/events"
+    assert [cli.post(ev, json={"event": "screen_opened"}, headers=hc).status_code for _ in range(31)][-2:] == [201, 429]
+    assert cli.post(f"{P}/drivers/{irmao}/waiver/events", json={"event": "screen_opened"}, headers=hc).status_code == 201, \
+        "o teto é por piloto"
+    assert cli.get(f"{P}/waivers/model/parental/pdf?driver={pid}").status_code == 200
+    assert cli.post(ev, json={"event": "all_pages_viewed", "mode": "pdf_viewer"}, headers=hc).status_code == 201
+    confirma_email(cli, hc)
+    r = _sign(cli, hc, pid)
+    assert r.status_code == 201, r.text
+    t = json.loads(um(conectar(), "SELECT audit FROM waivers WHERE id=?", (r.json()["waiver_id"],))["audit"])
+    assert "all_pages_viewed" in [e["event"] for e in t["events"]]
+
+
+def test_irmaos_em_duas_abas_cada_certificado_tem_os_passos_do_seu_piloto(cli):  # noqa: F811
+    """A mãe abre e lê A e B (duas abas), assina A e depois B: o certificado de cada um tem os passos daquele piloto."""
+    liga(cli)
+    hc, (a, b) = cliente(cli, pilotos=(("Leo Santos", "2014-05-01"), ("Ana Santos", "2016-03-03")))
+    for pid in (a, b):
+        assert cli.post(f"{P}/drivers/{pid}/waiver/events", json={"event": "screen_opened"}, headers=hc).status_code == 201
+        assert cli.get(f"{P}/waivers/model/parental/pdf?driver={pid}").status_code == 200
+        assert cli.post(f"{P}/drivers/{pid}/waiver/events", json={"event": "all_pages_viewed", "mode": "pdf_viewer"},
+                        headers=hc).status_code == 201
+    confirma_email(cli, hc)
+    wa = _sign(cli, hc, a).json()["waiver_id"]
+    wb = _sign(cli, hc, b).json()["waiver_id"]
+    con = conectar()
+    for wid, pid in ((wa, a), (wb, b)):
+        cob = json.loads(um(con, "SELECT detail FROM waiver_events WHERE event='signed' AND waiver_id=?", (wid,))["detail"])["covers"]
+        evs = todos(con, f"SELECT * FROM waiver_events WHERE id IN ({','.join('?' * len(cob))}) ORDER BY id", tuple(cob))
+        assert [e["event"] for e in evs] == ANTES, (pid, [e["event"] for e in evs])
+        assert {e["pilot_id"] for e in evs if e["event"] in ("screen_opened", "pdf_delivered", "all_pages_viewed",
+                                                              "code_verified", "reviewed")} == {pid}
+        assert [e["pilot_id"] for e in evs if e["event"] == "code_sent"] == [None]
+    o_outro = um(con, "SELECT pilot_id FROM waiver_events WHERE event='pdf_delivered' AND pilot_id=?", (b,))
+    assert o_outro and o_outro["pilot_id"] == b, "o PDF da aba de B fica com o piloto B"
+
+
+def test_pdf_com_piloto_de_outra_conta_fica_sem_piloto(cli):  # noqa: F811
+    liga(cli)
+    _, (outro,) = cliente(cli, conta={**CONTA, "email": "outra@example.com"})
+    cliente(cli)
+    assert cli.get(f"{P}/waivers/model/parental/pdf?driver={outro}").status_code == 200
+    assert um(conectar(), "SELECT pilot_id FROM waiver_events WHERE event='pdf_delivered' ORDER BY id DESC LIMIT 1")["pilot_id"] is None
+
+
+@pytest.mark.parametrize("pelo", ["conta", "convite"])
+def test_nome_digitado_com_surrogate_solto_nao_vira_500(cli, pelo):  # noqa: F811
+    """`\\ud800` solto no JSON dava UnicodeEncodeError (500). Agora sai do nome e a assinatura segue."""
+    from command_center.tests import test_convite_waiver as tc
+    liga(cli)
+    if pelo == "conta":
+        hc, (pid,) = cliente(cli)
+        assert cli.get(f"{P}/waivers/model/parental/pdf?driver={pid}").status_code == 200
+        confirma_email(cli, hc)
+        cli.post(f"{P}/waivers/code", headers=hc)
+        corpo, url, h = _corpo(sign_code=ultimo_codigo("maria@example.com")), f"{P}/drivers/{pid}/waiver", hc
+    else:
+        cid = tc.card(name="Bruno Adulto", email="bruno@example.com", pilot_name=None, pilot_dob="1990-02-02")
+        assert tc.manda(cli, equipe(cli), cid, "bruno@example.com").status_code == 201
+        token = tc.token_do_email("bruno@example.com")
+        cli.cookies.clear()
+        assert cli.get(f"{P}/invite/{token}/pdf").status_code == 200
+        assert cli.post(f"{P}/invite/{token}/code").status_code == 200
+        corpo = _corpo(typed_name="Maria Santos", relationship=None, guardian_declaration=False,
+                       sign_code=tc.codigo_do_email("bruno@example.com"))
+        url, h = f"{P}/invite/{token}/sign", {}
+    bruto = json.dumps(corpo).replace('"Maria Santos"', '"Maria \\ud800 Santos"')
+    r = cli.post(url, content=bruto, headers={**h, "Content-Type": "application/json"})
+    assert r.status_code == 201, r.text
+    t = json.loads(um(conectar(), "SELECT audit FROM waivers WHERE source='urace' ORDER BY id DESC LIMIT 1")["audit"])
+    assert t["typed_name"] == "Maria Santos"
+    from command_center.providers import trilha_waiver as tw
+    assert tw.verificar(conectar())["ok"]
+
+
+def test_motivo_da_anulacao_com_surrogate_nao_vira_500(cli):  # noqa: F811
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    wid = assina_como_a_tela(cli, hc, pid)
+    h = equipe(cli, "ger@urace.us")
+    bruto = json.dumps({"reason": "assinada por engano no teste"}).replace("engano", "engano \\udfff")
+    r = cli.post(f"{API}/waivers/{wid}/void", content=bruto, headers={**h, "Content-Type": "application/json"})
+    assert r.status_code == 200, r.text
+    assert r.json()["reason"] == "assinada por engano no teste"
+
+
+def test_insert_or_replace_nao_passa_pela_trava_dos_eventos(con):
+    from command_center.providers import trilha_waiver as tw
+    e = tw.registrar(con, "screen_opened", "account", account_id=1)
+    campos = {k: e[k] for k in ("id", "at", "flow", "event", "source", "hash")}
+    sql = f"({', '.join(campos)}) VALUES ({', '.join('?' * len(campos))})"
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        con.execute(f"INSERT OR REPLACE INTO waiver_events {sql}", (*list(campos.values())[:-1], "x" * 64))
+    con.execute(f"INSERT OR IGNORE INTO waiver_events {sql}", tuple(campos.values()))
+    assert tw.verificar(con)["ok"] and um(con, "SELECT COUNT(*) AS n FROM waiver_events")["n"] == 1

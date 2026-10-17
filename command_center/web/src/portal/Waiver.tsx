@@ -160,8 +160,8 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     {erro && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
     <section className="stack" aria-labelledby="w-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="w-doc">Read the document</h2>
-        <a className="btn sm" href={`${BASE}/waivers/model/${meu.kind}/pdf`} target="_blank" rel="noreferrer" onClick={() => setAbriuPdf(true)}>Open the PDF</a></div>
-      {!semVisor ? <VisorPdf url={`${BASE}/waivers/model/${meu.kind}/pdf`} onLido={em => leu(em, 'pdf_viewer')} onFalha={() => setSemVisor(true)} />
+        <a className="btn sm" href={`${BASE}/waivers/model/${meu.kind}/pdf?driver=${pid}`} target="_blank" rel="noreferrer" onClick={() => setAbriuPdf(true)}>Open the PDF</a></div>
+      {!semVisor ? <VisorPdf url={`${BASE}/waivers/model/${meu.kind}/pdf?driver=${pid}`} onLido={em => leu(em, 'pdf_viewer')} onFalha={() => setSemVisor(true)} />
         : <>
           <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
             This browser could not show the document here. Tap <b>Open the PDF</b>, read it, then read the text below to the end.</div></div>

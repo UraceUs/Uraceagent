@@ -18,6 +18,7 @@ primeira linha mexida.
 """
 import hashlib
 import json
+import re
 from datetime import datetime, timedelta, timezone
 
 from command_center.db import agora, todos, transacao, um
@@ -52,6 +53,14 @@ class Demais(Exception):
     """A tela mandou eventos demais na última hora (a rota devolve 429)."""
 
 
+_SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def sem_surrogate(v):
+    """Texto sem surrogate solto (`\\ud800` vindo do JSON): ele não vira UTF-8 e derrubava a gravação com 500."""
+    return _SURROGATE.sub("", v) if isinstance(v, str) else v
+
+
 def _canonico(linha):
     return json.dumps({k: linha.get(k) for k in _CAMPOS}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
@@ -75,6 +84,7 @@ def registrar(con, evento, fluxo, source="server", ip=None, user_agent=None, det
     linha.update(ids)
     linha.update(at=agora(), flow=fluxo, event=evento, source=source, ip=ip, user_agent=(user_agent or "")[:300] or None,
                  detail=json.dumps(detail, ensure_ascii=False, sort_keys=True) if detail is not None else None)
+    linha = {k: sem_surrogate(v) for k, v in linha.items()}
 
     def gravar():
         ponta = um(con, "SELECT hash FROM waiver_events ORDER BY id DESC LIMIT 1")
@@ -106,26 +116,46 @@ def verificar(con):
 # ------------------------------------------------------------------ escopo: o que a assinatura cobre
 def cobertos(con, account_id=None, pilot_id=None, kind=None, invite_id=None):
     """Os eventos de antes de assinar que esta assinatura cobre, na ordem.
-    Convite: todos os do convite. Conta: os desta conta desde a última assinatura dela (no máximo 24 h),
-    do piloto (ou sem piloto, como o código) e do modelo (ou sem modelo)."""
+    Convite: todos os do convite. Conta, nas últimas 24 h e do modelo (ou sem modelo):
+    - os do piloto, desde a última assinatura **dele** (irmãos abertos em duas abas não trocam passos);
+    - os da conta sem piloto (o código), desde a última assinatura **da conta**."""
     marcas = ",".join("?" * len(ANTES))
     if invite_id is not None:
         return todos(con, f"SELECT * FROM waiver_events WHERE invite_id=? AND event IN ({marcas}) ORDER BY id",
                      (invite_id, *ANTES))
-    ult = um(con, "SELECT MAX(id) AS id FROM waiver_events WHERE account_id=? AND event='signed'", (account_id,))["id"] or 0
+    da_conta = um(con, "SELECT COALESCE(MAX(id), 0) AS id FROM waiver_events WHERE account_id=? AND event='signed'",
+                  (account_id,))["id"]
+    do_piloto = um(con, """SELECT COALESCE(MAX(id), 0) AS id FROM waiver_events WHERE account_id=? AND event='signed'
+                           AND pilot_id=?""", (account_id, pilot_id))["id"]
     desde = (datetime.now(timezone.utc) - timedelta(hours=JANELA_HORAS)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    return todos(con, f"""SELECT * FROM waiver_events WHERE account_id=? AND id > ? AND at >= ? AND event IN ({marcas})
-                          AND (pilot_id IS NULL OR pilot_id=?) AND (kind IS NULL OR kind=?) ORDER BY id""",
-                 (account_id, ult, desde, *ANTES, pilot_id, kind))
+    return todos(con, f"""SELECT * FROM waiver_events WHERE account_id=? AND at >= ? AND event IN ({marcas})
+                          AND (kind IS NULL OR kind=?)
+                          AND ((pilot_id IS NULL AND id > ?) OR (pilot_id=? AND id > ?)) ORDER BY id""",
+                 (account_id, desde, *ANTES, kind, da_conta, pilot_id, do_piloto))
 
 
 def para_o_certificado(eventos, fuso):
-    """O que o certificado imprime de cada evento: hora na Flórida e em UTC, o que foi, quem registrou, IP e aparelho."""
+    """O que o certificado imprime de cada evento: hora na Flórida e em UTC, o que foi, quem registrou, IP e aparelho.
+    O mesmo passo repetido em seguida, do mesmo aparelho, vira uma linha só: ×N, com a hora do primeiro e a do último.
+    "Em seguida" inclui o vaivém de dois passos (recarregar a tela do convite repete abriu + recebeu o PDF): o certificado
+    nunca fica ilegível. Os ids de todos ficam em `ids`."""
+    def horas(at):
+        t = datetime.fromisoformat(at.replace("Z", "+00:00"))
+        return t.strftime("%Y-%m-%dT%H:%M:%SZ"), t.astimezone(fuso).strftime("%Y-%m-%d %H:%M:%S %Z")
+
     saida = []
     for e in eventos:
-        t = datetime.fromisoformat(e["at"].replace("Z", "+00:00"))
-        saida.append({"id": e["id"], "event": e["event"], "label": EVENTOS[e["event"]], "source": e["source"],
-                      "at_utc": t.strftime("%Y-%m-%dT%H:%M:%SZ"), "at_local": t.astimezone(fuso).strftime("%Y-%m-%d %H:%M:%S %Z"),
+        chave = (e["event"], e["source"], e["ip"], e["user_agent"])
+        ant = next((x for x in reversed(saida[-2:]) if (x["event"], x["source"], x["ip"], x["user_agent"]) == chave), None)
+        if ant:
+            ant["count"] += 1
+            ant["ids"].append(e["id"])
+            ant["last_at_utc"], ant["last_at_local"] = horas(e["at"])
+            ant["hash"] = e["hash"]
+            continue
+        utc, local = horas(e["at"])
+        saida.append({"id": e["id"], "ids": [e["id"]], "count": 1, "event": e["event"], "label": EVENTOS[e["event"]],
+                      "source": e["source"], "at_utc": utc, "at_local": local, "last_at_utc": utc, "last_at_local": local,
                       "ip": e["ip"], "user_agent": e["user_agent"], "hash": e["hash"]})
     return saida
 
@@ -147,18 +177,21 @@ def da_waiver(con, wid):
     return saida
 
 
-def _na_ultima_hora(con, fluxo, ids, source, evento=None):
-    escopo, valor = ("invite_id", ids["invite_id"]) if fluxo == "invite" else ("account_id", ids["account_id"])
+def _na_ultima_hora(con, fluxo, ids, evento, source):
+    """Quantas vezes `evento` entrou na última hora para esta conta (ou convite), este piloto e este modelo.
+    Cada passo tem o seu teto: abrir a tela muitas vezes não tira o "leu todas as páginas" (revisão #329)."""
+    escopo, valor = ("invite_id", ids.get("invite_id")) if fluxo == "invite" else ("account_id", ids.get("account_id"))
     desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-    return um(con, f"""SELECT COUNT(*) AS n FROM waiver_events WHERE {escopo}=? AND source=? AND at >= ?
-                       AND (? IS NULL OR event=?)""", (valor, source, desde, evento, evento))["n"]
+    return um(con, f"""SELECT COUNT(*) AS n FROM waiver_events WHERE {escopo}=? AND event=? AND source=? AND at >= ?
+                       AND pilot_id IS ? AND kind IS ?""",
+              (valor, evento, source, desde, ids.get("pilot_id"), ids.get("kind")))["n"]
 
 
 def da_tela(con, evento, fluxo, ip=None, user_agent=None, detail=None, **ids):
     """Um evento que a tela relatou: só os da lista fechada e no máximo `TELA_POR_HORA` por conta (ou convite)."""
     if evento not in DA_TELA:
         raise ValueError(f"a tela não registra este evento: {evento}")
-    if _na_ultima_hora(con, fluxo, ids, "client") >= TELA_POR_HORA:
+    if _na_ultima_hora(con, fluxo, ids, evento, "client") >= TELA_POR_HORA:
         raise Demais("Too many events from this page. Try again later.")
     return registrar(con, evento, fluxo, source="client", ip=ip, user_agent=user_agent, detail=detail, **ids)
 
@@ -166,6 +199,16 @@ def da_tela(con, evento, fluxo, ip=None, user_agent=None, detail=None, **ids):
 def abriu_pelo_link(con, ip=None, user_agent=None, detail=None, **ids):
     """O convite aberto (o servidor vê o GET do link). Recarregar em loop não enche a trilha: passou de
     `TELA_POR_HORA` aberturas na última hora, a página abre e a trilha não repete."""
-    if _na_ultima_hora(con, "invite", ids, "server", "screen_opened") >= TELA_POR_HORA:
+    return _com_teto(con, "screen_opened", "invite", ip, user_agent, detail, ids)
+
+
+def entregou_o_pdf(con, fluxo, ip=None, user_agent=None, detail=None, **ids):
+    """O PDF do modelo entregue (o servidor vê o GET). Com o mesmo teto do link aberto: recarregar o visor em loop
+    não enche a trilha nem o certificado (revisão #329). A entrega continua no `audit_logs` (#107) toda vez."""
+    return _com_teto(con, "pdf_delivered", fluxo, ip, user_agent, detail, ids)
+
+
+def _com_teto(con, evento, fluxo, ip, user_agent, detail, ids):
+    if _na_ultima_hora(con, fluxo, ids, evento, "server") >= TELA_POR_HORA:
         return None
-    return registrar(con, "screen_opened", "invite", ip=ip, user_agent=user_agent, detail=detail, **ids)
+    return registrar(con, evento, fluxo, ip=ip, user_agent=user_agent, detail=detail, **ids)

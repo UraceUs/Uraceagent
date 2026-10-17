@@ -423,7 +423,8 @@ def _png(dataurl):
 
 
 def _nome(v):
-    v = re.sub(r"\s+", " ", (v or "").strip())
+    from command_center.providers.trilha_waiver import sem_surrogate     # revisão #329: `\ud800` solto dava 500
+    v = re.sub(r"\s+", " ", sem_surrogate(v or "").strip())
     if len(v) < 3 or " " not in v:
         raise ErroWaiver("Type your full name, as your signature.")
     return v[:120]
@@ -609,7 +610,8 @@ def anular(con, wid, usuario, motivo, ip=None):
     quando e por quê, e para a auditoria (`waiver.void`). A waiver continua no card, na lista e no backup,
     marcada como anulada; `vigente` deixa de vê-la e o cliente pode assinar outra. Não se desfaz."""
     from command_center.db import auditar, transacao
-    motivo = re.sub(r"\s+", " ", (motivo or "").strip())[:500]
+    from command_center.providers.trilha_waiver import sem_surrogate
+    motivo = re.sub(r"\s+", " ", sem_surrogate(motivo or "").strip())[:500]
     if len(re.sub(r"[\W_]+", "", motivo)) < MIN_MOTIVO:      # letras e números: "........." não é motivo
         raise ErroWaiver(f"Escreva o motivo da anulação (pelo menos {MIN_MOTIVO} letras).")
     w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
@@ -716,7 +718,11 @@ def _pdf_assinado(base, t, png):
         for e in [*t["events"], {"label": "Signed", "source": "server", "at_local": t["signed_at_local"],
                                  "at_utc": t["signed_at_utc"], "ip": t.get("ip"), "user_agent": t.get("user_agent")}]:
             quem = "reported by the signer's browser" if e["source"] == "client" else "recorded by URACE's server"
-            topo = f"{e['at_local']} ({e['at_utc']} UTC) · {e['label']} · {quem}"
+            if e.get("count", 1) > 1:                 # o mesmo passo repetido em seguida: uma linha, do primeiro ao último
+                topo = (f"{e['at_local']} ({e['at_utc']} UTC) to {e['last_at_local']} ({e['last_at_utc']} UTC) · "
+                        f"{e['label']} ×{e['count']} · {quem}")
+            else:
+                topo = f"{e['at_local']} ({e['at_utc']} UTC) · {e['label']} · {quem}"
             aparelho = f"IP {e.get('ip') or '—'} · Device: {(e.get('user_agent') or '—')[:160]}"
             cabe(12 * len(_quebra(topo, 95)) + 11 * len(_quebra(aparelho, 95)))     # o evento não se parte entre páginas
             linha(topo, 9, "Helvetica-Bold", 12)

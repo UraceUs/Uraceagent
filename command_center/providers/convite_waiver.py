@@ -343,8 +343,8 @@ def pdf_do_modelo(con, token, ip=None, aparelho=None):
         pdf = f.read()
     auditar(con, "waiver.invite.document_view", f"invite:{inv['id']}", entity_type="waiver_invite", entity_id=inv["id"],
             detail={"kind": inv["kind"], "sha256": m["sha256"]}, ip=ip)
-    tw.registrar(con, "pdf_delivered", "invite", ip=ip, user_agent=aparelho, detail={"sha256": m["sha256"]},
-                 **_ids(inv, _piloto(con, inv), m))
+    tw.entregou_o_pdf(con, "invite", ip=ip, user_agent=aparelho, detail={"sha256": m["sha256"]},
+                      **_ids(inv, _piloto(con, inv), m))
     return pdf
 
 

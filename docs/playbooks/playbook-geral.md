@@ -401,6 +401,10 @@ com **hora, IP e aparelho**, e nenhum se muda nem se apaga (o próprio banco rec
 - **No PDF assinado**, o certificado lista esses passos em **Event history**, com a hora da Flórida e
   em UTC, IP e aparelho, e o hash do último passo. Com muitos passos ele **continua na página seguinte**
   ("continued"), sem cortar.
+- **Recarregar não enche a trilha.** Cada passo da tela (abrir, receber o PDF, ler) entra no máximo **30 vezes
+  por hora**, por conta (ou convite), piloto e modelo; no certificado, o mesmo passo repetido vira **uma linha só**
+  ("×N", com a hora do primeiro e a do último). Irmãos abertos em duas abas: cada certificado leva os passos do
+  seu piloto.
 - **Depois de assinar** (PDF baixado pelo cliente ou pela equipe, anulada; e, nas próximas tarefas,
   cópia por e-mail, documento conferido no balcão e pacote de prova) **não** entra no PDF, que não muda:
   fica só na trilha.
