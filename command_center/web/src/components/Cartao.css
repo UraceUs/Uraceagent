@@ -12,7 +12,8 @@
 .cd-prog-b{height:6px;border-radius:999px;background:var(--surface-3);overflow:hidden}
 .cd-prog-b i{display:block;height:100%;border-radius:999px;background:var(--ok);transform-origin:left;transition:transform var(--dur-media) var(--ease-saida)}
 .cd-prog-b.warn i{background:var(--warn)}.cd-prog-b.crit i{background:var(--crit)}.cd-prog-b.info i{background:var(--info)}
-.cd-lista li>.grow{flex:1 1 auto;min-width:0}
+.cd-lista li>.grow{flex:1 1 auto;min-width:min(45%,8em)}
+.cd-lista li>.muted{flex:0 1 auto;min-width:0;overflow-wrap:anywhere}
 .cd-lista li .chip{white-space:normal}
 .cd-aviso{width:100%;margin:0;text-align:left;font-size:13.5px;color:var(--ink-2);overflow-wrap:anywhere}
 .cd-aviso.crit{color:var(--crit)}.cd-aviso.warn{color:var(--warn)}

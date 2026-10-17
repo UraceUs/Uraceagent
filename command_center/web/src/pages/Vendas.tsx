@@ -175,7 +175,7 @@ export function Oportunidades() {
             const atrasado = !!o.next_at && o.next_at < new Date().toISOString()
             const [rot, tom]: [string, TomD] = o.stage === 'GANHO' ? [o.client_id ? tr("virou cliente") : ETAPA_PT.GANHO, 'ok'] : o.stage === 'PERDIDO' ? [ETAPA_PT.PERDIDO, 'crit']
               : o.next_at ? [atrasado ? tr("retorno atrasado") : tr("retorno marcado"), atrasado ? 'crit' : 'warn'] : [ETAPA_PT[o.stage] || o.stage, 'neutral']
-            return <Cartao key={o.id} id={`opp-${o.id}`} mini abrir={`/sales/${o.id}`} estado={rot} tom={tom} avatar={o.name} nome={o.name}
+            return <Cartao key={o.id} id={`opp-${o.id}`} nivel={2} mini abrir={`/sales/${o.id}`} estado={rot} tom={tom} avatar={o.name} nome={o.name}
               sub={[<span key="origem" className="row" style={{ gap: 6, justifyContent: 'center' }}><Icon name={CANAL_ICONE(o.source)} size={13} />{o.source || tr("sem origem")}
                 {!!o.calls && <span>· {o.calls} {tr("ligação(ões)")}</span>}</span>,
                 o.service ? `${o.service}${o.service_date ? ` · ${fmtDate(o.service_date)}` : ''}` : null]}
