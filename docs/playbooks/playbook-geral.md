@@ -169,7 +169,7 @@ pedem acesso de operador.
 | Site | **Editor do site** | `/ops/site/editor` | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
-| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas e **Anular** (#109) | gerente+ |
+| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111) e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
@@ -382,6 +382,31 @@ legal, e não há cópia no DocuSign.
     não é importado (o atual continua valendo), a assinatura **não liga** e a parental **não se assina
     online** (pela área do cliente ou pelo convite); a adult segue normal. Arquivo que não abre ou
     vazio também barra.
+
+#### Trilha de eventos da waiver assinada no próprio sistema (#111)
+
+Como o certificado do DocuSign (enviado, visto, assinado), cada passo de quem assina fica registrado
+com **hora, IP e aparelho**, e nenhum se muda nem se apaga (o próprio banco recusa):
+
+| Passo | Quem registra |
+|---|---|
+| convite enviado por e-mail (só pelo convite) | o servidor |
+| abriu a tela de assinar | a tela (área do cliente) ou o servidor (convite) |
+| recebeu o PDF | o servidor |
+| leu todas as páginas | a tela |
+| código enviado · código confirmado | o servidor |
+| revisou e confirmou (as caixas, o parentesco e o nome digitado, no clique final) | o servidor |
+| assinou | o servidor |
+
+- **No PDF assinado**, o certificado lista esses passos em **Event history**, com a hora da Flórida e
+  em UTC, IP e aparelho, e o hash do último passo. Com muitos passos ele **continua na página seguinte**
+  ("continued"), sem cortar.
+- **Depois de assinar** (PDF baixado pelo cliente ou pela equipe, anulada; e, nas próximas tarefas,
+  cópia por e-mail, documento conferido no balcão e pacote de prova) **não** entra no PDF, que não muda:
+  fica só na trilha.
+- **Onde ver:** Site › Waiver › Assinadas aqui › **Trilha** (gerente+): os passos de antes, a assinatura e
+  o que veio depois, e se a trilha inteira está **íntegra** (cada passo leva o hash do anterior; uma linha
+  mexida aparece como "trilha com linha mexida no evento #n").
 
 ### Um card por piloto
 
@@ -1046,6 +1071,7 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | convite da waiver por e-mail: para quem vai e os já mandados | `GET /clients/{id}/waiver-invite` (operador) |
 | mandar / reenviar o convite | `POST /clients/{id}/waiver-invite` com `{"email": "<o e-mail do card>"}` (operador; o e-mail confere com o card) |
 | versões do modelo da waiver nativa e o PDF de cada uma (#116) | `GET /site/waiver-nativa/versoes?kind=&limit=&offset=` · `GET /site/waiver-nativa/versoes/{id}/pdf` (gerente) |
+| trilha de eventos de uma waiver assinada no sistema e se a cadeia está íntegra (#111) | `GET /site/waiver-nativa/{id}/eventos` (gerente) |
 | dia do box | `GET /meu-dia` (operador; é a tela inicial do mecânico e do coach) |
 | mandar comando à IA do painel | `POST /ai/commands` (operador) |
 | propostas esperando decisão | `GET /ai/actions?status=PROPOSED` (logado) |

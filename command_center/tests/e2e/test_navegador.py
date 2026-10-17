@@ -1000,6 +1000,24 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     abrir(a, servidor, "/site/waiver")
     a.get_by_text("Rafa Waiver").wait_for()
     assert "parental · por Rita Waiver" in a.locator(".tr", has_text="Rafa Waiver").inner_text()
+    # 4. #111: a trilha da assinada, com o que a tela relatou (abriu, leu tudo) e o que o servidor registrou
+    a.locator(".tr", has_text="Rafa Waiver").get_by_role("button", name="Trilha").click()
+    a.get_by_text(re.compile(r"trilha íntegra · \d+ eventos no total")).wait_for()
+    passos = a.locator("ol li").all_inner_texts()
+    for passo in ("abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas", "código enviado", "código confirmado",
+                  "revisou e confirmou", "assinou", "PDF baixado"):
+        assert any(x.startswith(passo) for x in passos), (passo, passos)
+    assert any(x.startswith("abriu a tela de assinar") and "relatado pela tela" in x for x in passos), passos
+    assert any(x.startswith("PDF baixado") and "depois de assinar" in x for x in passos), passos
+    for largura in (360, 390):                       # a trilha aberta no celular não empurra a página para o lado
+        m = entrar(navegador, servidor, "italo@urace.us", largura=largura, altura=800)
+        abrir(m, servidor, "/site/waiver")
+        m.locator(".tr", has_text="Rafa Waiver").get_by_role("button", name="Trilha").click()
+        m.get_by_text(re.compile(r"trilha íntegra")).wait_for()
+        r = m.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not m.erros_js and not m.erros_api, (m.erros_js, m.erros_api)
+        m.close()
     a.close(); c.close()
 
 
@@ -1126,6 +1144,13 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     abrir(a, servidor, "/site/waiver")
     a.locator(".tr", has_text="Gabi Convite").get_by_text("anulada").wait_for()
     assert a.locator(".tr", has_text="Gabi Convite").get_by_role("button", name="Anular").count() == 0
+    # #111: a trilha do convite, do envio à anulação (o que a tela do convite relatou entra também)
+    a.locator(".tr", has_text="Gabi Convite").get_by_role("button", name="Trilha").click()
+    a.get_by_text(re.compile(r"trilha íntegra")).wait_for()
+    passos = list(dict.fromkeys(x.split(" · ")[0] for x in a.locator("ol li").all_inner_texts()))   # na ordem da 1ª vez
+    assert passos[:8] == ["convite enviado por e-mail", "abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas",
+                          "código enviado", "código confirmado", "revisou e confirmou", "assinou"], passos
+    assert "anulada" in passos[8:] and "PDF baixado" in passos[8:], passos
     if not estava:
         a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
     a.close(); c.close()

@@ -80,6 +80,18 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   useEffect(() => {
     if (sit?.enabled && meu?.kind) papi<WaiverModelo>('GET', `/waivers/model/${meu.kind}`).then(setModelo).catch(e => setErro((e as PortalError).message))
   }, [sit, meu?.kind])
+  // #111: o que só a tela sabe vai para a trilha (abriu a tela, leu todas as páginas); falhar aqui não trava a assinatura
+  const podeAssinar = !!(sit?.enabled && meu?.kind && meu.status !== 'signed' && !meu.own_signature_required)
+  const abriu = useRef(false)
+  useEffect(() => {
+    if (!podeAssinar || abriu.current) return
+    abriu.current = true
+    papi('POST', `/drivers/${pid}/waiver/events`, { event: 'screen_opened' }).catch(() => {})
+  }, [podeAssinar, pid])
+  function leu(em: string, modo: 'pdf_viewer' | 'pdf_opened_and_text') {
+    setLido(x => x ?? { em, modo })
+    if (!lido) papi('POST', `/drivers/${pid}/waiver/events`, { event: 'all_pages_viewed', mode: modo }).catch(() => {})
+  }
 
   async function assinar(e: FormEvent) {
     e.preventDefault(); setErro(null); setIndo(true)
@@ -149,14 +161,14 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     <section className="stack" aria-labelledby="w-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="w-doc">Read the document</h2>
         <a className="btn sm" href={`${BASE}/waivers/model/${meu.kind}/pdf`} target="_blank" rel="noreferrer" onClick={() => setAbriuPdf(true)}>Open the PDF</a></div>
-      {!semVisor ? <VisorPdf url={`${BASE}/waivers/model/${meu.kind}/pdf`} onLido={em => setLido({ em, modo: 'pdf_viewer' })} onFalha={() => setSemVisor(true)} />
+      {!semVisor ? <VisorPdf url={`${BASE}/waivers/model/${meu.kind}/pdf`} onLido={em => leu(em, 'pdf_viewer')} onFalha={() => setSemVisor(true)} />
         : <>
           <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
             This browser could not show the document here. Tap <b>Open the PDF</b>, read it, then read the text below to the end.</div></div>
           <div className="card card-b portal-waiver-texto" tabIndex={0} aria-label="Waiver text"
-            onScroll={e => { const t = e.currentTarget; if (abriuPdf && t.scrollTop + t.clientHeight >= t.scrollHeight - 8 && !lido) setLido({ em: new Date().toISOString(), modo: 'pdf_opened_and_text' }) }}>
+            onScroll={e => { const t = e.currentTarget; if (abriuPdf && t.scrollTop + t.clientHeight >= t.scrollHeight - 8 && !lido) leu(new Date().toISOString(), 'pdf_opened_and_text') }}>
             {modelo ? modelo.text || 'Open the PDF to read the document.' : <span className="spin" />}</div>
-          {abriuPdf && !lido && <button type="button" className="btn sm ghost" onClick={() => setLido({ em: new Date().toISOString(), modo: 'pdf_opened_and_text' })}>I have read the whole PDF</button>}
+          {abriuPdf && !lido && <button type="button" className="btn sm ghost" onClick={() => leu(new Date().toISOString(), 'pdf_opened_and_text')}>I have read the whole PDF</button>}
         </>}
       {!semVisor && modelo?.text && <details className="small"><summary>Text version (for screen readers)</summary>
         <div className="portal-waiver-texto" aria-label="Waiver text">{modelo.text}</div></details>}

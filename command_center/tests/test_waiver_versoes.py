@@ -228,8 +228,8 @@ def test_reimportar_guarda_a_anterior_e_a_assinatura_antiga_acha_o_modelo_pelo_h
     v1 = um(conectar(), "SELECT * FROM waiver_template_versions WHERE kind='parental'")
     assert t1["template_sha256"] == hashlib.sha256(PARENTAL).hexdigest() == v1["sha256"]
     assert t1["template_version_id"] == v1["id"]
-    from pypdf import PdfReader
-    assert f"Template version ID: {v1['id']}" in " ".join(PdfReader(w1["pdf_path"]).pages[-1].extract_text().split())
+    from command_center.tests.test_waiver_nativa import certificado
+    assert f"Template version ID: {v1['id']}" in certificado(w1["pdf_path"])
     # o DocuSign mudou o texto do parental: reimportar acrescenta a versão 2 e aponta para ela
     ds.pdf["parental"] = _pdf("PARENTAL CONSENT, RELEASE AND WAIVER - second text (test)")
     _importa(cli)

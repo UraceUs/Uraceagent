@@ -917,6 +917,10 @@ def waiver_download(wid: int, request: Request, u=Depends(auth.usuario_atual), c
             pdf = f.read()
         auditar(con, "waiver.download", f"user:{u['id']}", user_id=u["id"], entity_type="waiver", entity_id=wid,
                 detail={"origem": "urace", "sha256": w["doc_sha256"]}, ip=auth._ip(request))
+        from command_center.providers import trilha_waiver as tw          # #111: depois de assinar, na trilha
+        tw.registrar(con, "downloaded", "staff", ip=auth._ip(request), user_agent=request.headers.get("user-agent"),
+                     detail={"by": u.get("name"), "user_id": u["id"]}, waiver_id=wid, client_id=w["client_id"],
+                     pilot_id=w["pilot_id"], kind=w["template"])
         return Response(content=pdf, media_type="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="{nome}.pdf"', "Cache-Control": "no-store"})
     env = _envelope_id(con, wid)

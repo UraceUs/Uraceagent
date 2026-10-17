@@ -20,7 +20,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from command_center.api import auth
 from command_center.db import agora, atualizar, auditar, get_db, inserir, transacao, um
@@ -694,6 +694,10 @@ def _emitir(con, request, cid, finalidade):
     except email_envio.ErroEnvio:
         raise HTTPException(503, "We could not send the email right now. Try again in a few minutes.")
     _aud(con, request, "portal.code.sent", cid, {"finalidade": finalidade})
+    if finalidade == "waiver_sign":                 # #111: na trilha da waiver
+        from command_center.providers import trilha_waiver as tw
+        tw.registrar(con, "code_sent", "account", ip=auth._ip(request), user_agent=request.headers.get("user-agent"),
+                     detail={"sent_to": r.get("sent_to")}, account_id=cid)
     con.commit()
     return r
 
@@ -758,6 +762,9 @@ def waiver_modelo_pdf(kind: str, request: Request, cid=Depends(cliente_atual), c
         pdf = f.read()
     # #107: a prova de que o documento chegou a quem assina — o assinar exige este registro
     _aud(con, request, "portal.waiver.document_view", cid, {"kind": kind, "sha256": m["sha256"]})
+    from command_center.providers import trilha_waiver as tw          # #111: e o passo na trilha
+    tw.registrar(con, "pdf_delivered", "account", ip=auth._ip(request), user_agent=request.headers.get("user-agent"),
+                 detail={"sha256": m["sha256"]}, account_id=cid, kind=kind, template_version_id=m.get("version_id"))
     con.commit()
     return Response(content=pdf, media_type="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="URACE-waiver-{kind}.pdf"', "Cache-Control": "no-store"})
@@ -779,13 +786,55 @@ def assinar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(clie
     return {"waiver_id": w["id"], "signed_at": w["completed_at"], "valid_until": w["expires_at"], **wn.situacao(con, cid)}
 
 
+class EventoTelaIn(BaseModel):
+    """#111: o que só a tela sabe. Lista fechada no servidor (trilha_waiver.DA_TELA)."""
+    model_config = ConfigDict(extra="forbid")
+    event: str = Field(..., max_length=40)
+    mode: str | None = Field(None, max_length=40)          # all_pages_viewed: pdf_viewer | pdf_opened_and_text
+    pages: int | None = Field(None, ge=1, le=500)
+
+
+@r.post("/drivers/{pid}/waiver/events", status_code=201)
+def waiver_evento(pid: int, dados: EventoTelaIn, request: Request, cid=Depends(cliente_atual),
+                  con: sqlite3.Connection = Depends(get_db)):
+    """#111: abriu a tela de assinar e leu todas as páginas, relatados pela tela, com hora do servidor, IP e aparelho."""
+    from command_center.providers import trilha_waiver as tw, waiver_nativa as wn
+    if not wn.ligada(con):
+        raise HTTPException(404, "Waiver not available.")
+    p = next((x for x in portal.pilotos(con, cid) if x["id"] == pid), None)
+    if not p:
+        raise HTTPException(404, "Driver not found.")
+    try:
+        tipo = wn.tipo_para(p)
+    except wn.ErroWaiver as e:
+        raise HTTPException(400, str(e))
+    detalhe = None
+    if dados.event == "all_pages_viewed":
+        if dados.mode not in wn.MODOS_LEITURA:
+            raise HTTPException(400, "Unknown reading mode.")
+        detalhe = {"mode": dados.mode, "pages": dados.pages}
+    m = wn.modelo(con, tipo)
+    try:
+        e = tw.da_tela(con, dados.event, "account", ip=auth._ip(request), user_agent=request.headers.get("user-agent"),
+                       detail=detalhe, account_id=cid, pilot_id=pid, client_id=p.get("client_id"), kind=tipo,
+                       template_version_id=m.get("version_id") if m else None)
+    except ValueError:
+        raise HTTPException(400, "Unknown event.")
+    except tw.Demais as ex:
+        raise HTTPException(429, str(ex))
+    return {"ok": True, "id": e["id"]}
+
+
 @r.get("/waivers/{wid}/pdf")
-def waiver_assinada_pdf(wid: int, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def waiver_assinada_pdf(wid: int, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """O PDF assinado (documento + página de assinatura e certificado), só da própria conta."""
-    from command_center.providers import waiver_nativa as wn
+    from command_center.providers import trilha_waiver as tw, waiver_nativa as wn
     w = wn.da_conta(con, cid, wid)
     if not w or not w["pdf_path"] or not os.path.isfile(w["pdf_path"]):
         raise HTTPException(404, "Waiver not found.")
+    tw.registrar(con, "downloaded", "account", ip=auth._ip(request), user_agent=request.headers.get("user-agent"),
+                 detail={"by": "signer"}, account_id=cid, waiver_id=wid, pilot_id=w["pilot_id"], client_id=w["client_id"],
+                 kind=w["template"])
     with open(w["pdf_path"], "rb") as f:
         return Response(content=f.read(), media_type="application/pdf",
                         headers={"Content-Disposition": f'attachment; filename="URACE-waiver-{wid}.pdf"', "Cache-Control": "no-store"})
@@ -821,7 +870,7 @@ def _convite_recusado(con, request, e):
 def convite(token: str, request: Request, response: Response, con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import convite_waiver as cw
     try:
-        d = cw.ver(con, token, ip=auth._ip(request))
+        d = cw.ver(con, token, ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except cw.LinkInvalido as e:
         raise _convite_recusado(con, request, e)
     response.headers["Cache-Control"] = "no-store"
@@ -833,7 +882,7 @@ def convite(token: str, request: Request, response: Response, con: sqlite3.Conne
 def convite_pdf(token: str, request: Request, con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import convite_waiver as cw
     try:
-        pdf = cw.pdf_do_modelo(con, token, ip=auth._ip(request))
+        pdf = cw.pdf_do_modelo(con, token, ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except cw.LinkInvalido as e:
         raise _convite_recusado(con, request, e)
     return Response(content=pdf, media_type="application/pdf",
@@ -844,13 +893,29 @@ def convite_pdf(token: str, request: Request, con: sqlite3.Connection = Depends(
 def convite_codigo(token: str, request: Request, con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import codigos, convite_waiver as cw, email_envio
     try:
-        return cw.emitir_codigo(con, token, ip=auth._ip(request))
+        return cw.emitir_codigo(con, token, ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except cw.LinkInvalido as e:
         raise _convite_recusado(con, request, e)
     except codigos.ErroCodigo as e:
         raise HTTPException(429, str(e))
     except email_envio.ErroEnvio:
         raise HTTPException(503, "We could not send the email right now. Try again in a few minutes.")
+
+
+@r.post("/invite/{token}/events", status_code=201)
+def convite_evento(token: str, dados: EventoTelaIn, request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """#111: o que só a tela do convite sabe (leu todas as páginas), com lista fechada e limite de chamadas."""
+    from command_center.providers import convite_waiver as cw, trilha_waiver as tw
+    try:
+        e = cw.evento_da_tela(con, token, dados.event, dados.mode, dados.pages, ip=auth._ip(request),
+                              aparelho=request.headers.get("user-agent"))
+    except cw.LinkInvalido as ex:
+        raise _convite_recusado(con, request, ex)
+    except tw.Demais as ex:
+        raise HTTPException(429, str(ex))
+    except ValueError:
+        raise HTTPException(400, "Unknown event.")
+    return {"ok": True, "id": e["id"]}
 
 
 @r.post("/invite/{token}/sign", status_code=201)
@@ -866,10 +931,10 @@ def convite_assinar(token: str, dados: ConviteAssinarIn, request: Request, con: 
 
 
 @r.get("/invite/{token}/signed.pdf")
-def convite_pdf_assinado(token: str, con: sqlite3.Connection = Depends(get_db)):
+def convite_pdf_assinado(token: str, request: Request, con: sqlite3.Connection = Depends(get_db)):
     """A cópia de quem assinou, pelo mesmo link, até a validade do convite."""
     from command_center.providers import convite_waiver as cw
-    w = cw.pdf_assinado(con, token)
+    w = cw.pdf_assinado(con, token, ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     if not w:
         raise HTTPException(404, "Signed waiver not available from this link.")
     with open(w["pdf_path"], "rb") as f:

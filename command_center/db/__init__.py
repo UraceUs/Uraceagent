@@ -439,8 +439,9 @@ def status_da_waiver(alias="waivers"):
 
 
 # Tabelas de prova da waiver que só recebem INSERT: o banco recusa UPDATE e DELETE, como no `audit_logs`.
-# #116: as versões dos modelos. A trava é criada (ou trocada, se o texto mudou) a cada subida, com as da waiver.
-WAIVER_SO_INSERT = ("waiver_template_versions",)
+# #116: as versões dos modelos; #111: a trilha de eventos. A trava é criada (ou trocada, se o texto mudou) a cada
+# subida, com as da waiver.
+WAIVER_SO_INSERT = ("waiver_template_versions", "waiver_events")
 
 
 def _so_insert(tabela):

@@ -31,7 +31,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, um, waiver_anulada
-from command_center.providers import codigos, portal, waiver_nativa as wn
+from command_center.providers import codigos, portal, trilha_waiver as tw, waiver_nativa as wn
 
 VALIDADE_HORAS = 72          # a issue (#135, dono 06/10): "um link de uso único, que vale 72 h"
 INTERVALO_ENVIO_S = 60       # dois cliques seguidos não mandam dois e-mails
@@ -215,6 +215,7 @@ def enviar(con, client_id, por, user_id=None, email_confirmado=None, enviar_emai
            "created_at": _iso(agora_utc), "created_by": por, "user_id": user_id,
            "expires_at": _iso(agora_utc + timedelta(hours=VALIDADE_HORAS))}
     iid = inserir(con, "waiver_invites", **inv)
+    inv["id"] = iid
     token = f"{segredo}.{_selo(segredo, inv)}"
     try:
         mid = (enviar_email or email_envio.enviar)(inv["email"], assunto(inv), texto(inv, _link(token, base)))
@@ -232,7 +233,17 @@ def enviar(con, client_id, por, user_id=None, email_confirmado=None, enviar_emai
             detail={"invite": iid, "kind": inv["kind"], "to": inv["email"], "signer": inv["signer_name"],
                     "driver": inv["driver_name"], "expires_at": inv["expires_at"], "resend": bool(anteriores),
                     "replaced": anteriores}, ip=ip)
+    m = wn.modelo(con, inv["kind"])
+    tw.registrar(con, "invite_sent", "invite", ip=ip, detail={"to": codigos.mascarar(inv["email"]), "by": por,
+                                                              "expires_at": inv["expires_at"], "resend": bool(anteriores)},
+                 **_ids(inv, d.get("pilot_id"), m))
     return linha(con, iid)
+
+
+def _ids(inv, pilot_id=None, m=None):
+    """Os campos de escopo da trilha (#111) para um evento deste convite."""
+    return dict(invite_id=inv["id"], client_id=inv["client_id"], pilot_id=pilot_id, kind=inv["kind"],
+                template_version_id=m.get("version_id") if m else None)
 
 
 # ------------------------------------------------------------------ situação
@@ -305,8 +316,8 @@ def conferir(con, token):
     return inv
 
 
-def ver(con, token, ip=None):
-    """O que a tela do convite mostra. A primeira abertura fica registrada."""
+def ver(con, token, ip=None, aparelho=None):
+    """O que a tela do convite mostra. A primeira abertura fica registrada; cada abertura vai para a trilha (#111)."""
     inv = conferir(con, token)
     m = wn.modelo(con, inv["kind"])
     if not m:
@@ -315,13 +326,14 @@ def ver(con, token, ip=None):
         con.execute("UPDATE waiver_invites SET opened_at=? WHERE id=? AND opened_at IS NULL", (agora(), inv["id"]))
         auditar(con, "waiver.invite.opened", f"invite:{inv['id']}", entity_type="client", entity_id=inv["client_id"],
                 detail={"invite": inv["id"]}, ip=ip)
+    tw.abriu_pelo_link(con, ip=ip, user_agent=aparelho, detail={"first": not inv["opened_at"]}, **_ids(inv, _piloto(con, inv), m))
     return {"kind": inv["kind"], "driver": inv["driver_name"], "signer_name": inv["signer_name"],
             "email": codigos.mascarar(inv["email"]), "expires_at": inv["expires_at"],
             "model": {"name": m["name"], "pages": m["pages"], "text": m["text"] or "",
                       "declaration": wn.DECLARACAO if inv["kind"] == "parental" else None}}
 
 
-def pdf_do_modelo(con, token, ip=None):
+def pdf_do_modelo(con, token, ip=None, aparelho=None):
     """O PDF do modelo, e o registro da entrega (#107) — o assinar exige este registro."""
     inv = conferir(con, token)
     m = wn.modelo(con, inv["kind"])
@@ -331,10 +343,29 @@ def pdf_do_modelo(con, token, ip=None):
         pdf = f.read()
     auditar(con, "waiver.invite.document_view", f"invite:{inv['id']}", entity_type="waiver_invite", entity_id=inv["id"],
             detail={"kind": inv["kind"], "sha256": m["sha256"]}, ip=ip)
+    tw.registrar(con, "pdf_delivered", "invite", ip=ip, user_agent=aparelho, detail={"sha256": m["sha256"]},
+                 **_ids(inv, _piloto(con, inv), m))
     return pdf
 
 
-def emitir_codigo(con, token, enviar_email=None, ip=None):
+def _piloto(con, inv):
+    d = _do_card(con, inv["client_id"])
+    return d["pilot_id"] if d else None
+
+
+def evento_da_tela(con, token, evento, modo=None, paginas=None, ip=None, aparelho=None):
+    """#111: o que só a tela do convite sabe (abriu, leu todas as páginas), com lista fechada e limite."""
+    inv = conferir(con, token)
+    detalhe = None
+    if evento == "all_pages_viewed":
+        if modo not in wn.MODOS_LEITURA:
+            raise ValueError("modo de leitura inválido")
+        detalhe = {"mode": modo, "pages": paginas}
+    return tw.da_tela(con, evento, "invite", ip=ip, user_agent=aparelho, detail=detalhe,
+                      **_ids(inv, _piloto(con, inv), wn.modelo(con, inv["kind"])))
+
+
+def emitir_codigo(con, token, enviar_email=None, ip=None, aparelho=None):
     """O código de 6 dígitos (#108) no e-mail do convite. 1 por minuto, 5 por hora."""
     from command_center.providers import email_envio
     inv = conferir(con, token)
@@ -354,6 +385,8 @@ def emitir_codigo(con, token, enviar_email=None, ip=None):
             message_id=mid, created_at=_iso(agora_utc), expires_at=_iso(agora_utc + timedelta(minutes=CODIGO_MIN)))
     auditar(con, "waiver.invite.code_sent", f"invite:{inv['id']}", entity_type="client", entity_id=inv["client_id"],
             detail={"invite": inv["id"]}, ip=ip)
+    tw.registrar(con, "code_sent", "invite", ip=ip, user_agent=aparelho, detail={"sent_to": codigos.mascarar(inv["email"])},
+                 **_ids(inv, _piloto(con, inv), wn.modelo(con, inv["kind"])))
     return {"sent_to": codigos.mascarar(inv["email"]), "expires_in_minutes": CODIGO_MIN}
 
 
@@ -398,12 +431,17 @@ def assinar(con, token, dados, ip=None, aparelho=None):
     entregue, lido, modo = wn._leitura(con, inv["id"], tipo, dados, agora_utc, entidade="waiver_invite",
                                        evento="waiver.invite.document_view")
     cod = _conferir_codigo(con, inv, dados.get("sign_code"))
+    d = _do_card(con, inv["client_id"])
+    ids = _ids(inv, d["pilot_id"] if d else None, m)
+    tw.registrar(con, "code_verified", "invite", ip=ip, user_agent=aparelho,
+                 detail={"sent_to": codigos.mascarar(cod["sent_to"]), "sent_at": cod["created_at"]}, **ids)
+    wn.revisou(con, "invite", nome, parentesco, declaracao, ip, aparelho, ids)
+    agora_utc = _agora()                                  # a hora da assinatura vem depois do último passo da trilha
     ny = agora_utc.astimezone(portal.FUSO)
     nasc = date.fromisoformat(inv["driver_birth_date"])
     ate_d = wn.validade(tipo, nasc, ny.date())
     ate_motivo = ("the day before the minor turns 18" if tipo == "parental" and ate_d < ny.date() + timedelta(days=wn.VALIDADE_DIAS)
                   else "one year")
-    d = _do_card(con, inv["client_id"])
     trilha = {
         "signature_id": str(uuid.uuid4()), "template": tipo, "template_name": m["name"], "template_sha256": m["sha256"],
         "template_pages": m["pages"], "account_id": None, "account_email": inv["email"], "email_label": "Email",
@@ -435,17 +473,22 @@ def assinar(con, token, dados, ip=None, aparelho=None):
                   signer_name=inv["signer_name"], signer_email=inv["email"],
                   link_reason=f"assinada pelo convite #{inv['id']}, enviado ao e-mail do card", link_by="human",
                   resumo=f"waiver de {inv['signer_name']} assinada pelo convite por e-mail ({inv['driver_name']})",
-                  antes=marcar_usado)
+                  antes=marcar_usado, eventos={"fluxo": "invite", "cobrir": dict(invite_id=inv["id"]), "ids": ids,
+                                               "ip": ip, "user_agent": aparelho})
     con.execute("UPDATE waiver_invites SET waiver_id=? WHERE id=?", (w["id"], inv["id"]))
     auditar(con, "waiver.invite.signed", f"invite:{inv['id']}", entity_type="client", entity_id=inv["client_id"],
             detail={"invite": inv["id"], "waiver": w["id"], "kind": tipo, "sha256": w["doc_sha256"]}, ip=ip)
     return w, um(con, "SELECT * FROM waiver_invites WHERE id=?", (inv["id"],))
 
 
-def pdf_assinado(con, token):
+def pdf_assinado(con, token, ip=None, aparelho=None):
     """O PDF assinado, pelo mesmo link, até a validade do convite (a cópia de quem assinou)."""
     inv = achar(con, token)
     if not inv or not inv["used_at"] or not inv["waiver_id"] or inv["expires_at"] < _iso(_agora()):
         return None
     w = um(con, "SELECT id, pdf_path FROM waivers WHERE id=? AND client_id=?", (inv["waiver_id"], inv["client_id"]))
-    return w if w and w["pdf_path"] and os.path.isfile(w["pdf_path"]) else None
+    if not (w and w["pdf_path"] and os.path.isfile(w["pdf_path"])):
+        return None
+    tw.registrar(con, "downloaded", "invite", ip=ip, user_agent=aparelho, detail={"by": "signer"},
+                 waiver_id=w["id"], **_ids(inv))
+    return w
