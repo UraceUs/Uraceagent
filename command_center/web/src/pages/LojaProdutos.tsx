@@ -13,6 +13,7 @@ import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, Section } from '../components/ui'
 import { EditorTexto } from '../components/EditorTexto'
+import { InserirNoTopo } from '../components/Inserir'
 import { useToast } from '../components/Toast'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
@@ -61,6 +62,16 @@ export function ProdutosDaLoja() {
     } catch (er) { toast((er as ApiError).message, 'crit') }
   }
   return <div className="stack" style={{ gap: 14 }}>
+    {/* #312: o "Novo produto" fica no topo (antes ficava depois dos 70 produtos e da paginação) */}
+    {can('MANAGER') && <InserirNoTopo rotulo={tr("Novo produto")} primario>
+      <div className="loja-grade">
+        <label className="fld"><span>{tr("Nome")} <i>{tr("o cliente lê, em inglês")}</i></span><input value={novo.name} onChange={e => setNovo({ ...novo, name: e.target.value })} /></label>
+        <label className="fld"><span>{tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.regular} onChange={e => setNovo({ ...novo, regular: e.target.value })} /></label>
+        <label className="fld"><span>{tr("Categoria")}</span><select value={novo.categories[0]} onChange={e => setNovo({ ...novo, categories: [e.target.value] })}>
+          {(l.data?.categorias || []).map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}</select></label>
+        <div><button className="btn primary" disabled={novo.name.trim().length < 2} onClick={criar}>{tr("Criar e abrir")}</button></div>
+      </div>
+    </InserirNoTopo>}
     <p className="small muted" style={{ margin: 0 }}>{tr("Os produtos da loja do site. Frete: valor fixo por unidade, cobrado no pagamento quando o cliente escolhe \"Ship to me\" (vazio: a equipe combina à parte; 0: grátis). Retirar na pista é sempre grátis.")}</p>
     <div className="loja-filtros">
       <label className="fld"><span>{tr("Buscar")}</span><input type="search" value={q} placeholder={tr("nome, SKU ou endereço")} onChange={e => setQ(e.target.value)} /></label>
@@ -90,15 +101,6 @@ export function ProdutosDaLoja() {
       <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>
       <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, l.data.total)} {tr("de")} {l.data.total}</span>
       <button className="btn sm ghost" disabled={offset + POR_PAGINA >= l.data.total} onClick={() => setOffset(offset + POR_PAGINA)}>{tr("Próximas")}</button></div>}
-    {can('MANAGER') && <Section title={tr("Novo produto")}>
-      <div className="loja-grade">
-        <label className="fld"><span>{tr("Nome")} <i>{tr("o cliente lê, em inglês")}</i></span><input value={novo.name} onChange={e => setNovo({ ...novo, name: e.target.value })} /></label>
-        <label className="fld"><span>{tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.regular} onChange={e => setNovo({ ...novo, regular: e.target.value })} /></label>
-        <label className="fld"><span>{tr("Categoria")}</span><select value={novo.categories[0]} onChange={e => setNovo({ ...novo, categories: [e.target.value] })}>
-          {(l.data?.categorias || []).map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}</select></label>
-        <div><button className="btn primary" disabled={novo.name.trim().length < 2} onClick={criar}>{tr("Criar e abrir")}</button></div>
-      </div>
-    </Section>}
   </div>
 }
 

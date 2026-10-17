@@ -96,6 +96,69 @@ def addon_do_site(con, chave=None):
             "titulo": s["site_title"] or s["name"], "texto": s["description"] or LEAD_AND_FOLLOW["texto"]}
 
 
+def paginas_do_site():
+    """#312 (dono, 16/10): *"a gente escolhe em qual página que esse serviço vai estar"*. As páginas do site em que
+    um serviço do painel ou um cartão de preço entra, com o endereço de cada uma: as que o site tem de verdade
+    (o Arrive and Drive de `conteudo.ARRIVE` e as três dos cartões de `cartoes_site.PAGINAS`), nenhuma a mais."""
+    from command_center.providers.cartoes_site import PAGINAS
+    from command_center.vitrine.conteudo import ARRIVE
+    return [{"id": "arrive-and-drive", "nome": "Arrive and Drive", "caminho": ARRIVE["caminho"], "cartoes": False},
+            {"id": "academy", "nome": "Academy", "caminho": PAGINAS["academy"], "cartoes": True},
+            {"id": "pro-team", "nome": "Pro Team", "caminho": PAGINAS["pro-team"], "cartoes": True},
+            {"id": "for-beginners", "nome": "For Beginners", "caminho": PAGINAS["for-beginners"], "cartoes": True}]
+
+
+def _chave(s):
+    return " ".join(str(s.get("site_kart") or "").split()).lower()
+
+
+def onde_no_site(servicos):
+    """#312: onde cada serviço aparece hoje no site, pela mesma regra que monta as páginas — é o que o seletor de
+    página do painel mostra para o serviço que já existe.
+
+    - `kart`: sessão ativa com a chave de um kart, a única com essa chave → cartão do kart no Arrive and Drive e na
+      reserva (`paginas._karts_do_painel`);
+    - `addon`: add-on ativo com a chave do Lead and Follow, o único → caixa da reserva do Arrive and Drive
+      (`addon_do_site`); add-on com outra chave o site não mostra (`nenhum`);
+    - `plano`: plano ativo → página da Academy (`planos_para_cliente`);
+    - `area`: sessão ativa sem kart → só na área do cliente;
+    - `repetido`: dois ou mais ativos do mesmo tipo com a mesma chave → o site não mostra nenhum (`com`: os outros);
+    - `desativado`: fora do site e da área do cliente.
+
+    Devolve {id: {"onde", "pagina", "chave", "com"}}."""
+    from command_center.vitrine.conteudo import LEAD_AND_FOLLOW
+    lf = LEAD_AND_FOLLOW["chave"].lower()
+    grupos = {}
+    for s in servicos:
+        if s["active"] and _chave(s) and (s["kind"] or "session") in ("session", "addon"):
+            grupos.setdefault(((s["kind"] or "session"), _chave(s)), []).append(s)
+    out = {}
+    for s in servicos:
+        kind, k = s["kind"] or "session", _chave(s)
+        d = {"onde": "desativado", "pagina": None, "chave": s.get("site_kart"), "com": []}
+        if not s["active"]:
+            pass
+        elif kind == "plan":
+            d.update(onde="plano", pagina="academy")
+        elif kind == "addon" and k != lf:
+            d.update(onde="nenhum")
+        elif not k:
+            d.update(onde="area")
+        elif len(grupos[(kind, k)]) > 1:
+            d.update(onde="repetido", com=[o["name"] for o in grupos[(kind, k)] if o["id"] != s["id"]])
+        else:
+            d.update(onde="addon" if kind == "addon" else "kart", pagina="arrive-and-drive")
+        out[s["id"]] = d
+    return out
+
+
+def lista_no_painel(con):
+    """A lista de Serviços e preços com o lugar de cada serviço no site (#312)."""
+    ss = lista(con)
+    onde = onde_no_site(ss)
+    return [{**s, "no_site": onde[s["id"]]} for s in ss]
+
+
 def planos_para_cliente(con):
     """#169: os planos mensais que o site vende (Academy, Boost): preço por mês, meses, sessões por mês."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],
@@ -219,6 +282,28 @@ def _confere_deposito(s):
         raise ErroServico(MSG_DEPOSITO_OBRIGATORIO)
 
 
+class ChaveRepetida(ErroServico):
+    """#312 (revisão): o serviço ficaria ativo com a chave de outro ativo do mesmo tipo (409)."""
+
+
+def _confere_chave(con, s, sid=None):
+    """#312 (revisão): dois serviços ativos do mesmo tipo com a mesma chave tiram o kart (ou a caixa do add-on) do site
+    — é a regra de `onde_no_site` e da página. Quem cria esse conflito (criar, trocar a chave, o tipo, ou reativar) é
+    recusado com o que fazer; a tela, a API e o MCP passam por aqui."""
+    kind, k = s.get("kind") or "session", _chave(s)
+    if not s.get("active", 1) or not k or kind not in ("session", "addon"):
+        return
+    outros = [o for o in todos(con, "SELECT id, name, kind, site_kart FROM booking_services WHERE active=1 AND id IS NOT ?", (sid,))
+              if (o["kind"] or "session") == kind and _chave(o) == k]
+    if not outros:
+        return
+    if kind == "addon":
+        raise ChaveRepetida(f'O add-on {s["site_kart"]} já é vendido por "{outros[0]["name"]}": dois add-ons ativos com a mesma '
+                            "chave tiram a caixa da reserva do site. Desative aquele antes.")
+    raise ChaveRepetida(f'O kart {s["site_kart"]} já é vendido por "{outros[0]["name"]}": dois serviços ativos com o mesmo kart '
+                        "tiram o kart do site. Desative aquele antes ou escolha outro kart.")
+
+
 def criar(con, por, d):
     s = _dados(con, d, parcial=False)
     if s.get("kind") == "plan" and not s.get("months"):
@@ -227,6 +312,7 @@ def criar(con, por, d):
     _confere_deposito(s)
     if um(con, "SELECT 1 AS x FROM booking_services WHERE lower(name)=lower(?) AND active=1", (s["name"],)):
         raise ErroServico("já existe um serviço ativo com esse nome")
+    _confere_chave(con, s)
     return inserir(con, "booking_services", **s, updated_by=por, updated_at=agora())
 
 
@@ -238,6 +324,10 @@ def mudar(con, por, sid, d):
     s = _dados(con, d, parcial=True)
     _confere_deposito({**dict(atual), **s})
     mud = {k: (atual[k], v) for k, v in s.items() if atual[k] != v}
+    # #312 (revisão): só barra a mudança que CRIA o conflito (trocar a chave ou o tipo, ou reativar). Dois repetidos que
+    # já existem continuam editáveis (preço, nome…), senão ninguém consegue arrumar.
+    if {"site_kart", "kind"} & set(mud) or ("active" in mud and mud["active"][1]):
+        _confere_chave(con, {**dict(atual), **s}, sid)
     if mud:
         atualizar(con, "booking_services", sid, **{k: v for k, (_, v) in mud.items()}, updated_by=por, updated_at=agora())
     return mud
