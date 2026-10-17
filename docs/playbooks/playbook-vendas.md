@@ -560,41 +560,48 @@ mesma coisa.
 - **"Confirmar sozinho"** confirma a do plano, mas **não** confirma a extra: ela espera a invoice e a waiver.
 - **Extra cancelada** com a invoice aberta vira aviso em **Precisa de atenção**: anule a invoice (ou tire a
   linha dela) no QuickBooks.
+- **Vaga devolvida antes da cobrança:** se o cliente cancela uma do pacote e a extra do mesmo mês ainda não foi
+  cobrada, na hora de cobrar a extra passa a ser do plano (sem invoice). Em pedido de vários dias, a invoice
+  leva só as que continuam extra.
+- **Extra sem valor** (card sem mensal e sem "Valor da sessão extra"): fica escrito no agendamento "sem valor da
+  sessão extra". Ponha o valor na Mensalidade do card e clique **Aceitar** de novo: a invoice sai com o valor
+  novo, que fica gravado na sessão.
+- **No card, "acima do contrato"** conta o que passou do pacote e as extras do mês. A sessão paga no Stripe e
+  a avulsa não entram nem na vaga nem em "acima".
 - **Onde se combina:** card do cliente › Mensalidade (gerente): "Valor da sessão extra" (vazio mostra a
   conta que vale) e "Item da sessão extra".
 
-**Vários dias num pedido** (dono, 16/10: *"se ele quiser marcar para quartas, toda quarta … ele consegue
-marcar isso tudo em um book"*). Na área do cliente (`/portal/book`), o aluno recorrente vê **Book sessions**:
-- toca nos dias do calendário (marca e desmarca) ou usa os atalhos: **Every Wed** (e os outros dias que a
-  agenda abre) até **o fim do mês**, **as próximas 4 semanas** ou **uma data**, sempre dentro do que a agenda
-  mostra; **This weekend** e **Next weekend**;
-- cada dia tem o turno (manhã, tarde, dia todo) e o rótulo do servidor: **Included in your plan** ou **Extra
-  session · $689.23**; o resumo diz "3 included · 2 extras = $1,378.46";
-- **no máximo 12 dias** por pedido; **ou entram todos, ou nenhum** (se um dia lotou no meio do caminho, o
-  pedido volta com o dia que falhou; se o preço ou a vaga mudou desde que ele viu, volta para revisar);
-- depois de marcar, a página do pedido é `/portal/sessions/group/<n>`: os dias, a invoice das extras e a waiver.
+**Vários dias num pedido** (dono, 16/10: *"se ele quiser marcar para quartas, toda quarta. Ou quartas e sábado
+dessa semana, ou então sábado e domingo da outra, ele consegue marcar isso tudo em um book"*). Na área do
+cliente (**Book sessions**, `/portal/book`), o aluno recorrente:
+- toca nos dias do calendário (marca e desmarca) ou usa os atalhos **Every Wed** (e os outros dias que a agenda
+  abre), com **Repeat until**: o fim deste mês, as próximas 4 semanas ou até uma data, sempre dentro do que a
+  agenda mostra; **This weekend** e **Next weekend**. Atalho sem dia aberto avisa ("No open days that weekend.");
+- escolhe o **Session type** antes: sem ele, a tela diz "Pick the session type above to see what is included";
+- vê em cada dia o turno (manhã, tarde, dia todo) e o rótulo do servidor: **Included in your plan** ou **Extra
+  session · $689.23**; o resumo mostra "3 included · 2 extras" e, ao lado, "$1,378.46";
+- marca **no máximo 12 dias** por pedido; **ou entram todos, ou nenhum**: um dia que lotou no meio do caminho
+  volta para o cliente escolher outro, sem marcar os demais. Se a vaga ou o preço mudou entre ver e marcar, a
+  tela pede para revisar;
+- num dia que o plano **não cobre** (a recorrência acaba antes daquele mês, como no último mês de um contrato de
+  6 ou 12 meses), o dia diz isso e tem o botão **Book as a regular session**: abre a marcação de um dia, paga
+  como a de qualquer cliente (**Add to cart**, no Stripe, com o Stripe ligado; senão **Request session** e a
+  invoice). "Back to my plan days" volta para os vários dias.
 
 Na lista da equipe, cada sessão do pedido tem o chip **"pedido de vários dias #n"**. **Aceitar** uma delas
 aceita o **pedido inteiro**: as extras saem numa **invoice só** do QuickBooks (uma linha por sessão extra,
-item e valor da extra, sem depósito), a waiver sai uma vez, e o cliente recebe um e-mail só com todos os dias.
-Com a venda automática ligada, isso acontece sozinho na hora. A invoice paga confirma todas as extras dela.
-
-**Vários dias num pedido** (dono, 16/10: *"se ele quiser marcar para quartas, toda quarta. Ou quartas e sábado
-dessa semana, ou então sábado e domingo da outra, ele consegue marcar isso tudo em um book"*). Na área do
-cliente (**Book sessions**, `/portal/book`), o aluno recorrente toca nos dias do calendário ou usa os atalhos
-**Every Wed** (e os outros dias abertos), com **Repeat until**: o fim deste mês, as próximas 4 semanas ou até
-uma data (sempre dentro do que a agenda mostra), **This weekend** e **Next weekend**. Cada dia mostra o turno
-e "Included in your plan" ou "Extra session · $689.23"; o resumo diz "3 included · 2 extras = $1,378.46".
-- No máximo **12 dias** por pedido. **Ou entra tudo, ou nada**: um dia que lotou no meio do caminho volta para
-  o cliente escolher outro, sem marcar os demais. Se a vaga ou o preço mudou entre ver e marcar, a tela pede
-  para revisar.
-- Na lista da equipe cada dia aparece como um agendamento, com o chip **"pedido de vários dias #N"**.
-  **Aceitar** um deles aceita o pedido inteiro: **uma invoice** com as sessões extras (uma linha por dia) e
-  **uma waiver** para o pedido. Com a venda automática ligada, isso acontece sozinho e o cliente recebe **um**
-  e-mail com os dias, o que é do plano e o que é extra.
+item e valor da extra, sem depósito), a waiver sai uma vez, e o cliente recebe **um** e-mail com todos os dias,
+o que é do plano e o que é extra. Com a venda automática ligada, isso acontece sozinho na hora.
 - O cliente acompanha em `/portal/sessions/group/<n>`: os dias, a invoice das extras, a waiver e a confirmação.
-  Paga a invoice, todas as extras do pedido ficam pagas.
+  Paga a invoice, todas as extras do pedido ficam pagas. No painel do Site, essa invoice entra **uma vez** na
+  receita (não uma vez por dia).
 - A lista de sessões do cliente (My sessions) vem em páginas de 50 ("Show more sessions").
+
+**Um dia pela Reserva do site** (`/portal/reserve`): o aluno recorrente não vê preço cheio, depósito nem total;
+a etapa 4 mostra "Included in your plan" ou "Extra session · $689.23". Se a última vaga do mês foi ocupada entre
+ver e clicar (outra aba, uma tarefa de treino no Asana), a sessão **não** é marcada: a tela avisa "Your booking
+changed…", mostra o rótulo novo e só então libera o botão. O dia fora do plano vira sessão avulsa (carrinho ou
+invoice), como acima.
 
 ### Duas chaves da agenda (só leitura para quem vende)
 

@@ -27,7 +27,8 @@ PERIODOS = ("manha", "tarde", "dia")
 MOTIVOS = {"invalido": "Choose a valid date and time.",
            "fechado": "This time is not available. Pick another one.",
            "repetido": "This day and time is twice in your booking.",
-           "fora_do_plano": "Your monthly plan does not cover this date. Book it as a regular session."}
+           "fora_do_plano": "Your monthly plan does not cover this date. Use \"Book as a regular session\" on this day."}
+MUDOU = "Your booking changed since you reviewed it (a spot or a price). Please review it and book again."
 
 
 class ErroLote(ValueError):
@@ -143,7 +144,7 @@ def marcar(con, conta_id, piloto_id, servico_id, slots, cotacao, notas=None, ori
         quando = date.fromisoformat(ruim["date"]).strftime("%a, %b %d").replace(" 0", " ") if ruim["reason"] != "invalido" else ""
         raise ErroLote(f"{quando + ': ' if quando else ''}{ruim['message']}")
     if not cotacao or cotacao != c["hash"]:
-        raise CotacaoMudou("Your booking changed since you reviewed it (a spot or a price). Please review it and book again.")
+        raise CotacaoMudou(MUDOU)
     gid = inserir(con, "booking_groups", account_id=conta_id, pilot_id=piloto_id, service_id=servico_id,
                   origin="site" if origem == "site" else "portal", utm=utm)
     ids = []
@@ -158,3 +159,16 @@ def marcar(con, conta_id, piloto_id, servico_id, slots, cotacao, notas=None, ori
     for bid in ids:
         cob.ao_marcar(con, bid)
     return gid, ids
+
+
+def conferir(con, conta_id, piloto_id, servico_id, slots, cotacao):
+    """O pedido de um dia do aluno recorrente (a Reserva do site): a cotação que o cliente viu ("Included in your
+    plan" ou "Extra session · $X") ainda vale? Chame dentro da `transacao`, antes de marcar. Mudou (a última vaga
+    do mês foi ocupada, o preço mudou, o plano acabou): CotacaoMudou (409), e o cliente revisa antes."""
+    try:
+        c = cotar(con, conta_id, piloto_id, servico_id, slots)
+    except ErroLote:
+        raise CotacaoMudou(MUDOU)
+    if c["hash"] != cotacao:
+        raise CotacaoMudou(MUDOU)
+    return c

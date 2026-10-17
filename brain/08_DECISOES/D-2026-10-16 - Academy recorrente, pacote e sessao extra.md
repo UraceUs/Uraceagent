@@ -58,7 +58,17 @@ Liga com: [[D-2026-08-31 - Sessao extra e mensal do Academy]] · [[Urace Academy
 7. O pacote é **por mês** (zera no dia 1), também nos contratos de 6 e 12 meses, como já era.
 8. **Pro Racing Driver sem mensal no card não conta como recorrente.**
 9. A sessão do pacote cancelada **devolve a vaga do mês** (segue as regras de cancelamento que já existem); a
-   invoice de uma extra cancelada vira aviso em **Precisa de atenção** para a equipe anular no QuickBooks.
+   invoice de uma extra cancelada vira aviso em **Precisa de atenção** para a equipe anular no QuickBooks. A
+   extra do mesmo mês **ainda não cobrada** ocupa a vaga devolvida: na hora de cobrar, vira do plano e não sai
+   invoice (o cliente só paga a extra quando já usou as do pacote).
+
+Consequências dessas regras no sistema:
+- O dia de um mês que o plano **não cobre** (a recorrência acaba antes) é **sessão avulsa**: o aluno marca pelo
+  botão "Book as a regular session" e paga como qualquer cliente (Stripe com ele ligado, senão invoice).
+- O aluno marca **com a cotação que viu**: se a última vaga do mês foi ocupada entre ver e clicar, a sessão não
+  entra e a tela mostra o rótulo novo antes de ele marcar de novo (nada de extra cobrada sem aviso).
+- A extra que nasceu **sem valor** (card sem mensal) é cobrada com o valor que a equipe puser depois no card.
+- A invoice única das extras de um pedido conta **uma vez** na receita do painel do Site.
 
 ## A confirmar com o dono
 

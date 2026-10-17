@@ -125,11 +125,19 @@ def linha_da_extra(con, b, card):
     if not item:
         raise ErroCobranca("não achei o item da sessão extra no QuickBooks: escolha o \"Item da sessão extra\" na "
                            "Mensalidade do card (ou no plano, em Site › Serviços e preços) ou sincronize o QuickBooks")
-    if b["price"] is None:
-        raise ErroCobranca("sem valor da sessão extra: ponha o valor mensal ou o \"Valor da sessão extra\" na Mensalidade do card")
+    preco = b["price"]
+    if preco is None:
+        # nasceu sem preço (o card não tinha valor): a equipe pôs o valor depois — vale o de agora, gravado na sessão
+        p = contrato.preco_extra(con, card)
+        if p is None:
+            raise ErroCobranca("sem valor da sessão extra: ponha o valor mensal ou o \"Valor da sessão extra\" na Mensalidade do card")
+        preco = float(p)
+        atualizar(con, "bookings", b["id"], price=preco, updated_at=agora())
+        auditar(con, "booking.extra.preco", "system", entity_type="booking", entity_id=b["id"],
+                detail={"price": preco, "client_id": card})
     c = um(con, "SELECT monthly_plan FROM clients WHERE id=?", (card,))
     plano = (c or {}).get("monthly_plan")
-    return {"item_id": item, "quantidade": 1, "unitario": float(b["price"]),
+    return {"item_id": item, "quantidade": 1, "unitario": float(preco),
             "descricao": f"Extra session{f' ({plano})' if plano else ''} · "
                          f"{date.fromisoformat(b['date']).strftime('%m/%d/%Y')} ({_per(b)})"}
 
@@ -194,7 +202,31 @@ def cobrar(con, b, enviar=None, criar_cliente=None):
                                                   AND status IN ('pendente','confirmada') AND charge_kind IS NULL
                                                   AND qbo_invoice_id IS NULL AND (accepted_at IS NOT NULL OR id=?)
                                                 ORDER BY date, id""", (b["group_id"], b["id"]))] or [b]
+    if b.get("coverage") == "extra":
+        juntos = _realocar_extras(con, juntos)
+        if not juntos:
+            return "contrato"
     return _invoice(con, juntos, enviar, criar_cliente)
+
+
+def _realocar_extras(con, juntos):
+    """#314 (decisão 9): a sessão do pacote cancelada devolve a vaga do mês. A extra ainda não cobrada que agora cabe
+    no pacote vira do plano (sem custo) antes da invoice — o cliente só paga a extra quando já usou as do pacote.
+    Devolve as que continuam extra."""
+    card = card_do_agendamento(con, juntos[0])
+    if not card or not contrato.tem_contrato(con, card):
+        return juntos
+    res = contrato.alocar(con, card, [x["date"] for x in juntos], sem=tuple(x["id"] for x in juntos))
+    ficam = []
+    for x, a in zip(juntos, res):
+        if a["coverage"] != "plano":
+            ficam.append(x)
+            continue
+        atualizar(con, "bookings", x["id"], coverage="plano", price=0.0, charge_kind="contrato", charge_error=None,
+                  updated_at=agora())
+        auditar(con, "booking.realocada", "system", entity_type="booking", entity_id=x["id"],
+                detail={"de": "extra", "para": "plano", "client_id": card})
+    return ficam
 
 
 def _invoice(con, juntos, enviar, criar_cliente):

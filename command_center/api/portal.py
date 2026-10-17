@@ -421,6 +421,7 @@ class AgendarIn(BaseModel):
     notes: str | None = None
     origin: str | None = None                # #164: "site" quando veio do site novo
     utm: dict | None = None                  # #164: utm_source, utm_campaign… (para o marketing)
+    quote: str | None = None                 # #314: o hash da cotação que o aluno recorrente viu (409 se mudou)
 
 
 def _vender(bid):
@@ -439,8 +440,13 @@ def _vender(bid):
 @r.post("/bookings", status_code=201)
 def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
             con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import agenda_lote
     try:
         with transacao(con):                  # duas pessoas na última vaga: só uma leva
+            if dados.quote is not None:
+                # #314: o aluno recorrente viu "Included in your plan" ou "Extra session · $X": se mudou, revisa antes
+                agenda_lote.conferir(con, cid, dados.driver_id, dados.service_id,
+                                     [{"date": dados.date, "period": dados.period}], dados.quote)
             bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes, dados.service_id)
             from command_center.providers import cobranca_agenda, venda_site
             atualizar(con, "bookings", bid, origin="site" if dados.origin == "site" else "portal",
@@ -448,6 +454,8 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
             cobranca_agenda.ao_marcar(con, bid)      # contrato + waiver em dia: confirma sozinha (dono, 06/10)
             _aud(con, request, "portal.booking", cid, {"agendamento": bid, "data": dados.date, "periodo": dados.period,
                                                         "servico": dados.service_id})
+    except agenda_lote.CotacaoMudou as e:
+        raise HTTPException(409, str(e))
     except ag.ErroAgenda as e:
         raise HTTPException(400, str(e))
     tarefas.add_task(agenda_asana.levar, bid)      # #67: todo agendamento vira tarefa no Asana

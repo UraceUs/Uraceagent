@@ -231,6 +231,56 @@ def test_confirmar_sozinho_nao_confirma_a_extra_sem_cobranca(con, cenario):
         "a extra espera a invoice e a waiver, mesmo com Confirmar sozinho"
 
 
+def test_extra_que_nasceu_sem_preco_cobra_depois_que_a_equipe_poe_o_valor(con, cenario):
+    """O card sem mensal: a 2ª sessão nasce extra sem preço. A equipe põe o "Valor da sessão extra" e o Aceitar cobra."""
+    con.execute("UPDATE clients SET monthly_amount=NULL WHERE id=?", (cenario["card"],))
+    d1, d2 = _dois_no_mesmo_mes()
+    marca(con, cenario, d1)
+    b2 = marca(con, cenario, d2)
+    x2 = um(con, "SELECT coverage, price FROM bookings WHERE id=?", (b2,))
+    assert (x2["coverage"], x2["price"]) == ("extra", None)
+    qbo = Qbo()
+    cob.aceitar(con, 1, b2, enviar_invoice=qbo, enviar_waiver=lambda *a: {"envelopeId": "e"})
+    assert not qbo.chamadas and "sem valor da sessão extra" in um(con, "SELECT charge_error FROM bookings WHERE id=?", (b2,))["charge_error"]
+    con.execute("UPDATE clients SET extra_session_price=650 WHERE id=?", (cenario["card"],))   # a Mensalidade do card
+    r = cob.aceitar(con, 1, b2, enviar_invoice=qbo, enviar_waiver=lambda *a: {"envelopeId": "e"})
+    assert r["pagamento"] == "enviada" and len(qbo.chamadas) == 1, r
+    assert [(x["item_id"], x["unitario"]) for x in qbo.chamadas[0]["linhas"]] == [("892", 650.0)]
+    assert um(con, "SELECT price FROM bookings WHERE id=?", (b2,))["price"] == 650.0, "o valor fica gravado na sessão"
+
+
+def test_vaga_do_pacote_devolvida_vale_para_a_extra_ainda_nao_cobrada(con, cenario):
+    """Pacote de 1: o dia 1 é do plano e o dia 2 extra. O cliente cancela o dia 1 antes da cobrança do dia 2: o dia 2
+    passa a ser do plano, sem invoice (o cliente só paga a extra quando já usou as do pacote)."""
+    d1, d2 = _dois_no_mesmo_mes()
+    b1 = marca(con, cenario, d1)
+    b2 = marca(con, cenario, d2)
+    assert um(con, "SELECT coverage FROM bookings WHERE id=?", (b2,))["coverage"] == "extra"
+    ag.cancelar_pelo_cliente(con, cenario["conta"], b1)
+    qbo = Qbo()
+    cob.aceitar(con, 1, b2, enviar_invoice=qbo, enviar_waiver=lambda *a: {"envelopeId": "e"})
+    x2 = um(con, "SELECT coverage, price, charge_kind, qbo_invoice_id FROM bookings WHERE id=?", (b2,))
+    assert not qbo.chamadas, "nenhuma invoice de extra com a vaga do pacote livre"
+    assert (x2["coverage"], x2["price"], x2["charge_kind"], x2["qbo_invoice_id"]) == ("plano", 0, "contrato", None)
+    assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='booking.realocada' AND entity_id=?", (str(b2),))
+
+
+def test_card_da_equipe_acima_do_contrato_conta_so_o_pacote_e_as_extras(con):
+    """Pacote de 4: 3 do plano e 2 pagas no Stripe no mês. Sobra 1 vaga e nada está acima do contrato; uma extra, sim."""
+    from command_center.api.rotas import resumo_mensalidade
+    card, cid, pid = aluno(con, sessoes=4)
+    m = _mes()
+    for d in ("03", "04", "05"):
+        sessao(con, cid, pid, f"{m}-{d}", coverage="plano")
+    for d in ("06", "07"):
+        sessao(con, cid, pid, f"{m}-{d}", charge_kind="stripe")
+    mes = resumo_mensalidade(con, card, meses=1)["months"][0]
+    assert (mes["sessions_used"], mes["sessions_left"], mes["sessions_over"]) == (5, 1, 0), mes
+    sessao(con, cid, pid, f"{m}-08", coverage="extra", charge_kind="invoice")
+    mes = resumo_mensalidade(con, card, meses=1)["months"][0]
+    assert (mes["sessions_left"], mes["sessions_over"]) == (1, 1), "a extra é acima do contrato; a vaga do pacote continua"
+
+
 def test_extra_cancelada_com_invoice_aberta_aparece_em_precisa_de_atencao(con, cenario):
     d1, d2 = _dois_no_mesmo_mes()
     marca(con, cenario, d1)

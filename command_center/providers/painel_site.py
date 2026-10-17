@@ -226,10 +226,13 @@ def _recebido(con, ini, fim):
     # o plano: a mensalidade paga (invoice_total; sem ela, o preço de um mês — nunca o contrato inteiro)
     planos = todos(con, """SELECT COALESCE(NULLIF(invoice_total, 0), price, 0) AS valor, paid_at FROM plan_orders
                             WHERE paid_at IS NOT NULL AND paid_at>=? AND paid_at<?""", (ini, fim))
-    # a sessão da área do cliente paga pela invoice do QuickBooks (a do carrinho já está no pedido)
-    sessoes = todos(con, """SELECT COALESCE(NULLIF(invoice_total, 0), price, 0) AS valor, paid_at FROM bookings
+    # a sessão da área do cliente paga pela invoice do QuickBooks (a do carrinho já está no pedido). #314: as extras
+    # de um pedido de vários dias saem numa invoice só, gravada em cada sessão — cada invoice conta uma vez.
+    sessoes = todos(con, """SELECT COALESCE(NULLIF(MAX(invoice_total), 0), SUM(price), 0) AS valor, MIN(paid_at) AS paid_at
+                              FROM bookings
                              WHERE origin IN ('site','portal') AND store_order_id IS NULL AND paid_at IS NOT NULL
-                               AND paid_at>=? AND paid_at<? AND status<>'recusada'""", (ini, fim))
+                               AND paid_at>=? AND paid_at<? AND status<>'recusada'
+                             GROUP BY COALESCE(NULLIF(qbo_invoice_id, ''), 'b' || id)""", (ini, fim))
     loja = round(sum(_valor(o) for o in pagos), 2)
     rec_planos = round(sum(float(p["valor"]) for p in planos), 2)
     rec_sessoes = round(sum(float(s["valor"]) for s in sessoes), 2)

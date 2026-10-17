@@ -6,7 +6,8 @@
  * Tocar no dia marca ou desmarca. Atalhos: "Every Wed" (o resto do mês, as próximas 4 semanas ou até uma
  * data, dentro do que a agenda mostra), "This weekend", "Next weekend". Cada dia mostra só "Included in your
  * plan" ou "Extra session · $X", vindo do servidor (a cotação); o contador do pacote não aparece (dono,
- * 01/10). No máximo 12 dias por pedido; ou entra tudo, ou nada. Carregado só para quem tem plano. */
+ * 01/10). No máximo 12 dias por pedido; ou entra tudo, ou nada. Carregado só para quem tem plano. O dia que o plano
+ * não cobre (o plano acaba antes daquele mês) tem "Book as a regular session": abre a marcação de um dia, avulsa. */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { dataLonga, faixa, PERIODOS } from './Agendar'
@@ -30,9 +31,10 @@ function turnoPara(d: Dia, costume: Turno): Turno | null {
   return meios.length === 1 ? meios[0] : abertos[0]
 }
 
-export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, setServico, seletorPiloto, onMarcou }: {
+export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, setServico, seletorPiloto, onMarcou, onAvulso }: {
   piloto: number; plano: PlanoPiloto; dias: Dia[]; cfg: AgendaCfg; servicos: Servico[]; servico: number | null
   setServico: (id: number) => void; seletorPiloto: ReactNode; onMarcou: () => void
+  onAvulso: (date: string, period: Turno) => void
 }) {
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const porData = useMemo(() => Object.fromEntries(dias.map(d => [d.date, d])), [dias])
@@ -75,8 +77,10 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
     return [...Array(primeiro).fill(null), ...Array.from({ length: total }, (_, i) => `${mes}-${String(i + 1).padStart(2, '0')}`)]
   }, [mes])
 
-  function adicionar(isos: string[]) {
+  /** `vazio`: o que dizer quando o atalho não acha nenhum dia aberto (senão o toque não faria nada, sem aviso). */
+  function adicionar(isos: string[], vazio?: string) {
     setAviso(null)
+    if (!isos.length) { if (vazio) setAviso(vazio); return }
     setEscolhidos(x => {
       const novo = { ...x }
       let cortou = false
@@ -97,10 +101,12 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
   }
   const limite = ate === 'mes' ? fimDoMes(hoje) : ate === '4sem' ? somaDias(hoje, 27) : (ateData || somaDias(hoje, 27))
   const diasDaSemana = useMemo(() => [...new Set(dias.filter(d => d.any_open).map(d => d.weekday))].sort(), [dias])
-  const todaSemana = (wd: number) => adicionar(dias.filter(d => d.any_open && d.weekday === wd && d.date <= limite).map(d => d.date))
+  const todaSemana = (wd: number) => adicionar(dias.filter(d => d.any_open && d.weekday === wd && d.date <= limite).map(d => d.date),
+    ate === '4sem' ? 'No open days in the next 4 weeks.' : 'No open days left until then: try the next 4 weeks.')
   // o fim de semana desta semana (segunda a domingo) e o da próxima
   const sabado = (n: number) => { const d = new Date(hoje + 'T12:00:00'); const a = (d.getDay() + 6) % 7; return somaDias(hoje, 5 - a + 7 * n) }
-  const fimDeSemana = (n: number) => adicionar([sabado(n), somaDias(sabado(n), 1)].filter(x => x >= hoje && porData[x]?.any_open))
+  const fimDeSemana = (n: number) => adicionar([sabado(n), somaDias(sabado(n), 1)].filter(x => x >= hoje && porData[x]?.any_open),
+    'No open days that weekend.')
 
   const cotado = (iso: string) => q?.slots.find(x => x.date === iso && x.period === escolhidos[iso])
   const prontos = !!q && !cotando && q.slots.length === pedido.length && q.slots.every(x => x.ok)
@@ -155,13 +161,13 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
         <div className="row"><button className="btn ghost" aria-label="Previous month" disabled={meses.indexOf(mes) <= 0} onClick={() => setMes(meses[meses.indexOf(mes) - 1])}>‹</button>
           <b className="grow" style={{ textAlign: 'center' }}>{new Date(mes + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</b>
           <button className="btn ghost" aria-label="Next month" disabled={meses.indexOf(mes) >= meses.length - 1} onClick={() => setMes(meses[meses.indexOf(mes) + 1])}>›</button></div>
-        <div className="portal-cal" role="grid" aria-label="Pick the days">
-          {SEMANA.map(s => <div key={s} className="portal-cal-s" role="columnheader">{s}</div>)}
+        <div className="portal-cal" role="group" aria-label="Pick the days">
+          {SEMANA.map(s => <div key={s} className="portal-cal-s" aria-hidden="true">{s}</div>)}
           {grade.map((iso, i) => {
             if (!iso) return <div key={`v${i}`} />
             const aberto = !!porData[iso]?.any_open, on = !!escolhidos[iso]
-            return <button key={iso} type="button" role="gridcell" className={`portal-cal-d${aberto ? ' aberto' : ''}${on ? ' on' : ''}`} disabled={!aberto && !on}
-              aria-selected={on} aria-label={`${dataLonga(iso)}${on ? ', selected' : aberto ? ', available' : ', not available'}`}
+            return <button key={iso} type="button" className={`portal-cal-d${aberto ? ' aberto' : ''}${on ? ' on' : ''}`} disabled={!aberto && !on}
+              aria-pressed={on} aria-label={`${dataLonga(iso)}${on ? ', selected' : aberto ? ', available' : ', not available'}`}
               onClick={() => alternar(iso)}>{Number(iso.slice(8))}</button>
           })}
         </div>
@@ -171,11 +177,12 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
       <section className="stack" style={{ gap: 10 }} aria-labelledby="v-lista">
         <h2 className="h2" id="v-lista">Your booking</h2>
         {!n ? <p className="small muted" style={{ margin: 0 }}>Tap the days in the calendar, or use a quick pick.</p>
-          : <ul className="portal-varios-lista" aria-live="polite">{pedido.map(({ date, period }) => {
+          : <ul className="portal-varios-lista">{pedido.map(({ date, period }) => {
             const d = porData[date], c = cotado(date)
             return <li key={date} className={`portal-varios-dia${c && !c.ok ? ' ruim' : ''}`}>
               <div className="portal-varios-cab"><b>{curta(date)}</b>
                 {c?.ok ? <span className={`chip ${c.coverage === 'extra' ? 'warn' : 'ok'}`}>{c.label}</span>
+                  : !servico ? <span className="small muted">Pick the session type</span>
                   : !c && cotando ? <span className="small muted">checking…</span> : null}</div>
               <button type="button" className="btn ghost portal-varios-tirar" aria-label={`Remove ${dataLonga(date)}`} onClick={() => alternar(date)}>✕</button>
               <div className="portal-varios-turnos" role="group" aria-label={`Time on ${dataLonga(date)}`}>
@@ -183,12 +190,15 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
                   <button key={t} type="button" className={`btn${period === t ? ' primary' : ''}`} aria-pressed={period === t}
                     onClick={() => setEscolhidos(x => ({ ...x, [date]: t }))}>{PERIODOS[t]}<span className="small"> {faixa(cfg, t)}</span></button>)}</div>
               {c && !c.ok && <p className="small portal-varios-motivo">{c.message}</p>}
+              {c?.reason === 'fora_do_plano' && <div className="portal-varios-avulso">
+                <button type="button" className="btn" onClick={() => onAvulso(date, period)}>Book as a regular session</button></div>}
             </li>
           })}</ul>}
         {n > 0 && <div className="reserva-total" aria-live="polite">
           {q && !cotando ? <div className="soma"><span>{q.extras
             ? `${q.included} included · ${q.extras} extra${q.extras > 1 ? 's' : ''}`
             : `${q.included} included in your plan`}</span><span>{q.extras ? (q.extra_price_missing ? 'by invoice' : usd(q.extras_total)) : usd(0)}</span></div>
+            : !servico ? <div className="small muted"><span>Pick the session type above to see what is included.</span></div>
             : <div className="small muted"><span>Checking your days…</span></div>}
           {q && q.extras > 0 && <div className="small muted"><span>The extra sessions come in one invoice by email.</span></div>}</div>}
         {n > 0 && <label className="fld"><span>Anything we should know? <i>optional</i></span><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></label>}

@@ -231,3 +231,56 @@ def test_invoice_das_extras_que_falhou_e_tentada_uma_vez_por_rodada(amb, monkeyp
     assert len(tentativas) == 2, "uma tentativa por rodada para o pedido"
     extras = todos(con, "SELECT charge_error, charge_attempts FROM bookings WHERE group_id=? AND coverage='extra'", (gid,))
     assert {x["charge_attempts"] for x in extras} == {2} and all("fora do ar" in x["charge_error"] for x in extras)
+
+
+def test_reserva_de_um_dia_com_a_cotacao_vencida_da_409_e_nao_marca(amb):
+    """A Reserva do site marca um dia do aluno recorrente com o hash da cotação que ele viu. Se a última vaga do mês foi
+    ocupada entre a cotação e o clique, o "Included in your plan" virou extra: 409, nada é gravado, e ele revisa."""
+    con, cli = amb["con"], amb["cli"]
+    dia = quartas(1)[0]
+    q = cota(amb, [dia])
+    assert q["slots"][0]["label"] == "Included in your plan"
+    # outra aba (ou uma tarefa de treino) ocupa as 2 vagas do pacote do mês
+    outros = [f"{dia[:7]}-{d:02d}" for d in (1, 2, 3) if f"{dia[:7]}-{d:02d}" != dia][:2]
+    for d in outros:
+        inserir(con, "bookings", account_id=amb["conta"], pilot_id=amb["pid"], date=d, period="tarde", status="confirmada",
+                coverage="plano", price=0)
+    con.commit()
+    um_dia = {"date": dia, "period": "manha", "service_id": amb["sid"], "driver_id": amb["pid"], "origin": "site"}
+    r = cli.post(f"{P}/bookings", headers=amb["h"], json={**um_dia, "quote": q["hash"]})
+    assert r.status_code == 409 and "review" in r.json()["detail"], r.text
+    assert not um(con, "SELECT 1 AS x FROM bookings WHERE date=? AND period='manha'", (dia,)), "nada foi marcado"
+    novo = cota(amb, [dia])
+    assert novo["slots"][0]["label"] == "Extra session · $689.23", "a cotação de novo mostra a extra antes de marcar"
+    r = cli.post(f"{P}/bookings", headers=amb["h"], json={**um_dia, "quote": novo["hash"]})
+    assert r.status_code == 201, r.text
+    b = um(con, "SELECT coverage, price FROM bookings WHERE id=?", (r.json()["id"],))
+    assert (b["coverage"], b["price"]) == ("extra", 689.23)
+
+
+def test_pedido_com_a_vaga_do_pacote_devolvida_cobra_so_as_que_continuam_extra(amb, monkeypatch):
+    """Pacote de 1 por mês: o cliente cancela o dia do plano antes da cobrança; o 1º extra daquele mês ocupa a vaga
+    devolvida e sai da invoice das extras."""
+    from command_center.providers import cobranca_agenda as cob
+    con, cli = amb["con"], amb["cli"]
+    con.execute("UPDATE clients SET monthly_sessions=1 WHERE id=?", (amb["card"],))
+    con.commit()
+    dias = quartas(5)
+    q = cota(amb, dias)
+    gid = cli.post(f"{P}/bookings/batch", headers=amb["h"], json=corpo(amb, dias, quote=q["hash"])).json()["group_id"]
+    bs = todos(con, "SELECT * FROM bookings WHERE group_id=? ORDER BY date", (gid,))
+    # 5 quartas em até 2 meses: um dos meses tem o dia do plano e extras
+    mes = next(m for m in sorted({b["date"][:7] for b in bs}) if sum(1 for b in bs if b["date"][:7] == m) > 1)
+    plano = next(b for b in bs if b["date"][:7] == mes and b["coverage"] == "plano")
+    extra = next(b for b in bs if b["date"][:7] == mes and b["coverage"] == "extra")
+    ag.cancelar_pelo_cliente(con, amb["conta"], plano["id"])
+    monkeypatch.setattr(mensalidades, "_cliente_qbo", lambda con, cid: "42")
+    chamadas = []
+
+    def qbo(**kw):
+        chamadas.append(kw)
+        return {"id": "601", "numero": "URACE-0601", "total": round(sum(x["unitario"] for x in kw["linhas"]), 2), "enviado": True}
+    cob.aceitar(con, 1, extra["id"], enviar_invoice=qbo, enviar_waiver=lambda *a: {"envelopeId": "e"})
+    assert um(con, "SELECT coverage, charge_kind, qbo_invoice_id FROM bookings WHERE id=?", (extra["id"],)) == \
+        {"coverage": "plano", "charge_kind": "contrato", "qbo_invoice_id": None}, "a vaga devolvida vale para o 1º extra do mês"
+    assert len(chamadas) == 1 and len(chamadas[0]["linhas"]) == q["extras"] - 1, "a invoice leva só as que continuam extra"
