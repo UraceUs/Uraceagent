@@ -238,7 +238,7 @@ LUGARES = [
     ("pages/Garage.tsx", "Novo motor", "data.engines.map(e => <Linha<Engine>"),
     ("pages/Garage.tsx", "Nova peça", "parts.map(p =>"),
     ("pages/Checklists.tsx", "Adicionar item", "m.itens.map(i =>"),
-    ("pages/Races.tsx", "Convidar piloto", "{r.invited.map(i => <div className=\"att\""),
+    ("pages/Races.tsx", "Convidar piloto", "<div className=\"cd-grade cd-dentro\">{r.invited.map(i => {"),       # #313: o cartão D
 ]
 
 
