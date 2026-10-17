@@ -8,6 +8,7 @@ própria (append-only) e a anulada deixa de valer, mas continua no card, na list
 import json
 import os
 import sqlite3
+from datetime import date, timedelta
 
 import pytest
 
@@ -23,7 +24,8 @@ API = "/ops/api"
 def nativa(con, **campos):
     """Uma waiver nativa assinada, gravada direto (o INSERT é livre: o que a trava segura é a linha depois)."""
     base = dict(signer_name="Maria Santos", signer_email="maria@example.com", template="adult", status="completed",
-                sent_at="2026-10-01T12:00:00.000Z", completed_at="2026-10-01T12:00:00.000Z", expires_at="2027-10-01",
+                sent_at="2026-10-01T12:00:00.000Z", completed_at="2026-10-01T12:00:00.000Z",
+                expires_at=(date.today() + timedelta(days=365)).isoformat(),
                 source="urace", doc_sha256="a" * 64, audit=json.dumps({"ip": "203.0.113.5"}), pdf_path="/nao/existe.pdf")
     return inserir(con, "waivers", **{**base, **campos})
 
