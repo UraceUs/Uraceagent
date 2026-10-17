@@ -14,8 +14,10 @@ Decisões (ADR §2):
     mudança de usuário/papel).
 """
 import base64
+import functools
 import hashlib
 import hmac
+import ipaddress
 import os
 import secrets
 import sqlite3
@@ -219,9 +221,59 @@ def revogar_todas(con, user_id):
                 (agora(), user_id))
 
 
+# #120: o IP de quem pediu. O Caddy fica na mesma máquina e fala com o uvicorn por 127.0.0.1;
+# só ele (ou um endereço de CC_PROXIES_CONFIAVEIS, separado por vírgula, IP ou rede) pode
+# dizer, no X-Forwarded-For, de onde o pedido veio. Vale o ÚLTIMO salto que não é proxy nosso:
+# o que o próprio proxy escreveu. O primeiro valor é o que o cliente quis mandar.
+PROXIES_LOCAIS = ("127.0.0.1", "::1")
+
+
+@functools.lru_cache(maxsize=8)
+def _redes_confiaveis(extra):
+    redes = []
+    for item in (*PROXIES_LOCAIS, *extra.split(",")):
+        try:
+            if item.strip():
+                redes.append(ipaddress.ip_network(item.strip(), strict=False))
+        except ValueError:
+            print(f"[auth] CC_PROXIES_CONFIAVEIS: ignorei {item.strip()[:60]!r} (não é IP nem rede)", file=sys.stderr)
+    return tuple(redes)
+
+
+def _endereco(valor):
+    """O IP de um salto do X-Forwarded-For (sem porta e sem colchete), ou None se não é IP."""
+    v = (valor or "").strip()
+    if v.startswith("[") and "]" in v:
+        v = v[1:v.index("]")]
+    elif v.count(":") == 1:
+        v = v.split(":")[0]
+    try:
+        ip = ipaddress.ip_address(v)
+    except ValueError:
+        return None
+    return ip.ipv4_mapped if ip.version == 6 and ip.ipv4_mapped else ip
+
+
+def _de_confianca(ip, redes):
+    return ip is not None and any(ip.version == r.version and ip in r for r in redes)
+
+
 def _ip(request):
-    xff = request.headers.get("x-forwarded-for", "")
-    return (xff.split(",")[0].strip() if xff else request.client.host if request.client else "?")
+    """O IP real do cliente. Quem conecta direto é a resposta, e o cabeçalho é ignorado;
+    se quem conecta é proxy nosso, anda o X-Forwarded-For da direita para a esquerda e
+    para no primeiro salto que não é proxy nosso."""
+    par = (request.client.host if request.client else "") or "?"
+    redes = _redes_confiaveis(os.environ.get("CC_PROXIES_CONFIAVEIS", ""))
+    if not _de_confianca(_endereco(par), redes):
+        return par
+    saltos = [s for linha in request.headers.getlist("x-forwarded-for") for s in linha.split(",") if s.strip()]
+    for salto in reversed(saltos):
+        ip = _endereco(salto)
+        if ip is None:
+            return par                   # o proxy não escreveria isso: fica o último endereço que sabemos
+        if not _de_confianca(ip, redes):
+            return str(ip)
+    return str(_endereco(saltos[0])) if saltos else par
 
 
 def _seguro(request):

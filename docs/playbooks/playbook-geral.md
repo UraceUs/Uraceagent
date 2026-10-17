@@ -75,6 +75,7 @@ Três ideias explicam o painel inteiro:
 | Situação | O que acontece |
 |---|---|
 | Errou a senha 5 vezes em 15 minutos | o acesso trava por alguns minutos ("Too many attempts") |
+| De que IP o sistema diz que veio (#120) | o IP que o Caddy viu chegar, o mesmo no bloqueio de senha, na Auditoria e na trilha da waiver assinada no próprio site. Um cabeçalho `X-Forwarded-For` inventado pelo navegador não muda esse IP |
 | Esqueceu a senha | não há autoatendimento: um administrador redefine em **Usuários** |
 | Quer trocar a senha | menu do seu nome (canto de cima) › **Minha conta e senha**. Trocar a senha encerra todas as suas sessões |
 | Celular | o mesmo endereço. Embaixo aparece a barra de abas |
@@ -165,7 +166,7 @@ pedem acesso de operador.
 | Site | **Produtos da loja** | `/ops/site/produtos` | título, preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298), e **Como vendemos** (dropshipping ou em estoque, #309) | operador+ (mudar: gerente+) |
 | Site | **Estoque do site** | `/ops/site/estoque` (um produto: `/ops/site/estoque/<endereço>`) | o que é **dropshipping** e o que é **em estoque** (interno: o cliente nunca vê), o item do Estoque ligado a cada produto ou opção e **quanto tem** em cada local (*Galpão 5 · Pista 3*); ligar, criar o item a partir do produto e contar um local por vez (#309) | operador+ (contar); ligar, desligar e mudar o marcador: gerente+ |
 | Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
-| Site | **Editor do site** | `/ops/site/editor` | monta e muda as páginas do site arrastando seções e elementos (#300; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
+| Site | **Editor do site** | `/ops/site/editor` | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, assinadas e **Anular** (#109) | gerente+ |
@@ -414,7 +415,7 @@ abre o card dele).
 | **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
 | **Estoque do site** (#309) | cada produto da loja é **dropshipping** (o padrão: o fornecedor envia e o site segue a caixa "Em estoque") ou **em estoque** (o box envia). Em estoque, o produto (ou cada tamanho) liga a **um item do Estoque**: um saldo só, o mesmo do Balcão, da contagem e de Compras, contado no Galpão e na Pista (o trailer fica fora). Sem saldo, o site mostra "Out of stock" sozinho; a venda paga no site **sai do estoque sozinha**; sem saldo na hora de pagar, o pagamento entra e o pedido vira **"Resolver: sem estoque"**. O cliente nunca vê o marcador nem a quantidade | Site › Estoque do site · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
-| **Editor do site** (#300) | monta e muda as páginas do site arrastando seções (1 a 3 colunas) e elementos: título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); rascunho, pré-visualização em celular e computador, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
+| **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); desfazer e refazer, Camadas para quem usa teclado, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
 | **Blog do site** (#172) | os artigos do `/blog/` ficam no banco e se escrevem no painel: título, categoria, endereço, resumo, o que o Google mostra, capa (WebP sem a localização do celular) e texto com títulos, listas, links e fotos, com prévia no visual do site. O operador escreve o rascunho; **só o ADMIN** (ou o acesso livre) publica e tira do ar. Cada publicação guarda uma versão | Site › Blog · seção 6, "Blog do site" |
 | **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
 | **Aluno recorrente** (#314) | Academy (Kart School) com plano: marca na área do cliente sem pagar a sessão do pacote do mês; acima do pacote, a **sessão extra** sai numa invoice do QuickBooks (mensal ÷ sessões ou o valor combinado, sem depósito). O cliente vê só "Included in your plan" ou "Extra session"; o contador é da equipe. Marca **vários dias num pedido** (até 12: "Every Wed", "This weekend"…), e as extras do pedido saem numa invoice só. **Cliente novo** paga no Stripe (carrinho) com o Stripe ligado; o carrinho recusa a sessão do aluno recorrente | [playbook-vendas.md](playbook-vendas.md), seção 5, "Aluno recorrente" |
@@ -457,51 +458,104 @@ ficam em `/ops/site/agendamentos`.
 Número zerado é zero de verdade; o que ainda não tem dado diz "sem dado" (NO FAKE DATA). As vendas feitas pela equipe
 (invoice do QuickBooks fora do site) estão em Vendas, não aqui.
 
-### Editor do site (#300)
+### Editor do site (#300, #315)
 
 Dono, 16/10: *"no site público a gente tenha é, como alterar o design, layout, puxando e arrastando e soltando de uma
-forma bem simples e conseguir editar por lá como se fosse realmente um WordPress"*. Decisão: **livre, tipo Elementor**.
+forma bem simples e conseguir editar por lá como se fosse realmente um WordPress"*. E depois, no mesmo dia (#315): *"o
+editor do site ele abre uma mini visualização de como é o site público. E dali a pessoa consegue, por ali, clicar no que
+ela precisa editar. Ela edita, ela puxa, ela arrasta, ela solta, ela insere alguma coisa com o mouse, por exemplo, usando
+o mouse e teclado, sem precisar de preencher cards para aquilo ali. … É como se fosse um Canva."*
 
-**Onde:** Site › **Editor do site** (`/ops/site/editor`). Ver e pré-visualizar é do operador; criar,
-mudar, publicar e voltar versão é do gerente (tudo na auditoria).
+**Onde:** Site › **Editor do site** (`/ops/site/editor`). Ver é do operador; criar, mudar, publicar e voltar versão é do
+gerente (tudo na auditoria). O operador vê a prévia, as Camadas e a aba Página, sem mudar nada.
 
-**Como a página é montada**
-- A página é uma lista de **seções**, de cima para baixo. Cada seção tem **fundo** (claro, escuro, vermelho, cinza),
-  **espaçamento** (pequeno, médio, grande) e **1 a 3 colunas** (no celular viram uma só).
-- Cada coluna tem os seus **elementos**:
-  - Título (nível 1, 2 ou 3), Texto (negrito, itálico, lista, subtítulo), Imagem (sobe em WebP sem a localização do
-    celular, e precisa de descrição), Botão (link do site ou https), Lista, Espaço e Perguntas frequentes (viram FAQ no Google).
-  - **Karts e preços**, **Produtos da loja** e **Cartões de uma página** vêm do painel: mudou em Serviços e preços,
-    Produtos da loja ou Cartões das páginas, muda no editor também.
+**A tela**
+- No meio, a **prévia**: a página do site de verdade, desenhada do rascunho (o cabeçalho, o rodapé, as fotos, os preços
+  do painel). É nela que se trabalha. No computador, **Celular** (390 px) ou **Computador** (1280 px, reduzida para caber).
+- Do lado (no computador) ou nas folhas de baixo (no celular), três abas: **Inserir** (a paleta), **Camadas** (a página em
+  lista) e **Página** (título da aba, descrição, endereço, pendências, versões).
+- Em cima: **← Páginas**, o nome da página, o estado (rascunho, no ar, no ar com mudanças), **salvo / salvando… / não
+  salvou**, **↶ Desfazer** e **↷ Refazer**, as pendências e **Publicar**.
+
+**Clicar, escrever e mudar (sem formulário)**
+- **Clique** numa peça da prévia para selecionar: ela ganha o contorno azul e a **barra** aparece em cima dela (no celular, a
+  barra fica presa embaixo da tela). Clique no fundo de uma seção para selecionar a seção. **Esc** sobe da peça para a
+  seção e depois tira a seleção.
+- **Clique de novo** (ou duplo clique, ou **Enter**, ou **Escrever** na barra) para **escrever no lugar**: o título, o
+  texto, o texto do botão, os itens da lista (Enter cria o próximo), a pergunta e a resposta das perguntas frequentes e a
+  legenda da foto. **Esc**, **Enter** (fora do texto longo) ou **Pronto** saem do texto. O que se cola vira texto limpo
+  (só negrito, itálico, lista e link passam no texto longo). Escrever num texto que já existia não apaga os links nem as
+  fotos que ele tinha.
+- A **barra** muda o resto, com botões: no título, o **nível H1/H2/H3** (o H1 fica desligado quando a página já tem um),
+  **tamanho P/M/G** (com o painel em inglês, S/M/L), **cor** (padrão, vermelho da marca, cinza suave) e **alinhamento**; no texto, também **negrito,
+  itálico, lista e link** (marque o texto antes); no botão, **Cheio/Contorno** e **Link** (caminho do site como
+  `/contact/`, `https://`, `tel:` ou `mailto:`); na imagem, **Trocar foto**, **Descrição** (obrigatória para publicar),
+  **Legenda** e o formato; nas perguntas, **+ Pergunta / − Pergunta** (com a pergunta em edição, ela sai da edição para
+  a prévia mostrar a lista nova; clique de novo para escrever); em produtos, a categoria e quantos; em cartões, a
+  página. Em toda peça: **↑ ↓** (sobe e desce; no começo ou no fim da coluna passa para a seção vizinha), **← →** (muda de
+  coluna), **Duplicar** e **Apagar**.
+- Na **seção**: **fundo** (claro, escuro, vermelho, cinza), **espaço** P/M/G, **1, 2 ou 3 colunas** (no celular viram
+  uma só), ↑ ↓, Duplicar e Apagar. Na **faixa original**: **Esconder/Mostrar** e ↑ ↓.
+- **Karts e preços**, **Produtos da loja** e **Cartões de uma página** vêm do painel e não se escrevem na prévia: a barra
+  leva para **Serviços e preços**, **Produtos da loja** ou **Cartões das páginas**, onde se mudam (NO FAKE DATA, uma fonte
+  só). Sem nada para mostrar, a prévia mostra um marcador tracejado dizendo de onde vem; no site, não aparece nada.
 - Tamanho, cor e alinhamento são escolhas da paleta do site, não cores soltas: o contraste fica sempre legível.
-- **Arrastar e soltar** no computador: arraste um elemento da paleta (fica presa no topo) para uma coluna, um elemento
-  para outro lugar, uma seção para cima ou para baixo. No celular e no teclado: os botões **↑ ↓**, **← Coluna / Coluna →**,
-  **Duplicar** e **Apagar**; **+ Elemento** em cada coluna e **+ Seção aqui** entre as seções.
 
-**Página nova:** em **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). O endereço
-não muda depois de publicada. Endereços do sistema (`/ops/`, `/store/`, `/blog/`, `/cart/`, `/legal/`…) e de páginas que
-já existem não podem. Os artigos do blog não nascem aqui: são da tela **Site › Blog** (seção 6, "Blog do site"), sempre em
+**Arrastar, soltar e inserir**
+- **No computador**: arraste uma peça da prévia para outro lugar (na mesma coluna, para a outra coluna ou para outra
+  seção) e uma seção inteira para cima ou para baixo; a **linha azul** mostra onde vai cair e a prévia rola sozinha perto
+  da borda. Arraste uma peça da aba **Inserir** até a prévia, ou **clique** nela para pôr logo depois do que está
+  selecionado. Uma peça solta em cima de uma faixa original vira uma seção nova antes ou depois dela.
+- **Fotos**: solte um arquivo do computador direto na prévia (vira uma imagem ali) ou em cima de uma imagem (troca a foto
+  dela). A foto sobe em WebP de até 1600 px, sem a localização do celular; a barra da foto já abre a **descrição** para
+  escrever.
+- **No celular**: toque para selecionar; **toque e segure** uma peça para arrastá-la; para inserir, **+ Inserir**, toque
+  na peça e **toque na página onde quer pôr** (Cancelar desiste). Sem tocar (teclado, ou tela de até 900 px com mouse),
+  o botão do aviso, **Pôr depois do selecionado** (ou **Pôr no fim da página**, sem nada selecionado), põe a peça. As
+  folhas de Inserir, Camadas e Página fecham com **Esc** ou no **✕**, e o foco volta para o botão que as abriu.
+- **Camadas** faz tudo isso com botões, para quem usa teclado ou leitor de tela: escolher (escolher de novo escreve),
+  ↑ ↓ (desligados quando não há para onde ir), ← →, Esconder e Apagar. O foco fica na peça mesmo quando ela muda de
+  coluna ou de seção. O leitor de tela ouve onde cada peça foi parar, e o mesmo aviso duas vezes seguidas também é lido.
+
+**Teclado** (a lista também está em Página › **Atalhos do teclado**): **↑ ↓** o anterior e o próximo · **Enter**
+escreve · **Esc** sai do texto e sobe · **Alt+↑ ↓** move · **Alt+← →** muda de coluna · **Ctrl+Z** desfaz ·
+**Ctrl+Shift+Z** (ou Ctrl+Y) refaz · **Ctrl+D** duplica · **Delete** apaga · **Ctrl+B / I / K** negrito, itálico e link
+no texto · **Ctrl+S** salva já. Desfazer guarda até 100 passos; a digitação seguida no mesmo lugar é um passo só. Com a
+peça escolhida, o **Tab** chega na barra antes dos links da prévia; ali as setas não trocam a peça, e Duplicar, Apagar
+e ↑ ↓ deixam o foco na barra. ↓ nas peças diz o nome, o que ela mostra e onde está (seção, coluna, posição).
+
+**Página nova:** em **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). Ela já
+nasce com um título nível 1 e um botão. O endereço não muda depois de publicada. Endereços do sistema (`/ops/`,
+`/store/`, `/blog/`, `/cart/`, `/legal/`…) e de páginas que já existem não podem. Os artigos do blog não nascem aqui: são da tela **Site › Blog** (seção 6, "Blog do site"), sempre em
 `/blog/<endereço>/`, e lá `category`, `page` e `img` são reservados (`/blog/category/…`, `/blog/page/…` e `/blog/img/…`
 são caminhos do próprio blog).
 
 **Página que já existe** (home, Arrive and Drive, Academy, Pro Team, For Beginners, Career, About, os serviços…): em
 **Abrir uma página do site**, as faixas dela viram **Faixa original 1, 2, 3…**. Elas continuam vivas (preço do painel,
-agenda, cartões). Mova, **esconda** ou ponha seções novas entre elas. Sem mexer, a página sai igual à de antes.
+agenda, cartões): movem, **escondem** (na prévia ficam apagadas, no site somem) e ganham seções novas entre elas. O texto
+de dentro delas ainda não se escreve na prévia (vem numa próxima etapa). Sem mexer, a página sai igual à de antes.
 
-**Rascunho, pré-visualização e publicar**
-- Tudo salva sozinho no **rascunho** ("salvando…" some quando terminou). Ninguém de fora vê o rascunho.
-- **Ver como fica** mostra a página de verdade, em **Celular** ou **Computador** (no celular, alterne entre **Montar** e
-  **Ver como fica**).
-- **Publicar** confere as regras do site antes. Enquanto houver problema, o botão fica parado e a lista **Antes de
-  publicar** diz o que falta:
+**Rascunho, salvar e publicar**
+- Tudo **salva sozinho no rascunho** ("salvando…" vira "salvo"); a prévia troca só a seção que mudou, sem recarregar.
+  Ninguém de fora vê o rascunho. O meio do caminho salva (um título vazio, um botão ainda sem link); o que não pode ir
+  para o ar aparece nas **pendências**.
+- **Duas pessoas na mesma página**: se outra pessoa (ou outra aba) salvou antes, a tela para de salvar e avisa
+  **"Outra pessoa salvou esta página"**, com **Recarregar**. Nada do que a outra fez é apagado. Vale também para
+  **Voltar a esta versão**: a tela que ficou para trás não troca o rascunho da outra pessoa pela versão antiga.
+- **Não salvou** (internet caiu, link que não vale): a tela avisa, com **Tentar de novo**, e o **Publicar fica parado**.
+  Publicar só funciona com tudo salvo, sem erro e sem pendência: o que vai para o ar é sempre o que a tela mostra.
+- As **pendências** (o número ao lado de Publicar e a aba **Página**) dizem o que falta:
   - um título nível 1 só;
   - título sem pular nível (depois do nível 1 vem o 2; os cartões de karts e planos já têm o nível 3 dentro);
-  - descrição em toda foto;
+  - nenhum título vazio, botão com texto e link, pergunta com a resposta;
+  - imagem com a foto e com a descrição;
   - título da aba de 10 a 70 letras e descrição de 50 a 170.
-- Cada publicação vira uma **versão**: em **Versões**, **Voltar a esta versão** traz uma antiga para o rascunho. Confira e
-  publique de novo.
+- Cada publicação vira uma **versão**: em Página › **Versões publicadas**, **Voltar a esta versão** traz uma antiga para o
+  rascunho (e tira os erros do rascunho de antes). Confira e publique de novo. Com o salvar ainda em andamento, a tela
+  pede para tentar de novo em um instante.
 - **Voltar ao original** (página que já existia) tira o editor do ar e o site volta à página de sempre. **Tirar do ar**
-  (página nova) tira a página. O rascunho e as versões ficam.
+  (página nova) tira a página. O rascunho e as versões ficam. **Recarregar a prévia** (em Página) desenha a prévia de novo.
+- A prévia fica fora do Google e sem medição (quem edita não conta como visita do site).
 
 ### Blog do site (#172)
 

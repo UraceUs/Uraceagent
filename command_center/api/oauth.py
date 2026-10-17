@@ -119,10 +119,10 @@ def registrar(dados: dict, request: Request, con: sqlite3.Connection = Depends(g
     inserir(con, "oauth_clients", client_id=cid, name=nome,
             secret_hash=None if publico else _hash(sal + segredo),
             secret_salt=sal, redirect_uris=json.dumps(uris),
-            created_ip=(request.client.host if request.client else None))
+            created_ip=auth._ip(request))
     auditar(con, "oauth.client.register", "system", entity_type="oauth_client", entity_id=cid,
             detail={"nome": nome, "redirect_uris": uris, "publico": publico},
-            ip=(request.client.host if request.client else None))
+            ip=auth._ip(request))
     con.commit()
     saida = {"client_id": cid, "client_name": nome, "redirect_uris": uris,
              "token_endpoint_auth_method": metodo,

@@ -169,9 +169,14 @@ def _rodape():
 
 
 def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), foto=None, indexar=True, lang="en",
-           medicao_eventos=()):
+           medicao_eventos=(), editando=False):
     """`medicao_eventos` (#260): o que esta página já sabe para o `dataLayer` (hoje, o `purchase`
-    do pedido pago). Sem `SITE_GTM_ID`/`SITE_META_PIXEL_ID` no ambiente, nada de medição sai."""
+    do pedido pago). Sem `SITE_GTM_ID`/`SITE_META_PIXEL_ID` no ambiente, nada de medição sai.
+
+    `editando` (#315): a prévia de edição do painel. Fora do Google, sem medição nenhuma (quem edita não é visita) e
+    com o `editor-previa.css` (o contorno da seleção, a linha de soltar, o marcador de vazio). O site nunca leva isso."""
+    if editando:
+        indexar = False
     canon = f"https://{host}{caminho}"
     robots = '<meta name="robots" content="noindex, nofollow">' if preview() or not indexar else ""
     og_img = (f'<meta property="og:image" content="https://{host}{foto_url(foto)}">'
@@ -179,7 +184,8 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
     # #236: carrinho.js em toda página (o contador do topo); vem antes, a agenda e a loja usam o que ele expõe
     # #260: medicao.js primeiro (o dataLayer existe antes de todo mundo) e só quando há id no ambiente;
     # campanha.js em toda página, sempre: ele é nosso e não fala com ninguém de fora
-    med = medicao.cabeca(caminho, medicao_eventos)
+    med = "" if editando else medicao.cabeca(caminho, medicao_eventos)
+    css_editor = f'<link rel="stylesheet" href="{estatico("editor-previa.css")}">' if editando else ""
     js = "".join(f'<script src="{estatico(s)}" defer></script>'
                  for s in ((medicao.SCRIPT,) if med else ()) + ("campanha.js", "carrinho.js", *scripts))
     return f"""<!doctype html>
@@ -199,7 +205,7 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
 <meta name="theme-color" content="#0b0b0f">
 <link rel="icon" type="image/png" href="{estatico('img/favicon.png')}">
 <link rel="preload" href="/_s/fonts/archivo-expanded.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="{estatico('site.css')}">
+<link rel="stylesheet" href="{estatico('site.css')}">{css_editor}
 {''.join(_ld(s) for s in schemas)}
 {med}
 {js}

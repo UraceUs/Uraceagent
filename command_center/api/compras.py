@@ -24,7 +24,7 @@ def _gerente(u):
 
 def _aud(con, request, u, evento, eid, detalhe, tipo="purchase_order"):
     auditar(con, evento, f"user:{u['id']}", user_id=u["id"], entity_type=tipo, entity_id=eid, detail=detalhe,
-            ip=(request.client.host if request and request.client else None))
+            ip=(auth._ip(request) if request else None))
 
 
 def _sem_custo(c, u):
