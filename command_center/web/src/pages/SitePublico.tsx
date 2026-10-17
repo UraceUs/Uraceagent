@@ -27,10 +27,14 @@ interface Servico { id: number; name: string; description: string | null; price:
   invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null; site_kart?: string | null
   kind?: 'session' | 'plan' | 'addon' | null; months?: number | null; sessions_month?: number | null
   site_title?: string | null; site_subtitle?: string | null; site_note?: string | null; own_kart?: number | null
-  deposit_required?: number | boolean | null }
+  deposit_required?: number | boolean | null
+  /** #314: a sessão extra do plano — valor (vazio: mensal ÷ sessões) e o item do QuickBooks */
+  extra_price?: number | null; extra_item_id?: string | null; extra_item_name?: string | null }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
   service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
+  /** #314: do pacote do mês (sem custo) ou extra (cobrada pela invoice); null = avulsa */
+  coverage?: 'plano' | 'extra' | null; list_price?: number | null; group_id?: number | null
   accepted_at?: string | null; charge_kind?: string | null; store_order_id?: number | null; invoice_doc?: string | null; invoice_link?: string | null; charge_error?: string | null; waiver_error?: string | null; reminder_error?: string | null
   origin?: string | null; utm?: string | null; card_note?: string | null; paid_at?: string | null
   cobranca?: { aceita: boolean; pagamento: 'contrato' | 'pago' | 'enviada' | 'erro' | 'pendente'; waiver: 'ok' | 'enviada' | 'erro' | 'pendente'; pronta: boolean } | null
@@ -85,8 +89,12 @@ function Agendamentos() {
             <div className="small">{a.client_id && <><Link to={`/clients/${a.client_id}`}>{tr("Client ID")} {a.client_id}</Link> · </>}
               {a.asana_gid ? <a href={`https://app.asana.com/0/1205450093098920/${a.asana_gid}/f`} target="_blank" rel="noreferrer">{tr("tarefa no Asana ↗")}</a>
                 : a.asana_error ? <span title={a.asana_error}>{tr("Asana: tenta de novo em até 15 min")}</span> : <span className="muted">{tr("indo para o Asana…")}</span>}</div>
-            {a.service_name && <div className="small">{a.service_name}{a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
-            {a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
+            {a.service_name && <div className="small">{a.service_name}{a.coverage ? '' : a.price != null ? ` · ${usd(a.price)}` : ''}</div>}
+            {/* #314: a sessão do aluno recorrente — do plano (sem custo) ou extra (invoice); o contador é só da equipe */}
+            {a.coverage ? <div className="small"><Chip tone={a.coverage === 'extra' ? 'warn' : 'info'}>{a.coverage === 'extra'
+              ? tr("extra {0}", a.price != null ? usd(a.price) : tr("sem valor")) + (a.invoice_doc ? tr(" · invoice {0}", a.invoice_doc) : '')
+              : tr("do plano")}</Chip>{a.group_id ? <> <Chip tone="neutral">{tr("pedido de vários dias #{0}", a.group_id)}</Chip></> : null}{a.contrato && <span className="muted"> · {tr("pacote: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</span>}</div>
+              : a.contrato && <div className="small"><Chip tone={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
               ? tr("acima do contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)
               : tr("contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</Chip></div>}
             {a.notes && <div className="small">“{a.notes}”</div>}
@@ -102,7 +110,7 @@ function Agendamentos() {
           </div>
           <Chip tone={tom}>{rot}</Chip>
           {a.status === 'pendente' && <>{!a.accepted_at && <button className="btn sm primary" onClick={() => decidir(a, 'aceitar')}
-            title={tr("Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar")}>{tr("Aceitar")}</button>}
+            title={a.group_id ? tr("Aceita o pedido inteiro: uma invoice com as sessões extras e uma waiver") : tr("Cria e envia a invoice e a waiver; confirma sozinha quando pagar e assinar")}>{tr("Aceitar")}</button>}
             {can('MANAGER') && <button className="btn sm ghost" onClick={() => decidir(a, 'confirmar')} title={tr("Confirmar sem esperar pagamento e waiver")}>{tr("Confirmar mesmo assim")}</button>}
             <button className="btn sm ghost" onClick={() => decidir(a, 'recusar')}>{tr("Recusar")}</button></>}
           {a.status === 'confirmada' && a.date >= hojeFL() && <button className="btn sm ghost" onClick={() => decidir(a, 'cancelar')}>{tr("Cancelar")}</button>}
@@ -219,8 +227,8 @@ function Disponibilidade() {
       <label className="check" style={{ marginTop: 6 }}><input type="checkbox" disabled={!admin || salvandoVenda} checked={!!c.auto_sell} onChange={async e => {
         const ligar = e.target.checked
         setSalvandoVenda(true)
-        try { await api.patch('/site/agenda/config', { auto_sell: ligar }); toast(ligar ? tr("Venda automática ligada: o pedido do site vira invoice + depósito + waiver na hora.") : tr("Venda automática desligada: a equipe aceita cada pedido."), 'ok'); setCfg(null); a.reload() }
-        catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setSalvandoVenda(false) } }} /> {tr("Venda automática")} <span className="small muted">{tr("(ligada: o pedido do site vira invoice do QuickBooks com o depósito e a waiver na hora, sem esperar \"Aceitar\";")} {admin ? tr("só o administrador liga ou desliga") : tr("só o administrador muda")})</span></label>
+        try { await api.patch('/site/agenda/config', { auto_sell: ligar }); toast(ligar ? tr("Venda automática ligada: o pedido do site é cobrado e a waiver sai na hora (cliente novo no Stripe; aluno recorrente: do plano ou extra por invoice).") : tr("Venda automática desligada: a equipe aceita cada pedido."), 'ok'); setCfg(null); a.reload() }
+        catch (ex) { toast((ex as ApiError).message, 'crit') } finally { setSalvandoVenda(false) } }} /> {tr("Venda automática")} <span className="small muted">{tr("(ligada: cobra e manda a waiver na hora, sem esperar \"Aceitar\". Cliente novo paga no Stripe pelo carrinho do site (sem o Stripe, invoice do QuickBooks com o depósito); aluno recorrente da Academy: a sessão do plano sai sem custo e a extra vira invoice do QuickBooks, sem depósito;")} {admin ? tr("só o administrador liga ou desliga") : tr("só o administrador muda")})</span></label>
       {gerente && (regras || cfg) && <div style={{ marginTop: 10 }}><button className="btn primary" onClick={salvar}>{regras ? tr("Salvar a semana") : tr("Salvar regras")}</button></div>}
     </Section>
 
@@ -277,9 +285,10 @@ function Servicos() {
   // #317 (dono, 16/10): "o serviço que eu coloquei no checkout ia permitir que eu fizesse o checkout … sem o security
   // deposit". A sessão nova já nasce com o depósito obrigatório marcado: sem valor, não salva.
   const vazio = { name: '', description: '', price: '', qbo_item: '', kind: 'session', months: '', sessions_month: '', site_kart: '', kart_novo: '', site_title: '', site_subtitle: '',
-    deposit: '', deposit_required: true }
+    deposit: '', deposit_required: true, extra_price: '', extra_item: '' }
   const [novo, setNovo] = useState(vazio)
   type Edicao = Partial<Omit<Servico, 'own_kart'>> & { price_txt?: string; qbo_item?: string; deposit_txt?: string; months_txt?: string; sessions_txt?: string
+    extra_txt?: string; extra_item?: string
     kart_novo?: string; own_kart?: boolean }
   const [edit, setEdit] = useState<Record<number, Edicao>>({})
   const itens = l.data?.itens_qbo || []
@@ -289,6 +298,7 @@ function Servicos() {
       site_kart: novo.site_kart === NOVO_KART ? kart_novo : (novo.site_kart || null),
       site_title: novo.site_title || null, site_subtitle: novo.site_subtitle || null,
       months: novo.kind === 'plan' ? (novo.months || '1') : null, sessions_month: novo.kind === 'plan' ? (novo.sessions_month || null) : null,
+      extra_price: novo.kind === 'plan' ? (novo.extra_price || null) : null, extra_item: novo.kind === 'plan' ? (novo.extra_item || null) : null,
       deposit: novo.kind === 'session' ? (novo.deposit || null) : null, deposit_required: novo.kind === 'session' && novo.deposit_required })
       toast(novo.kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : tr("Serviço criado: o cliente já vê."), 'ok')
       setNovo(vazio); l.reload() }
@@ -311,6 +321,8 @@ function Servicos() {
     if (e.kind !== undefined) corpo.kind = e.kind
     if (e.months_txt !== undefined) corpo.months = e.months_txt || null
     if (e.sessions_txt !== undefined) corpo.sessions_month = e.sessions_txt || null
+    if (e.extra_txt !== undefined) corpo.extra_price = e.extra_txt || null          // #314
+    if (e.extra_item !== undefined) corpo.extra_item = e.extra_item || null
     try { await api.patch(`/site/servicos/${sv.id}`, corpo); toast(tr("Salvo. Vale para os próximos agendamentos."), 'ok')
       setEdit(x => { const y = { ...x }; delete y[sv.id]; return y }); l.reload() }
     catch (er) { toast((er as ApiError).message, 'crit') }
@@ -337,7 +349,12 @@ function Servicos() {
               <label className="fld"><span>{(e.kind ?? sv.kind) === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
               {(e.kind ?? sv.kind) === 'plan' && <>
                 <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={e.months_txt ?? String(sv.months ?? 1)} disabled={!gerente} onChange={x => muda(sv.id, { months_txt: x.target.value })} /></label>
-                <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={e.sessions_txt ?? String(sv.sessions_month ?? '')} disabled={!gerente} onChange={x => muda(sv.id, { sessions_txt: x.target.value })} /></label></>}
+                <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={e.sessions_txt ?? String(sv.sessions_month ?? '')} disabled={!gerente} onChange={x => muda(sv.id, { sessions_txt: x.target.value })} /></label>
+                {/* #314: a sessão além do pacote do mês, para quem comprou este plano */}
+                <label className="fld"><span>{tr("Valor da sessão extra (US$)")} <i>{tr("vazio = mensal ÷ sessões")}</i></span><input inputMode="decimal" value={e.extra_txt ?? (sv.extra_price != null ? String(sv.extra_price) : '')} disabled={!gerente}
+                  placeholder={sv.sessions_month ? (Math.round(sv.price * 100 / sv.sessions_month) / 100).toFixed(2) : ''} onChange={x => muda(sv.id, { extra_txt: x.target.value })} /></label>
+                <label className="fld"><span>{tr("Item da sessão extra")} <i>{tr("vazio = o \"Extra session\" do QuickBooks")}</i></span><input list="itens-qbo" value={e.extra_item ?? sv.extra_item_name ?? ''} disabled={!gerente}
+                  onChange={x => muda(sv.id, { extra_item: x.target.value })} placeholder={tr("escolha da lista")} /></label></>}
               <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={e.qbo_item ?? sv.qbo_item_name ?? sv.invoice_text ?? ''} disabled={!gerente}
                 onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder={tr("escolha ou escreva")} /></label>
               <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{tr("0 = sem")}</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
@@ -371,6 +388,7 @@ function Servicos() {
             </div>
             <div className="small muted" style={{ marginTop: 6 }}>{sv.active ? <Chip tone="ok">{sv.kind === 'plan' ? tr("na página da Academy") : sv.kind === 'addon' ? tr("add-on na reserva do site") : tr("na área do cliente")}</Chip> : <Chip tone="neutral">{tr("desativado")}</Chip>}
               {sv.kind === 'plan' && <> · <span>{tr("plano de")} {sv.months ?? 1} {(sv.months ?? 1) > 1 ? tr("meses") : tr("mês")}{sv.sessions_month ? tr(", {0} sessões/mês", sv.sessions_month) : ''}{tr(": a 1ª mensalidade sai na hora, as outras no dia 1")}</span></>}
+              {sv.kind === 'plan' && <> · <span>{tr("sessão extra")} {sv.extra_price != null ? usd(sv.extra_price) : tr("= mensal ÷ sessões")}</span></>}
               {sv.site_kart && <> · <Chip tone="ok">{tr("vende o {0} no site", sv.site_kart)}</Chip></>}
               {(sv.kind ?? 'session') === 'session' && (sv.deposit_required ? <> · <Chip tone="ok">{tr("depósito obrigatório")}</Chip></>
                 : !(sv.deposit ?? 0) ? <> · <Chip tone="warn">{tr("sem security deposit")}</Chip></> : null)}
@@ -387,7 +405,10 @@ function Servicos() {
         <label className="fld"><span>{novo.kind === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={novo.price} onChange={x => setNovo({ ...novo, price: x.target.value })} placeholder="719.00" /></label>
         {novo.kind === 'plan' && <>
           <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={novo.months} onChange={x => setNovo({ ...novo, months: x.target.value })} placeholder="3" /></label>
-          <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={novo.sessions_month} onChange={x => setNovo({ ...novo, sessions_month: x.target.value })} placeholder="4" /></label></>}
+          <label className="fld"><span>{tr("Sessões por mês")}</span><input inputMode="numeric" value={novo.sessions_month} onChange={x => setNovo({ ...novo, sessions_month: x.target.value })} placeholder="4" /></label>
+          <label className="fld"><span>{tr("Valor da sessão extra (US$)")} <i>{tr("vazio = mensal ÷ sessões")}</i></span><input inputMode="decimal" value={novo.extra_price} onChange={x => setNovo({ ...novo, extra_price: x.target.value })} /></label>
+          <label className="fld"><span>{tr("Item da sessão extra")} <i>{tr("vazio = o \"Extra session\" do QuickBooks")}</i></span><input list="itens-qbo" value={novo.extra_item} placeholder={tr("escolha da lista")}
+            onChange={x => setNovo({ ...novo, extra_item: x.target.value })} /></label></>}
         <label className="fld"><span>{tr("Item no QuickBooks")} <i>{tr("ou texto")}</i></span><input list="itens-qbo" value={novo.qbo_item} placeholder={tr("escolha ou escreva")}
           onChange={x => setNovo({ ...novo, qbo_item: x.target.value })} /></label>
         {novo.kind === 'session' && <>

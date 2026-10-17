@@ -523,8 +523,11 @@ gerente. Use Aceitar."
 1. **Invoice:** o preço gravado no agendamento + o **depósito**, quando o serviço tem depósito
    (configurado em Serviços e preços). A linha do depósito diz que é devolvido em até 5 dias úteis
    se não houver incidente. **Não cobra duas vezes**: se o agendamento já tem invoice, não cria outra.
-2. **Contrato (Academy):** cliente com contrato não paga de novo; a sessão conta no contrato. Acima
-   do limite do mês, cobra.
+2. **Aluno recorrente (Academy / Kart School, #314):** a sessão já nasce marcada como **do plano** ou
+   **extra** (chip na lista: "do plano" ou "extra $689.23 · invoice …", com o pacote do mês ao lado, que
+   só a equipe vê). A do plano não cobra nada. A **extra** (acima do pacote do mês) vai numa invoice do
+   QuickBooks com o **item da sessão extra** (no QuickBooks: "Academy | Extra session (beyond monthly 4)")
+   e o **valor da extra, sem depósito**. Veja "Aluno recorrente" logo abaixo.
 3. **Waiver:** se o piloto não tem waiver válida no dia da sessão, sai pelo DocuSign. Com a waiver
    nativa ligada, o cliente assina na área do cliente.
 4. **Confirma sozinha** quando a invoice aparece paga e a waiver está em dia.
@@ -532,14 +535,80 @@ gerente. Use Aceitar."
 6. Falhou algo (sem card, sem cliente no QuickBooks, serviço sem item)? O motivo fica escrito no
    agendamento e o painel tenta de novo (a invoice, até 3 vezes).
 
-Cliente com contrato e waiver em dia: o pedido **confirma sozinho** assim que é marcado.
+Cliente com contrato e waiver em dia: o pedido **confirma sozinho** assim que é marcado (a sessão do plano).
+
+### Aluno recorrente: pacote do mês e sessão extra (#314)
+
+Dono, 16/10: *"Quando for cliente do Kart School … pagam pelo QuickBooks. O invoice deles é recorrente …
+ele não precisa efetuar o pagamento, a não ser que as sessões daquele pacote dele … Se ele já tiver usado
+as sessões daquele pacote dele mensal, aí ele paga uma sessão adicional."* Academy e Kart School são a
+mesma coisa.
+
+- **Quem é recorrente:** o card do **piloto** tem contrato (plano mensal, valor mensal ou sessões por mês).
+  Plano comprado no site só vale **depois da 1ª mensalidade paga**. Plano cuja recorrência acabou não vale
+  mais. Pro Racing Driver sem mensal no card **não** é recorrente. Piloto do site sem card ligado ainda não
+  é recorrente: ligue o card (Contas do site) antes de ele marcar.
+- **Pacote do mês:** as sessões por mês do card (sem número, 4). Zera no dia 1, também nos contratos de 6
+  e 12 meses. A sessão extra e a paga no Stripe **não** ocupam vaga. Cancelar uma do pacote (pelas regras
+  de cancelamento de sempre) devolve a vaga do mês.
+- **Preço da extra**, nesta ordem: o **Valor da sessão extra** da Mensalidade do card → o do **plano**
+  (Site › Serviços e preços) → o **mensal do card ÷ sessões do mês**, em centavos com arredondamento
+  comercial (2.756,90 ÷ 4 = 689,23; 1.378,45 ÷ 2 = 689,23).
+- **Item da extra**, nesta ordem: o do card → o do plano → o item "Extra session" do QuickBooks.
+- **O cliente vê** só "Included in your plan" ou "Extra session · $689.23" em cada dia. O contador
+  ("2 de 4 no mês") fica com a equipe (dono, 01/10).
+- **"Confirmar sozinho"** confirma a do plano, mas **não** confirma a extra: ela espera a invoice e a waiver.
+- **Extra cancelada** com a invoice aberta vira aviso em **Precisa de atenção**: anule a invoice (ou tire a
+  linha dela) no QuickBooks.
+- **Vaga devolvida antes da cobrança:** se o cliente cancela uma do pacote e a extra do mesmo mês ainda não foi
+  cobrada, na hora de cobrar a extra passa a ser do plano (sem invoice). Em pedido de vários dias, a invoice
+  leva só as que continuam extra.
+- **Extra sem valor** (card sem mensal e sem "Valor da sessão extra"): fica escrito no agendamento "sem valor da
+  sessão extra". Ponha o valor na Mensalidade do card e clique **Aceitar** de novo: a invoice sai com o valor
+  novo, que fica gravado na sessão.
+- **No card, "acima do contrato"** conta o que passou do pacote e as extras do mês. A sessão paga no Stripe e
+  a avulsa não entram nem na vaga nem em "acima".
+- **Onde se combina:** card do cliente › Mensalidade (gerente): "Valor da sessão extra" (vazio mostra a
+  conta que vale) e "Item da sessão extra".
+
+**Vários dias num pedido** (dono, 16/10: *"se ele quiser marcar para quartas, toda quarta. Ou quartas e sábado
+dessa semana, ou então sábado e domingo da outra, ele consegue marcar isso tudo em um book"*). Na área do
+cliente (**Book sessions**, `/portal/book`), o aluno recorrente:
+- toca nos dias do calendário (marca e desmarca) ou usa os atalhos **Every Wed** (e os outros dias que a agenda
+  abre), com **Repeat until**: o fim deste mês, as próximas 4 semanas ou até uma data, sempre dentro do que a
+  agenda mostra; **This weekend** e **Next weekend**. Atalho sem dia aberto avisa ("No open days that weekend.");
+- escolhe o **Session type** antes: sem ele, a tela diz "Pick the session type above to see what is included";
+- vê em cada dia o turno (manhã, tarde, dia todo) e o rótulo do servidor: **Included in your plan** ou **Extra
+  session · $689.23**; o resumo mostra "3 included · 2 extras" e, ao lado, "$1,378.46";
+- marca **no máximo 12 dias** por pedido; **ou entram todos, ou nenhum**: um dia que lotou no meio do caminho
+  volta para o cliente escolher outro, sem marcar os demais. Se a vaga ou o preço mudou entre ver e marcar, a
+  tela pede para revisar;
+- num dia que o plano **não cobre** (a recorrência acaba antes daquele mês, como no último mês de um contrato de
+  6 ou 12 meses), o dia diz isso e tem o botão **Book as a regular session**: abre a marcação de um dia, paga
+  como a de qualquer cliente (**Add to cart**, no Stripe, com o Stripe ligado; senão **Request session** e a
+  invoice). "Back to my plan days" volta para os vários dias.
+
+Na lista da equipe, cada sessão do pedido tem o chip **"pedido de vários dias #n"**. **Aceitar** uma delas
+aceita o **pedido inteiro**: as extras saem numa **invoice só** do QuickBooks (uma linha por sessão extra,
+item e valor da extra, sem depósito), a waiver sai uma vez, e o cliente recebe **um** e-mail com todos os dias,
+o que é do plano e o que é extra. Com a venda automática ligada, isso acontece sozinho na hora.
+- O cliente acompanha em `/portal/sessions/group/<n>`: os dias, a invoice das extras, a waiver e a confirmação.
+  Paga a invoice, todas as extras do pedido ficam pagas. No painel do Site, essa invoice entra **uma vez** na
+  receita (não uma vez por dia).
+- A lista de sessões do cliente (My sessions) vem em páginas de 50 ("Show more sessions").
+
+**Um dia pela Reserva do site** (`/portal/reserve`): o aluno recorrente não vê preço cheio, depósito nem total;
+a etapa 4 mostra "Included in your plan" ou "Extra session · $689.23". Se a última vaga do mês foi ocupada entre
+ver e clicar (outra aba, uma tarefa de treino no Asana), a sessão **não** é marcada: a tela avisa "Your booking
+changed…", mostra o rótulo novo e só então libera o botão. O dia fora do plano vira sessão avulsa (carrinho ou
+invoice), como acima.
 
 ### Duas chaves da agenda (só leitura para quem vende)
 
 | Chave | Onde | Quem muda | Efeito |
 |---|---|---|---|
-| **Confirmar sozinho** (`auto_confirm`) | Disponibilidade | Gerente | o pedido já nasce **confirmado**, sem passar pelo Aceitar. Nesse caso o painel **não** gera invoice nem waiver para ele: confira pagamento e waiver por fora |
-| **Venda automática** (`auto_sell`, #164) | Disponibilidade | **só Administrador** | o pedido não espera o Aceitar: na hora, o card do piloto é garantido, o cliente no QuickBooks é achado ou criado, invoice + depósito + waiver saem, e o cliente recebe e-mail com o que falta e outro quando confirma |
+| **Confirmar sozinho** (`auto_confirm`) | Disponibilidade | Gerente | o pedido já nasce **confirmado**, sem passar pelo Aceitar. Nesse caso o painel **não** gera invoice nem waiver para ele: confira pagamento e waiver por fora. A **sessão extra** do aluno recorrente nunca nasce confirmada: espera a invoice e a waiver (#314) |
+| **Venda automática** (`auto_sell`, #164) | Disponibilidade | **só Administrador** | o pedido não espera o Aceitar: na hora, o card do piloto é garantido, o cliente no QuickBooks é achado ou criado, invoice + depósito + waiver saem, e o cliente recebe e-mail com o que falta e outro quando confirma. #314: o **cliente novo** paga no Stripe pelo carrinho do site (sem o Stripe, invoice + depósito); o **aluno recorrente** tem a sessão do plano sem custo e a extra numa invoice do QuickBooks, sem depósito |
 
 Na venda automática, o card só é ligado sozinho a um card que existe com **duas provas**: o e-mail
 confirmado da conta é o do card **e** o nome do piloto é o do card. Fora disso nasce card novo
@@ -600,6 +669,20 @@ Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: nã
 Dono, 14/10: *"o sistema de carrinho e checkout ... usando o Stripe"*; *"quando a pessoa selecionar
 o serviço, selecionar a data, já vai com aquele serviço e o preço que está lá"*; *"O depósito de
 segurança ele é cobrado em venda manual ou automática"*; *"Todo mundo agora precisa de conta no site"*.
+
+**Quem paga no Stripe e quem paga no QuickBooks** (#314, dono 16/10: *"Quando for agendamento direto pelo site
+de cliente novo, que não for do Kart School, ele vai pagar pelo Stripe. Quando for cliente do Kart School … esses
+clientes pagam pelo QuickBooks"*):
+
+| Cliente | Onde marca | Como paga |
+|---|---|---|
+| **Novo** (sem plano), Stripe ligado | site, Reserva (`/portal/reserve`) ou Book a session | **carrinho do site (Stripe)**: o último botão é **Add to cart**, com o piloto já escolhido |
+| **Novo**, Stripe desligado | os mesmos | invoice do QuickBooks (serviço + depósito), como antes |
+| **Aluno recorrente** (Academy / Kart School) | área do cliente (Book sessions; um ou vários dias) | sessão do plano: nada; **extra: invoice do QuickBooks**, sem depósito |
+
+O carrinho **recusa** a sessão de piloto com plano mensal vigente: a linha fica vermelha com "has a monthly
+plan: book this session in your account" e o link **Book it in your account**; o checkout não abre no
+Stripe. A sessão extra nunca vai para o Stripe.
 
 **O que o cliente faz** (site novo, em inglês; o carrinho e as páginas do pedido também em português, #248):
 

@@ -30,7 +30,7 @@ from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.db import agora, auditar, get_db, inserir, todos, transacao, um
-from command_center.providers import mensalidades
+from command_center.providers import contrato, mensalidades
 
 r = APIRouter(prefix="/ops/api/clients", tags=["mensalidade"])
 
@@ -176,11 +176,15 @@ def ver(cid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
     item = um(con, "SELECT id, name, price FROM qbo_items WHERE id=?", (c["monthly_item_id"],)) if c["monthly_item_id"] else None
     itens = todos(con, """SELECT id, name, full_name, price FROM qbo_items WHERE active=1
                            AND (LOWER(COALESCE(full_name,name)) LIKE '%academy%' OR LOWER(name) LIKE '%monthly%'
-                                OR LOWER(name) LIKE '%mensal%' OR LOWER(name) LIKE '%training%')
+                                OR LOWER(name) LIKE '%mensal%' OR LOWER(name) LIKE '%training%'
+                                OR LOWER(name) LIKE '%extra session%')
                            ORDER BY name LIMIT 60""")
     return {"monthly_plan": c["monthly_plan"], "monthly_note": c["monthly_note"],
             "monthly_amount": c["monthly_amount"], "monthly_item_id": c["monthly_item_id"], "item": item,
             "monthly_sessions": c["monthly_sessions"], "agendadas": mensalidades.do_cliente(con, cid),
+            # #314: a sessão extra — o valor combinado (vence), o que vale hoje e de onde vem, e o item do QuickBooks
+            "extra_session_price": c["extra_session_price"], "extra_item_id": c["extra_item_id"],
+            "extra": _extra(con, cid),
             "itens": itens, "email": c["email"],
             "opcoes_meses": list(OPCOES_MESES), "padrao_meses": PADRAO_MESES,
             "proximo_inicio": proximo_dia_1().isoformat(),
@@ -189,11 +193,22 @@ def ver(cid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
                                           WHERE m.client_id=? ORDER BY m.id DESC""", (cid,))}
 
 
+def _extra(con, cid):
+    """O valor da sessão extra que vale hoje (#314), de onde ele vem e o item do QuickBooks que vai na invoice."""
+    e = contrato.extra(con, cid)
+    item = contrato.item_extra(con, cid)
+    nome = um(con, "SELECT name FROM qbo_items WHERE id=?", (item,)) if item else None
+    return {"price": float(e["preco"]) if e["preco"] is not None else None, "origin": e["origem"], "math": e["conta"],
+            "item_id": item, "item_name": nome["name"] if nome else None}
+
+
 class CombinadoIn(BaseModel):
     model_config = {"extra": "forbid"}
     monthly_amount: float | None = None
     monthly_item_id: str | None = None
     monthly_sessions: int | None = None       # quantas sessões o contrato dá por mês (#61)
+    extra_session_price: float | None = None  # #314: o valor da sessão extra deste cliente (vazio: o do plano ou mensal ÷ sessões)
+    extra_item_id: str | None = None          # #314: o item do QuickBooks da sessão extra (vazio: o do plano ou o "Extra session")
 
 
 @r.patch("/{cid}/mensal")
@@ -208,9 +223,15 @@ def combinar(cid: int, dados: CombinadoIn, request: Request, con: sqlite3.Connec
         campos["monthly_amount"] = round(campos["monthly_amount"], 2)
     if campos.get("monthly_sessions") is not None and not 1 <= campos["monthly_sessions"] <= 31:
         raise HTTPException(400, "Sessões por mês: de 1 a 31.")
-    if campos.get("monthly_item_id"):
-        if not um(con, "SELECT 1 AS x FROM qbo_items WHERE id=? AND active=1", (campos["monthly_item_id"],)):
+    for k in ("monthly_item_id", "extra_item_id"):
+        if campos.get(k) and not um(con, "SELECT 1 AS x FROM qbo_items WHERE id=? AND active=1", (campos[k],)):
             raise HTTPException(400, "Esse item não está ativo no catálogo do QuickBooks.")
+    if "extra_item_id" in campos:
+        campos["extra_item_id"] = campos["extra_item_id"] or None
+    if "extra_session_price" in campos and campos["extra_session_price"] is not None:
+        if not 0 < campos["extra_session_price"] <= 100000:
+            raise HTTPException(400, "Valor da sessão extra fora da faixa.")
+        campos["extra_session_price"] = float(contrato.centavos(campos["extra_session_price"]))
     if not campos:
         return {"ok": True}
     antes = {k: c[k] for k in campos}
@@ -219,7 +240,7 @@ def combinar(cid: int, dados: CombinadoIn, request: Request, con: sqlite3.Connec
     auditar(con, "client.monthly.deal", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid,
             detail={"antes": antes, "depois": campos}, ip=auth._ip(request))
     con.commit()
-    return {"ok": True, **campos}
+    return {"ok": True, **campos, "extra": _extra(con, cid)}
 
 
 class RecorrenciaIn(BaseModel):

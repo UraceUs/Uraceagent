@@ -42,7 +42,8 @@ def _texto(v, n):
 
 
 def lista(con, ativos=False):
-    sql = ("SELECT s.*, q.name AS qbo_item_name FROM booking_services s LEFT JOIN qbo_items q ON q.id=s.qbo_item_id"
+    sql = ("SELECT s.*, q.name AS qbo_item_name, qe.name AS extra_item_name FROM booking_services s"
+           " LEFT JOIN qbo_items q ON q.id=s.qbo_item_id LEFT JOIN qbo_items qe ON qe.id=s.extra_item_id"
            + (" WHERE s.active=1" if ativos else "") + " ORDER BY s.active DESC, s.sort, s.name")
     return [dict(s) for s in todos(con, sql)]
 
@@ -189,6 +190,17 @@ def _dados(con, d, parcial):
         if n is not None and not 0 <= n <= 31:
             raise ErroServico("sessões por mês: de 0 a 31")
         s["sessions_month"] = n
+    if "extra_price" in d:
+        # #314: o valor da sessão extra do plano (vazio: o mensal ÷ sessões por mês)
+        s["extra_price"] = preco(d["extra_price"]) if d["extra_price"] not in (None, "", 0, "0") else None
+    if "extra_item" in d:
+        # #314: o item do QuickBooks da sessão extra do plano, pelo nome (vazio: o item "Extra session" do QuickBooks)
+        t = re.sub(r"\s+", " ", (d["extra_item"] or "").strip())[:120]
+        item = um(con, """SELECT id FROM qbo_items WHERE active=1
+                           AND (LOWER(name)=LOWER(?) OR LOWER(COALESCE(full_name,''))=LOWER(?))""", (t, t)) if t else None
+        if t and not item:
+            raise ErroServico("item da sessão extra não encontrado no QuickBooks (escolha da lista)")
+        s["extra_item_id"] = item["id"] if item else None
     if "active" in d and d["active"] is not None:
         s["active"] = 1 if d["active"] else 0
     if "sort" in d and d["sort"] is not None:

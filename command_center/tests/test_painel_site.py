@@ -344,6 +344,32 @@ def test_so_a_equipe_ve_o_painel_com_etag_e_sem_cache_compartilhado(site, equipe
     assert equipe.get("/ops/api/site/painel", headers={"If-None-Match": r.headers["etag"]}).status_code == 304
 
 
+def test_a_invoice_das_extras_de_um_pedido_conta_uma_vez_na_receita(site):
+    """#314: as extras de um pedido de vários dias saem numa invoice só, gravada em cada sessão (o "Pay now" mostra o
+    total). Paga, a receita é a da invoice — não a invoice vezes o número de sessões. A extra cancelada depois também
+    fica com o pago (a invoice foi paga) e não soma de novo."""
+    cli, con, *_ = site
+    agora = datetime.now(timezone.utc)
+    conta = inserir(con, "portal_accounts", email="lote.painel@example.com", pw_salt="x", pw_hash="x", name="Lote Painel",
+                    birth_date="1980-01-01", terms_accepted_at=_iso(agora))
+    futuro = datetime.now(FL).date() + timedelta(days=9)
+    gid = inserir(con, "booking_groups", account_id=conta, origin="portal")
+    pago = _iso(agora - timedelta(days=1))
+    inserir(con, "bookings", account_id=conta, date=futuro.isoformat(), period="manha", status="confirmada", origin="portal",
+            group_id=gid, coverage="plano", price=0, charge_kind="contrato")
+    for i, st in enumerate(("pendente", "pendente", "cancelada")):
+        inserir(con, "bookings", account_id=conta, date=(futuro + timedelta(days=7 * (i + 1))).isoformat(), period="manha",
+                status=st, origin="portal", group_id=gid, coverage="extra", price=1378.45, charge_kind="invoice",
+                qbo_invoice_id="501", invoice_total=4135.35, paid_at=pago)
+    # uma sessão avulsa paga pela invoice dela, sem id da invoice gravado: conta sozinha, como antes
+    inserir(con, "bookings", account_id=conta, date=futuro.isoformat(), period="tarde", status="confirmada", origin="site",
+            invoice_total=1119.0, paid_at=pago)
+    con.commit()
+    v = _ps().painel(con, 30)["vendas"]
+    assert (v["sessoes_invoice"], v["sessoes_pagas_invoice"]) == (5254.35, 2), v
+    assert v["receita"] == 5254.35
+
+
 def test_vazio_e_zero_de_verdade(site, equipe):
     """NO FAKE DATA: sem pedido e sem visita, o painel mostra zero e "sem dado", nunca um número inventado."""
     _entra(equipe, "op.painel@example.com")
