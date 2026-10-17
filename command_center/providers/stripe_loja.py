@@ -36,6 +36,8 @@ API = "https://api.stripe.com"
 TOLERANCIA = 300                       # segundos entre o Stripe assinar e nós recebermos
 PAISES_ENVIO = ("US", "CA", "MX", "BR", "PR")
 FL = ZoneInfo("America/New_York")
+EXPIRA_ESTOQUE_S = 31 * 60             # #309: produto em estoque, o Checkout vale 31 min (o mínimo do Stripe é 30)
+SEM_TANTO = "We don't have that many in stock right now. Please lower the quantity or send us an order request."
 
 
 class ErroStripe(Exception):
@@ -133,6 +135,10 @@ def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_
     from command_center.providers import loja
     unit = float((v or {}).get("price") or p["price"])
     qtd = max(1, min(20, int(quantidade)))
+    # #309: o produto em estoque vende o que o box tem; a mensagem não diz o número (o cliente não vê o estoque)
+    limite = loja.limites(con).get((p["slug"], variacao_nome if v else ""))
+    if limite is not None and qtd > limite:
+        raise ValueError(SEM_TANTO)
     entrega = "envio" if entrega == "envio" else "retirada"
     nome = p["name"] + (f" ({variacao_nome})" if v else "")
     # #298: o frete fixo do produto (× quantidade) com "Ship to me" (None: a equipe combina à parte) e o depósito
@@ -168,6 +174,8 @@ def criar_sessao(con, p, variacao_nome, quantidade, entrega, origem, host, foto_
     }
     if entrega == "envio":
         campos["shipping_address_collection"] = {"allowed_countries": list(PAISES_ENVIO)}
+    if limite is not None:                  # #309: a última unidade não fica presa um dia num checkout esquecido
+        campos["expires_at"] = int(time.time()) + EXPIRA_ESTOQUE_S
     try:
         s = http("POST", "/v1/checkout/sessions", campos, idem=f"urace-loja-{oid}")
     except ErroStripe:
@@ -371,6 +379,9 @@ def ligar_e_vender(con, oid):
     if o.get("kind") == "carrinho":                 # #236: várias linhas, sessões da agenda, um card por piloto
         from command_center.providers import carrinho
         return carrinho.pago(con, oid)
+    from command_center.providers import estoque_site
+    resolver = estoque_site.baixar_do_pedido(con, oid)       # #309: o produto em estoque sai do estoque, uma vez só
+    o = um(con, "SELECT * FROM store_orders WHERE id=?", (oid,))
     cid, nota = _cliente(con, o)
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
     from command_center.providers import pedido_site
@@ -378,16 +389,19 @@ def ligar_e_vender(con, oid):
                else pedido_site.texto_envio_equipe(o, pedido_site.linhas(con, o)).replace("ENVIO — ", "envio — "))
     notas = (f"[Loja · pago no Stripe] {descricao(o)} — US$ {valor:,.2f}\nPedido #{o['id']} · {entrega}"
              + (f"\nEndereço:\n{_endereco(o)}" if o["delivery"] == "envio" and o["shipping"] else "")
-             + f"\nCard: {nota}")
+             + f"\nCard: {nota}"
+             + "".join(f"\n⚠ {x}" for x in resolver)
+             + (f"\nEstoque: {o['stock_note']}" if o.get("stock_note") and not resolver else ""))
     opp = inserir(con, "opportunities", name=o["name"] or o["email"] or "Cliente da loja", email=o["email"], phone=o["phone"],
                   service=f"Store: {descricao(o)}", amount=valor, stage="GANHO" if cid else "FECHAMENTO", source="Site",
                   client_id=cid, notes=notas, campaign=o["utm"],
                   closing=json.dumps({"em": agora(), "por": "stripe", "pedido": o["id"]}, ensure_ascii=False))
     inserir(con, "opp_events", opp_id=opp, kind="note", title="Pago na loja do site (Stripe)", detail=notas[:2000],
             at=agora(), actor="site")
-    atualizar(con, "store_orders", oid, client_id=cid, link_note=nota, opp_id=opp, updated_at=agora())
+    atualizar(con, "store_orders", oid, client_id=cid, link_note=nota, opp_id=opp, updated_at=agora(),
+              **({"attention": "; ".join(resolver)[:500]} if resolver else {}))
     auditar(con, "store.paid", "stripe", entity_type="store_order", entity_id=oid,
-            detail={"valor": valor, "opp": opp, "card": cid, "vinculo": nota})
+            detail={"valor": valor, "opp": opp, "card": cid, "vinculo": nota, **({"sem_estoque": len(resolver)} if resolver else {})})
     return opp
 
 
@@ -428,11 +442,16 @@ def avisar(con, oid, enviar=None):
     try:
         if o["email"]:
             _enviar(enviar, o["email"], assunto, texto)
-        _enviar(enviar, "support@urace.us", f"Loja · PAGO: {descricao(o)} — {o['name'] or o['email']}",
+        _enviar(enviar, "support@urace.us", f"Loja · PAGO{' · SEM ESTOQUE' if o.get('attention') else ''}: {descricao(o)} — "
+                                            f"{o['name'] or o['email']}",
                 f"Pedido #{o['id']} pago no Stripe: US$ {valor:,.2f}\n{descricao(o)}\n{o['name'] or ''} <{o['email'] or ''}> "
                 f"{o['phone'] or ''}\nEntrega: {'retirada na pista' if o['delivery'] == 'retirada' else pedido_site.texto_envio_equipe(o, pedido_site.linhas(con, o))}\n"
                 + (f"Endereço:\n{_endereco(o)}\n" if o["shipping"] else "")
-                + f"Card: {o['link_note'] or '—'}\n\nSeparar e entregar. Vendas: https://ops.urace.us/ops/sales/{o['opp_id']}"
+                + f"Card: {o['link_note'] or '—'}\n"
+                + (f"RESOLVER: {o['attention']}\n" if o.get("attention") else "")
+                # #309: o que saiu do estoque, para separar exatamente aquilo (no item de série, a unidade pelo serial)
+                + (f"Estoque: {o['stock_note']}\n" if o.get("stock_note") and not o["stock_note"].startswith("sem estoque") else "")
+                + f"\nSeparar e entregar. Vendas: https://ops.urace.us/ops/sales/{o['opp_id']}"
                 + f"\nPágina do pedido: {pedido_site.link(o)}")
         atualizar(con, "store_orders", oid, notified_at=agora(), notify_error=None, updated_at=agora())
         pedido_site.avisado_pago(con, o, o["email"])

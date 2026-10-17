@@ -13,6 +13,12 @@ produto**; no painel = **tudo do produto**.
 - Preço: "Preço" é o cheio (`regular`); "Preço promocional" (opcional) é o que se cobra (`price`). Com variações,
   cada uma tem o seu, e a faixa (`price_min`/`price_max`) sai delas.
 - Esconder não apaga: o produto sai da loja, do carrinho e do sitemap, e o histórico dos pedidos continua.
+- **Como vendemos** (#309, dono, 16/10: *"a gente seleciona o que que é dropshipping e o que que a gente tem em estoque
+  … não precisa ficar aparente essa parte … para os clientes"*): `fulfillment` é `dropshipping` (o padrão: o fornecedor
+  envia, vale a caixa "Em estoque") ou `estoque` (o box envia). Em estoque, o produto (ou cada opção) liga a um item do
+  estoque interno (`store_product_stock`) e **quem diz se tem é o estoque**: um saldo só, o do Balcão, da contagem e de
+  Compras, contado no Galpão e na Pista (o trailer de corrida fica fora). O site recebe só o "Out of stock" derivado:
+  o marcador e a quantidade nunca saem de `catalogo` (o que o site, o carrinho e o Stripe leem).
 """
 import hashlib
 import json
@@ -27,6 +33,9 @@ MAX_FOTOS = 8
 MAX_VARIACOES = 60
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 CAMPOS_JSON = ("images", "categories", "tags", "attributes", "variations")
+FULFILLMENT = ("dropshipping", "estoque")          # #309: como vendemos (interno; o cliente nunca vê)
+LOCAIS_DO_SITE = ("sede", "pista")                 # #309: Galpão + Pista (OKC) contam para o site; o trailer não
+INTERNOS = ("fulfillment",)                        # #309: o que o painel lê e a saída pública tira
 
 
 class ErroProduto(ValueError):
@@ -55,15 +64,122 @@ def _produto(r):
             "images": p["images"], "categories": p["categories"], "tags": p["tags"], "attributes": p["attributes"],
             "variations": p["variations"], "in_stock": bool(p["in_stock"]), "sku": p["sku"] or "",
             "shipping_fee": p["shipping_fee"], "deposit": p["deposit"] or 0.0, "active": bool(p["active"]),
-            "sort": p["sort"], "origin": p["origin"], "updated_at": p["updated_at"]}
+            "sort": p["sort"], "origin": p["origin"], "updated_at": p["updated_at"],
+            "fulfillment": p.get("fulfillment") or "dropshipping"}
+
+
+# ------------------------------------------------------------------ #309: o estoque do site
+def opcoes(p):
+    """Os nomes das opções do produto, como o pedido grava (`" / ".join(attrs)`); [""] = produto sem opção."""
+    return [" / ".join(v["attrs"]) for v in p.get("variations") or ()] or [""]
+
+
+def _sql_ligados(onde=""):
+    marcas = ",".join("?" * len(LOCAIS_DO_SITE))
+    return (f"""SELECT s.product_id, s.variation, s.item_id, s.created_at, i.name AS item_name, i.kind, i.tracking, i.unit,
+                       i.active AS item_active, i.price AS item_price, p.slug, p.fulfillment, p.active AS product_active,
+                       CASE WHEN i.active=0 THEN 0
+                            WHEN i.tracking='serie' THEN
+                              (SELECT COUNT(*) FROM stock_units u JOIN stock_locations lo ON lo.id=u.location_id
+                                WHERE u.item_id=i.id AND u.client_id IS NULL AND u.status='disponivel' AND lo.code IN ({marcas}))
+                            ELSE (SELECT COALESCE(SUM(l.qty), 0) FROM stock_levels l JOIN stock_locations lo ON lo.id=l.location_id
+                                   WHERE l.item_id=i.id AND l.client_id IS NULL AND lo.code IN ({marcas})) END AS tem,
+                       (SELECT MAX(m.at) FROM stock_moves m WHERE m.item_id=i.id AND m.kind='contagem') AS contado_em
+                  FROM store_product_stock s JOIN stock_items i ON i.id=s.item_id JOIN store_products p ON p.id=s.product_id
+                  {onde} ORDER BY s.product_id, s.variation"""), (*LOCAIS_DO_SITE, *LOCAIS_DO_SITE)
+
+
+def ligados(con, pids=None, com_locais=True):
+    """{product_id: {opção: ligação}}: o item do estoque de cada produto/opção e quanto **da URACE** tem agora no Galpão
+    e na Pista (peça de cliente nunca conta; item de série conta as unidades disponíveis). Uma consulta só, mais a de
+    `por_local` (quanto em cada local) para o painel; o site público pede `com_locais=False`."""
+    onde, args = "", ()
+    if pids is not None:
+        pids = [int(x) for x in pids]
+        if not pids:
+            return {}
+        onde = f"WHERE s.product_id IN ({','.join('?' * len(pids))})"
+        args = tuple(pids)
+    sql, locais = _sql_ligados(onde)
+    rs = todos(con, sql, (*locais, *args))
+    pl = por_local(con, [r["item_id"] for r in rs]) if com_locais else {}      # o site público só precisa da soma
+    out = {}
+    for r in rs:
+        r["tem"] = float(r["tem"] or 0)
+        r["por_local"] = pl.get(r["item_id"]) if r["item_active"] else None
+        out.setdefault(r["product_id"], {})[r["variation"]] = r
+    return out
+
+
+def por_local(con, item_ids):
+    """{item_id: {local: quanto}}: o que é **da URACE** em cada local que conta para o site (Galpão e Pista). A tela
+    mostra "Galpão X · Pista Y" e a contagem é sempre de um local só: mostrar só a soma fazia a pessoa digitar o total
+    num local e inflar o saldo (revisão do #309). Quantidade pelo saldo; série pelas unidades disponíveis."""
+    ids = sorted({int(i) for i in item_ids})
+    if not ids:
+        return {}
+    m, l = ",".join("?" * len(ids)), ",".join("?" * len(LOCAIS_DO_SITE))
+    out = {i: dict.fromkeys(LOCAIS_DO_SITE, 0.0) for i in ids}
+    for r in todos(con, f"""SELECT lv.item_id, lo.code, SUM(lv.qty) AS q FROM stock_levels lv
+                              JOIN stock_locations lo ON lo.id=lv.location_id JOIN stock_items i ON i.id=lv.item_id
+                             WHERE lv.item_id IN ({m}) AND lv.client_id IS NULL AND lo.code IN ({l}) AND i.tracking='quantidade'
+                             GROUP BY lv.item_id, lo.code""", (*ids, *LOCAIS_DO_SITE)):
+        out[r["item_id"]][r["code"]] = round(float(r["q"] or 0), 4)
+    for r in todos(con, f"""SELECT u.item_id, lo.code, COUNT(*) AS q FROM stock_units u
+                              JOIN stock_locations lo ON lo.id=u.location_id JOIN stock_items i ON i.id=u.item_id
+                             WHERE u.item_id IN ({m}) AND u.client_id IS NULL AND u.status='disponivel' AND lo.code IN ({l})
+                               AND i.tracking='serie' GROUP BY u.item_id, lo.code""", (*ids, *LOCAIS_DO_SITE)):
+        out[r["item_id"]][r["code"]] = float(r["q"] or 0)
+    return out
+
+
+def no_site(p, ls):
+    """O que o site mostra (#309). Em estoque com item ligado, **quem diz se tem é o estoque**: sem uma unidade inteira, é
+    "Out of stock" (o produto, ou a opção, que fica desativada). Sem item ligado, e no dropshipping, vale a caixa "Em
+    estoque" do painel, como antes."""
+    if p.get("fulfillment") != "estoque" or not ls:
+        return p
+    if not p["variations"]:
+        l = ls.get("")
+        return {**p, "in_stock": l["tem"] >= 1} if l else p
+    vs, ligada_tem, solta_tem = [], False, False
+    for v in p["variations"]:
+        l = ls.get(" / ".join(v["attrs"]))
+        if l:
+            v = {**v, "in_stock": l["tem"] >= 1}
+            ligada_tem = ligada_tem or v["in_stock"]
+        else:
+            # a opção sem item ligado segue as caixas "Em estoque": a dela E a do produto. Desmarcar o produto tira
+            # a opção solta do site mesmo que outra opção, ligada, ainda tenha saldo (revisão do #309)
+            v = {**v, "in_stock": bool(p["in_stock"]) and bool(v.get("in_stock", True))}
+            solta_tem = solta_tem or v["in_stock"]
+        vs.append(v)
+    if not any(" / ".join(v["attrs"]) in ls for v in p["variations"]):
+        return p
+    return {**p, "variations": vs, "in_stock": ligada_tem or solta_tem}
+
+
+def publico(p):
+    """A saída para o site, o carrinho e o Stripe: sem o marcador interno (o cliente nunca vê)."""
+    return {k: v for k, v in p.items() if k not in INTERNOS}
+
+
+def limites(con):
+    """(endereço, opção) → quantas unidades inteiras o site pode vender agora: só produto em estoque com item ligado (o
+    resto não tem limite). O carrinho e o "Buy now" conferem a quantidade aqui; o número nunca vai para o cliente."""
+    sql, locais = _sql_ligados("WHERE p.fulfillment='estoque' AND p.active=1")
+    return {(r["slug"], r["variation"]): int(float(r["tem"] or 0) + 1e-9) for r in todos(con, sql, locais)}
 
 
 def catalogo(con):
     """Os produtos à venda (ativos), na ordem da loja. None quando a tabela nunca recebeu produto (o site cai no
-    arquivo de antes); lista vazia quando a equipe escondeu todos."""
+    arquivo de antes); lista vazia quando a equipe escondeu todos. #309: o "Em estoque" já vem do estoque (no produto
+    em estoque com item ligado) e o marcador interno fica de fora."""
     if not um(con, "SELECT 1 AS x FROM store_products LIMIT 1"):
         return None
-    return [_produto(r) for r in todos(con, "SELECT * FROM store_products WHERE active=1 ORDER BY sort, id")]
+    ls = ligados(con, com_locais=False)
+    return [publico(no_site(_produto(r), ls.get(r["id"])))
+            for r in todos(con, "SELECT * FROM store_products WHERE active=1 ORDER BY sort, id")]
 
 
 def do_site(con):
@@ -75,9 +191,30 @@ def do_site(con):
     return {p["slug"]: p for p in cat}
 
 
+def _ligacao(l):
+    """A ligação como o painel mostra: o item, quanto tem (Galpão + Pista, da URACE, e em cada um) e a última contagem."""
+    return {"variation": l["variation"], "item_id": l["item_id"], "item": l["item_name"], "kind": l["kind"],
+            "tracking": l["tracking"], "unit": l["unit"], "tem": l["tem"], "ativo": bool(l["item_active"]),
+            "por_local": l.get("por_local") or dict.fromkeys(LOCAIS_DO_SITE, 0.0),
+            "preco_balcao": l["item_price"], "contado_em": l["contado_em"]}
+
+
+def com_estoque(p, ls):
+    """O produto do painel com o estoque dele (#309): cada ligação, o que o site mostra agora e a soma do que tem."""
+    ls = ls or {}
+    site = no_site(p, ls)
+    return {**p, "estoque": {
+        "ligados": {k: _ligacao(l) for k, l in ls.items()},
+        "no_site": bool(site["in_stock"]),
+        "opcoes_no_site": [bool(v.get("in_stock", True)) for v in site["variations"]],
+        "tem": round(sum(l["tem"] for k, l in ls.items() if k in opcoes(p)), 4) if ls else None}}
+
+
 def do_painel(con, pid):
     r = um(con, "SELECT * FROM store_products WHERE id=?", (pid,))
-    return _produto(r) if r else None
+    if not r:
+        return None
+    return com_estoque(_produto(r), ligados(con, [r["id"]]).get(r["id"]))
 
 
 def categorias_da_loja(p):
@@ -108,7 +245,8 @@ def lista(con, termo="", categoria=None, ativos=None, limit=50, offset=0):
     total = um(con, f"SELECT COUNT(*) AS n FROM store_products{w}", tuple(args))["n"]
     limit, offset = max(1, min(int(limit), 200)), max(0, int(offset))
     rs = todos(con, f"SELECT * FROM store_products{w} ORDER BY active DESC, sort, id LIMIT ? OFFSET ?", (*args, limit, offset))
-    return {"produtos": [_produto(r) for r in rs], "total": total, "limit": limit, "offset": offset}
+    ls = ligados(con, [r["id"] for r in rs])
+    return {"produtos": [com_estoque(_produto(r), ls.get(r["id"])) for r in rs], "total": total, "limit": limit, "offset": offset}
 
 
 def categorias():
@@ -256,6 +394,10 @@ def _dados(con, d, atual=None):
         c["categories"] = [{"slug": "parts", "name": "Parts"}]
     if "in_stock" in d and d["in_stock"] is not None:
         c["in_stock"] = 1 if d["in_stock"] else 0
+    if "fulfillment" in d and d["fulfillment"] is not None:       # #309: interno, o cliente nunca vê
+        if d["fulfillment"] not in FULFILLMENT:
+            raise ErroProduto("como vendemos: dropshipping ou em estoque")
+        c["fulfillment"] = d["fulfillment"]
     if "sku" in d:
         c["sku"] = _texto(d.get("sku"), 60)
     if "shipping_fee" in d:
@@ -306,17 +448,90 @@ def _comparavel(v):
     return json.dumps(v, ensure_ascii=False, sort_keys=True) if isinstance(v, (list, dict)) else v
 
 
+def _opcoes_renomeadas(atual, d, vs):
+    """{nome antigo: nome novo} das opções **ligadas ao estoque** que mudaram de nome (#309, revisão). A ligação mora no
+    nome da opção (`store_product_stock.variation`, o mesmo que o pedido grava); renomear sem levar a ligação junto
+    deixava a opção nova vendendo sem limite. A tela manda, em cada opção, o nome de antes (`antes`; null na opção
+    nova). Sem ele (outro cliente da API), casa pela posição quando a lista tem o mesmo tamanho, ou a única que saiu com
+    a única que entrou. Opção ligada que **sai** do produto, e o produto ligado inteiro que **ganha opções**, são
+    recusados: a ligação ficaria órfã e prenderia o item (um item, um produto); desligue antes. Sem como casar: recusa,
+    com a frase do que fazer. Ligação que já era órfã (de antes desta regra) fica como está."""
+    antes = opcoes(atual)
+    ligadas = {k: v for k, v in (atual.get("estoque", {}).get("ligados") or {}).items() if k in antes}
+    if not ligadas:
+        return {}
+    depois = opcoes({"variations": vs})
+    if "" in ligadas:
+        if depois != [""]:
+            raise ErroProduto(f"o produto inteiro está ligado ao item {ligadas['']['item']}: desligue em Site › Estoque do "
+                              "site antes de criar opções (depois, ligue cada opção ao item dela)")
+        return {}
+
+    def saiu(a):
+        return ErroProduto(f"a opção {a} está ligada ao item {ligadas[a]['item']}: desligue em Site › Estoque do site "
+                           "antes de tirá-la do produto")
+    brutas = [x if isinstance(x, dict) else {} for x in d.get("variations") or []]
+    m = {}
+    if any("antes" in x for x in brutas):
+        novo_de = {x["antes"]: nome for x, nome in zip(brutas, depois) if isinstance(x.get("antes"), str)}
+        for a in ligadas:
+            if a in novo_de:
+                if novo_de[a] != a:
+                    m[a] = novo_de[a]
+            elif a in depois:
+                raise ErroProduto(f"a opção {a}, ligada ao item {ligadas[a]['item']}, saiu e outra opção ficou com o nome "
+                                  "dela: desligue em Site › Estoque do site antes")
+            else:
+                raise saiu(a)
+    else:
+        fora = [a for a in antes if a in ligadas and a not in depois]
+        vieram = [n for n in depois if n and n not in antes]
+        if len(antes) == len(depois):
+            m = {a: depois[i] for i, a in enumerate(antes) if a in fora and depois[i] in vieram}
+        elif len(fora) == 1 and len(vieram) == 1:
+            m = {fora[0]: vieram[0]}
+        sem_par = [a for a in fora if a not in m]
+        if sem_par and vieram:
+            a = sem_par[0]
+            raise ErroProduto(f"a opção {a} está ligada ao estoque ({ligadas[a]['item']}) e não dá para saber qual é o "
+                              "nome novo dela: mude o nome de uma opção por vez, ou desligue em Site › Estoque do site antes")
+        if sem_par:
+            raise saiu(sem_par[0])
+    for a, b in m.items():
+        if b in ligadas and b not in m:
+            raise ErroProduto(f"a opção {b} ainda está ligada ao item {ligadas[b]['item']}: desligue em Site › Estoque do "
+                              f"site antes de dar esse nome à opção {a}")
+    return m
+
+
+def _mover_ligacoes(con, pid, m):
+    """Leva cada ligação para o nome novo da opção. Em dois passos, para a troca de nomes (M ↔ L) não bater no
+    UNIQUE (produto, opção)."""
+    for a in m:
+        con.execute("UPDATE store_product_stock SET variation=? WHERE product_id=? AND variation=?", (f"\x00{a}", pid, a))
+    for a, b in m.items():
+        con.execute("UPDATE store_product_stock SET variation=? WHERE product_id=? AND variation=?", (b, pid, f"\x00{a}"))
+
+
 def mudar(con, por, pid, d):
-    """Devolve {campo: (antes, depois)} — vai para a auditoria (texto longo entra só como 'mudou')."""
+    """Devolve {campo: (antes, depois)} — vai para a auditoria (texto longo entra só como 'mudou').
+    #309: a opção ligada ao estoque que muda de nome leva a ligação junto; quem chama abre a transação."""
     atual = do_painel(con, pid)
     if not atual:
         raise ErroProduto("produto não existe")
     bruto = dict(um(con, "SELECT * FROM store_products WHERE id=?", (pid,)))
-    c = _gravavel(_dados(con, d, atual={**atual, "kind": bruto["kind"]}))
+    dados = _dados(con, d, atual={**atual, "kind": bruto["kind"]})
+    trocas = _opcoes_renomeadas(atual, d, dados["variations"]) if "variations" in dados else {}
+    c = _gravavel(dados)
     mud = {k: (bruto[k], v) for k, v in c.items() if _comparavel(bruto[k]) != _comparavel(v) and str(bruto[k]) != str(v)}
     if mud:
         atualizar(con, "store_products", pid, **{k: v for k, (_, v) in mud.items()}, updated_by=por, updated_at=agora())
-    return {k: (("…", "mudou") if k in ("short", "description", *CAMPOS_JSON) else ab) for k, ab in mud.items()}
+    if trocas:
+        _mover_ligacoes(con, pid, trocas)
+    out = {k: (("…", "mudou") if k in ("short", "description", *CAMPOS_JSON) else ab) for k, ab in mud.items()}
+    if trocas:
+        out["opcoes_no_estoque"] = (list(trocas), list(trocas.values()))
+    return out
 
 
 # ------------------------------------------------------------------ fotos

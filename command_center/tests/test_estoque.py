@@ -346,3 +346,18 @@ def test_item_pode_existir_sem_sku(con):
     """SKU é referência de compra, não identidade: peça avulsa e usado existem sem ele."""
     i = estoque.criar_item(con, "peca", "Corrente usada que veio no kart do Hank")
     assert um(con, "SELECT sku FROM stock_items WHERE id=?", (i,))["sku"] is None
+
+
+# ------------------------------------------------------------ #309: a loja do site
+def test_um_item_vende_no_site_por_um_produto_so(con):
+    """#309: o banco trava (UNIQUE item_id). Duas vitrines no mesmo item baixariam o mesmo saldo duas vezes; e uma
+    opção do produto liga a um item só (UNIQUE product_id + opção)."""
+    import sqlite3
+    it = estoque.criar_item(con, "peca", "Boné de teste")
+    p1, p2 = [r["id"] for r in todos(con, "SELECT id FROM store_products ORDER BY id LIMIT 2")]
+    inserir(con, "store_product_stock", product_id=p1, item_id=it)
+    with pytest.raises(sqlite3.IntegrityError):
+        inserir(con, "store_product_stock", product_id=p2, item_id=it)
+    outro = estoque.criar_item(con, "peca", "Outro boné de teste")
+    with pytest.raises(sqlite3.IntegrityError):
+        inserir(con, "store_product_stock", product_id=p1, item_id=outro)

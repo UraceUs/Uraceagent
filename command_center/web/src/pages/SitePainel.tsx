@@ -25,7 +25,7 @@ interface Painel {
   visitas: { total: number; total_ant: number | null; entradas: number; carrinho: number; desde: string | null; parcial: boolean
     paginas: { caminho: string; n: number }[]; fontes: { fonte: string; n: number }[] }
   dias: Dia[]
-  atencao: { pedidos_sem_vaga: number; avisos_falharam: number; agendamentos_pendentes: number; contas_sem_vinculo: number; janela_dias: number }
+  atencao: { pedidos_sem_vaga: number; pedidos_sem_estoque?: number; avisos_falharam: number; agendamentos_pendentes: number; contas_sem_vinculo: number; janela_dias: number }
   saude: { desde: string; paginas: { n: number; erros_5xx: number; p95_ms: number | null }; compra: { n: number; erros_5xx: number; p95_ms: number | null } }
 }
 
@@ -97,6 +97,7 @@ export function SitePainel() {
       </div>
       <Strip items={[
         { label: tr("Pagos sem vaga ({0} dias)", p.atencao.janela_dias), value: p.atencao.pedidos_sem_vaga, tone: p.atencao.pedidos_sem_vaga ? 'crit' : undefined },
+        { label: tr("Pagos sem estoque ({0} dias)", p.atencao.janela_dias), value: p.atencao.pedidos_sem_estoque ?? 0, tone: p.atencao.pedidos_sem_estoque ? 'crit' : undefined },
         { label: tr("Avisos por e-mail que não saíram ({0} dias)", p.atencao.janela_dias), value: p.atencao.avisos_falharam, tone: p.atencao.avisos_falharam ? 'warn' : undefined },
         { label: tr("Agendamentos esperando"), value: p.atencao.agendamentos_pendentes, tone: p.atencao.agendamentos_pendentes ? 'warn' : undefined },
         { label: tr("Contas sem card ligado"), value: p.atencao.contas_sem_vinculo, tone: p.atencao.contas_sem_vinculo ? 'warn' : undefined },

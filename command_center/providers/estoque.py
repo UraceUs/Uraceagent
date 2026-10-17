@@ -29,6 +29,8 @@ não fonte. `conferir()` refaz tudo a partir dos movimentos e acusa qualquer dif
 preenchido) nunca sai para outro cliente. É a mesma regra dos cards — *"nunca colocar
 serviço de outro cliente em card de outro cliente"* — aplicada ao que é físico.
 """
+import math
+
 from command_center.db import agora, inserir, todos, um
 
 SEDE, TRAILER = "sede", "trailer"
@@ -118,6 +120,8 @@ def _dinheiro(v, rotulo):
     try:
         v = float(str(v).replace("$", "").replace(",", ".").strip())
     except ValueError:
+        raise ErroEstoque(f"{rotulo} precisa ser um número")
+    if not math.isfinite(v):          # "1e400" é infinito: o JSON das listas não serializa e a tela caía com 500
         raise ErroEstoque(f"{rotulo} precisa ser um número")
     if v < 0:
         raise ErroEstoque(f"{rotulo} não pode ser negativo")
@@ -313,6 +317,8 @@ def _quantidade(qty, it):
     if qty is None:
         raise ErroEstoque(f"{it['name']} é controlado por quantidade: informe quanto")
     qty = float(qty)
+    if not math.isfinite(qty):
+        raise ErroEstoque("a quantidade precisa ser um número, como 3")
     if qty <= 0:
         raise ErroEstoque("quantidade tem de ser maior que zero "
                           "(para tirar do estoque use a saída, não um número negativo)")
@@ -454,6 +460,8 @@ def contar(con, item_id, qty, onde=SEDE, client_id=None, by_user_id=None,
         raise ErroEstoque(f"{it['name']} tem ficha individual: a contagem é conferir as "
                           "unidades uma a uma, não digitar um total")
     qty = float(qty)
+    if not math.isfinite(qty):        # "nan" e "inf" passavam pela comparação e gravavam lixo no saldo
+        raise ErroEstoque("a contagem precisa ser um número, como 3")
     if qty < 0:
         raise ErroEstoque("contagem não pode ser negativa")
     tinha = saldo(con, it["id"], loc["id"], client_id=client_id)   # dono explícito, nunca TODOS
@@ -477,6 +485,8 @@ def ajustar(con, item_id, delta, onde=SEDE, client_id=None, reason=None, by_user
     if it["tracking"] == "serie":
         raise ErroEstoque(f"{it['name']} tem ficha individual: use entrada, saída ou transferência")
     delta = float(delta)
+    if not math.isfinite(delta):
+        raise ErroEstoque("o ajuste precisa ser um número, como 2 ou -1")
     if delta == 0:
         raise ErroEstoque("ajuste de zero não é ajuste")
     antes, depois = _mexer_saldo(con, it["id"], loc["id"], client_id, delta)

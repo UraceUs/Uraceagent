@@ -450,6 +450,21 @@ A tela mostra uma fileira por prateleira. Use **"Buscar peça, marca, medida ou 
   **Sim, excluir**. A peça sai das prateleiras, mas o histórico fica guardado. Peça de
   cliente guardada com a gente **não sai** assim.
 
+### Peça com o selo "à venda no site"
+
+Algumas peças (boné, camisa por tamanho, pneu, kart usado) também são vendidas na **loja do site**. Elas têm o selo
+verde **à venda no site** no card. É **o mesmo saldo**: quando alguém compra no site e paga, a peça **sai do estoque
+sozinha** (no histórico: *venda · loja do site · pedido #…*); quando o balcão vende ou você usa a peça, o site também
+vê. Por isso:
+
+- **conte certo** essas prateleiras: quando o saldo chega a zero (no Galpão e na Pista), o site mostra "Out of stock"
+  e para de vender. O que está no **trailer** não conta para o site;
+- pedido do site **pago** com a peça para separar aparece em Site › Pedidos do site (o gerente avisa). A linha
+  **Estoque:** do pedido diz o que saiu e de onde (*baixou 1 do estoque (Galpão 1)*); no kart usado e no motor, com o
+  **serial** da unidade (*série: SN-…*): separe exatamente essa. Se faltar peça, o pedido mostra **"Resolver: sem
+  estoque"**: avise o gerente;
+- o que é dropshipping (o fornecedor envia) não tem selo e não mexe no estoque.
+
 ### O que é do gerente
 
 - preço final, valor de compra e margem (você não vê custo nem margem);
@@ -512,6 +527,8 @@ Quem compra já vê o pedido. Quando a compra chega, a tela da compra tem
 - **Etiqueta de prateleira (URQ):** o QR na prateleira, ligado ao produto do QuickBooks.
 - **Etiqueta URACE (URC):** o código de barras que a URACE dá à peça que veio sem código.
 - **Contagem:** dizer ao sistema quanto tem de verdade na prateleira. Sem ela, o balcão não cobra.
+- **À venda no site:** o selo da peça que a loja do site também vende. Mesmo saldo: a venda paga no site tira a peça
+  do estoque sozinha.
 - **QR do cliente:** o código do card do cliente, para o balcão completo.
 - **Meu dia:** a sua tela inicial e o seu calendário.
 - **Checklist:** a lista do que conferir em cada atendimento.
