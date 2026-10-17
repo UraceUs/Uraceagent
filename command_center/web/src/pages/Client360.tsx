@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { CatalogoEditor } from './Garage'
 import { InserirNoTopo } from '../components/Inserir'
+import { Cartao, CdItem, CdLista } from '../components/Cartao'
 import { LembreteChip, LembreteModal } from './Systems'
 import { PecasDoCliente } from './Estoque'
 import { CardIrmao, Picker, UnirModal } from '../components/Unir'
@@ -605,13 +606,16 @@ function ContaNoSite({ cid }: { cid: number }) {
   return <div className="stack">
     <div><b>{c.name}</b> <span className="small muted">· {c.email}{c.phone ? ` · ${c.phone}` : ''}</span>
       <div className="small muted">{[c.address_line1, c.city, c.state, c.zip].filter(Boolean).join(', ') || tr("sem endereço")}{c.last_login_at ? tr(" · último acesso {0}/{1}", c.last_login_at.slice(8, 10), c.last_login_at.slice(5, 7)) : ''}</div></div>
-    {c.drivers.map(p => <div key={p.id} className="card card-b">
-      <b>{p.name}</b>{p.is_self ? <span className="small muted"> {tr("· o próprio responsável")}</span> : null}
-      {' '}{p.id === c.driver_id ? <Chip tone="ok">{tr("este card")}</Chip> : p.client_id ? <Link className="small" to={`/clients/${p.client_id}`}>{tr("Client ID")} {p.client_id}</Link>
-        : <span className="small muted">{tr("· sem card ainda (Site › Contas de clientes)")}</span>}
-      <div className="small muted">{p.birth_date ? tr("nascimento {0}/{1}/{2}", p.birth_date.slice(8, 10), p.birth_date.slice(5, 7), p.birth_date.slice(0, 4)) : tr("sem nascimento")}{p.measures_updated_at ? tr(" · medido em {0}/{1}", p.measures_updated_at.slice(8, 10), p.measures_updated_at.slice(5, 7)) : ''}</div>
-      {Object.keys(p.measures).length > 0 && <dl className="portal-dl">{Object.entries(p.measures).map(([k, v]) => <div key={k}><dt>{MEDIDA_PT[k] || k}</dt><dd>{String(v)}</dd></div>)}</dl>}
-    </div>)}
+    {/* #313: cada piloto da conta no cartão D, com as medidas na lista */}
+    <div className="cd-grade">{c.drivers.map(p => <Cartao key={p.id} id={`piloto-${p.id}`} nivel={2}
+      estado={p.id === c.driver_id ? tr("este card") : p.client_id ? `${tr("Client ID")} ${p.client_id}` : tr("sem card")} tom={p.id === c.driver_id ? 'ok' : p.client_id ? 'info' : 'warn'}
+      avatar={p.name} nome={p.name}
+      sub={[p.is_self ? tr("o próprio responsável") : null,
+        `${p.birth_date ? tr("nascimento {0}/{1}/{2}", p.birth_date.slice(8, 10), p.birth_date.slice(5, 7), p.birth_date.slice(0, 4)) : tr("sem nascimento")}${p.measures_updated_at ? tr(" · medido em {0}/{1}", p.measures_updated_at.slice(8, 10), p.measures_updated_at.slice(5, 7)) : ''}`,
+        !p.client_id ? tr("Site › Contas de clientes") : null]}
+      acoes={p.client_id && p.id !== c.driver_id ? <Link className="btn" to={`/clients/${p.client_id}`}>{tr("Client ID")} {p.client_id}</Link> : null}>
+      {Object.keys(p.measures).length > 0 && <CdLista>{Object.entries(p.measures).map(([k, v]) => <CdItem key={k} tom="neutral" valor={String(v)}>{MEDIDA_PT[k] || k}</CdItem>)}</CdLista>}
+    </Cartao>)}</div>
   </div>
 }
 

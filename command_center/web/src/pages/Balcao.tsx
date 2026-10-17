@@ -18,6 +18,7 @@ import { useToast } from '../components/Toast'
 import { tr } from '../i18n'
 import { CAMERA, novoDetector, temCamera, vibrar } from '../components/Leitor'
 import { Picker } from '../components/Unir'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import type { Client } from '../api/types'
 
 type Modo = 'cobrar' | 'guardar'
@@ -235,33 +236,28 @@ function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean;
     try { await api.post(`/balcao/invoices/${p.id}/${qual}`); toast(qual === 'enviar' ? tr("Invoice enviada pelo QuickBooks.") : tr("Atualizada no QuickBooks."), 'ok'); onMudou() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
-  return <div className="card card-b stack" style={{ gap: 8 }}>
-    <div className="row wrap" style={{ gap: 8 }}>
-      <b className="grow">{tr("Peças de")} {p.service_date.slice(5, 7)}/{p.service_date.slice(8, 10)}{p.cliente ? ` · ${p.cliente}` : ''}</b>
-      {p.status === 'enviada' ? <Chip tone="ok">{tr("enviada")}{p.sent_to ? tr(" para {0}", p.sent_to) : ''}</Chip> : p.status === 'anulada' ? <Chip tone="neutral">{tr("anulada")}</Chip>
-        : <Chip tone="warn">{tr("aberta · não enviada")}</Chip>}
-      {p.paga && <Chip tone="ok">{tr("paga")}</Chip>}
-      {p.doc_number && <span className="mono small">{p.doc_number}</span>}
-    </div>
-    {p.qbo_error && <Banner tone="crit">{tr("QuickBooks:")} {p.qbo_error}</Banner>}
-    {p.linhas.length > 0 && <div className="tbl">{p.linhas.map(l => <div className="tr" key={l.id}><span className="grow">{l.name}</span>
-      <span className="small muted">{l.qty} {tr("×")} {usd(l.unit_price)}</span><b className="mono">{usd(l.total)}</b></div>)}</div>}
-    <div className="row wrap" style={{ gap: 8 }}><b className="grow">{tr("Total")} {usd(p.total)}</b>
-      {p.status === 'aberta' && p.qbo_error && <button className="btn sm" disabled={indo} onClick={() => acao('sincronizar')}>{tr("Tentar de novo")}</button>}
-    </div>
+  // #313: o cartão D — a situação, o cliente, o total no bloco grande, as linhas na lista e, embaixo, como o cliente paga
+  const [rot, tom]: [string, TomD] = p.status === 'enviada' ? [tr("enviada"), 'ok'] : p.status === 'anulada' ? [tr("anulada"), 'neutral'] : [tr("aberta · não enviada"), 'warn']
+  const cobrar = !p.paga && p.status !== 'anulada' && p.total > 0 && p.qbo_invoice_id && !p.qbo_error
+  return <Cartao id={`inv-pecas-${p.id}`} estado={rot} tom={tom} avatar={p.cliente || '#'}
+    nome={`${tr("Peças de")} ${p.service_date.slice(5, 7)}/${p.service_date.slice(8, 10)}${p.cliente ? ` · ${p.cliente}` : ''}`}
+    sub={[p.status === 'enviada' && p.sent_to ? tr("enviada para {0}", p.sent_to) : null]}
+    grande={usd(p.total)} detalhe={p.doc_number ? tr("invoice {0}", p.doc_number) : tr("Total")}
+    acoes={(p.status === 'aberta' && p.qbo_error) || (cobrar && ((p.status === 'aberta' && gerente) || p.cartao)) ? <>
+      {p.status === 'aberta' && p.qbo_error && <button className="btn" disabled={indo} onClick={() => acao('sincronizar')}>{tr("Tentar de novo")}</button>}
+      {cobrar && p.status === 'aberta' && gerente && <button className="btn" disabled={indo} onClick={() => acao('enviar')}>{tr("Enviar invoice por e-mail")}</button>}
+      {cobrar && p.cartao && <button className="btn primary" onClick={() => setCartao(true)}>{tr("Cobrar no cartão")}</button>}</> : null}>
+    <CdLista>
+      {p.paga && <CdItem tom="ok">{tr("paga")}</CdItem>}
+      {p.qbo_error && <CdItem tom="crit"><span className="cd-erro">{tr("QuickBooks:")} {p.qbo_error}</span></CdItem>}
+      {p.linhas.map(l => <CdItem key={l.id} tom="neutral" glifo="·" valor={`${l.qty} ${tr("×")} ${usd(l.unit_price)} = ${usd(l.total)}`}>{l.name}</CdItem>)}
+    </CdLista>
     {/* Dono, 06/10: as duas vias — montar a invoice e enviar, ou cobrar no leitor de cartão */}
-    {!p.paga && p.status !== 'anulada' && p.total > 0 && p.qbo_invoice_id && !p.qbo_error && <div className="stack" style={{ gap: 6 }}>
-      <span className="small muted">{tr("Como o cliente paga?")}</span>
-      <div className="row wrap" style={{ gap: 8 }}>
-        {p.status === 'aberta' && (gerente
-          ? <button className="btn sm" disabled={indo} onClick={() => acao('enviar')}>{tr("Enviar invoice por e-mail")}</button>
-          : <span className="small muted">{tr("Enviar invoice: o gerente envia no fim do dia.")}</span>)}
-        {p.status === 'enviada' && <span className="small muted">{tr("Invoice enviada: o cliente paga pelo link do e-mail.")}</span>}
-        {p.cartao && <button className="btn sm primary" onClick={() => setCartao(true)}>{tr("Cobrar no cartão")}</button>}
-      </div>
-    </div>}
+    {cobrar && <p className="cd-aviso">{tr("Como o cliente paga?")}{' '}
+      {p.status === 'aberta' && !gerente && tr("Enviar invoice: o gerente envia no fim do dia.")}
+      {p.status === 'enviada' && tr("Invoice enviada: o cliente paga pelo link do e-mail.")}</p>}
     {cartao && <CobrarNoCartao p={p} onFechar={() => setCartao(false)} onPago={onMudou} />}
-  </div>
+  </Cartao>
 }
 
 function AEnviar() {
@@ -272,7 +268,7 @@ function AEnviar() {
   useEffect(() => { carregar() }, [carregar])
   return <Section title={tr("Invoices de peças para enviar")} count={d?.total}>
     {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para enviar")}>{tr("As invoices de peças abertas aparecem aqui até alguém enviar.")}</Empty>
-      : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <CartaoInvoice key={p.id} p={p} gerente={can('MANAGER')} onMudou={carregar} />)}
+      : <div className="stack" style={{ gap: 10 }}><div className="cd-grade">{d.itens.map(p => <CartaoInvoice key={p.id} p={p} gerente={can('MANAGER')} onMudou={carregar} />)}</div>
         {d.total > d.itens.length && <button className="btn ghost" onClick={() => setLimite(l => Math.min(200, l + 50))}>{tr("Carregar mais")}</button>}</div>}
   </Section>
 }
@@ -316,35 +312,38 @@ function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; to
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   const nome = item?.name || p.item?.name
-  return <div className="card card-b stack" style={{ gap: 8 }}>
-    <div className="row wrap" style={{ gap: 8 }}>
-      <div className="grow"><b>{nome || tr("Código novo")}</b> <span className="mono small muted">{p.code}</span>
-        <div className="small muted">{p.pilot_name || tr("sem piloto")} · {p.service_date} · {tr("lida por {0}", p.por || '—')}
-          {p.item?.price != null ? ` · ${usd(p.item.price)}` : ''}</div></div>
-      {!temItem && <Chip tone="warn">{tr("código novo")}</Chip>}
-      {!temCliente && <Chip tone="warn">{tr("sem cliente")}</Chip>}
-      {p.item && !p.item.qbo_item_id && <Chip tone="warn">{tr("sem item no QuickBooks")}</Chip>}
-      {p.item && p.item.price == null && <Chip tone="warn">{tr("sem preço")}</Chip>}
-      {p.item && (p.item.nosso ?? 1) <= 0 && <Chip tone="warn">{tr("sem saldo na prateleira")}</Chip>}
-    </div>
-    {p.motivo && <p className="small" style={{ margin: 0 }}><b>{tr("Por que não foi direto para a OS:")}</b> {p.motivo}</p>}
-    {p.item && (p.item.nosso ?? 1) <= 0 && <p className="small muted" style={{ margin: 0 }}>{tr("A URACE não tem esta peça contada no estoque: para cobrar, conte a prateleira antes (Contar o estoque, nesta tela).")}</p>}
-    {!p.client_id && <Picker label={tr("Cliente desta peça")} value={cliente} onPick={setCliente} />}
-    {!temItem && <button className="btn sm" onClick={() => setNovo(true)}>{tr("Dizer que peça é")}</button>}
-    {it && (!it.qbo_item_id || it.price == null) && <button className="btn sm" onClick={() => setQbo(it)}>{tr("Ligar ao QuickBooks e definir o preço")}</button>}
-    {doCliente && <Banner tone="warn">{doCliente}</Banner>}
-    <label className="fld" style={{ maxWidth: 220 }}><span>{tr("A peça saiu de")}</span>
-      <select value={local} onChange={e => setLocal(e.target.value)}>{LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select></label>
-    <div className="row wrap" style={{ gap: 8 }}>
-      <button className="btn sm primary" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('cobrar', !!doCliente)}>{doCliente ? tr("Cobrar mesmo assim") : tr("Cobrar")}</button>
-      <button className="btn sm balcao-btn-guardar" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('guardar')}>{tr("Guardar para o cliente")}</button>
-      {(doCliente || (p.item?.do_cliente ?? 0) > 0) && <button className="btn sm" disabled={indo} onClick={() => confirmar('usar_do_cliente')}>{tr("Usar a do cliente")}</button>}
-      <button className="btn sm ghost" disabled={indo} onClick={descartar}>{tr("Descartar")}</button>
+  const semSaldo = !!p.item && (p.item.nosso ?? 1) <= 0
+  const temQbo = !!it && !!it.qbo_item_id && it.price != null
+  // #313: o cartão D com o checklist do que falta para cobrar, cada linha com a ação dela
+  return <Cartao id={`revisao-${p.id}`} estado={!temItem ? tr("código novo") : !temCliente ? tr("sem cliente") : !temQbo ? tr("sem item no QuickBooks") : semSaldo ? tr("sem saldo na prateleira") : tr("pronta")}
+    tom={temItem && temCliente && temQbo && !semSaldo ? 'ok' : 'warn'} avatar={p.pilot_name || null}
+    nome={nome || tr("Código novo")} sub={[<span key="c" className="cd-mono">{p.code}</span>, `${p.pilot_name || tr("sem piloto")} · ${p.service_date} · ${tr("lida por {0}", p.por || '—')}`]}
+    grande={p.item?.price != null ? usd(p.item.price) : null}
+    progresso={{ rotulo: tr("Pronta para cobrar"), total: 4, feito: [temItem, temCliente, temQbo, !semSaldo].filter(Boolean).length }}
+    acoes={<>
+      <button className="btn primary" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('cobrar', !!doCliente)}>{doCliente ? tr("Cobrar mesmo assim") : tr("Cobrar")}</button>
+      <button className="btn balcao-btn-guardar" disabled={indo || !temItem || !temCliente} onClick={() => confirmar('guardar')}>{tr("Guardar para o cliente")}</button>
+      {(doCliente || (p.item?.do_cliente ?? 0) > 0) && <button className="btn" disabled={indo} onClick={() => confirmar('usar_do_cliente')}>{tr("Usar a do cliente")}</button>}
+      <button className="btn" disabled={indo} onClick={descartar}>{tr("Descartar")}</button></>}>
+    {p.motivo && <p className="cd-aviso"><b>{tr("Por que não foi direto para a OS:")}</b> {p.motivo}</p>}
+    <CdLista>
+      <CdItem tom={temItem ? 'ok' : 'warn'} acao={!temItem ? <button className="btn sm" onClick={() => setNovo(true)}>{tr("Dizer que peça é")}</button> : undefined}>
+        {temItem ? nome : tr("código novo")}</CdItem>
+      <CdItem tom={temCliente ? 'ok' : 'warn'}>{temCliente ? (cliente ? cliente.pilot_name || cliente.name : p.pilot_name || tr("Cliente")) : tr("sem cliente")}</CdItem>
+      {it && <CdItem tom={temQbo ? 'ok' : 'warn'} acao={!temQbo ? <button className="btn sm" onClick={() => setQbo(it)}>{tr("Ligar ao QuickBooks e definir o preço")}</button> : undefined}>
+        {!it.qbo_item_id ? tr("sem item no QuickBooks") : it.price == null ? tr("sem preço") : tr("QuickBooks")}</CdItem>}
+      {semSaldo && <CdItem tom="warn">{tr("A URACE não tem esta peça contada no estoque: para cobrar, conte a prateleira antes (Contar o estoque, nesta tela).")}</CdItem>}
+    </CdLista>
+    <div className="cd-form">
+      {!p.client_id && <Picker label={tr("Cliente desta peça")} value={cliente} onPick={setCliente} />}
+      {doCliente && <Banner tone="warn">{doCliente}</Banner>}
+      <label className="fld"><span>{tr("A peça saiu de")}</span>
+        <select value={local} onChange={e => setLocal(e.target.value)}>{LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select></label>
     </div>
     {novo && <CodigoNovo codigo={p.code} gerente onFechar={() => setNovo(false)} onFeito={i => { setNovo(false); setItem(i) }} />}
     {qbo && <ItemQbo item={qbo} onFechar={() => { setQbo(null); setDepois(null) }}
       onFeito={() => { setQbo(null); const d = depois; setDepois(null); if (d) confirmar(d.modo, d.confirmado); else onMudou(null) }} />}
-  </div>
+  </Cartao>
 }
 
 function Revisao() {
@@ -354,7 +353,7 @@ function Revisao() {
   useEffect(() => { carregar() }, [carregar])
   return <Section title={tr("Revisão: lidas no celular")} count={d?.total}>
     {!d ? <span className="spin" /> : !d.itens.length ? <Empty title={tr("Nada para revisar")}>{tr("A leitura do celular vai direto para a OS do cliente. Aqui aparece só a que precisa de você (código novo, sem cliente, sem preço, sem saldo).")}</Empty>
-      : <div className="stack" style={{ gap: 10 }}>{d.itens.map(p => <ItemRevisao key={p.id} p={p} onMudou={r => r ? setD(r) : carregar()} />)}
+      : <div className="stack" style={{ gap: 10 }}><div className="cd-grade">{d.itens.map(p => <ItemRevisao key={p.id} p={p} onMudou={r => r ? setD(r) : carregar()} />)}</div>
         {d.total > d.itens.length && <button className="btn ghost" onClick={() => setLimite(l => Math.min(200, l + 50))}>{tr("Carregar mais")}</button>}</div>}
   </Section>
 }
@@ -420,8 +419,8 @@ function ContarEstoque() {
           <button type="button" className="btn ghost" onClick={() => { setAtual(null); setTimeout(() => campo.current?.focus(), 30) }}>{tr("Ler outra")}</button>
         </div>
       </form>}
-      {feitos.length > 0 && <div className="card"><div className="tbl">{feitos.map(f => <div className="tr" key={f.id}>
-        <span className="grow">{f.nome}</span><span className="small muted">{tr("era {0}", f.antes)}</span><b className="mono">{f.qty}</b></div>)}</div></div>}
+      {feitos.length > 0 && <div className="tbl">{feitos.map(f => <div className="tr" key={f.id}>
+        <span className="grow">{f.nome}</span><span className="small muted">{tr("era {0}", f.antes)}</span><b className="mono">{f.qty}</b></div>)}</div>}
       <div className="row wrap" style={{ gap: 8 }}>
         <button className="btn" onClick={() => setSemCodigo(true)}>{tr("Peça sem código: etiqueta URACE")}</button>
         <button className="btn ghost" onClick={() => { setAberto(false); setAtual(null) }}>{tr("Terminar")}</button>
@@ -650,15 +649,15 @@ export function Balcao() {
       {est.guardado.length > 0 && <Banner tone="warn">{tr("Guardado deste cliente com a gente:")} {est.guardado.map(g => `${g.name} (${g.qty} · ${g.local})`).join(', ')}{tr(". Não cobre o que é dele.")}</Banner>}
       <Section title={tr("Invoice de peças")}>
         {!est.invoices.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nenhuma peça cobrada hoje.")}</p>
-          : <div className="stack" style={{ gap: 10 }}>{est.invoices.map(p => <CartaoInvoice key={p.id} p={p} gerente={est.gerente} onMudou={carregar} />)}</div>}
+          : <div className="cd-grade">{est.invoices.map(p => <CartaoInvoice key={p.id} p={p} gerente={est.gerente} onMudou={carregar} />)}</div>}
       </Section>
       <Section title={tr("Leituras")} count={est.leituras.length}>
         {!est.leituras.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nada lido ainda.")}</p>
-          : <div className="card"><div className="tbl">{est.leituras.map(l => <div className="tr" key={l.id}>
+          : <div className="tbl">{est.leituras.map(l => <div className="tr" key={l.id}>
             <span className="grow">{l.name} <span className="small muted">{tr("×")} {l.qty} · {MODO_TXT[l.mode]}</span></span>
             {l.undone_at ? <Chip tone="neutral">{tr("desfeita")}</Chip> : l.travada ? <Chip tone="neutral" title={tr("A invoice já foi enviada ou paga: ajuste pelo QuickBooks.")}>{tr("na invoice fechada")}</Chip>
               : <button className="btn sm ghost" onClick={() => desfazer(l)}>{tr("Desfazer")}</button>}
-          </div>)}</div></div>}
+          </div>)}</div>}
       </Section>
     </>}
     {!cid && <Section title={tr("Abrir um cliente")}>

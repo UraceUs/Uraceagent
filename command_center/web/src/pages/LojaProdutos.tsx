@@ -14,6 +14,7 @@ import { useAuth } from '../auth/AuthContext'
 import { Chip, Empty, ErrorState, Loading, Section } from '../components/ui'
 import { EditorTexto } from '../components/EditorTexto'
 import { InserirNoTopo } from '../components/Inserir'
+import { Cartao, CdItem, CdLista } from '../components/Cartao'
 import { useToast } from '../components/Toast'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
@@ -83,20 +84,21 @@ export function ProdutosDaLoja() {
     {l.error && <ErrorState error={l.error} retry={l.reload} />}
     {l.loading && !l.data && <Loading />}
     {l.data && (!l.data.produtos.length ? <Empty title={tr("Nenhum produto aqui")}>{tr("Mude a busca ou os filtros.")}</Empty>
-      : <ul className="loja-lista">{l.data.produtos.map(p => <li key={p.id} className="card card-b loja-item">
-        {p.images[0] ? <img src={fotoUrl(p.images[0].src)} alt="" width={64} height={64} loading="lazy" /> : <span className="loja-sem-foto" aria-hidden="true">URACE</span>}
-        <div className="grow" style={{ minWidth: 0 }}>
-          <Link to={`/site/produtos/${p.id}`} className="loja-nome">{p.name}</Link>
-          <div className="small muted" style={{ overflowWrap: 'anywhere' }}>{preco(p)} · {frete(p.shipping_fee)}{p.deposit ? ` · ${tr("depósito {0}", usd(p.deposit))}` : ''}</div>
-          <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
-            {!p.active && <Chip tone="neutral">{tr("escondido")}</Chip>}
-            {!(p.estoque?.no_site ?? p.in_stock) && <Chip tone="warn">{tr("sem estoque")}</Chip>}
-            {p.fulfillment === 'estoque' && <Chip tone="info" title={tr("interno: o cliente não vê")}>{p.estoque?.tem != null
-              ? tr("em estoque · {0}", qtd(p.estoque.tem)) : tr("em estoque · falta ligar")}</Chip>}
-            {p.on_sale && <Chip tone="accent">{tr("promoção")}</Chip>}</div>
-        </div>
-        <Link className="btn sm ghost" to={`/site/produtos/${p.id}`}>{tr("Editar")}</Link>
-      </li>)}</ul>)}
+      : <div className="cd-grade">{l.data.produtos.map(p => {
+        const sem = !(p.estoque?.no_site ?? p.in_stock)
+        return <Cartao key={p.id} id={`produto-${p.id}`} nivel={2} estado={!p.active ? tr("escondido") : sem ? tr("sem estoque") : tr("à venda")} tom={!p.active ? 'neutral' : sem ? 'warn' : 'ok'}
+          avatar={p.images[0] ? <img src={fotoUrl(p.images[0].src)} alt="" width={60} height={60} loading="lazy" /> : <span>URACE</span>}
+          nome={<Link to={`/site/produtos/${p.id}`}>{p.name}</Link>}
+          sub={[`${frete(p.shipping_fee)}${p.deposit ? ` · ${tr("depósito {0}", usd(p.deposit))}` : ''}`]}
+          grande={preco(p)} acoes={<Link className="btn" to={`/site/produtos/${p.id}`}>{tr("Editar")}</Link>}>
+          {(p.fulfillment === 'estoque' || p.on_sale || (!p.active && sem)) && <CdLista>
+            {!p.active && sem && <CdItem tom="warn">{tr("sem estoque")}</CdItem>}
+            {p.fulfillment === 'estoque' && <CdItem tom="info" valor={tr("interno: o cliente não vê")}>{p.estoque?.tem != null
+              ? tr("em estoque · {0}", qtd(p.estoque.tem)) : tr("em estoque · falta ligar")}</CdItem>}
+            {p.on_sale && <CdItem tom="info" glifo="%">{tr("promoção")}</CdItem>}
+          </CdLista>}
+        </Cartao>
+      })}</div>)}
     {l.data && l.data.total > POR_PAGINA && <div className="row" style={{ gap: 8 }}>
       <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>
       <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, l.data.total)} {tr("de")} {l.data.total}</span>

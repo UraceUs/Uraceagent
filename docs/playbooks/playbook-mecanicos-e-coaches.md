@@ -2,7 +2,7 @@
 
 **Command Center da URACE — calendário e balcão de peças**
 
-Para quem trabalha no box, com o celular na mão. Atualizado em 13/10/2026.
+Para quem trabalha no box, com o celular na mão. Atualizado em 17/10/2026 (#313: o cartão novo, igual em todo o painel).
 O guia do painel inteiro está no playbook geral (`docs/playbooks/playbook-geral.md`).
 
 ---
@@ -124,6 +124,18 @@ compacto: 🏁 marca dia com corrida, e o número mostra quantos serviços e ses
   com **Card**, **Peças** e os checklists dele.
 - **Sessões marcadas pelo site:** manhã, tarde ou dia todo, com o piloto. "Esperando" quer
   dizer que a sessão ainda não foi confirmada.
+
+No **Dia**, cada serviço e cada corrida é um **cartão** (o mesmo do painel inteiro, #313), lido de cima para baixo:
+
+- em cima, a **situação** numa pílula colorida (serviço **aberto** em azul, **concluído** em verde; a corrida diz
+  **corrida**);
+- as **iniciais** e o **nome** do piloto, e embaixo o nome do serviço;
+- a **barra "Checklists feitos"** (ex.: 1/2), quando o serviço tem checklist;
+- os **checklists**, um por linha: toque para abrir;
+- embaixo, os botões grandes **Card** e **Peças** (e **Excluir**, só do gerente).
+
+Na corrida, o bloco grande mostra **quantos pilotos** vão, e cada piloto tem o card dele dentro, com **Card**,
+**Peças** e os checklists dele.
 
 O Meu dia **não mostra valores nem contato do cliente**. É o calendário do box.
 
@@ -273,8 +285,17 @@ Se a peça já é do cliente (guardada com a gente), o sistema pergunta antes:
 
 O QR do cliente fica no card dele, no botão **"▣ QR do balcão"**.
 
+Cada **invoice de peças** é um cartão: em cima a situação (**aberta · não enviada**, **enviada**), o cliente, o
+**total no bloco grande** e as peças, uma por linha (quantas × preço). Se o QuickBooks recusou, a linha vermelha diz
+o motivo e o botão **Tentar de novo** fica embaixo.
+
 Se o gerente ligou o cartão no balcão, a invoice mostra **"Cobrar no cartão"**, com os
 passos no app GoPayment. Enviar a invoice por e-mail é do gerente.
+
+Na **Revisão** (o que o celular mandou para o gerente), cada leitura é um cartão com a barra **"Pronta para cobrar"**
+(peça conhecida, cliente, QuickBooks com preço e saldo na prateleira) e uma linha para cada coisa, com o botão dela na
+linha (**Dizer que peça é**, **Ligar ao QuickBooks e definir o preço**). Embaixo: **Cobrar**, **Guardar para o
+cliente**, **Usar a do cliente** e **Descartar**.
 
 **Na dúvida, use o balcão do celular:** ele passa pela revisão do gerente.
 
@@ -396,8 +417,9 @@ precisa de atenção. Então: **começou, termine no mesmo dia.**
 
 ### Checklist que não é de um dia (trimestral e avulso)
 
-1. Abra **Checklists** no menu.
-2. Ache o checklist e toque em **Começar hoje**.
+1. Abra **Checklists** no menu. Cada modelo é um cartão: o cargo em cima, o nome, quando aparece e, no bloco grande,
+   **quantos itens** tem.
+2. Ache o checklist e toque em **Começar hoje** (o botão azul embaixo do cartão).
 
 Quem cria e muda os checklists (itens, foto obrigatória, quando aparecem) é o **gerente**.
 Se um item está errado ou faltando, avise o gerente.
@@ -433,6 +455,11 @@ Os nomes ficam em inglês, como na planilha.
 O seu cargo **alcança o Estoque**. Abra **Estoque** no menu.
 
 A tela mostra uma fileira por prateleira. Use **"Buscar peça, marca, medida ou cliente"**.
+
+Cada peça é um **cartão pequeno** (#313): em cima a situação (**em estoque** em verde, **repor** em amarelo, **sem
+quantidade** quando ninguém contou ainda), a **foto**, o nome e a marca ou medida, **quanto tem** no bloco grande e,
+embaixo, de qual cliente é a peça guardada, o preço e o selo **à venda no site**. Toque em qualquer lugar do cartão
+para abrir a peça; a **lixeira** fica no canto da foto.
 
 ### O que você pode fazer
 
@@ -489,7 +516,12 @@ Precisa de uma peça que não tem? Abra **Pedidos** → **Novo pedido**.
 3. Se é para o kart de um cliente, escolha em **"Para o kart de"**.
 4. Toque em **Pedir**.
 
-Quem compra já vê o pedido. Quando a compra chega, a tela da compra tem
+Cada pedido é um cartão: a situação em cima (**aberto**, **comprando**, **chegou**, **entregue**), o que é e quantos,
+quem pediu e quando, **para quando** no bloco grande (se você disse) e **urgente** em vermelho. Embaixo: **cancelar**
+(enquanto está aberto) e **entreguei** (quando chegou).
+
+Quem compra já vê o pedido. Em **Compras**, cada compra é um cartão com o fornecedor, o total e a entrega (a caminho,
+saiu para entrega, a pagar); toque nele para abrir. Quando a compra chega, a tela da compra tem
 **"Receber o que chegou"**, que dá entrada no estoque.
 
 ---

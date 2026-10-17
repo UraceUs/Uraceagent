@@ -11,7 +11,8 @@
 > `providers/venda_site.py`, `providers/google_agenda.py`) e nos processos do cérebro (`brain/10_PROCESSOS/`). Quando o código e
 > um documento antigo discordam, vale o código, e a diferença está dita.
 >
-> Atualizado em 14/10/2026 (#204: invoice fora da tabela só com o gerente, depósito na venda manual,
+> Atualizado em 17/10/2026 (#313: o quadro de oportunidades, os agendamentos, os pedidos e as contas do site no cartão do
+> padrão D). Antes, 14/10/2026 (#204: invoice fora da tabela só com o gerente, depósito na venda manual,
 > card de irmão, retorno vencido em Precisa de atenção, confirmação do chat pelo Claude).
 > Painel: https://ops.urace.us/ops/
 
@@ -153,6 +154,12 @@ sem dano ao kart; dano acima do depósito é cobrado à parte.
 
 No quadro, Ganho e Perdido mostram só os dos últimos 7 dias. **Só minhas / Todas** é filtro de
 tela: todo operador vê todas as oportunidades.
+
+**Como o quadro mostra cada oportunidade (#313):** um cartão do padrão D (o mesmo do painel inteiro; o playbook geral,
+seção 3, explica). Em cima, a situação: **retorno marcado** (amarelo), **retorno atrasado** (vermelho), **virou
+cliente** (verde), **Perdido** (vermelho) ou, sem retorno, a etapa. Depois as iniciais e o nome, a origem (com o ícone
+do canal) e as ligações, o serviço e o dia; no **bloco grande, o valor**; embaixo, o retorno (dia, hora e o que fazer) e
+o motivo da perda. **Clicar em qualquer lugar do cartão abre a oportunidade.**
 
 ---
 
@@ -622,6 +629,19 @@ Regra do dono (05/10): **a sessão só é confirmada depois do pagamento e da wa
 O Operador **não** confirma direto: a resposta é "Confirmar sem esperar pagamento e waiver é do
 gerente. Use Aceitar."
 
+**Como a tela mostra cada pedido (#313, o cartão do padrão D):**
+
+- **Em cima, a pílula do estado:** *esperando confirmação* (amarelo), *aceita · esperando pagamento e waiver* (azul),
+  *confirmada* (verde), *recusada* (vermelho), *cancelada* (cinza).
+- **Quem:** as iniciais e o nome do **piloto**, a idade, o **Responsável** (quando é outra pessoa) e o serviço com o preço.
+- **O bloco grande:** o **dia** (ex.: *Sáb 18/10*) e o **turno**.
+- **A barra "Pronto para confirmar"** (aceita, paga e waiver em dia: 3 de 3), só depois do Aceitar.
+- **A lista:** o pagamento (*pago no site · pedido #N*, *invoice enviada*, *invoice não saiu*), a waiver, o pacote do
+  aluno ou o contrato do mês, o **card do cliente** (ou *driver ainda sem card*), a tarefa do Asana, o e-mail e o
+  telefone, a nota do cliente, os erros em vermelho e de onde veio (pelo site, campanha).
+- **Os botões, embaixo:** **Recusar** (contorno vermelho) e **Aceitar** (azul) lado a lado; **Confirmar mesmo assim**
+  (gerente) na linha de baixo; a confirmada que ainda vai acontecer tem **Cancelar**.
+
 ### O que o Aceitar faz (código: `providers/cobranca_agenda.py`)
 
 1. **Invoice:** o preço gravado no agendamento + o **depósito**, quando o serviço tem depósito
@@ -941,7 +961,10 @@ pedidos do carrinho e da loja em **todo** estado (pago, processando o pagamento,
 checkout expirou, no checkout), com filtro, quem, o quê, o total, se o aviso por e-mail saiu (e se a
 pessoa comprou em português), e os botões
 **Página do pedido ↗** e **Copiar o link**: é esse link que você manda ao cliente que liga perguntando do
-pedido. No detalhe da venda, o cartão **Pedido do site #N** também tem os dois botões. **Quem vende**, no
+pedido. Cada pedido é um cartão do padrão D (#313): o estado em cima, quem comprou, o resumo e o contato; no **bloco
+grande, o total**, com o nº do pedido e a hora; a lista diz o aviso por e-mail, o **Resolver** e o **Estoque**; embaixo,
+**Resolvido** (quando ficou sem estoque), **Página do pedido ↗**, **Copiar o link** e **Venda**. No detalhe da venda, o
+cartão **Pedido do site #N** também tem os dois botões. **Quem vende**, no
 e-mail "Site · PAGAMENTO FALHOU" ou "Site · CHECKOUT EXPIROU": o cliente já recebeu o botão (Try again /
 Restore cart) no e-mail da conta, e um contato ajuda a fechar; se o aviso disser "sem e-mail do cliente"
 (pedido antigo, de antes da conta obrigatória), ligue e mande o link.
@@ -1127,6 +1150,12 @@ estoque quando há estorno no Stripe (dê **entrada** com o motivo "devolução"
 ### Contas de clientes (Site › Contas de clientes)
 
 Quem cria conta no site precisa estar ligado ao card certo. Cada driver tem o seu card.
+
+Cada conta é um cartão do padrão D (#313): **vinculada** (verde) ou **sem vínculo** (amarelo) em cima, as iniciais, o
+nome, o e-mail e o telefone. A lista mostra os **pilotos**, a **sugestão** do painel (com o motivo: mesmo e-mail,
+telefone…) ou o card já ligado. Embaixo: **Vincular a este** (a sugestão) ou **Criar cliente** (sem sugestão); para
+outro card, escolha em **Outro cliente** e toque em **Vincular**. Na conta ligada, os drivers ficam numa lista, cada um
+com a ação na linha (**Vincular a este**, **Criar card**, **Desvincular**).
 
 | Ação | Rota | Papel |
 |---|---|---|
