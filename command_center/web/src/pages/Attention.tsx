@@ -58,7 +58,8 @@ export function AttentionList({ items, onChange, mini }: { items: A[]; onChange?
   const sysOf = (l: string) => /asana\.com/.test(l) ? 'Asana' : /docusign/.test(l) ? 'DocuSign' : /google\.com/.test(l) ? 'Gmail' : /intuit|qbo/.test(l) ? 'QuickBooks' : 'Origem'
   // #313: cada aviso no cartão D — o nível em cima, o que é, por quê, os fatos na lista e o que fazer embaixo
   return <div className={`cd-grade cd-dentro${mini ? ' mini' : ''}`}>{items.map((a, n) => <Cartao key={a.key} id={`att-${n}`} mini={mini} className={a.dismissed ? 'cd-apagado' : undefined}
-    estado={<><span aria-hidden="true">{LEVEL_GLYPH[a.level]}</span> {LABEL[a.level]}</>} tom={levelTone(a.level) as TomD} nome={a.title} sub={[a.why]}
+    estado={<><span aria-hidden="true">{LEVEL_GLYPH[a.level]}</span> {LABEL[a.level]}</>} tom={levelTone(a.level) as TomD} nome={a.title}
+    sub={[a.why, mini ? (a.facts || []).filter(([, v]) => v && v !== '—').map(([k, v]) => `${k}: ${v}`).join(' · ') : null]}
     acoes={<>
       {a.client_id && <Link className="btn" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? tr("Abrir cliente e responder") : tr("Abrir cliente")}</Link>}
       {a.entity.type === 'approvals' && <Link className="btn" to="/approvals">{tr("Ver aprovações")}</Link>}
@@ -76,8 +77,9 @@ export function AttentionList({ items, onChange, mini }: { items: A[]; onChange?
       {can('OPERATOR') && !a.dismissed && <button className={`btn${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title={tr("Diga à IA o que fazer com este item")}>{tr("✦ Instruir a IA")}</button>}
       {can('OPERATOR') && !a.dismissed && <button className="btn" disabled={busy === a.key} onClick={() => hide(a)} title={tr("Esconde o aviso; não apaga a origem")}>{tr("ocultar")}</button>}
       {can('OPERATOR') && a.dismissed && !a.dismissed.auto && <button className="btn" disabled={busy === a.key} onClick={() => restore(a)}>{tr("Restaurar")}</button>}</>}>
-    {(!!a.facts?.filter(([, v]) => v && v !== '—').length || a.dismissed || (!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action)) && <CdLista>
-      {a.facts?.filter(([, v]) => v && v !== '—').map(([k, v]) => <CdItem key={k} tom="neutral" valor={v}>{k}</CdItem>)}
+    {((!mini && !!a.facts?.filter(([, v]) => v && v !== '—').length) || a.dismissed || (!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action)) && <CdLista>
+      {/* no Hoje (compacto), os fatos vão numa linha só, embaixo do porquê */}
+      {!mini && a.facts?.filter(([, v]) => v && v !== '—').map(([k, v]) => <CdItem key={k} tom="neutral" valor={v}>{k}</CdItem>)}
       {!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action && <CdItem tom="info" glifo="→">{a.action}</CdItem>}
       {a.dismissed && <CdItem tom="neutral" glifo="—">{a.dismissed.auto ? <>{tr("passou")} · {tr("Ocultado automaticamente:")} {a.dismissed.reason}.</>
         : <>{tr("oculto")} · {tr("Ocultado por")} {a.dismissed.by || '?'} {tr("em")} {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</>}</CdItem>}
