@@ -6,7 +6,7 @@ import { CatalogoEditor } from './Garage'
 import { LembreteChip, LembreteModal } from './Systems'
 import { PecasDoCliente } from './Estoque'
 import { CardIrmao, Picker, UnirModal } from '../components/Unir'
-import type { Catalog, Client, Client360 as C360, Monthly, Race } from '../api/types'
+import type { Catalog, Client, Client360 as C360, Monthly, Race, Waiver } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, Scrim, Section, Status, SysLink, WAIVER_LABEL, statusTone } from '../components/ui'
 import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
@@ -25,7 +25,7 @@ function idade(dob?: string | null) {
 }
 
 const KIND: Record<string, [string, 'ok' | 'warn' | 'crit' | 'info' | '']> = {
-  SITE_PAYMENT: [tr("Pagamento no site"), 'ok'], SERVICE: [tr("Serviço"), 'info'], WAIVER_SENT: [tr("Waiver enviada"), 'warn'], WAIVER_SIGNED: [tr("Waiver assinada"), 'ok'], EMAIL: ['E-mail', ''], AI_ACTION: [tr("Ação da IA"), 'info'], INVOICE: [tr("Invoice"), 'ok'],
+  SITE_PAYMENT: [tr("Pagamento no site"), 'ok'], SERVICE: [tr("Serviço"), 'info'], WAIVER_SENT: [tr("Waiver enviada"), 'warn'], WAIVER_SIGNED: [tr("Waiver assinada"), 'ok'], WAIVER_VOIDED: [tr("Waiver anulada"), 'crit'], EMAIL: ['E-mail', ''], AI_ACTION: [tr("Ação da IA"), 'info'], INVOICE: [tr("Invoice"), 'ok'],
 }
 
 export function Client360() {
@@ -68,11 +68,21 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const c = data.client
   const vivos = data.tasks.filter(t => !t.deleted_at)      // #219: o excluído fica no histórico, fora das contas
   const prox = vivos.filter(t => t.status === 'open' && t.due_on && (daysUntil(t.due_on) ?? -1) >= 0).sort((a, b) => (a.due_on! < b.due_on! ? -1 : 1))[0]
-  const wOk = data.waivers.find(w => w.status === 'completed')
+  const wOk = data.waivers.find(w => w.status === 'completed' && !w.voided_at)       // #109: a anulada não vale
   const wOpen = data.waivers.find(w => w.status === 'sent' || w.status === 'delivered')
   const wBad = data.waivers.find(w => w.status === 'autoresponded')
   const dias = daysUntil(prox?.due_on)
   const risco = !c.vip && prox && !wOk && dias !== null && dias <= 2
+
+  /* #109: a waiver assinada no próprio sistema não vai para a lixeira; o gerente anula com motivo e ela fica no card */
+  async function anularWaiver(w: Waiver) {
+    const motivo = await perguntar({ titulo: tr("Anular a waiver de {0}?", w.minor_name || w.signer_name || ''), perigo: true, ok: tr("Anular a waiver"),
+      texto: tr("A waiver não é apagada nem muda: continua no card e no backup, marcada como anulada, e deixa de valer. O cliente pode assinar outra. Não se desfaz."),
+      campo: tr("Motivo (pelo menos 10 letras)") }) as string | null
+    if (motivo === null) return
+    try { await api.post(`/waivers/${w.id}/void`, { reason: motivo }); toast(tr("Waiver anulada. Ela continua no card e no backup."), 'ok'); reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
 
   async function togglePro() {
     const vai = !c.pro_driver
@@ -205,7 +215,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'waivers' && can('OPERATOR') && <ConviteWaiver cid={c.id} onMuda={reload} />}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Signatário")}</th><th>{tr("Modelo")}</th><th>{tr("Status")}</th><th>{tr("Enviada")}</th><th>{tr("Assinada")}</th><th>{tr("Expira")}</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum envelope para este e-mail.")}</Empty></td></tr>}
-        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}{w.source === 'urace' && <div className="small muted">{tr("área do cliente")}</div>}</td><td><Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} /></td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.source === 'urace' ? tr("PDF assinado na área do cliente (com página de certificado)") : w.pdf_path ? tr("PDF assinado guardado no card") : tr("Baixar PDF assinado do DocuSign")}>{tr("⬇ PDF")}{w.pdf_path ? ' ✓' : ''}</a>} <SysLink links={w.links} /></td></tr>)}
+        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}{w.source === 'urace' && <div className="small muted">{tr("área do cliente")}</div>}</td><td>{w.voided_at ? <><Status s="voided" label={tr("anulada")} /><div className="small muted">{tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div></> : <Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} />}</td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.source === 'urace' ? tr("PDF assinado na área do cliente (com página de certificado)") : w.pdf_path ? tr("PDF assinado guardado no card") : tr("Baixar PDF assinado do DocuSign")}>{tr("⬇ PDF")}{w.pdf_path ? ' ✓' : ''}</a>} {w.source === 'urace' && w.status === 'completed' && !w.voided_at && can('MANAGER') && <button className="btn sm danger" onClick={() => anularWaiver(w)} title={tr("Tirar de vigor, com motivo: a waiver fica no card e no backup")}>{tr("Anular")}</button>} <SysLink links={w.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'emails' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Quando")}</th><th>{tr("Caixa")}</th><th>{tr("Assunto")}</th><th>{tr("De")}</th><th>{tr("Prioridade")}</th><th>{tr("Tratado")}</th><th></th></tr></thead><tbody>
         {data.emails.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum e-mail vinculado.")}</Empty></td></tr>}

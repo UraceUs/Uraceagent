@@ -1079,6 +1079,25 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     a.get_by_role("button", name=re.compile(r"^Waivers \(1\)")).click()
     a.locator(".convite-waiver .chip", has_text="assinado").wait_for()
     assert "área do cliente" in a.locator("table.tbl tr", has_text="gabi.convite.e2e@example.com").inner_text()
+    # #109: a assinada não vai para a lixeira; o gerente anula com motivo e ela continua no card, marcada
+    linha = a.locator("table.tbl tr", has_text="gabi.convite.e2e@example.com")
+    linha.get_by_role("button", name="Anular").click()
+    dlg = a.get_by_role("dialog")
+    assert "continua no card e no backup" in dlg.inner_text()
+    dlg.get_by_label("Motivo (pelo menos 10 letras)").fill("curto")
+    dlg.get_by_role("button", name="Anular a waiver").click()
+    a.get_by_text("Escreva o motivo da anulação").wait_for()          # motivo curto: o servidor recusa e nada muda
+    linha.get_by_role("button", name="Anular").click()
+    dlg.get_by_label("Motivo (pelo menos 10 letras)").fill("assinada pelo piloto errado no teste")
+    dlg.get_by_role("button", name="Anular a waiver").click()
+    linha.get_by_text("assinada pelo piloto errado no teste").wait_for()
+    assert "anulada" in linha.inner_text() and linha.get_by_role("button", name="Anular").count() == 0
+    assert linha.get_by_role("link", name=re.compile("PDF")).count() == 1, "o PDF continua no card"
+    r = a.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    abrir(a, servidor, "/site/waiver")
+    a.locator(".tr", has_text="Gabi Convite").get_by_text("anulada").wait_for()
+    assert a.locator(".tr", has_text="Gabi Convite").get_by_role("button", name="Anular").count() == 0
     if not estava:
         a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
     a.close(); c.close()

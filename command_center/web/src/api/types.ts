@@ -69,6 +69,8 @@ export interface Waiver {
   subject?: string | null; internal?: number
   /** 'urace' = assinada na área do cliente (#85), sem DocuSign */
   source?: string | null
+  /** #109: a anulação (a waiver não muda; quem anulou, quando e por quê vêm de waiver_voids) */
+  voided_at?: string | null; voided_by?: string | null; void_reason?: string | null
   client_name?: string | null; client_pilot?: string | null; links?: Link[]
 }
 

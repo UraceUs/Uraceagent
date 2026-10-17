@@ -30,7 +30,7 @@ import secrets
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-from command_center.db import agora, atualizar, auditar, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, inserir, todos, um, waiver_anulada
 from command_center.providers import codigos, portal, waiver_nativa as wn
 
 VALIDADE_HORAS = 72          # a issue (#135, dono 06/10): "um link de uso único, que vale 72 h"
@@ -131,8 +131,9 @@ def _do_card(con, client_id):
 
 
 def _vigente_do_card(con, client_id, tipo):
-    return um(con, """SELECT id, expires_at FROM waivers WHERE client_id=? AND source='urace' AND status='completed'
-                      AND template=? AND COALESCE(hidden,0)=0 AND expires_at >= ? ORDER BY completed_at DESC LIMIT 1""",
+    return um(con, f"""SELECT id, expires_at FROM waivers WHERE client_id=? AND source='urace' AND status='completed'
+                       AND template=? AND COALESCE(hidden,0)=0 AND NOT {waiver_anulada()} AND expires_at >= ?
+                       ORDER BY completed_at DESC LIMIT 1""",
               (client_id, tipo, portal.hoje().isoformat()))
 
 

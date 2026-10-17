@@ -648,7 +648,7 @@ function Contas() {
  * sim do advogado. Desligar não apaga nada; o DocuSign segue como está. */
 interface ModeloW { kind: 'adult' | 'parental'; templateId: string; name: string | null; pages: number | null; sha256: string | null; imported_at: string | null }
 interface Assinada { id: number; client_id: number | null; signer_name: string; signer_email: string; minor_name: string | null; template: string
-  completed_at: string; expires_at: string; doc_sha256: string }
+  completed_at: string; expires_at: string; doc_sha256: string; voided_at: string | null; voided_by: string | null; void_reason: string | null }
 interface WN { ligada: boolean; modelos: ModeloW[]; assinadas: { itens: Assinada[]; total: number; limit: number; offset: number } }
 const POR_PAGINA = 25
 
@@ -669,6 +669,15 @@ function WaiverNativa() {
     if (ligada && !await perguntar({ titulo: tr("Ligar a assinatura na área do cliente?"), ok: tr("Ligar"),
       texto: tr("Os clientes passam a assinar a waiver pela área do cliente, sem DocuSign. Faça isso depois do sim do advogado. O DocuSign continua funcionando como hoje.") })) return
     try { await api.post('/site/waiver-nativa/ligar', { ligada }); toast(ligada ? tr("Ligada: o cliente já vê \"Sign now\".") : tr("Desligada. Nada assinado foi apagado."), 'ok'); l.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  /* #109: assinada não vai para a lixeira; o gerente anula com motivo e ela continua aqui, no card e no backup */
+  async function anular(w: Assinada) {
+    const motivo = await perguntar({ titulo: tr("Anular a waiver de {0}?", w.minor_name || w.signer_name), perigo: true, ok: tr("Anular a waiver"),
+      texto: tr("A waiver não é apagada nem muda: continua no card e no backup, marcada como anulada, e deixa de valer. O cliente pode assinar outra. Não se desfaz."),
+      campo: tr("Motivo (pelo menos 10 letras)") }) as string | null
+    if (motivo === null) return
+    try { await api.post(`/waivers/${w.id}/void`, { reason: motivo }); toast(tr("Waiver anulada. Ela continua no card e no backup."), 'ok'); l.reload() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
@@ -697,9 +706,11 @@ function WaiverNativa() {
       {!a.itens.length ? <Empty title={tr("Nenhuma ainda")}>{tr("Quando um cliente assinar pela área do cliente, ela aparece aqui e no card do cliente.")}</Empty>
         : <div className="card"><div className="tbl">{a.itens.map(w => <div className="tr" key={w.id}>
           <span className="mono small" style={{ width: 92 }}>{fmtDate(w.completed_at)}</span>
-          <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")} {tr("· vale até")} {fmtDate(w.expires_at)}</div></span>
+          <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")} {tr("· vale até")} {fmtDate(w.expires_at)}</div>
+            {w.voided_at && <div className="small"><Chip tone="crit">{tr("anulada")}</Chip> {tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div>}</span>
           {w.client_id ? <Link className="btn sm ghost" to={`/clients/${w.client_id}`}>{tr("Card")}</Link> : <span className="small muted">{tr("sem card")}</span>}
           <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
+          {!w.voided_at && can('MANAGER') && <button className="btn sm danger" onClick={() => anular(w)}>{tr("Anular")}</button>}
         </div>)}</div></div>}
       {a.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
         <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>

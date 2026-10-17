@@ -10,7 +10,7 @@ Cada item devolve: level, title, why, entity (tipo/id), link, action.
 import json
 from datetime import date, datetime, timedelta
 
-from command_center.db import agora, todos, um
+from command_center.db import agora, todos, um, waiver_anulada
 
 NIVEIS = ("CRITICAL", "HIGH", "MEDIUM", "LOW")
 
@@ -119,8 +119,8 @@ def _coletar(con):
             continue
         if t["vip"]:
             continue                                   # VIP dispensa waiver (04/09)
-        w = um(con, """SELECT status, expires_at FROM waivers WHERE client_id=? AND status='completed'
-                       AND completed_at >= ? ORDER BY completed_at DESC LIMIT 1""",
+        w = um(con, f"""SELECT status, expires_at FROM waivers WHERE client_id=? AND status='completed'
+                        AND NOT {waiver_anulada()} AND completed_at >= ? ORDER BY completed_at DESC LIMIT 1""",
                (t["client_id"], (hoje - timedelta(days=365)).isoformat())) if t["client_id"] else None
         if w:
             continue

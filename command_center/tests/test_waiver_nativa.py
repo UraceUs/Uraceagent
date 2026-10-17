@@ -345,10 +345,11 @@ def test_parental_antiga_deixa_de_valer_quando_o_piloto_faz_18(cli, monkeypatch)
     o piloto passa a precisar da adult, assinada por ele."""
     liga(cli)
     hc, (pid,) = cliente(cli, pilotos=(("Teen Santos", _faz_18_daqui(100)),))
-    wid = assina(cli, hc, pid).json()["waiver_id"]
-    con = conectar()
-    con.execute("UPDATE waivers SET expires_at=? WHERE id=?", ((portal.hoje() + timedelta(days=365)).isoformat(), wid))
-    con.commit()
+    # assinada pela regra antiga (1 ano, sem olhar os 18): a linha não se reescreve depois (#109), então nasce assim
+    with monkeypatch.context() as m:
+        m.setattr(wn, "validade", lambda tipo, nasc, dia: dia + timedelta(days=wn.VALIDADE_DIAS))
+        wid = assina(cli, hc, pid).json()["waiver_id"]
+    assert um(conectar(), "SELECT expires_at FROM waivers WHERE id=?", (wid,))["expires_at"] == (portal.hoje() + timedelta(days=365)).isoformat()
     depois = portal.hoje() + timedelta(days=101)
     monkeypatch.setattr(portal, "hoje", lambda: depois)
     d = cli.get(f"{P}/waivers").json()["drivers"][0]
@@ -494,10 +495,4 @@ def test_waiver_assinada_no_sistema_nao_vai_para_a_lixeira(cli):
     assert r.status_code == 409 and "registro legal" in r.json()["detail"]
     assert um(conectar(), "SELECT hidden FROM waivers WHERE id=?", (wid,))["hidden"] == 0
 
-
-def test_o_backup_da_biblioteca_leva_tambem_a_waiver_oculta():
-    """#118: ocultar no painel não tira do backup."""
-    import inspect
-    from command_center.providers import biblioteca
-    fonte = inspect.getsource(biblioteca)
-    assert "WHERE status='completed'\")" in fonte and "status='completed' AND COALESCE(hidden,0)=0" not in fonte
+# #118/#109: o backup de verdade (anulada e oculta) está em test_waiver_imutavel.py
