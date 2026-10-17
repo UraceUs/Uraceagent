@@ -4,7 +4,8 @@ import { api, ApiError } from '../api/client'
 import { useGet, usePaginado } from '../api/hooks'
 import type { ActionPolicy, AuditRow, ContextSource, Integration, Policy } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, POLICY_LABEL, Section, Spinner, Status, statusTone, SYS_NAME, Thinking } from '../components/ui'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, POLICY_LABEL, Section, Spinner, STATUS_PT, statusKind, statusTone, SYS_NAME, Thinking } from '../components/ui'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { Icon } from '../components/Icon'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
@@ -178,20 +179,23 @@ function CartaoDialpad() {
   const { data } = useGet<DialpadStatus>('/dialpad/status', 60000)
   if (!data) return null
   const ok = data.connected
-  return <div className="card card-b lead" style={{ borderLeftColor: ok ? 'var(--ok)' : 'var(--warn)' }}>
-    <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{tr("Dialpad")}</h2>
-      <Status kind={ok ? 'ok' : 'wait'} label={ok ? tr("ok") : tr("falta configurar")} /><span className="grow" />
-      <span className="small muted mono" title={data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : ''}>{data.ultimo_evento ? tr("último evento há {0}", ago(data.ultimo_evento)) : tr("nenhum evento ainda")}</span></div>
-    <div className="small ink2" style={{ margin: '6px 0 0' }}>{tr("Ligações do número da empresa. Perdida vira item em Precisa de atenção; atendida entra na linha do tempo da venda.")}</div>
-    {!ok && <div className="banner warn" style={{ marginTop: 8 }}><span className="bi">▲</span><div className="grow small">{tr("Falta no servidor:")} {data.falta.join(', ')} {tr("(docs/adminai/dialpad-conexao.md).")}</div></div>}
-    {ok && !data.ultimo_evento && <div className="small muted" style={{ marginTop: 8 }}>{tr("Para testar: ligue para o número da empresa e desligue. O último evento aparece aqui.")}</div>}
-    <dl className="dl" style={{ marginTop: 8 }}>
-      <dt>{tr("Último evento")}</dt><dd className="mono">{data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : '—'}</dd>
-      <dt>{tr("Ligações recebidas")}</dt><dd className="mono">{data.ligacoes}</dd>
-      <dt>{tr("Webhook")}</dt><dd className="mono small">{data.webhook_endereco || '—'}</dd>
-      <dt>{tr("Assinatura")}</dt><dd className="small">{data.assinado ? tr("conferida (JWT)") : tr("sem segredo")}</dd></dl>
-  </div>
+  // #313: o cartão D — a situação em cima, o sistema, há quanto tempo chegou o último evento e os dados na lista
+  return <Cartao id="int-dialpad" nivel={2} estado={ok ? tr("ok") : tr("falta configurar")} tom={ok ? 'ok' : 'warn'} avatar="Dialpad" avatarTom="azul" nome={tr("Dialpad")}
+    sub={[tr("Ligações do número da empresa. Perdida vira item em Precisa de atenção; atendida entra na linha do tempo da venda.")]}
+    grande={data.ultimo_evento ? ago(data.ultimo_evento) : '—'} detalhe={data.ultimo_evento ? tr("último evento há {0}", ago(data.ultimo_evento)) : tr("nenhum evento ainda")}>
+    {!ok && <p className="cd-aviso warn">{tr("Falta no servidor:")} {data.falta.join(', ')} {tr("(docs/adminai/dialpad-conexao.md).")}</p>}
+    {ok && !data.ultimo_evento && <p className="cd-aviso">{tr("Para testar: ligue para o número da empresa e desligue. O último evento aparece aqui.")}</p>}
+    <CdLista>
+      <CdItem tom="neutral" valor={data.ultimo_evento ? fmtDateTime(data.ultimo_evento) : '—'}>{tr("Último evento")}</CdItem>
+      <CdItem tom="neutral" valor={data.ligacoes}>{tr("Ligações recebidas")}</CdItem>
+      <CdItem tom="neutral" valor={<span className="cd-mono">{data.webhook_endereco || '—'}</span>}>{tr("Webhook")}</CdItem>
+      <CdItem tom={data.assinado ? 'ok' : 'warn'} valor={data.assinado ? tr("conferida (JWT)") : tr("sem segredo")}>{tr("Assinatura")}</CdItem>
+    </CdLista>
+  </Cartao>
 }
+
+/** #313: a pílula do sistema (o mesmo nome e a mesma cor do Status) */
+const TOM_KIND: Record<string, TomD> = { ok: 'ok', run: 'info', wait: 'warn', warn: 'warn', crit: 'crit', off: 'neutral' }
 
 export function Integrations() {
   const { can } = useAuth()
@@ -213,20 +217,23 @@ export function Integrations() {
     {can('ADMIN') && tab === 'sys' && <Atualizacao />}
     <div className="tabs">{([['sys', 'Sistemas'], ['sheets', 'Planilhas e links'], ['files', 'Arquivos'], ...(can('MANAGER') ? [['saude', tr("Saúde do painel")]] as const : [])] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
     {tab === 'sys' && (error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-      <div className="grid g2">{(data || []).map(i => { const det = safeJson(i.detail); const ruim = i.status !== 'CONNECTED' && i.status !== 'SYNCING'; return <div className="card card-b lead" key={i.system} style={{ borderLeftColor: ruim ? 'var(--crit)' : 'var(--ok)' }}>
-        <div className="row wrap"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{SYS_NAME[i.system] || i.system}</h2><Status s={i.status} /><span className="grow" /><span className="small muted mono" title={i.last_success_at ? fmtDateTime(i.last_success_at) : ''}>{i.last_success_at ? tr("respondeu há {0}", ago(i.last_success_at)) : tr("nunca respondeu")}</span></div>
-        <div className="small ink2" style={{ margin: '6px 0 0' }}>{DESC[i.system]}</div>
-        {i.last_error && <div className="banner crit" style={{ marginTop: 8 }}><span className="bi">✕</span><div className="grow small">{motivo(i.last_error)}</div></div>}
-        <details className="small muted" style={{ marginTop: 8 }}><summary style={{ cursor: 'pointer' }}>{tr("detalhes técnicos")}</summary>
+      <div className="cd-grade">{(data || []).map(i => { const det = safeJson(i.detail); return <Cartao key={i.system} id={`int-${i.system}`} nivel={2}
+        estado={STATUS_PT[i.status] ?? STATUS_PT[(i.status || '').toUpperCase()] ?? (i.status || '').toLowerCase()} tom={TOM_KIND[statusKind(i.status)]}
+        avatar={SYS_NAME[i.system] || i.system} avatarTom="azul" nome={SYS_NAME[i.system] || i.system} sub={[DESC[i.system]]}
+        grande={i.last_success_at ? ago(i.last_success_at) : '—'} detalhe={i.last_success_at ? tr("respondeu há {0}", ago(i.last_success_at)) : tr("nunca respondeu")}>
+        {i.last_error && <p className="cd-aviso crit">{motivo(i.last_error)}</p>}
+        <details className="small muted cd-form"><summary style={{ cursor: 'pointer' }}>{tr("detalhes técnicos")}</summary>
           <dl className="dl" style={{ marginTop: 6 }}><dt>{tr("Última tentativa")}</dt><dd className="mono">{i.last_attempt_at ? fmtDateTime(i.last_attempt_at) : '—'}</dd><dt>{tr("Erros seguidos")}</dt><dd className="mono">{i.error_count}</dd>
             {det !== null && typeof det === 'object' && <><dt>{tr("Detalhe")}</dt><dd><pre className="mono small muted" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{JSON.stringify(det, null, 1).slice(0, 500)}</pre></dd></>}</dl></details>
-      </div> })}
+      </Cartao> })}
       {can('OPERATOR') && <CartaoDialpad />}
-      {rate && <div className="card card-b">
-        <div className="row"><h2 className="h2" style={{ color: 'var(--ink)', fontSize: 16 }}>{tr("Rate Card")}</h2><Status kind={rate.last_check_ok === null ? 'wait' : rate.last_check_ok ? 'ok' : 'crit'} label={rate.last_check_ok === null ? tr("não testada") : rate.last_check_ok ? tr("lida") : tr("falhou")} /></div>
-        <div className="small ink2" style={{ margin: '6px 0 10px' }}>{tr("Planilha de preços, fonte de verdade acima do catálogo do QuickBooks. A IA lê ao vivo pelo Google.")}</div>
-        <dl className="dl"><dt>{tr("Última leitura")}</dt><dd className="mono">{rate.last_check_at ? `${fmtDateTime(rate.last_check_at)} (${ago(rate.last_check_at)})` : '—'}</dd><dt>{tr("Resultado")}</dt><dd className="small">{rate.last_check_msg || '—'}</dd><dt>{tr("Planilha")}</dt><dd><a href={rate.url || '#'} target="_blank" rel="noopener noreferrer">{tr("abrir ↗")}</a></dd></dl>
-      </div>}
+      {rate && <Cartao id="int-rate-card" nivel={2} estado={rate.last_check_ok === null ? tr("não testada") : rate.last_check_ok ? tr("lida") : tr("falhou")}
+        tom={rate.last_check_ok === null ? 'warn' : rate.last_check_ok ? 'ok' : 'crit'} avatar="Rate Card" avatarTom="azul" nome={tr("Rate Card")}
+        sub={[tr("Planilha de preços, fonte de verdade acima do catálogo do QuickBooks. A IA lê ao vivo pelo Google.")]}
+        grande={rate.last_check_at ? ago(rate.last_check_at) : '—'} detalhe={rate.last_check_at ? fmtDateTime(rate.last_check_at) : tr("Última leitura")}
+        acoes={<a className="btn" href={rate.url || '#'} target="_blank" rel="noopener noreferrer">{tr("abrir ↗")}</a>}>
+        <CdLista><CdItem tom="neutral" valor={rate.last_check_msg || '—'}>{tr("Resultado")}</CdItem></CdLista>
+      </Cartao>}
       </div>)}
     {tab === 'sheets' && <Contexto kind="sheet" />}
     {tab === 'files' && <Contexto kind="file" />}

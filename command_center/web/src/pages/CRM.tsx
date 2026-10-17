@@ -17,6 +17,7 @@ import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
 import { PassarParaVendas } from './Vendas'
+import { Cartao, CdItem, CdLista } from '../components/Cartao'
 import { tr } from '../i18n'
 
 export interface Lead {
@@ -423,20 +424,17 @@ function CaixaDeEntrada({ conectado }: { conectado: boolean }) {
 }
 
 // ------------------------------------------------------------------ funil (kanban)
+/** #313: o lead no cartão D compacto, como a oportunidade no quadro de vendas; o cartão inteiro abre a conversa */
 function LeadCard({ l, onOpen }: { l: Lead; onOpen: () => void }) {
-  return <button className={`tcard lead${l.needs_reply ? ' esperando' : ''}`} onClick={onOpen}>
-    <div className="row wrap" style={{ gap: 6 }}>
-      <b className="truncate">{nomeDo(l)}</b>
-      {!!l.needs_reply && <Chip tone="warn">{tr("esperando resposta")}</Chip>}
-    </div>
-    <div className="row wrap small muted" style={{ gap: 6 }}>
-      {l.source && <Chip tone={origemTone(l.source)}>{iconeDaOrigem(l.source)} {l.source}</Chip>}
-      {!!l.price && <span className="mono">{money(l.price)}</span>}
-      {l.last_message_at && <span>{fmtDateTime(l.last_message_at)}</span>}
-    </div>
-    {l.tags.length > 0 && <div className="row wrap" style={{ gap: 4 }}>{l.tags.slice(0, 4).map(t => <span key={t} className="lchip">{t}</span>)}</div>}
-    {l.client_id && <div className="small muted truncate">{tr("card:")} {l.client_pilot || l.client_name}</div>}
-  </button>
+  return <Cartao id={`lead-${l.id}`} nivel={2} mini abrir={onOpen} estado={l.needs_reply ? tr("esperando resposta") : l.source ? <>{iconeDaOrigem(l.source)} {l.source}</> : tr("lead")} tom={l.needs_reply ? 'warn' : 'info'}
+    avatar={nomeDo(l)} nome={nomeDo(l)}
+    sub={[l.needs_reply && l.source ? <span key="o">{iconeDaOrigem(l.source)} {l.source}</span> : null, l.last_message_at ? fmtDateTime(l.last_message_at) : null]}
+    grande={l.price ? money(l.price) : null}>
+    {(l.tags.length > 0 || l.client_id) && <CdLista>
+      {l.tags.length > 0 && <CdItem tom="neutral" glifo="#">{l.tags.slice(0, 4).join(' · ')}</CdItem>}
+      {l.client_id && <CdItem tom="ok">{tr("card:")} {l.client_pilot || l.client_name}</CdItem>}
+    </CdLista>}
+  </Cartao>
 }
 
 function Funil({ b, abrir }: { b: Board; abrir: (id: number) => void }) {

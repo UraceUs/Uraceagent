@@ -908,10 +908,11 @@ def test_integracoes_mostra_o_dialpad_sem_a_chave(servidor, navegador):
     que não existia. O cartão mostra se está ligado e o último evento; a chave do webhook nunca."""
     pg = entrar(navegador, servidor)
     abrir(pg, servidor, "/integrations")
-    cartao = pg.locator(".card", has=pg.get_by_role("heading", name="Dialpad", exact=True))
+    cartao = pg.locator("article.cd", has=pg.get_by_role("heading", name="Dialpad", exact=True))
     cartao.wait_for()
     texto = cartao.inner_text()
-    assert "falta configurar" in texto and "DIALPAD_API_KEY" in texto, texto
+    # #313: "falta configurar" é a pílula do cartão D, em caixa alta na tela
+    assert "falta configurar" in texto.lower() and "DIALPAD_API_KEY" in texto, texto
     assert "key=" not in texto
     pg.close()
 
@@ -4976,6 +4977,15 @@ def _dados_dos_cartoes_d():
                        VALUES ('Corrente 313 (e2e)', 2, 'un', 1, 'aberto', '2026-12-01', 'para o kart 7')""")
         con.execute("""INSERT INTO parts_invoices (client_id, service_date, status, total, qbo_error)
                        VALUES (?, '2026-10-16', 'aberta', 89.5, 'QuickBooks não está conectado (e2e)')""", (card,))
+        # o resto: um pedido de macacão, um fornecedor, um lead e um login do cofre (sem senha, com outra chave)
+        forn = con.execute("""INSERT INTO suit_suppliers (name, contact, price, lead_time, has_fia)
+                              VALUES ('Alpha Teste Cartao D', 'Rita Fornecedor', 'US$ 900', '6 semanas', 1)""").lastrowid
+        con.execute("""INSERT INTO suit_orders (title, customer_name, driver_name, status, order_date, supplier_id)
+                       VALUES ('Pietro Suit Cartao D', 'Paula Cartao D', 'Pietro Cartao D', 'standby', '2026-10-15', ?)""", (forn,))
+        con.execute("""INSERT INTO suit_leads (name, email, phone, notes)
+                       VALUES ('Bruno Lead Cartao D', 'bruno.lead.d.e2e@example.com', '(407) 555-0177', 'quer um macacão azul')""")
+        con.execute("""INSERT INTO vault_items (name, url, username, key_fp)
+                       VALUES ('Portal Cartao D (e2e)', 'https://example.com/login', 'equipe@example.com', 'e2e313')""")
         con.commit()
         return card
     finally:
@@ -4996,7 +5006,7 @@ _TELAS_D = {
     "/site/editor": ({"pilula", "nome", "bloco", "acoes"}, None),
     "/site/blog": ({"pilula", "nome", "bloco", "acoes"}, None),
     "/sales": ({"pilula", "nome", "bloco"}, "Lia Cartao D"),        # o quadro: o cartão inteiro abre a venda
-    "/clients/{card}#site": ({"pilula", "nome"}, "Nico Cartao D"),
+    "/clients/{card}#Conta no site": ({"pilula", "nome"}, "Nico Cartao D"),
     # o box e o estoque (segunda parte do #313)
     "/pedidos": ({"pilula", "nome", "bloco", "acoes"}, "Corrente 313 (e2e)"),
     "/compras": ({"pilula", "nome", "bloco"}, "KartSport North America"),   # a compra abre inteira
@@ -5005,7 +5015,18 @@ _TELAS_D = {
     "/meu-dia": ({"pilula", "nome", "acoes"}, "David Pedalo"),
     "/checklists": ({"pilula", "nome", "bloco", "acoes"}, "Mechanic Checklist"),
     "/races": ({"pilula", "nome", "bloco"}, "ROK Cup"),                     # a corrida abre inteira
+    # o resto (terceira parte do #313)
+    "/": ({"pilula", "nome", "acoes"}, None),                               # Hoje: o que precisa de atenção, compacto
+    "/attention": ({"pilula", "nome", "acoes"}, None),
+    "/suits": ({"pilula", "nome", "bloco"}, "Pietro Suit Cartao D"),        # o pedido abre inteiro
+    "/suits/leads": ({"pilula", "nome", "acoes"}, "Bruno Lead Cartao D"),
+    "/suits/fornecedores": ({"pilula", "nome", "bloco", "acoes"}, "Alpha Teste Cartao D"),
+    "/integrations": ({"pilula", "nome", "bloco"}, "Dialpad"),
+    "/crm/funil": ({"pilula", "nome"}, None),                               # o lead abre a conversa
+    "/equipe#Pessoas": ({"pilula", "nome"}, None),                           # a pessoa abre a conversa
 }
+# o cofre é só do acesso livre
+_TELAS_D_LIVRE = {"/cofre": ({"pilula", "nome", "acoes"}, "Portal Cartao D (e2e)")}
 _FUNDO_D = {"dark": "rgb(28, 26, 24)", "light": "rgb(255, 255, 255)"}   # --surface de cada tema
 
 _CARTOES_D = """() => [...document.querySelectorAll('article.cd')].filter(c => c.getClientRects().length).map(c => {
@@ -5018,14 +5039,14 @@ _CARTOES_D = """() => [...document.querySelectorAll('article.cd')].filter(c => c
 })"""
 
 
-def _confere_cartoes_d(pg, servidor, rota, tema):
-    """Os problemas da tela (vazio = certo): o cartão D completo, um h1, sem rolar para o lado e alvo de 40 px."""
-    partes, texto = _TELAS_D[rota]
-    if rota.endswith("#site"):
-        abrir(pg, servidor, rota.removesuffix("#site").format(card=_dados_dos_cartoes_d()))
-        pg.get_by_role("button", name="Conta no site").click()
-    else:
-        abrir(pg, servidor, rota)
+def _confere_cartoes_d(pg, servidor, rota, tema, telas=None):
+    """Os problemas da tela (vazio = certo): o cartão D completo, um h1, sem rolar para o lado e alvo de 40 px.
+    `rota#Botão`: abre a rota e toca no botão (a aba que mostra os cartões)."""
+    partes, texto = (telas or _TELAS_D)[rota]
+    caminho, _, botao = rota.partition("#")
+    abrir(pg, servidor, caminho.format(card=_dados_dos_cartoes_d()) if "{card}" in caminho else caminho)
+    if botao:
+        pg.get_by_role("button", name=botao, exact=True).click()
     try:
         pg.locator("article.cd").first.wait_for(timeout=5000)
     except Exception:
@@ -5068,17 +5089,30 @@ def test_cartao_d_em_cada_tela_no_celular_nos_dois_temas(servidor, navegador, la
         probs += _confere_cartoes_d(g, servidor, rota, tema)
     # a lista de clientes continua tabela no computador; no celular, cada linha vira o cartão D: a pílula em cima,
     # as iniciais, o nome centrado e o resto em linhas de lista
-    abrir(g, servidor, "/clients")
-    linha = g.evaluate("""() => { const tr = document.querySelector('table.tbl.rsp tbody tr'); const pos = s => tr.querySelector(s)?.getBoundingClientRect() || { top: 1e9, height: 0 }
-      return { raio: parseFloat(getComputedStyle(tr).borderTopLeftRadius), fundo: getComputedStyle(tr).backgroundColor,
-               pilula: pos('.rsp-pill').top, av: pos('.rsp-av').height, nome: pos('td.first').top,
-               centro: getComputedStyle(tr.querySelector('td.first')).textAlign } }""")
-    if not (linha["raio"] >= 20 and linha["fundo"] == _FUNDO_D[tema] and linha["pilula"] < linha["nome"] and linha["av"] >= 40
-            and linha["centro"] == "center"):
-        probs.append(f"/clients: a linha não vira o cartão D no celular {linha}")
-    r = g.evaluate(_VAZA)
-    if r["rola"] or r["culpados"]:
-        probs.append(f"/clients: rola para o lado {r['culpados']}")
+    for rota in ("/clients", "/asana", "/docusign", "/quickbooks"):
+        abrir(g, servidor, rota)
+        g.locator("table.tbl.rsp tbody tr").first.wait_for()
+        linha = g.evaluate("""() => { const tr = document.querySelector('table.tbl.rsp tbody tr'); const pos = s => tr.querySelector(s)?.getBoundingClientRect() || { top: 1e9, height: 0 }
+          return { raio: parseFloat(getComputedStyle(tr).borderTopLeftRadius), fundo: getComputedStyle(tr).backgroundColor,
+                   pilula: pos('.rsp-pill').top, av: pos('.rsp-av').height, nome: pos('td.first').top,
+                   centro: getComputedStyle(tr.querySelector('td.first')).textAlign } }""")
+        if not (linha["raio"] >= 20 and linha["fundo"] == _FUNDO_D[tema] and linha["pilula"] < linha["nome"]
+                and (linha["av"] >= 40 or rota != "/clients") and linha["centro"] == "center"):
+            probs.append(f"{rota}: a linha não vira o cartão D no celular {linha}")
+        r = g.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            probs.append(f"{rota}: rola para o lado {r['culpados']}")
+    assert not probs, "\n".join(probs)
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+@pytest.mark.parametrize("largura,tema", [(360, "dark"), (390, "light")])
+def test_cartao_d_no_cofre_do_acesso_livre(servidor, navegador, largura, tema):
+    _dados_dos_cartoes_d()
+    g = entrar(navegador, servidor, email="livre@urace.us", largura=largura, altura=800)
+    g.evaluate(f"localStorage.setItem('cc.theme', '{tema}')")
+    probs = _confere_cartoes_d(g, servidor, "/cofre", tema, _TELAS_D_LIVRE)
     assert not probs, "\n".join(probs)
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()

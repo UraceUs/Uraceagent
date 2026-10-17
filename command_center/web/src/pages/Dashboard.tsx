@@ -68,7 +68,7 @@ export function Dashboard() {
     ]} />
     <div className="grid g2" style={{ gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)' }}>
       <Section title={tr("Precisa de atenção")} count={d.needs_attention_total} tight right={<Link to="/attention" className="small">{tr("ver tudo →")}</Link>}>
-        <AttentionList items={d.needs_attention.slice(0, 6)} onChange={dash.reload} />
+        <AttentionList items={d.needs_attention.slice(0, 6)} onChange={dash.reload} mini />
         {d.needs_attention_total > 6 && <div className="small muted" style={{ padding: '10px 16px' }}><Link to="/attention">{tr("mais")} {d.needs_attention_total - 6} {tr("item(ns) →")}</Link></div>}
       </Section>
       <Section title={tr("Sistemas")} tight right={<Link to="/integrations" className="small">{tr("detalhes →")}</Link>}>

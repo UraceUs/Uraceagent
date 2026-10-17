@@ -6,7 +6,7 @@
 > Code. A partir daí, o Claude sabe como a aba Suits funciona, o que pode fazer sozinho e o que
 > tem de perguntar antes.
 >
-> Atualizado em 13/10/2026 (issue #195).
+> Atualizado em 17/10/2026 (issue #313, o cartão novo das listas; antes, #195).
 
 ---
 
@@ -29,6 +29,18 @@ Quem trabalha em cada pedido:
 | Designer | **Mateus** (`carvalhovisual1@gmail.com`) | **só o design**, com a referência "Suits #id". Nunca nome completo, e-mail, telefone, endereço ou pagamento do cliente |
 | Fornecedor | o marcado como **atual** em Fornecedores (hoje o Usman) | o pedido de produção: as 29 medidas e o mockup final |
 | A URACE com o cliente | assina como **George** | — |
+
+### Como a tela mostra cada um (#313)
+
+As três listas usam o cartão do painel inteiro (o "padrão D", playbook geral, seção 3):
+
+- **Pedidos:** em cima, a **etapa** (Standby, Awaiting Measurements…) ou *descartado*; as iniciais do piloto, o nome do
+  pedido, o produto, a quantidade e o fornecedor; no **bloco grande, o dia do pedido**; embaixo, **IA desligada** e
+  quantas **notas** ele tem. Toque em qualquer lugar do cartão para abrir o pedido.
+- **Leads:** a situação (*aberto*, *virou pedido*, *perdido*), o nome, o e-mail e o telefone, a nota; embaixo,
+  **Virar pedido** (azul), **Perdido**, **Card do cliente** e **Ver pedido**.
+- **Fornecedores:** *atual* em verde em cima, se tem FIA, **quantos pedidos** no bloco grande, os dados (contato,
+  valor, frete, prazo…) na lista e **Editar** (gerente).
 
 ---
 

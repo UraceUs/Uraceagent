@@ -18,6 +18,7 @@ import { Icon } from '../components/Icon'
 import { ago, fmtTime } from '../components/fmt'
 import { useToast } from '../components/Toast'
 import { Avisos } from '../components/Avisos'
+import { Cartao } from '../components/Cartao'
 import { ConectarClaude } from '../components/ConectarClaude'
 import { TextoComVoz } from '../components/Voz'
 import { tr } from '../i18n'
@@ -106,17 +107,12 @@ export function Equipe() {
           {aba === 'pessoas' ? (
             pessoas.loading && !pessoas.data ? <Loading /> :
               gente.length === 0 ? <Empty>{tr("Ninguém mais cadastrado.")}</Empty> :
-                <div className="stack" style={{ gap: 0 }}>
-                  {gente.map(p => <button key={p.id} className={`tcard${p.canal_id === aberto ? ' on' : ''}`} onClick={() => abrirDireto(p)}>
-                    <div className="row" style={{ gap: 10, alignItems: 'center' }}>
-                      <Cara c={{ id: p.canal_id || 0, name: p.name }} size={34} />
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div className="from">{!!p.nao_lidas && <span style={{ color: 'var(--warn)' }}>● </span>}{p.name}</div>
-                        <div className="small muted">{ROLE_PT[p.role] || p.role}{p.canal_id ? '' : tr(" · nunca conversaram")}</div>
-                      </div>
-                      {!!p.nao_lidas && <Chip tone="warn">{p.nao_lidas}</Chip>}
-                    </div>
-                  </button>)}
+                // #313: cada pessoa no cartão D compacto; o cartão inteiro abre a conversa com ela
+                <div className="cd-grade mini cd-dentro">
+                  {gente.map(p => <Cartao key={p.id} id={`pessoa-${p.id}`} mini abrir={() => abrirDireto(p)} className={p.canal_id === aberto ? 'cd-on' : undefined}
+                    estado={p.nao_lidas ? tr("{0} nova(s)", p.nao_lidas) : ROLE_PT[p.role] || p.role} tom={p.nao_lidas ? 'warn' : 'info'}
+                    avatar={<Cara c={{ id: p.canal_id || 0, name: p.name }} size={40} />} nome={p.name}
+                    sub={[p.nao_lidas ? ROLE_PT[p.role] || p.role : null, p.canal_id ? null : tr("nunca conversaram")]} />)}
                 </div>
           ) : (
             error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :

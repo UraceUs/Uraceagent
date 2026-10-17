@@ -851,6 +851,7 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .cofre-linha{display:flex;align-items:center;gap:8px;min-width:0}
 .cofre-linha b,.cofre-linha code{min-width:0;flex:1 1 auto}
 .cofre-segredo code{font-size:14px;padding:4px 8px;border-radius:6px;background:var(--surface-2,var(--accent-wash))}
+.cofre-segredo-c{font-size:14px;padding:4px 8px;border-radius:6px;background:var(--surface-2);overflow-wrap:anywhere}
 .cofre-nota{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .cofre-acoes{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
 .cofre-acoes .btn,.cofre-linha .btn,.cofre-estado .btn{min-height:40px}

@@ -11,6 +11,7 @@ import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { Cartao, CdItem, CdLista } from '../components/Cartao'
 import { tr, LOCALE } from '../i18n'
 
 interface Item { id: number; name: string; url: string | null; username: string | null; tem_senha: number; tem_nota: number
@@ -92,29 +93,27 @@ export function Cofre() {
         </div>}>
         {d.itens.length > 4 && <label className="fld"><span>{tr("Buscar")}</span><input type="search" value={busca} onChange={e => setBusca(e.target.value)} placeholder={tr("serviço, usuário ou endereço")} /></label>}
         {!itens.length ? <Empty title={arquivados ? tr("Nada arquivado") : tr("Nenhum login guardado")}>{arquivados ? '' : aberto ? tr("Use “Novo login”.") : tr("Abra o cofre para guardar o primeiro.")}</Empty> :
-          <ul className="cofre-lista">
+          <div className="cd-grade">
             {itens.map(it => {
               const a = abertos[it.id]
-              return <li key={it.id} className="cofre-item">
-                <div className="cofre-topo">
-                  <h3>{it.name}</h3>
-                  {it.outra_chave && <Chip tone="warn" title={tr("Guardado com outra chave do cofre")}>{tr("outra chave")}</Chip>}
-                </div>
-                {it.url && <a className="small truncate" href={it.url} target="_blank" rel="noopener noreferrer">{it.url}</a>}
-                {it.username && <div className="cofre-linha"><span className="small muted">{tr("Usuário")}</span><b className="truncate">{it.username}</b>
-                  <button className="btn sm ghost" onClick={() => copiar(it.username!, toast, 'Usuário')}>{tr("Copiar")}</button></div>}
-                {a && <div className="cofre-linha cofre-segredo"><span className="small muted">{tr("Senha")}</span><code className="truncate">{a.senha || tr("(sem senha)")}</code>
-                  {a.senha && <button className="btn sm ghost" onClick={() => copiar(a.senha!, toast, 'Senha')}>{tr("Copiar")}</button>}</div>}
-                {a?.nota && <p className="small cofre-nota">{a.nota}</p>}
-                <div className="cofre-acoes">
-                  {aberto && (it.tem_senha || it.tem_nota) ? <button className="btn sm" onClick={() => ver(it)}>{a ? tr("Esconder") : tr("Ver senha")}</button> : null}
-                  {aberto && !it.archived && <button className="btn sm ghost" onClick={() => setEditar(it)}>{tr("Editar")}</button>}
-                  <button className="btn sm ghost" onClick={() => arquivar(it)}>{it.archived ? tr("Restaurar") : tr("Arquivar")}</button>
-                  <span className="small muted">{tr("mudou em")} {dia(it.updated_at)}</span>
-                </div>
-              </li>
+              // #313: cada login no cartão D; a senha só aparece na lista depois de "Ver senha"
+              return <Cartao key={it.id} id={`cofre-${it.id}`} estado={it.archived ? tr("Arquivado") : it.outra_chave ? tr("outra chave") : tr("guardado")}
+                tom={it.archived ? 'neutral' : it.outra_chave ? 'warn' : 'ok'} avatar={it.name} avatarTom="azul" nome={it.name}
+                sub={[it.url ? <a key="u" className="truncate" href={it.url} target="_blank" rel="noopener noreferrer">{it.url}</a> : null, `${tr("mudou em")} ${dia(it.updated_at)}`]}
+                acoes={<>
+                  {aberto && (it.tem_senha || it.tem_nota) ? <button className="btn primary" onClick={() => ver(it)}>{a ? tr("Esconder") : tr("Ver senha")}</button> : null}
+                  {aberto && !it.archived && <button className="btn" onClick={() => setEditar(it)}>{tr("Editar")}</button>}
+                  <button className="btn" onClick={() => arquivar(it)}>{it.archived ? tr("Restaurar") : tr("Arquivar")}</button></>}>
+                {(it.username || a) && <CdLista>
+                  {it.username && <CdItem tom="neutral" glifo="@" acao={<button className="btn sm ghost" onClick={() => copiar(it.username!, toast, 'Usuário')}>{tr("Copiar")}</button>}>
+                    <span className="small muted">{tr("Usuário")}</span> <b>{it.username}</b></CdItem>}
+                  {a && <CdItem tom="warn" glifo="•" acao={a.senha ? <button className="btn sm ghost" onClick={() => copiar(a.senha!, toast, 'Senha')}>{tr("Copiar")}</button> : undefined}>
+                    <span className="small muted">{tr("Senha")}</span> <code className="cofre-segredo-c">{a.senha || tr("(sem senha)")}</code></CdItem>}
+                </CdLista>}
+                {a?.nota && <p className="cd-aviso cofre-nota">{a.nota}</p>}
+              </Cartao>
             })}
-          </ul>}
+          </div>}
       </Section>
     </>}
     {editar && <Editar item={editar === 'novo' ? null : editar} onClose={() => setEditar(null)} onDone={() => { setAbertos({}); l.reload() }} />}

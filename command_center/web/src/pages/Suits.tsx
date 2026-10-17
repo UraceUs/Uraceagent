@@ -16,6 +16,7 @@ import { Icon } from '../components/Icon'
 import { Md } from '../components/Md'
 import { useToast } from '../components/Toast'
 import { Picker } from '../components/Unir'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { tr, LOCALE } from '../i18n'
 
 interface Etapa { codigo: string; nome: string; descricao: string }
@@ -67,6 +68,8 @@ const dia = (iso: string | null) => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)
 
 function useMeta() { return useGet<Meta>('/suits/etapas') }
 function nomeEtapa(meta: Meta | null, c: string) { return meta?.etapas.find(e => e.codigo === c)?.nome || c }
+/** #313: o tom da pílula do cartão D (o accent dos chips vira o azul da informação) */
+const tomD = (t: string): TomD => t === 'accent' ? 'info' : (t as TomD)
 function EtapaChip({ meta, s }: { meta: Meta | null; s: string }) { return <Chip tone={TOM[s] || 'neutral'}>{nomeEtapa(meta, s)}</Chip> }
 
 /* ============================================================ a aba */
@@ -131,14 +134,17 @@ function Pedidos({ meta, resumo }: { meta: Meta | null; resumo: Resumo | null })
     <label className="fld"><span className="sr-only">{tr("Buscar")}</span><input value={busca} onChange={e => setBusca(e.target.value)} placeholder={tr("Buscar por cliente, piloto ou e-mail")} /></label>
     {erro ? <ErrorState error={erro} retry={recarregar} /> : carregando && !itens.length ? <Loading />
       : !itens.length ? <Empty title={estado === 'abertos' ? tr("Nenhum pedido em andamento") : estado === 'fechados' ? tr("Nada no histórico") : tr("Nada descartado")}>{tr("Registre um pedido novo ou importe o que está no Asana.")}</Empty>
-      : <ul className="suit-lista">{itens.map(p => <li key={p.id}><Link to={`/suits/${p.id}`} className="suit-linha">
-          <div className="grow" style={{ minWidth: 0 }}><b className="truncate">{p.title}</b>
-            <div className="small muted truncate">{[p.product !== 'Suit' ? p.product : null, p.quantity > 1 ? `${p.quantity} un.` : null,
-              p.fornecedor, p.order_date ? `pedido ${dia(p.order_date)}` : null, p.source === 'asana' ? 'do Asana' : p.source === 'ia' ? 'pela IA' : null].filter(Boolean).join(' · ')}</div></div>
-          {p.discarded_at ? <Chip tone="neutral">{tr("descartado")}</Chip> : <EtapaChip meta={meta} s={p.status} />}
-          {!p.discarded_at && p.ia_ligada === 0 && <Chip tone="warn">{tr("IA desligada")}</Chip>}
-          {p.notas > 0 && <span className="small muted" title={tr("notas")}>{p.notas} ✎</span>}
-        </Link></li>)}</ul>}
+      : <div className="cd-grade">{itens.map(p => <Cartao key={p.id} id={`suit-${p.id}`} abrir={`/suits/${p.id}`}
+          estado={p.discarded_at ? tr("descartado") : nomeEtapa(meta, p.status)} tom={p.discarded_at ? 'neutral' : tomD(TOM[p.status] || 'neutral')}
+          avatar={p.driver_name || p.customer_name || p.title} nome={p.title}
+          sub={[[p.product !== 'Suit' ? p.product : null, p.quantity > 1 ? `${p.quantity} un.` : null, p.fornecedor].filter(Boolean).join(' · '),
+            p.source === 'asana' ? 'do Asana' : p.source === 'ia' ? 'pela IA' : null]}
+          grande={p.order_date ? dia(p.order_date) : null} detalhe={p.order_date ? tr("pedido") : null}>
+          {((!p.discarded_at && p.ia_ligada === 0) || p.notas > 0) && <CdLista>
+            {!p.discarded_at && p.ia_ligada === 0 && <CdItem tom="warn">{tr("IA desligada")}</CdItem>}
+            {p.notas > 0 && <CdItem tom="info" glifo="✎" valor={p.notas}>{tr("notas")}</CdItem>}
+          </CdLista>}
+        </Cartao>)}</div>}
     {temMais && <button className="btn ghost" disabled={carregando} onClick={mais}>{tr("Carregar mais")}</button>}
   </Section>
 }
@@ -588,14 +594,16 @@ function Leads() {
       <div className="row gap"><button className="btn ghost" onClick={() => setNovo(null)}>{tr("Cancelar")}</button><button className="btn primary" onClick={criar}>{tr("Guardar")}</button></div>
     </div>}
     {erro ? <ErrorState error={erro} retry={recarregar} /> : carregando && !itens.length ? <Loading /> : !itens.length ? <Empty title={tr("Nenhum lead aqui")} />
-      : <ul className="suit-lista">{itens.map(l => <li key={l.id} className="suit-linha">
-          <div className="grow" style={{ minWidth: 0 }}><b>{l.name}</b>
-            <div className="small muted">{[l.email, l.phone].filter(Boolean).join(' · ') || '—'}</div>
-            {l.notes && <div className="small suit-texto">{l.notes}</div>}</div>
-          {l.status === 'aberto' && <div className="row gap wrap"><button className="btn sm" onClick={() => virar(l)}>{tr("Virar pedido")}</button><button className="btn sm ghost" onClick={() => perdido(l)}>{tr("Perdido")}</button></div>}
-          {l.client_id && <Link className="btn sm ghost" to={`/clients/${l.client_id}`}>{tr("Card do cliente")}</Link>}
-          {l.order_id && <Link className="btn sm ghost" to={`/suits/${l.order_id}`}>{tr("Ver pedido")}</Link>}
-        </li>)}</ul>}
+      : <div className="cd-grade">{itens.map(l => <Cartao key={l.id} id={`lead-${l.id}`} estado={l.status === 'aberto' ? tr("aberto") : l.status === 'convertido' ? tr("virou pedido") : l.status === 'perdido' ? tr("perdido") : l.status}
+          tom={l.status === 'aberto' ? 'warn' : l.status === 'convertido' ? 'ok' : 'neutral'} avatar={l.name} avatarTom="azul" nome={l.name}
+          sub={[[l.email, l.phone].filter(Boolean).join(' · ') || '—']}
+          acoes={l.status === 'aberto' || l.client_id || l.order_id ? <>
+            {l.status === 'aberto' && <button className="btn primary" onClick={() => virar(l)}>{tr("Virar pedido")}</button>}
+            {l.status === 'aberto' && <button className="btn" onClick={() => perdido(l)}>{tr("Perdido")}</button>}
+            {l.client_id && <Link className="btn" to={`/clients/${l.client_id}`}>{tr("Card do cliente")}</Link>}
+            {l.order_id && <Link className="btn" to={`/suits/${l.order_id}`}>{tr("Ver pedido")}</Link>}</> : null}>
+          {l.notes && <p className="cd-aviso suit-texto">{l.notes}</p>}
+        </Cartao>)}</div>}
     {temMais && <button className="btn ghost" disabled={carregando} onClick={mais}>{tr("Carregar mais")}</button>}
   </Section>
 }
@@ -619,13 +627,12 @@ function Fornecedores() {
   }
   return <Section title={tr("Fornecedores")} count={lista.data?.length} right={can('MANAGER') && <button className="btn sm" onClick={() => setEd({})}><Icon name="plus" size={14} /> {tr("Novo")}</button>}>
     {lista.error ? <ErrorState error={lista.error} retry={lista.reload} /> : !lista.data ? <Loading /> : !lista.data.length ? <Empty title={tr("Nenhum fornecedor")}>{tr("Importe do Asana ou cadastre.")}</Empty>
-      : <div className="suit-forns">{lista.data.map(f => <article key={f.id} className="card suit-forn">
-          <div className="row gap"><h3 className="h3 grow">{f.name}</h3>{f.is_current ? <Chip tone="ok">{tr("atual")}</Chip> : null}
-            {f.has_fia === 1 ? <Chip tone="info">{tr("FIA")}</Chip> : f.has_fia === 0 ? <Chip>{tr("sem FIA")}</Chip> : null}</div>
-          <dl className="suit-dl">{CAMPOS_FORN.filter(([k]) => f[k]).map(([k, rot]) => <div key={k}><dt>{rot}</dt><dd>{String(f[k])}</dd></div>)}
-            <div><dt>{tr("Pedidos")}</dt><dd>{f.pedidos}</dd></div></dl>
-          {can('MANAGER') && <button className="btn sm ghost" onClick={() => setEd({ ...f })}><Icon name="pencil" size={14} /> {tr("Editar")}</button>}
-        </article>)}</div>}
+      : <div className="cd-grade">{lista.data.map(f => <Cartao key={f.id} id={`forn-${f.id}`} estado={f.is_current ? tr("atual") : (f.status || tr("fornecedor"))} tom={f.is_current ? 'ok' : 'neutral'}
+          avatar={f.name} avatarTom="azul" nome={f.name} sub={[f.has_fia === 1 ? tr("FIA") : f.has_fia === 0 ? tr("sem FIA") : null]}
+          grande={f.pedidos} detalhe={tr("Pedidos")}
+          acoes={can('MANAGER') ? <button className="btn" onClick={() => setEd({ ...f })}><Icon name="pencil" size={14} /> {tr("Editar")}</button> : null}>
+          <CdLista>{CAMPOS_FORN.filter(([k]) => f[k]).map(([k, rot]) => <CdItem key={k} tom="neutral" valor={String(f[k])}>{rot}</CdItem>)}</CdLista>
+        </Cartao>)}</div>}
     {ed && <Scrim onMouseDown={() => setEd(null)}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={tr("Fornecedor")}>
       <h3>{ed.id ? tr("Editar {0}", ed.name) : tr("Novo fornecedor")}</h3>
       <div className="suit-form"><label className="fld"><span>{tr("Nome")}</span><input value={ed.name || ''} onChange={e => setEd(x => ({ ...x, name: e.target.value }))} /></label>

@@ -4,11 +4,12 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Attention as A, Level } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
-import { Chip, Empty, ErrorState, LEVEL_GLYPH, Loading, PageHeader, Section, levelTone } from '../components/ui'
+import { Empty, ErrorState, LEVEL_GLYPH, Loading, PageHeader, Section, levelTone } from '../components/ui'
 import { fmtDateTime } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
+import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { tr } from '../i18n'
 
 const LEVELS: Level[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
@@ -34,7 +35,8 @@ function Balao({ a, onDone }: { a: A; onDone: () => void }) {
   </div>
 }
 
-export function AttentionList({ items, onChange }: { items: A[]; onChange?: () => void }) {
+/** `mini`: no painel Hoje, o cartão D compacto, dois por linha */
+export function AttentionList({ items, onChange, mini }: { items: A[]; onChange?: () => void; mini?: boolean }) {
   const { can } = useAuth()
   const perguntar = usePerguntar()
   const toast = useToast()
@@ -54,43 +56,34 @@ export function AttentionList({ items, onChange }: { items: A[]; onChange?: () =
   }
   if (items.length === 0) return <Empty title={tr("Tudo em ordem")}>{tr("Nenhum item precisa de humano agora.")}</Empty>
   const sysOf = (l: string) => /asana\.com/.test(l) ? 'Asana' : /docusign/.test(l) ? 'DocuSign' : /google\.com/.test(l) ? 'Gmail' : /intuit|qbo/.test(l) ? 'QuickBooks' : 'Origem'
-  return <div>{items.map(a => <div className={`att${a.dismissed ? ' dim' : ''}`} key={a.key}>
-    <div className={`lv ${a.level}`} />
-    <div className="grow">
-      <div className="row wrap" style={{ gap: 8 }}>
-        <span className="ti">{a.title}</span>
-        <Chip tone={levelTone(a.level)} glyph={LEVEL_GLYPH[a.level]}>{LABEL[a.level]}</Chip>
-        {a.dismissed && <Chip tone="outline">{a.dismissed.auto ? tr("passou") : tr("oculto")}</Chip>}
-        <span className="grow" />
-        {a.link && <a className="syslink" href={a.link} target="_blank" rel="noopener noreferrer" title={tr("Abrir no sistema de origem")}>{sysOf(a.link)} ↗</a>}
-      </div>
-      <div className="why">{a.why}</div>
-      {!!a.facts?.length && <div className="facts">{a.facts.filter(([, v]) => v && v !== '—').map(([k, v]) => <span key={k}><span className="k">{k}</span>{v}</span>)}</div>}
-      {a.dismissed && (a.dismissed.auto
-        ? <div className="small muted">{tr("Ocultado automaticamente:")} {a.dismissed.reason}.</div>
-        : <div className="small muted">{tr("Ocultado por")} {a.dismissed.by || '?'} {tr("em")} {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</div>)}
-      <div className="row wrap small att-acts">
-        {a.client_id && <Link className="btn sm" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? tr("Abrir cliente e responder") : tr("Abrir cliente")}</Link>}
-        {a.entity.type === 'approvals' && <Link className="btn sm" to="/approvals">{tr("Ver aprovações")}</Link>}
-        {a.entity.type === 'ai' && <Link className="btn sm" to="/ai">{tr("Ver conversa da IA")}</Link>}
-        {a.entity.type === 'integration' && <Link className="btn sm" to="/integrations">{tr("Ver integrações")}</Link>}
-        {a.entity.type === 'email' && !a.client_id && <Link className="btn sm" to="/gmail">{tr("Abrir na inbox")}</Link>}
-        {a.entity.type === 'stock' && <Link className="btn sm" to="/estoque">{a.action || tr("Ver estoque")}</Link>}
-        {a.entity.type === 'purchase' && <Link className="btn sm" to={a.entity.id ? `/compras/${a.entity.id}` : '/pedidos'}>{a.action || tr("Ver compras")}</Link>}
-        {a.entity.type === 'booking' && <Link className="btn sm" to="/site/agendamentos">{a.action || tr("Ver agenda")}</Link>}
-        {a.entity.type === 'portal_account' && <Link className="btn sm" to="/site/contas">{a.action || tr("Ver contas")}</Link>}
-        {a.entity.type === 'parts_invoice' && <Link className="btn sm" to="/balcao">{a.action || tr("Abrir o balcão")}</Link>}
-        {a.entity.type === 'checklist_run' && <Link className="btn sm" to="/checklists">{a.action || tr("Ver checklists")}</Link>}
-        {a.entity.type === 'ai_pendencia' && <Link className="btn sm" to="/ai">{a.action || tr("Ver no AI Command")}</Link>}
-        {!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action && <span className="chip outline">{a.action}</span>}
-        <span className="grow" />
-        {can('OPERATOR') && !a.dismissed && <button className={`btn sm${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title={tr("Diga à IA o que fazer com este item")}>{tr("✦ Instruir a IA")}</button>}
-        {can('OPERATOR') && !a.dismissed && <button className="btn quiet sm" disabled={busy === a.key} onClick={() => hide(a)} title={tr("Esconde o aviso; não apaga a origem")}>{tr("ocultar")}</button>}
-        {can('OPERATOR') && a.dismissed && !a.dismissed.auto && <button className="btn sm" disabled={busy === a.key} onClick={() => restore(a)}>{tr("Restaurar")}</button>}
-      </div>
-      {balao === a.key && <Balao a={a} onDone={() => setBalao(null)} />}
-    </div>
-  </div>)}</div>
+  // #313: cada aviso no cartão D — o nível em cima, o que é, por quê, os fatos na lista e o que fazer embaixo
+  return <div className={`cd-grade cd-dentro${mini ? ' mini' : ''}`}>{items.map((a, n) => <Cartao key={a.key} id={`att-${n}`} mini={mini} className={a.dismissed ? 'cd-apagado' : undefined}
+    estado={<><span aria-hidden="true">{LEVEL_GLYPH[a.level]}</span> {LABEL[a.level]}</>} tom={levelTone(a.level) as TomD} nome={a.title} sub={[a.why]}
+    acoes={<>
+      {a.client_id && <Link className="btn" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? tr("Abrir cliente e responder") : tr("Abrir cliente")}</Link>}
+      {a.entity.type === 'approvals' && <Link className="btn" to="/approvals">{tr("Ver aprovações")}</Link>}
+      {a.entity.type === 'ai' && <Link className="btn" to="/ai">{tr("Ver conversa da IA")}</Link>}
+      {a.entity.type === 'integration' && <Link className="btn" to="/integrations">{tr("Ver integrações")}</Link>}
+      {a.entity.type === 'email' && !a.client_id && <Link className="btn" to="/gmail">{tr("Abrir na inbox")}</Link>}
+      {a.entity.type === 'stock' && <Link className="btn" to="/estoque">{a.action || tr("Ver estoque")}</Link>}
+      {a.entity.type === 'purchase' && <Link className="btn" to={a.entity.id ? `/compras/${a.entity.id}` : '/pedidos'}>{a.action || tr("Ver compras")}</Link>}
+      {a.entity.type === 'booking' && <Link className="btn" to="/site/agendamentos">{a.action || tr("Ver agenda")}</Link>}
+      {a.entity.type === 'portal_account' && <Link className="btn" to="/site/contas">{a.action || tr("Ver contas")}</Link>}
+      {a.entity.type === 'parts_invoice' && <Link className="btn" to="/balcao">{a.action || tr("Abrir o balcão")}</Link>}
+      {a.entity.type === 'checklist_run' && <Link className="btn" to="/checklists">{a.action || tr("Ver checklists")}</Link>}
+      {a.entity.type === 'ai_pendencia' && <Link className="btn" to="/ai">{a.action || tr("Ver no AI Command")}</Link>}
+      {a.link && <a className="btn" href={a.link} target="_blank" rel="noopener noreferrer" title={tr("Abrir no sistema de origem")}>{sysOf(a.link)} ↗</a>}
+      {can('OPERATOR') && !a.dismissed && <button className={`btn${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title={tr("Diga à IA o que fazer com este item")}>{tr("✦ Instruir a IA")}</button>}
+      {can('OPERATOR') && !a.dismissed && <button className="btn" disabled={busy === a.key} onClick={() => hide(a)} title={tr("Esconde o aviso; não apaga a origem")}>{tr("ocultar")}</button>}
+      {can('OPERATOR') && a.dismissed && !a.dismissed.auto && <button className="btn" disabled={busy === a.key} onClick={() => restore(a)}>{tr("Restaurar")}</button>}</>}>
+    {(!!a.facts?.filter(([, v]) => v && v !== '—').length || a.dismissed || (!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action)) && <CdLista>
+      {a.facts?.filter(([, v]) => v && v !== '—').map(([k, v]) => <CdItem key={k} tom="neutral" valor={v}>{k}</CdItem>)}
+      {!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action && <CdItem tom="info" glifo="→">{a.action}</CdItem>}
+      {a.dismissed && <CdItem tom="neutral" glifo="—">{a.dismissed.auto ? <>{tr("passou")} · {tr("Ocultado automaticamente:")} {a.dismissed.reason}.</>
+        : <>{tr("oculto")} · {tr("Ocultado por")} {a.dismissed.by || '?'} {tr("em")} {fmtDateTime(a.dismissed.at)}{a.dismissed.reason && <> · “{a.dismissed.reason}”</>}</>}</CdItem>}
+    </CdLista>}
+    {balao === a.key && <div className="cd-form"><Balao a={a} onDone={() => setBalao(null)} /></div>}
+  </Cartao>)}</div>
 }
 
 export function AttentionPage() {

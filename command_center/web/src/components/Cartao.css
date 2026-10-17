@@ -39,5 +39,7 @@
 .cd-li-picker{flex:1 1 100%;min-width:0}
 .cd-largo{grid-column:1/-1}
 .cd-dentro{padding:12px}
+.cd-apagado>*{opacity:.6}
+.cd.cd-on{border-color:var(--accent);box-shadow:var(--shadow),0 0 0 2px var(--accent-wash)}
 .cd-marca{gap:8px}.cd-marca input{width:20px;height:20px;margin:0}
 @media(prefers-reduced-motion:reduce){.cd-prog-b i{transition:none}}
