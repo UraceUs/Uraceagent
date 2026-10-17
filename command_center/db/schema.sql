@@ -1913,6 +1913,25 @@ CREATE TABLE IF NOT EXISTS waiver_templates (
   imported_by  INTEGER REFERENCES users(id)
 );
 
+-- #116 (lacuna D-4): toda versão de modelo que já valeu, uma linha por texto (kind + sha256), que nunca
+-- muda nem sai (trigger em db/__init__.py, criado a cada subida). `waiver_templates` é só o ponteiro da
+-- versão atual (`version_id`); reimportar acrescenta a versão nova e a anterior continua aqui, com o PDF.
+-- A assinatura aponta para a versão pelo hash (`template_sha256` na trilha) e pelo `template_version_id`.
+CREATE TABLE IF NOT EXISTS waiver_template_versions (
+  id           INTEGER PRIMARY KEY,
+  kind         TEXT NOT NULL CHECK (kind IN ('adult','parental')),
+  sha256       TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  pdf_path     TEXT NOT NULL,
+  pages        INTEGER,
+  text         TEXT,
+  source       TEXT,
+  imported_at  TEXT NOT NULL,                 -- a primeira vez que este texto entrou
+  imported_by  INTEGER REFERENCES users(id),
+  notice_744   TEXT,                          -- json: a conferência do aviso §744.301(3) na importação (parental)
+  UNIQUE (kind, sha256)
+);
+
 -- ======================================================================
 -- Suits / Alpha Line (#153): pedidos de macacão, leads e fornecedores.
 -- Processo: brain/10_PROCESSOS/Pedido de macacão.md. Importado do projeto SUITS do Asana.

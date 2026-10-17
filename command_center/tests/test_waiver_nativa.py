@@ -287,6 +287,7 @@ def test_a_equipe_baixa_pelo_card_e_o_modelo_alterado_nao_assina(cli):
     assert r.status_code == 200 and r.content.startswith(b"%PDF")
     # alguém trocou o PDF do modelo no disco: o hash não bate e ninguém assina sobre ele
     m = um(conectar(), "SELECT pdf_path FROM waiver_templates WHERE kind='parental'")
+    os.chmod(m["pdf_path"], 0o600)                       # #116: o PDF da versão fica só leitura; quem troca, troca isso também
     open(m["pdf_path"], "wb").write(_pdf("TEXTO TROCADO"))
     hc2, (pid2,) = cliente(cli, conta={**CONTA, "email": "nova@example.com"})
     r = assina(cli, hc2, pid2)

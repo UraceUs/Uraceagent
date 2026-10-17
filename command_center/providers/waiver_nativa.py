@@ -33,6 +33,10 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
   `waivers_nativa_imutavel`), o PDF fica só leitura (0400) e a trilha inteira vai também para o
   `audit_logs`. Para tirar de vigor, um gerente **anula com motivo** (`waiver_voids`): ela continua
   no card, na lista e no backup, marcada como anulada.
+- **Versões do modelo** (#116): cada texto importado fica em `waiver_template_versions` (append-only,
+  com o PDF só leitura); reimportar acrescenta a versão nova e a anterior continua consultável. A
+  assinatura guarda o hash e o id da versão que valia. O modelo parental passa pela conferência do aviso
+  do §744.301(3) (`aviso_744`), que só barra quando o texto aprovado pelo advogado está configurado.
 
 Nasce DESLIGADA (`booking_config.waiver_native = 0`): quem liga é o ADMIN, depois do sim do
 advogado. Nada aqui toca o DocuSign além de LER os dois modelos na importação.
@@ -147,6 +151,10 @@ def ligada(con):
 def ligar(con, ligado, por):
     if ligado and not all(modelo(con, k) for k in MODELOS):
         raise ValueError("importe os dois modelos do DocuSign antes de ligar")
+    if ligado:                                     # #116: só barra com o texto aprovado pelo advogado configurado
+        a = aviso_do_atual(con)
+        if a["configured"] and not a["ok"]:
+            raise ValueError(f"o modelo parental atual não passa na conferência do aviso §744.301(3): {a['reason']}")
     con.execute("INSERT OR IGNORE INTO booking_config (id) VALUES (1)")
     atualizar(con, "booking_config", 1, waiver_native=1 if ligado else 0, updated_by=por, updated_at=agora())
     return ligada(con)
@@ -158,48 +166,177 @@ def modelo(con, tipo):
     return m if m and m["pdf_path"] and os.path.isfile(m["pdf_path"]) else None
 
 
+def _numero(con, vid):
+    """A versão N do modelo (1 = a primeira importada daquele tipo)."""
+    r = um(con, """SELECT COUNT(*) AS n FROM waiver_template_versions x
+                   WHERE x.kind = (SELECT kind FROM waiver_template_versions WHERE id=?) AND x.id <= ?""", (vid, vid))
+    return r["n"] if r and r["n"] else None
+
+
 def modelos(con):
     return [{"kind": k, "templateId": MODELOS[k], "name": (m["name"] if m else None), "pages": (m["pages"] if m else None),
-             "sha256": (m["sha256"] if m else None), "imported_at": (m["imported_at"] if m else None)}
+             "sha256": (m["sha256"] if m else None), "imported_at": (m["imported_at"] if m else None),
+             "version_id": (m.get("version_id") if m else None),
+             "version": (_numero(con, m["version_id"]) if m and m.get("version_id") else None)}
             for k in MODELOS for m in [modelo(con, k)]]
 
 
+def _pdf_da_versao(tipo, sha, pdf, caminho=None):
+    """O PDF da versão, gravado uma vez e só leitura (0400, como o assinado, #109). Já está lá com o mesmo
+    hash: não mexe. Sumiu ou mudou por fora: volta o original, que é o que o hash da versão diz."""
+    caminho = caminho or os.path.join(pasta(), "modelos", f"{tipo}-{sha}.pdf")
+    try:
+        with open(caminho, "rb") as f:
+            if _sha(f.read()) == sha:
+                return caminho, False
+        os.chmod(caminho, 0o600)
+    except FileNotFoundError:
+        pass
+    with open(caminho, "wb") as f:
+        f.write(pdf)
+    os.chmod(caminho, 0o400)
+    return caminho, True
+
+
 def guardar_modelo(con, tipo, nome, pdf, por=None, origem="docusign"):
-    """Guarda o PDF de um modelo como veio, com o hash e o texto (para ler na tela)."""
+    """Guarda o PDF de um modelo como veio, com o hash e o texto (para ler na tela).
+
+    #116: cada texto é uma versão em `waiver_template_versions` (append-only); o mesmo PDF de novo é a mesma
+    versão. `waiver_templates` passa a apontar para ela, e a versão anterior continua consultável, com o PDF.
+    O parental passa pela conferência do aviso §744.301(3): com o texto aprovado configurado, o que não passa
+    não entra (o atual continua valendo); sem ele, o resultado fica na versão e só informa."""
     from pypdf import PdfReader
+    from command_center.db import transacao
+    from command_center.providers import aviso_744
     if tipo not in MODELOS:
         raise ValueError("modelo desconhecido")
     if not pdf.startswith(b"%PDF"):
         raise ValueError("o arquivo do modelo não é um PDF")
+    sha = _sha(pdf)
     leitor = PdfReader(io.BytesIO(pdf))
     texto = "\n\n".join((p.extract_text() or "").strip() for p in leitor.pages).strip()
-    caminho = os.path.join(pasta(), "modelos", f"{tipo}-{_sha(pdf)[:12]}.pdf")
-    with open(caminho, "wb") as f:
-        f.write(pdf)
-    os.chmod(caminho, 0o600)
-    campos = dict(name=nome, pdf_path=caminho, sha256=_sha(pdf), pages=len(leitor.pages), text=texto,
-                  source=origem, imported_at=agora(), imported_by=por)
-    if um(con, "SELECT 1 AS x FROM waiver_templates WHERE kind=?", (tipo,)):
-        con.execute(f"UPDATE waiver_templates SET {', '.join(k + '=?' for k in campos)} WHERE kind=?", (*campos.values(), tipo))
+    aviso = aviso_744.conferir(pdf) if tipo == "parental" else None
+    if aviso and aviso["configured"] and not aviso["ok"]:
+        raise ValueError(f"o modelo parental não passa na conferência do aviso §744.301(3): {aviso['reason']} "
+                         "Nada foi importado: o modelo atual continua valendo.")
+    antes = um(con, "SELECT * FROM waiver_template_versions WHERE kind=? AND sha256=?", (tipo, sha))
+    caminho, gravou = _pdf_da_versao(tipo, sha, pdf, antes["pdf_path"] if antes else None)
+    quando = agora()
+
+    def gravar_versao():
+        con.execute("""INSERT OR IGNORE INTO waiver_template_versions (kind, sha256, name, pdf_path, pages, text, source,
+                       imported_at, imported_by, notice_744) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (tipo, sha, nome, caminho, len(leitor.pages), texto, origem, quando, por,
+                     json.dumps(aviso, ensure_ascii=False) if aviso else None))
+        v = um(con, "SELECT id, pdf_path FROM waiver_template_versions WHERE kind=? AND sha256=?", (tipo, sha))
+        campos = dict(name=nome, pdf_path=v["pdf_path"], sha256=sha, pages=len(leitor.pages), text=texto,
+                      source=origem, imported_at=quando, imported_by=por, version_id=v["id"])
+        if um(con, "SELECT 1 AS x FROM waiver_templates WHERE kind=?", (tipo,)):
+            con.execute(f"UPDATE waiver_templates SET {', '.join(k + '=?' for k in campos)} WHERE kind=?", (*campos.values(), tipo))
+        else:
+            con.execute(f"INSERT INTO waiver_templates (kind, {', '.join(campos)}) VALUES (?{', ?' * len(campos)})",
+                        (tipo, *campos.values()))
+        return campos
+
+    if con.in_transaction:
+        campos = gravar_versao()
     else:
-        con.execute(f"INSERT INTO waiver_templates (kind, {', '.join(campos)}) VALUES (?{', ?' * len(campos)})",
-                    (tipo, *campos.values()))
-    return dict(kind=tipo, **{k: v for k, v in campos.items() if k != "text"})
+        with transacao(con):
+            campos = gravar_versao()
+    return dict(kind=tipo, **{k: v for k, v in campos.items() if k != "text"}, version=_numero(con, campos["version_id"]),
+                new_version=antes is None, file_restored=bool(antes) and gravou,
+                notice_744_ok=aviso["ok"] if aviso else None)
 
 
 def importar_do_docusign(con, por=None):
-    """LÊ os dois modelos no DocuSign (nome + PDF) e guarda aqui. Não altera nada lá."""
-    from command_center.providers import modulo
+    """LÊ os dois modelos no DocuSign (nome + PDF) e guarda aqui. Não altera nada lá.
+    Baixa os dois antes de guardar: o parental que não passa no aviso (#116) não deixa entrar só o adult."""
+    from command_center.providers import aviso_744, modulo
     ds = modulo("docusign")
-    saida = []
+    baixados = []
     for tipo, tid in MODELOS.items():
         info = ds.modelo_humano(tid)
         docs = info.get("documentos") or []
         if len(docs) != 1:
             raise ValueError(f"o modelo {info.get('nome') or tid} tem {len(docs)} documentos; esperava 1")
-        pdf = ds.baixar_documento_do_modelo_humano(tid, docs[0]["documentId"])
-        saida.append(guardar_modelo(con, tipo, info.get("nome") or NOME[tipo], pdf, por))
-    return saida
+        baixados.append((tipo, info.get("nome") or NOME[tipo], ds.baixar_documento_do_modelo_humano(tid, docs[0]["documentId"])))
+    for tipo, _nome, pdf in baixados:
+        a = aviso_744.conferir(pdf) if tipo == "parental" else None
+        if a and a["configured"] and not a["ok"]:
+            raise ValueError(f"o modelo parental do DocuSign não passa na conferência do aviso §744.301(3): {a['reason']} "
+                             "Nada foi importado: os modelos atuais continuam valendo.")
+    return [guardar_modelo(con, tipo, nome, pdf, por) for tipo, nome, pdf in baixados]
+
+
+# ------------------------------------------------------------------ versões do modelo (#116)
+def _versao_saida(v):
+    v = dict(v)
+    v["notice_744"] = json.loads(v["notice_744"]) if v.get("notice_744") else None
+    if "current" in v:
+        v["current"] = bool(v["current"])
+    return v
+
+
+_VERSAO = """v.id, v.kind, v.sha256, v.name, v.pages, v.source, v.imported_at, v.imported_by, u.name AS imported_by_name,
+             v.notice_744, (t.version_id IS NOT NULL) AS current,
+             (SELECT COUNT(*) FROM waiver_template_versions x WHERE x.kind = v.kind AND x.id <= v.id) AS number,
+             (SELECT COUNT(*) FROM waivers w WHERE w.source='urace' AND w.template = v.kind
+                AND json_extract(w.audit, '$.template_sha256') = v.sha256) AS signatures"""
+_DE_VERSAO = """FROM waiver_template_versions v LEFT JOIN users u ON u.id = v.imported_by
+                LEFT JOIN waiver_templates t ON t.version_id = v.id"""
+
+
+def versoes(con, kind=None, limit=50, offset=0):
+    """Todas as versões dos modelos, das mais novas para as mais velhas, paginadas (sem o texto)."""
+    onde, args = ("WHERE v.kind=?", (kind,)) if kind else ("", ())
+    total = um(con, f"SELECT COUNT(*) AS n FROM waiver_template_versions v {onde}", args)["n"]
+    itens = todos(con, f"SELECT {_VERSAO} {_DE_VERSAO} {onde} ORDER BY v.id DESC LIMIT ? OFFSET ?", (*args, limit, offset))
+    return {"itens": [_versao_saida(v) for v in itens], "total": total, "limit": limit, "offset": offset}
+
+
+def versao(con, vid):
+    """Uma versão, com o texto e o caminho do PDF (ou None)."""
+    v = um(con, f"SELECT {_VERSAO}, v.text, v.pdf_path {_DE_VERSAO} WHERE v.id=?", (vid,))
+    return _versao_saida(v) if v else None
+
+
+def versao_por_hash(con, kind, sha):
+    """A versão que uma assinatura usou, pelo `template_sha256` da trilha (vale para as de antes das versões)."""
+    v = um(con, "SELECT id FROM waiver_template_versions WHERE kind=? AND sha256=?", (kind, sha))
+    return versao(con, v["id"]) if v else None
+
+
+def aviso_do_atual(con):
+    """A conferência do aviso §744.301(3) no modelo parental atual, contra o texto aprovado de agora."""
+    from command_center.providers import aviso_744
+    cfg = aviso_744.aprovado()
+    if cfg and cfg.get("error"):                   # o arquivo que não abre ou está vazio vem antes de tudo (revisão #328)
+        return {"configured": True, "ok": False, "reason": cfg["error"]}
+    m = modelo(con, "parental")
+    if not m:
+        return {"configured": bool(cfg), "ok": None if not cfg else False,
+                "reason": "O modelo parental ainda não foi importado."}
+    with open(m["pdf_path"], "rb") as f:
+        return aviso_744.conferir(f.read(), cfg)
+
+
+def aviso(con):
+    """O que Site › Waiver mostra do aviso: se há texto aprovado, onde ele fica e como o parental atual se sai."""
+    from command_center.providers import aviso_744
+    cfg = aviso_744.aprovado()
+    return {**aviso_do_atual(con), "path": aviso_744.caminho(), "approved_text": cfg.get("text") if cfg else None,
+            "approved_sha256": cfg.get("sha256") if cfg else None}
+
+
+def _exigir_aviso(tipo, pdf):
+    """#116: com o texto aprovado configurado, a parental sem o aviso do §744.301(3) não se assina online."""
+    if tipo != "parental":
+        return None
+    from command_center.providers import aviso_744
+    a = aviso_744.conferir(pdf)
+    if a["configured"] and not a["ok"]:
+        raise ErroWaiver("Online signing of this waiver is not available right now. Our team will send you the waiver.")
+    return a
 
 
 # ------------------------------------------------------------------ situação por piloto
@@ -319,6 +456,7 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         base = f.read()
     if _sha(base) != m["sha256"]:                          # o modelo guardado mudou por fora: não assina
         raise ErroWaiver("The waiver document could not be verified. Please contact us.")
+    _exigir_aviso(tipo, base)                              # #116: antes de gastar o código do e-mail
     agora_utc = datetime.now(timezone.utc)
     entregue, lido, modo = _leitura(con, conta_id, tipo, dados, agora_utc)
     verificado = um(con, "SELECT email_verified_at FROM portal_accounts WHERE id=?", (conta_id,))["email_verified_at"]
@@ -381,6 +519,11 @@ def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_e
     waiver é imutável por trigger e o audit_logs guarda uma segunda cópia que ninguém reescreve."""
     from command_center.db import auditar, transacao
     tipo = trilha["template"]
+    trilha.setdefault("template_version_id", m.get("version_id"))      # #116: a versão do modelo que valia
+    if tipo == "parental":                                               # e como ela se saiu na conferência do aviso
+        from command_center.providers import aviso_744
+        a = aviso_744.conferir(base)
+        trilha.setdefault("notice_744_check", {k: a.get(k) for k in ("configured", "ok", "approved_sha256", "notice_pt", "body_pt")})
     caminho = caminho or pdf_final(base, trilha, png)
     quando = agora()
     with transacao(con):
@@ -515,6 +658,7 @@ def _pdf_assinado(base, t, png):
                  ("Agreed: sign electronically", "yes"),
                  ("Language", t.get("language_ack") or "—"),
                  ("Document hash (SHA-256)", t["template_sha256"]),
+                 ("Template version ID", t.get("template_version_id") or "—"),
                  ("Signature image hash (SHA-256)", t["signature_png_sha256"])):
         linha(f"{k}: {v}", 9, "Helvetica", 12)
     y -= 6

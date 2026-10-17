@@ -4399,5 +4399,21 @@
 "Abrir {0} no site": "Open {0} on the site",
 "cartão {0} · {1}": "card {0} · {1}",
 "escondidos pelo plano ativo: {0}": "hidden by the active plan: {0}",
-"Para reativar, desative antes \"{0}\": ele já usa a chave {1}.": "To reactivate, first deactivate \"{0}\": it already uses the key {1}."
+"Para reativar, desative antes \"{0}\": ele já usa a chave {1}.": "To reactivate, first deactivate \"{0}\": it already uses the key {1}.",
+"aviso: esperando o advogado": "notice: waiting for the lawyer",
+"aviso confere": "notice checks out",
+"aviso não confere": "notice does not check out",
+"Aviso do §744.301(3) (parental)": "§744.301(3) notice (parental)",
+"Pelo menor, a waiver só vale com o aviso que a lei da Flórida pede, em maiúsculas e com letra maior que o resto. O sistema confere o modelo parental: o texto aprovado inteiro, em maiúsculas, com 5 pt a mais que o corpo.": "For a minor, the waiver only holds with the notice Florida law requires, in uppercase and in larger type than the rest. The system checks the parental template: the whole approved text, in uppercase, 5 pt larger than the body.",
+"Com o texto aprovado no servidor ({0}), o parental que não confere não é importado, a assinatura não liga e a parental não se assina online.": "With the approved text on the server ({0}), a parental template that does not check out is not imported, signing does not turn on and the parental waiver cannot be signed online.",
+"O texto do aviso não está no sistema: quando o advogado aprovar, ele vai para o arquivo {0} no servidor. Até lá a conferência só informa e nada é barrado.": "The notice text is not in the system: once the lawyer approves it, it goes into the file {0} on the server. Until then the check only informs and nothing is blocked.",
+"Texto aprovado": "Approved text",
+"Versões dos modelos": "Template versions",
+"Nenhuma versão ainda": "No versions yet",
+"Cada importação do DocuSign com um texto novo vira uma versão. A anterior continua aqui.": "Each DocuSign import with a new text becomes a version. The previous one stays here.",
+"versão {0}": "version {0}",
+"importada em {0}": "imported on {0}",
+"{0} assinatura(s)": "{0} signature(s)",
+"(na importação)": "(at import)",
+"Nenhuma versão se apaga nem muda. Cada assinatura guarda o hash e a versão que valia.": "No version is ever deleted or changed. Each signature keeps the hash and the version in force."
 }

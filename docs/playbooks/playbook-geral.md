@@ -170,7 +170,7 @@ pedem acesso de operador.
 | Site | **Editor do site** | `/ops/site/editor` | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
-| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, assinadas e **Anular** (#109) | gerente+ |
+| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
@@ -393,6 +393,29 @@ legal, e não há cópia no DocuSign.
   título). Se o PDF no servidor não bater mais com o hash gravado na assinatura, ela não sobe, a cópia
   do Drive fica como estava e o erro aparece na Biblioteca e na Auditoria
   (`biblioteca.waiver.hash_divergente`).
+
+#### Site › Waiver: versões do modelo e o aviso do §744.301(3) (#116)
+
+- **Versões dos modelos.** Cada vez que o ADMIN clica **Importar do DocuSign** e o texto de um modelo
+  mudou lá, entra uma **versão nova** (versão 1, 2…) e ela passa a ser a **atual**. A anterior **não se
+  apaga nem muda** (o próprio banco recusa): continua na lista **Versões dos modelos**, com o **PDF**
+  como foi importado, quando entrou, quem importou e quantas assinaturas usaram aquela versão.
+  Importar o mesmo PDF de novo não cria outra versão. Cada assinatura guarda o hash e a identificação
+  da versão que valia (**Template version ID**, no certificado): as próximas usam a nova, as já feitas
+  ficam com a delas. Se o PDF de uma versão mudar no servidor, o botão **PDF** dá erro (não bate com o
+  hash); importar o modelo de novo devolve o original.
+- **Aviso do §744.301(3) (parental).** Pelo menor, a waiver só vale com o aviso que a lei da Flórida
+  pede, em maiúsculas e com letra maior que o resto. O sistema confere o modelo parental: o texto
+  aprovado **inteiro**, em **maiúsculas**, com a letra pelo menos **5 pt maior** que a do corpo (é o
+  que o PDF deixa ler; o advogado confirma o texto e a regra).
+  - **O texto do aviso não está no sistema.** Quem dá é o advogado. Enquanto ele não aprova, o quadro
+    diz **"aviso: esperando o advogado"**: a conferência **só informa** e nada é barrado.
+  - Quando o advogado aprovar, o texto vai, como ele aprovou, para o arquivo
+    `~/.urace/waivers/aviso-744.txt` no servidor (ou o caminho em `CC_WAIVER_AVISO_744`). O quadro
+    mostra o texto e se o parental atual **confere**. A partir daí, o parental que **não confere**
+    não é importado (o atual continua valendo), a assinatura **não liga** e a parental **não se assina
+    online** (pela área do cliente ou pelo convite); a adult segue normal. Arquivo que não abre ou
+    vazio também barra.
 
 ### Um card por piloto
 
@@ -1057,6 +1080,7 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | enviar waiver avulsa | `POST /waivers/send` (operador) |
 | convite da waiver por e-mail: para quem vai e os já mandados | `GET /clients/{id}/waiver-invite` (operador) |
 | mandar / reenviar o convite | `POST /clients/{id}/waiver-invite` com `{"email": "<o e-mail do card>"}` (operador; o e-mail confere com o card) |
+| versões do modelo da waiver nativa e o PDF de cada uma (#116) | `GET /site/waiver-nativa/versoes?kind=&limit=&offset=` · `GET /site/waiver-nativa/versoes/{id}/pdf` (gerente) |
 | dia do box | `GET /meu-dia` (operador; é a tela inicial do mecânico e do coach) |
 | mandar comando à IA do painel | `POST /ai/commands` (operador) |
 | propostas esperando decisão | `GET /ai/actions?status=PROPOSED` (logado) |
