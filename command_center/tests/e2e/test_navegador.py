@@ -5033,9 +5033,12 @@ def _confere_cartoes_d(pg, servidor, rota, tema):
         probs.append(f"{rota}: cartão sem o raio do D ou ações fora da grade")
     if {c["fundo"] for c in cartoes} != {_FUNDO_D[tema]}:
         probs.append(f"{rota}: fundo {sorted({c['fundo'] for c in cartoes})} fora do tema {tema}")
-    h1 = pg.evaluate("() => [...document.querySelectorAll('h1')].filter(h => h.getClientRects().length).length")
-    if h1 != 1:
-        probs.append(f"{rota}: {h1} h1")
+    cab = _cabecalhos(pg)
+    if len([n for n, _ in cab if n == 1]) != 1:
+        probs.append(f"{rota}: {len([n for n, _ in cab if n == 1])} h1")
+    pulos = [f"h{a} → h{n} ({t!r})" for (a, _), (n, t) in zip([(0, "")] + cab, cab) if n > a + 1]
+    if pulos:
+        probs.append(f"{rota}: pulou nível de cabeçalho {pulos[:2]}")
     r = pg.evaluate(_VAZA)
     if r["rola"] or r["culpados"]:
         probs.append(f"{rota}: rola para o lado {r['culpados']}")

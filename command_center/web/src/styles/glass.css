@@ -1141,7 +1141,7 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
   .tbl.rsp td:empty{display:none}
   .tbl.rsp td[data-l]::before{text-align:left;margin-right:auto}
   .tbl.rsp td.rsp-pill{order:-3;justify-content:center;border:0;min-height:0;padding:0 0 10px}
-  .tbl.rsp td.rsp-pill::before,.tbl.rsp td.rsp-sub::before,.tbl.rsp td.rsp-bloco::before{display:none}
+  .tbl.rsp td.rsp-pill::before,.tbl.rsp td.rsp-sub::before,.tbl.rsp td.rsp-bloco::before,.tbl.rsp td.first::before{display:none}
   .tbl.rsp td.first{order:-2;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:0;font-size:19px;font-weight:600;padding:0 0 2px;min-height:0}
   .tbl.rsp td.first .row{justify-content:center;flex-wrap:wrap}
   .tbl.rsp td.rsp-sub{order:-1;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:0;color:var(--ink-2);min-height:0;padding:0 0 4px}
