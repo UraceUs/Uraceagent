@@ -105,7 +105,8 @@ def test_adulto_recebe_no_email_do_card_e_assina_a_propria_sem_conta(cli):  # no
     # a cópia de quem assinou, pelo mesmo link
     pdf = cli.get(f"{P}/invite/{token}/signed.pdf")
     assert pdf.status_code == 200 and pdf.content == open(w["pdf_path"], "rb").read()
-    assert "Email: bruno@example.com" in __import__("pypdf").PdfReader(w["pdf_path"]).pages[-1].extract_text()
+    from command_center.tests.test_waiver_nativa import certificado
+    assert "Email: bruno@example.com" in certificado(w["pdf_path"])
 
 
 def test_menor_o_convite_vai_para_o_responsavel_que_assina_como_pai_ou_mae(cli):  # noqa: F811

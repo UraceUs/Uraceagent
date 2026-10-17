@@ -36,6 +36,11 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
     papi<ConviteWaiver>('GET', caminho).then(setC).catch(e => setFora((e as PortalError).message))
   }, [caminho])
 
+  // #111: "leu todas as páginas" só a tela sabe: vai para a trilha (abrir a tela o servidor já registra)
+  function leu(em: string, modo: 'pdf_viewer' | 'pdf_opened_and_text') {
+    setLido(x => x ?? { em, modo })
+    if (!lido) papi('POST', `${caminho}/events`, { event: 'all_pages_viewed', mode: modo }).catch(() => {})
+  }
   async function mandarCodigo() {
     setErro(null); setOcupado(true)
     try { setEnviado((await papi<{ sent_to: string }>('POST', `${caminho}/code`)).sent_to) }
@@ -89,14 +94,14 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
     <section className="stack" aria-labelledby="c-doc" style={{ gap: 8 }}>
       <div className="row"><h2 className="h2 grow" id="c-doc">Read the document</h2>
         <a className="btn sm" href={pdf} target="_blank" rel="noreferrer" onClick={() => setAbriuPdf(true)}>Open the PDF</a></div>
-      {!semVisor ? <VisorPdf url={pdf} onLido={em => setLido({ em, modo: 'pdf_viewer' })} onFalha={() => setSemVisor(true)} />
+      {!semVisor ? <VisorPdf url={pdf} onLido={em => leu(em, 'pdf_viewer')} onFalha={() => setSemVisor(true)} />
         : <>
           <div className="banner warn" role="status"><span className="bi" aria-hidden="true">▲</span><div className="grow">
             This browser could not show the document here. Tap <b>Open the PDF</b>, read it, then read the text below to the end.</div></div>
           <div className="card card-b portal-waiver-texto" tabIndex={0} aria-label="Waiver text"
-            onScroll={e => { const t = e.currentTarget; if (abriuPdf && t.scrollTop + t.clientHeight >= t.scrollHeight - 8 && !lido) setLido({ em: new Date().toISOString(), modo: 'pdf_opened_and_text' }) }}>
+            onScroll={e => { const t = e.currentTarget; if (abriuPdf && t.scrollTop + t.clientHeight >= t.scrollHeight - 8 && !lido) leu(new Date().toISOString(), 'pdf_opened_and_text') }}>
             {c.model.text || 'Open the PDF to read the document.'}</div>
-          {abriuPdf && !lido && <button type="button" className="btn sm ghost" onClick={() => setLido({ em: new Date().toISOString(), modo: 'pdf_opened_and_text' })}>I have read the whole PDF</button>}
+          {abriuPdf && !lido && <button type="button" className="btn sm ghost" onClick={() => leu(new Date().toISOString(), 'pdf_opened_and_text')}>I have read the whole PDF</button>}
         </>}
       {!semVisor && c.model.text && <details className="small"><summary>Text version (for screen readers)</summary>
         <div className="portal-waiver-texto" aria-label="Waiver text">{c.model.text}</div></details>}

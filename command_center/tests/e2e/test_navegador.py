@@ -1002,7 +1002,86 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     abrir(a, servidor, "/site/waiver")
     a.get_by_text("Rafa Waiver").wait_for()
     assert "parental · por Rita Waiver" in a.locator("article.cd", has_text="Rafa Waiver").inner_text()
+    # 4. #111: a trilha da assinada, com o que a tela relatou (abriu, leu tudo) e o que o servidor registrou
+    a.locator("article.cd", has_text="Rafa Waiver").get_by_role("button", name="Trilha").click()
+    a.get_by_text(re.compile(r"trilha íntegra · \d+ eventos no total")).wait_for()
+    passos = a.locator("ol li").all_inner_texts()
+    for passo in ("abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas", "código enviado", "código confirmado",
+                  "revisou e confirmou", "assinou", "PDF baixado"):
+        assert any(x.startswith(passo) for x in passos), (passo, passos)
+    assert any(x.startswith("abriu a tela de assinar") and "relatado pela tela" in x for x in passos), passos
+    assert any(x.startswith("PDF baixado") and "depois de assinar" in x for x in passos), passos
+    for largura in (360, 390):                       # a trilha aberta no celular não empurra a página para o lado
+        m = entrar(navegador, servidor, "italo@urace.us", largura=largura, altura=800)
+        abrir(m, servidor, "/site/waiver")
+        m.locator("article.cd", has_text="Rafa Waiver").get_by_role("button", name="Trilha").click()
+        m.get_by_text(re.compile(r"trilha íntegra")).wait_for()
+        r = m.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not m.erros_js and not m.erros_api, (m.erros_js, m.erros_api)
+        m.close()
     a.close(); c.close()
+
+
+# ------------------------------------------------------------------ versões do modelo e o aviso §744.301(3) (#116)
+@pytest.mark.parametrize("largura", [360, 390])
+def test_site_waiver_mostra_as_versoes_e_o_aviso_esperando_o_advogado_no_celular(servidor, navegador, largura):
+    """A versão 1 do parental continua na lista depois da 2 (a semente importou duas vezes), com o PDF dela;
+    sem o texto aprovado no servidor, o aviso diz que espera o advogado e nada é barrado."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    abrir(pg, servidor, "/site/waiver")
+    sec = pg.locator("section", has=pg.get_by_role("heading", name="Versões dos modelos", level=2))
+    sec.wait_for()
+    linhas = sec.locator(".tr")
+    assert linhas.count() == 3, linhas.all_inner_texts()
+    textos = linhas.all_inner_texts()
+    assert any("Parental (menor) · versão 2" in t and "atual" in t for t in textos), textos
+    v1 = next(i for i, t in enumerate(textos) if "Parental (menor) · versão 1" in t)
+    assert "atual" not in textos[v1].split("\n")[0] and "aviso: esperando o advogado" in textos[v1]
+    pdf = pg.request.get(servidor.replace("/ops", "") + linhas.nth(v1).get_by_role("link", name="PDF").get_attribute("href"))
+    import hashlib
+    assert pdf.ok and pdf.body().startswith(b"%PDF") and hashlib.sha256(pdf.body()).hexdigest() == pdf.headers["x-content-sha256"]
+    aviso = pg.locator("section", has=pg.get_by_role("heading", name="Aviso do §744.301(3) (parental)", level=2))
+    assert "Esperando o texto do aviso aprovado pelo advogado" in aviso.inner_text()
+    assert "aviso-744.txt" in aviso.inner_text()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_quadro_do_aviso_com_o_texto_aprovado_e_com_o_arquivo_vazio_no_celular(servidor, navegador, largura):
+    """Revisão do #328: com o texto aprovado no servidor, o "Texto aprovado" abre com toque de 40 px e nada rola de
+    lado; com o arquivo vazio, o quadro diz que está vazio. O arquivo sai no fim (os outros testes não o veem)."""
+    arq = os.path.join(os.path.dirname(BANCO), "waivers", "aviso-744.txt")
+    os.makedirs(os.path.dirname(arq), exist_ok=True)
+    aviso = ("EXAMPLE NOTICE FOR AUTOMATED TESTS ONLY. THIS IS NOT THE TEXT OF THE FLORIDA STATUTE. "
+             "THE REAL NOTICE IS THE TEXT THAT THE LAWYER APPROVES FOR THE PARENTAL WAIVER.")
+    try:
+        with open(arq, "w", encoding="utf-8") as f:
+            f.write(aviso)
+        pg = entrar(navegador, servidor, largura=largura, altura=800)
+        abrir(pg, servidor, "/site/waiver")
+        sec = pg.locator("section", has=pg.get_by_role("heading", name="Aviso do §744.301(3) (parental)", level=2))
+        sec.wait_for()
+        assert "aviso não confere" in sec.inner_text() and "O aviso aprovado não está inteiro no modelo" in sec.inner_text()
+        resumo = sec.locator("summary", has_text="Texto aprovado")
+        assert resumo.bounding_box()["height"] >= 40, resumo.bounding_box()
+        resumo.click()
+        sec.locator("details p", has_text="EXAMPLE NOTICE FOR AUTOMATED TESTS ONLY").wait_for()
+        r = pg.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        with open(arq, "w", encoding="utf-8") as f:
+            f.write("")
+        abrir(pg, servidor, "/site/waiver")
+        sec.wait_for()
+        assert "está vazio" in sec.inner_text(), sec.inner_text()
+        assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+        pg.close()
+    finally:
+        os.remove(arq)
 
 
 # ------------------------------------------------------------------ convite da waiver por e-mail (#135)
@@ -1100,6 +1179,13 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     abrir(a, servidor, "/site/waiver")
     a.locator("article.cd", has_text="Gabi Convite").get_by_text("anulada").wait_for()
     assert a.locator("article.cd", has_text="Gabi Convite").get_by_role("button", name="Anular").count() == 0
+    # #111: a trilha do convite, do envio à anulação (o que a tela do convite relatou entra também)
+    a.locator("article.cd", has_text="Gabi Convite").get_by_role("button", name="Trilha").click()
+    a.get_by_text(re.compile(r"trilha íntegra")).wait_for()
+    passos = list(dict.fromkeys(x.split(" · ")[0] for x in a.locator("ol li").all_inner_texts()))   # na ordem da 1ª vez
+    assert passos[:8] == ["convite enviado por e-mail", "abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas",
+                          "código enviado", "código confirmado", "revisou e confirmou", "assinou"], passos
+    assert "anulada" in passos[8:] and "PDF baixado" in passos[8:], passos
     if not estava:
         a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
     a.close(); c.close()

@@ -779,11 +779,95 @@ function Contas() {
 /* Waiver assinada na área do cliente (#85), sem DocuSign. O texto vem dos dois modelos do
  * DocuSign, importados como estão (com o hash). Nasce desligada: quem liga é o ADMIN, depois do
  * sim do advogado. Desligar não apaga nada; o DocuSign segue como está. */
-interface ModeloW { kind: 'adult' | 'parental'; templateId: string; name: string | null; pages: number | null; sha256: string | null; imported_at: string | null }
+interface ModeloW { kind: 'adult' | 'parental'; templateId: string; name: string | null; pages: number | null; sha256: string | null; imported_at: string | null
+  version: number | null }
 interface Assinada { id: number; client_id: number | null; signer_name: string; signer_email: string; minor_name: string | null; template: string
   completed_at: string; expires_at: string; doc_sha256: string; voided_at: string | null; voided_by: string | null; void_reason: string | null }
-interface WN { ligada: boolean; modelos: ModeloW[]; assinadas: { itens: Assinada[]; total: number; limit: number; offset: number } }
+/* #116: a conferência do aviso §744.301(3) no parental. O texto do aviso não está no sistema: é o que o advogado
+ * aprovar, num arquivo no servidor. Sem ele, só informa; com ele, barra importar, ligar e assinar a parental. */
+interface Conferencia { configured: boolean; ok: boolean | null; reason: string; notice_pt?: number | null; body_pt?: number | null }
+interface Aviso744 extends Conferencia { path: string; approved_text: string | null; approved_sha256: string | null }
+interface WN { ligada: boolean; modelos: ModeloW[]; assinadas: { itens: Assinada[]; total: number; limit: number; offset: number }; aviso_744: Aviso744 }
+interface VersaoM { id: number; kind: 'adult' | 'parental'; sha256: string; name: string; pages: number | null; imported_at: string
+  imported_by_name: string | null; current: boolean; number: number; signatures: number; notice_744: Conferencia | null }
+interface Versoes { itens: VersaoM[]; total: number; limit: number; offset: number }
 const POR_PAGINA = 25
+
+function ChipDoAviso({ c }: { c: Conferencia | null }) {
+  if (!c) return null
+  if (!c.configured) return <Chip tone="neutral" glyph="○" title={c.reason}>{tr("aviso: esperando o advogado")}</Chip>
+  return c.ok ? <Chip tone="ok" glyph="✓" title={c.reason}>{tr("aviso confere")}</Chip>
+    : <Chip tone="crit" glyph="✕" title={c.reason}>{tr("aviso não confere")}</Chip>
+}
+
+function AvisoDoParental({ a }: { a: Aviso744 }) {
+  return <Section title={tr("Aviso do §744.301(3) (parental)")} right={<ChipDoAviso c={a} />}>
+    <div className="card card-b stack" style={{ gap: 10 }}>
+      <p className="small" style={{ margin: 0 }}>{tr("Pelo menor, a waiver só vale com o aviso que a lei da Flórida pede, em maiúsculas e com letra maior que o resto. O sistema confere o modelo parental: o texto aprovado inteiro, em maiúsculas, com 5 pt a mais que o corpo.")}</p>
+      <p className="small" style={{ margin: 0 }}><b>{a.reason}</b></p>
+      {a.configured
+        ? <p className="small muted" style={{ margin: 0 }}>{tr("Com o texto aprovado no servidor ({0}), o parental que não confere não é importado, a assinatura não liga e a parental não se assina online.", a.path)}</p>
+        : <p className="small muted" style={{ margin: 0 }}>{tr("O texto do aviso não está no sistema: quando o advogado aprovar, ele vai para o arquivo {0} no servidor. Até lá a conferência só informa e nada é barrado.", a.path)}</p>}
+      {a.approved_text && <details><summary className="small" style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center', gap: 6 }}>{tr("Texto aprovado")} <span className="mono muted">{a.approved_sha256?.slice(0, 12)}</span></summary>
+        <p className="small" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: '8px 0 0' }}>{a.approved_text}</p></details>}
+    </div>
+  </Section>
+}
+
+/* #111: a trilha de eventos de uma waiver assinada aqui (append-only e encadeada por hash). O que veio antes
+ * de assinar está também no certificado do PDF; o que veio depois (anulada, PDF baixado) fica só aqui. */
+interface EventoW { id: number; at: string; event: string; phase: 'before' | 'signed' | 'after'; source: 'server' | 'client'
+  ip: string | null; user_agent: string | null }
+interface TrilhaW { eventos: EventoW[]; cadeia: { ok: boolean; total: number | null; first_bad_id: number | null } }
+
+function rotuloDoEvento(ev: string) {
+  const r: Record<string, string> = {
+    invite_sent: tr("convite enviado por e-mail"), screen_opened: tr("abriu a tela de assinar"), pdf_delivered: tr("recebeu o PDF"),
+    all_pages_viewed: tr("leu todas as páginas"), code_sent: tr("código enviado"), code_verified: tr("código confirmado"),
+    reviewed: tr("revisou e confirmou"), signed: tr("assinou"), copy_emailed: tr("cópia por e-mail"), id_checked: tr("documento conferido no balcão"),
+    voided: tr("anulada"), downloaded: tr("PDF baixado"), evidence_exported: tr("pacote de prova exportado") }
+  return r[ev] || ev
+}
+
+function TrilhaDaWaiver({ wid }: { wid: number }) {
+  const l = useGet<TrilhaW>(`/site/waiver-nativa/${wid}/eventos`)
+  if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
+  if (!l.data) return <Loading />
+  const { eventos, cadeia } = l.data
+  return <div className="stack" style={{ gap: 6, padding: '4px 0 10px' }}>
+    <div className="small">{cadeia.ok ? <Chip tone="ok" glyph="✓">{tr("trilha íntegra · {0} eventos no total", cadeia.total ?? 0)}</Chip>
+      : <Chip tone="crit" glyph="✕">{tr("trilha com linha mexida no evento #{0}", cadeia.first_bad_id ?? '?')}</Chip>}</div>
+    {!eventos.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Sem eventos: assinada antes da trilha.")}</p>
+      : <ol className="small stack" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>{eventos.map(e => <li key={e.id} style={{ overflowWrap: 'anywhere' }}>
+        <b>{rotuloDoEvento(e.event)}</b> · {fmtDateTime(e.at)} · {e.source === 'client' ? tr("relatado pela tela") : tr("registrado pelo servidor")}
+        {e.phase === 'after' && <> · <Chip tone="neutral">{tr("depois de assinar")}</Chip></>}
+        <div className="muted">IP {e.ip || '—'} · {e.user_agent || '—'}</div></li>)}</ol>}
+  </div>
+}
+
+/* #116: toda versão que já valeu fica guardada (append-only), com o PDF: reimportar não apaga a anterior. */
+function VersoesDoModelo() {
+  const [offset, setOffset] = useState(0)
+  const l = useGet<Versoes>(`/site/waiver-nativa/versoes?limit=${POR_PAGINA}&offset=${offset}`)
+  if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
+  if (!l.data) return <Loading />
+  const v = l.data
+  return <Section title={tr("Versões dos modelos")} count={v.total}>
+    {!v.itens.length ? <Empty title={tr("Nenhuma versão ainda")}>{tr("Cada importação do DocuSign com um texto novo vira uma versão. A anterior continua aqui.")}</Empty>
+      : <div className="tbl">{v.itens.map(x => <div className="tr" key={x.id}>
+        <span className="grow"><b>{x.kind === 'adult' ? tr("Adult") : tr("Parental (menor)")} · {tr("versão {0}", x.number)}</b> {x.current && <Chip tone="ok">{tr("atual")}</Chip>}
+          <div className="small muted">{x.name} · {x.pages} {tr("pág. ·")} <span className="mono" title={x.sha256}>{x.sha256.slice(0, 12)}</span></div>
+          <div className="small muted">{tr("importada em {0}", fmtDateTime(x.imported_at))}{x.imported_by_name ? tr(" por {0}", x.imported_by_name) : ''} · {tr("{0} assinatura(s)", x.signatures)}</div>
+          {x.kind === 'parental' && <div className="small"><ChipDoAviso c={x.notice_744} /> <span className="muted">{tr("(na importação)")}</span></div>}</span>
+        <a className="btn sm" href={`/ops/api/site/waiver-nativa/versoes/${x.id}/pdf`} target="_blank" rel="noreferrer">{tr("PDF")}</a>
+      </div>)}</div>}
+    {v.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
+      <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>
+      <span className="small muted grow" style={{ textAlign: 'center' }}>{offset + 1}–{Math.min(offset + POR_PAGINA, v.total)} {tr("de")} {v.total}</span>
+      <button className="btn sm ghost" disabled={offset + POR_PAGINA >= v.total} onClick={() => setOffset(offset + POR_PAGINA)}>{tr("Próximas")}</button></div>}
+    <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Nenhuma versão se apaga nem muda. Cada assinatura guarda o hash e a versão que valia.")}</p>
+  </Section>
+}
 
 function WaiverNativa() {
   const { can } = useAuth()
@@ -793,6 +877,7 @@ function WaiverNativa() {
   const [offset, setOffset] = useState(0)
   const l = useGet<WN>(`/site/waiver-nativa?limit=${POR_PAGINA}&offset=${offset}`)
   const [indo, setIndo] = useState(false)
+  const [trilha, setTrilha] = useState<number | null>(null)
   async function importar() {
     setIndo(true)
     try { await api.post('/site/waiver-nativa/importar', {}); toast(tr("Modelos importados do DocuSign (só leitura lá)."), 'ok'); l.reload() }
@@ -832,24 +917,30 @@ function WaiverNativa() {
       <div className="tbl">{d.modelos.map(m => <div className="tr" key={m.kind}>
         <span className="grow"><b>{m.kind === 'adult' ? tr("Adult") : tr("Parental (menor)")}</b><div className="small muted">{m.name || tr("ainda não importado")}</div></span>
         <Chip tone={m.sha256 ? 'ok' : 'warn'}>{m.sha256 ? tr("importado") : tr("falta importar")}</Chip>
-        <span className="small muted">{m.sha256 ? <>{m.pages} {tr("pág. ·")} <span className="mono" title={m.sha256}>{m.sha256.slice(0, 12)}</span> · {fmtDateTime(m.imported_at)}</> : '—'}</span>
+        <span className="small muted">{m.sha256 ? <>{m.version ? tr("versão {0}", m.version) + ' · ' : ''}{m.pages} {tr("pág. ·")} <span className="mono" title={m.sha256}>{m.sha256.slice(0, 12)}</span> · {fmtDateTime(m.imported_at)}</> : '—'}</span>
       </div>)}</div>
       <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Importar só LÊ os modelos no DocuSign. Se o texto mudar lá, importe de novo: as próximas assinaturas usam o novo, as já feitas ficam com o delas.")}</p>
     </Section>
+    <AvisoDoParental a={d.aviso_744} />
+    <VersoesDoModelo key={d.modelos.map(m => m.sha256 || '').join()} />
     <Section title={tr("Assinadas aqui")} count={a.total}>
       {!a.itens.length ? <Empty title={tr("Nenhuma ainda")}>{tr("Quando um cliente assinar pela área do cliente, ela aparece aqui e no card do cliente.")}</Empty>
-        : <div className="cd-grade">{a.itens.map(w => <CartaoD key={w.id} id={`waiver-${w.id}`} estado={w.voided_at ? tr("anulada") : tr("assinada")} tom={w.voided_at ? 'crit' : 'ok'}
+        : <div className="cd-grade">{a.itens.map(w => <CartaoD key={w.id} id={`waiver-${w.id}`} className={trilha === w.id ? 'cd-largo' : undefined}
+          estado={w.voided_at ? tr("anulada") : tr("assinada")} tom={w.voided_at ? 'crit' : 'ok'}
           avatar={w.minor_name || w.signer_name} nome={w.minor_name || w.signer_name}
           sub={[w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")]}
           grande={fmtDate(w.completed_at)} detalhe={`${tr("assinada")} ${tr("· vale até")} ${fmtDate(w.expires_at)}`}
           acoes={<>
             {w.client_id && <Link className="btn" to={`/clients/${w.client_id}`}>{tr("Card")}</Link>}
             <a className="btn" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
+            {/* #111: a trilha de eventos abre dentro do cartão, que ocupa a linha inteira */}
+            <button className="btn" aria-expanded={trilha === w.id} onClick={() => setTrilha(trilha === w.id ? null : w.id)}>{tr("Trilha")}</button>
             {!w.voided_at && can('MANAGER') && <button className="btn danger" onClick={() => anular(w)}>{tr("Anular")}</button>}</>}>
           {(w.voided_at || !w.client_id) && <CdLista>
             {w.voided_at && <CdItem tom="crit">{tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</CdItem>}
             {!w.client_id && <CdItem tom="warn">{tr("sem card")}</CdItem>}
           </CdLista>}
+          {trilha === w.id && <div className="cd-form"><TrilhaDaWaiver wid={w.id} /></div>}
         </CartaoD>)}</div>}
       {a.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
         <button className="btn sm ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - POR_PAGINA))}>{tr("Anteriores")}</button>

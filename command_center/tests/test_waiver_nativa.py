@@ -42,6 +42,12 @@ def _pdf(texto):
     return b.getvalue()
 
 
+def certificado(caminho, paginas_do_modelo=1):
+    """O texto do certificado: tudo depois das páginas do modelo (#111: ele pode ter mais de uma página)."""
+    from pypdf import PdfReader
+    return " ".join(" ".join((p.extract_text() or "").split()) for p in PdfReader(caminho).pages[paginas_do_modelo:])
+
+
 ADULT = _pdf("ADULT RELEASE AND WAIVER OF LIABILITY - test document")
 PARENTAL = _pdf("PARENTAL CONSENT, RELEASE AND WAIVER OF LIABILITY - test document")
 
@@ -191,9 +197,9 @@ def test_menor_assina_a_parental_e_vira_waiver_igual_as_do_docusign(cli):
     pdf = open(w["pdf_path"], "rb").read()
     assert hashlib.sha256(pdf).hexdigest() == w["doc_sha256"]
     paginas = PdfReader(io.BytesIO(pdf)).pages
-    assert len(paginas) == 2
-    assert "PARENTAL CONSENT" in paginas[0].extract_text()
-    ultima = paginas[-1].extract_text()
+    assert len(paginas) >= 2
+    assert "PARENTAL CONSENT" in paginas[0].extract_text() and "PARENTAL CONSENT" not in certificado(w["pdf_path"])
+    ultima = certificado(w["pdf_path"])
     for trecho in ("Electronic signature and certificate", "Maria Santos", "Leo Santos", hashlib.sha256(PARENTAL).hexdigest()[:16]):
         assert trecho in ultima, trecho
     trilha = json.loads(w["audit"])
@@ -287,6 +293,7 @@ def test_a_equipe_baixa_pelo_card_e_o_modelo_alterado_nao_assina(cli):
     assert r.status_code == 200 and r.content.startswith(b"%PDF")
     # alguém trocou o PDF do modelo no disco: o hash não bate e ninguém assina sobre ele
     m = um(conectar(), "SELECT pdf_path FROM waiver_templates WHERE kind='parental'")
+    os.chmod(m["pdf_path"], 0o600)                       # #116: o PDF da versão fica só leitura; quem troca, troca isso também
     open(m["pdf_path"], "wb").write(_pdf("TEXTO TROCADO"))
     hc2, (pid2,) = cliente(cli, conta={**CONTA, "email": "nova@example.com"})
     r = assina(cli, hc2, pid2)
@@ -319,8 +326,7 @@ def test_parental_vence_na_vespera_dos_18_e_nao_em_um_ano(cli):
     w = um(conectar(), "SELECT * FROM waivers WHERE id=?", (r.json()["waiver_id"],))
     assert w["expires_at"] == (portal.hoje() + timedelta(days=89)).isoformat(), "véspera dos 18, não 1 ano"
     assert json.loads(w["audit"])["valid_until_reason"] == "the day before the minor turns 18"
-    from pypdf import PdfReader
-    assert "the day before the minor turns 18" in " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+    assert "the day before the minor turns 18" in certificado(w["pdf_path"])
 
 
 def test_menor_longe_dos_18_continua_com_um_ano(cli):
@@ -396,8 +402,7 @@ def test_a_leitura_fica_na_trilha_e_no_certificado(cli):
     assert t["reading_requirement"] == "every page of the PDF shown on screen before the boxes unlock"
     ev = um(conectar(), "SELECT detail FROM audit_logs WHERE event='portal.waiver.document_view' ORDER BY id DESC LIMIT 1")
     assert json.loads(ev["detail"])["kind"] in ("adult", "parental")
-    from pypdf import PdfReader
-    texto = " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+    texto = certificado(w["pdf_path"])
     assert "Document delivered to the signer" in texto and "Whole document read" in texto
 
 
@@ -451,8 +456,7 @@ def test_codigo_vale_uma_vez_e_nunca_fica_guardado(cli):
     t = json.loads(w["audit"])
     assert t["email_verified_at"] and t["otp_sent_at"] and t["otp_verified_at"] and t["otp_sent_to"] == "maria@example.com"
     assert t["session_login_at"] and "one-time code sent to maria@example.com" in t["authentication"]
-    from pypdf import PdfReader
-    texto = " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+    texto = certificado(w["pdf_path"])
     assert "one-time code sent to maria@example.com" in texto
 
 
@@ -481,8 +485,7 @@ def test_sem_a_caixa_de_ingles_nao_assina_e_com_ela_vai_para_a_trilha(cli):
     w = um(conectar(), "SELECT * FROM waivers WHERE id=?", (assina(cli, hc, pid).json()["waiver_id"],))
     t = json.loads(w["audit"])
     assert t["language_ack"] == wn.IDIOMA and "Orange County" in t["governing_law"]
-    from pypdf import PdfReader
-    assert "I read and understand English" in " ".join(PdfReader(w["pdf_path"]).pages[-1].extract_text().split())
+    assert "I read and understand English" in certificado(w["pdf_path"])
 
 
 def test_waiver_assinada_no_sistema_nao_vai_para_a_lixeira(cli):
