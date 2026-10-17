@@ -158,7 +158,10 @@ def decidir(bid: int, decisao: str, dados: DecisaoIn, request: Request, tarefas:
 # ------------------------------------------------------------------ serviços e preços (#50)
 @r.get("/servicos")
 def servicos(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    return {"servicos": sv.lista(con), "itens_qbo": sv.itens_qbo(con)}
+    # #312: as páginas do site em que um serviço entra e, em cada serviço, onde ele aparece hoje (`no_site`)
+    from command_center.vitrine.conteudo import LEAD_AND_FOLLOW
+    return {"servicos": sv.lista_no_painel(con), "itens_qbo": sv.itens_qbo(con), "paginas": sv.paginas_do_site(),
+            "chave_addon": LEAD_AND_FOLLOW["chave"]}
 
 
 class ServicoIn(BaseModel):

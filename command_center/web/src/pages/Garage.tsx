@@ -5,6 +5,7 @@ import type { Catalog, Chassis, Engine, Part } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import { Empty, Section, Spinner } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { InserirNoTopo } from '../components/Inserir'
 import { tr } from '../i18n'
 
 function csrf() { return decodeURIComponent(document.cookie.match(/(?:^|;\s*)cc_csrf=([^;]+)/)?.[1] || '') }
@@ -42,23 +43,30 @@ export function CatalogoEditor({ data, reload }: { data: Catalog; reload: () => 
     <div className="small ink2" style={{ marginBottom: 6 }}>{tr("Catálogo (vale para todos os pilotos): chassis com medidas de pneu, motores e peças por motor. Estoque vem depois.")}</div>
     <div className="tabs">{([['chassis', tr("Chassis ({0})", data.chassis.length)], ['engines', tr("Motores ({0})", data.engines.length)], ['parts', tr("Peças ({0})", data.parts.length)]] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l}</button>)}</div>
     {tab === 'chassis' && <Section title={tr("Chassis")} tight>
+      {/* #312: o cadastro novo fica em cima da tabela, que cresce */}
+      {can('OPERATOR') && <div className="ins-tight"><InserirNoTopo rotulo={tr("Novo chassi")} nivel={3} dentro>
+        <Novo kind="chassis" onSaved={reload} campos={[['brand', tr("Marca *")], ['model', tr("Modelo")], ['size', tr("Cadet/Junior/Senior")], ['tire_front', tr("Pneu diant.")], ['tire_rear', tr("Pneu tras.")], ['notes', tr("Notas")]]} />
+      </InserirNoTopo></div>}
       <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Foto")}</th><th>{tr("Marca")}</th><th>{tr("Modelo")}</th><th>{tr("Tamanho")}</th><th>{tr("Pneu diant.")}</th><th>{tr("Pneu tras.")}</th><th>{tr("Notas")}</th><th></th></tr></thead><tbody>
         {data.chassis.map(c => <Linha<Chassis> key={c.id} item={c} kind="chassis" imagem onSaved={reload} campos={[['brand', tr("Marca")], ['model', tr("Modelo")], ['size', tr("Tamanho")], ['tire_front', tr("Pneu diant.")], ['tire_rear', tr("Pneu tras.")], ['notes', tr("Notas")]]} />)}
       </tbody></table></div>
-      {can('OPERATOR') && <Novo kind="chassis" onSaved={reload} campos={[['brand', tr("Marca *")], ['model', tr("Modelo")], ['size', tr("Cadet/Junior/Senior")], ['tire_front', tr("Pneu diant.")], ['tire_rear', tr("Pneu tras.")], ['notes', tr("Notas")]]} />}
     </Section>}
     {tab === 'engines' && <Section title={tr("Motores")} tight>
+      {can('OPERATOR') && <div className="ins-tight"><InserirNoTopo rotulo={tr("Novo motor")} nivel={3} dentro>
+        <Novo kind="engines" onSaved={reload} campos={[['brand', tr("Marca *")], ['model', tr("Modelo *")], ['stroke', tr("2T/4T")], ['category', tr("Categoria")], ['notes', tr("Notas")]]} />
+      </InserirNoTopo></div>}
       <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Foto")}</th><th>{tr("Marca")}</th><th>{tr("Modelo")}</th><th>{tr("Tempos")}</th><th>{tr("Categoria")}</th><th>{tr("Notas")}</th><th></th></tr></thead><tbody>
         {data.engines.map(e => <Linha<Engine> key={e.id} item={e} kind="engines" imagem onSaved={reload} campos={[['brand', tr("Marca")], ['model', tr("Modelo")], ['stroke', tr("2T/4T")], ['category', tr("Categoria")], ['notes', tr("Notas")]]} />)}
       </tbody></table></div>
-      {can('OPERATOR') && <Novo kind="engines" onSaved={reload} campos={[['brand', tr("Marca *")], ['model', tr("Modelo *")], ['stroke', tr("2T/4T")], ['category', tr("Categoria")], ['notes', tr("Notas")]]} />}
     </Section>}
     {tab === 'parts' && <Section title={tr("Peças por motor")} tight right={<select className="input" style={{ width: 220 }} value={engine} onChange={e => setEngine(Number(e.target.value))}><option value={0}>{tr("Todos os motores")}</option>{data.engines.map(e => <option key={e.id} value={e.id}>{e.brand} {e.model}</option>)}</select>}>
-      {parts.length === 0 ? <Empty>{tr("Nenhuma peça")}{engine ? tr(" para este motor") : ''}{tr(". Escolha o motor e adicione abaixo.")}</Empty> :
+      {can('OPERATOR') && <div className="ins-tight"><InserirNoTopo rotulo={tr("Nova peça")} nivel={3} dentro>
+        {engine ? <Novo kind="parts" onSaved={reload} extra={{ engine_id: engine }} campos={[['name', tr("Peça *")], ['part_number', tr("Nº peça")], ['price', tr("Preço ref.")], ['notes', tr("Notas")]]} /> : <div className="small muted" style={{ padding: 10 }}>{tr("Escolha um motor acima para adicionar peças.")}</div>}
+      </InserirNoTopo></div>}
+      {parts.length === 0 ? <Empty>{tr("Nenhuma peça")}{engine ? tr(" para este motor") : ''}{tr(". Escolha o motor e use \"Nova peça\", em cima.")}</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Motor")}</th><th>{tr("Peça")}</th><th>{tr("Nº peça")}</th><th>{tr("Preço ref.")}</th><th>{tr("Notas")}</th><th></th></tr></thead><tbody>
           {parts.map(p => <tr key={p.id} style={{ opacity: p.active ? 1 : 0.5 }}><td className="small">{p.engine_brand} {p.engine_model}</td><td colSpan={4} style={{ padding: 0 }}><table className="tbl" style={{ margin: 0 }}><tbody><Linha<Part> item={p} kind="parts" onSaved={reload} campos={[['name', tr("Peça")], ['part_number', tr("Nº")], ['price', tr("Preço")], ['notes', tr("Notas")]]} /></tbody></table></td></tr>)}
         </tbody></table></div>}
-      {can('OPERATOR') && (engine ? <Novo kind="parts" onSaved={reload} extra={{ engine_id: engine }} campos={[['name', tr("Peça *")], ['part_number', tr("Nº peça")], ['price', tr("Preço ref.")], ['notes', tr("Notas")]]} /> : <div className="small muted" style={{ padding: 10 }}>{tr("Escolha um motor acima para adicionar peças.")}</div>)}
     </Section>}
     <div className="small muted">{tr("Preço de peça de verdade sai da Rate Card e do QuickBooks (15% na peça, decisão de 31/08); o valor aqui é só referência.")}</div>
   </>

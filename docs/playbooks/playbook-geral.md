@@ -24,7 +24,8 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 17/10/2026 (#172, Blog do site, com a revisão do PR #322). Tudo aqui foi conferido no código do
+> Atualizado em 17/10/2026 (#312, a inserção sempre no topo e o **Adicionar serviço** com a página do site; antes, #172,
+> Blog do site, com a revisão do PR #322). Tudo aqui foi conferido no código do
 > painel. Se a tela mudar e este texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
 
 ---
@@ -160,8 +161,8 @@ pedem acesso de operador.
 | Site | **Pedidos do site** | `/ops/site/pedidos` | carrinho e loja em todo estado do pagamento, com o link da página do pedido | operador+ |
 | Site | **Agendamentos** | `/ops/site/agendamentos` | os pedidos de sessão do site e da área do cliente: aceitar, confirmar, recusar, cancelar (era `/ops/site` até o #306) | operador+ |
 | Site | **Disponibilidade** | `/ops/site/disponibilidade` | a agenda que abre e fecha: semana, horários, regras e bloqueios | operador+ (mudar: gerente+) |
-| Site | **Serviços e preços** | `/ops/site/servicos` | o preço, o depósito (com **Security deposit obrigatório**, #317) e o item do QuickBooks de cada serviço, com o **cartão do kart no site** e o **kart novo** (#297) | operador+ (mudar: gerente+) |
-| Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team e do For Beginners (#297) | operador+ (mudar: gerente+) |
+| Site | **Serviços e preços** | `/ops/site/servicos` | **Adicionar serviço** em cima, escolhendo **em qual página do site** ele entra (#312); o preço, o depósito (com **Security deposit obrigatório**, #317) e o item do QuickBooks de cada serviço, com o **cartão do kart no site**, o **kart novo** (#297) e **onde cada um aparece hoje no site** | operador+ (mudar: gerente+) |
+| Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team e do For Beginners (#297); **Adicionar cartão** em cima (#312) | operador+ (mudar: gerente+) |
 | Site | **Produtos da loja** | `/ops/site/produtos` | título, preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298), e **Como vendemos** (dropshipping ou em estoque, #309) | operador+ (mudar: gerente+) |
 | Site | **Estoque do site** | `/ops/site/estoque` (um produto: `/ops/site/estoque/<endereço>`) | o que é **dropshipping** e o que é **em estoque** (interno: o cliente nunca vê), o item do Estoque ligado a cada produto ou opção e **quanto tem** em cada local (*Galpão 5 · Pista 3*); ligar, criar o item a partir do produto e contar um local por vez (#309) | operador+ (contar); ligar, desligar e mudar o marcador: gerente+ |
 | Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
@@ -214,6 +215,39 @@ Quatro cápsulas mostram o estado da operação. Cada uma leva para onde se reso
 | **IA** | quantas ações esperam você | Aprovações |
 
 Se aparecer **Offline**, o aparelho está sem internet. **Servidor fora**: o painel não respondeu.
+
+### Criar, novo, adicionar: sempre em cima (#312)
+
+Dono, 16/10: *"essas coisas de inserção fiquem sempre por cima, assim que abrir"*. Em toda tela que cria alguma coisa,
+o botão de criar fica **em cima da lista** (que cresce), e não no fim dela. Ele abre o formulário logo abaixo, com o
+cursor já no primeiro campo; **Fechar** ou **Esc** fecham e o cursor volta ao botão. O formulário é o de sempre: os
+mesmos campos e o mesmo "Criar".
+
+| Tela | Botão em cima | Antes ficava |
+|---|---|---|
+| Site › Serviços e preços | **Adicionar serviço** (com a página do site; veja a seção 6, "Serviços e cartões do site") | depois de todos os serviços |
+| Site › Cartões das páginas | **Adicionar cartão** | depois das três páginas de cartões |
+| Site › Produtos da loja | **Novo produto** | depois dos produtos e da paginação |
+| Site › Editor do site | **Adicionar página**: uma página nova ou **Abrir uma página do site** | depois das páginas no editor |
+| Site › Disponibilidade | **Bloquear datas** | na 3ª seção, depois do calendário e da semana |
+| Usuários | **Novo usuário** (e, na seção Chaves de API, **Nova chave**) | na coluna da direita, que no celular caía para baixo da tabela |
+| Robô SDR | **Pausar a IA numa conversa**, **Nova instrução** e **Novo relato**, cada um em cima da sua lista | depois de cada lista |
+| Oportunidade (`/ops/sales/<n>`) | a **Anotação (interna)**, sempre aberta | depois do Histórico |
+| Card do cliente › Mensalidade e contrato | **Adicionar contrato** (o PDF) | no fim da seção do contrato |
+| Card do cliente › ★ Equipamento › catálogo | **Novo chassi**, **Novo motor**, **Nova peça** | a linha "Novo" depois de cada tabela |
+| Checklists › Editar | a linha **Novo item** (Adicionar item), sempre aberta (o item entra no fim da lista) | depois dos itens |
+| Corridas › a corrida | **Convidar**, sempre aberto | depois dos pilotos da corrida |
+
+Ficam onde estão: o **chat** (Chat do Kommo, chat da Equipe, Testar o robô, IA), que escreve embaixo como todo chat; e
+as listas curtas dentro de um formulário que já está aberto (**+ Opção** e **Subir foto** do produto, **+ item** da
+compra, **+ Pergunta** do editor), em que o novo entra no fim e o botão fica onde ele vai aparecer. O **Novo artigo** do
+Blog, o **+ Novo cliente**, a **Nova oportunidade**, a **+ Nova corrida** e os do Estoque, Compras, Suits, Cofre, Equipe e
+Automação já estavam em cima.
+
+Nenhum desses formulários cria um registro de pessoa sem dono: o **Vincular ao cliente** (seção 5) continua onde
+sempre esteve. O contrato e o equipamento nascem no card aberto; a anotação, na oportunidade (que já tem o cliente); o
+convite da corrida é o próprio card do piloto ★ Pro. Serviço, cartão, produto, página, bloqueio, usuário, chave,
+instrução e relato não são de um cliente.
 
 ### Endereços antigos
 
@@ -391,7 +425,7 @@ abre o card dele).
 | **Suits · Alpha Line** | pedido de macacão sob medida, das 29 medidas e do design até a entrega, com a ponte de e-mail | [../suits-guia-do-lucas.md](../suits-guia-do-lucas.md) |
 | **Corridas** | a coluna RACES do Asana; convidar os ★ Pro, que ficam na corrida até confirmar | tela Corridas |
 | **Site** (#306) | uma seção só do site público no menu, com uma subseção por painel: o **Painel do site** (as métricas), os pedidos, os agendamentos, a agenda, os serviços e preços, os cartões, a loja e o **estoque do site**, o editor, o blog, as contas, a waiver e o security deposit | menu Site · esta seção, "Painel do site" |
-| **Serviços e cartões do site** (#297) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também | Site › Serviços e preços · Cartões das páginas |
+| **Serviços e cartões do site** (#297, #312) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também. **Adicionar serviço**, em cima, começa por **"Em qual página do site?"** (Arrive and Drive, Academy, Pro Team, For Beginners ou Só na área do cliente) e, quando a página tem dois jeitos, **"Como ele entra na página?"**: no Arrive and Drive, **kart** (reserva online) ou **add-on do dia** (Lead and Follow); na Academy, **plano mensal** ou **cartão de preço**; no Pro Team e no For Beginners, cartão de preço. A tela mostra o que já está naquela página hoje; o kart que já tem serviço ativo aparece com o nome do serviço de hoje e não se escolhe de novo (dois serviços com o mesmo kart tiram o kart do site); com um add-on ativo, o segundo não se cria. Cada serviço da lista diz onde aparece hoje: **no site: Arrive and Drive · kart 4-stroke**, **Academy · plano mensal**, **só na área do cliente** ou, em vermelho, **fora do site** (com o motivo) | Site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
 | **Estoque do site** (#309) | cada produto da loja é **dropshipping** (o padrão: o fornecedor envia e o site segue a caixa "Em estoque") ou **em estoque** (o box envia). Em estoque, o produto (ou cada tamanho) liga a **um item do Estoque**: um saldo só, o mesmo do Balcão, da contagem e de Compras, contado no Galpão e na Pista (o trailer fica fora). Sem saldo, o site mostra "Out of stock" sozinho; a venda paga no site **sai do estoque sozinha**; sem saldo na hora de pagar, o pagamento entra e o pedido vira **"Resolver: sem estoque"**. O cliente nunca vê o marcador nem a quantidade | Site › Estoque do site · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
 | **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); desfazer e refazer, Camadas para quem usa teclado, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
@@ -503,14 +537,14 @@ no texto · **Ctrl+S** salva já. Desfazer guarda até 100 passos; a digitação
 peça escolhida, o **Tab** chega na barra antes dos links da prévia; ali as setas não trocam a peça, e Duplicar, Apagar
 e ↑ ↓ deixam o foco na barra. ↓ nas peças diz o nome, o que ela mostra e onde está (seção, coluna, posição).
 
-**Página nova:** em **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). Ela já
+**Página nova:** em **Adicionar página** (em cima da lista, #312) › **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). Ela já
 nasce com um título nível 1 e um botão. O endereço não muda depois de publicada. Endereços do sistema (`/ops/`,
 `/store/`, `/blog/`, `/cart/`, `/legal/`…) e de páginas que já existem não podem. Os artigos do blog não nascem aqui: são da tela **Site › Blog** (seção 6, "Blog do site"), sempre em
 `/blog/<endereço>/`, e lá `category`, `page` e `img` são reservados (`/blog/category/…`, `/blog/page/…` e `/blog/img/…`
 são caminhos do próprio blog).
 
 **Página que já existe** (home, Arrive and Drive, Academy, Pro Team, For Beginners, Career, About, os serviços…): em
-**Abrir uma página do site**, as faixas dela viram **Faixa original 1, 2, 3…**. Elas continuam vivas (preço do painel,
+**Adicionar página › Abrir uma página do site**, as faixas dela viram **Faixa original 1, 2, 3…**. Elas continuam vivas (preço do painel,
 agenda, cartões): movem, **escondem** (na prévia ficam apagadas, no site somem) e ganham seções novas entre elas. O texto
 de dentro delas ainda não se escreve na prévia (vem numa próxima etapa). Sem mexer, a página sai igual à de antes.
 
@@ -846,7 +880,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | **Pelo Claude:** "… não existe no painel (veja urace_operacoes)" | caminho errado | procure a operação certa com `urace_operacoes` |
 | **Pelo Claude:** "login, chaves e área do cliente não são operados pelo MCP" | rota fora do MCP | faça pelo painel |
 | Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |
-| No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263) |
+| No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263). O serviço ambíguo mostra, em vermelho, **fora do site: a chave … também está em …** (#312): desative um dos dois |
 | No site/reserva: "Online booking is closed right now" | **nenhum** serviço ativo em Serviços e preços: não há o que vender online | ative um serviço; enquanto isso o site manda a pessoa falar com a gente, e nenhuma vaga é prometida |
 | No calendário do site: "Pick a time to continue" | o dia está escolhido e falta o turno (Morning/Afternoon) | escolha o turno; é o próprio site pedindo o que falta (#253) |
 

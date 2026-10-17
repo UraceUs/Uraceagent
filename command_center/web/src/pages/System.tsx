@@ -8,6 +8,7 @@ import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, POLICY_LABEL, Sec
 import { Icon } from '../components/Icon'
 import { ago, fmtDateTime, safeJson } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
+import { InserirNoTopo } from '../components/Inserir'
 import { useToast } from '../components/Toast'
 import { ConexaoGoogle, useStatusGoogle } from '../components/GoogleAgenda'
 import { tr } from '../i18n'
@@ -367,26 +368,8 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
         <button className="btn sm" onClick={() => navigator.clipboard?.writeText(nova.chave).then(() => toast(tr("Chave copiada."), 'ok'))}>{tr("copiar")}</button>
         <button className="btn sm" onClick={() => setNova(null)}>{tr("já guardei")}</button>
       </div></Banner>}
-    <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
-      <div>
-        {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-          (data || []).length === 0 ? <Empty>{tr("Nenhuma chave criada. O painel só responde a quem tem sessão.")}</Empty> :
-            <div className="tbl-wrap"><table className="tbl"><thead><tr>
-              <th>{tr("Nome")}</th><th>{tr("Papel")}</th><th>{tr("Age como")}</th><th>{tr("Último uso")}</th><th>{tr("Validade")}</th><th></th></tr></thead><tbody>
-              {(data || []).map(k => <tr key={k.id} style={k.revoked_at ? { opacity: .5 } : undefined}>
-                <td><div>{k.name}</div><div className="mono small muted">{tr("urk_")}{k.id}_…{k.note ? ` · ${k.note}` : ''}</div></td>
-                <td>{k.revoked_at ? <Chip tone="neutral">{tr("revogada")}</Chip> : <div className="row wrap" style={{ gap: 4 }}>
-                  <Chip tone={k.role === 'VIEWER' ? 'neutral' : 'accent'}>{ROLE_PT[k.role] || k.role}</Chip>
-                  {k.read_only ? <Chip tone="ok" title={tr("Consulta e não muda nada")}>{tr("só leitura")}</Chip>
-                    : <Chip tone="warn" title={tr("O que esta chave fizer acontece de verdade, sem aprovação")}>{tr("escreve")}</Chip>}</div>}</td>
-                <td className="small">{k.como_nome}<div className="muted">{k.como}</div></td>
-                <td className="small">{k.last_used_at ? <>{fmtDateTime(k.last_used_at)}<div className="muted">{k.uses} {tr("uso(s)")}{k.last_ip ? ` · ${k.last_ip}` : ''}</div></> : <span className="muted">{tr("nunca usada")}</span>}</td>
-                <td className="small">{k.expires_at ? fmtDateTime(k.expires_at) : <span className="muted">{tr("não expira")}</span>}</td>
-                <td>{!k.revoked_at && <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
-                  <button className="btn sm" onClick={() => mudarModo(k)}>{k.read_only ? tr("Liberar para operar") : tr("Só leitura")}</button>
-                  <button className="btn sm danger" onClick={() => revogar(k)}>{tr("Revogar")}</button></div>}</td></tr>)}
-            </tbody></table></div>}
-      </div>
+    {/* #312: a chave nova fica no topo da seção, antes da tabela */}
+    <InserirNoTopo rotulo={tr("Nova chave")} nivel={3} dentro>
       <form className="stack" onSubmit={criar}>
         {err && <Banner tone="crit">{err}</Banner>}
         <div className="field"><label>{tr("Para que serve")}</label>
@@ -413,6 +396,25 @@ function Chaves({ usuarios }: { usuarios: U[] }) {
         <button className="btn primary" disabled={busy || !f.name.trim()}>{busy ? <Spinner /> : tr("Criar chave")}</button>
         <div className="small muted">{tr("Use em")} <code className="mono">{tr("Authorization: Bearer urk_…")}</code> {tr("ou")} <code className="mono">{tr("X-API-Key: urk_…")}</code>{tr(". Chave não precisa de CSRF e não abre sessão.")}</div>
       </form>
+    </InserirNoTopo>
+    <div>
+        {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
+          (data || []).length === 0 ? <Empty>{tr("Nenhuma chave criada. O painel só responde a quem tem sessão.")}</Empty> :
+            <div className="tbl-wrap"><table className="tbl"><thead><tr>
+              <th>{tr("Nome")}</th><th>{tr("Papel")}</th><th>{tr("Age como")}</th><th>{tr("Último uso")}</th><th>{tr("Validade")}</th><th></th></tr></thead><tbody>
+              {(data || []).map(k => <tr key={k.id} style={k.revoked_at ? { opacity: .5 } : undefined}>
+                <td><div>{k.name}</div><div className="mono small muted">{tr("urk_")}{k.id}_…{k.note ? ` · ${k.note}` : ''}</div></td>
+                <td>{k.revoked_at ? <Chip tone="neutral">{tr("revogada")}</Chip> : <div className="row wrap" style={{ gap: 4 }}>
+                  <Chip tone={k.role === 'VIEWER' ? 'neutral' : 'accent'}>{ROLE_PT[k.role] || k.role}</Chip>
+                  {k.read_only ? <Chip tone="ok" title={tr("Consulta e não muda nada")}>{tr("só leitura")}</Chip>
+                    : <Chip tone="warn" title={tr("O que esta chave fizer acontece de verdade, sem aprovação")}>{tr("escreve")}</Chip>}</div>}</td>
+                <td className="small">{k.como_nome}<div className="muted">{k.como}</div></td>
+                <td className="small">{k.last_used_at ? <>{fmtDateTime(k.last_used_at)}<div className="muted">{k.uses} {tr("uso(s)")}{k.last_ip ? ` · ${k.last_ip}` : ''}</div></> : <span className="muted">{tr("nunca usada")}</span>}</td>
+                <td className="small">{k.expires_at ? fmtDateTime(k.expires_at) : <span className="muted">{tr("não expira")}</span>}</td>
+                <td>{!k.revoked_at && <div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
+                  <button className="btn sm" onClick={() => mudarModo(k)}>{k.read_only ? tr("Liberar para operar") : tr("Só leitura")}</button>
+                  <button className="btn sm danger" onClick={() => revogar(k)}>{tr("Revogar")}</button></div>}</td></tr>)}
+            </tbody></table></div>}
     </div>
     <ComoUsar />
   </Section>
@@ -493,8 +495,19 @@ export function Users() {
   }
   return <>
     <PageHeader title={tr("Usuários")} help={<>{tr("Administrador:")} {ROLE_O_QUE.ADMIN}{tr(". Gerente:")} {ROLE_O_QUE.MANAGER}{tr(". Operador:")} {ROLE_O_QUE.OPERATOR}{tr(". Leitura:")} {ROLE_O_QUE.VIEWER}{tr(". Conta de acesso livre não tem cargo e alcança tudo.")}</>} />
-    <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 320px' }}>
-      <Section title={tr("Cadastrados")} count={data?.length} tight>
+    {/* #312: o "Novo usuário" fica no topo (no celular ele caía para baixo da tabela) */}
+    <InserirNoTopo rotulo={tr("Novo usuário")} primario>
+      <form className="stack" onSubmit={create}>
+        {err && <Banner tone="crit">{err}</Banner>}
+        <div className="field"><label>{tr("Nome")}</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
+        <div className="field"><label>{tr("E-mail")}</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
+        <div className="field"><label>{tr("Papel")}</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>
+          <span className="small muted">{ROLE_O_QUE[f.role] || tr("só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe")}</span></div>
+        <div className="field"><label>{tr("Senha inicial")}</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">{tr("Mínimo 5 caracteres. Peça para trocar no primeiro acesso.")}</span></div>
+        <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : tr("Criar")}</button>
+      </form>
+    </InserirNoTopo>
+    <Section title={tr("Cadastrados")} count={data?.length} tight>
         {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
           <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Nome")}</th><th>{tr("E-mail")}</th><th>{tr("Papel")}</th><th>{tr("Ativo")}</th><th>{tr("Último login")}</th><th></th></tr></thead><tbody>
             {(data || []).map(u => <tr key={u.id}><td>{u.name}</td><td className="small">{u.email}</td><td><PapelEditavel u={u} self={u.id === user?.id} onChanged={reload} /></td><td>{u.active ? <Chip tone="ok">{tr("sim")}</Chip> : <Chip tone="neutral">{tr("não")}</Chip>}</td><td className="small nowrap">{u.last_login_at
@@ -505,17 +518,7 @@ export function Users() {
                 {u.id !== user?.id && <button className="btn sm" onClick={() => toggle(u)}>{u.active ? tr("Desativar") : tr("Reativar")}</button>}
               </div></td></tr>)}
           </tbody></table></div>}
-      </Section>
-      <Section title={tr("Novo usuário")}><form className="stack" onSubmit={create}>
-        {err && <Banner tone="crit">{err}</Banner>}
-        <div className="field"><label>{tr("Nome")}</label><input className="input" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} /></div>
-        <div className="field"><label>{tr("E-mail")}</label><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></div>
-        <div className="field"><label>{tr("Papel")}</label><select className="input" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{NIVEIS.map(r => <option key={r} value={r}>{nomeNivel(r)}</option>)}</select>
-          <span className="small muted">{ROLE_O_QUE[f.role] || tr("só o que é do box: Meu dia, Balcão, Checklists, Estoque, Pedidos, Clientes (sem valores) e Equipe")}</span></div>
-        <div className="field"><label>{tr("Senha inicial")}</label><input className="input" type="password" required minLength={5} autoComplete="new-password" value={f.password} onChange={e => setF({ ...f, password: e.target.value })} /><span className="small muted">{tr("Mínimo 5 caracteres. Peça para trocar no primeiro acesso.")}</span></div>
-        <button className="btn primary" disabled={busy}>{busy ? <Spinner /> : tr("Criar")}</button>
-      </form></Section>
-    </div>
+    </Section>
     <Chaves usuarios={data || []} />
   </>
 }

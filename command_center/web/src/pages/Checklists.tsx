@@ -9,6 +9,7 @@ import { useGet } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section } from '../components/ui'
 import { useToast } from '../components/Toast'
+import { InserirNoTopo } from '../components/Inserir'
 import { tr } from '../i18n'
 
 interface RunItem { id: number; grupo: string | null; text: string; photo_required: number; done: number; por: string | null; note: string | null; fotos: number[] }
@@ -133,14 +134,17 @@ function EditarModelo({ m: original, onMudou }: { m: Modelo; onMudou: () => void
         const n = new Set(quando); if (e.target.checked) n.add(k); else n.delete(k)
         if (n.size) mudar({ quando: [...n].join(',') })
       }} /> {v}</label>)}</div>
+    {/* #312: o item novo fica em cima da lista de itens do modelo (entra no fim dela, no último grupo) */}
+    <InserirNoTopo rotulo={tr("Adicionar item")} titulo={false} sempre dentro>
+      <div className="row" style={{ gap: 8 }}><input className="input grow" aria-label={tr("Novo item")} placeholder={tr("Novo item")} value={novo} onChange={e => setNovo(e.target.value)} />
+        <button className="btn sm" disabled={!novo.trim()} onClick={adicionar}>{tr("Adicionar")}</button></div>
+    </InserirNoTopo>
     <div className="tbl">{m.itens.map(i => <div className="tr" key={i.id}>
       <span className="grow" style={{ minWidth: 0 }}>{i.grupo && <span className="small muted">{i.grupo} · </span>}
         <input className="input" aria-label={tr("Texto do item")} defaultValue={i.text} onBlur={e => e.target.value.trim() && e.target.value !== i.text && item(i.id, { text: e.target.value })} /></span>
       <label className="check small"><input type="checkbox" checked={!!i.photo_required} onChange={e => item(i.id, { photo_required: e.target.checked })} /> {tr("foto obrigatória")}</label>
       <button className="btn sm ghost" onClick={() => item(i.id, { active: !i.active })}>{i.active ? tr("Tirar") : tr("Voltar")}</button>
     </div>)}</div>
-    <div className="row" style={{ gap: 8 }}><input className="input grow" aria-label={tr("Novo item")} placeholder={tr("Novo item")} value={novo} onChange={e => setNovo(e.target.value)} />
-      <button className="btn sm" disabled={!novo.trim()} onClick={adicionar}>{tr("Adicionar")}</button></div>
   </div>
 }
 

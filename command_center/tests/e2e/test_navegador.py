@@ -827,10 +827,11 @@ def test_bloqueio_recorrente_calendario_do_mes_e_criar_cliente_pela_conta(servid
     abrir(g, servidor, "/site/disponibilidade")
     g.get_by_role("heading", name="Calendário do mês").wait_for()
     assert g.locator(".site-cal-d").count() >= 28 and g.locator(".site-cal-d.fds").count() >= 8, "o mês inteiro, com fim de semana"
+    g.get_by_role("button", name="Bloquear datas").click()          # #312: o bloqueio fica no topo da tela
     g.get_by_role("radio", name="Toda semana").click()
     g.get_by_role("combobox", name="Dia da semana").select_option(label="toda segunda")
     g.get_by_label("Motivo").fill("sem aula")
-    g.get_by_role("button", name="Bloquear").click()
+    g.get_by_role("button", name="Bloquear", exact=True).click()
     g.get_by_text("Bloqueado.").wait_for()
     g.get_by_text("recorrente").first.wait_for()
     assert "toda segunda" in g.locator(".tbl").inner_text()
@@ -1759,11 +1760,14 @@ def test_servico_novo_ja_nasce_com_o_security_deposit_obrigatorio(servidor, nave
     o checkout … sem o security deposit … coloca em cada serviço … um checkbox para marcar que ele é obrigatório"."""
     pg = entrar(navegador, servidor, largura=390, altura=844)
     abrir(pg, servidor, "/site/servicos")
+    # #312: o "Adicionar serviço" fica no topo e abre o formulário; a sessão sem kart é "Só na área do cliente"
+    pg.get_by_role("button", name="Adicionar serviço").click()
     novo = pg.locator("section", has=pg.get_by_role("heading", name="Novo serviço"))
     novo.wait_for()
+    novo.get_by_role("radio", name="Só na área do cliente").click()
     obr = novo.get_by_role("checkbox", name="Security deposit obrigatório")
     assert obr.is_checked(), "a sessão nova nasce com o depósito obrigatório"
-    novo.get_by_label("Nome").fill("Teste de checkout e2e")
+    novo.get_by_label("Nome", exact=True).fill("Teste de checkout e2e")
     novo.get_by_label("Preço (US$)").fill("10")
     criar = novo.get_by_role("button", name="Criar")
     assert criar.is_disabled(), "sem o valor do depósito, não cria"
@@ -3504,6 +3508,7 @@ def test_editor_canva_clica_no_titulo_escreve_no_lugar_desfaz_refaz_e_publica(se
     pid = None
     try:
         abrir(g, servidor, "/site/editor")
+        g.get_by_role("button", name="Adicionar página").click()        # #312: criar a página fica no topo
         g.get_by_label("Título da aba").fill("Summer Kart Camp e2e")
         g.get_by_label("Endereço").fill("/summer-camp-e2e/")
         g.get_by_role("button", name="Criar e abrir").click()
@@ -4532,3 +4537,191 @@ def test_blog_o_admin_so_publica_o_que_viu(servidor, navegador):
         op.close()
         if adm:
             adm.close()
+
+
+# ------------------------------------------------------------------ #312: a inserção fica no topo
+_PEQUENOS_NO_PAINEL = """(id) => [...document.getElementById(id).querySelectorAll('.btn')]
+  .filter(b => b.offsetParent !== null && b.offsetHeight < 40).map(b => `${(b.textContent || '').trim().slice(0, 20)}=${b.offsetHeight}px`)"""
+
+_PRIMEIRO_CONTROLE_DEPOIS_DAS_ABAS = """() => { const nav = document.querySelector('main nav.tabs')
+  const els = [...document.querySelectorAll('main button, main a[href], main input, main select, main textarea')]
+    .filter(el => !nav.contains(el) && (nav.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) && el.offsetParent !== null)
+  return (els[0] && els[0].textContent || '').trim() }"""
+
+
+def _abre_no_topo(pg, nome, lista):
+    """O botão `nome` está acima da `lista` (o que cresce na tela); aberto, o painel fica logo abaixo dele e ainda acima da
+    lista, com o foco num campo dele, sem rolar para o lado e com alvo de 40 px; Esc fecha e devolve o foco ao botão.
+    Devolve os problemas (vazio = certo)."""
+    probs = []
+    b = pg.get_by_role("button", name=nome, exact=True)
+    b.wait_for()
+    lista = lista.first
+    lista.wait_for(state="attached")
+    if b.bounding_box()["y"] >= lista.bounding_box()["y"]:
+        probs.append(f"{nome}: o botão está embaixo da lista")
+    if b.get_attribute("aria-expanded") != "false":
+        probs.append(f"{nome}: o botão não diz que está fechado")
+    b.click()
+    painel = pg.locator(f'[id="{b.get_attribute("aria-controls")}"]')
+    painel.wait_for()
+    pg.wait_for_function("() => !!(document.activeElement && document.activeElement.closest('.ins-painel'))", timeout=3000)
+    caixa, lb = painel.bounding_box(), lista.bounding_box()
+    if not (b.bounding_box()["y"] < caixa["y"] < lb["y"]):
+        probs.append(f"{nome}: o painel não abriu entre o botão e a lista")
+    r = pg.evaluate(_VAZA)
+    if r["rola"] or r["culpados"]:
+        probs.append(f"{nome}: rola para o lado {r['culpados']}")
+    pequenos = pg.evaluate(_PEQUENOS_NO_PAINEL, painel.get_attribute("id"))
+    if pequenos:
+        probs.append(f"{nome}: botões pequenos {pequenos}")
+    pg.keyboard.press("Escape")
+    painel.wait_for(state="detached")
+    try:
+        pg.wait_for_function("(n) => document.activeElement.textContent.trim().endsWith(n)", arg=nome, timeout=2000)
+    except Exception:
+        probs.append(f"{nome}: o foco não voltou ao botão depois do Esc")
+    if b.get_attribute("aria-expanded") != "false":
+        probs.append(f"{nome}: Esc não fechou")
+    return probs
+
+
+def _sempre_no_topo(pg, nome, lista):
+    """A inserção de uma linha só (sem botão): o painel está aberto em cima da lista."""
+    painel = pg.locator(f'section.ins-painel[aria-label="{nome}"]')
+    painel.wait_for()
+    lista = lista.first
+    lista.wait_for(state="attached")
+    return [] if painel.bounding_box()["y"] < lista.bounding_box()["y"] else [f"{nome}: a inserção está embaixo da lista"]
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_adicionar_servico_no_topo_escolhe_a_pagina_e_o_site_mostra(servidor, navegador, largura):
+    """#312 (dono, 16/10): "um botão de adicionar novo serviço e a gente escolhe em qual página que esse serviço vai estar,
+    e aí abra essa seção". No celular: o "Adicionar serviço" é o primeiro controle da tela, à vista sem rolar e em cima da
+    lista; abre o formulário com o foco na primeira página; cada página mostra o que já está nela hoje e o kart que já tem
+    serviço não se escolhe de novo. Cria um kart novo no Arrive and Drive e um cartão no Pro Team, e o site mostra os dois."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=largura, altura=800)
+    csrf = _csrf(g)
+    kart, titulo = f"Rental e2e {largura}", f"Team Day e2e {largura}"
+    try:
+        abrir(g, servidor, "/site/servicos")
+        botao = g.get_by_role("button", name="Adicionar serviço", exact=True)
+        botao.wait_for()
+        assert g.evaluate(_PRIMEIRO_CONTROLE_DEPOIS_DAS_ABAS).endswith("Adicionar serviço"), "o primeiro controle da tela"
+        caixa = botao.bounding_box()
+        assert caixa["y"] + caixa["height"] <= 800, "à vista assim que a tela abre, sem rolar"
+        assert caixa["y"] < g.locator("section.card .card.card-b").first.bounding_box()["y"], "em cima da lista dos serviços"
+        botao.click()
+        painel = g.locator("section.ins-painel", has=g.get_by_role("heading", name="Novo serviço", level=2))
+        painel.wait_for()
+        assert botao.get_attribute("aria-expanded") == "true"
+        g.wait_for_function("() => document.activeElement && document.activeElement.textContent.trim() === 'Arrive and Drive'", timeout=3000)
+        paginas = painel.get_by_role("radiogroup", name="Em qual página do site?").get_by_role("radio")
+        assert [x.inner_text().strip() for x in paginas.all()] == ["Arrive and Drive", "Academy", "Pro Team", "For Beginners",
+                                                                   "Só na área do cliente"], "as páginas que o site tem"
+        # Arrive and Drive · kart: o que está na página hoje, e o kart com serviço ativo não se escolhe de novo
+        painel.get_by_role("radio", name="Arrive and Drive").click()
+        assert painel.get_by_role("radio", name="Kart (reserva online)").get_attribute("aria-checked") == "true"
+        hoje = painel.locator(".ins-onde").inner_text()
+        assert "Hoje em" in hoje and "kart 4-stroke" in hoje and "add-on" in hoje, hoje
+        quatro = painel.get_by_label("Kart do site").locator("option", has_text="4-stroke")
+        assert quatro.evaluate("o => o.disabled") and "hoje:" in quatro.inner_text()
+        painel.get_by_label("Kart do site").select_option("__novo__")
+        painel.get_by_label("Nome do kart novo").fill(kart)
+        painel.get_by_label("Nome", exact=True).fill(f"Arrive and Drive {kart}")
+        painel.get_by_label("Preço (US$)").fill("555")
+        painel.get_by_label("Depósito por sessão (US$)").fill("400")
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not g.evaluate(_PEQUENOS_NO_PAINEL, painel.get_attribute("id"))
+        painel.get_by_role("button", name="Criar", exact=True).click()
+        g.get_by_text("Serviço criado: o kart já aparece no Arrive and Drive.").wait_for()
+        s = next(x for x in _servicos_do_painel(g, servidor) if x["site_kart"] == kart)
+        assert s["no_site"]["onde"] == "kart" and s["deposit"] == 400
+        g.get_by_text(f"kart {kart}", exact=False).first.wait_for()
+        # Academy: com plano ativo, o cartão novo não apareceria — o painel avisa
+        painel.get_by_role("radio", name="Academy").click()
+        painel.get_by_role("radio", name="Cartão de preço").click()
+        painel.locator(".ins-onde").get_by_text("cartão", exact=False).first.wait_for()
+        # Pro Team: o cartão de preço, pelo mesmo botão
+        painel.get_by_role("radio", name="Pro Team").click()
+        painel.get_by_label("Título", exact=True).fill(titulo)
+        painel.get_by_role("button", name="Criar", exact=True).click()
+        g.get_by_text("Cartão criado: já aparece na página.").wait_for()
+        painel.get_by_label("Título", exact=True).press("Escape")           # Esc, com o foco no painel, fecha
+        painel.wait_for(state="detached")
+        assert botao.get_attribute("aria-expanded") == "false"
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+        v = navegador.new_page(viewport={"width": largura, "height": 800})
+        v.goto(site + "/services/arrive-and-drive/")
+        v.locator(f'label.kart:has(input[value="{kart}"])').wait_for()
+        v.goto(site + "/pro-team/")
+        v.get_by_role("heading", name=titulo).wait_for()
+        v.close()
+    finally:
+        for x in _servicos_do_painel(g, servidor):
+            if x["site_kart"] == kart and x["active"]:
+                _ativar(g, servidor, x["id"], False)
+        for c in g.request.get(servidor + "/api/site/cartoes").json()["cartoes"]:
+            if c["title"] == titulo and c["active"]:
+                g.request.patch(servidor + f"/api/site/cartoes/{c['id']}", headers=csrf, data={"active": False})
+        g.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_varredura_toda_insercao_fica_no_topo(servidor, navegador, largura):
+    """#312: "todo formulário de inserção (criar, novo, adicionar) sobe para o topo da tela ou ganha um botão no topo". Em
+    cada lugar da varredura, no celular: o botão (ou a linha de inserir) fica em cima do que cresce, abre logo abaixo dele
+    com o foco num campo, não rola para o lado, tem alvo de 40 px e fecha com Esc. O administrador vê todos eles."""
+    g = entrar(navegador, servidor, email="italo@urace.us", largura=largura, altura=800)
+    r = g.request.post(servidor + "/api/sales", headers=_csrf(g), data={"name": f"Nota no topo e2e {largura}"})
+    assert r.ok, r.text()
+    venda = r.json()["id"]
+    sec = lambda titulo, dentro: g.locator(", ".join(f'section.card:has(h2:has-text("{titulo}")) {d.strip()}'  # noqa: E731
+                                                       for d in dentro.split(",")))
+    probs = []
+    try:
+        for rota, nome, lista in [
+            ("/site/servicos", "Adicionar serviço", "section.card .card.card-b"),
+            ("/site/cartoes", "Adicionar cartão", "[data-cartao]"),
+            ("/site/produtos", "Novo produto", ".loja-item"),
+            ("/site/editor", "Adicionar página", 'section.card:has(h2:has-text("Páginas no editor"))'),
+            ("/site/disponibilidade", "Bloquear datas", ".site-cal"),
+            ("/users", "Novo usuário", "section.card table.tbl"),
+        ]:
+            abrir(g, servidor, rota)
+            probs += [f"{rota} · {p}" for p in _abre_no_topo(g, nome, g.locator(lista))]
+        abrir(g, servidor, "/users")
+        probs += _abre_no_topo(g, "Nova chave", sec("Chaves de API", ".tbl-wrap, .state"))
+        abrir(g, servidor, "/sdr")
+        probs += _abre_no_topo(g, "Pausar a IA numa conversa", sec("Conversas com a IA pausada", ".sdr-lista, .state"))
+        probs += _abre_no_topo(g, "Nova instrução", sec("Instruções para o robô", ".sdr-lista, .state"))
+        probs += _abre_no_topo(g, "Novo relato", sec("Relatos", ".sdr-lista, .state"))
+        abrir(g, servidor, f"/sales/{venda}")
+        probs += _sempre_no_topo(g, "Anotação (interna)", g.locator('.card:has(h2:has-text("Histórico"))'))
+        abrir(g, servidor, "/clients/1")
+        g.get_by_role("button", name="Mensalidade e contrato").click()
+        probs += _abre_no_topo(g, "Adicionar contrato", sec("Contrato da Academy", ".card-b > .tbl-wrap, .card-b > .small.muted"))
+        g.get_by_role("button", name="★ Equipamento").click()
+        g.get_by_text("Cadastrar ou editar chassis, motores e peças").click()
+        probs += _abre_no_topo(g, "Novo chassi", sec("Chassis", "table.tbl"))
+        g.get_by_role("button", name=re.compile(r"^Motores \(")).click()
+        probs += _abre_no_topo(g, "Novo motor", sec("Motores", "table.tbl"))
+        g.get_by_role("button", name=re.compile(r"^Peças \(")).click()
+        probs += _abre_no_topo(g, "Nova peça", sec("Peças por motor", ".tbl-wrap, .state"))
+        abrir(g, servidor, "/checklists")
+        card = g.locator(".card.card-b", has=g.get_by_role("heading", name="Mechanic Checklist", exact=True))
+        card.get_by_role("button", name="Editar").click()
+        probs += _sempre_no_topo(g, "Adicionar item", card.locator(".tbl"))
+        abrir(g, servidor, "/races")
+        g.locator(".att", has_text="ROK Cup USA Round 5").first.click()
+        probs += _sempre_no_topo(g, "Convidar piloto", g.locator('.modal section.card:has(h2:has-text("Pilotos nesta corrida")) .att'))
+        r = g.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            probs.append(f"/races (janela da corrida): rola para o lado {r['culpados']}")
+        assert not g.erros_js, g.erros_js
+    finally:
+        g.close()
+    assert not probs, "\n".join(probs)

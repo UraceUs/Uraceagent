@@ -96,6 +96,69 @@ def addon_do_site(con, chave=None):
             "titulo": s["site_title"] or s["name"], "texto": s["description"] or LEAD_AND_FOLLOW["texto"]}
 
 
+def paginas_do_site():
+    """#312 (dono, 16/10): *"a gente escolhe em qual página que esse serviço vai estar"*. As páginas do site em que
+    um serviço do painel ou um cartão de preço entra, com o endereço de cada uma: as que o site tem de verdade
+    (o Arrive and Drive de `conteudo.ARRIVE` e as três dos cartões de `cartoes_site.PAGINAS`), nenhuma a mais."""
+    from command_center.providers.cartoes_site import PAGINAS
+    from command_center.vitrine.conteudo import ARRIVE
+    return [{"id": "arrive-and-drive", "nome": "Arrive and Drive", "caminho": ARRIVE["caminho"], "cartoes": False},
+            {"id": "academy", "nome": "Academy", "caminho": PAGINAS["academy"], "cartoes": True},
+            {"id": "pro-team", "nome": "Pro Team", "caminho": PAGINAS["pro-team"], "cartoes": True},
+            {"id": "for-beginners", "nome": "For Beginners", "caminho": PAGINAS["for-beginners"], "cartoes": True}]
+
+
+def _chave(s):
+    return " ".join(str(s.get("site_kart") or "").split()).lower()
+
+
+def onde_no_site(servicos):
+    """#312: onde cada serviço aparece hoje no site, pela mesma regra que monta as páginas — é o que o seletor de
+    página do painel mostra para o serviço que já existe.
+
+    - `kart`: sessão ativa com a chave de um kart, a única com essa chave → cartão do kart no Arrive and Drive e na
+      reserva (`paginas._karts_do_painel`);
+    - `addon`: add-on ativo com a chave do Lead and Follow, o único → caixa da reserva do Arrive and Drive
+      (`addon_do_site`); add-on com outra chave o site não mostra (`nenhum`);
+    - `plano`: plano ativo → página da Academy (`planos_para_cliente`);
+    - `area`: sessão ativa sem kart → só na área do cliente;
+    - `repetido`: dois ou mais ativos do mesmo tipo com a mesma chave → o site não mostra nenhum (`com`: os outros);
+    - `desativado`: fora do site e da área do cliente.
+
+    Devolve {id: {"onde", "pagina", "chave", "com"}}."""
+    from command_center.vitrine.conteudo import LEAD_AND_FOLLOW
+    lf = LEAD_AND_FOLLOW["chave"].lower()
+    grupos = {}
+    for s in servicos:
+        if s["active"] and _chave(s) and (s["kind"] or "session") in ("session", "addon"):
+            grupos.setdefault(((s["kind"] or "session"), _chave(s)), []).append(s)
+    out = {}
+    for s in servicos:
+        kind, k = s["kind"] or "session", _chave(s)
+        d = {"onde": "desativado", "pagina": None, "chave": s.get("site_kart"), "com": []}
+        if not s["active"]:
+            pass
+        elif kind == "plan":
+            d.update(onde="plano", pagina="academy")
+        elif kind == "addon" and k != lf:
+            d.update(onde="nenhum")
+        elif not k:
+            d.update(onde="area")
+        elif len(grupos[(kind, k)]) > 1:
+            d.update(onde="repetido", com=[o["name"] for o in grupos[(kind, k)] if o["id"] != s["id"]])
+        else:
+            d.update(onde="addon" if kind == "addon" else "kart", pagina="arrive-and-drive")
+        out[s["id"]] = d
+    return out
+
+
+def lista_no_painel(con):
+    """A lista de Serviços e preços com o lugar de cada serviço no site (#312)."""
+    ss = lista(con)
+    onde = onde_no_site(ss)
+    return [{**s, "no_site": onde[s["id"]]} for s in ss]
+
+
 def planos_para_cliente(con):
     """#169: os planos mensais que o site vende (Academy, Boost): preço por mês, meses, sessões por mês."""
     return [{"id": s["id"], "name": s["name"], "description": s["description"], "price": s["price"],

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { CatalogoEditor } from './Garage'
+import { InserirNoTopo } from '../components/Inserir'
 import { LembreteChip, LembreteModal } from './Systems'
 import { PecasDoCliente } from './Estoque'
 import { CardIrmao, Picker, UnirModal } from '../components/Unir'
@@ -519,11 +520,14 @@ function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Mon
         <td>{x.needs_invoice ? <Chip tone="warn">{tr("falta invoice")}</Chip> : x.invoice ? <Chip tone="ok">{tr("ok")}</Chip> : <span className="muted">{tr("sem uso")}</span>}</td></tr>)}
     </tbody></table></div></Section>
     <Section title={tr("Contrato da Academy")} count={m.contracts.length}>
-      {m.contracts.length === 0 ? <div className="small muted">{tr("Nenhum contrato. Use \"Buscar nas plataformas\" para achar no DocuSign (assunto com Academy/contract) ou suba o PDF abaixo.")}</div> :
+      {/* #312: subir o contrato fica no topo da seção, antes da lista. O contrato já nasce no card deste cliente. */}
+      {can('OPERATOR') && <InserirNoTopo rotulo={tr("Adicionar contrato")} titulo={tr("Subir o PDF do contrato")} nivel={3} dentro>
+        <div className="row wrap"><input className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} aria-label={tr("PDF do contrato")} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : tr("Subir contrato")}</button></div>
+      </InserirNoTopo>}
+      {m.contracts.length === 0 ? <div className="small muted">{tr("Nenhum contrato. Use \"Buscar nas plataformas\" para achar no DocuSign (assunto com Academy/contract) ou \"Adicionar contrato\", em cima.")}</div> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Contrato")}</th><th>{tr("Origem")}</th><th>{tr("Status")}</th><th>{tr("Assinado")}</th><th></th></tr></thead><tbody>
           {m.contracts.map(k => <tr key={k.id}><td>{k.title}</td><td>{k.source === 'docusign' ? tr("DocuSign") : tr("upload ({0})", k.added_by_name || '')}</td><td><Chip tone={statusTone(k.status)}>{k.status || '—'}</Chip></td><td className="mono">{fmtDate(k.signed_at)}</td><td><a className="btn sm" href={`/ops/api/contracts/${k.id}/download`}>{tr("⬇ PDF")}</a></td></tr>)}
         </tbody></table></div>}
-      {can('OPERATOR') && <div className="row wrap" style={{ marginTop: 10 }}><input className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : tr("Subir contrato")}</button></div>}
     </Section>
   </div>
 }
