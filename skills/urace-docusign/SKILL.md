@@ -37,7 +37,7 @@ explícita à regra "a IA não manda e-mail".
 | **Lembrete** (`docusign_send_reminder`) | ✅ liberado em 22/09 (U-01 fechado) — **2x no máximo**, só para cliente com serviço marcado, 3 dias antes e 1 dia antes. A trava está no servidor |
 | **Reenviar / corrigir e-mail** (`docusign_reenviar_waiver`) | ✅ liberado em 17/09 — **com aprovação** no painel (sai da empresa) |
 | **Anular envelope em aberto** (`docusign_anular_envelope`) | ✅ liberado em 17/09 — **com aprovação**; assinado nunca |
-| **Lixeira do painel** (`painel_waiver_lixeira`) | ✅ com confirmação; em aberto anula, assinado só some do painel |
+| **Lixeira do painel** (`painel_waiver_lixeira`) | ✅ com confirmação; em aberto anula, assinado do DocuSign só some do painel. A assinada no próprio sistema é recusada (#109): o gerente anula com motivo no card |
 | **Convite da waiver por e-mail** (`painel_waiver_convite`, args `{"client_id": N}`) | ✅ **com aprovação** (#135, dono 14/10). Vai para o e-mail do card: piloto 18+ assina a própria (adult), menor → o responsável (parental). Link de uso único, 72 h, assinatura no próprio sistema (sem DocuSign). Recusa sem e-mail, sem nascimento do piloto ou com a assinatura nativa desligada |
 | **Renomear modelo** (`docusign_renomear_modelo`) | ✅ com confirmação |
 | **Trocar o PDF de um modelo** (`docusign_substituir_documento_modelo`) | ✅ **com aprovação**; o antigo é guardado antes; os campos de assinatura ficam no documento |

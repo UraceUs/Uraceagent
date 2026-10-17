@@ -16,7 +16,7 @@ import os
 import threading
 
 from command_center.api import ia
-from command_center.db import agora, atualizar, auditar, conectar, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, conectar, inserir, status_da_waiver, todos, um, waiver_anulada
 
 MAX_APRENDIZADOS = 25
 
@@ -70,7 +70,7 @@ def _contexto_cliente(con, client_id):
     c = um(con, "SELECT * FROM clients WHERE id=?", (client_id,))
     if not c:
         return ""
-    ws = todos(con, "SELECT status, template, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (client_id,))
+    ws = todos(con, f"SELECT {status_da_waiver()} AS status, template, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (client_id,))
     ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? AND deleted_at IS NULL ORDER BY due_on DESC LIMIT 5", (client_id,))
     campos = ("id", "name", "pilot_name", "pilot_dob", "email", "phone", "vip", "status",
               "monthly_plan", "monthly_note", "monthly_amount", "monthly_item_id")
@@ -122,7 +122,7 @@ def contexto_do_comando(con, texto, user_id=None):
     c = um(con, "SELECT * FROM clients WHERE id=?", (cid,))
     ts = todos(con, "SELECT title, section, due_on, status FROM tasks WHERE client_id=? AND deleted_at IS NULL ORDER BY due_on DESC LIMIT 5", (cid,))
     inv = um(con, "SELECT doc_number, amount, memo, issued_on, customer_ref, customer_email FROM invoices WHERE client_id=? ORDER BY issued_on DESC LIMIT 1", (cid,))
-    ws = todos(con, "SELECT status, template, signer_name, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (cid,))
+    ws = todos(con, f"SELECT {status_da_waiver()} AS status, template, signer_name, signer_email, completed_at, expires_at FROM waivers WHERE client_id=? AND hidden=0 ORDER BY sent_at DESC LIMIT 3", (cid,))
     from datetime import date, timedelta
     corte = (date.today() - timedelta(days=365)).isoformat()
     assinada = next((w for w in ws if w["status"] == "completed" and (w["completed_at"] or "")[:10] >= corte), None)
@@ -364,8 +364,8 @@ PASTA_WAIVERS = os.path.expanduser(os.environ.get("CC_WAIVERS_DIR", "~/.urace/wa
 def waiver_do_cliente(con, client_id):
     """A waiver assinada que vale para este cliente: a mais recente, não escondida,
     e ainda dentro da validade (se a data de validade existir)."""
-    return um(con, """SELECT * FROM waivers
-                      WHERE client_id=? AND status='completed' AND COALESCE(hidden,0)=0
+    return um(con, f"""SELECT * FROM waivers
+                       WHERE client_id=? AND status='completed' AND COALESCE(hidden,0)=0 AND NOT {waiver_anulada()}
                         AND (expires_at IS NULL OR expires_at >= date('now'))
                       ORDER BY COALESCE(completed_at, sent_at) DESC LIMIT 1""", (client_id,))
 
@@ -377,6 +377,8 @@ def pdf_da_waiver(con, w):
     caminho = w["pdf_path"] if "pdf_path" in w.keys() else None
     if caminho and os.path.isfile(caminho):
         return caminho
+    if "source" in w.keys() and w["source"] == "urace":     # #109: a nativa não tem envelope e a linha dela não muda
+        raise ValueError("waiver assinada no sistema sem o PDF no servidor")
     env = um(con, """SELECT external_id FROM entity_links
                      WHERE entity_type='waiver' AND entity_id=? AND system='docusign'""", (w["id"],))
     if not env:

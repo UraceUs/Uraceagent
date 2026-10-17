@@ -217,6 +217,23 @@ CREATE TABLE IF NOT EXISTS waivers (
 );
 CREATE INDEX IF NOT EXISTS waivers_email ON waivers(signer_email, status);
 
+-- #109 (dono, 06/10: "nunca apagar"): a waiver assinada no próprio sistema (source='urace') é o registro
+-- legal e a linha dela não muda (trigger por valor em db/__init__.py, criado depois das migrações porque
+-- as colunas de prova vêm delas). Anular não mexe nela: a anulação fica aqui, com quem, quando e por quê.
+-- Uma por waiver e append-only, como o audit_logs.
+CREATE TABLE IF NOT EXISTS waiver_voids (
+  id         INTEGER PRIMARY KEY,
+  waiver_id  INTEGER NOT NULL UNIQUE REFERENCES waivers(id),
+  at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  user_id    INTEGER,                     -- quem anulou (gerente ou acima)
+  by_name    TEXT NOT NULL,
+  reason     TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS waiver_voids_no_update BEFORE UPDATE ON waiver_voids
+BEGIN SELECT RAISE(ABORT, 'waiver_voids is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS waiver_voids_no_delete BEFORE DELETE ON waiver_voids
+BEGIN SELECT RAISE(ABORT, 'waiver_voids is append-only'); END;
+
 CREATE TABLE IF NOT EXISTS invoices (
   id            INTEGER PRIMARY KEY,
   client_id     INTEGER REFERENCES clients(id),

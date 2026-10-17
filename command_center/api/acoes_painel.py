@@ -5,7 +5,9 @@ rodam dentro do Command Center, com as travas do dono em código.
   responsável (chave exata). Fora disso é decisão humana: a ação falha e diz por quê.
 - `painel_varrer_cliente` — Gmail (as duas caixas) e DocuSign do cliente; só leitura + espelho.
 - `painel_waiver_lixeira` — tira a waiver do painel (restaurável); envelope em aberto é anulado
-  no DocuSign; assinado só some do painel. Pede confirmação.
+  no DocuSign; assinado do DocuSign só some do painel. A assinada no próprio sistema não vai para a
+  lixeira (#109): é o registro legal, e quem a tira de vigor é um gerente, anulando com motivo.
+  Pede confirmação.
 - `painel_waiver_convite` — convite por e-mail para assinar a waiver nativa (#135), para o e-mail do
   card. Sai para o cliente: pede aprovação.
 
@@ -68,6 +70,10 @@ def painel_waiver_lixeira(con, user_id, waiver_id, motivo=None):
     w = um(con, "SELECT * FROM waivers WHERE id=?", (int(waiver_id),))
     if not w:
         return {"aplicado": False, "motivo": "waiver não encontrada"}
+    # #109: a mesma trava da rota do painel (#118). Oculta, ela sumia de `vigente` e o cliente assinava outra.
+    if w["source"] == "urace" and w["status"] == "completed":
+        return {"aplicado": False, "motivo": "RECUSADO: waiver assinada na área do cliente é registro legal e não vai para a "
+                                              "lixeira; para tirar de vigor, um gerente anula com motivo no card do cliente"}
     env = rotas._envelope_id(con, w["id"])
     anulado = None
     if env and w["status"] in ("sent", "delivered", "autoresponded"):
@@ -80,7 +86,7 @@ def painel_waiver_lixeira(con, user_id, waiver_id, motivo=None):
     auditar(con, "waiver.trash", "ia", user_id=user_id, entity_type="waiver", entity_id=w["id"],
             detail={"envelope": env, "reason": motivo, "voided": bool(anulado and anulado.get("aplicado")), "status_antes": w["status"]})
     return {"aplicado": True, "hidden": True, "voided": bool(anulado and anulado.get("aplicado")),
-            "nota": "assinada fica no DocuSign; só saiu do painel" if w["status"] == "completed" else None}
+            "nota": "assinada fica no DocuSign (registro legal); só saiu do painel" if w["status"] == "completed" else None}
 
 
 # ---------------------------------------------------------------- vendas (closer, 17/09)
@@ -400,7 +406,8 @@ ACOES = {
 DESCRICOES = {
     "painel_unir_clientes": "Une dois cards de cliente em um. Só quando têm o mesmo e-mail, telefone ou responsável; fora disso é decisão humana.",
     "painel_varrer_cliente": "Varre o Gmail (urace@ e support@) e o DocuSign de um cliente e liga o que achar ao card.",
-    "painel_waiver_lixeira": "Tira uma waiver do painel (restaurável). Envelope em aberto é anulado no DocuSign; assinado só some do painel.",
+    "painel_waiver_lixeira": "Tira uma waiver do painel (restaurável). Envelope em aberto é anulado no DocuSign; assinado do DocuSign só some do painel. "
+                             "A assinada no próprio sistema (área do cliente ou convite) é recusada: um gerente anula com motivo no card.",
     "painel_waiver_convite": "Manda por e-mail o convite para assinar a waiver no próprio sistema, para o e-mail do card: piloto adulto assina a própria; menor, o responsável. Precisa de aprovação.",
     "venda_registrar_ligacao": "Registra a ligação numa oportunidade de venda (resultado, o que foi dito, próximo passo) e move a etapa quando for o caso.",
     "venda_agendar_retorno": "Marca o retorno de uma oportunidade na agenda de vendas. Nada sai para o cliente.",

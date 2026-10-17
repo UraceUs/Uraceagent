@@ -168,7 +168,7 @@ pedem acesso de operador.
 | Site | **Editor do site** | `/ops/site/editor` | monta e muda as páginas do site arrastando seções e elementos (#300; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
-| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos e assinadas | gerente+ |
+| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, assinadas e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
@@ -305,7 +305,7 @@ Dentro do card (`/ops/clients/<n>`), as abas:
 | Peças | o QR que o mecânico lê no balcão e as peças do cliente |
 | Conta no site | a conta da área do cliente ligada ao card |
 | Serviços | as tarefas do Asana do cliente: **Renomear** (operador+), **Mover** (gerente+) |
-| Waivers | os envelopes do DocuSign e as assinadas no sistema, com o PDF assinado; no topo, o **Convite da waiver por e-mail** (abaixo) |
+| Waivers | os envelopes do DocuSign e as assinadas no sistema, com o PDF assinado; no topo, o **Convite da waiver por e-mail** (abaixo). A assinada no sistema tem **Anular** (gerente+, abaixo) |
 | E-mails | os e-mails ligados ao card |
 | Invoices | só gerente e administrador (para os outros, aparece 🔒) |
 | IA | o que a IA propôs para este cliente |
@@ -338,6 +338,26 @@ O botão fica **desligado, com o motivo escrito**, quando: o card não tem e-mai
 data de nascimento do piloto; o piloto é menor e o card não tem o responsável; o e-mail é da URACE;
 ou a assinatura no próprio sistema está desligada (Site › Waiver). Se o card mudar
 de e-mail ou de data de nascimento depois do envio, o link para de valer: reenvie.
+
+#### Waiver assinada no próprio sistema: nunca se apaga, se anula (#109)
+
+Dono, 06/10: *"nunca apagar"*. A waiver assinada na área do cliente ou pelo convite é o registro
+legal, e não há cópia no DocuSign.
+
+- **Não muda.** O próprio banco recusa mudar a linha dela (quem assinou, datas, hash, trilha, PDF) e
+  recusa apagá-la. Continuam livres só o vínculo com o card (unir, soltar, vincular à mão) e o
+  "ocultar" da lixeira, que a tela e a IA recusam para ela. O PDF fica só leitura no servidor.
+- **A trilha vai também para a Auditoria** (`waiver.signed.trail`), no mesmo instante da assinatura.
+- **Não vai para a lixeira**, nem pela tela DocuSign (o botão 🗑 não aparece para ela) nem pela IA.
+- **Anular** (gerente ou acima), no card › aba **Waivers** ou em **Site › Waiver**: escreva o motivo
+  (pelo menos 10 letras) e confirme. A waiver **continua** no card, na lista e no backup do Drive,
+  marcada **anulada**, com quem anulou, quando e por quê, e a linha do tempo do card ganha "Waiver
+  anulada". Ela deixa de valer: o piloto aparece sem waiver e o cliente pode assinar outra. A anulação
+  fica na Auditoria (`waiver.void`) e **não se desfaz**.
+- **Backup:** a Biblioteca leva toda assinada, inclusive a oculta e a anulada (com "(anulada)" no
+  título). Se o PDF no servidor não bater mais com o hash gravado na assinatura, ela não sobe, a cópia
+  do Drive fica como estava e o erro aparece na Biblioteca e na Auditoria
+  (`biblioteca.waiver.hash_divergente`).
 
 ### Um card por piloto
 
@@ -401,7 +421,7 @@ abre o card dele).
 | **Carrinho do site** (#236) | o cliente junta sessões da agenda e produtos da loja e paga tudo de uma vez no Stripe; a sessão entra paga em Site › Agendamentos e a venda entra GANHO em Vendas, com o pedido e as linhas | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
 | **Loja do site** (#261) | `/store/` acha produto por texto, por código (SKU), por faixa de preço, ordenado e em páginas de 24, tudo resolvido no servidor (funciona sem JavaScript). Para mandar ao cliente, copie o link **do produto** (`/store/p/…/`), não o da busca | [playbook-vendas.md](playbook-vendas.md), seção 5.2 |
 | **Página do pedido** (#245, #248) | cada resultado do Stripe tem a sua página no site (pago, processando, não passou, expirou), em inglês ou português, com os dados do cliente da conta; **sempre** um e-mail para o cliente, um aviso para `support@` e um registro na Linha do tempo do card ("Pagamento no site"), uma vez só; "Try again" e "Restore cart" recalculam preço e vaga. Toda compra no site pede a conta. A equipe vê e copia o link em Site › Pedidos do site | [playbook-vendas.md](playbook-vendas.md), seção 5.1 |
-| **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente | tela DocuSign · card › Waivers |
+| **Waivers** | DocuSign: baixar PDF assinado, reenviar corrigindo e-mail, lixeira. Entregue não é assinada. **Convite por e-mail** para assinar no próprio sistema, do card do cliente. A assinada no próprio sistema não vai para a lixeira: o gerente **anula com motivo** (#109) | tela DocuSign · card › Waivers |
 | **Gmail** | a IA marca e move 3 vezes ao dia; o que ela não decidiu fica aqui. Ela só usa marcador do manual confirmado | tela Gmail |
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
 | **Medição de campanha no site** (#260, #171) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta) **só depois do Accept no banner de cookies**; o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |

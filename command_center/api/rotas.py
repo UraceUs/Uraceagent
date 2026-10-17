@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from command_center.api import atencao, auth, equipe, vendas
 from command_center.api.cache_api import paginar
-from command_center.db import agora, atualizar, auditar, conectar, get_db, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, conectar, get_db, inserir, status_da_waiver, todos, um
 from command_center.providers import contrato, sync as sy
 
 BASE = "/ops/api"
@@ -213,7 +213,7 @@ def clients(response: Response, status: str | None = None, q: str | None = None,
           (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='completed') AS done_tasks,
           (SELECT MAX(due_on) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='completed') AS last_service,
           (SELECT MIN(due_on) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='open' AND due_on>=date('now')) AS next_service,
-          (SELECT status FROM waivers w WHERE w.client_id=c.id ORDER BY sent_at DESC LIMIT 1) AS waiver_status,
+          (SELECT {status_da_waiver('w')} FROM waivers w WHERE w.client_id=c.id ORDER BY sent_at DESC LIMIT 1) AS waiver_status,
           (SELECT COUNT(*) FROM emails e WHERE e.client_id=c.id AND e.handled=0) AS emails_open,
           (SELECT MAX(synced_at) FROM tasks t WHERE t.client_id=c.id) AS last_activity
         FROM clients c LEFT JOIN client_stages s ON s.code=c.stage_code
@@ -232,7 +232,10 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
                             WHERE t.client_id=? ORDER BY t.due_on DESC""", (cid,))
     for t in tarefas:
         t["links"] = _links(con, "task", t["id"])
-    waivers = todos(con, "SELECT * FROM waivers WHERE client_id=? ORDER BY sent_at DESC", (cid,))
+    # #109: a anulada continua no card, com quem anulou, quando e por quê (a linha dela não muda)
+    waivers = todos(con, """SELECT w.*, v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason
+                            FROM waivers w LEFT JOIN waiver_voids v ON v.waiver_id = w.id
+                            WHERE w.client_id=? ORDER BY w.sent_at DESC""", (cid,))
     for w in waivers:
         w["links"] = _links(con, "waiver", w["id"])
     box = bool(u.get("cargo"))               # mecânico/coach (#92): o card sem e-mail, IA e valores
@@ -259,6 +262,9 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
         if w["completed_at"]:
             tl.append({"at": w["completed_at"][:10], "kind": "WAIVER_SIGNED", "title": f"Waiver assinada por {w['signer_name']}", "status": "completed", "entity": {"type": "waiver", "id": w["id"]},
                        "detail": f"vale até {_dbr(w['expires_at'])}" if w.get("expires_at") else None, "links": w["links"]})
+        if w["voided_at"]:
+            tl.append({"at": w["voided_at"][:10], "kind": "WAIVER_VOIDED", "title": f"Waiver de {w['signer_name']} anulada por {w['voided_by']}",
+                       "status": "voided", "entity": {"type": "waiver", "id": w["id"]}, "detail": w["void_reason"], "links": w["links"]})
     for e in emails:
         tl.append({"at": (e["last_at"] or "")[:10], "kind": "EMAIL", "title": e["subject"], "status": "handled" if e["handled"] else "open", "entity": {"type": "email", "id": e["id"]},
                    "detail": f"{e['mailbox']}@ · {e.get('sender') or ''}", "links": e["links"]})
@@ -349,7 +355,8 @@ def tasks(status: str = "open", project: str | None = None, u=Depends(auth.usuar
 
 @r.get("/waivers")
 def waivers(hidden: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    rows = todos(con, "SELECT w.*, c.name AS client_name, c.pilot_name AS client_pilot FROM waivers w LEFT JOIN clients c ON c.id=w.client_id WHERE w.hidden=? ORDER BY CASE w.status WHEN 'autoresponded' THEN 0 WHEN 'delivered' THEN 1 WHEN 'sent' THEN 2 ELSE 3 END, w.sent_at DESC", (1 if hidden else 0,))
+    rows = todos(con, "SELECT w.*, c.name AS client_name, c.pilot_name AS client_pilot, v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason "
+                      "FROM waivers w LEFT JOIN clients c ON c.id=w.client_id LEFT JOIN waiver_voids v ON v.waiver_id=w.id WHERE w.hidden=? ORDER BY CASE w.status WHEN 'autoresponded' THEN 0 WHEN 'delivered' THEN 1 WHEN 'sent' THEN 2 ELSE 3 END, w.sent_at DESC", (1 if hidden else 0,))
     # `internal` e `subject` vêm no w.*: a tela separa os documentos da empresa numa aba (dono, 16/09)
     for w in rows:
         w["links"] = _links(con, "waiver", w["id"])
@@ -970,6 +977,27 @@ def waiver_restore(wid: int, request: Request, u=Depends(auth.exige("OPERATOR"))
     con.execute("UPDATE waivers SET hidden=0 WHERE id=?", (wid,))
     auditar(con, "waiver.restore", f"user:{u['id']}", user_id=u["id"], entity_type="waiver", entity_id=wid, ip=auth._ip(request))
     return {"ok": True}
+
+
+class AnularIn(BaseModel):
+    reason: str
+
+
+@r.post("/waivers/{wid}/void")
+def waiver_void(wid: int, dados: AnularIn, request: Request, u=Depends(auth.exige("MANAGER")),
+                con: sqlite3.Connection = Depends(get_db)):
+    """#109: anular com motivo a waiver assinada no próprio sistema — gerente ou acima. Ela não vai para a
+    lixeira nem muda: a anulação fica em `waiver_voids` e na auditoria, e a waiver continua no card e no backup."""
+    from command_center.providers import waiver_nativa as wn
+    try:
+        v = wn.anular(con, wid, u, dados.reason, ip=auth._ip(request))
+    except LookupError:
+        raise HTTPException(404, "Waiver not found.")
+    except wn.ErroWaiver as e:
+        raise HTTPException(400, str(e))
+    except wn.NaoAnula as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True, "voided_at": v["at"], "voided_by": v["by_name"], "reason": v["reason"]}
 
 
 class ReenviarIn(BaseModel):

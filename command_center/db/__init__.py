@@ -412,6 +412,62 @@ INDICES_EXTRA = [
 ]
 
 
+# #109 (dono, 06/10: "nunca apagar"; issue: "ficam livres só hidden e client_id"): a linha da waiver
+# assinada no próprio sistema não muda e não sai do banco. Livres ficam o vínculo com o card (unir,
+# soltar e vincular à mão escrevem os três juntos) e a lixeira do painel, que a rota e a IA já recusam
+# para a nativa assinada. O resto é prova. O que vem depois de assinar (anulação, e-mail, conferência
+# no balcão) vai para tabela própria (`waiver_voids`…), nunca para esta linha nem para `audit`.
+# Coluna nova em `waivers` tem de entrar numa das duas listas (test_waiver_imutavel.py trava).
+WAIVER_LIVRES = ("client_id", "link_by", "link_reason", "hidden")
+WAIVER_TRAVADAS = ("id", "signer_name", "signer_email", "template", "status", "sent_at", "completed_at", "expires_at",
+                   "synced_at", "minor_name", "pdf_path", "subject", "internal", "source", "pilot_id", "doc_sha256", "audit")
+
+
+def waiver_anulada(alias="waivers"):
+    """SQL: a waiver `alias` foi anulada (#109). A linha dela continua `completed`; quem vale é `waiver_voids`."""
+    return f"EXISTS (SELECT 1 FROM waiver_voids v WHERE v.waiver_id = {alias}.id)"
+
+
+def status_da_waiver(alias="waivers"):
+    """SQL: o status que a tela e a IA leem — a anulada aparece como `voided`, como a anulada do DocuSign."""
+    return f"CASE WHEN {waiver_anulada(alias)} THEN 'voided' ELSE {alias}.status END"
+
+
+def _travas_da_waiver():
+    mudou = " OR ".join(f"NEW.{c} IS NOT OLD.{c}" for c in WAIVER_TRAVADAS)
+    return {
+        "waivers_nativa_imutavel": (
+            "CREATE TRIGGER waivers_nativa_imutavel BEFORE UPDATE ON waivers\n"
+            f"WHEN (OLD.source IS 'urace' AND ({mudou})) OR (NEW.source IS 'urace' AND OLD.source IS NOT 'urace')\n"
+            "BEGIN SELECT RAISE(ABORT, 'signed native waiver is immutable (#109)'); END"),
+        "waivers_nativa_sem_apagar": (
+            "CREATE TRIGGER waivers_nativa_sem_apagar BEFORE DELETE ON waivers\n"
+            "WHEN OLD.source IS 'urace'\n"
+            "BEGIN SELECT RAISE(ABORT, 'signed native waiver is never deleted (#109)'); END"),
+    }
+
+
+def _travar_waivers(con):
+    """Cria as travas a cada subida e troca a que mudou de texto (coluna nova na lista), numa transação:
+    não há instante em que a waiver fique sem trava. Igual ao que já está no banco, não mexe."""
+    for nome, sql in _travas_da_waiver().items():
+        atual = con.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?", (nome,)).fetchone()
+        if atual and atual[0].strip() == sql:
+            continue
+        dentro = con.in_transaction
+        if not dentro:
+            con.execute("BEGIN IMMEDIATE")
+        try:
+            con.execute(f"DROP TRIGGER IF EXISTS {nome}")
+            con.execute(sql)
+            if not dentro:
+                con.execute("COMMIT")
+        except Exception:
+            if not dentro:
+                con.execute("ROLLBACK")
+            raise
+
+
 def aplicar_schema(con):
     with open(SCHEMA, encoding="utf-8") as f:
         con.executescript(f.read())
@@ -421,6 +477,7 @@ def aplicar_schema(con):
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
     for sql in INDICES_EXTRA:        # índices de colunas que só existem depois da migração
         con.execute(sql)
+    _travar_waivers(con)             # #109: depois das migrações, porque as colunas de prova vêm delas
     _migrar_papeis(con)              # o papel CLOSER foi desfeito: quem tiver vira OPERATOR
     _herdar_card_do_piloto(con)      # #65: conta já vinculada → o piloto daquele card herda o card
     _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`

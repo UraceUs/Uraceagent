@@ -29,6 +29,10 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
   vence na véspera dos 18 anos** se isso vier antes (#106): adulto, o piloto assina a própria.
 - Grava na MESMA tabela `waivers` (source='urace'): card do cliente, anexo no Asana e
   "waiver assinada" para a agenda tratam as duas iguais.
+- **Imutável e fora da lixeira** (#109): a linha assinada não muda nem sai do banco (trigger
+  `waivers_nativa_imutavel`), o PDF fica só leitura (0400) e a trilha inteira vai também para o
+  `audit_logs`. Para tirar de vigor, um gerente **anula com motivo** (`waiver_voids`): ela continua
+  no card, na lista e no backup, marcada como anulada.
 
 Nasce DESLIGADA (`booking_config.waiver_native = 0`): quem liga é o ADMIN, depois do sim do
 advogado. Nada aqui toca o DocuSign além de LER os dois modelos na importação.
@@ -39,10 +43,11 @@ import io
 import json
 import os
 import re
+import sqlite3
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
-from command_center.db import agora, atualizar, inserir, todos, um
+from command_center.db import agora, atualizar, inserir, todos, um, waiver_anulada
 from command_center.providers import portal
 
 # os mesmos dois modelos que a IA usa no DocuSign (adminai/mcp/docusign_mcp.py, TEMPLATES)
@@ -224,8 +229,9 @@ def validade(tipo, nascimento, dia):
 def vigente(con, pid):
     """A waiver nativa ainda válida deste piloto (ou None). A parental deixa de valer quando o
     piloto faz 18, mesmo que a data gravada seja mais longa (assinada antes desta regra)."""
-    w = um(con, """SELECT * FROM waivers WHERE pilot_id=? AND source='urace' AND status='completed'
-                   AND COALESCE(hidden,0)=0 AND expires_at >= ? ORDER BY completed_at DESC LIMIT 1""",
+    w = um(con, f"""SELECT * FROM waivers WHERE pilot_id=? AND source='urace' AND status='completed'
+                    AND COALESCE(hidden,0)=0 AND NOT {waiver_anulada()} AND expires_at >= ?
+                    ORDER BY completed_at DESC LIMIT 1""",
            (pid, portal.hoje().isoformat()))
     if w and w["template"] == "parental":
         p = um(con, "SELECT birth_date FROM portal_pilots WHERE id=?", (pid,))
@@ -362,7 +368,7 @@ def pdf_final(base, trilha, png):
     caminho = os.path.join(pasta(), f"urace-{trilha['signature_id']}.pdf")
     with open(caminho, "wb") as f:
         f.write(final)
-    os.chmod(caminho, 0o600)
+    os.chmod(caminho, 0o400)                      # #109: só leitura, nem o dono do processo regrava
     trilha["document_sha256"] = _sha(final)
     return caminho
 
@@ -370,8 +376,10 @@ def pdf_final(base, trilha, png):
 def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_email, link_reason, link_by, resumo,
            caminho=None, antes=None):
     """Grava a waiver assinada na MESMA tabela das do DocuSign (card, anexo e agenda tratam igual).
-    `antes(con)` roda dentro da mesma transação, antes do INSERT (o convite se marca usado ali)."""
-    from command_center.db import transacao
+    `antes(con)` roda dentro da mesma transação, antes do INSERT (o convite se marca usado ali).
+    #109: a trilha inteira vai também para o `audit_logs` (append-only), na mesma transação: a linha da
+    waiver é imutável por trigger e o audit_logs guarda uma segunda cópia que ninguém reescreve."""
+    from command_center.db import auditar, transacao
     tipo = trilha["template"]
     caminho = caminho or pdf_final(base, trilha, png)
     quando = agora()
@@ -386,6 +394,8 @@ def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_e
                       link_reason=link_reason, link_by=link_by, synced_at=quando)
         con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id) VALUES ('waiver', ?, 'urace', ?)",
                     (wid, trilha["signature_id"]))
+        quem = f"portal:{trilha['account_id']}" if trilha.get("account_id") else f"invite:{trilha.get('invitation_id')}"
+        auditar(con, "waiver.signed.trail", quem, entity_type="waiver", entity_id=wid, detail=trilha, ip=trilha.get("ip"))
         if client_id:
             from command_center.api import motor
             motor.registrar_evento(con, "waiver.completed", "waiver", wid, client_id, resumo)
@@ -401,10 +411,52 @@ def da_conta(con, conta_id, wid):
 def listar(con, limit=50, offset=0):
     """As assinadas aqui, das mais novas para as mais velhas, paginadas."""
     total = um(con, "SELECT COUNT(*) AS n FROM waivers WHERE source='urace'")["n"]
-    itens = todos(con, """SELECT id, client_id, pilot_id, signer_name, signer_email, minor_name, template, completed_at,
-                                 expires_at, doc_sha256 FROM waivers WHERE source='urace'
-                          ORDER BY completed_at DESC, id DESC LIMIT ? OFFSET ?""", (limit, offset))
+    itens = todos(con, """SELECT w.id, w.client_id, w.pilot_id, w.signer_name, w.signer_email, w.minor_name, w.template,
+                                 w.completed_at, w.expires_at, w.doc_sha256,
+                                 v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason
+                            FROM waivers w LEFT JOIN waiver_voids v ON v.waiver_id = w.id WHERE w.source='urace'
+                          ORDER BY w.completed_at DESC, w.id DESC LIMIT ? OFFSET ?""", (limit, offset))
     return {"itens": itens, "total": total, "limit": limit, "offset": offset}
+
+
+# ------------------------------------------------------------------ anular (#109)
+MIN_MOTIVO = 10
+
+
+class NaoAnula(Exception):
+    """Não é uma waiver que se anula aqui, ou já foi anulada (a rota devolve 409)."""
+
+
+def anulacao(con, wid):
+    return um(con, "SELECT * FROM waiver_voids WHERE waiver_id=?", (wid,))
+
+
+def anular(con, wid, usuario, motivo, ip=None):
+    """Tira de vigor uma waiver assinada no próprio sistema, sem mexer nela (dono, 06/10: "nunca apagar").
+
+    A linha da waiver é imutável (trigger); a anulação vai para `waiver_voids` (append-only), com quem,
+    quando e por quê, e para a auditoria (`waiver.void`). A waiver continua no card, na lista e no backup,
+    marcada como anulada; `vigente` deixa de vê-la e o cliente pode assinar outra. Não se desfaz."""
+    from command_center.db import auditar, transacao
+    motivo = re.sub(r"\s+", " ", (motivo or "").strip())[:500]
+    if len(motivo) < MIN_MOTIVO:
+        raise ErroWaiver(f"Escreva o motivo da anulação (pelo menos {MIN_MOTIVO} letras).")
+    w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
+    if not w:
+        raise LookupError("waiver")
+    if w["source"] != "urace" or w["status"] != "completed":
+        raise NaoAnula("Só a waiver assinada no próprio sistema se anula aqui. A do DocuSign se resolve no DocuSign.")
+    try:
+        with transacao(con, imediata=True):
+            if anulacao(con, wid):
+                raise NaoAnula("Esta waiver já foi anulada.")
+            inserir(con, "waiver_voids", waiver_id=wid, user_id=usuario.get("id"), by_name=usuario.get("name") or "?", reason=motivo)
+            auditar(con, "waiver.void", f"user:{usuario.get('id')}", user_id=usuario.get("id"), entity_type="waiver", entity_id=wid,
+                    detail={"reason": motivo, "client_id": w["client_id"], "template": w["template"],
+                            "signed_at": w["completed_at"], "sha256": w["doc_sha256"]}, ip=ip)
+    except sqlite3.IntegrityError:                         # duas anulações ao mesmo tempo: a segunda bate no UNIQUE
+        raise NaoAnula("Esta waiver já foi anulada.")
+    return anulacao(con, wid)
 
 
 # ------------------------------------------------------------------ o PDF

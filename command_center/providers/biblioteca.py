@@ -195,14 +195,23 @@ def sincronizar_contratos_e_waivers(con, log=print):
             feitos["erros"] += 1
         con.commit()
     from command_center.api.motor import pdf_da_waiver
-    # #118: ocultar no painel não tira do backup — toda assinada (inclusive oculta) vai para o Drive
-    for w in todos(con, "SELECT * FROM waivers WHERE status='completed'"):
+    from command_center.db import auditar
+    # #118: ocultar no painel não tira do backup — toda assinada (inclusive oculta) vai para o Drive.
+    # #109: a anulada também, com "(anulada)" no título.
+    for w in todos(con, """SELECT w.*, v.at AS voided_at FROM waivers w LEFT JOIN waiver_voids v ON v.waiver_id = w.id
+                           WHERE w.status='completed'"""):
         nome = w["minor_name"] or w["signer_name"] or "Waiver"
-        campos = dict(client_id=w["client_id"], title=f"Waiver — {nome}", doc_date=(w["completed_at"] or "")[:10],
-                      status="assinada" + (" na área do cliente" if w["source"] == "urace" else ""))
+        anulada = " (anulada)" if w["voided_at"] else ""
+        campos = dict(client_id=w["client_id"], title=f"Waiver — {nome}{anulada}", doc_date=(w["completed_at"] or "")[:10],
+                      status=("anulada" if anulada else "assinada") + (" na área do cliente" if w["source"] == "urace" else ""))
         try:
             caminho = pdf_da_waiver(con, w)
             sha = _sha_arquivo(caminho)
+            if w["source"] == "urace" and sha != w["doc_sha256"]:
+                # #109: o PDF no servidor não é mais o que foi assinado. Não sobe (a cópia do Drive fica) e avisa.
+                auditar(con, "biblioteca.waiver.hash_divergente", "system", entity_type="waiver", entity_id=w["id"],
+                        detail={"esperado": w["doc_sha256"], "no_arquivo": sha})
+                raise ValueError("o PDF no servidor não bate com o hash gravado na assinatura: não subi; a cópia do Drive ficou")
             _upsert(con, "waiver", w["id"], file_path=caminho, sha256=sha, source_version=sha, error=None, **campos)
             feitos["waiver"] += 1
         except Exception as e:                                       # noqa: BLE001
@@ -304,6 +313,8 @@ def espelhar_no_drive(con, drive=None, log=print, limite=None):
             nome = re.sub(r"[\\/:*?\"<>|]+", " ", f"{d['doc_date'] or ''} {d['title']}".strip())[:150] + ".pdf"
             with open(d["file_path"], "rb") as f:
                 dados = f.read()
+            if _sha(dados) != d["sha256"]:       # #109: o arquivo mudou depois de conferido: não sobrescreve o Drive
+                raise ValueError("o arquivo mudou depois de conferido: não subi")
             fid = drive.enviar(tok, nome, dados, pastas[chave], file_id=d["drive_file_id"])
             atualizar(con, "library_docs", d["id"], drive_file_id=fid, drive_sha256=d["sha256"], drive_error=None)
             feitos += 1
