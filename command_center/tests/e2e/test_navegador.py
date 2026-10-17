@@ -1003,6 +1003,34 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a.close(); c.close()
 
 
+# ------------------------------------------------------------------ versões do modelo e o aviso §744.301(3) (#116)
+@pytest.mark.parametrize("largura", [360, 390])
+def test_site_waiver_mostra_as_versoes_e_o_aviso_esperando_o_advogado_no_celular(servidor, navegador, largura):
+    """A versão 1 do parental continua na lista depois da 2 (a semente importou duas vezes), com o PDF dela;
+    sem o texto aprovado no servidor, o aviso diz que espera o advogado e nada é barrado."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    abrir(pg, servidor, "/site/waiver")
+    sec = pg.locator("section", has=pg.get_by_role("heading", name="Versões dos modelos", level=2))
+    sec.wait_for()
+    linhas = sec.locator(".tr")
+    assert linhas.count() == 3, linhas.all_inner_texts()
+    textos = linhas.all_inner_texts()
+    assert any("Parental (menor) · versão 2" in t and "atual" in t for t in textos), textos
+    v1 = next(i for i, t in enumerate(textos) if "Parental (menor) · versão 1" in t)
+    assert "atual" not in textos[v1].split("\n")[0] and "aviso: esperando o advogado" in textos[v1]
+    pdf = pg.request.get(servidor.replace("/ops", "") + linhas.nth(v1).get_by_role("link", name="PDF").get_attribute("href"))
+    import hashlib
+    assert pdf.ok and pdf.body().startswith(b"%PDF") and hashlib.sha256(pdf.body()).hexdigest() == pdf.headers["x-content-sha256"]
+    aviso = pg.locator("section", has=pg.get_by_role("heading", name="Aviso do §744.301(3) (parental)", level=2))
+    assert "Esperando o texto do aviso aprovado pelo advogado" in aviso.inner_text()
+    assert "aviso-744.txt" in aviso.inner_text()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 # ------------------------------------------------------------------ convite da waiver por e-mail (#135)
 def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(servidor, navegador):
     """Dono, 14/10: "o e-mail que tiver no card vai receber isso". A equipe vê para quem vai, confirma

@@ -403,6 +403,8 @@ MIGRACOES = [
     # 16/10 — dono (#315): o editor do site "como um Canva". Cada rascunho salvo soma 1: dois gerentes na mesma página
     # não apagam o que o outro fez, e o Publicar só põe no ar o que a tela mostra
     ("site_pages", "rev", "INTEGER NOT NULL DEFAULT 0"),
+    # #116: o ponteiro da versão atual de cada modelo da waiver nativa (as versões ficam em waiver_template_versions)
+    ("waiver_templates", "version_id", "INTEGER REFERENCES waiver_template_versions(id)"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
@@ -436,9 +438,21 @@ def status_da_waiver(alias="waivers"):
     return f"CASE WHEN {waiver_anulada(alias)} THEN 'voided' ELSE {alias}.status END"
 
 
+# Tabelas de prova da waiver que só recebem INSERT: o banco recusa UPDATE e DELETE, como no `audit_logs`.
+# #116: as versões dos modelos. A trava é criada (ou trocada, se o texto mudou) a cada subida, com as da waiver.
+WAIVER_SO_INSERT = ("waiver_template_versions",)
+
+
+def _so_insert(tabela):
+    return {f"{tabela}_no_{op.lower()}": (f"CREATE TRIGGER {tabela}_no_{op.lower()} BEFORE {op} ON {tabela}\n"
+                                         f"BEGIN SELECT RAISE(ABORT, '{tabela} is append-only'); END")
+            for op in ("UPDATE", "DELETE")}
+
+
 def _travas_da_waiver():
     mudou = " OR ".join(f"NEW.{c} IS NOT OLD.{c}" for c in WAIVER_TRAVADAS)
     return {
+        **{nome: sql for t in WAIVER_SO_INSERT for nome, sql in _so_insert(t).items()},
         "waivers_nativa_imutavel": (
             "CREATE TRIGGER waivers_nativa_imutavel BEFORE UPDATE ON waivers\n"
             f"WHEN (OLD.source IS 'urace' AND ({mudou})) OR (NEW.source IS 'urace' AND OLD.source IS NOT 'urace')\n"
@@ -471,6 +485,18 @@ def _travar_waivers(con):
             raise
 
 
+def _versionar_modelos(con):
+    """#116: o modelo da waiver nativa importado antes das versões entra como a versão dele, uma vez, e o
+    ponteiro passa a apontar para ela. Nada é reescrito: a versão é a cópia do que já estava no ponteiro."""
+    for kind, sha, name, path, pages, text, source, at, by in con.execute(
+            """SELECT kind, sha256, name, pdf_path, pages, text, source, imported_at, imported_by
+                 FROM waiver_templates WHERE version_id IS NULL""").fetchall():
+        con.execute("""INSERT OR IGNORE INTO waiver_template_versions (kind, sha256, name, pdf_path, pages, text, source,
+                       imported_at, imported_by) VALUES (?,?,?,?,?,?,?,?,?)""", (kind, sha, name, path, pages, text, source, at, by))
+        vid = con.execute("SELECT id FROM waiver_template_versions WHERE kind=? AND sha256=?", (kind, sha)).fetchone()[0]
+        con.execute("UPDATE waiver_templates SET version_id=? WHERE kind=?", (vid, kind))
+
+
 def aplicar_schema(con):
     with open(SCHEMA, encoding="utf-8") as f:
         con.executescript(f.read())
@@ -481,7 +507,8 @@ def aplicar_schema(con):
     for sql in INDICES_EXTRA:        # índices de colunas que só existem depois da migração
         con.execute(sql)
     _travar_waivers(con)             # #109: depois das migrações, porque as colunas de prova vêm delas
-    _migrar_papeis(con)              # o papel CLOSER foi desfeito: quem tiver vira OPERATOR
+    _versionar_modelos(con)          # #116: o modelo importado antes das versões vira a versão dele
+    _migrar_papeis(con)             # o papel CLOSER foi desfeito: quem tiver vira OPERATOR
     _herdar_card_do_piloto(con)      # #65: conta já vinculada → o piloto daquele card herda o card
     _semear_marcadores(con)          # depois das migrações: a semente escreve `mailboxes`
     for sql in POS_MIGRACAO:

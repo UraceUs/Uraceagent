@@ -393,6 +393,7 @@ def assinar(con, token, dados, ip=None, aparelho=None):
         base = f.read()
     if wn._sha(base) != m["sha256"]:
         raise wn.ErroWaiver("The waiver document could not be verified. Please contact us.")
+    wn._exigir_aviso(tipo, base)                           # #116: antes de gastar o código do e-mail
     agora_utc = _agora()
     entregue, lido, modo = wn._leitura(con, inv["id"], tipo, dados, agora_utc, entidade="waiver_invite",
                                        evento="waiver.invite.document_view")
