@@ -11,7 +11,7 @@ from command_center.providers.loja import ErroProduto
 from command_center.tests.test_carrinho import _checkout, _entrar, _pagar, loja  # noqa: F401
 from command_center.tests.test_estoque_do_site import SEM_TANTO, _com_opcoes, _do_site, _es, _ligar, _sid
 from command_center.tests.test_loja_no_painel import _entra, _item, _um_simples, painel  # noqa: F401
-from command_center.tests.test_stripe_loja import _comprar, amb  # noqa: F401
+from command_center.tests.test_stripe_loja import _comprar, _emails, amb  # noqa: F401
 from command_center.tests.test_stripe_loja import _pagar as _pagar_buy_now
 
 
@@ -192,6 +192,7 @@ def test_resolvido_tira_o_sem_estoque_do_pedido_e_do_painel(painel):  # noqa: F8
     assert linha["sem_estoque"] is False and linha["atencao"] is None, "sai do Resolver"
     x = um(con, "SELECT * FROM store_order_items WHERE order_id=? AND kind='produto'", (o["id"],))
     assert x["stock_resolved_at"] and x["stock_note"].startswith("sem estoque"), "a frase fica na linha"
+    assert x["stock_resolved_by"] == um(con, "SELECT id FROM users WHERE email='op@example.com'")["id"], "quem resolveu"
     aud = um(con, "SELECT * FROM audit_logs WHERE event='store.stock.resolved' ORDER BY id DESC LIMIT 1")
     assert aud and str(aud["entity_id"]) == str(o["id"]) and "sem estoque" in aud["detail"]
     # o webhook repetido não traz o problema de volta, e resolver de novo diz que não há nada
@@ -218,6 +219,12 @@ def test_contagem_nan_e_infinita_e_recusada_com_400(painel):  # noqa: F811
         r = t.post("/ops/api/estoque/contar", headers=h, json={"item_id": item, "qty": v})   # a rota antiga do Estoque
         assert r.status_code == 400, (v, r.status_code, r.text)
     assert estoque.vendavel(con, item) == 2.0 and estoque.conferir(con) == []
+    # ligar criando o item com contagem "nan": 400 e nenhum item pela metade
+    outro = next(x for x in lj.catalogo(con) if not x["variations"] and x["price"] and x["id"] != p["id"])
+    hg = _entra(t, "ger@example.com")
+    r = t.post(f"/ops/api/site/estoque/{outro['id']}/ligar", headers=hg, json={"criar": {"name": "Peça NaN (e2e)"}, "contagem": "nan"})
+    assert r.status_code == 400, r.text
+    assert not um(con, "SELECT 1 AS x FROM stock_items WHERE name='Peça NaN (e2e)'")
 
 
 # ------------------------------------------------------------------ 7. preço infinito
@@ -235,6 +242,9 @@ def test_preco_infinito_e_recusado_e_as_listas_continuam_de_pe(painel):  # noqa:
                json={"criar": {"name": "Peça Infinita (e2e)", "price": "1e400"}, "contagem": 1})
     assert r.status_code == 400, r.text
     assert not um(con, "SELECT 1 AS x FROM stock_items WHERE name='Peça Infinita (e2e)'")
+    corpo = '{"criar": {"name": "Peça Infinita JSON (e2e)", "price": 1e309}, "contagem": 1}'       # o número JSON vira inf
+    r = t.post(f"/ops/api/site/estoque/{p['id']}/ligar", headers={**hg, "Content-Type": "application/json"}, content=corpo)
+    assert r.status_code == 400, r.text
     assert t.get("/ops/api/estoque", headers=hg).status_code == 200
     assert t.get("/ops/api/site/estoque", headers=hg).status_code == 200
 
@@ -301,3 +311,40 @@ def test_tirar_a_opcao_ligada_ou_dar_opcoes_ao_produto_ligado_e_recusado(painel)
     r = t.patch(f"/ops/api/site/produtos/{s['id']}", headers=hg, json={"variations": novas, "attribute_names": ["Size"]})
     assert r.status_code == 400 and "produto inteiro" in r.json()["detail"], r.text
     assert not lj.do_painel(con, s["id"])["variations"] and _ligacoes(con, s["id"]) == {"": _ligacoes(con, s["id"])[""]}
+
+
+# ------------------------------------------------------------------ workflow: a unidade vendida pelo serial
+def test_kart_usado_vendido_diz_qual_unidade_saiu_no_email_e_em_pedidos(amb):  # noqa: F811
+    """Item de série: a baixa diz o serial da unidade que saiu, e a equipe vê isso no e-mail "Separar e entregar" e em
+    Pedidos do site (antes, a nota dizia só "baixou 1" e ficava escondida: a equipe separava outra unidade)."""
+    cli, con, st, qbo, tmp = amb
+    p = _um_simples(con)
+    kart = estoque.criar_item(con, "chassi", "Kart usado revisão (e2e)")
+    estoque.entrada(con, kart, serial="SN-REV-A", para="sede")
+    estoque.entrada(con, kart, serial="SN-REV-B", para="sede")
+    _es().ligar(con, None, p["id"], "", item_id=kart)
+    con.commit()
+    s = _sid(_comprar(cli, p))
+    assert _pagar_buy_now(cli, st, s).json()["resultado"] == "pago"
+    o = um(con, "SELECT * FROM store_orders WHERE stripe_session_id=?", (s,))
+    vendida = um(con, "SELECT serial FROM stock_units WHERE item_id=? AND status='vendido'", (kart,))["serial"]
+    assert vendida in o["stock_note"] and "série" in o["stock_note"], o["stock_note"]
+    equipe = [m for m in _emails(tmp) if m["to"] == "support@urace.us"][-1]
+    assert f"Estoque: {o['stock_note']}" in equipe["text"], "o e-mail da equipe diz qual unidade separar"
+    linha = next(x for x in pedido_site.lista(con)["pedidos"] if x["id"] == o["id"])
+    assert any(vendida in x["nota"] for x in linha["estoque"]), "Pedidos do site também"
+    opp = um(con, "SELECT notes FROM opportunities WHERE id=?", (o["opp_id"],))
+    assert vendida in opp["notes"]
+
+
+def test_carrinho_pago_mostra_a_baixa_no_email_da_equipe(loja):  # noqa: F811
+    cli, con, st, qbo, tmp, sid = loja
+    p = _um_simples(con)
+    _ligar(con, p, 3)
+    _entrar(cli, con)
+    assert _checkout(cli, [_item(p["slug"], 2)]).status_code == 200
+    assert _pagar(cli, st, next(reversed(st.sessoes))).status_code == 200
+    equipe = [m for m in _emails(tmp) if m["to"] == "support@urace.us"][-1]
+    assert "Estoque: baixou 2 do estoque" in equipe["text"], equipe["text"]
+    o = um(con, "SELECT * FROM store_orders ORDER BY id DESC LIMIT 1")
+    assert next(x for x in pedido_site.lista(con)["pedidos"] if x["id"] == o["id"])["estoque"][0]["nota"].startswith("baixou 2")

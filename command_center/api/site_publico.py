@@ -578,7 +578,7 @@ def estoque_resolvido(request: Request, oid: int = Path(..., ge=1, le=2**63 - 1)
     from command_center.providers import estoque_site
     try:
         with transacao(con):
-            res = estoque_site.resolver(con, oid)
+            res = estoque_site.resolver(con, oid, u["id"])
             auditar(con, "store.stock.resolved", f"user:{u['id']}", user_id=u["id"], entity_type="store_order", entity_id=oid,
                     detail=res, ip=auth._ip(request))
     except loja.ErroProduto as e:

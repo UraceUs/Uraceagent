@@ -4075,7 +4075,6 @@
 "tem agora · Galpão + Pista": "on hand now · Shop + Track",
 "tem {0}": "{0} on hand",
 "à venda no site": "for sale on the site",
-"Agora: {0}. A contagem vale para o local escolhido; os outros ficam como estão.": "Now: {0}. The count applies to the chosen location; the others stay as they are.",
 "Ainda ligado ao estoque, mas a venda não baixa daqui (dropshipping). Desligue para ligar o item a outro produto.": "Still linked to inventory, but sales don't come out of it (dropshipping). Unlink to link the item to another product.",
 "Desligar {0}": "Unlink {0}",
 "Quanto tem {0} agora": "How many {0} now",
@@ -4090,5 +4089,14 @@
 "Resolvido": "Resolved",
 "Resolvido: saiu do Painel do site.": "Resolved: removed from the Site dashboard.",
 "Resolvido: sem estoque do pedido #{0}": "Resolved: out of stock on order #{0}",
-"Use quando a peça foi separada, o cliente combinou outro prazo ou o valor foi devolvido pelo Stripe. A frase continua no pedido e na auditoria.": "Use it when the part was set aside, the customer agreed to a new date or the amount was refunded through Stripe. The note stays on the order and in the audit log."
+"Use quando a peça foi separada, o cliente combinou outro prazo ou o valor foi devolvido pelo Stripe. A frase continua no pedido e na auditoria.": "Use it when the part was set aside, the customer agreed to a new date or the amount was refunded through Stripe. The note stays on the order and in the audit log.",
+"A contagem vira o saldo do local escolhido; os outros ficam como estão.": "The count becomes the balance of the chosen location; the others stay as they are.",
+"Agora: {0}.": "Now: {0}.",
+"Com item ligado, o site vende só o que o box tem (Galpão + Pista) e a venda paga sai do estoque. Até ligar, o site continua seguindo a caixa \"Em estoque\".": "With a linked item, the site sells only what the shop has (Shop + Track) and a paid sale comes out of inventory. Until you link it, the site keeps following the \"In stock\" box.",
+"O site passa a seguir a caixa \"Em estoque\" do produto e a venda paga deixa de sair do estoque do box. As ligações ficam no cartão até você desligar.": "The site goes back to following the product's \"In stock\" box and paid sales stop coming out of the shop's inventory. The links stay on the card until you unlink them.",
+"Passar {0} a dropshipping?": "Switch {0} to dropshipping?",
+"Passar {0} a em estoque?": "Switch {0} to in stock?",
+"{0}–{1} de {2} itens": "{0}–{1} of {2} items",
+"Com opções, a caixa \"Em estoque\" do produto vale para as opções sem item ligado (desmarcada, nenhuma delas vende); as ligadas seguem o estoque.": "With options, the product's \"In stock\" box applies to options without a linked item (unchecked, none of them sell); linked options follow the inventory.",
+"Estoque:": "Inventory:"
 }

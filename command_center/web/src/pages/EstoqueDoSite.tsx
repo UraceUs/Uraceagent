@@ -39,6 +39,7 @@ type ItemEstoque = { id: number; name: string; kind: string; tracking: 'quantida
 type Painel = { tipo: 'ligar' | 'contar'; p: ProdutoEstoque; o: Opcao | Ligacao }
 
 const POR_PAGINA = 20
+const POR_PAGINA_ITENS = 12            // a lista de itens do estoque no painel Ligar
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 const qtd = (n: number) => n.toLocaleString('en-US', { maximumFractionDigits: 2 })
 const fotoUrl = (src: string) => src.startsWith('/') ? src : `/_s/img/${src}`
@@ -61,6 +62,7 @@ export function EstoqueDoSite({ produto }: { produto?: string }) {
   const { can } = useAuth()
   const gerente = can('MANAGER')
   const toast = useToast()
+  const perguntar = usePerguntar()
   const [modo, setModo] = useState<Modo>('todos')
   const [texto, setTexto] = useState(produto ?? '')
   const [busca, setBusca] = useState(produto ?? '')
@@ -78,6 +80,10 @@ export function EstoqueDoSite({ produto }: { produto?: string }) {
 
   async function trocar(p: ProdutoEstoque) {
     const novo = p.fulfillment === 'estoque' ? 'dropshipping' : 'estoque'
+    // muda o que o site vende: confirma antes, dizendo o que muda
+    if (!await perguntar(novo === 'dropshipping'
+      ? { titulo: tr("Passar {0} a dropshipping?", p.name), texto: tr("O site passa a seguir a caixa \"Em estoque\" do produto e a venda paga deixa de sair do estoque do box. As ligações ficam no cartão até você desligar."), ok: tr("Passar a dropshipping") }
+      : { titulo: tr("Passar {0} a em estoque?", p.name), texto: tr("Com item ligado, o site vende só o que o box tem (Galpão + Pista) e a venda paga sai do estoque. Até ligar, o site continua seguindo a caixa \"Em estoque\"."), ok: tr("Passar a em estoque") })) return
     setTrocando(p.id)
     try {
       await api.patch(`/site/produtos/${p.id}`, { fulfillment: novo })
@@ -204,13 +210,16 @@ function PainelLigar({ p, o, locais, prateleiras, onFechar, onFeito }: { p: Prod
   const [mexeu, setMexeu] = useState(false)
   const [local, setLocal] = useState(locais[0]?.code || 'sede')
   const [indo, setIndo] = useState(false)
-  const r = useGet<{ itens: ItemEstoque[]; total: number; sugestao: boolean }>(jeito === 'existe' ? `/site/estoque/itens${qs({ q: busca, produto: p.id, limit: 12 })}` : null)
+  const [pag, setPag] = useState(0)
+  const r = useGet<{ itens: ItemEstoque[]; total: number; offset: number; sugestao: boolean }>(jeito === 'existe' ? `/site/estoque/itens${qs({ q: busca, produto: p.id, limit: POR_PAGINA_ITENS, offset: pag })}` : null)
   const serie = jeito === 'existe' && item?.tracking === 'serie'
   // o item que já tem saldo (ou contagem) liga sem contar: o campo vem com o saldo do local e só vai se a pessoa mudar
   const opcional = jeito === 'existe' && !!item?.contado
   const aqui = locais.find(x => x.code === local) || locais[0]
   const conta = serie || (opcional && (!mexeu || contagem.trim() === '')) ? null : contagem
   function preencher(i: ItemEstoque | null, code: string) { setContagem(i?.contado ? campo(i.por_local[code]) : ''); setMexeu(false) }
+  // busca nova: começa da primeira página e solta o item escolhido (ele podia ser ligado sem estar na tela)
+  function buscar() { setBusca(texto.trim()); setPag(0); setItem(null); preencher(null, local) }
 
   async function ligar(e: FormEvent) {
     e.preventDefault()
@@ -236,8 +245,8 @@ function PainelLigar({ p, o, locais, prateleiras, onFechar, onFeito }: { p: Prod
       <div className="row wrap" style={{ gap: 8 }}>
         <label className="fld grow" style={{ margin: 0 }}><span>{tr("Buscar no estoque")}</span>
           <input type="search" value={texto} onChange={e => setTexto(e.target.value)} enterKeyHint="search"
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setBusca(texto.trim()) } }} /></label>
-        <button type="button" className="btn" style={{ alignSelf: 'flex-end' }} onClick={() => setBusca(texto.trim())}>{tr("Buscar")}</button>
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); buscar() } }} /></label>
+        <button type="button" className="btn" style={{ alignSelf: 'flex-end' }} onClick={buscar}>{tr("Buscar")}</button>
       </div>
       {r.error && <ErrorState error={r.error} retry={r.reload} />}
       {r.loading && !r.data && <Loading rows={2} />}
@@ -254,6 +263,10 @@ function PainelLigar({ p, o, locais, prateleiras, onFechar, onFeito }: { p: Prod
                   : i.tracking === 'serie' ? tr("número de série, disponíveis: {0}", porLocal(locais, i.por_local)) : tr("tem {0} ({1})", porLocal(locais, i.por_local), i.unit)}</span></span>
             </label></li>
           })}</ul>}
+        {r.data.total > r.data.itens.length + pag || pag > 0 ? <div className="row" style={{ gap: 8 }}>
+          <button type="button" className="btn sm ghost" disabled={pag === 0} onClick={() => setPag(Math.max(0, pag - POR_PAGINA_ITENS))}>{tr("Anteriores")}</button>
+          <span className="small muted grow" style={{ textAlign: 'center' }}>{tr("{0}–{1} de {2} itens", pag + 1, pag + r.data.itens.length, r.data.total)}</span>
+          <button type="button" className="btn sm ghost" disabled={pag + POR_PAGINA_ITENS >= r.data.total} onClick={() => setPag(pag + POR_PAGINA_ITENS)}>{tr("Próximas")}</button></div> : null}
       </>}
     </> : <div className="es-campos">
       <label className="fld" style={{ gridColumn: '1 / -1' }}><span>{tr("Nome do item no estoque")}</span>
@@ -271,7 +284,7 @@ function PainelLigar({ p, o, locais, prateleiras, onFechar, onFeito }: { p: Prod
           <input inputMode="decimal" value={contagem} required={!opcional} onChange={e => { setContagem(e.target.value); setMexeu(true) }} placeholder="0" /></label>
         <label className="fld"><span>{tr("Onde")}</span><select value={local} onChange={e => { setLocal(e.target.value); if (!mexeu) preencher(jeito === 'existe' ? item : null, e.target.value) }}>
           {locais.map(x => <option key={x.code} value={x.code}>{x.name}</option>)}</select></label>
-        {opcional && item && <span className="small muted" style={{ gridColumn: '1 / -1' }}>{tr("Agora: {0}. A contagem vale para o local escolhido; os outros ficam como estão.", porLocal(locais, item.por_local))}</span>}
+        <span className="small muted" style={{ gridColumn: '1 / -1' }}>{jeito === 'existe' && item ? tr("Agora: {0}.", porLocal(locais, item.por_local)) + ' ' : ''}{tr("A contagem vira o saldo do local escolhido; os outros ficam como estão.")}</span>
       </div>}
     <div className="modal-foot">
       <button type="button" className="btn ghost" onClick={onFechar}>{tr("Cancelar")}</button>

@@ -293,7 +293,7 @@ def _baixar_linha(con, oid, x, ordem):
     if not l:
         return f"{PROBLEMA} ligado: {nome} × {qtd} — baixe à mão no Estoque", None
     nota_mov = f"loja do site · pedido #{oid}"
-    primeiro, baixou, onde = None, 0, []
+    primeiro, baixou, onde, seriais = None, 0, [], []
     con.execute("SAVEPOINT baixa_site")
     try:
         for code in ordem:
@@ -302,10 +302,12 @@ def _baixar_linha(con, oid, x, ordem):
             loc = estoque.local(con, code)
             n = 0
             if l["tracking"] == "serie":
-                for u in todos(con, """SELECT id FROM stock_units WHERE item_id=? AND client_id IS NULL AND status='disponivel'
-                                         AND location_id=? ORDER BY id LIMIT ?""", (l["item_id"], loc["id"], qtd - baixou)):
+                for u in todos(con, """SELECT id, serial FROM stock_units WHERE item_id=? AND client_id IS NULL
+                                         AND status='disponivel' AND location_id=? ORDER BY id LIMIT ?""",
+                               (l["item_id"], loc["id"], qtd - baixou)):
                     estoque.saida(con, l["item_id"], unit_id=u["id"], de=loc, reason="venda", source="site", notes=nota_mov)
                     primeiro = primeiro or _ultimo_movimento(con, l["item_id"])
+                    seriais.append(u["serial"])      # a equipe separa ESTA unidade (garantia e procedência do kart usado)
                     n += 1
             else:
                 # o que o local tem, fração inclusive (sem `int`): o site vende a SOMA do Galpão + Pista arredondada
@@ -325,10 +327,11 @@ def _baixar_linha(con, oid, x, ordem):
         con.execute("RELEASE baixa_site")
         log.warning("baixa do estoque do pedido %s falhou: %s", oid, str(e)[:200])
         return f"{PROBLEMA}: {nome} × {qtd} — não baixou ({str(e)[:120]}); baixe à mão no Estoque", None
+    serie = f"; série: {', '.join(seriais)}" if seriais else ""
     if baixou < qtd - 1e-9:
         return (f"{PROBLEMA}: {nome} — pediu {qtd}, tinha {baixou:g}"
-                + (f" (baixou {baixou:g}; falta {qtd - baixou:g})" if baixou else "")), primeiro
-    return f"baixou {qtd} do estoque ({', '.join(onde)})", primeiro
+                + (f" (baixou {baixou:g}; falta {qtd - baixou:g}{serie})" if baixou else "")), primeiro
+    return f"baixou {qtd} do estoque ({', '.join(onde)}{serie})", primeiro
 
 
 def baixar_do_pedido(con, oid):
@@ -367,6 +370,16 @@ def _aberto(x):
     return (x.get("stock_note") or "").startswith(PROBLEMA) and not x.get("stock_resolved_at")
 
 
+def baixas(con, o):
+    """O que a venda paga tirou do estoque, linha a linha, para a equipe separar (e, no item de série, QUAL unidade):
+    [(nome da linha, frase)]. O que está "sem estoque" fica no "Resolver"."""
+    if o.get("stock_note") and not o["stock_note"].startswith(PROBLEMA):
+        return [(o.get("product_name") or "", o["stock_note"])]
+    return [(x["name"], x["stock_note"]) for x in todos(
+        con, "SELECT name, stock_note FROM store_order_items WHERE order_id=? AND kind='produto' AND stock_note IS NOT NULL "
+             "ORDER BY id", (o["id"],)) if not x["stock_note"].startswith(PROBLEMA)]
+
+
 def pendentes(con, o):
     """As frases de "sem estoque" ainda abertas de um pedido (vazio: nada a resolver)."""
     out = [o["stock_note"]] if _aberto(o) else []
@@ -375,7 +388,7 @@ def pendentes(con, o):
     return out
 
 
-def resolver(con, oid):
+def resolver(con, oid, por=None):
     """A equipe resolveu o pedido pago sem estoque (separou o que tinha, combinou com o cliente, devolveu pelo Stripe):
     marca `stock_resolved_at` no pedido e nas linhas, e o "sem estoque" sai do "Resolver" do pedido e da contagem do
     Painel do site. Nada se apaga: a frase continua na linha (`stock_note`) e no histórico. Quem chama abre a transação
@@ -388,9 +401,9 @@ def resolver(con, oid):
         raise ErroProduto("este pedido não tem nada sem estoque para resolver")
     quando = agora()
     if _aberto(o):
-        atualizar(con, "store_orders", oid, stock_resolved_at=quando)
-    con.execute("""UPDATE store_order_items SET stock_resolved_at=? WHERE order_id=? AND kind='produto'
-                    AND stock_note LIKE ? AND stock_resolved_at IS NULL""", (quando, oid, PROBLEMA + "%"))
+        atualizar(con, "store_orders", oid, stock_resolved_at=quando, stock_resolved_by=por)
+    con.execute("""UPDATE store_order_items SET stock_resolved_at=?, stock_resolved_by=? WHERE order_id=? AND kind='produto'
+                    AND stock_note LIKE ? AND stock_resolved_at IS NULL""", (quando, por, oid, PROBLEMA + "%"))
     from command_center.providers import carrinho
     atencao = carrinho.atencao(con, um(con, "SELECT * FROM store_orders WHERE id=?", (oid,)))
     atualizar(con, "store_orders", oid, attention=atencao, updated_at=quando)

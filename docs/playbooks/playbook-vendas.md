@@ -837,7 +837,7 @@ toda mudança fica na auditoria.
 | **Frete por unidade (US$)** | cobrado no Stripe, numa linha **Shipping**, quando o cliente escolhe **Ship to me**: frete × quantidade. **Vazio** = como antes, a equipe combina e cobra à parte; **0** = frete grátis. Retirar na pista é sempre grátis |
 | **Depósito de segurança por unidade (US$)** | vira a linha "Refundable security deposit" no Stripe; 0 = sem depósito |
 | **Como vendemos** (#309) | **interno, o cliente nunca vê**: *Dropshipping (o fornecedor envia)*, o padrão de todos, ou *Em estoque (o box envia)*. Veja "Estoque do site", abaixo |
-| **Em estoque** | sem estoque, a página diz "Out of stock" e o carrinho não vende. No produto **em estoque com item ligado**, a caixa fica só de leitura e mostra **quanto tem**: quem diz se tem é o estoque |
+| **Em estoque** | sem estoque, a página diz "Out of stock" e o carrinho não vende. No produto **em estoque com item ligado**, a caixa fica só de leitura e mostra **quanto tem**: quem diz se tem é o estoque. Com opções, a caixa do produto vale para as opções **sem** item ligado (desmarcada, nenhuma delas vende); as ligadas seguem o estoque |
 | **Categorias** | em que página da loja o produto aparece |
 | **Fotos** | **Subir foto** (do celular ou do computador): sobe em WebP de até 1600 px, **sem a localização do celular**. A primeira é a da loja; ← → mudam a ordem; **Tirar** tira do produto |
 | **Resumo** e **Descrição** | o texto da página, com negrito, itálico, lista e subtítulo. O que não for seguro (script, link estranho) o sistema tira ao salvar |
@@ -881,10 +881,12 @@ o trailer de corrida fica fora, e peça de cliente guardada nunca vai para o sit
 só.
 
 **Passo a passo (gerente):**
-1. No cartão, **Passar a em estoque** (ou, no produto, *Como vendemos* → *Em estoque*).
-2. Em cada opção, **Ligar**: escolha o **item do estoque** (a lista sugere pelo nome do produto; o item que já vende
-   por outro produto aparece desligado) ou **Criar item** a partir do produto (nome, prateleira, tamanho e o preço do
-   Balcão, opcional: o preço do site continua no produto).
+1. No cartão, **Passar a em estoque** (ou, no produto, *Como vendemos* → *Em estoque*). O painel pergunta antes,
+   dizendo o que muda no site; **Cancelar** não muda nada.
+2. Em cada opção, **Ligar**: escolha o **item do estoque** (a lista sugere pelo nome do produto, 12 por página, com
+   *Anteriores* e *Próximas*; o item que já vende por outro produto aparece desligado; uma busca nova solta o item
+   escolhido, para nada ser ligado sem estar na tela) ou **Criar item** a partir do produto (nome, prateleira, tamanho
+   e o preço do Balcão, opcional: o preço do site continua no produto).
 3. **A contagem é de um local só.** Escolha **Onde** (Galpão ou Pista) e preencha **Quanto tem no Galpão agora** (ou
    *na Pista*) com o que tem **naquele local**, nunca a soma dos dois: a lista mostra cada local (*Galpão 5 · Pista
    3*). Item **novo** (Criar item) ou que **nunca foi contado**: a contagem é obrigatória (ligar sem contar mostraria
@@ -904,7 +906,9 @@ só.
 
 **A venda paga sai do estoque sozinha.** No pagamento (o aviso do Stripe ou a página de obrigado, o que chegar
 primeiro), o produto em estoque sai do item ligado, uma vez só (*venda · site*, com o número do pedido no histórico):
-**Ship to me** sai primeiro do Galpão; **retirada** sai primeiro da Pista. O razão do estoque continua batendo.
+**Ship to me** sai primeiro do Galpão; **retirada** sai primeiro da Pista. O razão do estoque continua batendo. O que
+saiu aparece no pedido em Site › Pedidos do site (**Estoque:** *baixou 1 do estoque (Galpão 1)*), no e-mail da equipe e
+na venda; no kart usado e no motor, com o **serial** da unidade que saiu (*série: SN-…*): separe exatamente essa.
 
 **Sem saldo na hora de pagar** (duas pessoas pagaram a última unidade, o Balcão vendeu antes, a contagem estava
 errada): o pagamento **não cai**. Sai o que tinha e o pedido fica com **"Resolver: sem estoque: … pediu 2, tinha 1"** em

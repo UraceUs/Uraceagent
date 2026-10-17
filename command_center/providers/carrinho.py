@@ -425,6 +425,8 @@ def _texto_linha(x):
         s += f"\n  ⚠ SEM VAGA: {x['note']}"
     elif (x.get("stock_note") or "").startswith("sem estoque"):      # #309: a equipe resolve (o pagamento ficou)
         s += f"\n  ⚠ SEM ESTOQUE: {x['stock_note']}"
+    elif x.get("stock_note"):                     # #309: o que saiu do estoque (e, no item de série, qual unidade)
+        s += f"\n  Estoque: {x['stock_note']}"
     elif x["booking_id"]:
         s += f" (agendamento #{x['booking_id']})"
     return s

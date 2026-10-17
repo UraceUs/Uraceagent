@@ -459,8 +459,10 @@ vê. Por isso:
 
 - **conte certo** essas prateleiras: quando o saldo chega a zero (no Galpão e na Pista), o site mostra "Out of stock"
   e para de vender. O que está no **trailer** não conta para o site;
-- pedido do site **pago** com a peça para separar aparece em Site › Pedidos do site (o gerente avisa). Se faltar
-  peça, o pedido mostra **"Resolver: sem estoque"**: avise o gerente;
+- pedido do site **pago** com a peça para separar aparece em Site › Pedidos do site (o gerente avisa). A linha
+  **Estoque:** do pedido diz o que saiu e de onde (*baixou 1 do estoque (Galpão 1)*); no kart usado e no motor, com o
+  **serial** da unidade (*série: SN-…*): separe exatamente essa. Se faltar peça, o pedido mostra **"Resolver: sem
+  estoque"**: avise o gerente;
 - o que é dropshipping (o fornecedor envia) não tem selo e não mexe no estoque.
 
 ### O que é do gerente

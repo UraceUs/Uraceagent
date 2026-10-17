@@ -462,7 +462,8 @@ def para_painel(con, o):
     ls = linhas(con, o)
     avisos = _avisos(con, o)
     atual = avisos.get(o["status"]) or {}
-    return {"sem_estoque": bool(estoque_site.pendentes(con, o)), "id": o["id"], "tipo": o["kind"], "status": o["status"], "total": o["amount"], "pago": o["amount_paid"],
+    return {"sem_estoque": bool(estoque_site.pendentes(con, o)),
+            "estoque": [{"linha": n, "nota": t} for n, t in estoque_site.baixas(con, o)], "id": o["id"], "tipo": o["kind"], "status": o["status"], "total": o["amount"], "pago": o["amount_paid"],
             "criado_em": o["created_at"], "pago_em": o["paid_at"], "nome": o["name"], "email": o["email"], "telefone": o["phone"],
             "resumo": "; ".join(x["name"] + (f" × {x['quantity']}" if x["quantity"] > 1 else "") for x in ls)[:300],
             "opp_id": o["opp_id"], "atencao": o["attention"], "aviso_em": atual.get("em") or (o["notified_at"] if o["status"] == "pago" else None),

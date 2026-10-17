@@ -384,7 +384,9 @@ MIGRACOES = [
     # revisão do #309: o "Resolver: sem estoque" que a equipe já resolveu (botão Resolvido em Pedidos do site) sai do
     # "Resolver" do pedido e do "Pagos sem estoque" do Painel do site; a frase fica na linha e no histórico
     ("store_orders", "stock_resolved_at", "TEXT"),
+    ("store_orders", "stock_resolved_by", "INTEGER REFERENCES users(id)"),
     ("store_order_items", "stock_resolved_at", "TEXT"),
+    ("store_order_items", "stock_resolved_by", "INTEGER REFERENCES users(id)"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

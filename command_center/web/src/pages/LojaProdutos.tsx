@@ -185,6 +185,7 @@ export function EditarProduto({ id }: { id: number }) {
             <span>{tr("Em estoque: tem {0} {1} (Galpão + Pista)", qtd(ligado('')!.tem), ligado('')!.unit)} · <Link to={`/site/estoque/${p.slug}`}>{tr("Estoque do site")}</Link></span></div>
             : <label className="check loja-check"><input type="checkbox" checked={e.in_stock ?? p.in_stock} disabled={!gerente} onChange={x => muda({ in_stock: x.target.checked })} /> {tr("Em estoque")}</label>}
         </div>
+        {emEstoque && vars.length > 0 && <p className="small muted" style={{ margin: 0 }}>{tr("Com opções, a caixa \"Em estoque\" do produto vale para as opções sem item ligado (desmarcada, nenhuma delas vende); as ligadas seguem o estoque.")}</p>}
         {emEstoque && !Object.keys(ligados).length && <p className="small muted" style={{ margin: 0 }}>{tr("Em estoque, mas ainda sem item ligado: até ligar, o site segue a caixa \"Em estoque\".")} <Link to={`/site/estoque/${p.slug}`}>{tr("Ligar em Estoque do site")}</Link></p>}
       </div>
     </section>

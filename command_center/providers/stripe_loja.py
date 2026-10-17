@@ -390,7 +390,8 @@ def ligar_e_vender(con, oid):
     notas = (f"[Loja · pago no Stripe] {descricao(o)} — US$ {valor:,.2f}\nPedido #{o['id']} · {entrega}"
              + (f"\nEndereço:\n{_endereco(o)}" if o["delivery"] == "envio" and o["shipping"] else "")
              + f"\nCard: {nota}"
-             + "".join(f"\n⚠ {x}" for x in resolver))
+             + "".join(f"\n⚠ {x}" for x in resolver)
+             + (f"\nEstoque: {o['stock_note']}" if o.get("stock_note") and not resolver else ""))
     opp = inserir(con, "opportunities", name=o["name"] or o["email"] or "Cliente da loja", email=o["email"], phone=o["phone"],
                   service=f"Store: {descricao(o)}", amount=valor, stage="GANHO" if cid else "FECHAMENTO", source="Site",
                   client_id=cid, notes=notas, campaign=o["utm"],
@@ -448,6 +449,8 @@ def avisar(con, oid, enviar=None):
                 + (f"Endereço:\n{_endereco(o)}\n" if o["shipping"] else "")
                 + f"Card: {o['link_note'] or '—'}\n"
                 + (f"RESOLVER: {o['attention']}\n" if o.get("attention") else "")
+                # #309: o que saiu do estoque, para separar exatamente aquilo (no item de série, a unidade pelo serial)
+                + (f"Estoque: {o['stock_note']}\n" if o.get("stock_note") and not o["stock_note"].startswith("sem estoque") else "")
                 + f"\nSeparar e entregar. Vendas: https://ops.urace.us/ops/sales/{o['opp_id']}"
                 + f"\nPágina do pedido: {pedido_site.link(o)}")
         atualizar(con, "store_orders", oid, notified_at=agora(), notify_error=None, updated_at=agora())

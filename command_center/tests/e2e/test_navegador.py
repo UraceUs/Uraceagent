@@ -3166,6 +3166,11 @@ def test_o_gerente_monta_uma_pagina_no_editor_e_publica(servidor, navegador):
         g.close()
 
 
+def _confirmar_marcador(g, rotulo):
+    """#309 (revisão): mudar o marcador muda o que o site vende, e o painel pergunta antes."""
+    g.get_by_role("dialog", name=re.compile("^Passar ")).get_by_role("button", name=rotulo, exact=True).click()
+
+
 @pytest.mark.parametrize("largura", [360, 390])
 def test_o_gerente_marca_em_estoque_liga_conta_e_a_venda_deixa_out_of_stock(servidor, navegador, largura):
     """#309 (dono, 16/10): "a gente seleciona o que que é dropshipping e o que que a gente tem em estoque … e o que tiver
@@ -3188,6 +3193,7 @@ def test_o_gerente_marca_em_estoque_liga_conta_e_a_venda_deixa_out_of_stock(serv
         cartao.wait_for()
         assert cartao.locator(".cd-pill").inner_text().strip().lower() == "dropshipping"
         cartao.get_by_role("button", name="Passar a em estoque").click()
+        _confirmar_marcador(g, "Passar a em estoque")
         g.get_by_text("Marcado como em estoque.", exact=False).wait_for()
         cartao.get_by_text("falta ligar ao estoque").wait_for()
         cartao.get_by_role("button", name=re.compile("^Ligar ")).click()
@@ -3226,6 +3232,12 @@ def test_o_gerente_marca_em_estoque_liga_conta_e_a_venda_deixa_out_of_stock(serv
         g.get_by_role("button", name=re.compile("^Sem saldo")).click()
         cartao = g.locator("article.cd", has=g.get_by_role("heading", name=alvo["name"], level=3))
         cartao.locator(".cd-grande", has_text="0").wait_for()
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        # Pedidos do site diz o que saiu do estoque, para a equipe separar (revisão do PR #320)
+        abrir(g, servidor, "/site/pedidos")
+        pedido = g.locator(".card", has_text=f"rui.estoque.{largura}.e2e@example.com").first
+        pedido.get_by_text("baixou 1 do estoque", exact=False).wait_for()
         r = g.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
@@ -3303,6 +3315,7 @@ def test_estoque_do_site_mostra_cada_local_liga_sem_inflar_e_o_dropshipping_desl
         assert g.evaluate("[...document.querySelectorAll('.cd .btn')].every(b => b.offsetHeight >= 40)"), "toque de 40 px"
         # dropshipping com a ligação: o cartão mostra o item e o Desligar; o Ligar de outro produto diz onde ele está
         cartao.get_by_role("button", name="Passar a dropshipping").click()
+        _confirmar_marcador(g, "Passar a dropshipping")
         cartao.locator(".cd-pill", has_text="Dropshipping").wait_for()
         cartao.get_by_text("Peça Revisão Ligar E2E 1", exact=False).wait_for()
         g.get_by_label("Buscar produto").fill(outro["name"][:24])
@@ -3367,6 +3380,7 @@ def test_estoque_do_site_a_pagina_nao_volta_a_toa_e_abre_filtrado_pelo_produto(s
         assert g.get_by_text("21–21 de 21").is_visible(), "o cartão continua no filtro: a página fica"
         # passar a dropshipping tira o cartão do filtro: a página vazia volta para a anterior
         g.get_by_role("button", name="Passar a dropshipping").click()
+        _confirmar_marcador(g, "Passar a dropshipping")
         g.get_by_role("button", name=re.compile("^Em estoque · 20$")).wait_for()
         g.locator("article.cd").nth(19).wait_for()
         assert g.locator("article.cd").count() == 20 and g.get_by_role("button", name="Próximas").count() == 0
@@ -3428,3 +3442,50 @@ def test_pago_sem_estoque_o_operador_marca_resolvido_e_o_painel_zera(servidor, n
         g.request.patch(servidor + f"/api/site/produtos/{alvo['id']}", headers=csrf, data={"fulfillment": "dropshipping"})
         g.close()
 
+
+def test_estoque_do_site_confirma_o_marcador_pagina_os_itens_e_solta_o_item_na_busca_nova(servidor, navegador):
+    """Workflow da revisão do PR #320: mudar o marcador pede confirmação (Cancelar não muda nada); a lista do Ligar
+    passa de 12 itens com Anteriores/Próximas; e a busca nova solta o item escolhido, que antes era ligado sem estar na
+    tela."""
+    g = entrar(navegador, servidor, largura=390, altura=844)
+    csrf = _csrf(g)
+    alvo = _produtos_para_estoque(g, servidor)[12]
+    for n in range(1, 15):
+        assert g.request.post(servidor + "/api/estoque/item", headers=csrf,
+                              form={"name": f"Peça Paginada E2E {n:02d}", "kind": "peca", "category": "outros"}).ok
+    try:
+        abrir(g, servidor, f"/site/estoque/{alvo['slug']}")
+        cartao = g.locator("article.cd", has=g.get_by_role("heading", name=alvo["name"], level=3))
+        cartao.get_by_role("button", name="Passar a em estoque").click()
+        dlg = g.get_by_role("dialog", name=re.compile("^Passar "))
+        dlg.get_by_text("Galpão + Pista", exact=False).wait_for()
+        dlg.get_by_role("button", name="Cancelar").click()
+        assert cartao.locator(".cd-pill").inner_text().strip().lower() == "dropshipping", "Cancelar não muda o marcador"
+        cartao.get_by_role("button", name="Passar a em estoque").click()
+        _confirmar_marcador(g, "Passar a em estoque")
+        g.get_by_text("Marcado como em estoque.", exact=False).wait_for()
+        cartao.get_by_role("button", name=re.compile("^Ligar ")).click()
+        painel = g.get_by_role("dialog")
+        painel.get_by_label("Buscar no estoque").fill("Paginada E2E")
+        painel.get_by_role("button", name="Buscar", exact=True).click()
+        painel.get_by_text("1–12 de 14 itens").wait_for()
+        painel.get_by_role("button", name="Próximas").click()
+        painel.get_by_text("13–14 de 14 itens").wait_for()
+        painel.locator("label.es-item", has_text="Peça Paginada E2E 14").wait_for()
+        painel.get_by_role("button", name="Anteriores").click()
+        painel.locator("label.es-item", has_text="Peça Paginada E2E 01").click()
+        painel.get_by_label("Buscar no estoque").fill("Zzz Inexistente E2E")
+        painel.get_by_role("button", name="Buscar", exact=True).click()
+        painel.get_by_text("Nenhum item com esse nome", exact=False).wait_for()
+        painel.get_by_label(re.compile("^Quanto tem")).fill("1")
+        painel.get_by_role("button", name="Ligar e contar").click()
+        g.get_by_text("Escolha o item do estoque.").wait_for()
+        ligado = g.request.get(servidor + f"/api/site/produtos/{alvo['id']}").json()["produto"]["estoque"]["ligados"]
+        assert not ligado, "a busca nova soltou o item: nada foi ligado sem estar na tela"
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    finally:
+        g.request.delete(servidor + f"/api/site/estoque/{alvo['id']}/ligar", headers=csrf)
+        g.request.patch(servidor + f"/api/site/produtos/{alvo['id']}", headers=csrf, data={"fulfillment": "dropshipping"})
+        g.close()

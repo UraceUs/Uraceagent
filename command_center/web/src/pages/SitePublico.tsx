@@ -494,7 +494,7 @@ function Cartoes() {
 interface PedidoLista { id: number; tipo: 'produto' | 'carrinho'; status: string; total: number; pago: number | null; criado_em: string
   pago_em: string | null; nome: string | null; email: string | null; telefone: string | null; resumo: string; opp_id: number | null
   atencao: string | null; aviso_em: string | null; aviso_para: string | null; aviso_erro: string | null; refeito_de: number | null; link: string; idioma?: 'en' | 'pt'; conta?: number | null
-  sem_estoque?: boolean }
+  sem_estoque?: boolean; estoque?: { linha: string; nota: string }[] }
 const POR_PAGINA_PEDIDOS = 30
 
 function Pedidos() {
@@ -528,6 +528,8 @@ function Pedidos() {
         {p.status !== 'aberto' && <div className="small">{p.aviso_em ? (p.aviso_para ? tr("Avisado por e-mail ({0}) em {1}.", p.aviso_para, fmtDateTime(p.aviso_em)) : tr("Sem e-mail para avisar: ligue para o cliente."))
           : p.aviso_erro ? <span style={{ color: 'var(--crit)' }}>{tr("O aviso não saiu: {0}", p.aviso_erro)}</span> : tr("Aviso por e-mail: saindo.")}</div>}
         {p.atencao && <div className="small" style={{ color: 'var(--crit)', overflowWrap: 'anywhere' }}><b>{tr("Resolver:")}</b> {p.atencao}</div>}
+        {/* #309: o que a venda tirou do estoque, para separar exatamente aquilo (no kart usado e no motor, o serial) */}
+        {(p.estoque || []).map((x, i) => <div key={i} className="small" style={{ overflowWrap: 'anywhere' }}><b>{tr("Estoque:")}</b> {x.linha ? `${x.linha}: ` : ''}{x.nota}</div>)}
         <div className="row wrap" style={{ gap: 8 }}>
           {p.sem_estoque && <button className="btn sm" disabled={resolvendo === p.id} onClick={() => resolvido(p)}
             aria-label={tr("Resolvido: sem estoque do pedido #{0}", p.id)}>{tr("Resolvido")}</button>}
