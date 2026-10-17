@@ -293,6 +293,26 @@ def _coletar(con):
                           facts=[(f"{_dbr(b['date'])} · {per.get(b['period'], b['period'])}", (b["piloto"] or b["conta"]))
                                  for b in pedidos_site[:6]]))
 
+    # ---- 4f1. sessão extra (#314) cancelada ou recusada com a invoice ainda aberta: anular no QuickBooks
+    from command_center.providers.cobranca_agenda import invoice_paga
+    from command_center.providers.contrato import CARD_DO_AGENDAMENTO
+    for b in todos(con, f"""SELECT b.*, {CARD_DO_AGENDAMENTO} AS card, COALESCE(p.name, a.name) AS quem
+                              FROM bookings b JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                             WHERE b.coverage='extra' AND b.status IN ('cancelada','recusada') AND b.qbo_invoice_id IS NOT NULL
+                             ORDER BY b.date DESC, b.id DESC LIMIT 50"""):
+        if invoice_paga(con, b):
+            continue                             # paga: a devolução é conversa da equipe, fora deste aviso
+        outras = um(con, """SELECT COUNT(*) AS n FROM bookings WHERE qbo_invoice_id=? AND id<>?
+                             AND status IN ('pendente','confirmada')""", (b["qbo_invoice_id"], b["id"]))["n"]
+        itens.append(dict(key=_chave("extra-cancelada", "booking", b["id"]), level="MEDIUM",
+                          title=f"Sessão extra cancelada com a invoice {b['invoice_doc'] or ''} ainda aberta".replace("  ", " "),
+                          why="A sessão extra do aluno recorrente foi cancelada, mas a invoice do QuickBooks continua aberta. "
+                              + ("Ela também cobra outras sessões do mesmo pedido: tire só a linha desta sessão no QuickBooks."
+                                 if outras else "Anule a invoice no QuickBooks (ou ajuste, se o cliente vai remarcar)."),
+                          entity={"type": "booking", "id": b["id"]}, client_id=b["card"], link=None, action="Ver agenda",
+                          facts=[("Sessão", f"{_dbr(b['date'])} · {b['quem']}"), ("Invoice", b["invoice_doc"] or b["qbo_invoice_id"]),
+                                 ("Valor da extra", _usd(b["price"])), ("Client ID", str(b["card"] or "sem card"))]))
+
     # ---- 4f2. balcão (#87): invoice de peças aberta, esperando alguém apertar "Enviar"
     pecas = todos(con, """SELECT p.id, p.service_date, p.total, p.qbo_error, COALESCE(c.pilot_name, c.name) AS cliente
                             FROM parts_invoices p JOIN clients c ON c.id=p.client_id

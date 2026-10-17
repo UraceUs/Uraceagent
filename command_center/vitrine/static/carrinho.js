@@ -289,7 +289,10 @@
     li.appendChild(acoes)
     if (x.erro) {
       var e = el('p', 'carrinho-linha-erro', x.erro)
-      if (/Account|profile|measurements|perfil|medidas/.test(x.erro)) {
+      if (x.recorrente) {                    // #314: aluno da Academy marca na área dele (do plano ou extra por invoice)
+        var plano = el('a', null, t(' Book it in your account', ' Marque na sua conta')); plano.href = portal + '/book'
+        e.appendChild(plano)
+      } else if (/Account|profile|measurements|perfil|medidas/.test(x.erro)) {
         var ir = el('a', null, t(' Update it in your account', ' Atualize na sua conta')); ir.href = portal + (/Account/.test(x.erro) ? '/account' : '/drivers')
         e.appendChild(ir)
       }

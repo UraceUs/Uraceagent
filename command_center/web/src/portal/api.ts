@@ -54,7 +54,8 @@ export interface Servico { id: number; name: string; description: string | null;
 export interface Checkout { id: number; status: 'pendente' | 'confirmada' | 'recusada' | 'cancelada'; date: string; period: 'manha' | 'tarde' | 'dia'
   service: string | null; price: number | null; driver: string | null; aceita: boolean; confirmada: boolean
   pagamento: { estado: 'pagar' | 'pago' | 'contrato' | 'preparando' | 'equipe'; link: string | null; invoice: string | null; total: number | null; para: string | null }
-  waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando' | 'equipe'; link: string | null; para?: string | null } }
+  waiver: { estado: 'ok' | 'email' | 'assinar_aqui' | 'preparando' | 'equipe'; link: string | null; para?: string | null }
+  coverage?: Cobertura }
 /** #169: um plano mensal que o site vende (Academy, Boost). */
 export interface Plano { id: number; name: string; description: string | null; price: number; months: number; sessions_month: number; total: number }
 /** #169: as etapas do plano, como o servidor resume para o cliente. */
@@ -65,7 +66,13 @@ export interface Booking { id: number; date: string; period: 'manha' | 'tarde' |
   notes: string | null; decision_note: string | null; driver: string | null; created_at: string; service: string | null; price: number | null
   /** #50: aceita pela equipe — falta pagar a invoice e/ou assinar a waiver */
   accepted?: string | null; charge_kind?: 'contrato' | 'invoice' | null; invoice_doc?: string | null; invoice_link?: string | null
-  invoice_sent?: number; waiver_sent?: number }
+  invoice_sent?: number; waiver_sent?: number
+  /** #314: aluno recorrente — "plano" (incluída no plano) ou "extra" (sessão extra, pela invoice) */
+  coverage?: Cobertura; group_id?: number | null }
+/** #314: a sessão do aluno recorrente. O cliente vê só "Included in your plan" ou "Extra session · $X". */
+export type Cobertura = 'plano' | 'extra' | null
+export const rotuloCobertura = (c: Cobertura | undefined, preco: number | null | undefined) =>
+  c === 'plano' ? 'Included in your plan' : c === 'extra' ? `Extra session${preco != null ? ` · ${usd(preco)}` : ''}` : null
 
 export const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 
@@ -91,3 +98,19 @@ export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages:
 /** #135: o convite da waiver por e-mail, como o link mostra (sem conta). O card e o piloto vêm do convite. */
 export interface ConviteWaiver { kind: 'adult' | 'parental'; driver: string; signer_name: string; email: string; expires_at: string
   model: { name: string; pages: number; text: string; declaration: string | null } }
+
+/** #314: o piloto é aluno recorrente (plano mensal vigente)? Nunca o contador do pacote (dono, 01/10). */
+export interface PlanoPiloto { driver_id: number; recurring: boolean; plan: string | null; extra_price: number | null
+  /** #314, parte 3: como paga a sessão — do plano (QuickBooks), carrinho (Stripe) ou invoice */
+  payment?: 'plano' | 'stripe' | 'invoice' }
+export type Turno = 'manha' | 'tarde' | 'dia'
+/** #314: um dia do pedido, como o servidor vê: aberto ou não, e do plano ou extra. */
+export interface DiaCotado { date: string; period: Turno; ok: boolean; reason: string | null; message: string | null
+  coverage: Cobertura; price: number | null; label: string | null }
+export interface Cotacao { slots: DiaCotado[]; included: number; extras: number; extras_total: number; extra_price_missing: boolean
+  service: string; hash: string }
+/** #314: as etapas do pedido de vários dias. */
+export interface CheckoutGrupo { id: number; service: string | null; driver: string | null; status: 'pendente' | 'confirmada' | 'cancelada'
+  sessions: { id: number; date: string; period: Turno; status: Booking['status']; coverage: Cobertura; price: number | null; label: string | null }[]
+  included: number; extras: number; extras_total: number; aceita: boolean; confirmada: boolean
+  pagamento: Checkout['pagamento']; waiver: Checkout['waiver'] }

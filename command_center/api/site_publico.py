@@ -122,7 +122,7 @@ def agendamentos(status: str | None = None, de: str | None = None, ate: str | No
     lista = ag.lista(con, status or None, de, ate)
     from command_center.providers import cobranca_agenda
     for a in lista:                          # contrato mensal: só a equipe vê (#61)
-        a["contrato"] = contrato.situacao_do_agendamento(con, a["client_id"], a["date"])
+        a["contrato"] = contrato.situacao_do_agendamento(con, a["client_id"], a["date"], a)
         a["cobranca"] = cobranca_agenda.situacao(con, a) if a.get("accepted_at") else None
     return {"agendamentos": lista}
 
@@ -177,6 +177,8 @@ class ServicoIn(BaseModel):
     kind: str | None = None                 # #169: session (avulsa) | plan (mensal: price é por mês)
     months: int | str | None = None         # #169: meses do compromisso do plano
     sessions_month: int | str | None = None # #169: sessões por mês que o plano dá (vira o contrato do card)
+    extra_price: float | str | None = None  # #314: o valor da sessão extra do plano (vazio: mensal ÷ sessões)
+    extra_item: str | None = None           # #314: o item do QuickBooks da sessão extra do plano (pelo nome)
     active: bool | None = None
     sort: int | None = None
 

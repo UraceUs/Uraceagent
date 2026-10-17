@@ -605,9 +605,17 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
     c.get_by_text("per driver").wait_for()
     assert "$719.00" in c.locator(".portal-servicos").inner_text()
-    c.get_by_role("button", name="Request session").click()
-    c.get_by_text("Request sent!").wait_for()
-    c.get_by_role("link", name="My sessions").first.click()
+    # #314 (dono, 16/10): cliente novo no site com o Stripe ligado paga no carrinho — o botão é "Add to cart"
+    assert c.get_by_role("button", name="Request session").count() == 0
+    c.get_by_role("button", name="Add to cart").click()
+    c.wait_for_url(re.compile(r"/cart/"))
+    c.locator(".carrinho-linha").first.wait_for()
+    # o Aceitar da equipe é o caminho da invoice (Stripe desligado, ou pedido que a equipe recebe): entra pela API
+    csrf_c = {"X-CSRF": next(x["value"] for x in c.context.cookies() if x["name"] == "cp_csrf")}
+    pid = c.request.get(servidor + "/api/portal/me").json()["drivers"][0]["id"]
+    assert c.request.post(servidor + "/api/portal/bookings", headers=csrf_c,
+                          data={"date": sab.isoformat(), "period": "manha", "service_id": do_4t[0]["id"], "driver_id": pid}).ok
+    c.goto(servidor + "/portal/sessions")
     c.get_by_text("Waiting for confirmation").wait_for()
     # 3. equipe vê em "Precisa de atenção" e confirma na agenda
     abrir(g, servidor, "/attention")
@@ -633,6 +641,164 @@ def test_gerente_abre_a_agenda_cliente_marca_e_equipe_confirma(servidor, navegad
     assert kpi.locator(".card").count() == 0, "cartão dentro do cartão"
     assert "Morning · " in kpi.inner_text() and "AM" in kpi.inner_text(), kpi.inner_text()
     g.close(); c.close()
+
+
+# ------------------------------------------------------------------ aluno recorrente: vários dias num pedido (#314)
+# alvo de toque: altura E largura (a 360 px o dia do calendário tinha 38 px de largura)
+_TOQUE_VARIOS = """() => [...document.querySelectorAll('.portal-varios-dia .btn, .portal-varios-atalhos .btn, .portal-cal-d.aberto')]
+  .filter(el => el.offsetHeight < 40 || el.offsetWidth < 40)
+  .map(el => `${el.className}=${el.offsetWidth}x${el.offsetHeight}px "${(el.textContent || '').trim().slice(0, 16)}"`).slice(0, 5)"""
+
+
+def _aluno_recorrente(navegador, servidor, g, csrf, largura, quem="rita", ip=None, telefone=None):
+    """Conta e piloto pela API do cliente; o card e a mensalidade (1 sessão por mês, extra de $689.23) pela equipe.
+    O card fica em `c.card`."""
+    c = navegador.new_page(viewport={"width": largura, "height": 844})
+    c.erros_js = []
+    c.on("pageerror", lambda e: c.erros_js.append(str(e)))
+    cliente_pela_api(c, servidor, "Rita Recorrente", f"{quem}{largura}.e2e@example.com", piloto=f"Rafa Recorrente {quem} {largura}",
+                     ip=ip or f"10.1.31.{largura % 250}", telefone=telefone or f"(407) 555-01{largura % 100:02d}")
+    pid = c.request.get(servidor + "/api/portal/me").json()["drivers"][0]["id"]
+    r = g.request.post(servidor + f"/api/site/drivers/{pid}/criar-cliente", headers=csrf)
+    assert r.ok, r.text()
+    card = r.json()["client_id"]
+    r = g.request.patch(servidor + f"/api/clients/{card}/mensal", headers=csrf,
+                        data={"monthly_amount": 2756.90, "monthly_sessions": 1, "extra_session_price": 689.23})
+    assert r.ok, r.text()
+    c.card = card
+    return c
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_aluno_recorrente_marca_toda_quarta_num_pedido_so_no_celular(servidor, navegador, largura):
+    """#314, dono 16/10: "se ele quiser marcar para quartas, toda quarta … ele consegue marcar isso tudo em um book".
+    Cada dia diz só "Included in your plan" ou "Extra session · $689.23"; o resumo soma; um h1, nada rola para o lado,
+    alvo de toque de 40 px."""
+    g = entrar(navegador, servidor)
+    csrf = {"X-CSRF": next(x["value"] for x in g.context.cookies() if x["name"] == "cc_csrf")}
+    abrir_quarta = [{"weekday": 2, "period": p, "open": True, "capacity": 3} for p in ("manha", "tarde")]
+    assert g.request.put(servidor + "/api/site/agenda/semana", headers=csrf, data=abrir_quarta).ok
+    try:
+        c = _aluno_recorrente(navegador, servidor, g, csrf, largura)
+        c.goto(servidor + "/portal/book")
+        c.get_by_role("heading", name="Book sessions", level=1).wait_for()
+        assert c.get_by_text("2756").count() == 0, "o cliente não vê conta nem contador do pacote"
+        c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
+        c.get_by_role("button", name="Every Wed").click()
+        dias = c.locator(".portal-varios-dia")
+        dias.first.wait_for()
+        n = dias.count()
+        assert n >= 2, "as quartas abertas das próximas 4 semanas"
+        c.get_by_text("Included in your plan").first.wait_for()
+        c.get_by_text("Extra session · $689.23").first.wait_for()
+        soma = c.locator(".reserva-total .soma")
+        soma.wait_for()
+        assert re.search(r"\d+ included · \d+ extras? ", soma.inner_text().replace("\n", " ")), soma.inner_text()
+        texto = c.locator("main").inner_text() if c.locator("main").count() else c.inner_text("body")
+        assert " of 1" not in texto and "used" not in texto.lower(), "o contador (usadas/total) não vai para o cliente"
+        assert len([t for nv, t in _cabecalhos(c) if nv == 1]) == 1
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not c.evaluate(_TOQUE_VARIOS), c.evaluate(_TOQUE_VARIOS)
+        # tirar um dia tira da lista e o resumo acompanha
+        c.get_by_role("button", name=re.compile("^Remove ")).first.click()
+        c.wait_for_function(f"() => document.querySelectorAll('.portal-varios-dia').length === {n - 1}")
+        if largura == 390:
+            c.get_by_role("button", name=re.compile(r"^Book \d+ session")).click()
+            c.wait_for_url(re.compile(r"/ops/portal/sessions/group/\d+$"))
+            c.get_by_role("heading", name="Almost there", level=1).wait_for()
+            c.get_by_text("Request received").wait_for()             # venda automática desligada: a equipe aceita
+            assert c.locator(".portal-varios-dia").count() == n - 1
+            r = c.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], r
+            abrir(g, servidor, "/site/agendamentos")
+            g.get_by_text(re.compile("pedido de vários dias #")).first.wait_for()
+            g.get_by_text(re.compile(r"extra \$689\.23")).first.wait_for()
+        else:
+            # #314: o aluno recorrente não vê o carrinho (Stripe) na reserva do site: ele marca pelo plano
+            c.goto(servidor + "/portal/reserve")
+            c.get_by_role("heading", name="Book your session", level=1).wait_for()
+            c.get_by_text("Academy student: sessions in your monthly plan are included").wait_for()
+            assert c.get_by_role("button", name="Add to cart").count() == 0
+            # decisões 1 e 2: nada de preço cheio, depósito ou total para o aluno — ele vê o rótulo de cada dia
+            c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
+            c.get_by_text("you see which one it is before booking").wait_for()
+            passo1 = c.locator("section[aria-labelledby=r1]")
+            assert passo1.locator(".reserva-total").count() == 0, "sem o total com depósito no passo 1"
+            assert "$719" not in passo1.inner_text() and "Security deposit" not in passo1.inner_text(), passo1.inner_text()
+        assert not c.erros_js, c.erros_js
+        c.close()
+    finally:
+        g.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                      data=[{**x, "open": False} for x in abrir_quarta])
+        g.close()
+
+
+def test_aluno_no_ultimo_mes_do_plano_marca_o_mes_seguinte_como_sessao_avulsa(servidor, navegador):
+    """#314: a recorrência termina neste mês (o último mês de um contrato, ou o plano de 1 mês do site). O mês seguinte
+    aparece na agenda, mas o plano não cobre: o dia diz isso e tem "Book as a regular session", que leva ao fluxo de um
+    dia e ao carrinho (Stripe ligado aqui). Também: sem o tipo de sessão, a tela diz o que falta; o atalho de fim de
+    semana sem dia aberto avisa; a 360 px, nada rola para o lado e o toque tem 40 px."""
+    import sqlite3
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    g = entrar(navegador, servidor)
+    csrf = {"X-CSRF": next(x["value"] for x in g.context.cookies() if x["name"] == "cc_csrf")}
+    abrir_quarta = [{"weekday": 2, "period": p, "open": True, "capacity": 3} for p in ("manha", "tarde")]
+    assert g.request.put(servidor + "/api/site/agenda/semana", headers=csrf, data=abrir_quarta).ok
+    try:
+        c = _aluno_recorrente(navegador, servidor, g, csrf, 360, quem="ultimo", ip="10.1.32.7", telefone="(407) 555-0177")
+        hoje = datetime.now(ZoneInfo("America/New_York")).date()
+        este_mes = hoje.replace(day=1)
+        con = sqlite3.connect(BANCO)
+        con.execute("""INSERT INTO monthly_recurring (client_id, amount, item_id, months, start_on, end_on, status)
+                       VALUES (?, 2756.90, '1', 6, ?, ?, 'active')""",
+                    (c.card, (este_mes - timedelta(days=150)).replace(day=1).isoformat(), este_mes.isoformat()))
+        con.commit()
+        con.close()
+        prox = (este_mes + timedelta(days=32)).replace(day=1)
+        quarta = prox + timedelta(days=(2 - prox.weekday()) % 7)            # a 1ª quarta do mês seguinte (até 37 dias)
+        c.goto(servidor + "/portal/book")
+        c.get_by_role("heading", name="Book sessions", level=1).wait_for()
+        assert c.locator(".portal-cal[role=group] [role=gridcell]").count() == 0, "o calendário é um grupo de botões"
+        # o atalho do fim de semana sem dia aberto diz por que nada entrou (o sábado pode ter sido aberto por outro teste)
+        abertos = {d["date"] for d in c.request.get(servidor + "/api/portal/availability").json()["dias"] if d["any_open"]}
+        sab = hoje + timedelta(days=5 - hoje.weekday())
+        if not {sab.isoformat(), (sab + timedelta(days=1)).isoformat()} & abertos:
+            c.get_by_role("button", name="This weekend").click()
+            c.get_by_text("No open days that weekend.").wait_for()
+        rotulo = f"{quarta.strftime('%A, %B ')}{quarta.day}"
+        for _ in range(3):
+            if c.get_by_role("button", name=f"{rotulo}, available").count():
+                break
+            c.get_by_role("button", name="Next month").click()
+        c.get_by_role("button", name=f"{rotulo}, available").click()
+        assert c.get_by_role("button", name=f"{rotulo}, selected").get_attribute("aria-pressed") == "true"
+        c.get_by_text("Pick the session type above to see what is included.").wait_for()
+        c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
+        c.get_by_text("Your monthly plan does not cover this date").wait_for()
+        assert c.get_by_role("button", name=re.compile(r"^Book \d+ session")).is_disabled()
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not c.evaluate(_TOQUE_VARIOS), c.evaluate(_TOQUE_VARIOS)
+        c.get_by_role("button", name="Book as a regular session").click()
+        c.get_by_role("heading", name="Book a session", level=1).wait_for()
+        c.get_by_text("Regular session: your monthly plan does not cover this date").wait_for()
+        assert c.get_by_role("button", name="Morning").get_attribute("aria-pressed") == "true", "o dia e o turno vêm escolhidos"
+        assert len([t for nv, t in _cabecalhos(c) if nv == 1]) == 1
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        c.get_by_role("button", name="Add to cart").click()
+        c.wait_for_url(re.compile(r"/cart/"))
+        c.locator(".carrinho-linha").first.wait_for()
+        c.wait_for_load_state("networkidle")
+        assert "monthly plan" not in c.locator(".carrinho-linha").first.inner_text(), "o carrinho aceita o dia que o plano não cobre"
+        assert not c.erros_js, c.erros_js
+        c.close()
+    finally:
+        g.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
+                      data=[{**x, "open": False} for x in abrir_quarta])
+        g.close()
 
 
 # ------------------------------------------------------------------ vínculo (#42)
@@ -1722,7 +1888,7 @@ def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(
 
 def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(servidor, navegador):
     """O visitante escolhe no site; entra na conta; a agenda da área do cliente abre com o kart,
-    o dia e o turno escolhidos, e o pedido vai para a equipe como qualquer outro.
+    o dia e o turno escolhidos, e o cliente novo paga no carrinho do site (#314: Stripe ligado).
 
     #262: o site público já não oferece o "Continue to booking" — o caminho dele é o carrinho. A
     reserva da área do cliente (#164) continua existindo e é a daqui para frente, aberta pelo mesmo
@@ -1777,9 +1943,12 @@ def test_site_novo_escolhe_kart_dia_e_turno_e_a_area_do_cliente_abre_ja_marcada(
     assert v.get_by_role("radio", name=re.compile("Sami Site")).is_checked(), "um piloto só: já vem escolhido"
     assert v.locator("textarea").input_value() == "Kart: 2-stroke"
     v.get_by_label("I agree to the").check()
-    v.get_by_role("button", name="Request this session").click()
-    v.wait_for_url(re.compile(r"/ops/portal/sessions/\d+$"))
-    v.get_by_text("Request received").wait_for()            # venda automática desligada: a equipe aceita
+    # #314 (dono, 16/10): cliente novo, Stripe ligado — paga no carrinho do site, com o piloto já escolhido
+    assert v.get_by_role("button", name="Request this session").count() == 0
+    v.get_by_role("button", name=re.compile(r"^Add to cart · \$")).click()
+    v.wait_for_url(re.compile(r"/cart/"))
+    v.locator(".carrinho-linha").first.wait_for()
+    assert "2-stroke" in v.locator(".carrinho-linhas").inner_text()
     v.close()
     assert not erros, erros
 
@@ -1853,12 +2022,13 @@ def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pag
         r = v.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         v.get_by_label("I agree to the").check()
-        v.get_by_role("button", name=re.compile("^Book and pay")).click()
-        v.wait_for_url(re.compile(r"/ops/portal/sessions/\d+$"))
-        v.get_by_role("heading", name="Almost there", level=1).wait_for()
-        v.get_by_text("Spot reserved").wait_for()
-        assert v.get_by_text(re.compile("Pay the invoice|Paid")).count() >= 1
-        assert v.get_by_text("Sign the waiver").count() == 1
+        # #314 (dono, 16/10): "cliente novo, que não for do Kart School, ele vai pagar pelo Stripe" — com o Stripe
+        # ligado, o pagamento é o do carrinho (sem ele, a invoice do QuickBooks continua: test_venda_site)
+        assert v.get_by_role("button", name=re.compile("^Book and pay")).count() == 0
+        v.get_by_role("button", name=re.compile(r"^Add to cart · \$")).click()
+        v.wait_for_url(re.compile(r"/cart/"))
+        v.locator(".carrinho-linha").first.wait_for()
+        assert "4-stroke" in v.locator(".carrinho-linhas").inner_text()
         r = v.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         assert not erros, erros
