@@ -42,7 +42,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
-         "/site/produtos", "/site/produtos/235", "/site/editor",
+         "/site/produtos", "/site/produtos/235", "/site/editor", "/site/blog", "/site/blog/451",
          "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -166,6 +166,7 @@ def servidor(tmp_path_factory):
                CC_SITE_HOSTS="127.0.0.1",              # #148: o site novo responde no endereço do teste
                CC_ACESSO_LIVRE="livre@urace.us",       # #162: a conta do cofre
                CC_BALCAO_HOSTS="localhost",           # #180: localhost faz o papel de parts.urace.us
+               CC_BALCAO_URL=f"http://localhost:{porta}",   # #311: o botão do balcão leva para lá, já logado
                STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_WEBHOOK_SECRET=WHSEC_E2E, STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM",  # 32 bytes de teste
                CC_GOOGLE_BASE=GOOGLE.origem, CC_GOOGLE_WEB_CREDENTIALS=GOOGLE_CRED,
@@ -1472,6 +1473,33 @@ def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor
     assert g.request.get(servidor + f"/api/sales/{oid}").json()["invoice"] == "enviada"
     assert not g.erros_js, g.erros_js
     g.close()
+
+
+def test_o_botao_do_balcao_abre_o_parts_ja_logado(servidor, navegador):
+    """#311 (dono, 16/10): o botão vermelho "tem que direcionar a pessoa para o … parts.urace.us, já
+    logada com o mesmo login". O mecânico entra no painel (127.0.0.1), toca no botão e cai no balcão
+    do celular (localhost faz o papel do parts) sem passar pelo login, com o nome dele à vista."""
+    balcao = servidor.replace("127.0.0.1", "localhost")
+    pg = entrar(navegador, servidor, email="luis@urace.us", largura=360, altura=740)
+    abrir(pg, servidor, "/balcao")
+    botao = pg.get_by_role("button", name="Abrir o balcão do celular")
+    caixa = botao.bounding_box()
+    assert caixa and caixa["height"] >= 40
+    paginas = []
+    pg.on("framenavigated", lambda f: paginas.append(f.url) if f == pg.main_frame else None)
+    botao.click()
+    pg.wait_for_url(balcao + "/**")
+    pg.get_by_role("heading", name="Leia a peça").wait_for()
+    assert not any("/login" in u for u in paginas), paginas
+    assert "passe" not in pg.url, "o passe nunca aparece no endereço"
+    assert pg.get_by_role("button", name="Sair da conta de Luis Barros").is_visible()
+    assert pg.evaluate("document.documentElement.scrollWidth") <= 360
+    assert pg.evaluate("fetch('/ops/api/clients').then(r => r.status)") == 403
+    eu = pg.evaluate("fetch('/ops/api/auth/me').then(r => r.json())")
+    assert (eu["email"], eu["so_balcao"]) == ("luis@urace.us", True)
+    # voltar com o mesmo passe não entra de novo: o formulário reenviado cai no login, com o aviso
+    pg.close()
+    assert not pg.erros_js, pg.erros_js
 
 
 def _espera_no_banco(con, sql, args, valor, tempo=10):
@@ -3302,3 +3330,165 @@ def test_o_gerente_monta_uma_pagina_no_editor_e_publica(servidor, navegador):
         if pid:
             g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
         g.close()
+
+
+# ------------------------------------------------------------------ blog do site (#172)
+_ALVOS_DO_SITE = """() => [...document.querySelectorAll('main a, main button, main label.kart, header a, header summary')]
+    .filter(e => e.offsetParent !== null && !e.closest('p, li, dd, address, .post-corpo'))   // link no meio do texto não é botão
+    .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+    .filter(([h]) => h < 40)"""
+
+
+def test_blog_o_operador_escreve_o_admin_publica_e_o_artigo_cabe_no_celular(servidor, navegador, tmp_path):
+    """#172 (dono, 16/10: "editor do blog, pode seguir"): Site › Blog no celular. O operador cria o artigo pelo "Novo
+    artigo" (em cima), escreve, sobe a capa e salva o rascunho, mas não publica; o administrador publica, e o artigo sai
+    em /blog/<slug>/ com um h1, sem rolar para o lado e com alvo de toque de 40 px em 360 e 390 px."""
+    from PIL import Image
+    site = servidor.removesuffix("/ops")
+    url = "/blog/kart-racing-line-for-beginners-e2e/"
+    op = entrar(navegador, servidor, "op@urace.us", largura=390, altura=844)
+    adm, pid = None, None
+    try:
+        abrir(op, servidor, "/site/blog")
+        op.get_by_role("heading", name="Blog", level=1).wait_for()
+        titulos = [t for n, t in _cabecalhos(op) if n == 2]
+        assert titulos.index("Novo artigo") < next(i for i, t in enumerate(titulos) if t.startswith("Artigos")), \
+            "a inserção fica em cima (dono)"
+        novo = op.locator("section.card", has=op.get_by_role("heading", name="Novo artigo"))
+        novo.get_by_label("Título do artigo").fill("Kart Racing Line for Beginners e2e")
+        novo.get_by_label("Categoria do artigo").select_option("training-racing")
+        novo.get_by_role("button", name="Criar e abrir").click()
+        op.wait_for_url(re.compile(r".*/site/blog/\d+$"))
+        pid = int(op.url.rstrip("/").rsplit("/", 1)[1])
+        op.get_by_label("Resumo").fill("Braking point, apex and exit: the racing line for your first day on track.")
+        op.get_by_label("Descrição para o Google").fill("How to drive the racing line in a kart in Orlando: braking point, apex and exit, "
+                                                     "explained by a URACE coach.")
+        op.get_by_role("textbox", name="Texto do artigo").fill("Brake in a straight line, turn in late and look at the exit.")
+        foto = tmp_path / "capa.png"
+        Image.new("RGB", (2000, 1000), (200, 30, 30)).save(foto)
+        op.get_by_label("Subir a capa").set_input_files(str(foto))
+        op.get_by_text("Capa salva no rascunho").wait_for()
+        op.get_by_label("Descrição da capa").fill("A red kart at the apex")
+        op.get_by_role("button", name="Salvar rascunho").click()
+        op.get_by_text("Rascunho salvo.").wait_for()
+        assert op.get_by_role("button", name="Publicar", exact=True).count() == 0, "o operador não publica"
+        assert op.get_by_text("Só o administrador publica").count() == 1
+        assert op.request.post(servidor + f"/api/site/blog/{pid}/publicar", headers=_csrf(op)).status == 403
+        assert op.request.get(site + url).status == 404, "rascunho fora do site"
+        op.locator('iframe[title="Prévia do artigo"]').wait_for()
+        for largura in (390, 360):
+            op.set_viewport_size({"width": largura, "height": 800})
+            r = op.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not op.erros_js and not op.erros_api, (op.erros_js, op.erros_api)
+
+        adm = entrar(navegador, servidor, "italo@urace.us", largura=390, altura=844)
+        abrir(adm, servidor, f"/site/blog/{pid}")
+        adm.get_by_role("button", name="Publicar", exact=True).click()
+        adm.get_by_text("Publicado: o blog e o mapa do site já mostram.").wait_for()
+        assert f"<loc>https://127.0.0.1{url}</loc>" in adm.request.get(site + "/sitemap.xml").text(), "no mapa do site na hora"
+        for largura in (360, 390):
+            v = navegador.new_page(viewport={"width": largura, "height": 800})
+            erros = []
+            v.on("pageerror", lambda e: erros.append(str(e)))
+            v.goto(site + url)
+            v.wait_for_load_state("networkidle")
+            assert [t for n, t in _cabecalhos(v) if n == 1] == ["Kart Racing Line for Beginners e2e"], largura
+            r = v.evaluate(_VAZA)
+            assert not r["rola"] and not r["culpados"], (largura, r)
+            assert not v.evaluate(_ALVOS_DO_SITE), (largura, v.evaluate(_ALVOS_DO_SITE))
+            assert v.locator("img.post-capa").get_attribute("alt") == "A red kart at the apex"
+            assert not erros, erros
+            v.close()
+        assert not adm.erros_js and not adm.erros_api, (adm.erros_js, adm.erros_api)
+    finally:
+        if pid and adm:
+            adm.request.post(servidor + f"/api/site/blog/{pid}/despublicar", headers=_csrf(adm), data={"confirmar": True})
+        op.close()
+        if adm:
+            adm.close()
+
+
+def _artigo_novo(op, servidor, titulo):
+    """Um rascunho criado pela tela "Novo artigo"; devolve o id (a tela já abre nele)."""
+    abrir(op, servidor, "/site/blog")
+    novo = op.locator("section.card", has=op.get_by_role("heading", name="Novo artigo"))
+    novo.get_by_label("Título do artigo").fill(titulo)
+    novo.get_by_role("button", name="Criar e abrir").click()
+    op.wait_for_url(re.compile(r".*/site/blog/\d+$"))
+    return int(op.url.rstrip("/").rsplit("/", 1)[1])
+
+
+def test_blog_enter_texto_colado_e_link_para_a_home_ficam_no_editor(servidor, navegador):
+    """Revisão do #172: o Enter do Chrome criava <div> e o texto colado de uma página vem em <div>; o servidor jogava a
+    div fora e os parágrafos grudavam ao salvar. E o link para a home ("/") era recusado na tela e no servidor."""
+    op = entrar(navegador, servidor, "op@urace.us", largura=390, altura=844)
+    op.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    try:
+        pid = _artigo_novo(op, servidor, "Enter and Paste Test e2e")
+        caixa = op.get_by_role("textbox", name="Texto do artigo")
+        caixa.click()
+        op.keyboard.type("First paragraph of the article.")
+        op.keyboard.press("Enter")
+        op.keyboard.type("Second paragraph of the article.")
+        op.keyboard.press("Enter")
+        op.keyboard.type("Third one.")
+        op.keyboard.press("Enter")
+        colado = ('<div>Paragraph one from a web page.</div><div>Paragraph two from a web page.</div>'
+                  '<img src="x" onerror="window.__xss=1"><a href="javascript:window.__xss=2">bad</a>')
+        op.evaluate("""async (h) => { await navigator.clipboard.write([new ClipboardItem({
+            'text/html': new Blob([h], {type: 'text/html'}), 'text/plain': new Blob(['x'], {type: 'text/plain'})})]) }""", colado)
+        op.keyboard.press("Control+V")
+        op.get_by_role("button", name="Link", exact=True).click()
+        pergunta = op.get_by_role("dialog", name="Link")
+        pergunta.locator("input").fill("/")
+        pergunta.get_by_role("button", name="Pôr o link").click()
+        assert op.get_by_text("Use um endereço que comece com").count() == 0, "a tela aceita / (a home)"
+        op.get_by_role("button", name="Salvar rascunho").click()
+        op.get_by_text("Rascunho salvo.").wait_for()
+        salvo = op.request.get(servidor + f"/api/site/blog/{pid}").json()["post"]["draft"]["html"]
+        for par in ("First paragraph of the article.", "Second paragraph of the article.", "Third one.",
+                    "Paragraph one from a web page.", "Paragraph two from a web page."):
+            assert f"<p>{par}</p>" in salvo, (par, salvo)
+        assert 'href="/"' in salvo, salvo
+        assert "javascript" not in salvo and "onerror" not in salvo and op.evaluate("window.__xss") is None
+        assert not op.erros_js and not op.erros_api, (op.erros_js, op.erros_api)
+    finally:
+        op.close()
+
+
+def test_blog_o_admin_so_publica_o_que_viu(servidor, navegador):
+    """Revisão do #172: o admin abre o artigo e a prévia, o operador salva outro texto, o admin clica Publicar. Antes ia
+    ao ar o que ele nunca viu; agora a tela recebe 409, recarrega o artigo e avisa, e só o segundo clique publica."""
+    site = servidor.removesuffix("/ops")
+    url = "/blog/review-before-publishing-e2e/"
+    op = entrar(navegador, servidor, "op@urace.us", largura=390, altura=844)
+    adm, pid = None, None
+    try:
+        pid = _artigo_novo(op, servidor, "Review Before Publishing e2e")
+        r = op.request.patch(servidor + f"/api/site/blog/{pid}", headers=_csrf(op), data={
+            "description": "What the admin reviews before a kart article goes live on the URACE site, step by step.",
+            "html": "<p>The text the admin reviewed.</p>"})
+        assert r.ok, r.text()
+        adm = entrar(navegador, servidor, "italo@urace.us", largura=390, altura=844)
+        abrir(adm, servidor, f"/site/blog/{pid}")
+        adm.get_by_role("textbox", name="Texto do artigo").get_by_text("The text the admin reviewed.").wait_for()
+        r = op.request.patch(servidor + f"/api/site/blog/{pid}", headers=_csrf(op), data={
+            "title": "Changed After the Admin Opened e2e", "html": "<p>A text the admin never saw.</p>"})
+        assert r.ok, r.text()
+        adm.get_by_role("button", name="Publicar", exact=True).click()
+        adm.get_by_text("O rascunho mudou depois que você abriu o artigo.").wait_for()
+        assert adm.request.get(site + url).status == 404, "nada foi ao ar"
+        adm.get_by_role("heading", name="Changed After the Admin Opened e2e", level=2).wait_for()
+        adm.get_by_role("textbox", name="Texto do artigo").get_by_text("A text the admin never saw.").wait_for()
+        adm.get_by_role("button", name="Publicar", exact=True).click()
+        adm.get_by_text("Publicado: o blog e o mapa do site já mostram.").wait_for()
+        pg = adm.request.get(site + url)
+        assert pg.status == 200 and "A text the admin never saw." in pg.text()
+        assert not adm.erros_js and not adm.erros_api, (adm.erros_js, adm.erros_api)
+    finally:
+        if pid and adm:
+            adm.request.post(servidor + f"/api/site/blog/{pid}/despublicar", headers=_csrf(adm), data={"confirmar": True})
+        op.close()
+        if adm:
+            adm.close()

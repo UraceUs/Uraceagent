@@ -54,3 +54,11 @@ def test_bomba_de_descompressao_e_recusada(monkeypatch):
     monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)
     with pytest.raises(imagem.ImagemInvalida):
         imagem.comprimir(_foto((100, 100)))
+
+
+def test_aviso_de_bomba_do_pillow_tambem_e_recusado(monkeypatch):
+    """Revisão do #172: o Pillow só recusa acima do DOBRO do MAX_IMAGE_PIXELS; entre o limite e o dobro ele só avisava
+    (DecompressionBombWarning) e decodificava a imagem inteira. O aviso agora também é recusa."""
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)
+    with pytest.raises(imagem.ImagemInvalida, match="pixels demais"):
+        imagem.comprimir(_foto((40, 40)))          # 1600 px: acima do limite, abaixo do dobro (só o aviso)
